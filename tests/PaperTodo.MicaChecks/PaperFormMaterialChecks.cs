@@ -150,6 +150,26 @@ internal static class PaperFormMaterialChecks
                     !native.IsLiveFormMorph && !surface.IsLiveNativeMorph &&
                     new WindowInteropHelper(window).Handle == fixture.Handle,
                     "real native morph traversed intermediate frames, then released its temporary state");
+
+                // Complete the geometry, then hide BEFORE the outgoing WPF frame.
+                // This is also how an ordinary paper leaves for its resting Edge host.
+                frames = surface.BackgroundFrameCount;
+                window.SetCollapsedState(true, animate: true, saveGeometry: false);
+                window.SettleAnimationsForDisabledSetting();
+                Program.Assert(!IsTransitioning(window) && native.IsLiveFormMorph,
+                    "real fixture is at the pending native-to-capsule handoff");
+                fixture.Paper.IsVisible = false;
+                window.PrepareForHide();
+                window.HideWithoutGeometrySave();
+                Program.Pump();
+                Program.Assert(!native.IsLiveFormMorph && !window.IsNativeMicaEffective &&
+                    !surface.HasBackgroundCapture && surface.FormFrameRendered == null,
+                    "hidden real endpoint has no stranded native handoff or capture");
+                fixture.Paper.IsVisible = true;
+                window.PrepareForShow();
+                window.Show();
+                AwaitSnapshot(fixture, frames, "show after hidden live endpoint");
+
             }
             finally { CompositionTarget.Rendering -= inspect; }
         }

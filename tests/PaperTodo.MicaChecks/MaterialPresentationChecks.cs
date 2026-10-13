@@ -382,6 +382,8 @@ internal static class MaterialPresentationChecks
             };
             var builder = typeof(AppController).GetMethod(
                 "BuildTopBarShortcutSettings", Program.Private)!;
+            StackPanel DropArea(StackPanel editor) =>
+                (StackPanel)((Border)editor.Children[1]).Child;
             StackPanel Rebuild()
             {
                 var root = (StackPanel)builder.Invoke(controller, null)!;
@@ -396,7 +398,17 @@ internal static class MaterialPresentationChecks
             surface.Activate();
             Program.Pump();
             var glyphs = Descendants(root).OfType<TextBlock>().Select(t => t.Text).ToArray();
-            Program.Assert(root.Children.Count == 6 &&
+            var actionFrame = (Border)root.Children[1];
+            var actionArea = (StackPanel)actionFrame.Child;
+            var titleHint = Descendants((Grid)root.Children[0]).OfType<Border>()
+                .Single(b => b.ToolTip is ToolTip);
+            Program.Assert(actionFrame.BorderThickness.Left == 1 &&
+                actionArea.Children.Count == 5 &&
+                ((TextBlock)((ToolTip)titleHint.ToolTip).Content).Text ==
+                    Strings.Get("TipTopBarShortcutSettings") &&
+                ((Border)actionArea.Children[2]).Margin.Top <= 6,
+                "shortcuts have a framed, compact two-section editor and localized help");
+            Program.Assert(root.Children.Count == 2 &&
                 glyphs.Contains("✓") && glyphs.Contains("✎"),
                 "settings omit the redundant hint and reuse the paper capsule glyphs");
             var vectors = Descendants(root).OfType<System.Windows.Shapes.Path>().ToArray();
@@ -408,6 +420,23 @@ internal static class MaterialPresentationChecks
                     path.StrokeLineJoin == PenLineJoin.Round) &&
                 !glyphs.Contains("◎") && !glyphs.Contains("↗"),
                 "association and external editor use distinct round-stroke vectors instead of font glyphs");
+
+            var shortcutIcons = new[]
+                {
+                    (StackPanel)actionArea.Children[1],
+                    (StackPanel)actionArea.Children[4]
+                }
+                .SelectMany(group => group.Children.OfType<Grid>())
+                .Select(frame => (FrameworkElement)((StackPanel)
+                    ((Border)frame.Children[0]).Child).Children[1])
+                .ToArray();
+            var iconCenters = shortcutIcons.Select(icon => icon.TranslatePoint(
+                new Point(icon.ActualWidth / 2, icon.ActualHeight / 2), root).X).ToArray();
+            Program.Assert(shortcutIcons.Length == 4 &&
+                shortcutIcons.All(icon => icon is Grid &&
+                    Math.Abs(icon.Width - AppTypography.Scale(24)) < 0.1) &&
+                iconCenters.Max() - iconCenters.Min() < 0.75,
+                "all four shortcut icons are horizontally centered on the same column");
 
             var createDragEvent = typeof(DragEventArgs).GetConstructor(
                 BindingFlags.Instance | BindingFlags.NonPublic,
@@ -428,9 +457,9 @@ internal static class MaterialPresentationChecks
                 return evt;
             }
 
-            var upperGroup = (StackPanel)root.Children[2];
-            var separator = (Border)root.Children[3];
-            var menuHeading = (TextBlock)root.Children[4];
+            var upperGroup = (StackPanel)DropArea(root).Children[1];
+            var separator = (Border)DropArea(root).Children[2];
+            var menuHeading = (TextBlock)DropArea(root).Children[3];
             Program.Assert(root.AllowDrop && upperGroup.AllowDrop &&
                 separator.ActualHeight > 0 && menuHeading.ActualHeight > 0,
                 "real settings editor has a hit-testable drop surface and divider");
@@ -448,7 +477,7 @@ internal static class MaterialPresentationChecks
                 "dropping on the lower section heading moves an actual item below the divider");
 
             root = Rebuild();
-            separator = (Border)root.Children[3];
+            separator = (Border)DropArea(root).Children[2];
             var movedLower = RaiseDrag(separator, DragDrop.DropEvent,
                 PaperTopBarShortcuts.NewTodo,
                 new Point(10, separator.ActualHeight * 0.75));
@@ -457,7 +486,7 @@ internal static class MaterialPresentationChecks
                 "the divider's lower half drops into the menu without a dead zone");
 
             root = Rebuild();
-            var upperHeading = (TextBlock)root.Children[1];
+            var upperHeading = (TextBlock)DropArea(root).Children[0];
             RaiseDrag(upperHeading, DragDrop.DropEvent,
                 PaperTopBarShortcuts.Association,
                 new Point(8, upperHeading.ActualHeight / 2));
@@ -466,7 +495,7 @@ internal static class MaterialPresentationChecks
                 "the upper group heading accepts a drop at its first slot");
 
             root = Rebuild();
-            separator = (Border)root.Children[3];
+            separator = (Border)DropArea(root).Children[2];
             var movedUpper = RaiseDrag(separator, DragDrop.DropEvent,
                 PaperTopBarShortcuts.NewTodo,
                 new Point(10, separator.ActualHeight * 0.25));
@@ -476,7 +505,7 @@ internal static class MaterialPresentationChecks
                 "the divider's upper half appends to the title-bar group");
 
             root = Rebuild();
-            var lowerGroup = (StackPanel)root.Children[5];
+            var lowerGroup = (StackPanel)DropArea(root).Children[4];
             var firstRow = (Grid)lowerGroup.Children[0];
             var rowHover = RaiseDrag(firstRow, DragDrop.DragOverEvent,
                 PaperTopBarShortcuts.ExternalEditor,
@@ -498,8 +527,8 @@ internal static class MaterialPresentationChecks
             // A physical left-button drag verifies the source gesture from
             // PreviewMouseLeftButtonDown through DragDrop.DoDragDrop to Drop.
             root = Rebuild();
-            upperGroup = (StackPanel)root.Children[2];
-            menuHeading = (TextBlock)root.Children[4];
+            upperGroup = (StackPanel)DropArea(root).Children[1];
+            menuHeading = (TextBlock)DropArea(root).Children[3];
             var sourceRow = (Grid)upperGroup.Children[1]; // New Todo
             var from = sourceRow.PointToScreen(new Point(
                 sourceRow.ActualWidth / 2, sourceRow.ActualHeight / 2));

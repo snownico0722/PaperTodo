@@ -1573,6 +1573,9 @@
   <data name="TopBarSettingsTitle" xml:space="preserve">
     <value>顶栏快捷</value>
   </data>
+  <data name="TipTopBarShortcutSettings" xml:space="preserve">
+    <value>拖动操作可调整顺序，跨过分割线可切换显示位置。顶栏空间不足时，已固定的内置快捷会整组临时收纳到菜单。</value>
+  </data>
   <data name="TopBarShownHeading" xml:space="preserve">
     <value>显示在顶栏</value>
   </data>

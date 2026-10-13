@@ -19,6 +19,7 @@ internal static class FormTransitionRenderingChecks
             state.Theme = "light";
             state.MatchAuxiliaryMaterialStrength = false;
             Theme.Invalidate();
+            CheckLiveHandoffRegressions(state);
             CheckContentViewport();
             CheckShadow(state);
             CheckReliefTiles();
@@ -39,6 +40,109 @@ internal static class FormTransitionRenderingChecks
         Console.WriteLine("FORM RENDERING: scaled far-edge pixels, gutter-bounded shadow, " +
             "quiet-material endpoint continuity, forced shadow restoration, reusable rim tiles " +
             "and staged/cancelled native fallback and live native morph passed.");
+    }
+
+
+    private static void CheckLiveHandoffRegressions(AppState state)
+    {
+        var saved = (state.PaperSkin, state.MatchAuxiliaryMaterialStrength);
+        var failures = new List<string>();
+        try
+        {
+            state.PaperSkin = PaperSkins.Aero;
+            state.MatchAuxiliaryMaterialStrength = true;
+            Theme.Invalidate();
+            foreach (var scenario in new[] { "opaque-frame", "fresh-alpha-failure", "hidden-endpoint" })
+            {
+                var surface = new SkinBorder
+                {
+                    Background = Theme.PaperBrush, CornerRadius = new CornerRadius(8),
+                    BorderThickness = new Thickness(1)
+                };
+                var window = new Window
+                {
+                    Content = surface, Width = 320, Height = 240, Left = 20, Top = 20,
+                    WindowStyle = WindowStyle.None, AllowsTransparency = false, ShowInTaskbar = false
+                };
+                var api = new NativeProbe();
+                var eligible = true;
+                using var backdrop = new NativeMicaBackdrop(window, () => surface, () => eligible,
+                    brush => surface.Background = brush, api, tryLiveFormMorph: true);
+                try
+                {
+                    backdrop.Refresh(true, false, NativeMicaBackdrop.AeroGlassMaterial);
+                    window.Show();
+                    Until(() => backdrop.IsActive && surface.ActualWidth > 0,
+                        "review fixture starts on an alpha-aware native recipe");
+                    Program.Pump();
+                    surface.SetSampledBackgroundCaptureSuspended(true);
+                    eligible = false;
+                    if (scenario == "fresh-alpha-failure")
+                    {
+                        // The capsule's alpha installation succeeded, but the new native
+                        // installation fails. Testing a second Refresh before admission
+                        // would miss the actual admission-to-installation boundary.
+                        backdrop.Refresh(true, false, force: true);
+                        api.RedirectionSupported = false;
+                        surface.SetFormTransition(true);
+                        Program.Assert(!backdrop.TryBeginLiveFormMorph() &&
+                            !backdrop.IsLiveFormMorph && !surface.IsLiveNativeMorph && !backdrop.IsActive,
+                            "a failed NEW alpha installation must reject live morph and keep fallback");
+                    }
+                    else
+                    {
+                        surface.SetFormTransition(true);
+                        Program.Assert(backdrop.TryBeginLiveFormMorph(), "review fixture enters live morph");
+                        surface.IsCapsule = true;
+                        surface.SetFormTransition(false);
+                        backdrop.FinishLiveFormMorph(collapsed: true, visible: true);
+                        if (scenario == "opaque-frame")
+                        {
+                            // Read the actual WPF paint, not just Background.A. A full
+                            // Aero capsule normally transmits through its own material fill.
+                            var size = new Size(surface.ActualWidth, surface.ActualHeight);
+                            var staged = Render(surface, size, 1).At(size.Width / 2, size.Height / 2);
+                            Program.Assert(staged.A == 255,
+                                $"outgoing full-Aero handoff must record opaque pixels, actual alpha={staged.A}");
+                            Until(() => !backdrop.IsLiveFormMorph && !backdrop.IsActive,
+                                "opaque frame completes outgoing native handoff");
+                            var resting = Render(surface, size, 1).At(size.Width / 2, size.Height / 2);
+                            Program.Assert(resting.A < 255,
+                                "temporary backing is removed so resting full Aero transmits again");
+                        }
+                        else
+                        {
+                            var completed = 0;
+                            backdrop.StartFormAnimation(() => completed++);
+                            var stale = surface.FormFrameRendered;
+                            window.Hide();
+                            Program.Assert(!backdrop.IsLiveFormMorph && !backdrop.IsActive &&
+                                surface.FormFrameRendered == null && completed == 1,
+                                "hidden endpoint must release native handoff and its capture continuation without paint");
+                            stale?.Invoke();
+                            Program.Pump();
+                            window.Show();
+                            Program.Pump();
+                            Program.Assert(completed == 1 && !backdrop.IsLiveFormMorph && !backdrop.IsActive,
+                                "a stale hidden-frame notification cannot replay after showing the capsule");
+                        }
+                    }
+                    Console.WriteLine("LIVE_REVIEW_PASS " + scenario);
+                }
+                catch (Exception error)
+                {
+                    failures.Add(scenario + ": " + error.Message);
+                    Console.WriteLine("LIVE_REVIEW_FAIL " + scenario + ": " + error.Message);
+                }
+                finally { window.Close(); }
+            }
+        }
+        finally
+        {
+            (state.PaperSkin, state.MatchAuxiliaryMaterialStrength) = saved;
+            Theme.Invalidate();
+        }
+        Program.Assert(failures.Count == 0, string.Join("; ", failures));
     }
 
     private static void CheckContentViewport()
@@ -277,7 +381,7 @@ internal static class FormTransitionRenderingChecks
             // Collapse endpoint: paint a fully opaque capsule before releasing native.
             surface.SetFormTransition(false);
             backdrop.FinishLiveFormMorph(collapsed: true, visible: true);
-            Program.Assert(backdrop.IsActive && surface.FormFrameNeedsOpaque &&
+            Program.Assert(backdrop.IsActive && surface.FormFrameNeedsOpaque == true &&
                 surface.Background is SolidColorBrush { Color.A: 255 },
                 "capsule fallback is staged underneath the live native surface");
 
@@ -305,7 +409,7 @@ internal static class FormTransitionRenderingChecks
             surface.SetFormTransition(true);
             eligible = false;
             Program.Assert(backdrop.TryBeginLiveFormMorph() && backdrop.IsActive &&
-                !surface.FormFrameNeedsOpaque, "expansion stages first native visual");
+                surface.FormFrameNeedsOpaque == false, "expansion stages first native visual");
             var starts = 0;
             backdrop.StartFormAnimation(() => starts++);
             Program.Assert(starts == 0, "native transition clocks wait for first WPF frame");

@@ -67,7 +67,8 @@ internal sealed partial class SkinBorder : PaperChromeBorder
     private const double QuietAuxiliaryMaterialStrength = .40;
     internal bool IsFormTransition { get; private set; }
     internal Action? FormFrameRendered { get; set; }
-    internal bool FormFrameNeedsOpaque { get; set; } = true;
+    // null: no prepared frame; true: explicit opaque backing; false: native alpha frame.
+    internal bool? FormFrameNeedsOpaque { get; set; }
     internal bool IsLiveNativeMorph { get; private set; }
     private MaterialTransitionRelief? _formRelief;
     private double _formCompactness;
@@ -189,6 +190,14 @@ internal sealed partial class SkinBorder : PaperChromeBorder
 
     protected override void OnRender(DrawingContext dc)
     {
+        // A solid Background property is not proof of opaque paint: full Aero
+        // draws its own transmitted fill. Keep a real backing until the adapter
+        // commits/cancels this handoff, including repaints after OnRender.
+        if (FormFrameNeedsOpaque == true && !IsOutline && ActualWidth > 0 && ActualHeight > 0)
+        {
+            EnsureGeometry();
+            dc.DrawGeometry(Theme.PaperBrush, null, _shape);
+        }
         RenderSurface(dc);
         // Both an entering native frame and an outgoing solid frame must be recorded
         // by THIS WPF surface, not inferred from another HWND's generic Rendering event.

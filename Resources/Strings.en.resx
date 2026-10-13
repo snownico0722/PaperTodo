@@ -1524,6 +1524,9 @@ When off, open at the docked edge or remembered position.</value>
   <data name="TopBarSettingsTitle" xml:space="preserve">
     <value>Top-bar shortcuts</value>
   </data>
+  <data name="TipTopBarShortcutSettings" xml:space="preserve">
+    <value>Drag actions to reorder them or move them across the divider to switch between the title bar and menu. If space is limited, pinned built-in shortcuts move to the menu together.</value>
+  </data>
   <data name="TopBarShownHeading" xml:space="preserve">
     <value>Show in title bar</value>
   </data>

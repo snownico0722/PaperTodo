@@ -82,7 +82,9 @@ internal sealed class NativeMicaBackdrop : IDisposable
             {
                 if (_disposed || !ReferenceEquals(_formPreparation, preparation)) return;
                 _formPreparation = null;
-                surface.FormFrameNeedsOpaque = true;
+                surface.FormFrameRendered = null;
+                surface.FormFrameNeedsOpaque = null;
+                surface.InvalidateVisual();
                 if (preparation.FinishLive) _liveFormMorph = false;
                 // For a solid handoff, remove DWM only after the replacement WPF
                 // frame has been recorded. For entering native, don't reinstall DWM
@@ -120,7 +122,7 @@ internal sealed class NativeMicaBackdrop : IDisposable
         // Expand starts from a WPF capsule. It needs one native installation; once
         // installed, ongoing geometry changes do not touch the DWM recipe again.
         Refresh(_requested, _dark, force: !alreadyActive);
-        if (!IsActive)
+        if (!IsActive || !_redirectionAlphaReady)
         {
             _liveFormMorph = false;
             surface.SetLiveNativeMorph(false);
@@ -176,7 +178,8 @@ internal sealed class NativeMicaBackdrop : IDisposable
         preparation.Commit?.Abort();
         if (ReferenceEquals(preparation.Surface.FormFrameRendered, preparation.Rendered))
             preparation.Surface.FormFrameRendered = null;
-        preparation.Surface.FormFrameNeedsOpaque = true;
+        preparation.Surface.FormFrameNeedsOpaque = null;
+        preparation.Surface.InvalidateVisual();
     }
     private string? _accentMaterial;
     internal bool UsesRedirectionAlpha { get; private set; }
@@ -241,6 +244,18 @@ internal sealed class NativeMicaBackdrop : IDisposable
         if (_source?.CompositionTarget == null || chrome == null) return;
         if (_formPreparation is { } pending)
         {
+            if (pending.FinishLive && (!_window.IsVisible ||
+                _window.WindowState == WindowState.Minimized))
+            {
+                // The geometry is already at its endpoint. A hidden paper
+                // cannot publish that frame; release DWM now, then complete
+                // the existing capture continuation once (it checks generation).
+                var completed = pending.Start;
+                CancelLiveFormMorph();
+                Refresh(_requested, _dark, force: true);
+                completed?.Invoke();
+                return;
+            }
             // Ignore intermediate setup refreshes until the matching surface frame
             // has been recorded. Native-entry preparation retains its live brush.
             if (pending.Opaque) _setSurface(Theme.PaperBrush);
