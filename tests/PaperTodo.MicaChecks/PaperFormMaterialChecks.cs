@@ -103,6 +103,19 @@ internal static class PaperFormMaterialChecks
                 return;
             }
 
+            string LiveDiagnostic()
+            {
+                object? Field(string name) => typeof(NativeMicaBackdrop)
+                    .GetField(name, Program.Private)!.GetValue(native);
+                return $"enabled={Field("_tryLiveFormMorph")} requested={Field("_requested")} " +
+                    $"redirectionReady={Field("_redirectionAlphaReady")} redirectionEver={native.UsesRedirectionAlpha} " +
+                    $"active={native.IsActive} live={native.IsLiveFormMorph} " +
+                    $"hwndLayered={DwmMicaApi.Instance.IsLayered(fixture.Handle)} " +
+                    $"windowOpacity={window.Opacity:F2} chromeOpacity={surface.Opacity:F2} " +
+                    $"windowVisible={window.IsVisible} surfaceVisible={surface.IsVisible} " +
+                    $"hresult=0x{native.LastHResult:X8}";
+            }
+            Console.WriteLine("LIVE MORPH PRE: " + LiveDiagnostic());
             var body = surface.Child;
             var frames = surface.BackgroundFrameCount;
             var during = 0;
@@ -120,7 +133,7 @@ internal static class PaperFormMaterialChecks
             {
                 window.SetCollapsedState(true, animate: true, saveGeometry: false);
                 Program.Assert(native.IsLiveFormMorph && window.IsNativeMicaEffective,
-                    "animated collapse starts in the native recipe");
+                    "animated collapse starts in the native recipe: " + LiveDiagnostic());
                 Until(() => !IsTransitioning(window) && !native.IsLiveFormMorph,
                     "live collapse reaches the capsule handoff");
                 AwaitSnapshot(fixture, frames, "opt-in live collapse");
