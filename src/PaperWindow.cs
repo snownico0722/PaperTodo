@@ -1204,7 +1204,8 @@ public sealed partial class PaperWindow : Window
         _paperChrome.Effect = UsesNativePaperChrome || materialShadow ? null : isCapsule
             ? CreatePaperChromeShadow(blurRadius: 8, opacity: 0.12, shadowDepth: 1)
             : CreatePaperChromeShadow();
-        _paperChrome.SetMaterialShadowMargin(materialShadow && _nativeMica?.IsLiveFormMorph != true
+        _paperChrome.SetMaterialShadowMargin(materialShadow &&
+            (_paperChrome as SkinBorder)?.IsLiveNativeMorph != true
             ? _paperChrome.Margin.Left : 0);
         RefreshPluginBodyClip();
         RefreshNativeMica();
@@ -3550,7 +3551,8 @@ public sealed partial class PaperWindow : Window
         var borderX = _paperChrome.BorderThickness.Left + _paperChrome.BorderThickness.Right;
         var borderY = _paperChrome.BorderThickness.Top + _paperChrome.BorderThickness.Bottom;
         if (Theme.UsesNativeBackdrop)
-            _paperChrome.SetMaterialShadowMargin(_nativeMica?.IsLiveFormMorph == true ? 0 : margin);
+            _paperChrome.SetMaterialShadowMargin(
+                (_paperChrome as SkinBorder)?.IsLiveNativeMorph == true ? 0 : margin);
         _shellScale.ScaleX = Math.Max(0.01, (visualChromeWidth - borderX) / Math.Max(1, baseChromeWidth - borderX));
         _shellScale.ScaleY = Math.Max(0.01, (visualChromeHeight - borderY) / Math.Max(1, baseChromeHeight - borderY));
         UpdateTransitionCornerRadius(visualChromeWidth, visualChromeHeight, baseChromeWidth, baseChromeHeight);

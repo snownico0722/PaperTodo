@@ -14,6 +14,10 @@ internal static class PaperFormMaterialChecks
         .GetProperty("IsPaperFormTransitioning", Program.Private)!;
     private static readonly FieldInfo Chrome = typeof(PaperWindow)
         .GetField("_paperChrome", Program.Private)!;
+    private static readonly FieldInfo Native = typeof(PaperWindow)
+        .GetField("_nativeMica", Program.Private)!;
+    private static readonly FieldInfo ShadowMargin = typeof(PaperChromeBorder)
+        .GetField("_materialShadowMargin", Program.Private)!;
 
     internal static void Run(AppController controller)
     {
@@ -67,6 +71,8 @@ internal static class PaperFormMaterialChecks
                     fixture.Surface.BackgroundFrameCount == 0,
                     "a queued endpoint callback cannot acquire material after close");
             }
+
+            CheckOptInLiveFormRoundTrip(controller);
         }
         finally
         {
@@ -76,7 +82,65 @@ internal static class PaperFormMaterialChecks
             nativeMode.SetValue(controller, savedNative);
             Theme.Invalidate();
         }
-        Console.WriteLine("PAPER FORM MATERIAL: animated collapse/expand, reversal, setting settlement, queued endpoints, hide and close passed.");
+        Console.WriteLine("PAPER FORM MATERIAL: animated collapse/expand, native opt-in round trip, reversal, setting settlement, queued endpoints, hide and close passed.");
+    }
+
+    private static void CheckOptInLiveFormRoundTrip(AppController controller)
+    {
+        // Test the real PaperWindow/HWND and its existing animation clocks. Servers
+        // without modern redirection alpha still verify the normal fallback elsewhere.
+        var previous = Environment.GetEnvironmentVariable("PAPERTODO_EXPERIMENT_LIVE_MORPH");
+        try
+        {
+            Environment.SetEnvironmentVariable("PAPERTODO_EXPERIMENT_LIVE_MORPH", "1");
+            using var fixture = new Fixture(controller);
+            var window = fixture.Window;
+            var surface = fixture.Surface;
+            var native = (NativeMicaBackdrop)Native.GetValue(window)!;
+            if (!native.UsesRedirectionAlpha)
+            {
+                Console.WriteLine("SKIP real live morph: no alpha-aware redirection on this HWND.");
+                return;
+            }
+
+            var body = surface.Child;
+            var frames = surface.BackgroundFrameCount;
+            var during = 0;
+            EventHandler inspect = (_, _) =>
+            {
+                if (!IsTransitioning(window) || !native.IsLiveFormMorph ||
+                    window.TransitionProgress is <= 0 or >= 1) return;
+                Program.Assert(window.IsNativeMicaEffective &&
+                    surface.Background is SolidColorBrush { Color.A: < 255 },
+                    "real HWND retains its native material and translucent WPF surface on an animated frame");
+                during++;
+            };
+            CompositionTarget.Rendering += inspect;
+            try
+            {
+                window.SetCollapsedState(true, animate: true, saveGeometry: false);
+                Program.Assert(native.IsLiveFormMorph && window.IsNativeMicaEffective,
+                    "animated collapse starts in the native recipe");
+                Until(() => !IsTransitioning(window) && !native.IsLiveFormMorph,
+                    "live collapse reaches the capsule handoff");
+                AwaitSnapshot(fixture, frames, "opt-in live collapse");
+                Program.Assert(!window.IsNativeMicaEffective &&
+                    (double)ShadowMargin.GetValue(surface)! > 0,
+                    "solid capsule endpoint restores its soft WPF gutter shadow");
+
+                frames = surface.BackgroundFrameCount;
+                window.SetCollapsedState(false, animate: true, saveGeometry: false);
+                Until(() => !IsTransitioning(window),
+                    "live expansion reaches the expanded endpoint");
+                AwaitExpanded(fixture, frames);
+                Program.Assert(during > 0 && ReferenceEquals(surface.Child, body) &&
+                    !native.IsLiveFormMorph && !surface.IsLiveNativeMorph &&
+                    new WindowInteropHelper(window).Handle == fixture.Handle,
+                    "real native morph traversed intermediate frames, then released its temporary state");
+            }
+            finally { CompositionTarget.Rendering -= inspect; }
+        }
+        finally { Environment.SetEnvironmentVariable("PAPERTODO_EXPERIMENT_LIVE_MORPH", previous); }
     }
 
     private static void CheckAnimatedRoundTrip(Fixture fixture)
