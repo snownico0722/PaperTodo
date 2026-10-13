@@ -309,8 +309,8 @@ internal static class FormTransitionRenderingChecks
             backdrop.Refresh(true, false, material, force: true);
             api.RedirectionSupported = false;
             backdrop.Refresh(true, false, material, force: true);
-            Program.Assert(!backdrop.UsesRedirectionAlpha || !backdrop.TryBeginLiveFormMorph(),
-                "lack of modern alpha support cannot claim live native transition");
+            Program.Assert(!backdrop.TryBeginLiveFormMorph(),
+                "a previously successful alpha recipe cannot hide a later capability failure");
         }
         finally { window.Close(); }
     }

@@ -41,6 +41,9 @@ internal sealed class NativeMicaBackdrop : IDisposable
     private FormSurfacePreparation? _formPreparation;
     private readonly bool _tryLiveFormMorph;
     private bool _liveFormMorph;
+    // UsesRedirectionAlpha tracks adapter lifetime/cleanup; this flag means
+    // the CURRENT native recipe's alpha installation actually succeeded.
+    private bool _redirectionAlphaReady;
     internal bool IsLiveFormMorph => _liveFormMorph;
 
     // An explicit comparison switch for this stacked PR, not a persisted preference.
@@ -99,7 +102,7 @@ internal sealed class NativeMicaBackdrop : IDisposable
     // eligible; other Windows sessions keep the proven opaque-first fallback.
     internal bool TryBeginLiveFormMorph()
     {
-        if (!_tryLiveFormMorph || _disposed || !_requested || !UsesRedirectionAlpha ||
+        if (!_tryLiveFormMorph || _disposed || !_requested || !_redirectionAlphaReady ||
             !_window.IsVisible || _window.Opacity < 1 ||
             _source is not { IsDisposed: false } || _getChrome() is not SkinBorder surface ||
             !_native.IsSupported || !_native.CompositionEnabled || !_native.TransparencyEnabled ||
@@ -275,6 +278,7 @@ internal sealed class NativeMicaBackdrop : IDisposable
         try
         {
             _applied = state;
+            _redirectionAlphaReady = false;
             var hwnd = _source.Handle;
             var enable = requested && eligible && _native.IsSupported &&
                 !_native.HighContrast && _native.TransparencyEnabled && _native.CompositionEnabled;
@@ -313,7 +317,8 @@ internal sealed class NativeMicaBackdrop : IDisposable
                 {
                     // Apply after the material recipe: this is the final alpha/margin writer.
                     UsesRedirectionAlpha = _native.SetRedirectionAlpha(hwnd, true) >= 0;
-                    if (UsesRedirectionAlpha && !accent && !glass) LastHResult = _native.ExtendFrame(hwnd, 0);
+                    _redirectionAlphaReady = UsesRedirectionAlpha;
+                    if (_redirectionAlphaReady && !accent && !glass) LastHResult = _native.ExtendFrame(hwnd, 0);
                 }
                 IsActive = LastHResult >= 0;
             }
@@ -352,6 +357,7 @@ internal sealed class NativeMicaBackdrop : IDisposable
                 {
                     UsesRedirectionAlpha = true;
                     alphaReady = _native.ExtendFrame(hwnd, 0) >= 0;
+                    _redirectionAlphaReady = alphaReady;
                 }
             }
             _source.CompositionTarget.BackgroundColor = IsActive || alphaReady
