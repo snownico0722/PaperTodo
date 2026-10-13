@@ -113,6 +113,10 @@ internal sealed class NativeMicaBackdrop : IDisposable
         var alreadyActive = IsActive;
         _liveFormMorph = true;
         surface.SetLiveNativeMorph(true);
+        // A reversal can cancel an outgoing opaque handoff while the DWM recipe
+        // is still active. Restore the translucent paint explicitly: the cached
+        // native request will otherwise skip Refresh and leave an opaque sheet.
+        if (alreadyActive) _setSurface(GetActiveSurfaceBrush(_material, _dark));
         // Expand starts from a WPF capsule. It needs one native installation; once
         // installed, ongoing geometry changes do not touch the DWM recipe again.
         Refresh(_requested, _dark, force: !alreadyActive);

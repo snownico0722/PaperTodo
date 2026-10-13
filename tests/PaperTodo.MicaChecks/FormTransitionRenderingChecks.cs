@@ -280,6 +280,21 @@ internal static class FormTransitionRenderingChecks
             Program.Assert(backdrop.IsActive && surface.FormFrameNeedsOpaque &&
                 surface.Background is SolidColorBrush { Color.A: 255 },
                 "capsule fallback is staged underneath the live native surface");
+
+            // A fast reversal before the opaque frame is committed must restore
+            // the native/translucent visual, not retain the staged solid backing.
+            var obsolete = surface.FormFrameRendered;
+            surface.SetFormTransition(true);
+            Program.Assert(backdrop.TryBeginLiveFormMorph() && backdrop.IsActive &&
+                surface.Background is SolidColorBrush { Color.A: < 255 },
+                "reversing an outgoing handoff restores the translucent native brush");
+            obsolete?.Invoke();
+            Program.Pump();
+            Program.Assert(backdrop.IsActive && backdrop.IsLiveFormMorph,
+                "cancelled handoff cannot remove DWM after a fast reversal");
+
+            surface.SetFormTransition(false);
+            backdrop.FinishLiveFormMorph(collapsed: true, visible: true);
             Until(() => !backdrop.IsActive && !backdrop.IsLiveFormMorph,
                 "live native collapse hands off after opaque surface paint");
             Program.Assert(!surface.IsLiveNativeMorph,
