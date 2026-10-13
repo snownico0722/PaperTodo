@@ -1,0 +1,74 @@
+name: Review 348 one-time checks
+on:
+  push:
+    branches: [experiment/native-form-morph-20261013]
+    paths:
+      - .github/scripts/review348-once.py
+      - .github/workflows/review348-once.yml
+permissions:
+  contents: write
+jobs:
+  review-and-fix:
+    if: github.ref == 'refs/heads/experiment/native-form-morph-20261013'
+    runs-on: windows-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
+          ref: ${{ github.sha }}
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - name: Reconcile squash-merged base and add regression cases
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          python .github/scripts/review348-once.py sync
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python .github/scripts/review348-once.py tests
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Confirm three regressions fail before the fix
+        timeout-minutes: 3
+        run: |
+          $log = Join-Path $env:RUNNER_TEMP 'review348-before.log'
+          & pwsh -NoProfile -File ./tools/testing/Run-Checks.ps1 -Group visual -Project MicaChecks *> $log
+          $result = $LASTEXITCODE
+          Get-Content $log
+          if ($result -eq 0) { throw 'Expected baseline regression failures, but baseline passed.' }
+          $text = Get-Content -Raw $log
+          foreach ($case in @('opaque-frame', 'fresh-alpha-failure', 'hidden-endpoint')) {
+            if ($text -notmatch ('LIVE_REVIEW_FAIL ' + $case + ':')) { throw ('Missing reproduced failure: ' + $case) }
+          }
+          'All three targeted failures reproduced on the original product code.'
+          exit 0
+      - name: Apply reviewed product fixes
+        run: |
+          python .github/scripts/review348-once.py fix
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git diff --check
+      - name: Release build
+        run: dotnet build PaperTodo.csproj -c Release
+      - name: Regression checks
+        run: ./tools/testing/Run-Checks.ps1 -Group regression
+      - name: Material rendering and real hidden endpoint
+        timeout-minutes: 2
+        run: ./tools/testing/Run-Checks.ps1 -Group visual -Project MicaChecks
+      - name: Commit verified source without build artifacts
+        run: |
+          git rm .github/scripts/review348-once.py
+          git add src/NativeMicaBackdrop.cs src/SkinBorder.cs tests/PaperTodo.MicaChecks/FormTransitionRenderingChecks.cs tests/PaperTodo.MicaChecks/PaperFormMaterialChecks.cs doc/ARCHITECTURE.md
+          git diff --cached --check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git diff --cached --stat
+          git fetch origin experiment/native-form-morph-20261013
+          $remote = git rev-parse FETCH_HEAD
+          if ($remote -ne '${{ github.sha }}') { throw 'PR head changed during validation; refusing to overwrite newer work.' }
+          git commit -m 'fix(material): 修复真实背衬、隐藏端点交接及原生透明能力复核'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git push origin HEAD:refs/heads/experiment/native-form-morph-20261013
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
