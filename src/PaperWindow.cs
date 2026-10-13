@@ -60,6 +60,7 @@ public sealed partial class PaperWindow : Window
     private Grid _windowHost = null!;
     private PaperChromeBorder _paperChrome = null!;
     private readonly Grid _containerGrid = new();
+    private readonly PaperFormContentHost _formContentHost = new();
     private readonly Grid _shell = new();
     private readonly ScaleTransform _shellScale = new(1.0, 1.0);
     private Canvas? _dragLayer;
@@ -1180,6 +1181,7 @@ public sealed partial class PaperWindow : Window
         if (snappedExpanded)
         {
             _paperChrome.Effect = null;
+            _paperChrome.SetMaterialShadowMargin(0);
             _paperChrome.BeginAnimation(Border.MarginProperty, null);
             _paperChrome.Margin = new Thickness(0);
             _paperChrome.CornerRadius = new CornerRadius(0);
@@ -1197,9 +1199,11 @@ public sealed partial class PaperWindow : Window
         _paperChrome.CornerRadius = targetCorner;
         // Native expanded papers use the system frame, even during solid fallback.
         // Applying an Effect to a transparent content ancestor also shadows its glyphs.
-        _paperChrome.Effect = UsesNativePaperChrome ? null : isCapsule
+        var materialShadow = Theme.UsesNativeBackdrop && (IsPaperFormTransitioning || isCapsule);
+        _paperChrome.Effect = UsesNativePaperChrome || materialShadow ? null : isCapsule
             ? CreatePaperChromeShadow(blurRadius: 8, opacity: 0.12, shadowDepth: 1)
             : CreatePaperChromeShadow();
+        _paperChrome.SetMaterialShadowMargin(materialShadow ? _paperChrome.Margin.Left : 0);
         RefreshPluginBodyClip();
         RefreshNativeMica();
         RefreshExperimentalFocusPresentation(animate: false);
@@ -1912,7 +1916,8 @@ public sealed partial class PaperWindow : Window
         _containerGrid.ClipToBounds = false;
         _containerGrid.RenderTransform = _shellScale;
         _containerGrid.RenderTransformOrigin = new Point(0, 0);
-        _paperChrome.Child = _containerGrid;
+        _formContentHost.Child = _containerGrid;
+        _paperChrome.Child = _formContentHost;
 
         _shell.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         _shell.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
@@ -3540,8 +3545,9 @@ public sealed partial class PaperWindow : Window
         _paperChrome.VerticalAlignment = VerticalAlignment.Top;
         _paperChrome.Width = visualChromeWidth;
         _paperChrome.Height = visualChromeHeight;
-        var borderX = nativeWindow ? _paperChrome.BorderThickness.Left + _paperChrome.BorderThickness.Right : 0;
-        var borderY = nativeWindow ? _paperChrome.BorderThickness.Top + _paperChrome.BorderThickness.Bottom : 0;
+        var borderX = _paperChrome.BorderThickness.Left + _paperChrome.BorderThickness.Right;
+        var borderY = _paperChrome.BorderThickness.Top + _paperChrome.BorderThickness.Bottom;
+        if (Theme.UsesNativeBackdrop) _paperChrome.SetMaterialShadowMargin(margin);
         _shellScale.ScaleX = Math.Max(0.01, (visualChromeWidth - borderX) / Math.Max(1, baseChromeWidth - borderX));
         _shellScale.ScaleY = Math.Max(0.01, (visualChromeHeight - borderY) / Math.Max(1, baseChromeHeight - borderY));
         UpdateTransitionCornerRadius(visualChromeWidth, visualChromeHeight, baseChromeWidth, baseChromeHeight);
@@ -3557,6 +3563,7 @@ public sealed partial class PaperWindow : Window
 
     private void ResetTransitionVisuals()
     {
+        _formContentHost.ExpandedSize = null;
         _paperChrome.Width = double.NaN;
         _paperChrome.Height = double.NaN;
         _paperChrome.HorizontalAlignment = HorizontalAlignment.Stretch;
@@ -3588,6 +3595,7 @@ public sealed partial class PaperWindow : Window
         var desiredVisualRadius = expandedRadius + (compactVisualRadius - expandedRadius) * compactness;
 
         _paperChrome.CornerRadius = new CornerRadius(desiredVisualRadius);
+        if (_paperChrome is SkinBorder skin) skin.SetFormTransitionCompactness(compactness);
     }
 
     private CornerRadius PaperChromeCornerRadiusForState(bool collapsed)

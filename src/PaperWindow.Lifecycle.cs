@@ -71,15 +71,18 @@ public sealed partial class PaperWindow
             : PaperPresentationState.Expanded;
     }
 
-    private void BeginPaperFormTransition(bool collapsed)
+    private void BeginPaperFormTransition(bool collapsed, bool animate)
     {
+        if (_paperChrome is SkinBorder surface) surface.SetFormTransition(true);
+        if (animate) _nativeMica?.PrepareFormTransition();
+        else _nativeMica?.CancelFormTransitionPreparation();
         _presentationState = collapsed
             ? PaperPresentationState.Collapsing
             : PaperPresentationState.Expanding;
         // IsCapsule changes to the target form before its size animation starts. Keep the
         // current scene, but never acquire a new desktop snapshot for an intermediate frame.
         if (_paperChrome is SkinBorder skin) skin.SetSampledBackgroundCaptureSuspended(true);
-        RefreshNativeMica();
+        // Native refresh belongs after target/frame preparation in SetCollapsedStateCore.
     }
 
     private void CompletePaperFormTransition(bool collapsed)
@@ -89,11 +92,15 @@ public sealed partial class PaperWindow
             return;
         }
 
+        _nativeMica?.CancelFormTransitionPreparation();
+        if (_paperChrome is SkinBorder surface) surface.SetFormTransition(false);
         _presentationState = collapsed
             ? PaperPresentationState.Collapsed
             : PaperPresentationState.Expanded;
 
-        RefreshNativeMica();
+        // ResetTransitionVisuals may have chosen a temporary shadow while the
+        // state still said "transitioning". Re-select the actual endpoint here.
+        ApplyPaperChromePresentation();
 
         if (_paperChrome is SkinBorder skin)
         {
@@ -270,6 +277,8 @@ public sealed partial class PaperWindow
         // close/hide still commits here; shutdown must not commit them for a second time.
         if (_controller.IsRunning) CommitPendingEditsForSave();
         if (_windowLifecycle != PaperWindowLifecycleState.Alive) return;
+        _nativeMica?.CancelFormTransitionPreparation();
+        if (_paperChrome is SkinBorder surface) surface.SetFormTransition(false);
         _windowLifecycle = PaperWindowLifecycleState.Closing;
         _presentationState = PaperPresentationState.Closing;
         if (_paperChrome is SkinBorder skin) skin.SetSampledBackgroundCaptureSuspended(true);
