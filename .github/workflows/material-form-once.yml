@@ -1,0 +1,46 @@
+name: Material form one-time edit and checks
+on:
+  push:
+    branches: [fix/material-form-transition-20261013]
+    paths:
+      - .github/scripts/material-form-once.py
+      - .github/workflows/material-form-once.yml
+permissions:
+  contents: write
+jobs:
+  apply-and-check:
+    if: github.ref == 'refs/heads/fix/material-form-transition-20261013'
+    runs-on: windows-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
+          ref: fix/material-form-transition-20261013
+      - name: Apply reviewed source delta
+        run: |
+          python .github/scripts/material-form-once.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git diff --cached --check
+          git diff --cached --stat
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - name: Release build
+        run: dotnet build PaperTodo.csproj -c Release
+      - name: Regression checks
+        run: ./tools/testing/Run-Checks.ps1 -Group regression
+      - name: Material behavior and form rendering
+        timeout-minutes: 2
+        run: ./tools/testing/Run-Checks.ps1 -Group visual -Project MicaChecks
+      - name: Commit verified source only
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix(material): 整理收展首帧交接、修正正文裁切并复用阴影与光照'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git push origin HEAD:refs/heads/fix/material-form-transition-20261013
