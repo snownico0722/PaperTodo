@@ -261,8 +261,13 @@ internal sealed class NativeMicaBackdrop : IDisposable
             return;
         }
 
+        // WPF can temporarily mark the resized chrome invisible while arranging the
+        // first form frame, even though the ordinary top-level HWND stays visible.
+        // The live experiment owns the DWM surface during that brief handoff; only
+        // a genuinely hidden/minimized Window should terminate its native recipe.
+        var chromeVisible = _liveFormMorph ? _window.IsVisible : chrome.IsVisible;
         var eligible = (_canPresent() || _liveFormMorph) && _window.Opacity >= 1 && chrome.Opacity >= 1 &&
-            !_native.IsLayered(_source.Handle) && chrome.IsVisible &&
+            !_native.IsLayered(_source.Handle) && chromeVisible &&
             _window.WindowState != WindowState.Minimized;
         var rounded = chrome.CornerRadius.TopLeft > 0 && _window.WindowState != WindowState.Maximized;
         var edge = ((SolidColorBrush)Theme.PaperBorderBrush).Color;
