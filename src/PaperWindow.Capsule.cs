@@ -728,7 +728,7 @@ public sealed partial class PaperWindow
         }
 
         PrepareForFormTransition();
-        BeginPaperFormTransition(collapsed);
+        BeginPaperFormTransition(collapsed, animate);
         var transitionGeneration = ++_collapseTransitionGeneration;
         var shouldRestoreCollapseStartPosition = collapsed &&
             IsVisible &&
@@ -803,7 +803,7 @@ public sealed partial class PaperWindow
             // the system accent outline in its transparent gutter while shrinking. Remove
             // it once at entry; the completion/settle paths restore the final resize mode.
             ResizeMode = ResizeMode.NoResize;
-            RefreshNativeMica(force: true);
+            RefreshNativeMica();
         }
         RefreshExperimentalOpacity();
         var expandedWidth = collapsed
@@ -841,10 +841,12 @@ var expandedHeight = collapsed
             // Establish the initial visual BEFORE native placement can resize the HWND and
             // synchronously run WPF layout. Otherwise the full-size chrome is exposed first,
             // then reset to capsule size when the expand animation starts.
-            _shell.Width = Math.Max(0, expandedWidth - (_controller.UsesNativeMicaWindows
-        ? _paperChrome.BorderThickness.Left + _paperChrome.BorderThickness.Right : WindowChromeInset));
-            _shell.Height = Math.Max(0, expandedHeight - (_controller.UsesNativeMicaWindows
-        ? _paperChrome.BorderThickness.Top + _paperChrome.BorderThickness.Bottom : WindowChromeInset));
+            var expandedInset = _controller.UsesNativeMicaWindows ? 0 : WindowChromeInset;
+            _shell.Width = Math.Max(0, expandedWidth - expandedInset -
+                _paperChrome.BorderThickness.Left - _paperChrome.BorderThickness.Right);
+            _shell.Height = Math.Max(0, expandedHeight - expandedInset -
+                _paperChrome.BorderThickness.Top - _paperChrome.BorderThickness.Bottom);
+            _formContentHost.ExpandedSize = new Size(_shell.Width, _shell.Height);
             TransitionProgress = 0.0;
             UpdateTransitionVisuals(0.0);
             if (!collapsed)
@@ -972,6 +974,8 @@ var expandedHeight = collapsed
                 EasingFunction = easeOut
             };
 
+            System.Windows.Media.Animation.DoubleAnimation shellAnimation;
+            System.Windows.Media.Animation.DoubleAnimation capsuleAnimation;
             if (collapsed)
             {
                 _shell.Opacity = 1.0;
@@ -984,7 +988,7 @@ var expandedHeight = collapsed
                     Duration = TimeSpan.FromMilliseconds(AnimationTiming.ScaleMilliseconds(CollapseShellFadeMilliseconds)),
                     EasingFunction = easeOut
                 };
-                _shell.BeginAnimation(UIElement.OpacityProperty, fadeOutShell);
+                shellAnimation = fadeOutShell;
 
                 var fadeInCapsule = new System.Windows.Media.Animation.DoubleAnimation
                 {
@@ -994,7 +998,7 @@ var expandedHeight = collapsed
                     BeginTime = TimeSpan.FromMilliseconds(AnimationTiming.ScaleMilliseconds(CollapseShellFadeMilliseconds)),
                     EasingFunction = easeOut
                 };
-                _capsuleShell.BeginAnimation(UIElement.OpacityProperty, fadeInCapsule);
+                capsuleAnimation = fadeInCapsule;
             }
             else
             {
@@ -1009,7 +1013,7 @@ var expandedHeight = collapsed
                     Duration = TimeSpan.FromMilliseconds(AnimationTiming.ScaleMilliseconds(ExpandCapsuleFadeOutMilliseconds)),
                     EasingFunction = easeOut
                 };
-                _capsuleShell.BeginAnimation(UIElement.OpacityProperty, fadeOutCapsule);
+                capsuleAnimation = fadeOutCapsule;
 
                 var fadeInShell = new System.Windows.Media.Animation.DoubleAnimation
                 {
@@ -1019,7 +1023,7 @@ var expandedHeight = collapsed
                     BeginTime = TimeSpan.FromMilliseconds(AnimationTiming.ScaleMilliseconds(ExpandCapsuleFadeOutMilliseconds)),
                     EasingFunction = easeOut
                 };
-                _shell.BeginAnimation(UIElement.OpacityProperty, fadeInShell);
+                shellAnimation = fadeInShell;
             }
 
             progressAnim.Completed += (s, e) =>
@@ -1098,7 +1102,17 @@ var expandedHeight = collapsed
                 UpdateTaskbarVisibility();
             };
 
-            BeginAnimation(TransitionProgressProperty, progressAnim);
+            void StartAnimation()
+            {
+                if (transitionGeneration != _collapseTransitionGeneration ||
+                    _windowLifecycle != PaperWindowLifecycleState.Alive || !IsPaperFormTransitioning)
+                    return;
+                _shell.BeginAnimation(UIElement.OpacityProperty, shellAnimation);
+                _capsuleShell.BeginAnimation(UIElement.OpacityProperty, capsuleAnimation);
+                BeginAnimation(TransitionProgressProperty, progressAnim);
+            }
+            if (_nativeMica != null) _nativeMica.StartFormAnimation(StartAnimation);
+            else StartAnimation();
         }
         else
         {

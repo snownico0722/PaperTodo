@@ -64,6 +64,21 @@ internal sealed partial class SkinBorder : PaperChromeBorder
             if (reference.TryGetTarget(out var surface)) surface.RefreshSkin();
     }
     private int _surfaceVersion;
+    internal bool IsFormTransition { get; private set; }
+    internal Action? FormFrameRendered { get; set; }
+    private MaterialTransitionRelief? _formRelief;
+
+    internal void SetFormTransition(bool active)
+    {
+        if (IsFormTransition == active) return;
+        IsFormTransition = active;
+        _formRelief = null;
+        _brushKey = null;
+        _surfaceVersion++;
+        if (!active) FormFrameRendered = null;
+        InvalidateVisual();
+    }
+
     private bool _dark, _highContrast, _animateReflection;
     private (string Skin, bool Dark, bool Capsule, bool Menu, double Strength, Color Background,
         MaterialPalette Palette, Brush Paper, Brush Active, bool Lightweight, bool EdgeActive)? _brushKey;
@@ -121,6 +136,7 @@ internal sealed partial class SkinBorder : PaperChromeBorder
         if (_appearance != appearance)
         {
             _appearance = appearance;
+            _formRelief = null;
             // Cache keys own invalidation. Palette changes do not destroy geometry and
             // geometry changes do not destroy size-independent brushes.
             _surfaceVersion++;
@@ -136,6 +152,20 @@ internal sealed partial class SkinBorder : PaperChromeBorder
     }
 
     protected override void OnRender(DrawingContext dc)
+    {
+        RenderSurface(dc);
+        // Notify only after THIS surface recorded an opaque fallback drawing. A
+        // generic Rendering event can belong to another HWND. The adapter queues
+        // its native handoff after this WPF render operation, never inside paint.
+        if (IsFormTransition && ActualWidth > 0 && ActualHeight > 0 &&
+            Background is SolidColorBrush { Color.A: 255 } && FormFrameRendered is { } ready)
+        {
+            FormFrameRendered = null;
+            ready();
+        }
+    }
+
+    private void RenderSurface(DrawingContext dc)
     {
         PresentPreparedMenuBackground();
         if (IsMenu)
@@ -168,6 +198,7 @@ internal sealed partial class SkinBorder : PaperChromeBorder
         if (!decorated && !(systemMaterial && IsAuxiliary))
         {
             if (ActualWidth <= 0 || ActualHeight <= 0) return;
+            DrawMaterialShadow(dc);
             EnsureGeometry();
             // BorderThickness keeps its layout role, but the outer stroke itself is absent.
             dc.DrawGeometry(Background, null, _shape);
@@ -176,6 +207,7 @@ internal sealed partial class SkinBorder : PaperChromeBorder
             return;
         }
         if (ActualWidth <= 0 || ActualHeight <= 0) return;
+        DrawMaterialShadow(dc);
         EnsureGeometry();
         var background = Background is SolidColorBrush solid
             ? solid.Color : ((SolidColorBrush)Theme.PaperBrush).Color;
@@ -198,7 +230,7 @@ internal sealed partial class SkinBorder : PaperChromeBorder
         if (IsAuxiliary && !UseLightweightMaterial && BackgroundVisual == null && !HasAuxiliaryTransmission)
             dc.DrawGeometry(Background ?? Theme.PaperBrush, null, _shape);
         PaintMaterialBase(dc);
-        dc.PushOpacity(MaterialStrength);
+        dc.PushOpacity(IsFormTransition ? 1 : MaterialStrength);
         if (Skin == PaperSkins.TracingPaper && !UseLightweightMaterial)
             dc.DrawRectangle(_dark ? DarkFibers : LightFibers, null, new Rect(RenderSize));
         dc.DrawRectangle(_shine, null, new Rect(RenderSize));
@@ -223,7 +255,7 @@ internal sealed partial class SkinBorder : PaperChromeBorder
             dc.DrawGeometry(_fill, null, _shape);
             // Quiet mode blends the COMPLETE material color toward semantic paper.
             // Putting paper underneath an almost opaque Mica tint cannot quiet that tint.
-            if (PaperBackingOpacity > 0)
+            if (!IsFormTransition && PaperBackingOpacity > 0)
             {
                 dc.PushOpacity(PaperBackingOpacity);
                 dc.DrawGeometry(Theme.PaperBrush, null, _shape);

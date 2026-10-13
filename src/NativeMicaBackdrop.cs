@@ -38,6 +38,56 @@ internal sealed class NativeMicaBackdrop : IDisposable
     private bool _disposed;
     private bool _refreshQueued;
     private bool _contentRendered;
+    private FormSurfacePreparation? _formPreparation;
+    private sealed class FormSurfacePreparation(SkinBorder surface)
+    {
+        internal SkinBorder Surface { get; } = surface;
+        internal Action? Rendered;
+        internal Action? Start;
+        internal DispatcherOperation? Commit;
+    }
+
+    internal void PrepareFormTransition()
+    {
+        CancelFormTransitionPreparation();
+        if (_disposed || !IsActive || !_window.IsVisible ||
+            _source is not { IsDisposed: false } || _getChrome() is not SkinBorder surface)
+            return;
+        var preparation = new FormSurfacePreparation(surface);
+        _formPreparation = preparation;
+        preparation.Rendered = () =>
+        {
+            if (!ReferenceEquals(_formPreparation, preparation) || _window.Dispatcher.HasShutdownStarted) return;
+            preparation.Commit = _window.Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
+            {
+                if (_disposed || !ReferenceEquals(_formPreparation, preparation)) return;
+                _formPreparation = null;
+                // This runs after the source's WPF render pass has unwound. It is
+                // a submission boundary, NOT a claim about physical scanout.
+                Refresh(_requested, _dark, force: true);
+                preparation.Start?.Invoke();
+            }));
+        };
+        surface.FormFrameRendered = preparation.Rendered;
+        _setSurface(Theme.PaperBrush);
+        surface.InvalidateVisual();
+    }
+
+    internal void StartFormAnimation(Action start)
+    {
+        if (_formPreparation is { } preparation) preparation.Start = start;
+        else start();
+    }
+
+    internal void CancelFormTransitionPreparation()
+    {
+        var preparation = _formPreparation;
+        _formPreparation = null;
+        if (preparation == null) return;
+        preparation.Commit?.Abort();
+        if (ReferenceEquals(preparation.Surface.FormFrameRendered, preparation.Rendered))
+            preparation.Surface.FormFrameRendered = null;
+    }
     private string? _accentMaterial;
     internal bool UsesRedirectionAlpha { get; private set; }
 
@@ -98,6 +148,13 @@ internal sealed class NativeMicaBackdrop : IDisposable
         var chrome = _getChrome();
         ObserveChrome(chrome);
         if (_source?.CompositionTarget == null || chrome == null) return;
+        if (_formPreparation != null)
+        {
+            // Form setup can refresh paint, opacity and frame policy several times.
+            // Keep one installed recipe until the replacement drawing is submitted.
+            _setSurface(Theme.PaperBrush);
+            return;
+        }
 
         // A fresh HWND can enter Clear Acrylic accent/redirection mode before WPF has
         // produced its first redirected bitmap. On current Windows compositors that can
@@ -348,6 +405,7 @@ internal sealed class NativeMicaBackdrop : IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        CancelFormTransitionPreparation();
         _window.SourceInitialized -= OnSourceInitialized;
         _window.ContentRendered -= OnContentRendered;
         _window.IsVisibleChanged -= OnVisibilityChanged;

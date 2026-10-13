@@ -319,6 +319,7 @@ internal static class PaperFormMaterialChecks
 
         private void Check() => Program.Assert(
             !_fixture.Surface.HasBackgroundCapture &&
+            _fixture.Surface.Effect == null &&
             _fixture.Surface.BackgroundFrameCount == _initialFrames &&
             DesktopBackgroundCapture.ReadAffinity(_fixture.Handle) == _fixture.Affinity,
             _context + ": changing geometry must not start or publish background captures");

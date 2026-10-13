@@ -398,6 +398,7 @@ internal static class Program
                 }
                 Check("retained scene efficiency and source ownership", () => MaterialPipelineChecks.Run(controller));
                 Check("stable sampling, retained settings shell and cancelled menu opening", () => MaterialPresentationChecks.Run(controller));
+                Check("paper form rendering and native fallback publication", () => FormTransitionRenderingChecks.Run(controller));
                 Check("paper form animations defer material capture until the endpoint", () => PaperFormMaterialChecks.Run(controller));
                 // Final DWM desktop screenshots are not deterministic on shared Windows CI:
                 // WPF can be rendered and active without having been committed to CopyFromScreen.
