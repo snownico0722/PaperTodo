@@ -700,7 +700,8 @@ public sealed partial class PaperWindow : Window
         {
             _nativeMica = new NativeMicaBackdrop(this, () => _paperChrome,
                 () => !_paper.IsCollapsed && !IsPaperFormTransitioning,
-                brush => Resources["PaperSurfaceBrushKey"] = brush);
+                brush => Resources["PaperSurfaceBrushKey"] = brush,
+                tryLiveFormMorph: NativeMicaBackdrop.LiveFormExperimentEnabled);
             RefreshNativeMica();
         }
         if (!deferShellConstruction)
@@ -1203,7 +1204,8 @@ public sealed partial class PaperWindow : Window
         _paperChrome.Effect = UsesNativePaperChrome || materialShadow ? null : isCapsule
             ? CreatePaperChromeShadow(blurRadius: 8, opacity: 0.12, shadowDepth: 1)
             : CreatePaperChromeShadow();
-        _paperChrome.SetMaterialShadowMargin(materialShadow ? _paperChrome.Margin.Left : 0);
+        _paperChrome.SetMaterialShadowMargin(materialShadow && _nativeMica?.IsLiveFormMorph != true
+            ? _paperChrome.Margin.Left : 0);
         RefreshPluginBodyClip();
         RefreshNativeMica();
         RefreshExperimentalFocusPresentation(animate: false);
@@ -3547,7 +3549,8 @@ public sealed partial class PaperWindow : Window
         _paperChrome.Height = visualChromeHeight;
         var borderX = _paperChrome.BorderThickness.Left + _paperChrome.BorderThickness.Right;
         var borderY = _paperChrome.BorderThickness.Top + _paperChrome.BorderThickness.Bottom;
-        if (Theme.UsesNativeBackdrop) _paperChrome.SetMaterialShadowMargin(margin);
+        if (Theme.UsesNativeBackdrop)
+            _paperChrome.SetMaterialShadowMargin(_nativeMica?.IsLiveFormMorph == true ? 0 : margin);
         _shellScale.ScaleX = Math.Max(0.01, (visualChromeWidth - borderX) / Math.Max(1, baseChromeWidth - borderX));
         _shellScale.ScaleY = Math.Max(0.01, (visualChromeHeight - borderY) / Math.Max(1, baseChromeHeight - borderY));
         UpdateTransitionCornerRadius(visualChromeWidth, visualChromeHeight, baseChromeWidth, baseChromeHeight);

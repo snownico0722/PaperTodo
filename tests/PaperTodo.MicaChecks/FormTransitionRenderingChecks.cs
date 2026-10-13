@@ -23,9 +23,12 @@ internal static class FormTransitionRenderingChecks
             CheckShadow(state);
             CheckReliefTiles();
             CheckQuietMaterialTransitionEndpoints(state);
-            foreach (var material in new[] { MicaBackdropTypes.Acrylic,
+            foreach (var material in new[] { MicaBackdropTypes.Mica, MicaBackdropTypes.Acrylic,
                 MicaBackdropTypes.ClearAcrylic, NativeMicaBackdrop.AeroGlassMaterial })
+            {
                 CheckNativePreparation(material);
+                CheckLiveNativeMorph(material);
+            }
             CheckFallbackShadowSettlement(controller);
         }
         finally
@@ -35,7 +38,7 @@ internal static class FormTransitionRenderingChecks
         }
         Console.WriteLine("FORM RENDERING: scaled far-edge pixels, gutter-bounded shadow, " +
             "quiet-material endpoint continuity, forced shadow restoration, reusable rim tiles " +
-            "and staged/cancelled native fallback passed.");
+            "and staged/cancelled native fallback and live native morph passed.");
     }
 
     private static void CheckContentViewport()
@@ -229,6 +232,89 @@ internal static class FormTransitionRenderingChecks
         }
     }
 
+    private static void CheckLiveNativeMorph(string material)
+    {
+        var surface = new SkinBorder
+        {
+            Background = Theme.PaperBrush, CornerRadius = new CornerRadius(8),
+            BorderThickness = new Thickness(1)
+        };
+        var window = new Window
+        {
+            Content = surface, Width = 320, Height = 240, Left = 20, Top = 20,
+            WindowStyle = WindowStyle.None, AllowsTransparency = false, ShowInTaskbar = false
+        };
+        var api = new NativeProbe();
+        var eligible = true;
+        using var backdrop = new NativeMicaBackdrop(window, () => surface, () => eligible,
+            brush => surface.Background = brush, api, tryLiveFormMorph: true);
+        try
+        {
+            backdrop.Refresh(true, false, material);
+            window.Show();
+            Until(() => backdrop.IsActive && backdrop.UsesRedirectionAlpha,
+                "live native fixture has redirection-alpha material");
+
+            // Expanded-to-capsule: no transition-time DWM replacement or solid brush.
+            surface.SetFormTransition(true);
+            eligible = false;
+            Program.Assert(backdrop.TryBeginLiveFormMorph() && backdrop.IsActive &&
+                backdrop.IsLiveFormMorph && surface.IsLiveNativeMorph,
+                "collapse preserves native recipe on the same HWND");
+            var nativeInstalls = api.BackdropWrites;
+            for (var i = 0; i < 6; i++)
+            {
+                surface.Width = 320 - i * 35;
+                surface.InvalidateVisual();
+                backdrop.Refresh(true, false, material);
+                Program.Assert(backdrop.IsActive &&
+                    surface.Background is SolidColorBrush { Color.A: < 255 },
+                    "intermediate morph keeps transparent WPF above native backing");
+            }
+            Program.Assert(api.BackdropWrites == nativeInstalls,
+                "native backdrop recipe is not reinstalled during animation frames");
+
+            // Collapse endpoint: paint a fully opaque capsule before releasing native.
+            surface.SetFormTransition(false);
+            backdrop.FinishLiveFormMorph(collapsed: true, visible: true);
+            Program.Assert(backdrop.IsActive && surface.FormFrameNeedsOpaque &&
+                surface.Background is SolidColorBrush { Color.A: 255 },
+                "capsule fallback is staged underneath the live native surface");
+            Until(() => !backdrop.IsActive && !backdrop.IsLiveFormMorph,
+                "live native collapse hands off after opaque surface paint");
+            Program.Assert(!surface.IsLiveNativeMorph,
+                "resting capsule no longer requests native-only paint");
+
+            // Capsule-to-expanded: install native once, record an alpha-aware frame,
+            // then let all three form clocks start from that one publication boundary.
+            surface.SetFormTransition(true);
+            eligible = false;
+            Program.Assert(backdrop.TryBeginLiveFormMorph() && backdrop.IsActive &&
+                !surface.FormFrameNeedsOpaque, "expansion stages first native visual");
+            var starts = 0;
+            backdrop.StartFormAnimation(() => starts++);
+            Program.Assert(starts == 0, "native transition clocks wait for first WPF frame");
+            Until(() => starts == 1, "expansion starts after alpha-aware paint");
+            Program.Assert(backdrop.IsLiveFormMorph && backdrop.IsActive &&
+                api.BackdropWrites > nativeInstalls, "expanded animation keeps native material");
+            eligible = true;
+            surface.SetFormTransition(false);
+            backdrop.FinishLiveFormMorph(collapsed: false, visible: true);
+            backdrop.Refresh(true, false, material);
+            Program.Assert(backdrop.IsActive && !backdrop.IsLiveFormMorph &&
+                !surface.IsLiveNativeMorph, "expanded endpoint remains native without a recipe switch");
+
+            // The opt-in must refuse platforms that cannot compose alpha redirection.
+            eligible = false;
+            backdrop.Refresh(true, false, material, force: true);
+            api.RedirectionSupported = false;
+            backdrop.Refresh(true, false, material, force: true);
+            Program.Assert(!backdrop.UsesRedirectionAlpha || !backdrop.TryBeginLiveFormMorph(),
+                "lack of modern alpha support cannot claim live native transition");
+        }
+        finally { window.Close(); }
+    }
+
     private static void CheckNativePreparation(string material)
     {
         var surface = new SkinBorder { CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1) };
@@ -328,13 +414,21 @@ internal static class FormTransitionRenderingChecks
         public bool IsLayered(IntPtr hwnd) => false;
         internal bool Alpha;
         internal int Backdrop;
+        internal int BackdropWrites;
+        internal bool RedirectionSupported = true;
         public int ExtendFrame(IntPtr hwnd, int top) => 0;
         public int SetDarkMode(IntPtr hwnd, bool dark) => 0;
-        public int SetBackdrop(IntPtr hwnd, int backdrop) { Backdrop = backdrop; return 0; }
+        public int SetBackdrop(IntPtr hwnd, int backdrop)
+        {
+            Backdrop = backdrop;
+            BackdropWrites++;
+            return 0;
+        }
         public int SetClearAcrylic(IntPtr hwnd, bool enabled, bool dark) => 0;
         public int EnableAlpha(IntPtr hwnd) { Alpha = true; return 0; }
         public int DisableAlpha(IntPtr hwnd) { Alpha = false; return 0; }
-        public int SetRedirectionAlpha(IntPtr hwnd, bool enabled) => 0;
+        public int SetRedirectionAlpha(IntPtr hwnd, bool enabled) =>
+            RedirectionSupported ? 0 : unchecked((int)0x80004001);
         public void InvalidateContent(IntPtr hwnd) { }
         public int ConfigureFrame(IntPtr hwnd, bool rounded, int borderColor, int captionColor) => 0;
         public void SetNonClientActive(IntPtr hwnd, bool active) { }

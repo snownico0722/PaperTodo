@@ -39,7 +39,8 @@ internal sealed partial class SkinBorder
             _shine = _header = Brushes.Transparent;
             return;
         }
-        var opaque = IsFormTransition || !PaperSkins.UsesNativeBackdrop(Skin) || background.A == 255;
+        var opaque = (IsFormTransition && !IsLiveNativeMorph) ||
+            !PaperSkins.UsesNativeBackdrop(Skin) || background.A == 255;
         byte alpha = EffectiveTransmissionAlpha(opaque, palette.TransmissionAlpha);
         _fill = Frozen(new SolidColorBrush(WithAlpha(paper, alpha)));
         _shine = _header = Brushes.Transparent;
@@ -160,7 +161,8 @@ internal sealed partial class SkinBorder
         if (opaque) return 255;
         // Full material OFF means no transmission at all for capsule/menu surfaces.
         // In particular DockedActive must not receive any separate alpha compensation.
-        if (IsAuxiliary && AppController.Current?.State.MatchAuxiliaryMaterialStrength != true)
+        if (IsAuxiliary && !IsLiveNativeMorph &&
+            AppController.Current?.State.MatchAuxiliaryMaterialStrength != true)
             return 255;
         if (!IsEdgeActiveMaterial)
             return alpha;

@@ -74,7 +74,11 @@ public sealed partial class PaperWindow
     private void BeginPaperFormTransition(bool collapsed, bool animate)
     {
         if (_paperChrome is SkinBorder surface) surface.SetFormTransition(true);
-        if (animate) _nativeMica?.PrepareFormTransition();
+        if (animate)
+        {
+            if (_nativeMica?.TryBeginLiveFormMorph() != true)
+                _nativeMica?.PrepareFormTransition();
+        }
         else _nativeMica?.CancelFormTransitionPreparation();
         _presentationState = collapsed
             ? PaperPresentationState.Collapsing
@@ -97,6 +101,7 @@ public sealed partial class PaperWindow
         _presentationState = collapsed
             ? PaperPresentationState.Collapsed
             : PaperPresentationState.Expanded;
+        _nativeMica?.FinishLiveFormMorph(collapsed, _paper.IsVisible);
 
         // ResetTransitionVisuals may have chosen a temporary shadow while the
         // state still said "transitioning". Re-select the actual endpoint here.
@@ -277,7 +282,7 @@ public sealed partial class PaperWindow
         // close/hide still commits here; shutdown must not commit them for a second time.
         if (_controller.IsRunning) CommitPendingEditsForSave();
         if (_windowLifecycle != PaperWindowLifecycleState.Alive) return;
-        _nativeMica?.CancelFormTransitionPreparation();
+        _nativeMica?.CancelLiveFormMorph();
         if (_paperChrome is SkinBorder surface) surface.SetFormTransition(false);
         _windowLifecycle = PaperWindowLifecycleState.Closing;
         _presentationState = PaperPresentationState.Closing;

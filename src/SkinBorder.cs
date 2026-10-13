@@ -67,6 +67,8 @@ internal sealed partial class SkinBorder : PaperChromeBorder
     private const double QuietAuxiliaryMaterialStrength = .40;
     internal bool IsFormTransition { get; private set; }
     internal Action? FormFrameRendered { get; set; }
+    internal bool FormFrameNeedsOpaque { get; set; } = true;
+    internal bool IsLiveNativeMorph { get; private set; }
     private MaterialTransitionRelief? _formRelief;
     private double _formCompactness;
 
@@ -79,9 +81,18 @@ internal sealed partial class SkinBorder : PaperChromeBorder
     private double PaintedMaterialStrength => IsFormTransition
         ? PaperSkins.UsesNativeBackdrop(Skin) ? FormMaterialStrength : 1
         : MaterialStrength;
-    private double PaintedPaperBackingOpacity => IsFormTransition
+    private double PaintedPaperBackingOpacity => IsLiveNativeMorph ? 0 : IsFormTransition
         ? PaperSkins.UsesNativeBackdrop(Skin) ? 1 - FormMaterialStrength * FormMaterialStrength : 0
         : PaperBackingOpacity;
+
+    internal void SetLiveNativeMorph(bool active)
+    {
+        if (IsLiveNativeMorph == active) return;
+        IsLiveNativeMorph = active;
+        _brushKey = null;
+        _surfaceVersion++;
+        InvalidateVisual();
+    }
 
     internal void SetFormTransitionCompactness(double compactness)
     {
@@ -179,11 +190,12 @@ internal sealed partial class SkinBorder : PaperChromeBorder
     protected override void OnRender(DrawingContext dc)
     {
         RenderSurface(dc);
-        // Notify only after THIS surface recorded an opaque fallback drawing. A
-        // generic Rendering event can belong to another HWND. The adapter queues
-        // its native handoff after this WPF render operation, never inside paint.
-        if (IsFormTransition && ActualWidth > 0 && ActualHeight > 0 &&
-            Background is SolidColorBrush { Color.A: 255 } && FormFrameRendered is { } ready)
+        // Both an entering native frame and an outgoing solid frame must be recorded
+        // by THIS WPF surface, not inferred from another HWND's generic Rendering event.
+        if (ActualWidth > 0 && ActualHeight > 0 &&
+            Background is SolidColorBrush surfaceBrush &&
+            (surfaceBrush.Color.A == 255) == FormFrameNeedsOpaque &&
+            FormFrameRendered is { } ready)
         {
             FormFrameRendered = null;
             ready();

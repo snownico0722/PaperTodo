@@ -39,9 +39,21 @@ internal sealed class NativeMicaBackdrop : IDisposable
     private bool _refreshQueued;
     private bool _contentRendered;
     private FormSurfacePreparation? _formPreparation;
-    private sealed class FormSurfacePreparation(SkinBorder surface)
+    private readonly bool _tryLiveFormMorph;
+    private bool _liveFormMorph;
+    internal bool IsLiveFormMorph => _liveFormMorph;
+
+    // An explicit comparison switch for this stacked PR, not a persisted preference.
+    // Native backdrop covers the WHOLE HWND; real Windows 11 corner/gutter visuals
+    // must be checked before deciding whether this is suitable for normal use.
+    internal static bool LiveFormExperimentEnabled =>
+        Environment.GetEnvironmentVariable("PAPERTODO_EXPERIMENT_LIVE_MORPH") == "1";
+
+    private sealed class FormSurfacePreparation(SkinBorder surface, bool opaque, bool finishLive)
     {
         internal SkinBorder Surface { get; } = surface;
+        internal bool Opaque { get; } = opaque;
+        internal bool FinishLive { get; } = finishLive;
         internal Action? Rendered;
         internal Action? Start;
         internal DispatcherOperation? Commit;
@@ -53,7 +65,12 @@ internal sealed class NativeMicaBackdrop : IDisposable
         if (_disposed || !IsActive || !_window.IsVisible ||
             _source is not { IsDisposed: false } || _getChrome() is not SkinBorder surface)
             return;
-        var preparation = new FormSurfacePreparation(surface);
+        PrepareSurfaceFrame(surface, opaque: true, finishLive: false);
+    }
+
+    private void PrepareSurfaceFrame(SkinBorder surface, bool opaque, bool finishLive)
+    {
+        var preparation = new FormSurfacePreparation(surface, opaque, finishLive);
         _formPreparation = preparation;
         preparation.Rendered = () =>
         {
@@ -62,15 +79,80 @@ internal sealed class NativeMicaBackdrop : IDisposable
             {
                 if (_disposed || !ReferenceEquals(_formPreparation, preparation)) return;
                 _formPreparation = null;
-                // This runs after the source's WPF render pass has unwound. It is
-                // a submission boundary, NOT a claim about physical scanout.
-                Refresh(_requested, _dark, force: true);
+                surface.FormFrameNeedsOpaque = true;
+                if (preparation.FinishLive) _liveFormMorph = false;
+                // For a solid handoff, remove DWM only after the replacement WPF
+                // frame has been recorded. For entering native, don't reinstall DWM
+                // after recording the first alpha-aware WPF frame.
+                Refresh(_requested, _dark, force: preparation.Opaque);
                 preparation.Start?.Invoke();
             }));
         };
+        surface.FormFrameNeedsOpaque = opaque;
         surface.FormFrameRendered = preparation.Rendered;
-        _setSurface(Theme.PaperBrush);
+        if (opaque) _setSurface(Theme.PaperBrush);
         surface.InvalidateVisual();
+    }
+
+    // Keep native material during the WPF shape/size clocks, rather than replacing
+    // the backdrop at animation entry. Only the modern redirection-alpha recipe is
+    // eligible; other Windows sessions keep the proven opaque-first fallback.
+    internal bool TryBeginLiveFormMorph()
+    {
+        if (!_tryLiveFormMorph || _disposed || !_requested || !UsesRedirectionAlpha ||
+            !_window.IsVisible || _window.Opacity < 1 ||
+            _source is not { IsDisposed: false } || _getChrome() is not SkinBorder surface ||
+            !_native.IsSupported || !_native.CompositionEnabled || !_native.TransparencyEnabled ||
+            _native.HighContrast || _native.IsLayered(_source.Handle))
+            return false;
+
+        CancelFormTransitionPreparation();
+        var alreadyActive = IsActive;
+        _liveFormMorph = true;
+        surface.SetLiveNativeMorph(true);
+        // Expand starts from a WPF capsule. It needs one native installation; once
+        // installed, ongoing geometry changes do not touch the DWM recipe again.
+        Refresh(_requested, _dark, force: !alreadyActive);
+        if (!IsActive)
+        {
+            _liveFormMorph = false;
+            surface.SetLiveNativeMorph(false);
+            Refresh(_requested, _dark, force: true);
+            return false;
+        }
+        if (!alreadyActive) PrepareSurfaceFrame(surface, opaque: false, finishLive: false);
+        return true;
+    }
+
+    internal void FinishLiveFormMorph(bool collapsed, bool visible)
+    {
+        if (!_liveFormMorph) return;
+        if (_getChrome() is not SkinBorder surface)
+        {
+            _liveFormMorph = false;
+            return;
+        }
+        surface.SetLiveNativeMorph(false);
+        if (collapsed && visible && IsActive && _window.IsVisible)
+        {
+            // The resting capsule still uses its original WPF alpha/8-DIP gutter.
+            // Stage its solid backing under the native material and remove DWM only
+            // after this exact surface has recorded an opaque frame.
+            CancelFormTransitionPreparation();
+            PrepareSurfaceFrame(surface, opaque: true, finishLive: true);
+        }
+        else
+        {
+            // Expanded endpoint remains native. Hide/close can release immediately.
+            _liveFormMorph = false;
+        }
+    }
+
+    internal void CancelLiveFormMorph()
+    {
+        CancelFormTransitionPreparation();
+        _liveFormMorph = false;
+        if (_getChrome() is SkinBorder surface) surface.SetLiveNativeMorph(false);
     }
 
     internal void StartFormAnimation(Action start)
@@ -87,6 +169,7 @@ internal sealed class NativeMicaBackdrop : IDisposable
         preparation.Commit?.Abort();
         if (ReferenceEquals(preparation.Surface.FormFrameRendered, preparation.Rendered))
             preparation.Surface.FormFrameRendered = null;
+        preparation.Surface.FormFrameNeedsOpaque = true;
     }
     private string? _accentMaterial;
     internal bool UsesRedirectionAlpha { get; private set; }
@@ -101,7 +184,7 @@ internal sealed class NativeMicaBackdrop : IDisposable
 
     internal NativeMicaBackdrop(Window window, Func<Border?> getChrome,
         Func<bool> canPresent, Action<Brush> setSurface,
-        INativeMicaApi? native = null)
+        INativeMicaApi? native = null, bool tryLiveFormMorph = false)
     {
         if (window.AllowsTransparency)
             throw new ArgumentException("DWM Mica requires a non-layered WPF window.", nameof(window));
@@ -110,6 +193,7 @@ internal sealed class NativeMicaBackdrop : IDisposable
         _canPresent = canPresent;
         _setSurface = setSurface;
         _native = native ?? DwmMicaApi.Instance;
+        _tryLiveFormMorph = tryLiveFormMorph;
         // One frame owner, installed before HWND creation. PaperWindow's existing native
         // hit-test still owns resizing; settings/capsules must not acquire resize borders.
         _windowChrome = new WindowChrome
@@ -148,11 +232,11 @@ internal sealed class NativeMicaBackdrop : IDisposable
         var chrome = _getChrome();
         ObserveChrome(chrome);
         if (_source?.CompositionTarget == null || chrome == null) return;
-        if (_formPreparation != null)
+        if (_formPreparation is { } pending)
         {
-            // Form setup can refresh paint, opacity and frame policy several times.
-            // Keep one installed recipe until the replacement drawing is submitted.
-            _setSurface(Theme.PaperBrush);
+            // Ignore intermediate setup refreshes until the matching surface frame
+            // has been recorded. Native-entry preparation retains its live brush.
+            if (pending.Opaque) _setSurface(Theme.PaperBrush);
             return;
         }
 
@@ -170,7 +254,7 @@ internal sealed class NativeMicaBackdrop : IDisposable
             return;
         }
 
-        var eligible = _canPresent() && _window.Opacity >= 1 && chrome.Opacity >= 1 &&
+        var eligible = (_canPresent() || _liveFormMorph) && _window.Opacity >= 1 && chrome.Opacity >= 1 &&
             !_native.IsLayered(_source.Handle) && chrome.IsVisible &&
             _window.WindowState != WindowState.Minimized;
         var rounded = chrome.CornerRadius.TopLeft > 0 && _window.WindowState != WindowState.Maximized;
@@ -405,7 +489,7 @@ internal sealed class NativeMicaBackdrop : IDisposable
     {
         if (_disposed) return;
         _disposed = true;
-        CancelFormTransitionPreparation();
+        CancelLiveFormMorph();
         _window.SourceInitialized -= OnSourceInitialized;
         _window.ContentRendered -= OnContentRendered;
         _window.IsVisibleChanged -= OnVisibilityChanged;
