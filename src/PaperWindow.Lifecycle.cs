@@ -111,15 +111,24 @@ public sealed partial class PaperWindow
         {
             var generation = _collapseTransitionGeneration;
             // Render/layout and already queued native geometry notifications must settle
-            // before the one endpoint capture. A reversed/closed transition cannot resume it.
-            Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
+            // before the one endpoint capture. In the live experiment, the collapsed
+            // capsule's opaque frame must ALSO be committed before DWM is withdrawn;
+            // sampling it sooner could capture the still-live native backing.
+            void ResumeCaptureAfterPaint()
             {
-                if (_windowLifecycle == PaperWindowLifecycleState.Alive &&
-                    generation == _collapseTransitionGeneration && !IsPaperFormTransitioning)
+                Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
                 {
-                    skin.SetSampledBackgroundCaptureSuspended(false);
-                }
-            }));
+                    if (_windowLifecycle == PaperWindowLifecycleState.Alive &&
+                        generation == _collapseTransitionGeneration && !IsPaperFormTransitioning)
+                    {
+                        skin.SetSampledBackgroundCaptureSuspended(false);
+                    }
+                }));
+            }
+            if (collapsed && _nativeMica?.IsLiveFormMorph == true)
+                _nativeMica.StartFormAnimation(ResumeCaptureAfterPaint);
+            else
+                ResumeCaptureAfterPaint();
         }
 
         // Collapse: release images only after the form transition finishes so the fading shell
