@@ -73,7 +73,13 @@ public sealed partial class PaperWindow
 
     private void BeginPaperFormTransition(bool collapsed, bool animate)
     {
-        if (_paperChrome is SkinBorder surface) surface.SetFormTransition(true);
+        if (_paperChrome is SkinBorder surface)
+        {
+            surface.SetFormTransition(true);
+            // Entering live native from a resting capsule can itself refresh the
+            // surface. Suspend captures BEFORE that native recipe is installed.
+            surface.SetSampledBackgroundCaptureSuspended(true);
+        }
         if (animate)
         {
             if (_nativeMica?.TryBeginLiveFormMorph() != true)
@@ -83,9 +89,8 @@ public sealed partial class PaperWindow
         _presentationState = collapsed
             ? PaperPresentationState.Collapsing
             : PaperPresentationState.Expanding;
-        // IsCapsule changes to the target form before its size animation starts. Keep the
-        // current scene, but never acquire a new desktop snapshot for an intermediate frame.
-        if (_paperChrome is SkinBorder skin) skin.SetSampledBackgroundCaptureSuspended(true);
+        // IsCapsule changes to the target form before its size animation starts;
+        // new desktop snapshots remain paused until the settled endpoint.
         // Native refresh belongs after target/frame preparation in SetCollapsedStateCore.
     }
 
