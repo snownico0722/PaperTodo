@@ -3595,6 +3595,7 @@ public sealed partial class PaperWindow : Window
         var desiredVisualRadius = expandedRadius + (compactVisualRadius - expandedRadius) * compactness;
 
         _paperChrome.CornerRadius = new CornerRadius(desiredVisualRadius);
+        if (_paperChrome is SkinBorder skin) skin.SetFormTransitionCompactness(compactness);
     }
 
     private CornerRadius PaperChromeCornerRadiusForState(bool collapsed)

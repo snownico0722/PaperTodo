@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Windows.Media.Effects;
 using PaperTodo;
 
 internal static class FormTransitionRenderingChecks
@@ -21,9 +22,11 @@ internal static class FormTransitionRenderingChecks
             CheckContentViewport();
             CheckShadow(state);
             CheckReliefTiles();
+            CheckQuietMaterialTransitionEndpoints(state);
             foreach (var material in new[] { MicaBackdropTypes.Acrylic,
                 MicaBackdropTypes.ClearAcrylic, NativeMicaBackdrop.AeroGlassMaterial })
                 CheckNativePreparation(material);
+            CheckFallbackShadowSettlement(controller);
         }
         finally
         {
@@ -31,7 +34,8 @@ internal static class FormTransitionRenderingChecks
             Theme.Invalidate();
         }
         Console.WriteLine("FORM RENDERING: scaled far-edge pixels, gutter-bounded shadow, " +
-            "reusable rim tiles and staged/cancelled native fallback passed.");
+            "quiet-material endpoint continuity, forced shadow restoration, reusable rim tiles " +
+            "and staged/cancelled native fallback passed.");
     }
 
     private static void CheckContentViewport()
@@ -116,6 +120,112 @@ internal static class FormTransitionRenderingChecks
                     pixels.AlphaIn(new Rect(size.Width - 4, size.Height / 3, 4, size.Height / 3)) > 0,
                     $"cached rim retains both sides, including pill-source expansion: source={sourceSize}, target={size}");
             }
+        }
+    }
+
+    private static void CheckQuietMaterialTransitionEndpoints(AppState state)
+    {
+        // Both ends of a quiet-material morph must match the actual resting paint.
+        // Expansion changes IsCapsule to the target role before its first animation frame.
+        foreach (var skin in new[] { PaperSkins.Mica, PaperSkins.Acrylic,
+            PaperSkins.ClearAcrylic, PaperSkins.TracingPaper, PaperSkins.Aero })
+        {
+            state.PaperSkin = skin;
+            Theme.Invalidate();
+            var surface = new SkinBorder
+            {
+                IsCapsule = true, Background = Theme.PaperBrush,
+                BorderBrush = Theme.PaperBorderBrush,
+                BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(12)
+            };
+            var size = new Size(176, 64);
+            Color Center() => Render(surface, size, 1).At(88, 32);
+            var restingCapsule = Center();
+
+            surface.SetFormTransition(true);
+            surface.SetFormTransitionCompactness(1);
+            AssertSameCenter(restingCapsule, Center(), skin + ": collapse endpoint");
+            surface.IsCapsule = false;
+            AssertSameCenter(restingCapsule, Center(), skin + ": expand first frame");
+
+            surface.SetFormTransitionCompactness(0);
+            var stagedExpanded = Center();
+            surface.SetFormTransition(false);
+            AssertSameCenter(stagedExpanded, Center(), skin + ": expand endpoint");
+
+            surface.SetFormTransition(true);
+            surface.IsCapsule = true;
+            surface.SetFormTransitionCompactness(1);
+            AssertSameCenter(restingCapsule, Center(), skin + ": return to capsule");
+            surface.SetFormTransition(false);
+            AssertSameCenter(restingCapsule, Center(), skin + ": resting after collapse");
+        }
+        state.PaperSkin = PaperSkins.Aero;
+        Theme.Invalidate();
+    }
+
+    private static void AssertSameCenter(Color expected, Color actual, string context)
+    {
+        var difference = Math.Max(
+            Math.Max(Math.Abs(expected.A - actual.A), Math.Abs(expected.R - actual.R)),
+            Math.Max(Math.Abs(expected.G - actual.G), Math.Abs(expected.B - actual.B)));
+        Program.Assert(difference <= 1,
+            $"{context}: staged and resting fallback colors differ: {expected} / {actual}");
+    }
+
+    private static void CheckFallbackShadowSettlement(AppController controller)
+    {
+        // Material skin without a native HWND: transition removes the full-content
+        // Effect, but the expanded endpoint still owns its ordinary WPF shadow.
+        var nativeMode = typeof(AppController).GetProperty("UsesNativeMicaWindows", Program.Private)!;
+        var wasNative = controller.UsesNativeMicaWindows;
+        var state = controller.State;
+        var saved = (state.PaperSkin, state.EnableAnimations, state.UseCapsuleMode,
+            state.UseDeepCapsuleMode);
+        var paper = new PaperData
+        {
+            Type = PaperTypes.Note, Title = "Material shadow settlement",
+            Content = "Retained editor", IsVisible = true,
+            Width = 360, Height = 250, X = 60, Y = 60, AlwaysOnTop = true
+        };
+        PaperWindow? window = null;
+        try
+        {
+            nativeMode.SetValue(controller, false);
+            state.PaperSkin = PaperSkins.Acrylic;
+            state.EnableAnimations = true;
+            state.UseCapsuleMode = true;
+            state.UseDeepCapsuleMode = false;
+            Theme.Invalidate();
+            state.Papers.Add(paper);
+            window = new PaperWindow(paper, controller) { ShowInTaskbar = false };
+            window.Show();
+            var chrome = (SkinBorder)typeof(PaperWindow)
+                .GetField("_paperChrome", Program.Private)!.GetValue(window)!;
+            window.SetCollapsedState(true, animate: false, saveGeometry: false);
+            window.SetCollapsedState(false, animate: true, saveGeometry: false);
+            Program.Assert(chrome.Effect == null && chrome.IsFormTransition,
+                "layered Acrylic expansion starts with its cheap form shadow");
+            state.EnableAnimations = false;
+            window.SettleAnimationsForDisabledSetting();
+            Program.Assert(!chrome.IsFormTransition && chrome.Effect is DropShadowEffect,
+                "disabled animation restores expanded paper shadow");
+
+            state.EnableAnimations = true;
+            window.SetCollapsedState(true, animate: false, saveGeometry: false);
+            window.SetCollapsedState(false, animate: true, saveGeometry: false);
+            window.EnsureExpandedSurfaceGeometry();
+            Program.Assert(!chrome.IsFormTransition && chrome.Effect is DropShadowEffect,
+                "forced expanded surface restoration also selects the endpoint shadow");
+        }
+        finally
+        {
+            window?.CloseForReal();
+            state.Papers.Remove(paper);
+            (state.PaperSkin, state.EnableAnimations, state.UseCapsuleMode,
+                state.UseDeepCapsuleMode) = saved;
+            nativeMode.SetValue(controller, wasNative);
+            Theme.Invalidate();
         }
     }
 

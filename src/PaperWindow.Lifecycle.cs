@@ -98,7 +98,9 @@ public sealed partial class PaperWindow
             ? PaperPresentationState.Collapsed
             : PaperPresentationState.Expanded;
 
-        RefreshNativeMica();
+        // ResetTransitionVisuals may have chosen a temporary shadow while the
+        // state still said "transitioning". Re-select the actual endpoint here.
+        ApplyPaperChromePresentation();
 
         if (_paperChrome is SkinBorder skin)
         {
