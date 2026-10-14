@@ -1286,6 +1286,6 @@ Native 插件是 fully trusted / unsandboxed .NET/WPF 代码，与 PaperTodo 当
 
 Native Body / Runtime 使用 `Workspace.ReloadData()` / `Workspace.GetDataReloadStatus()`；Web Body / Mini / Runtime 使用 `papertodo.workspace.request('data.reload', {})` 和 `papertodo.workspace.request('data.status', {})`。MCP 工具对应 `reload_data`（需要完整写入权限）和只读的 `get_data_reload_status`。
 
-宿主**不监听磁盘文件，也不记录历史修订或做三方合并**。外部工具可以编辑 `data.json`，但只有显式发起重载才会让运行态接受它；否则下一次正常保存可能直接覆盖外部编辑。
+宿主**不监听磁盘文件，也不记录持久化历史修订**。常规 `reload_data` 以校验后的主文件为准，可覆盖尚未保存的内存/编辑器修改；外部工具修改 `data.json` 后未显式请求时，正常保存仍可能覆盖这些修改。非法或缺失输入直接报告错误，不替换运行数据。
 
-显式重载以校验后的磁盘文件为准，可覆盖尚未保存的内存/编辑器修改；非法或缺失输入直接报告错误，不替换运行数据。结果包含 `Outcome`（`applied`、`invalid`、`busy`、`failed`）、`Applied`、`RestartRequired` 和 `Error`；状态包含 `IsReloading`、`LastAttemptAt`、`LastResult`。UI 更新在 API 返回后的 UI 调度轮次完成；如果删除了发起调用的插件纸片，其 session 可能随后失效。本接口不热替换插件代码；普通 Todo / Note 编辑优先使用已有领域 API。技术取舍见 `doc/ARCHITECTURE.md` / D-057。
+此整合分支另外提供实验性 `merge_data`（需要 MCP 完整写入权限）：Native Workspace 使用 `MergeData()`，Web 使用 `papertodo.workspace.request('data.merge', {})`。它以最近一次成功加载/保存的内存 JSON 为基准合并内外双方独立修改；遇到冲突时弹出左右对比供用户选择，无法确定基线时由用户选择整个状态。用户选择后还会检查外部文件是否再次变化，有冲突的输入会归档。调用先返回 `Outcome: pending` 和 `Applied: false`，待 `get_data_reload_status` 的 `IsReloading` 为 false 再看最终结果。界面更新在后续 UI 调度完成；原插件纸片被删时，其 session 可能失效。没有插件 DLL 代码热替换；普通 Todo / Note 编辑优先使用领域 API。技术路线见 `doc/ARCHITECTURE.md` / D-057。

@@ -20,7 +20,7 @@ This log is written for general and power users alike. It focuses on user-facing
 
 ### Unreleased
 
-- **On-demand data.json reload**: Native/Web plugins and MCP can explicitly reload a validated `data.json` into running papers, todos, notes and settings without restarting. There is no automatic file watching or merge; disk values replace pending in-memory edits, and ordinary saves may overwrite external edits until reload is requested. Interface language changes and first-time native materials still require restart.
+- **On-demand data.json reload**: Native/Web plugins and MCP can explicitly reload a validated `data.json` into running papers, todos, notes and settings without restarting. Default `reload_data` adopts disk values and may replace pending edits. The experimental `merge_data` entry instead combines independent in-memory and external changes, offers a side-by-side choice for conflicts, and keeps a recovery copy of conflicting input. Neither entry enables automatic file watching; ordinary saves may overwrite external edits until an explicit request. Interface language changes and first-time native materials still require restart.
 
 - **Fast animations**: General settings now includes an optional fast-animation mode that reduces visual transition durations to about 60% while keeping animations enabled. The default remains off, and non-visual timers are unchanged.
 - **Compact built-in edge previews**: Note and Todo hover previews now share a 320 DIP maximum height while shorter content remains naturally sized. Plugin Mini size limits are unchanged.
