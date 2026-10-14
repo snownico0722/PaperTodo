@@ -67,3 +67,28 @@ jobs:
           path: ${{ runner.temp }}/material-pixels
           if-no-files-found: warn
           retention-days: 7
+
+  # Temporary integration-branch validation only; remove before mainline adoption.
+  merge-integration:
+    name: Data merge and plugin compatibility
+    if: >-
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/integration/pr340-pr349-selective' &&
+      contains(github.event.head_commit.message, '[ci]')
+    runs-on: windows-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+      - name: Persistence and data reload checks
+        run: ./tools/testing/Run-Checks.ps1 -Group persistence
+      - name: Plugin, protocol and sample checks
+        run: ./tools/testing/Run-Checks.ps1 -Group plugins
