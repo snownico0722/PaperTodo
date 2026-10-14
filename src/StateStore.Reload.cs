@@ -5,7 +5,11 @@ using PaperTodo.Plugin;
 
 namespace PaperTodo;
 
-internal sealed record StateReloadCommit(AppState? State, DataReloadResult Result);
+internal sealed record StateReloadCommit(
+    AppState? State, DataReloadResult Result,
+    IReadOnlyList<StateMergeConflict>? Conflicts = null,
+    JsonObject? ExternalJson = null,
+    string? ObservedDiskJson = null);
 
 public sealed partial class StateStore
 {
@@ -34,6 +38,7 @@ public sealed partial class StateStore
             // Any asynchronous normal save queued before this request is now obsolete.
             // This does not write to disk: the imported file is already the primary file.
             _latestWrittenVersion = version;
+            _mergeBaselineJson = json;
             return new(state, new() { Outcome = "applied", Applied = true });
         }
         catch (Exception ex) when (ex is JsonException or ArgumentException)
