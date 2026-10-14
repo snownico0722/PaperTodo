@@ -112,7 +112,7 @@ internal static partial class Program
             if (ReplaceCalls == 1)
             {
                 // Another editor writes between the first failed replace and retry.
-                File.WriteAllText(targetPath, "{\\"changedDuringRetry\\":true}");
+                File.WriteAllText(targetPath, "{\"changedDuringRetry\":true}");
                 throw new IOException("Simulated sharing violation after external edit.");
             }
             File.Move(tempPath, targetPath, overwrite: true);
@@ -136,7 +136,7 @@ internal static partial class Program
             store.CommitExternalMerge(preview.State!, preview.ObservedDiskJson!, 2, preview.Conflicts));
         Require(operations.ReplaceCalls == 1,
             "writer retried despite an external change detected before replacement");
-        Require(File.ReadAllText(s.Store.FilePath) == "{\\"changedDuringRetry\\":true}",
+        Require(File.ReadAllText(s.Store.FilePath) == "{\"changedDuringRetry\":true}",
             "merge replaced a newer file on retry");
     }
 
