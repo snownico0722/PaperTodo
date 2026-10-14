@@ -92,3 +92,51 @@ jobs:
         run: ./tools/testing/Run-Checks.ps1 -Group persistence
       - name: Plugin, protocol and sample checks
         run: ./tools/testing/Run-Checks.ps1 -Group plugins
+
+  # One-off delivery of the generated native plugin outputs after the host API expands.
+  sync-native-integration:
+    name: Sync generated Codex Bridge outputs
+    if: >-
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/integration/pr340-pr349-selective' &&
+      contains(github.event.head_commit.message, '[sync-native]')
+    permissions:
+      contents: write
+    runs-on: windows-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+      - name: Rebuild only the Codex CLI Bridge distribution
+        run: |
+          ./plugin-samples/Build-And-Install-NativePlugin.ps1 `
+            -ProjectPath plugin-samples/PaperTodo.Plugin.CodexCliBridge/PaperTodo.Plugin.CodexCliBridge.csproj `
+            -ManifestPath plugin-samples/PaperTodo.Plugin.CodexCliBridge/plugin.json `
+            -PaperTodoRoot .
+      - name: Commit two generated outputs back to the integration branch
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $files = @(
+            'plugins/tools.codex-cli-bridge.native/PaperTodo.Plugin.CodexCliBridge.dll',
+            'plugins/tools.codex-cli-bridge.native/skills/papertodo-plugin-creator/references/plugin-development.md'
+          )
+          git add -- $files
+          $changed = @(git diff --cached --name-only)
+          if ($changed.Count -eq 0) { Write-Host 'Already in sync.'; exit 0 }
+          foreach ($name in $changed) {
+            if ($name -notin $files) { throw "Unexpected staged file: $name" }
+          }
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m "build(plugin): synchronize Codex Bridge DLL and reference docs"
+          if ($LASTEXITCODE -ne 0) { throw 'git commit failed' }
+          git push origin HEAD:refs/heads/integration/pr340-pr349-selective
+          if ($LASTEXITCODE -ne 0) { throw 'git push failed' }
