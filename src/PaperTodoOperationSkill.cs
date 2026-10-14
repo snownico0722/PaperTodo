@@ -13,6 +13,7 @@ internal static class PaperTodoOperationSkill
           - 长待办需要关联笔记时，先 `get_setting(id="todo.paper_links")`；关闭或未知则跳过关联方案，不先创建额外 Note。解绑用 `update_todo(clear_linked_paper=true)`，不可同时传绑定 ID。
           - 提醒用 `set_todo_reminder`，时间包含日期和时区；删除用 `delete_paper` / `delete_todo`，仅在用户要求删除时使用。
           - 用户明确授权外部编辑 data.json 后，调用 `reload_data` 接受文件为当前状态，再查询 `get_data_reload_status`；这会覆盖尚未保存的内存修改。没有主动重载时，正常自动保存可以覆盖外部文件。普通内容修改仍优先使用领域工具。
+          - 需要保留内存和外部独立修改时，可显式使用 `merge_data`；发生冲突会弹窗等待用户选择，再查询 `get_data_reload_status`。该功能不启用自动文件监听。
           - 遵循 MCP 权限；权限不足或连接失败时说明原因，不直接修改 data.json 或插件数据文件。工具确认成功后再报告完成；写入结果不明时先读取核对，避免重复追加。
           """
         : $"""

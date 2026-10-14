@@ -21,6 +21,11 @@ internal sealed partial class McpTools
     public Task<JsonElement> ReloadData(CancellationToken cancellationToken = default) =>
         _client.InvokeAsync("reload_data", new { }, cancellationToken);
 
+    [McpServerTool(Name = "merge_data", ReadOnly = false, Destructive = true, OpenWorld = false)]
+    [Description("Experiment: explicitly three-way merge external data.json edits with local unsaved changes. No watcher is installed. Pending conflicts open a PaperTodo dialog; use get_data_reload_status after UI reconciliation. Requires full writes.")]
+    public Task<JsonElement> MergeData(CancellationToken cancellationToken = default) =>
+        _client.InvokeAsync("merge_data", new { }, cancellationToken);
+
     [McpServerTool(Name = "get_data_reload_status", ReadOnly = true, Destructive = false, OpenWorld = false)]
     [Description("Read the last explicit data reload outcome and whether UI reconciliation is still in progress. Does not read or modify the data file.")]
     public Task<JsonElement> GetDataReloadStatus(CancellationToken cancellationToken = default) =>

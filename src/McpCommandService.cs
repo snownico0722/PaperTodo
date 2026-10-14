@@ -42,6 +42,7 @@ internal sealed partial class McpCommandService
             return method switch
             {
                 "reload_data" => ReloadData(),
+                "merge_data" => MergeData(),
                 "get_data_reload_status" => _commands.GetDataReloadStatus(),
                 "list_settings" => ListSettings(parameters),
                 "get_setting" => GetSetting(parameters),
@@ -104,6 +105,13 @@ internal sealed partial class McpCommandService
     {
         RequireFullWrites();
         return _commands.ReloadData(PaperOperationContext.Mcp());
+    }
+
+
+    private DataReloadResult MergeData()
+    {
+        RequireFullWrites();
+        return _commands.MergeData(PaperOperationContext.Mcp());
     }
 
     private object ListPapers(JsonElement parameters)
