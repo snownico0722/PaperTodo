@@ -16,7 +16,12 @@ internal static partial class Program
                 ("ordinary saves may overwrite unrequested file edits", NormalSaveWins),
                 ("invalid or missing input never falls back to backup", InvalidInput),
                 ("old async writes cannot replace an accepted import", SaveFence),
-                ("model/list references survive accepted reload", ModelIdentities)
+                ("model/list references survive accepted reload", ModelIdentities),
+                ("opt-in three-way merge combines independent changes", MergeIndependentEdits),
+                ("conflicts group by paper and archive input", MergePaperConflict),
+                ("stale external source cannot overwrite a newer edit", MergeRejectChangedSource),
+                ("source changed after flush is rejected before replacement", MergeRejectDuringReplace),
+                ("large text diff avoids quadratic allocations", LargeConflictDiff)
             };
             foreach (var check in checks)
             {

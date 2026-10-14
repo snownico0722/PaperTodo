@@ -164,6 +164,86 @@ internal static partial class Program
             Require(mcp.Execute(JsonSerializer.SerializeToElement(new { method = "get_data_reload_status" })) is DataReloadStatus, "MCP status missing");
             Console.WriteLine("PASS shared Web/MCP routes and live theme refresh");
 
+            // #349 selective integration: the extra explicit merge route is distinct from
+            // authoritative reload_data and does not require a FileSystemWatcher.
+            controller.SaveNow(sync: true);
+            var mergedDisk = ReadLive();
+            LivePaper(mergedDisk, "note-b")["content"] = "external independent change";
+            WriteLive(mergedDisk);
+            var localPaper = controller.State.Papers.Single(p => p.Id == "note-b");
+            localPaper.Title = "LOCAL-MERGE";
+            var mergeStart = (DataReloadResult)mcp.Execute(
+                JsonSerializer.SerializeToElement(new { method = "merge_data" }))!;
+            Require(mergeStart.Outcome == "pending" && !mergeStart.Applied,
+                "merge_data must return pending until the atomic commit is complete");
+            await Until(() => !controller.IsDataReloading, "MCP merge apply");
+            Require(localPaper.Title == "LOCAL-MERGE" && localPaper.Content == "external independent change",
+                "merge_data lost independent changes");
+            var mergedStatus = controller.PaperCommands.GetDataReloadStatus();
+            Require(mergedStatus.LastResult?.Applied == true &&
+                    mergedStatus.LastResult.Outcome == "applied", "merge status did not reach applied");
+            Console.WriteLine("PASS explicit MCP three-way merge retains independent local and disk edits");
+
+            controller.SaveNow(sync: true);
+            editorB.Text = "local conflicting body";
+            var conflicting = ReadLive();
+            LivePaper(conflicting, "note-b")["content"] = "external conflicting body";
+            WriteLive(conflicting);
+            var driver = AppController.ConflictDialogDriver;
+            var dialogueCalls = 0;
+            AppController.ConflictDialogDriver = (_, bucket) =>
+            {
+                dialogueCalls++;
+                return bucket is PaperBucket
+                    ? PaperConflictChoice.KeepExternal
+                    : ConflictChoice.KeepExternal;
+            };
+            try
+            {
+                var started = (DataReloadResult)mcp.Execute(
+                    JsonSerializer.SerializeToElement(new { method = "merge_data" }))!;
+                Require(started.Outcome == "pending" && started.ConflictCount >= 1,
+                    "competing field edits were not flagged");
+                await Until(() => !controller.IsDataReloading, "MCP conflict apply");
+                var finished = controller.PaperCommands.GetDataReloadStatus().LastResult;
+                Require(finished?.Applied == true && finished.Outcome == "conflict",
+                    "conflict choice not committed");
+                Require(localPaper.Content == "external conflicting body",
+                    "explicit KeepExternal did not replace conflicting value");
+                Require(dialogueCalls == 1, "single paper should prompt only once");
+                Require(!string.IsNullOrWhiteSpace(finished.ConflictFile) &&
+                    File.Exists(Path.Combine(AppContext.BaseDirectory, finished.ConflictFile)),
+                    "conflicting external data was not archived");
+            }
+            finally { AppController.ConflictDialogDriver = driver; }
+            Console.WriteLine("PASS explicit conflict dialog choice, paper grouping and recovery archive");
+
+            // The nonconflicting rename/delete cases from #349 must work without revision
+            // metadata, a watcher or a full-state overwrite.
+            var newPaper = controller.CreatePaper(PaperTypes.Note, show: true);
+            Require(newPaper != null, "cannot create rename fixture");
+            var oldId = newPaper.Id;
+            controller.SaveNow(sync: true);
+            var renamed = ReadLive();
+            LivePaper(renamed, oldId)["id"] = "merge-renamed-window";
+            WriteLive(renamed);
+            Require(controller.PaperCommands.MergeData(PaperOperationContext.Mcp()).Outcome == "pending",
+                "rename merge was not queued");
+            await Until(() => !controller.IsDataReloading, "rename merge apply");
+            Require(!windows.ContainsKey(oldId) && windows.ContainsKey("merge-renamed-window"),
+                "old paper surface was not replaced after external ID rename");
+            controller.SaveNow(sync: true);
+            var removed = ReadLive();
+            removed["papers"]!.AsArray().Remove(LivePaper(removed, "merge-renamed-window"));
+            WriteLive(removed);
+            Require(controller.PaperCommands.MergeData(PaperOperationContext.Mcp()).Outcome == "pending",
+                "delete merge was not queued");
+            await Until(() => !controller.IsDataReloading, "delete merge apply");
+            Require(!windows.ContainsKey("merge-renamed-window"),
+                "deleted paper surface survived merge");
+            Console.WriteLine("PASS external paper ID rename and delete close old windows");
+
+
             using (var runtime = new PaperPluginRuntimeWorkspaceApi(controller, "fixture.runtime", [], () => true))
             {
                 controller.SaveNow(sync: true);
