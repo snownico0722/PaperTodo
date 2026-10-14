@@ -145,6 +145,13 @@ public sealed partial class StateStore
             {
                 paths.Add(path);
             }
+            // Original external JSON preserved after an opt-in manual merge conflict
+            // can still refer to LMDB images. Diff metadata is not an AppState snapshot.
+            foreach (var path in Directory.EnumerateFiles(directory, "dataconflict-*.json"))
+            {
+                if (!path.EndsWith(".diff.json", StringComparison.OrdinalIgnoreCase))
+                    paths.Add(path);
+            }
 
             hasPersistedState |= paths.Count > 0;
             if (!hasPersistedState)

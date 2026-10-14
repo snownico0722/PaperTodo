@@ -25,6 +25,7 @@ internal static class PaperTodoOperationSkill
           - Before creating a linked detail Note, call `get_setting(id="todo.paper_links")`; if disabled or unknown, skip that approach rather than creating an extra Note first. Unlink with `update_todo(clear_linked_paper=true)`, without a linked paper ID.
           - Use `set_todo_reminder` with a future date, time, and UTC offset; use `delete_paper` / `delete_todo` only when the user requests deletion.
           - After explicit authorization to edit data.json, call `reload_data` to accept the file as authoritative and check `get_data_reload_status`. Unsaved in-memory edits may be replaced; without an explicit reload, ordinary saves may overwrite disk edits. Prefer domain tools for normal edits.
+          - When retaining independent disk and in-memory edits matters, use `merge_data` instead; conflicts open a user dialog and the final outcome is available from `get_data_reload_status`. No automatic file watcher is enabled.
           - Respect MCP permissions. Explain permission or connection failures; do not edit data.json or plugin data files directly. Report completion only after tool success; read back uncertain writes before retrying to avoid duplicate appends.
           """;
 }

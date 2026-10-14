@@ -171,13 +171,13 @@ internal static partial class Program
             LivePaper(mergedDisk, "note-b")["content"] = "external independent change";
             WriteLive(mergedDisk);
             var localPaper = controller.State.Papers.Single(p => p.Id == "note-b");
-            localPaper.Title = "LOCAL-MERGE";
+            localPaper.Title = "LOCAL";
             var mergeStart = (DataReloadResult)mcp.Execute(
                 JsonSerializer.SerializeToElement(new { method = "merge_data" }))!;
             Require(mergeStart.Outcome == "pending" && !mergeStart.Applied,
                 "merge_data must return pending until the atomic commit is complete");
             await Until(() => !controller.IsDataReloading, "MCP merge apply");
-            Require(localPaper.Title == "LOCAL-MERGE" && localPaper.Content == "external independent change",
+            Require(localPaper.Title == "LOCAL" && localPaper.Content == "external independent change",
                 "merge_data lost independent changes");
             var mergedStatus = controller.PaperCommands.GetDataReloadStatus();
             Require(mergedStatus.LastResult?.Applied == true &&

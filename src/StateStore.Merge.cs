@@ -131,7 +131,8 @@ public sealed partial class StateStore
         var diffName = "dataconflict-" + suffix + ".diff.json";
         var directory = Path.GetDirectoryName(FilePath)!;
         // Save exact external source bytes before a successful merge can replace it.
-        File.WriteAllText(Path.Combine(directory, mainName), source, new UTF8Encoding(false));
+        // Copy the exact source file bytes, including any BOM and formatting.
+        File.Copy(FilePath, Path.Combine(directory, mainName));
         File.WriteAllText(Path.Combine(directory, diffName),
             JsonSerializer.Serialize(new { conflicts }, JsonOptions), new UTF8Encoding(false));
         return (mainName, diffName);
