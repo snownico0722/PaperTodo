@@ -21,6 +21,7 @@ internal static partial class Program
                 ("conflicts group by paper and archive input", MergePaperConflict),
                 ("stale external source cannot overwrite a newer edit", MergeRejectChangedSource),
                 ("source changed after flush is rejected before replacement", MergeRejectDuringReplace),
+                ("source changed during replace retry is also rejected", MergeRejectDuringRetry),
                 ("large text diff avoids quadratic allocations", LargeConflictDiff)
             };
             foreach (var check in checks)

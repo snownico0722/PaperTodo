@@ -102,4 +102,42 @@ internal static partial class Program
                 diff.Count(c => c.Kind == LineDiff.ChangeKind.Added) == 1,
                 "large-conflict bounded fallback changed diff semantics");
     }
+    private sealed class ConcurrentReplaceOperations : IDurableAtomicFileOperations
+    {
+        public int ReplaceCalls { get; private set; }
+        public void FlushToDisk(FileStream stream) => stream.Flush(flushToDisk: true);
+        public void Replace(string tempPath, string targetPath)
+        {
+            ReplaceCalls++;
+            if (ReplaceCalls == 1)
+            {
+                // Another editor writes between the first failed replace and retry.
+                File.WriteAllText(targetPath, "{\\"changedDuringRetry\\":true}");
+                throw new IOException("Simulated sharing violation after external edit.");
+            }
+            File.Move(tempPath, targetPath, overwrite: true);
+        }
+        public void Delay(TimeSpan delay) { }
+        public void Delete(string path) => File.Delete(path);
+    }
+
+    private static void MergeRejectDuringRetry()
+    {
+        using var s = new Scope();
+        var operations = new ConcurrentReplaceOperations();
+        var writer = new DurableAtomicFileWriter(fileOperations: operations);
+        var store = new StateStore(s.DirectoryPath, writer);
+        var current = store.Load();
+        current.Papers[0].Title = "LOCAL";
+        var disk = s.Read(); disk["papers"]![0]!["content"] = "external"; s.Write(disk);
+        var preview = store.PreviewExternalMerge(current, 2);
+        Require(preview.State != null, "retry preview failed");
+        Throws<ExternalDocumentChangedException>(() =>
+            store.CommitExternalMerge(preview.State!, preview.ObservedDiskJson!, 2, preview.Conflicts));
+        Require(operations.ReplaceCalls == 1,
+            "writer retried despite an external change detected before replacement");
+        Require(File.ReadAllText(s.Store.FilePath) == "{\\"changedDuringRetry\\":true}",
+            "merge replaced a newer file on retry");
+    }
+
 }
