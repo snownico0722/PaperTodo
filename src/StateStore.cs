@@ -8,7 +8,7 @@ namespace PaperTodo;
 
 public sealed partial class StateStore
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerOptions.Strict)
+    internal static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerOptions.Strict)
     {
         WriteIndented = true,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,

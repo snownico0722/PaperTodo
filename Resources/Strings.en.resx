@@ -1500,4 +1500,49 @@ When off, open at the docked edge or remembered position.</value>
   <data name="SkinCaptureNotice" xml:space="preserve">
     <value>Capsules and menus take a temporary local snapshot of the background behind them; capsule dragging takes one low-resolution virtual-desktop snapshot. It is used only in local memory and is never saved or uploaded.</value>
   </data>
+  <data name="DataReloadConflictTitle" xml:space="preserve">
+    <value>PaperTodo data conflict</value>
+  </data>
+  <data name="DataReloadConflictPath" xml:space="preserve">
+    <value>Path: {0}</value>
+  </data>
+  <data name="DataReloadConflictMemoryHeader" xml:space="preserve">
+    <value>Current (PaperTodo)</value>
+  </data>
+  <data name="DataReloadConflictExternalHeader" xml:space="preserve">
+    <value>External (incoming file)</value>
+  </data>
+  <data name="DataReloadConflictKeepMemory" xml:space="preserve">
+    <value>Keep current</value>
+  </data>
+  <data name="DataReloadConflictKeepExternal" xml:space="preserve">
+    <value>Keep external</value>
+  </data>
+  <data name="DataReloadConflictValueMissing" xml:space="preserve">
+    <value>(missing)</value>
+  </data>
+  <data name="DataReloadConflictMemoryOnlyTooltip" xml:space="preserve">
+    <value>Present in PaperTodo but not in the external file. Kept by "Keep current"; discarded by "Keep external".</value>
+  </data>
+  <data name="DataReloadConflictExternalOnlyTooltip" xml:space="preserve">
+    <value>Present in the external file but not in PaperTodo. Adopted by "Keep external"; discarded by "Keep current".</value>
+  </data>
+  <data name="DataReloadPaperConflictTitle" xml:space="preserve">
+    <value>Paper data conflict</value>
+  </data>
+  <data name="DataReloadPaperConflictHeader" xml:space="preserve">
+    <value>Paper ID:{0}  Type:{1}</value>
+  </data>
+  <data name="DataReloadPaperConflictField" xml:space="preserve">
+    <value>Field:{0}</value>
+  </data>
+  <data name="DataReloadPaperConflictKeepAllMemory" xml:space="preserve">
+    <value>Keep current for all</value>
+  </data>
+  <data name="DataReloadPaperConflictKeepAllExternal" xml:space="preserve">
+    <value>Use external for all</value>
+  </data>
+  <data name="DataReloadPaperConflictWholePaper" xml:space="preserve">
+    <value>(whole paper)</value>
+  </data>
 </root>
