@@ -53,20 +53,11 @@ jobs:
           ./tools/testing/Run-Checks.ps1 -Group all -List
           ./tools/testing/Run-Checks.ps1 -Group regression
 
-      - name: Native material and skin checks
-        env:
-          PAPER_MICA_CAPTURE: ${{ runner.temp }}/material-pixels/native
-          PAPER_SKIN_CAPTURE: ${{ runner.temp }}/material-pixels/skins
+      - name: Material and skin behavior checks
+        # DWM desktop screenshot acceptance was retired on main (see its D-057).
+        # Preserve native behavior and WPF offscreen material checks only.
+        timeout-minutes: 2
         run: ./tools/testing/Run-Checks.ps1 -Group visual -Project MicaChecks
-
-      - name: Upload material visual evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: material-visual-${{ github.sha }}
-          path: ${{ runner.temp }}/material-pixels
-          if-no-files-found: warn
-          retention-days: 7
 
   # Temporary integration-branch validation only; remove before mainline adoption.
   merge-integration:
