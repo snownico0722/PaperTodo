@@ -8,7 +8,7 @@ namespace PaperTodo;
 
 public sealed partial class StateStore
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerOptions.Strict)
+    internal static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerOptions.Strict)
     {
         WriteIndented = true,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -142,6 +142,13 @@ public sealed partial class StateStore
             foreach (var path in Directory.EnumerateFiles(directory, "data.backup.used_for_recovery.*.json"))
             {
                 paths.Add(path);
+            }
+            // Original external JSON preserved after an opt-in manual merge conflict
+            // can still refer to LMDB images. Diff metadata is not an AppState snapshot.
+            foreach (var path in Directory.EnumerateFiles(directory, "dataconflict-*.json"))
+            {
+                if (!path.EndsWith(".diff.json", StringComparison.OrdinalIgnoreCase))
+                    paths.Add(path);
             }
 
             hasPersistedState |= paths.Count > 0;
@@ -308,10 +315,10 @@ public sealed partial class StateStore
         }
     }
 
-    private void WriteJsonInternal(string json)
+    private void WriteJsonInternal(string json, Action? beforeReplace = null)
     {
         var preserveRecoverySources = PreserveRecoveredLoadFilesIfNeeded();
-        _atomicWriter.Write(FilePath, Encoding.UTF8.GetBytes(json));
+        _atomicWriter.Write(FilePath, Encoding.UTF8.GetBytes(json), beforeReplace: beforeReplace);
 
         if (preserveRecoverySources)
         {

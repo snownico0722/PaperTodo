@@ -5,7 +5,11 @@ using PaperTodo.Plugin;
 
 namespace PaperTodo;
 
-internal sealed record StateReloadCommit(AppState? State, DataReloadResult Result);
+internal sealed record StateReloadCommit(
+    AppState? State, DataReloadResult Result,
+    IReadOnlyList<StateMergeConflict>? Conflicts = null,
+    JsonObject? ExternalJson = null,
+    string? ObservedDiskJson = null);
 
 public sealed partial class StateStore
 {

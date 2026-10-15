@@ -1,7 +1,10 @@
 using System.IO;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Threading;
 using PaperTodo.Plugin;
 using Application = System.Windows.Application;
@@ -10,8 +13,11 @@ namespace PaperTodo;
 
 public sealed partial class AppController
 {
-    private sealed record PendingDataReload(AppState Before, AppState Next,
-        DataReloadResult Result, PaperOperationContext Origin);
+    private sealed record PendingDataReload(
+        AppState Before, AppState Next, DataReloadResult Result, PaperOperationContext Origin,
+        bool IsMerge = false, long SaveVersion = 0,
+        IReadOnlyList<StateMergeConflict>? Conflicts = null,
+        JsonObject? ExternalJson = null, string? ObservedDiskJson = null);
 
     // No watcher or background history: reload happens only after an explicit API/MCP request.
     private bool _dataReloadEvaluating;
@@ -34,7 +40,7 @@ public sealed partial class AppController
         };
     }
 
-    internal DataReloadResult ReloadDataCore(PaperOperationContext origin)
+    internal DataReloadResult ReloadDataCore(PaperOperationContext origin, bool merge = false, string? baselineJson = null)
     {
         Application.Current.Dispatcher.VerifyAccess();
         if (IsExiting) return new() { Outcome = "failed", Error = "PaperTodo is exiting." };
@@ -51,7 +57,10 @@ public sealed partial class AppController
             foreach (var window in _windows.Values.ToArray()) window.CommitPendingEditsForDataReload();
             PrepareExternalPaperOperation();
             var before = StateStore.CopyForReload(State);
-            var commit = _store.ReloadExternalState(Interlocked.Increment(ref _saveVersion));
+            var version = Interlocked.Increment(ref _saveVersion);
+            var commit = merge
+                ? _store.PreviewExternalMerge(State, version, baselineJson)
+                : _store.ReloadExternalState(version);
             // Native HWND transparency is fixed at startup. The first switch into a native
             // material needs restart, like the normal skin setting path.
             var result = commit.State == null ? commit.Result : commit.Result with
@@ -69,7 +78,8 @@ public sealed partial class AppController
             _saveTimer.Stop();
             _forceSaveTimer.Stop();
             _hasPendingDirty = false;
-            _pendingDataReload = new(before, commit.State, result, origin);
+            _pendingDataReload = new(before, commit.State, result, origin,
+                merge, version, commit.Conflicts, commit.ExternalJson, commit.ObservedDiskJson);
             // A plugin can delete its own paper through this call. Return to the caller before
             // tearing down that session/runtime. Send precedes the next input/render/timer turn;
             // shared commands and saves remain gated until the committed model is reconciled.
@@ -91,11 +101,32 @@ public sealed partial class AppController
         if (pending == null || _applyingDataReload || IsExiting) return;
         _applyingDataReload = true;
         var suppressDirty = _suppressDirty;
+        var storageAccepted = !pending.IsMerge; // ordinary #340 reload is already committed by StateStore.
         _suppressDirty = true;
         _trayRefreshSuppressionDepth++;
         var events = SuppressPaperPluginEventScans();
         try
         {
+            if (pending.IsMerge)
+            {
+                var effectiveNext = ResolveConflictsInteractively(pending);
+                var files = _store.CommitExternalMerge(effectiveNext,
+                    pending.ObservedDiskJson ?? throw new InvalidOperationException("Missing data merge source."),
+                    pending.SaveVersion, pending.Conflicts);
+                var result = pending.Result with
+                {
+                    Outcome = pending.Conflicts is { Count: > 0 } ? "conflict" : "applied",
+                    Applied = true, ConflictFile = files.ConflictFile,
+                    ConflictDiffFile = files.ConflictDiffFile,
+                    RestartRequired = !string.Equals(pending.Before.UiLanguage, effectiveNext.UiLanguage,
+                        StringComparison.Ordinal) ||
+                        (PaperSkins.UsesNativeBackdrop(effectiveNext.PaperSkin) &&
+                         NativeMicaBackdrop.IsSupported && !UsesNativeMicaWindows)
+                };
+                pending = pending with { Next = effectiveNext, Result = result };
+                _lastDataReloadResult = result;
+                storageAccepted = true;
+            }
             _paperSurfaceRestoreGeneration++;
             _startupShellPrewarmGeneration++;
             var oldPapers = pending.Before.Papers.ToDictionary(p => p.Id, StringComparer.Ordinal);
@@ -147,12 +178,25 @@ public sealed partial class AppController
         {
             // The external file has been accepted. Reconciliation failed; report this without
             // claiming a rollback or triggering a second import.
-            StateReloadModels.Apply(State, pending.Next);
-            _lastDataReloadResult = pending.Result with
+            if (storageAccepted)
             {
-                Outcome = "failed", Applied = true,
-                Error = "The data was accepted, but a display refresh failed: " + ex.GetBaseException().Message
-            };
+                StateReloadModels.Apply(State, pending.Next);
+                _lastDataReloadResult = pending.Result with
+                {
+                    Outcome = "failed", Applied = true,
+                    Error = "Data was committed, but a display refresh failed: " + ex.GetBaseException().Message
+                };
+            }
+            else
+            {
+                // The original running objects are still untouched. In particular, never
+                // install a stale merged candidate when the external file changed mid-dialog.
+                _lastDataReloadResult = pending.Result with
+                {
+                    Outcome = ex is ExternalDocumentChangedException ? "busy" : "failed",
+                    Applied = false, Error = ex.GetBaseException().Message
+                };
+            }
         }
         finally
         {
@@ -162,6 +206,7 @@ public sealed partial class AppController
             _applyingDataReload = false;
             events.Dispose();
         }
+        if (!storageAccepted) return;
         RefreshTrayMenu();
         PublishExternalPaperOperation(pending.Origin);
         // Existing UI rules may normalize a placeholder or geometry. Save those actual runtime
@@ -202,6 +247,73 @@ public sealed partial class AppController
         {
             if (!IsExiting) RefreshMcpRuntime();
         }), DispatcherPriority.ContextIdle);
+    }
+
+    /// <summary>Test seam for user choices; null uses the real #349 dialogs.</summary>
+    internal static Func<Window?, ConflictBucket, object?>? ConflictDialogDriver;
+
+    private AppState ResolveConflictsInteractively(PendingDataReload pending)
+    {
+        if (pending.Conflicts is not { Count: > 0 } conflicts) return pending.Next;
+        var buckets = ConflictAggregator.Group(conflicts, pending.ExternalJson);
+        var paperChoices = new Dictionary<string, PaperConflictChoice>(StringComparer.Ordinal);
+        var leafChoices = new Dictionary<string, ConflictChoice>(StringComparer.Ordinal);
+        var useEntireExternalState = false;
+        var owner = _windows.Values.FirstOrDefault(w =>
+            w.IsVisible && PresentationSource.FromVisual(w) is HwndSource);
+
+        foreach (var bucket in buckets)
+        {
+            switch (bucket)
+            {
+                case PaperBucket paper:
+                {
+                    var choice = ConflictDialogDriver?.Invoke(owner, paper);
+                    var result = choice is PaperConflictChoice chosen
+                        ? chosen : DataReloadPaperConflictDialog.Show(owner, paper);
+                    if (result == PaperConflictChoice.KeepExternal)
+                        paperChoices[paper.PaperId] = result;
+                    break;
+                }
+                case UnknownBaselineBucket unknown:
+                {
+                    var choice = ConflictDialogDriver?.Invoke(owner, unknown);
+                    var result = choice is ConflictChoice chosen
+                        ? chosen : DataReloadConflictDialog.Show(owner, unknown.Conflict);
+                    if (result == ConflictChoice.KeepExternal) useEntireExternalState = true;
+                    break;
+                }
+                case OrderBucket order:
+                {
+                    var choice = ConflictDialogDriver?.Invoke(owner, order);
+                    var result = choice is ConflictChoice chosen
+                        ? chosen : DataReloadConflictDialog.Show(owner, order.Conflict);
+                    if (result == ConflictChoice.KeepExternal)
+                        leafChoices[order.Conflict.Path] = result;
+                    break;
+                }
+                case SingleLeafBucket single:
+                {
+                    var choice = ConflictDialogDriver?.Invoke(owner, single);
+                    var result = choice is ConflictChoice chosen
+                        ? chosen : DataReloadConflictDialog.Show(owner, single.Conflict);
+                    if (result == ConflictChoice.KeepExternal)
+                        leafChoices[single.Conflict.Path] = result;
+                    break;
+                }
+            }
+        }
+
+        if (useEntireExternalState && pending.ExternalJson != null)
+            return JsonSerializer.Deserialize<AppState>(
+                pending.ExternalJson.ToJsonString(StateStore.JsonOptions),
+                StateStore.JsonOptions)!;
+        var withLeaf = leafChoices.Count == 0
+            ? pending.Next
+            : JsonPath.ApplyChoices(pending.Next, conflicts, leafChoices);
+        return paperChoices.Count == 0 || pending.ExternalJson == null
+            ? withLeaf
+            : JsonPath.ApplyPaperChoices(withLeaf, paperChoices, pending.ExternalJson, conflicts);
     }
 
     private bool FinishDataReloadBeforeExit()

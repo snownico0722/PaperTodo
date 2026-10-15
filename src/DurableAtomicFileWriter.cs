@@ -16,7 +16,8 @@ internal interface IDurableAtomicFileWriter
     void Write(
         string targetPath,
         byte[] bytes,
-        Func<string, bool>? validateTemp = null);
+        Func<string, bool>? validateTemp = null,
+        Action? beforeReplace = null);
 }
 
 internal interface IDurableAtomicFileOperations
@@ -67,7 +68,8 @@ internal sealed class DurableAtomicFileWriter : IDurableAtomicFileWriter
     public void Write(
         string targetPath,
         byte[] bytes,
-        Func<string, bool>? validateTemp = null)
+        Func<string, bool>? validateTemp = null,
+        Action? beforeReplace = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(targetPath);
         ArgumentNullException.ThrowIfNull(bytes);
@@ -114,13 +116,21 @@ internal sealed class DurableAtomicFileWriter : IDurableAtomicFileWriter
         }
 
         _faultInjector?.Invoke(DurableAtomicWriteStage.BeforeReplace, targetPath);
-        ReplaceWithRetry(tempPath, targetPath);
+        try { ReplaceWithRetry(tempPath, targetPath, beforeReplace); }
+        catch
+        {
+            // An aborted compare-and-replace may not leave a stale temporary file.
+            TryDelete(tempPath);
+            throw;
+        }
     }
 
-    private void ReplaceWithRetry(string tempPath, string targetPath)
+    private void ReplaceWithRetry(string tempPath, string targetPath, Action? beforeReplace)
     {
         for (var attempt = 1; ; attempt++)
         {
+            // Check immediately before EACH replacement attempt, including retries.
+            beforeReplace?.Invoke();
             try
             {
                 _fileOperations.Replace(tempPath, targetPath);

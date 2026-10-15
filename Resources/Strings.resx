@@ -1549,4 +1549,52 @@
   <data name="SkinCaptureNotice" xml:space="preserve">
     <value>胶囊和菜单显示时会临时读取其后方的局部背景；拖动胶囊时只读取一次低分辨率虚拟桌面。仅在本机内存中使用，不保存或上传。</value>
   </data>
+  <data name="DataReloadConflictTitle" xml:space="preserve">
+    <value>PaperTodo 数据冲突</value>
+  </data>
+  <data name="DataReloadConflictPath" xml:space="preserve">
+    <value>路径:{0}</value>
+  </data>
+  <data name="DataReloadConflictMemoryHeader" xml:space="preserve">
+    <value>当前(PaperTodo)</value>
+  </data>
+  <data name="DataReloadConflictExternalHeader" xml:space="preserve">
+    <value>传入(外部文件)</value>
+  </data>
+  <data name="DataReloadConflictKeepMemory" xml:space="preserve">
+    <value>保留当前</value>
+  </data>
+  <data name="DataReloadConflictKeepExternal" xml:space="preserve">
+    <value>保留传入</value>
+  </data>
+  <data name="DataReloadConflictValueMissing" xml:space="preserve">
+    <value>(缺失)</value>
+  </data>
+  <data name="DataReloadConflictMemoryOnlyTooltip" xml:space="preserve">
+    <value>当前 PaperTodo 内存中有,外部文件中没有。"保留当前" 会保留;"保留传入" 会丢弃。</value>
+  </data>
+  <data name="DataReloadConflictExternalOnlyTooltip" xml:space="preserve">
+    <value>外部文件中有,当前 PaperTodo 内存中没有。"保留传入" 会采用;"保留当前" 会丢弃。</value>
+  </data>
+  <data name="DataReloadPaperConflictTitle" xml:space="preserve">
+    <value>Paper 数据冲突</value>
+  </data>
+  <data name="DataReloadPaperConflictHeader" xml:space="preserve">
+    <value>Paper ID:{0}  类型:{1}</value>
+  </data>
+  <data name="DataReloadPaperConflictField" xml:space="preserve">
+    <value>字段:{0}</value>
+  </data>
+  <data name="DataReloadPaperConflictKeepAllMemory" xml:space="preserve">
+    <value>全部保留当前</value>
+  </data>
+  <data name="DataReloadPaperConflictKeepAllExternal" xml:space="preserve">
+    <value>全部保留传入</value>
+  </data>
+  <data name="DataReloadPaperConflictWholePaper" xml:space="preserve">
+    <value>(整张 paper)</value>
+  </data>
+  <data name="DataReloadMissingBaseline" xml:space="preserve">
+    <value>未提供开始编辑时的原始数据，无法判断双方分别改了什么。请选择保留整份当前数据或采用整份外部数据。</value>
+  </data>
 </root>

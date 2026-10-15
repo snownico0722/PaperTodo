@@ -1500,4 +1500,52 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="SkinCaptureNotice" xml:space="preserve">
     <value>캡슐과 메뉴는 표시할 때 뒤쪽의 로컬 배경을 한 번만 캡처하며, 캡슐을 드래그할 때는 저해상도 가상 데스크톱을 한 번만 캡처합니다. 로컬 메모리에서만 사용하며 저장하거나 업로드하지 않습니다.</value>
   </data>
+  <data name="DataReloadConflictTitle" xml:space="preserve">
+    <value>PaperTodo 데이터 충돌</value>
+  </data>
+  <data name="DataReloadConflictPath" xml:space="preserve">
+    <value>경로: {0}</value>
+  </data>
+  <data name="DataReloadConflictMemoryHeader" xml:space="preserve">
+    <value>현재 (PaperTodo)</value>
+  </data>
+  <data name="DataReloadConflictExternalHeader" xml:space="preserve">
+    <value>외부 (가져온 파일)</value>
+  </data>
+  <data name="DataReloadConflictKeepMemory" xml:space="preserve">
+    <value>현재 값 유지</value>
+  </data>
+  <data name="DataReloadConflictKeepExternal" xml:space="preserve">
+    <value>외부 값 채택</value>
+  </data>
+  <data name="DataReloadConflictValueMissing" xml:space="preserve">
+    <value>(없음)</value>
+  </data>
+  <data name="DataReloadConflictMemoryOnlyTooltip" xml:space="preserve">
+    <value>PaperTodo 에는 있지만 외부 파일에는 없는 행입니다. "현재 값 유지" 시 유지, "외부 값 채택" 시 폐기됩니다.</value>
+  </data>
+  <data name="DataReloadConflictExternalOnlyTooltip" xml:space="preserve">
+    <value>외부 파일에는 있지만 PaperTodo 에는 없는 행입니다. "외부 값 채택" 시 채택, "현재 값 유지" 시 폐기됩니다.</value>
+  </data>
+  <data name="DataReloadPaperConflictTitle" xml:space="preserve">
+    <value>Paper 데이터 충돌</value>
+  </data>
+  <data name="DataReloadPaperConflictHeader" xml:space="preserve">
+    <value>Paper ID:{0}  종류:{1}</value>
+  </data>
+  <data name="DataReloadPaperConflictField" xml:space="preserve">
+    <value>필드:{0}</value>
+  </data>
+  <data name="DataReloadPaperConflictKeepAllMemory" xml:space="preserve">
+    <value>전체 현재 값 유지</value>
+  </data>
+  <data name="DataReloadPaperConflictKeepAllExternal" xml:space="preserve">
+    <value>전체 외부 값 채택</value>
+  </data>
+  <data name="DataReloadPaperConflictWholePaper" xml:space="preserve">
+    <value>(Paper 전체)</value>
+  </data>
+  <data name="DataReloadMissingBaseline" xml:space="preserve">
+    <value>편집 전에 읽은 원본 데이터가 제공되지 않아 각 변경 사항을 구분할 수 없습니다. 현재 데이터 전체를 유지하거나 외부 데이터 전체를 적용하세요.</value>
+  </data>
 </root>
