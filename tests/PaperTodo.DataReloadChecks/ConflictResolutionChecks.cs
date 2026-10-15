@@ -80,10 +80,11 @@ internal static partial class Program
     {
         using var s = new Scope();
         var todo = s.Memory.Papers.Single(p => p.Id == "todo");
-        todo.Title = "local title";
+        // Stay inside the normal six-character title limit; this checks merge choices, not truncation.
+        todo.Title = "LOCAL";
         todo.Items.Add(new() { Id = "local-new", Text = "independent local", Order = 2 });
         var disk = s.Read();
-        disk["papers"]![1]!["title"] = "external title";
+        disk["papers"]![1]!["title"] = "EXTERN";
         disk["papers"]![1]!["items"]![0]!["text"] = "independent external";
         s.Write(disk);
         var preview = s.Store.PreviewExternalMerge(s.Memory, 2, s.BaselineJson);
@@ -93,9 +94,10 @@ internal static partial class Program
             new Dictionary<string, PaperConflictChoice> { ["todo"] = PaperConflictChoice.KeepExternal },
             preview.ExternalJson!, preview.Conflicts!);
         var accepted = selected.Papers.Single(p => p.Id == "todo");
-        Require(accepted.Title == "external title" && accepted.Items.Any(i => i.Id == "local-new") &&
-            accepted.Items.Single(i => i.Id == "t1").Text == "independent external",
-            "paper conflict selection replaced independently merged edits");
+        Require(accepted.Title == "EXTERN", $"external title choice was not applied: {accepted.Title}");
+        Require(accepted.Items.Any(i => i.Id == "local-new"), "paper choice lost an independent local addition");
+        Require(accepted.Items.Single(i => i.Id == "t1").Text == "independent external",
+            "paper choice lost an independent external edit");
         Require(s.Store.SerializeState(preview.State!) == before, "paper selection changed its candidate input");
         s.Store.CommitExternalMerge(selected, preview.ObservedDiskJson!, 2, preview.Conflicts);
         Require(s.Read()["papers"]![1]!["items"]!.AsArray().Any(i => Str(i!["id"]) == "local-new"),
