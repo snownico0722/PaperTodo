@@ -13,7 +13,7 @@ internal static partial class Program
     private const BindingFlags Private = BindingFlags.Instance | BindingFlags.NonPublic;
     private const string LiveMarker = ".papertodo-data-reload-fixture";
 
-    private static void RunIsolatedLiveChecks()
+    private static void RunIsolatedLiveChecks(string fixtureArgument = "--live-fixture")
     {
         var directory = Path.Combine(Path.GetTempPath(), "PaperTodo.DataReloadChecks.Live", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
@@ -34,7 +34,7 @@ internal static partial class Program
                 WorkingDirectory = directory, UseShellExecute = false,
                 RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true
             };
-            start.ArgumentList.Add("--live-fixture");
+            start.ArgumentList.Add(fixtureArgument);
             using var process = Process.Start(start)!;
             var output = process.StandardOutput.ReadToEndAsync(); var error = process.StandardError.ReadToEndAsync();
             if (!process.WaitForExit(90_000))

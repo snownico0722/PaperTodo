@@ -1817,3 +1817,32 @@ PR #319 的初版把主胶囊完整材质收展后的卡死解释为终点迟到
 ### Evidence
 
 `src/StateStore.Merge.cs`、`src/McpTools.cs`、`src/PaperBodyPluginHostApi.DataReload.cs`、`src/WebPaperBodySession.HostRequests.cs`；`tests/PaperTodo.DataReloadChecks` 覆盖读取旧版本后同步/异步保存、同字段冲突、缺失/非法基线，以及 MCP/Native/Web 和窗口生命周期。
+
+---
+
+## D-059 — 固定编号工作区共用代码，不共用运行数据
+
+**Status:** Accepted
+
+### Context
+
+#340 已有同一数据文件的显式重载，但其“纸片消失即删除附属状态”的语义、单一图片缓存和固定 Store 路径不能直接作为工作区切换。产品明确限定主工作区与 2～5 共五个固定槽位、顶栏循环按钮、编号放在扩展名前，以及全部工作区管理配置保存在主 data.json。
+
+### Decision
+
+- 新增 `WorkspaceCatalog` / `WorkspaceSession`，保持每个编号 Store 的不可变文件路径和既有原子写入/version fence；切换时捕获实际 writer，不临时重命名或覆盖主文件。
+- 数据、图片、宿主管理插件配置/Runtime/per-paper state 按编号独立；安装代码和 Native assembly cache 共享。界面卸载不等于业务删除。
+- 主 data.json 独占 catalog，副工作区只通过主 Store 更新该节点。减少数量/禁用不删除文件。
+- 默认跟随主软件设置，保存副工作区独立偏好的设置快照，在运行时覆盖而不持久化继承值。跟随期间公共设置只读，避免隐式反写主工作区。
+- 复用既有窗口恢复、胶囊生命周期和设置生效函数，完整切换采用新窗口/缓存代次；不复用同 ID 的旧工作区窗口。
+
+### Why / Rejected
+
+共享 LMDB 会迫使图片回收扫描其他工作区，并使相同编号缓存含义不明确；独立 LMDB 与独立 StateStore 保持引用边界一致。额外 workspaces.json、目录式工作区容器、常驻监听和每次保存维护全状态历史均不符合本功能的固定槽位设计。普通 ReloadData 的删除与覆盖语义保持不变，不把跨工作区切换伪装为一次外部导入。
+
+### Evidence
+
+- `src/WorkspaceModels.cs` / `src/WorkspaceCatalog.cs` / `src/StateStore.Workspaces.cs`。
+- `src/AppController.Workspaces.cs` / `src/PaperBodyPluginDataStore.Workspaces.cs`。
+- `src/PaperWindow.Workspaces.cs` / `src/AppController.Settings.WorkspacePage.cs`。
+- `tests/PaperTodo.DataReloadChecks/WorkspaceChecks.cs`：存储/版本/继承及隔离 WPF 往返测试。

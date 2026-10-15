@@ -8,6 +8,7 @@ internal static partial class Program
     private static int Main(string[] args)
     {
         if (args.Contains("--live-fixture")) return RunLiveFixture();
+        if (args.Contains("--workspace-fixture")) return RunWorkspaceFixture();
         try
         {
             var checks = new (string Name, Action Run)[]
@@ -34,7 +35,9 @@ internal static partial class Program
                 check.Run();
                 Console.WriteLine("PASS " + check.Name);
             }
+            WorkspaceStorageChecks();
             RunIsolatedLiveChecks();
+            RunIsolatedLiveChecks("--workspace-fixture");
             Console.WriteLine($"PASS explicit reload: {checks.Length} storage groups and isolated WPF/API/MCP fixture");
             return 0;
         }

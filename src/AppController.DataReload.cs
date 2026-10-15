@@ -26,14 +26,17 @@ public sealed partial class AppController
     private DateTimeOffset? _lastDataReloadAt;
     private DataReloadResult? _lastDataReloadResult;
 
-    internal bool IsDataReloading => _dataReloadEvaluating || _applyingDataReload || _pendingDataReload != null;
-    internal bool SuppressDataReloadEditorCommit => _applyingDataReload || _pendingDataReload != null;
+    internal bool IsDataReloading => _workspaceSwitching || _dataReloadEvaluating || _applyingDataReload || _pendingDataReload != null;
+    internal bool SuppressDataReloadEditorCommit => _workspaceClosingSurfaces || _applyingDataReload || _pendingDataReload != null;
 
     internal DataReloadStatus GetDataReloadStatusCore()
     {
         Application.Current.Dispatcher.VerifyAccess();
         return new()
         {
+            WorkspaceNumber = WorkspaceNumber,
+            DataFileName = Path.GetFileName(_store.FilePath),
+            FollowsMainSettings = FollowsMainWorkspaceSettings,
             IsReloading = IsDataReloading,
             LastAttemptAt = _lastDataReloadAt,
             LastResult = _lastDataReloadResult
@@ -127,6 +130,7 @@ public sealed partial class AppController
                 _lastDataReloadResult = result;
                 storageAccepted = true;
             }
+            pending = pending with { Next = PrepareAcceptedWorkspaceReload(pending.Next) };
             _paperSurfaceRestoreGeneration++;
             _startupShellPrewarmGeneration++;
             var oldPapers = pending.Before.Papers.ToDictionary(p => p.Id, StringComparer.Ordinal);
@@ -245,7 +249,7 @@ public sealed partial class AppController
         // Delay host transport changes until the originating request has returned.
         Application.Current.Dispatcher.BeginInvoke(new Action(() =>
         {
-            if (!IsExiting) RefreshMcpRuntime();
+            if (!IsExiting && !_workspaceSwitching) RefreshMcpRuntime();
         }), DispatcherPriority.ContextIdle);
     }
 

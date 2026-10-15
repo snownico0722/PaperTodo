@@ -529,6 +529,10 @@ public sealed partial class AppController
         menu.Items.Add(TraySeparator());
 
         menu.Items.Add(TrayPaperToolbar(menu));
+        if (WorkspaceOptions.Enabled)
+            menu.Items.Add(TrayItem(menu,
+                Strings.Format("WorkspaceTrayCycle", WorkspaceNumber, WorkspaceOptions.Count),
+                () => { _ = CycleWorkspaceAsync(); }));
 
         if (State.Papers.Count > 0)
         {

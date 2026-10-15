@@ -23,6 +23,7 @@ public sealed partial class StateStore
     /// </summary>
     internal StateReloadCommit PreviewExternalMerge(AppState memory, long version, string? baselineJson = null)
     {
+        memory = ProjectForPersistence(memory);
         _writeLock.Wait();
         try
         {
@@ -37,7 +38,7 @@ public sealed partial class StateStore
             ValidateExternalDocument(document);
             var imported = JsonSerializer.Deserialize<AppState>(observed, JsonOptions)
                 ?? throw new JsonException("data.json cannot be null.");
-            NormalizeAfterLoad(imported);
+            NormalizeWorkspaceDocument(imported);
             var external = JsonSerializer.SerializeToNode(imported, JsonOptions)!.AsObject();
             var current = JsonSerializer.SerializeToNode(memory, JsonOptions)!.AsObject();
             JsonObject? baseline = null;
@@ -48,7 +49,7 @@ public sealed partial class StateStore
                 ValidateExternalDocument(originalDocument);
                 var original = JsonSerializer.Deserialize<AppState>(baselineJson, JsonOptions)
                     ?? throw new JsonException("Merge baseline cannot be null.");
-                NormalizeAfterLoad(original);
+                NormalizeWorkspaceDocument(original);
                 baseline = JsonSerializer.SerializeToNode(original, JsonOptions)!.AsObject();
             }
             if (JsonNode.DeepEquals(current, external))
@@ -74,7 +75,7 @@ public sealed partial class StateStore
             var candidate = JsonSerializer.Deserialize<AppState>(
                 merge.State.ToJsonString(JsonOptions), JsonOptions)
                 ?? throw new JsonException("Merged data cannot be null.");
-            NormalizeAfterLoad(candidate);
+            NormalizeWorkspaceDocument(candidate);
 
             // Fence only older queued saves; no primary-file write until conflicts are resolved.
             _latestWrittenVersion = version;
@@ -107,7 +108,7 @@ public sealed partial class StateStore
         IReadOnlyList<StateMergeConflict>? conflicts)
     {
         // Serializable snapshot is prepared outside the shared write lock.
-        var json = SerializeState(merged);
+        var json = SerializeRawState(merged);
         _writeLock.Wait();
         try
         {
@@ -137,8 +138,8 @@ public sealed partial class StateStore
     {
         var suffix = DateTime.UtcNow.ToString("yyyyMMddHHmmssfff") + "-" +
                      Guid.NewGuid().ToString("N")[..8];
-        var mainName = "dataconflict-" + suffix + ".json";
-        var diffName = "dataconflict-" + suffix + ".diff.json";
+        var mainName = ConflictFilePrefix + suffix + ".json";
+        var diffName = ConflictFilePrefix + suffix + ".diff.json";
         var directory = Path.GetDirectoryName(FilePath)!;
         // Save exact external source bytes before a successful merge can replace it.
         // Copy the exact source file bytes, including any BOM and formatting.

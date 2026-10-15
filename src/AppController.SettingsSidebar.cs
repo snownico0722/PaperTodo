@@ -318,6 +318,7 @@ public sealed partial class AppController
             ToggleAdvancedSettingsMode);
         advancedModeToggle.FontSize = AppTypography.Scale(11.5);
         advancedModeToggle.Margin = new Thickness(2, 2, 0, 0);
+        advancedModeToggle.IsEnabled = !FollowsMainWorkspaceSettings;
         advancedModeToggle.ToolTip = BuildSettingsHintTooltip(Strings.Get("TipAdvancedSettingsMode"));
         footer.Children.Add(advancedModeToggle);
 
@@ -347,6 +348,7 @@ public sealed partial class AppController
     private IEnumerable<SettingsPage> SettingsPages()
     {
         yield return SettingsPage.General;
+        yield return SettingsPage.Workspaces;
         yield return SettingsPage.Todo;
         yield return SettingsPage.Note;
         yield return SettingsPage.Visual;
@@ -443,7 +445,7 @@ public sealed partial class AppController
             Width = SettingsContentWidth() + 18,
             Padding = new Thickness(8, 0, 8, 0),
             HorizontalAlignment = HorizontalAlignment.Left,
-            Child = BuildSettingsPage()
+            Child = WithWorkspaceSettingsInheritance(BuildSettingsPage())
         };
 
         var scrollViewer = new ScrollViewer
@@ -470,6 +472,7 @@ public sealed partial class AppController
     private UIElement BuildSettingsPage() => _settingsPage switch
     {
         SettingsPage.General => BuildSettingsSidebarGeneralPage(),
+        SettingsPage.Workspaces => BuildWorkspaceSettingsPage(),
         SettingsPage.Todo => BuildSettingsSidebarTodoPage(),
         SettingsPage.Note => BuildSettingsSidebarNotePage(),
         SettingsPage.Visual => BuildSettingsLiveRegion("visual.options", BuildVisualSettingsPage),
@@ -483,6 +486,7 @@ public sealed partial class AppController
     {
         SettingsPage.General => SettingsSidebarLocalized(
             "常规", "General", "一般", "일반"),
+        SettingsPage.Workspaces => Strings.Get("WorkspaceSettingsTitle"),
         SettingsPage.Todo => Strings.Get("MenuTodo"),
         SettingsPage.Note => Strings.Get("PaperKindNote"),
         SettingsPage.Visual => Strings.Get("SettingsVisual"),
