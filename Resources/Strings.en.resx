@@ -1545,4 +1545,7 @@ When off, open at the docked edge or remembered position.</value>
   <data name="DataReloadPaperConflictWholePaper" xml:space="preserve">
     <value>(whole paper)</value>
   </data>
+  <data name="DataReloadMissingBaseline" xml:space="preserve">
+    <value>The original data read before editing was not provided, so independent changes cannot be identified. Choose the entire current state or the entire external state.</value>
+  </data>
 </root>

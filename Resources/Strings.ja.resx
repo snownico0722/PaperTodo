@@ -1545,4 +1545,7 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="DataReloadPaperConflictWholePaper" xml:space="preserve">
     <value>(Paper 全体)</value>
   </data>
+  <data name="DataReloadMissingBaseline" xml:space="preserve">
+    <value>編集前に読み取った元のデータが指定されていないため、それぞれの変更を判別できません。現在のデータ全体を保持するか、外部データ全体を採用してください。</value>
+  </data>
 </root>

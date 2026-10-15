@@ -168,12 +168,13 @@ internal static partial class Program
             // authoritative reload_data and does not require a FileSystemWatcher.
             controller.SaveNow(sync: true);
             var mergedDisk = ReadLive();
+            var mergedDiskBaseline = mergedDisk.ToJsonString();
             LivePaper(mergedDisk, "note-b")["content"] = "external independent change";
             WriteLive(mergedDisk);
             var localPaper = controller.State.Papers.Single(p => p.Id == "note-b");
             localPaper.Title = "LOCAL";
             var mergeStart = (DataReloadResult)mcp.Execute(
-                JsonSerializer.SerializeToElement(new { method = "merge_data" }))!;
+                JsonSerializer.SerializeToElement(new { method = "merge_data", @params = new { baseline_json = mergedDiskBaseline } }))!;
             Require(mergeStart.Outcome == "pending" && !mergeStart.Applied,
                 "merge_data must return pending until the atomic commit is complete");
             await Until(() => !controller.IsDataReloading, "MCP merge apply");
@@ -187,6 +188,7 @@ internal static partial class Program
             controller.SaveNow(sync: true);
             editorB.Text = "local conflicting body";
             var conflicting = ReadLive();
+            var conflictingBaseline = conflicting.ToJsonString();
             LivePaper(conflicting, "note-b")["content"] = "external conflicting body";
             WriteLive(conflicting);
             var driver = AppController.ConflictDialogDriver;
@@ -201,7 +203,7 @@ internal static partial class Program
             try
             {
                 var started = (DataReloadResult)mcp.Execute(
-                    JsonSerializer.SerializeToElement(new { method = "merge_data" }))!;
+                    JsonSerializer.SerializeToElement(new { method = "merge_data", @params = new { baseline_json = conflictingBaseline } }))!;
                 Require(started.Outcome == "pending" && started.ConflictCount >= 1,
                     "competing field edits were not flagged");
                 await Until(() => !controller.IsDataReloading, "MCP conflict apply");
@@ -218,6 +220,46 @@ internal static partial class Program
             finally { AppController.ConflictDialogDriver = driver; }
             Console.WriteLine("PASS explicit conflict dialog choice, paper grouping and recovery archive");
 
+            foreach (var choice in new[] { ConflictChoice.KeepMemory, ConflictChoice.KeepExternal })
+            {
+                controller.SaveNow(sync: true);
+                var noBaseline = ReadLive();
+                localPaper.Title = "saved before baseline-free merge";
+                controller.SaveNow(sync: true);
+                LivePaper(noBaseline, "note-b")["title"] = "entire external title";
+                WriteLive(noBaseline);
+                var previousDriver = AppController.ConflictDialogDriver;
+                var calls = 0;
+                AppController.ConflictDialogDriver = (_, bucket) =>
+                {
+                    Require(bucket is UnknownBaselineBucket, "missing baseline guessed field-level changes");
+                    calls++;
+                    return choice;
+                };
+                try
+                {
+                    var started = choice == ConflictChoice.KeepMemory
+                        ? native.MergeData()
+                        : (DataReloadResult)mcp.Execute(JsonSerializer.SerializeToElement(new { method = "merge_data" }))!;
+                    Require(started.Outcome == "pending" && started.ConflictCount == 1,
+                        "baseline-free merge did not request a whole-state choice");
+                    await Until(() => !controller.IsDataReloading, "whole-state choice");
+                    var expectedTitle = choice == ConflictChoice.KeepMemory
+                        ? "saved before baseline-free merge" : "entire external title";
+                    Require(calls == 1 && localPaper.Title == expectedTitle &&
+                        Str(LivePaper(ReadLive(), "note-b")["title"]) == expectedTitle,
+                        "whole-state choice did not reach memory and disk");
+                }
+                finally { AppController.ConflictDialogDriver = previousDriver; }
+            }
+            Require(native.MergeData("[]").Outcome == "invalid" &&
+                ((DataReloadResult)WebPluginWorkspaceRequests.Execute(native, "data.merge",
+                    JsonSerializer.SerializeToElement(new { baselineJson = "[]" }))!).Outcome == "invalid" &&
+                ((DataReloadResult)mcp.Execute(JsonSerializer.SerializeToElement(new {
+                    method = "merge_data", @params = new { baseline_json = "[]" } }))!).Outcome == "invalid",
+                "an adapter dropped the invalid supplied baseline");
+            Console.WriteLine("PASS missing-baseline whole-state choices and invalid baseline propagation");
+
             // KeepExternal must also resolve the absence of a whole paper, in either direction.
             foreach (var externalDeletes in new[] { true, false })
             {
@@ -227,6 +269,7 @@ internal static partial class Program
                 conflictWindow.EnsureShellBuilt();
                 controller.SaveNow(sync: true);
                 var conflictDisk = ReadLive();
+                var conflictDiskBaseline = conflictDisk.ToJsonString();
                 if (externalDeletes)
                 {
                     Field<MarkdownTextBox>(conflictWindow, "_noteBox").Text = "local edited before deletion";
@@ -252,7 +295,7 @@ internal static partial class Program
                 };
                 try
                 {
-                    var started = controller.PaperCommands.MergeData(PaperOperationContext.Mcp());
+                    var started = controller.PaperCommands.MergeData(PaperOperationContext.Mcp(), conflictDiskBaseline);
                     Require(started.Outcome == "pending" && started.ConflictCount == 1,
                         "whole-paper delete/edit conflict was not detected");
                     await Until(() => !controller.IsDataReloading, "delete/edit conflict apply");
@@ -280,18 +323,21 @@ internal static partial class Program
             var oldId = newPaper.Id;
             controller.SaveNow(sync: true);
             var renamed = ReadLive();
+            var renamedBaseline = renamed.ToJsonString();
             LivePaper(renamed, oldId)["id"] = "merge-renamed-window";
             WriteLive(renamed);
-            Require(controller.PaperCommands.MergeData(PaperOperationContext.Mcp()).Outcome == "pending",
+            Require(native.MergeData(renamedBaseline).Outcome == "pending",
                 "rename merge was not queued");
             await Until(() => !controller.IsDataReloading, "rename merge apply");
             Require(!windows.ContainsKey(oldId) && windows.ContainsKey("merge-renamed-window"),
                 "old paper surface was not replaced after external ID rename");
             controller.SaveNow(sync: true);
             var removed = ReadLive();
+            var removedBaseline = removed.ToJsonString();
             removed["papers"]!.AsArray().Remove(LivePaper(removed, "merge-renamed-window"));
             WriteLive(removed);
-            Require(controller.PaperCommands.MergeData(PaperOperationContext.Mcp()).Outcome == "pending",
+            Require(((DataReloadResult)WebPluginWorkspaceRequests.Execute(native, "data.merge",
+                JsonSerializer.SerializeToElement(new { baselineJson = removedBaseline }))!).Outcome == "pending",
                 "delete merge was not queued");
             await Until(() => !controller.IsDataReloading, "delete merge apply");
             Require(!windows.ContainsKey("merge-renamed-window"),
@@ -302,9 +348,14 @@ internal static partial class Program
             using (var runtime = new PaperPluginRuntimeWorkspaceApi(controller, "fixture.runtime", [], () => true))
             {
                 controller.SaveNow(sync: true);
-                var runtimeEdit = ReadLive(); LivePaper(runtimeEdit, "note-a")["title"] = "runtime title"; WriteLive(runtimeEdit);
-                Require((await Task.Run(runtime.ReloadData)).Applied, "Runtime API was not marshaled to UI");
-                await Until(() => !controller.IsDataReloading, "Runtime reload");
+                var runtimeEdit = ReadLive();
+                var runtimeBaseline = runtimeEdit.ToJsonString();
+                LivePaper(runtimeEdit, "note-a")["title"] = "runtime title"; WriteLive(runtimeEdit);
+                Require((await Task.Run(() => runtime.MergeData(runtimeBaseline))).Outcome == "pending",
+                    "Runtime merge API was not marshaled to UI");
+                await Until(() => !controller.IsDataReloading, "Runtime merge");
+                Require(controller.State.Papers.Single(p => p.Id == "note-a").Title == "runtime title",
+                    "Runtime merge baseline was not forwarded");
             }
             Console.WriteLine("PASS Native runtime thread dispatch without new plugin permissions");
 

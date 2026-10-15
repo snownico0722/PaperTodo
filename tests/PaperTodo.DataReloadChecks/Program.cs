@@ -18,6 +18,10 @@ internal static partial class Program
                 ("old async writes cannot replace an accepted import", SaveFence),
                 ("model/list references survive accepted reload", ModelIdentities),
                 ("opt-in three-way merge combines independent changes", MergeIndependentEdits),
+                ("caller baseline survives newer sync and async saves", MergeOriginalBaseline),
+                ("missing baseline requires a whole-state choice", MergeMissingBaseline),
+                ("invalid baseline is rejected without changing disk or memory", MergeInvalidBaseline),
+                ("unchanged external snapshot retains local edits", MergeUneditedExternal),
                 ("conflicts group by paper and archive input", MergePaperConflict),
                 ("delete/edit conflicts honor both choices for notes and todos", MergePaperDeletionConflicts),
                 ("stale external source cannot overwrite a newer edit", MergeRejectChangedSource),
@@ -66,12 +70,14 @@ internal static partial class Program
             Path.Combine(Path.GetTempPath(), "PaperTodo.DataReloadChecks", Guid.NewGuid().ToString("N"));
         public StateStore Store { get; }
         public AppState Memory { get; }
+        public string BaselineJson { get; }
         public Scope()
         {
             Directory.CreateDirectory(DirectoryPath);
             Store = new StateStore(DirectoryPath, DurableAtomicFileWriter.Shared);
             Store.SaveJsonSync(Store.SerializeState(NewState()), 1);
             Memory = Store.Load();
+            BaselineJson = File.ReadAllText(Store.FilePath);
         }
         public JsonObject Read() => J(File.ReadAllText(Store.FilePath));
         public void Write(JsonObject document) => File.WriteAllText(Store.FilePath, document.ToJsonString());

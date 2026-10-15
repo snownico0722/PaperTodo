@@ -1771,7 +1771,7 @@ PR #319 的初版把主胶囊完整材质收展后的卡死解释为终点迟到
  
 ## D-057 — data.json 仅显式重载，普通保存保持原路径
 
-**Status:** Accepted
+**Status:** Partially superseded by D-058（补充可选三方合并；直接重载与普通保存约束保留）
 
 ### Context
 
@@ -1790,3 +1790,30 @@ PR #319 的初版把主胶囊完整材质收展后的卡死解释为终点迟到
 ### Evidence
 
 `src/StateStore.Reload.cs`、`src/AppController.DataReload.cs`、`src/StateReloadModels.cs`、`src/PaperCommandService.DataReload.cs` 和 `tests/PaperTodo.DataReloadChecks`。
+
+
+---
+
+## D-058 — 显式合并由调用方提供真实原始版本
+
+**Status:** Accepted
+
+### Context
+
+#350 在 #340 的显式重载上吸收 #349 的 ID 感知三方合并与冲突选择。初版缓存最近一次成功加载/保存的 JSON，但外部工具可能仍在编辑更早读到的版本。如果把后一次保存当作共同基线，算法会把外部旧字段误判为新修改，撤回已经保存的本地工作；同字段竞争也可能被误判为单方修改。写入前确认磁盘没有再次变化，只能保护请求期间的输入，不能证明共同基线正确。
+
+### Decision
+
+- 保留直接采用磁盘的 `reload_data`；另提供按需 `merge_data`，全部经共享命令、controller 和 StateStore 写入边界。
+- 外部工具保留开始编辑时实际读到的完整 JSON，调用时传 `baseline_json`（MCP）或 `baselineJson`（Native/Web）。基线作为单次操作输入，按主文件相同规则校验和规范化，不保存为宿主历史。调用方应传原始快照，不能补传之后重新读取的文件。
+- 没有基线且双方不同，只提供整份当前/外部状态的明确选择；双方相同返回 `unchanged`。明确传入的非法基线返回 `invalid`，不能悄悄退回猜测或整状态导入。
+- 原有 Native `MergeData()` 保持可调用；新增带基线重载的默认接口实现在旧宿主明确报告不支持，不能丢掉调用方的基线。
+- 保持冲突选择、原件归档、提交前及替换重试时的源文件检查，成功写盘后才应用模型/窗口。普通保存不持有基线，不增加 JSON 解析、历史库、revision 字段或文件监听。
+
+### Why / Consequences
+
+合并所需的原始版本由实际读取它的编辑方持有，避免自动保存移动比较起点。代价是调用方需保留并传输一份完整状态；无法提供时，宿主不会声称能识别双方的独立修改。正常自动保存仍可能覆盖尚未显式导入的外部文件，外部编辑方仍需协调写入和请求。这不是跨进程事务或自动同步协议。
+
+### Evidence
+
+`src/StateStore.Merge.cs`、`src/McpTools.cs`、`src/PaperBodyPluginHostApi.DataReload.cs`、`src/WebPaperBodySession.HostRequests.cs`；`tests/PaperTodo.DataReloadChecks` 覆盖读取旧版本后同步/异步保存、同字段冲突、缺失/非法基线，以及 MCP/Native/Web 和窗口生命周期。

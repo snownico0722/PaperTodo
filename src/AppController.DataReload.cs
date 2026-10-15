@@ -40,7 +40,7 @@ public sealed partial class AppController
         };
     }
 
-    internal DataReloadResult ReloadDataCore(PaperOperationContext origin, bool merge = false)
+    internal DataReloadResult ReloadDataCore(PaperOperationContext origin, bool merge = false, string? baselineJson = null)
     {
         Application.Current.Dispatcher.VerifyAccess();
         if (IsExiting) return new() { Outcome = "failed", Error = "PaperTodo is exiting." };
@@ -59,7 +59,7 @@ public sealed partial class AppController
             var before = StateStore.CopyForReload(State);
             var version = Interlocked.Increment(ref _saveVersion);
             var commit = merge
-                ? _store.PreviewExternalMerge(State, version)
+                ? _store.PreviewExternalMerge(State, version, baselineJson)
                 : _store.ReloadExternalState(version);
             // Native HWND transparency is fixed at startup. The first switch into a native
             // material needs restart, like the normal skin setting path.

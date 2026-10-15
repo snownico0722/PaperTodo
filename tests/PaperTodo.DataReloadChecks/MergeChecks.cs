@@ -11,7 +11,7 @@ internal static partial class Program
         var disk = s.Read();
         disk["papers"]![0]!["content"] = "external";
         s.Write(disk);
-        var preview = s.Store.PreviewExternalMerge(s.Memory, 2);
+        var preview = s.Store.PreviewExternalMerge(s.Memory, 2, s.BaselineJson);
         Require(preview.State != null && preview.Result.Outcome == "pending" &&
                 preview.Conflicts is { Count: 0 } &&
                 preview.State.Papers[0].Title == "local" &&
@@ -26,7 +26,77 @@ internal static partial class Program
         Require(!File.ReadAllText(s.Store.FilePath).Contains("$paperTodoRevision", StringComparison.Ordinal),
                 "opt-in merge added obsolete persistent revision tracking");
         Require(s.Store.PreviewExternalMerge(preview.State, 3).Result.Outcome == "unchanged",
-                "accepted source must become the new in-memory baseline");
+                "identical current and disk state should require no merge");
+    }
+
+    private static void MergeOriginalBaseline()
+    {
+        foreach (var asynchronous in new[] { false, true })
+        foreach (var sameField in new[] { false, true })
+        {
+            using var s = new Scope();
+            var disk = s.Read(); // The external editor reads before PaperTodo's next save.
+            if (sameField) s.Memory.Papers[0].Content = "saved local body";
+            else s.Memory.Papers[0].Title = "saved local title";
+            var saved = s.Store.SerializeState(s.Memory);
+            if (asynchronous) s.Store.SaveJsonAsync(saved, 2).GetAwaiter().GetResult();
+            else s.Store.SaveJsonSync(saved, 2);
+            disk["papers"]![0]!["content"] = "external from original";
+            s.Write(disk);
+            var before = File.ReadAllText(s.Store.FilePath);
+            var preview = s.Store.PreviewExternalMerge(s.Memory, 3, s.BaselineJson);
+            Require(preview.State != null && preview.Result.Outcome == "pending" &&
+                preview.Result.ConflictCount == (sameField ? 1 : 0),
+                "a later save displaced the editor's original baseline");
+            Require(preview.State.Papers[0].Content == (sameField ? "saved local body" : "external from original") &&
+                (sameField || preview.State.Papers[0].Title == "saved local title"),
+                "merge reverted saved local work or lost external work");
+            Require(File.ReadAllText(s.Store.FilePath) == before, "preview wrote the file before resolution");
+        }
+    }
+
+    private static void MergeMissingBaseline()
+    {
+        using var s = new Scope();
+        Require(s.Store.PreviewExternalMerge(s.Memory, 2).Result.Outcome == "unchanged",
+            "identical snapshots should not need a baseline");
+        var disk = s.Read();
+        s.Memory.Papers[0].Title = "saved local title";
+        s.Store.SaveJsonSync(s.Store.SerializeState(s.Memory), 2);
+        disk["papers"]![0]!["content"] = "external based on old file";
+        s.Write(disk);
+        var before = File.ReadAllText(s.Store.FilePath);
+        var preview = s.Store.PreviewExternalMerge(s.Memory, 3);
+        Require(preview.State != null && preview.Conflicts is { Count: 1 } &&
+            preview.Conflicts[0].Reason == "unknown_baseline" &&
+            ConflictAggregator.Group(preview.Conflicts, preview.ExternalJson).Single() is UnknownBaselineBucket,
+            "missing baseline was silently inferred from a save");
+        Require(preview.State.Papers[0].Title == "saved local title" &&
+            preview.State.Papers[0].Content == "original" && File.ReadAllText(s.Store.FilePath) == before,
+            "unknown baseline applied external state before the user's choice");
+    }
+
+    private static void MergeInvalidBaseline()
+    {
+        using var s = new Scope();
+        var disk = File.ReadAllText(s.Store.FilePath);
+        var memory = s.Store.SerializeState(s.Memory);
+        foreach (var invalid in new[] { "", "{broken", "null", "[]", "{\"papers\":{}}" })
+        {
+            var preview = s.Store.PreviewExternalMerge(s.Memory, 2, invalid);
+            Require(preview.State == null && preview.Result.Outcome == "invalid" &&
+                File.ReadAllText(s.Store.FilePath) == disk && s.Store.SerializeState(s.Memory) == memory,
+                "invalid baseline was ignored or changed state");
+        }
+    }
+
+    private static void MergeUneditedExternal()
+    {
+        using var s = new Scope();
+        s.Memory.Papers[0].Title = "local only";
+        var preview = s.Store.PreviewExternalMerge(s.Memory, 2, s.BaselineJson);
+        Require(preview.State?.Papers[0].Title == "local only" && preview.Conflicts is { Count: 0 },
+            "unchanged external file incorrectly suppressed local edits");
     }
 
     private static void MergePaperConflict()
@@ -36,7 +106,7 @@ internal static partial class Program
         var disk = s.Read();
         disk["papers"]![0]!["content"] = "external";
         s.Write(disk);
-        var preview = s.Store.PreviewExternalMerge(s.Memory, 2);
+        var preview = s.Store.PreviewExternalMerge(s.Memory, 2, s.BaselineJson);
         Require(preview.State != null && preview.Result.ConflictCount == 1 &&
                 preview.Conflicts is { Count: 1 }, "conflicting field was not detected");
         var bucket = ConflictAggregator.Group(preview.Conflicts!, preview.ExternalJson).Single();
@@ -81,7 +151,7 @@ internal static partial class Program
                 else incoming["items"]![0]!["text"] = "external edit";
             }
             s.Write(disk);
-            var preview = s.Store.PreviewExternalMerge(s.Memory, 2);
+            var preview = s.Store.PreviewExternalMerge(s.Memory, 2, s.BaselineJson);
             Require(preview.State != null && preview.Conflicts is { Count: 1 },
                 "delete/edit must produce one whole-paper conflict");
             Require(ConflictAggregator.Group(preview.Conflicts!, preview.ExternalJson).Single()
@@ -120,7 +190,7 @@ internal static partial class Program
         using var s = new Scope();
         s.Memory.Papers[0].Title = "local";
         var disk = s.Read(); disk["papers"]![0]!["content"] = "external"; s.Write(disk);
-        var preview = s.Store.PreviewExternalMerge(s.Memory, 2);
+        var preview = s.Store.PreviewExternalMerge(s.Memory, 2, s.BaselineJson);
         Require(preview.State != null, "merge preview did not start");
         disk["papers"]![0]!["content"] = "arrived-later"; s.Write(disk);
         Throws<ExternalDocumentChangedException>(() =>
@@ -141,7 +211,7 @@ internal static partial class Program
         var local = special.Load();
         local.Papers[0].Title = "local";
         var disk = s.Read(); disk["papers"]![0]!["content"] = "external"; s.Write(disk);
-        var preview = special.PreviewExternalMerge(local, 2);
+        var preview = special.PreviewExternalMerge(local, 2, s.BaselineJson);
         Require(preview.State != null, "merge preview failed before replace-race test");
         Throws<ExternalDocumentChangedException>(() =>
             special.CommitExternalMerge(preview.State!, preview.ObservedDiskJson!, 2, preview.Conflicts));
@@ -188,7 +258,7 @@ internal static partial class Program
         var current = store.Load();
         current.Papers[0].Title = "LOCAL";
         var disk = s.Read(); disk["papers"]![0]!["content"] = "external"; s.Write(disk);
-        var preview = store.PreviewExternalMerge(current, 2);
+        var preview = store.PreviewExternalMerge(current, 2, s.BaselineJson);
         Require(preview.State != null, "retry preview failed");
         Throws<ExternalDocumentChangedException>(() =>
             store.CommitExternalMerge(preview.State!, preview.ObservedDiskJson!, 2, preview.Conflicts));

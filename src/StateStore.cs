@@ -65,7 +65,6 @@ public sealed partial class StateStore
                 if (state != null)
                 {
                     NormalizeAfterLoad(state);
-                    _mergeBaselineJson = json;
                     return state;
                 }
 
@@ -92,7 +91,6 @@ public sealed partial class StateStore
                     }
 
                     NormalizeAfterLoad(state);
-                    _mergeBaselineJson = null; // Recovered backup is not the current primary file.
                     return state;
                 }
 
@@ -237,8 +235,6 @@ public sealed partial class StateStore
 
     private readonly SemaphoreSlim _writeLock = new(1, 1);
     private long _latestWrittenVersion = 0;
-    // A single in-memory baseline for opt-in manual three-way imports. No revision field or history file.
-    private string? _mergeBaselineJson;
 
     public string SerializeState(AppState state)
     {
@@ -257,7 +253,6 @@ public sealed partial class StateStore
             }
             WriteJsonInternal(json);
             _latestWrittenVersion = version;
-            _mergeBaselineJson = json;
         }
         finally
         {
@@ -276,7 +271,6 @@ public sealed partial class StateStore
             }
             await Task.Run(() => WriteJsonInternal(json));
             _latestWrittenVersion = version;
-            _mergeBaselineJson = json;
         }
         finally
         {

@@ -144,7 +144,9 @@ internal sealed class DataReloadConflictDialogWindow : Window
         // 路径
         var pathText = new TextBlock
         {
-            Text = Strings.Format("DataReloadConflictPath", conflict.Path),
+            Text = conflict.Reason == "unknown_baseline"
+                ? Strings.Get("DataReloadMissingBaseline")
+                : Strings.Format("DataReloadConflictPath", conflict.Path),
             Foreground = Theme.WeakTextBrush,
             FontSize = AppTypography.Scale(11),
             Margin = new Thickness(0, 8, 0, 8),

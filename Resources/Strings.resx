@@ -1594,4 +1594,7 @@
   <data name="DataReloadPaperConflictWholePaper" xml:space="preserve">
     <value>(整张 paper)</value>
   </data>
+  <data name="DataReloadMissingBaseline" xml:space="preserve">
+    <value>未提供开始编辑时的原始数据，无法判断双方分别改了什么。请选择保留整份当前数据或采用整份外部数据。</value>
+  </data>
 </root>

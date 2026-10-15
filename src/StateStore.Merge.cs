@@ -18,10 +18,10 @@ public sealed partial class StateStore
     /// <summary>
     /// An *opt-in*, explicit 3-way merge preview. The usual ReloadExternalState remains
     /// disk-authoritative. No watcher, revision field or on-disk history is installed.
-    /// Baseline is just the last successfully loaded/saved JSON string, held in memory.
+    /// The caller supplies the actual original JSON read before editing; saves never infer it.
     /// No disk write occurs here: the UI must resolve any conflicts before commit.
     /// </summary>
-    internal StateReloadCommit PreviewExternalMerge(AppState memory, long version)
+    internal StateReloadCommit PreviewExternalMerge(AppState memory, long version, string? baselineJson = null)
     {
         _writeLock.Wait();
         try
@@ -32,9 +32,6 @@ public sealed partial class StateStore
                 return new(null, new() { Outcome = "invalid", Error = "data.json is missing." });
 
             var observed = File.ReadAllText(FilePath);
-            if (_mergeBaselineJson != null && string.Equals(observed, _mergeBaselineJson, StringComparison.Ordinal))
-                return new(null, new() { Outcome = "unchanged" });
-
             var document = JsonNode.Parse(observed, documentOptions: StateJsonReadPolicy.DocumentOptions)
                 as JsonObject ?? throw new JsonException("data.json must contain an object.");
             ValidateExternalDocument(document);
@@ -43,20 +40,30 @@ public sealed partial class StateStore
             NormalizeAfterLoad(imported);
             var external = JsonSerializer.SerializeToNode(imported, JsonOptions)!.AsObject();
             var current = JsonSerializer.SerializeToNode(memory, JsonOptions)!.AsObject();
-            StateMergeResult merge;
-            if (_mergeBaselineJson == null)
+            JsonObject? baseline = null;
+            if (baselineJson != null)
             {
-                // No proven baseline (e.g. startup backup recovery). Never silently infer one.
+                var originalDocument = JsonNode.Parse(baselineJson, documentOptions: StateJsonReadPolicy.DocumentOptions)
+                    as JsonObject ?? throw new JsonException("Merge baseline must contain an object.");
+                ValidateExternalDocument(originalDocument);
+                var original = JsonSerializer.Deserialize<AppState>(baselineJson, JsonOptions)
+                    ?? throw new JsonException("Merge baseline cannot be null.");
+                NormalizeAfterLoad(original);
+                baseline = JsonSerializer.SerializeToNode(original, JsonOptions)!.AsObject();
+            }
+            if (JsonNode.DeepEquals(current, external))
+                return new(null, new() { Outcome = "unchanged" });
+
+            StateMergeResult merge;
+            if (baseline == null)
+            {
+                // The last save is not necessarily what the external editor read. Ask explicitly.
                 merge = new((JsonObject)current.DeepClone(), [],
                     [new StateMergeConflict("$", false, null, true, current.DeepClone(),
                         true, external.DeepClone(), "unknown_baseline")]);
             }
             else
             {
-                var saved = JsonSerializer.Deserialize<AppState>(_mergeBaselineJson, JsonOptions)
-                    ?? throw new JsonException("Saved merge baseline is invalid.");
-                NormalizeAfterLoad(saved);
-                var baseline = JsonSerializer.SerializeToNode(saved, JsonOptions)!.AsObject();
                 merge = StateJsonMerge.Merge(baseline, current, external);
             }
 
@@ -116,7 +123,6 @@ public sealed partial class StateStore
                 (conflictFile, diffFile) = ArchiveConflicts(observedDiskJson, conflicts);
             WriteJsonInternal(json, beforeReplace: ValidateSource);
             _latestWrittenVersion = version;
-            _mergeBaselineJson = json;
             return (conflictFile, diffFile);
         }
         finally { _writeLock.Release(); }
