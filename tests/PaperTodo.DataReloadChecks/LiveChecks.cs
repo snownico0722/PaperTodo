@@ -173,8 +173,11 @@ internal static partial class Program
             WriteLive(mergedDisk);
             var localPaper = controller.State.Papers.Single(p => p.Id == "note-b");
             localPaper.Title = "LOCAL";
-            var mergeStart = (DataReloadResult)mcp.Execute(
-                JsonSerializer.SerializeToElement(new { method = "merge_data", @params = new { baseline_json = mergedDiskBaseline } }))!;
+            var mergePipeName = "PaperTodo-merge-check-" + Guid.NewGuid().ToString("N");
+            using var mergePipe = new McpApiHost(Dispatcher.CurrentDispatcher, mcp.Execute, mergePipeName);
+            mergePipe.Start();
+            var mergeTools = new McpTools(new McpPipeClient(mergePipeName));
+            var mergeStart = (await mergeTools.MergeData(mergedDiskBaseline)).Deserialize<DataReloadResult>()!;
             Require(mergeStart.Outcome == "pending" && !mergeStart.Applied,
                 "merge_data must return pending until the atomic commit is complete");
             await Until(() => !controller.IsDataReloading, "MCP merge apply");
