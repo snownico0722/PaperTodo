@@ -52,7 +52,11 @@ public sealed partial class StateStore
                 baseline = JsonSerializer.SerializeToNode(original, JsonOptions)!.AsObject();
             }
             if (JsonNode.DeepEquals(current, external))
+            {
+                // Even a no-op request must fence older queued snapshots.
+                _latestWrittenVersion = version;
                 return new(null, new() { Outcome = "unchanged" });
+            }
 
             StateMergeResult merge;
             if (baseline == null)

@@ -37,7 +37,7 @@ internal static partial class Program
             using var s = new Scope();
             var disk = s.Read(); // The external editor reads before PaperTodo's next save.
             if (sameField) s.Memory.Papers[0].Content = "saved local body";
-            else s.Memory.Papers[0].Title = "saved local title";
+            else s.Memory.Papers[0].Title = "SAVED";
             var saved = s.Store.SerializeState(s.Memory);
             if (asynchronous) s.Store.SaveJsonAsync(saved, 2).GetAwaiter().GetResult();
             else s.Store.SaveJsonSync(saved, 2);
@@ -49,7 +49,7 @@ internal static partial class Program
                 preview.Result.ConflictCount == (sameField ? 1 : 0),
                 "a later save displaced the editor's original baseline");
             Require(preview.State.Papers[0].Content == (sameField ? "saved local body" : "external from original") &&
-                (sameField || preview.State.Papers[0].Title == "saved local title"),
+                (sameField || preview.State.Papers[0].Title == "SAVED"),
                 "merge reverted saved local work or lost external work");
             Require(File.ReadAllText(s.Store.FilePath) == before, "preview wrote the file before resolution");
         }
@@ -58,20 +58,25 @@ internal static partial class Program
     private static void MergeMissingBaseline()
     {
         using var s = new Scope();
+        var stale = NewState();
+        stale.Papers[0].Content = "obsolete queued save";
         Require(s.Store.PreviewExternalMerge(s.Memory, 2).Result.Outcome == "unchanged",
             "identical snapshots should not need a baseline");
+        s.Store.SaveJsonSync(s.Store.SerializeState(stale), 1);
+        Require(Str(s.Read()["papers"]![0]!["content"]) == "original",
+            "unchanged merge did not fence an older queued snapshot");
         var disk = s.Read();
-        s.Memory.Papers[0].Title = "saved local title";
-        s.Store.SaveJsonSync(s.Store.SerializeState(s.Memory), 2);
+        s.Memory.Papers[0].Title = "SAVED";
+        s.Store.SaveJsonSync(s.Store.SerializeState(s.Memory), 3);
         disk["papers"]![0]!["content"] = "external based on old file";
         s.Write(disk);
         var before = File.ReadAllText(s.Store.FilePath);
-        var preview = s.Store.PreviewExternalMerge(s.Memory, 3);
+        var preview = s.Store.PreviewExternalMerge(s.Memory, 4);
         Require(preview.State != null && preview.Conflicts is { Count: 1 } &&
             preview.Conflicts[0].Reason == "unknown_baseline" &&
             ConflictAggregator.Group(preview.Conflicts, preview.ExternalJson).Single() is UnknownBaselineBucket,
             "missing baseline was silently inferred from a save");
-        Require(preview.State.Papers[0].Title == "saved local title" &&
+        Require(preview.State.Papers[0].Title == "SAVED" &&
             preview.State.Papers[0].Content == "original" && File.ReadAllText(s.Store.FilePath) == before,
             "unknown baseline applied external state before the user's choice");
     }
@@ -93,9 +98,9 @@ internal static partial class Program
     private static void MergeUneditedExternal()
     {
         using var s = new Scope();
-        s.Memory.Papers[0].Title = "local only";
+        s.Memory.Papers[0].Title = "LOCAL";
         var preview = s.Store.PreviewExternalMerge(s.Memory, 2, s.BaselineJson);
-        Require(preview.State?.Papers[0].Title == "local only" && preview.Conflicts is { Count: 0 },
+        Require(preview.State?.Papers[0].Title == "LOCAL" && preview.Conflicts is { Count: 0 },
             "unchanged external file incorrectly suppressed local edits");
     }
 

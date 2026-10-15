@@ -227,9 +227,9 @@ internal static partial class Program
             {
                 controller.SaveNow(sync: true);
                 var noBaseline = ReadLive();
-                localPaper.Title = "saved before baseline-free merge";
+                localPaper.Title = "LOCAL";
                 controller.SaveNow(sync: true);
-                LivePaper(noBaseline, "note-b")["title"] = "entire external title";
+                LivePaper(noBaseline, "note-b")["title"] = "REMOTE";
                 WriteLive(noBaseline);
                 var previousDriver = AppController.ConflictDialogDriver;
                 var calls = 0;
@@ -248,7 +248,7 @@ internal static partial class Program
                         "baseline-free merge did not request a whole-state choice");
                     await Until(() => !controller.IsDataReloading, "whole-state choice");
                     var expectedTitle = choice == ConflictChoice.KeepMemory
-                        ? "saved before baseline-free merge" : "entire external title";
+                        ? "LOCAL" : "REMOTE";
                     Require(calls == 1 && localPaper.Title == expectedTitle &&
                         Str(LivePaper(ReadLive(), "note-b")["title"]) == expectedTitle,
                         "whole-state choice did not reach memory and disk");
@@ -353,11 +353,11 @@ internal static partial class Program
                 controller.SaveNow(sync: true);
                 var runtimeEdit = ReadLive();
                 var runtimeBaseline = runtimeEdit.ToJsonString();
-                LivePaper(runtimeEdit, "note-a")["title"] = "runtime title"; WriteLive(runtimeEdit);
+                LivePaper(runtimeEdit, "note-a")["title"] = "RUN"; WriteLive(runtimeEdit);
                 Require((await Task.Run(() => runtime.MergeData(runtimeBaseline))).Outcome == "pending",
                     "Runtime merge API was not marshaled to UI");
                 await Until(() => !controller.IsDataReloading, "Runtime merge");
-                Require(controller.State.Papers.Single(p => p.Id == "note-a").Title == "runtime title",
+                Require(controller.State.Papers.Single(p => p.Id == "note-a").Title == "RUN",
                     "Runtime merge baseline was not forwarded");
             }
             Console.WriteLine("PASS Native runtime thread dispatch without new plugin permissions");
