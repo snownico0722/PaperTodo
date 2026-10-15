@@ -313,7 +313,7 @@ public sealed partial class AppController
             : JsonPath.ApplyChoices(pending.Next, conflicts, leafChoices);
         return paperChoices.Count == 0 || pending.ExternalJson == null
             ? withLeaf
-            : JsonPath.ApplyPaperChoices(withLeaf, paperChoices, pending.ExternalJson);
+            : JsonPath.ApplyPaperChoices(withLeaf, paperChoices, pending.ExternalJson, conflicts);
     }
 
     private bool FinishDataReloadBeforeExit()

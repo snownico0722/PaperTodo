@@ -50,7 +50,7 @@ internal static class StateJsonMerge
             foreach (var key in b.Select(x => x.Key).Concat(m.Select(x => x.Key)).Concat(e.Select(x => x.Key)).Distinct(StringComparer.Ordinal))
             {
                 var value = MergeValue(Member(b, key), Member(m, key), Member(e, key),
-                    string.IsNullOrEmpty(path) ? key : $"{path}.{key}", applied, conflicts);
+                    JsonPath.FieldPath(path, key), applied, conflicts);
                 if (value.Exists) result[key] = value.Node;
             }
             return new(true, result);
@@ -87,7 +87,7 @@ internal static class StateJsonMerge
         {
             var value = MergeValue(new(b.TryGetValue(id, out var bv), bv),
                 new(m.TryGetValue(id, out var mv), mv), new(e.TryGetValue(id, out var ev), ev),
-                $"{path}[id={id}]", applied, conflicts);
+                JsonPath.EntityPath(path, id), applied, conflicts);
             if (value.Exists) values[id] = value.Node;
         }
 
@@ -112,7 +112,7 @@ internal static class StateJsonMerge
     private static JsonArray OrderNode(IEnumerable<string> ids) =>
         new(ids.Select(id => (JsonNode?)JsonValue.Create(id)).ToArray());
 
-    private static void AddMissingIdentities(List<string> result, IReadOnlyList<string> other)
+    internal static void AddMissingIdentities(List<string> result, IReadOnlyList<string> other)
     {
         for (var i = 0; i < other.Count; i++)
         {

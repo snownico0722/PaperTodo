@@ -6,6 +6,7 @@ internal static partial class Program
 {
     private static void MergeIndependentEdits()
     {
+        ConflictResolutionChecks();
         using var s = new Scope();
         s.Memory.Papers[0].Title = "local";
         var disk = s.Read();
@@ -119,7 +120,7 @@ internal static partial class Program
                 "same-paper conflicts did not aggregate by stable ID");
         var selected = JsonPath.ApplyPaperChoices(preview.State!,
             new Dictionary<string, PaperConflictChoice> { ["note-a"] = PaperConflictChoice.KeepExternal },
-            preview.ExternalJson!);
+            preview.ExternalJson!, preview.Conflicts!);
         var (conflictFile, diffFile) = s.Store.CommitExternalMerge(
             selected, preview.ObservedDiskJson!, 2, preview.Conflicts);
         Require(Str(s.Read()["papers"]![0]!["content"]) == "external",
@@ -165,7 +166,7 @@ internal static partial class Program
             var candidateBefore = s.Store.SerializeState(preview.State!);
             var externalBefore = preview.ExternalJson!.ToJsonString();
             var selected = JsonPath.ApplyPaperChoices(preview.State!,
-                new Dictionary<string, PaperConflictChoice> { [paperId] = choice }, preview.ExternalJson);
+                new Dictionary<string, PaperConflictChoice> { [paperId] = choice }, preview.ExternalJson, preview.Conflicts!);
             var shouldExist = choice == PaperConflictChoice.KeepExternal ? !externalDeletes : externalDeletes;
             Require(selected.Papers.Any(p => p.Id == paperId) == shouldExist,
                 $"{paperId}: externalDeletes={externalDeletes}, choice={choice} ignored existence");
