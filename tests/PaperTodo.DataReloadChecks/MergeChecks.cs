@@ -57,6 +57,64 @@ internal static partial class Program
                 preview.ObservedDiskJson, "conflict archive changed original input");
     }
 
+    private static void MergePaperDeletionConflicts()
+    {
+        foreach (var paperId in new[] { "note-a", "todo" })
+        foreach (var externalDeletes in new[] { true, false })
+        foreach (var choice in new[] { PaperConflictChoice.KeepMemory, PaperConflictChoice.KeepExternal })
+        {
+            using var s = new Scope();
+            var local = s.Memory.Papers.Single(p => p.Id == paperId);
+            var survivor = s.Memory.Papers.Single(p => p.Id != paperId);
+            var disk = s.Read();
+            var incoming = disk["papers"]!.AsArray().Single(p => Str(p!["id"]) == paperId)!;
+            if (externalDeletes)
+            {
+                if (local.Type == PaperTypes.Note) local.Content = "local edit";
+                else local.Items[0].Text = "local edit";
+                disk["papers"]!.AsArray().Remove(incoming);
+            }
+            else
+            {
+                s.Memory.Papers.Remove(local);
+                if (local.Type == PaperTypes.Note) incoming["content"] = "external edit";
+                else incoming["items"]![0]!["text"] = "external edit";
+            }
+            s.Write(disk);
+            var preview = s.Store.PreviewExternalMerge(s.Memory, 2);
+            Require(preview.State != null && preview.Conflicts is { Count: 1 },
+                "delete/edit must produce one whole-paper conflict");
+            Require(ConflictAggregator.Group(preview.Conflicts!, preview.ExternalJson).Single()
+                is PaperBucket bucket && bucket.PaperId == paperId,
+                "delete/edit conflict did not reach the paper dialog");
+            var candidateBefore = s.Store.SerializeState(preview.State!);
+            var externalBefore = preview.ExternalJson!.ToJsonString();
+            var selected = JsonPath.ApplyPaperChoices(preview.State!,
+                new Dictionary<string, PaperConflictChoice> { [paperId] = choice }, preview.ExternalJson);
+            var shouldExist = choice == PaperConflictChoice.KeepExternal ? !externalDeletes : externalDeletes;
+            Require(selected.Papers.Any(p => p.Id == paperId) == shouldExist,
+                $"{paperId}: externalDeletes={externalDeletes}, choice={choice} ignored existence");
+            if (shouldExist)
+            {
+                var paper = selected.Papers.Single(p => p.Id == paperId);
+                var content = paper.Type == PaperTypes.Note ? paper.Content : paper.Items[0].Text;
+                Require(content == (externalDeletes ? "local edit" : "external edit"),
+                    "delete/edit choice lost the selected paper contents");
+                Require(selected.Papers.Select(p => p.Id).SequenceEqual(new[] { "note-a", "todo" }),
+                    "restored paper lost its position beside surviving papers");
+            }
+            Require(s.Store.SerializeState(preview.State!) == candidateBefore &&
+                preview.ExternalJson.ToJsonString() == externalBefore, "selection mutated its source snapshots");
+            s.Store.CommitExternalMerge(selected, preview.ObservedDiskJson!, 2, preview.Conflicts);
+            Require(s.Read()["papers"]!.AsArray().Any(p => Str(p!["id"]) == paperId) == shouldExist,
+                "persisted paper existence disagrees with the user's choice");
+            StateReloadModels.Apply(s.Memory, selected);
+            Require(s.Memory.Papers.Any(p => p.Id == paperId) == shouldExist &&
+                ReferenceEquals(survivor, s.Memory.Papers.Single(p => p.Id == survivor.Id)),
+                "reconciliation changed the choice or replaced an unrelated paper");
+        }
+    }
+
     private static void MergeRejectChangedSource()
     {
         using var s = new Scope();

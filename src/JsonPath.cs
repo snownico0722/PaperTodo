@@ -36,8 +36,8 @@ internal static class JsonPath
     }
 
     /// <summary>
-    /// 按 paper ID 级选择整替换 paper。paperChoices[id] == KeepExternal → 从 externalJson.papers
-    /// 按 id 找节点,整节点覆盖 next.papers 中同 id 节点;KeepMemory / 不在字典里 → 保留 next。
+    /// 按 paper ID 级采用外部版本:替换现有 paper、删除外部已删除的 paper,
+    /// 或恢复本地已删除但外部仍存在的 paper。KeepMemory / 不在字典里 → 保留 next。
     /// 替换顺序按字典迭代顺序(Stable);先调用 ApplyChoices 处理 leaf path,再用本方法叠加 paper 级决策。
     /// </summary>
     public static AppState ApplyPaperChoices(
@@ -63,18 +63,40 @@ internal static class JsonPath
             }
         }
 
-        // 按 id 替换 nextPapers 数组中的对应节点;不在 choices 里或 KeepMemory 的不动
-        for (var i = 0; i < nextPapers.Count; i++)
+        var externalOrder = externalById.Keys.ToList();
+        int FindPaperIndex(string id)
         {
-            if (nextPapers[i] is not JsonObject target) continue;
-            if (target["id"] is not JsonValue targetIdVal ||
-                !targetIdVal.TryGetValue<string>(out var targetId)) continue;
-            if (!paperChoices.TryGetValue(targetId, out var choice)) continue;
-            if (choice != PaperConflictChoice.KeepExternal) continue;
-            if (!externalById.TryGetValue(targetId, out var externalNode)) continue;
+            for (var i = 0; i < nextPapers.Count; i++)
+                if (nextPapers[i] is JsonObject paper &&
+                    string.Equals(paper["id"]?.GetValue<string>(), id, StringComparison.Ordinal))
+                    return i;
+            return -1;
+        }
 
-            // 整 paper 替换,DeepClone 一份避免后续引用污染 externalJson
-            nextPapers[i] = (JsonNode?)externalNode.DeepClone();
+        // Iterate choices, not surviving papers: a locally deleted paper is absent from next.
+        foreach (var (paperId, choice) in paperChoices)
+        {
+            if (choice != PaperConflictChoice.KeepExternal) continue;
+            var index = FindPaperIndex(paperId);
+            if (!externalById.TryGetValue(paperId, out var externalNode))
+            {
+                if (index >= 0) nextPapers.RemoveAt(index);
+                continue;
+            }
+            if (index >= 0)
+            {
+                nextPapers[index] = externalNode.DeepClone();
+                continue;
+            }
+
+            // Restore beside a surviving external neighbor without reordering other papers.
+            var externalIndex = externalOrder.IndexOf(paperId);
+            var previous = externalOrder.Take(externalIndex).Reverse()
+                .Select(FindPaperIndex).FirstOrDefault(i => i >= 0, -1);
+            var nextIndex = externalOrder.Skip(externalIndex + 1)
+                .Select(FindPaperIndex).FirstOrDefault(i => i >= 0, -1);
+            nextPapers.Insert(previous >= 0 ? previous + 1 : nextIndex >= 0 ? nextIndex : nextPapers.Count,
+                externalNode.DeepClone());
         }
 
         return JsonSerializer.Deserialize<AppState>(json.ToJsonString(StateStore.JsonOptions), StateStore.JsonOptions)!;

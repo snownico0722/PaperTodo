@@ -19,6 +19,7 @@ internal static partial class Program
                 ("model/list references survive accepted reload", ModelIdentities),
                 ("opt-in three-way merge combines independent changes", MergeIndependentEdits),
                 ("conflicts group by paper and archive input", MergePaperConflict),
+                ("delete/edit conflicts honor both choices for notes and todos", MergePaperDeletionConflicts),
                 ("stale external source cannot overwrite a newer edit", MergeRejectChangedSource),
                 ("source changed after flush is rejected before replacement", MergeRejectDuringReplace),
                 ("source changed during replace retry is also rejected", MergeRejectDuringRetry),

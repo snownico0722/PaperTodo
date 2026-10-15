@@ -218,6 +218,61 @@ internal static partial class Program
             finally { AppController.ConflictDialogDriver = driver; }
             Console.WriteLine("PASS explicit conflict dialog choice, paper grouping and recovery archive");
 
+            // KeepExternal must also resolve the absence of a whole paper, in either direction.
+            foreach (var externalDeletes in new[] { true, false })
+            {
+                var conflictPaper = controller.CreatePaper(PaperTypes.Note, show: true)!;
+                var conflictId = conflictPaper.Id;
+                var conflictWindow = windows[conflictId];
+                conflictWindow.EnsureShellBuilt();
+                controller.SaveNow(sync: true);
+                var conflictDisk = ReadLive();
+                if (externalDeletes)
+                {
+                    Field<MarkdownTextBox>(conflictWindow, "_noteBox").Text = "local edited before deletion";
+                    conflictDisk["papers"]!.AsArray().Remove(LivePaper(conflictDisk, conflictId));
+                }
+                else
+                {
+                    // Stage an unsaved deletion without DeletePaper's immediate persistence.
+                    conflictWindow.CloseForReal();
+                    windows.Remove(conflictId);
+                    controller.State.Papers.Remove(conflictPaper);
+                    LivePaper(conflictDisk, conflictId)["content"] = "external restored body";
+                }
+                WriteLive(conflictDisk);
+                var oldDriver = AppController.ConflictDialogDriver;
+                var calls = 0;
+                AppController.ConflictDialogDriver = (_, bucket) =>
+                {
+                    Require(bucket is PaperBucket paper && paper.PaperId == conflictId,
+                        "delete/edit conflict was not dispatched to its paper dialog");
+                    calls++;
+                    return PaperConflictChoice.KeepExternal;
+                };
+                try
+                {
+                    var started = controller.PaperCommands.MergeData(PaperOperationContext.Mcp());
+                    Require(started.Outcome == "pending" && started.ConflictCount == 1,
+                        "whole-paper delete/edit conflict was not detected");
+                    await Until(() => !controller.IsDataReloading, "delete/edit conflict apply");
+                    var finished = controller.PaperCommands.GetDataReloadStatus().LastResult;
+                    Require(finished?.Applied == true && finished.Outcome == "conflict" && calls == 1,
+                        "whole-paper conflict choice was not committed");
+                    Require(controller.State.Papers.Any(p => p.Id == conflictId) == !externalDeletes &&
+                        windows.ContainsKey(conflictId) == !externalDeletes &&
+                        ReadLive()["papers"]!.AsArray().Any(p => Str(p!["id"]) == conflictId) == !externalDeletes,
+                        "disk, model and window disagree after delete/edit choice");
+                    Require(conflictWindow.IsClosed, "deleted or replaced paper window survived");
+                    if (!externalDeletes)
+                        Require(controller.State.Papers.Single(p => p.Id == conflictId).Content == "external restored body" &&
+                            !ReferenceEquals(conflictWindow, windows[conflictId]),
+                            "restored paper did not get its external contents and a new window");
+                }
+                finally { AppController.ConflictDialogDriver = oldDriver; }
+            }
+            Console.WriteLine("PASS delete/edit conflict choices synchronize disk, model and window lifetimes");
+
             // The nonconflicting rename/delete cases from #349 must work without revision
             // metadata, a watcher or a full-state overwrite.
             var newPaper = controller.CreatePaper(PaperTypes.Note, show: true);

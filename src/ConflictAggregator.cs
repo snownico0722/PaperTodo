@@ -38,8 +38,8 @@ internal sealed record SingleLeafBucket(StateMergeConflict Conflict) : ConflictB
 /// <summary>
 /// 把 <see cref="StateJsonMerge.Merge"/> 输出的 leaf path 冲突列表按 paper ID 聚合,
 /// 让 AppController 一次弹一个 paper 级弹窗而不是 N 个 leaf 弹窗。
-/// 单侧 ID 缺失的情况已被 StateJsonMerge.MergeEntities 自动处理(不进入冲突列表),
-/// 因此这里不会看到"只在 memory"或"只在 external"的 paper。
+/// 单侧新增或删除未修改的 paper 由合并器自动处理;删除与修改并发时仍会产生
+/// 整 paper 冲突,此时一侧缺失,弹窗选择必须落实对应的删除或恢复。
 /// </summary>
 internal static class ConflictAggregator
 {
