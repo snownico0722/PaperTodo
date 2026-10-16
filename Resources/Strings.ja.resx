@@ -1548,4 +1548,75 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="DataReloadMissingBaseline" xml:space="preserve">
     <value>編集前に読み取った元のデータが指定されていないため、それぞれの変更を判別できません。現在のデータ全体を保持するか、外部データ全体を採用してください。</value>
   </data>
+  <data name="WorkspaceSettingsTitle" xml:space="preserve">
+    <value>ワークスペース</value>
+  </data>
+  <data name="WorkspaceSettingsDescription" xml:space="preserve">
+    <value>有効にすると紙片の上部ボタンで切り替えられます。紙片・画像・プラグインデータはワークスペースごとに保存されます。</value>
+  </data>
+  <data name="WorkspaceEnabled" xml:space="preserve">
+    <value>ワークスペースを有効にする</value>
+  </data>
+  <data name="WorkspaceCount" xml:space="preserve">
+    <value>ワークスペース数（メインを含む）</value>
+  </data>
+  <data name="WorkspaceCountHint" xml:space="preserve">
+    <value>最大5個。数を減らしたり無効にしてもファイルは削除されません。</value>
+  </data>
+  <data name="WorkspaceSelectLabel" xml:space="preserve">
+    <value>現在のワークスペース</value>
+  </data>
+  <data name="WorkspaceMainSlotLabel" xml:space="preserve">
+    <value>メインワークスペース（1）</value>
+  </data>
+  <data name="WorkspaceSlotLabel" xml:space="preserve">
+    <value>ワークスペース {0}</value>
+  </data>
+  <data name="WorkspaceCurrent" xml:space="preserve">
+    <value>現在のワークスペース：{0}</value>
+  </data>
+  <data name="WorkspaceFollowMain" xml:space="preserve">
+    <value>メインの設定を使用する</value>
+  </data>
+  <data name="WorkspaceFollowHint" xml:space="preserve">
+    <value>ソフトウェア設定のみメインに従います。紙片・画像・配置・プラグイン独自データは独立したままです。解除すると以前の独自設定に戻ります。</value>
+  </data>
+  <data name="WorkspaceMainHint" xml:space="preserve">
+    <value>メインのワークスペースです。設定を共有する他のワークスペースは、開くときにここの設定を使用します。</value>
+  </data>
+  <data name="WorkspaceNext" xml:space="preserve">
+    <value>次のワークスペース</value>
+  </data>
+  <data name="WorkspaceCycleTooltip" xml:space="preserve">
+    <value>ワークスペース {0} / {1}
+クリックで {2} に切り替え</value>
+  </data>
+  <data name="WorkspaceTrayCycle" xml:space="preserve">
+    <value>ワークスペース切替（現在 {0} / {1}）</value>
+  </data>
+  <data name="WorkspaceSettingsReadOnly" xml:space="preserve">
+    <value>現在の設定はメインに従っています。メインで変更するか、「メインの設定を使用する」を解除してください。</value>
+  </data>
+  <data name="WorkspacePluginSettingsHint" xml:space="preserve">
+    <value>プラグインの有効状態はメインに従います。プラグイン独自の設定・データはこのワークスペースに保存されます。</value>
+  </data>
+  <data name="WorkspaceSwitching" xml:space="preserve">
+    <value>ワークスペースの切り替え中です。完了後に操作してください。</value>
+  </data>
+  <data name="WorkspaceSwitchFailed" xml:space="preserve">
+    <value>ワークスペースを切り替えられませんでした</value>
+  </data>
+  <data name="WorkspaceSaveFailed" xml:space="preserve">
+    <value>保存できないため、切り替えを中止しました。</value>
+  </data>
+  <data name="WorkspaceImagesMissing" xml:space="preserve">
+    <value>画像への参照がありますが、画像データベースが見つかりません。</value>
+  </data>
+  <data name="WorkspaceImagesUnavailable" xml:space="preserve">
+    <value>画像データベースを読み込めません：{0}</value>
+  </data>
+  <data name="WorkspaceStartupFallback" xml:space="preserve">
+    <value>前回のワークスペースを開けないためメインを開きました。元のファイルは変更していません。
+{0}</value>
+  </data>
 </root>

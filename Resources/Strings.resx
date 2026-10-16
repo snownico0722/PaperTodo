@@ -1597,4 +1597,75 @@
   <data name="DataReloadMissingBaseline" xml:space="preserve">
     <value>未提供开始编辑时的原始数据，无法判断双方分别改了什么。请选择保留整份当前数据或采用整份外部数据。</value>
   </data>
+  <data name="WorkspaceSettingsTitle" xml:space="preserve">
+    <value>工作区</value>
+  </data>
+  <data name="WorkspaceSettingsDescription" xml:space="preserve">
+    <value>启用后，通过纸片顶栏的循环按钮切换工作区。每个工作区独立保存纸片、图片和插件数据。</value>
+  </data>
+  <data name="WorkspaceEnabled" xml:space="preserve">
+    <value>启用工作区</value>
+  </data>
+  <data name="WorkspaceCount" xml:space="preserve">
+    <value>工作区数量（包含主工作区）</value>
+  </data>
+  <data name="WorkspaceCountHint" xml:space="preserve">
+    <value>最多 5 个。减少数量或关闭功能只停止使用对应工作区，不删除其文件。</value>
+  </data>
+  <data name="WorkspaceSelectLabel" xml:space="preserve">
+    <value>当前工作区</value>
+  </data>
+  <data name="WorkspaceMainSlotLabel" xml:space="preserve">
+    <value>主工作区（1）</value>
+  </data>
+  <data name="WorkspaceSlotLabel" xml:space="preserve">
+    <value>工作区 {0}</value>
+  </data>
+  <data name="WorkspaceCurrent" xml:space="preserve">
+    <value>当前工作区：{0}</value>
+  </data>
+  <data name="WorkspaceFollowMain" xml:space="preserve">
+    <value>本工作区设置跟随主工作区</value>
+  </data>
+  <data name="WorkspaceFollowHint" xml:space="preserve">
+    <value>开启时使用主工作区的软件设置，纸片、图片、布局和插件私有数据保持独立。关闭后恢复本工作区原有的独立设置。</value>
+  </data>
+  <data name="WorkspaceMainHint" xml:space="preserve">
+    <value>这是主工作区。跟随主工作区的其他工作区，会在进入时采用这里的软件设置。</value>
+  </data>
+  <data name="WorkspaceNext" xml:space="preserve">
+    <value>切换下一个工作区</value>
+  </data>
+  <data name="WorkspaceCycleTooltip" xml:space="preserve">
+    <value>工作区 {0} / {1}
+点击切换到工作区 {2}</value>
+  </data>
+  <data name="WorkspaceTrayCycle" xml:space="preserve">
+    <value>切换工作区（当前 {0} / {1}）</value>
+  </data>
+  <data name="WorkspaceSettingsReadOnly" xml:space="preserve">
+    <value>当前软件设置跟随主工作区。请在主工作区修改，或先关闭本工作区的“设置跟随主工作区”。</value>
+  </data>
+  <data name="WorkspacePluginSettingsHint" xml:space="preserve">
+    <value>插件启用状态跟随主工作区；插件自己的配置和业务数据仍属于本工作区。</value>
+  </data>
+  <data name="WorkspaceSwitching" xml:space="preserve">
+    <value>正在切换工作区，请在切换完成后操作。</value>
+  </data>
+  <data name="WorkspaceSwitchFailed" xml:space="preserve">
+    <value>工作区切换未完成</value>
+  </data>
+  <data name="WorkspaceSaveFailed" xml:space="preserve">
+    <value>无法保存工作区，已停止切换。</value>
+  </data>
+  <data name="WorkspaceImagesMissing" xml:space="preserve">
+    <value>该工作区引用了图片，但对应图片数据库不存在。</value>
+  </data>
+  <data name="WorkspaceImagesUnavailable" xml:space="preserve">
+    <value>无法读取工作区图片数据库：{0}</value>
+  </data>
+  <data name="WorkspaceStartupFallback" xml:space="preserve">
+    <value>上次使用的工作区无法打开，已进入主工作区。原文件未被替换。
+{0}</value>
+  </data>
 </root>

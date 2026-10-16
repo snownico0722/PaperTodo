@@ -16,6 +16,10 @@ public sealed record DataReloadResult
 
 public sealed record DataReloadStatus
 {
+    /// <summary>Active workspace identity. Reload/merge never switches this identity.</summary>
+    public int WorkspaceNumber { get; init; } = 1;
+    public string DataFileName { get; init; } = "data.json";
+    public bool FollowsMainSettings { get; init; }
     public bool IsReloading { get; init; }
     public DateTimeOffset? LastAttemptAt { get; init; }
     public DataReloadResult? LastResult { get; init; }

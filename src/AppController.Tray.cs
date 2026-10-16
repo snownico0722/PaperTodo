@@ -529,6 +529,8 @@ public sealed partial class AppController
         menu.Items.Add(TraySeparator());
 
         menu.Items.Add(TrayPaperToolbar(menu));
+        if (WorkspaceOptions.Enabled)
+            menu.Items.Add(TrayWorkspaceSelector(menu));
 
         if (State.Papers.Count > 0)
         {
@@ -580,6 +582,27 @@ public sealed partial class AppController
 
             RebuildTrayMenu(menu);
         }
+    }
+
+    private MenuItem TrayWorkspaceSelector(ContextMenu menu)
+    {
+        var selector = new MenuItem
+        {
+            Header = Strings.Format("WorkspaceTrayCycle", WorkspaceNumber, WorkspaceOptions.Count),
+            Style = SharedTrayMenuItemStyle,
+            IsEnabled = !_workspaceSwitching
+        };
+        for (var number = 1; number <= WorkspaceOptions.Count; number++)
+        {
+            var target = number;
+            var label = WorkspaceSlotLabel(number);
+            // This menu template presents plain text, so the active marker is explicit
+            // rather than an IsChecked flag that its custom template would not display.
+            var prefix = number == WorkspaceNumber ? "✓  " : "    ";
+            selector.Items.Add(TrayItem(menu, prefix + label,
+                () => { _ = SwitchWorkspaceAsync(target); }));
+        }
+        return selector;
     }
 
     private MenuItem TrayItem(

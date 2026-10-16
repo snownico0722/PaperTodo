@@ -1,5 +1,8 @@
 # PaperTodo Plugin Development
 
+Workspace status also includes `WorkspaceNumber`, `DataFileName`, and `FollowsMainSettings`. Query the active filename before authorized external edits: `data.json` always remains the main workspace; `reload_data` / `merge_data` target the active workspace and never switch it.
+
+
 **Language: English | [简体中文](README.zh.md)**
 
 This is the **current PaperTodo plugin development manual**. It documents the current plugin contract, runtime boundaries, build workflow, and examples, with a concise API-version history and compatibility summary. Detailed historical trade-offs remain in `doc/DECISIONS.md`.

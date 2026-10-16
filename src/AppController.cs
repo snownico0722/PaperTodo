@@ -36,8 +36,8 @@ public sealed partial class AppController : IDisposable
 
     public static AppController Current { get; private set; } = null!;
 
-    private readonly StateStore _store = new();
-    private readonly NoteImageStore _imageStore = new();
+    private StateStore _store = null!;
+    private NoteImageStore _imageStore = null!;
     private readonly Dictionary<string, PaperWindow> _windows = new();
     private readonly DispatcherTimer _saveTimer;
     private readonly DispatcherTimer _forceSaveTimer;
@@ -145,7 +145,7 @@ public sealed partial class AppController : IDisposable
     public AppController()
     {
         Current = this;
-        State = _store.Load();
+        InitializeWorkspaceState();
         State.PaperSkin = PaperSkins.Resolve(State);
         UsesNativeMicaWindows = PaperSkins.UsesNativeBackdrop(State.PaperSkin) && NativeMicaBackdrop.IsSupported;
         Theme.Invalidate();
@@ -165,6 +165,7 @@ public sealed partial class AppController : IDisposable
         NoteTypography.Configure(State.NoteTextSize, State.NoteTextBold);
         ToolTipPreferences.Register(() => State.EnableToolTips);
         _paperBodyPlugins = new PaperBodyPluginRegistry();
+        InitializeWorkspacePluginData();
 
         // Idle debounce: save ~1s after the last change.
         // Force cap: while edits keep resetting the idle timer, still flush at least every 10s.
@@ -229,6 +230,7 @@ public sealed partial class AppController : IDisposable
         StartupCommandKind initialVisibilityCommand = StartupCommandKind.None)
     {
         CreateTrayIcon();
+        NotifyWorkspaceStartup();
         InitializeGlobalHotkeys();
         _ = Task.Run(PaperWindow.CleanupOldScriptCapsuleTempFiles);
         _ = Application.Current.Dispatcher.BeginInvoke(
@@ -3303,9 +3305,9 @@ public sealed partial class AppController : IDisposable
         _ = TrySaveNow(sync);
     }
 
-    private bool TrySaveNow(bool sync)
+    private bool TrySaveNow(bool sync, bool workspaceBoundary = false)
     {
-        if (IsDataReloading) return false;
+        if (IsDataReloading && !workspaceBoundary) return false;
         long? attemptedVersion = null;
         try
         {
@@ -3317,10 +3319,12 @@ public sealed partial class AppController : IDisposable
             NotifyPluginEventMutationStampChanged();
             attemptedVersion = version;
             var stateRevision = Interlocked.Read(ref _stateRevision);
-            var json = _store.SerializeState(State);
+            var store = _store;
+            var workspaceGeneration = Interlocked.Read(ref _workspaceGeneration);
+            var json = store.SerializeState(State);
             if (sync)
             {
-                _store.SaveJsonSync(json, version);
+                store.SaveJsonSync(json, version);
                 if (!IsExiting) TryReleaseUnreferencedImageCache();
                 TryFlushPendingPluginPaperStateDeletes();
                 _hasShownSaveFailure = false;
@@ -3331,9 +3335,10 @@ public sealed partial class AppController : IDisposable
                 {
                     try
                     {
-                        await _store.SaveJsonAsync(json, version);
+                        await store.SaveJsonAsync(json, version);
                         Application.Current?.Dispatcher?.BeginInvoke(new Action(() =>
                         {
+                            if (workspaceGeneration != Interlocked.Read(ref _workspaceGeneration) || IsExiting) return;
                             if (version == Interlocked.Read(ref _saveVersion) &&
                                 stateRevision == Interlocked.Read(ref _stateRevision))
                             {
@@ -3347,7 +3352,8 @@ public sealed partial class AppController : IDisposable
                     {
                         Application.Current?.Dispatcher?.BeginInvoke(new Action(() =>
                         {
-                            HandleSaveFailure(ex, version);
+                            if (workspaceGeneration == Interlocked.Read(ref _workspaceGeneration) && !IsExiting)
+                                HandleSaveFailure(ex, version);
                         }));
                     }
                 });

@@ -27,7 +27,7 @@
     <PaperTodoLmdbLibrary>$(MSBuildProjectDirectory)\native\lmdb\bin\win-x64\papertodo_lmdb.dll</PaperTodoLmdbLibrary>
     <OutputPath>$(MSBuildProjectDirectory)\输出\PaperTodo-v$(Version)\</OutputPath>
     <SatelliteResourceLanguages>en;ja;ko</SatelliteResourceLanguages>
-    <DefaultItemExcludes>$(DefaultItemExcludes);对比_StickyMD\**;输出\**;PaperTodo_v*\**;.codex_decompile_debug\**;PaperTodo.Plugin.Abstractions\**;plugin-samples\**;plugins\**\.runtime\**;plugins\data\**;tests\**;tools\**;vendor\**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);对比_StickyMD\**;输出\**;PaperTodo_v*\**;.codex_decompile_debug\**;PaperTodo.Plugin.Abstractions\**;plugin-samples\**;plugins\**\.runtime\**;plugins\data\**;plugins\data2\**;plugins\data3\**;plugins\data4\**;plugins\data5\**;tests\**;tools\**;vendor\**</DefaultItemExcludes>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(PaperTodoDefaultEnglish)' == 'true'">
@@ -63,7 +63,7 @@
     <EmbeddedResource Include="assets\PaperTodo.ico" />
     <!-- Repository plugin outputs are available to normal development builds, but plugins are
          distributed separately and must not be included in local or CI publish artifacts. -->
-    <Content Include="plugins\**\*" Exclude="plugins\**\.runtime\**;plugins\data\**">
+    <Content Include="plugins\**\*" Exclude="plugins\**\.runtime\**;plugins\data\**;plugins\data2\**;plugins\data3\**;plugins\data4\**;plugins\data5\**">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>Never</CopyToPublishDirectory>
     </Content>

@@ -40,16 +40,19 @@ internal sealed class PaperSettingsService
     private readonly Func<bool> _running;
     private readonly Func<bool> _commit;
     private readonly Action<Action> _publish;
+    private readonly Func<string?>? _unavailable;
+    internal bool IsChanging => _changing;
     // Saving calls live provider sessions; do not allow a provider to nest a second transaction.
     private bool _changing;
 
     internal PaperSettingsService(IEnumerable<PaperSettingDefinition> definitions, Func<bool> running,
-        Func<bool> commit, Action<Action> publish)
+        Func<bool> commit, Action<Action> publish, Func<string?>? unavailable = null)
     {
         _definitions = definitions.ToDictionary(d => d.Metadata.Id, StringComparer.Ordinal);
         _running = running;
         _commit = commit;
         _publish = publish;
+        _unavailable = unavailable;
     }
 
     internal IReadOnlyList<PaperSettingSnapshot> List(string? category = null)
@@ -57,13 +60,13 @@ internal sealed class PaperSettingsService
         EnsureRunning();
         return _definitions.Values.Where(d => string.IsNullOrEmpty(category) ||
             string.Equals(d.Metadata.Category, category, StringComparison.Ordinal))
-            .Select(d => d.Snapshot()).ToArray();
+            .Select(Snapshot).ToArray();
     }
 
     internal PaperSettingSnapshot Get(string id)
     {
         EnsureRunning();
-        return Definition(id).Snapshot();
+        return Snapshot(Definition(id));
     }
 
     internal PaperSettingChangeResult Set(string id, JsonElement value)
@@ -71,7 +74,7 @@ internal sealed class PaperSettingsService
         EnsureRunning();
         if (_changing) throw Error("settings_busy", "Another settings change is being committed.");
         var definition = Definition(id);
-        var before = definition.Snapshot();
+        var before = Snapshot(definition);
         if (!before.Writable)
             throw Error("setting_read_only", before.UnavailableReason ?? "This setting is read-only.");
         // Validate once before changing state; the persistence owner synchronizes content when saving.
@@ -95,9 +98,16 @@ internal sealed class PaperSettingsService
             }
             // Post-commit failures must not pretend the persisted mutation failed and invite replay.
             _publish(change.Publish);
-            return new PaperSettingChangeResult(definition.Snapshot(), before.Value, true);
+            return new PaperSettingChangeResult(Snapshot(definition), before.Value, true);
         }
         finally { _changing = false; }
+    }
+
+    private PaperSettingSnapshot Snapshot(PaperSettingDefinition definition)
+    {
+        var value = definition.Snapshot();
+        var reason = _unavailable?.Invoke();
+        return reason == null ? value : value with { Writable = false, UnavailableReason = reason };
     }
 
     private PaperSettingDefinition Definition(string id)

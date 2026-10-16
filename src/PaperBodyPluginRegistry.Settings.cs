@@ -11,7 +11,7 @@ internal sealed partial class PaperBodyPluginRegistry
         "^[A-Za-z0-9._-]{1,80}$",
         RegexOptions.CultureInvariant);
 
-    private readonly PaperBodyPluginDataStore _dataStore =
+    private PaperBodyPluginDataStore _dataStore =
         new(Path.Combine(AppContext.BaseDirectory, "plugins"));
 
     internal PaperBodyPluginDataStore DataStore => _dataStore;

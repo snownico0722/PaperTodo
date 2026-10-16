@@ -1664,6 +1664,7 @@ public sealed partial class PaperWindow : Window
         RefreshPaperTitle();
         RefreshPaperIconButton();
         RefreshWindowBindingButton();
+        RefreshWorkspaceButton();
         UpdateTextZoom();
         UpdateDeepCapsuleSlotHostTheme();
 
@@ -1779,6 +1780,7 @@ public sealed partial class PaperWindow : Window
             CapsuleLabelFontWeight,
             AppTypography.Scale(18));
         RefreshThemedContextMenus();
+        RefreshWorkspaceButton();
 
         RefreshPaperTitle();
         UpdateTopBarResponsiveLayout();
@@ -2360,6 +2362,7 @@ public sealed partial class PaperWindow : Window
 
         actionButtons.Children.Add(_newTodoButton);
         actionButtons.Children.Add(_newNoteButton);
+        buttons.Children.Add(CreateWorkspaceCycleButton());
         buttons.Children.Add(_closeButton);
         UpdateTopBarNewPaperButtons();
 
@@ -2430,7 +2433,7 @@ public sealed partial class PaperWindow : Window
                 _topBarTitleHost.Margin.Left +
                 _topBarTitleHost.Margin.Right;
             var actionButtonsWidth = VisibleTopBarActionButtonsWidth();
-            var persistentButtonsWidth = TopBarOuterWidth(_closeButton);
+            var persistentButtonsWidth = TopBarOuterWidth(_closeButton) + WorkspacePersistentButtonWidth();
 
             // Stage 1: keep the left button, the title at its minimum width and a 2-DIP
             // draggable gap. Collapse the complete right action group only when those

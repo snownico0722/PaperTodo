@@ -12,15 +12,19 @@ internal sealed partial class McpCommandService
 {
     private readonly AppController _controller;
     private readonly PaperCommandService _commands;
+    private readonly long _workspaceGeneration;
 
     public McpCommandService(AppController controller, PaperCommandService commands)
     {
         _controller = controller;
         _commands = commands;
+        _workspaceGeneration = controller.WorkspaceGeneration;
     }
 
     public object? Execute(JsonElement request)
     {
+        if (_workspaceGeneration != _controller.WorkspaceGeneration || _controller.IsWorkspaceSwitching)
+            throw new McpApiException("workspace_changed", "The workspace changed; query the current workspace before retrying.");
         if (!_controller.IsRunning)
         {
             throw new McpApiException("app_exiting", "PaperTodo is exiting.");
