@@ -79,7 +79,8 @@ public sealed partial class AppController : IDisposable
     private PaperWindow? _paperLinkTargetWindow;
     private string? _paperLinkTargetItemId;
     private readonly HashSet<string> _deepCapsuleContextMenuOwners = new(StringComparer.Ordinal);
-    // One master pill per docked-capsule queue, keyed by QueueKey(monitorDevice, edge).
+    // One master pill per docked-capsule queue, keyed by edge (monitor|side). Free queues are
+    // mutually exclusive with the master pill, so this stays an edge-keyed map.
     private readonly Dictionary<string, MasterCapsuleWindow> _masterCapsules = new();
 
     private static Brush TrayPaperBrush => Theme.PaperBrush;
@@ -2340,7 +2341,7 @@ public sealed partial class AppController : IDisposable
         var side = edge == EdgeCapsuleEdge.Left
             ? DeepCapsuleSides.Left
             : DeepCapsuleSides.Right;
-        var queueKey = QueueKey(monitorDeviceName, side);
+        var queueKey = EdgeKey(monitorDeviceName, side);
         foreach (var paper in DeepCapsulePapersInOrder())
         {
             if (!string.Equals(QueueKey(paper), queueKey, StringComparison.Ordinal) ||
@@ -2384,7 +2385,7 @@ public sealed partial class AppController : IDisposable
         var side = edge == EdgeCapsuleEdge.Left
             ? DeepCapsuleSides.Left
             : DeepCapsuleSides.Right;
-        var sourceKey = QueueKey(normalizedMonitor, side);
+        var sourceKey = EdgeKey(normalizedMonitor, side);
         var paperIds = DeepCapsulePapersInOrder()
             .Where(paper => string.Equals(QueueKey(paper), sourceKey, StringComparison.Ordinal))
             .Select(paper => paper.Id)
@@ -2539,7 +2540,7 @@ public sealed partial class AppController : IDisposable
         var targetSide = preliminaryTarget.Edge == EdgeCapsuleEdge.Left
             ? DeepCapsuleSides.Left
             : DeepCapsuleSides.Right;
-        var targetKey = QueueKey(
+        var targetKey = EdgeKey(
             preliminaryTarget.MonitorDeviceName,
             targetSide);
         var targetLiveCount = livePapers.Count(
@@ -2567,7 +2568,7 @@ public sealed partial class AppController : IDisposable
         targetSide = target.Edge == EdgeCapsuleEdge.Left
             ? DeepCapsuleSides.Left
             : DeepCapsuleSides.Right;
-        targetKey = QueueKey(target.MonitorDeviceName, targetSide);
+        targetKey = EdgeKey(target.MonitorDeviceName, targetSide);
 
         // A reconnected monitor may have split the pressed fallback queue while dragging.
         // Only skip reassignment when every captured member still belongs to this target.
@@ -2737,7 +2738,7 @@ public sealed partial class AppController : IDisposable
         paper.CapsuleMonitorDeviceName = normalizedMonitor;
 
         // Members already in the target queue (excluding the dragged paper), in State.Papers order.
-        var targetKey = QueueKey(normalizedMonitor, normalizedSide);
+        var targetKey = EdgeKey(normalizedMonitor, normalizedSide);
         var targetMembers = new List<PaperData>();
         foreach (var p in State.Papers)
         {
@@ -2966,10 +2967,16 @@ public sealed partial class AppController : IDisposable
             : "";
     }
 
-    private static string QueueKey(string monitorDeviceName, string side)
+    private static string EdgeKey(string monitorDeviceName, string side)
         => $"{LiveQueueMonitorDeviceName(monitorDeviceName)}|{(side == DeepCapsuleSides.Left ? DeepCapsuleSides.Left : DeepCapsuleSides.Right)}";
 
-    private static string QueueKey(PaperData paper) => QueueKey(paper.CapsuleMonitorDeviceName, paper.CapsuleSide);
+    // Queue instance key. An empty instance id yields the bare edge key, so papers that were
+    // never moved into a free queue group exactly as they did before D-058. This is the single
+    // funnel every per-paper call site routes through, which is what keeps the ripple small.
+    private static string QueueKey(string monitorDeviceName, string side, string? queueId)
+        => EdgeCapsuleQueueIds.Compose(EdgeKey(monitorDeviceName, side), queueId);
+
+    private static string QueueKey(PaperData paper) => QueueKey(paper.CapsuleMonitorDeviceName, paper.CapsuleSide, paper.CapsuleQueueId);
 
     private bool IsCapsuleCollapseAllActiveForQueue(string queueKey)
     {
@@ -3016,19 +3023,22 @@ public sealed partial class AppController : IDisposable
     private bool TryGetDisconnectedQueueFallbackKey(string queueKey, out string fallbackKey)
     {
         fallbackKey = "";
-        var separator = queueKey.LastIndexOf('|');
-        if (separator <= 0 || separator >= queueKey.Length - 1)
+        // A free queue's key carries an instance suffix. Strip it first — comparing the raw
+        // tail against "left" would only ever work by accident ("right#q1" != "left" -> right).
+        var edgeKey = EdgeCapsuleQueueIds.StripInstance(queueKey);
+        var separator = edgeKey.LastIndexOf('|');
+        if (separator <= 0 || separator >= edgeKey.Length - 1)
         {
             return false;
         }
 
-        var monitor = WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(queueKey[..separator]);
+        var monitor = WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(edgeKey[..separator]);
         if (string.IsNullOrEmpty(monitor) || WindowWorkAreaHelper.WorkAreaForDevice(monitor).HasValue)
         {
             return false;
         }
 
-        var side = queueKey[(separator + 1)..] == DeepCapsuleSides.Left
+        var side = edgeKey[(separator + 1)..] == DeepCapsuleSides.Left
             ? DeepCapsuleSides.Left
             : DeepCapsuleSides.Right;
         if (!DeepCapsulePapersInOrder().Any(p =>
@@ -3038,7 +3048,9 @@ public sealed partial class AppController : IDisposable
             return false;
         }
 
-        fallbackKey = QueueKey("", side);
+        // Falls back to the primary display's default queue for that edge: a queue whose
+        // monitor vanished has no meaningful instance identity left to preserve.
+        fallbackKey = EdgeKey("", side);
         return true;
     }
 
@@ -3092,6 +3104,14 @@ public sealed partial class AppController : IDisposable
         {
             if (!_windows.TryGetValue(paper.Id, out var window))
             {
+                continue;
+            }
+
+            if (ShouldPaperOccupyDeepCapsuleSlot(paper, window) && IsPaperInTransferringEdgeQueue(paper))
+            {
+                // A queue mid whole-queue drag is represented by the floating capsule only. Keep
+                // the rest hidden even if an arrange slips through despite the drag gate.
+                window.DetachFromDeepCapsuleStack();
                 continue;
             }
 
@@ -3247,7 +3267,7 @@ public sealed partial class AppController : IDisposable
         }
 
         var side = edge == EdgeCapsuleEdge.Left ? DeepCapsuleSides.Left : DeepCapsuleSides.Right;
-        var key = QueueKey(monitorDeviceName, side);
+        var key = EdgeKey(monitorDeviceName, side);
         var active = !IsCapsuleCollapseAllActiveForQueue(key);
         if (active)
         {
@@ -3263,6 +3283,9 @@ public sealed partial class AppController : IDisposable
 
     private void ToggleCapsuleCollapseAll() =>
         SetSettingFromUi("capsule.master_enabled", !State.UseCapsuleCollapseAll);
+
+    private void ToggleCapsuleFreeQueues() =>
+        SetSettingFromUi("capsule.free_queues", !State.UseCapsuleFreeQueues);
 
     private List<PaperData> DeepCapsulePapersInOrder()
     {
@@ -4041,24 +4064,30 @@ public sealed partial class AppController : IDisposable
         return SystemParameters.WorkArea;
     }
 
-    // Per-queue vertical rest position, keyed by (monitor, edge). Missing entries use the current
-    // product default directly; the per-queue dictionary is the only persisted authority.
+    // Per-queue vertical rest position, keyed by the queue instance (monitor, edge, id). Missing
+    // entries use the current product default directly; the per-queue dictionary is the only
+    // persisted authority. An empty instance id yields the pre-D-058 edge key.
     public double DeepCapsuleStartTopMarginFor(PaperData paper)
     {
         var edge = paper.CapsuleSide == DeepCapsuleSides.Left ? EdgeCapsuleEdge.Left : EdgeCapsuleEdge.Right;
-        return DeepCapsuleStartTopMarginForQueue(paper.CapsuleMonitorDeviceName, edge);
+        return DeepCapsuleStartTopMarginForQueue(paper.CapsuleMonitorDeviceName, edge, paper.CapsuleQueueId);
     }
 
     public double DeepCapsuleStartTopMarginForQueue(string monitorDeviceName, EdgeCapsuleEdge edge)
+        => DeepCapsuleStartTopMarginForQueue(monitorDeviceName, edge, null);
+
+    public double DeepCapsuleStartTopMarginForQueue(string monitorDeviceName, EdgeCapsuleEdge edge, string? queueId)
     {
-        var key = QueueKey(monitorDeviceName, edge == EdgeCapsuleEdge.Left ? DeepCapsuleSides.Left : DeepCapsuleSides.Right);
+        var key = QueueKey(monitorDeviceName,
+            edge == EdgeCapsuleEdge.Left ? DeepCapsuleSides.Left : DeepCapsuleSides.Right,
+            queueId);
         return State.DeepCapsuleQueueStartTopMargins.TryGetValue(key, out var m)
             ? m
             : EdgeCapsuleLayout.StartTopMargin;
     }
 
     internal string MasterCapsuleQueueKey(string monitorDeviceName, EdgeCapsuleEdge edge)
-        => QueueKey(monitorDeviceName, edge == EdgeCapsuleEdge.Left ? DeepCapsuleSides.Left : DeepCapsuleSides.Right);
+        => EdgeKey(monitorDeviceName, edge == EdgeCapsuleEdge.Left ? DeepCapsuleSides.Left : DeepCapsuleSides.Right);
 
     internal MasterCapsuleWindow? MasterCapsuleForQueue(string monitorDeviceName, EdgeCapsuleEdge edge)
         => _masterCapsules.GetValueOrDefault(MasterCapsuleQueueKey(monitorDeviceName, edge));
@@ -4100,7 +4129,7 @@ public sealed partial class AppController : IDisposable
         }
 
         var side = edge == EdgeCapsuleEdge.Left ? DeepCapsuleSides.Left : DeepCapsuleSides.Right;
-        var key = QueueKey(monitorDeviceName, side);
+        var key = EdgeKey(monitorDeviceName, side);
         var area = EdgeCapsuleLayout.LocalWorkAreaForQueue(monitorDeviceName);
 
         // Slot count for THIS queue (+1 if its master occupies slot 0).

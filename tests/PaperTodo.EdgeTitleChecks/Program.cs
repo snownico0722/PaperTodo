@@ -19,6 +19,10 @@ internal static partial class Program
             DetachedPointerAdmissionChecks();
             CycleAndUnicode();
             Console.WriteLine("PASS title-cycle-and-unicode");
+            QueueInstanceKeys();
+            Console.WriteLine("PASS queue-instance-key-codec");
+            QueueMagnet();
+            Console.WriteLine("PASS queue-magnet-merge-detach-reorder");
             Persistence();
             Console.WriteLine("PASS legacy-and-zero-persistence");
             Geometry();
@@ -40,8 +44,133 @@ internal static partial class Program
         if (!condition) throw new Exception(message);
     }
 
-    private static void CycleAndUnicode()
+    // A free queue narrows (monitor, side) with an instance id. The whole backward-compatibility
+    // story rests on one invariant: an empty id must compose to the byte-identical pre-D-058 key.
+    private static void QueueInstanceKeys()
     {
+        const string edge = "DISPLAY1|right";
+        Check(EdgeCapsuleQueueIds.Compose(edge, "") == edge, "Empty id keeps the legacy key byte-identical");
+        Check(EdgeCapsuleQueueIds.Compose(edge, null) == edge, "Null id keeps the legacy key");
+        Check(EdgeCapsuleQueueIds.Compose(edge, "q1") == $"{edge}#q1", "Instance id appends after the separator");
+
+        // Normalization is what keeps hand-edited or hostile data from producing bogus keys.
+        Check(EdgeCapsuleQueueIds.Normalize(null) == "", "Null id");
+        Check(EdgeCapsuleQueueIds.Normalize("   ") == "", "Whitespace-only id");
+        Check(EdgeCapsuleQueueIds.Normalize("!!!") == "", "Id with no usable characters");
+        Check(EdgeCapsuleQueueIds.Normalize(" Q1 ") == "q1", "Trim and lowercase");
+        Check(EdgeCapsuleQueueIds.Normalize("a-b_c") == "abc", "Disallowed characters are dropped, not rejected");
+        Check(EdgeCapsuleQueueIds.Compose(edge, " Q1 ") == $"{edge}#q1", "Compose normalizes before appending");
+        Check(EdgeCapsuleQueueIds.Normalize(new string('x', 64)).Length == EdgeCapsuleQueueIds.MaxLength,
+            "Over-long id is truncated");
+
+        Check(EdgeCapsuleQueueIds.TrySplit($"{edge}#q1", out var splitEdge, out var splitId) &&
+              splitEdge == edge && splitId == "q1", "Split a suffixed key");
+        Check(!EdgeCapsuleQueueIds.TrySplit(edge, out var plainEdge, out var plainId) &&
+              plainEdge == edge && plainId == "", "Unsuffixed key splits to an empty id");
+
+        // The primary display serializes to an empty monitor segment; the separator must survive.
+        Check(EdgeCapsuleQueueIds.TrySplit("|left#a", out var bareEdge, out var bareId) &&
+              bareEdge == "|left" && bareId == "a", "Empty monitor segment");
+
+        Check(EdgeCapsuleQueueIds.StripInstance($"{edge}#q1") == edge, "Strip removes the instance");
+        Check(EdgeCapsuleQueueIds.StripInstance(edge) == edge, "Strip is a no-op without an instance");
+        Check(EdgeCapsuleQueueIds.StripInstance("|right#a") == "|right", "Strip preserves an empty monitor segment");
+
+        Check(EdgeCapsuleQueueIds.New() != EdgeCapsuleQueueIds.New(), "New ids differ");
+        Check(EdgeCapsuleQueueIds.New().Length <= EdgeCapsuleQueueIds.MaxLength, "New id fits the length bound");
+    }
+
+    // The magnet is a Schmitt trigger: enter at 18 DIP, leave at 32 DIP, dead band between.
+    // Everything it decides must be derivable from (position, candidates, held), so the whole
+    // behaviour is checkable without a window, a pointer, or a clock.
+    private static void QueueMagnet()
+    {
+        const double slot = 50;   // capsule height 46 + standard gap 4
+        const double height = 46;
+
+        EdgeCapsuleQueueMagnetPlan Evaluate(double center, string source,
+            EdgeCapsuleQueueMagnetCandidate[] candidates, string held = "") =>
+            EdgeCapsuleQueueMagnet.Evaluate(new EdgeCapsuleQueueMagnetInput(
+                center, source, candidates, slot, height,
+                EdgeCapsuleQueueMagnet.DefaultMergeDistanceDip,
+                EdgeCapsuleQueueMagnet.DefaultDetachDistanceDip,
+                held));
+
+        // Queue "a" spans one slot at top 100; "b" sits far below at 600.
+        EdgeCapsuleQueueMagnetCandidate[] TwoQueues(int excludedInA = -1) =>
+        [
+            new("a", 1, 100, slot, excludedInA),
+            new("b", 1, 600, slot, -1)
+        ];
+
+        Check(Evaluate(100, "", TwoQueues()).Outcome == EdgeCapsuleQueueMagnetOutcome.Merge,
+            "Dragging onto a queue merges into it");
+        Check(Evaluate(100, "", TwoQueues()).TargetQueueKey == "a", "Merges into the nearest queue");
+
+        // Nothing within merge range -> the capsule becomes its own queue at the drop height.
+        var fresh = Evaluate(300, "", TwoQueues());
+        Check(fresh.Outcome == EdgeCapsuleQueueMagnetOutcome.NewQueue, "A far drop starts a new queue");
+        Check(Math.Abs(fresh.NewQueueStartTopDip - (300 - height / 2)) < 0.001,
+            "A new queue anchors the drop by its capsule top, not its centre");
+
+        // Queue "a" occupies 100 +/- 23, so its span is [77, 123]. The dead band is therefore
+        // centres 141..155 (distance 18..32): too far to acquire from scratch, close enough to keep
+        // holding. That asymmetry is the whole point of the trigger.
+        const double deadBandCentre = 148;   // 25 DIP from the span
+        Check(Evaluate(deadBandCentre, "", TwoQueues()).Outcome == EdgeCapsuleQueueMagnetOutcome.NewQueue,
+            "The dead band is too far to acquire a queue from scratch");
+        Check(Evaluate(deadBandCentre, "", TwoQueues(), held: "a").Outcome ==
+                  EdgeCapsuleQueueMagnetOutcome.Merge,
+            "The dead band keeps an already-held queue attached");
+
+        const double beyondDetach = 160;     // 37 DIP from the span
+        Check(Evaluate(beyondDetach, "", TwoQueues(), held: "a").Outcome ==
+                  EdgeCapsuleQueueMagnetOutcome.NewQueue,
+            "A held queue is released once the detach distance is exceeded");
+
+        // Same rules govern the source queue, so leaving it is distance-based too.
+        var sourceQueue = new EdgeCapsuleQueueMagnetCandidate("src", 3, 100, slot, 1);
+        Check(Evaluate(100 + 2 * slot, "src", [sourceQueue], held: "src").Outcome ==
+                  EdgeCapsuleQueueMagnetOutcome.Reorder,
+            "Staying inside the source queue reorders rather than merging");
+        Check(Evaluate(400, "src", [sourceQueue], held: "src").Outcome ==
+                  EdgeCapsuleQueueMagnetOutcome.NewQueue,
+            "Dragging well past the source queue leaves it");
+
+        // A single-member source queue has nothing left behind: any displacement detaches.
+        var solo = new EdgeCapsuleQueueMagnetCandidate("solo", 1, 100, slot, 0);
+        Check(Evaluate(101, "solo", [solo], held: "solo").Outcome == EdgeCapsuleQueueMagnetOutcome.NewQueue,
+            "A solo source queue cannot hold its member by proximity");
+
+        // Ties must resolve deterministically, not by enumeration order.
+        var tieA = Evaluate(100, "", [new("bbb", 1, 100, slot, -1), new("aaa", 1, 100, slot, -1)]);
+        var tieB = Evaluate(100, "", [new("aaa", 1, 100, slot, -1), new("bbb", 1, 100, slot, -1)]);
+        Check(tieA.TargetQueueKey == tieB.TargetQueueKey && tieA.TargetQueueKey == "aaa",
+            "Equidistant candidates resolve to the same queue regardless of input order");
+
+        // Reordering within the source queue reports Reorder; merging into another reports Merge.
+        Check(Evaluate(100, "a", TwoQueues(), held: "a").Outcome == EdgeCapsuleQueueMagnetOutcome.Reorder,
+            "Held source queue yields Reorder, not Merge");
+        Check(Evaluate(600, "a", TwoQueues(), held: "b").Outcome == EdgeCapsuleQueueMagnetOutcome.Merge,
+            "Held foreign queue yields Merge");
+
+        // Degenerate inputs must never throw, never match, and never leak a NaN into layout.
+        Check(Evaluate(double.NaN, "", TwoQueues()).Outcome == EdgeCapsuleQueueMagnetOutcome.None,
+            "A NaN centre resolves to no plan rather than matching every queue");
+        Check(Evaluate(double.PositiveInfinity, "", TwoQueues()).Outcome == EdgeCapsuleQueueMagnetOutcome.None,
+            "An infinite centre resolves to no plan");
+        Check(Evaluate(100, "", [new("a", 0, 100, slot, -1)]).Outcome ==
+                  EdgeCapsuleQueueMagnetOutcome.NewQueue,
+            "A zero-slot candidate is ignored");
+        Check(Evaluate(100, "", [new("a", 1, double.NaN, slot, -1)]).Outcome ==
+                  EdgeCapsuleQueueMagnetOutcome.NewQueue,
+            "A NaN queue top is ignored");
+        Check(Evaluate(100, "", System.Array.Empty<EdgeCapsuleQueueMagnetCandidate>(), held: "ghost").Outcome ==
+                  EdgeCapsuleQueueMagnetOutcome.NewQueue,
+            "A held queue that vanished from the candidate set does not resurrect");
+    }
+
+    private static void CycleAndUnicode()    {
         var cycle = new[] { EdgeCapsuleTitleLimit.Unlimited, EdgeCapsuleTitleLimit.Hidden }
             .Concat(Enumerable.Range(1, PaperTitles.MaxConfigurableTitleLength)).ToArray();
         for (var i = 0; i < cycle.Length; i++)

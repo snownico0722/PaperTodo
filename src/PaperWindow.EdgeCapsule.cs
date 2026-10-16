@@ -149,6 +149,14 @@ public sealed partial class PaperWindow
         IntPtr lParam,
         ref bool handled)
     {
+        // The native modifier bits are the only reliable source for "Ctrl held at press time":
+        // once the capsule takes the pointer, Keyboard.Modifiers stops tracking reliably. Latch
+        // here so the gesture can read it once, at pointer-down, and never again.
+        if (msg == WmLButtonDown)
+        {
+            _edgeCapsulePointerDownKeyState = wParam.ToInt32();
+        }
+
         // WM_MOUSELEAVE / WM_NCMOUSELEAVE are the authoritative boundary signal for the real host.
         // WPF can raise MouseLeave while the physical point is still inside the applied rectangle;
         // consume the native leave as well so that a later genuine exit cannot be lost.

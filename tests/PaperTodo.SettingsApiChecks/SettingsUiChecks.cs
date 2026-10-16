@@ -65,6 +65,7 @@ internal static partial class Program
             ("ToggleAutoMoveCompletedTodosToBottom", "todo.move_completed_to_bottom", false),
             ("ToggleTodoBottomBar", "todo.bottom_bar", false),
             ("ToggleCapsuleCollapseAll", "capsule.master_enabled", false),
+            ("ToggleCapsuleFreeQueues", "capsule.free_queues", false),
             ("ToggleCompactMasterCapsule", "capsule.master_compact", false),
             ("ToggleCapsuleMode", "capsule.enabled", false),
             ("ToggleCapsuleTextBold", "capsule.text_bold", false),
@@ -170,6 +171,18 @@ internal static partial class Program
         Invoke(failed, "ToggleCapsuleCollapseAll");
         Check(failed.State.UseCapsuleMode && failed.State.UseDeepCapsuleMode && failed.State.UseCapsuleCollapseAll,
             "UI master enable uses the shared prerequisite mutation.");
+
+        // D-058: one edge can host several free queues, which leaves slot 0 without a single
+        // owner, so the master pill and free queues cannot be on at the same time. The rule lives
+        // in the catalog setters so the UI path and the public API cannot disagree.
+        var exclusive = Controller();
+        SettingsFor(exclusive, () => true, _ => { });
+        Invoke(exclusive, "ToggleCapsuleFreeQueues");
+        Check(exclusive.State.UseCapsuleFreeQueues && !exclusive.State.UseCapsuleCollapseAll,
+            "Enabling free queues turns the master capsule off.");
+        Invoke(exclusive, "ToggleCapsuleCollapseAll");
+        Check(exclusive.State.UseCapsuleCollapseAll && !exclusive.State.UseCapsuleFreeQueues,
+            "Enabling the master capsule turns free queues off.");
     }
 
     private static void DrainSettingsUi()

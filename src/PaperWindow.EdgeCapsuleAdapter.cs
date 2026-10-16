@@ -154,10 +154,16 @@ public sealed partial class PaperWindow
             EdgeCapsuleIntent.DockingRevealStarted(),
             EdgeCapsuleDirty.None);
 
-    private bool FinishEdgeCapsulePointerInteraction() =>
-        DispatchEdgeCapsuleIntent(
+    private bool FinishEdgeCapsulePointerInteraction()
+    {
+        // The modifier latch is scoped to one press. Clearing it here means a later gesture can
+        // never inherit a stale "whole queue" intent.
+        _deepCapsuleQueueTransferRequested = false;
+        _edgeCapsulePointerDownKeyState = 0;
+        return DispatchEdgeCapsuleIntent(
             EdgeCapsuleIntent.PointerInteractionFinished(),
             EdgeCapsuleDirty.Presentation | EdgeCapsuleDirty.Pointer);
+    }
 
     private bool FinishEdgeCapsuleDockingHandoff() =>
         DispatchEdgeCapsuleIntent(

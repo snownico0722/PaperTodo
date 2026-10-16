@@ -1340,7 +1340,7 @@ public sealed partial class AppController
         {
             foreach (var side in new[] { normalizedPreferredSide, oppositeSide })
             {
-                var queueKey = QueueKey(monitorName, side);
+                var queueKey = EdgeKey(monitorName, side);
                 if (!queuesByKey.TryGetValue(queueKey, out var queue) || queue.Papers.Count < ordinal)
                 {
                     continue;

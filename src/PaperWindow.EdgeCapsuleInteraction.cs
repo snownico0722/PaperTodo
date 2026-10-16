@@ -12,6 +12,16 @@ public sealed partial class PaperWindow
 
     private PreviewOriginReorderBaseline? _previewOriginReorderBaseline;
 
+    // Raw WM_LBUTTONDOWN wParam captured by the host hook; see ConsumeQueueDragModifier.
+    private int _edgeCapsulePointerDownKeyState;
+
+    // Latched at pointer-down, cleared when the gesture ends. Whole-queue drags are a queue-level
+    // transaction, so the flag rides the gesture rather than being re-read mid-drag.
+    private bool _deepCapsuleQueueTransferRequested;
+
+    // Set when a Ctrl drag has frozen its source queue; null once committed or rolled back.
+    private EdgeCapsuleQueueTransferSnapshot? _deepCapsuleQueueTransferSnapshot;
+
     internal bool AllowsDeepCapsuleQueueProxyOwnership =>
         EdgeCapsuleQueueProxyPolicy.AllowsQueueProxyOwnership(
             CurrentEdgeCapsuleVisualAuthority);
@@ -22,9 +32,19 @@ public sealed partial class PaperWindow
             $"drag.input phase=pointer-down " +
             $"paper={EdgeCapsulePerformanceDiagnostics.ShortId(_paper.Id)} " +
             $"pointer={screenPosition.X:F0},{screenPosition.Y:F0}");
+        _deepCapsuleQueueTransferRequested = ConsumeQueueDragModifier();
         BeginEdgeCapsulePointerInteraction(screenPosition);
         QueueDeepCapsuleFloatingDragInfrastructurePrewarm();
     }
+
+    /// <summary>
+    /// Whether Ctrl was held when the press landed. Read exactly once, at pointer-down: the native
+    /// key state is authoritative, and Keyboard.Modifiers is only a fallback for the case where the
+    /// host hook did not observe WM_LBUTTONDOWN (it degrades once the capsule owns the pointer).
+    /// </summary>
+    private bool ConsumeQueueDragModifier() =>
+        (_edgeCapsulePointerDownKeyState & MkControl) != 0 ||
+        (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control;
 
     private bool OnEdgeCapsulePointerMoved(
         DeviceScreenPoint currentScreenPosition,
@@ -467,7 +487,8 @@ public sealed partial class PaperWindow
         }
 
         if (IsDeepCapsuleDockedReordering &&
-            ShouldUnlockDeepCapsuleCrossQueueDrag(currentScreenPos))
+            (_deepCapsuleQueueTransferRequested ||
+             ShouldUnlockDeepCapsuleCrossQueueDrag(currentScreenPos)))
         {
             BeginDeepCapsuleFloatingReorder(currentScreenPos);
             return;
@@ -518,6 +539,14 @@ public sealed partial class PaperWindow
         if (_edgeCapsuleHost == null || !IsDeepCapsuleDockedReordering)
         {
             return;
+        }
+
+        // Ctrl was latched at pointer-down: freeze the whole queue before anything moves, so its
+        // layout cannot reflow while the floating capsule is off the wall.
+        if (_deepCapsuleQueueTransferRequested)
+        {
+            _controller.TryBeginEdgeCapsuleQueueTransfer(_paper, out var transfer);
+            _deepCapsuleQueueTransferSnapshot = transfer;
         }
         if (_edgeCapsule.NativeBatchRetryPending)
         {
@@ -577,6 +606,13 @@ public sealed partial class PaperWindow
                 return;
             }
             WindowNative.BringToFrontNoActivate(floatingHost);
+            // Only now that the floating capsule is on screen may the rest of the queue be hidden;
+            // detaching first would leave a frame with nothing drawn at all.
+            if (_deepCapsuleQueueTransferSnapshot != null)
+            {
+                _controller.HideEdgeCapsuleQueueTransferMembers(_paper.Id);
+            }
+
             RefreshDeepCapsuleSlotTopmost();
             Mouse.OverrideCursor = Cursors.SizeAll;
 #if DEBUG
@@ -714,6 +750,23 @@ public sealed partial class PaperWindow
 
             if (commit)
             {
+                // Free queues decide by distance rather than by slot index, so the drop goes
+                // through the magnet even for a drag that never left the wall.
+                if (_controller.EdgeCapsuleFreeQueuesEnabled)
+                {
+                    if (_deepCapsuleQueueTransferSnapshot is { } transfer)
+                    {
+                        _deepCapsuleQueueTransferSnapshot = null;
+                        _controller.CommitEdgeCapsuleQueueTransfer(transfer, session.LastScreenPosition);
+                    }
+                    else
+                    {
+                        _controller.CommitDeepCapsuleQueueDrop(_paper, session.LastScreenPosition);
+                    }
+
+                    return;
+                }
+
                 if (!wasFloatingDrag)
                 {
                     _controller.ReorderDeepCapsule(_paper, DeepCapsuleDropIndexForCurrentPosition());
@@ -766,6 +819,13 @@ public sealed partial class PaperWindow
             // it before completing the controller gate, allowing the destination placement to be
             // measured and committed while the floating HWND is still visible.
             _previewOriginReorderBaseline = null;
+            if (!commit && _deepCapsuleQueueTransferSnapshot is { } cancelled)
+            {
+                // Roll the queue back to the exact membership and height it had before the drag.
+                _deepCapsuleQueueTransferSnapshot = null;
+                _controller.CancelEdgeCapsuleQueueTransfer(cancelled);
+            }
+
             FinishEdgeCapsulePointerInteraction();
             _controller.CompleteDeepCapsuleReorderDrag();
             var handoffStarted = shouldAnimateFloatingDrop &&

@@ -271,9 +271,31 @@ public sealed partial class AppController
             title: Strings.Get("TrayDeepCapsuleMode"));
         yield return DefineSetting<bool>("capsule.master_enabled",
             () => State.UseCapsuleCollapseAll,
-            value => State.UseCapsuleCollapseAll = value,
+            value =>
+            {
+                State.UseCapsuleCollapseAll = value;
+                // D-058: with several queues on one edge, slot 0 has no single owner, so the
+                // master pill and free queues are mutually exclusive. Enforced in the setter so
+                // the UI path and the public settings API cannot disagree.
+                if (value)
+                {
+                    State.UseCapsuleFreeQueues = false;
+                }
+            },
             SettingEffects.CapsuleMode,
             title: Strings.Get("SettingsCapsuleCollapseAll"));
+        yield return DefineSetting<bool>("capsule.free_queues",
+            () => State.UseCapsuleFreeQueues,
+            value =>
+            {
+                State.UseCapsuleFreeQueues = value;
+                if (value)
+                {
+                    State.UseCapsuleCollapseAll = false;
+                }
+            },
+            SettingEffects.CapsuleMode,
+            title: Strings.Get("SettingsCapsuleFreeQueues"));
         yield return DefineSetting<bool>("capsule.master_compact",
             () => State.CompactMasterCapsule,
             value => State.CompactMasterCapsule = value,
