@@ -410,10 +410,12 @@ internal static partial class Program
                 "tray workspace submenu did not select slot 4");
             Require(await controller.SwitchWorkspaceAsync(1), "return after tray selection failed");
 
-            File.WriteAllText(Path.Combine(directory, "data3.json"), "{invalid target");
-            Require(!await controller.SwitchWorkspaceAsync(3) && controller.WorkspaceNumber == 1,
+            // Slot 3 was opened by the selector test above, so it now has a valid backup.
+            // Damage a never-opened slot instead: recovery from a valid backup is not failure.
+            File.WriteAllText(Path.Combine(directory, "data5.json"), "{invalid target");
+            Require(!await controller.SwitchWorkspaceAsync(5) && controller.WorkspaceNumber == 1,
                 "invalid target displaced current workspace");
-            File.Delete(Path.Combine(directory, "data3.json"));
+            File.Delete(Path.Combine(directory, "data5.json"));
             Require(await controller.SwitchWorkspaceAsync(5), "new fifth workspace failed");
             Require(controller.State.Papers.Count == 1 && controller.State.Papers[0].Content.Length == 0,
                 "new fifth workspace duplicated main content");
