@@ -1612,6 +1612,15 @@
   <data name="WorkspaceCountHint" xml:space="preserve">
     <value>最多 5 个。减少数量或关闭功能只停止使用对应工作区，不删除其文件。</value>
   </data>
+  <data name="WorkspaceSelectLabel" xml:space="preserve">
+    <value>当前工作区</value>
+  </data>
+  <data name="WorkspaceMainSlotLabel" xml:space="preserve">
+    <value>主工作区（1）</value>
+  </data>
+  <data name="WorkspaceSlotLabel" xml:space="preserve">
+    <value>工作区 {0}</value>
+  </data>
   <data name="WorkspaceCurrent" xml:space="preserve">
     <value>当前工作区：{0}</value>
   </data>

@@ -383,6 +383,33 @@ internal static partial class Program
             await Until(() => controller.WorkspaceNumber == 2 && !controller.IsWorkspaceSwitching, "top-bar click did not switch");
             Require(await controller.SwitchWorkspaceAsync(1), "return after actual button event failed");
 
+            // Both settings and tray choose an explicit slot, unlike the paper's cycle button.
+            var workspacePage = (StackPanel)typeof(AppController)
+                .GetMethod("BuildWorkspaceSettingsPage", System.Reflection.BindingFlags.NonPublic |
+                    System.Reflection.BindingFlags.Instance)!
+                .Invoke(controller, null)!;
+            var workspaceCombo = workspacePage.Children.OfType<ComboBox>().Single();
+            Require(workspaceCombo.Items.Count == 5 && workspaceCombo.SelectedIndex == 0 &&
+                AutomationProperties.GetAutomationId(workspaceCombo) == "WorkspaceSelect",
+                "settings workspace dropdown did not reflect the active slot");
+            workspaceCombo.SelectedIndex = 2;
+            await Until(() => controller.WorkspaceNumber == 3 && !controller.IsWorkspaceSwitching,
+                "settings workspace dropdown did not select slot 3");
+            Require(await controller.SwitchWorkspaceAsync(1), "return after settings selection failed");
+
+            var trayMenu = controller.CreateTrayMenu();
+            controller.RebuildTrayMenu(trayMenu);
+            var workspaceMenu = trayMenu.Items.OfType<MenuItem>().Single(item =>
+                item.Items.Count == controller.WorkspaceOptions.Count &&
+                item.Header?.ToString()?.Contains("workspace", StringComparison.OrdinalIgnoreCase) == true);
+            Require(workspaceMenu.Items.Count == 5 &&
+                ((MenuItem)workspaceMenu.Items[0]).Header?.ToString()?.Contains("✓") == true,
+                "tray workspace submenu did not mark the current slot");
+            ((MenuItem)workspaceMenu.Items[3]).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            await Until(() => controller.WorkspaceNumber == 4 && !controller.IsWorkspaceSwitching,
+                "tray workspace submenu did not select slot 4");
+            Require(await controller.SwitchWorkspaceAsync(1), "return after tray selection failed");
+
             File.WriteAllText(Path.Combine(directory, "data3.json"), "{invalid target");
             Require(!await controller.SwitchWorkspaceAsync(3) && controller.WorkspaceNumber == 1,
                 "invalid target displaced current workspace");

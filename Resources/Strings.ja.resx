@@ -1563,6 +1563,15 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="WorkspaceCountHint" xml:space="preserve">
     <value>最大5個。数を減らしたり無効にしてもファイルは削除されません。</value>
   </data>
+  <data name="WorkspaceSelectLabel" xml:space="preserve">
+    <value>現在のワークスペース</value>
+  </data>
+  <data name="WorkspaceMainSlotLabel" xml:space="preserve">
+    <value>メインワークスペース（1）</value>
+  </data>
+  <data name="WorkspaceSlotLabel" xml:space="preserve">
+    <value>ワークスペース {0}</value>
+  </data>
   <data name="WorkspaceCurrent" xml:space="preserve">
     <value>現在のワークスペース：{0}</value>
   </data>

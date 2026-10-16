@@ -1563,6 +1563,15 @@ When off, open at the docked edge or remembered position.</value>
   <data name="WorkspaceCountHint" xml:space="preserve">
     <value>Up to 5. Reducing the count or disabling workspaces never deletes their files.</value>
   </data>
+  <data name="WorkspaceSelectLabel" xml:space="preserve">
+    <value>Current workspace</value>
+  </data>
+  <data name="WorkspaceMainSlotLabel" xml:space="preserve">
+    <value>Main workspace (1)</value>
+  </data>
+  <data name="WorkspaceSlotLabel" xml:space="preserve">
+    <value>Workspace {0}</value>
+  </data>
   <data name="WorkspaceCurrent" xml:space="preserve">
     <value>Current workspace: {0}</value>
   </data>

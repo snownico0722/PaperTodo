@@ -1,5 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Automation;
+using System.Windows.Threading;
 
 namespace PaperTodo;
 
@@ -13,41 +15,83 @@ public sealed partial class AppController
         _workspaceSettingsPanel = root;
         root.IsEnabled = !_workspaceSwitching;
         root.Children.Add(SettingsSectionLabel(Strings.Get("WorkspaceSettingsTitle")));
-        root.Children.Add(WorkspaceDescription(Strings.Get("WorkspaceSettingsDescription")));
-        root.Children.Add(SettingsToggle(Strings.Get("WorkspaceEnabled"), WorkspaceOptions.Enabled, async () =>
-        {
-            var next = WorkspaceOptions.Normalized();
-            next.Enabled = !next.Enabled;
-            await ChangeWorkspaceConfigurationAsync(next);
-        }));
-        root.Children.Add(SettingsSectionLabel(Strings.Get("WorkspaceCount")));
+        root.Children.Add(WrapWithHint(
+            SettingsToggle(Strings.Get("WorkspaceEnabled"), WorkspaceOptions.Enabled, async () =>
+            {
+                var next = WorkspaceOptions.Normalized();
+                next.Enabled = !next.Enabled;
+                await ChangeWorkspaceConfigurationAsync(next);
+            }),
+            "WorkspaceSettingsDescription"));
+
+        root.Children.Add(SettingsSectionLabelWithHint(Strings.Get("WorkspaceCount"), "WorkspaceCountHint"));
         var counts = Enumerable.Range(2, 4).Select(n =>
             (n.ToString(System.Globalization.CultureInfo.InvariantCulture), n.ToString(UiLanguages.EffectiveCulture)))
             .ToArray();
-        var selector = CreateSegmentSelector(counts,
+        var countSelector = CreateSegmentSelector(counts,
             WorkspaceOptions.Count.ToString(System.Globalization.CultureInfo.InvariantCulture), async value =>
             {
                 var next = WorkspaceOptions.Normalized();
                 next.Count = int.Parse(value, System.Globalization.CultureInfo.InvariantCulture);
                 await ChangeWorkspaceConfigurationAsync(next);
             });
-        selector.IsEnabled = WorkspaceOptions.Enabled;
-        root.Children.Add(selector);
-        root.Children.Add(WorkspaceDescription(Strings.Get("WorkspaceCountHint")));
-        root.Children.Add(SettingsSectionLabel(Strings.Format("WorkspaceCurrent", WorkspaceNumber)));
+        countSelector.IsEnabled = WorkspaceOptions.Enabled;
+        root.Children.Add(countSelector);
+
+        var currentLabel = Strings.Get("WorkspaceSelectLabel");
+        root.Children.Add(WorkspaceNumber == 1
+            ? SettingsSectionLabelWithHint(currentLabel, "WorkspaceMainHint")
+            : SettingsSectionLabel(currentLabel));
+        var workspaceSelector = new ComboBox
+        {
+            Width = AppTypography.Scale(196),
+            Height = AppTypography.FitChrome(28),
+            Margin = new Thickness(0, 4, 0, 0),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalContentAlignment = VerticalAlignment.Center,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            IsEnabled = WorkspaceOptions.Enabled
+        };
+        PaperSelectControl.ApplyAppTheme(workspaceSelector, AppTypography.Scale(12));
+        AutomationProperties.SetAutomationId(workspaceSelector, "WorkspaceSelect");
+        AutomationProperties.SetName(workspaceSelector, currentLabel);
+        for (var number = 1; number <= WorkspaceOptions.Count; number++)
+        {
+            workspaceSelector.Items.Add(new ComboBoxItem
+            {
+                Tag = number,
+                Content = WorkspaceSlotLabel(number)
+            });
+        }
+        workspaceSelector.SelectedIndex = WorkspaceNumber - 1;
+        workspaceSelector.SelectionChanged += async (_, _) =>
+        {
+            if (_workspaceSwitching || !WorkspaceOptions.Enabled ||
+                workspaceSelector.SelectedItem is not ComboBoxItem { Tag: int target } ||
+                target == WorkspaceNumber) return;
+
+            // Close the ComboBox popup before switching: the workspace boundary refuses
+            // an active mouse capture, and replacing the settings HWND during a click is unsafe.
+            workspaceSelector.IsDropDownOpen = false;
+            await Dispatcher.Yield(DispatcherPriority.ContextIdle);
+            if (!_workspaceSwitching && !await SwitchWorkspaceAsync(target))
+                RefreshSettingsWindowContent();
+        };
+        root.Children.Add(workspaceSelector);
         root.Children.Add(WorkspaceDescription(System.IO.Path.GetFileName(_workspace.Paths.Data) + "  ·  " +
             System.IO.Path.GetFileName(_workspace.Paths.Images)));
+
         if (WorkspaceNumber > 1)
         {
-            root.Children.Add(SettingsToggle(Strings.Get("WorkspaceFollowMain"), _workspace.FollowsMain, async () =>
-            {
-                var next = WorkspaceOptions.Normalized();
-                next.FollowMainSettings[WorkspaceNumber] = !_workspace.FollowsMain;
-                await ChangeWorkspaceConfigurationAsync(next);
-            }));
-            root.Children.Add(WorkspaceDescription(Strings.Get("WorkspaceFollowHint")));
+            root.Children.Add(WrapWithHint(
+                SettingsToggle(Strings.Get("WorkspaceFollowMain"), _workspace.FollowsMain, async () =>
+                {
+                    var next = WorkspaceOptions.Normalized();
+                    next.FollowMainSettings[WorkspaceNumber] = !_workspace.FollowsMain;
+                    await ChangeWorkspaceConfigurationAsync(next);
+                }),
+                "WorkspaceFollowHint"));
         }
-        else root.Children.Add(WorkspaceDescription(Strings.Get("WorkspaceMainHint")));
 
         var cycle = PluginPageButton(Strings.Get("WorkspaceNext"));
         cycle.HorizontalAlignment = HorizontalAlignment.Left;
@@ -57,6 +101,10 @@ public sealed partial class AppController
         root.Children.Add(cycle);
         return root;
     }
+
+    private static string WorkspaceSlotLabel(int number) => number == 1
+        ? Strings.Get("WorkspaceMainSlotLabel")
+        : Strings.Format("WorkspaceSlotLabel", number);
 
     private static TextBlock WorkspaceDescription(string text) => new()
     {
