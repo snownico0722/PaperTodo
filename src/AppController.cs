@@ -2305,7 +2305,7 @@ public sealed partial class AppController : IDisposable
         targetIndex = Math.Clamp(targetIndex, 0, queueMembers.Count);
         queueMembers.Insert(targetIndex, draggedPaper);
 
-        PreviewEdgeCapsuleQueueMembers(queueKey, queueMembers, skipPaperId: paper.Id);
+        PreviewEdgeCapsuleQueueMembers(queueKey, queueMembers, new HashSet<string>([paper.Id], StringComparer.Ordinal));
     }
 
     /// <summary>
@@ -2318,32 +2318,36 @@ public sealed partial class AppController : IDisposable
     /// postpone the whole preview until the gesture ends — exactly the "stiff" behaviour this
     /// replaces.
     /// </summary>
-    public void PreviewDeepCapsuleQueueDrag(PaperData dragged, string targetQueueKey, int targetIndex)
+    public void PreviewDeepCapsuleQueueDrag(
+        IReadOnlyList<PaperData> carried,
+        string targetQueueKey,
+        int targetIndex)
     {
-        if (!State.UseCapsuleMode || !State.UseDeepCapsuleMode)
+        if (!State.UseCapsuleMode || !State.UseDeepCapsuleMode || carried.Count == 0)
         {
             return;
         }
 
-        var sourceQueueKey = QueueKey(dragged);
+        var sourceQueueKey = QueueKey(carried[0]);
         var allPapers = DeepCapsulePapersInOrder();
+        var carriedIds = new HashSet<string>(carried.Select(p => p.Id), StringComparer.Ordinal);
 
-        // The queue losing a member: everyone else closes the gap.
-        PreviewDeepCapsuleQueueVacatedSource(allPapers, sourceQueueKey, dragged);
+        // The queue losing members: everyone else closes the gaps they leave.
+        PreviewDeepCapsuleQueueVacatedSource(allPapers, sourceQueueKey, carriedIds);
 
         if (string.Equals(targetQueueKey, sourceQueueKey, StringComparison.Ordinal))
         {
             return;
         }
 
-        // The queue gaining a member: open a slot at the insertion point.
+        // The queue gaining members: open as many slots as arrive, at the insertion point.
         var target = new List<PaperData>(allPapers.Where(p => QueueKey(p) == targetQueueKey));
-        target.Insert(Math.Clamp(targetIndex, 0, target.Count), dragged);
-        PreviewEdgeCapsuleQueueMembers(targetQueueKey, target, skipPaperId: dragged.Id);
+        target.InsertRange(Math.Clamp(targetIndex, 0, target.Count), carried);
+        PreviewEdgeCapsuleQueueMembers(targetQueueKey, target, carriedIds);
     }
 
     /// <summary>
-    /// Close the gap the dragged capsule vacates in its own queue.
+    /// Close the gaps the carried capsules vacate in their own queue.
     ///
     /// This must run in every drag phase, including once the capsule has left the wall. Letting the
     /// source queue keep a permanent hole is what made a floating drag read as "the queue came
@@ -2359,18 +2363,18 @@ public sealed partial class AppController : IDisposable
         PreviewDeepCapsuleQueueVacatedSource(
             DeepCapsulePapersInOrder(),
             QueueKey(dragged),
-            dragged);
+            new HashSet<string>([dragged.Id], StringComparer.Ordinal));
     }
 
     private void PreviewDeepCapsuleQueueVacatedSource(
         IReadOnlyList<PaperData> allPapers,
         string sourceQueueKey,
-        PaperData dragged)
+        HashSet<string> carriedIds)
     {
         var remaining = new List<PaperData>();
         foreach (var paper in allPapers)
         {
-            if (paper.Id != dragged.Id && QueueKey(paper) == sourceQueueKey)
+            if (!carriedIds.Contains(paper.Id) && QueueKey(paper) == sourceQueueKey)
             {
                 remaining.Add(paper);
             }
@@ -2381,13 +2385,13 @@ public sealed partial class AppController : IDisposable
             return;
         }
 
-        PreviewEdgeCapsuleQueueMembers(sourceQueueKey, remaining, skipPaperId: dragged.Id);
+        PreviewEdgeCapsuleQueueMembers(sourceQueueKey, remaining, carriedIds);
     }
 
     private void PreviewEdgeCapsuleQueueMembers(
         string queueKey,
         List<PaperData> members,
-        string skipPaperId)
+        HashSet<string> carriedIds)
     {
         if (members.Count == 0)
         {
@@ -2408,7 +2412,7 @@ public sealed partial class AppController : IDisposable
 
         foreach (var member in members)
         {
-            if (member.Id == skipPaperId ||
+            if (carriedIds.Contains(member.Id) ||
                 !_windows.TryGetValue(member.Id, out var window) ||
                 !ShouldPaperOccupyDeepCapsuleSlot(member, window))
             {

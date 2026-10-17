@@ -12,7 +12,10 @@ public sealed partial class AppController
 {
     private EdgeCapsuleQueueDropTargetOutline? _edgeCapsuleQueueDropTargetOutline;
 
-    internal void ShowEdgeCapsuleQueueDropTargetOutline(string queueKey, string draggedPaperId)
+    internal void ShowEdgeCapsuleQueueDropTargetOutline(
+        string queueKey,
+        string draggedPaperId,
+        int carriedCount = 1)
     {
         if (!EdgeCapsuleFreeQueuesEnabled)
         {
@@ -20,7 +23,12 @@ public sealed partial class AppController
             return;
         }
 
-        if (!TryGetEdgeCapsuleQueueDropTargetBounds(queueKey, draggedPaperId, out var bounds, out var monitorDeviceName))
+        if (!TryGetEdgeCapsuleQueueDropTargetBounds(
+                queueKey,
+                draggedPaperId,
+                Math.Max(1, carriedCount),
+                out var bounds,
+                out var monitorDeviceName))
         {
             EndEdgeCapsuleQueueDropTargetOutline();
             return;
@@ -56,6 +64,7 @@ public sealed partial class AppController
     private bool TryGetEdgeCapsuleQueueDropTargetBounds(
         string queueKey,
         string draggedPaperId,
+        int carriedCount,
         out DeviceScreenRect bounds,
         out string monitorDeviceName)
     {
@@ -84,7 +93,7 @@ public sealed partial class AppController
         }
 
         var area = geometry.LocalWorkAreaDip;
-        var slotCount = members.Count + 1;
+        var slotCount = members.Count + carriedCount;
         var startTop = EdgeCapsuleLayout.NormalizeStartTopMargin(
             DeepCapsuleStartTopMarginForQueue(monitorDeviceName, side, FirstQueueIdOf(members)),
             area,

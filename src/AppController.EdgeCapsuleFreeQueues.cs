@@ -88,22 +88,29 @@ public sealed partial class AppController
     /// <summary>
     /// Queue snapshot the magnet reasons about: which queue each visible docked capsule belongs to,
     /// and where each queue's slot 0 sits on the target monitor.
+    ///
+    /// <paramref name="carried"/> is everything the gesture is taking away. A whole-queue transfer
+    /// carries its entire source queue, so that queue must be dropped from the candidates — it is
+    /// the thing being moved, not somewhere to merge into. A single capsule keeps its source queue
+    /// as a candidate, because reordering within your own queue is a valid outcome.
     /// </summary>
     private List<EdgeCapsuleQueueMagnetCandidate> BuildEdgeCapsuleQueueMagnetCandidates(
-        PaperData dragged,
+        IReadOnlyList<PaperData> carried,
         MonitorGeometry targetGeometry,
         string targetMonitor,
         string targetSide,
+        bool excludeEntireSourceQueue,
         out string sourceQueueKey)
     {
         var result = new List<EdgeCapsuleQueueMagnetCandidate>();
-        sourceQueueKey = QueueKey(dragged);
+        sourceQueueKey = carried.Count == 0 ? "" : QueueKey(carried[0]);
 
+        var carriedIds = new HashSet<string>(carried.Select(p => p.Id), StringComparer.Ordinal);
         var members = new Dictionary<string, List<PaperData>>(StringComparer.Ordinal);
         var order = new List<string>();
         foreach (var paper in DeepCapsulePapersInOrder())
         {
-            if (paper.Id == dragged.Id ||
+            if (carriedIds.Contains(paper.Id) ||
                 !string.Equals(WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(paper.CapsuleMonitorDeviceName),
                     targetMonitor, StringComparison.Ordinal) ||
                 DeepCapsuleSides.Normalize(paper.CapsuleSide) != targetSide)
@@ -114,6 +121,12 @@ public sealed partial class AppController
             var key = QueueKey(paper);
             if (!members.TryGetValue(key, out var list))
             {
+                // Carrying the whole source queue: it must not offer itself as a merge target.
+                if (excludeEntireSourceQueue && key == sourceQueueKey)
+                {
+                    continue;
+                }
+
                 list = new List<PaperData>();
                 members[key] = list;
                 order.Add(key);
@@ -207,16 +220,19 @@ public sealed partial class AppController
     /// This is what turns free-queue dragging from "decide on release" into "decide continuously".
     /// </summary>
     internal EdgeCapsuleQueueMagnetPlan EvaluateDeepCapsuleQueueDrag(
-        PaperData paper,
-        DeviceScreenPoint cursor)
+        IReadOnlyList<PaperData> carried,
+        DeviceScreenPoint cursor,
+        bool excludeEntireSourceQueue = false)
     {
-        if (!EdgeCapsuleFreeQueuesEnabled ||
-            !TryResolveQueueDropGeometry(paper, cursor, out var drop))
+        if (carried.Count == 0 ||
+            !EdgeCapsuleFreeQueuesEnabled ||
+            !TryResolveQueueDropGeometry(carried[0], cursor, out var drop))
         {
             return EdgeCapsuleQueueMagnet.None;
         }
 
-        var plan = EdgeCapsuleQueueMagnet.Evaluate(BuildQueueMagnetInput(paper, drop, _deepCapsuleDragHeldQueueKey));
+        var plan = EdgeCapsuleQueueMagnet.Evaluate(
+            BuildQueueMagnetInput(carried, drop, excludeEntireSourceQueue, _deepCapsuleDragHeldQueueKey));
         _deepCapsuleDragHeldQueueKey = plan.Outcome is EdgeCapsuleQueueMagnetOutcome.Merge
             or EdgeCapsuleQueueMagnetOutcome.Reorder
             ? plan.TargetQueueKey
@@ -241,15 +257,16 @@ public sealed partial class AppController
     private EdgeCapsuleQueueMagnetPlan EvaluateDeepCapsuleQueueDrop(
         PaperData paper,
         QueueDropGeometry drop) =>
-        EdgeCapsuleQueueMagnet.Evaluate(BuildQueueMagnetInput(paper, drop, ""));
+        EdgeCapsuleQueueMagnet.Evaluate(BuildQueueMagnetInput([paper], drop, false, ""));
 
     private EdgeCapsuleQueueMagnetInput BuildQueueMagnetInput(
-        PaperData paper,
+        IReadOnlyList<PaperData> carried,
         QueueDropGeometry drop,
+        bool excludeEntireSourceQueue,
         string heldQueueKey)
     {
         var candidates = BuildEdgeCapsuleQueueMagnetCandidates(
-            paper, drop.Geometry, drop.MonitorDeviceName, drop.Side, out var sourceQueueKey);
+            carried, drop.Geometry, drop.MonitorDeviceName, drop.Side, excludeEntireSourceQueue, out var sourceQueueKey);
 
         return new EdgeCapsuleQueueMagnetInput(
             drop.CenterTopDip,
@@ -312,7 +329,8 @@ public sealed partial class AppController
     internal int DeepCapsuleQueueInsertIndexFor(
         string queueKey,
         string draggedPaperId,
-        double dropTopDip)
+        double dropTopDip,
+        int carriedCount = 1)
     {
         var members = FreeQueueMembersExcluding(queueKey, draggedPaperId);
         var edgeKey = EdgeCapsuleQueueIds.StripInstance(queueKey);
@@ -326,7 +344,7 @@ public sealed partial class AppController
         }
 
         var area = geometry.LocalWorkAreaDip;
-        var realCount = members.Count + 1;
+        var realCount = members.Count + Math.Max(1, carriedCount);
         var startTop = EdgeCapsuleLayout.NormalizeStartTopMargin(
             DeepCapsuleStartTopMarginForQueue(
                 edgeKey[..Math.Max(separator, 0)],
@@ -409,25 +427,41 @@ public sealed partial class AppController
         return members;
     }
 
+    /// <summary>Single-capsule form of <see cref="InsertPaperBesideQueues"/>.</summary>
+    private void InsertPaperBesideQueue(PaperData paper, List<PaperData> targetMembers, int insertAt)
+        => InsertPaperBesideQueues([paper], targetMembers, insertAt);
+
     /// <summary>
-    /// Rebuild <see cref="AppState.Papers"/> so the dragged paper lands at
+    /// Rebuild <see cref="AppState.Papers"/> so <paramref name="papers"/> land together at
     /// <paramref name="insertAt"/> within the run of papers that already hold the target queue.
     /// Every unrelated paper keeps its position, matching the legacy reorder rule.
+    ///
+    /// A whole-queue transfer inserts its members as one block, so the queue's internal order is
+    /// preserved exactly as it was before the drag.
     /// </summary>
-    private void InsertPaperBesideQueue(PaperData paper, List<PaperData> targetMembers, int insertAt)
+    private void InsertPaperBesideQueues(
+        IReadOnlyList<PaperData> papers,
+        List<PaperData> targetMembers,
+        int insertAt)
     {
+        if (papers.Count == 0)
+        {
+            return;
+        }
+
+        var movingIds = new HashSet<string>(papers.Select(p => p.Id), StringComparer.Ordinal);
         var rebuilt = new List<PaperData>(State.Papers.Count);
         var anchorPaper = insertAt < targetMembers.Count ? targetMembers[insertAt] : null;
         foreach (var existing in State.Papers)
         {
-            if (existing.Id == paper.Id)
+            if (movingIds.Contains(existing.Id))
             {
                 continue;
             }
 
             if (anchorPaper != null && existing.Id == anchorPaper.Id)
             {
-                rebuilt.Add(paper);
+                rebuilt.AddRange(papers);
             }
 
             rebuilt.Add(existing);
@@ -439,11 +473,11 @@ public sealed partial class AppController
             {
                 var lastId = targetMembers[^1].Id;
                 var index = rebuilt.FindIndex(p => p.Id == lastId);
-                rebuilt.Insert(index + 1, paper);
+                rebuilt.InsertRange(index + 1, papers);
             }
             else
             {
-                rebuilt.Add(paper);
+                rebuilt.AddRange(papers);
             }
         }
 

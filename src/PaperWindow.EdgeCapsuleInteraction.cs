@@ -652,20 +652,40 @@ public sealed partial class PaperWindow
         }
 
         _deepCapsuleQueuePreviewTimestamp = now;
-        var plan = _controller.EvaluateDeepCapsuleQueueDrag(_paper, session.LastScreenPosition);
+
+        // A Ctrl drag carries the whole queue, so the magnet has to reason about every member as
+        // one unit: N slots open in the target, and the source queue is not itself a merge target.
+        var transfer = _deepCapsuleQueueTransferSnapshot;
+        var carried = transfer != null
+            ? _controller.EdgeCapsuleQueueTransferMembers(transfer)
+            : [_paper];
+        if (carried.Count == 0)
+        {
+            return;
+        }
+
+        var plan = _controller.EvaluateDeepCapsuleQueueDrag(
+            carried,
+            session.LastScreenPosition,
+            excludeEntireSourceQueue: transfer != null);
         var sourceQueueKey = AppController.QueueKeyForPaper(_paper);
 
-        // The new outline and cross-queue avoidance exist for one situation only: this capsule
-        // leaving its own queue to join a different one. Same-queue reordering already had a
-        // working avoidance path before free queues existed, so it keeps that and shows no marker.
+        // The new outline and cross-queue avoidance exist for one situation only: what this drag
+        // carries leaving its own queue to join a different one. Same-queue reordering already had
+        // a working avoidance path before free queues existed, so it keeps that and shows no marker.
         var crossQueue = plan.Outcome == EdgeCapsuleQueueMagnetOutcome.Merge &&
                          !string.Equals(plan.TargetQueueKey, sourceQueueKey, StringComparison.Ordinal);
-
 
         if (!crossQueue)
         {
             _controller.EndEdgeCapsuleQueueDropTargetOutline();
-            if (floatingPhase)
+            if (transfer != null)
+            {
+                // The queue being carried is already lifted off the wall and hidden; there is no
+                // gap left to close, so re-running the close-up would only churn detached members.
+                ResetDeepCapsuleQueueMagnetPreviewState();
+            }
+            else if (floatingPhase)
             {
                 // Off the wall there is no slot index to track, but the vacated queue still has to
                 // close up. This is what keeps the queue reading as one piece mid-drag.
@@ -681,18 +701,21 @@ public sealed partial class PaperWindow
         }
 
         var dropTopDip = DeepCapsuleMonitorGeometry().DeviceYToLocalDip(session.LastScreenPosition.Y);
-        var index = _controller.DeepCapsuleQueueInsertIndexFor(plan.TargetQueueKey, _paper.Id, dropTopDip);
-        _controller.ShowEdgeCapsuleQueueDropTargetOutline(plan.TargetQueueKey, _paper.Id);
+        var index = _controller.DeepCapsuleQueueInsertIndexFor(
+            plan.TargetQueueKey,
+            _paper.Id,
+            dropTopDip,
+            carried.Count);
+        _controller.ShowEdgeCapsuleQueueDropTargetOutline(plan.TargetQueueKey, _paper.Id, carried.Count);
 
         if (plan.TargetQueueKey == _deepCapsuleQueuePreviewKey && index == _deepCapsuleQueuePreviewIndex)
         {
             return;
         }
 
-
         _deepCapsuleQueuePreviewKey = plan.TargetQueueKey;
         _deepCapsuleQueuePreviewIndex = index;
-        _controller.PreviewDeepCapsuleQueueDrag(_paper, plan.TargetQueueKey, index);
+        _controller.PreviewDeepCapsuleQueueDrag(carried, plan.TargetQueueKey, index);
     }
 
     private void PreviewDeepCapsuleReorderForCurrentPosition()

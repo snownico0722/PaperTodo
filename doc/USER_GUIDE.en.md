@@ -293,7 +293,7 @@ Turn on **Free edge capsule queues** in settings and capsules stop being forced 
 - **Place freely**: Drag any capsule to any height along the edge and it stays there as a queue of its own. The layout survives a restart.
 - **Snap to merge**: Bring a capsule near another queue and it merges in, still stacking at an even pitch. While you drag, the queue you would join is outlined and its members step aside in real time, so you can see the result before letting go.
 - **Pull away to leave**: Drag a member far enough from its queue and it leaves on its own; the rest of the queue does not move.
-- **Move the whole queue**: Hold <kbd>Ctrl</kbd> while dragging any member and the entire queue lifts off the wall and floats with the cursor. Drop it on the left or right edge of any screen.
+- **Move the whole queue**: Hold <kbd>Ctrl</kbd> while dragging any member and the entire queue lifts off the wall and floats with the cursor. Bring it near another queue and that queue makes room and highlights in real time; releasing merges the whole queue into it, order intact. Released over empty space it starts a queue of its own.
 
 > 
 > Turning the option off returns to the original one-queue-per-edge behaviour. Remembered layouts are kept, not discarded.

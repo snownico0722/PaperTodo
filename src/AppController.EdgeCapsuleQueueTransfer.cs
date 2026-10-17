@@ -94,8 +94,10 @@ public sealed partial class AppController
     }
 
     /// <summary>
-    /// Move every member of the transferred queue to the drop point. The queue keeps one shared
-    /// instance id and one shared rest height, so the whole stack lands as a unit.
+    /// Commit a whole-queue drag. Decides with the same magnet a single capsule uses, so carrying
+    /// five capsules lands exactly where carrying one would. On a merge the whole queue joins the
+    /// target at the magnet point, keeping its internal order; with no candidate it starts a queue
+    /// of its own at the drop height.
     /// </summary>
     internal void CommitEdgeCapsuleQueueTransfer(
         EdgeCapsuleQueueTransferSnapshot? snapshot,
@@ -109,6 +111,83 @@ public sealed partial class AppController
 
         _edgeCapsuleQueueTransferSources.Remove(snapshot.SourceQueueKey);
 
+        var carried = EdgeCapsuleQueueTransferMembers(snapshot);
+        if (carried.Count == 0)
+        {
+            ArrangeDeepCapsules(animate: true);
+            return;
+        }
+
+        // Do not inherit a drag-time hold: the pointer is released, so the Schmitt trigger's exit
+        // threshold no longer describes anything meaningful.
+        _deepCapsuleDragHeldQueueKey = "";
+        var plan = EvaluateDeepCapsuleQueueDrag(carried, dropPoint, excludeEntireSourceQueue: true);
+
+        if (plan.Outcome == EdgeCapsuleQueueMagnetOutcome.Merge)
+        {
+            MergeTransferredQueueInto(snapshot, carried, plan.TargetQueueKey, dropPoint);
+            return;
+        }
+
+        StartTransferredQueueAt(snapshot, carried, dropPoint);
+    }
+
+    /// <summary>
+    /// Join an existing queue: every carried member adopts the target's queue id and the whole
+    /// block is placed at the magnet point, so the queue reads as one piece inside the target.
+    /// </summary>
+    private void MergeTransferredQueueInto(
+        EdgeCapsuleQueueTransferSnapshot snapshot,
+        IReadOnlyList<PaperData> carried,
+        string targetQueueKey,
+        DeviceScreenPoint dropPoint)
+    {
+        var targetMembers = FreeQueueMembersExcluding(targetQueueKey, snapshot.PaperIds.FirstOrDefault() ?? "");
+        var targetQueueId = FirstQueueIdOf(targetMembers);
+        var edgeKey = EdgeCapsuleQueueIds.StripInstance(targetQueueKey);
+        var separator = edgeKey.LastIndexOf('|');
+        var side = separator >= 0 && edgeKey[(separator + 1)..] == DeepCapsuleSides.Left
+            ? DeepCapsuleSides.Left
+            : DeepCapsuleSides.Right;
+        var monitorName = edgeKey[..Math.Max(separator, 0)];
+
+        if (!WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(monitorName, out var geometry))
+        {
+            StartTransferredQueueAt(snapshot, carried, dropPoint);
+            return;
+        }
+
+        var insertAt = DeepCapsuleQueueInsertIndexFor(
+            targetQueueKey,
+            snapshot.PaperIds.FirstOrDefault() ?? "",
+            geometry.DeviceYToLocalDip(dropPoint.Y),
+            carried.Count);
+
+        foreach (var member in carried)
+        {
+            member.CapsuleMonitorDeviceName =
+                WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(monitorName);
+            member.CapsuleSide = side;
+            member.CapsuleQueueId = targetQueueId;
+        }
+
+        InsertPaperBesideQueues(carried, targetMembers, insertAt);
+        RemoveVacatedQueueStartMargin(snapshot, QueueKey(monitorName, side, targetQueueId));
+
+        ArrangeDeepCapsules(animate: true);
+        RefreshTrayMenu();
+        SaveNow();
+    }
+
+    /// <summary>
+    /// No queue in range: the carried members start a queue of their own at the drop height,
+    /// sharing one instance id and one rest height so the stack lands as a unit.
+    /// </summary>
+    private void StartTransferredQueueAt(
+        EdgeCapsuleQueueTransferSnapshot snapshot,
+        IReadOnlyList<PaperData> carried,
+        DeviceScreenPoint dropPoint)
+    {
         var geometry = MonitorGeometryForQueue(snapshot.MonitorDeviceName);
         if (geometry is null)
         {
@@ -122,48 +201,75 @@ public sealed partial class AppController
             : DeepCapsuleSides.Right;
         var queueId = EdgeCapsuleQueueIds.New();
 
-        var byId = State.Papers.ToDictionary(p => p.Id, StringComparer.Ordinal);
-        var moved = 0;
-        foreach (var id in snapshot.PaperIds)
+        foreach (var member in carried)
         {
-            if (!byId.TryGetValue(id, out var member))
-            {
-                continue;
-            }
-
-            member.CapsuleMonitorDeviceName = WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(monitor.DeviceName);
+            member.CapsuleMonitorDeviceName =
+                WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(monitor.DeviceName);
             member.CapsuleSide = side;
             member.CapsuleQueueId = queueId;
-            moved++;
         }
 
-        if (moved == 0)
-        {
-            ArrangeDeepCapsules(animate: true);
-            return;
-        }
-
-        // A queue resting higher up on the screen must not remember the source's old height, and
-        // the source key must not keep pointing at a queue that no longer exists there.
-        var sourceStartKey = QueueKey(snapshot.MonitorDeviceName, snapshot.Side, snapshot.QueueId);
-        if (!string.Equals(sourceStartKey,
-                QueueKey(monitor.DeviceName, side, queueId),
-                StringComparison.Ordinal))
-        {
-            State.DeepCapsuleQueueStartTopMargins.Remove(sourceStartKey);
-        }
-
-        var startTopDip = monitor.DeviceYToLocalDip(dropPoint.Y);
+        RemoveVacatedQueueStartMargin(snapshot, QueueKey(monitor.DeviceName, side, queueId));
         State.DeepCapsuleQueueStartTopMargins[QueueKey(monitor.DeviceName, side, queueId)] =
             EdgeCapsuleLayout.NormalizeStartTopMargin(
-                startTopDip,
+                monitor.DeviceYToLocalDip(dropPoint.Y),
                 monitor.LocalWorkAreaDip,
-                moved,
+                carried.Count,
                 DeepCapsuleGap);
 
         ArrangeDeepCapsules(animate: true);
         RefreshTrayMenu();
         SaveNow();
+    }
+
+    /// <summary>
+    /// The source queue's remembered height must not outlive it. Kept only when the queue actually
+    /// kept a member, so dropping a queue back onto its own start does not erase the memory.
+    /// </summary>
+    private void RemoveVacatedQueueStartMargin(
+        EdgeCapsuleQueueTransferSnapshot snapshot,
+        string destinationStartKey)
+    {
+        var sourceStartKey = QueueKey(snapshot.MonitorDeviceName, snapshot.Side, snapshot.QueueId);
+        if (string.Equals(sourceStartKey, destinationStartKey, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        if (!State.Papers.Any(p => QueueKey(p) == sourceStartKey))
+        {
+            State.DeepCapsuleQueueStartTopMargins.Remove(sourceStartKey);
+        }
+    }
+
+    /// <summary>
+    /// Members the in-flight whole-queue transfer is carrying, in their existing order.
+    /// Empty when no transfer is running or the snapshot is unusable.
+    /// </summary>
+    internal IReadOnlyList<PaperData> EdgeCapsuleQueueTransferMembers(
+        EdgeCapsuleQueueTransferSnapshot? snapshot)
+    {
+        if (snapshot == null || snapshot.PaperIds.Count == 0)
+        {
+            return [];
+        }
+
+        var byId = new Dictionary<string, PaperData>(StringComparer.Ordinal);
+        foreach (var paper in State.Papers)
+        {
+            byId[paper.Id] = paper;
+        }
+
+        var members = new List<PaperData>(snapshot.PaperIds.Count);
+        foreach (var id in snapshot.PaperIds)
+        {
+            if (byId.TryGetValue(id, out var paper))
+            {
+                members.Add(paper);
+            }
+        }
+
+        return members;
     }
 
     /// <summary>
