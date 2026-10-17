@@ -608,6 +608,32 @@ public sealed partial class PaperWindow
     }
 
     /// <summary>
+    /// 把上一帧实际开过槽的目标队列放回真实槽位，并清空目标去重键。
+    ///
+    /// 只处理跨队列预览记录的目标；源队列由现有的补位逻辑负责。绝不在这里恢复源队列，
+    /// 否则会把被拖胶囊重新算回源队列，撑开刚刚收拢的空隙。
+    /// </summary>
+    private void RestoreDeepCapsuleQueuePreviewTarget()
+    {
+        var targetKey = _deepCapsuleQueuePreviewKey;
+        if (targetKey.Length == 0)
+        {
+            return;
+        }
+
+        _deepCapsuleQueuePreviewKey = "";
+        _deepCapsuleQueuePreviewIndex = -1;
+
+        if (!string.Equals(
+                targetKey,
+                AppController.QueueKeyForPaper(_paper),
+                StringComparison.Ordinal))
+        {
+            _controller.RestoreDeepCapsuleQueuePreview(targetKey);
+        }
+    }
+
+    /// <summary>
     /// Close up the queue the dragged capsule came from, once per queue.
     ///
     /// Re-running it every tick would restart the 200 ms transition on every member every 32 ms,
@@ -706,6 +732,8 @@ public sealed partial class PaperWindow
         if (!crossQueue)
         {
             _controller.EndEdgeCapsuleQueueDropTargetOutline();
+            // 真正离开吸附区：把上一帧被撑开的目标队列放回真实槽位，空隙随之合拢。
+            RestoreDeepCapsuleQueuePreviewTarget();
             if (transfer != null)
             {
                 // The queue being carried is already lifted off the wall and hidden; there is no
@@ -737,6 +765,12 @@ public sealed partial class PaperWindow
         if (plan.TargetQueueKey == _deepCapsuleQueuePreviewKey && index == _deepCapsuleQueuePreviewIndex)
         {
             return;
+        }
+
+        // A→B：先把 A 合拢，再让 B 开槽，避免两条队列同时保持被撑开的状态。
+        if (!string.Equals(plan.TargetQueueKey, _deepCapsuleQueuePreviewKey, StringComparison.Ordinal))
+        {
+            RestoreDeepCapsuleQueuePreviewTarget();
         }
 
         _deepCapsuleQueuePreviewKey = plan.TargetQueueKey;
@@ -1126,6 +1160,9 @@ public sealed partial class PaperWindow
         finally
         {
             _previewOriginReorderBaseline = null;
+            // 取消/交接失败时不能让目标队列的开槽和描边活到下一次手势。
+            RestoreDeepCapsuleQueuePreviewTarget();
+            ResetDeepCapsuleQueueMagnetPreview();
             FinishEdgeCapsulePointerInteraction();
             _edgeCapsuleHost?.ReleaseContentPointer();
             if (wasReordering || wasDockingReveal)

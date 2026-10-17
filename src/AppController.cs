@@ -2347,6 +2347,35 @@ public sealed partial class AppController : IDisposable
     }
 
     /// <summary>
+    /// 把目标队列的成员按真实顺序放回真实槽位，撤销拖拽期开出的空隙。
+    ///
+    /// 只用于“已经推送过跨队列预览”的目标队列；不能对源队列调用，否则会把被拖胶囊
+    /// 重新算回源队列并撑开刚刚收拢的空隙。拖拽期间不能走 ArrangeDeepCapsules，
+    /// 它会被 arrange gate 推迟到手势结束。
+    /// </summary>
+    internal void RestoreDeepCapsuleQueuePreview(string queueKey)
+    {
+        if (string.IsNullOrEmpty(queueKey) ||
+            !State.UseCapsuleMode ||
+            !State.UseDeepCapsuleMode)
+        {
+            return;
+        }
+
+        // "" 表示不排除任何成员；目标队列本身不包含被拖胶囊。
+        var members = FreeQueueMembersExcluding(queueKey, "");
+        if (members.Count == 0)
+        {
+            return;
+        }
+
+        PreviewEdgeCapsuleQueueMembers(
+            queueKey,
+            members,
+            new HashSet<string>(StringComparer.Ordinal));
+    }
+
+    /// <summary>
     /// Close the gaps the carried capsules vacate in their own queue.
     ///
     /// This must run in every drag phase, including once the capsule has left the wall. Letting the
