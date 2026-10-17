@@ -214,6 +214,68 @@ internal static partial class Program
         MagnetNeedsHorizontalProximity();
         NewQueueDropAvoidsOverlap();
         DragTimeHoldStaysStableAcrossFrames();
+        EdgeCapsuleQueueDropTargetPlaceholder();
+    }
+
+    // 磁吸描边里的幽灵占位框：第 index 个槽的 top、carriedCount 覆盖的高度，以及设备矩形
+    // 到窗口内 DIP 的换算。纯函数检查，不依赖 WPF 窗口。
+    private static void EdgeCapsuleQueueDropTargetPlaceholder()
+    {
+        const double height = 46;
+
+        foreach (var gap in new[] { 0.0, 4.0, 8.0 })
+        {
+            var slot = EdgeCapsuleLayout.SlotHeight(gap);
+            Check(Math.Abs(EdgeCapsuleQueueDropTargetGeometry.PlaceholderTopDip(120, 0, slot) - 120) < 1e-9,
+                "The placeholder starts at the queue top");
+            Check(Math.Abs(EdgeCapsuleQueueDropTargetGeometry.PlaceholderTopDip(120, 2, slot) - (120 + 2 * slot)) < 1e-9,
+                "The placeholder top follows the slot pitch");
+            Check(Math.Abs(EdgeCapsuleQueueDropTargetGeometry.PlaceholderTopDip(120, -1, slot) - 120) < 1e-9,
+                "A negative index clamps to the first slot");
+            Check(Math.Abs(EdgeCapsuleQueueDropTargetGeometry.PlaceholderHeightDip(1, slot, gap, height) - height) < 1e-9,
+                "A single carried capsule fills exactly one capsule height");
+            Check(Math.Abs(EdgeCapsuleQueueDropTargetGeometry.PlaceholderHeightDip(3, slot, gap, height) - (3 * slot - gap)) < 1e-9,
+                "A carried block covers N slots without the trailing gap");
+        }
+
+        // 队尾插入：占位框底边必须与整条队列底边重合。
+        {
+            const double gap = 4;
+            var slot = EdgeCapsuleLayout.SlotHeight(gap);
+            const int members = 2;
+            const int carried = 1;
+            const double queueTop = 120;
+            var queueBottom = queueTop + (members + carried) * slot - gap;
+            var ghostTop = EdgeCapsuleQueueDropTargetGeometry.PlaceholderTopDip(queueTop, members, slot);
+            var ghostBottom = ghostTop +
+                EdgeCapsuleQueueDropTargetGeometry.PlaceholderHeightDip(carried, slot, gap, height);
+            Check(Math.Abs(ghostBottom - queueBottom) < 1e-9,
+                "A tail insertion ends exactly at the queue bottom");
+        }
+
+        var placeholderBounds = new DeviceScreenRect(13, 70, 113, 116);
+        var outlineBounds = new DeviceScreenRect(10, 20, 210, 420);
+
+        var atTwo = EdgeCapsuleQueueDropTargetGeometry.RelativeDip(
+            placeholderBounds, outlineBounds, 2, 2);
+        Check(Math.Abs(atTwo.X - 1.5) < 1e-9 &&
+              Math.Abs(atTwo.Y - 25) < 1e-9 &&
+              Math.Abs(atTwo.Width - 50) < 1e-9 &&
+              Math.Abs(atTwo.Height - 23) < 1e-9,
+            "Placeholder device bounds convert to window DIP");
+
+        var atOneAndQuarter = EdgeCapsuleQueueDropTargetGeometry.RelativeDip(
+            placeholderBounds, outlineBounds, 1.25, 1.25);
+        Check(Math.Abs(atOneAndQuarter.X - 2.4) < 1e-9 &&
+              Math.Abs(atOneAndQuarter.Y - 40) < 1e-9 &&
+              Math.Abs(atOneAndQuarter.Width - 80) < 1e-9 &&
+              Math.Abs(atOneAndQuarter.Height - 36.8) < 1e-9,
+            "Placeholder conversion honors fractional DPI");
+
+        var fallback = EdgeCapsuleQueueDropTargetGeometry.RelativeDip(
+            placeholderBounds, outlineBounds, 0, double.NaN);
+        Check(Math.Abs(fallback.X - 3) < 1e-9 && Math.Abs(fallback.Y - 50) < 1e-9,
+            "A non-positive DPI falls back to 1");
     }
 
     // 纯竖直时，超出合并半径的落点必然已经和队列分离；但斜向拖拽的水平分量会把总距离推出

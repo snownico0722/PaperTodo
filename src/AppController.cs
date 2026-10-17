@@ -2344,6 +2344,9 @@ public sealed partial class AppController : IDisposable
         var target = new List<PaperData>(allPapers.Where(p => QueueKey(p) == targetQueueKey));
         target.InsertRange(Math.Clamp(targetIndex, 0, target.Count), carried);
         PreviewEdgeCapsuleQueueMembers(targetQueueKey, target, carriedIds);
+
+        // 目标队列变高后，同一边下方的其它队列也像 mini-view 避让那样一起下移。
+        PreviewDeepCapsuleQueueDragAvoidance(carried, targetQueueKey);
     }
 
     /// <summary>
@@ -2355,24 +2358,23 @@ public sealed partial class AppController : IDisposable
     /// </summary>
     internal void RestoreDeepCapsuleQueuePreview(string queueKey)
     {
-        if (string.IsNullOrEmpty(queueKey) ||
-            !State.UseCapsuleMode ||
-            !State.UseDeepCapsuleMode)
+        if (!string.IsNullOrEmpty(queueKey) &&
+            State.UseCapsuleMode &&
+            State.UseDeepCapsuleMode)
         {
-            return;
+            // "" 表示不排除任何成员；目标队列本身不包含被拖胶囊。
+            var members = FreeQueueMembersExcluding(queueKey, "");
+            if (members.Count > 0)
+            {
+                PreviewEdgeCapsuleQueueMembers(
+                    queueKey,
+                    members,
+                    new HashSet<string>(StringComparer.Ordinal));
+            }
         }
 
-        // "" 表示不排除任何成员；目标队列本身不包含被拖胶囊。
-        var members = FreeQueueMembersExcluding(queueKey, "");
-        if (members.Count == 0)
-        {
-            return;
-        }
-
-        PreviewEdgeCapsuleQueueMembers(
-            queueKey,
-            members,
-            new HashSet<string>(StringComparer.Ordinal));
+        // 恢复目标的同时，把拖拽插入联动推开的所有同边队列也放回真实槽位。
+        RestoreDeepCapsuleQueueDragAvoidance();
     }
 
     /// <summary>

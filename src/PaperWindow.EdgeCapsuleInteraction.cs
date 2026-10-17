@@ -760,7 +760,8 @@ public sealed partial class PaperWindow
             _paper.Id,
             anchor.CapsuleCenterYDevice,
             carried.Count);
-        _controller.ShowEdgeCapsuleQueueDropTargetOutline(plan.TargetQueueKey, _paper.Id, carried.Count);
+        _controller.ShowEdgeCapsuleQueueDropTargetOutline(
+            plan.TargetQueueKey, _paper.Id, carried.Count, index);
 
         if (plan.TargetQueueKey == _deepCapsuleQueuePreviewKey && index == _deepCapsuleQueuePreviewIndex)
         {

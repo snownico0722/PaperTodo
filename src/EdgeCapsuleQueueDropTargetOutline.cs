@@ -18,9 +18,35 @@ internal sealed class EdgeCapsuleQueueDropTargetOutline : Window
 {
     private const int OutlineMarginDevice = 3;
     private const double RestingOpacity = 0.86;
+    private const double PlaceholderRestingOpacity = 0.9;
+    private const double PlaceholderSlideFadeFrom = 0.6;
+    private const double PlaceholderGeometryEpsilon = 0.1;
 
     private bool _closed;
     private string _queueKey = "";
+    private readonly Canvas _placeholderLayer;
+    private readonly Border _placeholder;
+    private int _placeholderIndex = -1;
+    private int _placeholderCarriedCount;
+    private double _placeholderLeftDip = double.NaN;
+    private double _placeholderTopDip = double.NaN;
+    private double _placeholderWidthDip = double.NaN;
+    private double _placeholderHeightDip = double.NaN;
+
+    /// <summary>测试用：幽灵占位框真正启动滑动动画的次数。</summary>
+    internal int PlaceholderSlideCount { get; private set; }
+
+    /// <summary>测试用：幽灵占位框启动高度展开动画的次数。</summary>
+    internal int PlaceholderHeightAnimationCount { get; private set; }
+
+    /// <summary>测试用：当前占位框对应的插入槽下标。</summary>
+    internal int PlaceholderIndex => _placeholderIndex;
+
+    /// <summary>测试用：占位框当前的目标 top（相对描边窗口的 DIP）。</summary>
+    internal double PlaceholderTopTargetDip => _placeholderTopDip;
+
+    /// <summary>测试用：占位框当前的目标高度（DIP）。</summary>
+    internal double PlaceholderTargetHeightDip => _placeholderHeightDip;
 
     public EdgeCapsuleQueueDropTargetOutline()
     {
@@ -44,7 +70,25 @@ internal sealed class EdgeCapsuleQueueDropTargetOutline : Window
         var activeColor = Theme.ActiveBrush is SolidColorBrush activeBrush
             ? activeBrush.Color
             : Colors.Gray;
-        Content = new Border
+
+        // 幽灵占位框：半透明 accent 圆角胶囊，标出真正要插入的槽位。
+        _placeholder = new Border
+        {
+            CornerRadius = new CornerRadius(EdgeCapsuleLayout.CornerRadius),
+            BorderThickness = new Thickness(1.5),
+            BorderBrush = Theme.ActiveBrush,
+            Background = Theme.Tint((byte)(Theme.IsDark ? 44 : 30)),
+            IsHitTestVisible = false,
+            Opacity = PlaceholderRestingOpacity,
+            Visibility = Visibility.Collapsed
+        };
+        // Canvas 与外框 Border 是兄弟节点，坐标原点就是窗口内容区左上角，
+        // 不会额外受到外框 Margin(1) / BorderThickness(2) 的内缩影响。
+        _placeholderLayer = new Canvas { IsHitTestVisible = false };
+        _placeholderLayer.Children.Add(_placeholder);
+
+        var root = new Grid();
+        root.Children.Add(new Border
         {
             Margin = new Thickness(1),
             CornerRadius = new CornerRadius(18),
@@ -59,7 +103,10 @@ internal sealed class EdgeCapsuleQueueDropTargetOutline : Window
                 ShadowDepth = 0,
                 Opacity = Theme.IsDark ? 0.58 : 0.34
             }
-        };
+        });
+        root.Children.Add(_placeholderLayer);
+        Content = root;
+
         SourceInitialized += (_, _) =>
         {
             WindowNative.ApplyNoActivateStyle(this);
@@ -70,12 +117,12 @@ internal sealed class EdgeCapsuleQueueDropTargetOutline : Window
     }
 
     /// <summary>
-    /// Move the outline onto <paramref name="bounds"/>. Returns whether this call changed the
-    /// target queue, which the caller uses to decide between a resting show and an emphasized
-    /// attention pulse.
+    /// Move the outline onto the target queue and place the ghost insertion slot inside it.
+    /// Returns whether this call changed the target queue, which the caller uses to decide
+    /// between a resting show and an emphasized attention pulse.
     /// </summary>
     public bool ShowAt(
-        DeviceScreenRect bounds,
+        EdgeCapsuleQueueDropTargetLayout layout,
         string queueKey,
         IntPtr fullscreenAvoidanceWindow,
         bool animate)
@@ -90,6 +137,7 @@ internal sealed class EdgeCapsuleQueueDropTargetOutline : Window
         var targetChanged = !string.Equals(_queueKey, queueKey, StringComparison.Ordinal);
         _queueKey = queueKey;
 
+        var bounds = layout.QueueBounds;
         var outlineBounds = bounds.IsEmpty
             ? bounds
             : new DeviceScreenRect(
@@ -104,7 +152,7 @@ internal sealed class EdgeCapsuleQueueDropTargetOutline : Window
             {
                 Show();
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 return targetChanged;
             }
@@ -119,6 +167,18 @@ internal sealed class EdgeCapsuleQueueDropTargetOutline : Window
         {
             return targetChanged;
         }
+
+        ApplyPlaceholder(
+            EdgeCapsuleQueueDropTargetGeometry.RelativeDip(
+                layout.PlaceholderBounds,
+                outlineBounds,
+                layout.DpiScaleX,
+                layout.DpiScaleY),
+            layout.TargetIndex,
+            layout.CarriedCount,
+            firstShow,
+            targetChanged,
+            animate);
 
         var topmost = fullscreenAvoidanceWindow == IntPtr.Zero;
         Topmost = topmost;
@@ -144,6 +204,124 @@ internal sealed class EdgeCapsuleQueueDropTargetOutline : Window
 
         return targetChanged;
     }
+
+    /// <summary>
+    /// 更新幽灵占位框。只有真正换了槽位/尺寸时才重新下发；同一 (队列, index, carriedCount,
+    /// 几何) 的 32ms 重复调用会直接返回，避免把 200ms 滑动每帧重启。
+    /// </summary>
+    private void ApplyPlaceholder(
+        Rect target,
+        int targetIndex,
+        int carriedCount,
+        bool firstShow,
+        bool targetChanged,
+        bool animate)
+    {
+        if (target.Width <= 0 || target.Height <= 0)
+        {
+            _placeholder.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        var sameSlot = !targetChanged &&
+                       targetIndex == _placeholderIndex &&
+                       carriedCount == _placeholderCarriedCount;
+        var sameTop = NearlyEqual(_placeholderTopDip, target.Top);
+        var sameHeight = NearlyEqual(_placeholderHeightDip, target.Height);
+        var sameGeometry =
+            NearlyEqual(_placeholderLeftDip, target.Left) &&
+            sameTop &&
+            NearlyEqual(_placeholderWidthDip, target.Width) &&
+            sameHeight;
+        if (sameSlot && sameGeometry)
+        {
+            return;
+        }
+
+        // 同一队列内 index 变化、高度不变：只滑动 top。
+        // 首次出现/换队列/高度变化：高度从 0（或当前高度）展开，像 mini-view 一样。
+        var canSlide = animate &&
+                       !firstShow &&
+                       !targetChanged &&
+                       _placeholderIndex >= 0 &&
+                       sameHeight &&
+                       NearlyEqual(_placeholderLeftDip, target.Left) &&
+                       NearlyEqual(_placeholderWidthDip, target.Width) &&
+                       !sameTop;
+        var canGrow = animate && (firstShow || targetChanged || !sameHeight);
+
+        _placeholder.Visibility = Visibility.Visible;
+        if (!NearlyEqual(_placeholderLeftDip, target.Left))
+        {
+            Canvas.SetLeft(_placeholder, target.Left);
+        }
+        if (!NearlyEqual(_placeholderWidthDip, target.Width))
+        {
+            _placeholder.Width = target.Width;
+        }
+
+        if (canGrow)
+        {
+            // 新的插入目标从头长出来；同一目标高度变化时从当前高度改道。
+            var from = firstShow || targetChanged ? 0 : _placeholder.Height;
+            AnimationHelper.AnimateHeightFrom(
+                _placeholder,
+                from,
+                target.Height,
+                EdgeCapsuleLayout.SlotMoveMilliseconds);
+            PlaceholderHeightAnimationCount++;
+
+            if (!firstShow && !targetChanged)
+            {
+                AnimationHelper.FadeToFrom(
+                    _placeholder,
+                    PlaceholderSlideFadeFrom,
+                    PlaceholderRestingOpacity,
+                    EdgeCapsuleLayout.SlotMoveMilliseconds);
+            }
+        }
+        else if (!sameHeight)
+        {
+            _placeholder.BeginAnimation(FrameworkElement.HeightProperty, null);
+            _placeholder.Height = target.Height;
+        }
+
+        if (canSlide)
+        {
+            AnimationHelper.AnimateCanvasTop(
+                _placeholder,
+                target.Top,
+                EdgeCapsuleLayout.SlotMoveMilliseconds);
+            AnimationHelper.FadeToFrom(
+                _placeholder,
+                PlaceholderSlideFadeFrom,
+                PlaceholderRestingOpacity,
+                EdgeCapsuleLayout.SlotMoveMilliseconds);
+            PlaceholderSlideCount++;
+        }
+        else
+        {
+            _placeholder.BeginAnimation(Canvas.TopProperty, null);
+            Canvas.SetTop(_placeholder, target.Top);
+            if (firstShow || targetChanged || !animate)
+            {
+                _placeholder.BeginAnimation(OpacityProperty, null);
+                _placeholder.Opacity = PlaceholderRestingOpacity;
+            }
+        }
+
+        _placeholderIndex = targetIndex;
+        _placeholderCarriedCount = carriedCount;
+        _placeholderLeftDip = target.Left;
+        _placeholderTopDip = target.Top;
+        _placeholderWidthDip = target.Width;
+        _placeholderHeightDip = target.Height;
+    }
+
+    private static bool NearlyEqual(double left, double right) =>
+        double.IsFinite(left) &&
+        double.IsFinite(right) &&
+        Math.Abs(left - right) < PlaceholderGeometryEpsilon;
 
     public void CloseForOwner()
     {

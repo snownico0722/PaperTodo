@@ -278,6 +278,7 @@ public sealed partial class AppController
     internal void EndDeepCapsuleQueueMagnetPreview()
     {
         _deepCapsuleDragHeldQueueKey = "";
+        ClearDeepCapsuleQueueDragAvoidanceState();
         EndEdgeCapsuleQueueDropTargetOutline();
     }
 
