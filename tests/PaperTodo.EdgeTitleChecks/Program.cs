@@ -21,6 +21,8 @@ internal static partial class Program
             Console.WriteLine("PASS title-cycle-and-unicode");
             QueueInstanceKeys();
             Console.WriteLine("PASS queue-instance-key-codec");
+            QueueDragModifierLatch();
+            Console.WriteLine("PASS queue-drag-modifier-latch");
             QueueMagnet();
             Console.WriteLine("PASS queue-magnet-merge-detach-reorder");
             EdgeQueueAvoidance();
@@ -277,6 +279,7 @@ internal static partial class Program
         Check(Math.Abs(fallback.X - 3) < 1e-9 && Math.Abs(fallback.Y - 50) < 1e-9,
             "A non-positive DPI falls back to 1");
     }
+
 
     // 纯竖直时，超出合并半径的落点必然已经和队列分离；但斜向拖拽的水平分量会把总距离推出
     // 半径，胶囊在竖直方向却仍可能与队列重叠。Ctrl 整队搬移还有“第一颗不重叠、后续成员重叠”

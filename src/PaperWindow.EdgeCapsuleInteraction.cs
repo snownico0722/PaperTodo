@@ -39,13 +39,33 @@ public sealed partial class PaperWindow
     }
 
     /// <summary>
-    /// Whether Ctrl was held when the press landed. Read exactly once, at pointer-down: the native
-    /// key state is authoritative, and Keyboard.Modifiers is only a fallback for the case where the
-    /// host hook did not observe WM_LBUTTONDOWN (it degrades once the capsule owns the pointer).
+    /// Ctrl 整队意图的三个来源：宿主收到 WM_LBUTTONDOWN 时的原生 MK_CONTROL、
+    /// WPF 键盘状态，以及不依赖窗口焦点/激活状态的 OS 异步键状态。任一成立即视为整队。
+    ///
+    /// 展开纸片持有焦点时 host 不是键盘焦点窗口，WPF 状态可能退化为 None；原生 wParam 在
+    /// 代理延迟转发时又可能比实时键状态更可靠，所以三路保留 OR。
     /// </summary>
-    private bool ConsumeQueueDragModifier() =>
-        (_edgeCapsulePointerDownKeyState & MkControl) != 0 ||
-        (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control;
+    internal static bool IsQueueDragModifier(
+        int nativeKeyState,
+        ModifierKeys modifiers,
+        bool osControlDown) =>
+        (nativeKeyState & MkControl) != 0 ||
+        (modifiers & ModifierKeys.Control) == ModifierKeys.Control ||
+        osControlDown;
+
+    /// <summary>
+    /// Whether Ctrl was held when the press landed. Read exactly once, at pointer-down.
+    /// </summary>
+    private bool ConsumeQueueDragModifier()
+    {
+        var nativeKeyState = _edgeCapsulePointerDownKeyState;
+        // 只消费一次；capture-lost 等窄路径不会再留下上一次手势的陈旧位。
+        _edgeCapsulePointerDownKeyState = 0;
+        return IsQueueDragModifier(
+            nativeKeyState,
+            Keyboard.Modifiers,
+            WindowNative.IsControlKeyDown);
+    }
 
     private bool OnEdgeCapsulePointerMoved(
         DeviceScreenPoint currentScreenPosition,
