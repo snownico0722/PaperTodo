@@ -3,14 +3,24 @@ using System.IO;
 namespace PaperTodo;
 
 /// <summary>
-/// Lifecycle for the outline that marks which free queue a drag would join.
+/// Lifecycle for the lightweight overlay that marks which free queue a drag would join.
 ///
-/// The outline spans the target queue's whole slot range including the gap opened for the incoming
-/// capsule, so one glance answers both "which queue" and "where in it".
+/// Two markers answer the two questions: a thin rail on the queue's inner edge identifies the
+/// queue, and a short insertion line identifies the slot. The preview queue only grows by a small
+/// gap below the insertion point; the full slot is opened when the capsule is committed.
 /// </summary>
 public sealed partial class AppController
 {
     private EdgeCapsuleQueueDropTargetOutline? _edgeCapsuleQueueDropTargetOutline;
+
+    // 高频评估（8ms 级）时的早退缓存：同一目标槽位不重复计算布局/移动窗口。
+    private string _edgeCapsuleQueueDropTargetOutlineQueueKey = "";
+    private string _edgeCapsuleQueueDropTargetOutlinePaperId = "";
+    private int _edgeCapsuleQueueDropTargetOutlineCarriedCount;
+    private int _edgeCapsuleQueueDropTargetOutlineIndex = -1;
+
+    /// <summary>测试用：真正重新计算描边布局的次数。</summary>
+    internal int DropTargetLayoutUpdateCount { get; private set; }
 
     internal void ShowEdgeCapsuleQueueDropTargetOutline(
         string queueKey,
@@ -24,10 +34,26 @@ public sealed partial class AppController
             return;
         }
 
+        var requestedCarriedCount = Math.Max(1, carriedCount);
+        if (_edgeCapsuleQueueDropTargetOutline is { IsClosed: false, IsVisible: true } &&
+            string.Equals(
+                _edgeCapsuleQueueDropTargetOutlineQueueKey,
+                queueKey,
+                StringComparison.Ordinal) &&
+            string.Equals(
+                _edgeCapsuleQueueDropTargetOutlinePaperId,
+                draggedPaperId,
+                StringComparison.Ordinal) &&
+            _edgeCapsuleQueueDropTargetOutlineCarriedCount == requestedCarriedCount &&
+            _edgeCapsuleQueueDropTargetOutlineIndex == targetIndex)
+        {
+            return;
+        }
+
         if (!TryGetEdgeCapsuleQueueDropTargetBounds(
                 queueKey,
                 draggedPaperId,
-                Math.Max(1, carriedCount),
+                requestedCarriedCount,
                 targetIndex,
                 out var layout,
                 out var monitorDeviceName))
@@ -36,7 +62,8 @@ public sealed partial class AppController
             return;
         }
 
-        if (_edgeCapsuleQueueDropTargetOutline is null)
+        if (_edgeCapsuleQueueDropTargetOutline is null ||
+            _edgeCapsuleQueueDropTargetOutline.IsClosed)
         {
             _edgeCapsuleQueueDropTargetOutline = new EdgeCapsuleQueueDropTargetOutline();
         }
@@ -46,21 +73,30 @@ public sealed partial class AppController
             queueKey,
             FullscreenAvoidanceWindowForQueue(monitorDeviceName),
             animate: State.EnableAnimations);
+        DropTargetLayoutUpdateCount++;
+        _edgeCapsuleQueueDropTargetOutlineQueueKey = queueKey;
+        _edgeCapsuleQueueDropTargetOutlinePaperId = draggedPaperId;
+        _edgeCapsuleQueueDropTargetOutlineCarriedCount = requestedCarriedCount;
+        _edgeCapsuleQueueDropTargetOutlineIndex = targetIndex;
     }
 
     internal void EndEdgeCapsuleQueueDropTargetOutline()
     {
         var outline = _edgeCapsuleQueueDropTargetOutline;
         _edgeCapsuleQueueDropTargetOutline = null;
+        _edgeCapsuleQueueDropTargetOutlineQueueKey = "";
+        _edgeCapsuleQueueDropTargetOutlinePaperId = "";
+        _edgeCapsuleQueueDropTargetOutlineCarriedCount = 0;
+        _edgeCapsuleQueueDropTargetOutlineIndex = -1;
         outline?.CloseForOwner();
     }
 
     /// <summary>
-    /// 目标队列插入后的整条队列矩形，以及第 <paramref name="targetIndex"/> 个槽位对应的
-    /// 幽灵占位框矩形。两者都是设备像素；DPI 一并返回，供描边窗口换算成窗口内 DIP。
+    /// 目标队列的预览矩形，以及插入位置的两条指示线矩形。全部是设备像素；DPI 一并返回，
+    /// 供描边窗口换算成窗口内 DIP。
     ///
-    /// 整条队列矩形包含为 incoming capsule 打开的空隙；占位框只覆盖真正要插入的那几个槽，
-    /// 这样用户既知道“是哪条队列”，也知道“插在第几格”。
+    /// 队列矩形只按真实成员高度加一个额外插入间隙，不再为 incoming capsule 打开完整槽位：
+    /// 拖拽期间只需要告诉用户“插在哪”，松手落位时才展开完整槽位。
     /// </summary>
     private bool TryGetEdgeCapsuleQueueDropTargetBounds(
         string queueKey,
@@ -80,9 +116,8 @@ public sealed partial class AppController
         }
 
         monitorDeviceName = edgeKey[..separator];
-        var side = edgeKey[(separator + 1)..] == DeepCapsuleSides.Left
-            ? EdgeCapsuleEdge.Left
-            : EdgeCapsuleEdge.Right;
+        var isLeftQueue = edgeKey[(separator + 1)..] == DeepCapsuleSides.Left;
+        var side = isLeftQueue ? EdgeCapsuleEdge.Left : EdgeCapsuleEdge.Right;
         if (!WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(monitorDeviceName, out var geometry))
         {
             return false;
@@ -95,23 +130,35 @@ public sealed partial class AppController
         }
 
         var area = geometry.LocalWorkAreaDip;
-        var slotCount = members.Count + carriedCount;
+        // 起始高度仍按最终提交槽数归一化，避免长队列靠近底部时预览与落位整队跳动。
+        var finalSlotCount = members.Count + carriedCount;
         var slotHeight = EdgeCapsuleLayout.SlotHeight(DeepCapsuleGap);
         var startTop = EdgeCapsuleLayout.NormalizeStartTopMargin(
             DeepCapsuleStartTopMarginForQueue(monitorDeviceName, side, FirstQueueIdOf(members)),
             area,
-            slotCount,
+            finalSlotCount,
             DeepCapsuleGap);
 
-        var topDip = EdgeCapsuleLayout.TopForIndex(0, startTop, area, slotCount, DeepCapsuleGap);
-        var heightDip = Math.Max(
-            slotCount * slotHeight - DeepCapsuleGap,
-            PaperLayoutDefaults.CapsuleHeight);
-        var widthDevice = (int)Math.Round(geometry.DpiScaleX * PaperLayoutDefaults.CapsuleWidth);
+        var topDip = EdgeCapsuleLayout.TopForIndex(
+            0,
+            startTop,
+            area,
+            finalSlotCount,
+            DeepCapsuleGap);
+        var heightDip = EdgeCapsuleQueueDropTargetGeometry.PreviewQueueHeightDip(
+            members.Count,
+            slotHeight,
+            DeepCapsuleGap,
+            PaperLayoutDefaults.CapsuleHeight,
+            carriedCount);
 
-        // Wall-anchored horizontally, exactly like a docked capsule, so the outline reads as
-        // "this queue" rather than a floating rectangle.
-        var leftDevice = side == EdgeCapsuleEdge.Left
+        // 指示线跟随目标队列的真实可见宽度，而不是固定 92 DIP；短标题胶囊也能对齐。
+        var visibleWidthDip = MeasureEdgeCapsuleQueueVisibleWidthDip(members, area.Width);
+        var widthDevice = Math.Max(1, (int)Math.Round(geometry.DpiScaleX * visibleWidthDip));
+
+        // Wall-anchored horizontally, exactly like a docked capsule, so the markers read as
+        // "this queue" rather than a floating overlay.
+        var leftDevice = isLeftQueue
             ? geometry.WorkArea.Left
             : geometry.WorkArea.Right - widthDevice;
 
@@ -124,26 +171,89 @@ public sealed partial class AppController
             leftDevice + widthDevice,
             (int)Math.Round(DeviceY(topDip + heightDip)));
 
-        // 队尾插入时 index == members.Count，占位框底边正好与整条队列底边重合。
         var clampedIndex = Math.Clamp(targetIndex, 0, members.Count);
-        var placeholderTopDip = EdgeCapsuleQueueDropTargetGeometry.PlaceholderTopDip(
-            topDip, clampedIndex, slotHeight);
-        var placeholderHeightDip = EdgeCapsuleQueueDropTargetGeometry.PlaceholderHeightDip(
-            carriedCount, slotHeight, DeepCapsuleGap, PaperLayoutDefaults.CapsuleHeight);
-        var placeholderBounds = new DeviceScreenRect(
-            leftDevice,
-            (int)Math.Round(DeviceY(placeholderTopDip)),
-            leftDevice + widthDevice,
-            (int)Math.Round(DeviceY(placeholderTopDip + placeholderHeightDip)));
+        // 贴边胶囊窗口只在靠屏幕内侧保留 chrome，可见 body 的起点/宽度据此换算。
+        var bodyWidthDip = Math.Max(
+            0,
+            visibleWidthDip - EdgeCapsuleLayout.WindowChromeMargin);
+        var bodyLeftDip = isLeftQueue ? 0 : EdgeCapsuleLayout.WindowChromeMargin;
+
+        var lineWidthDip = EdgeCapsuleQueueDropTargetGeometry.InsertionLineWidthDip(bodyWidthDip);
+        var lineLeftDip = bodyLeftDip + (bodyWidthDip - lineWidthDip) / 2.0;
+        var lineTopDip = EdgeCapsuleQueueDropTargetGeometry.InsertionLineCenterYDip(
+                topDip,
+                clampedIndex,
+                members.Count,
+                slotHeight,
+                PaperLayoutDefaults.CapsuleHeight,
+                carriedCount) -
+            EdgeCapsuleQueueDropTargetGeometry.InsertionLineThicknessDip / 2.0;
+
+        var railLeftDip = EdgeCapsuleQueueDropTargetGeometry.QueueEdgeLineXDip(
+            visibleWidthDip,
+            isLeftQueue);
+        var railTopDip = topDip + EdgeCapsuleQueueDropTargetGeometry.QueueEdgeLineInsetDip;
+        var railHeightDip = Math.Max(
+            1,
+            heightDip - EdgeCapsuleQueueDropTargetGeometry.QueueEdgeLineInsetDip * 2);
+
+        var lineBottomDip = lineTopDip +
+            EdgeCapsuleQueueDropTargetGeometry.InsertionLineThicknessDip;
+        var insertionLineBounds = new DeviceScreenRect(
+            leftDevice + (int)Math.Round(lineLeftDip * geometry.DpiScaleX),
+            (int)Math.Round(DeviceY(lineTopDip)),
+            leftDevice + (int)Math.Round((lineLeftDip + lineWidthDip) * geometry.DpiScaleX),
+            (int)Math.Round(DeviceY(lineBottomDip)));
+        var queueEdgeLineBounds = new DeviceScreenRect(
+            leftDevice + (int)Math.Round(railLeftDip * geometry.DpiScaleX),
+            (int)Math.Round(DeviceY(railTopDip)),
+            leftDevice + (int)Math.Round(
+                (railLeftDip + EdgeCapsuleQueueDropTargetGeometry.QueueEdgeLineWidthDip) *
+                geometry.DpiScaleX),
+            (int)Math.Round(DeviceY(railTopDip + railHeightDip)));
 
         layout = new EdgeCapsuleQueueDropTargetLayout(
             queueBounds,
-            placeholderBounds,
+            queueEdgeLineBounds,
+            insertionLineBounds,
             geometry.DpiScaleX,
             geometry.DpiScaleY,
             clampedIndex,
             carriedCount);
         return true;
+    }
+
+    /// <summary>
+    /// 目标队列的可见胶囊宽度（DIP，含靠屏幕内侧的 chrome margin）。取成员窗口实际测量宽度
+    /// 的最大值；测不到时回退标准胶囊宽度，并按工作区宽度收窄，避免指示线被屏幕边缘裁切。
+    /// </summary>
+    private double MeasureEdgeCapsuleQueueVisibleWidthDip(
+        IReadOnlyList<PaperData> members,
+        double workAreaWidthDip)
+    {
+        var width = 0.0;
+        foreach (var member in members)
+        {
+            if (!_windows.TryGetValue(member.Id, out var window))
+            {
+                continue;
+            }
+
+            var candidate = window.DeepCapsuleRestingVisibleWidth;
+            if (double.IsFinite(candidate) && candidate > 0)
+            {
+                width = Math.Max(width, candidate);
+            }
+        }
+
+        if (width <= 0)
+        {
+            width = PaperLayoutDefaults.CapsuleWidth;
+        }
+
+        return double.IsFinite(workAreaWidthDip) && workAreaWidthDip > 0
+            ? Math.Min(width, workAreaWidthDip)
+            : width;
     }
 
     // 拖拽插入时被联动推开的队列：key -> 是否为源队列。
@@ -218,7 +328,11 @@ public sealed partial class AppController
             slotCount,
             DeepCapsuleGap);
         var targetTop = EdgeCapsuleLayout.TopForIndex(0, startTop, area, slotCount, DeepCapsuleGap);
-        var targetBottom = targetTop + slotCount * slotHeight - DeepCapsuleGap;
+        // 预览只让出一个小间隙；邻队避让必须按预览底边计算，否则会被多推一个完整槽位。
+        var targetBottom = targetTop
+            + targetMembers.Count * slotHeight
+            - DeepCapsuleGap
+            + EdgeCapsuleQueueDropTargetGeometry.ExtraInsertionGapDip(carried.Count);
 
         var queues = BuildDeepCapsuleDragAvoidanceQueues(
             targetQueueKey, targetEdgeKey, targetTop);

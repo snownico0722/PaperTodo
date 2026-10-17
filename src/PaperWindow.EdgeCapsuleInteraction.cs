@@ -549,12 +549,22 @@ public sealed partial class PaperWindow
         PreviewDeepCapsuleReorderForCurrentPosition();
     }
 
-    // Drag-time feedback runs on a fixed interval rather than on every pointer message: a move can
-    // arrive far faster than the screen refreshes, and each pass recomputes the queue candidates.
-    // The same 32 ms gate the experimental capsule magnet preview uses.
-    private const double DeepCapsuleQueuePreviewIntervalMilliseconds = 32;
+    // Drag-time feedback stays close to pointer-move frequency so the insertion preview tracks the
+    // pointer like the legacy same-queue reorder does. Candidate building is cached per gesture, so
+    // this only bounds the cheap distance evaluation.
+    private const double DeepCapsuleQueuePreviewIntervalMilliseconds = 8;
+
+    /// <summary>
+    /// 预览节流判定：pointer move 受间隔约束；原生拖拽定时器由 timer 自身节流，直接放行。
+    /// </summary>
+    internal static bool IsDeepCapsuleQueuePreviewDue(
+        double elapsedMilliseconds,
+        double intervalMilliseconds,
+        bool forceEvaluation) =>
+        forceEvaluation || elapsedMilliseconds >= intervalMilliseconds;
 
     private DispatcherTimer? _deepCapsuleNativeDragFeedbackTimer;
+    private DeviceScreenPoint? _deepCapsuleNativeDragFeedbackCursor;
 
     // Dedup key for the source-queue close-up. Deliberately separate from the cross-queue
     // (queueKey, index) sentinel: the two describe different states, and sharing one key made each
@@ -583,9 +593,11 @@ public sealed partial class PaperWindow
             DispatcherPriority.Input,
             Dispatcher)
         {
-            // Matches the preview gate so a tick never evaluates a position it would skip anyway.
+            // The timer itself is the throttle for the native caption loop. Ticks force an
+            // evaluation instead of racing the Stopwatch gate at the same interval.
             Interval = TimeSpan.FromMilliseconds(DeepCapsuleQueuePreviewIntervalMilliseconds)
         };
+        _deepCapsuleNativeDragFeedbackCursor = null;
         _deepCapsuleNativeDragFeedbackTimer.Tick -= OnEdgeCapsuleNativeDragFeedbackTick;
         _deepCapsuleNativeDragFeedbackTimer.Tick += OnEdgeCapsuleNativeDragFeedbackTick;
         _deepCapsuleNativeDragFeedbackTimer.Start();
@@ -594,6 +606,7 @@ public sealed partial class PaperWindow
     private void StopEdgeCapsuleNativeDragFeedback()
     {
         _deepCapsuleNativeDragFeedbackTimer?.Stop();
+        _deepCapsuleNativeDragFeedbackCursor = null;
     }
 
     private void OnEdgeCapsuleNativeDragFeedbackTick(object? sender, EventArgs e)
@@ -604,8 +617,17 @@ public sealed partial class PaperWindow
             return;
         }
 
+        // A stationary pointer cannot change the target slot; skip the evaluation entirely.
+        if (_deepCapsuleNativeDragFeedbackCursor == cursor)
+        {
+            return;
+        }
+
+        _deepCapsuleNativeDragFeedbackCursor = cursor;
         UpdateEdgeCapsuleDragPointer(cursor);
-        PreviewDeepCapsuleQueueMagnetForCurrentPosition(floatingPhase: true);
+        PreviewDeepCapsuleQueueMagnetForCurrentPosition(
+            floatingPhase: true,
+            forceEvaluation: true);
     }
 
     /// <summary>Clear the drag-time feedback gate, outline and held queue at the end of a gesture.</summary>
@@ -625,6 +647,7 @@ public sealed partial class PaperWindow
         _deepCapsuleQueuePreviewKey = "";
         _deepCapsuleQueuePreviewIndex = -1;
         _deepCapsuleVacatedQueueKey = "";
+        _deepCapsuleQueuePreviewTimestamp = 0;
     }
 
     /// <summary>
@@ -701,7 +724,9 @@ public sealed partial class PaperWindow
     /// is no docked slot index to track any more, but the source queue must still close the gap it
     /// vacated — otherwise it keeps a permanent hole and the drag reads as a queue coming apart.
     /// </summary>
-    private void PreviewDeepCapsuleQueueMagnetForCurrentPosition(bool floatingPhase = false)
+    private void PreviewDeepCapsuleQueueMagnetForCurrentPosition(
+        bool floatingPhase = false,
+        bool forceEvaluation = false)
     {
         if (!TryGetEdgeCapsuleDragSession(out var session))
         {
@@ -710,9 +735,14 @@ public sealed partial class PaperWindow
         }
 
         var now = System.Diagnostics.Stopwatch.GetTimestamp();
-        if (_deepCapsuleQueuePreviewTimestamp != 0 &&
-            (now - _deepCapsuleQueuePreviewTimestamp) * 1000.0 /
-                System.Diagnostics.Stopwatch.Frequency < DeepCapsuleQueuePreviewIntervalMilliseconds)
+        var elapsedMilliseconds = _deepCapsuleQueuePreviewTimestamp == 0
+            ? double.PositiveInfinity
+            : (now - _deepCapsuleQueuePreviewTimestamp) * 1000.0 /
+                System.Diagnostics.Stopwatch.Frequency;
+        if (!IsDeepCapsuleQueuePreviewDue(
+                elapsedMilliseconds,
+                DeepCapsuleQueuePreviewIntervalMilliseconds,
+                forceEvaluation))
         {
             // Inside the gate: keep showing the previous frame's plan rather than clearing it, so
             // the preview never blinks between updates.

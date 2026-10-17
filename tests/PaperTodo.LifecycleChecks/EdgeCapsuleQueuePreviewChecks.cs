@@ -29,22 +29,25 @@ internal static class EdgeCapsuleQueuePreviewChecks
             Placement(windows["fixture-3"]).Index == 1,
             "target queue did not start with its true slot order");
 
-        // 源队列 qa 由 [0, 1] 撤走 0 后收拢为 [1]；目标 qb 由 [2, 3] 插入 carried 后变成 [2, 0, 3]。
+        // 源队列 qa 由 [0, 1] 撤走 0 后收拢为 [1]；目标 qb 由 [2, 3] 只在插入点下方
+        // 轻微让位：成员 Index 不变，SlotCount 按最终提交槽数归一化，额外间隙为 10 DIP。
         controller.PreviewDeepCapsuleQueueDrag([source], targetKey, 1);
         Require(
             Placement(windows["fixture-2"]).Index == 0 &&
-            Placement(windows["fixture-2"]).SlotCount == 3,
+            Placement(windows["fixture-2"]).SlotCount == 3 &&
+            Math.Abs(Placement(windows["fixture-2"]).TopOffsetDip) < 1e-6,
             "preview did not keep the first target member in place");
         Require(
-            Placement(windows["fixture-3"]).Index == 2 &&
-            Placement(windows["fixture-3"]).SlotCount == 3,
-            "preview did not open a slot for the carried capsule");
+            Placement(windows["fixture-3"]).Index == 1 &&
+            Placement(windows["fixture-3"]).SlotCount == 3 &&
+            Math.Abs(Placement(windows["fixture-3"]).TopOffsetDip - 10) < 1e-6,
+            "preview did not part the member below the insertion point");
         Require(
             Placement(windows["fixture-1"]).Index == 0,
             "preview did not close the source queue's vacated slot");
         Require(
-            Math.Abs(Placement(windows["fixture-4"]).TopOffsetDip - 20) < 1e-6,
-            "the queue below the target did not avoid the inserted slot");
+            Math.Abs(Placement(windows["fixture-4"]).TopOffsetDip) < 1e-6,
+            "the small insertion gap pushed a neighbouring queue that already had room");
 
         controller.RestoreDeepCapsuleQueuePreview(targetKey);
         Require(
@@ -53,7 +56,8 @@ internal static class EdgeCapsuleQueuePreviewChecks
             "restore did not shrink the target queue back to its real slot count");
         Require(
             Placement(windows["fixture-3"]).Index == 1 &&
-            Placement(windows["fixture-3"]).SlotCount == 2,
+            Placement(windows["fixture-3"]).SlotCount == 2 &&
+            Math.Abs(Placement(windows["fixture-3"]).TopOffsetDip) < 1e-6,
             "restore left the target queue's opened gap behind");
         Require(
             Placement(windows["fixture-1"]).Index == 0,
@@ -62,63 +66,101 @@ internal static class EdgeCapsuleQueuePreviewChecks
             Math.Abs(Placement(windows["fixture-4"]).TopOffsetDip) < 1e-6,
             "restore left the neighbouring queue displaced");
 
-        // 重新进入同一目标必须能再次开槽；交互层若残留 preview key，会在这里暴露。
+        // 重新进入同一目标必须能再次让位；交互层若残留 preview key，会在这里暴露。
         controller.PreviewDeepCapsuleQueueDrag([source], targetKey, 1);
         Require(
-            Placement(windows["fixture-3"]).Index == 2 &&
-            Placement(windows["fixture-3"]).SlotCount == 3,
-            "re-entering the same target did not open its slot again");
-        Require(
-            Math.Abs(Placement(windows["fixture-4"]).TopOffsetDip - 20) < 1e-6,
-            "re-entering the target did not restore the neighbouring avoidance");
+            Placement(windows["fixture-3"]).Index == 1 &&
+            Placement(windows["fixture-3"]).SlotCount == 3 &&
+            Math.Abs(Placement(windows["fixture-3"]).TopOffsetDip - 10) < 1e-6,
+            "re-entering the same target did not part its members again");
 
-        // 幽灵占位框：同一 (队列, index, carriedCount) 的重复下发不得重启滑动动画。
+        // Ctrl 整队：额外间隙随携带数量小幅加宽（2 个 → 18 DIP）。
+        var secondSource = controller.State.Papers.Single(paper => paper.Id == "fixture-1");
+        controller.PreviewDeepCapsuleQueueDrag([source, secondSource], targetKey, 1);
+        Require(
+            Placement(windows["fixture-3"]).SlotCount == 4 &&
+            Math.Abs(Placement(windows["fixture-3"]).TopOffsetDip - 18) < 1e-6,
+            "a two-capsule transfer did not widen the insertion gap");
+        controller.RestoreDeepCapsuleQueuePreview(targetKey);
+
+        // 插入短线：同一 (队列, index, carriedCount) 的重复下发不得重启滑动动画。
         controller.ShowEdgeCapsuleQueueDropTargetOutline(targetKey, source.Id, 1, 1);
         var outline = Field(controller, "_edgeCapsuleQueueDropTargetOutline");
         Require(outline != null, "drop-target outline was not created");
         Require(
-            (int)Part(outline!, "PlaceholderIndex") == 1,
-            "the placeholder did not track the insertion index");
+            (int)Part(outline!, "InsertionLineIndex") == 1,
+            "the insertion line did not track the insertion index");
         Require(
-            (int)Part(outline!, "PlaceholderHeightAnimationCount") == 1,
-            "the placeholder did not grow from zero on first appearance");
-        Require(
-            (int)Part(outline!, "PlaceholderSlideCount") == 0,
+            (int)Part(outline!, "InsertionLineSlideCount") == 0,
             "the first appearance must not slide");
+        Require(
+            Math.Abs((double)Part(outline!, "InsertionLineGapDip") - 10) < 1e-6,
+            "a single carried capsule did not use the base insertion gap");
 
-        var slidesAtOne = (int)Part(outline!, "PlaceholderSlideCount");
-        var heightsAtOne = (int)Part(outline!, "PlaceholderHeightAnimationCount");
-        var topAtOne = (double)Part(outline!, "PlaceholderTopTargetDip");
-        var heightAtOne = (double)Part(outline!, "PlaceholderTargetHeightDip");
+        var slidesAtOne = (int)Part(outline!, "InsertionLineSlideCount");
+        var topAtOne = (double)Part(outline!, "InsertionLineTopTargetDip");
 
         controller.ShowEdgeCapsuleQueueDropTargetOutline(targetKey, source.Id, 1, 1);
         Require(
-            (int)Part(outline!, "PlaceholderSlideCount") == slidesAtOne &&
-            (int)Part(outline!, "PlaceholderHeightAnimationCount") == heightsAtOne,
-            "repeating the same insertion slot restarted a placeholder animation");
+            (int)Part(outline!, "InsertionLineSlideCount") == slidesAtOne,
+            "repeating the same insertion slot restarted a slide animation");
 
         controller.ShowEdgeCapsuleQueueDropTargetOutline(targetKey, source.Id, 1, 0);
         Require(
-            (int)Part(outline!, "PlaceholderSlideCount") == slidesAtOne + 1,
-            "changing the insertion index did not slide the placeholder");
-        Require(
-            (int)Part(outline!, "PlaceholderHeightAnimationCount") == heightsAtOne,
-            "an index change must not restart the height animation");
-        var topAtZero = (double)Part(outline!, "PlaceholderTopTargetDip");
+            (int)Part(outline!, "InsertionLineSlideCount") == slidesAtOne + 1,
+            "changing the insertion index did not slide the line");
+        var topAtZero = (double)Part(outline!, "InsertionLineTopTargetDip");
         Require(
             topAtZero < topAtOne,
-            "the placeholder did not move toward the earlier slot");
+            "the insertion line did not move toward the earlier slot");
 
-        // carriedCount 变大时，占位块高度也应重新展开。
+        // carriedCount 变大时，插入间隙加宽，短线随之下移。
         controller.ShowEdgeCapsuleQueueDropTargetOutline(targetKey, source.Id, 2, 0);
         Require(
-            (int)Part(outline!, "PlaceholderHeightAnimationCount") == heightsAtOne + 1,
-            "a taller carried block did not animate its height");
+            Math.Abs((double)Part(outline!, "InsertionLineGapDip") - 18) < 1e-6,
+            "a two-capsule block did not widen the insertion gap");
         Require(
-            (double)Part(outline!, "PlaceholderTargetHeightDip") > heightAtOne,
-            "a taller carried block did not increase the placeholder height");
+            (double)Part(outline!, "InsertionLineTopTargetDip") > topAtZero,
+            "a wider insertion gap did not push the line lower");
 
         controller.EndEdgeCapsuleQueueDropTargetOutline();
+
+        // 高频评估早退：同一 (target, index, carriedCount) 不重复计算描边布局。
+        var layouts = (int)Part(controller, "DropTargetLayoutUpdateCount");
+        controller.ShowEdgeCapsuleQueueDropTargetOutline(targetKey, source.Id, 1, 1);
+        var layoutsAfterFirst = (int)Part(controller, "DropTargetLayoutUpdateCount");
+        Require(
+            layoutsAfterFirst == layouts + 1,
+            "the first outline show did not compute its layout");
+        controller.ShowEdgeCapsuleQueueDropTargetOutline(targetKey, source.Id, 1, 1);
+        Require(
+            (int)Part(controller, "DropTargetLayoutUpdateCount") == layoutsAfterFirst,
+            "repeating the same outline target recomputed its layout");
+        controller.ShowEdgeCapsuleQueueDropTargetOutline(targetKey, source.Id, 1, 0);
+        Require(
+            (int)Part(controller, "DropTargetLayoutUpdateCount") == layoutsAfterFirst + 1,
+            "changing the outline index did not recompute its layout");
+        controller.EndEdgeCapsuleQueueDropTargetOutline();
+
+        // 磁吸候选按手势缓存：相同 anchor 的重复评估不再重建候选或测量标题。
+        Require(
+            WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(null, out var geometry),
+            "primary monitor geometry was not resolved");
+        var anchorY = geometry.WorkArea.Top + 320 * geometry.DpiScaleY;
+        var anchor = new EdgeCapsuleDropAnchor(
+            new DeviceScreenPoint(geometry.WorkArea.Right - 10, anchorY),
+            anchorY);
+        var builds = (int)Part(controller, "MagnetCandidateBuildCount");
+        controller.EvaluateDeepCapsuleQueueDrag([source], anchor);
+        var buildsAfterFirst = (int)Part(controller, "MagnetCandidateBuildCount");
+        Require(
+            buildsAfterFirst == builds + 1,
+            "the first magnet evaluation did not build its candidates");
+        controller.EvaluateDeepCapsuleQueueDrag([source], anchor);
+        Require(
+            (int)Part(controller, "MagnetCandidateBuildCount") == buildsAfterFirst,
+            "repeating the same magnet evaluation rebuilt its candidates");
+        controller.ForgetDeepCapsuleQueueDrag();
     }
 
     private static EdgeCapsulePlacement Placement(PaperWindow window) =>

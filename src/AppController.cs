@@ -2340,10 +2340,15 @@ public sealed partial class AppController : IDisposable
             return;
         }
 
-        // The queue gaining members: open as many slots as arrive, at the insertion point.
+        // The queue gaining members: only part the members below the insertion point by a small
+        // gap. The full slot is opened when the capsule is actually committed on release.
         var target = new List<PaperData>(allPapers.Where(p => QueueKey(p) == targetQueueKey));
-        target.InsertRange(Math.Clamp(targetIndex, 0, target.Count), carried);
-        PreviewEdgeCapsuleQueueMembers(targetQueueKey, target, carriedIds);
+        PreviewEdgeCapsuleQueueInsertion(
+            targetQueueKey,
+            target,
+            carriedIds,
+            Math.Clamp(targetIndex, 0, target.Count),
+            carried.Count);
 
         // 目标队列变高后，同一边下方的其它队列也像 mini-view 避让那样一起下移。
         PreviewDeepCapsuleQueueDragAvoidance(carried, targetQueueKey);
@@ -2451,6 +2456,69 @@ public sealed partial class AppController : IDisposable
             }
 
             window.PreviewDeepCapsulePlacement(plan.Placements[member.Id]);
+        }
+    }
+
+    /// <summary>
+    /// 跨队列插入预览：目标成员保持原有槽位，只把插入点及其下方的成员整体下移一个小间隙。
+    ///
+    /// 不能复用 <see cref="PreviewEdgeCapsuleQueueMembers"/>：那条路径会把 carried 插进成员
+    /// 列表并按完整槽位重排，松手前就会撑开一整格。这里仍由同一个 coordinator 决定成员顺序，
+    /// 只是额外叠加一个相对位移；SlotCount 按最终提交槽数归一化，避免长队列靠近底部时跳动。
+    /// </summary>
+    private void PreviewEdgeCapsuleQueueInsertion(
+        string queueKey,
+        IReadOnlyList<PaperData> targetMembers,
+        HashSet<string> carriedIds,
+        int targetIndex,
+        int carriedCount)
+    {
+        if (targetMembers.Count == 0)
+        {
+            return;
+        }
+
+        var plan = EdgeCapsuleQueueCoordinator.Build(
+            targetMembers.Select(member => new EdgeCapsuleQueueMember(member, queueKey)),
+            State.UseCapsuleCollapseAll);
+        if (plan.Queues.Count == 0)
+        {
+            return;
+        }
+        if (plan.Queues[0].HasMaster && IsCapsuleCollapseAllActiveForQueue(queueKey))
+        {
+            return;
+        }
+
+        var clampedIndex = Math.Clamp(targetIndex, 0, targetMembers.Count);
+        var normalizedCarriedCount = Math.Max(1, carriedCount);
+        var extraGap = EdgeCapsuleQueueDropTargetGeometry.ExtraInsertionGapDip(
+            normalizedCarriedCount);
+        for (var index = 0; index < targetMembers.Count; index++)
+        {
+            var member = targetMembers[index];
+            if (carriedIds.Contains(member.Id) ||
+                !_windows.TryGetValue(member.Id, out var window) ||
+                !ShouldPaperOccupyDeepCapsuleSlot(member, window))
+            {
+                continue;
+            }
+
+            var placement = plan.Placements[member.Id];
+            // 与最终提交一致的槽数，只影响 StartTopMargin 的归一化上限。
+            placement = placement with
+            {
+                SlotCount = placement.SlotCount + normalizedCarriedCount
+            };
+            if (index >= clampedIndex)
+            {
+                placement = placement with
+                {
+                    TopOffsetDip = placement.TopOffsetDip + extraGap
+                };
+            }
+
+            window.PreviewDeepCapsulePlacement(placement);
         }
     }
 

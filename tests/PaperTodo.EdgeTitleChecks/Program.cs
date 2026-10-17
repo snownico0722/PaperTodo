@@ -23,6 +23,8 @@ internal static partial class Program
             Console.WriteLine("PASS queue-instance-key-codec");
             QueueDragModifierLatch();
             Console.WriteLine("PASS queue-drag-modifier-latch");
+            QueuePreviewThrottle();
+            Console.WriteLine("PASS queue-preview-throttle");
             QueueMagnet();
             Console.WriteLine("PASS queue-magnet-merge-detach-reorder");
             EdgeQueueAvoidance();
@@ -216,66 +218,97 @@ internal static partial class Program
         MagnetNeedsHorizontalProximity();
         NewQueueDropAvoidsOverlap();
         DragTimeHoldStaysStableAcrossFrames();
-        EdgeCapsuleQueueDropTargetPlaceholder();
+        EdgeCapsuleQueueDropTargetMarkers();
     }
 
-    // 磁吸描边里的幽灵占位框：第 index 个槽的 top、carriedCount 覆盖的高度，以及设备矩形
-    // 到窗口内 DIP 的换算。纯函数检查，不依赖 WPF 窗口。
-    private static void EdgeCapsuleQueueDropTargetPlaceholder()
+    // 磁吸插入指示：额外间隙、预览队列高度、插入线 Y/宽度，以及设备矩形到窗口内 DIP 的换算。
+    // 纯函数检查，不依赖 WPF 窗口。
+    private static void EdgeCapsuleQueueDropTargetMarkers()
     {
         const double height = 46;
+
+        foreach (var (carried, expected) in new[] { (0, 10.0), (1, 10.0), (2, 18.0), (3, 26.0) })
+        {
+            Check(
+                Math.Abs(EdgeCapsuleQueueDropTargetGeometry.ExtraInsertionGapDip(carried) - expected) < 1e-9,
+                "The insertion gap grows with the carried capsule count");
+        }
 
         foreach (var gap in new[] { 0.0, 4.0, 8.0 })
         {
             var slot = EdgeCapsuleLayout.SlotHeight(gap);
-            Check(Math.Abs(EdgeCapsuleQueueDropTargetGeometry.PlaceholderTopDip(120, 0, slot) - 120) < 1e-9,
-                "The placeholder starts at the queue top");
-            Check(Math.Abs(EdgeCapsuleQueueDropTargetGeometry.PlaceholderTopDip(120, 2, slot) - (120 + 2 * slot)) < 1e-9,
-                "The placeholder top follows the slot pitch");
-            Check(Math.Abs(EdgeCapsuleQueueDropTargetGeometry.PlaceholderTopDip(120, -1, slot) - 120) < 1e-9,
-                "A negative index clamps to the first slot");
-            Check(Math.Abs(EdgeCapsuleQueueDropTargetGeometry.PlaceholderHeightDip(1, slot, gap, height) - height) < 1e-9,
-                "A single carried capsule fills exactly one capsule height");
-            Check(Math.Abs(EdgeCapsuleQueueDropTargetGeometry.PlaceholderHeightDip(3, slot, gap, height) - (3 * slot - gap)) < 1e-9,
-                "A carried block covers N slots without the trailing gap");
+            Check(
+                Math.Abs(EdgeCapsuleQueueDropTargetGeometry.PreviewQueueHeightDip(
+                    2, slot, gap, height, 1) - (2 * slot - gap + 10)) < 1e-9,
+                "The preview queue height adds only the insertion gap");
+            Check(
+                Math.Abs(EdgeCapsuleQueueDropTargetGeometry.PreviewQueueHeightDip(
+                    2, slot, gap, height, 3) - (2 * slot - gap + 26)) < 1e-9,
+                "A carried block widens the insertion gap");
         }
 
-        // 队尾插入：占位框底边必须与整条队列底边重合。
+        // memberCount = 2, slot = 50, gap = 4, capsule = 46, carried = 1 (extra gap 10)。
         {
-            const double gap = 4;
-            var slot = EdgeCapsuleLayout.SlotHeight(gap);
-            const int members = 2;
-            const int carried = 1;
+            const double slot = 50;
             const double queueTop = 120;
-            var queueBottom = queueTop + (members + carried) * slot - gap;
-            var ghostTop = EdgeCapsuleQueueDropTargetGeometry.PlaceholderTopDip(queueTop, members, slot);
-            var ghostBottom = ghostTop +
-                EdgeCapsuleQueueDropTargetGeometry.PlaceholderHeightDip(carried, slot, gap, height);
-            Check(Math.Abs(ghostBottom - queueBottom) < 1e-9,
-                "A tail insertion ends exactly at the queue bottom");
+            Check(
+                Math.Abs(EdgeCapsuleQueueDropTargetGeometry.InsertionLineCenterYDip(
+                    queueTop, 0, 2, slot, height, 1) - (queueTop + 5)) < 1e-9,
+                "A head insertion centers the line in the gap above the first capsule");
+            Check(
+                Math.Abs(EdgeCapsuleQueueDropTargetGeometry.InsertionLineCenterYDip(
+                    queueTop, 1, 2, slot, height, 1) - (queueTop + 53)) < 1e-9,
+                "A middle insertion centers the line between the parted members");
+            Check(
+                Math.Abs(EdgeCapsuleQueueDropTargetGeometry.InsertionLineCenterYDip(
+                    queueTop, 2, 2, slot, height, 1) - (queueTop + 101)) < 1e-9,
+                "A tail insertion centers the line in the extension below the queue");
+            Check(
+                Math.Abs(EdgeCapsuleQueueDropTargetGeometry.InsertionLineCenterYDip(
+                    queueTop, 99, 2, slot, height, 1) - (queueTop + 101)) < 1e-9,
+                "The insertion index clamps to the tail");
         }
 
-        var placeholderBounds = new DeviceScreenRect(13, 70, 113, 116);
+        Check(
+            Math.Abs(EdgeCapsuleQueueDropTargetGeometry.InsertionLineWidthDip(84) - 48) < 1e-9,
+            "The insertion line is short inside a wide capsule");
+        Check(
+            Math.Abs(EdgeCapsuleQueueDropTargetGeometry.InsertionLineWidthDip(30) - 30) < 1e-9,
+            "The insertion line never exceeds the capsule body");
+        Check(
+            Math.Abs(EdgeCapsuleQueueDropTargetGeometry.InsertionLineWidthDip(double.NaN)) < 1e-9 &&
+            Math.Abs(EdgeCapsuleQueueDropTargetGeometry.InsertionLineWidthDip(0)) < 1e-9,
+            "An invalid capsule width hides the insertion line");
+
+        const double chrome = EdgeCapsuleLayout.WindowChromeMargin;
+        Check(
+            Math.Abs(EdgeCapsuleQueueDropTargetGeometry.QueueEdgeLineXDip(92, true) - (92 - chrome)) < 1e-9,
+            "A left queue draws its rail at the inner edge of the visible body");
+        Check(
+            Math.Abs(EdgeCapsuleQueueDropTargetGeometry.QueueEdgeLineXDip(92, false) - (chrome - 2)) < 1e-9,
+            "A right queue draws its rail in the inner chrome margin");
+
+        var insertionLineBounds = new DeviceScreenRect(13, 70, 113, 76);
         var outlineBounds = new DeviceScreenRect(10, 20, 210, 420);
 
         var atTwo = EdgeCapsuleQueueDropTargetGeometry.RelativeDip(
-            placeholderBounds, outlineBounds, 2, 2);
+            insertionLineBounds, outlineBounds, 2, 2);
         Check(Math.Abs(atTwo.X - 1.5) < 1e-9 &&
               Math.Abs(atTwo.Y - 25) < 1e-9 &&
               Math.Abs(atTwo.Width - 50) < 1e-9 &&
-              Math.Abs(atTwo.Height - 23) < 1e-9,
-            "Placeholder device bounds convert to window DIP");
+              Math.Abs(atTwo.Height - 3) < 1e-9,
+            "Insertion marker device bounds convert to window DIP");
 
         var atOneAndQuarter = EdgeCapsuleQueueDropTargetGeometry.RelativeDip(
-            placeholderBounds, outlineBounds, 1.25, 1.25);
+            insertionLineBounds, outlineBounds, 1.25, 1.25);
         Check(Math.Abs(atOneAndQuarter.X - 2.4) < 1e-9 &&
               Math.Abs(atOneAndQuarter.Y - 40) < 1e-9 &&
               Math.Abs(atOneAndQuarter.Width - 80) < 1e-9 &&
-              Math.Abs(atOneAndQuarter.Height - 36.8) < 1e-9,
-            "Placeholder conversion honors fractional DPI");
+              Math.Abs(atOneAndQuarter.Height - 4.8) < 1e-9,
+            "Marker conversion honors fractional DPI");
 
         var fallback = EdgeCapsuleQueueDropTargetGeometry.RelativeDip(
-            placeholderBounds, outlineBounds, 0, double.NaN);
+            insertionLineBounds, outlineBounds, 0, double.NaN);
         Check(Math.Abs(fallback.X - 3) < 1e-9 && Math.Abs(fallback.Y - 50) < 1e-9,
             "A non-positive DPI falls back to 1");
     }

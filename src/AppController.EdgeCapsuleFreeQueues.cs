@@ -41,6 +41,17 @@ public sealed partial class AppController
     // exit threshold, instead of releasing and re-acquiring every few frames.
     private string _deepCapsuleDragHeldQueueKey = "";
 
+    // Candidates depend only on the gesture's carried set and target monitor/side. Rebuilding them
+    // on every 8 ms evaluation would re-measure every capsule title; cache them for the gesture.
+    private string _deepCapsuleMagnetCandidateMonitor = "";
+    private string _deepCapsuleMagnetCandidateSide = "";
+    private bool _deepCapsuleMagnetCandidateExcludeSource;
+    private readonly List<string> _deepCapsuleMagnetCandidateCarriedIds = new();
+    private List<EdgeCapsuleQueueMagnetCandidate>? _deepCapsuleMagnetCandidateCache;
+
+    /// <summary>测试用：真正重建磁吸候选集合的次数。</summary>
+    internal int MagnetCandidateBuildCount { get; private set; }
+
     /// <summary>
     /// Geometry of the monitor a queue lives on, falling back to the primary monitor when the
     /// remembered device has since been unplugged. Null when no monitor can be resolved at all.
@@ -113,9 +124,18 @@ public sealed partial class AppController
         bool excludeEntireSourceQueue,
         out string sourceQueueKey)
     {
-        var result = new List<EdgeCapsuleQueueMagnetCandidate>();
         sourceQueueKey = carried.Count == 0 ? "" : QueueKey(carried[0]);
+        if (_deepCapsuleMagnetCandidateCache is { } cached &&
+            _deepCapsuleMagnetCandidateExcludeSource == excludeEntireSourceQueue &&
+            string.Equals(_deepCapsuleMagnetCandidateMonitor, targetMonitor, StringComparison.Ordinal) &&
+            string.Equals(_deepCapsuleMagnetCandidateSide, targetSide, StringComparison.Ordinal) &&
+            _deepCapsuleMagnetCandidateCarriedIds.Count == carried.Count &&
+            CarriedIdsMatch(carried))
+        {
+            return cached;
+        }
 
+        var result = new List<EdgeCapsuleQueueMagnetCandidate>();
         var carriedIds = new HashSet<string>(carried.Select(p => p.Id), StringComparer.Ordinal);
         var members = new Dictionary<string, List<PaperData>>(StringComparer.Ordinal);
         var order = new List<string>();
@@ -187,7 +207,43 @@ public sealed partial class AppController
                 bandWidth));
         }
 
+        _deepCapsuleMagnetCandidateMonitor = targetMonitor;
+        _deepCapsuleMagnetCandidateSide = targetSide;
+        _deepCapsuleMagnetCandidateExcludeSource = excludeEntireSourceQueue;
+        _deepCapsuleMagnetCandidateCarriedIds.Clear();
+        foreach (var paper in carried)
+        {
+            _deepCapsuleMagnetCandidateCarriedIds.Add(paper.Id);
+        }
+
+        _deepCapsuleMagnetCandidateCache = result;
+        MagnetCandidateBuildCount++;
         return result;
+    }
+
+    private bool CarriedIdsMatch(IReadOnlyList<PaperData> carried)
+    {
+        for (var index = 0; index < carried.Count; index++)
+        {
+            if (!string.Equals(
+                    _deepCapsuleMagnetCandidateCarriedIds[index],
+                    carried[index].Id,
+                    StringComparison.Ordinal))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private void ClearDeepCapsuleQueueMagnetCandidates()
+    {
+        _deepCapsuleMagnetCandidateCache = null;
+        _deepCapsuleMagnetCandidateMonitor = "";
+        _deepCapsuleMagnetCandidateSide = "";
+        _deepCapsuleMagnetCandidateExcludeSource = false;
+        _deepCapsuleMagnetCandidateCarriedIds.Clear();
     }
 
     private static string FirstQueueIdOf(List<PaperData> papers) =>
@@ -279,11 +335,16 @@ public sealed partial class AppController
     {
         _deepCapsuleDragHeldQueueKey = "";
         ClearDeepCapsuleQueueDragAvoidanceState();
+        ClearDeepCapsuleQueueMagnetCandidates();
         EndEdgeCapsuleQueueDropTargetOutline();
     }
 
     /// <summary>Drop the drag-time hold so the next gesture starts from a clean slate.</summary>
-    internal void ForgetDeepCapsuleQueueDrag() => _deepCapsuleDragHeldQueueKey = "";
+    internal void ForgetDeepCapsuleQueueDrag()
+    {
+        _deepCapsuleDragHeldQueueKey = "";
+        ClearDeepCapsuleQueueMagnetCandidates();
+    }
 
     private EdgeCapsuleQueueMagnetPlan EvaluateDeepCapsuleQueueDrop(
         PaperData paper,

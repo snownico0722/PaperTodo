@@ -46,4 +46,20 @@ internal static partial class Program
             !WindowNative.IsAsyncKeyDown(1),
             "The low GetAsyncKeyState bit alone is not a held key");
     }
+
+    /// <summary>
+    /// 插入预览的节流：pointer move 受 8ms 间隔约束，原生拖拽定时器强制评估。
+    /// </summary>
+    private static void QueuePreviewThrottle()
+    {
+        Check(
+            !PaperWindow.IsDeepCapsuleQueuePreviewDue(7.9, 8, false),
+            "A pointer move inside the preview interval is skipped");
+        Check(
+            PaperWindow.IsDeepCapsuleQueuePreviewDue(8, 8, false),
+            "A pointer move at the preview interval is evaluated");
+        Check(
+            PaperWindow.IsDeepCapsuleQueuePreviewDue(0, 8, true),
+            "The native drag timer forces an evaluation regardless of the interval");
+    }
 }
