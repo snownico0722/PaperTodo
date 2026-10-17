@@ -90,9 +90,6 @@ public sealed partial class AppController
             IsCapsuleCollapseAllActiveForQueue(session.QueueKey) ||
             !_windows.TryGetValue(session.OwnerPaperId, out var owner))
         {
-            TraceEdgeCapsulePreview(
-                $"layout reset owner={EdgeCapsulePreviewTraceId(session.OwnerPaperId)} " +
-                $"reason=owner-missing-or-queue-unavailable queue={session.QueueKey}");
             ResetEdgeCapsulePreviewWithoutArrange();
             return basePlan;
         }
@@ -103,11 +100,6 @@ public sealed partial class AppController
             ownerSize.Value != session.Size ||
             !owner.CanEnterEdgeCapsulePreview)
         {
-            TraceEdgeCapsulePreview(
-                $"layout reset owner={EdgeCapsulePreviewTraceId(session.OwnerPaperId)} " +
-                $"reason=owner-state open={owner.IsEdgeCapsulePreviewOpen} " +
-                $"size={(ownerSize.HasValue ? ownerSize.Value.ToString() : "<null>")} " +
-                $"expectedSize={session.Size} eligibility={owner.EdgeCapsulePreviewEligibilityTrace()}");
             ResetEdgeCapsulePreviewWithoutArrange();
             return basePlan;
         }
@@ -120,9 +112,6 @@ public sealed partial class AppController
                 StringComparison.Ordinal));
         if (currentQueue == null)
         {
-            TraceEdgeCapsulePreview(
-                $"layout reset owner={EdgeCapsulePreviewTraceId(session.OwnerPaperId)} " +
-                $"reason=current-queue-missing queue={currentQueueKey}");
             ResetEdgeCapsulePreviewWithoutArrange();
             return basePlan;
         }
@@ -146,10 +135,6 @@ public sealed partial class AppController
                 currentEdgeIds,
                 StringComparer.Ordinal))
         {
-            TraceEdgeCapsulePreview(
-                $"layout refresh owner={EdgeCapsulePreviewTraceId(session.OwnerPaperId)} " +
-                $"queue={session.QueueKey}->{currentQueueKey} " +
-                $"edge={session.EdgePaperIds.Count}->{currentEdgeIds.Length}");
             session = EdgeCapsulePreviewLayoutCoordinator.OpenOrTransfer(
                 basePlan,
                 null,
@@ -160,9 +145,6 @@ public sealed partial class AppController
                 DeepCapsuleGap);
             if (session == null)
             {
-                TraceEdgeCapsulePreview(
-                    $"layout reset owner={EdgeCapsulePreviewTraceId(_edgeCapsulePreviewSession?.OwnerPaperId)} " +
-                    "reason=layout-refresh-failed");
                 ResetEdgeCapsulePreviewWithoutArrange();
                 return basePlan;
             }
@@ -271,15 +253,29 @@ public sealed partial class AppController
             return session with { EdgePaperIds = edgePaperIds };
         }
 
-        // The card occupies the owner's compact slot and grows downward from it, so its bottom
-        // edge is the anchor every queue below has to clear.
-        var ownerCardTop = ownerQueue.RestTopDip +
-                           (ownerPlacement.VisualIndex * EdgeCapsuleLayout.SlotHeight(DeepCapsuleGap));
+        // The card occupies the owner's compact slot and grows downward from it — but the card's
+        // bottom edge is NOT the anchor. The single-queue policy also pushes the owner's own lower
+        // members, and they can settle below the card: hovering A3 in [A1..A4] leaves A4 sitting at
+        // cardTop + cardHeight + gap. Anchoring on the card alone would push the next queue to
+        // exactly A4's new top, so the two overlap. Take the lowest bottom the owner's queue
+        // reaches, card included.
+        var slotHeight = EdgeCapsuleLayout.SlotHeight(DeepCapsuleGap);
+        var ownerCardTop = ownerQueue.RestTopDip + (ownerPlacement.VisualIndex * slotHeight);
         var cardHeight = Math.Max(session.Size.HeightDip, PaperLayoutDefaults.CapsuleHeight);
+        var ownerBottom = ownerCardTop + cardHeight;
+        for (var index = 0; index < ownerQueue.PaperIds.Count; index++)
+        {
+            var memberId = ownerQueue.PaperIds[index];
+            var memberRestTop = ownerQueue.RestTopDip + (index * slotHeight);
+            var memberOffset = session.TopOffsetsDip.TryGetValue(memberId, out var value) ? value : 0;
+            ownerBottom = Math.Max(
+                ownerBottom,
+                memberRestTop + memberOffset + PaperLayoutDefaults.CapsuleHeight);
+        }
         var extra = EdgeCapsulePreviewLayoutCoordinator.BuildEdgeAvoidanceOffsets(
             edgeQueues,
             session.QueueKey,
-            ownerCardTop + cardHeight,
+            ownerBottom,
             PaperLayoutDefaults.CapsuleHeight,
             DeepCapsuleGap);
         if (extra.Count == 0)
@@ -293,14 +289,13 @@ public sealed partial class AppController
             merged[paperId] = offset;
         }
 
+
         return session with { TopOffsetsDip = merged, EdgePaperIds = edgePaperIds };
     }
 
     private void ResetEdgeCapsulePreviewWithoutArrange()
     {
         var session = _edgeCapsulePreviewSession;
-        TraceEdgeCapsulePreview(
-            $"reset without arrange owner={EdgeCapsulePreviewTraceId(session?.OwnerPaperId)}");
         _edgeCapsulePreviewSession = null;
         _edgeCapsulePreviewQueuedTransferPaperId = null;
         _edgeCapsulePreviewQueuedCloseOwnerPaperId = null;
@@ -344,10 +339,6 @@ public sealed partial class AppController
 
         if (!window.CanEnterEdgeCapsulePreview)
         {
-            TraceEdgeCapsulePreview(
-                $"enter blocked target={EdgeCapsulePreviewTraceId(window.EdgeCapsulePreviewPaperId)} " +
-                $"eligibility={window.EdgeCapsulePreviewEligibilityTrace()} " +
-                $"owner={EdgeCapsulePreviewTraceId(_edgeCapsulePreviewSession?.OwnerPaperId)}");
             return;
         }
 
@@ -372,9 +363,6 @@ public sealed partial class AppController
         {
             // A WPF enter caused only by the moving queue has no activation authority. Real
             // screen-space pointer motion clears this suppression before the intent gate starts.
-            TraceEdgeCapsulePreview(
-                $"enter suppressed target={EdgeCapsulePreviewTraceId(window.EdgeCapsulePreviewPaperId)} " +
-                $"owner={EdgeCapsulePreviewTraceId(session?.OwnerPaperId)} pointer={pointer.X},{pointer.Y}");
             return;
         }
 
@@ -435,9 +423,6 @@ public sealed partial class AppController
 
         if (!window.CanEnterEdgeCapsulePreview)
         {
-            TraceEdgeCapsulePreview(
-                $"owner sample blocked owner={EdgeCapsulePreviewTraceId(session.OwnerPaperId)} " +
-                $"eligibility={window.EdgeCapsulePreviewEligibilityTrace()}");
             CancelEdgeCapsulePreviewActivationIntent();
             ResetEdgeCapsulePreviewCorridorExitIntent();
             QueueEdgeCapsulePreviewClose(window, session.OwnerPaperId);
@@ -696,9 +681,6 @@ public sealed partial class AppController
                         var fallbackReason =
                             _edgeCapsulePreviewQueuedCloseReason;
                         ConsumeQueuedEdgeCapsulePreviewClose(ownerPaperId);
-                        TraceEdgeCapsulePreview(
-                            $"close queued owner={EdgeCapsulePreviewTraceId(ownerPaperId)} " +
-                            $"reason={fallbackReason} pointer=<unavailable>");
                         CloseEdgeCapsulePreview(animate: true, arrange: true);
                     }
                     return;
@@ -725,9 +707,6 @@ public sealed partial class AppController
                     NotifyEdgeCapsulePreviewPointerSample(owner, pointer);
                     return;
                 }
-                TraceEdgeCapsulePreview(
-                    $"close queued owner={EdgeCapsulePreviewTraceId(ownerPaperId)} " +
-                    $"reason={queuedReason} pointer={pointer.X},{pointer.Y}");
                 CloseEdgeCapsulePreview(animate: true, arrange: true);
             }),
             DispatcherPriority.Input);
@@ -771,9 +750,6 @@ public sealed partial class AppController
                 QueueKey(window.EdgeCapsulePreviewPaper)))
         {
             CancelEdgeCapsulePreviewActivationIntent();
-            TraceEdgeCapsulePreview(
-                $"transfer blocked target={EdgeCapsulePreviewTraceId(paperId)} " +
-                "reason=drag-authority");
             return;
         }
         if (string.Equals(
@@ -786,9 +762,6 @@ public sealed partial class AppController
 
         _edgeCapsulePreviewQueuedTransferPaperId = paperId;
         var generation = ++_edgeCapsulePreviewTransferGeneration;
-        TraceEdgeCapsulePreview(
-            $"transfer queued target={EdgeCapsulePreviewTraceId(paperId)} " +
-            $"expectedOwner={EdgeCapsulePreviewTraceId(expectedOwnerPaperId)} generation={generation}");
         ProcessQueuedEdgeCapsulePreviewTransfer(
             window,
             paperId,
@@ -823,25 +796,17 @@ public sealed partial class AppController
                     !ReferenceEquals(current, window))
                 {
                     _edgeCapsulePreviewQueuedTransferPaperId = null;
-                    TraceEdgeCapsulePreview(
-                        $"transfer dropped target={EdgeCapsulePreviewTraceId(paperId)} reason=window-changed");
                     return;
                 }
                 if (!AllowsEdgeCapsuleQueueProxyOwnership(
                         QueueKey(current.EdgeCapsulePreviewPaper)))
                 {
                     CancelEdgeCapsulePreviewActivationIntent();
-                    TraceEdgeCapsulePreview(
-                        $"transfer dropped target={EdgeCapsulePreviewTraceId(paperId)} " +
-                        "reason=drag-authority");
                     return;
                 }
                 if (!current.CanEnterEdgeCapsulePreview)
                 {
                     _edgeCapsulePreviewQueuedTransferPaperId = null;
-                    TraceEdgeCapsulePreview(
-                        $"transfer dropped target={EdgeCapsulePreviewTraceId(paperId)} " +
-                        $"reason=blocked eligibility={current.EdgeCapsulePreviewEligibilityTrace()}");
                     return;
                 }
                 if (!WindowNative.TryGetCursorScreenPosition(out var pointer))
@@ -859,16 +824,11 @@ public sealed partial class AppController
                     }
 
                     _edgeCapsulePreviewQueuedTransferPaperId = null;
-                    TraceEdgeCapsulePreview(
-                        $"transfer dropped target={EdgeCapsulePreviewTraceId(paperId)} reason=no-pointer");
                     return;
                 }
                 _edgeCapsulePreviewQueuedTransferPaperId = null;
                 if (!current.IsEdgeCapsuleInteractiveAt(pointer))
                 {
-                    TraceEdgeCapsulePreview(
-                        $"transfer dropped target={EdgeCapsulePreviewTraceId(paperId)} " +
-                        $"reason=pointer-outside pointer={pointer.X},{pointer.Y}");
                     return;
                 }
                 if (stableAnchor.HasValue &&
@@ -878,10 +838,6 @@ public sealed partial class AppController
                         stableAnchor.Value.DpiScaleX,
                         stableAnchor.Value.DpiScaleY))
                 {
-                    TraceEdgeCapsulePreview(
-                        $"transfer dropped target={EdgeCapsulePreviewTraceId(paperId)} " +
-                        $"reason=anchor-moved anchor={stableAnchor.Value.Point.X},{stableAnchor.Value.Point.Y} " +
-                        $"pointer={pointer.X},{pointer.Y}");
                     return;
                 }
 
@@ -892,9 +848,6 @@ public sealed partial class AppController
                     // If another request already opened one, its owner sampler starts a transfer.
                     if (session != null)
                     {
-                        TraceEdgeCapsulePreview(
-                            $"transfer dropped target={EdgeCapsulePreviewTraceId(paperId)} " +
-                            $"reason=session-already-open owner={EdgeCapsulePreviewTraceId(session.OwnerPaperId)}");
                         return;
                     }
                 }
@@ -907,17 +860,10 @@ public sealed partial class AppController
                         expectedOwnerPaperId,
                         out var owner))
                 {
-                    TraceEdgeCapsulePreview(
-                        $"transfer dropped target={EdgeCapsulePreviewTraceId(paperId)} " +
-                        $"reason=owner-changed expected={EdgeCapsulePreviewTraceId(expectedOwnerPaperId)} " +
-                        $"actual={EdgeCapsulePreviewTraceId(session?.OwnerPaperId)}");
                     return;
                 }
                 else if (owner.EdgeCapsulePreviewPointerCaptureActive)
                 {
-                    TraceEdgeCapsulePreview(
-                        $"transfer paused target={EdgeCapsulePreviewTraceId(paperId)} " +
-                        $"owner={EdgeCapsulePreviewTraceId(session.OwnerPaperId)} reason=pointer-capture");
                     HoldEdgeCapsulePreviewForPointerCapture(owner, session);
                     return;
                 }
@@ -939,16 +885,10 @@ public sealed partial class AppController
         }
         if (!window.CanEnterEdgeCapsulePreview)
         {
-            TraceEdgeCapsulePreview(
-                $"open blocked target={EdgeCapsulePreviewTraceId(window.EdgeCapsulePreviewPaperId)} " +
-                $"eligibility={window.EdgeCapsulePreviewEligibilityTrace()}");
             return;
         }
         if (!window.IsEdgeCapsuleInteractiveAt(pointer))
         {
-            TraceEdgeCapsulePreview(
-                $"open blocked target={EdgeCapsulePreviewTraceId(window.EdgeCapsulePreviewPaperId)} " +
-                $"reason=pointer-outside pointer={pointer.X},{pointer.Y}");
             return;
         }
 
@@ -976,9 +916,6 @@ public sealed partial class AppController
                 previous,
                 _edgeCapsulePreviewSession))
         {
-            TraceEdgeCapsulePreview(
-                $"open superseded during prepare target={EdgeCapsulePreviewTraceId(window.EdgeCapsulePreviewPaperId)} " +
-                $"current={EdgeCapsulePreviewTraceId(_edgeCapsulePreviewSession?.OwnerPaperId)}");
             return;
         }
         // Same-generation layout refreshes may replace the immutable record while preserving the
@@ -986,9 +923,6 @@ public sealed partial class AppController
         previous = _edgeCapsulePreviewSession;
         if (request == null)
         {
-            TraceEdgeCapsulePreview(
-                $"open aborted target={EdgeCapsulePreviewTraceId(window.EdgeCapsulePreviewPaperId)} " +
-                "reason=prepare-null");
             return;
         }
 
@@ -1004,9 +938,6 @@ public sealed partial class AppController
             DeepCapsuleGap);
         if (next == null)
         {
-            TraceEdgeCapsulePreview(
-                $"open aborted target={EdgeCapsulePreviewTraceId(window.EdgeCapsulePreviewPaperId)} " +
-                $"reason=layout-null queue={queueKey}");
             return;
         }
         if (transferGeneration != _edgeCapsulePreviewTransferGeneration ||
@@ -1014,9 +945,6 @@ public sealed partial class AppController
                 previous,
                 _edgeCapsulePreviewSession))
         {
-            TraceEdgeCapsulePreview(
-                $"open superseded before mount target={EdgeCapsulePreviewTraceId(next.OwnerPaperId)} " +
-                $"current={EdgeCapsulePreviewTraceId(_edgeCapsulePreviewSession?.OwnerPaperId)}");
             return;
         }
         previous = _edgeCapsulePreviewSession;
@@ -1026,9 +954,6 @@ public sealed partial class AppController
         // the same owner that the target model is about to expose. If opening is rejected, roll
         // the controller session back before returning.
         _edgeCapsulePreviewSession = next;
-        TraceEdgeCapsulePreview(
-            $"session switch prepare from={EdgeCapsulePreviewTraceId(previous?.OwnerPaperId)} " +
-            $"to={EdgeCapsulePreviewTraceId(next.OwnerPaperId)} queue={next.QueueKey}");
         if (!window.SetEdgeCapsulePreviewOpen(
                 request,
                 animate: true))
@@ -1045,10 +970,6 @@ public sealed partial class AppController
                 // rejected target generation.
                 ArrangeDeepCapsules(animate: false);
             }
-            TraceEdgeCapsulePreview(
-                $"session switch rollback target={EdgeCapsulePreviewTraceId(next.OwnerPaperId)} " +
-                $"restore={EdgeCapsulePreviewTraceId(_edgeCapsulePreviewSession?.OwnerPaperId)} " +
-                "reason=model-rejected-or-reentered");
             return;
         }
         if (transferGeneration != _edgeCapsulePreviewTransferGeneration ||
@@ -1058,9 +979,6 @@ public sealed partial class AppController
                 next.OwnerPaperId,
                 StringComparison.Ordinal))
         {
-            TraceEdgeCapsulePreview(
-                $"session switch superseded target={EdgeCapsulePreviewTraceId(next.OwnerPaperId)} " +
-                $"current={EdgeCapsulePreviewTraceId(_edgeCapsulePreviewSession?.OwnerPaperId)}");
             return;
         }
         // A re-entrant layout refresh may rebuild the immutable session record without superseding
@@ -1112,9 +1030,6 @@ public sealed partial class AppController
             next.TopOffsetsDip
                 .Where(pair => Math.Abs(pair.Value) > 0.01)
                 .Select(pair => $"{EdgeCapsulePreviewTraceId(pair.Key)}:{pair.Value:F1}"));
-        TraceEdgeCapsulePreview(
-            $"session switch committed owner={EdgeCapsulePreviewTraceId(next.OwnerPaperId)} " +
-            $"displaced={(string.IsNullOrEmpty(displaced) ? "<none>" : displaced)}");
     }
 
     private static bool EdgeCapsulePreviewSessionsHaveSameOwner(
@@ -1175,9 +1090,6 @@ public sealed partial class AppController
         var transferGeneration = ++_edgeCapsulePreviewTransferGeneration;
         var closeGeneration = ++_edgeCapsulePreviewCloseGeneration;
         var session = _edgeCapsulePreviewSession;
-        TraceEdgeCapsulePreview(
-            $"close owner={EdgeCapsulePreviewTraceId(session?.OwnerPaperId)} " +
-            $"animate={animate} arrange={arrange}");
         _edgeCapsulePreviewSession = null;
         _edgeCapsulePreviewQueuedTransferPaperId = null;
         _edgeCapsulePreviewQueuedCloseOwnerPaperId = null;
@@ -1400,11 +1312,6 @@ public sealed partial class AppController
                     pointer,
                     now,
                     now);
-            TraceEdgeCapsulePreview(
-                $"intent candidate target=" +
-                $"{EdgeCapsulePreviewTraceId(targetPaperId)} " +
-                $"owner={EdgeCapsulePreviewTraceId(expectedOwnerPaperId)} " +
-                $"pointer={pointer.X},{pointer.Y}");
             ScheduleEdgeCapsulePreviewActivationIntentCheck(
                 target,
                 EdgeCapsulePreviewTransferResidenceMilliseconds);
@@ -1463,12 +1370,6 @@ public sealed partial class AppController
         }
 
         ResetEdgeCapsulePreviewActivationIntent();
-        TraceEdgeCapsulePreview(
-            $"intent accepted target=" +
-            $"{EdgeCapsulePreviewTraceId(targetPaperId)} " +
-            $"owner={EdgeCapsulePreviewTraceId(expectedOwnerPaperId)} " +
-            $"candidateMs={candidateElapsed:F1} " +
-            $"stableMs={stableElapsed:F1}");
         QueueEdgeCapsulePreviewTransfer(
             target,
             expectedOwnerPaperId,
@@ -1628,11 +1529,6 @@ public sealed partial class AppController
                 };
                 break;
             case EdgeCapsuleCorridorExitDecision.CloseForNoTargetIntent:
-                TraceEdgeCapsulePreview(
-                    $"corridor close owner={EdgeCapsulePreviewTraceId(session.OwnerPaperId)} " +
-                    $"reason={decision} pointer={pointer.X},{pointer.Y} " +
-                    $"corridorMs={corridorElapsed:F1} " +
-                    $"noTargetMs={noTargetIntentElapsed:F1}");
                 QueueEdgeCapsulePreviewClose(
                     owner,
                     session.OwnerPaperId,

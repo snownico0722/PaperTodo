@@ -304,6 +304,32 @@ internal static partial class Program
         Check(Math.Abs(across["c1"] - across["b1"] - slot) < 1e-9,
             "A queue inherits the previous queue's already-displaced bottom");
 
+        // The regression this guards: hovering a NON-bottom member. The single-queue policy
+        // pushes that queue's own lower members below the card, so the next queue must clear
+        // those — anchoring on the card alone lands them exactly on top of the pushed member.
+        //
+        // A = [A1@152, A2@202, A3@252, A4@302], B1@386, card 250 DIP tall.
+        // Hovering A3 puts the card at [252, 502] and A4 at 506 (card + gap). A chain anchored at
+        // the card bottom would push B1 to 506 too — the very overlap this fixes.
+        EdgeCapsuleAvoidanceQueue[] ab() => [Q("A", 152, "a1", "a2", "a3", "a4"), Q("B", 386, "b1")];
+
+        // Hovering A3: card occupies [252, 502]; PushFollowingMembers then drops A4 to
+        // 252 + 250 + gap = 506, so A4's settled bottom is 506 + 46 = 552.
+        const double pushedFollowerBottom = 552;
+        var correct = Push(pushedFollowerBottom, ab());
+        Check(correct.TryGetValue("b1", out var correctOffset) && Math.Abs(correctOffset - 170) < 1e-9,
+            "The next queue clears the pushed follower's bottom");
+
+        // The card-only anchor lands B1 exactly on A4's new top — the overlap being fixed.
+        var cardOnly = Push(252 + 250, ab());
+        Check(cardOnly.TryGetValue("b1", out var cardOnlyOffset) && cardOnlyOffset < correct["b1"],
+            "Anchoring on the card alone would overlap the pushed follower");
+
+        // Hovering A4: the card is the lowest thing in its queue, so the anchor is the card.
+        var bottomMember = Push(302 + 250, ab());
+        Check(bottomMember.TryGetValue("b1", out var bottomOffset) && Math.Abs(bottomOffset - 170) < 1e-9,
+            "Hovering the bottom member still anchors on the card");
+
         // Queues must arrive in ascending rest order or the chain walks the wrong way.
         var descending = Push(300, Q("A", 100, "a1"), Q("C", 600, "c1"), Q("B", 260, "b1"));
         Check(descending.ContainsKey("b1"), "Order is the caller's contract; a caller that sorts wrong is visible");
