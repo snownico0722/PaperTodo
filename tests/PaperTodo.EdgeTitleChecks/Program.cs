@@ -168,6 +168,73 @@ internal static partial class Program
         Check(Evaluate(100, "", System.Array.Empty<EdgeCapsuleQueueMagnetCandidate>(), held: "ghost").Outcome ==
                   EdgeCapsuleQueueMagnetOutcome.NewQueue,
             "A held queue that vanished from the candidate set does not resurrect");
+
+        DragTimeHoldStaysStableAcrossFrames();
+    }
+
+    // The drag loop feeds each frame's target back in as the next frame's held queue. If that
+    // round trip were unstable the outline and the avoidance animation would strobe while the
+    // pointer merely wobbles, so the hold behaviour is pinned across a simulated frame sequence.
+    private static void DragTimeHoldStaysStableAcrossFrames()
+    {
+        const double slot = 50;
+        const double height = 46;
+        EdgeCapsuleQueueMagnetCandidate[] OneQueue() => [new("q1", 2, 100, slot, -1)];
+
+        // Queue spans 100..150, so its reach is [77, 173] and the dead band (18..32 DIP out) is
+        // centres 191..205. Inside that band nothing can be acquired fresh, so staying attached
+        // is possible only via the hold. Frame 0 acquires from inside merge range, then the
+        // pointer drifts into the dead band: a drag loop that dropped the hold each frame would
+        // release on frame 1 and report 1 attachment instead of 12.
+        string held = "";
+        var attached = 0;
+        var centres = new List<double> { 180.0 };
+        centres.AddRange(Enumerable.Range(0, 12).Select(i => 195.0 + (i % 2 == 0 ? -1 : 1)));
+
+        foreach (var centre in centres)
+        {
+            var plan = EdgeCapsuleQueueMagnet.Evaluate(new EdgeCapsuleQueueMagnetInput(
+                centre, "other", OneQueue(), slot, height,
+                EdgeCapsuleQueueMagnet.DefaultMergeDistanceDip,
+                EdgeCapsuleQueueMagnet.DefaultDetachDistanceDip,
+                held));
+            if (plan.Outcome is EdgeCapsuleQueueMagnetOutcome.Merge or EdgeCapsuleQueueMagnetOutcome.Reorder)
+            {
+                attached++;
+                held = plan.TargetQueueKey;
+            }
+            else
+            {
+                held = "";
+            }
+        }
+
+        Check(attached == 13,
+            "Only the held queue can survive the dead band; a dropped hold would release on frame 1");
+
+        // Crossing the detach distance must release, and the release must survive the next frame
+        // rather than immediately snapping back because the pointer is still nearby.
+        var released = EdgeCapsuleQueueMagnet.Evaluate(new EdgeCapsuleQueueMagnetInput(
+            220, "other", OneQueue(), slot, height,
+            EdgeCapsuleQueueMagnet.DefaultMergeDistanceDip,
+            EdgeCapsuleQueueMagnet.DefaultDetachDistanceDip,
+            "q1"));
+        Check(released.Outcome == EdgeCapsuleQueueMagnetOutcome.NewQueue,
+            "Crossing the detach distance releases the held queue");
+        Check(released.TargetQueueKey == "",
+            "A released plan must not still name the queue it left");
+
+        // With the hold cleared, that same position is genuinely out of range, so a released drag
+        // settles on a new queue rather than oscillating.
+        var afterRelease = EdgeCapsuleQueueMagnet.Evaluate(new EdgeCapsuleQueueMagnetInput(
+            220, "other", OneQueue(), slot, height,
+            EdgeCapsuleQueueMagnet.DefaultMergeDistanceDip,
+            EdgeCapsuleQueueMagnet.DefaultDetachDistanceDip,
+            ""));
+        Check(afterRelease.Outcome == EdgeCapsuleQueueMagnetOutcome.NewQueue,
+            "A released position stays released on the following frame");
+        Check(afterRelease.Outcome == released.Outcome,
+            "Release and re-evaluation agree, so the drag does not oscillate");
     }
 
     private static void CycleAndUnicode()    {

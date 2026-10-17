@@ -1,3 +1,6 @@
+using System.Windows;
+using System.Windows.Threading;
+
 namespace PaperTodo;
 
 /// <summary>
@@ -15,6 +18,17 @@ public sealed partial class AppController
 {
     internal bool EdgeCapsuleFreeQueuesEnabled =>
         State.UseCapsuleFreeQueues && State.UseCapsuleMode && State.UseDeepCapsuleMode;
+
+    /// <summary>
+    /// Queue instance key of a paper, for callers outside the controller that need to tell a
+    /// same-queue reorder apart from a cross-queue merge.
+    /// </summary>
+    internal static string QueueKeyForPaper(PaperData paper) => QueueKey(paper);
+
+    // The queue this drag is currently snapped to. Fed back into the magnet as its held queue so
+    // the Schmitt trigger's dead band keeps a queue attached while the pointer jitters near the
+    // exit threshold, instead of releasing and re-acquiring every few frames.
+    private string _deepCapsuleDragHeldQueueKey = "";
 
     /// <summary>
     /// Geometry of the monitor a queue lives on, falling back to the primary monitor when the
@@ -137,6 +151,7 @@ public sealed partial class AppController
         papers.Count == 0 ? "" : EdgeCapsuleQueueIds.Normalize(papers[0].CapsuleQueueId);
 
     /// <summary>
+    /// <summary>
     /// Commit a free-queue drag: decide with the magnet, then apply the resulting Reorder / Merge /
     /// NewQueue outcome. Falls back to the legacy arrangement when free mode is off.
     /// </summary>
@@ -147,43 +162,17 @@ public sealed partial class AppController
             return;
         }
 
-        MonitorGeometry? resolvedGeometry = WindowWorkAreaHelper.TryGetMonitorGeometryAtDeviceScreenPoint(
-            dropPoint,
-            out var atDropPoint)
-            ? atDropPoint
-            : MonitorGeometryForQueue(paper.CapsuleMonitorDeviceName);
-        if (!resolvedGeometry.HasValue)
+        if (!TryResolveQueueDropGeometry(paper, dropPoint, out var drop))
         {
             // No monitor to resolve against: leave the arrangement untouched rather than guess.
             ArrangeDeepCapsules(animate: true);
             return;
         }
 
-        var geometry = resolvedGeometry.GetValueOrDefault();
-
-        var targetMonitor = WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(geometry.DeviceName);
-        var targetSide = dropPoint.X <
-                         geometry.WorkArea.Left + geometry.WorkArea.Width / 2.0
-            ? DeepCapsuleSides.Left
-            : DeepCapsuleSides.Right;
-
-        // The dragged capsule's centre in the target monitor's DIP space. Candidates on other
-        // monitors or the other edge are not reachable by a vertical drop, so they never compete.
-        var dropCenterTopDip =
-            geometry.DeviceYToLocalDip(dropPoint.Y) + PaperLayoutDefaults.CapsuleHeight / 2.0;
-
-        var candidates = BuildEdgeCapsuleQueueMagnetCandidates(
-            paper, geometry, targetMonitor, targetSide, out var sourceQueueKey);
-
-        var plan = EdgeCapsuleQueueMagnet.Evaluate(new EdgeCapsuleQueueMagnetInput(
-            dropCenterTopDip,
-            sourceQueueKey,
-            candidates,
-            EdgeCapsuleLayout.SlotHeight(DeepCapsuleGap),
-            PaperLayoutDefaults.CapsuleHeight,
-            EdgeCapsuleQueueMagnet.DefaultMergeDistanceDip,
-            EdgeCapsuleQueueMagnet.DefaultDetachDistanceDip,
-            ""));
+        // The commit must not inherit a drag-time hold: the pointer is already released, so the
+        // Schmitt trigger's exit threshold would no longer reflect anything meaningful.
+        _deepCapsuleDragHeldQueueKey = "";
+        var plan = EvaluateDeepCapsuleQueueDrop(paper, drop);
 
         switch (plan.Outcome)
         {
@@ -192,22 +181,163 @@ public sealed partial class AppController
                 return;
 
             case EdgeCapsuleQueueMagnetOutcome.Reorder:
-                ReorderDeepCapsuleInFreeQueue(paper, plan.TargetQueueKey, geometry, dropPoint);
+                ReorderDeepCapsuleInFreeQueue(paper, plan.TargetQueueKey, drop.Geometry, dropPoint);
                 return;
 
             case EdgeCapsuleQueueMagnetOutcome.Merge:
-                MergeCapsuleIntoFreeQueue(paper, plan.TargetQueueKey, geometry, dropPoint);
+                MergeCapsuleIntoFreeQueue(paper, plan.TargetQueueKey, drop.Geometry, dropPoint);
                 return;
 
             default:
                 SplitCapsuleIntoQueue(
                     paper,
-                    targetMonitor,
-                    targetSide,
+                    drop.MonitorDeviceName,
+                    drop.Side,
                     plan.NewQueueStartTopDip,
                     EdgeCapsuleQueueIds.New());
                 return;
         }
+    }
+
+    /// <summary>
+    /// Live magnet evaluation for the drag in progress. Feeds the previous frame's target back in
+    /// as the held queue so the Schmitt trigger's dead band can suppress flicker, then records the
+    /// new target for the next frame.
+    ///
+    /// This is what turns free-queue dragging from "decide on release" into "decide continuously".
+    /// </summary>
+    internal EdgeCapsuleQueueMagnetPlan EvaluateDeepCapsuleQueueDrag(
+        PaperData paper,
+        DeviceScreenPoint cursor)
+    {
+        if (!EdgeCapsuleFreeQueuesEnabled ||
+            !TryResolveQueueDropGeometry(paper, cursor, out var drop))
+        {
+            return EdgeCapsuleQueueMagnet.None;
+        }
+
+        var plan = EdgeCapsuleQueueMagnet.Evaluate(BuildQueueMagnetInput(paper, drop, _deepCapsuleDragHeldQueueKey));
+        _deepCapsuleDragHeldQueueKey = plan.Outcome is EdgeCapsuleQueueMagnetOutcome.Merge
+            or EdgeCapsuleQueueMagnetOutcome.Reorder
+            ? plan.TargetQueueKey
+            : "";
+        return plan;
+    }
+
+    /// <summary>
+    /// Tear down everything the drag-time feedback built: the held-queue state and the gate.
+    /// Called on every gesture end so a dropped outline can never outlive the drag that created it,
+    /// and so the next drag starts from a clean slate rather than inheriting a stale hold.
+    /// </summary>
+    internal void EndDeepCapsuleQueueMagnetPreview()
+    {
+        _deepCapsuleDragHeldQueueKey = "";
+        EndEdgeCapsuleQueueDropTargetOutline();
+    }
+
+    /// <summary>Drop the drag-time hold so the next gesture starts from a clean slate.</summary>
+    internal void ForgetDeepCapsuleQueueDrag() => _deepCapsuleDragHeldQueueKey = "";
+
+    private EdgeCapsuleQueueMagnetPlan EvaluateDeepCapsuleQueueDrop(
+        PaperData paper,
+        QueueDropGeometry drop) =>
+        EdgeCapsuleQueueMagnet.Evaluate(BuildQueueMagnetInput(paper, drop, ""));
+
+    private EdgeCapsuleQueueMagnetInput BuildQueueMagnetInput(
+        PaperData paper,
+        QueueDropGeometry drop,
+        string heldQueueKey)
+    {
+        var candidates = BuildEdgeCapsuleQueueMagnetCandidates(
+            paper, drop.Geometry, drop.MonitorDeviceName, drop.Side, out var sourceQueueKey);
+
+        return new EdgeCapsuleQueueMagnetInput(
+            drop.CenterTopDip,
+            sourceQueueKey,
+            candidates,
+            EdgeCapsuleLayout.SlotHeight(DeepCapsuleGap),
+            PaperLayoutDefaults.CapsuleHeight,
+            EdgeCapsuleQueueMagnet.DefaultMergeDistanceDip,
+            EdgeCapsuleQueueMagnet.DefaultDetachDistanceDip,
+            heldQueueKey);
+    }
+
+    /// <summary>
+    /// Which monitor, which edge and which vertical centre a pointer position resolves to, in the
+    /// local DIP space the magnet reasons about.
+    /// </summary>
+    private readonly record struct QueueDropGeometry(
+        MonitorGeometry Geometry,
+        string MonitorDeviceName,
+        string Side,
+        double CenterTopDip);
+
+    private bool TryResolveQueueDropGeometry(
+        PaperData paper,
+        DeviceScreenPoint point,
+        out QueueDropGeometry drop)
+    {
+        drop = default;
+        MonitorGeometry? resolved = WindowWorkAreaHelper.TryGetMonitorGeometryAtDeviceScreenPoint(
+            point,
+            out var atPoint)
+            ? atPoint
+            : MonitorGeometryForQueue(paper.CapsuleMonitorDeviceName);
+        if (!resolved.HasValue)
+        {
+            return false;
+        }
+
+        var geometry = resolved.GetValueOrDefault();
+        drop = new QueueDropGeometry(
+            geometry,
+            WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(geometry.DeviceName),
+            // Choose the nearer physical wall of the target monitor.
+            point.X < geometry.WorkArea.Left + geometry.WorkArea.Width / 2.0
+                ? DeepCapsuleSides.Left
+                : DeepCapsuleSides.Right,
+            // The dragged capsule's centre. Candidates on other monitors or the other edge are not
+            // reachable by a vertical drop, so they never compete.
+            geometry.DeviceYToLocalDip(point.Y) + PaperLayoutDefaults.CapsuleHeight / 2.0);
+        return true;
+    }
+
+    /// <summary>
+    /// Slot index a drop at <paramref name="dropTopDip"/> would occupy in
+    /// <paramref name="queueKey"/>, excluding <paramref name="draggedPaper"/>.
+    ///
+    /// Shared by the drag preview and the commit so the gap the user was shown is exactly the gap
+    /// they get. Rounding matches the pre-free-queue insertion rule (nearest slot, ties up).
+    /// </summary>
+    internal int DeepCapsuleQueueInsertIndexFor(
+        string queueKey,
+        string draggedPaperId,
+        double dropTopDip)
+    {
+        var members = FreeQueueMembersExcluding(queueKey, draggedPaperId);
+        var edgeKey = EdgeCapsuleQueueIds.StripInstance(queueKey);
+        var separator = edgeKey.LastIndexOf('|');
+        var side = separator >= 0 && edgeKey[(separator + 1)..] == DeepCapsuleSides.Left
+            ? EdgeCapsuleEdge.Left
+            : EdgeCapsuleEdge.Right;
+        if (!WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(edgeKey[..Math.Max(separator, 0)], out var geometry))
+        {
+            return 0;
+        }
+
+        var area = geometry.LocalWorkAreaDip;
+        var realCount = members.Count + 1;
+        var startTop = EdgeCapsuleLayout.NormalizeStartTopMargin(
+            DeepCapsuleStartTopMarginForQueue(
+                edgeKey[..Math.Max(separator, 0)],
+                side,
+                FirstQueueIdOf(members)),
+            area,
+            realCount,
+            DeepCapsuleGap);
+        var firstTop = EdgeCapsuleLayout.TopForIndex(0, startTop, area, realCount, DeepCapsuleGap);
+        var slotHeight = EdgeCapsuleLayout.SlotHeight(DeepCapsuleGap);
+        return Math.Clamp((int)Math.Floor((dropTopDip - firstTop) / slotHeight + 0.5), 0, members.Count);
     }
 
     /// <summary>Insert the dragged capsule into an existing queue at the slot nearest the drop.</summary>
@@ -221,24 +351,8 @@ public sealed partial class AppController
         var queueId = FirstQueueIdOf(targetMembers);
         var targetSide = DeepCapsuleSides.Normalize(
             EdgeCapsuleQueueIds.StripInstance(targetQueueKey)[(EdgeCapsuleQueueIds.StripInstance(targetQueueKey).LastIndexOf('|') + 1)..]);
-
-        var area = targetGeometry.LocalWorkAreaDip;
-        var realCount = targetMembers.Count + 1;
-        var startTop = EdgeCapsuleLayout.NormalizeStartTopMargin(
-            DeepCapsuleStartTopMarginForQueue(
-                targetGeometry.DeviceName,
-                targetSide == DeepCapsuleSides.Left ? EdgeCapsuleEdge.Left : EdgeCapsuleEdge.Right,
-                queueId),
-            area,
-            realCount,
-            DeepCapsuleGap);
-        var slotHeight = EdgeCapsuleLayout.SlotHeight(DeepCapsuleGap);
-        var firstTop = EdgeCapsuleLayout.TopForIndex(0, startTop, area, realCount, DeepCapsuleGap);
         var dropY = targetGeometry.DeviceYToLocalDip(dropPoint.Y);
-        var insertAt = Math.Clamp(
-            (int)Math.Floor((dropY - firstTop) / slotHeight + 0.5),
-            0,
-            targetMembers.Count);
+        var insertAt = DeepCapsuleQueueInsertIndexFor(targetQueueKey, paper.Id, dropY);
 
         paper.CapsuleMonitorDeviceName =
             WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(targetGeometry.DeviceName);
@@ -268,29 +382,18 @@ public sealed partial class AppController
         paper.CapsuleSide = targetSide;
         paper.CapsuleQueueId = queueId;
 
-        var area = targetGeometry.LocalWorkAreaDip;
-        var realCount = members.Count + 1;
-        var startTop = EdgeCapsuleLayout.NormalizeStartTopMargin(
-            DeepCapsuleStartTopMarginForQueue(
-                targetGeometry.DeviceName,
-                targetSide == DeepCapsuleSides.Left ? EdgeCapsuleEdge.Left : EdgeCapsuleEdge.Right,
-                queueId),
-            area,
-            realCount,
-            DeepCapsuleGap);
-        var slotHeight = EdgeCapsuleLayout.SlotHeight(DeepCapsuleGap);
-        var firstTop = EdgeCapsuleLayout.TopForIndex(0, startTop, area, realCount, DeepCapsuleGap);
         var dropY = targetGeometry.DeviceYToLocalDip(dropPoint.Y);
-        var insertAt = Math.Clamp(
-            (int)Math.Floor((dropY - firstTop) / slotHeight + 0.5),
-            0,
-            members.Count);
+        var insertAt = DeepCapsuleQueueInsertIndexFor(queueKey, paper.Id, dropY);
 
         InsertPaperBesideQueue(paper, members, insertAt);
         ArrangeDeepCapsules(animate: true);
         RefreshTrayMenu();
         MarkDirty();
     }
+
+    /// <summary>Diagnostics only: how many members a queue would have besides the dragged capsule.</summary>
+    internal int FreeQueueMemberCount(string queueKey, string excludedPaperId) =>
+        FreeQueueMembersExcluding(queueKey, excludedPaperId).Count;
 
     private List<PaperData> FreeQueueMembersExcluding(string queueKey, string excludedPaperId)
     {

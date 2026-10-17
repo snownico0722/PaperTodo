@@ -388,6 +388,10 @@ Measure / display-metrics 也是同一 presentation reconcile 的输入，而不
 
 自由队列模式下同一条边可并存多条队列，每条队列实例持有自己的 slot 0 起始高度（复用 `AppState.DeepCapsuleQueueStartTopMargins`，key 形态扩展为 `monitor|side#instanceId`，不另立字典）。合并／脱离的距离判定由无 WPF 依赖的纯函数 `EdgeCapsuleQueueMagnet` 独占，进入 18 DIP、退出 32 DIP 的 Schmitt trigger 使防抖内生于纯函数而非时间状态；控制器只负责把实时状态喂进判定并应用结果。
 
+拖拽期的反馈按 32ms 间隔重新评估同一判定，并把上一帧目标作为 `HeldQueueKey` 回传，死区因此抑制了指针抖动导致的反复脱落。让位动画由源队列与目标队列各自调用 `EdgeCapsuleQueueCoordinator` 重算后直连下发 `PreviewDeepCapsulePlacement`：**拖拽期不走 `ArrangeDeepCapsules`**，因为 arrange gate 会把该次重排延迟到手势结束。
+
+拖拽解锁为浮空后会进入 Win32 模态移动循环，此时 WPF 不再收到指针事件。反馈改由 `DispatcherTimer` 轮询光标维持；模态循环仍会泵 Dispatcher，计时器照常触发。浮空阶段没有 docked 槽位可预览，但源队列仍须收拢——留一个永久空洞正是「拖出去了、同伴不动」观感的来源。
+
 `EdgeCapsuleLayoutSnapshot` 捕获的是**目标 monitor** 的 `MonitorGeometry` 与 DPI；docked 物理矩形必须基于这份目标显示器事实计算，不能退回主 `PaperWindow` 的当前 DPI 或在动画/measure 路径重新复制一套换算。共享 capsule 尺寸和队列布局参数从 `PaperLayoutDefaults` / `EdgeCapsuleLayout` 等统一来源进入 layout/planner。
 
 队列保持完整顺序，不引入分页/自动隐藏 overflow。分页会把 placement 问题升级成另一套 visibility/state ownership，因此当前方向仍是连续完整队列。

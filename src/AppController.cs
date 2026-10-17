@@ -2305,8 +2305,97 @@ public sealed partial class AppController : IDisposable
         targetIndex = Math.Clamp(targetIndex, 0, queueMembers.Count);
         queueMembers.Insert(targetIndex, draggedPaper);
 
+        PreviewEdgeCapsuleQueueMembers(queueKey, queueMembers, skipPaperId: paper.Id);
+    }
+
+    /// <summary>
+    /// Free-queue drag preview: the queue the capsule is leaving closes the gap it vacates, and
+    /// the queue it is joining makes room for it. Both are recomputed through the same coordinator,
+    /// so a queue never has a second placement authority while dragging.
+    ///
+    /// Members are pushed straight to their windows rather than through ArrangeDeepCapsules: the
+    /// arrange gate defers for the duration of a drag, so routing through it would silently
+    /// postpone the whole preview until the gesture ends — exactly the "stiff" behaviour this
+    /// replaces.
+    /// </summary>
+    public void PreviewDeepCapsuleQueueDrag(PaperData dragged, string targetQueueKey, int targetIndex)
+    {
+        if (!State.UseCapsuleMode || !State.UseDeepCapsuleMode)
+        {
+            return;
+        }
+
+        var sourceQueueKey = QueueKey(dragged);
+        var allPapers = DeepCapsulePapersInOrder();
+
+        // The queue losing a member: everyone else closes the gap.
+        PreviewDeepCapsuleQueueVacatedSource(allPapers, sourceQueueKey, dragged);
+
+        if (string.Equals(targetQueueKey, sourceQueueKey, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        // The queue gaining a member: open a slot at the insertion point.
+        var target = new List<PaperData>(allPapers.Where(p => QueueKey(p) == targetQueueKey));
+        target.Insert(Math.Clamp(targetIndex, 0, target.Count), dragged);
+        PreviewEdgeCapsuleQueueMembers(targetQueueKey, target, skipPaperId: dragged.Id);
+    }
+
+    /// <summary>
+    /// Close the gap the dragged capsule vacates in its own queue.
+    ///
+    /// This must run in every drag phase, including once the capsule has left the wall. Letting the
+    /// source queue keep a permanent hole is what made a floating drag read as "the queue came
+    /// apart": its members never closed up, so nothing moved while the capsule hung off the wall.
+    /// </summary>
+    internal void PreviewDeepCapsuleQueueVacatedSource(PaperData dragged)
+    {
+        if (!State.UseCapsuleMode || !State.UseDeepCapsuleMode)
+        {
+            return;
+        }
+
+        PreviewDeepCapsuleQueueVacatedSource(
+            DeepCapsulePapersInOrder(),
+            QueueKey(dragged),
+            dragged);
+    }
+
+    private void PreviewDeepCapsuleQueueVacatedSource(
+        IReadOnlyList<PaperData> allPapers,
+        string sourceQueueKey,
+        PaperData dragged)
+    {
+        var remaining = new List<PaperData>();
+        foreach (var paper in allPapers)
+        {
+            if (paper.Id != dragged.Id && QueueKey(paper) == sourceQueueKey)
+            {
+                remaining.Add(paper);
+            }
+        }
+
+        if (remaining.Count == 0)
+        {
+            return;
+        }
+
+        PreviewEdgeCapsuleQueueMembers(sourceQueueKey, remaining, skipPaperId: dragged.Id);
+    }
+
+    private void PreviewEdgeCapsuleQueueMembers(
+        string queueKey,
+        List<PaperData> members,
+        string skipPaperId)
+    {
+        if (members.Count == 0)
+        {
+            return;
+        }
+
         var plan = EdgeCapsuleQueueCoordinator.Build(
-            queueMembers.Select(member => new EdgeCapsuleQueueMember(member, queueKey)),
+            members.Select(member => new EdgeCapsuleQueueMember(member, queueKey)),
             State.UseCapsuleCollapseAll);
         if (plan.Queues.Count == 0)
         {
@@ -2317,9 +2406,9 @@ public sealed partial class AppController : IDisposable
             return;
         }
 
-        foreach (var member in queueMembers)
+        foreach (var member in members)
         {
-            if (member.Id == paper.Id ||
+            if (member.Id == skipPaperId ||
                 !_windows.TryGetValue(member.Id, out var window) ||
                 !ShouldPaperOccupyDeepCapsuleSlot(member, window))
             {

@@ -291,10 +291,11 @@ Hovering over a docked capsule slides out a **real-time interactive preview card
 Turn on **Free edge capsule queues** in settings and capsules stop being forced into a single stack: several independent queues can share the same edge. This option is mutually exclusive with the main capsule.
 
 - **Place freely**: Drag any capsule to any height along the edge and it stays there as a queue of its own. The layout survives a restart.
-- **Snap to merge**: Bring a capsule near another queue and it merges in, still stacking at an even pitch.
+- **Snap to merge**: Bring a capsule near another queue and it merges in, still stacking at an even pitch. While you drag, the queue you would join is outlined and its members step aside in real time, so you can see the result before letting go.
 - **Pull away to leave**: Drag a member far enough from its queue and it leaves on its own; the rest of the queue does not move.
 - **Move the whole queue**: Hold <kbd>Ctrl</kbd> while dragging any member and the entire queue lifts off the wall and floats with the cursor. Drop it on the left or right edge of any screen.
 
+> 
 > Turning the option off returns to the original one-queue-per-edge behaviour. Remembered layouts are kept, not discarded.
 
 ### 5.5 Master Capsule (Queue Controller)

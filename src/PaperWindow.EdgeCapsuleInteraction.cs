@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Threading;
 
 namespace PaperTodo;
 
@@ -497,6 +498,15 @@ public sealed partial class PaperWindow
         if (IsDeepCapsuleFloatingReordering)
         {
             UpdateEdgeCapsuleDragPointer(currentScreenPos);
+            // The docked phase is over the moment the capsule leaves the wall, but a free-queue
+            // merge must keep reporting for the rest of the gesture. Crossing to the other edge
+            // is the single most common merge — and it happens entirely in this phase, so skipping
+            // it here is what left cross-edge drags with no feedback at all.
+            if (_controller.EdgeCapsuleFreeQueuesEnabled)
+            {
+                PreviewDeepCapsuleQueueMagnetForCurrentPosition(floatingPhase: true);
+            }
+
             return;
         }
 
@@ -510,7 +520,179 @@ public sealed partial class PaperWindow
             return;
         }
         FlushEdgeCapsulePresentation(EdgeCapsuleTransitionReason.Drag);
+        if (_controller.EdgeCapsuleFreeQueuesEnabled)
+        {
+            PreviewDeepCapsuleQueueMagnetForCurrentPosition();
+            return;
+        }
+
         PreviewDeepCapsuleReorderForCurrentPosition();
+    }
+
+    // Drag-time feedback runs on a fixed interval rather than on every pointer message: a move can
+    // arrive far faster than the screen refreshes, and each pass recomputes the queue candidates.
+    // The same 32 ms gate the experimental capsule magnet preview uses.
+    private const double DeepCapsuleQueuePreviewIntervalMilliseconds = 32;
+
+    private DispatcherTimer? _deepCapsuleNativeDragFeedbackTimer;
+
+    // Dedup key for the source-queue close-up. Deliberately separate from the cross-queue
+    // (queueKey, index) sentinel: the two describe different states, and sharing one key made each
+    // clear the other, so a merge would cancel the close-up and the close-up would cancel a merge.
+    private string _deepCapsuleVacatedQueueKey = "";
+    private long _deepCapsuleQueuePreviewTimestamp;
+    private string _deepCapsuleQueuePreviewKey = "";
+    private int _deepCapsuleQueuePreviewIndex = -1;
+
+    /// <summary>
+    /// Sample the cursor on a timer while the native caption loop owns the drag.
+    ///
+    /// Cross-edge and cross-monitor drags spend their entire gesture inside that loop, so without
+    /// this the most common free-queue merge gets no feedback until release. The timer runs on the
+    /// dispatcher, which the modal loop keeps pumping, and the preview's own 32 ms gate still
+    /// collapses repeated ticks.
+    /// </summary>
+    private void StartEdgeCapsuleNativeDragFeedback()
+    {
+        if (!_controller.EdgeCapsuleFreeQueuesEnabled)
+        {
+            return;
+        }
+
+        _deepCapsuleNativeDragFeedbackTimer ??= new DispatcherTimer(
+            DispatcherPriority.Input,
+            Dispatcher)
+        {
+            // Matches the preview gate so a tick never evaluates a position it would skip anyway.
+            Interval = TimeSpan.FromMilliseconds(DeepCapsuleQueuePreviewIntervalMilliseconds)
+        };
+        _deepCapsuleNativeDragFeedbackTimer.Tick -= OnEdgeCapsuleNativeDragFeedbackTick;
+        _deepCapsuleNativeDragFeedbackTimer.Tick += OnEdgeCapsuleNativeDragFeedbackTick;
+        _deepCapsuleNativeDragFeedbackTimer.Start();
+    }
+
+    private void StopEdgeCapsuleNativeDragFeedback()
+    {
+        _deepCapsuleNativeDragFeedbackTimer?.Stop();
+    }
+
+    private void OnEdgeCapsuleNativeDragFeedbackTick(object? sender, EventArgs e)
+    {
+        if (!IsDeepCapsuleFloatingReordering ||
+            !WindowNative.TryGetCursorScreenPosition(out var cursor))
+        {
+            return;
+        }
+
+        UpdateEdgeCapsuleDragPointer(cursor);
+        PreviewDeepCapsuleQueueMagnetForCurrentPosition(floatingPhase: true);
+    }
+
+    /// <summary>Clear the drag-time feedback gate, outline and held queue at the end of a gesture.</summary>
+    private void ResetDeepCapsuleQueueMagnetPreview()
+    {
+        StopEdgeCapsuleNativeDragFeedback();
+        ResetDeepCapsuleQueueMagnetPreviewState();
+        _controller.EndDeepCapsuleQueueMagnetPreview();
+    }
+
+    /// <summary>
+    /// Forget the last previewed target without touching the controller's held-queue state, so the
+    /// next frame's Schmitt trigger still knows what this drag is attached to.
+    /// </summary>
+    private void ResetDeepCapsuleQueueMagnetPreviewState()
+    {
+        _deepCapsuleQueuePreviewKey = "";
+        _deepCapsuleQueuePreviewIndex = -1;
+        _deepCapsuleVacatedQueueKey = "";
+    }
+
+    /// <summary>
+    /// Close up the queue the dragged capsule came from, once per queue.
+    ///
+    /// Re-running it every tick would restart the 200 ms transition on every member every 32 ms,
+    /// which reads as a stutter rather than a settle.
+    /// </summary>
+    private void PreviewDeepCapsuleQueueVacatedSourceOnce()
+    {
+        var sourceQueueKey = AppController.QueueKeyForPaper(_paper);
+        if (_deepCapsuleVacatedQueueKey == sourceQueueKey)
+        {
+            return;
+        }
+
+        _deepCapsuleVacatedQueueKey = sourceQueueKey;
+        _controller.PreviewDeepCapsuleQueueVacatedSource(_paper);
+    }
+
+    /// <summary>
+    /// Live magnet feedback for a free-queue drag: decide what the drop would do right now, then
+    /// show it — the target queue opens a slot, and the outline says which queue that is.
+    ///
+    /// <paramref name="floatingPhase"/> marks the phase where the capsule has left the wall. There
+    /// is no docked slot index to track any more, but the source queue must still close the gap it
+    /// vacated — otherwise it keeps a permanent hole and the drag reads as a queue coming apart.
+    /// </summary>
+    private void PreviewDeepCapsuleQueueMagnetForCurrentPosition(bool floatingPhase = false)
+    {
+        if (!TryGetEdgeCapsuleDragSession(out var session))
+        {
+            CancelDeepCapsuleReorderDrag(restoreLayout: true);
+            return;
+        }
+
+        var now = System.Diagnostics.Stopwatch.GetTimestamp();
+        if (_deepCapsuleQueuePreviewTimestamp != 0 &&
+            (now - _deepCapsuleQueuePreviewTimestamp) * 1000.0 /
+                System.Diagnostics.Stopwatch.Frequency < DeepCapsuleQueuePreviewIntervalMilliseconds)
+        {
+            // Inside the gate: keep showing the previous frame's plan rather than clearing it, so
+            // the preview never blinks between updates.
+            return;
+        }
+
+        _deepCapsuleQueuePreviewTimestamp = now;
+        var plan = _controller.EvaluateDeepCapsuleQueueDrag(_paper, session.LastScreenPosition);
+        var sourceQueueKey = AppController.QueueKeyForPaper(_paper);
+
+        // The new outline and cross-queue avoidance exist for one situation only: this capsule
+        // leaving its own queue to join a different one. Same-queue reordering already had a
+        // working avoidance path before free queues existed, so it keeps that and shows no marker.
+        var crossQueue = plan.Outcome == EdgeCapsuleQueueMagnetOutcome.Merge &&
+                         !string.Equals(plan.TargetQueueKey, sourceQueueKey, StringComparison.Ordinal);
+
+
+        if (!crossQueue)
+        {
+            _controller.EndEdgeCapsuleQueueDropTargetOutline();
+            if (floatingPhase)
+            {
+                // Off the wall there is no slot index to track, but the vacated queue still has to
+                // close up. This is what keeps the queue reading as one piece mid-drag.
+                PreviewDeepCapsuleQueueVacatedSourceOnce();
+            }
+            else
+            {
+                ResetDeepCapsuleQueueMagnetPreviewState();
+                PreviewDeepCapsuleReorderForCurrentPosition();
+            }
+
+            return;
+        }
+
+        var dropTopDip = DeepCapsuleMonitorGeometry().DeviceYToLocalDip(session.LastScreenPosition.Y);
+        var index = _controller.DeepCapsuleQueueInsertIndexFor(plan.TargetQueueKey, _paper.Id, dropTopDip);
+        _controller.ShowEdgeCapsuleQueueDropTargetOutline(plan.TargetQueueKey, _paper.Id);
+
+        if (plan.TargetQueueKey == _deepCapsuleQueuePreviewKey && index == _deepCapsuleQueuePreviewIndex)
+        {
+            return;
+        }
+
+
+        _deepCapsuleQueuePreviewKey = plan.TargetQueueKey;
+        _deepCapsuleQueuePreviewIndex = index;
+        _controller.PreviewDeepCapsuleQueueDrag(_paper, plan.TargetQueueKey, index);
     }
 
     private void PreviewDeepCapsuleReorderForCurrentPosition()
@@ -628,11 +810,17 @@ public sealed partial class PaperWindow
 #endif
             // Shared preparation checks this owner again after Render, then Windows owns the
             // movement until button release. The reducer retains only its transaction/slot state.
+            //
+            // "Windows owns the movement" also means no WPF pointer event reaches us for the rest
+            // of the gesture, so drag-time feedback has to sample the cursor itself. The modal
+            // loop still pumps messages, so a dispatcher timer runs inside it.
+            StartEdgeCapsuleNativeDragFeedback();
             var nativeDragOutcome = floatingHost.PrepareAndRunNativeDrag(
                 currentScreenPos,
                 () => ReferenceEquals(floatingHost, _deepCapsuleFloatingDragHost) &&
                     IsDeepCapsuleFloatingReordering,
                 edgeHost.TransferContentPointerToNativeDrag);
+            StopEdgeCapsuleNativeDragFeedback();
 #if DEBUG
             EdgeCapsulePerformanceDiagnostics.Trace(
                 $"drag.transfer phase=native-return paper={diagnosticId} " +
@@ -819,6 +1007,7 @@ public sealed partial class PaperWindow
             // it before completing the controller gate, allowing the destination placement to be
             // measured and committed while the floating HWND is still visible.
             _previewOriginReorderBaseline = null;
+            ResetDeepCapsuleQueueMagnetPreview();
             if (!commit && _deepCapsuleQueueTransferSnapshot is { } cancelled)
             {
                 // Roll the queue back to the exact membership and height it had before the drag.
