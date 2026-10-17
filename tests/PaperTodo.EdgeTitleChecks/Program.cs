@@ -90,19 +90,27 @@ internal static partial class Program
         const double slot = 50;   // capsule height 46 + standard gap 4
         const double height = 46;
 
+        // Every case below is purely vertical, so the drag centre is placed inside this band and
+        // the horizontal term is exactly 0. That makes the two-axis distance reduce to the old
+        // one-axis distance bit for bit, which is what keeps these assertions valid as the
+        // regression baseline for "same-wall dragging feels unchanged".
+        const double bandLeft = 0;
+        const double bandWidth = 200;
+        const double centreLeft = 100;
+
         EdgeCapsuleQueueMagnetPlan Evaluate(double center, string source,
             EdgeCapsuleQueueMagnetCandidate[] candidates, string held = "") =>
             EdgeCapsuleQueueMagnet.Evaluate(new EdgeCapsuleQueueMagnetInput(
                 center, source, candidates, slot, height,
                 EdgeCapsuleQueueMagnet.DefaultMergeDistanceDip,
                 EdgeCapsuleQueueMagnet.DefaultDetachDistanceDip,
-                held));
+                held, centreLeft));
 
         // Queue "a" spans one slot at top 100; "b" sits far below at 600.
         EdgeCapsuleQueueMagnetCandidate[] TwoQueues(int excludedInA = -1) =>
         [
-            new("a", 1, 100, slot, excludedInA),
-            new("b", 1, 600, slot, -1)
+            new("a", 1, 100, slot, excludedInA, bandLeft, bandWidth),
+            new("b", 1, 600, slot, -1, bandLeft, bandWidth)
         ];
 
         Check(Evaluate(100, "", TwoQueues()).Outcome == EdgeCapsuleQueueMagnetOutcome.Merge,
@@ -115,23 +123,53 @@ internal static partial class Program
         Check(Math.Abs(fresh.NewQueueStartTopDip - (300 - height / 2)) < 0.001,
             "A new queue anchors the drop by its capsule top, not its centre");
 
-        // Queue "a" occupies 100 +/- 23, so its span is [77, 123]. The dead band is therefore
-        // centres 141..155 (distance 18..32): too far to acquire from scratch, close enough to keep
-        // holding. That asymmetry is the whole point of the trigger.
-        const double deadBandCentre = 148;   // 25 DIP from the span
+        // Queue "a" rises from top 100 and its single capsule really occupies [100, 146]. The magnet
+        // measures edge to edge, so the reachable band for the drag centre is [77, 169]. The dead
+        // band is therefore 169 + 18 .. 169 + 32: too far to acquire from scratch, close enough to
+        // keep holding. That asymmetry is the whole point of the trigger.
+        const double deadBandCentre = 194;   // 25 DIP below the reachable band
         Check(Evaluate(deadBandCentre, "", TwoQueues()).Outcome == EdgeCapsuleQueueMagnetOutcome.NewQueue,
             "The dead band is too far to acquire a queue from scratch");
         Check(Evaluate(deadBandCentre, "", TwoQueues(), held: "a").Outcome ==
                   EdgeCapsuleQueueMagnetOutcome.Merge,
             "The dead band keeps an already-held queue attached");
 
-        const double beyondDetach = 160;     // 37 DIP from the span
+        const double beyondDetach = 206;     // 37 DIP below the reachable band
         Check(Evaluate(beyondDetach, "", TwoQueues(), held: "a").Outcome ==
                   EdgeCapsuleQueueMagnetOutcome.NewQueue,
             "A held queue is released once the detach distance is exceeded");
 
+        // Edge-to-edge distance must be symmetric: the same 18 DIP approach from above and below
+        // has to snap, and one more DIP has to stop snapping on both sides.
+        var single = new EdgeCapsuleQueueMagnetCandidate("a", 1, 100, slot, -1, bandLeft, bandWidth);
+        const double topReach = 100 - height / 2 - EdgeCapsuleQueueMagnet.DefaultMergeDistanceDip;
+        const double bottomReach = 100 + height + height / 2 +
+            EdgeCapsuleQueueMagnet.DefaultMergeDistanceDip;
+        var fromAbove = Evaluate(topReach, "", [single]);
+        var fromBelow = Evaluate(bottomReach, "", [single]);
+        Check(fromAbove.Outcome == EdgeCapsuleQueueMagnetOutcome.Merge &&
+              fromBelow.Outcome == EdgeCapsuleQueueMagnetOutcome.Merge,
+            "The merge reach is symmetric above and below a single capsule");
+        Check(Math.Abs(fromAbove.ScoreDip - 18) < 0.001 && Math.Abs(fromBelow.ScoreDip - 18) < 0.001,
+            "Approaching from either end reports the same edge-to-edge distance");
+        Check(Evaluate(topReach - 1, "", [single]).Outcome == EdgeCapsuleQueueMagnetOutcome.NewQueue &&
+              Evaluate(bottomReach + 1, "", [single]).Outcome == EdgeCapsuleQueueMagnetOutcome.NewQueue,
+            "One DIP beyond the reach stops snapping on both sides");
+
+        // A three-slot queue really occupies [100, 246]; its reachable centre band is [77, 269].
+        var multi = new EdgeCapsuleQueueMagnetCandidate("m", 3, 100, slot, -1, bandLeft, bandWidth);
+        var multiAbove = Evaluate(65, "", [multi]);
+        var multiBelow = Evaluate(281, "", [multi]);
+        Check(multiAbove.Outcome == EdgeCapsuleQueueMagnetOutcome.Merge &&
+              multiBelow.Outcome == EdgeCapsuleQueueMagnetOutcome.Merge &&
+              Math.Abs(multiAbove.ScoreDip - multiBelow.ScoreDip) < 0.001,
+            "A multi-member queue snaps symmetrically from both ends");
+        Check(Evaluate(58, "", [multi]).Outcome == EdgeCapsuleQueueMagnetOutcome.NewQueue &&
+              Evaluate(288, "", [multi]).Outcome == EdgeCapsuleQueueMagnetOutcome.NewQueue,
+            "A multi-member queue rejects both ends beyond the merge radius");
+
         // Same rules govern the source queue, so leaving it is distance-based too.
-        var sourceQueue = new EdgeCapsuleQueueMagnetCandidate("src", 3, 100, slot, 1);
+        var sourceQueue = new EdgeCapsuleQueueMagnetCandidate("src", 3, 100, slot, 1, bandLeft, bandWidth);
         Check(Evaluate(100 + 2 * slot, "src", [sourceQueue], held: "src").Outcome ==
                   EdgeCapsuleQueueMagnetOutcome.Reorder,
             "Staying inside the source queue reorders rather than merging");
@@ -140,13 +178,15 @@ internal static partial class Program
             "Dragging well past the source queue leaves it");
 
         // A single-member source queue has nothing left behind: any displacement detaches.
-        var solo = new EdgeCapsuleQueueMagnetCandidate("solo", 1, 100, slot, 0);
+        var solo = new EdgeCapsuleQueueMagnetCandidate("solo", 1, 100, slot, 0, bandLeft, bandWidth);
         Check(Evaluate(101, "solo", [solo], held: "solo").Outcome == EdgeCapsuleQueueMagnetOutcome.NewQueue,
             "A solo source queue cannot hold its member by proximity");
 
         // Ties must resolve deterministically, not by enumeration order.
-        var tieA = Evaluate(100, "", [new("bbb", 1, 100, slot, -1), new("aaa", 1, 100, slot, -1)]);
-        var tieB = Evaluate(100, "", [new("aaa", 1, 100, slot, -1), new("bbb", 1, 100, slot, -1)]);
+        var tieA = Evaluate(100, "", [new("bbb", 1, 100, slot, -1, bandLeft, bandWidth),
+            new("aaa", 1, 100, slot, -1, bandLeft, bandWidth)]);
+        var tieB = Evaluate(100, "", [new("aaa", 1, 100, slot, -1, bandLeft, bandWidth),
+            new("bbb", 1, 100, slot, -1, bandLeft, bandWidth)]);
         Check(tieA.TargetQueueKey == tieB.TargetQueueKey && tieA.TargetQueueKey == "aaa",
             "Equidistant candidates resolve to the same queue regardless of input order");
 
@@ -161,17 +201,263 @@ internal static partial class Program
             "A NaN centre resolves to no plan rather than matching every queue");
         Check(Evaluate(double.PositiveInfinity, "", TwoQueues()).Outcome == EdgeCapsuleQueueMagnetOutcome.None,
             "An infinite centre resolves to no plan");
-        Check(Evaluate(100, "", [new("a", 0, 100, slot, -1)]).Outcome ==
+        Check(Evaluate(100, "", [new("a", 0, 100, slot, -1, bandLeft, bandWidth)]).Outcome ==
                   EdgeCapsuleQueueMagnetOutcome.NewQueue,
             "A zero-slot candidate is ignored");
-        Check(Evaluate(100, "", [new("a", 1, double.NaN, slot, -1)]).Outcome ==
+        Check(Evaluate(100, "", [new("a", 1, double.NaN, slot, -1, bandLeft, bandWidth)]).Outcome ==
                   EdgeCapsuleQueueMagnetOutcome.NewQueue,
             "A NaN queue top is ignored");
         Check(Evaluate(100, "", System.Array.Empty<EdgeCapsuleQueueMagnetCandidate>(), held: "ghost").Outcome ==
                   EdgeCapsuleQueueMagnetOutcome.NewQueue,
             "A held queue that vanished from the candidate set does not resurrect");
 
+        MagnetNeedsHorizontalProximity();
+        NewQueueDropAvoidsOverlap();
         DragTimeHoldStaysStableAcrossFrames();
+    }
+
+    // 纯竖直时，超出合并半径的落点必然已经和队列分离；但斜向拖拽的水平分量会把总距离推出
+    // 半径，胶囊在竖直方向却仍可能与队列重叠。Ctrl 整队搬移还有“第一颗不重叠、后续成员重叠”
+    // 的情况。磁吸必须按真实占位校验返回的落点，否则自由队列会把胶囊叠在一起。
+    private static void NewQueueDropAvoidsOverlap()
+    {
+        const double slot = 50;
+        const double height = 46;
+        const double merge = EdgeCapsuleQueueMagnet.DefaultMergeDistanceDip;
+        const double detach = EdgeCapsuleQueueMagnet.DefaultDetachDistanceDip;
+        const double half = height / 2;
+
+        EdgeCapsuleQueueMagnetPlan Drop(
+            double centreTop,
+            double centreLeft,
+            EdgeCapsuleQueueMagnetCandidate[] candidates) =>
+            EdgeCapsuleQueueMagnet.Evaluate(new EdgeCapsuleQueueMagnetInput(
+                centreTop, "other", candidates, slot, height, merge, detach, "", centreLeft));
+
+        // 单槽队列的真实占位是 [top, top + height]。
+        EdgeCapsuleQueueMagnetCandidate QueueAt(string key, double top) =>
+            new(key, 1, top, slot, -1, 0, 200);
+
+        bool OverlapsAny(EdgeCapsuleQueueMagnetPlan plan, EdgeCapsuleQueueMagnetCandidate[] candidates)
+        {
+            var top = plan.NewQueueStartTopDip;
+            var bottom = top + height;
+            foreach (var candidate in candidates)
+            {
+                var low = candidate.FirstSlotTopDip;
+                var high = low + height;
+                if (top < high && bottom > low)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        // 横向 19 DIP 已把总距离推出 18 DIP 半径，但中心 120 仍与队列 [100, 146] 重叠。
+        // 落点应被推到更近的一侧：队列上方 54。
+        EdgeCapsuleQueueMagnetCandidate[] single = [QueueAt("a", 100)];
+        var above = Drop(120, 219, single);
+        Check(above.Outcome == EdgeCapsuleQueueMagnetOutcome.NewQueue,
+            "A diagonal drop outside the merge radius is still its own queue");
+        Check(!OverlapsAny(above, single),
+            "The new-queue drop is pushed clear of the queue it would have covered");
+        Check(Math.Abs(above.NewQueueStartTopDip - 54) < 0.001,
+            "A drop overlapping the top half resolves above the queue");
+
+        // 中心 130 更靠近队列下沿，应解析到队列下方 146。
+        var below = Drop(130, 219, single);
+        Check(!OverlapsAny(below, single),
+            "A drop overlapping the bottom half is pushed clear below it");
+        Check(Math.Abs(below.NewQueueStartTopDip - 146) < 0.001,
+            "The side chosen follows the side the capsule actually came from");
+
+        // 无重叠时保持原落点（中心 - 半胶囊），避让是恒等变换。
+        var clear = Drop(400, 100, single);
+        Check(clear.Outcome == EdgeCapsuleQueueMagnetOutcome.NewQueue, "A clear drop stays independent");
+        Check(Math.Abs(clear.NewQueueStartTopDip - (400 - half)) < 0.001,
+            "A non-overlapping drop keeps its exact drop height");
+
+        // 相邻队列：“a”占 [100,146]，“b”占 [146,192]。中心 190、横向 19 超出半径，
+        // 贴 a 下方会压住 b，所以最终必须落到 b 下方 192。
+        EdgeCapsuleQueueMagnetCandidate[] adjacent = [QueueAt("a", 100), QueueAt("b", 146)];
+        var squeezed = Drop(190, 219, adjacent);
+        Check(squeezed.Outcome == EdgeCapsuleQueueMagnetOutcome.NewQueue,
+            "A diagonal drop into a narrow gap is still independent");
+        Check(!OverlapsAny(squeezed, adjacent),
+            "Avoidance re-checks the position it slid to against every candidate, not just the first");
+        Check(Math.Abs(squeezed.NewQueueStartTopDip - 192) < 0.001,
+            "The resolved drop clears both adjacent queues");
+
+        // 候选顺序不得影响落点。
+        var reversed = Drop(190, 219, [QueueAt("b", 146), QueueAt("a", 100)]);
+        Check(Math.Abs(squeezed.NewQueueStartTopDip - reversed.NewQueueStartTopDip) < 0.001,
+            "The resolved drop does not depend on the order candidates were enumerated in");
+
+        // Ctrl 整队搬移：3 个成员时整块高度是 146 DIP。即使第一颗不重叠，后续成员也可能压住
+        // 目标队列，因此避让必须按整队高度计算。
+        var stack = EdgeCapsuleQueueMagnet.Evaluate(new EdgeCapsuleQueueMagnetInput(
+            54, "other", [QueueAt("a", 100)], slot, height, merge, detach, "", 100,
+            EdgeCapsuleLayout.TopMargin, 446, 3));
+        Check(stack.Outcome == EdgeCapsuleQueueMagnetOutcome.NewQueue,
+            "A whole-queue drop outside the radius is still its own queue");
+        Check(Math.Abs(stack.NewQueueStartTopDip - 146) < 0.001,
+            "A multi-member block clears the target by its whole stack height");
+
+        // 被排除的唯一成员没有占位，不触发避让。
+        var solo = new EdgeCapsuleQueueMagnetCandidate("solo", 1, 100, slot, 0, 0, 200);
+        var soloDrop = EdgeCapsuleQueueMagnet.Evaluate(new EdgeCapsuleQueueMagnetInput(
+            400, "solo", [solo], slot, height, merge, detach, "", 100));
+        Check(Math.Abs(soloDrop.NewQueueStartTopDip - (400 - half)) < 0.001,
+            "A candidate that excluded its only member occupies nothing and never forces avoidance");
+
+        WorkAreaClampIsValidated();
+    }
+
+    // The commit path clamps a new queue's top back into the work area, so the magnet has to
+    // validate the drop in committed coordinates. Validating the raw pointer position instead lets
+    // an off-screen drop pass as "clear" and then clamp straight down onto a wall queue.
+    private static void WorkAreaClampIsValidated()
+    {
+        const double slot = 50;
+        const double height = 46;
+        const double half = height / 2;
+        const double gap = 4;
+        const double merge = EdgeCapsuleQueueMagnet.DefaultMergeDistanceDip;
+        const double detach = EdgeCapsuleQueueMagnet.DefaultDetachDistanceDip;
+
+        var area = new Rect(0, 0, 1000, 600);
+        var min = EdgeCapsuleLayout.TopMargin;
+        var max = EdgeCapsuleLayout.MaxStartTopMarginForCount(1, area, gap);
+
+        EdgeCapsuleQueueMagnetPlan Drop(double centre, EdgeCapsuleQueueMagnetCandidate[] candidates) =>
+            EdgeCapsuleQueueMagnet.Evaluate(new EdgeCapsuleQueueMagnetInput(
+                centre, "other", candidates, slot, height, merge, detach, "", 100, min, max));
+
+        // Committed top, after the same clamp SplitCapsuleIntoQueue applies.
+        double Commit(EdgeCapsuleQueueMagnetPlan plan) =>
+            EdgeCapsuleLayout.NormalizeStartTopMargin(plan.NewQueueStartTopDip, area, 1, gap);
+
+        bool Overlaps(EdgeCapsuleQueueMagnetPlan plan, EdgeCapsuleQueueMagnetCandidate[] candidates)
+        {
+            var top = Commit(plan);
+            var bottom = top + height;
+            foreach (var candidate in candidates)
+            {
+                if (top < candidate.FirstSlotTopDip + height &&
+                    bottom > candidate.FirstSlotTopDip)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        // A queue already resting at the very top of the work area, and a drop far above the screen.
+        // The raw drop (-83) clears it, but the commit clamps to 8 — exactly onto the queue.
+        EdgeCapsuleQueueMagnetCandidate[] topQueue =
+            [new EdgeCapsuleQueueMagnetCandidate("qa", 1, min, slot, -1, 0, 200)];
+        var aboveScreen = Drop(-60, topQueue);
+        Check(aboveScreen.Outcome == EdgeCapsuleQueueMagnetOutcome.NewQueue,
+            "A drop dragged off the top of the screen is still its own queue");
+        Check(!Overlaps(aboveScreen, topQueue),
+            "An off-screen drop that clamps back into the work area does not land on a queue");
+        Check(Math.Abs(aboveScreen.NewQueueStartTopDip - 54) < 0.001,
+            "The clamped drop is pushed just below the top queue");
+
+        // Same failure from the other edge: a queue at the bottom, dropped below the screen.
+        // 620 is genuinely outside the merge radius; 560 would still be inside it and merge.
+        EdgeCapsuleQueueMagnetCandidate[] bottomQueue =
+            [new EdgeCapsuleQueueMagnetCandidate("qb", 1, 523, slot, -1, 0, 200)];
+        var belowScreen = Drop(620, bottomQueue);
+        Check(belowScreen.Outcome == EdgeCapsuleQueueMagnetOutcome.NewQueue,
+            "An off-screen drop from below is its own queue");
+        Check(!Overlaps(belowScreen, bottomQueue),
+            "An off-screen drop from below does not clamp back onto a queue either");
+        Check(Math.Abs(belowScreen.NewQueueStartTopDip - 477) < 0.001,
+            "The clamped drop is pushed just above the bottom queue");
+
+        // Inside the work area nothing changes: the clamp is a no-op and the drop is untouched.
+        var inside = Drop(300, topQueue);
+        Check(!Overlaps(inside, topQueue), "An in-range drop stays clear of the queue");
+        Check(Math.Abs(inside.NewQueueStartTopDip - (300 - half)) < 0.001,
+            "An in-range, non-overlapping drop keeps its exact drop height");
+    }
+
+    // The magnet measures to the queue's wall-anchored rectangle, so a vertically aligned but
+    // horizontally distant capsule must not snap. Before the horizontal term existed, dragging to
+    // the middle of the screen with Y lined up against a queue merged into it anyway.
+    private static void MagnetNeedsHorizontalProximity()
+    {
+        const double slot = 50;
+        const double height = 46;
+        const double merge = EdgeCapsuleQueueMagnet.DefaultMergeDistanceDip;
+        const double detach = EdgeCapsuleQueueMagnet.DefaultDetachDistanceDip;
+
+        // A right-wall queue 120 DIP wide on a 1920 DIP screen: band [1800, 1920].
+        const double bandWidth = 120;
+        const double bandLeft = 1800;
+        EdgeCapsuleQueueMagnetCandidate[] RightQueue() =>
+            [new("q1", 1, 100, slot, -1, bandLeft, bandWidth)];
+
+        EdgeCapsuleQueueMagnetPlan At(double centreTop, double centreLeft, string held = "") =>
+            EdgeCapsuleQueueMagnet.Evaluate(new EdgeCapsuleQueueMagnetInput(
+                centreTop, "other", RightQueue(), slot, height, merge, detach, held, centreLeft));
+
+        // Dead centre of the screen, vertically aligned with the queue. This is the false snap.
+        Check(At(100, 960).Outcome == EdgeCapsuleQueueMagnetOutcome.NewQueue,
+            "A vertically aligned capsule far from the wall starts a new queue instead of merging");
+
+        // Holding that queue does not rescue it either: 180 DIP out is well past the detach
+        // threshold, so the dead band must not keep a horizontally distant queue attached.
+        Check(At(100, 960, held: "q1").Outcome == EdgeCapsuleQueueMagnetOutcome.NewQueue,
+            "The hold does not keep a queue attached across a large horizontal gap");
+
+        // Inside the band the vertical rule is untouched: merging is decided by Y alone again.
+        Check(At(100, bandLeft + 60).Outcome == EdgeCapsuleQueueMagnetOutcome.Merge,
+            "A capsule inside the band still merges on vertical proximity alone");
+        Check(At(100, bandLeft).Outcome == EdgeCapsuleQueueMagnetOutcome.Merge,
+            "The band's inner edge counts as inside");
+        Check(At(100, bandLeft + bandWidth).Outcome == EdgeCapsuleQueueMagnetOutcome.Merge,
+            "The band's outer edge counts as inside");
+
+        // Just outside the band, still within the merge radius: the two axes compose, so a small
+        // horizontal offset still snaps on vertical proximity alone.
+        Check(At(100 + 10, bandLeft - 15).Outcome == EdgeCapsuleQueueMagnetOutcome.Merge,
+            "A near-corner approach within the radius still merges");
+
+        // Queue "q1" really occupies [100, 146]; with half a capsule of padding on each side its
+        // reachable centre band is [77, 169]. 187 is 18 DIP below it, so with an 18 DIP horizontal
+        // offset the diagonal distance is sqrt(18^2 + 18^2) = 25.5, which clears the merge radius
+        // even though neither axis alone is very far.
+        Check(At(187, bandLeft - 18).Outcome == EdgeCapsuleQueueMagnetOutcome.NewQueue,
+            "A diagonal offset beyond the radius does not merge");
+
+        // Same position cannot be held either: the dead band widens the radius to 32 DIP, and
+        // 194 is 25 DIP below the reachable band, so sqrt(25^2 + 25^2) = 35.4 is past even that.
+        Check(At(194, bandLeft - 25, held: "q1").Outcome == EdgeCapsuleQueueMagnetOutcome.NewQueue,
+            "The hold cannot bridge a diagonal distance past the detach radius");
+
+        // A candidate whose band could not be measured must be unreachable rather than silently
+        // treated as unconstrained, which would reintroduce the screen-wide snap.
+        var noBand = new EdgeCapsuleQueueMagnetCandidate("q1", 1, 100, slot, -1, 0, 0);
+        Check(EdgeCapsuleQueueMagnet.Evaluate(new EdgeCapsuleQueueMagnetInput(
+                100, "other", [noBand], slot, height, merge, detach, "", 960)).Outcome ==
+                  EdgeCapsuleQueueMagnetOutcome.NewQueue,
+            "A zero-width band makes the candidate unreachable instead of universally attractive");
+
+        // A non-finite horizontal centre resolves to no plan, matching the existing NaN guard on
+        // the vertical centre.
+        Check(EdgeCapsuleQueueMagnet.Evaluate(new EdgeCapsuleQueueMagnetInput(
+                100, "other", RightQueue(), slot, height, merge, detach, "",
+                double.NaN)).Outcome == EdgeCapsuleQueueMagnetOutcome.None,
+            "A NaN horizontal centre resolves to no plan");
+        Check(EdgeCapsuleQueueMagnet.Evaluate(new EdgeCapsuleQueueMagnetInput(
+                100, "other", RightQueue(), slot, height, merge, detach, "",
+                double.PositiveInfinity)).Outcome == EdgeCapsuleQueueMagnetOutcome.None,
+            "An infinite horizontal centre resolves to no plan");
     }
 
     // The drag loop feeds each frame's target back in as the next frame's held queue. If that
@@ -181,17 +467,19 @@ internal static partial class Program
     {
         const double slot = 50;
         const double height = 46;
-        EdgeCapsuleQueueMagnetCandidate[] OneQueue() => [new("q1", 2, 100, slot, -1)];
+        const double centreLeft = 100;   // inside the band, so the horizontal term is 0
+        EdgeCapsuleQueueMagnetCandidate[] OneQueue() =>
+            [new("q1", 2, 100, slot, -1, 0, 200)];
 
-        // Queue spans 100..150, so its reach is [77, 173] and the dead band (18..32 DIP out) is
-        // centres 191..205. Inside that band nothing can be acquired fresh, so staying attached
-        // is possible only via the hold. Frame 0 acquires from inside merge range, then the
-        // pointer drifts into the dead band: a drag loop that dropped the hold each frame would
-        // release on frame 1 and report 1 attachment instead of 12.
+        // Queue really occupies [100, 196], so its reach is [77, 219] and the dead band
+        // (18..32 DIP out) is centres 237..251. Inside that band nothing can be acquired fresh,
+        // so staying attached is possible only via the hold. Frame 0 acquires from inside merge
+        // range, then the pointer drifts into the dead band: a drag loop that dropped the hold
+        // each frame would release on frame 1 and report 1 attachment instead of 13.
         string held = "";
         var attached = 0;
-        var centres = new List<double> { 180.0 };
-        centres.AddRange(Enumerable.Range(0, 12).Select(i => 195.0 + (i % 2 == 0 ? -1 : 1)));
+        var centres = new List<double> { 230.0 };
+        centres.AddRange(Enumerable.Range(0, 12).Select(i => 244.0 + (i % 2 == 0 ? -1 : 1)));
 
         foreach (var centre in centres)
         {
@@ -199,7 +487,7 @@ internal static partial class Program
                 centre, "other", OneQueue(), slot, height,
                 EdgeCapsuleQueueMagnet.DefaultMergeDistanceDip,
                 EdgeCapsuleQueueMagnet.DefaultDetachDistanceDip,
-                held));
+                held, centreLeft));
             if (plan.Outcome is EdgeCapsuleQueueMagnetOutcome.Merge or EdgeCapsuleQueueMagnetOutcome.Reorder)
             {
                 attached++;
@@ -217,10 +505,10 @@ internal static partial class Program
         // Crossing the detach distance must release, and the release must survive the next frame
         // rather than immediately snapping back because the pointer is still nearby.
         var released = EdgeCapsuleQueueMagnet.Evaluate(new EdgeCapsuleQueueMagnetInput(
-            220, "other", OneQueue(), slot, height,
+            260, "other", OneQueue(), slot, height,
             EdgeCapsuleQueueMagnet.DefaultMergeDistanceDip,
             EdgeCapsuleQueueMagnet.DefaultDetachDistanceDip,
-            "q1"));
+            "q1", centreLeft));
         Check(released.Outcome == EdgeCapsuleQueueMagnetOutcome.NewQueue,
             "Crossing the detach distance releases the held queue");
         Check(released.TargetQueueKey == "",
@@ -229,10 +517,10 @@ internal static partial class Program
         // With the hold cleared, that same position is genuinely out of range, so a released drag
         // settles on a new queue rather than oscillating.
         var afterRelease = EdgeCapsuleQueueMagnet.Evaluate(new EdgeCapsuleQueueMagnetInput(
-            220, "other", OneQueue(), slot, height,
+            260, "other", OneQueue(), slot, height,
             EdgeCapsuleQueueMagnet.DefaultMergeDistanceDip,
             EdgeCapsuleQueueMagnet.DefaultDetachDistanceDip,
-            ""));
+            "", centreLeft));
         Check(afterRelease.Outcome == EdgeCapsuleQueueMagnetOutcome.NewQueue,
             "A released position stays released on the following frame");
         Check(afterRelease.Outcome == released.Outcome,

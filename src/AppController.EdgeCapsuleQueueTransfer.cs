@@ -101,7 +101,7 @@ public sealed partial class AppController
     /// </summary>
     internal void CommitEdgeCapsuleQueueTransfer(
         EdgeCapsuleQueueTransferSnapshot? snapshot,
-        DeviceScreenPoint dropPoint)
+        EdgeCapsuleDropAnchor anchor)
     {
         if (snapshot == null)
         {
@@ -121,15 +121,27 @@ public sealed partial class AppController
         // Do not inherit a drag-time hold: the pointer is released, so the Schmitt trigger's exit
         // threshold no longer describes anything meaningful.
         _deepCapsuleDragHeldQueueKey = "";
-        var plan = EvaluateDeepCapsuleQueueDrag(carried, dropPoint, excludeEntireSourceQueue: true);
+        var plan = EvaluateDeepCapsuleQueueDrag(carried, anchor, excludeEntireSourceQueue: true);
 
         if (plan.Outcome == EdgeCapsuleQueueMagnetOutcome.Merge)
         {
-            MergeTransferredQueueInto(snapshot, carried, plan.TargetQueueKey, dropPoint);
+            MergeTransferredQueueInto(snapshot, carried, plan.TargetQueueKey, anchor);
             return;
         }
 
-        StartTransferredQueueAt(snapshot, carried, dropPoint);
+        // 新队列使用磁吸解析后的落点，而不是原始光标：落点已按整队高度做过工作区夹取与避让，
+        // 并且 top 与浮动胶囊的实际位置对齐。
+        if (!TryResolveQueueDropGeometry(carried[0], anchor, out var drop))
+        {
+            CancelEdgeCapsuleQueueTransfer(snapshot);
+            return;
+        }
+
+        // Evaluate 返回 None 时没有可用的磁吸落点，退回“胶囊中心 - 半高”的原始落点。
+        var startTop = plan.Outcome == EdgeCapsuleQueueMagnetOutcome.NewQueue
+            ? plan.NewQueueStartTopDip
+            : drop.CenterTopDip - PaperLayoutDefaults.CapsuleHeight / 2.0;
+        StartTransferredQueueAt(snapshot, carried, drop, startTop);
     }
 
     /// <summary>
@@ -140,7 +152,7 @@ public sealed partial class AppController
         EdgeCapsuleQueueTransferSnapshot snapshot,
         IReadOnlyList<PaperData> carried,
         string targetQueueKey,
-        DeviceScreenPoint dropPoint)
+        EdgeCapsuleDropAnchor anchor)
     {
         var targetMembers = FreeQueueMembersExcluding(targetQueueKey, snapshot.PaperIds.FirstOrDefault() ?? "");
         var targetQueueId = FirstQueueIdOf(targetMembers);
@@ -151,16 +163,29 @@ public sealed partial class AppController
             : DeepCapsuleSides.Right;
         var monitorName = edgeKey[..Math.Max(separator, 0)];
 
-        if (!WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(monitorName, out var geometry))
+        if (!WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(monitorName, out _))
         {
-            StartTransferredQueueAt(snapshot, carried, dropPoint);
+            // 目标队列的显示器已不可用，退回“在落点新建队列”的路径。
+            if (TryResolveQueueDropGeometry(carried[0], anchor, out var fallbackDrop))
+            {
+                StartTransferredQueueAt(
+                    snapshot,
+                    carried,
+                    fallbackDrop,
+                    fallbackDrop.CenterTopDip - PaperLayoutDefaults.CapsuleHeight / 2.0);
+            }
+            else
+            {
+                CancelEdgeCapsuleQueueTransfer(snapshot);
+            }
+
             return;
         }
 
         var insertAt = DeepCapsuleQueueInsertIndexFor(
             targetQueueKey,
             snapshot.PaperIds.FirstOrDefault() ?? "",
-            geometry.DeviceYToLocalDip(dropPoint.Y),
+            anchor.CapsuleCenterYDevice,
             carried.Count);
 
         foreach (var member in carried)
@@ -186,33 +211,25 @@ public sealed partial class AppController
     private void StartTransferredQueueAt(
         EdgeCapsuleQueueTransferSnapshot snapshot,
         IReadOnlyList<PaperData> carried,
-        DeviceScreenPoint dropPoint)
+        QueueDropGeometry drop,
+        double startTopDip)
     {
-        var geometry = MonitorGeometryForQueue(snapshot.MonitorDeviceName);
-        if (geometry is null)
-        {
-            CancelEdgeCapsuleQueueTransfer(snapshot);
-            return;
-        }
-
-        var monitor = geometry.GetValueOrDefault();
-        var side = dropPoint.X < monitor.WorkArea.Left + monitor.WorkArea.Width / 2.0
-            ? DeepCapsuleSides.Left
-            : DeepCapsuleSides.Right;
+        var monitor = drop.Geometry;
+        var side = drop.Side;
         var queueId = EdgeCapsuleQueueIds.New();
 
         foreach (var member in carried)
         {
-            member.CapsuleMonitorDeviceName =
-                WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(monitor.DeviceName);
+            member.CapsuleMonitorDeviceName = drop.MonitorDeviceName;
             member.CapsuleSide = side;
             member.CapsuleQueueId = queueId;
         }
 
-        RemoveVacatedQueueStartMargin(snapshot, QueueKey(monitor.DeviceName, side, queueId));
-        State.DeepCapsuleQueueStartTopMargins[QueueKey(monitor.DeviceName, side, queueId)] =
+        RemoveVacatedQueueStartMargin(
+            snapshot, QueueKey(drop.MonitorDeviceName, side, queueId));
+        State.DeepCapsuleQueueStartTopMargins[QueueKey(drop.MonitorDeviceName, side, queueId)] =
             EdgeCapsuleLayout.NormalizeStartTopMargin(
-                monitor.DeviceYToLocalDip(dropPoint.Y),
+                startTopDip,
                 monitor.LocalWorkAreaDip,
                 carried.Count,
                 DeepCapsuleGap);

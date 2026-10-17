@@ -4,6 +4,17 @@ using System.Windows.Threading;
 namespace PaperTodo;
 
 /// <summary>
+/// 一次拖拽的落点锚点。
+///
+/// Pointer 用于解析显示器、选择贴墙侧和计算水平距离；CapsuleCenterYDevice 是被拖胶囊的
+/// 真实中心设备 Y。浮空阶段胶囊窗口以光标为中心，两者 Y 相同；贴边阶段胶囊顶边跟随光标，
+/// 中心还要补上抓取偏移与半个胶囊高度。
+/// </summary>
+internal readonly record struct EdgeCapsuleDropAnchor(
+    DeviceScreenPoint Pointer,
+    double CapsuleCenterYDevice);
+
+/// <summary>
 /// Free edge-capsule queues (D-058).
 ///
 /// The default arrangement lets one edge hold exactly one queue, whose height comes from a single
@@ -149,12 +160,31 @@ public sealed partial class AppController
                 area,
                 slotCount,
                 DeepCapsuleGap);
+
+            // The magnet measures to the queue's wall-anchored rectangle, so the band must be the
+            // width this queue actually occupies: its widest resting capsule. LocalWorkAreaDip's X
+            // origin is the work area's left edge, matching EdgeCapsuleGeometry's `wall` for a left
+            // queue and `wall - width` for a right one.
+            var bandWidth = 0.0;
+            foreach (var member in papers)
+            {
+                if (_windows.TryGetValue(member.Id, out var memberWindow))
+                {
+                    bandWidth = Math.Max(bandWidth, memberWindow.DeepCapsuleRestingVisibleWidth);
+                }
+            }
+
+            var bandLeft = targetSide == DeepCapsuleSides.Left
+                ? 0
+                : Math.Max(0, area.Width - bandWidth);
             result.Add(new EdgeCapsuleQueueMagnetCandidate(
                 key,
                 slotCount,
                 EdgeCapsuleLayout.TopForIndex(0, startTop, area, slotCount, DeepCapsuleGap),
                 slotHeight,
-                -1));
+                -1,
+                bandLeft,
+                bandWidth));
         }
 
         return result;
@@ -168,14 +198,14 @@ public sealed partial class AppController
     /// Commit a free-queue drag: decide with the magnet, then apply the resulting Reorder / Merge /
     /// NewQueue outcome. Falls back to the legacy arrangement when free mode is off.
     /// </summary>
-    internal void CommitDeepCapsuleQueueDrop(PaperData paper, DeviceScreenPoint dropPoint)
+    internal void CommitDeepCapsuleQueueDrop(PaperData paper, EdgeCapsuleDropAnchor anchor)
     {
         if (!EdgeCapsuleFreeQueuesEnabled)
         {
             return;
         }
 
-        if (!TryResolveQueueDropGeometry(paper, dropPoint, out var drop))
+        if (!TryResolveQueueDropGeometry(paper, anchor, out var drop))
         {
             // No monitor to resolve against: leave the arrangement untouched rather than guess.
             ArrangeDeepCapsules(animate: true);
@@ -194,11 +224,11 @@ public sealed partial class AppController
                 return;
 
             case EdgeCapsuleQueueMagnetOutcome.Reorder:
-                ReorderDeepCapsuleInFreeQueue(paper, plan.TargetQueueKey, drop.Geometry, dropPoint);
+                ReorderDeepCapsuleInFreeQueue(paper, plan.TargetQueueKey, drop.Geometry, anchor);
                 return;
 
             case EdgeCapsuleQueueMagnetOutcome.Merge:
-                MergeCapsuleIntoFreeQueue(paper, plan.TargetQueueKey, drop.Geometry, dropPoint);
+                MergeCapsuleIntoFreeQueue(paper, plan.TargetQueueKey, drop.Geometry, anchor);
                 return;
 
             default:
@@ -221,12 +251,12 @@ public sealed partial class AppController
     /// </summary>
     internal EdgeCapsuleQueueMagnetPlan EvaluateDeepCapsuleQueueDrag(
         IReadOnlyList<PaperData> carried,
-        DeviceScreenPoint cursor,
+        EdgeCapsuleDropAnchor anchor,
         bool excludeEntireSourceQueue = false)
     {
         if (carried.Count == 0 ||
             !EdgeCapsuleFreeQueuesEnabled ||
-            !TryResolveQueueDropGeometry(carried[0], cursor, out var drop))
+            !TryResolveQueueDropGeometry(carried[0], anchor, out var drop))
         {
             return EdgeCapsuleQueueMagnet.None;
         }
@@ -268,6 +298,9 @@ public sealed partial class AppController
         var candidates = BuildEdgeCapsuleQueueMagnetCandidates(
             carried, drop.Geometry, drop.MonitorDeviceName, drop.Side, excludeEntireSourceQueue, out var sourceQueueKey);
 
+        // 新队列提交时会按实际放下的槽位数夹回工作区：单胶囊是 1，Ctrl 整队搬移是整队成员数。
+        // 磁吸必须用同一上界校验，否则它验证的位置与实际提交的位置不是同一个。
+        var area = drop.Geometry.LocalWorkAreaDip;
         return new EdgeCapsuleQueueMagnetInput(
             drop.CenterTopDip,
             sourceQueueKey,
@@ -276,27 +309,33 @@ public sealed partial class AppController
             PaperLayoutDefaults.CapsuleHeight,
             EdgeCapsuleQueueMagnet.DefaultMergeDistanceDip,
             EdgeCapsuleQueueMagnet.DefaultDetachDistanceDip,
-            heldQueueKey);
+            heldQueueKey,
+            drop.CenterLeftDip,
+            EdgeCapsuleLayout.TopMargin,
+            EdgeCapsuleLayout.MaxStartTopMarginForCount(
+                Math.Max(1, carried.Count), area, DeepCapsuleGap),
+            Math.Max(1, carried.Count));
     }
 
     /// <summary>
-    /// Which monitor, which edge and which vertical centre a pointer position resolves to, in the
-    /// local DIP space the magnet reasons about.
+    /// 指针位置解析出的目标显示器、贴墙侧与胶囊中心（本地 DIP）。
     /// </summary>
     private readonly record struct QueueDropGeometry(
         MonitorGeometry Geometry,
         string MonitorDeviceName,
         string Side,
-        double CenterTopDip);
+        double CenterTopDip,
+        double CenterLeftDip);
 
     private bool TryResolveQueueDropGeometry(
         PaperData paper,
-        DeviceScreenPoint point,
+        EdgeCapsuleDropAnchor anchor,
         out QueueDropGeometry drop)
     {
         drop = default;
+        var pointer = anchor.Pointer;
         MonitorGeometry? resolved = WindowWorkAreaHelper.TryGetMonitorGeometryAtDeviceScreenPoint(
-            point,
+            pointer,
             out var atPoint)
             ? atPoint
             : MonitorGeometryForQueue(paper.CapsuleMonitorDeviceName);
@@ -309,27 +348,30 @@ public sealed partial class AppController
         drop = new QueueDropGeometry(
             geometry,
             WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(geometry.DeviceName),
-            // Choose the nearer physical wall of the target monitor.
-            point.X < geometry.WorkArea.Left + geometry.WorkArea.Width / 2.0
+            // 取目标显示器更近的物理墙。
+            pointer.X < geometry.WorkArea.Left + geometry.WorkArea.Width / 2.0
                 ? DeepCapsuleSides.Left
                 : DeepCapsuleSides.Right,
-            // The dragged capsule's centre. Candidates on other monitors or the other edge are not
-            // reachable by a vertical drop, so they never compete.
-            geometry.DeviceYToLocalDip(point.Y) + PaperLayoutDefaults.CapsuleHeight / 2.0);
+            // 胶囊中心已由调用方按拖拽阶段换算好，这里不能再加半个胶囊高度。
+            geometry.DeviceYToLocalDip(anchor.CapsuleCenterYDevice),
+            // 浮空时胶囊以光标为中心；贴边时光标位于胶囊内，仍在同一贴墙条带附近。
+            geometry.DeviceXToLocalDip(pointer.X));
         return true;
     }
 
     /// <summary>
-    /// Slot index a drop at <paramref name="dropTopDip"/> would occupy in
-    /// <paramref name="queueKey"/>, excluding <paramref name="draggedPaper"/>.
+    /// 被拖胶囊中心落在设备 Y <paramref name="draggedCenterDeviceY"/> 时，它在
+    /// <paramref name="queueKey"/> 中会占据的槽位下标。
     ///
-    /// Shared by the drag preview and the commit so the gap the user was shown is exactly the gap
-    /// they get. Rounding matches the pre-free-queue insertion rule (nearest slot, ties up).
+    /// 预览与提交共用这一函数，因此用户看到的空隙就是松手后得到的空隙。距离按「中心减半个
+    /// 胶囊高度」换算成 top，抓取点位于胶囊顶部、中心还是底部都不会改变插入位。
+    /// 坐标转换在目标队列自己的显示器上完成，跨屏/混合 DPI 时也能得到正确槽位。
+    /// 取整规则沿用自由队列之前的插入规则（最近槽位，数值向上取整）。
     /// </summary>
     internal int DeepCapsuleQueueInsertIndexFor(
         string queueKey,
         string draggedPaperId,
-        double dropTopDip,
+        double draggedCenterDeviceY,
         int carriedCount = 1)
     {
         var members = FreeQueueMembersExcluding(queueKey, draggedPaperId);
@@ -344,6 +386,8 @@ public sealed partial class AppController
         }
 
         var area = geometry.LocalWorkAreaDip;
+        var dropTopDip = geometry.DeviceYToLocalDip(draggedCenterDeviceY)
+                         - PaperLayoutDefaults.CapsuleHeight / 2.0;
         var realCount = members.Count + Math.Max(1, carriedCount);
         var startTop = EdgeCapsuleLayout.NormalizeStartTopMargin(
             DeepCapsuleStartTopMarginForQueue(
@@ -363,14 +407,14 @@ public sealed partial class AppController
         PaperData paper,
         string targetQueueKey,
         MonitorGeometry targetGeometry,
-        DeviceScreenPoint dropPoint)
+        EdgeCapsuleDropAnchor anchor)
     {
         var targetMembers = FreeQueueMembersExcluding(targetQueueKey, paper.Id);
         var queueId = FirstQueueIdOf(targetMembers);
         var targetSide = DeepCapsuleSides.Normalize(
             EdgeCapsuleQueueIds.StripInstance(targetQueueKey)[(EdgeCapsuleQueueIds.StripInstance(targetQueueKey).LastIndexOf('|') + 1)..]);
-        var dropY = targetGeometry.DeviceYToLocalDip(dropPoint.Y);
-        var insertAt = DeepCapsuleQueueInsertIndexFor(targetQueueKey, paper.Id, dropY);
+        var insertAt = DeepCapsuleQueueInsertIndexFor(
+            targetQueueKey, paper.Id, anchor.CapsuleCenterYDevice);
 
         paper.CapsuleMonitorDeviceName =
             WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(targetGeometry.DeviceName);
@@ -388,7 +432,7 @@ public sealed partial class AppController
         PaperData paper,
         string queueKey,
         MonitorGeometry targetGeometry,
-        DeviceScreenPoint dropPoint)
+        EdgeCapsuleDropAnchor anchor)
     {
         var members = FreeQueueMembersExcluding(queueKey, paper.Id);
         var queueId = FirstQueueIdOf(members);
@@ -400,8 +444,8 @@ public sealed partial class AppController
         paper.CapsuleSide = targetSide;
         paper.CapsuleQueueId = queueId;
 
-        var dropY = targetGeometry.DeviceYToLocalDip(dropPoint.Y);
-        var insertAt = DeepCapsuleQueueInsertIndexFor(queueKey, paper.Id, dropY);
+        var insertAt = DeepCapsuleQueueInsertIndexFor(
+            queueKey, paper.Id, anchor.CapsuleCenterYDevice);
 
         InsertPaperBesideQueue(paper, members, insertAt);
         ArrangeDeepCapsules(animate: true);

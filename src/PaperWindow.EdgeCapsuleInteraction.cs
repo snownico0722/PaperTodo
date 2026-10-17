@@ -626,6 +626,28 @@ public sealed partial class PaperWindow
     }
 
     /// <summary>
+    /// 拖拽当前的真实落点锚点。
+    ///
+    /// 浮空阶段拖拽窗口以光标为中心，鼠标点就是胶囊中心；贴边阶段胶囊顶边跟随光标，
+    /// 中心 = 光标 Y - 抓取偏移 + 半个胶囊高度（设备像素）。
+    /// </summary>
+    private EdgeCapsuleDropAnchor DeepCapsuleDropAnchorFor(
+        DeviceScreenPoint pointer,
+        in EdgeCapsuleDragSession session,
+        bool floatingPhase)
+    {
+        if (floatingPhase)
+        {
+            return new EdgeCapsuleDropAnchor(pointer, pointer.Y);
+        }
+
+        var scaleY = DeepCapsuleMonitorGeometry().DpiScaleY;
+        var centerY = pointer.Y - session.DockedPointerOffsetY
+                      + PaperLayoutDefaults.CapsuleHeight * scaleY / 2.0;
+        return new EdgeCapsuleDropAnchor(pointer, centerY);
+    }
+
+    /// <summary>
     /// Live magnet feedback for a free-queue drag: decide what the drop would do right now, then
     /// show it — the target queue opens a slot, and the outline says which queue that is.
     ///
@@ -664,9 +686,14 @@ public sealed partial class PaperWindow
             return;
         }
 
+        // Ctrl 整队搬移始终处于浮空阶段；其余情况由调用点告诉我们是贴边还是浮空。
+        var anchor = DeepCapsuleDropAnchorFor(
+            session.LastScreenPosition,
+            session,
+            floatingPhase || transfer != null);
         var plan = _controller.EvaluateDeepCapsuleQueueDrag(
             carried,
-            session.LastScreenPosition,
+            anchor,
             excludeEntireSourceQueue: transfer != null);
         var sourceQueueKey = AppController.QueueKeyForPaper(_paper);
 
@@ -700,11 +727,10 @@ public sealed partial class PaperWindow
             return;
         }
 
-        var dropTopDip = DeepCapsuleMonitorGeometry().DeviceYToLocalDip(session.LastScreenPosition.Y);
         var index = _controller.DeepCapsuleQueueInsertIndexFor(
             plan.TargetQueueKey,
             _paper.Id,
-            dropTopDip,
+            anchor.CapsuleCenterYDevice,
             carried.Count);
         _controller.ShowEdgeCapsuleQueueDropTargetOutline(plan.TargetQueueKey, _paper.Id, carried.Count);
 
@@ -965,14 +991,29 @@ public sealed partial class PaperWindow
                 // through the magnet even for a drag that never left the wall.
                 if (_controller.EdgeCapsuleFreeQueuesEnabled)
                 {
+                    // A floating drop returns through the same docking hand-off transaction as
+                    // an ordinary cross-edge one, so this must be latched before the branch
+                    // returns: otherwise finally withdraws the floating HWND outright and the
+                    // capsule teleports off the wall. A drag that never left the wall has no
+                    // floating host, so the condition is naturally false there.
+                    shouldAnimateFloatingDrop =
+                        _controller.State.EnableAnimations &&
+                        _deepCapsuleFloatingDragHost != null;
+
+                    // 落点锚点必须在清空 transfer 快照之前算好：整队搬移一定处于浮空阶段。
+                    var anchor = DeepCapsuleDropAnchorFor(
+                        session.LastScreenPosition,
+                        session,
+                        wasFloatingDrag || _deepCapsuleQueueTransferSnapshot != null);
+
                     if (_deepCapsuleQueueTransferSnapshot is { } transfer)
                     {
                         _deepCapsuleQueueTransferSnapshot = null;
-                        _controller.CommitEdgeCapsuleQueueTransfer(transfer, session.LastScreenPosition);
+                        _controller.CommitEdgeCapsuleQueueTransfer(transfer, anchor);
                     }
                     else
                     {
-                        _controller.CommitDeepCapsuleQueueDrop(_paper, session.LastScreenPosition);
+                        _controller.CommitDeepCapsuleQueueDrop(_paper, anchor);
                     }
 
                     return;

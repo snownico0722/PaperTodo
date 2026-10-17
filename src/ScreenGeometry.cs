@@ -39,4 +39,6 @@ internal readonly record struct MonitorGeometry(
         WorkArea.Height / DpiScaleY);
 
     public double DeviceYToLocalDip(double deviceY) => (deviceY - WorkArea.Top) / DpiScaleY;
+
+    public double DeviceXToLocalDip(double deviceX) => (deviceX - WorkArea.Left) / DpiScaleX;
 }
