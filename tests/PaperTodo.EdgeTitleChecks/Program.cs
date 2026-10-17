@@ -29,6 +29,8 @@ internal static partial class Program
             Console.WriteLine("PASS queue-magnet-merge-detach-reorder");
             EdgeQueueAvoidance();
             Console.WriteLine("PASS edge-wide-preview-avoidance");
+            EdgeCapsuleQueueInsertionSolverChecks();
+            Console.WriteLine("PASS insertion-layout-solver");
             Persistence();
             Console.WriteLine("PASS legacy-and-zero-persistence");
             Geometry();
@@ -221,52 +223,44 @@ internal static partial class Program
         EdgeCapsuleQueueDropTargetMarkers();
     }
 
-    // 磁吸插入指示：额外间隙、预览队列高度、插入线 Y/宽度，以及设备矩形到窗口内 DIP 的换算。
+    // 磁吸插入指示：完整槽位的目标高度、插入线边界，以及设备矩形到窗口内 DIP 的换算。
     // 纯函数检查，不依赖 WPF 窗口。
     private static void EdgeCapsuleQueueDropTargetMarkers()
     {
-        const double height = 46;
-
-        foreach (var (carried, expected) in new[] { (0, 10.0), (1, 10.0), (2, 18.0), (3, 26.0) })
-        {
-            Check(
-                Math.Abs(EdgeCapsuleQueueDropTargetGeometry.ExtraInsertionGapDip(carried) - expected) < 1e-9,
-                "The insertion gap grows with the carried capsule count");
-        }
-
         foreach (var gap in new[] { 0.0, 4.0, 8.0 })
         {
             var slot = EdgeCapsuleLayout.SlotHeight(gap);
             Check(
-                Math.Abs(EdgeCapsuleQueueDropTargetGeometry.PreviewQueueHeightDip(
-                    2, slot, gap, height, 1) - (2 * slot - gap + 10)) < 1e-9,
-                "The preview queue height adds only the insertion gap");
+                Math.Abs(EdgeCapsuleQueueDropTargetGeometry.TargetQueueHeightDip(
+                    2, 1, slot, gap) - (3 * slot - gap)) < 1e-9,
+                "The preview queue reserves a full slot for the carried capsule");
             Check(
-                Math.Abs(EdgeCapsuleQueueDropTargetGeometry.PreviewQueueHeightDip(
-                    2, slot, gap, height, 3) - (2 * slot - gap + 26)) < 1e-9,
-                "A carried block widens the insertion gap");
+                Math.Abs(EdgeCapsuleQueueDropTargetGeometry.TargetQueueHeightDip(
+                    2, 3, slot, gap) - (5 * slot - gap)) < 1e-9,
+                "A carried block reserves one full slot per capsule");
         }
 
-        // memberCount = 2, slot = 50, gap = 4, capsule = 46, carried = 1 (extra gap 10)。
+        Check(
+            Math.Abs(EdgeCapsuleQueueDropTargetGeometry.InsertionBlockHeightDip(1, 50, 4) - 46) < 1e-9 &&
+            Math.Abs(EdgeCapsuleQueueDropTargetGeometry.InsertionBlockHeightDip(3, 50, 4) - 146) < 1e-9,
+            "The insertion block uses full slot heights without the trailing gap");
+
+        // queueTop = 320, slot = 50, gap = 4：短线标记插入块的上边界。
         {
             const double slot = 50;
-            const double queueTop = 120;
+            const double queueTop = 320;
             Check(
                 Math.Abs(EdgeCapsuleQueueDropTargetGeometry.InsertionLineCenterYDip(
-                    queueTop, 0, 2, slot, height, 1) - (queueTop + 5)) < 1e-9,
-                "A head insertion centers the line in the gap above the first capsule");
+                    queueTop, 0, slot, 4) - queueTop) < 1e-9,
+                "A head insertion marks the queue top");
             Check(
                 Math.Abs(EdgeCapsuleQueueDropTargetGeometry.InsertionLineCenterYDip(
-                    queueTop, 1, 2, slot, height, 1) - (queueTop + 53)) < 1e-9,
-                "A middle insertion centers the line between the parted members");
+                    queueTop, 1, slot, 4) - (queueTop + 48)) < 1e-9,
+                "A middle insertion marks the boundary above the inserted block");
             Check(
                 Math.Abs(EdgeCapsuleQueueDropTargetGeometry.InsertionLineCenterYDip(
-                    queueTop, 2, 2, slot, height, 1) - (queueTop + 101)) < 1e-9,
-                "A tail insertion centers the line in the extension below the queue");
-            Check(
-                Math.Abs(EdgeCapsuleQueueDropTargetGeometry.InsertionLineCenterYDip(
-                    queueTop, 99, 2, slot, height, 1) - (queueTop + 101)) < 1e-9,
-                "The insertion index clamps to the tail");
+                    queueTop, 2, slot, 4) - (queueTop + 98)) < 1e-9,
+                "A tail insertion marks the boundary below the last member");
         }
 
         Check(
@@ -313,6 +307,87 @@ internal static partial class Program
             "A non-positive DPI falls back to 1");
     }
 
+
+    // 插入求解器：锚点固定、受影响链、工作区边界、不可行拒绝、输入顺序稳定。
+    private static void EdgeCapsuleQueueInsertionSolverChecks()
+    {
+        const double areaHeight = 1040;
+        const double margin = 8;
+        const double gap = 4;
+
+        static EdgeCapsuleQueueInsertBox Box(string key, double top, double height) =>
+            new(key, top, height);
+
+        static EdgeCapsuleQueueInsertSolveResult Run(
+            string anchorKey,
+            params EdgeCapsuleQueueInsertBox[] boxes) =>
+            EdgeCapsuleQueueInsertionSolver.Solve(
+                boxes,
+                anchorKey,
+                areaHeight,
+                gap,
+                margin);
+
+        // S1: 下方直接被推，远处队列不动。
+        var first = Run("a", Box("a", 100, 196), Box("b", 280, 96), Box("c", 500, 46));
+        Check(first.Feasible, "S1: the insertion layout should be feasible");
+        Check(Math.Abs(first.TopsDip["a"] - 100) < 1e-6, "S1: the anchor must not move");
+        Check(Math.Abs(first.TopsDip["b"] - 300) < 1e-6, "S1: the overlapping queue moves down");
+        Check(Math.Abs(first.TopsDip["c"] - 500) < 1e-6, "S1: the far queue stays put");
+        Check(Math.Abs(first.TotalDisplacementDip - 20) < 1e-6, "S1: total displacement");
+
+        // S2: 链式传播。
+        var second = Run("a", Box("a", 100, 196), Box("b", 280, 96), Box("c", 380, 46));
+        Check(second.Feasible, "S2: the chain layout should be feasible");
+        Check(
+            Math.Abs(second.TopsDip["b"] - 300) < 1e-6 &&
+            Math.Abs(second.TopsDip["c"] - 400) < 1e-6,
+            "S2: the chain propagates downward");
+        Check(Math.Abs(second.TotalDisplacementDip - 40) < 1e-6, "S2: total displacement");
+
+        // S3: 上方链，锚点固定。
+        var third = Run("a", Box("a", 150, 46), Box("b", 110, 46), Box("c", 80, 46));
+        Check(third.Feasible, "S3: the above-chain layout should be feasible");
+        Check(Math.Abs(third.TopsDip["a"] - 150) < 1e-6, "S3: the anchor must not move");
+        Check(
+            Math.Abs(third.TopsDip["b"] - 100) < 1e-6 &&
+            Math.Abs(third.TopsDip["c"] - 50) < 1e-6,
+            "S3: the above chain is pushed upward");
+        Check(Math.Abs(third.TotalDisplacementDip - 40) < 1e-6, "S3: total displacement");
+
+        // S4: 锚点本身放不下。
+        var oversized = Run("a", Box("a", 100, 1100));
+        Check(!oversized.Feasible, "S4: an anchor taller than the work area must be rejected");
+
+        // S5: 下方链被推到底部越界。
+        var bottomOverflow = Run("a", Box("a", 850, 146), Box("b", 990, 96));
+        Check(!bottomOverflow.Feasible, "S5: a moved queue overflowing the bottom must be rejected");
+
+        // S6: 链外的既有溢出队列不参与、不阻塞。
+        var untouchedOverflow = Run("a", Box("a", 100, 46), Box("b", 1000, 46));
+        Check(untouchedOverflow.Feasible, "S6: an untouched overflowing queue must not block");
+        Check(
+            Math.Abs(untouchedOverflow.TopsDip["b"] - 1000) < 1e-6,
+            "S6: the untouched queue keeps its position");
+
+        // S7: 输入顺序不影响结果。
+        var forward = Run("a", Box("a", 100, 196), Box("b", 280, 96), Box("c", 380, 46));
+        var reversed = Run("a", Box("c", 380, 46), Box("b", 280, 96), Box("a", 100, 196));
+        Check(
+            reversed.Feasible &&
+            Math.Abs(forward.TopsDip["b"] - reversed.TopsDip["b"]) < 1e-6 &&
+            Math.Abs(forward.TopsDip["c"] - reversed.TopsDip["c"]) < 1e-6,
+            "S7: input order must not change the solved layout");
+
+        // S8: 非法输入。
+        var invalid = EdgeCapsuleQueueInsertionSolver.Solve(
+            [Box("a", double.NaN, 46)],
+            "a",
+            areaHeight,
+            gap,
+            margin);
+        Check(!invalid.Feasible, "S8: non-finite geometry must be rejected");
+    }
 
     // 纯竖直时，超出合并半径的落点必然已经和队列分离；但斜向拖拽的水平分量会把总距离推出
     // 半径，胶囊在竖直方向却仍可能与队列重叠。Ctrl 整队搬移还有“第一颗不重叠、后续成员重叠”

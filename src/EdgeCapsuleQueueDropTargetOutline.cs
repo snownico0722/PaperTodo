@@ -38,6 +38,7 @@ internal sealed class EdgeCapsuleQueueDropTargetOutline : Window
     private double _insertionLineTopDip = double.NaN;
     private double _insertionLineWidthDip = double.NaN;
     private double _insertionLineHeightDip = double.NaN;
+    private bool? _insertionLineFeasible;
 
     /// <summary>窗口是否已经关闭；关闭后控制器需要重建实例。</summary>
     internal bool IsClosed => _closed;
@@ -51,8 +52,8 @@ internal sealed class EdgeCapsuleQueueDropTargetOutline : Window
     /// <summary>测试用：插入短线当前的目标 top（相对描边窗口的 DIP）。</summary>
     internal double InsertionLineTopTargetDip => _insertionLineTopDip;
 
-    /// <summary>测试用：当前插入点让出的额外间隙（DIP）。</summary>
-    internal double InsertionLineGapDip { get; private set; }
+    /// <summary>测试用：当前插入是否可行；不可行时插入短线使用警示色。</summary>
+    internal bool InsertionLineIsWarning => _insertionLineFeasible == false;
 
     public EdgeCapsuleQueueDropTargetOutline()
     {
@@ -174,6 +175,7 @@ internal sealed class EdgeCapsuleQueueDropTargetOutline : Window
                 layout.DpiScaleY),
             layout.TargetIndex,
             layout.CarriedCount,
+            layout.IsFeasible,
             firstShow,
             targetChanged,
             animate);
@@ -212,11 +214,20 @@ internal sealed class EdgeCapsuleQueueDropTargetOutline : Window
         Rect queueEdgeLine,
         int targetIndex,
         int carriedCount,
+        bool isFeasible,
         bool firstShow,
         bool targetChanged,
         bool animate)
     {
         ApplyQueueEdgeLine(queueEdgeLine);
+
+        if (_insertionLineFeasible != isFeasible)
+        {
+            _insertionLine.Background = isFeasible
+                ? Theme.ActiveBrush
+                : Theme.DangerBrush;
+            _insertionLineFeasible = isFeasible;
+        }
 
         if (insertionLine.Width <= 0.01 || insertionLine.Height <= 0.01)
         {
@@ -283,8 +294,6 @@ internal sealed class EdgeCapsuleQueueDropTargetOutline : Window
 
         _insertionLineIndex = targetIndex;
         _insertionLineCarriedCount = carriedCount;
-        InsertionLineGapDip =
-            EdgeCapsuleQueueDropTargetGeometry.ExtraInsertionGapDip(carriedCount);
         _insertionLineLeftDip = insertionLine.Left;
         _insertionLineTopDip = insertionLine.Top;
         _insertionLineWidthDip = insertionLine.Width;

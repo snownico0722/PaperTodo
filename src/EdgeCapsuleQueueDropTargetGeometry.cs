@@ -14,23 +14,17 @@ internal readonly record struct EdgeCapsuleQueueDropTargetLayout(
     double DpiScaleX,
     double DpiScaleY,
     int TargetIndex,
-    int CarriedCount);
+    int CarriedCount,
+    bool IsFeasible);
 
 /// <summary>
 /// 插入指示的纯几何计算。
 ///
-/// 预览不再为 incoming capsule 打开完整槽位，而是在插入点下方让出一个小间隙：
-/// 队列底边 = 真实成员槽位高度 + 一个额外间隙。插入线居中于该间隙，因此队首、队中、队尾
-/// 使用同一套公式，index 变化也不会改变目标队列底边。
+/// 预览按完整槽位模拟插入结果：目标队列高度增加 carriedCount 个槽位，插入短线标记
+/// “插入块的上边界”，而不是继续使用人工的小间隙。
 /// </summary>
 internal static class EdgeCapsuleQueueDropTargetGeometry
 {
-    /// <summary>插入点下方让出的基础额外间隙（DIP）。</summary>
-    internal const double InsertionGapBaseDip = 10;
-
-    /// <summary>Ctrl 整队拖拽时，每多携带一个胶囊追加的间隙（DIP）。</summary>
-    internal const double InsertionGapPerExtraCarriedDip = 8;
-
     /// <summary>插入短线目标宽度（DIP），实际还会按胶囊可见宽度收窄。</summary>
     internal const double InsertionLineMaxWidthDip = 48;
 
@@ -47,70 +41,63 @@ internal static class EdgeCapsuleQueueDropTargetGeometry
     internal const double QueueEdgeLineOpacity = 0.45;
 
     /// <summary>
-    /// 插入点下方需要让出的额外间隙：单个胶囊为 10 DIP，Ctrl 整队时每个额外胶囊再 +8 DIP。
+    /// 插入块高度：carriedCount 个完整槽位，最后一个槽不含尾部 gap。
     /// </summary>
-    internal static double ExtraInsertionGapDip(int carriedCount) =>
-        InsertionGapBaseDip +
-        (Math.Max(1, carriedCount) - 1) * InsertionGapPerExtraCarriedDip;
-
-    /// <summary>
-    /// 预览队列高度：真实成员完整占位高度 + 插入点下方的额外间隙。
-    /// 至少保留一个胶囊高度，避免 gap/参数异常时队列消失。
-    /// </summary>
-    internal static double PreviewQueueHeightDip(
-        int memberCount,
+    internal static double InsertionBlockHeightDip(
+        int carriedCount,
         double slotHeight,
-        double gap,
-        double capsuleHeight,
-        int carriedCount)
+        double gap)
     {
-        var count = Math.Max(1, memberCount);
+        var count = Math.Max(1, carriedCount);
         var slot = double.IsFinite(slotHeight) && slotHeight > 0 ? slotHeight : 0;
         var normalizedGap = double.IsFinite(gap) && gap > 0 ? gap : 0;
-        var normalizedHeight = double.IsFinite(capsuleHeight) && capsuleHeight > 0
-            ? capsuleHeight
-            : 0;
-        return Math.Max(
-            normalizedHeight,
-            count * slot - normalizedGap + ExtraInsertionGapDip(carriedCount));
+        return Math.Max(0, count * slot - normalizedGap);
     }
 
     /// <summary>
-    /// 插入短线中心 Y：位于“插入点上方成员的底边”和“下方成员下移后的顶边”之间。
+    /// 目标队列插入后的完整高度：真实成员 + carriedCount 个完整槽位，尾槽不含 gap。
+    /// </summary>
+    internal static double TargetQueueHeightDip(
+        int memberCount,
+        int carriedCount,
+        double slotHeight,
+        double gap)
+    {
+        var members = Math.Max(0, memberCount);
+        var carried = Math.Max(1, carriedCount);
+        var slot = double.IsFinite(slotHeight) && slotHeight > 0 ? slotHeight : 0;
+        var normalizedGap = double.IsFinite(gap) && gap > 0 ? gap : 0;
+        return Math.Max(
+            0,
+            (members + carried) * slot - normalizedGap);
+    }
+
+    /// <summary>
+    /// 插入短线中心 Y：标记插入块的上边界。
     ///
-    /// 队首没有上方成员，间隙从队列顶边开始；队尾没有下方成员，队列底边只按额外间隙延伸，
-    /// 因此三个位置共用同一公式：
-    /// prevBottom = queueTop + (index - 1) * slot + capsuleHeight（index 0 时取 queueTop）
-    /// nextTop    = queueTop + index * slot + extraGap（队尾再扣掉正常 gap）
+    /// 队首没有上方成员，短线落在队列顶边；其余情况落在“上方成员底边”和“插入块顶边”
+    /// 之间的正常 gap 中央。完整槽位由布局本身表达，不再让短线随 carriedCount 移动。
     /// </summary>
     internal static double InsertionLineCenterYDip(
         double queueTopDip,
         int targetIndex,
-        int memberCount,
         double slotHeight,
-        double capsuleHeight,
-        int carriedCount)
+        double gap)
     {
         if (!double.IsFinite(queueTopDip))
         {
             return 0;
         }
 
-        var count = Math.Max(0, memberCount);
-        var index = Math.Clamp(targetIndex, 0, count);
+        var index = Math.Max(0, targetIndex);
+        if (index == 0)
+        {
+            return queueTopDip;
+        }
+
         var slot = double.IsFinite(slotHeight) && slotHeight > 0 ? slotHeight : 0;
-        var height = double.IsFinite(capsuleHeight) && capsuleHeight > 0 ? capsuleHeight : 0;
-        var gap = Math.Max(0, slot - height);
-        var prevBottom = index == 0
-            ? queueTopDip
-            : queueTopDip + (index - 1) * slot + height;
-        // 队中/队首下方成员会整体下移 extraGap；队尾没有成员可下移，队列底边本身只延伸
-        // extraGap，因此不再叠加正常 gap。
-        var nextTop = queueTopDip
-            + index * slot
-            - (index == count ? gap : 0)
-            + ExtraInsertionGapDip(carriedCount);
-        return (prevBottom + nextTop) / 2.0;
+        var normalizedGap = double.IsFinite(gap) && gap > 0 ? gap : 0;
+        return queueTopDip + index * slot - normalizedGap / 2.0;
     }
 
     /// <summary>插入短线宽度：不超过胶囊可见 body 宽度；非法宽度返回 0（窗口侧隐藏）。</summary>

@@ -29,25 +29,28 @@ internal static class EdgeCapsuleQueuePreviewChecks
             Placement(windows["fixture-3"]).Index == 1,
             "target queue did not start with its true slot order");
 
-        // 源队列 qa 由 [0, 1] 撤走 0 后收拢为 [1]；目标 qb 由 [2, 3] 只在插入点下方
-        // 轻微让位：成员 Index 不变，SlotCount 按最终提交槽数归一化，额外间隙为 10 DIP。
-        controller.PreviewDeepCapsuleQueueDrag([source], targetKey, 1);
+        // 源队列 qa 由 [0, 1] 撤走 0 后收拢为 [1]；目标 qb 按完整槽位展开为 3 槽，
+        // fixture-3 下移一整槽；下方 qc 被求解器推到 470（+20）。
+        Require(
+            controller.PreviewDeepCapsuleQueueDrag([source], targetKey, 1),
+            "the normal insertion preview should be feasible");
         Require(
             Placement(windows["fixture-2"]).Index == 0 &&
             Placement(windows["fixture-2"]).SlotCount == 3 &&
             Math.Abs(Placement(windows["fixture-2"]).TopOffsetDip) < 1e-6,
             "preview did not keep the first target member in place");
         Require(
-            Placement(windows["fixture-3"]).Index == 1 &&
+            Placement(windows["fixture-3"]).Index == 2 &&
             Placement(windows["fixture-3"]).SlotCount == 3 &&
-            Math.Abs(Placement(windows["fixture-3"]).TopOffsetDip - 10) < 1e-6,
-            "preview did not part the member below the insertion point");
+            Math.Abs(Placement(windows["fixture-3"]).TopOffsetDip) < 1e-6,
+            "preview did not reserve a full slot below the insertion point");
         Require(
-            Placement(windows["fixture-1"]).Index == 0,
+            Placement(windows["fixture-1"]).Index == 0 &&
+            Placement(windows["fixture-1"]).SlotCount == 1,
             "preview did not close the source queue's vacated slot");
         Require(
-            Math.Abs(Placement(windows["fixture-4"]).TopOffsetDip) < 1e-6,
-            "the small insertion gap pushed a neighbouring queue that already had room");
+            Math.Abs(Placement(windows["fixture-4"]).TopOffsetDip - 20) < 1e-6,
+            "the queue below the target did not avoid the inserted slot");
 
         controller.RestoreDeepCapsuleQueuePreview(targetKey);
         Require(
@@ -58,7 +61,7 @@ internal static class EdgeCapsuleQueuePreviewChecks
             Placement(windows["fixture-3"]).Index == 1 &&
             Placement(windows["fixture-3"]).SlotCount == 2 &&
             Math.Abs(Placement(windows["fixture-3"]).TopOffsetDip) < 1e-6,
-            "restore left the target queue's opened gap behind");
+            "restore left the target queue's opened slot behind");
         Require(
             Placement(windows["fixture-1"]).Index == 0,
             "restore disturbed the collapsed source queue");
@@ -66,24 +69,34 @@ internal static class EdgeCapsuleQueuePreviewChecks
             Math.Abs(Placement(windows["fixture-4"]).TopOffsetDip) < 1e-6,
             "restore left the neighbouring queue displaced");
 
-        // 重新进入同一目标必须能再次让位；交互层若残留 preview key，会在这里暴露。
-        controller.PreviewDeepCapsuleQueueDrag([source], targetKey, 1);
+        // 重新进入同一目标必须能再次展开；交互层若残留 preview key，会在这里暴露。
         Require(
-            Placement(windows["fixture-3"]).Index == 1 &&
-            Placement(windows["fixture-3"]).SlotCount == 3 &&
-            Math.Abs(Placement(windows["fixture-3"]).TopOffsetDip - 10) < 1e-6,
-            "re-entering the same target did not part its members again");
+            controller.PreviewDeepCapsuleQueueDrag([source], targetKey, 1),
+            "re-entering the same target should be feasible");
+        Require(
+            Placement(windows["fixture-3"]).Index == 2 &&
+            Placement(windows["fixture-3"]).SlotCount == 3,
+            "re-entering the same target did not reserve its slot again");
 
-        // Ctrl 整队：额外间隙随携带数量小幅加宽（2 个 → 18 DIP）。
+        // Ctrl 整队：两个胶囊占两个完整槽位，qb bottom=516，qc 被推到 520（+70）。
         var secondSource = controller.State.Papers.Single(paper => paper.Id == "fixture-1");
-        controller.PreviewDeepCapsuleQueueDrag([source, secondSource], targetKey, 1);
         Require(
+            controller.PreviewDeepCapsuleQueueDrag([source, secondSource], targetKey, 1),
+            "the two-capsule transfer preview should be feasible");
+        Require(
+            Placement(windows["fixture-3"]).Index == 3 &&
             Placement(windows["fixture-3"]).SlotCount == 4 &&
-            Math.Abs(Placement(windows["fixture-3"]).TopOffsetDip - 18) < 1e-6,
-            "a two-capsule transfer did not widen the insertion gap");
+            Math.Abs(Placement(windows["fixture-3"]).TopOffsetDip) < 1e-6,
+            "a two-capsule transfer did not reserve both slots");
+        Require(
+            Math.Abs(Placement(windows["fixture-4"]).TopOffsetDip - 70) < 1e-6,
+            "a two-capsule transfer did not push the queue below by the full block");
         controller.RestoreDeepCapsuleQueuePreview(targetKey);
 
         // 插入短线：同一 (队列, index, carriedCount) 的重复下发不得重启滑动动画。
+        Require(
+            controller.PreviewDeepCapsuleQueueDrag([source], targetKey, 1),
+            "the outline preview should be feasible");
         controller.ShowEdgeCapsuleQueueDropTargetOutline(targetKey, source.Id, 1, 1);
         var outline = Field(controller, "_edgeCapsuleQueueDropTargetOutline");
         Require(outline != null, "drop-target outline was not created");
@@ -94,8 +107,8 @@ internal static class EdgeCapsuleQueuePreviewChecks
             (int)Part(outline!, "InsertionLineSlideCount") == 0,
             "the first appearance must not slide");
         Require(
-            Math.Abs((double)Part(outline!, "InsertionLineGapDip") - 10) < 1e-6,
-            "a single carried capsule did not use the base insertion gap");
+            !(bool)Part(outline!, "InsertionLineIsWarning"),
+            "a feasible insertion must not use the warning color");
 
         var slidesAtOne = (int)Part(outline!, "InsertionLineSlideCount");
         var topAtOne = (double)Part(outline!, "InsertionLineTopTargetDip");
@@ -113,15 +126,6 @@ internal static class EdgeCapsuleQueuePreviewChecks
         Require(
             topAtZero < topAtOne,
             "the insertion line did not move toward the earlier slot");
-
-        // carriedCount 变大时，插入间隙加宽，短线随之下移。
-        controller.ShowEdgeCapsuleQueueDropTargetOutline(targetKey, source.Id, 2, 0);
-        Require(
-            Math.Abs((double)Part(outline!, "InsertionLineGapDip") - 18) < 1e-6,
-            "a two-capsule block did not widen the insertion gap");
-        Require(
-            (double)Part(outline!, "InsertionLineTopTargetDip") > topAtZero,
-            "a wider insertion gap did not push the line lower");
 
         controller.EndEdgeCapsuleQueueDropTargetOutline();
 
@@ -161,6 +165,71 @@ internal static class EdgeCapsuleQueuePreviewChecks
             (int)Part(controller, "MagnetCandidateBuildCount") == buildsAfterFirst,
             "repeating the same magnet evaluation rebuilt its candidates");
         controller.ForgetDeepCapsuleQueueDrag();
+
+        // 空间不足：qa 顶到 8、qb 顶到 40，qa 无法再向上让位。
+        var qaKey = AppController.QueueKeyForPaper(source);
+        var qcKey = AppController.QueueKeyForPaper(
+            controller.State.Papers.Single(paper => paper.Id == "fixture-4"));
+        controller.State.DeepCapsuleQueueStartTopMargins[qaKey] = 8;
+        controller.State.DeepCapsuleQueueStartTopMargins[targetKey] = 40;
+        controller.State.DeepCapsuleQueueStartTopMargins[qcKey] = 450;
+        controller.ArrangeDeepCapsules(animate: false);
+
+        Require(
+            !controller.PreviewDeepCapsuleQueueDrag([source], targetKey, 1),
+            "an insertion with no legal layout must be rejected");
+        controller.ShowEdgeCapsuleQueueDropTargetOutline(targetKey, source.Id, 1, 1);
+        var warningOutline = Field(controller, "_edgeCapsuleQueueDropTargetOutline");
+        Require(
+            warningOutline != null &&
+            (bool)Part(warningOutline, "InsertionLineIsWarning"),
+            "an infeasible insertion must draw the warning-colored line");
+        Require(
+            Placement(windows["fixture-2"]).Index == 0 &&
+            Placement(windows["fixture-2"]).SlotCount == 2 &&
+            Placement(windows["fixture-3"]).Index == 1 &&
+            Placement(windows["fixture-3"]).SlotCount == 2,
+            "an infeasible preview must not expand the target queue");
+
+        var commitAnchor = new EdgeCapsuleDropAnchor(
+            new DeviceScreenPoint(
+                geometry.WorkArea.Right - 10,
+                geometry.WorkArea.Top + 100 * geometry.DpiScaleY),
+            geometry.WorkArea.Top + 100 * geometry.DpiScaleY);
+        Require(
+            !controller.CommitDeepCapsuleQueueDrop(source, commitAnchor, targetKey, 1),
+            "an infeasible insertion must be rejected on commit");
+        Require(
+            AppController.QueueKeyForPaper(source) == qaKey,
+            "a rejected capsule must stay in its source queue");
+        Require(
+            Math.Abs(controller.State.DeepCapsuleQueueStartTopMargins[qaKey] - 8) < 1e-6 &&
+            Math.Abs(controller.State.DeepCapsuleQueueStartTopMargins[targetKey] - 40) < 1e-6 &&
+            Math.Abs(controller.State.DeepCapsuleQueueStartTopMargins[qcKey] - 450) < 1e-6,
+            "a rejected insertion must not persist any layout change");
+
+        controller.EndEdgeCapsuleQueueDropTargetOutline();
+        controller.State.DeepCapsuleQueueStartTopMargins[qaKey] = 48;
+        controller.State.DeepCapsuleQueueStartTopMargins[targetKey] = 320;
+        controller.State.DeepCapsuleQueueStartTopMargins[qcKey] = 450;
+        controller.ArrangeDeepCapsules(animate: false);
+
+        // 可行提交：把避让后的队列 top 持久化，Arrange 后与预览一致。
+        Require(
+            controller.CommitDeepCapsuleQueueDrop(source, commitAnchor, targetKey, 1),
+            "a feasible insertion should commit");
+        Require(
+            AppController.QueueKeyForPaper(source) == targetKey,
+            "the committed capsule did not join the target queue");
+        Require(
+            Math.Abs(controller.State.DeepCapsuleQueueStartTopMargins[targetKey] - 320) < 1e-6 &&
+            Math.Abs(controller.State.DeepCapsuleQueueStartTopMargins[qcKey] - 470) < 1e-6 &&
+            Math.Abs(controller.State.DeepCapsuleQueueStartTopMargins[qaKey] - 48) < 1e-6,
+            "the committed layout was not persisted");
+        await Until(
+            () => Placement(windows["fixture-3"]).Index == 2 &&
+                  Placement(windows["fixture-3"]).SlotCount == 3,
+            "the committed target queue did not adopt the final slot layout");
     }
 
     private static EdgeCapsulePlacement Placement(PaperWindow window) =>

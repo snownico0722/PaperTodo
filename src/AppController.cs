@@ -2318,40 +2318,88 @@ public sealed partial class AppController : IDisposable
     /// postpone the whole preview until the gesture ends — exactly the "stiff" behaviour this
     /// replaces.
     /// </summary>
-    public void PreviewDeepCapsuleQueueDrag(
+    /// <summary>
+    /// 返回插入是否有合法布局。不可行时只收拢源队列，不移动目标/邻队；描边改画警示线。
+    /// </summary>
+    public bool PreviewDeepCapsuleQueueDrag(
         IReadOnlyList<PaperData> carried,
         string targetQueueKey,
         int targetIndex)
     {
         if (!State.UseCapsuleMode || !State.UseDeepCapsuleMode || carried.Count == 0)
         {
-            return;
+            return false;
         }
 
         var sourceQueueKey = QueueKey(carried[0]);
-        var allPapers = DeepCapsulePapersInOrder();
-        var carriedIds = new HashSet<string>(carried.Select(p => p.Id), StringComparer.Ordinal);
-
-        // The queue losing members: everyone else closes the gaps they leave.
-        PreviewDeepCapsuleQueueVacatedSource(allPapers, sourceQueueKey, carriedIds);
-
         if (string.Equals(targetQueueKey, sourceQueueKey, StringComparison.Ordinal))
         {
-            return;
+            return false;
         }
 
-        // The queue gaining members: only part the members below the insertion point by a small
-        // gap. The full slot is opened when the capsule is actually committed on release.
-        var target = new List<PaperData>(allPapers.Where(p => QueueKey(p) == targetQueueKey));
-        PreviewEdgeCapsuleQueueInsertion(
-            targetQueueKey,
-            target,
-            carriedIds,
-            Math.Clamp(targetIndex, 0, target.Count),
-            carried.Count);
+        var plan = EvaluateEdgeCapsuleQueueDropLayout(carried, targetQueueKey, targetIndex);
+        _edgeCapsuleQueueDropLayoutPlan = plan;
 
-        // 目标队列变高后，同一边下方的其它队列也像 mini-view 避让那样一起下移。
-        PreviewDeepCapsuleQueueDragAvoidance(carried, targetQueueKey);
+        // 跨边源队列只收拢，不参与目标边求解；同边源队列由计划统一处理。
+        // 不可行时同边源队列也要收拢，但目标/邻队保持真实布局。
+        if (!plan.Feasible || !plan.SourceOnTargetEdge)
+        {
+            PreviewDeepCapsuleQueueVacatedSource(carried[0]);
+        }
+
+        _deepCapsuleDragAvoidanceCarriedIds.Clear();
+        foreach (var paper in carried)
+        {
+            _deepCapsuleDragAvoidanceCarriedIds.Add(paper.Id);
+        }
+
+        if (!plan.Feasible)
+        {
+            return false;
+        }
+
+        if (!WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(
+                plan.MonitorDeviceName,
+                out var geometry))
+        {
+            return false;
+        }
+
+        var carriedIds = new HashSet<string>(
+            carried.Select(paper => paper.Id),
+            StringComparer.Ordinal);
+        var area = geometry.LocalWorkAreaDip;
+        foreach (var (queueKey, preview) in plan.Queues)
+        {
+            if (preview.PreviewMembers.Count == 0)
+            {
+                continue;
+            }
+
+            var margin = DeepCapsuleStartTopMarginForQueue(
+                plan.MonitorDeviceName,
+                EdgeForQueueSide(plan.Side),
+                preview.QueueId);
+            var baseTop = EdgeCapsuleLayout.TopForIndex(
+                0,
+                margin,
+                area,
+                preview.PreviewMembers.Count,
+                plan.GapDip);
+            var offset = preview.TopDip - baseTop;
+            PreviewEdgeCapsuleQueueMembers(
+                queueKey,
+                preview.PreviewMembers,
+                carriedIds,
+                offset);
+
+            if (!string.Equals(queueKey, targetQueueKey, StringComparison.Ordinal))
+            {
+                _deepCapsuleDragAvoidanceQueues[queueKey] = preview.IsSource;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>
@@ -2426,8 +2474,9 @@ public sealed partial class AppController : IDisposable
 
     private void PreviewEdgeCapsuleQueueMembers(
         string queueKey,
-        List<PaperData> members,
-        HashSet<string> carriedIds)
+        IReadOnlyList<PaperData> members,
+        HashSet<string> carriedIds,
+        double topOffsetDip = 0)
     {
         if (members.Count == 0)
         {
@@ -2455,66 +2504,12 @@ public sealed partial class AppController : IDisposable
                 continue;
             }
 
-            window.PreviewDeepCapsulePlacement(plan.Placements[member.Id]);
-        }
-    }
-
-    /// <summary>
-    /// 跨队列插入预览：目标成员保持原有槽位，只把插入点及其下方的成员整体下移一个小间隙。
-    ///
-    /// 不能复用 <see cref="PreviewEdgeCapsuleQueueMembers"/>：那条路径会把 carried 插进成员
-    /// 列表并按完整槽位重排，松手前就会撑开一整格。这里仍由同一个 coordinator 决定成员顺序，
-    /// 只是额外叠加一个相对位移；SlotCount 按最终提交槽数归一化，避免长队列靠近底部时跳动。
-    /// </summary>
-    private void PreviewEdgeCapsuleQueueInsertion(
-        string queueKey,
-        IReadOnlyList<PaperData> targetMembers,
-        HashSet<string> carriedIds,
-        int targetIndex,
-        int carriedCount)
-    {
-        if (targetMembers.Count == 0)
-        {
-            return;
-        }
-
-        var plan = EdgeCapsuleQueueCoordinator.Build(
-            targetMembers.Select(member => new EdgeCapsuleQueueMember(member, queueKey)),
-            State.UseCapsuleCollapseAll);
-        if (plan.Queues.Count == 0)
-        {
-            return;
-        }
-        if (plan.Queues[0].HasMaster && IsCapsuleCollapseAllActiveForQueue(queueKey))
-        {
-            return;
-        }
-
-        var clampedIndex = Math.Clamp(targetIndex, 0, targetMembers.Count);
-        var normalizedCarriedCount = Math.Max(1, carriedCount);
-        var extraGap = EdgeCapsuleQueueDropTargetGeometry.ExtraInsertionGapDip(
-            normalizedCarriedCount);
-        for (var index = 0; index < targetMembers.Count; index++)
-        {
-            var member = targetMembers[index];
-            if (carriedIds.Contains(member.Id) ||
-                !_windows.TryGetValue(member.Id, out var window) ||
-                !ShouldPaperOccupyDeepCapsuleSlot(member, window))
-            {
-                continue;
-            }
-
             var placement = plan.Placements[member.Id];
-            // 与最终提交一致的槽数，只影响 StartTopMargin 的归一化上限。
-            placement = placement with
-            {
-                SlotCount = placement.SlotCount + normalizedCarriedCount
-            };
-            if (index >= clampedIndex)
+            if (Math.Abs(topOffsetDip) > 1e-9)
             {
                 placement = placement with
                 {
-                    TopOffsetDip = placement.TopOffsetDip + extraGap
+                    TopOffsetDip = placement.TopOffsetDip + topOffsetDip
                 };
             }
 

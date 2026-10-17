@@ -99,14 +99,16 @@ public sealed partial class AppController
     /// target at the magnet point, keeping its internal order; with no candidate it starts a queue
     /// of its own at the drop height.
     /// </summary>
-    internal void CommitEdgeCapsuleQueueTransfer(
+    internal bool CommitEdgeCapsuleQueueTransfer(
         EdgeCapsuleQueueTransferSnapshot? snapshot,
-        EdgeCapsuleDropAnchor anchor)
+        EdgeCapsuleDropAnchor anchor,
+        string expectedTargetQueueKey = "",
+        int expectedTargetIndex = -1)
     {
         if (snapshot == null)
         {
             _edgeCapsuleQueueTransferSources.Clear();
-            return;
+            return false;
         }
 
         _edgeCapsuleQueueTransferSources.Remove(snapshot.SourceQueueKey);
@@ -115,7 +117,22 @@ public sealed partial class AppController
         if (carried.Count == 0)
         {
             ArrangeDeepCapsules(animate: true);
-            return;
+            return false;
+        }
+
+        // 预览已经选定的目标优先：提交和预览必须落到同一条队列、同一槽位。
+        if (!string.IsNullOrEmpty(expectedTargetQueueKey) &&
+            expectedTargetIndex >= 0 &&
+            FreeQueueMembersExcluding(
+                expectedTargetQueueKey,
+                snapshot.PaperIds.FirstOrDefault() ?? "").Count > 0)
+        {
+            return MergeTransferredQueueInto(
+                snapshot,
+                carried,
+                expectedTargetQueueKey,
+                anchor,
+                expectedTargetIndex);
         }
 
         // Do not inherit a drag-time hold: the pointer is released, so the Schmitt trigger's exit
@@ -125,8 +142,11 @@ public sealed partial class AppController
 
         if (plan.Outcome == EdgeCapsuleQueueMagnetOutcome.Merge)
         {
-            MergeTransferredQueueInto(snapshot, carried, plan.TargetQueueKey, anchor);
-            return;
+            return MergeTransferredQueueInto(
+                snapshot,
+                carried,
+                plan.TargetQueueKey,
+                anchor);
         }
 
         // 新队列使用磁吸解析后的落点，而不是原始光标：落点已按整队高度做过工作区夹取与避让，
@@ -134,7 +154,7 @@ public sealed partial class AppController
         if (!TryResolveQueueDropGeometry(carried[0], anchor, out var drop))
         {
             CancelEdgeCapsuleQueueTransfer(snapshot);
-            return;
+            return false;
         }
 
         // Evaluate 返回 None 时没有可用的磁吸落点，退回“胶囊中心 - 半高”的原始落点。
@@ -142,17 +162,19 @@ public sealed partial class AppController
             ? plan.NewQueueStartTopDip
             : drop.CenterTopDip - PaperLayoutDefaults.CapsuleHeight / 2.0;
         StartTransferredQueueAt(snapshot, carried, drop, startTop);
+        return true;
     }
 
     /// <summary>
     /// Join an existing queue: every carried member adopts the target's queue id and the whole
     /// block is placed at the magnet point, so the queue reads as one piece inside the target.
     /// </summary>
-    private void MergeTransferredQueueInto(
+    private bool MergeTransferredQueueInto(
         EdgeCapsuleQueueTransferSnapshot snapshot,
         IReadOnlyList<PaperData> carried,
         string targetQueueKey,
-        EdgeCapsuleDropAnchor anchor)
+        EdgeCapsuleDropAnchor anchor,
+        int expectedTargetIndex = -1)
     {
         var targetMembers = FreeQueueMembersExcluding(targetQueueKey, snapshot.PaperIds.FirstOrDefault() ?? "");
         var targetQueueId = FirstQueueIdOf(targetMembers);
@@ -173,20 +195,28 @@ public sealed partial class AppController
                     carried,
                     fallbackDrop,
                     fallbackDrop.CenterTopDip - PaperLayoutDefaults.CapsuleHeight / 2.0);
-            }
-            else
-            {
-                CancelEdgeCapsuleQueueTransfer(snapshot);
+                return true;
             }
 
-            return;
+            CancelEdgeCapsuleQueueTransfer(snapshot);
+            return false;
         }
 
-        var insertAt = DeepCapsuleQueueInsertIndexFor(
-            targetQueueKey,
-            snapshot.PaperIds.FirstOrDefault() ?? "",
-            anchor.CapsuleCenterYDevice,
-            carried.Count);
+        var insertAt = expectedTargetIndex >= 0
+            ? Math.Clamp(expectedTargetIndex, 0, targetMembers.Count)
+            : DeepCapsuleQueueInsertIndexFor(
+                targetQueueKey,
+                snapshot.PaperIds.FirstOrDefault() ?? "",
+                anchor.CapsuleCenterYDevice,
+                carried.Count);
+
+        // 先求完整布局，再改成员；空间不足时恢复整队快照，不留下半完成的合并。
+        var layoutPlan = EvaluateEdgeCapsuleQueueDropLayout(carried, targetQueueKey, insertAt);
+        if (!layoutPlan.Feasible)
+        {
+            CancelEdgeCapsuleQueueTransfer(snapshot);
+            return false;
+        }
 
         foreach (var member in carried)
         {
@@ -196,12 +226,14 @@ public sealed partial class AppController
             member.CapsuleQueueId = targetQueueId;
         }
 
-        InsertPaperBesideQueues(carried, targetMembers, insertAt);
+        InsertPaperBesideQueues(carried, targetMembers, layoutPlan.TargetIndex);
+        PersistEdgeCapsuleQueueDropLayoutMargins(layoutPlan);
         RemoveVacatedQueueStartMargin(snapshot, QueueKey(monitorName, side, targetQueueId));
 
         ArrangeDeepCapsules(animate: true);
         RefreshTrayMenu();
         SaveNow();
+        return true;
     }
 
     /// <summary>

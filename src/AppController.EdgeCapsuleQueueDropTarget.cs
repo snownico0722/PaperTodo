@@ -6,8 +6,8 @@ namespace PaperTodo;
 /// Lifecycle for the lightweight overlay that marks which free queue a drag would join.
 ///
 /// Two markers answer the two questions: a thin rail on the queue's inner edge identifies the
-/// queue, and a short insertion line identifies the slot. The preview queue only grows by a small
-/// gap below the insertion point; the full slot is opened when the capsule is committed.
+/// queue, and a short insertion line identifies the slot. The preview uses the full inserted
+/// slots and the same layout plan as the commit, so other queues avoid exactly once.
 /// </summary>
 public sealed partial class AppController
 {
@@ -26,12 +26,18 @@ public sealed partial class AppController
         string queueKey,
         string draggedPaperId,
         int carriedCount = 1,
-        int targetIndex = 0)
+        int targetIndex = 0,
+        EdgeCapsuleQueueDropLayoutPlan? plan = null)
     {
         if (!EdgeCapsuleFreeQueuesEnabled)
         {
             EndEdgeCapsuleQueueDropTargetOutline();
             return;
+        }
+
+        if (plan != null)
+        {
+            _edgeCapsuleQueueDropLayoutPlan = plan;
         }
 
         var requestedCarriedCount = Math.Max(1, carriedCount);
@@ -88,6 +94,7 @@ public sealed partial class AppController
         _edgeCapsuleQueueDropTargetOutlinePaperId = "";
         _edgeCapsuleQueueDropTargetOutlineCarriedCount = 0;
         _edgeCapsuleQueueDropTargetOutlineIndex = -1;
+        _edgeCapsuleQueueDropLayoutPlan = null;
         outline?.CloseForOwner();
     }
 
@@ -95,8 +102,8 @@ public sealed partial class AppController
     /// 目标队列的预览矩形，以及插入位置的两条指示线矩形。全部是设备像素；DPI 一并返回，
     /// 供描边窗口换算成窗口内 DIP。
     ///
-    /// 队列矩形只按真实成员高度加一个额外插入间隙，不再为 incoming capsule 打开完整槽位：
-    /// 拖拽期间只需要告诉用户“插在哪”，松手落位时才展开完整槽位。
+    /// 可行时使用与提交完全相同的计划（已按完整槽位展开并求解邻队避让）；不可行时使用
+    /// 目标队列的真实布局绘制警示线，不展示一个实际不会发生的重叠结果。
     /// </summary>
     private bool TryGetEdgeCapsuleQueueDropTargetBounds(
         string queueKey,
@@ -117,8 +124,10 @@ public sealed partial class AppController
 
         monitorDeviceName = edgeKey[..separator];
         var isLeftQueue = edgeKey[(separator + 1)..] == DeepCapsuleSides.Left;
-        var side = isLeftQueue ? EdgeCapsuleEdge.Left : EdgeCapsuleEdge.Right;
-        if (!WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(monitorDeviceName, out var geometry))
+        var side = isLeftQueue ? DeepCapsuleSides.Left : DeepCapsuleSides.Right;
+        if (!WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(
+                monitorDeviceName,
+                out var geometry))
         {
             return false;
         }
@@ -130,27 +139,50 @@ public sealed partial class AppController
         }
 
         var area = geometry.LocalWorkAreaDip;
-        // 起始高度仍按最终提交槽数归一化，避免长队列靠近底部时预览与落位整队跳动。
-        var finalSlotCount = members.Count + carriedCount;
-        var slotHeight = EdgeCapsuleLayout.SlotHeight(DeepCapsuleGap);
-        var startTop = EdgeCapsuleLayout.NormalizeStartTopMargin(
-            DeepCapsuleStartTopMarginForQueue(monitorDeviceName, side, FirstQueueIdOf(members)),
-            area,
-            finalSlotCount,
-            DeepCapsuleGap);
+        var clampedIndex = Math.Clamp(targetIndex, 0, members.Count);
+        var requestedCarriedCount = Math.Max(1, carriedCount);
 
-        var topDip = EdgeCapsuleLayout.TopForIndex(
-            0,
-            startTop,
-            area,
-            finalSlotCount,
-            DeepCapsuleGap);
-        var heightDip = EdgeCapsuleQueueDropTargetGeometry.PreviewQueueHeightDip(
-            members.Count,
-            slotHeight,
-            DeepCapsuleGap,
-            PaperLayoutDefaults.CapsuleHeight,
-            carriedCount);
+        var plan = _edgeCapsuleQueueDropLayoutPlan;
+        var hasPlan = plan != null &&
+                      string.Equals(plan.TargetQueueKey, queueKey, StringComparison.Ordinal) &&
+                      plan.TargetIndex == clampedIndex &&
+                      plan.CarriedCount == requestedCarriedCount &&
+                      string.Equals(plan.EdgeKey, edgeKey, StringComparison.Ordinal);
+
+        double targetTopDip;
+        double targetHeightDip;
+        double lineCenterDip;
+        bool feasible;
+        if (hasPlan)
+        {
+            targetTopDip = plan!.TargetTopDip;
+            targetHeightDip = plan.TargetHeightDip;
+            lineCenterDip = plan.InsertionLineCenterYDip;
+            feasible = plan.Feasible;
+        }
+        else
+        {
+            // 预览计划尚未生成时的安全回退：按真实队列布局绘制，不做插入展开。
+            var gap = DeepCapsuleGap;
+            var slotHeight = EdgeCapsuleLayout.SlotHeight(gap);
+            var margin = DeepCapsuleStartTopMarginForQueue(
+                monitorDeviceName,
+                EdgeForQueueSide(side),
+                FirstQueueIdOf(members));
+            targetTopDip = EdgeCapsuleLayout.TopForIndex(
+                0,
+                margin,
+                area,
+                members.Count,
+                gap);
+            targetHeightDip = members.Count * slotHeight - gap;
+            lineCenterDip = EdgeCapsuleQueueDropTargetGeometry.InsertionLineCenterYDip(
+                targetTopDip,
+                clampedIndex,
+                slotHeight,
+                gap);
+            feasible = true;
+        }
 
         // 指示线跟随目标队列的真实可见宽度，而不是固定 92 DIP；短标题胶囊也能对齐。
         var visibleWidthDip = MeasureEdgeCapsuleQueueVisibleWidthDip(members, area.Width);
@@ -167,11 +199,10 @@ public sealed partial class AppController
 
         var queueBounds = new DeviceScreenRect(
             leftDevice,
-            (int)Math.Round(DeviceY(topDip)),
+            (int)Math.Round(DeviceY(targetTopDip)),
             leftDevice + widthDevice,
-            (int)Math.Round(DeviceY(topDip + heightDip)));
+            (int)Math.Round(DeviceY(targetTopDip + targetHeightDip)));
 
-        var clampedIndex = Math.Clamp(targetIndex, 0, members.Count);
         // 贴边胶囊窗口只在靠屏幕内侧保留 chrome，可见 body 的起点/宽度据此换算。
         var bodyWidthDip = Math.Max(
             0,
@@ -180,22 +211,17 @@ public sealed partial class AppController
 
         var lineWidthDip = EdgeCapsuleQueueDropTargetGeometry.InsertionLineWidthDip(bodyWidthDip);
         var lineLeftDip = bodyLeftDip + (bodyWidthDip - lineWidthDip) / 2.0;
-        var lineTopDip = EdgeCapsuleQueueDropTargetGeometry.InsertionLineCenterYDip(
-                topDip,
-                clampedIndex,
-                members.Count,
-                slotHeight,
-                PaperLayoutDefaults.CapsuleHeight,
-                carriedCount) -
+        var lineTopDip = lineCenterDip -
             EdgeCapsuleQueueDropTargetGeometry.InsertionLineThicknessDip / 2.0;
 
         var railLeftDip = EdgeCapsuleQueueDropTargetGeometry.QueueEdgeLineXDip(
             visibleWidthDip,
             isLeftQueue);
-        var railTopDip = topDip + EdgeCapsuleQueueDropTargetGeometry.QueueEdgeLineInsetDip;
+        var railTopDip = targetTopDip +
+            EdgeCapsuleQueueDropTargetGeometry.QueueEdgeLineInsetDip;
         var railHeightDip = Math.Max(
             1,
-            heightDip - EdgeCapsuleQueueDropTargetGeometry.QueueEdgeLineInsetDip * 2);
+            targetHeightDip - EdgeCapsuleQueueDropTargetGeometry.QueueEdgeLineInsetDip * 2);
 
         var lineBottomDip = lineTopDip +
             EdgeCapsuleQueueDropTargetGeometry.InsertionLineThicknessDip;
@@ -219,7 +245,8 @@ public sealed partial class AppController
             geometry.DpiScaleX,
             geometry.DpiScaleY,
             clampedIndex,
-            carriedCount);
+            requestedCarriedCount,
+            feasible);
         return true;
     }
 
@@ -259,258 +286,7 @@ public sealed partial class AppController
     // 拖拽插入时被联动推开的队列：key -> 是否为源队列。
     // 源队列恢复时必须重新下发“撤走 carried 后”的收拢布局，不能按真实成员恢复。
     private readonly Dictionary<string, bool> _deepCapsuleDragAvoidanceQueues = new(StringComparer.Ordinal);
-    private string _deepCapsuleDragAvoidanceTargetKey = "";
-    private string _deepCapsuleDragAvoidanceSourceQueueKey = "";
     private readonly HashSet<string> _deepCapsuleDragAvoidanceCarriedIds = new(StringComparer.Ordinal);
-
-    /// <summary>
-    /// 磁吸插入时，把目标队列同一边下方的其它队列一起推开，复用 hover mini-view 的边级避让。
-    ///
-    /// 目标队列自身的成员让位由 PreviewDeepCapsuleQueueDrag 的绝对 placement 负责；这里只处理
-    /// 因为目标队列变高而需要下移的其它队列。offset 以相对位移写入 TopOffsetDip，和 mini-view
-    /// 避让使用同一套语义。
-    /// </summary>
-    private void PreviewDeepCapsuleQueueDragAvoidance(
-        IReadOnlyList<PaperData> carried,
-        string targetQueueKey)
-    {
-        if (carried.Count == 0 || string.IsNullOrEmpty(targetQueueKey))
-        {
-            return;
-        }
-
-        var sourceQueueKey = QueueKey(carried[0]);
-        if (!string.Equals(
-                _deepCapsuleDragAvoidanceTargetKey,
-                targetQueueKey,
-                StringComparison.Ordinal))
-        {
-            // 目标切换：先撤掉上一目标留下的联动位移。
-            RestoreDeepCapsuleQueueDragAvoidance();
-        }
-
-        _deepCapsuleDragAvoidanceTargetKey = targetQueueKey;
-        _deepCapsuleDragAvoidanceSourceQueueKey = sourceQueueKey;
-        _deepCapsuleDragAvoidanceCarriedIds.Clear();
-        foreach (var paper in carried)
-        {
-            _deepCapsuleDragAvoidanceCarriedIds.Add(paper.Id);
-        }
-
-        var targetEdgeKey = EdgeCapsuleQueueIds.StripInstance(targetQueueKey);
-        var separator = targetEdgeKey.LastIndexOf('|');
-        if (separator < 0 ||
-            !WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(
-                targetEdgeKey[..Math.Max(separator, 0)],
-                out var targetGeometry))
-        {
-            return;
-        }
-
-        var targetMembers = FreeQueueMembersExcluding(targetQueueKey, "");
-        if (targetMembers.Count == 0)
-        {
-            return;
-        }
-
-        var area = targetGeometry.LocalWorkAreaDip;
-        var side = targetEdgeKey[(separator + 1)..] == DeepCapsuleSides.Left
-            ? EdgeCapsuleEdge.Left
-            : EdgeCapsuleEdge.Right;
-        var slotHeight = EdgeCapsuleLayout.SlotHeight(DeepCapsuleGap);
-        var slotCount = targetMembers.Count + carried.Count;
-        var startTop = EdgeCapsuleLayout.NormalizeStartTopMargin(
-            DeepCapsuleStartTopMarginForQueue(
-                targetEdgeKey[..Math.Max(separator, 0)],
-                side,
-                FirstQueueIdOf(targetMembers)),
-            area,
-            slotCount,
-            DeepCapsuleGap);
-        var targetTop = EdgeCapsuleLayout.TopForIndex(0, startTop, area, slotCount, DeepCapsuleGap);
-        // 预览只让出一个小间隙；邻队避让必须按预览底边计算，否则会被多推一个完整槽位。
-        var targetBottom = targetTop
-            + targetMembers.Count * slotHeight
-            - DeepCapsuleGap
-            + EdgeCapsuleQueueDropTargetGeometry.ExtraInsertionGapDip(carried.Count);
-
-        var queues = BuildDeepCapsuleDragAvoidanceQueues(
-            targetQueueKey, targetEdgeKey, targetTop);
-        if (queues.Count == 0)
-        {
-            return;
-        }
-
-        var offsets = EdgeCapsulePreviewLayoutCoordinator.BuildEdgeAvoidanceOffsets(
-            queues,
-            targetQueueKey,
-            targetBottom,
-            PaperLayoutDefaults.CapsuleHeight,
-            DeepCapsuleGap);
-        if (offsets.Count == 0)
-        {
-            return;
-        }
-
-        var basePlan = BuildCurrentEdgeCapsuleQueuePlan();
-        EdgeCapsuleQueuePlan? vacatedSourcePlan = null;
-        if (!string.IsNullOrEmpty(sourceQueueKey))
-        {
-            var remaining = new List<PaperData>();
-            foreach (var paper in DeepCapsulePapersInOrder())
-            {
-                if (!_deepCapsuleDragAvoidanceCarriedIds.Contains(paper.Id) &&
-                    QueueKey(paper) == sourceQueueKey)
-                {
-                    remaining.Add(paper);
-                }
-            }
-
-            if (remaining.Count > 0)
-            {
-                vacatedSourcePlan = EdgeCapsuleQueueCoordinator.Build(
-                    remaining.Select(paper => new EdgeCapsuleQueueMember(paper, sourceQueueKey)),
-                    State.UseCapsuleCollapseAll);
-            }
-        }
-
-        var queueKeysByPaper = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var paper in DeepCapsulePapersInOrder())
-        {
-            queueKeysByPaper[paper.Id] = QueueKey(paper);
-        }
-
-        foreach (var (paperId, offset) in offsets)
-        {
-            EdgeCapsulePlacement placement;
-            var queueKey = queueKeysByPaper.GetValueOrDefault(paperId, "");
-            if (vacatedSourcePlan is { } sourcePlan &&
-                sourcePlan.Placements.TryGetValue(paperId, out var sourcePlacement))
-            {
-                // 源队列成员用“撤走 carried 后”的收拢槽位，再叠加联动位移。
-                placement = sourcePlacement;
-                queueKey = sourceQueueKey;
-            }
-            else if (basePlan.Placements.TryGetValue(paperId, out var basePlacement))
-            {
-                placement = basePlacement;
-            }
-            else
-            {
-                continue;
-            }
-
-            if (!_windows.TryGetValue(paperId, out var window))
-            {
-                continue;
-            }
-
-            window.PreviewDeepCapsulePlacement(placement with { TopOffsetDip = offset });
-            if (queueKey.Length > 0)
-            {
-                _deepCapsuleDragAvoidanceQueues[queueKey] =
-                    string.Equals(queueKey, sourceQueueKey, StringComparison.Ordinal);
-            }
-        }
-    }
-
-    /// <summary>
-    /// 目标队列同 monitor+side 上的所有队列，按 rest top 升序；carried 成员从源队列中剔除，
-    /// 因此源队列的成员列表和 slotCount 反映“撤走 carried 后”的收拢状态。
-    /// </summary>
-    private List<EdgeCapsuleAvoidanceQueue> BuildDeepCapsuleDragAvoidanceQueues(
-        string targetQueueKey,
-        string targetEdgeKey,
-        double targetRestTopDip)
-    {
-        var result = new List<EdgeCapsuleAvoidanceQueue>();
-        var members = new Dictionary<string, List<PaperData>>(StringComparer.Ordinal);
-        var order = new List<string>();
-
-        foreach (var paper in DeepCapsulePapersInOrder())
-        {
-            if (_deepCapsuleDragAvoidanceCarriedIds.Contains(paper.Id))
-            {
-                continue;
-            }
-
-            var key = QueueKey(paper);
-            if (!string.Equals(
-                    EdgeCapsuleQueueIds.StripInstance(key),
-                    targetEdgeKey,
-                    StringComparison.Ordinal))
-            {
-                continue;
-            }
-
-            if (!members.TryGetValue(key, out var list))
-            {
-                list = new List<PaperData>();
-                members[key] = list;
-                order.Add(key);
-            }
-
-            list.Add(paper);
-        }
-
-        foreach (var key in order)
-        {
-            var papers = members[key];
-            if (papers.Count == 0)
-            {
-                continue;
-            }
-
-            var edgeKey = EdgeCapsuleQueueIds.StripInstance(key);
-            var separator = edgeKey.LastIndexOf('|');
-            if (separator < 0)
-            {
-                continue;
-            }
-
-            var side = edgeKey[(separator + 1)..] == DeepCapsuleSides.Left
-                ? EdgeCapsuleEdge.Left
-                : EdgeCapsuleEdge.Right;
-            if (!WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(
-                    edgeKey[..Math.Max(separator, 0)],
-                    out var geometry))
-            {
-                continue;
-            }
-
-            var slotCount = papers.Count;
-            var startTop = EdgeCapsuleLayout.NormalizeStartTopMargin(
-                DeepCapsuleStartTopMarginForQueue(
-                    edgeKey[..Math.Max(separator, 0)],
-                    side,
-                    FirstQueueIdOf(papers)),
-                geometry.LocalWorkAreaDip,
-                slotCount,
-                DeepCapsuleGap);
-            var restTop = EdgeCapsuleLayout.TopForIndex(
-                0,
-                startTop,
-                geometry.LocalWorkAreaDip,
-                slotCount,
-                DeepCapsuleGap);
-            result.Add(new EdgeCapsuleAvoidanceQueue(
-                key,
-                papers.Select(paper => paper.Id).ToArray(),
-                restTop));
-        }
-
-        // 目标队列用插入后的 top 参与排序，让 owner 在列表中的位置反映新布局。
-        for (var index = 0; index < result.Count; index++)
-        {
-            if (string.Equals(result[index].QueueKey, targetQueueKey, StringComparison.Ordinal))
-            {
-                result[index] = result[index] with { RestTopDip = targetRestTopDip };
-            }
-        }
-
-        result.Sort(static (left, right) => left.RestTopDip.CompareTo(right.RestTopDip));
-        return result;
-    }
 
     /// <summary>撤掉拖拽插入造成的同边联动位移；源队列恢复为收拢后的布局。</summary>
     private void RestoreDeepCapsuleQueueDragAvoidance()
@@ -558,8 +334,6 @@ public sealed partial class AppController
     private void ClearDeepCapsuleQueueDragAvoidanceState()
     {
         _deepCapsuleDragAvoidanceQueues.Clear();
-        _deepCapsuleDragAvoidanceTargetKey = "";
-        _deepCapsuleDragAvoidanceSourceQueueKey = "";
         _deepCapsuleDragAvoidanceCarriedIds.Clear();
     }
 }

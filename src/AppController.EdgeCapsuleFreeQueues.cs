@@ -254,18 +254,37 @@ public sealed partial class AppController
     /// Commit a free-queue drag: decide with the magnet, then apply the resulting Reorder / Merge /
     /// NewQueue outcome. Falls back to the legacy arrangement when free mode is off.
     /// </summary>
-    internal void CommitDeepCapsuleQueueDrop(PaperData paper, EdgeCapsuleDropAnchor anchor)
+    internal bool CommitDeepCapsuleQueueDrop(
+        PaperData paper,
+        EdgeCapsuleDropAnchor anchor,
+        string expectedTargetQueueKey = "",
+        int expectedTargetIndex = -1)
     {
         if (!EdgeCapsuleFreeQueuesEnabled)
         {
-            return;
+            return false;
         }
 
         if (!TryResolveQueueDropGeometry(paper, anchor, out var drop))
         {
             // No monitor to resolve against: leave the arrangement untouched rather than guess.
             ArrangeDeepCapsules(animate: true);
-            return;
+            return false;
+        }
+
+        // 预览已经选定了一个合法目标：提交必须落到同一目标/同一槽位，不能因为清掉 held
+        // 后重新评估磁吸而悄悄落到别处。目标队列若已消失，则退回磁吸重新决定。
+        if (!string.IsNullOrEmpty(expectedTargetQueueKey) &&
+            expectedTargetIndex >= 0 &&
+            FreeQueueMembersExcluding(expectedTargetQueueKey, paper.Id).Count > 0 &&
+            TryResolveQueueGeometry(expectedTargetQueueKey, out var expectedGeometry))
+        {
+            return MergeCapsuleIntoFreeQueue(
+                paper,
+                expectedTargetQueueKey,
+                expectedGeometry,
+                anchor,
+                expectedTargetIndex);
         }
 
         // The commit must not inherit a drag-time hold: the pointer is already released, so the
@@ -277,15 +296,18 @@ public sealed partial class AppController
         {
             case EdgeCapsuleQueueMagnetOutcome.None:
                 ArrangeDeepCapsules(animate: true);
-                return;
+                return false;
 
             case EdgeCapsuleQueueMagnetOutcome.Reorder:
                 ReorderDeepCapsuleInFreeQueue(paper, plan.TargetQueueKey, drop.Geometry, anchor);
-                return;
+                return true;
 
             case EdgeCapsuleQueueMagnetOutcome.Merge:
-                MergeCapsuleIntoFreeQueue(paper, plan.TargetQueueKey, drop.Geometry, anchor);
-                return;
+                return MergeCapsuleIntoFreeQueue(
+                    paper,
+                    plan.TargetQueueKey,
+                    drop.Geometry,
+                    anchor);
 
             default:
                 SplitCapsuleIntoQueue(
@@ -294,8 +316,23 @@ public sealed partial class AppController
                     drop.Side,
                     plan.NewQueueStartTopDip,
                     EdgeCapsuleQueueIds.New());
-                return;
+                return true;
         }
+    }
+
+    private bool TryResolveQueueGeometry(string queueKey, out MonitorGeometry geometry)
+    {
+        var edgeKey = EdgeCapsuleQueueIds.StripInstance(queueKey);
+        var separator = edgeKey.LastIndexOf('|');
+        if (separator < 0)
+        {
+            geometry = default;
+            return false;
+        }
+
+        return WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(
+            edgeKey[..separator],
+            out geometry);
     }
 
     /// <summary>
@@ -465,28 +502,46 @@ public sealed partial class AppController
     }
 
     /// <summary>Insert the dragged capsule into an existing queue at the slot nearest the drop.</summary>
-    private void MergeCapsuleIntoFreeQueue(
+    private bool MergeCapsuleIntoFreeQueue(
         PaperData paper,
         string targetQueueKey,
         MonitorGeometry targetGeometry,
-        EdgeCapsuleDropAnchor anchor)
+        EdgeCapsuleDropAnchor anchor,
+        int expectedTargetIndex = -1)
     {
         var targetMembers = FreeQueueMembersExcluding(targetQueueKey, paper.Id);
+        if (targetMembers.Count == 0)
+        {
+            return false;
+        }
+
         var queueId = FirstQueueIdOf(targetMembers);
         var targetSide = DeepCapsuleSides.Normalize(
             EdgeCapsuleQueueIds.StripInstance(targetQueueKey)[(EdgeCapsuleQueueIds.StripInstance(targetQueueKey).LastIndexOf('|') + 1)..]);
-        var insertAt = DeepCapsuleQueueInsertIndexFor(
-            targetQueueKey, paper.Id, anchor.CapsuleCenterYDevice);
+        var insertAt = expectedTargetIndex >= 0
+            ? Math.Clamp(expectedTargetIndex, 0, targetMembers.Count)
+            : DeepCapsuleQueueInsertIndexFor(
+                targetQueueKey, paper.Id, anchor.CapsuleCenterYDevice);
+
+        // 先求完整布局，再改成员：空间不足时不能留下半完成的插入。
+        var layoutPlan = EvaluateEdgeCapsuleQueueDropLayout([paper], targetQueueKey, insertAt);
+        if (!layoutPlan.Feasible)
+        {
+            ArrangeDeepCapsules(animate: true);
+            return false;
+        }
 
         paper.CapsuleMonitorDeviceName =
             WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(targetGeometry.DeviceName);
         paper.CapsuleSide = targetSide;
         paper.CapsuleQueueId = queueId;
-        InsertPaperBesideQueue(paper, targetMembers, insertAt);
+        InsertPaperBesideQueue(paper, targetMembers, layoutPlan.TargetIndex);
+        PersistEdgeCapsuleQueueDropLayoutMargins(layoutPlan);
 
         ArrangeDeepCapsules(animate: true);
         RefreshTrayMenu();
         SaveNow();
+        return true;
     }
 
     /// <summary>Move the dragged capsule to a new slot inside the queue it is already in.</summary>

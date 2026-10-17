@@ -810,23 +810,44 @@ public sealed partial class PaperWindow
             _paper.Id,
             anchor.CapsuleCenterYDevice,
             carried.Count);
-        _controller.ShowEdgeCapsuleQueueDropTargetOutline(
-            plan.TargetQueueKey, _paper.Id, carried.Count, index);
 
-        if (plan.TargetQueueKey == _deepCapsuleQueuePreviewKey && index == _deepCapsuleQueuePreviewIndex)
-        {
-            return;
-        }
+        var targetChanged = !string.Equals(
+            plan.TargetQueueKey,
+            _deepCapsuleQueuePreviewKey,
+            StringComparison.Ordinal);
 
-        // A→B：先把 A 合拢，再让 B 开槽，避免两条队列同时保持被撑开的状态。
-        if (!string.Equals(plan.TargetQueueKey, _deepCapsuleQueuePreviewKey, StringComparison.Ordinal))
+        // A→B：先把 A 合拢，再让 B 应用新计划，避免两条队列同时保持被撑开的状态。
+        if (targetChanged)
         {
             RestoreDeepCapsuleQueuePreviewTarget();
         }
 
-        _deepCapsuleQueuePreviewKey = plan.TargetQueueKey;
-        _deepCapsuleQueuePreviewIndex = index;
-        _controller.PreviewDeepCapsuleQueueDrag(carried, plan.TargetQueueKey, index);
+        var sameSlot = !targetChanged && index == _deepCapsuleQueuePreviewIndex;
+        if (!sameSlot)
+        {
+            var feasible = _controller.PreviewDeepCapsuleQueueDrag(
+                carried,
+                plan.TargetQueueKey,
+                index);
+            if (!feasible)
+            {
+                // 计划不可行：恢复上一帧的目标/邻队展开，源队列保持收拢；
+                // 描边会读取计划并画警示色插入线。
+                if (!targetChanged)
+                {
+                    RestoreDeepCapsuleQueuePreviewTarget();
+                }
+
+                PreviewDeepCapsuleQueueVacatedSourceOnce();
+            }
+
+            _deepCapsuleQueuePreviewKey = plan.TargetQueueKey;
+            _deepCapsuleQueuePreviewIndex = index;
+        }
+
+        // 先 Preview（生成/保存计划），再 Show（读取同一份计划画描边）。
+        _controller.ShowEdgeCapsuleQueueDropTargetOutline(
+            plan.TargetQueueKey, _paper.Id, carried.Count, index);
     }
 
     private void PreviewDeepCapsuleReorderForCurrentPosition()
@@ -1094,11 +1115,19 @@ public sealed partial class PaperWindow
                     if (_deepCapsuleQueueTransferSnapshot is { } transfer)
                     {
                         _deepCapsuleQueueTransferSnapshot = null;
-                        _controller.CommitEdgeCapsuleQueueTransfer(transfer, anchor);
+                        _controller.CommitEdgeCapsuleQueueTransfer(
+                            transfer,
+                            anchor,
+                            _deepCapsuleQueuePreviewKey,
+                            _deepCapsuleQueuePreviewIndex);
                     }
                     else
                     {
-                        _controller.CommitDeepCapsuleQueueDrop(_paper, anchor);
+                        _controller.CommitDeepCapsuleQueueDrop(
+                            _paper,
+                            anchor,
+                            _deepCapsuleQueuePreviewKey,
+                            _deepCapsuleQueuePreviewIndex);
                     }
 
                     return;
