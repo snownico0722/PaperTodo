@@ -130,17 +130,26 @@ public sealed partial class AppController
         var currentIds = currentQueue.Papers
             .Select(paper => paper.Id)
             .ToArray();
+        var edgeQueues = BuildEdgeCapsuleAvoidanceQueues(basePlan, session);
+        var currentEdgeIds = edgeQueues.SelectMany(queue => queue.PaperIds).ToArray();
         if (!string.Equals(
                 session.QueueKey,
                 currentQueueKey,
                 StringComparison.Ordinal) ||
             !session.QueuePaperIds.SequenceEqual(
                 currentIds,
+                StringComparer.Ordinal) ||
+            // Free queues put several stacks on one edge, so the edge-wide avoidance depends on
+            // queues the owner does not belong to. Without this term a capsule added to a
+            // neighbouring queue mid-preview would keep a stale displacement.
+            !session.EdgePaperIds.SequenceEqual(
+                currentEdgeIds,
                 StringComparer.Ordinal))
         {
             TraceEdgeCapsulePreview(
                 $"layout refresh owner={EdgeCapsulePreviewTraceId(session.OwnerPaperId)} " +
-                $"queue={session.QueueKey}->{currentQueueKey}");
+                $"queue={session.QueueKey}->{currentQueueKey} " +
+                $"edge={session.EdgePaperIds.Count}->{currentEdgeIds.Length}");
             session = EdgeCapsulePreviewLayoutCoordinator.OpenOrTransfer(
                 basePlan,
                 null,
@@ -160,7 +169,131 @@ public sealed partial class AppController
             _edgeCapsulePreviewSession = session;
         }
 
+        session = ApplyEdgeCapsuleAvoidance(basePlan, session, edgeQueues, currentEdgeIds);
         return EdgeCapsulePreviewLayoutCoordinator.Apply(basePlan, session);
+    }
+
+    /// <summary>
+    /// Every queue resting on the owner's monitor+edge, ascending by slot-0 top, with each queue's
+    /// member ids in their own order.
+    ///
+    /// Free queues let one edge hold several independent stacks (D-058), so a mini-view on one of
+    /// them would otherwise be overlapped by the others. Only the controller can read the persisted
+    /// per-queue start margins, so this descriptor is assembled here and handed to the pure policy.
+    /// </summary>
+    private List<EdgeCapsuleAvoidanceQueue> BuildEdgeCapsuleAvoidanceQueues(
+        EdgeCapsuleQueuePlan basePlan,
+        EdgeCapsulePreviewLayoutSession session)
+    {
+        var result = new List<EdgeCapsuleAvoidanceQueue>();
+        var ownerPaper = session.OwnerPaperId;
+        if (!basePlan.Placements.ContainsKey(ownerPaper))
+        {
+            return result;
+        }
+
+        var ownerSide = string.Equals(
+            EdgeCapsuleQueueIds.StripInstance(session.QueueKey)[(EdgeCapsuleQueueIds.StripInstance(session.QueueKey).LastIndexOf('|') + 1)..],
+            DeepCapsuleSides.Left,
+            StringComparison.Ordinal)
+            ? EdgeCapsuleEdge.Left
+            : EdgeCapsuleEdge.Right;
+        var ownerMonitor = EdgeCapsuleQueueIds.StripInstance(session.QueueKey);
+
+        foreach (var queue in basePlan.Queues)
+        {
+            var edgeKey = EdgeCapsuleQueueIds.StripInstance(queue.Key);
+            var separator = edgeKey.LastIndexOf('|');
+            var side = edgeKey[(separator + 1)..] == DeepCapsuleSides.Left
+                ? EdgeCapsuleEdge.Left
+                : EdgeCapsuleEdge.Right;
+            if (side != ownerSide ||
+                !WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(
+                    edgeKey[..Math.Max(separator, 0)],
+                    out var geometry))
+            {
+                continue;
+            }
+
+            var papers = queue.Papers;
+            if (papers.Count == 0)
+            {
+                continue;
+            }
+
+            var slotCount = papers.Count;
+            var startTop = EdgeCapsuleLayout.NormalizeStartTopMargin(
+                DeepCapsuleStartTopMarginForQueue(
+                    edgeKey[..Math.Max(separator, 0)],
+                    side,
+                    EdgeCapsuleQueueIds.Normalize(papers[0].CapsuleQueueId)),
+                geometry.LocalWorkAreaDip,
+                slotCount,
+                DeepCapsuleGap);
+            result.Add(new EdgeCapsuleAvoidanceQueue(
+                queue.Key,
+                papers.Select(p => p.Id).ToArray(),
+                EdgeCapsuleLayout.TopForIndex(
+                    0,
+                    startTop,
+                    geometry.LocalWorkAreaDip,
+                    slotCount,
+                    DeepCapsuleGap)));
+        }
+
+        result.Sort(static (left, right) => left.RestTopDip.CompareTo(right.RestTopDip));
+        return result;
+    }
+
+    /// <summary>
+    /// Merge the edge-wide avoidance into the session so the single-queue policy above and the
+    /// cross-queue policy below travel through the same <see cref="Apply"/> path.
+    /// </summary>
+    private EdgeCapsulePreviewLayoutSession ApplyEdgeCapsuleAvoidance(
+        EdgeCapsuleQueuePlan basePlan,
+        EdgeCapsulePreviewLayoutSession session,
+        IReadOnlyList<EdgeCapsuleAvoidanceQueue> edgeQueues,
+        IReadOnlyList<string> edgePaperIds)
+    {
+        if (edgeQueues.Count == 0)
+        {
+            return session;
+        }
+
+        if (!basePlan.Placements.TryGetValue(session.OwnerPaperId, out var ownerPlacement))
+        {
+            return session with { EdgePaperIds = edgePaperIds };
+        }
+
+        var ownerQueue = edgeQueues.FirstOrDefault(queue => queue.PaperIds.Contains(session.OwnerPaperId));
+        if (ownerQueue.QueueKey == null)
+        {
+            return session with { EdgePaperIds = edgePaperIds };
+        }
+
+        // The card occupies the owner's compact slot and grows downward from it, so its bottom
+        // edge is the anchor every queue below has to clear.
+        var ownerCardTop = ownerQueue.RestTopDip +
+                           (ownerPlacement.VisualIndex * EdgeCapsuleLayout.SlotHeight(DeepCapsuleGap));
+        var cardHeight = Math.Max(session.Size.HeightDip, PaperLayoutDefaults.CapsuleHeight);
+        var extra = EdgeCapsulePreviewLayoutCoordinator.BuildEdgeAvoidanceOffsets(
+            edgeQueues,
+            session.QueueKey,
+            ownerCardTop + cardHeight,
+            PaperLayoutDefaults.CapsuleHeight,
+            DeepCapsuleGap);
+        if (extra.Count == 0)
+        {
+            return session with { EdgePaperIds = edgePaperIds };
+        }
+
+        var merged = new Dictionary<string, double>(session.TopOffsetsDip, StringComparer.Ordinal);
+        foreach (var (paperId, offset) in extra)
+        {
+            merged[paperId] = offset;
+        }
+
+        return session with { TopOffsetsDip = merged, EdgePaperIds = edgePaperIds };
     }
 
     private void ResetEdgeCapsulePreviewWithoutArrange()

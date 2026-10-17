@@ -164,7 +164,18 @@ internal sealed record EdgeCapsulePreviewLayoutSession(
     string OwnerPaperId,
     EdgeCapsulePreviewSize Size,
     IReadOnlyList<string> QueuePaperIds,
-    IReadOnlyDictionary<string, double> TopOffsetsDip);
+    IReadOnlyDictionary<string, double> TopOffsetsDip,
+    // Every docked capsule on the owner's monitor+edge, in ascending rest order. Kept separate
+    // from QueuePaperIds on purpose: that one is the corridor / transfer topology, while this one
+    // only says when the edge-wide avoidance has to be recomputed. Free queues put several
+    // independent stacks on one edge, so a change outside the owner's queue still moves capsules.
+    IReadOnlyList<string> EdgePaperIds);
+
+/// <summary>One queue's resting geometry on an edge, in the monitor's local DIP space.</summary>
+internal readonly record struct EdgeCapsuleAvoidanceQueue(
+    string QueueKey,
+    IReadOnlyList<string> PaperIds,
+    double RestTopDip);
 
 /// <summary>
 /// Preview placement policy. The compact queue remains the base plan. During one browsing session
@@ -328,7 +339,72 @@ internal static class EdgeCapsulePreviewLayoutCoordinator
             ownerPaperId,
             size,
             paperIds,
-            offsets);
+            offsets,
+            []);
+    }
+
+    /// <summary>
+    /// Edge-wide avoidance: push the capsules of every *other* queue on the owner's monitor+edge
+    /// down so the owner's expanded card never overlaps them.
+    ///
+    /// The owner's own queue is skipped — its members are already placed by the session above.
+    /// Queues above the owner are skipped too: a mini-view only grows downward, or upward into the
+    /// region it just released, so it can never reach them.
+    ///
+    /// Offsets are pure relative displacements. The session computes them as
+    /// <c>VisualIndex * slotHeight</c> minus the same baseline, and the layout service adds them to
+    /// <c>TopForIndex(...)</c>, which drops the same anchor — so the queue's own start margin and
+    /// the work-area origin cancel out and a displacement computed for one queue is valid on any
+    /// queue. That is what makes this cross-queue without touching a geometry formula.
+    /// </summary>
+    public static Dictionary<string, double> BuildEdgeAvoidanceOffsets(
+        IReadOnlyList<EdgeCapsuleAvoidanceQueue> edgeQueues,
+        string ownerQueueKey,
+        double ownerCardBottomDip,
+        double compactHeightDip,
+        double gapDip)
+    {
+        var offsets = new Dictionary<string, double>(StringComparer.Ordinal);
+        if (edgeQueues.Count == 0)
+        {
+            return offsets;
+        }
+
+        var previousBottom = ownerCardBottomDip;
+        var ownerSeen = false;
+        foreach (var queue in edgeQueues)
+        {
+            if (string.Equals(queue.QueueKey, ownerQueueKey, StringComparison.Ordinal))
+            {
+                // The owner's queue already has its own session offsets; only resume the chain
+                // from the card's bottom edge, not from the compact slot.
+                ownerSeen = true;
+                continue;
+            }
+
+            if (!ownerSeen || queue.PaperIds.Count == 0)
+            {
+                continue;
+            }
+
+            var restTop = queue.RestTopDip;
+            for (var index = 0; index < queue.PaperIds.Count; index++)
+            {
+                var memberTop = restTop + (index * EdgeCapsuleLayout.SlotHeight(gapDip));
+                var minimumTop = previousBottom + gapDip;
+                // Same "only ever push down" rule the in-queue chain uses: a member that already
+                // clears the gap stays put, so an already-spread queue does not collapse inward.
+                var top = Math.Max(memberTop, minimumTop);
+                if (top - memberTop > 0)
+                {
+                    offsets[queue.PaperIds[index]] = top - memberTop;
+                }
+
+                previousBottom = top + compactHeightDip;
+            }
+        }
+
+        return offsets;
     }
 
     public static EdgeCapsuleQueuePlan Apply(

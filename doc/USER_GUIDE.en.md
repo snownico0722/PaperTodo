@@ -278,6 +278,7 @@ Hovering over a docked capsule slides out a **real-time interactive preview card
   - Gliding your mouse along adjacent capsules transitions between preview cards without jarring retracts;
   - Cards retract cleanly when moving away from the edge dock corridor.
 - **Drag Protection**:
+  - When several queues share one edge, an open preview makes the others move aside instead of overlapping it.
   - Preview cards automatically hide when dragging capsules to reorder or peel away.
 
 ### 5.3 Multi-Monitor Queues & Reordering

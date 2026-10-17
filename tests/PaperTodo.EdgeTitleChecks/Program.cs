@@ -23,6 +23,8 @@ internal static partial class Program
             Console.WriteLine("PASS queue-instance-key-codec");
             QueueMagnet();
             Console.WriteLine("PASS queue-magnet-merge-detach-reorder");
+            EdgeQueueAvoidance();
+            Console.WriteLine("PASS edge-wide-preview-avoidance");
             Persistence();
             Console.WriteLine("PASS legacy-and-zero-persistence");
             Geometry();
@@ -235,6 +237,77 @@ internal static partial class Program
             "A released position stays released on the following frame");
         Check(afterRelease.Outcome == released.Outcome,
             "Release and re-evaluation agree, so the drag does not oscillate");
+    }
+
+    // A mini-view is placed by a pure relative displacement, so the same number applies to any
+    // queue on that edge (D-058). These checks pin the scope rule: everything below the owner's
+    // card is pushed, everything above is left alone, and a member that already clears the gap
+    // stays put rather than the whole stack closing up.
+    private static void EdgeQueueAvoidance()
+    {
+        const double compact = 46;
+        const double gap = 4;
+        var slot = EdgeCapsuleLayout.SlotHeight(gap); // 50
+
+        static EdgeCapsuleAvoidanceQueue Q(string key, double top, params string[] ids) =>
+            new(key, ids, top);
+
+        // A card grown to 200 DIP starting at 100 ends at 300; the next member must clear it.
+        Dictionary<string, double> Push(
+            double cardBottom,
+            params EdgeCapsuleAvoidanceQueue[] queues) =>
+            EdgeCapsulePreviewLayoutCoordinator.BuildEdgeAvoidanceOffsets(
+                queues, "A", cardBottom, compact, gap);
+
+        // Nothing on the edge: no displacement at all.
+        Check(Push(300).Count == 0, "An empty edge produces no avoidance");
+
+        // A card spanning [100, 300]; a queue starting at 260 overlaps it and must be pushed.
+        var one = Push(300, Q("A", 100, "a1", "a2"), Q("B", 260, "b1", "b2"));
+        Check(one.Count == 2, "Every member of the overlapping queue is displaced");
+        Check(one["b1"] > 0, "The member overlapping the card is pushed down");
+        // Pitch lives in absolute tops, so a uniformly pushed queue has *equal* offsets.
+        Check(Math.Abs(one["b1"] - one["b2"]) < 1e-9,
+            "A uniformly pushed queue keeps its even pitch");
+
+        // A queue that already clears card bottom + gap is left exactly where the user put it.
+        var clearOfGap = Push(300, Q("A", 100, "a1"), Q("B", 310, "b1"));
+        Check(clearOfGap.Count == 0, "A queue one slot-height below the card is not moved");
+
+        // A queue entirely clear of the card is left alone — no chasing, no compaction.
+        var clear = Push(300, Q("A", 100, "a1"), Q("B", 600, "b1", "b2"));
+        Check(clear.Count == 0, "A queue already clear of the card does not move");
+
+        // A queue above the owner is never touched: a card only grows downward.
+        var above = Push(300, Q("B", 40, "b1"), Q("A", 100, "a1"), Q("C", 260, "c1"));
+        Check(!above.ContainsKey("b1"), "A queue above the owner is never displaced");
+        Check(above.ContainsKey("c1"), "A queue below the owner still is");
+
+        // The owner's own queue is skipped: the session already placed those members.
+        var own = Push(300, Q("A", 100, "a1", "a2"));
+        Check(own.Count == 0, "The owner's own queue is left to the single-queue policy");
+
+        // Partial overlap: the first member is pushed, the rest follow the chain.
+        var chain = Push(300, Q("A", 100, "a1"), Q("B", 260, "b1", "b2", "b3"));
+        Check(chain["b1"] > 0, "The overlapping head of the chain moves");
+        Check(Math.Abs(chain["b1"] - chain["b2"]) < 1e-9 &&
+              Math.Abs(chain["b2"] - chain["b3"]) < 1e-9,
+            "Every member of the chain shifts by the same amount, so pitch survives");
+
+        // Two queues in sequence: the chain must carry across the queue boundary.
+        var across = Push(300, Q("A", 100, "a1"), Q("B", 260, "b1"), Q("C", 260, "c1", "c2"));
+        Check(across.ContainsKey("b1") && across.ContainsKey("c1"),
+            "Displacement carries from one queue into the next");
+        Check(Math.Abs(across["c1"] - across["c2"]) < 1e-9,
+            "The second queue shifts uniformly");
+        // C's head must sit one slot below B's head *after* B was pushed, not before.
+        Check(Math.Abs(across["c1"] - across["b1"] - slot) < 1e-9,
+            "A queue inherits the previous queue's already-displaced bottom");
+
+        // Queues must arrive in ascending rest order or the chain walks the wrong way.
+        var descending = Push(300, Q("A", 100, "a1"), Q("C", 600, "c1"), Q("B", 260, "b1"));
+        Check(descending.ContainsKey("b1"), "Order is the caller's contract; a caller that sorts wrong is visible");
+        Check(!descending.ContainsKey("c1"), "A queue the walk already passed stays put");
     }
 
     private static void CycleAndUnicode()    {
