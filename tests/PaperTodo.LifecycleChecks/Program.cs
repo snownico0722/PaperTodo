@@ -15,8 +15,12 @@ internal static class Program
     private static readonly string[] Cases = ["startup", "missing-monitor", "master-queue-transfer", "master-queue-cancel", "master-queue-drag-preparation", "master-queue-drop-handoff", "master-queue-membership", "master-queue-mutations", "master-queue-hide", "master-queue-disconnect", "master-queue-merge", "master-queue-merge-collapsed", "master-queue-lightweight-handoff", "controller-hide-create-reentry", "controller-hide-show-reentry", "controller-zorder-create-reentry", "controller-close-delete-reentry", "todo-visibility", "real-exit", "early-expand", "edge-expand-foreground", "expanded-paper-display-recovery", "cancel-prewarm", "real-exit-scripts", "early-exit", "todo-context-menu", "todo-history"];
 =======
     private static readonly string[] Cases = ["startup", "missing-monitor", "master-queue-transfer", "master-queue-cancel", "master-queue-drag-preparation", "master-queue-drop-handoff", "master-queue-membership", "master-queue-mutations", "master-queue-hide", "master-queue-disconnect", "master-queue-merge", "master-queue-merge-collapsed", "master-queue-material-handoff", "controller-hide-create-reentry", "controller-hide-show-reentry", "controller-zorder-create-reentry", "controller-close-delete-reentry", "todo-visibility", "real-exit", "early-expand", "edge-expand-foreground", "cancel-prewarm", "real-exit-scripts", "early-exit", "todo-context-menu", "todo-history",
+<<<<<<< HEAD
         "free-queue-preview-restore"];
 >>>>>>> 56595088 (fix(capsule): 离开磁吸区时恢复目标队列让位预览)
+=======
+        "free-queue-preview-restore", "free-queue-regressions"];
+>>>>>>> ee7c9291 (fix(capsule): 修复拖拽期共享状态的 owner 归属、handoff 吞手势与描边不重试)
 
     [STAThread]
     private static int Main(string[] args)
@@ -164,7 +168,7 @@ internal static class Program
                 IsVisible = true, IsCollapsed = true, X = area.Left + 60, Y = area.Top + 60,
                 Width = 300, Height = 240, CapsuleSide = DeepCapsuleSides.Right
             });
-        if (name == "free-queue-preview-restore")
+        if (name == "free-queue-preview-restore" || name == "free-queue-regressions")
         {
             // 同一右侧边上的三条自由队列：qa = [0, 1]，qb = [2, 3]，qc = [4]。
             state.UseCapsuleFreeQueues = true;
@@ -220,6 +224,11 @@ internal static class Program
             if (name == "free-queue-preview-restore")
             {
                 await EdgeCapsuleQueuePreviewChecks.Run(controller, windows);
+                return;
+            }
+            if (name == "free-queue-regressions")
+            {
+                await EdgeCapsuleQueueRegressionChecks.Run(controller, windows);
                 return;
             }
             if (name == "edge-expand-foreground")
@@ -578,7 +587,7 @@ internal static class Program
         target.GetType().GetField(name, Private)?.GetValue(target) ??
         target.GetType().GetProperty(name, Private)?.GetValue(target) ??
         throw new MissingMemberException(target.GetType().FullName, name);
-    private static async Task Until(Func<bool> ready, string name)
+    internal static async Task Until(Func<bool> ready, string name)
     {
         var started = Stopwatch.GetTimestamp();
         while (!ready())
@@ -587,7 +596,7 @@ internal static class Program
             await Task.Delay(10);
         }
     }
-    private static void Require(bool condition, string message)
+    internal static void Require(bool condition, string message)
     {
         if (!condition) throw new InvalidOperationException(message);
     }

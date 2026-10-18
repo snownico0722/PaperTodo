@@ -43,6 +43,28 @@ public sealed partial class AppController
     // exit threshold, instead of releasing and re-acquiring every few frames.
     private string _deepCapsuleDragHeldQueueKey = "";
 
+    // FQ-12: 当前持有共享磁吸 / 描边状态的窗口纸片 id。held key、候选缓存、避让队列、描边
+    // 都是 controller 级单例，只有 owner 窗口可以清理共享状态——无关纸片在隐藏 / 关闭 / 折叠
+    // 等场景下调 CancelDeepCapsuleReorderDrag 早退分支，不能让它顺手把别人的描边擦掉。
+    private string _edgeCapsuleQueueDragOwnerPaperId = "";
+
+    /// <summary>当前纸片是否就是本次拖拽手势的 owner，决定它能不能清理共享状态。</summary>
+    internal bool OwnsEdgeCapsuleQueueMagnetPreview(string paperId) =>
+        _edgeCapsuleQueueDragOwnerPaperId.Length > 0 &&
+        string.Equals(_edgeCapsuleQueueDragOwnerPaperId, paperId, StringComparison.Ordinal);
+
+    /// <summary>在 <see cref="BeginDeepCapsuleReorderDrag"/> 内记录当前 owner。</summary>
+    internal void ClaimEdgeCapsuleQueueDragOwnership(string paperId)
+    {
+        _edgeCapsuleQueueDragOwnerPaperId = paperId ?? "";
+    }
+
+    /// <summary>在 <see cref="CompleteDeepCapsuleReorderDrag"/> / 取消 finally 中清空 owner。</summary>
+    internal void ReleaseEdgeCapsuleQueueDragOwnership()
+    {
+        _edgeCapsuleQueueDragOwnerPaperId = "";
+    }
+
     // 候选依赖 carried、目标显示器、队列成员/标题/宽度、margin、gap 与排版设置。每帧重建会
     // 重新测量所有胶囊标题，因此用手势级签名缓存：任一影响候选几何的输入变化都会重建。
     private string _deepCapsuleMagnetCandidateSignature = "";
@@ -497,8 +519,18 @@ public sealed partial class AppController
     /// Called on every gesture end so a dropped outline can never outlive the drag that created it,
     /// and so the next drag starts from a clean slate rather than inheriting a stale hold.
     /// </summary>
-    internal void EndDeepCapsuleQueueMagnetPreview()
+    /// <param name="requesterPaperId">调用方纸片 id。非 owner 窗口（无关纸片隐藏 / 关闭等场景）
+    /// 调用本方法会被直接拒绝——它的取消不应触碰正在被另一个窗口持有的共享状态（FQ-12）。</param>
+    internal void EndDeepCapsuleQueueMagnetPreview(string? requesterPaperId)
     {
+        // FQ-12: 无关窗口的普通取消会清空当前手势的 held key / 候选缓存 / 避让队列 / 描边，
+        // 让真正在拖的纸片出现描边闪断。只清理 owner 的状态，其他纸片的取消必须透传。
+        if (requesterPaperId == null ||
+            !OwnsEdgeCapsuleQueueMagnetPreview(requesterPaperId))
+        {
+            return;
+        }
+        _edgeCapsuleQueueDragOwnerPaperId = "";
         _deepCapsuleDragHeldQueueKey = "";
         ClearDeepCapsuleQueueDragAvoidanceState();
         ClearDeepCapsuleQueueMagnetCandidates();
@@ -506,8 +538,14 @@ public sealed partial class AppController
     }
 
     /// <summary>Drop the drag-time hold so the next gesture starts from a clean slate.</summary>
-    internal void ForgetDeepCapsuleQueueDrag()
+    /// <remarks>同样要求 owner（FQ-12）；仅供测试套件 / 显式让渡使用。</remarks>
+    internal void ForgetDeepCapsuleQueueDrag(string? requesterPaperId)
     {
+        if (requesterPaperId == null ||
+            !OwnsEdgeCapsuleQueueMagnetPreview(requesterPaperId))
+        {
+            return;
+        }
         _deepCapsuleDragHeldQueueKey = "";
         ClearDeepCapsuleQueueMagnetCandidates();
     }

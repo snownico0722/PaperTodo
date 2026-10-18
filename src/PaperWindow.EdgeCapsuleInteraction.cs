@@ -102,6 +102,18 @@ public sealed partial class PaperWindow
             UpdateDeepCapsuleReorderDrag(currentScreenPosition);
             return true;
         }
+        // FQ-09: 兜底——之前 StartDeepCapsuleReorderDrag 因 lease 占用排队了一次重试。
+        // lease 异常长时间不释放（handoff 反复重启 / HWND 出问题）会让我们永远等下去：
+        // 检测超时并退化到明确反馈（用户取消 + restoreLayout）而不是继续无限循环。
+        if (HasDeepCapsulePendingReorderDrag &&
+            Environment.TickCount64 - _deepCapsulePendingReorderDragRequestTimestamp
+                > DeepCapsulePendingReorderRetryTimeoutMilliseconds)
+        {
+            ClearDeepCapsulePendingReorderDrag();
+            CancelDeepCapsuleReorderDrag(restoreLayout: true);
+            _edgeCapsuleHost?.ReleaseContentPointer();
+            return true;
+        }
         if (!IsDeepCapsuleSlotPendingClick)
         {
             return false;
@@ -437,9 +449,16 @@ public sealed partial class PaperWindow
         _previewOriginReorderBaseline = null;
         if (EdgeCapsuleDragWindow.HasActiveLease)
         {
-            CancelDeepCapsuleReorderDrag();
+            // FQ-09: 上一条手势还在 docking handoff（flight + reveal，160–240ms 起步，可被 restart 拉长）。
+            // 不能调 CancelDeepCapsuleReorderDrag()：它会走 finally 把 PendingClick 也清掉，把整个手势
+            // 静默吞成一次意外单击。改为记录起点，租约释放后下一次指针移动由 OnEdgeCapsulePointerMoved
+            // 重新调用本方法自然重进；同时在 OnEdgeCapsulePointerMoved 入口检查超时做兜底。
+            _deepCapsulePendingReorderDragStart = currentScreenPos;
+            _deepCapsulePendingReorderDragRequestTimestamp = Environment.TickCount64;
             return;
         }
+        // lease 已释放或从未占用，把 pending 意图清掉以免后续误判超时。
+        ClearDeepCapsulePendingReorderDrag();
         if (_edgeCapsule.NativeBatchRetryPending)
         {
             CancelDeepCapsuleReorderDrag(restoreLayout: true);
@@ -602,6 +621,26 @@ public sealed partial class PaperWindow
     // 否则预览/描边会停留在旧几何，而提交会重新求解。
     private int _deepCapsuleQueuePlanInputVersion = -1;
 
+    // FQ-09: docking handoff 期间到达的拖拽请求不能被吞掉。浮动 HWND 只有一个租约，
+    // 但用户已经按下的按钮不能变成一次意外单击：在 lease 占用期间记录意图与时间戳，
+    // 租约释放后下一次指针移动自然重进 StartDeepCapsuleReorderDrag（OnEdgeCapsulePointerMoved
+    // 会重复调用本方法直到 lease 空闲）。超时兜底：超过 750ms 仍未释放则视为死锁，按用户
+    // 取消处理并清字段。
+    private DeviceScreenPoint? _deepCapsulePendingReorderDragStart;
+    private long _deepCapsulePendingReorderDragRequestTimestamp;
+    private const int DeepCapsulePendingReorderRetryTimeoutMilliseconds = 750;
+
+    /// <summary>当前是否有 pending 拖拽请求正在等待 handoff lease 释放。</summary>
+    private bool HasDeepCapsulePendingReorderDrag =>
+        _deepCapsulePendingReorderDragStart.HasValue;
+
+    /// <summary>清理 pending 重试意图。在任何取消 / 完成 / 关闭窗口路径上统一调用。</summary>
+    private void ClearDeepCapsulePendingReorderDrag()
+    {
+        _deepCapsulePendingReorderDragStart = null;
+        _deepCapsulePendingReorderDragRequestTimestamp = 0;
+    }
+
     /// <summary>
     /// Sample the cursor on a timer while the native caption loop owns the drag.
     ///
@@ -700,7 +739,9 @@ public sealed partial class PaperWindow
     {
         StopEdgeCapsuleNativeDragFeedback();
         ResetDeepCapsuleQueueMagnetPreviewState();
-        _controller.EndDeepCapsuleQueueMagnetPreview();
+        // FQ-12: 把调用方纸片 id 传给 controller，由 controller 判定是否 owner。
+        // 无关窗口同样走到这里，但只有 owner 的清理请求会真正命中。
+        _controller.EndDeepCapsuleQueueMagnetPreview(_paper.Id);
     }
 
     /// <summary>

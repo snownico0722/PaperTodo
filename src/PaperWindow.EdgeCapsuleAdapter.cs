@@ -171,6 +171,10 @@ public sealed partial class PaperWindow
         // never inherit a stale "whole queue" intent.
         _deepCapsuleQueueTransferRequested = false;
         _edgeCapsulePointerDownKeyState = 0;
+        // FQ-09: 手势终结即丢弃 docking handoff 排队意图。这里是所有指针手势的唯一收口
+        // （含松手未起拖的分支），残留的旧时间戳会让下一次新手势在
+        // OnEdgeCapsulePointerMoved 的超时判定里被误杀。
+        ClearDeepCapsulePendingReorderDrag();
         return DispatchEdgeCapsuleIntent(
             EdgeCapsuleIntent.PointerInteractionFinished(),
             EdgeCapsuleDirty.Presentation | EdgeCapsuleDirty.Pointer);

@@ -89,11 +89,17 @@ public sealed partial class AppController
             _edgeCapsuleQueueDropTargetOutline = new EdgeCapsuleQueueDropTargetOutline();
         }
 
-        _edgeCapsuleQueueDropTargetOutline.ShowAt(
+        if (!_edgeCapsuleQueueDropTargetOutline.ShowAt(
             layout,
             queueKey,
             FullscreenAvoidanceWindowForQueue(monitorDeviceName),
-            animate: State.EnableAnimations);
+            animate: State.EnableAnimations))
+        {
+            // FQ-13: ShowAt 返回 false 表示下发失败（宿主已关闭、设备矩形失败或布局为空），
+            // 此时 markers / 颜色 / z-order 都未被应用，写早退缓存会让下一帧目标不再重试。
+            // 直接 return 保留所有早退键与计数，下一反馈周期自然重进 ShowAt。
+            return;
+        }
         DropTargetLayoutUpdateCount++;
         _edgeCapsuleQueueDropTargetOutlineQueueKey = queueKey;
         _edgeCapsuleQueueDropTargetOutlinePaperId = draggedPaperId;

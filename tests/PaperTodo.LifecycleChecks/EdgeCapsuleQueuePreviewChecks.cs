@@ -223,7 +223,9 @@ internal static class EdgeCapsuleQueuePreviewChecks
             "changing the capsule gap did not rebuild the magnet candidates");
         controller.State.DeepCapsuleGapSize = gapBefore;
 
-        controller.ForgetDeepCapsuleQueueDrag();
+        controller.ClaimEdgeCapsuleQueueDragOwnership(source.Id);
+        controller.ForgetDeepCapsuleQueueDrag(source.Id);
+        controller.ReleaseEdgeCapsuleQueueDragOwnership();
 
         // 空间不足：qa 顶到 8、qb 顶到 40，qa 无法再向上让位。
         var qaKey = controller.QueueKeyForPaper(source);

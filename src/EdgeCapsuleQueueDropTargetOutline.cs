@@ -112,8 +112,11 @@ internal sealed class EdgeCapsuleQueueDropTargetOutline : Window
 
     /// <summary>
     /// Move the overlay onto the target queue and place both insertion markers.
-    /// Returns whether this call changed the target queue, which the caller uses to decide
-    /// between a resting show and an emphasized attention pulse.
+    ///
+    /// Returns whether this call actually applied the overlay — bounds, markers, colour and z-order
+    /// are all committed only on the success path. A false return means nothing visible changed, so
+    /// the caller must skip its early-return cache update and let the next pointer move retry
+    /// (FQ-13 残余：此前失败也照写缓存，导致同一目标永不重试，颜色/位置/z-order 停在失败前状态）。
     /// </summary>
     public bool ShowAt(
         EdgeCapsuleQueueDropTargetLayout layout,
@@ -148,18 +151,23 @@ internal sealed class EdgeCapsuleQueueDropTargetOutline : Window
             }
             catch (Exception)
             {
-                return targetChanged;
+                // FQ-13: Show() 抛异常也算下发失败——下一帧 IsVisible==false，下一次调用
+                // 仍会 firstShow 重进 Show()，无需写缓存。
+                return false;
             }
         }
 
         if (outlineBounds.IsEmpty)
         {
-            return targetChanged;
+            // FQ-13: 没有几何可下发也算失败，避免调用方误把早退键键写到位。
+            return false;
         }
 
         if (!WindowNative.TrySetWindowDeviceBounds(this, outlineBounds))
         {
-            return targetChanged;
+            // FQ-13: 设备矩形下发失败时，本次 markers / z-order / 颜色都未生效，
+            // 返回 false 让调用方不更新早退缓存。
+            return false;
         }
 
         ApplyMarkers(
@@ -188,7 +196,7 @@ internal sealed class EdgeCapsuleQueueDropTargetOutline : Window
         {
             BeginAnimation(OpacityProperty, null);
             Opacity = RestingOpacity;
-            return targetChanged;
+            return true;
         }
 
         if (firstShow || targetChanged)
@@ -202,7 +210,7 @@ internal sealed class EdgeCapsuleQueueDropTargetOutline : Window
                 easing: AnimationHelper.QuickEase);
         }
 
-        return targetChanged;
+        return true;
     }
 
     /// <summary>
