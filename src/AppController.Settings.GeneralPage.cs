@@ -58,6 +58,14 @@ public sealed partial class AppController
         rightColumn.Children.Add(WrapWithHint(
             _settingsCapsuleCollapseAllCheckBox,
             "TipCapsuleCollapseAll"));
+        rightColumn.Children.Add(BuildSettingsLiveRegion(
+            "general.masterSize",
+            () => CompactSettingsField(
+                Strings.Get("SettingsMasterCapsuleSize"),
+                CreateMasterCapsuleSizeSlider(),
+                editorWidth: 180,
+                tipKey: "TipMasterCapsuleSize",
+                topMargin: 7)));
         rightColumn.Children.Add(WrapWithHint(
             _settingsCollapseExpandedDeepCapsuleOnClickCheckBox,
             "TipCollapseExpandedDeepCapsuleOnClick"));
@@ -231,6 +239,7 @@ public sealed partial class AppController
         State.RememberDeepCapsuleExpandedPosition = true;
         State.UseCapsuleCollapseAll = true;
         State.CompactMasterCapsule = false;
+        State.MasterCapsuleSize = MasterCapsuleSizes.Default;
         State.CollapseExpandedDeepCapsuleOnClick = false;
         State.EdgeCapsulePreviewPreferDownward = false;
         State.ExperimentalEdgeCapsuleHoverPreview = true;
@@ -257,6 +266,53 @@ public sealed partial class AppController
         RefreshSettingsWindowContent();
     }
 
+
+    // Persist integer values on gesture completion, not each pointer movement.
+    private UIElement CreateMasterCapsuleSizeSlider()
+    {
+        var grid = new Grid { Height = 28, Margin = new Thickness(0, 4, 0, 8) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var slider = new Slider
+        {
+            Minimum = MasterCapsuleSizes.Minimum,
+            Maximum = MasterCapsuleSizes.Maximum,
+            Value = MasterCapsuleSizes.Normalize(State.MasterCapsuleSize),
+            TickFrequency = 1,
+            IsSnapToTickEnabled = true,
+            IsMoveToPointEnabled = true,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        var valueText = new TextBlock
+        {
+            Text = MasterCapsuleSizes.Normalize(State.MasterCapsuleSize).ToString(),
+            MinWidth = 26,
+            Margin = new Thickness(8, 0, 0, 0),
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Center,
+            FontSize = AppTypography.Scale(12),
+            Foreground = TrayTextBrush
+        };
+        Grid.SetColumn(valueText, 1);
+        slider.ValueChanged += (_, _) => valueText.Text =
+            ((int)Math.Round(slider.Value)).ToString();
+        void Commit()
+        {
+            var selected = (int)Math.Round(slider.Value);
+            if (State.MasterCapsuleSize != selected)
+                SetSettingFromUi("capsule.master_size", selected);
+        }
+        slider.AddHandler(
+            System.Windows.Controls.Primitives.Thumb.DragCompletedEvent,
+            new System.Windows.Controls.Primitives.DragCompletedEventHandler((_, _) => Commit()));
+        slider.PreviewMouseLeftButtonUp += (_, _) =>
+            slider.Dispatcher.BeginInvoke((Action)Commit, System.Windows.Threading.DispatcherPriority.Background);
+        slider.KeyUp += (_, _) => Commit();
+        slider.LostKeyboardFocus += (_, _) => Commit();
+        grid.Children.Add(slider);
+        grid.Children.Add(valueText);
+        return grid;
+    }
 
     private UIElement CreateAnonymousUsageStatisticsSettingsRow() =>
         WrapWithHint(

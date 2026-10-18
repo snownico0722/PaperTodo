@@ -17,7 +17,8 @@ internal readonly record struct EdgeCapsuleLayoutFacts(
     double HostCapacityWidthDip = 0,
     double HostCapacityHeightDip = 0,
     double ExpandedWidthDip = 0,
-    bool HideRestingTitle = false);
+    bool HideRestingTitle = false,
+    double MasterExtraHeightDip = 0);
 
 /// <summary>
 /// Converts measured/environment facts into the planner snapshot. PaperWindow supplies target
@@ -29,13 +30,15 @@ internal static class EdgeCapsuleLayoutService
     {
         var placement = facts.Placement.Normalize();
         var localWorkArea = facts.Monitor.LocalWorkAreaDip;
+        var masterExtraHeight = placement.VisualOffset > 0 ? facts.MasterExtraHeightDip : 0;
         var normalTop = placement.IsPlaced
             ? EdgeCapsuleLayout.TopForIndex(
                 placement.VisualIndex,
                 facts.QueueStartTopMarginDip,
                 localWorkArea,
                 placement.SlotCount,
-                facts.GapDip) +
+                facts.GapDip,
+                masterExtraHeight) +
               placement.TopOffsetDip
             : 0;
         var masterTop = placement.IsPlaced
@@ -44,7 +47,8 @@ internal static class EdgeCapsuleLayoutService
                 facts.QueueStartTopMarginDip,
                 localWorkArea,
                 placement.SlotCount,
-                facts.GapDip)
+                facts.GapDip,
+                masterExtraHeight)
             : normalTop;
         return new EdgeCapsuleLayoutSnapshot(
             facts.Monitor,
@@ -70,11 +74,13 @@ internal static class EdgeCapsuleLayoutService
         int visualIndex,
         int slotCount,
         double queueStartTopMarginDip,
-        double gapDip) =>
+        double gapDip,
+        double masterExtraHeightDip = 0) =>
         EdgeCapsuleLayout.TopForIndex(
             visualIndex,
             queueStartTopMarginDip,
             monitor.LocalWorkAreaDip,
             slotCount,
-            gapDip);
+            gapDip,
+            masterExtraHeightDip);
 }

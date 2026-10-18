@@ -8,7 +8,7 @@ namespace PaperTodo;
 
 /// <summary>
 /// Startup-only master-capsule artwork beside PaperTodo.exe. This is presentation only;
-/// there is no extra state owner, setting, timer or watcher.
+/// there is no secondary visual owner, separate settings store, timer or file watcher.
 /// </summary>
 internal static class MasterCapsuleSkin
 {

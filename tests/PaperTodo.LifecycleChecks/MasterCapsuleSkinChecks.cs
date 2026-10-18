@@ -45,6 +45,11 @@ internal static class MasterCapsuleSkinChecks
         Require(MasterCapsuleSkin.DisplayWidthDip(loaded) >= 16 &&
                 MasterCapsuleSkin.DisplayWidthDip(loaded) <= 128,
             "Visible master skin width must remain bounded");
+        Require(MasterCapsuleSizes.Normalize(0) == 1 &&
+                MasterCapsuleSizes.Normalize(51) == 50 &&
+                MasterCapsuleSizes.Scale(10) == 1.0 &&
+                MasterCapsuleSizes.Scale(50) == 5.0,
+            "Master-capsule size boundaries must remain 1..50 with 10 = 1x");
     }
 
     internal static void Verify(AppController controller)
@@ -109,5 +114,47 @@ internal static class MasterCapsuleSkinChecks
                 "An ordinary paper drag inherited master-capsule artwork");
         }
         finally { ordinary.ReturnToPool(); }
+
+        var setting = controller.PublicSettings.Get("capsule.master_size");
+        Require(setting.Value.GetInt32() == 10 && setting.Min == 1 &&
+                setting.Max == 50 && setting.Step == 1,
+            "The size setting must expose the default and supported 1..50 range");
+        var originalWidth = master.DesiredDockedWidth;
+        controller.PublicSettings.Set(
+            "capsule.master_size",
+            System.Text.Json.JsonSerializer.SerializeToElement(50));
+        controller.ArrangeDeepCapsules(animate: false);
+        Require(controller.State.MasterCapsuleSize == 50 &&
+                Math.Abs(master.DesiredDockedWidth - originalWidth * 5) < 0.1 &&
+                Math.Abs(controller.MasterCapsuleHeightDip - 230) < 0.01,
+            "A size of 50 must scale the static image 5x in both axes");
+
+        Require(WindowWorkAreaHelper.TryGetMonitorGeometryForDevice("", out var geometry),
+            "A real monitor is required for native size verification");
+        Require(WindowNative.TryGetWindowDeviceBounds(master, out var bounds) &&
+                Math.Abs(bounds.Height - Math.Round(230 * geometry.DpiScaleY)) <= 1,
+            "The master HWND must physically grow with its artwork");
+        var margin = controller.DeepCapsuleStartTopMarginForQueue("", EdgeCapsuleEdge.Right);
+        var masterTop = EdgeCapsuleLayout.TopForIndex(
+            0, margin, geometry.LocalWorkAreaDip,
+            controller.State.Papers.Count + 1, controller.DeepCapsuleGap,
+            controller.MasterCapsuleExtraHeightDip);
+        var firstPaperTop = EdgeCapsuleLayout.TopForIndex(
+            1, margin, geometry.LocalWorkAreaDip,
+            controller.State.Papers.Count + 1, controller.DeepCapsuleGap,
+            controller.MasterCapsuleExtraHeightDip);
+        Require(firstPaperTop - masterTop >= controller.MasterCapsuleHeightDip,
+            "A larger master must reserve vertical space ahead of the first real capsule");
+        Require(master.TryGetQueueTransferDockingTarget(out var target, out _) &&
+                target.Height == bounds.Height,
+            "The master drop target must use its scaled native height");
+
+        controller.PublicSettings.Set(
+            "capsule.master_size",
+            System.Text.Json.JsonSerializer.SerializeToElement(10));
+        controller.ArrangeDeepCapsules(animate: false);
+        Require(Math.Abs(master.DesiredDockedWidth - originalWidth) < 0.1 &&
+                controller.MasterCapsuleExtraHeightDip == 0,
+            "Returning to 10 restores the original geometry");
     }
 }

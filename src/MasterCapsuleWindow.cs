@@ -697,10 +697,17 @@ public sealed class MasterCapsuleWindow : Window
         {
             // The pooled drag HWND displays the same frozen image and retains the
             // controller's existing queue-transfer and handoff authorities.
-            var width = MasterCapsuleSkin.DisplayWidthDip(_skinSource) + WindowChromeMargin;
+            var width = MasterCapsuleSkin.DisplayWidthDip(
+                _skinSource, _controller.State.MasterCapsuleSize) + WindowChromeMargin;
+            var height = _controller.MasterCapsuleHeightDip;
             options = options with
             {
-                Shape = options.Shape with { WindowWidthDip = width },
+                Shape = options.Shape with
+                {
+                    WindowWidthDip = width,
+                    WindowHeightDip = height,
+                    BodyHeightDip = height
+                },
                 MasterSkinSource = _skinSource,
                 MasterSkinEdge = _queueEdge
             };
@@ -889,7 +896,8 @@ public sealed class MasterCapsuleWindow : Window
         // The arrow slot stays stable in both modes. Normal mode also reserves a stable
         // two-digit count slot; compact mode removes that slot entirely.
         if (_skinSource != null)
-            return MasterCapsuleSkin.DisplayWidthDip(_skinSource);
+            return MasterCapsuleSkin.DisplayWidthDip(
+                _skinSource, _controller.State.MasterCapsuleSize);
 
         var glyphWidth = Math.Max(
             MeasureText("▾", MasterGlyphFontSize, FontWeights.SemiBold, AppTypography.SymbolFontFamily, pixelsPerDip),
@@ -1059,7 +1067,8 @@ public sealed class MasterCapsuleWindow : Window
             QueueStartTopMargin,
             localArea,
             QueueSlotCount,
-            _controller.DeepCapsuleGap);
+            _controller.DeepCapsuleGap,
+            _controller.MasterCapsuleExtraHeightDip);
         var currentTop = double.IsNaN(_currentTopDip) ? targetTop : _currentTopDip;
 
         ApplyMasterDeviceBounds(currentTop, requestedWidth, geometry);
@@ -1120,7 +1129,8 @@ public sealed class MasterCapsuleWindow : Window
                     QueueStartTopMargin,
                     geometry.LocalWorkAreaDip,
                     QueueSlotCount,
-                    _controller.DeepCapsuleGap);
+                    _controller.DeepCapsuleGap,
+                    _controller.MasterCapsuleExtraHeightDip);
                 ApplyMasterDeviceBounds(
                     targetTop,
                     MasterDockedWidth(geometry.DpiScaleY),
@@ -1165,7 +1175,7 @@ public sealed class MasterCapsuleWindow : Window
             topDip,
             widthDip,
             0,
-            PaperLayoutDefaults.CapsuleHeight));
+            _controller.MasterCapsuleHeightDip));
         if (WindowNative.TrySetWindowDeviceBounds(this, layout.Bounds))
         {
             _currentTopDip = topDip;
@@ -1178,7 +1188,8 @@ public sealed class MasterCapsuleWindow : Window
         QueueStartTopMargin,
         EdgeCapsuleLayout.LocalWorkAreaForQueue(_queueMonitorDeviceName),
         QueueSlotCount,
-        _controller.DeepCapsuleGap);
+        _controller.DeepCapsuleGap,
+        _controller.MasterCapsuleExtraHeightDip);
 
     private static void OnAnimatedTopChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
@@ -1262,14 +1273,15 @@ public sealed class MasterCapsuleWindow : Window
             QueueStartTopMargin,
             geometry.LocalWorkAreaDip,
             QueueSlotCount,
-            _controller.DeepCapsuleGap);
+            _controller.DeepCapsuleGap,
+            _controller.MasterCapsuleExtraHeightDip);
         var docked = EdgeCapsuleGeometry.Calculate(new EdgeCapsuleGeometryInput(
             geometry,
             _queueEdge,
             targetTop,
             MasterDockedWidth(geometry.DpiScaleY),
             0,
-            PaperLayoutDefaults.CapsuleHeight));
+            _controller.MasterCapsuleHeightDip));
 
         // Ordinary capsule docking adds the missing wall-side chrome margin to the one-sided
         // docked HWND. Use the same physical anchor for the symmetric floating pill.

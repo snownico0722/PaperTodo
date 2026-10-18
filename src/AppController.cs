@@ -87,6 +87,14 @@ public sealed partial class AppController : IDisposable
     public NoteImageStore ImageStore => _imageStore;
     internal double DeepCapsuleGap =>
         DeepCapsuleGapSizes.Value(State.DeepCapsuleGapSize);
+    // One derived presentation fact for every queue, not a second per-paper model.
+    internal double MasterCapsuleHeightDip => MasterCapsuleSkin.Current is not null
+        ? MasterCapsuleSizes.HeightDip(State.MasterCapsuleSize)
+        : PaperLayoutDefaults.CapsuleHeight;
+    internal double MasterCapsuleExtraHeightDip =>
+        State.UseCapsuleMode && State.UseDeepCapsuleMode && State.UseCapsuleCollapseAll
+            ? Math.Max(0, MasterCapsuleHeightDip - PaperLayoutDefaults.CapsuleHeight)
+            : 0;
     internal bool IsRunning => _lifecycleState == AppLifecycleState.Running;
     internal bool HasPaperLinkDropTarget =>
         _paperLinkTargetWindow != null &&
@@ -2506,7 +2514,8 @@ public sealed partial class AppController : IDisposable
                 snapshot.SourceEdge,
                 slotCount: sourceLiveCount + 1,
                 DeepCapsuleGap,
-                out var preliminaryTarget))
+                out var preliminaryTarget,
+                masterHeightDip: MasterCapsuleHeightDip))
         {
             CancelMasterCapsuleQueueTransfer(snapshot);
             return false;
@@ -2534,7 +2543,8 @@ public sealed partial class AppController : IDisposable
                 snapshot.SourceEdge,
                 finalSlotCount,
                 DeepCapsuleGap,
-                out var target))
+                out var target,
+                masterHeightDip: MasterCapsuleHeightDip))
         {
             CancelMasterCapsuleQueueTransfer(snapshot);
             return false;
@@ -2737,14 +2747,16 @@ public sealed partial class AppController : IDisposable
                 normalizedSide == DeepCapsuleSides.Left ? EdgeCapsuleEdge.Left : EdgeCapsuleEdge.Right),
             area,
             targetRealCount + visualOffset,
-            DeepCapsuleGap);
+            DeepCapsuleGap,
+            visualOffset > 0 ? MasterCapsuleExtraHeightDip : 0);
         var slotHeight = EdgeCapsuleLayout.SlotHeight(DeepCapsuleGap);
         var firstTop = EdgeCapsuleLayout.TopForIndex(
             visualOffset,
             startTop,
             area,
             targetRealCount + visualOffset,
-            DeepCapsuleGap);
+            DeepCapsuleGap,
+            visualOffset > 0 ? MasterCapsuleExtraHeightDip : 0);
         var rawIndex = (int)Math.Floor((dropY - firstTop) / slotHeight + 0.5);
         var insertAt = Math.Clamp(rawIndex, 0, targetMembers.Count);
 
@@ -4067,7 +4079,8 @@ public sealed partial class AppController : IDisposable
             startTopMargin,
             area,
             slotCount,
-            DeepCapsuleGap);
+            DeepCapsuleGap,
+            State.UseCapsuleCollapseAll && queueCount > 0 ? MasterCapsuleExtraHeightDip : 0);
 
         var current = State.DeepCapsuleQueueStartTopMargins.TryGetValue(key, out var m) ? m : EdgeCapsuleLayout.StartTopMargin;
         if (Math.Abs(current - normalized) < 0.01)

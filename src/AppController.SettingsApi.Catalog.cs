@@ -278,6 +278,15 @@ public sealed partial class AppController
             SettingEffects.Arrange,
             title: Strings.Get("SettingsCompactMasterCapsule"),
             description: "Show only the arrow in the master capsule and hide its queue count.");
+        yield return DefineSetting<int>("capsule.master_size",
+            () => State.MasterCapsuleSize,
+            value => State.MasterCapsuleSize = MasterCapsuleSizes.Normalize(value),
+            SettingEffects.Arrange,
+            title: Strings.Get("SettingsMasterCapsuleSize"),
+            minimum: MasterCapsuleSizes.Minimum,
+            maximum: MasterCapsuleSizes.Maximum,
+            step: 1,
+            description: "External static master image size. 10 = 1x (default), 50 = 5x. The original master pill is unchanged.");
         yield return DefineSetting<bool>("capsule.show_while_expanded",
             () => State.ShowDeepCapsuleWhileExpanded,
             value => State.ShowDeepCapsuleWhileExpanded = value,
