@@ -103,6 +103,9 @@ public sealed partial class AppController
 
         var oldCapsule = State.UseCapsuleMode;
         var oldDeep = State.UseDeepCapsuleMode;
+        // 主胶囊与自由队列互斥：setter 可能连带改写另一个开关，回滚必须成对恢复。
+        var oldCapsuleCollapseAll = State.UseCapsuleCollapseAll;
+        var oldCapsuleFreeQueues = State.UseCapsuleFreeQueues;
         var oldTaskbar = State.HidePapersFromTaskbar;
         var oldTopBarOrder = effects == SettingEffects.TopBar
             ? State.TopBarShortcutOrder.ToList() : null;
@@ -177,6 +180,9 @@ public sealed partial class AppController
                 {
                     State.UseCapsuleMode = oldCapsule;
                     State.UseDeepCapsuleMode = oldDeep;
+                    // setter 的互斥逻辑可能已经关掉伴生开关，这里连同队列快照一起还原。
+                    State.UseCapsuleCollapseAll = oldCapsuleCollapseAll;
+                    State.UseCapsuleFreeQueues = oldCapsuleFreeQueues;
                     State.CapsuleCollapseAllActiveQueues = oldQueues;
                 }
                 if (titles != null) foreach (var row in titles) row.Paper.Title = row.Title;

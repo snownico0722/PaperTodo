@@ -183,6 +183,28 @@ internal static partial class Program
         Invoke(exclusive, "ToggleCapsuleCollapseAll");
         Check(exclusive.State.UseCapsuleCollapseAll && !exclusive.State.UseCapsuleFreeQueues,
             "Enabling the master capsule turns free queues off.");
+
+        // 保存失败时，互斥 setter 连带改写的另一个开关也必须恢复；否则内存会停在
+        // 「两个都未开启」的状态，与写入前不一致。
+        var rollbackFree = Controller();
+        rollbackFree.State.CapsuleCollapseAllActiveQueues["|right"] = true;
+        var rollbackFreeService = SettingsFor(rollbackFree, () => false,
+            _ => throw new Exception("Failed writes must not publish."));
+        Throws<PaperSettingsException>(
+            () => rollbackFreeService.Set("capsule.free_queues", Json(true)), "save_failed");
+        Check(rollbackFree.State.UseCapsuleCollapseAll && !rollbackFree.State.UseCapsuleFreeQueues &&
+              rollbackFree.State.CapsuleCollapseAllActiveQueues.ContainsKey("|right"),
+            "A failed free-queue write restores both exclusive flags and collapse state.");
+
+        var rollbackMaster = Controller();
+        rollbackMaster.State.UseCapsuleCollapseAll = false;
+        rollbackMaster.State.UseCapsuleFreeQueues = true;
+        var rollbackMasterService = SettingsFor(rollbackMaster, () => false,
+            _ => throw new Exception("Failed writes must not publish."));
+        Throws<PaperSettingsException>(
+            () => rollbackMasterService.Set("capsule.master_enabled", Json(true)), "save_failed");
+        Check(!rollbackMaster.State.UseCapsuleCollapseAll && rollbackMaster.State.UseCapsuleFreeQueues,
+            "A failed master-capsule write restores the free-queue switch it turned off.");
     }
 
     private static void DrainSettingsUi()
