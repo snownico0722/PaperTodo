@@ -306,19 +306,10 @@ public sealed partial class AppController
     /// </summary>
     private void RemoveVacatedQueueStartMargin(
         EdgeCapsuleQueueTransferSnapshot snapshot,
-        string destinationStartKey)
-    {
-        var sourceStartKey = QueueKey(snapshot.MonitorDeviceName, snapshot.Side, snapshot.QueueId);
-        if (string.Equals(sourceStartKey, destinationStartKey, StringComparison.Ordinal))
-        {
-            return;
-        }
-
-        if (!State.Papers.Any(p => QueueKey(p) == sourceStartKey))
-        {
-            State.DeepCapsuleQueueStartTopMargins.Remove(sourceStartKey);
-        }
-    }
+        string destinationStartKey) =>
+        RemoveQueueStartMarginIfVacated(
+            QueueKey(snapshot.MonitorDeviceName, snapshot.Side, snapshot.QueueId),
+            destinationStartKey);
 
     /// <summary>
     /// Members the in-flight whole-queue transfer is carrying, in their existing order.

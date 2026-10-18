@@ -71,16 +71,18 @@ public sealed partial class AppController
     }
 
     /// <summary>
-    /// Split a capsule out of its current queue into a brand new one resting at
-    /// <paramref name="startTopDip"/>. The new queue keeps its own instance id and remembered
-    /// height, so it survives a restart independently of the queue it came from.
+    /// Split a capsule out of its current queue into a queue resting at
+    /// <paramref name="startTopDip"/>.
+    ///
+    /// 单成员队列在同一显示器同一侧再次放下时复用原实例 id：拖放不应改变队列身份，否则
+    /// 每次拖放都会生成新 id，旧 margin 变成孤儿并持久化。源队列仍有成员（含隐藏成员）或
+    /// 目的地换了边时生成新 id；源队列真正消失时清掉它记住的起始边距。
     /// </summary>
     private void SplitCapsuleIntoQueue(
         PaperData paper,
         string monitorDeviceName,
         string side,
-        double startTopDip,
-        string queueId)
+        double startTopDip)
     {
         var normalizedMonitor = WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(monitorDeviceName);
         var normalizedSide = DeepCapsuleSides.Normalize(side);
@@ -89,9 +91,19 @@ public sealed partial class AppController
             return;
         }
 
+        var sourceQueueKey = InstanceQueueKey(paper);
+        var sourceStillHasMembers = State.Papers.Any(candidate =>
+            !string.Equals(candidate.Id, paper.Id, StringComparison.Ordinal) &&
+            string.Equals(InstanceQueueKey(candidate), sourceQueueKey, StringComparison.Ordinal));
+        var destinationEdgeKey = QueueKey(normalizedMonitor, normalizedSide, null);
+        var queueId = !sourceStillHasMembers &&
+            EdgeCapsuleQueueIds.IsSameEdge(sourceQueueKey, destinationEdgeKey)
+                ? EdgeCapsuleQueueIds.Normalize(paper.CapsuleQueueId)
+                : EdgeCapsuleQueueIds.New();
+
         paper.CapsuleMonitorDeviceName = normalizedMonitor;
         paper.CapsuleSide = normalizedSide;
-        paper.CapsuleQueueId = EdgeCapsuleQueueIds.Normalize(queueId);
+        paper.CapsuleQueueId = queueId;
 
         // Clamp at commit time only: while dragging, the capsule tracks the pointer 1:1 so the
         // drop position never feels like it lags behind the cursor.
@@ -100,11 +112,42 @@ public sealed partial class AppController
             geometry.LocalWorkAreaDip,
             1,
             DeepCapsuleGap);
-        State.DeepCapsuleQueueStartTopMargins[QueueKey(normalizedMonitor, normalizedSide, paper.CapsuleQueueId)] = startTop;
+        var destinationQueueKey = QueueKey(normalizedMonitor, normalizedSide, queueId);
+        State.DeepCapsuleQueueStartTopMargins[destinationQueueKey] = startTop;
+        // 先写新值再清理：原地复用 id 时两个 key 相同，helper 会直接返回，不会删掉刚写入的值。
+        RemoveQueueStartMarginIfVacated(sourceQueueKey, destinationQueueKey);
 
         ArrangeDeepCapsules(animate: true);
         RefreshTrayMenu();
         SaveNow();
+    }
+
+    /// <summary>
+    /// 队列的持久实例 key。margin 字典按持久实例 key 存储，不受运行期
+    /// <see cref="AppState.UseCapsuleFreeQueues"/> 对 <see cref="QueueKey(PaperData)"/> 的折叠影响。
+    /// </summary>
+    private static string InstanceQueueKey(PaperData paper) =>
+        QueueKey(paper.CapsuleMonitorDeviceName, paper.CapsuleSide, paper.CapsuleQueueId);
+
+    /// <summary>
+    /// 源队列不再有任何成员（含隐藏成员）时删除它记住的起始边距。
+    /// 目的地与源 key 相同时表示队列原地复用同一实例，保留并覆盖，不删除。
+    /// </summary>
+    private void RemoveQueueStartMarginIfVacated(string sourceQueueKey, string destinationQueueKey)
+    {
+        if (string.IsNullOrEmpty(sourceQueueKey) ||
+            string.Equals(sourceQueueKey, destinationQueueKey, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        if (!State.Papers.Any(paper => string.Equals(
+                InstanceQueueKey(paper),
+                sourceQueueKey,
+                StringComparison.Ordinal)))
+        {
+            State.DeepCapsuleQueueStartTopMargins.Remove(sourceQueueKey);
+        }
     }
 
     /// <summary>
@@ -314,8 +357,7 @@ public sealed partial class AppController
                     paper,
                     drop.MonitorDeviceName,
                     drop.Side,
-                    plan.NewQueueStartTopDip,
-                    EdgeCapsuleQueueIds.New());
+                    plan.NewQueueStartTopDip);
                 return true;
         }
     }

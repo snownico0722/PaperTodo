@@ -290,10 +290,8 @@ public sealed partial class AppController
                     plan.GapDip);
         }
 
-        if (plan.SourceBecomesEmpty && !string.IsNullOrEmpty(plan.SourceQueueKey))
-        {
-            State.DeepCapsuleQueueStartTopMargins.Remove(plan.SourceQueueKey);
-        }
+        // carried 此时已改写到目标队列；源队列不再有成员（含隐藏）时统一清理起始边距。
+        RemoveQueueStartMarginIfVacated(plan.SourceQueueKey, plan.TargetQueueKey);
     }
 
     private static EdgeCapsuleEdge EdgeForQueueSide(string side) =>

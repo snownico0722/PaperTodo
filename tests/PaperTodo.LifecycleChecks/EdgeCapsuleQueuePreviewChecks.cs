@@ -435,6 +435,7 @@ internal static class EdgeCapsuleQueuePreviewChecks
             "the committed reorder did not match the preview slots");
 
         // M2 提交侧：贴边 NewQueue 必须让源队列收拢，而不是保留空槽。
+        var qbMarginBeforeSplit = controller.State.DeepCapsuleQueueStartTopMargins[qbKey];
         var splitAnchorY = geometry.WorkArea.Top + 200 * geometry.DpiScaleY;
         var splitAnchor = new EdgeCapsuleDropAnchor(
             new DeviceScreenPoint(geometry.WorkArea.Right - 10, splitAnchorY),
@@ -449,6 +450,105 @@ internal static class EdgeCapsuleQueuePreviewChecks
             () => Placement(windows["fixture-2"]).Index == 0 &&
                   Placement(windows["fixture-3"]).Index == 1,
             "the source queue did not close up after the split");
+
+        // M6：qb 仍有成员，拆分单个成员不得删除它的 margin。
+        Require(
+            controller.State.DeepCapsuleQueueStartTopMargins.TryGetValue(
+                qbKey, out var qbMarginAfterSplit) &&
+            Math.Abs(qbMarginAfterSplit - qbMarginBeforeSplit) < 1e-6,
+            "splitting one member from a multi-member queue discarded its start margin");
+
+        // M6：单成员队列在同一侧放下时复用原实例 id，并原地更新它的 margin，
+        // 不得生成新的孤立 key。
+        var single = controller.State.Papers.Single(paper => paper.Id == "fixture-4");
+        var singleKey = controller.QueueKeyForPaper(single);
+        var singleQueueId = single.CapsuleQueueId;
+        var marginKeysBeforeSingle = controller.State.DeepCapsuleQueueStartTopMargins.Keys
+            .ToHashSet(StringComparer.Ordinal);
+        var singleArea = geometry.LocalWorkAreaDip;
+        var singleBottomCenterY = geometry.WorkArea.Top +
+            (singleArea.Height - 10) * geometry.DpiScaleY;
+        var singleAnchor = new EdgeCapsuleDropAnchor(
+            new DeviceScreenPoint(geometry.WorkArea.Right - 10, singleBottomCenterY),
+            singleBottomCenterY);
+        Require(
+            controller.CommitDeepCapsuleQueueDrop(single, singleAnchor),
+            "the single-member same-edge drop was rejected");
+        Require(
+            controller.QueueKeyForPaper(single) == singleKey &&
+            single.CapsuleQueueId == singleQueueId,
+            "a single-member queue changed identity when dropped in place");
+        Require(
+            controller.State.DeepCapsuleQueueStartTopMargins.Keys
+                .ToHashSet(StringComparer.Ordinal)
+                .SetEquals(marginKeysBeforeSingle),
+            "a single-member same-edge drop created an orphan queue margin");
+        var expectedSingleMargin = EdgeCapsuleLayout.NormalizeStartTopMargin(
+            EdgeCapsuleLayout.MaxStartTopMarginForCount(
+                1, singleArea, controller.DeepCapsuleGap),
+            singleArea,
+            1,
+            controller.DeepCapsuleGap);
+        Require(
+            controller.State.DeepCapsuleQueueStartTopMargins.TryGetValue(
+                singleKey, out var singleMargin) &&
+            Math.Abs(singleMargin - expectedSingleMargin) < 1e-6,
+            "a reused queue identity did not remember its new drop height");
+
+        // M6：跨边拆分后源队列为空，旧 margin 必须删除，新边使用新的实例 id。
+        var oldSingleKey = controller.QueueKeyForPaper(single);
+        var leftAnchor = new EdgeCapsuleDropAnchor(
+            new DeviceScreenPoint(geometry.WorkArea.Left + 10, singleBottomCenterY),
+            singleBottomCenterY);
+        Require(
+            controller.CommitDeepCapsuleQueueDrop(single, leftAnchor),
+            "the cross-edge new-queue drop was rejected");
+        Require(
+            controller.QueueKeyForPaper(single) != oldSingleKey &&
+            controller.QueueKeyForPaper(single).Contains("|left#", StringComparison.Ordinal),
+            "a cross-edge split did not assign a new instance id on the target edge");
+        Require(
+            !controller.State.DeepCapsuleQueueStartTopMargins.ContainsKey(oldSingleKey),
+            "a vacated queue's start margin was left behind after a cross-edge split");
+        Require(
+            controller.State.DeepCapsuleQueueStartTopMargins.ContainsKey(
+                controller.QueueKeyForPaper(single)),
+            "the cross-edge new queue did not persist its start margin");
+
+        // M6：隐藏成员仍属于源队列，不能因为可见成员被拆走就删除它的 margin；
+        // 同时源队列仍有成员，拆分必须生成新 id。
+        var leftKey = controller.QueueKeyForPaper(single);
+        var leftQueueId = single.CapsuleQueueId;
+        var leftMargin = controller.State.DeepCapsuleQueueStartTopMargins[leftKey];
+        controller.State.Papers.Add(new PaperData
+        {
+            Id = "fixture-hidden",
+            Type = PaperTypes.Note,
+            IsVisible = false,
+            CapsuleMonitorDeviceName = single.CapsuleMonitorDeviceName,
+            CapsuleSide = single.CapsuleSide,
+            CapsuleQueueId = leftQueueId
+        });
+        var hiddenAnchorY = geometry.WorkArea.Top + 120 * geometry.DpiScaleY;
+        var hiddenAnchor = new EdgeCapsuleDropAnchor(
+            new DeviceScreenPoint(geometry.WorkArea.Left + 10, hiddenAnchorY),
+            hiddenAnchorY);
+        Require(
+            controller.CommitDeepCapsuleQueueDrop(single, hiddenAnchor),
+            "the drop beside a queue with a hidden member was rejected");
+        Require(
+            controller.QueueKeyForPaper(single) != leftKey &&
+            single.CapsuleQueueId != leftQueueId,
+            "splitting the only visible member reused an id although a hidden member remained");
+        Require(
+            controller.State.DeepCapsuleQueueStartTopMargins.TryGetValue(
+                leftKey, out var keptMargin) &&
+            Math.Abs(keptMargin - leftMargin) < 1e-6,
+            "a queue that still has a hidden member lost its start margin");
+        Require(
+            controller.State.DeepCapsuleQueueStartTopMargins.ContainsKey(
+                controller.QueueKeyForPaper(single)),
+            "the new queue beside a hidden member did not persist its start margin");
     }
 
     private static object? Call(object target, string name, params object?[] args)
