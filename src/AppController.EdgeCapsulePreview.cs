@@ -272,7 +272,13 @@ public sealed partial class AppController
         // exactly A4's new top, so the two overlap. Take the lowest bottom the owner's queue
         // reaches, card included.
         var slotHeight = EdgeCapsuleLayout.SlotHeight(DeepCapsuleGap);
-        var ownerCardTop = ownerQueue.RestTopDip + (ownerPlacement.VisualIndex * slotHeight);
+        // owner 自己可能带着上一帧 session 留下的位移（向下换卡时 keep 分支继承 currentTops），
+        // 卡片就画在那个位置上。漏掉它会让避让按静止槽位计算——矮卡片恰好被下面的成员循环补偿、
+        // 高卡片则少算整个 offset，导致下一条队列被少推、与展开卡片重叠。
+        var ownerOffset = session.TopOffsetsDip.GetValueOrDefault(session.OwnerPaperId);
+        var ownerCardTop = ownerQueue.RestTopDip
+            + (ownerPlacement.VisualIndex * slotHeight)
+            + ownerOffset;
         var cardHeight = Math.Max(session.Size.HeightDip, PaperLayoutDefaults.CapsuleHeight);
         var ownerBottom = ownerCardTop + cardHeight;
         for (var index = 0; index < ownerQueue.PaperIds.Count; index++)
