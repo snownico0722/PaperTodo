@@ -22,11 +22,12 @@ internal static class MasterCapsuleSkin
 
     internal static BitmapSource? Current => StartupSkin.Value;
 
-    internal static double DisplayWidthDip(BitmapSource image) =>
+    internal static double DisplayWidthDip(
+        BitmapSource image, int size = MasterCapsuleSizes.Default) =>
         Math.Clamp(
             Math.Ceiling(PaperLayoutDefaults.CapsuleHeight * (double)image.PixelWidth / image.PixelHeight),
             16,
-            MaxWidthDip);
+            MaxWidthDip) * MasterCapsuleSizes.Scale(size);
 
     // PNG takes precedence. A corrupt PNG does not prevent trying WebP.
     // WebP follows the existing system-WIC codec policy of Note images.
@@ -123,4 +124,22 @@ internal static class MasterCapsuleSkin
         cropped.Freeze();
         return cropped;
     }
+}
+
+/// <summary>
+/// Image scale is the persisted integer size divided by ten.
+/// Ordinary master-pill geometry remains unchanged when no image is present.
+/// </summary>
+internal static class MasterCapsuleSizes
+{
+    internal const int Minimum = 1;
+    internal const int Default = 10;
+    internal const int Maximum = 50;
+
+    internal static int Normalize(int size) => Math.Clamp(size, Minimum, Maximum);
+    internal static double Scale(int size) => Normalize(size) / (double)Default;
+    internal static double HeightDip(int size) =>
+        PaperLayoutDefaults.CapsuleHeight * Scale(size);
+    internal static double ExtraHeightDip(int size) =>
+        Math.Max(0, HeightDip(size) - PaperLayoutDefaults.CapsuleHeight);
 }
