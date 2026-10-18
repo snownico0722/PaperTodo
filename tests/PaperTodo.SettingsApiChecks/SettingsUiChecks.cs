@@ -184,6 +184,37 @@ internal static partial class Program
         Check(exclusive.State.UseCapsuleCollapseAll && !exclusive.State.UseCapsuleFreeQueues,
             "Enabling the master capsule turns free queues off.");
 
+        // FQ-08：前置胶囊模式关闭时写 free_queues=true，必须联动开启 capsule/deep。
+        // 否则设置返回 Changed:true 却运行期不生效，重启时又被 StateStore 归一化静默丢弃——
+        // 「保存成功」不再等价于「最终生效」。语义与 master_enabled 对称。
+        var cascade = Controller();
+        cascade.State.UseCapsuleMode = false;
+        cascade.State.UseDeepCapsuleMode = false;
+        cascade.State.UseCapsuleCollapseAll = false;
+        var cascadeService = SettingsFor(cascade, () => true, _ => { });
+        Check(
+            cascadeService.Set("capsule.free_queues", Json(true)).Changed,
+            "Enabling free queues while capsule mode is off must still report a change.");
+        Check(
+            cascade.State.UseCapsuleFreeQueues && cascade.State.UseCapsuleMode &&
+            cascade.State.UseDeepCapsuleMode && !cascade.State.UseCapsuleCollapseAll,
+            "Writing free queues cascades the capsule prerequisites on, like the master pill does.");
+
+        // 级联开启的开关也必须参与回滚，否则失败写入会把用户从「两个都关」推到
+        // 「free=true 但 capsule 仍关」——正是 FQ-08 描述的静默失效状态。
+        var cascadeFail = Controller();
+        cascadeFail.State.UseCapsuleMode = false;
+        cascadeFail.State.UseDeepCapsuleMode = false;
+        cascadeFail.State.UseCapsuleCollapseAll = false;
+        var cascadeFailService = SettingsFor(cascadeFail, () => false,
+            _ => throw new Exception("Failed writes must not publish."));
+        Throws<PaperSettingsException>(
+            () => cascadeFailService.Set("capsule.free_queues", Json(true)), "save_failed");
+        Check(
+            !cascadeFail.State.UseCapsuleFreeQueues && !cascadeFail.State.UseCapsuleMode &&
+            !cascadeFail.State.UseDeepCapsuleMode,
+            "A failed free-queue write also rolls back the cascaded capsule flags.");
+
         // 保存失败时，互斥 setter 连带改写的另一个开关也必须恢复；否则内存会停在
         // 「两个都未开启」的状态，与写入前不一致。
         var rollbackFree = Controller();

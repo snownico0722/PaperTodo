@@ -144,6 +144,12 @@ public sealed partial class AppController
                     if (id == "capsule.edge_enabled" && value is true) State.UseCapsuleMode = true;
                     if (id == "capsule.master_enabled" && value is true)
                         State.UseCapsuleMode = State.UseDeepCapsuleMode = true;
+                    // FQ-08: free_queues 与 master_enabled 同属「胶囊体系内」开关，保存成功必须蕴含
+                    // 运行期可用。与 StateStore 加载归一化共用同一条不变式：free=true => capsule && deep，
+                    // 避免写成功却不生效、重启再被丢弃。Rollback 的成对快照已把旧 UseCapsuleMode / UseDeepCapsuleMode
+                    // 一并纳入，Publish 会在 oldDeep != UseDeepCapsuleMode 时自动刷新胶囊窗口。
+                    if (id == "capsule.free_queues" && value is true)
+                        State.UseCapsuleMode = State.UseDeepCapsuleMode = true;
                     if (!State.UseDeepCapsuleMode || !State.UseCapsuleCollapseAll)
                     {
                         State.CapsuleCollapseAllActiveQueues.Clear();

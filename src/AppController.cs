@@ -1721,6 +1721,9 @@ public sealed partial class AppController : IDisposable
 
     internal void BeginDeepCapsuleReorderDrag(PaperData draggedPaper)
     {
+        // FQ-12: 在手势真正建立的瞬间把 owner 钉住——后续 EndDeepCapsuleQueueMagnetPreview 会
+        // 用它拦截无关纸片调来的清理调用。begin 入口处无条件覆盖，避免上次手势未释放造成的残留。
+        ClaimEdgeCapsuleQueueDragOwnership(draggedPaper.Id);
         foreach (var entry in _windows)
         {
             if (string.Equals(entry.Key, draggedPaper.Id, StringComparison.Ordinal))
@@ -1749,6 +1752,9 @@ public sealed partial class AppController : IDisposable
         {
             return;
         }
+
+        // FQ-12: 手势正常完成，下一次 Begin 时再 Claim。无条件释放以防 finally 之外的调用路径遗漏。
+        ReleaseEdgeCapsuleQueueDragOwnership();
 
         foreach (var window in _windows.Values)
         {
@@ -4389,6 +4395,14 @@ public sealed partial class AppController : IDisposable
     public void SetDeepCapsuleStartTopMargin(string monitorDeviceName, EdgeCapsuleEdge edge, double startTopMargin, bool commit = false)
     {
         if (!State.UseCapsuleMode || !State.UseDeepCapsuleMode)
+        {
+            return;
+        }
+        // FQ-15: 本方法只服务主胶囊拖拽，写裸 edge key（"|side"）。master 与 free 队列互斥（D-058），
+        // 自由队列开启时不存在主胶囊，且自由队列渲染读持久实例 key（"|side#id"）——此时写入既无视觉
+        // 反馈又会留下永远读不到的陈旧裸 margin。guard 只能挡 free，不能挡 UseCapsuleCollapseAll：
+        // 主胶囊正是在该开关为 true 时才存在（SyncMasterCapsules 反之则销毁），挡它会让本方法永不生效。
+        if (State.UseCapsuleFreeQueues)
         {
             return;
         }
