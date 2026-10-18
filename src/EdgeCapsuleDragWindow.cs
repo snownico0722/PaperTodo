@@ -7,6 +7,7 @@ using System.Windows.Markup;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
+using System.Windows.Media.Imaging;
 
 namespace PaperTodo;
 
@@ -37,6 +38,8 @@ internal sealed record EdgeCapsuleDragWindowOptions
     public required Brush LabelBrush { get; init; }
     public required Brush OutlineBrush { get; init; }
     public required bool Topmost { get; init; }
+    public BitmapSource? MasterSkinSource { get; init; }
+    public EdgeCapsuleEdge MasterSkinEdge { get; init; }
 }
 
 internal enum EdgeCapsuleNativeDragResult
@@ -79,6 +82,7 @@ internal sealed partial class EdgeCapsuleDragWindow : Window
     private Grid _surface = null!;
     private Border _paperBackground = null!;
     private Grid _shell = null!;
+    private Image _masterSkinImage = null!;
     private Grid _content = null!;
     private TextBlock _icon = null!;
     private TextBlock _label = null!;
@@ -740,9 +744,25 @@ internal sealed partial class EdgeCapsuleDragWindow : Window
             options.Shape.CornerRadiusDip +
             options.OutlineThickness -
             options.OutlineOverlap);
-        _outline.Visibility = options.Shape.OutlineVisible
-            ? Visibility.Visible
-            : Visibility.Collapsed;
+        var customMaster = options.MasterSkinSource != null;
+        _paperBackground.Visibility = customMaster ? Visibility.Collapsed : Visibility.Visible;
+        _shell.Visibility = customMaster ? Visibility.Collapsed : Visibility.Visible;
+        _outline.Visibility = customMaster
+            ? Visibility.Collapsed
+            : options.Shape.OutlineVisible ? Visibility.Visible : Visibility.Collapsed;
+        _masterSkinImage.Source = options.MasterSkinSource;
+        _masterSkinImage.Visibility = customMaster ? Visibility.Visible : Visibility.Collapsed;
+        if (customMaster)
+        {
+            // Docked masters have no wall-side gutter. The floating handoff does;
+            // keep the bitmap on the same edge of the additional gutter.
+            _masterSkinImage.Margin = options.MasterSkinEdge == EdgeCapsuleEdge.Right
+                ? new Thickness(options.WindowChromeMargin, 0, 0, 0)
+                : new Thickness(0, 0, options.WindowChromeMargin, 0);
+            _masterSkinImage.RenderTransform = options.MasterSkinEdge == EdgeCapsuleEdge.Left
+                ? new ScaleTransform(-1, 1)
+                : Transform.Identity;
+        }
         _configuredOptions = options;
     }
 
@@ -971,6 +991,19 @@ internal sealed partial class EdgeCapsuleDragWindow : Window
         };
         Panel.SetZIndex(_outline, 20);
         _surface.Children.Add(_outline);
+
+        // Reuse this Image across queue transfers. Ordinary paper drags bind null
+        // and restore the original capsule shell, avoiding a second HWND/tree.
+        _masterSkinImage = new Image
+        {
+            Stretch = Stretch.Uniform,
+            RenderTransformOrigin = new Point(0.5, 0.5),
+            IsHitTestVisible = false,
+            Visibility = Visibility.Collapsed
+        };
+        RenderOptions.SetBitmapScalingMode(_masterSkinImage, BitmapScalingMode.HighQuality);
+        Panel.SetZIndex(_masterSkinImage, 30);
+        _surface.Children.Add(_masterSkinImage);
         Content = _root;
     }
 }
