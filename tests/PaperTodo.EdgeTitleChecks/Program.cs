@@ -25,6 +25,8 @@ internal static partial class Program
             Console.WriteLine("PASS queue-drag-modifier-latch");
             QueuePreviewThrottle();
             Console.WriteLine("PASS queue-preview-throttle");
+            FreeQueuePreviewActionChecks();
+            Console.WriteLine("PASS free-queue-preview-action");
             QueueMagnet();
             Console.WriteLine("PASS queue-magnet-merge-detach-reorder");
             EdgeQueueAvoidance();

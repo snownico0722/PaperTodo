@@ -4,6 +4,17 @@ using System.Windows.Threading;
 
 namespace PaperTodo;
 
+/// <summary>
+/// 自由队列拖拽反馈的分支。跨队列开槽、整队保持、贴边同队列重排、源队列收拢四选一。
+/// </summary>
+internal enum EdgeCapsuleFreeQueuePreviewAction
+{
+    KeepTransfer,
+    SameQueueReorder,
+    VacateSource,
+    CrossQueue
+}
+
 public sealed partial class PaperWindow
 {
     private readonly record struct PreviewOriginReorderBaseline(
@@ -717,6 +728,30 @@ public sealed partial class PaperWindow
     }
 
     /// <summary>
+    /// 自由队列拖拽反馈的分支选择（纯函数）。贴边的 NewQueue/None 也必须收拢源队列，
+    /// 否则会显示一个提交时不会发生的同队列重排；浮空阶段同样只收拢、不预览槽位。
+    /// </summary>
+    internal static EdgeCapsuleFreeQueuePreviewAction ResolveEdgeCapsuleFreeQueuePreviewAction(
+        EdgeCapsuleQueueMagnetOutcome outcome,
+        bool crossQueue,
+        bool floatingPhase,
+        bool hasTransfer)
+    {
+        if (crossQueue)
+        {
+            return EdgeCapsuleFreeQueuePreviewAction.CrossQueue;
+        }
+        if (hasTransfer)
+        {
+            return EdgeCapsuleFreeQueuePreviewAction.KeepTransfer;
+        }
+
+        return !floatingPhase && outcome == EdgeCapsuleQueueMagnetOutcome.Reorder
+            ? EdgeCapsuleFreeQueuePreviewAction.SameQueueReorder
+            : EdgeCapsuleFreeQueuePreviewAction.VacateSource;
+    }
+
+    /// <summary>
     /// Live magnet feedback for a free-queue drag: decide what the drop would do right now, then
     /// show it — the target queue opens a slot, and the outline says which queue that is.
     ///
@@ -778,32 +813,47 @@ public sealed partial class PaperWindow
         // a working avoidance path before free queues existed, so it keeps that and shows no marker.
         var crossQueue = plan.Outcome == EdgeCapsuleQueueMagnetOutcome.Merge &&
                          !string.Equals(plan.TargetQueueKey, sourceQueueKey, StringComparison.Ordinal);
+        var previewAction = ResolveEdgeCapsuleFreeQueuePreviewAction(
+            plan.Outcome,
+            crossQueue,
+            floatingPhase,
+            transfer != null);
 
-        if (!crossQueue)
+        if (previewAction != EdgeCapsuleFreeQueuePreviewAction.CrossQueue)
         {
             _controller.EndEdgeCapsuleQueueDropTargetOutline();
             // 真正离开吸附区：把上一帧被撑开的目标队列放回真实槽位，空隙随之合拢。
             RestoreDeepCapsuleQueuePreviewTarget();
-            if (transfer != null)
+            switch (previewAction)
             {
-                // The queue being carried is already lifted off the wall and hidden; there is no
-                // gap left to close, so re-running the close-up would only churn detached members.
-                ResetDeepCapsuleQueueMagnetPreviewState();
-            }
-            else if (floatingPhase)
-            {
-                // Off the wall there is no slot index to track, but the vacated queue still has to
-                // close up. This is what keeps the queue reading as one piece mid-drag.
-                PreviewDeepCapsuleQueueVacatedSourceOnce();
-            }
-            else
-            {
-                ResetDeepCapsuleQueueMagnetPreviewState();
-                PreviewDeepCapsuleReorderForCurrentPosition();
+                case EdgeCapsuleFreeQueuePreviewAction.KeepTransfer:
+                    // The queue being carried is already lifted off the wall and hidden; there is
+                    // no gap left to close, so re-running the close-up would only churn members.
+                    ClearDeepCapsulePreviewIndex(session);
+                    ResetDeepCapsuleQueueMagnetPreviewState();
+                    break;
+
+                case EdgeCapsuleFreeQueuePreviewAction.SameQueueReorder:
+                    // 只清 vacated 去重键：允许之后切换到 NewQueue 时重新收拢一次，
+                    // 但不要重置预览节流/key。索引与提交共用同一取整规则。
+                    _deepCapsuleVacatedQueueKey = "";
+                    PreviewDeepCapsuleFreeQueueReorderAt(anchor, sourceQueueKey);
+                    break;
+
+                case EdgeCapsuleFreeQueuePreviewAction.VacateSource:
+                    // floating / NewQueue / None：源队列按提交语义收拢。这里不能 Reset，
+                    // 否则每个 tick 都会重启 200ms 过渡并造成抖动。
+                    ClearDeepCapsulePreviewIndex(session);
+                    PreviewDeepCapsuleQueueVacatedSourceOnce();
+                    break;
             }
 
             return;
         }
+
+        // 离开同队列重排预览后（跨队列开槽会覆盖同伴 placement），必须清掉 reducer 的
+        // PreviewIndex，否则回到相同索引时 helper 会误判“已预览”而跳过重新下发。
+        ClearDeepCapsulePreviewIndex(session);
 
         var index = _controller.DeepCapsuleQueueInsertIndexFor(
             plan.TargetQueueKey,
@@ -848,6 +898,53 @@ public sealed partial class PaperWindow
         // 先 Preview（生成/保存计划），再 Show（读取同一份计划画描边）。
         _controller.ShowEdgeCapsuleQueueDropTargetOutline(
             plan.TargetQueueKey, _paper.Id, carried.Count, index);
+    }
+
+    /// <summary>
+    /// 重置 reducer 的预览索引去重键。离开同队列重排预览时必须调用，否则同伴 placement
+    /// 已被收拢/跨队列预览覆盖后，回到同一索引会被误判为“已预览”。
+    /// </summary>
+    private void ClearDeepCapsulePreviewIndex(EdgeCapsuleDragSession session)
+    {
+        if (session.PreviewIndex != -1)
+        {
+            _ = UpdateEdgeCapsulePreviewIndex(-1);
+        }
+    }
+
+    /// <summary>
+    /// 自由队列贴边同队列重排预览：索引与提交共用 DeepCapsuleQueueInsertIndexFor，
+    /// 避免旧的方向性 floor/ceil 在 0.5 槽边界与提交的四舍五入给出不同槽位。
+    /// 同时钉扎 preview key/index，保证松手提交落在预览显示的队列与槽位。
+    /// </summary>
+    private void PreviewDeepCapsuleFreeQueueReorderAt(
+        EdgeCapsuleDropAnchor anchor,
+        string sourceQueueKey)
+    {
+        if (!TryGetEdgeCapsuleDragSession(out var session))
+        {
+            CancelDeepCapsuleReorderDrag(restoreLayout: true);
+            return;
+        }
+
+        var index = _controller.DeepCapsuleQueueInsertIndexFor(
+            sourceQueueKey,
+            _paper.Id,
+            anchor.CapsuleCenterYDevice);
+        if (index != session.PreviewIndex)
+        {
+            if (!UpdateEdgeCapsulePreviewIndex(index))
+            {
+                CancelDeepCapsuleReorderDrag(restoreLayout: true);
+                return;
+            }
+
+            _controller.PreviewDeepCapsuleReorder(_paper, index);
+        }
+
+        // 每帧都要重设：RestoreDeepCapsuleQueuePreviewTarget 会在本分支入口清空这两个字段。
+        _deepCapsuleQueuePreviewKey = sourceQueueKey;
+        _deepCapsuleQueuePreviewIndex = index;
     }
 
     private void PreviewDeepCapsuleReorderForCurrentPosition()

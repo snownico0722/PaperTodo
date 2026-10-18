@@ -353,6 +353,66 @@ internal static class EdgeCapsuleQueuePreviewChecks
         await Until(
             () => !ownerWindow.IsEdgeCapsulePreviewOpen,
             "the preview did not close after the session check");
+
+        // M2：贴边同队列重排的预览与提交必须使用同一取整规则（0.5 槽边界）。
+        Require(
+            Placement(windows["fixture-2"]).Index == 0 &&
+            Placement(windows["fixture-0"]).Index == 1 &&
+            Placement(windows["fixture-3"]).Index == 2,
+            "the queue did not settle in its expected order before the reorder check");
+
+        var qbKey = controller.QueueKeyForPaper(source);
+        var qbMargin = controller.DeepCapsuleStartTopMarginForQueue(
+            "", EdgeCapsuleEdge.Right, "qb");
+        var gap = controller.DeepCapsuleGap;
+        var slotHeight = EdgeCapsuleLayout.SlotHeight(gap);
+        var firstTop = EdgeCapsuleLayout.TopForIndex(
+            0, qbMargin, geometry.LocalWorkAreaDip, 3, gap);
+        double DeviceCenterY(double slots) =>
+            geometry.WorkArea.Top +
+            (firstTop + slots * slotHeight + PaperLayoutDefaults.CapsuleHeight / 2.0) *
+            geometry.DpiScaleY;
+
+        Require(
+            controller.DeepCapsuleQueueInsertIndexFor(qbKey, source.Id, DeviceCenterY(1.4)) == 1,
+            "the insertion slot below half-way did not round down");
+        var targetIndex = controller.DeepCapsuleQueueInsertIndexFor(
+            qbKey, source.Id, DeviceCenterY(1.6));
+        Require(targetIndex == 2, "the insertion slot past half-way did not round up");
+
+        var reorderAnchorY = DeviceCenterY(1.6);
+        var reorderAnchor = new EdgeCapsuleDropAnchor(
+            new DeviceScreenPoint(geometry.WorkArea.Right - 10, reorderAnchorY),
+            reorderAnchorY);
+        controller.PreviewDeepCapsuleReorder(source, targetIndex);
+        Require(
+            Placement(windows["fixture-2"]).Index == 0 &&
+            Placement(windows["fixture-3"]).Index == 1,
+            "the reorder preview did not place the peers at the target slots");
+        Require(
+            controller.CommitDeepCapsuleQueueDrop(source, reorderAnchor, qbKey, targetIndex),
+            "the pinned same-queue reorder was rejected");
+        await Until(
+            () => Placement(windows["fixture-2"]).Index == 0 &&
+                  Placement(windows["fixture-3"]).Index == 1 &&
+                  Placement(windows[source.Id]).Index == 2,
+            "the committed reorder did not match the preview slots");
+
+        // M2 提交侧：贴边 NewQueue 必须让源队列收拢，而不是保留空槽。
+        var splitAnchorY = geometry.WorkArea.Top + 200 * geometry.DpiScaleY;
+        var splitAnchor = new EdgeCapsuleDropAnchor(
+            new DeviceScreenPoint(geometry.WorkArea.Right - 10, splitAnchorY),
+            splitAnchorY);
+        Require(
+            controller.CommitDeepCapsuleQueueDrop(source, splitAnchor),
+            "the new-queue drop was rejected");
+        Require(
+            controller.QueueKeyForPaper(source) != qbKey,
+            "the new-queue drop did not split the capsule out of its queue");
+        await Until(
+            () => Placement(windows["fixture-2"]).Index == 0 &&
+                  Placement(windows["fixture-3"]).Index == 1,
+            "the source queue did not close up after the split");
     }
 
     private static object? Call(object target, string name, params object?[] args)

@@ -62,4 +62,44 @@ internal static partial class Program
             PaperWindow.IsDeepCapsuleQueuePreviewDue(0, 8, true),
             "The native drag timer forces an evaluation regardless of the interval");
     }
+
+    /// <summary>
+    /// 自由队列拖拽反馈的分支选择：贴边 Reorder 才显示同队列重排；NewQueue/None 与浮空
+    /// 都应收拢源队列；整队搬移保持现状；跨队列进入开槽路径。
+    /// </summary>
+    private static void FreeQueuePreviewActionChecks()
+    {
+        static EdgeCapsuleFreeQueuePreviewAction Resolve(
+            EdgeCapsuleQueueMagnetOutcome outcome,
+            bool crossQueue = false,
+            bool floatingPhase = false,
+            bool hasTransfer = false) =>
+            PaperWindow.ResolveEdgeCapsuleFreeQueuePreviewAction(
+                outcome, crossQueue, floatingPhase, hasTransfer);
+
+        Check(Resolve(EdgeCapsuleQueueMagnetOutcome.Merge, crossQueue: true) ==
+              EdgeCapsuleFreeQueuePreviewAction.CrossQueue,
+            "A cross-queue merge opens the target slot");
+        Check(Resolve(EdgeCapsuleQueueMagnetOutcome.Merge, hasTransfer: true) ==
+              EdgeCapsuleFreeQueuePreviewAction.KeepTransfer,
+            "A whole-queue transfer keeps the hidden source untouched");
+        Check(Resolve(EdgeCapsuleQueueMagnetOutcome.Reorder) ==
+              EdgeCapsuleFreeQueuePreviewAction.SameQueueReorder,
+            "A docked reorder previews the new slot");
+        Check(Resolve(EdgeCapsuleQueueMagnetOutcome.Reorder, floatingPhase: true) ==
+              EdgeCapsuleFreeQueuePreviewAction.VacateSource,
+            "A floating reorder closes the source instead of previewing a slot");
+        Check(Resolve(EdgeCapsuleQueueMagnetOutcome.NewQueue) ==
+              EdgeCapsuleFreeQueuePreviewAction.VacateSource,
+            "A docked new-queue drop closes the source instead of reordering it");
+        Check(Resolve(EdgeCapsuleQueueMagnetOutcome.NewQueue, floatingPhase: true) ==
+              EdgeCapsuleFreeQueuePreviewAction.VacateSource,
+            "A floating new-queue drop closes the source");
+        Check(Resolve(EdgeCapsuleQueueMagnetOutcome.None) ==
+              EdgeCapsuleFreeQueuePreviewAction.VacateSource,
+            "An unavailable plan closes the source");
+        Check(Resolve(EdgeCapsuleQueueMagnetOutcome.None, crossQueue: true) ==
+              EdgeCapsuleFreeQueuePreviewAction.CrossQueue,
+            "Cross-queue takes precedence over the plan outcome");
+    }
 }
