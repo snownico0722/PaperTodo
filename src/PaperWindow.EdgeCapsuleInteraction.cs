@@ -669,7 +669,7 @@ public sealed partial class PaperWindow
 
         if (!string.Equals(
                 targetKey,
-                AppController.QueueKeyForPaper(_paper),
+                _controller.QueueKeyForPaper(_paper),
                 StringComparison.Ordinal))
         {
             _controller.RestoreDeepCapsuleQueuePreview(targetKey);
@@ -684,7 +684,7 @@ public sealed partial class PaperWindow
     /// </summary>
     private void PreviewDeepCapsuleQueueVacatedSourceOnce()
     {
-        var sourceQueueKey = AppController.QueueKeyForPaper(_paper);
+        var sourceQueueKey = _controller.QueueKeyForPaper(_paper);
         if (_deepCapsuleVacatedQueueKey == sourceQueueKey)
         {
             return;
@@ -771,7 +771,7 @@ public sealed partial class PaperWindow
             carried,
             anchor,
             excludeEntireSourceQueue: transfer != null);
-        var sourceQueueKey = AppController.QueueKeyForPaper(_paper);
+        var sourceQueueKey = _controller.QueueKeyForPaper(_paper);
 
         // The new outline and cross-queue avoidance exist for one situation only: what this drag
         // carries leaving its own queue to join a different one. Same-queue reordering already had

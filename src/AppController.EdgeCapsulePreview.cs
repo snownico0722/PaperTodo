@@ -204,11 +204,16 @@ public sealed partial class AppController
             }
 
             var slotCount = papers.Count;
+            // margin 必须从队列身份 key 派生：free 关闭时 key 是裸 edge key，
+            // 纸片上的实例 id 已不参与运行期身份，继续读它会得到不同的起始高度。
+            var queueId = EdgeCapsuleQueueIds.TrySplit(queue.Key, out _, out var parsedQueueId)
+                ? parsedQueueId
+                : "";
             var startTop = EdgeCapsuleLayout.NormalizeStartTopMargin(
                 DeepCapsuleStartTopMarginForQueue(
                     edgeKey[..Math.Max(separator, 0)],
                     side,
-                    EdgeCapsuleQueueIds.Normalize(papers[0].CapsuleQueueId)),
+                    queueId),
                 geometry.LocalWorkAreaDip,
                 slotCount,
                 DeepCapsuleGap);

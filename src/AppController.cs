@@ -3163,7 +3163,12 @@ public sealed partial class AppController : IDisposable
     private static string QueueKey(string monitorDeviceName, string side, string? queueId)
         => EdgeCapsuleQueueIds.Compose(EdgeKey(monitorDeviceName, side), queueId);
 
-    private static string QueueKey(PaperData paper) => QueueKey(paper.CapsuleMonitorDeviceName, paper.CapsuleSide, paper.CapsuleQueueId);
+    // 运行期队列身份：自由队列关闭时忽略实例 id，回到「一条边一条队列」的旧语义；
+    // CapsuleQueueId 与实例 margin 原样保留，重新开启后按 id/记忆位置恢复原布局。
+    private string QueueKey(PaperData paper) => QueueKey(
+        paper.CapsuleMonitorDeviceName,
+        paper.CapsuleSide,
+        State.UseCapsuleFreeQueues ? paper.CapsuleQueueId : null);
 
     private bool IsCapsuleCollapseAllActiveForQueue(string queueKey)
     {
@@ -4257,7 +4262,12 @@ public sealed partial class AppController : IDisposable
     public double DeepCapsuleStartTopMarginFor(PaperData paper)
     {
         var edge = paper.CapsuleSide == DeepCapsuleSides.Left ? EdgeCapsuleEdge.Left : EdgeCapsuleEdge.Right;
-        return DeepCapsuleStartTopMarginForQueue(paper.CapsuleMonitorDeviceName, edge, paper.CapsuleQueueId);
+        // 与 QueueKey(paper) 共用同一身份漏斗：free 关闭时实例 id 被忽略，
+        // 否则同一裸队列的不同成员会读到不同实例 margin（第二 authority）。
+        var queueId = EdgeCapsuleQueueIds.TrySplit(QueueKey(paper), out _, out var parsedQueueId)
+            ? parsedQueueId
+            : "";
+        return DeepCapsuleStartTopMarginForQueue(paper.CapsuleMonitorDeviceName, edge, queueId);
     }
 
     public double DeepCapsuleStartTopMarginForQueue(string monitorDeviceName, EdgeCapsuleEdge edge)

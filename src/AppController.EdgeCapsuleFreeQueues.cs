@@ -34,7 +34,7 @@ public sealed partial class AppController
     /// Queue instance key of a paper, for callers outside the controller that need to tell a
     /// same-queue reorder apart from a cross-queue merge.
     /// </summary>
-    internal static string QueueKeyForPaper(PaperData paper) => QueueKey(paper);
+    internal string QueueKeyForPaper(PaperData paper) => QueueKey(paper);
 
     // The queue this drag is currently snapped to. Fed back into the magnet as its held queue so
     // the Schmitt trigger's dead band keeps a queue attached while the pointer jitters near the

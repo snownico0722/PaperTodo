@@ -22,7 +22,7 @@ internal static class EdgeCapsuleQueuePreviewChecks
 
         var source = controller.State.Papers.Single(paper => paper.Id == "fixture-0");
         var targetPaper = controller.State.Papers.Single(paper => paper.Id == "fixture-2");
-        var targetKey = AppController.QueueKeyForPaper(targetPaper);
+        var targetKey = controller.QueueKeyForPaper(targetPaper);
 
         Require(
             Placement(windows["fixture-2"]).Index == 0 &&
@@ -167,8 +167,8 @@ internal static class EdgeCapsuleQueuePreviewChecks
         controller.ForgetDeepCapsuleQueueDrag();
 
         // 空间不足：qa 顶到 8、qb 顶到 40，qa 无法再向上让位。
-        var qaKey = AppController.QueueKeyForPaper(source);
-        var qcKey = AppController.QueueKeyForPaper(
+        var qaKey = controller.QueueKeyForPaper(source);
+        var qcKey = controller.QueueKeyForPaper(
             controller.State.Papers.Single(paper => paper.Id == "fixture-4"));
         controller.State.DeepCapsuleQueueStartTopMargins[qaKey] = 8;
         controller.State.DeepCapsuleQueueStartTopMargins[targetKey] = 40;
@@ -200,7 +200,7 @@ internal static class EdgeCapsuleQueuePreviewChecks
             !controller.CommitDeepCapsuleQueueDrop(source, commitAnchor, targetKey, 1),
             "an infeasible insertion must be rejected on commit");
         Require(
-            AppController.QueueKeyForPaper(source) == qaKey,
+            controller.QueueKeyForPaper(source) == qaKey,
             "a rejected capsule must stay in its source queue");
         Require(
             Math.Abs(controller.State.DeepCapsuleQueueStartTopMargins[qaKey] - 8) < 1e-6 &&
@@ -219,7 +219,7 @@ internal static class EdgeCapsuleQueuePreviewChecks
             controller.CommitDeepCapsuleQueueDrop(source, commitAnchor, targetKey, 1),
             "a feasible insertion should commit");
         Require(
-            AppController.QueueKeyForPaper(source) == targetKey,
+            controller.QueueKeyForPaper(source) == targetKey,
             "the committed capsule did not join the target queue");
         Require(
             Math.Abs(controller.State.DeepCapsuleQueueStartTopMargins[targetKey] - 320) < 1e-6 &&
@@ -254,6 +254,50 @@ internal static class EdgeCapsuleQueuePreviewChecks
         await Until(
             () => windows[source.Id].IsDeepCapsuleSlotVisible,
             "the source queue did not return after the transfer cancel");
+
+        // H2：关闭自由队列后，同一显示器同侧必须回到单队列身份，主胶囊也只能有一个；
+        // 实例 id 与 margin 保留，重新开启后恢复原自由队列布局。
+        var sourceInstanceMargin = controller.DeepCapsuleStartTopMarginFor(source);
+        controller.State.DeepCapsuleQueueStartTopMargins["|right"] = 96;
+        controller.State.UseCapsuleFreeQueues = false;
+        controller.State.UseCapsuleCollapseAll = true;
+        controller.ArrangeDeepCapsules(animate: false);
+
+        var masters = (Dictionary<string, MasterCapsuleWindow>?)Field(controller, "_masterCapsules")
+            ?? throw new InvalidOperationException("master capsule map was missing");
+        Require(
+            masters.Count == 1 && masters.ContainsKey("|right"),
+            "disabling free queues did not collapse the edge into one master queue");
+        Require(
+            controller.QueueKeyForPaper(source) == "|right",
+            "disabling free queues kept an instance queue identity");
+        Require(
+            controller.VisibleDeepCapsuleCountForQueue(source) == 5,
+            "disabling free queues did not merge every capsule on the edge");
+        Require(
+            controller.MasterCapsuleForQueue("", EdgeCapsuleEdge.Right) != null,
+            "the bare-edge master capsule was not reachable by the master lookup");
+        Require(
+            Math.Abs(controller.DeepCapsuleStartTopMarginFor(source) - 96) < 1e-6,
+            "the merged queue did not read the bare-edge start margin");
+
+        controller.State.UseCapsuleCollapseAll = false;
+        controller.State.UseCapsuleFreeQueues = true;
+        controller.ArrangeDeepCapsules(animate: false);
+
+        Require(masters.Count == 0, "re-enabling free queues did not retire the master capsule");
+        Require(
+            controller.QueueKeyForPaper(source).Contains('#'),
+            "re-enabling free queues did not restore the instance queue identity");
+        Require(
+            !string.IsNullOrEmpty(source.CapsuleQueueId),
+            "re-enabling free queues lost the persisted instance id");
+        Require(
+            Math.Abs(controller.DeepCapsuleStartTopMarginFor(source) - sourceInstanceMargin) < 1e-6,
+            "re-enabling free queues did not restore the instance start margin");
+        Require(
+            controller.State.DeepCapsuleQueueStartTopMargins.ContainsKey(targetKey),
+            "the instance start margin was discarded while free queues were disabled");
     }
 
     private static void SetField(object target, string name, object? value) =>
