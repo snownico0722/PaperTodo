@@ -8,11 +8,13 @@ namespace PaperTodo;
 /// </summary>
 /// <param name="QueueKey">队列实例 key。</param>
 /// <param name="SlotCount">队列槽位数（含主胶囊槽位，若有）。</param>
-/// <param name="FirstSlotTopDip">slot 0 的 top（已含 visualOffset 造成的偏移）。</param>
+/// <param name="FirstSlotTopDip">
+/// slot 0 的 top（已含该队列持久化的起始 margin；自由队列没有主胶囊槽位，不含 VisualOffset）。
+/// </param>
 /// <param name="SlotHeightDip">相邻槽位的间距（胶囊高 + 队列间距）。</param>
 /// <param name="ExcludedMemberIndex">
-/// 计算区间时要排除的成员下标。源队列传入被拖动成员的槽位，使「拖离本队列」以剩余成员
-/// 的实际占位来判定；-1 表示不排除。
+/// 计算区间时要排除的成员下标；-1 表示不排除。当前生产候选在构建时已按 carriedIds 剔除被拖
+/// 成员，因此恒传 -1；该参数保留给纯函数测试和未来调用。
 /// </param>
 /// <param name="BandLeftDip">贴墙矩形水平条带的左边界（本地 DIP）。</param>
 /// <param name="BandWidthDip">贴墙矩形水平条带的宽度（本地 DIP）。</param>
@@ -28,6 +30,20 @@ internal readonly record struct EdgeCapsuleQueueMagnetCandidate(
 /// <summary>
 /// 一次磁吸判定的全部输入。全部为本地 DIP，与 <see cref="EdgeCapsuleLayout"/> 的坐标口径一致。
 /// </summary>
+/// <param name="SourceQueueKey">
+/// 被拖成员当前所在队列；命中该 key 时返回 Reorder，否则返回 Merge。
+/// </param>
+/// <param name="Candidates">
+/// 目标边上参与磁吸的队列及几何。顺序必须确定：不同候选等距时，先遍历到的候选胜出。
+/// </param>
+/// <param name="HeldQueueKey">
+/// 上一帧磁吸命中的队列；空串表示未吸附。用于 Schmitt trigger 的退出与接管判定。
+/// </param>
+/// <param name="MergeDistanceDip">首次吸附半径；非有限或负值时回退默认值。</param>
+/// <param name="DetachDistanceDip">
+/// 已吸附队列的脱落半径；小于 MergeDistanceDip 时回退默认值。调用方显式传相等值会让死区
+/// 宽度变为 0。
+/// </param>
 /// <param name="NewQueueMinTopDip">
 /// 新队列落点允许的最小 top。调用方提交时会把落点夹回工作区，所以磁吸必须用同一边界校验，
 /// 否则它验证的位置与实际提交的位置不是同一个。
@@ -70,7 +86,8 @@ internal enum EdgeCapsuleQueueMagnetOutcome
 }
 
 /// <summary>
-/// 判定结果。<see cref="ScoreDip"/> 是与胜出候选的区间距离，供调用方决定是否值得做视觉反馈。
+/// 判定结果。<see cref="ScoreDip"/> 是拖动中心到命中候选矩形的区间距离；NewQueue/None 为
+/// <see cref="double.MaxValue"/>。当前生产调用方不读取它，主要由测试断言使用。
 /// </summary>
 internal readonly record struct EdgeCapsuleQueueMagnetPlan(
     EdgeCapsuleQueueMagnetOutcome Outcome,
@@ -91,7 +108,10 @@ internal static class EdgeCapsuleQueueMagnet
     /// <summary>开始吸附到某条队列的距离。</summary>
     internal const double DefaultMergeDistanceDip = 18;
 
-    /// <summary>从已吸附的队列上脱落的距离。必须大于合并距离，二者之差即死区宽度。</summary>
+    /// <summary>
+    /// 默认脱落距离，大于合并距离，二者之差即死区宽度。实现允许调用方显式传入等于合并距离的
+    /// 值（死区为 0），但默认值必须保持大于合并距离。
+    /// </summary>
     internal const double DefaultDetachDistanceDip = 32;
 
     /// <summary>
@@ -100,6 +120,10 @@ internal static class EdgeCapsuleQueueMagnet
     /// </summary>
     internal const double DefaultTakeoverDistanceDip = 6;
 
+    /// <summary>
+    /// 对当前拖动位置做一次纯磁吸判定。不修改输入或任何全局状态；中心坐标非有限、候选几何
+    /// 非法或找不到合法新队列落点时返回 <see cref="None"/>，调用方应保持布局不变。
+    /// </summary>
     public static EdgeCapsuleQueueMagnetPlan Evaluate(in EdgeCapsuleQueueMagnetInput input)
     {
         // A non-finite centre would make both range comparisons false, scoring every queue as a
@@ -181,7 +205,7 @@ internal static class EdgeCapsuleQueueMagnet
                 continue;
             }
 
-            // 同分时按 key 序数决胜：候选集合来自 LINQ 遍历，顺序不应影响结果。
+            // 同分时按 key 序数决胜，使结果不依赖候选集合的遍历顺序。
             if (distance < bestDistance ||
                 (distance == bestDistance && string.CompareOrdinal(key, bestKey) < 0))
             {
@@ -489,7 +513,8 @@ internal static class EdgeCapsuleQueueMagnet
         }
 
         var distance = Math.Abs(top - desiredTop);
-        // 严格小于：同距时先遍历到的（下方）胜出，结果不依赖候选的输入顺序。
+        // 严格小于：同一候选内先尝试下方位置，同距时下方胜出。不同候选等距时，先遍历到的
+        // 候选取胜，因此调用方必须传入确定性顺序。
         if (distance < chosenDistance)
         {
             chosen = top;

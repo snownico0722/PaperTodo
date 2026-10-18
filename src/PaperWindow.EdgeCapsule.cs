@@ -149,9 +149,10 @@ public sealed partial class PaperWindow
         IntPtr lParam,
         ref bool handled)
     {
-        // The native modifier bits are the only reliable source for "Ctrl held at press time":
-        // once the capsule takes the pointer, Keyboard.Modifiers stops tracking reliably. Latch
-        // here so the gesture can read it once, at pointer-down, and never again.
+        // Record the native modifier bits at press time. The capsule's NOACTIVATE host may later
+        // lack reliable WPF modifier state, so IsQueueDragModifier OR-s this value with
+        // Keyboard.Modifiers and GetAsyncKeyState at pointer-down instead of treating any one
+        // source as authoritative.
         if (msg == WmLButtonDown)
         {
             _edgeCapsulePointerDownKeyState = wParam.ToInt32();

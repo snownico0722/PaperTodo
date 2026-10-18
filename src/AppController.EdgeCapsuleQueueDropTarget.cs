@@ -8,8 +8,8 @@ namespace PaperTodo;
 /// Lifecycle for the lightweight overlay that marks which free queue a drag would join.
 ///
 /// Two markers answer the two questions: a thin rail on the queue's inner edge identifies the
-/// queue, and a short insertion line identifies the slot. The preview uses the full inserted
-/// slots and the same layout plan as the commit, so other queues avoid exactly once.
+/// queue, and a short insertion line identifies the slot. Preview and commit use the same layout
+/// solver with the same inputs, so the avoidance shown while dragging matches the committed layout.
 /// </summary>
 public sealed partial class AppController
 {
@@ -115,10 +115,10 @@ public sealed partial class AppController
     }
 
     /// <summary>
-    /// 目标队列的预览矩形，以及插入位置的两条指示线矩形。全部是设备像素；DPI 一并返回，
+    /// 目标队列的预览矩形、队列内侧标识线矩形与插入线矩形。全部是设备像素；DPI 一并返回，
     /// 供描边窗口换算成窗口内 DIP。
     ///
-    /// 可行时使用与提交完全相同的计划（已按完整槽位展开并求解邻队避让）；不可行时使用
+    /// 可行时使用与提交相同的布局求解结果（已按完整槽位展开并求解邻队避让）；不可行时使用
     /// 目标队列的真实布局绘制警示线，不展示一个实际不会发生的重叠结果。
     /// </summary>
     private bool TryGetEdgeCapsuleQueueDropTargetBounds(

@@ -154,17 +154,17 @@ internal static partial class Program
             "A new queue anchors the drop by its capsule top, not its centre");
 
         // Queue "a" rises from top 100 and its single capsule really occupies [100, 146]. The magnet
-        // measures edge to edge, so the reachable band for the drag centre is [77, 169]. The dead
-        // band is therefore 169 + 18 .. 169 + 32: too far to acquire from scratch, close enough to
-        // keep holding. That asymmetry is the whole point of the trigger.
-        const double deadBandCentre = 194;   // 25 DIP below the reachable band
+        // measures edge to edge, so the zero-distance band for the drag centre is [77, 169] and the
+        // merge-reachable band is [59, 187]. The dead band is therefore 187 .. 201: too far to
+        // acquire from scratch, close enough to keep holding. That asymmetry is the whole point.
+        const double deadBandCentre = 194;   // 25 DIP below the zero-distance band
         Check(Evaluate(deadBandCentre, "", TwoQueues()).Outcome == EdgeCapsuleQueueMagnetOutcome.NewQueue,
             "The dead band is too far to acquire a queue from scratch");
         Check(Evaluate(deadBandCentre, "", TwoQueues(), held: "a").Outcome ==
                   EdgeCapsuleQueueMagnetOutcome.Merge,
             "The dead band keeps an already-held queue attached");
 
-        const double beyondDetach = 206;     // 37 DIP below the reachable band
+        const double beyondDetach = 206;     // 37 DIP below the zero-distance band
         Check(Evaluate(beyondDetach, "", TwoQueues(), held: "a").Outcome ==
                   EdgeCapsuleQueueMagnetOutcome.NewQueue,
             "A held queue is released once the detach distance is exceeded");
@@ -186,7 +186,8 @@ internal static partial class Program
               Evaluate(bottomReach + 1, "", [single]).Outcome == EdgeCapsuleQueueMagnetOutcome.NewQueue,
             "One DIP beyond the reach stops snapping on both sides");
 
-        // A three-slot queue really occupies [100, 246]; its reachable centre band is [77, 269].
+        // A three-slot queue really occupies [100, 246]; its zero-distance centre band is [77, 269]
+        // and its merge-reachable band is [59, 287].
         var multi = new EdgeCapsuleQueueMagnetCandidate("m", 3, 100, slot, -1, bandLeft, bandWidth);
         var multiAbove = Evaluate(65, "", [multi]);
         var multiBelow = Evaluate(281, "", [multi]);
@@ -726,8 +727,9 @@ internal static partial class Program
         Check(At(100, 960).Outcome == EdgeCapsuleQueueMagnetOutcome.NewQueue,
             "A vertically aligned capsule far from the wall starts a new queue instead of merging");
 
-        // Holding that queue does not rescue it either: 180 DIP out is well past the detach
-        // threshold, so the dead band must not keep a horizontally distant queue attached.
+        // Holding that queue does not rescue it either: the centre is 840 DIP outside the band,
+        // well past the detach threshold, so the dead band must not keep a horizontally distant
+        // queue attached.
         Check(At(100, 960, held: "q1").Outcome == EdgeCapsuleQueueMagnetOutcome.NewQueue,
             "The hold does not keep a queue attached across a large horizontal gap");
 
@@ -739,20 +741,23 @@ internal static partial class Program
         Check(At(100, bandLeft + bandWidth).Outcome == EdgeCapsuleQueueMagnetOutcome.Merge,
             "The band's outer edge counts as inside");
 
-        // Just outside the band, still within the merge radius: the two axes compose, so a small
-        // horizontal offset still snaps on vertical proximity alone.
+        // Just outside the band, still within the merge radius: the centre's Y is inside the
+        // capsule's vertical extent, so only the 15 DIP horizontal offset contributes to the
+        // distance and it stays below the 18 DIP radius.
         Check(At(100 + 10, bandLeft - 15).Outcome == EdgeCapsuleQueueMagnetOutcome.Merge,
             "A near-corner approach within the radius still merges");
 
         // Queue "q1" really occupies [100, 146]; with half a capsule of padding on each side its
-        // reachable centre band is [77, 169]. 187 is 18 DIP below it, so with an 18 DIP horizontal
-        // offset the diagonal distance is sqrt(18^2 + 18^2) = 25.5, which clears the merge radius
-        // even though neither axis alone is very far.
+        // zero-distance centre band is [77, 169] (merge-reachable [59, 187]). 187 is 18 DIP below
+        // the zero-distance band, so with an 18 DIP horizontal offset the diagonal distance is
+        // sqrt(18^2 + 18^2) = 25.5, which clears the merge radius even though neither axis alone
+        // is very far.
         Check(At(187, bandLeft - 18).Outcome == EdgeCapsuleQueueMagnetOutcome.NewQueue,
             "A diagonal offset beyond the radius does not merge");
 
         // Same position cannot be held either: the dead band widens the radius to 32 DIP, and
-        // 194 is 25 DIP below the reachable band, so sqrt(25^2 + 25^2) = 35.4 is past even that.
+        // 194 is 25 DIP below the zero-distance band, so sqrt(25^2 + 25^2) = 35.4 is past even
+        // that.
         Check(At(194, bandLeft - 25, held: "q1").Outcome == EdgeCapsuleQueueMagnetOutcome.NewQueue,
             "The hold cannot bridge a diagonal distance past the detach radius");
 

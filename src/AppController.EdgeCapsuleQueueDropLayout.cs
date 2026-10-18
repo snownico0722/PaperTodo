@@ -8,7 +8,8 @@ internal sealed record EdgeCapsuleQueueDropPreview(
     bool IsSource);
 
 /// <summary>
-/// 一次跨队列插入的完整布局计划。预览、描边与提交共用同一份计划，避免三者各算一套几何。
+/// 一次跨队列插入的完整布局计划。预览与描边共享同一份计划；提交按相同输入重新求解一次，
+/// 避免复用可能已经过期的预览计划。
 /// </summary>
 internal sealed class EdgeCapsuleQueueDropLayoutPlan
 {

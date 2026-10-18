@@ -95,7 +95,11 @@ public sealed partial class AppController
         return true;
     }
 
-    /// <summary>Put the queue back exactly as it was before the drag started.</summary>
+    /// <summary>
+    /// Restore the carried members' source queue identity and the source queue's remembered start
+    /// margin. This does not restore State.Papers order or target/neighbour margins; after a partial
+    /// commit, pair it with <see cref="RestoreEdgeCapsuleQueueTransferCommit"/>.
+    /// </summary>
     internal void CancelEdgeCapsuleQueueTransfer(EdgeCapsuleQueueTransferSnapshot? snapshot)
     {
         _edgeCapsuleQueueTransferSources.Remove(snapshot?.SourceQueueKey ?? "");
@@ -120,10 +124,11 @@ public sealed partial class AppController
     }
 
     /// <summary>
-    /// Commit a whole-queue drag. Decides with the same magnet a single capsule uses, so carrying
-    /// five capsules lands exactly where carrying one would. On a merge the whole queue joins the
-    /// target at the magnet point, keeping its internal order; with no candidate it starts a queue
-    /// of its own at the drop height.
+    /// Commit a whole-queue drag. Decides with the same magnet a single capsule uses; the carried
+    /// count additionally participates in the new-queue bounds and overlap checks, so a whole queue
+    /// can be rejected or placed differently from a single capsule. On a merge the whole queue joins
+    /// the target at the magnet point, keeping its internal order; with no candidate it starts a
+    /// queue of its own at the drop height.
     /// </summary>
     internal bool CommitEdgeCapsuleQueueTransfer(
         EdgeCapsuleQueueTransferSnapshot? snapshot,
@@ -202,8 +207,8 @@ public sealed partial class AppController
     }
 
     /// <summary>
-    /// FQ-14: 在 commit 入口快照 carried 成员当前在 State.Papers 中的顺序与
-    /// 整个 DeepCapsuleQueueStartTopMargins 字典。异常路径用
+    /// FQ-14: 在 commit 入口快照 State.Papers 的完整 id 顺序与整个
+    /// DeepCapsuleQueueStartTopMargins 字典。异常路径用
     /// <see cref="RestoreEdgeCapsuleQueueTransferCommit"/> 完整回滚——
     /// CancelEdgeCapsuleQueueTransfer 只覆盖成员身份与源队列 margin，无力回滚
     /// PersistEdgeCapsuleQueueDropLayoutMargins 写过的目标/邻队 margin 与 State.Papers 重排。
@@ -318,10 +323,9 @@ public sealed partial class AppController
             return false;
         }
 
-        // FQ-14: 在所有 mutation 之前快照 State.Papers 顺序与全部 margin。catch 中
-        // 既能回滚自身写入，也能恢复外部在拖拽期间对 State.Papers 顺序的合法修改——
-        // 外部新增/删除/移动的成员会落在原本 occupied slot 之外的 new/empty 位置，
-        // 回滚只覆盖 carried 成员占据的 slot，外部成员自然保留。
+        // FQ-14: 在所有 mutation 之前快照 State.Papers 顺序与全部 margin。catch 中按快照的
+        // 完整顺序重建 State.Papers，因此拖拽期间外部对既有成员顺序的调整会被覆盖；只有
+        // 快照之外新增的成员按当前相对次序追加到末尾，已删除成员自然跳过。
         var commitUndo = CaptureEdgeCapsuleQueueTransferCommit(snapshot);
         try
         {

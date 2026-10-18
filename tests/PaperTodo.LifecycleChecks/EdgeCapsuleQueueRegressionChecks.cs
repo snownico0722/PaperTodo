@@ -61,8 +61,9 @@ internal static class EdgeCapsuleQueueRegressionChecks
     }
 
     /// <summary>
-    /// FQ-12：共享磁吸 / 描边状态是 controller 级单例。拖拽进行中，另一张无关纸片因
-    /// 隐藏 / 关闭 / 折叠调用清理时，早退分支不得把 owner 建立的 held key 与描边擦掉。
+    /// FQ-12：共享磁吸 / 描边状态是 controller 级单例。这里直接调用 owner 校验入口，验证无关
+    /// 纸片的取消/Forget 不会清空 owner 建立的 held key。隐藏/关闭/折叠调用点与描边清理共享
+    /// 同一守卫，不在本检查中单独驱动。
     /// </summary>
     private static void OwnerIsolation(AppController controller)
     {
@@ -91,7 +92,7 @@ internal static class EdgeCapsuleQueueRegressionChecks
             HeldQueueKey(controller).Length == 0,
             "the owner's own teardown no longer clears the held queue key");
 
-        // 非手势状态下 owner 已释放，后续无关清理不应误判为「有 owner」。
+        // 非手势状态下 owner 已释放：再次调用只做冒烟检查，确保不抛异常；该路径没有可观察断言。
         controller.EndDeepCapsuleQueueMagnetPreview(bystander.Id);
     }
 

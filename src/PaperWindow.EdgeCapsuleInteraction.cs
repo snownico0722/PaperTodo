@@ -646,8 +646,9 @@ public sealed partial class PaperWindow
     ///
     /// Cross-edge and cross-monitor drags spend their entire gesture inside that loop, so without
     /// this the most common free-queue merge gets no feedback until release. The timer runs on the
-    /// dispatcher, which the modal loop keeps pumping, and the preview's own 32 ms gate still
-    /// collapses repeated ticks.
+    /// dispatcher, which the modal loop keeps pumping; its interval
+    /// (<see cref="DeepCapsuleQueuePreviewIntervalMilliseconds"/>, currently 8 ms) is the throttle,
+    /// and each tick forces an evaluation instead of racing the Stopwatch gate.
     /// </summary>
     private void StartEdgeCapsuleNativeDragFeedback()
     {
@@ -794,8 +795,8 @@ public sealed partial class PaperWindow
     /// <summary>
     /// Close up the queue the dragged capsule came from, once per queue.
     ///
-    /// Re-running it every tick would restart the 200 ms transition on every member every 32 ms,
-    /// which reads as a stutter rather than a settle.
+    /// Re-running it every feedback tick (currently 8 ms) would restart the 200 ms transition on
+    /// every member, which reads as a stutter rather than a settle.
     /// </summary>
     private void PreviewDeepCapsuleQueueVacatedSourceOnce()
     {
@@ -833,7 +834,8 @@ public sealed partial class PaperWindow
 
     /// <summary>
     /// 自由队列拖拽反馈的分支选择（纯函数）。贴边的 NewQueue/None 也必须收拢源队列，
-    /// 否则会显示一个提交时不会发生的同队列重排；浮空阶段同样只收拢、不预览槽位。
+    /// 否则会显示一个提交时不会发生的同队列重排。浮空阶段在 Merge 或拖回源队列时仍会
+    /// 开槽；只有 NewQueue/None（且不是整队转移）才仅收拢源队列、不预览槽位。
     /// </summary>
     internal static EdgeCapsuleFreeQueuePreviewAction ResolveEdgeCapsuleFreeQueuePreviewAction(
         EdgeCapsuleQueueMagnetOutcome outcome,
@@ -1269,6 +1271,11 @@ public sealed partial class PaperWindow
         ClearCapsuleInteractionKeyboardFocus();
     }
 
+    /// <summary>
+    /// 只有水平位移达到解锁距离，或指针进入另一显示器，才从贴边重排切到浮空拖拽。
+    /// 贴边重排本身就是纵向移动，不能把纵向位移当成“离开墙面”；跨显示器则必须浮空才能
+    /// 改写目标边。
+    /// </summary>
     private bool ShouldUnlockDeepCapsuleCrossQueueDrag(DeviceScreenPoint currentScreenPos)
     {
         if (!TryGetEdgeCapsuleDragSession(out var session))

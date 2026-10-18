@@ -24,8 +24,9 @@ internal readonly record struct EdgeCapsuleDropAnchor(
 /// an edge: a capsule dropped far from every queue starts a new one, a capsule dropped near one
 /// joins it, and dragging a member away takes it out on its own.
 ///
-/// All geometry decisions live in <see cref="EdgeCapsuleQueueMagnet"/>, which is a pure function.
-/// This file only collects live state into magnet inputs and applies the resulting plan.
+/// Magnet decisions live in <see cref="EdgeCapsuleQueueMagnet"/> (pure); the edge-wide insertion
+/// layout is solved by <see cref="EdgeCapsuleQueueInsertionSolver"/>. This file collects live state
+/// into those inputs and applies the resulting plan.
 /// </summary>
 public sealed partial class AppController
 {
@@ -70,7 +71,10 @@ public sealed partial class AppController
     private string _deepCapsuleMagnetCandidateSignature = "";
     private List<EdgeCapsuleQueueMagnetCandidate>? _deepCapsuleMagnetCandidateCache;
 
-    /// <summary>测试用：真正重建磁吸候选集合的次数。</summary>
+    /// <summary>
+    /// 真正重建磁吸候选集合的次数。测试用它断言缓存命中；生产用它作为预览计划的输入版本，
+    /// 候选重建后必须使同一槽位的旧预览失效。
+    /// </summary>
     internal int MagnetCandidateBuildCount { get; private set; }
 
     /// <summary>
@@ -384,10 +388,19 @@ public sealed partial class AppController
         papers.Count == 0 ? "" : EdgeCapsuleQueueIds.Normalize(papers[0].CapsuleQueueId);
 
     /// <summary>
-    /// <summary>
     /// Commit a free-queue drag: decide with the magnet, then apply the resulting Reorder / Merge /
-    /// NewQueue outcome. Falls back to the legacy arrangement when free mode is off.
+    /// NewQueue outcome. Returns false when free mode is off so the caller can take its legacy path.
     /// </summary>
+    /// <param name="paper">被拖拽的胶囊。</param>
+    /// <param name="anchor">松手时的指针与胶囊中心锚点。</param>
+    /// <param name="expectedTargetQueueKey">预览已显示的目标队列；非空且仍有效时优先按该目标提交。</param>
+    /// <param name="expectedTargetIndex">预览已显示的插入槽位；小于 0 时按锚点重新计算。</param>
+    /// <param name="sameQueueReorderPreviewed">
+    /// 贴边阶段是否已展示同队列重排预览。浮空阶段不沿用该标记，否则会把旧槽位当成当前落点。
+    /// </param>
+    /// <returns>
+    /// 已提交返回 true；自由队列关闭、几何无法解析、目标失效、磁吸为 None 或布局不可行时返回 false。
+    /// </returns>
     internal bool CommitDeepCapsuleQueueDrop(
         PaperData paper,
         EdgeCapsuleDropAnchor anchor,
@@ -631,7 +644,7 @@ public sealed partial class AppController
     /// 预览与提交共用这一函数，因此用户看到的空隙就是松手后得到的空隙。距离按「中心减半个
     /// 胶囊高度」换算成 top，抓取点位于胶囊顶部、中心还是底部都不会改变插入位。
     /// 坐标转换在目标队列自己的显示器上完成，跨屏/混合 DPI 时也能得到正确槽位。
-    /// 取整规则沿用自由队列之前的插入规则（最近槽位，数值向上取整）。
+    /// 取整规则沿用自由队列之前的插入规则（四舍五入，恰好 .5 时向上）。
     /// </summary>
     internal int DeepCapsuleQueueInsertIndexFor(
         string queueKey,
@@ -741,7 +754,8 @@ public sealed partial class AppController
             : DeepCapsuleQueueInsertIndexFor(
                 queueKey, paper.Id, anchor.CapsuleCenterYDevice);
 
-        // 纯重排不改变队列归属；拖拽期间若纸片已被外部移走，则不要把它强行拉回。
+        // 正常情况下 queueKey 就是当前队列，不改归属；仅当拖拽期间纸片被外部移走（防御分支）
+        // 时，才把身份重新同步到 queueKey。
         if (!string.Equals(queueKey, QueueKey(paper), StringComparison.Ordinal))
         {
             if (!EdgeCapsuleQueueIds.TryGetEdge(

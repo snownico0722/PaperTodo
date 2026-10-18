@@ -166,9 +166,9 @@ internal sealed record EdgeCapsulePreviewLayoutSession(
     IReadOnlyList<string> QueuePaperIds,
     IReadOnlyDictionary<string, double> TopOffsetsDip,
     // Every docked capsule on the owner's monitor+edge, in ascending rest order. Kept separate
-    // from QueuePaperIds on purpose: that one is the corridor / transfer topology, while this one
-    // only says when the edge-wide avoidance has to be recomputed. Free queues put several
-    // independent stacks on one edge, so a change outside the owner's queue still moves capsules.
+    // from QueuePaperIds on purpose: that one is the corridor / transfer topology. This list is a
+    // version marker: when it changes, the session reference is replaced so caches keyed on
+    // reference identity invalidate. The edge-wide offsets themselves are recomputed every frame.
     IReadOnlyList<string> EdgePaperIds);
 
 /// <summary>One queue's resting geometry on an edge, in the monitor's local DIP space.</summary>

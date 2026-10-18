@@ -236,7 +236,8 @@ public sealed partial class AppController
 
     /// <summary>
     /// Merge the edge-wide avoidance into the session so the single-queue policy above and the
-    /// cross-queue policy below travel through the same <see cref="Apply"/> path.
+    /// cross-queue policy below travel through the same
+    /// <see cref="EdgeCapsulePreviewLayoutCoordinator.Apply"/> path.
     /// </summary>
     private EdgeCapsulePreviewLayoutSession ApplyEdgeCapsuleAvoidance(
         EdgeCapsuleQueuePlan basePlan,

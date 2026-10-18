@@ -5,10 +5,11 @@ using System.Windows.Input;
 using PaperTodo;
 
 /// <summary>
-/// 拖拽期“目标队列开槽”预览的恢复检查。
+/// 自由队列拖拽期交互的控制器原语检查。
 ///
-/// 磁吸进入目标队列时，目标成员会被推下去让出插入空隙；离开吸附区后必须能按真实成员顺序
-/// 放回。这里直接调用控制器原语验证 placement，不需要驱动真实指针或等待动画。
+/// 覆盖目标开槽与离开后的恢复、描边/磁吸缓存失效、整队搬移的取消/拒绝/异常回滚、关闭自由
+/// 队列后的身份折叠、预览 session 稳定性、同队列重排取整、拆分与隐藏成员 margin、断连显示器
+/// 以及浮空宿主异常关闭。这里直接调用控制器原语验证 placement，不需要驱动真实指针或等待动画。
 /// </summary>
 internal static class EdgeCapsuleQueuePreviewChecks
 {
@@ -746,7 +747,7 @@ internal static class EdgeCapsuleQueuePreviewChecks
                 controller.QueueKeyForPaper(transferA) == disconnectedMonitor + "|right",
                 "a disconnected empty-id queue lost its persisted edge identity");
 
-            // 同 live 边的单成员 Split 必须复用 id 并保留原 monitor tag。
+            // 断连显示器折叠到主屏 live edge 后，单成员 Split 仍必须复用持久 id 并保留原 monitor tag。
             var splitPaper = controller.State.Papers.Single(paper => paper.Id == "fixture-1");
             splitPaper.CapsuleMonitorDeviceName = disconnectedMonitor;
             splitPaper.CapsuleSide = DeepCapsuleSides.Left;
@@ -810,7 +811,7 @@ internal static class EdgeCapsuleQueuePreviewChecks
         }
 
         // FQ-10：FloatingTransfer 阶段宿主异常关闭必须取消手势，不能留下 arrange gate、
-        // 隐藏成员或鼠标光标等永久脏状态。
+        // 浮动宿主引用或鼠标光标等永久脏状态。
         var recoveryWindow = windows["fixture-0"];
         Require(
             !recoveryWindow.IsDeepCapsuleReorderDragInProgress,

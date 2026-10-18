@@ -33,6 +33,15 @@ internal static class EdgeCapsuleQueueInsertionSolver
 {
     private const double Epsilon = 1e-6;
 
+    /// <summary>
+    /// 求解插入后的整边队列 top。<paramref name="boxes"/> 必须非空、包含
+    /// <paramref name="anchorQueueKey"/>，且所有 top/height 有限；<paramref name="gapDip"/>
+    /// 同时作为槽间距与队列间距使用。<paramref name="topMarginDip"/> 必须有限、非负，且
+    /// 两倍小于工作区高度。
+    ///
+    /// 任一前置条件不满足时返回 <see cref="EdgeCapsuleQueueInsertSolveResult.Infeasible"/>；
+    /// 调用方必须放弃插入，不能退回到“带重叠的尽力布局”。
+    /// </summary>
     internal static EdgeCapsuleQueueInsertSolveResult Solve(
         IReadOnlyList<EdgeCapsuleQueueInsertBox> boxes,
         string anchorQueueKey,

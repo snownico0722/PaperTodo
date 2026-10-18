@@ -92,7 +92,7 @@ internal static class EdgeCapsuleQueueIds
 
     /// <summary>
     /// 拆分队列 key 的 edge 部分（monitor + side），实例后缀会被剥离。
-    /// 找不到分隔符时返回 false；主屏 monitor 为空串。
+    /// edge 中找不到 '|' 时返回 false；主屏 monitor 为空串。
     /// </summary>
     internal static bool TryGetEdge(string? key, out string monitorDeviceName, out string side)
     {

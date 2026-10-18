@@ -2323,10 +2323,19 @@ public sealed partial class AppController : IDisposable
     /// arrange gate defers for the duration of a drag, so routing through it would silently
     /// postpone the whole preview until the gesture ends — exactly the "stiff" behaviour this
     /// replaces.
+    ///
+    /// 返回插入是否有合法布局。不可行时只收拢源队列，不移动目标/邻队；描边读取已保存的计划画警示线。
     /// </summary>
-    /// <summary>
-    /// 返回插入是否有合法布局。不可行时只收拢源队列，不移动目标/邻队；描边改画警示线。
-    /// </summary>
+    /// <param name="carried">本次手势携带的全部成员；为空时直接返回 false。</param>
+    /// <param name="targetQueueKey">目标队列实例 key。</param>
+    /// <param name="targetIndex">预览插入槽位；布局求解会把它夹取到合法范围。</param>
+    /// <param name="allowSourceQueueTarget">
+    /// 浮空阶段拖回源队列时传 true，允许源队列按插入计划重新开槽；贴边同队列重排保持 false。
+    /// </param>
+    /// <returns>
+    /// 布局可行且已下发预览时返回 true；自由队列未启用、carried 为空、目标为源队列且未允许，
+    /// 或布局不可行时返回 false。
+    /// </returns>
     public bool PreviewDeepCapsuleQueueDrag(
         IReadOnlyList<PaperData> carried,
         string targetQueueKey,
@@ -3161,7 +3170,8 @@ public sealed partial class AppController : IDisposable
         => $"{LiveQueueMonitorDeviceName(monitorDeviceName)}|{(side == DeepCapsuleSides.Left ? DeepCapsuleSides.Left : DeepCapsuleSides.Right)}";
 
     // 持久边 key：只把主屏归一化为 ""，不检查显示器当前是否连接。
-    // margin 字典与 collapse-all 状态按这套身份持久化。
+    // margin 按 PersistentQueueKey（本 key + "#" + 实例 id）持久化；只有 collapse-all
+    // 状态按这套裸边 key 持久化。
     private static string PersistentEdgeKey(string? monitorDeviceName, string side)
         => $"{WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(monitorDeviceName)}|{(side == DeepCapsuleSides.Left ? DeepCapsuleSides.Left : DeepCapsuleSides.Right)}";
 
