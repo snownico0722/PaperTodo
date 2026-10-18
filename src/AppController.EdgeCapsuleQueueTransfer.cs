@@ -4,6 +4,15 @@ namespace PaperTodo;
 /// State captured when a free-queue drag escalates into a whole-queue move, so the gesture can be
 /// rolled back exactly if it is cancelled.
 /// </summary>
+/// <remarks>
+/// FQ-14 残余：仅恢复成员身份与源队列 margin 不足以覆盖完整提交——
+/// <see cref="MergeTransferredQueueInto"/> / <see cref="StartTransferredQueueAt"/> 在
+/// 「改身份 → 重排 State.Papers → 持久化 margin → Arrange/RefreshTrayMenu/SaveNow」
+/// 区间内一旦抛异常，<see cref="AppController.CancelEdgeCapsuleQueueTransfer"/> 只会恢复
+/// 身份与源队列 margin，不能回滚目标/邻队 margin 与 State.Papers 顺序。
+/// 在 commit 入口额外快照 <see cref="PaperOrderIds"/> 与 <see cref="StartTopMargins"/>，
+/// 让异常路径具备完整回滚能力。
+/// </remarks>
 internal sealed record EdgeCapsuleQueueTransferSnapshot(
     string SourceQueueKey,
     IReadOnlyList<string> PaperIds,
@@ -11,7 +20,12 @@ internal sealed record EdgeCapsuleQueueTransferSnapshot(
     string Side,
     string QueueId,
     double StartTopMargin,
-    bool HadStartTopMargin);
+    bool HadStartTopMargin,
+    // --- FQ-14: order + margin snapshots so a partial commit can be reverted wholesale ---
+    // PaperOrderIds 是提交前 State.Papers 的**完整** id 顺序（不只是 carried 成员），
+    // 因为提交会把整块搬到目标队列的插入位，只记相对顺序无法还原槽位。
+    IReadOnlyList<string>? PaperOrderIds,
+    IReadOnlyDictionary<string, double>? StartTopMargins);
 
 /// <summary>
 /// Whole-queue drag for free queues (D-058).
@@ -25,6 +39,12 @@ public sealed partial class AppController
     // Queue instance keys currently mid-transfer. A paper in one of these queues is not allowed to
     // take part in layout decisions until the gesture commits or rolls back.
     private readonly HashSet<string> _edgeCapsuleQueueTransferSources = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// 测试钩子：在整队提交的 mutation 区间中途抛异常，用于验证 FQ-14 的回滚是否完整
+    /// （State.Papers 顺序 + 目标/邻队 margin + 成员身份）。生产路径恒为 null。
+    /// </summary>
+    internal Action? EdgeCapsuleQueueTransferCommitFailureInjector { get; set; }
 
     internal bool IsEdgeCapsuleQueueTransferActive => _edgeCapsuleQueueTransferSources.Count > 0;
 
@@ -64,7 +84,12 @@ public sealed partial class AppController
             State.DeepCapsuleQueueStartTopMargins.TryGetValue(startKey, out var margin)
                 ? margin
                 : EdgeCapsuleLayout.StartTopMargin,
-            State.DeepCapsuleQueueStartTopMargins.ContainsKey(startKey));
+            State.DeepCapsuleQueueStartTopMargins.ContainsKey(startKey),
+            // FQ-14: 此刻 OrderIds/Margins 还没被 commit mutation 替换为可回滚点，留 null。
+            // 真实快照在 commit 入口由 CaptureEdgeCapsuleQueueTransferCommit 填充；
+            // 用户取消路径因没有 mutation，本就无需回滚。
+            null,
+            null);
 
         _edgeCapsuleQueueTransferSources.Add(queueKey);
         return true;
@@ -177,6 +202,69 @@ public sealed partial class AppController
     }
 
     /// <summary>
+    /// FQ-14: 在 commit 入口快照 carried 成员当前在 State.Papers 中的顺序与
+    /// 整个 DeepCapsuleQueueStartTopMargins 字典。异常路径用
+    /// <see cref="RestoreEdgeCapsuleQueueTransferCommit"/> 完整回滚——
+    /// CancelEdgeCapsuleQueueTransfer 只覆盖成员身份与源队列 margin，无力回滚
+    /// PersistEdgeCapsuleQueueDropLayoutMargins 写过的目标/邻队 margin 与 State.Papers 重排。
+    /// </summary>
+    private EdgeCapsuleQueueTransferSnapshot CaptureEdgeCapsuleQueueTransferCommit(
+        EdgeCapsuleQueueTransferSnapshot source)
+    {
+        return source with
+        {
+            // 快照**完整**顺序而非仅 carried 成员的相对顺序：InsertPaperBesideQueues 会把
+            // 整块搬到目标队列的插入位，只还原相对顺序无法把成员送回原来的槽位。
+            PaperOrderIds = State.Papers.Select(p => p.Id).ToList(),
+            StartTopMargins = new Dictionary<string, double>(
+                State.DeepCapsuleQueueStartTopMargins, StringComparer.Ordinal),
+        };
+    }
+
+    /// <summary>
+    /// FQ-14: 把 <see cref="CaptureEdgeCapsuleQueueTransferCommit"/> 快照写回 State——
+    /// State.Papers 按 snapshot.PaperOrderIds 的完整顺序还原；DeepCapsuleQueueStartTopMargins
+    /// 整体覆盖还原；成员身份随后再由 <see cref="CancelEdgeCapsuleQueueTransfer"/> 写回。
+    ///
+    /// 拖拽期间外部增删的成员必须保留：快照里没有的新成员按其当前相对次序追加在末尾，
+    /// 已被外部删除的成员自然跳过。State.Papers 始终是新 List 实例，不会与快照共享引用。
+    /// </summary>
+    private void RestoreEdgeCapsuleQueueTransferCommit(
+        EdgeCapsuleQueueTransferSnapshot snapshot)
+    {
+        if (snapshot.PaperOrderIds is { Count: > 0 })
+        {
+            var byId = State.Papers.ToDictionary(p => p.Id, StringComparer.Ordinal);
+            var rebuilt = new List<PaperData>(State.Papers.Count);
+            foreach (var id in snapshot.PaperOrderIds)
+            {
+                if (byId.Remove(id, out var paper))
+                {
+                    rebuilt.Add(paper);
+                }
+            }
+            // 快照里没有的成员是拖拽期间被外部新增的，保持其当前相对次序。
+            foreach (var paper in State.Papers)
+            {
+                if (byId.ContainsKey(paper.Id))
+                {
+                    rebuilt.Add(paper);
+                }
+            }
+            State.Papers = rebuilt;
+        }
+
+        if (snapshot.StartTopMargins is not null)
+        {
+            State.DeepCapsuleQueueStartTopMargins.Clear();
+            foreach (var (key, margin) in snapshot.StartTopMargins)
+            {
+                State.DeepCapsuleQueueStartTopMargins[key] = margin;
+            }
+        }
+    }
+
+    /// <summary>
     /// Join an existing queue: every carried member adopts the target's queue id and the whole
     /// block is placed at the magnet point, so the queue reads as one piece inside the target.
     /// </summary>
@@ -230,23 +318,42 @@ public sealed partial class AppController
             return false;
         }
 
-        foreach (var member in carried)
+        // FQ-14: 在所有 mutation 之前快照 State.Papers 顺序与全部 margin。catch 中
+        // 既能回滚自身写入，也能恢复外部在拖拽期间对 State.Papers 顺序的合法修改——
+        // 外部新增/删除/移动的成员会落在原本 occupied slot 之外的 new/empty 位置，
+        // 回滚只覆盖 carried 成员占据的 slot，外部成员自然保留。
+        var commitUndo = CaptureEdgeCapsuleQueueTransferCommit(snapshot);
+        try
         {
-            // 身份从目标队列 key 写出：断连目标保留原显示器，不会被静默主屏几何改写。
-            member.CapsuleMonitorDeviceName = monitorName;
-            member.CapsuleSide = side;
-            member.CapsuleQueueId = targetQueueId;
+            foreach (var member in carried)
+            {
+                // 身份从目标队列 key 写出：断连目标保留原显示器，不会被静默主屏几何改写。
+                member.CapsuleMonitorDeviceName = monitorName;
+                member.CapsuleSide = side;
+                member.CapsuleQueueId = targetQueueId;
+            }
+
+            InsertPaperBesideQueues(carried, targetMembers, layoutPlan.TargetIndex);
+            PersistEdgeCapsuleQueueDropLayoutMargins(layoutPlan);
+            RemoveVacatedQueueStartMargin(
+                snapshot, PersistentQueueKey(monitorName, side, targetQueueId));
+
+            EdgeCapsuleQueueTransferCommitFailureInjector?.Invoke();
+
+            ArrangeDeepCapsules(animate: true);
+            RefreshTrayMenu();
+            SaveNow();
+            return true;
         }
-
-        InsertPaperBesideQueues(carried, targetMembers, layoutPlan.TargetIndex);
-        PersistEdgeCapsuleQueueDropLayoutMargins(layoutPlan);
-        RemoveVacatedQueueStartMargin(
-            snapshot, PersistentQueueKey(monitorName, side, targetQueueId));
-
-        ArrangeDeepCapsules(animate: true);
-        RefreshTrayMenu();
-        SaveNow();
-        return true;
+        catch
+        {
+            // FQ-14: 异常路径同时回滚 State.Papers 顺序与全部 margin，再走身份回滚与冻结释放。
+            // 返回 false 让手势层走正常「未提交」收尾（弹回原位）。
+            // 不能上抛：上层 PrepareAndRunNativeDrag 的异常处理不保证事务恢复。
+            RestoreEdgeCapsuleQueueTransferCommit(commitUndo);
+            CancelEdgeCapsuleQueueTransfer(snapshot);
+            return false;
+        }
     }
 
     /// <summary>
@@ -265,25 +372,38 @@ public sealed partial class AppController
         var side = drop.Side;
         var queueId = EdgeCapsuleQueueIds.New();
 
-        foreach (var member in carried)
+        // FQ-14: 同样的事务回滚。NewQueue 分支不重排 State.Papers（carried 成员已连续），
+        // 但仍会改身份与写入目标 margin，异常时必须一并回滚。
+        var commitUndo = CaptureEdgeCapsuleQueueTransferCommit(snapshot);
+        try
         {
-            member.CapsuleMonitorDeviceName = drop.MonitorDeviceName;
-            member.CapsuleSide = side;
-            member.CapsuleQueueId = queueId;
+            foreach (var member in carried)
+            {
+                member.CapsuleMonitorDeviceName = drop.MonitorDeviceName;
+                member.CapsuleSide = side;
+                member.CapsuleQueueId = queueId;
+            }
+
+            var destinationKey = PersistentQueueKey(drop.MonitorDeviceName, side, queueId);
+            RemoveVacatedQueueStartMargin(snapshot, destinationKey);
+            State.DeepCapsuleQueueStartTopMargins[destinationKey] =
+                EdgeCapsuleLayout.NormalizeStartTopMargin(
+                    startTopDip,
+                    monitor.LocalWorkAreaDip,
+                    carried.Count,
+                    DeepCapsuleGap);
+
+            EdgeCapsuleQueueTransferCommitFailureInjector?.Invoke();
+
+            ArrangeDeepCapsules(animate: true);
+            RefreshTrayMenu();
+            SaveNow();
         }
-
-        var destinationKey = PersistentQueueKey(drop.MonitorDeviceName, side, queueId);
-        RemoveVacatedQueueStartMargin(snapshot, destinationKey);
-        State.DeepCapsuleQueueStartTopMargins[destinationKey] =
-            EdgeCapsuleLayout.NormalizeStartTopMargin(
-                startTopDip,
-                monitor.LocalWorkAreaDip,
-                carried.Count,
-                DeepCapsuleGap);
-
-        ArrangeDeepCapsules(animate: true);
-        RefreshTrayMenu();
-        SaveNow();
+        catch
+        {
+            RestoreEdgeCapsuleQueueTransferCommit(commitUndo);
+            CancelEdgeCapsuleQueueTransfer(snapshot);
+        }
     }
 
     /// <summary>
