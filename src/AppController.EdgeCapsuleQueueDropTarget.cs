@@ -146,8 +146,7 @@ public sealed partial class AppController
         var hasPlan = plan != null &&
                       string.Equals(plan.TargetQueueKey, queueKey, StringComparison.Ordinal) &&
                       plan.TargetIndex == clampedIndex &&
-                      plan.CarriedCount == requestedCarriedCount &&
-                      string.Equals(plan.EdgeKey, edgeKey, StringComparison.Ordinal);
+                      plan.CarriedCount == requestedCarriedCount;
 
         double targetTopDip;
         double targetHeightDip;

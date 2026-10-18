@@ -6,7 +6,6 @@ internal sealed record EdgeCapsuleQueueDropPreview(
     string QueueId,
     IReadOnlyList<PaperData> PreviewMembers,
     double TopDip,
-    double HeightDip,
     bool IsSource);
 
 /// <summary>
@@ -25,8 +24,6 @@ internal sealed class EdgeCapsuleQueueDropLayoutPlan
         new Dictionary<string, EdgeCapsuleQueueDropPreview>(StringComparer.Ordinal);
     public string MonitorDeviceName { get; init; } = "";
     public string Side { get; init; } = DeepCapsuleSides.Right;
-    public string EdgeKey { get; init; } = "";
-    public double AreaHeightDip { get; init; }
     public double GapDip { get; init; }
     public string SourceQueueKey { get; init; } = "";
     public bool SourceOnTargetEdge { get; init; }
@@ -167,7 +164,6 @@ public sealed partial class AppController
                 queueId,
                 previewMembers,
                 top,
-                height,
                 isSource);
             boxes.Add(new EdgeCapsuleQueueInsertBox(queueKey, top, height));
         }
@@ -192,19 +188,15 @@ public sealed partial class AppController
 
         if (solved.Feasible)
         {
-            var solvedPreviews =
-                new Dictionary<string, EdgeCapsuleQueueDropPreview>(StringComparer.Ordinal);
             foreach (var (queueKey, preview) in previews)
             {
-                var top = solved.TopsDip.TryGetValue(queueKey, out var solvedTop)
-                    ? solvedTop
-                    : preview.TopDip;
-                solvedPreviews[queueKey] = preview with { TopDip = top };
+                previews[queueKey] = preview with
+                {
+                    TopDip = solved.TopsDip[queueKey]
+                };
             }
 
-            var targetTop = solved.TopsDip.TryGetValue(targetQueueKey, out var solvedTargetTop)
-                ? solvedTargetTop
-                : targetPreview.TopDip;
+            var targetTop = solved.TopsDip[targetQueueKey];
             var lineCenter = EdgeCapsuleQueueDropTargetGeometry.InsertionLineCenterYDip(
                 targetTop,
                 clampedIndex,
@@ -218,13 +210,11 @@ public sealed partial class AppController
                 TargetIndex = clampedIndex,
                 CarriedCount = carried.Count,
                 TargetTopDip = targetTop,
-                TargetHeightDip = targetPreview.HeightDip,
+                TargetHeightDip = targetPreview.PreviewMembers.Count * slotHeight - gap,
                 InsertionLineCenterYDip = lineCenter,
-                Queues = solvedPreviews,
+                Queues = previews,
                 MonitorDeviceName = monitorDeviceName,
                 Side = side,
-                EdgeKey = edgeKey,
-                AreaHeightDip = area.Height,
                 GapDip = gap,
                 SourceQueueKey = sourceQueueKey,
                 SourceOnTargetEdge = sourceOnTargetEdge,
@@ -260,11 +250,8 @@ public sealed partial class AppController
             TargetTopDip = realTop,
             TargetHeightDip = realHeight,
             InsertionLineCenterYDip = warningLineCenter,
-            Queues = previews,
             MonitorDeviceName = monitorDeviceName,
             Side = side,
-            EdgeKey = edgeKey,
-            AreaHeightDip = area.Height,
             GapDip = gap,
             SourceQueueKey = sourceQueueKey,
             SourceOnTargetEdge = sourceOnTargetEdge,

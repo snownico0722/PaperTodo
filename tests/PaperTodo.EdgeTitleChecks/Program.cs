@@ -387,6 +387,81 @@ internal static partial class Program
             gap,
             margin);
         Check(!invalid.Feasible, "S8: non-finite geometry must be rejected");
+
+        // S9: 扫描会继续传播到更远队列。
+        var propagated = Run(
+            "a",
+            Box("a", 180, 46),
+            Box("b", 160, 46),
+            Box("c", 100, 46));
+        Check(
+            propagated.Feasible &&
+            Math.Abs(propagated.TopsDip["b"] - 130) < 1e-6 &&
+            Math.Abs(propagated.TopsDip["c"] - 80) < 1e-6,
+            "S9: the scan propagates through the whole chain");
+
+        // S10: 上方与下方同时避让。
+        var bothSides = Run(
+            "a",
+            Box("a", 300, 96),
+            Box("b", 280, 46),
+            Box("c", 380, 46));
+        Check(
+            bothSides.Feasible &&
+            Math.Abs(bothSides.TopsDip["b"] - 250) < 1e-6 &&
+            Math.Abs(bothSides.TopsDip["c"] - 400) < 1e-6,
+            "S10: queues above and below move independently");
+
+        // S11: 顶部边界恰好可行 / 越界拒绝。
+        var topExact = Run("a", Box("a", 58, 46), Box("b", 50, 46));
+        Check(
+            topExact.Feasible &&
+            Math.Abs(topExact.TopsDip["b"] - 8) < 1e-6,
+            "S11: a queue may land exactly on the top margin");
+        var topOverflow = Run("a", Box("a", 57, 46), Box("b", 50, 46));
+        Check(!topOverflow.Feasible, "S11: moving above the top margin must be rejected");
+
+        // S12: 相同 top 的队列按 key 稳定分侧，输入顺序不影响结果。
+        var tieForward = Run(
+            "b",
+            Box("a", 200, 46),
+            Box("b", 200, 46),
+            Box("c", 200, 46));
+        var tieReversed = Run(
+            "b",
+            Box("c", 200, 46),
+            Box("b", 200, 46),
+            Box("a", 200, 46));
+        Check(
+            tieForward.Feasible &&
+            tieReversed.Feasible &&
+            Math.Abs(tieForward.TopsDip["a"] - 150) < 1e-6 &&
+            Math.Abs(tieForward.TopsDip["c"] - 250) < 1e-6 &&
+            Math.Abs(tieReversed.TopsDip["a"] - tieForward.TopsDip["a"]) < 1e-6 &&
+            Math.Abs(tieReversed.TopsDip["c"] - tieForward.TopsDip["c"]) < 1e-6,
+            "S12: equal-top queues keep a deterministic side");
+
+        // S13: gap=0 / 零高度不产生 NaN。
+        var noGap = EdgeCapsuleQueueInsertionSolver.Solve(
+            [Box("a", 100, 46), Box("b", 120, 46)],
+            "a",
+            areaHeight,
+            0,
+            margin);
+        Check(
+            noGap.Feasible &&
+            Math.Abs(noGap.TopsDip["b"] - 146) < 1e-6,
+            "S13: a zero gap still separates the queues");
+        var zeroHeight = EdgeCapsuleQueueInsertionSolver.Solve(
+            [Box("a", 100, 0), Box("b", 100, 0)],
+            "a",
+            areaHeight,
+            gap,
+            margin);
+        Check(
+            zeroHeight.Feasible &&
+            Math.Abs(zeroHeight.TopsDip["b"] - 104) < 1e-6,
+            "S13: zero-height queues stay finite");
     }
 
     // 纯竖直时，超出合并半径的落点必然已经和队列分离；但斜向拖拽的水平分量会把总距离推出
