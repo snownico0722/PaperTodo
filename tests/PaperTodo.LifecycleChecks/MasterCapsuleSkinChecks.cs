@@ -90,5 +90,24 @@ internal static class MasterCapsuleSkinChecks
                 "The floating master must reuse the same image");
         }
         finally { floating.ReturnToPool(); }
+
+        // The pooled HWND is also used for ordinary paper drags; no master image
+        // or hidden shell may leak into the very next lease.
+        var ordinary = EdgeCapsuleDragWindow.Rent(options);
+        try
+        {
+            var surface = (Grid)typeof(EdgeCapsuleDragWindow)
+                .GetField("_surface", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .GetValue(ordinary)!;
+            var artAfterReuse = surface.Children.OfType<Image>().Single();
+            var shell = (Grid)typeof(EdgeCapsuleDragWindow)
+                .GetField("_shell", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .GetValue(ordinary)!;
+            Require(artAfterReuse.Source == null &&
+                    artAfterReuse.Visibility == Visibility.Collapsed &&
+                    shell.Visibility == Visibility.Visible,
+                "An ordinary paper drag inherited master-capsule artwork");
+        }
+        finally { ordinary.ReturnToPool(); }
     }
 }
