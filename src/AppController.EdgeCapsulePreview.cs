@@ -219,17 +219,12 @@ public sealed partial class AppController
             var slotCount = papers.Count;
             // margin 必须从队列身份 key 派生：free 关闭时 key 是裸 edge key，
             // 纸片上的实例 id 已不参与运行期身份，继续读它会得到不同的起始高度。
-            var startTop = EdgeCapsuleLayout.NormalizeStartTopMargin(
-                DeepCapsuleStartTopMarginForQueueKey(queue.Key),
-                geometry.LocalWorkAreaDip,
-                slotCount,
-                DeepCapsuleGap);
             result.Add(new EdgeCapsuleAvoidanceQueue(
                 queue.Key,
                 papers.Select(p => p.Id).ToArray(),
                 EdgeCapsuleLayout.TopForIndex(
                     0,
-                    startTop,
+                    DeepCapsuleStartTopMarginForQueueKey(queue.Key),
                     geometry.LocalWorkAreaDip,
                     slotCount,
                     DeepCapsuleGap)));
@@ -1043,11 +1038,6 @@ public sealed partial class AppController
         ResetEdgeCapsulePreviewCorridorExitIntent();
         RecordEdgeCapsulePreviewTransferPointer(window, next.QueueKey);
         ArrangeDeepCapsules(animate: true);
-        var displaced = string.Join(
-            ",",
-            next.TopOffsetsDip
-                .Where(pair => Math.Abs(pair.Value) > 0.01)
-                .Select(pair => $"{EdgeCapsulePreviewTraceId(pair.Key)}:{pair.Value:F1}"));
     }
 
     private static bool EdgeCapsulePreviewSessionsHaveSameOwner(
@@ -1267,11 +1257,6 @@ public sealed partial class AppController
                 QueueKey(target.EdgeCapsulePreviewPaper),
                 StringComparison.Ordinal);
     }
-
-    private static bool IsEdgeCapsulePreviewLayoutSuppressedFor(
-        EdgeCapsulePreviewPointerAnchor anchor,
-        string queueKey) =>
-        string.Equals(anchor.QueueKey, queueKey, StringComparison.Ordinal);
 
     private static bool IsEdgeCapsulePreviewLayoutSuppressionExpired(
         EdgeCapsulePreviewPointerAnchor anchor) =>

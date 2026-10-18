@@ -129,11 +129,21 @@ internal static class EdgeCapsuleQueueMagnet
         };
 
         var detachedTop = sanitized.DraggedCenterTopDip - heightDip / 2.0;
+        var sourceKey = Normalize(sanitized.SourceQueueKey);
         var held = Normalize(sanitized.HeldQueueKey);
         var bestKey = "";
         var bestDistance = double.MaxValue;
         var heldStillHeld = false;
         var heldDistance = double.MaxValue;
+
+        EdgeCapsuleQueueMagnetPlan PlanFor(string targetKey, double distance) =>
+            new(
+                string.Equals(targetKey, sourceKey, StringComparison.Ordinal)
+                    ? EdgeCapsuleQueueMagnetOutcome.Reorder
+                    : EdgeCapsuleQueueMagnetOutcome.Merge,
+                targetKey,
+                0,
+                distance);
 
         for (var i = 0; i < sanitized.Candidates.Count; i++)
         {
@@ -184,38 +194,19 @@ internal static class EdgeCapsuleQueueMagnet
         // 否则相邻队列（尤其 0 gap 邻居）永远无法成为落点。
         if (heldStillHeld &&
             bestKey.Length > 0 &&
-            bestDistance <= mergeDip &&
             heldDistance - bestDistance >= DefaultTakeoverDistanceDip)
         {
-            return new EdgeCapsuleQueueMagnetPlan(
-                string.Equals(bestKey, Normalize(sanitized.SourceQueueKey), StringComparison.Ordinal)
-                    ? EdgeCapsuleQueueMagnetOutcome.Reorder
-                    : EdgeCapsuleQueueMagnetOutcome.Merge,
-                bestKey,
-                0,
-                bestDistance);
+            return PlanFor(bestKey, bestDistance);
         }
 
         if (heldStillHeld)
         {
-            return new EdgeCapsuleQueueMagnetPlan(
-                string.Equals(held, Normalize(sanitized.SourceQueueKey), StringComparison.Ordinal)
-                    ? EdgeCapsuleQueueMagnetOutcome.Reorder
-                    : EdgeCapsuleQueueMagnetOutcome.Merge,
-                held,
-                0,
-                heldDistance);
+            return PlanFor(held, heldDistance);
         }
 
         if (bestKey.Length > 0)
         {
-            return new EdgeCapsuleQueueMagnetPlan(
-                string.Equals(bestKey, Normalize(sanitized.SourceQueueKey), StringComparison.Ordinal)
-                    ? EdgeCapsuleQueueMagnetOutcome.Reorder
-                    : EdgeCapsuleQueueMagnetOutcome.Merge,
-                bestKey,
-                0,
-                bestDistance);
+            return PlanFor(bestKey, bestDistance);
         }
 
         // 判定为独立成队列后仍要做一次合法性校验：合并半径小于胶囊高度，落点可能压在队列上。

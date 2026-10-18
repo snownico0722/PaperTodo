@@ -180,6 +180,19 @@ public sealed partial class AppController
         }
     }
 
+    // 候选构建与候选签名必须使用同一套成员过滤规则，否则签名可能误判缓存有效。
+    private static bool IsMagnetCandidatePaper(
+        PaperData paper,
+        HashSet<string> carriedIds,
+        string targetMonitor,
+        string targetSide) =>
+        !carriedIds.Contains(paper.Id) &&
+        string.Equals(
+            LiveQueueMonitorDeviceName(paper.CapsuleMonitorDeviceName),
+            targetMonitor,
+            StringComparison.Ordinal) &&
+        DeepCapsuleSides.Normalize(paper.CapsuleSide) == targetSide;
+
     /// <summary>
     /// Queue snapshot the magnet reasons about: which queue each visible docked capsule belongs to,
     /// and where each queue's slot 0 sits on the target monitor.
@@ -214,10 +227,7 @@ public sealed partial class AppController
         {
             // 显示器按 live 映射过滤：断连队列回退到主屏后仍是同一条物理边上的候选，
             // 但分组 key 仍是持久身份，不会与主屏队列合并。
-            if (carriedIds.Contains(paper.Id) ||
-                !string.Equals(LiveQueueMonitorDeviceName(paper.CapsuleMonitorDeviceName),
-                    targetMonitor, StringComparison.Ordinal) ||
-                DeepCapsuleSides.Normalize(paper.CapsuleSide) != targetSide)
+            if (!IsMagnetCandidatePaper(paper, carriedIds, targetMonitor, targetSide))
             {
                 continue;
             }
@@ -246,11 +256,6 @@ public sealed partial class AppController
             var papers = members[key];
             // Free mode has no master pill, so slot 0 belongs to a real capsule.
             var slotCount = papers.Count;
-            var startTop = EdgeCapsuleLayout.NormalizeStartTopMargin(
-                DeepCapsuleStartTopMarginForQueueKey(key),
-                area,
-                slotCount,
-                DeepCapsuleGap);
 
             // The magnet measures to the queue's wall-anchored rectangle, so the band must be the
             // width this queue actually occupies: its widest resting capsule. LocalWorkAreaDip's X
@@ -271,7 +276,12 @@ public sealed partial class AppController
             result.Add(new EdgeCapsuleQueueMagnetCandidate(
                 key,
                 slotCount,
-                EdgeCapsuleLayout.TopForIndex(0, startTop, area, slotCount, DeepCapsuleGap),
+                EdgeCapsuleLayout.TopForIndex(
+                    0,
+                    DeepCapsuleStartTopMarginForQueueKey(key),
+                    area,
+                    slotCount,
+                    DeepCapsuleGap),
                 slotHeight,
                 -1,
                 bandLeft,
@@ -334,10 +344,7 @@ public sealed partial class AppController
         var carriedIds = new HashSet<string>(carried.Select(p => p.Id), StringComparer.Ordinal);
         foreach (var paper in DeepCapsulePapersInOrder())
         {
-            if (carriedIds.Contains(paper.Id) ||
-                !string.Equals(LiveQueueMonitorDeviceName(paper.CapsuleMonitorDeviceName),
-                    targetMonitor, StringComparison.Ordinal) ||
-                DeepCapsuleSides.Normalize(paper.CapsuleSide) != targetSide)
+            if (!IsMagnetCandidatePaper(paper, carriedIds, targetMonitor, targetSide))
             {
                 continue;
             }
@@ -473,17 +480,9 @@ public sealed partial class AppController
 
     private bool TryResolveQueueGeometry(string queueKey, out MonitorGeometry geometry)
     {
-        var edgeKey = EdgeCapsuleQueueIds.StripInstance(queueKey);
-        var separator = edgeKey.LastIndexOf('|');
-        if (separator < 0)
-        {
-            geometry = default;
-            return false;
-        }
-
-        return WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(
-            edgeKey[..separator],
-            out geometry);
+        geometry = default;
+        return EdgeCapsuleQueueIds.TryGetEdge(queueKey, out var monitor, out _) &&
+               WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(monitor, out geometry);
     }
 
     /// <summary>
@@ -650,9 +649,9 @@ public sealed partial class AppController
         }
 
         var members = FreeQueueMembersExcludingIds(queueKey, excluded);
-        var edgeKey = EdgeCapsuleQueueIds.StripInstance(queueKey);
-        var separator = edgeKey.LastIndexOf('|');
-        if (!WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(edgeKey[..Math.Max(separator, 0)], out var geometry))
+        // 畸形 key（无 '|'）沿用原有语义：按空显示器名回退主屏几何。
+        _ = EdgeCapsuleQueueIds.TryGetEdge(queueKey, out var monitor, out _);
+        if (!WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(monitor, out var geometry))
         {
             return 0;
         }
@@ -661,12 +660,12 @@ public sealed partial class AppController
         var dropTopDip = geometry.DeviceYToLocalDip(draggedCenterDeviceY)
                          - PaperLayoutDefaults.CapsuleHeight / 2.0;
         var realCount = members.Count + Math.Max(1, carriedCount);
-        var startTop = EdgeCapsuleLayout.NormalizeStartTopMargin(
+        var firstTop = EdgeCapsuleLayout.TopForIndex(
+            0,
             DeepCapsuleStartTopMarginForQueueKey(queueKey),
             area,
             realCount,
             DeepCapsuleGap);
-        var firstTop = EdgeCapsuleLayout.TopForIndex(0, startTop, area, realCount, DeepCapsuleGap);
         var slotHeight = EdgeCapsuleLayout.SlotHeight(DeepCapsuleGap);
         return Math.Clamp((int)Math.Floor((dropTopDip - firstTop) / slotHeight + 0.5), 0, members.Count);
     }
@@ -765,10 +764,6 @@ public sealed partial class AppController
         RefreshTrayMenu();
         MarkDirty();
     }
-
-    /// <summary>Diagnostics only: how many members a queue would have besides the dragged capsule.</summary>
-    internal int FreeQueueMemberCount(string queueKey, string excludedPaperId) =>
-        FreeQueueMembersExcluding(queueKey, excludedPaperId).Count;
 
     private List<PaperData> FreeQueueMembersExcluding(string queueKey, string excludedPaperId)
         => FreeQueueMembersExcludingIds(

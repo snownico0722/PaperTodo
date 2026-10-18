@@ -39,19 +39,12 @@ public sealed partial class AppController
         string queueKey,
         string draggedPaperId,
         int carriedCount = 1,
-        int targetIndex = 0,
-        EdgeCapsuleQueueDropLayoutPlan? plan = null)
+        int targetIndex = 0)
     {
         if (!EdgeCapsuleFreeQueuesEnabled)
         {
             EndEdgeCapsuleQueueDropTargetOutline();
             return;
-        }
-
-        if (plan != null)
-        {
-            _edgeCapsuleQueueDropLayoutPlan = plan;
-            _edgeCapsuleQueueDropLayoutVersion++;
         }
 
         var requestedCarriedCount = Math.Max(1, carriedCount);
@@ -138,16 +131,15 @@ public sealed partial class AppController
     {
         layout = default;
         monitorDeviceName = "";
-        var edgeKey = EdgeCapsuleQueueIds.StripInstance(queueKey);
-        var separator = edgeKey.LastIndexOf('|');
-        if (separator < 0)
+        if (!EdgeCapsuleQueueIds.TryGetEdge(
+                queueKey,
+                out monitorDeviceName,
+                out var sideText))
         {
             return false;
         }
 
-        monitorDeviceName = edgeKey[..separator];
-        var isLeftQueue = edgeKey[(separator + 1)..] == DeepCapsuleSides.Left;
-        var side = isLeftQueue ? DeepCapsuleSides.Left : DeepCapsuleSides.Right;
+        var isLeftQueue = sideText == DeepCapsuleSides.Left;
         if (!WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(
                 monitorDeviceName,
                 out var geometry))
@@ -364,38 +356,24 @@ public sealed partial class AppController
     /// <summary>撤掉拖拽插入造成的同边联动位移；源队列恢复为收拢后的布局。</summary>
     internal void RestoreDeepCapsuleQueueDragAvoidance()
     {
-        if (_deepCapsuleDragAvoidanceQueues.Count > 0)
+        foreach (var (queueKey, isSource) in _deepCapsuleDragAvoidanceQueues)
         {
-            foreach (var (queueKey, isSource) in _deepCapsuleDragAvoidanceQueues)
+            if (isSource)
             {
-                if (isSource)
+                PreviewDeepCapsuleQueueVacatedSource(
+                    DeepCapsulePapersInOrder(),
+                    queueKey,
+                    _deepCapsuleDragAvoidanceCarriedIds);
+            }
+            else
+            {
+                var members = FreeQueueMembersExcluding(queueKey, "");
+                if (members.Count > 0)
                 {
-                    var remaining = new List<PaperData>();
-                    foreach (var paper in DeepCapsulePapersInOrder())
-                    {
-                        if (!_deepCapsuleDragAvoidanceCarriedIds.Contains(paper.Id) &&
-                            QueueKey(paper) == queueKey)
-                        {
-                            remaining.Add(paper);
-                        }
-                    }
-
-                    if (remaining.Count > 0)
-                    {
-                        PreviewEdgeCapsuleQueueMembers(
-                            queueKey, remaining, _deepCapsuleDragAvoidanceCarriedIds);
-                    }
-                }
-                else
-                {
-                    var members = FreeQueueMembersExcluding(queueKey, "");
-                    if (members.Count > 0)
-                    {
-                        PreviewEdgeCapsuleQueueMembers(
-                            queueKey,
-                            members,
-                            new HashSet<string>(StringComparer.Ordinal));
-                    }
+                    PreviewEdgeCapsuleQueueMembers(
+                        queueKey,
+                        members,
+                        new HashSet<string>(StringComparer.Ordinal));
                 }
             }
         }

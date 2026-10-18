@@ -141,44 +141,6 @@ public static class AnimationHelper
             });
     }
 
-    /// <summary>
-    /// 把元素高度平滑移动到目标值，从当前有效高度（含进行中的动画）重新起跳。
-    /// </summary>
-    public static void AnimateHeight(
-        FrameworkElement element,
-        double height,
-        double duration = 200,
-        IEasingFunction? easing = null)
-    {
-        AnimateDouble(element, FrameworkElement.HeightProperty, height, duration, easing ?? SmoothEase);
-    }
-
-    /// <summary>
-    /// 从指定高度长到目标高度。用于 mini-view 式的“从 0 展开”动画；
-    /// 与 <see cref="AnimateHeight"/> 不同，这里显式指定起点。
-    /// </summary>
-    public static void AnimateHeightFrom(
-        FrameworkElement element,
-        double from,
-        double to,
-        double duration = 200,
-        IEasingFunction? easing = null)
-    {
-        element.BeginAnimation(FrameworkElement.HeightProperty, null);
-        element.Height = to;
-
-        element.BeginAnimation(
-            FrameworkElement.HeightProperty,
-            new DoubleAnimation(
-                from,
-                to,
-                TimeSpan.FromMilliseconds(AnimationTiming.ScaleMilliseconds(duration)))
-            {
-                EasingFunction = easing ?? SmoothEase,
-                FillBehavior = FillBehavior.Stop
-            });
-    }
-
     // 颜色过渡
     public static void TransitionColor(Brush brush, Color toColor, double duration = 300)
     {

@@ -3,7 +3,6 @@ namespace PaperTodo;
 /// <summary>计划中一条队列的预览成员与最终位置（目标显示器本地 DIP）。</summary>
 internal sealed record EdgeCapsuleQueueDropPreview(
     string QueueKey,
-    string QueueId,
     IReadOnlyList<PaperData> PreviewMembers,
     double TopDip,
     bool IsSource);
@@ -27,7 +26,6 @@ internal sealed class EdgeCapsuleQueueDropLayoutPlan
     public double GapDip { get; init; }
     public string SourceQueueKey { get; init; } = "";
     public bool SourceOnTargetEdge { get; init; }
-    public bool SourceBecomesEmpty { get; init; }
 }
 
 public sealed partial class AppController
@@ -50,15 +48,15 @@ public sealed partial class AppController
             return InfeasibleDropLayoutPlan(targetQueueKey, targetIndex, 0);
         }
 
-        var edgeKey = EdgeCapsuleQueueIds.StripInstance(targetQueueKey);
-        var separator = edgeKey.LastIndexOf('|');
-        if (separator < 0)
+        if (!EdgeCapsuleQueueIds.TryGetEdge(
+                targetQueueKey,
+                out var monitorDeviceName,
+                out var sideText))
         {
             return InfeasibleDropLayoutPlan(targetQueueKey, targetIndex, carried.Count);
         }
 
-        var monitorDeviceName = edgeKey[..separator];
-        var side = edgeKey[(separator + 1)..] == DeepCapsuleSides.Left
+        var side = sideText == DeepCapsuleSides.Left
             ? DeepCapsuleSides.Left
             : DeepCapsuleSides.Right;
         if (!WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(
@@ -149,7 +147,6 @@ public sealed partial class AppController
                 continue;
             }
 
-            var queueId = FirstQueueIdOf(allMembers);
             var margin = DeepCapsuleStartTopMarginForQueueKey(queueKey);
             var top = EdgeCapsuleLayout.TopForIndex(
                 0,
@@ -161,7 +158,6 @@ public sealed partial class AppController
 
             previews[queueKey] = new EdgeCapsuleQueueDropPreview(
                 queueKey,
-                queueId,
                 previewMembers,
                 top,
                 isSource);
@@ -179,12 +175,6 @@ public sealed partial class AppController
             area.Height,
             gap,
             EdgeCapsuleLayout.TopMargin);
-
-        // carried 尚未从源队列移除，因此必须显式排除它们再判断源队列是否会变空。
-        // 使用 State.Papers 而不是可见成员：隐藏成员仍属于该队列，不能删除它的起始边距。
-        var sourceBecomesEmpty = !State.Papers.Any(
-            paper => !carriedIds.Contains(paper.Id) &&
-                     string.Equals(QueueKey(paper), sourceQueueKey, StringComparison.Ordinal));
 
         if (solved.Feasible)
         {
@@ -217,8 +207,7 @@ public sealed partial class AppController
                 Side = side,
                 GapDip = gap,
                 SourceQueueKey = sourceQueueKey,
-                SourceOnTargetEdge = sourceOnTargetEdge,
-                SourceBecomesEmpty = sourceBecomesEmpty
+                SourceOnTargetEdge = sourceOnTargetEdge
             };
         }
 
@@ -251,8 +240,7 @@ public sealed partial class AppController
             Side = side,
             GapDip = gap,
             SourceQueueKey = sourceQueueKey,
-            SourceOnTargetEdge = sourceOnTargetEdge,
-            SourceBecomesEmpty = sourceBecomesEmpty
+            SourceOnTargetEdge = sourceOnTargetEdge
         };
     }
 

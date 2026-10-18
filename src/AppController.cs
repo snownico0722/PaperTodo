@@ -2952,16 +2952,11 @@ public sealed partial class AppController : IDisposable
         var dropY = monitorGeometry.DeviceYToLocalDip(dropPoint.Y);
         var targetRealCount = targetMembers.Count + 1;
         var visualOffset = State.UseCapsuleCollapseAll && targetRealCount > 0 ? 1 : 0;
-        var startTop = EdgeCapsuleLayout.NormalizeStartTopMargin(
-            DeepCapsuleStartTopMarginForQueue(normalizedMonitor,
-                normalizedSide == DeepCapsuleSides.Left ? EdgeCapsuleEdge.Left : EdgeCapsuleEdge.Right),
-            area,
-            targetRealCount + visualOffset,
-            DeepCapsuleGap);
         var slotHeight = EdgeCapsuleLayout.SlotHeight(DeepCapsuleGap);
         var firstTop = EdgeCapsuleLayout.TopForIndex(
             visualOffset,
-            startTop,
+            DeepCapsuleStartTopMarginForQueue(normalizedMonitor,
+                normalizedSide == DeepCapsuleSides.Left ? EdgeCapsuleEdge.Left : EdgeCapsuleEdge.Right),
             area,
             targetRealCount + visualOffset,
             DeepCapsuleGap);
@@ -4290,19 +4285,9 @@ public sealed partial class AppController : IDisposable
     // persisted authority. An empty instance id yields the pre-D-058 edge key.
     public double DeepCapsuleStartTopMarginFor(PaperData paper)
     {
-        // 自由队列开启时 QueueKey 已是持久身份，断连后仍能命中原显示器下的 margin。
-        if (State.UseCapsuleFreeQueues)
-        {
-            return DeepCapsuleStartTopMarginForQueueKey(QueueKey(paper));
-        }
-
-        var edge = paper.CapsuleSide == DeepCapsuleSides.Left ? EdgeCapsuleEdge.Left : EdgeCapsuleEdge.Right;
-        // 与 QueueKey(paper) 共用同一身份漏斗：free 关闭时实例 id 被忽略，
-        // 否则同一裸队列的不同成员会读到不同实例 margin（第二 authority）。
-        var queueId = EdgeCapsuleQueueIds.TrySplit(QueueKey(paper), out _, out var parsedQueueId)
-            ? parsedQueueId
-            : "";
-        return DeepCapsuleStartTopMarginForQueue(paper.CapsuleMonitorDeviceName, edge, queueId);
+        // QueueKey(paper) 是唯一身份漏斗：free 开启时保留持久实例身份，关闭时退化为裸
+        // edge key，因此两种模式都直接按该 key 查询即可。
+        return DeepCapsuleStartTopMarginForQueueKey(QueueKey(paper));
     }
 
     /// <summary>
