@@ -381,14 +381,20 @@ public sealed partial class PaperWindow
     private void OnDeepCapsuleFloatingDragHostLocationChanged(object? sender, EventArgs e)
     {
         if (sender is not EdgeCapsuleDragWindow host ||
-            !ReferenceEquals(host, _deepCapsuleFloatingDragHost) ||
-            _deepCapsuleFloatingFullscreenAvoidanceWindow ==
-                _controller.FullscreenAvoidanceWindowFor(host))
+            !ReferenceEquals(host, _deepCapsuleFloatingDragHost))
         {
             return;
         }
 
-        RefreshDeepCapsuleSlotTopmost();
+        // 原生移动循环期间 WM_TIMER 会被高频移动消息饿死；浮动窗口的位置变化与光标同步
+        // 到达，用它驱动同一采样入口，跨侧快速拖拽才能继续逐槽更新预览。
+        SampleEdgeCapsuleNativeDragFeedback(forceEvaluation: false);
+
+        if (_deepCapsuleFloatingFullscreenAvoidanceWindow !=
+            _controller.FullscreenAvoidanceWindowFor(host))
+        {
+            RefreshDeepCapsuleSlotTopmost();
+        }
     }
 
     private void OnDeepCapsuleFloatingDragHostUnexpectedlyClosed(object? sender, EventArgs e)
@@ -576,6 +582,7 @@ public sealed partial class PaperWindow
 
     private DispatcherTimer? _deepCapsuleNativeDragFeedbackTimer;
     private DeviceScreenPoint? _deepCapsuleNativeDragFeedbackCursor;
+    private bool _deepCapsuleNativeDragFeedbackSampling;
 
     // Dedup key for the source-queue close-up. Deliberately separate from the cross-queue
     // (queueKey, index) sentinel: the two describe different states, and sharing one key made each
@@ -620,9 +627,18 @@ public sealed partial class PaperWindow
         _deepCapsuleNativeDragFeedbackCursor = null;
     }
 
-    private void OnEdgeCapsuleNativeDragFeedbackTick(object? sender, EventArgs e)
+    private void OnEdgeCapsuleNativeDragFeedbackTick(object? sender, EventArgs e) =>
+        SampleEdgeCapsuleNativeDragFeedback(forceEvaluation: true);
+
+    /// <summary>
+    /// 浮空阶段的光标采样。timer 是兜底；Win32 原生 caption 循环会连续投递移动消息并
+    /// 饿死 WM_TIMER，因此浮动窗口的 LocationChanged 也走同一入口驱动磁吸预览。
+    /// </summary>
+    private void SampleEdgeCapsuleNativeDragFeedback(bool forceEvaluation)
     {
-        if (!IsDeepCapsuleFloatingReordering ||
+        // LocationChanged 可能在按钮动画/SetWindowPos 泵消息时重入 timer 回调。
+        if (_deepCapsuleNativeDragFeedbackSampling ||
+            !IsDeepCapsuleFloatingReordering ||
             !WindowNative.TryGetCursorScreenPosition(out var cursor))
         {
             return;
@@ -634,11 +650,39 @@ public sealed partial class PaperWindow
             return;
         }
 
-        _deepCapsuleNativeDragFeedbackCursor = cursor;
-        UpdateEdgeCapsuleDragPointer(cursor);
-        PreviewDeepCapsuleQueueMagnetForCurrentPosition(
-            floatingPhase: true,
-            forceEvaluation: true);
+        if (!forceEvaluation)
+        {
+            // LocationChanged can arrive faster than the preview interval. If the gate is not
+            // due yet, leave the cursor unrecorded so the next event or timer retries it.
+            var now = System.Diagnostics.Stopwatch.GetTimestamp();
+            var elapsedMilliseconds = _deepCapsuleQueuePreviewTimestamp == 0
+                ? double.PositiveInfinity
+                : (now - _deepCapsuleQueuePreviewTimestamp) * 1000.0 /
+                    System.Diagnostics.Stopwatch.Frequency;
+            if (!IsDeepCapsuleQueuePreviewDue(
+                    elapsedMilliseconds,
+                    DeepCapsuleQueuePreviewIntervalMilliseconds,
+                    forceEvaluation: false))
+            {
+                return;
+            }
+        }
+
+        _deepCapsuleNativeDragFeedbackSampling = true;
+        try
+        {
+            _deepCapsuleNativeDragFeedbackCursor = cursor;
+            UpdateEdgeCapsuleDragPointer(cursor);
+            // The outer sample already applied the interval gate; force the inner gate so the
+            // timestamp and cursor stay consistent.
+            PreviewDeepCapsuleQueueMagnetForCurrentPosition(
+                floatingPhase: true,
+                forceEvaluation: true);
+        }
+        finally
+        {
+            _deepCapsuleNativeDragFeedbackSampling = false;
+        }
     }
 
     /// <summary>Clear the drag-time feedback gate, outline and held queue at the end of a gesture.</summary>
