@@ -30,6 +30,27 @@ internal static class EdgeCapsuleQueuePreviewChecks
             Placement(windows["fixture-3"]).Index == 1,
             "target queue did not start with its true slot order");
 
+        // 浮空拖回自身队列：默认仍拒绝同队列目标；显式允许时源队列按插入 index 开槽。
+        // 这样松手前就能看到与提交一致的槽位，而不是只有源队列收拢。
+        var sourceQueueKey = controller.QueueKeyForPaper(source);
+        Require(
+            !controller.PreviewDeepCapsuleQueueDrag([source], sourceQueueKey, 1),
+            "a same-queue preview must stay opt-in");
+        Require(
+            controller.PreviewDeepCapsuleQueueDrag(
+                [source], sourceQueueKey, 1, allowSourceQueueTarget: true),
+            "the floating same-queue preview should be feasible");
+        Require(
+            Placement(windows["fixture-1"]).Index == 0 &&
+            Placement(windows["fixture-1"]).SlotCount == 2,
+            "the same-queue preview did not open a slot in the source queue");
+        controller.RestoreDeepCapsuleQueuePreview(sourceQueueKey);
+        Require(
+            Placement(windows["fixture-1"]).Index == 1 &&
+            Placement(windows["fixture-1"]).SlotCount == 2 &&
+            Math.Abs(Placement(windows["fixture-1"]).TopOffsetDip) < 1e-6,
+            "the same-queue preview did not restore the source queue");
+
         // 源队列 qa 由 [0, 1] 撤走 0 后收拢为 [1]；目标 qb 按完整槽位展开为 3 槽，
         // fixture-3 下移一整槽；下方 qc 被求解器推到 470（+20）。
         Require(

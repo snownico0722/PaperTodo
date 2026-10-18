@@ -2324,7 +2324,8 @@ public sealed partial class AppController : IDisposable
     public bool PreviewDeepCapsuleQueueDrag(
         IReadOnlyList<PaperData> carried,
         string targetQueueKey,
-        int targetIndex)
+        int targetIndex,
+        bool allowSourceQueueTarget = false)
     {
         if (!State.UseCapsuleMode || !State.UseDeepCapsuleMode || carried.Count == 0)
         {
@@ -2332,8 +2333,11 @@ public sealed partial class AppController : IDisposable
         }
 
         var sourceQueueKey = QueueKey(carried[0]);
-        if (string.Equals(targetQueueKey, sourceQueueKey, StringComparison.Ordinal))
+        if (!allowSourceQueueTarget &&
+            string.Equals(targetQueueKey, sourceQueueKey, StringComparison.Ordinal))
         {
+            // 贴边阶段同队列重排走 PreviewDeepCapsuleReorder；浮空阶段拖回源队列时由
+            // 调用方显式允许，让源队列按插入计划重新开槽。
             return false;
         }
 

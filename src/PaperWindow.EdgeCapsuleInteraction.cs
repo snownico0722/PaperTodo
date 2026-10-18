@@ -777,11 +777,11 @@ public sealed partial class PaperWindow
     /// </summary>
     internal static EdgeCapsuleFreeQueuePreviewAction ResolveEdgeCapsuleFreeQueuePreviewAction(
         EdgeCapsuleQueueMagnetOutcome outcome,
-        bool crossQueue,
+        bool hasTargetPreview,
         bool floatingPhase,
         bool hasTransfer)
     {
-        if (crossQueue)
+        if (hasTargetPreview)
         {
             return EdgeCapsuleFreeQueuePreviewAction.CrossQueue;
         }
@@ -852,16 +852,29 @@ public sealed partial class PaperWindow
             excludeEntireSourceQueue: transfer != null);
         var sourceQueueKey = _controller.QueueKeyForPaper(_paper);
 
-        // The new outline and cross-queue avoidance exist for one situation only: what this drag
-        // carries leaving its own queue to join a different one. Same-queue reordering already had
-        // a working avoidance path before free queues existed, so it keeps that and shows no marker.
+        // 跨队列 Merge 需要描边与邻队避让。浮空阶段拖回源队列时磁吸会返回 Reorder；
+        // 此时胶囊已经脱离队列，旧的后排预览不适用，也必须按插入计划重新给源队列开槽。
+        var targetIsSourceQueue = string.Equals(
+            plan.TargetQueueKey,
+            sourceQueueKey,
+            StringComparison.Ordinal);
         var crossQueue = plan.Outcome == EdgeCapsuleQueueMagnetOutcome.Merge &&
-                         !string.Equals(plan.TargetQueueKey, sourceQueueKey, StringComparison.Ordinal);
+                         !targetIsSourceQueue;
+        var sameQueueFloatingPreview = floatingPhase &&
+            transfer == null &&
+            plan.Outcome == EdgeCapsuleQueueMagnetOutcome.Reorder;
         var previewAction = ResolveEdgeCapsuleFreeQueuePreviewAction(
             plan.Outcome,
-            crossQueue,
+            crossQueue || sameQueueFloatingPreview,
             floatingPhase,
             transfer != null);
+
+        if (sameQueueFloatingPreview)
+        {
+            // 源队列现在以插入槽形态显示，不再处于已收拢状态；离开该预览时必须允许
+            // VacateSource 再收拢一次，否则会留下一个空洞。
+            _deepCapsuleVacatedQueueKey = "";
+        }
 
         if (previewAction != EdgeCapsuleFreeQueuePreviewAction.CrossQueue)
         {
@@ -922,7 +935,8 @@ public sealed partial class PaperWindow
             var feasible = _controller.PreviewDeepCapsuleQueueDrag(
                 carried,
                 plan.TargetQueueKey,
-                index);
+                index,
+                allowSourceQueueTarget: sameQueueFloatingPreview);
             if (!feasible)
             {
                 // 计划不可行：恢复上一帧的目标/邻队展开，源队列保持收拢；
