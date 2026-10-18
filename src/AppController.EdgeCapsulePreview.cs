@@ -119,7 +119,7 @@ public sealed partial class AppController
         var currentIds = currentQueue.Papers
             .Select(paper => paper.Id)
             .ToArray();
-        var edgeQueues = BuildEdgeCapsuleAvoidanceQueues(basePlan, session);
+        var edgeQueues = BuildEdgeCapsuleAvoidanceQueues(basePlan, session, currentQueueKey);
         var currentEdgeIds = edgeQueues.SelectMany(queue => queue.PaperIds).ToArray();
         if (!string.Equals(
                 session.QueueKey,
@@ -165,33 +165,25 @@ public sealed partial class AppController
     /// </summary>
     private List<EdgeCapsuleAvoidanceQueue> BuildEdgeCapsuleAvoidanceQueues(
         EdgeCapsuleQueuePlan basePlan,
-        EdgeCapsulePreviewLayoutSession session)
+        EdgeCapsulePreviewLayoutSession session,
+        string ownerQueueKey)
     {
         var result = new List<EdgeCapsuleAvoidanceQueue>();
         var ownerPaper = session.OwnerPaperId;
-        if (!basePlan.Placements.ContainsKey(ownerPaper))
+        if (!basePlan.Placements.ContainsKey(ownerPaper) ||
+            !EdgeCapsuleQueueIds.TryGetEdge(ownerQueueKey, out _, out _))
         {
             return result;
         }
 
-        var ownerSide = string.Equals(
-            EdgeCapsuleQueueIds.StripInstance(session.QueueKey)[(EdgeCapsuleQueueIds.StripInstance(session.QueueKey).LastIndexOf('|') + 1)..],
-            DeepCapsuleSides.Left,
-            StringComparison.Ordinal)
-            ? EdgeCapsuleEdge.Left
-            : EdgeCapsuleEdge.Right;
-        var ownerMonitor = EdgeCapsuleQueueIds.StripInstance(session.QueueKey);
-
         foreach (var queue in basePlan.Queues)
         {
-            var edgeKey = EdgeCapsuleQueueIds.StripInstance(queue.Key);
-            var separator = edgeKey.LastIndexOf('|');
-            var side = edgeKey[(separator + 1)..] == DeepCapsuleSides.Left
-                ? EdgeCapsuleEdge.Left
-                : EdgeCapsuleEdge.Right;
-            if (side != ownerSide ||
+            // 边级避让只作用于 owner 所在的显示器 + 同侧。不同显示器的本地 DIP
+            // 没有可比性，混排会把另一块屏幕上的队列整体推开。
+            if (!EdgeCapsuleQueueIds.IsSameEdge(queue.Key, ownerQueueKey) ||
+                !EdgeCapsuleQueueIds.TryGetEdge(queue.Key, out var monitorDeviceName, out var side) ||
                 !WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(
-                    edgeKey[..Math.Max(separator, 0)],
+                    monitorDeviceName,
                     out var geometry))
             {
                 continue;
@@ -211,8 +203,8 @@ public sealed partial class AppController
                 : "";
             var startTop = EdgeCapsuleLayout.NormalizeStartTopMargin(
                 DeepCapsuleStartTopMarginForQueue(
-                    edgeKey[..Math.Max(separator, 0)],
-                    side,
+                    monitorDeviceName,
+                    EdgeForQueueSide(side),
                     queueId),
                 geometry.LocalWorkAreaDip,
                 slotCount,

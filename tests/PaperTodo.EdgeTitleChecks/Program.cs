@@ -84,6 +84,28 @@ internal static partial class Program
         Check(EdgeCapsuleQueueIds.StripInstance(edge) == edge, "Strip is a no-op without an instance");
         Check(EdgeCapsuleQueueIds.StripInstance("|right#a") == "|right", "Strip preserves an empty monitor segment");
 
+        // 边级范围解析：迷你视图避让必须同时按 monitor 和 side 过滤。
+        Check(EdgeCapsuleQueueIds.TryGetEdge($"{edge}#q1", out var edgeMonitor, out var edgeSide) &&
+              edgeMonitor == "DISPLAY1" && edgeSide == "right",
+            "TryGetEdge splits the monitor and side");
+        Check(EdgeCapsuleQueueIds.TryGetEdge("|left#a", out var primaryMonitor, out var primarySide) &&
+              primaryMonitor == "" && primarySide == "left",
+            "TryGetEdge preserves the empty primary monitor segment");
+        Check(!EdgeCapsuleQueueIds.TryGetEdge("right", out _, out _),
+            "TryGetEdge rejects a key without an edge separator");
+        Check(!EdgeCapsuleQueueIds.TryGetEdge(null, out _, out _),
+            "TryGetEdge rejects a null key");
+        Check(EdgeCapsuleQueueIds.IsSameEdge($"{edge}#q1", $"{edge}#q2"),
+            "Same monitor and side compare equal across instance ids");
+        Check(!EdgeCapsuleQueueIds.IsSameEdge($"{edge}#q1", "DISPLAY2|right#q1"),
+            "Different monitors must not share an edge");
+        Check(!EdgeCapsuleQueueIds.IsSameEdge("DISPLAY1|left", "DISPLAY1|right"),
+            "Different sides must not share an edge");
+        Check(EdgeCapsuleQueueIds.IsSameEdge("|right#a", "|right"),
+            "The primary monitor edge matches without an instance id");
+        Check(!EdgeCapsuleQueueIds.IsSameEdge("right", "right"),
+            "Malformed keys are never the same edge");
+
         Check(EdgeCapsuleQueueIds.New() != EdgeCapsuleQueueIds.New(), "New ids differ");
         Check(EdgeCapsuleQueueIds.New().Length <= EdgeCapsuleQueueIds.MaxLength, "New id fits the length bound");
     }

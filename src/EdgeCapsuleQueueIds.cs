@@ -89,4 +89,34 @@ internal static class EdgeCapsuleQueueIds
         var separator = value.LastIndexOf(Separator);
         return separator < 0 ? value : value[..separator];
     }
+
+    /// <summary>
+    /// 拆分队列 key 的 edge 部分（monitor + side），实例后缀会被剥离。
+    /// 找不到分隔符时返回 false；主屏 monitor 为空串。
+    /// </summary>
+    internal static bool TryGetEdge(string? key, out string monitorDeviceName, out string side)
+    {
+        var edgeKey = StripInstance(key);
+        var separator = edgeKey.LastIndexOf('|');
+        if (separator < 0)
+        {
+            monitorDeviceName = "";
+            side = "";
+            return false;
+        }
+
+        monitorDeviceName = edgeKey[..separator];
+        side = edgeKey[(separator + 1)..];
+        return true;
+    }
+
+    /// <summary>
+    /// 两个队列 key 是否属于同一显示器 + 同一侧（忽略实例 id）。
+    /// 生产 key 的 monitor/side 已由 EdgeKey 归一化，这里按 Ordinal 比较。
+    /// </summary>
+    internal static bool IsSameEdge(string? left, string? right) =>
+        TryGetEdge(left, out var leftMonitor, out var leftSide) &&
+        TryGetEdge(right, out var rightMonitor, out var rightSide) &&
+        string.Equals(leftMonitor, rightMonitor, StringComparison.Ordinal) &&
+        string.Equals(leftSide, rightSide, StringComparison.Ordinal);
 }
