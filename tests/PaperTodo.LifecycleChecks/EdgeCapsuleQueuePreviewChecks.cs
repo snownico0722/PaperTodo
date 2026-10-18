@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Reflection;
 using System.Windows.Controls;
+using System.Windows.Input;
 using PaperTodo;
 
 /// <summary>
@@ -166,6 +167,16 @@ internal static class EdgeCapsuleQueuePreviewChecks
         Require(
             (int)Part(controller, "DropTargetLayoutUpdateCount") == layoutsAfterFirst + 1,
             "changing the outline index did not recompute its layout");
+
+        // 同 key/index 但重新生成了拖放计划时，描边不得复用旧布局。
+        var layoutsBeforeRegeneratedPlan = (int)Part(controller, "DropTargetLayoutUpdateCount");
+        Require(
+            controller.PreviewDeepCapsuleQueueDrag([source], targetKey, 1),
+            "the regenerated plan fixture was infeasible");
+        controller.ShowEdgeCapsuleQueueDropTargetOutline(targetKey, source.Id, 1, 1);
+        Require(
+            (int)Part(controller, "DropTargetLayoutUpdateCount") == layoutsBeforeRegeneratedPlan + 1,
+            "a regenerated drop layout did not invalidate the outline cache");
         controller.EndEdgeCapsuleQueueDropTargetOutline();
 
         // 磁吸候选按手势缓存：相同 anchor 的重复评估不再重建候选或测量标题。
@@ -366,6 +377,21 @@ internal static class EdgeCapsuleQueuePreviewChecks
                     pair.Key, out var margin) &&
                 Math.Abs(margin - pair.Value) < 1e-6),
             "a rejected transfer changed queue margins");
+        externalMember.CapsuleQueueId = externalQueueIdBefore;
+        controller.ArrangeDeepCapsules(animate: false);
+
+        // 用户取消同样不得覆盖拖拽期间的外部修改：序列不一致时只释放事务。
+        Require(
+            controller.TryBeginEdgeCapsuleQueueTransfer(targetPaper, out var abandonedTransfer),
+            "the abandon transfer fixture did not start");
+        externalMember.CapsuleQueueId = "qexternal";
+        controller.AbandonEdgeCapsuleQueueTransfer(abandonedTransfer);
+        Require(
+            controller.QueueKeyForPaper(externalMember).Contains("#qexternal", StringComparison.Ordinal),
+            "cancelling a transfer overwrote an external membership change");
+        Require(
+            !controller.IsPaperInTransferringEdgeQueue(targetPaper),
+            "an abandoned transfer left its source queue frozen");
         externalMember.CapsuleQueueId = externalQueueIdBefore;
         controller.ArrangeDeepCapsules(animate: false);
 
@@ -779,6 +805,64 @@ internal static class EdgeCapsuleQueuePreviewChecks
         {
             controller.State.Papers = papersBeforeAnchorGuard;
             controller.ArrangeDeepCapsules(animate: false);
+        }
+
+        // FQ-10：FloatingTransfer 阶段宿主异常关闭必须取消手势，不能留下 arrange gate、
+        // 隐藏成员或鼠标光标等永久脏状态。
+        var recoveryWindow = windows["fixture-0"];
+        Require(
+            !recoveryWindow.IsDeepCapsuleReorderDragInProgress,
+            "the host-close fixture started with an active drag");
+        var presenter = Field(recoveryWindow, "_edgeCapsule")!;
+        var modelProperty = presenter.GetType().GetProperty(
+            "Model", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        var model = (EdgeCapsuleModel)modelProperty.GetValue(presenter)!;
+        var recoveryPoint = new DeviceScreenPoint(
+            geometry.WorkArea.Left + 40, geometry.WorkArea.Top + 40);
+        modelProperty.SetValue(presenter, model with
+        {
+            State = model.State with { Gesture = EdgeCapsuleGestureState.FloatingTransfer },
+            DragSession = EdgeCapsuleDragSession.Begin(recoveryPoint)
+        });
+
+        var hostShape = new EdgeCapsuleFloatingShape(
+            true,
+            EdgeCapsuleSurfaceKind.FloatingFree,
+            200,
+            46,
+            46,
+            12,
+            true);
+        var options = (EdgeCapsuleDragWindowOptions)Call(
+            recoveryWindow, "CreateDeepCapsuleFloatingDragHostOptions", hostShape)!;
+        var host = EdgeCapsuleDragWindow.Rent(options);
+        SetField(recoveryWindow, "_deepCapsuleFloatingDragHost", host);
+        try
+        {
+            Invoke(
+                recoveryWindow,
+                "OnDeepCapsuleFloatingDragHostUnexpectedlyClosed",
+                host,
+                EventArgs.Empty);
+            Require(
+                !recoveryWindow.IsDeepCapsuleReorderDragInProgress,
+                "an unexpected host close during FloatingTransfer left the drag active");
+            Require(
+                Field(recoveryWindow, "_deepCapsuleFloatingDragHost") == null,
+                "an unexpected host close left the floating host reference behind");
+            Require(
+                Mouse.OverrideCursor == null,
+                "an unexpected host close left the drag cursor overridden");
+            Require(
+                !(bool)Call(controller, "HasDeepCapsuleReorderDragInProgress")!,
+                "an unexpected host close left the controller's arrange gate closed");
+        }
+        finally
+        {
+            if (Field(recoveryWindow, "_deepCapsuleFloatingDragHost") is EdgeCapsuleDragWindow pendingHost)
+            {
+                pendingHost.ReturnToPool();
+            }
         }
     }
 

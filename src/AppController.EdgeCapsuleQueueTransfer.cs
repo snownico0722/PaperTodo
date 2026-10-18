@@ -323,6 +323,29 @@ public sealed partial class AppController
     }
 
     /// <summary>
+    /// 用户主动取消时使用：源队列 live 序列未变才回滚，否则只释放事务，
+    /// 避免把拖拽期间的外部合法修改覆盖掉。异常回滚仍使用 Cancel 强制恢复。
+    /// </summary>
+    internal void AbandonEdgeCapsuleQueueTransfer(
+        EdgeCapsuleQueueTransferSnapshot? snapshot)
+    {
+        if (snapshot == null)
+        {
+            _edgeCapsuleQueueTransferSources.Clear();
+            return;
+        }
+
+        if (EdgeCapsuleQueueTransferSourceMatchesSnapshot(snapshot))
+        {
+            CancelEdgeCapsuleQueueTransfer(snapshot);
+        }
+        else
+        {
+            ReleaseEdgeCapsuleQueueTransfer(snapshot);
+        }
+    }
+
+    /// <summary>
     /// Members the in-flight whole-queue transfer is carrying, in their existing order.
     /// Empty when no transfer is running or the snapshot is unusable.
     /// </summary>

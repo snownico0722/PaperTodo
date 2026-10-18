@@ -2343,6 +2343,7 @@ public sealed partial class AppController : IDisposable
 
         var plan = EvaluateEdgeCapsuleQueueDropLayout(carried, targetQueueKey, targetIndex);
         _edgeCapsuleQueueDropLayoutPlan = plan;
+        _edgeCapsuleQueueDropLayoutVersion++;
 
         // 跨边源队列只收拢，不参与目标边求解；同边源队列由计划统一处理。
         // 不可行时同边源队列也要收拢，但目标/邻队保持真实布局。
@@ -3165,6 +3166,10 @@ public sealed partial class AppController : IDisposable
 
     // 持久队列实例 key。与 StateStore.NormalizeQueueKey 完全同构：显示器不可用时
     // 不折叠为主屏，否则副屏队列会与主屏同侧队列合并、margin 也会读到别的队列。
+    //
+    // 产品决策：主屏是“角色”而不是物理身份。运行中切换主屏时，旧主屏的 "" 与新主屏的
+    // 设备名会归一化到同一条 live edge；归一化 key 相同的队列会合并，这是接受的语义，
+    // 不做主屏身份迁移。副屏 tag 与 margin 原样保留，用于该显示器恢复为副屏时继续使用。
     private static string PersistentQueueKey(string? monitorDeviceName, string side, string? queueId)
         => EdgeCapsuleQueueIds.Compose(PersistentEdgeKey(monitorDeviceName, side), queueId);
 

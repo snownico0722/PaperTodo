@@ -20,6 +20,11 @@ public sealed partial class AppController
     private string _edgeCapsuleQueueDropTargetOutlinePaperId = "";
     private int _edgeCapsuleQueueDropTargetOutlineCarriedCount;
     private int _edgeCapsuleQueueDropTargetOutlineIndex = -1;
+    private int _edgeCapsuleQueueDropTargetOutlinePlanVersion = -1;
+
+    // 每次重新生成拖放布局计划时递增。早退键必须包含它，否则同槽位的外部输入变化会
+    // 复用旧的可行性/几何。
+    private int _edgeCapsuleQueueDropLayoutVersion;
 
     /// <summary>测试用：真正重新计算描边布局的次数。</summary>
     internal int DropTargetLayoutUpdateCount { get; private set; }
@@ -46,6 +51,7 @@ public sealed partial class AppController
         if (plan != null)
         {
             _edgeCapsuleQueueDropLayoutPlan = plan;
+            _edgeCapsuleQueueDropLayoutVersion++;
         }
 
         var requestedCarriedCount = Math.Max(1, carriedCount);
@@ -59,7 +65,8 @@ public sealed partial class AppController
                 draggedPaperId,
                 StringComparison.Ordinal) &&
             _edgeCapsuleQueueDropTargetOutlineCarriedCount == requestedCarriedCount &&
-            _edgeCapsuleQueueDropTargetOutlineIndex == targetIndex)
+            _edgeCapsuleQueueDropTargetOutlineIndex == targetIndex &&
+            _edgeCapsuleQueueDropTargetOutlinePlanVersion == _edgeCapsuleQueueDropLayoutVersion)
         {
             return;
         }
@@ -92,6 +99,7 @@ public sealed partial class AppController
         _edgeCapsuleQueueDropTargetOutlinePaperId = draggedPaperId;
         _edgeCapsuleQueueDropTargetOutlineCarriedCount = requestedCarriedCount;
         _edgeCapsuleQueueDropTargetOutlineIndex = targetIndex;
+        _edgeCapsuleQueueDropTargetOutlinePlanVersion = _edgeCapsuleQueueDropLayoutVersion;
     }
 
     internal void EndEdgeCapsuleQueueDropTargetOutline()
@@ -102,6 +110,7 @@ public sealed partial class AppController
         _edgeCapsuleQueueDropTargetOutlinePaperId = "";
         _edgeCapsuleQueueDropTargetOutlineCarriedCount = 0;
         _edgeCapsuleQueueDropTargetOutlineIndex = -1;
+        _edgeCapsuleQueueDropTargetOutlinePlanVersion = -1;
         _edgeCapsuleQueueDropLayoutPlan = null;
         outline?.CloseForOwner();
     }
@@ -347,7 +356,7 @@ public sealed partial class AppController
     private readonly HashSet<string> _deepCapsuleDragAvoidanceCarriedIds = new(StringComparer.Ordinal);
 
     /// <summary>撤掉拖拽插入造成的同边联动位移；源队列恢复为收拢后的布局。</summary>
-    private void RestoreDeepCapsuleQueueDragAvoidance()
+    internal void RestoreDeepCapsuleQueueDragAvoidance()
     {
         if (_deepCapsuleDragAvoidanceQueues.Count > 0)
         {
