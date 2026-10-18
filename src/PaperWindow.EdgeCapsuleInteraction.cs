@@ -1086,6 +1086,11 @@ public sealed partial class PaperWindow
             return;
         }
         var wasFloatingDrag = IsDeepCapsuleFloatingReordering;
+        // 快照在本方法内一次性消费：free 分支提交、legacy 分支回滚、未提交/异常路径由
+        // finally 回滚。拖拽期间设置 API/插件可能关闭自由队列，因此不能假设提交一定走 free 分支。
+        var transfer = _deepCapsuleQueueTransferSnapshot;
+        _deepCapsuleQueueTransferSnapshot = null;
+        var transferConsumed = false;
         var shouldAnimateFloatingDrop = false;
         try
         {
@@ -1110,16 +1115,17 @@ public sealed partial class PaperWindow
                     var anchor = DeepCapsuleDropAnchorFor(
                         session.LastScreenPosition,
                         session,
-                        wasFloatingDrag || _deepCapsuleQueueTransferSnapshot != null);
+                        wasFloatingDrag || transfer != null);
 
-                    if (_deepCapsuleQueueTransferSnapshot is { } transfer)
+                    if (transfer is { } activeTransfer)
                     {
-                        _deepCapsuleQueueTransferSnapshot = null;
                         _controller.CommitEdgeCapsuleQueueTransfer(
-                            transfer,
+                            activeTransfer,
                             anchor,
                             _deepCapsuleQueuePreviewKey,
                             _deepCapsuleQueuePreviewIndex);
+                        // 只有提交正常返回后才算消费；异常时交给 finally 回滚。
+                        transferConsumed = true;
                     }
                     else
                     {
@@ -1131,6 +1137,13 @@ public sealed partial class PaperWindow
                     }
 
                     return;
+                }
+
+                // 拖拽中自由队列被关闭：先回滚整队事务，再走旧路径，避免 source key 泄漏。
+                if (transfer is { } legacyTransfer)
+                {
+                    _controller.CancelEdgeCapsuleQueueTransfer(legacyTransfer);
+                    transferConsumed = true;
                 }
 
                 if (!wasFloatingDrag)
@@ -1186,10 +1199,9 @@ public sealed partial class PaperWindow
             // measured and committed while the floating HWND is still visible.
             _previewOriginReorderBaseline = null;
             ResetDeepCapsuleQueueMagnetPreview();
-            if (!commit && _deepCapsuleQueueTransferSnapshot is { } cancelled)
+            if (!transferConsumed && transfer is { } cancelled)
             {
-                // Roll the queue back to the exact membership and height it had before the drag.
-                _deepCapsuleQueueTransferSnapshot = null;
+                // 任何提前返回或异常路径都必须回滚整队事务；正常提交分支已标记 consumed。
                 _controller.CancelEdgeCapsuleQueueTransfer(cancelled);
             }
 
@@ -1215,6 +1227,15 @@ public sealed partial class PaperWindow
 
     private void CancelDeepCapsuleReorderDrag(bool restoreLayout = false)
     {
+        // 任何取消/异常路径都必须先释放整队搬移事务。源队列 key 残留在 controller 会让
+        // 后续每次 Arrange 都 detach 整条队列，并永久拒绝新的整队拖拽。
+        // 先清空字段再回滚，保证本方法被 Arrange 重入时不会重复执行。
+        if (_deepCapsuleQueueTransferSnapshot is { } cancelledTransfer)
+        {
+            _deepCapsuleQueueTransferSnapshot = null;
+            _controller.CancelEdgeCapsuleQueueTransfer(cancelledTransfer);
+        }
+
         var wasReordering = IsDeepCapsuleReordering;
         var wasDockingHandoff = IsDeepCapsuleDockingHandoff;
         var wasDockingReveal = IsDeepCapsuleDockingReveal;
@@ -1224,6 +1245,8 @@ public sealed partial class PaperWindow
             _deepCapsuleFloatingDragHost == null)
         {
             _previewOriginReorderBaseline = null;
+            // 早退时不经过下面的 finally，拖拽期磁吸状态必须在这里一并清理。
+            ResetDeepCapsuleQueueMagnetPreview();
             return;
         }
 

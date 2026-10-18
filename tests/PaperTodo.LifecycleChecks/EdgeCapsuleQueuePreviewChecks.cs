@@ -230,6 +230,41 @@ internal static class EdgeCapsuleQueuePreviewChecks
             () => Placement(windows["fixture-3"]).Index == 2 &&
                   Placement(windows["fixture-3"]).SlotCount == 3,
             "the committed target queue did not adopt the final slot layout");
+
+        // H1：整队搬移在取消/异常路径必须释放快照与 controller 的 source 集合，
+        // 否则后续 Arrange 会永久 detach 整条队列，且整队拖拽再也无法开始。
+        Require(
+            controller.TryBeginEdgeCapsuleQueueTransfer(source, out var transferSnapshot),
+            "the whole-queue transfer fixture did not start");
+        var sourceWindow = windows[source.Id];
+        SetField(sourceWindow, "_deepCapsuleQueueTransferSnapshot", transferSnapshot);
+        Invoke(sourceWindow, "CancelDeepCapsuleReorderDrag", false);
+
+        Require(
+            !controller.IsPaperInTransferringEdgeQueue(source),
+            "cancelling a drag left the source queue in the transfer set");
+        Require(
+            Field(sourceWindow, "_deepCapsuleQueueTransferSnapshot") == null,
+            "cancelling a drag left the transfer snapshot behind");
+        Require(
+            controller.TryBeginEdgeCapsuleQueueTransfer(source, out var retrySnapshot),
+            "a later whole-queue transfer was rejected after the cancel");
+        controller.CancelEdgeCapsuleQueueTransfer(retrySnapshot);
+        controller.ArrangeDeepCapsules(animate: false);
+        await Until(
+            () => windows[source.Id].IsDeepCapsuleSlotVisible,
+            "the source queue did not return after the transfer cancel");
+    }
+
+    private static void SetField(object target, string name, object? value) =>
+        (target.GetType().GetField(name, Private)
+         ?? throw new MissingFieldException(target.GetType().Name, name)).SetValue(target, value);
+
+    private static void Invoke(object target, string name, params object?[] args)
+    {
+        var method = target.GetType().GetMethod(name, Private)
+            ?? throw new MissingMethodException(target.GetType().Name, name);
+        _ = method.Invoke(target, args);
     }
 
     private static EdgeCapsulePlacement Placement(PaperWindow window) =>
