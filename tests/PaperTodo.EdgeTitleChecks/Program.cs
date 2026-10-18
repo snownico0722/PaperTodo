@@ -243,6 +243,7 @@ internal static partial class Program
 
         MagnetNeedsHorizontalProximity();
         NewQueueDropAvoidsOverlap();
+        NewQueueRejectsWhenNoLegalSpotExists();
         DragTimeHoldStaysStableAcrossFrames();
         EdgeCapsuleQueueDropTargetMarkers();
     }
@@ -585,6 +586,48 @@ internal static partial class Program
             "A candidate that excluded its only member occupies nothing and never forces avoidance");
 
         WorkAreaClampIsValidated();
+    }
+
+    // 满边或整队过高时，“新建队列”没有合法落点。磁吸必须返回 None 让调用方保持原布局，
+    // 而不是退回一个必然与现有队列重叠的位置。
+    private static void NewQueueRejectsWhenNoLegalSpotExists()
+    {
+        const double slot = 50;
+        const double height = 46;
+        const double gap = 4;
+        var area = new Rect(0, 0, 1000, 600);
+        var min = EdgeCapsuleLayout.TopMargin;
+
+        // 12 个槽位从 8 起堆叠占据 [8, 604]，覆盖整个合法区间；水平中心 400 在候选条带
+        // [0, 200] 之外足够远，确保先判定为 NewQueue 而不是 Merge。
+        var full = new EdgeCapsuleQueueMagnetCandidate("full", 12, min, slot, -1, 0, 200);
+        EdgeCapsuleQueueMagnetPlan Blocked(int carriedCount) =>
+            EdgeCapsuleQueueMagnet.Evaluate(new EdgeCapsuleQueueMagnetInput(
+                300, "other", [full], slot, height,
+                EdgeCapsuleQueueMagnet.DefaultMergeDistanceDip,
+                EdgeCapsuleQueueMagnet.DefaultDetachDistanceDip,
+                "", 400,
+                min,
+                EdgeCapsuleLayout.MaxStartTopMarginForCount(carriedCount, area, gap),
+                carriedCount));
+
+        Check(Blocked(1).Outcome == EdgeCapsuleQueueMagnetOutcome.None,
+            "A single capsule with no legal slot must not start an overlapping queue");
+        Check(Blocked(12).Outcome == EdgeCapsuleQueueMagnetOutcome.None,
+            "A whole queue with no legal slot must not start an overlapping queue");
+
+        // 9 个槽位只占 [8, 454]；下方仍有合法空位时不能误判为拒绝。
+        var almost = new EdgeCapsuleQueueMagnetCandidate("almost", 9, min, slot, -1, 0, 200);
+        var below = EdgeCapsuleQueueMagnet.Evaluate(new EdgeCapsuleQueueMagnetInput(
+            300, "other", [almost], slot, height,
+            EdgeCapsuleQueueMagnet.DefaultMergeDistanceDip,
+            EdgeCapsuleQueueMagnet.DefaultDetachDistanceDip,
+            "", 400,
+            min,
+            EdgeCapsuleLayout.MaxStartTopMarginForCount(1, area, gap)));
+        Check(below.Outcome == EdgeCapsuleQueueMagnetOutcome.NewQueue &&
+              Math.Abs(below.NewQueueStartTopDip - 454) < 0.001,
+            "A new queue still resolves into the remaining legal gap");
     }
 
     // The commit path clamps a new queue's top back into the work area, so the magnet has to

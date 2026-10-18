@@ -256,6 +256,42 @@ internal static class EdgeCapsuleQueuePreviewChecks
             () => windows[source.Id].IsDeepCapsuleSlotVisible,
             "the source queue did not return after the transfer cancel");
 
+        // M5：整队提交拿到 None（输入退化）时必须回滚并释放冻结集合，
+        // 而不是退回原始光标位置硬放一个可能与现有队列重叠的新队列。
+        var marginsBeforeRejectedTransfer = new Dictionary<string, double>(
+            controller.State.DeepCapsuleQueueStartTopMargins, StringComparer.Ordinal);
+        Require(
+            controller.TryBeginEdgeCapsuleQueueTransfer(targetPaper, out var rejectedTransfer),
+            "the infeasible whole-queue transfer fixture did not start");
+        var rejectedAnchor = new EdgeCapsuleDropAnchor(
+            new DeviceScreenPoint(
+                geometry.WorkArea.Right - 10,
+                geometry.WorkArea.Top + 100 * geometry.DpiScaleY),
+            double.NaN);
+        Require(
+            !controller.CommitEdgeCapsuleQueueTransfer(rejectedTransfer, rejectedAnchor),
+            "a whole-queue transfer without a finite drop centre must be rejected");
+        Require(
+            !controller.IsPaperInTransferringEdgeQueue(targetPaper),
+            "a rejected whole-queue transfer left its source frozen");
+        Require(
+            controller.State.Papers
+                .Where(paper => paper.Id is "fixture-2" or "fixture-3")
+                .All(paper => controller.QueueKeyForPaper(paper) == targetKey),
+            "a rejected whole-queue transfer changed queue membership");
+        Require(
+            controller.State.DeepCapsuleQueueStartTopMargins.Count ==
+                marginsBeforeRejectedTransfer.Count &&
+            marginsBeforeRejectedTransfer.All(pair =>
+                controller.State.DeepCapsuleQueueStartTopMargins.TryGetValue(
+                    pair.Key, out var margin) &&
+                Math.Abs(margin - pair.Value) < 1e-6),
+            "a rejected whole-queue transfer changed queue margins");
+        Require(
+            controller.TryBeginEdgeCapsuleQueueTransfer(targetPaper, out var retryTransfer),
+            "a rejected whole-queue transfer stranded the transfer gate");
+        controller.CancelEdgeCapsuleQueueTransfer(retryTransfer);
+
         // H2：关闭自由队列后，同一显示器同侧必须回到单队列身份，主胶囊也只能有一个；
         // 实例 id 与 margin 保留，重新开启后恢复原自由队列布局。
         var sourceInstanceMargin = controller.DeepCapsuleStartTopMarginFor(source);

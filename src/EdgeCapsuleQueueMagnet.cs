@@ -53,7 +53,10 @@ internal readonly record struct EdgeCapsuleQueueMagnetInput(
 
 internal enum EdgeCapsuleQueueMagnetOutcome
 {
-    /// <summary>没有可作用的队列；调用方应保持现状。</summary>
+    /// <summary>
+    /// 没有可作用的队列，或新建队列找不到不与现有队列重叠的合法落点；
+    /// 调用方应保持现状（拒绝本次落位）。
+    /// </summary>
     None,
 
     /// <summary>在源队列内重排。</summary>
@@ -192,14 +195,23 @@ internal static class EdgeCapsuleQueueMagnet
         }
 
         // 判定为独立成队列后仍要做一次合法性校验：合并半径小于胶囊高度，落点可能压在队列上。
+        // 整个合法区间都被现有队列占满时没有可提交的落点，返回 None 让调用方保持原布局，
+        // 而不是接受一个必然重叠的位置。
+        if (!TryResolveDetachedTopDip(in sanitized, detachedTop, out var resolvedTop))
+        {
+            return None;
+        }
+
         return new EdgeCapsuleQueueMagnetPlan(
             EdgeCapsuleQueueMagnetOutcome.NewQueue,
             "",
-            ResolveDetachedTopDip(in sanitized, detachedTop),
+            resolvedTop,
             double.MaxValue);
     }
 
-    /// <summary>判定不出任何可用目标时返回的计划；调用方应保持当前布局不变。</summary>
+    /// <summary>
+    /// 判定不出可用目标（或新建队列没有合法落点）时返回的计划；调用方应保持当前布局不变。
+    /// </summary>
     public static EdgeCapsuleQueueMagnetPlan None { get; } = new(
         EdgeCapsuleQueueMagnetOutcome.None, "", 0, double.MaxValue);
 
@@ -367,14 +379,26 @@ internal static class EdgeCapsuleQueueMagnet
     ///
     /// 候选队列已按同一侧筛选（不同侧的胶囊不在同一竖直线上，垂直避让即可），因此只需在
     /// 垂直方向上取离期望落点最近的合法位置。
+    ///
+    /// 返回 false 表示整个合法区间都被现有队列占满：此时无论落在哪都会重叠，调用方必须拒绝
+    /// 这次落位（单胶囊回原队列、整队恢复快照），而不是提交一个视觉上叠在一起的新队列。
     /// </summary>
-    private static double ResolveDetachedTopDip(in EdgeCapsuleQueueMagnetInput input, double desiredTop)
+    private static bool TryResolveDetachedTopDip(
+        in EdgeCapsuleQueueMagnetInput input,
+        double desiredTop,
+        out double resolvedTop)
     {
-        var height = input.CapsuleHeightDip;
-        if (!double.IsFinite(height) || height <= 0 ||
-            !double.IsFinite(desiredTop))
+        resolvedTop = desiredTop;
+        if (!double.IsFinite(desiredTop))
         {
-            return desiredTop;
+            return false;
+        }
+
+        var height = input.CapsuleHeightDip;
+        if (!double.IsFinite(height) || height <= 0)
+        {
+            // 退化几何没有可比较的占位，保持旧行为：原样接受落点。
+            return true;
         }
 
         // 单胶囊时等于胶囊高度；整队搬移时是 N 个槽位叠加后的整块高度。
@@ -385,7 +409,9 @@ internal static class EdgeCapsuleQueueMagnet
 
         var min = input.NewQueueMinTopDip;
         var max = input.NewQueueMaxTopDip;
-        var bounded = double.IsFinite(min) && double.IsFinite(max) && max > min;
+        // min == max 也是有效边界：整队高度接近工作区高度时上界会退化为 TopMargin，
+        // 此时唯一可提交的位置就是 min，必须按有界区间校验，否则会选到区间外。
+        var bounded = double.IsFinite(min) && double.IsFinite(max) && min <= max;
         if (bounded)
         {
             desiredTop = Math.Clamp(desiredTop, min, max);
@@ -394,7 +420,8 @@ internal static class EdgeCapsuleQueueMagnet
         // 没有重叠就保持原落点，这是绝大多数拖拽的路径，必须逐位不变。
         if (!OverlapsAnyCandidate(input, desiredTop, stackHeight))
         {
-            return desiredTop;
+            resolvedTop = desiredTop;
+            return true;
         }
 
         var best = double.NaN;
@@ -416,9 +443,13 @@ internal static class EdgeCapsuleQueueMagnet
                 stackHeight, desiredTop, ref best, ref bestDistance);
         }
 
-        // 合法区间被队列占满、实在找不到空位时退回夹好的期望落点：此时无论落在哪都会重叠，
-        // 与改动前一致，不在这里另造一套规则。
-        return double.IsNaN(best) ? desiredTop : best;
+        if (double.IsNaN(best))
+        {
+            return false;
+        }
+
+        resolvedTop = best;
+        return true;
     }
 
     private static void TryConsider(

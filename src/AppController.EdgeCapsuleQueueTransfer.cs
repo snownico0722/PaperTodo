@@ -149,6 +149,14 @@ public sealed partial class AppController
                 anchor);
         }
 
+        // 只有磁吸确认存在不重叠的合法落点时才允许新建队列。None 表示整条边没有空位
+        // （或输入退化），此时必须回滚，不能退回“胶囊中心 - 半高”的原始落点硬放。
+        if (plan.Outcome != EdgeCapsuleQueueMagnetOutcome.NewQueue)
+        {
+            CancelEdgeCapsuleQueueTransfer(snapshot);
+            return false;
+        }
+
         // 新队列使用磁吸解析后的落点，而不是原始光标：落点已按整队高度做过工作区夹取与避让，
         // 并且 top 与浮动胶囊的实际位置对齐。
         if (!TryResolveQueueDropGeometry(carried[0], anchor, out var drop))
@@ -157,11 +165,7 @@ public sealed partial class AppController
             return false;
         }
 
-        // Evaluate 返回 None 时没有可用的磁吸落点，退回“胶囊中心 - 半高”的原始落点。
-        var startTop = plan.Outcome == EdgeCapsuleQueueMagnetOutcome.NewQueue
-            ? plan.NewQueueStartTopDip
-            : drop.CenterTopDip - PaperLayoutDefaults.CapsuleHeight / 2.0;
-        StartTransferredQueueAt(snapshot, carried, drop, startTop);
+        StartTransferredQueueAt(snapshot, carried, drop, plan.NewQueueStartTopDip);
         return true;
     }
 
@@ -174,7 +178,8 @@ public sealed partial class AppController
         IReadOnlyList<PaperData> carried,
         string targetQueueKey,
         EdgeCapsuleDropAnchor anchor,
-        int expectedTargetIndex = -1)
+        int expectedTargetIndex = -1,
+        bool allowMonitorFallback = true)
     {
         var targetMembers = FreeQueueMembersExcluding(targetQueueKey, snapshot.PaperIds.FirstOrDefault() ?? "");
         var targetQueueId = FirstQueueIdOf(targetMembers);
@@ -187,14 +192,36 @@ public sealed partial class AppController
 
         if (!WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(monitorName, out _))
         {
-            // 目标队列的显示器已不可用，退回“在落点新建队列”的路径。
-            if (TryResolveQueueDropGeometry(carried[0], anchor, out var fallbackDrop))
+            if (!allowMonitorFallback)
+            {
+                CancelEdgeCapsuleQueueTransfer(snapshot);
+                return false;
+            }
+
+            // 目标队列的显示器已不可用：按当前落点重新决策。只有磁吸确认的 Merge/NewQueue
+            // 才继续，避免未经可行性校验就硬放一个可能与现有队列重叠的新队列。
+            // 指针已释放，不能沿用拖拽期的吸附保持。
+            _deepCapsuleDragHeldQueueKey = "";
+            var fallbackPlan = EvaluateDeepCapsuleQueueDrag(
+                carried, anchor, excludeEntireSourceQueue: true);
+            if (fallbackPlan.Outcome == EdgeCapsuleQueueMagnetOutcome.Merge)
+            {
+                return MergeTransferredQueueInto(
+                    snapshot,
+                    carried,
+                    fallbackPlan.TargetQueueKey,
+                    anchor,
+                    allowMonitorFallback: false);
+            }
+
+            if (fallbackPlan.Outcome == EdgeCapsuleQueueMagnetOutcome.NewQueue &&
+                TryResolveQueueDropGeometry(carried[0], anchor, out var fallbackDrop))
             {
                 StartTransferredQueueAt(
                     snapshot,
                     carried,
                     fallbackDrop,
-                    fallbackDrop.CenterTopDip - PaperLayoutDefaults.CapsuleHeight / 2.0);
+                    fallbackPlan.NewQueueStartTopDip);
                 return true;
             }
 
@@ -239,6 +266,8 @@ public sealed partial class AppController
     /// <summary>
     /// No queue in range: the carried members start a queue of their own at the drop height,
     /// sharing one instance id and one rest height so the stack lands as a unit.
+    ///
+    /// 调用方必须传入磁吸已确认可行（不与现有队列重叠）的落点；本方法不再重复校验。
     /// </summary>
     private void StartTransferredQueueAt(
         EdgeCapsuleQueueTransferSnapshot snapshot,
