@@ -1,4 +1,6 @@
+using System.Globalization;
 using System.IO;
+using System.Text;
 
 namespace PaperTodo;
 
@@ -21,6 +23,12 @@ public sealed partial class AppController
 
     /// <summary>测试用：真正重新计算描边布局的次数。</summary>
     internal int DropTargetLayoutUpdateCount { get; private set; }
+
+    // 拖拽期间目标队列的成员、标题和字体不会变化，插入槽变化只影响指示线的纵向位置。
+    // 指示线宽度此前每次 index 变化都会对每个成员重新读取 resting width（多次文本测量），
+    // 是大队列热路径上的固定浪费；这里只在手势内按队列缓存宽度，结束拖拽即清空。
+    private readonly Dictionary<string, (string Signature, double Width)>
+        _edgeCapsuleQueueDropTargetWidthCache = new(StringComparer.Ordinal);
 
     internal void ShowEdgeCapsuleQueueDropTargetOutline(
         string queueKey,
@@ -184,7 +192,8 @@ public sealed partial class AppController
         }
 
         // 指示线跟随目标队列的真实可见宽度，而不是固定 92 DIP；短标题胶囊也能对齐。
-        var visibleWidthDip = MeasureEdgeCapsuleQueueVisibleWidthDip(members, area.Width);
+        var visibleWidthDip = MeasureEdgeCapsuleQueueVisibleWidthDipCached(
+            queueKey, members, area.Width);
         var widthDevice = Math.Max(1, (int)Math.Round(geometry.DpiScaleX * visibleWidthDip));
 
         // Wall-anchored horizontally, exactly like a docked capsule, so the markers read as
@@ -247,6 +256,53 @@ public sealed partial class AppController
             requestedCarriedCount,
             feasible);
         return true;
+    }
+
+    /// <summary>
+    /// 带手势级缓存的可见宽度查询。插入槽变化不改变队列成员与标题，同一拖动内无需重复测量。
+    /// </summary>
+    private double MeasureEdgeCapsuleQueueVisibleWidthDipCached(
+        string queueKey,
+        IReadOnlyList<PaperData> members,
+        double workAreaWidthDip)
+    {
+        var signature = MeasureEdgeCapsuleQueueVisibleWidthSignature(members, workAreaWidthDip);
+        if (_edgeCapsuleQueueDropTargetWidthCache.TryGetValue(queueKey, out var cached) &&
+            string.Equals(cached.Signature, signature, StringComparison.Ordinal))
+        {
+            return cached.Width;
+        }
+
+        var width = MeasureEdgeCapsuleQueueVisibleWidthDip(members, workAreaWidthDip);
+        _edgeCapsuleQueueDropTargetWidthCache[queueKey] = (signature, width);
+        return width;
+    }
+
+    /// <summary>
+    /// 影响目标队列可见宽度的输入签名。标题、折叠状态或排版设置变化时必须重测，
+    /// 因此这些值都进入签名；同一手势内仅插入槽变化时签名保持不变。
+    /// </summary>
+    private string MeasureEdgeCapsuleQueueVisibleWidthSignature(
+        IReadOnlyList<PaperData> members,
+        double workAreaWidthDip)
+    {
+        var builder = new StringBuilder();
+        builder.Append(State.CapsuleTextSize).Append('\u001f')
+            .Append(State.CapsuleTextBold).Append('\u001f')
+            .Append(State.Zoom.ToString("R", CultureInfo.InvariantCulture)).Append('\u001f')
+            .Append(State.UiFontPreset).Append('\u001f')
+            .Append(State.DeepCapsuleTitleMeasureCharacterLimit).Append('\u001f')
+            .Append(State.ExperimentalEdgeCapsuleHoverPreview).Append('\u001f')
+            .Append(workAreaWidthDip.ToString("R", CultureInfo.InvariantCulture));
+        foreach (var member in members)
+        {
+            builder.Append('\u001e')
+                .Append(member.Id).Append(':')
+                .Append(member.IsCollapsed ? 'c' : 'e').Append(':')
+                .Append(PaperCapsuleTitle(member));
+        }
+
+        return builder.ToString();
     }
 
     /// <summary>

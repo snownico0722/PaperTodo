@@ -55,8 +55,19 @@ public sealed partial class PaperWindow
         return accepted;
     }
 
-    private bool UpdateEdgeCapsuleQueuePlacement(EdgeCapsulePlacement placement) =>
-        DispatchEdgeCapsuleIntent(EdgeCapsuleIntent.QueuePlacementChanged(placement));
+    private bool UpdateEdgeCapsuleQueuePlacement(EdgeCapsulePlacement placement)
+    {
+        var previous = _edgeCapsule.Placement;
+        if (!DispatchEdgeCapsuleIntent(EdgeCapsuleIntent.QueuePlacementChanged(placement)))
+        {
+            return false;
+        }
+
+        // Dispatch 对 Unchanged 也返回 true。只有归约器真正改变了 placement 才值得重新采集
+        // 布局并请求 Presentation；拖拽预览每次插入槽变化都会重发整条队列，未变化的成员
+        // 若继续走 Measure 会重复构造 FormattedText，是跨侧大队列卡顿的主要来源。
+        return previous != _edgeCapsule.Placement;
+    }
 
     private bool ChangeEdgeCapsulePaperForm(
         EdgeCapsulePaperForm paperForm,

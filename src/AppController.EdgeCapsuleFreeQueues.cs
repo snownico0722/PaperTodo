@@ -287,6 +287,7 @@ public sealed partial class AppController
         _deepCapsuleMagnetCandidateSide = "";
         _deepCapsuleMagnetCandidateExcludeSource = false;
         _deepCapsuleMagnetCandidateCarriedIds.Clear();
+        _edgeCapsuleQueueDropTargetWidthCache.Clear();
     }
 
     private static string FirstQueueIdOf(List<PaperData> papers) =>
