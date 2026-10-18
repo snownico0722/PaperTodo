@@ -754,11 +754,12 @@ internal sealed partial class EdgeCapsuleDragWindow : Window
         _masterSkinImage.Visibility = customMaster ? Visibility.Visible : Visibility.Collapsed;
         if (customMaster)
         {
-            // Docked masters have no wall-side gutter. The floating handoff does;
-            // keep the bitmap on the same edge of the additional gutter.
+            // FloatingHandoffBoundsForDockedBounds adds its gutter OUTSIDE the
+            // monitor edge (right of a right-edge master, left of a left-edge master).
+            // Preserve the docked bitmap's exact position within that wider HWND.
             _masterSkinImage.Margin = options.MasterSkinEdge == EdgeCapsuleEdge.Right
-                ? new Thickness(options.WindowChromeMargin, 0, 0, 0)
-                : new Thickness(0, 0, options.WindowChromeMargin, 0);
+                ? new Thickness(0, 0, options.WindowChromeMargin, 0)
+                : new Thickness(options.WindowChromeMargin, 0, 0, 0);
             _masterSkinImage.RenderTransform = options.MasterSkinEdge == EdgeCapsuleEdge.Left
                 ? new ScaleTransform(-1, 1)
                 : Transform.Identity;
