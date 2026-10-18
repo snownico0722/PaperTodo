@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Reflection;
+using System.Windows.Controls;
 using PaperTodo;
 
 /// <summary>
@@ -298,6 +299,67 @@ internal static class EdgeCapsuleQueuePreviewChecks
         Require(
             controller.State.DeepCapsuleQueueStartTopMargins.ContainsKey(targetKey),
             "the instance start margin was discarded while free queues were disabled");
+
+        // M1：布局 session 必须写回并保持引用稳定，否则每次 Arrange 都会以
+        // previous:null 重建，丢失同队列 owner 转移的连续性。
+        var ownerWindow = windows[source.Id];
+        await Until(
+            () => ownerWindow.CanEnterEdgeCapsulePreview,
+            "the owner capsule did not settle before the preview session check");
+        var previewSize = new EdgeCapsulePreviewSize(300, 200);
+        var basePlan = (EdgeCapsuleQueuePlan?)Call(controller, "BuildCurrentEdgeCapsuleQueuePlan")
+            ?? throw new InvalidOperationException("the current queue plan was not built");
+        var previewSession = EdgeCapsulePreviewLayoutCoordinator.OpenOrTransfer(
+            basePlan,
+            null,
+            controller.QueueKeyForPaper(source),
+            source.Id,
+            previewSize,
+            PaperLayoutDefaults.CapsuleHeight,
+            controller.DeepCapsuleGap)
+            ?? throw new InvalidOperationException("the preview session was not created");
+        SetField(controller, "_edgeCapsulePreviewSession", previewSession);
+        var previewContent = new Border
+        {
+            Width = previewSize.ContentSize.Width,
+            Height = previewSize.ContentSize.Height
+        };
+        var previewRequest = new EdgeCapsulePreviewRequest(previewSize, previewContent);
+        Require(
+            ownerWindow.SetEdgeCapsulePreviewOpen(previewRequest, animate: false),
+            "the preview session fixture did not open");
+        Require(ownerWindow.IsEdgeCapsulePreviewOpen, "the owner is not in preview state");
+
+        var rebuildsAfterOpen = controller.PreviewSessionRebuildCount;
+        controller.ArrangeDeepCapsules(animate: false);
+        var storedAfterFirst = Field(controller, "_edgeCapsulePreviewSession");
+        controller.ArrangeDeepCapsules(animate: false);
+        var storedAfterSecond = Field(controller, "_edgeCapsulePreviewSession");
+        Require(
+            controller.PreviewSessionRebuildCount == rebuildsAfterOpen,
+            "a stable preview session was rebuilt on Arrange");
+        Require(
+            ReferenceEquals(storedAfterFirst, storedAfterSecond),
+            "a stable preview session was replaced on Arrange");
+        var storedSession = (EdgeCapsulePreviewLayoutSession?)storedAfterSecond;
+        Require(
+            storedSession != null && storedSession.EdgePaperIds.Count == 5,
+            "the edge-wide paper ids were not written back to the preview session");
+
+        controller.CloseEdgeCapsulePreviewForDrag(ownerWindow);
+        Require(
+            Field(controller, "_edgeCapsulePreviewSession") == null,
+            "closing the preview did not clear the layout session");
+        await Until(
+            () => !ownerWindow.IsEdgeCapsulePreviewOpen,
+            "the preview did not close after the session check");
+    }
+
+    private static object? Call(object target, string name, params object?[] args)
+    {
+        var method = target.GetType().GetMethod(name, Private)
+            ?? throw new MissingMethodException(target.GetType().Name, name);
+        return method.Invoke(target, args);
     }
 
     private static void SetField(object target, string name, object? value) =>

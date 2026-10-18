@@ -18,6 +18,9 @@ public sealed partial class AppController
     private readonly EdgeCapsuleHoverIntentPredictor
         _edgeCapsulePreviewIntentPredictor = new();
     private EdgeCapsulePreviewLayoutSession? _edgeCapsulePreviewSession;
+
+    /// <summary>测试用：真正重建预览布局 session 的次数。</summary>
+    internal int PreviewSessionRebuildCount { get; private set; }
     private string? _edgeCapsulePreviewOutgoingPaperId;
     private string? _edgeCapsulePreviewQueuedTransferPaperId;
     private string? _edgeCapsulePreviewQueuedCloseOwnerPaperId;
@@ -121,20 +124,19 @@ public sealed partial class AppController
             .ToArray();
         var edgeQueues = BuildEdgeCapsuleAvoidanceQueues(basePlan, session, currentQueueKey);
         var currentEdgeIds = edgeQueues.SelectMany(queue => queue.PaperIds).ToArray();
-        if (!string.Equals(
-                session.QueueKey,
-                currentQueueKey,
-                StringComparison.Ordinal) ||
-            !session.QueuePaperIds.SequenceEqual(
-                currentIds,
-                StringComparer.Ordinal) ||
-            // Free queues put several stacks on one edge, so the edge-wide avoidance depends on
-            // queues the owner does not belong to. Without this term a capsule added to a
-            // neighbouring queue mid-preview would keep a stale displacement.
-            !session.EdgePaperIds.SequenceEqual(
-                currentEdgeIds,
-                StringComparer.Ordinal))
+
+        // EdgePaperIds 只影响边级避让的输入，不应触发 session 重建：重建会以 previous:null
+        // 重算，丢掉同队列 owner 转移的连续性。只有队列身份/成员变化才需要新 session。
+        var queueKeyChanged = !string.Equals(
+            session.QueueKey,
+            currentQueueKey,
+            StringComparison.Ordinal);
+        var queueMembersChanged = !session.QueuePaperIds.SequenceEqual(
+            currentIds,
+            StringComparer.Ordinal);
+        if (queueKeyChanged || queueMembersChanged)
         {
+            PreviewSessionRebuildCount++;
             session = EdgeCapsulePreviewLayoutCoordinator.OpenOrTransfer(
                 basePlan,
                 null,
@@ -148,11 +150,26 @@ public sealed partial class AppController
                 ResetEdgeCapsulePreviewWithoutArrange();
                 return basePlan;
             }
+        }
+
+        // 只存基础 session（owner 自身 offsets）+ 最新边级成员集合；边级避让是每帧从 rest
+        // margin 重新计算的派生量，写回会让旧邻居 offset 在下一次 Arrange 残留。
+        // 仅在记录实际变化时替换引用，保持指针解析的 ReferenceEquals 缓存有效。
+        var edgePaperIdsChanged = !session.EdgePaperIds.SequenceEqual(
+            currentEdgeIds,
+            StringComparer.Ordinal);
+        if (queueKeyChanged || queueMembersChanged || edgePaperIdsChanged)
+        {
+            session = session with { EdgePaperIds = currentEdgeIds };
             _edgeCapsulePreviewSession = session;
         }
 
-        session = ApplyEdgeCapsuleAvoidance(basePlan, session, edgeQueues, currentEdgeIds);
-        return EdgeCapsulePreviewLayoutCoordinator.Apply(basePlan, session);
+        var appliedSession = ApplyEdgeCapsuleAvoidance(
+            basePlan,
+            session,
+            edgeQueues,
+            currentEdgeIds);
+        return EdgeCapsulePreviewLayoutCoordinator.Apply(basePlan, appliedSession);
     }
 
     /// <summary>
