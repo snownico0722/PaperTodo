@@ -172,10 +172,7 @@ public sealed partial class AppController
             // 预览计划尚未生成时的安全回退：按真实队列布局绘制，不做插入展开。
             var gap = DeepCapsuleGap;
             var slotHeight = EdgeCapsuleLayout.SlotHeight(gap);
-            var margin = DeepCapsuleStartTopMarginForQueue(
-                monitorDeviceName,
-                EdgeForQueueSide(side),
-                FirstQueueIdOf(members));
+            var margin = DeepCapsuleStartTopMarginForQueueKey(queueKey);
             targetTopDip = EdgeCapsuleLayout.TopForIndex(
                 0,
                 margin,
@@ -290,7 +287,9 @@ public sealed partial class AppController
         builder.Append(State.CapsuleTextSize).Append('\u001f')
             .Append(State.CapsuleTextBold).Append('\u001f')
             .Append(State.Zoom.ToString("R", CultureInfo.InvariantCulture)).Append('\u001f')
-            .Append(State.UiFontPreset).Append('\u001f')
+            .Append(State.UiFontPreset).Append(':')
+            .Append(State.UiLanguage).Append(':')
+            .Append(State.TextRenderingProfile).Append('\u001f')
             .Append(State.DeepCapsuleTitleMeasureCharacterLimit).Append('\u001f')
             .Append(State.ExperimentalEdgeCapsuleHoverPreview).Append('\u001f')
             .Append(workAreaWidthDip.ToString("R", CultureInfo.InvariantCulture));
@@ -300,6 +299,10 @@ public sealed partial class AppController
                 .Append(member.Id).Append(':')
                 .Append(member.IsCollapsed ? 'c' : 'e').Append(':')
                 .Append(PaperCapsuleTitle(member));
+            // 插件 PreferredWidth / 自动宽度模板变化由窗口版本号覆盖，不重新测量文字宽度。
+            builder.Append(_windows.TryGetValue(member.Id, out var window)
+                ? ":w" + window.CapsuleWidthRevision
+                : ":nw");
         }
 
         return builder.ToString();

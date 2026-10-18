@@ -2380,10 +2380,7 @@ public sealed partial class AppController : IDisposable
                 continue;
             }
 
-            var margin = DeepCapsuleStartTopMarginForQueue(
-                plan.MonitorDeviceName,
-                EdgeForQueueSide(plan.Side),
-                preview.QueueId);
+            var margin = DeepCapsuleStartTopMarginForQueueKey(queueKey);
             var baseTop = EdgeCapsuleLayout.TopForIndex(
                 0,
                 margin,
@@ -3161,18 +3158,35 @@ public sealed partial class AppController : IDisposable
     private static string EdgeKey(string monitorDeviceName, string side)
         => $"{LiveQueueMonitorDeviceName(monitorDeviceName)}|{(side == DeepCapsuleSides.Left ? DeepCapsuleSides.Left : DeepCapsuleSides.Right)}";
 
+    // 持久边 key：只把主屏归一化为 ""，不检查显示器当前是否连接。
+    // margin 字典与 collapse-all 状态按这套身份持久化。
+    private static string PersistentEdgeKey(string? monitorDeviceName, string side)
+        => $"{WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(monitorDeviceName)}|{(side == DeepCapsuleSides.Left ? DeepCapsuleSides.Left : DeepCapsuleSides.Right)}";
+
+    // 持久队列实例 key。与 StateStore.NormalizeQueueKey 完全同构：显示器不可用时
+    // 不折叠为主屏，否则副屏队列会与主屏同侧队列合并、margin 也会读到别的队列。
+    private static string PersistentQueueKey(string? monitorDeviceName, string side, string? queueId)
+        => EdgeCapsuleQueueIds.Compose(PersistentEdgeKey(monitorDeviceName, side), queueId);
+
+    // 队列身份所属的物理边：断连显示器会折叠为主屏，用于布局求解与避让分组。
+    // 身份本身仍保持持久 key，二者不能混用。
+    private static string LiveEdgeOfQueueKey(string queueKey)
+        => EdgeCapsuleQueueIds.TryGetEdge(queueKey, out var monitor, out var side)
+            ? EdgeKey(monitor, side)
+            : "";
+
     // Queue instance key. An empty instance id yields the bare edge key, so papers that were
     // never moved into a free queue group exactly as they did before D-058. This is the single
     // funnel every per-paper call site routes through, which is what keeps the ripple small.
     private static string QueueKey(string monitorDeviceName, string side, string? queueId)
         => EdgeCapsuleQueueIds.Compose(EdgeKey(monitorDeviceName, side), queueId);
 
-    // 运行期队列身份：自由队列关闭时忽略实例 id，回到「一条边一条队列」的旧语义；
-    // CapsuleQueueId 与实例 margin 原样保留，重新开启后按 id/记忆位置恢复原布局。
-    private string QueueKey(PaperData paper) => QueueKey(
-        paper.CapsuleMonitorDeviceName,
-        paper.CapsuleSide,
-        State.UseCapsuleFreeQueues ? paper.CapsuleQueueId : null);
+    // 运行期身份：自由队列开启时保留持久实例身份，显示器断开也不会丢弃 monitor tag；
+    // 关闭时忽略实例 id，回到「一条边一条队列」的旧语义，CapsuleQueueId 与实例 margin
+    // 原样保留，重新开启后按 id/记忆位置恢复原布局。
+    private string QueueKey(PaperData paper) => State.UseCapsuleFreeQueues
+        ? PersistentQueueKey(paper.CapsuleMonitorDeviceName, paper.CapsuleSide, paper.CapsuleQueueId)
+        : QueueKey(paper.CapsuleMonitorDeviceName, paper.CapsuleSide, null);
 
     private bool IsCapsuleCollapseAllActiveForQueue(string queueKey)
     {
@@ -3204,7 +3218,7 @@ public sealed partial class AppController : IDisposable
             // Hidden/non-slot papers still own their queue's persisted collapse choice.
             // Moving the visible members must not reset those papers when they return.
             if (State.Papers.Any(paper =>
-                    string.Equals(PersistentQueueKey(paper), staleKey, StringComparison.Ordinal) ||
+                    string.Equals(PersistentEdgeKey(paper), staleKey, StringComparison.Ordinal) ||
                     string.Equals(QueueKey(paper), staleKey, StringComparison.Ordinal)))
             {
                 continue;
@@ -3213,7 +3227,7 @@ public sealed partial class AppController : IDisposable
         }
     }
 
-    private static string PersistentQueueKey(PaperData paper)
+    private static string PersistentEdgeKey(PaperData paper)
         => $"{paper.CapsuleMonitorDeviceName.Trim()}|{DeepCapsuleSides.Normalize(paper.CapsuleSide)}";
 
     private bool TryGetDisconnectedQueueFallbackKey(string queueKey, out string fallbackKey)
@@ -4265,6 +4279,12 @@ public sealed partial class AppController : IDisposable
     // persisted authority. An empty instance id yields the pre-D-058 edge key.
     public double DeepCapsuleStartTopMarginFor(PaperData paper)
     {
+        // 自由队列开启时 QueueKey 已是持久身份，断连后仍能命中原显示器下的 margin。
+        if (State.UseCapsuleFreeQueues)
+        {
+            return DeepCapsuleStartTopMarginForQueueKey(QueueKey(paper));
+        }
+
         var edge = paper.CapsuleSide == DeepCapsuleSides.Left ? EdgeCapsuleEdge.Left : EdgeCapsuleEdge.Right;
         // 与 QueueKey(paper) 共用同一身份漏斗：free 关闭时实例 id 被忽略，
         // 否则同一裸队列的不同成员会读到不同实例 margin（第二 authority）。
@@ -4272,6 +4292,45 @@ public sealed partial class AppController : IDisposable
             ? parsedQueueId
             : "";
         return DeepCapsuleStartTopMarginForQueue(paper.CapsuleMonitorDeviceName, edge, queueId);
+    }
+
+    /// <summary>
+    /// 按队列身份 key 读取起始边距。自由队列的 key 是持久实例 key，断连后仍指向原显示器。
+    /// 仅对非空实例 id 做 live key 的窄回退，兼容修复前写入回退键的数据；空 id 不做回退，
+    /// 否则断连的默认队列会读到主屏默认队列的 margin。
+    /// </summary>
+    internal double DeepCapsuleStartTopMarginForQueueKey(string queueKey)
+    {
+        if (State.DeepCapsuleQueueStartTopMargins.TryGetValue(queueKey, out var margin))
+        {
+            return margin;
+        }
+
+        if (!EdgeCapsuleQueueIds.TrySplit(queueKey, out var edgeKey, out var queueId) ||
+            queueId.Length == 0)
+        {
+            return EdgeCapsuleLayout.StartTopMargin;
+        }
+
+        var separator = edgeKey.LastIndexOf('|');
+        if (separator < 0)
+        {
+            return EdgeCapsuleLayout.StartTopMargin;
+        }
+
+        var monitor = edgeKey[..separator];
+        var side = edgeKey[(separator + 1)..];
+        var liveMonitor = LiveQueueMonitorDeviceName(monitor);
+        if (string.Equals(liveMonitor, monitor, StringComparison.Ordinal))
+        {
+            return EdgeCapsuleLayout.StartTopMargin;
+        }
+
+        var legacyKey = QueueKey(liveMonitor, side, queueId);
+        return !string.Equals(legacyKey, queueKey, StringComparison.Ordinal) &&
+               State.DeepCapsuleQueueStartTopMargins.TryGetValue(legacyKey, out var legacy)
+            ? legacy
+            : EdgeCapsuleLayout.StartTopMargin;
     }
 
     public double DeepCapsuleStartTopMarginForQueue(string monitorDeviceName, EdgeCapsuleEdge edge)

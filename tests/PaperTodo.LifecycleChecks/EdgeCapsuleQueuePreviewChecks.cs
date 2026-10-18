@@ -186,6 +186,32 @@ internal static class EdgeCapsuleQueuePreviewChecks
         Require(
             (int)Part(controller, "MagnetCandidateBuildCount") == buildsAfterFirst,
             "repeating the same magnet evaluation rebuilt its candidates");
+
+        // FQ-05：影响候选几何的外部输入变化必须使缓存失效。
+        var targetMarginBefore = controller.State.DeepCapsuleQueueStartTopMargins[targetKey];
+        controller.State.DeepCapsuleQueueStartTopMargins[targetKey] = targetMarginBefore + 1;
+        controller.EvaluateDeepCapsuleQueueDrag([source], anchor);
+        Require(
+            (int)Part(controller, "MagnetCandidateBuildCount") == buildsAfterFirst + 1,
+            "changing a queue margin did not rebuild the magnet candidates");
+        controller.State.DeepCapsuleQueueStartTopMargins[targetKey] = targetMarginBefore;
+
+        var targetQueueIdBefore = targetPaper.CapsuleQueueId;
+        targetPaper.CapsuleQueueId = "qexternal";
+        controller.EvaluateDeepCapsuleQueueDrag([source], anchor);
+        Require(
+            (int)Part(controller, "MagnetCandidateBuildCount") == buildsAfterFirst + 2,
+            "changing queue membership did not rebuild the magnet candidates");
+        targetPaper.CapsuleQueueId = targetQueueIdBefore;
+
+        var gapBefore = controller.State.DeepCapsuleGapSize;
+        controller.State.DeepCapsuleGapSize = DeepCapsuleGapSizes.Wide;
+        controller.EvaluateDeepCapsuleQueueDrag([source], anchor);
+        Require(
+            (int)Part(controller, "MagnetCandidateBuildCount") == buildsAfterFirst + 3,
+            "changing the capsule gap did not rebuild the magnet candidates");
+        controller.State.DeepCapsuleGapSize = gapBefore;
+
         controller.ForgetDeepCapsuleQueueDrag();
 
         // 空间不足：qa 顶到 8、qb 顶到 40，qa 无法再向上让位。
@@ -312,6 +338,36 @@ internal static class EdgeCapsuleQueuePreviewChecks
             controller.TryBeginEdgeCapsuleQueueTransfer(targetPaper, out var retryTransfer),
             "a rejected whole-queue transfer stranded the transfer gate");
         controller.CancelEdgeCapsuleQueueTransfer(retryTransfer);
+
+        // FQ-04：整队拖拽期间外部移动非首个 carried 成员时，提交必须释放事务并拒绝，
+        // 且不能用旧快照覆盖外部合法修改。
+        var externalMember = controller.State.Papers.Single(paper => paper.Id == "fixture-3");
+        Require(
+            controller.TryBeginEdgeCapsuleQueueTransfer(targetPaper, out var externalTransfer),
+            "the external-mutation transfer fixture did not start");
+        var externalQueueIdBefore = externalMember.CapsuleQueueId;
+        externalMember.CapsuleQueueId = "qexternal";
+        var marginsBeforeExternalCommit = new Dictionary<string, double>(
+            controller.State.DeepCapsuleQueueStartTopMargins, StringComparer.Ordinal);
+        Require(
+            !controller.CommitEdgeCapsuleQueueTransfer(externalTransfer, commitAnchor),
+            "a transfer whose non-first member moved externally must be rejected");
+        Require(
+            !controller.IsPaperInTransferringEdgeQueue(targetPaper),
+            "a rejected transfer left its source queue frozen");
+        Require(
+            controller.QueueKeyForPaper(externalMember).Contains("#qexternal", StringComparison.Ordinal),
+            "a rejected transfer rolled back an external membership change");
+        Require(
+            controller.State.DeepCapsuleQueueStartTopMargins.Count ==
+                marginsBeforeExternalCommit.Count &&
+            marginsBeforeExternalCommit.All(pair =>
+                controller.State.DeepCapsuleQueueStartTopMargins.TryGetValue(
+                    pair.Key, out var margin) &&
+                Math.Abs(margin - pair.Value) < 1e-6),
+            "a rejected transfer changed queue margins");
+        externalMember.CapsuleQueueId = externalQueueIdBefore;
+        controller.ArrangeDeepCapsules(animate: false);
 
         // H2：关闭自由队列后，同一显示器同侧必须回到单队列身份，主胶囊也只能有一个；
         // 实例 id 与 margin 保留，重新开启后恢复原自由队列布局。
@@ -446,9 +502,19 @@ internal static class EdgeCapsuleQueuePreviewChecks
             Placement(windows["fixture-2"]).Index == 0 &&
             Placement(windows["fixture-3"]).Index == 1,
             "the reorder preview did not place the peers at the target slots");
+        var marginsBeforeReorder = new Dictionary<string, double>(
+            controller.State.DeepCapsuleQueueStartTopMargins, StringComparer.Ordinal);
         Require(
-            controller.CommitDeepCapsuleQueueDrop(source, reorderAnchor, qbKey, targetIndex),
+            controller.CommitDeepCapsuleQueueDrop(
+                source, reorderAnchor, qbKey, targetIndex, sameQueueReorderPreviewed: true),
             "the pinned same-queue reorder was rejected");
+        Require(
+            controller.State.DeepCapsuleQueueStartTopMargins.Count == marginsBeforeReorder.Count &&
+            marginsBeforeReorder.All(pair =>
+                controller.State.DeepCapsuleQueueStartTopMargins.TryGetValue(
+                    pair.Key, out var margin) &&
+                Math.Abs(margin - pair.Value) < 1e-6),
+            "a same-queue reorder must not rewrite neighbour margins");
         await Until(
             () => Placement(windows["fixture-2"]).Index == 0 &&
                   Placement(windows["fixture-3"]).Index == 1 &&
@@ -570,6 +636,150 @@ internal static class EdgeCapsuleQueuePreviewChecks
             controller.State.DeepCapsuleQueueStartTopMargins.ContainsKey(
                 controller.QueueKeyForPaper(single)),
             "the new queue beside a hidden member did not persist its start margin");
+
+        // FQ-01：显示器断开后仍保留持久队列身份与 margin；空 id 队列不会与主屏合并。
+        var cacheField = typeof(WindowWorkAreaHelper).GetField(
+            "_cachedMonitors", BindingFlags.Static | BindingFlags.NonPublic)!;
+        var originalMonitorCache = cacheField.GetValue(null)!;
+        const string disconnectedMonitor = "PAPERTODO-FIXTURE-FREE-QUEUE-DISCONNECT";
+        try
+        {
+            var entries = ((System.Collections.IEnumerable)originalMonitorCache).Cast<object>().ToArray();
+            var entryType = entries[0].GetType();
+            var primaryEntry = entries.First(entry => (bool)Value(entry, "IsPrimary"));
+            var fakeEntry = Activator.CreateInstance(
+                entryType,
+                Value(primaryEntry, "Handle"),
+                disconnectedMonitor,
+                Value(primaryEntry, "WorkArea"),
+                false,
+                Value(primaryEntry, "DpiScaleX"),
+                Value(primaryEntry, "DpiScaleY"))!;
+            var connected = Array.CreateInstance(entryType, entries.Length + 1);
+            for (var i = 0; i < entries.Length; i++)
+            {
+                connected.SetValue(entries[i], i);
+            }
+
+            connected.SetValue(fakeEntry, entries.Length);
+
+            var transferA = controller.State.Papers.Single(paper => paper.Id == "fixture-2");
+            var transferB = controller.State.Papers.Single(paper => paper.Id == "fixture-3");
+            foreach (var member in new[] { transferA, transferB })
+            {
+                member.CapsuleMonitorDeviceName = disconnectedMonitor;
+                member.CapsuleSide = DeepCapsuleSides.Right;
+                member.CapsuleQueueId = "qdisp";
+            }
+
+            var persistentKey = disconnectedMonitor + "|right#qdisp";
+            controller.State.DeepCapsuleQueueStartTopMargins[persistentKey] = 120;
+            cacheField.SetValue(null, connected);
+            controller.ArrangeDeepCapsules(animate: false);
+
+            Require(
+                controller.QueueKeyForPaper(transferA) == persistentKey,
+                "free queue identity did not keep the persistent monitor while connected");
+            Require(
+                Math.Abs(controller.DeepCapsuleStartTopMarginFor(transferA) - 120) < 1e-6,
+                "the persistent queue margin was not readable while connected");
+            Require(
+                controller.TryBeginEdgeCapsuleQueueTransfer(transferA, out var disconnectTransfer),
+                "the disconnect transfer fixture did not start");
+
+            // 模拟运行中拔掉副屏。
+            cacheField.SetValue(null, originalMonitorCache);
+            Require(
+                controller.QueueKeyForPaper(transferA) == persistentKey,
+                "disconnecting a monitor discarded the free queue identity");
+            Require(
+                controller.IsPaperInTransferringEdgeQueue(transferA),
+                "a disconnecting monitor made a transferring member invisible to the freeze set");
+            Require(
+                Math.Abs(controller.DeepCapsuleStartTopMarginFor(transferA) - 120) < 1e-6,
+                "disconnecting a monitor fell back to the primary queue margin");
+            controller.ArrangeDeepCapsules(animate: false);
+
+            controller.CancelEdgeCapsuleQueueTransfer(disconnectTransfer);
+            Require(
+                Math.Abs(controller.State.DeepCapsuleQueueStartTopMargins[persistentKey] - 120) < 1e-6 &&
+                !controller.State.DeepCapsuleQueueStartTopMargins.ContainsKey("|right#qdisp"),
+                "cancelling after a disconnect restored the margin into the fallback queue");
+
+            // 空 id 队列：断连副屏与主屏同侧必须保持不同身份。
+            transferA.CapsuleMonitorDeviceName = disconnectedMonitor;
+            transferA.CapsuleQueueId = "";
+            transferB.CapsuleMonitorDeviceName = "";
+            transferB.CapsuleQueueId = "";
+            Require(
+                controller.QueueKeyForPaper(transferA) != controller.QueueKeyForPaper(transferB),
+                "empty-id queues on a disconnected monitor collapsed into the primary queue");
+            Require(
+                controller.QueueKeyForPaper(transferA) == disconnectedMonitor + "|right",
+                "a disconnected empty-id queue lost its persisted edge identity");
+
+            // 同 live 边的单成员 Split 必须复用 id 并保留原 monitor tag。
+            var splitPaper = controller.State.Papers.Single(paper => paper.Id == "fixture-1");
+            splitPaper.CapsuleMonitorDeviceName = disconnectedMonitor;
+            splitPaper.CapsuleSide = DeepCapsuleSides.Left;
+            splitPaper.CapsuleQueueId = "qsplit";
+            controller.State.DeepCapsuleQueueStartTopMargins[disconnectedMonitor + "|left#qsplit"] = 160;
+            controller.ArrangeDeepCapsules(animate: false);
+            var disconnectSplitAnchorY = geometry.WorkArea.Top + 500 * geometry.DpiScaleY;
+            var disconnectSplitAnchor = new EdgeCapsuleDropAnchor(
+                new DeviceScreenPoint(geometry.WorkArea.Left + 10, disconnectSplitAnchorY),
+                disconnectSplitAnchorY);
+            Require(
+                controller.CommitDeepCapsuleQueueDrop(splitPaper, disconnectSplitAnchor),
+                "the disconnected same-edge split was rejected");
+            Require(
+                splitPaper.CapsuleMonitorDeviceName == disconnectedMonitor &&
+                splitPaper.CapsuleQueueId == "qsplit",
+                "a same-live-edge split rewrote the persisted monitor or queue identity");
+            Require(
+                controller.State.DeepCapsuleQueueStartTopMargins.ContainsKey(
+                    disconnectedMonitor + "|left#qsplit"),
+                "a same-live-edge split did not persist the margin under the persistent key");
+        }
+        finally
+        {
+            cacheField.SetValue(null, originalMonitorCache);
+        }
+
+        // FQ-04 防御：targetMembers 的 anchor 恰好属于 moving 集合时，整块仍必须被插入，
+        // 不能因为循环里的 moving skip 而让纸片从 State.Papers 中消失。
+        var papersBeforeAnchorGuard = controller.State.Papers;
+        try
+        {
+            var moving = new[]
+            {
+                controller.State.Papers.Single(paper => paper.Id == "fixture-2"),
+                controller.State.Papers.Single(paper => paper.Id == "fixture-3")
+            };
+            var anchorTargetMembers = new List<PaperData>
+            {
+                moving[0],
+                controller.State.Papers.Single(paper => paper.Id == "fixture-0"),
+                controller.State.Papers.Single(paper => paper.Id == "fixture-1")
+            };
+            Call(controller, "InsertPaperBesideQueues", moving, anchorTargetMembers, 0);
+            var expectedIds = papersBeforeAnchorGuard
+                .Select(paper => paper.Id)
+                .OrderBy(id => id, StringComparer.Ordinal)
+                .ToArray();
+            var actualIds = controller.State.Papers
+                .Select(paper => paper.Id)
+                .OrderBy(id => id, StringComparer.Ordinal)
+                .ToArray();
+            Require(
+                expectedIds.SequenceEqual(actualIds),
+                "an anchor inside the moving set dropped part of the carried block");
+        }
+        finally
+        {
+            controller.State.Papers = papersBeforeAnchorGuard;
+            controller.ArrangeDeepCapsules(animate: false);
+        }
     }
 
     private static object? Call(object target, string name, params object?[] args)
@@ -595,6 +805,10 @@ internal static class EdgeCapsuleQueuePreviewChecks
 
     private static object? Field(object target, string name) =>
         target.GetType().GetField(name, Private)?.GetValue(target);
+
+    private static object Value(object target, string name) =>
+        target.GetType().GetProperty(name)?.GetValue(target) ??
+        throw new MissingMemberException(target.GetType().Name, name);
 
     private static object Part(object target, string name) =>
         target.GetType().GetField(name, Private)?.GetValue(target) ??

@@ -94,6 +94,12 @@ internal static class EdgeCapsuleQueueMagnet
     /// <summary>从已吸附的队列上脱落的距离。必须大于合并距离，二者之差即死区宽度。</summary>
     internal const double DefaultDetachDistanceDip = 32;
 
+    /// <summary>
+    /// 另一个候选要接管 held 队列所需的“明确更近”距离。只对已吸附场景生效：
+    /// 新候选还必须已进入 merge 半径；首次吸附仍只按 merge 距离判定。
+    /// </summary>
+    internal const double DefaultTakeoverDistanceDip = 6;
+
     public static EdgeCapsuleQueueMagnetPlan Evaluate(in EdgeCapsuleQueueMagnetInput input)
     {
         // A non-finite centre would make both range comparisons false, scoring every queue as a
@@ -127,6 +133,7 @@ internal static class EdgeCapsuleQueueMagnet
         var bestKey = "";
         var bestDistance = double.MaxValue;
         var heldStillHeld = false;
+        var heldDistance = double.MaxValue;
 
         for (var i = 0; i < sanitized.Candidates.Count; i++)
         {
@@ -153,6 +160,7 @@ internal static class EdgeCapsuleQueueMagnet
                 else
                 {
                     heldStillHeld = true;
+                    heldDistance = distance;
                 }
 
                 continue;
@@ -172,6 +180,22 @@ internal static class EdgeCapsuleQueueMagnet
             }
         }
 
+        // 已吸附队列仍保留 Schmitt 死区，但更近且已进入 merge 半径的其他候选可以接管：
+        // 否则相邻队列（尤其 0 gap 邻居）永远无法成为落点。
+        if (heldStillHeld &&
+            bestKey.Length > 0 &&
+            bestDistance <= mergeDip &&
+            heldDistance - bestDistance >= DefaultTakeoverDistanceDip)
+        {
+            return new EdgeCapsuleQueueMagnetPlan(
+                string.Equals(bestKey, Normalize(sanitized.SourceQueueKey), StringComparison.Ordinal)
+                    ? EdgeCapsuleQueueMagnetOutcome.Reorder
+                    : EdgeCapsuleQueueMagnetOutcome.Merge,
+                bestKey,
+                0,
+                bestDistance);
+        }
+
         if (heldStillHeld)
         {
             return new EdgeCapsuleQueueMagnetPlan(
@@ -180,7 +204,7 @@ internal static class EdgeCapsuleQueueMagnet
                     : EdgeCapsuleQueueMagnetOutcome.Merge,
                 held,
                 0,
-                bestDistance);
+                heldDistance);
         }
 
         if (bestKey.Length > 0)

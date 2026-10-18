@@ -193,12 +193,16 @@ public sealed partial class AppController
             return result;
         }
 
+        var ownerLiveEdgeKey = LiveEdgeOfQueueKey(ownerQueueKey);
         foreach (var queue in basePlan.Queues)
         {
-            // 边级避让只作用于 owner 所在的显示器 + 同侧。不同显示器的本地 DIP
-            // 没有可比性，混排会把另一块屏幕上的队列整体推开。
-            if (!EdgeCapsuleQueueIds.IsSameEdge(queue.Key, ownerQueueKey) ||
-                !EdgeCapsuleQueueIds.TryGetEdge(queue.Key, out var monitorDeviceName, out var side) ||
+            // 边级避让按物理 live edge 分组：断连队列回退到主屏后必须与主屏同侧队列
+            // 一起避让。队列身份仍使用持久 key，二者不能混用。
+            if (!string.Equals(
+                    LiveEdgeOfQueueKey(queue.Key),
+                    ownerLiveEdgeKey,
+                    StringComparison.Ordinal) ||
+                !EdgeCapsuleQueueIds.TryGetEdge(queue.Key, out var monitorDeviceName, out _) ||
                 !WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(
                     monitorDeviceName,
                     out var geometry))
@@ -215,14 +219,8 @@ public sealed partial class AppController
             var slotCount = papers.Count;
             // margin 必须从队列身份 key 派生：free 关闭时 key 是裸 edge key，
             // 纸片上的实例 id 已不参与运行期身份，继续读它会得到不同的起始高度。
-            var queueId = EdgeCapsuleQueueIds.TrySplit(queue.Key, out _, out var parsedQueueId)
-                ? parsedQueueId
-                : "";
             var startTop = EdgeCapsuleLayout.NormalizeStartTopMargin(
-                DeepCapsuleStartTopMarginForQueue(
-                    monitorDeviceName,
-                    EdgeForQueueSide(side),
-                    queueId),
+                DeepCapsuleStartTopMarginForQueueKey(queue.Key),
                 geometry.LocalWorkAreaDip,
                 slotCount,
                 DeepCapsuleGap);

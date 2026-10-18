@@ -76,14 +76,17 @@ public sealed partial class AppController
             carried.Select(paper => paper.Id),
             StringComparer.Ordinal);
 
+        // 身份用持久 key，几何分组用物理 live edge：断连队列回退渲染到主屏后，
+        // 必须与主屏同侧队列一起参与求解/避让，否则会视觉重叠。
+        var liveTargetEdgeKey = LiveEdgeOfQueueKey(targetQueueKey);
         var membersByQueue = new Dictionary<string, List<PaperData>>(StringComparer.Ordinal);
         var queueOrder = new List<string>();
         foreach (var paper in DeepCapsulePapersInOrder())
         {
             var queueKey = QueueKey(paper);
             if (!string.Equals(
-                    EdgeCapsuleQueueIds.StripInstance(queueKey),
-                    edgeKey,
+                    LiveEdgeOfQueueKey(queueKey),
+                    liveTargetEdgeKey,
                     StringComparison.Ordinal))
             {
                 continue;
@@ -112,8 +115,8 @@ public sealed partial class AppController
         targetPreviewMembers.InsertRange(clampedIndex, carried);
 
         var sourceOnTargetEdge = string.Equals(
-            EdgeCapsuleQueueIds.StripInstance(sourceQueueKey),
-            edgeKey,
+            LiveEdgeOfQueueKey(sourceQueueKey),
+            liveTargetEdgeKey,
             StringComparison.Ordinal);
 
         var previews = new Dictionary<string, EdgeCapsuleQueueDropPreview>(StringComparer.Ordinal);
@@ -147,10 +150,7 @@ public sealed partial class AppController
             }
 
             var queueId = FirstQueueIdOf(allMembers);
-            var margin = DeepCapsuleStartTopMarginForQueue(
-                monitorDeviceName,
-                EdgeForQueueSide(side),
-                queueId);
+            var margin = DeepCapsuleStartTopMarginForQueueKey(queueKey);
             var top = EdgeCapsuleLayout.TopForIndex(
                 0,
                 margin,
@@ -224,10 +224,7 @@ public sealed partial class AppController
 
         // 不可行：描边仍要显示目标队列与警示线，因此使用目标队列的真实布局，
         // 不展示一个实际不会发生的展开结果。
-        var realMargin = DeepCapsuleStartTopMarginForQueue(
-            monitorDeviceName,
-            EdgeForQueueSide(side),
-            FirstQueueIdOf(targetAllMembers));
+        var realMargin = DeepCapsuleStartTopMarginForQueueKey(targetQueueKey);
         var realTop = EdgeCapsuleLayout.TopForIndex(
             0,
             realMargin,
@@ -293,11 +290,6 @@ public sealed partial class AppController
         // carried 此时已改写到目标队列；源队列不再有成员（含隐藏）时统一清理起始边距。
         RemoveQueueStartMarginIfVacated(plan.SourceQueueKey, plan.TargetQueueKey);
     }
-
-    private static EdgeCapsuleEdge EdgeForQueueSide(string side) =>
-        side == DeepCapsuleSides.Left
-            ? EdgeCapsuleEdge.Left
-            : EdgeCapsuleEdge.Right;
 
     private static EdgeCapsuleQueueDropLayoutPlan InfeasibleDropLayoutPlan(
         string targetQueueKey,

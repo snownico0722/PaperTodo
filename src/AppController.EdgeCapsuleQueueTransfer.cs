@@ -52,8 +52,9 @@ public sealed partial class AppController
             return false;
         }
 
-        var edge = paper.CapsuleSide == DeepCapsuleSides.Left ? EdgeCapsuleEdge.Left : EdgeCapsuleEdge.Right;
-        var startKey = QueueKey(paper.CapsuleMonitorDeviceName, paper.CapsuleSide, paper.CapsuleQueueId);
+        // free 模式下 QueueKey 已是持久实例 key；快照的 margin 与恢复/清理都使用它，
+        // 显示器断连/重连不会把源队列重定向到主屏。
+        var startKey = queueKey;
         snapshot = new EdgeCapsuleQueueTransferSnapshot(
             queueKey,
             members.Select(p => p.Id).ToList(),
@@ -113,6 +114,14 @@ public sealed partial class AppController
 
         _edgeCapsuleQueueTransferSources.Remove(snapshot.SourceQueueKey);
 
+        // 原生拖拽会泵 Dispatcher，外部 API/插件可能在拖拽期间增删、隐藏或移动成员。
+        // 提交前必须按 live 成员序列复核，不能把旧快照覆盖到更新的状态上。
+        if (!EdgeCapsuleQueueTransferSourceMatchesSnapshot(snapshot))
+        {
+            ReleaseEdgeCapsuleQueueTransfer(snapshot);
+            return false;
+        }
+
         var carried = EdgeCapsuleQueueTransferMembers(snapshot);
         if (carried.Count == 0)
         {
@@ -123,9 +132,7 @@ public sealed partial class AppController
         // 预览已经选定的目标优先：提交和预览必须落到同一条队列、同一槽位。
         if (!string.IsNullOrEmpty(expectedTargetQueueKey) &&
             expectedTargetIndex >= 0 &&
-            FreeQueueMembersExcluding(
-                expectedTargetQueueKey,
-                snapshot.PaperIds.FirstOrDefault() ?? "").Count > 0)
+            FreeQueueMembersExcludingIds(expectedTargetQueueKey, snapshot.PaperIds).Count > 0)
         {
             return MergeTransferredQueueInto(
                 snapshot,
@@ -178,64 +185,42 @@ public sealed partial class AppController
         IReadOnlyList<PaperData> carried,
         string targetQueueKey,
         EdgeCapsuleDropAnchor anchor,
-        int expectedTargetIndex = -1,
-        bool allowMonitorFallback = true)
+        int expectedTargetIndex = -1)
     {
-        var targetMembers = FreeQueueMembersExcluding(targetQueueKey, snapshot.PaperIds.FirstOrDefault() ?? "");
-        var targetQueueId = FirstQueueIdOf(targetMembers);
-        var edgeKey = EdgeCapsuleQueueIds.StripInstance(targetQueueKey);
-        var separator = edgeKey.LastIndexOf('|');
-        var side = separator >= 0 && edgeKey[(separator + 1)..] == DeepCapsuleSides.Left
-            ? DeepCapsuleSides.Left
-            : DeepCapsuleSides.Right;
-        var monitorName = edgeKey[..Math.Max(separator, 0)];
-
-        if (!WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(monitorName, out _))
+        if (!EdgeCapsuleQueueTransferSourceMatchesSnapshot(snapshot))
         {
-            if (!allowMonitorFallback)
-            {
-                CancelEdgeCapsuleQueueTransfer(snapshot);
-                return false;
-            }
-
-            // 目标队列的显示器已不可用：按当前落点重新决策。只有磁吸确认的 Merge/NewQueue
-            // 才继续，避免未经可行性校验就硬放一个可能与现有队列重叠的新队列。
-            // 指针已释放，不能沿用拖拽期的吸附保持。
-            _deepCapsuleDragHeldQueueKey = "";
-            var fallbackPlan = EvaluateDeepCapsuleQueueDrag(
-                carried, anchor, excludeEntireSourceQueue: true);
-            if (fallbackPlan.Outcome == EdgeCapsuleQueueMagnetOutcome.Merge)
-            {
-                return MergeTransferredQueueInto(
-                    snapshot,
-                    carried,
-                    fallbackPlan.TargetQueueKey,
-                    anchor,
-                    allowMonitorFallback: false);
-            }
-
-            if (fallbackPlan.Outcome == EdgeCapsuleQueueMagnetOutcome.NewQueue &&
-                TryResolveQueueDropGeometry(carried[0], anchor, out var fallbackDrop))
-            {
-                StartTransferredQueueAt(
-                    snapshot,
-                    carried,
-                    fallbackDrop,
-                    fallbackPlan.NewQueueStartTopDip);
-                return true;
-            }
-
-            CancelEdgeCapsuleQueueTransfer(snapshot);
+            ReleaseEdgeCapsuleQueueTransfer(snapshot);
             return false;
         }
 
+        // 排除全部 carried，而不是只排除第一个：被外部移入目标队列的非首个成员
+        // 既不能出现在 targetMembers 里，也不能成为 anchor。
+        var targetMembers = FreeQueueMembersExcludingIds(targetQueueKey, snapshot.PaperIds);
+        if (targetMembers.Count == 0)
+        {
+            ReleaseEdgeCapsuleQueueTransfer(snapshot);
+            return false;
+        }
+
+        var targetQueueId = FirstQueueIdOf(targetMembers);
+        if (!EdgeCapsuleQueueIds.TryGetEdge(
+                targetQueueKey,
+                out var monitorName,
+                out var targetSideText))
+        {
+            ReleaseEdgeCapsuleQueueTransfer(snapshot);
+            return false;
+        }
+
+        var side = DeepCapsuleSides.Normalize(targetSideText);
         var insertAt = expectedTargetIndex >= 0
             ? Math.Clamp(expectedTargetIndex, 0, targetMembers.Count)
             : DeepCapsuleQueueInsertIndexFor(
                 targetQueueKey,
                 snapshot.PaperIds.FirstOrDefault() ?? "",
                 anchor.CapsuleCenterYDevice,
-                carried.Count);
+                carried.Count,
+                snapshot.PaperIds);
 
         // 先求完整布局，再改成员；空间不足时恢复整队快照，不留下半完成的合并。
         var layoutPlan = EvaluateEdgeCapsuleQueueDropLayout(carried, targetQueueKey, insertAt);
@@ -247,15 +232,16 @@ public sealed partial class AppController
 
         foreach (var member in carried)
         {
-            member.CapsuleMonitorDeviceName =
-                WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(monitorName);
+            // 身份从目标队列 key 写出：断连目标保留原显示器，不会被静默主屏几何改写。
+            member.CapsuleMonitorDeviceName = monitorName;
             member.CapsuleSide = side;
             member.CapsuleQueueId = targetQueueId;
         }
 
         InsertPaperBesideQueues(carried, targetMembers, layoutPlan.TargetIndex);
         PersistEdgeCapsuleQueueDropLayoutMargins(layoutPlan);
-        RemoveVacatedQueueStartMargin(snapshot, QueueKey(monitorName, side, targetQueueId));
+        RemoveVacatedQueueStartMargin(
+            snapshot, PersistentQueueKey(monitorName, side, targetQueueId));
 
         ArrangeDeepCapsules(animate: true);
         RefreshTrayMenu();
@@ -286,9 +272,9 @@ public sealed partial class AppController
             member.CapsuleQueueId = queueId;
         }
 
-        RemoveVacatedQueueStartMargin(
-            snapshot, QueueKey(drop.MonitorDeviceName, side, queueId));
-        State.DeepCapsuleQueueStartTopMargins[QueueKey(drop.MonitorDeviceName, side, queueId)] =
+        var destinationKey = PersistentQueueKey(drop.MonitorDeviceName, side, queueId);
+        RemoveVacatedQueueStartMargin(snapshot, destinationKey);
+        State.DeepCapsuleQueueStartTopMargins[destinationKey] =
             EdgeCapsuleLayout.NormalizeStartTopMargin(
                 startTopDip,
                 monitor.LocalWorkAreaDip,
@@ -308,8 +294,33 @@ public sealed partial class AppController
         EdgeCapsuleQueueTransferSnapshot snapshot,
         string destinationStartKey) =>
         RemoveQueueStartMarginIfVacated(
-            QueueKey(snapshot.MonitorDeviceName, snapshot.Side, snapshot.QueueId),
+            PersistentQueueKey(snapshot.MonitorDeviceName, snapshot.Side, snapshot.QueueId),
             destinationStartKey);
+
+    /// <summary>
+    /// 提交前复核源队列的 live 成员序列。与主胶囊整队路径一致：原生拖拽会泵
+    /// Dispatcher，外部操作可能已增删/隐藏/移动成员，旧快照不能覆盖新状态。
+    /// </summary>
+    private bool EdgeCapsuleQueueTransferSourceMatchesSnapshot(
+        EdgeCapsuleQueueTransferSnapshot snapshot)
+    {
+        var liveIds = DeepCapsulePapersInOrder()
+            .Where(paper => string.Equals(
+                QueueKey(paper), snapshot.SourceQueueKey, StringComparison.Ordinal))
+            .Select(paper => paper.Id);
+        return liveIds.SequenceEqual(snapshot.PaperIds);
+    }
+
+    /// <summary>
+    /// 校验失败时释放事务，但不回写成员身份：拖拽期间成员可能正被外部合法修改，
+    /// 用旧快照回滚会覆盖这些修改。
+    /// </summary>
+    private void ReleaseEdgeCapsuleQueueTransfer(
+        EdgeCapsuleQueueTransferSnapshot snapshot)
+    {
+        _edgeCapsuleQueueTransferSources.Remove(snapshot.SourceQueueKey);
+        ArrangeDeepCapsules(animate: false);
+    }
 
     /// <summary>
     /// Members the in-flight whole-queue transfer is carrying, in their existing order.
@@ -367,8 +378,9 @@ public sealed partial class AppController
         }
     }
 
-    private void RestoreQueueStartMargin(EdgeCapsuleQueueTransferSnapshot snapshot)    {
-        var key = QueueKey(snapshot.MonitorDeviceName, snapshot.Side, snapshot.QueueId);
+    private void RestoreQueueStartMargin(EdgeCapsuleQueueTransferSnapshot snapshot)
+    {
+        var key = PersistentQueueKey(snapshot.MonitorDeviceName, snapshot.Side, snapshot.QueueId);
         if (snapshot.HadStartTopMargin)
         {
             State.DeepCapsuleQueueStartTopMargins[key] = snapshot.StartTopMargin;

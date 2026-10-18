@@ -241,6 +241,7 @@ internal static partial class Program
                   EdgeCapsuleQueueMagnetOutcome.NewQueue,
             "A held queue that vanished from the candidate set does not resurrect");
 
+        MagnetTakeoverThreshold();
         MagnetNeedsHorizontalProximity();
         NewQueueDropAvoidsOverlap();
         NewQueueRejectsWhenNoLegalSpotExists();
@@ -773,6 +774,58 @@ internal static partial class Program
                 100, "other", RightQueue(), slot, height, merge, detach, "",
                 double.PositiveInfinity)).Outcome == EdgeCapsuleQueueMagnetOutcome.None,
             "An infinite horizontal centre resolves to no plan");
+    }
+
+    // FQ-02：held 队列仍保留死区，但更近且已进入 merge 半径的候选可以接管。
+    private static void MagnetTakeoverThreshold()
+    {
+        const double slot = 50;
+        const double height = 46;
+        const double centreLeft = 100;
+
+        EdgeCapsuleQueueMagnetPlan Evaluate(
+            double centre,
+            EdgeCapsuleQueueMagnetCandidate[] candidates,
+            string held) =>
+            EdgeCapsuleQueueMagnet.Evaluate(new EdgeCapsuleQueueMagnetInput(
+                centre,
+                "other",
+                candidates,
+                slot,
+                height,
+                EdgeCapsuleQueueMagnet.DefaultMergeDistanceDip,
+                EdgeCapsuleQueueMagnet.DefaultDetachDistanceDip,
+                held,
+                centreLeft));
+
+        // held 队列占 [100, 146]，拖拽中心 190 时距离 21（死区内、merge 外）；
+        // near 队列 top=116 时同一中心距离 5，差 16 → 接管。
+        var held = new EdgeCapsuleQueueMagnetCandidate("held", 1, 100, slot, -1, 0, 200);
+        var near = new EdgeCapsuleQueueMagnetCandidate("near", 1, 116, slot, -1, 0, 200);
+        Check(Evaluate(190, [held, near], "held").TargetQueueKey == "near",
+            "A clearly closer candidate inside the merge radius must take over the held queue");
+
+        // 距离差 5 < 6：保持 held，避免在相邻队列之间抖动。
+        var nearFive = new EdgeCapsuleQueueMagnetCandidate("near", 1, 105, slot, -1, 0, 200);
+        var holdPlan = Evaluate(179, [held, nearFive], "held");
+        Check(holdPlan.TargetQueueKey == "held",
+            "A candidate that is only slightly closer must not steal the hold");
+        Check(Math.Abs(holdPlan.ScoreDip - 10) < 0.001,
+            "A held plan must report the held queue's own distance");
+
+        // 距离差恰好 6：接管。
+        var nearSix = new EdgeCapsuleQueueMagnetCandidate("near", 1, 106, slot, -1, 0, 200);
+        Check(Evaluate(180, [held, nearSix], "held").TargetQueueKey == "near",
+            "A six-DIP advantage must be enough to take over the hold");
+
+        // 候选仍在 merge 半径外：即使距离接近，也不能接管。
+        var outsideMerge = new EdgeCapsuleQueueMagnetCandidate("near", 1, 102, slot, -1, 0, 200);
+        Check(Evaluate(190, [held, outsideMerge], "held").TargetQueueKey == "held",
+            "A candidate outside the merge radius must not take over the hold");
+
+        // 超过 detach：held 释放，正常候选竞争。
+        Check(Evaluate(202, [held, near], "held").TargetQueueKey == "near",
+            "A held queue beyond the detach distance must release to a valid candidate");
     }
 
     // The drag loop feeds each frame's target back in as the next frame's held queue. If that
