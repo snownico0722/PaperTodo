@@ -575,7 +575,9 @@ public sealed partial class PaperWindow
         {
             var wasMaximized = WindowState == WindowState.Maximized;
             var wasSnapped = _isSnappedPresentation;
-            _collapsedFromMaximized = wasMaximized;
+            // Reversing an expansion before its restore completes must retain the original
+            // maximized intent, including a restore deferred while another app has focus.
+            _collapsedFromMaximized |= wasMaximized;
             // Collapsing ends the snap relationship: a collapsed paper is a free capsule, so it
             // should expand back to its own recorded paper size — NOT re-snap. So we do not
             // remember the snap tile for restore here (only maximized windows are restored, via
@@ -890,7 +892,7 @@ public sealed partial class PaperWindow
                 }
                 if (!collapsed)
                 {
-                    FinishExpandSnapStateRestore();
+                    TryRestoreMaximizedStateAfterExpand();
                 }
                 UpdateTaskbarVisibility();
             };
@@ -952,7 +954,7 @@ public sealed partial class PaperWindow
             }
             if (!collapsed)
             {
-                FinishExpandSnapStateRestore();
+                TryRestoreMaximizedStateAfterExpand();
             }
             UpdateTaskbarVisibility();
             if (!collapsed && activateOnExpand)
@@ -1032,17 +1034,25 @@ public sealed partial class PaperWindow
             System.Windows.Threading.DispatcherPriority.Send);
     }
 
-    // Runs when an expand transition finishes. If the paper was collapsed while maximized,
-    // re-enter the real maximized window state (rather than leaving a manually-sized rect).
-    // Clears the one-shot capture flags either way.
-    private void FinishExpandSnapStateRestore()
+    // WPF maximization activates its HWND even when ShowActivated is false. Restore only
+    // while this paper owns foreground; otherwise the existing capture survives until the
+    // user activates the expanded paper again. No delayed callback may acquire foreground.
+    private void TryRestoreMaximizedStateAfterExpand()
     {
-        if (_collapsedFromMaximized)
+        if (!_collapsedFromMaximized ||
+            !_controller.IsRunning ||
+            _windowLifecycle != PaperWindowLifecycleState.Alive ||
+            IsPaperFormTransitioning ||
+            _paper.IsCollapsed || !_paper.IsVisible || !IsVisible ||
+            _controller.FullscreenAvoidanceWindowFor(this) != IntPtr.Zero ||
+            WindowNative.ForegroundWindow != new WindowInteropHelper(this).Handle)
         {
-            MoveWindowWithoutGeometrySave(() => WindowState = WindowState.Maximized);
+            return;
         }
 
+        // Clear before changing native state: maximization can synchronously raise Activated.
         _collapsedFromMaximized = false;
+        MoveWindowWithoutGeometrySave(() => WindowState = WindowState.Maximized);
     }
 
     // A collapsed paper is a free capsule. Clear both the active snap presentation and the

@@ -626,7 +626,11 @@ public sealed partial class PaperWindow : Window
 
             RefreshEffectiveTopmost();
         };
-        Activated += (_, _) => _controller.RefreshFloatingSurfaceZOrder();
+        Activated += (_, _) =>
+        {
+            _controller.RefreshFloatingSurfaceZOrder();
+            TryRestoreMaximizedStateAfterExpand();
+        };
         Deactivated += (_, _) => AbortAllInteractions(InteractionAbortReason.Deactivated);
         Closing += OnClosing;
         Closed += (_, _) => CompletePaperWindowClose();

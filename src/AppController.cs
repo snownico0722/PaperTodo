@@ -2438,6 +2438,36 @@ public sealed partial class AppController : IDisposable
         out PaperRestoreGeometry geometry)
     {
         geometry = default;
+        if (!TryGetUnclampedDeepCapsuleExpandedGeometry(
+                paper, fallbackWidth, fallbackHeight, out var rememberedRect, out _))
+        {
+            return false;
+        }
+
+        var savedScale = paper.DeepCapsuleExpandedDpiScale is double scale && double.IsFinite(scale) && scale > 0
+            ? scale
+            : WindowWorkAreaHelper.SystemDpiScale().ScaleX;
+        if (!PaperRestoreGeometry.TryGetDeviceBounds(rememberedRect, savedScale, out var deviceBounds) ||
+            !WindowWorkAreaHelper.TryGetMonitorGeometryForDeviceBounds(deviceBounds, out var monitor))
+        {
+            return false;
+        }
+
+        geometry = PaperRestoreGeometry.ClampToMonitor(deviceBounds, rememberedRect.Width, rememberedRect.Height, monitor);
+        return true;
+    }
+
+    // Restore and startup readiness must agree about which saved snapshot is still usable.
+    // Keep its original rectangle until display enumeration has had a chance to settle.
+    private bool TryGetUnclampedDeepCapsuleExpandedGeometry(
+        PaperData paper,
+        double fallbackWidth,
+        double fallbackHeight,
+        out Rect bounds,
+        out Point screenCenter)
+    {
+        bounds = default;
+        screenCenter = default;
         if (!State.RememberDeepCapsuleExpandedPosition ||
             !paper.DeepCapsuleExpandedX.HasValue ||
             !paper.DeepCapsuleExpandedY.HasValue ||
@@ -2476,7 +2506,7 @@ public sealed partial class AppController : IDisposable
             fallbackHeight,
             PaperLayoutDefaults.MinHeight,
             double.MaxValue);
-        var rememberedRect = new Rect(
+        bounds = new Rect(
             paper.DeepCapsuleExpandedX.Value,
             paper.DeepCapsuleExpandedY.Value,
             rememberedWidth,
@@ -2486,13 +2516,17 @@ public sealed partial class AppController : IDisposable
         var savedScale = paper.DeepCapsuleExpandedDpiScale is double scale && double.IsFinite(scale) && scale > 0
             ? scale
             : WindowWorkAreaHelper.SystemDpiScale().ScaleX;
-        if (!PaperRestoreGeometry.TryGetDeviceBounds(rememberedRect, savedScale, out var deviceBounds) ||
-            !WindowWorkAreaHelper.TryGetMonitorGeometryForDeviceBounds(deviceBounds, out var monitor))
+        if (!PaperRestoreGeometry.TryGetDeviceBounds(bounds, savedScale, out var deviceBounds))
         {
             return false;
         }
 
-        geometry = PaperRestoreGeometry.ClampToMonitor(deviceBounds, rememberedWidth, rememberedHeight, monitor);
+        // WorkAreaForDevice uses system-DPI coordinates. The saved rectangle belongs to
+        // the capture monitor's DPI, so only this readiness comparison needs the projection.
+        var center = WindowWorkAreaHelper.DeviceScreenPointToDip(new DeviceScreenPoint(
+            deviceBounds.Left + deviceBounds.Width / 2.0,
+            deviceBounds.Top + deviceBounds.Height / 2.0));
+        screenCenter = new Point(center.X, center.Y);
         return true;
     }
 
