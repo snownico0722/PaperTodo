@@ -591,31 +591,13 @@ public sealed class StateStore
             }
         }
 
-        var keepDeepCapsuleStartTopMargins = collapseAllRuntimeEnabled;
-        state.DeepCapsuleStartTopMargin = keepDeepCapsuleStartTopMargins
-            ? NormalizeDeepCapsuleStartTopMargin(state.DeepCapsuleStartTopMargin, state.DeepCapsuleMonitorDeviceName)
-            : EdgeCapsuleLayout.StartTopMargin;
-
-        // Per-queue margins: drop NaN/inf; final clamping against each queue's live work area is
-        // done at layout time (monitor set can change between sessions, so we don't over-normalize
-        // here). A null dict (older config) becomes empty => every queue falls back to the global.
+        // Heights are preferences, not transient enabled-capsule state.
+        // Preserve them across disabling/restarting; explicit defaults reset them.
+        state.DeepCapsuleStartTopMargin = NormalizeDeepCapsuleStartTopMargin(
+            state.DeepCapsuleStartTopMargin, state.DeepCapsuleMonitorDeviceName);
         state.DeepCapsuleQueueStartTopMargins ??= new Dictionary<string, double>();
         state.DeepCapsuleQueueStartTopMargins = NormalizeQueueStartTopMargins(state.DeepCapsuleQueueStartTopMargins);
-        if (!keepDeepCapsuleStartTopMargins)
-        {
-            state.DeepCapsuleQueueStartTopMargins.Clear();
-        }
-        else
-        {
-            foreach (var key in state.DeepCapsuleQueueStartTopMargins.Keys.ToList())
-            {
-                var v = state.DeepCapsuleQueueStartTopMargins[key];
-                if (double.IsNaN(v) || double.IsInfinity(v))
-                {
-                    state.DeepCapsuleQueueStartTopMargins.Remove(key);
-                }
-            }
-        }
+        RemoveNonFiniteValues(state.DeepCapsuleQueueStartTopMargins);
     }
 
     private static void NormalizePapers(AppState state)

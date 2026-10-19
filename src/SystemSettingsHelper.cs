@@ -11,6 +11,8 @@ public static class SystemSettingsHelper
 {
     private const string RegistryRunPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
     private const string AppKeyName = "PaperTodo";
+    private const string StartupApprovedRunPath =
+        @"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run";
 #if PAPERTODO_STORE_BUILD
     private const string StartupTaskId = "PaperTodoStartup";
 #endif
@@ -103,52 +105,55 @@ public static class SystemSettingsHelper
     {
         try
         {
-            using var key = Registry.CurrentUser.OpenSubKey(RegistryRunPath, false);
-            if (key != null)
-            {
-                var val = key.GetValue(AppKeyName)?.ToString();
-                var processPath = Environment.ProcessPath ?? "";
-                return !string.IsNullOrEmpty(val) &&
-                    (val == processPath || val == $"\"{processPath}\"");
-            }
+            using var runKey = Registry.CurrentUser.OpenSubKey(RegistryRunPath, false);
+            using var approvalKey = Registry.CurrentUser.OpenSubKey(StartupApprovedRunPath, false);
+            return IsStartupEnabled(runKey?.GetValue(AppKeyName),
+                approvalKey?.GetValue(AppKeyName), Environment.ProcessPath ?? "");
         }
-        catch
-        {
-            // Ignored, fallback to false.
-        }
-
-        return false;
+        catch { return false; }
     }
 
     private static bool ToggleLegacyRunStartup(bool enable)
     {
         try
         {
-            using var key = Registry.CurrentUser.CreateSubKey(RegistryRunPath, true);
-            if (key != null)
+            var processPath = Environment.ProcessPath;
+            if (enable && string.IsNullOrEmpty(processPath)) return false;
+            using var runKey = Registry.CurrentUser.CreateSubKey(RegistryRunPath, true);
+            if (runKey == null) return false;
+            if (!enable)
             {
-                if (enable)
-                {
-                    var path = Environment.ProcessPath;
-                    if (!string.IsNullOrEmpty(path))
-                    {
-                        key.SetValue(AppKeyName, $"\"{path}\"");
-                        return true;
-                    }
-                }
-                else
-                {
-                    key.DeleteValue(AppKeyName, false);
-                    return true;
-                }
+                runKey.DeleteValue(AppKeyName, false);
+                return runKey.GetValue(AppKeyName) == null;
             }
+            runKey.SetValue(AppKeyName, $"\"{processPath}\"", RegistryValueKind.String);
+            using var approvalKey = Registry.CurrentUser.OpenSubKey(StartupApprovedRunPath, true);
+            var approval = approvalKey?.GetValue(AppKeyName);
+            // Only an explicit enable click may clear our own disabled entry. Reading external
+            // Startup Apps state never silently re-enables an entry disabled by the user.
+            if (approval != null && !StartupApprovalAllowsLaunch(approval))
+                approvalKey!.DeleteValue(AppKeyName, false);
+            return IsStartupEnabled(runKey.GetValue(AppKeyName),
+                approvalKey?.GetValue(AppKeyName), processPath!);
         }
-        catch
-        {
-            // Permission exceptions in locked down environments.
-        }
+        catch { return false; }
+    }
 
-        return false;
+    internal static bool IsStartupEnabled(object? runValue, object? approvalValue, string processPath)
+    {
+        if (string.IsNullOrEmpty(processPath)) return false;
+        var value = runValue?.ToString();
+        return (value == processPath || value == $"\"{processPath}\"") &&
+            StartupApprovalAllowsLaunch(approvalValue);
+    }
+
+    internal static bool StartupApprovalAllowsLaunch(object? approvalValue)
+    {
+        if (approvalValue == null) return true;
+        if (approvalValue is not byte[] data || data.Length < 12) return false;
+        // Explorer-owned, undocumented format: the first DWORD is the approval state;
+        // the FILETIME records history and is not evidence that an entry is disabled.
+        return data[1] == 0 && data[2] == 0 && data[3] == 0 && data[0] is 0x00 or 0x02 or 0x06;
     }
 
     private static string? TryGetLegacyRunExecutablePath()

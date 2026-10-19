@@ -379,6 +379,7 @@ public sealed class MasterCapsuleWindow : Window
     private void ApplyStateVisuals()
     {
         _glyph.Text = _active ? "▸" : "▾";
+        _label.Visibility = _controller.State.CompactMasterCapsule ? Visibility.Collapsed : Visibility.Visible;
         _label.Text = _active
             ? string.Format(UiLanguages.EffectiveUiCulture, Strings.Get("CapsuleCollapseAllCountFormat"), _count)
             : Strings.Get("CapsuleCollapseAllLabel");
@@ -441,6 +442,13 @@ public sealed class MasterCapsuleWindow : Window
         var glyphWidth = Math.Max(
             MeasureText("▾", MasterGlyphFontSize, FontWeights.SemiBold, AppTypography.SymbolFontFamily, pixelsPerDip),
             MeasureText("▸", MasterGlyphFontSize, FontWeights.SemiBold, AppTypography.SymbolFontFamily, pixelsPerDip));
+        if (_controller.State.CompactMasterCapsule)
+        {
+            // Removing the label also removes its gap; keep the existing real HWND geometry
+            // and input surface, rather than clipping the original full-width master.
+            return Math.Max(1, Math.Ceiling(MasterLeftPadding + glyphWidth + MasterRightPadding +
+                MasterInteriorBorderThickness) + WindowChromeMargin);
+        }
         var expandedLabelWidth = MeasureText(
             Strings.Get("CapsuleCollapseAllLabel"),
             MasterLabelFontSize,

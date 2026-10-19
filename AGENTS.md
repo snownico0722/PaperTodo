@@ -71,6 +71,7 @@ Hardcodet 托盘必须走 `TaskbarIcon.IconSource = LoadTrayIconSource()`。不�
 - `UseCapsuleCollapseAll` 使用 slot 0 的主胶囊；真实纸片槽位从后面开始。`CapsuleCollapseAllActive` 为真时，真实胶囊收向主胶囊并隐藏可点击面。
 - `HideLinkedNotesFromCapsules` 开启时，已被待办关联的笔记不应显示为胶囊。
 - 隐藏全部、关闭胶囊模式、关闭贴边模式、从边缘展开后再隐藏，都要清理临时 slot / 激发态 / 动画状态，避免下次显示错位或残留占位。
+- 关闭胶囊功能不删除队列高度记忆；旧全局高度与每队列高度仅在明确恢复默认时一起重置。展开来源与是否保留边缘槽位独立，不能因为展开后不占槽而丢失位置和大小记忆。
 - 边缘菜单的 Popup HWND 提升为 Topmost 后，关闭时可能在 UI 线程残留 PaperTodo 的 active / focus HWND；前台已经切到外部进程时，要等 WPF 退出菜单模式后再有条件清理，否则 Hardcodet 托盘菜单可能首次打开即关闭。不要改成无条件清焦点，也不要提前到菜单关闭过程内执行。
 
 ## 待办和笔记

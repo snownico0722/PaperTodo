@@ -1,4 +1,5 @@
 using System;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Security.Cryptography;
@@ -1030,10 +1031,7 @@ public sealed partial class PaperWindow
         try
         {
             var path = WriteExternalMarkdownFile();
-            Process.Start(new ProcessStartInfo(path)
-            {
-                UseShellExecute = true
-            });
+            OpenExternalNoteFile(path);
         }
         catch (Exception ex)
         {
@@ -1042,6 +1040,20 @@ public sealed partial class PaperWindow
                 Strings.Get("OpenMarkdownFailureTitle"),
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
+        }
+    }
+
+    private static void OpenExternalNoteFile(string path)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+        }
+        catch (Win32Exception ex) when (ex.NativeErrorCode == 1155) // ERROR_NO_ASSOCIATION only
+        {
+            var startInfo = new ProcessStartInfo("notepad.exe") { UseShellExecute = false };
+            startInfo.ArgumentList.Add(path);
+            Process.Start(startInfo);
         }
     }
 

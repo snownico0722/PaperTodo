@@ -443,7 +443,7 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
     <value>展開位置を記憶</value>
   </data>
   <data name="SettingsCollapseExpandedDeepCapsuleOnClick" xml:space="preserve">
-    <value>端のカプセルを再クリックして紙片を戻す</value>
+    <value>再クリックで紙を閉じる</value>
   </data>
   <data name="SettingsHideEdgeCapsuleCloseButtonOnHover" xml:space="preserve">
     <value>閉じるボタンを隠す</value>
@@ -625,7 +625,7 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
     <value>端から開くとき、前回の位置とサイズを復元します。使えない場合は端寄せで開きます。</value>
   </data>
   <data name="TipCollapseExpandedDeepCapsuleOnClick" xml:space="preserve">
-    <value>端から開いた紙片に対し、同じカプセルをもう一度クリックすると戻します。</value>
+    <value>展開中の端カプセルを再クリックすると紙を折りたたみます。カプセルから除外した関連紙は、ToDo の関連ボタンを再クリックすると非表示になります。</value>
   </data>
   <data name="TipCapsuleCollapseAll" xml:space="preserve">
     <value>列の先頭にメインカプセルを表示し、現在の列を一括で折りたたみ／展開します。</value>
@@ -1022,5 +1022,11 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   </data>
   <data name="ToolTipOpenLinkedPath" xml:space="preserve">
     <value>開く：{0}</value>
+  </data>
+  <data name="SettingsCompactMasterCapsule" xml:space="preserve">
+    <value>主カプセルを短くする</value>
+  </data>
+  <data name="TipCompactMasterCapsule" xml:space="preserve">
+    <value>主カプセルの展開／収納矢印だけを表示して幅を短くします。オフにすると元の文字と件数の表示に戻ります。</value>
   </data>
 </root>

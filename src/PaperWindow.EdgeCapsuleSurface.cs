@@ -517,7 +517,6 @@ public sealed partial class PaperWindow
         if (_paper.IsCollapsed ||
             !_controller.State.UseCapsuleMode ||
             !_controller.State.UseDeepCapsuleMode ||
-            !_controller.State.ShowDeepCapsuleWhileExpanded ||
             !CanDisplayAsCapsule())
         {
             return false;
@@ -530,6 +529,7 @@ public sealed partial class PaperWindow
             return false;
         }
 
+        // Independent expanded geometry is remembered even when the edge slot is hidden.
         var applied = false;
         MoveWindowWithoutGeometrySave(() =>
         {
