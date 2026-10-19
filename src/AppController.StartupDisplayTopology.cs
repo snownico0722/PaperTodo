@@ -29,14 +29,28 @@ public sealed partial class AppController
             .Select(monitor => WindowWorkAreaHelper.WorkAreaForDevice(monitor.DeviceName))
             .Where(area => area.HasValue && !area.Value.IsEmpty && area.Value.Width > 0 && area.Value.Height > 0)
             .Select(area => area!.Value).ToList();
+        return HasPaperGeometryOutsideWorkAreas(workAreas);
+    }
+
+    private bool HasPaperGeometryOutsideWorkAreas(IReadOnlyList<Rect> workAreas)
+    {
         foreach (var paper in State.Papers)
         {
-            if (paper.IsCollapsed && State.UseCapsuleMode && State.UseDeepCapsuleMode &&
-                CanPaperDisplayAsCapsule(paper)) continue;
-            if (!IsFinite(paper.X) || !IsFinite(paper.Y) || !IsFinite(paper.Width) ||
-                !IsFinite(paper.Height) || paper.Width <= 0 || paper.Height <= 0) continue;
-            var center = new Point(paper.X + paper.Width / 2, paper.Y + paper.Height / 2);
-            if (!workAreas.Any(area => area.Contains(center))) return true;
+            // Startup rescue visits every paper, including hidden and docked collapsed ones.
+            // Their ordinary geometry must be protected before that rescue can write it back.
+            if (IsFinite(paper.X) && IsFinite(paper.Y) && IsFinite(paper.Width) &&
+                IsFinite(paper.Height) && paper.Width > 0 && paper.Height > 0)
+            {
+                var center = new Point(paper.X + paper.Width / 2, paper.Y + paper.Height / 2);
+                if (!workAreas.Any(area => area.Contains(center))) return true;
+            }
+
+            // Expanded papers can keep their latest position separately from ordinary X/Y.
+            // Inspect the same eligible snapshot as restore, before it is clamped to a screen.
+            if (State.UseDeepCapsuleMode && CanPaperDisplayAsCapsule(paper) &&
+                TryGetUnclampedDeepCapsuleExpandedGeometry(
+                    paper, paper.Width, paper.Height, out _, out var expandedCenter) &&
+                !workAreas.Any(area => area.Contains(expandedCenter))) return true;
         }
         return false;
     }
