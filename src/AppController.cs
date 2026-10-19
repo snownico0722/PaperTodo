@@ -258,6 +258,14 @@ public sealed partial class AppController : IDisposable
         bool createDefaultPaper = true,
         StartupCommandKind initialVisibilityCommand = StartupCommandKind.None)
     {
+        if (IsExiting) return;
+
+        // Do not publish tray/hotkey entry points until display enumeration settles: their
+        // show-all path performs off-screen rescue and would otherwise overwrite saved positions.
+        var startupRestoreGeneration = _paperSurfaceRestoreGeneration;
+        await WaitForStartupDisplayTopologyAsync();
+        if (IsExiting || startupRestoreGeneration != _paperSurfaceRestoreGeneration) return;
+
         CreateTrayIcon();
         InitializeGlobalHotkeys();
         _ = Task.Run(PaperWindow.CleanupOldScriptCapsuleTempFiles);
@@ -2417,6 +2425,54 @@ public sealed partial class AppController : IDisposable
         out Rect geometry)
     {
         geometry = default;
+        if (!TryGetUnclampedDeepCapsuleExpandedGeometry(
+                paper, fallbackWidth, fallbackHeight, out var remembered, out _))
+        {
+            return false;
+        }
+
+        var currentMonitor = WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(paper.CapsuleMonitorDeviceName);
+        var area = EdgeCapsuleLayout.WorkAreaForQueue(currentMonitor);
+        if (area.Width <= 0 || area.Height <= 0)
+        {
+            return false;
+        }
+
+        const double margin = 8;
+        var width = ClampPaperDimension(
+            remembered.Width,
+            fallbackWidth,
+            PaperLayoutDefaults.MinWidth,
+            Math.Max(PaperLayoutDefaults.MinWidth, area.Width - (margin * 2)));
+        var height = ClampPaperDimension(
+            remembered.Height,
+            fallbackHeight,
+            PaperLayoutDefaults.MinHeight,
+            Math.Max(PaperLayoutDefaults.MinHeight, area.Height - (margin * 2)));
+        var minX = area.Left + margin;
+        var maxX = Math.Max(minX, area.Right - width - margin);
+        var minY = area.Top + margin;
+        var maxY = Math.Max(minY, area.Bottom - height - margin);
+
+        geometry = new Rect(
+            Math.Round(Math.Clamp(remembered.Left, minX, maxX)),
+            Math.Round(Math.Clamp(remembered.Top, minY, maxY)),
+            Math.Round(width),
+            Math.Round(height));
+        return true;
+    }
+
+    // Restore and startup readiness must agree about which saved snapshot is still usable.
+    // Keep its original rectangle until display enumeration has had a chance to settle.
+    private bool TryGetUnclampedDeepCapsuleExpandedGeometry(
+        PaperData paper,
+        double fallbackWidth,
+        double fallbackHeight,
+        out Rect bounds,
+        out Point screenCenter)
+    {
+        bounds = default;
+        screenCenter = default;
         if (!State.RememberDeepCapsuleExpandedPosition ||
             !paper.DeepCapsuleExpandedX.HasValue ||
             !paper.DeepCapsuleExpandedY.HasValue ||
@@ -2442,33 +2498,18 @@ public sealed partial class AppController : IDisposable
             return false;
         }
 
-        var area = EdgeCapsuleLayout.WorkAreaForQueue(currentMonitor);
-        if (area.Width <= 0 || area.Height <= 0)
-        {
-            return false;
-        }
-
-        const double margin = 8;
         var width = ClampPaperDimension(
             paper.DeepCapsuleExpandedWidth.Value,
             fallbackWidth,
             PaperLayoutDefaults.MinWidth,
-            Math.Max(PaperLayoutDefaults.MinWidth, area.Width - (margin * 2)));
+            double.MaxValue);
         var height = ClampPaperDimension(
             paper.DeepCapsuleExpandedHeight.Value,
             fallbackHeight,
             PaperLayoutDefaults.MinHeight,
-            Math.Max(PaperLayoutDefaults.MinHeight, area.Height - (margin * 2)));
-        var minX = area.Left + margin;
-        var maxX = Math.Max(minX, area.Right - width - margin);
-        var minY = area.Top + margin;
-        var maxY = Math.Max(minY, area.Bottom - height - margin);
-
-        geometry = new Rect(
-            Math.Round(Math.Clamp(paper.DeepCapsuleExpandedX.Value, minX, maxX)),
-            Math.Round(Math.Clamp(paper.DeepCapsuleExpandedY.Value, minY, maxY)),
-            Math.Round(width),
-            Math.Round(height));
+            double.MaxValue);
+        bounds = new Rect(paper.DeepCapsuleExpandedX.Value, paper.DeepCapsuleExpandedY.Value, width, height);
+        screenCenter = new Point(bounds.Left + width / 2, bounds.Top + height / 2);
         return true;
     }
 

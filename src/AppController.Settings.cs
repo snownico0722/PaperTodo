@@ -776,8 +776,17 @@ public sealed partial class AppController
         window.PreviewKeyDown += OnSettingsWindowPreviewKeyDown;
         window.PreviewKeyUp += OnSettingsWindowPreviewKeyUp;
         window.Deactivated += (_, _) => CommitSettingsExternalMarkdownEditor();
+        window.Activated += (_, _) => RefreshSettingsStartupStateFromWindows();
+        window.IsVisibleChanged += (_, _) =>
+        {
+            if (window.IsVisible) StartSettingsStartupStateRefresh();
+            else _settingsStartupRefreshTimer?.Stop();
+        };
         window.Closed += (_, _) =>
         {
+            _settingsStartupRefreshTimer?.Stop();
+            _settingsStartupRefreshTimer = null;
+            _settingsStartupCheckBox = null;
             CommitSettingsExternalMarkdownEditor();
             _settingsExternalMarkdownTextBox = null;
             _settingsHidePapersFromTaskbarCheckBox = null;
@@ -1026,7 +1035,8 @@ public sealed partial class AppController
         // Left: everyday desktop / window behavior. Right: paper features, capsule first.
         leftColumn.Children.Add(SettingsSectionLabel(Strings.Get("SettingsGeneral")));
         leftColumn.Children.Add(CreateUiLanguageSettingsRow());
-        leftColumn.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("TrayStartup"), SystemSettingsHelper.IsStartupEnabled(), ToggleStartup), "TipStartup"));
+        _settingsStartupCheckBox = SettingsToggle(Strings.Get("TrayStartup"), SystemSettingsHelper.IsStartupEnabled(), ToggleStartup);
+        leftColumn.Children.Add(WrapWithHint(_settingsStartupCheckBox, "TipStartup"));
         leftColumn.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("SettingsEnableToolTips"), State.EnableToolTips, ToggleToolTips), "TipEnableToolTips"));
         leftColumn.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("SettingsEnableAnimations"), State.EnableAnimations, ToggleAnimations), "TipEnableAnimations"));
         if (advanced)
@@ -2320,7 +2330,8 @@ public sealed partial class AppController
     private void TogglePreferPowerShell7()
     {
         State.PreferPowerShell7 = !State.PreferPowerShell7;
-        PaperWindow.StopPersistentScriptProcesses();
+        // Preferences select the session for future submissions, not the lifetime of running work.
+        // The existing executable/window-mode keyed pool also reuses sessions when switching back.
         PaperWindow.EnsurePersistentScriptProcessForSettings(State);
         SaveNow();
         RefreshSettingsWindowContent();
@@ -2329,7 +2340,8 @@ public sealed partial class AppController
     private void ToggleHideScriptRunWindow()
     {
         State.HideScriptRunWindow = !State.HideScriptRunWindow;
-        PaperWindow.StopPersistentScriptProcesses();
+        // Preferences select the session for future submissions, not the lifetime of running work.
+        // The existing executable/window-mode keyed pool also reuses sessions when switching back.
         PaperWindow.EnsurePersistentScriptProcessForSettings(State);
         SaveNow();
         RefreshSettingsWindowContent();
