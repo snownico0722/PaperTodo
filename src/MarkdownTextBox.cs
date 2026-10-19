@@ -1622,6 +1622,20 @@ public sealed partial class MarkdownTextBox : TextEditor
         DocumentReplacementTarget Target,
         int ImageCount);
 
+    // Explicit paste (including the note context menu) must use the same image path as
+    // Ctrl+V; AvalonEdit's text-only command is disabled for a pure-image clipboard.
+    public new void Paste()
+    {
+        if (!IsReadOnly &&
+            !ClipboardHasText() &&
+            TryInsertImageFromClipboard())
+        {
+            return;
+        }
+
+        base.Paste();
+    }
+
     protected override void OnPreviewKeyDown(System.Windows.Input.KeyEventArgs e)
     {
         // AvalonEdit's built-in paste command no-ops when the clipboard holds only image
