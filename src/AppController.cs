@@ -282,6 +282,11 @@ public sealed partial class AppController : IDisposable
             return;
         }
 
+        var startupRestoreGeneration = _paperSurfaceRestoreGeneration;
+        await WaitForStartupDisplayTopologyAsync();
+        // A show/hide command or exit received during the wait owns the newer presentation.
+        if (IsExiting || startupRestoreGeneration != _paperSurfaceRestoreGeneration) return;
+
         ApplyInitialStartupVisibility(initialVisibilityCommand);
         var rescuedPapers = EnsurePapersOnScreen();
 
