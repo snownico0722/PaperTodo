@@ -16,9 +16,23 @@ namespace PaperTodo;
 public sealed partial class PaperWindow
 {
     private static readonly object PersistentScriptProcessLock = new();
-    private static readonly Dictionary<string, Process> PersistentScriptProcesses = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly Dictionary<string, PersistentScriptSession> PersistentScriptProcesses = new(StringComparer.OrdinalIgnoreCase);
     private static readonly object ActiveScriptProcessLock = new();
-    private static readonly Dictionary<Guid, Process> ActiveScriptProcesses = new();
+    private static readonly Dictionary<Guid, ActiveScriptExecution> ActiveScriptProcesses = new();
+
+    private sealed class PersistentScriptSession(string key, Process process)
+    {
+        internal string Key { get; } = key;
+        internal Process Process { get; } = process;
+        internal HashSet<string> ScriptPaths { get; } = new(StringComparer.OrdinalIgnoreCase);
+    }
+
+    private sealed class ActiveScriptExecution(Process process)
+    {
+        internal Process Process { get; } = process;
+        internal System.Threading.CancellationTokenSource ShutdownCancellation { get; } = new();
+        internal Task<(int ExitCode, string Output, string Error)> Completion { get; set; } = null!;
+    }
     private int _notePresenterGeneration;
     private int _noteDeferredWorkGeneration;
     private Action? _cancelNotePresenterInteractions;
@@ -611,6 +625,13 @@ public sealed partial class PaperWindow
         {
             if (!box.CanInsertImagesFromDataObject(e.Data))
             {
+                if (!isPreviewing || !MarkdownTextBox.HasTextDropData(e.Data))
+                {
+                    return;
+                }
+
+                e.Effects = MarkdownTextBox.ResolveTextDropEffect(e);
+                e.Handled = e.Effects != DragDropEffects.None;
                 return;
             }
 
@@ -621,11 +642,25 @@ public sealed partial class PaperWindow
         {
             if (!box.CanInsertImagesFromDataObject(e.Data))
             {
+                if (!MarkdownTextBox.HasTextDropData(e.Data))
+                {
+                    return;
+                }
                 if (!box.ValidateTextDrop(e.Data))
                 {
                     e.Effects = DragDropEffects.None;
                     e.Handled = true;
+                    return;
                 }
+                if (isPreviewing)
+                {
+                    ShowEditorAtPreviewPoint(
+                        e.GetPosition(box),
+                        e.OriginalSource as DependencyObject,
+                        selectImage: false);
+                }
+                // AvalonEdit still owns text insertion, move/copy semantics and undo grouping.
+                // Leave the actual Drop unhandled after entering edit mode.
                 return;
             }
 
@@ -1251,6 +1286,11 @@ public sealed partial class PaperWindow
 
     private async Task RunScriptCapsuleAsync(ScriptCapsuleSpec spec)
     {
+        if (!_controller.IsRunning || _windowLifecycle != PaperWindowLifecycleState.Alive)
+        {
+            return;
+        }
+
         if (string.IsNullOrWhiteSpace(spec.Script))
         {
             ShowScriptCapsuleFailure(Strings.Get("ScriptCapsuleEmptyMessage"));
@@ -1265,7 +1305,7 @@ public sealed partial class PaperWindow
 
         string? path = null;
         var executionId = Guid.NewGuid();
-        var registeredProcess = false;
+        Process? process = null;
         try
         {
             path = WriteScriptCapsuleFile(spec.Script);
@@ -1287,28 +1327,38 @@ public sealed partial class PaperWindow
             startInfo.ArgumentList.Add("-EncodedCommand");
             startInfo.ArgumentList.Add(EncodedPowerShellLaunchCommand(path));
 
-            using var process = new Process { StartInfo = startInfo };
+            process = new Process { StartInfo = startInfo };
             if (!process.Start())
             {
                 ShowScriptCapsuleFailure(Strings.Get("ScriptCapsuleStartFailureMessage"));
                 return;
             }
 
+            // Process ownership and temp-file cleanup must finish even when WPF shutdown drops
+            // this UI continuation. Only the result/error presentation returns to the Dispatcher.
+            var execution = new ActiveScriptExecution(process);
             lock (ActiveScriptProcessLock)
             {
-                ActiveScriptProcesses[executionId] = process;
-                registeredProcess = true;
+                ActiveScriptProcesses[executionId] = execution;
+                execution.Completion = CompleteScriptCapsuleExecutionAsync(execution, path);
             }
-
-            var outputTask = process.StandardOutput.ReadToEndAsync();
-            var errorTask = process.StandardError.ReadToEndAsync();
-            await process.WaitForExitAsync();
-            var output = await outputTask;
-            var error = await errorTask;
-            if (process.ExitCode != 0)
+            process = null;
+            path = null;
+            // Remove only after the entire non-UI completion (including finally/disposal).
+            // Registering this after publication also handles an already-completed process.
+            _ = execution.Completion.ContinueWith(_ =>
             {
-                var detail = CompactScriptCapsuleOutput(output, error);
-                ShowScriptCapsuleFailure(Strings.Format("ScriptCapsuleExitFailureMessage", process.ExitCode, detail));
+                lock (ActiveScriptProcessLock)
+                {
+                    ActiveScriptProcesses.Remove(executionId);
+                }
+            }, System.Threading.CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+            var result = await execution.Completion;
+            if (result.ExitCode != 0)
+            {
+                var detail = CompactScriptCapsuleOutput(result.Output, result.Error);
+                ShowScriptCapsuleFailure(Strings.Format("ScriptCapsuleExitFailureMessage", result.ExitCode, detail));
             }
         }
         catch (Exception ex)
@@ -1317,24 +1367,48 @@ public sealed partial class PaperWindow
         }
         finally
         {
-            if (registeredProcess)
-            {
-                lock (ActiveScriptProcessLock)
-                {
-                    ActiveScriptProcesses.Remove(executionId);
-                }
-            }
-
+            process?.Dispose();
             if (!string.IsNullOrWhiteSpace(path))
             {
+                DeleteScriptCapsuleFile(path);
+            }
+        }
+    }
+
+    private static async Task<(int ExitCode, string Output, string Error)> CompleteScriptCapsuleExecutionAsync(
+        ActiveScriptExecution execution,
+        string path)
+    {
+        using var cancellation = execution.ShutdownCancellation;
+        var process = execution.Process;
+        using (process)
+        {
+            Task<string> outputTask = Task.FromResult(string.Empty);
+            Task<string> errorTask = Task.FromResult(string.Empty);
+            try
+            {
+                outputTask = process.StandardOutput.ReadToEndAsync(cancellation.Token);
+                errorTask = process.StandardError.ReadToEndAsync(cancellation.Token);
+                await process.WaitForExitAsync(cancellation.Token).ConfigureAwait(false);
+                var output = await outputTask.ConfigureAwait(false);
+                var error = await errorTask.ConfigureAwait(false);
+                return (process.ExitCode, output, error);
+            }
+            finally
+            {
+                // A child can inherit output pipes after its parent exits. Shutdown cancels
+                // the drain instead of waiting forever for that unrelated lifetime to end.
+                cancellation.Cancel();
                 try
                 {
-                    File.Delete(path);
+                    await Task.WhenAll(outputTask, errorTask).ConfigureAwait(false);
                 }
                 catch
                 {
-                    // Temporary script cleanup must not affect the user's note.
+                    // The caller observes the execution failure; cleanup still completes.
                 }
+
+                DeleteScriptCapsuleFile(path);
             }
         }
     }
@@ -1342,46 +1416,70 @@ public sealed partial class PaperWindow
     private void RunPersistentScriptCapsule(ScriptCapsuleSpec spec)
     {
         string? path = null;
-        var submitted = false;
+        PersistentScriptSession? failedSession = null;
         try
         {
             path = WriteScriptCapsuleFile(spec.Script);
             var executable = ResolvePowerShellExecutable(spec.Engine);
-            var process = EnsurePersistentScriptProcess(executable, _controller.State.HideScriptRunWindow);
-            var escapedPath = path.Replace("'", "''", StringComparison.Ordinal);
-            process.StandardInput.WriteLine("[Console]::OutputEncoding = [System.Text.Encoding]::UTF8");
-            process.StandardInput.WriteLine("$OutputEncoding = [System.Text.Encoding]::UTF8");
-            process.StandardInput.WriteLine($"try {{ & '{escapedPath}' }} finally {{ Remove-Item -LiteralPath '{escapedPath}' -ErrorAction SilentlyContinue }}");
-            process.StandardInput.Flush();
-            submitted = true;
+            lock (PersistentScriptProcessLock)
+            {
+                var session = EnsurePersistentScriptProcess(executable, _controller.State.HideScriptRunWindow);
+                // PowerShell removes completed scripts immediately. Retain only files that
+                // still need the session's fallback cleanup, including queued submissions.
+                session.ScriptPaths.RemoveWhere(static scriptPath => !File.Exists(scriptPath));
+                session.ScriptPaths.Add(path);
+                var escapedPath = path.Replace("'", "''", StringComparison.Ordinal);
+                path = null; // The session owns cleanup before any command reaches its input pipe.
+                try
+                {
+                    var process = session.Process;
+                    process.StandardInput.WriteLine("[Console]::OutputEncoding = [System.Text.Encoding]::UTF8");
+                    process.StandardInput.WriteLine("$OutputEncoding = [System.Text.Encoding]::UTF8");
+                    process.StandardInput.WriteLine($"try {{ & '{escapedPath}' }} finally {{ Remove-Item -LiteralPath '{escapedPath}' -ErrorAction SilentlyContinue }}");
+                    process.StandardInput.Flush();
+                }
+                catch
+                {
+                    // A failed pipe cannot be reused. Transfer this whole session to the
+                    // stop worker so even a partially submitted command keeps its file alive
+                    // until its process has stopped.
+                    PersistentScriptProcesses.Remove(session.Key);
+                    failedSession = session;
+                    throw;
+                }
+            }
         }
         catch (Exception ex)
         {
+            if (failedSession != null)
+            {
+                StopScriptProcessAsync(failedSession.Process, failedSession).GetAwaiter().GetResult();
+            }
+
             ShowScriptCapsuleFailure(ex.Message);
         }
         finally
         {
-            if (!submitted && !string.IsNullOrWhiteSpace(path))
+            if (!string.IsNullOrWhiteSpace(path))
             {
                 DeleteScriptCapsuleFile(path);
             }
         }
     }
 
-    private static Process EnsurePersistentScriptProcess(string executable, bool hideWindow)
+    private static PersistentScriptSession EnsurePersistentScriptProcess(string executable, bool hideWindow)
     {
         var key = $"{executable}|{hideWindow}";
         lock (PersistentScriptProcessLock)
         {
-            if (PersistentScriptProcesses.TryGetValue(key, out var existing) && !existing.HasExited)
+            if (PersistentScriptProcesses.TryGetValue(key, out var existing) && !existing.Process.HasExited)
             {
                 return existing;
             }
 
-            if (existing != null)
+            if (existing != null && PersistentScriptProcesses.Remove(key))
             {
-                existing.Dispose();
-                PersistentScriptProcesses.Remove(key);
+                DisposePersistentScriptSession(existing);
             }
 
             var startInfo = new ProcessStartInfo
@@ -1400,26 +1498,35 @@ public sealed partial class PaperWindow
             startInfo.ArgumentList.Add("-");
 
             var process = new Process { StartInfo = startInfo, EnableRaisingEvents = true };
+            var session = new PersistentScriptSession(key, process);
             process.Exited += (_, _) =>
             {
-                var ownsProcess = false;
                 lock (PersistentScriptProcessLock)
                 {
-                    if (PersistentScriptProcesses.TryGetValue(key, out var current) && ReferenceEquals(current, process))
+                    if (PersistentScriptProcesses.TryGetValue(key, out var current) && ReferenceEquals(current, session))
                     {
+                        // Keep cleanup inside the ownership lock: global shutdown must not
+                        // miss an exited session whose files are still being removed.
+                        DisposePersistentScriptSession(session);
                         PersistentScriptProcesses.Remove(key);
-                        ownsProcess = true;
                     }
                 }
-
-                if (ownsProcess)
-                {
-                    process.Dispose();
-                }
             };
-            process.Start();
-            PersistentScriptProcesses[key] = process;
-            return process;
+            try
+            {
+                if (!process.Start())
+                {
+                    throw new InvalidOperationException(Strings.Get("ScriptCapsuleStartFailureMessage"));
+                }
+
+                PersistentScriptProcesses[key] = session;
+                return session;
+            }
+            catch
+            {
+                process.Dispose();
+                throw;
+            }
         }
     }
 
@@ -1538,7 +1645,10 @@ public sealed partial class PaperWindow
 
     internal static void EnsurePersistentScriptProcessForSettings(AppState state)
     {
-        if (!state.UsePersistentPowerShellProcess)
+        // Settings callbacks and queued prewarming share this entry point. A nested message
+        // loop during shutdown must not publish a new pool after the exit snapshot was taken.
+        // A later AppController becomes Current in Running state, so this is not a global latch.
+        if (!state.UsePersistentPowerShellProcess || AppController.Current is { IsRunning: false })
         {
             return;
         }
@@ -1626,7 +1736,8 @@ public sealed partial class PaperWindow
 
     private void ShowScriptCapsuleFailure(string message)
     {
-        if (_windowLifecycle != PaperWindowLifecycleState.Alive || IsClosed || !_paper.IsVisible)
+        if (!_controller.IsRunning ||
+            _windowLifecycle != PaperWindowLifecycleState.Alive || IsClosed || !_paper.IsVisible)
         {
             return;
         }
@@ -1639,76 +1750,124 @@ public sealed partial class PaperWindow
     }
 
 
-    internal static void StopPersistentScriptProcesses()
+    internal static void StopPersistentScriptProcesses() =>
+        StopPersistentScriptProcessesAsync().GetAwaiter().GetResult();
+
+    private static Task StopPersistentScriptProcessesAsync()
     {
-        List<Process> processes;
+        PersistentScriptSession[] sessions;
         lock (PersistentScriptProcessLock)
         {
-            processes = PersistentScriptProcesses.Values.ToList();
+            sessions = PersistentScriptProcesses.Values.Distinct().ToArray();
             PersistentScriptProcesses.Clear();
         }
 
-        foreach (var process in processes)
-        {
-            try
-            {
-                if (!process.HasExited)
-                {
-                    try
-                    {
-                        if (process.StartInfo.RedirectStandardInput)
-                        {
-                            process.StandardInput.Close();
-                        }
-                    }
-                    catch
-                    {
-                        // The process may already be exiting or the pipe may be broken.
-                    }
-
-                    if (!process.WaitForExit(250))
-                    {
-                        process.Kill(entireProcessTree: true);
-                        process.WaitForExit(1000);
-                    }
-                }
-            }
-            catch
-            {
-                // Persistent script sessions are optional and disposable.
-            }
-            finally
-            {
-                process.Dispose();
-            }
-        }
+        return Task.WhenAll(sessions.Select(session => StopScriptProcessAsync(session.Process, session)));
     }
 
-    internal static void StopAllScriptProcesses()
+    private static void DisposePersistentScriptSession(PersistentScriptSession session)
     {
-        StopPersistentScriptProcesses();
+        foreach (var path in session.ScriptPaths)
+        {
+            DeleteScriptCapsuleFile(path);
+        }
 
-        List<Process> activeProcesses;
+        session.ScriptPaths.Clear();
+        session.Process.Dispose();
+    }
+
+    internal static Task StopAllScriptProcessesAsync()
+    {
+        var persistent = StopPersistentScriptProcessesAsync();
+        ActiveScriptExecution[] activeExecutions;
         lock (ActiveScriptProcessLock)
         {
-            activeProcesses = ActiveScriptProcesses.Values.Distinct().ToList();
+            activeExecutions = ActiveScriptProcesses.Values.Distinct().ToArray();
             ActiveScriptProcesses.Clear();
         }
 
-        foreach (var process in activeProcesses)
+        return Task.WhenAll(activeExecutions
+            .Select(StopActiveScriptExecutionAsync)
+            .Append(persistent));
+    }
+
+    private static async Task StopActiveScriptExecutionAsync(ActiveScriptExecution execution)
+    {
+        await StopScriptProcessAsync(execution.Process).ConfigureAwait(false);
+        try
         {
-            try
-            {
-                if (!process.HasExited)
-                {
-                    process.Kill(entireProcessTree: true);
-                    process.WaitForExit(1000);
-                }
-            }
-            catch
-            {
-                // The execution task owns disposal and temporary-file cleanup in its finally.
-            }
+            execution.ShutdownCancellation.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            // Completion already disposed its cancellation source and Process.
+        }
+
+        try
+        {
+            // This Task contains no WPF continuation. Exit waits for output cancellation,
+            // temporary-file deletion and Process disposal, not merely native process exit.
+            await execution.Completion.ConfigureAwait(false);
+        }
+        catch
+        {
+            // Cancellation or an ordinary script error must not interrupt global cleanup.
         }
     }
+
+    // Windows redirected pipes use synchronous handles. Their async output reads can occupy
+    // ThreadPool workers until the child exits, so stopping must not queue behind those reads.
+    // Keep each bounded stop on its own worker, including the grace/kill waits; an async
+    // LongRunning delegate would return its continuation to the same starved ThreadPool.
+    private static Task StopScriptProcessAsync(Process process, PersistentScriptSession? persistentSession = null) => Task.Factory.StartNew(() =>
+    {
+        try
+        {
+            if (process.HasExited)
+            {
+                return;
+            }
+
+            if (persistentSession != null)
+            {
+                try
+                {
+                    if (process.StartInfo.RedirectStandardInput)
+                    {
+                        process.StandardInput.Close();
+                    }
+                }
+                catch
+                {
+                    // The process may already be exiting or its input pipe may be broken.
+                }
+
+                if (process.WaitForExit(250))
+                {
+                    return;
+                }
+            }
+
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+            }
+
+            process.WaitForExit(1000);
+        }
+        catch
+        {
+            // An active execution may finish/dispose concurrently. Other processes still stop.
+        }
+        finally
+        {
+            // The non-WPF execution completion owns normal process/temp-file disposal. Clearing
+            // the persistent pools transfers their sole disposal responsibility to this worker.
+            if (persistentSession != null)
+            {
+                DisposePersistentScriptSession(persistentSession);
+            }
+        }
+    }, System.Threading.CancellationToken.None,
+        TaskCreationOptions.LongRunning | TaskCreationOptions.DenyChildAttach, TaskScheduler.Default);
 }

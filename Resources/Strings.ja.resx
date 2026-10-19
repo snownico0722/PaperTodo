@@ -184,6 +184,21 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
   <data name="ImageImportFailureMessage" xml:space="preserve">
     <value>画像を挿入できませんでした:&#x0A;{0}</value>
   </data>
+  <data name="TodoPasteTruncatedTitle" xml:space="preserve">
+    <value>貼り付け内容を切り詰めました</value>
+  </data>
+  <data name="TodoPasteItemLimitMessage" xml:space="preserve">
+    <value>先頭の {0} 件だけを挿入し、残りは挿入しませんでした。</value>
+  </data>
+  <data name="TodoPasteTextLimitMessage" xml:space="preserve">
+    <value>ToDo は最大 {0} 文字です。超えた部分は挿入しませんでした。</value>
+  </data>
+  <data name="NoteInputLimitTitle" xml:space="preserve">
+    <value>ノートの上限に達しました</value>
+  </data>
+  <data name="NoteInputLimitMessage" xml:space="preserve">
+    <value>ノートは最大 {0} 文字です。続けて入力するには一部の内容を削除してください。</value>
+  </data>
   <data name="NotePasteRejectedTitle" xml:space="preserve">
     <value>貼り付けできません</value>
   </data>

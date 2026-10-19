@@ -464,6 +464,11 @@ public sealed class StateStore
                 ClearDeepCapsuleExpandedGeometry(paper);
             }
 
+            if (paper.DeepCapsuleExpandedDpiScale is double scale && (!IsFinite(scale) || scale <= 0))
+            {
+                paper.DeepCapsuleExpandedDpiScale = null;
+            }
+
             foreach (var item in paper.Items)
             {
                 item.Text ??= "";
@@ -764,6 +769,10 @@ public sealed class StateStore
 
     private static void NormalizeDeepCapsuleExpandedGeometry(PaperData paper)
     {
+        if (paper.DeepCapsuleExpandedDpiScale is double scale && (!IsFinite(scale) || scale <= 0))
+        {
+            paper.DeepCapsuleExpandedDpiScale = null;
+        }
         if (!paper.DeepCapsuleExpandedX.HasValue ||
             !paper.DeepCapsuleExpandedY.HasValue ||
             !paper.DeepCapsuleExpandedWidth.HasValue ||
@@ -804,6 +813,7 @@ public sealed class StateStore
         paper.DeepCapsuleExpandedY = null;
         paper.DeepCapsuleExpandedWidth = null;
         paper.DeepCapsuleExpandedHeight = null;
+        paper.DeepCapsuleExpandedDpiScale = null;
         paper.DeepCapsuleExpandedSide = "";
         paper.DeepCapsuleExpandedMonitorDeviceName = "";
     }

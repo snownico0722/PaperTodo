@@ -223,8 +223,14 @@ public sealed partial class PaperWindow : Window
     public bool SuppressGeometrySave => _suppressGeometrySave;
     // Ordinary collapsed capsules are the main PaperWindow and should still save X/Y.
     // Deep capsules use the slot-host window for docked geometry, so the hidden/parked
-    // main window must not overwrite ordinary paper geometry.
-    public bool UsesNonPaperGeometry => _paper.IsCollapsed && HasDeepCapsuleSlotPlacement;
+    // main window must not overwrite ordinary paper geometry. When the slot is hidden
+    // while expanded, collapse settles before the queue reattaches it; its edge origin
+    // still identifies that short return path even though no slot is attached yet.
+    public bool UsesNonPaperGeometry => _paper.IsCollapsed &&
+        (HasDeepCapsuleSlotPlacement ||
+         (_controller.State.UseCapsuleMode &&
+          _controller.State.UseDeepCapsuleMode &&
+          ExpandedFromDeepCapsuleEdge));
     public bool ShouldSaveDeepCapsuleExpandedGeometry => ExpandedFromDeepCapsuleEdge && !_paper.IsCollapsed && _paper.IsVisible;
     public double DesiredCapsuleWindowWidth => CapsuleWindowWidth();
     public double DeepCapsuleRestingVisibleWidth => HoldsDeepCapsuleSlotWhileExpanded
@@ -240,9 +246,6 @@ public sealed partial class PaperWindow : Window
     private void ClearCapsuleInteractionKeyboardFocus()
     {
         WindowNative.ClearCurrentThreadKeyboardFocus();
-        Dispatcher.BeginInvoke(
-            (Action)WindowNative.ClearCurrentThreadKeyboardFocus,
-            System.Windows.Threading.DispatcherPriority.Background);
     }
 
     private sealed class TodoDragState
@@ -623,7 +626,11 @@ public sealed partial class PaperWindow : Window
 
             RefreshEffectiveTopmost();
         };
-        Activated += (_, _) => _controller.RefreshFloatingSurfaceZOrder();
+        Activated += (_, _) =>
+        {
+            _controller.RefreshFloatingSurfaceZOrder();
+            TryRestoreMaximizedStateAfterExpand();
+        };
         Deactivated += (_, _) => AbortAllInteractions(InteractionAbortReason.Deactivated);
         Closing += OnClosing;
         Closed += (_, _) => CompletePaperWindowClose();
@@ -740,15 +747,21 @@ public sealed partial class PaperWindow : Window
 
     private void ApplyDeferredStartupSystemVisibility()
     {
+        // A cold edge expansion can precede Loaded's deferred refresh. Its first frame
+        // already has the correct shell styles; the transition owns taskbar completion.
+        if (IsPaperFormTransitioning)
+        {
+            return;
+        }
         var shouldShowInTaskbar = ShouldShowInTaskbar();
         ApplySystemVisibility(reapplyTaskbarShellState: ShowInTaskbar != shouldShowInTaskbar || !shouldShowInTaskbar);
     }
 
-    private bool ShouldShowInTaskbar()
+    private bool ShouldShowInTaskbar(bool? collapsed = null)
     {
         return !_controller.State.HidePapersFromWindowSwitcher &&
             !_controller.State.HidePapersFromTaskbar &&
-            !_paper.IsCollapsed;
+            !(collapsed ?? _paper.IsCollapsed);
     }
 
     private bool TryGetHiddenResizeHitTest(IntPtr hwnd, IntPtr lParam, out int hitTest)
@@ -2699,6 +2712,15 @@ public sealed partial class PaperWindow : Window
         RefreshEffectiveTopmost();
         RefreshPaperIconButton();
         _controller.MarkDirty();
+    }
+
+    internal bool CanRetryFullscreenAvoidance(IntPtr expectedTarget)
+    {
+        return _controller.IsRunning &&
+            _windowLifecycle == PaperWindowLifecycleState.Alive &&
+            _paper.IsVisible && IsVisible && !Topmost &&
+            (_paper.AlwaysOnTop || (_controller.State.UseCapsuleMode && _paper.IsCollapsed)) &&
+            _controller.FullscreenAvoidanceWindowFor(this) == expectedTarget;
     }
 
     internal void RefreshEffectiveTopmost()

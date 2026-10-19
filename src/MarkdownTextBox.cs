@@ -55,6 +55,8 @@ public sealed partial class MarkdownTextBox : TextEditor
     private readonly MarkdownImageElementGenerator _imageElementGenerator;
     private readonly FencedCodeStateCache _fencedCodeStateCache = new();
     private readonly MarkdownLineAnalysisCache _lineAnalysisCache;
+    private bool _textLimitNoticeShown;
+    private static readonly bool PreviewTextDropHandlersRegistered = RegisterPreviewTextDropHandlers();
 
     public event Action<Exception>? ImageImportFailed;
 
@@ -1260,11 +1262,8 @@ public sealed partial class MarkdownTextBox : TextEditor
 
     public bool ValidateTextDrop(IDataObject dataObject)
     {
-        if (IsReadOnly)
-        {
-            return true;
-        }
-
+        // Preview is read-only until the host places the caret and enables editing. Validate
+        // before that transition too, so external text cannot bypass the existing paste limits.
         string? text;
         try
         {
@@ -1287,6 +1286,58 @@ public sealed partial class MarkdownTextBox : TextEditor
 
         PasteRejected?.Invoke();
         return false;
+    }
+
+    private static bool RegisterPreviewTextDropHandlers()
+    {
+        // AvalonEdit can consume preview events before instance handlers. Keep the narrowly
+        // scoped class interception, while sharing format/effect/validation rules with the host.
+        EventManager.RegisterClassHandler(typeof(MarkdownTextBox), DragDrop.PreviewDragOverEvent,
+            new DragEventHandler(OnPreviewTextDragOver), handledEventsToo: true);
+        EventManager.RegisterClassHandler(typeof(MarkdownTextBox), DragDrop.PreviewDropEvent,
+            new DragEventHandler(OnPreviewTextDrop), handledEventsToo: true);
+        return true;
+    }
+
+    private static void OnPreviewTextDragOver(object sender, DragEventArgs e)
+    {
+        if (sender is not MarkdownTextBox editor || !editor.IsPreviewMode ||
+            editor.CanInsertImagesFromDataObject(e.Data) || !HasTextDropData(e.Data)) return;
+
+        e.Effects = ResolveTextDropEffect(e);
+        e.Handled = e.Effects != DragDropEffects.None;
+    }
+
+    private static void OnPreviewTextDrop(object sender, DragEventArgs e)
+    {
+        if (sender is not MarkdownTextBox editor || !editor.IsPreviewMode ||
+            editor.CanInsertImagesFromDataObject(e.Data) || !HasTextDropData(e.Data) ||
+            editor.ValidateTextDrop(e.Data)) return;
+
+        e.Effects = DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    internal static bool HasTextDropData(IDataObject data)
+    {
+        try
+        {
+            return data.GetDataPresent(DataFormats.UnicodeText) || data.GetDataPresent(DataFormats.Text);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    internal static DragDropEffects ResolveTextDropEffect(DragEventArgs e)
+    {
+        var controlPressed = (e.KeyStates & DragDropKeyStates.ControlKey) == DragDropKeyStates.ControlKey;
+        return (e.AllowedEffects & DragDropEffects.Move) != 0 && !controlPressed
+            ? DragDropEffects.Move
+            : (e.AllowedEffects & DragDropEffects.Copy) != 0
+                ? DragDropEffects.Copy
+                : DragDropEffects.None;
     }
 
     public bool TryInsertImagesFromDataObject(IDataObject dataObject)
@@ -1621,6 +1672,20 @@ public sealed partial class MarkdownTextBox : TextEditor
         DocumentReplacementTarget Target,
         int ImageCount);
 
+    // Explicit paste (including the note context menu) must use the same image path as
+    // Ctrl+V; AvalonEdit's text-only command is disabled for a pure-image clipboard.
+    public new void Paste()
+    {
+        if (!IsReadOnly &&
+            !ClipboardHasText() &&
+            TryInsertImageFromClipboard())
+        {
+            return;
+        }
+
+        base.Paste();
+    }
+
     protected override void OnPreviewKeyDown(System.Windows.Input.KeyEventArgs e)
     {
         // AvalonEdit's built-in paste command no-ops when the clipboard holds only image
@@ -1685,7 +1750,7 @@ public sealed partial class MarkdownTextBox : TextEditor
         if (!IsReadOnly &&
             _acceptsReturn &&
             e.Key == System.Windows.Input.Key.Enter &&
-            !CanApplyTextReplacement(NewLineTextAtCaret()))
+            !CanApplyTextReplacementWithNotice(NewLineTextAtCaret()))
         {
             e.Handled = true;
             return;
@@ -1694,7 +1759,7 @@ public sealed partial class MarkdownTextBox : TextEditor
         if (!IsReadOnly &&
             _acceptsTab &&
             e.Key == System.Windows.Input.Key.Tab &&
-            !CanApplyTextReplacement("\t"))
+            !CanApplyTextReplacementWithNotice("\t"))
         {
             e.Handled = true;
             return;
@@ -1712,13 +1777,40 @@ public sealed partial class MarkdownTextBox : TextEditor
 
         if (!IsReadOnly &&
             !string.IsNullOrEmpty(e.Text) &&
-            !CanApplyTextReplacement(e.Text))
+            !CanApplyTextReplacementWithNotice(e.Text))
         {
             e.Handled = true;
             return;
         }
 
         base.OnPreviewTextInput(e);
+    }
+
+    private bool CanApplyTextReplacementWithNotice(string replacement)
+    {
+        // Ask the actual edit guard: legacy oversized notes and image delimiters keep their
+        // existing exceptions, and a rejected keystroke is reported only once until input resumes.
+        var inputAllowed = CanApplyTextReplacement(replacement);
+        if (inputAllowed)
+        {
+            _textLimitNoticeShown = false;
+        }
+        else if (!_textLimitNoticeShown)
+        {
+            _textLimitNoticeShown = true;
+            var maximumCharacters = MaxLength;
+            _ = Dispatcher.BeginInvoke((Action)(() =>
+            {
+                if (Window.GetWindow(this) is not PaperWindow owner || owner.IsClosed || !owner.IsVisible)
+                {
+                    _textLimitNoticeShown = false;
+                    return;
+                }
+                PaperNoticeDialog.Show(owner, Strings.Get("NoteInputLimitTitle"),
+                    Strings.Format("NoteInputLimitMessage", maximumCharacters));
+            }), System.Windows.Threading.DispatcherPriority.Background);
+        }
+        return inputAllowed;
     }
 
     private bool CanApplyTextReplacement(string replacement)

@@ -70,8 +70,7 @@ public sealed partial class AppController
 
         // Autosave already owns normal runtime durability. Do not start a new final state save
         // while Windows is ending the session. A save already in flight may finish naturally.
-        _lifecycleState = AppLifecycleState.Exiting;
-        StopStateBackupPolicy();
+        BeginRuntimeShutdown();
         DisposeRuntimeResources();
         _lifecycleState = AppLifecycleState.Disposed;
 

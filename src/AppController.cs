@@ -270,7 +270,13 @@ public sealed partial class AppController : IDisposable
         InitializeGlobalHotkeys();
         _ = Task.Run(PaperWindow.CleanupOldScriptCapsuleTempFiles);
         _ = Application.Current.Dispatcher.BeginInvoke(
-            () => PaperWindow.EnsurePersistentScriptProcessForSettings(State),
+            () =>
+            {
+                if (!IsExiting)
+                {
+                    PaperWindow.EnsurePersistentScriptProcessForSettings(State);
+                }
+            },
             DispatcherPriority.SystemIdle);
         RefreshFullscreenAvoidanceRuntime();
 
@@ -306,6 +312,11 @@ public sealed partial class AppController : IDisposable
 
     private async Task RestorePaperSurfacesAsync(IReadOnlyList<PaperData> papersToRestore)
     {
+        if (IsExiting)
+        {
+            return;
+        }
+
         var restoreGeneration = ++_paperSurfaceRestoreGeneration;
         var activationPaper = papersToRestore.LastOrDefault(paper =>
             !(State.UseCapsuleMode && State.UseDeepCapsuleMode && paper.IsCollapsed && CanPaperDisplayAsCapsule(paper)));
@@ -498,6 +509,11 @@ public sealed partial class AppController : IDisposable
 
     public PaperData? CreatePaper(string type, bool show = true, PaperData? sourcePaper = null)
     {
+        if (IsExiting)
+        {
+            return null;
+        }
+
         if (State.Papers.Count >= 100)
         {
             ShowPaperLimitDialog();
@@ -1143,6 +1159,11 @@ public sealed partial class AppController : IDisposable
 
     public void ExecuteStartupCommand(StartupCommand command)
     {
+        if (IsExiting)
+        {
+            return;
+        }
+
         if (command.Kind is StartupCommandKind.Show or
             StartupCommandKind.Toggle or
             StartupCommandKind.NewTodo or
@@ -2430,47 +2451,29 @@ public sealed partial class AppController : IDisposable
         MarkDirty();
     }
 
-    public bool TryGetRememberedDeepCapsuleExpandedGeometry(
+    internal bool TryGetRememberedDeepCapsuleExpandedGeometry(
         PaperData paper,
         double fallbackWidth,
         double fallbackHeight,
-        out Rect geometry)
+        out PaperRestoreGeometry geometry)
     {
         geometry = default;
         if (!TryGetUnclampedDeepCapsuleExpandedGeometry(
-                paper, fallbackWidth, fallbackHeight, out var remembered, out _))
+                paper, fallbackWidth, fallbackHeight, out var rememberedRect, out _))
         {
             return false;
         }
 
-        var currentMonitor = WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(paper.CapsuleMonitorDeviceName);
-        var area = EdgeCapsuleLayout.WorkAreaForQueue(currentMonitor);
-        if (area.Width <= 0 || area.Height <= 0)
+        var savedScale = paper.DeepCapsuleExpandedDpiScale is double scale && double.IsFinite(scale) && scale > 0
+            ? scale
+            : WindowWorkAreaHelper.SystemDpiScale().ScaleX;
+        if (!PaperRestoreGeometry.TryGetDeviceBounds(rememberedRect, savedScale, out var deviceBounds) ||
+            !WindowWorkAreaHelper.TryGetMonitorGeometryForDeviceBounds(deviceBounds, out var monitor))
         {
             return false;
         }
 
-        const double margin = 8;
-        var width = ClampPaperDimension(
-            remembered.Width,
-            fallbackWidth,
-            PaperLayoutDefaults.MinWidth,
-            Math.Max(PaperLayoutDefaults.MinWidth, area.Width - (margin * 2)));
-        var height = ClampPaperDimension(
-            remembered.Height,
-            fallbackHeight,
-            PaperLayoutDefaults.MinHeight,
-            Math.Max(PaperLayoutDefaults.MinHeight, area.Height - (margin * 2)));
-        var minX = area.Left + margin;
-        var maxX = Math.Max(minX, area.Right - width - margin);
-        var minY = area.Top + margin;
-        var maxY = Math.Max(minY, area.Bottom - height - margin);
-
-        geometry = new Rect(
-            Math.Round(Math.Clamp(remembered.Left, minX, maxX)),
-            Math.Round(Math.Clamp(remembered.Top, minY, maxY)),
-            Math.Round(width),
-            Math.Round(height));
+        geometry = PaperRestoreGeometry.ClampToMonitor(deviceBounds, rememberedRect.Width, rememberedRect.Height, monitor);
         return true;
     }
 
@@ -2510,27 +2513,58 @@ public sealed partial class AppController : IDisposable
             return false;
         }
 
-        var width = ClampPaperDimension(
+        // The remembered monitor/side identify the edge queue that owns this memory, not
+        // the screen the expanded paper must stay on. Resolve that screen from the saved
+        // paper rectangle before clamping, so cross-monitor positions can be restored.
+        var rememberedWidth = ClampPaperDimension(
             paper.DeepCapsuleExpandedWidth.Value,
             fallbackWidth,
             PaperLayoutDefaults.MinWidth,
             double.MaxValue);
-        var height = ClampPaperDimension(
+        var rememberedHeight = ClampPaperDimension(
             paper.DeepCapsuleExpandedHeight.Value,
             fallbackHeight,
             PaperLayoutDefaults.MinHeight,
             double.MaxValue);
-        bounds = new Rect(paper.DeepCapsuleExpandedX.Value, paper.DeepCapsuleExpandedY.Value, width, height);
-        screenCenter = new Point(bounds.Left + width / 2, bounds.Top + height / 2);
+        bounds = new Rect(
+            paper.DeepCapsuleExpandedX.Value,
+            paper.DeepCapsuleExpandedY.Value,
+            rememberedWidth,
+            rememberedHeight);
+        // Old data did not capture DPI and cannot disambiguate every mixed-DPI position.
+        // Keep its system-DPI interpretation until a real expanded HWND supplies a new snapshot.
+        var savedScale = paper.DeepCapsuleExpandedDpiScale is double scale && double.IsFinite(scale) && scale > 0
+            ? scale
+            : WindowWorkAreaHelper.SystemDpiScale().ScaleX;
+        if (!PaperRestoreGeometry.TryGetDeviceBounds(bounds, savedScale, out var deviceBounds))
+        {
+            return false;
+        }
+
+        // WorkAreaForDevice uses system-DPI coordinates. The saved rectangle belongs to
+        // the capture monitor's DPI, so only this readiness comparison needs the projection.
+        var center = WindowWorkAreaHelper.DeviceScreenPointToDip(new DeviceScreenPoint(
+            deviceBounds.Left + deviceBounds.Width / 2.0,
+            deviceBounds.Top + deviceBounds.Height / 2.0));
+        screenCenter = new Point(center.X, center.Y);
         return true;
     }
 
     private void UpdateDeepCapsuleExpandedGeometry(PaperData paper, Window window)
     {
-        paper.DeepCapsuleExpandedX = Math.Round(window.Left);
-        paper.DeepCapsuleExpandedY = Math.Round(window.Top);
-        paper.DeepCapsuleExpandedWidth = Math.Round(Math.Max(window.ActualWidth > 0 ? window.ActualWidth : window.Width, PaperLayoutDefaults.MinWidth));
-        paper.DeepCapsuleExpandedHeight = Math.Round(Math.Max(window.ActualHeight > 0 ? window.ActualHeight : window.Height, PaperLayoutDefaults.MinHeight));
+        if (!WindowNative.TryGetWindowDeviceBounds(window, out var bounds) ||
+            !WindowWorkAreaHelper.TryGetMonitorGeometryForWindowHandle(
+                new System.Windows.Interop.WindowInteropHelper(window).Handle, out var monitor))
+        {
+            return;
+        }
+
+        var scale = monitor.DpiScaleX;
+        paper.DeepCapsuleExpandedX = bounds.Left / scale;
+        paper.DeepCapsuleExpandedY = bounds.Top / scale;
+        paper.DeepCapsuleExpandedWidth = Math.Max(bounds.Width / scale, PaperLayoutDefaults.MinWidth);
+        paper.DeepCapsuleExpandedHeight = Math.Max(bounds.Height / scale, PaperLayoutDefaults.MinHeight);
+        paper.DeepCapsuleExpandedDpiScale = scale;
         paper.DeepCapsuleExpandedSide = DeepCapsuleSides.Normalize(paper.CapsuleSide);
         paper.DeepCapsuleExpandedMonitorDeviceName = WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(paper.CapsuleMonitorDeviceName);
         MarkDirty();
@@ -2942,7 +2976,10 @@ public sealed partial class AppController : IDisposable
 
     public void SaveNow(bool sync = false)
     {
-        _ = TrySaveNow(sync);
+        if (!IsExiting)
+        {
+            _ = TrySaveNow(sync);
+        }
     }
 
     private bool TrySaveNow(bool sync)
@@ -2961,7 +2998,10 @@ public sealed partial class AppController : IDisposable
             if (sync)
             {
                 _store.SaveJsonSync(json, version);
-                TryReleaseUnreferencedImageCache();
+                if (!IsExiting)
+                {
+                    TryReleaseUnreferencedImageCache();
+                }
                 _hasShownSaveFailure = false;
             }
             else
@@ -2973,7 +3013,8 @@ public sealed partial class AppController : IDisposable
                         await _store.SaveJsonAsync(json, version);
                         Application.Current?.Dispatcher?.BeginInvoke(new Action(() =>
                         {
-                            if (version == Interlocked.Read(ref _saveVersion) &&
+                            if (!IsExiting &&
+                                version == Interlocked.Read(ref _saveVersion) &&
                                 stateRevision == Interlocked.Read(ref _stateRevision))
                             {
                                 TryReleaseUnreferencedImageCache();
@@ -3592,17 +3633,14 @@ public sealed partial class AppController : IDisposable
             return;
         }
 
+        // Freeze queued restore/prewarm/commands before committing editors. A save-error dialog
+        // can pump the Dispatcher; it must not resume startup or create another script process.
+        BeginRuntimeShutdown();
         CommitSettingsExternalMarkdownEditor(saveImmediately: false);
         foreach (var window in _windows.Values.ToList())
         {
             window.CommitPendingEditsForSave();
         }
-
-        _lifecycleState = AppLifecycleState.Exiting;
-        _saveTimer.Stop();
-        _forceSaveTimer.Stop();
-        StopFullscreenAvoidanceRuntime(restoreTopmost: false);
-        _displayMetricsRefreshTimer.Stop();
 
         if (!TrySaveNow(sync: true))
         {
@@ -3618,14 +3656,9 @@ public sealed partial class AppController : IDisposable
 
         DisposeRuntimeResources();
         _lifecycleState = AppLifecycleState.Disposed;
-        try
-        {
-            Application.Current.Shutdown();
-        }
-        finally
-        {
-            Environment.Exit(0);
-        }
+        // The owning Dispatcher must finish WPF shutdown and App.OnExit, which releases the
+        // single-instance listener/mutex. Owned scripts have already stopped before this point.
+        Application.Current.Shutdown();
     }
 
     private static void TryExitCleanup(Action cleanup)
@@ -3674,7 +3707,9 @@ public sealed partial class AppController : IDisposable
             return;
         }
 
-        if (_lifecycleState == AppLifecycleState.Running)
+        var wasRunning = IsRunning;
+        BeginRuntimeShutdown();
+        if (wasRunning)
         {
             foreach (var window in _windows.Values.ToList())
             {
@@ -3684,15 +3719,33 @@ public sealed partial class AppController : IDisposable
             TrySaveNow(sync: true);
         }
 
-        _lifecycleState = AppLifecycleState.Exiting;
         DisposeRuntimeResources();
         _lifecycleState = AppLifecycleState.Disposed;
     }
 
-    private void DisposeRuntimeResources()
+    private void BeginRuntimeShutdown()
     {
+        if (IsExiting)
+        {
+            return;
+        }
+
+        _lifecycleState = AppLifecycleState.Exiting;
         _paperSurfaceRestoreGeneration++;
         _startupShellPrewarmGeneration++;
+        _isPreparingStartupEdgeCapsules = false;
+        StopStateBackupPolicy();
+        _saveTimer.Stop();
+        _forceSaveTimer.Stop();
+        StopFullscreenAvoidanceRuntime(restoreTopmost: false);
+        _displayMetricsRefreshTimer.Stop();
+    }
+
+    private void DisposeRuntimeResources()
+    {
+        // Snapshot every retained engine/window-style pool, then let their bounded stop waits
+        // overlap each other and UI teardown. The workers only receive Process objects.
+        var scriptShutdown = PaperWindow.StopAllScriptProcessesAsync();
         SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
         SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
         SystemEvents.PowerModeChanged -= OnPowerModeChanged;
@@ -3701,6 +3754,12 @@ public sealed partial class AppController : IDisposable
         _forceSaveTimer.Stop();
         StopFullscreenAvoidanceRuntime(restoreTopmost: false);
         _displayMetricsRefreshTimer.Stop();
+        // The final snapshot is already saved. Withdraw surfaces without changing the persisted
+        // IsVisible flags, and keep all WPF Hide/Close operations on the owning UI thread.
+        foreach (Window surface in Application.Current.Windows.Cast<Window>().ToArray())
+        {
+            TryExitCleanup(surface.Hide);
+        }
         ClearNoteLinkDropTarget();
         _deepCapsuleContextMenuOwners.Clear();
         _displayMetricsRefreshState = DisplayMetricsRefreshState.Idle;
@@ -3718,7 +3777,7 @@ public sealed partial class AppController : IDisposable
             TryExitCleanup(m.CloseForReal);
         }
         _masterCapsules.Clear();
-        TryExitCleanup(PaperWindow.StopAllScriptProcesses);
         TryExitCleanup(_imageStore.Dispose);
+        TryExitCleanup(() => scriptShutdown.GetAwaiter().GetResult());
     }
 }

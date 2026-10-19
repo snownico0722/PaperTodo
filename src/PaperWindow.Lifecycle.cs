@@ -202,7 +202,12 @@ public sealed partial class PaperWindow
             return;
         }
 
-        CommitPendingEditsForSave();
+        // Normal exit has already committed all editors and saved once. Do not mutate or save
+        // another snapshot while tearing down that finished session.
+        if (_controller.IsRunning)
+        {
+            CommitPendingEditsForSave();
+        }
         _windowLifecycle = PaperWindowLifecycleState.Closing;
         _presentationState = PaperPresentationState.Closing;
         _collapseTransitionGeneration++;
@@ -301,5 +306,6 @@ public sealed partial class PaperWindow
                 Height = Math.Max(_paper.Height, PaperLayoutDefaults.MinHeight);
             }
         });
+        UpdateTaskbarVisibility();
     }
 }
