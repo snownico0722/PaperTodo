@@ -1343,6 +1343,7 @@ public sealed partial class AppController
         State.RememberDeepCapsuleExpandedPosition = true;
         State.UseCapsuleCollapseAll = true;
         State.CompactMasterCapsule = false;
+        ResetDeepCapsuleStartTopMargins();
         State.CollapseExpandedDeepCapsuleOnClick = false;
         State.MaxTitleLength = PaperTitles.DefaultMaxTitleLength;
         State.DeepCapsuleTitleMeasureCharacterLimit = 0;
