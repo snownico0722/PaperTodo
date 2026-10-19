@@ -308,4 +308,3 @@ public sealed partial class PaperWindow
         UpdateTaskbarVisibility();
     }
 }
-

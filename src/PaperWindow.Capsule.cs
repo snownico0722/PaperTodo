@@ -1081,4 +1081,3 @@ public sealed partial class PaperWindow
     }
 
 }
-

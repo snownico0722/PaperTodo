@@ -5048,4 +5048,3 @@ public sealed partial class MarkdownTextBox : TextEditor
         }
     }
 }
-

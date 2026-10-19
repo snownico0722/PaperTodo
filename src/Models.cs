@@ -431,4 +431,3 @@ public sealed class PaperItem
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public bool? LinkedPathIsDirectory { get; set; }
 }
-

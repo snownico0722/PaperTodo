@@ -1092,4 +1092,3 @@ internal sealed class EdgeCapsuleHost : IDisposable
         _appliedEdge = null;
     }
 }
-

@@ -744,4 +744,3 @@ internal static class WindowWorkAreaHelper
             Device == null ? "" : new string(Device).TrimEnd('\0');
     }
 }
-

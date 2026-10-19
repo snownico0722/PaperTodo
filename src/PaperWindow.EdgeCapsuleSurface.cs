@@ -655,4 +655,3 @@ public sealed partial class PaperWindow
         Top = RoundToDevicePixelY(targetTop);
     }
 }
-

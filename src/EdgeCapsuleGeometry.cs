@@ -309,4 +309,3 @@ internal static class EdgeCapsuleGeometry
     private static int LerpDevice(int from, int to, double progress) =>
         RoundDevice(from + (to - from) * progress);
 }
-

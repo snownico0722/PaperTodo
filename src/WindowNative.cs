@@ -767,4 +767,3 @@ internal static partial class WindowNative
         public int Bottom;
     }
 }
-

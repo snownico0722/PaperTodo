@@ -892,4 +892,3 @@ public sealed class StateStore
         return EdgeCapsuleLayout.NormalizeStartTopMargin(value, area, 1);
     }
 }
-
