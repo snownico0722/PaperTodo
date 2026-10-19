@@ -50,7 +50,8 @@ jobs:
               'obj.GetType().GetField(name, Flags)': '(obj is App ? typeof(App) : obj.GetType()).GetField(name, Flags)',
               'obj.GetType().GetMethods(Flags)': '(obj is App ? typeof(App) : obj.GetType()).GetMethods(Flags)',
               'var app = new App();': 'var app = new ReviewApp();',
-              'app.InitializeComponent();': resource_loader
+              'app.InitializeComponent();': resource_loader,
+              'app.ShutdownMode = ShutdownMode.OnExplicitShutdown;': 'app.ShutdownMode = ShutdownMode.OnExplicitShutdown;\n            System.Threading.SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(app.Dispatcher));'
           }
           for old,new in edits.items():
               assert source.count(old)==1, old
