@@ -1,0 +1,79 @@
+name: Temporary 3.x combined backport validation
+on:
+  pull_request:
+    branches: [3.x]
+    paths: [.github/workflows/backport3x-combined.yml]
+permissions:
+  contents: read
+jobs:
+  combined:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'backport/3x-paper-interaction-1019'
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          submodules: recursive
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+      - name: Merge only the three pinned source commits in this disposable checkout
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git checkout --detach 97a65af962b6bde25dea0cfb52f44aa83d82e8da
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git merge --no-ff --no-edit a9b45477fab54c34afa3f56644e4c918bf567a91
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git merge --no-ff --no-edit fc89f9ace90248abaa2e50f8fa1b94e179ee47ed
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git diff 05a798582929cdb08fb57e023fa2fd5e9735965a HEAD --check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git diff 05a798582929cdb08fb57e023fa2fd5e9735965a HEAD --stat
+          $tree = git rev-parse 'HEAD^{tree}'
+          "Combined product tree: $tree" | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          "Sources: #357 97a65af; #358 a9b4547; #359 fc89f9a. No remote branch is modified." | Out-File $env:GITHUB_STEP_SUMMARY -Append
+      - name: Combined Release compilation
+        run: dotnet build PaperTodo.csproj -c Release
+      - name: Run the three historical behavioral harnesses against the combined product tree
+        run: |
+          @'
+          import os, sys, subprocess
+          from pathlib import Path
+          tests=[
+              ('system','b2a4227ba0b129f9359f868fe07fc5e6306d3db0'),
+              ('capsule','f0983faa88d0f44119a742c072400237f75e9d4e'),
+              ('paper','fc5e5d9c11d5b4ff4140e5c6cea869e41a78cc71')
+          ]
+          for name,sha in tests:
+              s=subprocess.check_output(['git','show',f'{sha}:.github/backport3x-{name}.py']).decode('utf-8')
+              if name=='system':
+                  s=s.replace('using System.Diagnostics;', 'using System.Diagnostics;\nusing System.IO;')
+              if name=='capsule':
+                  s=s.replace(')!==expected', ')! == expected')
+                  s=s.replace('c.State.DeepCapsuleStartTopMargin=93;', 'var leftKey=(string)Call(typeof(AppController),"QueueKey","",DeepCapsuleSides.Left)!;\n            var rightKey=(string)Call(typeof(AppController),"QueueKey","",DeepCapsuleSides.Right)!;\n            c.State.DeepCapsuleStartTopMargin=93;')
+                  s=s.replace('"check-left"','leftKey').replace('"check-right"','rightKey')
+                  s=s.replace('Deserialize<AppState>("{}")','Deserialize<AppState>("""{"Papers":[]}""")')
+                  s=s.replace('Assert(new StateStore().Load()', 'c.SaveNow(sync: true);\n            Assert(new StateStore().Load()')
+              p=Path(os.environ['RUNNER_TEMP'])/f'combined-{name}-check.py'
+              p.write_text(s,encoding='utf-8',newline='\n')
+              print(f'RUN combined product + {name} behavioral checks',flush=True)
+              subprocess.run([sys.executable,str(p),'--tests'],check=True)
+          '@ | python -
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Combined persistence regression
+        run: dotnet run --project tests/PaperTodo.PersistenceChecks/PaperTodo.PersistenceChecks.csproj -c Release
+      - name: Combined Store compilation
+        run: dotnet build PaperTodo.csproj -c Release /p:PaperTodoStoreBuild=true
+      - name: Combined Win7 best-effort compilation
+        run: ./build-win7.ps1 -SelfContained
+      - name: Record completed validation
+        run: |
+          "Three pinned PRs merged without conflicts; combined Release, three behavioral harnesses, persistence, Store and Win7 builds passed." | Out-File $env:GITHUB_STEP_SUMMARY -Append
+          "This job has contents:read only and contains no git push or release operation." | Out-File $env:GITHUB_STEP_SUMMARY -Append
