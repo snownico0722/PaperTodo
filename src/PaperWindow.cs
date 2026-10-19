@@ -2697,6 +2697,15 @@ public sealed partial class PaperWindow : Window
         _controller.MarkDirty();
     }
 
+    internal bool CanRetryFullscreenAvoidance(IntPtr expectedTarget)
+    {
+        return _controller.IsRunning &&
+            _windowLifecycle == PaperWindowLifecycleState.Alive &&
+            _paper.IsVisible && IsVisible && !Topmost &&
+            (_paper.AlwaysOnTop || (_controller.State.UseCapsuleMode && _paper.IsCollapsed)) &&
+            _controller.FullscreenAvoidanceWindowFor(this) == expectedTarget;
+    }
+
     internal void RefreshEffectiveTopmost()
     {
         var shouldBeTopmost = _paper.AlwaysOnTop || (_controller.State.UseCapsuleMode && _paper.IsCollapsed);

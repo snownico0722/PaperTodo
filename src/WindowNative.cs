@@ -7,10 +7,11 @@ namespace PaperTodo;
 // Shared Win32 window-style / z-order helpers for the app's borderless top-level windows
 // (paper windows, the deep-capsule slot host, the master capsule). Previously duplicated
 // verbatim across PaperWindow.Native and MasterCapsuleWindow.
-internal static class WindowNative
+internal static partial class WindowNative
 {
     private const int GwlExStyle = -20;
     private const int GwlpHwndParent = -8;
+    private const uint GwHwndNext = 2;
     private const uint GwOwner = 4;
     private const int WsExNoActivate = 0x08000000;
     private const int WsExTopmost = 0x00000008;
@@ -18,8 +19,10 @@ internal static class WindowNative
     private const int WsExAppWindow = 0x00040000;
     private const int WmNcLButtonDown = 0x00A1;
     private const int HtCaption = 0x0002;
+    private const int FullscreenAvoidanceFallbackAttempts = 2;
     private static readonly IntPtr DpiAwarenessContextSystemAware = new(-2);
     private static readonly IntPtr HwndTop = IntPtr.Zero;
+    private static readonly IntPtr HwndBottom = new(1);
     private static readonly IntPtr HwndTopmost = new(-1);
     private static readonly IntPtr HwndNoTopmost = new(-2);
     private const uint SwpNoSize = 0x0001;
@@ -170,65 +173,120 @@ internal static class WindowNative
 
     // Set topmost / no-topmost without moving, sizing, or activating the window. Fullscreen
     // avoidance is owner-aware for non-topmost targets because hidden paper windows can have
-    // an invisible same-process owner.
-    public static void ApplyTopmostZOrder(Window window, bool topmost, IntPtr insertAfter)
+    // an invisible same-process owner. Verify the real order so cross-integrity relative
+    // insertion failures can fall back to lowering only PaperTodo's own HWND group.
+    public static bool ApplyTopmostZOrder(Window window, bool topmost, IntPtr insertAfter)
     {
-        ApplyTopmostZOrder(new WindowInteropHelper(window).Handle, topmost, insertAfter);
+        return ApplyTopmostZOrder(new WindowInteropHelper(window).Handle, topmost, insertAfter);
     }
 
-    public static void ApplyTopmostZOrder(IntPtr handle, bool topmost, IntPtr insertAfter)
+    public static bool ApplyTopmostZOrder(IntPtr handle, bool topmost, IntPtr insertAfter)
     {
-        if (handle == IntPtr.Zero)
+        if (handle == IntPtr.Zero || !IsWindow(handle))
         {
-            return;
+            return false;
         }
 
-        SetWindowPos(
+        var bandApplied = SetWindowPos(
             handle,
             topmost ? HwndTopmost : HwndNoTopmost,
             0, 0, 0, 0,
             SwpNoMove | SwpNoSize | SwpNoActivate | SwpNoOwnerZOrder);
 
-        if (!topmost && insertAfter != IntPtr.Zero)
+        if (topmost || insertAfter == IntPtr.Zero)
         {
-            ApplyFullscreenAvoidanceZOrder(handle, insertAfter);
+            return bandApplied;
         }
+
+        return ApplyFullscreenAvoidanceZOrder(handle, insertAfter);
     }
 
-    private static void ApplyFullscreenAvoidanceZOrder(IntPtr handle, IntPtr insertAfter)
+    private static bool ApplyFullscreenAvoidanceZOrder(IntPtr handle, IntPtr insertAfter)
     {
-        if (insertAfter == handle ||
-            !IsWindow(insertAfter) ||
-            (GetWindowLong(insertAfter, GwlExStyle) & WsExTopmost) != 0)
+        if (insertAfter == handle || !IsWindow(insertAfter))
         {
-            return;
+            // Demotion remains safe if the target has disappeared. There is no live foreign
+            // HWND left whose relative order can be verified.
+            return (GetWindowLong(handle, GwlExStyle) & WsExTopmost) == 0;
+        }
+
+        if ((GetWindowLong(insertAfter, GwlExStyle) & WsExTopmost) != 0)
+        {
+            return (GetWindowLong(handle, GwlExStyle) & WsExTopmost) == 0;
         }
 
         const uint flags = SwpNoMove | SwpNoSize | SwpNoActivate;
         var owner = GetWindow(handle, GwOwner);
-        if (!IsHiddenOwnerFromSameProcess(handle, owner))
+        var hasHiddenOwner = IsHiddenOwnerFromSameProcess(handle, owner);
+        if (!hasHiddenOwner)
         {
             _ = SetWindowPos(
                 handle,
                 insertAfter,
                 0, 0, 0, 0,
                 flags | SwpNoOwnerZOrder);
-            return;
+        }
+        else
+        {
+            // Owned windows cannot be placed behind their owner. Move the invisible owner
+            // first, then insert the visible paper while preserving the committed owner order.
+            var ownerMoved = SetWindowPos(
+                owner,
+                insertAfter,
+                0, 0, 0, 0,
+                flags);
+
+            _ = SetWindowPos(
+                handle,
+                insertAfter,
+                0, 0, 0, 0,
+                flags | (ownerMoved ? SwpNoOwnerZOrder : 0u));
         }
 
-        // Owned windows cannot be placed behind their owner. Move the invisible owner behind
-        // the fullscreen target first, then insert the visible paper immediately behind it.
-        var ownerMoved = SetWindowPos(
-            owner,
-            insertAfter,
-            0, 0, 0, 0,
-            flags);
+        if (IsWindowBehind(handle, insertAfter))
+        {
+            return true;
+        }
 
-        _ = SetWindowPos(
-            handle,
-            insertAfter,
-            0, 0, 0, 0,
-            flags | (ownerMoved ? SwpNoOwnerZOrder : 0u));
+        // UIPI may reject a High-integrity HWND as hWndInsertAfter. Moving our own windows
+        // to HWND_BOTTOM needs no control over that foreign process; read back the real order.
+        for (var attempt = 0; attempt < FullscreenAvoidanceFallbackAttempts; attempt++)
+        {
+            if (hasHiddenOwner)
+            {
+                _ = SetWindowPos(owner, HwndBottom, 0, 0, 0, 0, flags);
+            }
+
+            _ = SetWindowPos(handle, HwndBottom, 0, 0, 0, 0, flags | SwpNoOwnerZOrder);
+            if (IsWindowBehind(handle, insertAfter))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsWindowBehind(IntPtr handle, IntPtr reference)
+    {
+        if (handle == IntPtr.Zero || reference == IntPtr.Zero || handle == reference ||
+            !IsWindow(handle) || !IsWindow(reference))
+        {
+            return false;
+        }
+
+        var current = GetWindow(reference, GwHwndNext);
+        for (var inspected = 0; current != IntPtr.Zero && inspected < 4096; inspected++)
+        {
+            if (current == handle)
+            {
+                return true;
+            }
+
+            current = GetWindow(current, GwHwndNext);
+        }
+
+        return false;
     }
 
     private static bool IsHiddenOwnerFromSameProcess(IntPtr handle, IntPtr owner)
@@ -709,3 +767,4 @@ internal static class WindowNative
         public int Bottom;
     }
 }
+
