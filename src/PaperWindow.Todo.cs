@@ -2099,6 +2099,22 @@ public sealed partial class PaperWindow
 
     private void OnWindowPreviewKeyDown(object sender, KeyEventArgs e)
     {
+        // Title edits own their text history, even after it is exhausted. Never fall through
+        // to the Todo-list history just because the focused editor is not a TodoTextBox.
+        if (_isEditingTitle &&
+            _titleEditBox is { IsKeyboardFocusWithin: true } titleEditBox &&
+            Keyboard.Modifiers == ModifierKeys.Control &&
+            e.Key is Key.Z or Key.Y)
+        {
+            var command = e.Key == Key.Z ? ApplicationCommands.Undo : ApplicationCommands.Redo;
+            if (command.CanExecute(null, titleEditBox))
+            {
+                command.Execute(null, titleEditBox);
+            }
+            e.Handled = true;
+            return;
+        }
+
         if (e.Key == Key.Escape &&
             Keyboard.Modifiers == ModifierKeys.None &&
             TryCollapseExpandedPaperFromEscape())
@@ -2155,3 +2171,4 @@ public sealed partial class PaperWindow
 
 
 }
+
