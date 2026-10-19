@@ -919,7 +919,10 @@ public sealed partial class AppController : IDisposable
             IsNoteLinkedToAnyTodo(paper));
     }
 
-    public void OpenLinkedNote(string? noteId, Window? anchorWindow = null)
+    public void OpenLinkedNote(
+        string? noteId,
+        Window? anchorWindow = null,
+        bool toggleIfExcludedFromCapsules = false)
     {
         var note = FindLinkedPaper(noteId);
         if (note == null)
@@ -931,6 +934,15 @@ public sealed partial class AppController : IDisposable
         {
             if (IsLinkedNoteShown(note.Id))
             {
+                // Only an explicit linked-button click toggles excluded papers. Context-menu
+                // Open and other programmatic callers must remain open/bring-to-front actions.
+                if (toggleIfExcludedFromCapsules && State.CollapseExpandedDeepCapsuleOnClick &&
+                    State.EnableTodoNoteLinks && State.HideLinkedNotesFromCapsules &&
+                    IsNoteLinkedToAnyTodo(note))
+                {
+                    HidePaper(note);
+                    return;
+                }
                 if (State.CollapseExpandedDeepCapsuleOnClick && window.TryHandleLinkedNoteRepeatedOpenAsDeepCapsuleToggle())
                 {
                     RefreshTodoRowsForLinkedNote(note.Id);
@@ -2840,9 +2852,9 @@ public sealed partial class AppController : IDisposable
 
         if (!State.UseCapsuleCollapseAll)
         {
+            // Disabling the master only clears retraction, not the user's queue positions.
             State.CapsuleCollapseAllActive = false;
             State.CapsuleCollapseAllActiveQueues.Clear();
-            ResetDeepCapsuleStartTopMargins();
         }
 
         // Collapse-all rides on top of edge-aligned capsules; enabling it implies both prerequisites.
@@ -3527,10 +3539,8 @@ public sealed partial class AppController : IDisposable
             : State.DeepCapsuleStartTopMargin;
     }
 
-    // Reset ALL deep-capsule start heights to the default — both the legacy global scalar AND the
-    // per-queue dictionary. Must clear the dict too: layout reads per-queue values first, so
-    // leaving stale entries would resurrect old queue heights when the mode is re-enabled (and
-    // persist them to data.json). Single chokepoint so no reset path forgets the dict again.
+    // Only explicit restore-defaults clears both legacy and per-queue heights. Disabling
+    // capsule presentation clears transient slots/retraction, not this persistent preference.
     private void ResetDeepCapsuleStartTopMargins()
     {
         State.DeepCapsuleStartTopMargin = EdgeCapsuleLayout.StartTopMargin;

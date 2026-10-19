@@ -1103,7 +1103,10 @@ public sealed partial class AppController
                 WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsMaxTitleLength"), topMargin: 8), "TipMaxTitleLength"),
                 CreateMaxTitleLengthStepper(),
                 WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsDeepCapsuleTitleMeasureLimit"), topMargin: 8), "TipDeepCapsuleTitleMeasureLimit"),
-                CreateDeepCapsuleTitleMeasureLimitStepper()));
+                CreateDeepCapsuleTitleMeasureLimitStepper(),
+                WrapWithHint(MarkAdvancedSetting(SettingsToggle(
+                    Strings.Get("SettingsCompactMasterCapsule"), State.CompactMasterCapsule,
+                    ToggleCompactMasterCapsule)), "TipCompactMasterCapsule")));
         }
 
         rightColumn.Children.Add(SettingsSectionLabel(Strings.Get("SettingsTodoNote")));
@@ -1349,6 +1352,8 @@ public sealed partial class AppController
         State.HideEdgeCapsuleCloseButtonOnHover = false;
         State.RememberDeepCapsuleExpandedPosition = true;
         State.UseCapsuleCollapseAll = true;
+        State.CompactMasterCapsule = false;
+        ResetDeepCapsuleStartTopMargins();
         State.CollapseExpandedDeepCapsuleOnClick = false;
         State.MaxTitleLength = PaperTitles.DefaultMaxTitleLength;
         State.DeepCapsuleTitleMeasureCharacterLimit = 0;
@@ -1900,8 +1905,9 @@ public sealed partial class AppController
         if (_settingsCollapseExpandedDeepCapsuleOnClickCheckBox != null)
         {
             _settingsCollapseExpandedDeepCapsuleOnClickCheckBox.IsChecked = State.CollapseExpandedDeepCapsuleOnClick;
-            _settingsCollapseExpandedDeepCapsuleOnClickCheckBox.IsEnabled = State.UseCapsuleMode && State.UseDeepCapsuleMode &&
-                State.ShowDeepCapsuleWhileExpanded;
+            _settingsCollapseExpandedDeepCapsuleOnClickCheckBox.IsEnabled =
+                (State.UseCapsuleMode && State.UseDeepCapsuleMode && State.ShowDeepCapsuleWhileExpanded) ||
+                (State.EnableTodoNoteLinks && State.HideLinkedNotesFromCapsules);
         }
         if (_settingsCapsuleCollapseAllCheckBox != null)
         {
@@ -2384,7 +2390,6 @@ public sealed partial class AppController
             State.UseDeepCapsuleMode = false;
             State.CapsuleCollapseAllActive = false;
             State.CapsuleCollapseAllActiveQueues.Clear();
-            ResetDeepCapsuleStartTopMargins();
         }
 
         // Keep IsCollapsed intact until each live window has consumed the mode change.
@@ -2518,8 +2523,8 @@ public sealed partial class AppController
         List<(PaperWindow Window, PaperWindow.DeepCapsuleModeHandoff Handoff)>? handoffs = null;
         if (State.UseDeepCapsuleMode)
         {
-            // Capture normal queue slots before disabling collapse-all and resetting queue
-            // margins; once the hosts are detached, only the stale ordinary X/Y remains.
+            // Capture normal queue slots before disabling collapse-all; queue heights remain user settings.
+            // once the hosts are detached, only the stale ordinary X/Y remains.
             var windows = _windows.Values.ToList();
             foreach (var window in windows)
             {
@@ -2550,7 +2555,6 @@ public sealed partial class AppController
         {
             State.CapsuleCollapseAllActive = false;
             State.CapsuleCollapseAllActiveQueues.Clear();
-            ResetDeepCapsuleStartTopMargins();
         }
 
         foreach (var window in _windows.Values)
@@ -2602,6 +2606,14 @@ public sealed partial class AppController
         State.CollapseExpandedDeepCapsuleOnClick = !State.CollapseExpandedDeepCapsuleOnClick;
         SaveNow();
         RefreshSettingsCapsuleToggleStates();
+    }
+
+    private void ToggleCompactMasterCapsule()
+    {
+        State.CompactMasterCapsule = !State.CompactMasterCapsule;
+        ArrangeDeepCapsules(animate: false);
+        SaveNow();
+        RefreshSettingsWindowContent();
     }
 
     private void ToggleRememberDeepCapsuleExpandedPosition()

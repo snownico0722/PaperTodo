@@ -794,7 +794,7 @@ public sealed partial class PaperWindow
                 if (!_controller.ShouldRunLinkedScriptCapsule(item.LinkedNoteId) ||
                     !_controller.RunLinkedScriptCapsule(item.LinkedNoteId))
                 {
-                    _controller.OpenLinkedNote(item.LinkedNoteId, this);
+                    _controller.OpenLinkedNote(item.LinkedNoteId, this, toggleIfExcludedFromCapsules: true);
                 }
                 e.Handled = true;
             };

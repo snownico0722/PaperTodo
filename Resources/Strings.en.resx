@@ -428,7 +428,7 @@ Error: {0}</value>
     <value>Remember open position</value>
   </data>
   <data name="SettingsCollapseExpandedDeepCapsuleOnClick" xml:space="preserve">
-    <value>Click edge capsule again to retract paper</value>
+    <value>Click again to close a paper</value>
   </data>
   <data name="SettingsHideEdgeCapsuleCloseButtonOnHover" xml:space="preserve">
     <value>Hide edge close button</value>
@@ -597,7 +597,7 @@ Enhanced: nicer headings, lists, and emphasis.</value>
     <value>When expanding from the edge, restore the last position and size; otherwise use edge placement.</value>
   </data>
   <data name="TipCollapseExpandedDeepCapsuleOnClick" xml:space="preserve">
-    <value>If the paper is already expanded from the edge, click the same capsule again to retract it.</value>
+    <value>Click an expanded edge capsule again to collapse its paper. If a linked paper is excluded from capsules, click its Todo link again to hide it.</value>
   </data>
   <data name="TipCapsuleCollapseAll" xml:space="preserve">
     <value>Show a master capsule at the top of the queue to collapse or expand it.</value>
@@ -1007,5 +1007,11 @@ When off, open at the docked edge or remembered position.</value>
   </data>
   <data name="ToolTipOpenLinkedPath" xml:space="preserve">
     <value>Open: {0}</value>
+  </data>
+  <data name="SettingsCompactMasterCapsule" xml:space="preserve">
+    <value>Compact master capsule</value>
+  </data>
+  <data name="TipCompactMasterCapsule" xml:space="preserve">
+    <value>Show only the expand/collapse arrow and reduce the master capsule width. Disable to restore its original label and count.</value>
   </data>
 </root>
