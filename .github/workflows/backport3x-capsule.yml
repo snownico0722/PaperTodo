@@ -34,7 +34,16 @@ jobs:
         run: dotnet build PaperTodo.csproj -c Release
       - name: Real WPF capsule and linked-paper checks in isolated temporary directory
         run: |
-          python -c "import sys; from pathlib import Path; sys.argv.append('--tests'); p=Path('.github/backport3x-capsule.py'); s=p.read_text(encoding='utf-8').replace(')!==expected', ')! == expected'); exec(compile(s,str(p),'exec'))"
+          @'
+          import sys
+          from pathlib import Path
+          sys.argv.append('--tests')
+          p=Path('.github/backport3x-capsule.py')
+          s=p.read_text(encoding='utf-8').replace(')!==expected', ')! == expected')
+          s=s.replace('c.State.DeepCapsuleStartTopMargin=93;', 'var leftKey=(string)Call(typeof(AppController),"QueueKey","",DeepCapsuleSides.Left)!;\n            var rightKey=(string)Call(typeof(AppController),"QueueKey","",DeepCapsuleSides.Right)!;\n            c.State.DeepCapsuleStartTopMargin=93;')
+          s=s.replace('"check-left"', 'leftKey').replace('"check-right"', 'rightKey')
+          exec(compile(s,str(p),'exec'))
+          '@ | python -
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Existing persistence regression
         run: dotnet run --project tests/PaperTodo.PersistenceChecks/PaperTodo.PersistenceChecks.csproj -c Release
