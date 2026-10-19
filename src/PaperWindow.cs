@@ -223,8 +223,14 @@ public sealed partial class PaperWindow : Window
     public bool SuppressGeometrySave => _suppressGeometrySave;
     // Ordinary collapsed capsules are the main PaperWindow and should still save X/Y.
     // Deep capsules use the slot-host window for docked geometry, so the hidden/parked
-    // main window must not overwrite ordinary paper geometry.
-    public bool UsesNonPaperGeometry => _paper.IsCollapsed && HasDeepCapsuleSlotPlacement;
+    // main window must not overwrite ordinary paper geometry. When the slot is hidden
+    // while expanded, collapse settles before the queue reattaches it; its edge origin
+    // still identifies that short return path even though no slot is attached yet.
+    public bool UsesNonPaperGeometry => _paper.IsCollapsed &&
+        (HasDeepCapsuleSlotPlacement ||
+         (_controller.State.UseCapsuleMode &&
+          _controller.State.UseDeepCapsuleMode &&
+          ExpandedFromDeepCapsuleEdge));
     public bool ShouldSaveDeepCapsuleExpandedGeometry => ExpandedFromDeepCapsuleEdge && !_paper.IsCollapsed && _paper.IsVisible;
     public double DesiredCapsuleWindowWidth => CapsuleWindowWidth();
     public double DeepCapsuleRestingVisibleWidth => HoldsDeepCapsuleSlotWhileExpanded
