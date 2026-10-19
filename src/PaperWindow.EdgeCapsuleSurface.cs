@@ -234,6 +234,9 @@ public sealed partial class PaperWindow
         {
             MoveWindowWithoutGeometrySave(() =>
             {
+                // Explicit expansion activates once its initial shape is ready. Bootstrap
+                // and background programmatic opens must not activate implicitly in Show().
+                ShowActivated = false;
                 Width = DesiredCapsuleWindowWidth;
                 Height = PaperLayoutDefaults.CapsuleHeight;
                 if (programmaticOrigin is { } targetPlacement)
@@ -376,10 +379,13 @@ public sealed partial class PaperWindow
     private void QueueDeepCapsuleDeviceBoundsConfirmation(DeviceScreenRect bounds)
     {
         var generation = ++_deepCapsuleDevicePlacementGeneration;
+        var formGeneration = _collapseTransitionGeneration;
         Dispatcher.BeginInvoke(
             (Action)(() =>
             {
                 if (generation != _deepCapsuleDevicePlacementGeneration ||
+                    formGeneration != _collapseTransitionGeneration ||
+                    _windowLifecycle != PaperWindowLifecycleState.Alive ||
                     _paper.IsCollapsed ||
                     !IsVisible)
                 {
@@ -582,6 +588,7 @@ public sealed partial class PaperWindow
             }
             Width = DesiredCapsuleWindowWidth;
             Height = PaperLayoutDefaults.CapsuleHeight;
+            ShowActivated = false;
             Show();
         }
 

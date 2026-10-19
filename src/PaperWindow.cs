@@ -240,9 +240,6 @@ public sealed partial class PaperWindow : Window
     private void ClearCapsuleInteractionKeyboardFocus()
     {
         WindowNative.ClearCurrentThreadKeyboardFocus();
-        Dispatcher.BeginInvoke(
-            (Action)WindowNative.ClearCurrentThreadKeyboardFocus,
-            System.Windows.Threading.DispatcherPriority.Background);
     }
 
     private sealed class TodoDragState

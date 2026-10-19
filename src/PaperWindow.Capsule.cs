@@ -7,6 +7,7 @@ using System.Text.RegularExpressions;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
 using Brush = System.Windows.Media.Brush;
@@ -498,6 +499,11 @@ public sealed partial class PaperWindow
         bool activateOnExpand,
         ProgrammaticPaperExpansionOrigin? programmaticOrigin)
     {
+        if (_windowLifecycle != PaperWindowLifecycleState.Alive ||
+            (!collapsed && activateOnExpand && !_paper.IsVisible))
+        {
+            return;
+        }
         EnsureShellBuilt();
         animate = animate && _controller.State.EnableAnimations;
 
@@ -640,6 +646,20 @@ public sealed partial class PaperWindow
             {
                 _shell.Opacity = 0.0;
                 _capsuleShell.Opacity = 1.0;
+            }
+        }
+
+        if (animate && !collapsed && activateOnExpand)
+        {
+            // The initial capsule-sized shape is ready. Take the user's activation before
+            // queue handoff or native placement can publish the first expansion frame.
+            TryActivateAfterCapsuleInteraction(transitionGeneration);
+            // Activated handlers can synchronously hide, close or reverse this transition.
+            // Continuing afterwards would start a stale animation for an obsolete action.
+            if (transitionGeneration != _collapseTransitionGeneration ||
+                _windowLifecycle != PaperWindowLifecycleState.Alive || !IsPaperFormTransitioning)
+            {
+                return;
             }
         }
 
@@ -802,7 +822,8 @@ public sealed partial class PaperWindow
 
             progressAnim.Completed += (s, e) =>
             {
-                if (transitionGeneration != _collapseTransitionGeneration)
+                if (transitionGeneration != _collapseTransitionGeneration ||
+                    _windowLifecycle != PaperWindowLifecycleState.Alive)
                 {
                     return;
                 }
@@ -934,6 +955,10 @@ public sealed partial class PaperWindow
                 FinishExpandSnapStateRestore();
             }
             UpdateTaskbarVisibility();
+            if (!collapsed && activateOnExpand)
+            {
+                TryActivateAfterCapsuleInteraction(transitionGeneration);
+            }
         }
 
         RefreshPaperContextMenus();
@@ -941,34 +966,70 @@ public sealed partial class PaperWindow
 
         if (!collapsed && activateOnExpand)
         {
-            QueueActivateAfterExpandInteraction(transitionGeneration);
+            QueueRestoreFocusAfterExpandInteraction(transitionGeneration);
         }
     }
 
-    private void QueueActivateAfterExpandInteraction(int transitionGeneration)
+    private bool IsCurrentExpandInteraction(int transitionGeneration)
     {
-        // Capsule mouse-up handlers clear native keyboard focus after SetCollapsedState returns,
-        // and repeat that cleanup at Background priority. Run below Background so the explicit
-        // user activation is the final focus operation even when animations are disabled.
+        return transitionGeneration == _collapseTransitionGeneration &&
+            _windowLifecycle == PaperWindowLifecycleState.Alive &&
+            _paper.IsVisible && !_paper.IsCollapsed && IsVisible &&
+            _controller.FullscreenAvoidanceWindowFor(this) == IntPtr.Zero;
+    }
+
+    private bool TryActivateAfterCapsuleInteraction(int transitionGeneration)
+    {
+        if (!IsCurrentExpandInteraction(transitionGeneration))
+        {
+            return false;
+        }
+
+        var handle = new WindowInteropHelper(this).Handle;
+        if (handle == IntPtr.Zero)
+        {
+            return false;
+        }
+
+        // A NOACTIVATE edge host can leave WPF IsActive stale. The system foreground HWND
+        // is the authority, and only this synchronous explicit interaction may change it.
+        if (WindowNative.ForegroundWindow != handle)
+        {
+            base.Activate();
+            if (!IsCurrentExpandInteraction(transitionGeneration))
+            {
+                return false;
+            }
+            if (WindowNative.ForegroundWindow != handle)
+            {
+                WindowNative.TrySetForegroundWindow(handle);
+            }
+        }
+
+        if (!IsCurrentExpandInteraction(transitionGeneration) || WindowNative.ForegroundWindow != handle)
+        {
+            return false;
+        }
+        Focus();
+        return true;
+    }
+
+    private void QueueRestoreFocusAfterExpandInteraction(int transitionGeneration)
+    {
+        // Mouse-up clears native keyboard focus after this method returns. Restore only
+        // focus while this interaction still owns foreground; never queue a new activation.
         Dispatcher.BeginInvoke(
             (Action)(() =>
             {
-                if (transitionGeneration != _collapseTransitionGeneration ||
-                    _paper.IsCollapsed ||
-                    !IsVisible ||
-                    _controller.FullscreenAvoidanceWindowFor(this) != IntPtr.Zero)
-                {
-                    return;
-                }
-
-                if (!IsActive && !Activate())
+                if (!IsCurrentExpandInteraction(transitionGeneration) ||
+                    WindowNative.ForegroundWindow != new WindowInteropHelper(this).Handle)
                 {
                     return;
                 }
 
                 Focus();
             }),
-            System.Windows.Threading.DispatcherPriority.ContextIdle);
+            System.Windows.Threading.DispatcherPriority.Send);
     }
 
     // Runs when an expand transition finishes. If the paper was collapsed while maximized,
