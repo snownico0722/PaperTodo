@@ -610,6 +610,13 @@ public sealed partial class PaperWindow
         {
             if (!box.CanInsertImagesFromDataObject(e.Data))
             {
+                if (!isPreviewing || !MarkdownTextBox.HasTextDropData(e.Data))
+                {
+                    return;
+                }
+
+                e.Effects = MarkdownTextBox.ResolveTextDropEffect(e);
+                e.Handled = e.Effects != DragDropEffects.None;
                 return;
             }
 
@@ -620,11 +627,25 @@ public sealed partial class PaperWindow
         {
             if (!box.CanInsertImagesFromDataObject(e.Data))
             {
+                if (!MarkdownTextBox.HasTextDropData(e.Data))
+                {
+                    return;
+                }
                 if (!box.ValidateTextDrop(e.Data))
                 {
                     e.Effects = DragDropEffects.None;
                     e.Handled = true;
+                    return;
                 }
+                if (isPreviewing)
+                {
+                    ShowEditorAtPreviewPoint(
+                        e.GetPosition(box),
+                        e.OriginalSource as DependencyObject,
+                        selectImage: false);
+                }
+                // AvalonEdit still owns text insertion, move/copy semantics and undo grouping.
+                // Leave the actual Drop unhandled after entering edit mode.
                 return;
             }
 

@@ -56,6 +56,7 @@ public sealed partial class MarkdownTextBox : TextEditor
     private readonly FencedCodeStateCache _fencedCodeStateCache = new();
     private readonly MarkdownLineAnalysisCache _lineAnalysisCache;
     private bool _textLimitNoticeShown;
+    private static readonly bool PreviewTextDropHandlersRegistered = RegisterPreviewTextDropHandlers();
 
     public event Action<Exception>? ImageImportFailed;
 
@@ -1261,11 +1262,8 @@ public sealed partial class MarkdownTextBox : TextEditor
 
     public bool ValidateTextDrop(IDataObject dataObject)
     {
-        if (IsReadOnly)
-        {
-            return true;
-        }
-
+        // Preview is read-only until the host places the caret and enables editing. Validate
+        // before that transition too, so external text cannot bypass the existing paste limits.
         string? text;
         try
         {
@@ -1288,6 +1286,58 @@ public sealed partial class MarkdownTextBox : TextEditor
 
         PasteRejected?.Invoke();
         return false;
+    }
+
+    private static bool RegisterPreviewTextDropHandlers()
+    {
+        // AvalonEdit can consume preview events before instance handlers. Keep the narrowly
+        // scoped class interception, while sharing format/effect/validation rules with the host.
+        EventManager.RegisterClassHandler(typeof(MarkdownTextBox), DragDrop.PreviewDragOverEvent,
+            new DragEventHandler(OnPreviewTextDragOver), handledEventsToo: true);
+        EventManager.RegisterClassHandler(typeof(MarkdownTextBox), DragDrop.PreviewDropEvent,
+            new DragEventHandler(OnPreviewTextDrop), handledEventsToo: true);
+        return true;
+    }
+
+    private static void OnPreviewTextDragOver(object sender, DragEventArgs e)
+    {
+        if (sender is not MarkdownTextBox editor || !editor.IsPreviewMode ||
+            editor.CanInsertImagesFromDataObject(e.Data) || !HasTextDropData(e.Data)) return;
+
+        e.Effects = ResolveTextDropEffect(e);
+        e.Handled = e.Effects != DragDropEffects.None;
+    }
+
+    private static void OnPreviewTextDrop(object sender, DragEventArgs e)
+    {
+        if (sender is not MarkdownTextBox editor || !editor.IsPreviewMode ||
+            editor.CanInsertImagesFromDataObject(e.Data) || !HasTextDropData(e.Data) ||
+            editor.ValidateTextDrop(e.Data)) return;
+
+        e.Effects = DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    internal static bool HasTextDropData(IDataObject data)
+    {
+        try
+        {
+            return data.GetDataPresent(DataFormats.UnicodeText) || data.GetDataPresent(DataFormats.Text);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    internal static DragDropEffects ResolveTextDropEffect(DragEventArgs e)
+    {
+        var controlPressed = (e.KeyStates & DragDropKeyStates.ControlKey) == DragDropKeyStates.ControlKey;
+        return (e.AllowedEffects & DragDropEffects.Move) != 0 && !controlPressed
+            ? DragDropEffects.Move
+            : (e.AllowedEffects & DragDropEffects.Copy) != 0
+                ? DragDropEffects.Copy
+                : DragDropEffects.None;
     }
 
     public bool TryInsertImagesFromDataObject(IDataObject dataObject)
