@@ -258,6 +258,14 @@ public sealed partial class AppController : IDisposable
         bool createDefaultPaper = true,
         StartupCommandKind initialVisibilityCommand = StartupCommandKind.None)
     {
+        if (IsExiting) return;
+
+        // Do not publish tray/hotkey entry points until display enumeration settles: their
+        // show-all path performs off-screen rescue and would otherwise overwrite saved positions.
+        var startupRestoreGeneration = _paperSurfaceRestoreGeneration;
+        await WaitForStartupDisplayTopologyAsync();
+        if (IsExiting || startupRestoreGeneration != _paperSurfaceRestoreGeneration) return;
+
         CreateTrayIcon();
         InitializeGlobalHotkeys();
         _ = Task.Run(PaperWindow.CleanupOldScriptCapsuleTempFiles);
@@ -281,11 +289,6 @@ public sealed partial class AppController : IDisposable
             }
             return;
         }
-
-        var startupRestoreGeneration = _paperSurfaceRestoreGeneration;
-        await WaitForStartupDisplayTopologyAsync();
-        // A show/hide command or exit received during the wait owns the newer presentation.
-        if (IsExiting || startupRestoreGeneration != _paperSurfaceRestoreGeneration) return;
 
         ApplyInitialStartupVisibility(initialVisibilityCommand);
         var rescuedPapers = EnsurePapersOnScreen();
