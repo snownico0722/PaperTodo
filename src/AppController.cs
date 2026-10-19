@@ -262,7 +262,13 @@ public sealed partial class AppController : IDisposable
         InitializeGlobalHotkeys();
         _ = Task.Run(PaperWindow.CleanupOldScriptCapsuleTempFiles);
         _ = Application.Current.Dispatcher.BeginInvoke(
-            () => PaperWindow.EnsurePersistentScriptProcessForSettings(State),
+            () =>
+            {
+                if (!IsExiting)
+                {
+                    PaperWindow.EnsurePersistentScriptProcessForSettings(State);
+                }
+            },
             DispatcherPriority.SystemIdle);
         RefreshFullscreenAvoidanceRuntime();
 
@@ -298,6 +304,11 @@ public sealed partial class AppController : IDisposable
 
     private async Task RestorePaperSurfacesAsync(IReadOnlyList<PaperData> papersToRestore)
     {
+        if (IsExiting)
+        {
+            return;
+        }
+
         var restoreGeneration = ++_paperSurfaceRestoreGeneration;
         var activationPaper = papersToRestore.LastOrDefault(paper =>
             !(State.UseCapsuleMode && State.UseDeepCapsuleMode && paper.IsCollapsed && CanPaperDisplayAsCapsule(paper)));
@@ -490,6 +501,11 @@ public sealed partial class AppController : IDisposable
 
     public PaperData? CreatePaper(string type, bool show = true, PaperData? sourcePaper = null)
     {
+        if (IsExiting)
+        {
+            return null;
+        }
+
         if (State.Papers.Count >= 100)
         {
             ShowPaperLimitDialog();
@@ -1123,6 +1139,11 @@ public sealed partial class AppController : IDisposable
 
     public void ExecuteStartupCommand(StartupCommand command)
     {
+        if (IsExiting)
+        {
+            return;
+        }
+
         if (command.Kind is StartupCommandKind.Show or
             StartupCommandKind.Toggle or
             StartupCommandKind.NewTodo or
@@ -2901,7 +2922,10 @@ public sealed partial class AppController : IDisposable
 
     public void SaveNow(bool sync = false)
     {
-        _ = TrySaveNow(sync);
+        if (!IsExiting)
+        {
+            _ = TrySaveNow(sync);
+        }
     }
 
     private bool TrySaveNow(bool sync)
@@ -2920,7 +2944,10 @@ public sealed partial class AppController : IDisposable
             if (sync)
             {
                 _store.SaveJsonSync(json, version);
-                TryReleaseUnreferencedImageCache();
+                if (!IsExiting)
+                {
+                    TryReleaseUnreferencedImageCache();
+                }
                 _hasShownSaveFailure = false;
             }
             else
@@ -2932,7 +2959,8 @@ public sealed partial class AppController : IDisposable
                         await _store.SaveJsonAsync(json, version);
                         Application.Current?.Dispatcher?.BeginInvoke(new Action(() =>
                         {
-                            if (version == Interlocked.Read(ref _saveVersion) &&
+                            if (!IsExiting &&
+                                version == Interlocked.Read(ref _saveVersion) &&
                                 stateRevision == Interlocked.Read(ref _stateRevision))
                             {
                                 TryReleaseUnreferencedImageCache();
@@ -3553,17 +3581,14 @@ public sealed partial class AppController : IDisposable
             return;
         }
 
+        // Freeze queued restore/prewarm/commands before committing editors. A save-error dialog
+        // can pump the Dispatcher; it must not resume startup or create another script process.
+        BeginRuntimeShutdown();
         CommitSettingsExternalMarkdownEditor(saveImmediately: false);
         foreach (var window in _windows.Values.ToList())
         {
             window.CommitPendingEditsForSave();
         }
-
-        _lifecycleState = AppLifecycleState.Exiting;
-        _saveTimer.Stop();
-        _forceSaveTimer.Stop();
-        StopFullscreenAvoidanceRuntime(restoreTopmost: false);
-        _displayMetricsRefreshTimer.Stop();
 
         if (!TrySaveNow(sync: true))
         {
@@ -3579,14 +3604,9 @@ public sealed partial class AppController : IDisposable
 
         DisposeRuntimeResources();
         _lifecycleState = AppLifecycleState.Disposed;
-        try
-        {
-            Application.Current.Shutdown();
-        }
-        finally
-        {
-            Environment.Exit(0);
-        }
+        // The owning Dispatcher must finish WPF shutdown and App.OnExit, which releases the
+        // single-instance listener/mutex. Owned scripts have already stopped before this point.
+        Application.Current.Shutdown();
     }
 
     private static void TryExitCleanup(Action cleanup)
@@ -3635,7 +3655,9 @@ public sealed partial class AppController : IDisposable
             return;
         }
 
-        if (_lifecycleState == AppLifecycleState.Running)
+        var wasRunning = IsRunning;
+        BeginRuntimeShutdown();
+        if (wasRunning)
         {
             foreach (var window in _windows.Values.ToList())
             {
@@ -3645,15 +3667,33 @@ public sealed partial class AppController : IDisposable
             TrySaveNow(sync: true);
         }
 
-        _lifecycleState = AppLifecycleState.Exiting;
         DisposeRuntimeResources();
         _lifecycleState = AppLifecycleState.Disposed;
     }
 
-    private void DisposeRuntimeResources()
+    private void BeginRuntimeShutdown()
     {
+        if (IsExiting)
+        {
+            return;
+        }
+
+        _lifecycleState = AppLifecycleState.Exiting;
         _paperSurfaceRestoreGeneration++;
         _startupShellPrewarmGeneration++;
+        _isPreparingStartupEdgeCapsules = false;
+        StopStateBackupPolicy();
+        _saveTimer.Stop();
+        _forceSaveTimer.Stop();
+        StopFullscreenAvoidanceRuntime(restoreTopmost: false);
+        _displayMetricsRefreshTimer.Stop();
+    }
+
+    private void DisposeRuntimeResources()
+    {
+        // Snapshot every retained engine/window-style pool, then let their bounded stop waits
+        // overlap each other and UI teardown. The workers only receive Process objects.
+        var scriptShutdown = PaperWindow.StopAllScriptProcessesAsync();
         SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
         SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
         SystemEvents.PowerModeChanged -= OnPowerModeChanged;
@@ -3662,6 +3702,12 @@ public sealed partial class AppController : IDisposable
         _forceSaveTimer.Stop();
         StopFullscreenAvoidanceRuntime(restoreTopmost: false);
         _displayMetricsRefreshTimer.Stop();
+        // The final snapshot is already saved. Withdraw surfaces without changing the persisted
+        // IsVisible flags, and keep all WPF Hide/Close operations on the owning UI thread.
+        foreach (Window surface in Application.Current.Windows.Cast<Window>().ToArray())
+        {
+            TryExitCleanup(surface.Hide);
+        }
         ClearNoteLinkDropTarget();
         _deepCapsuleContextMenuOwners.Clear();
         _displayMetricsRefreshState = DisplayMetricsRefreshState.Idle;
@@ -3679,7 +3725,7 @@ public sealed partial class AppController : IDisposable
             TryExitCleanup(m.CloseForReal);
         }
         _masterCapsules.Clear();
-        TryExitCleanup(PaperWindow.StopAllScriptProcesses);
         TryExitCleanup(_imageStore.Dispose);
+        TryExitCleanup(() => scriptShutdown.GetAwaiter().GetResult());
     }
 }
