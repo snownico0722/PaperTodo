@@ -1,0 +1,55 @@
+name: Temporary 3.x capsule backport validation
+on:
+  pull_request:
+    branches: [3.x]
+    paths:
+      - .github/backport3x-capsule.py
+      - .github/workflows/backport3x-capsule.yml
+permissions:
+  contents: write
+jobs:
+  validate:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'backport/3x-capsule-memory-1019'
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+      - name: Apply independently reversible production fixes
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          python .github/backport3x-capsule.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Release compilation
+        run: dotnet build PaperTodo.csproj -c Release
+      - name: Real WPF capsule and linked-paper checks in isolated temporary directory
+        run: |
+          python -c "import sys; from pathlib import Path; sys.argv.append('--tests'); p=Path('.github/backport3x-capsule.py'); s=p.read_text(encoding='utf-8').replace(')!==expected', ')! == expected'); exec(compile(s,str(p),'exec'))"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Existing persistence regression
+        run: dotnet run --project tests/PaperTodo.PersistenceChecks/PaperTodo.PersistenceChecks.csproj -c Release
+      - name: Store build compatibility
+        run: dotnet build PaperTodo.csproj -c Release /p:PaperTodoStoreBuild=true
+      - name: Win7 best-effort build compatibility
+        run: ./build-win7.ps1 -SelfContained
+      - name: Publish only validated source commits to this PR branch
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          $branch = 'backport/3x-capsule-memory-1019'
+          $remote = (git ls-remote origin "refs/heads/$branch").Split()[0]
+          if ($remote -ne $env:EXPECTED_SHA) { throw 'PR branch changed during validation; refusing to overwrite it.' }
+          git diff 05a798582929cdb08fb57e023fa2fd5e9735965a HEAD --check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git push origin "HEAD:refs/heads/$branch"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
