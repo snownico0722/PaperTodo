@@ -85,6 +85,7 @@ public sealed partial class AppController
         resources["PaperScrollThumbBrush"] = Theme.ScrollThumbBrush;
         resources["PaperScrollThumbHoverBrush"] = Theme.ScrollThumbHoverBrush;
         resources["PaperResizeGripBrush"] = Theme.ResizeGripBrush(State.ResizeGripMode);
+        resources["PaperResizeGripTileBrush"] = Theme.ResizeGripTileBrush((Brush)resources["PaperResizeGripBrush"]);
     }
 
     private UIElement CreateColorSchemeSegmentSelector()
