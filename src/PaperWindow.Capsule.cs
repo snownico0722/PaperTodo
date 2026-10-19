@@ -605,20 +605,44 @@ public sealed partial class PaperWindow
             && usesDeepCapsuleMode
             && ExpandedFromDeepCapsuleEdge
             && !_controller.State.ShowDeepCapsuleWhileExpanded;
-        Rect? rememberedDeepCapsuleExpandedGeometry = null;
+        PaperRestoreGeometry? rememberedDeepCapsuleExpandedGeometry = null;
         // An explicit open origin outranks edge history; edge-driven expansion still restores it.
         if (programmaticOrigin == null &&
             expandingFromDeepCapsuleEdge &&
             _controller.TryGetRememberedDeepCapsuleExpandedGeometry(_paper, targetWidth, targetHeight, out var rememberedGeometry))
         {
             rememberedDeepCapsuleExpandedGeometry = rememberedGeometry;
-            targetWidth = rememberedGeometry.Width;
-            targetHeight = rememberedGeometry.Height;
+            targetWidth = rememberedGeometry.WidthDip;
+            targetHeight = rememberedGeometry.HeightDip;
         }
-        double finalTargetWidth = RoundToDevicePixelX(targetWidth);
-        double finalTargetHeight = RoundToDevicePixelY(targetHeight);
+        double finalTargetWidth = rememberedDeepCapsuleExpandedGeometry?.WidthDip ?? RoundToDevicePixelX(targetWidth);
+        double finalTargetHeight = rememberedDeepCapsuleExpandedGeometry?.HeightDip ?? RoundToDevicePixelY(targetHeight);
 
         _paper.IsCollapsed = collapsed;
+        var expandedWidth = collapsed ? RoundToDevicePixelX(Width) : finalTargetWidth;
+        var expandedHeight = collapsed ? RoundToDevicePixelY(Height) : finalTargetHeight;
+        if (animate)
+        {
+            _transitionBaseWidth = expandedWidth;
+            _transitionBaseHeight = expandedHeight;
+            _startTransitionWidth = interruptedVisualWidth ?? (collapsed ? expandedWidth : capsuleWidth);
+            _startTransitionHeight = interruptedVisualHeight ?? (collapsed ? expandedHeight : PaperLayoutDefaults.CapsuleHeight);
+            _targetTransitionWidth = collapsed ? finalTargetWidth : expandedWidth;
+            _targetTransitionHeight = collapsed ? finalTargetHeight : expandedHeight;
+
+            // Prepare the first shape before native movement can change DPI and run layout.
+            // Otherwise a full-sized paper can render before the capsule-sized start frame.
+            _shell.Width = Math.Max(0, expandedWidth - WindowChromeInset);
+            _shell.Height = Math.Max(0, expandedHeight - WindowChromeInset);
+            TransitionProgress = 0.0;
+            UpdateTransitionVisuals(0.0);
+            if (!collapsed)
+            {
+                _shell.Opacity = 0.0;
+                _capsuleShell.Opacity = 1.0;
+            }
+        }
+
         if (!collapsed)
         {
             ChangeEdgeCapsulePaperForm(
@@ -641,12 +665,8 @@ public sealed partial class PaperWindow
                     : 0;
                 MoveWindowWithoutGeometrySave(() =>
                 {
-                    if (rememberedDeepCapsuleExpandedGeometry is Rect rememberedRect)
-                    {
-                        Left = RoundToDevicePixelX(rememberedRect.Left);
-                        Top = RoundToDevicePixelY(rememberedRect.Top);
-                    }
-                    else
+                    if (rememberedDeepCapsuleExpandedGeometry is not PaperRestoreGeometry rememberedPlacement ||
+                        !TryApplyRememberedDeepCapsuleExpandedGeometry(rememberedPlacement))
                     {
                         AlignExpandedToDockedEdge(finalTargetWidth, finalTargetHeight, requiredEdgeInset);
                     }
@@ -678,7 +698,9 @@ public sealed partial class PaperWindow
         }
 
         RefreshEffectiveTopmost();
-        ApplySystemVisibility();
+        // Keep the same native surface through the form animation. Changing taskbar
+        // membership here can make WPF hide/show its old cached bitmap before layout settles.
+        // Hidden preparation, completion and cancellation update membership instead.
         _controller.MarkDirty();
 
         if (collapsed)
@@ -711,21 +733,6 @@ public sealed partial class PaperWindow
 
         if (animate)
         {
-            var expandedWidth = collapsed ? RoundToDevicePixelX(Width) : finalTargetWidth;
-            var expandedHeight = collapsed ? RoundToDevicePixelY(Height) : finalTargetHeight;
-            _transitionBaseWidth = expandedWidth;
-            _transitionBaseHeight = expandedHeight;
-            _startTransitionWidth = interruptedVisualWidth ?? (collapsed ? expandedWidth : capsuleWidth);
-            _startTransitionHeight = interruptedVisualHeight ?? (collapsed ? expandedHeight : PaperLayoutDefaults.CapsuleHeight);
-            _targetTransitionWidth = collapsed ? finalTargetWidth : expandedWidth;
-            _targetTransitionHeight = collapsed ? finalTargetHeight : expandedHeight;
-
-            // Prevent shell content reflow/wrapping by locking its size to the expanded dimensions
-            _shell.Width = Math.Max(0, expandedWidth - WindowChromeInset);
-            _shell.Height = Math.Max(0, expandedHeight - WindowChromeInset);
-
-            TransitionProgress = 0.0;
-            UpdateTransitionVisuals(0.0);
             if (!collapsed)
             {
                 Width = expandedWidth;
@@ -864,6 +871,7 @@ public sealed partial class PaperWindow
                 {
                     FinishExpandSnapStateRestore();
                 }
+                UpdateTaskbarVisibility();
             };
 
             BeginAnimation(TransitionProgressProperty, progressAnim);
@@ -925,6 +933,7 @@ public sealed partial class PaperWindow
             {
                 FinishExpandSnapStateRestore();
             }
+            UpdateTaskbarVisibility();
         }
 
         RefreshPaperContextMenus();
@@ -1011,3 +1020,4 @@ public sealed partial class PaperWindow
     }
 
 }
+

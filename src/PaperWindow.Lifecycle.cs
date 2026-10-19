@@ -300,5 +300,7 @@ public sealed partial class PaperWindow
                 Height = Math.Max(_paper.Height, PaperLayoutDefaults.MinHeight);
             }
         });
+        UpdateTaskbarVisibility();
     }
 }
+

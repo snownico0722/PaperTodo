@@ -832,6 +832,12 @@ internal sealed class EdgeCapsuleHost : IDisposable
         }
     }
 
+    internal bool TryGetAppliedPresentation(out EdgeCapsulePresentationFrame presentation)
+    {
+        presentation = _appliedFrame;
+        return !_disposed;
+    }
+
     public DeviceScreenPoint ScreenOrigin()
     {
         if (_disposed)
@@ -1086,3 +1092,4 @@ internal sealed class EdgeCapsuleHost : IDisposable
         _appliedEdge = null;
     }
 }
+

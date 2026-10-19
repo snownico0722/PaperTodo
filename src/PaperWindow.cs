@@ -740,15 +740,21 @@ public sealed partial class PaperWindow : Window
 
     private void ApplyDeferredStartupSystemVisibility()
     {
+        // A cold edge expansion can precede Loaded's deferred refresh. Its first frame
+        // already has the correct shell styles; the transition owns taskbar completion.
+        if (IsPaperFormTransitioning)
+        {
+            return;
+        }
         var shouldShowInTaskbar = ShouldShowInTaskbar();
         ApplySystemVisibility(reapplyTaskbarShellState: ShowInTaskbar != shouldShowInTaskbar || !shouldShowInTaskbar);
     }
 
-    private bool ShouldShowInTaskbar()
+    private bool ShouldShowInTaskbar(bool? collapsed = null)
     {
         return !_controller.State.HidePapersFromWindowSwitcher &&
             !_controller.State.HidePapersFromTaskbar &&
-            !_paper.IsCollapsed;
+            !(collapsed ?? _paper.IsCollapsed);
     }
 
     private bool TryGetHiddenResizeHitTest(IntPtr hwnd, IntPtr lParam, out int hitTest)
@@ -3652,3 +3658,4 @@ public sealed partial class PaperWindow : Window
     }
 
 }
+

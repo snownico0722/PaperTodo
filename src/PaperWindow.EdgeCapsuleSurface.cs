@@ -6,6 +6,7 @@ public sealed partial class PaperWindow
 {
     internal readonly record struct ProgrammaticPaperExpansionOrigin(double Left, double Top);
     internal readonly record struct DeepCapsuleModeHandoff(double Left, double Top);
+    private int _deepCapsuleDevicePlacementGeneration;
 
     internal bool TryCaptureDeepCapsuleModeHandoff(out DeepCapsuleModeHandoff handoff)
     {
@@ -210,39 +211,200 @@ public sealed partial class PaperWindow
             return;
         }
 
-        BeginAnimation(Window.OpacityProperty, null);
-        Opacity = 1.0;
-        MoveWindowWithoutGeometrySave(() =>
+        var bootstrapBounds = programmaticOrigin == null
+            ? DeepCapsuleMainWindowBootstrapBounds()
+            : default;
+        if (programmaticOrigin == null &&
+            _controller.TryGetRememberedDeepCapsuleExpandedGeometry(
+                _paper, _paper.Width, _paper.Height, out var rememberedGeometry))
         {
-            Width = DesiredCapsuleWindowWidth;
-            Height = PaperLayoutDefaults.CapsuleHeight;
-            if (programmaticOrigin is { } targetPlacement)
+            // Start on the restore monitor. Visiting the queue monitor first makes the same
+            // HWND change DPI twice before its first expand frame can be presented.
+            var left = rememberedGeometry.Bounds.Left;
+            var top = rememberedGeometry.Bounds.Top;
+            bootstrapBounds = new DeviceScreenRect(left, top,
+                left + (int)Math.Round(DesiredCapsuleWindowWidth * rememberedGeometry.DpiScaleX),
+                top + (int)Math.Round(PaperLayoutDefaults.CapsuleHeight * rememberedGeometry.DpiScaleY));
+        }
+        var useNativeBootstrap = !bootstrapBounds.IsEmpty;
+
+        BeginAnimation(Window.OpacityProperty, null);
+        Opacity = useNativeBootstrap ? 0 : 1.0;
+        try
+        {
+            MoveWindowWithoutGeometrySave(() =>
             {
-                MoveMainWindowToProgrammaticExpansionOrigin(targetPlacement);
-            }
-            else if (_edgeCapsuleHost != null)
-            {
-                // PointToScreen is physical pixels; convert through the app's global screen-DIP
-                // coordinate space. Rounding with this hidden paper HWND's old monitor DPI is the
-                // exact mixed-DPI bug this hand-off must avoid.
-                var slotOrigin = WindowWorkAreaHelper.DeviceScreenPointToDip(
-                    _edgeCapsuleHost.ScreenOrigin());
-                Left = slotOrigin.X;
-                Top = slotOrigin.Y;
-            }
-            else
-            {
-                Left = _paper.X;
-                Top = _paper.Y;
-            }
-            Show();
-        });
+                Width = DesiredCapsuleWindowWidth;
+                Height = PaperLayoutDefaults.CapsuleHeight;
+                if (programmaticOrigin is { } targetPlacement)
+                {
+                    MoveMainWindowToProgrammaticExpansionOrigin(targetPlacement);
+                }
+                else if (!useNativeBootstrap && _edgeCapsuleHost != null)
+                {
+                    var slotOrigin = WindowWorkAreaHelper.DeviceScreenPointToDip(
+                        _edgeCapsuleHost.ScreenOrigin());
+                    Left = slotOrigin.X;
+                    Top = slotOrigin.Y;
+                }
+                else if (!useNativeBootstrap)
+                {
+                    Left = _paper.X;
+                    Top = _paper.Y;
+                }
+
+                if (useNativeBootstrap)
+                {
+                    _ = TryApplyDeepCapsuleDeviceBounds(bootstrapBounds);
+                }
+                // Handle creation applies initial shell styles. Set the expanded taskbar state
+                // after that, while hidden, so WPF need not hide/show the first animation frame.
+                ShowInTaskbar = ShouldShowInTaskbar(collapsed: false);
+                Show();
+                if (useNativeBootstrap &&
+                    !TryApplyDeepCapsuleDeviceBounds(bootstrapBounds))
+                {
+                    if (_edgeCapsuleHost != null)
+                    {
+                        var slotOrigin = WindowWorkAreaHelper.DeviceScreenPointToDip(
+                            _edgeCapsuleHost.ScreenOrigin());
+                        Left = slotOrigin.X;
+                        Top = slotOrigin.Y;
+                    }
+                    else
+                    {
+                        Left = _paper.X;
+                        Top = _paper.Y;
+                    }
+                }
+                // The native move can change DPI; finish measuring the capsule at that DPI
+                // while transparent, before exposing the first expand frame.
+                RefreshCapsuleLabel();
+                UpdateLayout();
+            });
+        }
+        finally
+        {
+            Opacity = 1.0;
+        }
     }
 
     private void MoveMainWindowToProgrammaticExpansionOrigin(ProgrammaticPaperExpansionOrigin placement)
     {
+        _deepCapsuleDevicePlacementGeneration++;
         Left = placement.Left;
         Top = placement.Top;
+    }
+
+    private DeviceScreenRect DeepCapsuleMainWindowBootstrapBounds()
+    {
+        var frame = EdgeCapsulePresentationFrame.Hidden;
+        var hasCommittedFrame = _edgeCapsuleHost?.TryGetAppliedPresentation(
+            out frame) == true;
+        if (hasCommittedFrame && frame.Visible && !frame.Bounds.IsEmpty)
+        {
+            return EdgeCapsuleGeometry.PaperBoundsForDockedEdge(
+                DeepCapsuleMonitorGeometry(),
+                frame.Edge,
+                frame.Bounds.Top,
+                DesiredCapsuleWindowWidth,
+                PaperLayoutDefaults.CapsuleHeight,
+                edgeInsetDip: 0,
+                verticalMarginDip: 0);
+        }
+
+        if (!TryGetDeepCapsuleTarget(out var layout, out var targetBounds))
+        {
+            return default;
+        }
+
+        return EdgeCapsuleGeometry.PaperBoundsForDockedEdge(
+            layout.Monitor,
+            layout.Edge,
+            targetBounds.Top,
+            DesiredCapsuleWindowWidth,
+            PaperLayoutDefaults.CapsuleHeight,
+            edgeInsetDip: 0,
+            verticalMarginDip: 0);
+    }
+
+    private bool TryGetDeepCapsuleTarget(
+        out EdgeCapsuleLayoutSnapshot layout,
+        out DeviceScreenRect bounds)
+    {
+        layout = default;
+        bounds = default;
+        if (!HasDeepCapsuleSlotPlacement)
+        {
+            return false;
+        }
+
+        layout = CaptureEdgeCapsuleLayoutSnapshot();
+        if (!layout.IsUsable)
+        {
+            return false;
+        }
+
+        bounds = EdgeCapsuleGeometry.Calculate(new EdgeCapsuleGeometryInput(
+            layout.Monitor,
+            layout.Edge,
+            IsDeepCapsuleRetractedIntoMaster
+                ? layout.MasterTopDip
+                : layout.NormalTopDip,
+            layout.RestingWidthDip,
+            0,
+            PaperLayoutDefaults.CapsuleHeight)).Bounds;
+        return !bounds.IsEmpty;
+    }
+
+    private bool TryApplyDeepCapsuleDeviceBounds(DeviceScreenRect bounds)
+    {
+        if (bounds.IsEmpty)
+        {
+            return false;
+        }
+
+        if (WindowNative.TryGetWindowDeviceBounds(this, out var currentBounds) &&
+            EdgeCapsuleGeometry.DeviceBoundsMatch(currentBounds, bounds, tolerance: 1))
+        {
+            return true;
+        }
+
+        return WindowNative.TrySetWindowDeviceBounds(this, bounds);
+    }
+
+    private void QueueDeepCapsuleDeviceBoundsConfirmation(DeviceScreenRect bounds)
+    {
+        var generation = ++_deepCapsuleDevicePlacementGeneration;
+        Dispatcher.BeginInvoke(
+            (Action)(() =>
+            {
+                if (generation != _deepCapsuleDevicePlacementGeneration ||
+                    _paper.IsCollapsed ||
+                    !IsVisible)
+                {
+                    return;
+                }
+
+                MoveWindowWithoutGeometrySave(() => _ = TryApplyDeepCapsuleDeviceBounds(bounds));
+            }),
+            System.Windows.Threading.DispatcherPriority.Render);
+    }
+
+    private bool TryApplyRememberedDeepCapsuleExpandedGeometry(PaperRestoreGeometry geometry)
+    {
+        _deepCapsuleDevicePlacementGeneration++;
+        if (!TryApplyDeepCapsuleDeviceBounds(geometry.Bounds))
+        {
+            return false;
+        }
+
+        // Native placement selects the destination DPI. Settle WPF's logical size at that DPI
+        // before starting the form animation; a queued resize would compete with its frames.
+        Width = geometry.WidthDip;
+        Height = geometry.HeightDip;
+        UpdateLayout();
+        return TryApplyDeepCapsuleDeviceBounds(geometry.Bounds);
     }
 
     private void HideMainWindowForDeepCapsuleRest()
@@ -306,30 +468,26 @@ public sealed partial class PaperWindow
 
         var rawTargetWidth = Math.Max(_paper.Width, PaperLayoutDefaults.MinWidth);
         var rawTargetHeight = Math.Max(_paper.Height, PaperLayoutDefaults.MinHeight);
-        Rect? rememberedDeepCapsuleExpandedGeometry = null;
+        PaperRestoreGeometry? rememberedDeepCapsuleExpandedGeometry = null;
         if (alignToDockedEdge &&
             ExpandedFromDeepCapsuleEdge &&
             _controller.TryGetRememberedDeepCapsuleExpandedGeometry(_paper, rawTargetWidth, rawTargetHeight, out var rememberedGeometry))
         {
             rememberedDeepCapsuleExpandedGeometry = rememberedGeometry;
-            rawTargetWidth = rememberedGeometry.Width;
-            rawTargetHeight = rememberedGeometry.Height;
+            rawTargetWidth = rememberedGeometry.WidthDip;
+            rawTargetHeight = rememberedGeometry.HeightDip;
         }
 
-        var targetWidth = RoundToDevicePixelX(rawTargetWidth);
-        var targetHeight = RoundToDevicePixelY(rawTargetHeight);
+        var targetWidth = rememberedDeepCapsuleExpandedGeometry?.WidthDip ?? RoundToDevicePixelX(rawTargetWidth);
+        var targetHeight = rememberedDeepCapsuleExpandedGeometry?.HeightDip ?? RoundToDevicePixelY(rawTargetHeight);
         MoveWindowWithoutGeometrySave(() =>
         {
             Width = targetWidth;
             Height = targetHeight;
             if (alignToDockedEdge)
             {
-                if (rememberedDeepCapsuleExpandedGeometry is Rect rememberedRect)
-                {
-                    Left = RoundToDevicePixelX(rememberedRect.Left);
-                    Top = RoundToDevicePixelY(rememberedRect.Top);
-                }
-                else
+                if (rememberedDeepCapsuleExpandedGeometry is not PaperRestoreGeometry rememberedPlacement ||
+                    !TryApplyRememberedDeepCapsuleExpandedGeometry(rememberedPlacement))
                 {
                     var requiredEdgeInset = _controller.State.ShowDeepCapsuleWhileExpanded && _controller.CanPaperDisplayAsCapsule(_paper)
                         ? ExpandedDeepCapsuleVisibleWidth() + DeepCapsuleGap
@@ -366,14 +524,16 @@ public sealed partial class PaperWindow
             return false;
         }
 
-        MarkEdgeCapsuleOpenedFromEdge();
+        var applied = false;
         MoveWindowWithoutGeometrySave(() =>
         {
-            Left = RoundToDevicePixelX(rememberedGeometry.Left);
-            Top = RoundToDevicePixelY(rememberedGeometry.Top);
-            Width = RoundToDevicePixelX(rememberedGeometry.Width);
-            Height = RoundToDevicePixelY(rememberedGeometry.Height);
+            applied = TryApplyRememberedDeepCapsuleExpandedGeometry(rememberedGeometry);
         });
+        if (!applied)
+        {
+            return false;
+        }
+        MarkEdgeCapsuleOpenedFromEdge();
         return true;
     }
 
@@ -436,22 +596,56 @@ public sealed partial class PaperWindow
 
     private void AlignExpandedToDockedEdge(double targetWidth, double targetHeight, double requiredEdgeInset = 0)
     {
-        var area = DeepCapsuleWorkArea();
+        var monitor = DeepCapsuleMonitorGeometry();
         var width = Math.Max(targetWidth, PaperLayoutDefaults.MinWidth);
         var height = Math.Max(targetHeight, PaperLayoutDefaults.MinHeight);
-        // "rightInset" is really the gap between the expanded window and the docked edge; it
-        // reserves room for the resting capsule strip. On the left edge it pushes the window
-        // rightward from area.Left; on the right edge it pulls it leftward from area.Right.
-        var edgeInset = Math.Min(
-            Math.Max(
-                Math.Max(DeepCapsuleExpandedEdgeInset, requiredEdgeInset),
-                _controller.VisibleDeepCapsuleRestingWidthForQueue(_paper) + DeepCapsuleGap),
-            Math.Max(0, area.Width - width));
-        var targetTop = Math.Clamp(Top, area.Top + DeepCapsuleTopMargin, Math.Max(area.Top + DeepCapsuleTopMargin, area.Bottom - height - DeepCapsuleTopMargin));
+        var edgeInset = Math.Max(
+            Math.Max(DeepCapsuleExpandedEdgeInset, requiredEdgeInset),
+            _controller.VisibleDeepCapsuleRestingWidthForQueue(_paper) + DeepCapsuleGap);
+        var committedFrame = EdgeCapsulePresentationFrame.Hidden;
+        var hasCommittedFrame = _edgeCapsuleHost?.TryGetAppliedPresentation(
+            out committedFrame) == true;
+        var appliedBounds = hasCommittedFrame
+            ? committedFrame.Bounds
+            : default;
+        var hasQueueTarget = TryGetDeepCapsuleTarget(
+            out _,
+            out var queueTargetBounds);
+        var anchorTop = !appliedBounds.IsEmpty
+            ? appliedBounds.Top
+            : hasQueueTarget
+                ? queueTargetBounds.Top
+                : WindowNative.TryGetWindowDeviceBounds(this, out var currentBounds)
+                    ? currentBounds.Top
+                    : monitor.WorkArea.Top;
+        var targetBounds = EdgeCapsuleGeometry.PaperBoundsForDockedEdge(
+            monitor,
+            MyDeepCapsuleEdge,
+            anchorTop,
+            width,
+            height,
+            edgeInset,
+            DeepCapsuleTopMargin);
+        if (TryApplyDeepCapsuleDeviceBounds(targetBounds))
+        {
+            // Width/Height are written by the form transition immediately after this method.
+            // Confirm the same physical rectangle after that layout pass, before rendering.
+            QueueDeepCapsuleDeviceBoundsConfirmation(targetBounds);
+            return;
+        }
 
+        var area = DeepCapsuleWorkArea();
+        var fallbackInset = Math.Min(edgeInset, Math.Max(0, area.Width - width));
+        var targetTop = Math.Clamp(
+            Top,
+            area.Top + DeepCapsuleTopMargin,
+            Math.Max(
+                area.Top + DeepCapsuleTopMargin,
+                area.Bottom - height - DeepCapsuleTopMargin));
         Left = RoundToDevicePixelX(MyDeepCapsuleIsLeftEdge
-            ? area.Left + edgeInset
-            : area.Right - width - edgeInset);
+            ? area.Left + fallbackInset
+            : area.Right - width - fallbackInset);
         Top = RoundToDevicePixelY(targetTop);
     }
 }
+

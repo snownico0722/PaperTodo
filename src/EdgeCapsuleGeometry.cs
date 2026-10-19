@@ -85,6 +85,49 @@ internal static class EdgeCapsuleGeometry
             scaleY);
     }
 
+    // Expanded paper placement shares the queue's physical coordinate authority.
+    public static DeviceScreenRect PaperBoundsForDockedEdge(
+        MonitorGeometry monitor,
+        EdgeCapsuleEdge edge,
+        int anchorTopDevice,
+        double widthDip,
+        double heightDip,
+        double edgeInsetDip,
+        double verticalMarginDip)
+    {
+        if (monitor.WorkArea.IsEmpty ||
+            !double.IsFinite(widthDip) ||
+            !double.IsFinite(heightDip) ||
+            widthDip <= 0 ||
+            heightDip <= 0)
+        {
+            return default;
+        }
+
+        var scaleX = Math.Max(1, monitor.DpiScaleX);
+        var scaleY = Math.Max(1, monitor.DpiScaleY);
+        var width = Math.Max(1, RoundDevice(widthDip * scaleX));
+        var height = Math.Max(1, RoundDevice(heightDip * scaleY));
+        var maximumInset = Math.Max(0, monitor.WorkArea.Width - width);
+        var edgeInset = Math.Clamp(
+            RoundDevice(Math.Max(0, edgeInsetDip) * scaleX),
+            0,
+            maximumInset);
+        var verticalMargin = Math.Max(
+            0,
+            RoundDevice(Math.Max(0, verticalMarginDip) * scaleY));
+        var minTop = monitor.WorkArea.Top + verticalMargin;
+        var maxTop = Math.Max(
+            minTop,
+            monitor.WorkArea.Bottom - height - verticalMargin);
+        var top = Math.Clamp(anchorTopDevice, minTop, maxTop);
+        var left = edge == EdgeCapsuleEdge.Left
+            ? monitor.WorkArea.Left + edgeInset
+            : monitor.WorkArea.Right - width - edgeInset;
+
+        return new DeviceScreenRect(left, top, left + width, top + height);
+    }
+
     public static double CloseWidthForAppliedDeviceWidth(
         int appliedWidth,
         int restingWidth,
@@ -266,3 +309,4 @@ internal static class EdgeCapsuleGeometry
     private static int LerpDevice(int from, int to, double progress) =>
         RoundDevice(from + (to - from) * progress);
 }
+
