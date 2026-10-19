@@ -2811,9 +2811,9 @@ public sealed partial class AppController : IDisposable
 
         if (!State.UseCapsuleCollapseAll)
         {
+            // Disabling the master only clears retraction, not the user's queue positions.
             State.CapsuleCollapseAllActive = false;
             State.CapsuleCollapseAllActiveQueues.Clear();
-            ResetDeepCapsuleStartTopMargins();
         }
 
         // Collapse-all rides on top of edge-aligned capsules; enabling it implies both prerequisites.
