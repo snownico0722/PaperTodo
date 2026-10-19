@@ -1890,8 +1890,9 @@ public sealed partial class AppController
         if (_settingsCollapseExpandedDeepCapsuleOnClickCheckBox != null)
         {
             _settingsCollapseExpandedDeepCapsuleOnClickCheckBox.IsChecked = State.CollapseExpandedDeepCapsuleOnClick;
-            _settingsCollapseExpandedDeepCapsuleOnClickCheckBox.IsEnabled = State.UseCapsuleMode && State.UseDeepCapsuleMode &&
-                State.ShowDeepCapsuleWhileExpanded;
+            _settingsCollapseExpandedDeepCapsuleOnClickCheckBox.IsEnabled =
+                (State.UseCapsuleMode && State.UseDeepCapsuleMode && State.ShowDeepCapsuleWhileExpanded) ||
+                (State.EnableTodoNoteLinks && State.HideLinkedNotesFromCapsules);
         }
         if (_settingsCapsuleCollapseAllCheckBox != null)
         {
