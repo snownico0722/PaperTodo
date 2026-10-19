@@ -1764,7 +1764,11 @@ public sealed partial class PaperWindow
         }
     }
 
-    private static Task StopScriptProcessAsync(Process process, bool persistent) => Task.Run(async () =>
+    // Windows redirected pipes use synchronous handles. Their async output reads can occupy
+    // ThreadPool workers until the child exits, so stopping must not queue behind those reads.
+    // Keep each bounded stop on its own worker, including the grace/kill waits; an async
+    // LongRunning delegate would return its continuation to the same starved ThreadPool.
+    private static Task StopScriptProcessAsync(Process process, bool persistent) => Task.Factory.StartNew(() =>
     {
         try
         {
@@ -1787,14 +1791,9 @@ public sealed partial class PaperWindow
                     // The process may already be exiting or its input pipe may be broken.
                 }
 
-                using var grace = new System.Threading.CancellationTokenSource(250);
-                try
+                if (process.WaitForExit(250))
                 {
-                    await process.WaitForExitAsync(grace.Token).ConfigureAwait(false);
                     return;
-                }
-                catch (OperationCanceledException) when (grace.IsCancellationRequested)
-                {
                 }
             }
 
@@ -1803,8 +1802,7 @@ public sealed partial class PaperWindow
                 process.Kill(entireProcessTree: true);
             }
 
-            using var deadline = new System.Threading.CancellationTokenSource(1000);
-            await process.WaitForExitAsync(deadline.Token).ConfigureAwait(false);
+            process.WaitForExit(1000);
         }
         catch
         {
@@ -1819,5 +1817,6 @@ public sealed partial class PaperWindow
                 process.Dispose();
             }
         }
-    });
+    }, System.Threading.CancellationToken.None,
+        TaskCreationOptions.LongRunning | TaskCreationOptions.DenyChildAttach, TaskScheduler.Default);
 }
