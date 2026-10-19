@@ -72,6 +72,7 @@ jobs:
           s=s.replace('c.State.DeepCapsuleStartTopMargin=93;', 'var leftKey=(string)Call(typeof(AppController),"QueueKey","",DeepCapsuleSides.Left)!;\n            var rightKey=(string)Call(typeof(AppController),"QueueKey","",DeepCapsuleSides.Right)!;\n            c.State.DeepCapsuleStartTopMargin=93;')
           s=s.replace('"check-left"', 'leftKey').replace('"check-right"', 'rightKey')
           s=s.replace('Deserialize<AppState>("{}")','Deserialize<AppState>("""{"Papers":[]}""")')
+          s=s.replace('Assert(new StateStore().Load()', 'c.SaveNow(sync: true);\n            Assert(new StateStore().Load()')
           exec(compile(s,str(p),'exec'))
           '@ | python -
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
