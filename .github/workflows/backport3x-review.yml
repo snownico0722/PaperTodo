@@ -1,0 +1,60 @@
+name: Temporary 3.x review follow-up
+on:
+  pull_request:
+    branches: [3.x]
+    paths:
+      - .github/backport3x-review.py
+      - .github/workflows/backport3x-review.yml
+permissions:
+  contents: write
+concurrency:
+  group: papertodo-3x-review-followup
+  cancel-in-progress: false
+jobs:
+  review:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'backport/3x-system-startup-1019'
+    runs-on: windows-latest
+    timeout-minutes: 20
+    env:
+      SOURCE_HEAD: ${{ github.event.pull_request.head.sha }}
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+      - name: Prepare isolated validation runner
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          Copy-Item .github/backport3x-review.py "$env:RUNNER_TEMP/backport3x-review.py"
+          python -m py_compile "$env:RUNNER_TEMP/backport3x-review.py"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Reproduce both defects on the previous combined product
+        run: |
+          python "$env:RUNNER_TEMP/backport3x-review.py" before
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Apply minimal independent fixes and combine only the three PRs
+        run: |
+          python "$env:RUNNER_TEMP/backport3x-review.py" prepare
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Revised startup and all-three-toggle regressions plus prior behavioral suites
+        run: |
+          python "$env:RUNNER_TEMP/backport3x-review.py" after
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Combined persistence regression
+        run: dotnet run --project tests/PaperTodo.PersistenceChecks/PaperTodo.PersistenceChecks.csproj -c Release
+      - name: Combined Store compilation
+        run: dotnet build PaperTodo.csproj -c Release /p:PaperTodoStoreBuild=true
+      - name: Combined Win7 best-effort compilation
+        run: ./build-win7.ps1 -SelfContained
+      - name: Publish verified commits only to the two original PR branches
+        run: |
+          python "$env:RUNNER_TEMP/backport3x-review.py" publish
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
