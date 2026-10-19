@@ -79,6 +79,7 @@ public sealed partial class PaperWindow
         _todoPanel.Children.Clear();
         _todoEditors.Clear();
         _todoRows.Clear();
+        _todoLinkedPresentationRefreshers.Clear();
         _linkedNoteDropRow = null;
 
         foreach (var item in OrderedItems())
@@ -135,6 +136,7 @@ public sealed partial class PaperWindow
         // Removing the focused row releases its old editor. Do not focus the new editor at
         // the item's distant completed position: that made ScrollViewer jump to the bottom.
         _todoEditors.Remove(item.Id);
+        _todoLinkedPresentationRefreshers.Remove(item.Id);
         _todoPanel.Children.RemoveAt(panelIndex);
         _todoRows.RemoveAt(currentIndex);
 
@@ -359,6 +361,7 @@ public sealed partial class PaperWindow
 
     private UIElement BuildTodoRow(PaperItem item, bool isNewItem = false)
     {
+        _todoLinkedPresentationRefreshers.Remove(item.Id);
         var metrics = TodoVisualSizes.Metrics(_controller.State.TodoVisualSize);
         var linkedNoteTitle = "";
         var hasLinkedNote = _controller.State.EnableTodoNoteLinks &&
@@ -797,6 +800,18 @@ public sealed partial class PaperWindow
                     _controller.OpenLinkedNote(item.LinkedNoteId, this, toggleIfExcludedFromCapsules: true);
                 }
                 e.Handled = true;
+            };
+
+            _todoLinkedPresentationRefreshers[item.Id] = () =>
+            {
+                linkedNoteActive = _controller.IsLinkedNoteShown(item.LinkedNoteId);
+                var hovered = linkButton.IsMouseOver;
+                linkButton.Background = linkedNoteActive
+                    ? (hovered ? LinkedNoteMediumBgBrush : LinkedNoteLightBgBrush)
+                    : (hovered ? LinkedNoteLightBgBrush : LinkedNoteNormalBgBrush);
+                linkGlyph.Foreground = linkedNoteActive ? LinkedNoteActiveTextBrush
+                    : (hovered ? TextBrush : WeakTextBrush);
+                linkGlyph.Opacity = linkedNoteActive || hovered ? 1.0 : 0.7;
             };
 
             Grid.SetColumn(linkButton, 2);

@@ -1931,7 +1931,7 @@ public sealed partial class AppController : IDisposable
         {
             if (_windows.TryGetValue(paper.Id, out var window))
             {
-                window.RefreshTodoRowsForExternalChange();
+                window.RefreshTodoRowsForPaperVisibility();
             }
         }
     }
@@ -1966,7 +1966,7 @@ public sealed partial class AppController : IDisposable
         {
             if (_windows.TryGetValue(paper.Id, out var window))
             {
-                window.RefreshTodoRowsForExternalChange();
+                window.RefreshTodoRowsForPaperVisibility();
             }
         }
 
