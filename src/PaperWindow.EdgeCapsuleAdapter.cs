@@ -60,13 +60,17 @@ public sealed partial class PaperWindow
         EdgeCapsulePaperForm paperForm,
         bool reserveWhileExpanded)
     {
+        // Capture origin before PaperFormChanged can detach the slot. Whether the slot remains
+        // visible after opening must not decide whether expanded geometry can be remembered.
+        var markOpenedFromEdge = EdgeCapsuleOpenOriginPolicy.ShouldMarkOpenedFromEdge(EdgeCapsuleSlot, paperForm);
         if (paperForm == EdgeCapsulePaperForm.Expanded && !reserveWhileExpanded)
         {
             CloseDeepCapsuleSlotContextMenu();
         }
-
-        return DispatchEdgeCapsuleIntent(
+        var accepted = DispatchEdgeCapsuleIntent(
             EdgeCapsuleIntent.PaperFormChanged(paperForm, reserveWhileExpanded));
+        if (accepted && markOpenedFromEdge) MarkEdgeCapsuleOpenedFromEdge();
+        return accepted;
     }
 
     private bool BeginEdgeCapsuleRetraction()
