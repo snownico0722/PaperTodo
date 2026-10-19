@@ -2372,7 +2372,6 @@ public sealed partial class AppController
             State.UseDeepCapsuleMode = false;
             State.CapsuleCollapseAllActive = false;
             State.CapsuleCollapseAllActiveQueues.Clear();
-            ResetDeepCapsuleStartTopMargins();
         }
 
         // Keep IsCollapsed intact until each live window has consumed the mode change.
@@ -2506,8 +2505,8 @@ public sealed partial class AppController
         List<(PaperWindow Window, PaperWindow.DeepCapsuleModeHandoff Handoff)>? handoffs = null;
         if (State.UseDeepCapsuleMode)
         {
-            // Capture normal queue slots before disabling collapse-all and resetting queue
-            // margins; once the hosts are detached, only the stale ordinary X/Y remains.
+            // Capture normal queue slots before disabling collapse-all; queue heights remain user settings.
+            // once the hosts are detached, only the stale ordinary X/Y remains.
             var windows = _windows.Values.ToList();
             foreach (var window in windows)
             {
@@ -2538,7 +2537,6 @@ public sealed partial class AppController
         {
             State.CapsuleCollapseAllActive = false;
             State.CapsuleCollapseAllActiveQueues.Clear();
-            ResetDeepCapsuleStartTopMargins();
         }
 
         foreach (var window in _windows.Values)

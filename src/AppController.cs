@@ -3486,10 +3486,8 @@ public sealed partial class AppController : IDisposable
             : State.DeepCapsuleStartTopMargin;
     }
 
-    // Reset ALL deep-capsule start heights to the default — both the legacy global scalar AND the
-    // per-queue dictionary. Must clear the dict too: layout reads per-queue values first, so
-    // leaving stale entries would resurrect old queue heights when the mode is re-enabled (and
-    // persist them to data.json). Single chokepoint so no reset path forgets the dict again.
+    // Only explicit restore-defaults clears both legacy and per-queue heights. Disabling
+    // capsule presentation clears transient slots/retraction, not this persistent preference.
     private void ResetDeepCapsuleStartTopMargins()
     {
         State.DeepCapsuleStartTopMargin = EdgeCapsuleLayout.StartTopMargin;
