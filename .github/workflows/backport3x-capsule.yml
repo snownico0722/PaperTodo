@@ -30,6 +30,28 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           python .github/backport3x-capsule.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          @'
+          from pathlib import Path
+          import subprocess
+          p=Path('src/StateStore.cs')
+          s=p.read_text(encoding='utf-8')
+          start=s.index('        var keepDeepCapsuleStartTopMargins = collapseAllRuntimeEnabled;')
+          end=s.index('\n    private static void NormalizePapers(',start)
+          s=s[:start]+'''        // Heights are user preferences, not the transient state of enabled capsules.
+                  // Preserve them across disabling/restarting; explicit restore-defaults resets them.
+                  state.DeepCapsuleStartTopMargin = NormalizeDeepCapsuleStartTopMargin(
+                      state.DeepCapsuleStartTopMargin, state.DeepCapsuleMonitorDeviceName);
+                  state.DeepCapsuleQueueStartTopMargins ??= new Dictionary<string, double>();
+                  state.DeepCapsuleQueueStartTopMargins = NormalizeQueueStartTopMargins(state.DeepCapsuleQueueStartTopMargins);
+                  RemoveNonFiniteValues(state.DeepCapsuleQueueStartTopMargins);
+              }
+          '''.replace('\n        ','\n')+s[end:]
+          p.write_text(s,encoding='utf-8',newline='\n')
+          subprocess.run(['git','add','src/StateStore.cs'],check=True)
+          subprocess.run(['git','diff','--cached','--check'],check=True)
+          subprocess.run(['git','commit','-m','fix(3.x): 读取配置时保留已关闭胶囊的队列高度'],check=True)
+          '@ | python -
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Release compilation
         run: dotnet build PaperTodo.csproj -c Release
       - name: Real WPF capsule and linked-paper checks in isolated temporary directory
