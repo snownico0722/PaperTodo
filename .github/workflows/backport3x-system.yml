@@ -33,7 +33,9 @@ jobs:
       - name: Release compilation
         run: dotnet build PaperTodo.csproj -c Release
       - name: Real PowerShell and startup boundary checks in isolated temporary directory
-        run: python .github/backport3x-system.py --tests
+        run: |
+          python -c "import sys; from pathlib import Path; sys.argv.append('--tests'); p=Path('.github/backport3x-system.py'); s=p.read_text(encoding='utf-8').replace('using System.Diagnostics;', 'using System.Diagnostics;\nusing System.IO;'); exec(compile(s,str(p),'exec'))"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Existing persistence regression
         run: dotnet run --project tests/PaperTodo.PersistenceChecks/PaperTodo.PersistenceChecks.csproj -c Release
       - name: Store build compatibility
