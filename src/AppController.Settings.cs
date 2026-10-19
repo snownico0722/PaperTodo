@@ -2330,7 +2330,8 @@ public sealed partial class AppController
     private void TogglePreferPowerShell7()
     {
         State.PreferPowerShell7 = !State.PreferPowerShell7;
-        PaperWindow.StopPersistentScriptProcesses();
+        // Preferences select the session for future submissions, not the lifetime of running work.
+        // The existing executable/window-mode keyed pool also reuses sessions when switching back.
         PaperWindow.EnsurePersistentScriptProcessForSettings(State);
         SaveNow();
         RefreshSettingsWindowContent();
@@ -2339,7 +2340,8 @@ public sealed partial class AppController
     private void ToggleHideScriptRunWindow()
     {
         State.HideScriptRunWindow = !State.HideScriptRunWindow;
-        PaperWindow.StopPersistentScriptProcesses();
+        // Preferences select the session for future submissions, not the lifetime of running work.
+        // The existing executable/window-mode keyed pool also reuses sessions when switching back.
         PaperWindow.EnsurePersistentScriptProcessForSettings(State);
         SaveNow();
         RefreshSettingsWindowContent();
