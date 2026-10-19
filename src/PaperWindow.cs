@@ -837,6 +837,12 @@ public sealed partial class PaperWindow : Window
 
     private IntPtr OnWindowMessage(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
+        // Note preview may have no WPF keyboard-focus target; use the existing HWND hook too.
+        if (!handled && TryHandleWindowCloseKey(msg, wParam, lParam))
+        {
+            handled = true;
+            return IntPtr.Zero;
+        }
         // Keep restore/maximize on the default system path; only native minimization is blocked.
         if (msg == WmSysCommand && (wParam.ToInt64() & SystemCommandMask) == ScMinimize)
         {
@@ -2136,6 +2142,7 @@ public sealed partial class PaperWindow : Window
             CornerRadius = new CornerRadius(RadiusShell, RadiusShell, 0, 0),
             Child = top
         };
+        _windowCloseTitleBar = topHost;
         topHost.SetResourceReference(Border.BackgroundProperty, "TitleBarBrushKey");
         topHost.SetResourceReference(Border.BorderBrushProperty, "TitleBarDividerBrushKey");
         topHost.MouseLeftButtonDown += (_, e) => BeginTitleBarDragGesture(topHost, e);

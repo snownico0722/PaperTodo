@@ -129,6 +129,23 @@ public static class Theme
     // 50% transparency => alpha 128.
     private const byte ResizeGripSoftAlpha = 128;
 
+    // The dynamic reference belongs on Path.Fill. A nested GeometryDrawing resource
+    // does not reliably invalidate an already displayed Window-template ResizeGrip.
+    public static DrawingBrush ResizeGripTileBrush(Brush dots)
+    {
+        var tile = new DrawingBrush(new GeometryDrawing(dots, null,
+            Geometry.Parse("M 0,0 L 2,0 L 2,2 L 0,2 z")))
+        {
+            Viewbox = new Rect(0, 0, 3, 3),
+            Viewport = new Rect(0, 0, 3, 3),
+            TileMode = TileMode.Tile,
+            ViewboxUnits = BrushMappingMode.Absolute,
+            ViewportUnits = BrushMappingMode.Absolute
+        };
+        tile.Freeze();
+        return tile;
+    }
+
     public static Brush ResizeGripBrush(string? mode)
     {
         var tone = Mix(SystemColors.ControlDarkColor, Current.Tint, ResizeGripSchemeTintMix);

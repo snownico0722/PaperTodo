@@ -227,6 +227,7 @@ public sealed partial class PaperWindow
 
     private void AbortAllInteractions(InteractionAbortReason reason)
     {
+        _middleClickTitleArmed = false;
         CancelPendingTitleEditIntent();
         CancelNotePresenterDeferredWork();
         EndTitleBarDragGesture();
