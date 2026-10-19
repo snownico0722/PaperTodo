@@ -37,13 +37,20 @@ jobs:
           import os
           from pathlib import Path
           source=Path('.github/backport3x-review.py').read_text(encoding='utf-8')
-          # Dispatcher pumping must not implicitly start another AppController behind the
-          # explicitly tested StartAsync call. Retain App's actual queue/drain implementation.
+          # Suppress only the host's automatic OnStartup. All tested controller, queue,
+          # persistence and window methods remain the real compiled product methods.
+          resource_loader='''var appSource = System.Xml.Linq.XDocument.Load(Path.Combine(Environment.GetEnvironmentVariable("GITHUB_WORKSPACE")!, "App.xaml"));
+                      var appRoot = appSource.Root!;
+                      var resourceRoot = new System.Xml.Linq.XElement(appRoot.Name.Namespace + "ResourceDictionary",
+                          appRoot.Attributes().Where(a => a.IsNamespaceDeclaration).Select(a => new System.Xml.Linq.XAttribute(a)),
+                          appRoot.Element(appRoot.Name.Namespace + "Application.Resources")!.Nodes());
+                      app.Resources = (ResourceDictionary)System.Windows.Markup.XamlReader.Parse(resourceRoot.ToString());'''
           edits={
               'static class ReviewChecks\n{': 'sealed class ReviewApp : App\n{\n    protected override void OnStartup(StartupEventArgs e) { }\n}\n\nstatic class ReviewChecks\n{',
               'obj.GetType().GetField(name, Flags)': '(obj is App ? typeof(App) : obj.GetType()).GetField(name, Flags)',
               'obj.GetType().GetMethods(Flags)': '(obj is App ? typeof(App) : obj.GetType()).GetMethods(Flags)',
-              'var app = new App();': 'var app = new ReviewApp();'
+              'var app = new App();': 'var app = new ReviewApp();',
+              'app.InitializeComponent();': resource_loader
           }
           for old,new in edits.items():
               assert source.count(old)==1, old
