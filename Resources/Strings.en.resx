@@ -184,6 +184,21 @@ Error: {0}</value>
   <data name="ImageImportFailureMessage" xml:space="preserve">
     <value>Could not insert the image:&#x0A;{0}</value>
   </data>
+  <data name="TodoPasteTruncatedTitle" xml:space="preserve">
+    <value>Paste was truncated</value>
+  </data>
+  <data name="TodoPasteItemLimitMessage" xml:space="preserve">
+    <value>Only the first {0} todos were inserted; the rest were not inserted.</value>
+  </data>
+  <data name="TodoPasteTextLimitMessage" xml:space="preserve">
+    <value>A todo can contain at most {0} characters; excess text was not inserted.</value>
+  </data>
+  <data name="NoteInputLimitTitle" xml:space="preserve">
+    <value>Note limit reached</value>
+  </data>
+  <data name="NoteInputLimitMessage" xml:space="preserve">
+    <value>A note can contain at most {0} characters. Delete some content before typing more.</value>
+  </data>
   <data name="NotePasteRejectedTitle" xml:space="preserve">
     <value>Cannot paste</value>
   </data>
@@ -1009,3 +1024,4 @@ When off, open at the docked edge or remembered position.</value>
     <value>Open: {0}</value>
   </data>
 </root>
+

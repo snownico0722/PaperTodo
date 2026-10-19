@@ -55,6 +55,7 @@ public sealed partial class MarkdownTextBox : TextEditor
     private readonly MarkdownImageElementGenerator _imageElementGenerator;
     private readonly FencedCodeStateCache _fencedCodeStateCache = new();
     private readonly MarkdownLineAnalysisCache _lineAnalysisCache;
+    private bool _textLimitNoticeShown;
 
     public event Action<Exception>? ImageImportFailed;
 
@@ -1685,7 +1686,7 @@ public sealed partial class MarkdownTextBox : TextEditor
         if (!IsReadOnly &&
             _acceptsReturn &&
             e.Key == System.Windows.Input.Key.Enter &&
-            !CanApplyTextReplacement(NewLineTextAtCaret()))
+            !CanApplyTextReplacementWithNotice(NewLineTextAtCaret()))
         {
             e.Handled = true;
             return;
@@ -1694,7 +1695,7 @@ public sealed partial class MarkdownTextBox : TextEditor
         if (!IsReadOnly &&
             _acceptsTab &&
             e.Key == System.Windows.Input.Key.Tab &&
-            !CanApplyTextReplacement("\t"))
+            !CanApplyTextReplacementWithNotice("\t"))
         {
             e.Handled = true;
             return;
@@ -1712,13 +1713,40 @@ public sealed partial class MarkdownTextBox : TextEditor
 
         if (!IsReadOnly &&
             !string.IsNullOrEmpty(e.Text) &&
-            !CanApplyTextReplacement(e.Text))
+            !CanApplyTextReplacementWithNotice(e.Text))
         {
             e.Handled = true;
             return;
         }
 
         base.OnPreviewTextInput(e);
+    }
+
+    private bool CanApplyTextReplacementWithNotice(string replacement)
+    {
+        // Ask the actual edit guard: legacy oversized notes and image delimiters keep their
+        // existing exceptions, and a rejected keystroke is reported only once until input resumes.
+        var inputAllowed = CanApplyTextReplacement(replacement);
+        if (inputAllowed)
+        {
+            _textLimitNoticeShown = false;
+        }
+        else if (!_textLimitNoticeShown)
+        {
+            _textLimitNoticeShown = true;
+            var maximumCharacters = MaxLength;
+            _ = Dispatcher.BeginInvoke((Action)(() =>
+            {
+                if (Window.GetWindow(this) is not PaperWindow owner || owner.IsClosed || !owner.IsVisible)
+                {
+                    _textLimitNoticeShown = false;
+                    return;
+                }
+                PaperNoticeDialog.Show(owner, Strings.Get("NoteInputLimitTitle"),
+                    Strings.Format("NoteInputLimitMessage", maximumCharacters));
+            }), System.Windows.Threading.DispatcherPriority.Background);
+        }
+        return inputAllowed;
     }
 
     private bool CanApplyTextReplacement(string replacement)
@@ -4956,3 +4984,4 @@ public sealed partial class MarkdownTextBox : TextEditor
         }
     }
 }
+

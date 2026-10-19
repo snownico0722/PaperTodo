@@ -194,6 +194,21 @@
     <value>无法插入图片：
 {0}</value>
   </data>
+  <data name="TodoPasteTruncatedTitle" xml:space="preserve">
+    <value>粘贴内容已截断</value>
+  </data>
+  <data name="TodoPasteItemLimitMessage" xml:space="preserve">
+    <value>本次最多插入前 {0} 条待办，其余未插入。</value>
+  </data>
+  <data name="TodoPasteTextLimitMessage" xml:space="preserve">
+    <value>待办最多支持 {0} 个字符，超出部分未插入。</value>
+  </data>
+  <data name="NoteInputLimitTitle" xml:space="preserve">
+    <value>笔记已达上限</value>
+  </data>
+  <data name="NoteInputLimitMessage" xml:space="preserve">
+    <value>笔记最多支持 {0} 个字符。请删除部分内容后再继续输入。</value>
+  </data>
   <data name="NotePasteRejectedTitle" xml:space="preserve">
     <value>无法粘贴</value>
   </data>
@@ -1022,3 +1037,4 @@
     <value>打开：{0}</value>
   </data>
 </root>
+
