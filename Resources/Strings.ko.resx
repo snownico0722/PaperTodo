@@ -1008,4 +1008,10 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="ToolTipOpenLinkedPath" xml:space="preserve">
     <value>열기: {0}</value>
   </data>
+  <data name="SettingsCompactMasterCapsule" xml:space="preserve">
+    <value>주 캡슐 짧게 표시</value>
+  </data>
+  <data name="TipCompactMasterCapsule" xml:space="preserve">
+    <value>주 캡슐의 펼치기/접기 화살표만 표시하고 너비를 줄입니다. 끄면 기존 글자와 개수 표시로 돌아갑니다.</value>
+  </data>
 </root>

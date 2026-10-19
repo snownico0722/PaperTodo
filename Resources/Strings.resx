@@ -1021,4 +1021,10 @@
   <data name="ToolTipOpenLinkedPath" xml:space="preserve">
     <value>打开：{0}</value>
   </data>
+  <data name="SettingsCompactMasterCapsule" xml:space="preserve">
+    <value>主胶囊缩短</value>
+  </data>
+  <data name="TipCompactMasterCapsule" xml:space="preserve">
+    <value>主胶囊仅显示展开／收起箭头，并缩短宽度；关闭后恢复原有文字与数量显示。</value>
+  </data>
 </root>

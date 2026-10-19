@@ -311,6 +311,8 @@ public sealed class AppState
     public bool HideLinkedNotesFromCapsules { get; set; }
     public bool RunLinkedScriptCapsulesOnClick { get; set; }
     public int MaxTitleLength { get; set; } = PaperTitles.DefaultMaxTitleLength;
+    public bool CompactMasterCapsule { get; set; }
+
     public bool UseCapsuleCollapseAll { get; set; } = true;
     public bool CapsuleCollapseAllActive { get; set; }
     public Dictionary<string, bool> CapsuleCollapseAllActiveQueues { get; set; } = new();

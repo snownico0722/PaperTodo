@@ -1008,4 +1008,10 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="ToolTipOpenLinkedPath" xml:space="preserve">
     <value>開く：{0}</value>
   </data>
+  <data name="SettingsCompactMasterCapsule" xml:space="preserve">
+    <value>主カプセルを短くする</value>
+  </data>
+  <data name="TipCompactMasterCapsule" xml:space="preserve">
+    <value>主カプセルの展開／収納矢印だけを表示して幅を短くします。オフにすると元の文字と件数の表示に戻ります。</value>
+  </data>
 </root>

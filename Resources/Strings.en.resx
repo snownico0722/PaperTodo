@@ -1008,4 +1008,10 @@ When off, open at the docked edge or remembered position.</value>
   <data name="ToolTipOpenLinkedPath" xml:space="preserve">
     <value>Open: {0}</value>
   </data>
+  <data name="SettingsCompactMasterCapsule" xml:space="preserve">
+    <value>Compact master capsule</value>
+  </data>
+  <data name="TipCompactMasterCapsule" xml:space="preserve">
+    <value>Show only the expand/collapse arrow and reduce the master capsule width. Disable to restore its original label and count.</value>
+  </data>
 </root>
