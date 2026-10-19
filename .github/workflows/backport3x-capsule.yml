@@ -37,19 +37,26 @@ jobs:
           s=p.read_text(encoding='utf-8')
           start=s.index('        var keepDeepCapsuleStartTopMargins = collapseAllRuntimeEnabled;')
           end=s.index('\n    private static void NormalizePapers(',start)
-          s=s[:start]+'''        // Heights are user preferences, not the transient state of enabled capsules.
-                  // Preserve them across disabling/restarting; explicit restore-defaults resets them.
-                  state.DeepCapsuleStartTopMargin = NormalizeDeepCapsuleStartTopMargin(
-                      state.DeepCapsuleStartTopMargin, state.DeepCapsuleMonitorDeviceName);
-                  state.DeepCapsuleQueueStartTopMargins ??= new Dictionary<string, double>();
-                  state.DeepCapsuleQueueStartTopMargins = NormalizeQueueStartTopMargins(state.DeepCapsuleQueueStartTopMargins);
-                  RemoveNonFiniteValues(state.DeepCapsuleQueueStartTopMargins);
-              }
-          '''.replace('\n        ','\n')+s[end:]
-          p.write_text(s,encoding='utf-8',newline='\n')
-          subprocess.run(['git','add','src/StateStore.cs'],check=True)
+          lines=[
+            '        // Heights are preferences, not transient enabled-capsule state.',
+            '        // Preserve them across disabling/restarting; explicit defaults reset them.',
+            '        state.DeepCapsuleStartTopMargin = NormalizeDeepCapsuleStartTopMargin(',
+            '            state.DeepCapsuleStartTopMargin, state.DeepCapsuleMonitorDeviceName);',
+            '        state.DeepCapsuleQueueStartTopMargins ??= new Dictionary<string, double>();',
+            '        state.DeepCapsuleQueueStartTopMargins = NormalizeQueueStartTopMargins(state.DeepCapsuleQueueStartTopMargins);',
+            '        RemoveNonFiniteValues(state.DeepCapsuleQueueStartTopMargins);',
+            '    }',
+            ''
+          ]
+          p.write_text(s[:start]+'\n'.join(lines)+s[end:],encoding='utf-8',newline='\n')
+          p=Path('src/AppController.Settings.cs')
+          s=p.read_text(encoding='utf-8')
+          anchor='        State.CompactMasterCapsule = false;'
+          assert s.count(anchor)==1
+          p.write_text(s.replace(anchor,anchor+'\n        ResetDeepCapsuleStartTopMargins();'),encoding='utf-8',newline='\n')
+          subprocess.run(['git','add','src/StateStore.cs','src/AppController.Settings.cs'],check=True)
           subprocess.run(['git','diff','--cached','--check'],check=True)
-          subprocess.run(['git','commit','-m','fix(3.x): 读取配置时保留已关闭胶囊的队列高度'],check=True)
+          subprocess.run(['git','commit','-m','fix(3.x): 补齐高度记忆的配置读取与明确恢复默认边界'],check=True)
           '@ | python -
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Release compilation
