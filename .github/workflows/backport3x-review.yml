@@ -33,7 +33,24 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          Copy-Item .github/backport3x-review.py "$env:RUNNER_TEMP/backport3x-review.py"
+          @'
+          import os
+          from pathlib import Path
+          source=Path('.github/backport3x-review.py').read_text(encoding='utf-8')
+          # Dispatcher pumping must not implicitly start another AppController behind the
+          # explicitly tested StartAsync call. Retain App's actual queue/drain implementation.
+          edits={
+              'static class ReviewChecks\n{': 'sealed class ReviewApp : App\n{\n    protected override void OnStartup(StartupEventArgs e) { }\n}\n\nstatic class ReviewChecks\n{',
+              'obj.GetType().GetField(name, Flags)': '(obj is App ? typeof(App) : obj.GetType()).GetField(name, Flags)',
+              'obj.GetType().GetMethods(Flags)': '(obj is App ? typeof(App) : obj.GetType()).GetMethods(Flags)',
+              'var app = new App();': 'var app = new ReviewApp();'
+          }
+          for old,new in edits.items():
+              assert source.count(old)==1, old
+              source=source.replace(old,new)
+          Path(os.environ['RUNNER_TEMP'],'backport3x-review.py').write_text(source,encoding='utf-8')
+          '@ | python -
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python -m py_compile "$env:RUNNER_TEMP/backport3x-review.py"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Reproduce both defects on the previous combined product
