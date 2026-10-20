@@ -5,3 +5,109 @@ patch=pathlib.Path(os.environ['RUNNER_TEMP'])/'safety-followup.patch'
 patch.write_text(json.loads(data)[os.environ['REVIEW_PR']],encoding='utf-8',newline='')
 subprocess.run(['git','apply','--check',str(patch)],check=True)
 subprocess.run(['git','apply',str(patch)],check=True)
+from pathlib import Path
+
+def edit(name, old, new):
+    p=Path(name);s=p.read_text(encoding='utf-8-sig')
+    assert s.count(old)==1,(name,s.count(old))
+    p.write_text(s.replace(old,new),encoding='utf-8',newline='')
+
+edit('tests/PaperTodo.DataReloadChecks/LiveChecks.cs',
+'''            Console.WriteLine("PASS missing-baseline whole-state choices and invalid baseline propagation");''',
+'''            Require(Field<StateStore>(controller, "_store").OrdinaryWritesPaused,
+                "invalid baseline failed to retain the write hold");
+            Require(native.ReloadData().Applied, "explicit recovery after invalid baseline failed");
+            await Until(() => !controller.IsDataReloading, "accept disk after invalid baseline");
+            Console.WriteLine("PASS missing-baseline choices, invalid-baseline hold and explicit recovery");''')
+
+edit('tests/PaperTodo.DataReloadChecks/PolicyLiveChecks.cs',
+'''        // Finish the normal save explicitly before the rest of the fixture; no sleep/retry.''',
+'''        CheckUserExitIoFailure(controller, editor);
+        // Finish the normal save explicitly before the rest of the fixture; no sleep/retry.''')
+
+Path('tests/PaperTodo.DataReloadChecks/TerminationOwnerChecks.cs').write_text('''using System.IO;
+using System.Windows;
+using PaperTodo;
+
+internal static partial class Program
+{
+    private static void CheckUserExitIoFailure(AppController controller, MarkdownTextBox editor)
+    {
+        var store = Field<StateStore>(controller, "_store");
+        var writerField = typeof(StateStore).GetField("_atomicWriter", Private)!;
+        var originalWriter = writerField.GetValue(store);
+        var ignored = Field<bool>(controller, "_ignoreSaveFailures");
+        var disk = File.ReadAllBytes(store.FilePath);
+        editor.Text = "local edit survives failed ordinary exit";
+        writerField.SetValue(store, new DurableAtomicFileWriter((stage, _) =>
+        {
+            if (stage == DurableAtomicWriteStage.AfterFlush) throw new IOException("injected exit write failure");
+        }));
+        typeof(AppController).GetField("_ignoreSaveFailures", Private)!.SetValue(controller, true);
+        try
+        {
+            controller.Exit();
+            Require(controller.IsRunning && !store.WriteLifetime.IsStopped &&
+                editor.PersistentText == "local edit survives failed ordinary exit" &&
+                File.ReadAllBytes(store.FilePath).SequenceEqual(disk),
+                "failed ordinary exit discarded the editor or replaced primary data");
+        }
+        finally
+        {
+            writerField.SetValue(store, originalWriter);
+            typeof(AppController).GetField("_ignoreSaveFailures", Private)!.SetValue(controller, ignored);
+        }
+        controller.SaveNow(sync: true);
+        Require(Str(LivePaper(ReadLive(), "note-a")["content"]) == editor.PersistentText,
+            "normal saving did not recover after the I/O fault was removed");
+        Console.WriteLine("PASS actual ordinary Exit: I/O failure preserves editor and primary; subsequent save recovers");
+    }
+
+    private static int RunPassiveDisposeFixture()
+    {
+        if (!File.Exists(Path.Combine(AppContext.BaseDirectory, LiveMarker))) return 2;
+        var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+        AppController? controller = null;
+        byte[]? saved = null;
+        var disposed = false;
+        app.Dispatcher.InvokeAsync(async () =>
+        {
+            try
+            {
+                var seed = new StateStore(); seed.SaveJsonSync(seed.SerializeState(NewState()), 1);
+                controller = new AppController();
+                await controller.StartAsync(createDefaultPaper: false);
+                var window = Field<Dictionary<string, PaperWindow>>(controller, "_windows")["note-a"];
+                window.EnsureShellBuilt();
+                controller.SaveNow(sync: true);
+                saved = File.ReadAllBytes(seed.FilePath);
+                Field<MarkdownTextBox>(window, "_noteBox").Text = "unaccepted transient content";
+                controller.MarkDirty();
+                controller.Dispose();
+                disposed = true;
+            }
+            catch (Exception ex) { Console.Error.WriteLine(ex); }
+            finally { app.Shutdown(); }
+        });
+        app.Run();
+        controller?.Dispose();
+        try
+        {
+            Require(disposed && saved != null && controller?.IsRunning == false &&
+                File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "data.json")).SequenceEqual(saved),
+                "passive Dispose performed a fallback final save");
+            Console.WriteLine("PASS passive Dispose stops persistence without writing transient state");
+            return 0;
+        }
+        catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
+    }
+}
+''',encoding='utf-8',newline='')
+edit('tests/PaperTodo.DataReloadChecks/Program.cs',
+'''        if (args.Contains("--exit-fixture")) return RunDeferredExitFixture();''',
+'''        if (args.Contains("--exit-fixture")) return RunDeferredExitFixture();
+        if (args.Contains("--passive-dispose")) return RunPassiveDisposeFixture();''')
+edit('tests/PaperTodo.DataReloadChecks/Program.cs',
+'''            RunIsolatedLiveChecks("--exit-fixture");''',
+'''            RunIsolatedLiveChecks("--exit-fixture");
+            RunIsolatedLiveChecks("--passive-dispose");''')
