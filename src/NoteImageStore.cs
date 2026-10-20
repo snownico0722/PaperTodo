@@ -42,6 +42,9 @@ public sealed class NoteImageStore : IDisposable
 
     public string FilePath { get; } = Path.Combine(AppContext.BaseDirectory, "note-assets.lmdb");
 
+    public NoteImageStore() { }
+    internal NoteImageStore(string filePath) => FilePath = Path.GetFullPath(filePath);
+
     public bool IsWriteDisabled => _writeDisabled;
 
     public bool AutoCompressLargeImages { get; set; } = true;
@@ -303,6 +306,9 @@ public sealed class NoteImageStore : IDisposable
     }
 
     public NoteImageAsset ImportBitmapSource(string noteId, BitmapSource source)
+        => ImportBitmapSource(noteId, source, repairMissingAlpha: true);
+
+    internal NoteImageAsset ImportBitmapSource(string noteId, BitmapSource source, bool repairMissingAlpha)
     {
         if (_writeDisabled)
         {
@@ -314,7 +320,7 @@ public sealed class NoteImageStore : IDisposable
             throw new InvalidOperationException(Strings.Get("ImageImportInvalidNote"));
         }
 
-        var image = PrepareBitmapSource(source);
+        var image = PrepareBitmapSource(source, repairMissingAlpha);
         return AddEncodedImage(
             noteId,
             image.Bytes,
@@ -428,13 +434,16 @@ public sealed class NoteImageStore : IDisposable
         return new PreparedImage(encoded.Bytes, encoded.Mime, originalName, width, height);
     }
 
-    private PreparedImage PrepareBitmapSource(BitmapSource source)
+    private PreparedImage PrepareBitmapSource(BitmapSource source, bool repairMissingAlpha)
     {
         ValidateImageDimensions(source.PixelWidth, source.PixelHeight);
 
-        // Clipboard CF_DIB / GetImage often reports Bgra32 with every alpha byte = 0 while RGB
-        // still holds the screenshot. Encoding that as PNG makes the whole image invisible.
-        source = NormalizeVacuousAlpha(source);
+        // Legacy clipboard bitmaps can have an unused alpha plane. Encoded images
+        // carry authoritative alpha, including fully transparent pixels with RGB.
+        if (repairMissingAlpha)
+        {
+            source = NormalizeVacuousAlpha(source);
+        }
 
         byte[] originalBytes;
         try

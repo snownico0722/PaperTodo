@@ -47,6 +47,7 @@
   <ItemGroup>
     <Compile Remove="win7.fork\**\*.cs" />
     <Compile Remove="tests\PaperTodo.PersistenceChecks\**\*.cs" />
+    <Compile Remove="tests\PaperTodo.ClipboardImageChecks\**\*.cs" />
   </ItemGroup>
   <ItemGroup Condition="'$(PaperTodoWin7BestEffort)' == 'true'">
     <Compile Include="win7.fork\Win7Compatibility.cs" />
