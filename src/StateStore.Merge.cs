@@ -7,11 +7,7 @@ using PaperTodo.Plugin;
 namespace PaperTodo;
 
 /// <summary>An external editor changed the source after the explicit merge request began.</summary>
-internal sealed class ExternalDocumentChangedException : InvalidOperationException
-{
-    public ExternalDocumentChangedException() :
-        base("data.json changed during conflict review; no merged changes were written. Please retry.") { }
-}
+internal sealed class ExternalDocumentChangedException : StateWriteBlockedException { }
 
 public sealed partial class StateStore
 {
@@ -29,10 +25,12 @@ public sealed partial class StateStore
         {
             if (version < _latestWrittenVersion)
                 return new(null, new() { Outcome = "busy" });
+            BeginExternalRead(version);
             if (!File.Exists(FilePath))
                 return new(null, new() { Outcome = "invalid", Error = "data.json is missing." });
 
-            var observed = File.ReadAllText(FilePath);
+            var sourceBytes = File.ReadAllBytes(FilePath);
+            var observed = DecodeStateBytes(sourceBytes);
             var document = JsonNode.Parse(observed, documentOptions: StateJsonReadPolicy.DocumentOptions)
                 as JsonObject ?? throw new JsonException("data.json must contain an object.");
             ValidateExternalDocument(document);
@@ -55,6 +53,8 @@ public sealed partial class StateStore
             if (JsonNode.DeepEquals(current, external))
             {
                 // Even a no-op request must fence older queued snapshots.
+                ValidatePrimaryHash(System.Security.Cryptography.SHA256.HashData(sourceBytes));
+                AcceptPrimaryBytes(sourceBytes);
                 _latestWrittenVersion = version;
                 return new(null, new() { Outcome = "unchanged" });
             }
@@ -93,6 +93,14 @@ public sealed partial class StateStore
         {
             return new(null, new() { Outcome = "invalid", Error = ex.Message });
         }
+        catch (StateWriteBlockedException ex)
+        {
+            return new(null, new() { Outcome = "busy", Error = ex.Message });
+        }
+        catch (OperationCanceledException ex)
+        {
+            return new(null, new() { Outcome = "failed", Error = ex.Message });
+        }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
         {
             return new(null, new() { Outcome = "failed", Error = ex.Message });
@@ -117,19 +125,18 @@ public sealed partial class StateStore
         {
             if (version < _latestWrittenVersion)
                 throw new ExternalDocumentChangedException();
-            void ValidateSource()
-            {
-                if (!File.Exists(FilePath) ||
-                    !string.Equals(File.ReadAllText(FilePath), observedDiskJson, StringComparison.Ordinal))
-                    throw new ExternalDocumentChangedException();
-            }
+            WriteLifetime.ThrowIfStopped();
+            var sourceBytes = File.ReadAllBytes(FilePath);
+            ValidateExplicitSource(observedDiskJson, sourceBytes);
+            var sourceHash = System.Security.Cryptography.SHA256.HashData(sourceBytes);
+            void ValidateSource() => ValidatePrimaryHash(sourceHash);
 
             ValidateSource();
             string? conflictFile = null;
             string? diffFile = null;
             if (resolution.Conflicts.Count > 0)
-                (conflictFile, diffFile) = ArchiveConflicts(resolution);
-            WriteJsonInternal(json, beforeReplace: ValidateSource);
+                (conflictFile, diffFile) = ArchiveConflicts(resolution, sourceBytes, ValidateSource);
+            WriteJsonInternal(json, beforeReplace: ValidateSource, acceptExternal: true);
             _latestWrittenVersion = version;
             return (conflictFile, diffFile);
         }
@@ -137,16 +144,18 @@ public sealed partial class StateStore
     }
 
     private (string ConflictFile, string ConflictDiffFile) ArchiveConflicts(
-        StateMergeResolution resolution)
+        StateMergeResolution resolution, byte[] sourceBytes, Action validateSource)
     {
         var suffix = DateTime.UtcNow.ToString("yyyyMMddHHmmssfff") + "-" +
                      Guid.NewGuid().ToString("N")[..8];
         var mainName = ConflictFilePrefix + suffix + ".json";
         var diffName = ConflictFilePrefix + suffix + ".diff.json";
         var directory = Path.GetDirectoryName(FilePath)!;
-        // Save exact external source bytes before a successful merge can replace it.
-        // Copy the exact source file bytes, including any BOM and formatting.
-        File.Copy(FilePath, Path.Combine(directory, mainName));
+        // Flush the existing pair of recovery records BEFORE replacing the primary.
+        // Use the bytes validated for this operation, not another racing read of the path.
+        // No ordinary-save copies, additional generations or separate image backups.
+        _atomicWriter.Write(Path.Combine(directory, mainName), sourceBytes,
+            beforeReplace: validateSource);
         // Keep the existing flat archive schema, but record the decisions actually used
         // to produce the accepted state. A preview conflict has no implied resolution.
         var conflicts = resolution.Conflicts.Select(decision => new
@@ -159,8 +168,9 @@ public sealed partial class StateStore
             Resolution = decision.Choice == ConflictChoice.KeepExternal ? "external" : "paperTodo",
             ResolutionSource = decision.Source
         });
-        File.WriteAllText(Path.Combine(directory, diffName),
-            JsonSerializer.Serialize(new { policy = resolution.Policy, conflicts }, JsonOptions), new UTF8Encoding(false));
+        _atomicWriter.Write(Path.Combine(directory, diffName),
+            JsonSerializer.SerializeToUtf8Bytes(new { policy = resolution.Policy, conflicts }, JsonOptions),
+            beforeReplace: validateSource);
         return (mainName, diffName);
     }
 }

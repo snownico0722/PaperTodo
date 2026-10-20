@@ -11,6 +11,7 @@ internal sealed class WorkspaceCatalog
     private readonly string _directory;
     private readonly IDurableAtomicFileWriter _writer;
     private readonly Dictionary<int, StateStore> _stores = new();
+    private readonly PersistenceWriteLifetime _writeLifetime = new();
     private AppState? _initialMain;
 
     internal WorkspaceCatalog(string directory, IDurableAtomicFileWriter writer)
@@ -33,7 +34,7 @@ internal sealed class WorkspaceCatalog
         if (!_stores.TryGetValue(number, out var store))
         {
             _ = PathsFor(number); // validate before indexing or touching a file
-            _stores[number] = store = new StateStore(_directory, _writer, number);
+            _stores[number] = store = new StateStore(_directory, _writer, number) { WriteLifetime = _writeLifetime };
         }
         return store;
     }

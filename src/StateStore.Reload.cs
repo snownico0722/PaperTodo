@@ -22,12 +22,14 @@ public sealed partial class StateStore
         {
             if (version < _latestWrittenVersion)
                 return new(null, new() { Outcome = "busy" });
+            BeginExternalRead(version);
 
             // Do not fall back to the startup backup or manufacture an empty state.
             if (!File.Exists(FilePath))
                 return new(null, new() { Outcome = "invalid", Error = "data.json is missing." });
 
-            var json = File.ReadAllText(FilePath);
+            var bytes = File.ReadAllBytes(FilePath);
+            var json = DecodeStateBytes(bytes);
             var document = JsonNode.Parse(json, documentOptions: StateJsonReadPolicy.DocumentOptions)
                 as JsonObject ?? throw new JsonException("data.json must contain an object.");
             ValidateExternalDocument(document);
@@ -37,12 +39,22 @@ public sealed partial class StateStore
 
             // Any asynchronous normal save queued before this request is now obsolete.
             // This does not write to disk: the imported file is already the primary file.
+            ValidatePrimaryHash(System.Security.Cryptography.SHA256.HashData(bytes));
+            AcceptPrimaryBytes(bytes);
             _latestWrittenVersion = version;
             return new(state, new() { Outcome = "applied", Applied = true });
         }
         catch (Exception ex) when (ex is JsonException or ArgumentException)
         {
             return new(null, new() { Outcome = "invalid", Error = ex.Message });
+        }
+        catch (StateWriteBlockedException ex)
+        {
+            return new(null, new() { Outcome = "busy", Error = ex.Message });
+        }
+        catch (OperationCanceledException ex)
+        {
+            return new(null, new() { Outcome = "failed", Error = ex.Message });
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
         {

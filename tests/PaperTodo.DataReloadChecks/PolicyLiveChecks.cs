@@ -114,13 +114,34 @@ internal static partial class Program
                 Str(LivePaper(ReadLive(), "note-a")["content"]) == "external arrived during review",
                 "aborted merge installed or wrote a stale candidate");
             Require(Field<bool>(controller, "_hasPendingDirty") &&
-                Field<DispatcherTimer>(controller, "_forceSaveTimer").IsEnabled,
-                "aborted merge permanently discarded the original dirty-save schedule");
+                !Field<DispatcherTimer>(controller, "_forceSaveTimer").IsEnabled,
+                "aborted merge scheduled an overwrite of the newer external input");
+            var ignored = Field<bool>(controller, "_ignoreSaveFailures");
+            typeof(AppController).GetField("_ignoreSaveFailures", Private)!.SetValue(controller, true);
+            try
+            {
+                controller.MarkDirty();
+                controller.SaveNow(sync: true);
+                controller.SaveNow();
+                await Until(() => Field<bool>(controller, "_hasPendingDirty"), "rejected queued normal save");
+                controller.Exit();
+                Require(controller.IsRunning && editor.PersistentText == "retained local draft" &&
+                    Str(LivePaper(ReadLive(), "note-a")["content"]) == "external arrived during review",
+                    "later save/ordinary exit discarded a conflict side");
+            }
+            finally { typeof(AppController).GetField("_ignoreSaveFailures", Private)!.SetValue(controller, ignored); }
+            AppController.ConflictDialogDriver = (_, _) => PaperConflictChoice.KeepMemory;
+            Require(controller.PaperCommands.MergeData(PaperOperationContext.Mcp(), failingBaseline).Outcome == "pending",
+                "explicit conflict retry did not start");
+            await Until(() => !controller.IsDataReloading, "explicit retry resolves paused saves");
+            Require(controller.PaperCommands.GetDataReloadStatus().LastResult?.Applied == true,
+                "explicit retry did not restore normal saving");
         }
         finally { AppController.ConflictDialogDriver = savedDriver; }
+        CheckUserExitIoFailure(controller, editor);
         // Finish the normal save explicitly before the rest of the fixture; no sleep/retry.
         editor.Text = "original";
         controller.SaveNow(sync: true);
-        Console.WriteLine("PASS trusted policy capture, accurate live archive, rejected candidate and retained normal-save schedule");
+        Console.WriteLine("PASS trusted policy capture, accurate live archive, rejected candidate, blocked overwrite/exit and explicit recovery");
     }
 }

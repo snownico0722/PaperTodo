@@ -65,6 +65,7 @@ internal sealed partial class PaperBodyPluginDataStore : IDisposable
     private readonly Timer _saveTimer;
     private readonly Timer _forceSaveTimer;
     private readonly IDurableAtomicFileWriter _atomicWriter;
+    internal PersistenceWriteLifetime WriteLifetime { get; set; } = new();
     private readonly int _saveDebounceMilliseconds;
     private readonly int _forceSaveMilliseconds;
     private bool _suppressFinalFlushOnDispose;
@@ -475,7 +476,7 @@ internal sealed partial class PaperBodyPluginDataStore : IDisposable
             SaveSnapshot[] snapshots;
             lock (_gate)
             {
-                if (_disposed ||
+                if (_disposed || WriteLifetime.IsStopped ||
                     _suppressFinalFlushOnDispose ||
                     _dirtyProviderIds.Count == 0)
                 {
@@ -497,7 +498,7 @@ internal sealed partial class PaperBodyPluginDataStore : IDisposable
                 // Release the writer before rearming: even an immediate timer callback can
                 // become the next writer. The state gate keeps its capture after this update.
                 Monitor.Exit(_writeGate);
-                if (!_disposed && !_suppressFinalFlushOnDispose)
+                if (!_disposed && !_suppressFinalFlushOnDispose && !WriteLifetime.IsStopped)
                 {
                     UpdateSaveTimersAfterFlush();
                 }
@@ -564,7 +565,7 @@ internal sealed partial class PaperBodyPluginDataStore : IDisposable
     private void UpdateSaveTimersAfterFlush()
     {
         _saveTimer.Change(Timeout.Infinite, Timeout.Infinite);
-        if (_disposed ||
+        if (_disposed || WriteLifetime.IsStopped ||
             _suppressFinalFlushOnDispose ||
             _dirtyProviderIds.Count == 0 ||
             !_dirtyProviderIds.Any(providerId =>
@@ -586,8 +587,34 @@ internal sealed partial class PaperBodyPluginDataStore : IDisposable
 
     private void SaveNow(string providerId, PluginDataDocument document)
     {
+        WriteLifetime.ThrowIfStopped();
         var bytes = JsonSerializer.SerializeToUtf8Bytes(document, JsonOptions);
-        _atomicWriter.Write(DataPath(providerId), bytes);
+        _atomicWriter.Write(DataPath(providerId), bytes, beforeReplace: WriteLifetime.ThrowIfStopped);
+    }
+
+    // Unlike best-effort disposal, a user-requested exit must not discard known dirty
+    // plugin data after a failed write. Keep the store and runtime usable on failure.
+    internal void FlushForUserExit()
+    {
+        lock (_writeGate)
+        {
+            SaveSnapshot[] snapshots;
+            lock (_gate)
+            {
+                ThrowIfDisposed();
+                WriteLifetime.ThrowIfStopped();
+                snapshots = CaptureDirtySnapshots(includeFailed: true);
+            }
+            foreach (var snapshot in snapshots) WriteSnapshot(snapshot);
+            lock (_gate)
+            {
+                if (_dirtyProviderIds.Count != 0)
+                {
+                    UpdateSaveTimersAfterFlush();
+                    throw new IOException("Plugin data could not be saved; exit was cancelled.");
+                }
+            }
+        }
     }
 
     internal void SuppressFinalFlushOnDispose()
@@ -643,7 +670,7 @@ internal sealed partial class PaperBodyPluginDataStore : IDisposable
                 _saveTimer.Change(Timeout.Infinite, Timeout.Infinite);
                 _forceSaveTimer.Change(Timeout.Infinite, Timeout.Infinite);
                 _disposed = true;
-                snapshots = _suppressFinalFlushOnDispose
+                snapshots = _suppressFinalFlushOnDispose || WriteLifetime.IsStopped
                     ? []
                     : CaptureDirtySnapshots(includeFailed: true);
             }

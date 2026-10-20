@@ -42,7 +42,8 @@ public sealed partial class AppController
     {
         if (WorkspaceNumber == 1) return;
         _paperBodyPlugins.ExchangeWorkspaceDataStore(
-            new PaperBodyPluginDataStore(_paperBodyPlugins.PluginRoot, WorkspaceNumber)).Dispose();
+            new PaperBodyPluginDataStore(_paperBodyPlugins.PluginRoot, WorkspaceNumber)
+            { WriteLifetime = _store.WriteLifetime }).Dispose();
     }
 
     private void NotifyWorkspaceStartup()
@@ -168,7 +169,8 @@ public sealed partial class AppController
                 if (!File.Exists(candidate.Paths.Images) && candidate.State.Papers.Any(p =>
                     p.Type == PaperTypes.Note && MarkdownImageReferences.CollectImageIds(p.Content).Any()))
                     throw new FileNotFoundException(Strings.Get("WorkspaceImagesMissing"), candidate.Paths.Images);
-                candidatePluginData = new PaperBodyPluginDataStore(_paperBodyPlugins.PluginRoot, number);
+                candidatePluginData = new PaperBodyPluginDataStore(_paperBodyPlugins.PluginRoot, number)
+                    { WriteLifetime = _store.WriteLifetime };
             }
 
             _suppressDirty = true;

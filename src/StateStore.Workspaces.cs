@@ -54,12 +54,17 @@ public sealed partial class StateStore
         {
             if (version < _latestWrittenVersion)
                 throw new InvalidOperationException("A newer main-workspace save already completed.");
-            var json = File.ReadAllText(FilePath);
+            WriteLifetime.ThrowIfStopped();
+            if (OrdinaryWritesPaused) throw new StateWriteBlockedException();
+            var bytes = File.ReadAllBytes(FilePath);
+            var json = DecodeStateBytes(bytes);
             var document = JsonNode.Parse(json, documentOptions: StateJsonReadPolicy.DocumentOptions)
                 as JsonObject ?? throw new JsonException("The main workspace must contain an object.");
             ValidateExternalDocument(document);
             document["workspaces"] = JsonSerializer.SerializeToNode(options.Normalized(), JsonOptions);
-            WriteJsonInternal(document.ToJsonString(JsonOptions));
+            var sourceHash = System.Security.Cryptography.SHA256.HashData(bytes);
+            WriteJsonInternal(document.ToJsonString(JsonOptions),
+                beforeReplace: () => ValidatePrimaryHash(sourceHash), acceptExternal: true);
             _latestWrittenVersion = version;
         }
         finally { _writeLock.Release(); }
