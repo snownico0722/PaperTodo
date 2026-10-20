@@ -1,13 +1,10 @@
 name: Data safety verification (temporary)
-
 on:
   push:
     branches: [feat/data-json-hot-reload-main-adapt]
-    paths: [.github/workflows/temporary-data-safety.yml]
-
+    paths: [.github/workflows/temporary-data-safety.yml, .github/safety-review-followup.py]
 permissions:
   contents: read
-
 jobs:
   verify:
     if: github.repository == 'snownico0722/PaperTodo'
@@ -47,21 +44,22 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
-      - name: Apply the exact reviewed candidate
+      - name: Apply exact candidate and recovery followup
         env:
           REVIEW_PR: ${{ matrix.pr }}
         run: |
           @'
           import base64, hashlib, json, lzma, os, pathlib, subprocess
-          root = pathlib.Path('../harness/.github')
-          data = lzma.decompress(base64.b64decode(''.join((root / f'safety-review-payload.{i}').read_text().strip() for i in range(1,5)), validate=True))
-          assert hashlib.sha256(data).hexdigest() == 'a56a22343e82d742d77228eb56bce8fd513ef0fda5e89b33ecad85c16926537f'
-          entry = json.loads(data)[os.environ['REVIEW_PR']]
-          assert subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip() == entry['base']
-          patch = pathlib.Path(os.environ['RUNNER_TEMP']) / 'safety.patch'
+          root=pathlib.Path('../harness/.github')
+          data=lzma.decompress(base64.b64decode(''.join((root/f'safety-review-payload.{i}').read_text().strip() for i in range(1,5)),validate=True))
+          assert hashlib.sha256(data).hexdigest()=='a56a22343e82d742d77228eb56bce8fd513ef0fda5e89b33ecad85c16926537f'
+          entry=json.loads(data)[os.environ['REVIEW_PR']]
+          assert subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()==entry['base']
+          patch=pathlib.Path(os.environ['RUNNER_TEMP'])/'safety.patch'
           patch.write_text(entry['patch'],encoding='utf-8',newline='')
           subprocess.run(['git','apply','--check',str(patch)],check=True)
           subprocess.run(['git','apply',str(patch)],check=True)
+          subprocess.run(['python',str(root/'safety-review-followup.py')],check=True)
           subprocess.run(['git','diff','--check'],check=True)
           subprocess.run(['git','add','-A'],check=True)
           '@ | python -
@@ -70,11 +68,11 @@ jobs:
         run: |
           dotnet build ./PaperTodo.csproj -c Release
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Data safety, real modal shutdown and killed-writer checks
+      - name: Data safety, modal shutdown and real killed writers
         run: |
           ./tools/testing/Run-Checks.ps1 -Group persistence 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/safety-checks.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Complete behavior inventory and strict plugin output check
+      - name: All behavior groups and strict plugin outputs
         run: |
           ./tools/testing/Run-Checks.ps1 -Group all 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/all-checks.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -85,17 +83,17 @@ jobs:
           REVIEW_PR: ${{ matrix.pr }}
         run: |
           @'
-          import base64, hashlib, json, os, pathlib, subprocess
-          names = subprocess.check_output(['git','diff','--cached','--name-only','-z']).decode().split('\0')
+          import base64,hashlib,json,os,pathlib,subprocess
           entries=[]
+          names=subprocess.check_output(['git','diff','--cached','--name-only','-z']).decode().split('\0')
           for name in filter(None,names):
               assert not name.startswith('.github/safety-review')
               path=pathlib.Path(name)
-              if not path.exists(): entries.append({'path':name,'deleted':True})
+              if not path.exists():entries.append({'path':name,'deleted':True})
               else:
                   data=path.read_bytes()
                   entries.append({'path':name,'sha256':hashlib.sha256(data).hexdigest(),'content':base64.b64encode(data).decode()})
-          out=pathlib.Path('../delivery'); out.mkdir(exist_ok=True)
+          out=pathlib.Path('../delivery');out.mkdir(exist_ok=True)
           (out/(os.environ['REVIEW_PR']+'.json')).write_text(json.dumps(entries),encoding='utf-8')
           stats=subprocess.check_output(['git','diff','--cached','--stat'],text=True)
           print(stats)
@@ -117,7 +115,6 @@ jobs:
             ${{ runner.temp }}/all-checks.log
           if-no-files-found: ignore
           retention-days: 1
-
   prepare-commits:
     needs: verify
     runs-on: ubuntu-latest
@@ -155,8 +152,8 @@ jobs:
           for pr in ('340','351'):
               parent=os.environ['INFRA_HEAD'] if pr=='340' else 'c9318c3c78bf857c95a31a0a770b61f7f5b914de'
               old=request('GET','/git/commits/'+parent)
-              elements=[]
               entries=json.loads(pathlib.Path('delivery/'+pr+'.json').read_text())
+              elements=[]
               for item in entries:
                   if item.get('deleted'):sha=None
                   else:
@@ -165,7 +162,7 @@ jobs:
                       sha=request('POST','/git/blobs',{'content':item['content'],'encoding':'base64'})['sha']
                   elements.append({'path':item['path'],'mode':'100644','type':'blob','sha':sha})
               if pr=='340':
-                  cleanup=['.github/workflows/temporary-data-safety.yml']+[f'.github/safety-review-payload.{i}' for i in range(1,5)]
+                  cleanup=['.github/workflows/temporary-data-safety.yml','.github/safety-review-followup.py']+[f'.github/safety-review-payload.{i}' for i in range(1,5)]
                   elements += [{'path':p,'mode':'100644','type':'blob','sha':None} for p in cleanup]
               tree=request('POST','/git/trees',{'base_tree':old['tree']['sha'],'tree':elements})['sha']
               parents=[parent] if pr=='340' else [parent,result['340']['commit']]
