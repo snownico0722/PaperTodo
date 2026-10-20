@@ -1,2 +1,7 @@
 # Generated dependency manifests: normalize line endings without hiding content changes.
 plugins/**/*.deps.json text
+
+# Multiline raw literals become DLL string constants: keep Codex bridge builds
+# identical under Windows core.autocrlf=true and source-snapshot checkouts.
+plugin-samples/PaperTodo.Plugin.CodexCliBridge/**/*.cs text eol=lf
+src/PaperTodoOperationSkill.cs text eol=lf
