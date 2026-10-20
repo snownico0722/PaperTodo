@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.IO;
 using System.Runtime.CompilerServices;
+using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Windows;
@@ -17,6 +18,7 @@ internal static partial class Program
     {
         var checks = new (string Name, Action Run)[]
         {
+            ("explicit state field ownership and fail-closed inheritance", WorkspaceFieldScopeChecks),
             ("legacy main and numbered paths", WorkspacePathsAndLegacy),
             ("main catalog updates preserve content and fence old writers", WorkspaceMetadataWrites),
             ("follow-main overlay preserves dormant preferences and layout", WorkspaceInheritance),
@@ -31,6 +33,71 @@ internal static partial class Program
             check.Run();
             Console.WriteLine("PASS workspace: " + check.Name);
         }
+    }
+
+
+    private static void WorkspaceFieldScopeChecks()
+    {
+        var actual = typeof(AppState).GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Where(p => p.GetMethod != null && p.SetMethod?.IsPublic == true)
+            .Select(p => p.Name).ToHashSet(StringComparer.Ordinal);
+        var roles = WorkspaceFieldScopes.Declared;
+        var missing = actual.Except(roles.Keys, StringComparer.Ordinal).OrderBy(x => x).ToArray();
+        var stale = roles.Keys.Except(actual, StringComparer.Ordinal).OrderBy(x => x).ToArray();
+        Require(missing.Length == 0 && stale.Length == 0,
+            "Every writable AppState field needs an explicit workspace scope. Missing: " +
+            string.Join(", ", missing) + "; stale: " + string.Join(", ", stale));
+        Require(!WorkspaceFieldScopes.Inherits("FutureUnclassifiedField"),
+            "New state fields must default to local, not silently inherit main settings.");
+        Require(roles[nameof(AppState.Workspaces)] == WorkspaceStateFieldScope.MainCatalog &&
+                roles[nameof(AppState.Papers)] == WorkspaceStateFieldScope.LocalContent &&
+                roles[nameof(AppState.DeepCapsuleSide)] == WorkspaceStateFieldScope.LocalLayout &&
+                roles[nameof(AppState.DeepCapsuleQueueStartTopMargins)] == WorkspaceStateFieldScope.LocalLayout,
+            "Main catalog, paper content and window geometry must be separately owned.");
+        Require(roles[nameof(AppState.TodoTopBarShortcuts)] == WorkspaceStateFieldScope.LegacyMigration &&
+                roles[nameof(AppState.NoteTopBarShortcuts)] == WorkspaceStateFieldScope.LegacyMigration,
+            "Top-bar migration inputs need an explicit legacy classification.");
+        Require(WorkspaceFieldScopes.Inherits(nameof(AppState.McpAllowFullWrites)) &&
+                WorkspaceFieldScopes.Inherits(nameof(AppState.McpAllowDeletes)) &&
+                WorkspaceFieldScopes.Inherits(nameof(AppState.GlobalHotkeys)) &&
+                WorkspaceFieldScopes.Inherits(nameof(AppState.DisabledPluginIds)),
+            "Existing security-sensitive settings-follow behavior must remain explicit.");
+
+        var main = new AppState
+        {
+            Theme = "dark",
+            McpAllowFullWrites = true,
+            Papers = [new PaperData { Title = "Main only" }]
+        };
+        main.GlobalHotkeys["test"] = "Ctrl+Shift+K";
+        main.DisabledPluginIds.Add("disabled-on-main");
+        main.DeepCapsuleQueueStartTopMargins["main|right"] = 30;
+        var secondary = new AppState
+        {
+            Theme = "light",
+            McpAllowFullWrites = false,
+            Papers = [new PaperData { Title = "Secondary only" }],
+            DeepCapsuleSide = DeepCapsuleSides.Left,
+            Workspaces = new WorkspaceConfiguration { Enabled = true }
+        };
+        secondary.DeepCapsuleQueueStartTopMargins["secondary|left"] = 90;
+        var snapshot = WorkspaceSettingsSnapshot.Capture(main);
+        snapshot.ApplyTo(secondary);
+        Require(secondary.Theme == "dark" && secondary.McpAllowFullWrites &&
+                secondary.GlobalHotkeys["test"] == "Ctrl+Shift+K" &&
+                secondary.DisabledPluginIds.SequenceEqual(["disabled-on-main"]),
+            "Declared software settings did not inherit as before.");
+        Require(secondary.Papers.Single().Title == "Secondary only" &&
+                secondary.DeepCapsuleSide == DeepCapsuleSides.Left &&
+                secondary.DeepCapsuleQueueStartTopMargins.Count == 1 &&
+                secondary.DeepCapsuleQueueStartTopMargins.ContainsKey("secondary|left") &&
+                secondary.Workspaces?.Enabled == true,
+            "Independent paper, geometry or catalog leaked across workspace boundaries.");
+        secondary.GlobalHotkeys["test"] = "Ctrl+Alt+L";
+        secondary.DisabledPluginIds.Clear();
+        Require(main.GlobalHotkeys["test"] == "Ctrl+Shift+K" &&
+                main.DisabledPluginIds.SequenceEqual(["disabled-on-main"]),
+            "Settings snapshot must not share mutable collections with the main AppState.");
     }
 
     private static void WorkspacePathsAndLegacy()

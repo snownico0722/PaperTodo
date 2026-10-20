@@ -1880,3 +1880,4 @@ PR #319 的初版把主胶囊完整材质收展后的卡死解释为终点迟到
 - `src/AppController.Workspaces.cs` / `src/PaperBodyPluginDataStore.Workspaces.cs`。
 - `src/PaperWindow.Workspaces.cs` / `src/AppController.Settings.WorkspacePage.cs`。
 - `tests/PaperTodo.DataReloadChecks/WorkspaceChecks.cs`：存储/版本/继承及隔离 WPF 往返测试。
+- `WorkspaceFieldScopes` 显式列出 `AppState` 字段归属，缺失分类不自动继承且在持久化检查中失败；保留现有设置跟随和旧字段迁移行为，避免新增内容或布局字段被静默共享。
