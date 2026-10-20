@@ -85,7 +85,7 @@ internal static class WorkspaceFieldScopes
         // Preserve the established settings-follow behavior, including MCP permissions,
         // global hotkeys and plugin enablement. Do not expand this list implicitly.
         Add(WorkspaceStateFieldScope.FollowMain,
-            nameof(AppState.UiLanguage), nameof(AppState.Theme), nameof(AppState.ColorScheme),
+            nameof(AppState.UiLanguage), nameof(AppState.DataMergeConflictPolicy), nameof(AppState.Theme), nameof(AppState.ColorScheme),
             nameof(AppState.PaperSkin), nameof(AppState.MaterialTransparency), nameof(AppState.HideSurfaceOutline),
             nameof(AppState.MatchAuxiliaryMaterialStrength), nameof(AppState.MicaBackdropType), nameof(AppState.MicaAlwaysActive),
             nameof(AppState.MarkdownRenderMode), nameof(AppState.ImageReferenceTextMode), nameof(AppState.MarkdownEditAnimationEnabled),

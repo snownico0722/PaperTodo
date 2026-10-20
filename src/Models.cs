@@ -460,6 +460,7 @@ public sealed class AppState
     public List<PaperData> Papers { get; set; } = new();
     [JsonPropertyOrder(-100)]
     public string UiLanguage { get; set; } = UiLanguages.Default;
+    public string DataMergeConflictPolicy { get; set; } = DataMergeConflictPolicies.Ask;
     public string Theme { get; set; } = "system";
     public string ColorScheme { get; set; } = ColorSchemes.Warm;
     // Null is the legacy migration sentinel; an explicit "paper" never implies Mica.

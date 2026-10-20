@@ -1,0 +1,2 @@
+# Generated dependency manifests: normalize line endings without hiding content changes.
+plugins/**/*.deps.json text

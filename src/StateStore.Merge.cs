@@ -75,7 +75,9 @@ public sealed partial class StateStore
             var candidate = JsonSerializer.Deserialize<AppState>(
                 merge.State.ToJsonString(JsonOptions), JsonOptions)
                 ?? throw new JsonException("Merged data cannot be null.");
-            NormalizeWorkspaceDocument(candidate);
+            // Candidate settings may still be disputed. Normalizing dependent fields here
+            // can irreversibly truncate a title before the user chooses a longer title limit.
+            // Apply cross-field invariants once, after all choices, in CommitExternalMerge.
 
             // Fence only older queued saves; no primary-file write until conflicts are resolved.
             _latestWrittenVersion = version;
@@ -104,11 +106,12 @@ public sealed partial class StateStore
     /// The caller must not install the merged in-memory objects before this succeeds.
     /// </summary>
     internal (string? ConflictFile, string? ConflictDiffFile) CommitExternalMerge(
-        AppState merged, string observedDiskJson, long version,
-        IReadOnlyList<StateMergeConflict>? conflicts)
+        StateMergeResolution resolution, string observedDiskJson, long version)
     {
-        // Serializable snapshot is prepared outside the shared write lock.
-        var json = SerializeRawState(merged);
+        // Normalize against the selected settings, not the provisional conflict defaults.
+        // The resolution owns a detached candidate; live objects are still untouched.
+        NormalizeWorkspaceDocument(resolution.State);
+        var json = SerializeRawState(resolution.State);
         _writeLock.Wait();
         try
         {
@@ -124,8 +127,8 @@ public sealed partial class StateStore
             ValidateSource();
             string? conflictFile = null;
             string? diffFile = null;
-            if (conflicts is { Count: > 0 })
-                (conflictFile, diffFile) = ArchiveConflicts(observedDiskJson, conflicts);
+            if (resolution.Conflicts.Count > 0)
+                (conflictFile, diffFile) = ArchiveConflicts(resolution);
             WriteJsonInternal(json, beforeReplace: ValidateSource);
             _latestWrittenVersion = version;
             return (conflictFile, diffFile);
@@ -134,7 +137,7 @@ public sealed partial class StateStore
     }
 
     private (string ConflictFile, string ConflictDiffFile) ArchiveConflicts(
-        string source, IReadOnlyList<StateMergeConflict> conflicts)
+        StateMergeResolution resolution)
     {
         var suffix = DateTime.UtcNow.ToString("yyyyMMddHHmmssfff") + "-" +
                      Guid.NewGuid().ToString("N")[..8];
@@ -144,8 +147,20 @@ public sealed partial class StateStore
         // Save exact external source bytes before a successful merge can replace it.
         // Copy the exact source file bytes, including any BOM and formatting.
         File.Copy(FilePath, Path.Combine(directory, mainName));
+        // Keep the existing flat archive schema, but record the decisions actually used
+        // to produce the accepted state. A preview conflict has no implied resolution.
+        var conflicts = resolution.Conflicts.Select(decision => new
+        {
+            decision.Conflict.Path,
+            decision.Conflict.BaselineExists, decision.Conflict.Baseline,
+            decision.Conflict.PaperTodoExists, decision.Conflict.PaperTodo,
+            decision.Conflict.ExternalExists, decision.Conflict.External,
+            decision.Conflict.Reason,
+            Resolution = decision.Choice == ConflictChoice.KeepExternal ? "external" : "paperTodo",
+            ResolutionSource = decision.Source
+        });
         File.WriteAllText(Path.Combine(directory, diffName),
-            JsonSerializer.Serialize(new { conflicts }, JsonOptions), new UTF8Encoding(false));
+            JsonSerializer.Serialize(new { policy = resolution.Policy, conflicts }, JsonOptions), new UTF8Encoding(false));
         return (mainName, diffName);
     }
 }

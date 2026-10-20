@@ -57,7 +57,8 @@ internal static partial class Program
         Require(roles[nameof(AppState.TodoTopBarShortcuts)] == WorkspaceStateFieldScope.LegacyMigration &&
                 roles[nameof(AppState.NoteTopBarShortcuts)] == WorkspaceStateFieldScope.LegacyMigration,
             "Top-bar migration inputs need an explicit legacy classification.");
-        Require(WorkspaceFieldScopes.Inherits(nameof(AppState.McpAllowFullWrites)) &&
+        Require(WorkspaceFieldScopes.Inherits(nameof(AppState.DataMergeConflictPolicy)) &&
+                WorkspaceFieldScopes.Inherits(nameof(AppState.McpAllowFullWrites)) &&
                 WorkspaceFieldScopes.Inherits(nameof(AppState.McpAllowDeletes)) &&
                 WorkspaceFieldScopes.Inherits(nameof(AppState.GlobalHotkeys)) &&
                 WorkspaceFieldScopes.Inherits(nameof(AppState.DisabledPluginIds)),
@@ -67,6 +68,7 @@ internal static partial class Program
         {
             Theme = "dark",
             McpAllowFullWrites = true,
+            DataMergeConflictPolicy = DataMergeConflictPolicies.External,
             Papers = [new PaperData { Title = "Main only" }]
         };
         main.GlobalHotkeys["test"] = "Ctrl+Shift+K";
@@ -84,6 +86,7 @@ internal static partial class Program
         var snapshot = WorkspaceSettingsSnapshot.Capture(main);
         snapshot.ApplyTo(secondary);
         Require(secondary.Theme == "dark" && secondary.McpAllowFullWrites &&
+                secondary.DataMergeConflictPolicy == DataMergeConflictPolicies.External &&
                 secondary.GlobalHotkeys["test"] == "Ctrl+Shift+K" &&
                 secondary.DisabledPluginIds.SequenceEqual(["disabled-on-main"]),
             "Declared software settings did not inherit as before.");
@@ -384,6 +387,10 @@ internal static partial class Program
             var windows = Field<Dictionary<string, PaperWindow>>(controller, "_windows");
             foreach (var window in windows.Values) window.EnsureShellBuilt();
             await Dispatcher.Yield(DispatcherPriority.Background);
+            controller.PaperCommands.ReloadData(PaperOperationContext.Mcp());
+            await Until(() => !controller.IsDataReloading, "initial reload did not settle");
+            Require(controller.PaperCommands.GetDataReloadStatus().LastResult != null,
+                "fixture did not establish a previous-workspace reload result");
             var oldWindow = windows["note-a"];
             var oldStore = Field<StateStore>(controller, "_store");
             var draft = $"saved draft\n![image](i:{imageId})";
@@ -420,7 +427,8 @@ internal static partial class Program
                 "old asynchronous writer reverted main catalog");
             var workspaceStatus = controller.PaperCommands.GetDataReloadStatus();
             Require(workspaceStatus.WorkspaceNumber == 2 && workspaceStatus.DataFileName == "data2.json" &&
-                workspaceStatus.FollowsMainSettings && !workspaceStatus.IsReloading,
+                workspaceStatus.FollowsMainSettings && !workspaceStatus.IsReloading &&
+                workspaceStatus.LastResult == null && workspaceStatus.LastAttemptAt == null,
                 "status does not identify the actual reload target");
             Require(!controller.PublicSettings.Get("appearance.theme").Writable, "inherited setting advertised writable");
             Throws<PaperSettingsException>(() => controller.PublicSettings.Set("appearance.theme", JsonSerializer.SerializeToElement("light")));
@@ -449,6 +457,8 @@ internal static partial class Program
             cycleButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             await Until(() => controller.WorkspaceNumber == 2 && !controller.IsWorkspaceSwitching, "top-bar click did not switch");
             Require(await controller.SwitchWorkspaceAsync(1), "return after actual button event failed");
+
+            await WorkspaceRollbackChecks(controller, directory);
 
             // Both settings and tray choose an explicit slot, unlike the paper's cycle button.
             var workspacePage = (StackPanel)typeof(AppController)

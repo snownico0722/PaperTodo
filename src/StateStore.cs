@@ -558,6 +558,7 @@ public sealed partial class StateStore
         }
 
         state.UiLanguage = UiLanguages.Normalize(state.UiLanguage);
+        state.DataMergeConflictPolicy = DataMergeConflictPolicies.Normalize(state.DataMergeConflictPolicy);
         state.PaperSkin = PaperSkins.Resolve(state);
         state.ColorScheme = ColorSchemes.Normalize(state.ColorScheme);
         state.MicaBackdropType = MicaBackdropTypes.Normalize(state.MicaBackdropType);

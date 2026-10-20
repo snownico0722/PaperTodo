@@ -101,6 +101,7 @@ public sealed partial class AppController
         {
             _workspaceSwitching = false;
             RefreshWorkspaceControls();
+            ResumeExitAfterDataReload();
         }
     }
 
@@ -194,6 +195,8 @@ public sealed partial class AppController
                 throw new IOException(Strings.Get("WorkspaceSaveFailed"));
             if (number != 1) _workspaceCatalog.SaveOptions(NextWorkspaceSaveVersion());
             committed = true;
+            _lastDataReloadAt = null;
+            _lastDataReloadResult = null;
             if (!ReferenceEquals(previousImages, candidateImages)) previousImages.Dispose();
             if (!ReferenceEquals(previousPluginData, candidatePluginData)) previousPluginData.Dispose();
             return true;
@@ -204,10 +207,13 @@ public sealed partial class AppController
             {
                 try
                 {
+                    var rollbackFrom = State;
                     if (installed)
                     {
                         _workspaceClosingSurfaces = true;
+                        var targetScriptShutdown = PaperWindow.StopAllScriptProcessesAsync();
                         StopWorkspacePresentation();
+                        await targetScriptShutdown;
                     }
                     previous.BindPersistence();
                     _workspaceCatalog.AdoptOptions(previousOptions, previouslyConfigured);
@@ -217,7 +223,7 @@ public sealed partial class AppController
                     {
                         InstallWorkspace(previous, previousImages, previousPluginData);
                         _workspaceClosingSurfaces = false;
-                        await RestoreWorkspacePresentationAsync(previous.State);
+                        await RestoreWorkspacePresentationAsync(rollbackFrom);
                     }
                 }
                 catch (Exception restoreError)
@@ -250,6 +256,7 @@ public sealed partial class AppController
                 RefreshWorkspaceControls();
                 if (reopenSettings && _settingsWindow == null) ShowSettingsWindow(settingsPage);
             }
+            ResumeExitAfterDataReload();
         }
     }
 
@@ -331,6 +338,9 @@ public sealed partial class AppController
     private async Task RestoreWorkspacePresentationAsync(AppState before)
     {
         RefreshReloadedSettings(before);
+        // Every workspace handoff stopped the old processes, even when both slots use
+        // identical preferences. Recreate the target's optional warm process once.
+        PaperWindow.EnsurePersistentScriptProcessForSettings(State);
         EnablePluginRuntimeReconciliation();
         EnsurePapersOnScreen();
         await RestorePaperSurfacesAsync(State.Papers.Where(p => p.IsVisible).ToArray());

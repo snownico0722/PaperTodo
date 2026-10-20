@@ -7,10 +7,7 @@ internal sealed record StateMergeConflict(
     bool BaselineExists, JsonNode? Baseline,
     bool PaperTodoExists, JsonNode? PaperTodo,
     bool ExternalExists, JsonNode? External,
-    string Reason = "concurrent_change")
-{
-    public string Resolution => "paperTodo";
-}
+    string Reason = "concurrent_change");
 
 internal sealed record StateMergeResult(
     JsonObject State,
@@ -114,12 +111,31 @@ internal static class StateJsonMerge
 
     internal static void AddMissingIdentities(List<string> result, IReadOnlyList<string> other)
     {
+        if (other.Count == 0) return;
+        var present = result.ToHashSet(StringComparer.Ordinal);
+        if (other.All(present.Contains)) return;
+
+        var order = new LinkedList<string>(result);
+        var nodes = new Dictionary<string, LinkedListNode<string>>(StringComparer.Ordinal);
+        for (var node = order.First; node != null; node = node.Next) nodes.Add(node.Value, node);
         for (var i = 0; i < other.Count; i++)
         {
-            if (result.Contains(other[i], StringComparer.Ordinal)) continue;
-            var previous = i > 0 ? result.IndexOf(other[i - 1]) : -1;
-            var next = other.Skip(i + 1).Select(item => result.IndexOf(item)).FirstOrDefault(index => index >= 0, -1);
-            result.Insert(previous >= 0 ? previous + 1 : next >= 0 ? next : result.Count, other[i]);
+            if (nodes.ContainsKey(other[i])) continue;
+            LinkedListNode<string> inserted;
+            if (i > 0)
+            {
+                // The preceding incoming ID already existed or was inserted on the last turn.
+                inserted = order.AddAfter(nodes[other[i - 1]], other[i]);
+            }
+            else
+            {
+                LinkedListNode<string>? next = null;
+                for (var j = 1; j < other.Count && next == null; j++) nodes.TryGetValue(other[j], out next);
+                inserted = next == null ? order.AddLast(other[i]) : order.AddBefore(next, other[i]);
+            }
+            nodes.Add(other[i], inserted);
         }
+        result.Clear();
+        result.AddRange(order);
     }
 }

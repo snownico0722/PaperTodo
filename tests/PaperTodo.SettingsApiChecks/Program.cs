@@ -40,6 +40,9 @@ internal static partial class Program
     {
         var controller = (AppController)RuntimeHelpers.GetUninitializedObject(typeof(AppController));
         Field(controller, "<State>k__BackingField", new AppState());
+        var paths = new WorkspacePaths(Path.Combine(Path.GetTempPath(), "PaperTodo.SettingsApiFixture"), 1);
+        Field(controller, "_workspace", new WorkspaceSession(paths,
+            new StateStore(paths.Directory, DurableAtomicFileWriter.Shared), controller.State, false, null));
         Field(controller, "_windows", new Dictionary<string, PaperWindow>());
         Field(controller, "_masterCapsules", new Dictionary<string, MasterCapsuleWindow>());
         return controller;

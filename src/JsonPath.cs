@@ -7,11 +7,12 @@ namespace PaperTodo;
 internal static class JsonPath
 {
     public static AppState ApplyChoices(AppState next, IReadOnlyList<StateMergeConflict> conflicts,
-        IReadOnlyDictionary<string, ConflictChoice> choices)
+        IReadOnlyDictionary<string, ConflictChoice> choices, JsonObject? externalJson = null)
     {
-        if (choices.Count == 0) return next;
+        if (!choices.Values.Contains(ConflictChoice.KeepExternal)) return next;
         var json = JsonSerializer.SerializeToNode(next, StateStore.JsonOptions)!.AsObject();
-        return ReadState(ApplyChoices(json, conflicts, choices));
+        ApplyExternalChoices(json, conflicts, choices, externalJson);
+        return ReadState(json);
     }
 
     /// <summary>
@@ -28,19 +29,23 @@ internal static class JsonPath
             if (TryGetPaperId(conflict.Path, out var id) &&
                 paperChoices.TryGetValue(id, out var choice) && choice == PaperConflictChoice.KeepExternal)
                 choices[conflict.Path] = ConflictChoice.KeepExternal;
-        if (choices.Count == 0) return next;
-        var json = JsonSerializer.SerializeToNode(next, StateStore.JsonOptions)!.AsObject();
-        return ReadState(ApplyChoices(json, conflicts, choices, externalJson));
+        return ApplyChoices(next, conflicts, choices, externalJson);
     }
 
     internal static JsonObject ApplyChoices(JsonObject next, IReadOnlyList<StateMergeConflict> conflicts,
         IReadOnlyDictionary<string, ConflictChoice> choices, JsonObject? externalJson = null)
     {
         var result = (JsonObject)next.DeepClone();
+        ApplyExternalChoices(result, conflicts, choices, externalJson);
+        return result;
+    }
+
+    private static void ApplyExternalChoices(JsonObject result, IReadOnlyList<StateMergeConflict> conflicts,
+        IReadOnlyDictionary<string, ConflictChoice> choices, JsonObject? externalJson)
+    {
         foreach (var conflict in conflicts)
             if (choices.TryGetValue(conflict.Path, out var choice) && choice == ConflictChoice.KeepExternal)
                 ApplyExternalToPath(result, conflict, externalJson);
-        return result;
     }
 
     private static AppState ReadState(JsonObject json) =>

@@ -1661,4 +1661,10 @@ Click to switch to workspace {2}</value>
     <value>The last workspace could not be opened. The main workspace was opened instead; the original files were not replaced.
 {0}</value>
   </data>
+  <data name="SettingsDataMergeConflicts" xml:space="preserve"><value>Data merge conflicts</value></data>
+  <data name="DataMergeConflictAsk" xml:space="preserve"><value>Ask on conflict (default)</value></data>
+  <data name="DataMergeConflictExternal" xml:space="preserve"><value>Prefer external</value></data>
+  <data name="DataMergeConflictInternal" xml:space="preserve"><value>Prefer internal</value></data>
+  <data name="TipDataMergeConflicts" xml:space="preserve"><value>An explicit merge preserves nonconflicting changes from both sides. This setting affects conflicts only: internal means current PaperTodo data; external means the incoming file. Without the original version, always ask. Does not enable background watching or automatic sync.</value></data>
+  <data name="DataReloadConflictEmpty" xml:space="preserve"><value>(empty)</value></data>
 </root>

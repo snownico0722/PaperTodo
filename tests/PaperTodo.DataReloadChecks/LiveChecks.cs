@@ -102,6 +102,7 @@ internal static partial class Program
             foreach (var window in windows.Values) window.EnsureShellBuilt();
             await Dispatcher.Yield(DispatcherPriority.Background);
             controller.SaveNow(sync: true);
+            await MergePolicyLiveChecks(controller);
             var stateIdentity = controller.State;
             var paperIdentity = controller.State.Papers.Single(p => p.Id == "note-a");
             var noteA = windows["note-a"]; var noteB = windows["note-b"];

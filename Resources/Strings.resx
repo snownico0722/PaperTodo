@@ -1710,4 +1710,10 @@
     <value>上次使用的工作区无法打开，已进入主工作区。原文件未被替换。
 {0}</value>
   </data>
+  <data name="SettingsDataMergeConflicts" xml:space="preserve"><value>数据合并冲突</value></data>
+  <data name="DataMergeConflictAsk" xml:space="preserve"><value>冲突时询问（默认）</value></data>
+  <data name="DataMergeConflictExternal" xml:space="preserve"><value>外部优先</value></data>
+  <data name="DataMergeConflictInternal" xml:space="preserve"><value>内部优先</value></data>
+  <data name="TipDataMergeConflicts" xml:space="preserve"><value>显式合并先保留双方没有冲突的修改，此选项只决定冲突部分。内部指 PaperTodo 当前数据，外部指本次导入文件。缺少原始版本时始终询问；不启用后台监听或自动同步。</value></data>
+  <data name="DataReloadConflictEmpty" xml:space="preserve"><value>（空）</value></data>
 </root>

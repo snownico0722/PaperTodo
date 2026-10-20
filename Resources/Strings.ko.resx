@@ -1661,4 +1661,10 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
     <value>마지막 작업 공간을 열 수 없어 기본 작업 공간을 열었습니다. 원래 파일은 교체하지 않았습니다.
 {0}</value>
   </data>
+  <data name="SettingsDataMergeConflicts" xml:space="preserve"><value>데이터 병합 충돌</value></data>
+  <data name="DataMergeConflictAsk" xml:space="preserve"><value>충돌 시 확인(기본값)</value></data>
+  <data name="DataMergeConflictExternal" xml:space="preserve"><value>외부 우선</value></data>
+  <data name="DataMergeConflictInternal" xml:space="preserve"><value>내부 우선</value></data>
+  <data name="TipDataMergeConflicts" xml:space="preserve"><value>명시적 병합은 양쪽의 충돌하지 않는 변경을 유지합니다. 이 설정은 충돌 부분에만 적용됩니다. 내부는 현재 PaperTodo 데이터, 외부는 가져올 파일입니다. 원본 버전이 없으면 항상 확인합니다. 백그라운드 감시나 자동 동기화를 켜지 않습니다.</value></data>
+  <data name="DataReloadConflictEmpty" xml:space="preserve"><value>(비어 있음)</value></data>
 </root>
