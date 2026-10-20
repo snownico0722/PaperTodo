@@ -1,3 +1,4 @@
+using System.IO;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Interop;
@@ -108,23 +109,131 @@ internal static partial class Program
 
         public void AssertFullRender(string context)
         {
-            var pixels = RenderPixels();
-            var widths = View.VisualLines.SelectMany(line => line.TextLines).Select(line => line.WidthIncludingTrailingWhitespace).ToArray();
+            var local = CapturePixels();
+            var widths = View.VisualLines.SelectMany(line => line.TextLines)
+                .Select(line => line.WidthIncludingTrailingWhitespace).ToArray();
             View.Redraw(DispatcherPriority.Render);
             Flush();
-            Require(pixels.SequenceEqual(RenderPixels()), $"{context}: local pixels match fresh full redraw");
-            Require(widths.SequenceEqual(View.VisualLines.SelectMany(line => line.TextLines).Select(line => line.WidthIncludingTrailingWhitespace)),
+            var full = CapturePixels();
+            var matches = local.Width == full.Width && local.Height == full.Height &&
+                local.Pixels.SequenceEqual(full.Pixels);
+            if (!matches)
+            {
+                // Keep the strict assertion. A diagnostic capture must never turn a
+                // stale/incomplete render into a passing check via an extra dispatcher pump.
+                try { SaveRedrawMismatch(context, local, full, widths); }
+                catch (Exception error) { Console.Error.WriteLine("Markdown redraw evidence failed: " + error); }
+            }
+            Require(matches, $"{context}: local pixels match fresh full redraw");
+            Require(widths.SequenceEqual(View.VisualLines.SelectMany(line => line.TextLines)
+                .Select(line => line.WidthIncludingTrailingWhitespace)),
                 $"{context}: local widths match fresh full redraw");
         }
 
-        private byte[] RenderPixels()
+        private sealed record PixelCapture(int Width, int Height, byte[] Pixels);
+
+        private PixelCapture CapturePixels()
         {
-            var bitmap = new RenderTargetBitmap((int)Math.Ceiling(View.ActualWidth), (int)Math.Ceiling(View.ActualHeight), 96, 96, PixelFormats.Pbgra32);
+            var bitmap = new RenderTargetBitmap(
+                (int)Math.Ceiling(View.ActualWidth), (int)Math.Ceiling(View.ActualHeight),
+                96, 96, PixelFormats.Pbgra32);
             bitmap.Render(View);
             var stride = bitmap.PixelWidth * 4;
             var pixels = new byte[stride * bitmap.PixelHeight];
             bitmap.CopyPixels(pixels, stride, 0);
-            return pixels;
+            return new(bitmap.PixelWidth, bitmap.PixelHeight, pixels);
+        }
+
+        private byte[] RenderPixels() => CapturePixels().Pixels;
+
+        private void SaveRedrawMismatch(string context, PixelCapture local, PixelCapture full, double[] widths)
+        {
+            var root = Environment.GetEnvironmentVariable("PAPER_MARKDOWN_REDRAW_CAPTURE");
+            if (string.IsNullOrWhiteSpace(root))
+                root = Path.Combine(Path.GetTempPath(), "PaperTodo-MarkdownRedraw");
+            var label = new string(context.Select(c => char.IsLetterOrDigit(c) ? c : '_').ToArray());
+            var folder = Path.Combine(root, label + "-" + DateTime.UtcNow.ToString("yyyyMMddHHmmssfff") +
+                "-" + Guid.NewGuid().ToString("N")[..8]);
+            Directory.CreateDirectory(folder);
+
+            var width = Math.Max(local.Width, full.Width);
+            var height = Math.Max(local.Height, full.Height);
+            var delta = new byte[checked(width * height * 4)];
+            var changed = 0;
+            var minX = width;
+            var minY = height;
+            var maxX = -1;
+            var maxY = -1;
+            var maxChannelDelta = 0;
+            for (var y = 0; y < height; y++)
+            for (var x = 0; x < width; x++)
+            {
+                var isDifferent = false;
+                for (var c = 0; c < 4; c++)
+                {
+                    var a = x < local.Width && y < local.Height
+                        ? local.Pixels[(y * local.Width + x) * 4 + c] : (byte)0;
+                    var b = x < full.Width && y < full.Height
+                        ? full.Pixels[(y * full.Width + x) * 4 + c] : (byte)0;
+                    var difference = Math.Abs(a - b);
+                    maxChannelDelta = Math.Max(maxChannelDelta, difference);
+                    if (difference != 0) isDifferent = true;
+                }
+                if (!isDifferent) continue;
+                changed++;
+                minX = Math.Min(minX, x);
+                minY = Math.Min(minY, y);
+                maxX = Math.Max(maxX, x);
+                maxY = Math.Max(maxY, y);
+                var offset = (y * width + x) * 4;
+                delta[offset + 2] = 255; // Opaque red highlights every changed pixel.
+                delta[offset + 3] = 255;
+            }
+
+            SavePng(local, Path.Combine(folder, "local.png"));
+            SavePng(full, Path.Combine(folder, "full.png"));
+            SavePng(new PixelCapture(width, height, delta), Path.Combine(folder, "difference.png"));
+
+            // This is evidence only, after the original failure was already determined.
+            // A later settled image distinguishes a transient pending render from a
+            // repeatable pixel discrepancy; it cannot make the original assertion pass.
+            Flush();
+            var settled = CapturePixels();
+            SavePng(settled, Path.Combine(folder, "after-extra-flush.png"));
+            var settledMatchesFull = settled.Width == full.Width && settled.Height == full.Height &&
+                settled.Pixels.SequenceEqual(full.Pixels);
+            var currentWidths = View.VisualLines.SelectMany(line => line.TextLines)
+                .Select(line => line.WidthIncludingTrailingWhitespace).ToArray();
+            var bounds = changed == 0 ? "none" : $"({minX},{minY})-({maxX},{maxY})";
+            var details = $"""
+                Context: {context}
+                Mode: {Box.MarkdownRenderMode}
+                Preview: {Box.IsPreviewMode}
+                CaretOffset: {Box.CaretOffset}
+                LocalSize: {local.Width}x{local.Height}
+                FullSize: {full.Width}x{full.Height}
+                ChangedPixels: {changed}
+                Bounds: {bounds}
+                MaxChannelDifference: {maxChannelDelta}
+                FullEqualsAfterExtraFlush: {settledMatchesFull}
+                VisualLines: {View.VisualLines.Count}
+                LineWidthsEqual: {widths.SequenceEqual(currentWidths)}
+                OriginalLineWidths: {string.Join(", ", widths)}
+                CurrentLineWidths: {string.Join(", ", currentWidths)}
+                """;
+            File.WriteAllText(Path.Combine(folder, "diagnostics.txt"), details);
+            Console.Error.WriteLine("Markdown local/full redraw mismatch:\n" + details +
+                "\nEvidence: " + folder);
+        }
+
+        private static void SavePng(PixelCapture frame, string path)
+        {
+            var image = BitmapSource.Create(frame.Width, frame.Height, 96, 96,
+                PixelFormats.Pbgra32, null, frame.Pixels, frame.Width * 4);
+            var png = new PngBitmapEncoder();
+            png.Frames.Add(BitmapFrame.Create(image));
+            using var file = File.Create(path);
+            png.Save(file);
         }
 
         public void Dispose()

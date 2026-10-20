@@ -49,9 +49,20 @@ jobs:
         run: dotnet build .\PaperTodo.csproj -c Release --no-restore
 
       - name: Run regression checks
+        env:
+          PAPER_MARKDOWN_REDRAW_CAPTURE: ${{ runner.temp }}/markdown-redraw
         run: |
           ./tools/testing/Run-Checks.ps1 -Group all -List
           ./tools/testing/Run-Checks.ps1 -Group regression
+
+      - name: Upload Markdown redraw mismatch evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: markdown-redraw-${{ github.sha }}
+          path: ${{ runner.temp }}/markdown-redraw
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Material and skin behavior checks
         # DWM desktop screenshot acceptance was retired on main (see its D-057).
