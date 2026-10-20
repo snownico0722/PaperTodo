@@ -12,7 +12,7 @@ internal static class PaperTodoOperationSkill
           - 软件设置先 `list_settings` / `get_setting` 查询公开 ID、类型、范围和 writable；只有任务明确要求更改时才 `set_setting`。这不同于插件自己的设置，禁止修改内部字段或自行提升未获准权限。
           - 长待办需要关联笔记时，先 `get_setting(id="todo.paper_links")`；关闭或未知则跳过关联方案，不先创建额外 Note。解绑用 `update_todo(clear_linked_paper=true)`，不可同时传绑定 ID。
           - 提醒用 `set_todo_reminder`，时间包含日期和时区；删除用 `delete_paper` / `delete_todo`，仅在用户要求删除时使用。
-          - 用户明确授权外部编辑 data.json 后，调用 `reload_data` 接受文件为当前状态，再查询 `get_data_reload_status`；这会覆盖尚未保存的内存修改。没有主动重载时，正常自动保存可以覆盖外部文件。普通内容修改仍优先使用领域工具。
+          - 用户明确授权外部编辑 data.json 后，调用 `reload_data` 接受文件为当前状态，再查询 `get_data_reload_status`；这会覆盖尚未保存的内存修改。发现外部变化或导入失败后，普通保存会暂停；需显式合并或重载接受输入才能恢复。不要用强制退出、改内部字段或反复保存绕过。普通内容修改仍优先使用领域工具。
           - 需要合并独立修改时，保留开始编辑前实际读取的完整原始 JSON，调用 `merge_data(baseline_json=原始JSON字符串)`；不要用修改后或后来保存的文件替代原始版本。没有基线时只能由用户选择整份当前/外部数据；冲突默认询问，也可按当前设置只对冲突采用外部或内部优先；不要临时改变用户策略来免除询问。再查询 `get_data_reload_status` 确认最终结果。该功能不启用自动文件监听。
           - 遵循 MCP 权限；权限不足或连接失败时说明原因，不直接修改 data.json 或插件数据文件。工具确认成功后再报告完成；写入结果不明时先读取核对，避免重复追加。
           """
@@ -24,7 +24,7 @@ internal static class PaperTodoOperationSkill
           - Discover public application setting IDs, types, limits, and writable with `list_settings` / `get_setting`; use `set_setting` only for a requested settings change. These are not plugin-private settings. Never edit internal fields or grant yourself an unauthorized permission.
           - Before creating a linked detail Note, call `get_setting(id="todo.paper_links")`; if disabled or unknown, skip that approach rather than creating an extra Note first. Unlink with `update_todo(clear_linked_paper=true)`, without a linked paper ID.
           - Use `set_todo_reminder` with a future date, time, and UTC offset; use `delete_paper` / `delete_todo` only when the user requests deletion.
-          - After explicit authorization to edit data.json, call `reload_data` to accept the file as authoritative and check `get_data_reload_status`. Unsaved in-memory edits may be replaced; without an explicit reload, ordinary saves may overwrite disk edits. Prefer domain tools for normal edits.
+          - After explicit authorization to edit data.json, call `reload_data` to accept the file as authoritative and check `get_data_reload_status`. Unsaved in-memory edits may be replaced; external changes or a rejected import pause ordinary saves until an explicit merge/reload accepts the input. Never bypass this hold by forcing exit, editing internal fields, or repeatedly saving. Prefer domain tools for normal edits.
           - For independent changes, keep the complete original JSON actually read before editing and pass it to `merge_data(baseline_json=originalJson)`; never substitute the edited file or a later save. Without a baseline, the user must choose the entire current or external state. Conflicts follow the current ask/external/internal preference; do not change the user preference just to avoid a prompt. Check `get_data_reload_status` for the final outcome. No automatic file watcher is enabled.
           - Respect MCP permissions. Explain permission or connection failures; do not edit data.json or plugin data files directly. Report completion only after tool success; read back uncertain writes before retrying to avoid duplicate appends.
           """;

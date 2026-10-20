@@ -1645,4 +1645,5 @@
   <data name="DataMergeConflictInternal" xml:space="preserve"><value>内部优先</value></data>
   <data name="TipDataMergeConflicts" xml:space="preserve"><value>显式合并先保留双方没有冲突的修改，此选项只决定冲突部分。内部指 PaperTodo 当前数据，外部指本次导入文件。缺少原始版本时始终询问；不启用后台监听或自动同步。</value></data>
   <data name="DataReloadConflictEmpty" xml:space="preserve"><value>（空）</value></data>
+  <data name="DataSavePausedExternal" xml:space="preserve"><value>磁盘数据已变化或导入尚未解决，已暂停保存以避免覆盖。当前编辑仍保留在内存中。请完成显式合并或重载后再退出；强制关闭可能丢失尚未保存的编辑。</value></data>
 </root>

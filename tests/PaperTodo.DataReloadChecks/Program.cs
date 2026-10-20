@@ -7,14 +7,18 @@ internal static partial class Program
     [STAThread]
     private static int Main(string[] args)
     {
+        if (args.Contains("--kill-writer")) return RunKillWriter(args);
+        if (args.Contains("--shutdown-merge")) return RunShutdownMergeFixture(false);
+        if (args.Contains("--shutdown-unknown")) return RunShutdownMergeFixture(true);
         if (args.Contains("--live-fixture")) return RunLiveFixture();
         if (args.Contains("--exit-fixture")) return RunDeferredExitFixture();
+        if (args.Contains("--passive-dispose")) return RunPassiveDisposeFixture();
         try
         {
             var checks = new (string Name, Action Run)[]
             {
                 ("explicit request accepts external snapshot; no revision metadata", ExplicitImport),
-                ("ordinary saves may overwrite unrequested file edits", NormalSaveWins),
+                ("ordinary saves reject unrequested file edits", NormalSaveWins),
                 ("invalid or missing input never falls back to backup", InvalidInput),
                 ("old async writes cannot replace an accepted import", SaveFence),
                 ("model/list references survive accepted reload", ModelIdentities),
@@ -40,8 +44,13 @@ internal static partial class Program
                 check.Run();
                 Console.WriteLine("PASS " + check.Name);
             }
+            StorageSafetyChecks();
+            KillSafetyChecks();
             RunIsolatedLiveChecks();
+            RunIsolatedLiveChecks("--shutdown-merge");
+            RunIsolatedLiveChecks("--shutdown-unknown");
             RunIsolatedLiveChecks("--exit-fixture");
+            RunIsolatedLiveChecks("--passive-dispose");
             Console.WriteLine($"PASS explicit reload: {checks.Length} storage groups and isolated WPF/API/MCP fixture");
             return 0;
         }
@@ -119,9 +128,9 @@ internal static partial class Program
         using var s = new Scope();
         var disk = s.Read(); disk["theme"] = "dark"; s.Write(disk);
         Require(s.Memory.Theme != "dark", "disk edits mutated the live model");
-        s.Store.SaveJsonSync(s.Store.SerializeState(s.Memory), 2);
-        Require(Str(s.Read()["theme"]) == s.Memory.Theme,
-            "a normal save did not overwrite unrequested external edits");
+        Throws<StateWriteBlockedException>(() => s.Store.SaveJsonSync(s.Store.SerializeState(s.Memory), 2));
+        Require(Str(s.Read()["theme"]) == "dark",
+            "an ordinary save overwrote an unaccepted external edit");
     }
 
     private static void InvalidInput()

@@ -262,7 +262,11 @@ internal static partial class Program
                 ((DataReloadResult)mcp.Execute(JsonSerializer.SerializeToElement(new {
                     method = "merge_data", @params = new { baseline_json = "[]" } }))!).Outcome == "invalid",
                 "an adapter dropped the invalid supplied baseline");
-            Console.WriteLine("PASS missing-baseline whole-state choices and invalid baseline propagation");
+            Require(Field<StateStore>(controller, "_store").OrdinaryWritesPaused,
+                "invalid baseline failed to retain the write hold");
+            Require(native.ReloadData().Applied, "explicit recovery after invalid baseline failed");
+            await Until(() => !controller.IsDataReloading, "accept disk after invalid baseline");
+            Console.WriteLine("PASS missing-baseline choices, invalid-baseline hold and explicit recovery");
 
             // KeepExternal must also resolve the absence of a whole paper, in either direction.
             foreach (var externalDeletes in new[] { true, false })

@@ -8,7 +8,8 @@ internal enum DurableAtomicWriteStage
     BeforeTempOpen,
     AfterTempWrite,
     AfterFlush,
-    BeforeReplace
+    BeforeReplace,
+    AfterReplace
 }
 
 internal interface IDurableAtomicFileWriter
@@ -82,6 +83,7 @@ internal sealed class DurableAtomicFileWriter : IDurableAtomicFileWriter
 
         var tempPath = targetPath + ".tmp";
         _faultInjector?.Invoke(DurableAtomicWriteStage.BeforeTempOpen, targetPath);
+        beforeReplace?.Invoke();
 
         using (var stream = new FileStream(
                    tempPath,
@@ -123,6 +125,7 @@ internal sealed class DurableAtomicFileWriter : IDurableAtomicFileWriter
             TryDelete(tempPath);
             throw;
         }
+        _faultInjector?.Invoke(DurableAtomicWriteStage.AfterReplace, targetPath);
     }
 
     private void ReplaceWithRetry(string tempPath, string targetPath, Action? beforeReplace)

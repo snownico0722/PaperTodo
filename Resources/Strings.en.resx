@@ -1596,4 +1596,5 @@ When off, open at the docked edge or remembered position.</value>
   <data name="DataMergeConflictInternal" xml:space="preserve"><value>Prefer internal</value></data>
   <data name="TipDataMergeConflicts" xml:space="preserve"><value>An explicit merge preserves nonconflicting changes from both sides. This setting affects conflicts only: internal means current PaperTodo data; external means the incoming file. Without the original version, always ask. Does not enable background watching or automatic sync.</value></data>
   <data name="DataReloadConflictEmpty" xml:space="preserve"><value>(empty)</value></data>
+  <data name="DataSavePausedExternal" xml:space="preserve"><value>The file changed or an import remains unresolved. Saving is paused to prevent overwriting it. Current edits remain in memory. Complete an explicit merge or reload before exiting; force-closing may lose unsaved edits.</value></data>
 </root>

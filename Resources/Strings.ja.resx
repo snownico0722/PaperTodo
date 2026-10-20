@@ -1596,4 +1596,5 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="DataMergeConflictInternal" xml:space="preserve"><value>内部を優先</value></data>
   <data name="TipDataMergeConflicts" xml:space="preserve"><value>明示的な統合では、双方の競合しない変更を保持します。この設定は競合部分にのみ適用されます。内部は現在の PaperTodo データ、外部は取り込むファイルです。元のバージョンがない場合は必ず確認します。バックグラウンド監視や自動同期は有効になりません。</value></data>
   <data name="DataReloadConflictEmpty" xml:space="preserve"><value>（空）</value></data>
+  <data name="DataSavePausedExternal" xml:space="preserve"><value>ファイルが変更されたか、読み込みが未解決のため、上書きを防ぐため保存を停止しています。現在の編集はメモリに保持されています。終了前に明示的なマージまたは再読み込みを完了してください。強制終了すると未保存の編集が失われる場合があります。</value></data>
 </root>

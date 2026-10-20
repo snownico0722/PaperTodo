@@ -75,6 +75,12 @@ public sealed partial class AppController
             _lastDataReloadResult = result;
             if (commit.State == null)
             {
+                if (_store.OrdinaryWritesPaused)
+                {
+                    _hasPendingDirty = true;
+                    _saveTimer.Stop();
+                    _forceSaveTimer.Stop();
+                }
                 return result;
             }
 
@@ -117,6 +123,7 @@ public sealed partial class AppController
             if (pending.IsMerge)
             {
                 var resolution = ResolveDataMerge(pending);
+                ThrowIfDataReloadCancelled(pending);
                 var effectiveNext = resolution.State;
                 var files = _store.CommitExternalMerge(resolution,
                     pending.ObservedDiskJson ?? throw new InvalidOperationException("Missing data merge source."),
@@ -186,7 +193,7 @@ public sealed partial class AppController
         {
             // The external file has been accepted. Reconciliation failed; report this without
             // claiming a rollback or triggering a second import.
-            if (storageAccepted)
+            if (storageAccepted && !IsExiting)
             {
                 StateReloadModels.Apply(State, pending.Next);
                 _lastDataReloadResult = pending.Result with
@@ -202,7 +209,7 @@ public sealed partial class AppController
                 _lastDataReloadResult = pending.Result with
                 {
                     Outcome = ex is ExternalDocumentChangedException ? "busy" : "failed",
-                    Applied = false, Error = ex.GetBaseException().Message
+                    Applied = storageAccepted, Error = ex.GetBaseException().Message
                 };
             }
         }
@@ -215,12 +222,14 @@ public sealed partial class AppController
             events.Dispose();
             ResumeExitAfterDataReload();
         }
+        if (IsExiting) return;
         if (!storageAccepted)
         {
-            // Preview fenced older queued saves and stopped both timers. Keep the original
-            // state dirty after an aborted merge, using the existing normal-save retry owner.
-            // This does not retry the merge or write the rejected candidate.
-            ArmSaveRetryIfNeeded(pending.SaveVersion);
+            // An unresolved input is not a transient ordinary-save error. Keep both sides;
+            // only an explicit successful reload/merge may release the store's write hold.
+            _hasPendingDirty = true;
+            _saveTimer.Stop();
+            _forceSaveTimer.Stop();
             return;
         }
         RefreshTrayMenu();
@@ -270,7 +279,20 @@ public sealed partial class AppController
 
     private StateMergeResolution ResolveDataMerge(PendingDataReload pending) =>
         StateMergeResolution.Resolve(pending.Next, pending.Conflicts, pending.ExternalJson,
-            pending.ConflictPolicy, AskDataMergeConflict);
+            pending.ConflictPolicy, bucket =>
+            {
+                ThrowIfDataReloadCancelled(pending);
+                var choice = AskDataMergeConflict(bucket);
+                ThrowIfDataReloadCancelled(pending);
+                return choice;
+            });
+
+    private void ThrowIfDataReloadCancelled(PendingDataReload pending)
+    {
+        if (IsExiting || !ReferenceEquals(_pendingDataReload, pending))
+            throw new OperationCanceledException("Data import was cancelled because PaperTodo is stopping.");
+        _store.WriteLifetime.ThrowIfStopped();
+    }
 
     private ConflictChoice AskDataMergeConflict(ConflictBucket bucket)
     {
