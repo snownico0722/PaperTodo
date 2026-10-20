@@ -728,7 +728,10 @@ public sealed class MasterCapsuleWindow : Window
             var height = _controller.MasterCapsuleHeightDip;
             options = options with
             {
-                Shape = options.Shape with
+                // Without normal artwork the return flight restores the ordinary shell.
+                // Keep its complete geometry (including the body's chrome insets), rather
+                // than giving that shell the image-only body's full window height.
+                Shape = _skinSource == null ? options.Shape : options.Shape with
                 {
                     WindowWidthDip = width,
                     WindowHeightDip = height,

@@ -11,7 +11,7 @@ internal static class Program
 {
     private const BindingFlags Private = BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic;
     private const string FixtureMarker = ".papertodo-lifecycle-fixture";
-    private static readonly string[] Cases = ["startup", "missing-monitor", "master-queue-transfer", "master-capsule-image-skin", "master-capsule-animation", "master-capsule-drag-only", "master-queue-cancel", "master-queue-drag-preparation", "master-queue-drop-handoff", "master-queue-membership", "master-queue-mutations", "master-queue-hide", "master-queue-disconnect", "master-queue-merge", "master-queue-merge-collapsed", "master-queue-material-handoff", "controller-hide-create-reentry", "controller-hide-show-reentry", "controller-zorder-create-reentry", "controller-close-delete-reentry", "todo-visibility", "real-exit", "early-expand", "edge-expand-foreground", "cancel-prewarm", "real-exit-scripts", "early-exit", "todo-context-menu", "todo-history"];
+    private static readonly string[] Cases = ["master-capsule-review-assets", "master-capsule-review-settings", "master-capsule-review-drag-only", "startup", "missing-monitor", "master-queue-transfer", "master-capsule-image-skin", "master-capsule-animation", "master-capsule-drag-only", "master-queue-cancel", "master-queue-drag-preparation", "master-queue-drop-handoff", "master-queue-membership", "master-queue-mutations", "master-queue-hide", "master-queue-disconnect", "master-queue-merge", "master-queue-merge-collapsed", "master-queue-material-handoff", "controller-hide-create-reentry", "controller-hide-show-reentry", "controller-zorder-create-reentry", "controller-close-delete-reentry", "todo-visibility", "real-exit", "early-expand", "edge-expand-foreground", "cancel-prewarm", "real-exit-scripts", "early-exit", "todo-context-menu", "todo-history"];
 
     [STAThread]
     private static int Main(string[] args)
@@ -131,6 +131,13 @@ internal static class Program
 
     private static async Task RunFixture(string name)
     {
+        if (name == "master-capsule-review-assets")
+        {
+            MasterCapsuleReviewChecks.VerifyImages();
+            return;
+        }
+        if (name == "master-capsule-review-drag-only")
+            MasterCapsuleAnimationChecks.Prepare(dragOnly: true);
         if (name == "todo-visibility")
         {
             await TodoVisibilityChecks.Run();
@@ -203,6 +210,16 @@ internal static class Program
             await controller.StartAsync(createDefaultPaper: false);
             await Dispatcher.CurrentDispatcher.InvokeAsync(static () => { }, DispatcherPriority.Render);
             var visible = windows.Values.Count(window => window.HasVisibleSurface);
+            if (name == "master-capsule-review-settings")
+            {
+                MasterCapsuleReviewChecks.VerifySettings(controller);
+                return;
+            }
+            if (name == "master-capsule-review-drag-only")
+            {
+                MasterCapsuleReviewChecks.VerifyDragOnly(controller);
+                return;
+            }
             if (name == "master-capsule-image-skin")
             {
                 MasterCapsuleSkinChecks.Verify(controller);

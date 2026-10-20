@@ -169,9 +169,29 @@ internal static class MasterCapsuleSkin
             bitmap.StreamSource = stream;
             bitmap.EndInit();
             bitmap.Freeze();
-            frames[index] = bitmap;
+            // File DPI is printing metadata, not the animation canvas contract. Normalize
+            // after bounded decoding so equal pixel canvases also have equal WPF DIP sizes.
+            var converted = new FormatConvertedBitmap(bitmap, PixelFormats.Pbgra32, null, 0);
+            var stride = checked(size.Width * 4);
+            var pixels = new byte[checked(stride * size.Height)];
+            converted.CopyPixels(pixels, stride, 0);
+            var normalized = BitmapSource.Create(size.Width, size.Height, 96, 96,
+                PixelFormats.Pbgra32, null, pixels, stride);
+            normalized.Freeze();
+            frames[index] = normalized;
         }
         return TrimTogether(frames);
+    }
+
+    private static System.Drawing.Image OpenGifImage(Stream stream)
+    {
+        try { return System.Drawing.Image.FromStream(stream, false, false); }
+        catch (OutOfMemoryException ex)
+        {
+            // GDI+ also reports invalid image formats as OutOfMemoryException. Only translate
+            // that decoder boundary; real managed frame-buffer allocation failures still escape.
+            throw new InvalidDataException("GDI+ could not decode the optional GIF artwork.", ex);
+        }
     }
 
     private static MasterCapsuleVisualClip? DecodeGif(string path)
@@ -181,7 +201,7 @@ internal static class MasterCapsuleSkin
         // active-frame decoder composites GIF offsets, transparency and disposal operations;
         // drawing WIC's raw delta frames as independent full images would leave trails/holes.
         // No ImageAnimator is started: our own small player is the sole animation clock.
-        using var image = System.Drawing.Image.FromStream(stream, false, false);
+        using var image = OpenGifImage(stream);
         if (image.RawFormat.Guid != System.Drawing.Imaging.ImageFormat.Gif.Guid)
             throw new InvalidDataException("The .gif candidate is not a GIF image.");
         var count = image.GetFrameCount(System.Drawing.Imaging.FrameDimension.Time);

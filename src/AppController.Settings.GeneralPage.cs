@@ -313,11 +313,21 @@ public sealed partial class AppController
         Grid.SetColumn(valueText, 1);
         slider.ValueChanged += (_, _) => valueText.Text =
             ((int)Math.Round(slider.Value)).ToString();
+        var committedValue = readValue();
+        var committing = false;
         void Commit()
         {
             var selected = (int)Math.Round(slider.Value);
-            if (readValue() != selected)
-                SetSettingFromUi(id, selected);
+            // Region replacement can deliver LostKeyboardFocus or a queued mouse-up from
+            // an obsolete slider. Its old value/draft must not overwrite a later API/reset.
+            if (committing || selected == committedValue || readValue() != committedValue) return;
+            committing = true;
+            try { SetSettingFromUi(id, selected); }
+            finally
+            {
+                committedValue = readValue();
+                committing = false;
+            }
         }
         slider.AddHandler(
             System.Windows.Controls.Primitives.Thumb.DragCompletedEvent,
