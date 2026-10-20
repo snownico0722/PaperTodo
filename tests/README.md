@@ -37,6 +37,8 @@
 
 实际执行需要 Windows、.NET 10 SDK、PowerShell 7 和固定的 `vendor/wpf-notifyicon` 子模块；插件组需要 Node.js。窗口、输入和渲染检查需要可用的 Windows/WPF 桌面，不能并行争用鼠标或前台窗口。数据故障注入必须使用测试隔离目录，不指向日常数据。
 
+Markdown 局部重绘对照已移除：原 `LocalRedrawChecks.cs` 同时比较局部重绘和再次强制完整重绘的离屏 `RenderTargetBitmap` 字节，**相同测试及渲染源码在 Windows CI 中既失败又通过**，两次图像没有可证明一致的渲染完成边界；因此不能用该差分给出可靠的通过/失败判定。已一并移除三项 WPF 像素场景、反射驱动淡入和失败截图 artifact，而不是增加重试、容差或将其改名为可选测试。现有 `MarkdownEditingChecks` / `MarkdownSemanticChecks` 继续检查源码不变、撤销重做、预览/模式切换、语义增量对照及真实控件排版行为；**这些检查不声称证明任意一帧局部刷新与强制重绘的像素完全一致**。若将来有可独立验证的稳定行为边界，再设计相应检查，不能恢复无完成时序保证的两帧逐字节对照。
+
 Markdown 编辑检查中的图片用例默认只使用内存 `DataObject` 和隔离 LMDB，覆盖 PNG 透明像素、格式优先级、旧 Bitmap 截图兼容、单步撤销／重做、数据库重开，以及添加图片格式时保留原有文本和富文本数据。实际系统剪贴板往返需单独运行 `dotnet run --project tests/PaperTodo.MarkdownEditingChecks -c Release -- --clipboard`。此模式会用合成图片替换当前剪贴板，必须与其他剪贴板操作串行；它检查复制方法返回后 PNG 与 Bitmap 都可读取，单图选区复制保留 Markdown、HTML 和 RTF，以及写入进程退出后 PNG 像素仍完整。
 
 因共享 Windows CI 的 WPF/DWM 桌面合成截图可在未修改代码的基线上随机漏掉真实 WPF 内容，最终桌面截图不再属于自动化验收（D-057）。本组仍执行真实 Windows 窗口与材质状态、WPF 离屏像素、失效清理、Aero 反光等确定性检查；它们不等于真实 Windows 11／HDR／多屏外观验收。后者只在实际需要发布材质变更时人工确认，不改用其他 CI 机器跑同一组截图。命令行的 `--no-raster` 仍可跳过部分 WPF 离屏图像检查，但不能视为相关行为已通过。

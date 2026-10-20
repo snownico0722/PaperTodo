@@ -161,6 +161,7 @@ Architecture / Decisions 按「项目知识入口」中的 Edge 影响范围路�
 - 版本号显式维护在 `PaperTodo.csproj`；不要恢复自动递增。
 - `plugin-samples/` 保存插件源码/说明，`plugins/` 保存可直接加载的最终产物；主程序 publish/Release 不捆绑插件。最终插件目录不保留无必要的 PDB/XML/重复 native/shared assemblies。
 - PR 分支 Windows CI 由 HEAD commit marker 控制：`[debug]` → Debug 测试包，`[ci]` → Release build，`[debug-ci]` → 两者。标记必须在本次 push 的最后一个 HEAD；不要为了触发制造空提交。
+- 已确认 Markdown/AvalonEdit 的 WPF 离屏局部重绘与强制全重绘两次 `RenderTargetBitmap` 逐字节对照，在同一测试及产品源码下出现相反 CI 结果，不得再次作为正确性门槛；不通过加等待、重复运行、放宽容差或改成长期可选 fixture 掩盖该不确定性。保留语义、编辑、撤销、可观察布局等有明确行为边界的回归，只有找到可证明稳定的渲染同步机制后才能重新设计局部像素验收。
 - 不重新引入已删除的 `scripts/edge-refinement-tests/` 或依赖源码字符串/文件路径/方法排列的 source-shape test；若新增 Edge 自动化，应验证可执行 reducer/geometry/policy/transaction 行为，而不是源码排布。真实集成回归仍依赖编译、诊断日志和真机验证。
 - 普通编译：`dotnet build PaperTodo.csproj -c Release`。
 - `vendor/wpf-notifyicon` 使用父仓库记录的固定 submodule commit；更新 fork 时显式更新 gitlink，并完成构建和真实托盘手测。构建过程不自动拉取最新分支。
