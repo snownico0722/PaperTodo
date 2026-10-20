@@ -18,7 +18,7 @@ internal static partial class Program
                 preview.State.Papers[0].Title == "local" &&
                 preview.State.Papers[0].Content == "external",
                 "independent edits were not retained");
-        var archived = s.Store.CommitExternalMerge(preview.State, preview.ObservedDiskJson!, 2, preview.Conflicts);
+        var archived = s.Store.CommitExternalMerge(ResolvePreview(preview), preview.ObservedDiskJson!, 2);
         Require(archived.ConflictFile == null && archived.ConflictDiffFile == null,
                 "clean merge generated conflict files");
         Require(Str(s.Read()["papers"]![0]!["title"]) == "local" &&
@@ -122,7 +122,7 @@ internal static partial class Program
             new Dictionary<string, PaperConflictChoice> { ["note-a"] = PaperConflictChoice.KeepExternal },
             preview.ExternalJson!, preview.Conflicts!);
         var (conflictFile, diffFile) = s.Store.CommitExternalMerge(
-            selected, preview.ObservedDiskJson!, 2, preview.Conflicts);
+            ResolvePreview(preview, ConflictChoice.KeepExternal), preview.ObservedDiskJson!, 2);
         Require(Str(s.Read()["papers"]![0]!["content"]) == "external",
                 "KeepExternal did not commit the external paper");
         Require(conflictFile != null && diffFile != null &&
@@ -181,7 +181,8 @@ internal static partial class Program
             }
             Require(s.Store.SerializeState(preview.State!) == candidateBefore &&
                 preview.ExternalJson.ToJsonString() == externalBefore, "selection mutated its source snapshots");
-            s.Store.CommitExternalMerge(selected, preview.ObservedDiskJson!, 2, preview.Conflicts);
+            s.Store.CommitExternalMerge(ResolvePreview(preview, choice == PaperConflictChoice.KeepExternal
+                ? ConflictChoice.KeepExternal : ConflictChoice.KeepMemory), preview.ObservedDiskJson!, 2);
             Require(s.Read()["papers"]!.AsArray().Any(p => Str(p!["id"]) == paperId) == shouldExist,
                 "persisted paper existence disagrees with the user's choice");
             StateReloadModels.Apply(s.Memory, selected);
@@ -200,7 +201,7 @@ internal static partial class Program
         Require(preview.State != null, "merge preview did not start");
         disk["papers"]![0]!["content"] = "arrived-later"; s.Write(disk);
         Throws<ExternalDocumentChangedException>(() =>
-            s.Store.CommitExternalMerge(preview.State!, preview.ObservedDiskJson!, 2, preview.Conflicts));
+            s.Store.CommitExternalMerge(ResolvePreview(preview), preview.ObservedDiskJson!, 2));
         Require(Str(s.Read()["papers"]![0]!["content"]) == "arrived-later",
                 "newer external input was overwritten after preview");
     }
@@ -220,7 +221,7 @@ internal static partial class Program
         var preview = special.PreviewExternalMerge(local, 2, s.BaselineJson);
         Require(preview.State != null, "merge preview failed before replace-race test");
         Throws<ExternalDocumentChangedException>(() =>
-            special.CommitExternalMerge(preview.State!, preview.ObservedDiskJson!, 2, preview.Conflicts));
+            special.CommitExternalMerge(ResolvePreview(preview), preview.ObservedDiskJson!, 2));
         Require(File.ReadAllText(s.Store.FilePath) == "{\"arrived\":true}",
                 "guard allowed stale primary replacement during flush");
         Require(!File.Exists(s.Store.FilePath + ".tmp"),
@@ -267,7 +268,7 @@ internal static partial class Program
         var preview = store.PreviewExternalMerge(current, 2, s.BaselineJson);
         Require(preview.State != null, "retry preview failed");
         Throws<ExternalDocumentChangedException>(() =>
-            store.CommitExternalMerge(preview.State!, preview.ObservedDiskJson!, 2, preview.Conflicts));
+            store.CommitExternalMerge(ResolvePreview(preview), preview.ObservedDiskJson!, 2));
         Require(operations.ReplaceCalls == 1,
             "writer retried despite an external change detected before replacement");
         Require(File.ReadAllText(s.Store.FilePath) == "{\"changedDuringRetry\":true}",

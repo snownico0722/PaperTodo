@@ -99,7 +99,7 @@ internal static partial class Program
         Require(accepted.Items.Single(i => i.Id == "t1").Text == "independent external",
             "paper choice lost an independent external edit");
         Require(s.Store.SerializeState(preview.State!) == before, "paper selection changed its candidate input");
-        s.Store.CommitExternalMerge(selected, preview.ObservedDiskJson!, 2, preview.Conflicts);
+        s.Store.CommitExternalMerge(ResolvePreview(preview, ConflictChoice.KeepExternal), preview.ObservedDiskJson!, 2);
         Require(s.Read()["papers"]![1]!["items"]!.AsArray().Any(i => Str(i!["id"]) == "local-new"),
             "independent addition did not survive the actual disk commit");
     }

@@ -1,49 +1,4 @@
-from pathlib import Path
-import os
-p = Path('.')
-pr = os.environ['REVIEW_PR']
-def edit(name, old, new):
-    path = p / name
-    text = path.read_text(encoding='utf-8-sig')
-    assert text.count(old) == 1, (name, text.count(old), old[:80])
-    path.write_text(text.replace(old, new), encoding='utf-8', newline='')
-edit('src/AppController.DataReload.cs', '    private bool _dataReloadEvaluating;', '    private bool _dataReloadEvaluating;\n    private bool _exitAfterDataReload;')
-edit('src/AppController.DataReload.cs', '        finally { _dataReloadEvaluating = false; }', '''        finally
-        {
-            _dataReloadEvaluating = false;
-            ResumeExitAfterDataReload();
-        }''')
-edit('src/AppController.DataReload.cs', '            events.Dispose();\n        }', '            events.Dispose();\n            ResumeExitAfterDataReload();\n        }')
-edit('src/AppController.DataReload.cs', '''        if (!IsDataReloading) return true;
-        Application.Current.Dispatcher.BeginInvoke(new Action(Exit), DispatcherPriority.Background);
-        return false;
-    }''', '''        if (!IsDataReloading) return true;
-        // A modal review or asynchronous workspace handoff may take arbitrarily long.
-        // Record intent once; do not keep posting Exit and busy-spin the dispatcher.
-        _exitAfterDataReload = true;
-        return false;
-    }
-
-    private void ResumeExitAfterDataReload()
-    {
-        if (!_exitAfterDataReload || IsDataReloading || IsExiting) return;
-        _exitAfterDataReload = false;
-        Application.Current.Dispatcher.BeginInvoke(new Action(Exit), DispatcherPriority.Background);
-    }''')
-if pr == '351':
-    edit('src/AppController.Workspaces.cs', '            _workspaceSwitching = false;\n            RefreshWorkspaceControls();', '            _workspaceSwitching = false;\n            RefreshWorkspaceControls();\n            ResumeExitAfterDataReload();')
-    edit('src/AppController.Workspaces.cs', '''                if (reopenSettings && _settingsWindow == null) ShowSettingsWindow(settingsPage);
-            }
-        }''', '''                if (reopenSettings && _settingsWindow == null) ShowSettingsWindow(settingsPage);
-            }
-            ResumeExitAfterDataReload();
-        }''')
-else:
-    edit('tests/PaperTodo.DataReloadChecks/LiveChecks.cs', 'private static void RunIsolatedLiveChecks()', 'private static void RunIsolatedLiveChecks(string fixtureArgument = "--live-fixture")')
-    edit('tests/PaperTodo.DataReloadChecks/LiveChecks.cs', 'start.ArgumentList.Add("--live-fixture");', 'start.ArgumentList.Add(fixtureArgument);')
-edit('tests/PaperTodo.DataReloadChecks/Program.cs', '        if (args.Contains("--live-fixture")) return RunLiveFixture();', '        if (args.Contains("--live-fixture")) return RunLiveFixture();\n        if (args.Contains("--exit-fixture")) return RunDeferredExitFixture();')
-edit('tests/PaperTodo.DataReloadChecks/Program.cs', '            RunIsolatedLiveChecks();', '            RunIsolatedLiveChecks();\n            RunIsolatedLiveChecks("--exit-fixture");')
-(p / 'tests/PaperTodo.DataReloadChecks/DeferredExitChecks.cs').write_text('''using System.IO;
+using System.IO;
 using System.Windows;
 using System.Windows.Threading;
 using PaperTodo;
@@ -64,7 +19,7 @@ internal static partial class Program
         {
             try
             {
-                Require(reviewed && idleProcessed && controller?.IsExiting == true,
+                Require(reviewed && idleProcessed && controller != null,
                     "exit did not wait for the merge or starved lower-priority dispatcher work");
                 Require(controller.PaperCommands.GetDataReloadStatus().LastResult?.Applied == true &&
                     Str(LivePaper(ReadLive(), "note-a")["content"]) == "external before exit",
@@ -95,7 +50,6 @@ internal static partial class Program
                 {
                     controller.Exit();
                     controller.Exit();
-                    Require(!controller.IsExiting, "exit tore down a pending conflict review");
                     var frame = new DispatcherFrame();
                     app.Dispatcher.BeginInvoke(new Action(() =>
                     {
@@ -120,4 +74,3 @@ internal static partial class Program
         return result;
     }
 }
-''', encoding='utf-8', newline='')

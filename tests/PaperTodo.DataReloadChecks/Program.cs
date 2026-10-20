@@ -8,6 +8,7 @@ internal static partial class Program
     private static int Main(string[] args)
     {
         if (args.Contains("--live-fixture")) return RunLiveFixture();
+        if (args.Contains("--exit-fixture")) return RunDeferredExitFixture();
         try
         {
             var checks = new (string Name, Action Run)[]
@@ -27,7 +28,12 @@ internal static partial class Program
                 ("stale external source cannot overwrite a newer edit", MergeRejectChangedSource),
                 ("source changed after flush is rejected before replacement", MergeRejectDuringReplace),
                 ("source changed during replace retry is also rejected", MergeRejectDuringRetry),
-                ("large text diff avoids quadratic allocations", LargeConflictDiff)
+                ("large text diff avoids quadratic allocations", LargeConflictDiff),
+                ("three conflict policies preserve independent edits and archive actual decisions", MergePolicies),
+                ("missing baselines always require an explicit whole-state choice", MergePoliciesMissingBaseline),
+                ("mixed user decisions share the state and archive owner", MergeMixedPolicyChoices),
+                ("merged normalization waits for the selected settings", MergeNormalizeAfterChoices),
+                ("identity insertion preserves order with bounded traversal", MergeIdentityOrderChecks)
             };
             foreach (var check in checks)
             {
@@ -35,6 +41,7 @@ internal static partial class Program
                 Console.WriteLine("PASS " + check.Name);
             }
             RunIsolatedLiveChecks();
+            RunIsolatedLiveChecks("--exit-fixture");
             Console.WriteLine($"PASS explicit reload: {checks.Length} storage groups and isolated WPF/API/MCP fixture");
             return 0;
         }

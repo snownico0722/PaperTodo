@@ -39,8 +39,8 @@ internal static class DataReloadConflictDialog
 }
 
 /// <summary>
-/// paper 级冲突弹窗:同一 paper 下的所有字段冲突一次展示,用户二选一整张 paper。
-/// 默认(关闭/X/Esc)=KeepMemory;用户点 "全部保留传入" 才会用外部覆盖整张 paper。
+/// paper 级冲突弹窗:同一 paper 下的所有字段冲突一次展示,用户一次选择该 paper 的冲突项。
+/// 默认(关闭/X/Esc)=KeepMemory;用户点 "全部保留传入" 才会用外部值解决该 paper 的冲突项。
 /// </summary>
 internal static class DataReloadPaperConflictDialog
 {
@@ -347,16 +347,16 @@ internal sealed class DataReloadPaperConflictDialogWindow : Window
         DockPanel.SetDock(buttonRow, Dock.Bottom);
         content.Children.Add(buttonRow);
 
-        // 中间:字段列表(每个有差异字段一组左右 diff 面板,所有面板共享一个 ScrollSyncGroup)
+        // Each conflicting field owns one synchronized left/right pair.
         var fieldsPanel = new StackPanel();
-        var sync = new DataReloadConflictUi.ScrollSyncGroup();
 
         // 整张 paper 整节点冲突时,bucket.Conflicts 长度为 1 且 path 是 "papers[id=X]"
         // 仍然渲染为单个 "整张 paper" 字段块,内部直接对比两个完整 paper JsonObject
         // 普通多字段:按 conflict 顺序逐条渲染,字段短路径来自 conflict.Path 去掉前缀
-        var prefix = $"papers[id={bucket.PaperId}].";
+        var prefix = JsonPath.EntityPath("papers", bucket.PaperId) + ".";
         foreach (var conflict in bucket.Conflicts)
         {
+            var sync = new DataReloadConflictUi.ScrollSyncGroup();
             var fieldLabel = StripPrefix(conflict.Path, prefix);
             var memoryText = DataReloadConflictUi.FormatConflictValue(conflict.PaperTodoExists, conflict.PaperTodo);
             var externalText = DataReloadConflictUi.FormatConflictValue(conflict.ExternalExists, conflict.External);
@@ -456,7 +456,7 @@ internal static class DataReloadConflictUi
 
         var headerBorder = new Border
         {
-            Background = new SolidColorBrush(Color.FromRgb(0xEE, 0xEE, 0xEE)), // 浅灰头
+            Background = Theme.HoverBrush,
             BorderBrush = new SolidColorBrush(Color.FromRgb(0x42, 0x42, 0x42)), // 明显深色边框
             BorderThickness = new Thickness(0, 0, 0, 1),
             Padding = new Thickness(8, 6, 8, 6),
@@ -472,7 +472,10 @@ internal static class DataReloadConflictUi
         stack.Children.Add(headerBorder);
 
         // 用 LineDiff 计算逐行差异
-        var diff = LineDiff.DiffLines(otherSideText, thisSideText);
+        // The reverse diff includes removals belonging ONLY to the other column. Never
+        // display them as this side's value: the choice must match the visible contents.
+        var diff = LineDiff.DiffLines(otherSideText, thisSideText)
+            .Where(entry => entry.Kind != LineDiff.ChangeKind.Removed).ToArray();
 
         // 高亮策略:左侧 4px 色条 + 微妙底色 + 加粗 + 彩色前缀,而不是整行深色背景,
         // 保证文本在浅底色上仍清晰可读。
@@ -496,11 +499,11 @@ internal static class DataReloadConflictUi
         };
 
         var linesPanel = new StackPanel();
-        if (diff.Count == 0)
+        if (diff.Length == 0)
         {
             linesPanel.Children.Add(new TextBlock
             {
-                Text = "(empty)",
+                Text = Strings.Get("DataReloadConflictEmpty"),
                 Foreground = Theme.WeakTextBrush,
                 FontStyle = FontStyles.Italic,
                 Margin = new Thickness(4)
@@ -510,8 +513,8 @@ internal static class DataReloadConflictUi
         {
             foreach (var entry in diff)
             {
-                var isThisSideOnly = entry.Kind != LineDiff.ChangeKind.Common;
-                var prefix = isThisSideOnly ? "+ " : "  ";
+                var isThisSideOnly = entry.Kind == LineDiff.ChangeKind.Added;
+                var prefix = isThisSideOnly ? (thisSideMark == LineMark.OnlyInMemory ? "- " : "+ ") : "  ";
                 var fullText = prefix + entry.Text;
 
                 // 单行容器:左侧 4px 色条 + 文本

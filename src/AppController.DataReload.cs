@@ -17,10 +17,12 @@ public sealed partial class AppController
         AppState Before, AppState Next, DataReloadResult Result, PaperOperationContext Origin,
         bool IsMerge = false, long SaveVersion = 0,
         IReadOnlyList<StateMergeConflict>? Conflicts = null,
-        JsonObject? ExternalJson = null, string? ObservedDiskJson = null);
+        JsonObject? ExternalJson = null, string? ObservedDiskJson = null,
+        string ConflictPolicy = DataMergeConflictPolicies.Ask);
 
     // No watcher or background history: reload happens only after an explicit API/MCP request.
     private bool _dataReloadEvaluating;
+    private bool _exitAfterDataReload;
     private bool _applyingDataReload;
     private PendingDataReload? _pendingDataReload;
     private DateTimeOffset? _lastDataReloadAt;
@@ -56,6 +58,7 @@ public sealed partial class AppController
             CommitSettingsExternalMarkdownEditor(saveImmediately: false);
             foreach (var window in _windows.Values.ToArray()) window.CommitPendingEditsForDataReload();
             PrepareExternalPaperOperation();
+            var conflictPolicy = DataMergeConflictPolicies.Normalize(State.DataMergeConflictPolicy);
             var before = StateStore.CopyForReload(State);
             var version = Interlocked.Increment(ref _saveVersion);
             var commit = merge
@@ -79,7 +82,7 @@ public sealed partial class AppController
             _forceSaveTimer.Stop();
             _hasPendingDirty = false;
             _pendingDataReload = new(before, commit.State, result, origin,
-                merge, version, commit.Conflicts, commit.ExternalJson, commit.ObservedDiskJson);
+                merge, version, commit.Conflicts, commit.ExternalJson, commit.ObservedDiskJson, conflictPolicy);
             // A plugin can delete its own paper through this call. Return to the caller before
             // tearing down that session/runtime. Send precedes the next input/render/timer turn;
             // shared commands and saves remain gated until the committed model is reconciled.
@@ -92,7 +95,11 @@ public sealed partial class AppController
             _lastDataReloadResult = result;
             return result;
         }
-        finally { _dataReloadEvaluating = false; }
+        finally
+        {
+            _dataReloadEvaluating = false;
+            ResumeExitAfterDataReload();
+        }
     }
 
     private void CompletePendingDataReload()
@@ -109,10 +116,11 @@ public sealed partial class AppController
         {
             if (pending.IsMerge)
             {
-                var effectiveNext = ResolveConflictsInteractively(pending);
-                var files = _store.CommitExternalMerge(effectiveNext,
+                var resolution = ResolveDataMerge(pending);
+                var effectiveNext = resolution.State;
+                var files = _store.CommitExternalMerge(resolution,
                     pending.ObservedDiskJson ?? throw new InvalidOperationException("Missing data merge source."),
-                    pending.SaveVersion, pending.Conflicts);
+                    pending.SaveVersion);
                 var result = pending.Result with
                 {
                     Outcome = pending.Conflicts is { Count: > 0 } ? "conflict" : "applied",
@@ -205,8 +213,16 @@ public sealed partial class AppController
             _pendingDataReload = null;
             _applyingDataReload = false;
             events.Dispose();
+            ResumeExitAfterDataReload();
         }
-        if (!storageAccepted) return;
+        if (!storageAccepted)
+        {
+            // Preview fenced older queued saves and stopped both timers. Keep the original
+            // state dirty after an aborted merge, using the existing normal-save retry owner.
+            // This does not retry the merge or write the rejected candidate.
+            ArmSaveRetryIfNeeded(pending.SaveVersion);
+            return;
+        }
         RefreshTrayMenu();
         PublishExternalPaperOperation(pending.Origin);
         // Existing UI rules may normalize a placeholder or geometry. Save those actual runtime
@@ -252,74 +268,44 @@ public sealed partial class AppController
     /// <summary>Test seam for user choices; null uses the real #349 dialogs.</summary>
     internal static Func<Window?, ConflictBucket, object?>? ConflictDialogDriver;
 
-    private AppState ResolveConflictsInteractively(PendingDataReload pending)
+    private StateMergeResolution ResolveDataMerge(PendingDataReload pending) =>
+        StateMergeResolution.Resolve(pending.Next, pending.Conflicts, pending.ExternalJson,
+            pending.ConflictPolicy, AskDataMergeConflict);
+
+    private ConflictChoice AskDataMergeConflict(ConflictBucket bucket)
     {
-        if (pending.Conflicts is not { Count: > 0 } conflicts) return pending.Next;
-        var buckets = ConflictAggregator.Group(conflicts, pending.ExternalJson);
-        var paperChoices = new Dictionary<string, PaperConflictChoice>(StringComparer.Ordinal);
-        var leafChoices = new Dictionary<string, ConflictChoice>(StringComparer.Ordinal);
-        var useEntireExternalState = false;
         var owner = _windows.Values.FirstOrDefault(w =>
             w.IsVisible && PresentationSource.FromVisual(w) is HwndSource);
-
-        foreach (var bucket in buckets)
+        var driven = ConflictDialogDriver?.Invoke(owner, bucket);
+        if (bucket is PaperBucket paper)
         {
-            switch (bucket)
-            {
-                case PaperBucket paper:
-                {
-                    var choice = ConflictDialogDriver?.Invoke(owner, paper);
-                    var result = choice is PaperConflictChoice chosen
-                        ? chosen : DataReloadPaperConflictDialog.Show(owner, paper);
-                    if (result == PaperConflictChoice.KeepExternal)
-                        paperChoices[paper.PaperId] = result;
-                    break;
-                }
-                case UnknownBaselineBucket unknown:
-                {
-                    var choice = ConflictDialogDriver?.Invoke(owner, unknown);
-                    var result = choice is ConflictChoice chosen
-                        ? chosen : DataReloadConflictDialog.Show(owner, unknown.Conflict);
-                    if (result == ConflictChoice.KeepExternal) useEntireExternalState = true;
-                    break;
-                }
-                case OrderBucket order:
-                {
-                    var choice = ConflictDialogDriver?.Invoke(owner, order);
-                    var result = choice is ConflictChoice chosen
-                        ? chosen : DataReloadConflictDialog.Show(owner, order.Conflict);
-                    if (result == ConflictChoice.KeepExternal)
-                        leafChoices[order.Conflict.Path] = result;
-                    break;
-                }
-                case SingleLeafBucket single:
-                {
-                    var choice = ConflictDialogDriver?.Invoke(owner, single);
-                    var result = choice is ConflictChoice chosen
-                        ? chosen : DataReloadConflictDialog.Show(owner, single.Conflict);
-                    if (result == ConflictChoice.KeepExternal)
-                        leafChoices[single.Conflict.Path] = result;
-                    break;
-                }
-            }
+            var result = driven is PaperConflictChoice choice
+                ? choice : DataReloadPaperConflictDialog.Show(owner, paper);
+            return result == PaperConflictChoice.KeepExternal ? ConflictChoice.KeepExternal : ConflictChoice.KeepMemory;
         }
-
-        if (useEntireExternalState && pending.ExternalJson != null)
-            return JsonSerializer.Deserialize<AppState>(
-                pending.ExternalJson.ToJsonString(StateStore.JsonOptions),
-                StateStore.JsonOptions)!;
-        var withLeaf = leafChoices.Count == 0
-            ? pending.Next
-            : JsonPath.ApplyChoices(pending.Next, conflicts, leafChoices);
-        return paperChoices.Count == 0 || pending.ExternalJson == null
-            ? withLeaf
-            : JsonPath.ApplyPaperChoices(withLeaf, paperChoices, pending.ExternalJson, conflicts);
+        var conflict = bucket switch
+        {
+            UnknownBaselineBucket unknown => unknown.Conflict,
+            OrderBucket order => order.Conflict,
+            SingleLeafBucket leaf => leaf.Conflict,
+            _ => throw new InvalidOperationException("Unknown conflict group.")
+        };
+        return driven is ConflictChoice selected ? selected : DataReloadConflictDialog.Show(owner, conflict);
     }
 
     private bool FinishDataReloadBeforeExit()
     {
         if (!IsDataReloading) return true;
-        Application.Current.Dispatcher.BeginInvoke(new Action(Exit), DispatcherPriority.Background);
+        // A modal review or asynchronous workspace handoff may take arbitrarily long.
+        // Record intent once; do not keep posting Exit and busy-spin the dispatcher.
+        _exitAfterDataReload = true;
         return false;
+    }
+
+    private void ResumeExitAfterDataReload()
+    {
+        if (!_exitAfterDataReload || IsDataReloading || IsExiting) return;
+        _exitAfterDataReload = false;
+        Application.Current.Dispatcher.BeginInvoke(new Action(Exit), DispatcherPriority.Background);
     }
 }

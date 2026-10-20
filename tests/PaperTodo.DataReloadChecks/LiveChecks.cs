@@ -13,7 +13,7 @@ internal static partial class Program
     private const BindingFlags Private = BindingFlags.Instance | BindingFlags.NonPublic;
     private const string LiveMarker = ".papertodo-data-reload-fixture";
 
-    private static void RunIsolatedLiveChecks()
+    private static void RunIsolatedLiveChecks(string fixtureArgument = "--live-fixture")
     {
         var directory = Path.Combine(Path.GetTempPath(), "PaperTodo.DataReloadChecks.Live", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
@@ -34,7 +34,7 @@ internal static partial class Program
                 WorkingDirectory = directory, UseShellExecute = false,
                 RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true
             };
-            start.ArgumentList.Add("--live-fixture");
+            start.ArgumentList.Add(fixtureArgument);
             using var process = Process.Start(start)!;
             var output = process.StandardOutput.ReadToEndAsync(); var error = process.StandardError.ReadToEndAsync();
             if (!process.WaitForExit(90_000))
@@ -102,6 +102,7 @@ internal static partial class Program
             foreach (var window in windows.Values) window.EnsureShellBuilt();
             await Dispatcher.Yield(DispatcherPriority.Background);
             controller.SaveNow(sync: true);
+            await MergePolicyLiveChecks(controller);
             var stateIdentity = controller.State;
             var paperIdentity = controller.State.Papers.Single(p => p.Id == "note-a");
             var noteA = windows["note-a"]; var noteB = windows["note-b"];

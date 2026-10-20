@@ -1590,4 +1590,10 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="DataReloadMissingBaseline" xml:space="preserve">
     <value>編集前に読み取った元のデータが指定されていないため、それぞれの変更を判別できません。現在のデータ全体を保持するか、外部データ全体を採用してください。</value>
   </data>
+  <data name="SettingsDataMergeConflicts" xml:space="preserve"><value>データ統合時の競合</value></data>
+  <data name="DataMergeConflictAsk" xml:space="preserve"><value>競合時に確認（既定）</value></data>
+  <data name="DataMergeConflictExternal" xml:space="preserve"><value>外部を優先</value></data>
+  <data name="DataMergeConflictInternal" xml:space="preserve"><value>内部を優先</value></data>
+  <data name="TipDataMergeConflicts" xml:space="preserve"><value>明示的な統合では、双方の競合しない変更を保持します。この設定は競合部分にのみ適用されます。内部は現在の PaperTodo データ、外部は取り込むファイルです。元のバージョンがない場合は必ず確認します。バックグラウンド監視や自動同期は有効になりません。</value></data>
+  <data name="DataReloadConflictEmpty" xml:space="preserve"><value>（空）</value></data>
 </root>

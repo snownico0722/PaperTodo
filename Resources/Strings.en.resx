@@ -1590,4 +1590,10 @@ When off, open at the docked edge or remembered position.</value>
   <data name="DataReloadMissingBaseline" xml:space="preserve">
     <value>The original data read before editing was not provided, so independent changes cannot be identified. Choose the entire current state or the entire external state.</value>
   </data>
+  <data name="SettingsDataMergeConflicts" xml:space="preserve"><value>Data merge conflicts</value></data>
+  <data name="DataMergeConflictAsk" xml:space="preserve"><value>Ask on conflict (default)</value></data>
+  <data name="DataMergeConflictExternal" xml:space="preserve"><value>Prefer external</value></data>
+  <data name="DataMergeConflictInternal" xml:space="preserve"><value>Prefer internal</value></data>
+  <data name="TipDataMergeConflicts" xml:space="preserve"><value>An explicit merge preserves nonconflicting changes from both sides. This setting affects conflicts only: internal means current PaperTodo data; external means the incoming file. Without the original version, always ask. Does not enable background watching or automatic sync.</value></data>
+  <data name="DataReloadConflictEmpty" xml:space="preserve"><value>(empty)</value></data>
 </root>
