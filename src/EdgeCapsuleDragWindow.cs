@@ -7,6 +7,7 @@ using System.Windows.Markup;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
+using System.Windows.Media.Imaging;
 
 namespace PaperTodo;
 
@@ -37,6 +38,8 @@ internal sealed record EdgeCapsuleDragWindowOptions
     public required Brush LabelBrush { get; init; }
     public required Brush OutlineBrush { get; init; }
     public required bool Topmost { get; init; }
+    public MasterCapsulePlayback? MasterSkinPlayback { get; init; }
+    public EdgeCapsuleEdge MasterSkinEdge { get; init; }
 }
 
 internal enum EdgeCapsuleNativeDragResult
@@ -79,6 +82,8 @@ internal sealed partial class EdgeCapsuleDragWindow : Window
     private Grid _surface = null!;
     private Border _paperBackground = null!;
     private Grid _shell = null!;
+    private Image _masterSkinImage = null!;
+    private MasterCapsuleAnimationPlayer _masterSkinPlayer = null!;
     private Grid _content = null!;
     private TextBlock _icon = null!;
     private TextBlock _label = null!;
@@ -255,6 +260,7 @@ internal sealed partial class EdgeCapsuleDragWindow : Window
         try
         {
             ParkHidden();
+            SetMasterSkinPlayback(null);
             EndDragBackground();
             ResetTransientPresentation();
             s_pooledHostLeased = false;
@@ -668,6 +674,8 @@ internal sealed partial class EdgeCapsuleDragWindow : Window
         }
 
         ResetTransientPresentation();
+        // ReturnToPool stops/clears playback, even when the next lease has equal options.
+        SetMasterSkinPlayback(options.MasterSkinPlayback, options.MasterSkinEdge);
         return reconfigured;
     }
 
@@ -740,10 +748,36 @@ internal sealed partial class EdgeCapsuleDragWindow : Window
             options.Shape.CornerRadiusDip +
             options.OutlineThickness -
             options.OutlineOverlap);
-        _outline.Visibility = options.Shape.OutlineVisible
-            ? Visibility.Visible
-            : Visibility.Collapsed;
         _configuredOptions = options;
+    }
+
+    internal bool HasMasterSkin => _masterSkinPlayer.Playback != null;
+
+    internal void SetMasterSkinPlayback(MasterCapsulePlayback? playback, EdgeCapsuleEdge? edge = null)
+    {
+        var custom = playback != null;
+        _paperBackground.Visibility = custom ? Visibility.Collapsed : Visibility.Visible;
+        _shell.Visibility = custom ? Visibility.Collapsed : Visibility.Visible;
+        _outline.Visibility = !custom && _configuredOptions?.Shape.OutlineVisible == true
+            ? Visibility.Visible : Visibility.Collapsed;
+        _masterSkinImage.Visibility = custom ? Visibility.Visible : Visibility.Collapsed;
+        if (custom)
+        {
+            var side = edge ?? _configuredOptions?.MasterSkinEdge ?? EdgeCapsuleEdge.Right;
+            var margin = _configuredOptions?.WindowChromeMargin ?? 0;
+            _masterSkinImage.Margin = side == EdgeCapsuleEdge.Right
+                ? new Thickness(0, 0, margin, 0) : new Thickness(margin, 0, 0, 0);
+            _masterSkinImage.RenderTransform = side == EdgeCapsuleEdge.Left
+                ? new ScaleTransform(-1, 1) : Transform.Identity;
+        }
+        _masterSkinPlayer.Play(playback);
+    }
+
+    internal void RefreshMasterSkinFrameRate(int rate)
+    {
+        if (_masterSkinPlayer.Playback is not { } playback) return;
+        playback.FramesPerSecond = rate;
+        _masterSkinPlayer.Refresh();
     }
 
     private void ResetTransientPresentation()
@@ -971,6 +1005,20 @@ internal sealed partial class EdgeCapsuleDragWindow : Window
         };
         Panel.SetZIndex(_outline, 20);
         _surface.Children.Add(_outline);
+
+        // Reuse this Image across queue transfers. Ordinary paper drags bind null
+        // and restore the original capsule shell, avoiding a second HWND/tree.
+        _masterSkinImage = new Image
+        {
+            Stretch = Stretch.Uniform,
+            RenderTransformOrigin = new Point(0.5, 0.5),
+            IsHitTestVisible = false,
+            Visibility = Visibility.Collapsed
+        };
+        RenderOptions.SetBitmapScalingMode(_masterSkinImage, BitmapScalingMode.HighQuality);
+        Panel.SetZIndex(_masterSkinImage, 30);
+        _surface.Children.Add(_masterSkinImage);
+        _masterSkinPlayer = new MasterCapsuleAnimationPlayer(this, _masterSkinImage);
         Content = _root;
     }
 }

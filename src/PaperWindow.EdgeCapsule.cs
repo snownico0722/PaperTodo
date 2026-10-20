@@ -523,7 +523,8 @@ public sealed partial class PaperWindow
                 _edgeCapsuleHostCapacityWidthDip,
                 _edgeCapsuleHostCapacityHeightDip,
                 expandedWidth,
-                _controller.State.DeepCapsuleTitleMeasureCharacterLimit == EdgeCapsuleTitleLimit.Hidden));
+                _controller.State.DeepCapsuleTitleMeasureCharacterLimit == EdgeCapsuleTitleLimit.Hidden,
+                _controller.MasterCapsuleExtraHeightDip));
     }
 
     private bool ApplyEdgeCapsulePresentationFrame(
@@ -751,7 +752,8 @@ public sealed partial class PaperWindow
             index,
             slotCount,
             _controller.DeepCapsuleStartTopMarginFor(_paper),
-            DeepCapsuleGap);
+            DeepCapsuleGap,
+            _controller.MasterCapsuleExtraHeightDip);
     }
 
 }

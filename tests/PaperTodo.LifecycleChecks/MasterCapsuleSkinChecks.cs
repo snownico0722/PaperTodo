@@ -1,0 +1,160 @@
+using System.IO;
+using System.Reflection;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using PaperTodo;
+
+internal static class MasterCapsuleSkinChecks
+{
+    private static void Require(bool condition, string description)
+    {
+        if (!condition) throw new InvalidOperationException(description);
+    }
+
+    internal static void Prepare()
+    {
+        var directory = AppContext.BaseDirectory;
+        Require(MasterCapsuleSkin.LoadFromDirectory(directory) == null,
+            "An absent master-capsule image must not replace the default pill");
+
+        // A 40x30 canvas has a 12x14 opaque sticker away from its transparent edges.
+        var pixels = new byte[40 * 30 * 4];
+        for (var y = 8; y < 22; y++)
+        for (var x = 19; x < 31; x++)
+        {
+            var index = (y * 40 + x) * 4;
+            pixels[index] = 220;
+            pixels[index + 1] = 120;
+            pixels[index + 2] = 25;
+            pixels[index + 3] = 255;
+        }
+        var source = BitmapSource.Create(
+            40, 30, 96, 96, PixelFormats.Bgra32, null, pixels, 40 * 4);
+        var png = new PngBitmapEncoder();
+        png.Frames.Add(BitmapFrame.Create(source));
+        var pngPath = Path.Combine(directory, "papertodomain.png");
+        using (var output = File.Create(pngPath)) png.Save(output);
+
+        // Broken optional WebP must not supersede a valid PNG.
+        File.WriteAllText(Path.Combine(directory, "papertodomain.webp"), "broken");
+        var loaded = MasterCapsuleSkin.LoadFromDirectory(directory);
+        Require(loaded is { PixelWidth: 12, PixelHeight: 14, IsFrozen: true },
+            "Transparent image margins were not cropped and frozen");
+        Require(MasterCapsuleSkin.DisplayWidthDip(loaded) >= 16 &&
+                MasterCapsuleSkin.DisplayWidthDip(loaded) <= 128,
+            "Visible master skin width must remain bounded");
+        Require(MasterCapsuleSizes.Normalize(0) == 1 &&
+                MasterCapsuleSizes.Normalize(51) == 50 &&
+                MasterCapsuleSizes.Scale(10) == 1.0 &&
+                MasterCapsuleSizes.Scale(50) == 5.0,
+            "Master-capsule size boundaries must remain 1..50 with 10 = 1x");
+    }
+
+    internal static void Verify(AppController controller)
+    {
+        var master = controller.MasterCapsuleForQueue("", EdgeCapsuleEdge.Right);
+        Require(master != null, "The master capsule was not created");
+        var pill = (Border)typeof(MasterCapsuleWindow)
+            .GetField("_pill", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(master)!;
+        Require(pill is not SkinBorder && pill.Child is Grid,
+            "An image skin must replace the master chrome without changing its host");
+        var grid = (Grid)pill.Child;
+        var art = grid.Children.OfType<Image>().SingleOrDefault();
+        Require(art?.Source is BitmapSource { PixelWidth: 12, PixelHeight: 14 },
+            "Master skin was not bound to the transparent image");
+        Require(Math.Abs(master.DesiredDockedWidth - MasterCapsuleSkin.DisplayWidthDip(
+                (BitmapSource)art.Source)) < 0.1,
+            "Master skin must use the cropped image width");
+        Require(pill.ContextMenu != null && pill.Cursor != null,
+            "Image skin must keep the master pill's interaction surface");
+
+        Require(controller.TryCreateMasterQueueFloatingDragHostOptions(
+                "", EdgeCapsuleEdge.Right, "▾", "5", out var options),
+            "Master queue drag options unavailable");
+        var floatingOptions = options with
+        {
+            Shape = options.Shape with
+            {
+                WindowWidthDip = master.DesiredDockedWidth + EdgeCapsuleLayout.WindowChromeMargin
+            },
+            MasterSkinPlayback = new MasterCapsulePlayback(MasterCapsuleSkin.Visuals.Normal!, 12),
+            MasterSkinEdge = EdgeCapsuleEdge.Right
+        };
+        var floating = EdgeCapsuleDragWindow.Rent(floatingOptions);
+        try
+        {
+            var surface = (Grid)typeof(EdgeCapsuleDragWindow)
+                .GetField("_surface", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .GetValue(floating)!;
+            Require(surface.Children.OfType<Image>().Any(image =>
+                    image.Visibility == Visibility.Visible &&
+                    ReferenceEquals(image.Source, art.Source)),
+                "The floating master must reuse the same image");
+        }
+        finally { floating.ReturnToPool(); }
+
+        // The pooled HWND is also used for ordinary paper drags; no master image
+        // or hidden shell may leak into the very next lease.
+        var ordinary = EdgeCapsuleDragWindow.Rent(options);
+        try
+        {
+            var surface = (Grid)typeof(EdgeCapsuleDragWindow)
+                .GetField("_surface", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .GetValue(ordinary)!;
+            var artAfterReuse = surface.Children.OfType<Image>().Single();
+            var shell = (Grid)typeof(EdgeCapsuleDragWindow)
+                .GetField("_shell", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .GetValue(ordinary)!;
+            Require(artAfterReuse.Source == null &&
+                    artAfterReuse.Visibility == Visibility.Collapsed &&
+                    shell.Visibility == Visibility.Visible,
+                "An ordinary paper drag inherited master-capsule artwork");
+        }
+        finally { ordinary.ReturnToPool(); }
+
+        var setting = controller.PublicSettings.Get("capsule.master_size");
+        Require(setting.Value.GetInt32() == 10 && setting.Min == 1 &&
+                setting.Max == 50 && setting.Step == 1,
+            "The size setting must expose the default and supported 1..50 range");
+        var originalWidth = master.DesiredDockedWidth;
+        controller.PublicSettings.Set(
+            "capsule.master_size",
+            System.Text.Json.JsonSerializer.SerializeToElement(50));
+        controller.ArrangeDeepCapsules(animate: false);
+        Require(controller.State.MasterCapsuleSize == 50 &&
+                Math.Abs(master.DesiredDockedWidth - originalWidth * 5) < 0.1 &&
+                Math.Abs(controller.MasterCapsuleHeightDip - 230) < 0.01,
+            "A size of 50 must scale the static image 5x in both axes");
+
+        Require(WindowWorkAreaHelper.TryGetMonitorGeometryForDevice("", out var geometry),
+            "A real monitor is required for native size verification");
+        Require(WindowNative.TryGetWindowDeviceBounds(master, out var bounds) &&
+                Math.Abs(bounds.Height - Math.Round(230 * geometry.DpiScaleY)) <= 1,
+            "The master HWND must physically grow with its artwork");
+        var margin = controller.DeepCapsuleStartTopMarginForQueue("", EdgeCapsuleEdge.Right);
+        var masterTop = EdgeCapsuleLayout.TopForIndex(
+            0, margin, geometry.LocalWorkAreaDip,
+            controller.State.Papers.Count + 1, controller.DeepCapsuleGap,
+            controller.MasterCapsuleExtraHeightDip);
+        var firstPaperTop = EdgeCapsuleLayout.TopForIndex(
+            1, margin, geometry.LocalWorkAreaDip,
+            controller.State.Papers.Count + 1, controller.DeepCapsuleGap,
+            controller.MasterCapsuleExtraHeightDip);
+        Require(firstPaperTop - masterTop >= controller.MasterCapsuleHeightDip,
+            "A larger master must reserve vertical space ahead of the first real capsule");
+        Require(master.TryGetQueueTransferDockingTarget(out var target, out _) &&
+                target.Height == bounds.Height,
+            "The master drop target must use its scaled native height");
+
+        controller.PublicSettings.Set(
+            "capsule.master_size",
+            System.Text.Json.JsonSerializer.SerializeToElement(10));
+        controller.ArrangeDeepCapsules(animate: false);
+        Require(Math.Abs(master.DesiredDockedWidth - originalWidth) < 0.1 &&
+                controller.MasterCapsuleExtraHeightDip == 0,
+            "Returning to 10 restores the original geometry");
+    }
+}

@@ -1117,6 +1117,12 @@ Per-note percentage zoom stacks on top.</value>
   <data name="TipDeepCapsuleTitleMeasureLimit" xml:space="preserve">
     <value>Limit the title shown by resting edge capsules. 0 hides the title but keeps the icon and stored title. Plus/minus cycle through Unlimited, 0, 1…20. With hover preview off, hovering reveals a shortened title; leaving restores the limit.</value>
   </data>
+  <data name="SettingsMasterCapsuleSize" xml:space="preserve">
+    <value>Master capsule size</value>
+  </data>
+  <data name="TipMasterCapsuleSize" xml:space="preserve">
+    <value>10 is the original image size (1×); 50 is 5×. Range: 1–50. Only the external papertodomain image is scaled; the default capsule is unchanged.</value>
+  </data>
   <data name="SettingsCompactMasterCapsule" xml:space="preserve">
     <value>Shorten main capsule</value>
   </data>
@@ -1541,5 +1547,11 @@ When off, open at the docked edge or remembered position.</value>
   </data>
   <data name="TopBarExternalEditor" xml:space="preserve">
     <value>Open externally</value>
+  </data>
+  <data name="SettingsMasterCapsuleAnimationSpeed" xml:space="preserve">
+    <value>Master animation speed (fps)</value>
+  </data>
+  <data name="TipMasterCapsuleAnimationSpeed" xml:space="preserve">
+    <value>1–30 frames per second (default: 12). Normal and drag animations share this speed; GIF timing is overridden.</value>
   </data>
 </root>
