@@ -38,7 +38,7 @@ internal sealed record EdgeCapsuleDragWindowOptions
     public required Brush LabelBrush { get; init; }
     public required Brush OutlineBrush { get; init; }
     public required bool Topmost { get; init; }
-    public BitmapSource? MasterSkinSource { get; init; }
+    public MasterCapsulePlayback? MasterSkinPlayback { get; init; }
     public EdgeCapsuleEdge MasterSkinEdge { get; init; }
 }
 
@@ -83,6 +83,7 @@ internal sealed partial class EdgeCapsuleDragWindow : Window
     private Border _paperBackground = null!;
     private Grid _shell = null!;
     private Image _masterSkinImage = null!;
+    private MasterCapsuleAnimationPlayer _masterSkinPlayer = null!;
     private Grid _content = null!;
     private TextBlock _icon = null!;
     private TextBlock _label = null!;
@@ -259,6 +260,7 @@ internal sealed partial class EdgeCapsuleDragWindow : Window
         try
         {
             ParkHidden();
+            SetMasterSkinPlayback(null);
             EndDragBackground();
             ResetTransientPresentation();
             s_pooledHostLeased = false;
@@ -672,6 +674,8 @@ internal sealed partial class EdgeCapsuleDragWindow : Window
         }
 
         ResetTransientPresentation();
+        // ReturnToPool stops/clears playback, even when the next lease has equal options.
+        SetMasterSkinPlayback(options.MasterSkinPlayback, options.MasterSkinEdge);
         return reconfigured;
     }
 
@@ -744,27 +748,36 @@ internal sealed partial class EdgeCapsuleDragWindow : Window
             options.Shape.CornerRadiusDip +
             options.OutlineThickness -
             options.OutlineOverlap);
-        var customMaster = options.MasterSkinSource != null;
-        _paperBackground.Visibility = customMaster ? Visibility.Collapsed : Visibility.Visible;
-        _shell.Visibility = customMaster ? Visibility.Collapsed : Visibility.Visible;
-        _outline.Visibility = customMaster
-            ? Visibility.Collapsed
-            : options.Shape.OutlineVisible ? Visibility.Visible : Visibility.Collapsed;
-        _masterSkinImage.Source = options.MasterSkinSource;
-        _masterSkinImage.Visibility = customMaster ? Visibility.Visible : Visibility.Collapsed;
-        if (customMaster)
-        {
-            // FloatingHandoffBoundsForDockedBounds adds its gutter OUTSIDE the
-            // monitor edge (right of a right-edge master, left of a left-edge master).
-            // Preserve the docked bitmap's exact position within that wider HWND.
-            _masterSkinImage.Margin = options.MasterSkinEdge == EdgeCapsuleEdge.Right
-                ? new Thickness(0, 0, options.WindowChromeMargin, 0)
-                : new Thickness(options.WindowChromeMargin, 0, 0, 0);
-            _masterSkinImage.RenderTransform = options.MasterSkinEdge == EdgeCapsuleEdge.Left
-                ? new ScaleTransform(-1, 1)
-                : Transform.Identity;
-        }
         _configuredOptions = options;
+    }
+
+    internal bool HasMasterSkin => _masterSkinPlayer.Playback != null;
+
+    internal void SetMasterSkinPlayback(MasterCapsulePlayback? playback, EdgeCapsuleEdge? edge = null)
+    {
+        var custom = playback != null;
+        _paperBackground.Visibility = custom ? Visibility.Collapsed : Visibility.Visible;
+        _shell.Visibility = custom ? Visibility.Collapsed : Visibility.Visible;
+        _outline.Visibility = !custom && _configuredOptions?.Shape.OutlineVisible == true
+            ? Visibility.Visible : Visibility.Collapsed;
+        _masterSkinImage.Visibility = custom ? Visibility.Visible : Visibility.Collapsed;
+        if (custom)
+        {
+            var side = edge ?? _configuredOptions?.MasterSkinEdge ?? EdgeCapsuleEdge.Right;
+            var margin = _configuredOptions?.WindowChromeMargin ?? 0;
+            _masterSkinImage.Margin = side == EdgeCapsuleEdge.Right
+                ? new Thickness(0, 0, margin, 0) : new Thickness(margin, 0, 0, 0);
+            _masterSkinImage.RenderTransform = side == EdgeCapsuleEdge.Left
+                ? new ScaleTransform(-1, 1) : Transform.Identity;
+        }
+        _masterSkinPlayer.Play(playback);
+    }
+
+    internal void RefreshMasterSkinFrameRate(int rate)
+    {
+        if (_masterSkinPlayer.Playback is not { } playback) return;
+        playback.FramesPerSecond = rate;
+        _masterSkinPlayer.Refresh();
     }
 
     private void ResetTransientPresentation()
@@ -1005,6 +1018,7 @@ internal sealed partial class EdgeCapsuleDragWindow : Window
         RenderOptions.SetBitmapScalingMode(_masterSkinImage, BitmapScalingMode.HighQuality);
         Panel.SetZIndex(_masterSkinImage, 30);
         _surface.Children.Add(_masterSkinImage);
+        _masterSkinPlayer = new MasterCapsuleAnimationPlayer(this, _masterSkinImage);
         Content = _root;
     }
 }

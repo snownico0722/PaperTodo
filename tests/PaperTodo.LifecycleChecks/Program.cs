@@ -11,7 +11,7 @@ internal static class Program
 {
     private const BindingFlags Private = BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic;
     private const string FixtureMarker = ".papertodo-lifecycle-fixture";
-    private static readonly string[] Cases = ["startup", "missing-monitor", "master-queue-transfer", "master-capsule-image-skin", "master-queue-cancel", "master-queue-drag-preparation", "master-queue-drop-handoff", "master-queue-membership", "master-queue-mutations", "master-queue-hide", "master-queue-disconnect", "master-queue-merge", "master-queue-merge-collapsed", "master-queue-material-handoff", "controller-hide-create-reentry", "controller-hide-show-reentry", "controller-zorder-create-reentry", "controller-close-delete-reentry", "todo-visibility", "real-exit", "early-expand", "edge-expand-foreground", "cancel-prewarm", "real-exit-scripts", "early-exit", "todo-context-menu", "todo-history"];
+    private static readonly string[] Cases = ["startup", "missing-monitor", "master-queue-transfer", "master-capsule-image-skin", "master-capsule-animation", "master-capsule-drag-only", "master-queue-cancel", "master-queue-drag-preparation", "master-queue-drop-handoff", "master-queue-membership", "master-queue-mutations", "master-queue-hide", "master-queue-disconnect", "master-queue-merge", "master-queue-merge-collapsed", "master-queue-material-handoff", "controller-hide-create-reentry", "controller-hide-show-reentry", "controller-zorder-create-reentry", "controller-close-delete-reentry", "todo-visibility", "real-exit", "early-expand", "edge-expand-foreground", "cancel-prewarm", "real-exit-scripts", "early-exit", "todo-context-menu", "todo-history"];
 
     [STAThread]
     private static int Main(string[] args)
@@ -145,6 +145,8 @@ internal static class Program
 
         if (name == "master-capsule-image-skin")
             MasterCapsuleSkinChecks.Prepare();
+        if (name is "master-capsule-animation" or "master-capsule-drag-only")
+            MasterCapsuleAnimationChecks.Prepare(name == "master-capsule-drag-only");
 
         const int count = 5;
         var state = new AppState
@@ -204,6 +206,11 @@ internal static class Program
             if (name == "master-capsule-image-skin")
             {
                 MasterCapsuleSkinChecks.Verify(controller);
+                return;
+            }
+            if (name is "master-capsule-animation" or "master-capsule-drag-only")
+            {
+                await MasterCapsuleAnimationChecks.Verify(controller, name == "master-capsule-drag-only");
                 return;
             }
             if (name == "edge-expand-foreground")

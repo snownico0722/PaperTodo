@@ -286,7 +286,16 @@ public sealed partial class AppController
             minimum: MasterCapsuleSizes.Minimum,
             maximum: MasterCapsuleSizes.Maximum,
             step: 1,
-            description: "External static master image size. 10 = 1x (default), 50 = 5x. The original master pill is unchanged.");
+            description: "External master artwork size. 10 = 1x (default), 50 = 5x. The original master pill is unchanged.");
+        yield return DefineSetting<int>("capsule.master_animation_fps",
+            () => State.MasterCapsuleAnimationFps,
+            value => State.MasterCapsuleAnimationFps = MasterCapsuleAnimationRates.Normalize(value),
+            SettingEffects.Arrange,
+            title: Strings.Get("SettingsMasterCapsuleAnimationSpeed"),
+            minimum: MasterCapsuleAnimationRates.Minimum,
+            maximum: MasterCapsuleAnimationRates.Maximum,
+            step: 1,
+            description: "Frames per second for normal and drag artwork (1–30, default 12). Overrides GIF timing.");
         yield return DefineSetting<bool>("capsule.show_while_expanded",
             () => State.ShowDeepCapsuleWhileExpanded,
             value => State.ShowDeepCapsuleWhileExpanded = value,

@@ -80,7 +80,7 @@ internal static class MasterCapsuleSkinChecks
             {
                 WindowWidthDip = master.DesiredDockedWidth + EdgeCapsuleLayout.WindowChromeMargin
             },
-            MasterSkinSource = (BitmapSource)art.Source,
+            MasterSkinPlayback = new MasterCapsulePlayback(MasterCapsuleSkin.Visuals.Normal!, 12),
             MasterSkinEdge = EdgeCapsuleEdge.Right
         };
         var floating = EdgeCapsuleDragWindow.Rent(floatingOptions);

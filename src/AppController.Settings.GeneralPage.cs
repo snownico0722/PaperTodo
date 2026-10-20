@@ -66,6 +66,14 @@ public sealed partial class AppController
                 editorWidth: 180,
                 tipKey: "TipMasterCapsuleSize",
                 topMargin: 7)));
+        rightColumn.Children.Add(BuildSettingsLiveRegion(
+            "general.masterAnimation",
+            () => CompactSettingsField(
+                Strings.Get("SettingsMasterCapsuleAnimationSpeed"),
+                CreateMasterCapsuleAnimationSpeedSlider(),
+                editorWidth: 180,
+                tipKey: "TipMasterCapsuleAnimationSpeed",
+                topMargin: 7)));
         rightColumn.Children.Add(WrapWithHint(
             _settingsCollapseExpandedDeepCapsuleOnClickCheckBox,
             "TipCollapseExpandedDeepCapsuleOnClick"));
@@ -240,6 +248,7 @@ public sealed partial class AppController
         State.UseCapsuleCollapseAll = true;
         State.CompactMasterCapsule = false;
         State.MasterCapsuleSize = MasterCapsuleSizes.Default;
+        State.MasterCapsuleAnimationFps = MasterCapsuleAnimationRates.Default;
         State.CollapseExpandedDeepCapsuleOnClick = false;
         State.EdgeCapsulePreviewPreferDownward = false;
         State.ExperimentalEdgeCapsuleHoverPreview = true;
@@ -268,16 +277,24 @@ public sealed partial class AppController
 
 
     // Persist integer values on gesture completion, not each pointer movement.
-    private UIElement CreateMasterCapsuleSizeSlider()
+    private UIElement CreateMasterCapsuleSizeSlider() => CreateMasterCapsuleIntegerSlider(
+        "capsule.master_size", MasterCapsuleSizes.Minimum, MasterCapsuleSizes.Maximum,
+        () => MasterCapsuleSizes.Normalize(State.MasterCapsuleSize));
+
+    private UIElement CreateMasterCapsuleAnimationSpeedSlider() => CreateMasterCapsuleIntegerSlider(
+        "capsule.master_animation_fps", MasterCapsuleAnimationRates.Minimum, MasterCapsuleAnimationRates.Maximum,
+        () => MasterCapsuleAnimationRates.Normalize(State.MasterCapsuleAnimationFps));
+
+    private UIElement CreateMasterCapsuleIntegerSlider(string id, int minimum, int maximum, Func<int> readValue)
     {
         var grid = new Grid { Height = 28, Margin = new Thickness(0, 4, 0, 8) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var slider = new Slider
         {
-            Minimum = MasterCapsuleSizes.Minimum,
-            Maximum = MasterCapsuleSizes.Maximum,
-            Value = MasterCapsuleSizes.Normalize(State.MasterCapsuleSize),
+            Minimum = minimum,
+            Maximum = maximum,
+            Value = readValue(),
             TickFrequency = 1,
             IsSnapToTickEnabled = true,
             IsMoveToPointEnabled = true,
@@ -285,7 +302,7 @@ public sealed partial class AppController
         };
         var valueText = new TextBlock
         {
-            Text = MasterCapsuleSizes.Normalize(State.MasterCapsuleSize).ToString(),
+            Text = readValue().ToString(),
             MinWidth = 26,
             Margin = new Thickness(8, 0, 0, 0),
             HorizontalAlignment = HorizontalAlignment.Right,
@@ -299,8 +316,8 @@ public sealed partial class AppController
         void Commit()
         {
             var selected = (int)Math.Round(slider.Value);
-            if (State.MasterCapsuleSize != selected)
-                SetSettingFromUi("capsule.master_size", selected);
+            if (readValue() != selected)
+                SetSettingFromUi(id, selected);
         }
         slider.AddHandler(
             System.Windows.Controls.Primitives.Thumb.DragCompletedEvent,

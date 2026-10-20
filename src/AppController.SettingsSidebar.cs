@@ -102,6 +102,7 @@ public sealed partial class AppController
             "title.max_length" or "capsule.title_measure_limit" or "capsule.hide_close_button" or
                 "capsule.master_compact" => "general.capsuleAppearance",
             "capsule.master_size" => "general.masterSize",
+            "capsule.master_animation_fps" => "general.masterAnimation",
             "capsule.gap" or "window.resize_grip" or "note.image_reference_text" => "visual.options",
             "edge.non_topmost" => "general.edgeTopmost",
             "scripts.run_linked_on_click" => "general.todos",

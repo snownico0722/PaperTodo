@@ -1597,4 +1597,10 @@
   <data name="TopBarExternalEditor" xml:space="preserve">
     <value>外部编辑</value>
   </data>
+  <data name="SettingsMasterCapsuleAnimationSpeed" xml:space="preserve">
+    <value>主胶囊动画速度（帧/秒）</value>
+  </data>
+  <data name="TipMasterCapsuleAnimationSpeed" xml:space="preserve">
+    <value>每秒播放 1—30 帧，默认 12 帧。普通态与拖拽态共用此速度，GIF 的原始帧间隔不再单独生效。</value>
+  </data>
 </root>

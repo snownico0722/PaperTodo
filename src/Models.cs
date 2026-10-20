@@ -528,6 +528,7 @@ public sealed class AppState
     public bool CompactMasterCapsule { get; set; }
     // 10 is the original image size; persisted with the ordinary application settings.
     public int MasterCapsuleSize { get; set; } = MasterCapsuleSizes.Default;
+    public int MasterCapsuleAnimationFps { get; set; } = MasterCapsuleAnimationRates.Default;
     public Dictionary<string, bool> CapsuleCollapseAllActiveQueues { get; set; } = new();
     public bool ShowDeepCapsuleWhileExpanded { get; set; } = true;
     public bool HideEdgeCapsuleCloseButtonOnHover { get; set; }

@@ -1548,4 +1548,10 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="TopBarExternalEditor" xml:space="preserve">
     <value>외부 편집기로 열기</value>
   </data>
+  <data name="SettingsMasterCapsuleAnimationSpeed" xml:space="preserve">
+    <value>메인 캡슐 재생 속도(fps)</value>
+  </data>
+  <data name="TipMasterCapsuleAnimationSpeed" xml:space="preserve">
+    <value>초당 1~30프레임이며 기본값은 12입니다. 일반 상태와 드래그 상태에 같은 속도를 적용하며 GIF의 원래 프레임 간격은 사용하지 않습니다.</value>
+  </data>
 </root>

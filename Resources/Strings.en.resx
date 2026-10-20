@@ -1548,4 +1548,10 @@ When off, open at the docked edge or remembered position.</value>
   <data name="TopBarExternalEditor" xml:space="preserve">
     <value>Open externally</value>
   </data>
+  <data name="SettingsMasterCapsuleAnimationSpeed" xml:space="preserve">
+    <value>Master animation speed (fps)</value>
+  </data>
+  <data name="TipMasterCapsuleAnimationSpeed" xml:space="preserve">
+    <value>1–30 frames per second (default: 12). Normal and drag animations share this speed; GIF timing is overridden.</value>
+  </data>
 </root>
