@@ -36,7 +36,7 @@ internal sealed partial class SkinBorder : PaperChromeBorder
     }
     internal bool IsAuxiliary => IsCapsule || IsMenu;
     internal double MaterialStrength => IsAuxiliary &&
-        AppController.Current?.State.MatchAuxiliaryMaterialStrength != true ? .40 : 1;
+        AppController.Current?.State.MatchAuxiliaryMaterialStrength != true ? QuietAuxiliaryMaterialStrength : 1;
     // A weaker material means more ordinary paper, not more background transmission.
     internal double PaperBackingOpacity => IsAuxiliary ? 1 - MaterialStrength * MaterialStrength : 0;
     // High contrast keeps an explicit edge for accessibility. Otherwise the preference
@@ -64,6 +64,46 @@ internal sealed partial class SkinBorder : PaperChromeBorder
             if (reference.TryGetTarget(out var surface)) surface.RefreshSkin();
     }
     private int _surfaceVersion;
+    private const double QuietAuxiliaryMaterialStrength = .40;
+    internal bool IsFormTransition { get; private set; }
+    internal Action? FormFrameRendered { get; set; }
+    private MaterialTransitionRelief? _formRelief;
+    private double _formCompactness;
+
+    // Keep the opaque fallback fill cached. Interpolate only details and paper
+    // backing so the expanded and quiet-capsule endpoints have identical paint.
+    // Neither the window nor its editable content changes opacity.
+    private double FormMaterialStrength => 1 - _formCompactness *
+        (AppController.Current?.State.MatchAuxiliaryMaterialStrength == true
+            ? 0 : 1 - QuietAuxiliaryMaterialStrength);
+    private double PaintedMaterialStrength => IsFormTransition
+        ? PaperSkins.UsesNativeBackdrop(Skin) ? FormMaterialStrength : 1
+        : MaterialStrength;
+    private double PaintedPaperBackingOpacity => IsFormTransition
+        ? PaperSkins.UsesNativeBackdrop(Skin) ? 1 - FormMaterialStrength * FormMaterialStrength : 0
+        : PaperBackingOpacity;
+
+    internal void SetFormTransitionCompactness(double compactness)
+    {
+        if (!IsFormTransition) return;
+        compactness = Math.Clamp(compactness, 0, 1);
+        if (_formCompactness == compactness) return;
+        _formCompactness = compactness;
+        InvalidateVisual();
+    }
+
+    internal void SetFormTransition(bool active)
+    {
+        if (IsFormTransition == active) return;
+        IsFormTransition = active;
+        _formCompactness = active && IsCapsule ? 1 : 0;
+        _formRelief = null;
+        _brushKey = null;
+        _surfaceVersion++;
+        if (!active) FormFrameRendered = null;
+        InvalidateVisual();
+    }
+
     private bool _dark, _highContrast, _animateReflection;
     private (string Skin, bool Dark, bool Capsule, bool Menu, double Strength, Color Background,
         MaterialPalette Palette, Brush Paper, Brush Active, bool Lightweight, bool EdgeActive)? _brushKey;
@@ -121,6 +161,7 @@ internal sealed partial class SkinBorder : PaperChromeBorder
         if (_appearance != appearance)
         {
             _appearance = appearance;
+            _formRelief = null;
             // Cache keys own invalidation. Palette changes do not destroy geometry and
             // geometry changes do not destroy size-independent brushes.
             _surfaceVersion++;
@@ -136,6 +177,20 @@ internal sealed partial class SkinBorder : PaperChromeBorder
     }
 
     protected override void OnRender(DrawingContext dc)
+    {
+        RenderSurface(dc);
+        // Notify only after THIS surface recorded an opaque fallback drawing. A
+        // generic Rendering event can belong to another HWND. The adapter queues
+        // its native handoff after this WPF render operation, never inside paint.
+        if (IsFormTransition && ActualWidth > 0 && ActualHeight > 0 &&
+            Background is SolidColorBrush { Color.A: 255 } && FormFrameRendered is { } ready)
+        {
+            FormFrameRendered = null;
+            ready();
+        }
+    }
+
+    private void RenderSurface(DrawingContext dc)
     {
         PresentPreparedMenuBackground();
         if (IsMenu)
@@ -168,6 +223,7 @@ internal sealed partial class SkinBorder : PaperChromeBorder
         if (!decorated && !(systemMaterial && IsAuxiliary))
         {
             if (ActualWidth <= 0 || ActualHeight <= 0) return;
+            DrawMaterialShadow(dc);
             EnsureGeometry();
             // BorderThickness keeps its layout role, but the outer stroke itself is absent.
             dc.DrawGeometry(Background, null, _shape);
@@ -176,6 +232,7 @@ internal sealed partial class SkinBorder : PaperChromeBorder
             return;
         }
         if (ActualWidth <= 0 || ActualHeight <= 0) return;
+        DrawMaterialShadow(dc);
         EnsureGeometry();
         var background = Background is SolidColorBrush solid
             ? solid.Color : ((SolidColorBrush)Theme.PaperBrush).Color;
@@ -198,7 +255,7 @@ internal sealed partial class SkinBorder : PaperChromeBorder
         if (IsAuxiliary && !UseLightweightMaterial && BackgroundVisual == null && !HasAuxiliaryTransmission)
             dc.DrawGeometry(Background ?? Theme.PaperBrush, null, _shape);
         PaintMaterialBase(dc);
-        dc.PushOpacity(MaterialStrength);
+        dc.PushOpacity(PaintedMaterialStrength);
         if (Skin == PaperSkins.TracingPaper && !UseLightweightMaterial)
             dc.DrawRectangle(_dark ? DarkFibers : LightFibers, null, new Rect(RenderSize));
         dc.DrawRectangle(_shine, null, new Rect(RenderSize));
@@ -223,9 +280,10 @@ internal sealed partial class SkinBorder : PaperChromeBorder
             dc.DrawGeometry(_fill, null, _shape);
             // Quiet mode blends the COMPLETE material color toward semantic paper.
             // Putting paper underneath an almost opaque Mica tint cannot quiet that tint.
-            if (PaperBackingOpacity > 0)
+            var backingOpacity = PaintedPaperBackingOpacity;
+            if (backingOpacity > 0)
             {
-                dc.PushOpacity(PaperBackingOpacity);
+                dc.PushOpacity(backingOpacity);
                 dc.DrawGeometry(Theme.PaperBrush, null, _shape);
                 dc.Pop();
             }

@@ -382,7 +382,7 @@ internal sealed partial class SkinBorder
 
             using var dc = _finish.RenderOpen();
             _owner.PaintMaterialBase(dc);
-            dc.PushOpacity(_owner.MaterialStrength);
+            dc.PushOpacity(_owner.PaintedMaterialStrength);
             if (_owner.Skin == PaperSkins.TracingPaper && !_owner.UseLightweightMaterial)
                 dc.DrawRectangle(_owner._dark ? DarkFibers : LightFibers, null, new Rect(_owner.RenderSize));
             dc.DrawRectangle(_owner._shine, null, new Rect(_owner.RenderSize));

@@ -20,6 +20,7 @@ internal sealed class MaterialContextMenu : ContextMenu
 {
     private MaterialMenuOpening? _opening;
     internal bool IsOpening => _opening?.IsPending == true;
+    internal Action? BeforeWpfOpen { get; set; }
     static MaterialContextMenu() => IsOpenProperty.OverrideMetadata(typeof(MaterialContextMenu),
         new FrameworkPropertyMetadata(false, null, CoerceOpen));
     private static object CoerceOpen(DependencyObject d, object value)
@@ -28,7 +29,14 @@ internal sealed class MaterialContextMenu : ContextMenu
         menu.ConfigurePopupAnimation();
         menu._opening ??= new MaterialMenuOpening(menu, IsOpenProperty, () => menu,
             () => menu.PlacementTarget, () => menu.Placement);
-        return menu._opening.Coerce((bool)value);
+        var open = menu._opening.Coerce((bool)value);
+        if (open && value is true && !menu.IsOpen)
+        {
+            // ContextMenuService / delayed material preparation both reach this point
+            // before the real Popup opens or WPF takes mouse capture.
+            menu.BeforeWpfOpen?.Invoke();
+        }
+        return open;
     }
     protected override void OnVisualParentChanged(DependencyObject oldParent)
     {

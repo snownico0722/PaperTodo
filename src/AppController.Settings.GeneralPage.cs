@@ -164,6 +164,9 @@ public sealed partial class AppController
             "general.telemetry",
             CreateAnonymousUsageStatisticsSettingsRow));
 
+        leftColumn.Children.Add(BuildSettingsLiveRegion(
+            "general.topbar", BuildTopBarShortcutSettings));
+
         if (State.AdvancedSettingsMode)
         {
             leftColumn.Children.Add(SettingsSectionLabel(
@@ -191,26 +194,6 @@ public sealed partial class AppController
                     topMargin: 8)));
         }
 
-        leftColumn.Children.Add(SettingsSectionLabel(Strings.Get("SettingsTopBarButtons")));
-        leftColumn.Children.Add(WrapWithHint(
-            SettingsToggle(
-                Strings.Get("SettingsShowTopBarNewTodoButton"),
-                State.ShowTopBarNewTodoButton,
-                ToggleTopBarNewTodoButton),
-            "TipNewTodoButton"));
-        leftColumn.Children.Add(WrapWithHint(
-            SettingsToggle(
-                Strings.Get("SettingsShowTopBarNewNoteButton"),
-                State.ShowTopBarNewNoteButton,
-                ToggleTopBarNewNoteButton),
-            "TipNewNoteButton"));
-        leftColumn.Children.Add(WrapWithHint(
-            SettingsToggle(
-                Strings.Get("SettingsShowTopBarExternalOpenButton"),
-                State.ShowTopBarExternalOpenButton,
-                ToggleTopBarExternalOpenButton),
-            "TipExternalOpenButton"));
-
         RefreshSettingsSystemVisibilityToggleStates();
         return leftColumn;
     }
@@ -237,6 +220,10 @@ public sealed partial class AppController
         State.ShowTopBarNewTodoButton = true;
         State.ShowTopBarNewNoteButton = true;
         State.ShowTopBarExternalOpenButton = true;
+        State.TopBarShortcutOrder = PaperTopBarShortcuts.NormalizeOrder(null);
+        State.TopBarPinnedCount = 1;
+        State.TodoTopBarShortcuts = null;
+        State.NoteTopBarShortcuts = null;
         State.UseCapsuleMode = true;
         State.UseDeepCapsuleMode = true;
         State.ShowDeepCapsuleWhileExpanded = true;

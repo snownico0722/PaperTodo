@@ -16,6 +16,9 @@ internal static class Program
     [STAThread]
     private static int Main(string[] args)
     {
+        if (args.Length == 3 && args[0] == "--external-menu-window")
+            return RunExternalMenuWindow(args[1], args[2]);
+
         // Read the real resource definitions, but not the Application subclass/BAML root:
         // pumping an App would start a second production controller in this test process.
         var noRaster = args.Contains("--no-raster", StringComparer.Ordinal);
@@ -395,10 +398,11 @@ internal static class Program
                 }
                 Check("retained scene efficiency and source ownership", () => MaterialPipelineChecks.Run(controller));
                 Check("stable sampling, retained settings shell and cancelled menu opening", () => MaterialPresentationChecks.Run(controller));
+                Check("paper form rendering and native fallback publication", () => FormTransitionRenderingChecks.Run(controller));
                 Check("paper form animations defer material capture until the endpoint", () => PaperFormMaterialChecks.Run(controller));
-                // Final DWM desktop screenshots were retired on main after repeated
-                // failures on unchanged code. Keep the native behavior and WPF offscreen
-                // checks above; never restore desktop-pixel CI assertions here.
+                // Final DWM desktop screenshots are not deterministic on shared Windows CI:
+                // WPF can be rendered and active without having been committed to CopyFromScreen.
+                // The native behavior checks above and WPF raster tests remain; see D-057.
                 if (noRaster)
                     Console.WriteLine("SKIP optional WPF offscreen raster assertions (--no-raster).");
                 Check("non-Mica startup keeps the original layered paper", () =>
@@ -416,6 +420,35 @@ internal static class Program
         }
         catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
         finally { Directory.Delete(temp, recursive: true); }
+    }
+    private static int RunExternalMenuWindow(string left, string top)
+    {
+        // A different process (rather than a second WPF Window on our own UI thread)
+        // exercises the native foreground/capture boundary of a NOACTIVATE capsule.
+        var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+        var window = new Window
+        {
+            Left = double.Parse(left, System.Globalization.CultureInfo.InvariantCulture),
+            Top = double.Parse(top, System.Globalization.CultureInfo.InvariantCulture),
+            Width = 190,
+            Height = 120,
+            Topmost = true,
+            ShowInTaskbar = false,
+            Content = new Border { Background = Brushes.DimGray }
+        };
+        window.Show();
+        app.Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(() =>
+        {
+            Console.WriteLine("READY " + new WindowInteropHelper(window).Handle.ToInt64());
+            Console.Out.Flush();
+        }));
+        _ = Task.Run(async () =>
+        {
+            await Console.In.ReadLineAsync();
+            await app.Dispatcher.InvokeAsync(app.Shutdown);
+        });
+        app.Run();
+        return 0;
     }
     internal static void Pump()
     {

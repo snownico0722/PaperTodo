@@ -67,6 +67,7 @@ internal static partial class Program
             ServiceBehavior();
             StartupApprovalBehavior();
             CatalogBehavior();
+            TopBarShortcutBehavior();
             TodoMoveBehavior();
             AdapterBehavior();
             SharedUiSettingBehavior();
@@ -79,6 +80,128 @@ internal static partial class Program
             return 0;
         }
         catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
+    }
+
+    private static void TopBarShortcutBehavior()
+    {
+        var state = new AppState();
+        Check(PaperTopBarShortcuts.Pinned(state).SequenceEqual(
+                  [PaperTopBarShortcuts.Association]) &&
+              PaperTopBarShortcuts.Menu(state).SequenceEqual(
+                  [PaperTopBarShortcuts.NewNote, PaperTopBarShortcuts.NewTodo,
+                   PaperTopBarShortcuts.ExternalEditor]) &&
+              PaperTopBarShortcuts.NormalizeOrder(null).SequenceEqual(
+                  state.TopBarShortcutOrder),
+            "New installations pin only association and order Note, Todo, external editor in the menu.");
+        Check(PaperTopBarShortcuts.MoveTo(state, PaperTopBarShortcuts.NewNote, true, 1) &&
+              PaperTopBarShortcuts.Pinned(state).SequenceEqual(
+                  [PaperTopBarShortcuts.Association, PaperTopBarShortcuts.NewNote]) &&
+              PaperTopBarShortcuts.Menu(state).SequenceEqual(
+                  [PaperTopBarShortcuts.NewTodo, PaperTopBarShortcuts.ExternalEditor]),
+            "Dragging a menu command above the divider pins it at the insertion slot.");
+        Check(PaperTopBarShortcuts.MoveTo(state, PaperTopBarShortcuts.Association, false, 0) &&
+              PaperTopBarShortcuts.Pinned(state).SequenceEqual(
+                  [PaperTopBarShortcuts.NewNote]) &&
+              PaperTopBarShortcuts.Menu(state).SequenceEqual(
+                  [PaperTopBarShortcuts.Association, PaperTopBarShortcuts.NewTodo,
+                   PaperTopBarShortcuts.ExternalEditor]),
+            "Dragging to the lower group moves only one action without changing other ordering.");
+        Check(!PaperTopBarShortcuts.MoveTo(state, PaperTopBarShortcuts.Association, false, 0),
+            "Dropping in the same slot is a true no-op.");
+        Check(PaperTopBarShortcuts.MoveTo(state, PaperTopBarShortcuts.NewTodo, true, 0) &&
+              PaperTopBarShortcuts.Pinned(state).SequenceEqual(
+                  [PaperTopBarShortcuts.NewTodo, PaperTopBarShortcuts.NewNote]),
+            "Reordering within one group preserves divider membership.");
+        Check(PaperTopBarShortcuts.Contains(state, PaperTypes.Note,
+                  PaperTopBarShortcuts.NewNote) &&
+              !PaperTopBarShortcuts.Contains(state, PaperTypes.Todo,
+                  PaperTopBarShortcuts.ExternalEditor) &&
+              !PaperTopBarShortcuts.IsApplicable(PaperTypes.Todo,
+                  PaperTopBarShortcuts.ExternalEditor),
+            "One global selection filters commands unavailable on the current paper.");
+        Check(PaperTopBarShortcuts.NormalizeOrder(
+                  [PaperTopBarShortcuts.ExternalEditor, PaperTopBarShortcuts.ExternalEditor,
+                   PaperTopBarShortcuts.PluginActions, "unknown"])
+                  .SequenceEqual(
+                  [PaperTopBarShortcuts.ExternalEditor, PaperTopBarShortcuts.Association,
+                   PaperTopBarShortcuts.NewNote, PaperTopBarShortcuts.NewTodo]),
+            "Duplicates and obsolete plugin pins never enter the new global configuration.");
+
+        var controller = Controller();
+        controller.State.TopBarShortcutOrder =
+            [PaperTopBarShortcuts.Association, PaperTopBarShortcuts.NewTodo,
+             PaperTopBarShortcuts.NewNote, PaperTopBarShortcuts.ExternalEditor];
+        controller.State.TopBarPinnedCount = 1;
+        var priorOrder = controller.State.TopBarShortcutOrder.ToArray();
+        var failed = SettingsFor(controller, () => false, _ => { });
+        Throws<PaperSettingsException>(
+            () => failed.Set("topbar.new_note", Json(true)), "save_failed");
+        Check(controller.State.TopBarPinnedCount == 1 &&
+              controller.State.TopBarShortcutOrder.SequenceEqual(priorOrder),
+            "Failed legacy API writes restore both global order and divider.");
+
+        var commits = 0;
+        var service = SettingsFor(controller, () => { commits++; return true; }, _ => { });
+        Check(service.Set("topbar.new_note", Json(true)).Changed &&
+              PaperTopBarShortcuts.IsPinned(controller.State, PaperTopBarShortcuts.NewNote) &&
+              controller.State.TopBarPinnedCount == 2 && commits == 1,
+            "Legacy topbar.new_note moves the action across the global divider.");
+        Check(!service.Set("topbar.new_note", Json(true)).Changed && commits == 1,
+            "Repeated legacy API writes are genuine no-ops.");
+        Check(service.Set("topbar.new_todo", Json(false)).Changed == false,
+            "Unpinned action remains unpinned on an explicit false legacy write.");
+        Check(service.Set("topbar.external_open", Json(true)).Changed &&
+              PaperTopBarShortcuts.IsPinned(controller.State, PaperTopBarShortcuts.ExternalEditor),
+            "The old external-open alias also updates the single global layout.");
+
+        var temp = Path.Combine(Path.GetTempPath(), "PaperTodo-TopBar-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(temp);
+        try
+        {
+            var legacy = new AppState
+            {
+                TodoTopBarShortcuts =
+                    [PaperTopBarShortcuts.Association, PaperTopBarShortcuts.NewTodo,
+                     PaperTopBarShortcuts.PluginActions],
+                NoteTopBarShortcuts =
+                    [PaperTopBarShortcuts.Association, PaperTopBarShortcuts.ExternalEditor,
+                     PaperTopBarShortcuts.NewNote, PaperTopBarShortcuts.PluginActions]
+            };
+            var options = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+            var root = System.Text.Json.Nodes.JsonNode.Parse(
+                JsonSerializer.Serialize(legacy, options))!.AsObject();
+            root.Remove("topBarShortcutOrder");
+            root.Remove("topBarPinnedCount");
+            File.WriteAllText(Path.Combine(temp, "data.json"), root.ToJsonString());
+            var store = new StateStore(temp, DurableAtomicFileWriter.Shared);
+            var loaded = store.Load();
+            Check(PaperTopBarShortcuts.Pinned(loaded).SequenceEqual(
+                      [PaperTopBarShortcuts.Association, PaperTopBarShortcuts.NewTodo,
+                       PaperTopBarShortcuts.ExternalEditor, PaperTopBarShortcuts.NewNote]) &&
+                  loaded.TodoTopBarShortcuts == null && loaded.NoteTopBarShortcuts == null,
+                "Different Todo and Note layouts migrate to one union; old lists stop being authoritative.");
+
+            PaperTopBarShortcuts.MoveTo(loaded, PaperTopBarShortcuts.NewNote, false, 0);
+            File.WriteAllText(Path.Combine(temp, "data.json"),
+                JsonSerializer.Serialize(loaded, options));
+            var reloaded = store.Load();
+            Check(reloaded.TopBarPinnedCount == 3 &&
+                  PaperTopBarShortcuts.Menu(reloaded).SequenceEqual([PaperTopBarShortcuts.NewNote]) &&
+                  reloaded.TodoTopBarShortcuts == null,
+                "A deliberate menu position survives restart without migrating again.");
+
+            root.Remove("todoTopBarShortcuts");
+            root.Remove("noteTopBarShortcuts");
+            root["showTopBarNewTodoButton"] = false;
+            root["showTopBarNewNoteButton"] = true;
+            root["showTopBarExternalOpenButton"] = false;
+            File.WriteAllText(Path.Combine(temp, "data.json"), root.ToJsonString());
+            var older = store.Load();
+            Check(PaperTopBarShortcuts.Pinned(older).SequenceEqual(
+                [PaperTopBarShortcuts.Association, PaperTopBarShortcuts.NewNote]),
+                "Pre-341 visibility booleans migrate through the same one-time global path.");
+        }
+        finally { Directory.Delete(temp, recursive: true); }
     }
 
     private static void PostCommitFailureDoesNotReplay()

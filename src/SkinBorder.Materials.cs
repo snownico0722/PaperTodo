@@ -39,7 +39,7 @@ internal sealed partial class SkinBorder
             _shine = _header = Brushes.Transparent;
             return;
         }
-        var opaque = !PaperSkins.UsesNativeBackdrop(Skin) || background.A == 255;
+        var opaque = IsFormTransition || !PaperSkins.UsesNativeBackdrop(Skin) || background.A == 255;
         byte alpha = EffectiveTransmissionAlpha(opaque, palette.TransmissionAlpha);
         _fill = Frozen(new SolidColorBrush(WithAlpha(paper, alpha)));
         _shine = _header = Brushes.Transparent;
@@ -128,6 +128,14 @@ internal sealed partial class SkinBorder
         {
             dc.DrawRectangle(_aeroReadabilityVeil, null, new Rect(RenderSize));
             var dpi = VisualTreeHelper.GetDpi(this);
+            if (IsFormTransition)
+            {
+                _formRelief ??= new MaterialTransitionRelief(
+                    MaterialRelief.Create(RenderSize, CornerRadius, BorderThickness, dpi, _dark),
+                    RenderSize, CornerRadius);
+                _formRelief.Draw(dc, RenderSize, CornerRadius);
+                return;
+            }
             var key = (RenderSize, CornerRadius, BorderThickness, dpi.DpiScaleX, dpi.DpiScaleY, Skin, _dark);
             if (_reliefKey != key)
             {

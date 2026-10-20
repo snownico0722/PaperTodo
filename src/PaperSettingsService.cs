@@ -19,6 +19,9 @@ internal sealed class PaperSettingDefinition
     internal required Func<JsonElement> Read { get; init; }
     internal required Func<JsonElement, JsonElement> Validate { get; init; }
     internal required Func<JsonElement, PaperSettingChange> Begin { get; set; }
+    // Optional composite-setting equality. A legacy boolean may represent two values,
+    // so its getter alone is insufficient for deciding that a write is a no-op.
+    internal Func<JsonElement, bool>? IsNoOp { get; init; }
     internal Func<string?>? Unavailable { get; init; }
 
     internal PaperSettingSnapshot Snapshot()
@@ -76,7 +79,8 @@ internal sealed class PaperSettingsService
             throw Error("setting_read_only", before.UnavailableReason ?? "This setting is read-only.");
         // Validate once before changing state; the persistence owner synchronizes content when saving.
         var normalized = definition.Validate(value);
-        if (JsonElement.DeepEquals(before.Value, normalized))
+        if (definition.IsNoOp?.Invoke(normalized) ??
+            JsonElement.DeepEquals(before.Value, normalized))
             return new PaperSettingChangeResult(before, before.Value, false);
         _changing = true;
         try

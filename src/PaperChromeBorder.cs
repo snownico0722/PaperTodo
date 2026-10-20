@@ -8,7 +8,7 @@ namespace PaperTodo;
 
 // The outer Border still owns the shell's original layout and shadow. Only the
 // empty background Border is arranged shorter; the editor never changes size.
-internal class PaperChromeBorder : Border
+internal partial class PaperChromeBorder : Border
 {
     private readonly Border _surface = new() { IsHitTestVisible = false, Visibility = Visibility.Collapsed };
     private Geometry? _contentClip;
@@ -37,6 +37,7 @@ internal class PaperChromeBorder : Border
 
     protected override void OnRender(DrawingContext drawingContext)
     {
+        DrawMaterialShadow(drawingContext);
         if (_surface.Visibility != Visibility.Visible)
             base.OnRender(drawingContext);
     }

@@ -1500,6 +1500,48 @@ When off, open at the docked edge or remembered position.</value>
   <data name="SkinCaptureNotice" xml:space="preserve">
     <value>Capsules and menus take a temporary local snapshot of the background behind them; capsule dragging takes one low-resolution virtual-desktop snapshot. It is used only in local memory and is never saved or uploaded.</value>
   </data>
+  <data name="MenuPaperActions" xml:space="preserve">
+    <value>Paper actions</value>
+  </data>
+  <data name="MenuCustomizeTopBar" xml:space="preserve">
+    <value>Customize title bar</value>
+  </data>
+  <data name="MenuReorderTopBar" xml:space="preserve">
+    <value>Reorder shortcuts</value>
+  </data>
+  <data name="MenuTopBarMoveLeft" xml:space="preserve">
+    <value>Move left</value>
+  </data>
+  <data name="MenuTopBarMoveRight" xml:space="preserve">
+    <value>Move right</value>
+  </data>
+  <data name="MenuTopBarAssociationDrag" xml:space="preserve">
+    <value>Hold and drag to associate</value>
+  </data>
+  <data name="MenuTopBarPluginActions" xml:space="preserve">
+    <value>Plugin actions</value>
+  </data>
+  <data name="TopBarSettingsTitle" xml:space="preserve">
+    <value>Top-bar shortcuts</value>
+  </data>
+  <data name="TipTopBarShortcutSettings" xml:space="preserve">
+    <value>Drag actions to reorder them or move them across the divider to switch between the title bar and menu. If space is limited, pinned built-in shortcuts move to the menu together.</value>
+  </data>
+  <data name="TopBarShownHeading" xml:space="preserve">
+    <value>Show in title bar</value>
+  </data>
+  <data name="TopBarMenuHeading" xml:space="preserve">
+    <value>Show in menu</value>
+  </data>
+  <data name="TopBarEmptyDropArea" xml:space="preserve">
+    <value>Drag an action here</value>
+  </data>
+  <data name="TopBarAssociation" xml:space="preserve">
+    <value>Drag to associate</value>
+  </data>
+  <data name="TopBarExternalEditor" xml:space="preserve">
+    <value>Open externally</value>
+  </data>
   <data name="DataReloadConflictTitle" xml:space="preserve">
     <value>PaperTodo data conflict</value>
   </data>

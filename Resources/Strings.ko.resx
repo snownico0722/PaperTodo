@@ -1500,6 +1500,48 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="SkinCaptureNotice" xml:space="preserve">
     <value>캡슐과 메뉴는 표시할 때 뒤쪽의 로컬 배경을 한 번만 캡처하며, 캡슐을 드래그할 때는 저해상도 가상 데스크톱을 한 번만 캡처합니다. 로컬 메모리에서만 사용하며 저장하거나 업로드하지 않습니다.</value>
   </data>
+  <data name="MenuPaperActions" xml:space="preserve">
+    <value>메모 메뉴</value>
+  </data>
+  <data name="MenuCustomizeTopBar" xml:space="preserve">
+    <value>상단 바 사용자 지정</value>
+  </data>
+  <data name="MenuReorderTopBar" xml:space="preserve">
+    <value>버튼 순서 변경</value>
+  </data>
+  <data name="MenuTopBarMoveLeft" xml:space="preserve">
+    <value>왼쪽으로 이동</value>
+  </data>
+  <data name="MenuTopBarMoveRight" xml:space="preserve">
+    <value>오른쪽으로 이동</value>
+  </data>
+  <data name="MenuTopBarAssociationDrag" xml:space="preserve">
+    <value>누른 채 끌어서 연결</value>
+  </data>
+  <data name="MenuTopBarPluginActions" xml:space="preserve">
+    <value>플러그인 작업</value>
+  </data>
+  <data name="TopBarSettingsTitle" xml:space="preserve">
+    <value>상단 바 바로가기</value>
+  </data>
+  <data name="TipTopBarShortcutSettings" xml:space="preserve">
+    <value>항목을 드래그하여 순서를 바꾸거나 구분선을 넘어 이동하면 상단 바와 메뉴 사이에서 표시 위치를 변경할 수 있습니다. 공간이 부족하면 고정한 기본 바로가기가 한꺼번에 메뉴로 이동합니다.</value>
+  </data>
+  <data name="TopBarShownHeading" xml:space="preserve">
+    <value>상단 바에 표시</value>
+  </data>
+  <data name="TopBarMenuHeading" xml:space="preserve">
+    <value>메뉴에 표시</value>
+  </data>
+  <data name="TopBarEmptyDropArea" xml:space="preserve">
+    <value>항목을 여기로 끌기</value>
+  </data>
+  <data name="TopBarAssociation" xml:space="preserve">
+    <value>연결 드래그</value>
+  </data>
+  <data name="TopBarExternalEditor" xml:space="preserve">
+    <value>외부 편집기로 열기</value>
+  </data>
   <data name="DataReloadConflictTitle" xml:space="preserve">
     <value>PaperTodo 데이터 충돌</value>
   </data>
