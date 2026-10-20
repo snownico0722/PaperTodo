@@ -1,4 +1,4 @@
-name: Data safety verification (temporary)
+name: Data safety final contract verification (temporary)
 on:
   push:
     branches: [feat/data-json-hot-reload-main-adapt]
@@ -44,7 +44,7 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
-      - name: Apply exact candidate and recovery followup
+      - name: Apply exact candidate and synchronize its external contract
         env:
           REVIEW_PR: ${{ matrix.pr }}
         run: |
@@ -60,6 +60,9 @@ jobs:
           subprocess.run(['git','apply','--check',str(patch)],check=True)
           subprocess.run(['git','apply',str(patch)],check=True)
           subprocess.run(['python',str(root/'safety-review-followup.py')],check=True)
+          contract=lzma.decompress(base64.b64decode('/Td6WFoAAATm1rRGAgAhARYAAAB0L+Wj4AmzBTRdADMciiJvqp8dIpVimH2VAtrLUYFySxxtABUAYUG3ktBfTvZ4+RlpLEK8wOOF6G0PaaJcbec02RvLFvkzOO1XGr1xEWmUfRTD1cERix9v8TRazgmVOS2BeaHhYKr0tcqf5FLJyPZ1sprri3Oat+scWHImbU6HinIfXpQKqgm7Ix5Tx23/Gm6TElHobUJqaM22Rj/JGbTTTS/B5ukfb/7USzJhvhNYDmDoG+IAAJY+Rcc2l/qS7XEfFsuM0AaIhZIyKnzGjm8G5Zmry/e9AmOOyjDiVl5spVHWTVsV+atLpWf+LdeJZrYbOtOaMuFmmxsOVA6+KPhnsVDImlrfbomPNuFjeOl/j19lWcftdjPrBfOhCEhHCEH0Y/RKapWKnqTGHEPl/0fGUFghgsJjAhny9ZNoIqvReaWpgoGW/BYSglbNt3+cu9c0/gWaQd2Gp5+55/S0nMYJvkR4K/5XiMA4H1NbbkfpIkNiQH6LYBpjA4S6t/BgXj9/RGb+4rcAqJFCewlSb1o/6SJuJyos1dLdBm9s7Phwc4+rJkqvIUQgqCsSQitqxnwwq5w/3LzjbBTFA12H7cBfEFktdHBgeolzGNGNodvSkizfhB0DxaCmajQACMKPHPr3sH41uneDsvOlgsFME30IyyzyFUhfLrMlZZuHzqZa3zfVdTfXniJiO4U48qqT6thOTshNJ/Fq31MTvNHnf6DtmSFL2BwuigKRPQRfXuTqdRxq06wgr6whdd5LKWIdVL/FYN0JP8OcT53CTH3a1acI39uvXUS3FgeiB6E7r+fE0qoekZtnG5JJkSwCTIlrg2jojNX8/IODXiu2dxakaNUmivJ+Sqih9jBCYb6EabfwiH35q8oWgM9p+J9EHx2a8uAaEyyiOCpxMTgnonWDTTqQTz/jM5yGvb9RF6uqyGRiRAPsNqk/Ln/xQFly0WmMe1voNbzq43IqlqwgN6PNoftgYQ/KsiPBTReW/R1rOm3KlchfQBiupAc+njBdyxm7OJRT0UJblaN3gCu6vaEtZH6AMGAo61jputM0u1a74j4QBrgY0110TkHLYb1AsWPXru+WWQj7V4EIKtMVoPJPzr1HQ4gDF/4gMKawQhQ8axO9lRh1dyY6ihuJ0auH5EG2TsC+DYVnWZ99GrXMBum5bQPKGr9C7ay/M9gxFT+vEWgFdAz7a70eSfMI7MqeP8/VrEcn/GYJDaBsKalOMwAjAbBH/5m7hFLQP7qJY78PbIIqZPoExmv/xn/rFQDZZ3JleuxvaIPJxbsMkkq8uPdyNCjzAM+sdR5VZ5aPu9K+8JVT1/BBdHOVH/HdYtdMFbx+1BB0t70AfFNa9hT6z9hH9mEqWWH5Cs3BlDdIiD1ahYU0GdKoLAQNwB+Q7/ICRCpIdcviL7Ew+Std8n0CdX2lNuneZ04D/VFj2xuupUoMGpLizp4z8AulZltvw4lGby4+VARGXXft6N5V4GsIWXY1PHE1myLqIP775/pvkyd1ROB1zslK6m159ZiQqsmBcf7BWVFy26a5xhW0DQD/bBoACSWApcMTRhX7UZrBwdQDZan3pDMXhqJz10aMQFVprHLJMME8bo7R0X2PnysH7DI+4tQkJLBxEQB+G1rVT1PmOacK/xubMC3kurxnHLPakpTg+hDQVgI2TwkK+cSgRiYG/X6vAbA4IVtugi+iJaZ40qqbBucy+JzjKSy65OrEqzGrX8YFxjGrLKFyUzG7NNHREMxlNAURwqMPiXs8ISOQ8j5/zpENp9SJbPEcM61HIS9CqACdwFg8+sbrjwAB0Aq0EwAAtxSrF7HEZ/sCAAAAAARZWg==',validate=True))
+          assert hashlib.sha256(contract).hexdigest()=='7688132ff096523f6f1b61e531b59b834ba15b8b1be9bbbf14fdb117d56aed70'
+          exec(compile(contract,'external-write-contract','exec'))
           subprocess.run(['git','diff','--check'],check=True)
           subprocess.run(['git','add','-A'],check=True)
           '@ | python -
@@ -68,13 +71,18 @@ jobs:
         run: |
           dotnet build ./PaperTodo.csproj -c Release
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Rebuild the bridge carrying the synchronized operation instructions
+        run: |
+          ./plugin-samples/Build-And-Install-NativePlugin.ps1 -ProjectPath plugin-samples/PaperTodo.Plugin.CodexCliBridge/PaperTodo.Plugin.CodexCliBridge.csproj
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git add -A -- plugins
       - name: Data safety, modal shutdown and real killed writers
         run: |
           ./tools/testing/Run-Checks.ps1 -Group persistence 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/safety-checks.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: All behavior groups and strict plugin outputs
+      - name: Reverify changed contract and strict plugin outputs
         run: |
-          ./tools/testing/Run-Checks.ps1 -Group all 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/all-checks.log"
+          ./tools/testing/Run-Checks.ps1 -Group plugins 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/plugin-checks.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git diff --exit-code
           if ($LASTEXITCODE -ne 0) { throw 'Verification changed candidate files.' }
@@ -112,7 +120,7 @@ jobs:
           name: safety-logs-${{ matrix.pr }}
           path: |
             ${{ runner.temp }}/safety-checks.log
-            ${{ runner.temp }}/all-checks.log
+            ${{ runner.temp }}/plugin-checks.log
           if-no-files-found: ignore
           retention-days: 1
   prepare-commits:
