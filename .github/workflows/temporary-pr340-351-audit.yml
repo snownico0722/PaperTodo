@@ -1,0 +1,36 @@
+name: Temporary PR 340-351 source audit
+
+on:
+  push:
+    branches: [feat/data-json-hot-reload-main-adapt]
+    paths: [.github/workflows/temporary-pr340-351-audit.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot:
+    if: github.repository == 'snownico0722/PaperTodo'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Export exact tracked source snapshots (no credentials or working files)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir audit-snapshots
+          git archive --format=tar.gz -o audit-snapshots/pr340-5ef1656.tar.gz 5ef165668ebc1bdb3c292ba9729b58d5921deec3
+          git archive --format=tar.gz -o audit-snapshots/pr351-581408c.tar.gz 581408c6045c5d7618f3954d62521927e09d736a
+          git diff --stat 773a7cb58f96b88c95a0a2b1d45d6a1c048365a4 5ef165668ebc1bdb3c292ba9729b58d5921deec3 > audit-snapshots/pr340-stat.txt
+          git diff 773a7cb58f96b88c95a0a2b1d45d6a1c048365a4 5ef165668ebc1bdb3c292ba9729b58d5921deec3 -- . ':!plugins/*.dll' > audit-snapshots/pr340.diff
+          git diff 5ef165668ebc1bdb3c292ba9729b58d5921deec3 581408c6045c5d7618f3954d62521927e09d736a > audit-snapshots/pr351.diff
+      - uses: actions/upload-artifact@v6
+        with:
+          name: pr340-351-audit-source
+          path: audit-snapshots/*
+          retention-days: 1
+          compression-level: 0
