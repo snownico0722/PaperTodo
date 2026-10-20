@@ -1669,6 +1669,7 @@ public sealed partial class PaperWindow : Window
         RefreshPaperTitle();
         RefreshPaperIconButton();
         RefreshWindowBindingButton();
+        RefreshWorkspaceButton();
         UpdateTextZoom();
         UpdateDeepCapsuleSlotHostTheme();
 
@@ -1784,6 +1785,7 @@ public sealed partial class PaperWindow : Window
             CapsuleLabelFontWeight,
             AppTypography.Scale(18));
         RefreshThemedContextMenus();
+        RefreshWorkspaceButton();
 
         RefreshPaperTitle();
         UpdateTopBarResponsiveLayout();
@@ -2373,6 +2375,7 @@ public sealed partial class PaperWindow : Window
         actionButtons.Children.Add(_newTodoButton);
         actionButtons.Children.Add(_newNoteButton);
         buttons.Children.Add(_moreActionsButton);
+        buttons.Children.Add(CreateWorkspaceCycleButton());
         buttons.Children.Add(_closeButton);
         UpdateTopBarNewPaperButtons();
 
@@ -2424,7 +2427,7 @@ public sealed partial class PaperWindow : Window
                 _topBarTitleHost.Margin.Left + _topBarTitleHost.Margin.Right;
             var fixedWidth = TopBarOuterWidth(_paperIconButton) +
                 TopBarOuterWidth(_moreActionsButton) +
-                TopBarOuterWidth(_closeButton) + TopBarCollisionGap;
+                TopBarOuterWidth(_closeButton) + WorkspacePersistentButtonWidth() + TopBarCollisionGap;
             var remaining = Math.Max(0, availableWidth - fixedWidth - titleMinWidth);
 
             // Built-in user shortcuts are atomic. Saved order affects placement,

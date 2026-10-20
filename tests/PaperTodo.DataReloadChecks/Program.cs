@@ -7,12 +7,14 @@ internal static partial class Program
     [STAThread]
     private static int Main(string[] args)
     {
+        if (args.Contains("--shutdown-workspace")) return RunWorkspaceShutdownFixture();
         if (args.Contains("--kill-writer")) return RunKillWriter(args);
         if (args.Contains("--shutdown-merge")) return RunShutdownMergeFixture(false);
         if (args.Contains("--shutdown-unknown")) return RunShutdownMergeFixture(true);
         if (args.Contains("--live-fixture")) return RunLiveFixture();
         if (args.Contains("--exit-fixture")) return RunDeferredExitFixture();
         if (args.Contains("--passive-dispose")) return RunPassiveDisposeFixture();
+        if (args.Contains("--workspace-fixture")) return RunWorkspaceFixture();
         try
         {
             var checks = new (string Name, Action Run)[]
@@ -44,13 +46,17 @@ internal static partial class Program
                 check.Run();
                 Console.WriteLine("PASS " + check.Name);
             }
+            WorkspaceStorageChecks();
             StorageSafetyChecks();
+            WorkspaceWriteSafetyChecks();
             KillSafetyChecks();
             RunIsolatedLiveChecks();
             RunIsolatedLiveChecks("--shutdown-merge");
             RunIsolatedLiveChecks("--shutdown-unknown");
+            RunIsolatedLiveChecks("--shutdown-workspace");
             RunIsolatedLiveChecks("--exit-fixture");
             RunIsolatedLiveChecks("--passive-dispose");
+            RunIsolatedLiveChecks("--workspace-fixture");
             Console.WriteLine($"PASS explicit reload: {checks.Length} storage groups and isolated WPF/API/MCP fixture");
             return 0;
         }

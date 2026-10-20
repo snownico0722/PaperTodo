@@ -22,6 +22,8 @@ This log is written for general and power users alike. It focuses on user-facing
 
 #### Papers, Title Bar & Capsules
 
+- **Workspace cycling**: Enable 2–5 workspaces and switch using the paper top-bar's custom SVG cycle icon and number badge; the tray submenu and Settings page also offer direct workspace selection, with long setting explanations moved into ⓘ hints. The main workspace keeps `data.json` and `note-assets.lmdb`; others use `data2.json` / `note-assets2.lmdb` and separate host-managed plugin data. Secondary workspaces follow the main software settings by default; turning this off restores their own settings. Switching saves current edits and remembers the active slot. Reducing the count or disabling workspaces never deletes inactive files.
+
 - **Paper menus and title-bar shortcuts**: On an expanded paper, the `···` button and right-click entry now open the same menu, including Quick, the paper title and Settings.
   - In Settings → General → Title-bar Shortcuts, move and reorder the four built-in actions (Associate by Drag, New Note, New Todo and External Editor) between the **Show in title bar** and **Show in menu** sections. Todo and Note papers share one layout; separate customization menus and visibility checkboxes are no longer needed.
   - On new installations, only Associate by Drag appears in the title bar; the menu lists New Note, New Todo and External Editor in that order. Upgrades preserve previously pinned actions. If a paper is too narrow to fit its built-in shortcuts, they move into the menu as a group, without duplicating actions still visible in the title bar. Plugin buttons use only the remaining title-bar space. Drag-to-associate works from either location.

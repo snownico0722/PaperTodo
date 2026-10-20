@@ -28,12 +28,16 @@ public sealed partial class StateStore
     }
 
     internal StateStore(string dataDirectory, IDurableAtomicFileWriter atomicWriter)
+        : this(dataDirectory, atomicWriter, 1) { }
+
+    internal StateStore(string dataDirectory, IDurableAtomicFileWriter atomicWriter, int workspaceNumber)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(dataDirectory);
         ArgumentNullException.ThrowIfNull(atomicWriter);
-
-        FilePath = Path.Combine(dataDirectory, "data.json");
-        BackupPath = Path.Combine(dataDirectory, "data.backup.json");
+        var paths = new WorkspacePaths(dataDirectory, workspaceNumber);
+        WorkspaceNumber = workspaceNumber;
+        FilePath = paths.Data;
+        BackupPath = paths.Backup;
         _atomicWriter = atomicWriter;
     }
 
@@ -77,7 +81,7 @@ public sealed partial class StateStore
                 if (state != null)
                 {
                     MigrateLegacyTopBarSettings(state, json);
-                    NormalizeAfterLoad(state);
+                    NormalizeWorkspaceDocument(state);
                     AcceptPrimaryBytes(primaryBytes);
                     return state;
                 }
@@ -105,7 +109,7 @@ public sealed partial class StateStore
                     }
 
                     MigrateLegacyTopBarSettings(state, json);
-                    NormalizeAfterLoad(state);
+                    NormalizeWorkspaceDocument(state);
                     // Never authorize a recovered backup against bytes read later: another
                     // writer may have repaired/replaced the primary while we read the backup.
                     // Unreadable primary: show recovery data, but keep saving paused.
@@ -155,17 +159,17 @@ public sealed partial class StateStore
                 directory = AppContext.BaseDirectory;
             }
 
-            foreach (var path in Directory.EnumerateFiles(directory, "data.failed_load.*.json"))
+            foreach (var path in Directory.EnumerateFiles(directory, DocumentStem + ".failed_load.*.json"))
             {
                 paths.Add(path);
             }
-            foreach (var path in Directory.EnumerateFiles(directory, "data.backup.used_for_recovery.*.json"))
+            foreach (var path in Directory.EnumerateFiles(directory, DocumentStem + ".backup.used_for_recovery.*.json"))
             {
                 paths.Add(path);
             }
             // Recovery includes rejected local/baseline values, not just the external file.
             // Half-written archives also disable GC until they can be inspected safely.
-            foreach (var path in Directory.EnumerateFiles(directory, "dataconflict-" + "*.json*"))
+            foreach (var path in Directory.EnumerateFiles(directory, ConflictFilePrefix + "*.json*"))
             {
                 if (path.EndsWith(".json", StringComparison.OrdinalIgnoreCase) ||
                     path.EndsWith(".json.tmp", StringComparison.OrdinalIgnoreCase)) paths.Add(path);
@@ -273,11 +277,8 @@ public sealed partial class StateStore
     private readonly SemaphoreSlim _writeLock = new(1, 1);
     private long _latestWrittenVersion = 0;
 
-    public string SerializeState(AppState state)
-    {
-        PrepareForSave(state);
-        return JsonSerializer.Serialize(state, JsonOptions);
-    }
+    public string SerializeState(AppState state) =>
+        SerializeRawState(ProjectForPersistence(state));
 
     public void SaveJsonSync(string json, long version)
     {

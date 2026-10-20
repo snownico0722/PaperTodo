@@ -1590,6 +1590,77 @@ When off, open at the docked edge or remembered position.</value>
   <data name="DataReloadMissingBaseline" xml:space="preserve">
     <value>The original data read before editing was not provided, so independent changes cannot be identified. Choose the entire current state or the entire external state.</value>
   </data>
+  <data name="WorkspaceSettingsTitle" xml:space="preserve">
+    <value>Workspaces</value>
+  </data>
+  <data name="WorkspaceSettingsDescription" xml:space="preserve">
+    <value>Enable the cycle button in paper top bars. Each workspace keeps its own papers, images and plugin data.</value>
+  </data>
+  <data name="WorkspaceEnabled" xml:space="preserve">
+    <value>Enable workspaces</value>
+  </data>
+  <data name="WorkspaceCount" xml:space="preserve">
+    <value>Workspace count (including main)</value>
+  </data>
+  <data name="WorkspaceCountHint" xml:space="preserve">
+    <value>Up to 5. Reducing the count or disabling workspaces never deletes their files.</value>
+  </data>
+  <data name="WorkspaceSelectLabel" xml:space="preserve">
+    <value>Current workspace</value>
+  </data>
+  <data name="WorkspaceMainSlotLabel" xml:space="preserve">
+    <value>Main workspace (1)</value>
+  </data>
+  <data name="WorkspaceSlotLabel" xml:space="preserve">
+    <value>Workspace {0}</value>
+  </data>
+  <data name="WorkspaceCurrent" xml:space="preserve">
+    <value>Current workspace: {0}</value>
+  </data>
+  <data name="WorkspaceFollowMain" xml:space="preserve">
+    <value>Follow main workspace settings</value>
+  </data>
+  <data name="WorkspaceFollowHint" xml:space="preserve">
+    <value>Use the main software settings without sharing papers, images, layout or plugin-private data. Turning this off restores this workspace’s independent settings.</value>
+  </data>
+  <data name="WorkspaceMainHint" xml:space="preserve">
+    <value>This is the main workspace. Other workspaces that follow it use these software settings when opened.</value>
+  </data>
+  <data name="WorkspaceNext" xml:space="preserve">
+    <value>Next workspace</value>
+  </data>
+  <data name="WorkspaceCycleTooltip" xml:space="preserve">
+    <value>Workspace {0} / {1}
+Click to switch to workspace {2}</value>
+  </data>
+  <data name="WorkspaceTrayCycle" xml:space="preserve">
+    <value>Switch workspace (current {0} / {1})</value>
+  </data>
+  <data name="WorkspaceSettingsReadOnly" xml:space="preserve">
+    <value>Software settings currently follow the main workspace. Edit them there, or turn off “Follow main workspace settings” first.</value>
+  </data>
+  <data name="WorkspacePluginSettingsHint" xml:space="preserve">
+    <value>Plugin enablement follows the main workspace; plugin-private settings and data remain local to this workspace.</value>
+  </data>
+  <data name="WorkspaceSwitching" xml:space="preserve">
+    <value>A workspace switch is in progress. Try again after it completes.</value>
+  </data>
+  <data name="WorkspaceSwitchFailed" xml:space="preserve">
+    <value>Workspace switch did not complete</value>
+  </data>
+  <data name="WorkspaceSaveFailed" xml:space="preserve">
+    <value>The workspace could not be saved. Switching was stopped.</value>
+  </data>
+  <data name="WorkspaceImagesMissing" xml:space="preserve">
+    <value>This workspace references images, but its image database is missing.</value>
+  </data>
+  <data name="WorkspaceImagesUnavailable" xml:space="preserve">
+    <value>Cannot read workspace image database: {0}</value>
+  </data>
+  <data name="WorkspaceStartupFallback" xml:space="preserve">
+    <value>The last workspace could not be opened. The main workspace was opened instead; the original files were not replaced.
+{0}</value>
+  </data>
   <data name="SettingsDataMergeConflicts" xml:space="preserve"><value>Data merge conflicts</value></data>
   <data name="DataMergeConflictAsk" xml:space="preserve"><value>Ask on conflict (default)</value></data>
   <data name="DataMergeConflictExternal" xml:space="preserve"><value>Prefer external</value></data>

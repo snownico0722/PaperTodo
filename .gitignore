@@ -26,3 +26,11 @@ plugins/data/
 # Local drafts
 *.draft.md
 
+# Numbered workspace data (the unsuffixed main files keep their existing paths)
+data[2-5].json*
+data[2-5].backup.json*
+data[2-5].failed_load.*.json
+data[2-5].backup.used_for_recovery.*.json
+data[2-5]conflict-*.json
+note-assets[2-5].lmdb*
+plugins/data[2-5]/
