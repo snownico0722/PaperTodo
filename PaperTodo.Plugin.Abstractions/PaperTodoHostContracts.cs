@@ -269,6 +269,14 @@ public sealed record DeleteMutationResult(
 
 public interface IPaperTodoHostApi
 {
+    /// <summary>Explicitly accept the current data.json as authoritative. Pending in-memory changes may be discarded. UI reconciliation follows on the next turn.</summary>
+    DataReloadResult ReloadData() => throw new NotSupportedException("This host does not support data reload.");
+    /// <summary>Without an original snapshot, differing current and external states require a whole-state user choice.</summary>
+    DataReloadResult MergeData() => throw new NotSupportedException("This host does not support data merge.");
+    /// <summary>Merge using the complete original data.json contents read before editing. Never substitute a later save.</summary>
+    DataReloadResult MergeData(string baselineJson) => throw new NotSupportedException("This host does not support merge baselines.");
+    DataReloadStatus GetDataReloadStatus() => throw new NotSupportedException("This host does not support data reload.");
+
     IReadOnlySet<string> GrantedPermissions { get; }
 
     IReadOnlyList<PaperSnapshot> ListPapers(string? type = null);

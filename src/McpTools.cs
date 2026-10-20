@@ -16,6 +16,23 @@ internal sealed partial class McpTools
     }
 
 
+    [McpServerTool(Name = "reload_data", ReadOnly = false, Destructive = true, OpenWorld = false)]
+    [Description("Explicitly replace PaperTodo's running state with the validated current data.json file. Requires full writes. Unsaved in-memory edits may be discarded; no file watcher or automatic merge. Check get_data_reload_status for UI reconciliation.")]
+    public Task<JsonElement> ReloadData(CancellationToken cancellationToken = default) =>
+        _client.InvokeAsync("reload_data", new { }, cancellationToken);
+
+    [McpServerTool(Name = "merge_data", ReadOnly = false, Destructive = true, OpenWorld = false)]
+    [Description("Explicitly merge external data.json edits with local changes using the original JSON read before editing. Without a baseline, differing states require the user to choose the entire current or external state. No watcher is installed. Conflicts follow the current ask/external/internal preference; missing baselines always require a whole-state choice. Check get_data_reload_status. Requires full writes.")]
+    public Task<JsonElement> MergeData(
+        [Description("Complete original data.json contents read before editing, as a JSON string. Preserve this snapshot even if PaperTodo saves again. Omit only to request a whole-state choice.")] string? baseline_json = null,
+        CancellationToken cancellationToken = default) =>
+        _client.InvokeAsync("merge_data", new { baseline_json }, cancellationToken);
+
+    [McpServerTool(Name = "get_data_reload_status", ReadOnly = true, Destructive = false, OpenWorld = false)]
+    [Description("Read the last explicit data reload outcome and whether UI reconciliation is still in progress. Does not read or modify the data file.")]
+    public Task<JsonElement> GetDataReloadStatus(CancellationToken cancellationToken = default) =>
+        _client.InvokeAsync("get_data_reload_status", new { }, cancellationToken);
+
     [McpServerTool(Name = "list_settings", ReadOnly = true, Destructive = false, OpenWorld = false)]
     [Description("List public PaperTodo application settings, stable IDs, current values, types, constraints and this caller's writability. Plugin-private settings and internal state are not included.")]
     public Task<JsonElement> ListSettings(

@@ -19,6 +19,10 @@ internal static class WebPluginWorkspaceRequests
         "papers.collapse" => WorkspacePresentation(host).CollapsePaper(RequiredString(parameters, "paperId")),
         "papers.toggleCollapsed" => WorkspacePresentation(host).TogglePaperCollapsed(RequiredString(parameters, "paperId"), OptionalBoolean(parameters, "activate") ?? true),
         "papers.activate" => WorkspacePresentation(host).ActivatePaper(RequiredString(parameters, "paperId")),
+        "data.reload" => host.ReloadData(),
+        "data.merge" => OptionalString(parameters, "baselineJson") is { } baselineJson
+            ? host.MergeData(baselineJson) : host.MergeData(),
+        "data.status" => host.GetDataReloadStatus(),
         "papers.list" => host.ListPapers(OptionalString(parameters, "type")),
         "papers.get" => host.GetPaper(RequiredString(parameters, "paperId")),
         "todos.list" => host.ListTodos(

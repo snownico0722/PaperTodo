@@ -66,6 +66,8 @@
 | D-055 | Aero 不采用 ACCENT_ENABLE_BLURBEHIND 原生模糊 | Rejected | 主题 / Window integration |
 | D-056 | 精确终帧与主胶囊纯视觉输入隔离 | Accepted | Edge handoff / input |
 | D-057 | DWM 桌面截图退出 CI 自动验收 | Accepted | 测试 / Window integration |
+| D-058 | data.json 仅显式重载，普通保存保持原路径 | Partially superseded by D-059 | 持久化 / 外部 API |
+| D-059 | 显式合并由调用方提供真实原始版本 | Accepted | 持久化 / 外部 API |
 
 ## 维护规则
 
@@ -1796,3 +1798,84 @@ PR #319 的初版把主胶囊完整材质收展后的卡死解释为终点迟到
 - `.github/workflows/pull-request-build.yml`：仍执行材质行为检查，但不再输出桌面截图 artifact。
 - `tests/PaperTodo.MicaChecks/Program.cs` 与 `MaterialStudyChecks.cs`：保留确定性渲染与运行时检查；历史屏幕采样源文件删除。
 - `doc/experiments/pr227-drag-followup-20260922.md`：基线、故障证据与失败补绘实验。
+
+---
+
+## D-058 — data.json 仅显式重载，普通保存保持原路径
+
+**Status:** Partially superseded by D-059 / D-060（补充显式三方合并，普通保存增加内容指纹防覆盖；无监听/历史约束保留）
+
+### Context
+
+用户需要在 PaperTodo 运行期间由外部工具修改 `data.json`，并在需要时主动让宿主接受磁盘状态。早期候选实现使用常驻 FileSystemWatcher、历史版本快照、字段级三方合并与写前磁盘一致性检查；实测 4 MB 状态下正常保存的额外 JSON 解析、复制及历史维护带来明显成本。用户已明确接受：没有显式请求时，普通保存可覆盖外部编辑。
+
+### Decision
+
+仅保留 Native/Web Workspace 与 GUI MCP 的显式请求入口，统一经 `PaperCommandService` → `AppController.DataReload` → `StateStore.Reload`。读取并校验当前主文件，不自动监听或追踪修订元数据；磁盘内容作为唯一待导入结果，不做三方合并。当前运行的未保存修改可能被替换。无效输入只报告错误，不调用启动时的 backup 恢复，也不生成恢复/冲突文件。
+
+重载使用原 `StateStore` 写锁和版本序号读取文件并淘汰尚未执行的旧异步保存；不把重载变成第二条写入路径。普通保存完整恢复为原有序列化、原子临时文件替换和备份语义，不添加重载专用磁盘检查、历史快照或修订字段。已验证的 ID 原位模型更新及下一 UI 调度轮次的窗口/插件/Edge 生命周期协调仍保留，以维护存活对象引用。
+
+### Why / Consequences
+
+功能按需付费：不使用重载时不付出历史追踪成本。直接编辑主文件与正常自动保存可以竞争，属于明确接受的结果；需要可控的外部编辑工具应自行协调文件写入并及时调用 `reload_data`。显式请求不会保留未提交用户编辑或自动识别冲突，不承诺文件监听及跨进程同步；第三方插件业务状态与核心 `data.json` 继续分域。
+
+### Evidence
+
+`src/StateStore.Reload.cs`、`src/AppController.DataReload.cs`、`src/StateReloadModels.cs`、`src/PaperCommandService.DataReload.cs` 和 `tests/PaperTodo.DataReloadChecks`。
+
+
+---
+
+## D-059 — 显式合并由调用方提供真实原始版本
+
+**Status:** Partially superseded by D-060（真实基线/显式裁决保留；普通保存不得盲目覆盖外部变化）
+
+### Context
+
+#350 在 #340 的显式重载上吸收 #349 的 ID 感知三方合并与冲突选择。初版缓存最近一次成功加载/保存的 JSON，但外部工具可能仍在编辑更早读到的版本。如果把后一次保存当作共同基线，算法会把外部旧字段误判为新修改，撤回已经保存的本地工作；同字段竞争也可能被误判为单方修改。写入前确认磁盘没有再次变化，只能保护请求期间的输入，不能证明共同基线正确。
+
+### Decision
+
+- 保留直接采用磁盘的 `reload_data`；另提供按需 `merge_data`，全部经共享命令、controller 和 StateStore 写入边界。
+- 冲突处理扩展为询问（默认）、外部优先、内部优先，三者仍共用同一个三方比较结果。缺失原始基线必须询问，不能把字段优先级偷偷升级为整份覆盖授权。请求前捕获当前策略，统一选择结果同时驱动数据和归档，避免日志仍写死内部优先。最终跨字段规范化必须在选择之后执行：待定的较短标题上限不能提前截断本应随较长上限保留的文本。归档在写盘前保护输入，不能把归档存在当作成功凭证。
+- 外部工具保留开始编辑时实际读到的完整 JSON，调用时传 `baseline_json`（MCP）或 `baselineJson`（Native/Web）。基线作为单次操作输入，按主文件相同规则校验和规范化，不保存为宿主历史。调用方应传原始快照，不能补传之后重新读取的文件。
+- 没有基线且双方不同，只提供整份当前/外部状态的明确选择；双方相同返回 `unchanged`。明确传入的非法基线返回 `invalid`，不能悄悄退回猜测或整状态导入。
+- 原有 Native `MergeData()` 保持可调用；新增带基线重载；未实现该重载时由默认接口实现明确报告不支持，不能丢掉调用方的基线。
+- 保持冲突选择、原件归档、提交前及替换重试时的源文件检查，成功写盘后才应用模型/窗口。普通保存不持有基线，不增加 JSON 解析、历史库、revision 字段或文件监听。
+
+### Why / Consequences
+
+合并所需的原始版本由实际读取它的编辑方持有，避免自动保存移动比较起点。代价是调用方需保留并传输一份完整状态；无法提供时，宿主不会声称能识别双方的独立修改。正常自动保存仍可能覆盖尚未显式导入的外部文件，外部编辑方仍需协调写入和请求。这不是跨进程事务或自动同步协议。
+
+### Evidence
+
+`src/StateStore.Merge.cs`、`src/McpTools.cs`、`src/PaperBodyPluginHostApi.DataReload.cs`、`src/WebPaperBodySession.HostRequests.cs`；`tests/PaperTodo.DataReloadChecks` 覆盖读取旧版本后同步/异步保存、同字段冲突、缺失/非法基线，以及 MCP/Native/Web 和窗口生命周期。
+
+
+---
+
+## D-060 — 写入准入、外部变化暂停与终止边界
+
+**Status:** Accepted
+
+### Context
+
+关掉保存计时器不能撤销已经排队的任务。WPF 模态窗口在 Hide/关闭后会返回，若关机只设置顶层退出状态，旧合并调用仍可把默认结果提交。另一次修复在拒绝过期合并后恢复普通保存，虽保住了内存脏标记，却允许随后的普通保存覆盖刚检测到的新外部输入；测试只看拒绝瞬间而未继续执行保存与退出，不能证明安全。
+
+用户这次把避免错误覆盖置于旧的无请求外部覆盖约定之上，但仍要求少副本、无常驻历史。因此不能恢复完整历史库，也不能在关机/崩溃时抢写内存状态。
+
+### Decision / Why
+
+- 在 StateStore 原写锁内保留最后接受文件的 SHA-256 内容指纹，只在写入边界检查；不增加 JSON 解析、文件时间猜测、revision 字段、轮询或常驻历史副本。显式导入先栅栏旧写入并暂停普通覆盖，只有成功接受输入才解除；普通版本递增不提供覆盖权限。
+- 系统终止信号共享给全部已存在和未来打开的工作区存储以及宿主管理插件。在临时文件打开/替换重试、异步任务开始及冲突模态返回后检查；崩溃处理在可能泵消息的错误框之前发布信号。已进入 OS 的替换允许完成，不宣传绝对取消正在执行的系统调用。
+- 用户主动退出只有同步保存和已脏插件数据刷新成功才进入不可逆拆除；Dispose/OnExit 不承接第二次保存。失败保留内存、磁盘与可用编辑器，关机和强杀仍不补最后强存。
+- 现有冲突原件/差异归档先持久化，再替换主文件；引用保护包含原始、内部、外部冲突值和未完成临时文件。内容不完整时禁止 GC/编号复用。沿用两文件归档，不创建额外图片库、pending 副本或每次保存快照。
+- 加入真实模态关机入口、拒绝后继续保存/普通退出、排队写入终止、各原子写阶段强杀子进程后精确内容重读，以及实际 LMDB 清理验证。时限只检测挂起，不作为性能或像素阈值。
+
+### Consequences / Boundaries
+
+每次写入多出内容哈希读取成本（与文件大小线性相关），换取不静默覆盖；指纹不是三方共同基线。没有合作锁的检查与替换仍有窄竞争窗口；未落盘 RAM、硬件断电、多文件事务不声称零丢失。未解决外部变化期间会暂停自动保存并提示、拒绝正常退出；用户必须显式处理，强杀依然可能丢掉未保存的本地编辑。原备份周期与正常文件数量不变。
+
+### Evidence
+
+`StateStore.WriteSafety`、`PersistenceWriteLifetime`、`AppController.PersistencePolicy`、`AppController.DataReload`、`StateStore.ConflictImages`；`WriteSafetyChecks`、`KillSafetyChecks`、`ShutdownSafetyChecks` 通过实际 IO/进程/控件边界约束行为。

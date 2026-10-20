@@ -1542,4 +1542,59 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="TopBarExternalEditor" xml:space="preserve">
     <value>外部エディターで開く</value>
   </data>
+  <data name="DataReloadConflictTitle" xml:space="preserve">
+    <value>PaperTodo データの競合</value>
+  </data>
+  <data name="DataReloadConflictPath" xml:space="preserve">
+    <value>パス:{0}</value>
+  </data>
+  <data name="DataReloadConflictMemoryHeader" xml:space="preserve">
+    <value>現在 (PaperTodo)</value>
+  </data>
+  <data name="DataReloadConflictExternalHeader" xml:space="preserve">
+    <value>外部ファイル</value>
+  </data>
+  <data name="DataReloadConflictKeepMemory" xml:space="preserve">
+    <value>現在を保持</value>
+  </data>
+  <data name="DataReloadConflictKeepExternal" xml:space="preserve">
+    <value>外部を採用</value>
+  </data>
+  <data name="DataReloadConflictValueMissing" xml:space="preserve">
+    <value>(なし)</value>
+  </data>
+  <data name="DataReloadConflictMemoryOnlyTooltip" xml:space="preserve">
+    <value>PaperTodo には存在するが外部ファイルにない行です。「現在を保持」で採用、「外部を採用」で破棄されます。</value>
+  </data>
+  <data name="DataReloadConflictExternalOnlyTooltip" xml:space="preserve">
+    <value>外部ファイルには存在するが PaperTodo にない行です。「外部を採用」で採用、「現在を保持」で破棄されます。</value>
+  </data>
+  <data name="DataReloadPaperConflictTitle" xml:space="preserve">
+    <value>Paper データの競合</value>
+  </data>
+  <data name="DataReloadPaperConflictHeader" xml:space="preserve">
+    <value>Paper ID:{0}  種類:{1}</value>
+  </data>
+  <data name="DataReloadPaperConflictField" xml:space="preserve">
+    <value>フィールド:{0}</value>
+  </data>
+  <data name="DataReloadPaperConflictKeepAllMemory" xml:space="preserve">
+    <value>すべて現在を保持</value>
+  </data>
+  <data name="DataReloadPaperConflictKeepAllExternal" xml:space="preserve">
+    <value>すべて外部を採用</value>
+  </data>
+  <data name="DataReloadPaperConflictWholePaper" xml:space="preserve">
+    <value>(Paper 全体)</value>
+  </data>
+  <data name="DataReloadMissingBaseline" xml:space="preserve">
+    <value>編集前に読み取った元のデータが指定されていないため、それぞれの変更を判別できません。現在のデータ全体を保持するか、外部データ全体を採用してください。</value>
+  </data>
+  <data name="SettingsDataMergeConflicts" xml:space="preserve"><value>データ統合時の競合</value></data>
+  <data name="DataMergeConflictAsk" xml:space="preserve"><value>競合時に確認（既定）</value></data>
+  <data name="DataMergeConflictExternal" xml:space="preserve"><value>外部を優先</value></data>
+  <data name="DataMergeConflictInternal" xml:space="preserve"><value>内部を優先</value></data>
+  <data name="TipDataMergeConflicts" xml:space="preserve"><value>明示的な統合では、双方の競合しない変更を保持します。この設定は競合部分にのみ適用されます。内部は現在の PaperTodo データ、外部は取り込むファイルです。元のバージョンがない場合は必ず確認します。バックグラウンド監視や自動同期は有効になりません。</value></data>
+  <data name="DataReloadConflictEmpty" xml:space="preserve"><value>（空）</value></data>
+  <data name="DataSavePausedExternal" xml:space="preserve"><value>ファイルが変更されたか、読み込みが未解決のため、上書きを防ぐため保存を停止しています。現在の編集はメモリに保持されています。終了前に明示的なマージまたは再読み込みを完了してください。強制終了すると未保存の編集が失われる場合があります。</value></data>
 </root>

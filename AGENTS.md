@@ -97,11 +97,12 @@ Markdown 当前保持轻量。若要扩展到网络图片、表格、附件、�
 当前数据结构和技术方向见 Architecture「状态与持久化架构」；历史取舍见 D-002、D-003、D-020、D-040。
 
 - `data.json` 是核心用户数据协议，不是缓存。字段删除/改名必须考虑旧数据兼容。
-- 不绕过 `StateStore` 建立第二套主状态写入；保留版本化写入和退出同步保存语义。
+- 不绕过 `StateStore` 建立第二套主状态写入；保留版本化写入。用户主动退出须同步保存成功才关闭；系统关机、崩溃和被动 Dispose 不新增最后保存。停止计时器不等于撤销已排队写入：实际写入入口和模态/异步返回后都要核对同一终止信号。
 - 不绕过 `NoteImageStore` 直接开启 LMDB transaction；图片 GC / id reuse 不能在保护引用扫描不可信时继续执行。
 - provider settings / per-paper plugin state 由 `PaperBodyPluginDataStore` 管理；不要塞回 `data.json`，也不要让插件自行建立另一套会与宿主竞争的 authoritative state。宿主不提供插件业务数据恢复系统；只保留普通文件读写和一次写入完整性，不恢复 `.json.recovered` 分流。插件自己的业务存储、备份和恢复由插件负责。
 - 核心保存只同步内置 Markdown 的待提交文本；不要把第三方 `IPaperBodySession.Commit()` 恢复成全局保存钩子。外部写入只有在目标就是该内置 Markdown 时才先提交目标用户文本；修改其他纸片不得因此调用无关第三方正文的 `Commit()`。
-- 启动解析失败时不能用默认空状态覆盖旧数据；crash handler 不走普通“最后强存一次”流程。
+- 启动解析失败时不能用默认空状态覆盖旧数据；crash handler 在日志/提示框之前封闭持久化入口，不走普通“最后强存一次”流程。
+- 已知外部版本变化或显式导入失败后，不得靠增大保存版本号、自动重试、普通退出或工作区切换绕过暂停覆盖保护；需显式合并/重载接受输入。文件指纹不是三方合并的共同基线。冲突差异记录及未完成临时记录也是图片保护输入，扫描不完整时禁止 GC/编号复用。
 - 普通纸片几何与 edge slot/expanded 恢复几何不能互相覆盖。
 - 外部打开笔记的临时文件后缀只做文件名合法性校验；不要擅自收窄成固定白名单。
 
@@ -161,6 +162,7 @@ Architecture / Decisions 按「项目知识入口」中的 Edge 影响范围路�
 - 版本号显式维护在 `PaperTodo.csproj`；不要恢复自动递增。
 - `plugin-samples/` 保存插件源码/说明，`plugins/` 保存可直接加载的最终产物；主程序 publish/Release 不捆绑插件。最终插件目录不保留无必要的 PDB/XML/重复 native/shared assemblies。
 - PR 分支 Windows CI 由 HEAD commit marker 控制：`[debug]` → Debug 测试包，`[ci]` → Release build，`[debug-ci]` → 两者。标记必须在本次 push 的最后一个 HEAD；不要为了触发制造空提交。
+- 已确认 Markdown/AvalonEdit 的 WPF 离屏局部重绘与强制全重绘两次 `RenderTargetBitmap` 逐字节对照，在同一测试及产品源码下出现相反 CI 结果，不得再次作为正确性门槛；不通过加等待、重复运行、放宽容差或改成长期可选 fixture 掩盖该不确定性。保留语义、编辑、撤销、可观察布局等有明确行为边界的回归，只有找到可证明稳定的渲染同步机制后才能重新设计局部像素验收。
 - 不重新引入已删除的 `scripts/edge-refinement-tests/` 或依赖源码字符串/文件路径/方法排列的 source-shape test；若新增 Edge 自动化，应验证可执行 reducer/geometry/policy/transaction 行为，而不是源码排布。真实集成回归仍依赖编译、诊断日志和真机验证。
 - 普通编译：`dotnet build PaperTodo.csproj -c Release`。
 - `vendor/wpf-notifyicon` 使用父仓库记录的固定 submodule commit；更新 fork 时显式更新 gitlink，并完成构建和真实托盘手测。构建过程不自动拉取最新分支。
