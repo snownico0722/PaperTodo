@@ -109,7 +109,8 @@ public sealed partial class AppController
             _ when id.StartsWith("todo.reminder", StringComparison.Ordinal) => "labs.reminders",
             _ => id.Split('.')[0] switch
             {
-                "general" or "topbar" => "general.options",
+                "general" => "general.options",
+                "topbar" => "general.topbar",
                 "privacy" => "general.telemetry",
                 "appearance" => "visual.options",
                 "todo" => "general.todos",

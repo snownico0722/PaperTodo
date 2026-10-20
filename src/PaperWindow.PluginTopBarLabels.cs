@@ -104,8 +104,8 @@ public sealed partial class PaperWindow
         _pluginTopBarLabelsHost.Visibility = Visibility.Collapsed;
         MeasurePluginTopBarLabelsWidth();
 
-        // One layout authority: interactive controls settle first, then labels use the remainder.
-        ReconcilePluginTopBarCapacity();
+        // The normal title-bar layout allocates remaining space to passive labels.
+        UpdateTopBarResponsiveLayout();
     }
 
     private static void ApplyPluginTopBarLabelTheme(
@@ -147,28 +147,4 @@ public sealed partial class PaperWindow
             Math.Ceiling(_pluginTopBarLabelsHost.DesiredSize.Width);
     }
 
-    private void ReconcilePluginTopBarLabelCapacity()
-    {
-        if (_pluginTopBarLabelsHost == null || _topBarActionButtonsHost == null)
-        {
-            return;
-        }
-
-        if (_paper.IsCollapsed || _pluginTopBarLabelsHost.Children.Count == 0)
-        {
-            _pluginTopBarLabelsHost.Visibility = Visibility.Collapsed;
-            UpdateTopBarResponsiveLayout();
-            return;
-        }
-
-        _pluginTopBarLabelsHost.Visibility = Visibility.Visible;
-        UpdateTopBarResponsiveLayout();
-        if (_topBarActionButtonsHost.Visibility == Visibility.Visible)
-        {
-            return;
-        }
-
-        _pluginTopBarLabelsHost.Visibility = Visibility.Collapsed;
-        UpdateTopBarResponsiveLayout();
-    }
 }

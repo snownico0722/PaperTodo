@@ -1293,4 +1293,4 @@ Native Body / Runtime 使用 `Workspace.ReloadData()` / `Workspace.GetDataReload
 
 可选的 `merge_data`（需要 MCP 完整写入权限）用于三方合并。外部工具必须保留**开始编辑时实际读到的完整原始 JSON**，并传给 MCP `merge_data(baseline_json: originalJson)`、Native `Workspace.MergeData(originalJson)` 或 Web `papertodo.workspace.request('data.merge', { baselineJson: originalJson })`。参数是 JSON 字符串，不是文件路径或编辑后的文档；PaperTodo 后续保存不能替换这份原始版本。宿主校验基线后合并独立修改，冲突时弹出左右对比供用户选择。省略基线（包括 Native `MergeData()`）时，双方相同返回 `unchanged`，不同时必须由用户选择整份当前或外部状态；明确传入的非法基线返回 `invalid`。MCP 仍受完整序列化请求 8,000,000 字符的既有上限约束（包括 JSON 转义）；更大的快照应通过 Native 集成处理，或改用领域 API。
 
-用户选择后还会检查外部文件是否再次变化，有冲突的输入会归档，通过既有原子写入器成功提交后才应用模型和窗口。若审查期间源文件改变，则拒绝提交过期结果。排队合并返回 `Outcome: pending` 和 `Applied: false`，待 `get_data_reload_status` 的 `IsReloading` 为 false 再看最终结果。原插件纸片被删时，其 session 可能失效。没有插件 DLL 代码热替换；普通 Todo / Note 编辑优先使用领域 API。技术路线见 `doc/ARCHITECTURE.md` / D-057 / D-058。
+用户选择后还会检查外部文件是否再次变化，有冲突的输入会归档，通过既有原子写入器成功提交后才应用模型和窗口。若审查期间源文件改变，则拒绝提交过期结果。排队合并返回 `Outcome: pending` 和 `Applied: false`，待 `get_data_reload_status` 的 `IsReloading` 为 false 再看最终结果。原插件纸片被删时，其 session 可能失效。没有插件 DLL 代码热替换；普通 Todo / Note 编辑优先使用领域 API。技术路线见 `doc/ARCHITECTURE.md` / D-058 / D-059。

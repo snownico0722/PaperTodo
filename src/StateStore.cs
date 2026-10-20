@@ -68,6 +68,7 @@ public sealed partial class StateStore
                 var state = JsonSerializer.Deserialize<AppState>(json, JsonOptions);
                 if (state != null)
                 {
+                    MigrateLegacyTopBarSettings(state, json);
                     NormalizeWorkspaceDocument(state);
                     return state;
                 }
@@ -94,6 +95,7 @@ public sealed partial class StateStore
                         _preserveRecoveredLoadFilesOnNextSave = true;
                     }
 
+                    MigrateLegacyTopBarSettings(state, json);
                     NormalizeWorkspaceDocument(state);
                     return state;
                 }
@@ -530,8 +532,26 @@ public sealed partial class StateStore
         NormalizeLinks(state);
     }
 
+    private static void MigrateLegacyTopBarSettings(AppState state, string json)
+    {
+        using var document = JsonDocument.Parse(json, new JsonDocumentOptions
+        {
+            AllowTrailingCommas = StateJsonReadPolicy.AllowTrailingCommas,
+            CommentHandling = StateJsonReadPolicy.CommentHandling
+        });
+        var root = document.RootElement;
+        // New global layout is the only authority when present.
+        if (root.TryGetProperty("topBarShortcutOrder", out _)) return;
+        var missingTodo = !root.TryGetProperty("todoTopBarShortcuts", out _);
+        var missingNote = !root.TryGetProperty("noteTopBarShortcuts", out _);
+        if (missingTodo || missingNote)
+            PaperTopBarShortcuts.MigrateLegacyBooleans(state, missingTodo, missingNote);
+        PaperTopBarShortcuts.MigrateLegacy(state);
+    }
+
     private static void NormalizeGlobalState(AppState state)
     {
+        PaperTopBarShortcuts.Normalize(state);
         if (state.Theme is not ("system" or "light" or "dark"))
         {
             state.Theme = "system";

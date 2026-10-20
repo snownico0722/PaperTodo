@@ -84,6 +84,23 @@ internal sealed class DeepCapsuleContextMenuSession
         _controller.SetDeepCapsuleContextMenuOpen(_ownerId, false);
     }
 
+    // The NOACTIVATE capsule should stay passive for ordinary clicks. Only an explicit
+    // context-menu open is allowed to activate its native owner, and that must happen
+    // BEFORE WPF starts the menu's mouse-capture/focus session. Activating the Popup
+    // after ContextMenu.Opened already made a material menu dismiss itself (#227).
+    public static void PrepareOwnerActivation(MaterialContextMenu menu)
+    {
+        menu.BeforeWpfOpen = () =>
+        {
+            if (menu.PlacementTarget is { } target &&
+                PresentationSource.FromVisual(target) is HwndSource source &&
+                source.Handle != IntPtr.Zero)
+            {
+                WindowNative.TrySetForegroundWindow(source.Handle);
+            }
+        };
+    }
+
     private static void QueuePopupActivation(ContextMenu menu)
     {
         // ContextMenu.Opened runs after WPF entered menu mode. One Input turn is only to resolve
@@ -104,10 +121,8 @@ internal sealed class DeepCapsuleContextMenuSession
                     topmost: true,
                     insertAfter: IntPtr.Zero);
 
-                // MaterialContextMenu already entered WPF menu mode when Opened fired. Forcing
-                // a foreground/focus handoff here can immediately close its subclassed Popup
-                // on a NOACTIVATE owner. Keep the popup above the owner and leave capture/focus
-                // to WPF; ordinary ContextMenu keeps the mainline #303 handoff unchanged.
+                // MaterialContextMenu is prepared before WPF enters menu mode; activating
+                // its owner here would close an already-open popup (#227).
                 if (menu is MaterialContextMenu)
                 {
                     return;

@@ -1,4 +1,4 @@
-name: Debug
+name: Package
 
 on:
   push:
@@ -13,17 +13,37 @@ on:
       - "plugin-samples/**"
       - "plugins/**"
   workflow_dispatch:
+    inputs:
+      configuration:
+        description: "构建模式：Release 正式版 / Debug 测试版"
+        required: true
+        type: choice
+        options:
+          - Release
+          - Debug
+        default: Release
+      single_file:
+        description: "单文件（关闭则打包为多文件 ZIP）"
+        required: true
+        type: boolean
+        default: true
+      include_dotnet:
+        description: "内置 .NET 运行时"
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
+# A new push can replace an older automatic build; it must not cancel a manually requested package.
 concurrency:
-  group: debug-${{ github.ref }}
+  group: package-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  build:
-    name: Build Debug executables
+  package:
+    name: Build selected Windows package
     runs-on: windows-latest
     timeout-minutes: 15
 
@@ -47,93 +67,106 @@ jobs:
         with:
           dotnet-version: "10.0.x"
 
-      - name: Read project metadata
+      - name: Read metadata and select package
         id: meta
+        env:
+          BUILD_EVENT: ${{ github.event_name }}
+          INPUT_CONFIGURATION: ${{ inputs.configuration }}
+          INPUT_SINGLE_FILE: ${{ inputs.single_file }}
+          INPUT_INCLUDE_DOTNET: ${{ inputs.include_dotnet }}
         run: |
+          # For push events the dispatch inputs are absent: use the same default selection.
+          $configuration = "Release"
+          $singleFile = $true
+          $includeDotnet = $false
+          if ($env:BUILD_EVENT -eq "workflow_dispatch") {
+            $configuration = $env:INPUT_CONFIGURATION
+            $singleFile = $env:INPUT_SINGLE_FILE -eq "true"
+            $includeDotnet = $env:INPUT_INCLUDE_DOTNET -eq "true"
+          }
+          if ($configuration -notin @("Release", "Debug")) {
+            throw "Unknown configuration: $configuration"
+          }
+
           $project = [xml](Get-Content -LiteralPath .\PaperTodo.csproj -Raw)
           $versionNodes = $project.SelectNodes('/Project/PropertyGroup/Version')
           if ($versionNodes.Count -ne 1) {
             throw "PaperTodo.csproj must define exactly one <Version> element (found $($versionNodes.Count))."
           }
-
           $version = ([string]$versionNodes[0].InnerText).Trim()
           if ([string]::IsNullOrWhiteSpace($version) -or $version -match '\s') {
             throw "PaperTodo.csproj <Version> is missing or contains whitespace: '$version'."
           }
 
-          "self_contained_exe=PaperTodo-v$version-debug-win-x64-self-contained.exe" >> $env:GITHUB_OUTPUT
-          "framework_dependent_exe=PaperTodo-v$version-debug-win-x64-no-runtime.exe" >> $env:GITHUB_OUTPUT
+          $layout = if ($singleFile) { "single-file" } else { "multi-file" }
+          $runtime = if ($includeDotnet) { "self-contained" } else { "no-runtime" }
+          $extension = if ($singleFile) { ".exe" } else { ".zip" }
+          $stem = "PaperTodo-v$($version)-$($configuration.ToLowerInvariant())-win-x64-$layout-$runtime"
+
+          "configuration=$configuration" >> $env:GITHUB_OUTPUT
+          "single_file=$($singleFile.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          "include_dotnet=$($includeDotnet.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          "file_name=$stem$extension" >> $env:GITHUB_OUTPUT
+          "artifact_name=$stem" >> $env:GITHUB_OUTPUT
+          Write-Host "Selected package: $stem$extension"
 
       - name: Restore
         run: dotnet restore .\PaperTodo.csproj -r win-x64
 
-      - name: Publish Debug executables
+      - name: Publish selected package
         env:
-          SELF_CONTAINED_EXE: ${{ steps.meta.outputs.self_contained_exe }}
-          FRAMEWORK_DEPENDENT_EXE: ${{ steps.meta.outputs.framework_dependent_exe }}
+          CONFIGURATION: ${{ steps.meta.outputs.configuration }}
+          SINGLE_FILE: ${{ steps.meta.outputs.single_file }}
+          INCLUDE_DOTNET: ${{ steps.meta.outputs.include_dotnet }}
+          FILE_NAME: ${{ steps.meta.outputs.file_name }}
         run: |
-          $debugDir = Join-Path $env:GITHUB_WORKSPACE "debug"
-          $selfContainedOut = Join-Path $env:RUNNER_TEMP "debug-self-contained"
-          $frameworkDependentOut = Join-Path $env:RUNNER_TEMP "debug-no-runtime"
+          $publishDir = Join-Path $env:RUNNER_TEMP "papertodo-publish"
+          $packageDir = Join-Path $env:GITHUB_WORKSPACE "package"
+          Remove-Item -LiteralPath $publishDir, $packageDir -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $publishDir, $packageDir | Out-Null
 
-          Remove-Item -LiteralPath $debugDir, $selfContainedOut, $frameworkDependentOut -Recurse -Force -ErrorAction SilentlyContinue
-          New-Item -ItemType Directory -Force -Path $debugDir, $selfContainedOut, $frameworkDependentOut | Out-Null
-
-          dotnet publish .\PaperTodo.csproj `
-            -c Debug `
-            -r win-x64 `
-            --self-contained true `
-            --no-restore `
-            -o $selfContainedOut `
-            /p:PublishSingleFile=true `
-            /p:PublishReadyToRun=false `
-            /p:IncludeNativeLibrariesForSelfExtract=true `
-            /p:EnableCompressionInSingleFile=true `
-            /p:PublishTrimmed=false `
-            /p:EmbedAllSources=false `
-            /p:EmbedUntrackedSources=false `
-            /p:DebugType=embedded `
-            /p:DebugSymbols=true
-
+          $debugType = if ($env:CONFIGURATION -eq "Debug") { "embedded" } else { "none" }
+          $debugSymbols = if ($env:CONFIGURATION -eq "Debug") { "true" } else { "false" }
+          $publishArgs = @(
+            "publish", ".\PaperTodo.csproj",
+            "-c", $env:CONFIGURATION,
+            "-r", "win-x64",
+            "--self-contained", $env:INCLUDE_DOTNET,
+            "--no-restore",
+            "-o", $publishDir,
+            "/p:PublishSingleFile=$($env:SINGLE_FILE)",
+            "/p:PublishReadyToRun=false",
+            "/p:IncludeNativeLibrariesForSelfExtract=true",
+            "/p:EnableCompressionInSingleFile=false",
+            "/p:PublishTrimmed=false",
+            "/p:EmbedAllSources=false",
+            "/p:EmbedUntrackedSources=false",
+            "/p:DebugType=$debugType",
+            "/p:DebugSymbols=$debugSymbols"
+          )
+          & dotnet @publishArgs
           if ($LASTEXITCODE -ne 0) {
             exit $LASTEXITCODE
           }
 
-          Copy-Item -LiteralPath (Join-Path $selfContainedOut "PaperTodo.exe") -Destination (Join-Path $debugDir $env:SELF_CONTAINED_EXE)
-
-          dotnet publish .\PaperTodo.csproj `
-            -c Debug `
-            -r win-x64 `
-            --self-contained false `
-            --no-restore `
-            -o $frameworkDependentOut `
-            /p:PublishSingleFile=true `
-            /p:PublishReadyToRun=false `
-            /p:IncludeNativeLibrariesForSelfExtract=true `
-            /p:EnableCompressionInSingleFile=false `
-            /p:PublishTrimmed=false `
-            /p:EmbedAllSources=false `
-            /p:EmbedUntrackedSources=false `
-            /p:DebugType=embedded `
-            /p:DebugSymbols=true
-
-          if ($LASTEXITCODE -ne 0) {
-            exit $LASTEXITCODE
+          $sourceExe = Join-Path $publishDir "PaperTodo.exe"
+          if (-not (Test-Path -LiteralPath $sourceExe -PathType Leaf)) {
+            throw "Published executable not found: $sourceExe"
           }
 
-          Copy-Item -LiteralPath (Join-Path $frameworkDependentOut "PaperTodo.exe") -Destination (Join-Path $debugDir $env:FRAMEWORK_DEPENDENT_EXE)
-          Get-ChildItem -LiteralPath $debugDir -File | Sort-Object Name | Format-Table Name, Length
+          $packagePath = Join-Path $packageDir $env:FILE_NAME
+          if ($env:SINGLE_FILE -eq "true") {
+            Copy-Item -LiteralPath $sourceExe -Destination $packagePath
+          } else {
+            # Preserve the full publish directory, rather than copying only PaperTodo.exe.
+            Compress-Archive -Path (Join-Path $publishDir "*") -DestinationPath $packagePath -CompressionLevel Optimal
+          }
+          Get-Item -LiteralPath $packagePath | Format-Table Name, Length
 
-      - name: Upload self-contained Debug executable
+      - name: Upload selected package
         uses: actions/upload-artifact@v7
         with:
-          path: debug/${{ steps.meta.outputs.self_contained_exe }}
-          archive: false
-          if-no-files-found: error
-
-      - name: Upload framework-dependent Debug executable
-        uses: actions/upload-artifact@v7
-        with:
-          path: debug/${{ steps.meta.outputs.framework_dependent_exe }}
+          name: ${{ steps.meta.outputs.artifact_name }}
+          path: package/${{ steps.meta.outputs.file_name }}
           archive: false
           if-no-files-found: error

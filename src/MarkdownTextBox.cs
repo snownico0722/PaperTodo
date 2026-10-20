@@ -975,9 +975,9 @@ public sealed partial class MarkdownTextBox : TextEditor
                 return true;
             }
 
-            if (TryGetBitmapSource(dataObject, out var bitmap) && bitmap != null)
+            if (TryGetBitmapSource(dataObject, out var bitmap, out var repairMissingAlpha) && bitmap != null)
             {
-                ImportAndInsertBitmap(bitmap);
+                ImportAndInsertBitmap(bitmap, repairMissingAlpha);
                 return true;
             }
         }
@@ -1021,7 +1021,7 @@ public sealed partial class MarkdownTextBox : TextEditor
 
         try
         {
-            ImportAndInsertBitmap(bitmap);
+            ImportAndInsertBitmap(bitmap, repairMissingAlpha: true);
         }
         catch (Exception ex)
         {
@@ -1054,7 +1054,7 @@ public sealed partial class MarkdownTextBox : TextEditor
         return imported.Count;
     }
 
-    private void ImportAndInsertBitmap(BitmapSource bitmap)
+    private void ImportAndInsertBitmap(BitmapSource bitmap, bool repairMissingAlpha)
     {
         var imageStore = _imageStore
             ?? throw new InvalidOperationException(Strings.Get("ImageStoreUnavailable"));
@@ -1066,7 +1066,7 @@ public sealed partial class MarkdownTextBox : TextEditor
 
         // The length check intentionally runs before ImportBitmapSource writes the blob to LMDB.
         var insertionPlan = CreateImageInsertionPlan(imageCount: 1);
-        var asset = imageStore.ImportBitmapSource(noteId, bitmap);
+        var asset = imageStore.ImportBitmapSource(noteId, bitmap, repairMissingAlpha);
         InsertImportedImages(imageStore, noteId, new[] { asset }, insertionPlan);
     }
 
@@ -2108,7 +2108,7 @@ public sealed partial class MarkdownTextBox : TextEditor
             var bitmap = _imageStore?.GetBitmapSourceForClipboard(imageId);
             if (bitmap != null)
             {
-                Clipboard.SetImage(bitmap);
+                ClipboardHelper.SetImage(bitmap);
             }
         }
         catch
@@ -2177,8 +2177,12 @@ public sealed partial class MarkdownTextBox : TextEditor
         }
     }
 
-    private static bool TryGetBitmapSource(IDataObject dataObject, out BitmapSource? bitmap)
+    private static bool TryGetBitmapSource(
+        IDataObject dataObject,
+        out BitmapSource? bitmap,
+        out bool repairMissingAlpha)
     {
+        repairMissingAlpha = false;
         // Prefer encoded clipboard formats (PNG/JPEG/GIF). Windows screenshot tools often
         // put a correct PNG next to a CF_DIB/Bitmap whose alpha channel is all zeros; taking
         // Bitmap first would re-encode a fully transparent image.
@@ -2192,6 +2196,7 @@ public sealed partial class MarkdownTextBox : TextEditor
 
         if (TryGetBitmapData(dataObject, DataFormats.Bitmap, autoConvert: true, out bitmap))
         {
+            repairMissingAlpha = true;
             return true;
         }
 

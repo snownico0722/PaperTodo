@@ -1299,4 +1299,4 @@ Default `reload_data` accepts the validated current `data.json` as authoritative
 
 On resolution, the host verifies that the external input has not changed, archives conflicting input, and commits through its atomic writer before applying the result. If the source changes during review, the merge aborts without installing the stale result. A queued merge returns `Outcome: pending` and `Applied: false`; query `get_data_reload_status` until `IsReloading` is false for its final outcome. The originating paper session may be released after reconciliation. This is not plugin-code hot reload. Prefer domain APIs for ordinary Todo/Note edits.
 
-See `doc/ARCHITECTURE.md`, D-057 and D-058.
+See `doc/ARCHITECTURE.md`, D-058 and D-059.
