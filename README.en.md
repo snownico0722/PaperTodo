@@ -6,7 +6,7 @@
 
 A minimal Windows desktop sticky-note app built with native WPF. No main window, no account, no manager.
 
-![version](https://img.shields.io/badge/version-v3.3-3b82f6) ![platform](https://img.shields.io/badge/platform-Windows%20x64-555) ![.NET](https://img.shields.io/badge/.NET-10-512bd4) ![UI](https://img.shields.io/badge/UI-WPF-0078d4)
+![version](https://img.shields.io/badge/version-v3.40-3b82f6) ![platform](https://img.shields.io/badge/platform-Windows%20x64-555) ![.NET](https://img.shields.io/badge/.NET-10-512bd4) ![UI](https://img.shields.io/badge/UI-WPF-0078d4)
 
 **Website**: [https://snownico0722.github.io/PaperTodo/](https://snownico0722.github.io/PaperTodo/) 
 
