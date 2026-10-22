@@ -51,9 +51,25 @@ internal static class ExpandedPaperDisplayRecoveryChecks
         // Active capsule, expanded logical paper, but the real paper HWND is inaccessible.
         ParkOffscreen();
         window.ActivateFromEdgeShortcut();
-        Require(paper.IsVisible && !paper.IsCollapsed && window.IsDeepCapsuleSlotVisible &&
-            WindowNative.TryGetWindowDeviceBounds(window, out var retrieved) &&
-            ExpandedPaperRecoveryPolicy.HasReachablePixels(retrieved, monitors),
+        var hasRetrievedBounds = WindowNative.TryGetWindowDeviceBounds(window, out var retrieved);
+        var clickRecovered = paper.IsVisible && !paper.IsCollapsed &&
+            window.IsDeepCapsuleSlotVisible && hasRetrievedBounds &&
+            ExpandedPaperRecoveryPolicy.HasReachablePixels(retrieved, monitors);
+        if (!clickRecovered)
+        {
+            var directRecovery = window.RecoverInaccessibleExpandedSurface(monitors);
+            var hasDirectBounds = WindowNative.TryGetWindowDeviceBounds(window, out var afterDirect);
+            var presenter = (EdgeCapsulePresenter)typeof(PaperWindow)
+                .GetField("_edgeCapsule", Private)!.GetValue(window)!;
+            Console.WriteLine($"EDGE_RESCUE_DIAGNOSTIC clickRect={retrieved} " +
+                $"clickBounds={hasRetrievedBounds} wpfVisible={window.IsVisible} " +
+                $"collapsed={paper.IsCollapsed} paperVisible={paper.IsVisible} " +
+                $"edgeHostVisible={window.IsDeepCapsuleSlotVisible} " +
+                $"windowState={window.WindowState} slot={presenter.State.Slot} " +
+                $"wpfOpacity={window.Opacity:F3} directRecovery={directRecovery} " +
+                $"directBounds={hasDirectBounds} directRect={afterDirect}");
+        }
+        Require(clickRecovered,
             "clicking an active capsule failed to retrieve its off-screen expanded HWND");
 
         // Simulate display topology settling without requiring a real DP hot-unplug in CI.
