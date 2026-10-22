@@ -154,6 +154,14 @@ public sealed partial class PaperWindow
             return false;
         }
 
+        // WindowFromPoint can report a live HWND outside the connected monitors. An
+        // off-screen paper is not meaningfully visible, even if its own hit test succeeds.
+        if (!ExpandedPaperRecoveryPolicy.HasReachablePixels(
+                bounds, WindowWorkAreaHelper.ConnectedMonitorGeometries()))
+        {
+            return false;
+        }
+
         // WindowFromPoint skips disabled windows. A common modal-dialog pattern therefore makes
         // the still-visible disabled owner look transparent to the grid below it. Handle only
         // that narrow, externally-owned case and conservatively retrieve instead of retracting.
