@@ -1671,13 +1671,20 @@ public sealed partial class AppController : IDisposable
         else
         {
             _displayMetricsRefreshState = DisplayMetricsRefreshState.Idle;
-            _ = WindowWorkAreaHelper.ConnectedMonitorGeometries();
+            var monitors = WindowWorkAreaHelper.ConnectedMonitorGeometries();
             foreach (var window in _windows.Values)
             {
                 window.InvalidateEdgeCapsuleDisplayMetrics();
             }
             RefreshExperimentalAttachmentsAfterDisplayMetrics();
             ArrangeDeepCapsules(animate: false);
+            // A DP hot-unplug can move an expanded paper's HWND beyond the work areas
+            // while its independent edge host still advertises an Active slot.
+            foreach (var window in _windows.Values.ToArray())
+            {
+                if (!window.IsClosed)
+                    window.RecoverInaccessibleExpandedSurface(monitors);
+            }
         }
         foreach (var window in _windows.Values)
         {

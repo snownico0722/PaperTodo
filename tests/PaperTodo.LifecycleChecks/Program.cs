@@ -11,7 +11,7 @@ internal static class Program
 {
     private const BindingFlags Private = BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic;
     private const string FixtureMarker = ".papertodo-lifecycle-fixture";
-    private static readonly string[] Cases = ["startup", "missing-monitor", "master-queue-transfer", "master-queue-cancel", "master-queue-drag-preparation", "master-queue-drop-handoff", "master-queue-membership", "master-queue-mutations", "master-queue-hide", "master-queue-disconnect", "master-queue-merge", "master-queue-merge-collapsed", "master-queue-material-handoff", "controller-hide-create-reentry", "controller-hide-show-reentry", "controller-zorder-create-reentry", "controller-close-delete-reentry", "todo-visibility", "real-exit", "early-expand", "edge-expand-foreground", "cancel-prewarm", "real-exit-scripts", "early-exit", "todo-context-menu", "todo-history"];
+    private static readonly string[] Cases = ["startup", "missing-monitor", "master-queue-transfer", "master-queue-cancel", "master-queue-drag-preparation", "master-queue-drop-handoff", "master-queue-membership", "master-queue-mutations", "master-queue-hide", "master-queue-disconnect", "master-queue-merge", "master-queue-merge-collapsed", "master-queue-material-handoff", "controller-hide-create-reentry", "controller-hide-show-reentry", "controller-zorder-create-reentry", "controller-close-delete-reentry", "todo-visibility", "real-exit", "early-expand", "edge-expand-foreground", "expanded-paper-display-recovery", "cancel-prewarm", "real-exit-scripts", "early-exit", "todo-context-menu", "todo-history"];
 
     [STAThread]
     private static int Main(string[] args)
@@ -187,6 +187,8 @@ internal static class Program
             TodoContextMenuChecks.Prepare(state);
         if (name == "edge-expand-foreground")
             EdgeExpandForegroundChecks.Prepare(state);
+        if (name == "expanded-paper-display-recovery")
+            ExpandedPaperDisplayRecoveryChecks.Prepare(state);
         var store = new StateStore();
         store.SaveJsonSync(store.SerializeState(state), 1);
         var controller = new AppController();
@@ -201,6 +203,11 @@ internal static class Program
             if (name == "edge-expand-foreground")
             {
                 await EdgeExpandForegroundChecks.Run(controller, windows);
+                return;
+            }
+            if (name == "expanded-paper-display-recovery")
+            {
+                await ExpandedPaperDisplayRecoveryChecks.Run(controller, windows);
                 return;
             }
             if (name == "todo-context-menu")
