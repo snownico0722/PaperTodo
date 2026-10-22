@@ -425,6 +425,8 @@ public sealed partial class PaperWindow
             _capsuleShell.Visibility == Visibility.Visible;
         if (!needsRestore)
         {
+            // The WPF expanded form can be intact even when its native HWND is off-screen.
+            RecoverInaccessibleExpandedSurface(WindowWorkAreaHelper.ConnectedMonitorGeometries());
             return;
         }
 
@@ -482,7 +484,41 @@ public sealed partial class PaperWindow
             Show();
         }
 
+        RecoverInaccessibleExpandedSurface(WindowWorkAreaHelper.ConnectedMonitorGeometries());
         RefreshEffectiveTopmost();
+    }
+
+    /// <summary>
+    /// Restore a physically inaccessible expanded HWND without touching the edge host or
+    /// persisting an intermediate DP disconnect geometry as the user's paper placement.
+    /// </summary>
+    internal bool RecoverInaccessibleExpandedSurface(IReadOnlyList<MonitorGeometry> monitors)
+    {
+        if (_windowLifecycle != PaperWindowLifecycleState.Alive ||
+            !_paper.IsVisible || _paper.IsCollapsed ||
+            IsDeepCapsuleRetractedIntoMaster || IsExperimentalTetherPresentationSuppressed ||
+            !IsVisible || WindowState != WindowState.Normal ||
+            IsPaperFormTransitioning || _isSnappedPresentation ||
+            monitors.Count == 0 ||
+            !WindowNative.TryGetWindowDeviceBounds(this, out var bounds) ||
+            bounds.IsEmpty ||
+            ExpandedPaperRecoveryPolicy.HasReachablePixels(bounds, monitors) ||
+            !WindowWorkAreaHelper.TryGetMonitorGeometryForDeviceBounds(bounds, out var monitor))
+        {
+            return false;
+        }
+
+        var target = PaperRestoreGeometry.ClampToMonitor(
+            bounds,
+            Math.Max(_paper.Width, PaperLayoutDefaults.MinWidth),
+            Math.Max(_paper.Height, PaperLayoutDefaults.MinHeight),
+            monitor);
+        var applied = false;
+        MoveWindowWithoutGeometrySave(() =>
+            applied = TryApplyRememberedDeepCapsuleExpandedGeometry(target));
+        return applied &&
+            WindowNative.TryGetWindowDeviceBounds(this, out var restored) &&
+            ExpandedPaperRecoveryPolicy.HasReachablePixels(restored, monitors);
     }
 
     public bool TryRestoreRememberedDeepCapsuleExpandedGeometry()
