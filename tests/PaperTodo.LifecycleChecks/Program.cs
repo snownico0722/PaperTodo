@@ -24,8 +24,13 @@ internal static class Program
 >>>>>>> ee7c9291 (fix(capsule): 修复拖拽期共享状态的 owner 归属、handoff 吞手势与描边不重试)
 =======
         "free-queue-preview-restore", "free-queue-regressions",
+<<<<<<< HEAD
         "edge-capsule-pending-drag-release", "free-queue-resting-avoidance"];
 >>>>>>> 2c6b001f (fix(capsule): 修复等待租约松手误触与自由队列跨队列重叠)
+=======
+        "edge-capsule-pending-drag-release", "free-queue-resting-avoidance",
+        "free-queue-shortcut-targeting"];
+>>>>>>> a1c305fd (fix(capsule): 修复整队取消身份回写与快捷键漏选自由队列)
 
     [STAThread]
     private static int Main(string[] args)
@@ -173,7 +178,9 @@ internal static class Program
                 IsVisible = true, IsCollapsed = true, X = area.Left + 60, Y = area.Top + 60,
                 Width = 300, Height = 240, CapsuleSide = DeepCapsuleSides.Right
             });
-        if (name == "free-queue-preview-restore" || name == "free-queue-regressions")
+        if (name == "free-queue-preview-restore" ||
+            name == "free-queue-regressions" ||
+            name == "free-queue-shortcut-targeting")
         {
             // 同一右侧边上的三条自由队列：qa = [0, 1]，qb = [2, 3]，qc = [4]。
             state.UseCapsuleFreeQueues = true;
@@ -257,6 +264,11 @@ internal static class Program
             if (name == "free-queue-resting-avoidance")
             {
                 await EdgeCapsuleRestingLayoutChecks.Run(controller, windows);
+                return;
+            }
+            if (name == "free-queue-shortcut-targeting")
+            {
+                await EdgeCapsuleShortcutChecks.Run(controller, windows);
                 return;
             }
             if (name == "edge-expand-foreground")

@@ -33,6 +33,8 @@ internal static partial class Program
             Console.WriteLine("PASS edge-wide-preview-avoidance");
             EdgeCapsuleRestingLayout();
             Console.WriteLine("PASS free-queue-resting-avoidance");
+            EdgeCapsuleShortcutOrdinalChecks();
+            Console.WriteLine("PASS free-queue-shortcut-ordinal");
             EdgeCapsuleQueueInsertionSolverChecks();
             Console.WriteLine("PASS insertion-layout-solver");
             Persistence();

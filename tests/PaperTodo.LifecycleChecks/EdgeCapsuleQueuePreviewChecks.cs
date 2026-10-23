@@ -311,7 +311,7 @@ internal static class EdgeCapsuleQueuePreviewChecks
         Require(
             controller.TryBeginEdgeCapsuleQueueTransfer(source, out var retrySnapshot),
             "a later whole-queue transfer was rejected after the cancel");
-        controller.CancelEdgeCapsuleQueueTransfer(retrySnapshot);
+        controller.AbandonEdgeCapsuleQueueTransfer(retrySnapshot);
         controller.ArrangeDeepCapsules(animate: false);
         await Until(
             () => windows[source.Id].IsDeepCapsuleSlotVisible,
@@ -351,7 +351,7 @@ internal static class EdgeCapsuleQueuePreviewChecks
         Require(
             controller.TryBeginEdgeCapsuleQueueTransfer(targetPaper, out var retryTransfer),
             "a rejected whole-queue transfer stranded the transfer gate");
-        controller.CancelEdgeCapsuleQueueTransfer(retryTransfer);
+        controller.AbandonEdgeCapsuleQueueTransfer(retryTransfer);
 
         // FQ-04：整队拖拽期间外部移动非首个 carried 成员时，提交必须释放事务并拒绝，
         // 且不能用旧快照覆盖外部合法修改。
@@ -729,11 +729,11 @@ internal static class EdgeCapsuleQueuePreviewChecks
                 "disconnecting a monitor fell back to the primary queue margin");
             controller.ArrangeDeepCapsules(animate: false);
 
-            controller.CancelEdgeCapsuleQueueTransfer(disconnectTransfer);
+            controller.AbandonEdgeCapsuleQueueTransfer(disconnectTransfer);
             Require(
                 Math.Abs(controller.State.DeepCapsuleQueueStartTopMargins[persistentKey] - 120) < 1e-6 &&
                 !controller.State.DeepCapsuleQueueStartTopMargins.ContainsKey("|right#qdisp"),
-                "cancelling after a disconnect restored the margin into the fallback queue");
+                "cancelling after a disconnect rewrote the queue margin");
 
             // 空 id 队列：断连副屏与主屏同侧必须保持不同身份。
             transferA.CapsuleMonitorDeviceName = disconnectedMonitor;

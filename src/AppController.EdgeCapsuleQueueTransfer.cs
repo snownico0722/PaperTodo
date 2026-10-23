@@ -1,31 +1,36 @@
 namespace PaperTodo;
 
 /// <summary>
+/// 单个成员在某个时间点的持久队列身份。取消/回滚时必须逐成员恢复，
+/// 不能用被拖成员的字段代表整条队列（主屏切换后同一运行队列可能混用 "" 与设备名）。
+/// </summary>
+internal readonly record struct EdgeCapsuleQueueMemberIdentity(
+    string PaperId,
+    string MonitorDeviceName,
+    string Side,
+    string QueueId);
+
+/// <summary>
 /// State captured when a free-queue drag escalates into a whole-queue move, so the gesture can be
 /// rolled back exactly if it is cancelled.
 /// </summary>
 /// <remarks>
-/// FQ-14 残余：仅恢复成员身份与源队列 margin 不足以覆盖完整提交——
-/// <see cref="MergeTransferredQueueInto"/> / <see cref="StartTransferredQueueAt"/> 在
+/// FQ-14：<see cref="MergeTransferredQueueInto"/> / <see cref="StartTransferredQueueAt"/> 在
 /// 「改身份 → 重排 State.Papers → 持久化 margin → Arrange/RefreshTrayMenu/SaveNow」
-/// 区间内一旦抛异常，<see cref="AppController.CancelEdgeCapsuleQueueTransfer"/> 只会恢复
-/// 身份与源队列 margin，不能回滚目标/邻队 margin 与 State.Papers 顺序。
+/// 区间内一旦抛异常，仅在内存中回调取消无法回滚目标/邻队 margin 与 State.Papers 顺序。
 /// 在 commit 入口额外快照 <see cref="PaperOrderIds"/> 与 <see cref="StartTopMargins"/>，
-/// 让异常路径具备完整回滚能力。
+/// 逐成员身份则在 <see cref="MemberIdentities"/> 中恢复。
 /// </remarks>
 internal sealed record EdgeCapsuleQueueTransferSnapshot(
     string SourceQueueKey,
     IReadOnlyList<string> PaperIds,
-    string MonitorDeviceName,
-    string Side,
-    string QueueId,
-    double StartTopMargin,
-    bool HadStartTopMargin,
+    // 逐成员原始身份：TryBegin 捕获起拖状态，Capture...Commit 在 mutation 前刷新为提交状态。
+    IReadOnlyList<EdgeCapsuleQueueMemberIdentity> MemberIdentities,
     // --- FQ-14: order + margin snapshots so a partial commit can be reverted wholesale ---
     // PaperOrderIds 是提交前 State.Papers 的**完整** id 顺序（不只是 carried 成员），
     // 因为提交会把整块搬到目标队列的插入位，只记相对顺序无法还原槽位。
-    IReadOnlyList<string>? PaperOrderIds,
-    IReadOnlyDictionary<string, double>? StartTopMargins);
+    IReadOnlyList<string>? PaperOrderIds = null,
+    IReadOnlyDictionary<string, double>? StartTopMargins = null);
 
 /// <summary>
 /// Whole-queue drag for free queues (D-058).
@@ -72,33 +77,28 @@ public sealed partial class AppController
             return false;
         }
 
-        // free 模式下 QueueKey 已是持久实例 key；快照的 margin 与恢复/清理都使用它，
+        // free 模式下 QueueKey 已是持久实例 key；快照的恢复/清理都使用它，
         // 显示器断连/重连不会把源队列重定向到主屏。
-        var startKey = queueKey;
         snapshot = new EdgeCapsuleQueueTransferSnapshot(
             queueKey,
             members.Select(p => p.Id).ToList(),
-            paper.CapsuleMonitorDeviceName,
-            DeepCapsuleSides.Normalize(paper.CapsuleSide),
-            EdgeCapsuleQueueIds.Normalize(paper.CapsuleQueueId),
-            State.DeepCapsuleQueueStartTopMargins.TryGetValue(startKey, out var margin)
-                ? margin
-                : EdgeCapsuleLayout.StartTopMargin,
-            State.DeepCapsuleQueueStartTopMargins.ContainsKey(startKey),
-            // FQ-14: 此刻 OrderIds/Margins 还没被 commit mutation 替换为可回滚点，留 null。
-            // 真实快照在 commit 入口由 CaptureEdgeCapsuleQueueTransferCommit 填充；
-            // 用户取消路径因没有 mutation，本就无需回滚。
-            null,
-            null);
+            // 逐成员捕获：同一条运行队列可能混用 "" 与主屏设备名（运行中切换主屏）。
+            members.Select(p => new EdgeCapsuleQueueMemberIdentity(
+                p.Id,
+                p.CapsuleMonitorDeviceName,
+                DeepCapsuleSides.Normalize(p.CapsuleSide),
+                EdgeCapsuleQueueIds.Normalize(p.CapsuleQueueId))).ToList());
+        // FQ-14: OrderIds/Margins 在 commit 入口由 CaptureEdgeCapsuleQueueTransferCommit
+        // 填充；用户取消路径没有 mutation，本就无需回滚。
 
         _edgeCapsuleQueueTransferSources.Add(queueKey);
         return true;
     }
 
     /// <summary>
-    /// Restore the carried members' source queue identity and the source queue's remembered start
-    /// margin. This does not restore State.Papers order or target/neighbour margins; after a partial
-    /// commit, pair it with <see cref="RestoreEdgeCapsuleQueueTransferCommit"/>.
+    /// 提交中途异常时的回滚入口：按快照逐成员恢复原始身份，并释放冻结。
+    /// 普通取消没有修改业务数据，应走 <see cref="AbandonEdgeCapsuleQueueTransfer"/>。
+    /// 顺序与 margin 由 <see cref="RestoreEdgeCapsuleQueueTransferCommit"/> 负责。
     /// </summary>
     internal void CancelEdgeCapsuleQueueTransfer(EdgeCapsuleQueueTransferSnapshot? snapshot)
     {
@@ -109,17 +109,16 @@ public sealed partial class AppController
         }
 
         var byId = State.Papers.ToDictionary(p => p.Id, StringComparer.Ordinal);
-        foreach (var id in snapshot.PaperIds)
+        foreach (var identity in snapshot.MemberIdentities)
         {
-            if (byId.TryGetValue(id, out var member))
+            if (byId.TryGetValue(identity.PaperId, out var member))
             {
-                member.CapsuleMonitorDeviceName = snapshot.MonitorDeviceName;
-                member.CapsuleSide = snapshot.Side;
-                member.CapsuleQueueId = snapshot.QueueId;
+                member.CapsuleMonitorDeviceName = identity.MonitorDeviceName;
+                member.CapsuleSide = identity.Side;
+                member.CapsuleQueueId = identity.QueueId;
             }
         }
 
-        RestoreQueueStartMargin(snapshot);
         ArrangeDeepCapsules(animate: false);
     }
 
@@ -190,7 +189,8 @@ public sealed partial class AppController
         // （或输入退化），此时必须回滚，不能退回“胶囊中心 - 半高”的原始落点硬放。
         if (plan.Outcome != EdgeCapsuleQueueMagnetOutcome.NewQueue)
         {
-            CancelEdgeCapsuleQueueTransfer(snapshot);
+            // 尚未修改任何业务数据：只释放冻结与预览。
+            AbandonEdgeCapsuleQueueTransfer(snapshot);
             return false;
         }
 
@@ -198,7 +198,7 @@ public sealed partial class AppController
         // 并且 top 与浮动胶囊的实际位置对齐。
         if (!TryResolveQueueDropGeometry(carried[0], anchor, out var drop))
         {
-            CancelEdgeCapsuleQueueTransfer(snapshot);
+            AbandonEdgeCapsuleQueueTransfer(snapshot);
             return false;
         }
 
@@ -207,17 +207,23 @@ public sealed partial class AppController
     }
 
     /// <summary>
-    /// FQ-14: 在 commit 入口快照 State.Papers 的完整 id 顺序与整个
-    /// DeepCapsuleQueueStartTopMargins 字典。异常路径用
-    /// <see cref="RestoreEdgeCapsuleQueueTransferCommit"/> 完整回滚——
-    /// CancelEdgeCapsuleQueueTransfer 只覆盖成员身份与源队列 margin，无力回滚
-    /// PersistEdgeCapsuleQueueDropLayoutMargins 写过的目标/邻队 margin 与 State.Papers 重排。
+    /// FQ-14: 在 mutation 前快照逐成员身份、State.Papers 的完整 id 顺序与整个
+    /// DeepCapsuleQueueStartTopMargins 字典。异常路径先用
+    /// <see cref="RestoreEdgeCapsuleQueueTransferCommit"/> 还原顺序与 margin，
+    /// 再由 <see cref="CancelEdgeCapsuleQueueTransfer"/> 逐成员还原身份。
     /// </summary>
     private EdgeCapsuleQueueTransferSnapshot CaptureEdgeCapsuleQueueTransferCommit(
-        EdgeCapsuleQueueTransferSnapshot source)
+        EdgeCapsuleQueueTransferSnapshot source,
+        IReadOnlyList<PaperData> carried)
     {
         return source with
         {
+            // 回滚点取提交前的 live 身份，而不是起拖值：拖拽期间外部 API/插件可能合法修改。
+            MemberIdentities = carried.Select(paper => new EdgeCapsuleQueueMemberIdentity(
+                paper.Id,
+                paper.CapsuleMonitorDeviceName,
+                DeepCapsuleSides.Normalize(paper.CapsuleSide),
+                EdgeCapsuleQueueIds.Normalize(paper.CapsuleQueueId))).ToList(),
             // 快照**完整**顺序而非仅 carried 成员的相对顺序：InsertPaperBesideQueues 会把
             // 整块搬到目标队列的插入位，只还原相对顺序无法把成员送回原来的槽位。
             PaperOrderIds = State.Papers.Select(p => p.Id).ToList(),
@@ -319,14 +325,15 @@ public sealed partial class AppController
         var layoutPlan = EvaluateEdgeCapsuleQueueDropLayout(carried, targetQueueKey, insertAt);
         if (!layoutPlan.Feasible)
         {
-            CancelEdgeCapsuleQueueTransfer(snapshot);
+            // 尚未修改任何业务数据：只释放冻结与预览。
+            AbandonEdgeCapsuleQueueTransfer(snapshot);
             return false;
         }
 
         // FQ-14: 在所有 mutation 之前快照 State.Papers 顺序与全部 margin。catch 中按快照的
         // 完整顺序重建 State.Papers，因此拖拽期间外部对既有成员顺序的调整会被覆盖；只有
         // 快照之外新增的成员按当前相对次序追加到末尾，已删除成员自然跳过。
-        var commitUndo = CaptureEdgeCapsuleQueueTransferCommit(snapshot);
+        var commitUndo = CaptureEdgeCapsuleQueueTransferCommit(snapshot, carried);
         try
         {
             foreach (var member in carried)
@@ -355,7 +362,7 @@ public sealed partial class AppController
             // 返回 false 让手势层走正常「未提交」收尾（弹回原位）。
             // 不能上抛：上层 PrepareAndRunNativeDrag 的异常处理不保证事务恢复。
             RestoreEdgeCapsuleQueueTransferCommit(commitUndo);
-            CancelEdgeCapsuleQueueTransfer(snapshot);
+            CancelEdgeCapsuleQueueTransfer(commitUndo);
             return false;
         }
     }
@@ -378,7 +385,7 @@ public sealed partial class AppController
 
         // FQ-14: 同样的事务回滚。NewQueue 分支不重排 State.Papers（carried 成员已连续），
         // 但仍会改身份与写入目标 margin，异常时必须一并回滚。
-        var commitUndo = CaptureEdgeCapsuleQueueTransferCommit(snapshot);
+        var commitUndo = CaptureEdgeCapsuleQueueTransferCommit(snapshot, carried);
         try
         {
             foreach (var member in carried)
@@ -406,7 +413,7 @@ public sealed partial class AppController
         catch
         {
             RestoreEdgeCapsuleQueueTransferCommit(commitUndo);
-            CancelEdgeCapsuleQueueTransfer(snapshot);
+            CancelEdgeCapsuleQueueTransfer(commitUndo);
         }
     }
 
@@ -417,9 +424,8 @@ public sealed partial class AppController
     private void RemoveVacatedQueueStartMargin(
         EdgeCapsuleQueueTransferSnapshot snapshot,
         string destinationStartKey) =>
-        RemoveQueueStartMarginIfVacated(
-            PersistentQueueKey(snapshot.MonitorDeviceName, snapshot.Side, snapshot.QueueId),
-            destinationStartKey);
+        // 直接使用起拖时的持久 key：按当前主屏重新归一化会在拖拽期间切换主屏时漂移。
+        RemoveQueueStartMarginIfVacated(snapshot.SourceQueueKey, destinationStartKey);
 
     /// <summary>
     /// 提交前复核源队列的 live 成员序列。与主胶囊整队路径一致：原生拖拽会泵
@@ -447,26 +453,20 @@ public sealed partial class AppController
     }
 
     /// <summary>
-    /// 用户主动取消时使用：源队列 live 序列未变才回滚，否则只释放事务，
-    /// 避免把拖拽期间的外部合法修改覆盖掉。异常回滚仍使用 Cancel 强制恢复。
+    /// 用户主动取消时使用：尚未修改业务数据，只释放冻结并重排。
+    /// 异常回滚必须使用 <see cref="CancelEdgeCapsuleQueueTransfer"/>。
     /// </summary>
     internal void AbandonEdgeCapsuleQueueTransfer(
         EdgeCapsuleQueueTransferSnapshot? snapshot)
     {
         if (snapshot == null)
         {
+            // TryBegin 拒绝并发 transfer，因此这里清空只会释放唯一冻结的源队列。
             _edgeCapsuleQueueTransferSources.Clear();
             return;
         }
 
-        if (EdgeCapsuleQueueTransferSourceMatchesSnapshot(snapshot))
-        {
-            CancelEdgeCapsuleQueueTransfer(snapshot);
-        }
-        else
-        {
-            ReleaseEdgeCapsuleQueueTransfer(snapshot);
-        }
+        ReleaseEdgeCapsuleQueueTransfer(snapshot);
     }
 
     /// <summary>
@@ -525,16 +525,4 @@ public sealed partial class AppController
         }
     }
 
-    private void RestoreQueueStartMargin(EdgeCapsuleQueueTransferSnapshot snapshot)
-    {
-        var key = PersistentQueueKey(snapshot.MonitorDeviceName, snapshot.Side, snapshot.QueueId);
-        if (snapshot.HadStartTopMargin)
-        {
-            State.DeepCapsuleQueueStartTopMargins[key] = snapshot.StartTopMargin;
-        }
-        else
-        {
-            State.DeepCapsuleQueueStartTopMargins.Remove(key);
-        }
-    }
 }

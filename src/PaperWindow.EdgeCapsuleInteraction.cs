@@ -1481,8 +1481,17 @@ public sealed partial class PaperWindow
             ResetDeepCapsuleQueueMagnetPreview();
             if (!transferConsumed && transfer is { } cancelled)
             {
-                // 任何提前返回或异常路径都必须回滚整队事务；正常提交分支已标记 consumed。
-                _controller.CancelEdgeCapsuleQueueTransfer(cancelled);
+                if (commit)
+                {
+                    // 提交异常真正逃逸时只剩起拖快照：这里只能恢复身份并释放冻结；
+                    // 顺序与 margin 的完整回滚由 Commit 内部 catch 保证。
+                    _controller.CancelEdgeCapsuleQueueTransfer(cancelled);
+                }
+                else
+                {
+                    // 普通取消：业务数据未被修改，只释放冻结与预览。
+                    _controller.AbandonEdgeCapsuleQueueTransfer(cancelled);
+                }
             }
 
             FinishEdgeCapsulePointerInteraction();
