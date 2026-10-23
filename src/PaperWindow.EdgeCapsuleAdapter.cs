@@ -174,7 +174,8 @@ public sealed partial class PaperWindow
         // FQ-09: 手势终结即丢弃 docking handoff 排队意图。这里是所有指针手势的唯一收口
         // （含松手未起拖的分支），残留的旧时间戳会让下一次新手势在
         // OnEdgeCapsulePointerMoved 的超时判定里被误杀。
-        ClearDeepCapsulePendingReorderDrag();
+        // 同时恢复点击资格：等待租约期间被撤销的点击不能泄漏到下一次手势。
+        ResetDeepCapsulePointerGestureSuppression();
         return DispatchEdgeCapsuleIntent(
             EdgeCapsuleIntent.PointerInteractionFinished(),
             EdgeCapsuleDirty.Presentation | EdgeCapsuleDirty.Pointer);

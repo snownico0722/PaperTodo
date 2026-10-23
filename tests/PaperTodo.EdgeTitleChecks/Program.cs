@@ -31,6 +31,8 @@ internal static partial class Program
             Console.WriteLine("PASS queue-magnet-merge-detach-reorder");
             EdgeQueueAvoidance();
             Console.WriteLine("PASS edge-wide-preview-avoidance");
+            EdgeCapsuleRestingLayout();
+            Console.WriteLine("PASS free-queue-resting-avoidance");
             EdgeCapsuleQueueInsertionSolverChecks();
             Console.WriteLine("PASS insertion-layout-solver");
             Persistence();
@@ -995,6 +997,85 @@ internal static partial class Program
         var descending = Push(300, Q("A", 100, "a1"), Q("C", 600, "c1"), Q("B", 260, "b1"));
         Check(descending.ContainsKey("b1"), "Order is the caller's contract; a caller that sorts wrong is visible");
         Check(!descending.ContainsKey("c1"), "A queue the walk already passed stays put");
+    }
+
+    // 自由队列静止避让：同一 live edge 上，后一条队列按前一条队列的底边整体下推。
+    // 输入 top 已包含 preview 等附加偏移，delta 只是需要追加到 TopOffsetDip 上的增量。
+    private static void EdgeCapsuleRestingLayout()
+    {
+        const double compact = 46;
+        const double gap = 4;
+
+        EdgeCapsuleRestingQueueMember M(string id, double top) => new(id, top);
+
+        EdgeCapsuleRestingQueue Q(
+            string key,
+            string liveEdge,
+            params EdgeCapsuleRestingQueueMember[] members) =>
+            new(
+                liveEdge,
+                key,
+                members,
+                members.Min(member => member.TopDip),
+                members.Max(member => member.TopDip) + compact);
+
+        Dictionary<string, double> Build(params EdgeCapsuleRestingQueue[] queues) =>
+            new(EdgeCapsuleRestingLayoutCoordinator.BuildDownwardOffsets(queues, gap));
+
+        Check(Build().Count == 0, "An empty edge produces no resting offsets");
+
+        var overlap = Build(
+            Q("a", "|right", M("a1", 48), M("a2", 98)),
+            Q("b", "|right", M("b1", 60), M("b2", 110)));
+        Check(
+            Math.Abs(overlap["b1"] - 88) < 1e-9 &&
+            Math.Abs(overlap["b2"] - 88) < 1e-9,
+            "An overlapping queue shifts uniformly below its neighbour");
+
+        var clear = Build(
+            Q("a", "|right", M("a1", 48)),
+            Q("b", "|right", M("b1", 400)));
+        Check(clear.Count == 0, "A queue that already clears the gap stays put");
+
+        var otherEdge = Build(
+            Q("a", "|right", M("a1", 48)),
+            Q("b", "|left", M("b1", 60)));
+        Check(otherEdge.Count == 0, "Different live edges do not avoid each other");
+
+        // B 已带 preview 偏移（当前 top 90），delta 必须相对当前 top 计算。
+        var withPreviewOffset = Build(
+            Q("a", "|right", M("a1", 48), M("a2", 98)),
+            Q("b", "|right", M("b1", 90), M("b2", 140)));
+        Check(
+            Math.Abs(withPreviewOffset["b1"] - 58) < 1e-9,
+            "The delta is relative to the already-offset current top");
+
+        var unsorted = Build(
+            Q("c", "|right", M("c1", 400)),
+            Q("a", "|right", M("a1", 48), M("a2", 98)),
+            Q("b", "|right", M("b1", 60)));
+        Check(
+            Math.Abs(unsorted["b1"] - 88) < 1e-9 && !unsorted.ContainsKey("c1"),
+            "The policy sorts queues by current top");
+
+        var chain = Build(
+            Q("a", "|right", M("a1", 48), M("a2", 98)),
+            Q("b", "|right", M("b1", 60), M("b2", 110)),
+            Q("c", "|right", M("c1", 240)));
+        Check(
+            Math.Abs(chain["b1"] - 88) < 1e-9 &&
+            Math.Abs(chain["c1"] - 8) < 1e-9,
+            "Downward displacement carries across queues");
+
+        var nonFinite = Build(
+            new EdgeCapsuleRestingQueue(
+                "|right",
+                "a",
+                new[] { M("a1", double.NaN) },
+                double.NaN,
+                double.NaN),
+            Q("b", "|right", M("b1", 60)));
+        Check(nonFinite.Count == 0, "Queues with non-finite geometry are skipped");
     }
 
     private static void CycleAndUnicode()    {

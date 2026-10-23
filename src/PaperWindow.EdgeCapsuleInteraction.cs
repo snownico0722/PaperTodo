@@ -45,7 +45,11 @@ public sealed partial class PaperWindow
             $"paper={EdgeCapsulePerformanceDiagnostics.ShortId(_paper.Id)} " +
             $"pointer={screenPosition.X:F0},{screenPosition.Y:F0}");
         _deepCapsuleQueueTransferRequested = ConsumeQueueDragModifier();
-        BeginEdgeCapsulePointerInteraction(screenPosition);
+        if (BeginEdgeCapsulePointerInteraction(screenPosition))
+        {
+            // 新 PendingClick 已建立，上一手势可能残留的等待/撤销状态一律作废。
+            ResetDeepCapsulePointerGestureSuppression();
+        }
         QueueDeepCapsuleFloatingDragInfrastructurePrewarm();
     }
 
@@ -109,7 +113,7 @@ public sealed partial class PaperWindow
             Environment.TickCount64 - _deepCapsulePendingReorderDragRequestTimestamp
                 > DeepCapsulePendingReorderRetryTimeoutMilliseconds)
         {
-            ClearDeepCapsulePendingReorderDrag();
+            ResetDeepCapsulePointerGestureSuppression();
             CancelDeepCapsuleReorderDrag(restoreLayout: true);
             _edgeCapsuleHost?.ReleaseContentPointer();
             return true;
@@ -160,6 +164,14 @@ public sealed partial class PaperWindow
             ClearCapsuleInteractionKeyboardFocus();
             return true;
         }
+        if (_deepCapsulePointerClickRevoked || HasDeepCapsulePendingReorderDrag)
+        {
+            // 阈值已越过但没有可提交的拖拽：结束手势，绝不退化成点击（否则会展开或执行脚本）。
+            // 返回 true 交给 EdgeCapsuleHost.CompleteContentPointer 释放 content 捕获。
+            FinishEdgeCapsulePointerInteraction();
+            ClearCapsuleInteractionKeyboardFocus();
+            return true;
+        }
         if (!IsDeepCapsuleSlotPendingClick)
         {
             return false;
@@ -192,6 +204,9 @@ public sealed partial class PaperWindow
         }
         else if (wasPendingClick && action == EdgeCapsuleCaptureAction.None)
         {
+            // LoseCapture 已把 reducer 从 PendingClick 送回 Idle；窗口侧的等待/撤销字段
+            // 不经过 FinishEdgeCapsulePointerInteraction，必须在这里显式收口。
+            ResetDeepCapsulePointerGestureSuppression();
             InvalidateEdgeCapsule(EdgeCapsuleDirty.Presentation | EdgeCapsuleDirty.Pointer);
         }
         return action;
@@ -446,6 +461,8 @@ public sealed partial class PaperWindow
 
     private void StartDeepCapsuleReorderDrag(DeviceScreenPoint currentScreenPos)
     {
+        // 本方法只会在越过拖拽阈值的路径上调用：从这一刻起本次手势不再是点击。
+        _deepCapsulePointerClickRevoked = true;
         _previewOriginReorderBaseline = null;
         if (EdgeCapsuleDragWindow.HasActiveLease)
         {
@@ -453,8 +470,14 @@ public sealed partial class PaperWindow
             // 不能调 CancelDeepCapsuleReorderDrag()：它会走 finally 把 PendingClick 也清掉，把整个手势
             // 静默吞成一次意外单击。改为记录起点，租约释放后下一次指针移动由 OnEdgeCapsulePointerMoved
             // 重新调用本方法自然重进；同时在 OnEdgeCapsulePointerMoved 入口检查超时做兜底。
-            _deepCapsulePendingReorderDragStart = currentScreenPos;
-            _deepCapsulePendingReorderDragRequestTimestamp = Environment.TickCount64;
+            // 等待期间点击资格已撤销，但手势保留，租约释放后仍需能续拖。
+            // 只有首次进入等待才记录起点与时间戳；后续移动不得重置 750ms 兜底时钟。
+            _deepCapsulePointerClickRevoked = true;
+            if (!HasDeepCapsulePendingReorderDrag)
+            {
+                _deepCapsulePendingReorderDragStart = currentScreenPos;
+                _deepCapsulePendingReorderDragRequestTimestamp = Environment.TickCount64;
+            }
             return;
         }
         // lease 已释放或从未占用，把 pending 意图清掉以免后续误判超时。
@@ -517,6 +540,8 @@ public sealed partial class PaperWindow
             return;
         }
         _previewOriginReorderBaseline = previewOriginBaseline;
+        // reducer 已进入 DockedReordering，松手走拖拽提交分支。
+        _deepCapsulePointerClickRevoked = false;
 
         _controller.BeginDeepCapsuleReorderDrag(_paper);
         CloseDeepCapsuleFloatingDragHost();
@@ -630,6 +655,10 @@ public sealed partial class PaperWindow
     private long _deepCapsulePendingReorderDragRequestTimestamp;
     private const int DeepCapsulePendingReorderRetryTimeoutMilliseconds = 750;
 
+    // 越过拖拽阈值后即撤销本次手势的点击资格。即使因共享 lease 占用或宿主未就绪
+    // 没能真正起拖、reducer 仍是 PendingClick，松手也只能取消，不能退化成点击/脚本执行。
+    private bool _deepCapsulePointerClickRevoked;
+
     /// <summary>当前是否有 pending 拖拽请求正在等待 handoff lease 释放。</summary>
     private bool HasDeepCapsulePendingReorderDrag =>
         _deepCapsulePendingReorderDragStart.HasValue;
@@ -639,6 +668,13 @@ public sealed partial class PaperWindow
     {
         _deepCapsulePendingReorderDragStart = null;
         _deepCapsulePendingReorderDragRequestTimestamp = 0;
+    }
+
+    /// <summary>手势真正结束时调用：清等待意图，同时恢复点击资格判定。</summary>
+    private void ResetDeepCapsulePointerGestureSuppression()
+    {
+        ClearDeepCapsulePendingReorderDrag();
+        _deepCapsulePointerClickRevoked = false;
     }
 
     /// <summary>
@@ -1489,8 +1525,9 @@ public sealed partial class PaperWindow
             _deepCapsuleFloatingDragHost == null)
         {
             _previewOriginReorderBaseline = null;
-            // 早退时不经过下面的 finally，拖拽期磁吸状态必须在这里一并清理。
+            // 早退时不经过下面的 finally，拖拽期磁吸状态与手势抑制字段必须在这里一并清理。
             ResetDeepCapsuleQueueMagnetPreview();
+            ResetDeepCapsulePointerGestureSuppression();
             return;
         }
 

@@ -16,11 +16,16 @@ internal static class Program
 =======
     private static readonly string[] Cases = ["startup", "missing-monitor", "master-queue-transfer", "master-queue-cancel", "master-queue-drag-preparation", "master-queue-drop-handoff", "master-queue-membership", "master-queue-mutations", "master-queue-hide", "master-queue-disconnect", "master-queue-merge", "master-queue-merge-collapsed", "master-queue-material-handoff", "controller-hide-create-reentry", "controller-hide-show-reentry", "controller-zorder-create-reentry", "controller-close-delete-reentry", "todo-visibility", "real-exit", "early-expand", "edge-expand-foreground", "cancel-prewarm", "real-exit-scripts", "early-exit", "todo-context-menu", "todo-history",
 <<<<<<< HEAD
+<<<<<<< HEAD
         "free-queue-preview-restore"];
 >>>>>>> 56595088 (fix(capsule): 离开磁吸区时恢复目标队列让位预览)
 =======
         "free-queue-preview-restore", "free-queue-regressions"];
 >>>>>>> ee7c9291 (fix(capsule): 修复拖拽期共享状态的 owner 归属、handoff 吞手势与描边不重试)
+=======
+        "free-queue-preview-restore", "free-queue-regressions",
+        "edge-capsule-pending-drag-release", "free-queue-resting-avoidance"];
+>>>>>>> 2c6b001f (fix(capsule): 修复等待租约松手误触与自由队列跨队列重叠)
 
     [STAThread]
     private static int Main(string[] args)
@@ -181,6 +186,19 @@ internal static class Program
             state.DeepCapsuleQueueStartTopMargins["|right#qb"] = 320;
             state.DeepCapsuleQueueStartTopMargins["|right#qc"] = 450;
         }
+        if (name == "free-queue-resting-avoidance")
+        {
+            // 默认队列 [0, 1] 与 qb [2, 3] 故意重叠：默认队列底边 144，qb 起点 60。
+            // qc [4] 在 400，必须保持不动。
+            state.UseCapsuleFreeQueues = true;
+            state.UseCapsuleCollapseAll = false;
+            state.Papers[2].CapsuleQueueId = "qb";
+            state.Papers[3].CapsuleQueueId = "qb";
+            state.Papers[4].CapsuleQueueId = "qc";
+            state.DeepCapsuleQueueStartTopMargins["|" + DeepCapsuleSides.Right] = 48;
+            state.DeepCapsuleQueueStartTopMargins["|" + DeepCapsuleSides.Right + "#qb"] = 60;
+            state.DeepCapsuleQueueStartTopMargins["|" + DeepCapsuleSides.Right + "#qc"] = 400;
+        }
         if (name.StartsWith("master-queue-merge"))
         {
             state.Papers[2].CapsuleSide = DeepCapsuleSides.Left;
@@ -229,6 +247,16 @@ internal static class Program
             if (name == "free-queue-regressions")
             {
                 await EdgeCapsuleQueueRegressionChecks.Run(controller, windows);
+                return;
+            }
+            if (name == "edge-capsule-pending-drag-release")
+            {
+                await EdgeCapsulePendingDragChecks.Run(controller, windows);
+                return;
+            }
+            if (name == "free-queue-resting-avoidance")
+            {
+                await EdgeCapsuleRestingLayoutChecks.Run(controller, windows);
                 return;
             }
             if (name == "edge-expand-foreground")

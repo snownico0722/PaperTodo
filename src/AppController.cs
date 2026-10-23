@@ -3316,6 +3316,7 @@ public sealed partial class AppController : IDisposable
             capsulePapers.Select(paper => new EdgeCapsuleQueueMember(paper, QueueKey(paper))),
             State.UseCapsuleCollapseAll);
         plan = ApplyEdgeCapsulePreviewLayout(plan);
+        plan = ApplyDeepCapsuleRestingAvoidance(plan);
         var queueKeys = plan.Queues.Select(queue => queue.Key).ToList();
         RemoveStaleCollapseAllActiveQueues(queueKeys);
 
