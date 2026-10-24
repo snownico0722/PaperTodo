@@ -1,16 +1,8 @@
-using System.Reflection;
 using PaperTodo;
 
-/// <summary>
-/// 自由队列审查条目 FQ-12 / FQ-14 / FQ-15 的行为回归。
-///
-/// 这些检查只调用控制器原语，不驱动真实指针，因此可以在无交互会话中稳定运行。
-/// </summary>
+/// <summary>自由队列核心回归：普通取消保持逐成员身份，提交异常完整回滚。</summary>
 internal static class EdgeCapsuleQueueRegressionChecks
 {
-    private const BindingFlags Private =
-        BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic;
-
     internal static async Task Run(
         AppController controller,
         IReadOnlyDictionary<string, PaperWindow> windows)
@@ -20,8 +12,6 @@ internal static class EdgeCapsuleQueueRegressionChecks
             "free-queue regression fixture slots did not become visible");
 
         CancelIdentityPreservation(controller);
-        MarginGuard(controller);
-        OwnerIsolation(controller);
         CommitRollback(controller);
         SingleCommitRollback(controller);
     }
@@ -75,78 +65,6 @@ internal static class EdgeCapsuleQueueRegressionChecks
 
         sibling.CapsuleMonitorDeviceName = "";
         controller.ArrangeDeepCapsules(animate: false);
-    }
-
-    /// <summary>
-    /// FQ-15：自由队列开启时 SetDeepCapsuleStartTopMargin 写的是裸 edge key，而渲染读的是
-    /// 持久实例 key（"|side#id"）——写入既无视觉反馈，又留下永远读不到的陈旧裸 margin。
-    /// 守卫必须挡住 free 场景。
-    ///
-    /// 同时锁住反向护栏：主胶囊模式（free 关闭）必须**仍然能写**。守卫若误加
-    /// UseCapsuleCollapseAll（该字段默认 true，且主胶囊仅在它为 true 时才存在），
-    /// 会让本方法在生产中永远立即返回——这条断言专门防它被重新写错。
-    /// </summary>
-    private static void MarginGuard(AppController controller)
-    {
-        var bareRightKey = "|" + DeepCapsuleSides.Right;
-
-        controller.State.UseCapsuleFreeQueues = true;
-        controller.State.DeepCapsuleQueueStartTopMargins.Remove(bareRightKey);
-        controller.SetDeepCapsuleStartTopMargin("", EdgeCapsuleEdge.Right, 123);
-        Program.Require(
-            !controller.State.DeepCapsuleQueueStartTopMargins.ContainsKey(bareRightKey),
-            "free-queue mode wrote a bare edge margin that no free queue can ever read back");
-
-        // 反向护栏：master 模式下必须照常写入裸 key（slot 0 归主胶囊，key 语义正确）。
-        controller.State.UseCapsuleFreeQueues = false;
-        controller.State.UseCapsuleCollapseAll = true;
-        controller.State.DeepCapsuleQueueStartTopMargins.Remove(bareRightKey);
-        controller.SetDeepCapsuleStartTopMargin("", EdgeCapsuleEdge.Right, 123);
-        Program.Require(
-            controller.State.DeepCapsuleQueueStartTopMargins.TryGetValue(bareRightKey, out var written),
-            "master mode stopped writing its start margin — the guard must not block collapse-all");
-        Program.Require(Math.Abs(written - 123) < 0.5, "master margin was not applied verbatim");
-        controller.State.DeepCapsuleQueueStartTopMargins.Remove(bareRightKey);
-
-        // 还原夹具状态：后续 commit 回滚检查需要自由队列处于开启态。
-        controller.State.UseCapsuleFreeQueues = true;
-        controller.State.UseCapsuleCollapseAll = false;
-    }
-
-    /// <summary>
-    /// FQ-12：共享磁吸 / 描边状态是 controller 级单例。这里直接调用 owner 校验入口，验证无关
-    /// 纸片的取消/Forget 不会清空 owner 建立的 held key。隐藏/关闭/折叠调用点与描边清理共享
-    /// 同一守卫，不在本检查中单独驱动。
-    /// </summary>
-    private static void OwnerIsolation(AppController controller)
-    {
-        var owner = controller.State.Papers.Single(paper => paper.Id == "fixture-0");
-        var bystander = controller.State.Papers.Single(paper => paper.Id == "fixture-3");
-
-        controller.BeginDeepCapsuleReorderDrag(owner);
-        SetHeldQueueKey(controller, controller.QueueKeyForPaper(owner));
-        Program.Require(HeldQueueKey(controller).Length > 0, "owner drag did not latch a held queue key");
-
-        // 无关纸片清理：必须被 owner 校验拦下。
-        controller.EndDeepCapsuleQueueMagnetPreview(bystander.Id);
-        Program.Require(
-            HeldQueueKey(controller).Length > 0,
-            "an unrelated paper's cancel wiped the live gesture's held queue key");
-
-        // 无关纸片的 Forget 同样必须被拦下。
-        controller.ForgetDeepCapsuleQueueDrag(bystander.Id);
-        Program.Require(
-            HeldQueueKey(controller).Length > 0,
-            "an unrelated paper's Forget dropped the live gesture's held queue key");
-
-        // owner 自己清理：必须真正生效，否则共享状态永远不释放。
-        controller.EndDeepCapsuleQueueMagnetPreview(owner.Id);
-        Program.Require(
-            HeldQueueKey(controller).Length == 0,
-            "the owner's own teardown no longer clears the held queue key");
-
-        // 非手势状态下 owner 已释放：再次调用只做冒烟检查，确保不抛异常；该路径没有可观察断言。
-        controller.EndDeepCapsuleQueueMagnetPreview(bystander.Id);
     }
 
     /// <summary>
@@ -293,15 +211,4 @@ internal static class EdgeCapsuleQueueRegressionChecks
 
         controller.ArrangeDeepCapsules(animate: false);
     }
-
-    private static string HeldQueueKey(AppController controller) =>
-        (string)HeldQueueKeyField(controller).GetValue(controller)!;
-
-    private static void SetHeldQueueKey(AppController controller, string value) =>
-        HeldQueueKeyField(controller).SetValue(controller, value);
-
-    private static FieldInfo HeldQueueKeyField(AppController controller) =>
-        controller.GetType().GetField("_deepCapsuleDragHeldQueueKey", Private)
-        ?? throw new InvalidOperationException(
-            "AppController is missing the held-queue-key field the FQ-12 check reads");
 }

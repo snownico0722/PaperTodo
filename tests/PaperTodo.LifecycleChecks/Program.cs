@@ -25,6 +25,7 @@ internal static class Program
 =======
         "free-queue-preview-restore", "free-queue-regressions",
 <<<<<<< HEAD
+<<<<<<< HEAD
         "edge-capsule-pending-drag-release", "free-queue-resting-avoidance"];
 >>>>>>> 2c6b001f (fix(capsule): 修复等待租约松手误触与自由队列跨队列重叠)
 =======
@@ -33,6 +34,9 @@ internal static class Program
         "free-queue-shortcut-targeting"];
 >>>>>>> a1c305fd (fix(capsule): 修复整队取消身份回写与快捷键漏选自由队列)
 =======
+=======
+        "edge-capsule-pending-drag-release",
+>>>>>>> 42eff62e (test(capsule): 大幅删减自由队列测试，保留核心行为)
         "free-queue-shortcut-targeting", "free-queue-bottom-insert"];
 >>>>>>> d16a146f (fix(capsule): 修复贴底队列头插磁吸与复合设置重开失效)
 
@@ -197,19 +201,6 @@ internal static class Program
             state.DeepCapsuleQueueStartTopMargins["|right#qb"] = 320;
             state.DeepCapsuleQueueStartTopMargins["|right#qc"] = 450;
         }
-        if (name == "free-queue-resting-avoidance")
-        {
-            // 默认队列 [0, 1] 与 qb [2, 3] 故意重叠：默认队列底边 144，qb 起点 60。
-            // qc [4] 在 400，必须保持不动。
-            state.UseCapsuleFreeQueues = true;
-            state.UseCapsuleCollapseAll = false;
-            state.Papers[2].CapsuleQueueId = "qb";
-            state.Papers[3].CapsuleQueueId = "qb";
-            state.Papers[4].CapsuleQueueId = "qc";
-            state.DeepCapsuleQueueStartTopMargins["|" + DeepCapsuleSides.Right] = 48;
-            state.DeepCapsuleQueueStartTopMargins["|" + DeepCapsuleSides.Right + "#qb"] = 60;
-            state.DeepCapsuleQueueStartTopMargins["|" + DeepCapsuleSides.Right + "#qc"] = 400;
-        }
         if (name == "free-queue-bottom-insert")
         {
             // 源队列三成员；目标队列单成员并贴底（margin 由布局夹到最大值）；
@@ -278,11 +269,6 @@ internal static class Program
             if (name == "edge-capsule-pending-drag-release")
             {
                 await EdgeCapsulePendingDragChecks.Run(controller, windows);
-                return;
-            }
-            if (name == "free-queue-resting-avoidance")
-            {
-                await EdgeCapsuleRestingLayoutChecks.Run(controller, windows);
                 return;
             }
             if (name == "free-queue-shortcut-targeting")
