@@ -113,7 +113,7 @@ internal static class EdgeCapsuleBottomInsertChecks
     }
 
     private static EdgeCapsulePlacement Placement(PaperWindow window) =>
-        ((EdgeCapsulePresenter)Part(window, "_edgeCapsule")).Placement;
+        ((EdgeCapsulePresenter)Program.Part(window, "_edgeCapsule")).Placement;
 
     private static double EffectiveTop(
         PaperWindow window,
@@ -130,8 +130,4 @@ internal static class EdgeCapsuleBottomInsertChecks
             gap) + placement.TopOffsetDip;
     }
 
-    private static object Part(object target, string name) =>
-        target.GetType().GetField(name, Private)?.GetValue(target) ??
-        target.GetType().GetProperty(name, Private)?.GetValue(target) ??
-        throw new MissingMemberException(target.GetType().Name, name);
-}
+    }

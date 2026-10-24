@@ -651,6 +651,27 @@ internal static class Program
         target.GetType().GetField(name, Private)?.GetValue(target) ??
         target.GetType().GetProperty(name, Private)?.GetValue(target) ??
         throw new MissingMemberException(target.GetType().FullName, name);
+
+    // 各 fixture 共用的反射辅助：避免每个文件各自维护一份 Call/Invoke/Part。
+    internal static object? Call(object target, string name, params object?[] args)
+    {
+        var method = target.GetType().GetMethod(name, Private)
+            ?? throw new MissingMethodException(target.GetType().Name, name);
+        return method.Invoke(target, args);
+    }
+
+    internal static void Invoke(object target, string name, params object?[] args)
+    {
+        var method = target.GetType().GetMethod(name, Private)
+            ?? throw new MissingMethodException(target.GetType().Name, name);
+        _ = method.Invoke(target, args);
+    }
+
+    internal static object Part(object target, string name) =>
+        target.GetType().GetField(name, Private)?.GetValue(target) ??
+        target.GetType().GetProperty(name, Private)?.GetValue(target) ??
+        throw new MissingMemberException(target.GetType().Name, name);
+
     internal static async Task Until(Func<bool> ready, string name)
     {
         var started = Stopwatch.GetTimestamp();

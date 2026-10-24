@@ -1485,7 +1485,7 @@ public sealed partial class PaperWindow
                 {
                     // 提交异常真正逃逸时只剩起拖快照：这里只能恢复身份并释放冻结；
                     // 顺序与 margin 的完整回滚由 Commit 内部 catch 保证。
-                    _controller.CancelEdgeCapsuleQueueTransfer(cancelled);
+                    _controller.RollbackEdgeCapsuleQueueTransfer(cancelled, null);
                 }
                 else
                 {

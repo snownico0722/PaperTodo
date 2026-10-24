@@ -25,8 +25,8 @@ internal static class EdgeExpandForegroundChecks
     {
         var window = windows["fixture-0"];
         var paper = controller.State.Papers.Single(item => item.Id == window.PaperId);
-        var presenter = (EdgeCapsulePresenter)Part(window, "_edgeCapsule");
-        var host = (EdgeCapsuleHost)Part(window, "_edgeCapsuleHost");
+        var presenter = (EdgeCapsulePresenter)Program.Part(window, "_edgeCapsule");
+        var host = (EdgeCapsuleHost)Program.Part(window, "_edgeCapsuleHost");
         var cursorSaved = GetCursorPos(out var cursor);
         using var other = new ForegroundWindow();
         HwndSource? source = null;
@@ -109,7 +109,7 @@ internal static class EdgeExpandForegroundChecks
             {
                 var hit = presenter.AppliedPresentation.InteractiveBounds;
                 var point = new Point(hit.Left + hit.Width / 2, hit.Top + hit.Height / 2);
-                var hostWindow = (Window)Part(host, "Window");
+                var hostWindow = (Window)Program.Part(host, "Window");
                 // Inject movement and wait for both the native target and WPF input state.
                 // Back-to-back SetCursorPos/button injection can precede WPF's mouse target.
                 LifecycleInput.MoveCursor(point);
@@ -120,7 +120,7 @@ internal static class EdgeExpandForegroundChecks
                         "native movement did not reach the edge capsule");
                     // Hover can reveal the close segment. Click the actual content area after
                     // that layout settles so the test cannot accidentally press close.
-                    var content = (FrameworkElement)Part(host, "ContentArea");
+                    var content = (FrameworkElement)Program.Part(host, "ContentArea");
                     point = content.PointToScreen(new Point(content.ActualWidth / 2, content.ActualHeight / 2));
                     Require(EdgeCapsuleGeometry.Contains(presenter.AppliedPresentation.InteractiveBounds,
                         DeviceScreenPoint.FromPoint(point)), "capsule content is outside the applied hit bounds");
@@ -281,7 +281,7 @@ internal static class EdgeExpandForegroundChecks
 
         private void OnRendering(object? sender, EventArgs args)
         {
-            var paper = (PaperData)Part(_window, "_paper");
+            var paper = (PaperData)Program.Part(_window, "_paper");
             if (!paper.IsCollapsed && Transitioning(_window))
             {
                 // Include the zero-progress frame: ContextIdle may run between it and the
@@ -315,12 +315,8 @@ internal static class EdgeExpandForegroundChecks
         public void Dispose() => DestroyWindow(Handle);
     }
 
-    private static bool Transitioning(PaperWindow window) => (bool)Part(window, "IsPaperFormTransitioning");
+    private static bool Transitioning(PaperWindow window) => (bool)Program.Part(window, "IsPaperFormTransitioning");
 
-    private static object Part(object target, string name) =>
-        target.GetType().GetField(name, Private)?.GetValue(target) ??
-        target.GetType().GetProperty(name, Private)?.GetValue(target) ??
-        throw new MissingMemberException(target.GetType().Name, name);
 
     private static async Task DrainActivationCallbacks()
     {

@@ -140,15 +140,19 @@ public sealed partial class AppController
                 if (id == "window.hide_from_switcher" && value is true) State.HidePapersFromTaskbar = true;
                 if (effects == SettingEffects.CapsuleMode)
                 {
-                    if (id == "capsule.enabled" && value is false) State.UseDeepCapsuleMode = false;
-                    if (id == "capsule.edge_enabled" && value is true) State.UseCapsuleMode = true;
-                    // FQ-08: free_queues 与 master_enabled 同属「胶囊体系内」开关，保存成功必须蕴含
-                    // 运行期可用。与 StateStore 加载归一化共用同一条不变式：free=true => capsule && deep，
-                    // 避免写成功却不生效、重启再被丢弃。Rollback 的成对快照已把旧 UseCapsuleMode / UseDeepCapsuleMode
-                    // 一并纳入，Publish 会在 oldDeep != UseDeepCapsuleMode 时自动刷新胶囊窗口。
-                    if (value is true &&
-                        id is "capsule.master_enabled" or "capsule.free_queues")
-                        State.UseCapsuleMode = State.UseDeepCapsuleMode = true;
+                    // 四个开关的写入与级联统一由目标状态计算：set(value) 已写入自身字段，
+                    // 这里补齐 capsule/deep/master/free 之间的前置不变式。free/master=true
+                    // 必须蕴含 capsule && deep，避免写成功却不生效、重启再被丢弃。
+                    if (value is bool enabled &&
+                        id is "capsule.enabled" or "capsule.edge_enabled"
+                            or "capsule.master_enabled" or "capsule.free_queues")
+                    {
+                        CapsuleModeSettingsState
+                            .Capture(State)
+                            .With(id, enabled)
+                            .WriteTo(State);
+                    }
+
                     if (!State.UseDeepCapsuleMode || !State.UseCapsuleCollapseAll)
                     {
                         State.CapsuleCollapseAllActiveQueues.Clear();

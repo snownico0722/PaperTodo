@@ -157,43 +157,21 @@ public sealed partial class AppController
         var clampedIndex = Math.Clamp(targetIndex, 0, members.Count);
         var requestedCarriedCount = Math.Max(1, carriedCount);
 
+        // 描边只消费正常规划入口生成的计划。缺少匹配计划时说明预览已经失效，
+        // 此时不应由显示层另算一套布局并假定可行。
         var plan = _edgeCapsuleQueueDropLayoutPlan;
-        var hasPlan = plan != null &&
-                      string.Equals(plan.TargetQueueKey, queueKey, StringComparison.Ordinal) &&
-                      plan.TargetIndex == clampedIndex &&
-                      plan.CarriedCount == requestedCarriedCount;
+        if (plan == null ||
+            !string.Equals(plan.TargetQueueKey, queueKey, StringComparison.Ordinal) ||
+            plan.TargetIndex != clampedIndex ||
+            plan.CarriedCount != requestedCarriedCount)
+        {
+            return false;
+        }
 
-        double targetTopDip;
-        double targetHeightDip;
-        double lineCenterDip;
-        bool feasible;
-        if (hasPlan)
-        {
-            targetTopDip = plan!.TargetTopDip;
-            targetHeightDip = plan.TargetHeightDip;
-            lineCenterDip = plan.InsertionLineCenterYDip;
-            feasible = plan.Feasible;
-        }
-        else
-        {
-            // 预览计划尚未生成时的安全回退：按真实队列布局绘制，不做插入展开。
-            var gap = DeepCapsuleGap;
-            var slotHeight = EdgeCapsuleLayout.SlotHeight(gap);
-            var margin = DeepCapsuleStartTopMarginForQueueKey(queueKey);
-            targetTopDip = EdgeCapsuleLayout.TopForIndex(
-                0,
-                margin,
-                area,
-                members.Count,
-                gap);
-            targetHeightDip = members.Count * slotHeight - gap;
-            lineCenterDip = EdgeCapsuleQueueDropTargetGeometry.InsertionLineCenterYDip(
-                targetTopDip,
-                clampedIndex,
-                slotHeight,
-                gap);
-            feasible = true;
-        }
+        var targetTopDip = plan.TargetTopDip;
+        var targetHeightDip = plan.TargetHeightDip;
+        var lineCenterDip = plan.InsertionLineCenterYDip;
+        var feasible = plan.Feasible;
 
         // 指示线跟随目标队列的真实可见宽度，而不是固定 92 DIP；短标题胶囊也能对齐。
         var visibleWidthDip = MeasureEdgeCapsuleQueueVisibleWidthDipCached(
@@ -283,6 +261,22 @@ public sealed partial class AppController
     }
 
     /// <summary>
+    /// 影响胶囊可见宽度的公共排版输入。磁吸候选签名与描边宽度签名共用，避免以后新增
+    /// 影响宽度的设置时只改到一处。
+    /// </summary>
+    private void AppendCapsuleWidthInputs(StringBuilder builder)
+    {
+        builder.Append(State.CapsuleTextSize).Append('\u001f')
+            .Append(State.CapsuleTextBold).Append('\u001f')
+            .Append(State.Zoom.ToString("R", CultureInfo.InvariantCulture)).Append('\u001f')
+            .Append(State.UiFontPreset).Append('\u001f')
+            .Append(State.UiLanguage).Append('\u001f')
+            .Append(State.TextRenderingProfile).Append('\u001f')
+            .Append(State.DeepCapsuleTitleMeasureCharacterLimit).Append('\u001f')
+            .Append(State.ExperimentalEdgeCapsuleHoverPreview).Append('\u001f');
+    }
+
+    /// <summary>
     /// 影响目标队列可见宽度的输入签名。标题、折叠状态或排版设置变化时必须重测，
     /// 因此这些值都进入签名；同一手势内仅插入槽变化时签名保持不变。
     /// </summary>
@@ -291,15 +285,8 @@ public sealed partial class AppController
         double workAreaWidthDip)
     {
         var builder = new StringBuilder();
-        builder.Append(State.CapsuleTextSize).Append('\u001f')
-            .Append(State.CapsuleTextBold).Append('\u001f')
-            .Append(State.Zoom.ToString("R", CultureInfo.InvariantCulture)).Append('\u001f')
-            .Append(State.UiFontPreset).Append(':')
-            .Append(State.UiLanguage).Append(':')
-            .Append(State.TextRenderingProfile).Append('\u001f')
-            .Append(State.DeepCapsuleTitleMeasureCharacterLimit).Append('\u001f')
-            .Append(State.ExperimentalEdgeCapsuleHoverPreview).Append('\u001f')
-            .Append(workAreaWidthDip.ToString("R", CultureInfo.InvariantCulture));
+        AppendCapsuleWidthInputs(builder);
+        builder.Append(workAreaWidthDip.ToString("R", CultureInfo.InvariantCulture));
         foreach (var member in members)
         {
             builder.Append('\u001e')
@@ -316,12 +303,10 @@ public sealed partial class AppController
     }
 
     /// <summary>
-    /// 目标队列的可见胶囊宽度（DIP，含靠屏幕内侧的 chrome margin）。取成员窗口实际测量宽度
-    /// 的最大值；测不到时回退标准胶囊宽度，并按工作区宽度收窄，避免指示线被屏幕边缘裁切。
+    /// 队列成员窗口实际测量到的最大可见宽度（DIP）。测不到时返回 0，由调用方决定：
+    /// 磁吸把 0 视为不可达，描边回退到标准胶囊宽度。两处共用同一测宽来源。
     /// </summary>
-    private double MeasureEdgeCapsuleQueueVisibleWidthDip(
-        IReadOnlyList<PaperData> members,
-        double workAreaWidthDip)
+    private double MeasureEdgeCapsuleQueueWidthDip(IEnumerable<PaperData> members)
     {
         var width = 0.0;
         foreach (var member in members)
@@ -338,6 +323,18 @@ public sealed partial class AppController
             }
         }
 
+        return width;
+    }
+
+    /// <summary>
+    /// 目标队列的可见胶囊宽度（DIP，含靠屏幕内侧的 chrome margin）。测不到时回退标准胶囊宽度，
+    /// 并按工作区宽度收窄，避免指示线被屏幕边缘裁切。
+    /// </summary>
+    private double MeasureEdgeCapsuleQueueVisibleWidthDip(
+        IReadOnlyList<PaperData> members,
+        double workAreaWidthDip)
+    {
+        var width = MeasureEdgeCapsuleQueueWidthDip(members);
         if (width <= 0)
         {
             width = PaperLayoutDefaults.CapsuleWidth;

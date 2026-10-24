@@ -41,18 +41,28 @@ internal static class EdgeCapsuleQueueDropTargetGeometry
     internal const double QueueEdgeLineOpacity = 0.45;
 
     /// <summary>
-    /// 插入块高度：carriedCount 个完整槽位，最后一个槽不含尾部 gap。
+    /// 一条队列的可见高度：count 个槽位，最后一个槽不含尾部 gap。允许 0 个成员（返回 0），
+    /// 供预览、描边与磁吸共用同一个高度口径。
     /// </summary>
-    internal static double InsertionBlockHeightDip(
-        int carriedCount,
+    internal static double QueueHeightDip(
+        int memberCount,
         double slotHeight,
         double gap)
     {
-        var count = Math.Max(1, carriedCount);
+        var count = Math.Max(0, memberCount);
         var slot = double.IsFinite(slotHeight) && slotHeight > 0 ? slotHeight : 0;
         var normalizedGap = double.IsFinite(gap) && gap > 0 ? gap : 0;
         return Math.Max(0, count * slot - normalizedGap);
     }
+
+    /// <summary>
+    /// 插入块高度：至少一个完整槽位，最后一个槽不含尾部 gap。
+    /// </summary>
+    internal static double InsertionBlockHeightDip(
+        int carriedCount,
+        double slotHeight,
+        double gap) =>
+        QueueHeightDip(Math.Max(1, carriedCount), slotHeight, gap);
 
     /// <summary>
     /// 目标队列插入后的完整高度：真实成员 + carriedCount 个完整槽位，尾槽不含 gap。
@@ -61,15 +71,25 @@ internal static class EdgeCapsuleQueueDropTargetGeometry
         int memberCount,
         int carriedCount,
         double slotHeight,
-        double gap)
+        double gap) =>
+        QueueHeightDip(
+            Math.Max(0, memberCount) + Math.Max(1, carriedCount),
+            slotHeight,
+            gap);
+
+    /// <summary>
+    /// 整队搬移时胶囊块的垂直高度：第一个胶囊用自己的高度，后续槽位按 slotHeight 堆叠。
+    /// 退化输入沿用磁吸原有口径：slotHeight 无效时退回 capsuleHeight。
+    /// </summary>
+    internal static double CarriedBlockHeightDip(
+        int carriedCount,
+        double slotHeight,
+        double capsuleHeight)
     {
-        var members = Math.Max(0, memberCount);
-        var carried = Math.Max(1, carriedCount);
-        var slot = double.IsFinite(slotHeight) && slotHeight > 0 ? slotHeight : 0;
-        var normalizedGap = double.IsFinite(gap) && gap > 0 ? gap : 0;
-        return Math.Max(
-            0,
-            (members + carried) * slot - normalizedGap);
+        var count = Math.Max(1, carriedCount);
+        var height = double.IsFinite(capsuleHeight) && capsuleHeight > 0 ? capsuleHeight : 0;
+        var slot = double.IsFinite(slotHeight) && slotHeight > 0 ? slotHeight : height;
+        return height + (count - 1) * Math.Max(0, slot);
     }
 
     /// <summary>

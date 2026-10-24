@@ -155,7 +155,10 @@ public sealed partial class AppController
                 area,
                 previewMembers.Count,
                 gap);
-            var height = previewMembers.Count * slotHeight - gap;
+            var height = EdgeCapsuleQueueDropTargetGeometry.QueueHeightDip(
+                previewMembers.Count,
+                slotHeight,
+                gap);
 
             previews[queueKey] = new EdgeCapsuleQueueDropPreview(
                 queueKey,
@@ -201,7 +204,11 @@ public sealed partial class AppController
                 TargetIndex = clampedIndex,
                 CarriedCount = carried.Count,
                 TargetTopDip = targetTop,
-                TargetHeightDip = targetPreview.PreviewMembers.Count * slotHeight - gap,
+                TargetHeightDip = EdgeCapsuleQueueDropTargetGeometry.TargetQueueHeightDip(
+                    targetRealMembers.Count,
+                    carried.Count,
+                    slotHeight,
+                    gap),
                 InsertionLineCenterYDip = lineCenter,
                 Queues = previews,
                 MonitorDeviceName = monitorDeviceName,
@@ -221,7 +228,10 @@ public sealed partial class AppController
             area,
             targetRealMembers.Count,
             gap);
-        var realHeight = targetRealMembers.Count * slotHeight - gap;
+        var realHeight = EdgeCapsuleQueueDropTargetGeometry.QueueHeightDip(
+            targetRealMembers.Count,
+            slotHeight,
+            gap);
         var warningLineCenter = EdgeCapsuleQueueDropTargetGeometry.InsertionLineCenterYDip(
             realTop,
             clampedIndex,

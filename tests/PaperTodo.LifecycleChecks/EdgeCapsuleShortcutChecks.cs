@@ -23,7 +23,7 @@ internal static class EdgeCapsuleShortcutChecks
             .ToList();
 
         // 该边共 5 个胶囊；第 6 个必须落空，不能回退到对侧或其它显示器。
-        Invoke(controller, "ActivateEdgeCapsuleShortcut", DeepCapsuleSides.Right, 6);
+        Program.Invoke(controller, "ActivateEdgeCapsuleShortcut", DeepCapsuleSides.Right, 6);
         await Task.Delay(100);
         Program.Require(
             papers.All(paper => paper.IsCollapsed),
@@ -34,7 +34,7 @@ internal static class EdgeCapsuleShortcutChecks
 
         // 可见顺序：qa=[0,1] @48、qb=[2,3] @320、qc=[4] @450。
         // 第 3 个应命中 qb 的首成员 fixture-2。
-        Invoke(controller, "ActivateEdgeCapsuleShortcut", DeepCapsuleSides.Right, 3);
+        Program.Invoke(controller, "ActivateEdgeCapsuleShortcut", DeepCapsuleSides.Right, 3);
         await Program.Until(
             () => windows["fixture-2"].HasExpandedPaperSurface,
             "ordinal 3 did not activate the second queue's first member");
@@ -47,10 +47,4 @@ internal static class EdgeCapsuleShortcutChecks
         }
     }
 
-    private static void Invoke(object target, string name, params object?[] args)
-    {
-        var method = target.GetType().GetMethod(name, Private)
-            ?? throw new MissingMethodException(target.GetType().Name, name);
-        _ = method.Invoke(target, args);
     }
-}

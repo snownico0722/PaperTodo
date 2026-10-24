@@ -23,6 +23,7 @@ internal static class EdgeCapsuleQueueRegressionChecks
         MarginGuard(controller);
         OwnerIsolation(controller);
         CommitRollback(controller);
+        SingleCommitRollback(controller);
     }
 
     /// <summary>
@@ -151,7 +152,7 @@ internal static class EdgeCapsuleQueueRegressionChecks
     /// <summary>
     /// FQ-14（残余）：整队提交在「改身份 → 重排 State.Papers → 持久化 margin → SaveNow」
     /// 区间内抛异常时，必须同时回滚 State.Papers 顺序与目标 / 邻队 / 源队列 margin，
-    /// 而不只是恢复成员身份（CancelEdgeCapsuleQueueTransfer 的既有能力）。
+    /// 而不只是恢复成员身份（RollbackEdgeCapsuleQueueTransfer 的统一能力）。
     /// </summary>
     private static void CommitRollback(AppController controller)
     {
@@ -235,6 +236,64 @@ internal static class EdgeCapsuleQueueRegressionChecks
             "the source queue key changed after a mid-commit failure");
 
         sibling.CapsuleMonitorDeviceName = "";
+        controller.ArrangeDeepCapsules(animate: false);
+    }
+
+    /// <summary>
+    /// 单颗提交与整队共用撤销边界后，mutation 中途异常也必须完整回滚：
+    /// State.Papers 顺序、全部 margin 与被拖成员身份。
+    /// </summary>
+    private static void SingleCommitRollback(AppController controller)
+    {
+        Program.Require(
+            WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(null, out var geometry),
+            "primary monitor geometry is unavailable for the single commit rollback fixture");
+
+        var source = controller.State.Papers.Single(paper => paper.Id == "fixture-0");
+        var target = controller.State.Papers.Single(paper => paper.Id == "fixture-4");
+        var sourceKey = controller.QueueKeyForPaper(source);
+        var targetKey = controller.QueueKeyForPaper(target);
+        Program.Require(
+            sourceKey != targetKey,
+            "the single rollback fixture needs two distinct queues");
+
+        var orderBefore = controller.State.Papers.Select(paper => paper.Id).ToArray();
+        var marginsBefore = new Dictionary<string, double>(
+            controller.State.DeepCapsuleQueueStartTopMargins, StringComparer.Ordinal);
+        var identityBefore = (
+            source.CapsuleMonitorDeviceName,
+            source.CapsuleSide,
+            source.CapsuleQueueId);
+
+        var dropY = geometry.WorkArea.Top + 470 * geometry.DpiScaleY;
+        var anchor = new EdgeCapsuleDropAnchor(
+            new DeviceScreenPoint(geometry.WorkArea.Right - 10, dropY),
+            dropY);
+
+        controller.EdgeCapsuleQueueTransferCommitFailureInjector =
+            () => throw new InvalidOperationException("injected single commit failure");
+
+        var committed = controller.CommitDeepCapsuleQueueDrop(source, anchor, targetKey, 0);
+        controller.EdgeCapsuleQueueTransferCommitFailureInjector = null;
+
+        Program.Require(!committed, "an injected single-commit failure reported success");
+        Program.Require(
+            controller.State.Papers.Select(paper => paper.Id).SequenceEqual(orderBefore),
+            "State.Papers order was not rolled back after a single-commit failure");
+        Program.Require(
+            controller.State.DeepCapsuleQueueStartTopMargins.Count == marginsBefore.Count &&
+            marginsBefore.All(pair => controller.State.DeepCapsuleQueueStartTopMargins
+                .TryGetValue(pair.Key, out var now) && Math.Abs(now - pair.Value) < 0.001),
+            "queue start margins were not rolled back after a single-commit failure");
+        Program.Require(
+            source.CapsuleMonitorDeviceName == identityBefore.Item1 &&
+            source.CapsuleSide == identityBefore.Item2 &&
+            source.CapsuleQueueId == identityBefore.Item3,
+            "the dragged capsule kept a partial identity after a single-commit failure");
+        Program.Require(
+            controller.QueueKeyForPaper(source) == sourceKey,
+            "the dragged capsule left its source queue after a single-commit failure");
+
         controller.ArrangeDeepCapsules(animate: false);
     }
 

@@ -299,6 +299,26 @@ internal static partial class Program
         Check(!masterService.Set("capsule.master_enabled", Json(true)).Changed,
             "A repeated master true write is a no-op once the composite state holds.");
 
+        // capsule.edge_enabled 也存在对称缺口：capsule 缺失但 edge 已是 true 时，
+        // 只看 getter 会把写入判成 no-op，跳过 Apply 的 capsule 前置修复。
+        var edgeRepair = Controller();
+        edgeRepair.State.UseCapsuleMode = false;
+        edgeRepair.State.UseDeepCapsuleMode = true;
+        var edgeRepairCommits = 0;
+        var edgeRepairService = SettingsFor(
+            edgeRepair,
+            () => { edgeRepairCommits++; return true; },
+            _ => { });
+        Check(
+            edgeRepairService.Set("capsule.edge_enabled", Json(true)).Changed &&
+            edgeRepair.State.UseCapsuleMode &&
+            edgeRepair.State.UseDeepCapsuleMode,
+            "Writing edge=true must repair a missing capsule prerequisite.");
+        Check(
+            !edgeRepairService.Set("capsule.edge_enabled", Json(true)).Changed &&
+            edgeRepairCommits == 1,
+            "A repeated edge true write is a no-op once capsule is on.");
+
         // 修复写入的级联字段也必须参与回滚。
         var repairFail = Controller();
         repairFail.State.UseCapsuleFreeQueues = true;

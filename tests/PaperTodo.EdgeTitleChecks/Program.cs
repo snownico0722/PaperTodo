@@ -143,10 +143,10 @@ internal static partial class Program
                 held, centreLeft));
 
         // Queue "a" spans one slot at top 100; "b" sits far below at 600.
-        EdgeCapsuleQueueMagnetCandidate[] TwoQueues(int excludedInA = -1) =>
+        EdgeCapsuleQueueMagnetCandidate[] TwoQueues() =>
         [
-            new("a", 1, 100, slot, excludedInA, bandLeft, bandWidth),
-            new("b", 1, 600, slot, -1, bandLeft, bandWidth)
+            new("a", 1, 100, slot, bandLeft, bandWidth, 1, 100),
+            new("b", 1, 600, slot, bandLeft, bandWidth, 1, 600)
         ];
 
         Check(Evaluate(100, "", TwoQueues()).Outcome == EdgeCapsuleQueueMagnetOutcome.Merge,
@@ -177,7 +177,7 @@ internal static partial class Program
 
         // Edge-to-edge distance must be symmetric: the same 18 DIP approach from above and below
         // has to snap, and one more DIP has to stop snapping on both sides.
-        var single = new EdgeCapsuleQueueMagnetCandidate("a", 1, 100, slot, -1, bandLeft, bandWidth);
+        var single = new EdgeCapsuleQueueMagnetCandidate("a", 1, 100, slot, bandLeft, bandWidth, 1, 100);
         const double topReach = 100 - height / 2 - EdgeCapsuleQueueMagnet.DefaultMergeDistanceDip;
         const double bottomReach = 100 + height + height / 2 +
             EdgeCapsuleQueueMagnet.DefaultMergeDistanceDip;
@@ -194,7 +194,7 @@ internal static partial class Program
 
         // A three-slot queue really occupies [100, 246]; its zero-distance centre band is [77, 269]
         // and its merge-reachable band is [59, 287].
-        var multi = new EdgeCapsuleQueueMagnetCandidate("m", 3, 100, slot, -1, bandLeft, bandWidth);
+        var multi = new EdgeCapsuleQueueMagnetCandidate("m", 3, 100, slot, bandLeft, bandWidth, 3, 100);
         var multiAbove = Evaluate(65, "", [multi]);
         var multiBelow = Evaluate(281, "", [multi]);
         Check(multiAbove.Outcome == EdgeCapsuleQueueMagnetOutcome.Merge &&
@@ -206,7 +206,7 @@ internal static partial class Program
             "A multi-member queue rejects both ends beyond the merge radius");
 
         // Same rules govern the source queue, so leaving it is distance-based too.
-        var sourceQueue = new EdgeCapsuleQueueMagnetCandidate("src", 3, 100, slot, 1, bandLeft, bandWidth);
+        var sourceQueue = new EdgeCapsuleQueueMagnetCandidate("src", 2, 100, slot, bandLeft, bandWidth, 2, 100);
         Check(Evaluate(100 + 2 * slot, "src", [sourceQueue], held: "src").Outcome ==
                   EdgeCapsuleQueueMagnetOutcome.Reorder,
             "Staying inside the source queue reorders rather than merging");
@@ -215,15 +215,15 @@ internal static partial class Program
             "Dragging well past the source queue leaves it");
 
         // A single-member source queue has nothing left behind: any displacement detaches.
-        var solo = new EdgeCapsuleQueueMagnetCandidate("solo", 1, 100, slot, 0, bandLeft, bandWidth);
+        var solo = new EdgeCapsuleQueueMagnetCandidate("solo", 0, 100, slot, bandLeft, bandWidth, 0, 100);
         Check(Evaluate(101, "solo", [solo], held: "solo").Outcome == EdgeCapsuleQueueMagnetOutcome.NewQueue,
             "A solo source queue cannot hold its member by proximity");
 
         // Ties must resolve deterministically, not by enumeration order.
-        var tieA = Evaluate(100, "", [new("bbb", 1, 100, slot, -1, bandLeft, bandWidth),
-            new("aaa", 1, 100, slot, -1, bandLeft, bandWidth)]);
-        var tieB = Evaluate(100, "", [new("aaa", 1, 100, slot, -1, bandLeft, bandWidth),
-            new("bbb", 1, 100, slot, -1, bandLeft, bandWidth)]);
+        var tieA = Evaluate(100, "", [new("bbb", 1, 100, slot, bandLeft, bandWidth, 1, 100),
+            new("aaa", 1, 100, slot, bandLeft, bandWidth, 1, 100)]);
+        var tieB = Evaluate(100, "", [new("aaa", 1, 100, slot, bandLeft, bandWidth, 1, 100),
+            new("bbb", 1, 100, slot, bandLeft, bandWidth, 1, 100)]);
         Check(tieA.TargetQueueKey == tieB.TargetQueueKey && tieA.TargetQueueKey == "aaa",
             "Equidistant candidates resolve to the same queue regardless of input order");
 
@@ -238,10 +238,10 @@ internal static partial class Program
             "A NaN centre resolves to no plan rather than matching every queue");
         Check(Evaluate(double.PositiveInfinity, "", TwoQueues()).Outcome == EdgeCapsuleQueueMagnetOutcome.None,
             "An infinite centre resolves to no plan");
-        Check(Evaluate(100, "", [new("a", 0, 100, slot, -1, bandLeft, bandWidth)]).Outcome ==
+        Check(Evaluate(100, "", [new("a", 0, 100, slot, bandLeft, bandWidth, 0, 100)]).Outcome ==
                   EdgeCapsuleQueueMagnetOutcome.NewQueue,
             "A zero-slot candidate is ignored");
-        Check(Evaluate(100, "", [new("a", 1, double.NaN, slot, -1, bandLeft, bandWidth)]).Outcome ==
+        Check(Evaluate(100, "", [new("a", 1, double.NaN, slot, bandLeft, bandWidth, 1, double.NaN)]).Outcome ==
                   EdgeCapsuleQueueMagnetOutcome.NewQueue,
             "A NaN queue top is ignored");
         Check(Evaluate(100, "", System.Array.Empty<EdgeCapsuleQueueMagnetCandidate>(), held: "ghost").Outcome ==
@@ -517,7 +517,7 @@ internal static partial class Program
 
         // 单槽队列的真实占位是 [top, top + height]。
         EdgeCapsuleQueueMagnetCandidate QueueAt(string key, double top) =>
-            new(key, 1, top, slot, -1, 0, 200);
+            new(key, 1, top, slot, 0, 200, 1, top);
 
         bool OverlapsAny(EdgeCapsuleQueueMagnetPlan plan, EdgeCapsuleQueueMagnetCandidate[] candidates)
         {
@@ -587,7 +587,7 @@ internal static partial class Program
             "A multi-member block clears the target by its whole stack height");
 
         // 被排除的唯一成员没有占位，不触发避让。
-        var solo = new EdgeCapsuleQueueMagnetCandidate("solo", 1, 100, slot, 0, 0, 200);
+        var solo = new EdgeCapsuleQueueMagnetCandidate("solo", 0, 100, slot, 0, 200, 0, 100);
         var soloDrop = EdgeCapsuleQueueMagnet.Evaluate(new EdgeCapsuleQueueMagnetInput(
             400, "solo", [solo], slot, height, merge, detach, "", 100));
         Check(Math.Abs(soloDrop.NewQueueStartTopDip - (400 - half)) < 0.001,
@@ -608,7 +608,7 @@ internal static partial class Program
 
         // 12 个槽位从 8 起堆叠占据 [8, 604]，覆盖整个合法区间；水平中心 400 在候选条带
         // [0, 200] 之外足够远，确保先判定为 NewQueue 而不是 Merge。
-        var full = new EdgeCapsuleQueueMagnetCandidate("full", 12, min, slot, -1, 0, 200);
+        var full = new EdgeCapsuleQueueMagnetCandidate("full", 12, min, slot, 0, 200, 12, min);
         EdgeCapsuleQueueMagnetPlan Blocked(int carriedCount) =>
             EdgeCapsuleQueueMagnet.Evaluate(new EdgeCapsuleQueueMagnetInput(
                 300, "other", [full], slot, height,
@@ -625,7 +625,7 @@ internal static partial class Program
             "A whole queue with no legal slot must not start an overlapping queue");
 
         // 9 个槽位只占 [8, 454]；下方仍有合法空位时不能误判为拒绝。
-        var almost = new EdgeCapsuleQueueMagnetCandidate("almost", 9, min, slot, -1, 0, 200);
+        var almost = new EdgeCapsuleQueueMagnetCandidate("almost", 9, min, slot, 0, 200, 9, min);
         var below = EdgeCapsuleQueueMagnet.Evaluate(new EdgeCapsuleQueueMagnetInput(
             300, "other", [almost], slot, height,
             EdgeCapsuleQueueMagnet.DefaultMergeDistanceDip,
@@ -681,7 +681,7 @@ internal static partial class Program
         // A queue already resting at the very top of the work area, and a drop far above the screen.
         // The raw drop (-83) clears it, but the commit clamps to 8 — exactly onto the queue.
         EdgeCapsuleQueueMagnetCandidate[] topQueue =
-            [new EdgeCapsuleQueueMagnetCandidate("qa", 1, min, slot, -1, 0, 200)];
+            [new EdgeCapsuleQueueMagnetCandidate("qa", 1, min, slot, 0, 200, 1, min)];
         var aboveScreen = Drop(-60, topQueue);
         Check(aboveScreen.Outcome == EdgeCapsuleQueueMagnetOutcome.NewQueue,
             "A drop dragged off the top of the screen is still its own queue");
@@ -693,7 +693,7 @@ internal static partial class Program
         // Same failure from the other edge: a queue at the bottom, dropped below the screen.
         // 620 is genuinely outside the merge radius; 560 would still be inside it and merge.
         EdgeCapsuleQueueMagnetCandidate[] bottomQueue =
-            [new EdgeCapsuleQueueMagnetCandidate("qb", 1, 523, slot, -1, 0, 200)];
+            [new EdgeCapsuleQueueMagnetCandidate("qb", 1, 523, slot, 0, 200, 1, 523)];
         var belowScreen = Drop(620, bottomQueue);
         Check(belowScreen.Outcome == EdgeCapsuleQueueMagnetOutcome.NewQueue,
             "An off-screen drop from below is its own queue");
@@ -723,7 +723,7 @@ internal static partial class Program
         const double bandWidth = 120;
         const double bandLeft = 1800;
         EdgeCapsuleQueueMagnetCandidate[] RightQueue() =>
-            [new("q1", 1, 100, slot, -1, bandLeft, bandWidth)];
+            [new("q1", 1, 100, slot, bandLeft, bandWidth, 1, 100)];
 
         EdgeCapsuleQueueMagnetPlan At(double centreTop, double centreLeft, string held = "") =>
             EdgeCapsuleQueueMagnet.Evaluate(new EdgeCapsuleQueueMagnetInput(
@@ -769,7 +769,7 @@ internal static partial class Program
 
         // A candidate whose band could not be measured must be unreachable rather than silently
         // treated as unconstrained, which would reintroduce the screen-wide snap.
-        var noBand = new EdgeCapsuleQueueMagnetCandidate("q1", 1, 100, slot, -1, 0, 0);
+        var noBand = new EdgeCapsuleQueueMagnetCandidate("q1", 1, 100, slot, 0, 0, 1, 100);
         Check(EdgeCapsuleQueueMagnet.Evaluate(new EdgeCapsuleQueueMagnetInput(
                 100, "other", [noBand], slot, height, merge, detach, "", 960)).Outcome ==
                   EdgeCapsuleQueueMagnetOutcome.NewQueue,
@@ -811,13 +811,13 @@ internal static partial class Program
 
         // held 队列占 [100, 146]，拖拽中心 190 时距离 21（死区内、merge 外）；
         // near 队列 top=116 时同一中心距离 5，差 16 → 接管。
-        var held = new EdgeCapsuleQueueMagnetCandidate("held", 1, 100, slot, -1, 0, 200);
-        var near = new EdgeCapsuleQueueMagnetCandidate("near", 1, 116, slot, -1, 0, 200);
+        var held = new EdgeCapsuleQueueMagnetCandidate("held", 1, 100, slot, 0, 200, 1, 100);
+        var near = new EdgeCapsuleQueueMagnetCandidate("near", 1, 116, slot, 0, 200, 1, 116);
         Check(Evaluate(190, [held, near], "held").TargetQueueKey == "near",
             "A clearly closer candidate inside the merge radius must take over the held queue");
 
         // 距离差 5 < 6：保持 held，避免在相邻队列之间抖动。
-        var nearFive = new EdgeCapsuleQueueMagnetCandidate("near", 1, 105, slot, -1, 0, 200);
+        var nearFive = new EdgeCapsuleQueueMagnetCandidate("near", 1, 105, slot, 0, 200, 1, 105);
         var holdPlan = Evaluate(179, [held, nearFive], "held");
         Check(holdPlan.TargetQueueKey == "held",
             "A candidate that is only slightly closer must not steal the hold");
@@ -825,12 +825,12 @@ internal static partial class Program
             "A held plan must report the held queue's own distance");
 
         // 距离差恰好 6：接管。
-        var nearSix = new EdgeCapsuleQueueMagnetCandidate("near", 1, 106, slot, -1, 0, 200);
+        var nearSix = new EdgeCapsuleQueueMagnetCandidate("near", 1, 106, slot, 0, 200, 1, 106);
         Check(Evaluate(180, [held, nearSix], "held").TargetQueueKey == "near",
             "A six-DIP advantage must be enough to take over the hold");
 
         // 候选仍在 merge 半径外：即使距离接近，也不能接管。
-        var outsideMerge = new EdgeCapsuleQueueMagnetCandidate("near", 1, 102, slot, -1, 0, 200);
+        var outsideMerge = new EdgeCapsuleQueueMagnetCandidate("near", 1, 102, slot, 0, 200, 1, 102);
         Check(Evaluate(190, [held, outsideMerge], "held").TargetQueueKey == "held",
             "A candidate outside the merge radius must not take over the hold");
 
@@ -848,7 +848,7 @@ internal static partial class Program
         const double height = 46;
         const double centreLeft = 100;   // inside the band, so the horizontal term is 0
         EdgeCapsuleQueueMagnetCandidate[] OneQueue() =>
-            [new("q1", 2, 100, slot, -1, 0, 200)];
+            [new("q1", 2, 100, slot, 0, 200, 2, 100)];
 
         // Queue really occupies [100, 196], so its reach is [77, 219] and the dead band
         // (18..32 DIP out) is centres 237..251. Inside that band nothing can be acquired fresh,
@@ -1107,7 +1107,7 @@ internal static partial class Program
 
         // 贴底单成员：当前 [986, 1032]；插入 3 个 carried 后 [836, 1032]。
         var currentOnly = new EdgeCapsuleQueueMagnetCandidate(
-            "|right#qtgt", 1, 986, slot, -1, bandLeft, bandWidth);
+            "|right#qtgt", 1, 986, slot, bandLeft, bandWidth, 1, 986);
         var withInsertion = currentOnly with
         {
             InsertionSlotCount = 4,

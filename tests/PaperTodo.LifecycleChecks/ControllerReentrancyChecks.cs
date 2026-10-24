@@ -210,8 +210,8 @@ internal static class ControllerReentrancyChecks
 
     private static async Task<IDictionary> PublishProxy(AppController controller, PaperWindow[] windows)
     {
-        var proxies = (IDictionary)Part(controller, "_edgeCapsuleQueueCompositionProxies");
-        var presenters = windows.Select(window => (EdgeCapsulePresenter)Part(window, "_edgeCapsule")).ToArray();
+        var proxies = (IDictionary)Program.Part(controller, "_edgeCapsuleQueueCompositionProxies");
+        var presenters = windows.Select(window => (EdgeCapsulePresenter)Program.Part(window, "_edgeCapsule")).ToArray();
         await Until(() => proxies.Count == 0 && presenters.All(presenter =>
                 !presenter.HasActiveTransition && !presenter.NativeBatchRetryPending &&
                 presenter.AppliedPresentation.Visible),
@@ -224,9 +224,6 @@ internal static class ControllerReentrancyChecks
         return proxies;
     }
 
-    private static object Part(object target, string name) =>
-        target.GetType().GetField(name, Private)?.GetValue(target) ??
-        throw new MissingMemberException(target.GetType().Name, name);
 
     private static async Task Until(Func<bool> ready, string message)
     {

@@ -40,7 +40,7 @@ internal static class EdgeCapsulePendingDragChecks
             46,
             12,
             true);
-        var options = (EdgeCapsuleDragWindowOptions)Call(
+        var options = (EdgeCapsuleDragWindowOptions)Program.Call(
             window,
             "CreateDeepCapsuleFloatingDragHostOptions",
             shape)!;
@@ -49,19 +49,19 @@ internal static class EdgeCapsulePendingDragChecks
         var lease = EdgeCapsuleDragWindow.Rent(options);
         try
         {
-            Invoke(window, "OnEdgeCapsulePointerPressed", start);
+            Program.Invoke(window, "OnEdgeCapsulePointerPressed", start);
             Require(
                 Gesture(window) == EdgeCapsuleGestureState.PendingClick,
                 "press did not create a pending click");
 
             Require(
-                (bool)Call(window, "OnEdgeCapsulePointerMoved", moved, true)!,
+                (bool)Program.Call(window, "OnEdgeCapsulePointerMoved", moved, true)!,
                 "a threshold move must be consumed while waiting for the lease");
             Require(
                 Gesture(window) == EdgeCapsuleGestureState.PendingClick,
                 "waiting for the lease must keep the reducer in PendingClick");
             Require(
-                (bool)Part(window, "HasDeepCapsulePendingReorderDrag"),
+                (bool)Program.Part(window, "HasDeepCapsulePendingReorderDrag"),
                 "crossing the threshold during a lease wait was not recorded");
             Require(
                 (bool)Field(window, "_deepCapsulePointerClickRevoked")!,
@@ -80,7 +80,7 @@ internal static class EdgeCapsulePendingDragChecks
             await Task.Delay(50);
             var movedAgain = new DeviceScreenPoint(moved.X, moved.Y + 8);
             Require(
-                (bool)Call(window, "OnEdgeCapsulePointerMoved", movedAgain, true)!,
+                (bool)Program.Call(window, "OnEdgeCapsulePointerMoved", movedAgain, true)!,
                 "a later move must stay consumed while waiting for the lease");
             Require(
                 (DeviceScreenPoint)Field(
@@ -94,7 +94,7 @@ internal static class EdgeCapsulePendingDragChecks
                 "the 750 ms fallback clock was reset by a later move");
 
             Require(
-                (bool)Call(window, "OnEdgeCapsulePointerReleased", movedAgain)!,
+                (bool)Program.Call(window, "OnEdgeCapsulePointerReleased", movedAgain)!,
                 "a revoked click release must return true so the host releases capture");
             Require(
                 Gesture(window) == EdgeCapsuleGestureState.Idle,
@@ -120,12 +120,12 @@ internal static class EdgeCapsulePendingDragChecks
         // 租约释放后，同一入口必须仍能正常起拖。
         var retryStart = new DeviceScreenPoint(start.X + 1, start.Y + 1);
         var retryMoved = new DeviceScreenPoint(retryStart.X, retryStart.Y + 200);
-        Invoke(window, "OnEdgeCapsulePointerPressed", retryStart);
+        Program.Invoke(window, "OnEdgeCapsulePointerPressed", retryStart);
         Require(
             Gesture(window) == EdgeCapsuleGestureState.PendingClick,
             "the retry press did not create a pending click");
         Require(
-            (bool)Call(window, "OnEdgeCapsulePointerMoved", retryMoved, true)!,
+            (bool)Program.Call(window, "OnEdgeCapsulePointerMoved", retryMoved, true)!,
             "the retry move was not consumed");
         Require(
             Gesture(window) is EdgeCapsuleGestureState.DockedReordering
@@ -135,7 +135,7 @@ internal static class EdgeCapsulePendingDragChecks
             Field(window, "_deepCapsulePendingReorderDragStart") == null,
             "a successful drag start left the pending retry behind");
 
-        Invoke(window, "CancelDeepCapsuleReorderDrag", true);
+        Program.Invoke(window, "CancelDeepCapsuleReorderDrag", true);
         Require(
             Gesture(window) == EdgeCapsuleGestureState.Idle,
             "cancel did not finish the retry drag");
@@ -147,7 +147,7 @@ internal static class EdgeCapsulePendingDragChecks
 
     private static EdgeCapsuleGestureState Gesture(PaperWindow window)
     {
-        var presenter = Part(window, "_edgeCapsule");
+        var presenter = Program.Part(window, "_edgeCapsule");
         var modelProperty = presenter.GetType().GetProperty(
             "Model",
             BindingFlags.Instance | BindingFlags.NonPublic)!;
@@ -155,27 +155,11 @@ internal static class EdgeCapsulePendingDragChecks
         return model.State.Gesture;
     }
 
-    private static object? Call(object target, string name, params object?[] args)
-    {
-        var method = target.GetType().GetMethod(name, Private)
-            ?? throw new MissingMethodException(target.GetType().Name, name);
-        return method.Invoke(target, args);
-    }
 
-    private static void Invoke(object target, string name, params object?[] args)
-    {
-        var method = target.GetType().GetMethod(name, Private)
-            ?? throw new MissingMethodException(target.GetType().Name, name);
-        _ = method.Invoke(target, args);
-    }
 
     private static object? Field(object target, string name) =>
         target.GetType().GetField(name, Private)?.GetValue(target);
 
-    private static object Part(object target, string name) =>
-        target.GetType().GetField(name, Private)?.GetValue(target) ??
-        target.GetType().GetProperty(name, Private)?.GetValue(target) ??
-        throw new MissingMemberException(target.GetType().Name, name);
 
     private static async Task Until(Func<bool> ready, string message)
     {

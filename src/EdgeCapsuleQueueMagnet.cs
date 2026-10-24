@@ -12,32 +12,25 @@ namespace PaperTodo;
 /// 当前 slot 0 的 top（已含该队列持久化的起始 margin；自由队列没有主胶囊槽位，不含 VisualOffset）。
 /// </param>
 /// <param name="SlotHeightDip">相邻槽位的间距（胶囊高 + 队列间距）。</param>
-/// <param name="ExcludedMemberIndex">
-/// 计算区间时要排除的成员下标；-1 表示不排除。当前生产候选在构建时已按 carriedIds 剔除被拖
-/// 成员，因此恒传 -1；该参数保留给纯函数测试和未来调用。
-/// </param>
 /// <param name="BandLeftDip">贴墙矩形水平条带的左边界（本地 DIP）。</param>
 /// <param name="BandWidthDip">贴墙矩形水平条带的宽度（本地 DIP）。</param>
 /// <param name="InsertionSlotCount">
-/// 预览把 carried 插入后的槽位数。只用于磁吸距离/held 判定；&lt;= 0 时不使用插入几何，
-/// 距离回退到 <paramref name="SlotCount"/> 描述的当前占位（含
-/// <paramref name="ExcludedMemberIndex"/>），这也是纯函数测试与旧调用点的默认行为。
+/// 预览把 carried 插入后的槽位数。候选由调用方按 carriedIds 预过滤，因此这里就是最终档位数，
+/// 必须大于 0；磁吸距离只用插入后的几何，避免贴底扩容时 top 上移却仍按旧占位判定脱落。
 /// </param>
 /// <param name="InsertionFirstSlotTopDip">
-/// 插入后的 slot 0 top。非有限值时不使用插入几何，回退到
-/// <paramref name="FirstSlotTopDip"/>。贴底队列扩容时 margin 会被夹小，这个 top 比当前
-/// top 更靠上；若磁吸仍读当前占位，队首空位会先脱离磁吸再消失。
+/// 插入后的 slot 0 top。贴底队列扩容时 margin 会被夹小，这个 top 比当前 top 更靠上；
+/// 磁吸与预览必须读同一个值，否则用户看得见队首空位却吸不住。
 /// </param>
 internal readonly record struct EdgeCapsuleQueueMagnetCandidate(
     string QueueKey,
     int SlotCount,
     double FirstSlotTopDip,
     double SlotHeightDip,
-    int ExcludedMemberIndex,
     double BandLeftDip,
     double BandWidthDip,
-    int InsertionSlotCount = -1,
-    double InsertionFirstSlotTopDip = double.NaN);
+    int InsertionSlotCount,
+    double InsertionFirstSlotTopDip);
 
 /// <summary>
 /// 一次磁吸判定的全部输入。全部为本地 DIP，与 <see cref="EdgeCapsuleLayout"/> 的坐标口径一致。
@@ -322,9 +315,9 @@ internal static class EdgeCapsuleQueueMagnet
     /// <summary>
     /// 候选队列当前实际占据的垂直区间 [low, high]，按胶囊的真实上下边缘计算。
     ///
-    /// 被拖成员一旦脱离，它后面的成员会重新紧贴堆叠，所以区间按「移除后的新下标」计算，
-    /// 而不是简单地挖掉一个洞 —— 否则从队列中部拖走时会把空洞误算成仍然贴得很近。
-    /// 移除后队列为空（源队列只剩它自己）时返回 false，即该候选没有任何占位。
+    /// 生产候选在构建时已剔除 carried 成员，因此 <see cref="EdgeCapsuleQueueMagnetCandidate.SlotCount"/>
+    /// 就是移除后的档位数；没有剩余成员的队列根本不会成为候选。本区间只服务 NewQueue 避让，
+    /// 磁吸距离读取的是插入后的几何。
     /// </summary>
     private static bool TryOccupiedVerticalSpan(
         EdgeCapsuleQueueMagnetInput input,
@@ -335,54 +328,16 @@ internal static class EdgeCapsuleQueueMagnet
         low = 0;
         high = 0;
 
-        var slotHeight = double.IsFinite(candidate.SlotHeightDip) && candidate.SlotHeightDip > 0
-            ? candidate.SlotHeightDip
-            : input.SlotHeightDip;
-        if (!double.IsFinite(slotHeight) || slotHeight <= 0)
-        {
-            return false;
-        }
-
         var count = candidate.SlotCount;
-        if (count <= 0)
-        {
-            return false;
-        }
-
-        var excluded = candidate.ExcludedMemberIndex;
-        var remaining = count;
         var first = candidate.FirstSlotTopDip;
-        if (!double.IsFinite(first))
-        {
-            return false;
-        }
-
-        if (excluded >= 0)
-        {
-            if (excluded >= count)
-            {
-                return false;
-            }
-
-            remaining = count - 1;
-            if (remaining == 0)
-            {
-                return false;
-            }
-
-            if (excluded == 0)
-            {
-                first += slotHeight;
-            }
-        }
-
-        return TrySpan(input, candidate, first, remaining, out low, out high);
+        return count > 0 &&
+            double.IsFinite(first) &&
+            TrySpan(input, candidate, first, count, out low, out high);
     }
 
     /// <summary>
     /// 预览把 carried 插入后的垂直区间。贴底队列扩容时 top 会上移，磁吸必须与预览读同一几何，
     /// 否则队首空位在预览里存在、在磁吸系统里却已经脱离。
-    /// 插入后的成员集合已经包含 carried，因此不应用 <see cref="EdgeCapsuleQueueMagnetCandidate.ExcludedMemberIndex"/>。
     /// </summary>
     private static bool TryInsertionVerticalSpan(
         EdgeCapsuleQueueMagnetInput input,
@@ -442,7 +397,7 @@ internal static class EdgeCapsuleQueueMagnet
     /// 取「到整段区间」而非「到某个具体槽」：进入队列的语义是「我靠近这一列」，
     /// 具体插入位由调用方按既有的 slot 高度公式另算。
     ///
-    /// 距离优先使用“carried 插入后”的占位：贴底队列扩容时预览 top 会上移，磁吸必须跟着上移，
+    /// 距离使用“carried 插入后”的占位：贴底队列扩容时预览 top 会上移，磁吸必须跟着上移，
     /// 否则用户看得见队首空位却吸不住。NewQueue 避让仍使用当前真实占位（见
     /// <see cref="TryResolveDetachedTopDip"/>），避免用幽灵占位把新队列推远。
     /// </summary>
@@ -450,8 +405,7 @@ internal static class EdgeCapsuleQueueMagnet
         in EdgeCapsuleQueueMagnetInput input,
         EdgeCapsuleQueueMagnetCandidate candidate)
     {
-        if (!TryInsertionVerticalSpan(input, candidate, out var low, out var high) &&
-            !TryOccupiedVerticalSpan(input, candidate, out low, out high))
+        if (!TryInsertionVerticalSpan(input, candidate, out var low, out var high))
         {
             return double.PositiveInfinity;
         }
@@ -507,10 +461,10 @@ internal static class EdgeCapsuleQueueMagnet
         }
 
         // 单胶囊时等于胶囊高度；整队搬移时是 N 个槽位叠加后的整块高度。
-        var slotHeight = double.IsFinite(input.SlotHeightDip) && input.SlotHeightDip > 0
-            ? input.SlotHeightDip
-            : height;
-        var stackHeight = height + (Math.Max(1, input.NewQueueSlotCount) - 1) * slotHeight;
+        var stackHeight = EdgeCapsuleQueueDropTargetGeometry.CarriedBlockHeightDip(
+            input.NewQueueSlotCount,
+            input.SlotHeightDip,
+            height);
 
         var min = input.NewQueueMinTopDip;
         var max = input.NewQueueMaxTopDip;

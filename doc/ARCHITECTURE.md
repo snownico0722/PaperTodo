@@ -390,7 +390,7 @@ Measure / display-metrics 也是同一 presentation reconcile 的输入，而不
 
 迷你视图的避让同样是边级的：`EdgeCapsulePreviewLayoutSession` 只描述 owner 所在队列（该字段同时是 hover 走廊与 transfer 的拓扑，不可泛化），边级让位由 `EdgeCapsulePreviewLayoutCoordinator.BuildEdgeAvoidanceOffsets` 这一纯函数在 apply 前补入。它之所以能跨队列，是因为避让量是与锚点无关的纯相对位移。
 
-拖拽期的反馈按 32ms 间隔重新评估同一判定，并把上一帧目标作为 `HeldQueueKey` 回传，死区因此抑制了指针抖动导致的反复脱落。让位动画由源队列与目标队列各自调用 `EdgeCapsuleQueueCoordinator` 重算后直连下发 `PreviewDeepCapsulePlacement`：**拖拽期不走 `ArrangeDeepCapsules`**，因为 arrange gate 会把该次重排延迟到手势结束。
+拖拽期的反馈按 8ms 间隔重新评估同一判定，并把上一帧目标作为 `HeldQueueKey` 回传，死区因此抑制了指针抖动导致的反复脱落。让位动画由源队列与目标队列各自调用 `EdgeCapsuleQueueCoordinator` 重算后直连下发 `PreviewDeepCapsulePlacement`：**拖拽期不走 `ArrangeDeepCapsules`**，因为 arrange gate 会把该次重排延迟到手势结束。
 
 拖拽解锁为浮空后会进入 Win32 模态移动循环，此时 WPF 不再收到指针事件。反馈改由 `DispatcherTimer` 轮询光标维持；模态循环仍会泵 Dispatcher，计时器照常触发。浮空阶段没有 docked 槽位可预览，但源队列仍须收拢——留一个永久空洞正是「拖出去了、同伴不动」观感的来源。
 

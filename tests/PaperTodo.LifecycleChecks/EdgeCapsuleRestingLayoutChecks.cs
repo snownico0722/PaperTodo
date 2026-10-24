@@ -165,16 +165,12 @@ internal static class EdgeCapsuleRestingLayoutChecks
         paper.CapsuleQueueId;
 
     private static EdgeCapsulePlacement Placement(PaperWindow window) =>
-        ((EdgeCapsulePresenter)Part(window, "_edgeCapsule")).Placement;
+        ((EdgeCapsulePresenter)Program.Part(window, "_edgeCapsule")).Placement;
 
     private static object Value(object target, string name) =>
         target.GetType().GetProperty(name)?.GetValue(target) ??
         throw new MissingMemberException(target.GetType().Name, name);
 
-    private static object Part(object target, string name) =>
-        target.GetType().GetField(name, Private)?.GetValue(target) ??
-        target.GetType().GetProperty(name, Private)?.GetValue(target) ??
-        throw new MissingMemberException(target.GetType().Name, name);
 
     private static async Task Until(Func<bool> ready, string message)
     {

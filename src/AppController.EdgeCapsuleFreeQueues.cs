@@ -103,19 +103,11 @@ public sealed partial class AppController
     /// 每次拖放都会生成新 id，旧 margin 变成孤儿并持久化。源队列仍有成员（含隐藏成员）或
     /// 目的地换了边时生成新 id；源队列真正消失时清掉它记住的起始边距。
     /// </summary>
-    private void SplitCapsuleIntoQueue(
+    private bool SplitCapsuleIntoQueue(
         PaperData paper,
-        string monitorDeviceName,
-        string side,
+        QueueDropGeometry drop,
         double startTopDip)
     {
-        var normalizedMonitor = WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(monitorDeviceName);
-        var normalizedSide = DeepCapsuleSides.Normalize(side);
-        if (!WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(normalizedMonitor, out var geometry))
-        {
-            return;
-        }
-
         var sourceQueueKey = InstanceQueueKey(paper);
         var sourceStillHasMembers = State.Papers.Any(candidate =>
             !string.Equals(candidate.Id, paper.Id, StringComparison.Ordinal) &&
@@ -124,36 +116,20 @@ public sealed partial class AppController
         // 同一物理边（显示器当前不可用时折叠为主屏）视为原地重建：没有剩余成员时复用
         // queue id，并保留持久 monitor tag，显示器重连后队列仍能回到原屏。
         var sourceLiveEdgeKey = EdgeKey(paper.CapsuleMonitorDeviceName, paper.CapsuleSide);
-        var destinationLiveEdgeKey = EdgeKey(normalizedMonitor, normalizedSide);
+        var destinationLiveEdgeKey = EdgeKey(drop.MonitorDeviceName, drop.Side);
         var reuseIdentity = !sourceStillHasMembers &&
             string.Equals(sourceLiveEdgeKey, destinationLiveEdgeKey, StringComparison.Ordinal);
 
-        var destinationMonitor = reuseIdentity
-            ? WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(paper.CapsuleMonitorDeviceName)
-            : normalizedMonitor;
-        var queueId = reuseIdentity
-            ? EdgeCapsuleQueueIds.Normalize(paper.CapsuleQueueId)
-            : EdgeCapsuleQueueIds.New();
-
-        paper.CapsuleMonitorDeviceName = destinationMonitor;
-        paper.CapsuleSide = normalizedSide;
-        paper.CapsuleQueueId = queueId;
-
-        // Clamp at commit time only: while dragging, the capsule tracks the pointer 1:1 so the
-        // drop position never feels like it lags behind the cursor.
-        var startTop = EdgeCapsuleLayout.NormalizeStartTopMargin(
+        return StartCarriedQueueAt(
+            [paper],
+            sourceQueueKey,
+            transfer: null,
+            drop.MonitorDeviceName,
+            drop.Side,
+            drop.Geometry,
             startTopDip,
-            geometry.LocalWorkAreaDip,
-            1,
-            DeepCapsuleGap);
-        var destinationQueueKey = PersistentQueueKey(destinationMonitor, normalizedSide, queueId);
-        State.DeepCapsuleQueueStartTopMargins[destinationQueueKey] = startTop;
-        // 先写新值再清理：原地复用 id 时两个 key 相同，helper 会直接返回，不会删掉刚写入的值。
-        RemoveQueueStartMarginIfVacated(sourceQueueKey, destinationQueueKey);
-
-        ArrangeDeepCapsules(animate: true);
-        RefreshTrayMenu();
-        SaveNow();
+            reuseIdentity,
+            paper.CapsuleMonitorDeviceName);
     }
 
     /// <summary>
@@ -265,14 +241,7 @@ public sealed partial class AppController
             // width this queue actually occupies: its widest resting capsule. LocalWorkAreaDip's X
             // origin is the work area's left edge, matching EdgeCapsuleGeometry's `wall` for a left
             // queue and `wall - width` for a right one.
-            var bandWidth = 0.0;
-            foreach (var member in papers)
-            {
-                if (_windows.TryGetValue(member.Id, out var memberWindow))
-                {
-                    bandWidth = Math.Max(bandWidth, memberWindow.DeepCapsuleRestingVisibleWidth);
-                }
-            }
+            var bandWidth = MeasureEdgeCapsuleQueueWidthDip(papers);
 
             var bandLeft = targetSide == DeepCapsuleSides.Left
                 ? 0
@@ -287,7 +256,6 @@ public sealed partial class AppController
                 slotCount,
                 EdgeCapsuleLayout.TopForIndex(0, margin, area, slotCount, DeepCapsuleGap),
                 slotHeight,
-                -1,
                 bandLeft,
                 bandWidth,
                 insertionSlotCount,
@@ -330,15 +298,8 @@ public sealed partial class AppController
         AppendNumber(builder, targetGeometry.DpiScaleX); AppendSeparator(builder);
         AppendNumber(builder, targetGeometry.DpiScaleY); AppendSeparator(builder);
         AppendNumber(builder, DeepCapsuleGap); AppendSeparator(builder);
-        builder.Append(State.CapsuleTextSize).Append('\u001f');
-        builder.Append(State.CapsuleTextBold).Append('\u001f');
-        AppendNumber(builder, State.Zoom); AppendSeparator(builder);
-        builder.Append(State.UiFontPreset).Append('\u001f')
-            .Append(State.UiLanguage).Append('\u001f')
-            .Append(State.TextRenderingProfile).Append('\u001f')
-            .Append(State.DeepCapsuleTitleMeasureCharacterLimit).Append('\u001f')
-            .Append(State.ExperimentalEdgeCapsuleHoverPreview).Append('\u001f')
-            .Append(State.ShowDeepCapsuleWhileExpanded);
+        AppendCapsuleWidthInputs(builder);
+        builder.Append(State.ShowDeepCapsuleWhileExpanded);
 
         foreach (var paper in carried)
         {
@@ -455,7 +416,6 @@ public sealed partial class AppController
                 return MergeCapsuleIntoFreeQueue(
                     paper,
                     expectedTargetQueueKey,
-                    expectedGeometry,
                     anchor,
                     expectedTargetIndex);
             }
@@ -480,16 +440,13 @@ public sealed partial class AppController
                 return MergeCapsuleIntoFreeQueue(
                     paper,
                     plan.TargetQueueKey,
-                    drop.Geometry,
                     anchor);
 
             default:
-                SplitCapsuleIntoQueue(
+                return SplitCapsuleIntoQueue(
                     paper,
-                    drop.MonitorDeviceName,
-                    drop.Side,
+                    drop,
                     plan.NewQueueStartTopDip);
-                return true;
         }
     }
 
@@ -545,10 +502,23 @@ public sealed partial class AppController
             return;
         }
         _edgeCapsuleQueueDragOwnerPaperId = "";
+        ResetEdgeCapsuleQueueDragSharedState(closeOutline: true);
+    }
+
+    /// <summary>
+    /// 手势结束时清理 controller 级共享拖拽状态。调用方负责 owner 校验（FQ-12）。
+    /// 描边、布局计划、候选缓存、测宽缓存与避让状态都从这一个入口复位，避免结束路径
+    /// 各自漏清一部分。
+    /// </summary>
+    private void ResetEdgeCapsuleQueueDragSharedState(bool closeOutline)
+    {
         _deepCapsuleDragHeldQueueKey = "";
         ClearDeepCapsuleQueueDragAvoidanceState();
         ClearDeepCapsuleQueueMagnetCandidates();
-        EndEdgeCapsuleQueueDropTargetOutline();
+        if (closeOutline)
+        {
+            EndEdgeCapsuleQueueDropTargetOutline();
+        }
     }
 
     /// <summary>Drop the drag-time hold so the next gesture starts from a clean slate.</summary>
@@ -689,57 +659,23 @@ public sealed partial class AppController
     private bool MergeCapsuleIntoFreeQueue(
         PaperData paper,
         string targetQueueKey,
-        MonitorGeometry targetGeometry,
         EdgeCapsuleDropAnchor anchor,
         int expectedTargetIndex = -1)
     {
-        var targetMembers = FreeQueueMembersExcluding(targetQueueKey, paper.Id);
-        if (targetMembers.Count == 0)
+        // 目标已空时保持旧行为：不重排，交由上层继续/弹回。
+        if (FreeQueueMembersExcluding(targetQueueKey, paper.Id).Count == 0)
         {
             return false;
         }
 
-        var queueId = FirstQueueIdOf(targetMembers);
-        if (!EdgeCapsuleQueueIds.TryGetEdge(
-                targetQueueKey,
-                out var targetMonitor,
-                out var targetSideText))
-        {
-            targetMonitor = WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(
-                targetGeometry.DeviceName);
-            targetSideText = DeepCapsuleSides.Right;
-        }
-
-        var targetSide = DeepCapsuleSides.Normalize(targetSideText);
-        var insertAt = expectedTargetIndex >= 0
-            ? Math.Clamp(expectedTargetIndex, 0, targetMembers.Count)
-            : DeepCapsuleQueueInsertIndexFor(
-                targetQueueKey, paper.Id, anchor.CapsuleCenterYDevice);
-
-        // 先求完整布局，再改成员：空间不足时不能留下半完成的插入。
-        var layoutPlan = EvaluateEdgeCapsuleQueueDropLayout([paper], targetQueueKey, insertAt);
-        if (!layoutPlan.Feasible)
-        {
-            ArrangeDeepCapsules(animate: true);
-            return false;
-        }
-
-        // 身份从目标队列 key 派生，而不是从解析后的窗口几何反写：断连目标队列会静默
-        // 回退到主屏几何，用几何写 tag 会把成员错误地迁到主屏。同队列时保持原身份不变。
-        if (!string.Equals(targetQueueKey, QueueKey(paper), StringComparison.Ordinal))
-        {
-            paper.CapsuleMonitorDeviceName = targetMonitor;
-            paper.CapsuleSide = targetSide;
-            paper.CapsuleQueueId = queueId;
-        }
-
-        InsertPaperBesideQueue(paper, targetMembers, layoutPlan.TargetIndex);
-        PersistEdgeCapsuleQueueDropLayoutMargins(layoutPlan);
-
-        ArrangeDeepCapsules(animate: true);
-        RefreshTrayMenu();
-        SaveNow();
-        return true;
+        return MergeCarriedIntoQueue(
+            [paper],
+            transfer: null,
+            targetQueueKey,
+            anchor.CapsuleCenterYDevice,
+            expectedTargetIndex,
+            requireSourceMatch: false,
+            animateOnReject: true);
     }
 
     /// <summary>Move the dragged capsule to a new slot inside the queue it is already in.</summary>

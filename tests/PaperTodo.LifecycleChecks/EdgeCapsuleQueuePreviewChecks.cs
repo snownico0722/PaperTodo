@@ -125,58 +125,75 @@ internal static class EdgeCapsuleQueuePreviewChecks
         var outline = Field(controller, "_edgeCapsuleQueueDropTargetOutline");
         Require(outline != null, "drop-target outline was not created");
         Require(
-            (int)Part(outline!, "InsertionLineIndex") == 1,
+            (int)Program.Part(outline!, "InsertionLineIndex") == 1,
             "the insertion line did not track the insertion index");
         Require(
-            (int)Part(outline!, "InsertionLineSlideCount") == 0,
+            (int)Program.Part(outline!, "InsertionLineSlideCount") == 0,
             "the first appearance must not slide");
         Require(
-            !(bool)Part(outline!, "InsertionLineIsWarning"),
+            !(bool)Program.Part(outline!, "InsertionLineIsWarning"),
             "a feasible insertion must not use the warning color");
 
-        var slidesAtOne = (int)Part(outline!, "InsertionLineSlideCount");
-        var topAtOne = (double)Part(outline!, "InsertionLineTopTargetDip");
+        var slidesAtOne = (int)Program.Part(outline!, "InsertionLineSlideCount");
+        var topAtOne = (double)Program.Part(outline!, "InsertionLineTopTargetDip");
 
         controller.ShowEdgeCapsuleQueueDropTargetOutline(targetKey, source.Id, 1, 1);
         Require(
-            (int)Part(outline!, "InsertionLineSlideCount") == slidesAtOne,
+            (int)Program.Part(outline!, "InsertionLineSlideCount") == slidesAtOne,
             "repeating the same insertion slot restarted a slide animation");
 
+        Require(
+            controller.PreviewDeepCapsuleQueueDrag([source], targetKey, 0),
+            "the earlier-slot preview fixture was infeasible");
         controller.ShowEdgeCapsuleQueueDropTargetOutline(targetKey, source.Id, 1, 0);
         Require(
-            (int)Part(outline!, "InsertionLineSlideCount") == slidesAtOne + 1,
+            (int)Program.Part(outline!, "InsertionLineSlideCount") == slidesAtOne + 1,
             "changing the insertion index did not slide the line");
-        var topAtZero = (double)Part(outline!, "InsertionLineTopTargetDip");
+        var topAtZero = (double)Program.Part(outline!, "InsertionLineTopTargetDip");
         Require(
             topAtZero < topAtOne,
             "the insertion line did not move toward the earlier slot");
 
         controller.EndEdgeCapsuleQueueDropTargetOutline();
 
-        // 高频评估早退：同一 (target, index, carriedCount) 不重复计算描边布局。
-        var layouts = (int)Part(controller, "DropTargetLayoutUpdateCount");
+        // 描边只消费匹配计划：End 之后直接 Show 不得自行算布局或创建描边。
+        var layoutsWithoutPlan = (int)Program.Part(controller, "DropTargetLayoutUpdateCount");
         controller.ShowEdgeCapsuleQueueDropTargetOutline(targetKey, source.Id, 1, 1);
-        var layoutsAfterFirst = (int)Part(controller, "DropTargetLayoutUpdateCount");
+        Require(
+            Field(controller, "_edgeCapsuleQueueDropTargetOutline") == null &&
+            (int)Program.Part(controller, "DropTargetLayoutUpdateCount") == layoutsWithoutPlan,
+            "an outline without a matching layout plan must not be drawn");
+
+        // 高频评估早退：同一 (target, index, carriedCount) 不重复计算描边布局。
+        var layouts = (int)Program.Part(controller, "DropTargetLayoutUpdateCount");
+        Require(
+            controller.PreviewDeepCapsuleQueueDrag([source], targetKey, 1),
+            "the outline preview fixture was infeasible");
+        controller.ShowEdgeCapsuleQueueDropTargetOutline(targetKey, source.Id, 1, 1);
+        var layoutsAfterFirst = (int)Program.Part(controller, "DropTargetLayoutUpdateCount");
         Require(
             layoutsAfterFirst == layouts + 1,
             "the first outline show did not compute its layout");
         controller.ShowEdgeCapsuleQueueDropTargetOutline(targetKey, source.Id, 1, 1);
         Require(
-            (int)Part(controller, "DropTargetLayoutUpdateCount") == layoutsAfterFirst,
+            (int)Program.Part(controller, "DropTargetLayoutUpdateCount") == layoutsAfterFirst,
             "repeating the same outline target recomputed its layout");
+        Require(
+            controller.PreviewDeepCapsuleQueueDrag([source], targetKey, 0),
+            "the earlier-slot outline preview fixture was infeasible");
         controller.ShowEdgeCapsuleQueueDropTargetOutline(targetKey, source.Id, 1, 0);
         Require(
-            (int)Part(controller, "DropTargetLayoutUpdateCount") == layoutsAfterFirst + 1,
+            (int)Program.Part(controller, "DropTargetLayoutUpdateCount") == layoutsAfterFirst + 1,
             "changing the outline index did not recompute its layout");
 
         // 同 key/index 但重新生成了拖放计划时，描边不得复用旧布局。
-        var layoutsBeforeRegeneratedPlan = (int)Part(controller, "DropTargetLayoutUpdateCount");
+        var layoutsBeforeRegeneratedPlan = (int)Program.Part(controller, "DropTargetLayoutUpdateCount");
         Require(
             controller.PreviewDeepCapsuleQueueDrag([source], targetKey, 1),
             "the regenerated plan fixture was infeasible");
         controller.ShowEdgeCapsuleQueueDropTargetOutline(targetKey, source.Id, 1, 1);
         Require(
-            (int)Part(controller, "DropTargetLayoutUpdateCount") == layoutsBeforeRegeneratedPlan + 1,
+            (int)Program.Part(controller, "DropTargetLayoutUpdateCount") == layoutsBeforeRegeneratedPlan + 1,
             "a regenerated drop layout did not invalidate the outline cache");
         controller.EndEdgeCapsuleQueueDropTargetOutline();
 
@@ -188,15 +205,15 @@ internal static class EdgeCapsuleQueuePreviewChecks
         var anchor = new EdgeCapsuleDropAnchor(
             new DeviceScreenPoint(geometry.WorkArea.Right - 10, anchorY),
             anchorY);
-        var builds = (int)Part(controller, "MagnetCandidateBuildCount");
+        var builds = (int)Program.Part(controller, "MagnetCandidateBuildCount");
         controller.EvaluateDeepCapsuleQueueDrag([source], anchor);
-        var buildsAfterFirst = (int)Part(controller, "MagnetCandidateBuildCount");
+        var buildsAfterFirst = (int)Program.Part(controller, "MagnetCandidateBuildCount");
         Require(
             buildsAfterFirst == builds + 1,
             "the first magnet evaluation did not build its candidates");
         controller.EvaluateDeepCapsuleQueueDrag([source], anchor);
         Require(
-            (int)Part(controller, "MagnetCandidateBuildCount") == buildsAfterFirst,
+            (int)Program.Part(controller, "MagnetCandidateBuildCount") == buildsAfterFirst,
             "repeating the same magnet evaluation rebuilt its candidates");
 
         // FQ-05：影响候选几何的外部输入变化必须使缓存失效。
@@ -204,7 +221,7 @@ internal static class EdgeCapsuleQueuePreviewChecks
         controller.State.DeepCapsuleQueueStartTopMargins[targetKey] = targetMarginBefore + 1;
         controller.EvaluateDeepCapsuleQueueDrag([source], anchor);
         Require(
-            (int)Part(controller, "MagnetCandidateBuildCount") == buildsAfterFirst + 1,
+            (int)Program.Part(controller, "MagnetCandidateBuildCount") == buildsAfterFirst + 1,
             "changing a queue margin did not rebuild the magnet candidates");
         controller.State.DeepCapsuleQueueStartTopMargins[targetKey] = targetMarginBefore;
 
@@ -212,7 +229,7 @@ internal static class EdgeCapsuleQueuePreviewChecks
         targetPaper.CapsuleQueueId = "qexternal";
         controller.EvaluateDeepCapsuleQueueDrag([source], anchor);
         Require(
-            (int)Part(controller, "MagnetCandidateBuildCount") == buildsAfterFirst + 2,
+            (int)Program.Part(controller, "MagnetCandidateBuildCount") == buildsAfterFirst + 2,
             "changing queue membership did not rebuild the magnet candidates");
         targetPaper.CapsuleQueueId = targetQueueIdBefore;
 
@@ -220,7 +237,7 @@ internal static class EdgeCapsuleQueuePreviewChecks
         controller.State.DeepCapsuleGapSize = DeepCapsuleGapSizes.Wide;
         controller.EvaluateDeepCapsuleQueueDrag([source], anchor);
         Require(
-            (int)Part(controller, "MagnetCandidateBuildCount") == buildsAfterFirst + 3,
+            (int)Program.Part(controller, "MagnetCandidateBuildCount") == buildsAfterFirst + 3,
             "changing the capsule gap did not rebuild the magnet candidates");
         controller.State.DeepCapsuleGapSize = gapBefore;
 
@@ -244,7 +261,7 @@ internal static class EdgeCapsuleQueuePreviewChecks
         var warningOutline = Field(controller, "_edgeCapsuleQueueDropTargetOutline");
         Require(
             warningOutline != null &&
-            (bool)Part(warningOutline, "InsertionLineIsWarning"),
+            (bool)Program.Part(warningOutline, "InsertionLineIsWarning"),
             "an infeasible insertion must draw the warning-colored line");
         Require(
             Placement(windows["fixture-2"]).Index == 0 &&
@@ -300,7 +317,7 @@ internal static class EdgeCapsuleQueuePreviewChecks
             "the whole-queue transfer fixture did not start");
         var sourceWindow = windows[source.Id];
         SetField(sourceWindow, "_deepCapsuleQueueTransferSnapshot", transferSnapshot);
-        Invoke(sourceWindow, "CancelDeepCapsuleReorderDrag", false);
+        Program.Invoke(sourceWindow, "CancelDeepCapsuleReorderDrag", false);
 
         Require(
             !controller.IsPaperInTransferringEdgeQueue(source),
@@ -449,7 +466,7 @@ internal static class EdgeCapsuleQueuePreviewChecks
             () => ownerWindow.CanEnterEdgeCapsulePreview,
             "the owner capsule did not settle before the preview session check");
         var previewSize = new EdgeCapsulePreviewSize(300, 200);
-        var basePlan = (EdgeCapsuleQueuePlan?)Call(controller, "BuildCurrentEdgeCapsuleQueuePlan")
+        var basePlan = (EdgeCapsuleQueuePlan?)Program.Call(controller, "BuildCurrentEdgeCapsuleQueuePlan")
             ?? throw new InvalidOperationException("the current queue plan was not built");
         var previewSession = EdgeCapsulePreviewLayoutCoordinator.OpenOrTransfer(
             basePlan,
@@ -791,7 +808,7 @@ internal static class EdgeCapsuleQueuePreviewChecks
                 controller.State.Papers.Single(paper => paper.Id == "fixture-0"),
                 controller.State.Papers.Single(paper => paper.Id == "fixture-1")
             };
-            Call(controller, "InsertPaperBesideQueues", moving, anchorTargetMembers, 0);
+            Program.Call(controller, "InsertPaperBesideQueues", moving, anchorTargetMembers, 0);
             var expectedIds = papersBeforeAnchorGuard
                 .Select(paper => paper.Id)
                 .OrderBy(id => id, StringComparer.Ordinal)
@@ -836,13 +853,13 @@ internal static class EdgeCapsuleQueuePreviewChecks
             46,
             12,
             true);
-        var options = (EdgeCapsuleDragWindowOptions)Call(
+        var options = (EdgeCapsuleDragWindowOptions)Program.Call(
             recoveryWindow, "CreateDeepCapsuleFloatingDragHostOptions", hostShape)!;
         var host = EdgeCapsuleDragWindow.Rent(options);
         SetField(recoveryWindow, "_deepCapsuleFloatingDragHost", host);
         try
         {
-            Invoke(
+            Program.Invoke(
                 recoveryWindow,
                 "OnDeepCapsuleFloatingDragHostUnexpectedlyClosed",
                 host,
@@ -857,7 +874,7 @@ internal static class EdgeCapsuleQueuePreviewChecks
                 Mouse.OverrideCursor == null,
                 "an unexpected host close left the drag cursor overridden");
             Require(
-                !(bool)Call(controller, "HasDeepCapsuleReorderDragInProgress")!,
+                !(bool)Program.Call(controller, "HasDeepCapsuleReorderDragInProgress")!,
                 "an unexpected host close left the controller's arrange gate closed");
         }
         finally
@@ -869,26 +886,14 @@ internal static class EdgeCapsuleQueuePreviewChecks
         }
     }
 
-    private static object? Call(object target, string name, params object?[] args)
-    {
-        var method = target.GetType().GetMethod(name, Private)
-            ?? throw new MissingMethodException(target.GetType().Name, name);
-        return method.Invoke(target, args);
-    }
 
     private static void SetField(object target, string name, object? value) =>
         (target.GetType().GetField(name, Private)
          ?? throw new MissingFieldException(target.GetType().Name, name)).SetValue(target, value);
 
-    private static void Invoke(object target, string name, params object?[] args)
-    {
-        var method = target.GetType().GetMethod(name, Private)
-            ?? throw new MissingMethodException(target.GetType().Name, name);
-        _ = method.Invoke(target, args);
-    }
 
     private static EdgeCapsulePlacement Placement(PaperWindow window) =>
-        ((EdgeCapsulePresenter)Part(window, "_edgeCapsule")).Placement;
+        ((EdgeCapsulePresenter)Program.Part(window, "_edgeCapsule")).Placement;
 
     private static object? Field(object target, string name) =>
         target.GetType().GetField(name, Private)?.GetValue(target);
@@ -897,10 +902,6 @@ internal static class EdgeCapsuleQueuePreviewChecks
         target.GetType().GetProperty(name)?.GetValue(target) ??
         throw new MissingMemberException(target.GetType().Name, name);
 
-    private static object Part(object target, string name) =>
-        target.GetType().GetField(name, Private)?.GetValue(target) ??
-        target.GetType().GetProperty(name, Private)?.GetValue(target) ??
-        throw new MissingMemberException(target.GetType().Name, name);
 
     private static async Task Until(Func<bool> ready, string message)
     {
