@@ -615,6 +615,12 @@ About 5 full-width characters on one line, 10 on multiline.</value>
   <data name="TipCapsuleCollapseAll" xml:space="preserve">
     <value>Show a master capsule at the top of the queue to collapse or expand it.</value>
   </data>
+  <data name="TipCapsuleFreeQueues" xml:space="preserve">
+    <value>Capsules can sit at any height along the edge, snap into a nearby queue, and leave again when dragged far enough. Hold Ctrl while dragging any capsule to move the whole queue. Mutually exclusive with the main capsule.</value>
+  </data>
+  <data name="SettingsCapsuleFreeQueues" xml:space="preserve">
+    <value>Free edge capsule queues</value>
+  </data>
   <data name="TipHideEdgeCapsuleCloseButtonOnHover" xml:space="preserve">
     <value>Edge capsules still extend on hover; the extra area acts like the main capsule without a close button. Use Hide in the context menu to close it.</value>
   </data>

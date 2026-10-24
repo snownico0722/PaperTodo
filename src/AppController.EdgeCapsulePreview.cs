@@ -18,6 +18,9 @@ public sealed partial class AppController
     private readonly EdgeCapsuleHoverIntentPredictor
         _edgeCapsulePreviewIntentPredictor = new();
     private EdgeCapsulePreviewLayoutSession? _edgeCapsulePreviewSession;
+
+    /// <summary>测试用：真正重建预览布局 session 的次数。</summary>
+    internal int PreviewSessionRebuildCount { get; private set; }
     private string? _edgeCapsulePreviewOutgoingPaperId;
     private string? _edgeCapsulePreviewQueuedTransferPaperId;
     private string? _edgeCapsulePreviewQueuedCloseOwnerPaperId;
@@ -90,9 +93,6 @@ public sealed partial class AppController
             IsCapsuleCollapseAllActiveForQueue(session.QueueKey) ||
             !_windows.TryGetValue(session.OwnerPaperId, out var owner))
         {
-            TraceEdgeCapsulePreview(
-                $"layout reset owner={EdgeCapsulePreviewTraceId(session.OwnerPaperId)} " +
-                $"reason=owner-missing-or-queue-unavailable queue={session.QueueKey}");
             ResetEdgeCapsulePreviewWithoutArrange();
             return basePlan;
         }
@@ -103,11 +103,6 @@ public sealed partial class AppController
             ownerSize.Value != session.Size ||
             !owner.CanEnterEdgeCapsulePreview)
         {
-            TraceEdgeCapsulePreview(
-                $"layout reset owner={EdgeCapsulePreviewTraceId(session.OwnerPaperId)} " +
-                $"reason=owner-state open={owner.IsEdgeCapsulePreviewOpen} " +
-                $"size={(ownerSize.HasValue ? ownerSize.Value.ToString() : "<null>")} " +
-                $"expectedSize={session.Size} eligibility={owner.EdgeCapsulePreviewEligibilityTrace()}");
             ResetEdgeCapsulePreviewWithoutArrange();
             return basePlan;
         }
@@ -120,9 +115,6 @@ public sealed partial class AppController
                 StringComparison.Ordinal));
         if (currentQueue == null)
         {
-            TraceEdgeCapsulePreview(
-                $"layout reset owner={EdgeCapsulePreviewTraceId(session.OwnerPaperId)} " +
-                $"reason=current-queue-missing queue={currentQueueKey}");
             ResetEdgeCapsulePreviewWithoutArrange();
             return basePlan;
         }
@@ -130,17 +122,21 @@ public sealed partial class AppController
         var currentIds = currentQueue.Papers
             .Select(paper => paper.Id)
             .ToArray();
-        if (!string.Equals(
-                session.QueueKey,
-                currentQueueKey,
-                StringComparison.Ordinal) ||
-            !session.QueuePaperIds.SequenceEqual(
-                currentIds,
-                StringComparer.Ordinal))
+        var edgeQueues = BuildEdgeCapsuleAvoidanceQueues(basePlan, session, currentQueueKey);
+        var currentEdgeIds = edgeQueues.SelectMany(queue => queue.PaperIds).ToArray();
+
+        // EdgePaperIds 只影响边级避让的输入，不应触发 session 重建：重建会以 previous:null
+        // 重算，丢掉同队列 owner 转移的连续性。只有队列身份/成员变化才需要新 session。
+        var queueKeyChanged = !string.Equals(
+            session.QueueKey,
+            currentQueueKey,
+            StringComparison.Ordinal);
+        var queueMembersChanged = !session.QueuePaperIds.SequenceEqual(
+            currentIds,
+            StringComparer.Ordinal);
+        if (queueKeyChanged || queueMembersChanged)
         {
-            TraceEdgeCapsulePreview(
-                $"layout refresh owner={EdgeCapsulePreviewTraceId(session.OwnerPaperId)} " +
-                $"queue={session.QueueKey}->{currentQueueKey}");
+            PreviewSessionRebuildCount++;
             session = EdgeCapsulePreviewLayoutCoordinator.OpenOrTransfer(
                 basePlan,
                 null,
@@ -151,23 +147,169 @@ public sealed partial class AppController
                 DeepCapsuleGap);
             if (session == null)
             {
-                TraceEdgeCapsulePreview(
-                    $"layout reset owner={EdgeCapsulePreviewTraceId(_edgeCapsulePreviewSession?.OwnerPaperId)} " +
-                    "reason=layout-refresh-failed");
                 ResetEdgeCapsulePreviewWithoutArrange();
                 return basePlan;
             }
+        }
+
+        // 只存基础 session（owner 自身 offsets）+ 最新边级成员集合；边级避让是每帧从 rest
+        // margin 重新计算的派生量，写回会让旧邻居 offset 在下一次 Arrange 残留。
+        // 仅在记录实际变化时替换引用，保持指针解析的 ReferenceEquals 缓存有效。
+        var edgePaperIdsChanged = !session.EdgePaperIds.SequenceEqual(
+            currentEdgeIds,
+            StringComparer.Ordinal);
+        if (queueKeyChanged || queueMembersChanged || edgePaperIdsChanged)
+        {
+            session = session with { EdgePaperIds = currentEdgeIds };
             _edgeCapsulePreviewSession = session;
         }
 
-        return EdgeCapsulePreviewLayoutCoordinator.Apply(basePlan, session);
+        var appliedSession = ApplyEdgeCapsuleAvoidance(
+            basePlan,
+            session,
+            edgeQueues,
+            currentEdgeIds);
+        return EdgeCapsulePreviewLayoutCoordinator.Apply(basePlan, appliedSession);
+    }
+
+    /// <summary>
+    /// Every queue resting on the owner's monitor+edge, ascending by slot-0 top, with each queue's
+    /// member ids in their own order.
+    ///
+    /// Free queues let one edge hold several independent stacks (D-058), so a mini-view on one of
+    /// them would otherwise be overlapped by the others. Only the controller can read the persisted
+    /// per-queue start margins, so this descriptor is assembled here and handed to the pure policy.
+    /// </summary>
+    private List<EdgeCapsuleAvoidanceQueue> BuildEdgeCapsuleAvoidanceQueues(
+        EdgeCapsuleQueuePlan basePlan,
+        EdgeCapsulePreviewLayoutSession session,
+        string ownerQueueKey)
+    {
+        var result = new List<EdgeCapsuleAvoidanceQueue>();
+        var ownerPaper = session.OwnerPaperId;
+        if (!basePlan.Placements.ContainsKey(ownerPaper) ||
+            !EdgeCapsuleQueueIds.TryGetEdge(ownerQueueKey, out _, out _))
+        {
+            return result;
+        }
+
+        var ownerLiveEdgeKey = LiveEdgeOfQueueKey(ownerQueueKey);
+        foreach (var queue in basePlan.Queues)
+        {
+            // 边级避让按物理 live edge 分组：断连队列回退到主屏后必须与主屏同侧队列
+            // 一起避让。队列身份仍使用持久 key，二者不能混用。
+            if (!string.Equals(
+                    LiveEdgeOfQueueKey(queue.Key),
+                    ownerLiveEdgeKey,
+                    StringComparison.Ordinal) ||
+                !EdgeCapsuleQueueIds.TryGetEdge(queue.Key, out var monitorDeviceName, out _) ||
+                !WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(
+                    monitorDeviceName,
+                    out var geometry))
+            {
+                continue;
+            }
+
+            var papers = queue.Papers;
+            if (papers.Count == 0)
+            {
+                continue;
+            }
+
+            var slotCount = papers.Count;
+            // margin 必须从队列身份 key 派生：free 关闭时 key 是裸 edge key，
+            // 纸片上的实例 id 已不参与运行期身份，继续读它会得到不同的起始高度。
+            result.Add(new EdgeCapsuleAvoidanceQueue(
+                queue.Key,
+                papers.Select(p => p.Id).ToArray(),
+                EdgeCapsuleLayout.TopForIndex(
+                    0,
+                    DeepCapsuleStartTopMarginForQueueKey(queue.Key),
+                    geometry.LocalWorkAreaDip,
+                    slotCount,
+                    DeepCapsuleGap)));
+        }
+
+        result.Sort(static (left, right) => left.RestTopDip.CompareTo(right.RestTopDip));
+        return result;
+    }
+
+    /// <summary>
+    /// Merge the edge-wide avoidance into the session so the single-queue policy above and the
+    /// cross-queue policy below travel through the same
+    /// <see cref="EdgeCapsulePreviewLayoutCoordinator.Apply"/> path.
+    /// </summary>
+    private EdgeCapsulePreviewLayoutSession ApplyEdgeCapsuleAvoidance(
+        EdgeCapsuleQueuePlan basePlan,
+        EdgeCapsulePreviewLayoutSession session,
+        IReadOnlyList<EdgeCapsuleAvoidanceQueue> edgeQueues,
+        IReadOnlyList<string> edgePaperIds)
+    {
+        if (edgeQueues.Count == 0)
+        {
+            return session;
+        }
+
+        if (!basePlan.Placements.TryGetValue(session.OwnerPaperId, out var ownerPlacement))
+        {
+            return session with { EdgePaperIds = edgePaperIds };
+        }
+
+        var ownerQueue = edgeQueues.FirstOrDefault(queue => queue.PaperIds.Contains(session.OwnerPaperId));
+        if (ownerQueue.QueueKey == null)
+        {
+            return session with { EdgePaperIds = edgePaperIds };
+        }
+
+        // The card occupies the owner's compact slot and grows downward from it — but the card's
+        // bottom edge is NOT the anchor. The single-queue policy also pushes the owner's own lower
+        // members, and they can settle below the card: hovering A3 in [A1..A4] leaves A4 sitting at
+        // cardTop + cardHeight + gap. Anchoring on the card alone would push the next queue to
+        // exactly A4's new top, so the two overlap. Take the lowest bottom the owner's queue
+        // reaches, card included.
+        var slotHeight = EdgeCapsuleLayout.SlotHeight(DeepCapsuleGap);
+        // owner 自己可能带着上一帧 session 留下的位移（向下换卡时 keep 分支继承 currentTops），
+        // 卡片就画在那个位置上。漏掉它会让避让按静止槽位计算——矮卡片恰好被下面的成员循环补偿、
+        // 高卡片则少算整个 offset，导致下一条队列被少推、与展开卡片重叠。
+        var ownerOffset = session.TopOffsetsDip.GetValueOrDefault(session.OwnerPaperId);
+        var ownerCardTop = ownerQueue.RestTopDip
+            + (ownerPlacement.VisualIndex * slotHeight)
+            + ownerOffset;
+        var cardHeight = Math.Max(session.Size.HeightDip, PaperLayoutDefaults.CapsuleHeight);
+        var ownerBottom = ownerCardTop + cardHeight;
+        for (var index = 0; index < ownerQueue.PaperIds.Count; index++)
+        {
+            var memberId = ownerQueue.PaperIds[index];
+            var memberRestTop = ownerQueue.RestTopDip + (index * slotHeight);
+            var memberOffset = session.TopOffsetsDip.TryGetValue(memberId, out var value) ? value : 0;
+            ownerBottom = Math.Max(
+                ownerBottom,
+                memberRestTop + memberOffset + PaperLayoutDefaults.CapsuleHeight);
+        }
+        var extra = EdgeCapsulePreviewLayoutCoordinator.BuildEdgeAvoidanceOffsets(
+            edgeQueues,
+            session.QueueKey,
+            ownerBottom,
+            PaperLayoutDefaults.CapsuleHeight,
+            DeepCapsuleGap);
+        if (extra.Count == 0)
+        {
+            return session with { EdgePaperIds = edgePaperIds };
+        }
+
+        var merged = new Dictionary<string, double>(session.TopOffsetsDip, StringComparer.Ordinal);
+        foreach (var (paperId, offset) in extra)
+        {
+            merged[paperId] = offset;
+        }
+
+
+        return session with { TopOffsetsDip = merged, EdgePaperIds = edgePaperIds };
     }
 
     private void ResetEdgeCapsulePreviewWithoutArrange()
     {
         var session = _edgeCapsulePreviewSession;
-        TraceEdgeCapsulePreview(
-            $"reset without arrange owner={EdgeCapsulePreviewTraceId(session?.OwnerPaperId)}");
         _edgeCapsulePreviewSession = null;
         _edgeCapsulePreviewQueuedTransferPaperId = null;
         _edgeCapsulePreviewQueuedCloseOwnerPaperId = null;
@@ -211,10 +353,6 @@ public sealed partial class AppController
 
         if (!window.CanEnterEdgeCapsulePreview)
         {
-            TraceEdgeCapsulePreview(
-                $"enter blocked target={EdgeCapsulePreviewTraceId(window.EdgeCapsulePreviewPaperId)} " +
-                $"eligibility={window.EdgeCapsulePreviewEligibilityTrace()} " +
-                $"owner={EdgeCapsulePreviewTraceId(_edgeCapsulePreviewSession?.OwnerPaperId)}");
             return;
         }
 
@@ -239,9 +377,6 @@ public sealed partial class AppController
         {
             // A WPF enter caused only by the moving queue has no activation authority. Real
             // screen-space pointer motion clears this suppression before the intent gate starts.
-            TraceEdgeCapsulePreview(
-                $"enter suppressed target={EdgeCapsulePreviewTraceId(window.EdgeCapsulePreviewPaperId)} " +
-                $"owner={EdgeCapsulePreviewTraceId(session?.OwnerPaperId)} pointer={pointer.X},{pointer.Y}");
             return;
         }
 
@@ -302,9 +437,6 @@ public sealed partial class AppController
 
         if (!window.CanEnterEdgeCapsulePreview)
         {
-            TraceEdgeCapsulePreview(
-                $"owner sample blocked owner={EdgeCapsulePreviewTraceId(session.OwnerPaperId)} " +
-                $"eligibility={window.EdgeCapsulePreviewEligibilityTrace()}");
             CancelEdgeCapsulePreviewActivationIntent();
             ResetEdgeCapsulePreviewCorridorExitIntent();
             QueueEdgeCapsulePreviewClose(window, session.OwnerPaperId);
@@ -563,9 +695,6 @@ public sealed partial class AppController
                         var fallbackReason =
                             _edgeCapsulePreviewQueuedCloseReason;
                         ConsumeQueuedEdgeCapsulePreviewClose(ownerPaperId);
-                        TraceEdgeCapsulePreview(
-                            $"close queued owner={EdgeCapsulePreviewTraceId(ownerPaperId)} " +
-                            $"reason={fallbackReason} pointer=<unavailable>");
                         CloseEdgeCapsulePreview(animate: true, arrange: true);
                     }
                     return;
@@ -592,9 +721,6 @@ public sealed partial class AppController
                     NotifyEdgeCapsulePreviewPointerSample(owner, pointer);
                     return;
                 }
-                TraceEdgeCapsulePreview(
-                    $"close queued owner={EdgeCapsulePreviewTraceId(ownerPaperId)} " +
-                    $"reason={queuedReason} pointer={pointer.X},{pointer.Y}");
                 CloseEdgeCapsulePreview(animate: true, arrange: true);
             }),
             DispatcherPriority.Input);
@@ -638,9 +764,6 @@ public sealed partial class AppController
                 QueueKey(window.EdgeCapsulePreviewPaper)))
         {
             CancelEdgeCapsulePreviewActivationIntent();
-            TraceEdgeCapsulePreview(
-                $"transfer blocked target={EdgeCapsulePreviewTraceId(paperId)} " +
-                "reason=drag-authority");
             return;
         }
         if (string.Equals(
@@ -653,9 +776,6 @@ public sealed partial class AppController
 
         _edgeCapsulePreviewQueuedTransferPaperId = paperId;
         var generation = ++_edgeCapsulePreviewTransferGeneration;
-        TraceEdgeCapsulePreview(
-            $"transfer queued target={EdgeCapsulePreviewTraceId(paperId)} " +
-            $"expectedOwner={EdgeCapsulePreviewTraceId(expectedOwnerPaperId)} generation={generation}");
         ProcessQueuedEdgeCapsulePreviewTransfer(
             window,
             paperId,
@@ -690,25 +810,17 @@ public sealed partial class AppController
                     !ReferenceEquals(current, window))
                 {
                     _edgeCapsulePreviewQueuedTransferPaperId = null;
-                    TraceEdgeCapsulePreview(
-                        $"transfer dropped target={EdgeCapsulePreviewTraceId(paperId)} reason=window-changed");
                     return;
                 }
                 if (!AllowsEdgeCapsuleQueueProxyOwnership(
                         QueueKey(current.EdgeCapsulePreviewPaper)))
                 {
                     CancelEdgeCapsulePreviewActivationIntent();
-                    TraceEdgeCapsulePreview(
-                        $"transfer dropped target={EdgeCapsulePreviewTraceId(paperId)} " +
-                        "reason=drag-authority");
                     return;
                 }
                 if (!current.CanEnterEdgeCapsulePreview)
                 {
                     _edgeCapsulePreviewQueuedTransferPaperId = null;
-                    TraceEdgeCapsulePreview(
-                        $"transfer dropped target={EdgeCapsulePreviewTraceId(paperId)} " +
-                        $"reason=blocked eligibility={current.EdgeCapsulePreviewEligibilityTrace()}");
                     return;
                 }
                 if (!WindowNative.TryGetCursorScreenPosition(out var pointer))
@@ -726,16 +838,11 @@ public sealed partial class AppController
                     }
 
                     _edgeCapsulePreviewQueuedTransferPaperId = null;
-                    TraceEdgeCapsulePreview(
-                        $"transfer dropped target={EdgeCapsulePreviewTraceId(paperId)} reason=no-pointer");
                     return;
                 }
                 _edgeCapsulePreviewQueuedTransferPaperId = null;
                 if (!current.IsEdgeCapsuleInteractiveAt(pointer))
                 {
-                    TraceEdgeCapsulePreview(
-                        $"transfer dropped target={EdgeCapsulePreviewTraceId(paperId)} " +
-                        $"reason=pointer-outside pointer={pointer.X},{pointer.Y}");
                     return;
                 }
                 if (stableAnchor.HasValue &&
@@ -745,10 +852,6 @@ public sealed partial class AppController
                         stableAnchor.Value.DpiScaleX,
                         stableAnchor.Value.DpiScaleY))
                 {
-                    TraceEdgeCapsulePreview(
-                        $"transfer dropped target={EdgeCapsulePreviewTraceId(paperId)} " +
-                        $"reason=anchor-moved anchor={stableAnchor.Value.Point.X},{stableAnchor.Value.Point.Y} " +
-                        $"pointer={pointer.X},{pointer.Y}");
                     return;
                 }
 
@@ -759,9 +862,6 @@ public sealed partial class AppController
                     // If another request already opened one, its owner sampler starts a transfer.
                     if (session != null)
                     {
-                        TraceEdgeCapsulePreview(
-                            $"transfer dropped target={EdgeCapsulePreviewTraceId(paperId)} " +
-                            $"reason=session-already-open owner={EdgeCapsulePreviewTraceId(session.OwnerPaperId)}");
                         return;
                     }
                 }
@@ -774,17 +874,10 @@ public sealed partial class AppController
                         expectedOwnerPaperId,
                         out var owner))
                 {
-                    TraceEdgeCapsulePreview(
-                        $"transfer dropped target={EdgeCapsulePreviewTraceId(paperId)} " +
-                        $"reason=owner-changed expected={EdgeCapsulePreviewTraceId(expectedOwnerPaperId)} " +
-                        $"actual={EdgeCapsulePreviewTraceId(session?.OwnerPaperId)}");
                     return;
                 }
                 else if (owner.EdgeCapsulePreviewPointerCaptureActive)
                 {
-                    TraceEdgeCapsulePreview(
-                        $"transfer paused target={EdgeCapsulePreviewTraceId(paperId)} " +
-                        $"owner={EdgeCapsulePreviewTraceId(session.OwnerPaperId)} reason=pointer-capture");
                     HoldEdgeCapsulePreviewForPointerCapture(owner, session);
                     return;
                 }
@@ -806,16 +899,10 @@ public sealed partial class AppController
         }
         if (!window.CanEnterEdgeCapsulePreview)
         {
-            TraceEdgeCapsulePreview(
-                $"open blocked target={EdgeCapsulePreviewTraceId(window.EdgeCapsulePreviewPaperId)} " +
-                $"eligibility={window.EdgeCapsulePreviewEligibilityTrace()}");
             return;
         }
         if (!window.IsEdgeCapsuleInteractiveAt(pointer))
         {
-            TraceEdgeCapsulePreview(
-                $"open blocked target={EdgeCapsulePreviewTraceId(window.EdgeCapsulePreviewPaperId)} " +
-                $"reason=pointer-outside pointer={pointer.X},{pointer.Y}");
             return;
         }
 
@@ -843,9 +930,6 @@ public sealed partial class AppController
                 previous,
                 _edgeCapsulePreviewSession))
         {
-            TraceEdgeCapsulePreview(
-                $"open superseded during prepare target={EdgeCapsulePreviewTraceId(window.EdgeCapsulePreviewPaperId)} " +
-                $"current={EdgeCapsulePreviewTraceId(_edgeCapsulePreviewSession?.OwnerPaperId)}");
             return;
         }
         // Same-generation layout refreshes may replace the immutable record while preserving the
@@ -853,9 +937,6 @@ public sealed partial class AppController
         previous = _edgeCapsulePreviewSession;
         if (request == null)
         {
-            TraceEdgeCapsulePreview(
-                $"open aborted target={EdgeCapsulePreviewTraceId(window.EdgeCapsulePreviewPaperId)} " +
-                "reason=prepare-null");
             return;
         }
 
@@ -871,9 +952,6 @@ public sealed partial class AppController
             DeepCapsuleGap);
         if (next == null)
         {
-            TraceEdgeCapsulePreview(
-                $"open aborted target={EdgeCapsulePreviewTraceId(window.EdgeCapsulePreviewPaperId)} " +
-                $"reason=layout-null queue={queueKey}");
             return;
         }
         if (transferGeneration != _edgeCapsulePreviewTransferGeneration ||
@@ -881,9 +959,6 @@ public sealed partial class AppController
                 previous,
                 _edgeCapsulePreviewSession))
         {
-            TraceEdgeCapsulePreview(
-                $"open superseded before mount target={EdgeCapsulePreviewTraceId(next.OwnerPaperId)} " +
-                $"current={EdgeCapsulePreviewTraceId(_edgeCapsulePreviewSession?.OwnerPaperId)}");
             return;
         }
         previous = _edgeCapsulePreviewSession;
@@ -893,9 +968,6 @@ public sealed partial class AppController
         // the same owner that the target model is about to expose. If opening is rejected, roll
         // the controller session back before returning.
         _edgeCapsulePreviewSession = next;
-        TraceEdgeCapsulePreview(
-            $"session switch prepare from={EdgeCapsulePreviewTraceId(previous?.OwnerPaperId)} " +
-            $"to={EdgeCapsulePreviewTraceId(next.OwnerPaperId)} queue={next.QueueKey}");
         if (!window.SetEdgeCapsulePreviewOpen(
                 request,
                 animate: true))
@@ -912,10 +984,6 @@ public sealed partial class AppController
                 // rejected target generation.
                 ArrangeDeepCapsules(animate: false);
             }
-            TraceEdgeCapsulePreview(
-                $"session switch rollback target={EdgeCapsulePreviewTraceId(next.OwnerPaperId)} " +
-                $"restore={EdgeCapsulePreviewTraceId(_edgeCapsulePreviewSession?.OwnerPaperId)} " +
-                "reason=model-rejected-or-reentered");
             return;
         }
         if (transferGeneration != _edgeCapsulePreviewTransferGeneration ||
@@ -925,9 +993,6 @@ public sealed partial class AppController
                 next.OwnerPaperId,
                 StringComparison.Ordinal))
         {
-            TraceEdgeCapsulePreview(
-                $"session switch superseded target={EdgeCapsulePreviewTraceId(next.OwnerPaperId)} " +
-                $"current={EdgeCapsulePreviewTraceId(_edgeCapsulePreviewSession?.OwnerPaperId)}");
             return;
         }
         // A re-entrant layout refresh may rebuild the immutable session record without superseding
@@ -974,14 +1039,6 @@ public sealed partial class AppController
         ResetEdgeCapsulePreviewCorridorExitIntent();
         RecordEdgeCapsulePreviewTransferPointer(window, next.QueueKey);
         ArrangeDeepCapsules(animate: true);
-        var displaced = string.Join(
-            ",",
-            next.TopOffsetsDip
-                .Where(pair => Math.Abs(pair.Value) > 0.01)
-                .Select(pair => $"{EdgeCapsulePreviewTraceId(pair.Key)}:{pair.Value:F1}"));
-        TraceEdgeCapsulePreview(
-            $"session switch committed owner={EdgeCapsulePreviewTraceId(next.OwnerPaperId)} " +
-            $"displaced={(string.IsNullOrEmpty(displaced) ? "<none>" : displaced)}");
     }
 
     private static bool EdgeCapsulePreviewSessionsHaveSameOwner(
@@ -1042,9 +1099,6 @@ public sealed partial class AppController
         var transferGeneration = ++_edgeCapsulePreviewTransferGeneration;
         var closeGeneration = ++_edgeCapsulePreviewCloseGeneration;
         var session = _edgeCapsulePreviewSession;
-        TraceEdgeCapsulePreview(
-            $"close owner={EdgeCapsulePreviewTraceId(session?.OwnerPaperId)} " +
-            $"animate={animate} arrange={arrange}");
         _edgeCapsulePreviewSession = null;
         _edgeCapsulePreviewQueuedTransferPaperId = null;
         _edgeCapsulePreviewQueuedCloseOwnerPaperId = null;
@@ -1205,11 +1259,6 @@ public sealed partial class AppController
                 StringComparison.Ordinal);
     }
 
-    private static bool IsEdgeCapsulePreviewLayoutSuppressedFor(
-        EdgeCapsulePreviewPointerAnchor anchor,
-        string queueKey) =>
-        string.Equals(anchor.QueueKey, queueKey, StringComparison.Ordinal);
-
     private static bool IsEdgeCapsulePreviewLayoutSuppressionExpired(
         EdgeCapsulePreviewPointerAnchor anchor) =>
         Stopwatch.GetElapsedTime(
@@ -1267,11 +1316,6 @@ public sealed partial class AppController
                     pointer,
                     now,
                     now);
-            TraceEdgeCapsulePreview(
-                $"intent candidate target=" +
-                $"{EdgeCapsulePreviewTraceId(targetPaperId)} " +
-                $"owner={EdgeCapsulePreviewTraceId(expectedOwnerPaperId)} " +
-                $"pointer={pointer.X},{pointer.Y}");
             ScheduleEdgeCapsulePreviewActivationIntentCheck(
                 target,
                 EdgeCapsulePreviewTransferResidenceMilliseconds);
@@ -1330,12 +1374,6 @@ public sealed partial class AppController
         }
 
         ResetEdgeCapsulePreviewActivationIntent();
-        TraceEdgeCapsulePreview(
-            $"intent accepted target=" +
-            $"{EdgeCapsulePreviewTraceId(targetPaperId)} " +
-            $"owner={EdgeCapsulePreviewTraceId(expectedOwnerPaperId)} " +
-            $"candidateMs={candidateElapsed:F1} " +
-            $"stableMs={stableElapsed:F1}");
         QueueEdgeCapsulePreviewTransfer(
             target,
             expectedOwnerPaperId,
@@ -1495,11 +1533,6 @@ public sealed partial class AppController
                 };
                 break;
             case EdgeCapsuleCorridorExitDecision.CloseForNoTargetIntent:
-                TraceEdgeCapsulePreview(
-                    $"corridor close owner={EdgeCapsulePreviewTraceId(session.OwnerPaperId)} " +
-                    $"reason={decision} pointer={pointer.X},{pointer.Y} " +
-                    $"corridorMs={corridorElapsed:F1} " +
-                    $"noTargetMs={noTargetIntentElapsed:F1}");
                 QueueEdgeCapsulePreviewClose(
                     owner,
                     session.OwnerPaperId,

@@ -628,6 +628,12 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="TipCapsuleCollapseAll" xml:space="preserve">
     <value>列の先頭にメインカプセルを表示し、現在の列を一括で折りたたみ／展開します。</value>
   </data>
+  <data name="TipCapsuleFreeQueues" xml:space="preserve">
+    <value>カプセルをエッジ上の任意の高さに自由に配置でき、近くのキューに近づくと自動的に統合され、遠ざけると分離します。Ctrl を押したまま任意のカプセルをドラッグするとキュー全体を移動できます。メインカプセルとは排他的です。</value>
+  </data>
+  <data name="SettingsCapsuleFreeQueues" xml:space="preserve">
+    <value>エッジカプセル自由キュー</value>
+  </data>
   <data name="TipHideEdgeCapsuleCloseButtonOnHover" xml:space="preserve">
     <value>ホバー時も通常どおり伸びますが、追加領域は閉じるボタンのない通常のカプセル領域として動作します。閉じる場合は右クリックメニューの「隠す」を使います。</value>
   </data>

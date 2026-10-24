@@ -156,7 +156,7 @@ internal static class TodoHistoryChecks
         await Reset(6);
         ReconcileRows(window);
         RequirePresentation(window, paper, "unchanged order");
-        Invoke(window, "PushUndoSnapshot");
+        Program.Invoke(window, "PushUndoSnapshot");
         paper.Items.Reverse();
         ReconcileRows(window);
         await Idle();
@@ -172,10 +172,10 @@ internal static class TodoHistoryChecks
         // Mixed removals, a changed row and an insertion keep the current presentation in sync.
         await Reset(8);
         controller.State.ShowTodoBottomBar = true;
-        Invoke(window, "SyncTodoAppendArea");
+        Program.Invoke(window, "SyncTodoAppendArea");
         await Idle();
         var oldItems = paper.Items.ToArray();
-        Invoke(window, "PushUndoSnapshot");
+        Program.Invoke(window, "PushUndoSnapshot");
         var changedItem = TodoRules.Clone(oldItems[2]);
         changedItem.Text += " rebuilt";
         paper.Items = [oldItems[6], new PaperItem { Id = "inserted", Text = "inserted row" }, oldItems[0], changedItem, oldItems[3], oldItems[7], oldItems[4]];
@@ -243,7 +243,7 @@ internal static class TodoHistoryChecks
         {
             await Reset(4, prepare);
             var previous = TodoRules.Clone(paper.Items[0]);
-            Invoke(window, "PushUndoSnapshot");
+            Program.Invoke(window, "PushUndoSnapshot");
             change(paper.Items[0]);
             var changed = TodoRules.Clone(paper.Items[0]);
             window.RefreshTodoRowsForExternalChange();
@@ -335,7 +335,7 @@ internal static class TodoHistoryChecks
         Require(foldPreview.Visibility == Visibility.Visible && editor.Opacity == 0,
             "clearing sweep selection did not restore the folded preview");
 
-        Invoke(window, "RefreshTodoFindCues");
+        Program.Invoke(window, "RefreshTodoFindCues");
         var foldGlyph = (System.Windows.Shapes.Path)foldButton.Child;
         Require(Math.Abs(foldGlyph.Opacity - 0.48) < 0.001,
             "a search cue refresh changed the folded icon's neutral opacity");
@@ -465,7 +465,7 @@ internal static class TodoHistoryChecks
         await SendKey(window, Key.Y);
         Require(paper.Items.Count == 5 && paper.Items[1].Id == insertedId, "insert redo changed the new row identity");
         await Reset(1);
-        Invoke(window, "RemoveItem", paper.Items[0], true, null, true);
+        Program.Invoke(window, "RemoveItem", paper.Items[0], true, null, true);
         await Idle();
         var placeholderId = paper.Items[0].Id;
         Require(placeholderId != "row-0" && TodoRules.IsPlaceholder(paper.Items[0]), "last-row deletion did not create a placeholder");
@@ -481,10 +481,10 @@ internal static class TodoHistoryChecks
         // is used only here to make that timing deterministic; keyboard routing is covered above.
         await Reset(4);
         controller.State.EnableAnimations = true;
-        Invoke(window, "RemoveItem", paper.Items[0], true, null, true);
+        Program.Invoke(window, "RemoveItem", paper.Items[0], true, null, true);
         Require(Rows(window).ContainsKey("row-0") && !Rows(window)["row-0"].IsHitTestVisible,
             "deletion fixture did not retain its animating old row");
-        Invoke(window, "Undo");
+        Program.Invoke(window, "Undo");
         await Task.Delay(350);
         await Idle();
         Require(paper.Items.Count == 4 && Rows(window)["row-0"].IsHitTestVisible,
@@ -696,7 +696,6 @@ internal static class TodoHistoryChecks
     private static List<List<PaperItem>> History(PaperWindow window, string name) => (List<List<PaperItem>>)Field(window, name);
     private static object Field(object target, string name) => target.GetType().GetField(name, Private)!.GetValue(target)!;
     private static void SetField(object target, string name, object? value) => target.GetType().GetField(name, Private)!.SetValue(target, value);
-    private static void Invoke(object target, string name, params object?[] args) => target.GetType().GetMethod(name, Private)!.Invoke(target, args);
-    private static Task Idle() => Dispatcher.CurrentDispatcher.InvokeAsync(static () => { }, DispatcherPriority.ApplicationIdle).Task;
+        private static Task Idle() => Dispatcher.CurrentDispatcher.InvokeAsync(static () => { }, DispatcherPriority.ApplicationIdle).Task;
     private static void Require(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }
 }

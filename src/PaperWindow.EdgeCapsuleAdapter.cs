@@ -55,8 +55,19 @@ public sealed partial class PaperWindow
         return accepted;
     }
 
-    private bool UpdateEdgeCapsuleQueuePlacement(EdgeCapsulePlacement placement) =>
-        DispatchEdgeCapsuleIntent(EdgeCapsuleIntent.QueuePlacementChanged(placement));
+    private bool UpdateEdgeCapsuleQueuePlacement(EdgeCapsulePlacement placement)
+    {
+        var previous = _edgeCapsule.Placement;
+        if (!DispatchEdgeCapsuleIntent(EdgeCapsuleIntent.QueuePlacementChanged(placement)))
+        {
+            return false;
+        }
+
+        // Dispatch 对 Unchanged 也返回 true。只有归约器真正改变了 placement 才值得重新采集
+        // 布局并请求 Presentation；拖拽预览每次插入槽变化都会重发整条队列，未变化的成员
+        // 若继续走 Measure 会重复构造 FormattedText，是跨侧大队列卡顿的主要来源。
+        return previous != _edgeCapsule.Placement;
+    }
 
     private bool ChangeEdgeCapsulePaperForm(
         EdgeCapsulePaperForm paperForm,
@@ -154,10 +165,21 @@ public sealed partial class PaperWindow
             EdgeCapsuleIntent.DockingRevealStarted(),
             EdgeCapsuleDirty.None);
 
-    private bool FinishEdgeCapsulePointerInteraction() =>
-        DispatchEdgeCapsuleIntent(
+    private bool FinishEdgeCapsulePointerInteraction()
+    {
+        // The modifier latch is scoped to one press. Clearing it here means a later gesture can
+        // never inherit a stale "whole queue" intent.
+        _deepCapsuleQueueTransferRequested = false;
+        _edgeCapsulePointerDownKeyState = 0;
+        // FQ-09: 手势终结即丢弃 docking handoff 排队意图。这里是所有指针手势的唯一收口
+        // （含松手未起拖的分支），残留的旧时间戳会让下一次新手势在
+        // OnEdgeCapsulePointerMoved 的超时判定里被误杀。
+        // 同时恢复点击资格：等待租约期间被撤销的点击不能泄漏到下一次手势。
+        ResetDeepCapsulePointerGestureSuppression();
+        return DispatchEdgeCapsuleIntent(
             EdgeCapsuleIntent.PointerInteractionFinished(),
             EdgeCapsuleDirty.Presentation | EdgeCapsuleDirty.Pointer);
+    }
 
     private bool FinishEdgeCapsuleDockingHandoff() =>
         DispatchEdgeCapsuleIntent(

@@ -56,9 +56,9 @@ internal static class TodoContextMenuChecks
     internal static async Task Run(AppController controller, IReadOnlyDictionary<string, PaperWindow> windows)
     {
         var window = windows[PaperId];
-        var rows = (List<Border>)Part(window, "_todoRows");
-        var editors = (Dictionary<string, TodoTextBox>)Part(window, "_todoEditors");
-        var selected = (HashSet<string>)Part(window, "_selectedTodoItemIds");
+        var rows = (List<Border>)Program.Part(window, "_todoRows");
+        var editors = (Dictionary<string, TodoTextBox>)Program.Part(window, "_todoEditors");
+        var selected = (HashSet<string>)Program.Part(window, "_selectedTodoItemIds");
         await Flush();
         LifecycleInput.Focus(window, editors["mouse"]);
         await Flush();
@@ -275,9 +275,8 @@ internal static class TodoContextMenuChecks
         var editor = typeof(TextBoxBase).GetProperty("TextEditor", Private)!.GetValue(textBox)!;
         return (bool)editor.GetType().GetProperty("IsContextMenuOpen", Private)!.GetValue(editor)!;
     }
-    private static object Part(object target, string name) => target.GetType().GetField(name, Private)!.GetValue(target)!;
-    private static List<ContextMenu> ThemedMenus(PaperWindow window) =>
-        ((List<WeakReference<ContextMenu>>)Part(window, "_themedContextMenus"))
+        private static List<ContextMenu> ThemedMenus(PaperWindow window) =>
+        ((List<WeakReference<ContextMenu>>)Program.Part(window, "_themedContextMenus"))
             .Select(reference => reference.TryGetTarget(out var menu) ? menu : null)
             .OfType<ContextMenu>().ToList();
 

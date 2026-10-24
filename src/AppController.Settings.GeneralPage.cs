@@ -42,6 +42,10 @@ public sealed partial class AppController
             Strings.Get("SettingsCapsuleCollapseAll"),
             State.UseCapsuleCollapseAll,
             ToggleCapsuleCollapseAll);
+        _settingsCapsuleFreeQueuesCheckBox = SettingsToggle(
+            Strings.Get("SettingsCapsuleFreeQueues"),
+            State.UseCapsuleFreeQueues,
+            ToggleCapsuleFreeQueues);
         _settingsCollapseExpandedDeepCapsuleOnClickCheckBox = SettingsToggle(
             Strings.Get("SettingsCollapseExpandedDeepCapsuleOnClick"),
             State.CollapseExpandedDeepCapsuleOnClick,
@@ -58,6 +62,9 @@ public sealed partial class AppController
         rightColumn.Children.Add(WrapWithHint(
             _settingsCapsuleCollapseAllCheckBox,
             "TipCapsuleCollapseAll"));
+        rightColumn.Children.Add(WrapWithHint(
+            _settingsCapsuleFreeQueuesCheckBox,
+            "TipCapsuleFreeQueues"));
         rightColumn.Children.Add(WrapWithHint(
             _settingsCollapseExpandedDeepCapsuleOnClickCheckBox,
             "TipCollapseExpandedDeepCapsuleOnClick"));
@@ -230,6 +237,7 @@ public sealed partial class AppController
         State.HideEdgeCapsuleCloseButtonOnHover = false;
         State.RememberDeepCapsuleExpandedPosition = true;
         State.UseCapsuleCollapseAll = true;
+        State.UseCapsuleFreeQueues = false;
         State.CompactMasterCapsule = false;
         State.CollapseExpandedDeepCapsuleOnClick = false;
         State.EdgeCapsulePreviewPreferDownward = false;

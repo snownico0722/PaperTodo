@@ -628,6 +628,12 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="TipCapsuleCollapseAll" xml:space="preserve">
     <value>줄 맨 위에 메인 캡슐을 두어 현재 줄을 한 번에 접거나 펼칩니다.</value>
   </data>
+  <data name="TipCapsuleFreeQueues" xml:space="preserve">
+    <value>캡슐을 가장자리의 원하는 높이에 자유롭게 배치하고, 가까운 큐에 가까이 가면 자동으로 합쳐지며, 충분히 멀리 끌면 분리됩니다. Ctrl 키를 누른 채 아무 캡슐이나 끌면 큐 전체가 이동합니다. 메인 캡슐과는 동시에 사용할 수 없습니다.</value>
+  </data>
+  <data name="SettingsCapsuleFreeQueues" xml:space="preserve">
+    <value>가장자리 캡슐 자유 큐</value>
+  </data>
   <data name="TipHideEdgeCapsuleCloseButtonOnHover" xml:space="preserve">
     <value>마우스를 올리면 기존처럼 늘어나지만 추가 영역은 닫기 버튼 없이 일반 캡슐 영역으로 동작합니다. 닫으려면 오른쪽 클릭 메뉴에서 '숨기기'를 사용하세요.</value>
   </data>

@@ -102,6 +102,45 @@ public static class AnimationHelper
         AnimateDouble(transform, TranslateTransform.YProperty, y, duration, ease, onComplete);
     }
 
+    /// <summary>
+    /// 把元素在 Canvas 中的 Top 平滑移动到目标值。与 <see cref="AnimateDouble"/> 一样，
+    /// 从当前有效值（包含正在运行的动画）重新起跳，避免快速重定向时回跳一帧。
+    /// </summary>
+    public static void AnimateCanvasTop(
+        FrameworkElement element,
+        double top,
+        double duration = 200,
+        IEasingFunction? easing = null)
+    {
+        AnimateDouble(element, Canvas.TopProperty, top, duration, easing ?? SmoothEase);
+    }
+
+    /// <summary>
+    /// 从指定透明度淡到目标值。用于需要每次都看到淡入的局部元素；
+    /// 与 <see cref="FadeTo"/> 不同，这里显式指定起点。
+    /// </summary>
+    public static void FadeToFrom(
+        UIElement element,
+        double from,
+        double to,
+        double duration = 200,
+        IEasingFunction? easing = null)
+    {
+        element.BeginAnimation(UIElement.OpacityProperty, null);
+        element.Opacity = to;
+
+        element.BeginAnimation(
+            UIElement.OpacityProperty,
+            new DoubleAnimation(
+                from,
+                to,
+                TimeSpan.FromMilliseconds(AnimationTiming.ScaleMilliseconds(duration)))
+            {
+                EasingFunction = easing ?? SmoothEase,
+                FillBehavior = FillBehavior.Stop
+            });
+    }
+
     // 颜色过渡
     public static void TransitionColor(Brush brush, Color toColor, double duration = 300)
     {
