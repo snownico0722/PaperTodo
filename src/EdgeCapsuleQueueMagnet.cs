@@ -14,13 +14,9 @@ namespace PaperTodo;
 /// <param name="SlotHeightDip">相邻槽位的间距（胶囊高 + 队列间距）。</param>
 /// <param name="BandLeftDip">贴墙矩形水平条带的左边界（本地 DIP）。</param>
 /// <param name="BandWidthDip">贴墙矩形水平条带的宽度（本地 DIP）。</param>
-/// <param name="InsertionSlotCount">
-/// 预览把 carried 插入后的槽位数。候选由调用方按 carriedIds 预过滤，因此这里就是最终档位数，
-/// 必须大于 0；磁吸距离只用插入后的几何，避免贴底扩容时 top 上移却仍按旧占位判定脱落。
-/// </param>
+/// <param name="InsertionSlotCount">插入 carried 后的槽位数，必须 &gt; 0；磁吸距离只看插入后的几何。</param>
 /// <param name="InsertionFirstSlotTopDip">
-/// 插入后的 slot 0 top。贴底队列扩容时 margin 会被夹小，这个 top 比当前 top 更靠上；
-/// 磁吸与预览必须读同一个值，否则用户看得见队首空位却吸不住。
+/// 插入后的 slot 0 top；必须与预览同值，否则贴底头插会先脱离磁吸。
 /// </param>
 internal readonly record struct EdgeCapsuleQueueMagnetCandidate(
     string QueueKey,
@@ -313,11 +309,8 @@ internal static class EdgeCapsuleQueueMagnet
     }
 
     /// <summary>
-    /// 候选队列当前实际占据的垂直区间 [low, high]，按胶囊的真实上下边缘计算。
-    ///
-    /// 生产候选在构建时已剔除 carried 成员，因此 <see cref="EdgeCapsuleQueueMagnetCandidate.SlotCount"/>
-    /// 就是移除后的档位数；没有剩余成员的队列根本不会成为候选。本区间只服务 NewQueue 避让，
-    /// 磁吸距离读取的是插入后的几何。
+    /// 候选队列当前实际占据的垂直区间 [low, high]。生产候选已剔除 carried，
+    /// 因此 SlotCount 就是剩余档位数；这里只服务 NewQueue 避让。
     /// </summary>
     private static bool TryOccupiedVerticalSpan(
         EdgeCapsuleQueueMagnetInput input,
@@ -336,8 +329,7 @@ internal static class EdgeCapsuleQueueMagnet
     }
 
     /// <summary>
-    /// 预览把 carried 插入后的垂直区间。贴底队列扩容时 top 会上移，磁吸必须与预览读同一几何，
-    /// 否则队首空位在预览里存在、在磁吸系统里却已经脱离。
+    /// 插入 carried 后的垂直区间；必须与预览同几何，否则贴底队首空位会先脱离磁吸。
     /// </summary>
     private static bool TryInsertionVerticalSpan(
         EdgeCapsuleQueueMagnetInput input,

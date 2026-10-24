@@ -239,10 +239,7 @@ internal static class EdgeCapsuleQueueRegressionChecks
         controller.ArrangeDeepCapsules(animate: false);
     }
 
-    /// <summary>
-    /// 单颗提交与整队共用撤销边界后，mutation 中途异常也必须完整回滚：
-    /// State.Papers 顺序、全部 margin 与被拖成员身份。
-    /// </summary>
+    /// <summary>单颗提交中途异常时，顺序、margin 与身份都必须完整回滚。</summary>
     private static void SingleCommitRollback(AppController controller)
     {
         Program.Require(

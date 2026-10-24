@@ -6,8 +6,7 @@ namespace PaperTodo;
 public sealed partial class AppController
 {
     /// <summary>
-    /// 胶囊体系四个运行期开关的快照。设置写入、no-op 判断与级联都基于同一个目标状态，
-    /// 避免“值没变”却漏掉前置修复（例如 edge_enabled 单独为 true 而 capsule 缺失）。
+    /// 胶囊四开关的目标状态快照；写入、no-op 与级联共用，避免漏掉前置修复。
     /// </summary>
     private readonly record struct CapsuleModeSettingsState(
         bool Capsule,
@@ -66,10 +65,7 @@ public sealed partial class AppController
             state.UseCapsuleFreeQueues = FreeQueues;
         }
 
-        /// <summary>
-        /// 写入 true 时只有目标状态与当前完全一致才算 no-op；写入 false 保留旧语义
-        /// （只比较自身字段），避免改变取消路径的副作用。
-        /// </summary>
+        /// <summary>写 true 比较完整目标状态；写 false 只比较自身字段，保持取消路径旧语义。</summary>
         internal static bool IsNoOp(AppState state, string id, bool value)
         {
             if (value)
@@ -355,8 +351,7 @@ public sealed partial class AppController
             value => State.UseDeepCapsuleMode = value,
             SettingEffects.CapsuleMode,
             title: Strings.Get("TrayDeepCapsuleMode"),
-            // 写 true 时 capsule 必须同时开启；否则“deep 已经是 true”会被误判为 no-op，
-            // 跳过 Apply 里的前置修复，API 读到 true 但胶囊并不可用。
+            // 写 true 需蕴含 capsule；否则会被误判 no-op，跳过前置修复。
             isNoOp: value => CapsuleModeSettingsState.IsNoOp(
                 State, "capsule.edge_enabled", value));
         yield return DefineSetting<bool>("capsule.master_enabled",

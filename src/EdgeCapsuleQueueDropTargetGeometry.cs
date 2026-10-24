@@ -41,8 +41,7 @@ internal static class EdgeCapsuleQueueDropTargetGeometry
     internal const double QueueEdgeLineOpacity = 0.45;
 
     /// <summary>
-    /// 一条队列的可见高度：count 个槽位，最后一个槽不含尾部 gap。允许 0 个成员（返回 0），
-    /// 供预览、描边与磁吸共用同一个高度口径。
+    /// 队列可见高度：count 个槽位，尾槽不含 gap；0 成员返回 0。预览、描边与磁吸共用。
     /// </summary>
     internal static double QueueHeightDip(
         int memberCount,
@@ -55,18 +54,14 @@ internal static class EdgeCapsuleQueueDropTargetGeometry
         return Math.Max(0, count * slot - normalizedGap);
     }
 
-    /// <summary>
-    /// 插入块高度：至少一个完整槽位，最后一个槽不含尾部 gap。
-    /// </summary>
+    /// <summary>插入块高度：至少一个槽位，尾槽不含 gap。</summary>
     internal static double InsertionBlockHeightDip(
         int carriedCount,
         double slotHeight,
         double gap) =>
         QueueHeightDip(Math.Max(1, carriedCount), slotHeight, gap);
 
-    /// <summary>
-    /// 目标队列插入后的完整高度：真实成员 + carriedCount 个完整槽位，尾槽不含 gap。
-    /// </summary>
+    /// <summary>插入后的完整高度：真实成员 + carried 槽位，尾槽不含 gap。</summary>
     internal static double TargetQueueHeightDip(
         int memberCount,
         int carriedCount,
@@ -78,8 +73,7 @@ internal static class EdgeCapsuleQueueDropTargetGeometry
             gap);
 
     /// <summary>
-    /// 整队搬移时胶囊块的垂直高度：第一个胶囊用自己的高度，后续槽位按 slotHeight 堆叠。
-    /// 退化输入沿用磁吸原有口径：slotHeight 无效时退回 capsuleHeight。
+    /// 整队块高度：首颗用自身高度，后续按 slotHeight 堆叠；slotHeight 无效时退回 capsuleHeight。
     /// </summary>
     internal static double CarriedBlockHeightDip(
         int carriedCount,

@@ -506,9 +506,8 @@ public sealed partial class AppController
     }
 
     /// <summary>
-    /// 手势结束时清理 controller 级共享拖拽状态。调用方负责 owner 校验（FQ-12）。
-    /// 描边、布局计划、候选缓存、测宽缓存与避让状态都从这一个入口复位，避免结束路径
-    /// 各自漏清一部分。
+    /// 手势结束时复位 controller 级共享拖拽状态；调用方负责 owner 校验（FQ-12）。
+    /// 描边、布局计划、候选/测宽缓存与避让状态统一从这里清理。
     /// </summary>
     private void ResetEdgeCapsuleQueueDragSharedState(bool closeOutline)
     {

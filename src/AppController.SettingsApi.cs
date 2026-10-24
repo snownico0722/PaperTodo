@@ -140,9 +140,7 @@ public sealed partial class AppController
                 if (id == "window.hide_from_switcher" && value is true) State.HidePapersFromTaskbar = true;
                 if (effects == SettingEffects.CapsuleMode)
                 {
-                    // 四个开关的写入与级联统一由目标状态计算：set(value) 已写入自身字段，
-                    // 这里补齐 capsule/deep/master/free 之间的前置不变式。free/master=true
-                    // 必须蕴含 capsule && deep，避免写成功却不生效、重启再被丢弃。
+                    // 四个开关统一由目标状态补齐前置不变式：free/master=true 必须蕴含 capsule && deep。
                     if (value is bool enabled &&
                         id is "capsule.enabled" or "capsule.edge_enabled"
                             or "capsule.master_enabled" or "capsule.free_queues")

@@ -157,8 +157,7 @@ public sealed partial class AppController
         var clampedIndex = Math.Clamp(targetIndex, 0, members.Count);
         var requestedCarriedCount = Math.Max(1, carriedCount);
 
-        // 描边只消费正常规划入口生成的计划。缺少匹配计划时说明预览已经失效，
-        // 此时不应由显示层另算一套布局并假定可行。
+        // 描边只消费正常规划入口生成的计划；缺少匹配计划时不由显示层另算布局。
         var plan = _edgeCapsuleQueueDropLayoutPlan;
         if (plan == null ||
             !string.Equals(plan.TargetQueueKey, queueKey, StringComparison.Ordinal) ||
@@ -260,10 +259,7 @@ public sealed partial class AppController
         return width;
     }
 
-    /// <summary>
-    /// 影响胶囊可见宽度的公共排版输入。磁吸候选签名与描边宽度签名共用，避免以后新增
-    /// 影响宽度的设置时只改到一处。
-    /// </summary>
+    /// <summary>磁吸与描边共用的排版输入；新增影响宽度的设置只改这里。</summary>
     private void AppendCapsuleWidthInputs(StringBuilder builder)
     {
         builder.Append(State.CapsuleTextSize).Append('\u001f')
@@ -303,8 +299,7 @@ public sealed partial class AppController
     }
 
     /// <summary>
-    /// 队列成员窗口实际测量到的最大可见宽度（DIP）。测不到时返回 0，由调用方决定：
-    /// 磁吸把 0 视为不可达，描边回退到标准胶囊宽度。两处共用同一测宽来源。
+    /// 队列成员的最大可见宽度（DIP）；测不到返回 0。磁吸视 0 为不可达，描边回退标准宽度。
     /// </summary>
     private double MeasureEdgeCapsuleQueueWidthDip(IEnumerable<PaperData> members)
     {
@@ -327,8 +322,7 @@ public sealed partial class AppController
     }
 
     /// <summary>
-    /// 目标队列的可见胶囊宽度（DIP，含靠屏幕内侧的 chrome margin）。测不到时回退标准胶囊宽度，
-    /// 并按工作区宽度收窄，避免指示线被屏幕边缘裁切。
+    /// 目标队列可见宽度（DIP）；测不到时回退标准宽度并按工作区收窄。
     /// </summary>
     private double MeasureEdgeCapsuleQueueVisibleWidthDip(
         IReadOnlyList<PaperData> members,

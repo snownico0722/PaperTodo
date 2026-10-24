@@ -11,22 +11,17 @@ internal readonly record struct EdgeCapsuleQueueMemberIdentity(
     string QueueId);
 
 /// <summary>
-/// State captured when a whole-queue move starts: the frozen source queue and per-member identities.
+/// 起拖时冻结的源队列事实：源 key、成员 id 与逐成员身份。
+/// 提交撤销所需的顺序/margin 另见 <see cref="EdgeCapsuleQueueCommitUndo"/>。
 /// </summary>
-/// <remarks>
-/// 这里只记录“起拖时的源队列事实”。提交中途异常需要的顺序、margin 与 mutation 前的身份
-/// 另由 <see cref="EdgeCapsuleQueueCommitUndo"/> 在真正改数据之前捕获，二者不要混在一起。
-/// </remarks>
 internal sealed record EdgeCapsuleQueueTransferSnapshot(
     string SourceQueueKey,
     IReadOnlyList<string> PaperIds,
-    // 逐成员原始身份：TryBegin 捕获起拖状态；提交异常逃逸时按它恢复身份。
     IReadOnlyList<EdgeCapsuleQueueMemberIdentity> MemberIdentities);
 
 /// <summary>
-/// 一次队列提交的撤销记录，必须在任何业务数据 mutation 之前捕获。
-/// 逐成员身份、<see cref="AppState.Papers"/> 的完整顺序与整个 margin 字典缺一不可：
-/// 提交会把整块搬到目标队列的插入位，只记相对顺序无法还原槽位。
+/// 提交前捕获的撤销记录：逐成员身份、<see cref="AppState.Papers"/> 完整顺序与全部 margin。
+/// 提交会把整块搬到插入位，只记相对顺序无法还原槽位。
 /// </summary>
 internal sealed record EdgeCapsuleQueueCommitUndo(
     IReadOnlyList<EdgeCapsuleQueueMemberIdentity> MemberIdentities,
@@ -101,11 +96,8 @@ public sealed partial class AppController
     }
 
     /// <summary>
-    /// 提交异常时的唯一回滚入口：有 <paramref name="undo"/> 时恢复顺序、margin 与 mutation
-    /// 前身份；只有起拖快照时（异常从提交入口逃逸）至少恢复逐成员身份并释放冻结。
-    ///
-    /// 普通取消没有修改业务数据，应走 <see cref="AbandonEdgeCapsuleQueueTransfer"/>，
-    /// 不得调用本方法，否则会用旧快照覆盖拖拽期间外部的合法修改。
+    /// 提交异常的唯一回滚入口：有 undo 时恢复顺序/margin/身份；只有起拖快照时只恢复身份。
+    /// 普通取消应走 <see cref="AbandonEdgeCapsuleQueueTransfer"/>，否则会覆盖拖拽期间的外部修改。
     /// </summary>
     internal void RollbackEdgeCapsuleQueueTransfer(
         EdgeCapsuleQueueTransferSnapshot? snapshot,
@@ -252,11 +244,8 @@ public sealed partial class AppController
     }
 
     /// <summary>
-    /// 把提交撤销记录写回 State：State.Papers 按完整顺序还原，margin 字典整体覆盖，
-    /// 逐成员身份按 mutation 前的值恢复。
-    ///
-    /// 拖拽期间外部增删的成员必须保留：快照里没有的新成员按其当前相对次序追加在末尾，
-    /// 已被外部删除的成员自然跳过。State.Papers 始终是新 List 实例，不会与快照共享引用。
+    /// 把撤销记录写回 State。外部新增成员按当前相对次序追加，已删除成员跳过；
+    /// State.Papers 始终是新 List，不与快照共享引用。
     /// </summary>
     private void RestoreEdgeCapsuleQueueCommitUndo(EdgeCapsuleQueueCommitUndo undo)
     {
@@ -292,18 +281,13 @@ public sealed partial class AppController
     }
 
     /// <summary>
-    /// 单颗与整队共用的“并入目标队列”提交边界。
-    ///
-    /// 调用方已完成各自的入口校验（单颗的预览目标门禁 / 整队的事务快照复核），这里统一处理：
-    /// 目标成员过滤、插入位、布局求解、身份改写、整块插入、margin 持久化与异常回滚。
-    /// carried 为单颗时是一元素列表，为整队时保持原内部顺序。
+    /// 单颗与整队共用的“并入目标队列”提交边界：过滤目标成员、求插入位与布局、
+    /// 改身份、整块插入、持久化 margin，并在异常时回滚。carried 保持传入时的内部顺序。
     /// </summary>
-    /// <param name="transfer">整队事务；单颗路径为 null。</param>
     /// <param name="requireSourceMatch">
-    /// 整队路径为 true：mutation 前再按 live 成员序列复核一次，防止原生拖拽泵 Dispatcher
-    /// 期间外部增删/移动成员后被旧快照覆盖。
+    /// 整队为 true：mutation 前按 live 序列再复核一次，防止原生拖拽期间的外部修改被旧快照覆盖。
     /// </param>
-    /// <param name="animateOnReject">单颗拒绝时是否播放重排动画；整队拒绝走 Abandon 的静默重排。</param>
+    /// <param name="animateOnReject">单颗拒绝时是否播放重排动画；整队走 Abandon 的静默重排。</param>
     private bool MergeCarriedIntoQueue(
         IReadOnlyList<PaperData> carried,
         EdgeCapsuleQueueTransferSnapshot? transfer,
@@ -328,8 +312,7 @@ public sealed partial class AppController
         }
 
         var carriedIds = carried.Select(paper => paper.Id).ToArray();
-        // 排除全部 carried，而不是只排除第一个：被外部移入目标队列的非首个成员
-        // 既不能出现在 targetMembers 里，也不能成为 anchor。
+        // 排除全部 carried：非首个成员也不能进入 targetMembers 或成为 anchor。
         var targetMembers = FreeQueueMembersExcludingIds(targetQueueKey, carriedIds);
         if (targetMembers.Count == 0)
         {
@@ -395,9 +378,7 @@ public sealed partial class AppController
         }
         catch
         {
-            // 异常路径同时回滚 State.Papers 顺序、全部 margin 与逐成员身份，再释放冻结。
-            // 返回 false 让手势层走正常「未提交」收尾（弹回原位）。
-            // 不能上抛：上层 PrepareAndRunNativeDrag 的异常处理不保证事务恢复。
+            // 回滚顺序/margin/身份并释放冻结；不上抛，上层原生拖拽不保证事务恢复。
             RollbackEdgeCapsuleQueueTransfer(transfer, commitUndo);
             return false;
         }
@@ -417,10 +398,7 @@ public sealed partial class AppController
         ArrangeDeepCapsules(animate);
     }
 
-    /// <summary>
-    /// Join an existing queue: every carried member adopts the target's queue id and the whole
-    /// block is placed at the magnet point, so the queue reads as one piece inside the target.
-    /// </summary>
+    /// <summary>整队并入目标队列的薄包装；共用提交边界见 <see cref="MergeCarriedIntoQueue"/>。</summary>
     private bool MergeTransferredQueueInto(
         EdgeCapsuleQueueTransferSnapshot snapshot,
         IReadOnlyList<PaperData> carried,
@@ -437,10 +415,8 @@ public sealed partial class AppController
             animateOnReject: false);
 
     /// <summary>
-    /// 单颗与整队共用的“自成新队列”提交边界。
-    ///
-    /// 调用方必须传入磁吸已确认可行（不与现有队列重叠）的落点；这里只负责身份、margin 与
-    /// 事务回滚。单颗在源队列真正消失且仍在同一物理边时复用原实例 id；整队恒用新 id。
+    /// 单颗与整队共用的“自成新队列”提交边界：调用方保证落点不与现有队列重叠。
+    /// 单颗在源队列消失且同边时复用原实例 id；整队恒用新 id。
     /// </summary>
     private bool StartCarriedQueueAt(
         IReadOnlyList<PaperData> carried,
@@ -500,12 +476,7 @@ public sealed partial class AppController
         }
     }
 
-    /// <summary>
-    /// No queue in range: the carried members start a queue of their own at the drop height,
-    /// sharing one instance id and one rest height so the stack lands as a unit.
-    ///
-    /// 调用方必须传入磁吸已确认可行（不与现有队列重叠）的落点；本方法不再重复校验。
-    /// </summary>
+    /// <summary>整队自成新队列的薄包装；共用提交边界见 <see cref="StartCarriedQueueAt"/>。</summary>
     private bool StartTransferredQueueAt(
         EdgeCapsuleQueueTransferSnapshot snapshot,
         IReadOnlyList<PaperData> carried,
