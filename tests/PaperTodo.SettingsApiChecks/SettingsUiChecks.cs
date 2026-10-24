@@ -236,6 +236,81 @@ internal static partial class Program
             () => rollbackMasterService.Set("capsule.master_enabled", Json(true)), "save_failed");
         Check(!rollbackMaster.State.UseCapsuleCollapseAll && rollbackMaster.State.UseCapsuleFreeQueues,
             "A failed master-capsule write restores the free-queue switch it turned off.");
+
+        // 审查第 6 点：free 已是 true 时单独关掉 edge，再写 free=true 不能被判为 no-op；
+        // 否则 API 报告成功，但运行期仍不可用，重启还会被 StateStore 清掉。
+        var reenable = Controller();
+        var reenableCommits = 0;
+        var reenablePublishes = 0;
+        var reenableService = SettingsFor(
+            reenable,
+            () => { reenableCommits++; return true; },
+            _ => reenablePublishes++);
+        Check(reenableService.Set("capsule.free_queues", Json(true)).Changed,
+            "The first free-queue enable must change state.");
+        Check(reenableService.Set("capsule.edge_enabled", Json(false)).Changed,
+            "Disabling edge mode must change state.");
+        Check(reenable.State.UseCapsuleFreeQueues && !reenable.State.UseDeepCapsuleMode,
+            "The fixture must leave free queues marked on while edge mode is off.");
+
+        var commitsBeforeRepair = reenableCommits;
+        var publishesBeforeRepair = reenablePublishes;
+        var repaired = reenableService.Set("capsule.free_queues", Json(true));
+        Check(repaired.Changed,
+            "Re-enabling free queues must repair missing prerequisites.");
+        Check(repaired.PreviousValue.GetBoolean(),
+            "PreviousValue reports the pre-write value even when the repair changed other flags.");
+        Check(reenable.State.UseCapsuleFreeQueues && reenable.State.UseCapsuleMode &&
+              reenable.State.UseDeepCapsuleMode && !reenable.State.UseCapsuleCollapseAll,
+            "Re-enabling free queues restores the full composite invariant.");
+        Check(reenableCommits == commitsBeforeRepair + 1 &&
+              reenablePublishes == publishesBeforeRepair + 1,
+            "The repair writes and publishes exactly once.");
+
+        Check(!reenableService.Set("capsule.free_queues", Json(true)).Changed &&
+              reenableCommits == commitsBeforeRepair + 1 &&
+              reenablePublishes == publishesBeforeRepair + 1,
+            "Once the composite state holds, a repeated true write is a real no-op.");
+
+        var freeFalse = Controller();
+        var freeFalseCommits = 0;
+        var freeFalseService = SettingsFor(
+            freeFalse,
+            () => { freeFalseCommits++; return true; },
+            _ => { });
+        Check(!freeFalseService.Set("capsule.free_queues", Json(false)).Changed &&
+              freeFalseCommits == 0,
+            "Writing false while free queues are already off remains a no-op.");
+
+        // master_enabled 共享同一条级联路径，存在对称缺陷。
+        var masterRepair = Controller();
+        var masterService = SettingsFor(
+            masterRepair,
+            () => true,
+            _ => { });
+        Check(!masterService.Set("capsule.master_enabled", Json(true)).Changed,
+            "The default master state is a truthful no-op.");
+        Check(masterService.Set("capsule.edge_enabled", Json(false)).Changed,
+            "Disabling edge mode must change state for the master repair fixture.");
+        Check(masterService.Set("capsule.master_enabled", Json(true)).Changed &&
+              masterRepair.State.UseCapsuleMode &&
+              masterRepair.State.UseDeepCapsuleMode,
+            "Re-enabling the master capsule must repair missing prerequisites.");
+        Check(!masterService.Set("capsule.master_enabled", Json(true)).Changed,
+            "A repeated master true write is a no-op once the composite state holds.");
+
+        // 修复写入的级联字段也必须参与回滚。
+        var repairFail = Controller();
+        repairFail.State.UseCapsuleFreeQueues = true;
+        repairFail.State.UseCapsuleMode = true;
+        repairFail.State.UseDeepCapsuleMode = false;
+        repairFail.State.UseCapsuleCollapseAll = false;
+        var repairFailService = SettingsFor(repairFail, () => false,
+            _ => throw new Exception("Failed writes must not publish."));
+        Throws<PaperSettingsException>(
+            () => repairFailService.Set("capsule.free_queues", Json(true)), "save_failed");
+        Check(repairFail.State.UseCapsuleFreeQueues && !repairFail.State.UseDeepCapsuleMode,
+            "A failed prerequisite repair must roll back the cascaded flags.");
     }
 
     private static void DrainSettingsUi()

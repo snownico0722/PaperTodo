@@ -283,7 +283,15 @@ public sealed partial class AppController
                 }
             },
             SettingEffects.CapsuleMode,
-            title: Strings.Get("SettingsCapsuleCollapseAll"));
+            title: Strings.Get("SettingsCapsuleCollapseAll"),
+            // 复合设置：写 true 时还要满足级联前置（capsule/deep 开启、free 关闭），
+            // 否则“值没变”不等于“功能已生效”。写 false 保留原来的 getter 相等语义。
+            isNoOp: value => value
+                ? State.UseCapsuleCollapseAll &&
+                  State.UseCapsuleMode &&
+                  State.UseDeepCapsuleMode &&
+                  !State.UseCapsuleFreeQueues
+                : !State.UseCapsuleCollapseAll);
         yield return DefineSetting<bool>("capsule.free_queues",
             () => State.UseCapsuleFreeQueues,
             value =>
@@ -295,7 +303,15 @@ public sealed partial class AppController
                 }
             },
             SettingEffects.CapsuleMode,
-            title: Strings.Get("SettingsCapsuleFreeQueues"));
+            title: Strings.Get("SettingsCapsuleFreeQueues"),
+            // 复合设置：只有 free/capsule/deep 全开且 master 关闭时，写 true 才真正无需操作。
+            // 例如 edge_enabled 被单独关掉后再写 true，必须进入 Apply 修复级联。
+            isNoOp: value => value
+                ? State.UseCapsuleFreeQueues &&
+                  State.UseCapsuleMode &&
+                  State.UseDeepCapsuleMode &&
+                  !State.UseCapsuleCollapseAll
+                : !State.UseCapsuleFreeQueues);
         yield return DefineSetting<bool>("capsule.master_compact",
             () => State.CompactMasterCapsule,
             value => State.CompactMasterCapsule = value,

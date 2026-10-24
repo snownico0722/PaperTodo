@@ -277,19 +277,21 @@ public sealed partial class AppController
             var bandLeft = targetSide == DeepCapsuleSides.Left
                 ? 0
                 : Math.Max(0, area.Width - bandWidth);
+
+            // 磁吸距离必须与插入预览同几何：贴底队列扩容时 margin 会被夹小，top 随之上移。
+            // NewQueue 避让仍使用上面的当前占位，因此同一个候选同时携带两套区间。
+            var margin = DeepCapsuleStartTopMarginForQueueKey(key);
+            var insertionSlotCount = slotCount + carried.Count;
             result.Add(new EdgeCapsuleQueueMagnetCandidate(
                 key,
                 slotCount,
-                EdgeCapsuleLayout.TopForIndex(
-                    0,
-                    DeepCapsuleStartTopMarginForQueueKey(key),
-                    area,
-                    slotCount,
-                    DeepCapsuleGap),
+                EdgeCapsuleLayout.TopForIndex(0, margin, area, slotCount, DeepCapsuleGap),
                 slotHeight,
                 -1,
                 bandLeft,
-                bandWidth));
+                bandWidth,
+                insertionSlotCount,
+                EdgeCapsuleLayout.TopForIndex(0, margin, area, insertionSlotCount, DeepCapsuleGap)));
         }
 
         _deepCapsuleMagnetCandidateSignature = signature;

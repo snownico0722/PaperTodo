@@ -7,9 +7,9 @@ namespace PaperTodo;
 /// 堆叠的区间。磁吸判定用的是拖动中心到这个矩形的距离，因此两个方向都必须参与。
 /// </summary>
 /// <param name="QueueKey">队列实例 key。</param>
-/// <param name="SlotCount">队列槽位数（含主胶囊槽位，若有）。</param>
+/// <param name="SlotCount">队列当前真实槽位数（含主胶囊槽位，若有）。</param>
 /// <param name="FirstSlotTopDip">
-/// slot 0 的 top（已含该队列持久化的起始 margin；自由队列没有主胶囊槽位，不含 VisualOffset）。
+/// 当前 slot 0 的 top（已含该队列持久化的起始 margin；自由队列没有主胶囊槽位，不含 VisualOffset）。
 /// </param>
 /// <param name="SlotHeightDip">相邻槽位的间距（胶囊高 + 队列间距）。</param>
 /// <param name="ExcludedMemberIndex">
@@ -18,6 +18,16 @@ namespace PaperTodo;
 /// </param>
 /// <param name="BandLeftDip">贴墙矩形水平条带的左边界（本地 DIP）。</param>
 /// <param name="BandWidthDip">贴墙矩形水平条带的宽度（本地 DIP）。</param>
+/// <param name="InsertionSlotCount">
+/// 预览把 carried 插入后的槽位数。只用于磁吸距离/held 判定；&lt;= 0 时不使用插入几何，
+/// 距离回退到 <paramref name="SlotCount"/> 描述的当前占位（含
+/// <paramref name="ExcludedMemberIndex"/>），这也是纯函数测试与旧调用点的默认行为。
+/// </param>
+/// <param name="InsertionFirstSlotTopDip">
+/// 插入后的 slot 0 top。非有限值时不使用插入几何，回退到
+/// <paramref name="FirstSlotTopDip"/>。贴底队列扩容时 margin 会被夹小，这个 top 比当前
+/// top 更靠上；若磁吸仍读当前占位，队首空位会先脱离磁吸再消失。
+/// </param>
 internal readonly record struct EdgeCapsuleQueueMagnetCandidate(
     string QueueKey,
     int SlotCount,
@@ -25,7 +35,9 @@ internal readonly record struct EdgeCapsuleQueueMagnetCandidate(
     double SlotHeightDip,
     int ExcludedMemberIndex,
     double BandLeftDip,
-    double BandWidthDip);
+    double BandWidthDip,
+    int InsertionSlotCount = -1,
+    double InsertionFirstSlotTopDip = double.NaN);
 
 /// <summary>
 /// 一次磁吸判定的全部输入。全部为本地 DIP，与 <see cref="EdgeCapsuleLayout"/> 的坐标口径一致。
@@ -364,8 +376,57 @@ internal static class EdgeCapsuleQueueMagnet
             }
         }
 
-        // `last` 是最后一个槽位的 top；队列的真实底边还要再加一个胶囊高度。
-        var last = first + (remaining - 1) * slotHeight;
+        return TrySpan(input, candidate, first, remaining, out low, out high);
+    }
+
+    /// <summary>
+    /// 预览把 carried 插入后的垂直区间。贴底队列扩容时 top 会上移，磁吸必须与预览读同一几何，
+    /// 否则队首空位在预览里存在、在磁吸系统里却已经脱离。
+    /// 插入后的成员集合已经包含 carried，因此不应用 <see cref="EdgeCapsuleQueueMagnetCandidate.ExcludedMemberIndex"/>。
+    /// </summary>
+    private static bool TryInsertionVerticalSpan(
+        EdgeCapsuleQueueMagnetInput input,
+        EdgeCapsuleQueueMagnetCandidate candidate,
+        out double low,
+        out double high)
+    {
+        low = 0;
+        high = 0;
+
+        var count = candidate.InsertionSlotCount;
+        var first = candidate.InsertionFirstSlotTopDip;
+        return count > 0 &&
+            double.IsFinite(first) &&
+            TrySpan(input, candidate, first, count, out low, out high);
+    }
+
+    /// <summary>
+    /// 由第一个槽位的 top 与槽位数求队列的真实垂直占位：
+    /// `last` 是最后一个槽位的 top，底边还要再加一个胶囊高度。
+    /// </summary>
+    private static bool TrySpan(
+        EdgeCapsuleQueueMagnetInput input,
+        EdgeCapsuleQueueMagnetCandidate candidate,
+        double first,
+        int count,
+        out double low,
+        out double high)
+    {
+        low = 0;
+        high = 0;
+
+        var slotHeight = double.IsFinite(candidate.SlotHeightDip) && candidate.SlotHeightDip > 0
+            ? candidate.SlotHeightDip
+            : input.SlotHeightDip;
+        if (!double.IsFinite(slotHeight) ||
+            slotHeight <= 0 ||
+            count <= 0 ||
+            !double.IsFinite(first))
+        {
+            return false;
+        }
+
+        var last = first + (count - 1) * slotHeight;
         low = first;
         high = last + input.CapsuleHeightDip;
         return true;
@@ -380,12 +441,17 @@ internal static class EdgeCapsuleQueueMagnet
     ///
     /// 取「到整段区间」而非「到某个具体槽」：进入队列的语义是「我靠近这一列」，
     /// 具体插入位由调用方按既有的 slot 高度公式另算。
+    ///
+    /// 距离优先使用“carried 插入后”的占位：贴底队列扩容时预览 top 会上移，磁吸必须跟着上移，
+    /// 否则用户看得见队首空位却吸不住。NewQueue 避让仍使用当前真实占位（见
+    /// <see cref="TryResolveDetachedTopDip"/>），避免用幽灵占位把新队列推远。
     /// </summary>
     private static double VerticalDistance(
         in EdgeCapsuleQueueMagnetInput input,
         EdgeCapsuleQueueMagnetCandidate candidate)
     {
-        if (!TryOccupiedVerticalSpan(input, candidate, out var low, out var high))
+        if (!TryInsertionVerticalSpan(input, candidate, out var low, out var high) &&
+            !TryOccupiedVerticalSpan(input, candidate, out low, out high))
         {
             return double.PositiveInfinity;
         }

@@ -35,6 +35,8 @@ internal static partial class Program
             Console.WriteLine("PASS free-queue-resting-avoidance");
             EdgeCapsuleShortcutOrdinalChecks();
             Console.WriteLine("PASS free-queue-shortcut-ordinal");
+            BottomQueueInsertionMagnet();
+            Console.WriteLine("PASS bottom-queue-insertion-magnet");
             EdgeCapsuleQueueInsertionSolverChecks();
             Console.WriteLine("PASS insertion-layout-solver");
             Persistence();
@@ -1078,6 +1080,62 @@ internal static partial class Program
                 double.NaN),
             Q("b", "|right", M("b1", 60)));
         Check(nonFinite.Count == 0, "Queues with non-finite geometry are skipped");
+    }
+
+    // 贴底队列扩容时插入预览的 top 会上移；磁吸距离必须使用同一插入几何，
+    // 但 NewQueue 避让仍按当前真实占位。
+    private static void BottomQueueInsertionMagnet()
+    {
+        const double slot = 50;
+        const double height = 46;
+        const double bandLeft = 0;
+        const double bandWidth = 200;
+        const double centreLeft = 100;
+
+        EdgeCapsuleQueueMagnetPlan Evaluate(
+            double center,
+            string held,
+            EdgeCapsuleQueueMagnetCandidate candidate,
+            int newQueueSlotCount = 1,
+            double horizontal = centreLeft) =>
+            EdgeCapsuleQueueMagnet.Evaluate(new EdgeCapsuleQueueMagnetInput(
+                center, "", [candidate], slot, height,
+                EdgeCapsuleQueueMagnet.DefaultMergeDistanceDip,
+                EdgeCapsuleQueueMagnet.DefaultDetachDistanceDip,
+                held, horizontal,
+                NewQueueSlotCount: newQueueSlotCount));
+
+        // 贴底单成员：当前 [986, 1032]；插入 3 个 carried 后 [836, 1032]。
+        var currentOnly = new EdgeCapsuleQueueMagnetCandidate(
+            "|right#qtgt", 1, 986, slot, -1, bandLeft, bandWidth);
+        var withInsertion = currentOnly with
+        {
+            InsertionSlotCount = 4,
+            InsertionFirstSlotTopDip = 836,
+        };
+
+        const double headCenter = 836 + height / 2; // 859
+        Check(Evaluate(headCenter, "", currentOnly).Outcome != EdgeCapsuleQueueMagnetOutcome.Merge,
+            "The current-only geometry cannot reach the preview's head slot");
+        Check(Evaluate(headCenter, "|right#qtgt", currentOnly).Outcome !=
+                  EdgeCapsuleQueueMagnetOutcome.Merge,
+            "The current-only geometry drops a held queue at the preview head");
+        Check(Evaluate(headCenter, "", withInsertion).Outcome ==
+                  EdgeCapsuleQueueMagnetOutcome.Merge,
+            "The insertion geometry reaches the preview head slot");
+        Check(Math.Abs(Evaluate(headCenter, "", withInsertion).ScoreDip) < 1e-9,
+            "The preview head slot is at zero distance");
+
+        // 底边仍锚定在工作区底部：1055 是零距离带的下边界，1074 已超出 merge 半径。
+        Check(Evaluate(1055, "", withInsertion).ScoreDip == 0 &&
+              Evaluate(1074, "", withInsertion).Outcome != EdgeCapsuleQueueMagnetOutcome.Merge,
+            "The insertion geometry keeps the queue's anchored bottom edge");
+
+        // NewQueue 避让继续使用当前占位：desired top 900 在插入几何内，但在当前队列上方。
+        var newQueue = Evaluate(923, "", withInsertion, newQueueSlotCount: 1, horizontal: 500);
+        Check(newQueue.Outcome == EdgeCapsuleQueueMagnetOutcome.NewQueue &&
+              Math.Abs(newQueue.NewQueueStartTopDip - 900) < 1e-9,
+            "NewQueue avoidance must ignore the insertion-only span");
     }
 
     private static void CycleAndUnicode()    {

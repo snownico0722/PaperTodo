@@ -29,8 +29,12 @@ internal static class Program
 >>>>>>> 2c6b001f (fix(capsule): 修复等待租约松手误触与自由队列跨队列重叠)
 =======
         "edge-capsule-pending-drag-release", "free-queue-resting-avoidance",
+<<<<<<< HEAD
         "free-queue-shortcut-targeting"];
 >>>>>>> a1c305fd (fix(capsule): 修复整队取消身份回写与快捷键漏选自由队列)
+=======
+        "free-queue-shortcut-targeting", "free-queue-bottom-insert"];
+>>>>>>> d16a146f (fix(capsule): 修复贴底队列头插磁吸与复合设置重开失效)
 
     [STAThread]
     private static int Main(string[] args)
@@ -206,6 +210,21 @@ internal static class Program
             state.DeepCapsuleQueueStartTopMargins["|" + DeepCapsuleSides.Right + "#qb"] = 60;
             state.DeepCapsuleQueueStartTopMargins["|" + DeepCapsuleSides.Right + "#qc"] = 400;
         }
+        if (name == "free-queue-bottom-insert")
+        {
+            // 源队列三成员；目标队列单成员并贴底（margin 由布局夹到最大值）；
+            // fixture-4 移到左侧，避免成为右侧磁吸候选。
+            state.UseCapsuleFreeQueues = true;
+            state.UseCapsuleCollapseAll = false;
+            state.Papers[0].CapsuleQueueId = "qsrc";
+            state.Papers[1].CapsuleQueueId = "qsrc";
+            state.Papers[2].CapsuleQueueId = "qsrc";
+            state.Papers[3].CapsuleQueueId = "qtgt";
+            state.Papers[4].CapsuleSide = DeepCapsuleSides.Left;
+            state.Papers[4].CapsuleQueueId = "qleft";
+            state.DeepCapsuleQueueStartTopMargins[
+                "|" + DeepCapsuleSides.Right + "#qtgt"] = 100_000;
+        }
         if (name.StartsWith("master-queue-merge"))
         {
             state.Papers[2].CapsuleSide = DeepCapsuleSides.Left;
@@ -269,6 +288,11 @@ internal static class Program
             if (name == "free-queue-shortcut-targeting")
             {
                 await EdgeCapsuleShortcutChecks.Run(controller, windows);
+                return;
+            }
+            if (name == "free-queue-bottom-insert")
+            {
+                await EdgeCapsuleBottomInsertChecks.Run(controller, windows);
                 return;
             }
             if (name == "edge-expand-foreground")
