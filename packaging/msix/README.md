@@ -64,7 +64,7 @@ Run the basic TEST validation from an **elevated PowerShell session**:
 
 ```powershell
 .\Validate-MSIX.ps1 `
-  -PackagePath .\PaperTodo-v3.31-win-x64-TEST.msix `
+  -PackagePath .\PaperTodo-v3.40-win-x64-TEST.msix `
   -CertificatePath .\PaperTodo-MSIX-test.cer
 ```
 
@@ -83,7 +83,7 @@ To include Windows App Certification Kit testing, run from an elevated PowerShel
 
 ```powershell
 .\Validate-MSIX.ps1 `
-  -PackagePath .\PaperTodo-v3.31-win-x64-TEST.msix `
+  -PackagePath .\PaperTodo-v3.40-win-x64-TEST.msix `
   -CertificatePath .\PaperTodo-MSIX-test.cer `
   -RunWack
 ```
