@@ -1,3 +1,4 @@
+using System.Threading;
 using System.Windows;
 using System.Windows.Threading;
 
@@ -40,6 +41,8 @@ public sealed partial class AppController
         try
         {
             _store.TryRefreshBackupFromPrimary();
+            if (_store.OrdinaryWritesPaused && !IsDataReloading)
+                HandleSaveFailure(new StateWriteBlockedException());
         }
         catch
         {
@@ -61,9 +64,17 @@ public sealed partial class AppController
         timer.Tick -= OnStateBackupTimerTick;
     }
 
+    // May run from an AppDomain crash callback: no I/O, locks, waits or UI dispatch here.
+    internal void AbortPersistenceForTermination()
+    {
+        Volatile.Write(ref _persistenceTerminationRequested, true);
+        _store?.StopWritesForTermination();
+    }
+
     internal void ExitForSystemShutdown()
     {
-        if (IsExiting)
+        AbortPersistenceForTermination();
+        if (_lifecycleState != AppLifecycleState.Running)
         {
             return;
         }
@@ -72,6 +83,10 @@ public sealed partial class AppController
         // state writes while Windows is ending the session. The plugin store waits for any write
         // already holding its gate to finish, then disables queued/final flushes before disposal.
         _lifecycleState = AppLifecycleState.Exiting;
+        _pendingDataReload = null;
+        _exitAfterDataReload = false;
+        _saveTimer.Stop();
+        _forceSaveTimer.Stop();
         StopStateBackupPolicy();
         _paperBodyPlugins.DataStore.SuppressFinalFlushOnDispose();
         DisposeRuntimeResources();

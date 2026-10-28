@@ -247,6 +247,10 @@ public partial class App : Application
             return;
         }
 
+        // A crash dialog pumps messages too. Stop queued persistence BEFORE displaying it,
+        // not merely by omitting an explicit final SaveNow call at the bottom of this handler.
+        _controller?.AbortPersistenceForTermination();
+
         // Classification must never prevent the crash log from being written.
         var isDesktopRuntimeLoadFailure = false;
         try
