@@ -75,7 +75,7 @@ internal sealed class FreeformWorkspaceWindow : Window
         Grid.SetRow(toolbar, 0);
         root.Children.Add(toolbar);
 
-        _canvas.Background = new DrawingBrush
+        var gridBrush = new DrawingBrush
         {
             TileMode = TileMode.Tile,
             Viewport = new Rect(0, 0, 24, 24),
@@ -84,6 +84,7 @@ internal sealed class FreeformWorkspaceWindow : Window
                 new Pen(Theme.PaperBorderBrush, 0.6),
                 new GeometryGroup { Children = { new LineGeometry(new Point(0, 0), new Point(24, 0)), new LineGeometry(new Point(0, 0), new Point(0, 24)) } })
         };
+        _canvas.Background = Brushes.Transparent;
         _canvas.RenderTransform = new TransformGroup { Children = new TransformCollection { _scale, _offset } };
         _connections.IsHitTestVisible = false;
         _connections.RenderTransform = _canvas.RenderTransform;
@@ -92,7 +93,7 @@ internal sealed class FreeformWorkspaceWindow : Window
         _canvas.MouseMove += CanvasMove;
         _canvas.MouseUp += CanvasUp;
         _canvas.MouseWheel += CanvasWheel;
-        var canvasHost = new Grid();
+        var canvasHost = new Grid { Background = gridBrush };
         canvasHost.Children.Add(_connections);
         canvasHost.Children.Add(_canvas);
         Grid.SetRow(canvasHost, 1);
@@ -158,7 +159,7 @@ internal sealed class FreeformWorkspaceWindow : Window
 
     private void BuildCards()
     {
-        _canvas.Children.Clear(); _cards.Clear(); _papers.Clear();
+        _canvas.Children.Clear(); _cards.Clear(); _papers.Clear(); _items.Clear(); _itemCards.Clear();
         var papers = _controller.State.Papers.ToList();
         for (int i = 0; i < papers.Count; i++)
         {
@@ -224,7 +225,14 @@ internal sealed class FreeformWorkspaceWindow : Window
         var editor = new TextBox { Text = item.Text, TextWrapping = TextWrapping.Wrap, AcceptsReturn = true, MinHeight = 36, MaxHeight = 110, BorderThickness = new Thickness(0), Background = Brushes.Transparent, Foreground = Theme.TextBrush, Padding = new Thickness(0), VerticalContentAlignment = VerticalAlignment.Top };
         editor.TextChanged += (_, _) => { if (editor.IsKeyboardFocusWithin && item.Text != editor.Text) { item.Text = editor.Text; _controller.SaveWorkspaceLayout(); } };
         var row = new DockPanel(); DockPanel.SetDock(check, Dock.Left); row.Children.Add(check); row.Children.Add(editor);
-        var card = new Border { Width = 220, MinHeight = 68, MaxHeight = 150, Padding = new Thickness(10), CornerRadius = new CornerRadius(8), Background = Theme.PaperBrush, BorderBrush = Theme.PaperBorderBrush, BorderThickness = new Thickness(1), Child = row, Cursor = Cursors.SizeAll, Tag = "item:" + item.Id };
+        var tools = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        var split = new Button { Content = "↳", ToolTip = Strings.Get("WorkspaceSplitItem"), Padding = new Thickness(5, 0, 5, 0), Margin = new Thickness(0, 0, 4, 5), Background = Brushes.Transparent, Foreground = Theme.TextBrush, BorderBrush = Theme.PaperBorderBrush, Cursor = Cursors.Hand };
+        split.Click += (_, _) => SplitItem(owner, item);
+        var link = new Button { Content = "↔", ToolTip = Strings.Get("WorkspaceConnectNode"), Padding = new Thickness(5, 0, 5, 0), Margin = new Thickness(0, 0, 0, 5), Background = Brushes.Transparent, Foreground = Theme.TextBrush, BorderBrush = Theme.PaperBorderBrush, Cursor = Cursors.Hand };
+        link.Click += (_, _) => { var id = "item:" + item.Id; if (_connectFromNodeId == null) { _connectFromNodeId = id; link.Content = "●"; } else { AddConnection(_connectFromNodeId, id); _connectFromNodeId = null; RefreshNodeLinkButtons(); } };
+        tools.Children.Add(split); tools.Children.Add(link);
+        var nodePanel = new DockPanel(); DockPanel.SetDock(tools, Dock.Top); nodePanel.Children.Add(tools); nodePanel.Children.Add(row);
+        var card = new Border { Width = 220, MinHeight = 76, MaxHeight = 165, Padding = new Thickness(10), CornerRadius = new CornerRadius(8), Background = Theme.PaperBrush, BorderBrush = Theme.PaperBorderBrush, BorderThickness = new Thickness(1), Child = nodePanel, Cursor = Cursors.SizeAll, Tag = "item:" + item.Id };
         card.MouseLeftButtonDown += (_, e) =>
         {
             if (e.OriginalSource is TextBox or CheckBox) return;
@@ -239,11 +247,30 @@ internal sealed class FreeformWorkspaceWindow : Window
         return card;
     }
 
+    private void SplitItem(PaperData owner, PaperItem item)
+    {
+        var current = item.Text;
+        var splitAt = current.LastIndexOfAny(new[] { '\\n', ';', '，', ',', '。' });
+        if (splitAt < 1 || splitAt >= current.Length - 1) splitAt = current.Length / 2;
+        var first = current[..splitAt].Trim();
+        var second = current[Math.Min(current.Length, splitAt + 1)..].Trim();
+        if (first.Length == 0 || second.Length == 0) return;
+        item.Text = first;
+        owner.Items.Add(new PaperItem { Text = second, Order = owner.Items.Count == 0 ? 0 : owner.Items.Max(x => x.Order) + 1, WorkspaceX = (item.WorkspaceX ?? 300) + 250, WorkspaceY = item.WorkspaceY ?? 150 });
+        _controller.SaveWorkspaceLayout(); BuildCards();
+    }
+
+    private void RefreshNodeLinkButtons()
+    {
+        foreach (var card in _itemCards.Values)
+            if (card.Tag is string tag) card.BorderBrush = _connectFromNodeId == tag ? Theme.ActiveBrush : Theme.PaperBorderBrush;
+    }
+
     private void AddConnection(string from, string to)
     {
         if (from == to || _controller.State.WorkspaceConnections.Any(c => c.FromNodeId == from && c.ToNodeId == to || c.FromNodeId == to && c.ToNodeId == from)) return;
         _controller.State.WorkspaceConnections.Add(new WorkspaceConnection { FromNodeId = from, ToNodeId = to });
-        _controller.SaveWorkspaceLayout(); DrawConnections();
+        _controller.SaveWorkspaceLayout(); DrawConnections(); RefreshNodeLinkButtons();
     }
 
     private void DrawConnections()
@@ -293,7 +320,6 @@ internal sealed class FreeformWorkspaceWindow : Window
         p.WorkspaceY = Math.Max(30, (-_offset.Y + _canvas.ActualHeight / 2) / _scale.ScaleY - H / 2);
         _controller.SaveWorkspaceLayout(); BuildCards(); _search.Text = "";
         if (_cards.TryGetValue(p.Id, out var card)) { Select(card); CenterCard(card); }
-        _controller.ShowPaper(p);
     }
 
     private void FitCanvas()
