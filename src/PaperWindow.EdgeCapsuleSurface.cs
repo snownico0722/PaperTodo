@@ -95,6 +95,12 @@ public sealed partial class PaperWindow
 
         if (_paper.IsCollapsed)
         {
+            _controller.ShowFreeformWorkspace(_paper.Id);
+            return;
+        }
+
+        if (_paper.IsCollapsed)
+        {
             if (TryGetEdgeShortcutCursorOrigin(out var placement))
             {
                 ShowMainWindowForDeepCapsuleActivation(placement);

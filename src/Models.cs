@@ -455,6 +455,7 @@ public sealed class AppState
 {
     [JsonRequired]
     public List<PaperData> Papers { get; set; } = new();
+    public List<WorkspaceConnection> WorkspaceConnections { get; set; } = new();
     [JsonPropertyOrder(-100)]
     public string UiLanguage { get; set; } = UiLanguages.Default;
     public string Theme { get; set; } = "system";
@@ -683,12 +684,23 @@ public sealed class PaperData
     public string Content { get; set; } = "";
 }
 
+public sealed class WorkspaceConnection
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string FromNodeId { get; set; } = "";
+    public string ToNodeId { get; set; } = "";
+}
+
 public sealed class PaperItem
 {
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
     public string Text { get; set; } = "";
     public bool Done { get; set; }
     public int Order { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? WorkspaceX { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? WorkspaceY { get; set; }
 
     [JsonInclude]
     [JsonPropertyName("linkedNoteId")]

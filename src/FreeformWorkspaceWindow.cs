@@ -37,7 +37,11 @@ internal sealed class FreeformWorkspaceWindow : Window
     private readonly TextBox _search = new();
     private readonly Dictionary<string, Border> _cards = new(StringComparer.Ordinal);
     private readonly Dictionary<string, PaperData> _papers = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, PaperItem> _items = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, Border> _itemCards = new(StringComparer.Ordinal);
+    private readonly Canvas _connections = new();
     private Border? _selected, _dragCard;
+    private string? _connectFromNodeId;
     private Point _dragPoint, _dragOrigin, _panPoint;
     private double _panX, _panY;
     private bool _panning;
@@ -81,13 +85,18 @@ internal sealed class FreeformWorkspaceWindow : Window
                 new GeometryGroup { Children = { new LineGeometry(new Point(0, 0), new Point(24, 0)), new LineGeometry(new Point(0, 0), new Point(0, 24)) } })
         };
         _canvas.RenderTransform = new TransformGroup { Children = new TransformCollection { _scale, _offset } };
+        _connections.IsHitTestVisible = false;
+        _connections.RenderTransform = _canvas.RenderTransform;
         _canvas.ClipToBounds = true;
         _canvas.MouseDown += CanvasDown;
         _canvas.MouseMove += CanvasMove;
         _canvas.MouseUp += CanvasUp;
         _canvas.MouseWheel += CanvasWheel;
-        Grid.SetRow(_canvas, 1);
-        root.Children.Add(_canvas);
+        var canvasHost = new Grid();
+        canvasHost.Children.Add(_connections);
+        canvasHost.Children.Add(_canvas);
+        Grid.SetRow(canvasHost, 1);
+        root.Children.Add(canvasHost);
 
         var footer = new TextBlock
         {
@@ -161,7 +170,20 @@ internal sealed class FreeformWorkspaceWindow : Window
             var card = MakeCard(p);
             _cards[p.Id] = card;
             Canvas.SetLeft(card, p.WorkspaceX.Value); Canvas.SetTop(card, p.WorkspaceY.Value); _canvas.Children.Add(card);
+            if (p.Type == PaperTypes.Todo)
+            {
+                var rows = p.Items.Where(item => !string.IsNullOrWhiteSpace(item.Text)).OrderBy(item => item.Order).ToList();
+                for (var j = 0; j < rows.Count; j++)
+                {
+                    var item = rows[j]; _items[item.Id] = item;
+                    item.WorkspaceX ??= p.WorkspaceX.Value + W + 50;
+                    item.WorkspaceY ??= p.WorkspaceY.Value + j * 96;
+                    var node = MakeItemNode(p, item); _itemCards[item.Id] = node;
+                    Canvas.SetLeft(node, item.WorkspaceX.Value); Canvas.SetTop(node, item.WorkspaceY.Value); _canvas.Children.Add(node);
+                }
+            }
         }
+        DrawConnections();
         FilterCards();
         FitCanvas();
     }
@@ -194,6 +216,55 @@ internal sealed class FreeformWorkspaceWindow : Window
         Select(card); CenterCard(card);
     }
 
+    private Border MakeItemNode(PaperData owner, PaperItem item)
+    {
+        var check = new CheckBox { IsChecked = item.Done, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 2, 8, 0), Cursor = Cursors.Hand };
+        check.Checked += (_, _) => { item.Done = true; _controller.SaveWorkspaceLayout(); };
+        check.Unchecked += (_, _) => { item.Done = false; _controller.SaveWorkspaceLayout(); };
+        var editor = new TextBox { Text = item.Text, TextWrapping = TextWrapping.Wrap, AcceptsReturn = true, MinHeight = 36, MaxHeight = 110, BorderThickness = new Thickness(0), Background = Brushes.Transparent, Foreground = Theme.TextBrush, Padding = new Thickness(0), VerticalContentAlignment = VerticalAlignment.Top };
+        editor.TextChanged += (_, _) => { if (editor.IsKeyboardFocusWithin && item.Text != editor.Text) { item.Text = editor.Text; _controller.SaveWorkspaceLayout(); } };
+        var row = new DockPanel(); DockPanel.SetDock(check, Dock.Left); row.Children.Add(check); row.Children.Add(editor);
+        var card = new Border { Width = 220, MinHeight = 68, MaxHeight = 150, Padding = new Thickness(10), CornerRadius = new CornerRadius(8), Background = Theme.PaperBrush, BorderBrush = Theme.PaperBorderBrush, BorderThickness = new Thickness(1), Child = row, Cursor = Cursors.SizeAll, Tag = "item:" + item.Id };
+        card.MouseLeftButtonDown += (_, e) =>
+        {
+            Select(card);
+            if (e.ClickCount > 1) { _controller.ShowPaper(owner); e.Handled = true; return; }
+            if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control)) { var id = "item:" + item.Id; if (_connectFromNodeId == null) _connectFromNodeId = id; else { AddConnection(_connectFromNodeId, id); _connectFromNodeId = null; } e.Handled = true; return; }
+            _dragCard = card; _dragPoint = e.GetPosition(_canvas); _dragOrigin = new Point(Canvas.GetLeft(card), Canvas.GetTop(card)); card.CaptureMouse(); e.Handled = true;
+        };
+        card.MouseMove += (_, e) => { if (ReferenceEquals(_dragCard, card) && e.LeftButton == MouseButtonState.Pressed) { var pt = e.GetPosition(_canvas); Canvas.SetLeft(card, _dragOrigin.X + pt.X - _dragPoint.X); Canvas.SetTop(card, _dragOrigin.Y + pt.Y - _dragPoint.Y); } };
+        card.MouseLeftButtonUp += (_, e) => { if (!ReferenceEquals(_dragCard, card)) return; item.WorkspaceX = Canvas.GetLeft(card); item.WorkspaceY = Canvas.GetTop(card); _dragCard = null; card.ReleaseMouseCapture(); _controller.SaveWorkspaceLayout(); DrawConnections(); e.Handled = true; };
+        card.LostMouseCapture += (_, _) => { if (ReferenceEquals(_dragCard, card)) _dragCard = null; };
+        return card;
+    }
+
+    private void AddConnection(string from, string to)
+    {
+        if (from == to || _controller.State.WorkspaceConnections.Any(c => c.FromNodeId == from && c.ToNodeId == to || c.FromNodeId == to && c.ToNodeId == from)) return;
+        _controller.State.WorkspaceConnections.Add(new WorkspaceConnection { FromNodeId = from, ToNodeId = to });
+        _controller.SaveWorkspaceLayout(); DrawConnections();
+    }
+
+    private void DrawConnections()
+    {
+        _connections.Children.Clear();
+        foreach (var link in _controller.State.WorkspaceConnections)
+        {
+            if (!TryGetNodeCenter(link.FromNodeId, out var a) || !TryGetNodeCenter(link.ToNodeId, out var b)) continue;
+            var dx = Math.Max(35, Math.Abs(b.X - a.X) * .45);
+            var geometry = new PathGeometry(); var figure = new PathFigure { StartPoint = a };
+            figure.Segments.Add(new BezierSegment(new Point(a.X + (b.X >= a.X ? dx : -dx), a.Y), new Point(b.X - (b.X >= a.X ? dx : -dx), b.Y), b, true)); geometry.Figures.Add(figure);
+            _connections.Children.Add(new System.Windows.Shapes.Path { Data = geometry, Stroke = Theme.ActiveBrush, StrokeThickness = 1.7, Opacity = .75 });
+        }
+    }
+
+    private bool TryGetNodeCenter(string id, out Point point)
+    {
+        if (id.StartsWith("item:", StringComparison.Ordinal) && _itemCards.TryGetValue(id[5..], out var item)) { point = new Point(Canvas.GetLeft(item) + item.ActualWidth / 2, Canvas.GetTop(item) + item.ActualHeight / 2); return true; }
+        if (_cards.TryGetValue(id, out var card)) { point = new Point(Canvas.GetLeft(card) + card.ActualWidth / 2, Canvas.GetTop(card) + card.ActualHeight / 2); return true; }
+        point = default; return false;
+    }
+
     private void Select(Border card)
     {
         if (_selected != null) { _selected.BorderBrush = Theme.PaperBorderBrush; _selected.BorderThickness = new Thickness(1); }
@@ -209,6 +280,8 @@ internal sealed class FreeformWorkspaceWindow : Window
             var text = p.Type == PaperTypes.Todo ? string.Join("\n", p.Items.Select(x => x.Text)) : p.Content;
             pair.Value.Visibility = q.Length == 0 || ($"{p.Title}\n{text}").Contains(q, StringComparison.CurrentCultureIgnoreCase) ? Visibility.Visible : Visibility.Collapsed;
         }
+        foreach (var pair in _itemCards) pair.Value.Visibility = q.Length == 0 || _items[pair.Key].Text.Contains(q, StringComparison.CurrentCultureIgnoreCase) ? Visibility.Visible : Visibility.Collapsed;
+        DrawConnections();
     }
 
     private void NewPaper(string type)
@@ -224,10 +297,10 @@ internal sealed class FreeformWorkspaceWindow : Window
 
     private void FitCanvas()
     {
-        var cards = _cards.Values.Where(c => c.Visibility == Visibility.Visible).ToList();
+        var cards = _cards.Values.Concat(_itemCards.Values).Where(c => c.Visibility == Visibility.Visible).ToList();
         if (cards.Count == 0 || _canvas.ActualWidth < 1 || _canvas.ActualHeight < 1) return;
         var l = cards.Min(Canvas.GetLeft); var t = cards.Min(Canvas.GetTop);
-        var r = cards.Max(c => Canvas.GetLeft(c) + W); var b = cards.Max(c => Canvas.GetTop(c) + H);
+        var r = cards.Max(c => Canvas.GetLeft(c) + c.ActualWidth); var b = cards.Max(c => Canvas.GetTop(c) + c.ActualHeight);
         var w = Math.Max(1, r - l); var h = Math.Max(1, b - t);
         var z = Math.Clamp(Math.Min((_canvas.ActualWidth - 80) / w, (_canvas.ActualHeight - 60) / h), .35, 1.25);
         _scale.ScaleX = _scale.ScaleY = z;
