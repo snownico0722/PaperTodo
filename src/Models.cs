@@ -455,6 +455,14 @@ public sealed class AppState
 {
     [JsonRequired]
     public List<PaperData> Papers { get; set; } = new();
+
+    // Organization metadata references stable Paper IDs; it never owns paper content or desktop geometry.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<WorkbenchRelation>? WorkbenchRelations { get; set; } = new();
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<WorkbenchScene>? WorkbenchScenes { get; set; } = new();
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public string WorkbenchActiveSceneId { get; set; } = "";
     [JsonPropertyOrder(-100)]
     public string UiLanguage { get; set; } = UiLanguages.Default;
     public string Theme { get; set; } = "system";
@@ -610,6 +618,22 @@ public sealed class AppState
     // so unplugging the anchored monitor gracefully lands the stack on a surviving screen.
     public string DeepCapsuleMonitorDeviceName { get; set; } = "";
 
+}
+
+public sealed class WorkbenchRelation
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string SourcePaperId { get; set; } = "";
+    public string TargetPaperId { get; set; } = "";
+    public string Kind { get; set; } = "related";
+    public string Label { get; set; } = "";
+}
+
+public sealed class WorkbenchScene
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string Name { get; set; } = "";
+    public List<string> PaperIds { get; set; } = new();
 }
 
 public sealed class PaperData
