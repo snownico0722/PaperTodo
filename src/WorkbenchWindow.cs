@@ -76,7 +76,7 @@ public sealed class WorkbenchWindow : Window
         var left = new DockPanel { Margin = new Thickness(0, 0, 10, 0) };
         Header(left, "scenes");
         _scenes.BorderThickness = new Thickness(0); _scenes.Background = Brushes.Transparent;
-        _scenes.SelectionChanged += (_, _) => { if (!_refreshing) RefreshPapers(); };
+        _scenes.SelectionChanged += (_, _) => { if (!_refreshing) { _controller.State.WorkbenchActiveSceneId = (_scenes.SelectedItem as SceneChoice)?.Id ?? ""; _controller.SaveWorkbenchMetadata(); RefreshPapers(); } };
         left.Children.Add(_scenes);
         var sb = new StackPanel(); ButtonTo(sb, "new", CreateScene); ButtonTo(sb, "add", AddToScene);
         DockPanel.SetDock(sb, Dock.Bottom); left.Children.Add(sb); Grid.SetColumn(left, 0); grid.Children.Add(left);
