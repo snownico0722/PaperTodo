@@ -165,11 +165,12 @@ public sealed partial class PaperWindow
             UiFontFamily = CapsuleLabelFontFamily,
             SymbolFontFamily = AppTypography.SymbolFontFamily,
             Language = AppTypography.Language,
+            Appearance = Appearance,
             PaperBrush = PaperBrush,
             PaperBorderBrush = PaperBorderBrush,
             IconBrush = BrightWeakTextBrush,
             LabelBrush = WeakTextBrush,
-            OutlineBrush = Theme.CapsuleFocusBorderBrush,
+            OutlineBrush = Appearance.CapsuleFocusBorderBrush,
             Topmost = _edgeCapsuleHost?.IsTopmost == true
         };
     }

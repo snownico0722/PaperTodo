@@ -36,11 +36,11 @@ public sealed partial class PaperWindow
     private bool _todoSelectionInputHooksInstalled;
     private DispatcherTimer? _todoSweepTrackingTimer;
 
-    private static Brush TodoSelectionBrush =>
-        Theme.Tint((byte)(Theme.IsDark ? 62 : 42));
+    private Brush TodoSelectionBrush =>
+        Appearance.Tint((byte)(Theme.IsDark ? 62 : 42));
 
-    private static Brush TodoReminderActiveBrush =>
-        Theme.Danger((byte)(Theme.IsDark ? 52 : 38));
+    private Brush TodoReminderActiveBrush =>
+        Appearance.Danger((byte)(Theme.IsDark ? 52 : 38));
 
     private bool IsTodoGroupDrag => _todoGroupDragItemIds.Count > 1;
 
@@ -645,7 +645,7 @@ public sealed partial class PaperWindow
             : reminding
                 ? TodoReminderActiveBrush
                 : itemId != null && _findHiddenTodoItemIds.Contains(itemId)
-                    ? Theme.Tint((byte)(Theme.IsDark ? 42 : 28))
+                    ? Appearance.Tint((byte)(Theme.IsDark ? 42 : 28))
                     : row.IsMouseOver ? HoverBrush : Brushes.Transparent;
 
         if (itemId == null || !_todoEditors.TryGetValue(itemId, out var text))

@@ -36,6 +36,7 @@ internal static class Program
         Directory.CreateDirectory(temp);
         try
         {
+            Check("todo palettes, contrast and explicit surface scopes", TodoColorPaletteChecks.Run);
             Check("skin normalization and data compatibility", () =>
             {
                 foreach (var id in new[] { "warm", "ink", "forest", "rose", "mica" })

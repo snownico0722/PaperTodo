@@ -431,7 +431,7 @@ public sealed partial class PaperWindow
                     Height = diameter,
                     Value = component.Value,
                     ForegroundBrush = brush,
-                    TrackBrush = Theme.Tint(38),
+                    TrackBrush = Appearance.Tint(38),
                     VerticalAlignment = VerticalAlignment.Center,
                     HorizontalAlignment = HorizontalAlignment.Center
                 };
@@ -452,7 +452,7 @@ public sealed partial class PaperWindow
                     Height = 5,
                     Value = component.Value,
                     ForegroundBrush = brush,
-                    TrackBrush = Theme.Tint(38),
+                    TrackBrush = Appearance.Tint(38),
                     VerticalAlignment = VerticalAlignment.Center,
                     HorizontalAlignment = component.Fill
                         ? HorizontalAlignment.Stretch
@@ -535,7 +535,7 @@ public sealed partial class PaperWindow
         };
     }
 
-    private static Brush ResolvePluginCapsuleBrush(PaperCapsuleComponent component)
+    private Brush ResolvePluginCapsuleBrush(PaperCapsuleComponent component)
     {
         if (!string.IsNullOrWhiteSpace(component.Color))
         {
@@ -555,11 +555,11 @@ public sealed partial class PaperWindow
 
         return component.Tone switch
         {
-            PaperCapsuleTone.Muted => Theme.WeakTextBrush,
-            PaperCapsuleTone.Accent => Theme.ActiveBrush,
-            PaperCapsuleTone.Warning => Theme.Tint(210),
-            PaperCapsuleTone.Danger => Theme.DangerBrush,
-            _ => Theme.BrightWeakTextBrush
+            PaperCapsuleTone.Muted => Appearance.WeakTextBrush,
+            PaperCapsuleTone.Accent => Appearance.ActiveBrush,
+            PaperCapsuleTone.Warning => Appearance.Tint(210),
+            PaperCapsuleTone.Danger => Appearance.DangerBrush,
+            _ => Appearance.BrightWeakTextBrush
         };
     }
 

@@ -94,6 +94,7 @@ public sealed partial class PaperWindow
         _todoPanel.Children.Clear();
         _todoFoldFindControls.Clear();
         _todoEditors.Clear();
+        _todoColorRefreshers.Clear();
         _todoReminderCountdowns.Clear();
         _todoRows.Clear();
         _linkedPaperTitleRefreshers.Clear();
@@ -286,6 +287,7 @@ public sealed partial class PaperWindow
         }
 
         _todoEditors.Remove(itemId);
+        _todoColorRefreshers.Remove(itemId);
         _todoFoldFindControls.Remove(itemId);
         _todoReminderCountdowns.Remove(itemId);
         foreach (var paperId in _linkedPaperTitleRefreshers.Keys.ToList())
@@ -1366,6 +1368,16 @@ public sealed partial class PaperWindow
         Grid.SetColumn(trailingControls, showTodoReminderControl ? 4 : 3);
         grid.Children.Add(trailingControls);
 
+        _todoColorRefreshers[item.Id] = () =>
+        {
+            text.Foreground = item.Done ? BrightWeakTextBrush : TextBrush;
+            text.CaretBrush = TextBrush;
+            text.InvalidateVisual();
+            handleGlyph.Foreground = WeakTextBrush;
+            foldGlyph.Stroke = _findHiddenTodoItemIds.Contains(item.Id) ? Appearance.ActiveBrush : WeakTextBrush;
+            check.Style = CurrentTodoCheckBoxStyle();
+            UpdateTodoRowBackground(row);
+        };
         row.Child = grid;
         ConfigureTodoPathDrop(row, item);
         ConfigureTodoMultiSelection(row, item, check, text);
@@ -2293,7 +2305,7 @@ public sealed partial class PaperWindow
             Padding = new Thickness(2),
             CornerRadius = new CornerRadius(Theme.IsPixelSkin ? 0 : RadiusControl),
             Background = PaperBrush,
-            BorderBrush = Theme.Tint(150),
+            BorderBrush = Appearance.Tint(150),
             BorderThickness = new Thickness(1),
             Opacity = 0.65,
             IsHitTestVisible = false,

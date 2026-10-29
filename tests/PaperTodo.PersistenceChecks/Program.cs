@@ -6,6 +6,7 @@ using PaperTodo;
 
 var checks = new (string Name, Action Run)[]
 {
+    ("todo-color-slots-migrate-share-delete-and-rollback", TodoColorPersistenceChecks.Run),
     ("primary-save-faults-keep-a-loadable-generation", PrimarySaveFaultsKeepALoadableGeneration),
     ("backup-refresh-fault-keeps-old-backup", BackupRefreshFaultKeepsOldBackup),
     ("corrupt-primary-never-refreshes-backup", CorruptPrimaryNeverRefreshesBackup),

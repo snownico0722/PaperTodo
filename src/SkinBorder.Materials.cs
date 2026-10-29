@@ -21,9 +21,9 @@ internal sealed partial class SkinBorder
 
     private void EnsureBrushes(Color background)
     {
-        var palette = Theme.MaterialColors;
+        var palette = Appearance.MaterialColors;
         var key = (Skin, _dark, IsCapsule, IsMenu, MaterialStrength, background,
-            palette, Theme.PaperBrush, Theme.ActiveBrush, UseLightweightMaterial, IsEdgeActiveMaterial);
+            palette, Appearance.PaperBrush, Appearance.ActiveBrush, UseLightweightMaterial, IsEdgeActiveMaterial);
         if (_brushKey == key) return;
         _brushKey = key;
         BrushBuildCount++;
@@ -60,7 +60,7 @@ internal sealed partial class SkinBorder
             case PaperSkins.Aero:
                 // Aero needs colored transmission and bounded specular bands. Mixing
                 // blue into opaque white paper and stacking a broad white wash made milk.
-                var glass = opaque ? Mix(((SolidColorBrush)Theme.PaperBrush).Color, paper, .18) : paper;
+                var glass = opaque ? Mix(((SolidColorBrush)Appearance.PaperBrush).Color, paper, .18) : paper;
                 var top = Mix(glass, Colors.White, .035);
                 var low = Mix(glass, Color.FromRgb(12, 39, 66), opaque ? .06 : .25);
                 byte a = alpha;
@@ -104,10 +104,10 @@ internal sealed partial class SkinBorder
                 // strength into the color instead of lowering the surface alpha. The active edge
                 // capsule keeps a stronger floor so it does not look washed out when full material is off.
                 var pixelStrength = IsEdgeActiveMaterial ? Math.Max(MaterialStrength, .70) : MaterialStrength;
-                var semanticPaper = ((SolidColorBrush)Theme.PaperBrush).Color;
+                var semanticPaper = ((SolidColorBrush)Appearance.PaperBrush).Color;
                 var retro = Mix(semanticPaper, retroTarget, pixelStrength);
                 _fill = Frozen(new SolidColorBrush(retro));
-                var headerTarget = Mix(retroTarget, ((SolidColorBrush)Theme.ActiveBrush).Color, _dark ? .12 : .16);
+                var headerTarget = Mix(retroTarget, ((SolidColorBrush)Appearance.ActiveBrush).Color, _dark ? .12 : .16);
                 _header = Frozen(new SolidColorBrush(Mix(semanticPaper, headerTarget, pixelStrength)));
                 break;
             case PaperSkins.TracingPaper:
@@ -151,7 +151,7 @@ internal sealed partial class SkinBorder
             if (bottom > 0)
             {
                 dc.DrawRectangle(_header, null, new Rect(0, 0, ActualWidth, bottom));
-                dc.DrawRectangle(Theme.PaperBorderBrush, null, new Rect(0, bottom, ActualWidth, 1 / dpi.DpiScaleY));
+                dc.DrawRectangle(Appearance.PaperBorderBrush, null, new Rect(0, bottom, ActualWidth, 1 / dpi.DpiScaleY));
             }
         }
     }

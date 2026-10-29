@@ -13,7 +13,11 @@ public sealed partial class PaperWindow
     {
         SkinBorder.Refresh(_paperChrome);
         _edgeCapsuleHost?.RefreshSkin();
-        _experimentalTetherCapsule?.UpdateTheme();
+        if (_experimentalTetherCapsule != null)
+        {
+            ThemePalette.SetScope(_experimentalTetherCapsule, Appearance);
+            _experimentalTetherCapsule.UpdateTheme();
+        }
         _todoCheckBoxStyle = null;
         if (_topBarTitleHost != null) _topBarTitleHost.CornerRadius = new CornerRadius(Theme.IsPixelSkin ? 0 : RadiusControl);
         if (_newTodoButton != null) _newTodoButton.Content = CreateTopBarNewTodoIcon(_newTodoButton);

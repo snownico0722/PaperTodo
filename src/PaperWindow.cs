@@ -286,41 +286,41 @@ public sealed partial class PaperWindow : Window
         After
     }
 
-    private static Brush PaperBrush => Theme.PaperBrush;
-    private static Brush PaperBorderBrush => Theme.PaperBorderBrush;
-    private static Brush TextBrush => Theme.TextBrush;
-    private static Brush WeakTextBrush => Theme.WeakTextBrush;
-    private static Brush BrightWeakTextBrush => Theme.BrightWeakTextBrush;
-    private static Brush HoverBrush => Theme.HoverBrush;
-    private static Brush MenuHoverBrush => Theme.HoverBrush;
+    private Brush PaperBrush => Appearance.PaperBrush;
+    private Brush PaperBorderBrush => Appearance.PaperBorderBrush;
+    private Brush TextBrush => Appearance.TextBrush;
+    private Brush WeakTextBrush => Appearance.WeakTextBrush;
+    private Brush BrightWeakTextBrush => Appearance.BrightWeakTextBrush;
+    private Brush HoverBrush => Appearance.HoverBrush;
+    private Brush MenuHoverBrush => Appearance.HoverBrush;
 
     // 以下半透明叠加色全部从当前主题的 Tint / Danger 基色派生，
     // 切换配色族（暖纸 / 墨 / 林 / 霞）时自动跟随，无需各自维护 Light/Dark 对。
-    private static Brush DropIndicatorBgBrush => Theme.Tint(12);
-    private static Brush DropIndicatorBrush => Theme.Tint(180);
-    private static Brush AppendDropBrush => Theme.Tint(34);
-    private static Brush AppendBorderBrush => Theme.Tint((byte)(Theme.IsPixelSkin ? 100 : 45));
-    private static Brush AppendBgBrush => Theme.Tint((byte)(Theme.IsPixelSkin ? 24 : 12));
-    private static Brush AppendHoverBgBrush => Theme.Tint(26);
-    private static Brush PaperLinkTargetBgBrush => Theme.Tint((byte)(Theme.IsDark ? 36 : 28));
-    private static Brush PaperLinkTargetBorderBrush => Theme.Tint(150);
-    private static Brush LinkedPaperNormalBgBrush => Theme.Tint((byte)(Theme.IsDark ? 28 : 18));
-    private static Brush LinkedPaperLightBgBrush => Theme.Tint((byte)(Theme.IsDark ? 48 : 34));
-    private static Brush LinkedPaperMediumBgBrush => Theme.Tint((byte)(Theme.IsDark ? 78 : 58));
-    private static Brush LinkedPaperActiveTextBrush => Theme.TextBrush;
+    private Brush DropIndicatorBgBrush => Appearance.Tint(12);
+    private Brush DropIndicatorBrush => Appearance.Tint(180);
+    private Brush AppendDropBrush => Appearance.Tint(34);
+    private Brush AppendBorderBrush => Appearance.Tint((byte)(Theme.IsPixelSkin ? 100 : 45));
+    private Brush AppendBgBrush => Appearance.Tint((byte)(Theme.IsPixelSkin ? 24 : 12));
+    private Brush AppendHoverBgBrush => Appearance.Tint(26);
+    private Brush PaperLinkTargetBgBrush => Appearance.Tint((byte)(Theme.IsDark ? 36 : 28));
+    private Brush PaperLinkTargetBorderBrush => Appearance.Tint(150);
+    private Brush LinkedPaperNormalBgBrush => Appearance.Tint((byte)(Theme.IsDark ? 28 : 18));
+    private Brush LinkedPaperLightBgBrush => Appearance.Tint((byte)(Theme.IsDark ? 48 : 34));
+    private Brush LinkedPaperMediumBgBrush => Appearance.Tint((byte)(Theme.IsDark ? 78 : 58));
+    private Brush LinkedPaperActiveTextBrush => Appearance.TextBrush;
 
-    private static Brush CheckBoxBorderBrush => Theme.CheckBoxBorderBrush;
+    private Brush CheckBoxBorderBrush => Appearance.CheckBoxBorderBrush;
 
-    private static Brush TrashBgBrush => Theme.Danger((byte)(Theme.IsDark ? 16 : 12));
-    private static Brush TrashBorderBrush => Theme.Danger(50);
-    private static Brush TrashTextBrush => Theme.DangerBrush;
-    private static Brush TrashHoverBgBrush => Theme.Danger((byte)(Theme.IsDark ? 32 : 26));
-    private static Brush TrashHoverBorderBrush => Theme.DangerBrush;
+    private Brush TrashBgBrush => Appearance.Danger((byte)(Theme.IsDark ? 16 : 12));
+    private Brush TrashBorderBrush => Appearance.Danger(50);
+    private Brush TrashTextBrush => Appearance.DangerBrush;
+    private Brush TrashHoverBgBrush => Appearance.Danger((byte)(Theme.IsDark ? 32 : 26));
+    private Brush TrashHoverBorderBrush => Appearance.DangerBrush;
 
     // The single skin surface continues behind the controls. Native caption color is
     // still explicitly owned by DwmMicaApi; a second opaque header is not needed.
-    private Brush TitleBarBrush => HasMaterialHeader ? Brushes.Transparent : Theme.TitleBarBrush(_controller.UsesNativeMicaWindows);
-    private static Brush TitleBarDividerBrush => Theme.Tint((byte)(Theme.IsDark ? 34 : 28));
+    private Brush TitleBarBrush => HasMaterialHeader ? Brushes.Transparent : Appearance.TitleBarBrush(_controller.UsesNativeMicaWindows);
+    private Brush TitleBarDividerBrush => Appearance.Tint((byte)(Theme.IsDark ? 34 : 28));
     private const string PinOutlineHeadPathData = "M 7.5,4.25 H 16.5 V 5.75 H 15.5 V 12.05 L 17.6,14.15 V 15.35 H 6.4 V 14.15 L 8.5,12.05 V 5.75 H 7.5 Z";
     private const string PinNeedlePathData = "M 10.85,15.35 H 13.15 V 22.1 L 12,23.25 L 10.85,22.1 Z";
     private const int TodoMoveAnimationMilliseconds = 150;
@@ -687,6 +687,7 @@ public sealed partial class PaperWindow : Window
     {
         _paper = paper;
         _controller = controller;
+        ThemePalette.SetScope(this, Appearance);
         _edgeCapsule.DiagnosticId =
             EdgeCapsulePerformanceDiagnostics.ShortId(paper.Id);
         _deepCapsuleContextMenuSession = new DeepCapsuleContextMenuSession(
@@ -1583,8 +1584,14 @@ public sealed partial class PaperWindow : Window
         Resources["PaperBorderBrushKey"] = PaperBorderBrush;
         Resources["TextBrushKey"] = TextBrush;
         Resources["WeakTextBrushKey"] = WeakTextBrush;
+        Resources["BrightWeakTextBrushKey"] = BrightWeakTextBrush;
+        Resources["PaperScrollThumbBrush"] = Appearance.ScrollThumbBrush;
+        Resources["PaperScrollThumbHoverBrush"] = Appearance.ScrollThumbHoverBrush;
+        var grip = Appearance.ResizeGripBrush(_controller.State.ResizeGripMode);
+        Resources["PaperResizeGripBrush"] = grip;
+        Resources["PaperResizeGripTileBrush"] = Theme.ResizeGripTileBrush(grip);
         Resources["HoverBrushKey"] = HoverBrush;
-        Resources["LinkBrushKey"] = Theme.LinkBrush;
+        Resources["LinkBrushKey"] = Appearance.LinkBrush;
         Resources["DropIndicatorBrushKey"] = DropIndicatorBrush;
         Resources["AppendDropBrushKey"] = AppendDropBrush;
         Resources["MenuHoverBrushKey"] = MenuHoverBrush;
@@ -1594,14 +1601,16 @@ public sealed partial class PaperWindow : Window
         Resources["TitleBarDividerBrushKey"] = TitleBarDividerBrush;
 
         Resources["CheckBoxBorderBrushKey"] = CheckBoxBorderBrush;
-        Resources["CheckBoxActiveBrushKey"] = Theme.ActiveBrush;
-        Resources["CheckBoxUncheckedHoverBorderBrushKey"] = Theme.CheckBoxHoverBorderBrush;
-        Resources["CheckBoxUncheckedHoverBgKey"] = Theme.CheckBoxUncheckedHoverBgBrush;
-        Resources["CheckBoxActiveHoverBrushKey"] = Theme.CheckBoxActiveHoverBrush;
+        Resources["CheckBoxActiveBrushKey"] = Appearance.ActiveBrush;
+        Resources["CheckBoxUncheckedHoverBorderBrushKey"] = Appearance.CheckBoxHoverBorderBrush;
+        Resources["CheckBoxUncheckedHoverBgKey"] = Appearance.CheckBoxUncheckedHoverBgBrush;
+        Resources["CheckBoxActiveHoverBrushKey"] = Appearance.CheckBoxActiveHoverBrush;
     }
 
     public void UpdateTheme()
     {
+        _appearance = ThemePalette.ForPaper(_controller.State, _paper);
+        ThemePalette.SetScope(this, Appearance);
         RefreshSkin();
         var oldPaperColor = TryGetSolidColor(_paperChrome?.Background, out var capturedPaperColor)
             ? capturedPaperColor
@@ -1614,7 +1623,11 @@ public sealed partial class PaperWindow : Window
         var themeAnimationGeneration = _themeAnimationGeneration;
 
         InitializeThemeResources();
-        _experimentalTetherCapsule?.UpdateTheme();
+        if (_experimentalTetherCapsule != null)
+        {
+            ThemePalette.SetScope(_experimentalTetherCapsule, Appearance);
+            _experimentalTetherCapsule.UpdateTheme();
+        }
         RefreshThemedContextMenus();
 
         var canAnimateTheme = !PaperSkins.IsDecorated(Theme.Skin) && _nativeMica == null && _controller.State.EnableAnimations &&
@@ -1678,8 +1691,9 @@ public sealed partial class PaperWindow : Window
         }
         else
         {
-            RebuildTodoRows(CurrentFocusedTodoItemId());
+            RefreshTodoColors();
         }
+        RefreshColorSlotButton();
     }
 
     public void UpdateTypography()
@@ -1786,6 +1800,7 @@ public sealed partial class PaperWindow : Window
         RefreshThemedContextMenus();
 
         RefreshPaperTitle();
+        RefreshColorSlotButton();
         UpdateTopBarResponsiveLayout();
         ApplyCurrentCollapsedCapsuleWidth();
     }
@@ -2372,6 +2387,7 @@ public sealed partial class PaperWindow : Window
 
         actionButtons.Children.Add(_newTodoButton);
         actionButtons.Children.Add(_newNoteButton);
+        AddColorSlotButton(buttons);
         buttons.Children.Add(_moreActionsButton);
         buttons.Children.Add(_closeButton);
         UpdateTopBarNewPaperButtons();
@@ -2424,6 +2440,7 @@ public sealed partial class PaperWindow : Window
                 _topBarTitleHost.Margin.Left + _topBarTitleHost.Margin.Right;
             var fixedWidth = TopBarOuterWidth(_paperIconButton) +
                 TopBarOuterWidth(_moreActionsButton) +
+                (_colorSlotButton == null ? 0 : TopBarOuterWidth(_colorSlotButton)) +
                 TopBarOuterWidth(_closeButton) + TopBarCollisionGap;
             var remaining = Math.Max(0, availableWidth - fixedWidth - titleMinWidth);
 
@@ -2838,7 +2855,7 @@ public sealed partial class PaperWindow : Window
         _paperIconButton.ToolTip = _paper.AlwaysOnTop ? Strings.Get("Unpin") : Strings.Get("Pin");
         _paperIconButton.Content = CreateTopmostPinIcon(_paperIconButton, _paper.AlwaysOnTop);
         _paperIconButton.Opacity = 1.0;
-        _paperIconButton.Foreground = _paper.AlwaysOnTop ? Theme.ActiveBrush : WeakTextBrush;
+        _paperIconButton.Foreground = _paper.AlwaysOnTop ? Appearance.ActiveBrush : WeakTextBrush;
     }
 
     public void RefreshPaperTitle() => RefreshPaperTitle(invalidatePreview: true);
@@ -3127,16 +3144,16 @@ public sealed partial class PaperWindow : Window
         return dialog.ShowDialog() == true;
     }
 
-    private static Button DialogButton(string text, bool isDanger)
+    private Button DialogButton(string text, bool isDanger)
     {
         var background = isDanger
-            ? Theme.DangerBrush
-            : Theme.Tint(28);
+            ? Appearance.DangerBrush
+            : Appearance.Tint(28);
 
         var foreground = isDanger ? PaperBrush : TextBrush;
         var hover = isDanger
-            ? Theme.DangerHoverBrush
-            : Theme.Tint(46);
+            ? Appearance.DangerHoverBrush
+            : Appearance.Tint(46);
 
         var style = new Style(typeof(Button));
         style.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(16, 7, 16, 7)));
@@ -3424,8 +3441,9 @@ public sealed partial class PaperWindow : Window
         }
     }
 
-    private static void UpdateContextMenuTheme(ContextMenu menu)
+    private void UpdateContextMenuTheme(ContextMenu menu)
     {
+        ThemePalette.SetScope(menu, Appearance);
         menu.Resources["PaperBrushKey"] = PaperBrush;
         menu.Resources["PaperBorderBrushKey"] = PaperBorderBrush;
         menu.Resources["TextBrushKey"] = TextBrush;

@@ -459,6 +459,7 @@ public sealed class AppState
     public string UiLanguage { get; set; } = UiLanguages.Default;
     public string Theme { get; set; } = "system";
     public string ColorScheme { get; set; } = ColorSchemes.Warm;
+    public List<TodoColorSlot>? TodoColorSlots { get; set; } = PaperTodo.TodoColorSlots.Defaults();
     // Null is the legacy migration sentinel; an explicit "paper" never implies Mica.
     public string? PaperSkin { get; set; }
     public string MaterialTransparency { get; set; } = MaterialTransparencyLevels.Medium;
@@ -617,6 +618,8 @@ public sealed class PaperData
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
     public string Type { get; set; } = PaperTypes.Todo;
     public string Title { get; set; } = "";
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ColorSlotId { get; set; }
 
     public double X { get; set; } = 120;
     public double Y { get; set; } = 120;

@@ -133,7 +133,7 @@ public sealed class TodoTextBox : TextBox
             return;
         }
 
-        var lineColor = Theme.BrightWeakTextBrush is SolidColorBrush solid
+        var lineColor = ThemePalette.For(this).BrightWeakTextBrush is SolidColorBrush solid
             ? Color.FromArgb(205, solid.Color.R, solid.Color.G, solid.Color.B)
             : Color.FromArgb(205, 138, 122, 99);
         var pen = new Pen(new SolidColorBrush(lineColor), StrikeThickness);

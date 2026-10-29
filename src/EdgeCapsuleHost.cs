@@ -1366,12 +1366,14 @@ internal sealed partial class EdgeCapsuleHost : IDisposable
         Brush weakTextBrush,
         string iconText,
         double iconFontSize,
-        EdgeCapsulePreviewThemeResources previewResources)
+        EdgeCapsulePreviewThemeResources previewResources,
+        ThemePalette? appearance = null)
     {
         if (_disposed)
         {
             return;
         }
+        ThemePalette.SetScope(Window, appearance ?? Theme.Global);
         _hoverBrush = hoverBrush;
         _textBrush = strongTextBrush;
         _weakTextBrush = weakTextBrush;
@@ -1605,7 +1607,7 @@ internal sealed partial class EdgeCapsuleHost : IDisposable
             VisualSurface,
             scale: 1.055,
             duration: 95);
-        if (Theme.DangerBrush is SolidColorBrush danger)
+        if (ThemePalette.For(Window).DangerBrush is SolidColorBrush danger)
         {
             AnimationHelper.FlashHighlight(
                 Chrome,
