@@ -31,6 +31,7 @@ internal sealed record EdgeCapsuleDragWindowOptions
     public required FontFamily UiFontFamily { get; init; }
     public required FontFamily SymbolFontFamily { get; init; }
     public required XmlLanguage Language { get; init; }
+    internal ThemePalette? Appearance { get; init; }
     public required Brush PaperBrush { get; init; }
     public required Brush PaperBorderBrush { get; init; }
     public required Brush IconBrush { get; init; }
@@ -698,6 +699,7 @@ internal sealed partial class EdgeCapsuleDragWindow : Window
         _heightDip = options.Shape.WindowHeightDip;
         Width = _widthDip;
         Height = _heightDip;
+        ThemePalette.SetScope(this, options.Appearance ?? Theme.Global);
         FontFamily = options.UiFontFamily;
         Language = options.Language;
         Topmost = options.Topmost;

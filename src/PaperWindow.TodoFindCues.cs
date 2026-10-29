@@ -77,7 +77,7 @@ public sealed partial class PaperWindow
         var highlighted = _findHiddenTodoItemIds.Contains(itemId) &&
                           controls.Button.Visibility == Visibility.Visible;
         controls.Button.Background = highlighted
-            ? Theme.Tint((byte)(Theme.IsDark ? 96 : 78)) : Brushes.Transparent;
+            ? Appearance.Tint((byte)(Theme.IsDark ? 96 : 78)) : Brushes.Transparent;
         controls.Icon.Stroke = highlighted ? TextBrush : WeakTextBrush;
         controls.Icon.Opacity = highlighted
             ? 1.0

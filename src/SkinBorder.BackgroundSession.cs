@@ -361,7 +361,7 @@ internal sealed partial class SkinBorder
             // snapshots retain the material-specific diffusion used by the current recipe.
             var diffusionRadius = scene.PreBlurred
                 ? 0
-                : Theme.MaterialColors.Diffusion * _owner.MaterialStrength;
+                : _owner.Appearance.MaterialColors.Diffusion * _owner.MaterialStrength;
             if (scene.Diffusion.Radius != diffusionRadius)
                 scene.Diffusion.Radius = diffusionRadius;
             var effect = diffusionRadius > 0 ? scene.Diffusion : null;

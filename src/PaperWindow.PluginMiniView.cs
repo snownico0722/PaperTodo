@@ -400,7 +400,7 @@ public sealed partial class PaperWindow
                     Height = 30,
                     Value = component.Value,
                     ForegroundBrush = brush,
-                    TrackBrush = Theme.Tint(38),
+                    TrackBrush = Appearance.Tint(38),
                     VerticalAlignment = VerticalAlignment.Center,
                     HorizontalAlignment = HorizontalAlignment.Center
                 };
@@ -412,7 +412,7 @@ public sealed partial class PaperWindow
                     Height = 7,
                     Value = component.Value,
                     ForegroundBrush = brush,
-                    TrackBrush = Theme.Tint(38),
+                    TrackBrush = Appearance.Tint(38),
                     VerticalAlignment = VerticalAlignment.Center,
                     HorizontalAlignment = component.Fill
                         ? HorizontalAlignment.Stretch

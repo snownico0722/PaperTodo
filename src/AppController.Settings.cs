@@ -1670,6 +1670,7 @@ public sealed partial class AppController
         leftColumn.Children.Add(CreateThemeSegmentSelector());
         leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsColorScheme")), "TipColorScheme"));
         leftColumn.Children.Add(CreateColorSchemeSegmentSelector());
+        if (State.AdvancedSettingsMode) leftColumn.Children.Add(CreateTodoColorSlotSettings());
         leftColumn.Children.Add(CreateSkinSettings());
         leftColumn.Children.Add(WrapWithHint(
             SettingsFieldLabel(Strings.Get("SettingsResizeGripMode")),

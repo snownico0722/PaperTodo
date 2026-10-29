@@ -552,6 +552,7 @@ public sealed class StateStore
         state.UiLanguage = UiLanguages.Normalize(state.UiLanguage);
         state.PaperSkin = PaperSkins.Resolve(state);
         state.ColorScheme = ColorSchemes.Normalize(state.ColorScheme);
+        TodoColorSlots.Normalize(state);
         state.MicaBackdropType = MicaBackdropTypes.Normalize(state.MicaBackdropType);
         state.MaterialTransparency = MaterialTransparencyLevels.Normalize(state.MaterialTransparency);
 

@@ -188,7 +188,7 @@ public sealed partial class PaperWindow
         _advancedDisabledChildWindows.Clear();
     }
 
-    private static UIElement CreateAdvancedLockIcon()
+    private UIElement CreateAdvancedLockIcon()
     {
         var canvas = new Grid
         {
@@ -200,7 +200,7 @@ public sealed partial class PaperWindow
         {
             Data = Geometry.Parse("M 3.1 6 V 4.4 C 3.1 1.9 4.8 0.8 6.5 0.8 C 8.2 0.8 9.9 1.9 9.9 4.4 V 6"),
             StrokeThickness = 1.45,
-            Stroke = Theme.ActiveBrush,
+            Stroke = Appearance.ActiveBrush,
             StrokeStartLineCap = PenLineCap.Round,
             StrokeEndLineCap = PenLineCap.Round
         });
@@ -208,7 +208,7 @@ public sealed partial class PaperWindow
         {
             Data = Geometry.Parse("M 1.5 6.2 H 11.5 V 13.2 H 1.5 Z M 6.5 8.5 V 10.9"),
             StrokeThickness = 1.35,
-            Stroke = Theme.ActiveBrush,
+            Stroke = Appearance.ActiveBrush,
             StrokeStartLineCap = PenLineCap.Round,
             StrokeEndLineCap = PenLineCap.Round,
             StrokeLineJoin = PenLineJoin.Round

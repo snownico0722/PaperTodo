@@ -10,6 +10,7 @@ namespace PaperTodo;
 /// and the native/solid Background decision. Never replace its focus border with a skin rim.</summary>
 internal sealed partial class SkinBorder : PaperChromeBorder
 {
+    internal ThemePalette Appearance => ThemePalette.For(this);
     public static readonly DependencyProperty SkinProperty = DependencyProperty.Register(
         nameof(Skin), typeof(string), typeof(SkinBorder),
         new FrameworkPropertyMetadata(PaperSkins.Paper, FrameworkPropertyMetadataOptions.AffectsRender,
@@ -156,8 +157,8 @@ internal sealed partial class SkinBorder : PaperChromeBorder
         _applyingSkin = true;
         try { SetCurrentValue(SkinProperty, Theme.Skin); }
         finally { _applyingSkin = false; }
-        var appearance = (Skin, _dark, _highContrast, Theme.MaterialColors, Theme.PaperBrush,
-            Theme.ActiveBrush, MaterialStrength, UseLightweightMaterial, DrawBaseOuterBorder, IsEdgeActiveMaterial);
+        var appearance = (Skin, _dark, _highContrast, Appearance.MaterialColors, Appearance.PaperBrush,
+            Appearance.ActiveBrush, MaterialStrength, UseLightweightMaterial, DrawBaseOuterBorder, IsEdgeActiveMaterial);
         if (_appearance != appearance)
         {
             _appearance = appearance;
@@ -216,7 +217,7 @@ internal sealed partial class SkinBorder : PaperChromeBorder
                 Background is SolidColorBrush { Color.A: < 255 } && ActualWidth > 0 && ActualHeight > 0)
             {
                 EnsureGeometry();
-                dc.DrawGeometry(Theme.NativeMaterialTint, null, _shape);
+                dc.DrawGeometry(Appearance.NativeMaterialTint, null, _shape);
             }
             return;
         }
@@ -228,14 +229,14 @@ internal sealed partial class SkinBorder : PaperChromeBorder
             // BorderThickness keeps its layout role, but the outer stroke itself is absent.
             dc.DrawGeometry(Background, null, _shape);
             if (systemMaterial && Background is SolidColorBrush { Color.A: < 255 })
-                dc.DrawGeometry(Theme.NativeMaterialTint, null, _shape);
+                dc.DrawGeometry(Appearance.NativeMaterialTint, null, _shape);
             return;
         }
         if (ActualWidth <= 0 || ActualHeight <= 0) return;
         DrawMaterialShadow(dc);
         EnsureGeometry();
         var background = Background is SolidColorBrush solid
-            ? solid.Color : ((SolidColorBrush)Theme.PaperBrush).Color;
+            ? solid.Color : ((SolidColorBrush)Appearance.PaperBrush).Color;
         EnsureBrushes(BackgroundVisual != null || HasAuxiliaryTransmission ? Colors.Transparent : background);
         if (BackgroundVisual != null)
         {
@@ -253,7 +254,7 @@ internal sealed partial class SkinBorder : PaperChromeBorder
         // Both auxiliary strengths retain actual background processing. Only an unavailable
         // source falls back to an opaque base; no foreground or HWND opacity is altered.
         if (IsAuxiliary && !UseLightweightMaterial && BackgroundVisual == null && !HasAuxiliaryTransmission)
-            dc.DrawGeometry(Background ?? Theme.PaperBrush, null, _shape);
+            dc.DrawGeometry(Background ?? Appearance.PaperBrush, null, _shape);
         PaintMaterialBase(dc);
         dc.PushOpacity(PaintedMaterialStrength);
         if (Skin == PaperSkins.TracingPaper && !UseLightweightMaterial)
@@ -284,7 +285,7 @@ internal sealed partial class SkinBorder : PaperChromeBorder
             if (backingOpacity > 0)
             {
                 dc.PushOpacity(backingOpacity);
-                dc.DrawGeometry(Theme.PaperBrush, null, _shape);
+                dc.DrawGeometry(Appearance.PaperBrush, null, _shape);
                 dc.Pop();
             }
         }

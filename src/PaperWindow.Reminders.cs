@@ -53,7 +53,7 @@ public sealed partial class PaperWindow
                 _paperChrome,
                 scale: _paper.IsCollapsed ? 1.05 : 1.025,
                 duration: 95);
-            if (Theme.DangerBrush is SolidColorBrush danger)
+            if (Appearance.DangerBrush is SolidColorBrush danger)
             {
                 AnimationHelper.FlashHighlight(
                     _paperChrome,
@@ -147,6 +147,7 @@ public sealed partial class PaperWindow
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center
         };
+        glyph.SetResourceReference(TextBlock.ForegroundProperty, "WeakTextBrushKey");
         var button = new Border
         {
             Width = Math.Max(
@@ -197,7 +198,7 @@ public sealed partial class PaperWindow
             Text = TodoReminderCountdownText(
                 item.ReminderAt!.Value,
                 DateTimeOffset.Now),
-            Foreground = Theme.ActiveBrush,
+            Foreground = Appearance.ActiveBrush,
             FontFamily = AppTypography.UiFontFamily,
             FontSize = Math.Max(
                 AppTypography.Scale(10),
@@ -210,6 +211,7 @@ public sealed partial class PaperWindow
             ToolTip = TodoReminderToolTip(item)
         };
         _todoReminderCountdowns[item.Id] = countdown;
+        countdown.SetResourceReference(TextBlock.ForegroundProperty, "CheckBoxActiveBrushKey");
         var host = new Border
         {
             MinWidth = Math.Max(
@@ -229,12 +231,12 @@ public sealed partial class PaperWindow
         host.MouseEnter += (_, _) =>
         {
             host.Background = HoverBrush;
-            countdown.Foreground = TextBrush;
+            countdown.SetResourceReference(TextBlock.ForegroundProperty, "TextBrushKey");
         };
         host.MouseLeave += (_, _) =>
         {
             host.Background = Brushes.Transparent;
-            countdown.Foreground = Theme.ActiveBrush;
+            countdown.SetResourceReference(TextBlock.ForegroundProperty, "CheckBoxActiveBrushKey");
             countdown.Opacity = 1.0;
         };
         host.PreviewMouseLeftButtonDown += (_, e) =>

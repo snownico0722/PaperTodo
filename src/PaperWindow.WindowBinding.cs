@@ -134,7 +134,7 @@ public sealed partial class PaperWindow
             isAssociated ? FontWeights.Bold : FontWeights.SemiBold;
         if (isAssociated)
         {
-            _windowBindingButton.Foreground = Theme.ActiveBrush;
+            _windowBindingButton.Foreground = Appearance.ActiveBrush;
         }
         else
         {
@@ -286,8 +286,8 @@ public sealed partial class PaperWindow
 
         if (_windowBindingDragTarget is { } selected)
         {
-            visual.Chrome.BorderBrush = Theme.ActiveBrush;
-            visual.Chrome.Background = Theme.Tint(
+            visual.Chrome.BorderBrush = Appearance.ActiveBrush;
+            visual.Chrome.Background = Appearance.Tint(
                 (byte)(Theme.IsDark ? 52 : 34));
             visual.Icon.Text = "◎";
             visual.Label.Foreground = TextBrush;
@@ -362,7 +362,7 @@ public sealed partial class PaperWindow
         var icon = new TextBlock
         {
             Text = "◎",
-            Foreground = Theme.ActiveBrush,
+            Foreground = Appearance.ActiveBrush,
             FontFamily = AppTypography.SymbolFontFamily,
             FontSize = AppTypography.Scale(13),
             FontWeight = FontWeights.SemiBold,

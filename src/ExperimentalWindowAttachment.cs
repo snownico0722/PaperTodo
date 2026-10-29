@@ -1686,6 +1686,8 @@ public sealed partial class PaperWindow
             ActivateExperimentalTetherTarget,
             normalTopmost: true,
             restingOpacity: restingOpacity);
+        ThemePalette.SetScope(capsule, Appearance);
+        capsule.UpdateTheme();
         capsule.UpdateRestingOpacity(
             restingOpacity,
             _controller.State.ExperimentalRestingCapsuleOpacity &&

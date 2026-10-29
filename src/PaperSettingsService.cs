@@ -86,22 +86,23 @@ internal sealed class PaperSettingsService
         try
         {
             var change = definition.Begin(normalized);
-            try
-            {
-                change.Apply();
-                if (!(change.Commit ?? _commit)())
-                    throw Error("save_failed", "PaperTodo could not save the setting; the previous value was restored.");
-            }
-            catch
-            {
-                change.Rollback();
-                throw;
-            }
-            // Post-commit failures must not pretend the persisted mutation failed and invite replay.
-            _publish(change.Publish);
+            CommitChange(change, _commit, _publish);
             return new PaperSettingChangeResult(definition.Snapshot(), before.Value, true);
         }
         finally { _changing = false; }
+    }
+
+    internal static void CommitChange(PaperSettingChange change, Func<bool> commit, Action<Action> publish)
+    {
+        try
+        {
+            change.Apply();
+            if (!(change.Commit ?? commit)())
+                throw Error("save_failed", "PaperTodo could not save the setting; the previous value was restored.");
+        }
+        catch { change.Rollback(); throw; }
+        // A committed change must not be rolled back for a UI refresh failure.
+        publish(change.Publish);
     }
 
     private PaperSettingDefinition Definition(string id)

@@ -176,9 +176,9 @@ internal sealed class ExperimentalTetherCapsuleWindow : Window
     public void UpdateTheme()
     {
         SkinBorder.Refresh(_pill);
-        _pill.Background = Theme.PaperBrush;
-        _pill.BorderBrush = Theme.PaperBorderBrush;
-        _label.Foreground = Theme.TextBrush;
+        _pill.Background = ThemePalette.For(this).PaperBrush;
+        _pill.BorderBrush = ThemePalette.For(this).PaperBorderBrush;
+        _label.Foreground = ThemePalette.For(this).TextBrush;
     }
 
     public void SetFullscreenAvoidance(IntPtr avoidanceWindow)

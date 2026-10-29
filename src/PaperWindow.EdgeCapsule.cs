@@ -43,7 +43,7 @@ public sealed partial class PaperWindow
             Strings.Get("ToolTipHideThisPaper"),
             PaperBrush,
             PaperBorderBrush,
-            Theme.CapsuleFocusBorderBrush,
+            Appearance.CapsuleFocusBorderBrush,
             HoverBrush,
             BrightWeakTextBrush,
             TextBrush,
@@ -209,7 +209,7 @@ public sealed partial class PaperWindow
         _edgeCapsuleHost?.UpdateTheme(
             PaperBrush,
             PaperBorderBrush,
-            Theme.CapsuleFocusBorderBrush,
+            Appearance.CapsuleFocusBorderBrush,
             HoverBrush,
             BrightWeakTextBrush,
             TextBrush,
@@ -217,12 +217,13 @@ public sealed partial class PaperWindow
             CapsuleIconText(),
             CapsuleIconFontSizeForCurrentPaper(),
             new EdgeCapsulePreviewThemeResources(
-                Theme.LinkBrush,
+                Appearance.LinkBrush,
                 CheckBoxBorderBrush,
-                Theme.ActiveBrush,
-                Theme.CheckBoxHoverBorderBrush,
-                Theme.CheckBoxUncheckedHoverBgBrush,
-                Theme.CheckBoxActiveHoverBrush));
+                Appearance.ActiveBrush,
+                Appearance.CheckBoxHoverBorderBrush,
+                Appearance.CheckBoxUncheckedHoverBgBrush,
+                Appearance.CheckBoxActiveHoverBrush),
+            Appearance);
     }
 
     public void UpdateEdgeCapsuleCloseButtonMode()

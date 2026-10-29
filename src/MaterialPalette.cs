@@ -8,17 +8,17 @@ namespace PaperTodo;
 internal readonly record struct MaterialPalette(Color Surface, Color NativeOverlay, Color Preview,
     byte TransmissionAlpha, double Diffusion)
 {
-    internal static MaterialPalette For(string skin, string scheme, bool dark, Color paper, string? transparency)
+    internal static MaterialPalette For(string skin, string scheme, bool dark, Color paper, string? transparency, Color? customHue = null)
     {
-        var neutral = scheme == ColorSchemes.Neutral;
-        var hue = scheme switch
+        var neutral = customHue == null && scheme == ColorSchemes.Neutral;
+        var hue = customHue ?? (scheme switch
         {
             ColorSchemes.Warm => Color.FromRgb(197, 164, 111),
             ColorSchemes.Ink => Color.FromRgb(115, 153, 201),
             ColorSchemes.Forest => Color.FromRgb(121, 169, 142),
             ColorSchemes.Rose => Color.FromRgb(195, 136, 158),
             _ => Color.FromRgb(139, 168, 192)
-        };
+        });
         var baseColor = dark ? Color.FromRgb(28, 30, 34) : Color.FromRgb(246, 247, 249);
         var (chroma, alpha, wash, blur) = skin switch
         {

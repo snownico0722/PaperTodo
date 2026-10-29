@@ -19,6 +19,7 @@ namespace PaperTodo;
 internal sealed class NativeMicaBackdrop : IDisposable
 {
     private readonly Window _window;
+    private ThemePalette Appearance => ThemePalette.For(_window);
     private readonly Func<Border?> _getChrome;
     private readonly Func<bool> _canPresent;
     private readonly Action<Brush> _setSurface;
@@ -69,7 +70,7 @@ internal sealed class NativeMicaBackdrop : IDisposable
             }));
         };
         surface.FormFrameRendered = preparation.Rendered;
-        _setSurface(Theme.PaperBrush);
+        _setSurface(Appearance.PaperBrush);
         surface.InvalidateVisual();
     }
 
@@ -152,7 +153,7 @@ internal sealed class NativeMicaBackdrop : IDisposable
         {
             // Form setup can refresh paint, opacity and frame policy several times.
             // Keep one installed recipe until the replacement drawing is submitted.
-            _setSurface(Theme.PaperBrush);
+            _setSurface(Appearance.PaperBrush);
             return;
         }
 
@@ -163,7 +164,7 @@ internal sealed class NativeMicaBackdrop : IDisposable
         // below because staging Aero through an opaque frame leaves a dark redirected underlay.
         if (_material == MicaBackdropTypes.ClearAcrylic && !_contentRendered)
         {
-            var paper = Theme.PaperBrush;
+            var paper = Appearance.PaperBrush;
             _source.CompositionTarget.BackgroundColor = ((SolidColorBrush)paper).Color;
             _window.Background = paper;
             _setSurface(paper);
@@ -174,7 +175,7 @@ internal sealed class NativeMicaBackdrop : IDisposable
             !_native.IsLayered(_source.Handle) && chrome.IsVisible &&
             _window.WindowState != WindowState.Minimized;
         var rounded = chrome.CornerRadius.TopLeft > 0 && _window.WindowState != WindowState.Maximized;
-        var edge = ((SolidColorBrush)Theme.PaperBorderBrush).Color;
+        var edge = ((SolidColorBrush)Appearance.PaperBorderBrush).Color;
         var showOutline = _native.HighContrast || AppController.Current?.State.HideSurfaceOutline != true;
         var transparency = MaterialTransparencyLevels.Normalize(
             AppController.Current?.State.MaterialTransparency);
@@ -246,7 +247,7 @@ internal sealed class NativeMicaBackdrop : IDisposable
             // rounded stroke as well produces doubled arcs at fractional DPI. Keep the inset
             // thickness for layout; restore the WPF stroke when the native frame is suspended.
             chrome.SetCurrentValue(Border.BorderBrushProperty,
-                IsActive && LastFrameHResult >= 0 ? Brushes.Transparent : Theme.PaperBorderBrush);
+                IsActive && LastFrameHResult >= 0 ? Brushes.Transparent : Appearance.PaperBorderBrush);
             // WM_NCACTIVATE controls appearance only. Never synthesize WM_ACTIVATE or
             // change keyboard focus. Restore real activation when the override ends.
             if (IsActive && _alwaysActive || wasForcedActive)
@@ -271,9 +272,9 @@ internal sealed class NativeMicaBackdrop : IDisposable
                 }
             }
             _source.CompositionTarget.BackgroundColor = IsActive || alphaReady
-                ? Color.FromArgb(0, 0, 0, 0) : ((SolidColorBrush)Theme.PaperBrush).Color;
-            _window.Background = IsActive || alphaReady ? Brushes.Transparent : Theme.PaperBrush;
-            _setSurface(IsActive ? GetActiveSurfaceBrush(_material, dark) : Theme.PaperBrush);
+                ? Color.FromArgb(0, 0, 0, 0) : ((SolidColorBrush)Appearance.PaperBrush).Color;
+            _window.Background = IsActive || alphaReady ? Brushes.Transparent : Appearance.PaperBrush;
+            _setSurface(IsActive ? GetActiveSurfaceBrush(_material, dark) : Appearance.PaperBrush);
             // DWM may discard the redirected bitmap when its alpha/frame mode changes.
             // Invalidating a retained WPF Visual only updates its dirty subregion; request
             // a full native WM_PAINT so existing text/controls are copied into the new bitmap.
