@@ -129,13 +129,14 @@ internal sealed class FreeformWorkspaceWindow : Window
         for (int i = 0; i < papers.Count; i++)
         {
             var p = papers[i]; _papers[p.Id] = p;
+            var hadWorkspacePosition = p.WorkspaceX.HasValue && p.WorkspaceY.HasValue;
             p.WorkspaceX ??= 90 + (i % 4) * (W + GapX);
             p.WorkspaceY ??= 70 + (i / 4) * (H + GapY);
+            if (!hadWorkspacePosition) _controller.SaveWorkspaceLayout();
             var card = MakeCard(p);
             _cards[p.Id] = card;
             Canvas.SetLeft(card, p.WorkspaceX.Value); Canvas.SetTop(card, p.WorkspaceY.Value); _canvas.Children.Add(card);
         }
-        _controller.SaveWorkspaceLayout();
         FilterCards();
         FitCanvas();
     }
