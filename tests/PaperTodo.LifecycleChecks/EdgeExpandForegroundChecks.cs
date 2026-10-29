@@ -178,7 +178,7 @@ internal static class EdgeExpandForegroundChecks
             }
 
             await Collapse();
-            window.ActivateFromEdgeShortcut();
+            ActivateFromEdgeSlot(window);
             window.SetCollapsedState(true, animate: false);
             ForbidFurtherActivation();
             await Until(CapsuleReady, "reversed expansion did not return to its edge capsule");
@@ -190,7 +190,7 @@ internal static class EdgeExpandForegroundChecks
             controller.State.EnableAnimations = false;
             try
             {
-                window.ActivateFromEdgeShortcut();
+                ActivateFromEdgeSlot(window);
                 Require(!paper.IsCollapsed && !Transitioning(window) &&
                     GetForegroundWindow() == new WindowInteropHelper(window).Handle,
                     "animation-disabled explicit expansion did not immediately own foreground");
@@ -203,7 +203,7 @@ internal static class EdgeExpandForegroundChecks
             await Collapse();
 
             rejectActivation = false;
-            window.ActivateFromEdgeShortcut();
+            ActivateFromEdgeSlot(window);
             controller.HidePaper(paper);
             ForbidFurtherActivation();
             await Until(() => !window.HasVisibleSurface, "hidden expansion retained a visible surface");
@@ -228,7 +228,7 @@ internal static class EdgeExpandForegroundChecks
             CompositionTarget.Rendering += ObserveClock;
             try
             {
-                window.ActivateFromEdgeShortcut();
+                ActivateFromEdgeSlot(window);
                 ObserveClock(null, EventArgs.Empty);
                 Require(hiddenDuringActivation && !paper.IsVisible && !Transitioning(window),
                     "synchronous Activated hide did not cancel the active expansion");
@@ -251,6 +251,13 @@ internal static class EdgeExpandForegroundChecks
             source?.RemoveHook(ObserveActivation);
             if (cursorSaved) SetCursorPos(cursor.X, cursor.Y);
         }
+    }
+
+    internal static void ActivateFromEdgeSlot(PaperWindow window)
+    {
+        // Native edge clicks still expand papers; the shortcut now opens the workspace.
+        // Keep these foreground/cancellation checks on the native click's production path.
+        typeof(PaperWindow).GetMethod("ActivateFromDeepCapsuleSlot", Private)!.Invoke(window, null);
     }
 
     private sealed class ProgressObservation : IDisposable

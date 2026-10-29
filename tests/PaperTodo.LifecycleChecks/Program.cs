@@ -11,7 +11,7 @@ internal static class Program
 {
     private const BindingFlags Private = BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic;
     private const string FixtureMarker = ".papertodo-lifecycle-fixture";
-    private static readonly string[] Cases = ["startup", "missing-monitor", "master-queue-transfer", "master-queue-cancel", "master-queue-drag-preparation", "master-queue-drop-handoff", "master-queue-membership", "master-queue-mutations", "master-queue-hide", "master-queue-disconnect", "master-queue-merge", "master-queue-merge-collapsed", "master-queue-material-handoff", "controller-hide-create-reentry", "controller-hide-show-reentry", "controller-zorder-create-reentry", "controller-close-delete-reentry", "todo-visibility", "real-exit", "early-expand", "edge-expand-foreground", "cancel-prewarm", "real-exit-scripts", "early-exit", "todo-context-menu", "todo-history"];
+    private static readonly string[] Cases = ["startup", "missing-monitor", "master-queue-transfer", "master-queue-cancel", "master-queue-drag-preparation", "master-queue-drop-handoff", "master-queue-membership", "master-queue-mutations", "master-queue-hide", "master-queue-disconnect", "master-queue-merge", "master-queue-merge-collapsed", "master-queue-material-handoff", "controller-hide-create-reentry", "controller-hide-show-reentry", "controller-zorder-create-reentry", "controller-close-delete-reentry", "todo-visibility", "real-exit", "early-expand", "early-workspace", "edge-expand-foreground", "cancel-prewarm", "real-exit-scripts", "early-exit", "todo-context-menu", "todo-history"];
 
     [STAThread]
     private static int Main(string[] args)
@@ -489,13 +489,33 @@ internal static class Program
                     "deferred startup resurrected a hidden surface or its cache");
                 return;
             }
-            if (name == "early-expand")
+            FreeformWorkspaceWindow? workspace = null;
+            if (name == "early-workspace")
             {
                 windows["fixture-0"].ActivateFromEdgeShortcut();
+                await Until(
+                    () => Application.Current.Windows.OfType<FreeformWorkspaceWindow>().Any(window => window.IsVisible),
+                    "early workspace open");
+                workspace = Application.Current.Windows.OfType<FreeformWorkspaceWindow>().Single(window => window.IsVisible);
+                Require(windows.Values.All(window => !window.HasExpandedPaperSurface),
+                    "workspace shortcut unexpectedly expanded a paper");
+                windows["fixture-1"].ActivateFromEdgeShortcut();
+                Require(Application.Current.Windows.OfType<FreeformWorkspaceWindow>().Count(window => window.IsVisible) == 1,
+                    "repeated workspace shortcut created a second visible workspace");
+            }
+            if (name == "early-expand")
+            {
+                EdgeExpandForegroundChecks.ActivateFromEdgeSlot(windows["fixture-0"]);
                 Require(windows["fixture-0"].IsShellBuilt && windows["fixture-0"].HasExpandedPaperSurface,
                     "early demand did not construct and show the selected paper");
             }
             await Until(() => windows.Values.All(window => window.IsShellBuilt), "shell drain");
+            if (workspace != null)
+            {
+                Require(workspace.IsVisible && controller.State.Papers.All(paper => paper.IsCollapsed) &&
+                    windows.Values.All(window => !window.HasExpandedPaperSurface),
+                    "startup completion withdrew the workspace or expanded a paper");
+            }
             // A hidden edge anchor legitimately defers optional preload while its paper is
             // expanded. Startup correctness is not defined by the cache's pending count.
             if (name == "early-expand")
