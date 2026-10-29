@@ -153,7 +153,16 @@ public sealed class WorkbenchWindow : Window
     private void CreateScene()
     {
         var box = new TextBox { Width = 260, Margin = new Thickness(12) };
-        var dialog = new Window { Title = Label("new", _controller.State.UiLanguage), Owner = this, WindowStartupLocation = WindowStartupLocation.CenterOwner, SizeToContent = SizeToContent.WidthAndHeight, ResizeMode = ResizeMode.NoResize, Content = box, Background = Background };
+        var dialog = new Window { Title = Label("new", _controller.State.UiLanguage), Owner = this, WindowStartupLocation = WindowStartupLocation.CenterOwner, SizeToContent = SizeToContent.WidthAndHeight, ResizeMode = ResizeMode.NoResize, Background = Background };
+        var form = new StackPanel();
+        form.Children.Add(new TextBlock { Text = Label("name", _controller.State.UiLanguage), Margin = new Thickness(12, 12, 12, 0) });
+        form.Children.Add(box);
+        var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(12, 0, 12, 12) };
+        var create = MakeButton("OK", () => dialog.DialogResult = true);
+        var cancel = MakeButton("Cancel", () => dialog.DialogResult = false);
+        actions.Children.Add(create); actions.Children.Add(cancel); form.Children.Add(actions);
+        dialog.Content = form;
+        dialog.Loaded += (_, _) => box.Focus();
         if (dialog.ShowDialog() == true && !string.IsNullOrWhiteSpace(box.Text))
         {
             var s = new WorkbenchScene { Name = box.Text.Trim() };
