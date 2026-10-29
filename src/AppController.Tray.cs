@@ -733,7 +733,7 @@ public sealed partial class AppController
             menu,
             CreateTrayAddIcon("▦"),
             Strings.Get("WorkspaceOpen"),
-            ShowFreeformWorkspace);
+            () => ShowFreeformWorkspace());
 
         Grid.SetColumn(visibilityButton, 0);
         Grid.SetColumn(label, 1);
