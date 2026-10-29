@@ -1563,4 +1563,7 @@ When off, open at the docked edge or remembered position.</value>
   <data name="WorkspaceClose" xml:space="preserve">
     <value>Close workspace</value>
   </data>
+  <data name="WorkspaceConnectHint" xml:space="preserve">
+    <value>Hold Ctrl and click two nodes to connect</value>
+  </data>
 </root>

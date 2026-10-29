@@ -1612,4 +1612,7 @@
   <data name="WorkspaceClose" xml:space="preserve">
     <value>关闭工作台</value>
   </data>
+  <data name="WorkspaceConnectHint" xml:space="preserve">
+    <value>按住 Ctrl 依次点击两个节点建立连线</value>
+  </data>
 </root>

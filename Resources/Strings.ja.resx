@@ -1563,4 +1563,7 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="WorkspaceClose" xml:space="preserve">
     <value>作業スペースを閉じる</value>
   </data>
+  <data name="WorkspaceConnectHint" xml:space="preserve">
+    <value>Ctrlを押しながらノードを2つクリックして接続</value>
+  </data>
 </root>

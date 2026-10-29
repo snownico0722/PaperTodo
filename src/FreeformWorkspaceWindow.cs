@@ -8,16 +8,17 @@ namespace PaperTodo;
 public sealed partial class AppController
 {
     private FreeformWorkspaceWindow? _freeformWorkspaceWindow;
-    public void ShowFreeformWorkspace()
+    public void ShowFreeformWorkspace(string? focusPaperId = null)
     {
         if (IsExiting) return;
         if (_freeformWorkspaceWindow is { IsLoaded: true } current)
         {
             if (!current.IsVisible) current.Show();
+            current.FocusPaper(focusPaperId);
             current.Activate();
             return;
         }
-        var window = new FreeformWorkspaceWindow(this);
+        var window = new FreeformWorkspaceWindow(this, focusPaperId);
         _freeformWorkspaceWindow = window;
         window.Closed += (_, _) => { if (ReferenceEquals(_freeformWorkspaceWindow, window)) _freeformWorkspaceWindow = null; };
         window.Show();
@@ -40,14 +41,21 @@ internal sealed class FreeformWorkspaceWindow : Window
     private Point _dragPoint, _dragOrigin, _panPoint;
     private double _panX, _panY;
     private bool _panning;
+    private readonly string? _focusPaperId;
 
-    public FreeformWorkspaceWindow(AppController controller)
+    public FreeformWorkspaceWindow(AppController controller, string? focusPaperId = null)
     {
         _controller = controller;
+        _focusPaperId = focusPaperId;
         Title = Strings.Get("WorkspaceOpen");
         WindowStyle = WindowStyle.None;
         ResizeMode = ResizeMode.NoResize;
-        WindowState = WindowState.Maximized;
+        WindowState = WindowState.Normal;
+        Left = SystemParameters.VirtualScreenLeft;
+        Top = SystemParameters.VirtualScreenTop;
+        Width = SystemParameters.VirtualScreenWidth;
+        Height = SystemParameters.VirtualScreenHeight;
+        Topmost = true;
         ShowInTaskbar = true;
         Background = Theme.PaperBrush;
         Foreground = Theme.TextBrush;
@@ -83,7 +91,7 @@ internal sealed class FreeformWorkspaceWindow : Window
 
         var footer = new TextBlock
         {
-            Text = Strings.Get("WorkspaceHint"),
+            Text = Strings.Get("WorkspaceHint") + " · " + Strings.Get("WorkspaceConnectHint"),
             Foreground = Theme.WeakTextBrush,
             FontSize = AppTypography.Scale(10.5),
             VerticalAlignment = VerticalAlignment.Center,
@@ -93,7 +101,7 @@ internal sealed class FreeformWorkspaceWindow : Window
         Grid.SetRow(footer, 2);
         root.Children.Add(footer);
         Content = root;
-        Loaded += (_, _) => { BuildCards(); _search.Focus(); };
+        Loaded += (_, _) => { BuildCards(); if (focusPaperId == null) _search.Focus(); };
         PreviewKeyDown += (_, e) =>
         {
             if (e.Key == Key.Escape)
@@ -178,6 +186,12 @@ internal sealed class FreeformWorkspaceWindow : Window
         card.MouseLeftButtonUp += (_, e) => { if (!ReferenceEquals(_dragCard, card)) return; p.WorkspaceX = Canvas.GetLeft(card); p.WorkspaceY = Canvas.GetTop(card); _dragCard = null; card.ReleaseMouseCapture(); _controller.SaveWorkspaceLayout(); e.Handled = true; };
         card.LostMouseCapture += (_, _) => { if (ReferenceEquals(_dragCard, card)) _dragCard = null; };
         return card;
+    }
+
+    internal void FocusPaper(string? id)
+    {
+        if (string.IsNullOrWhiteSpace(id) || !_cards.TryGetValue(id, out var card)) return;
+        Select(card); CenterCard(card);
     }
 
     private void Select(Border card)
