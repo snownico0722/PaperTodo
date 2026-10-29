@@ -133,6 +133,14 @@ PaperTodo 为绿色单文件程序，无需安装。请在 [Releases 页面](htt
 
 ---
 
+## Android 手机版（实验性）
+
+[Android 独立工程](mobile/android/README.md) 支持随手记录待办、Markdown 笔记、跨应用悬浮纸片和贴边胶囊，最低支持 Android 8.0，使用电脑版原始 logo 与四套明暗配色。安装与构建见[手机端说明](mobile/android/INSTALL.md)。
+
+当前手动 JSON／图片 ZIP 迁移以 **v3.31** 为兼容基线；不提供云同步，也不承诺兼容 4.0 插件纸片。Windows 程序继续独立构建，手机端真实机型的权限和后台管理仍需测试。
+
+---
+
 ## 构建与依赖
 
 本地编译需 Windows 环境并安装 .NET 10 SDK：

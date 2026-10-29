@@ -133,6 +133,14 @@ On first launch, papers appear on the desktop and the PaperTodo tray icon remain
 
 ---
 
+## Android Companion (Experimental)
+
+The [standalone Android project](mobile/android/README.md) supports quick todo capture, Markdown notes, floating papers and edge capsules on Android 8.0 and later. It reuses the desktop logo and four light/dark palettes. See the [installation and build instructions](mobile/android/INSTALL.md).
+
+Manual JSON and image-ZIP transfer currently targets the **v3.31** data format. Cloud sync and compatibility with 4.0 plugin papers are outside this version. The Windows application builds independently; device-specific overlay permissions and background behavior still require physical-device testing.
+
+---
+
 ## Build & Dependencies
 
 Local builds require Windows and the .NET 10 SDK:
@@ -296,6 +304,14 @@ PaperTodo 为绿色单文件程序，无需安装。请在 [Releases 页面](htt
 - 📖 **[完整用户手册](doc/USER_GUIDE.md)**：包含新手 3 分钟入门指南、待办/笔记深度用法、多屏胶囊调度、全量设置项大字典、脚本编写规则、换机数据迁移教程及常见问题解答（FAQ）。
 - 🧩 **[插件开发手册](plugin-samples/README.zh.md)**：了解 PaperTodo 正文插件扩展机制、协议说明与示例索引。
 - 📋 **[版本更新日志](CHANGELOG.zh.md)**：查阅更新与修复记录。
+
+---
+
+## Android 手机版（实验性）
+
+[Android 独立工程](mobile/android/README.md) 支持随手记录待办、Markdown 笔记、跨应用悬浮纸片和贴边胶囊，最低支持 Android 8.0，使用电脑版原始 logo 与四套明暗配色。安装与构建见[手机端说明](mobile/android/INSTALL.md)。
+
+当前手动 JSON／图片 ZIP 迁移以 **v3.31** 为兼容基线；不提供云同步，也不承诺兼容 4.0 插件纸片。Windows 程序继续独立构建，手机端真实机型的权限和后台管理仍需测试。
 
 ---
 
