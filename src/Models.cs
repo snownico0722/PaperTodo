@@ -629,11 +629,20 @@ public sealed class WorkbenchRelation
     public string Label { get; set; } = "";
 }
 
+public sealed class WorkbenchNodePosition
+{
+    public double X { get; set; }
+    public double Y { get; set; }
+}
+
 public sealed class WorkbenchScene
 {
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
     public string Name { get; set; } = "";
     public List<string> PaperIds { get; set; } = new();
+
+    // Workbench coordinates are a scene projection, never desktop PaperData geometry.
+    public Dictionary<string, WorkbenchNodePosition> Positions { get; set; } = new();
 }
 
 public sealed class PaperData
