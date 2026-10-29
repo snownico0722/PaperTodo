@@ -197,10 +197,20 @@ internal sealed class FreeformWorkspaceWindow : Window
         var preview = todo
             ? string.Join("\n", p.Items.OrderBy(x => x.Order).Where(x => !string.IsNullOrWhiteSpace(x.Text)).Take(4).Select(x => (x.Done ? "☑ " : "☐ ") + x.Text.Replace('\n', ' ')))
             : string.Join(" ", (p.Content ?? "").Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
-        panel.Children.Add(new TextBlock { Text = preview, TextWrapping = TextWrapping.Wrap, TextTrimming = TextTrimming.CharacterEllipsis, MaxHeight = 120, Margin = new Thickness(0, 9, 0, 0), Foreground = Theme.WeakTextBrush, FontSize = AppTypography.Scale(11.5) });
+        if (todo)
+        {
+            panel.Children.Add(new TextBlock { Text = preview, TextWrapping = TextWrapping.Wrap, TextTrimming = TextTrimming.CharacterEllipsis, MaxHeight = 120, Margin = new Thickness(0, 9, 0, 0), Foreground = Theme.WeakTextBrush, FontSize = AppTypography.Scale(11.5) });
+        }
+        else
+        {
+            var bodyEditor = new TextBox { Text = p.Content ?? "", AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, BorderThickness = new Thickness(0), Background = Brushes.Transparent, Foreground = Theme.TextBrush, FontSize = AppTypography.Scale(11.5), Padding = new Thickness(0), MinHeight = 85, MaxHeight = 124 };
+            bodyEditor.TextChanged += (_, _) => { if (bodyEditor.IsKeyboardFocusWithin && p.Content != bodyEditor.Text) { p.Content = bodyEditor.Text; _controller.SaveWorkspaceLayout(); } };
+            panel.Children.Add(bodyEditor);
+        }
         var card = new Border { Width = W, Height = H, Padding = new Thickness(14, 12, 14, 12), CornerRadius = new CornerRadius(10), Background = Theme.PaperBrush, BorderBrush = Theme.PaperBorderBrush, BorderThickness = new Thickness(1), Child = panel, Cursor = Cursors.SizeAll, Tag = p.Id };
         card.MouseLeftButtonDown += (_, e) =>
         {
+            if (e.OriginalSource is TextBox or CheckBox or Button) return;
             Select(card);
             if (e.ClickCount > 1) { _controller.ShowPaper(p); e.Handled = true; return; }
             _dragCard = card; _dragPoint = e.GetPosition(_canvas); _dragOrigin = new Point(Canvas.GetLeft(card), Canvas.GetTop(card)); card.CaptureMouse(); e.Handled = true;
