@@ -31,6 +31,8 @@ This log is written for general and power users alike. It focuses on user-facing
 - **Drag the entire master-capsule queue**: Drag the master capsule horizontally to move the entire queue to the opposite edge of the current monitor or either edge of another monitor, keeping member order unchanged. The queue temporarily retracts while a floating master capsule follows the pointer; releasing it triggers a smooth return animation into its new position rather than an abrupt jump. Hidden papers and expanded papers without a queue slot are unaffected. Vertical dragging still adjusts only the queue's starting height.
 - **Compact master capsule**: Under General → Advanced, the master capsule can be reduced to an arrow-only style that hides the queue count.
 
+- **Recover missing expanded papers after display changes**: When a monitor disconnects or reconnects, expanded papers that have become inaccessible are brought back onto a connected screen while their edge capsules keep their state. Clicking an active edge capsule can also recover its missing paper. Normally placed or intentionally partly off-screen papers are left alone.
+
 #### Appearance, Skins & Materials
 
 - **Seven experimental skins**: Paper, Mica, two Acrylic styles, tracing paper, Aero and pixel style each support independent color customization. Aero provides a translucent tint, localized reflections and parallax that responds to window position, without capturing the desktop background. Switching skins preserves the editor and text undo history. Papers remain resizable by dragging their visible edges; the Standard / Soft / Hidden grip options affect only how the grip is displayed, not whether resizing works.
