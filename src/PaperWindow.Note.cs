@@ -1136,7 +1136,7 @@ public sealed partial class PaperWindow
             return;
         }
 
-        SetCollapsedState(false, activateOnExpand: true);
+        _controller.ShowFreeformWorkspace(_paper.Id);
     }
 
     private void OpenCapsuleForEditing()
