@@ -229,7 +229,10 @@ internal sealed class FreeformWorkspaceWindow : Window
     {
         var p = e.GetPosition(_canvas); var old = _scale.ScaleX;
         var z = Math.Clamp(old * (e.Delta > 0 ? 1.1 : 1 / 1.1), .25, 2);
-        var factor = z / old; _offset.X = p.X - (p.X - _offset.X) * factor; _offset.Y = p.Y - (p.Y - _offset.Y) * factor;
+        var factor = z / old;
+        // Keep the canvas point under the pointer stationary while changing scale.
+        _offset.X += p.X * old * (1 - factor);
+        _offset.Y += p.Y * old * (1 - factor);
         _scale.ScaleX = _scale.ScaleY = z; e.Handled = true;
     }
 }
