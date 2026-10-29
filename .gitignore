@@ -26,3 +26,7 @@ plugins/data/
 # Local drafts
 *.draft.md
 
+# Optional user-provided master-capsule art (not shipped with the app)
+papertodomain*.gif
+papertodomain*.png
+papertodomain*.webp

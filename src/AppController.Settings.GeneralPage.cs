@@ -58,6 +58,22 @@ public sealed partial class AppController
         rightColumn.Children.Add(WrapWithHint(
             _settingsCapsuleCollapseAllCheckBox,
             "TipCapsuleCollapseAll"));
+        rightColumn.Children.Add(BuildSettingsLiveRegion(
+            "general.masterSize",
+            () => CompactSettingsField(
+                Strings.Get("SettingsMasterCapsuleSize"),
+                CreateMasterCapsuleSizeSlider(),
+                editorWidth: 180,
+                tipKey: "TipMasterCapsuleSize",
+                topMargin: 7)));
+        rightColumn.Children.Add(BuildSettingsLiveRegion(
+            "general.masterAnimation",
+            () => CompactSettingsField(
+                Strings.Get("SettingsMasterCapsuleAnimationSpeed"),
+                CreateMasterCapsuleAnimationSpeedSlider(),
+                editorWidth: 180,
+                tipKey: "TipMasterCapsuleAnimationSpeed",
+                topMargin: 7)));
         rightColumn.Children.Add(WrapWithHint(
             _settingsCollapseExpandedDeepCapsuleOnClickCheckBox,
             "TipCollapseExpandedDeepCapsuleOnClick"));
@@ -231,6 +247,8 @@ public sealed partial class AppController
         State.RememberDeepCapsuleExpandedPosition = true;
         State.UseCapsuleCollapseAll = true;
         State.CompactMasterCapsule = false;
+        State.MasterCapsuleSize = MasterCapsuleSizes.Default;
+        State.MasterCapsuleAnimationFps = MasterCapsuleAnimationRates.Default;
         State.CollapseExpandedDeepCapsuleOnClick = false;
         State.EdgeCapsulePreviewPreferDownward = false;
         State.ExperimentalEdgeCapsuleHoverPreview = true;
@@ -257,6 +275,71 @@ public sealed partial class AppController
         RefreshSettingsWindowContent();
     }
 
+
+    // Persist integer values on gesture completion, not each pointer movement.
+    private UIElement CreateMasterCapsuleSizeSlider() => CreateMasterCapsuleIntegerSlider(
+        "capsule.master_size", MasterCapsuleSizes.Minimum, MasterCapsuleSizes.Maximum,
+        () => MasterCapsuleSizes.Normalize(State.MasterCapsuleSize));
+
+    private UIElement CreateMasterCapsuleAnimationSpeedSlider() => CreateMasterCapsuleIntegerSlider(
+        "capsule.master_animation_fps", MasterCapsuleAnimationRates.Minimum, MasterCapsuleAnimationRates.Maximum,
+        () => MasterCapsuleAnimationRates.Normalize(State.MasterCapsuleAnimationFps));
+
+    private UIElement CreateMasterCapsuleIntegerSlider(string id, int minimum, int maximum, Func<int> readValue)
+    {
+        var grid = new Grid { Height = 28, Margin = new Thickness(0, 4, 0, 8) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var slider = new Slider
+        {
+            Minimum = minimum,
+            Maximum = maximum,
+            Value = readValue(),
+            TickFrequency = 1,
+            IsSnapToTickEnabled = true,
+            IsMoveToPointEnabled = true,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        var valueText = new TextBlock
+        {
+            Text = readValue().ToString(),
+            MinWidth = 26,
+            Margin = new Thickness(8, 0, 0, 0),
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Center,
+            FontSize = AppTypography.Scale(12),
+            Foreground = TrayTextBrush
+        };
+        Grid.SetColumn(valueText, 1);
+        slider.ValueChanged += (_, _) => valueText.Text =
+            ((int)Math.Round(slider.Value)).ToString();
+        var committedValue = readValue();
+        var committing = false;
+        void Commit()
+        {
+            var selected = (int)Math.Round(slider.Value);
+            // Region replacement can deliver LostKeyboardFocus or a queued mouse-up from
+            // an obsolete slider. Its old value/draft must not overwrite a later API/reset.
+            if (committing || selected == committedValue || readValue() != committedValue) return;
+            committing = true;
+            try { SetSettingFromUi(id, selected); }
+            finally
+            {
+                committedValue = readValue();
+                committing = false;
+            }
+        }
+        slider.AddHandler(
+            System.Windows.Controls.Primitives.Thumb.DragCompletedEvent,
+            new System.Windows.Controls.Primitives.DragCompletedEventHandler((_, _) => Commit()));
+        slider.PreviewMouseLeftButtonUp += (_, _) =>
+            slider.Dispatcher.BeginInvoke((Action)Commit, System.Windows.Threading.DispatcherPriority.Background);
+        slider.KeyUp += (_, _) => Commit();
+        slider.LostKeyboardFocus += (_, _) => Commit();
+        grid.Children.Add(slider);
+        grid.Children.Add(valueText);
+        return grid;
+    }
 
     private UIElement CreateAnonymousUsageStatisticsSettingsRow() =>
         WrapWithHint(

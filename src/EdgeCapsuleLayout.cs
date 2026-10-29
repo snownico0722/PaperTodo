@@ -121,19 +121,26 @@ public static class EdgeCapsuleLayout
         double startTopMargin,
         Rect area,
         int slotCount,
-        double gap)
+        double gap,
+        double masterExtraHeightDip = 0)
     {
         // Deliberately unbounded: a long edge queue keeps its normal slot spacing and may extend
         // below the monitor work area. Do not clamp overflow items onto the last visible slot.
+        var extra = Math.Max(0, masterExtraHeightDip);
         return area.Top +
-            NormalizeStartTopMargin(startTopMargin, area, slotCount, gap) +
-            Math.Max(0, index) * SlotHeight(gap);
+            NormalizeStartTopMargin(startTopMargin, area, slotCount, gap, extra) +
+            Math.Max(0, index) * SlotHeight(gap) +
+            (index > 0 ? extra : 0);
     }
 
-    public static double MaxStartTopMarginForCount(int slotCount, Rect area, double gap)
+    public static double MaxStartTopMarginForCount(
+        int slotCount, Rect area, double gap, double masterExtraHeightDip = 0)
     {
         var count = Math.Max(1, slotCount);
-        var stackHeight = PaperLayoutDefaults.CapsuleHeight + (count - 1) * SlotHeight(gap);
+        // Reserve extra height for the master in slot 0, without changing
+        // the spacing of the remaining paper slots or queue index authority.
+        var stackHeight = PaperLayoutDefaults.CapsuleHeight +
+            (count - 1) * SlotHeight(gap) + Math.Max(0, masterExtraHeightDip);
         var maxMargin = area.Height - stackHeight - TopMargin;
         return Math.Max(TopMargin, maxMargin);
     }
@@ -142,14 +149,15 @@ public static class EdgeCapsuleLayout
         double value,
         Rect area,
         int slotCount,
-        double gap)
+        double gap,
+        double masterExtraHeightDip = 0)
     {
         if (double.IsNaN(value) || double.IsInfinity(value))
         {
             value = StartTopMargin;
         }
 
-        var max = MaxStartTopMarginForCount(slotCount, area, gap);
+        var max = MaxStartTopMarginForCount(slotCount, area, gap, masterExtraHeightDip);
         return Math.Round(Math.Clamp(value, TopMargin, max), 1);
     }
 

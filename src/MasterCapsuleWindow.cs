@@ -7,6 +7,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
+using System.Windows.Media.Imaging;
 using Brush = System.Windows.Media.Brush;
 using Brushes = System.Windows.Media.Brushes;
 using FontFamily = System.Windows.Media.FontFamily;
@@ -66,6 +67,13 @@ public sealed class MasterCapsuleWindow : Window
     private EdgeCapsuleEdge _queueEdge;
     private string _queueMonitorDeviceName = "";
 
+    private readonly BitmapSource? _skinSource;
+    private Image? _skinImage;
+    private MasterCapsuleAnimationPlayer? _skinPlayer;
+    private readonly MasterCapsulePlayback? _normalSkinPlayback;
+    private MasterCapsulePlayback? _dragSkinPlayback;
+    // Only needed when an independent drag image exists without a normal image.
+    private SkinBorder? _fallbackSkinChrome;
     private Border _pill = null!;
     private Border _hoverOverlay = null!;
     private TextBlock _glyph = null!;
@@ -108,6 +116,10 @@ public sealed class MasterCapsuleWindow : Window
     public MasterCapsuleWindow(AppController controller, EdgeCapsuleEdge queueEdge, string queueMonitorDeviceName)
     {
         _controller = controller;
+        _skinSource = MasterCapsuleSkin.Current;
+        _normalSkinPlayback = MasterCapsuleSkin.Visuals.Normal is { } normalClip
+            ? new MasterCapsulePlayback(normalClip, controller.State.MasterCapsuleAnimationFps)
+            : null;
         _queueEdge = queueEdge;
         _queueMonitorDeviceName = queueMonitorDeviceName ?? "";
         _contextMenuSession = new DeepCapsuleContextMenuSession(
@@ -170,6 +182,20 @@ public sealed class MasterCapsuleWindow : Window
         RefreshEffectiveTopmost();
     }
 
+    private static SkinBorder CreateDefaultMasterChrome() =>
+        new SkinBorder
+            {
+                IsCapsule = true,
+                Margin = new Thickness(WindowChromeMargin, WindowChromeMargin, 0, WindowChromeMargin),
+                CornerRadius = new CornerRadius(EdgeCapsuleLayout.CornerRadius),
+                BorderThickness = new Thickness(1),
+                Background = Theme.PaperBrush,
+                BorderBrush = Theme.PaperBorderBrush,
+                SnapsToDevicePixels = true,
+                Cursor = System.Windows.Input.Cursors.Hand,
+                Effect = SkinBorder.CreateShadow(4, 0, 0.1)
+            };
+
     private void BuildContent()
     {
         var host = new Grid
@@ -178,23 +204,22 @@ public sealed class MasterCapsuleWindow : Window
             ClipToBounds = false
         };
 
-        _pill = new SkinBorder
-        {
-            IsCapsule = true,
-            Margin = new Thickness(WindowChromeMargin, WindowChromeMargin, 0, WindowChromeMargin),
-            CornerRadius = new CornerRadius(EdgeCapsuleLayout.CornerRadius),
-            BorderThickness = new Thickness(1),
-            Background = Theme.PaperBrush,
-            BorderBrush = Theme.PaperBorderBrush,
-            SnapsToDevicePixels = true,
-            Cursor = System.Windows.Input.Cursors.Hand,
-            Effect = SkinBorder.CreateShadow(4, 0, 0.1)
-        };
+        // The same Border remains the owner of mouse capture, context menus,
+        // vertical movement and cross-queue transfer. Only its paint changes.
+        _pill = _skinSource != null || MasterCapsuleSkin.Visuals.Drag != null
+            ? new Border
+            {
+                Background = Brushes.Transparent,
+                SnapsToDevicePixels = true,
+                Cursor = System.Windows.Input.Cursors.Hand
+            }
+            : CreateDefaultMasterChrome();
 
         // The pill background stays opaque (PaperBrush) at all times. Hover tint is a separate
         // overlay layered on top — the same shape as the pill — so the (semi-transparent)
         // HoverBrush never replaces the only opaque layer and let the desktop show through.
         var content = new Grid();
+        var defaultContent = new Grid();
 
         _hoverOverlay = new Border
         {
@@ -202,7 +227,7 @@ public sealed class MasterCapsuleWindow : Window
             Background = Brushes.Transparent,
             SnapsToDevicePixels = true
         };
-        content.Children.Add(_hoverOverlay);
+        if (_skinSource == null) defaultContent.Children.Add(_hoverOverlay);
 
         var stack = new StackPanel
         {
@@ -238,7 +263,32 @@ public sealed class MasterCapsuleWindow : Window
         };
         AppTypography.ApplyTextRendering(_label);
         stack.Children.Add(_label);
-        content.Children.Add(stack);
+        if (_skinSource == null)
+        {
+            defaultContent.Children.Add(stack);
+            if (MasterCapsuleSkin.Visuals.Drag != null)
+            {
+                _fallbackSkinChrome = CreateDefaultMasterChrome();
+                _fallbackSkinChrome.Child = defaultContent;
+                content.Children.Add(_fallbackSkinChrome);
+            }
+            else content.Children.Add(defaultContent);
+        }
+        if (_skinSource != null || MasterCapsuleSkin.Visuals.Drag != null)
+        {
+            _skinImage = new Image
+            {
+                Source = _skinSource,
+                Stretch = Stretch.Uniform,
+                IsHitTestVisible = false,
+                Visibility = _skinSource != null ? Visibility.Visible : Visibility.Collapsed,
+                RenderTransformOrigin = new Point(0.5, 0.5)
+            };
+            RenderOptions.SetBitmapScalingMode(_skinImage, BitmapScalingMode.HighQuality);
+            content.Children.Add(_skinImage);
+            _skinPlayer = new MasterCapsuleAnimationPlayer(this, _skinImage);
+            _skinPlayer.Play(_normalSkinPlayback);
+        }
 
         _pill.Child = content;
         // Same chrome as the tray menu. The NOACTIVATE host delegates popup activation
@@ -358,6 +408,9 @@ public sealed class MasterCapsuleWindow : Window
             return false;
         }
 
+        if (_gestureState == MasterGestureState.Pending)
+            ApplyMasterSkinPlayback(GetMasterDragPlayback());
+
         if (Math.Abs(deltaX) >= MasterQueueTransferUnlockDistance)
         {
             if (TryRunQueueTransfer(currentScreenPos, session))
@@ -385,10 +438,14 @@ public sealed class MasterCapsuleWindow : Window
     public void UpdateTheme()
     {
         // The pill background stays opaque; hover is rendered by the overlay.
-        SkinBorder.Refresh(_pill);
-        _pill.Effect = SkinBorder.CreateShadow(4, 0, 0.1);
-        _pill.Background = Theme.PaperBrush;
-        _pill.BorderBrush = Theme.PaperBorderBrush;
+        if (_skinSource == null)
+        {
+            var chrome = _fallbackSkinChrome ?? _pill;
+            SkinBorder.Refresh(chrome);
+            chrome.Effect = SkinBorder.CreateShadow(4, 0, 0.1);
+            chrome.Background = Theme.PaperBrush;
+            chrome.BorderBrush = Theme.PaperBorderBrush;
+        }
         _hoverOverlay.Background = _isHovering ? Theme.HoverBrush : Brushes.Transparent;
         _glyph.Foreground = Theme.TextBrush;
         _label.Foreground = Theme.WeakTextBrush;
@@ -508,7 +565,8 @@ public sealed class MasterCapsuleWindow : Window
     private async Task PrepareFloatingDragBackgroundAsync(EdgeCapsuleDragWindow host)
     {
         EndFloatingDragBackground();
-        if (!_controller.State.MatchAuxiliaryMaterialStrength ||
+        if (host.HasMasterSkin ||
+            !_controller.State.MatchAuxiliaryMaterialStrength ||
             !PaperSkins.UsesSampledAuxiliary(Theme.Skin) ||
             SystemParameters.HighContrast ||
             !DwmMicaApi.Instance.EffectsEnabled)
@@ -661,6 +719,29 @@ public sealed class MasterCapsuleWindow : Window
             return false;
         }
 
+        var dragPlayback = GetMasterDragPlayback();
+        if (dragPlayback != null)
+        {
+            // Poses fit the normal master envelope; a frame change never resizes the queue.
+            // Vertical drag and detached drag share this same visual-only playhead.
+            var width = DesiredDockedWidth + WindowChromeMargin;
+            var height = _controller.MasterCapsuleHeightDip;
+            options = options with
+            {
+                // Without normal artwork the return flight restores the ordinary shell.
+                // Keep its complete geometry (including the body's chrome insets), rather
+                // than giving that shell the image-only body's full window height.
+                Shape = _skinSource == null ? options.Shape : options.Shape with
+                {
+                    WindowWidthDip = width,
+                    WindowHeightDip = height,
+                    BodyHeightDip = height
+                },
+                MasterSkinPlayback = dragPlayback,
+                MasterSkinEdge = _queueEdge
+            };
+        }
+
         EdgeCapsuleDragWindow? floatingHost = null;
         MasterCapsuleWindow? handoffTarget = null;
         var committed = false;
@@ -735,6 +816,7 @@ public sealed class MasterCapsuleWindow : Window
             _queueTransferSnapshot = null;
             _gestureState = MasterGestureState.Idle;
             _dragSession = null;
+            RestoreMasterSkinPlayback();
             try
             {
                 // Begin can synchronously retire this master before it receives the snapshot.
@@ -793,12 +875,43 @@ public sealed class MasterCapsuleWindow : Window
         }
     }
 
+    private MasterCapsulePlayback? GetMasterDragPlayback() =>
+        _dragSkinPlayback ??= MasterCapsuleSkin.Visuals.Drag is { } dragClip
+            ? new MasterCapsulePlayback(dragClip, _controller.State.MasterCapsuleAnimationFps)
+            : _normalSkinPlayback;
+
+    private void ApplyMasterSkinPlayback(MasterCapsulePlayback? playback)
+    {
+        if (_skinPlayer == null || _skinImage == null) return;
+        _skinImage.Visibility = playback != null ? Visibility.Visible : Visibility.Collapsed;
+        if (_fallbackSkinChrome != null)
+            _fallbackSkinChrome.Visibility = playback == null ? Visibility.Visible : Visibility.Collapsed;
+        _skinPlayer.Play(playback);
+        ApplyMasterEdgeLayout();
+    }
+
+    private void RestoreMasterSkinPlayback()
+    {
+        _dragSkinPlayback = null;
+        ApplyMasterSkinPlayback(_normalSkinPlayback);
+    }
+
+    private void RefreshMasterSkinFrameRate()
+    {
+        var rate = _controller.State.MasterCapsuleAnimationFps;
+        if (_normalSkinPlayback != null) _normalSkinPlayback.FramesPerSecond = rate;
+        if (_dragSkinPlayback != null) _dragSkinPlayback.FramesPerSecond = rate;
+        _skinPlayer?.Refresh();
+        _floatingDragHost?.RefreshMasterSkinFrameRate(rate);
+    }
+
     private bool FinishMasterGesture(bool commit, bool clearFocus = true)
     {
         var session = _dragSession;
         var wasDragging = _gestureState == MasterGestureState.Dragging && session != null;
         _gestureState = MasterGestureState.Idle;
         _dragSession = null;
+        RestoreMasterSkinPlayback();
         var hadCapture = _pill.IsMouseCaptured;
         if (_pill.IsMouseCaptured)
         {
@@ -843,6 +956,10 @@ public sealed class MasterCapsuleWindow : Window
     {
         // The arrow slot stays stable in both modes. Normal mode also reserves a stable
         // two-digit count slot; compact mode removes that slot entirely.
+        if (_skinSource != null)
+            return MasterCapsuleSkin.DisplayWidthDip(
+                _skinSource, _controller.State.MasterCapsuleSize);
+
         var glyphWidth = Math.Max(
             MeasureText("▾", MasterGlyphFontSize, FontWeights.SemiBold, AppTypography.SymbolFontFamily, pixelsPerDip),
             MeasureText("▸", MasterGlyphFontSize, FontWeights.SemiBold, AppTypography.SymbolFontFamily, pixelsPerDip));
@@ -893,18 +1010,32 @@ public sealed class MasterCapsuleWindow : Window
     private void ApplyMasterEdgeLayout()
     {
         var leftEdge = _queueEdge == EdgeCapsuleEdge.Left;
+        if (_skinImage?.Visibility == Visibility.Visible)
+        {
+            // The visible bitmap edge meets the monitor edge, without pill chrome.
+            _pill.Margin = new Thickness(0);
+            _pill.CornerRadius = new CornerRadius(0);
+            _pill.BorderThickness = new Thickness(0);
+            _pill.HorizontalAlignment = HorizontalAlignment.Stretch;
+            _pill.Width = double.NaN;
+            _skinImage.RenderTransform = leftEdge
+                ? new ScaleTransform(-1, 1)
+                : Transform.Identity;
+            return;
+        }
+        var chrome = _fallbackSkinChrome ?? _pill;
         var radius = EdgeCapsuleLayout.CornerRadius;
         var edgeCorner = leftEdge
             ? new CornerRadius(0, radius, radius, 0)
             : new CornerRadius(radius, 0, 0, radius);
 
-        _pill.Margin = leftEdge
+        chrome.Margin = leftEdge
             ? new Thickness(0, WindowChromeMargin, WindowChromeMargin, WindowChromeMargin)
             : new Thickness(WindowChromeMargin, WindowChromeMargin, 0, WindowChromeMargin);
-        _pill.HorizontalAlignment = HorizontalAlignment.Stretch;
-        _pill.Width = double.NaN;
-        _pill.CornerRadius = edgeCorner;
-        _pill.BorderThickness = leftEdge
+        chrome.HorizontalAlignment = HorizontalAlignment.Stretch;
+        chrome.Width = double.NaN;
+        chrome.CornerRadius = edgeCorner;
+        chrome.BorderThickness = leftEdge
             ? new Thickness(0, MasterInteriorBorderThickness, MasterInteriorBorderThickness, MasterInteriorBorderThickness)
             : new Thickness(MasterInteriorBorderThickness, MasterInteriorBorderThickness, 0, MasterInteriorBorderThickness);
         _hoverOverlay.CornerRadius = edgeCorner;
@@ -980,6 +1111,7 @@ public sealed class MasterCapsuleWindow : Window
             return;
         }
 
+        RefreshMasterSkinFrameRate();
         var moveGeneration = ++_moveGeneration;
         if (!WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(
                 _queueMonitorDeviceName,
@@ -998,7 +1130,8 @@ public sealed class MasterCapsuleWindow : Window
             QueueStartTopMargin,
             localArea,
             QueueSlotCount,
-            _controller.DeepCapsuleGap);
+            _controller.DeepCapsuleGap,
+            _controller.MasterCapsuleExtraHeightDip);
         var currentTop = double.IsNaN(_currentTopDip) ? targetTop : _currentTopDip;
 
         ApplyMasterDeviceBounds(currentTop, requestedWidth, geometry);
@@ -1059,7 +1192,8 @@ public sealed class MasterCapsuleWindow : Window
                     QueueStartTopMargin,
                     geometry.LocalWorkAreaDip,
                     QueueSlotCount,
-                    _controller.DeepCapsuleGap);
+                    _controller.DeepCapsuleGap,
+                    _controller.MasterCapsuleExtraHeightDip);
                 ApplyMasterDeviceBounds(
                     targetTop,
                     MasterDockedWidth(geometry.DpiScaleY),
@@ -1104,7 +1238,7 @@ public sealed class MasterCapsuleWindow : Window
             topDip,
             widthDip,
             0,
-            PaperLayoutDefaults.CapsuleHeight));
+            _controller.MasterCapsuleHeightDip));
         if (WindowNative.TrySetWindowDeviceBounds(this, layout.Bounds))
         {
             _currentTopDip = topDip;
@@ -1117,7 +1251,8 @@ public sealed class MasterCapsuleWindow : Window
         QueueStartTopMargin,
         EdgeCapsuleLayout.LocalWorkAreaForQueue(_queueMonitorDeviceName),
         QueueSlotCount,
-        _controller.DeepCapsuleGap);
+        _controller.DeepCapsuleGap,
+        _controller.MasterCapsuleExtraHeightDip);
 
     private static void OnAnimatedTopChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
@@ -1201,14 +1336,15 @@ public sealed class MasterCapsuleWindow : Window
             QueueStartTopMargin,
             geometry.LocalWorkAreaDip,
             QueueSlotCount,
-            _controller.DeepCapsuleGap);
+            _controller.DeepCapsuleGap,
+            _controller.MasterCapsuleExtraHeightDip);
         var docked = EdgeCapsuleGeometry.Calculate(new EdgeCapsuleGeometryInput(
             geometry,
             _queueEdge,
             targetTop,
             MasterDockedWidth(geometry.DpiScaleY),
             0,
-            PaperLayoutDefaults.CapsuleHeight));
+            _controller.MasterCapsuleHeightDip));
 
         // Ordinary capsule docking adds the missing wall-side chrome margin to the one-sided
         // docked HWND. Use the same physical anchor for the symmetric floating pill.
@@ -1227,6 +1363,9 @@ public sealed class MasterCapsuleWindow : Window
     {
         var targetMonitor = target._queueMonitorDeviceName;
         var targetEdge = target._queueEdge;
+        // Release switches back to the destination's normal playhead before the return flight.
+        // The cover and target therefore sample the same clip/time, including a canceled transfer.
+        floatingHost.SetMasterSkinPlayback(target._normalSkinPlayback, targetEdge);
         var hasTarget = target.TryGetQueueTransferDockingTarget(
             out var targetBounds,
             out _);
@@ -1249,6 +1388,8 @@ public sealed class MasterCapsuleWindow : Window
             // the master or changes its geometry. Resolve once more after that boundary, then
             // publish synchronously so the cover uses the same current endpoint as the master.
             current = _controller.MasterCapsuleForQueue(targetMonitor, targetEdge);
+            if (current != null)
+                floatingHost.SetMasterSkinPlayback(current._normalSkinPlayback, current._queueEdge);
             current?.PublishQueueTransferHandoff();
             if (current == null)
             {
