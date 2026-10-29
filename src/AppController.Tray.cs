@@ -529,6 +529,7 @@ public sealed partial class AppController
         menu.Items.Add(TraySeparator());
 
         menu.Items.Add(TrayPaperToolbar(menu));
+        menu.Items.Add(TrayItem(menu, WorkbenchWindow.Label("workbench", State.UiLanguage), OpenWorkbench));
 
         if (State.Papers.Count > 0)
         {
