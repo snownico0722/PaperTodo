@@ -1615,4 +1615,10 @@
   <data name="WorkspaceConnectHint" xml:space="preserve">
     <value>按住 Ctrl 依次点击两个节点建立连线</value>
   </data>
+  <data name="WorkspaceSplitItem" xml:space="preserve">
+    <value>拆分为两个节点</value>
+  </data>
+  <data name="WorkspaceConnectNode" xml:space="preserve">
+    <value>连接节点</value>
+  </data>
 </root>

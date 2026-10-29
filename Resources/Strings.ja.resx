@@ -1566,4 +1566,10 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="WorkspaceConnectHint" xml:space="preserve">
     <value>Ctrlを押しながらノードを2つクリックして接続</value>
   </data>
+  <data name="WorkspaceSplitItem" xml:space="preserve">
+    <value>2つのノードに分割</value>
+  </data>
+  <data name="WorkspaceConnectNode" xml:space="preserve">
+    <value>ノードを接続</value>
+  </data>
 </root>

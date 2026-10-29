@@ -1566,4 +1566,10 @@ When off, open at the docked edge or remembered position.</value>
   <data name="WorkspaceConnectHint" xml:space="preserve">
     <value>Hold Ctrl and click two nodes to connect</value>
   </data>
+  <data name="WorkspaceSplitItem" xml:space="preserve">
+    <value>Split into two nodes</value>
+  </data>
+  <data name="WorkspaceConnectNode" xml:space="preserve">
+    <value>Connect nodes</value>
+  </data>
 </root>

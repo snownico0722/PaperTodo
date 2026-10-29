@@ -212,7 +212,7 @@ internal sealed class FreeformWorkspaceWindow : Window
         {
             if (e.OriginalSource is TextBox or CheckBox or Button) return;
             Select(card);
-            if (e.ClickCount > 1) { _controller.ShowPaper(p); e.Handled = true; return; }
+            if (e.ClickCount > 1) { if (card.Child is Panel panel && panel.Children.OfType<TextBox>().FirstOrDefault() is TextBox editor) editor.Focus(); e.Handled = true; return; }
             _dragCard = card; _dragPoint = e.GetPosition(_canvas); _dragOrigin = new Point(Canvas.GetLeft(card), Canvas.GetTop(card)); card.CaptureMouse(); e.Handled = true;
         };
         card.MouseMove += (_, e) => { if (ReferenceEquals(_dragCard, card) && e.LeftButton == MouseButtonState.Pressed) { var pt = e.GetPosition(_canvas); Canvas.SetLeft(card, _dragOrigin.X + pt.X - _dragPoint.X); Canvas.SetTop(card, _dragOrigin.Y + pt.Y - _dragPoint.Y); } };
@@ -247,7 +247,7 @@ internal sealed class FreeformWorkspaceWindow : Window
         {
             if (e.OriginalSource is TextBox or CheckBox) return;
             Select(card);
-            if (e.ClickCount > 1) { _controller.ShowPaper(owner); e.Handled = true; return; }
+            if (e.ClickCount > 1) { editor.Focus(); e.Handled = true; return; }
             if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control)) { var id = "item:" + item.Id; if (_connectFromNodeId == null) _connectFromNodeId = id; else { AddConnection(_connectFromNodeId, id); _connectFromNodeId = null; } e.Handled = true; return; }
             _dragCard = card; _dragPoint = e.GetPosition(_canvas); _dragOrigin = new Point(Canvas.GetLeft(card), Canvas.GetTop(card)); card.CaptureMouse(); e.Handled = true;
         };
@@ -260,7 +260,7 @@ internal sealed class FreeformWorkspaceWindow : Window
     private void SplitItem(PaperData owner, PaperItem item)
     {
         var current = item.Text;
-        var splitAt = current.LastIndexOfAny(new[] { '\\n', ';', '，', ',', '。' });
+        var splitAt = current.LastIndexOfAny(new[] { '\n', ';', '，', ',', '。' });
         if (splitAt < 1 || splitAt >= current.Length - 1) splitAt = current.Length / 2;
         var first = current[..splitAt].Trim();
         var second = current[Math.Min(current.Length, splitAt + 1)..].Trim();
