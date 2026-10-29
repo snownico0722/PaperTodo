@@ -8,7 +8,7 @@
 
 ## 1. 架构目标与当前方向
 
-PaperTodo 是 Windows 桌面“纸片”应用。当前技术路线围绕几个长期方向组织：
+PaperTodo 桌面端是 Windows“纸片”应用；`mobile/android/` 提供独立的 Android 移植。桌面端当前技术路线围绕几个长期方向组织：
 
 - **paper 是主要对象和交互边界。** Todo、Markdown/Note、插件正文和 Edge Capsule 都围绕 `PaperData` / `PaperWindow` 组合；应用级能力由 `AppController` 协调，而不是默认把所有行为收束成一个中心主界面。
 - **每个职责尽量只有一个 authority。** 状态、几何、队列 placement、presentation、持久化和外部 mutation 不各自复制第二套“近似真相”。
@@ -24,6 +24,10 @@ PaperTodo 是 Windows 桌面“纸片”应用。当前技术路线围绕几个�
 - WPF 是主 UI；Windows Forms 只作为兼容依赖。
 - 进程 DPI 策略：`PerMonitorV2,PerMonitor`。
 - 主项目入口为根目录 `PaperTodo.csproj`。
+
+Android 端使用 Kotlin、原生 Views / EditText 和 CommonMark Java；Activity 与 `OverlayService` 复用 `PaperView`，`PaperRepository` 独占手机本地 JSON 的修改与串行保存，`ImageStore` 管理本地图片。跨应用窗口由用户显式开启的前台服务持有，一次展开一张纸片。
+
+Android 与 Windows 进程及构建互相独立，根 WPF 项目排除 `mobile/**`。两端当前仅以 v3.31 JSON／图片 ZIP 手动传输；Android 不直接读写正在使用的 Windows 数据目录，Windows 传输工具只操作副本或新目录，也不加入桌面端 `StateStore` 的主状态写入路径。Android 设置与保存边界的局部说明见 `mobile/android/README.md`；本说明不承诺 4.0 插件数据迁移。
 
 ## 2. 系统形态与 ownership
 
@@ -489,6 +493,7 @@ Debug 包可显式启用内存诊断：`EdgeDiagnosticObservation` 观察既有�
 - `assets/`：图标和静态资源。
 - `doc/`：当前架构与历史决策文档。
 - `website/`：GitHub Pages 站点资源。
+- `mobile/android/`：独立 Android 工程及其 v3.31 手动数据传输工具。
 - `.github/workflows/`：CI / Release / Pages 部署。
 
 根目录保留项目入口和仓库级入口：`README`、`CHANGELOG`、`AGENTS.md`。

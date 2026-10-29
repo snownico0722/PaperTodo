@@ -1,0 +1,16 @@
+.gradle/
+.kotlin/
+.local/
+local.properties
+**/build/
+dist/
+*.keystore
+*.jks
+*.user
+tools/desktop-transfer/**/bin/
+tools/desktop-transfer/**/obj/
+.idea/
+*.iml
+/data.json
+/data.backup.json
+/note-assets.lmdb

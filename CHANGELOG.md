@@ -20,6 +20,10 @@ This log is written for general and power users alike. It focuses on user-facing
 
 ### Unreleased
 
+#### Android Companion (Experimental)
+
+- Adds a standalone Android app for quick todo capture, Markdown notes, floating papers and edge capsules, using the desktop logo and four light/dark palettes. Manual JSON and image-ZIP transfer targets v3.31; cloud sync and 4.0 plugin-paper compatibility are not included. See `mobile/android/` for build and installation instructions.
+
 #### Papers, Title Bar & Capsules
 
 - **Paper menus and title-bar shortcuts**: On an expanded paper, the `···` button and right-click entry now open the same menu, including Quick, the paper title and Settings.
