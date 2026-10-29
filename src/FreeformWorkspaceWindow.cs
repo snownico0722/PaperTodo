@@ -227,6 +227,7 @@ internal sealed class FreeformWorkspaceWindow : Window
         var card = new Border { Width = 220, MinHeight = 68, MaxHeight = 150, Padding = new Thickness(10), CornerRadius = new CornerRadius(8), Background = Theme.PaperBrush, BorderBrush = Theme.PaperBorderBrush, BorderThickness = new Thickness(1), Child = row, Cursor = Cursors.SizeAll, Tag = "item:" + item.Id };
         card.MouseLeftButtonDown += (_, e) =>
         {
+            if (e.OriginalSource is TextBox or CheckBox) return;
             Select(card);
             if (e.ClickCount > 1) { _controller.ShowPaper(owner); e.Handled = true; return; }
             if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control)) { var id = "item:" + item.Id; if (_connectFromNodeId == null) _connectFromNodeId = id; else { AddConnection(_connectFromNodeId, id); _connectFromNodeId = null; } e.Handled = true; return; }
