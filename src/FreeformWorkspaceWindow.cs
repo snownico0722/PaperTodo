@@ -94,7 +94,24 @@ internal sealed class FreeformWorkspaceWindow : Window
         root.Children.Add(footer);
         Content = root;
         Loaded += (_, _) => { BuildCards(); _search.Focus(); };
-        PreviewKeyDown += (_, e) => { if (e.Key == Key.Escape) { Close(); e.Handled = true; } else if (e.Key == Key.F && Keyboard.Modifiers == ModifierKeys.Control) { _search.Focus(); _search.SelectAll(); e.Handled = true; } else if (e.Key == Key.Enter && _selected != null && _selected.Tag is string id && _papers.TryGetValue(id, out var p)) { _controller.ShowPaper(p); e.Handled = true; } };
+        PreviewKeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Escape)
+            {
+                if (_search.Text.Length > 0) _search.Clear();
+                else Close();
+                e.Handled = true;
+            }
+            else if (e.Key == Key.F && Keyboard.Modifiers == ModifierKeys.Control)
+            {
+                _search.Focus(); _search.SelectAll(); e.Handled = true;
+            }
+            else if (e.Key == Key.Enter && !_search.IsKeyboardFocusWithin &&
+                     _selected?.Tag is string id && _papers.TryGetValue(id, out var paper))
+            {
+                _controller.ShowPaper(paper); e.Handled = true;
+            }
+        };
     }
 
     private UIElement BuildToolbar()
@@ -113,7 +130,7 @@ internal sealed class FreeformWorkspaceWindow : Window
         Button(2, Strings.Get("WorkspaceNewNote"), "＋", () => NewPaper(PaperTypes.Note));
         Button(3, Strings.Get("WorkspaceNewTodo"), "✓", () => NewPaper(PaperTypes.Todo));
         Button(4, Strings.Get("WorkspaceFit"), "⤢", FitCanvas);
-        Button(5, Strings.Get("TrayExit"), "×", Close);
+        Button(5, Strings.Get("WorkspaceClose"), "×", Close);
         return new Border { Background = Theme.PaperBrush, BorderBrush = Theme.PaperBorderBrush, BorderThickness = new Thickness(0, 0, 0, 1), Child = grid };
         void Button(int col, string label, string glyph, Action action)
         {

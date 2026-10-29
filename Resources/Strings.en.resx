@@ -1560,4 +1560,7 @@ When off, open at the docked edge or remembered position.</value>
   <data name="WorkspaceHint" xml:space="preserve">
     <value>Drag cards to arrange · Wheel to zoom · Middle-drag to pan · Double-click to open · Esc to exit</value>
   </data>
+  <data name="WorkspaceClose" xml:space="preserve">
+    <value>Close workspace</value>
+  </data>
 </root>

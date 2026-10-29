@@ -1609,4 +1609,7 @@
   <data name="WorkspaceHint" xml:space="preserve">
     <value>拖动卡片整理空间 · 滚轮缩放 · 中键拖动画布 · 双击打开纸片 · Esc 退出</value>
   </data>
+  <data name="WorkspaceClose" xml:space="preserve">
+    <value>关闭工作台</value>
+  </data>
 </root>

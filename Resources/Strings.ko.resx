@@ -1560,4 +1560,7 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="WorkspaceHint" xml:space="preserve">
     <value>카드 드래그로 배치 · 휠로 확대/축소 · 가운데 버튼 드래그로 이동 · 더블 클릭해 열기 · Esc로 종료</value>
   </data>
+  <data name="WorkspaceClose" xml:space="preserve">
+    <value>작업 공간 닫기</value>
+  </data>
 </root>

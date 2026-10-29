@@ -1560,4 +1560,7 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="WorkspaceHint" xml:space="preserve">
     <value>カードをドラッグして配置 · ホイールで拡大縮小 · 中ボタンドラッグで移動 · ダブルクリックで開く · Escで終了</value>
   </data>
+  <data name="WorkspaceClose" xml:space="preserve">
+    <value>作業スペースを閉じる</value>
+  </data>
 </root>
