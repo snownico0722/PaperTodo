@@ -628,6 +628,12 @@ public sealed class PaperData
     public bool IsCollapsed { get; set; } = false;
     public double TextZoom { get; set; } = 1.0;
 
+    // Independent coordinates for the freeform workspace; never reuse desktop window geometry.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? WorkspaceX { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? WorkspaceY { get; set; }
+
     // Note body provider.
     public string BodyProviderId { get; set; } = PaperBodyProviderIds.Markdown;
     // Expanded runtime header and folded capsule fallback are independent lightweight caches.

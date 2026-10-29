@@ -59,8 +59,9 @@ internal sealed class FreeformWorkspaceWindow : Window
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(54) });
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(27) });
-        Grid.SetRow(BuildToolbar(), 0);
-        root.Children.Add(BuildToolbar());
+        var toolbar = BuildToolbar();
+        Grid.SetRow(toolbar, 0);
+        root.Children.Add(toolbar);
 
         _canvas.Background = new DrawingBrush
         {

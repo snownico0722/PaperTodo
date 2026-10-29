@@ -1542,4 +1542,22 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="TopBarExternalEditor" xml:space="preserve">
     <value>외부 편집기로 열기</value>
   </data>
+  <data name="WorkspaceOpen" xml:space="preserve">
+    <value>자유 배치 작업 공간</value>
+  </data>
+  <data name="WorkspaceSearch" xml:space="preserve">
+    <value>메모 검색…</value>
+  </data>
+  <data name="WorkspaceNewNote" xml:space="preserve">
+    <value>새 메모</value>
+  </data>
+  <data name="WorkspaceNewTodo" xml:space="preserve">
+    <value>새 할 일</value>
+  </data>
+  <data name="WorkspaceFit" xml:space="preserve">
+    <value>캔버스 맞춤</value>
+  </data>
+  <data name="WorkspaceHint" xml:space="preserve">
+    <value>카드 드래그로 배치 · 휠로 확대/축소 · 가운데 버튼 드래그로 이동 · 더블 클릭해 열기 · Esc로 종료</value>
+  </data>
 </root>

@@ -10,7 +10,7 @@
 
 PaperTodo 是 Windows 桌面“纸片”应用。当前技术路线围绕几个长期方向组织：
 
-- **paper 是主要对象和交互边界。** Todo、Markdown/Note、插件正文和 Edge Capsule 都围绕 `PaperData` / `PaperWindow` 组合；应用级能力由 `AppController` 协调，而不是默认把所有行为收束成一个中心主界面。
+- **paper 是主要内容对象；桌面与自由画布是不同呈现面。** Todo、Markdown/Note、插件正文和 Edge Capsule 都围绕 `PaperData` / `PaperWindow` 组合；应用级能力由 `AppController` 协调。自由画布只保存独立的 workspace 坐标并引用现有纸片，不复制正文，也不覆盖桌面几何。
 - **每个职责尽量只有一个 authority。** 状态、几何、队列 placement、presentation、持久化和外部 mutation 不各自复制第二套“近似真相”。
 - **复杂 UI 状态优先走显式状态与单通道 reconcile。** Edge Capsule 使用 Intent → Reducer → Presenter；窗口和 controller 不通过并行 bool/临时 setter 绕过它。
 - **WPF 是主 UI / shape owner，native/DirectComposition 只承担确有必要的 Windows 边界能力。** 不把 compositor 扩成第二套 UI renderer。

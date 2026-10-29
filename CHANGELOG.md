@@ -20,6 +20,8 @@ This log is written for general and power users alike. It focuses on user-facing
 
 ### Unreleased
 
+- **Fullscreen freeform workspace**: Open a full-screen canvas from the tray to search and freely arrange existing papers, create notes/todos, and double-click a card to open its original paper. Supports wheel zoom, middle-button panning and fit-to-canvas. Canvas coordinates are saved separately from desktop window geometry; paper content is not duplicated.
+
 #### Papers, Title Bar & Capsules
 
 - **Paper menus and title-bar shortcuts**: On an expanded paper, the `···` button and right-click entry now open the same menu, including Quick, the paper title and Settings.

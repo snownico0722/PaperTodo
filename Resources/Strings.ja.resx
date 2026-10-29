@@ -1542,4 +1542,22 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="TopBarExternalEditor" xml:space="preserve">
     <value>外部エディターで開く</value>
   </data>
+  <data name="WorkspaceOpen" xml:space="preserve">
+    <value>フリーフォーム作業スペース</value>
+  </data>
+  <data name="WorkspaceSearch" xml:space="preserve">
+    <value>紙片を検索…</value>
+  </data>
+  <data name="WorkspaceNewNote" xml:space="preserve">
+    <value>新しいノート</value>
+  </data>
+  <data name="WorkspaceNewTodo" xml:space="preserve">
+    <value>新しいToDo</value>
+  </data>
+  <data name="WorkspaceFit" xml:space="preserve">
+    <value>キャンバスに合わせる</value>
+  </data>
+  <data name="WorkspaceHint" xml:space="preserve">
+    <value>カードをドラッグして配置 · ホイールで拡大縮小 · 中ボタンドラッグで移動 · ダブルクリックで開く · Escで終了</value>
+  </data>
 </root>

@@ -697,6 +697,7 @@ public sealed partial class AppController
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         KeyboardNavigation.SetTabNavigation(grid, KeyboardNavigationMode.Cycle);
 
         var visibilityTip = Strings.Get(anyShown ? "TrayHideAll" : "TrayShowAll");
@@ -728,15 +729,22 @@ public sealed partial class AppController
             CreateTrayAddIcon("✎"),
             Strings.Get("TrayNewNote"),
             () => CreatePaper(PaperTypes.Note, show: true));
+        var workspaceButton = TrayToolbarAction(
+            menu,
+            CreateTrayAddIcon("▦"),
+            Strings.Get("WorkspaceOpen"),
+            ShowFreeformWorkspace);
 
         Grid.SetColumn(visibilityButton, 0);
         Grid.SetColumn(label, 1);
         Grid.SetColumn(newTodoButton, 2);
         Grid.SetColumn(newNoteButton, 3);
+        Grid.SetColumn(workspaceButton, 4);
         grid.Children.Add(visibilityButton);
         grid.Children.Add(label);
         grid.Children.Add(newTodoButton);
         grid.Children.Add(newNoteButton);
+        grid.Children.Add(workspaceButton);
 
         item.Header = grid;
         item.Click += (_, e) => e.Handled = true;
