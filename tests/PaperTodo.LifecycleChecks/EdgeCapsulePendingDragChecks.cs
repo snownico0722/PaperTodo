@@ -30,7 +30,8 @@ internal static class EdgeCapsulePendingDragChecks
         var start = new DeviceScreenPoint(
             geometry.WorkArea.Left + 40,
             geometry.WorkArea.Top + 40);
-        var moved = new DeviceScreenPoint(start.X, start.Y + 200);
+        // 横向位移超过脱墙阈值，使该手势确实需要共享浮窗，从而覆盖 lease 等待分支。
+        var moved = new DeviceScreenPoint(start.X + 200, start.Y + 200);
 
         var shape = new EdgeCapsuleFloatingShape(
             true,
