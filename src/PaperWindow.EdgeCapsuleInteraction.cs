@@ -44,7 +44,8 @@ public sealed partial class PaperWindow
             $"drag.input phase=pointer-down " +
             $"paper={EdgeCapsulePerformanceDiagnostics.ShortId(_paper.Id)} " +
             $"pointer={screenPosition.X:F0},{screenPosition.Y:F0}");
-        _deepCapsuleQueueTransferRequested = ConsumeQueueDragModifier();
+        _deepCapsuleQueueTransferRequested =
+            ConsumeQueueDragModifier(_controller.EdgeCapsuleFreeQueuesEnabled);
         if (BeginEdgeCapsulePointerInteraction(screenPosition))
         {
             // 新 PendingClick 已建立，上一手势可能残留的等待/撤销状态一律作废。
@@ -69,14 +70,36 @@ public sealed partial class PaperWindow
         osControlDown;
 
     /// <summary>
+    /// Ctrl 整队意图只属于自由队列：功能关闭时 Ctrl 必须完全不影响原有的沿边重排。
+    /// </summary>
+    internal static bool ShouldBeginQueueTransfer(
+        bool freeQueuesEnabled,
+        int nativeKeyState,
+        ModifierKeys modifiers,
+        bool osControlDown) =>
+        freeQueuesEnabled &&
+        IsQueueDragModifier(nativeKeyState, modifiers, osControlDown);
+
+    /// <summary>
+    /// 浮空的两个独立理由：真正脱墙，或自由队列生效时的 Ctrl 整队意图。
+    /// 自由队列关闭时不能把整个条件都短路，否则 legacy 跨屏拖动无法浮空。
+    /// </summary>
+    internal static bool ShouldStartFloatingReorder(
+        bool freeQueuesEnabled,
+        bool transferRequested,
+        bool unlockRequested) =>
+        unlockRequested || (freeQueuesEnabled && transferRequested);
+
+    /// <summary>
     /// Whether Ctrl was held when the press landed. Read exactly once, at pointer-down.
     /// </summary>
-    private bool ConsumeQueueDragModifier()
+    private bool ConsumeQueueDragModifier(bool freeQueuesEnabled)
     {
         var nativeKeyState = _edgeCapsulePointerDownKeyState;
-        // 只消费一次；capture-lost 等窄路径不会再留下上一次手势的陈旧位。
+        // 只消费一次；无论功能是否启用都清位，capture-lost 等窄路径不会留下陈旧位。
         _edgeCapsulePointerDownKeyState = 0;
-        return IsQueueDragModifier(
+        return ShouldBeginQueueTransfer(
+            freeQueuesEnabled,
             nativeKeyState,
             Keyboard.Modifiers,
             WindowNative.IsControlKeyDown);
@@ -576,8 +599,10 @@ public sealed partial class PaperWindow
         }
 
         if (IsDeepCapsuleDockedReordering &&
-            (_deepCapsuleQueueTransferRequested ||
-             ShouldUnlockDeepCapsuleCrossQueueDrag(currentScreenPos)))
+            ShouldStartFloatingReorder(
+                _controller.EdgeCapsuleFreeQueuesEnabled,
+                _deepCapsuleQueueTransferRequested,
+                ShouldUnlockDeepCapsuleCrossQueueDrag(currentScreenPos)))
         {
             BeginDeepCapsuleFloatingReorder(currentScreenPos);
             return;
@@ -1149,8 +1174,21 @@ public sealed partial class PaperWindow
         // layout cannot reflow while the floating capsule is off the wall.
         if (_deepCapsuleQueueTransferRequested)
         {
-            _controller.TryBeginEdgeCapsuleQueueTransfer(_paper, out var transfer);
-            _deepCapsuleQueueTransferSnapshot = transfer;
+            if (!_controller.TryBeginEdgeCapsuleQueueTransfer(_paper, out var transfer))
+            {
+                // Ctrl 本身不能成为浮空理由：事务建立失败时清掉意图，只有真正脱墙才继续。
+                // 不要 abandon：失败也可能是因为另一个手势的 transfer 正在占用。
+                _deepCapsuleQueueTransferRequested = false;
+                _deepCapsuleQueueTransferSnapshot = null;
+                if (!ShouldUnlockDeepCapsuleCrossQueueDrag(currentScreenPos))
+                {
+                    return; // 保持 DockedReordering，下一帧继续沿边重排。
+                }
+            }
+            else
+            {
+                _deepCapsuleQueueTransferSnapshot = transfer;
+            }
         }
         if (_edgeCapsule.NativeBatchRetryPending)
         {
