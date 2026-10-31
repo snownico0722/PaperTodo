@@ -491,7 +491,15 @@ public sealed partial class PaperWindow
         // 本方法只会在越过拖拽阈值的路径上调用：从这一刻起本次手势不再是点击。
         _deepCapsulePointerClickRevoked = true;
         _previewOriginReorderBaseline = null;
-        if (EdgeCapsuleDragWindow.HasActiveLease)
+        // 只有真正需要共享浮窗的手势才必须等待 lease：Ctrl 整队、脱墙或跨屏。
+        // 纯贴边纵向重排用 docked host，不占用浮窗；同窗口仍持有浮窗时也不能抢，
+        // 否则会打断自己的 docking handoff。
+        var requiresFloatingHost = ShouldStartFloatingReorder(
+            _controller.EdgeCapsuleFreeQueuesEnabled,
+            _deepCapsuleQueueTransferRequested,
+            ShouldUnlockDeepCapsuleCrossQueueDrag(currentScreenPos));
+        if (EdgeCapsuleDragWindow.HasActiveLease &&
+            (requiresFloatingHost || _deepCapsuleFloatingDragHost != null))
         {
             // FQ-09: 上一条手势还在 docking handoff（flight + reveal，160–240ms 起步，可被 restart 拉长）。
             // 不能调 CancelDeepCapsuleReorderDrag()：它会走 finally 把 PendingClick 也清掉，把整个手势
@@ -604,8 +612,14 @@ public sealed partial class PaperWindow
                 _deepCapsuleQueueTransferRequested,
                 ShouldUnlockDeepCapsuleCrossQueueDrag(currentScreenPos)))
         {
-            BeginDeepCapsuleFloatingReorder(currentScreenPos);
-            return;
+            if (!EdgeCapsuleDragWindow.HasActiveLease)
+            {
+                BeginDeepCapsuleFloatingReorder(currentScreenPos);
+                return;
+            }
+
+            // 浮窗仍被上一条手势占用：保持贴边重排，lease 释放后的下一次移动再浮空。
+            // 若用户先松手，提交的是已经发生的贴边重排，而不是静默丢掉整个手势。
         }
 
         if (IsDeepCapsuleFloatingReordering)
