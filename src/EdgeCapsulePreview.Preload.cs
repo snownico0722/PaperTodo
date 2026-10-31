@@ -32,7 +32,6 @@ internal sealed partial class MarkdownEdgePreviewPreload
     internal int DeferredCount => _deferred.Count;
     private int RunnableCount => PendingCount - DeferredCount;
     internal long ArtifactHits { get; private set; }
-    internal long WarmCompletions { get; private set; }
 
     internal enum Readiness { Discard, Deferred, Ready }
     internal readonly record struct ReadResult(Readiness State, Target? Target = null)
@@ -363,7 +362,6 @@ internal sealed partial class MarkdownEdgePreviewPreload
                     MakeKey(key.Binding, target.Anchor, new Size(width, 0)) != key) return false;
 
                 if (!StoreArtifact(key, artifact)) return false;
-                WarmCompletions++;
                 TracePreload("ready", key.Binding.Source, $"width={width:R} dpi={key.Dpi.DpiScaleX:R}x{key.Dpi.DpiScaleY:R}");
                 return true;
             }, DispatcherPriority.ContextIdle);

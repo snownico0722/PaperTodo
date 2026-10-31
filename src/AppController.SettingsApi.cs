@@ -103,6 +103,9 @@ public sealed partial class AppController
 
         var oldCapsule = State.UseCapsuleMode;
         var oldDeep = State.UseDeepCapsuleMode;
+        // 主胶囊与自由队列互斥：setter 可能连带改写另一个开关，回滚必须成对恢复。
+        var oldCapsuleCollapseAll = State.UseCapsuleCollapseAll;
+        var oldCapsuleFreeQueues = State.UseCapsuleFreeQueues;
         var oldTaskbar = State.HidePapersFromTaskbar;
         var oldTopBarOrder = effects == SettingEffects.TopBar
             ? State.TopBarShortcutOrder.ToList() : null;
@@ -137,10 +140,17 @@ public sealed partial class AppController
                 if (id == "window.hide_from_switcher" && value is true) State.HidePapersFromTaskbar = true;
                 if (effects == SettingEffects.CapsuleMode)
                 {
-                    if (id == "capsule.enabled" && value is false) State.UseDeepCapsuleMode = false;
-                    if (id == "capsule.edge_enabled" && value is true) State.UseCapsuleMode = true;
-                    if (id == "capsule.master_enabled" && value is true)
-                        State.UseCapsuleMode = State.UseDeepCapsuleMode = true;
+                    // 四个开关统一由目标状态补齐前置不变式：free/master=true 必须蕴含 capsule && deep。
+                    if (value is bool enabled &&
+                        id is "capsule.enabled" or "capsule.edge_enabled"
+                            or "capsule.master_enabled" or "capsule.free_queues")
+                    {
+                        CapsuleModeSettingsState
+                            .Capture(State)
+                            .With(id, enabled)
+                            .WriteTo(State);
+                    }
+
                     if (!State.UseDeepCapsuleMode || !State.UseCapsuleCollapseAll)
                     {
                         State.CapsuleCollapseAllActiveQueues.Clear();
@@ -177,6 +187,9 @@ public sealed partial class AppController
                 {
                     State.UseCapsuleMode = oldCapsule;
                     State.UseDeepCapsuleMode = oldDeep;
+                    // setter 的互斥逻辑可能已经关掉伴生开关，这里连同队列快照一起还原。
+                    State.UseCapsuleCollapseAll = oldCapsuleCollapseAll;
+                    State.UseCapsuleFreeQueues = oldCapsuleFreeQueues;
                     State.CapsuleCollapseAllActiveQueues = oldQueues;
                 }
                 if (titles != null) foreach (var row in titles) row.Paper.Title = row.Title;

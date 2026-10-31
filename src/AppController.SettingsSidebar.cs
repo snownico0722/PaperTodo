@@ -62,6 +62,7 @@ public sealed partial class AppController
         _settingsRememberDeepCapsuleExpandedPositionCheckBox = null;
         _settingsCollapseExpandedDeepCapsuleOnClickCheckBox = null;
         _settingsCapsuleCollapseAllCheckBox = null;
+        _settingsCapsuleFreeQueuesCheckBox = null;
 
         window.Title = Strings.Get("TraySettings");
         window.SizeToContent = SizeToContent.Manual;
@@ -83,7 +84,8 @@ public sealed partial class AppController
             return;
         }
         if (id is "capsule.enabled" or "capsule.edge_enabled" or "capsule.master_enabled" or
-            "capsule.show_while_expanded" or "capsule.remember_expanded_position" or "capsule.click_to_collapse")
+            "capsule.free_queues" or "capsule.show_while_expanded" or
+            "capsule.remember_expanded_position" or "capsule.click_to_collapse")
         {
             RefreshSettingsCapsuleToggleStates();
             return;

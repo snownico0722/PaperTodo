@@ -167,7 +167,9 @@ PaperTodo 不提供插件热重载入口。插件 manifest、DLL、Web body/mini
 
 普通窗口 `X/Y/Width/Height` 与 Edge Capsule 的 queue / expanded recovery geometry 不是同一套状态，不能由 parked/hidden shell 相互覆盖。
 
-Edge 展开记忆保留原有窗口 DIP 字段，并用可选 `DeepCapsuleExpandedDpiScale` 记录捕获时的 HWND 缩放；队列 monitor/side 只标识记忆归属。恢复先还原物理矩形选屏，再以目标屏 DPI 计算尺寸，通过原生窗口边界和既有布局确认完成回位。旧数据缺少缩放信息时沿用系统 DPI 的兼容解释，不猜测其原屏幕；下一次真实展开窗口保存后补齐。
+Edge 展开记忆保留原有窗口 DIP 字段，并用可选 `DeepCapsuleExpandedDpiScale` 记录捕获时的 HWND 缩放；队列 monitor/side 只标识记忆归属。
+
+`PaperData.CapsuleQueueId` 是队列实例身份；空值等价于「该边的默认队列」，因而与 D-006 之前的队列 key 逐字节相同。`AppState.UseCapsuleFreeQueues` 与 `UseCapsuleCollapseAll` 互斥——一条边存在多条队列时 slot 0 的主胶囊没有唯一归属。恢复先还原物理矩形选屏，再以目标屏 DPI 计算尺寸，通过原生窗口边界和既有布局确认完成回位。旧数据缺少缩放信息时沿用系统 DPI 的兼容解释，不猜测其原屏幕；下一次真实展开窗口保存后补齐。
 
 `StateStore` 的方向是保守恢复与版本化写入：主文件失败后可从 backup 恢复；需要保护失败源时先保留证据再允许正常保存覆盖。保存阶段只修复序列化无效值，不重新解释业务不变量。
 
@@ -351,7 +353,15 @@ Measure / display-metrics 也是同一 presentation reconcile 的输入，而不
 
 ### 6.2 Queue placement 与 geometry
 
-队列由 monitor + edge 标识。`EdgeCapsuleQueueCoordinator` 只负责 index、master offset 和 slot count；`EdgeCapsuleGeometry` 只负责 monitor/edge/DIP 到物理像素矩形。
+队列由 monitor + edge（自由队列模式下再加 instance id，见 D-058）标识。`EdgeCapsuleQueueCoordinator` 只负责 index、master offset 和 slot count；`EdgeCapsuleGeometry` 只负责 monitor/edge/DIP 到物理像素矩形。
+
+自由队列模式下同一条边可并存多条队列，每条队列实例持有自己的 slot 0 起始高度（复用 `AppState.DeepCapsuleQueueStartTopMargins`，key 形态扩展为 `monitor|side#instanceId`，不另立字典）。合并／脱离的距离判定由无 WPF 依赖的纯函数 `EdgeCapsuleQueueMagnet` 独占，进入 18 DIP、退出 32 DIP 的 Schmitt trigger 使防抖内生于纯函数而非时间状态；控制器只负责把实时状态喂进判定并应用结果。
+
+迷你视图的避让同样是边级的：`EdgeCapsulePreviewLayoutSession` 只描述 owner 所在队列（该字段同时是 hover 走廊与 transfer 的拓扑，不可泛化），边级让位由 `EdgeCapsulePreviewLayoutCoordinator.BuildEdgeAvoidanceOffsets` 这一纯函数在 apply 前补入。它之所以能跨队列，是因为避让量是与锚点无关的纯相对位移。
+
+拖拽期的反馈按 8ms 间隔重新评估同一判定，并把上一帧目标作为 `HeldQueueKey` 回传，死区因此抑制了指针抖动导致的反复脱落。让位动画由源队列与目标队列各自调用 `EdgeCapsuleQueueCoordinator` 重算后直连下发 `PreviewDeepCapsulePlacement`：**拖拽期不走 `ArrangeDeepCapsules`**，因为 arrange gate 会把该次重排延迟到手势结束。
+
+拖拽解锁为浮空后会进入 Win32 模态移动循环，此时 WPF 不再收到指针事件。反馈改由 `DispatcherTimer` 轮询光标维持；模态循环仍会泵 Dispatcher，计时器照常触发。浮空阶段没有 docked 槽位可预览，但源队列仍须收拢——留一个永久空洞正是「拖出去了、同伴不动」观感的来源。
 
 `EdgeCapsuleLayoutSnapshot` 捕获的是**目标 monitor** 的 `MonitorGeometry` 与 DPI；docked 物理矩形必须基于这份目标显示器事实计算，不能退回主 `PaperWindow` 的当前 DPI 或在动画/measure 路径重新复制一套换算。共享 capsule 尺寸和队列布局参数从 `PaperLayoutDefaults` / `EdgeCapsuleLayout` 等统一来源进入 layout/planner。
 

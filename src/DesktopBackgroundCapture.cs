@@ -53,7 +53,6 @@ internal sealed class DesktopBackgroundCapture : IDisposable
     private Frame? _latest;
     private int _disposed;
 
-    internal IntPtr WindowHandle => _hwnd;
     internal bool IsStopped => Volatile.Read(ref _disposed) != 0;
     internal Task Completion => _captureTask;
 

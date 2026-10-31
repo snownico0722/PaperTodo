@@ -62,11 +62,6 @@ public static class PaperTitles
             : title;
     }
 
-    public static string CapsuleText(PaperData paper, int fallbackNumber)
-    {
-        return EffectiveTitle(paper, fallbackNumber);
-    }
-
     private static string NormalizeCustomTitle(string? title)
     {
         var cleaned = (title ?? "").Trim();

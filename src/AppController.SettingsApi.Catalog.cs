@@ -5,6 +5,86 @@ namespace PaperTodo;
 
 public sealed partial class AppController
 {
+    /// <summary>
+    /// 胶囊四开关的目标状态快照；写入、no-op 与级联共用，避免漏掉前置修复。
+    /// </summary>
+    private readonly record struct CapsuleModeSettingsState(
+        bool Capsule,
+        bool Edge,
+        bool Master,
+        bool FreeQueues)
+    {
+        internal static CapsuleModeSettingsState Capture(AppState state) =>
+            new(
+                state.UseCapsuleMode,
+                state.UseDeepCapsuleMode,
+                state.UseCapsuleCollapseAll,
+                state.UseCapsuleFreeQueues);
+
+        /// <summary>
+        /// 应用与 StateStore 加载归一化相同的父/子不变式：capsule 是根，edge 是它的子；
+        /// edge 关闭时 master/free 必须关闭；free 开启时 master 必须关闭。
+        /// 运行期设置与重启后加载走同一套规则，避免 API 读值与实际功能分叉。
+        /// </summary>
+        internal CapsuleModeSettingsState Normalize()
+        {
+            var edge = Capsule && Edge;
+            var freeQueues = edge && FreeQueues;
+            var master = edge && !freeQueues && Master;
+            return new CapsuleModeSettingsState(Capsule, edge, master, freeQueues);
+        }
+
+        /// <summary>把一次开关写入及其级联应用到快照，返回归一化后的目标状态。</summary>
+        internal CapsuleModeSettingsState With(string id, bool value) =>
+            (id switch
+            {
+                "capsule.enabled" => this with { Capsule = value },
+                "capsule.edge_enabled" => this with
+                {
+                    Edge = value,
+                    Capsule = value || Capsule
+                },
+                // D-058: 主胶囊与自由队列互斥；两者都蕴含 capsule + edge。
+                "capsule.master_enabled" => value
+                    ? this with
+                    {
+                        Master = true,
+                        FreeQueues = false,
+                        Capsule = true,
+                        Edge = true
+                    }
+                    : this with { Master = false },
+                "capsule.free_queues" => value
+                    ? this with
+                    {
+                        FreeQueues = true,
+                        Master = false,
+                        Capsule = true,
+                        Edge = true
+                    }
+                    : this with { FreeQueues = false },
+                _ => this
+            }).Normalize();
+
+        internal void WriteTo(AppState state)
+        {
+            state.UseCapsuleMode = Capsule;
+            state.UseDeepCapsuleMode = Edge;
+            state.UseCapsuleCollapseAll = Master;
+            state.UseCapsuleFreeQueues = FreeQueues;
+        }
+
+        /// <summary>
+        /// 写 true/false 都比较完整目标状态。脏状态（父开关已关、子开关残留）下
+        /// 重复写 false 会返回“需要修复”，而不是被误判为 no-op。
+        /// </summary>
+        internal static bool IsNoOp(AppState state, string id, bool value)
+        {
+            var current = Capture(state);
+            return current.With(id, value) == current;
+        }
+    }
+
     private IEnumerable<PaperSettingDefinition> CreatePublicSettingsCatalog()
     {
         yield return DefineSetting<string>("general.language",
@@ -261,17 +341,52 @@ public sealed partial class AppController
             () => State.UseCapsuleMode,
             value => State.UseCapsuleMode = value,
             SettingEffects.CapsuleMode,
-            title: Strings.Get("TrayCapsuleMode"));
+            title: Strings.Get("TrayCapsuleMode"),
+            isNoOp: value => CapsuleModeSettingsState.IsNoOp(
+                State, "capsule.enabled", value));
         yield return DefineSetting<bool>("capsule.edge_enabled",
             () => State.UseDeepCapsuleMode,
             value => State.UseDeepCapsuleMode = value,
             SettingEffects.CapsuleMode,
-            title: Strings.Get("TrayDeepCapsuleMode"));
+            title: Strings.Get("TrayDeepCapsuleMode"),
+            // 写 true 需蕴含 capsule；否则会被误判 no-op，跳过前置修复。
+            isNoOp: value => CapsuleModeSettingsState.IsNoOp(
+                State, "capsule.edge_enabled", value));
         yield return DefineSetting<bool>("capsule.master_enabled",
             () => State.UseCapsuleCollapseAll,
-            value => State.UseCapsuleCollapseAll = value,
+            value =>
+            {
+                State.UseCapsuleCollapseAll = value;
+                // D-058: with several queues on one edge, slot 0 has no single owner, so the
+                // master pill and free queues are mutually exclusive. Enforced in the setter so
+                // the UI path and the public settings API cannot disagree.
+                if (value)
+                {
+                    State.UseCapsuleFreeQueues = false;
+                }
+            },
             SettingEffects.CapsuleMode,
-            title: Strings.Get("SettingsCapsuleCollapseAll"));
+            title: Strings.Get("SettingsCapsuleCollapseAll"),
+            // 复合设置：写 true 时还要满足级联前置（capsule/deep 开启、free 关闭），
+            // 否则“值没变”不等于“功能已生效”。写 false 保留原来的 getter 相等语义。
+            isNoOp: value => CapsuleModeSettingsState.IsNoOp(
+                State, "capsule.master_enabled", value));
+        yield return DefineSetting<bool>("capsule.free_queues",
+            () => State.UseCapsuleFreeQueues,
+            value =>
+            {
+                State.UseCapsuleFreeQueues = value;
+                if (value)
+                {
+                    State.UseCapsuleCollapseAll = false;
+                }
+            },
+            SettingEffects.CapsuleMode,
+            title: Strings.Get("SettingsCapsuleFreeQueues"),
+            // 复合设置：只有 free/capsule/deep 全开且 master 关闭时，写 true 才真正无需操作。
+            // 例如 edge_enabled 被单独关掉后再写 true，必须进入 Apply 修复级联。
+            isNoOp: value => CapsuleModeSettingsState.IsNoOp(
+                State, "capsule.free_queues", value));
         yield return DefineSetting<bool>("capsule.master_compact",
             () => State.CompactMasterCapsule,
             value => State.CompactMasterCapsule = value,

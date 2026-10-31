@@ -56,16 +56,4 @@ public sealed partial class AppController
         };
     }
 
-    private FrameworkElement CreateTraySettingsVectorIcon()
-    {
-        return new VectorPrimitiveIconElement(
-            VectorPrimitiveIconKind.Settings)
-        {
-            Width = 15,
-            Height = 15,
-            Foreground = TrayTextBrush,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center
-        };
-    }
 }

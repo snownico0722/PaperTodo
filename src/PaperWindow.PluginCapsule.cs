@@ -27,6 +27,12 @@ public sealed partial class PaperWindow
     private double _pluginCapsuleRegularCustomViewWidth = double.NaN;
     private double _pluginCapsuleDockedCustomViewWidth = double.NaN;
 
+    /// <summary>
+    /// 影响胶囊静止宽度的窗口级版本号。插件 PreferredWidth/自动宽度模板变化时递增；
+    /// 磁吸候选与描边宽度缓存用它做低成本失效判断，不必每帧重新测量文字宽度。
+    /// </summary>
+    internal int CapsuleWidthRevision { get; private set; }
+
     private FrameworkElement BuildPluginCapsuleContentHost(UIElement defaultContent)
     {
         var host = new Grid
@@ -76,6 +82,7 @@ public sealed partial class PaperWindow
 
     private void SetPluginCapsulePresentation(PaperCapsulePresentation? presentation)
     {
+        CapsuleWidthRevision++;
         var previousRequestedWidth = PluginCapsuleRequestedContentWidth();
         var normalized = NormalizePluginCapsulePresentation(presentation);
         _pluginCapsulePresentation = normalized;

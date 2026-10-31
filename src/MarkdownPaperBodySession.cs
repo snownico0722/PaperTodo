@@ -103,15 +103,6 @@ internal sealed class MarkdownPaperBodySession : IPaperBodySession
         CurrentPresenter = presenter;
     }
 
-    internal void RemovePresenter(UIElement presenter)
-    {
-        _root.Children.Remove(presenter);
-        if (ReferenceEquals(CurrentPresenter, presenter))
-        {
-            CurrentPresenter = _root.Children.OfType<UIElement>().LastOrDefault();
-        }
-    }
-
     internal void ResetPresenterState()
     {
         PresenterGeneration++;

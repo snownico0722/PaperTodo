@@ -96,12 +96,6 @@ public sealed partial class AppController
     private void ToggleMcpDeletes() =>
         SetSettingFromUi("mcp.deletes", !State.McpAllowDeletes);
 
-    internal bool TryCommitMcpMutation()
-    {
-        MarkDirty();
-        return TrySaveNow(sync: true);
-    }
-
     internal void RunMcpPostCommitUi(Action update)
     {
         try { update(); }

@@ -45,6 +45,7 @@ public sealed partial class AppController
     private CheckBox? _settingsRememberDeepCapsuleExpandedPositionCheckBox;
     private CheckBox? _settingsCollapseExpandedDeepCapsuleOnClickCheckBox;
     private CheckBox? _settingsCapsuleCollapseAllCheckBox;
+    private CheckBox? _settingsCapsuleFreeQueuesCheckBox;
     private readonly Dictionary<string, Action> _settingsRegionRefreshers =
         new(StringComparer.Ordinal);
 
@@ -620,6 +621,7 @@ public sealed partial class AppController
             _settingsRememberDeepCapsuleExpandedPositionCheckBox = null;
             _settingsCollapseExpandedDeepCapsuleOnClickCheckBox = null;
             _settingsCapsuleCollapseAllCheckBox = null;
+            _settingsCapsuleFreeQueuesCheckBox = null;
             _settingsPageScrollViewer = null;
             _settingsPageScrollViewerPage = null;
             _settingsPageScrollOffsets.Clear();
@@ -2283,6 +2285,11 @@ public sealed partial class AppController
         {
             _settingsCapsuleCollapseAllCheckBox.IsChecked = State.UseCapsuleCollapseAll;
             _settingsCapsuleCollapseAllCheckBox.IsEnabled = State.UseCapsuleMode && State.UseDeepCapsuleMode;
+        }
+        if (_settingsCapsuleFreeQueuesCheckBox != null)
+        {
+            _settingsCapsuleFreeQueuesCheckBox.IsChecked = State.UseCapsuleFreeQueues;
+            _settingsCapsuleFreeQueuesCheckBox.IsEnabled = State.UseCapsuleMode && State.UseDeepCapsuleMode;
         }
         RefreshSettingsRegions("general.edgeBrowsing");
     }

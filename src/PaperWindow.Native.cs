@@ -43,6 +43,10 @@ public sealed partial class PaperWindow
     private const int WmDpiChanged = 0x02E0;
     private const int WmWindowPosChanged = 0x0047;
     private const int WmGetMinMaxInfo = 0x0024;
+    private const int WmLButtonDown = 0x0201;
+    // Low-order wParam bits carried by WM_LBUTTONDOWN. MK_CONTROL is 0x0008 — 0x0002 is
+    // MK_RBUTTON, which is easy to mistake for it.
+    private const int MkControl = 0x0008;
     private const int HtLeft = 10;
     private const int HtRight = 11;
     private const int HtTop = 12;

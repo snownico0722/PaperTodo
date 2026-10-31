@@ -617,6 +617,14 @@ public sealed class StateStore
         if (!state.UseCapsuleMode || !state.UseDeepCapsuleMode)
         {
             state.UseCapsuleCollapseAll = false;
+            state.UseCapsuleFreeQueues = false;
+        }
+        else if (state.UseCapsuleFreeQueues)
+        {
+            // D-058: with several queues per edge, slot 0 has no single owner, so the master pill
+            // cannot coexist with free queues. Enforced here too because hand-edited or
+            // plugin-written data can carry both flags.
+            state.UseCapsuleCollapseAll = false;
         }
 
         state.CapsuleCollapseAllActiveQueues ??= new Dictionary<string, bool>();
@@ -686,6 +694,9 @@ public sealed class StateStore
                 ? (state.DeepCapsuleMonitorDeviceName ?? "")
                 : paper.CapsuleMonitorDeviceName.Trim();
             paper.CapsuleMonitorDeviceName = WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(capsuleMonitorDeviceName);
+            // An empty instance id keeps the paper in the edge's default queue, which is
+            // exactly the pre-free-queue behaviour — so old data needs no migration.
+            paper.CapsuleQueueId = EdgeCapsuleQueueIds.Normalize(paper.CapsuleQueueId);
             NormalizeDeepCapsuleExpandedGeometry(paper);
 
             paper.Title = PaperTitles.CleanCustomTitle(paper.Title, state.MaxTitleLength);
@@ -928,18 +939,24 @@ public sealed class StateStore
     private static string NormalizeQueueKey(string? key)
     {
         var value = (key ?? "").Trim();
-        var separator = value.LastIndexOf('|');
+        // The instance suffix is stripped before the side is normalized. Normalizing first
+        // would feed "right#q1" into DeepCapsuleSides, which folds anything that is not
+        // exactly "left" to "right" — silently collapsing two distinct queues into one.
+        EdgeCapsuleQueueIds.TrySplit(value, out var edgeKey, out var queueId);
+        var separator = edgeKey.LastIndexOf('|');
         if (separator < 0)
         {
-            return QueueKey("", value);
+            return QueueKey("", edgeKey, queueId);
         }
 
-        var monitorDeviceName = value[..separator];
-        var side = value[(separator + 1)..];
-        return QueueKey(monitorDeviceName, side);
+        var monitorDeviceName = edgeKey[..separator];
+        var side = edgeKey[(separator + 1)..];
+        return QueueKey(monitorDeviceName, side, queueId);
     }
 
-    private static string QueueKey(string? monitorDeviceName, string? side)
-        => $"{WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(monitorDeviceName)}|{(side == DeepCapsuleSides.Left ? DeepCapsuleSides.Left : DeepCapsuleSides.Right)}";
+    private static string QueueKey(string? monitorDeviceName, string? side, string? queueId = null)
+        => EdgeCapsuleQueueIds.Compose(
+            $"{WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(monitorDeviceName)}|{(side == DeepCapsuleSides.Left ? DeepCapsuleSides.Left : DeepCapsuleSides.Right)}",
+            queueId);
 
 }

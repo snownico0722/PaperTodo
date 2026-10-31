@@ -137,21 +137,6 @@ public sealed partial class PaperWindow
         UpdateTodoRowBackground(row);
     }
 
-    private static bool IsDescendantOfType<T>(DependencyObject? source)
-        where T : DependencyObject
-    {
-        var current = source;
-        while (current != null)
-        {
-            if (current is T)
-            {
-                return true;
-            }
-            current = VisualTreeHelper.GetParent(current);
-        }
-        return false;
-    }
-
     private static bool IsDescendantOfCursor(DependencyObject? source, Cursor cursor)
     {
         var current = source;
@@ -471,27 +456,6 @@ public sealed partial class PaperWindow
                 return result;
             }
             current = VisualTreeHelper.GetParent(current);
-        }
-        return null;
-    }
-
-    private Border? FindTodoRowAtPoint(Point pointOnWindow)
-    {
-        foreach (var row in _todoRows)
-        {
-            if (!row.IsVisible || row.ActualWidth <= 0 || row.ActualHeight <= 0)
-            {
-                continue;
-            }
-
-            var origin = row.TranslatePoint(new Point(0, 0), this);
-            if (pointOnWindow.X >= origin.X &&
-                pointOnWindow.X <= origin.X + row.ActualWidth &&
-                pointOnWindow.Y >= origin.Y &&
-                pointOnWindow.Y <= origin.Y + row.ActualHeight)
-            {
-                return row;
-            }
         }
         return null;
     }

@@ -67,12 +67,6 @@ public static class AnimationHelper
         FadeTo(element, 1, duration, QuickEase, onComplete);
     }
 
-    // 淡出
-    public static void FadeOut(UIElement element, double duration = 150, EventHandler? onComplete = null)
-    {
-        FadeTo(element, 0, duration, QuickEase, onComplete);
-    }
-
     // 淡化到指定透明度；最终值写回基础属性，避免动画结束后继续覆盖交互状态。
     public static void FadeTo(
         UIElement element,
@@ -84,15 +78,6 @@ public static class AnimationHelper
         AnimateDouble(element, UIElement.OpacityProperty, opacity, duration, easing ?? QuickEase, onComplete);
     }
 
-    // 缩放到指定比例
-    public static void ScaleTo(UIElement element, double scale, double duration = 200, IEasingFunction? easing = null)
-    {
-        var transform = GetScaleTransform(element);
-        var ease = easing ?? SmoothEase;
-        AnimateDouble(transform, ScaleTransform.ScaleXProperty, scale, duration, ease);
-        AnimateDouble(transform, ScaleTransform.ScaleYProperty, scale, duration, ease);
-    }
-
     // 平移到指定位置
     public static void TranslateTo(UIElement element, double x, double y, double duration = 200, IEasingFunction? easing = null, EventHandler? onComplete = null)
     {
@@ -102,40 +87,43 @@ public static class AnimationHelper
         AnimateDouble(transform, TranslateTransform.YProperty, y, duration, ease, onComplete);
     }
 
-    // 颜色过渡
-    public static void TransitionColor(Brush brush, Color toColor, double duration = 300)
+    /// <summary>
+    /// 把元素在 Canvas 中的 Top 平滑移动到目标值。与 <see cref="AnimateDouble"/> 一样，
+    /// 从当前有效值（包含正在运行的动画）重新起跳，避免快速重定向时回跳一帧。
+    /// </summary>
+    public static void AnimateCanvasTop(
+        FrameworkElement element,
+        double top,
+        double duration = 200,
+        IEasingFunction? easing = null)
     {
-        if (brush is not SolidColorBrush solidBrush) return;
-
-        var anim = new ColorAnimation(
-            toColor,
-            TimeSpan.FromMilliseconds(AnimationTiming.ScaleMilliseconds(duration)))
-        {
-            EasingFunction = SmoothEase
-        };
-        solidBrush.BeginAnimation(SolidColorBrush.ColorProperty, anim);
+        AnimateDouble(element, Canvas.TopProperty, top, duration, easing ?? SmoothEase);
     }
 
-    // 取消所有动画
-    public static void StopAllAnimations(UIElement element)
+    /// <summary>
+    /// 从指定透明度淡到目标值。用于需要每次都看到淡入的局部元素；
+    /// 与 <see cref="FadeTo"/> 不同，这里显式指定起点。
+    /// </summary>
+    public static void FadeToFrom(
+        UIElement element,
+        double from,
+        double to,
+        double duration = 200,
+        IEasingFunction? easing = null)
     {
         element.BeginAnimation(UIElement.OpacityProperty, null);
-        if (element.RenderTransform is TransformGroup group)
-        {
-            foreach (var transform in group.Children)
+        element.Opacity = to;
+
+        element.BeginAnimation(
+            UIElement.OpacityProperty,
+            new DoubleAnimation(
+                from,
+                to,
+                TimeSpan.FromMilliseconds(AnimationTiming.ScaleMilliseconds(duration)))
             {
-                if (transform is ScaleTransform st)
-                {
-                    st.BeginAnimation(ScaleTransform.ScaleXProperty, null);
-                    st.BeginAnimation(ScaleTransform.ScaleYProperty, null);
-                }
-                else if (transform is TranslateTransform tt)
-                {
-                    tt.BeginAnimation(TranslateTransform.XProperty, null);
-                    tt.BeginAnimation(TranslateTransform.YProperty, null);
-                }
-            }
-        }
+                EasingFunction = easing ?? SmoothEase,
+                FillBehavior = FillBehavior.Stop
+            });
     }
 
     // 快速弹跳（用于强调）

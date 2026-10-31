@@ -14,7 +14,7 @@ public sealed partial class AppController
         var side = edge == EdgeCapsuleEdge.Left
             ? DeepCapsuleSides.Left
             : DeepCapsuleSides.Right;
-        var queueKey = QueueKey(monitorDeviceName, side);
+        var queueKey = EdgeKey(monitorDeviceName, side);
 
         // Master collapse/expand moves real capsule HWNDs under a stationary pointer. Cancel any
         // activation work that was based on the pre-toggle layout before arming the same

@@ -1261,18 +1261,6 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
         return $"{safe}.papertodo.local";
     }
 
-    internal void ApplyExternalState(string stateJson)
-    {
-        var normalized = string.IsNullOrWhiteSpace(stateJson) ? "{}" : stateJson;
-        if (string.Equals(_stateJson, normalized, StringComparison.Ordinal))
-        {
-            return;
-        }
-        _stateJson = normalized;
-        SendStateChanged();
-        _miniViewHost?.SendStateChanged();
-    }
-
     internal bool ReceiveRuntimeMessage(JsonElement payload)
     {
         if (_disposed || _webViewFailed)

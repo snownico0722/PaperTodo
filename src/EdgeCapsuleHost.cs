@@ -622,36 +622,6 @@ internal sealed partial class EdgeCapsuleHost : IDisposable
             Math.Abs(dpi.DpiScaleY - expected.DpiScaleY) < 0.001;
     }
 
-    internal bool PrepareCompositionSourceForHandoff()
-    {
-        if (_disposed || !Window.IsVisible)
-        {
-            return false;
-        }
-
-        try
-        {
-            // Host.Apply establishes the endpoint synchronously, but WPF may still have queued its
-            // Measure/Arrange/Render work. Drain through Render before the live HWND wrapper fades
-            // in or is uncloaked, then wait for that submitted surface at the desktop boundary.
-            Window.UpdateLayout();
-            VisualSurface.UpdateLayout();
-            Window.Dispatcher.Invoke(
-                DispatcherPriority.Render,
-                static () => { });
-            WindowNative.FlushDesktopComposition();
-            return true;
-        }
-        catch (Exception ex)
-        {
-            Trace.TraceWarning(
-                "Edge capsule proxy endpoint render barrier failed. Paper={0}; Exception={1}",
-                _options.DiagnosticId,
-                ex);
-            return false;
-        }
-    }
-
     public void InvalidateNativeMetrics()
     {
         if (_disposed)
@@ -1287,11 +1257,6 @@ internal sealed partial class EdgeCapsuleHost : IDisposable
                 _appliedFrame.Bounds.Top);
         }
         return DeviceScreenPoint.FromPoint(Window.PointToScreen(new Point(0, 0)));
-    }
-
-    public bool ContainsWindowScreenPoint(Point screenPoint)
-    {
-        return ContainsScreenPoint(DeviceScreenPoint.FromPoint(screenPoint));
     }
 
     public bool TryGetMonitorGeometry(string? deviceName, out MonitorGeometry geometry)

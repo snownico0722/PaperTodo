@@ -11,8 +11,7 @@ internal enum VectorPrimitiveIconKind
     Plus,
     Minus,
     AssociationIdle,
-    AssociationActive,
-    Settings
+    AssociationActive
 }
 
 /// <summary>
@@ -96,16 +95,6 @@ internal sealed class VectorPrimitiveIconElement : FrameworkElement
                     deviceOrigin.X,
                     deviceOrigin.Y,
                     active: true);
-                break;
-            case VectorPrimitiveIconKind.Settings:
-                DrawSettings(
-                    drawingContext,
-                    centerX,
-                    centerY,
-                    pixelX,
-                    pixelY,
-                    deviceOrigin.X,
-                    deviceOrigin.Y);
                 break;
         }
     }
@@ -233,57 +222,6 @@ internal sealed class VectorPrimitiveIconElement : FrameworkElement
             pixelY,
             originPixelX,
             originPixelY);
-    }
-
-    private void DrawSettings(
-        DrawingContext drawingContext,
-        double centerX,
-        double centerY,
-        double pixelX,
-        double pixelY,
-        double originPixelX,
-        double originPixelY)
-    {
-        var minimum = Math.Min(ActualWidth, ActualHeight);
-        var thicknessX = AxisThickness(pixelX);
-        var thicknessY = AxisThickness(pixelY);
-        var stroke = Math.Min(thicknessX, thicknessY);
-        var centerLineX = AxisCenter(centerX, pixelX, thicknessX, originPixelX);
-        var centerLineY = AxisCenter(centerY, pixelY, thicknessY, originPixelY);
-        var ringRadius = Math.Max(minimum * 0.255, stroke * 2.4);
-        var toothLength = Math.Max(stroke * 1.6, minimum * 0.09);
-
-        for (var i = 0; i < 6; i++)
-        {
-            var angle = (Math.PI / 3.0) * i;
-            var toothCenterRadius = ringRadius + (toothLength / 2.0) - (stroke * 0.15);
-            var toothCenterX = centerLineX + (Math.Cos(angle) * toothCenterRadius);
-            var toothCenterY = centerLineY + (Math.Sin(angle) * toothCenterRadius);
-
-            drawingContext.PushTransform(
-                new RotateTransform(
-                    angle * 180.0 / Math.PI,
-                    toothCenterX,
-                    toothCenterY));
-            DrawCenteredRectangle(
-                drawingContext,
-                toothCenterX,
-                toothCenterY,
-                toothLength,
-                stroke,
-                pixelX,
-                pixelY,
-                originPixelX,
-                originPixelY);
-            drawingContext.Pop();
-        }
-
-        drawingContext.DrawEllipse(
-            null,
-            CreateRoundPen(stroke),
-            new Point(centerLineX, centerLineY),
-            ringRadius,
-            ringRadius);
     }
 
     private Pen CreateRoundPen(double thickness)

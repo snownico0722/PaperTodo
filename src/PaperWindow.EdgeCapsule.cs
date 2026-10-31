@@ -149,6 +149,15 @@ public sealed partial class PaperWindow
         IntPtr lParam,
         ref bool handled)
     {
+        // Record the native modifier bits at press time. The capsule's NOACTIVATE host may later
+        // lack reliable WPF modifier state, so IsQueueDragModifier OR-s this value with
+        // Keyboard.Modifiers and GetAsyncKeyState at pointer-down instead of treating any one
+        // source as authoritative.
+        if (msg == WmLButtonDown)
+        {
+            _edgeCapsulePointerDownKeyState = wParam.ToInt32();
+        }
+
         // WM_MOUSELEAVE / WM_NCMOUSELEAVE are the authoritative boundary signal for the real host.
         // WPF can raise MouseLeave while the physical point is still inside the applied rectangle;
         // consume the native leave as well so that a later genuine exit cannot be lost.

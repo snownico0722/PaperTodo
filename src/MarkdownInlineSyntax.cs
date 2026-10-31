@@ -4,8 +4,6 @@ namespace PaperTodo;
 
 internal static class MarkdownInlineSyntax
 {
-    private const char MaskedPunctuation = '\uE000';
-
     public static bool IsEscaped(string text, int index)
     {
         if (index <= 0 || index >= text.Length)
@@ -55,36 +53,6 @@ internal static class MarkdownInlineSyntax
             search = index + 1;
         }
         return -1;
-    }
-
-    public static string MaskEscapedPunctuation(string text)
-    {
-        if (string.IsNullOrEmpty(text) || text.IndexOf('\\') < 0)
-        {
-            return text;
-        }
-
-        char[]? chars = null;
-        var slashRun = 0;
-        for (var i = 0; i < text.Length; i++)
-        {
-            if (text[i] == '\\')
-            {
-                slashRun++;
-                continue;
-            }
-
-            var escaped = (slashRun & 1) != 0;
-            slashRun = 0;
-            if (!escaped || !IsEscapable(text[i]))
-            {
-                continue;
-            }
-
-            chars ??= text.ToCharArray();
-            chars[i] = MaskedPunctuation;
-        }
-        return chars == null ? text : new string(chars);
     }
 
     public static string Unescape(string text)

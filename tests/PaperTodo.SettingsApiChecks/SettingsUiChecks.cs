@@ -65,6 +65,7 @@ internal static partial class Program
             ("ToggleAutoMoveCompletedTodosToBottom", "todo.move_completed_to_bottom", false),
             ("ToggleTodoBottomBar", "todo.bottom_bar", false),
             ("ToggleCapsuleCollapseAll", "capsule.master_enabled", false),
+            ("ToggleCapsuleFreeQueues", "capsule.free_queues", false),
             ("ToggleCompactMasterCapsule", "capsule.master_compact", false),
             ("ToggleCapsuleMode", "capsule.enabled", false),
             ("ToggleCapsuleTextBold", "capsule.text_bold", false),
@@ -170,6 +171,85 @@ internal static partial class Program
         Invoke(failed, "ToggleCapsuleCollapseAll");
         Check(failed.State.UseCapsuleMode && failed.State.UseDeepCapsuleMode && failed.State.UseCapsuleCollapseAll,
             "UI master enable uses the shared prerequisite mutation.");
+
+    }
+
+    /// <summary>
+    /// 验证关闭父开关会清空孤立的子开关，且运行期状态与加载归一化使用同一套规则。
+    /// </summary>
+    private static void CapsuleModeCascadeBehavior()
+    {
+        // 1. 关闭 capsule 必须同时清空 edge/master/free。
+        var freeThenCapsule = Controller();
+        var freeThenCapsuleSettings = SettingsFor(
+            freeThenCapsule, () => true, _ => { });
+        freeThenCapsuleSettings.Set("capsule.free_queues", Json(true));
+        var disableCapsule = freeThenCapsuleSettings.Set(
+            "capsule.enabled", Json(false));
+        Check(disableCapsule.Changed,
+            "disabling capsule mode from a free-queue state must apply");
+        Check(!freeThenCapsule.State.UseCapsuleMode &&
+              !freeThenCapsule.State.UseDeepCapsuleMode &&
+              !freeThenCapsule.State.UseCapsuleCollapseAll &&
+              !freeThenCapsule.State.UseCapsuleFreeQueues,
+            "disabling capsule mode must clear every dependent capsule flag");
+        Check(!freeThenCapsuleSettings.Get("capsule.free_queues").Value.GetBoolean() &&
+              !freeThenCapsuleSettings.Get("capsule.master_enabled").Value.GetBoolean(),
+            "the API must not report a disabled child flag as enabled");
+
+        // 2. 关闭 edge 清空 master/free，但保留 capsule 本身。
+        var freeThenEdge = Controller();
+        var freeThenEdgeSettings = SettingsFor(
+            freeThenEdge, () => true, _ => { });
+        freeThenEdgeSettings.Set("capsule.free_queues", Json(true));
+        var disableEdge = freeThenEdgeSettings.Set(
+            "capsule.edge_enabled", Json(false));
+        Check(disableEdge.Changed,
+            "disabling edge mode from a free-queue state must apply");
+        Check(freeThenEdge.State.UseCapsuleMode &&
+              !freeThenEdge.State.UseDeepCapsuleMode &&
+              !freeThenEdge.State.UseCapsuleCollapseAll &&
+              !freeThenEdge.State.UseCapsuleFreeQueues,
+            "disabling edge mode must keep capsule mode but clear its children");
+
+        // 3. 关闭 capsule 也必须清空 master。
+        var masterThenCapsule = Controller();
+        var masterThenCapsuleSettings = SettingsFor(
+            masterThenCapsule, () => true, _ => { });
+        Check(masterThenCapsule.State.UseCapsuleCollapseAll,
+            "the default state should have master enabled");
+        masterThenCapsuleSettings.Set("capsule.enabled", Json(false));
+        Check(!masterThenCapsule.State.UseCapsuleMode &&
+              !masterThenCapsule.State.UseCapsuleCollapseAll &&
+              !masterThenCapsule.State.UseCapsuleFreeQueues,
+            "disabling capsule mode must clear master/free children");
+
+        // 4. 脏状态下的重复 false 写入必须修复，而不是被误判为 no-op。
+        var dirty = Controller();
+        var dirtySettings = SettingsFor(dirty, () => true, _ => { });
+        dirty.State.UseCapsuleMode = false;
+        dirty.State.UseDeepCapsuleMode = false;
+        dirty.State.UseCapsuleCollapseAll = true;
+        dirty.State.UseCapsuleFreeQueues = true;
+        var repair = dirtySettings.Set("capsule.enabled", Json(false));
+        Check(repair.Changed,
+            "a dirty parent/child combination must be repaired on write");
+        Check(!dirty.State.UseCapsuleMode &&
+              !dirty.State.UseDeepCapsuleMode &&
+              !dirty.State.UseCapsuleCollapseAll &&
+              !dirty.State.UseCapsuleFreeQueues,
+            "the repair must clear every capsule flag");
+        Check(!dirtySettings.Set("capsule.enabled", Json(false)).Changed,
+            "a normalized state must treat a repeated false write as a no-op");
+
+        // 5. 关闭 edge 后 API 读到的每个子开关都必须是 false。
+        var edgeOnly = Controller();
+        var edgeOnlySettings = SettingsFor(edgeOnly, () => true, _ => { });
+        edgeOnlySettings.Set("capsule.edge_enabled", Json(false));
+        Check(edgeOnly.State.UseCapsuleMode &&
+              !edgeOnlySettings.Get("capsule.master_enabled").Value.GetBoolean() &&
+              !edgeOnlySettings.Get("capsule.free_queues").Value.GetBoolean(),
+            "edge-off reads must agree with the effective capsule state");
     }
 
     private static void DrainSettingsUi()

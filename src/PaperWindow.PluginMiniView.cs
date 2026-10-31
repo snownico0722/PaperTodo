@@ -115,15 +115,6 @@ public sealed partial class PaperWindow
             new EdgeCapsulePreviewSize(width, height));
     }
 
-    private EdgeCapsulePreviewSize NormalizePluginMiniSizeForCurrentMonitor(
-        EdgeCapsulePreviewSize size)
-    {
-        var workArea = DeepCapsuleMonitorGeometry().LocalWorkAreaDip;
-        return size.Normalize(
-            Math.Max(EdgeCapsulePreviewSize.MinimumWidthDip, workArea.Width - 16),
-            Math.Max(EdgeCapsulePreviewSize.MinimumHeightDip, workArea.Height - 16));
-    }
-
     private FrameworkElement CreateNativePluginMiniView(
         IPaperMiniViewProvider provider,
         EdgeCapsulePreviewContext context,

@@ -8,6 +8,7 @@ public sealed partial class PaperWindow
 {
     private enum TopBarDragKind
     {
+        // 保留：note-link 拖拽按钮与反馈工厂当前未接线，NoteLink 与它们成组存在。
         NoteLink,
         WindowBinding
     }

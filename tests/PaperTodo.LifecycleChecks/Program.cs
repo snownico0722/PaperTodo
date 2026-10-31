@@ -11,7 +11,11 @@ internal static class Program
 {
     private const BindingFlags Private = BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic;
     private const string FixtureMarker = ".papertodo-lifecycle-fixture";
-    private static readonly string[] Cases = ["startup", "missing-monitor", "master-queue-transfer", "master-queue-cancel", "master-queue-drag-preparation", "master-queue-drop-handoff", "master-queue-membership", "master-queue-mutations", "master-queue-hide", "master-queue-disconnect", "master-queue-merge", "master-queue-merge-collapsed", "master-queue-material-handoff", "controller-hide-create-reentry", "controller-hide-show-reentry", "controller-zorder-create-reentry", "controller-close-delete-reentry", "todo-visibility", "real-exit", "early-expand", "edge-expand-foreground", "cancel-prewarm", "real-exit-scripts", "early-exit", "todo-context-menu", "todo-history"];
+    private static readonly string[] Cases = ["startup", "missing-monitor", "master-queue-transfer", "master-queue-cancel", "master-queue-drag-preparation", "master-queue-drop-handoff", "master-queue-membership", "master-queue-mutations", "master-queue-hide", "master-queue-disconnect", "master-queue-merge", "master-queue-merge-collapsed", "master-queue-material-handoff", "controller-hide-create-reentry", "controller-hide-show-reentry", "controller-zorder-create-reentry", "controller-close-delete-reentry", "todo-visibility", "real-exit", "early-expand", "edge-expand-foreground", "cancel-prewarm", "real-exit-scripts", "early-exit", "todo-context-menu", "todo-history",
+        "free-queue-preview-restore", "free-queue-regressions",
+        "edge-capsule-pending-drag-release",
+        "free-queue-shortcut-targeting", "free-queue-bottom-insert",
+        "free-queue-resting-delta-persist"];
 
     [STAThread]
     private static int Main(string[] args)
@@ -159,6 +163,56 @@ internal static class Program
                 IsVisible = true, IsCollapsed = true, X = area.Left + 60, Y = area.Top + 60,
                 Width = 300, Height = 240, CapsuleSide = DeepCapsuleSides.Right
             });
+        if (name == "free-queue-preview-restore" ||
+            name == "free-queue-regressions" ||
+            name == "free-queue-shortcut-targeting")
+        {
+            // 同一右侧边上的三条自由队列：qa = [0, 1]，qb = [2, 3]，qc = [4]。
+            state.UseCapsuleFreeQueues = true;
+            state.UseCapsuleCollapseAll = false;
+            state.Papers[0].CapsuleQueueId = "qa";
+            state.Papers[1].CapsuleQueueId = "qa";
+            state.Papers[2].CapsuleQueueId = "qb";
+            state.Papers[3].CapsuleQueueId = "qb";
+            state.Papers[4].CapsuleQueueId = "qc";
+            state.DeepCapsuleQueueStartTopMargins["|right#qb"] = 320;
+            state.DeepCapsuleQueueStartTopMargins["|right#qc"] = 450;
+        }
+        if (name == "free-queue-bottom-insert")
+        {
+            // 源队列三成员；目标队列单成员并贴底（margin 由布局夹到最大值）；
+            // fixture-4 移到左侧，避免成为右侧磁吸候选。
+            state.UseCapsuleFreeQueues = true;
+            state.UseCapsuleCollapseAll = false;
+            state.Papers[0].CapsuleQueueId = "qsrc";
+            state.Papers[1].CapsuleQueueId = "qsrc";
+            state.Papers[2].CapsuleQueueId = "qsrc";
+            state.Papers[3].CapsuleQueueId = "qtgt";
+            state.Papers[4].CapsuleSide = DeepCapsuleSides.Left;
+            state.Papers[4].CapsuleQueueId = "qleft";
+            state.DeepCapsuleQueueStartTopMargins[
+                "|" + DeepCapsuleSides.Right + "#qtgt"] = 100_000;
+        }
+        if (name == "free-queue-resting-delta-persist")
+        {
+            // 三条右侧队列形成非零静止避让：qa 在 qb 上方，qb 是插入目标，qc 在下方。
+            // 源队列放在左侧，避免参与右侧磁吸/求解。
+            state.UseCapsuleFreeQueues = true;
+            state.UseCapsuleCollapseAll = false;
+            state.Papers[0].CapsuleQueueId = "qa";
+            state.Papers[1].CapsuleQueueId = "qb";
+            state.Papers[2].CapsuleQueueId = "qc";
+            state.Papers[3].CapsuleSide = DeepCapsuleSides.Left;
+            state.Papers[3].CapsuleQueueId = "qleft";
+            state.Papers[4].CapsuleSide = DeepCapsuleSides.Left;
+            state.Papers[4].CapsuleQueueId = "qleft";
+            state.DeepCapsuleQueueStartTopMargins[
+                "|" + DeepCapsuleSides.Right + "#qa"] = 60;
+            state.DeepCapsuleQueueStartTopMargins[
+                "|" + DeepCapsuleSides.Right + "#qb"] = 90;
+            state.DeepCapsuleQueueStartTopMargins[
+                "|" + DeepCapsuleSides.Right + "#qc"] = 130;
+        }
         if (name.StartsWith("master-queue-merge"))
         {
             state.Papers[2].CapsuleSide = DeepCapsuleSides.Left;
@@ -198,6 +252,39 @@ internal static class Program
             await controller.StartAsync(createDefaultPaper: false);
             await Dispatcher.CurrentDispatcher.InvokeAsync(static () => { }, DispatcherPriority.Render);
             var visible = windows.Values.Count(window => window.HasVisibleSurface);
+            if (name == "free-queue-preview-restore")
+            {
+                await EdgeCapsuleQueuePreviewChecks.Run(controller, windows);
+                return;
+            }
+            if (name == "free-queue-regressions")
+            {
+                await EdgeCapsuleQueueRegressionChecks.Run(controller, windows);
+                return;
+            }
+            if (name == "edge-capsule-pending-drag-release")
+            {
+                await EdgeCapsulePendingDragChecks.Run(controller, windows);
+                return;
+            }
+            if (name == "free-queue-shortcut-targeting")
+            {
+                await EdgeCapsuleShortcutChecks.Run(controller, windows);
+                return;
+            }
+            if (name == "free-queue-bottom-insert")
+            {
+                await EdgeCapsuleBottomInsertChecks.Run(controller, windows);
+                return;
+            }
+            if (name == "free-queue-resting-delta-persist")
+            {
+                await EdgeCapsuleRestingDeltaPersistChecks.Run(
+                    controller,
+                    windows,
+                    store);
+                return;
+            }
             if (name == "edge-expand-foreground")
             {
                 await EdgeExpandForegroundChecks.Run(controller, windows);
@@ -549,7 +636,28 @@ internal static class Program
         target.GetType().GetField(name, Private)?.GetValue(target) ??
         target.GetType().GetProperty(name, Private)?.GetValue(target) ??
         throw new MissingMemberException(target.GetType().FullName, name);
-    private static async Task Until(Func<bool> ready, string name)
+
+    // 各 fixture 共用的反射辅助：避免每个文件各自维护一份 Call/Invoke/Part。
+    internal static object? Call(object target, string name, params object?[] args)
+    {
+        var method = target.GetType().GetMethod(name, Private)
+            ?? throw new MissingMethodException(target.GetType().Name, name);
+        return method.Invoke(target, args);
+    }
+
+    internal static void Invoke(object target, string name, params object?[] args)
+    {
+        var method = target.GetType().GetMethod(name, Private)
+            ?? throw new MissingMethodException(target.GetType().Name, name);
+        _ = method.Invoke(target, args);
+    }
+
+    internal static object Part(object target, string name) =>
+        target.GetType().GetField(name, Private)?.GetValue(target) ??
+        target.GetType().GetProperty(name, Private)?.GetValue(target) ??
+        throw new MissingMemberException(target.GetType().Name, name);
+
+    internal static async Task Until(Func<bool> ready, string name)
     {
         var started = Stopwatch.GetTimestamp();
         while (!ready())
@@ -558,7 +666,7 @@ internal static class Program
             await Task.Delay(10);
         }
     }
-    private static void Require(bool condition, string message)
+    internal static void Require(bool condition, string message)
     {
         if (!condition) throw new InvalidOperationException(message);
     }

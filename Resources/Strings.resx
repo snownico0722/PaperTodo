@@ -47,15 +47,6 @@
   <data name="AppendAreaToolTip" xml:space="preserve">
     <value>点击添加内容；拖到这里删除</value>
   </data>
-  <data name="CapsuleNote" xml:space="preserve">
-    <value>笔记</value>
-  </data>
-  <data name="CapsuleTodo" xml:space="preserve">
-    <value>待办</value>
-  </data>
-  <data name="CapsuleTodoCount" xml:space="preserve">
-    <value>{0}项</value>
-  </data>
   <data name="CommonCancel" xml:space="preserve">
     <value>取消</value>
   </data>
@@ -73,12 +64,6 @@
   </data>
   <data name="DragSortToolTip" xml:space="preserve">
     <value>拖动排序</value>
-  </data>
-  <data name="EmptyNotePaper" xml:space="preserve">
-    <value>空笔记纸</value>
-  </data>
-  <data name="EmptyTodoPaper" xml:space="preserve">
-    <value>空待办纸</value>
   </data>
   <data name="MarkdownDefaultLinkLabel" xml:space="preserve">
     <value>链接</value>
@@ -113,9 +98,6 @@
   <data name="FullscreenTopmostModeStayOnTop" xml:space="preserve">
     <value>保持置顶</value>
   </data>
-  <data name="MarkdownPreviewFailure" xml:space="preserve">
-    <value>*预览失败，已保留原文。错误信息：{0}*</value>
-  </data>
   <data name="OpenMarkdownFailureMessage" xml:space="preserve">
     <value>无法调用默认 {0} 编辑器：
 {1}</value>
@@ -125,9 +107,6 @@
   </data>
   <data name="ScriptCapsuleEmptyMessage" xml:space="preserve">
     <value>脚本胶囊没有可运行内容。</value>
-  </data>
-  <data name="ScriptCapsuleEditMenu" xml:space="preserve">
-    <value>编辑脚本胶囊</value>
   </data>
   <data name="ScriptCapsuleExitFailureMessage" xml:space="preserve">
     <value>脚本运行失败（退出码 {0}）。
@@ -272,9 +251,6 @@
   <data name="MenuList" xml:space="preserve">
     <value>列表</value>
   </data>
-  <data name="MenuNew" xml:space="preserve">
-    <value>新建</value>
-  </data>
   <data name="MenuQuick" xml:space="preserve">
     <value>快捷</value>
   </data>
@@ -286,9 +262,6 @@
   </data>
   <data name="MenuQuote" xml:space="preserve">
     <value>引用</value>
-  </data>
-  <data name="MenuRenameTitle" xml:space="preserve">
-    <value>重命名标题</value>
   </data>
   <data name="MenuRestoreWindow" xml:space="preserve">
     <value>展开为纸片</value>
@@ -308,9 +281,6 @@
   <data name="MenuText" xml:space="preserve">
     <value>文本</value>
   </data>
-  <data name="MenuThisPaper" xml:space="preserve">
-    <value>这张纸</value>
-  </data>
   <data name="MenuTodo" xml:space="preserve">
     <value>待办</value>
   </data>
@@ -322,9 +292,6 @@
   </data>
   <data name="PaperKindTodo" xml:space="preserve">
     <value>待办</value>
-  </data>
-  <data name="PaperLabelFormat" xml:space="preserve">
-    <value>{0} {1} · {2}</value>
   </data>
   <data name="PaperLimitMessage" xml:space="preserve">
     <value>纸片已达到 200 张上限。
@@ -452,17 +419,11 @@
   <data name="SettingsHideEdgeCapsuleCloseButtonOnHover" xml:space="preserve">
     <value>悬停时隐藏关闭按钮</value>
   </data>
-  <data name="CapsuleCollapseAllLabel" xml:space="preserve">
-    <value>收起</value>
-  </data>
   <data name="CapsuleCollapseAllExpandedTip" xml:space="preserve">
     <value>收起当前胶囊队列</value>
   </data>
   <data name="CapsuleCollapseAllCollapsedTip" xml:space="preserve">
     <value>展开当前胶囊队列</value>
-  </data>
-  <data name="CapsuleCollapseAllCountFormat" xml:space="preserve">
-    <value>{0} 个</value>
   </data>
   <data name="TrayExit" xml:space="preserve">
     <value>退出</value>
@@ -488,9 +449,6 @@
   <data name="TodoVisualSizeLarge" xml:space="preserve">
     <value>大</value>
   </data>
-  <data name="TodoVisualSizeExtraLarge" xml:space="preserve">
-    <value>特大</value>
-  </data>
   <data name="TrayInlineConfirmDelete" xml:space="preserve">
     <value>⚠ 删除</value>
   </data>
@@ -515,9 +473,6 @@
   <data name="SettingsExternalMarkdownExtension" xml:space="preserve">
     <value>外部打开文件类型</value>
   </data>
-  <data name="SettingsQuickActions" xml:space="preserve">
-    <value>快捷操作</value>
-  </data>
   <data name="SettingsDisplay" xml:space="preserve">
     <value>显示</value>
   </data>
@@ -526,12 +481,6 @@
   </data>
   <data name="SettingsScriptCapsule" xml:space="preserve">
     <value>脚本胶囊</value>
-  </data>
-  <data name="SettingsTopBarButtons" xml:space="preserve">
-    <value>顶栏按钮</value>
-  </data>
-  <data name="SettingsBehavior" xml:space="preserve">
-    <value>基础行为</value>
   </data>
   <data name="SettingsAdvancedMode" xml:space="preserve">
     <value>高级模式</value>
@@ -551,9 +500,6 @@
   </data>
   <data name="SettingsRunLinkedScriptCapsulesOnClick" xml:space="preserve">
     <value>关联脚本直接运行</value>
-  </data>
-  <data name="SettingsGeneral" xml:space="preserve">
-    <value>通用</value>
   </data>
   <data name="TipThemeMode" xml:space="preserve">
     <value>浅色、深色，或跟随 Windows 系统主题。</value>
@@ -592,9 +538,6 @@
     <value>检测到视频、游戏等全屏时，纸片与边缘胶囊可暂时避让；
 「保持置顶」则始终可见。</value>
   </data>
-  <data name="TipTodoVisualSize" xml:space="preserve">
-    <value>调整待办文字、行高与间距。</value>
-  </data>
   <data name="TipEnableTodoPaperLinks" xml:space="preserve">
     <value>把任意纸片拖到待办项上建立关联，再从该项打开纸片。</value>
   </data>
@@ -620,15 +563,6 @@
 关闭时不压缩，超过 8 MB 直接拒绝。
 无论开关，任一边超过 4096 像素都拒绝。</value>
   </data>
-  <data name="TipNewTodoButton" xml:space="preserve">
-    <value>在纸片顶栏显示「新建待办」。</value>
-  </data>
-  <data name="TipNewNoteButton" xml:space="preserve">
-    <value>在纸片顶栏显示「新建笔记」。</value>
-  </data>
-  <data name="TipExternalOpenButton" xml:space="preserve">
-    <value>顶栏显示外部打开：把当前笔记写入临时文件，交给系统默认程序。</value>
-  </data>
   <data name="TipExternalExtension" xml:space="preserve">
     <value>外部打开时使用的后缀，例如 .md、.txt。</value>
   </data>
@@ -650,8 +584,11 @@
   <data name="TipCapsuleCollapseAll" xml:space="preserve">
     <value>队列顶部显示主胶囊，一键收起或展开当前队列。</value>
   </data>
-  <data name="TipHideEdgeCapsuleCloseButtonOnHover" xml:space="preserve">
-    <value>开启后仍会正常伸长；延长区域作为普通胶囊区域使用，不显示关闭按钮。需要关闭时可在右键菜单中选择「隐藏」。</value>
+  <data name="TipCapsuleFreeQueues" xml:space="preserve">
+    <value>胶囊可在贴边任意高度自由摆放，靠近其他队列自动合并，拖远自动脱离；按住 Ctrl 拖动队列中任意胶囊可整队搬移。与「显示主胶囊」互斥。</value>
+  </data>
+  <data name="SettingsCapsuleFreeQueues" xml:space="preserve">
+    <value>边缘胶囊自由队列</value>
   </data>
   <data name="TipMaxTitleLength" xml:space="preserve">
     <value>纸片标题与胶囊显示的最大字数。</value>
@@ -757,12 +694,6 @@
   <data name="SettingsHideLinkedPapersFromCapsules" xml:space="preserve">
     <value>关联纸片不显示为胶囊</value>
   </data>
-  <data name="SettingsResetNoteZoom" xml:space="preserve">
-    <value>恢复笔记缩放</value>
-  </data>
-  <data name="SettingsRestoreAllCapsules" xml:space="preserve">
-    <value>展开所有胶囊</value>
-  </data>
   <data name="TrayStartup" xml:space="preserve">
     <value>开机自启动</value>
   </data>
@@ -832,9 +763,6 @@
   <data name="TipLabsCollapsePaperOnDeactivate" xml:space="preserve">
     <value>纸片失去焦点后自动收起为胶囊。拖拽、标题编辑、菜单或下拉栏打开时不会触发。需要启用胶囊模式。</value>
   </data>
-  <data name="LabsPaperOpacity" xml:space="preserve">
-    <value>纸片透明度</value>
-  </data>
   <data name="LabsEnableInactivePaperOpacity" xml:space="preserve">
     <value>失焦后自动半透明</value>
   </data>
@@ -843,15 +771,6 @@
   </data>
   <data name="LabsInactivePaperOpacityLevel" xml:space="preserve">
     <value>失焦后的不透明度</value>
-  </data>
-  <data name="LabsCapsuleOpacity" xml:space="preserve">
-    <value>胶囊透明度</value>
-  </data>
-  <data name="LabsEnableRestingCapsuleOpacity" xml:space="preserve">
-    <value>静止时自动半透明</value>
-  </data>
-  <data name="TipLabsRestingCapsuleOpacity" xml:space="preserve">
-    <value>仅影响普通胶囊和贴边胶囊的静止状态；悬停、激活或拖动时恢复为不透明，主胶囊不受影响。</value>
   </data>
   <data name="LabsRestingCapsuleOpacityLevel" xml:space="preserve">
     <value>静止时不透明度</value>
@@ -883,9 +802,6 @@
   <data name="LabsEnableWindowTethering" xml:space="preserve">
     <value>启用窗口绑定</value>
   </data>
-  <data name="TipLabsWindowTethering" xml:space="preserve">
-    <value>展开纸片后，把顶栏的窗口绑定按钮拖到其他软件窗口并松手，纸片会贴边并跟随移动。待办纸和笔记纸均可绑定；解除后会恢复原有贴边胶囊槽位。</value>
-  </data>
   <data name="LabsWindowTetherPreferredEdge" xml:space="preserve">
     <value>绑定位置</value>
   </data>
@@ -916,29 +832,17 @@
   <data name="LabsEnableTetherVisibility" xml:space="preserve">
     <value>目标隐藏时同步收起</value>
   </data>
-  <data name="TipLabsTetherVisibility" xml:space="preserve">
-    <value>目标最小化或隐藏时，绑定纸片会临时隐藏或替换为独立胶囊；目标恢复或激活时纸片重新显示。此过程不会修改纸片自身的展开、胶囊或可见性数据。</value>
-  </data>
   <data name="ToolTipDragPaperToWindow" xml:space="preserve">
     <value>拖动到其他软件窗口以绑定</value>
   </data>
   <data name="ToolTipWindowBindingActiveFormat" xml:space="preserve">
     <value>已绑定到「{0}」；拖动可改绑，右键可解除绑定</value>
   </data>
-  <data name="WindowBindingDragHint" xml:space="preserve">
-    <value>拖到要绑定的软件窗口</value>
-  </data>
   <data name="WindowBindingDropTargetFormat" xml:space="preserve">
     <value>松开以绑定到「{0}」</value>
   </data>
   <data name="LabsTetherMinimizedBehavior" xml:space="preserve">
     <value>目标最小化时</value>
-  </data>
-  <data name="LabsTetherMinimizedHide" xml:space="preserve">
-    <value>隐藏纸片</value>
-  </data>
-  <data name="LabsTetherMinimizedCapsule" xml:space="preserve">
-    <value>显示胶囊</value>
   </data>
   <data name="LabsTetherCapsuleLabelFormat" xml:space="preserve">
     <value>绑定 · {0}</value>
@@ -1018,9 +922,6 @@
   <data name="TodoReminderInvalidTime" xml:space="preserve">
     <value>请输入有效时间，例如 09:30。</value>
   </data>
-  <data name="TodoReminderSelectionFormat" xml:space="preserve">
-    <value>{0} · {1:00}:{2:00}</value>
-  </data>
   <data name="TodoReminderFutureRequired" xml:space="preserve">
     <value>请选择一个晚于当前时间的提醒。</value>
   </data>
@@ -1050,9 +951,6 @@
   </data>
   <data name="TodoReminderCountdownDaysFormat" xml:space="preserve">
     <value>{0}天</value>
-  </data>
-  <data name="LabsPassiveMode" xml:space="preserve">
-    <value>快捷键置底</value>
   </data>
   <data name="LabsCurrentPaperPassive" xml:space="preserve">
     <value>当前纸片：置底并穿透点击</value>
@@ -1210,9 +1108,6 @@
   <data name="ShortcutRestoreDefault" xml:space="preserve">
     <value>恢复默认</value>
   </data>
-  <data name="ShortcutRestoreAll" xml:space="preserve">
-    <value>恢复默认</value>
-  </data>
   <data name="ShortcutStatusUnassigned" xml:space="preserve">
     <value>未设置</value>
   </data>
@@ -1257,18 +1152,11 @@
   <data name="TipLabsMcpDeletes" xml:space="preserve"><value>开启即预授权 AI 直接删除纸片或待办，不再逐次弹窗确认；操作无法自动撤销，请谨慎启用。</value></data>
   <data name="LabsMcpStatusReady" xml:space="preserve"><value>本地 MCP 接口已就绪</value></data>
   <data name="LabsMcpStatusDisabled" xml:space="preserve"><value>本地 MCP 接口已关闭</value></data>
-  <data name="LabsMcpCopyCodex" xml:space="preserve"><value>复制 Codex 配置</value></data>
   <data name="LabsMcpCopyJson" xml:space="preserve"><value>复制 JSON 配置</value></data>
   <data name="LabsMcpCopied" xml:space="preserve"><value>已复制</value></data>
   <data name="LabsMcpCopyFailed" xml:space="preserve"><value>复制失败</value></data>
   <data name="SettingsPlugins" xml:space="preserve">
     <value>插件</value>
-  </data>
-  <data name="PluginsCurrentProtocolFormat" xml:space="preserve">
-    <value>当前插件协议：{0}</value>
-  </data>
-  <data name="PluginsDescriptorVersionFormat" xml:space="preserve">
-    <value>{0} · 插件 v{1} · 协议 {2} · 状态数据 {3}</value>
   </data>
   <data name="PluginsPageTitle" xml:space="preserve">
     <value>正文插件</value>
@@ -1380,9 +1268,6 @@
   <data name="TodoDragSelectedCount" xml:space="preserve">
     <value>已选择 {0} 项</value>
   </data>
-  <data name="TodoMultiSelectToolTip" xml:space="preserve">
-    <value>按住并上下拖动，选择多个待办</value>
-  </data>
   <data name="MenuOpenLinkedPath" xml:space="preserve">
     <value>打开关联路径：{0}</value>
   </data>
@@ -1394,9 +1279,6 @@
   </data>
   <data name="ToolTipOpenLinkedPath" xml:space="preserve">
     <value>打开关联路径：{0}</value>
-  </data>
-  <data name="ToolTipLinkedPathMissing" xml:space="preserve">
-    <value>关联路径已失效：{0}</value>
   </data>
   <data name="LinkedPathSingleDropMessage" xml:space="preserve">
     <value>一条待办一次只能关联一个文件或文件夹。</value>
@@ -1437,9 +1319,6 @@
   <data name="DeepCapsuleGapWide" xml:space="preserve">
     <value>较宽</value>
   </data>
-  <data name="AdvancedFeatureBadgeTip" xml:space="preserve">
-    <value>高级模式中显示的增强功能</value>
-  </data>
   <data name="PluginsStatusIssue" xml:space="preserve">
     <value>插件有问题</value>
   </data>
@@ -1466,27 +1345,6 @@
   </data>
   <data name="NoteCopyTextOnlyMessage" xml:space="preserve">
     <value>选中的图片内容过大，本次仅复制了文字。</value>
-  </data>
-  <data name="ColorSchemeMica" xml:space="preserve">
-    <value>云母</value>
-  </data>
-  <data name="TipColorSchemeMica" xml:space="preserve">
-    <value>使用 Windows 11 22H2 及以上的原生 DWM Mica，背景由系统合成，不读取或模拟壁纸。用于展开的纸片和设置窗口；胶囊、折叠动画和半透明状态保留实色绘制。关闭系统透明效果、开启高对比度或原生接口不可用时回退实色。首次从其他皮肤切换后需退出并重新打开 PaperTodo。</value>
-  </data>
-  <data name="MicaRestartRequired" xml:space="preserve">
-    <value>已保存云母选择。请从托盘退出并重新打开 PaperTodo，以启用原生 Mica；当前窗口先使用实色，编辑内容和撤销记录不会因换肤被重建。</value>
-  </data>
-  <data name="MicaUnsupported" xml:space="preserve">
-    <value>原生 Mica 需要 Windows 11 22H2（22621）及以上。当前系统使用云母配色的实色背景。</value>
-  </data>
-  <data name="MicaScope" xml:space="preserve">
-    <value>原生 Mica 用于展开的纸片和设置窗口。胶囊、折叠动画及半透明状态使用实色背景；系统也可能按透明效果和节能策略回退。</value>
-  </data>
-  <data name="SettingsMicaBackdrop" xml:space="preserve">
-    <value>材质效果</value>
-  </data>
-  <data name="TipMicaBackdrop" xml:space="preserve">
-    <value>选择标准云母、标准亚克力或透色亚克力。标准亚克力保留柔和磨砂效果；透色亚克力使用更轻的底色，让背后的颜色更明显。</value>
   </data>
   <data name="MicaBackdropMica" xml:space="preserve">
     <value>标准云母</value>
@@ -1554,15 +1412,6 @@
   </data>
   <data name="MenuCustomizeTopBar" xml:space="preserve">
     <value>自定义顶栏</value>
-  </data>
-  <data name="MenuReorderTopBar" xml:space="preserve">
-    <value>调整按钮顺序</value>
-  </data>
-  <data name="MenuTopBarMoveLeft" xml:space="preserve">
-    <value>向左移动</value>
-  </data>
-  <data name="MenuTopBarMoveRight" xml:space="preserve">
-    <value>向右移动</value>
   </data>
   <data name="MenuTopBarAssociationDrag" xml:space="preserve">
     <value>按住此项拖动以关联</value>

@@ -52,7 +52,6 @@ internal sealed partial class SkinBorder
         internal bool IsBackgroundActive => _scene?.Layout != null;
         internal bool HasBackgroundCapture => _capture != null;
         internal int BackgroundFrameCount { get; private set; }
-        internal long BackgroundUploadedPixels { get; private set; }
         internal string? BackgroundFailure { get; private set; }
         internal int BackgroundProjectionCount { get; private set; }
         internal int BackgroundSceneDrawCount { get; private set; }
@@ -303,7 +302,6 @@ internal sealed partial class SkinBorder
             scene.Layout = layout;
             scene.PreBlurred = preBlurred;
             scene.ImageBounds = null;
-            BackgroundUploadedPixels += (long)layout.PixelWidth * layout.PixelHeight;
 
             if (_visual == null)
             {

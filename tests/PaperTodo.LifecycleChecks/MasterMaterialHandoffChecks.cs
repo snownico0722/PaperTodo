@@ -14,10 +14,10 @@ internal static class MasterMaterialHandoffChecks
     {
         var papers = windows.Values.ToArray();
         Require(papers.Length > 0, "material fixture must contain real papers");
-        var presenters = papers.ToDictionary(w => w, w => (EdgeCapsulePresenter)Part(w, "_edgeCapsule"));
-        var hosts = papers.ToDictionary(w => w, w => (EdgeCapsuleHost)Part(w, "_edgeCapsuleHost"));
-        var skins = papers.ToDictionary(w => w, w => (SkinBorder)Part(hosts[w], "Chrome"));
-        var proxies = (IDictionary)Part(controller, "_edgeCapsuleQueueCompositionProxies");
+        var presenters = papers.ToDictionary(w => w, w => (EdgeCapsulePresenter)Program.Part(w, "_edgeCapsule"));
+        var hosts = papers.ToDictionary(w => w, w => (EdgeCapsuleHost)Program.Part(w, "_edgeCapsuleHost"));
+        var skins = papers.ToDictionary(w => w, w => (SkinBorder)Program.Part(hosts[w], "Chrome"));
+        var proxies = (IDictionary)Program.Part(controller, "_edgeCapsuleQueueCompositionProxies");
         var admitted = new HashSet<EdgeCapsuleQueueCompositionProxy>();
         var cycleOutputs = new HashSet<IntPtr>();
         var captureOverlappedProxy = false;
@@ -44,7 +44,7 @@ internal static class MasterMaterialHandoffChecks
             !presenters[paper].HasActiveTransition && !presenters[paper].NativeBatchRetryPending &&
             presenters[paper].AppliedPresentation.Visible &&
             presenters[paper].AppliedPresentation ==
-                ((EdgeCapsuleTargetPresentation)Part(presenters[paper], "TargetPresentation")).ToFrame() &&
+                ((EdgeCapsuleTargetPresentation)Program.Part(presenters[paper], "TargetPresentation")).ToFrame() &&
             (presenters[paper].AppliedPresentation.Surface == EdgeCapsuleSurfaceKind.DockedRetracted) == retracted &&
             hosts[paper].MatchesPresentation(presenters[paper].AppliedPresentation));
 
@@ -120,11 +120,7 @@ internal static class MasterMaterialHandoffChecks
         }
     }
 
-    private static object Part(object target, string name) =>
-        target.GetType().GetField(name, Private)?.GetValue(target) ??
-        target.GetType().GetProperty(name, Private)?.GetValue(target) ??
-        throw new MissingMemberException(target.GetType().Name, name);
-    private static async Task Until(Func<bool> ready, string message)
+        private static async Task Until(Func<bool> ready, string message)
     {
         var watch = Stopwatch.StartNew();
         while (!ready())

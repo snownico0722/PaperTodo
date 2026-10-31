@@ -40,15 +40,6 @@ Error: {0}</value>
   <data name="AppendAreaToolTip" xml:space="preserve">
     <value>Click to add content; drag here to delete</value>
   </data>
-  <data name="CapsuleNote" xml:space="preserve">
-    <value>Note</value>
-  </data>
-  <data name="CapsuleTodo" xml:space="preserve">
-    <value>Todo</value>
-  </data>
-  <data name="CapsuleTodoCount" xml:space="preserve">
-    <value>{0} items</value>
-  </data>
   <data name="CommonCancel" xml:space="preserve">
     <value>Cancel</value>
   </data>
@@ -66,12 +57,6 @@ Error: {0}</value>
   </data>
   <data name="DragSortToolTip" xml:space="preserve">
     <value>Drag to reorder</value>
-  </data>
-  <data name="EmptyNotePaper" xml:space="preserve">
-    <value>Empty note paper</value>
-  </data>
-  <data name="EmptyTodoPaper" xml:space="preserve">
-    <value>Empty todo paper</value>
   </data>
   <data name="MarkdownDefaultLinkLabel" xml:space="preserve">
     <value>Link</value>
@@ -106,9 +91,6 @@ Error: {0}</value>
   <data name="FullscreenTopmostModeStayOnTop" xml:space="preserve">
     <value>Stay on top</value>
   </data>
-  <data name="MarkdownPreviewFailure" xml:space="preserve">
-    <value>*Preview failed. The original text was kept. Error: {0}*</value>
-  </data>
   <data name="OpenMarkdownFailureMessage" xml:space="preserve">
     <value>Could not open the default {0} editor:&#x0A;{1}</value>
   </data>
@@ -117,9 +99,6 @@ Error: {0}</value>
   </data>
   <data name="ScriptCapsuleEmptyMessage" xml:space="preserve">
     <value>This script capsule has nothing to run.</value>
-  </data>
-  <data name="ScriptCapsuleEditMenu" xml:space="preserve">
-    <value>Edit script capsule</value>
   </data>
   <data name="ScriptCapsuleExitFailureMessage" xml:space="preserve">
     <value>Script failed with exit code {0}.&#x0A;{1}</value>
@@ -262,9 +241,6 @@ Error: {0}</value>
   <data name="MenuList" xml:space="preserve">
     <value>List</value>
   </data>
-  <data name="MenuNew" xml:space="preserve">
-    <value>New</value>
-  </data>
   <data name="MenuQuick" xml:space="preserve">
     <value>Quick</value>
   </data>
@@ -276,9 +252,6 @@ Error: {0}</value>
   </data>
   <data name="MenuQuote" xml:space="preserve">
     <value>Quote</value>
-  </data>
-  <data name="MenuRenameTitle" xml:space="preserve">
-    <value>Rename title</value>
   </data>
   <data name="MenuRestoreWindow" xml:space="preserve">
     <value>Expand to paper</value>
@@ -298,9 +271,6 @@ Error: {0}</value>
   <data name="MenuText" xml:space="preserve">
     <value>Text</value>
   </data>
-  <data name="MenuThisPaper" xml:space="preserve">
-    <value>This paper</value>
-  </data>
   <data name="MenuTodo" xml:space="preserve">
     <value>Todo</value>
   </data>
@@ -312,9 +282,6 @@ Error: {0}</value>
   </data>
   <data name="PaperKindTodo" xml:space="preserve">
     <value>Todo</value>
-  </data>
-  <data name="PaperLabelFormat" xml:space="preserve">
-    <value>{0} {1} · {2}</value>
   </data>
   <data name="PaperLimitMessage" xml:space="preserve">
     <value>You have reached the 200-paper limit.&#x0A;Delete papers you no longer need before creating more.</value>
@@ -439,17 +406,11 @@ Error: {0}</value>
   <data name="SettingsHideEdgeCapsuleCloseButtonOnHover" xml:space="preserve">
     <value>Hide edge close button</value>
   </data>
-  <data name="CapsuleCollapseAllLabel" xml:space="preserve">
-    <value>Collapse</value>
-  </data>
   <data name="CapsuleCollapseAllExpandedTip" xml:space="preserve">
     <value>Collapse current capsule queue</value>
   </data>
   <data name="CapsuleCollapseAllCollapsedTip" xml:space="preserve">
     <value>Expand current capsule queue</value>
-  </data>
-  <data name="CapsuleCollapseAllCountFormat" xml:space="preserve">
-    <value>{0} pc</value>
   </data>
   <data name="TrayExit" xml:space="preserve">
     <value>Exit</value>
@@ -475,9 +436,6 @@ Error: {0}</value>
   <data name="TodoVisualSizeLarge" xml:space="preserve">
     <value>Large</value>
   </data>
-  <data name="TodoVisualSizeExtraLarge" xml:space="preserve">
-    <value>XL</value>
-  </data>
   <data name="TrayInlineConfirmDelete" xml:space="preserve">
     <value>⚠ Delete</value>
   </data>
@@ -502,9 +460,6 @@ Error: {0}</value>
   <data name="SettingsExternalMarkdownExtension" xml:space="preserve">
     <value>External open file type</value>
   </data>
-  <data name="SettingsQuickActions" xml:space="preserve">
-    <value>Quick actions</value>
-  </data>
   <data name="SettingsDisplay" xml:space="preserve">
     <value>Display</value>
   </data>
@@ -514,9 +469,6 @@ Error: {0}</value>
   <data name="SettingsScriptCapsule" xml:space="preserve">
     <value>Script capsule</value>
   </data>
-  <data name="SettingsTopBarButtons" xml:space="preserve">
-    <value>Top-bar buttons</value>
-  </data>
   <data name="SettingsCapsule" xml:space="preserve">
     <value>Capsule</value>
   </data>
@@ -525,9 +477,6 @@ Error: {0}</value>
   </data>
   <data name="SettingsRunLinkedScriptCapsulesOnClick" xml:space="preserve">
     <value>Run linked scripts directly</value>
-  </data>
-  <data name="SettingsGeneral" xml:space="preserve">
-    <value>General</value>
   </data>
   <data name="TipThemeMode" xml:space="preserve">
     <value>Light, dark, or follow the Windows system theme.</value>
@@ -566,9 +515,6 @@ Full Render: while editing, headings, lists, quotes, code and other blocks use t
     <value>When video, games, or other fullscreen apps are detected, papers and edge capsules can step aside.
 “Stay on top” keeps them always visible.</value>
   </data>
-  <data name="TipTodoVisualSize" xml:space="preserve">
-    <value>Todo text, row height, and spacing.</value>
-  </data>
   <data name="TipEnableTodoPaperLinks" xml:space="preserve">
     <value>Drag any paper onto a todo item to link it, then open the paper from that item.</value>
   </data>
@@ -584,15 +530,6 @@ About 5 full-width characters on one line, 10 on multiline.</value>
   </data>
   <data name="TipRunLinkedScriptCapsulesOnClick" xml:space="preserve">
     <value>If linked to a script capsule: left-click runs it, right-click opens edit.</value>
-  </data>
-  <data name="TipNewTodoButton" xml:space="preserve">
-    <value>Show “New todo” in the paper top bar.</value>
-  </data>
-  <data name="TipNewNoteButton" xml:space="preserve">
-    <value>Show “New note” in the paper top bar.</value>
-  </data>
-  <data name="TipExternalOpenButton" xml:space="preserve">
-    <value>Top-bar external open: write the note to a temp file and hand it to the default app.</value>
   </data>
   <data name="TipExternalExtension" xml:space="preserve">
     <value>File suffix for external open, e.g. .md or .txt.</value>
@@ -615,8 +552,11 @@ About 5 full-width characters on one line, 10 on multiline.</value>
   <data name="TipCapsuleCollapseAll" xml:space="preserve">
     <value>Show a master capsule at the top of the queue to collapse or expand it.</value>
   </data>
-  <data name="TipHideEdgeCapsuleCloseButtonOnHover" xml:space="preserve">
-    <value>Edge capsules still extend on hover; the extra area acts like the main capsule without a close button. Use Hide in the context menu to close it.</value>
+  <data name="TipCapsuleFreeQueues" xml:space="preserve">
+    <value>Capsules can sit at any height along the edge, snap into a nearby queue, and leave again when dragged far enough. Hold Ctrl while dragging any capsule to move the whole queue. Mutually exclusive with the main capsule.</value>
+  </data>
+  <data name="SettingsCapsuleFreeQueues" xml:space="preserve">
+    <value>Free edge capsule queues</value>
   </data>
   <data name="TipMaxTitleLength" xml:space="preserve">
     <value>Max characters shown in paper titles and capsules.</value>
@@ -731,12 +671,6 @@ Either way, any side over 4096 px is rejected.</value>
   <data name="SettingsHideLinkedPapersFromCapsules" xml:space="preserve">
     <value>Linked papers not shown as capsules</value>
   </data>
-  <data name="SettingsResetNoteZoom" xml:space="preserve">
-    <value>Restore note zoom</value>
-  </data>
-  <data name="SettingsRestoreAllCapsules" xml:space="preserve">
-    <value>Expand all capsules</value>
-  </data>
   <data name="TrayStartup" xml:space="preserve">
     <value>Start with Windows</value>
   </data>
@@ -748,9 +682,6 @@ Either way, any side over 4096 px is rejected.</value>
   </data>
   <data name="SettingsShortcuts" xml:space="preserve">
     <value>Keyboard shortcuts</value>
-  </data>
-  <data name="SettingsBehavior" xml:space="preserve">
-    <value>Behavior</value>
   </data>
   <data name="SettingsAdvancedMode" xml:space="preserve">
     <value>Advanced</value>
@@ -819,9 +750,6 @@ When off, only hides those items; selected values stay unchanged.</value>
   <data name="TipLabsCollapsePaperOnDeactivate" xml:space="preserve">
     <value>Collapses an unfocused paper into a capsule. It does not trigger during dragging, title editing, or while a menu or drop-down is open. Capsule mode is required.</value>
   </data>
-  <data name="LabsPaperOpacity" xml:space="preserve">
-    <value>Paper opacity</value>
-  </data>
   <data name="LabsEnableInactivePaperOpacity" xml:space="preserve">
     <value>Fade inactive papers</value>
   </data>
@@ -830,15 +758,6 @@ When off, only hides those items; selected values stay unchanged.</value>
   </data>
   <data name="LabsInactivePaperOpacityLevel" xml:space="preserve">
     <value>Inactive opacity</value>
-  </data>
-  <data name="LabsCapsuleOpacity" xml:space="preserve">
-    <value>Capsule opacity</value>
-  </data>
-  <data name="LabsEnableRestingCapsuleOpacity" xml:space="preserve">
-    <value>Fade resting capsules</value>
-  </data>
-  <data name="TipLabsRestingCapsuleOpacity" xml:space="preserve">
-    <value>Only affects ordinary and edge capsules while resting. Hovering, activating, or dragging restores full opacity; the master capsule is unchanged.</value>
   </data>
   <data name="LabsRestingCapsuleOpacityLevel" xml:space="preserve">
     <value>Resting opacity</value>
@@ -870,9 +789,6 @@ When off, only hides those items; selected values stay unchanged.</value>
   <data name="LabsEnableWindowTethering" xml:space="preserve">
     <value>Enable window binding</value>
   </data>
-  <data name="TipLabsWindowTethering" xml:space="preserve">
-    <value>On an expanded paper, drag the window-binding button in the title bar onto another application window. Todo and note papers can both bind, follow the target, and restore any reserved edge-capsule slot after unbinding.</value>
-  </data>
   <data name="LabsWindowTetherPreferredEdge" xml:space="preserve">
     <value>Binding position</value>
   </data>
@@ -903,29 +819,17 @@ When off, only hides those items; selected values stay unchanged.</value>
   <data name="LabsEnableTetherVisibility" xml:space="preserve">
     <value>Retract when the target is hidden</value>
   </data>
-  <data name="TipLabsTetherVisibility" xml:space="preserve">
-    <value>When the target is minimized or hidden, its bound paper is temporarily hidden or replaced by a separate capsule. Restoring or activating the target shows the paper again without changing the paper's own expanded, capsule, or visibility data.</value>
-  </data>
   <data name="ToolTipDragPaperToWindow" xml:space="preserve">
     <value>Drag onto another application window to bind</value>
   </data>
   <data name="ToolTipWindowBindingActiveFormat" xml:space="preserve">
     <value>Bound to “{0}”; drag to rebind or right-click to unbind</value>
   </data>
-  <data name="WindowBindingDragHint" xml:space="preserve">
-    <value>Drag onto the application window to bind</value>
-  </data>
   <data name="WindowBindingDropTargetFormat" xml:space="preserve">
     <value>Release to bind to “{0}”</value>
   </data>
   <data name="LabsTetherMinimizedBehavior" xml:space="preserve">
     <value>When the target is minimized</value>
-  </data>
-  <data name="LabsTetherMinimizedHide" xml:space="preserve">
-    <value>Hide paper</value>
-  </data>
-  <data name="LabsTetherMinimizedCapsule" xml:space="preserve">
-    <value>Show capsule</value>
   </data>
   <data name="LabsTetherCapsuleLabelFormat" xml:space="preserve">
     <value>Bound · {0}</value>
@@ -1005,9 +909,6 @@ When off, only hides those items; selected values stay unchanged.</value>
   <data name="TodoReminderInvalidTime" xml:space="preserve">
     <value>Enter a valid time, for example 09:30.</value>
   </data>
-  <data name="TodoReminderSelectionFormat" xml:space="preserve">
-    <value>{0} · {1:00}:{2:00}</value>
-  </data>
   <data name="TodoReminderFutureRequired" xml:space="preserve">
     <value>Choose a reminder later than the current time.</value>
   </data>
@@ -1037,9 +938,6 @@ When off, only hides those items; selected values stay unchanged.</value>
   </data>
   <data name="TodoReminderCountdownDaysFormat" xml:space="preserve">
     <value>{0}d</value>
-  </data>
-  <data name="LabsPassiveMode" xml:space="preserve">
-    <value>Shortcut pass-through</value>
   </data>
   <data name="LabsCurrentPaperPassive" xml:space="preserve">
     <value>Send current paper behind and make it click-through</value>
@@ -1197,9 +1095,6 @@ When off, open at the docked edge or remembered position.</value>
   <data name="ShortcutRestoreDefault" xml:space="preserve">
     <value>Restore default</value>
   </data>
-  <data name="ShortcutRestoreAll" xml:space="preserve">
-    <value>Restore defaults</value>
-  </data>
   <data name="ShortcutStatusUnassigned" xml:space="preserve">
     <value>Unassigned</value>
   </data>
@@ -1244,18 +1139,11 @@ When off, open at the docked edge or remembered position.</value>
   <data name="TipLabsMcpDeletes" xml:space="preserve"><value>Enabling this pre-authorizes AI to delete papers or todos without per-operation prompts. Deletion cannot be undone automatically; enable with care.</value></data>
   <data name="LabsMcpStatusReady" xml:space="preserve"><value>Local MCP interface is ready</value></data>
   <data name="LabsMcpStatusDisabled" xml:space="preserve"><value>Local MCP interface is off</value></data>
-  <data name="LabsMcpCopyCodex" xml:space="preserve"><value>Copy Codex config</value></data>
   <data name="LabsMcpCopyJson" xml:space="preserve"><value>Copy JSON config</value></data>
   <data name="LabsMcpCopied" xml:space="preserve"><value>Copied</value></data>
   <data name="LabsMcpCopyFailed" xml:space="preserve"><value>Copy failed</value></data>
   <data name="SettingsPlugins" xml:space="preserve">
     <value>Plugins</value>
-  </data>
-  <data name="PluginsCurrentProtocolFormat" xml:space="preserve">
-    <value>Current plugin protocol: {0}</value>
-  </data>
-  <data name="PluginsDescriptorVersionFormat" xml:space="preserve">
-    <value>{0} · plugin v{1} · protocol {2} · state {3}</value>
   </data>
   <data name="PluginsPageTitle" xml:space="preserve">
     <value>Body plugins</value>
@@ -1355,12 +1243,10 @@ When off, open at the docked edge or remembered position.</value>
   <data name="MenuUncompleteSelectedTodos" xml:space="preserve"><value>Mark all incomplete</value></data>
   <data name="MenuDeleteSelectedTodos" xml:space="preserve"><value>Delete {0} selected items</value></data>
   <data name="TodoDragSelectedCount" xml:space="preserve"><value>{0} items selected</value></data>
-  <data name="TodoMultiSelectToolTip" xml:space="preserve"><value>Drag up or down to select multiple todos</value></data>
   <data name="MenuOpenLinkedPath" xml:space="preserve"><value>Open linked path: {0}</value></data>
   <data name="MenuOpenLinkedPathLocation" xml:space="preserve"><value>Open containing location</value></data>
   <data name="MenuUnlinkPath" xml:space="preserve"><value>Remove path link</value></data>
   <data name="ToolTipOpenLinkedPath" xml:space="preserve"><value>Open linked path: {0}</value></data>
-  <data name="ToolTipLinkedPathMissing" xml:space="preserve"><value>Linked path is unavailable: {0}</value></data>
   <data name="LinkedPathSingleDropMessage" xml:space="preserve"><value>A todo can link to only one file or folder at a time.</value></data>
   <data name="LinkedPathDropFailureTitle" xml:space="preserve"><value>Cannot link path</value></data>
   <data name="LinkedPathDropFailureMessage" xml:space="preserve"><value>Could not link this file or folder:&#xA;{0}</value></data>
@@ -1388,9 +1274,6 @@ When off, open at the docked edge or remembered position.</value>
   <data name="DeepCapsuleGapWide" xml:space="preserve">
     <value>Wide</value>
   </data>
-  <data name="AdvancedFeatureBadgeTip" xml:space="preserve">
-    <value>Enhanced setting shown in Advanced mode</value>
-  </data>
   <data name="PluginsStatusIssue" xml:space="preserve">
     <value>Plugin has an issue</value>
   </data>
@@ -1417,27 +1300,6 @@ When off, open at the docked edge or remembered position.</value>
   </data>
   <data name="NoteCopyTextOnlyMessage" xml:space="preserve">
     <value>The selected images are too large to include. Only the text was copied.</value>
-  </data>
-  <data name="ColorSchemeMica" xml:space="preserve">
-    <value>Mica</value>
-  </data>
-  <data name="TipColorSchemeMica" xml:space="preserve">
-    <value>Uses native DWM Mica on Windows 11 22H2 or later, composed by Windows without reading or simulating the wallpaper. Applies to expanded papers and Settings; capsules, folding animations and translucent states keep solid rendering. Falls back to solid colors when transparency is disabled, high contrast is enabled, or native APIs are unavailable. After switching from another skin for the first time, exit and reopen PaperTodo.</value>
-  </data>
-  <data name="MicaRestartRequired" xml:space="preserve">
-    <value>Mica selection saved. Exit PaperTodo from the tray and reopen it to enable native Mica. Existing windows use solid colors for now; changing skins does not recreate your editors or undo history.</value>
-  </data>
-  <data name="MicaUnsupported" xml:space="preserve">
-    <value>Native Mica requires Windows 11 22H2 (build 22621) or later. This system uses solid Mica palette colors.</value>
-  </data>
-  <data name="MicaScope" xml:space="preserve">
-    <value>Native Mica applies to expanded papers and Settings. Capsules, folding animations and translucent states use solid backgrounds. Windows may also use its fallback based on transparency and power settings.</value>
-  </data>
-  <data name="SettingsMicaBackdrop" xml:space="preserve">
-    <value>Backdrop material</value>
-  </data>
-  <data name="TipMicaBackdrop" xml:space="preserve">
-    <value>Choose Mica, standard Acrylic or Clear Acrylic. Standard Acrylic has a soft frosted finish; Clear Acrylic uses a lighter tint to reveal more background color.</value>
   </data>
   <data name="MicaBackdropMica" xml:space="preserve">
     <value>Mica</value>
@@ -1505,15 +1367,6 @@ When off, open at the docked edge or remembered position.</value>
   </data>
   <data name="MenuCustomizeTopBar" xml:space="preserve">
     <value>Customize title bar</value>
-  </data>
-  <data name="MenuReorderTopBar" xml:space="preserve">
-    <value>Reorder shortcuts</value>
-  </data>
-  <data name="MenuTopBarMoveLeft" xml:space="preserve">
-    <value>Move left</value>
-  </data>
-  <data name="MenuTopBarMoveRight" xml:space="preserve">
-    <value>Move right</value>
   </data>
   <data name="MenuTopBarAssociationDrag" xml:space="preserve">
     <value>Hold and drag to associate</value>

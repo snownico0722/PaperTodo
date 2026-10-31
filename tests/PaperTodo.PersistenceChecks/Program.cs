@@ -30,6 +30,10 @@ var checks = new (string Name, Action Run)[]
     ("markdown-modes-migrate-and-roundtrip", MarkdownModesMigrateAndRoundTrip),
     ("obsolete-topbar-aggregate-is-ignored", ObsoleteTopBarAggregateIsIgnored),
     ("disabled-capsule-mode-keeps-queue-layout-memory", DisabledCapsuleModeKeepsQueueLayoutMemory),
+    ("free-queue-instance-keys-survive-a-round-trip", FreeQueueInstanceKeysSurviveARoundTrip),
+    ("free-queue-instance-keys-do-not-collapse-into-one", FreeQueueInstanceKeysDoNotCollapseIntoOne),
+    ("legacy-papers-keep-the-default-queue-key", LegacyPapersKeepTheDefaultQueueKey),
+    ("legacy-queue-keys-survive-when-free-queues-disabled", LegacyQueueKeysSurviveWhenFreeQueuesDisabled),
     ("downward-preview-default-and-roundtrip", DownwardPreviewDefaultAndRoundTrip)
 };
 
@@ -170,6 +174,109 @@ static void DisabledCapsuleModeKeepsQueueLayoutMemory()
            Math.Abs(margin - 37.5) < 0.001,
         "disabled capsule mode discarded remembered queue layout");
 }
+
+// Free queues extend the persisted queue key with an instance suffix ("monitor|side#id").
+// These checks pin the two invariants that make old data safe: a suffixed key must round-trip
+// unchanged, and a paper with no suffix must keep deriving the pre-D-058 key.
+static void FreeQueueInstanceKeysSurviveARoundTrip()
+{
+    using var scope = new TempDirectory();
+    var state = NewState("light");
+    state.UseCapsuleFreeQueues = true;
+    state.Papers.Add(NewDockedPaper("p1", "DISPLAY1", "right", "q1"));
+    state.Papers.Add(NewDockedPaper("p2", "DISPLAY1", "right", "q2"));
+    state.DeepCapsuleQueueStartTopMargins["DISPLAY1|right#q1"] = 137.0;
+    state.DeepCapsuleQueueStartTopMargins["DISPLAY1|right#q2"] = 411.5;
+    state.DeepCapsuleQueueStartTopMargins["DISPLAY1|left"] = 37.5;
+
+    var store = NewStore(scope.Path, DurableAtomicFileWriter.Shared);
+    store.SaveJsonSync(store.SerializeState(state), version: 1);
+    var loaded = NewStore(scope.Path, DurableAtomicFileWriter.Shared).Load();
+
+    foreach (var (key, expected) in new[]
+             {
+                 ("DISPLAY1|right#q1", 137.0),
+                 ("DISPLAY1|right#q2", 411.5),
+                 ("DISPLAY1|left", 37.5)
+             })
+    {
+        Assert(loaded.DeepCapsuleQueueStartTopMargins.TryGetValue(key, out var margin) &&
+               Math.Abs(margin - expected) < 0.001,
+            $"queue layout memory lost or rewrote key {key}");
+    }
+
+    var byId = loaded.Papers.ToDictionary(p => p.Id);
+    Assert(byId["p1"].CapsuleQueueId == "q1" && byId["p2"].CapsuleQueueId == "q2",
+        "queue instance id did not survive the round trip");
+}
+
+// The exact failure mode that motivated splitting the suffix off before side normalization:
+// normalizing "right#q1" folds it to "right", collapsing two queues into one with no error.
+static void FreeQueueInstanceKeysDoNotCollapseIntoOne()
+{
+    using var scope = new TempDirectory();
+    var state = NewState("light");
+    state.DeepCapsuleQueueStartTopMargins["DISPLAY1|right#q1"] = 137.0;
+    state.DeepCapsuleQueueStartTopMargins["DISPLAY1|right#q2"] = 411.5;
+
+    var store = NewStore(scope.Path, DurableAtomicFileWriter.Shared);
+    store.SaveJsonSync(store.SerializeState(state), version: 1);
+    var loaded = NewStore(scope.Path, DurableAtomicFileWriter.Shared).Load();
+
+    Assert(loaded.DeepCapsuleQueueStartTopMargins.Count == 2,
+        "two distinct queues collapsed into one during load normalization");
+    Assert(loaded.DeepCapsuleQueueStartTopMargins.ContainsKey("DISPLAY1|right#q1") &&
+           loaded.DeepCapsuleQueueStartTopMargins.ContainsKey("DISPLAY1|right#q2"),
+        "instance suffix was dropped during load normalization");
+}
+
+static void LegacyPapersKeepTheDefaultQueueKey()
+{
+    using var scope = new TempDirectory();
+    var state = NewState("light");
+    state.UseCapsuleFreeQueues = true;
+    state.Papers.Add(NewDockedPaper("p1", "DISPLAY1", "right", ""));
+    state.DeepCapsuleQueueStartTopMargins["DISPLAY1|right"] = 64.0;
+
+    var store = NewStore(scope.Path, DurableAtomicFileWriter.Shared);
+    store.SaveJsonSync(store.SerializeState(state), version: 1);
+    var loaded = NewStore(scope.Path, DurableAtomicFileWriter.Shared).Load();
+
+    Assert(loaded.Papers[0].CapsuleQueueId == "",
+        "a paper with no instance id was assigned one during normalization");
+    Assert(loaded.DeepCapsuleQueueStartTopMargins.ContainsKey("DISPLAY1|right") &&
+           loaded.DeepCapsuleQueueStartTopMargins["DISPLAY1|right"] == 64.0,
+        "the pre-D-058 queue key stopped resolving to its remembered layout");
+}
+
+static void LegacyQueueKeysSurviveWhenFreeQueuesDisabled()
+{
+    using var scope = new TempDirectory();
+    var state = NewState("light");
+    state.UseCapsuleFreeQueues = false;
+    state.DeepCapsuleQueueStartTopMargins["DISPLAY1|left"] = 37.5;
+    state.DeepCapsuleQueueStartTopMargins["DISPLAY1|right#q1"] = 137.0;
+
+    var store = NewStore(scope.Path, DurableAtomicFileWriter.Shared);
+    store.SaveJsonSync(store.SerializeState(state), version: 1);
+    var loaded = NewStore(scope.Path, DurableAtomicFileWriter.Shared).Load();
+
+    // Queue layout is user layout, not runtime state: turning the feature off must keep the
+    // memory so re-enabling restores the arrangement.
+    Assert(loaded.DeepCapsuleQueueStartTopMargins.ContainsKey("DISPLAY1|left") &&
+           loaded.DeepCapsuleQueueStartTopMargins.ContainsKey("DISPLAY1|right#q1"),
+        "disabling free queues discarded remembered queue layout");
+}
+
+static PaperData NewDockedPaper(string id, string monitor, string side, string queueId) => new()
+{
+    Id = id,
+    Title = id,
+    CapsuleMonitorDeviceName = monitor,
+    CapsuleSide = side,
+    CapsuleQueueId = queueId,
+    IsCollapsed = true
+};
 
 static void PluginDataUsesOneNormalFile()
 {

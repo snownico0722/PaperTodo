@@ -525,6 +525,9 @@ public sealed class AppState
     public bool RunLinkedScriptCapsulesOnClick { get; set; }
     public int MaxTitleLength { get; set; } = PaperTitles.DefaultMaxTitleLength;
     public bool UseCapsuleCollapseAll { get; set; } = true;
+    // 自由队列模式：胶囊可在同一条边上的任意高度自由摆放，一条边可并存多条队列。
+    // 与 UseCapsuleCollapseAll 互斥 —— 一条边存在多条队列时，slot 0 的主胶囊无明确归属。
+    public bool UseCapsuleFreeQueues { get; set; }
     public bool CompactMasterCapsule { get; set; }
     public Dictionary<string, bool> CapsuleCollapseAllActiveQueues { get; set; } = new();
     public bool ShowDeepCapsuleWhileExpanded { get; set; } = true;
@@ -652,6 +655,13 @@ public sealed class PaperData
     // assigned" — on load it inherits the legacy global anchor so existing capsules keep place.
     public string CapsuleSide { get; set; } = "";
     public string CapsuleMonitorDeviceName { get; set; } = "";
+
+    // Free-queue mode narrows the above pair to one queue instance, so several queues can
+    // coexist on the same edge. Empty means "the default queue for this edge" — which makes
+    // the derived queue key byte-identical to the pre-free-queue one, so old data needs no
+    // migration. See D-058.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public string CapsuleQueueId { get; set; } = "";
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public double? DeepCapsuleExpandedX { get; set; }

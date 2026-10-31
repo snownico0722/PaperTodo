@@ -8,8 +8,7 @@ internal enum EdgeCapsuleVisualAuthority
     QueueTranslation = 1,
     FloatingDrag = 2,
     DockingOverlap = 3,
-    AuthoritySwap = 4,
-    Lost = 5
+    AuthoritySwap = 4
 }
 
 internal readonly record struct EdgeCapsuleQueueProxyCandidate(

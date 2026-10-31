@@ -31,7 +31,6 @@ internal readonly record struct MarkdownCollapseCandidate(
 
 /// <summary>一次光标显灵同步后，折叠区间表 / 显灵取色是否需要变化的报告。</summary>
 internal readonly record struct MarkdownCollapseChange(
-    bool CollapseChanged,  // 折叠区间表发生变化（控制符折叠↔显灵翻转）
     bool VisualChanged);   // 任一显灵驱动的视觉变化（含折叠 + 非塌缩取色标记），决定是否触发重排
 
 /// <summary>
@@ -841,7 +840,7 @@ internal sealed class MarkdownCollapseTable
         }
 
         Caret = target;
-        return new MarkdownCollapseChange(collapseChanged, visualChanged || collapseChanged);
+        return new MarkdownCollapseChange(visualChanged || collapseChanged);
     }
 
     /// <summary>

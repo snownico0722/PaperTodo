@@ -30,11 +30,9 @@ public sealed partial class MarkdownTextBox : TextEditor
     private bool _isPreviewMode;
     private bool _isPostPasteRefreshQueued;
     private bool _isImageRenderRedrawQueued;
-    private bool _isMarkdownSuffixRedrawQueued;
     private bool _isEnsuringImageAnchorLine;
     private string _imageReferenceTextMode = ImageReferenceTextModes.Always;
     private bool _hadInternalImageReferences;
-    private int _queuedMarkdownRedrawStartLine = int.MaxValue;
     private readonly HashSet<int> _queuedImageRedrawLines = new();
     private TextAnchor? _selectedImageReferenceAnchor;
     private string? _selectedImageId;
@@ -443,30 +441,6 @@ public sealed partial class MarkdownTextBox : TextEditor
         Select(start + prefix.Length, 0);
     }
 
-    public int GetFirstVisibleLineIndex()
-    {
-        EnsureVisualLines();
-        var lines = TextArea.TextView.VisualLines;
-        if (lines.Count > 0)
-        {
-            return Math.Max(0, lines[0].FirstDocumentLine.LineNumber - 1);
-        }
-
-        return GetLineIndexFromCharacterIndex(CaretIndex);
-    }
-
-    public int GetLastVisibleLineIndex()
-    {
-        EnsureVisualLines();
-        var lines = TextArea.TextView.VisualLines;
-        if (lines.Count > 0)
-        {
-            return Math.Max(0, lines[^1].LastDocumentLine.LineNumber - 1);
-        }
-
-        return GetLineIndexFromCharacterIndex(CaretIndex);
-    }
-
     public int GetLineIndexFromCharacterIndex(int charIndex)
     {
         if (Document == null || Document.TextLength == 0)
@@ -782,28 +756,6 @@ public sealed partial class MarkdownTextBox : TextEditor
             : null;
     }
 
-    public bool TryPlaceCaretOnImageFromSource(DependencyObject? source)
-    {
-        if (!TryGetImageCaretFromSource(source, out var caretIndex))
-        {
-            return false;
-        }
-
-        PlaceCaretAfterImage(caretIndex);
-        return true;
-    }
-
-    public bool TryPlaceCaretOnImageFromPoint(Point point)
-    {
-        if (!TryGetImageCaretFromPoint(point, out var caretIndex))
-        {
-            return false;
-        }
-
-        PlaceCaretAfterImage(caretIndex);
-        return true;
-    }
-
     public void PlaceCaretAfterImage(int caretIndex)
     {
         if (Document == null)
@@ -899,19 +851,6 @@ public sealed partial class MarkdownTextBox : TextEditor
         {
             EnsureTrailingImageAnchorLine();
         }
-    }
-
-    private static void GetAffectedLineRange(
-        TextDocument document,
-        int offset,
-        int length,
-        out int startLine,
-        out int endLine)
-    {
-        var startOffset = Math.Clamp(offset, 0, document.TextLength);
-        var endOffset = Math.Clamp(offset + Math.Max(0, length), 0, document.TextLength);
-        startLine = document.GetLineByOffset(startOffset).LineNumber;
-        endLine = document.GetLineByOffset(endOffset).LineNumber;
     }
 
     public bool CanInsertImagesFromDataObject(IDataObject dataObject)
@@ -1855,38 +1794,6 @@ public sealed partial class MarkdownTextBox : TextEditor
                     }
                 }
                 _queuedImageRedrawLines.Clear();
-            }),
-            System.Windows.Threading.DispatcherPriority.ContextIdle);
-    }
-
-    private void QueueMarkdownSuffixRedraw(int startLine)
-    {
-        _queuedMarkdownRedrawStartLine = Math.Min(_queuedMarkdownRedrawStartLine, Math.Max(1, startLine));
-        if (_isMarkdownSuffixRedrawQueued)
-        {
-            return;
-        }
-
-        _isMarkdownSuffixRedrawQueued = true;
-        Dispatcher.BeginInvoke(
-            (Action)(() =>
-            {
-                _isMarkdownSuffixRedrawQueued = false;
-                var document = Document;
-                var lineNumber = Math.Clamp(
-                    _queuedMarkdownRedrawStartLine,
-                    1,
-                    Math.Max(1, document.LineCount));
-                _queuedMarkdownRedrawStartLine = int.MaxValue;
-                var line = document.GetLineByNumber(lineNumber);
-                var length = document.TextLength - line.Offset;
-                if (length > 0)
-                {
-                    TextArea.TextView.Redraw(
-                        line.Offset,
-                        length,
-                        System.Windows.Threading.DispatcherPriority.Render);
-                }
             }),
             System.Windows.Threading.DispatcherPriority.ContextIdle);
     }
