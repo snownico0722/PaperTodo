@@ -532,9 +532,14 @@ internal static partial class WindowNative
         _ = SetActiveWindow(externalForegroundWindow);
     }
 
+    /// <summary>
+    /// 取光标的物理屏幕像素。无论当前线程处于哪个 DPI 感知上下文都返回物理坐标；
+    /// 失败时绝不回退 <c>GetCursorPos</c>，避免把 System Aware 上下文里的逻辑坐标
+    /// 当成 <see cref="DeviceScreenPoint"/> 使用。
+    /// </summary>
     public static bool TryGetCursorScreenPosition(out DeviceScreenPoint point)
     {
-        if (GetCursorPos(out var nativePoint))
+        if (GetPhysicalCursorPos(out var nativePoint))
         {
             point = new DeviceScreenPoint(nativePoint.X, nativePoint.Y);
             return true;
@@ -1600,6 +1605,10 @@ internal static partial class WindowNative
 
     [DllImport("user32.dll")]
     private static extern bool GetCursorPos(out CursorPoint lpPoint);
+
+    // 不受线程 DPI 虚拟化影响，始终返回物理屏幕像素。
+    [DllImport("user32.dll")]
+    private static extern bool GetPhysicalCursorPos(out CursorPoint lpPoint);
 
     private const int VkControl = 0x11;
     private const int VkLeftControl = 0xA2;
