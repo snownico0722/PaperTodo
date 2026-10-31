@@ -64,7 +64,20 @@ internal sealed record EdgeCapsulePreviewRequest(
     FrameworkElement Content,
     Action<bool>? SetVisibility = null,
     Action? PrepareForActivation = null,
-    Func<FrameworkElement>? CreateDeferredContent = null);
+    Func<FrameworkElement>? CreateDeferredContent = null)
+{
+    /// <summary>
+    /// 释放未被采用的预览内容。普通 WPF 元素交给 GC；插件/原生内容若实现
+    /// <see cref="IDisposable"/>，必须在拒绝路径显式回收。
+    /// </summary>
+    internal void ReleaseUnusedContent()
+    {
+        if (Content is IDisposable disposable)
+        {
+            disposable.Dispose();
+        }
+    }
+}
 
 
 
