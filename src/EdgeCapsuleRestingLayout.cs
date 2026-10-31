@@ -1,9 +1,7 @@
 namespace PaperTodo;
 
 /// <summary>队列某个成员在当前帧的实际顶部位置（已包含 preview 等附加偏移）。</summary>
-internal readonly record struct EdgeCapsuleRestingQueueMember(
-    string PaperId,
-    double TopDip);
+internal readonly record struct EdgeCapsuleRestingQueueMember(string PaperId);
 
 /// <summary>
 /// 一条静止队列。LiveEdgeKey 会把断连显示器折叠到主屏同侧，因此回退队列与主屏队列

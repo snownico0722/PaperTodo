@@ -10,6 +10,20 @@ internal static partial class Program
 {
     private static int assertions;
 
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool GetPhysicalCursorPos(out NativeCursorPoint point);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern IntPtr SetThreadDpiAwarenessContext(IntPtr context);
+
+    [System.Runtime.InteropServices.StructLayout(
+        System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct NativeCursorPoint
+    {
+        public int X;
+        public int Y;
+    }
+
     [STAThread]
     private static int Main()
     {
@@ -23,8 +37,14 @@ internal static partial class Program
             Console.WriteLine("PASS queue-instance-key-codec");
             QueueDragModifierLatch();
             Console.WriteLine("PASS queue-drag-modifier-latch");
+            CursorPhysicalCoordinates();
+            Console.WriteLine("PASS cursor-physical-coordinates");
             QueueMagnet();
             Console.WriteLine("PASS queue-magnet-merge-detach-reorder");
+            EdgeCapsuleQueueInsertionSolverChecks();
+            Console.WriteLine("PASS queue-insertion-solver");
+            EdgeCapsuleRestingLayoutChecks();
+            Console.WriteLine("PASS queue-resting-layout");
             EdgeCapsuleShortcutOrdinalChecks();
             Console.WriteLine("PASS free-queue-shortcut-ordinal");
             BottomQueueInsertionMagnet();
@@ -48,6 +68,38 @@ internal static partial class Program
     {
         assertions++;
         if (!condition) throw new Exception(message);
+    }
+
+    // 第 4 项回归：即使线程处于 System Aware 上下文，包装函数也必须返回物理像素。
+    // 锁屏/无输入桌面时 GetPhysicalCursorPos 失败，跳过而不阻塞 CI。
+    private static void CursorPhysicalCoordinates()
+    {
+        if (!GetPhysicalCursorPos(out var expected))
+        {
+            return;
+        }
+
+        var previous = SetThreadDpiAwarenessContext(new IntPtr(-2));
+        try
+        {
+            if (!WindowNative.TryGetCursorScreenPosition(out var sampled))
+            {
+                Check(false, "The cursor wrapper failed while GetPhysicalCursorPos succeeded");
+                return;
+            }
+
+            // 两次调用之间光标可能移动，保留 2 像素容差。
+            Check(Math.Abs(sampled.X - expected.X) <= 2 &&
+                  Math.Abs(sampled.Y - expected.Y) <= 2,
+                "The cursor wrapper returns physical coordinates outside PMv2");
+        }
+        finally
+        {
+            if (previous != IntPtr.Zero)
+            {
+                _ = SetThreadDpiAwarenessContext(previous);
+            }
+        }
     }
 
     // A free queue narrows (monitor, side) with an instance id. The whole backward-compatibility
@@ -216,6 +268,34 @@ internal static partial class Program
             new("bbb", 1, 100, slot, bandLeft, bandWidth, 1, 100)]);
         Check(tieA.TargetQueueKey == tieB.TargetQueueKey && tieA.TargetQueueKey == "aaa",
             "Equidistant candidates resolve to the same queue regardless of input order");
+
+        // 第 1 项回归：每条候选的插入后占位都会扩容，但目标选择必须优先使用当前真实占位。
+        // A 单颗 [48,94] 的插入区间会覆盖 B，指针却在 B 的当前占位 [248,294] 正中。
+        var farA = new EdgeCapsuleQueueMagnetCandidate(
+            "a", 1, 48, slot, bandLeft, bandWidth, 5, 48);
+        var nearB = new EdgeCapsuleQueueMagnetCandidate(
+            "b", 1, 248, slot, bandLeft, bandWidth, 5, 248);
+        Check(Evaluate(271, "", [farA, nearB]).TargetQueueKey == "b",
+            "A queue's hypothetical insertion span must not steal a real hit on another queue");
+
+        // 单颗拖动：A 三颗 [48,194] 的插入区间 [48,244] 会盖住指针，
+        // B 当前 [210,256] 才是真实命中。旧算法两者距离都是 0，会按 key 序选中 A。
+        var tallA = new EdgeCapsuleQueueMagnetCandidate(
+            "a", 3, 48, slot, bandLeft, bandWidth, 4, 48);
+        var smallB = new EdgeCapsuleQueueMagnetCandidate(
+            "b", 1, 210, slot, bandLeft, bandWidth, 2, 210);
+        Check(Evaluate(233, "", [tallA, smallB]).TargetQueueKey == "b",
+            "A single capsule drop prefers the queue it actually occupies");
+
+        // held 仅靠插入区间保持时，遇到真实命中必须立即让位；没有真实命中则继续吸附。
+        var bottomHeld = new EdgeCapsuleQueueMagnetCandidate(
+            "bottom", 1, 986, slot, bandLeft, bandWidth, 4, 836);
+        var realHit = new EdgeCapsuleQueueMagnetCandidate(
+            "real", 1, 850, slot, bandLeft, bandWidth, 2, 850);
+        Check(Evaluate(873, "", [bottomHeld, realHit], held: "bottom").TargetQueueKey == "real",
+            "A held queue kept only by its insertion span yields to a real hit");
+        Check(Evaluate(859, "", [bottomHeld], held: "bottom").TargetQueueKey == "bottom",
+            "A held bottom queue stays attached through its insertion span");
 
         // Reordering within the source queue reports Reorder; merging into another reports Merge.
         Check(Evaluate(100, "a", TwoQueues(), held: "a").Outcome == EdgeCapsuleQueueMagnetOutcome.Reorder,
@@ -424,6 +504,158 @@ internal static partial class Program
         Check(newQueue.Outcome == EdgeCapsuleQueueMagnetOutcome.NewQueue &&
               Math.Abs(newQueue.NewQueueStartTopDip - 900) < 1e-9,
             "NewQueue avoidance must ignore the insertion-only span");
+    }
+
+    // 第 3 项回归：Feasible 必须兑现“整边不重叠”。删除提前 break 还不够，保持原位的队列
+    // 也必须推进扫描前沿，否则近端已让位的队列会挡住更远处的重叠队列。
+    private static void EdgeCapsuleQueueInsertionSolverChecks()
+    {
+        const double gap = 4;
+        const double area = 1080;
+        const double topMargin = 8;
+
+        EdgeCapsuleQueueInsertSolveResult Solve(
+            double gapDip,
+            params EdgeCapsuleQueueInsertBox[] boxes) =>
+            EdgeCapsuleQueueInsertionSolver.Solve(boxes, "t", area, gapDip, topMargin);
+
+        static void RequireNoOverlap(
+            EdgeCapsuleQueueInsertSolveResult result,
+            EdgeCapsuleQueueInsertBox[] boxes)
+        {
+            var heights = boxes.ToDictionary(
+                box => box.QueueKey,
+                box => box.HeightDip,
+                StringComparer.Ordinal);
+            var ordered = result.TopsDip
+                .OrderBy(pair => pair.Value)
+                .ThenBy(pair => pair.Key, StringComparer.Ordinal)
+                .ToArray();
+            for (var index = 1; index < ordered.Length; index++)
+            {
+                var previous = ordered[index - 1];
+                var current = ordered[index];
+                if (current.Value < previous.Value + heights[previous.Key] - 1e-6)
+                {
+                    throw new Exception("A feasible layout must not contain overlapping queues");
+                }
+            }
+        }
+
+        EdgeCapsuleQueueInsertBox[] stable =
+        [
+            new("t", 48, 96),
+            new("b", 400, 46),
+            new("c", 450, 46)
+        ];
+        var stableResult = Solve(gap, stable);
+        Check(stableResult.Feasible, "A non-overlapping layout stays feasible");
+        Check(Math.Abs(stableResult.TotalDisplacementDip) < 1e-6,
+            "A non-overlapping insertion does not move any queue");
+        Check(Math.Abs(stableResult.TopsDip["b"] - 400) < 1e-6 &&
+              Math.Abs(stableResult.TopsDip["c"] - 450) < 1e-6,
+            "Untouched queues keep their input tops");
+
+        // B 已避开锚点，但 C 与 B 相交：前沿必须从 B 的底边继续推进，把 C 推开。
+        EdgeCapsuleQueueInsertBox[] overlappedBelow =
+        [
+            new("t", 48, 96),
+            new("b", 400, 46),
+            new("c", 420, 46)
+        ];
+        var belowResult = Solve(gap, overlappedBelow);
+        Check(belowResult.Feasible, "Overlapping input below the anchor can still be solved");
+        Check(belowResult.TopsDip["c"] >= belowResult.TopsDip["b"] + 46 - 1e-6,
+            "The farther lower queue is pushed clear of the nearer one");
+        RequireNoOverlap(belowResult, overlappedBelow);
+
+        // 上方链同理。
+        EdgeCapsuleQueueInsertBox[] overlappedAbove =
+        [
+            new("a", 400, 46),
+            new("b", 420, 46),
+            new("t", 600, 96)
+        ];
+        var aboveResult = Solve(gap, overlappedAbove);
+        Check(aboveResult.Feasible, "Overlapping input above the anchor can still be solved");
+        Check(aboveResult.TopsDip["a"] + 46 <= aboveResult.TopsDip["b"] + 1e-6,
+            "The farther upper queue is pushed clear of the nearer one");
+        RequireNoOverlap(aboveResult, overlappedAbove);
+
+        // 0-gap 接触合法；相邻校验只拒绝真实重叠。
+        var touching = Solve(
+            0,
+            new EdgeCapsuleQueueInsertBox("t", 100, 46),
+            new EdgeCapsuleQueueInsertBox("b", 146, 46));
+        Check(touching.Feasible, "Touching queues at zero gap are feasible");
+
+        // 输入顺序不影响结果。
+        var reversed = EdgeCapsuleQueueInsertionSolver.Solve(
+            [new("c", 420, 46), new("b", 400, 46), new("t", 48, 96)],
+            "t", area, gap, topMargin);
+        Check(reversed.Feasible &&
+              Math.Abs(reversed.TopsDip["b"] - belowResult.TopsDip["b"]) < 1e-6 &&
+              Math.Abs(reversed.TopsDip["c"] - belowResult.TopsDip["c"]) < 1e-6,
+            "Candidate order does not change the solved layout");
+
+        // 越界仍不可行。
+        var overflows = Solve(gap, new EdgeCapsuleQueueInsertBox("t", 100, 1200));
+        Check(!overflows.Feasible, "A queue that cannot fit the work area is infeasible");
+    }
+
+    // 第 2 项回归：静止避让只下推；展开卡片的完整底边必须继续传递给下方队列。
+    private static void EdgeCapsuleRestingLayoutChecks()
+    {
+        const double gap = 4;
+
+        static EdgeCapsuleRestingQueue Queue(
+            string key,
+            string edge,
+            double top,
+            double bottom,
+            params string[] paperIds) =>
+            new(
+                edge,
+                key,
+                paperIds
+                    .Select(paperId => new EdgeCapsuleRestingQueueMember(paperId))
+                    .ToArray(),
+                top,
+                bottom);
+
+        var queues = new[]
+        {
+            Queue("a", "|right", 48, 194, "a1", "a2", "a3"),
+            Queue("b", "|right", 100, 146, "b1"),
+            Queue("c", "|right", 320, 366, "c1")
+        };
+        var deltas = EdgeCapsuleRestingLayoutCoordinator.BuildDownwardOffsets(queues, gap);
+        Check(Math.Abs(deltas.GetValueOrDefault("b1") - 98) < 1e-6,
+            "A colliding queue is pushed below the previous compact bottom");
+        Check(deltas.GetValueOrDefault("c1") == 0,
+            "A queue that already clears the previous bottom stays put");
+
+        // B 展开 200 高卡片：输入底边是 100+200=300，B 自身下推 98 后底边 398，C 应推到 402。
+        var withCard = new[]
+        {
+            Queue("a", "|right", 48, 194, "a1", "a2", "a3"),
+            Queue("b", "|right", 100, 300, "b1"),
+            Queue("c", "|right", 320, 366, "c1")
+        };
+        var cardDeltas = EdgeCapsuleRestingLayoutCoordinator.BuildDownwardOffsets(withCard, gap);
+        Check(Math.Abs(cardDeltas.GetValueOrDefault("b1") - 98) < 1e-6,
+            "The card owner is still pushed by the queue above it");
+        Check(Math.Abs(cardDeltas.GetValueOrDefault("c1") - 82) < 1e-6,
+            "The expanded card's full bottom pushes the queue below it to 402");
+
+        var splitEdges = new[]
+        {
+            Queue("a", "|right", 48, 194, "a1"),
+            Queue("b", "|left", 100, 146, "b1")
+        };
+        var splitDeltas = EdgeCapsuleRestingLayoutCoordinator.BuildDownwardOffsets(splitEdges, gap);
+        Check(splitDeltas.GetValueOrDefault("b1") == 0,
+            "Queues on different physical edges do not push each other");
     }
 
     private static void CycleAndUnicode()    {

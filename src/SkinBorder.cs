@@ -139,8 +139,6 @@ internal sealed partial class SkinBorder : PaperChromeBorder
     private bool _applyingSkin;
     private (string Skin, bool Dark, bool HighContrast, MaterialPalette Palette, Brush Paper, Brush Active,
         double Strength, bool Lightweight, bool BaseOuterBorder, bool EdgeActive)? _appearance;
-    internal int GeometryBuildCount { get; private set; }
-    internal int BrushBuildCount { get; private set; }
 
     private void OnSurfaceRoleChanged()
     {
@@ -303,7 +301,6 @@ internal sealed partial class SkinBorder : PaperChromeBorder
         var key = (RenderSize, CornerRadius, BorderThickness, pixel, IsCapsule, dpi.DpiScaleX, dpi.DpiScaleY);
         if (_geometryKey == key) return;
         _geometryKey = key;
-        GeometryBuildCount++;
         _surfaceVersion++;
         _shape = CreateShape(RenderSize, CornerRadius, 0, pixel, dpi);
         _borderRing = Ring(new Thickness(), BorderThickness);

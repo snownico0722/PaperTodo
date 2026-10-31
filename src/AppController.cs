@@ -782,11 +782,6 @@ public sealed partial class AppController : IDisposable
         }
     }
 
-    public bool IsExistingNote(string? noteId)
-    {
-        return FindNote(noteId) != null;
-    }
-
     public bool IsExistingPaper(string? paperId)
     {
         return FindPaper(paperId) != null;
@@ -2069,9 +2064,6 @@ public sealed partial class AppController : IDisposable
         RefreshTrayMenu();
     }
 
-    public void RefreshCapsuleEligibilityForLinkedPaper(string? paperId)
-        => RefreshCapsuleEligibilityForLinkedPapers([paperId]);
-
     public void RefreshCapsuleEligibilityForLinkedPapers(IEnumerable<string?> paperIds)
     {
         var linkedPaperIds = paperIds
@@ -2149,25 +2141,6 @@ public sealed partial class AppController : IDisposable
     {
         var key = QueueKey(target);
         return DeepCapsulePapersInOrder().Count(p => QueueKey(p) == key);
-    }
-
-    public double VisibleDeepCapsuleRestingWidth()
-    {
-        if (!State.UseCapsuleMode || !State.UseDeepCapsuleMode)
-        {
-            return 0;
-        }
-
-        double width = 0;
-        foreach (var paper in DeepCapsulePapersInOrder())
-        {
-            if (_windows.TryGetValue(paper.Id, out var window))
-            {
-                width = Math.Max(width, window.DeepCapsuleRestingVisibleWidth);
-            }
-        }
-
-        return width;
     }
 
     // Widest resting capsule in ONLY the queue that the given paper belongs to. Used to reserve
@@ -4344,12 +4317,6 @@ public sealed partial class AppController : IDisposable
         }
         ArrangeDeepCapsules(animate: false);
         MarkDirty();
-    }
-
-    // Reset every persisted per-queue start height to the product default.
-    private void ResetDeepCapsuleStartTopMargins()
-    {
-        State.DeepCapsuleQueueStartTopMargins.Clear();
     }
 
     // Live-adjust ONE queue's vertical rest position while its master pill is dragged. Writes the

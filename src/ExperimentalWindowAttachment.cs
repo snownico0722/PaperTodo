@@ -1660,6 +1660,8 @@ public sealed partial class PaperWindow
         ReleaseHiddenNoteImages();
     }
 
+    // 保留：ExperimentalTetherCapsule 展示路径当前未接入默认交互，但仍是窗口吸附
+    // 最小化语义的完整实现；ActivateExperimentalTetherTarget 只由本路径回调使用。
     private void ShowExperimentalTetherCapsule()
     {
         var session = _experimentalWindowAttachment;

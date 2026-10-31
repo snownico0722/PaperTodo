@@ -323,7 +323,6 @@ public sealed partial class PaperWindow : Window
     private static Brush TitleBarDividerBrush => Theme.Tint((byte)(Theme.IsDark ? 34 : 28));
     private const string PinOutlineHeadPathData = "M 7.5,4.25 H 16.5 V 5.75 H 15.5 V 12.05 L 17.6,14.15 V 15.35 H 6.4 V 14.15 L 8.5,12.05 V 5.75 H 7.5 Z";
     private const string PinNeedlePathData = "M 10.85,15.35 H 13.15 V 22.1 L 12,23.25 L 10.85,22.1 Z";
-    private const int TodoMoveAnimationMilliseconds = 150;
 
     // Static helpers can initialize PaperWindow on a worker thread during startup.
     // Keep dispatcher-owned menu resources lazy and shared only by their creating thread.
@@ -2471,25 +2470,6 @@ public sealed partial class PaperWindow : Window
         }
     }
 
-    private double VisibleTopBarActionButtonsWidth()
-    {
-        if (_topBarActionButtonsHost == null)
-        {
-            return 0;
-        }
-
-        var width = 0.0;
-        foreach (var child in _topBarActionButtonsHost.Children)
-        {
-            if (child is FrameworkElement element &&
-                element.Visibility == Visibility.Visible)
-            {
-                width += TopBarOuterWidth(element);
-            }
-        }
-        return width;
-    }
-
     private static double TopBarOuterWidth(FrameworkElement element)
     {
         var width = element.Width;
@@ -2506,6 +2486,8 @@ public sealed partial class PaperWindow : Window
             element.Margin.Right;
     }
 
+    // 保留：note-link 拖拽按钮与反馈工厂当前未接线。它们与 TopBarDragKind.NoteLink
+    // 成组存在，删除会掩盖可能待接线的产品功能。
     private void ConfigureNoteLinkDragButton(Button button)
     {
         ConfigureTopBarDragGesture(

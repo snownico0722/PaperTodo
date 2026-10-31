@@ -10,9 +10,7 @@ internal readonly record struct EdgeCapsulePreviewSize(
     // minimum constants remain only as built-in presentation defaults; Normalize deliberately
     // accepts any positive finite plugin size and clamps only to the current monitor work area.
     public const double MinimumWidthDip = 120;
-    public const double MaximumWidthDip = double.MaxValue;
     public const double MinimumHeightDip = 90;
-    public const double MaximumHeightDip = double.MaxValue;
 
     // Built-in Todo and Markdown preview cap; plugin Mini sizes have independent contracts.
     internal const double BuiltInMaximumHeightDip = 320;

@@ -61,16 +61,6 @@ public sealed partial class PaperWindow
         RebuildTodoRows(CurrentFocusedTodoItemId());
     }
 
-    public void UpdateTodoVisualSize()
-    {
-        if (_paper.Type != PaperTypes.Todo)
-        {
-            return;
-        }
-
-        RebuildTodoRows(CurrentFocusedTodoItemId());
-    }
-
     private void RebuildTodoRows(string? focusItemId = null, TodoFocusPlacement focusPlacement = TodoFocusPlacement.End)
     {
         InvalidateEdgeCapsulePreviewContent();

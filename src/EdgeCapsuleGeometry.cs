@@ -38,8 +38,6 @@ internal readonly record struct EdgeCapsuleGeometryResult(
     double DpiScaleX,
     double DpiScaleY);
 
-internal readonly record struct EdgeCapsuleVerticalEdges(int Top, int Bottom);
-
 internal readonly record struct EdgeCapsuleFloatingHandoffGeometry(
     DeviceScreenRect HostStartBounds,
     DeviceScreenRect HostTargetBounds,
@@ -273,17 +271,6 @@ internal static class EdgeCapsuleGeometry
         Math.Abs(first.Top - second.Top) <= tolerance &&
         Math.Abs(first.Right - second.Right) <= tolerance &&
         Math.Abs(first.Bottom - second.Bottom) <= tolerance;
-
-    public static EdgeCapsuleVerticalEdges CalculateVerticalEdges(
-        MonitorGeometry monitor,
-        double topDip,
-        double heightDip)
-    {
-        var scaleY = Math.Max(1, monitor.DpiScaleY);
-        var top = monitor.WorkArea.Top + RoundDevice(topDip * scaleY);
-        var height = Math.Max(1, RoundDevice(Math.Max(1, heightDip) * scaleY));
-        return new EdgeCapsuleVerticalEdges(top, top + height);
-    }
 
     private static int RoundDevice(double value) =>
         (int)Math.Round(value, MidpointRounding.AwayFromZero);

@@ -526,19 +526,6 @@ public sealed partial class AppController
         }
     }
 
-    /// <summary>Drop the drag-time hold so the next gesture starts from a clean slate.</summary>
-    /// <remarks>同样要求 owner（FQ-12）；仅供测试套件 / 显式让渡使用。</remarks>
-    internal void ForgetDeepCapsuleQueueDrag(string? requesterPaperId)
-    {
-        if (requesterPaperId == null ||
-            !OwnsEdgeCapsuleQueueMagnetPreview(requesterPaperId))
-        {
-            return;
-        }
-        _deepCapsuleDragHeldQueueKey = "";
-        ClearDeepCapsuleQueueMagnetCandidates();
-    }
-
     private EdgeCapsuleQueueMagnetPlan EvaluateDeepCapsuleQueueDrop(
         PaperData paper,
         QueueDropGeometry drop) =>

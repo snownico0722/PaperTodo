@@ -26,9 +26,6 @@ public sealed partial class AppController
     // 复用旧的可行性/几何。
     private int _edgeCapsuleQueueDropLayoutVersion;
 
-    /// <summary>测试用：真正重新计算描边布局的次数。</summary>
-    internal int DropTargetLayoutUpdateCount { get; private set; }
-
     // 拖拽期间目标队列的成员、标题和字体不会变化，插入槽变化只影响指示线的纵向位置。
     // 指示线宽度此前每次 index 变化都会对每个成员重新读取 resting width（多次文本测量），
     // 是大队列热路径上的固定浪费；这里只在手势内按队列缓存宽度，结束拖拽即清空。
@@ -93,7 +90,6 @@ public sealed partial class AppController
             // 直接 return 保留所有早退键与计数，下一反馈周期自然重进 ShowAt。
             return;
         }
-        DropTargetLayoutUpdateCount++;
         _edgeCapsuleQueueDropTargetOutlineQueueKey = queueKey;
         _edgeCapsuleQueueDropTargetOutlinePaperId = draggedPaperId;
         _edgeCapsuleQueueDropTargetOutlineCarriedCount = requestedCarriedCount;

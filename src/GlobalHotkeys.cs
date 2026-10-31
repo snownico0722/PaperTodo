@@ -289,11 +289,6 @@ internal readonly record struct ShortcutGesture(Key Key, ModifierKeys Modifiers)
         return new ShortcutGesture(Key.D0 + ordinal, modifiers);
     }
 
-    public static bool HasExactlyTwoModifiers(ModifierKeys modifiers)
-    {
-        return CountSupportedModifiers(modifiers) == 2;
-    }
-
     public static bool HasEdgePrefixModifiers(ModifierKeys modifiers)
     {
         var count = CountSupportedModifiers(modifiers);
@@ -323,11 +318,6 @@ internal readonly record struct ShortcutGesture(Key Key, ModifierKeys Modifiers)
     {
         return ordinal is >= 1 and <= 9 &&
             (key == Key.D0 + ordinal || key == Key.NumPad0 + ordinal);
-    }
-
-    public static bool IsAnyEdgeOrdinalKey(Key key)
-    {
-        return key is (>= Key.D1 and <= Key.D9) or (>= Key.NumPad1 and <= Key.NumPad9);
     }
 
     public bool IsDigitKey =>
@@ -371,12 +361,6 @@ internal readonly record struct ShortcutGesture(Key Key, ModifierKeys Modifiers)
         }
 
         return string.Join('+', ModifierParts());
-    }
-
-    public string ToEdgeSequenceDisplayString()
-    {
-        var prefix = ToEdgePrefixDisplayString();
-        return string.IsNullOrEmpty(prefix) ? "" : $"{prefix}+1–9";
     }
 
     public static bool TryParse(string? text, out ShortcutGesture gesture)

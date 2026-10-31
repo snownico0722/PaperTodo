@@ -90,15 +90,20 @@ internal static class EdgeCapsuleQueuePreviewChecks
         controller.RestoreDeepCapsuleQueuePreview(targetKey);
 
         // 提交拒绝：没有合法布局时不得写入任何 margin 或身份。
+        // 目标队列已接近工作区底部，插入后会把下方队列推过下边界；这次必须拒绝，
+        // 不能退回一个带重叠/出屏的“尽力布局”。
         Require(
             WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(null, out var geometry),
             "primary monitor geometry was not resolved");
         var qaKey = controller.QueueKeyForPaper(source);
         var qcKey = controller.QueueKeyForPaper(
             controller.State.Papers.Single(paper => paper.Id == "fixture-4"));
+        var areaHeight = geometry.LocalWorkAreaDip.Height;
+        var targetMargin = areaHeight - 200;
+        var qcMargin = areaHeight - 100;
         controller.State.DeepCapsuleQueueStartTopMargins[qaKey] = 8;
-        controller.State.DeepCapsuleQueueStartTopMargins[targetKey] = 40;
-        controller.State.DeepCapsuleQueueStartTopMargins[qcKey] = 450;
+        controller.State.DeepCapsuleQueueStartTopMargins[targetKey] = targetMargin;
+        controller.State.DeepCapsuleQueueStartTopMargins[qcKey] = qcMargin;
         controller.ArrangeDeepCapsules(animate: false);
 
         Require(
@@ -122,11 +127,16 @@ internal static class EdgeCapsuleQueuePreviewChecks
         Require(
             controller.QueueKeyForPaper(source) == qaKey &&
             Math.Abs(controller.State.DeepCapsuleQueueStartTopMargins[qaKey] - 8) < 1e-6 &&
-            Math.Abs(controller.State.DeepCapsuleQueueStartTopMargins[targetKey] - 40) < 1e-6 &&
-            Math.Abs(controller.State.DeepCapsuleQueueStartTopMargins[qcKey] - 450) < 1e-6,
+            Math.Abs(
+                controller.State.DeepCapsuleQueueStartTopMargins[targetKey] -
+                targetMargin) < 1e-6 &&
+            Math.Abs(
+                controller.State.DeepCapsuleQueueStartTopMargins[qcKey] -
+                qcMargin) < 1e-6,
             "a rejected insertion must not persist any layout or identity change");
 
-        // 可行提交：目标/邻队 margin 落盘，源胶囊加入目标队列。
+        // 可行提交：target 保存基准 margin；被下推的邻队保留原偏好，
+        // 由提交后的静止避让复现最终位置；源胶囊加入目标队列。
         controller.State.DeepCapsuleQueueStartTopMargins[qaKey] = 48;
         controller.State.DeepCapsuleQueueStartTopMargins[targetKey] = 320;
         controller.State.DeepCapsuleQueueStartTopMargins[qcKey] = 450;
@@ -138,9 +148,9 @@ internal static class EdgeCapsuleQueuePreviewChecks
         Require(
             controller.QueueKeyForPaper(source) == targetKey &&
             Math.Abs(controller.State.DeepCapsuleQueueStartTopMargins[targetKey] - 320) < 1e-6 &&
-            Math.Abs(controller.State.DeepCapsuleQueueStartTopMargins[qcKey] - 470) < 1e-6 &&
+            Math.Abs(controller.State.DeepCapsuleQueueStartTopMargins[qcKey] - 450) < 1e-6 &&
             Math.Abs(controller.State.DeepCapsuleQueueStartTopMargins[qaKey] - 48) < 1e-6,
-            "the committed layout was not persisted");
+            "the committed target margin or source preference was not persisted");
         await Until(
             () => Placement(windows["fixture-3"]).Index == 2 &&
                   Placement(windows["fixture-3"]).SlotCount == 3,

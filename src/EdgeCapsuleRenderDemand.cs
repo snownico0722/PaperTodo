@@ -36,7 +36,6 @@ internal sealed class EdgeCapsuleRenderDemand : IDisposable
     private bool _disposed;
 
     internal bool Enabled { get; }
-    internal int ReadyGroupCount => _deadlines.Count;
     internal bool HasScheduledDemand { get { lock (_gate) return _deadline != 0; } }
     internal bool HasPendingOperation { get { lock (_gate) return _wake != null; } }
 

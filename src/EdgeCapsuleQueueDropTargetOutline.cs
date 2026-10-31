@@ -43,18 +43,6 @@ internal sealed class EdgeCapsuleQueueDropTargetOutline : Window
     /// <summary>窗口是否已经关闭；关闭后控制器需要重建实例。</summary>
     internal bool IsClosed => _closed;
 
-    /// <summary>测试用：插入短线真正启动滑动动画的次数。</summary>
-    internal int InsertionLineSlideCount { get; private set; }
-
-    /// <summary>测试用：当前插入短线对应的插入槽下标。</summary>
-    internal int InsertionLineIndex => _insertionLineIndex;
-
-    /// <summary>测试用：插入短线当前的目标 top（相对描边窗口的 DIP）。</summary>
-    internal double InsertionLineTopTargetDip => _insertionLineTopDip;
-
-    /// <summary>测试用：当前插入是否可行；不可行时插入短线使用警示色。</summary>
-    internal bool InsertionLineIsWarning => _insertionLineFeasible == false;
-
     public EdgeCapsuleQueueDropTargetOutline()
     {
         ShowInTaskbar = false;
@@ -287,7 +275,6 @@ internal sealed class EdgeCapsuleQueueDropTargetOutline : Window
                 InsertionLineSlideFadeFrom,
                 InsertionLineRestingOpacity,
                 EdgeCapsuleLayout.SlotMoveMilliseconds);
-            InsertionLineSlideCount++;
         }
         else
         {

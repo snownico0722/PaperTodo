@@ -9,7 +9,6 @@ internal static class LmdbNative
     private const string LibraryName = "papertodo_lmdb";
 
     internal const int Success = 0;
-    internal const int KeyExists = -30799;
     internal const int NotFound = -30798;
 
     internal const uint NoSubdirectory = 0x4000;

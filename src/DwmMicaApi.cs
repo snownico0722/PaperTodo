@@ -36,11 +36,9 @@ internal sealed class DwmMicaApi : INativeMicaApi
     public bool IsSupported => NativeMicaBackdrop.IsSupported;
     public bool HighContrast => System.Windows.SystemParameters.HighContrast;
     private bool? _compositionEnabled, _transparencyEnabled;
-    internal int EnvironmentReadCount { get; private set; }
     public bool CompositionEnabled => _compositionEnabled ??= ReadComposition();
     private bool ReadComposition()
     {
-        EnvironmentReadCount++;
         return DwmIsCompositionEnabled(out var enabled) >= 0 && enabled;
     }
     internal bool EffectsEnabled => CompositionEnabled && TransparencyEnabled;
@@ -51,7 +49,6 @@ internal sealed class DwmMicaApi : INativeMicaApi
     }
     private bool ReadTransparency()
     {
-        EnvironmentReadCount++;
         try
         {
             using var key = Registry.CurrentUser.OpenSubKey(

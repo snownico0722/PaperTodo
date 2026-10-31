@@ -21,15 +21,24 @@ public sealed partial class AppController
                 state.UseCapsuleCollapseAll,
                 state.UseCapsuleFreeQueues);
 
-        /// <summary>把一次开关写入及其级联应用到快照，返回目标状态。</summary>
+        /// <summary>
+        /// 应用与 StateStore 加载归一化相同的父/子不变式：capsule 是根，edge 是它的子；
+        /// edge 关闭时 master/free 必须关闭；free 开启时 master 必须关闭。
+        /// 运行期设置与重启后加载走同一套规则，避免 API 读值与实际功能分叉。
+        /// </summary>
+        internal CapsuleModeSettingsState Normalize()
+        {
+            var edge = Capsule && Edge;
+            var freeQueues = edge && FreeQueues;
+            var master = edge && !freeQueues && Master;
+            return new CapsuleModeSettingsState(Capsule, edge, master, freeQueues);
+        }
+
+        /// <summary>把一次开关写入及其级联应用到快照，返回归一化后的目标状态。</summary>
         internal CapsuleModeSettingsState With(string id, bool value) =>
-            id switch
+            (id switch
             {
-                "capsule.enabled" => this with
-                {
-                    Capsule = value,
-                    Edge = value ? Edge : false
-                },
+                "capsule.enabled" => this with { Capsule = value },
                 "capsule.edge_enabled" => this with
                 {
                     Edge = value,
@@ -55,7 +64,7 @@ public sealed partial class AppController
                     }
                     : this with { FreeQueues = false },
                 _ => this
-            };
+            }).Normalize();
 
         internal void WriteTo(AppState state)
         {
@@ -65,23 +74,14 @@ public sealed partial class AppController
             state.UseCapsuleFreeQueues = FreeQueues;
         }
 
-        /// <summary>写 true 比较完整目标状态；写 false 只比较自身字段，保持取消路径旧语义。</summary>
+        /// <summary>
+        /// 写 true/false 都比较完整目标状态。脏状态（父开关已关、子开关残留）下
+        /// 重复写 false 会返回“需要修复”，而不是被误判为 no-op。
+        /// </summary>
         internal static bool IsNoOp(AppState state, string id, bool value)
         {
-            if (value)
-            {
-                var current = Capture(state);
-                return current.With(id, true) == current;
-            }
-
-            return id switch
-            {
-                "capsule.enabled" => !state.UseCapsuleMode,
-                "capsule.edge_enabled" => !state.UseDeepCapsuleMode,
-                "capsule.master_enabled" => !state.UseCapsuleCollapseAll,
-                "capsule.free_queues" => !state.UseCapsuleFreeQueues,
-                _ => false
-            };
+            var current = Capture(state);
+            return current.With(id, value) == current;
         }
     }
 

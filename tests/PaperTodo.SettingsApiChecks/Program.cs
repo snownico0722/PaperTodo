@@ -67,6 +67,7 @@ internal static partial class Program
             ServiceBehavior();
             StartupApprovalBehavior();
             CatalogBehavior();
+            CapsuleModeCascadeBehavior();
             TopBarShortcutBehavior();
             TodoMoveBehavior();
             AdapterBehavior();

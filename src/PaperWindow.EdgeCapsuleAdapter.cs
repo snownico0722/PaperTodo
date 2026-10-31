@@ -20,7 +20,6 @@ public sealed partial class PaperWindow
     private bool IsDeepCapsuleSlotRetracting => EdgeCapsuleSlot is
         EdgeCapsuleSlotState.RetractingCollapsed or
         EdgeCapsuleSlotState.RetractingExpanded;
-    private bool IsDeepCapsuleHovered => EdgeCapsuleVisual == EdgeCapsuleVisualState.Hovered;
     private bool IsDeepCapsuleSlotActive => EdgeCapsuleVisual == EdgeCapsuleVisualState.Active;
     private bool IsDeepCapsuleSlotPendingClick => EdgeCapsuleGesture == EdgeCapsuleGestureState.PendingClick;
     private bool IsDeepCapsuleDockedReordering => EdgeCapsuleGesture == EdgeCapsuleGestureState.DockedReordering;

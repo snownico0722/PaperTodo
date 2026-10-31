@@ -54,13 +54,6 @@ internal static class EdgeCapsuleQueueDropTargetGeometry
         return Math.Max(0, count * slot - normalizedGap);
     }
 
-    /// <summary>插入块高度：至少一个槽位，尾槽不含 gap。</summary>
-    internal static double InsertionBlockHeightDip(
-        int carriedCount,
-        double slotHeight,
-        double gap) =>
-        QueueHeightDip(Math.Max(1, carriedCount), slotHeight, gap);
-
     /// <summary>插入后的完整高度：真实成员 + carried 槽位，尾槽不含 gap。</summary>
     internal static double TargetQueueHeightDip(
         int memberCount,

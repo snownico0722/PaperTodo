@@ -45,8 +45,6 @@ public sealed class NoteImageStore : IDisposable
     public NoteImageStore() { }
     internal NoteImageStore(string filePath) => FilePath = Path.GetFullPath(filePath);
 
-    public bool IsWriteDisabled => _writeDisabled;
-
     public bool AutoCompressLargeImages { get; set; } = true;
 
     public void Load()
@@ -366,35 +364,6 @@ public sealed class NoteImageStore : IDisposable
         }
 
         var image = PrepareBitmapSource(source);
-        return AddEncodedImage(
-            noteId,
-            image.Bytes,
-            image.Mime,
-            image.OriginalName,
-            image.Width,
-            image.Height);
-    }
-
-    public NoteImageAsset ImportImageFile(string noteId, string path)
-    {
-        if (_writeDisabled)
-        {
-            throw new InvalidOperationException(Strings.Get("ImageStoreUnavailable"));
-        }
-
-        if (string.IsNullOrWhiteSpace(noteId))
-        {
-            throw new InvalidOperationException(Strings.Get("ImageImportInvalidNote"));
-        }
-
-        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
-        {
-            throw new FileNotFoundException(Strings.Get("ImageImportFileMissing"), path);
-        }
-
-        ThrowIfUnsupportedImageFiles(new[] { path });
-
-        var image = PrepareImageFile(path);
         return AddEncodedImage(
             noteId,
             image.Bytes,

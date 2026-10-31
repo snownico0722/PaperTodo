@@ -921,9 +921,9 @@ internal static partial class WindowNative
         private readonly Dictionary<IntPtr, DeviceScreenRect> _pendingBounds = new();
         private IntPtr _deferredWindowPosition;
         private bool _beginAttempted;
-        private bool _nativeCommitAttempted;
         private bool _completed;
 #if DEBUG
+        private bool _nativeCommitAttempted;
         private readonly Dictionary<IntPtr, WindowBatchDiagnostic> _windowDiagnostics = new();
         private readonly long _startedAt = EdgeCapsulePerformanceDiagnostics.Timestamp();
         private double _beginMilliseconds;
@@ -977,7 +977,6 @@ internal static partial class WindowNative
         internal int UnchangedWindowCount { get; private set; }
         internal int MoveChangeCount { get; private set; }
         internal int SizeChangeCount { get; private set; }
-        internal bool PerformedNativeCommit => _nativeCommitAttempted;
 
         internal bool TryDefer(IntPtr handle, DeviceScreenRect bounds)
         {
@@ -1221,8 +1220,8 @@ internal static partial class WindowNative
                 _deferredWindowPosition = updated;
             }
 
-            _nativeCommitAttempted = true;
 #if DEBUG
+            _nativeCommitAttempted = true;
             var nativeLatency =
                 EdgeNativeLatencyObservation.BeginBatch(_pendingBounds.Keys);
             var nativeJournal = EdgeNativeLatencyObservation.Enabled
@@ -1370,21 +1369,6 @@ internal static partial class WindowNative
 #endif
 
         public void Dispose() => Commit();
-    }
-
-    public static bool TryGetWindowScreenBounds(Window window, out Rect bounds)
-    {
-        var handle = new WindowInteropHelper(window).Handle;
-        if (handle != IntPtr.Zero && GetWindowRect(handle, out var nativeRect))
-        {
-            var topLeft = WindowWorkAreaHelper.DeviceScreenPointToDip(new DeviceScreenPoint(nativeRect.Left, nativeRect.Top));
-            var bottomRight = WindowWorkAreaHelper.DeviceScreenPointToDip(new DeviceScreenPoint(nativeRect.Right, nativeRect.Bottom));
-            bounds = new Rect(topLeft.ToPoint(), bottomRight.ToPoint());
-            return true;
-        }
-
-        bounds = Rect.Empty;
-        return false;
     }
 
     public static bool TryGetVisibleFrameScreenBounds(Window window, out Rect bounds)

@@ -120,16 +120,6 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
             ReferenceEquals(member.Window, window) &&
             member.SourceHandle != IntPtr.Zero);
 
-    public bool Routes(PaperWindow window) =>
-        !_disposed &&
-        _members.Any(member =>
-            ReferenceEquals(member.Window, window));
-
-    public IntPtr SourceHandleFor(PaperWindow window) =>
-        _members.FirstOrDefault(member =>
-            ReferenceEquals(member.Window, window))
-            ?.SourceHandle ?? IntPtr.Zero;
-
     public bool TryReserveForSuccessor()
     {
         if (_disposed ||

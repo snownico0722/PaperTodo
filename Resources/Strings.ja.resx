@@ -40,15 +40,6 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
   <data name="AppendAreaToolTip" xml:space="preserve">
     <value>クリックして内容を追加、ドラッグして削除</value>
   </data>
-  <data name="CapsuleNote" xml:space="preserve">
-    <value>メモ</value>
-  </data>
-  <data name="CapsuleTodo" xml:space="preserve">
-    <value>ToDo</value>
-  </data>
-  <data name="CapsuleTodoCount" xml:space="preserve">
-    <value>{0}件</value>
-  </data>
   <data name="CommonCancel" xml:space="preserve">
     <value>キャンセル</value>
   </data>
@@ -66,12 +57,6 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
   </data>
   <data name="DragSortToolTip" xml:space="preserve">
     <value>ドラッグして並べ替え</value>
-  </data>
-  <data name="EmptyNotePaper" xml:space="preserve">
-    <value>空のメモ紙</value>
-  </data>
-  <data name="EmptyTodoPaper" xml:space="preserve">
-    <value>空のToDo紙</value>
   </data>
   <data name="MarkdownDefaultLinkLabel" xml:space="preserve">
     <value>リンク</value>
@@ -106,9 +91,6 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
   <data name="FullscreenTopmostModeStayOnTop" xml:space="preserve">
     <value>最前面のまま</value>
   </data>
-  <data name="MarkdownPreviewFailure" xml:space="preserve">
-    <value>*プレビューに失敗しました。原文は保持されました。エラー: {0}*</value>
-  </data>
   <data name="OpenMarkdownFailureMessage" xml:space="preserve">
     <value>既定の {0} エディターを起動できませんでした:&#x0A;{1}</value>
   </data>
@@ -117,9 +99,6 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
   </data>
   <data name="ScriptCapsuleEmptyMessage" xml:space="preserve">
     <value>このスクリプトカプセルには実行できる内容がありません。</value>
-  </data>
-  <data name="ScriptCapsuleEditMenu" xml:space="preserve">
-    <value>スクリプトカプセルを編集</value>
   </data>
   <data name="ScriptCapsuleExitFailureMessage" xml:space="preserve">
     <value>スクリプトが終了コード {0} で失敗しました。&#x0A;{1}</value>
@@ -262,9 +241,6 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
   <data name="MenuList" xml:space="preserve">
     <value>リスト</value>
   </data>
-  <data name="MenuNew" xml:space="preserve">
-    <value>新規</value>
-  </data>
   <data name="MenuQuick" xml:space="preserve">
     <value>クイック</value>
   </data>
@@ -276,9 +252,6 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
   </data>
   <data name="MenuQuote" xml:space="preserve">
     <value>引用</value>
-  </data>
-  <data name="MenuRenameTitle" xml:space="preserve">
-    <value>タイトルを変更</value>
   </data>
   <data name="MenuRestoreWindow" xml:space="preserve">
     <value>紙片として展開</value>
@@ -298,9 +271,6 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
   <data name="MenuText" xml:space="preserve">
     <value>テキスト</value>
   </data>
-  <data name="MenuThisPaper" xml:space="preserve">
-    <value>この紙片</value>
-  </data>
   <data name="MenuTodo" xml:space="preserve">
     <value>ToDo</value>
   </data>
@@ -312,9 +282,6 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
   </data>
   <data name="PaperKindTodo" xml:space="preserve">
     <value>ToDo</value>
-  </data>
-  <data name="PaperLabelFormat" xml:space="preserve">
-    <value>{0} {1} · {2}</value>
   </data>
   <data name="PaperLimitMessage" xml:space="preserve">
     <value>紙片の数が上限の 200 枚に達しました。&#x0A;不要な紙片を削除してから新規作成してください。</value>
@@ -439,17 +406,11 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
   <data name="SettingsHideEdgeCapsuleCloseButtonOnHover" xml:space="preserve">
     <value>閉じるボタンを隠す</value>
   </data>
-  <data name="CapsuleCollapseAllLabel" xml:space="preserve">
-    <value>折りたたむ</value>
-  </data>
   <data name="CapsuleCollapseAllExpandedTip" xml:space="preserve">
     <value>現在のカプセル列を折りたたむ</value>
   </data>
   <data name="CapsuleCollapseAllCollapsedTip" xml:space="preserve">
     <value>現在のカプセル列を展開</value>
-  </data>
-  <data name="CapsuleCollapseAllCountFormat" xml:space="preserve">
-    <value>{0} 個</value>
   </data>
   <data name="TrayExit" xml:space="preserve">
     <value>終了</value>
@@ -475,9 +436,6 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
   <data name="TodoVisualSizeLarge" xml:space="preserve">
     <value>大</value>
   </data>
-  <data name="TodoVisualSizeExtraLarge" xml:space="preserve">
-    <value>特大</value>
-  </data>
   <data name="TrayInlineConfirmDelete" xml:space="preserve">
     <value>⚠ 削除</value>
   </data>
@@ -502,9 +460,6 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
   <data name="SettingsExternalMarkdownExtension" xml:space="preserve">
     <value>外部で開くファイル形式</value>
   </data>
-  <data name="SettingsQuickActions" xml:space="preserve">
-    <value>クイック操作</value>
-  </data>
   <data name="SettingsDisplay" xml:space="preserve">
     <value>表示</value>
   </data>
@@ -513,12 +468,6 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
   </data>
   <data name="SettingsScriptCapsule" xml:space="preserve">
     <value>スクリプトカプセル</value>
-  </data>
-  <data name="SettingsTopBarButtons" xml:space="preserve">
-    <value>上部バーのボタン</value>
-  </data>
-  <data name="SettingsBehavior" xml:space="preserve">
-    <value>基本動作</value>
   </data>
   <data name="SettingsAdvancedMode" xml:space="preserve">
     <value>詳細モード</value>
@@ -538,9 +487,6 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
   </data>
   <data name="SettingsRunLinkedScriptCapsulesOnClick" xml:space="preserve">
     <value>関連スクリプトを直接実行</value>
-  </data>
-  <data name="SettingsGeneral" xml:space="preserve">
-    <value>一般</value>
   </data>
   <data name="TipThemeMode" xml:space="preserve">
     <value>ライト、ダーク、または Windows のシステムテーマに合わせます。</value>
@@ -579,9 +525,6 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
     <value>動画やゲームなどの全画面を検出したとき、紙片と端のカプセルを一時的に避けられます。
 「最前面のまま」なら常に表示します。</value>
   </data>
-  <data name="TipTodoVisualSize" xml:space="preserve">
-    <value>ToDo の文字、行高、間隔を調整します。</value>
-  </data>
   <data name="TipEnableTodoPaperLinks" xml:space="preserve">
     <value>任意の紙片を ToDo 項目へドラッグして関連付け、その項目から紙片を開けます。</value>
   </data>
@@ -597,15 +540,6 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   </data>
   <data name="TipRunLinkedScriptCapsulesOnClick" xml:space="preserve">
     <value>関連先がスクリプトカプセルのとき：左クリックで実行、右クリックで編集。</value>
-  </data>
-  <data name="TipNewTodoButton" xml:space="preserve">
-    <value>紙片上部バーに「新規 ToDo」を表示します。</value>
-  </data>
-  <data name="TipNewNoteButton" xml:space="preserve">
-    <value>紙片上部バーに「新規ノート」を表示します。</value>
-  </data>
-  <data name="TipExternalOpenButton" xml:space="preserve">
-    <value>上部バーの外部で開く：ノートを一時ファイルに書き、既定アプリに渡します。</value>
   </data>
   <data name="TipExternalExtension" xml:space="preserve">
     <value>外部で開くときの拡張子。例：.md、.txt。</value>
@@ -633,9 +567,6 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   </data>
   <data name="SettingsCapsuleFreeQueues" xml:space="preserve">
     <value>エッジカプセル自由キュー</value>
-  </data>
-  <data name="TipHideEdgeCapsuleCloseButtonOnHover" xml:space="preserve">
-    <value>ホバー時も通常どおり伸びますが、追加領域は閉じるボタンのない通常のカプセル領域として動作します。閉じる場合は右クリックメニューの「隠す」を使います。</value>
   </data>
   <data name="TipMaxTitleLength" xml:space="preserve">
     <value>紙片タイトルとカプセルに表示する最大文字数。</value>
@@ -750,12 +681,6 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="SettingsHideLinkedPapersFromCapsules" xml:space="preserve">
     <value>関連紙片をカプセルに表示しない</value>
   </data>
-  <data name="SettingsResetNoteZoom" xml:space="preserve">
-    <value>ノートのズームを戻す</value>
-  </data>
-  <data name="SettingsRestoreAllCapsules" xml:space="preserve">
-    <value>すべてのカプセルを展開</value>
-  </data>
   <data name="TrayStartup" xml:space="preserve">
     <value>Windows 起動時に開始</value>
   </data>
@@ -825,9 +750,6 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="TipLabsCollapsePaperOnDeactivate" xml:space="preserve">
     <value>フォーカスを失った付箋をカプセルに折りたたみます。ドラッグ中、タイトル編集中、メニューやドロップダウンを開いている間は実行されません。カプセルモードが必要です。</value>
   </data>
-  <data name="LabsPaperOpacity" xml:space="preserve">
-    <value>付箋の透明度</value>
-  </data>
   <data name="LabsEnableInactivePaperOpacity" xml:space="preserve">
     <value>非アクティブ時に半透明にする</value>
   </data>
@@ -836,15 +758,6 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   </data>
   <data name="LabsInactivePaperOpacityLevel" xml:space="preserve">
     <value>非アクティブ時の不透明度</value>
-  </data>
-  <data name="LabsCapsuleOpacity" xml:space="preserve">
-    <value>カプセルの透明度</value>
-  </data>
-  <data name="LabsEnableRestingCapsuleOpacity" xml:space="preserve">
-    <value>待機中に半透明にする</value>
-  </data>
-  <data name="TipLabsRestingCapsuleOpacity" xml:space="preserve">
-    <value>通常カプセルと端カプセルの待機中だけに適用されます。ホバー、アクティブ、ドラッグ時は不透明に戻り、メインカプセルは変わりません。</value>
   </data>
   <data name="LabsRestingCapsuleOpacityLevel" xml:space="preserve">
     <value>待機中の不透明度</value>
@@ -876,9 +789,6 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="LabsEnableWindowTethering" xml:space="preserve">
     <value>ウィンドウ連携を有効にする</value>
   </data>
-  <data name="TipLabsWindowTethering" xml:space="preserve">
-    <value>展開した付箋のタイトルバーにある連携ボタンを、別のアプリのウィンドウへドラッグします。Todo とノートの両方を連携でき、解除後は予約されていた端カプセルの位置も復元されます。</value>
-  </data>
   <data name="LabsWindowTetherPreferredEdge" xml:space="preserve">
     <value>連携位置</value>
   </data>
@@ -909,29 +819,17 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="LabsEnableTetherVisibility" xml:space="preserve">
     <value>対象が非表示のとき収納する</value>
   </data>
-  <data name="TipLabsTetherVisibility" xml:space="preserve">
-    <value>対象が最小化または非表示になると、連携した付箋を一時的に隠すか、独立したカプセルに置き換えます。対象を復元またはアクティブにすると、付箋自体の展開、カプセル、表示状態を変えずに再表示します。</value>
-  </data>
   <data name="ToolTipDragPaperToWindow" xml:space="preserve">
     <value>別のアプリのウィンドウへドラッグして連携</value>
   </data>
   <data name="ToolTipWindowBindingActiveFormat" xml:space="preserve">
     <value>「{0}」と連携中。ドラッグで変更、右クリックで連携解除</value>
   </data>
-  <data name="WindowBindingDragHint" xml:space="preserve">
-    <value>連携するアプリのウィンドウへドラッグ</value>
-  </data>
   <data name="WindowBindingDropTargetFormat" xml:space="preserve">
     <value>離すと「{0}」に連携</value>
   </data>
   <data name="LabsTetherMinimizedBehavior" xml:space="preserve">
     <value>対象が最小化されたとき</value>
-  </data>
-  <data name="LabsTetherMinimizedHide" xml:space="preserve">
-    <value>付箋を隠す</value>
-  </data>
-  <data name="LabsTetherMinimizedCapsule" xml:space="preserve">
-    <value>カプセルを表示</value>
   </data>
   <data name="LabsTetherCapsuleLabelFormat" xml:space="preserve">
     <value>連携 · {0}</value>
@@ -1011,9 +909,6 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="TodoReminderInvalidTime" xml:space="preserve">
     <value>09:30 のような有効な時刻を入力してください。</value>
   </data>
-  <data name="TodoReminderSelectionFormat" xml:space="preserve">
-    <value>{0}・{1:00}:{2:00}</value>
-  </data>
   <data name="TodoReminderFutureRequired" xml:space="preserve">
     <value>現在より後の時刻を選択してください。</value>
   </data>
@@ -1043,9 +938,6 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   </data>
   <data name="TodoReminderCountdownDaysFormat" xml:space="preserve">
     <value>{0}日</value>
-  </data>
-  <data name="LabsPassiveMode" xml:space="preserve">
-    <value>ショートカットで背面化</value>
   </data>
   <data name="LabsCurrentPaperPassive" xml:space="preserve">
     <value>現在の付箋をクリック透過して背面へ</value>
@@ -1203,9 +1095,6 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="ShortcutRestoreDefault" xml:space="preserve">
     <value>既定に戻す</value>
   </data>
-  <data name="ShortcutRestoreAll" xml:space="preserve">
-    <value>既定に戻す</value>
-  </data>
   <data name="ShortcutStatusUnassigned" xml:space="preserve">
     <value>未設定</value>
   </data>
@@ -1250,18 +1139,11 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="TipLabsMcpDeletes" xml:space="preserve"><value>有効にすると、AI が紙片や ToDo を確認ダイアログなしで直接削除することを事前承認します。自動的には元に戻せないため、注意して有効にしてください。</value></data>
   <data name="LabsMcpStatusReady" xml:space="preserve"><value>ローカル MCP は準備完了</value></data>
   <data name="LabsMcpStatusDisabled" xml:space="preserve"><value>ローカル MCP は無効</value></data>
-  <data name="LabsMcpCopyCodex" xml:space="preserve"><value>Codex 設定をコピー</value></data>
   <data name="LabsMcpCopyJson" xml:space="preserve"><value>JSON 設定をコピー</value></data>
   <data name="LabsMcpCopied" xml:space="preserve"><value>コピーしました</value></data>
   <data name="LabsMcpCopyFailed" xml:space="preserve"><value>コピーに失敗しました</value></data>
   <data name="SettingsPlugins" xml:space="preserve">
     <value>プラグイン</value>
-  </data>
-  <data name="PluginsCurrentProtocolFormat" xml:space="preserve">
-    <value>現在のプラグインプロトコル：{0}</value>
-  </data>
-  <data name="PluginsDescriptorVersionFormat" xml:space="preserve">
-    <value>{0} · プラグイン v{1} · プロトコル {2} · 状態 {3}</value>
   </data>
   <data name="PluginsPageTitle" xml:space="preserve">
     <value>本文プラグイン</value>
@@ -1361,12 +1243,10 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="MenuUncompleteSelectedTodos" xml:space="preserve"><value>すべて未完了に戻す</value></data>
   <data name="MenuDeleteSelectedTodos" xml:space="preserve"><value>選択した {0} 件を削除</value></data>
   <data name="TodoDragSelectedCount" xml:space="preserve"><value>{0} 件を選択中</value></data>
-  <data name="TodoMultiSelectToolTip" xml:space="preserve"><value>上下にドラッグして複数のタスクを選択</value></data>
   <data name="MenuOpenLinkedPath" xml:space="preserve"><value>関連パスを開く：{0}</value></data>
   <data name="MenuOpenLinkedPathLocation" xml:space="preserve"><value>保存場所を開く</value></data>
   <data name="MenuUnlinkPath" xml:space="preserve"><value>パスの関連付けを解除</value></data>
   <data name="ToolTipOpenLinkedPath" xml:space="preserve"><value>関連パスを開く：{0}</value></data>
-  <data name="ToolTipLinkedPathMissing" xml:space="preserve"><value>関連パスが見つかりません：{0}</value></data>
   <data name="LinkedPathSingleDropMessage" xml:space="preserve"><value>1 件のタスクに関連付けられるファイルまたはフォルダーは 1 つだけです。</value></data>
   <data name="LinkedPathDropFailureTitle" xml:space="preserve"><value>パスを関連付けできません</value></data>
   <data name="LinkedPathDropFailureMessage" xml:space="preserve"><value>このファイルまたはフォルダーを関連付けできません：&#xA;{0}</value></data>
@@ -1394,9 +1274,6 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="DeepCapsuleGapWide" xml:space="preserve">
     <value>広い</value>
   </data>
-  <data name="AdvancedFeatureBadgeTip" xml:space="preserve">
-    <value>詳細モードで表示される拡張機能</value>
-  </data>
   <data name="PluginsStatusIssue" xml:space="preserve">
     <value>プラグインに問題があります</value>
   </data>
@@ -1423,27 +1300,6 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   </data>
   <data name="NoteCopyTextOnlyMessage" xml:space="preserve">
     <value>選択した画像の内容が大きすぎるため、今回はテキストのみコピーしました。</value>
-  </data>
-  <data name="ColorSchemeMica" xml:space="preserve">
-    <value>マイカ</value>
-  </data>
-  <data name="TipColorSchemeMica" xml:space="preserve">
-    <value>Windows 11 22H2 以降のネイティブ DWM Mica を使用します。壁紙を読み込んだり模倣したりせず、Windows が背景を合成します。展開した紙片と設定画面が対象です。カプセル、折りたたみアニメーション、半透明状態では単色描画を維持します。透明効果がオフ、高コントラストがオン、またはネイティブ API が利用できない場合は単色になります。他のスキンから初めて切り替えた後は PaperTodo を終了して開き直してください。</value>
-  </data>
-  <data name="MicaRestartRequired" xml:space="preserve">
-    <value>マイカの選択を保存しました。トレイから PaperTodo を終了して開き直すと、ネイティブ Mica が有効になります。現在のウィンドウは単色のままです。スキン変更で編集画面や元に戻す履歴は作り直しません。</value>
-  </data>
-  <data name="MicaUnsupported" xml:space="preserve">
-    <value>ネイティブ Mica には Windows 11 22H2（ビルド 22621）以降が必要です。このシステムではマイカ配色の単色背景を使用します。</value>
-  </data>
-  <data name="MicaScope" xml:space="preserve">
-    <value>ネイティブ Mica は展開した紙片と設定画面に適用されます。カプセル、折りたたみアニメーション、半透明状態では単色背景を使用します。Windows の透明効果や省電力設定によっても単色表示になります。</value>
-  </data>
-  <data name="SettingsMicaBackdrop" xml:space="preserve">
-    <value>背景効果</value>
-  </data>
-  <data name="TipMicaBackdrop" xml:space="preserve">
-    <value>標準マイカ、標準アクリル、透色アクリルから選べます。標準アクリルは柔らかなすりガラス効果、透色アクリルは薄い色の重ね合わせで背後の色をより透かします。</value>
   </data>
   <data name="MicaBackdropMica" xml:space="preserve">
     <value>標準マイカ</value>
@@ -1511,15 +1367,6 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   </data>
   <data name="MenuCustomizeTopBar" xml:space="preserve">
     <value>タイトルバーをカスタマイズ</value>
-  </data>
-  <data name="MenuReorderTopBar" xml:space="preserve">
-    <value>ボタンの順序を変更</value>
-  </data>
-  <data name="MenuTopBarMoveLeft" xml:space="preserve">
-    <value>左へ移動</value>
-  </data>
-  <data name="MenuTopBarMoveRight" xml:space="preserve">
-    <value>右へ移動</value>
   </data>
   <data name="MenuTopBarAssociationDrag" xml:space="preserve">
     <value>押したままドラッグして関連付け</value>

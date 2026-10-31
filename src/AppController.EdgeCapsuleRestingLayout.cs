@@ -54,11 +54,9 @@ public sealed partial class AppController
                 papers.Count,
                 gap);
             var members = new List<EdgeCapsuleRestingQueueMember>(papers.Count);
-            for (var index = 0; index < papers.Count; index++)
+            foreach (var paper in papers)
             {
-                members.Add(new EdgeCapsuleRestingQueueMember(
-                    papers[index].Id,
-                    baseTop + (index * slotHeight)));
+                members.Add(new EdgeCapsuleRestingQueueMember(paper.Id));
             }
 
             queues.Add(new EdgeCapsuleRestingQueue(
@@ -151,7 +149,7 @@ public sealed partial class AppController
                     area,
                     placement.SlotCount,
                     gap) + placement.TopOffsetDip;
-                members.Add(new EdgeCapsuleRestingQueueMember(paper.Id, memberTop));
+                members.Add(new EdgeCapsuleRestingQueueMember(paper.Id));
                 queueTop = Math.Min(queueTop, memberTop);
                 queueBottom = Math.Max(
                     queueBottom,

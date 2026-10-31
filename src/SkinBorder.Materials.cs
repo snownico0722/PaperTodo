@@ -26,7 +26,6 @@ internal sealed partial class SkinBorder
             palette, Theme.PaperBrush, Theme.ActiveBrush, UseLightweightMaterial, IsEdgeActiveMaterial);
         if (_brushKey == key) return;
         _brushKey = key;
-        BrushBuildCount++;
         _surfaceVersion++;
         var paper = palette.Surface;
         _aeroReadabilityVeil = Brushes.Transparent;

@@ -1,9 +1,13 @@
 namespace PaperTodo;
 
-/// <summary>计划中一条队列的预览成员与最终位置（目标显示器本地 DIP）。</summary>
+/// <summary>
+/// 计划中一条队列的预览成员与位置（目标显示器本地 DIP）。
+/// <see cref="BaseTopDip"/> 是按保存 margin 与新成员数算出的偏好位置，不含运行期静止避让；
+/// <see cref="TopDip"/> 是求解器实际使用/下发的屏幕位置。
+/// </summary>
 internal sealed record EdgeCapsuleQueueDropPreview(
-    string QueueKey,
     IReadOnlyList<PaperData> PreviewMembers,
+    double BaseTopDip,
     double TopDip,
     bool IsSource);
 
@@ -23,16 +27,15 @@ internal sealed class EdgeCapsuleQueueDropLayoutPlan
     public IReadOnlyDictionary<string, EdgeCapsuleQueueDropPreview> Queues { get; init; } =
         new Dictionary<string, EdgeCapsuleQueueDropPreview>(StringComparer.Ordinal);
     public string MonitorDeviceName { get; init; } = "";
-    public string Side { get; init; } = DeepCapsuleSides.Right;
     public double GapDip { get; init; }
     public string SourceQueueKey { get; init; } = "";
     public bool SourceOnTargetEdge { get; init; }
 
     /// <summary>
-    /// 求解器实际移动过的队列（不含 target）。持久化时只写 target 与这些队列，
-    /// 未移动队列的临时静止避让位移不能写回保存 margin。
+    /// 被求解器向上推开的邻队（不含 target）。向下推开由提交后的静止避让按新成员数
+    /// 自然复现，不能写回保存偏好；只有向上位移无法由静止避让产生，必须持久化。
     /// </summary>
-    public IReadOnlySet<string> MovedQueueKeys { get; init; } =
+    public IReadOnlySet<string> UpwardMovedQueueKeys { get; init; } =
         new HashSet<string>(StringComparer.Ordinal);
 }
 
@@ -59,14 +62,11 @@ public sealed partial class AppController
         if (!EdgeCapsuleQueueIds.TryGetEdge(
                 targetQueueKey,
                 out var monitorDeviceName,
-                out var sideText))
+                out _))
         {
             return InfeasibleDropLayoutPlan(targetQueueKey, targetIndex, carried.Count);
         }
 
-        var side = sideText == DeepCapsuleSides.Left
-            ? DeepCapsuleSides.Left
-            : DeepCapsuleSides.Right;
         if (!WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(
                 monitorDeviceName,
                 out var geometry))
@@ -159,20 +159,21 @@ public sealed partial class AppController
             // 求解器输入必须是屏幕上的有效静止位置，而不是保存 margin：断屏回退或队列
             // 碰撞后，后者可能让原本分开的队列在输入里重叠。
             var margin = DeepCapsuleStartTopMarginForQueueKey(queueKey);
-            var top = EdgeCapsuleLayout.TopForIndex(
+            var baseTop = EdgeCapsuleLayout.TopForIndex(
                 0,
                 margin,
                 area,
                 previewMembers.Count,
-                gap) + restingDeltas.GetValueOrDefault(queueKey);
+                gap);
+            var top = baseTop + restingDeltas.GetValueOrDefault(queueKey);
             var height = EdgeCapsuleQueueDropTargetGeometry.QueueHeightDip(
                 previewMembers.Count,
                 slotHeight,
                 gap);
 
             previews[queueKey] = new EdgeCapsuleQueueDropPreview(
-                queueKey,
                 previewMembers,
+                baseTop,
                 top,
                 isSource);
             boxes.Add(new EdgeCapsuleQueueInsertBox(queueKey, top, height));
@@ -192,15 +193,16 @@ public sealed partial class AppController
 
         if (solved.Feasible)
         {
-            var movedQueueKeys = new HashSet<string>(StringComparer.Ordinal);
+            var upwardMovedQueueKeys = new HashSet<string>(StringComparer.Ordinal);
             foreach (var (queueKey, preview) in previews)
             {
                 var solvedTop = solved.TopsDip[queueKey];
-                // 只有被求解器真正推动的队列才需要更新持久 margin；其余队列保持原偏好。
+                // 只记录被求解器向上推开的邻队。向下推开是目标扩容造成的，提交后的
+                // 静止避让会按新成员数复现，不能把位移写回保存偏好。
                 if (!string.Equals(queueKey, targetQueueKey, StringComparison.Ordinal) &&
-                    Math.Abs(solvedTop - preview.TopDip) > 1e-6)
+                    solvedTop < preview.TopDip - 1e-6)
                 {
-                    movedQueueKeys.Add(queueKey);
+                    upwardMovedQueueKeys.Add(queueKey);
                 }
 
                 previews[queueKey] = preview with { TopDip = solvedTop };
@@ -228,11 +230,10 @@ public sealed partial class AppController
                 InsertionLineCenterYDip = lineCenter,
                 Queues = previews,
                 MonitorDeviceName = monitorDeviceName,
-                Side = side,
                 GapDip = gap,
                 SourceQueueKey = sourceQueueKey,
                 SourceOnTargetEdge = sourceOnTargetEdge,
-                MovedQueueKeys = movedQueueKeys
+                UpwardMovedQueueKeys = upwardMovedQueueKeys
             };
         }
 
@@ -265,7 +266,6 @@ public sealed partial class AppController
             TargetHeightDip = realHeight,
             InsertionLineCenterYDip = warningLineCenter,
             MonitorDeviceName = monitorDeviceName,
-            Side = side,
             GapDip = gap,
             SourceQueueKey = sourceQueueKey,
             SourceOnTargetEdge = sourceOnTargetEdge
@@ -295,16 +295,25 @@ public sealed partial class AppController
                 continue;
             }
 
-            // 该队列只是按静止避让临时下推，插入并没有移动它；不要把临时位移写回偏好。
-            if (!string.Equals(queueKey, plan.TargetQueueKey, StringComparison.Ordinal) &&
-                !plan.MovedQueueKeys.Contains(queueKey))
+            // target 写回不含运行期避让的基准位置；只有被求解器向上推开的邻队才写回
+            // 求解位置。向下推开由提交后的静止避让按新成员数自然复现，不能写回偏好。
+            double persistedTop;
+            if (string.Equals(queueKey, plan.TargetQueueKey, StringComparison.Ordinal))
+            {
+                persistedTop = preview.BaseTopDip;
+            }
+            else if (plan.UpwardMovedQueueKeys.Contains(queueKey))
+            {
+                persistedTop = preview.TopDip;
+            }
+            else
             {
                 continue;
             }
 
             State.DeepCapsuleQueueStartTopMargins[queueKey] =
                 EdgeCapsuleLayout.NormalizeStartTopMargin(
-                    preview.TopDip - area.Top,
+                    persistedTop - area.Top,
                     area,
                     preview.PreviewMembers.Count,
                     plan.GapDip);

@@ -67,12 +67,6 @@ public static class AnimationHelper
         FadeTo(element, 1, duration, QuickEase, onComplete);
     }
 
-    // 淡出
-    public static void FadeOut(UIElement element, double duration = 150, EventHandler? onComplete = null)
-    {
-        FadeTo(element, 0, duration, QuickEase, onComplete);
-    }
-
     // 淡化到指定透明度；最终值写回基础属性，避免动画结束后继续覆盖交互状态。
     public static void FadeTo(
         UIElement element,
@@ -82,15 +76,6 @@ public static class AnimationHelper
         EventHandler? onComplete = null)
     {
         AnimateDouble(element, UIElement.OpacityProperty, opacity, duration, easing ?? QuickEase, onComplete);
-    }
-
-    // 缩放到指定比例
-    public static void ScaleTo(UIElement element, double scale, double duration = 200, IEasingFunction? easing = null)
-    {
-        var transform = GetScaleTransform(element);
-        var ease = easing ?? SmoothEase;
-        AnimateDouble(transform, ScaleTransform.ScaleXProperty, scale, duration, ease);
-        AnimateDouble(transform, ScaleTransform.ScaleYProperty, scale, duration, ease);
     }
 
     // 平移到指定位置
@@ -139,42 +124,6 @@ public static class AnimationHelper
                 EasingFunction = easing ?? SmoothEase,
                 FillBehavior = FillBehavior.Stop
             });
-    }
-
-    // 颜色过渡
-    public static void TransitionColor(Brush brush, Color toColor, double duration = 300)
-    {
-        if (brush is not SolidColorBrush solidBrush) return;
-
-        var anim = new ColorAnimation(
-            toColor,
-            TimeSpan.FromMilliseconds(AnimationTiming.ScaleMilliseconds(duration)))
-        {
-            EasingFunction = SmoothEase
-        };
-        solidBrush.BeginAnimation(SolidColorBrush.ColorProperty, anim);
-    }
-
-    // 取消所有动画
-    public static void StopAllAnimations(UIElement element)
-    {
-        element.BeginAnimation(UIElement.OpacityProperty, null);
-        if (element.RenderTransform is TransformGroup group)
-        {
-            foreach (var transform in group.Children)
-            {
-                if (transform is ScaleTransform st)
-                {
-                    st.BeginAnimation(ScaleTransform.ScaleXProperty, null);
-                    st.BeginAnimation(ScaleTransform.ScaleYProperty, null);
-                }
-                else if (transform is TranslateTransform tt)
-                {
-                    tt.BeginAnimation(TranslateTransform.XProperty, null);
-                    tt.BeginAnimation(TranslateTransform.YProperty, null);
-                }
-            }
-        }
     }
 
     // 快速弹跳（用于强调）

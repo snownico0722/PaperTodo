@@ -42,22 +42,6 @@ internal static partial class WindowNative
     internal static bool TryFlushDesktopComposition() =>
         DwmFlush() == 0;
 
-    /// <summary>
-    /// Applies a set of DWMWA_CLOAK changes as one desktop-composition boundary. DWM has no native
-    /// multi-HWND cloak API, so the important ordering is: set every handle, optionally publish the
-    /// caller's coordinated visual change, flush once, then verify every handle. If any step fails,
-    /// every attempted handle and coordinated visual change are restored before one rollback flush.
-    /// </summary>
-    internal static bool TrySetWindowCloakedBatch(
-        IReadOnlyCollection<WindowCloakChange> requestedChanges,
-        Func<bool>? publishBeforeFlush = null,
-        Action? rollbackBeforeFlush = null) =>
-        TrySetWindowCloakedBatchDetailed(
-            requestedChanges,
-            publishBeforeFlush,
-            rollbackBeforeFlush) ==
-        WindowCloakBatchResult.Success;
-
     internal static WindowCloakBatchResult
         TrySetWindowCloakedBatchDetailed(
             IReadOnlyCollection<WindowCloakChange> requestedChanges,

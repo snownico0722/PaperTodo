@@ -19,8 +19,6 @@ public sealed partial class AppController
         _edgeCapsulePreviewIntentPredictor = new();
     private EdgeCapsulePreviewLayoutSession? _edgeCapsulePreviewSession;
 
-    /// <summary>测试用：真正重建预览布局 session 的次数。</summary>
-    internal int PreviewSessionRebuildCount { get; private set; }
     private string? _edgeCapsulePreviewOutgoingPaperId;
     private string? _edgeCapsulePreviewQueuedTransferPaperId;
     private string? _edgeCapsulePreviewQueuedCloseOwnerPaperId;
@@ -136,7 +134,6 @@ public sealed partial class AppController
             StringComparer.Ordinal);
         if (queueKeyChanged || queueMembersChanged)
         {
-            PreviewSessionRebuildCount++;
             session = EdgeCapsulePreviewLayoutCoordinator.OpenOrTransfer(
                 basePlan,
                 null,
