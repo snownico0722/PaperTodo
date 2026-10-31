@@ -36,6 +36,10 @@ public sealed partial class AppController
             members.Add(paper);
         }
 
+        var connectedMonitors = WindowWorkAreaHelper.ConnectedMonitorGeometries()
+            .Select(geometry => WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(
+                geometry.DeviceName))
+            .ToHashSet(StringComparer.Ordinal);
         var queues = new List<EdgeCapsuleRestingQueue>(queueOrder.Count);
         foreach (var key in queueOrder)
         {
@@ -45,6 +49,11 @@ public sealed partial class AppController
                 continue;
             }
 
+            var sortPriority = connectedMonitors.Count == 0 ||
+                connectedMonitors.Contains(
+                    WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(monitor))
+                    ? 0
+                    : 1;
             var papers = membersByQueue[key];
             var area = geometry.LocalWorkAreaDip;
             var baseTop = EdgeCapsuleLayout.TopForIndex(
@@ -65,7 +74,8 @@ public sealed partial class AppController
                 members,
                 baseTop,
                 baseTop + ((papers.Count - 1) * slotHeight) +
-                    PaperLayoutDefaults.CapsuleHeight));
+                    PaperLayoutDefaults.CapsuleHeight,
+                sortPriority));
         }
 
         var offsets = EdgeCapsuleRestingLayoutCoordinator.BuildDownwardOffsets(queues, gap);
@@ -109,6 +119,10 @@ public sealed partial class AppController
             : 0;
 
         var gap = DeepCapsuleGap;
+        var connectedMonitors = WindowWorkAreaHelper.ConnectedMonitorGeometries()
+            .Select(geometry => WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(
+                geometry.DeviceName))
+            .ToHashSet(StringComparer.Ordinal);
         var queues = new List<EdgeCapsuleRestingQueue>(plan.Queues.Count);
         foreach (var queue in plan.Queues)
         {
@@ -121,6 +135,11 @@ public sealed partial class AppController
                 continue;
             }
 
+            var sortPriority = connectedMonitors.Count == 0 ||
+                connectedMonitors.Contains(
+                    WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(monitor))
+                    ? 0
+                    : 1;
             var margin = DeepCapsuleStartTopMarginForQueueKey(queue.Key);
             var area = geometry.LocalWorkAreaDip;
             var members = new List<EdgeCapsuleRestingQueueMember>(queue.Papers.Count);
@@ -172,7 +191,8 @@ public sealed partial class AppController
                 queue.Key,
                 members,
                 queueTop,
-                queueBottom));
+                queueBottom,
+                sortPriority));
         }
 
         var deltas = EdgeCapsuleRestingLayoutCoordinator.BuildDownwardOffsets(queues, gap);

@@ -12,7 +12,8 @@ internal sealed record EdgeCapsuleRestingQueue(
     string QueueKey,
     IReadOnlyList<EdgeCapsuleRestingQueueMember> Members,
     double TopDip,
-    double BottomDip);
+    double BottomDip,
+    int SortPriority = 0);
 
 /// <summary>
 /// 自由队列静止避让策略：同一物理边上，后一条队列整体下移，直到清空前一条队列的
@@ -42,6 +43,9 @@ internal static class EdgeCapsuleRestingLayoutCoordinator
                          .Where(queue => double.IsFinite(queue.TopDip) &&
                                          double.IsFinite(queue.BottomDip))
                          .OrderBy(queue => queue.TopDip)
+                         // 同 top 时已连接显示器优先，断连回退队列让位；最后才用 key
+                         // 保证确定性，避免主屏队列因字典序反而被下推。
+                         .ThenBy(queue => queue.SortPriority)
                          .ThenBy(queue => queue.QueueKey, StringComparer.Ordinal))
             {
                 var delta = previousBottom is { } bottom
