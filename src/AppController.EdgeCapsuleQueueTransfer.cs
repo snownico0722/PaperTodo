@@ -96,8 +96,9 @@ public sealed partial class AppController
     }
 
     /// <summary>
-    /// 提交异常的唯一回滚入口：有 undo 时恢复顺序/margin/身份；只有起拖快照时只恢复身份。
-    /// 普通取消应走 <see cref="AbandonEdgeCapsuleQueueTransfer"/>，否则会覆盖拖拽期间的外部修改。
+    /// 提交异常的唯一回滚入口：有 undo 时恢复顺序/margin/身份；没有 undo 时说明 mutation
+    /// 尚未开始，只释放事务，不能用起拖快照写回身份——拖拽期间外部 API/插件可能已合法
+    /// 修改成员身份。普通取消应走 <see cref="AbandonEdgeCapsuleQueueTransfer"/>。
     /// </summary>
     internal void RollbackEdgeCapsuleQueueTransfer(
         EdgeCapsuleQueueTransferSnapshot? snapshot,
@@ -111,10 +112,6 @@ public sealed partial class AppController
         if (undo != null)
         {
             RestoreEdgeCapsuleQueueCommitUndo(undo);
-        }
-        else if (snapshot != null)
-        {
-            RestoreMemberIdentities(snapshot.MemberIdentities);
         }
 
         if (snapshot != null)
