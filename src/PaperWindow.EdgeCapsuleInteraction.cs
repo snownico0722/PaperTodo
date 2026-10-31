@@ -1308,6 +1308,15 @@ public sealed partial class PaperWindow
             return;
         }
 
+        // 原生循环返回时 StopEdgeCapsuleNativeDragFeedback() 已清空缓存光标；用最终物理位置
+        // 强制重算一次预览，避免提交沿用更早的目标/槽位。此时 timer 已停止，不会重入。
+        if (_controller.EdgeCapsuleFreeQueuesEnabled)
+        {
+            PreviewDeepCapsuleQueueMagnetForCurrentPosition(
+                floatingPhase: true,
+                forceEvaluation: true);
+        }
+
         EndDeepCapsuleReorderDrag(commit: true);
         ClearCapsuleInteractionKeyboardFocus();
     }
