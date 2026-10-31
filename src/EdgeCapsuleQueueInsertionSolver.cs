@@ -27,6 +27,9 @@ internal sealed record EdgeCapsuleQueueInsertSolveResult(
 /// 下方队列只能向下让位。在这个约束下，最小总位移解就是“整条受影响链贴紧锚点”，因此只需
 /// 从锚点向外各扫一遍，不需要通用的代价优化。
 ///
+/// 输入允许重叠（断屏回退后生产调用方传入的有效位置仍可能相交）：保持原位的队列也会
+/// 推进扫描前沿，使更远处的重叠队列继续被推开。返回可行前会再次校验整边结果不重叠。
+///
 /// 纯函数，无 WPF / 控制器依赖。
 /// </summary>
 internal static class EdgeCapsuleQueueInsertionSolver
@@ -108,7 +111,10 @@ internal static class EdgeCapsuleQueueInsertionSolver
             var box = sorted[index];
             if (box.TopDip + box.HeightDip <= requiredBottom + Epsilon)
             {
-                break;
+                // 该队列已让出空间并保持原位，但它的 top 仍是更上方队列的下限。
+                // 推进前沿而不是 break，重叠输入下更远处的队列才会继续接受检查。
+                requiredBottom = Math.Min(requiredBottom, box.TopDip - gapDip);
+                continue;
             }
 
             var newTop = requiredBottom - box.HeightDip;
@@ -129,7 +135,9 @@ internal static class EdgeCapsuleQueueInsertionSolver
             var box = sorted[index];
             if (box.TopDip >= requiredTop - Epsilon)
             {
-                break;
+                // 该队列已让出空间并保持原位，但它的底边仍是更下方队列的上限。
+                requiredTop = Math.Max(requiredTop, box.TopDip + box.HeightDip + gapDip);
+                continue;
             }
 
             if (requiredTop + box.HeightDip > maxBottom + Epsilon)
@@ -140,6 +148,31 @@ internal static class EdgeCapsuleQueueInsertionSolver
             tops[box.QueueKey] = requiredTop;
             cost += Math.Abs(requiredTop - box.TopDip);
             requiredTop = requiredTop + box.HeightDip + gapDip;
+        }
+
+        // 兜底：Feasible 必须真的兑现“整边不重叠”。允许 0-gap 接触，但拒绝真实重叠。
+        // 正常路径（含重叠输入的推开）不会触发；这里只保护返回值的不变量。
+        var ordered = new List<(EdgeCapsuleQueueInsertBox Box, double TopDip)>(sorted.Count);
+        foreach (var box in sorted)
+        {
+            ordered.Add((box, tops[box.QueueKey]));
+        }
+
+        ordered.Sort(static (left, right) =>
+        {
+            var byTop = left.TopDip.CompareTo(right.TopDip);
+            return byTop != 0
+                ? byTop
+                : string.CompareOrdinal(left.Box.QueueKey, right.Box.QueueKey);
+        });
+        for (var index = 1; index < ordered.Count; index++)
+        {
+            var previous = ordered[index - 1];
+            var current = ordered[index];
+            if (current.TopDip < previous.TopDip + previous.Box.HeightDip - Epsilon)
+            {
+                return EdgeCapsuleQueueInsertSolveResult.Infeasible;
+            }
         }
 
         return new EdgeCapsuleQueueInsertSolveResult(true, tops, cost);
