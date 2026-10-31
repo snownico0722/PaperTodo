@@ -347,6 +347,7 @@ public sealed partial class AppController
     /// <summary>撤掉拖拽插入造成的同边联动位移；源队列恢复为收拢后的布局。</summary>
     internal void RestoreDeepCapsuleQueueDragAvoidance()
     {
+        var restingDeltas = BuildEffectiveQueueRestingDeltas();
         foreach (var (queueKey, isSource) in _deepCapsuleDragAvoidanceQueues)
         {
             if (isSource)
@@ -364,7 +365,8 @@ public sealed partial class AppController
                     PreviewEdgeCapsuleQueueMembers(
                         queueKey,
                         members,
-                        new HashSet<string>(StringComparer.Ordinal));
+                        new HashSet<string>(StringComparer.Ordinal),
+                        restingDeltas.GetValueOrDefault(queueKey));
                 }
             }
         }

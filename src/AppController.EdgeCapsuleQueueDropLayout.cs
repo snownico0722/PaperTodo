@@ -27,6 +27,13 @@ internal sealed class EdgeCapsuleQueueDropLayoutPlan
     public double GapDip { get; init; }
     public string SourceQueueKey { get; init; } = "";
     public bool SourceOnTargetEdge { get; init; }
+
+    /// <summary>
+    /// 求解器实际移动过的队列（不含 target）。持久化时只写 target 与这些队列，
+    /// 未移动队列的临时静止避让位移不能写回保存 margin。
+    /// </summary>
+    public IReadOnlySet<string> MovedQueueKeys { get; init; } =
+        new HashSet<string>(StringComparer.Ordinal);
 }
 
 public sealed partial class AppController
@@ -70,6 +77,7 @@ public sealed partial class AppController
         var area = geometry.LocalWorkAreaDip;
         var gap = DeepCapsuleGap;
         var slotHeight = EdgeCapsuleLayout.SlotHeight(gap);
+        var restingDeltas = BuildEffectiveQueueRestingDeltas();
         var sourceQueueKey = QueueKey(carried[0]);
         var carriedIds = new HashSet<string>(
             carried.Select(paper => paper.Id),
@@ -148,13 +156,15 @@ public sealed partial class AppController
                 continue;
             }
 
+            // 求解器输入必须是屏幕上的有效静止位置，而不是保存 margin：断屏回退或队列
+            // 碰撞后，后者可能让原本分开的队列在输入里重叠。
             var margin = DeepCapsuleStartTopMarginForQueueKey(queueKey);
             var top = EdgeCapsuleLayout.TopForIndex(
                 0,
                 margin,
                 area,
                 previewMembers.Count,
-                gap);
+                gap) + restingDeltas.GetValueOrDefault(queueKey);
             var height = EdgeCapsuleQueueDropTargetGeometry.QueueHeightDip(
                 previewMembers.Count,
                 slotHeight,
@@ -182,12 +192,18 @@ public sealed partial class AppController
 
         if (solved.Feasible)
         {
+            var movedQueueKeys = new HashSet<string>(StringComparer.Ordinal);
             foreach (var (queueKey, preview) in previews)
             {
-                previews[queueKey] = preview with
+                var solvedTop = solved.TopsDip[queueKey];
+                // 只有被求解器真正推动的队列才需要更新持久 margin；其余队列保持原偏好。
+                if (!string.Equals(queueKey, targetQueueKey, StringComparison.Ordinal) &&
+                    Math.Abs(solvedTop - preview.TopDip) > 1e-6)
                 {
-                    TopDip = solved.TopsDip[queueKey]
-                };
+                    movedQueueKeys.Add(queueKey);
+                }
+
+                previews[queueKey] = preview with { TopDip = solvedTop };
             }
 
             var targetTop = solved.TopsDip[targetQueueKey];
@@ -215,7 +231,8 @@ public sealed partial class AppController
                 Side = side,
                 GapDip = gap,
                 SourceQueueKey = sourceQueueKey,
-                SourceOnTargetEdge = sourceOnTargetEdge
+                SourceOnTargetEdge = sourceOnTargetEdge,
+                MovedQueueKeys = movedQueueKeys
             };
         }
 
@@ -227,7 +244,7 @@ public sealed partial class AppController
             realMargin,
             area,
             targetRealMembers.Count,
-            gap);
+            gap) + restingDeltas.GetValueOrDefault(targetQueueKey);
         var realHeight = EdgeCapsuleQueueDropTargetGeometry.QueueHeightDip(
             targetRealMembers.Count,
             slotHeight,
@@ -275,6 +292,13 @@ public sealed partial class AppController
             if (preview.PreviewMembers.Count == 0)
             {
                 State.DeepCapsuleQueueStartTopMargins.Remove(queueKey);
+                continue;
+            }
+
+            // 该队列只是按静止避让临时下推，插入并没有移动它；不要把临时位移写回偏好。
+            if (!string.Equals(queueKey, plan.TargetQueueKey, StringComparison.Ordinal) &&
+                !plan.MovedQueueKeys.Contains(queueKey))
+            {
                 continue;
             }
 
