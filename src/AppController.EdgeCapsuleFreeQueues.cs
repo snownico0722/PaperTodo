@@ -231,6 +231,7 @@ public sealed partial class AppController
 
         var area = targetGeometry.LocalWorkAreaDip;
         var slotHeight = EdgeCapsuleLayout.SlotHeight(DeepCapsuleGap);
+        var restingDeltas = BuildEffectiveQueueRestingDeltas();
         foreach (var key in order)
         {
             var papers = members[key];
@@ -247,19 +248,22 @@ public sealed partial class AppController
                 ? 0
                 : Math.Max(0, area.Width - bandWidth);
 
-            // 磁吸距离必须与插入预览同几何：贴底队列扩容时 margin 会被夹小，top 随之上移。
-            // NewQueue 避让仍使用上面的当前占位，因此同一个候选同时携带两套区间。
+            // 当前占位与插入后占位都要叠加静止避让 delta：屏幕上的队列已经被下推，候选几何
+            // 必须与显示位置一致。贴底扩容时按新的槽位数重新归一化保存 margin，再叠加 delta。
+            // NewQueue 避让仍使用当前占位，因此同一个候选同时携带两套区间。
             var margin = DeepCapsuleStartTopMarginForQueueKey(key);
+            var delta = restingDeltas.GetValueOrDefault(key);
             var insertionSlotCount = slotCount + carried.Count;
             result.Add(new EdgeCapsuleQueueMagnetCandidate(
                 key,
                 slotCount,
-                EdgeCapsuleLayout.TopForIndex(0, margin, area, slotCount, DeepCapsuleGap),
+                EdgeCapsuleLayout.TopForIndex(0, margin, area, slotCount, DeepCapsuleGap) + delta,
                 slotHeight,
                 bandLeft,
                 bandWidth,
                 insertionSlotCount,
-                EdgeCapsuleLayout.TopForIndex(0, margin, area, insertionSlotCount, DeepCapsuleGap)));
+                EdgeCapsuleLayout.TopForIndex(
+                    0, margin, area, insertionSlotCount, DeepCapsuleGap) + delta));
         }
 
         _deepCapsuleMagnetCandidateSignature = signature;
@@ -300,6 +304,8 @@ public sealed partial class AppController
         AppendNumber(builder, DeepCapsuleGap); AppendSeparator(builder);
         AppendCapsuleWidthInputs(builder);
         builder.Append(State.ShowDeepCapsuleWhileExpanded);
+        AppendSeparator(builder);
+        builder.Append(State.UseCapsuleCollapseAll ? '1' : '0');
 
         foreach (var paper in carried)
         {
@@ -644,12 +650,13 @@ public sealed partial class AppController
         var dropTopDip = geometry.DeviceYToLocalDip(draggedCenterDeviceY)
                          - PaperLayoutDefaults.CapsuleHeight / 2.0;
         var realCount = members.Count + Math.Max(1, carriedCount);
+        // 队列可能已被静止避让下推；插入索引必须按屏幕上的有效位置计算。
         var firstTop = EdgeCapsuleLayout.TopForIndex(
             0,
             DeepCapsuleStartTopMarginForQueueKey(queueKey),
             area,
             realCount,
-            DeepCapsuleGap);
+            DeepCapsuleGap) + BuildEffectiveQueueRestingDeltas().GetValueOrDefault(queueKey);
         var slotHeight = EdgeCapsuleLayout.SlotHeight(DeepCapsuleGap);
         return Math.Clamp((int)Math.Floor((dropTopDip - firstTop) / slotHeight + 0.5), 0, members.Count);
     }

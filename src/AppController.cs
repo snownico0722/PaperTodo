@@ -2287,7 +2287,11 @@ public sealed partial class AppController : IDisposable
         targetIndex = Math.Clamp(targetIndex, 0, queueMembers.Count);
         queueMembers.Insert(targetIndex, draggedPaper);
 
-        PreviewEdgeCapsuleQueueMembers(queueKey, queueMembers, new HashSet<string>([paper.Id], StringComparer.Ordinal));
+        PreviewEdgeCapsuleQueueMembers(
+            queueKey,
+            queueMembers,
+            new HashSet<string>([paper.Id], StringComparer.Ordinal),
+            BuildEffectiveQueueRestingDeltas().GetValueOrDefault(queueKey));
     }
 
     /// <summary>
@@ -2415,7 +2419,8 @@ public sealed partial class AppController : IDisposable
                 PreviewEdgeCapsuleQueueMembers(
                     queueKey,
                     members,
-                    new HashSet<string>(StringComparer.Ordinal));
+                    new HashSet<string>(StringComparer.Ordinal),
+                    BuildEffectiveQueueRestingDeltas().GetValueOrDefault(queueKey));
             }
         }
 
@@ -2462,7 +2467,12 @@ public sealed partial class AppController : IDisposable
             return;
         }
 
-        PreviewEdgeCapsuleQueueMembers(sourceQueueKey, remaining, carriedIds);
+        // 收拢后的源队列仍要停留在有效静止位置，而不是跳回保存 margin。
+        PreviewEdgeCapsuleQueueMembers(
+            sourceQueueKey,
+            remaining,
+            carriedIds,
+            BuildEffectiveQueueRestingDeltas().GetValueOrDefault(sourceQueueKey));
     }
 
     private void PreviewEdgeCapsuleQueueMembers(
