@@ -930,6 +930,7 @@ public sealed partial class AppController
                 previous,
                 _edgeCapsulePreviewSession))
         {
+            request?.ReleaseUnusedContent();
             return;
         }
         // Same-generation layout refreshes may replace the immutable record while preserving the
@@ -952,6 +953,7 @@ public sealed partial class AppController
             DeepCapsuleGap);
         if (next == null)
         {
+            request.ReleaseUnusedContent();
             return;
         }
         if (transferGeneration != _edgeCapsulePreviewTransferGeneration ||
@@ -959,6 +961,7 @@ public sealed partial class AppController
                 previous,
                 _edgeCapsulePreviewSession))
         {
+            request.ReleaseUnusedContent();
             return;
         }
         previous = _edgeCapsulePreviewSession;

@@ -60,6 +60,7 @@ public sealed partial class PaperWindow
         var bodySessionGeneration = _bodySessionGeneration;
 
         IEdgeCapsulePreviewProvider? provider = null;
+        FrameworkElement? content = null;
         try
         {
             provider = ResolveEdgeCapsulePreviewProvider();
@@ -108,7 +109,7 @@ public sealed partial class PaperWindow
             // this useful fallback instead of leaving a permanent loading ellipsis.
             var deferProviderContent = descriptor.DeferContentCreation;
             var contentStartedAt = EdgeCapsulePerformanceDiagnostics.Timestamp();
-            var content = deferProviderContent
+            content = deferProviderContent
                 ? BuildPluginCapsuleEdgePreviewContent(context, size)
                 : descriptor.CreateContent(size);
             EdgeCapsulePerformanceDiagnostics.Trace(
@@ -121,6 +122,10 @@ public sealed partial class PaperWindow
                 content == null ||
                 !IsValidEdgeCapsulePreviewContent(content))
             {
+                if (content is IDisposable disposable)
+                {
+                    disposable.Dispose();
+                }
                 Trace.TraceWarning(
                     "Edge capsule preview provider returned invalid content. " +
                     "PaperId={0}; PaperType={1}; Provider={2}; ContentType={3}",
@@ -148,6 +153,10 @@ public sealed partial class PaperWindow
         }
         catch (Exception ex)
         {
+            if (content is IDisposable disposable)
+            {
+                disposable.Dispose();
+            }
             EdgeCapsulePerformanceDiagnostics.Trace(
                 $"preview.prepare.fail paper={EdgeCapsulePerformanceDiagnostics.ShortId(_paper.Id)} " +
                 $"totalMs={EdgeCapsulePerformanceDiagnostics.ElapsedMilliseconds(prepareStartedAt):F3} " +
@@ -464,6 +473,7 @@ public sealed partial class PaperWindow
             EdgeCapsulePerformanceDiagnostics.Trace(
                 $"preview.open.reject paper={EdgeCapsulePerformanceDiagnostics.ShortId(_paper.Id)} " +
                 "reason=active-proxy-capacity-growth");
+            request.ReleaseUnusedContent();
             return false;
         }
 
@@ -475,6 +485,7 @@ public sealed partial class PaperWindow
                 EdgeCapsuleIntent.PreviewChanged(open: true),
                 EdgeCapsuleDirty.None))
         {
+            request.ReleaseUnusedContent();
             return false;
         }
 
@@ -495,6 +506,7 @@ public sealed partial class PaperWindow
                         EdgeCapsuleIntent.PreviewChanged(open: false),
                         EdgeCapsuleDirty.None);
                 }
+                request.ReleaseUnusedContent();
                 return false;
             }
         }
@@ -530,6 +542,7 @@ public sealed partial class PaperWindow
                 if (contentGeneration != _edgeCapsulePreviewContentGeneration ||
                     !ReferenceEquals(_edgeCapsulePreviewRequest, request))
                 {
+                    request.ReleaseUnusedContent();
                     return false;
                 }
                 _edgeCapsulePreviewRequest = null;
@@ -541,6 +554,7 @@ public sealed partial class PaperWindow
                         EdgeCapsuleDirty.None);
                 }
             }
+            request.ReleaseUnusedContent();
             return false;
         }
         if (request.CreateDeferredContent == null)
@@ -580,6 +594,7 @@ public sealed partial class PaperWindow
                             EdgeCapsuleDirty.None);
                     }
                 }
+                request.ReleaseUnusedContent();
                 return false;
             }
         }
