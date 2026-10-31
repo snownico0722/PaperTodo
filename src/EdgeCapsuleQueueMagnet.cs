@@ -163,8 +163,10 @@ internal static class EdgeCapsuleQueueMagnet
         var held = Normalize(sanitized.HeldQueueKey);
         var bestKey = "";
         var bestDistance = double.MaxValue;
+        var bestCenterDistance = double.MaxValue;
         var fallbackKey = "";
         var fallbackDistance = double.MaxValue;
+        var fallbackCenterDistance = double.MaxValue;
         var heldStillHeld = false;
         var heldDistance = double.MaxValue;
         var heldByInsertionOnly = false;
@@ -193,6 +195,12 @@ internal static class EdgeCapsuleQueueMagnet
                 in sanitized, candidate, insertionGeometry: false);
             var insertionDistance = DistanceToQueue(
                 in sanitized, candidate, insertionGeometry: true);
+            // 真实占位距离相同（相邻队列的吸附带重叠）时，优先指针更接近队列中心的一条，
+            // 避免目标完全由队列 key 的字典序决定。
+            var currentCenterDistance = VerticalCenterDistance(
+                in sanitized, candidate, insertionGeometry: false);
+            var insertionCenterDistance = VerticalCenterDistance(
+                in sanitized, candidate, insertionGeometry: true);
 
             if (key == held)
             {
@@ -218,12 +226,17 @@ internal static class EdgeCapsuleQueueMagnet
                 continue;
             }
 
-            // 真实命中优先：多个候选同时被指针覆盖时，按当前占位距离决胜。
+            // 真实命中优先：多个候选同时被指针覆盖时，按当前占位距离决胜；
+            // 距离相同再比较指针到队列中心的距离，最后才用 key 保证确定性。
             if (currentDistance <= mergeDip &&
                 (currentDistance < bestDistance ||
-                 (currentDistance == bestDistance && string.CompareOrdinal(key, bestKey) < 0)))
+                 (currentDistance == bestDistance &&
+                  (currentCenterDistance < bestCenterDistance ||
+                   (currentCenterDistance == bestCenterDistance &&
+                    string.CompareOrdinal(key, bestKey) < 0)))))
             {
                 bestDistance = currentDistance;
+                bestCenterDistance = currentCenterDistance;
                 bestKey = key;
             }
 
@@ -231,9 +244,12 @@ internal static class EdgeCapsuleQueueMagnet
             if (insertionDistance <= mergeDip &&
                 (insertionDistance < fallbackDistance ||
                  (insertionDistance == fallbackDistance &&
-                  string.CompareOrdinal(key, fallbackKey) < 0)))
+                  (insertionCenterDistance < fallbackCenterDistance ||
+                   (insertionCenterDistance == fallbackCenterDistance &&
+                    string.CompareOrdinal(key, fallbackKey) < 0)))))
             {
                 fallbackDistance = insertionDistance;
+                fallbackCenterDistance = insertionCenterDistance;
                 fallbackKey = key;
             }
         }
@@ -326,6 +342,26 @@ internal static class EdgeCapsuleQueueMagnet
         }
 
         return horizontal <= 0 ? vertical : Math.Sqrt(horizontal * horizontal + vertical * vertical);
+    }
+
+    /// <summary>
+    /// 拖拽中心到候选队列占位区间中心的垂直距离，用于同距决胜。
+    /// 区间无效时返回正无穷，让有效的候选优先。
+    /// </summary>
+    private static double VerticalCenterDistance(
+        in EdgeCapsuleQueueMagnetInput input,
+        EdgeCapsuleQueueMagnetCandidate candidate,
+        bool insertionGeometry)
+    {
+        var count = insertionGeometry
+            ? candidate.InsertionSlotCount
+            : candidate.SlotCount;
+        var first = insertionGeometry
+            ? candidate.InsertionFirstSlotTopDip
+            : candidate.FirstSlotTopDip;
+        return TrySpan(input, candidate, first, count, out var low, out var high)
+            ? Math.Abs(input.DraggedCenterTopDip - ((low + high) / 2.0))
+            : double.PositiveInfinity;
     }
 
     /// <summary>
