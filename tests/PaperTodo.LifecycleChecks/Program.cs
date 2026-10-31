@@ -36,9 +36,14 @@ internal static class Program
 =======
 =======
         "edge-capsule-pending-drag-release",
+<<<<<<< HEAD
 >>>>>>> 42eff62e (test(capsule): 大幅删减自由队列测试，保留核心行为)
         "free-queue-shortcut-targeting", "free-queue-bottom-insert"];
 >>>>>>> d16a146f (fix(capsule): 修复贴底队列头插磁吸与复合设置重开失效)
+=======
+        "free-queue-shortcut-targeting", "free-queue-bottom-insert",
+        "free-queue-resting-delta-persist"];
+>>>>>>> 361fc6e1 (fix(capsule): 修复静止避让持久化与设置级联)
 
     [STAThread]
     private static int Main(string[] args)
@@ -216,6 +221,26 @@ internal static class Program
             state.DeepCapsuleQueueStartTopMargins[
                 "|" + DeepCapsuleSides.Right + "#qtgt"] = 100_000;
         }
+        if (name == "free-queue-resting-delta-persist")
+        {
+            // 三条右侧队列形成非零静止避让：qa 在 qb 上方，qb 是插入目标，qc 在下方。
+            // 源队列放在左侧，避免参与右侧磁吸/求解。
+            state.UseCapsuleFreeQueues = true;
+            state.UseCapsuleCollapseAll = false;
+            state.Papers[0].CapsuleQueueId = "qa";
+            state.Papers[1].CapsuleQueueId = "qb";
+            state.Papers[2].CapsuleQueueId = "qc";
+            state.Papers[3].CapsuleSide = DeepCapsuleSides.Left;
+            state.Papers[3].CapsuleQueueId = "qleft";
+            state.Papers[4].CapsuleSide = DeepCapsuleSides.Left;
+            state.Papers[4].CapsuleQueueId = "qleft";
+            state.DeepCapsuleQueueStartTopMargins[
+                "|" + DeepCapsuleSides.Right + "#qa"] = 60;
+            state.DeepCapsuleQueueStartTopMargins[
+                "|" + DeepCapsuleSides.Right + "#qb"] = 90;
+            state.DeepCapsuleQueueStartTopMargins[
+                "|" + DeepCapsuleSides.Right + "#qc"] = 130;
+        }
         if (name.StartsWith("master-queue-merge"))
         {
             state.Papers[2].CapsuleSide = DeepCapsuleSides.Left;
@@ -279,6 +304,14 @@ internal static class Program
             if (name == "free-queue-bottom-insert")
             {
                 await EdgeCapsuleBottomInsertChecks.Run(controller, windows);
+                return;
+            }
+            if (name == "free-queue-resting-delta-persist")
+            {
+                await EdgeCapsuleRestingDeltaPersistChecks.Run(
+                    controller,
+                    windows,
+                    store);
                 return;
             }
             if (name == "edge-expand-foreground")
