@@ -14,7 +14,10 @@ namespace PaperTodo;
 /// <param name="SlotHeightDip">相邻槽位的间距（胶囊高 + 队列间距）。</param>
 /// <param name="BandLeftDip">贴墙矩形水平条带的左边界（本地 DIP）。</param>
 /// <param name="BandWidthDip">贴墙矩形水平条带的宽度（本地 DIP）。</param>
-/// <param name="InsertionSlotCount">插入 carried 后的槽位数，必须 &gt; 0；磁吸距离只看插入后的几何。</param>
+/// <param name="InsertionSlotCount">
+/// 插入 carried 后的槽位数，必须 &gt; 0。只有当没有任何候选被当前占位真实命中时，才用这段
+/// 区间做磁吸回退；否则另一条队列的假想扩容会抢走指针真正所在的目标。
+/// </param>
 /// <param name="InsertionFirstSlotTopDip">
 /// 插入后的 slot 0 top；必须与预览同值，否则贴底头插会先脱离磁吸。
 /// </param>
@@ -35,7 +38,8 @@ internal readonly record struct EdgeCapsuleQueueMagnetCandidate(
 /// 被拖成员当前所在队列；命中该 key 时返回 Reorder，否则返回 Merge。
 /// </param>
 /// <param name="Candidates">
-/// 目标边上参与磁吸的队列及几何。顺序必须确定：不同候选等距时，先遍历到的候选胜出。
+/// 目标边上参与磁吸的队列及几何。不同候选等距时按 <c>QueueKey</c> 的 ordinal 决胜，
+/// 因此结果不依赖候选集合的遍历顺序。
 /// </param>
 /// <param name="HeldQueueKey">
 /// 上一帧磁吸命中的队列；空串表示未吸附。用于 Schmitt trigger 的退出与接管判定。
@@ -87,8 +91,9 @@ internal enum EdgeCapsuleQueueMagnetOutcome
 }
 
 /// <summary>
-/// 判定结果。<see cref="ScoreDip"/> 是拖动中心到命中候选矩形的区间距离；NewQueue/None 为
-/// <see cref="double.MaxValue"/>。当前生产调用方不读取它，主要由测试断言使用。
+/// 判定结果。<see cref="ScoreDip"/> 是拖动中心到命中候选矩形的区间距离：真实命中时是当前
+/// 占位距离，插入回退时是插入后区间距离；NewQueue/None 为 <see cref="double.MaxValue"/>。
+/// 当前生产调用方不读取它，主要由测试断言使用。
 /// </summary>
 internal readonly record struct EdgeCapsuleQueueMagnetPlan(
     EdgeCapsuleQueueMagnetOutcome Outcome,
@@ -158,8 +163,11 @@ internal static class EdgeCapsuleQueueMagnet
         var held = Normalize(sanitized.HeldQueueKey);
         var bestKey = "";
         var bestDistance = double.MaxValue;
+        var fallbackKey = "";
+        var fallbackDistance = double.MaxValue;
         var heldStillHeld = false;
         var heldDistance = double.MaxValue;
+        var heldByInsertionOnly = false;
 
         EdgeCapsuleQueueMagnetPlan PlanFor(string targetKey, double distance) =>
             new(
@@ -179,47 +187,64 @@ internal static class EdgeCapsuleQueueMagnet
                 continue;
             }
 
-            var distance = DistanceToQueue(in sanitized, candidate);
-            if (!double.IsFinite(distance))
-            {
-                continue;
-            }
+            // 当前占位与插入后占位是两套几何：选择目标时真实占位优先，插入区间只在没有
+            // 任何真实命中时兜底（贴底队列的队首空位）。
+            var currentDistance = DistanceToQueue(
+                in sanitized, candidate, insertionGeometry: false);
+            var insertionDistance = DistanceToQueue(
+                in sanitized, candidate, insertionGeometry: true);
 
             if (key == held)
             {
                 // 已吸附的队列按退出阈值衡量，避免在死区里反复脱落重附。
-                if (distance > detachDip)
+                if (currentDistance <= detachDip)
                 {
-                    held = "";
+                    heldStillHeld = true;
+                    heldDistance = currentDistance;
+                    heldByInsertionOnly = false;
+                }
+                else if (insertionDistance <= mergeDip)
+                {
+                    // 贴底头插的预览区间在当前占位之外；只要还在 merge 半径内就保持吸附。
+                    heldStillHeld = true;
+                    heldDistance = insertionDistance;
+                    heldByInsertionOnly = true;
                 }
                 else
                 {
-                    heldStillHeld = true;
-                    heldDistance = distance;
+                    held = "";
                 }
 
                 continue;
             }
 
-            if (distance > mergeDip)
+            // 真实命中优先：多个候选同时被指针覆盖时，按当前占位距离决胜。
+            if (currentDistance <= mergeDip &&
+                (currentDistance < bestDistance ||
+                 (currentDistance == bestDistance && string.CompareOrdinal(key, bestKey) < 0)))
             {
-                continue;
+                bestDistance = currentDistance;
+                bestKey = key;
             }
 
-            // 同分时按 key 序数决胜，使结果不依赖候选集合的遍历顺序。
-            if (distance < bestDistance ||
-                (distance == bestDistance && string.CompareOrdinal(key, bestKey) < 0))
+            // 插入后的假想区间只作为回退，不能压过其它队列的真实占位。
+            if (insertionDistance <= mergeDip &&
+                (insertionDistance < fallbackDistance ||
+                 (insertionDistance == fallbackDistance &&
+                  string.CompareOrdinal(key, fallbackKey) < 0)))
             {
-                bestDistance = distance;
-                bestKey = key;
+                fallbackDistance = insertionDistance;
+                fallbackKey = key;
             }
         }
 
         // 已吸附队列仍保留 Schmitt 死区，但更近且已进入 merge 半径的其他候选可以接管：
-        // 否则相邻队列（尤其 0 gap 邻居）永远无法成为落点。
-        if (heldStillHeld &&
-            bestKey.Length > 0 &&
-            heldDistance - bestDistance >= DefaultTakeoverDistanceDip)
+        // 否则相邻队列（尤其 0 gap 邻居）永远无法成为落点。仅由插入区间保留的 held 只要
+        // 遇到任何真实命中就让位，避免假想扩容继续抢走指针真正所在的队列。
+        if (bestKey.Length > 0 &&
+            heldStillHeld &&
+            (heldByInsertionOnly ||
+             heldDistance - bestDistance >= DefaultTakeoverDistanceDip))
         {
             return PlanFor(bestKey, bestDistance);
         }
@@ -232,6 +257,12 @@ internal static class EdgeCapsuleQueueMagnet
         if (bestKey.Length > 0)
         {
             return PlanFor(bestKey, bestDistance);
+        }
+
+        // 没有任何真实命中时，才允许贴底头插的插入区间成为目标。
+        if (fallbackKey.Length > 0)
+        {
+            return PlanFor(fallbackKey, fallbackDistance);
         }
 
         // 判定为独立成队列后仍要做一次合法性校验：合并半径小于胶囊高度，落点可能压在队列上。
@@ -263,10 +294,14 @@ internal static class EdgeCapsuleQueueMagnet
     /// 而停在屏幕正中间（离墙很远）不会再因为 Y 恰好对齐而被吸附。
     ///
     /// 水平对齐时水平项为 0，合成结果与只看垂直距离完全相同 —— 贴墙拖动这条主路径的手感不变。
+    ///
+    /// <paramref name="insertionGeometry"/> 决定垂直区间取当前真实占位还是 carried 插入后的
+    /// 占位；真实占位用于目标选择，插入区间只用于贴底头插的回退。
     /// </summary>
     private static double DistanceToQueue(
         in EdgeCapsuleQueueMagnetInput input,
-        EdgeCapsuleQueueMagnetCandidate candidate)
+        EdgeCapsuleQueueMagnetCandidate candidate,
+        bool insertionGeometry)
     {
         var horizontal = HorizontalDistance(input.DraggedCenterLeftDip, candidate);
         if (!double.IsFinite(horizontal))
@@ -274,7 +309,17 @@ internal static class EdgeCapsuleQueueMagnet
             return double.PositiveInfinity;
         }
 
-        var vertical = VerticalDistance(input, candidate);
+        var vertical = insertionGeometry
+            ? VerticalDistanceForSpan(
+                input,
+                candidate,
+                candidate.InsertionSlotCount,
+                candidate.InsertionFirstSlotTopDip)
+            : VerticalDistanceForSpan(
+                input,
+                candidate,
+                candidate.SlotCount,
+                candidate.FirstSlotTopDip);
         if (!double.IsFinite(vertical))
         {
             return double.PositiveInfinity;
@@ -329,25 +374,6 @@ internal static class EdgeCapsuleQueueMagnet
     }
 
     /// <summary>
-    /// 插入 carried 后的垂直区间；必须与预览同几何，否则贴底队首空位会先脱离磁吸。
-    /// </summary>
-    private static bool TryInsertionVerticalSpan(
-        EdgeCapsuleQueueMagnetInput input,
-        EdgeCapsuleQueueMagnetCandidate candidate,
-        out double low,
-        out double high)
-    {
-        low = 0;
-        high = 0;
-
-        var count = candidate.InsertionSlotCount;
-        var first = candidate.InsertionFirstSlotTopDip;
-        return count > 0 &&
-            double.IsFinite(first) &&
-            TrySpan(input, candidate, first, count, out low, out high);
-    }
-
-    /// <summary>
     /// 由第一个槽位的 top 与槽位数求队列的真实垂直占位：
     /// `last` 是最后一个槽位的 top，底边还要再加一个胶囊高度。
     /// </summary>
@@ -380,24 +406,26 @@ internal static class EdgeCapsuleQueueMagnet
     }
 
     /// <summary>
-    /// 拖拽胶囊到候选队列的垂直距离，按「胶囊边缘到队列边缘」计算。
+    /// 拖拽胶囊到指定垂直区间的距离，按「胶囊边缘到队列边缘」计算。
     ///
-    /// 输入是拖拽胶囊的中心，因此把队列的真实占位两端各外扩半个胶囊，再量中心到该区间的距离。
+    /// 输入是拖拽胶囊的中心，因此把队列占位两端各外扩半个胶囊，再量中心到该区间的距离。
     /// 这等价于两颗胶囊的「边缘到边缘」距离；两端采用同一种口径，保证从队列上方和下方
     /// 靠近时触发距离严格相等。
     ///
     /// 取「到整段区间」而非「到某个具体槽」：进入队列的语义是「我靠近这一列」，
     /// 具体插入位由调用方按既有的 slot 高度公式另算。
     ///
-    /// 距离使用“carried 插入后”的占位：贴底队列扩容时预览 top 会上移，磁吸必须跟着上移，
-    /// 否则用户看得见队首空位却吸不住。NewQueue 避让仍使用当前真实占位（见
+    /// 调用方传入当前占位或插入后的占位：真实占位用于目标选择，插入占位只在贴底队列
+    /// 扩容、且没有任何候选被真实命中时兜底。NewQueue 避让始终使用当前真实占位（见
     /// <see cref="TryResolveDetachedTopDip"/>），避免用幽灵占位把新队列推远。
     /// </summary>
-    private static double VerticalDistance(
+    private static double VerticalDistanceForSpan(
         in EdgeCapsuleQueueMagnetInput input,
-        EdgeCapsuleQueueMagnetCandidate candidate)
+        EdgeCapsuleQueueMagnetCandidate candidate,
+        int slotCount,
+        double firstSlotTopDip)
     {
-        if (!TryInsertionVerticalSpan(input, candidate, out var low, out var high))
+        if (!TrySpan(input, candidate, firstSlotTopDip, slotCount, out var low, out var high))
         {
             return double.PositiveInfinity;
         }
@@ -525,8 +553,7 @@ internal static class EdgeCapsuleQueueMagnet
         }
 
         var distance = Math.Abs(top - desiredTop);
-        // 严格小于：同一候选内先尝试下方位置，同距时下方胜出。不同候选等距时，先遍历到的
-        // 候选取胜，因此调用方必须传入确定性顺序。
+        // 严格小于：同一候选内先尝试下方位置，同距时下方胜出。
         if (distance < chosenDistance)
         {
             chosen = top;
