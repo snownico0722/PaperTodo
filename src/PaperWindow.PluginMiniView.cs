@@ -66,7 +66,9 @@ public sealed partial class PaperWindow
                     size),
                 visible => NotifyNativePluginMiniViewVisibility(
                     nativeProvider,
-                    visible));
+                    visible),
+                // 原生 mini 视图缓存在 _pluginMiniView，由本窗口按 generation 管理生命周期。
+                ContentOwnership: EdgeCapsulePreviewContentOwnership.ProviderOwned);
         }
 
         if (_paperBodyHost.Current is WebPaperBodySession webSession &&

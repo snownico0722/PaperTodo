@@ -150,8 +150,20 @@ internal static class EdgeCapsuleQueueInsertionSolver
             requiredTop = requiredTop + box.HeightDip + gapDip;
         }
 
-        // 兜底：Feasible 必须真的兑现“整边不重叠”。允许 0-gap 接触，但拒绝真实重叠。
-        // 正常路径（含重叠输入的推开）不会触发；这里只保护返回值的不变量。
+        // 兜底：Feasible 必须兑现“整边不重叠且都在工作区内”。允许 0-gap 接触，
+        // 但拒绝真实重叠与越界。输入可能已含运行期避让位移（预览成员数变化会重算
+        // delta），这类队列在扫描中会表现为“已让出空间”，扫描分支不会再次检查边界，
+        // 因此必须在返回前统一校验。
+        foreach (var box in sorted)
+        {
+            var top = tops[box.QueueKey];
+            if (top < topMarginDip - Epsilon ||
+                top + box.HeightDip > maxBottom + Epsilon)
+            {
+                return EdgeCapsuleQueueInsertSolveResult.Infeasible;
+            }
+        }
+
         var ordered = new List<(EdgeCapsuleQueueInsertBox Box, double TopDip)>(sorted.Count);
         foreach (var box in sorted)
         {

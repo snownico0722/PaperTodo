@@ -51,6 +51,17 @@ internal readonly record struct EdgeCapsulePreviewSize(
 }
 
 /// <summary>
+/// 预览内容的生命周期归属。<see cref="ProviderOwned"/> 表示内容由 provider
+/// 缓存并复用（例如 Web/Native 插件 mini 视图），拒绝路径不得 Dispose；
+/// <see cref="RequestOwned"/> 表示内容随本次请求创建，拒绝时可以回收。
+/// </summary>
+internal enum EdgeCapsulePreviewContentOwnership
+{
+    RequestOwned,
+    ProviderOwned
+}
+
+/// <summary>
 /// Size is the complete visible card rectangle in DIPs, including the host-owned close segment.
 /// The host normalizes it before CreateContent is invoked and freezes it for the preview session.
 /// </summary>
@@ -59,25 +70,38 @@ internal sealed record EdgeCapsulePreviewDescriptor(
     Func<EdgeCapsulePreviewSize, FrameworkElement> CreateContent,
     Action<bool>? SetVisibility = null,
     Action? PrepareForActivation = null,
-    bool DeferContentCreation = false);
+    bool DeferContentCreation = false,
+    EdgeCapsulePreviewContentOwnership ContentOwnership =
+        EdgeCapsulePreviewContentOwnership.RequestOwned);
 
 internal sealed record EdgeCapsulePreviewRequest(
     EdgeCapsulePreviewSize Size,
     FrameworkElement Content,
     Action<bool>? SetVisibility = null,
     Action? PrepareForActivation = null,
-    Func<FrameworkElement>? CreateDeferredContent = null)
+    Func<FrameworkElement>? CreateDeferredContent = null,
+    EdgeCapsulePreviewContentOwnership ContentOwnership =
+        EdgeCapsulePreviewContentOwnership.RequestOwned)
 {
     /// <summary>
-    /// 释放未被采用的预览内容。普通 WPF 元素交给 GC；插件/原生内容若实现
-    /// <see cref="IDisposable"/>，必须在拒绝路径显式回收。
+    /// 释放未被采用的预览内容。普通 WPF 元素交给 GC；只有本次请求自有的可处置内容
+    /// 才显式回收。provider 缓存内容与仍挂树的元素由各自 owner 管理，绝不能在这里 Dispose。
     /// </summary>
-    internal void ReleaseUnusedContent()
+    internal void ReleaseUnusedContent() =>
+        ReleaseUnusedContent(Content, ContentOwnership);
+
+    internal static void ReleaseUnusedContent(
+        FrameworkElement? content,
+        EdgeCapsulePreviewContentOwnership ownership)
     {
-        if (Content is IDisposable disposable)
+        if (content is not IDisposable disposable ||
+            ownership != EdgeCapsulePreviewContentOwnership.RequestOwned ||
+            content.Parent != null)
         {
-            disposable.Dispose();
+            return;
         }
+
+        disposable.Dispose();
     }
 }
 

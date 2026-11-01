@@ -61,6 +61,7 @@ public sealed partial class PaperWindow
 
         IEdgeCapsulePreviewProvider? provider = null;
         FrameworkElement? content = null;
+        var contentOwnership = EdgeCapsulePreviewContentOwnership.RequestOwned;
         try
         {
             provider = ResolveEdgeCapsulePreviewProvider();
@@ -112,6 +113,11 @@ public sealed partial class PaperWindow
             content = deferProviderContent
                 ? BuildPluginCapsuleEdgePreviewContent(context, size)
                 : descriptor.CreateContent(size);
+            // deferred 的初始内容由 PaperWindow 自己创建；直接同步创建的 provider 内容
+            // 可能被 provider 缓存复用，拒绝路径不能回收。
+            contentOwnership = deferProviderContent
+                ? EdgeCapsulePreviewContentOwnership.RequestOwned
+                : descriptor.ContentOwnership;
             EdgeCapsulePerformanceDiagnostics.Trace(
                 $"preview.prepare.content paper={EdgeCapsulePerformanceDiagnostics.ShortId(_paper.Id)} " +
                 $"provider={provider.GetType().Name} deferred={deferProviderContent} " +
@@ -122,10 +128,7 @@ public sealed partial class PaperWindow
                 content == null ||
                 !IsValidEdgeCapsulePreviewContent(content))
             {
-                if (content is IDisposable disposable)
-                {
-                    disposable.Dispose();
-                }
+                EdgeCapsulePreviewRequest.ReleaseUnusedContent(content, contentOwnership);
                 Trace.TraceWarning(
                     "Edge capsule preview provider returned invalid content. " +
                     "PaperId={0}; PaperType={1}; Provider={2}; ContentType={3}",
@@ -149,14 +152,12 @@ public sealed partial class PaperWindow
                 descriptor.PrepareForActivation,
                 deferProviderContent
                     ? () => descriptor.CreateContent(size)
-                    : null);
+                    : null,
+                contentOwnership);
         }
         catch (Exception ex)
         {
-            if (content is IDisposable disposable)
-            {
-                disposable.Dispose();
-            }
+            EdgeCapsulePreviewRequest.ReleaseUnusedContent(content, contentOwnership);
             EdgeCapsulePerformanceDiagnostics.Trace(
                 $"preview.prepare.fail paper={EdgeCapsulePerformanceDiagnostics.ShortId(_paper.Id)} " +
                 $"totalMs={EdgeCapsulePerformanceDiagnostics.ElapsedMilliseconds(prepareStartedAt):F3} " +
@@ -773,7 +774,9 @@ public sealed partial class PaperWindow
                     var resolvedRequest = request with
                     {
                         Content = content,
-                        CreateDeferredContent = null
+                        CreateDeferredContent = null,
+                        // 延迟创建的内容来自 provider，归 provider 所有，拒绝/关闭时不得回收。
+                        ContentOwnership = EdgeCapsulePreviewContentOwnership.ProviderOwned
                     };
                     _edgeCapsulePreviewRequest = resolvedRequest;
                     if (_windowLifecycle != PaperWindowLifecycleState.Alive ||

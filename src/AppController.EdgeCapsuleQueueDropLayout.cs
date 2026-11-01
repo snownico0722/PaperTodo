@@ -82,7 +82,6 @@ public sealed partial class AppController
         var area = geometry.LocalWorkAreaDip;
         var gap = DeepCapsuleGap;
         var slotHeight = EdgeCapsuleLayout.SlotHeight(gap);
-        var restingDeltas = BuildEffectiveQueueRestingDeltas();
         var sourceQueueKey = QueueKey(carried[0]);
         var carriedIds = new HashSet<string>(
             carried.Select(paper => paper.Id),
@@ -130,6 +129,23 @@ public sealed partial class AppController
             LiveEdgeOfQueueKey(sourceQueueKey),
             liveTargetEdgeKey,
             StringComparison.Ordinal);
+
+        // 预览会改变源/目标队列的成员数，静止避让必须按预览后的高度重算。
+        // 沿用拖拽前的 delta 会让源队列在上方变短时，目标先按旧高度被多推一个槽位，
+        // 松手提交后又跳回。
+        var previewMemberCounts = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var queueKey in queueOrder)
+        {
+            previewMemberCounts[queueKey] =
+                string.Equals(queueKey, targetQueueKey, StringComparison.Ordinal)
+                    ? targetPreviewMembers.Count
+                    : string.Equals(queueKey, sourceQueueKey, StringComparison.Ordinal)
+                        ? membersByQueue[queueKey].Count(
+                            paper => !carriedIds.Contains(paper.Id))
+                        : membersByQueue[queueKey].Count;
+        }
+
+        var restingDeltas = BuildEffectiveQueueRestingDeltas(previewMemberCounts);
 
         var previews = new Dictionary<string, EdgeCapsuleQueueDropPreview>(StringComparer.Ordinal);
         var boxes = new List<EdgeCapsuleQueueInsertBox>();

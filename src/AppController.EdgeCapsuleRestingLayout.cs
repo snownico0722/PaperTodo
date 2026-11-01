@@ -8,10 +8,11 @@ public sealed partial class AppController
     ///
     /// 使用完整当前状态计算：拖拽期间 Arrange 被 gate，屏幕上的位置就是上一次完整状态
     /// Arrange 的结果。剔除 carried 会把源队列下方队列算回未下推的位置，与屏幕不一致。
-    /// delta 只取决于该队列上方队列的底边，与本队列自身成员数无关，因此搬入/搬出/收拢时
-    /// 可以沿用，只需按新的槽位数重新归一化保存 margin。
+    /// delta 只取决于该队列上方队列的底边。搬入/搬出/收拢会改变上方队列的高度，
+    /// 因此插入预览必须通过 <paramref name="memberCountOverrides"/> 按预览后的成员数重算。
     /// </summary>
-    private IReadOnlyDictionary<string, double> BuildEffectiveQueueRestingDeltas()
+    private IReadOnlyDictionary<string, double> BuildEffectiveQueueRestingDeltas(
+        IReadOnlyDictionary<string, int>? memberCountOverrides = null)
     {
         var result = new Dictionary<string, double>(StringComparer.Ordinal);
         if (!State.UseCapsuleFreeQueues || State.UseCapsuleCollapseAll)
@@ -36,10 +37,7 @@ public sealed partial class AppController
             members.Add(paper);
         }
 
-        var connectedMonitors = WindowWorkAreaHelper.ConnectedMonitorGeometries()
-            .Select(geometry => WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(
-                geometry.DeviceName))
-            .ToHashSet(StringComparer.Ordinal);
+        var connectedMonitors = ConnectedQueueMonitorNames();
         var queues = new List<EdgeCapsuleRestingQueue>(queueOrder.Count);
         foreach (var key in queueOrder)
         {
@@ -49,18 +47,23 @@ public sealed partial class AppController
                 continue;
             }
 
-            var sortPriority = connectedMonitors.Count == 0 ||
-                connectedMonitors.Contains(
-                    WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(monitor))
-                    ? 0
-                    : 1;
+            var sortPriority = QueueRestingSortPriority(key, connectedMonitors);
             var papers = membersByQueue[key];
+            var count = memberCountOverrides != null &&
+                memberCountOverrides.TryGetValue(key, out var overriddenCount)
+                    ? overriddenCount
+                    : papers.Count;
+            if (count <= 0)
+            {
+                continue;
+            }
+
             var area = geometry.LocalWorkAreaDip;
             var baseTop = EdgeCapsuleLayout.TopForIndex(
                 0,
                 DeepCapsuleStartTopMarginForQueueKey(key),
                 area,
-                papers.Count,
+                count,
                 gap);
             var members = new List<EdgeCapsuleRestingQueueMember>(papers.Count);
             for (var index = 0; index < papers.Count; index++)
@@ -75,7 +78,7 @@ public sealed partial class AppController
                 key,
                 members,
                 baseTop,
-                baseTop + ((papers.Count - 1) * slotHeight) +
+                baseTop + ((count - 1) * slotHeight) +
                     PaperLayoutDefaults.CapsuleHeight,
                 sortPriority));
         }
@@ -121,10 +124,7 @@ public sealed partial class AppController
             : 0;
 
         var gap = DeepCapsuleGap;
-        var connectedMonitors = WindowWorkAreaHelper.ConnectedMonitorGeometries()
-            .Select(geometry => WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(
-                geometry.DeviceName))
-            .ToHashSet(StringComparer.Ordinal);
+        var connectedMonitors = ConnectedQueueMonitorNames();
         var queues = new List<EdgeCapsuleRestingQueue>(plan.Queues.Count);
         foreach (var queue in plan.Queues)
         {
@@ -137,11 +137,7 @@ public sealed partial class AppController
                 continue;
             }
 
-            var sortPriority = connectedMonitors.Count == 0 ||
-                connectedMonitors.Contains(
-                    WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(monitor))
-                    ? 0
-                    : 1;
+            var sortPriority = QueueRestingSortPriority(queue.Key, connectedMonitors);
             var margin = DeepCapsuleStartTopMarginForQueueKey(queue.Key);
             var area = geometry.LocalWorkAreaDip;
             var members = new List<EdgeCapsuleRestingQueueMember>(queue.Papers.Count);
@@ -221,5 +217,32 @@ public sealed partial class AppController
         }
 
         return new EdgeCapsuleQueuePlan(plan.Queues, placements);
+    }
+
+    /// <summary>当前已连接显示器在队列 key 中的归一化设备名集合。</summary>
+    private static HashSet<string> ConnectedQueueMonitorNames() =>
+        WindowWorkAreaHelper.ConnectedMonitorGeometries()
+            .Select(geometry => WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(
+                geometry.DeviceName))
+            .ToHashSet(StringComparer.Ordinal);
+
+    /// <summary>
+    /// 同 top 时的排序优先级：已连接显示器上的队列优先，断连回退队列让位。
+    /// 静止避让、插入求解与 hover 预览必须共用这一规则。
+    /// </summary>
+    private static int QueueRestingSortPriority(
+        string queueKey,
+        IReadOnlySet<string> connectedMonitors)
+    {
+        if (connectedMonitors.Count == 0 ||
+            !EdgeCapsuleQueueIds.TryGetEdge(queueKey, out var monitor, out _))
+        {
+            return 0;
+        }
+
+        return connectedMonitors.Contains(
+            WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(monitor))
+                ? 0
+                : 1;
     }
 }

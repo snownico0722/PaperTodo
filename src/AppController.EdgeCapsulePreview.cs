@@ -230,7 +230,23 @@ public sealed partial class AppController
                     DeepCapsuleGap)));
         }
 
-        result.Sort(static (left, right) => left.RestTopDip.CompareTo(right.RestTopDip));
+        // 与 EdgeCapsuleRestingLayout 使用同一排序：同 top 时已连接显示器优先，
+        // 最后用持久 key 保证确定性，避免 List.Sort 不稳定导致预览避让顺序漂移。
+        var connectedMonitors = ConnectedQueueMonitorNames();
+        result.Sort((left, right) =>
+        {
+            var comparison = left.RestTopDip.CompareTo(right.RestTopDip);
+            if (comparison != 0)
+            {
+                return comparison;
+            }
+
+            comparison = QueueRestingSortPriority(left.QueueKey, connectedMonitors)
+                .CompareTo(QueueRestingSortPriority(right.QueueKey, connectedMonitors));
+            return comparison != 0
+                ? comparison
+                : string.CompareOrdinal(left.QueueKey, right.QueueKey);
+        });
         return result;
     }
 

@@ -45,7 +45,9 @@ internal sealed partial class WebPaperBodySession
                 normalized,
                 buildFallback(context, normalized)),
             visible => _miniViewHost?.SetVisible(visible),
-            DeferContentCreation: true);
+            DeferContentCreation: true,
+            // WebView host 由本 session 缓存并在空闲/尺寸变化时自行释放，预览拒绝路径不得回收。
+            ContentOwnership: EdgeCapsulePreviewContentOwnership.ProviderOwned);
     }
 
     private FrameworkElement GetOrCreateMiniView(

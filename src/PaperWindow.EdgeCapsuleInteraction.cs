@@ -132,13 +132,28 @@ public sealed partial class PaperWindow
         // FQ-09: 兜底——之前 StartDeepCapsuleReorderDrag 因 lease 占用排队了一次重试。
         // lease 异常长时间不释放（handoff 反复重启 / HWND 出问题）会让我们永远等下去：
         // 检测超时并退化到明确反馈（用户取消 + restoreLayout）而不是继续无限循环。
-        if (HasDeepCapsulePendingReorderDrag &&
-            Environment.TickCount64 - _deepCapsulePendingReorderDragRequestTimestamp
-                > DeepCapsulePendingReorderRetryTimeoutMilliseconds)
+        if (HasDeepCapsulePendingReorderDrag)
         {
-            ResetDeepCapsulePointerGestureSuppression();
-            CancelDeepCapsuleReorderDrag(restoreLayout: true);
-            _edgeCapsuleHost?.ReleaseContentPointer();
+            if (EdgeCapsuleDragWindow.HasActiveLease)
+            {
+                // lease 仍被上一条手势占用：超过兜底时限才明确取消。
+                if (Environment.TickCount64 - _deepCapsulePendingReorderDragRequestTimestamp
+                    > DeepCapsulePendingReorderRetryTimeoutMilliseconds)
+                {
+                    ResetDeepCapsulePointerGestureSuppression();
+                    CancelDeepCapsuleReorderDrag(restoreLayout: true);
+                    _edgeCapsuleHost?.ReleaseContentPointer();
+                }
+                return true;
+            }
+
+            // lease 已释放：立即按当前指针续拖，不能等到“下一次移动”，
+            // 也不能因为等待时长超过兜底时限而误取消。
+            if (leftButtonPressed)
+            {
+                ClearDeepCapsulePendingReorderDrag();
+                StartDeepCapsuleReorderDrag(currentScreenPosition);
+            }
             return true;
         }
         if (!IsDeepCapsuleSlotPendingClick)
