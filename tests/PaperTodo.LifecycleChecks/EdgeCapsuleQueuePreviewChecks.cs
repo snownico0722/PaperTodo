@@ -116,6 +116,38 @@ internal static class EdgeCapsuleQueuePreviewChecks
             Placement(windows["fixture-3"]).SlotCount == 2,
             "an infeasible preview must not expand the target queue");
 
+        // 越界拒绝也必须交出目标队列的真实几何，否则描边读到零高度矩形会在
+        // ShowAt 里直接失败，警示线完全不显示。
+        var infeasiblePlan = (EdgeCapsuleQueueDropLayoutPlan)Program.Part(
+            controller,
+            "_edgeCapsuleQueueDropLayoutPlan");
+        var infeasibleGap = controller.DeepCapsuleGap;
+        var infeasibleSlotHeight = EdgeCapsuleLayout.SlotHeight(infeasibleGap);
+        Require(
+            !infeasiblePlan.Feasible &&
+            infeasiblePlan.TargetQueueKey == targetKey &&
+            infeasiblePlan.TargetIndex == 1 &&
+            infeasiblePlan.CarriedCount == 1,
+            "the rejected insertion did not record the target queue");
+        Require(
+            Math.Abs(
+                infeasiblePlan.TargetHeightDip -
+                EdgeCapsuleQueueDropTargetGeometry.QueueHeightDip(
+                    2,
+                    infeasibleSlotHeight,
+                    infeasibleGap)) < 1e-6,
+            "an infeasible plan must describe the real target queue, not the expanded preview");
+        Require(
+            infeasiblePlan.TargetTopDip > geometry.LocalWorkAreaDip.Top + 1 &&
+            Math.Abs(
+                infeasiblePlan.InsertionLineCenterYDip -
+                EdgeCapsuleQueueDropTargetGeometry.InsertionLineCenterYDip(
+                    infeasiblePlan.TargetTopDip,
+                    1,
+                    infeasibleSlotHeight,
+                    infeasibleGap)) < 1e-6,
+            "an infeasible plan must place the warning line on the target queue");
+
         var commitAnchor = new EdgeCapsuleDropAnchor(
             new DeviceScreenPoint(
                 geometry.WorkArea.Right - 10,

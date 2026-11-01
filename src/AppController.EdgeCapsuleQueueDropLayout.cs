@@ -240,7 +240,19 @@ public sealed partial class AppController
                     gap,
                     slotHeight))
             {
-                return InfeasibleDropLayoutPlan(targetQueueKey, clampedIndex, carried.Count);
+                // 越界拒绝仍要交出目标队列的真实布局，描边才能画出警示线。
+                return InfeasibleDropLayoutPlanForTarget(
+                    targetQueueKey,
+                    clampedIndex,
+                    carried.Count,
+                    targetRealMembers,
+                    area,
+                    gap,
+                    slotHeight,
+                    monitorDeviceName,
+                    side,
+                    sourceQueueKey,
+                    sourceOnTargetEdge);
             }
 
             var targetTop = solved.TopsDip[targetQueueKey];
@@ -274,8 +286,39 @@ public sealed partial class AppController
         }
 
         // 不可行：描边仍要显示目标队列与警示线，因此使用目标队列的真实布局，
-        // 不展示一个实际不会发生的展开结果。这里必须用当前成员数的 delta，
-        // 预览 delta 会让警示线与屏幕上真实目标队列错位。
+        // 不展示一个实际不会发生的展开结果。
+        return InfeasibleDropLayoutPlanForTarget(
+            targetQueueKey,
+            clampedIndex,
+            carried.Count,
+            targetRealMembers,
+            area,
+            gap,
+            slotHeight,
+            monitorDeviceName,
+            side,
+            sourceQueueKey,
+            sourceOnTargetEdge);
+    }
+
+    /// <summary>
+    /// 无法给出合法插入布局时，仍按目标队列的真实屏幕布局构造计划，
+    /// 供描边绘制目标队列与警示色插入线。这里必须用当前成员数的 delta；
+    /// 预览 delta 会让警示线与屏幕上真实目标队列错位。
+    /// </summary>
+    private EdgeCapsuleQueueDropLayoutPlan InfeasibleDropLayoutPlanForTarget(
+        string targetQueueKey,
+        int targetIndex,
+        int carriedCount,
+        IReadOnlyList<PaperData> targetRealMembers,
+        Rect area,
+        double gap,
+        double slotHeight,
+        string monitorDeviceName,
+        string side,
+        string sourceQueueKey,
+        bool sourceOnTargetEdge)
+    {
         var realMargin = DeepCapsuleStartTopMarginForQueueKey(targetQueueKey);
         var currentRestingDeltas = BuildEffectiveQueueRestingDeltas();
         var realTop = EdgeCapsuleLayout.TopForIndex(
@@ -290,7 +333,7 @@ public sealed partial class AppController
             gap);
         var warningLineCenter = EdgeCapsuleQueueDropTargetGeometry.InsertionLineCenterYDip(
             realTop,
-            clampedIndex,
+            targetIndex,
             slotHeight,
             gap);
 
@@ -298,8 +341,8 @@ public sealed partial class AppController
         {
             Feasible = false,
             TargetQueueKey = targetQueueKey,
-            TargetIndex = clampedIndex,
-            CarriedCount = carried.Count,
+            TargetIndex = targetIndex,
+            CarriedCount = carriedCount,
             TargetTopDip = realTop,
             TargetHeightDip = realHeight,
             InsertionLineCenterYDip = warningLineCenter,
