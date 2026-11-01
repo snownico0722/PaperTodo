@@ -35,6 +35,9 @@ internal sealed record EdgeCapsuleQueueInsertSolveResult(
 internal static class EdgeCapsuleQueueInsertionSolver
 {
     private const double Epsilon = 1e-6;
+    // NormalizeStartTopMargin 按 0.1 DIP 量化，边界比较必须覆盖半个步长的舍入误差，
+    // 否则 175% 等缩放下贴底队列会被误判越界。
+    private const double BoundsEpsilon = 0.1;
 
     /// <summary>
     /// 求解插入后的整边队列 top。<paramref name="boxes"/> 必须非空、包含
@@ -90,8 +93,8 @@ internal static class EdgeCapsuleQueueInsertionSolver
 
         var anchor = sorted[anchorIndex];
         var maxBottom = areaHeightDip - topMarginDip;
-        if (anchor.TopDip < topMarginDip - Epsilon ||
-            anchor.TopDip + anchor.HeightDip > maxBottom + Epsilon)
+        if (anchor.TopDip < topMarginDip - BoundsEpsilon ||
+            anchor.TopDip + anchor.HeightDip > maxBottom + BoundsEpsilon)
         {
             return EdgeCapsuleQueueInsertSolveResult.Infeasible;
         }
@@ -118,7 +121,7 @@ internal static class EdgeCapsuleQueueInsertionSolver
             }
 
             var newTop = requiredBottom - box.HeightDip;
-            if (newTop < topMarginDip - Epsilon)
+            if (newTop < topMarginDip - BoundsEpsilon)
             {
                 return EdgeCapsuleQueueInsertSolveResult.Infeasible;
             }
@@ -140,7 +143,7 @@ internal static class EdgeCapsuleQueueInsertionSolver
                 continue;
             }
 
-            if (requiredTop + box.HeightDip > maxBottom + Epsilon)
+            if (requiredTop + box.HeightDip > maxBottom + BoundsEpsilon)
             {
                 return EdgeCapsuleQueueInsertSolveResult.Infeasible;
             }
@@ -150,20 +153,9 @@ internal static class EdgeCapsuleQueueInsertionSolver
             requiredTop = requiredTop + box.HeightDip + gapDip;
         }
 
-        // 兜底：Feasible 必须兑现“整边不重叠且都在工作区内”。允许 0-gap 接触，
-        // 但拒绝真实重叠与越界。输入可能已含运行期避让位移（预览成员数变化会重算
-        // delta），这类队列在扫描中会表现为“已让出空间”，扫描分支不会再次检查边界，
-        // 因此必须在返回前统一校验。
-        foreach (var box in sorted)
-        {
-            var top = tops[box.QueueKey];
-            if (top < topMarginDip - Epsilon ||
-                top + box.HeightDip > maxBottom + Epsilon)
-            {
-                return EdgeCapsuleQueueInsertSolveResult.Infeasible;
-            }
-        }
-
+        // 兜底：Feasible 必须兑现“整边不重叠”。允许 0-gap 接触，但拒绝真实重叠。
+        // 工作区越界不在这里统一拒绝：D-006 允许既有队列延伸出屏幕，是否因本次
+        // 插入新越界必须结合插入前的真实布局判断，由调用方完成。
         var ordered = new List<(EdgeCapsuleQueueInsertBox Box, double TopDip)>(sorted.Count);
         foreach (var box in sorted)
         {

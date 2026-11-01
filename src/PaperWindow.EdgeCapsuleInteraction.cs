@@ -1072,7 +1072,8 @@ public sealed partial class PaperWindow
             plan.TargetQueueKey,
             _paper.Id,
             anchor.CapsuleCenterYDevice,
-            carried.Count);
+            carried.Count,
+            carriedPaperIds: carried.Select(paper => paper.Id).ToList());
 
         var targetChanged = !string.Equals(
             plan.TargetQueueKey,

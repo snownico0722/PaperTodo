@@ -1,3 +1,5 @@
+using System.Windows;
+
 namespace PaperTodo;
 
 /// <summary>
@@ -230,6 +232,17 @@ public sealed partial class AppController
                 previews[queueKey] = preview with { TopDip = solvedTop };
             }
 
+            if (QueueDropLayoutCausesWorkAreaOverflow(
+                    solved.TopsDip,
+                    previews,
+                    membersByQueue,
+                    area,
+                    gap,
+                    slotHeight))
+            {
+                return InfeasibleDropLayoutPlan(targetQueueKey, clampedIndex, carried.Count);
+            }
+
             var targetTop = solved.TopsDip[targetQueueKey];
             var lineCenter = EdgeCapsuleQueueDropTargetGeometry.InsertionLineCenterYDip(
                 targetTop,
@@ -261,14 +274,16 @@ public sealed partial class AppController
         }
 
         // 不可行：描边仍要显示目标队列与警示线，因此使用目标队列的真实布局，
-        // 不展示一个实际不会发生的展开结果。
+        // 不展示一个实际不会发生的展开结果。这里必须用当前成员数的 delta，
+        // 预览 delta 会让警示线与屏幕上真实目标队列错位。
         var realMargin = DeepCapsuleStartTopMarginForQueueKey(targetQueueKey);
+        var currentRestingDeltas = BuildEffectiveQueueRestingDeltas();
         var realTop = EdgeCapsuleLayout.TopForIndex(
             0,
             realMargin,
             area,
             targetRealMembers.Count,
-            gap) + restingDeltas.GetValueOrDefault(targetQueueKey);
+            gap) + currentRestingDeltas.GetValueOrDefault(targetQueueKey);
         var realHeight = EdgeCapsuleQueueDropTargetGeometry.QueueHeightDip(
             targetRealMembers.Count,
             slotHeight,
@@ -294,6 +309,65 @@ public sealed partial class AppController
             SourceQueueKey = sourceQueueKey,
             SourceOnTargetEdge = sourceOnTargetEdge
         };
+    }
+
+    /// <summary>
+    /// 插入后的布局是否让「插入前在界内」的队列越界。
+    /// D-006 允许既有队列延伸出屏幕，因此不能因为边上已有一条出屏队列就拒绝所有插入；
+    /// 只有本次插入本身把原本合法的队列推出工作区时才必须拒绝。
+    /// </summary>
+    private bool QueueDropLayoutCausesWorkAreaOverflow(
+        IReadOnlyDictionary<string, double> solvedTops,
+        IReadOnlyDictionary<string, EdgeCapsuleQueueDropPreview> previews,
+        IReadOnlyDictionary<string, List<PaperData>> currentMembersByQueue,
+        Rect area,
+        double gap,
+        double slotHeight)
+    {
+        // 容差覆盖 NormalizeStartTopMargin 的 0.1 DIP 量化。
+        const double boundsEpsilon = 0.1;
+        var minTop = EdgeCapsuleLayout.TopMargin;
+        var maxBottom = area.Height - EdgeCapsuleLayout.TopMargin;
+        IReadOnlyDictionary<string, double>? currentDeltas = null;
+        foreach (var (queueKey, preview) in previews)
+        {
+            var solvedTop = solvedTops[queueKey];
+            var solvedHeight = EdgeCapsuleQueueDropTargetGeometry.QueueHeightDip(
+                preview.PreviewMembers.Count,
+                slotHeight,
+                gap);
+            if (solvedTop >= minTop - boundsEpsilon &&
+                solvedTop + solvedHeight <= maxBottom + boundsEpsilon)
+            {
+                continue;
+            }
+
+            if (!currentMembersByQueue.TryGetValue(queueKey, out var currentMembers) ||
+                currentMembers.Count == 0)
+            {
+                return true;
+            }
+
+            // 只有确实越界时才计算当前布局的 delta，避免每帧多算一份。
+            currentDeltas ??= BuildEffectiveQueueRestingDeltas();
+            var currentTop = EdgeCapsuleLayout.TopForIndex(
+                0,
+                DeepCapsuleStartTopMarginForQueueKey(queueKey),
+                area,
+                currentMembers.Count,
+                gap) + currentDeltas.GetValueOrDefault(queueKey);
+            var currentHeight = EdgeCapsuleQueueDropTargetGeometry.QueueHeightDip(
+                currentMembers.Count,
+                slotHeight,
+                gap);
+            if (currentTop >= minTop - boundsEpsilon &&
+                currentTop + currentHeight <= maxBottom + boundsEpsilon)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>

@@ -335,7 +335,8 @@ public sealed partial class AppController
                 carried[0].Id,
                 anchorCenterDeviceY,
                 carried.Count,
-                carriedIds);
+                carriedIds,
+                carriedPaperIds: carriedIds);
 
         // 先求完整布局，再改成员；空间不足时不留下半完成的插入。
         var layoutPlan = EvaluateEdgeCapsuleQueueDropLayout(carried, targetQueueKey, insertAt);

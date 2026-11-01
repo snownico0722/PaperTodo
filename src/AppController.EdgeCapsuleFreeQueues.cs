@@ -231,7 +231,25 @@ public sealed partial class AppController
 
         var area = targetGeometry.LocalWorkAreaDip;
         var slotHeight = EdgeCapsuleLayout.SlotHeight(DeepCapsuleGap);
-        var restingDeltas = BuildEffectiveQueueRestingDeltas();
+        // 拖拽期间源队列按撤走 carried 后的成员数收拢；候选几何必须与预览一致，
+        // 否则源队列位于候选上方时 delta 会差一个槽位。
+        var previewMemberCounts = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var paper in DeepCapsulePapersInOrder())
+        {
+            var key = QueueKey(paper);
+            previewMemberCounts[key] = previewMemberCounts.GetValueOrDefault(key) + 1;
+        }
+
+        foreach (var paper in carried)
+        {
+            var key = QueueKey(paper);
+            if (previewMemberCounts.TryGetValue(key, out var count) && count > 0)
+            {
+                previewMemberCounts[key] = count - 1;
+            }
+        }
+
+        var restingDeltas = BuildEffectiveQueueRestingDeltas(previewMemberCounts);
         foreach (var key in order)
         {
             var papers = members[key];
@@ -622,13 +640,17 @@ public sealed partial class AppController
     /// 胶囊高度」换算成 top，抓取点位于胶囊顶部、中心还是底部都不会改变插入位。
     /// 坐标转换在目标队列自己的显示器上完成，跨屏/混合 DPI 时也能得到正确槽位。
     /// 取整规则沿用自由队列之前的插入规则（四舍五入，恰好 .5 时向上）。
+    ///
+    /// <paramref name="carriedPaperIds"/> 用于按预览后的成员数重算静止 delta：
+    /// 跨队列拖拽时源队列会收拢，若仍用当前 delta，插入索引会与预览几何相差一个偏移。
     /// </summary>
     internal int DeepCapsuleQueueInsertIndexFor(
         string queueKey,
         string draggedPaperId,
         double draggedCenterDeviceY,
         int carriedCount = 1,
-        IReadOnlyCollection<string>? excludedPaperIds = null)
+        IReadOnlyCollection<string>? excludedPaperIds = null,
+        IReadOnlyCollection<string>? carriedPaperIds = null)
     {
         var excluded = new HashSet<string>(
             excludedPaperIds ?? Array.Empty<string>(),
@@ -649,14 +671,32 @@ public sealed partial class AppController
         var area = geometry.LocalWorkAreaDip;
         var dropTopDip = geometry.DeviceYToLocalDip(draggedCenterDeviceY)
                          - PaperLayoutDefaults.CapsuleHeight / 2.0;
+        Dictionary<string, int>? previewMemberCounts = null;
+        if (carriedPaperIds is { Count: > 0 })
+        {
+            var carriedSet = new HashSet<string>(carriedPaperIds, StringComparer.Ordinal);
+            previewMemberCounts = new Dictionary<string, int>(StringComparer.Ordinal);
+            foreach (var paper in DeepCapsulePapersInOrder())
+            {
+                var key = QueueKey(paper);
+                previewMemberCounts[key] = previewMemberCounts.GetValueOrDefault(key) + 1;
+                if (carriedSet.Contains(paper.Id))
+                {
+                    previewMemberCounts[key]--;
+                }
+            }
+        }
+
         var realCount = members.Count + Math.Max(1, carriedCount);
         // 队列可能已被静止避让下推；插入索引必须按屏幕上的有效位置计算。
+        // 跨队列拖拽按预览成员数重算 delta，与插入预览共用同一几何。
         var firstTop = EdgeCapsuleLayout.TopForIndex(
             0,
             DeepCapsuleStartTopMarginForQueueKey(queueKey),
             area,
             realCount,
-            DeepCapsuleGap) + BuildEffectiveQueueRestingDeltas().GetValueOrDefault(queueKey);
+            DeepCapsuleGap) +
+            BuildEffectiveQueueRestingDeltas(previewMemberCounts).GetValueOrDefault(queueKey);
         var slotHeight = EdgeCapsuleLayout.SlotHeight(DeepCapsuleGap);
         return Math.Clamp((int)Math.Floor((dropTopDip - firstTop) / slotHeight + 0.5), 0, members.Count);
     }
