@@ -35,7 +35,8 @@ public sealed partial class StateStore
             ValidateExternalDocument(document);
             var imported = JsonSerializer.Deserialize<AppState>(observed, JsonOptions)
                 ?? throw new JsonException("data.json cannot be null.");
-            NormalizeAfterLoad(imported);
+            MigrateLegacyTopBarSettings(imported, observed);
+            // Preserve source values until the user's merge choices are final.
             var external = JsonSerializer.SerializeToNode(imported, JsonOptions)!.AsObject();
             var current = JsonSerializer.SerializeToNode(memory, JsonOptions)!.AsObject();
             JsonObject? baseline = null;
@@ -46,7 +47,7 @@ public sealed partial class StateStore
                 ValidateExternalDocument(originalDocument);
                 var original = JsonSerializer.Deserialize<AppState>(baselineJson, JsonOptions)
                     ?? throw new JsonException("Merge baseline cannot be null.");
-                NormalizeAfterLoad(original);
+                MigrateLegacyTopBarSettings(original, baselineJson);
                 baseline = JsonSerializer.SerializeToNode(original, JsonOptions)!.AsObject();
             }
             if (JsonNode.DeepEquals(current, external))
