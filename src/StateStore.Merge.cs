@@ -38,8 +38,8 @@ public sealed partial class StateStore
             MigrateLegacyTopBarSettings(imported, observed);
             var externalTitles = CaptureMergeTitles(imported);
             // Normalize a detached copy for semantic comparison and for all fields whose
-            // normalization is non-destructive. Keep the original title values separately:
-            // a disputed MaxTitleLength must not truncate external text before resolution.
+            // normalization is non-destructive. Keep original titles for the actual merge:
+            // a disputed MaxTitleLength must not truncate text before resolution.
             var normalizedImported = CopyForReload(imported);
             NormalizeAfterLoad(normalizedImported);
             var external = JsonSerializer.SerializeToNode(normalizedImported, JsonOptions)!.AsObject();
@@ -70,7 +70,12 @@ public sealed partial class StateStore
                 return new(null, new() { Outcome = "unchanged" });
             }
 
-            RestoreMergeTitles(external, externalTitles, baselineRawTitles, baselineNormalizedTitles);
+            RestoreRawMergeTitles(external, externalTitles);
+            if (baseline != null && baselineRawTitles != null && baselineNormalizedTitles != null)
+            {
+                RestoreRawMergeTitles(baseline, baselineRawTitles);
+                RestoreUnmodifiedCurrentMergeTitles(current, baselineRawTitles, baselineNormalizedTitles);
+            }
             StateMergeResult merge;
             if (baseline == null)
             {
@@ -123,32 +128,38 @@ public sealed partial class StateStore
     private static Dictionary<string, string?> CaptureMergeTitles(AppState state) =>
         state.Papers.ToDictionary(paper => paper.Id, paper => paper.Title, StringComparer.Ordinal);
 
-    private static void RestoreMergeTitles(
-        JsonObject external,
-        IReadOnlyDictionary<string, string?> externalTitles,
-        IReadOnlyDictionary<string, string?>? baselineRawTitles,
-        IReadOnlyDictionary<string, string?>? baselineNormalizedTitles)
+    private static void RestoreRawMergeTitles(
+        JsonObject document,
+        IReadOnlyDictionary<string, string?> titles)
     {
-        if (external["papers"] is not JsonArray papers) return;
+        if (document["papers"] is not JsonArray papers) return;
+        foreach (var node in papers.OfType<JsonObject>())
+        {
+            if (node["id"] is JsonValue idValue &&
+                idValue.TryGetValue<string>(out var id) &&
+                titles.TryGetValue(id, out var title))
+                node["title"] = JsonValue.Create(title);
+        }
+    }
+
+    private static void RestoreUnmodifiedCurrentMergeTitles(
+        JsonObject current,
+        IReadOnlyDictionary<string, string?> baselineRawTitles,
+        IReadOnlyDictionary<string, string?> baselineNormalizedTitles)
+    {
+        if (current["papers"] is not JsonArray papers) return;
         foreach (var node in papers.OfType<JsonObject>())
         {
             if (node["id"] is not JsonValue idValue ||
                 !idValue.TryGetValue<string>(out var id) ||
-                !externalTitles.TryGetValue(id, out var externalTitle))
+                !baselineRawTitles.TryGetValue(id, out var rawTitle) ||
+                !baselineNormalizedTitles.TryGetValue(id, out var normalizedTitle))
                 continue;
 
-            var title = externalTitle;
-            // If the editor did not change this title, compare it using the baseline's
-            // normalized value so startup normalization is not mistaken for an edit.
-            // If it did change the title, retain the raw external value until final choice.
-            if (baselineRawTitles != null && baselineNormalizedTitles != null &&
-                baselineRawTitles.TryGetValue(id, out var baselineRawTitle) &&
-                baselineNormalizedTitles.TryGetValue(id, out var baselineNormalizedTitle) &&
-                string.Equals(externalTitle, baselineRawTitle, StringComparison.Ordinal))
-            {
-                title = baselineNormalizedTitle;
-            }
-            node["title"] = JsonValue.Create(title);
+            // The live model may have been shortened when the baseline was loaded. If it
+            // still equals that normalized baseline value, it was not a local title edit.
+            if (node["title"]?.GetValue<string>() == normalizedTitle)
+                node["title"] = JsonValue.Create(rawTitle);
         }
     }
 
