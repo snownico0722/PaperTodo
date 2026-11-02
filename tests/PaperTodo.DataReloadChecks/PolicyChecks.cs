@@ -108,6 +108,66 @@ internal static partial class Program
             "the provisional internal limit truncated independent external text before the final choice");
     }
 
+    private static void MergeLegacyShortcutMigration()
+    {
+        using var s = new Scope();
+        var legacy = s.Read();
+        legacy["todoTopBarShortcuts"] = JsonNode.Parse("[\"association\",\"new-todo\"]")!.AsArray();
+        legacy["noteTopBarShortcuts"] = JsonNode.Parse("[\"association\",\"external-editor\"]")!.AsArray();
+        legacy.Remove("topBarShortcutOrder");
+        legacy.Remove("topBarPinnedCount");
+        s.Write(legacy);
+        var reload = s.Store.ReloadExternalState(2);
+        Require(reload.State != null &&
+            reload.State.TopBarShortcutOrder.Contains(PaperTopBarShortcuts.NewTodo) &&
+            reload.State.TopBarShortcutOrder.Contains(PaperTopBarShortcuts.ExternalEditor) &&
+            reload.State.TodoTopBarShortcuts == null && reload.State.NoteTopBarShortcuts == null,
+            "explicit reload discarded legacy top-bar selections");
+
+        var baseline = legacy.ToJsonString();
+        var memory = reload.State!;
+        memory.Papers[0].Title = "local";
+        var external = (JsonObject)legacy.DeepClone();
+        external["papers"]![0]!["content"] = "external";
+        s.Write(external);
+        var preview = s.Store.PreviewExternalMerge(memory, 3, baseline);
+        Require(preview.State != null &&
+            preview.State.TopBarShortcutOrder.Contains(PaperTopBarShortcuts.NewTodo) &&
+            preview.State.TopBarShortcutOrder.Contains(PaperTopBarShortcuts.ExternalEditor) &&
+            preview.State.Papers[0].Title == "local" && preview.State.Papers[0].Content == "external",
+            "three-way merge did not migrate legacy shortcut values consistently");
+    }
+
+    private static void MergeLoweredTitleLimitPreservesUnchangedTitle()
+    {
+        using var s = new Scope();
+        const string title = "123456789012345678";
+        s.Memory.MaxTitleLength = PaperTitles.MaxTitleLength;
+        s.Memory.Papers[0].Title = title;
+        s.Store.SaveJsonSync(s.Store.SerializeState(s.Memory), 2);
+        var baseline = File.ReadAllText(s.Store.FilePath);
+        var memory = s.Store.Load();
+        memory.MaxTitleLength = 18;
+
+        var external = JsonNode.Parse(baseline)!.AsObject();
+        external["maxTitleLength"] = 6;
+        s.Write(external);
+
+        var preview = s.Store.PreviewExternalMerge(memory, 3, baseline);
+        Require(preview.State != null &&
+            preview.Conflicts!.Any(conflict => conflict.Path == "maxTitleLength") &&
+            !preview.Conflicts.Any(conflict => conflict.Path.EndsWith(".title", StringComparison.Ordinal)),
+            "lowering the external title limit was mistaken for an external title edit");
+
+        var resolution = StateMergeResolution.Resolve(preview.State!, preview.Conflicts,
+            preview.ExternalJson, "ask", _ => ConflictChoice.KeepMemory);
+        s.Store.CommitExternalMerge(resolution, preview.ObservedDiskJson!, 3);
+        Require(resolution.State.MaxTitleLength == 18 &&
+            resolution.State.Papers[0].Title == title &&
+            Str(s.Read()["papers"]![0]!["title"]) == title,
+            "an unchanged title was truncated before the local title-limit choice");
+    }
+
     private static void MergeIdentityOrderChecks()
     {
         // Compare observable ordering against the previous algorithm, including empty inputs,
