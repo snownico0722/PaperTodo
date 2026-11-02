@@ -39,6 +39,8 @@ internal static partial class Program
                 ("missing baselines always require an explicit whole-state choice", MergePoliciesMissingBaseline),
                 ("mixed user decisions share the state and archive owner", MergeMixedPolicyChoices),
                 ("merged normalization waits for the selected settings", MergeNormalizeAfterChoices),
+                ("lowering external title limit preserves unchanged title until resolution", MergeLoweredTitleLimitPreservesUnchangedTitle),
+                ("legacy shortcut values migrate on reload and merge", MergeLegacyShortcutMigration),
                 ("identity insertion preserves order with bounded traversal", MergeIdentityOrderChecks)
             };
             foreach (var check in checks)
