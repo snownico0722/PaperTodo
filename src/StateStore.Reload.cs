@@ -35,6 +35,7 @@ public sealed partial class StateStore
             ValidateExternalDocument(document);
             var state = JsonSerializer.Deserialize<AppState>(json, JsonOptions)
                 ?? throw new JsonException("data.json cannot be null.");
+            MigrateLegacyTopBarSettings(state, json);
             NormalizeWorkspaceDocument(state);
 
             // Any asynchronous normal save queued before this request is now obsolete.
