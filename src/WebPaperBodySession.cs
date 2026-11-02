@@ -890,7 +890,7 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
         _hostSubscriptions.Clear();
     }
 
-    private static HashSet<PaperTodoEventKind> ReadEventKinds(JsonElement payload)
+    internal static HashSet<PaperTodoEventKind> ReadEventKinds(JsonElement payload)
     {
         if (payload.ValueKind != JsonValueKind.Object ||
             !payload.TryGetProperty("types", out var values) ||
@@ -910,6 +910,7 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
                 "todo.created" => PaperTodoEventKind.TodoCreated,
                 "todo.changed" => PaperTodoEventKind.TodoChanged,
                 "todo.deleted" => PaperTodoEventKind.TodoDeleted,
+                "todo.reminderTriggered" => PaperTodoEventKind.TodoReminderTriggered,
                 "note.changed" => PaperTodoEventKind.NoteChanged,
                 var unknown => throw new PaperTodoPluginException(
                     "invalid_params",
@@ -925,7 +926,7 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
         return result;
     }
 
-    private static HashSet<string>? ReadStringSet(JsonElement payload, string name)
+    internal static HashSet<string>? ReadStringSet(JsonElement payload, string name)
     {
         if (payload.ValueKind != JsonValueKind.Object ||
             !payload.TryGetProperty(name, out var values) ||

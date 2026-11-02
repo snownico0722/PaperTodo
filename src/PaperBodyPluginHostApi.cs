@@ -280,6 +280,7 @@ internal sealed partial class PaperBodyPluginHostApi : IPaperTodoHostApi, IPaper
                 After = RedactTodo(item.After, canReadPapers, canReadTodos)
             },
             TodoDeletedEvent item => item with { Todo = RedactTodo(item.Todo, canReadPapers, canReadTodos) },
+            TodoReminderTriggeredEvent item => item with { Todo = RedactTodo(item.Todo, canReadPapers, canReadTodos) },
             NoteChangedEvent item when !canReadPapers => item with { PaperTitle = "" },
             _ => value
         };
@@ -298,7 +299,8 @@ internal sealed partial class PaperBodyPluginHostApi : IPaperTodoHostApi, IPaper
             Text = canReadTodos ? value.Text : "",
             LinkedPaperId = canReadTodos ? value.LinkedPaperId : null,
             LinkedPath = canReadTodos ? value.LinkedPath : null,
-            ReminderAt = canReadTodos ? value.ReminderAt : null
+            ReminderAt = canReadTodos ? value.ReminderAt : null,
+            ReminderTriggered = canReadTodos && value.ReminderTriggered
         };
 
     private T Invoke<T>(Func<T> action)
@@ -340,6 +342,7 @@ internal sealed partial class PaperBodyPluginHostApi : IPaperTodoHostApi, IPaper
         PaperTodoEventKind.PaperDeleted => PaperTodoPermissionNames.PapersObserve,
         PaperTodoEventKind.TodoCreated or
         PaperTodoEventKind.TodoChanged or
+        PaperTodoEventKind.TodoReminderTriggered or
         PaperTodoEventKind.TodoDeleted => PaperTodoPermissionNames.TodosObserve,
         PaperTodoEventKind.NoteChanged => PaperTodoPermissionNames.NotesObserve,
         _ => throw Error("invalid_params", "Unknown event kind.")

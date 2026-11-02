@@ -53,7 +53,8 @@ public enum PaperTodoEventKind
     TodoCreated,
     TodoChanged,
     TodoDeleted,
-    NoteChanged
+    NoteChanged,
+    TodoReminderTriggered
 }
 
 public enum PaperTodoEventOrigin
@@ -120,6 +121,9 @@ public sealed record TodoSnapshot(
     /// host cannot classify it; true means directory and false means file.
     /// </summary>
     public bool? LinkedPathIsDirectory { get; init; }
+
+    /// <summary>API 2.2: the host has surfaced this reminder. This is not a plugin delivery receipt.</summary>
+    public bool ReminderTriggered { get; init; }
 }
 
 public sealed record NoteSnapshot(
@@ -166,6 +170,16 @@ public sealed record TodoDeletedEvent(
     TodoSnapshot Todo,
     PaperTodoEventMetadata EventMetadata)
     : PaperTodoEvent(PaperTodoEventKind.TodoDeleted, EventMetadata);
+
+/// <summary>
+/// API 2.2: emitted after the host surfaces a reminder through its normal delivery path.
+/// Live, best-effort notification only: no replay, acknowledgement or plugin-controlled delivery.
+/// Todo is an immutable snapshot of the triggered reminder; Metadata.Origin is System.
+/// </summary>
+public sealed record TodoReminderTriggeredEvent(
+    TodoSnapshot Todo,
+    PaperTodoEventMetadata EventMetadata)
+    : PaperTodoEvent(PaperTodoEventKind.TodoReminderTriggered, EventMetadata);
 
 public sealed record NoteChangedEvent(
     string PaperId,

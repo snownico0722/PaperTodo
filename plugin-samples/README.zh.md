@@ -27,7 +27,7 @@ MinimumSupportedApiVersion <= plugin.apiVersion <= CurrentApiVersion
 | 1.x | 旧版 / 不再兼容 | 早期 paper-body 合同。已确认的里程碑包括：1.2 将插件 settings/state 移入独立插件数据域；1.8 加入由宿主持有窗口/队列/输入 authority 的 Edge Mini。 |
 | 2.0 | 实验过渡 / 不再兼容 | 引入宿主绘制 Top Bar 等方向，但仍同时存在 provider app Runtime 与 per-Paper Web Runtime；后续被 2.1 收敛路线替代，没有保留加载兼容。 |
 | 2.1 | 当前最低兼容 | 后台统一为单 provider Runtime，Body/Mini 只做前端；包括 Workspace 的 Paper/Todo/Note、Runtime state/Papers、宿主绘制 Top Bar/Todo contribution、全局快捷键与自定义 shortcut action、纸片菜单、笔记图片读取和临时弹窗。 |
-| 2.2 | 当前最新 | 新增跨纸片显示控制、公共软件 Settings API（`settings.read/update`）、settings `type: "action"` 命令按钮，以及 `startupPaper.presentation: "hidden"`。新插件默认面向 2.2。 |
+| 2.2 | 当前最新 | 新增跨纸片显示控制、公共软件 Settings API（`settings.read/update`）、settings `type: "action"` 命令按钮、`startupPaper.presentation: "hidden"`、提醒触发状态/事件及 Web Runtime 宿主事件订阅。新插件默认面向 2.2。 |
 
 **升版规则：**当前 minor 正式发布后，只要新增向后兼容、插件可观察的新合同（manifest 字段/类型、permission、事件、公开 API surface 或新语义），下一批就升 minor；纯宿主内部实现、性能优化和 bugfix 不升。破坏已有插件合同才升 major。同一个尚未发布的 minor 可以一起收纳多项兼容新增，不需要每加一个字段就连续制造多个版本号。
 
@@ -620,7 +620,51 @@ const dispose = papertodo.onHostEvent(
 );
 ```
 
-可订阅：`paper.created`、`paper.changed`、`paper.deleted`、`todo.created`、`todo.changed`、`todo.deleted`、`note.changed`。会话失效或销毁后订阅自动失效；插件自己也应及时 unsubscribe 不再需要的监听。
+可订阅：`paper.created`、`paper.changed`、`paper.deleted`、`todo.created`、`todo.changed`、`todo.deleted`、`note.changed`，以及 API 2.2 的 `todo.reminderTriggered`。会话失效或销毁后订阅自动失效；插件自己也应及时 unsubscribe 不再需要的监听。
+
+### 提醒 API（2.2）
+
+PaperTodo 只提供提醒数据与实时触发通知。
+
+- Native 通过 `Workspace.ListTodos()`、Web 通过 `workspace.request('todos.list')` 读取提醒。`ReminderAt` / `reminderAt` 是计划时间，`ReminderTriggered` / `reminderTriggered` 表示宿主是否已展示该提醒；需要 `todos.read`。
+- 设置、改期或取消仍使用 Native `SetTodoReminder` / Web `todos.setReminder`，需要 `todos.update`。`TodoChangedFields.Reminder` 也覆盖已触发标记的变化。
+- 显式订阅 Native `PaperTodoEventKind.TodoReminderTriggered`（`TodoReminderTriggeredEvent`）或 Web `todo.reminderTriggered`，需要 `todos.observe`。事件包含 `Todo` / `todo` 和来源为 `system` 的标准 metadata。没有 `todos.read` 时裁剪文本、提醒时间和已触发状态；纸片标题另需 `papers.read`。Native 默认订阅保留旧事件集合，新事件必须显式请求。
+- 只有原有纸片/托盘通知路径实际展示的提醒，才逐条发出事件；此时已更新状态并安排原有保存/重试。同批事件共用 operation ID，每条有独立 event ID。宿主展示失败时保留待处理且不发触发事件；关闭提醒功能也停止触发通知。启动或恢复后已过期的提醒仍走同一路径。
+- 事件是实时、尽力投递，不提供历史重放、离线队列、ACK 或跨重启的恰好一次保证；不表示异步保存已落盘，也不表示插件真正展示了提示。插件回调不能确认、屏蔽或替换宿主提醒。Native 回调运行在 UI Dispatcher，应保持简短，将慢速桌宠/网络工作交给插件自己的后台处理。
+- 长期联动放在 provider Runtime，不依赖可能被回收的 Body/Mini。Runtime 仍需至少一张实体插件纸片，可使用 `startupPaper.presentation: 'hidden'`。Web Body 和 Runtime 提供 `onHostEvent`，Web Mini 不提供。Runtime 导航或恢复时清理旧订阅，新文档需重新订阅；通过 `onEvent` 监听 `hostSubscriptionError` 可报告订阅被拒绝的原因。
+
+Native Runtime 示例（保存订阅，并在 Runtime 释放时 Dispose）：
+
+```csharp
+var subscription = context.Workspace.Subscribe(
+    new PaperTodoEventFilter
+    {
+        Kinds = new HashSet<PaperTodoEventKind> { PaperTodoEventKind.TodoReminderTriggered }
+    },
+    evt =>
+    {
+        if (evt is TodoReminderTriggeredEvent reminder)
+        {
+            // 将 reminder.Todo 交给插件自己的通知实现。
+        }
+    });
+// 在插件自己提示的点击回调中：
+// context.WorkspacePresentation.ExpandPaper(paperId, activate: true);
+```
+
+Web Runtime 示例（声明 `permissions: ["todos.read", "todos.observe"]`，读取标题时再加 `papers.read`）：
+
+```js
+const stop = papertodo.onHostEvent(['todo.reminderTriggered'], event => {
+  const { paperId, id, text, reminderAt } = event.todo;
+  // 将这些字段交给插件自己的桌宠/通知实现。
+});
+// 在插件自己提示的点击回调中确认目标仍存在，再打开：
+// await papertodo.workspace.request('papers.expand', { paperId, activate: true });
+// 不再需要监听时调用 stop()。
+```
+
+打开纸片复用既有显示 API，不会自动选中具体待办。提示存在期间纸片可能被删除，应处理 `paper_not_found`，不要新建替代纸片。本次不向 MCP 增加提醒事件流。
 
 纸片、待办、笔记与图片查询只读当前模型/资产，不提交或强制同步编辑器；最新输入可能等待原有编辑/保存流程后再可见。外部写入如果目标就是同一张内置 Markdown，会先提交这张纸片尚未写回模型的用户文字，再执行插件/MCP修改；修改其他纸片不会因此调用无关第三方 Body 的 `Commit()`。核心 `data.json` 保存仍按正常规则同步内置 Markdown，不把第三方 Body `Commit()` 当作全局保存钩子。MCP 新建/追加同样允许设置新待办的初始属性，不额外要求完整写入；修改已有内容的权限不变。
 
@@ -1149,7 +1193,7 @@ papertodo.request(method, params);    // root transport
 papertodo.onEvent(listener);
 ```
 
-Runtime 的 `initialize` 包含 `settings`、provider Runtime `state` 及其版本、当前 provider `papers` 快照；后续设置变更会收到 `settingsChanged`，Paper 增删和 Body 消息会收到 `paperEvent`。它没有 `paper`、`body`、`mini`、`saveState` 等 paper-session API，也没有 Web `onHostEvent` 订阅 bridge。
+Runtime 的 `initialize` 包含 `settings`、provider Runtime `state` 及其版本、当前 provider `papers` 快照；后续设置变更会收到 `settingsChanged`，Paper 增删和 Body 消息会收到 `paperEvent`。API 2.2 另提供 `papertodo.onHostEvent(types, listener, options)` 订阅 Workspace 事件，复用 Native 的 observe/read 权限。它没有 `paper`、`body`、`mini`、`saveState` 等 paper-session API。
 
 `papertodo.papers.postBody(...)` / Native `Papers.PostToBody(...)` 只尝试交给当前 live Body，返回值表示该 Body 当前是否接受（Web Body 可能暂存至 document ready）；它不是持久消息队列，也不是业务 ACK 或最终送达保证。
 

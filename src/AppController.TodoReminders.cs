@@ -69,10 +69,7 @@ public sealed partial class AppController
         var nextReminder = State.Papers
             .Where(paper => paper.Type == PaperTypes.Todo)
             .SelectMany(paper => paper.Items)
-            .Where(item =>
-                !item.Done &&
-                !item.ReminderTriggered &&
-                item.ReminderAt.HasValue)
+            .Where(TodoReminderPolicy.IsPending)
             .Select(item => item.ReminderAt!.Value)
             .DefaultIfEmpty(DateTimeOffset.MaxValue)
             .Min();
@@ -163,11 +160,7 @@ public sealed partial class AppController
         var due = State.Papers
             .Where(paper => paper.Type == PaperTypes.Todo)
             .SelectMany(paper => paper.Items
-                .Where(item =>
-                    !item.Done &&
-                    !item.ReminderTriggered &&
-                    item.ReminderAt is { } reminderAt &&
-                    reminderAt <= now)
+                .Where(item => TodoReminderPolicy.IsDue(item, now))
                 .Select(item => (Paper: paper, Item: item)))
             .ToList();
         if (due.Count == 0)
@@ -197,7 +190,8 @@ public sealed partial class AppController
             // Keep reminders pending when their delivery path was not available.
         }
 
-        if (!openedFirst && !balloonSurfaced)
+        var deliveredCount = TodoReminderPolicy.DeliveredCount(due.Count, openedFirst, balloonSurfaced);
+        if (deliveredCount == 0)
         {
             ScheduleTodoReminderRetry();
             return;
@@ -205,9 +199,7 @@ public sealed partial class AppController
 
         // A successful multi-reminder balloon represents the whole due batch. If only the first
         // paper could be opened, acknowledge only that first item and leave the rest pending.
-        var delivered = balloonSurfaced
-            ? due
-            : due.Take(1).ToList();
+        var delivered = due.Take(deliveredCount).ToList();
 
         // Sound is an optional presentation channel. A bad custom file or unavailable system
         // sound must never keep a successfully surfaced reminder pending.
@@ -234,6 +226,9 @@ public sealed partial class AppController
             }
         }
 
+        // Freeze the whole batch before invoking plugins. A listener may synchronously edit or
+        // delete another item; its callback must not change which reminders this batch surfaced.
+        var triggered = delivered.Select(entry => CaptureTodoSnapshot(entry.Paper, entry.Item)).ToArray();
         SaveNow();
         if (delivered.Count < due.Count)
         {
@@ -243,6 +238,9 @@ public sealed partial class AppController
         {
             RefreshTodoReminderSchedule();
         }
+
+        // Observation only. Plugins cannot acknowledge delivery or affect the host retry path.
+        _paperBodyPluginEvents?.PublishReminderTriggered(triggered, now);
     }
 
     private void OpenTodoReminderTarget(
