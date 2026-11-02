@@ -10,5 +10,6 @@
     <ProjectReference Include="..\..\..\PaperTodo.Plugin.Abstractions\PaperTodo.Plugin.Abstractions.csproj" />
     <Compile Include="..\WebhookDispatcher.cs" Link="WebhookDispatcher.cs" />
     <Compile Include="..\WebhookRoutes.cs" Link="WebhookRoutes.cs" />
+    <Compile Include="..\WebhookSubscriptions.cs" Link="WebhookSubscriptions.cs" />
   </ItemGroup>
 </Project>

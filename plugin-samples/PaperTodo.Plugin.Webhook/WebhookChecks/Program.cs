@@ -16,6 +16,27 @@ if (WebhookRoutes.TryRead("{\"routes\":\"{\"}", out _, out _))
 if (WebhookRoutes.EventName(PaperTodoEventKind.TodoReminderTriggered) != "todoReminderTriggered")
     throw new Exception("Event naming changed");
 
+var activeSubscriptions = 0;
+var filters = new List<PaperTodoEventFilter>();
+using (var subscriptions = new WebhookSubscriptions((filter, handler) =>
+{
+    filters.Add(filter);
+    activeSubscriptions++;
+    return new CallbackDisposable(() => activeSubscriptions--);
+}, new WebhookDispatcher()))
+{
+    subscriptions.Update("{}");
+    if (activeSubscriptions != 0) throw new Exception("Empty routes subscribed to events");
+    subscriptions.Update("{\"routes\":\"{\\\"todoReminderTriggered\\\":\\\"http://localhost:1234\\\"}\"}");
+    if (activeSubscriptions != 1 || !filters[^1].Kinds!.SetEquals(new[] { PaperTodoEventKind.TodoReminderTriggered }))
+        throw new Exception("Reminder route did not subscribe to the reminder event");
+    subscriptions.Update("{\"routes\":\"{\\\"todoCreated\\\":\\\"http://localhost:1234\\\"}\"}");
+    if (activeSubscriptions != 1 || !filters[^1].Kinds!.SetEquals(new[] { PaperTodoEventKind.TodoCreated }))
+        throw new Exception("Subscription was not replaced");
+    subscriptions.Update("{\"routes\":\"{}\"}");
+    if (activeSubscriptions != 0) throw new Exception("Clearing routes left a subscription active");
+}
+
 using var listener = new TcpListener(IPAddress.Loopback, 0);
 listener.Start();
 var port = ((IPEndPoint)listener.LocalEndpoint).Port;
@@ -51,5 +72,18 @@ if (payload.RootElement.GetProperty("kind").GetString() != "todoReminderTriggere
     !payload.RootElement.GetProperty("todo").GetProperty("reminderTriggered").GetBoolean() ||
     payload.RootElement.GetProperty("metadata").GetProperty("eventId").GetGuid() != metadata.EventId)
     throw new Exception("Unexpected webhook payload");
-await stream.WriteAsync("HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n"u8.ToArray(), timeout.Token);
-Console.WriteLine("Webhook POST and reminder payload verified.");
+webhook.Enqueue(new Uri($"http://127.0.0.1:{port}/old"), new TodoReminderTriggeredEvent(todo, metadata));
+webhook.InvalidatePending();
+webhook.Enqueue(new Uri($"http://127.0.0.1:{port}/new"), new TodoReminderTriggeredEvent(todo, metadata));
+await stream.WriteAsync("HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"u8.ToArray(), timeout.Token);
+client.Close();
+using var nextClient = await listener.AcceptTcpClientAsync(timeout.Token);
+using var nextReader = new StreamReader(nextClient.GetStream(), Encoding.UTF8);
+var nextRequest = await nextReader.ReadLineAsync(timeout.Token);
+if (nextRequest != "POST /new HTTP/1.1") throw new Exception($"Stale queued request was sent: {nextRequest}");
+Console.WriteLine("Webhook POST, reminder payload and subscriptions verified.");
+
+sealed class CallbackDisposable(Action callback) : IDisposable
+{
+    public void Dispose() => callback();
+}

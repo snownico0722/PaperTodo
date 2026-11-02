@@ -1,5 +1,5 @@
-using System.Diagnostics;
 using System.Windows;
+using System.Windows.Threading;
 using System.Windows.Controls;
 using PaperTodo.Plugin;
 
@@ -25,50 +25,47 @@ public sealed class WebhookPlugin : IPaperBodyPlugin, IPaperPluginRuntimeProvide
 
     private sealed class Runtime : IPaperPluginRuntime
     {
-        private readonly WebhookDispatcher _dispatcher = new();
+        private readonly Dispatcher _ui = Application.Current.Dispatcher;
+        private readonly WebhookSubscriptions _subscriptions;
         private readonly IDisposable _settingsSubscription;
-        private readonly IDisposable _eventSubscription;
-        private Dictionary<string, Uri> _endpoints = new(StringComparer.OrdinalIgnoreCase);
+        private bool _disposed;
 
         public Runtime(PaperPluginRuntimeContext context)
         {
-            UpdateEndpoints(context.Settings.Json);
-            _settingsSubscription = context.Settings.Subscribe(UpdateEndpoints);
-            _eventSubscription = context.Workspace.Subscribe(
-                new PaperTodoEventFilter
-                {
-                    Kinds = Enum.GetValues<PaperTodoEventKind>().ToHashSet(),
-                    ExcludeOwnOperations = false
-                },
-                OnEvent);
-        }
-
-        private void OnEvent(PaperTodoEvent value)
-        {
-            if (_endpoints.TryGetValue(WebhookRoutes.EventName(value.Kind), out var endpoint))
+            _subscriptions = new WebhookSubscriptions(context.Workspace.Subscribe, new WebhookDispatcher());
+            try
             {
-                _dispatcher.Enqueue(endpoint, value);
+                _subscriptions.Update(context.Settings.Json);
+                _settingsSubscription = context.Settings.Subscribe(UpdateEndpoints);
+            }
+            catch
+            {
+                _subscriptions.Dispose();
+                throw;
             }
         }
 
         private void UpdateEndpoints(string json)
         {
-            if (WebhookRoutes.TryRead(json, out var routes, out var error))
+            if (!_ui.CheckAccess())
             {
-                _endpoints = routes;
+                _ui.Invoke(() => UpdateEndpoints(json));
+                return;
             }
-            else
-            {
-                _endpoints = routes;
-                Trace.TraceWarning("Webhook routes are invalid; sending is disabled: {0}", error);
-            }
+            if (!_disposed) _subscriptions.Update(json);
         }
 
         public void Dispose()
         {
-            _eventSubscription.Dispose();
+            if (!_ui.CheckAccess())
+            {
+                _ui.Invoke(Dispose);
+                return;
+            }
+            if (_disposed) return;
+            _disposed = true;
             _settingsSubscription.Dispose();
-            _dispatcher.Dispose();
+            _subscriptions.Dispose();
         }
     }
 }

@@ -22,7 +22,7 @@ The current event names are `paperCreated`, `paperChanged`, `paperDeleted`, `tod
 
 When the host adds a compatible event type, you can add a route using its enum name with the first letter lowercased without changing the plugin code. Whether the event is delivered still depends on the host's subscription and permission contracts.
 
-Settings take effect immediately. By default, the plugin creates or restores a hidden Paper at startup to keep its Runtime active; you can also create a plugin Paper manually. Turning off **启动时运行** (Run at startup) only affects future startups and does not delete existing Papers.
+Settings take effect immediately: changing routes discards events queued under the previous configuration that have not started sending. An HTTP request that has already started cannot be recalled. The plugin does not subscribe to workspace events when no recognized event routes are configured. By default, the plugin creates or restores a hidden Paper at startup to keep its Runtime active; you can also create a plugin Paper manually. Turning off **启动时运行** (Run at startup) only affects future startups and does not delete existing Papers.
 
 ## Try it locally
 
