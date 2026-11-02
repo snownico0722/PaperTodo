@@ -139,14 +139,15 @@ internal sealed class PaperBodyPluginEventHub : IDisposable
         _scheduledStamp = _observedStamp;
     }
 
-    // Keep unrelated pending edits in the diff; settle a conflicting reminder edit before its
-    // system transition so the baseline cannot later report the trigger as a user change.
+    // Settle pending changes before triggering so callbacks see the user transition first.
+    // The caller must revalidate candidates after these synchronous callbacks.
     public void PrepareTriggeredReminderChanges(IReadOnlyList<TodoSnapshot> todos)
     {
         _dispatcher.VerifyAccess();
         if (_disposed || _suppressionDepth > 0 || _subscriptions.Count == 0) return;
         if (todos.Any(todo => !_baseline.TryGetValue(todo.PaperId, out var paper) ||
-                !paper.Todos.ContainsKey(todo.Id)))
+                !paper.Todos.TryGetValue(todo.Id, out var baseline) ||
+                ChangedTodoFields(baseline, todo) != TodoChangedFields.None))
             ScanNow(PaperOperationContext.User());
     }
 
@@ -171,14 +172,11 @@ internal sealed class PaperBodyPluginEventHub : IDisposable
             if (!_baseline.TryGetValue(after.PaperId, out var paper) ||
                 !paper.Todos.TryGetValue(after.Id, out var baseline))
                 continue;
-            if (baseline.ReminderAt != after.ReminderAt || baseline.ReminderTriggered)
-            {
-                var changes = ChangedTodoFields(baseline, before);
-                if (changes != TodoChangedFields.None)
-                    events.Add(new TodoChangedEvent(baseline, before, changes,
-                        Metadata(PaperOperationContext.User())));
-                baseline = before;
-            }
+            var changes = ChangedTodoFields(baseline, before);
+            if (changes != TodoChangedFields.None)
+                events.Add(new TodoChangedEvent(baseline, before, changes,
+                    Metadata(PaperOperationContext.User())));
+            baseline = before;
             var updatedTodos = new Dictionary<string, TodoSnapshot>(paper.Todos, StringComparer.Ordinal)
             {
                 [after.Id] = baseline with { ReminderTriggered = true }

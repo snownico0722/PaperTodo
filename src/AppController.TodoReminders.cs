@@ -201,7 +201,7 @@ public sealed partial class AppController
         // paper could be opened, acknowledge only that first item and leave the rest pending.
         var delivered = due.Take(deliveredCount).ToList();
 
-        // Settle newly created todos before emitting their reminder transition; callbacks may
+        // Settle pending user changes before the reminder transition; callbacks may
         // synchronously remove or reschedule a delivered item.
         _paperBodyPluginEvents?.PrepareTriggeredReminderChanges(
             delivered.Select(entry => CaptureTodoSnapshot(entry.Paper, entry.Item)).ToArray());

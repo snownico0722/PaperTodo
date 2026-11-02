@@ -145,17 +145,19 @@ internal static partial class Program
         changes.Clear();
         item.Text = "Pending user edit";
         var prior = controller.CaptureTodoSnapshot(paper, item);
+        hub.PrepareTriggeredReminderChanges([prior]);
         item.ReminderTriggered = true;
         var after = controller.CaptureTodoSnapshot(paper, item);
         var publish = hub.CaptureTriggeredReminderChanges([prior], [after], DateTimeOffset.UtcNow);
         publish();
         hub.ScanNow(PaperOperationContext.User());
         Assert(changes.Count == 2 &&
-            changes[0].Metadata.Origin == PaperTodoEventOrigin.System &&
-            changes[0].ChangedFields == TodoChangedFields.Reminder &&
-            changes[0].Before.Text == "Pending user edit" && changes[0].After.ReminderTriggered &&
-            changes[1].Metadata.Origin == PaperTodoEventOrigin.User &&
-            changes[1].ChangedFields == TodoChangedFields.Text,
+            changes[0].Metadata.Origin == PaperTodoEventOrigin.User &&
+            changes[0].ChangedFields == TodoChangedFields.Text &&
+            changes[0].Before.Text == "Before edit" && changes[0].After.Text == "Pending user edit" &&
+            changes[1].Metadata.Origin == PaperTodoEventOrigin.System &&
+            changes[1].ChangedFields == TodoChangedFields.Reminder &&
+            changes[0].After == changes[1].Before && changes[1].After.ReminderTriggered,
             "System reminder transition and pending user edit were not separated.");
         hub.ScanNow(PaperOperationContext.User());
         Assert(changes.Count == 2, "Reminder transition was emitted twice.");

@@ -470,12 +470,36 @@ internal static partial class Program
                 string.Join(", ", events.Select(e => e is TodoChangedEvent change
                     ? $"{change.After.Id}:{change.ChangedFields}:{change.Metadata.Origin}"
                     : e.Kind.ToString())));
-            Check(changes.Any(e => e.After.Id == "reminder-1" &&
-                e.ChangedFields == TodoChangedFields.Text &&
-                e.Metadata.Origin == PaperTodoEventOrigin.User),
-                "Pending user edits must retain their own origin.");
+            var reminderChanges = changes.Where(e => e.After.Id == "reminder-1").ToArray();
+            Check(reminderChanges.Length == 2 &&
+                reminderChanges[0].ChangedFields == TodoChangedFields.Text &&
+                reminderChanges[0].Metadata.Origin == PaperTodoEventOrigin.User &&
+                reminderChanges[1].Metadata.Origin == PaperTodoEventOrigin.System &&
+                reminderChanges[0].After == reminderChanges[1].Before,
+                "Pending user edits must precede the system transition with continuous snapshots.");
             Check(!events.OfType<TodoReminderTriggeredEvent>().Any(e => e.Todo.Id == "reminder-2"),
                 "An undelivered reminder must not emit an occurrence.");
+
+            // A listener may cancel an existing reminder while its pending edit is settled.
+            var edited = paper.Items[1];
+            using (var cancelEditSub = c.PaperBodyPluginEvents.Subscribe(
+                Guid.NewGuid(), "cancel-edit-test", new PaperTodoEventFilter
+                {
+                    Kinds = new HashSet<PaperTodoEventKind> { PaperTodoEventKind.TodoChanged }
+                }, e =>
+                {
+                    if (e is TodoChangedEvent change && change.After.Id == edited.Id &&
+                        change.Metadata.Origin == PaperTodoEventOrigin.User)
+                        edited.ReminderAt = null;
+                }))
+            {
+                edited.Text = "edited before reminder";
+                c.MarkDirty();
+                _ = Invoke(c, "ProcessDueTodoReminders", now);
+                Check(!edited.ReminderTriggered && edited.ReminderAt == null &&
+                    !events.OfType<TodoReminderTriggeredEvent>().Any(e => e.Todo.Id == edited.Id),
+                    "A reminder cancelled by a pending edit callback must not trigger.");
+            }
 
             // If a listener sees a newly created due todo during preparation and cancels it,
             // the reminder loop must not mutate the now-stale delivery candidate.
