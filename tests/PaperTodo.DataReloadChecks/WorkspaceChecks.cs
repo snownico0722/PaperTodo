@@ -253,6 +253,12 @@ internal static partial class Program
             secondaryIds.Contains("303") && !secondaryIds.Contains("101"), "secondary scanned main archives");
         Require(store2.TryRefreshBackupFromPrimary() && File.Exists(Path.Combine(scope.DirectoryPath, "data2.backup.json")),
             "secondary backup used main filename");
+
+        var missingImagePath = Path.Combine(scope.DirectoryPath, "note-assets-missing.lmdb");
+        using var missingImages = new NoteImageStore(missingImagePath);
+        missingImages.Load();
+        Require(!missingImages.ValidateReferencedImages(second) && missingImages.IsWriteDisabled,
+            "missing referenced image store did not disable writes and prevent ID reuse");
     }
 
     private static void WorkspacePluginStores()
