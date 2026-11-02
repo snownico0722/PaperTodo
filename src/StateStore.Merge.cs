@@ -36,10 +36,18 @@ public sealed partial class StateStore
             ValidateExternalDocument(document);
             var imported = JsonSerializer.Deserialize<AppState>(observed, JsonOptions)
                 ?? throw new JsonException("data.json cannot be null.");
-            NormalizeWorkspaceDocument(imported);
-            var external = JsonSerializer.SerializeToNode(imported, JsonOptions)!.AsObject();
+            MigrateLegacyTopBarSettings(imported, observed);
+            var externalTitles = CaptureMergeTitles(imported);
+            // Normalize a detached copy for semantic comparison and for all fields whose
+            // normalization is non-destructive. Keep original titles for the actual merge:
+            // a disputed MaxTitleLength must not truncate text before resolution.
+            var normalizedImported = CopyForReload(imported);
+            NormalizeWorkspaceDocument(normalizedImported);
+            var external = JsonSerializer.SerializeToNode(normalizedImported, JsonOptions)!.AsObject();
             var current = JsonSerializer.SerializeToNode(memory, JsonOptions)!.AsObject();
             JsonObject? baseline = null;
+            Dictionary<string, string?>? baselineRawTitles = null;
+            Dictionary<string, string?>? baselineNormalizedTitles = null;
             if (baselineJson != null)
             {
                 var originalDocument = JsonNode.Parse(baselineJson, documentOptions: StateJsonReadPolicy.DocumentOptions)
@@ -47,8 +55,12 @@ public sealed partial class StateStore
                 ValidateExternalDocument(originalDocument);
                 var original = JsonSerializer.Deserialize<AppState>(baselineJson, JsonOptions)
                     ?? throw new JsonException("Merge baseline cannot be null.");
-                NormalizeWorkspaceDocument(original);
-                baseline = JsonSerializer.SerializeToNode(original, JsonOptions)!.AsObject();
+                MigrateLegacyTopBarSettings(original, baselineJson);
+                baselineRawTitles = CaptureMergeTitles(original);
+                var normalizedOriginal = CopyForReload(original);
+                NormalizeWorkspaceDocument(normalizedOriginal);
+                baselineNormalizedTitles = CaptureMergeTitles(normalizedOriginal);
+                baseline = JsonSerializer.SerializeToNode(normalizedOriginal, JsonOptions)!.AsObject();
             }
             if (JsonNode.DeepEquals(current, external))
             {
@@ -59,6 +71,12 @@ public sealed partial class StateStore
                 return new(null, new() { Outcome = "unchanged" });
             }
 
+            RestoreRawMergeTitles(external, externalTitles);
+            if (baseline != null && baselineRawTitles != null && baselineNormalizedTitles != null)
+            {
+                RestoreRawMergeTitles(baseline, baselineRawTitles);
+                RestoreUnmodifiedCurrentMergeTitles(current, baselineRawTitles, baselineNormalizedTitles);
+            }
             StateMergeResult merge;
             if (baseline == null)
             {
@@ -106,6 +124,44 @@ public sealed partial class StateStore
             return new(null, new() { Outcome = "failed", Error = ex.Message });
         }
         finally { _writeLock.Release(); }
+    }
+
+    private static Dictionary<string, string?> CaptureMergeTitles(AppState state) =>
+        state.Papers.ToDictionary(paper => paper.Id, paper => paper.Title, StringComparer.Ordinal);
+
+    private static void RestoreRawMergeTitles(
+        JsonObject document,
+        IReadOnlyDictionary<string, string?> titles)
+    {
+        if (document["papers"] is not JsonArray papers) return;
+        foreach (var node in papers.OfType<JsonObject>())
+        {
+            if (node["id"] is JsonValue idValue &&
+                idValue.TryGetValue<string>(out var id) &&
+                titles.TryGetValue(id, out var title))
+                node["title"] = JsonValue.Create(title);
+        }
+    }
+
+    private static void RestoreUnmodifiedCurrentMergeTitles(
+        JsonObject current,
+        IReadOnlyDictionary<string, string?> baselineRawTitles,
+        IReadOnlyDictionary<string, string?> baselineNormalizedTitles)
+    {
+        if (current["papers"] is not JsonArray papers) return;
+        foreach (var node in papers.OfType<JsonObject>())
+        {
+            if (node["id"] is not JsonValue idValue ||
+                !idValue.TryGetValue<string>(out var id) ||
+                !baselineRawTitles.TryGetValue(id, out var rawTitle) ||
+                !baselineNormalizedTitles.TryGetValue(id, out var normalizedTitle))
+                continue;
+
+            // The live model may have been shortened when the baseline was loaded. If it
+            // still equals that normalized baseline value, it was not a local title edit.
+            if (node["title"]?.GetValue<string>() == normalizedTitle)
+                node["title"] = JsonValue.Create(rawTitle);
+        }
     }
 
     /// <summary>
