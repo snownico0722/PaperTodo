@@ -108,6 +108,36 @@ internal static partial class Program
             "the provisional internal limit truncated independent external text before the final choice");
     }
 
+    private static void MergeLegacyShortcutMigration()
+    {
+        using var s = new Scope();
+        var legacy = s.Read();
+        legacy["todoTopBarShortcuts"] = J("[\"association\",\"new-todo\"]").AsArray();
+        legacy["noteTopBarShortcuts"] = J("[\"association\",\"external-editor\"]").AsArray();
+        legacy.Remove("topBarShortcutOrder");
+        legacy.Remove("topBarPinnedCount");
+        s.Write(legacy);
+        var reload = s.Store.ReloadExternalState(2);
+        Require(reload.State != null &&
+            reload.State.TopBarShortcutOrder.Contains(PaperTopBarShortcuts.NewTodo) &&
+            reload.State.TopBarShortcutOrder.Contains(PaperTopBarShortcuts.ExternalEditor) &&
+            reload.State.TodoTopBarShortcuts == null && reload.State.NoteTopBarShortcuts == null,
+            "explicit reload discarded legacy top-bar selections");
+
+        var baseline = legacy.ToJsonString();
+        var memory = JsonSerializer.Deserialize<AppState>(baseline, StateStore.JsonOptions)!;
+        memory.Papers[0].Title = "local";
+        var external = (JsonObject)legacy.DeepClone();
+        external["papers"]![0]!["content"] = "external";
+        s.Write(external);
+        var preview = s.Store.PreviewExternalMerge(memory, 3, baseline);
+        Require(preview.State != null &&
+            preview.State.TopBarShortcutOrder.Contains(PaperTopBarShortcuts.NewTodo) &&
+            preview.State.TopBarShortcutOrder.Contains(PaperTopBarShortcuts.ExternalEditor) &&
+            preview.State.Papers[0].Title == "local" && preview.State.Papers[0].Content == "external",
+            "three-way merge did not migrate legacy shortcut values consistently");
+    }
+
     private static void MergeIdentityOrderChecks()
     {
         // Compare observable ordering against the previous algorithm, including empty inputs,
