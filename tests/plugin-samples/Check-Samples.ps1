@@ -76,6 +76,7 @@ try {
     Write-Host '
     === Rebuild and verify native runtime outputs ==='
     $projects = Get-ChildItem -Path plugin-samples -Recurse -Filter *.csproj |
+      Where-Object { Test-Path (Join-Path $_.DirectoryName 'plugin.json') } |
       Sort-Object FullName
     if (-not $projects) {
       throw "No native plugin sample projects were found."
