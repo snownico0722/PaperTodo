@@ -187,11 +187,8 @@ public sealed partial class AppController
             {
                 candidateImages = new NoteImageStore(candidate.Paths.Images);
                 candidateImages.Load();
-                if (candidateImages.IsWriteDisabled)
+                if (!candidateImages.ValidateReferencedImages(candidate.State))
                     throw new InvalidDataException(Strings.Format("WorkspaceImagesUnavailable", candidate.Paths.Images));
-                if (!File.Exists(candidate.Paths.Images) && candidate.State.Papers.Any(p =>
-                    p.Type == PaperTypes.Note && MarkdownImageReferences.CollectImageIds(p.Content).Any()))
-                    throw new FileNotFoundException(Strings.Get("WorkspaceImagesMissing"), candidate.Paths.Images);
                 candidatePluginData = new PaperBodyPluginDataStore(_paperBodyPlugins.PluginRoot, number)
                     { WriteLifetime = _store.WriteLifetime };
             }
