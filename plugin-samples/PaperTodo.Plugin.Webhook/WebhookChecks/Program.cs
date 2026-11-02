@@ -1,0 +1,55 @@
+using System.IO;
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
+using System.Text.Json;
+using PaperTodo.Plugin;
+using PaperTodo.Plugin.Webhook;
+
+if (!WebhookRoutes.TryRead("{\"routes\":\"{\\\"futureEvent\\\":\\\"https://example.com/hook\\\"}\"}", out var routes, out _) ||
+    !routes.ContainsKey("futureEvent"))
+    throw new Exception("Unknown future event route was not retained");
+if (WebhookRoutes.TryRead("{\"routes\":\"{\\\"todoCreated\\\":\\\"file:///tmp\\\"}\"}", out _, out _))
+    throw new Exception("Invalid URL was accepted");
+if (WebhookRoutes.TryRead("{\"routes\":\"{\"}", out _, out _))
+    throw new Exception("Invalid JSON was accepted");
+if (WebhookRoutes.EventName(PaperTodoEventKind.TodoReminderTriggered) != "todoReminderTriggered")
+    throw new Exception("Event naming changed");
+
+using var listener = new TcpListener(IPAddress.Loopback, 0);
+listener.Start();
+var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+using var webhook = new WebhookDispatcher();
+var metadata = new PaperTodoEventMetadata(Guid.NewGuid(), Guid.NewGuid(), DateTimeOffset.Now, PaperTodoEventOrigin.System, null);
+var todo = new TodoSnapshot("paper", "Title", "todo", "Test", false, 0, null, null, DateTimeOffset.Now) { ReminderTriggered = true };
+webhook.Enqueue(new Uri($"http://127.0.0.1:{port}/reminder"), new TodoReminderTriggeredEvent(todo, metadata));
+using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+using var client = await listener.AcceptTcpClientAsync(timeout.Token);
+await using var stream = client.GetStream();
+using var reader = new StreamReader(stream, Encoding.UTF8, leaveOpen: true);
+var request = await reader.ReadLineAsync(timeout.Token);
+if (request != "POST /reminder HTTP/1.1") throw new Exception($"Unexpected request: {request}");
+var length = 0;
+string? line;
+while (!string.IsNullOrEmpty(line = await reader.ReadLineAsync(timeout.Token)))
+{
+    if (line.StartsWith("Content-Length:", StringComparison.OrdinalIgnoreCase))
+        length = int.Parse(line[15..].Trim());
+}
+if (length <= 0) throw new Exception("Missing Content-Length");
+var body = new char[length];
+var read = 0;
+while (read < body.Length)
+{
+    var count = await reader.ReadAsync(body.AsMemory(read), timeout.Token);
+    if (count == 0) throw new Exception("Incomplete request body");
+    read += count;
+}
+using var payload = JsonDocument.Parse(new string(body));
+if (payload.RootElement.GetProperty("kind").GetString() != "todoReminderTriggered" ||
+    payload.RootElement.GetProperty("todo").GetProperty("text").GetString() != "Test" ||
+    !payload.RootElement.GetProperty("todo").GetProperty("reminderTriggered").GetBoolean() ||
+    payload.RootElement.GetProperty("metadata").GetProperty("eventId").GetGuid() != metadata.EventId)
+    throw new Exception("Unexpected webhook payload");
+await stream.WriteAsync("HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n"u8.ToArray(), timeout.Token);
+Console.WriteLine("Webhook POST and reminder payload verified.");
