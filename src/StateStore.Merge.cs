@@ -36,10 +36,17 @@ public sealed partial class StateStore
             var imported = JsonSerializer.Deserialize<AppState>(observed, JsonOptions)
                 ?? throw new JsonException("data.json cannot be null.");
             MigrateLegacyTopBarSettings(imported, observed);
-            // Preserve source values until the user's merge choices are final.
-            var external = JsonSerializer.SerializeToNode(imported, JsonOptions)!.AsObject();
+            var externalTitles = CaptureMergeTitles(imported);
+            // Normalize a detached copy for semantic comparison and for all fields whose
+            // normalization is non-destructive. Keep the original title values separately:
+            // a disputed MaxTitleLength must not truncate external text before resolution.
+            var normalizedImported = CopyForReload(imported);
+            NormalizeAfterLoad(normalizedImported);
+            var external = JsonSerializer.SerializeToNode(normalizedImported, JsonOptions)!.AsObject();
             var current = JsonSerializer.SerializeToNode(memory, JsonOptions)!.AsObject();
             JsonObject? baseline = null;
+            Dictionary<string, string?>? baselineRawTitles = null;
+            Dictionary<string, string?>? baselineNormalizedTitles = null;
             if (baselineJson != null)
             {
                 var originalDocument = JsonNode.Parse(baselineJson, documentOptions: StateJsonReadPolicy.DocumentOptions)
@@ -48,7 +55,11 @@ public sealed partial class StateStore
                 var original = JsonSerializer.Deserialize<AppState>(baselineJson, JsonOptions)
                     ?? throw new JsonException("Merge baseline cannot be null.");
                 MigrateLegacyTopBarSettings(original, baselineJson);
-                baseline = JsonSerializer.SerializeToNode(original, JsonOptions)!.AsObject();
+                baselineRawTitles = CaptureMergeTitles(original);
+                var normalizedOriginal = CopyForReload(original);
+                NormalizeAfterLoad(normalizedOriginal);
+                baselineNormalizedTitles = CaptureMergeTitles(normalizedOriginal);
+                baseline = JsonSerializer.SerializeToNode(normalizedOriginal, JsonOptions)!.AsObject();
             }
             if (JsonNode.DeepEquals(current, external))
             {
@@ -59,6 +70,7 @@ public sealed partial class StateStore
                 return new(null, new() { Outcome = "unchanged" });
             }
 
+            RestoreMergeTitles(external, externalTitles, baselineRawTitles, baselineNormalizedTitles);
             StateMergeResult merge;
             if (baseline == null)
             {
@@ -106,6 +118,38 @@ public sealed partial class StateStore
             return new(null, new() { Outcome = "failed", Error = ex.Message });
         }
         finally { _writeLock.Release(); }
+    }
+
+    private static Dictionary<string, string?> CaptureMergeTitles(AppState state) =>
+        state.Papers.ToDictionary(paper => paper.Id, paper => paper.Title, StringComparer.Ordinal);
+
+    private static void RestoreMergeTitles(
+        JsonObject external,
+        IReadOnlyDictionary<string, string?> externalTitles,
+        IReadOnlyDictionary<string, string?>? baselineRawTitles,
+        IReadOnlyDictionary<string, string?>? baselineNormalizedTitles)
+    {
+        if (external["papers"] is not JsonArray papers) return;
+        foreach (var node in papers.OfType<JsonObject>())
+        {
+            if (node["id"] is not JsonValue idValue ||
+                !idValue.TryGetValue<string>(out var id) ||
+                !externalTitles.TryGetValue(id, out var externalTitle))
+                continue;
+
+            var title = externalTitle;
+            // If the editor did not change this title, compare it using the baseline's
+            // normalized value so startup normalization is not mistaken for an edit.
+            // If it did change the title, retain the raw external value until final choice.
+            if (baselineRawTitles != null && baselineNormalizedTitles != null &&
+                baselineRawTitles.TryGetValue(id, out var baselineRawTitle) &&
+                baselineNormalizedTitles.TryGetValue(id, out var baselineNormalizedTitle) &&
+                string.Equals(externalTitle, baselineRawTitle, StringComparison.Ordinal))
+            {
+                title = baselineNormalizedTitle;
+            }
+            node["title"] = JsonValue.Create(title);
+        }
     }
 
     /// <summary>
