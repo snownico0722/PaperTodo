@@ -54,6 +54,11 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "Plugin sample behavior check failed: $LASTEXITCODE" }
 
     Write-Host '
+    === Run Webhook behavior checks ==='
+    dotnet run --project ./plugin-samples/PaperTodo.Plugin.Webhook/WebhookChecks/WebhookChecks.csproj -c Release
+    if ($LASTEXITCODE -ne 0) { throw "Webhook behavior checks failed: $LASTEXITCODE" }
+
+    Write-Host '
     === Check Web plugin scripts ==='
     $htmlFiles = Get-ChildItem plugin-samples,plugins -Recurse -Filter *.html
     foreach ($html in $htmlFiles) {
