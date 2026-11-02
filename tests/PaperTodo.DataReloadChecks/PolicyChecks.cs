@@ -112,8 +112,8 @@ internal static partial class Program
     {
         using var s = new Scope();
         var legacy = s.Read();
-        legacy["todoTopBarShortcuts"] = J("[\"association\",\"new-todo\"]").AsArray();
-        legacy["noteTopBarShortcuts"] = J("[\"association\",\"external-editor\"]").AsArray();
+        legacy["todoTopBarShortcuts"] = JsonNode.Parse("[\"association\",\"new-todo\"]")!.AsArray();
+        legacy["noteTopBarShortcuts"] = JsonNode.Parse("[\"association\",\"external-editor\"]")!.AsArray();
         legacy.Remove("topBarShortcutOrder");
         legacy.Remove("topBarPinnedCount");
         s.Write(legacy);
@@ -125,7 +125,7 @@ internal static partial class Program
             "explicit reload discarded legacy top-bar selections");
 
         var baseline = legacy.ToJsonString();
-        var memory = JsonSerializer.Deserialize<AppState>(baseline, StateStore.JsonOptions)!;
+        var memory = reload.State!;
         memory.Papers[0].Title = "local";
         var external = (JsonObject)legacy.DeepClone();
         external["papers"]![0]!["content"] = "external";
