@@ -98,6 +98,20 @@ public sealed class NoteImageStore : IDisposable
         }
     }
 
+    internal bool ValidateReferencedImages(AppState state)
+    {
+        lock (_gate)
+        {
+            var referenced = state.Papers
+                .Where(paper => paper.Type == PaperTypes.Note)
+                .SelectMany(paper => MarkdownImageReferences.CollectImageIds(paper.Content))
+                .ToHashSet(StringComparer.Ordinal);
+            var missing = referenced.Any(id => !_images.ContainsKey(id));
+            if (missing) _writeDisabled = true;
+            return !missing && !_writeDisabled;
+        }
+    }
+
     public bool TryGetAsset(string imageId, out NoteImageAsset asset)
     {
         lock (_gate)
