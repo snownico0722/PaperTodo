@@ -17,7 +17,7 @@ internal sealed class WebhookDispatcher : IDisposable
     private readonly Channel<(Uri Endpoint, PaperTodoEvent Event, long Generation)> _queue =
         Channel.CreateBounded<(Uri, PaperTodoEvent, long)>(new BoundedChannelOptions(256)
         {
-            SingleReader = true,
+            SingleReader = false,
             FullMode = BoundedChannelFullMode.Wait
         });
     private readonly CancellationTokenSource _stopping = new();
@@ -33,7 +33,11 @@ internal sealed class WebhookDispatcher : IDisposable
 
     public void InvalidatePending()
     {
-        lock (_gate) _generation++;
+        lock (_gate)
+        {
+            _generation++;
+            while (_queue.Reader.TryRead(out _)) { }
+        }
     }
 
     public void Enqueue(Uri endpoint, PaperTodoEvent value)

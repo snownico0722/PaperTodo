@@ -72,7 +72,8 @@ if (payload.RootElement.GetProperty("kind").GetString() != "todoReminderTriggere
     !payload.RootElement.GetProperty("todo").GetProperty("reminderTriggered").GetBoolean() ||
     payload.RootElement.GetProperty("metadata").GetProperty("eventId").GetGuid() != metadata.EventId)
     throw new Exception("Unexpected webhook payload");
-webhook.Enqueue(new Uri($"http://127.0.0.1:{port}/old"), new TodoReminderTriggeredEvent(todo, metadata));
+for (var i = 0; i < 256; i++)
+    webhook.Enqueue(new Uri($"http://127.0.0.1:{port}/old"), new TodoReminderTriggeredEvent(todo, metadata));
 webhook.InvalidatePending();
 webhook.Enqueue(new Uri($"http://127.0.0.1:{port}/new"), new TodoReminderTriggeredEvent(todo, metadata));
 await stream.WriteAsync("HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"u8.ToArray(), timeout.Token);
