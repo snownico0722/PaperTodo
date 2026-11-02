@@ -75,8 +75,10 @@ internal sealed class WebhookSubscriptions : IDisposable
     {
         public static readonly RouteComparer Instance = new();
         public bool Equals(KeyValuePair<string, Uri> x, KeyValuePair<string, Uri> y) =>
-            StringComparer.OrdinalIgnoreCase.Equals(x.Key, y.Key) && x.Value.Equals(y.Value);
+            StringComparer.OrdinalIgnoreCase.Equals(x.Key, y.Key) &&
+            StringComparer.Ordinal.Equals(x.Value.OriginalString, y.Value.OriginalString);
         public int GetHashCode(KeyValuePair<string, Uri> value) =>
-            HashCode.Combine(StringComparer.OrdinalIgnoreCase.GetHashCode(value.Key), value.Value);
+            HashCode.Combine(StringComparer.OrdinalIgnoreCase.GetHashCode(value.Key),
+                StringComparer.Ordinal.GetHashCode(value.Value.OriginalString));
     }
 }

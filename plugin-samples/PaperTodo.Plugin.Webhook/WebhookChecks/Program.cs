@@ -82,6 +82,52 @@ using var nextClient = await listener.AcceptTcpClientAsync(timeout.Token);
 using var nextReader = new StreamReader(nextClient.GetStream(), Encoding.UTF8);
 var nextRequest = await nextReader.ReadLineAsync(timeout.Token);
 if (nextRequest != "POST /new HTTP/1.1") throw new Exception($"Stale queued request was sent: {nextRequest}");
+// Hold the first request open while changing only credentials on the configured route.
+using var credentialListener = new TcpListener(IPAddress.Loopback, 0);
+credentialListener.Start();
+var credentialPort = ((IPEndPoint)credentialListener.LocalEndpoint).Port;
+Action<PaperTodoEvent>? deliver = null;
+using var credentialSubscriptions = new WebhookSubscriptions((filter, handler) =>
+{
+    deliver = handler;
+    return new CallbackDisposable(() => { });
+}, new WebhookDispatcher());
+string Settings(string password) => JsonSerializer.Serialize(new
+{
+    routes = JsonSerializer.Serialize(new { todoReminderTriggered = $"http://user:{password}@127.0.0.1:{credentialPort}/hook" })
+});
+credentialSubscriptions.Update(Settings("old"));
+deliver!(new TodoReminderTriggeredEvent(todo, metadata));
+using var firstCredentialClient = await credentialListener.AcceptTcpClientAsync(timeout.Token);
+await using var firstCredentialStream = firstCredentialClient.GetStream();
+using var firstCredentialReader = new StreamReader(firstCredentialStream, Encoding.UTF8, leaveOpen: true);
+if (await firstCredentialReader.ReadLineAsync(timeout.Token) != "POST /hook HTTP/1.1")
+    throw new Exception("First credential request was not received");
+while (!string.IsNullOrEmpty(await firstCredentialReader.ReadLineAsync(timeout.Token))) { }
+deliver(new TodoReminderTriggeredEvent(todo, metadata));
+credentialSubscriptions.Update(Settings("new"));
+deliver(new TodoReminderTriggeredEvent(todo with { Text = "New route event" }, metadata));
+await firstCredentialStream.WriteAsync("HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"u8.ToArray(), timeout.Token);
+firstCredentialClient.Close();
+using var nextCredentialClient = await credentialListener.AcceptTcpClientAsync(timeout.Token);
+using var nextCredentialReader = new StreamReader(nextCredentialClient.GetStream(), Encoding.UTF8);
+if (await nextCredentialReader.ReadLineAsync(timeout.Token) != "POST /hook HTTP/1.1")
+    throw new Exception("New credential request was not received");
+var nextLength = 0;
+while (!string.IsNullOrEmpty(line = await nextCredentialReader.ReadLineAsync(timeout.Token)))
+    if (line.StartsWith("Content-Length:", StringComparison.OrdinalIgnoreCase))
+        nextLength = int.Parse(line[15..].Trim());
+var nextBody = new char[nextLength];
+var nextRead = 0;
+while (nextRead < nextBody.Length)
+{
+    var count = await nextCredentialReader.ReadAsync(nextBody.AsMemory(nextRead), timeout.Token);
+    if (count == 0) throw new Exception("Incomplete credential request body");
+    nextRead += count;
+}
+using var nextPayload = JsonDocument.Parse(new string(nextBody));
+if (nextPayload.RootElement.GetProperty("todo").GetProperty("text").GetString() != "New route event")
+    throw new Exception("Queued event used old credentials after route change");
 Console.WriteLine("Webhook POST, reminder payload and subscriptions verified.");
 
 sealed class CallbackDisposable(Action callback) : IDisposable
