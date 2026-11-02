@@ -139,18 +139,78 @@ internal sealed class PaperBodyPluginEventHub : IDisposable
         _scheduledStamp = _observedStamp;
     }
 
-    // Occurrence events must not be reconstructed from the debounced state diff: cancelling or
-    // resetting a reminder in a listener must not erase an occurrence or manufacture another one.
-    public void PublishReminderTriggered(IReadOnlyList<TodoSnapshot> todos, DateTimeOffset occurredAt)
+    // Keep unrelated pending edits in the diff; settle a conflicting reminder edit before its
+    // system transition so the baseline cannot later report the trigger as a user change.
+    public void PrepareTriggeredReminderChanges(IReadOnlyList<TodoSnapshot> todos)
     {
         _dispatcher.VerifyAccess();
-        if (_disposed || _subscriptions.Count == 0 || todos.Count == 0) return;
+        if (_disposed || _suppressionDepth > 0 || _subscriptions.Count == 0) return;
+        if (todos.Any(todo => !_baseline.TryGetValue(todo.PaperId, out var paper) ||
+                !paper.Todos.ContainsKey(todo.Id)))
+            ScanNow(PaperOperationContext.User());
+    }
+
+    public Action CaptureTriggeredReminderChanges(
+        IReadOnlyList<TodoSnapshot> beforeTodos, IReadOnlyList<TodoSnapshot> triggeredTodos,
+        DateTimeOffset occurredAt)
+    {
+        _dispatcher.VerifyAccess();
+        if (_disposed || _suppressionDepth > 0 || _subscriptions.Count == 0 || triggeredTodos.Count == 0)
+            return static () => { };
+
+        var events = new List<PaperTodoEvent>();
+        var operationId = Guid.NewGuid();
+        for (var index = 0; index < triggeredTodos.Count; index++)
+        {
+            var before = beforeTodos[index];
+            var after = triggeredTodos[index];
+            if (before.ReminderTriggered || !after.ReminderTriggered ||
+                !string.Equals(before.PaperId, after.PaperId, StringComparison.Ordinal) ||
+                !string.Equals(before.Id, after.Id, StringComparison.Ordinal)) continue;
+
+            if (!_baseline.TryGetValue(after.PaperId, out var paper) ||
+                !paper.Todos.TryGetValue(after.Id, out var baseline))
+                continue;
+            if (baseline.ReminderAt != after.ReminderAt || baseline.ReminderTriggered)
+            {
+                var changes = ChangedTodoFields(baseline, before);
+                if (changes != TodoChangedFields.None)
+                    events.Add(new TodoChangedEvent(baseline, before, changes,
+                        Metadata(PaperOperationContext.User())));
+                baseline = before;
+            }
+            var updatedTodos = new Dictionary<string, TodoSnapshot>(paper.Todos, StringComparer.Ordinal)
+            {
+                [after.Id] = baseline with { ReminderTriggered = true }
+            };
+            _baseline[after.PaperId] = paper with { Todos = updatedTodos };
+            events.Add(new TodoChangedEvent(before, after, TodoChangedFields.Reminder,
+                new(Guid.NewGuid(), operationId, occurredAt, PaperTodoEventOrigin.System, null)));
+        }
+        var subscribers = _subscriptions.Values.ToArray();
+        return () =>
+        {
+            Dispatch(events, subscribers);
+            QueueUserChangesIfNeeded();
+        };
+    }
+
+    // Occurrence events must not be reconstructed from the debounced state diff: cancelling or
+    // resetting a reminder in a listener must not erase an occurrence or manufacture another one.
+    public Action CaptureReminderTriggered(IReadOnlyList<TodoSnapshot> todos, DateTimeOffset occurredAt)
+    {
+        _dispatcher.VerifyAccess();
+        if (_disposed || _subscriptions.Count == 0 || todos.Count == 0) return static () => { };
         var operationId = Guid.NewGuid();
         var events = todos.Select(todo => (PaperTodoEvent)new TodoReminderTriggeredEvent(
             todo,
             new(Guid.NewGuid(), operationId, occurredAt, PaperTodoEventOrigin.System, null))).ToArray();
-        Dispatch(events, _subscriptions.Values.ToArray());
+        var subscribers = _subscriptions.Values.ToArray();
+        return () => Dispatch(events, subscribers);
     }
+
+    public void PublishReminderTriggered(IReadOnlyList<TodoSnapshot> todos, DateTimeOffset occurredAt) =>
+        CaptureReminderTriggered(todos, occurredAt)();
 
     public void RemoveSession(Guid sessionId)
     {

@@ -627,7 +627,7 @@ const dispose = papertodo.onHostEvent(
 PaperTodo 只提供提醒数据与实时触发通知。
 
 - Native 通过 `Workspace.ListTodos()`、Web 通过 `workspace.request('todos.list')` 读取提醒。`ReminderAt` / `reminderAt` 是计划时间，`ReminderTriggered` / `reminderTriggered` 表示宿主是否已展示该提醒；需要 `todos.read`。
-- 设置、改期或取消仍使用 Native `SetTodoReminder` / Web `todos.setReminder`，需要 `todos.update`。`TodoChangedFields.Reminder` 也覆盖已触发标记的变化。
+- 设置、改期或取消仍使用 Native `SetTodoReminder` / Web `todos.setReminder`，需要 `todos.update`。`TodoChangedFields.Reminder` 也覆盖已触发标记的变化；宿主自动触发产生的 `TodoChanged` 来源为 `system`。
 - 显式订阅 Native `PaperTodoEventKind.TodoReminderTriggered`（`TodoReminderTriggeredEvent`）或 Web `todo.reminderTriggered`，需要 `todos.observe`。事件包含 `Todo` / `todo` 和来源为 `system` 的标准 metadata。没有 `todos.read` 时裁剪文本、提醒时间和已触发状态；纸片标题另需 `papers.read`。Native 默认订阅保留旧事件集合，新事件必须显式请求。
 - 只有原有纸片/托盘通知路径实际展示的提醒，才逐条发出事件；此时已更新状态并安排原有保存/重试。同批事件共用 operation ID，每条有独立 event ID。宿主展示失败时保留待处理且不发触发事件；关闭提醒功能也停止触发通知。启动或恢复后已过期的提醒仍走同一路径。
 - 事件是实时、尽力投递，不提供历史重放、离线队列、ACK 或跨重启的恰好一次保证；不表示异步保存已落盘，也不表示插件真正展示了提示。插件回调不能确认、屏蔽或替换宿主提醒。Native 回调运行在 UI Dispatcher，应保持简短，将慢速桌宠/网络工作交给插件自己的后台处理。

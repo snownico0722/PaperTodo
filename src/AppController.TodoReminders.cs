@@ -201,10 +201,24 @@ public sealed partial class AppController
         // paper could be opened, acknowledge only that first item and leave the rest pending.
         var delivered = due.Take(deliveredCount).ToList();
 
+        // Settle newly created todos before emitting their reminder transition; callbacks may
+        // synchronously remove or reschedule a delivered item.
+        _paperBodyPluginEvents?.PrepareTriggeredReminderChanges(
+            delivered.Select(entry => CaptureTodoSnapshot(entry.Paper, entry.Item)).ToArray());
+        delivered = delivered.Where(entry =>
+            State.Papers.Contains(entry.Paper) && entry.Paper.Type == PaperTypes.Todo &&
+            entry.Paper.Items.Contains(entry.Item) && TodoReminderPolicy.IsDue(entry.Item, now)).ToList();
+        if (delivered.Count == 0)
+        {
+            RefreshTodoReminderSchedule();
+            return;
+        }
+
         // Sound is an optional presentation channel. A bad custom file or unavailable system
         // sound must never keep a successfully surfaced reminder pending.
         PlayTodoReminderSound();
 
+        var beforeTriggered = delivered.Select(entry => CaptureTodoSnapshot(entry.Paper, entry.Item)).ToArray();
         foreach (var (paper, item) in delivered)
         {
             item.ReminderTriggered = true;
@@ -229,6 +243,8 @@ public sealed partial class AppController
         // Freeze the whole batch before invoking plugins. A listener may synchronously edit or
         // delete another item; its callback must not change which reminders this batch surfaced.
         var triggered = delivered.Select(entry => CaptureTodoSnapshot(entry.Paper, entry.Item)).ToArray();
+        var publishChanges = _paperBodyPluginEvents?.CaptureTriggeredReminderChanges(beforeTriggered, triggered, now);
+        var publishOccurrences = _paperBodyPluginEvents?.CaptureReminderTriggered(triggered, now);
         SaveNow();
         if (delivered.Count < due.Count)
         {
@@ -239,8 +255,10 @@ public sealed partial class AppController
             RefreshTodoReminderSchedule();
         }
 
+        // Publish the frozen state transition before callbacks can mutate another delivered item.
+        publishChanges?.Invoke();
         // Observation only. Plugins cannot acknowledge delivery or affect the host retry path.
-        _paperBodyPluginEvents?.PublishReminderTriggered(triggered, now);
+        publishOccurrences?.Invoke();
     }
 
     private void OpenTodoReminderTarget(

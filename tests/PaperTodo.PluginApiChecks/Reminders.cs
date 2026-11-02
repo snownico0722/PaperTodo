@@ -137,6 +137,58 @@ internal static partial class Program
             "Reminder state changes were not observable.");
         hub.ScanNow(PaperOperationContext.User());
         Assert(changes.Count == 1 && received.Count == 2, "State scans replayed an occurrence or repeated a change.");
+
+        item.ReminderAt = DateTimeOffset.UtcNow.AddMinutes(-1);
+        item.ReminderTriggered = false;
+        item.Text = "Before edit";
+        hub.ResetBaseline();
+        changes.Clear();
+        item.Text = "Pending user edit";
+        var prior = controller.CaptureTodoSnapshot(paper, item);
+        item.ReminderTriggered = true;
+        var after = controller.CaptureTodoSnapshot(paper, item);
+        var publish = hub.CaptureTriggeredReminderChanges([prior], [after], DateTimeOffset.UtcNow);
+        publish();
+        hub.ScanNow(PaperOperationContext.User());
+        Assert(changes.Count == 2 &&
+            changes[0].Metadata.Origin == PaperTodoEventOrigin.System &&
+            changes[0].ChangedFields == TodoChangedFields.Reminder &&
+            changes[0].Before.Text == "Pending user edit" && changes[0].After.ReminderTriggered &&
+            changes[1].Metadata.Origin == PaperTodoEventOrigin.User &&
+            changes[1].ChangedFields == TodoChangedFields.Text,
+            "System reminder transition and pending user edit were not separated.");
+        hub.ScanNow(PaperOperationContext.User());
+        Assert(changes.Count == 2, "Reminder transition was emitted twice.");
+
+        item.ReminderTriggered = false;
+        hub.ResetBaseline();
+        changes.Clear();
+        item.ReminderAt = item.ReminderAt!.Value.AddSeconds(1);
+        prior = controller.CaptureTodoSnapshot(paper, item);
+        item.ReminderTriggered = true;
+        after = controller.CaptureTodoSnapshot(paper, item);
+        hub.CaptureTriggeredReminderChanges([prior], [after], DateTimeOffset.UtcNow)();
+        hub.ScanNow(PaperOperationContext.User());
+        Assert(changes.Count == 2 && changes[0].Metadata.Origin == PaperTodoEventOrigin.User &&
+            changes[0].After.ReminderAt == prior.ReminderAt && !changes[0].After.ReminderTriggered &&
+            changes[1].Metadata.Origin == PaperTodoEventOrigin.System && changes[1].After.ReminderTriggered,
+            "A pending reminder reschedule was not separated from its system trigger.");
+
+        var fresh = new PaperItem { Id = "fresh", Text = "New reminder", ReminderAt = DateTimeOffset.UtcNow };
+        var lifecycle = new List<PaperTodoEvent>();
+        using var lifecycleSub = api.Subscribe(new() { Kinds = new HashSet<PaperTodoEventKind>
+            { PaperTodoEventKind.TodoCreated, PaperTodoEventKind.TodoChanged } }, lifecycle.Add);
+        paper.Items.Add(fresh);
+        var freshBefore = controller.CaptureTodoSnapshot(paper, fresh);
+        hub.PrepareTriggeredReminderChanges([freshBefore]);
+        fresh.ReminderTriggered = true;
+        var freshAfter = controller.CaptureTodoSnapshot(paper, fresh);
+        hub.CaptureTriggeredReminderChanges([freshBefore], [freshAfter], DateTimeOffset.UtcNow)();
+        hub.ScanNow(PaperOperationContext.User());
+        Assert(lifecycle.Count == 2 && lifecycle[0] is TodoCreatedEvent created &&
+            !created.Todo.ReminderTriggered && lifecycle[1] is TodoChangedEvent triggered &&
+            triggered.Metadata.Origin == PaperTodoEventOrigin.System && triggered.After.ReminderTriggered,
+            "A new pending todo did not emit creation followed by a system trigger.");
     }
 
     private static void ReminderWebRuntime()
