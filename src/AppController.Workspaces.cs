@@ -38,6 +38,29 @@ public sealed partial class AppController
         UiLanguages.ApplyWorkspacePreference(State.UiLanguage);
     }
 
+    private void ValidateInitialWorkspaceImages()
+    {
+        if (_imageStore.ValidateReferencedImages(State)) return;
+        var error = Strings.Format("WorkspaceImagesUnavailable", _workspace.Paths.Images);
+        if (WorkspaceNumber > 1)
+        {
+            _imageStore.Dispose();
+            _workspace = _workspaceCatalog.OpenMainFallback();
+            _workspace.BindPersistence();
+            _store = _workspace.Store;
+            State = _workspace.State;
+            _imageStore = new NoteImageStore(_workspace.Paths.Images);
+            _imageStore.AutoCompressLargeImages = State.AutoCompressLargeImages;
+            _imageStore.Load();
+            _imageStore.ValidateReferencedImages(State);
+            _workspaceCatalog.SetStartupError(error);
+        }
+        else
+        {
+            _workspaceCatalog.SetStartupError(error);
+        }
+    }
+
     private void InitializeWorkspacePluginData()
     {
         if (WorkspaceNumber == 1) return;
