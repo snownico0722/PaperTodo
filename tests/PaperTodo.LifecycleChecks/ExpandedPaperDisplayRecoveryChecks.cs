@@ -24,6 +24,18 @@ internal static class ExpandedPaperDisplayRecoveryChecks
         Require(monitors.Count > 0 && window.IsDeepCapsuleSlotVisible,
             "edge fixture must have a connected monitor and a real capsule host");
 
+        var sampleMonitor = monitors[0];
+        var onScreenSample = new DeviceScreenPoint(
+            sampleMonitor.WorkArea.Left + 1,
+            sampleMonitor.WorkArea.Top + 1);
+        var offScreenSample = new DeviceScreenPoint(
+            monitors.Max(m => m.WorkArea.Right) + 1,
+            sampleMonitor.WorkArea.Top + 1);
+        Require(ExpandedPaperRecoveryPolicy.IsWithinConnectedWorkArea(onScreenSample, monitors),
+            "a point inside a connected monitor work area was rejected");
+        Require(!ExpandedPaperRecoveryPolicy.IsWithinConnectedWorkArea(offScreenSample, monitors),
+            "an off-screen point was accepted as a visible sampling location");
+
         window.ActivateFromEdgeShortcut();
         await Dispatcher.CurrentDispatcher.InvokeAsync(
             static () => { }, DispatcherPriority.Render);
@@ -81,15 +93,33 @@ internal static class ExpandedPaperDisplayRecoveryChecks
             paper.IsVisible && !paper.IsCollapsed,
             "display-change reconciliation left the expanded paper inaccessible");
 
-        // Deliberate partly off-screen placement must never be recentered.
-        var area = monitors[0].WorkArea;
+        // Deliberate partly off-screen placement must never be recentered. Keep 64 DIP
+        // reachable and convert that overlap through the destination monitor's DPI.
+        var monitor = monitors[0];
+        var area = monitor.WorkArea;
+        var overlapWidth = (int)Math.Ceiling(64 * monitor.DpiScaleX);
+        var topInset = (int)Math.Ceiling(64 * monitor.DpiScaleY);
         var partial = new DeviceScreenRect(
-            area.Right - 80, area.Top + 80,
-            area.Right - 80 + restored.Width, area.Top + 80 + restored.Height);
+            area.Right - overlapWidth, area.Top + topInset,
+            area.Right - overlapWidth + restored.Width, area.Top + topInset + restored.Height);
         Require(WindowNative.TrySetWindowDeviceBounds(window, partial),
             "could not stage partial visibility");
         Require(ExpandedPaperRecoveryPolicy.HasReachablePixels(partial, monitors),
             "the partial-window threshold rejected usable placement");
+
+        // Exercise the same 64-DIP overlap at 200% so the test does not only pass on
+        // the runner's current DPI configuration.
+        var highDpiMonitor = monitor with { DpiScaleX = 2, DpiScaleY = 2 };
+        var highDpiOverlap = (int)Math.Ceiling(64 * highDpiMonitor.DpiScaleX);
+        var highDpiInset = (int)Math.Ceiling(64 * highDpiMonitor.DpiScaleY);
+        var highDpiPartial = new DeviceScreenRect(
+            area.Right - highDpiOverlap, area.Top + highDpiInset,
+            area.Right - highDpiOverlap + restored.Width,
+            area.Top + highDpiInset + restored.Height);
+        Require(ExpandedPaperRecoveryPolicy.HasReachablePixels(
+                highDpiPartial, new[] { highDpiMonitor }),
+            "the partial-window threshold rejected a 64-DIP overlap at 200% DPI");
+
         typeof(AppController).GetMethod("RefreshAfterDisplayMetricsChanged", Private)!
             .Invoke(controller, null);
         Require(WindowNative.TryGetWindowDeviceBounds(window, out var unchanged) &&

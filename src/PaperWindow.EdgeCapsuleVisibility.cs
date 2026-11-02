@@ -154,10 +154,10 @@ public sealed partial class PaperWindow
             return false;
         }
 
-        // WindowFromPoint can report a live HWND outside the connected monitors. An
-        // off-screen paper is not meaningfully visible, even if its own hit test succeeds.
-        if (!ExpandedPaperRecoveryPolicy.HasReachablePixels(
-                bounds, WindowWorkAreaHelper.ConnectedMonitorGeometries()))
+        // A small on-screen intersection makes the paper reachable, but off-screen HWND pixels
+        // must not count toward the visibility ratio used to decide whether a repeat click retracts it.
+        var monitors = WindowWorkAreaHelper.ConnectedMonitorGeometries();
+        if (!ExpandedPaperRecoveryPolicy.HasReachablePixels(bounds, monitors))
         {
             return false;
         }
@@ -192,9 +192,15 @@ public sealed partial class PaperWindow
             {
                 var x = sampleBounds.Left +
                     (column + 0.5) * sampleBounds.Width / EdgeToggleVisibilityGridSize;
-                if (WindowNative.IsRootWindowAtDeviceScreenPoint(
-                        handle,
-                        new DeviceScreenPoint(x, y)))
+                var point = new DeviceScreenPoint(x, y);
+                // WindowFromPoint can still return a live HWND for coordinates outside the active
+                // desktop. Never let those off-screen samples inflate the visible-surface count.
+                if (!ExpandedPaperRecoveryPolicy.IsWithinConnectedWorkArea(point, monitors))
+                {
+                    continue;
+                }
+
+                if (WindowNative.IsRootWindowAtDeviceScreenPoint(handle, point))
                 {
                     visibleSamples++;
                 }

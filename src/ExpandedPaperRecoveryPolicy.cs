@@ -30,4 +30,22 @@ internal static class ExpandedPaperRecoveryPolicy
         }
         return false;
     }
+
+    internal static bool IsWithinConnectedWorkArea(
+        DeviceScreenPoint point,
+        IReadOnlyList<MonitorGeometry> monitors)
+    {
+        foreach (var monitor in monitors)
+        {
+            var area = monitor.WorkArea;
+            if (!area.IsEmpty &&
+                point.X >= area.Left && point.X < area.Right &&
+                point.Y >= area.Top && point.Y < area.Bottom)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 }
