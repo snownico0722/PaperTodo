@@ -13,6 +13,7 @@ internal sealed partial class WebPluginRuntime
             methodValue.ValueKind != JsonValueKind.String) return true;
         var method = methodValue.GetString()!;
         if (!method.StartsWith("paperActions.", StringComparison.Ordinal) &&
+            !method.StartsWith("events.", StringComparison.Ordinal) &&
             !method.StartsWith("popups.", StringComparison.Ordinal)) return true;
         return expectedToken != null && root.TryGetProperty("uiToken", out var token) &&
             token.ValueKind == JsonValueKind.String && token.GetString() == expectedToken;
@@ -39,6 +40,7 @@ internal sealed partial class WebPluginRuntime
     private void TryResetExtensionUi()
     {
         _extensionDocumentToken = null;
+        ClearHostSubscriptions();
         try { (_workspace as PaperPluginRuntimeWorkspaceApi)?.ResetExtensionUi(); } catch { }
     }
 }

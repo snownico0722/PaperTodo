@@ -244,12 +244,14 @@ Paper/Todo/Note 及笔记图片查询只读取当前模型/资产，不提交任
 
 transport 权限、Web/Native surface 生命周期、Top Bar presentation 和 MCP protocol 不下沉到 `PaperCommandService`；反过来，transport/presentation 层也不建立另一套核心 mutation 实现。
 
+待办提醒的调度、展示成功判定、已触发状态及失败重试仍由 `AppController.TodoReminders` 唯一拥有。插件通过 Todo snapshot 读取提醒时间/已触发状态，通过现有事件 hub 显式订阅 `TodoReminderTriggered`；该 occurrence 在宿主实际展示后的原有状态更新及保存/重试安排之后发布。事件为实时尽力通知，无重放/离线队列；桌宠等展示与外部通信由插件自有 Runtime 负责。Native 与 Web Runtime 复用 Workspace 的订阅权限、字段裁剪和释放边界；Web Runtime 订阅额外绑定当前文档 token，导航/失败恢复时撤销，独立于可见 Body/Mini。
+
 ### 5.4 Plugin Protocol 2.x
 
 当前最新插件协议是 **2.2**，宿主继续加载 **2.1** 插件。2.1 已发布能力保持原语义；2.2 新增的 manifest/API 契约必须由插件显式声明 `apiVersion: "2.2"`。宿主不接受 2.0 及更早版本，也不接受高于当前实现的未来版本。
 
 - 2.1 保留 Top Bar、provider Runtime、快捷键、自定义 shortcut action、Mini / Workspace 等既有合同。
-- 2.2 新增 `startupPaper.presentation: hidden`、settings `type: action`、公共 Application Settings API 及 `settings.read/update` 权限。
+- 2.2 新增 `startupPaper.presentation: hidden`、settings `type: action`、公共 Application Settings API 及 `settings.read/update` 权限、提醒已触发状态/事件和 Web Runtime 宿主事件订阅。
 - 新增宿主内部行为、bugfix 或复用既有通用协议原语时不升版本；新增插件可观察的字段、类型、权限、事件、API surface 或新语义时升 minor。破坏既有插件合同才升 major。
 
 #### Protocol 2.1 Top Bar

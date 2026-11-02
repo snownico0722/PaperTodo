@@ -27,7 +27,7 @@ A newer host may load an older compatible plugin. An older host must reject a pl
 | 1.x | Legacy / unsupported | Early paper-body contracts. Known milestones include 1.2 moving plugin settings/state into the independent plugin data store, and 1.8 adding host-owned Edge Mini views. |
 | 2.0 | Experimental / unsupported | Transitional generation that introduced host-rendered Top Bar concepts while still carrying separate provider app Runtime and per-Paper Web Runtime paths. It was superseded rather than kept load-compatible. |
 | 2.1 | Supported minimum | Consolidated background work into one provider Runtime; Body/Mini are frontend surfaces. Includes Workspace Paper/Todo/Note access, Runtime state/Papers, host-rendered Top Bar and Todo contributions, global shortcuts/custom shortcut actions, paper menus, note-image reads and temporary popups. |
-| 2.2 | Current | Adds cross-paper presentation, public application Settings API (`settings.read/update`), settings `type: "action"` command buttons, and `startupPaper.presentation: "hidden"`. New plugins should target 2.2. |
+| 2.2 | Current | Adds cross-paper presentation, public application Settings API (`settings.read/update`), settings `type: "action"` command buttons, `startupPaper.presentation: "hidden"`, reminder trigger state/events, and Web Runtime host-event subscriptions. New plugins should target 2.2. |
 
 **Versioning rule:** a backward-compatible new plugin-visible contract (manifest field/type, permission, event, public API surface, or new observable semantics) advances the minor version after the current minor is published. Host-only implementation changes and bug fixes do not. Breaking an existing plugin contract advances the major version. Multiple compatible additions developed before one minor is released may ship together in that minor.
 
@@ -619,7 +619,51 @@ const dispose = papertodo.onHostEvent(
 );
 ```
 
-Subscribable events are `paper.created`, `paper.changed`, `paper.deleted`, `todo.created`, `todo.changed`, `todo.deleted`, and `note.changed`. Subscriptions become invalid automatically when the session becomes invalid or is disposed; plugins should still unsubscribe promptly when a listener is no longer needed.
+Subscribable events are `paper.created`, `paper.changed`, `paper.deleted`, `todo.created`, `todo.changed`, `todo.deleted`, `note.changed`, and API 2.2 `todo.reminderTriggered`. Subscriptions become invalid automatically when the session becomes invalid or is disposed; plugins should still unsubscribe promptly when a listener is no longer needed.
+
+### Reminder API (2.2)
+
+PaperTodo supplies reminder data and live trigger notifications.
+
+- Read reminders through Native `Workspace.ListTodos()` or Web `workspace.request('todos.list')`. `ReminderAt` / `reminderAt` is the scheduled time; `ReminderTriggered` / `reminderTriggered` reports whether the host has surfaced that reminder. Require `todos.read`.
+- Set, reschedule or cancel through the existing Native `SetTodoReminder` / Web `todos.setReminder` API, under `todos.update`. `TodoChangedFields.Reminder` also covers changes to the triggered flag; `TodoChanged` events caused by the host triggering a reminder have `origin: 'system'`.
+- Explicitly subscribe to Native `PaperTodoEventKind.TodoReminderTriggered` (`TodoReminderTriggeredEvent`) or Web `todo.reminderTriggered`, under `todos.observe`. The event contains `Todo` / `todo` and normal metadata with `origin: 'system'`. Without `todos.read`, text, reminder time and triggered state are redacted; paper titles additionally require `papers.read`. Default Native subscriptions keep their previous set of event kinds, so request the new kind explicitly.
+- The host emits one event per reminder actually surfaced by its existing paper/tray notification path, after updating state and scheduling its normal save/retry. A batch shares an operation ID, with a separate event ID per todo. Failed host delivery remains pending and emits no trigger event. Turning reminders off also stops trigger notifications. Startup/resume overdue reminders use the same path.
+- Events are live and best-effort: no history replay, offline queue, ACK or exactly-once guarantee across restarts. The event is not proof that asynchronous disk saving finished or that a plugin displayed anything. A plugin callback cannot acknowledge, suppress or replace host notification delivery. Keep Native callbacks short; move slow pet/network work off the UI dispatcher.
+- Long-running integrations belong in the provider Runtime, not a Body/Mini that can be reclaimed. Runtime still requires at least one real plugin Paper; `startupPaper.presentation: 'hidden'` can keep that paper unobtrusive. Web Body and Runtime expose `onHostEvent`; Web Mini does not. Runtime navigation/recovery removes old subscriptions, so the new document must subscribe again. Listen for `hostSubscriptionError` through `onEvent` to report rejected subscriptions.
+
+Native Runtime example (retain the returned subscription and dispose it with the Runtime):
+
+```csharp
+var subscription = context.Workspace.Subscribe(
+    new PaperTodoEventFilter
+    {
+        Kinds = new HashSet<PaperTodoEventKind> { PaperTodoEventKind.TodoReminderTriggered }
+    },
+    evt =>
+    {
+        if (evt is TodoReminderTriggeredEvent reminder)
+        {
+            // Hand reminder.Todo to your plugin's own notification implementation.
+        }
+    });
+// From your own notification's click handler:
+// context.WorkspacePresentation.ExpandPaper(paperId, activate: true);
+```
+
+Web Runtime example (`permissions: ["todos.read", "todos.observe"]`, plus `papers.read` if titles are needed):
+
+```js
+const stop = papertodo.onHostEvent(['todo.reminderTriggered'], event => {
+  const { paperId, id, text, reminderAt } = event.todo;
+  // Pass these values to your own pet/notification implementation.
+});
+// From your own notification's click handler, after checking the target still exists:
+// await papertodo.workspace.request('papers.expand', { paperId, activate: true });
+// Call stop() when this listener is no longer needed.
+```
+
+Opening a paper uses the existing presentation API; it does not automatically select a specific todo. If a notification outlives its paper, handle `paper_not_found` rather than creating a replacement paper. No reminder event stream is added to MCP.
 
 Paper, Todo, Note and Note-image reads use the current host model/assets without committing editors. Recent typing may appear after the normal editor/save synchronization; reads do not force a flush. When an external write targets the same built-in Markdown paper, PaperTodo commits that paper's pending user text first so the write follows it; writes to other papers do not invoke unrelated third-party Body `Commit()`. Core `data.json` saves still synchronize built-in Markdown normally and do not use third-party Body `Commit()` as a global save hook. MCP creation/append accepts the new Todo's initial fields under additive writes; changing existing content still needs full writes.
 
@@ -1148,7 +1192,7 @@ papertodo.request(method, params);    // root transport
 papertodo.onEvent(listener);
 ```
 
-Runtime `initialize` contains `settings`, provider Runtime `state` plus its versions, and the current provider `papers` snapshot. Later setting changes produce `settingsChanged`; Paper add/remove events and Body messages produce `paperEvent`. Runtime does not receive paper-session APIs such as `paper`, `body`, `mini`, or `saveState`, and it does not have the Web `onHostEvent` subscription bridge.
+Runtime `initialize` contains `settings`, provider Runtime `state` plus its versions, and the current provider `papers` snapshot. Later setting changes produce `settingsChanged`; Paper add/remove events and Body messages produce `paperEvent`. API 2.2 also provides `papertodo.onHostEvent(types, listener, options)` for Workspace events, with the same observe/read permissions as Native. Runtime does not receive paper-session APIs such as `paper`, `body`, `mini`, or `saveState`.
 
 `papertodo.papers.postBody(...)` / Native `Papers.PostToBody(...)` only attempts delivery to the current live Body. Its return value tells whether that Body currently accepts the message; a Web Body may temporarily buffer until its document is ready. It is not a persistent message queue, business ACK, or guarantee of final delivery.
 

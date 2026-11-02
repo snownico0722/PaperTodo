@@ -35,7 +35,9 @@ internal sealed partial class WebPluginRuntime : IDisposable
         TopBarLabelsClear,
         TopBarLabelsClearAll,
         PaperActions,
-        Popups
+        Popups,
+        EventsSubscribe,
+        EventsUnsubscribe
     }
 
     private readonly PaperBodyPluginDescriptor _descriptor;
@@ -181,6 +183,7 @@ internal sealed partial class WebPluginRuntime : IDisposable
               const expectedOrigin = {{originJson}};
               if (window !== window.top || location.origin !== expectedOrigin || window.papertodo) return;
               const listeners = new Set();
+              const hostEventListeners = new Map();
               const pending = new Map();
               const queuedRequests = [];
               let sequence = 0;
@@ -310,6 +313,27 @@ internal sealed partial class WebPluginRuntime : IDisposable
                 todoActions,
                 topBarLabels,
                 request,
+                onHostEvent(types, listener, options = {}) {
+                  if (typeof listener !== 'function' || !Array.isArray(types) || types.length === 0) return () => {};
+                  const subscriptionId = `s${++sequence}`;
+                  hostEventListeners.set(subscriptionId, listener);
+                  void request('events.subscribe', {
+                    subscriptionId,
+                    types,
+                    paperIds: options.paperIds ?? null,
+                    excludeOwnOperations: options.excludeOwnOperations !== false
+                  }).catch(error => {
+                    hostEventListeners.delete(subscriptionId);
+                    for (const callback of [...listeners]) {
+                      try { callback({ type: 'hostSubscriptionError', subscriptionId,
+                        error: { code: error.code, message: error.message } }); } catch { }
+                    }
+                  });
+                  return () => {
+                    if (!hostEventListeners.delete(subscriptionId)) return;
+                    void request('events.unsubscribe', { subscriptionId }).catch(() => {});
+                  };
+                },
                 onEvent(listener) {
                   if (typeof listener !== 'function') return () => {};
                   listeners.add(listener);
@@ -335,6 +359,12 @@ internal sealed partial class WebPluginRuntime : IDisposable
                       error.code = message.error?.code ?? 'host_error';
                       waiter.reject(error);
                     }
+                  }
+                }
+                if (message?.type === 'hostEvent') {
+                  const listener = hostEventListeners.get(message.subscriptionId);
+                  if (listener) {
+                    try { listener(message.event); } catch { }
                   }
                 }
                 for (const listener of [...listeners]) {
@@ -640,6 +670,8 @@ internal sealed partial class WebPluginRuntime : IDisposable
             HostRequestRoute.TopBarLabelsClear => ClearTopBarLabels(parameters),
             HostRequestRoute.TopBarLabelsClearAll => ClearTopBarLabels(),
             HostRequestRoute.PaperActions => ExecutePaperActionRequest(method, parameters),
+            HostRequestRoute.EventsSubscribe => SubscribeHostEvents(parameters),
+            HostRequestRoute.EventsUnsubscribe => UnsubscribeHostEvents(parameters),
             HostRequestRoute.Popups => WebPluginPopupRequests.Execute((IPaperPluginPopups)_workspace,
                 _workspace, _descriptor.Manifest!, method, parameters, Send),
             _ => throw new PaperTodoPluginException(
@@ -835,6 +867,8 @@ internal sealed partial class WebPluginRuntime : IDisposable
             "topbar.labels.clearAll" => HostRequestRoute.TopBarLabelsClearAll,
             "paperActions.set" or "paperActions.clear" or "paperActions.clearAll" => HostRequestRoute.PaperActions,
             "popups.open" or "popups.close" => HostRequestRoute.Popups,
+            "events.subscribe" => HostRequestRoute.EventsSubscribe,
+            "events.unsubscribe" => HostRequestRoute.EventsUnsubscribe,
             _ => HostRequestRoute.Workspace
         };
     }

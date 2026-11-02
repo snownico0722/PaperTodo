@@ -139,6 +139,77 @@ internal sealed class PaperBodyPluginEventHub : IDisposable
         _scheduledStamp = _observedStamp;
     }
 
+    // Settle pending changes before triggering so callbacks see the user transition first.
+    // The caller must revalidate candidates after these synchronous callbacks.
+    public void PrepareTriggeredReminderChanges(IReadOnlyList<TodoSnapshot> todos)
+    {
+        _dispatcher.VerifyAccess();
+        if (_disposed || _suppressionDepth > 0 || _subscriptions.Count == 0) return;
+        if (todos.Any(todo => !_baseline.TryGetValue(todo.PaperId, out var paper) ||
+                !paper.Todos.TryGetValue(todo.Id, out var baseline) ||
+                ChangedTodoFields(baseline, todo) != TodoChangedFields.None))
+            ScanNow(PaperOperationContext.User());
+    }
+
+    public Action CaptureTriggeredReminderChanges(
+        IReadOnlyList<TodoSnapshot> beforeTodos, IReadOnlyList<TodoSnapshot> triggeredTodos,
+        DateTimeOffset occurredAt)
+    {
+        _dispatcher.VerifyAccess();
+        if (_disposed || _suppressionDepth > 0 || _subscriptions.Count == 0 || triggeredTodos.Count == 0)
+            return static () => { };
+
+        var events = new List<PaperTodoEvent>();
+        var operationId = Guid.NewGuid();
+        for (var index = 0; index < triggeredTodos.Count; index++)
+        {
+            var before = beforeTodos[index];
+            var after = triggeredTodos[index];
+            if (before.ReminderTriggered || !after.ReminderTriggered ||
+                !string.Equals(before.PaperId, after.PaperId, StringComparison.Ordinal) ||
+                !string.Equals(before.Id, after.Id, StringComparison.Ordinal)) continue;
+
+            if (!_baseline.TryGetValue(after.PaperId, out var paper) ||
+                !paper.Todos.TryGetValue(after.Id, out var baseline))
+                continue;
+            var changes = ChangedTodoFields(baseline, before);
+            if (changes != TodoChangedFields.None)
+                events.Add(new TodoChangedEvent(baseline, before, changes,
+                    Metadata(PaperOperationContext.User())));
+            baseline = before;
+            var updatedTodos = new Dictionary<string, TodoSnapshot>(paper.Todos, StringComparer.Ordinal)
+            {
+                [after.Id] = baseline with { ReminderTriggered = true }
+            };
+            _baseline[after.PaperId] = paper with { Todos = updatedTodos };
+            events.Add(new TodoChangedEvent(before, after, TodoChangedFields.Reminder,
+                new(Guid.NewGuid(), operationId, occurredAt, PaperTodoEventOrigin.System, null)));
+        }
+        var subscribers = _subscriptions.Values.ToArray();
+        return () =>
+        {
+            Dispatch(events, subscribers);
+            QueueUserChangesIfNeeded();
+        };
+    }
+
+    // Occurrence events must not be reconstructed from the debounced state diff: cancelling or
+    // resetting a reminder in a listener must not erase an occurrence or manufacture another one.
+    public Action CaptureReminderTriggered(IReadOnlyList<TodoSnapshot> todos, DateTimeOffset occurredAt)
+    {
+        _dispatcher.VerifyAccess();
+        if (_disposed || _subscriptions.Count == 0 || todos.Count == 0) return static () => { };
+        var operationId = Guid.NewGuid();
+        var events = todos.Select(todo => (PaperTodoEvent)new TodoReminderTriggeredEvent(
+            todo,
+            new(Guid.NewGuid(), operationId, occurredAt, PaperTodoEventOrigin.System, null))).ToArray();
+        var subscribers = _subscriptions.Values.ToArray();
+        return () => Dispatch(events, subscribers);
+    }
+
+    public void PublishReminderTriggered(IReadOnlyList<TodoSnapshot> todos, DateTimeOffset occurredAt) =>
+        CaptureReminderTriggered(todos, occurredAt)();
+
     public void RemoveSession(Guid sessionId)
     {
         _dispatcher.VerifyAccess();
@@ -232,6 +303,15 @@ internal sealed class PaperBodyPluginEventHub : IDisposable
         _observedStamp = observedStamp;
         _scheduledStamp = observedStamp;
 
+        Dispatch(events, subscribers);
+
+        // A handler may synchronously mutate or save PaperTodo. Do not lose that newer stamp just
+        // because this scan installed a fresh baseline before invoking listeners.
+        QueueUserChangesIfNeeded();
+    }
+
+    private void Dispatch(IEnumerable<PaperTodoEvent> events, IReadOnlyList<Subscription> subscribers)
+    {
         foreach (var value in events)
         {
             foreach (var subscriber in subscribers)
@@ -251,10 +331,6 @@ internal sealed class PaperBodyPluginEventHub : IDisposable
                 }
             }
         }
-
-        // A handler may synchronously mutate or save PaperTodo. Do not lose that newer stamp just
-        // because this scan installed a fresh baseline before invoking listeners.
-        QueueUserChangesIfNeeded();
     }
 
     private Dictionary<string, PaperStateSnapshot> CaptureState()
@@ -403,7 +479,8 @@ internal sealed class PaperBodyPluginEventHub : IDisposable
         if (!string.Equals(before.Text, after.Text, StringComparison.Ordinal)) fields |= TodoChangedFields.Text;
         if (before.Done != after.Done) fields |= TodoChangedFields.Completion;
         if (before.Order != after.Order) fields |= TodoChangedFields.Order;
-        if (before.ReminderAt != after.ReminderAt) fields |= TodoChangedFields.Reminder;
+        if (before.ReminderAt != after.ReminderAt || before.ReminderTriggered != after.ReminderTriggered)
+            fields |= TodoChangedFields.Reminder;
         if (!string.Equals(before.LinkedPaperId, after.LinkedPaperId, StringComparison.Ordinal)) fields |= TodoChangedFields.LinkedPaper;
         if (!string.Equals(before.LinkedPath, after.LinkedPath, StringComparison.Ordinal) ||
             before.LinkedPathIsDirectory != after.LinkedPathIsDirectory)
@@ -441,6 +518,7 @@ internal sealed class PaperBodyPluginEventHub : IDisposable
         TodoCreatedEvent item => item.Todo.PaperId,
         TodoChangedEvent item => item.After.PaperId,
         TodoDeletedEvent item => item.Todo.PaperId,
+        TodoReminderTriggeredEvent item => item.Todo.PaperId,
         NoteChangedEvent item => item.PaperId,
         _ => ""
     };

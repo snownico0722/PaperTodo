@@ -8,4 +8,5 @@
   </PropertyGroup>
   <ItemGroup><ProjectReference Include="../../PaperTodo.csproj" /></ItemGroup>
   <ItemGroup><None Update="bridge-check.cjs" CopyToOutputDirectory="PreserveNewest" /></ItemGroup>
+  <ItemGroup><None Update="reminder-bridge-check.cjs" CopyToOutputDirectory="PreserveNewest" /></ItemGroup>
 </Project>
