@@ -9,7 +9,6 @@ internal static partial class Program
     {
         if (args.Contains("--kill-writer")) return RunKillWriter(args);
         if (args.Contains("--shutdown-merge")) return RunShutdownMergeFixture(false);
-        if (args.Contains("--shutdown-unknown")) return RunShutdownMergeFixture(true);
         if (args.Contains("--live-fixture")) return RunLiveFixture();
         if (args.Contains("--exit-fixture")) return RunDeferredExitFixture();
         if (args.Contains("--passive-dispose")) return RunPassiveDisposeFixture();
@@ -18,14 +17,14 @@ internal static partial class Program
             var checks = new (string Name, Action Run)[]
             {
                 ("explicit request accepts external snapshot; no revision metadata", ExplicitImport),
-                ("ordinary saves reject unrequested file edits", NormalSaveWins),
+                ("ordinary saves retain legacy overwrite behavior", NormalSaveWins),
                 ("invalid or missing input never falls back to backup", InvalidInput),
                 ("old async writes cannot replace an accepted import", SaveFence),
                 ("model/list references survive accepted reload", ModelIdentities),
                 ("opt-in three-way merge combines independent changes", MergeIndependentEdits),
                 ("derived todo order does not create false conflicts", MergeDerivedTodoOrderDoesNotConflict),
                 ("caller baseline survives newer sync and async saves", MergeOriginalBaseline),
-                ("missing baseline requires a whole-state choice", MergeMissingBaseline),
+                ("merge rejects missing baseline without whole-state choice", MergeMissingBaseline),
                 ("invalid baseline is rejected without changing disk or memory", MergeInvalidBaseline),
                 ("unchanged external snapshot retains local edits", MergeUneditedExternal),
                 ("conflicts group by paper and archive input", MergePaperConflict),
@@ -35,7 +34,7 @@ internal static partial class Program
                 ("source changed during replace retry is also rejected", MergeRejectDuringRetry),
                 ("large text diff avoids quadratic allocations", LargeConflictDiff),
                 ("three conflict policies preserve independent edits and archive actual decisions", MergePolicies),
-                ("missing baselines always require an explicit whole-state choice", MergePoliciesMissingBaseline),
+                ("missing baselines are rejected for all conflict policies", MergePoliciesMissingBaseline),
                 ("mixed user decisions share the state and archive owner", MergeMixedPolicyChoices),
                 ("merged normalization waits for the selected settings", MergeNormalizeAfterChoices),
                 ("lowering external title limit preserves unchanged title until resolution", MergeLoweredTitleLimitPreservesUnchangedTitle),
@@ -51,7 +50,6 @@ internal static partial class Program
             KillSafetyChecks();
             RunIsolatedLiveChecks();
             RunIsolatedLiveChecks("--shutdown-merge");
-            RunIsolatedLiveChecks("--shutdown-unknown");
             RunIsolatedLiveChecks("--exit-fixture");
             RunIsolatedLiveChecks("--passive-dispose");
             Console.WriteLine($"PASS explicit reload: {checks.Length} storage groups and isolated WPF/API/MCP fixture");
@@ -131,9 +129,9 @@ internal static partial class Program
         using var s = new Scope();
         var disk = s.Read(); disk["theme"] = "dark"; s.Write(disk);
         Require(s.Memory.Theme != "dark", "disk edits mutated the live model");
-        Throws<StateWriteBlockedException>(() => s.Store.SaveJsonSync(s.Store.SerializeState(s.Memory), 2));
-        Require(Str(s.Read()["theme"]) == "dark",
-            "an ordinary save overwrote an unaccepted external edit");
+        s.Store.SaveJsonSync(s.Store.SerializeState(s.Memory), 2);
+        Require(Str(s.Read()["theme"]) == s.Memory.Theme,
+            "ordinary save unexpectedly checked or retained an external modification");
     }
 
     private static void InvalidInput()

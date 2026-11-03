@@ -55,14 +55,17 @@ internal static partial class Program
         foreach (var policy in new[] { "ask", "external", "internal" })
         {
             using var s = new Scope();
+            s.Memory.DataMergeConflictPolicy = policy;
             s.Memory.Papers[0].Content = "local";
-            var disk = s.Read(); disk["papers"]![0]!["content"] = "external"; s.Write(disk);
+            var disk = s.Read();
+            disk["papers"]![0]!["content"] = "external";
+            s.Write(disk);
+            var previous = File.ReadAllBytes(s.Store.FilePath);
             var preview = s.Store.PreviewExternalMerge(s.Memory, 2);
-            var calls = 0;
-            var result = StateMergeResolution.Resolve(preview.State!, preview.Conflicts, preview.ExternalJson, policy,
-                bucket => { Require(bucket is UnknownBaselineBucket, "fabricated a baseline"); calls++; return ConflictChoice.KeepMemory; });
-            Require(calls == 1 && result.State.Papers[0].Content == "local" &&
-                result.Conflicts.Single().Source == "user", "missing baseline silently used an automatic preference");
+            Require(preview.State == null && preview.Result.Outcome == "invalid" &&
+                    preview.Conflicts == null &&
+                    File.ReadAllBytes(s.Store.FilePath).SequenceEqual(previous),
+                "missing baseline was silently accepted under " + policy);
         }
     }
 
