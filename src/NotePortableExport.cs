@@ -12,8 +12,6 @@ internal sealed record NoteExportResult(
 
 internal static class NotePortableExport
 {
-    private sealed record ExportImage(string EntryPath, string MarkdownUrl, byte[] Bytes);
-    private sealed record MarkdownOutput(string Text, IReadOnlyList<ExportImage> Images);
 
     internal static NoteExportResult Export(string destination, IReadOnlyList<NoteExportDocument> notes,
         NoteExportFormat format, bool all, NoteImageStore images, string missingImageLabel,
@@ -31,31 +29,29 @@ internal static class NotePortableExport
         var missing = new HashSet<string>(StringComparer.Ordinal);
         if (format == NoteExportFormat.Html)
         {
-            var html = NoteHtmlExport.Render(note.Id, note.Title, note.Content, images,
-                missingLabel, missing);
-            NoteHtmlExport.Save(path, html);
+            SaveAtomic(path, stream => WriteHtml(stream, note, images, missingLabel, missing));
         }
         else
         {
             var folderName = AvailableImageFolder(path);
-            var result = RenderMarkdown(note, folderName, images, missingLabel, missing);
             var folderPath = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(path))!, folderName);
             var madeFolder = false;
             try
             {
-                if (result.Images.Count != 0)
-                {
-                    Directory.CreateDirectory(folderPath);
-                    madeFolder = true;
-                    foreach (var image in result.Images)
+                var markdown = RenderMarkdown(note, folderName, images, missingLabel, missing,
+                    (entryPath, bytes) =>
                     {
-                        var fileName = Path.GetFileName(image.EntryPath);
-                        using var file = new FileStream(Path.Combine(folderPath, fileName),
+                        if (!madeFolder)
+                        {
+                            Directory.CreateDirectory(folderPath);
+                            madeFolder = true;
+                        }
+                        using var file = new FileStream(
+                            Path.Combine(folderPath, Path.GetFileName(entryPath)),
                             FileMode.CreateNew, FileAccess.Write, FileShare.None);
-                        file.Write(image.Bytes);
-                    }
-                }
-                SaveAtomic(path, Encoding.UTF8.GetBytes(result.Text));
+                        file.Write(bytes);
+                    });
+                SaveAtomic(path, Encoding.UTF8.GetBytes(markdown));
             }
             catch
             {
@@ -94,33 +90,28 @@ internal static class NotePortableExport
                         var note = notes[index];
                         var stem = UniqueName(SafeName(note.Title), names);
                         var missing = new HashSet<string>(StringComparer.Ordinal);
-                        MarkdownOutput? markdown = null;
-                        string? html = null;
                         try
                         {
                             if (format == NoteExportFormat.Markdown)
-                                markdown = RenderMarkdown(note, stem + "-images", images,
-                                    missingLabel, missing);
+                            {
+                                var markdown = RenderMarkdown(note, stem + "-images", images,
+                                    missingLabel, missing, (entryPath, bytes) =>
+                                        WriteEntry(zip, entryPath, bytes));
+                                WriteEntry(zip, stem + ".md", Encoding.UTF8.GetBytes(markdown));
+                            }
                             else
-                                html = NoteHtmlExport.Render(note.Id, note.Title, note.Content,
-                                    images, missingLabel, missing);
+                            {
+                                WriteEntry(zip, stem + ".html", stream =>
+                                    WriteHtml(stream, note, images, missingLabel, missing));
+                            }
                         }
+                        catch (IOException) { throw; } // A broken ZIP or destination is a whole-export failure.
+                        catch (UnauthorizedAccessException) { throw; }
                         catch (Exception ex)
                         {
                             failures.Add(note.Title + ": " + ex.Message);
                             progress?.Report(index + 1);
                             continue;
-                        }
-
-                        if (format == NoteExportFormat.Markdown)
-                        {
-                            foreach (var image in markdown!.Images)
-                                WriteEntry(zip, image.EntryPath, image.Bytes);
-                            WriteEntry(zip, stem + ".md", Encoding.UTF8.GetBytes(markdown.Text));
-                        }
-                        else
-                        {
-                            WriteEntry(zip, stem + ".html", Encoding.UTF8.GetBytes(html!));
                         }
 
                         exported++;
@@ -138,45 +129,62 @@ internal static class NotePortableExport
         return new NoteExportResult(exported, missingCount, affectedNotes, failures);
     }
 
-    private static MarkdownOutput RenderMarkdown(NoteExportDocument note, string imageFolder,
-        NoteImageStore store, string missingLabel, ISet<string> missing)
+    private static string RenderMarkdown(NoteExportDocument note, string imageFolder,
+        NoteImageStore store, string missingLabel, ISet<string> missing,
+        Action<string, byte[]> writeImage)
     {
-        var files = new Dictionary<string, ExportImage>(StringComparer.Ordinal);
+        // Only paths are retained. Image bytes leave memory as soon as each image
+        // has been written, including when exporting to a ZIP archive.
+        var urls = new Dictionary<string, string?>(StringComparer.Ordinal);
         var builder = new StringBuilder(note.Content.Length);
         var position = 0;
         foreach (var reference in MarkdownImageReferences.Enumerate(note.Content))
         {
             builder.Append(note.Content, position, reference.LineStart - position);
-            if (store.TryGetEncodedImageBytes(reference.ImageId, out var asset, out var bytes) &&
-                string.Equals(asset.NoteId, note.Id, StringComparison.Ordinal))
+            if (!urls.TryGetValue(reference.ImageId, out var url))
             {
-                if (!files.TryGetValue(reference.ImageId, out var image))
+                if (store.TryGetEncodedImageBytes(reference.ImageId, out var asset, out var bytes) &&
+                    string.Equals(asset.NoteId, note.Id, StringComparison.Ordinal))
                 {
-                    var entryPath = imageFolder + "/" + reference.ImageId + ExtensionFromMime(asset.Mime);
-                    var markdownUrl = "./" + Uri.EscapeDataString(imageFolder) + "/" +
-                        reference.ImageId + ExtensionFromMime(asset.Mime);
-                    image = new ExportImage(entryPath, markdownUrl, bytes);
-                    files.Add(reference.ImageId, image);
+                    var name = reference.ImageId + ExtensionFromMime(asset.Mime);
+                    var entryPath = imageFolder + "/" + name;
+                    url = "./" + Uri.EscapeDataString(imageFolder) + "/" + name;
+                    writeImage(entryPath, bytes);
                 }
-                builder.Append(reference.WithUrl(image.MarkdownUrl));
+                else
+                {
+                    missing.Add(reference.ImageId);
+                    url = null;
+                }
+                urls.Add(reference.ImageId, url);
             }
+
+            if (url != null)
+                builder.Append(reference.WithUrl(url));
             else
-            {
-                missing.Add(reference.ImageId);
                 builder.Append('[').Append(missingLabel).Append(": ")
                     .Append(reference.ImageId).Append(']');
-            }
             position = reference.LineStart + reference.LineLength;
         }
         builder.Append(note.Content, position, note.Content.Length - position);
-        return new MarkdownOutput(builder.ToString(), files.Values.ToArray());
+        return builder.ToString();
     }
 
-    private static void WriteEntry(ZipArchive zip, string name, byte[] bytes)
+    private static void WriteHtml(Stream stream, NoteExportDocument note, NoteImageStore images,
+        string missingLabel, ISet<string> missing)
+    {
+        using var writer = new StreamWriter(stream, new UTF8Encoding(false), 16 * 1024, leaveOpen: true);
+        NoteHtmlExport.Write(writer, note.Id, note.Title, note.Content, images, missingLabel, missing);
+    }
+
+    private static void WriteEntry(ZipArchive zip, string name, byte[] bytes) =>
+        WriteEntry(zip, name, stream => stream.Write(bytes));
+
+    private static void WriteEntry(ZipArchive zip, string name, Action<Stream> write)
     {
         var entry = zip.CreateEntry(name, CompressionLevel.Optimal);
         using var stream = entry.Open();
-        stream.Write(bytes);
+        write(stream);
     }
 
     private static string AvailableImageFolder(string documentPath)
@@ -231,7 +239,10 @@ internal static class NotePortableExport
         Path.Combine(Path.GetDirectoryName(Path.GetFullPath(path))!,
             "." + Path.GetFileName(path) + "." + Guid.NewGuid().ToString("N") + ".tmp");
 
-    internal static void SaveAtomic(string path, byte[] bytes)
+    internal static void SaveAtomic(string path, byte[] bytes) =>
+        SaveAtomic(path, stream => stream.Write(bytes));
+
+    internal static void SaveAtomic(string path, Action<Stream> write)
     {
         var tempPath = TempPath(path);
         try
@@ -239,7 +250,7 @@ internal static class NotePortableExport
             using (var stream = new FileStream(tempPath, FileMode.CreateNew,
                        FileAccess.Write, FileShare.None))
             {
-                stream.Write(bytes);
+                write(stream);
                 stream.Flush(flushToDisk: true);
             }
             File.Move(tempPath, path, overwrite: true);

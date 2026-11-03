@@ -29,6 +29,30 @@ internal static class NoteHtmlChecks
                 !html.Contains("href=\"javascript:") && !html.Contains("<script>") &&
                 html.Contains("&lt;title&gt;"), "HTML portable rendering");
 
+        // More than one Base64 chunk: the streaming renderer must not introduce
+        // padding or alter the original compressed image between chunks.
+        var pixels = new byte[320 * 320 * 4];
+        new Random(42).NextBytes(pixels);
+        for (var i = 3; i < pixels.Length; i += 4) pixels[i] = 255;
+        var largeBitmap = BitmapSource.Create(320, 320, 96, 96, PixelFormats.Bgra32,
+            null, pixels, 320 * 4);
+        largeBitmap.Freeze();
+        var larger = images.ImportBitmapSource("test-note", largeBitmap);
+        Require(images.TryGetEncodedImageBytes(larger.Id, out _, out var expectedBytes) &&
+                expectedBytes.Length > 24 * 1024, "large image did not cross a Base64 chunk");
+        var largePath = Path.Combine(temp.Path, "large.html");
+        var largeExport = NotePortableExport.Export(largePath,
+            [new NoteExportDocument("test-note", "Large", "![large](i:" + larger.Id + ")")],
+            NoteExportFormat.Html, all: false, images, "Missing image");
+        var largeHtml = File.ReadAllText(largePath);
+        var prefix = largeHtml.IndexOf(";base64,", StringComparison.Ordinal);
+        Require(largeExport.MissingImages == 0 && prefix >= 0, "large image export");
+        var first = prefix + ";base64,".Length;
+        var last = largeHtml.IndexOf('"', first);
+        Require(last > first &&
+                Convert.FromBase64String(largeHtml[first..last]).SequenceEqual(expectedBytes),
+            "streamed Base64 image bytes changed");
+
         var htmlPath = Path.Combine(temp.Path, "note.html");
         File.WriteAllText(htmlPath + ".tmp", "existing user file");
         NoteHtmlExport.Save(htmlPath, html);
@@ -48,6 +72,16 @@ internal static class NoteHtmlChecks
                 File.Exists(Path.Combine(imageDir, asset.Id + ".png")),
             "Markdown export and relative image paths");
         var firstImageBytes = File.ReadAllBytes(Path.Combine(imageDir, asset.Id + ".png"));
+        Require(Directory.GetFiles(imageDir).Length == 1,
+            "repeated Markdown image references wrote duplicate files");
+        var htmlStreamPath = Path.Combine(temp.Path, "streamed.html");
+        var singleHtml = NotePortableExport.Export(htmlStreamPath, [source],
+            NoteExportFormat.Html, all: false, images, "Missing image");
+        var streamedHtml = File.ReadAllText(htmlStreamPath);
+        Require(singleHtml.Exported == 1 &&
+                streamedHtml == NoteHtmlExport.Render("test-note", "Note", markdown,
+                    images, "Missing image", new HashSet<string>()),
+            "streamed single HTML does not match Markdig output");
         var repeat = NotePortableExport.Export(mdPath, [source],
             NoteExportFormat.Markdown, all: false, images, "Missing image");
         Require(repeat.Exported == 1 &&
@@ -99,7 +133,7 @@ internal static class NoteHtmlChecks
         using (var zip = ZipFile.OpenRead(zipHtml))
         {
             Require(htmlBatch.Exported == 2 && htmlBatch.MissingImages == 2 &&
-                    Read(zip.GetEntry("Note.html")!).Contains("data:image/") &&
+                    Read(zip.GetEntry("Note.html")!) == streamedHtml &&
                     Read(zip.GetEntry("Note (2).html")!).Contains("Missing image:"),
                 "HTML archive and missing-image placeholders");
         }

@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Globalization;
 using System.IO;
 using System.Net;
@@ -5,16 +6,26 @@ using System.Text;
 using Markdig;
 using Markdig.Extensions.EmphasisExtras;
 using Markdig.Renderers.Html;
+using Markdig.Renderers.Html.Inlines;
 using Markdig.Syntax;
 using Markdig.Syntax.Inlines;
 
 namespace PaperTodo;
 
-// Based on GitKUMA's original HTML exporter in PR #195. The rendered page is
-// independent of the note's original ownership, persistence and editor.
+// Based on GitKUMA's HTML exporter in PR #195. HTML and embedded images are
+// written incrementally, without retaining a base64 copy of the entire note.
 internal static class NoteHtmlExport
 {
+    // Keep the string entry point for focused markup tests; production exports use Write.
     internal static string Render(string noteId, string title, string content,
+        NoteImageStore images, string missingImageLabel, ISet<string> missingImages)
+    {
+        using var writer = new StringWriter(CultureInfo.InvariantCulture);
+        Write(writer, noteId, title, content, images, missingImageLabel, missingImages);
+        return writer.ToString();
+    }
+
+    internal static void Write(TextWriter writer, string noteId, string title, string content,
         NoteImageStore images, string missingImageLabel, ISet<string> missingImages)
     {
         var pipeline = new MarkdownPipelineBuilder()
@@ -25,37 +36,103 @@ internal static class NoteHtmlExport
             .Build();
         var exportContent = PrepareMarkdownForExport(content, out var imageWidths);
         var document = Markdown.Parse(exportContent, pipeline);
-        foreach (var link in document.Descendants<LinkInline>().ToArray())
+        foreach (var link in document.Descendants<LinkInline>())
         {
-            if (link.IsImage)
-            {
-                var url = link.Url ?? "";
-                var imageId = url.StartsWith("i:", StringComparison.Ordinal) ? url[2..] : url;
-                if (!url.StartsWith("i:", StringComparison.Ordinal) ||
-                    !images.TryGetEncodedImageBytes(imageId, out var asset, out var bytes) ||
-                    !string.Equals(asset.NoteId, noteId, StringComparison.Ordinal))
-                {
-                    missingImages.Add(imageId);
-                    link.ReplaceBy(new LiteralInline("[" + missingImageLabel + ": " + imageId + "]"),
-                        copyChildren: false);
-                    continue;
-                }
-
-                link.Url = "data:" + asset.Mime + ";base64," + Convert.ToBase64String(bytes);
-                if (imageWidths.TryGetValue(link.Span.Start, out var displayOptions))
-                    ApplyImageWidth(link, displayOptions, asset.Width);
-            }
-            else if (!(link.Url?.StartsWith('#') == true ||
-                Uri.TryCreate(link.Url, UriKind.Absolute, out var uri) && uri.Scheme is "https" or "http" or "mailto"))
+            if (!link.IsImage &&
+                !(link.Url?.StartsWith('#') == true ||
+                  Uri.TryCreate(link.Url, UriKind.Absolute, out var uri) &&
+                  uri.Scheme is "https" or "http" or "mailto"))
                 link.Url = "";
         }
 
-        var body = document.ToHtml(pipeline);
         var safeTitle = WebUtility.HtmlEncode(title);
-        return "<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">" +
+        writer.Write("<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">" +
             "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; img-src data:; style-src 'unsafe-inline'\">" +
             "<title>" + safeTitle + "</title><style>body{max-width:900px;margin:40px auto;padding:0 24px;background:#faf8f1;color:#302e29;font:16px/1.8 system-ui,sans-serif}img{max-width:100%;height:auto}pre{overflow:auto;padding:16px;background:#eeeae0}blockquote{border-left:3px solid #aaa;padding-left:18px}a{color:#52745d}h1,h2,h3{line-height:1.4}header{border-bottom:1px solid #ddd;margin-bottom:28px}header small{color:#777}@media print{body{background:white}}</style></head><body><header><h1>" +
-            safeTitle + "</h1><small>" + DateTime.Now.ToString("yyyy-MM-dd") + " · PaperTodo</small></header>" + body + "</body></html>";
+            safeTitle + "</h1><small>" + DateTime.Now.ToString("yyyy-MM-dd") + " · PaperTodo</small></header>");
+
+        var renderer = new HtmlRenderer(writer);
+        pipeline.Setup(renderer);
+        renderer.ObjectRenderers.Replace<LinkInlineRenderer>(
+            new StreamingImageRenderer(noteId, images, missingImageLabel, missingImages, imageWidths));
+        renderer.Render(document);
+        writer.Write("</body></html>");
+    }
+
+    private sealed class StreamingImageRenderer(
+        string noteId, NoteImageStore images, string missingLabel,
+        ISet<string> missing, IReadOnlyDictionary<int, MarkdownImageDisplayOptions> widths)
+        : LinkInlineRenderer
+    {
+        protected override void Write(HtmlRenderer renderer, LinkInline link)
+        {
+            if (!link.IsImage)
+            {
+                base.Write(renderer, link);
+                return;
+            }
+
+            var url = link.Url ?? "";
+            var imageId = url.StartsWith("i:", StringComparison.Ordinal) ? url[2..] : url;
+            if (!url.StartsWith("i:", StringComparison.Ordinal) ||
+                !images.TryGetEncodedImageBytes(imageId, out var asset, out var bytes) ||
+                !string.Equals(asset.NoteId, noteId, StringComparison.Ordinal))
+            {
+                missing.Add(imageId);
+                renderer.WriteEscape("[" + missingLabel + ": " + imageId + "]");
+                return;
+            }
+
+            if (widths.TryGetValue(link.Span.Start, out var options))
+                ApplyImageWidth(link, options, asset.Width);
+
+            // Preserve Markdig's image alt/title/attribute rendering while writing the
+            // Base64 payload directly to the destination writer in bounded chunks.
+            if (!renderer.EnableHtmlForInline)
+            {
+                renderer.WriteChildren(link);
+                return;
+            }
+
+            renderer.Write("<img src=\"data:");
+            renderer.Write(asset.Mime);
+            renderer.Write(";base64,");
+            WriteBase64(renderer.Writer, bytes);
+            renderer.Write('"');
+            renderer.WriteAttributes(link);
+            renderer.Write(" alt=\"");
+            renderer.EnableHtmlForInline = false;
+            try { renderer.WriteChildren(link); }
+            finally { renderer.EnableHtmlForInline = true; }
+            renderer.Write('"');
+            if (!string.IsNullOrEmpty(link.Title))
+            {
+                renderer.Write(" title=\"");
+                renderer.WriteEscape(link.Title);
+                renderer.Write('"');
+            }
+            renderer.Write(" />");
+        }
+
+        private static void WriteBase64(TextWriter writer, ReadOnlySpan<byte> bytes)
+        {
+            const int inputChunk = 24 * 1024; // Multiple of 3: no padding between chunks.
+            var chars = ArrayPool<char>.Shared.Rent(inputChunk / 3 * 4);
+            try
+            {
+                for (var offset = 0; offset < bytes.Length; offset += inputChunk)
+                {
+                    var length = Math.Min(inputChunk, bytes.Length - offset);
+                    if (!Convert.TryToBase64Chars(bytes.Slice(offset, length), chars, out var written))
+                        throw new InvalidDataException("Could not encode an exported image.");
+                    writer.Write(chars, 0, written);
+                }
+            }
+            finally
+            {
+                ArrayPool<char>.Shared.Return(chars);
+            }
+        }
     }
 
     // PaperTodo's standalone image lines carry size syntax that standard Markdown
@@ -110,6 +187,7 @@ internal static class NoteHtmlExport
                 "width:" + Math.Round(width.Value, 1).ToString("0.#", CultureInfo.InvariantCulture) +
                 unit + ";max-width:100%;height:auto");
     }
+
 
     internal static void Save(string path, string html) =>
         NotePortableExport.SaveAtomic(path, Encoding.UTF8.GetBytes(html));
