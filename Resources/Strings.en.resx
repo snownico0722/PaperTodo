@@ -1588,6 +1588,7 @@ When off, open at the docked edge or remembered position.</value>
   <data name="DataReloadPaperConflictWholePaper" xml:space="preserve">
     <value>(whole paper)</value>
   </data>
+  <data name="DataReloadInvalidExternalHint" xml:space="preserve"><value>The external data file is invalid. The right pane shows the error and a preview; your current data has not been overwritten. Fix the file and try again.</value></data>
   <data name="DataReloadMissingBaseline" xml:space="preserve">
     <value>The original data read before editing was not provided, so independent changes cannot be identified. Choose the entire current state or the entire external state.</value>
   </data>
