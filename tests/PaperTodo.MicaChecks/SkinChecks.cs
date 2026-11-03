@@ -77,7 +77,11 @@ internal static class SkinChecks
                     if (PaperSkins.UsesNativeBackdrop(skin))
                     {
                         border.Background = NativeMicaBackdrop.GetActiveSurfaceBrush(PaperSkins.NativeBackdrop(skin), mode == "dark");
-                        Program.Assert(Pixels(Render(border, scale))[center + 3] is > 0 and < 255, "native fill allows compositor through");
+                        var nativeAlpha = Pixels(Render(border, scale))[center + 3];
+                        Program.Assert(capsule ? nativeAlpha == 255 : nativeAlpha is > 0 and < 255,
+                            capsule
+                                ? "auxiliary capsule never transmits desktop pixels through an opaque material"
+                                : "expanded paper preserves its native transparent fill");
                     }
                     samples++;
                 }
