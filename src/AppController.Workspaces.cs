@@ -181,7 +181,8 @@ public sealed partial class AppController
     {
         // This operation originates from the Workspaces settings page. Direct
         // internal calls (including tests) have no visible dialog owner.
-        if (_settingsWindow is not { IsVisible: true } owner) return;
+        var owner = _settingsWindow;
+        if (owner == null || !owner.IsVisible) return;
         if (!PaperNoticeDialog.ShowChoice(
                 owner,
                 SettingsSidebarLocalized(
