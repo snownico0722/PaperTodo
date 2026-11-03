@@ -78,7 +78,8 @@ internal static class ExpandedPaperDisplayRecoveryChecks
                 paper.DeepCapsuleExpandedDpiScale, paper.DeepCapsuleExpandedSide,
                 paper.DeepCapsuleExpandedMonitorDeviceName);
             Require(current == rememberedBeforeRescue,
-                $"{phase} overwrote remembered expanded paper geometry");
+                $"{phase} overwrote remembered expanded paper geometry; " +
+                $"before={rememberedBeforeRescue}; after={current}");
         }
 
         var rightEdge = monitors.Max(m => m.WorkArea.Right);
