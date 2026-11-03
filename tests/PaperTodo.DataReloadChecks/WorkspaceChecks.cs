@@ -236,6 +236,12 @@ internal static partial class Program
             "projection lost content or wrote a second catalog");
         session.Store.SaveJsonSync(projected.ToJsonString(), 4);
         var independent = catalog.Options.Normalized(); independent.FollowMainSettings[2] = false;
+        var (preview, effectiveSettings) = catalog.PreviewSettingsChange(session, independent);
+        var effective = new AppState();
+        effectiveSettings.ApplyTo(effective);
+        Require(ReferenceEquals(preview.State, session.State) && !preview.FollowsMain &&
+                effective.Theme == "light" && !effective.McpEnabled,
+            "changing inheritance duplicated the live workspace or lost its independent preferences");
         var next = catalog.Open(2, independent);
         next.BindPersistence();
         Require(next.State.Theme == "light" && !next.State.McpEnabled && !next.FollowsMain,
@@ -243,17 +249,17 @@ internal static partial class Program
         var newSlot = catalog.Open(3, catalog.Options);
         Require(newSlot.State.Papers.Count == 1 && newSlot.State.Papers[0].Content.Length == 0 &&
             newSlot.State.Papers[0].Id != main.Papers[0].Id, "new workspace copied main content");
-        // A new independent slot should not need to reopen the main file. In
-        // particular, temporary main-file access failures must not veto entry.
+        // New slots always start with main settings, even when they are
+        // immediately independent and are entered from another secondary slot.
         var independentNew = catalog.Options.Normalized();
         independentNew.FollowMainSettings[3] = false;
-        using (var busyMain = new FileStream(scope.Store.FilePath, FileMode.Open,
-                   FileAccess.ReadWrite, FileShare.None))
-        {
-            var opened = catalog.Open(3, independentNew);
-            Require(!opened.FollowsMain && opened.State.Papers.Count == 1,
-                "independent new slot unnecessarily read the inaccessible main file");
-        }
+        var fromMain = catalog.Open(3, independentNew, main);
+        var fromSecondary = catalog.Open(3, independentNew);
+        Require(!fromMain.FollowsMain && !fromSecondary.FollowsMain &&
+                fromMain.State.Theme == "dark" && fromSecondary.State.Theme == "dark" &&
+                fromMain.State.MaxTitleLength == 20 && fromSecondary.State.MaxTitleLength == 20 &&
+                fromMain.State.McpEnabled && fromSecondary.State.McpEnabled,
+            "independent new slot did not use consistent main-workspace initial settings");
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
@@ -805,6 +811,44 @@ internal static partial class Program
 
             await WorkspaceMainCatalogSingleWriteChecks(controller);
             await WorkspaceRollbackChecks(controller, directory);
+
+            // Restore can legitimately expand a saved capsule when the effective
+            // settings hide todo-linked papers from capsules. That UI change must
+            // persist, while a healthy unchanged target must still avoid writes.
+            var beforeRestoreOptions = controller.WorkspaceOptions.Normalized();
+            var localThirdOptions = controller.WorkspaceOptions.Normalized();
+            localThirdOptions.FollowMainSettings[3] = false;
+            Require(await controller.ChangeWorkspaceConfigurationAsync(localThirdOptions),
+                "restore mutation fixture could not enable independent third-slot settings");
+            var thirdState = NewState();
+            thirdState.UseCapsuleMode = true;
+            thirdState.EnableTodoPaperLinks = true;
+            thirdState.HideLinkedPapersFromCapsules = true;
+            thirdState.Papers[0].IsCollapsed = true;
+            thirdState.Papers[1].Items[0].RestoreQuickLaunch("note-a", null, false);
+            var thirdDataPath = Path.Combine(directory, "data3.json");
+            var thirdStore = Field<WorkspaceCatalog>(controller, "_workspaceCatalog").StoreFor(3);
+            File.WriteAllText(thirdDataPath, thirdStore.SerializeState(thirdState));
+            var restoreWriterField = typeof(StateStore).GetField("_atomicWriter",
+                BindingFlags.Instance | BindingFlags.NonPublic)!;
+            var originalRestoreWriter = (IDurableAtomicFileWriter)restoreWriterField.GetValue(thirdStore)!;
+            var restorationWrites = 0;
+            try
+            {
+                restoreWriterField.SetValue(thirdStore, new DurableAtomicFileWriter((stage, path) =>
+                {
+                    if (stage == DurableAtomicWriteStage.BeforeTempOpen && path == thirdStore.FilePath)
+                        restorationWrites++;
+                }));
+                Require(await controller.SwitchWorkspaceAsync(3), "restore mutation fixture could not enter slot 3");
+                Require(!controller.State.Papers[0].IsCollapsed && restorationWrites == 1 &&
+                        !J(File.ReadAllText(thirdDataPath))["papers"]![0]!["isCollapsed"]!.GetValue<bool>(),
+                    "presentation expanded a blocked capsule without saving its new state exactly once");
+            }
+            finally { restoreWriterField.SetValue(thirdStore, originalRestoreWriter); }
+            Require(await controller.SwitchWorkspaceAsync(1), "restore mutation fixture could not return to main");
+            Require(await controller.ChangeWorkspaceConfigurationAsync(beforeRestoreOptions),
+                "restore mutation fixture could not restore follow settings");
 
             // Both settings and tray choose an explicit slot, unlike the paper's cycle button.
             var workspacePage = (StackPanel)typeof(AppController)
