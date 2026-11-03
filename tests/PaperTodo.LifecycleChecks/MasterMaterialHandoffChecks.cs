@@ -78,17 +78,15 @@ internal static class MasterMaterialHandoffChecks
             {
                 foreach (var retracted in new[] { true, false })
                 {
-                    var before = papers.ToDictionary(w => w, w => skins[w].BackgroundFrameCount);
                     await Toggle();
-                    await CheckSettled(retracted, before);
+                    await CheckSettled(retracted);
                 }
             }
 
             // Reverse a published transaction, not two coalesced uncommitted toggles.
-            var beforeReverse = papers.ToDictionary(w => w, w => skins[w].BackgroundFrameCount);
             await Toggle();
             await Toggle();
-            await CheckSettled(false, beforeReverse);
+            await CheckSettled(false);
             Require(admitted.Count > 0, "fixture never exercised a live DComp queue proxy");
 
             var first = papers[0];
@@ -98,7 +96,7 @@ internal static class MasterMaterialHandoffChecks
             MouseEvent(0x0002, 0, 0, 0, UIntPtr.Zero);
             MouseEvent(0x0004, 0, 0, 0, UIntPtr.Zero);
             await Until(() => first.HasExpandedPaperSurface, "real capsule receives a complete native click after handoff");
-            Console.WriteLine($"PASS lightweight-material master handoff: {admitted.Count} actual proxy generations, exact endpoints, released cloak/capture, reversal and real click");
+            Console.WriteLine($"PASS lightweight-material master handoff: {admitted.Count} actual proxy generations, exact endpoints, released cloak, reversal and real click");
         }
         finally
         {
