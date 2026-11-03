@@ -398,10 +398,10 @@ internal static partial class Program
             {
                 controller.SaveNow(sync: true);
                 var recoveryDisk = ReadLive();
-                LivePaper(recoveryDisk, "note-b")["title"] = "external recovery";
+                LivePaper(recoveryDisk, "note-b")["title"] = "disk";
                 WriteLive(recoveryDisk);
                 var recoveryPaper = controller.State.Papers.Single(p => p.Id == "note-b");
-                recoveryPaper.Title = "local recovery";
+                recoveryPaper.Title = "local";
                 controller.SaveNow(sync: true);
                 var recoveryStore = Field<StateStore>(controller, "_store");
                 Require(recoveryStore.OrdinaryWritesPaused, "external edit did not pause ordinary saving");
@@ -413,15 +413,15 @@ internal static partial class Program
                 };
                 controller.ResolvePausedExternalSave();
                 await Until(() => !controller.IsDataReloading, "cancelled manual recovery");
-                Require(recoveryStore.OrdinaryWritesPaused && recoveryPaper.Title == "local recovery" &&
-                        Str(LivePaper(ReadLive(), "note-b")["title"]) == "external recovery",
+                Require(recoveryStore.OrdinaryWritesPaused && recoveryPaper.Title == "local" &&
+                        Str(LivePaper(ReadLive(), "note-b")["title"]) == "disk",
                     "cancelled manual recovery overwrote either side");
 
                 AppController.ConflictDialogDriver = (_, _) => ConflictChoice.KeepMemory;
                 controller.ResolvePausedExternalSave();
                 await Until(() => !controller.IsDataReloading, "accepted manual recovery");
                 Require(!recoveryStore.OrdinaryWritesPaused &&
-                        Str(LivePaper(ReadLive(), "note-b")["title"]) == "local recovery",
+                        Str(LivePaper(ReadLive(), "note-b")["title"]) == "local",
                     "explicit manual recovery did not commit the choice and resume saving");
                 Console.WriteLine("PASS paused-save GUI action reuses merge; cancel preserves data");
             }
