@@ -18,7 +18,8 @@ public sealed partial class AppController
         bool IsMerge = false, long SaveVersion = 0,
         IReadOnlyList<StateMergeConflict>? Conflicts = null,
         JsonObject? ExternalJson = null, string? ObservedDiskJson = null,
-        string ConflictPolicy = DataMergeConflictPolicies.Ask);
+        string ConflictPolicy = DataMergeConflictPolicies.Ask,
+        bool CancelOnClose = false);
 
     // No watcher or background history: reload happens only after an explicit API/MCP request.
     private bool _dataReloadEvaluating;
@@ -45,7 +46,8 @@ public sealed partial class AppController
         };
     }
 
-    internal DataReloadResult ReloadDataCore(PaperOperationContext origin, bool merge = false, string? baselineJson = null)
+    internal DataReloadResult ReloadDataCore(PaperOperationContext origin, bool merge = false, string? baselineJson = null,
+        bool cancelOnClose = false)
     {
         Application.Current.Dispatcher.VerifyAccess();
         if (IsExiting) return new() { Outcome = "failed", Error = "PaperTodo is exiting." };
@@ -91,7 +93,8 @@ public sealed partial class AppController
             _forceSaveTimer.Stop();
             _hasPendingDirty = false;
             _pendingDataReload = new(before, commit.State, result, origin,
-                merge, version, commit.Conflicts, commit.ExternalJson, commit.ObservedDiskJson, conflictPolicy);
+                merge, version, commit.Conflicts, commit.ExternalJson, commit.ObservedDiskJson,
+                conflictPolicy, cancelOnClose);
             // A plugin can delete its own paper through this call. Return to the caller before
             // tearing down that session/runtime. Send precedes the next input/render/timer turn;
             // shared commands and saves remain gated until the committed model is reconciled.
@@ -281,13 +284,23 @@ public sealed partial class AppController
     /// <summary>Test seam for user choices; null uses the real #349 dialogs.</summary>
     internal static Func<Window?, ConflictBucket, object?>? ConflictDialogDriver;
 
+    internal void ResolvePausedExternalSave()
+    {
+        Application.Current.Dispatcher.VerifyAccess();
+        if (IsExiting || IsDataReloading || !_store.OrdinaryWritesPaused) return;
+        // With no trustworthy original version, ask for an explicit whole-state choice.
+        ReloadDataCore(PaperOperationContext.User(), merge: true, cancelOnClose: true);
+    }
+
     private StateMergeResolution ResolveDataMerge(PendingDataReload pending) =>
         StateMergeResolution.Resolve(pending.Next, pending.Conflicts, pending.ExternalJson,
             pending.ConflictPolicy, bucket =>
             {
                 ThrowIfDataReloadCancelled(pending);
-                var choice = AskDataMergeConflict(bucket);
+                var choice = AskDataMergeConflict(bucket, pending.CancelOnClose);
                 ThrowIfDataReloadCancelled(pending);
+                if (choice == ConflictChoice.Cancel)
+                    throw new OperationCanceledException("The data conflict review was cancelled.");
                 return choice;
             });
 
@@ -298,7 +311,7 @@ public sealed partial class AppController
         _store.WriteLifetime.ThrowIfStopped();
     }
 
-    private ConflictChoice AskDataMergeConflict(ConflictBucket bucket)
+    private ConflictChoice AskDataMergeConflict(ConflictBucket bucket, bool cancelOnClose)
     {
         var owner = _windows.Values.FirstOrDefault(w =>
             w.IsVisible && PresentationSource.FromVisual(w) is HwndSource);
@@ -316,7 +329,7 @@ public sealed partial class AppController
             SingleLeafBucket leaf => leaf.Conflict,
             _ => throw new InvalidOperationException("Unknown conflict group.")
         };
-        return driven is ConflictChoice selected ? selected : DataReloadConflictDialog.Show(owner, conflict);
+        return driven is ConflictChoice selected ? selected : DataReloadConflictDialog.Show(owner, conflict, cancelOnClose);
     }
 
     private bool FinishDataReloadBeforeExit()
