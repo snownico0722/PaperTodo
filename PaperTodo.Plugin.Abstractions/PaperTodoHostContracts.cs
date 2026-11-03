@@ -124,7 +124,7 @@ public sealed record TodoSnapshot(
     /// </summary>
     public bool? LinkedPathIsDirectory { get; init; }
 
-    /// <summary>API 2.2: the host has surfaced this reminder. This is not a plugin delivery receipt.</summary>
+    /// <summary>API 2.2: the occurrence was completed by host presentation or plugin suppression. This is not a plugin display receipt.</summary>
     public bool ReminderTriggered { get; init; }
 }
 
