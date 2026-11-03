@@ -427,7 +427,7 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
             _activeDocumentToken = null;
         }
         _documentGeneration++;
-        ClearHostSubscriptions();
+        ResetDocumentResources();
         _documentReady = false;
         _pluginDocumentReady = false;
     }
@@ -548,7 +548,7 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
             _activeDocumentToken = null;
             _departingDocumentToken = null;
             _documentGeneration++;
-            ClearHostSubscriptions();
+            ResetDocumentResources();
         }
         webView.Loaded -= OnWebViewLoaded;
         webView.SizeChanged -= OnWebViewSizeChanged;
@@ -880,9 +880,14 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
         }
     }
 
-    private void ClearHostSubscriptions()
+    private void ResetDocumentResources()
     {
         (_context.Host as PaperBodyPluginHostApi)?.ResetExtensionUi();
+        ClearHostSubscriptions();
+    }
+
+    private void ClearHostSubscriptions()
+    {
         foreach (var subscription in _hostSubscriptions.Values)
         {
             try { subscription.Dispose(); } catch { }
@@ -1016,7 +1021,7 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
         _activeDocumentToken = null;
         _departingDocumentToken = null;
         _documentGeneration++;
-        ClearHostSubscriptions();
+        ResetDocumentResources();
         ShowFailure(Strings.Format("PluginsWebProcessFailedFormat", e.ProcessFailedKind));
     }
 
@@ -1113,7 +1118,7 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
         _activeDocumentToken = null;
         _departingDocumentToken = null;
         _documentGeneration++;
-        ClearHostSubscriptions();
+        ResetDocumentResources();
         _documentReady = false;
         _pluginDocumentReady = false;
         _webViewFailed = true;
@@ -1382,7 +1387,7 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
         _activeDocumentToken = null;
         _departingDocumentToken = null;
         _documentGeneration++;
-        ClearHostSubscriptions();
+        ResetDocumentResources();
         _pendingRuntimeMessages.Clear();
         _lifetime.Cancel();
         _webViewGeneration++;

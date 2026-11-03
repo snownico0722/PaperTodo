@@ -28,11 +28,12 @@ internal static partial class Program
         var signal = controller.State.Papers.Single(p => p.Id == signalId);
         var oldReminders = controller.State.ExperimentalTodoReminders;
         controller.State.ExperimentalTodoReminders = true;
+        var allRejected = true;
         try
         {
-            foreach (var operation in new[] { "append", "update", "reminder", "note", "deleteTodo", "deletePaper" })
+            foreach (var operation in new[] { "append", "update", "reminder", "note", "deleteTodo", "deletePaper", "title" })
             {
-                var note = operation == "note";
+                var note = operation is "note" or "title";
                 var targetId = commands.CreatePaper(new CreatePaperRequest
                 {
                     Type = note ? PaperTypes.Note : PaperTypes.Todo, Show = false,
@@ -42,6 +43,7 @@ internal static partial class Program
                 var target = controller.State.Papers.Single(p => p.Id == targetId);
                 var itemId = note ? "" : target.Items[0].Id;
                 var beforeItems = target.Items.ToArray();
+                var beforeTitle = target.Title;
                 var fired = false;
                 Exception? callbackFailure = null;
                 using var subscription = controller.PaperBodyPluginEvents.Subscribe(
@@ -83,20 +85,28 @@ internal static partial class Program
                             commands.DeleteTodo(new DeleteTodoRequest { PaperId = targetId, TodoId = itemId }, origin);
                             break;
                         case "deletePaper": commands.DeletePaper(targetId, origin); break;
+                        case "title":
+                            controller.UpdatePaperTitleFromPlugin(target, "must not change", target.BodyProviderId);
+                            break;
                     }
                 }
                 catch (Exception ex) { failure = ex; }
                 Check(fired && callbackFailure == null && !controller.State.Papers.Contains(target),
                     "Fixture must delete the actual target during a synchronous user-event callback.");
-                Check(failure is PaperCommandException { Code: "paper_not_found" },
-                    "External mutation must revalidate its target after plugin callbacks.");
-                Check(target.Items.SequenceEqual(beforeItems) &&
-                      (note ? target.Content == "original note" :
-                          target.Items[0].Text == "original todo" && target.Items[0].ReminderAt == null),
-                    "Rejected outer mutation must not modify the detached target.");
+                var rejected = operation == "title"
+                    ? failure is PaperTodoPluginException { Code: "paper_not_owned" }
+                    : failure is PaperCommandException { Code: "paper_not_found" };
+                Console.WriteLine($"TARGET_CALLBACK operation={operation} rejected={rejected} error={failure?.GetType().Name ?? "none"}");
+                allRejected &= rejected;
+                if (rejected)
+                    Check(target.Title == beforeTitle && target.Items.SequenceEqual(beforeItems) &&
+                          (note ? target.Content == "original note" :
+                              target.Items[0].Text == "original todo" && target.Items[0].ReminderAt == null),
+                        "Rejected outer mutation must not modify the detached target.");
                 Check(!ReadField<StateStore>(controller, "_store").Load().Papers.Any(p => p.Id == targetId),
                     "The callback's committed deletion must survive the rejected outer operation.");
             }
+            Check(allRejected, "External mutation must revalidate its target after plugin callbacks.");
         }
         finally
         {
