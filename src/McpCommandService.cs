@@ -21,6 +21,22 @@ internal sealed partial class McpCommandService
         _workspaceGeneration = controller.WorkspaceGeneration;
     }
 
+    // Only the internal named-pipe protocol carries this lease. Public MCP tools stay unchanged.
+    // A stale bridge must not silently retarget its work after a workspace switch.
+    internal object? ExecutePipeBound(JsonElement request)
+    {
+        var method = RequiredString(request, "method", 80);
+        if (method is not ("get_workspace_binding" or "get_data_reload_status"))
+        {
+            if (!request.TryGetProperty("workspace_token", out var token) ||
+                token.ValueKind != JsonValueKind.String ||
+                !string.Equals(token.GetString(), _controller.WorkspaceBindingToken, StringComparison.Ordinal))
+                throw new McpApiException("workspace_changed",
+                    "The workspace changed; restart the MCP connection before making another request.");
+        }
+        return Execute(request);
+    }
+
     public object? Execute(JsonElement request)
     {
         if (_workspaceGeneration != _controller.WorkspaceGeneration || _controller.IsWorkspaceSwitching)
@@ -47,6 +63,7 @@ internal sealed partial class McpCommandService
             {
                 "reload_data" => ReloadData(),
                 "merge_data" => MergeData(parameters),
+                "get_workspace_binding" => new { token = _controller.WorkspaceBindingToken },
                 "get_data_reload_status" => _commands.GetDataReloadStatus(),
                 "list_settings" => ListSettings(parameters),
                 "get_setting" => GetSetting(parameters),
