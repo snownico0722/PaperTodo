@@ -1825,7 +1825,6 @@ public sealed partial class AppController
         State.MicaAlwaysActive = false;
         State.MaterialTransparency = MaterialTransparencyLevels.Medium;
         State.HideSurfaceOutline = false;
-        State.MatchAuxiliaryMaterialStrength = false;
         State.UiFontPreset = UiFontPresets.Default;
         State.TextRenderingProfile = TextRenderingProfiles.Standard;
         State.CustomFontEnhancedBold = false;
