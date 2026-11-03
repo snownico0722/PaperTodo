@@ -446,6 +446,14 @@ internal static partial class Program
             Type = PaperTypes.Todo,
             IsVisible = false
         };
+        var delegated = new PaperData
+        {
+            Id = "tests.suppressed-reminder-notification",
+            Type = PaperTypes.Todo,
+            IsVisible = false,
+            Items = [new PaperItem { Id = "delegated", Text = "pet notification",
+                ReminderAt = DateTimeOffset.Now.AddMinutes(1) }]
+        };
         c.State.Papers.Add(paper);
 
         try
@@ -544,6 +552,31 @@ internal static partial class Program
 
             Check(paper.Items[0].ReminderTriggered && paper.Items[1].ReminderTriggered,
                 "An undelivered second reminder was not retried on the next delivery pass.");
+
+            // Advance reminder notification is an explicit opt-in hook: the plugin may suppress
+            // this one default presentation. No PaperTodo paper/balloon/sound is shown, but
+            // the Todo is acknowledged and a normal System TodoChanged is still emitted.
+            paper.Items[2].Done = true;
+            c.State.Papers.Add(delegated);
+            c.PaperBodyPluginEvents.ScanNow(PaperOperationContext.User());
+            var upcoming = new List<TodoReminderUpcomingEvent>();
+            using var preSub = c.PaperBodyPluginEvents.Subscribe(
+                Guid.NewGuid(), "advance-test", new PaperTodoEventFilter
+                {
+                    Kinds = new HashSet<PaperTodoEventKind> { PaperTodoEventKind.TodoReminderUpcoming }
+                }, e => upcoming.Add((TodoReminderUpcomingEvent)e));
+            var delegatedAt = delegated.Items[0].ReminderAt!.Value;
+            _ = Invoke(c, "PublishUpcomingTodoReminders", delegatedAt.AddSeconds(-5));
+            Check(upcoming.Count == 1 && upcoming[0].Todo.Id == "delegated" &&
+                c.SuppressDefaultReminderNotification(upcoming[0].NotificationId),
+                "Advance notification did not supply a valid suppression token.");
+            _ = Invoke(c, "ProcessDueTodoReminders", delegatedAt);
+            Check(delegated.Items[0].ReminderTriggered && !delegated.IsVisible &&
+                events.OfType<TodoChangedEvent>().Any(e =>
+                    e.After.Id == "delegated" && e.Metadata.Origin == PaperTodoEventOrigin.System &&
+                    !e.Before.ReminderTriggered && e.After.ReminderTriggered) &&
+                !c.SuppressDefaultReminderNotification(upcoming[0].NotificationId),
+                "A suppressed default notification was displayed, retried, or failed to publish TodoChanged.");
             var timer = ReadField<System.Windows.Threading.DispatcherTimer?>(c, "_todoReminderTimer");
             Check(timer?.IsEnabled == true,
                 "A remaining future reminder must stay scheduled.");
@@ -558,6 +591,12 @@ internal static partial class Program
             {
                 _ = c.PaperCommands.DeletePaper(
                     cancelledPaper.Id,
+                    PaperOperationContext.User());
+            }
+            if (c.State.Papers.Contains(delegated))
+            {
+                _ = c.PaperCommands.DeletePaper(
+                    delegated.Id,
                     PaperOperationContext.User());
             }
             if (c.State.Papers.Contains(paper))
