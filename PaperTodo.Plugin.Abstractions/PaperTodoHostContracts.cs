@@ -55,7 +55,8 @@ public enum PaperTodoEventKind
     TodoCreated,
     TodoChanged,
     TodoDeleted,
-    NoteChanged
+    NoteChanged,
+    TodoReminderUpcoming
 }
 
 public enum PaperTodoEventOrigin
@@ -180,6 +181,17 @@ public sealed record NoteChangedEvent(
     PaperTodoEventMetadata EventMetadata)
     : PaperTodoEvent(PaperTodoEventKind.NoteChanged, EventMetadata);
 
+/// <summary>
+ /// API 2.2: sent once when a pending reminder enters its five-second pre-notification window.
+ /// An earlier overdue reminder may skip this best-effort advance notice.
+ /// The notificationId is valid only for that reminder occurrence until its due time.
+ /// </summary>
+public sealed record TodoReminderUpcomingEvent(
+    TodoSnapshot Todo,
+    Guid NotificationId,
+    PaperTodoEventMetadata EventMetadata)
+    : PaperTodoEvent(PaperTodoEventKind.TodoReminderUpcoming, EventMetadata);
+
 public sealed class PaperTodoEventFilter
 {
     public IReadOnlySet<PaperTodoEventKind>? Kinds { get; init; }
@@ -294,6 +306,16 @@ public interface IPaperTodoHostApi
     IDisposable Subscribe(
         PaperTodoEventFilter filter,
         Action<PaperTodoEvent> handler);
+}
+
+/// <summary>
+/// Optional host capability for suppressing PaperTodo's default presentation of an upcoming
+/// reminder. Requires todos.update; it never cancels/reschedules the underlying Todo.
+/// A false result means this notification is no longer pending or its token is invalid.
+/// </summary>
+public interface IPaperReminderNotificationControl
+{
+    bool SuppressDefaultReminderNotification(Guid notificationId);
 }
 
 public sealed class PaperTodoPluginException : Exception

@@ -617,43 +617,50 @@ const dispose = papertodo.onHostEvent(
 );
 ```
 
-可订阅：`paper.created`、`paper.changed`、`paper.deleted`、`todo.created`、`todo.changed`、`todo.deleted`、`note.changed`；API 2.2 的提醒触发通过已有的 `todo.changed` 表达。会话失效或销毁后订阅自动失效；插件自己也应及时 unsubscribe 不再需要的监听。
+可订阅：`paper.created`、`paper.changed`、`paper.deleted`、`todo.created`、`todo.changed`、`todo.deleted`、`note.changed`，以及 API 2.2 的 `todo.reminderUpcoming` 前置事件；提醒实际触发通过已有的 `todo.changed` 表达。会话失效或销毁后订阅自动失效；插件自己也应及时 unsubscribe 不再需要的监听。
 
 ### 提醒 API（2.2）
 
-PaperTodo 将提醒是否触发作为待办状态变化公布，不再提供独立的提醒触发事件。
+PaperTodo 在到期前**约 5 秒**发出一次前置事件，插件可取消本次默认展示；到期后的状态变化仍由普通 `TodoChanged` 表达。
 
-- 查询使用 `Workspace.ListTodos()` / `todos.list`，`reminderAt` 是提醒时间，`reminderTriggered` 表示宿主已展示提醒；查询与订阅均使用 `todos.read`。
-- 修改、改期与取消仍使用 `SetTodoReminder` / `todos.setReminder`，需要 `todos.update`。
-- Native 订阅 `PaperTodoEventKind.TodoChanged`，Web 订阅 `todo.changed`。仅在 `before.reminderTriggered` 为 false、`after.reminderTriggered` 为 true 且 `metadata.origin` 为 `system` 时，将它视为宿主触发的提醒。不要仅根据 `changedFields.Reminder` 判断，因为修改提醒时间也会触发该标记。
-- 宿主确认纸片/系统通知成功展示后，保存触发状态并发布冻结的状态变化。未展示的待办仍等待重试。事件实时且尽力投递，不提供历史重放或插件确认回执。
-- 长期监听放在插件 Runtime；Native 回调应避免阻塞 UI 线程。Web Body/Runtime 可用 `onHostEvent`，Web Mini 不支持；导航或销毁会释放旧订阅。
+- `todos.read` 允许查询待办与订阅 Native `PaperTodoEventKind.TodoReminderUpcoming`（Web：`todo.reminderUpcoming`）。新事件包含 `todo` 快照、一次性的 `notificationId` 及 System 来源的 `metadata`，不是提醒已触发的通知；旧的 `todos.observe` 仅保留旧事件兼容，不能订阅这个新前置事件。
+- 宿主在预定时间前 5 秒尝试发送前置事件。若创建/改期时剩余不到 5 秒，会尽快发送；启动恢复时已过期的提醒直接进入宿主默认处理，不保证补发前置事件。同一轮提醒最多发一次，改期后旧 `notificationId` 失效。
+- 要接管默认展示，插件还需 `todos.update`，在到期前调用 Native `(context.Workspace as IPaperReminderNotificationControl)?.SuppressDefaultReminderNotification(notificationId)` 或 Web `papertodo.workspace.request('reminders.suppressDefault', { notificationId })`。成功返回 `true`；过期/无效返回 `false`。取消只跳过本次 PaperTodo 默认纸片/托盘通知与提示音，**不会删除、改期或反复重试这条待办**。多个插件都能收到事件，但宿主不协调它们自己的提示。
+- PaperTodo 不会阻塞 UI 线程等待插件应答：五秒窗口允许 Web 插件异步回复；插件未回复、崩溃或未取消时，宿主照常提示。用户停用提醒、完成/取消/改期待办时，旧取消令牌自动无效。
+- 提醒被宿主展示成功或被插件取消默认展示后，`reminderTriggered` 都变为 `true`，并发送 System 来源的 `TodoChanged`。按 `!before.reminderTriggered && after.reminderTriggered` 过滤本次触发；仅凭 `changedFields.Reminder` 不够，因为修改时间也会变化。
+- 普通用户修改事件在宿主完成本轮提醒之后再通知插件，**不是前置拦截钩子**。提醒事件尽力实时投递，无离线重放和跨重启的恰好一次保证；插件展示自己的通知失败后，宿主不会重新弹窗。
+- 长期通知集成放在插件 Runtime；Web Body 和 Runtime 可用 `onHostEvent`，Web Mini 不支持。Native 回调应避免阻塞 UI 线程。
 
-Native 示例：
+Native Runtime 前置钩子示例（需 `todos.read` + `todos.update`）：
 
 ```csharp
-var subscription = context.Workspace.Subscribe(
-    new PaperTodoEventFilter { Kinds = new HashSet<PaperTodoEventKind> { PaperTodoEventKind.TodoChanged } },
+var stop = context.Workspace.Subscribe(
+    new PaperTodoEventFilter { Kinds = new HashSet<PaperTodoEventKind>
+        { PaperTodoEventKind.TodoReminderUpcoming } },
     evt =>
     {
-        if (evt is TodoChangedEvent change &&
-            change.Metadata.Origin == PaperTodoEventOrigin.System &&
-            !change.Before.ReminderTriggered && change.After.ReminderTriggered)
+        if (evt is TodoReminderUpcomingEvent upcoming &&
+            context.Workspace is IPaperReminderNotificationControl control)
         {
-            // 使用 change.After 交给插件自己的通知实现。
+            // 启动桌宠自己的提示流程；只有决定接管时才取消默认通知。
+            control.SuppressDefaultReminderNotification(upcoming.NotificationId);
         }
     });
 ```
 
-Web 示例（`permissions: ["todos.read"]`）：
+Web Runtime 示例（需 `permissions: ["todos.read", "todos.update"]`）：
 
 ```js
-const stop = papertodo.onHostEvent(['todo.changed'], event => {
-  if (event.metadata.origin === 'system' &&
-      !event.before.reminderTriggered && event.after.reminderTriggered) {
-    // 使用 event.after 触发插件自己的提示。
+const stop = papertodo.onHostEvent(['todo.reminderUpcoming'], async event => {
+  const { notificationId, todo } = event;
+  // 插件决定负责展示这条 todo 后，抢在到期前取消默认通知：
+  const suppressed = await papertodo.workspace.request(
+    'reminders.suppressDefault', { notificationId });
+  if (suppressed) {
+    // 桌宠展示自己的提示；宿主不再显示默认通知。
   }
 });
+// 不再监听时调用 stop()。
 ```
 
 纸片、待办、笔记与图片查询只读当前模型/资产，不提交或强制同步编辑器；最新输入可能等待原有编辑/保存流程后再可见。外部写入如果目标就是同一张内置 Markdown，会先提交这张纸片尚未写回模型的用户文字，再执行插件/MCP修改；修改其他纸片不会因此调用无关第三方 Body 的 `Commit()`。核心 `data.json` 保存仍按正常规则同步内置 Markdown，不把第三方 Body `Commit()` 当作全局保存钩子。MCP 新建/追加同样允许设置新待办的初始属性，不额外要求完整写入；修改已有内容的权限不变。

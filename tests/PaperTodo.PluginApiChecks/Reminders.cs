@@ -115,6 +115,78 @@ internal static partial class Program
         Assert(!before.ReminderTriggered, "Previous snapshot was mutated.");
     }
 
+    private static void ReminderAdvance()
+    {
+        var (controller, paper, item) = ReminderController();
+        item.ReminderAt = DateTimeOffset.Now.AddSeconds(30);
+        paper.IsVisible = false;
+        using var hub = controller.PaperBodyPluginEvents;
+        using var reader = BodyApi(controller, [PaperTodoPermissionNames.TodosRead]);
+        using var writer = BodyApi(controller,
+            [PaperTodoPermissionNames.TodosRead, PaperTodoPermissionNames.TodosUpdate]);
+        using var legacy = BodyApi(controller, [PaperTodoPermissionNames.TodosObserve]);
+        var filter = new PaperTodoEventFilter
+        {
+            Kinds = new HashSet<PaperTodoEventKind> { PaperTodoEventKind.TodoReminderUpcoming }
+        };
+        Error("permission_denied", () => legacy.Subscribe(filter, _ => { }));
+        var advance = new List<TodoReminderUpcomingEvent>();
+        var changes = new List<TodoChangedEvent>();
+        using var preSub = reader.Subscribe(filter, e => advance.Add((TodoReminderUpcomingEvent)e));
+        using var changed = reader.Subscribe(ReminderFilter(), e => changes.Add((TodoChangedEvent)e));
+
+        var notice = typeof(AppController).GetMethod("PublishUpcomingTodoReminders",
+            BindingFlags.Instance | BindingFlags.NonPublic)!;
+        var getWake = typeof(AppController).GetMethod("NextReminderWake",
+            BindingFlags.Instance | BindingFlags.NonPublic)!;
+        var dueAt = item.ReminderAt!.Value;
+        var now = dueAt.AddSeconds(-10);
+        Assert((DateTimeOffset)getWake.Invoke(controller, [now, true])! ==
+            dueAt.AddSeconds(-5), "Advance-notice schedule did not wake five seconds before due.");
+
+        notice.Invoke(controller, [dueAt.AddSeconds(-5)]);
+        notice.Invoke(controller, [dueAt.AddSeconds(-4)]);
+        Assert(advance.Count == 1 && advance[0].Todo.Id == item.Id &&
+            advance[0].Todo.ReminderAt == dueAt &&
+            advance[0].Metadata.Origin == PaperTodoEventOrigin.System &&
+            advance[0].NotificationId != Guid.Empty && changes.Count == 0,
+            "Advance reminder did not emit exactly once without triggering a TodoChanged.");
+        Assert((DateTimeOffset)getWake.Invoke(controller, [now, true])! == dueAt,
+            "An announced reminder was scheduled a second time before due.");
+        Error("permission_denied", () =>
+            ((IPaperReminderNotificationControl)reader).SuppressDefaultReminderNotification(
+                advance[0].NotificationId));
+        Assert(((IPaperReminderNotificationControl)writer).SuppressDefaultReminderNotification(
+            advance[0].NotificationId), "A write-authorized plugin could not suppress default presentation.");
+
+        // This lightweight fixture has no persistence owner. Verify the suppression
+        // decision here; the real host delivery behavior is covered by SettingsApiChecks.
+        var isSuppressed = typeof(AppController).GetMethod("IsDefaultReminderSuppressed",
+            BindingFlags.Instance | BindingFlags.NonPublic)!;
+        Assert((bool)isSuppressed.Invoke(controller, [item])! &&
+            !item.ReminderTriggered && !paper.IsVisible,
+            "Suppression altered the Todo or failed to mark only the default UI.");
+        // A changed occurrence invalidates its old notification token.
+        // Rescheduling invalidates the old token and issues one fresh notice for the new time.
+        item.ReminderTriggered = false;
+        item.ReminderAt = DateTimeOffset.Now.AddMinutes(1);
+        var newAt = item.ReminderAt.Value;
+        notice.Invoke(controller, [newAt.AddSeconds(-5)]);
+        Assert(advance.Count == 2 && advance[1].NotificationId != advance[0].NotificationId &&
+            !((IPaperReminderNotificationControl)writer).SuppressDefaultReminderNotification(
+                advance[0].NotificationId), "Rescheduling reused a stale suppression token.");
+
+        var serialized = JsonSerializer.SerializeToElement(advance[1],
+            WebPluginRuntimeInfrastructure.JsonOptions);
+        Assert(serialized.GetProperty("kind").GetString() == "todoReminderUpcoming" &&
+            serialized.GetProperty("notificationId").GetGuid() == advance[1].NotificationId,
+            "Advance event JSON did not expose the cancellation token.");
+
+        // Prevent a test-only timer from running after this controller is discarded.
+        typeof(AppController).GetMethod("StopTodoReminderTimer",
+            BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(controller, null);
+    }
+
     private static void ReminderReentrancy()
     {
         var (controller, paper, item) = ReminderController();
@@ -170,10 +242,12 @@ internal static partial class Program
         changes.Clear();
         item.Text = "Pending user edit";
         var prior = controller.CaptureTodoSnapshot(paper, item);
-        hub.PrepareTriggeredReminderChanges([prior]);
+        var pending = hub.CapturePendingChangesForReminder();
+        Assert(changes.Count == 0, "Pending TodoChanged callbacks ran before host delivery.");
         item.ReminderTriggered = true;
         var after = controller.CaptureTodoSnapshot(paper, item);
         var publish = hub.CaptureTriggeredReminderChanges([prior], [after], DateTimeOffset.UtcNow);
+        pending();
         publish();
         hub.ScanNow(PaperOperationContext.User());
         Assert(changes.Count == 2 &&
@@ -207,10 +281,12 @@ internal static partial class Program
             { PaperTodoEventKind.TodoCreated, PaperTodoEventKind.TodoChanged } }, lifecycle.Add);
         paper.Items.Add(fresh);
         var freshBefore = controller.CaptureTodoSnapshot(paper, fresh);
-        hub.PrepareTriggeredReminderChanges([freshBefore]);
+        pending = hub.CapturePendingChangesForReminder();
         fresh.ReminderTriggered = true;
         var freshAfter = controller.CaptureTodoSnapshot(paper, fresh);
-        hub.CaptureTriggeredReminderChanges([freshBefore], [freshAfter], DateTimeOffset.UtcNow)();
+        var freshPublish = hub.CaptureTriggeredReminderChanges([freshBefore], [freshAfter], DateTimeOffset.UtcNow);
+        pending();
+        freshPublish();
         hub.ScanNow(PaperOperationContext.User());
         Assert(lifecycle.Count == 2 && lifecycle[0] is TodoCreatedEvent created &&
             !created.Todo.ReminderTriggered && lifecycle[1] is TodoChangedEvent triggered &&
@@ -245,8 +321,10 @@ internal static partial class Program
         execute.Invoke(runtime, [payload]);
         typeof(WebPluginRuntime).GetMethod("TryResetExtensionUi", flags)!.Invoke(runtime, null);
         Assert(subscriptions.Count == 0, "Navigation/failure cleanup retained subscriptions.");
-        var kinds = WebPaperBodySession.ReadEventKinds(JsonSerializer.SerializeToElement(new { types = new[] { "todo.changed" } }));
-        Assert(kinds.SetEquals(new[] { PaperTodoEventKind.TodoChanged }), "Web Body event parser differs from Runtime.");
+        var kinds = WebPaperBodySession.ReadEventKinds(JsonSerializer.SerializeToElement(
+            new { types = new[] { "todo.changed", "todo.reminderUpcoming" } }));
+        Assert(kinds.SetEquals(new[] { PaperTodoEventKind.TodoChanged, PaperTodoEventKind.TodoReminderUpcoming }),
+            "Web Body event parser differs from Runtime.");
         Error("invalid_params", () => WebPaperBodySession.ReadEventKinds(JsonSerializer.SerializeToElement(new { types = new[] { "todo.reminderTriggered" } })));
         Error("invalid_params", () => WebPaperBodySession.ReadEventKinds(JsonSerializer.SerializeToElement(new { types = new[] { "unknown" } })));
         using var denied = BodyApi(controller, []);

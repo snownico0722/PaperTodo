@@ -909,6 +909,7 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
                 "paper.deleted" => PaperTodoEventKind.PaperDeleted,
                 "todo.created" => PaperTodoEventKind.TodoCreated,
                 "todo.changed" => PaperTodoEventKind.TodoChanged,
+                "todo.reminderUpcoming" => PaperTodoEventKind.TodoReminderUpcoming,
                 "todo.deleted" => PaperTodoEventKind.TodoDeleted,
                 "note.changed" => PaperTodoEventKind.NoteChanged,
                 var unknown => throw new PaperTodoPluginException(
