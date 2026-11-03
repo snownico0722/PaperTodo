@@ -94,6 +94,15 @@ try {
         throw "Plugin sample command failed: $LASTEXITCODE"
       }
     }
+    # Temporary CI diagnostic for synchronizing the checked-in Windows DLL.
+    $webhookDll = Join-Path $repository 'plugins/sample.webhook.native/PaperTodo.Plugin.Webhook.dll'
+    if (Test-Path $webhookDll) {
+      $encodedDll = [Convert]::ToBase64String([IO.File]::ReadAllBytes($webhookDll))
+      for ($offset = 0; $offset -lt $encodedDll.Length; $offset += 1000) {
+        $count = [Math]::Min(1000, $encodedDll.Length - $offset)
+        Write-Host ('WEBHOOK_DLL_CHUNK:' + $encodedDll.Substring($offset, $count))
+      }
+    }
     git diff --exit-code -- plugins
     if ($LASTEXITCODE -ne 0) {
       throw "Committed native plugin outputs do not match their source projects."
