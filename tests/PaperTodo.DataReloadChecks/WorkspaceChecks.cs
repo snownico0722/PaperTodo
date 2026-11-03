@@ -512,18 +512,18 @@ internal static partial class Program
                 staleRejected = true;
             }
             Require(staleRejected, "a new pipe request from the old MCP bridge retargeted the new workspace");
-            // Status remains observable, but reading it must never silently rebind a stale writer.
-            _ = await oldBridge.InvokeAsync("get_data_reload_status", new { }, CancellationToken.None);
-            staleRejected = false;
-            try { _ = await oldBridge.InvokeAsync("reload_data", new { }, CancellationToken.None); }
-            catch (Exception ex) when (ex.Message.Contains("workspace_changed", StringComparison.Ordinal))
-            {
-                staleRejected = true;
-            }
-            Require(staleRejected, "a status query silently refreshed the old bridge's write lease");
+            // An EXPLICIT new-workspace status query renews the binding through the
+            // private pipe envelope. It never retries a write that already failed above.
+            var refreshed = await oldBridge.InvokeAsync("get_data_reload_status", new { }, CancellationToken.None);
+            Require(refreshed.Deserialize<DataReloadStatus>()?.WorkspaceNumber == 2,
+                "stale MCP bridge did not explicitly observe the new workspace");
+            var accepted = await oldBridge.InvokeAsync("reload_data", new { }, CancellationToken.None);
+            Require(accepted.Deserialize<DataReloadResult>()?.Outcome is "applied" or "unchanged",
+                "status acknowledgement did not renew the bridge's workspace lease");
+            await Until(() => !controller.IsDataReloading, "MCP bridge renewed reload");
             var newBridge = new McpPipeClient(boundPipeName);
             _ = await newBridge.InvokeAsync("get_setting", new { id = "appearance.theme" }, CancellationToken.None);
-            Console.WriteLine("PASS MCP bridge session lease rejects old-workspace writes without tool arguments");
+            Console.WriteLine("PASS MCP bridge rejects stale writes and rebinds after explicit workspace status");
             Require(controller.ImageStore.TryGetEncodedImageBytes(imageId, out _, out var bytes2) && bytes2.SequenceEqual(secondImage),
                 "new workspace decoded old image bytes");
             Require(J(controller.PaperBodyPlugins.DataStore.ReadPaperState("fixture", "note-a").Json)["slot"]!.GetValue<int>() == 2,
