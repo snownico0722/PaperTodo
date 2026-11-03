@@ -94,6 +94,9 @@ try {
         throw "Plugin sample command failed: $LASTEXITCODE"
       }
     }
+    # Temporary one-run capture for checking in the exact Windows-built DLL.
+    $webhookDllPath = Join-Path $repository 'plugins/sample.webhook.native/PaperTodo.Plugin.Webhook.dll'
+    Write-Host ('PAPERTODO_WEBHOOK_DLL_B64=' + [Convert]::ToBase64String([IO.File]::ReadAllBytes($webhookDllPath)))
     git diff --exit-code -- plugins
     if ($LASTEXITCODE -ne 0) {
       throw "Committed native plugin outputs do not match their source projects."
