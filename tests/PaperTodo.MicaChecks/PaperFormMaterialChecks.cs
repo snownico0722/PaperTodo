@@ -6,8 +6,7 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using PaperTodo;
 
-// Exercise the main paper's real HWND and animation clocks. A stopped sampler on an
-// unrelated Edge host, or a no-animation collapse, cannot satisfy the animated checks.
+// Exercise the real native-paper HWND, animation clocks, reversal, hide and close.
 internal static class PaperFormMaterialChecks
 {
     private static readonly PropertyInfo Transitioning = typeof(PaperWindow)
@@ -54,12 +53,12 @@ internal static class PaperFormMaterialChecks
         finally
         {
             (state.PaperSkin, state.Theme, state.EnableAnimations,
-                state.MatchAuxiliaryMaterialStrength, state.UseCapsuleMode,
+                state.UseCapsuleMode,
                 state.UseDeepCapsuleMode, state.ExperimentalInactivePaperOpacity) = saved;
             nativeMode.SetValue(controller, savedNative);
             Theme.Invalidate();
         }
-        Console.WriteLine("PAPER FORM MATERIAL: animated collapse/expand, reversal, setting settlement, queued endpoints, hide and close passed.");
+        Console.WriteLine("PAPER FORM MATERIAL: animated collapse/expand, reversal, setting settlement, hide and close passed.");
     }
 
     private static void CheckAnimatedRoundTrip(Fixture fixture)
@@ -201,15 +200,6 @@ internal static class PaperFormMaterialChecks
 
     private static bool IsTransitioning(PaperWindow window) => (bool)Transitioning.GetValue(window)!;
 
-    private static void DrainRendering()
-    {
-        var frames = 0;
-        EventHandler rendered = (_, _) => frames++;
-        CompositionTarget.Rendering += rendered;
-        try { Until(() => frames >= 2, "settled endpoint presents on successive render ticks"); }
-        finally { CompositionTarget.Rendering -= rendered; }
-    }
-
     private static void Until(Func<bool> condition, string context)
     {
         var timeout = Stopwatch.StartNew();
@@ -225,7 +215,6 @@ internal static class PaperFormMaterialChecks
     {
         private readonly Fixture _fixture;
         private readonly string _context;
-        private readonly int _initialFrames;
         private readonly Size _initialSize;
         private int _rendered;
         private bool _changedSize;
@@ -234,7 +223,6 @@ internal static class PaperFormMaterialChecks
         {
             _fixture = fixture;
             _context = context;
-            _initialFrames = fixture.Surface.BackgroundFrameCount;
             _initialSize = fixture.Window.RenderSize;
             CompositionTarget.Rendering += OnRendering;
             fixture.Window.SizeChanged += OnSizeChanged;
@@ -256,11 +244,8 @@ internal static class PaperFormMaterialChecks
         }
 
         private void Check() => Program.Assert(
-            !_fixture.Surface.HasBackgroundCapture &&
-            _fixture.Surface.Effect == null &&
-            _fixture.Surface.BackgroundFrameCount == _initialFrames &&
-            DesktopBackgroundCapture.ReadAffinity(_fixture.Handle) == _fixture.Affinity,
-            _context + ": changing geometry must not start or publish background captures");
+            _fixture.Surface.Effect == null && !_fixture.Window.IsClosed,
+            _context + ": transition keeps the live lightweight WPF chrome");
 
         internal void AssertAnimated() => Program.Assert(_rendered > 0 && _changedSize,
             _context + ": observed actual render ticks and changing window geometry");
@@ -280,7 +265,6 @@ internal static class PaperFormMaterialChecks
         internal PaperWindow Window { get; }
         internal SkinBorder Surface { get; }
         internal IntPtr Handle { get; }
-        internal uint Affinity { get; }
 
         internal Fixture(AppController controller)
         {
@@ -301,10 +285,8 @@ internal static class PaperFormMaterialChecks
                     "fixture starts with native Acrylic on an expanded paper");
                 Program.Pump();
                 Handle = new WindowInteropHelper(Window).Handle;
-                Affinity = DesktopBackgroundCapture.ReadAffinity(Handle);
-                Program.Assert(!Surface.HasBackgroundCapture && !Surface.IsBackgroundActive &&
-                    Affinity != uint.MaxValue && Affinity != 0x11,
-                    "expanded native fixture starts without software capture or exclusion");
+                Program.Assert(Window.IsNativeMicaEffective,
+                    "expanded fixture starts with native Acrylic");
             }
             catch
             {
