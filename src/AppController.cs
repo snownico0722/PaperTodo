@@ -1678,13 +1678,20 @@ public sealed partial class AppController : IDisposable
         else
         {
             _displayMetricsRefreshState = DisplayMetricsRefreshState.Idle;
-            _ = WindowWorkAreaHelper.ConnectedMonitorGeometries();
+            var monitors = WindowWorkAreaHelper.ConnectedMonitorGeometries();
             foreach (var window in _windows.Values)
             {
                 window.InvalidateEdgeCapsuleDisplayMetrics();
             }
             RefreshExperimentalAttachmentsAfterDisplayMetrics();
             ArrangeDeepCapsules(animate: false);
+            // A DP hot-unplug can move an expanded paper's HWND beyond the work areas
+            // while its independent edge host still advertises an Active slot.
+            foreach (var window in _windows.Values.ToArray())
+            {
+                if (!window.IsClosed)
+                    window.RecoverInaccessibleExpandedSurface(monitors);
+            }
         }
         foreach (var window in _windows.Values)
         {
@@ -2801,6 +2808,16 @@ public sealed partial class AppController : IDisposable
         }
 
         if (window is PaperWindow { UsesNonPaperGeometry: true })
+        {
+            return;
+        }
+
+        // Display disconnects can displace the expanded HWND before the topology
+        // reconciliation runs. Only persist its position while it is reachable.
+        if (window is PaperWindow { ShouldSaveDeepCapsuleExpandedGeometry: true } expanded &&
+            WindowNative.TryGetWindowDeviceBounds(expanded, out var expandedBounds) &&
+            !ExpandedPaperRecoveryPolicy.HasReachablePixels(
+                expandedBounds, WindowWorkAreaHelper.ConnectedMonitorGeometries()))
         {
             return;
         }

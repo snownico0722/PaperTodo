@@ -139,6 +139,111 @@ internal sealed class PaperBodyPluginEventHub : IDisposable
         _scheduledStamp = _observedStamp;
     }
 
+    // Freeze any pending user changes without running plugin callbacks before the host
+    // completes its own reminder delivery. Deliver this batch before the system transition.
+    public Action CapturePendingChangesForReminder()
+    {
+        _dispatcher.VerifyAccess();
+        if (_disposed || _suppressionDepth > 0 || _subscriptions.Count == 0)
+            return static () => { };
+
+        _flushTimer.Stop();
+        var subscribers = _subscriptions.Values.ToArray();
+        var snapshot = CaptureState();
+        var events = BuildEvents(_baseline, snapshot, PaperOperationContext.User());
+        _baseline = snapshot;
+        _observedStamp = CaptureChangeStamp();
+        _scheduledStamp = _observedStamp;
+        return () =>
+        {
+            Dispatch(events, subscribers);
+            QueueUserChangesIfNeeded();
+        };
+    }
+
+    // The advance notice is intentionally a pre-notification hook. Unlike ordinary
+    // TodoChanged observers, it may prompt a plugin to suppress the default presentation.
+    public void PublishReminderUpcoming(IReadOnlyList<TodoReminderUpcomingEvent> events)
+    {
+        _dispatcher.VerifyAccess();
+        if (_disposed || _subscriptions.Count == 0 || events.Count == 0) return;
+        Dispatch(events, _subscriptions.Values.ToArray());
+    }
+
+    // Record only presentation changes caused by the host, keeping unrelated
+    // user edits in the ordinary event stream.
+    public Action CaptureReminderPresentationChanges(PaperData paper, DateTimeOffset occurredAt)
+    {
+        _dispatcher.VerifyAccess();
+        if (_disposed || _suppressionDepth > 0 || _subscriptions.Count == 0 ||
+            !_baseline.TryGetValue(paper.Id, out var previous))
+            return static () => { };
+
+        var before = previous.Paper;
+        var current = _controller.CapturePaperSnapshot(paper);
+        var fields = PaperChangedFields.None;
+        if (before.IsVisible != current.IsVisible) fields |= PaperChangedFields.Visibility;
+        if (before.IsCollapsed != current.IsCollapsed) fields |= PaperChangedFields.Collapsed;
+        if (fields == PaperChangedFields.None) return static () => { };
+
+        var after = before with
+        {
+            IsVisible = current.IsVisible,
+            IsCollapsed = current.IsCollapsed
+        };
+        _baseline[paper.Id] = previous with { Paper = after };
+        var changed = new PaperChangedEvent(before, after, fields,
+            new(Guid.NewGuid(), Guid.NewGuid(), occurredAt, PaperTodoEventOrigin.System, null));
+        var subscribers = _subscriptions.Values.ToArray();
+        return () =>
+        {
+            Dispatch([changed], subscribers);
+            QueueUserChangesIfNeeded();
+        };
+    }
+
+    public Action CaptureTriggeredReminderChanges(
+        IReadOnlyList<TodoSnapshot> beforeTodos, IReadOnlyList<TodoSnapshot> triggeredTodos,
+        DateTimeOffset occurredAt)
+    {
+        _dispatcher.VerifyAccess();
+        if (_disposed || _suppressionDepth > 0 || _subscriptions.Count == 0 || triggeredTodos.Count == 0)
+            return static () => { };
+
+        var events = new List<PaperTodoEvent>();
+        var operationId = Guid.NewGuid();
+        for (var index = 0; index < triggeredTodos.Count; index++)
+        {
+            var before = beforeTodos[index];
+            var after = triggeredTodos[index];
+            if (before.ReminderTriggered || !after.ReminderTriggered ||
+                !string.Equals(before.PaperId, after.PaperId, StringComparison.Ordinal) ||
+                !string.Equals(before.Id, after.Id, StringComparison.Ordinal)) continue;
+
+            if (!_baseline.TryGetValue(after.PaperId, out var paper) ||
+                !paper.Todos.TryGetValue(after.Id, out var baseline))
+                continue;
+            var changes = ChangedTodoFields(baseline, before);
+            if (changes != TodoChangedFields.None)
+                events.Add(new TodoChangedEvent(baseline, before, changes,
+                    Metadata(PaperOperationContext.User())));
+            baseline = before;
+            var updatedTodos = new Dictionary<string, TodoSnapshot>(paper.Todos, StringComparer.Ordinal)
+            {
+                [after.Id] = baseline with { ReminderTriggered = true }
+            };
+            _baseline[after.PaperId] = paper with { Todos = updatedTodos };
+            events.Add(new TodoChangedEvent(before, after, TodoChangedFields.Reminder,
+                new(Guid.NewGuid(), operationId, occurredAt, PaperTodoEventOrigin.System, null)));
+        }
+        var subscribers = _subscriptions.Values.ToArray();
+        return () =>
+        {
+            Dispatch(events, subscribers);
+            QueueUserChangesIfNeeded();
+        };
+    }
+
     public void RemoveSession(Guid sessionId)
     {
         _dispatcher.VerifyAccess();
@@ -232,6 +337,15 @@ internal sealed class PaperBodyPluginEventHub : IDisposable
         _observedStamp = observedStamp;
         _scheduledStamp = observedStamp;
 
+        Dispatch(events, subscribers);
+
+        // A handler may synchronously mutate or save PaperTodo. Do not lose that newer stamp just
+        // because this scan installed a fresh baseline before invoking listeners.
+        QueueUserChangesIfNeeded();
+    }
+
+    private void Dispatch(IEnumerable<PaperTodoEvent> events, IReadOnlyList<Subscription> subscribers)
+    {
         foreach (var value in events)
         {
             foreach (var subscriber in subscribers)
@@ -251,10 +365,6 @@ internal sealed class PaperBodyPluginEventHub : IDisposable
                 }
             }
         }
-
-        // A handler may synchronously mutate or save PaperTodo. Do not lose that newer stamp just
-        // because this scan installed a fresh baseline before invoking listeners.
-        QueueUserChangesIfNeeded();
     }
 
     private Dictionary<string, PaperStateSnapshot> CaptureState()
@@ -403,7 +513,8 @@ internal sealed class PaperBodyPluginEventHub : IDisposable
         if (!string.Equals(before.Text, after.Text, StringComparison.Ordinal)) fields |= TodoChangedFields.Text;
         if (before.Done != after.Done) fields |= TodoChangedFields.Completion;
         if (before.Order != after.Order) fields |= TodoChangedFields.Order;
-        if (before.ReminderAt != after.ReminderAt) fields |= TodoChangedFields.Reminder;
+        if (before.ReminderAt != after.ReminderAt || before.ReminderTriggered != after.ReminderTriggered)
+            fields |= TodoChangedFields.Reminder;
         if (!string.Equals(before.LinkedPaperId, after.LinkedPaperId, StringComparison.Ordinal)) fields |= TodoChangedFields.LinkedPaper;
         if (!string.Equals(before.LinkedPath, after.LinkedPath, StringComparison.Ordinal) ||
             before.LinkedPathIsDirectory != after.LinkedPathIsDirectory)
@@ -441,6 +552,7 @@ internal sealed class PaperBodyPluginEventHub : IDisposable
         TodoCreatedEvent item => item.Todo.PaperId,
         TodoChangedEvent item => item.After.PaperId,
         TodoDeletedEvent item => item.Todo.PaperId,
+        TodoReminderUpcomingEvent item => item.Todo.PaperId,
         NoteChangedEvent item => item.PaperId,
         _ => ""
     };

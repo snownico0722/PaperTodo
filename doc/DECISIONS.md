@@ -62,14 +62,16 @@
 | D-051 | Aero 清透合成与辅助材质强度 | Partially superseded by D-052 | 主题 / Rendering |
 | D-052 | 实际辅助窗口背景处理与材质清理 | Partially superseded by D-053 | 主题 / Rendering |
 | D-053 | 材质绘制、原生背景与可选采样职责收敛 | Partially superseded by D-054 | 主题 / Rendering |
-| D-054 | 辅助材质背景改为一次性静态快照，拖动复用虚拟桌面纹理 | Accepted | 主题 / Rendering |
+| D-054 | 辅助材质背景改为一次性静态快照，拖动复用虚拟桌面纹理 | Superseded by D-058（产品功能） | 主题 / Rendering |
 | D-055 | Aero 不采用 ACCENT_ENABLE_BLURBEHIND 原生模糊 | Rejected | 主题 / Window integration |
 | D-056 | 精确终帧与主胶囊纯视觉输入隔离 | Accepted | Edge handoff / input |
 | D-057 | DWM 桌面截图退出 CI 自动验收 | Accepted | 测试 / Window integration |
-| D-058 | data.json 仅显式重载，普通保存保持原路径 | Partially superseded by D-059 | 持久化 / 外部 API |
-| D-059 | 显式合并由调用方提供真实原始版本 | Revised by D-061 | 持久化 / 外部 API |
-| D-060 | 写入准入、外部变化暂停与终止边界 | Partially superseded by D-061 | 持久化 / 写入安全 |
-| D-061 | 仅显式热重载和有基线三方合并，普通保存不检测外部修改 | Accepted | 持久化 / 产品边界 |
+| D-058 | 辅助表面统一轻量材质，退休完整材质设置 | Accepted | 主题 / Rendering |
+| D-059 | 删除辅助材质截图与离屏背景会话代码 | Accepted | 主题 / Rendering |
+| D-060 | data.json 仅显式重载，普通保存保持原路径 | Partially superseded by D-061 | 持久化 / 外部 API |
+| D-061 | 显式合并由调用方提供真实原始版本 | Revised by D-063 | 持久化 / 外部 API |
+| D-062 | 写入准入、外部变化暂停与终止边界 | Partially superseded by D-063 | 持久化 / 写入安全 |
+| D-063 | 仅显式热重载和有基线三方合并，普通保存不检测外部修改 | Accepted | 持久化 / 产品边界 |
 
 ## 维护规则
 
@@ -1702,7 +1704,7 @@ PR #191 最初在现有透明 WPF 窗口上采样静态壁纸，生成类似云�
 
 ## D-054 — 辅助材质背景改为一次性静态快照，拖动复用虚拟桌面纹理（2026-09-23）
 
-**Status:** Accepted
+**Status:** Superseded by D-058（产品路径；历史采样协议和内部测试仍保留）
 
 **Context / Why:** D-053 将背景处理收敛到可选 `BackgroundSession`，但当时仍保留持续采样、帧检测与采样节拍。实际产品不需要材质跟随桌面内容实时变化；持续截图、变化判断和后台 worker 增加了常驻职责、性能波动与测试复杂度。用户只需要打开菜单或停住胶囊时看起来与当前位置背景一致，拖动期间则需要连续的空间对应，而不是连续重新截图。
 
@@ -1801,11 +1803,37 @@ PR #319 的初版把主胶囊完整材质收展后的卡死解释为终点迟到
 - `tests/PaperTodo.MicaChecks/Program.cs` 与 `MaterialStudyChecks.cs`：保留确定性渲染与运行时检查；历史屏幕采样源文件删除。
 - `doc/experiments/pr227-drag-followup-20260922.md`：基线、故障证据与失败补绘实验。
 
+
+## D-058 — 辅助表面统一轻量材质，退休完整材质设置（2026-11-03）
+
+**Status:** Accepted
+
+**Context:** 侧边胶囊和菜单的「完整材质」依赖一次性屏幕后景快照；后方窗口变化后不实时更新，造成用户对真实 Mica/Acrylic 的误解。完整与轻量两档带来独立设置、采样生命周期、拖动截屏和菜单延迟打开成本；产品决定侧边胶囊与菜单无需完整材质。
+
+**Decision:** 设置 UI、公共 Settings API 移除 `appearance.match_auxiliary_material`；旧 `matchAuxiliaryMaterialStrength` 字段不反序列化且不再写回，安装与升级后统一使用原轻量材质。辅助胶囊和菜单不再进入桌面采样的生产路径；普通展开纸片／设置窗口的原生 DWM 材质、皮肤透明度和边框设置不受影响。
+
+**Scope boundary:** 本次先关闭产品入口与持久化，不在同一提交删除 `DesktopBackgroundCapture`、`BackgroundSession`、`MaterialMenuOpening` 等旧实验的低层协议及其测试断言。内部测试仍可显式启用该测试路径，正常用户无法通过配置或 API 启用。后续若清理死代码，应独立核对 Edge 权限交接、捕获租约释放与 Popup 打开顺序，不把删除旧选项等同于已经删除所有旧实现。
+
+**Validation:** Settings API 不再列出或接受旧 ID；旧 JSON 字段不会激活材质或重新序列化；原有静态采样协议测试继续约束兼容层，正式 GUI 默认为轻量且不会触发截图。
+
+
+## D-059 — 删除辅助材质截图与离屏背景会话代码（2026-11-03）
+
+**Status:** Accepted
+
+**Context:** PR #387 已让辅助完整材质不可通过产品设置启用，但残留的 SRCCOPY 背景获取、模糊、会话缓存、拖动半分辨率桌面快照与菜单预采样仍与 Edge、Popup 和 UI 测试纠缠。该能力在边缘浏览中不连续，对动态背景存在滞后；为单一装饰效果保留复杂生命周期不再合理。
+
+**Decision:** 删除 `DesktopBackgroundCapture`、`BackgroundCaptureLayout`、`SkinBorder.BackgroundSession` 和相关状态、租约、暂停回调；`MaterialContextMenu` 与子菜单保留 WPF 正常即时打开、焦点和关闭行为，不再预截图。移除主胶囊/纸片拖动快照与 Edge DComp 的采样保护调用。胶囊、边缘浏览和菜单统一使用原轻量材质；展开纸片/设置窗口的 DWM Mica/Acrylic 与 Aero 位置视差观察仍保留。
+
+**外部设置契约：** `appearance.match_auxiliary_material` 从公开设置目录彻底删除；插件读写旧 ID 返回 `setting_not_found`，应删去旧调用，不再保留或补充一个无效的兼容项。`appearance.material_transparency` 保留五档，主要控制展开纸片与设置窗口的原生材质表现；胶囊与菜单仍是固定不透传桌面背景的轻量材质，不借此恢复截图或玻璃透传。
+
+**Validation:** 删除纯截图专用测试，把真实 Edge 队列终态、反转、点击、窗口隐藏/恢复、ContextMenu 打开/关闭、Aero 光照复用和纸片收展测试从旧截图断言中拆出并保留。独立 Windows Release 编译、回归及材质行为 CI 验证。
+
 ---
 
-## D-058 — data.json 仅显式重载，普通保存保持原路径
+## D-060 — data.json 仅显式重载，普通保存保持原路径
 
-**Status:** Accepted, complemented by D-059 and restored by D-061（显式重载与普通保存原路径仍成立）
+**Status:** Accepted, complemented by D-061 and restored by D-063（显式重载与普通保存原路径仍成立）
 
 ### Context
 
@@ -1828,9 +1856,9 @@ PR #319 的初版把主胶囊完整材质收展后的卡死解释为终点迟到
 
 ---
 
-## D-059 — 显式合并由调用方提供真实原始版本
+## D-061 — 显式合并由调用方提供真实原始版本
 
-**Status:** Revised by D-061（保留真实原始基线与三方冲突处理；移除缺失基线时的整份选择）
+**Status:** Revised by D-063（保留真实原始基线与三方冲突处理；移除缺失基线时的整份选择）
 
 ### Context
 
@@ -1856,9 +1884,9 @@ PR #319 的初版把主胶囊完整材质收展后的卡死解释为终点迟到
 
 ---
 
-## D-060 — 写入准入、外部变化暂停与终止边界
+## D-062 — 写入准入、外部变化暂停与终止边界
 
-**Status:** Partially superseded by D-061（普通保存指纹/暂停策略撤销；系统终止与原子写入保护仍保留）
+**Status:** Partially superseded by D-063（普通保存指纹/暂停策略撤销；系统终止与原子写入保护仍保留）
 
 ### Context
 
@@ -1885,7 +1913,7 @@ PR #319 的初版把主胶囊完整材质收展后的卡死解释为终点迟到
 
 ---
 
-## D-061 — 仅显式热重载与有基线三方合并，普通保存不检测外部修改
+## D-063 — 仅显式热重载与有基线三方合并，普通保存不检测外部修改
 
 **Status:** Accepted
 
@@ -1906,4 +1934,4 @@ PR #319 的初版把主胶囊完整材质收展后的卡死解释为终点迟到
 
 ### Evidence
 
-#340 / #351 的 `StateStore.WriteSafety.cs`、`StateStore.Merge.cs`、`AppController.DataReload.cs`、`McpTools.cs` 及 `PaperTodo.DataReloadChecks`；D-058/059/060 保留为路线演进的历史证据。
+#340 / #351 的 `StateStore.WriteSafety.cs`、`StateStore.Merge.cs`、`AppController.DataReload.cs`、`McpTools.cs` 及 `PaperTodo.DataReloadChecks`；D-060/061/062 保留为路线演进的历史证据。

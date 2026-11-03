@@ -13,6 +13,7 @@ namespace PaperTodo;
 /// </summary>
 internal sealed partial class PaperPluginRuntimeWorkspaceApi :
     IPaperTodoHostApi,
+    IPaperReminderNotificationControl,
     IPaperPluginRuntimeTodoActions,
     IPaperPluginRuntimeTopBarLabels,
     IDisposable
@@ -69,6 +70,8 @@ internal sealed partial class PaperPluginRuntimeWorkspaceApi :
         OnUi(() => _inner.DeleteTodo(request));
     public DeleteMutationResult DeletePaper(string paperId) =>
         OnUi(() => _inner.DeletePaper(paperId));
+    public bool SuppressDefaultReminderNotification(Guid notificationId) =>
+        OnUi(() => _inner.SuppressDefaultReminderNotification(notificationId));
     public IDisposable Subscribe(PaperTodoEventFilter filter, Action<PaperTodoEvent> handler) =>
         OnUi(() => _inner.Subscribe(filter, handler));
 

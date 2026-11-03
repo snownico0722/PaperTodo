@@ -4,11 +4,11 @@ namespace PaperTodo;
 
 public static class PaperTitles
 {
-    // Hard storage / edit cap in Unicode text elements (≈ full-width characters for CJK).
-    // Titles are never stored longer than this regardless of the user setting.
+    // Title limits are full-width character equivalents: CJK/full-width = 2 units,
+    // Latin/half-width = 1 unit. The configured limit is expressed in 2-unit characters.
     public const int MaxTitleLength = 20;
 
-    // User-configurable display/edit cap (Settings → 标题最大长度), within MaxTitleLength.
+    // New-install default. Existing saved preferences retain their configured value.
     public const int DefaultMaxTitleLength = 6;
     public const int MinConfigurableTitleLength = 2;
     public const int MaxConfigurableTitleLength = MaxTitleLength;
@@ -44,14 +44,14 @@ public static class PaperTitles
     public static string CleanCustomTitle(string? title, int maxLength)
     {
         var cleaned = NormalizeCustomTitle(title);
-        return TakeTextElements(cleaned, Math.Clamp(maxLength, 1, MaxTitleLength));
+        return TakeByDisplayWidth(cleaned, Math.Clamp(maxLength, 1, MaxTitleLength) * 2);
     }
 
-    internal static bool ExceedsTextElementLimit(string? title, int maxLength)
+    internal static bool ExceedsTitleLengthLimit(string? title, int maxLength)
     {
         var cleaned = NormalizeCustomTitle(title);
-        var limit = Math.Clamp(maxLength, 1, MaxTitleLength);
-        return StringInfo.ParseCombiningCharacters(cleaned).Length > limit;
+        var limit = Math.Clamp(maxLength, 1, MaxTitleLength) * 2;
+        return EdgeCapsuleLayout.DisplayWidth(cleaned) > limit;
     }
 
     public static string EffectiveTitle(PaperData paper, int fallbackNumber)
@@ -73,14 +73,20 @@ public static class PaperTitles
         return string.Join("", cleaned.Where(ch => !char.IsControl(ch)));
     }
 
-    private static string TakeTextElements(string text, int maxLength)
+    private static string TakeByDisplayWidth(string text, int maximumWidth)
     {
-        var indexes = StringInfo.ParseCombiningCharacters(text);
-        if (indexes.Length <= maxLength)
+        var width = 0;
+        var elements = StringInfo.GetTextElementEnumerator(text);
+        while (elements.MoveNext())
         {
-            return text;
+            width += EdgeCapsuleLayout.DisplayWidth((string)elements.Current);
+            if (width > maximumWidth)
+            {
+                // Never cut in the middle of a combining sequence or emoji cluster.
+                return text[..elements.ElementIndex];
+            }
         }
 
-        return text[..indexes[maxLength]];
+        return text;
     }
 }

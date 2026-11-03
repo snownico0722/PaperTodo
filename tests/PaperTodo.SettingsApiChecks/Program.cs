@@ -322,11 +322,15 @@ internal static partial class Program
         Check(service.Get("general.language").RequiresRestart, "Language is restart-based; API must not force exit.");
         Check(service.Get("appearance.paper_skin").Options.Count == PaperSkins.All.Length,
             "Public settings exposes every paper skin.");
-        Check(service.Get("appearance.match_auxiliary_material").Type == "boolean" &&
-            service.Get("appearance.material_transparency").Type == "string" &&
+        Check(service.Get("appearance.material_transparency").Type == "string" &&
             service.Get("appearance.material_transparency").Options.Count == 5 &&
             service.Get("appearance.native_material_always_active").Type == "boolean",
-            "All visible material toggles share the public settings catalog.");
+            "Remaining material settings use the shared public catalog.");
+        Check(!service.List("appearance").Any(s => s.Id == "appearance.match_auxiliary_material"),
+            "the retired full auxiliary material setting is absent from the public catalog");
+        Throws<PaperSettingsException>(() => service.Get("appearance.match_auxiliary_material"), "setting_not_found");
+        Throws<PaperSettingsException>(() => service.Set("appearance.match_auxiliary_material", Json(true)),
+            "setting_not_found");
         Throws<PaperSettingsException>(() => service.Set("appearance.font_scale", Json(1.3)), "invalid_setting_value");
         Throws<PaperSettingsException>(() => service.Set("appearance.font_scale", Json(1.01)), "invalid_setting_value");
         Throws<PaperSettingsException>(() => service.Set("appearance.theme", Json("unknown")), "invalid_setting_value");
@@ -355,11 +359,9 @@ internal static partial class Program
         service.Set("appearance.paper_skin", Json(PaperSkins.Mica));
         Check(c.State.PaperSkin == PaperSkins.Mica && c.State.MicaBackdropType == MicaBackdropTypes.Mica,
             "Successful system skin keeps the compatibility native recipe in the same transaction.");
-        service.Set("appearance.match_auxiliary_material", Json(true));
         service.Set("appearance.material_transparency", Json(MaterialTransparencyLevels.High));
         service.Set("appearance.native_material_always_active", Json(true));
-        Check(c.State.MatchAuxiliaryMaterialStrength &&
-            c.State.MaterialTransparency == MaterialTransparencyLevels.High &&
+        Check(c.State.MaterialTransparency == MaterialTransparencyLevels.High &&
             c.State.MicaAlwaysActive,
             "Material preferences mutate through the shared catalog.");
         Throws<PaperSettingsException>(
@@ -383,14 +385,14 @@ internal static partial class Program
         var paper = new PaperData { Type = PaperTypes.Todo, Title = "abcdef", Items = [new PaperItem { Text = "done", Done = true, Order = 0 }, new PaperItem { Text = "open", Order = 1 }] };
         c.State.Papers.Add(paper);
         Throws<PaperSettingsException>(() => service.Set("title.max_length", Json(2)), "save_failed");
-        Check(paper.Title == "abcdef" && c.State.MaxTitleLength == 6, "Failed title limit changes do not truncate user data.");
+        Check(paper.Title == "abcdef" && c.State.MaxTitleLength == PaperTitles.DefaultMaxTitleLength, "Failed title limit changes do not truncate user data.");
         Throws<PaperSettingsException>(() => service.Set("todo.move_completed_to_bottom", Json(true)), "save_failed");
         Check(paper.Items[0].Done && paper.Items[0].Order == 0 && !c.State.AutoMoveCompletedTodosToBottom, "Failed reorder restores items and order.");
         success = true;
         service.Set("todo.move_completed_to_bottom", Json(true));
         Check(!paper.Items[0].Done && paper.Items[0].Order == 0 && paper.Items[1].Order == 1, "Completed group is reordered just like Settings UI.");
         service.Set("title.max_length", Json(2));
-        Check(paper.Title == "ab", "Successful max length applies existing title semantics.");
+        Check(paper.Title == "abcd", "Successful max length counts two half-width characters as one.");
     }
 
     private static void TodoMoveBehavior()

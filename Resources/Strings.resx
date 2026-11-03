@@ -654,7 +654,7 @@
     <value>开启后仍会正常伸长；延长区域作为普通胶囊区域使用，不显示关闭按钮。需要关闭时可在右键菜单中选择「隐藏」。</value>
   </data>
   <data name="TipMaxTitleLength" xml:space="preserve">
-    <value>纸片标题与胶囊显示的最大字数。</value>
+    <value>标题按汉字长度计算：中文、全角字符算 1 字，英文、数字等半角字符算半字。调低上限会截短已有标题。</value>
   </data>
   <data name="TipStartup" xml:space="preserve">
     <value>开机时自动启动 PaperTodo。</value>
@@ -1539,15 +1539,6 @@
   </data>
   <data name="SkinNativeUnsupported" xml:space="preserve">
     <value>原生背景需要 Windows 11 22H2 或更新版本。</value>
-  </data>
-<data name="SettingsMatchAuxiliaryMaterial" xml:space="preserve">
-    <value>胶囊与菜单完整材质</value>
-  </data>
-  <data name="TipMatchAuxiliaryMaterial" xml:space="preserve">
-    <value>开启：与纸片一致。关闭：材质更轻、底色更实，更易阅读。边缘浏览始终使用轻量效果。</value>
-  </data>
-  <data name="SkinCaptureNotice" xml:space="preserve">
-    <value>胶囊和菜单显示时会临时读取其后方的局部背景；拖动胶囊时只读取一次低分辨率虚拟桌面。仅在本机内存中使用，不保存或上传。</value>
   </data>
   <data name="MenuPaperActions" xml:space="preserve">
     <value>纸片操作</value>

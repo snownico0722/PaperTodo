@@ -465,7 +465,6 @@ public sealed class AppState
     public string MaterialTransparency { get; set; } = MaterialTransparencyLevels.Medium;
     // Hides only the ordinary outer stroke. Active/focus capsule outlines stay separate.
     public bool HideSurfaceOutline { get; set; } = false;
-    public bool MatchAuxiliaryMaterialStrength { get; set; }
     public string MicaBackdropType { get; set; } = MicaBackdropTypes.Mica;
     public bool MicaAlwaysActive { get; set; }
     [System.Diagnostics.CodeAnalysis.AllowNull]
