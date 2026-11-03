@@ -76,12 +76,19 @@ for (var i = 0; i < 256; i++)
     webhook.Enqueue(new Uri($"http://127.0.0.1:{port}/old"), new TodoReminderTriggeredEvent(todo, metadata));
 webhook.InvalidatePending();
 webhook.Enqueue(new Uri($"http://127.0.0.1:{port}/new"), new TodoReminderTriggeredEvent(todo, metadata));
-await stream.WriteAsync("HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"u8.ToArray(), timeout.Token);
+await stream.WriteAsync("HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nSet-Cookie: webhook_test=source; Path=/\r\nConnection: close\r\n\r\n"u8.ToArray(), timeout.Token);
 client.Close();
 using var nextClient = await listener.AcceptTcpClientAsync(timeout.Token);
 using var nextReader = new StreamReader(nextClient.GetStream(), Encoding.UTF8);
 var nextRequest = await nextReader.ReadLineAsync(timeout.Token);
 if (nextRequest != "POST /new HTTP/1.1") throw new Exception($"Stale queued request was sent: {nextRequest}");
+while (!string.IsNullOrEmpty(line = await nextReader.ReadLineAsync(timeout.Token)))
+{
+    if (line.StartsWith("Cookie:", StringComparison.OrdinalIgnoreCase))
+        throw new Exception("Webhook route received a Cookie from an earlier endpoint.");
+}
+await nextClient.GetStream().WriteAsync(
+    "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"u8.ToArray(), timeout.Token);
 // Hold the first request open while changing only credentials on the configured route.
 using var credentialListener = new TcpListener(IPAddress.Loopback, 0);
 credentialListener.Start();

@@ -24,7 +24,7 @@ internal sealed class WebhookDispatcher : IDisposable
     private int _disposed;
     private readonly object _gate = new();
     private long _generation;
-    private readonly HttpClient _client = new(new HttpClientHandler { AllowAutoRedirect = false })
+    private readonly HttpClient _client = new(new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false })
     {
         Timeout = TimeSpan.FromSeconds(15)
     };
