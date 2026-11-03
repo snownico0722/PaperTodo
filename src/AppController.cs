@@ -46,6 +46,9 @@ public sealed partial class AppController : IDisposable
     private readonly DispatcherTimer _displayMetricsRefreshTimer;
     private DispatcherTimer? _todoReminderTimer;
     private bool _hasPendingDirty;
+    // UI-thread bookkeeping for snapshots queued to the background writer. A merge
+    // preview can supersede one after _hasPendingDirty was already cleared.
+    private readonly HashSet<(StateStore Store, long Version)> _pendingAsyncSaves = new();
 
     private TaskbarIcon? _trayIcon;
     private ContextMenu? _trayMenu;
@@ -3339,6 +3342,7 @@ public sealed partial class AppController : IDisposable
             }
             else
             {
+                _pendingAsyncSaves.Add((store, version));
                 _ = Task.Run(async () =>
                 {
                     try
@@ -3346,6 +3350,7 @@ public sealed partial class AppController : IDisposable
                         await store.SaveJsonAsync(json, version);
                         Application.Current?.Dispatcher?.BeginInvoke(new Action(() =>
                         {
+                            _pendingAsyncSaves.Remove((store, version));
                             if (workspaceGeneration != Interlocked.Read(ref _workspaceGeneration) || IsExiting) return;
                             if (version == Interlocked.Read(ref _saveVersion) &&
                                 stateRevision == Interlocked.Read(ref _stateRevision))
@@ -3360,6 +3365,7 @@ public sealed partial class AppController : IDisposable
                     {
                         Application.Current?.Dispatcher?.BeginInvoke(new Action(() =>
                         {
+                            _pendingAsyncSaves.Remove((store, version));
                             if (workspaceGeneration == Interlocked.Read(ref _workspaceGeneration) && !IsExiting)
                                 HandleSaveFailure(ex, version);
                         }));

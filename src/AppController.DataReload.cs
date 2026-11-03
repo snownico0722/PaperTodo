@@ -64,10 +64,14 @@ public sealed partial class AppController
             PrepareExternalPaperOperation();
             var conflictPolicy = DataMergeConflictPolicies.Normalize(State.DataMergeConflictPolicy);
             var before = StateStore.CopyForReload(State);
-            var version = Interlocked.Increment(ref _saveVersion);
+            // Invalid requests must not obsolete an already queued ordinary save or
+            // change its failure/retry version. Commit the version only after acceptance.
+            var version = Interlocked.Read(ref _saveVersion) + 1;
             var commit = merge
                 ? _store.PreviewExternalMerge(State, version, baselineJson)
                 : _store.ReloadExternalState(version);
+            if (commit.State != null || commit.Result.Outcome == "unchanged")
+                Interlocked.Increment(ref _saveVersion);
             // Native HWND transparency is fixed at startup. The first switch into a native
             // material needs restart, like the normal skin setting path.
             var result = commit.State == null ? commit.Result : commit.Result with
@@ -81,7 +85,8 @@ public sealed partial class AppController
 
             _saveTimer.Stop();
             _forceSaveTimer.Stop();
-            var hadPendingDirty = _hasPendingDirty;
+            var hadPendingDirty = _hasPendingDirty ||
+                _pendingAsyncSaves.Any(save => ReferenceEquals(save.Store, _store));
             _hasPendingDirty = false;
             _pendingDataReload = new(before, commit.State, result, origin,
                 merge, version, commit.Conflicts, commit.ExternalJson, commit.ObservedDiskJson,
