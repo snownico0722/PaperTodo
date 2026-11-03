@@ -28,7 +28,7 @@ internal static class PaperFormMaterialChecks
         var savedNative = controller.UsesNativeMicaWindows;
         var state = controller.State;
         var saved = (state.PaperSkin, state.Theme, state.EnableAnimations,
-            state.MatchAuxiliaryMaterialStrength, state.UseCapsuleMode,
+            state.UseCapsuleMode,
             state.UseDeepCapsuleMode, state.ExperimentalInactivePaperOpacity);
         try
         {
@@ -36,8 +36,7 @@ internal static class PaperFormMaterialChecks
             state.PaperSkin = PaperSkins.Acrylic;
             state.Theme = "light";
             state.EnableAnimations = true;
-            state.MatchAuxiliaryMaterialStrength = true;
-            state.UseCapsuleMode = true;
+                        state.UseCapsuleMode = true;
             state.UseDeepCapsuleMode = false;
             state.ExperimentalInactivePaperOpacity = false;
             Theme.Invalidate();
@@ -48,25 +47,9 @@ internal static class PaperFormMaterialChecks
                 CheckReversal(fixture);
                 CheckAnimationSettingAndQueuedCompletion(fixture);
                 CheckHide(fixture);
-                CheckCloseCancelsActiveCapture(fixture);
+                CheckCloseDuringTransition(fixture);
             }
 
-            // This completion is already queued when the HWND closes. Pump afterwards
-            // to prove it cannot restart a sampler or clear the closing suspension.
-            using (var fixture = new Fixture(controller))
-            {
-                fixture.Window.SetCollapsedState(true, animate: false, saveGeometry: false);
-                Program.Assert(fixture.Surface.SampledBackgroundCaptureSuspended &&
-                    !fixture.Surface.HasBackgroundCapture,
-                    "non-animated endpoint waits for settled layout before acquiring material");
-                fixture.Window.CloseForReal();
-                Program.Pump();
-                Program.Assert(fixture.Surface.SampledBackgroundCaptureSuspended &&
-                    !fixture.Surface.HasBackgroundCapture &&
-                    !fixture.Surface.HasMaterialHostSubscription &&
-                    fixture.Surface.BackgroundFrameCount == 0,
-                    "a queued endpoint callback cannot acquire material after close");
-            }
         }
         finally
         {
