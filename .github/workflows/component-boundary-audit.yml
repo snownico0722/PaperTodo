@@ -1,0 +1,33 @@
+name: Component boundary audit source
+on:
+  push:
+    branches: [audit/component-boundaries-20261103]
+    paths: [.github/workflows/component-boundary-audit.yml]
+permissions:
+  contents: read
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 371519644dc5d6f6c2fc00d89b7a13f928121653
+          persist-credentials: false
+      - name: Archive tracked public sources for this audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/component-audit"
+          git archive --format=tar HEAD > "$RUNNER_TEMP/component-audit/main.tar"
+          git rev-parse HEAD > "$RUNNER_TEMP/component-audit/main.sha"
+          for pr in 340 351 380 381 387 388 389; do
+            git fetch --depth=1 origin "refs/pull/$pr/head:refs/remotes/audit/pr$pr"
+            git archive --format=tar "refs/remotes/audit/pr$pr" src tests doc PaperTodo.Plugin.Abstractions plugin-samples > "$RUNNER_TEMP/component-audit/pr$pr.tar"
+            git rev-parse "refs/remotes/audit/pr$pr" > "$RUNNER_TEMP/component-audit/pr$pr.sha"
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: component-audit-source
+          path: ${{ runner.temp }}/component-audit/*
+          retention-days: 1
+          compression-level: 9
