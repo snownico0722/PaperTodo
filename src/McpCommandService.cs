@@ -112,7 +112,7 @@ internal sealed partial class McpCommandService
     {
         RequireFullWrites();
         return _commands.MergeData(PaperOperationContext.Mcp(),
-            OptionalString(parameters, "baseline_json", int.MaxValue, allowEmpty: true));
+            RequiredString(parameters, "baseline_json", int.MaxValue));
     }
 
     private object ListPapers(JsonElement parameters)

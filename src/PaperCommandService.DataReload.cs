@@ -8,7 +8,7 @@ internal sealed partial class PaperCommandService
         _controller.ReloadDataCore(origin);
 
     // Opt-in three-way merge with the caller's original snapshot; ReloadData remains authoritative.
-    internal DataReloadResult MergeData(PaperOperationContext origin, string? baselineJson = null) =>
+    internal DataReloadResult MergeData(PaperOperationContext origin, string? baselineJson) =>
         _controller.ReloadDataCore(origin, merge: true, baselineJson: baselineJson);
 
     internal DataReloadStatus GetDataReloadStatus() =>
