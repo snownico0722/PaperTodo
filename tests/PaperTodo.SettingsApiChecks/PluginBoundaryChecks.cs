@@ -489,51 +489,61 @@ internal static partial class Program
             Check(retryTimer?.IsEnabled == true && retryTimer.Interval < TimeSpan.FromSeconds(25),
                 "Partial delivery retry postponed a separately scheduled future reminder.");
 
-            // A listener may cancel an existing reminder while its pending edit is settled.
+            // Ordinary TodoChanged handlers run after presentation. Even if a listener
+            // edits the reminder, it cannot retroactively veto the occurrence.
             var edited = paper.Items[1];
-            using (var cancelEditSub = c.PaperBodyPluginEvents.Subscribe(
-                Guid.NewGuid(), "cancel-edit-test", new PaperTodoEventFilter
+            var callbackSawTriggered = false;
+            using (var changeSub = c.PaperBodyPluginEvents.Subscribe(
+                Guid.NewGuid(), "post-edit-test", new PaperTodoEventFilter
                 {
                     Kinds = new HashSet<PaperTodoEventKind> { PaperTodoEventKind.TodoChanged }
                 }, e =>
                 {
                     if (e is TodoChangedEvent change && change.After.Id == edited.Id &&
                         change.Metadata.Origin == PaperTodoEventOrigin.User)
+                    {
+                        callbackSawTriggered = edited.ReminderTriggered;
                         edited.ReminderAt = null;
+                    }
                 }))
             {
                 edited.Text = "edited before reminder";
                 c.MarkDirty();
                 _ = Invoke(c, "ProcessDueTodoReminders", now);
-                Check(!edited.ReminderTriggered && edited.ReminderAt == null &&
-                    !events.OfType<TodoChangedEvent>().Any(e => e.After.Id == edited.Id && e.Metadata.Origin == PaperTodoEventOrigin.System && !e.Before.ReminderTriggered && e.After.ReminderTriggered),
-                    "A reminder cancelled by a pending edit callback must not trigger.");
+                Check(callbackSawTriggered && edited.ReminderTriggered &&
+                    events.OfType<TodoChangedEvent>().Any(e => e.After.Id == edited.Id &&
+                        e.Metadata.Origin == PaperTodoEventOrigin.System &&
+                        !e.Before.ReminderTriggered && e.After.ReminderTriggered),
+                    "Ordinary TodoChanged callback ran before host reminder delivery.");
             }
 
-            // If a listener sees a newly created due todo during preparation and cancels it,
-            // the reminder loop must not mutate the now-stale delivery candidate.
+            // A just-created due Todo must still emit creation then system transition,
+            // but its creation callback must not become an implicit pre-notification hook.
             paper.Items[0].Done = true;
             paper.Items[1].Done = true;
             c.State.Papers.Add(cancelledPaper);
             c.PaperBodyPluginEvents.ScanNow(PaperOperationContext.User());
-            var cancelled = new PaperItem { Id = "reminder-cancelled", Text = "cancelled", ReminderAt = now.AddSeconds(-1) };
-            using var cancelSub = c.PaperBodyPluginEvents.Subscribe(
-                Guid.NewGuid(), "cancel-test", new PaperTodoEventFilter
+            var newDue = new PaperItem { Id = "reminder-cancelled", Text = "new reminder", ReminderAt = now.AddSeconds(-1) };
+            var callbackRanAfterTrigger = false;
+            using var createSub = c.PaperBodyPluginEvents.Subscribe(
+                Guid.NewGuid(), "creation-test", new PaperTodoEventFilter
                 {
                     Kinds = new HashSet<PaperTodoEventKind> { PaperTodoEventKind.TodoCreated }
                 }, e =>
                 {
-                    if (e is TodoCreatedEvent created && created.Todo.Id == cancelled.Id)
-                        cancelled.ReminderAt = null;
+                    if (e is TodoCreatedEvent created && created.Todo.Id == newDue.Id)
+                    {
+                        callbackRanAfterTrigger = newDue.ReminderTriggered;
+                        newDue.ReminderAt = null;
+                    }
                 });
-            cancelledPaper.Items.Add(cancelled);
+            cancelledPaper.Items.Add(newDue);
             _ = Invoke(c, "ProcessDueTodoReminders", now);
-            Check(!cancelled.ReminderTriggered && cancelled.ReminderAt == null &&
-                !cancelledPaper.IsVisible,
-                "A callback-cancelled reminder was displayed or triggered after preparation.");
+            Check(newDue.ReminderTriggered && callbackRanAfterTrigger && cancelledPaper.IsVisible,
+                "Todo creation callback incorrectly prevented the host reminder.");
 
-            Check(paper.Items[0].ReminderTriggered && !paper.Items[1].ReminderTriggered,
-                "Opening only the first due reminder must not acknowledge the unseen remainder.");
+            Check(paper.Items[0].ReminderTriggered && paper.Items[1].ReminderTriggered,
+                "An undelivered second reminder was not retried on the next delivery pass.");
             var timer = ReadField<System.Windows.Threading.DispatcherTimer?>(c, "_todoReminderTimer");
             Check(timer?.IsEnabled == true,
                 "A remaining future reminder must stay scheduled.");
