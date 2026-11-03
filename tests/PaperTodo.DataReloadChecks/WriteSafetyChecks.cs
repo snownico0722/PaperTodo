@@ -9,6 +9,7 @@ internal static partial class Program
     private static void StorageSafetyChecks()
     {
         ExternalEditsDoNotBlockOrdinarySaves();
+        FailedExplicitRequestsDoNotFenceQueuedSaves();
         ExplicitMergeRejectsChangedSource();
         OrdinarySavesDoNotInspectExternalChanges();
         TerminationRejectsQueuedWrites();
@@ -50,6 +51,34 @@ internal static partial class Program
             "ordinary save unexpectedly detected or deferred an external edit");
         Require(s.Store.TryRefreshBackupFromPrimary(),
             "ordinary save disabled the periodic backup path");
+    }
+
+    private static void FailedExplicitRequestsDoNotFenceQueuedSaves()
+    {
+        // These versions model an autosave queued before the explicit request. Even if
+        // the request fails, the older save must still be allowed to reach the file.
+        foreach (var scenario in new[] { "invalid_baseline", "invalid_reload", "invalid_merge", "missing_reload" })
+        {
+            using var s = new Scope();
+            s.Memory.Papers[0].Content = "queued ordinary edit";
+            var queuedSnapshot = s.Store.SerializeState(s.Memory);
+            if (scenario is "invalid_reload" or "invalid_merge")
+                File.WriteAllText(s.Store.FilePath, "{broken");
+            else if (scenario == "missing_reload")
+                File.Delete(s.Store.FilePath);
+
+            var rejected = scenario switch
+            {
+                "invalid_baseline" => s.Store.PreviewExternalMerge(s.Memory, 3, "{broken"),
+                "invalid_merge" => s.Store.PreviewExternalMerge(s.Memory, 3, s.BaselineJson),
+                _ => s.Store.ReloadExternalState(3)
+            };
+            Require(rejected.State == null && rejected.Result.Outcome == "invalid",
+                "invalid explicit operation unexpectedly succeeded: " + scenario);
+            s.Store.SaveJsonAsync(queuedSnapshot, 2).GetAwaiter().GetResult();
+            Require(Str(s.Read()["papers"]![0]!["content"]) == "queued ordinary edit",
+                "failed explicit operation invalidated a queued autosave: " + scenario);
+        }
     }
 
     private static void ExplicitMergeRejectsChangedSource()
