@@ -215,11 +215,8 @@ internal static class MaterialDragBenchmarks
                 "drag preserves window and content identity");
             var intervals = positions.Zip(positions.Skip(1), (a, b) => b.Milliseconds - a.Milliseconds).ToArray();
             var inputIntervals = times.Zip(times.Skip(1), (a, b) => b - a).ToArray();
-            var changes = new Counters(after.Draws-before.Draws, after.Refreshes-before.Refreshes,
-                after.RegionQueries-before.RegionQueries, after.Layouts-before.Layouts,
-                after.Projections-before.Projections, after.SceneDraws-before.SceneDraws,
-                after.Frames-before.Frames);
-            Console.WriteLine($"DRAG {c.Skin}/{(c.Capsule ? "capsule" : "paper")}/anim={c.Animations}/r={round}: moves={positions.Count}, cpu={cpuMs:F1}ms, draws={changes.Draws}, refresh={changes.Refreshes}, regions={changes.RegionQueries}, frames={changes.Frames}");
+            var changes = new Counters(after.Layouts - before.Layouts);
+            Console.WriteLine($"DRAG {c.Skin}/{(c.Capsule ? "capsule" : "paper")}/anim={c.Animations}/r={round}: moves={positions.Count}, cpu={cpuMs:F1}ms, layouts={changes.Layouts}");
             return new { c.Skin, c.Capsule, c.Animations, Round = round, DurationMs = elapsed,
                 ProcessCpuMs = cpuMs, DwmCpuMs = dwm.HasValue && endDwm.HasValue ? endDwm-dwm : null,
                 UiAllocatedBytes = uiBytes, ProcessAllocatedBytes = bytes, NativeMoves = positions.Count,
