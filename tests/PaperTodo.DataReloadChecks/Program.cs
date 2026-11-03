@@ -23,6 +23,7 @@ internal static partial class Program
                 ("old async writes cannot replace an accepted import", SaveFence),
                 ("model/list references survive accepted reload", ModelIdentities),
                 ("opt-in three-way merge combines independent changes", MergeIndependentEdits),
+                ("derived todo order does not create false conflicts", MergeDerivedTodoOrderDoesNotConflict),
                 ("caller baseline survives newer sync and async saves", MergeOriginalBaseline),
                 ("missing baseline requires a whole-state choice", MergeMissingBaseline),
                 ("invalid baseline is rejected without changing disk or memory", MergeInvalidBaseline),
