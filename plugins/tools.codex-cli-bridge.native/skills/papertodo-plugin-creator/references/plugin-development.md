@@ -620,7 +620,7 @@ Subscribable events are `paper.created`, `paper.changed`, `paper.deleted`, `todo
 
 ### Reminder API (2.2)
 
-PaperTodo emits a one-shot **upcoming notification event about five seconds before a reminder is due**. Plugins may suppress only the default presentation. The eventual reminder transition remains an ordinary `TodoChanged`.
+PaperTodo emits a one-shot **upcoming notification event about five seconds before a reminder is due**. Upcoming is not globally ordered with debounced user-change events; its Todo snapshot reflects the state observed at notification time. The `occurredAt` of a batched user event reflects scan time rather than the exact edit time. Plugins may suppress only the default presentation. The eventual reminder transition remains an ordinary `TodoChanged`.
 
 - `todos.read` grants queries and subscription to Native `PaperTodoEventKind.TodoReminderUpcoming` / Web `todo.reminderUpcoming`. The event contains a `todo` snapshot, one-time `notificationId`, and System `metadata`. Legacy `todos.observe` grants remain valid only for the older events, not this new advance hook.
 - The host aims to emit five seconds before due. A reminder created or rescheduled with less lead time receives an immediate best-effort notice; already-overdue reminders at startup use normal host presentation without an advance notice. A reschedule invalidates the old token.
