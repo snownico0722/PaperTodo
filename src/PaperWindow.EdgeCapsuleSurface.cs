@@ -508,10 +508,11 @@ public sealed partial class PaperWindow
             return false;
         }
 
+        // Use the expanded HWND's current WPF size, not the base paper size.
         var target = PaperRestoreGeometry.ClampToMonitor(
             bounds,
-            Math.Max(_paper.Width, PaperLayoutDefaults.MinWidth),
-            Math.Max(_paper.Height, PaperLayoutDefaults.MinHeight),
+            Math.Max(Width, PaperLayoutDefaults.MinWidth),
+            Math.Max(Height, PaperLayoutDefaults.MinHeight),
             monitor);
         var applied = false;
         MoveWindowWithoutGeometrySave(() =>
