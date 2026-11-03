@@ -542,6 +542,11 @@ public sealed partial class AppController
         }
 
         menu.Items.Add(TraySeparator());
+        if (_store.OrdinaryWritesPaused)
+        {
+            menu.Items.Add(TrayItem(menu, Strings.Get("DataSaveResolveConflict"), ResolvePausedExternalSave));
+            menu.Items.Add(TraySeparator());
+        }
         if (HasExperimentalPassiveSurfaces)
         {
             menu.Items.Add(TrayItem(
