@@ -26,7 +26,7 @@ internal static partial class Program
             ("image recovery protection is per workspace", WorkspaceImageProtection),
             ("plugin detach flush is strict and recoverable", WorkspacePluginStores),
             ("bad startup workspace falls back without replacing it", WorkspaceStartupFallback),
-            ("previewing a candidate never accepts changed active source", WorkspacePreviewDoesNotAcceptSource),
+            ("bad candidate cannot switch or mutate the active in-memory state", WorkspacePreviewDoesNotAcceptSource),
             ("plugin language fallback restores discovered labels", WorkspacePluginLocalization),
             ("inactive following state is released but reload updates its settings projection", WorkspaceSessionRelease)
         };
@@ -315,10 +315,11 @@ internal static partial class Program
         try { _ = catalog.Open(2, catalog.Options, allowCreate: true, main: active.State); }
         catch (InvalidOperationException) { rejected = true; }
         Require(rejected, "The corrupt candidate should not open.");
-        Throws<StateWriteBlockedException>(() =>
-            active.Store.SaveJsonSync(active.Store.SerializeState(active.State), 4));
-        Require(Str(scope.Read()["papers"]![0]!["content"]) == "external editor",
-            "candidate preview silently accepted the external source as safe to overwrite");
+        Require(active.State.Papers[0].Content != "external editor",
+            "previewing a rejected candidate changed the active live state");
+        active.Store.SaveJsonSync(active.Store.SerializeState(active.State), 4);
+        Require(Str(scope.Read()["papers"]![0]!["content"]) == active.State.Papers[0].Content,
+            "candidate failure introduced an external-detection hold on ordinary saves");
     }
 
     private static void WorkspaceStartupFallback()

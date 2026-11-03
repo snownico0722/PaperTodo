@@ -89,27 +89,23 @@ internal static partial class Program
     private static void MergeMissingBaseline()
     {
         using var s = new Scope();
-        var stale = NewState();
-        stale.Papers[0].Content = "obsolete queued save";
-        Require(s.Store.PreviewExternalMerge(s.Memory, 2).Result.Outcome == "unchanged",
-            "identical snapshots should not need a baseline");
-        s.Store.SaveJsonSync(s.Store.SerializeState(stale), 1);
-        Require(Str(s.Read()["papers"]![0]!["content"]) == "original",
-            "unchanged merge did not fence an older queued snapshot");
         var disk = s.Read();
-        s.Memory.Papers[0].Title = "SAVED";
-        s.Store.SaveJsonSync(s.Store.SerializeState(s.Memory), 3);
-        disk["papers"]![0]!["content"] = "external based on old file";
+        disk["papers"]![0]!["content"] = "external edit";
         s.Write(disk);
-        var before = File.ReadAllText(s.Store.FilePath);
-        var preview = s.Store.PreviewExternalMerge(s.Memory, 4);
-        Require(preview.State != null && preview.Conflicts is { Count: 1 } &&
-            preview.Conflicts[0].Reason == "unknown_baseline" &&
-            ConflictAggregator.Group(preview.Conflicts, preview.ExternalJson).Single() is UnknownBaselineBucket,
-            "missing baseline was silently inferred from a save");
-        Require(preview.State.Papers[0].Title == "SAVED" &&
-            preview.State.Papers[0].Content == "original" && File.ReadAllText(s.Store.FilePath) == before,
-            "unknown baseline applied external state before the user's choice");
+        var before = File.ReadAllBytes(s.Store.FilePath);
+        s.Memory.Papers[0].Title = "LOCAL";
+        var current = s.Store.SerializeState(s.Memory);
+        foreach (var missing in new string?[] { null, "", " " })
+        {
+            var preview = s.Store.PreviewExternalMerge(s.Memory, 2, missing);
+            Require(preview.State == null && preview.Result.Outcome == "invalid" &&
+                    preview.Conflicts == null && File.ReadAllBytes(s.Store.FilePath).SequenceEqual(before) &&
+                    s.Store.SerializeState(s.Memory) == current,
+                "missing baseline entered a two-party merge or mutated data");
+        }
+        s.Store.SaveJsonSync(current, 3);
+        Require(Str(s.Read()["papers"]![0]!["title"]) == "LOCAL",
+            "rejected baseline blocked an ordinary save");
     }
 
     private static void MergeInvalidBaseline()
