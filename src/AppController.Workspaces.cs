@@ -125,25 +125,18 @@ public sealed partial class AppController
 
     private bool ApplyCurrentWorkspaceSettings(WorkspaceConfiguration options)
     {
-        // Changing inheritance is a settings operation, not a workspace handoff.
-        // Keep the live papers, windows, plugins and command binding intact.
-        var previous = _workspace;
+        // A follow toggle changes settings, not the workspace's windows or data owner.
         _workspaceSwitching = true;
         RefreshWorkspaceButtons();
         var catalogCommitted = false;
         try
         {
-            var candidate = _workspaceCatalog.Open(WorkspaceNumber, options, current: previous);
-            var effectiveSettings = WorkspaceSettingsSnapshot.Capture(candidate.State);
-            var before = StateStore.CopyForReload(State);
-            var session = new WorkspaceSession(previous.Paths, previous.Store, State,
-                candidate.FollowsMain, candidate.IndependentSettings)
-            {
-                InheritedSettings = candidate.InheritedSettings
-            };
+            var (session, effectiveSettings) = _workspaceCatalog.PreviewSettingsChange(_workspace, options);
+            var previousPersistentPowerShell = State.UsePersistentPowerShellProcess;
+            var previousPreferPowerShell7 = State.PreferPowerShell7;
 
-            // Persist only the main catalog first. A failed write must leave the
-            // active settings and the normal-save projection untouched.
+            // Only the main catalog is persisted here. A failed write must not
+            // change the current settings or the ordinary-save projection.
             _workspaceCatalog.MainStore.UpdateWorkspaceConfiguration(options, NextWorkspaceSaveVersion());
             catalogCommitted = true;
             _workspaceCatalog.AdoptOptions(options);
@@ -159,21 +152,19 @@ public sealed partial class AppController
                 State.PaperSkin = PaperSkins.Resolve(State);
                 NormalizePaperSystemVisibilitySettings();
                 _paperBodyPlugins.RefreshWorkspaceLocalization();
-                RefreshReloadedSettings(before);
+                RefreshReloadedSettings(previousPersistentPowerShell, previousPreferPowerShell7);
                 ReconcilePluginRuntimes();
             }
             catch (Exception ex)
             {
-                // The catalog is committed; a UI refresh failure is not a rollback.
+                // An already committed catalog cannot be rolled back by a UI refresh.
                 Trace.TraceWarning("Workspace settings refresh failed: {0}", ex);
                 ReportWorkspaceError(ex.GetBaseException().Message);
             }
-            return true;
         }
         catch (Exception ex)
         {
             ReportWorkspaceError(ex.GetBaseException().Message);
-            return catalogCommitted;
         }
         finally
         {
@@ -181,6 +172,31 @@ public sealed partial class AppController
             RefreshWorkspaceControls();
             ResumeExitAfterDataReload();
         }
+
+        if (catalogCommitted) OfferWorkspaceSettingsRestart();
+        return catalogCommitted;
+    }
+
+    private void OfferWorkspaceSettingsRestart()
+    {
+        // This operation originates from the Workspaces settings page. Direct
+        // internal calls (including tests) have no visible dialog owner.
+        if (_settingsWindow is not { IsVisible: true } owner) return;
+        if (!PaperNoticeDialog.ShowChoice(
+                owner,
+                SettingsSidebarLocalized(
+                    "重启 PaperTodo", "Restart PaperTodo", "PaperTodo を再起動", "PaperTodo 다시 시작"),
+                SettingsSidebarLocalized(
+                    "工作区设置已切换。如果不重启，部分视觉效果可能并非最佳。是否立即重启？",
+                    "Workspace settings have changed. Without restarting, some visual effects may not appear at their best. Restart now?",
+                    "ワークスペース設定を切り替えました。再起動しない場合、一部の視覚効果が最適に表示されない可能性があります。今すぐ再起動しますか？",
+                    "작업 공간 설정이 변경되었습니다. 다시 시작하지 않으면 일부 시각 효과가 최적으로 표시되지 않을 수 있습니다. 지금 다시 시작할까요?"),
+                SettingsSidebarLocalized("稍后", "Later", "後で", "나중에"),
+                SettingsSidebarLocalized("立即重启", "Restart now", "今すぐ再起動", "지금 다시 시작")))
+            return;
+
+        if (Application.Current is App app) app.RequestRestartAfterExit();
+        Exit();
     }
 
     private bool CanBeginWorkspaceChange()
@@ -232,6 +248,7 @@ public sealed partial class AppController
             candidate = _workspaceCatalog.Open(number, nextOptions,
                 main: previous.Paths.Number == 1 ? previous.State : null);
             var needsInitialSave = candidate.Store.NeedsStartupRecoverySave;
+            var originalHideFromTaskbar = candidate.State.HidePapersFromTaskbar;
             candidateImages = new NoteImageStore(candidate.Paths.Images);
             candidateImages.Load();
             // Missing images must not prevent entry or recreate an unsafe image library.
@@ -264,7 +281,8 @@ public sealed partial class AppController
 
             // A healthy existing target needs no content write. Save only when
             // initializing/recovering the document or rescuing off-screen geometry.
-            var targetChanged = needsInitialSave || relocated;
+            var targetChanged = needsInitialSave || relocated ||
+                candidate.State.HidePapersFromTaskbar != originalHideFromTaskbar;
             if (targetChanged && !TrySaveNow(sync: true, workspaceBoundary: true))
                 throw new IOException(Strings.Get("WorkspaceSaveFailed"));
             // The active slot always belongs to the main catalog. Returning to a
@@ -415,6 +433,10 @@ public sealed partial class AppController
 
     private async Task<bool> RestoreWorkspacePresentationAsync(AppState before)
     {
+        // ShowPaper may expand a persisted capsule that the effective settings no
+        // longer allow. MarkDirty is suppressed while rebuilding the presentation,
+        // so record this narrow, real state change explicitly.
+        var originalCollapse = State.Papers.Select(paper => (Paper: paper, paper.IsCollapsed)).ToArray();
         RefreshReloadedSettings(before);
         // Every workspace handoff stopped the old processes, even when both slots use
         // identical preferences. Recreate the target's optional warm process once.
@@ -427,7 +449,7 @@ public sealed partial class AppController
         RebuildTrayMenu();
         // GC is not part of a reversible handoff. Each store's normal startup protection scan
         // is already scoped to its own primary, backup, recovery and conflict files.
-        return relocated;
+        return relocated || originalCollapse.Any(entry => entry.Paper.IsCollapsed != entry.IsCollapsed);
     }
 
     private AppState PrepareAcceptedWorkspaceReload(AppState candidate) =>
