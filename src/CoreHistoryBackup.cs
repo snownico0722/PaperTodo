@@ -220,10 +220,16 @@ internal sealed class CoreHistoryBackup
         {
             try
             {
-                using var stream = OpenSourceSnapshot(path);
-                using var copy = new MemoryStream();
-                stream.CopyTo(copy);
-                bytes = copy.ToArray();
+                // Windows File.Move(overwrite) does not reliably honor share-delete
+                // on an open destination. Hold the small common I/O gate only
+                // while copying source bytes, then compress/verify outside it.
+                lock (DurableAtomicFileWriter.SnapshotReadReplaceGate)
+                {
+                    using var stream = OpenSourceSnapshot(path);
+                    using var copy = new MemoryStream();
+                    stream.CopyTo(copy);
+                    bytes = copy.ToArray();
+                }
                 return true;
             }
             catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)

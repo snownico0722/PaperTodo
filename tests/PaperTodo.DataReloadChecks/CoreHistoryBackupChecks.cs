@@ -108,15 +108,36 @@ internal static partial class Program
                     "month-scale backup collapsed during continuous editing");
         }
 
-        // A long-lived backup read handle must not block an atomic normal save.
+        // Windows MoveFileEx can reject replacing a file with ANY open handle,
+        // even when that handle specifies FileShare.Delete. A backup reader's
+        // short shared gate must delay just the atomic replacement.
         using (var concurrent = new Scope())
-        using (var openRead = CoreHistoryBackup.OpenSourceSnapshot(concurrent.Store.FilePath))
+        using (var atReplace = new System.Threading.ManualResetEventSlim(false))
         {
+            var guardedWriter = new DurableAtomicFileWriter((stage, _) =>
+            {
+                if (stage == DurableAtomicWriteStage.BeforeReplace) atReplace.Set();
+            });
+            var guardedStore = new StateStore(concurrent.DirectoryPath, guardedWriter);
             var changed = NewState();
             changed.Papers[0].Content = "saved while backup is reading";
-            concurrent.Store.SaveJsonSync(concurrent.Store.SerializeState(changed), 2);
+            Task? save = null;
+            lock (DurableAtomicFileWriter.SnapshotReadReplaceGate)
+            {
+                using (var openRead = CoreHistoryBackup.OpenSourceSnapshot(concurrent.Store.FilePath))
+                {
+                    save = Task.Run(() =>
+                        guardedStore.SaveJsonSync(guardedStore.SerializeState(changed), 2));
+                    Require(atReplace.Wait(TimeSpan.FromSeconds(10)),
+                        "concurrent save did not reach the atomic-replace stage");
+                    // A replacement attempt is now waiting for the reader gate.
+                    Require(!save.IsCompleted,
+                        "atomic save bypassed the snapshot read/replace gate");
+                }
+            }
+            save!.GetAwaiter().GetResult();
             Require(concurrent.Store.Load().Papers[0].Content == "saved while backup is reading",
-                "backup read blocked an atomic primary save");
+                "backup read blocked or corrupted an atomic primary save");
         }
 
         // Clock correction: a future-dated archive may be retained as history

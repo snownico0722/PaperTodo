@@ -31,6 +31,10 @@ internal interface IDurableAtomicFileOperations
 
 internal sealed class DurableAtomicFileWriter : IDurableAtomicFileWriter
 {
+    // Windows MoveFileEx overwrite may reject an open destination even when its
+    // reader requested FileShare.Delete. Serialize only the physical replace
+    // with raw history snapshot reads, never the save's temp-file write.
+    internal static readonly object SnapshotReadReplaceGate = new();
     private const int ReplaceAttemptCount = 5;
     private static readonly TimeSpan ReplaceRetryDelay = TimeSpan.FromMilliseconds(100);
 
@@ -136,7 +140,8 @@ internal sealed class DurableAtomicFileWriter : IDurableAtomicFileWriter
             beforeReplace?.Invoke();
             try
             {
-                _fileOperations.Replace(tempPath, targetPath);
+                lock (SnapshotReadReplaceGate)
+                    _fileOperations.Replace(tempPath, targetPath);
                 return;
             }
             catch (Exception ex) when (
