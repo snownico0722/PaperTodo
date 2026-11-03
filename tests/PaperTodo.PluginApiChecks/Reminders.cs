@@ -314,8 +314,20 @@ internal static partial class Program
         execute.Invoke(runtime, [payload]);
         var subscriptions = (Dictionary<string, IDisposable>)typeof(WebPluginRuntime).GetField("_hostSubscriptions", flags)!.GetValue(runtime)!;
         Assert(subscriptions.Count == 1, "Web Runtime event request did not reach Workspace.");
+        var original = subscriptions["s1"];
+        var rejected = JsonSerializer.SerializeToElement(new { method = "events.subscribe", @params = new {
+            subscriptionId = "s1", types = new[] { "note.changed" } } });
+        try
+        {
+            execute.Invoke(runtime, [rejected]);
+            throw new Exception("Web Runtime accepted a replacement without note read permission.");
+        }
+        catch (TargetInvocationException ex) when (ex.InnerException is PaperTodoPluginException { Code: "permission_denied" }) { }
+        Assert(subscriptions.Count == 1 && ReferenceEquals(subscriptions["s1"], original),
+            "Failed Web Runtime replacement removed an existing subscription.");
         execute.Invoke(runtime, [payload]);
-        Assert(subscriptions.Count == 1, "Replacing a subscription leaked registrations.");
+        Assert(subscriptions.Count == 1 && !ReferenceEquals(subscriptions["s1"], original),
+            "Successful Web Runtime replacement did not replace the old subscription.");
         execute.Invoke(runtime, [JsonSerializer.SerializeToElement(new { method = "events.unsubscribe", @params = new { subscriptionId = "s1" } })]);
         Assert(subscriptions.Count == 0, "Web Runtime unsubscribe failed.");
         execute.Invoke(runtime, [payload]);
@@ -335,6 +347,43 @@ internal static partial class Program
             throw new Exception("Web Runtime bypassed reminder read permission.");
         }
         catch (TargetInvocationException ex) when (ex.InnerException is PaperTodoPluginException { Code: "permission_denied" }) { }
+        // Web Body must also preserve the old listener when a replacement is denied.
+        using var bodyHost = BodyApi(controller, [PaperTodoPermissionNames.TodosRead]);
+        var bodyContext = new PaperBodyContext
+        {
+            ProviderId = "web.body",
+            ApiVersion = "2.2",
+            StateJson = "{}",
+            StateVersion = 1,
+            TargetStateVersion = 1,
+            Paper = null!,
+            Body = null!,
+            Workspace = bodyHost,
+            Runtime = null!,
+            SaveStateJson = _ => { }
+        };
+        var body = (WebPaperBodySession)RuntimeHelpers.GetUninitializedObject(typeof(WebPaperBodySession));
+        typeof(WebPaperBodySession).GetField("_context", flags)!.SetValue(body, bodyContext);
+        typeof(WebPaperBodySession).GetField("_hostSubscriptions", flags)!.SetValue(
+            body, new Dictionary<string, IDisposable>());
+        var bodySubscribe = typeof(WebPaperBodySession).GetMethod("HandleSubscribeHostEvents", flags)!;
+        var bodySubscriptions = (Dictionary<string, IDisposable>)typeof(WebPaperBodySession)
+            .GetField("_hostSubscriptions", flags)!.GetValue(body)!;
+        var bodyValid = JsonSerializer.SerializeToElement(new {
+            subscriptionId = "same", types = new[] { "todo.changed" } });
+        var bodyInvalid = JsonSerializer.SerializeToElement(new {
+            subscriptionId = "same", types = new[] { "note.changed" } });
+        bodySubscribe.Invoke(body, [bodyValid]);
+        Assert(bodySubscriptions.Count == 1, "Web Body initial subscription failed.");
+        var bodyOriginal = bodySubscriptions["same"];
+        bodySubscribe.Invoke(body, [bodyInvalid]);
+        Assert(bodySubscriptions.Count == 1 && ReferenceEquals(bodySubscriptions["same"], bodyOriginal),
+            "Failed Web Body replacement removed an existing subscription.");
+        bodySubscribe.Invoke(body, [bodyValid]);
+        Assert(bodySubscriptions.Count == 1 && !ReferenceEquals(bodySubscriptions["same"], bodyOriginal),
+            "Successful Web Body replacement did not replace the old subscription.");
+        bodySubscriptions["same"].Dispose();
+
         var before = controller.CaptureTodoSnapshot(paper, item) with { ReminderTriggered = false };
         var after = before with { ReminderTriggered = true };
         var serialized = JsonSerializer.SerializeToElement(new TodoChangedEvent(

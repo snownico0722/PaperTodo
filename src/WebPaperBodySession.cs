@@ -832,11 +832,7 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
         var documentGeneration = _documentGeneration;
         try
         {
-            if (_hostSubscriptions.Remove(subscriptionId, out var existing))
-            {
-                existing.Dispose();
-            }
-            _hostSubscriptions[subscriptionId] = _context.Host.Subscribe(
+            var replacement = _context.Host.Subscribe(
                 new PaperTodoEventFilter
                 {
                     Kinds = ReadEventKinds(payload),
@@ -859,6 +855,9 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
                         @event = eventJson
                     });
                 });
+            _hostSubscriptions.TryGetValue(subscriptionId, out var existing);
+            _hostSubscriptions[subscriptionId] = replacement;
+            existing?.Dispose();
         }
         catch (PaperTodoPluginException ex)
         {
