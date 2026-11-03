@@ -20,7 +20,6 @@ internal static class MasterMaterialHandoffChecks
         var proxies = (IDictionary)Part(controller, "_edgeCapsuleQueueCompositionProxies");
         var admitted = new HashSet<EdgeCapsuleQueueCompositionProxy>();
         var cycleOutputs = new HashSet<IntPtr>();
-        var captureOverlappedProxy = false;
         var cursorSaved = GetCursorPos(out var cursor);
 
         void Observe()
@@ -29,13 +28,6 @@ internal static class MasterMaterialHandoffChecks
             {
                 admitted.Add(proxy);
                 if (proxy.OutputHandle != IntPtr.Zero) cycleOutputs.Add(proxy.OutputHandle);
-            }
-            foreach (var paper in papers)
-            {
-                if (!controller.IsEdgeCapsuleQueueProxyRetainingSource(paper)) continue;
-                captureOverlappedProxy |= !skins[paper].SampledBackgroundCaptureSuspended ||
-                    skins[paper].HasBackgroundCapture ||
-                    DesktopBackgroundCapture.ReadAffinity(hosts[paper].Handle) != 0;
             }
         }
         void Rendering(object? sender, EventArgs e) => Observe();
