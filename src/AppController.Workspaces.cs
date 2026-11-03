@@ -107,9 +107,24 @@ public sealed partial class AppController
         try
         {
             CommitWorkspaceEditors();
-            if (!TrySaveNow(sync: true, workspaceBoundary: true)) return false;
-            // Persist with the main store before publishing a changed count/enablement.
-            _workspaceCatalog.MainStore.UpdateWorkspaceConfiguration(next, NextWorkspaceSaveVersion());
+            if (WorkspaceNumber == 1)
+            {
+                // This is the live main AppState: persist its updated catalog and papers in ONE
+                // guarded ordinary save. Reading and accepting the main file a second time
+                // could allow an intervening external edit to be overwritten by live memory.
+                State.Workspaces = next;
+                if (!TrySaveNow(sync: true, workspaceBoundary: true))
+                {
+                    State.Workspaces = previouslyConfigured ? previous : null;
+                    return false;
+                }
+            }
+            else
+            {
+                if (!TrySaveNow(sync: true, workspaceBoundary: true)) return false;
+                // The main store is inactive; only update its catalog, retaining its papers.
+                _workspaceCatalog.MainStore.UpdateWorkspaceConfiguration(next, NextWorkspaceSaveVersion());
+            }
             _workspaceCatalog.AdoptOptions(next);
             if (WorkspaceNumber == 1) State.Workspaces = WorkspaceOptions;
             Interlocked.Increment(ref _stateRevision);
