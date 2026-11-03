@@ -61,6 +61,16 @@ public sealed partial class AppController
         timer.Tick -= OnStateBackupTimerTick;
     }
 
+    // The primary write has already succeeded. Independent maintenance must neither
+    // turn it into a reported save failure nor borrow another component's cleanup hook.
+    private void CompleteStateSaveMaintenance(bool releaseImageCache)
+    {
+        if (IsExiting) return;
+        if (releaseImageCache) TryReleaseUnreferencedImageCache();
+        RunExternalPostCommitUi(TryFlushPendingPluginPaperStateDeletes);
+        RunExternalPostCommitUi(ReconcilePluginRuntimes);
+    }
+
     internal void ExitForSystemShutdown()
     {
         if (IsExiting)

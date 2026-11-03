@@ -2004,7 +2004,7 @@ public sealed partial class AppController : IDisposable
         }
 
         State.Papers.RemoveAll(p => p.Id == paper.Id);
-        QueuePluginPaperStateDeletion(paper.Id);
+        NotifyPaperRemoved(paper.Id);
         _visibilityAnimationVersions.Remove(paper.Id);
         NotifyTodoReminderCollectionChanged();
 
@@ -2026,6 +2026,15 @@ public sealed partial class AppController : IDisposable
         ArrangeDeepCapsules();
         RefreshTrayMenu();
         SaveNow();
+    }
+
+    // Called by both UI deletion and a successfully committed external deletion.
+    // Cross-paper history belongs to entity removal, not plugin-state persistence.
+    internal void NotifyPaperRemoved(string paperId)
+    {
+        foreach (var window in _windows.Values)
+            window.PruneDeletedLinkedPaperFromTodoHistory(paperId);
+        QueuePluginPaperStateDeletion(paperId);
     }
 
     private void ClearTodoLinksToPaper(string linkedPaperId)
@@ -3336,8 +3345,7 @@ public sealed partial class AppController : IDisposable
             if (sync)
             {
                 _store.SaveJsonSync(json, version);
-                if (!IsExiting) TryReleaseUnreferencedImageCache();
-                TryFlushPendingPluginPaperStateDeletes();
+                CompleteStateSaveMaintenance(releaseImageCache: true);
                 _hasShownSaveFailure = false;
             }
             else
@@ -3352,8 +3360,7 @@ public sealed partial class AppController : IDisposable
                             if (version == Interlocked.Read(ref _saveVersion) &&
                                 stateRevision == Interlocked.Read(ref _stateRevision))
                             {
-                                TryReleaseUnreferencedImageCache();
-                                TryFlushPendingPluginPaperStateDeletes();
+                                CompleteStateSaveMaintenance(releaseImageCache: true);
                             }
                             _hasShownSaveFailure = false;
                         }));
