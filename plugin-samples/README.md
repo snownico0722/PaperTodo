@@ -616,41 +616,47 @@ const dispose = papertodo.onHostEvent(
 );
 ```
 
-Subscribable events are `paper.created`, `paper.changed`, `paper.deleted`, `todo.created`, `todo.changed`, `todo.deleted`, `note.changed`, ; API 2.2 reminder triggers are represented by existing `todo.changed` events. Subscriptions become invalid automatically when the session becomes invalid or is disposed; plugins should still unsubscribe promptly when a listener is no longer needed.
+Subscribable events are `paper.created`, `paper.changed`, `paper.deleted`, `todo.created`, `todo.changed`, `todo.deleted`, `note.changed`, and API 2.2 `todo.reminderUpcoming`. Actual reminder triggers remain regular `todo.changed` events. Subscriptions become invalid automatically when the session becomes invalid or is disposed; plugins should still unsubscribe promptly when a listener is no longer needed.
 
 ### Reminder API (2.2)
 
-A reminder trigger is published as a Todo state change rather than a separate event kind.
+PaperTodo emits a one-shot **upcoming notification event about five seconds before a reminder is due**. Plugins may suppress only the default presentation. The eventual reminder transition remains an ordinary `TodoChanged`.
 
-- Query `Workspace.ListTodos()` or Web `todos.list`: `reminderAt` is the scheduled time, and `reminderTriggered` indicates the host has surfaced the reminder. `todos.read` grants both query and event subscription.
-- Set, reschedule or cancel reminders with `SetTodoReminder` or `todos.setReminder` under `todos.update`.
-- Subscribe to Native `PaperTodoEventKind.TodoChanged` or Web `todo.changed`. Recognize a host trigger by `before.reminderTriggered === false`, `after.reminderTriggered === true`, and `metadata.origin === 'system'`. Do not use only `changedFields.Reminder`: rescheduling also changes that field.
-- Only successfully surfaced reminders produce these frozen state transitions. Failed delivery remains pending. Events are live and best effort, without offline replay, plugin ACK or exactly-once delivery.
-- Long-running integrations belong in provider Runtime. Keep Native callbacks short. Web Body and Runtime support `onHostEvent`; Web Mini does not. Unsubscribe when no longer needed, and resubscribe after navigation/recovery.
+- `todos.read` grants queries and subscription to Native `PaperTodoEventKind.TodoReminderUpcoming` / Web `todo.reminderUpcoming`. The event contains a `todo` snapshot, one-time `notificationId`, and System `metadata`. Legacy `todos.observe` grants remain valid only for the older events, not this new advance hook.
+- The host aims to emit five seconds before due. A reminder created or rescheduled with less lead time receives an immediate best-effort notice; already-overdue reminders at startup use normal host presentation without an advance notice. A reschedule invalidates the old token.
+- A plugin with **`todos.update`** may suppress the default notification before due through Native `IPaperReminderNotificationControl.SuppressDefaultReminderNotification(notificationId)` or Web `papertodo.workspace.request('reminders.suppressDefault', { notificationId })`. It returns `true` on success, `false` for invalid/expired tokens. This only suppresses the PaperTodo paper/tray presentation and sound; it does not change the todo or schedule. Multiple plugins can receive notices and may independently display their own notifications.
+- The host never blocks its UI awaiting JavaScript. Web plugins have up to the remaining advance window to respond; absent/late responses fall back to the default presentation. Completing/cancelling/rescheduling the Todo invalidates the token.
+- A reminder either successfully surfaced by the host or suppressed by a plugin is acknowledged with `reminderTriggered: true`, followed by System `TodoChanged`. Filter `!before.reminderTriggered && after.reminderTriggered`; a generic Reminder changed field may also mean rescheduling.
+- Regular pending `TodoChanged` callbacks run **after** the host presentation, not as a hidden veto hook. Events are live/best effort without replay or cross-restart exactly-once guarantees. A plugin's own display failure after suppression is not retried by the host.
+- Long-running listeners belong in provider Runtime; Web Body and Runtime support `onHostEvent`, Web Mini does not. Keep Native callbacks short.
 
-Native example:
+Native Runtime example (requires `todos.read` + `todos.update`):
 
 ```csharp
-var subscription = context.Workspace.Subscribe(
-    new PaperTodoEventFilter { Kinds = new HashSet<PaperTodoEventKind> { PaperTodoEventKind.TodoChanged } },
+var stop = context.Workspace.Subscribe(
+    new PaperTodoEventFilter { Kinds = new HashSet<PaperTodoEventKind>
+        { PaperTodoEventKind.TodoReminderUpcoming } },
     evt =>
     {
-        if (evt is TodoChangedEvent change &&
-            change.Metadata.Origin == PaperTodoEventOrigin.System &&
-            !change.Before.ReminderTriggered && change.After.ReminderTriggered)
+        if (evt is TodoReminderUpcomingEvent upcoming &&
+            context.Workspace is IPaperReminderNotificationControl control)
         {
-            // Notify using change.After in the plugin.
+            // Only suppress if this plugin is taking over presentation.
+            control.SuppressDefaultReminderNotification(upcoming.NotificationId);
         }
     });
 ```
 
-Web example (`permissions: ["todos.read"]`):
+Web Runtime example (requires `permissions: ["todos.read", "todos.update"]`):
 
 ```js
-const stop = papertodo.onHostEvent(['todo.changed'], event => {
-  if (event.metadata.origin === 'system' &&
-      !event.before.reminderTriggered && event.after.reminderTriggered) {
-    // Notify using event.after in the plugin.
+const stop = papertodo.onHostEvent(['todo.reminderUpcoming'], async event => {
+  const { notificationId, todo } = event;
+  // If the plugin will handle presentation, cancel the host's default:
+  const suppressed = await papertodo.workspace.request(
+    'reminders.suppressDefault', { notificationId });
+  if (suppressed) {
+    // Render the pet's own notification.
   }
 });
 ```
