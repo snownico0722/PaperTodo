@@ -187,7 +187,7 @@ internal sealed class WorkspaceSession
     internal AppState State { get; }
     internal bool FollowsMain { get; }
     internal WorkspaceSettingsSnapshot? IndependentSettings { get; set; }
-    internal WorkspaceSettingsSnapshot? InheritedSettings { get; }
+    internal WorkspaceSettingsSnapshot? InheritedSettings { get; set; }
 
     internal void BindPersistence()
     {
