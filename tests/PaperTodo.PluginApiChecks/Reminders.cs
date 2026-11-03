@@ -148,6 +148,10 @@ internal static partial class Program
             "Batch identity or in-flight unsubscribe was wrong.");
         hub.CaptureTriggeredReminderChanges([], [], DateTimeOffset.UtcNow)();
         Assert(received.Count == 2, "Empty batch emitted an event.");
+        // These callbacks tested reentrancy during the frozen batch only. The following
+        // assertions test regular TodoChanged scans without injecting another mutation.
+        mutating.Dispose();
+        listener.Dispose();
         var changes = new List<TodoChangedEvent>();
         using var changed = api.Subscribe(new() { Kinds = new HashSet<PaperTodoEventKind> { PaperTodoEventKind.TodoChanged } },
             e => changes.Add((TodoChangedEvent)e));
