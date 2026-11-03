@@ -334,6 +334,7 @@ PaperTodo를 수동으로 다시 여세요. 문제가 반복되면 PC를 다시 
   <data name="SaveFailureMessage" xml:space="preserve">
     <value>데이터 저장에 실패했습니다:&#x0A;{0}&#x0A;디스크 공간 또는 권한을 확인해 주세요.</value>
   </data>
+  <data name="DataSaveResolveConflict" xml:space="preserve"><value>데이터 충돌 해결</value></data>
   <data name="SaveFailureTitle" xml:space="preserve">
     <value>저장 실패</value>
   </data>
