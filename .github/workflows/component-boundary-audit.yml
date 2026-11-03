@@ -66,12 +66,24 @@ jobs:
           }
           Write-Host 'CONFIRMED: synchronous plugin creation interrupts other windows theme notifications.'
           $global:LASTEXITCODE = 0
-      - name: Apply remaining fixes and documentation
+      - name: Apply visual fixes and reproduce settings-to-popup coupling
         run: |
           git apply --include='src/**' .github/component-audit/02-master-state.patch
           if ($LASTEXITCODE -ne 0) { throw 'Could not apply master fix.' }
           git apply --include='src/**' .github/component-audit/03-visual-broadcast.patch
           if ($LASTEXITCODE -ne 0) { throw 'Could not apply broadcast fix.' }
+          $PSNativeCommandUseErrorActionPreference = $false
+          $log = "$env:RUNNER_TEMP/boundary-audit-logs/red-popup.txt"
+          dotnet run --project tests/PaperTodo.SettingsApiChecks -c Release 2>&1 | Tee-Object -FilePath $log
+          if ($LASTEXITCODE -eq 0 -or !(Get-Content $log -Raw).Contains('Rebuilding settings must not dispatch unrelated plugin popup theme callbacks.')) {
+            throw 'Old popup wiring did not fail at the expected behavior assertion.'
+          }
+          Write-Host 'CONFIRMED: settings rebuild invokes unrelated plugin popup callbacks.'
+          $global:LASTEXITCODE = 0
+      - name: Apply popup boundary fix and documentation
+        run: |
+          git apply --include='src/**' .github/component-audit/04-popup-theme.patch
+          if ($LASTEXITCODE -ne 0) { throw 'Could not apply popup fix.' }
           foreach ($patch in Get-ChildItem .github/component-audit/*.patch | Sort-Object Name) {
             git apply --include='doc/**' --include='CHANGELOG*' $patch.FullName
             if ($LASTEXITCODE -ne 0) { throw "Could not apply docs from $($patch.Name)" }
@@ -124,11 +136,13 @@ jobs:
           git commit -m '保留隐藏队列的收起选择，不由窗口销毁清空设置'
           git apply --index .github/component-audit/03-visual-broadcast.patch
           git commit -m '修复插件回调创建纸片中断主题与字体刷新'
+          git apply --index .github/component-audit/04-popup-theme.patch
+          git commit -m '由外观变更直接通知插件弹窗，不借设置页重建触发'
           git rm .github/workflows/component-boundary-audit.yml .github/component-audit/*.patch
           git commit -m '移除组件边界审查的临时验证工具 [ci]'
           git diff 371519644dc5d6f6c2fc00d89b7a13f928121653 HEAD --check
           git push origin "HEAD:refs/heads/$branch"
-          git log --oneline -4 | tee "$RUNNER_TEMP/published-commits.txt"
+          git log --oneline -5 | tee "$RUNNER_TEMP/published-commits.txt"
       - uses: actions/upload-artifact@v4
         with:
           name: component-boundary-published-commits
