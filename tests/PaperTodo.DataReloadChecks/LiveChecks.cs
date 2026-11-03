@@ -387,6 +387,49 @@ internal static partial class Program
             await Until(() => !controller.IsDataReloading, "expand reload");
             Require(windows["note-b"].HasExpandedPaperSurface, "expanded paper not displayed");
             Console.WriteLine("PASS existing capsule/form presentation path");
+
+            // The user-facing paused-save action reuses an explicit unknown-baseline merge.
+            // Cancelling must leave both versions intact; a later deliberate choice unblocks saving.
+            var ignoreField = typeof(AppController).GetField("_ignoreSaveFailures", Private)!;
+            var previousIgnore = (bool)ignoreField.GetValue(controller)!;
+            var recoveryDriver = AppController.ConflictDialogDriver;
+            ignoreField.SetValue(controller, true); // do not open the separate notification modal in this fixture
+            try
+            {
+                controller.SaveNow(sync: true);
+                var recoveryDisk = ReadLive();
+                LivePaper(recoveryDisk, "note-b")["title"] = "external recovery";
+                WriteLive(recoveryDisk);
+                var recoveryPaper = controller.State.Papers.Single(p => p.Id == "note-b");
+                recoveryPaper.Title = "local recovery";
+                controller.SaveNow(sync: true);
+                var recoveryStore = Field<StateStore>(controller, "_store");
+                Require(recoveryStore.OrdinaryWritesPaused, "external edit did not pause ordinary saving");
+
+                AppController.ConflictDialogDriver = (_, bucket) =>
+                {
+                    Require(bucket is UnknownBaselineBucket, "manual recovery inferred an unsafe baseline");
+                    return ConflictChoice.Cancel;
+                };
+                controller.ResolvePausedExternalSave();
+                await Until(() => !controller.IsDataReloading, "cancelled manual recovery");
+                Require(recoveryStore.OrdinaryWritesPaused && recoveryPaper.Title == "local recovery" &&
+                        Str(LivePaper(ReadLive(), "note-b")["title"]) == "external recovery",
+                    "cancelled manual recovery overwrote either side");
+
+                AppController.ConflictDialogDriver = (_, _) => ConflictChoice.KeepMemory;
+                controller.ResolvePausedExternalSave();
+                await Until(() => !controller.IsDataReloading, "accepted manual recovery");
+                Require(!recoveryStore.OrdinaryWritesPaused &&
+                        Str(LivePaper(ReadLive(), "note-b")["title"]) == "local recovery",
+                    "explicit manual recovery did not commit the choice and resume saving");
+                Console.WriteLine("PASS paused-save GUI action reuses merge; cancel preserves data");
+            }
+            finally
+            {
+                AppController.ConflictDialogDriver = recoveryDriver;
+                ignoreField.SetValue(controller, previousIgnore);
+            }
         }
         finally
         {
