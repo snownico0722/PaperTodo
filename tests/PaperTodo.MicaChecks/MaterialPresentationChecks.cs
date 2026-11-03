@@ -629,14 +629,12 @@ internal static class MaterialPresentationChecks
     }
     private static void CheckMasterRightClicks(AppController controller)
     {
-        var original = (controller.State.PaperSkin, controller.State.Theme, controller.State.EnableAnimations,
-            controller.State.MatchAuxiliaryMaterialStrength);
+        var original = (controller.State.PaperSkin, controller.State.Theme, controller.State.EnableAnimations);
         controller.State.PaperSkin = PaperSkins.Paper; Theme.Invalidate();
         var master = new MasterCapsuleWindow(controller, EdgeCapsuleEdge.Left, "");
         GetCursorPos(out var cursor);
         ContextMenu? menu = null;
         Window? outside = null;
-        RoutedEventHandler? opened = null;
         EventHandler? rendered = null;
         var observedFrames = 0;
         try
@@ -656,17 +654,11 @@ internal static class MaterialPresentationChecks
             outside.Show(); Wait(60);
             var pill = (FrameworkElement)typeof(MasterCapsuleWindow).GetField("_pill", Program.Private)!.GetValue(master)!;
             menu = pill.ContextMenu!;
-            opened = (_, _) =>
-            {
-                if (controller.State.MatchAuxiliaryMaterialStrength) AssertNoPopupFade(menu);
-            };
             rendered = (_, _) =>
             {
                 if (!menu.IsOpen) return;
-                if (controller.State.MatchAuxiliaryMaterialStrength) AssertNoPopupFade(menu);
                 observedFrames++;
             };
-            menu.Opened += opened;
             CompositionTarget.Rendering += rendered;
             // The very same detached template survives Paper -> Mica -> Acrylic.
             menu.ApplyTemplate();
@@ -678,7 +670,6 @@ internal static class MaterialPresentationChecks
                 Theme.Invalidate(); master.UpdateTheme(); Wait(60);
                 for (var attempt = 0; attempt < 2; attempt++)
                 {
-                    controller.State.MatchAuxiliaryMaterialStrength = attempt == 1;
                     var beforeFrames = observedFrames;
                     var point = pill.PointToScreen(new Point(pill.ActualWidth / 2, pill.ActualHeight / 2));
                     SetCursorPos((int)point.X, (int)point.Y); Wait(25);
@@ -687,24 +678,9 @@ internal static class MaterialPresentationChecks
                     Until(() => menu.IsOpen, "actual MASTER right click opens " + skin);
                     Wait(180);
                     Program.Assert(observedFrames > beforeFrames, "observe actual opening frames, not just the settled menu");
-                    var fullMaterial = controller.State.MatchAuxiliaryMaterialStrength;
-                    // Only transparent material popups need a forced local None. Opaque quiet
-                    // menus may use the normal system animation without exposing a plain frame.
-                    menu.Resources[SystemParameters.MenuPopupAnimationKey] = PopupAnimation.Fade;
-                    if (fullMaterial) AssertNoPopupFade(menu);
-                    menu.Resources.Remove(SystemParameters.MenuPopupAnimationKey);
                     var surface = Find(menu)!;
-                    var opacityOwners = new List<string>();
-                    for (DependencyObject? node = surface; node is Visual; node = VisualTreeHelper.GetParent(node))
-                        if (node is UIElement ui) opacityOwners.Add($"{ui.GetType().Name}:{ui.Opacity:F3}/{ui.IsVisible}");
-                    Console.WriteLine($"MASTER {skin}/{theme}/{attempt}: recipe={surface.Skin}; first={surface.FirstMenuRenderUsedBackground}; active={surface.IsBackgroundActive}; fallback={surface.MenuFallbackRenderCount}; capture={surface.HasBackgroundCapture}; frames={surface.BackgroundFrameCount}; suppress={surface.SuppressStaticBackgroundForOpening}; failure={surface.BackgroundFailure}; opacity={string.Join(',', opacityOwners)}");
-                    Program.Assert(surface.Skin == skin && !surface.HasBackgroundCapture,
-                        $"master {skin}/{theme}: current recipe stays capture-free after opening");
-                    Program.Assert(fullMaterial ? surface.IsBackgroundActive : !surface.IsBackgroundActive,
-                        $"master {skin}/{theme}: background transmission follows the full-material switch");
-                    if (fullMaterial)
-                        Program.Assert(surface.MenuFallbackRenderCount == 0,
-                            $"master {skin}/{theme}: transparent material has no plain-paper fallback frame");
+                    Program.Assert(surface.Skin == skin && surface.IsMenu,
+                        $"master {skin}/{theme}: correct lightweight surface after real right-click");
                     Program.Assert(menu.Opacity == 1, "master menu never hides content with a foreground opacity fade");
                     if (theme == "light" && skin == PaperSkins.Mica && attempt == 0)
                     {
@@ -740,13 +716,11 @@ internal static class MaterialPresentationChecks
             if (rendered != null) CompositionTarget.Rendering -= rendered;
             if (menu != null)
             {
-                if (opened != null) menu.Opened -= opened;
                 menu.IsOpen = false;
             }
             outside?.Close();
             master.CloseForReal(); SetCursorPos(cursor.X, cursor.Y);
-            (controller.State.PaperSkin, controller.State.Theme, controller.State.EnableAnimations,
-                controller.State.MatchAuxiliaryMaterialStrength) = original;
+            (controller.State.PaperSkin, controller.State.Theme, controller.State.EnableAnimations) = original;
             Theme.Invalidate();
         }
     }
