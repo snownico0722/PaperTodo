@@ -1,0 +1,135 @@
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index af10100..8fa9223 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -74,7 +74,7 @@ This log is written for general and power users alike. It focuses on user-facing
+ - **Todo performance and editing continuity**: Startup, paper opening and bulk paste involve less waiting when a Todo paper contains many items. Per-row context menus are created on demand, with mouse right-click, the Menu key and `Shift+F10` working on the first attempt. Reordering and undo/redo update only changed rows to reduce stutter while preserving editors, keyboard focus and text selections. Show/Hide All avoids rebuilding unchanged linked-todo rows and preserves text selections and undo history.
+ - **Edge-preview click targeting**: Fixed hit areas and forwarded clicks becoming misaligned with an edge preview's visible position during rapid switching.
+ - **Repeat-click linked-paper behavior**: When linked papers are excluded from the capsule queue, clicking the Todo link to an expanded paper again now retracts it if **Click capsule again to retract paper** is enabled; another click reopens it. This option was previously named **Click edge capsule again to retract paper**.
+-- **Capsule position memory**: The expanded paper's position and size are now remembered even when **Keep edge capsule visible while expanded** is off. Temporarily disabling capsule, edge-capsule or master-capsule features preserves the queue's starting height, which returns when the feature is re-enabled. Explicitly restoring defaults still clears that memory.
++- **Capsule position memory**: The expanded paper's position and size are now remembered even when **Keep edge capsule visible while expanded** is off. Temporarily disabling capsule, edge-capsule or master-capsule features preserves the queue's starting height, which returns when the feature is re-enabled. Explicitly restoring defaults still clears that memory. Hiding and showing a queue also preserves its collapsed state.
+ - **Multi-monitor startup and focus**: If a paper's saved coordinates are valid but its monitor has not yet been detected at startup, PaperTodo allows a brief, one-time grace period before applying normal off-screen position correction. Other papers restore immediately. Closing, hiding or deleting the active paper hands focus to an appropriate window rather than unexpectedly bringing a covered background window to the front; actions on background papers do not steal focus. Opening a paper from an edge capsule now brings it to the foreground before its expansion animation begins, rather than unexpectedly raising it at the end. Switching to another app mid-animation does not steal focus back.
+ - **Windows startup-app status**: Disabling PaperTodo through Windows Startup Apps or Task Manager is now reflected correctly in PaperTodo Settings. Startup can also be re-enabled from within PaperTodo.
+ - **Todo reminders**: Fixed multiple due reminders being marked as delivered when tray notifications were unavailable even though some were never shown. Reminders that were not actually displayed remain eligible for the normal retry path.
+diff --git a/CHANGELOG.zh.md b/CHANGELOG.zh.md
+index 6f0886e..0718a52 100644
+--- a/CHANGELOG.zh.md
++++ b/CHANGELOG.zh.md
+@@ -68,7 +68,7 @@
+ - **待办性能与编辑连续性**：待办较多时，程序启动、打开纸片和批量粘贴的等待更少。待办行右键菜单改为按需创建，鼠标右键、菜单键和 `Shift+F10` 仍可在首次操作时直接唤出。待办排序及撤销／重做只更新有变化的行，减少卡顿，并保留原有编辑器、键盘焦点和文字选区。执行「全部显示／隐藏纸片」时也不再重复重建关联待办行，尽量保留文字选区与撤销历史。
+ - **边缘预览点击位置**：修复快速切换边缘预览时，点击区域与画面错位、点击被转交到旧动画位置的问题。
+ - **关联入口重复点击**：当关联纸片设置为不在胶囊队列中显示时，如果开启「再次点击胶囊收回纸片」，再次点击待办中的关联入口即可收起已展开的纸片，再次点击则重新打开。该开关由「再次点击边缘胶囊收回纸片」更名。
+-- **胶囊位置记忆**：即使关闭「展开时保留边缘胶囊」，也能正确记住对应纸片展开后的位置和大小。临时关闭胶囊、边缘胶囊或主胶囊功能时，会保留队列起始高度；重新开启后恢复此前布局，只有主动恢复默认设置时才会清除该记忆。
++- **胶囊位置记忆**：即使关闭「展开时保留边缘胶囊」，也能正确记住对应纸片展开后的位置和大小。临时关闭胶囊、边缘胶囊或主胶囊功能时，会保留队列起始高度；重新开启后恢复此前布局，只有主动恢复默认设置时才会清除该记忆。隐藏整个队列后再显示，也会保留原来的收起状态。
+ - **多屏启动恢复与焦点**：启动时，如果纸片保存的坐标有效，但所属显示器尚未被系统识别，会给予一次短暂等待，再按正常规则修正离屏位置；其他纸片仍会立即恢复。关闭、隐藏或删除当前活动纸片时，会把焦点交给合适的窗口，避免将原本被遮挡的后台窗口意外置顶；处理后台纸片也不会抢走前台焦点。 点击边缘胶囊展开纸片时，会在动画开始前将纸片带到前台，避免动画结束才突然置顶；如果动画途中切换到其他程序，也不会强行抢回焦点。
+ - **Windows 开机自启动状态**：在 Windows「启动应用」或任务管理器中禁用 PaperTodo 后，软件设置会同步显示真实状态；重新在 PaperTodo 中开启自启动也会正常生效。
+ - **待办提醒**：修复多条提醒同时到期、托盘通知不可用时，部分未真正展示的提醒也被标记为已处理的问题。没有实际展示的提醒会按原有机制继续重试。
+diff --git a/doc/ARCHITECTURE.md b/doc/ARCHITECTURE.md
+index faa0670..3d4b2c2 100644
+--- a/doc/ARCHITECTURE.md
++++ b/doc/ARCHITECTURE.md
+@@ -175,6 +175,8 @@ Edge 展开记忆保留原有窗口 DIP 字段，并用可选 `DeepCapsuleExpand
+ 
+ 主数据写入成功后，由保存完成路径分别触发图片缓存回收、已删除纸片的插件文件清理和 Runtime 成员同步；后两者不再借用对方的入口。这些后续操作失败不得将已成功的主数据写入改判为保存失败。删除纸片后清除 Todo 撤销/重做历史中的关联，属于实体删除边界，不属于插件文件删除队列。
+ 
++主胶囊窗口的销毁只退出当前呈现，不清空队列的持久化收起选择。隐藏队列后再显示保留该选择；显式关闭胶囊/主胶囊功能及清理已不存在的队列，仍由相应的设置和队列逻辑修改持久化状态。
++
+ ### 4.3 图片资产
+ 
+ 图片二进制不进入 `data.json`。`NoteImageStore` 统一串行化 LMDB 访问，外部业务代码不直接拥有 LMDB transaction authority。
+diff --git a/src/AppController.cs b/src/AppController.cs
+index 15da7e5..3ae0b1e 100644
+--- a/src/AppController.cs
++++ b/src/AppController.cs
+@@ -3059,6 +3059,7 @@ public sealed partial class AppController : IDisposable
+             {
+                 window.DetachFromDeepCapsuleStack();
+             }
++            State.CapsuleCollapseAllActiveQueues.Clear();
+             DestroyAllMasterCapsules();
+             return;
+         }
+@@ -3150,6 +3151,7 @@ public sealed partial class AppController : IDisposable
+     {
+         if (!State.UseCapsuleCollapseAll)
+         {
++            State.CapsuleCollapseAllActiveQueues.Clear();
+             DestroyAllMasterCapsules();
+             return;
+         }
+@@ -3211,12 +3213,8 @@ public sealed partial class AppController : IDisposable
+ 
+     private void DestroyAllMasterCapsules()
+     {
+-        // Collapsing the masters must never strand retracted capsules off-screen at Opacity 0.
+-        if (State.CapsuleCollapseAllActiveQueues.Count > 0)
+-        {
+-            State.CapsuleCollapseAllActiveQueues.Clear();
+-        }
+-
++        // This retires live windows only. Hidden/non-slot papers retain their queue
++        // preferences; feature disablement and stale-queue cleanup own model changes.
+         if (_masterCapsules.Count == 0)
+         {
+             return;
+diff --git a/tests/PaperTodo.LifecycleChecks/MasterQueueMembershipChecks.cs b/tests/PaperTodo.LifecycleChecks/MasterQueueMembershipChecks.cs
+index 4d5ca54..2ecb41b 100644
+--- a/tests/PaperTodo.LifecycleChecks/MasterQueueMembershipChecks.cs
++++ b/tests/PaperTodo.LifecycleChecks/MasterQueueMembershipChecks.cs
+@@ -78,6 +78,31 @@ internal static class MasterQueueMembershipChecks
+                 "retained source geometry did not survive persistence");
+     }
+ 
++    internal static async Task RunVisibilityRetention(
++        AppController controller, Dictionary<string, PaperWindow> windows, StateStore store)
++    {
++        controller.ToggleCapsuleCollapseAllActive("", EdgeCapsuleEdge.Right);
++        await Until(() => windows.Values.All(window => window.IsCollapseAllRetracted),
++            "persistent master collapse fixture");
++        for (var pass = 0; pass < 2; pass++)
++        {
++            if (pass == 0) controller.HideAllPapers();
++            else foreach (var paper in controller.State.Papers.ToArray()) controller.HidePaper(paper);
++            await Until(() => windows.Values.All(window => !window.HasVisibleSurface), "all queue members hidden");
++            RequireSourceCollapse(controller.State, expected: true);
++            controller.SaveNow(sync: true);
++            RequireSourceCollapse(store.Load(), expected: true);
++            controller.ShowAllPapers();
++            await Until(() => windows.Values.All(window => window.IsCollapseAllRetracted),
++                "show restores the user's previous collapse choice");
++        }
++        controller.PublicSettings.Set("capsule.master_enabled", System.Text.Json.JsonSerializer.SerializeToElement(false));
++        await Until(() => windows.Values.All(window => !window.IsCollapseAllRetracted),
++            "disabling master mode restores ordinary capsules");
++        Require(controller.State.CapsuleCollapseAllActiveQueues.Count == 0,
++            "explicit master disablement must still clear saved collapse choices");
++    }
++
+     internal static void RunAbsentMarginCancellation(AppController controller, StateStore store)
+     {
+         // A vertical preview creates the dictionary entry before the horizontal transfer begins.
+diff --git a/tests/PaperTodo.LifecycleChecks/Program.cs b/tests/PaperTodo.LifecycleChecks/Program.cs
+index d0c7fe9..f5ea97a 100644
+--- a/tests/PaperTodo.LifecycleChecks/Program.cs
++++ b/tests/PaperTodo.LifecycleChecks/Program.cs
+@@ -11,7 +11,7 @@ internal static class Program
+ {
+     private const BindingFlags Private = BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic;
+     private const string FixtureMarker = ".papertodo-lifecycle-fixture";
+-    private static readonly string[] Cases = ["startup", "missing-monitor", "master-queue-transfer", "master-queue-cancel", "master-queue-drag-preparation", "master-queue-drop-handoff", "master-queue-membership", "master-queue-mutations", "master-queue-hide", "master-queue-disconnect", "master-queue-merge", "master-queue-merge-collapsed", "master-queue-material-handoff", "controller-hide-create-reentry", "controller-hide-show-reentry", "controller-zorder-create-reentry", "controller-close-delete-reentry", "todo-visibility", "real-exit", "early-expand", "edge-expand-foreground", "expanded-paper-display-recovery", "cancel-prewarm", "real-exit-scripts", "early-exit", "todo-context-menu", "todo-history"];
++    private static readonly string[] Cases = ["startup", "missing-monitor", "master-queue-transfer", "master-queue-cancel", "master-queue-drag-preparation", "master-queue-drop-handoff", "master-queue-membership", "master-queue-mutations", "master-queue-hide", "master-queue-hidden-retains-collapse", "master-queue-disconnect", "master-queue-merge", "master-queue-merge-collapsed", "master-queue-material-handoff", "controller-hide-create-reentry", "controller-hide-show-reentry", "controller-zorder-create-reentry", "controller-close-delete-reentry", "todo-visibility", "real-exit", "early-expand", "edge-expand-foreground", "expanded-paper-display-recovery", "cancel-prewarm", "real-exit-scripts", "early-exit", "todo-context-menu", "todo-history"];
+ 
+     [STAThread]
+     private static int Main(string[] args)
+@@ -270,6 +270,11 @@ internal static class Program
+                     "master drag cancelled during layout restored presentation");
+                 return;
+             }
++            if (name == "master-queue-hidden-retains-collapse")
++            {
++                await MasterQueueMembershipChecks.RunVisibilityRetention(controller, windows, store);
++                return;
++            }
+             if (name == "master-queue-hide")
+             {
+                 var margin = controller.DeepCapsuleStartTopMarginForQueue("", EdgeCapsuleEdge.Right);
