@@ -334,6 +334,7 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
   <data name="SaveFailureMessage" xml:space="preserve">
     <value>データの保存に失敗しました:&#x0A;{0}&#x0A;ディスク容量または権限を確認してください。</value>
   </data>
+  <data name="DataSaveResolveConflict" xml:space="preserve"><value>データの競合を解決</value></data>
   <data name="SaveFailureTitle" xml:space="preserve">
     <value>保存失敗</value>
   </data>
