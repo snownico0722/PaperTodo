@@ -16,7 +16,7 @@
     "title": "Webhook"
   },
   "settings": [
-    { "id": "autoStart", "type": "boolean", "name": "启动时运行", "description": "启动时创建或恢复隐藏纸片，以保持事件转发运行。", "default": true },
+    { "id": "autoStart", "type": "boolean", "name": "启动时自动创建纸片", "description": "仅控制启动时创建或恢复纸片；已有的插件实例不会停用。停止转发请将事件路由设为 {}。", "default": true },
     { "id": "routes", "type": "string", "name": "事件路由", "description": "JSON 对象：事件名称对应 HTTP(S) 地址；未列出的事件不发送。示例见插件说明。", "default": "{}", "maxLength": 16000 }
   ]
 }

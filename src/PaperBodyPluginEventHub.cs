@@ -170,6 +170,38 @@ internal sealed class PaperBodyPluginEventHub : IDisposable
         Dispatch(events, _subscriptions.Values.ToArray());
     }
 
+    // Record only presentation changes caused by the host, keeping unrelated
+    // user edits in the ordinary event stream.
+    public Action CaptureReminderPresentationChanges(PaperData paper, DateTimeOffset occurredAt)
+    {
+        _dispatcher.VerifyAccess();
+        if (_disposed || _suppressionDepth > 0 || _subscriptions.Count == 0 ||
+            !_baseline.TryGetValue(paper.Id, out var previous))
+            return static () => { };
+
+        var before = previous.Paper;
+        var current = _controller.CapturePaperSnapshot(paper);
+        var fields = PaperChangedFields.None;
+        if (before.IsVisible != current.IsVisible) fields |= PaperChangedFields.Visibility;
+        if (before.IsCollapsed != current.IsCollapsed) fields |= PaperChangedFields.Collapsed;
+        if (fields == PaperChangedFields.None) return static () => { };
+
+        var after = before with
+        {
+            IsVisible = current.IsVisible,
+            IsCollapsed = current.IsCollapsed
+        };
+        _baseline[paper.Id] = previous with { Paper = after };
+        var changed = new PaperChangedEvent(before, after, fields,
+            new(Guid.NewGuid(), Guid.NewGuid(), occurredAt, PaperTodoEventOrigin.System, null));
+        var subscribers = _subscriptions.Values.ToArray();
+        return () =>
+        {
+            Dispatch([changed], subscribers);
+            QueueUserChangesIfNeeded();
+        };
+    }
+
     public Action CaptureTriggeredReminderChanges(
         IReadOnlyList<TodoSnapshot> beforeTodos, IReadOnlyList<TodoSnapshot> triggeredTodos,
         DateTimeOffset occurredAt)

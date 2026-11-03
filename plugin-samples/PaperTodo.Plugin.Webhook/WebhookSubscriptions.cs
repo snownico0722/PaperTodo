@@ -26,31 +26,22 @@ internal sealed class WebhookSubscriptions : IDisposable
         if (!WebhookRoutes.TryRead(json, out var routes, out var error))
             Trace.TraceWarning("Webhook routes are invalid; sending is disabled: {0}", error);
 
+        var kinds = Enum.GetValues<PaperTodoEventKind>()
+            .Where(kind => routes.ContainsKey(WebhookRoutes.EventName(kind)))
+            .ToHashSet();
+        var replaceSubscription = !_kinds.SetEquals(kinds);
+        // Prepare the new listener first. Failure must preserve the active routes,
+        // subscription, and queue instead of disabling a working webhook.
+        var next = replaceSubscription && kinds.Count > 0
+            ? _subscribe(new PaperTodoEventFilter { Kinds = kinds, ExcludeOwnOperations = false }, OnEvent)
+            : null;
+
         if (!_routes.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase)
             .SequenceEqual(routes.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase), RouteComparer.Instance))
             _dispatcher.InvalidatePending();
         _routes = routes;
+        if (!replaceSubscription) return;
 
-        var kinds = Enum.GetValues<PaperTodoEventKind>()
-            .Where(kind => routes.ContainsKey(WebhookRoutes.EventName(kind)))
-            .ToHashSet();
-        if (_kinds.SetEquals(kinds)) return;
-
-        IDisposable? next = null;
-        if (kinds.Count != 0)
-        {
-            try
-            {
-                next = _subscribe(new PaperTodoEventFilter { Kinds = kinds, ExcludeOwnOperations = false }, OnEvent);
-            }
-            catch
-            {
-                _subscription?.Dispose();
-                _subscription = null;
-                _kinds.Clear();
-                throw;
-            }
-        }
         var previous = _subscription;
         _subscription = next;
         _kinds = kinds;

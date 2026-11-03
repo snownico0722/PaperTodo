@@ -259,20 +259,22 @@ public sealed partial class AppController
         // Record pending user changes without executing plugin callbacks. They are
         // delivered after host presentation, ahead of the system reminder transitions.
         var publishPending = _paperBodyPluginEvents?.CapturePendingChangesForReminder();
+        Action? publishPresentation = null;
         try
         {
-            ProcessDueTodoReminderPresentations(now, due, ref publishPending);
+            ProcessDueTodoReminderPresentations(now, due, ref publishPending, ref publishPresentation);
         }
         finally
         {
             // Even on a delivery failure, pending user changes must not disappear.
             publishPending?.Invoke();
+            publishPresentation?.Invoke();
         }
     }
 
     private void ProcessDueTodoReminderPresentations(
         DateTimeOffset now, List<(PaperData Paper, PaperItem Item)> due,
-        ref Action? publishPending)
+        ref Action? publishPending, ref Action? publishPresentation)
     {
         var suppressed = due.Where(entry => IsDefaultReminderSuppressed(entry.Item)).ToList();
         var defaultDue = due.Where(entry => !IsDefaultReminderSuppressed(entry.Item)).ToList();
@@ -301,6 +303,12 @@ public sealed partial class AppController
         {
             // Keep reminders pending when their delivery path was not available.
         }
+
+        // Showing the first default reminder can open a previously hidden Paper.
+        // Attribute that visibility/collapse transition to the system, not a later user scan.
+        publishPresentation = defaultDue.Count > 0
+            ? _paperBodyPluginEvents?.CaptureReminderPresentationChanges(defaultDue[0].Paper, now)
+            : null;
 
         var deliveredCount = TodoReminderPolicy.DeliveredCount(defaultDue.Count, openedFirst, balloonSurfaced);
         if (deliveredCount == 0 && suppressed.Count == 0)
@@ -355,6 +363,8 @@ public sealed partial class AppController
         // decision is final. Preserve user-before-system ordering without a hidden hook.
         publishPending?.Invoke();
         publishPending = null;
+        publishPresentation?.Invoke();
+        publishPresentation = null;
         publishChanges?.Invoke();
     }
 
