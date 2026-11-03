@@ -1588,6 +1588,7 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="DataReloadPaperConflictWholePaper" xml:space="preserve">
     <value>(Paper 전체)</value>
   </data>
+  <data name="DataReloadInvalidExternalHint" xml:space="preserve"><value>외부 데이터 파일이 올바르지 않습니다. 오른쪽에 오류와 파일 미리보기가 표시됩니다. 현재 데이터는 덮어쓰지 않았습니다. 파일을 수정한 뒤 다시 시도하세요.</value></data>
   <data name="DataReloadMissingBaseline" xml:space="preserve">
     <value>편집 전에 읽은 원본 데이터가 제공되지 않아 각 변경 사항을 구분할 수 없습니다. 현재 데이터 전체를 유지하거나 외부 데이터 전체를 적용하세요.</value>
   </data>
