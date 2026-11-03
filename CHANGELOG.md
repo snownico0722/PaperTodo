@@ -20,6 +20,10 @@ This log is written for general and power users alike. It focuses on user-facing
 
 ### Unreleased
 
+#### Data Reliability
+
+- **Weekly core-data history**: Automatically keeps up to four weekly ZIP snapshots in `backups/`, containing the main and any existing numbered workspace JSON documents. Images, plugins and short-term backup files are excluded. Older history is pruned only after a new archive is created successfully; failures do not block normal autosave.
+
 #### Papers, Title Bar & Capsules
 
 - **Workspace cycling**: Enable 2–5 workspaces and switch using the paper top-bar's custom SVG cycle icon and number badge; the tray submenu and Settings page also offer direct workspace selection, with long setting explanations moved into ⓘ hints. The main workspace keeps `data.json` and `note-assets.lmdb`; others use `data2.json` / `note-assets2.lmdb` and separate host-managed plugin data. Secondary workspaces follow the main software settings by default; turning this off restores their own settings. Switching saves current edits and remembers the active slot. Reducing the count or disabling workspaces never deletes inactive files.

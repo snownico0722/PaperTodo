@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Threading;
 
@@ -7,6 +9,7 @@ namespace PaperTodo;
 public sealed partial class AppController
 {
     private DispatcherTimer? _stateBackupTimer;
+    private int _coreHistoryBackupRunning;
 
     internal void StartStateBackupPolicy()
     {
@@ -16,6 +19,7 @@ public sealed partial class AppController
         }
 
         TryRefreshStateBackup();
+        QueueCoreHistoryBackup();
 
         _stateBackupTimer = new DispatcherTimer
         {
@@ -34,6 +38,21 @@ public sealed partial class AppController
         }
 
         TryRefreshStateBackup();
+        QueueCoreHistoryBackup();
+    }
+
+    private void QueueCoreHistoryBackup()
+    {
+        if (IsExiting || Interlocked.CompareExchange(ref _coreHistoryBackupRunning, 1, 0) != 0)
+            return;
+
+        // Disk-only history runs off the dispatcher; no editor commit or workspace switch.
+        _ = Task.Run(() =>
+        {
+            try { new CoreHistoryBackup(AppContext.BaseDirectory).TryCreateIfDue(DateTimeOffset.UtcNow); }
+            catch (Exception ex) { Trace.TraceWarning("Core history backup failed: {0}", ex); }
+            finally { Interlocked.Exchange(ref _coreHistoryBackupRunning, 0); }
+        });
     }
 
     private void TryRefreshStateBackup()

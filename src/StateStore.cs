@@ -351,7 +351,7 @@ public sealed partial class StateStore
         }
     }
 
-    private static bool TryReadValidatedStateBytes(string path, out byte[] bytes)
+    internal static bool TryReadValidatedStateBytes(string path, out byte[] bytes)
     {
         bytes = [];
         try

@@ -34,3 +34,6 @@ data[2-5].backup.used_for_recovery.*.json
 data[2-5]conflict-*.json
 note-assets[2-5].lmdb*
 plugins/data[2-5]/
+
+# Automatic core JSON history
+/backups/
