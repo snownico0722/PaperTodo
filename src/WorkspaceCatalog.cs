@@ -97,9 +97,10 @@ internal sealed class WorkspaceCatalog
         {
             // New or irrecoverably corrupt slots both start with one blank paper.
             // Image, plugin and historical files never veto initialization.
-            main ??= MainStore.Load();
-            inherited ??= WorkspaceSettingsSnapshot.Capture(main);
-            inherited.ApplyTo(state);
+            // Independent new slots use their own/default preferences. A caller with
+            // an already-loaded main state may provide defaults without another disk read.
+            inherited ??= main is null ? null : WorkspaceSettingsSnapshot.Capture(main);
+            inherited?.ApplyTo(state);
             state.Papers.Add(new PaperData());
         }
         if (number == 1)
