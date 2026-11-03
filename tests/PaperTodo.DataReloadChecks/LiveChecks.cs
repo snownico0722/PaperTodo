@@ -131,7 +131,7 @@ internal static partial class Program
             var beforeDenied = File.ReadAllText(seedStore.FilePath);
             var previousAttempt = controller.PaperCommands.GetDataReloadStatus().LastAttemptAt;
             var previousTitle = controller.State.Papers.Single(p => p.Id == "note-a").Title;
-            Require(deniedImport.GetDataReloadStatus().WorkspaceNumber == controller.WorkspaceNumber &&
+            Require(deniedImport.GetDataReloadStatus().LastAttemptAt == previousAttempt &&
                 WebPluginWorkspaceRequests.Execute(deniedImport, "data.status",
                     JsonSerializer.SerializeToElement(new { })) is DataReloadStatus,
                 "Read-only data status unexpectedly required import permission.");
