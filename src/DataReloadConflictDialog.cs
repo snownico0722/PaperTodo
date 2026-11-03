@@ -19,7 +19,7 @@ internal static class DataReloadConflictDialog
     /// <summary>
     /// 弹一个 modal dialog,返回用户选择。
     /// </summary>
-    public static ConflictChoice Show(Window? owner, StateMergeConflict conflict)
+    public static ConflictChoice Show(Window? owner, StateMergeConflict conflict, bool cancelOnClose = false)
     {
         var dialog = new DataReloadConflictDialogWindow(conflict);
         if (owner != null && PresentationSource.FromVisual(owner) is HwndSource)
@@ -33,7 +33,9 @@ internal static class DataReloadConflictDialog
         }
 
         var keepExternal = dialog.ShowDialog() == true;
+        var explicitChoice = dialog.ExplicitChoice;
         dialog.Close();
+        if (cancelOnClose && !explicitChoice) return ConflictChoice.Cancel;
         return keepExternal ? ConflictChoice.KeepExternal : ConflictChoice.KeepMemory;
     }
 }
@@ -68,6 +70,8 @@ internal static class DataReloadPaperConflictDialog
 
 internal sealed class DataReloadConflictDialogWindow : Window
 {
+    internal bool ExplicitChoice { get; private set; }
+
     public DataReloadConflictDialogWindow(StateMergeConflict conflict)
     {
         Title = Strings.Get("DataReloadConflictTitle");
@@ -168,10 +172,10 @@ internal sealed class DataReloadConflictDialogWindow : Window
             MinWidth = 140,
             Padding = new Thickness(14, 6, 14, 6),
             Margin = new Thickness(0, 0, 8, 0),
-            IsCancel = true,
+            IsCancel = false,
             Cursor = Cursors.Hand
         };
-        keepMemoryBtn.Click += (_, _) => { DialogResult = false; };
+        keepMemoryBtn.Click += (_, _) => { ExplicitChoice = true; DialogResult = false; };
         buttonRow.Children.Add(keepMemoryBtn);
 
         var keepExternalBtn = new Button
@@ -182,7 +186,7 @@ internal sealed class DataReloadConflictDialogWindow : Window
             IsDefault = true,
             Cursor = Cursors.Hand
         };
-        keepExternalBtn.Click += (_, _) => { DialogResult = true; };
+        keepExternalBtn.Click += (_, _) => { ExplicitChoice = true; DialogResult = true; };
         buttonRow.Children.Add(keepExternalBtn);
         DockPanel.SetDock(buttonRow, Dock.Bottom);
         content.Children.Add(buttonRow);
