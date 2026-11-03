@@ -96,6 +96,7 @@ public sealed partial class AppController
         }
         foreach (var m in _masterCapsules.Values) m.UpdateTheme();
         SkinBorder.RefreshLoadedSurfaces();
+        PluginPopupThemeChanged?.Invoke();
 
         RebuildTrayMenu();
         RefreshSettingsWindowContent();
@@ -660,6 +661,7 @@ public sealed partial class AppController
             masterCapsule.UpdateTypography();
         }
         ArrangeDeepCapsules(animate: false);
+        PluginPopupThemeChanged?.Invoke();
     }
 
     private UIElement BuildLabsSettingsPage()

@@ -17,6 +17,7 @@ internal static partial class Program
         ReadsAndNotificationsDoNotCommitOrReplaceBodies(c, owner, note, todo);
         await ExternalSavePreservesRuntimeCallbackDirtyState(c);
         VisualBroadcastSurvivesPaperCreation(c);
+        PopupThemeNotificationsFollowAppearance(c);
         CreationOwnsInitialTodoFields(c, note);
         TodoPasteUsesEventPayload();
         PartialReminderDeliveryKeepsUnsurfacedItemsPending(c);

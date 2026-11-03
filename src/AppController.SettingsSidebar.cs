@@ -16,8 +16,6 @@ public sealed partial class AppController
 
     private void RefreshSettingsWindowContent()
     {
-        RefreshPluginPopupThemeForSettingsRefresh();
-
         if (_settingsWindow is not { } window)
         {
             return;
@@ -538,14 +536,6 @@ public sealed partial class AppController
             workArea.Bottom - targetHeight - 16);
     }
 
-
-    // Keep this helper separate from the page builder so conflict-resolution fixes stay localized.
-    // Theme/font changes eventually rebuild the settings surface; notify open plugin popups even
-    // when the settings window itself is closed (for example, a system theme change).
-    private void RefreshPluginPopupThemeForSettingsRefresh()
-    {
-        PluginPopupThemeChanged?.Invoke();
-    }
 
     private static (double Width, double Height) SettingsSidebarSizeForWorkArea(Rect workArea)
     {

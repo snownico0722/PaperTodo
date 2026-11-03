@@ -5,6 +5,34 @@ using PaperTodo.Plugin;
 
 internal static partial class Program
 {
+    private static void PopupThemeNotificationsFollowAppearance(AppController controller)
+    {
+        Check(ReadField<Window?>(controller, "_settingsWindow") == null,
+            "Popup refresh fixture must not depend on an open settings window.");
+        var previousTheme = controller.State.Theme;
+        var previousZoom = controller.State.Zoom;
+        var refreshes = 0;
+        void Changed() => refreshes++;
+        controller.PluginPopupThemeChanged += Changed;
+        try
+        {
+            Invoke(controller, "RefreshSettingsWindowContent");
+            Check(refreshes == 0, "Rebuilding settings must not dispatch unrelated plugin popup theme callbacks.");
+            controller.PublicSettings.Set("appearance.theme", Json(previousTheme == "dark" ? "light" : "dark"));
+            Check(refreshes == 1, "Theme changes must notify popups exactly once without an open settings window.");
+            controller.PublicSettings.Set("appearance.font_scale", Json(previousZoom == 1.05 ? 1.0 : 1.05));
+            Check(refreshes == 2, "Font changes must notify popups exactly once without an open settings window.");
+            Invoke(controller, "RefreshSettingsWindowContent");
+            Check(refreshes == 2, "An unrelated settings rebuild must not repeat popup theme delivery.");
+        }
+        finally
+        {
+            controller.PluginPopupThemeChanged -= Changed;
+            controller.PublicSettings.Set("appearance.theme", Json(previousTheme));
+            controller.PublicSettings.Set("appearance.font_scale", Json(previousZoom));
+        }
+    }
+
     private static void VisualBroadcastSurvivesPaperCreation(AppController controller)
     {
         var windows = ReadField<Dictionary<string, PaperWindow>>(controller, "_windows");
