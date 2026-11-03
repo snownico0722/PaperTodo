@@ -13,7 +13,7 @@ if (WebhookRoutes.TryRead("{\"routes\":\"{\\\"todoCreated\\\":\\\"file:///tmp\\\
     throw new Exception("Invalid URL was accepted");
 if (WebhookRoutes.TryRead("{\"routes\":\"{\"}", out _, out _))
     throw new Exception("Invalid JSON was accepted");
-if (WebhookRoutes.EventName(PaperTodoEventKind.TodoReminderTriggered) != "todoReminderTriggered")
+if (WebhookRoutes.EventName(PaperTodoEventKind.TodoChanged) != "todoChanged")
     throw new Exception("Event naming changed");
 
 var activeSubscriptions = 0;
@@ -27,9 +27,9 @@ using (var subscriptions = new WebhookSubscriptions((filter, handler) =>
 {
     subscriptions.Update("{}");
     if (activeSubscriptions != 0) throw new Exception("Empty routes subscribed to events");
-    subscriptions.Update("{\"routes\":\"{\\\"todoReminderTriggered\\\":\\\"http://localhost:1234\\\"}\"}");
-    if (activeSubscriptions != 1 || !filters[^1].Kinds!.SetEquals(new[] { PaperTodoEventKind.TodoReminderTriggered }))
-        throw new Exception("Reminder route did not subscribe to the reminder event");
+    subscriptions.Update("{\"routes\":\"{\\\"todoChanged\\\":\\\"http://localhost:1234\\\"}\"}");
+    if (activeSubscriptions != 1 || !filters[^1].Kinds!.SetEquals(new[] { PaperTodoEventKind.TodoChanged }))
+        throw new Exception("Todo change route did not subscribe to TodoChanged");
     subscriptions.Update("{\"routes\":\"{\\\"todoCreated\\\":\\\"http://localhost:1234\\\"}\"}");
     if (activeSubscriptions != 1 || !filters[^1].Kinds!.SetEquals(new[] { PaperTodoEventKind.TodoCreated }))
         throw new Exception("Subscription was not replaced");
@@ -42,8 +42,10 @@ listener.Start();
 var port = ((IPEndPoint)listener.LocalEndpoint).Port;
 using var webhook = new WebhookDispatcher();
 var metadata = new PaperTodoEventMetadata(Guid.NewGuid(), Guid.NewGuid(), DateTimeOffset.Now, PaperTodoEventOrigin.System, null);
-var todo = new TodoSnapshot("paper", "Title", "todo", "Test", false, 0, null, null, DateTimeOffset.Now) { ReminderTriggered = true };
-webhook.Enqueue(new Uri($"http://127.0.0.1:{port}/reminder"), new TodoReminderTriggeredEvent(todo, metadata));
+var before = new TodoSnapshot("paper", "Title", "todo", "Test", false, 0, null, null, DateTimeOffset.Now);
+var todo = before with { ReminderTriggered = true };
+var reminderChange = new TodoChangedEvent(before, todo, TodoChangedFields.Reminder, metadata);
+webhook.Enqueue(new Uri($"http://127.0.0.1:{port}/reminder"), reminderChange);
 using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
 using var client = await listener.AcceptTcpClientAsync(timeout.Token);
 await using var stream = client.GetStream();
@@ -67,15 +69,16 @@ while (read < body.Length)
     read += count;
 }
 using var payload = JsonDocument.Parse(new string(body));
-if (payload.RootElement.GetProperty("kind").GetString() != "todoReminderTriggered" ||
-    payload.RootElement.GetProperty("todo").GetProperty("text").GetString() != "Test" ||
-    !payload.RootElement.GetProperty("todo").GetProperty("reminderTriggered").GetBoolean() ||
+if (payload.RootElement.GetProperty("kind").GetString() != "todoChanged" ||
+    payload.RootElement.GetProperty("before").GetProperty("reminderTriggered").GetBoolean() ||
+    payload.RootElement.GetProperty("after").GetProperty("text").GetString() != "Test" ||
+    !payload.RootElement.GetProperty("after").GetProperty("reminderTriggered").GetBoolean() ||
     payload.RootElement.GetProperty("metadata").GetProperty("eventId").GetGuid() != metadata.EventId)
     throw new Exception("Unexpected webhook payload");
 for (var i = 0; i < 256; i++)
-    webhook.Enqueue(new Uri($"http://127.0.0.1:{port}/old"), new TodoReminderTriggeredEvent(todo, metadata));
+    webhook.Enqueue(new Uri($"http://127.0.0.1:{port}/old"), reminderChange);
 webhook.InvalidatePending();
-webhook.Enqueue(new Uri($"http://127.0.0.1:{port}/new"), new TodoReminderTriggeredEvent(todo, metadata));
+webhook.Enqueue(new Uri($"http://127.0.0.1:{port}/new"), reminderChange);
 await stream.WriteAsync("HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nSet-Cookie: webhook_test=source; Path=/\r\nConnection: close\r\n\r\n"u8.ToArray(), timeout.Token);
 client.Close();
 using var nextClient = await listener.AcceptTcpClientAsync(timeout.Token);
@@ -101,19 +104,20 @@ using var credentialSubscriptions = new WebhookSubscriptions((filter, handler) =
 }, new WebhookDispatcher());
 string Settings(string password) => JsonSerializer.Serialize(new
 {
-    routes = JsonSerializer.Serialize(new { todoReminderTriggered = $"http://user:{password}@127.0.0.1:{credentialPort}/hook" })
+    routes = JsonSerializer.Serialize(new { todoChanged = $"http://user:{password}@127.0.0.1:{credentialPort}/hook" })
 });
 credentialSubscriptions.Update(Settings("old"));
-deliver!(new TodoReminderTriggeredEvent(todo, metadata));
+deliver!(reminderChange);
 using var firstCredentialClient = await credentialListener.AcceptTcpClientAsync(timeout.Token);
 await using var firstCredentialStream = firstCredentialClient.GetStream();
 using var firstCredentialReader = new StreamReader(firstCredentialStream, Encoding.UTF8, leaveOpen: true);
 if (await firstCredentialReader.ReadLineAsync(timeout.Token) != "POST /hook HTTP/1.1")
     throw new Exception("First credential request was not received");
 while (!string.IsNullOrEmpty(await firstCredentialReader.ReadLineAsync(timeout.Token))) { }
-deliver(new TodoReminderTriggeredEvent(todo, metadata));
+deliver(reminderChange);
 credentialSubscriptions.Update(Settings("new"));
-deliver(new TodoReminderTriggeredEvent(todo with { Text = "New route event" }, metadata));
+deliver(new TodoChangedEvent(before, todo with { Text = "New route event" },
+    TodoChangedFields.Reminder | TodoChangedFields.Text, metadata));
 await firstCredentialStream.WriteAsync("HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"u8.ToArray(), timeout.Token);
 firstCredentialClient.Close();
 using var nextCredentialClient = await credentialListener.AcceptTcpClientAsync(timeout.Token);
@@ -133,9 +137,9 @@ while (nextRead < nextBody.Length)
     nextRead += count;
 }
 using var nextPayload = JsonDocument.Parse(new string(nextBody));
-if (nextPayload.RootElement.GetProperty("todo").GetProperty("text").GetString() != "New route event")
+if (nextPayload.RootElement.GetProperty("after").GetProperty("text").GetString() != "New route event")
     throw new Exception("Queued event used old credentials after route change");
-Console.WriteLine("Webhook POST, reminder payload and subscriptions verified.");
+Console.WriteLine("Webhook POST, TodoChanged reminder transition and subscriptions verified.");
 
 sealed class CallbackDisposable(Action callback) : IDisposable
 {

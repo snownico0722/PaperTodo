@@ -8,7 +8,7 @@
   "stateVersion": 1,
   "entry": "PaperTodo.Plugin.Webhook.dll",
   "capabilities": ["runtime"],
-  "permissions": ["papers.read", "papers.observe", "todos.read", "todos.observe", "notes.observe"],
+  "permissions": ["papers.read", "todos.read", "notes.read"],
   "startupPaper": {
     "enabledSetting": "autoStart",
     "instanceKey": "main",
