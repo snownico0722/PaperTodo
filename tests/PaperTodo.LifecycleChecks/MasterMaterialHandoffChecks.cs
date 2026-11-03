@@ -61,12 +61,13 @@ internal static class MasterMaterialHandoffChecks
         async Task CheckSettled(bool retracted, IReadOnlyDictionary<PaperWindow, int> framesBefore)
         {
             await Until(() => Settled(retracted), "exact applied master terminal frames and native geometry");
-            if (!retracted)
-                await Until(() => papers.All(w => skins[w].IsBackgroundActive &&
-                    !skins[w].HasBackgroundCapture && skins[w].BackgroundFrameCount > framesBefore[w]),
-                    "fresh material snapshots completed for every revealed endpoint");
             foreach (var paper in papers)
             {
+                // The retired full-material setting must never re-enable desktop snapshots
+                // after a live DComp handoff, regardless of which form is revealed.
+                Require(!skins[paper].IsBackgroundActive &&
+                    skins[paper].BackgroundFrameCount == framesBefore[paper],
+                    "lightweight capsule unexpectedly created a desktop background snapshot");
                 Require(!skins[paper].SampledBackgroundCaptureSuspended && !skins[paper].HasBackgroundCapture &&
                     DesktopBackgroundCapture.ReadAffinity(hosts[paper].Handle) == 0,
                     "terminal material capture or display-affinity lease remained active");
@@ -85,6 +86,8 @@ internal static class MasterMaterialHandoffChecks
         CompositionTarget.Rendering += Rendering;
         try
         {
+            Require(!controller.State.MatchAuxiliaryMaterialStrength,
+                "retired auxiliary setting cannot be restored from the persisted fixture");
             Require(cursorSaved && SetCursorPos(10, 10), "park cursor outside the capsule queue");
             await Until(() => Settled(false), "initial real capsule presentation");
             for (var pass = 0; pass < 3; pass++)
@@ -111,7 +114,7 @@ internal static class MasterMaterialHandoffChecks
             MouseEvent(0x0002, 0, 0, 0, UIntPtr.Zero);
             MouseEvent(0x0004, 0, 0, 0, UIntPtr.Zero);
             await Until(() => first.HasExpandedPaperSurface, "real capsule receives a complete native click after handoff");
-            Console.WriteLine($"PASS full-material master handoff: {admitted.Count} actual proxy generations, exact endpoints, released cloak/capture, reversal and real click");
+            Console.WriteLine($"PASS lightweight-material master handoff: {admitted.Count} actual proxy generations, exact endpoints, released cloak/capture, reversal and real click");
         }
         finally
         {
