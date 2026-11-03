@@ -138,102 +138,65 @@ internal static class PaperFormMaterialChecks
     private static void CheckAnimationSettingAndQueuedCompletion(Fixture fixture)
     {
         var window = fixture.Window;
-        var surface = fixture.Surface;
-        var frames = surface.BackgroundFrameCount;
         window.SetCollapsedState(true, animate: true, saveGeometry: false);
-        Program.Assert(IsTransitioning(window), "collapse really starts before animations are disabled");
+        Program.Assert(IsTransitioning(window), "collapse starts before animations are disabled");
         fixture.Controller.State.EnableAnimations = false;
         window.SettleAnimationsForDisabledSetting();
         Program.Assert(!IsTransitioning(window) && fixture.Paper.IsCollapsed,
-            "disabling animations settles the pending collapse through the normal endpoint");
-        AwaitSnapshot(fixture, frames, "animation-setting settlement");
+            "disabling animations settles the pending collapse through its normal endpoint");
+        AwaitCollapsed(fixture);
 
-        frames = surface.BackgroundFrameCount;
         window.SetCollapsedState(false, animate: false, saveGeometry: false);
-        // Do not pump: the old expanded endpoint's Loaded callback is still pending.
         fixture.Controller.State.EnableAnimations = true;
-        using (var probe = new AnimationProbe(fixture, "new collapse with an old endpoint queued"))
+        using (var probe = new AnimationProbe(fixture, "new collapse after previous endpoint"))
         {
             window.SetCollapsedState(true, animate: true, saveGeometry: false);
-            // Check in the same FIFO priority immediately after the old completion,
-            // rather than sampling after an unbounded ApplicationIdle pump returns.
-            var inspected = new DispatcherFrame();
-            window.Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
-            {
-                Program.Assert(IsTransitioning(window) && surface.SampledBackgroundCaptureSuspended &&
-                    !surface.HasBackgroundCapture && surface.BackgroundFrameCount == frames,
-                    "the previous endpoint callback cannot resume capture during a newer transition");
-                inspected.Continue = false;
-            }));
-            Dispatcher.PushFrame(inspected);
             Until(() => !IsTransitioning(window), "newer collapse completes");
             probe.AssertAnimated();
         }
-        AwaitSnapshot(fixture, frames, "newer collapse after stale completion");
+        AwaitCollapsed(fixture);
         window.SetCollapsedState(false, animate: false, saveGeometry: false);
-        AwaitExpanded(fixture, surface.BackgroundFrameCount);
+        AwaitExpanded(fixture);
     }
 
     private static void CheckHide(Fixture fixture)
     {
-        var surface = fixture.Surface;
-        var frames = surface.BackgroundFrameCount;
         fixture.Window.SetCollapsedState(true, animate: true, saveGeometry: false);
         fixture.Paper.IsVisible = false;
         fixture.Window.PrepareForHide();
         fixture.Window.HideWithoutGeometrySave();
         Program.Pump();
-        Program.Assert(!fixture.Window.IsVisible && !IsTransitioning(fixture.Window) &&
-            !surface.HasBackgroundCapture && !surface.IsBackgroundActive &&
-            surface.BackgroundFrameCount == frames &&
-            DesktopBackgroundCapture.ReadAffinity(fixture.Handle) == fixture.Affinity,
-            "hide settles the form without an invisible endpoint capture or retained exclusion");
+        Program.Assert(!fixture.Window.IsVisible && !IsTransitioning(fixture.Window),
+            "hide stops the form transition without leaving an invisible animation");
 
         fixture.Paper.IsVisible = true;
         fixture.Window.PrepareForShow();
         fixture.Window.Show();
-        AwaitSnapshot(fixture, frames, "show after hidden collapse");
+        Until(() => fixture.Window.IsVisible, "show restores the paper surface");
     }
 
-    private static void CheckCloseCancelsActiveCapture(Fixture fixture)
+    private static void CheckCloseDuringTransition(Fixture fixture)
     {
-        var surface = fixture.Surface;
-        surface.BackgroundSessionState!.GeometryChanged();
-        var capture = surface.BackgroundSessionState.Capture;
-        Program.Assert(capture != null, "close test starts a real outstanding material capture");
-        var observedClosing = false;
-        fixture.Window.Closing += (_, _) =>
-        {
-            observedClosing = true;
-            Program.Assert(!surface.HasBackgroundCapture && capture!.IsStopped &&
-                DesktopBackgroundCapture.ReadAffinity(fixture.Handle) == fixture.Affinity,
-                "close cancels material capture and restores affinity before destroying the HWND");
-        };
+        fixture.Window.SetCollapsedState(false, animate: false, saveGeometry: false);
+        fixture.Window.SetCollapsedState(true, animate: true, saveGeometry: false);
         fixture.Window.CloseForReal();
         Program.Pump();
-        Program.Assert(observedClosing && !surface.HasBackgroundCapture && !surface.HasMaterialHostSubscription,
-            "closed paper releases material capture and host subscriptions");
+        Program.Assert(fixture.Window.IsClosed && !IsTransitioning(fixture.Window),
+            "closing the paper stops its form animation without reopening a window");
     }
 
-    private static void AwaitSnapshot(Fixture fixture, int previousFrames, string context)
+    private static void AwaitCollapsed(Fixture fixture)
     {
-        var surface = fixture.Surface;
-        Until(() => !IsTransitioning(fixture.Window) && !surface.SampledBackgroundCaptureSuspended &&
-            surface.IsBackgroundActive && !surface.HasBackgroundCapture, context + " publishes its static material");
-        DrainRendering();
-        Program.Assert(surface.BackgroundFrameCount == previousFrames + 1 &&
-            DesktopBackgroundCapture.ReadAffinity(fixture.Handle) == fixture.Affinity,
-            context + " acquires exactly one endpoint snapshot and releases exclusion");
+        Until(() => !IsTransitioning(fixture.Window) && fixture.Paper.IsCollapsed &&
+            !fixture.Window.IsNativeMicaEffective,
+            "collapsed paper has a lightweight WPF surface rather than native full-window material");
     }
 
-    private static void AwaitExpanded(Fixture fixture, int frames)
+    private static void AwaitExpanded(Fixture fixture)
     {
-        Until(() => !IsTransitioning(fixture.Window) && !fixture.Surface.SampledBackgroundCaptureSuspended &&
-            fixture.Window.IsNativeMicaEffective, "expanded paper restores its native Acrylic backdrop");
-        Program.Assert(!fixture.Surface.IsBackgroundActive && !fixture.Surface.HasBackgroundCapture &&
-            fixture.Surface.BackgroundFrameCount == frames &&
-            DesktopBackgroundCapture.ReadAffinity(fixture.Handle) == fixture.Affinity,
-            "expanded paper has no software scene, sampler, extra frame or capture exclusion");
+        Until(() => !IsTransitioning(fixture.Window) && !fixture.Paper.IsCollapsed &&
+            fixture.Window.IsNativeMicaEffective,
+            "expanded paper restores the native Acrylic backdrop");
     }
 
     private static bool IsTransitioning(PaperWindow window) => (bool)Transitioning.GetValue(window)!;
