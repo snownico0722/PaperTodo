@@ -224,49 +224,17 @@ internal static partial class Program
             finally { AppController.ConflictDialogDriver = driver; }
             Console.WriteLine("PASS explicit conflict dialog choice, paper grouping and recovery archive");
 
-            foreach (var choice in new[] { ConflictChoice.KeepMemory, ConflictChoice.KeepExternal })
-            {
-                controller.SaveNow(sync: true);
-                var noBaseline = ReadLive();
-                localPaper.Title = "LOCAL";
-                controller.SaveNow(sync: true);
-                LivePaper(noBaseline, "note-b")["title"] = "REMOTE";
-                WriteLive(noBaseline);
-                var previousDriver = AppController.ConflictDialogDriver;
-                var calls = 0;
-                AppController.ConflictDialogDriver = (_, bucket) =>
-                {
-                    Require(bucket is UnknownBaselineBucket, "missing baseline guessed field-level changes");
-                    calls++;
-                    return choice;
-                };
-                try
-                {
-                    var started = choice == ConflictChoice.KeepMemory
-                        ? native.MergeData()
-                        : (DataReloadResult)mcp.Execute(JsonSerializer.SerializeToElement(new { method = "merge_data" }))!;
-                    Require(started.Outcome == "pending" && started.ConflictCount == 1,
-                        "baseline-free merge did not request a whole-state choice");
-                    await Until(() => !controller.IsDataReloading, "whole-state choice");
-                    var expectedTitle = choice == ConflictChoice.KeepMemory
-                        ? "LOCAL" : "REMOTE";
-                    Require(calls == 1 && localPaper.Title == expectedTitle &&
-                        Str(LivePaper(ReadLive(), "note-b")["title"]) == expectedTitle,
-                        "whole-state choice did not reach memory and disk");
-                }
-                finally { AppController.ConflictDialogDriver = previousDriver; }
-            }
+            Require(controller.PaperCommands.MergeData(PaperOperationContext.Mcp(), null).Outcome == "invalid",
+                "merge without baseline did not reject the request");
+            Throws<McpApiException>(() => mcp.Execute(
+                JsonSerializer.SerializeToElement(new { method = "merge_data" })));
             Require(native.MergeData("[]").Outcome == "invalid" &&
                 ((DataReloadResult)WebPluginWorkspaceRequests.Execute(native, "data.merge",
                     JsonSerializer.SerializeToElement(new { baselineJson = "[]" }))!).Outcome == "invalid" &&
                 ((DataReloadResult)mcp.Execute(JsonSerializer.SerializeToElement(new {
                     method = "merge_data", @params = new { baseline_json = "[]" } }))!).Outcome == "invalid",
-                "an adapter dropped the invalid supplied baseline");
-            Require(Field<StateStore>(controller, "_store").OrdinaryWritesPaused,
-                "invalid baseline failed to retain the write hold");
-            Require(native.ReloadData().Applied, "explicit recovery after invalid baseline failed");
-            await Until(() => !controller.IsDataReloading, "accept disk after invalid baseline");
-            Console.WriteLine("PASS missing-baseline choices, invalid-baseline hold and explicit recovery");
+                "an adapter accepted a missing or invalid merge baseline");
+            Console.WriteLine("PASS merge requires an explicit valid baseline across Native/Web/MCP");
 
             // KeepExternal must also resolve the absence of a whole paper, in either direction.
             foreach (var externalDeletes in new[] { true, false })
@@ -388,80 +356,19 @@ internal static partial class Program
             Require(windows["note-b"].HasExpandedPaperSurface, "expanded paper not displayed");
             Console.WriteLine("PASS existing capsule/form presentation path");
 
-            // The user-facing paused-save action reuses an explicit unknown-baseline merge.
-            // Cancelling must leave both versions intact; a later deliberate choice unblocks saving.
-            var ignoreField = typeof(AppController).GetField("_ignoreSaveFailures", Private)!;
-            var previousIgnore = (bool)ignoreField.GetValue(controller)!;
-            var recoveryDriver = AppController.ConflictDialogDriver;
-            ignoreField.SetValue(controller, true); // do not open the separate notification modal in this fixture
-            try
-            {
-                controller.SaveNow(sync: true);
-                var recoveryDisk = ReadLive();
-                LivePaper(recoveryDisk, "note-b")["title"] = "disk";
-                WriteLive(recoveryDisk);
-                var recoveryPaper = controller.State.Papers.Single(p => p.Id == "note-b");
-                recoveryPaper.Title = "local";
-                controller.SaveNow(sync: true);
-                var recoveryStore = Field<StateStore>(controller, "_store");
-                Require(recoveryStore.OrdinaryWritesPaused, "external edit did not pause ordinary saving");
-
-                AppController.ConflictDialogDriver = (_, bucket) =>
-                {
-                    Require(bucket is UnknownBaselineBucket, "manual recovery inferred an unsafe baseline");
-                    return ConflictChoice.Cancel;
-                };
-                controller.ResolvePausedExternalSave();
-                await Until(() => !controller.IsDataReloading, "cancelled manual recovery");
-                Require(recoveryStore.OrdinaryWritesPaused && recoveryPaper.Title == "local" &&
-                        Str(LivePaper(ReadLive(), "note-b")["title"]) == "disk",
-                    "cancelled manual recovery overwrote either side");
-
-                AppController.ConflictDialogDriver = (_, _) => ConflictChoice.KeepMemory;
-                controller.ResolvePausedExternalSave();
-                await Until(() => !controller.IsDataReloading, "accepted manual recovery");
-                Require(!recoveryStore.OrdinaryWritesPaused &&
-                        Str(LivePaper(ReadLive(), "note-b")["title"]) == "local",
-                    "explicit manual recovery did not commit the choice and resume saving");
-                Console.WriteLine("PASS paused-save GUI action reuses merge; cancel preserves data");
-
-                // A manually malformed file stays untouched while the same two-pane UI
-                // shows the parse error on its external side; repairing it permits recovery.
-                var validSource = File.ReadAllText(recoveryStore.FilePath);
-                File.WriteAllText(recoveryStore.FilePath, "{broken");
-                controller.SaveNow(sync: true);
-                Require(recoveryStore.OrdinaryWritesPaused, "malformed source did not stop ordinary saving");
-                var invalidDriver = DataReloadConflictDialog.InvalidExternalDialogDriver;
-                var invalidShown = 0;
-                DataReloadConflictDialog.InvalidExternalDialogDriver = (memory, external, error) =>
-                {
-                    invalidShown++;
-                    Require(memory.Contains("note-b", StringComparison.Ordinal) &&
-                            external == "{broken" && !string.IsNullOrWhiteSpace(error),
-                        "invalid file preview did not show the original file and parse error");
-                };
-                try
-                {
-                    controller.ResolvePausedExternalSave();
-                    Require(invalidShown == 1 && recoveryStore.OrdinaryWritesPaused &&
-                            File.ReadAllText(recoveryStore.FilePath) == "{broken" &&
-                            recoveryPaper.Title == "local",
-                        "invalid external file review silently replaced either data version");
-                }
-                finally { DataReloadConflictDialog.InvalidExternalDialogDriver = invalidDriver; }
-                File.WriteAllText(recoveryStore.FilePath, validSource);
-                Require(controller.PaperCommands.ReloadData(PaperOperationContext.Mcp()).Applied,
-                    "explicit reload could not recover after repairing invalid JSON");
-                await Until(() => !controller.IsDataReloading, "recovery after invalid external JSON");
-                Require(!recoveryStore.OrdinaryWritesPaused,
-                    "repaired external JSON did not restore saving");
-                Console.WriteLine("PASS malformed external JSON shows one-sided error without overwriting source");
-            }
-            finally
-            {
-                AppController.ConflictDialogDriver = recoveryDriver;
-                ignoreField.SetValue(controller, previousIgnore);
-            }
+            // Explicit reload rejects malformed JSON without installing a partial live state.
+            controller.SaveNow(sync: true);
+            var recoveryStore = Field<StateStore>(controller, "_store");
+            var validSource = File.ReadAllText(recoveryStore.FilePath);
+            File.WriteAllText(recoveryStore.FilePath, "{broken");
+            Require(controller.PaperCommands.ReloadData(PaperOperationContext.Mcp()).Outcome == "invalid" &&
+                    File.ReadAllText(recoveryStore.FilePath) == "{broken",
+                "invalid explicit reload accepted or rewrote malformed input");
+            File.WriteAllText(recoveryStore.FilePath, validSource);
+            Require(controller.PaperCommands.ReloadData(PaperOperationContext.Mcp()).Applied,
+                "explicit reload could not recover after repairing invalid JSON");
+            await Until(() => !controller.IsDataReloading, "recovery after invalid explicit reload");
+            Console.WriteLine("PASS explicit invalid reload does not modify disk or running state");
         }
         finally
         {
