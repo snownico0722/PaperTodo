@@ -279,6 +279,8 @@ internal static partial class Program
         var name = "PaperTodo.PresentationChecks." + Guid.NewGuid().ToString("N");
         using var pipe = new McpApiHost(Dispatcher.CurrentDispatcher, request =>
         {
+            if (request.GetProperty("method").GetString() == "get_workspace_binding")
+                return new { token = "presentation-fixture" };
             requests.Add(request.Clone());
             return new PaperPresentationResult("note", true, false);
         }, name);
@@ -296,6 +298,8 @@ internal static partial class Program
         for (var i = 0; i < expected.Length; i++)
         {
             Check(requests[i].GetProperty("method").GetString() == expected[i], "Tool method survives serialization: " + expected[i]);
+            Check(requests[i].GetProperty("workspace_token").GetString() == "presentation-fixture",
+                "Presentation request omitted the current workspace binding.");
             var p = requests[i].GetProperty("params");
             Check(p.GetProperty("paper_id").GetString() == "note", "Exact target ID reaches the GUI bridge.");
             if (i is 0 or 2 or 3 or 5)
