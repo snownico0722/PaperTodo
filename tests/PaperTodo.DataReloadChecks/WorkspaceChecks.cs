@@ -243,6 +243,17 @@ internal static partial class Program
         var newSlot = catalog.Open(3, catalog.Options);
         Require(newSlot.State.Papers.Count == 1 && newSlot.State.Papers[0].Content.Length == 0 &&
             newSlot.State.Papers[0].Id != main.Papers[0].Id, "new workspace copied main content");
+        // A new independent slot should not need to reopen the main file. In
+        // particular, temporary main-file access failures must not veto entry.
+        var independentNew = catalog.Options.Normalized();
+        independentNew.FollowMainSettings[3] = false;
+        using (var busyMain = new FileStream(scope.Store.FilePath, FileMode.Open,
+                   FileAccess.ReadWrite, FileShare.None))
+        {
+            var opened = catalog.Open(3, independentNew);
+            Require(!opened.FollowsMain && opened.State.Papers.Count == 1,
+                "independent new slot unnecessarily read the inaccessible main file");
+        }
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
@@ -707,15 +718,50 @@ internal static partial class Program
             controller.SaveNow(sync: true);
             Require(Str(J(File.ReadAllText(store2.FilePath))["theme"]) == "light", "inherited settings saved over dormant settings");
 
+            // A follow toggle changes only the effective software settings. It must not
+            // destroy editors, image handles, plugin state or the workspace binding.
+            var followingWindow = windows["note-a"];
+            var followingState = controller.State;
+            var followingImages = controller.ImageStore;
+            var followingPluginData = controller.PaperBodyPlugins.DataStore;
+            var followingBinding = controller.WorkspaceBindingToken;
             var independent = controller.WorkspaceOptions.Normalized(); independent.FollowMainSettings[2] = false;
             Require(await controller.ChangeWorkspaceConfigurationAsync(independent), "unfollow failed");
+            Require(ReferenceEquals(controller.State, followingState) &&
+                    ReferenceEquals(windows["note-a"], followingWindow) && !followingWindow.IsClosed &&
+                    ReferenceEquals(controller.ImageStore, followingImages) &&
+                    ReferenceEquals(controller.PaperBodyPlugins.DataStore, followingPluginData) &&
+                    controller.WorkspaceBindingToken == followingBinding,
+                "unfollow rebuilt the workspace instead of updating its settings");
             Require(controller.State.Theme == "light" && !controller.State.McpEnabled &&
                 UiLanguages.EffectiveUiCulture.Name == "ja-JP" && controller.PublicSettings.Get("appearance.theme").Writable,
                 "independent software settings/language did not activate");
             var following = controller.WorkspaceOptions.Normalized(); following.FollowMainSettings[2] = true;
             Require(await controller.ChangeWorkspaceConfigurationAsync(following), "refollow failed");
             Require(controller.State.Theme == "dark" && controller.State.McpEnabled, "refollow did not reapply main settings");
+            Require(ReferenceEquals(controller.State, followingState) &&
+                    ReferenceEquals(windows["note-a"], followingWindow) && !followingWindow.IsClosed &&
+                    controller.WorkspaceBindingToken == followingBinding,
+                "refollow unnecessarily recreated the active workspace");
             Require(await controller.SwitchWorkspaceAsync(1), "return to main failed");
+            // The second slot has already been accepted and normalized. Re-entering
+            // an unchanged workspace must succeed without writing its content file.
+            var secondWriterField = typeof(StateStore).GetField("_atomicWriter",
+                BindingFlags.Instance | BindingFlags.NonPublic)!;
+            var storedSecond = Field<WorkspaceCatalog>(controller, "_workspaceCatalog").StoreFor(2);
+            var previousSecondWriter = (IDurableAtomicFileWriter)secondWriterField.GetValue(storedSecond)!;
+            try
+            {
+                secondWriterField.SetValue(storedSecond, new DurableAtomicFileWriter((stage, path) =>
+                {
+                    if (stage == DurableAtomicWriteStage.BeforeTempOpen && path == storedSecond.FilePath)
+                        throw new IOException("Healthy target should not be rewritten on entry.");
+                }));
+                Require(await controller.SwitchWorkspaceAsync(2),
+                    "re-entering an unchanged secondary unexpectedly saved its core data");
+            }
+            finally { secondWriterField.SetValue(storedSecond, previousSecondWriter); }
+            Require(await controller.SwitchWorkspaceAsync(1), "return after healthy read-only entry failed");
             Require(controller.ImageStore.TryGetEncodedImageBytes(imageId, out _, out var bytes1) && bytes1.SequenceEqual(mainImage),
                 "main image changed across roundtrip");
             Require(J(controller.PaperBodyPlugins.DataStore.ReadPaperState("fixture", "note-a").Json)["slot"]!.GetValue<int>() == 1,
