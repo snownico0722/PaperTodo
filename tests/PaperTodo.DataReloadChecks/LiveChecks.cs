@@ -424,6 +424,38 @@ internal static partial class Program
                         Str(LivePaper(ReadLive(), "note-b")["title"]) == "local",
                     "explicit manual recovery did not commit the choice and resume saving");
                 Console.WriteLine("PASS paused-save GUI action reuses merge; cancel preserves data");
+
+                // A manually malformed file stays untouched while the same two-pane UI
+                // shows the parse error on its external side; repairing it permits recovery.
+                var validSource = File.ReadAllText(recoveryStore.FilePath);
+                File.WriteAllText(recoveryStore.FilePath, "{broken");
+                controller.SaveNow(sync: true);
+                Require(recoveryStore.OrdinaryWritesPaused, "malformed source did not stop ordinary saving");
+                var invalidDriver = DataReloadConflictDialog.InvalidExternalDialogDriver;
+                var invalidShown = 0;
+                DataReloadConflictDialog.InvalidExternalDialogDriver = (memory, external, error) =>
+                {
+                    invalidShown++;
+                    Require(memory.Contains("note-b", StringComparison.Ordinal) &&
+                            external == "{broken" && !string.IsNullOrWhiteSpace(error),
+                        "invalid file preview did not show the original file and parse error");
+                };
+                try
+                {
+                    controller.ResolvePausedExternalSave();
+                    Require(invalidShown == 1 && recoveryStore.OrdinaryWritesPaused &&
+                            File.ReadAllText(recoveryStore.FilePath) == "{broken" &&
+                            recoveryPaper.Title == "local",
+                        "invalid external file review silently replaced either data version");
+                }
+                finally { DataReloadConflictDialog.InvalidExternalDialogDriver = invalidDriver; }
+                File.WriteAllText(recoveryStore.FilePath, validSource);
+                Require(controller.PaperCommands.ReloadData(PaperOperationContext.Mcp()).Applied,
+                    "explicit reload could not recover after repairing invalid JSON");
+                await Until(() => !controller.IsDataReloading, "recovery after invalid external JSON");
+                Require(!recoveryStore.OrdinaryWritesPaused,
+                    "repaired external JSON did not restore saving");
+                Console.WriteLine("PASS malformed external JSON shows one-sided error without overwriting source");
             }
             finally
             {
