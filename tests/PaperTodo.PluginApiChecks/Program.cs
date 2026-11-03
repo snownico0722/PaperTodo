@@ -28,6 +28,7 @@ internal static partial class Program
         var checks = new (string Name, Action Run)[]
         {
             ("reminder-due-and-delivery-policy", ReminderPolicy),
+            ("reminder-five-second-notice-and-suppression", ReminderAdvance),
             ("reminder-snapshots-events-permissions-and-lifetime", ReminderEvents),
             ("reminder-batch-reentrancy-and-state-diff", ReminderReentrancy),
             ("reminder-web-runtime-routing-and-document-cleanup", ReminderWebRuntime),
