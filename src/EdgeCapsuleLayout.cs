@@ -83,7 +83,7 @@ public static class EdgeCapsuleLayout
             || (c >= 0x25FB && c <= 0x27BF)   // Geometric emoji / symbols / dingbats
             || (c >= 0x2B05 && c <= 0x2B07)   // Emoji arrows
             || (c >= 0x2B1B && c <= 0x2B1C)   // Square emoji
-            || c is 0x2B50 or 0x2B55          // Star / circle emoji
+            || c == '\u2B50' || c == '\u2B55' // Star / circle emoji
             || (c >= 0x1100 && c <= 0x115F)   // Hangul Jamo
             || (c >= 0x2E80 && c <= 0x303E)   // CJK radicals / Kangxi / symbols
             || (c >= 0x3041 && c <= 0x33FF)   // Hiragana, Katakana, CJK symbols
