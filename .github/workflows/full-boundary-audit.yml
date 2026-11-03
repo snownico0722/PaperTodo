@@ -1,0 +1,133 @@
+name: Full boundary audit validation
+on:
+  push:
+    branches: [audit/full-boundary-pass-20261103]
+    paths: [.github/workflows/full-boundary-audit.yml]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "true"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+      - name: Install behavior tests without production changes
+        run: |
+          New-Item -ItemType Directory -Force "$env:RUNNER_TEMP/full-boundary-logs" | Out-Null
+          Copy-Item .github/full-audit/ExtendedComponentBoundaryChecks.cs tests/PaperTodo.SettingsApiChecks/
+          Remove-Item .github/full-audit/ExtendedComponentBoundaryChecks.cs
+          $p = 'tests/PaperTodo.SettingsApiChecks/PluginBoundaryChecks.cs'
+          $text = [IO.File]::ReadAllText($p)
+          $anchor = '        CreationOwnsInitialTodoFields(c, note);'
+          if (($text.Split($anchor)).Count -ne 2) { throw 'Test entry anchor changed.' }
+          [IO.File]::WriteAllText($p, $text.Replace($anchor, "        await ExtendedComponentBoundaryBehavior(c);`n$anchor"), [Text.UTF8Encoding]::new($false))
+      - name: Reproduce command target invalidation on original implementation
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $false
+          $log = "$env:RUNNER_TEMP/full-boundary-logs/red-command.txt"
+          dotnet run --project tests/PaperTodo.SettingsApiChecks -c Release 2>&1 | Tee-Object -FilePath $log
+          if ($LASTEXITCODE -eq 0 -or !(Get-Content $log -Raw).Contains('External mutation must revalidate its target after plugin callbacks.')) { throw 'Expected command behavior failure was not reproduced.' }
+          $global:LASTEXITCODE = 0
+      - name: Apply command fix and reproduce archive save blocked by observer
+        run: |
+          git apply --include='src/PaperCommandService.cs' .github/full-audit/fixes.patch
+          if ($LASTEXITCODE -ne 0) { throw 'Command patch failed.' }
+          $PSNativeCommandUseErrorActionPreference = $false
+          $log = "$env:RUNNER_TEMP/full-boundary-logs/red-archive.txt"
+          dotnet run --project tests/PaperTodo.SettingsApiChecks -c Release 2>&1 | Tee-Object -FilePath $log
+          if ($LASTEXITCODE -eq 0 -or !(Get-Content $log -Raw).Contains('Archive persistence must not depend on view notification success.')) { throw 'Expected archive persistence failure was not reproduced.' }
+          $global:LASTEXITCODE = 0
+      - name: Apply archive fix and verify original cleanup side effect
+        run: |
+          git apply --include='plugin-samples/**' .github/full-audit/fixes.patch
+          if ($LASTEXITCODE -ne 0) { throw 'Archive patch failed.' }
+          $PSNativeCommandUseErrorActionPreference = $false
+          $log = "$env:RUNNER_TEMP/full-boundary-logs/red-document-boundary.txt"
+          dotnet run --project tests/PaperTodo.SettingsApiChecks -c Release 2>&1 | Tee-Object -FilePath $log
+          if ($LASTEXITCODE -eq 0 -or !(Get-Content $log -Raw).Contains('Clearing event subscriptions must not revoke an unrelated plugin popup.')) { throw 'Expected private cleanup boundary behavior was not observed.' }
+          $global:LASTEXITCODE = 0
+      - name: Apply document ownership fix and build matching archive binary
+        run: |
+          git apply --include='src/WebPaperBodySession.cs' .github/full-audit/fixes.patch
+          if ($LASTEXITCODE -ne 0) { throw 'Document patch failed.' }
+          ./plugin-samples/Build-And-Install-NativePlugin.ps1 -ProjectPath plugin-samples/PaperTodo.Plugin.ReviewArchive/PaperTodo.Plugin.ReviewArchive.csproj
+          if ($LASTEXITCODE -ne 0) { throw 'Archive binary build failed.' }
+          git add plugins/sample.review-archive.native/PaperTodo.Plugin.ReviewArchive.dll
+          git diff --check
+          if ($LASTEXITCODE -ne 0) { throw 'Whitespace validation failed.' }
+      - name: Release build and full settings regression
+        run: |
+          dotnet build PaperTodo.csproj -c Release 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/full-boundary-logs/build.txt"
+          if ($LASTEXITCODE -ne 0) { throw 'Release build failed.' }
+          dotnet run --project tests/PaperTodo.SettingsApiChecks -c Release 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/full-boundary-logs/green-settings.txt"
+          if ($LASTEXITCODE -ne 0) { throw 'New behavior tests failed.' }
+      - name: Run all twenty existing check entries
+        run: ./tools/testing/Run-Checks.ps1 -Group all *>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/full-boundary-logs/all-checks.txt"
+      - name: Export verified source delta and matching plugin binary
+        run: |
+          $out = "$env:RUNNER_TEMP/full-boundary-result"
+          New-Item -ItemType Directory -Force $out | Out-Null
+          git add src/PaperCommandService.cs src/WebPaperBodySession.cs plugin-samples/PaperTodo.Plugin.ReviewArchive/ReviewArchiveStore.cs tests/PaperTodo.SettingsApiChecks
+          git diff --cached --binary --output="$out/verified.patch"
+          if ($LASTEXITCODE -ne 0) { throw 'Could not export verified patch.' }
+          git diff --exit-code -- plugins
+          if ($LASTEXITCODE -ne 0) { throw 'Unstaged plugin artifacts differ from the verified payload.' }
+          Get-FileHash plugins/sample.review-archive.native/PaperTodo.Plugin.ReviewArchive.dll | Format-List | Out-File "$env:RUNNER_TEMP/full-boundary-logs/plugin-hash.txt"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: full-boundary-validation-logs
+          path: ${{ runner.temp }}/full-boundary-logs/*
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        with:
+          name: full-boundary-verified-patch
+          path: ${{ runner.temp }}/full-boundary-result/verified.patch
+          retention-days: 14
+  publish:
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: full-boundary-verified-patch
+          path: ${{ runner.temp }}/full-boundary-result
+      - name: Commit only the verified payload and remove temporary audit tooling
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          branch=audit/full-boundary-pass-20261103
+          test "$GITHUB_REF" = "refs/heads/$branch"
+          test "$(git ls-remote origin "refs/heads/$branch" | cut -f1)" = "$EXPECTED_SHA"
+          git apply --index "$RUNNER_TEMP/full-boundary-result/verified.patch"
+          git rm .github/full-audit/ExtendedComponentBoundaryChecks.cs .github/full-audit/fixes.patch .github/workflows/full-boundary-audit.yml
+          git diff --cached --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m '修复回调失效目标与复盘保存耦合，明确正文资源清理边界 [ci]'
+          git push origin "HEAD:refs/heads/$branch"
+          git rev-parse HEAD
