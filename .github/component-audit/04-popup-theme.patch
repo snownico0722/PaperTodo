@@ -1,0 +1,99 @@
+diff --git a/src/AppController.Settings.cs b/src/AppController.Settings.cs
+index 8b07856..abbc8b2 100644
+--- a/src/AppController.Settings.cs
++++ b/src/AppController.Settings.cs
+@@ -96,6 +96,7 @@ public sealed partial class AppController
+         }
+         foreach (var m in _masterCapsules.Values) m.UpdateTheme();
+         SkinBorder.RefreshLoadedSurfaces();
++        PluginPopupThemeChanged?.Invoke();
+ 
+         RebuildTrayMenu();
+         RefreshSettingsWindowContent();
+@@ -660,6 +661,7 @@ public sealed partial class AppController
+             masterCapsule.UpdateTypography();
+         }
+         ArrangeDeepCapsules(animate: false);
++        PluginPopupThemeChanged?.Invoke();
+     }
+ 
+     private UIElement BuildLabsSettingsPage()
+diff --git a/src/AppController.SettingsSidebar.cs b/src/AppController.SettingsSidebar.cs
+index 69f68f3..a5441ab 100644
+--- a/src/AppController.SettingsSidebar.cs
++++ b/src/AppController.SettingsSidebar.cs
+@@ -16,8 +16,6 @@ public sealed partial class AppController
+ 
+     private void RefreshSettingsWindowContent()
+     {
+-        RefreshPluginPopupThemeForSettingsRefresh();
+-
+         if (_settingsWindow is not { } window)
+         {
+             return;
+@@ -539,14 +537,6 @@ public sealed partial class AppController
+     }
+ 
+ 
+-    // Keep this helper separate from the page builder so conflict-resolution fixes stay localized.
+-    // Theme/font changes eventually rebuild the settings surface; notify open plugin popups even
+-    // when the settings window itself is closed (for example, a system theme change).
+-    private void RefreshPluginPopupThemeForSettingsRefresh()
+-    {
+-        PluginPopupThemeChanged?.Invoke();
+-    }
+-
+     private static (double Width, double Height) SettingsSidebarSizeForWorkArea(Rect workArea)
+     {
+         var targetWidth = Math.Min(840, Math.Max(360, workArea.Width - 48));
+diff --git a/tests/PaperTodo.SettingsApiChecks/ComponentBoundaryChecks.cs b/tests/PaperTodo.SettingsApiChecks/ComponentBoundaryChecks.cs
+index 48995cb..4f9179d 100644
+--- a/tests/PaperTodo.SettingsApiChecks/ComponentBoundaryChecks.cs
++++ b/tests/PaperTodo.SettingsApiChecks/ComponentBoundaryChecks.cs
+@@ -5,6 +5,34 @@ using PaperTodo.Plugin;
+ 
+ internal static partial class Program
+ {
++    private static void PopupThemeNotificationsFollowAppearance(AppController controller)
++    {
++        Check(ReadField<Window?>(controller, "_settingsWindow") == null,
++            "Popup refresh fixture must not depend on an open settings window.");
++        var previousTheme = controller.State.Theme;
++        var previousZoom = controller.State.Zoom;
++        var refreshes = 0;
++        void Changed() => refreshes++;
++        controller.PluginPopupThemeChanged += Changed;
++        try
++        {
++            Invoke(controller, "RefreshSettingsWindowContent");
++            Check(refreshes == 0, "Rebuilding settings must not dispatch unrelated plugin popup theme callbacks.");
++            controller.PublicSettings.Set("appearance.theme", Json(previousTheme == "dark" ? "light" : "dark"));
++            Check(refreshes == 1, "Theme changes must notify popups exactly once without an open settings window.");
++            controller.PublicSettings.Set("appearance.font_scale", Json(previousZoom == 1.05 ? 1.0 : 1.05));
++            Check(refreshes == 2, "Font changes must notify popups exactly once without an open settings window.");
++            Invoke(controller, "RefreshSettingsWindowContent");
++            Check(refreshes == 2, "An unrelated settings rebuild must not repeat popup theme delivery.");
++        }
++        finally
++        {
++            controller.PluginPopupThemeChanged -= Changed;
++            controller.PublicSettings.Set("appearance.theme", Json(previousTheme));
++            controller.PublicSettings.Set("appearance.font_scale", Json(previousZoom));
++        }
++    }
++
+     private static void VisualBroadcastSurvivesPaperCreation(AppController controller)
+     {
+         var windows = ReadField<Dictionary<string, PaperWindow>>(controller, "_windows");
+diff --git a/tests/PaperTodo.SettingsApiChecks/PluginBoundaryChecks.cs b/tests/PaperTodo.SettingsApiChecks/PluginBoundaryChecks.cs
+index 4a7f699..149e811 100644
+--- a/tests/PaperTodo.SettingsApiChecks/PluginBoundaryChecks.cs
++++ b/tests/PaperTodo.SettingsApiChecks/PluginBoundaryChecks.cs
+@@ -17,6 +17,7 @@ internal static partial class Program
+         ReadsAndNotificationsDoNotCommitOrReplaceBodies(c, owner, note, todo);
+         await ExternalSavePreservesRuntimeCallbackDirtyState(c);
+         VisualBroadcastSurvivesPaperCreation(c);
++        PopupThemeNotificationsFollowAppearance(c);
+         CreationOwnsInitialTodoFields(c, note);
+         TodoPasteUsesEventPayload();
+         PartialReminderDeliveryKeepsUnsurfacedItemsPending(c);
