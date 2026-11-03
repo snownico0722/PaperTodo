@@ -41,7 +41,6 @@ public sealed partial class StateStore
             // Any asynchronous normal save queued before this request is now obsolete.
             // This does not write to disk: the imported file is already the primary file.
             ValidatePrimaryHash(System.Security.Cryptography.SHA256.HashData(bytes));
-            AcceptPrimaryBytes(bytes);
             _latestWrittenVersion = version;
             return new(state, new() { Outcome = "applied", Applied = true });
         }
@@ -49,7 +48,7 @@ public sealed partial class StateStore
         {
             return new(null, new() { Outcome = "invalid", Error = ex.Message });
         }
-        catch (StateWriteBlockedException ex)
+        catch (ExternalDocumentChangedException ex)
         {
             return new(null, new() { Outcome = "busy", Error = ex.Message });
         }

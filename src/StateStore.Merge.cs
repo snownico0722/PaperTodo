@@ -7,7 +7,10 @@ using PaperTodo.Plugin;
 namespace PaperTodo;
 
 /// <summary>An external editor changed the source after the explicit merge request began.</summary>
-internal sealed class ExternalDocumentChangedException : StateWriteBlockedException { }
+internal sealed class ExternalDocumentChangedException : InvalidOperationException
+{
+    internal ExternalDocumentChangedException() : base("The data file changed during the explicit operation; retry with a fresh input.") { }
+}
 
 public sealed partial class StateStore
 {
@@ -25,6 +28,8 @@ public sealed partial class StateStore
         {
             if (version < _latestWrittenVersion)
                 return new(null, new() { Outcome = "busy" });
+            if (string.IsNullOrWhiteSpace(baselineJson))
+                return new(null, new() { Outcome = "invalid", Error = "merge_data requires baseline_json containing the original data.json." });
             BeginExternalRead(version);
             if (!File.Exists(FilePath))
                 return new(null, new() { Outcome = "invalid", Error = "data.json is missing." });
@@ -45,50 +50,29 @@ public sealed partial class StateStore
             NormalizeWorkspaceDocument(normalizedImported);
             var external = JsonSerializer.SerializeToNode(normalizedImported, JsonOptions)!.AsObject();
             var current = JsonSerializer.SerializeToNode(memory, JsonOptions)!.AsObject();
-            JsonObject? baseline = null;
-            Dictionary<string, string?>? baselineRawTitles = null;
-            Dictionary<string, string?>? baselineNormalizedTitles = null;
-            if (baselineJson != null)
-            {
-                var originalDocument = JsonNode.Parse(baselineJson, documentOptions: StateJsonReadPolicy.DocumentOptions)
-                    as JsonObject ?? throw new JsonException("Merge baseline must contain an object.");
-                ValidateExternalDocument(originalDocument);
-                var original = JsonSerializer.Deserialize<AppState>(baselineJson, JsonOptions)
-                    ?? throw new JsonException("Merge baseline cannot be null.");
-                MigrateLegacyTopBarSettings(original, baselineJson);
-                baselineRawTitles = CaptureMergeTitles(original);
-                var normalizedOriginal = CopyForReload(original);
-                NormalizeWorkspaceDocument(normalizedOriginal);
-                baselineNormalizedTitles = CaptureMergeTitles(normalizedOriginal);
-                baseline = JsonSerializer.SerializeToNode(normalizedOriginal, JsonOptions)!.AsObject();
-            }
+            var originalDocument = JsonNode.Parse(baselineJson, documentOptions: StateJsonReadPolicy.DocumentOptions)
+                as JsonObject ?? throw new JsonException("Merge baseline must contain an object.");
+            ValidateExternalDocument(originalDocument);
+            var original = JsonSerializer.Deserialize<AppState>(baselineJson, JsonOptions)
+                ?? throw new JsonException("Merge baseline cannot be null.");
+            MigrateLegacyTopBarSettings(original, baselineJson);
+            var baselineRawTitles = CaptureMergeTitles(original);
+            var normalizedOriginal = CopyForReload(original);
+            NormalizeAfterLoad(normalizedOriginal);
+            var baselineNormalizedTitles = CaptureMergeTitles(normalizedOriginal);
+            var baseline = JsonSerializer.SerializeToNode(normalizedOriginal, JsonOptions)!.AsObject();
             if (JsonNode.DeepEquals(current, external))
             {
                 // Even a no-op request must fence older queued snapshots.
                 ValidatePrimaryHash(System.Security.Cryptography.SHA256.HashData(sourceBytes));
-                AcceptPrimaryBytes(sourceBytes);
                 _latestWrittenVersion = version;
                 return new(null, new() { Outcome = "unchanged" });
             }
 
             RestoreRawMergeTitles(external, externalTitles);
-            if (baseline != null && baselineRawTitles != null && baselineNormalizedTitles != null)
-            {
-                RestoreRawMergeTitles(baseline, baselineRawTitles);
-                RestoreUnmodifiedCurrentMergeTitles(current, baselineRawTitles, baselineNormalizedTitles);
-            }
-            StateMergeResult merge;
-            if (baseline == null)
-            {
-                // The last save is not necessarily what the external editor read. Ask explicitly.
-                merge = new((JsonObject)current.DeepClone(), [],
-                    [new StateMergeConflict("$", false, null, true, current.DeepClone(),
-                        true, external.DeepClone(), "unknown_baseline")]);
-            }
-            else
-            {
-                merge = StateJsonMerge.Merge(baseline, current, external);
-            }
+            RestoreRawMergeTitles(baseline, baselineRawTitles);
+            RestoreUnmodifiedCurrentMergeTitles(current, baselineRawTitles, baselineNormalizedTitles);
+            var merge = StateJsonMerge.Merge(baseline, current, external);
 
             var candidate = JsonSerializer.Deserialize<AppState>(
                 merge.State.ToJsonString(JsonOptions), JsonOptions)
@@ -111,7 +95,7 @@ public sealed partial class StateStore
         {
             return new(null, new() { Outcome = "invalid", Error = ex.Message });
         }
-        catch (StateWriteBlockedException ex)
+        catch (ExternalDocumentChangedException ex)
         {
             return new(null, new() { Outcome = "busy", Error = ex.Message });
         }
@@ -192,7 +176,7 @@ public sealed partial class StateStore
             string? diffFile = null;
             if (resolution.Conflicts.Count > 0)
                 (conflictFile, diffFile) = ArchiveConflicts(resolution, sourceBytes, ValidateSource);
-            WriteJsonInternal(json, beforeReplace: ValidateSource, acceptExternal: true);
+            WriteJsonInternal(json, beforeReplace: ValidateSource);
             _latestWrittenVersion = version;
             return (conflictFile, diffFile);
         }
