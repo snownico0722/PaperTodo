@@ -44,79 +44,55 @@ public sealed partial class StateStore
     public string FilePath { get; }
     public string BackupPath { get; }
     private bool _preserveRecoveredLoadFilesOnNextSave;
+    private bool _preserveOrphanedTempsOnNextSave;
     private string? _preservedFailedPrimaryPath;
     private string? _preservedRecoveryBackupPath;
 
-    public AppState Load()
+    public AppState Load() => Load(out _);
+
+    // Only malformed state JSON permits recovery/reinitialization. File sharing,
+    // permissions and other I/O failures must reach the caller unchanged.
+    internal AppState Load(out bool initializedEmpty)
     {
+        initializedEmpty = false;
         ClearRecoveredLoadPreservationState();
-        bool mainExists = FileExistsForCollection(FilePath);
-        bool backupExists = FileExistsForCollection(BackupPath);
-
-        if (!mainExists && !backupExists)
-        {
-            // A killed first write may leave the only user data in its temp file.
-            // Do not promote an uncommitted temp, but do not silently start an empty
-            // document that would overwrite it on the next ordinary save either.
-            if (FileExistsForCollection(FilePath + ".tmp") || FileExistsForCollection(BackupPath + ".tmp"))
-                throw new InvalidDataException(Strings.Get("StateLoadFailed"));
-            return new AppState();
-        }
-
-        Exception? mainEx = null;
+        var mainExists = FileExistsForCollection(FilePath);
         if (mainExists)
         {
-            try
-            {
-                var primaryBytes = File.ReadAllBytes(FilePath);
-                var json = DecodeStateBytes(primaryBytes);
-                var state = ReadCoreState(json);
-                if (state != null)
-                {
-                    MigrateLegacyTopBarSettings(state, json);
-                    NormalizeWorkspaceDocument(state);
-                    return state;
-                }
-
-                mainEx = new InvalidDataException($"{Path.GetFileName(FilePath)} deserialized to null.");
-            }
-            catch (Exception ex)
-            {
-                mainEx = ex;
-            }
+            try { return ReadLoadDocument(FilePath); }
+            catch (JsonException) { /* Confirmed corrupt; try the backup. */ }
         }
 
-        Exception? backupEx = null;
+        var backupExists = FileExistsForCollection(BackupPath);
         if (backupExists)
         {
             try
             {
-                var json = File.ReadAllText(BackupPath);
-                var state = ReadCoreState(json);
-                if (state != null)
-                {
-                    if (mainExists)
-                    {
-                        _preserveRecoveredLoadFilesOnNextSave = true;
-                    }
-
-                    MigrateLegacyTopBarSettings(state, json);
-                    NormalizeWorkspaceDocument(state);
-                    return state;
-                }
-
-                backupEx = new InvalidDataException($"{Path.GetFileName(BackupPath)} deserialized to null.");
+                var restored = ReadLoadDocument(BackupPath);
+                _preserveRecoveredLoadFilesOnNextSave = mainExists;
+                return restored;
             }
-            catch (Exception ex)
-            {
-                backupEx = ex;
-            }
+            catch (JsonException) { /* Backup is also corrupt; rebuild. */ }
         }
 
-        var innerEx = mainEx ?? backupEx;
-        throw new InvalidOperationException(
-            Strings.Get("StateLoadFailed"),
-            innerEx);
+        // Do not block an empty workspace on image/plugin data or historical files.
+        // Keep any corrupt primary/backup before the next ordinary save replaces it.
+        _preserveRecoveredLoadFilesOnNextSave = mainExists || backupExists;
+        _preserveOrphanedTempsOnNextSave =
+            FileExistsForCollection(FilePath + ".tmp") ||
+            FileExistsForCollection(BackupPath + ".tmp");
+        initializedEmpty = true;
+        return new AppState();
+    }
+
+    private AppState ReadLoadDocument(string path)
+    {
+        var json = DecodeStateBytes(File.ReadAllBytes(path));
+        var state = ReadCoreState(json)
+            ?? throw new JsonException($"{Path.GetFileName(path)} deserialized to null.");
+        MigrateLegacyTopBarSettings(state, json);
+        NormalizeWorkspaceDocument(state);
+        return state;
     }
 
     internal bool TryCollectProtectedImageIds(
@@ -385,9 +361,21 @@ public sealed partial class StateStore
 
     private bool PreserveRecoveredLoadFilesIfNeeded(Action validateWrite)
     {
-        if (!_preserveRecoveredLoadFilesOnNextSave)
+        if (!_preserveRecoveredLoadFilesOnNextSave && !_preserveOrphanedTempsOnNextSave)
         {
             return false;
+        }
+
+        if (_preserveOrphanedTempsOnNextSave)
+        {
+            // A previous interrupted first write is recovery evidence, not a reason
+            // to refuse a new workspace. Archive it before the atomic writer reuses .tmp.
+            foreach (var path in new[] { FilePath + ".tmp", BackupPath + ".tmp" })
+            {
+                if (FileExistsForCollection(path))
+                    CopyRecoverySource(path, "orphaned", validateWrite);
+            }
+            _preserveOrphanedTempsOnNextSave = false;
         }
 
         if (File.Exists(FilePath) && string.IsNullOrWhiteSpace(_preservedFailedPrimaryPath))
@@ -434,6 +422,7 @@ public sealed partial class StateStore
     private void ClearRecoveredLoadPreservationState()
     {
         _preserveRecoveredLoadFilesOnNextSave = false;
+        _preserveOrphanedTempsOnNextSave = false;
         _preservedFailedPrimaryPath = null;
         _preservedRecoveryBackupPath = null;
     }
