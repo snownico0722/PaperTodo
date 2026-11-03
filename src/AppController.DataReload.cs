@@ -289,7 +289,23 @@ public sealed partial class AppController
         Application.Current.Dispatcher.VerifyAccess();
         if (IsExiting || IsDataReloading || !_store.OrdinaryWritesPaused) return;
         // With no trustworthy original version, ask for an explicit whole-state choice.
-        ReloadDataCore(PaperOperationContext.User(), merge: true, cancelOnClose: true);
+        var result = ReloadDataCore(PaperOperationContext.User(), merge: true, cancelOnClose: true);
+        if (result.Outcome != "invalid") return;
+
+        // A malformed external document cannot be merged. Show its error in the existing
+        // right-hand comparison pane, but offer no action that could silently overwrite it.
+        string externalText;
+        try { externalText = File.ReadAllText(_store.FilePath); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            externalText = ex.Message;
+        }
+        var memoryText = JsonSerializer.Serialize(State,
+            new JsonSerializerOptions(StateStore.JsonOptions) { WriteIndented = true });
+        var owner = _windows.Values.FirstOrDefault(w =>
+            w.IsVisible && PresentationSource.FromVisual(w) is HwndSource);
+        DataReloadConflictDialog.ShowInvalidExternal(owner, memoryText, externalText,
+            result.Error ?? Strings.Get("DataReloadInvalidExternalHint"));
     }
 
     private StateMergeResolution ResolveDataMerge(PendingDataReload pending) =>
