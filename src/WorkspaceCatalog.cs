@@ -68,7 +68,7 @@ internal sealed class WorkspaceCatalog
     }
 
     internal WorkspaceSession Open(int number, WorkspaceConfiguration options, bool allowCreate,
-        AppState? main = null)
+        AppState? main = null, WorkspaceSession? current = null)
     {
         var paths = PathsFor(number);
         var store = StoreFor(number);
@@ -88,8 +88,21 @@ internal sealed class WorkspaceCatalog
         }
         // Normalize paper titles/collapse state using the EFFECTIVE settings, not a dormant
         // independent preference (otherwise entering an inherited workspace can truncate titles).
-        store.InheritedSettings = follows ? inherited : null;
-        var state = store.Load();
+        // A same-slot settings handoff must not Load() the live store: Load accepts
+        // new disk bytes and could authorize writes from an older in-memory state on rollback.
+        AppState state;
+        if (current != null)
+        {
+            if (current.Paths.Number != number || !ReferenceEquals(current.Store, store))
+                throw new InvalidOperationException("The preview session belongs to another workspace.");
+            state = StateStore.CopyForReload(current.State);
+            if (current.FollowsMain) current.IndependentSettings!.ApplyTo(state);
+        }
+        else
+        {
+            store.InheritedSettings = follows ? inherited : null;
+            state = store.Load();
+        }
         if (!exists && number > 1)
         {
             // First entry starts with the main software settings and one ordinary blank paper,
@@ -100,13 +113,17 @@ internal sealed class WorkspaceCatalog
         if (number == 1)
         {
             state.Workspaces = HasConfiguration ? options : null;
-            return new(paths, store, state, false, null);
+            var mainSession = new WorkspaceSession(paths, store, state, false, null);
+            if (current != null) mainSession.InheritedSettings = null;
+            return mainSession;
         }
 
         state.Workspaces = null;
         var independent = WorkspaceSettingsSnapshot.Capture(state);
         if (follows) inherited!.ApplyTo(state);
-        return new(paths, store, state, follows, independent);
+        var session = new WorkspaceSession(paths, store, state, follows, independent);
+        if (current != null) session.InheritedSettings = follows ? inherited : null;
+        return session;
     }
 
     internal void AdoptOptions(WorkspaceConfiguration options, bool hasConfiguration = true)
