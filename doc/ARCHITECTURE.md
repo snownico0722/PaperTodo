@@ -244,7 +244,7 @@ Paper/Todo/Note 及笔记图片查询只读取当前模型/资产，不提交任
 
 transport 权限、Web/Native surface 生命周期、Top Bar presentation 和 MCP protocol 不下沉到 `PaperCommandService`；反过来，transport/presentation 层也不建立另一套核心 mutation 实现。
 
-待办提醒的调度、展示成功判定、已触发状态及失败重试仍由 `AppController.TodoReminders` 唯一拥有。插件通过 Todo snapshot 读取提醒时间/已触发状态，通过现有事件 hub 显式订阅 `TodoReminderTriggered`；该 occurrence 在宿主实际展示后的原有状态更新及保存/重试安排之后发布。事件为实时尽力通知，无重放/离线队列；桌宠等展示与外部通信由插件自有 Runtime 负责。Native 与 Web Runtime 复用 Workspace 的订阅权限、字段裁剪和释放边界；Web Runtime 订阅额外绑定当前文档 token，导航/失败恢复时撤销，独立于可见 Body/Mini。
+待办提醒的调度、展示成功判定、已触发状态及失败重试仍由 `AppController.TodoReminders` 唯一拥有。插件通过 Todo snapshot 读取提醒时间/已触发状态，通过现有事件 hub 订阅 `TodoChanged`；宿主展示成功后以 `ReminderTriggered: false → true` 的 System 来源待办变化通知插件，不再发布专用提醒事件。事件为实时尽力通知，无重放/离线队列；桌宠等展示与外部通信由插件自有 Runtime 负责。Native 与 Web Runtime 复用 Workspace 的订阅权限、字段裁剪和释放边界；Web Runtime 订阅额外绑定当前文档 token，导航/失败恢复时撤销，独立于可见 Body/Mini。
 
 ### 5.4 Plugin Protocol 2.x
 

@@ -548,18 +548,15 @@ A manifest may declare:
 
 ```text
 papers.read
-papers.observe
 papers.create
 papers.delete
 
 todos.read
-todos.observe
 todos.append
 todos.update
 todos.delete
 
 notes.read
-notes.observe
 notes.append
 notes.replace
 ```
@@ -592,7 +589,7 @@ Permission combinations that are easy to miss:
 - `notes.write` append/fill-blank operations use `notes.append`, while replace uses `notes.replace`;
 - a paper-session plugin cannot delete the Paper that hosts its own active session; Runtime has no host Paper and is not subject to this single-Paper self-deletion restriction.
 
-Observe permissions are independent of Read permissions. Without the matching read permission, events may still be delivered under observe permission, but the host removes sensitive fields.
+Read permissions allow both querying a resource and subscribing to its change events. Legacy `papers.observe`, `todos.observe`, and `notes.observe` declarations still allow subscriptions but do not grant querying or access to sensitive fields without the matching read permission.
 
 Native paper session:
 
@@ -619,51 +616,44 @@ const dispose = papertodo.onHostEvent(
 );
 ```
 
-Subscribable events are `paper.created`, `paper.changed`, `paper.deleted`, `todo.created`, `todo.changed`, `todo.deleted`, `note.changed`, and API 2.2 `todo.reminderTriggered`. Subscriptions become invalid automatically when the session becomes invalid or is disposed; plugins should still unsubscribe promptly when a listener is no longer needed.
+Subscribable events are `paper.created`, `paper.changed`, `paper.deleted`, `todo.created`, `todo.changed`, `todo.deleted`, `note.changed`, ; API 2.2 reminder triggers are represented by existing `todo.changed` events. Subscriptions become invalid automatically when the session becomes invalid or is disposed; plugins should still unsubscribe promptly when a listener is no longer needed.
 
 ### Reminder API (2.2)
 
-PaperTodo supplies reminder data and live trigger notifications.
+A reminder trigger is published as a Todo state change rather than a separate event kind.
 
-- Read reminders through Native `Workspace.ListTodos()` or Web `workspace.request('todos.list')`. `ReminderAt` / `reminderAt` is the scheduled time; `ReminderTriggered` / `reminderTriggered` reports whether the host has surfaced that reminder. Require `todos.read`.
-- Set, reschedule or cancel through the existing Native `SetTodoReminder` / Web `todos.setReminder` API, under `todos.update`. `TodoChangedFields.Reminder` also covers changes to the triggered flag; `TodoChanged` events caused by the host triggering a reminder have `origin: 'system'`.
-- Explicitly subscribe to Native `PaperTodoEventKind.TodoReminderTriggered` (`TodoReminderTriggeredEvent`) or Web `todo.reminderTriggered`, under `todos.observe`. The event contains `Todo` / `todo` and normal metadata with `origin: 'system'`. Without `todos.read`, text, reminder time and triggered state are redacted; paper titles additionally require `papers.read`. Default Native subscriptions keep their previous set of event kinds, so request the new kind explicitly.
-- The host emits one event per reminder actually surfaced by its existing paper/tray notification path, after updating state and scheduling its normal save/retry. A batch shares an operation ID, with a separate event ID per todo. Failed host delivery remains pending and emits no trigger event. Turning reminders off also stops trigger notifications. Startup/resume overdue reminders use the same path.
-- Events are live and best-effort: no history replay, offline queue, ACK or exactly-once guarantee across restarts. The event is not proof that asynchronous disk saving finished or that a plugin displayed anything. A plugin callback cannot acknowledge, suppress or replace host notification delivery. Keep Native callbacks short; move slow pet/network work off the UI dispatcher.
-- Long-running integrations belong in the provider Runtime, not a Body/Mini that can be reclaimed. Runtime still requires at least one real plugin Paper; `startupPaper.presentation: 'hidden'` can keep that paper unobtrusive. Web Body and Runtime expose `onHostEvent`; Web Mini does not. Runtime navigation/recovery removes old subscriptions, so the new document must subscribe again. Listen for `hostSubscriptionError` through `onEvent` to report rejected subscriptions.
+- Query `Workspace.ListTodos()` or Web `todos.list`: `reminderAt` is the scheduled time, and `reminderTriggered` indicates the host has surfaced the reminder. `todos.read` grants both query and event subscription.
+- Set, reschedule or cancel reminders with `SetTodoReminder` or `todos.setReminder` under `todos.update`.
+- Subscribe to Native `PaperTodoEventKind.TodoChanged` or Web `todo.changed`. Recognize a host trigger by `before.reminderTriggered === false`, `after.reminderTriggered === true`, and `metadata.origin === 'system'`. Do not use only `changedFields.Reminder`: rescheduling also changes that field.
+- Only successfully surfaced reminders produce these frozen state transitions. Failed delivery remains pending. Events are live and best effort, without offline replay, plugin ACK or exactly-once delivery.
+- Long-running integrations belong in provider Runtime. Keep Native callbacks short. Web Body and Runtime support `onHostEvent`; Web Mini does not. Unsubscribe when no longer needed, and resubscribe after navigation/recovery.
 
-Native Runtime example (retain the returned subscription and dispose it with the Runtime):
+Native example:
 
 ```csharp
 var subscription = context.Workspace.Subscribe(
-    new PaperTodoEventFilter
-    {
-        Kinds = new HashSet<PaperTodoEventKind> { PaperTodoEventKind.TodoReminderTriggered }
-    },
+    new PaperTodoEventFilter { Kinds = new HashSet<PaperTodoEventKind> { PaperTodoEventKind.TodoChanged } },
     evt =>
     {
-        if (evt is TodoReminderTriggeredEvent reminder)
+        if (evt is TodoChangedEvent change &&
+            change.Metadata.Origin == PaperTodoEventOrigin.System &&
+            !change.Before.ReminderTriggered && change.After.ReminderTriggered)
         {
-            // Hand reminder.Todo to your plugin's own notification implementation.
+            // Notify using change.After in the plugin.
         }
     });
-// From your own notification's click handler:
-// context.WorkspacePresentation.ExpandPaper(paperId, activate: true);
 ```
 
-Web Runtime example (`permissions: ["todos.read", "todos.observe"]`, plus `papers.read` if titles are needed):
+Web example (`permissions: ["todos.read"]`):
 
 ```js
-const stop = papertodo.onHostEvent(['todo.reminderTriggered'], event => {
-  const { paperId, id, text, reminderAt } = event.todo;
-  // Pass these values to your own pet/notification implementation.
+const stop = papertodo.onHostEvent(['todo.changed'], event => {
+  if (event.metadata.origin === 'system' &&
+      !event.before.reminderTriggered && event.after.reminderTriggered) {
+    // Notify using event.after in the plugin.
+  }
 });
-// From your own notification's click handler, after checking the target still exists:
-// await papertodo.workspace.request('papers.expand', { paperId, activate: true });
-// Call stop() when this listener is no longer needed.
 ```
-
-Opening a paper uses the existing presentation API; it does not automatically select a specific todo. If a notification outlives its paper, handle `paper_not_found` rather than creating a replacement paper. No reminder event stream is added to MCP.
 
 Paper, Todo, Note and Note-image reads use the current host model/assets without committing editors. Recent typing may appear after the normal editor/save synchronization; reads do not force a flush. When an external write targets the same built-in Markdown paper, PaperTodo commits that paper's pending user text first so the write follows it; writes to other papers do not invoke unrelated third-party Body `Commit()`. Core `data.json` saves still synchronize built-in Markdown normally and do not use third-party Body `Commit()` as a global save hook. MCP creation/append accepts the new Todo's initial fields under additive writes; changing existing content still needs full writes.
 
