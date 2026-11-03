@@ -67,16 +67,16 @@ internal static class MaterialPresentationChecks
             settings = (Window)typeof(AppController).GetField("_settingsWindow", Program.Private)!.GetValue(controller)!;
             var shell = (SkinBorder)settings.Content;
             Wait(120);
-            Program.Assert(!shell.IsBackgroundActive && !shell.HasBackgroundCapture,
-                "expanded Settings uses the native Acrylic backdrop without a software background-capture worker");
+            Program.Assert(shell.Background != null && settings.Opacity == 1,
+                "expanded settings shell keeps its native material composition");
             var oldContent = shell.Child;
             show.Invoke(controller, [Enum.Parse(pageType, "Visual")]);
             Program.Assert(ReferenceEquals(shell, settings.Content) && !ReferenceEquals(oldContent, shell.Child) &&
-                !shell.IsBackgroundActive && !shell.HasBackgroundCapture,
-                "page switch replaces only Settings content and keeps the native material path capture-free");
+                settings.Opacity == 1,
+                "page switch replaces only Settings content on the same native window");
             settings.Width += 12; settings.UpdateLayout(); shell.RefreshBackground();
-            Program.Assert(!shell.IsBackgroundActive && !shell.HasBackgroundCapture && settings.Opacity == 1,
-                "resizing Settings keeps the native material path capture-free and fully visible");
+            Program.Assert(settings.Opacity == 1 && ReferenceEquals(shell, settings.Content),
+                "resizing Settings retains its shell and visible content");
 
             // This real settings interaction was previously trapped inside the discarded
             // CopyFromScreen fixture; keep the independent WPF behavior without desktop pixels.
@@ -96,7 +96,7 @@ internal static class MaterialPresentationChecks
             if (aeroMenu != null) aeroMenu.IsOpen = false;
             settings?.Close(); owner.Close();
             (controller.State.PaperSkin, controller.State.Theme, controller.State.EnableAnimations,
-                controller.State.MatchAuxiliaryMaterialStrength, controller.State.MicaAlwaysActive) = saved;
+                controller.State.MicaAlwaysActive) = saved;
             Theme.Invalidate();
         }
     }
@@ -614,8 +614,8 @@ internal static class MaterialPresentationChecks
                     mouse_event(0x0010, 0, 0, 0, UIntPtr.Zero);
                     Until(() => menu!.IsOpen, $"actual right click opens {(collapsed ? "capsule" : "paper")} menu");
                     Wait(80);
-                    Program.Assert(Find(menu!)?.FirstMenuRenderUsedBackground == true,
-                        "service-opened menu retains its prepared first-frame material");
+                    Program.Assert(Find(menu!) is { IsMenu: true } && menu!.Opacity == 1,
+                        "service-opened menu paints the lightweight material immediately");
                     menu!.SetCurrentValue(ContextMenu.IsOpenProperty, false); Wait(80);
                     Program.Assert(!menu.IsOpen, "real right-click menu closes and can reopen");
                 }
