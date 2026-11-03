@@ -59,14 +59,6 @@ internal sealed class WorkspaceCatalog
         return new(PathsFor(1), MainStore, main, false, null);
     }
 
-    internal WorkspaceSession OpenMainFallback()
-    {
-        var main = MainStore.Load();
-        main.Workspaces = HasConfiguration ? Options : null;
-        Options.Active = 1;
-        return new(PathsFor(1), MainStore, main, false, null);
-    }
-
     internal WorkspaceSession Open(int number, WorkspaceConfiguration options, bool allowCreate,
         AppState? main = null, WorkspaceSession? current = null)
     {
