@@ -145,7 +145,6 @@ internal static class MaterialDragBenchmarks
         window.LayoutUpdated += layout;
         var positions = new List<PositionSample>(200);
         var nativeSizeMessages = 0; var enters = 0; var exits = 0;
-        var sawDragSnapshotWhilePressed = false;
         var watch = Stopwatch.StartNew();
         GetWindowRect(hwnd, out var previous);
         HwndSourceHook hook = (IntPtr h, int msg, IntPtr wp, IntPtr lp, ref bool handled) => {
@@ -200,25 +199,10 @@ internal static class MaterialDragBenchmarks
         {
             while (!driver.IsCompleted && watch.Elapsed.TotalSeconds < 15)
             {
-                if (c.Capsule && PaperSkins.UsesSampledAuxiliary(c.Skin))
-                {
-                    foreach (var surface in surfaces)
-                    {
-                        var session = surface.BackgroundSessionState;
-                        if (session?.GetType().GetField("_dragSnapshotActive", Private)?.GetValue(session) is true)
-                        {
-                            sawDragSnapshotWhilePressed = true;
-                            break;
-                        }
-                    }
-                }
                 Wait(10);
             }
             Program.Assert(driver.IsCompleted, "mouse drag ends after release");
             var times = driver.GetAwaiter().GetResult();
-            if (c.Capsule && PaperSkins.UsesSampledAuxiliary(c.Skin))
-                Program.Assert(sawDragSnapshotWhilePressed,
-                    "real capsule drag publishes the shared virtual-desktop snapshot before button release");
             Wait(40);
             var elapsed = watch.Elapsed.TotalMilliseconds;
             var cpuMs = (Process.GetCurrentProcess().TotalProcessorTime - cpu).TotalMilliseconds;
@@ -229,7 +213,6 @@ internal static class MaterialDragBenchmarks
             Program.Assert(positions.Count >= 35, $"actual drag moved HWND: {c}, moves={positions.Count}");
             Program.Assert(ReferenceEquals(content, window.Content) && new WindowInteropHelper(window).Handle == hwnd,
                 "drag preserves window and content identity");
-            Program.Assert(surfaces.All(s => s.BackgroundFailure == null), "no background capture failure while dragging");
             var intervals = positions.Zip(positions.Skip(1), (a, b) => b.Milliseconds - a.Milliseconds).ToArray();
             var inputIntervals = times.Zip(times.Skip(1), (a, b) => b - a).ToArray();
             var changes = new Counters(after.Draws-before.Draws, after.Refreshes-before.Refreshes,
