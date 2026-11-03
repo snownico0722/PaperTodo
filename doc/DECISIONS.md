@@ -1821,4 +1821,6 @@ PR #319 的初版把主胶囊完整材质收展后的卡死解释为终点迟到
 
 **Decision:** 删除 `DesktopBackgroundCapture`、`BackgroundCaptureLayout`、`SkinBorder.BackgroundSession` 和相关状态、租约、暂停回调；`MaterialContextMenu` 与子菜单保留 WPF 正常即时打开、焦点和关闭行为，不再预截图。移除主胶囊/纸片拖动快照与 Edge DComp 的采样保护调用。胶囊、边缘浏览和菜单统一使用原轻量材质；展开纸片/设置窗口的 DWM Mica/Acrylic 与 Aero 位置视差观察仍保留。
 
+**外部设置契约：** `appearance.match_auxiliary_material` 从公开设置目录彻底删除；插件读写旧 ID 返回 `setting_not_found`，应删去旧调用，不再保留或补充一个无效的兼容项。`appearance.material_transparency` 保留五档，主要控制展开纸片与设置窗口的原生材质表现；胶囊与菜单仍是固定不透传桌面背景的轻量材质，不借此恢复截图或玻璃透传。
+
 **Validation:** 删除纯截图专用测试，把真实 Edge 队列终态、反转、点击、窗口隐藏/恢复、ContextMenu 打开/关闭、Aero 光照复用和纸片收展测试从旧截图断言中拆出并保留。独立 Windows Release 编译、回归及材质行为 CI 验证。
