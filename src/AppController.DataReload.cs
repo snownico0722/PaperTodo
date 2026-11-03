@@ -238,7 +238,10 @@ public sealed partial class AppController
         if (!StateReloadModels.Equivalent(State, pending.Next)) MarkDirty();
     }
 
-    private void RefreshReloadedSettings(AppState before)
+    private void RefreshReloadedSettings(AppState before) =>
+        RefreshReloadedSettings(before.UsePersistentPowerShellProcess, before.PreferPowerShell7);
+
+    private void RefreshReloadedSettings(bool previousPersistentPowerShell, bool previousPreferPowerShell7)
     {
         _imageStore.AutoCompressLargeImages = State.AutoCompressLargeImages;
         AppTypography.Configure(State.UiFontPreset, State.Zoom, State.CustomFontEnhancedBold, State.TextRenderingProfile);
@@ -260,8 +263,8 @@ public sealed partial class AppController
         RefreshExperimentalOpacitySurfaces(animate: false);
         RefreshExperimentalFocusPresentationSurfaces();
         TelemetryService.SetEnabled(State.TelemetryEnabled);
-        if (before.UsePersistentPowerShellProcess != State.UsePersistentPowerShellProcess ||
-            before.PreferPowerShell7 != State.PreferPowerShell7)
+        if (previousPersistentPowerShell != State.UsePersistentPowerShellProcess ||
+            previousPreferPowerShell7 != State.PreferPowerShell7)
         {
             PaperWindow.StopPersistentScriptProcesses();
             PaperWindow.EnsurePersistentScriptProcessForSettings(State);
