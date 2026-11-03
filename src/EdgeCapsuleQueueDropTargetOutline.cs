@@ -132,7 +132,6 @@ internal sealed class EdgeCapsuleQueueDropTargetOutline : Window
         // A different queue is a genuinely different target and deserves the pulse; moving within
         // the same queue must not re-pulse, or it would strobe on every pointer move.
         var targetChanged = !string.Equals(_queueKey, queueKey, StringComparison.Ordinal);
-        _queueKey = queueKey;
 
         var bounds = layout.QueueBounds;
         var outlineBounds = bounds.IsEmpty
@@ -196,10 +195,8 @@ internal sealed class EdgeCapsuleQueueDropTargetOutline : Window
         {
             BeginAnimation(OpacityProperty, null);
             Opacity = RestingOpacity;
-            return true;
         }
-
-        if (firstShow || targetChanged)
+        else if (firstShow || targetChanged)
         {
             BeginAnimation(OpacityProperty, null);
             Opacity = targetChanged ? 0.42 : 0;
@@ -210,6 +207,7 @@ internal sealed class EdgeCapsuleQueueDropTargetOutline : Window
                 easing: AnimationHelper.QuickEase);
         }
 
+        _queueKey = queueKey;
         return true;
     }
 
