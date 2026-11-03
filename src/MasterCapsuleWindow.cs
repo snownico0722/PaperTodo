@@ -525,7 +525,6 @@ public sealed class MasterCapsuleWindow : Window
         // The native move loop can still be on the stack. Withdraw its visible surface now,
         // but keep the lease until that call returns so no later drag can rebind its HWND.
         _floatingDragHost?.Hide();
-        EndFloatingDragBackground();
         _controller.CancelMasterCapsuleQueueTransfer(snapshot);
     }
 
