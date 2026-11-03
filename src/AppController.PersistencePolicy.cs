@@ -9,6 +9,7 @@ namespace PaperTodo;
 public sealed partial class AppController
 {
     private DispatcherTimer? _stateBackupTimer;
+    private DispatcherTimer? _coreHistoryDueTimer;
     private int _coreHistoryBackupRunning;
     private DateTimeOffset _nextCoreHistoryCheckUtc = DateTimeOffset.MinValue;
 
@@ -46,8 +47,18 @@ public sealed partial class AppController
     {
         if (IsExiting || _workspaceSwitching || IsDataReloading) return;
         var now = DateTimeOffset.UtcNow;
-        if (now < _nextCoreHistoryCheckUtc ||
-            Interlocked.CompareExchange(ref _coreHistoryBackupRunning, 1, 0) != 0) return;
+        if (now < _nextCoreHistoryCheckUtc)
+        {
+            ScheduleCoreHistoryDueCheck(_nextCoreHistoryCheckUtc - now);
+            return;
+        }
+        if (Interlocked.CompareExchange(ref _coreHistoryBackupRunning, 1, 0) != 0)
+        {
+            // A previous snapshot is still being compressed. Check again shortly.
+            ScheduleCoreHistoryDueCheck(TimeSpan.FromSeconds(1));
+            return;
+        }
+        _coreHistoryDueTimer?.Stop();
         _nextCoreHistoryCheckUtc = now.Add(CoreHistoryBackup.MinimumInterval);
         var lifetime = _store.WriteLifetime;
         _ = Task.Run(() =>
@@ -60,6 +71,26 @@ public sealed partial class AppController
             catch (Exception ex) { Trace.TraceWarning("Core history backup failed: {0}", ex); }
             finally { Interlocked.Exchange(ref _coreHistoryBackupRunning, 0); }
         });
+    }
+
+    private void ScheduleCoreHistoryDueCheck(TimeSpan delay)
+    {
+        if (_coreHistoryDueTimer?.IsEnabled == true) return;
+        if (_coreHistoryDueTimer == null)
+        {
+            _coreHistoryDueTimer = new DispatcherTimer();
+            _coreHistoryDueTimer.Tick += OnCoreHistoryDueTick;
+        }
+        _coreHistoryDueTimer.Interval = delay > TimeSpan.Zero
+            ? delay
+            : TimeSpan.FromMilliseconds(100);
+        _coreHistoryDueTimer.Start();
+    }
+
+    private void OnCoreHistoryDueTick(object? sender, EventArgs e)
+    {
+        _coreHistoryDueTimer?.Stop();
+        QueueCoreHistoryBackup();
     }
 
     private void TryRefreshStateBackup()
@@ -77,6 +108,7 @@ public sealed partial class AppController
 
     private void StopStateBackupPolicy()
     {
+        _coreHistoryDueTimer?.Stop();
         var timer = _stateBackupTimer;
         _stateBackupTimer = null;
         if (timer == null)

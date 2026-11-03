@@ -15,12 +15,10 @@ internal sealed class CoreHistoryBackup
     private const string ArchivePrefix = "PaperTodo-core-";
     private const string TimestampFormat = "yyyyMMdd-HHmmss-fffffff";
     internal static readonly TimeSpan MinimumInterval = TimeSpan.FromMinutes(10);
-    private static readonly TimeSpan[] OlderRestorePoints =
-    [
-        TimeSpan.FromDays(30),
-        TimeSpan.FromDays(3),
-        TimeSpan.FromHours(6)
-    ];
+    private static readonly TimeSpan LongHistoryTarget = TimeSpan.FromDays(30);
+    private static readonly TimeSpan LongHistoryReplacementFloor = TimeSpan.FromDays(21);
+    private static readonly TimeSpan MediumHistoryTarget = TimeSpan.FromDays(3);
+    private static readonly TimeSpan ShortHistoryTarget = TimeSpan.FromHours(6);
 
     private readonly string _dataDirectory;
     private readonly Action? _ensureWritesAllowed;
@@ -52,7 +50,12 @@ internal sealed class CoreHistoryBackup
             {
                 var path = new WorkspacePaths(_dataDirectory, number).Data;
                 if (File.Exists(path))
-                    documents.Add((Path.GetFileName(path), File.ReadAllBytes(path)));
+                {
+                    using var stream = OpenSourceSnapshot(path);
+                    using var copy = new MemoryStream();
+                    stream.CopyTo(copy);
+                    documents.Add((Path.GetFileName(path), copy.ToArray()));
+                }
             }
             if (documents.Count == 0) return false;
 
@@ -110,26 +113,64 @@ internal sealed class CoreHistoryBackup
         }
     }
 
-    private static HashSet<string> ChooseRetainedArchives(
+    internal static HashSet<string> ChooseRetainedArchives(
         List<(string Path, DateTime Timestamp)> archives, DateTime now)
     {
-        var available = archives.ToList(); // already newest first
+        var available = archives.ToList(); // newest first
         var keep = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         if (available.Count == 0) return keep;
 
-        keep.Add(available[0].Path); // the newest snapshot is always retained
+        keep.Add(available[0].Path); // newest always wins
         available.RemoveAt(0);
-        foreach (var target in OlderRestorePoints)
+
+        if (available.Count >= 2)
+        {
+            var oldest = available[^1];
+            var successor = available[^2];
+            var oldAge = now - oldest.Timestamp;
+            var successorAge = now - successor.Timestamp;
+
+            // A month-scale history must not be replaced by a three-day-old one.
+            // Let its next-oldest successor age to at least three weeks before
+            // retirement. The middle restore points can shift temporarily.
+            if (oldAge >= LongHistoryTarget &&
+                (successorAge < LongHistoryReplacementFloor ||
+                 Distance(oldAge, LongHistoryTarget) <=
+                 Distance(successorAge, LongHistoryTarget)))
+            {
+                keep.Add(oldest.Path);
+                keep.Add(successor.Path);
+                available.RemoveRange(available.Count - 2, 2);
+                if (available.Count > 0)
+                    keep.Add(SelectClosest(available, now, MediumHistoryTarget).Path);
+                return keep;
+            }
+        }
+
+        foreach (var target in new[]
+                 { LongHistoryTarget, MediumHistoryTarget, ShortHistoryTarget })
         {
             if (available.Count == 0 || keep.Count == CopiesToKeep) break;
-            // Oldest target first, so a newly generated recent copy cannot crowd
-            // out all longer-term history while the user is editing frequently.
-            var selected = available.MinBy(a => Math.Abs(((now - a.Timestamp) - target).Ticks));
-            keep.Add(selected.Path);
-            available.Remove(selected);
+            keep.Add(SelectClosest(available, now, target).Path);
         }
         return keep;
     }
+
+    private static long Distance(TimeSpan age, TimeSpan target) =>
+        Math.Abs((age - target).Ticks);
+
+    private static (string Path, DateTime Timestamp) SelectClosest(
+        List<(string Path, DateTime Timestamp)> available, DateTime now, TimeSpan target)
+    {
+        var candidate = available.MinBy(a => Distance(now - a.Timestamp, target));
+        available.Remove(candidate);
+        return candidate;
+    }
+
+    // Allow the primary's atomic file replacement while this read handle is open.
+    internal static FileStream OpenSourceSnapshot(string path) =>
+        new(path, FileMode.Open, FileAccess.Read,
+            FileShare.ReadWrite | FileShare.Delete);
 
     private static bool SameDocuments(string archivePath, List<(string Name, byte[] Bytes)> documents)
     {

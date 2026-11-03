@@ -294,8 +294,44 @@ internal static partial class Program
         var missingImagePath = Path.Combine(scope.DirectoryPath, "note-assets-missing.lmdb");
         using var missingImages = new NoteImageStore(missingImagePath);
         missingImages.Load();
-        Require(!missingImages.ValidateReferencedImages(second) && missingImages.IsWriteDisabled,
-            "missing referenced image store did not disable writes and prevent ID reuse");
+        missingImages.ProtectPersistedImageReferences(second, secondaryIds, hasPersistedDocument: true);
+        Require(missingImages.IsWriteDisabled && !File.Exists(missingImagePath) &&
+                !missingImages.TryGetEncodedImageBytes("202", out _, out _),
+            "missing image database must stay untouched and reject unsafe image writes");
+
+        // An unrelated missing picture is NOT a reason to disable a healthy LMDB.
+        using var partialImages = new NoteImageStore(Path.Combine(scope.DirectoryPath, "note-assets-partial.lmdb"));
+        partialImages.Load();
+        Require(partialImages.ImportBitmapSource("note-a", WorkspaceBitmap(255, 0)).Id == "1",
+            "image fixture did not start at the first ID");
+        var protectedWithGap = new HashSet<string>(secondaryIds, StringComparer.Ordinal) { "2" };
+        partialImages.ProtectPersistedImageReferences(second, protectedWithGap, hasPersistedDocument: true);
+        Require(!partialImages.IsWriteDisabled &&
+                partialImages.ImportBitmapSource("note-a", WorkspaceBitmap(0, 255)).Id == "3",
+            "a dangling image ID was reused or blocked all healthy image imports");
+
+        // A genuinely new, empty workspace must still be allowed to create its first LMDB.
+        var freshImagePath = Path.Combine(scope.DirectoryPath, "note-assets-fresh.lmdb");
+        using var freshImages = new NoteImageStore(freshImagePath);
+        freshImages.Load();
+        freshImages.ProtectPersistedImageReferences(new AppState(), new HashSet<string>(), false);
+        Require(!freshImages.IsWriteDisabled &&
+                freshImages.ImportBitmapSource("note-a", WorkspaceBitmap(255, 0)).Id == "1" &&
+                File.Exists(freshImagePath),
+            "a fresh workspace was mistaken for missing historical image data");
+
+        // A malformed recovery record cannot establish that missing images are safe to replace.
+        File.WriteAllText(Path.Combine(scope.DirectoryPath, "data2conflict-broken.json"), "{broken");
+        Require(!store2.TryCollectProtectedImageIds(second, out _),
+            "malformed recovery archive unexpectedly produced a complete reference set");
+        var uncertainPath = Path.Combine(scope.DirectoryPath, "note-assets-uncertain.lmdb");
+        using var uncertain = new NoteImageStore(uncertainPath);
+        uncertain.Load();
+        var textOnly = NewState();
+        textOnly.Papers[0].Content = "";
+        uncertain.ProtectPersistedImageReferences(textOnly, null, hasPersistedDocument: true);
+        Require(uncertain.IsWriteDisabled && !File.Exists(uncertainPath),
+            "incomplete recovery scan must not permit recreating a missing image library");
     }
 
     private static void WorkspacePluginStores()
@@ -392,7 +428,7 @@ internal static partial class Program
         Require(manifest.Name == "original", "missing locale did not restore source labels");
     }
 
-    private static int RunWorkspaceStartupFallbackFixture()
+    private static int RunWorkspaceMissingImagesFixture()
     {
         if (!File.Exists(Path.Combine(AppContext.BaseDirectory, LiveMarker)))
             throw new InvalidOperationException("Refusing startup fallback checks outside isolated fixture.");
@@ -420,15 +456,20 @@ internal static partial class Program
                 var secondary = new StateStore(AppContext.BaseDirectory, DurableAtomicFileWriter.Shared, 2);
                 secondary.SaveJsonSync(secondary.SerializeState(independent), 1);
                 controller = new AppController();
-                Require(controller.WorkspaceNumber == 1 &&
-                        Field<WorkspaceCatalog>(controller, "_workspaceCatalog").StartupError != null,
-                    "failed secondary image verification did not return to main workspace");
-                Require(UiLanguages.EffectiveUiCulture.Name == UiLanguages.English &&
-                        controller.State.PaperSkin == PaperSkins.Paper &&
-                        !Field<bool>(controller, "UsesNativeMicaWindows"),
-                    "startup fallback kept secondary language or window material");
+                Require(controller.WorkspaceNumber == 2 &&
+                        Field<WorkspaceCatalog>(controller, "_workspaceCatalog").StartupError == null,
+                    "missing images incorrectly forced a secondary workspace back to main");
+                Require(UiLanguages.EffectiveUiCulture.Name == UiLanguages.Japanese &&
+                        controller.State.Papers[0].Content.Contains("i:999", StringComparison.Ordinal),
+                    "missing images changed the selected workspace's language or note");
+                var images = Field<NoteImageStore>(controller, "_imageStore");
+                Require(images.IsWriteDisabled &&
+                        !File.Exists(Path.Combine(AppContext.BaseDirectory, "note-assets2.lmdb")) &&
+                        !images.TryGetEncodedImageBytes("999", out _, out _),
+                    "startup recreated missing image history or claimed that broken image bytes existed");
                 await controller.StartAsync(createDefaultPaper: false);
-                Console.WriteLine("PASS startup image fallback re-applies final workspace language and skin");
+                Require(controller.WorkspaceNumber == 2, "startup discarded selected workspace after rendering");
+                Console.WriteLine("PASS startup remains in secondary workspace with missing pictures and no unsafe image writes");
             }
             catch (Exception ex) { result = 1; Console.Error.WriteLine(ex); }
             finally { controller?.Dispose(); app.Shutdown(); }
@@ -634,6 +675,22 @@ internal static partial class Program
             await Until(() => controller.WorkspaceNumber == 4 && !controller.IsWorkspaceSwitching,
                 "tray workspace submenu did not select slot 4");
             Require(await controller.SwitchWorkspaceAsync(1), "return after tray selection failed");
+
+            // Missing images remain a local rendering failure, not a reason to reject
+            // an otherwise valid workspace. Nor may a missing LMDB be replaced on entry.
+            var fourthDataPath = Path.Combine(directory, "data4.json");
+            var fourthData = J(File.ReadAllText(fourthDataPath));
+            fourthData["papers"]![0]!["content"] = MarkdownImageReferences.CreateReference("999");
+            File.WriteAllText(fourthDataPath, fourthData.ToJsonString());
+            var fourthImagesPath = Path.Combine(directory, "note-assets4.lmdb");
+            Require(!File.Exists(fourthImagesPath), "missing-image switch fixture unexpectedly has an LMDB");
+            Require(await controller.SwitchWorkspaceAsync(4) && controller.WorkspaceNumber == 4 &&
+                    controller.State.Papers[0].Content.Contains("i:999", StringComparison.Ordinal) &&
+                    controller.ImageStore.IsWriteDisabled && !File.Exists(fourthImagesPath),
+                "missing pictures blocked workspace entry or created an unsafe image database");
+            Require(!controller.ImageStore.TryGetEncodedImageBytes("999", out _, out _),
+                "missing image incorrectly rendered as available");
+            Require(await controller.SwitchWorkspaceAsync(1), "return after missing-image switch failed");
 
             // Slot 3 was opened by the selector test above, so it now has a valid backup.
             // Damage a never-opened slot instead: recovery from a valid backup is not failure.

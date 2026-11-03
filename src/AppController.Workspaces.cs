@@ -39,29 +39,6 @@ public sealed partial class AppController
         _imageStore = new NoteImageStore(_workspace.Paths.Images);
     }
 
-    private void ValidateInitialWorkspaceImages()
-    {
-        if (_imageStore.ValidateReferencedImages(State)) return;
-        var error = Strings.Format("WorkspaceImagesUnavailable", _workspace.Paths.Images);
-        if (WorkspaceNumber > 1)
-        {
-            _imageStore.Dispose();
-            _workspace = _workspaceCatalog.OpenMainFallback();
-            _workspace.BindPersistence();
-            _store = _workspace.Store;
-            State = _workspace.State;
-            _imageStore = new NoteImageStore(_workspace.Paths.Images);
-            _imageStore.AutoCompressLargeImages = State.AutoCompressLargeImages;
-            _imageStore.Load();
-            _imageStore.ValidateReferencedImages(State);
-            _workspaceCatalog.SetStartupError(error);
-        }
-        else
-        {
-            _workspaceCatalog.SetStartupError(error);
-        }
-    }
-
     private void InitializeWorkspacePluginData()
     {
         if (WorkspaceNumber == 1) return;
@@ -73,9 +50,9 @@ public sealed partial class AppController
     private void NotifyWorkspaceStartup()
     {
         if (_workspaceCatalog.StartupError is not { } error) return;
+        // The selected data file may only be busy. Show the existing notice but do
+        // not save a new active slot or mutate either workspace on this fallback.
         ReportWorkspaceError(Strings.Format("WorkspaceStartupFallback", error));
-        // Save the fallback slot through the ordinary main StateStore, never over the bad secondary.
-        SaveNow(sync: true);
     }
 
     internal Task<bool> CycleWorkspaceAsync()
@@ -205,8 +182,14 @@ public sealed partial class AppController
             {
                 candidateImages = new NoteImageStore(candidate.Paths.Images);
                 candidateImages.Load();
-                if (!candidateImages.ValidateReferencedImages(candidate.State))
-                    throw new InvalidDataException(Strings.Format("WorkspaceImagesUnavailable", candidate.Paths.Images));
+                // Only a missing LMDB needs a recovery-reference scan. Never veto a
+                // workspace switch because an individual image cannot be rendered.
+                IReadOnlySet<string>? protectedImageIds = null;
+                if (!File.Exists(candidateImages.FilePath) &&
+                    candidate.Store.TryCollectProtectedImageIds(candidate.State, out var ids))
+                    protectedImageIds = ids;
+                candidateImages.ProtectPersistedImageReferences(candidate.State, protectedImageIds,
+                    File.Exists(candidate.Paths.Data) || File.Exists(candidate.Paths.Backup));
                 candidatePluginData = new PaperBodyPluginDataStore(_paperBodyPlugins.PluginRoot, number)
                     { WriteLifetime = _store.WriteLifetime };
             }

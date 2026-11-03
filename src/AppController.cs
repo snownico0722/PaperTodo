@@ -154,8 +154,7 @@ public sealed partial class AppController : IDisposable
         InitializeWorkspaceState();
         _imageStore.AutoCompressLargeImages = State.AutoCompressLargeImages;
         _imageStore.Load();
-        ValidateInitialWorkspaceImages();
-        // Apply the final startup workspace's settings, not those of a failed candidate.
+        // A missing or damaged picture must not redirect startup to another workspace.
         UiLanguages.ApplyWorkspacePreference(State.UiLanguage);
         State.PaperSkin = PaperSkins.Resolve(State);
         UsesNativeMicaWindows = PaperSkins.UsesNativeBackdrop(State.PaperSkin) && NativeMicaBackdrop.IsSupported;
@@ -165,6 +164,8 @@ public sealed partial class AppController : IDisposable
         // Only rebuild free numbers when the same protection scan that gates GC succeeded.
         // A failed scan leaves reuse disabled so missing-but-referenced ids are never reissued.
         _imageStore.PrepareReusableImageNumbers(protectedImageIdsForReuse);
+        _imageStore.ProtectPersistedImageReferences(State, protectedImageIdsForReuse,
+            System.IO.File.Exists(_store.FilePath) || System.IO.File.Exists(_store.BackupPath));
         NormalizePaperSystemVisibilitySettings();
         AppTypography.Configure(
             State.UiFontPreset,

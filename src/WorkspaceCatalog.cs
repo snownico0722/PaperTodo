@@ -46,24 +46,15 @@ internal sealed class WorkspaceCatalog
         _initialMain = null;
         if (Options.Enabled && Options.Active > 1)
         {
-            try { return Open(Options.Active, Options, allowCreate: false, main); }
+            try { return Open(Options.Active, Options, allowCreate: true, main); }
             catch (Exception ex)
             {
-                // A missing/broken secondary never manufactures an empty replacement at startup.
-                // Keep its files intact and make the main workspace usable, with an explicit notice.
+                // An inaccessible slot can be retried later; do not reset the
+                // user's selected workspace or write over its unavailable data.
                 StartupError = ex.GetBaseException().Message;
-                Options.Active = 1;
             }
         }
         main.Workspaces = HasConfiguration ? Options : null;
-        return new(PathsFor(1), MainStore, main, false, null);
-    }
-
-    internal WorkspaceSession OpenMainFallback()
-    {
-        var main = MainStore.Load();
-        main.Workspaces = HasConfiguration ? Options : null;
-        Options.Active = 1;
         return new(PathsFor(1), MainStore, main, false, null);
     }
 
@@ -72,16 +63,9 @@ internal sealed class WorkspaceCatalog
     {
         var paths = PathsFor(number);
         var store = StoreFor(number);
-        var exists = File.Exists(paths.Data) || File.Exists(paths.Backup);
-        if (!exists && (!allowCreate || number == 1))
-            throw new FileNotFoundException("Workspace data is missing.", paths.Data);
-        if (!exists && number > 1 &&
-            (File.Exists(paths.Images) || System.IO.Directory.Exists(paths.PluginData)))
-            throw new InvalidDataException("Workspace data is missing but its images or plugin data still exist: " + paths.Data);
-
         var follows = options.FollowsMain(number);
         WorkspaceSettingsSnapshot? inherited = null;
-        if (number > 1 && (follows || !exists))
+        if (number > 1 && follows)
         {
             main ??= MainStore.Load();
             inherited = WorkspaceSettingsSnapshot.Capture(main);
@@ -91,6 +75,7 @@ internal sealed class WorkspaceCatalog
         // A same-slot settings handoff must not Load() the live store: Load accepts
         // new disk bytes and could authorize writes from an older in-memory state on rollback.
         AppState state;
+        var initializedEmpty = false;
         if (current != null)
         {
             if (current.Paths.Number != number || !ReferenceEquals(current.Store, store))
@@ -101,15 +86,19 @@ internal sealed class WorkspaceCatalog
         else
         {
             store.InheritedSettings = follows ? inherited : null;
-            state = store.Load();
+            state = store.Load(out initializedEmpty);
         }
-        if (!exists && number > 1)
+        if (initializedEmpty && number > 1)
         {
-            // First entry starts with the main software settings and one ordinary blank paper,
-            // not copies of the main workspace's notes, reminders or desktop geometry.
-            inherited!.ApplyTo(state);
+            // New or irrecoverably corrupt slots both start with one blank paper.
+            // Image, plugin and historical files never veto initialization.
+            main ??= MainStore.Load();
+            inherited ??= WorkspaceSettingsSnapshot.Capture(main);
+            inherited.ApplyTo(state);
             state.Papers.Add(new PaperData());
         }
+        if (initializedEmpty && !allowCreate)
+            throw new FileNotFoundException("Workspace data is missing or corrupt.", paths.Data);
         if (number == 1)
         {
             state.Workspaces = HasConfiguration ? options : null;

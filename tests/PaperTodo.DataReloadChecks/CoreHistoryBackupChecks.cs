@@ -90,6 +90,35 @@ internal static partial class Program
         using (var zip = ZipFile.OpenRead(newest))
             Require(zip.GetEntry("data.json") == null && zip.GetEntry("data5.json") != null,
                 "raw backup attempted recovery from a missing main data file");
-        Console.WriteLine("PASS core history: raw files, 10-minute cadence, 4-way gradient, duplicate skip and restart");
+        // A 90-day sequence of ten-minute edits must not lose month-scale history
+        // halfway through rotation (the previous selector dropped 56d to 4d).
+        var historyStart = start.UtcDateTime;
+        var history = new List<(string Path, DateTime Timestamp)>();
+        for (var step = 0; step <= 90 * 24 * 6; step++)
+        {
+            var instant = historyStart.AddMinutes(step * 10);
+            history.Add((step.ToString(CultureInfo.InvariantCulture), instant));
+            var retained = CoreHistoryBackup.ChooseRetainedArchives(
+                history.OrderByDescending(x => x.Timestamp).ToList(), instant);
+            history.RemoveAll(x => !retained.Contains(x.Path));
+            Require(history.Count is > 0 and <= 4,
+                "continuous editing exceeded four core history backups");
+            if (step >= 30 * 24 * 6)
+                Require(instant - history.Min(x => x.Timestamp) >= TimeSpan.FromDays(21),
+                    "month-scale backup collapsed during continuous editing");
+        }
+
+        // A long-lived backup read handle must not block an atomic normal save.
+        using (var concurrent = new Scope())
+        using (var openRead = CoreHistoryBackup.OpenSourceSnapshot(concurrent.Store.FilePath))
+        {
+            var changed = NewState();
+            changed.Papers[0].Content = "saved while backup is reading";
+            concurrent.Store.SaveJsonSync(concurrent.Store.SerializeState(changed), 2);
+            Require(concurrent.Store.Load().Papers[0].Content == "saved while backup is reading",
+                "backup read blocked an atomic primary save");
+        }
+
+        Console.WriteLine("PASS core history: raw files, ten-minute cadence, 90-day gradient and nonblocking reads");
     }
 }
