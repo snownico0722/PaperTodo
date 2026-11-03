@@ -149,13 +149,15 @@ public sealed partial class AppController : IDisposable
     {
         Current = this;
         InitializeWorkspaceState();
+        _imageStore.AutoCompressLargeImages = State.AutoCompressLargeImages;
+        _imageStore.Load();
+        ValidateInitialWorkspaceImages();
+        // Apply the final startup workspace's settings, not those of a failed candidate.
+        UiLanguages.ApplyWorkspacePreference(State.UiLanguage);
         State.PaperSkin = PaperSkins.Resolve(State);
         UsesNativeMicaWindows = PaperSkins.UsesNativeBackdrop(State.PaperSkin) && NativeMicaBackdrop.IsSupported;
         Theme.Invalidate();
         RefreshApplicationThemeResources();
-        _imageStore.AutoCompressLargeImages = State.AutoCompressLargeImages;
-        _imageStore.Load();
-        ValidateInitialWorkspaceImages();
         var protectedImageIdsForReuse = TryCollectUnprotectedImages();
         // Only rebuild free numbers when the same protection scan that gates GC succeeded.
         // A failed scan leaves reuse disabled so missing-but-referenced ids are never reissued.
