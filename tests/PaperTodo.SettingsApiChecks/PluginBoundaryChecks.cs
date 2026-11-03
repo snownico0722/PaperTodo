@@ -460,8 +460,7 @@ internal static partial class Program
                 {
                     Kinds = new HashSet<PaperTodoEventKind>
                     {
-                        PaperTodoEventKind.TodoChanged,
-                        PaperTodoEventKind.TodoReminderTriggered
+                        PaperTodoEventKind.TodoChanged
                     }
                 }, events.Add);
             paper.Items[0].Text = "pending user edit";
@@ -484,7 +483,7 @@ internal static partial class Program
                 reminderChanges[1].Metadata.Origin == PaperTodoEventOrigin.System &&
                 reminderChanges[0].After == reminderChanges[1].Before,
                 "Pending user edits must precede the system transition with continuous snapshots.");
-            Check(!events.OfType<TodoReminderTriggeredEvent>().Any(e => e.Todo.Id == "reminder-2"),
+            Check(!events.OfType<TodoChangedEvent>().Any(e => e.After.Id == "reminder-2" && e.Metadata.Origin == PaperTodoEventOrigin.System && !e.Before.ReminderTriggered && e.After.ReminderTriggered),
                 "An undelivered reminder must not emit an occurrence.");
             var retryTimer = ReadField<System.Windows.Threading.DispatcherTimer?>(c, "_todoReminderTimer");
             Check(retryTimer?.IsEnabled == true && retryTimer.Interval < TimeSpan.FromSeconds(25),
@@ -507,7 +506,7 @@ internal static partial class Program
                 c.MarkDirty();
                 _ = Invoke(c, "ProcessDueTodoReminders", now);
                 Check(!edited.ReminderTriggered && edited.ReminderAt == null &&
-                    !events.OfType<TodoReminderTriggeredEvent>().Any(e => e.Todo.Id == edited.Id),
+                    !events.OfType<TodoChangedEvent>().Any(e => e.After.Id == edited.Id && e.Metadata.Origin == PaperTodoEventOrigin.System && !e.Before.ReminderTriggered && e.After.ReminderTriggered),
                     "A reminder cancelled by a pending edit callback must not trigger.");
             }
 
