@@ -439,6 +439,15 @@ internal static partial class Program
             Require(expectedDraft.Replace("\r\n", "\n").TrimEnd('\n') == draft,
                 "unexpected fixture editor normalization: " + JsonSerializer.Serialize(expectedDraft));
             var previousMcp = new McpCommandService(controller, controller.PaperCommands);
+            // Emulate the persistent stdio MCP bridge: each pipe request reaches the CURRENT
+            // adapter, while the calling bridge holds the workspace token from its first query.
+            var boundPipeName = "PaperTodo-workspace-binding-" + Guid.NewGuid().ToString("N");
+            using var boundPipe = new McpApiHost(Dispatcher.CurrentDispatcher,
+                request => new McpCommandService(controller, controller.PaperCommands).ExecutePipeBound(request),
+                boundPipeName);
+            boundPipe.Start();
+            var oldBridge = new McpPipeClient(boundPipeName);
+            _ = await oldBridge.InvokeAsync("get_data_reload_status", new { }, CancellationToken.None);
             controller.SaveNow(); // deliberately leave an asynchronous ordinary write queued
             Require(controller.State.Papers.Single(p => p.Id == "note-a").Content == expectedDraft,
                 "ordinary save did not commit the fixture editor");
@@ -454,6 +463,16 @@ internal static partial class Program
             var currentMcp = new McpCommandService(controller, controller.PaperCommands);
             Require(currentMcp.Execute(JsonSerializer.SerializeToElement(new { method = "list_papers" })) != null,
                 "new-workspace MCP adapter could not read current papers");
+            var staleRejected = false;
+            try { _ = await oldBridge.InvokeAsync("reload_data", new { }, CancellationToken.None); }
+            catch (Exception ex) when (ex.Message.Contains("workspace_changed", StringComparison.Ordinal))
+            {
+                staleRejected = true;
+            }
+            Require(staleRejected, "a new pipe request from the old MCP bridge retargeted the new workspace");
+            var newBridge = new McpPipeClient(boundPipeName);
+            _ = await newBridge.InvokeAsync("get_setting", new { id = "appearance.theme" }, CancellationToken.None);
+            Console.WriteLine("PASS MCP bridge session lease rejects old-workspace writes without tool arguments");
             Require(controller.ImageStore.TryGetEncodedImageBytes(imageId, out _, out var bytes2) && bytes2.SequenceEqual(secondImage),
                 "new workspace decoded old image bytes");
             Require(J(controller.PaperBodyPlugins.DataStore.ReadPaperState("fixture", "note-a").Json)["slot"]!.GetValue<int>() == 2,
