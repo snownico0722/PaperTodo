@@ -334,7 +334,6 @@ Error: {0}</value>
   <data name="SaveFailureMessage" xml:space="preserve">
     <value>Failed to save data:&#x0A;{0}&#x0A;Please check disk space or permissions.</value>
   </data>
-  <data name="DataSaveResolveConflict" xml:space="preserve"><value>Resolve data conflict</value></data>
   <data name="SaveFailureTitle" xml:space="preserve">
     <value>Save Failed</value>
   </data>
@@ -1588,15 +1587,10 @@ When off, open at the docked edge or remembered position.</value>
   <data name="DataReloadPaperConflictWholePaper" xml:space="preserve">
     <value>(whole paper)</value>
   </data>
-  <data name="DataReloadInvalidExternalHint" xml:space="preserve"><value>The external data file is invalid. The right pane shows the error and a preview; your current data has not been overwritten. Fix the file and try again.</value></data>
-  <data name="DataReloadMissingBaseline" xml:space="preserve">
-    <value>The original data read before editing was not provided, so independent changes cannot be identified. Choose the entire current state or the entire external state.</value>
-  </data>
   <data name="SettingsDataMergeConflicts" xml:space="preserve"><value>Data merge conflicts</value></data>
   <data name="DataMergeConflictAsk" xml:space="preserve"><value>Ask on conflict (default)</value></data>
   <data name="DataMergeConflictExternal" xml:space="preserve"><value>Prefer external</value></data>
   <data name="DataMergeConflictInternal" xml:space="preserve"><value>Prefer internal</value></data>
   <data name="TipDataMergeConflicts" xml:space="preserve"><value>An explicit merge preserves nonconflicting changes from both sides. This setting affects conflicts only: internal means current PaperTodo data; external means the incoming file. Without the original version, always ask. Does not enable background watching or automatic sync.</value></data>
   <data name="DataReloadConflictEmpty" xml:space="preserve"><value>(empty)</value></data>
-  <data name="DataSavePausedExternal" xml:space="preserve"><value>The file changed or an import remains unresolved. Saving is paused to prevent overwriting it. Current edits remain in memory. Complete an explicit merge or reload before exiting; force-closing may lose unsaved edits.</value></data>
 </root>

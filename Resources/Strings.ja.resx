@@ -334,7 +334,6 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
   <data name="SaveFailureMessage" xml:space="preserve">
     <value>データの保存に失敗しました:&#x0A;{0}&#x0A;ディスク容量または権限を確認してください。</value>
   </data>
-  <data name="DataSaveResolveConflict" xml:space="preserve"><value>データの競合を解決</value></data>
   <data name="SaveFailureTitle" xml:space="preserve">
     <value>保存失敗</value>
   </data>
@@ -1588,15 +1587,10 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="DataReloadPaperConflictWholePaper" xml:space="preserve">
     <value>(Paper 全体)</value>
   </data>
-  <data name="DataReloadInvalidExternalHint" xml:space="preserve"><value>外部データファイルが無効です。右側にエラーと内容の一部を表示します。現在のデータは上書きされません。ファイルを修正して再試行してください。</value></data>
-  <data name="DataReloadMissingBaseline" xml:space="preserve">
-    <value>編集前に読み取った元のデータが指定されていないため、それぞれの変更を判別できません。現在のデータ全体を保持するか、外部データ全体を採用してください。</value>
-  </data>
   <data name="SettingsDataMergeConflicts" xml:space="preserve"><value>データ統合時の競合</value></data>
   <data name="DataMergeConflictAsk" xml:space="preserve"><value>競合時に確認（既定）</value></data>
   <data name="DataMergeConflictExternal" xml:space="preserve"><value>外部を優先</value></data>
   <data name="DataMergeConflictInternal" xml:space="preserve"><value>内部を優先</value></data>
   <data name="TipDataMergeConflicts" xml:space="preserve"><value>明示的な統合では、双方の競合しない変更を保持します。この設定は競合部分にのみ適用されます。内部は現在の PaperTodo データ、外部は取り込むファイルです。元のバージョンがない場合は必ず確認します。バックグラウンド監視や自動同期は有効になりません。</value></data>
   <data name="DataReloadConflictEmpty" xml:space="preserve"><value>（空）</value></data>
-  <data name="DataSavePausedExternal" xml:space="preserve"><value>ファイルが変更されたか、読み込みが未解決のため、上書きを防ぐため保存を停止しています。現在の編集はメモリに保持されています。終了前に明示的なマージまたは再読み込みを完了してください。強制終了すると未保存の編集が失われる場合があります。</value></data>
 </root>
