@@ -3059,6 +3059,7 @@ public sealed partial class AppController : IDisposable
             {
                 window.DetachFromDeepCapsuleStack();
             }
+            State.CapsuleCollapseAllActiveQueues.Clear();
             DestroyAllMasterCapsules();
             return;
         }
@@ -3150,6 +3151,7 @@ public sealed partial class AppController : IDisposable
     {
         if (!State.UseCapsuleCollapseAll)
         {
+            State.CapsuleCollapseAllActiveQueues.Clear();
             DestroyAllMasterCapsules();
             return;
         }
@@ -3211,12 +3213,8 @@ public sealed partial class AppController : IDisposable
 
     private void DestroyAllMasterCapsules()
     {
-        // Collapsing the masters must never strand retracted capsules off-screen at Opacity 0.
-        if (State.CapsuleCollapseAllActiveQueues.Count > 0)
-        {
-            State.CapsuleCollapseAllActiveQueues.Clear();
-        }
-
+        // This retires live windows only. Hidden/non-slot papers retain their queue
+        // preferences; feature disablement and stale-queue cleanup own model changes.
         if (_masterCapsules.Count == 0)
         {
             return;

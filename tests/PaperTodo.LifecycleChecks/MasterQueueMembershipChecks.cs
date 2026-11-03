@@ -78,6 +78,31 @@ internal static class MasterQueueMembershipChecks
                 "retained source geometry did not survive persistence");
     }
 
+    internal static async Task RunVisibilityRetention(
+        AppController controller, Dictionary<string, PaperWindow> windows, StateStore store)
+    {
+        controller.ToggleCapsuleCollapseAllActive("", EdgeCapsuleEdge.Right);
+        await Until(() => windows.Values.All(window => window.IsCollapseAllRetracted),
+            "persistent master collapse fixture");
+        for (var pass = 0; pass < 2; pass++)
+        {
+            if (pass == 0) controller.HideAllPapers();
+            else foreach (var paper in controller.State.Papers.ToArray()) controller.HidePaper(paper);
+            await Until(() => windows.Values.All(window => !window.HasVisibleSurface), "all queue members hidden");
+            RequireSourceCollapse(controller.State, expected: true);
+            controller.SaveNow(sync: true);
+            RequireSourceCollapse(store.Load(), expected: true);
+            controller.ShowAllPapers();
+            await Until(() => windows.Values.All(window => window.IsCollapseAllRetracted),
+                "show restores the user's previous collapse choice");
+        }
+        controller.PublicSettings.Set("capsule.master_enabled", System.Text.Json.JsonSerializer.SerializeToElement(false));
+        await Until(() => windows.Values.All(window => !window.IsCollapseAllRetracted),
+            "disabling master mode restores ordinary capsules");
+        Require(controller.State.CapsuleCollapseAllActiveQueues.Count == 0,
+            "explicit master disablement must still clear saved collapse choices");
+    }
+
     internal static void RunAbsentMarginCancellation(AppController controller, StateStore store)
     {
         // A vertical preview creates the dictionary entry before the horizontal transfer begins.
