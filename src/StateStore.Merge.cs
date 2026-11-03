@@ -57,7 +57,9 @@ public sealed partial class StateStore
             MigrateLegacyTopBarSettings(original, baselineJson);
             var baselineRawTitles = CaptureMergeTitles(original);
             var normalizedOriginal = CopyForReload(original);
-            NormalizeAfterLoad(normalizedOriginal);
+            // Compare the baseline under the same effective workspace settings as
+            // the external snapshot, not dormant independent preferences.
+            NormalizeWorkspaceDocument(normalizedOriginal);
             var baselineNormalizedTitles = CaptureMergeTitles(normalizedOriginal);
             var baseline = JsonSerializer.SerializeToNode(normalizedOriginal, JsonOptions)!.AsObject();
             if (JsonNode.DeepEquals(current, external))
