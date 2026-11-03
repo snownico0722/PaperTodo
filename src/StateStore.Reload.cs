@@ -22,8 +22,6 @@ public sealed partial class StateStore
         {
             if (version < _latestWrittenVersion)
                 return new(null, new() { Outcome = "busy" });
-            BeginExternalRead(version);
-
             // Do not fall back to the startup backup or manufacture an empty state.
             if (!File.Exists(FilePath))
                 return new(null, new() { Outcome = "invalid", Error = "data.json is missing." });
@@ -41,7 +39,8 @@ public sealed partial class StateStore
             // Any asynchronous normal save queued before this request is now obsolete.
             // This does not write to disk: the imported file is already the primary file.
             ValidatePrimaryHash(System.Security.Cryptography.SHA256.HashData(bytes));
-            _latestWrittenVersion = version;
+            // An invalid or failed reload must leave previously queued saves eligible.
+            BeginExternalRead(version);
             return new(state, new() { Outcome = "applied", Applied = true });
         }
         catch (Exception ex) when (ex is JsonException or ArgumentException)

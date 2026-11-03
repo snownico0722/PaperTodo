@@ -29,7 +29,6 @@ public sealed partial class StateStore
                 return new(null, new() { Outcome = "busy" });
             if (string.IsNullOrWhiteSpace(baselineJson))
                 return new(null, new() { Outcome = "invalid", Error = "merge_data requires baseline_json containing the original data.json." });
-            BeginExternalRead(version);
             if (!File.Exists(FilePath))
                 return new(null, new() { Outcome = "invalid", Error = "data.json is missing." });
 
@@ -64,7 +63,7 @@ public sealed partial class StateStore
             {
                 // Even a no-op request must fence older queued snapshots.
                 ValidatePrimaryHash(System.Security.Cryptography.SHA256.HashData(sourceBytes));
-                _latestWrittenVersion = version;
+                BeginExternalRead(version);
                 return new(null, new() { Outcome = "unchanged" });
             }
 
@@ -80,8 +79,9 @@ public sealed partial class StateStore
             // can irreversibly truncate a title before the user chooses a longer title limit.
             // Apply cross-field invariants once, after all choices, in CommitExternalMerge.
 
-            // Fence only older queued saves; no primary-file write until conflicts are resolved.
-            _latestWrittenVersion = version;
+            // Only a valid preview may fence older queued saves. No disk write occurs
+            // until conflicts are resolved; a failed commit must reschedule lost autosaves.
+            BeginExternalRead(version);
             return new(candidate, new DataReloadResult
             {
                 Outcome = "pending", Applied = false,

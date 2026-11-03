@@ -46,6 +46,9 @@ public sealed partial class AppController : IDisposable
     private readonly DispatcherTimer _displayMetricsRefreshTimer;
     private DispatcherTimer? _todoReminderTimer;
     private bool _hasPendingDirty;
+    // UI-thread bookkeeping for snapshots queued to the background writer. A merge
+    // preview can supersede one after _hasPendingDirty was already cleared.
+    private readonly HashSet<(StateStore Store, long Version)> _pendingAsyncSaves = new();
 
     private TaskbarIcon? _trayIcon;
     private ContextMenu? _trayMenu;
@@ -3322,23 +3325,26 @@ public sealed partial class AppController : IDisposable
             NotifyPluginEventMutationStampChanged();
             attemptedVersion = version;
             var stateRevision = Interlocked.Read(ref _stateRevision);
-            var json = _store.SerializeState(State);
+            var store = _store;
+            var json = store.SerializeState(State);
             if (sync)
             {
-                _store.SaveJsonSync(json, version);
+                store.SaveJsonSync(json, version);
                 if (!IsExiting) TryReleaseUnreferencedImageCache();
                 TryFlushPendingPluginPaperStateDeletes();
                 _hasShownSaveFailure = false;
             }
             else
             {
+                _pendingAsyncSaves.Add((store, version));
                 _ = Task.Run(async () =>
                 {
                     try
                     {
-                        await _store.SaveJsonAsync(json, version);
+                        await store.SaveJsonAsync(json, version);
                         Application.Current?.Dispatcher?.BeginInvoke(new Action(() =>
                         {
+                            _pendingAsyncSaves.Remove((store, version));
                             if (version == Interlocked.Read(ref _saveVersion) &&
                                 stateRevision == Interlocked.Read(ref _stateRevision))
                             {
@@ -3352,6 +3358,7 @@ public sealed partial class AppController : IDisposable
                     {
                         Application.Current?.Dispatcher?.BeginInvoke(new Action(() =>
                         {
+                            _pendingAsyncSaves.Remove((store, version));
                             HandleSaveFailure(ex, version);
                         }));
                     }
