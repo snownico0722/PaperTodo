@@ -6,19 +6,30 @@ using System.IO.Compression;
 namespace PaperTodo;
 
 /// <summary>
-/// Best-effort weekly history of committed core JSON documents. This is not a full
-/// application backup: images, plugin state and short-term .backup.json files are excluded.
+/// Four age-spaced recovery points for the raw, already-saved core JSON files.
+/// This is not a full backup of images, plugin state or app binaries.
 /// </summary>
 internal sealed class CoreHistoryBackup
 {
     private const int CopiesToKeep = 4;
     private const string ArchivePrefix = "PaperTodo-core-";
     private const string TimestampFormat = "yyyyMMdd-HHmmss-fffffff";
-    private static readonly TimeSpan Interval = TimeSpan.FromDays(7);
-    private readonly string _dataDirectory;
+    internal static readonly TimeSpan MinimumInterval = TimeSpan.FromMinutes(10);
+    private static readonly TimeSpan[] OlderRestorePoints =
+    [
+        TimeSpan.FromDays(30),
+        TimeSpan.FromDays(3),
+        TimeSpan.FromHours(6)
+    ];
 
-    internal CoreHistoryBackup(string dataDirectory) =>
+    private readonly string _dataDirectory;
+    private readonly Action? _ensureWritesAllowed;
+
+    internal CoreHistoryBackup(string dataDirectory, Action? ensureWritesAllowed = null)
+    {
         _dataDirectory = Path.GetFullPath(dataDirectory);
+        _ensureWritesAllowed = ensureWritesAllowed;
+    }
 
     internal string BackupDirectory => Path.Combine(_dataDirectory, "backups");
 
@@ -27,25 +38,30 @@ internal sealed class CoreHistoryBackup
         var utc = now.UtcDateTime;
         try
         {
-            var existing = ListArchives();
-            if (existing.Count != 0 && utc - existing[0].Timestamp < Interval)
+            _ensureWritesAllowed?.Invoke();
+            var archives = ListArchives();
+            CleanAbandonedTemporaryFiles();
+
+            if (archives.Count > 0 && utc - archives[0].Timestamp < MinimumInterval)
                 return false;
 
-            // Read the saved files, not UI models or .backup.json. A dormant numbered
-            // workspace still contains user notes even when its slot was disabled.
+            // Preserve the original bytes even if a workspace JSON cannot be parsed.
+            // A missing numbered workspace is normal; it must not block the others.
             var documents = new List<(string Name, byte[] Bytes)>();
             for (var number = 1; number <= 5; number++)
             {
                 var path = new WorkspacePaths(_dataDirectory, number).Data;
-                if (number > 1 && !File.Exists(path)) continue;
-                if (!StateStore.TryReadValidatedStateBytes(path, out var bytes))
-                {
-                    Trace.TraceWarning("Core history backup skipped: invalid or unavailable {0}", path);
-                    return false;
-                }
-                documents.Add((Path.GetFileName(path), bytes));
+                if (File.Exists(path))
+                    documents.Add((Path.GetFileName(path), File.ReadAllBytes(path)));
             }
+            if (documents.Count == 0) return false;
 
+            // No new historical version is needed when every workspace file is unchanged.
+            // This compares bytes, not JSON structure or application-level validity.
+            if (archives.Count > 0 && SameDocuments(archives[0].Path, documents))
+                return false;
+
+            _ensureWritesAllowed?.Invoke();
             Directory.CreateDirectory(BackupDirectory);
             var name = ArchivePrefix + utc.ToString(TimestampFormat, CultureInfo.InvariantCulture) + ".zip";
             var destination = Path.Combine(BackupDirectory, name);
@@ -62,28 +78,87 @@ internal sealed class CoreHistoryBackup
                         output.Write(document.Bytes);
                     }
                 }
-                // Same-directory rename publishes only a fully finalized archive.
+
+                _ensureWritesAllowed?.Invoke();
+                // Only a finalized archive becomes eligible for retention.
                 File.Move(temporary, destination);
             }
             finally
             {
                 try { if (File.Exists(temporary)) File.Delete(temporary); }
-                catch (IOException) { /* The failed temporary file is not part of retention. */ }
+                catch (IOException) { /* A failed temporary is never a restore point. */ }
             }
 
-            // A failure above never touches older archives. Prune only after publication.
-            foreach (var stale in ListArchives().Skip(CopiesToKeep))
+            var all = ListArchives();
+            var retained = ChooseRetainedArchives(all, utc);
+            foreach (var stale in all.Where(a => !retained.Contains(a.Path)))
             {
-                try { File.Delete(stale.Path); }
+                try
+                {
+                    _ensureWritesAllowed?.Invoke();
+                    File.Delete(stale.Path);
+                }
                 catch (Exception ex) { Trace.TraceWarning("Could not prune core history backup: {0}", ex); }
             }
             return true;
         }
         catch (Exception ex)
         {
-            // A history failure must not interrupt autosave, workspace switching or startup.
-            Trace.TraceWarning("Core history backup failed: {0}", ex);
+            // Never affect ordinary saving, switching, startup or termination.
+            Trace.TraceWarning("Core history backup skipped: {0}", ex);
             return false;
+        }
+    }
+
+    private static HashSet<string> ChooseRetainedArchives(
+        List<(string Path, DateTime Timestamp)> archives, DateTime now)
+    {
+        var available = archives.ToList(); // already newest first
+        var keep = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (available.Count == 0) return keep;
+
+        keep.Add(available[0].Path); // the newest snapshot is always retained
+        available.RemoveAt(0);
+        foreach (var target in OlderRestorePoints)
+        {
+            if (available.Count == 0 || keep.Count == CopiesToKeep) break;
+            // Oldest target first, so a newly generated recent copy cannot crowd
+            // out all longer-term history while the user is editing frequently.
+            var selected = available.MinBy(a => Math.Abs(((now - a.Timestamp) - target).Ticks));
+            keep.Add(selected.Path);
+            available.Remove(selected);
+        }
+        return keep;
+    }
+
+    private static bool SameDocuments(string archivePath, List<(string Name, byte[] Bytes)> documents)
+    {
+        try
+        {
+            using var zip = ZipFile.OpenRead(archivePath);
+            if (zip.Entries.Count != documents.Count) return false;
+            foreach (var document in documents)
+            {
+                var entry = zip.GetEntry(document.Name);
+                if (entry == null || entry.Length != document.Bytes.LongLength) return false;
+                using var input = entry.Open();
+                using var copy = new MemoryStream();
+                input.CopyTo(copy);
+                if (!copy.GetBuffer().AsSpan(0, (int)copy.Length).SequenceEqual(document.Bytes))
+                    return false;
+            }
+            return true;
+        }
+        catch { return false; } // a damaged older ZIP must not prevent a new backup
+    }
+
+    private void CleanAbandonedTemporaryFiles()
+    {
+        if (!Directory.Exists(BackupDirectory)) return;
+        foreach (var path in Directory.EnumerateFiles(BackupDirectory, "." + ArchivePrefix + "*.tmp"))
+        {
+            try { File.Delete(path); }
+            catch (IOException) { /* Best-effort cleanup of interrupted ZIP writes. */ }
         }
     }
 

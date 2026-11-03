@@ -236,6 +236,41 @@ internal static partial class Program
         GC.KeepAlive(catalog);
     }
 
+    private static void WorkspaceFollowingMergeBaseline()
+    {
+        // A following workspace uses the main title limit, not its dormant
+        // independent preference. Both merge inputs must use the same rules.
+        using var scope = new Scope();
+        var main = scope.Store.Load();
+        main.MaxTitleLength = 20;
+        scope.Store.SaveJsonSync(scope.Store.SerializeState(main), 2);
+        var secondary = new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared, 2);
+        var own = NewState();
+        own.MaxTitleLength = 6;
+        own.Papers[0].Title = "ABCDEFGHIJ";
+        secondary.SaveJsonSync(secondary.SerializeState(own), 1);
+        var baselineJson = File.ReadAllText(secondary.FilePath);
+
+        var catalog = new WorkspaceCatalog(scope.DirectoryPath, DurableAtomicFileWriter.Shared);
+        _ = catalog.OpenInitial();
+        var session = catalog.Open(2, catalog.Options, false);
+        session.BindPersistence();
+        Require(session.FollowsMain && session.State.MaxTitleLength == 20 &&
+                session.State.Papers[0].Title == "ABCDEFGHIJ",
+            "Fixture did not retain the full title under inherited settings.");
+
+        var external = J(baselineJson);
+        external["papers"]![0]!["title"] = "KLMNOPQRST";
+        File.WriteAllText(secondary.FilePath, external.ToJsonString());
+        var preview = session.Store.PreviewExternalMerge(session.State, 2, baselineJson);
+        Require(preview.State != null && preview.Conflicts is { Count: 0 } &&
+                preview.State.Papers[0].Title == "KLMNOPQRST",
+            "Dormant title limit created a fake conflict or rejected an external-only edit.");
+        Require(Str(J(File.ReadAllText(secondary.FilePath))["papers"]![0]!["title"]) == "KLMNOPQRST",
+            "The merge preview unexpectedly rewrote the external document.");
+        Console.WriteLine("PASS following workspace uses effective title settings for merge baseline.");
+    }
+
     private static void WorkspaceImageProtection()
     {
         using var scope = new Scope();

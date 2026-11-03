@@ -3339,6 +3339,7 @@ public sealed partial class AppController : IDisposable
                 if (!IsExiting) TryReleaseUnreferencedImageCache();
                 TryFlushPendingPluginPaperStateDeletes();
                 _hasShownSaveFailure = false;
+                if (!workspaceBoundary) QueueCoreHistoryBackup();
             }
             else
             {
@@ -3359,6 +3360,7 @@ public sealed partial class AppController : IDisposable
                                 TryFlushPendingPluginPaperStateDeletes();
                             }
                             _hasShownSaveFailure = false;
+                            QueueCoreHistoryBackup();
                         }));
                     }
                     catch (Exception ex)

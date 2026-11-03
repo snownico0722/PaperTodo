@@ -1289,6 +1289,8 @@ Native 插件是 fully trusted / unsandboxed .NET/WPF 代码，与 PaperTodo 当
 
 Native Body / Runtime 使用 `Workspace.ReloadData()` / `Workspace.GetDataReloadStatus()`；Web Body / Mini / Runtime 使用 `papertodo.workspace.request('data.reload', {})` 和 `papertodo.workspace.request('data.status', {})`。MCP 工具对应 `reload_data`（需要完整写入权限）和只读的 `get_data_reload_status`。
 
+插件侧调用 `ReloadData()` / `MergeData()` 或 Web 的 `data.reload` / `data.merge` 必须在插件清单声明高权限 `data.import`；`data.status` 无需此权限。MCP 仍使用原有完整写入权限控制。
+
 宿主**不监听或轮询磁盘文件，也不在普通自动保存时比较外部文件指纹**。`reload_data` 主动接受校验后的活动工作区数据，可能覆盖尚未保存的内存修改；无效或缺失输入直接报告错误。没有显式请求时，普通保存保持原行为，可能覆盖外部编辑。显式重载会使此前已排队的旧保存失效，关机/崩溃仍不会执行最后强存。
 
 可选的 `merge_data`（需要 MCP 完整写入权限）仅提供**有真实原始基线的三方合并**。外部工具必须保留开始编辑时实际读到的完整 JSON，传给 MCP `merge_data(baseline_json: originalJson)`、Native `Workspace.MergeData(originalJson)` 或 Web `papertodo.workspace.request('data.merge', { baselineJson: originalJson })`；参数是 JSON 字符串，不是路径或后来重新读取的文件。缺少、空白或无效的基线一律返回 `invalid`，不存在两方整份选择。`general.data_merge_conflicts` 的 `ask`（默认）、`external`（外部优先）、`internal`（内部优先）只处理真正冲突的字段，保留其他独立修改；正文按字段而不是逐行合并。MCP 的请求仍受 8,000,000 字符上限约束。

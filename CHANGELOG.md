@@ -22,7 +22,7 @@ This log is written for general and power users alike. It focuses on user-facing
 
 #### Data Reliability
 
-- **Weekly core-data history**: Automatically keeps up to four weekly ZIP snapshots in `backups/`, containing the main and any existing numbered workspace JSON documents. Images, plugins and short-term backup files are excluded. Older history is pruned only after a new archive is created successfully; failures do not block normal autosave.
+- **Dynamic core JSON backups**: Keep up to four age-spaced restore points targeting the latest saved state (about 10 minutes), 6 hours, 3 days and 1 month. Unchanged files are not re-archived. Raw JSON files from all existing workspaces are archived without JSON validation; images and plugin files are excluded. Old snapshots are pruned only after publishing a complete new ZIP, with no unbounded rescue archive.
 
 #### Papers, Title Bar & Capsules
 

@@ -6,6 +6,8 @@ public static class PaperTodoPermissionNames
 {
     public const string SettingsRead = "settings.read";
     public const string SettingsUpdate = "settings.update";
+    /// <summary>Explicit reload or merge of an entire workspace from disk.</summary>
+    public const string DataImport = "data.import";
     public const string PapersRead = "papers.read";
     public const string PapersObserve = "papers.observe";
     public const string PapersCreate = "papers.create";
@@ -29,6 +31,7 @@ public static class PaperTodoPermissionNames
     {
         SettingsRead,
         SettingsUpdate,
+        DataImport,
         PapersRead,
         PapersObserve,
         PapersCreate,

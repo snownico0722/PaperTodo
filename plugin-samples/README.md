@@ -1288,6 +1288,8 @@ When starting a new plugin, copy the smallest structure from the sample closest 
 
 Native Body/Runtime sessions use `Workspace.ReloadData()` and `Workspace.GetDataReloadStatus()`. Web Body/Mini/Runtime sessions use the Workspace bridge:
 
+Plugin calls to `ReloadData()` / `MergeData()` and Web `data.reload` / `data.merge` require the high-risk `data.import` permission in the plugin manifest. `data.status` remains readable without that grant. MCP continues to use its existing full-write gate.
+
 ```js
 const result = await papertodo.workspace.request('data.reload', {});
 const status = await papertodo.workspace.request('data.status', {});
