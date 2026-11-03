@@ -402,6 +402,7 @@ internal sealed partial class WebPluginRuntime : IDisposable
         TryClearGlobalShortcuts();
         TryClearTodoActions();
         TryClearTopBarLabels();
+        ResetRuntimeDocument();
     }
 
     private void OnNavigationCompleted(
@@ -426,6 +427,7 @@ internal sealed partial class WebPluginRuntime : IDisposable
             TryClearGlobalShortcuts();
             TryClearTodoActions();
             TryClearTopBarLabels();
+        ResetRuntimeDocument();
             FailStartupOrRestart(
                 $"Web Runtime navigation failed ({e.WebErrorStatus}).");
             return;
@@ -508,6 +510,7 @@ internal sealed partial class WebPluginRuntime : IDisposable
         TryClearGlobalShortcuts();
         TryClearTodoActions();
         TryClearTopBarLabels();
+        ResetRuntimeDocument();
 
         var dispatcher = _webView.Dispatcher;
         if (dispatcher.HasShutdownStarted || dispatcher.HasShutdownFinished)
@@ -551,6 +554,7 @@ internal sealed partial class WebPluginRuntime : IDisposable
         TryClearGlobalShortcuts();
         TryClearTodoActions();
         TryClearTopBarLabels();
+        ResetRuntimeDocument();
 
         if (!_startupCompleted &&
             _startupReady.TrySetException(new InvalidOperationException(message)))
@@ -576,6 +580,7 @@ internal sealed partial class WebPluginRuntime : IDisposable
         TryClearGlobalShortcuts();
         TryClearTodoActions();
         TryClearTopBarLabels();
+        ResetRuntimeDocument();
         try { _requestRestart(); } catch { }
     }
 
@@ -1012,7 +1017,6 @@ internal sealed partial class WebPluginRuntime : IDisposable
     private void TryClearTopBarLabels()
     {
         try { TopBarLabels.Clear(); } catch { }
-        TryResetExtensionUi();
     }
 
     private void ThrowIfInactive()
@@ -1034,6 +1038,7 @@ internal sealed partial class WebPluginRuntime : IDisposable
         TryClearGlobalShortcuts();
         TryClearTodoActions();
         TryClearTopBarLabels();
+        ResetRuntimeDocument();
         _disposed = true;
         try { _papersSubscription.Dispose(); } catch { }
         try { _settingsSubscription.Dispose(); } catch { }

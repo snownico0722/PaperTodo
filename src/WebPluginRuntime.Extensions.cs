@@ -37,7 +37,7 @@ internal sealed partial class WebPluginRuntime
         actions.SetActions(paperId, descriptors);
         return new { updated = descriptors.Length };
     }
-    private void TryResetExtensionUi()
+    private void ResetRuntimeDocument()
     {
         _extensionDocumentToken = null;
         ClearHostSubscriptions();
