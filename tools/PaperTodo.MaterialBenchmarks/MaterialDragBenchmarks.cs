@@ -223,20 +223,13 @@ internal static class MaterialDragBenchmarks
                 NativeSizeMessages = nativeSizeMessages, EnterSizeMove = enters, ExitSizeMove = exits,
                 InputIntervalMedianMs = Percentile(inputIntervals, .5), MovementIntervalMedianMs = Percentile(intervals, .5),
                 MovementIntervalP95Ms = Percentile(intervals, .95), Counters = changes,
-                SurfaceCount = surfaces.Length, ActiveBackgrounds = surfaces.Count(s => s.IsBackgroundActive),
-                NativeBackdropActive = window.IsNativeMicaEffective, Dpi = VisualTreeHelper.GetDpi(target).DpiScaleX,
-                SawDragSnapshotWhilePressed = sawDragSnapshotWhilePressed, Positions = positions };
+                SurfaceCount = surfaces.Length, NativeBackdropActive = window.IsNativeMicaEffective,
+                Dpi = VisualTreeHelper.GetDpi(target).DpiScaleX, Positions = positions };
         }
         finally { source.RemoveHook(hook); window.LayoutUpdated -= layout; }
 
-        Counters ReadCounters() => new(
-            surfaces.Sum(s => TestCounter(s, "_dragDraws")), surfaces.Sum(s => TestCounter(s, "_dragRefreshes")),
-            surfaces.Sum(s => TestCounter(s.BackgroundSessionState, "_dragRegions")), layouts,
-            surfaces.Sum(s => s.BackgroundProjectionCount), surfaces.Sum(s => s.BackgroundSceneDrawCount),
-            surfaces.Sum(s => s.BackgroundFrameCount));
+        Counters ReadCounters() => new(layouts);
     }
-    private static long TestCounter(object? value, string name) => value == null ? 0 :
-        Convert.ToInt64(value.GetType().GetField(name, Private | BindingFlags.Public)?.GetValue(value) ?? 0);
     private static double Percentile(double[] values, double percentile) => values.Length == 0 ? 0 :
         values.Order().ElementAt(Math.Min(values.Length - 1, (int)Math.Floor((values.Length - 1) * percentile)));
     private static double? DwmCpu()
