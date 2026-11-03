@@ -111,7 +111,8 @@ internal static partial class Program
             var original = ReadLive();
             editorB.Text = "local draft";
             editorB.CaretOffset = 3;
-            using var native = new PaperBodyPluginHostApi(controller, controller.PaperCommands, "note-a", "fixture.native", [], () => !noteA.IsClosed, () => true);
+            using var deniedImport = new PaperBodyPluginHostApi(controller, controller.PaperCommands, null, "fixture.denied", [], () => true, () => true);
+            using var native = new PaperBodyPluginHostApi(controller, controller.PaperCommands, "note-a", "fixture.native", [PaperTodoPermissionNames.DataImport], () => !noteA.IsClosed, () => true);
             using var observer = new PaperBodyPluginHostApi(controller, controller.PaperCommands, null, "fixture.observer", PaperTodoPermissionNames.All, () => true, () => true);
             var observed = new List<PaperTodoEvent>();
             using var subscription = observer.Subscribe(new() { ExcludeOwnOperations = false }, observed.Add);
@@ -121,6 +122,31 @@ internal static partial class Program
             LivePaper(original, "todo")["items"]![0]!["text"] = "external todo";
             original["papers"]!.AsArray().Add(new JsonObject { ["id"] = "added", ["type"] = "note", ["content"] = "new paper", ["x"] = 250, ["y"] = 350 });
             WriteLive(original);
+            static void ExpectImportDenied(Action call)
+            {
+                try { call(); }
+                catch (PaperTodoPluginException ex) when (ex.Code == "permission_denied") { return; }
+                throw new InvalidOperationException("Whole-workspace import bypassed data.import.");
+            }
+            var beforeDenied = File.ReadAllText(seedStore.FilePath);
+            var previousAttempt = controller.PaperCommands.GetDataReloadStatus().LastAttemptAt;
+            var previousTitle = controller.State.Papers.Single(p => p.Id == "note-a").Title;
+            Require(deniedImport.GetDataReloadStatus().WorkspaceNumber == controller.WorkspaceNumber &&
+                WebPluginWorkspaceRequests.Execute(deniedImport, "data.status",
+                    JsonSerializer.SerializeToElement(new { })) is DataReloadStatus,
+                "Read-only data status unexpectedly required import permission.");
+            ExpectImportDenied(() => deniedImport.ReloadData());
+            ExpectImportDenied(() => deniedImport.MergeData(original.ToJsonString()));
+            ExpectImportDenied(() => WebPluginWorkspaceRequests.Execute(deniedImport, "data.reload",
+                JsonSerializer.SerializeToElement(new { })));
+            ExpectImportDenied(() => WebPluginWorkspaceRequests.Execute(deniedImport, "data.merge",
+                JsonSerializer.SerializeToElement(new { baselineJson = original.ToJsonString() })));
+            Require(!controller.IsDataReloading &&
+                controller.PaperCommands.GetDataReloadStatus().LastAttemptAt == previousAttempt &&
+                controller.State.Papers.Single(p => p.Id == "note-a").Title == previousTitle &&
+                File.ReadAllText(seedStore.FilePath) == beforeDenied,
+                "Denied plugin import changed live state, disk, or the import attempt status.");
+            Console.WriteLine("PASS Native and Web imports require data.import; status remains readable.");
             var result = native.ReloadData();
             Require(result.Applied && !noteA.IsClosed, "Native API did not return before surface teardown");
             await Until(() => !controller.IsDataReloading, "Native reload completion");
@@ -321,19 +347,21 @@ internal static partial class Program
             Console.WriteLine("PASS external paper ID rename and delete close old windows");
 
 
-            using (var runtime = new PaperPluginRuntimeWorkspaceApi(controller, "fixture.runtime", [], () => true))
+            using (var runtime = new PaperPluginRuntimeWorkspaceApi(controller, "fixture.runtime", [PaperTodoPermissionNames.DataImport], () => true))
             {
                 controller.SaveNow(sync: true);
                 var runtimeEdit = ReadLive();
                 var runtimeBaseline = runtimeEdit.ToJsonString();
                 LivePaper(runtimeEdit, "note-a")["title"] = "RUN"; WriteLive(runtimeEdit);
+                using (var deniedRuntime = new PaperPluginRuntimeWorkspaceApi(controller, "fixture.runtime.denied", [], () => true))
+                    ExpectImportDenied(() => deniedRuntime.MergeData(runtimeBaseline));
                 Require((await Task.Run(() => runtime.MergeData(runtimeBaseline))).Outcome == "pending",
                     "Runtime merge API was not marshaled to UI");
                 await Until(() => !controller.IsDataReloading, "Runtime merge");
                 Require(controller.State.Papers.Single(p => p.Id == "note-a").Title == "RUN",
                     "Runtime merge baseline was not forwarded");
             }
-            Console.WriteLine("PASS Native runtime thread dispatch without new plugin permissions");
+            Console.WriteLine("PASS Native runtime thread dispatch with explicit data.import permission");
 
             controller.SaveNow(sync: true);
             var deletion = ReadLive(); deletion["papers"]!.AsArray().Remove(LivePaper(deletion, "note-a")); WriteLive(deletion);
