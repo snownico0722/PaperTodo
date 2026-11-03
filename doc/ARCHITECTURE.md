@@ -205,7 +205,7 @@ Markdown 中的 Note 图片只通过 PaperTodo 内部 `i:` asset URI 引用宿�
 
 `WorkspaceCatalog` 从主 `data.json` 的可选 `workspaces` 对象解析总开关、数量（含主工作区，2～5）、最后激活编号及副工作区设置跟随开关。不创建额外目录扫描器或 `workspaces.json`。未配置的旧数据仍只有原来的主工作区；主工作区启动时不额外重复读取整个文档。
 
-每个固定编号拥有不可变的 `WorkspacePaths` 与复用的 `StateStore` writer：1 使用 `data.json` / `data.backup.json` / `note-assets.lmdb` / `plugins/data`；2～5 使用 `data2.json` / `data2.backup.json` / `note-assets2.lmdb` / `plugins/data2` 等。备份、失败恢复源及冲突归档的图片引用扫描只保护对应工作区；未激活工作区不维持窗口、LMDB 连接或插件 Runtime。插件代码发现与 Native assembly 缓存仍属于进程，不随切换重新发现。
+每个固定编号拥有不可变的 `WorkspacePaths` 与复用的 `StateStore` writer：1 使用 `data.json` / `data.backup.json` / `note-assets.lmdb` / `plugins/data`；2～5 使用 `data2.json` / `data2.backup.json` / `note-assets2.lmdb` / `plugins/data2` 等。备份、失败恢复源及冲突归档的图片引用扫描只保护对应工作区；未激活工作区不维持窗口、LMDB 连接或插件 Runtime。图片缺失或读取损坏不阻止工作区启动和切换，也不额外弹出预检查提示；图片读取按原有局部失败处理。图片库加载失败时禁止危险写入，缺失库如有历史引用则不创建新库覆盖其恢复位置，缺失的引用编号不得重新分配；只有图片写入受到必要限制，不影响纸片和工作区的正常使用。插件代码发现与 Native assembly 缓存仍属于进程，不随切换重新发现。
 
 `AppController.Workspaces` 协调显式切换：先提交原编辑器并同步保存以淘汰旧异步快照，预读目标核心数据及图片库，再结束旧窗口、胶囊与插件 session/runtime。插件 datastore 的严格 detach 会等待当前写入、保存最新状态并报告失败；切换失败可恢复原缓存。切换不是删除，不发送永久纸片删除清理。目标使用新窗口及对应图片缓存，目标保存成功后才提交主文件中的活动编号。副工作区运行时更新主 catalog，必须通过主 `StateStore` 的锁与版本序号只替换 `workspaces` 节点，不能将当前副工作区 AppState 写入主文件。普通异步保存捕获具体 store 和界面代次，晚到的回调不能操作另一个工作区。成功切换清空旧工作区的重载结果；切换失败回滚则保留旧结果。目标已安装后失败时，先结束目标脚本进程，再按目标到原工作区的设置差异恢复运行时。MCP adapter 也绑定工作区代次：旧请求可完成已提交响应，但不得在新工作区执行；状态查询返回当前编号、数据文件名及设置跟随状态。缓存 writer 的保存投影只持有设置快照，不持有整份未激活 AppState。
 
