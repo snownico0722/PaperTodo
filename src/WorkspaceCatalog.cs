@@ -44,6 +44,11 @@ internal sealed class WorkspaceCatalog
     {
         var main = _initialMain ?? throw new InvalidOperationException("The initial workspace was already opened.");
         _initialMain = null;
+        // The main document owns the workspace catalog even while a numbered
+        // workspace is active. Finish its backup recovery before relying on it
+        // for subsequent switches or catalog updates.
+        if (MainStore.NeedsStartupRecoverySave)
+            MainStore.SaveJsonSync(MainStore.SerializeState(main), 1);
         if (Options.Enabled && Options.Active > 1)
         {
             try { return Open(Options.Active, Options, main); }
