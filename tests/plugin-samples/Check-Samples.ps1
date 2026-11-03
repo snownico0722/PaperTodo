@@ -88,16 +88,6 @@ try {
         throw "Plugin sample command failed: $LASTEXITCODE"
       }
     }
-    # Temporary CI transport: export the generated CloudGenshin DLL in bounded log chunks.
-    # The following block will be removed immediately after the binary is committed.
-    $cloudGenshinDll = Join-Path $repository 'plugins/sample.cloudgenshin.native/PaperTodo.Plugin.CloudGenshin.dll'
-    $cloudGenshinEncoded = [Convert]::ToBase64String([IO.File]::ReadAllBytes($cloudGenshinDll))
-    Write-Host 'PAPERTODO_CLOUDGENSHIN_DLL_B64_BEGIN'
-    for ($pos = 0; $pos -lt $cloudGenshinEncoded.Length; $pos += 1024) {
-      Write-Host $cloudGenshinEncoded.Substring(
-        $pos, [Math]::Min(1024, $cloudGenshinEncoded.Length - $pos))
-    }
-    Write-Host 'PAPERTODO_CLOUDGENSHIN_DLL_B64_END'
     git diff --exit-code -- plugins
     if ($LASTEXITCODE -ne 0) {
       throw "Committed native plugin outputs do not match their source projects."
