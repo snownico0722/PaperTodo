@@ -729,7 +729,7 @@ internal static class MaterialPresentationChecks
         var state = controller.State;
         var original = (state.UseCapsuleMode, state.UseDeepCapsuleMode,
             state.EnableAnimations, state.ExperimentalEdgeCapsuleHoverPreview,
-            state.PaperSkin, state.Theme, state.MatchAuxiliaryMaterialStrength);
+            state.PaperSkin, state.Theme);
         var area = SystemParameters.WorkArea;
         var paper = new PaperData
         {
@@ -765,14 +765,14 @@ internal static class MaterialPresentationChecks
             CheckCapsuleExternalForeground(controller, content, content.ContextMenu!,
                 host.Handle, "EDGE", host.RefreshSkin,
                 area.Left + 180, area.Top + 120);
-            Console.WriteLine("PASS real EDGE right-click: external foreground, stable popup, outside click (both material strengths)");
+            Console.WriteLine("PASS real EDGE right-click: external foreground, stable popup and outside click");
         }
         finally
         {
             if (state.Papers.Contains(paper)) controller.DeletePaper(paper);
             (state.UseCapsuleMode, state.UseDeepCapsuleMode,
                 state.EnableAnimations, state.ExperimentalEdgeCapsuleHoverPreview,
-                state.PaperSkin, state.Theme, state.MatchAuxiliaryMaterialStrength) = original;
+                state.PaperSkin, state.Theme) = original;
             Theme.Invalidate();
         }
     }
@@ -809,11 +809,10 @@ internal static class MaterialPresentationChecks
                 System.Globalization.CultureInfo.InvariantCulture));
             var externalX = (int)Math.Round(left + 95);
             var externalY = (int)Math.Round(top + 60);
-            foreach (var fullMaterial in new[] { false, true })
+            foreach (var skin in new[] { PaperSkins.Mica, PaperSkins.Acrylic })
             {
-                controller.State.PaperSkin = PaperSkins.Mica;
+                controller.State.PaperSkin = skin;
                 controller.State.Theme = "light";
-                controller.State.MatchAuxiliaryMaterialStrength = fullMaterial;
                 Theme.Invalidate();
                 refreshTheme();
                 Wait(70);
@@ -890,17 +889,6 @@ internal static class MaterialPresentationChecks
                 }
             }
         }
-    }
-    private static void AssertNoPopupFade(ContextMenu menu)
-    {
-        var popup = LogicalTreeHelper.GetParent(menu) as Popup;
-        Program.Assert(popup != null && popup.PopupAnimation == PopupAnimation.None &&
-            !DependencyPropertyHelper.GetValueSource(popup, Popup.PopupAnimationProperty).IsExpression,
-            "live popup animation is a local None, not a dynamic system Fade expression");
-        for (DependencyObject? node = menu; node is Visual; node = VisualTreeHelper.GetParent(node))
-            if (node is UIElement ui)
-                Program.Assert(ui.Opacity == 1 && !DependencyPropertyHelper.GetValueSource(ui, UIElement.OpacityProperty).IsAnimated,
-                    "menu and PopupRoot have no fade at Opened or during composition");
     }
     [StructLayout(LayoutKind.Sequential)] private struct CursorPoint { public int X, Y; }
     [DllImport("user32.dll")] private static extern bool GetCursorPos(out CursorPoint point);
