@@ -16,6 +16,7 @@ internal static partial class Program
         StartingPluginRuntimeIsDisposedOnRemoval(c);
         ReadsAndNotificationsDoNotCommitOrReplaceBodies(c, owner, note, todo);
         await ExternalSavePreservesRuntimeCallbackDirtyState(c);
+        VisualBroadcastSurvivesPaperCreation(c);
         CreationOwnsInitialTodoFields(c, note);
         TodoPasteUsesEventPayload();
         PartialReminderDeliveryKeepsUnsurfacedItemsPending(c);
