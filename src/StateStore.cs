@@ -328,6 +328,7 @@ public sealed partial class StateStore
         {
             ClearRecoveredLoadPreservationState();
         }
+        NeedsStartupRecoverySave = false;
     }
 
     private static bool TryReadValidatedStateBytes(string path, out byte[] bytes)
