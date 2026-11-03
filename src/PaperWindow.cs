@@ -2252,9 +2252,10 @@ public sealed partial class PaperWindow : Window
             FontSize = TitleFontSize,
             MinHeight = TitleLineHeight + 1,
             FontWeight = TitleFontWeight,
-            // UTF-16 MaxLength could cut off valid emoji clusters before commit.
-            // 0 is unlimited; title length is checked on commit, after IME composition.
-            MaxLength = 0,
+            // Keep a generous UTF-16 input guard against huge pastes without
+            // cutting off ordinary emoji sequences. The weighted title limit is
+            // applied on commit, after IME composition.
+            MaxLength = 4096,
             Padding = new Thickness(0),
             VerticalContentAlignment = VerticalAlignment.Center,
             FocusVisualStyle = null

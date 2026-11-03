@@ -251,8 +251,8 @@ internal static partial class Program
         todo.Items[0].LinkPaper(note.Id);
         c.ApplyPaperPresentation(todo, PaperPresentationAction.Expand, activate: false);
         var window = ReadField<Dictionary<string, PaperWindow>>(c, "_windows")[todo.Id];
-        Check(ReadField<System.Windows.Controls.TextBox>(window, "_titleEditBox").MaxLength == 0,
-            "The title editor does not reject valid composed emoji before weighted commit");
+        Check(ReadField<System.Windows.Controls.TextBox>(window, "_titleEditBox").MaxLength == 4096,
+            "The title editor allows long emoji sequences but bounds oversized pastes");
         window.RefreshTodoRowsForExternalChange();
         await PresentationSettle();
         static IEnumerable<System.Windows.Controls.TextBlock> Labels(DependencyObject root)
