@@ -22,6 +22,7 @@ internal static partial class Program
             ("explicit state field ownership and fail-closed inheritance", WorkspaceFieldScopeChecks),
             ("legacy main and numbered paths", WorkspacePathsAndLegacy),
             ("main catalog updates preserve content and fence old writers", WorkspaceMetadataWrites),
+            ("main backup recovery persists before secondary activation", WorkspaceMainRecoveryBeforeSecondaryStart),
             ("follow-main overlay preserves dormant preferences and layout", WorkspaceInheritance),
             ("image recovery protection is per workspace", WorkspaceImageProtection),
             ("plugin detach flush is strict and recoverable", WorkspacePluginStores),
@@ -158,6 +159,42 @@ internal static partial class Program
         Throws<IOException>(() => failed.UpdateWorkspaceConfiguration(
             new WorkspaceConfiguration { Enabled = true, Count = 2, Active = 2 }, 7));
         Require(File.ReadAllBytes(scope.Store.FilePath).SequenceEqual(bytes), "failed catalog write replaced main");
+    }
+
+    private static void WorkspaceMainRecoveryBeforeSecondaryStart()
+    {
+        using var scope = new Scope();
+        var main = scope.Store.Load();
+        main.Workspaces = new() { Enabled = true, Count = 3, Active = 2 };
+        main.Papers[0].Content = "main content must survive recovery";
+        scope.Store.SaveJsonSync(scope.Store.SerializeState(main), 2);
+        Require(scope.Store.TryRefreshBackupFromPrimary(), "main recovery test needs a valid backup");
+        var secondary = new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared, 2);
+        var secondState = NewState();
+        secondState.Papers[0].Content = "secondary independent content";
+        secondary.SaveJsonSync(secondary.SerializeState(secondState), 1);
+        var originalSecondary = File.ReadAllBytes(secondary.FilePath);
+        File.WriteAllText(scope.Store.FilePath, "{corrupt main");
+
+        var catalog = new WorkspaceCatalog(scope.DirectoryPath, DurableAtomicFileWriter.Shared);
+        var active = catalog.OpenInitial();
+        Require(active.Paths.Number == 2 && catalog.StartupError == null &&
+                !catalog.MainStore.NeedsStartupRecoverySave,
+            "starting a numbered workspace left the main workspace recovery pending");
+        var recoveredMain = J(File.ReadAllText(catalog.MainStore.FilePath));
+        Require(recoveredMain["workspaces"]!["active"]!.GetValue<int>() == 2 &&
+                Str(recoveredMain["papers"]![0]!["content"]) == "main content must survive recovery" &&
+                Directory.GetFiles(scope.DirectoryPath, "data.failed_load.*.json")
+                    .Any(p => File.ReadAllText(p) == "{corrupt main") &&
+                File.ReadAllBytes(secondary.FilePath).SequenceEqual(originalSecondary),
+            "main recovery lost the selected slot, main content, or secondary data");
+
+        var next = catalog.Options.Normalized();
+        next.Active = 3;
+        catalog.AdoptOptions(next);
+        catalog.SaveOptions(3);
+        Require(J(File.ReadAllText(catalog.MainStore.FilePath))["workspaces"]!["active"]!.GetValue<int>() == 3,
+            "restored main catalog could not accept a subsequent workspace switch");
     }
 
     private static void WorkspaceInheritance()
