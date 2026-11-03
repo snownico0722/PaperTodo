@@ -739,9 +739,20 @@ internal static partial class Program
                 "missing image incorrectly rendered as available");
             Require(await controller.SwitchWorkspaceAsync(1), "return after missing-image switch failed");
 
-            // Slot 3 was opened by the selector test above, so it now has a valid backup.
-            // Damage a never-opened slot instead: recovery from a valid backup is not failure.
-            File.WriteAllText(Path.Combine(directory, "data5.json"), "{invalid target");
+            // The actual switch path must reject a busy core file instead of
+            // accepting a backup or replacing it with a blank workspace.
+            var busyFifthPath = Path.Combine(directory, "data5.json");
+            File.WriteAllText(busyFifthPath, store2.SerializeState(NewState()));
+            var busyFifthBytes = File.ReadAllBytes(busyFifthPath);
+            using (var busy = new FileStream(busyFifthPath,
+                FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+                Require(!await controller.SwitchWorkspaceAsync(5) && controller.WorkspaceNumber == 1,
+                    "busy fifth workspace caused a switch or a destructive recovery");
+            Require(File.ReadAllBytes(busyFifthPath).SequenceEqual(busyFifthBytes),
+                "busy fifth workspace was overwritten during the rejected switch");
+
+            // Corrupt JSON is a different outcome: the same slot can be rebuilt.
+            File.WriteAllText(busyFifthPath, "{invalid target");
             Require(await controller.SwitchWorkspaceAsync(5) && controller.WorkspaceNumber == 5,
                 "corrupt fifth workspace was not rebuilt during a normal switch");
             Require(Directory.GetFiles(directory, "data5.failed_load.*.json")
