@@ -549,18 +549,15 @@ manifest 可声明：
 
 ```text
 papers.read
-papers.observe
 papers.create
 papers.delete
 
 todos.read
-todos.observe
 todos.append
 todos.update
 todos.delete
 
 notes.read
-notes.observe
 notes.append
 notes.replace
 ```
@@ -593,7 +590,7 @@ notes.write
 - `notes.write` 的 append/fill-blank 使用 `notes.append`，replace 使用 `notes.replace`；
 - paper session 插件不能删除承载当前 active session 的 paper；Runtime 没有 host paper，因此不受这条单纸片自删除限制。
 
-Observe 权限独立于 Read 权限。没有对应 read 权限时，事件仍可按 observe 权限投递，但敏感字段会被宿主裁剪。
+读取权限允许查询同类数据，也允许订阅对应事件。旧插件的 `papers.observe`、`todos.observe` 和 `notes.observe` 声明仍然有效，但仅保留事件订阅能力，不授予主动查询权限，事件中缺少 read 权限的敏感内容继续被脱敏。
 
 Native paper session：
 
@@ -620,51 +617,44 @@ const dispose = papertodo.onHostEvent(
 );
 ```
 
-可订阅：`paper.created`、`paper.changed`、`paper.deleted`、`todo.created`、`todo.changed`、`todo.deleted`、`note.changed`，以及 API 2.2 的 `todo.reminderTriggered`。会话失效或销毁后订阅自动失效；插件自己也应及时 unsubscribe 不再需要的监听。
+可订阅：`paper.created`、`paper.changed`、`paper.deleted`、`todo.created`、`todo.changed`、`todo.deleted`、`note.changed`；API 2.2 的提醒触发通过已有的 `todo.changed` 表达。会话失效或销毁后订阅自动失效；插件自己也应及时 unsubscribe 不再需要的监听。
 
 ### 提醒 API（2.2）
 
-PaperTodo 只提供提醒数据与实时触发通知。
+PaperTodo 将提醒是否触发作为待办状态变化公布，不再提供独立的提醒触发事件。
 
-- Native 通过 `Workspace.ListTodos()`、Web 通过 `workspace.request('todos.list')` 读取提醒。`ReminderAt` / `reminderAt` 是计划时间，`ReminderTriggered` / `reminderTriggered` 表示宿主是否已展示该提醒；需要 `todos.read`。
-- 设置、改期或取消仍使用 Native `SetTodoReminder` / Web `todos.setReminder`，需要 `todos.update`。`TodoChangedFields.Reminder` 也覆盖已触发标记的变化；宿主自动触发产生的 `TodoChanged` 来源为 `system`。
-- 显式订阅 Native `PaperTodoEventKind.TodoReminderTriggered`（`TodoReminderTriggeredEvent`）或 Web `todo.reminderTriggered`，需要 `todos.observe`。事件包含 `Todo` / `todo` 和来源为 `system` 的标准 metadata。没有 `todos.read` 时裁剪文本、提醒时间和已触发状态；纸片标题另需 `papers.read`。Native 默认订阅保留旧事件集合，新事件必须显式请求。
-- 只有原有纸片/托盘通知路径实际展示的提醒，才逐条发出事件；此时已更新状态并安排原有保存/重试。同批事件共用 operation ID，每条有独立 event ID。宿主展示失败时保留待处理且不发触发事件；关闭提醒功能也停止触发通知。启动或恢复后已过期的提醒仍走同一路径。
-- 事件是实时、尽力投递，不提供历史重放、离线队列、ACK 或跨重启的恰好一次保证；不表示异步保存已落盘，也不表示插件真正展示了提示。插件回调不能确认、屏蔽或替换宿主提醒。Native 回调运行在 UI Dispatcher，应保持简短，将慢速桌宠/网络工作交给插件自己的后台处理。
-- 长期联动放在 provider Runtime，不依赖可能被回收的 Body/Mini。Runtime 仍需至少一张实体插件纸片，可使用 `startupPaper.presentation: 'hidden'`。Web Body 和 Runtime 提供 `onHostEvent`，Web Mini 不提供。Runtime 导航或恢复时清理旧订阅，新文档需重新订阅；通过 `onEvent` 监听 `hostSubscriptionError` 可报告订阅被拒绝的原因。
+- 查询使用 `Workspace.ListTodos()` / `todos.list`，`reminderAt` 是提醒时间，`reminderTriggered` 表示宿主已展示提醒；查询与订阅均使用 `todos.read`。
+- 修改、改期与取消仍使用 `SetTodoReminder` / `todos.setReminder`，需要 `todos.update`。
+- Native 订阅 `PaperTodoEventKind.TodoChanged`，Web 订阅 `todo.changed`。仅在 `before.reminderTriggered` 为 false、`after.reminderTriggered` 为 true 且 `metadata.origin` 为 `system` 时，将它视为宿主触发的提醒。不要仅根据 `changedFields.Reminder` 判断，因为修改提醒时间也会触发该标记。
+- 宿主确认纸片/系统通知成功展示后，保存触发状态并发布冻结的状态变化。未展示的待办仍等待重试。事件实时且尽力投递，不提供历史重放或插件确认回执。
+- 长期监听放在插件 Runtime；Native 回调应避免阻塞 UI 线程。Web Body/Runtime 可用 `onHostEvent`，Web Mini 不支持；导航或销毁会释放旧订阅。
 
-Native Runtime 示例（保存订阅，并在 Runtime 释放时 Dispose）：
+Native 示例：
 
 ```csharp
 var subscription = context.Workspace.Subscribe(
-    new PaperTodoEventFilter
-    {
-        Kinds = new HashSet<PaperTodoEventKind> { PaperTodoEventKind.TodoReminderTriggered }
-    },
+    new PaperTodoEventFilter { Kinds = new HashSet<PaperTodoEventKind> { PaperTodoEventKind.TodoChanged } },
     evt =>
     {
-        if (evt is TodoReminderTriggeredEvent reminder)
+        if (evt is TodoChangedEvent change &&
+            change.Metadata.Origin == PaperTodoEventOrigin.System &&
+            !change.Before.ReminderTriggered && change.After.ReminderTriggered)
         {
-            // 将 reminder.Todo 交给插件自己的通知实现。
+            // 使用 change.After 交给插件自己的通知实现。
         }
     });
-// 在插件自己提示的点击回调中：
-// context.WorkspacePresentation.ExpandPaper(paperId, activate: true);
 ```
 
-Web Runtime 示例（声明 `permissions: ["todos.read", "todos.observe"]`，读取标题时再加 `papers.read`）：
+Web 示例（`permissions: ["todos.read"]`）：
 
 ```js
-const stop = papertodo.onHostEvent(['todo.reminderTriggered'], event => {
-  const { paperId, id, text, reminderAt } = event.todo;
-  // 将这些字段交给插件自己的桌宠/通知实现。
+const stop = papertodo.onHostEvent(['todo.changed'], event => {
+  if (event.metadata.origin === 'system' &&
+      !event.before.reminderTriggered && event.after.reminderTriggered) {
+    // 使用 event.after 触发插件自己的提示。
+  }
 });
-// 在插件自己提示的点击回调中确认目标仍存在，再打开：
-// await papertodo.workspace.request('papers.expand', { paperId, activate: true });
-// 不再需要监听时调用 stop()。
 ```
-
-打开纸片复用既有显示 API，不会自动选中具体待办。提示存在期间纸片可能被删除，应处理 `paper_not_found`，不要新建替代纸片。本次不向 MCP 增加提醒事件流。
 
 纸片、待办、笔记与图片查询只读当前模型/资产，不提交或强制同步编辑器；最新输入可能等待原有编辑/保存流程后再可见。外部写入如果目标就是同一张内置 Markdown，会先提交这张纸片尚未写回模型的用户文字，再执行插件/MCP修改；修改其他纸片不会因此调用无关第三方 Body 的 `Commit()`。核心 `data.json` 保存仍按正常规则同步内置 Markdown，不把第三方 Body `Commit()` 当作全局保存钩子。MCP 新建/追加同样允许设置新待办的初始属性，不额外要求完整写入；修改已有内容的权限不变。
 

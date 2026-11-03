@@ -193,23 +193,6 @@ internal sealed class PaperBodyPluginEventHub : IDisposable
         };
     }
 
-    // Occurrence events must not be reconstructed from the debounced state diff: cancelling or
-    // resetting a reminder in a listener must not erase an occurrence or manufacture another one.
-    public Action CaptureReminderTriggered(IReadOnlyList<TodoSnapshot> todos, DateTimeOffset occurredAt)
-    {
-        _dispatcher.VerifyAccess();
-        if (_disposed || _subscriptions.Count == 0 || todos.Count == 0) return static () => { };
-        var operationId = Guid.NewGuid();
-        var events = todos.Select(todo => (PaperTodoEvent)new TodoReminderTriggeredEvent(
-            todo,
-            new(Guid.NewGuid(), operationId, occurredAt, PaperTodoEventOrigin.System, null))).ToArray();
-        var subscribers = _subscriptions.Values.ToArray();
-        return () => Dispatch(events, subscribers);
-    }
-
-    public void PublishReminderTriggered(IReadOnlyList<TodoSnapshot> todos, DateTimeOffset occurredAt) =>
-        CaptureReminderTriggered(todos, occurredAt)();
-
     public void RemoveSession(Guid sessionId)
     {
         _dispatcher.VerifyAccess();
@@ -518,7 +501,6 @@ internal sealed class PaperBodyPluginEventHub : IDisposable
         TodoCreatedEvent item => item.Todo.PaperId,
         TodoChangedEvent item => item.After.PaperId,
         TodoDeletedEvent item => item.Todo.PaperId,
-        TodoReminderTriggeredEvent item => item.Todo.PaperId,
         NoteChangedEvent item => item.PaperId,
         _ => ""
     };

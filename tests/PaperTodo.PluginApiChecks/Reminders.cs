@@ -44,7 +44,7 @@ internal static partial class Program
 
     private static PaperTodoEventFilter ReminderFilter(string? paperId = null) => new()
     {
-        Kinds = new HashSet<PaperTodoEventKind> { PaperTodoEventKind.TodoReminderTriggered },
+        Kinds = new HashSet<PaperTodoEventKind> { PaperTodoEventKind.TodoChanged },
         PaperIds = paperId == null ? null : new HashSet<string> { paperId }
     };
 
@@ -61,53 +61,70 @@ internal static partial class Program
         using var hub = controller.PaperBodyPluginEvents;
         using var denied = BodyApi(controller, []);
         Error("permission_denied", () => denied.Subscribe(ReminderFilter(), _ => { }));
-        using var observe = BodyApi(controller, [PaperTodoPermissionNames.TodosObserve]);
-        using var read = BodyApi(controller, [PaperTodoPermissionNames.TodosRead, PaperTodoPermissionNames.TodosObserve, PaperTodoPermissionNames.PapersRead]);
+        using var legacy = BodyApi(controller, [PaperTodoPermissionNames.TodosObserve]);
+        Error("permission_denied", () => legacy.ListTodos());
+        using var reader = BodyApi(controller, [PaperTodoPermissionNames.TodosRead, PaperTodoPermissionNames.PapersRead]);
         using var runtime = new PaperPluginRuntimeWorkspaceApi(controller, "runtime.plugin",
-            [PaperTodoPermissionNames.TodosObserve, PaperTodoPermissionNames.TodosRead], () => true);
-        var redacted = new List<TodoReminderTriggeredEvent>();
-        var full = new List<TodoReminderTriggeredEvent>();
-        var runtimeEvents = new List<TodoReminderTriggeredEvent>();
-        using var observeSub = observe.Subscribe(ReminderFilter(), e => redacted.Add((TodoReminderTriggeredEvent)e));
-        using var fullSub = read.Subscribe(ReminderFilter(paper.Id), e => full.Add((TodoReminderTriggeredEvent)e));
-        using var runtimeSub = runtime.Subscribe(ReminderFilter(), e => runtimeEvents.Add((TodoReminderTriggeredEvent)e));
-        var wrongPaperEvents = 0;
-        using var wrongPaper = read.Subscribe(ReminderFilter("other"), _ => wrongPaperEvents++);
-        var oldDefaultEvents = new List<PaperTodoEvent>();
-        using var defaultSub = observe.Subscribe(new(), oldDefaultEvents.Add);
-        var before = read.ListTodos().Single();
+            [PaperTodoPermissionNames.TodosRead], () => true);
+        using var paperReader = BodyApi(controller, [PaperTodoPermissionNames.PapersRead]);
+        using var paperSub = paperReader.Subscribe(new()
+        { Kinds = new HashSet<PaperTodoEventKind> { PaperTodoEventKind.PaperChanged } }, _ => { });
+        using var noteReader = BodyApi(controller, [PaperTodoPermissionNames.NotesRead]);
+        using var noteSub = noteReader.Subscribe(new()
+        { Kinds = new HashSet<PaperTodoEventKind> { PaperTodoEventKind.NoteChanged } }, _ => { });
+        var redacted = new List<TodoChangedEvent>();
+        var full = new List<TodoChangedEvent>();
+        var runtimeEvents = new List<TodoChangedEvent>();
+        using var observeSub = legacy.Subscribe(ReminderFilter(), e => redacted.Add((TodoChangedEvent)e));
+        using var fullSub = reader.Subscribe(ReminderFilter(paper.Id), e => full.Add((TodoChangedEvent)e));
+        using var runtimeSub = runtime.Subscribe(ReminderFilter(), e => runtimeEvents.Add((TodoChangedEvent)e));
+        var other = 0;
+        using var wrongPaper = reader.Subscribe(ReminderFilter("other"), _ => other++);
+        var defaults = new List<PaperTodoEvent>();
+        using var defaultSub = legacy.Subscribe(new(), defaults.Add);
+        var before = reader.ListTodos().Single();
         Assert(before.ReminderAt == item.ReminderAt && !before.ReminderTriggered, "Pending reminder query was wrong.");
         item.ReminderTriggered = true;
-        var snapshot = controller.CaptureTodoSnapshot(paper, item);
+        var after = controller.CaptureTodoSnapshot(paper, item);
         var now = DateTimeOffset.UtcNow;
-        hub.PublishReminderTriggered([snapshot], now);
-        Assert(full.Count == 1 && full[0].Todo == snapshot && full[0].Metadata.Origin == PaperTodoEventOrigin.System &&
-            full[0].Metadata.OccurredAt == now && full[0].Metadata.SourcePluginId == null, "Trigger payload or origin was lost.");
-        Assert(redacted.Count == 1 && redacted[0].Todo.Text == "" && redacted[0].Todo.PaperTitle == "" &&
-            redacted[0].Todo.ReminderAt == null && !redacted[0].Todo.ReminderTriggered, "Observe-only listener leaked reminder content.");
-        Assert(runtimeEvents.Count == 1 && runtimeEvents[0].Todo.Text == item.Text && runtimeEvents[0].Todo.PaperTitle == "",
-            "Runtime failed to receive the event or paper title was not redacted.");
-        Assert(oldDefaultEvents.Count == 0, "A new occurrence kind reached legacy default subscriptions.");
-        Assert(wrongPaperEvents == 0, "A paper filter received another paper's reminder.");
-        Assert(read.ListTodos().Single().ReminderTriggered, "Triggered state was not queryable.");
-        var lateEvents = 0;
-        using var late = read.Subscribe(ReminderFilter(), _ => lateEvents++);
-        Assert(lateEvents == 0, "A late subscriber replayed a prior occurrence.");
+        hub.CaptureTriggeredReminderChanges([before], [after], now)();
+        Assert(full.Count == 1 && full[0].Before == before && full[0].After == after &&
+            full[0].ChangedFields == TodoChangedFields.Reminder &&
+            full[0].Metadata.Origin == PaperTodoEventOrigin.System &&
+            full[0].Metadata.OccurredAt == now && full[0].Metadata.SourcePluginId == null,
+            "TodoChanged did not describe the reminder transition.");
+        Assert(redacted.Count == 1 && redacted[0].Before.Text == "" && redacted[0].After.Text == "" &&
+            redacted[0].After.PaperTitle == "" && redacted[0].After.ReminderAt == null &&
+            !redacted[0].After.ReminderTriggered, "Legacy observe-only listener leaked reminder content.");
+        Assert(runtimeEvents.Count == 1 && runtimeEvents[0].After.Text == item.Text &&
+            runtimeEvents[0].After.PaperTitle == "", "Read-only Runtime failed to receive a redacted event.");
+        Assert(defaults.Count == 1 && defaults[0] is TodoChangedEvent,
+            "Existing default subscriptions stopped receiving reminder changes.");
+        Assert(other == 0, "Paper filter received a different paper's reminder.");
+        Assert(reader.ListTodos().Single().ReminderTriggered, "Triggered state was not queryable.");
+        var late = 0;
+        using var lateSub = reader.Subscribe(ReminderFilter(), _ => late++);
+        Assert(late == 0, "Late subscription replayed an earlier change.");
         fullSub.Dispose();
         runtime.Dispose();
-        hub.PublishReminderTriggered([snapshot], now);
-        Assert(full.Count == 1 && runtimeEvents.Count == 1, "Released subscriptions received events.");
-        Assert(!before.ReminderTriggered, "A previous snapshot was mutated.");
+        item.ReminderTriggered = false;
+        hub.ResetBaseline();
+        item.ReminderTriggered = true;
+        hub.CaptureTriggeredReminderChanges([before], [after], now)();
+        Assert(full.Count == 1 && runtimeEvents.Count == 1, "Released subscribers received events.");
+        Assert(!before.ReminderTriggered, "Previous snapshot was mutated.");
     }
 
     private static void ReminderReentrancy()
     {
         var (controller, paper, item) = ReminderController();
+        var secondItem = new PaperItem { Id = "second", Text = "Second reminder", ReminderAt = item.ReminderAt };
+        paper.Items.Add(secondItem);
         using var hub = controller.PaperBodyPluginEvents;
-        using var api = BodyApi(controller, [PaperTodoPermissionNames.TodosRead, PaperTodoPermissionNames.TodosObserve]);
+        using var api = BodyApi(controller, [PaperTodoPermissionNames.TodosRead]);
         var cancelled = 0;
         IDisposable? cancelledSub = null;
-        var received = new List<TodoReminderTriggeredEvent>();
+        var received = new List<TodoChangedEvent>();
         using var mutating = api.Subscribe(ReminderFilter(), _ =>
         {
             item.Text = "Changed by listener";
@@ -117,15 +134,19 @@ internal static partial class Program
             throw new Exception("Injected listener failure");
         });
         cancelledSub = api.Subscribe(ReminderFilter(), _ => cancelled++);
-        using var listener = api.Subscribe(ReminderFilter(), e => received.Add((TodoReminderTriggeredEvent)e));
-        var first = controller.CaptureTodoSnapshot(paper, item) with { ReminderTriggered = true };
-        var second = first with { Id = "second", Text = "Second reminder" };
-        hub.PublishReminderTriggered([first, second], DateTimeOffset.UtcNow);
-        Assert(received.Count == 2 && received[0].Todo.Text == "Reminder text" && received[1].Todo.Text == "Second reminder",
+        using var listener = api.Subscribe(ReminderFilter(), e => received.Add((TodoChangedEvent)e));
+        var beforeFirst = controller.CaptureTodoSnapshot(paper, item);
+        var beforeSecond = controller.CaptureTodoSnapshot(paper, secondItem);
+        var first = beforeFirst with { ReminderTriggered = true };
+        var second = beforeSecond with { ReminderTriggered = true };
+        hub.CaptureTriggeredReminderChanges([beforeFirst, beforeSecond], [first, second], DateTimeOffset.UtcNow)();
+        Assert(received.Count == 2 && received[0].After.Text == "Reminder text" &&
+            received[1].After.Text == "Second reminder",
             "A reentrant/throwing listener changed the frozen batch or blocked another subscriber.");
         Assert(cancelled == 0 && received[0].Metadata.OperationId == received[1].Metadata.OperationId &&
-            received[0].Metadata.EventId != received[1].Metadata.EventId, "Batch identity or in-flight unsubscribe was wrong.");
-        hub.PublishReminderTriggered([], DateTimeOffset.UtcNow);
+            received[0].Metadata.EventId != received[1].Metadata.EventId,
+            "Batch identity or in-flight unsubscribe was wrong.");
+        hub.CaptureTriggeredReminderChanges([], [], DateTimeOffset.UtcNow)();
         Assert(received.Count == 2, "Empty batch emitted an event.");
         var changes = new List<TodoChangedEvent>();
         using var changed = api.Subscribe(new() { Kinds = new HashSet<PaperTodoEventKind> { PaperTodoEventKind.TodoChanged } },
@@ -198,7 +219,7 @@ internal static partial class Program
         var (controller, paper, item) = ReminderController();
         using var hub = controller.PaperBodyPluginEvents;
         using var workspace = new PaperPluginRuntimeWorkspaceApi(controller, "web.plugin",
-            [PaperTodoPermissionNames.TodosObserve, PaperTodoPermissionNames.TodosRead], () => true);
+            [PaperTodoPermissionNames.TodosRead], () => true);
         var runtime = (WebPluginRuntime)RuntimeHelpers.GetUninitializedObject(typeof(WebPluginRuntime));
         var flags = BindingFlags.Instance | BindingFlags.NonPublic;
         typeof(WebPluginRuntime).GetField("_workspace", flags)!.SetValue(runtime, workspace);
@@ -206,7 +227,7 @@ internal static partial class Program
         typeof(WebPluginRuntime).GetField("_extensionDocumentToken", flags)!.SetValue(runtime, "current");
         var execute = typeof(WebPluginRuntime).GetMethod("ExecuteHostRequest", flags)!;
         var payload = JsonSerializer.SerializeToElement(new { method = "events.subscribe", @params = new {
-            subscriptionId = "s1", types = new[] { "todo.reminderTriggered" }, paperIds = new[] { paper.Id } } });
+            subscriptionId = "s1", types = new[] { "todo.changed" }, paperIds = new[] { paper.Id } } });
         Assert(!WebPluginRuntime.AcceptsExtensionRequest(JsonSerializer.SerializeToElement(new { uiToken = "old" }), payload, "current") &&
             WebPluginRuntime.AcceptsExtensionRequest(JsonSerializer.SerializeToElement(new { uiToken = "current" }), payload, "current"),
             "Runtime accepted a stale document subscription.");
@@ -220,23 +241,28 @@ internal static partial class Program
         execute.Invoke(runtime, [payload]);
         typeof(WebPluginRuntime).GetMethod("TryResetExtensionUi", flags)!.Invoke(runtime, null);
         Assert(subscriptions.Count == 0, "Navigation/failure cleanup retained subscriptions.");
-        var kinds = WebPaperBodySession.ReadEventKinds(JsonSerializer.SerializeToElement(new { types = new[] { "todo.reminderTriggered" } }));
-        Assert(kinds.SetEquals(new[] { PaperTodoEventKind.TodoReminderTriggered }), "Web Body event parser differs from Runtime.");
+        var kinds = WebPaperBodySession.ReadEventKinds(JsonSerializer.SerializeToElement(new { types = new[] { "todo.changed" } }));
+        Assert(kinds.SetEquals(new[] { PaperTodoEventKind.TodoChanged }), "Web Body event parser differs from Runtime.");
+        Error("invalid_params", () => WebPaperBodySession.ReadEventKinds(JsonSerializer.SerializeToElement(new { types = new[] { "todo.reminderTriggered" } })));
         Error("invalid_params", () => WebPaperBodySession.ReadEventKinds(JsonSerializer.SerializeToElement(new { types = new[] { "unknown" } })));
         using var denied = BodyApi(controller, []);
         typeof(WebPluginRuntime).GetField("_workspace", flags)!.SetValue(runtime, denied);
         try
         {
             execute.Invoke(runtime, [payload]);
-            throw new Exception("Web Runtime bypassed reminder observe permission.");
+            throw new Exception("Web Runtime bypassed reminder read permission.");
         }
         catch (TargetInvocationException ex) when (ex.InnerException is PaperTodoPluginException { Code: "permission_denied" }) { }
-        var serialized = JsonSerializer.SerializeToElement(new TodoReminderTriggeredEvent(
-            controller.CaptureTodoSnapshot(paper, item) with { ReminderTriggered = true },
+        var before = controller.CaptureTodoSnapshot(paper, item) with { ReminderTriggered = false };
+        var after = before with { ReminderTriggered = true };
+        var serialized = JsonSerializer.SerializeToElement(new TodoChangedEvent(
+            before, after, TodoChangedFields.Reminder,
             new(Guid.NewGuid(), Guid.NewGuid(), DateTimeOffset.UtcNow, PaperTodoEventOrigin.System, null)),
             WebPluginRuntimeInfrastructure.JsonOptions);
-        Assert(serialized.GetProperty("kind").GetString() == "todoReminderTriggered" &&
-            serialized.GetProperty("todo").GetProperty("reminderTriggered").GetBoolean(), "Web payload shape is incorrect.");
+        Assert(serialized.GetProperty("kind").GetString() == "todoChanged" &&
+            !serialized.GetProperty("before").GetProperty("reminderTriggered").GetBoolean() &&
+            serialized.GetProperty("after").GetProperty("reminderTriggered").GetBoolean(),
+            "Web reminder transition payload shape is incorrect.");
     }
 
     private static void ReminderWebBridge()
