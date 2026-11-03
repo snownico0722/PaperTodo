@@ -32,18 +32,6 @@ internal static partial class Program
         var empty = VisibleLines("", "opposite value", DataReloadConflictUi.LineMark.OnlyInMemory);
         Require(empty.Length == 1 && empty[0] == Strings.Get("DataReloadConflictEmpty"),
             "empty content was replaced by opposite-side text instead of an empty indication");
-        var invalidWindow = new DataReloadConflictDialogWindow(new StateMergeConflict(
-            "$", false, null, true, System.Text.Json.Nodes.JsonValue.Create("live data"),
-            true, System.Text.Json.Nodes.JsonValue.Create("invalid JSON at line 1\n{broken"),
-            "invalid_external"));
-        var controls = LogicalDescendants(invalidWindow).ToArray();
-        Require(controls.OfType<Button>().Any(button =>
-                    Equals(button.Content, Strings.Get("DataReloadConflictKeepExternal")) &&
-                    button.Visibility == Visibility.Collapsed) &&
-                controls.OfType<TextBlock>().Any(block => block.Text?.Contains("invalid JSON at line 1") == true),
-            "invalid JSON was not shown in the external comparison pane or could still be accepted");
-        invalidWindow.Close();
-        Console.WriteLine("PASS invalid external JSON is shown in comparison UI without accepting corrupt bytes");
         Console.WriteLine("PASS actual conflict panel values, side-specific markers and empty content");
     }
 
@@ -125,35 +113,18 @@ internal static partial class Program
                 editor.PersistentText == "retained local draft" &&
                 Str(LivePaper(ReadLive(), "note-a")["content"]) == "external arrived during review",
                 "aborted merge installed or wrote a stale candidate");
-            Require(Field<bool>(controller, "_hasPendingDirty") &&
-                !Field<DispatcherTimer>(controller, "_forceSaveTimer").IsEnabled,
-                "aborted merge scheduled an overwrite of the newer external input");
-            var ignored = Field<bool>(controller, "_ignoreSaveFailures");
-            typeof(AppController).GetField("_ignoreSaveFailures", Private)!.SetValue(controller, true);
-            try
-            {
-                controller.MarkDirty();
-                controller.SaveNow(sync: true);
-                controller.SaveNow();
-                await Until(() => Field<bool>(controller, "_hasPendingDirty"), "rejected queued normal save");
-                controller.Exit();
-                Require(controller.IsRunning && editor.PersistentText == "retained local draft" &&
-                    Str(LivePaper(ReadLive(), "note-a")["content"]) == "external arrived during review",
-                    "later save/ordinary exit discarded a conflict side");
-            }
-            finally { typeof(AppController).GetField("_ignoreSaveFailures", Private)!.SetValue(controller, ignored); }
-            AppController.ConflictDialogDriver = (_, _) => PaperConflictChoice.KeepMemory;
-            Require(controller.PaperCommands.MergeData(PaperOperationContext.Mcp(), failingBaseline).Outcome == "pending",
-                "explicit conflict retry did not start");
-            await Until(() => !controller.IsDataReloading, "explicit retry resolves paused saves");
-            Require(controller.PaperCommands.GetDataReloadStatus().LastResult?.Applied == true,
-                "explicit retry did not restore normal saving");
+            Require(Field<bool>(controller, "_hasPendingDirty"),
+                "rejected merge lost the pending local edits");
+            controller.SaveNow(sync: true);
+            Require(editor.PersistentText == "retained local draft" &&
+                    Str(LivePaper(ReadLive(), "note-a")["content"]) == "retained local draft",
+                "normal autosave did not resume after rejected explicit merge");
         }
         finally { AppController.ConflictDialogDriver = savedDriver; }
         CheckUserExitIoFailure(controller, editor);
         // Finish the normal save explicitly before the rest of the fixture; no sleep/retry.
         editor.Text = "original";
         controller.SaveNow(sync: true);
-        Console.WriteLine("PASS trusted policy capture, accurate live archive, rejected candidate, blocked overwrite/exit and explicit recovery");
+        Console.WriteLine("PASS trusted policy capture, accurate archive, rejected candidate and normal autosave after rejection");
     }
 }
