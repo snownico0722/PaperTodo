@@ -3731,6 +3731,16 @@ public sealed partial class PaperWindow : Window
             return;
         }
 
+        // A monitor disconnect can move the expanded HWND before display reconciliation.
+        // Do not let that temporary off-screen position replace its remembered geometry.
+        if (ShouldSaveDeepCapsuleExpandedGeometry &&
+            WindowNative.TryGetWindowDeviceBounds(this, out var bounds) &&
+            !ExpandedPaperRecoveryPolicy.HasReachablePixels(
+                bounds, WindowWorkAreaHelper.ConnectedMonitorGeometries()))
+        {
+            return;
+        }
+
         _controller.UpdateGeometry(_paper, this);
     }
 
