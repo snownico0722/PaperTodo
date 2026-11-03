@@ -56,7 +56,7 @@ internal static partial class Program
                 "accepted merge was not written to primary");
         Require(!File.ReadAllText(s.Store.FilePath).Contains("$paperTodoRevision", StringComparison.Ordinal),
                 "opt-in merge added obsolete persistent revision tracking");
-        Require(s.Store.PreviewExternalMerge(preview.State, 3).Result.Outcome == "unchanged",
+        Require(s.Store.PreviewExternalMerge(preview.State, 3, s.BaselineJson).Result.Outcome == "unchanged",
                 "identical current and disk state should require no merge");
     }
 
