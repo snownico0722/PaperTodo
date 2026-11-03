@@ -468,7 +468,8 @@ internal static partial class Program
                 {
                     Kinds = new HashSet<PaperTodoEventKind>
                     {
-                        PaperTodoEventKind.TodoChanged
+                        PaperTodoEventKind.TodoChanged,
+                        PaperTodoEventKind.PaperChanged
                     }
                 }, events.Add);
             paper.Items[0].Text = "pending user edit";
@@ -476,6 +477,21 @@ internal static partial class Program
 
             _ = Invoke(c, "ProcessDueTodoReminders", now);
             c.PaperBodyPluginEvents.ScanNow(PaperOperationContext.User());
+            var presentationEvents = events.OfType<PaperChangedEvent>()
+                .Where(e => e.After.Id == paper.Id &&
+                    e.ChangedFields.HasFlag(PaperChangedFields.Visibility))
+                .ToArray();
+            Check(presentationEvents.Length == 1 &&
+                presentationEvents[0].Metadata.Origin == PaperTodoEventOrigin.System &&
+                !presentationEvents[0].Before.IsVisible && presentationEvents[0].After.IsVisible,
+                "Automatic reminder presentation must emit exactly one system-origin visibility event.");
+            Check(events.FindIndex(e => e is TodoChangedEvent change &&
+                    change.After.Id == "reminder-1" &&
+                    change.Metadata.Origin == PaperTodoEventOrigin.User) <
+                  events.FindIndex(e => e is PaperChangedEvent changed &&
+                    changed.After.Id == paper.Id &&
+                    changed.Metadata.Origin == PaperTodoEventOrigin.System),
+                "Pending user changes must be delivered before reminder presentation changes.");
             var changes = events.OfType<TodoChangedEvent>().ToArray();
             Check(changes.Any(e => e.After.Id == "reminder-1" &&
                 e.ChangedFields == TodoChangedFields.Reminder &&

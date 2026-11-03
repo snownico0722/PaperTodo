@@ -621,7 +621,7 @@ const dispose = papertodo.onHostEvent(
 
 ### 提醒 API（2.2）
 
-PaperTodo 在到期前**约 5 秒**发出一次前置事件，插件可取消本次默认展示；到期后的状态变化仍由普通 `TodoChanged` 表达。
+PaperTodo 在到期前**约 5 秒**发出一次前置事件（Upcoming 与防抖后的用户变更事件不保证全局严格顺序；快照反映通知时的当前状态，用户事件的 `occurredAt` 不一定是实际编辑时间），插件可取消本次默认展示；到期后的状态变化仍由普通 `TodoChanged` 表达。
 
 - `todos.read` 允许查询待办与订阅 Native `PaperTodoEventKind.TodoReminderUpcoming`（Web：`todo.reminderUpcoming`）。新事件包含 `todo` 快照、一次性的 `notificationId` 及 System 来源的 `metadata`，不是提醒已触发的通知；旧的 `todos.observe` 仅保留旧事件兼容，不能订阅这个新前置事件。
 - 宿主在预定时间前 5 秒尝试发送前置事件。若创建/改期时剩余不到 5 秒，会尽快发送；启动恢复时已过期的提醒直接进入宿主默认处理，不保证补发前置事件。同一轮提醒最多发一次，改期后旧 `notificationId` 失效。
