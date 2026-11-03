@@ -64,7 +64,7 @@ public sealed partial class AppController
     }
 
     internal Task<bool> SwitchWorkspaceAsync(int number) =>
-        SwitchWorkspaceCoreAsync(number, WorkspaceOptions.Normalized(), forceReload: false);
+        SwitchWorkspaceCoreAsync(number, WorkspaceOptions.Normalized());
 
     internal async Task<bool> ChangeWorkspaceConfigurationAsync(WorkspaceConfiguration requested)
     {
@@ -74,8 +74,10 @@ public sealed partial class AppController
         next.Active = !next.Enabled || WorkspaceNumber > next.Count ? 1 : WorkspaceNumber;
         var followsChanged = WorkspaceNumber > 1 &&
             next.FollowsMain(WorkspaceNumber) != _workspace.FollowsMain;
-        if (next.Active != WorkspaceNumber || followsChanged)
-            return await SwitchWorkspaceCoreAsync(next.Active, next, forceReload: true);
+        if (next.Active != WorkspaceNumber)
+            return await SwitchWorkspaceCoreAsync(next.Active, next);
+        if (followsChanged)
+            return ApplyCurrentWorkspaceSettings(next);
 
         var previous = WorkspaceOptions.Normalized();
         var previouslyConfigured = _workspaceCatalog.HasConfiguration;
@@ -83,9 +85,9 @@ public sealed partial class AppController
         RefreshWorkspaceButtons();
         try
         {
-            CommitWorkspaceEditors();
             if (WorkspaceNumber == 1)
             {
+                CommitWorkspaceEditors();
                 // This is the live main AppState: persist its updated catalog and papers in ONE
                 // guarded ordinary save. Reading and accepting the main file a second time
                 // could allow an intervening external edit to be overwritten by live memory.
@@ -98,8 +100,7 @@ public sealed partial class AppController
             }
             else
             {
-                if (!TrySaveNow(sync: true, workspaceBoundary: true)) return false;
-                // The main store is inactive; only update its catalog, retaining its papers.
+                // Updating the main catalog must not flush an unrelated secondary document.
                 _workspaceCatalog.MainStore.UpdateWorkspaceConfiguration(next, NextWorkspaceSaveVersion());
             }
             _workspaceCatalog.AdoptOptions(next);
@@ -113,6 +114,66 @@ public sealed partial class AppController
             if (WorkspaceNumber == 1) State.Workspaces = previouslyConfigured ? WorkspaceOptions : null;
             ReportWorkspaceError(ex.GetBaseException().Message);
             return false;
+        }
+        finally
+        {
+            _workspaceSwitching = false;
+            RefreshWorkspaceControls();
+            ResumeExitAfterDataReload();
+        }
+    }
+
+    private bool ApplyCurrentWorkspaceSettings(WorkspaceConfiguration options)
+    {
+        // Changing inheritance is a settings operation, not a workspace handoff.
+        // Keep the live papers, windows, plugins and command binding intact.
+        var previous = _workspace;
+        _workspaceSwitching = true;
+        RefreshWorkspaceButtons();
+        var catalogCommitted = false;
+        try
+        {
+            var candidate = _workspaceCatalog.Open(WorkspaceNumber, options, current: previous);
+            var effectiveSettings = WorkspaceSettingsSnapshot.Capture(candidate.State);
+            var before = StateStore.CopyForReload(State);
+            var session = new WorkspaceSession(previous.Paths, previous.Store, State,
+                candidate.FollowsMain, candidate.IndependentSettings)
+            {
+                InheritedSettings = candidate.InheritedSettings
+            };
+
+            // Persist only the main catalog first. A failed write must leave the
+            // active settings and the normal-save projection untouched.
+            _workspaceCatalog.MainStore.UpdateWorkspaceConfiguration(options, NextWorkspaceSaveVersion());
+            catalogCommitted = true;
+            _workspaceCatalog.AdoptOptions(options);
+            effectiveSettings.ApplyTo(State);
+            _workspace = session;
+            session.BindPersistence();
+            Interlocked.Increment(ref _stateRevision);
+            NotifyPluginEventMutationStampChanged();
+
+            try
+            {
+                UiLanguages.ApplyWorkspacePreference(State.UiLanguage);
+                State.PaperSkin = PaperSkins.Resolve(State);
+                NormalizePaperSystemVisibilitySettings();
+                _paperBodyPlugins.RefreshWorkspaceLocalization();
+                RefreshReloadedSettings(before);
+                ReconcilePluginRuntimes();
+            }
+            catch (Exception ex)
+            {
+                // The catalog is committed; a UI refresh failure is not a rollback.
+                Trace.TraceWarning("Workspace settings refresh failed: {0}", ex);
+                ReportWorkspaceError(ex.GetBaseException().Message);
+            }
+            return true;
+        }
+        catch (Exception ex)
+        {
+            ReportWorkspaceError(ex.GetBaseException().Message);
+            return catalogCommitted;
         }
         finally
         {
@@ -138,14 +199,13 @@ public sealed partial class AppController
         foreach (var window in _windows.Values.ToArray()) window.CommitPendingEditsForSave();
     }
 
-    private async Task<bool> SwitchWorkspaceCoreAsync(int number, WorkspaceConfiguration requested,
-        bool forceReload)
+    private async Task<bool> SwitchWorkspaceCoreAsync(int number, WorkspaceConfiguration requested)
     {
         Application.Current.Dispatcher.VerifyAccess();
         var nextOptions = requested.Normalized();
         if (number < 1 || number > (nextOptions.Enabled ? nextOptions.Count : 1)) return false;
         if (!CanBeginWorkspaceChange()) return false;
-        if (number == WorkspaceNumber && !forceReload) return true;
+        if (number == WorkspaceNumber) return true;
         nextOptions.Active = number;
 
         var previous = _workspace;
@@ -170,29 +230,19 @@ public sealed partial class AppController
             CommitWorkspaceEditors();
             if (!TrySaveNow(sync: true, workspaceBoundary: true)) return false;
             candidate = _workspaceCatalog.Open(number, nextOptions,
-                main: previous.Paths.Number == 1 ? previous.State : null,
-                current: number == previous.Paths.Number ? previous : null);
-            if (number == previous.Paths.Number)
-            {
-                // Toggling inheritance reloads software settings, not a second LMDB handle.
-                candidateImages = previousImages;
-                candidatePluginData = previousPluginData;
-            }
-            else
-            {
-                candidateImages = new NoteImageStore(candidate.Paths.Images);
-                candidateImages.Load();
-                // Only a missing LMDB needs a recovery-reference scan. Never veto a
-                // workspace switch because an individual image cannot be rendered.
-                IReadOnlySet<string>? protectedImageIds = null;
-                if (!File.Exists(candidateImages.FilePath) &&
-                    candidate.Store.TryCollectProtectedImageIds(candidate.State, out var ids))
-                    protectedImageIds = ids;
-                candidateImages.ProtectPersistedImageReferences(candidate.State, protectedImageIds,
-                    File.Exists(candidate.Paths.Data) || File.Exists(candidate.Paths.Backup));
-                candidatePluginData = new PaperBodyPluginDataStore(_paperBodyPlugins.PluginRoot, number)
-                    { WriteLifetime = _store.WriteLifetime };
-            }
+                main: previous.Paths.Number == 1 ? previous.State : null);
+            var needsInitialSave = candidate.Store.NeedsStartupRecoverySave;
+            candidateImages = new NoteImageStore(candidate.Paths.Images);
+            candidateImages.Load();
+            // Missing images must not prevent entry or recreate an unsafe image library.
+            IReadOnlySet<string>? protectedImageIds = null;
+            if (!File.Exists(candidateImages.FilePath) &&
+                candidate.Store.TryCollectProtectedImageIds(candidate.State, out var ids))
+                protectedImageIds = ids;
+            candidateImages.ProtectPersistedImageReferences(candidate.State, protectedImageIds,
+                File.Exists(candidate.Paths.Data) || File.Exists(candidate.Paths.Backup));
+            candidatePluginData = new PaperBodyPluginDataStore(_paperBodyPlugins.PluginRoot, number)
+                { WriteLifetime = _store.WriteLifetime };
 
             _suppressDirty = true;
             _workspaceClosingSurfaces = true;
@@ -209,14 +259,18 @@ public sealed partial class AppController
             InstallWorkspace(candidate, candidateImages, candidatePluginData);
             installed = true;
             _workspaceClosingSurfaces = false;
-            await RestoreWorkspacePresentationAsync(previous.State);
+            var relocated = await RestoreWorkspacePresentationAsync(previous.State);
             if (IsExiting) return false;
 
-            // Save normalized target geometry/new blank papers first. Only then commit the active
-            // slot in main data.json. A failed metadata write still permits restoring the old UI.
-            if (!TrySaveNow(sync: true, workspaceBoundary: true))
+            // A healthy existing target needs no content write. Save only when
+            // initializing/recovering the document or rescuing off-screen geometry.
+            var targetChanged = needsInitialSave || relocated;
+            if (targetChanged && !TrySaveNow(sync: true, workspaceBoundary: true))
                 throw new IOException(Strings.Get("WorkspaceSaveFailed"));
-            if (number != 1) _workspaceCatalog.SaveOptions(NextWorkspaceSaveVersion());
+            // The active slot always belongs to the main catalog. Returning to a
+            // healthy main workspace updates that node alone, without resaving papers.
+            if (number != 1 || !targetChanged)
+                _workspaceCatalog.SaveOptions(NextWorkspaceSaveVersion());
             committed = true;
             _lastDataReloadAt = null;
             _lastDataReloadResult = null;
@@ -359,20 +413,21 @@ public sealed partial class AppController
         Interlocked.Increment(ref _stateRevision);
     }
 
-    private async Task RestoreWorkspacePresentationAsync(AppState before)
+    private async Task<bool> RestoreWorkspacePresentationAsync(AppState before)
     {
         RefreshReloadedSettings(before);
         // Every workspace handoff stopped the old processes, even when both slots use
         // identical preferences. Recreate the target's optional warm process once.
         PaperWindow.EnsurePersistentScriptProcessForSettings(State);
         EnablePluginRuntimeReconciliation();
-        EnsurePapersOnScreen();
+        var relocated = EnsurePapersOnScreen();
         await RestorePaperSurfacesAsync(State.Papers.Where(p => p.IsVisible).ToArray());
         RefreshTodoReminderSchedule();
         ArrangeDeepCapsules(animate: false);
         RebuildTrayMenu();
         // GC is not part of a reversible handoff. Each store's normal startup protection scan
         // is already scoped to its own primary, backup, recovery and conflict files.
+        return relocated;
     }
 
     private AppState PrepareAcceptedWorkspaceReload(AppState candidate) =>
