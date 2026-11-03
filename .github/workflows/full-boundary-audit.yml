@@ -32,6 +32,8 @@ jobs:
           New-Item -ItemType Directory -Force "$env:RUNNER_TEMP/full-boundary-logs" | Out-Null
           Copy-Item .github/full-audit/ExtendedComponentBoundaryChecks.cs tests/PaperTodo.SettingsApiChecks/
           Remove-Item .github/full-audit/ExtendedComponentBoundaryChecks.cs
+          git apply --include='tests/**' .github/full-audit/title-and-cases.patch
+          if ($LASTEXITCODE -ne 0) { throw 'Extended test patch failed.' }
           $p = 'tests/PaperTodo.SettingsApiChecks/PluginBoundaryChecks.cs'
           $text = [IO.File]::ReadAllText($p)
           $anchor = '        CreationOwnsInitialTodoFields(c, note);'
@@ -48,6 +50,8 @@ jobs:
         run: |
           git apply --include='src/PaperCommandService.cs' .github/full-audit/fixes.patch
           if ($LASTEXITCODE -ne 0) { throw 'Command patch failed.' }
+          git apply --include='src/AppController.PluginApi.cs' .github/full-audit/title-and-cases.patch
+          if ($LASTEXITCODE -ne 0) { throw 'Title patch failed.' }
           $PSNativeCommandUseErrorActionPreference = $false
           $log = "$env:RUNNER_TEMP/full-boundary-logs/red-archive.txt"
           dotnet run --project tests/PaperTodo.SettingsApiChecks -c Release 2>&1 | Tee-Object -FilePath $log
@@ -83,11 +87,18 @@ jobs:
         run: |
           $out = "$env:RUNNER_TEMP/full-boundary-result"
           New-Item -ItemType Directory -Force $out | Out-Null
-          git add src/PaperCommandService.cs src/WebPaperBodySession.cs plugin-samples/PaperTodo.Plugin.ReviewArchive/ReviewArchiveStore.cs tests/PaperTodo.SettingsApiChecks
+          git add src/PaperCommandService.cs src/AppController.PluginApi.cs src/WebPaperBodySession.cs plugin-samples/PaperTodo.Plugin.ReviewArchive/ReviewArchiveStore.cs tests/PaperTodo.SettingsApiChecks
           git diff --cached --binary --output="$out/verified.patch"
           if ($LASTEXITCODE -ne 0) { throw 'Could not export verified patch.' }
           git diff --exit-code -- plugins
           if ($LASTEXITCODE -ne 0) { throw 'Unstaged plugin artifacts differ from the verified payload.' }
+          $records = @(foreach ($path in (git ls-files)) {
+            if ($path -match '^\.github/(full-audit/|workflows/full-boundary-audit\.yml$)') { continue }
+            if (Test-Path -LiteralPath $path -PathType Leaf) {
+              [pscustomobject]@{ path = $path; bytes = (Get-Item -LiteralPath $path).Length; sha256 = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash }
+            }
+          })
+          $records | ConvertTo-Json -Depth 3 | Set-Content "$out/verified-file-inventory.json" -Encoding utf8
           Get-FileHash plugins/sample.review-archive.native/PaperTodo.Plugin.ReviewArchive.dll | Format-List | Out-File "$env:RUNNER_TEMP/full-boundary-logs/plugin-hash.txt"
       - uses: actions/upload-artifact@v4
         if: always()
@@ -98,7 +109,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: full-boundary-verified-patch
-          path: ${{ runner.temp }}/full-boundary-result/verified.patch
+          path: ${{ runner.temp }}/full-boundary-result/*
           retention-days: 14
   publish:
     needs: verify
@@ -124,7 +135,7 @@ jobs:
           test "$GITHUB_REF" = "refs/heads/$branch"
           test "$(git ls-remote origin "refs/heads/$branch" | cut -f1)" = "$EXPECTED_SHA"
           git apply --index "$RUNNER_TEMP/full-boundary-result/verified.patch"
-          git rm .github/full-audit/ExtendedComponentBoundaryChecks.cs .github/full-audit/fixes.patch .github/workflows/full-boundary-audit.yml
+          git rm .github/full-audit/ExtendedComponentBoundaryChecks.cs .github/full-audit/fixes.patch .github/full-audit/title-and-cases.patch .github/workflows/full-boundary-audit.yml
           git diff --cached --check
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
