@@ -121,6 +121,52 @@ internal static partial class Program
                 "normal autosave did not resume after rejected explicit merge");
         }
         finally { AppController.ConflictDialogDriver = savedDriver; }
+        var versionBeforeInvalid = Field<long>(controller, "_saveVersion");
+        Require(controller.PaperCommands.MergeData(PaperOperationContext.Mcp(), "{invalid").Outcome == "invalid" &&
+                Field<long>(controller, "_saveVersion") == versionBeforeInvalid,
+            "invalid merge changed the ordinary-save version");
+        // A background autosave has cleared _hasPendingDirty but its queued snapshot
+        // may be discarded by a valid merge preview. Simulate that pending snapshot
+        // deterministically instead of relying on thread scheduling in the UI fixture.
+        controller.SaveNow(sync: true);
+        var inFlightBaseline = ReadLive().ToJsonString();
+        editor.Text = "queued local snapshot";
+        var outstanding = Field<HashSet<(StateStore Store, long Version)>>(controller, "_pendingAsyncSaves");
+        var queuedToken = (Field<StateStore>(controller, "_store"), -17L);
+        Require(outstanding.Add(queuedToken), "test queue token already exists");
+        typeof(AppController).GetField("_hasPendingDirty", Private)!.SetValue(controller, false);
+        Field<DispatcherTimer>(controller, "_saveTimer").Stop();
+        Field<DispatcherTimer>(controller, "_forceSaveTimer").Stop();
+        var competingDisk = ReadLive();
+        LivePaper(competingDisk, "note-a")["content"] = "external competing change";
+        WriteLive(competingDisk);
+        var diskAfterReview = (System.Text.Json.Nodes.JsonObject)competingDisk.DeepClone();
+        LivePaper(diskAfterReview, "note-a")["content"] = "external changed while reviewing";
+        AppController.ConflictDialogDriver = (_, _) =>
+        {
+            WriteLive(diskAfterReview);
+            return PaperConflictChoice.KeepExternal;
+        };
+        try
+        {
+            Require(!Field<bool>(controller, "_hasPendingDirty"),
+                "test did not model a dispatched autosave with no pending dirty flag");
+            Require(controller.PaperCommands.MergeData(PaperOperationContext.Mcp(), inFlightBaseline).Outcome == "pending",
+                "in-flight autosave merge did not start");
+            await Until(() => !controller.IsDataReloading, "in-flight autosave merge failure");
+            Require(controller.PaperCommands.GetDataReloadStatus().LastResult is { Outcome: "busy", Applied: false } &&
+                    Field<bool>(controller, "_hasPendingDirty"),
+                "rejected merge did not restore a superseded in-flight autosave");
+        }
+        finally
+        {
+            outstanding.Remove(queuedToken);
+            AppController.ConflictDialogDriver = savedDriver;
+        }
+        controller.SaveNow(sync: true);
+        Require(Str(LivePaper(ReadLive(), "note-a")["content"]) == "queued local snapshot",
+            "restored autosave did not persist the rejected merge's local draft");
+        Console.WriteLine("PASS failed merge reschedules autosave already dispatched to the writer");
         CheckUserExitIoFailure(controller, editor);
         // Finish the normal save explicitly before the rest of the fixture; no sleep/retry.
         editor.Text = "original";
