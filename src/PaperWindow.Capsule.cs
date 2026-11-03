@@ -37,102 +37,6 @@ namespace PaperTodo;
 
 public sealed partial class PaperWindow
 {
-    private CancellationTokenSource? _capsuleDragBackgroundCapture;
-    private DesktopBackgroundCapture.Snapshot? _capsuleDragBackgroundSnapshot;
-
-    private void BeginCapsuleDragBackground(IntPtr excludeHwnd)
-    {
-        EndCapsuleDragBackground();
-        if (!_controller.State.MatchAuxiliaryMaterialStrength ||
-            !PaperSkins.UsesSampledAuxiliary(Theme.Skin) ||
-            SystemParameters.HighContrast ||
-            !DwmMicaApi.Instance.EffectsEnabled)
-        {
-            return;
-        }
-
-        var capture = new CancellationTokenSource();
-        _capsuleDragBackgroundCapture = capture;
-        if (_capsulePointerState == CapsulePointerState.NativeMoving &&
-            _paperChrome is SkinBorder paperSurface)
-            paperSurface.BeginDragBackground();
-        if (IsDeepCapsuleReordering)
-            _edgeCapsuleHost?.BeginDragBackground();
-        _ = PrepareCapsuleDragBackgroundAsync(excludeHwnd, capture);
-    }
-
-    private async Task PrepareCapsuleDragBackgroundAsync(
-        IntPtr excludeHwnd,
-        CancellationTokenSource capture)
-    {
-        var retained = false;
-        try
-        {
-            var snapshot = await DesktopBackgroundCapture.PrepareDragAsync(
-                excludeHwnd,
-                capture.Token);
-            if (snapshot == null ||
-                capture.IsCancellationRequested ||
-                !ReferenceEquals(capture, _capsuleDragBackgroundCapture) ||
-                !_controller.State.MatchAuxiliaryMaterialStrength ||
-                !PaperSkins.UsesSampledAuxiliary(Theme.Skin) ||
-                SystemParameters.HighContrast || !DwmMicaApi.Instance.EffectsEnabled)
-            {
-                return;
-            }
-
-            _capsuleDragBackgroundSnapshot = snapshot;
-            ApplyCapsuleDragBackground(snapshot);
-            retained = true;
-        }
-        catch (OperationCanceledException)
-        {
-        }
-        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or
-            InvalidOperationException or ExternalException or ArgumentException or NotSupportedException)
-        {
-            Debug.WriteLine("Capsule drag background unavailable; keeping the live material: " + ex.Message);
-        }
-        finally
-        {
-            if (!retained && ReferenceEquals(capture, _capsuleDragBackgroundCapture))
-                EndCapsuleDragBackground();
-        }
-    }
-
-    private void ApplyCapsuleDragBackground(DesktopBackgroundCapture.Snapshot snapshot)
-    {
-        if (_capsulePointerState == CapsulePointerState.NativeMoving &&
-            _paperChrome is SkinBorder paperSurface)
-        {
-            paperSurface.UseDragBackground(snapshot);
-        }
-
-        if (IsDeepCapsuleReordering)
-        {
-            _edgeCapsuleHost?.UseDragBackground(snapshot);
-            _deepCapsuleFloatingDragHost?.UseDragBackground(snapshot);
-        }
-    }
-
-    private void EndCapsuleDragBackground()
-    {
-        var capture = _capsuleDragBackgroundCapture;
-        _capsuleDragBackgroundCapture = null;
-        if (capture != null)
-        {
-            capture.Cancel();
-            capture.Dispose();
-        }
-
-        _capsuleDragBackgroundSnapshot = null;
-        if (_paperChrome is SkinBorder paperSurface)
-            paperSurface.EndDragBackground();
-        _edgeCapsuleHost?.EndDragBackground();
-        if (!IsDeepCapsuleDockingHandoff && !IsDeepCapsuleDockingReveal)
-            _deepCapsuleFloatingDragHost?.EndDragBackground();
-    }
-
     private enum CapsulePointerState
     {
         Idle,
@@ -494,7 +398,6 @@ public sealed partial class PaperWindow
                 try
                 {
                     _collapsedFromMaximized = false;
-                    BeginCapsuleDragBackground(new WindowInteropHelper(this).Handle);
                     DragMove();
                 }
                 catch (InvalidOperationException)
@@ -503,7 +406,6 @@ public sealed partial class PaperWindow
                 }
                 finally
                 {
-                    EndCapsuleDragBackground();
                     TryAttachExperimentalCapsuleMagnetAfterDrag();
                     SetCapsulePointerState(CapsulePointerState.Idle);
                     leftArea.Cursor = Cursors.Hand;
