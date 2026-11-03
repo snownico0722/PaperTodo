@@ -60,8 +60,9 @@ public sealed partial class AppController
             () => MaterialTransparencyLevels.Normalize(State.MaterialTransparency),
             value => State.MaterialTransparency = value,
             SettingEffects.MaterialTransparency,
-            title: SettingsSidebarLocalized("材质透明度", "Material transparency", "素材の透明度", "재질 투명도"),
-            options: MaterialTransparencyLevels.All);
+            title: SettingsSidebarLocalized("展开纸片材质透明度", "Expanded paper material transparency", "展開した紙片の素材透明度", "펼친 메모의 재질 투명도"),
+            options: MaterialTransparencyLevels.All,
+            description: "Controls the native material appearance of expanded papers and Settings windows. Capsules and menus keep an opaque lightweight surface; these levels do not enable background transmission for them.");
         yield return DefineSetting<bool>("appearance.hide_surface_outline",
             () => State.HideSurfaceOutline,
             value => State.HideSurfaceOutline = value,
