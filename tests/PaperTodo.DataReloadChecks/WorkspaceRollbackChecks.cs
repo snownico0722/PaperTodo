@@ -6,6 +6,44 @@ using PaperTodo;
 
 internal static partial class Program
 {
+    private static async Task WorkspaceMainCatalogSingleWriteChecks(AppController controller)
+    {
+        Require(controller.WorkspaceNumber == 1, "main catalog fixture requires the active main workspace");
+        var catalog = Field<WorkspaceCatalog>(controller, "_workspaceCatalog");
+        var store = catalog.MainStore;
+        var writerField = typeof(StateStore).GetField("_atomicWriter", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        var originalWriter = (IDurableAtomicFileWriter)writerField.GetValue(store)!;
+        var original = controller.WorkspaceOptions.Normalized();
+        var next = controller.WorkspaceOptions.Normalized();
+        next.Count = next.Count == 5 ? 4 : 5;
+        var writes = 0;
+        var activeState = controller.State;
+        try
+        {
+            writerField.SetValue(store, new DurableAtomicFileWriter((stage, path) =>
+            {
+                if (stage == DurableAtomicWriteStage.BeforeTempOpen && path == store.FilePath)
+                    writes++;
+            }));
+            Require(await controller.ChangeWorkspaceConfigurationAsync(next),
+                "main workspace configuration update failed");
+            Require(writes == 1, "main workspace catalog update performed a second accepting write");
+            Require(ReferenceEquals(activeState, controller.State) &&
+                    controller.WorkspaceOptions.Count == next.Count &&
+                    controller.State.Workspaces?.Count == next.Count &&
+                    J(File.ReadAllText(store.FilePath))["workspaces"]!["count"]!.GetValue<int>() == next.Count,
+                "one-pass main configuration update did not keep disk and live state aligned");
+        }
+        finally
+        {
+            writerField.SetValue(store, originalWriter);
+            if (controller.WorkspaceOptions.Count != original.Count)
+                Require(await controller.ChangeWorkspaceConfigurationAsync(original),
+                    "main catalog fixture could not restore workspace configuration");
+        }
+        Console.WriteLine("PASS active main workspace catalog and papers persist in one guarded save");
+    }
+
     private static async Task WorkspaceRollbackChecks(AppController controller, string directory)
     {
         var catalog = Field<WorkspaceCatalog>(controller, "_workspaceCatalog");
