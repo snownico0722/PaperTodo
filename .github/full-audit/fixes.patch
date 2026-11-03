@@ -1,0 +1,171 @@
+diff --git a/src/PaperCommandService.cs b/src/PaperCommandService.cs
+index cfe1929..3ec319e 100644
+--- a/src/PaperCommandService.cs
++++ b/src/PaperCommandService.cs
+@@ -92,7 +92,7 @@ internal sealed partial class PaperCommandService
+     {
+         ArgumentNullException.ThrowIfNull(request);
+         EnsureRunning();
+-        _controller.PrepareExternalPaperOperation();
++        PrepareExternalMutation();
+         EnsurePaperCapacity();
+ 
+         var type = request.Type?.Trim().ToLowerInvariant();
+@@ -172,7 +172,7 @@ internal sealed partial class PaperCommandService
+         var paper = RequirePaper(
+             RequiredId(request.PaperId, "paperId"),
+             PaperTypes.Todo);
+-        _controller.PrepareExternalPaperOperation(paper);
++        PrepareExternalMutation(paper);
+         var inputs = request.Todos?.ToArray() ?? [];
+         ValidateTodoInputs(
+             inputs,
+@@ -227,7 +227,7 @@ internal sealed partial class PaperCommandService
+         var paper = RequirePaper(
+             RequiredId(request.PaperId, "paperId"),
+             PaperTypes.Todo);
+-        _controller.PrepareExternalPaperOperation(paper);
++        PrepareExternalMutation(paper);
+         var item = RequireTodo(
+             paper,
+             RequiredId(request.TodoId, "todoId"));
+@@ -363,7 +363,7 @@ internal sealed partial class PaperCommandService
+         var paper = RequirePaper(
+             RequiredId(request.PaperId, "paperId"),
+             PaperTypes.Todo);
+-        _controller.PrepareExternalPaperOperation(paper);
++        PrepareExternalMutation(paper);
+         var item = RequireTodo(
+             paper,
+             RequiredId(request.TodoId, "todoId"));
+@@ -426,7 +426,7 @@ internal sealed partial class PaperCommandService
+ 
+         // Only a request that is already valid may settle pending user text and establish
+         // user-before-external ordering for this same Markdown paper.
+-        _controller.PrepareExternalPaperOperation(paper);
++        PrepareExternalMutation(paper);
+ 
+         var original = paper.Content ?? "";
+         var result = BuildNoteWriteResult(original, content, request.Mode);
+@@ -463,7 +463,7 @@ internal sealed partial class PaperCommandService
+         var paper = RequirePaper(
+             RequiredId(request.PaperId, "paperId"),
+             PaperTypes.Todo);
+-        _controller.PrepareExternalPaperOperation(paper);
++        PrepareExternalMutation(paper);
+         var item = RequireTodo(
+             paper,
+             RequiredId(request.TodoId, "todoId"));
+@@ -508,7 +508,7 @@ internal sealed partial class PaperCommandService
+     {
+         EnsureRunning();
+         var paper = RequirePaper(RequiredId(paperId, "paperId"));
+-        _controller.PrepareExternalPaperOperation(paper);
++        PrepareExternalMutation(paper);
+         var papers = _controller.State.Papers;
+         var originalIndex = papers.IndexOf(paper);
+         var affectedLinks = papers
+@@ -852,6 +852,16 @@ internal sealed partial class PaperCommandService
+         }
+     }
+ 
++    private void PrepareExternalMutation(PaperData? targetPaper = null)
++    {
++        // Flushing pending user events can synchronously run plugin commands, including
++        // deleting/replacing this target. Never mutate a detached pre-callback object.
++        _controller.PrepareExternalPaperOperation(targetPaper);
++        EnsureRunning();
++        if (targetPaper != null && !ReferenceEquals(FindPaper(targetPaper.Id), targetPaper))
++            throw Error("paper_not_found", "The requested paper no longer exists.");
++    }
++
+     private void EnsureRunning()
+     {
+         if (!_controller.IsRunning)
+diff --git a/plugin-samples/PaperTodo.Plugin.ReviewArchive/ReviewArchiveStore.cs b/plugin-samples/PaperTodo.Plugin.ReviewArchive/ReviewArchiveStore.cs
+index fb8610b..cdabcc9 100644
+--- a/plugin-samples/PaperTodo.Plugin.ReviewArchive/ReviewArchiveStore.cs
++++ b/plugin-samples/PaperTodo.Plugin.ReviewArchive/ReviewArchiveStore.cs
+@@ -580,8 +580,16 @@ internal static class ReviewArchiveStore
+         {
+             _ = Prune(settings);
+         }
+-        Changed?.Invoke();
++        // Persistence belongs to the mutation, not to successful UI notifications.
+         ScheduleSave();
++        foreach (Action handler in Changed?.GetInvocationList() ?? [])
++        {
++            try { handler(); }
++            catch (Exception ex)
++            {
++                System.Diagnostics.Trace.TraceWarning("Review archive observer failed: {0}", ex.GetType().Name);
++            }
++        }
+     }
+ 
+     private static void ScheduleSave()
+diff --git a/src/WebPaperBodySession.cs b/src/WebPaperBodySession.cs
+index 244fbde..abfdf89 100644
+--- a/src/WebPaperBodySession.cs
++++ b/src/WebPaperBodySession.cs
+@@ -427,7 +427,7 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
+             _activeDocumentToken = null;
+         }
+         _documentGeneration++;
+-        ClearHostSubscriptions();
++        ResetDocumentResources();
+         _documentReady = false;
+         _pluginDocumentReady = false;
+     }
+@@ -548,7 +548,7 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
+             _activeDocumentToken = null;
+             _departingDocumentToken = null;
+             _documentGeneration++;
+-            ClearHostSubscriptions();
++            ResetDocumentResources();
+         }
+         webView.Loaded -= OnWebViewLoaded;
+         webView.SizeChanged -= OnWebViewSizeChanged;
+@@ -880,9 +880,14 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
+         }
+     }
+ 
+-    private void ClearHostSubscriptions()
++    private void ResetDocumentResources()
+     {
+         (_context.Host as PaperBodyPluginHostApi)?.ResetExtensionUi();
++        ClearHostSubscriptions();
++    }
++
++    private void ClearHostSubscriptions()
++    {
+         foreach (var subscription in _hostSubscriptions.Values)
+         {
+             try { subscription.Dispose(); } catch { }
+@@ -1016,7 +1021,7 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
+         _activeDocumentToken = null;
+         _departingDocumentToken = null;
+         _documentGeneration++;
+-        ClearHostSubscriptions();
++        ResetDocumentResources();
+         ShowFailure(Strings.Format("PluginsWebProcessFailedFormat", e.ProcessFailedKind));
+     }
+ 
+@@ -1113,7 +1118,7 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
+         _activeDocumentToken = null;
+         _departingDocumentToken = null;
+         _documentGeneration++;
+-        ClearHostSubscriptions();
++        ResetDocumentResources();
+         _documentReady = false;
+         _pluginDocumentReady = false;
+         _webViewFailed = true;
+@@ -1382,7 +1387,7 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
+         _activeDocumentToken = null;
+         _departingDocumentToken = null;
+         _documentGeneration++;
+-        ClearHostSubscriptions();
++        ResetDocumentResources();
+         _pendingRuntimeMessages.Clear();
+         _lifetime.Cancel();
+         _webViewGeneration++;
