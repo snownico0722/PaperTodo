@@ -183,7 +183,7 @@ internal static partial class Program
         secondaryStore.SaveJsonSync(secondaryStore.SerializeState(own), 1);
         var catalog = new WorkspaceCatalog(scope.DirectoryPath, DurableAtomicFileWriter.Shared);
         _ = catalog.OpenInitial();
-        var session = catalog.Open(2, catalog.Options, false);
+        var session = catalog.Open(2, catalog.Options);
         session.BindPersistence();
         Require(session.State.Theme == "dark" && session.State.McpEnabled && session.State.McpAllowFullWrites,
             "main software settings were not inherited");
@@ -199,11 +199,11 @@ internal static partial class Program
             "projection lost content or wrote a second catalog");
         session.Store.SaveJsonSync(projected.ToJsonString(), 4);
         var independent = catalog.Options.Normalized(); independent.FollowMainSettings[2] = false;
-        var next = catalog.Open(2, independent, false);
+        var next = catalog.Open(2, independent);
         next.BindPersistence();
         Require(next.State.Theme == "light" && !next.State.McpEnabled && !next.FollowsMain,
             "unfollow did not restore independent settings");
-        var newSlot = catalog.Open(3, catalog.Options, true);
+        var newSlot = catalog.Open(3, catalog.Options);
         Require(newSlot.State.Papers.Count == 1 && newSlot.State.Papers[0].Content.Length == 0 &&
             newSlot.State.Papers[0].Id != main.Papers[0].Id, "new workspace copied main content");
     }
@@ -211,7 +211,7 @@ internal static partial class Program
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static WeakReference BindRetiredWorkspace(WorkspaceCatalog catalog)
     {
-        var session = catalog.Open(2, catalog.Options, false);
+        var session = catalog.Open(2, catalog.Options);
         session.BindPersistence();
         return new WeakReference(session.State);
     }
@@ -226,7 +226,7 @@ internal static partial class Program
         var retired = BindRetiredWorkspace(catalog);
         GC.Collect(); GC.WaitForPendingFinalizers(); GC.Collect();
         Require(!retired.IsAlive, "cached writer retained the entire inactive workspace state");
-        var session = catalog.Open(2, catalog.Options, false);
+        var session = catalog.Open(2, catalog.Options);
         session.BindPersistence();
         var incoming = NewState(); incoming.Theme = "light";
         var effective = catalog.AcceptReload(session, incoming);
@@ -253,7 +253,7 @@ internal static partial class Program
 
         var catalog = new WorkspaceCatalog(scope.DirectoryPath, DurableAtomicFileWriter.Shared);
         _ = catalog.OpenInitial();
-        var session = catalog.Open(2, catalog.Options, false);
+        var session = catalog.Open(2, catalog.Options);
         session.BindPersistence();
         Require(session.FollowsMain && session.State.MaxTitleLength == 20 &&
                 session.State.Papers[0].Title == "ABCDEFGHIJ",
@@ -388,7 +388,7 @@ internal static partial class Program
         using (var busy = new FileStream(target.FilePath, FileMode.Open,
             FileAccess.ReadWrite, FileShare.None))
         {
-            try { _ = catalog.Open(2, catalog.Options, allowCreate: true, main: active.State); }
+            try { _ = catalog.Open(2, catalog.Options, main: active.State); }
             catch (IOException) { rejected = true; }
         }
         Require(rejected, "The inaccessible target must not fall back to its backup or initialize empty.");
