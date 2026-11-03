@@ -18,7 +18,7 @@ The script builds the plugin and installs it to `plugins/sample.webhook.native`.
 {"todoCreated":"https://example.com/created","todoChanged":"https://example.com/changes"}
 ```
 
-The current event names are `paperCreated`, `paperChanged`, `paperDeleted`, `todoCreated`, `todoChanged`, `todoDeleted`, and `noteChanged`. Names are case-insensitive. Events omitted from the object are not sent; use `{}` to stop all forwarding. Invalid JSON or URLs stop all forwarding until the configuration is corrected, so enter complete JSON when saving.
+The current event names are `paperCreated`, `paperChanged`, `paperDeleted`, `todoCreated`, `todoChanged`, `todoDeleted`, `todoReminderUpcoming`, and `noteChanged`. Names are case-insensitive. Events omitted from the object are not sent; use `{}` to stop all forwarding. Invalid JSON or URLs stop all forwarding until the configuration is corrected, so enter complete JSON when saving.
 
 When the host adds a compatible event type, you can add a route using its enum name with the first letter lowercased without changing the plugin code. Whether the event is delivered still depends on the host's subscription and permission contracts.
 
@@ -32,7 +32,7 @@ Set **Event Routes** to a JSON mapping of event names to HTTP(S) destinations, f
 {"todoChanged":"https://example.com/todo"}
 ```
 
-A `todoChanged` event may indicate a text edit, a reminder reschedule, or a reminder trigger. To identify **a reminder trigger**, filter for `metadata.origin === "system"`, `before.reminderTriggered === false`, and `after.reminderTriggered === true`. Configure your own trusted HTTP receiver.
+`todoReminderUpcoming` is an advance notice sent about five seconds before due with a `notificationId`. This sample forwards the notice but cannot suppress the host presentation on behalf of a remote HTTP receiver. A `todoChanged` event may indicate a text edit, a reminder reschedule, or a reminder trigger. To identify **a reminder trigger**, filter for `metadata.origin === "system"`, `before.reminderTriggered === false`, and `after.reminderTriggered === true`. Configure your own trusted HTTP receiver.
 
 ## Request format
 

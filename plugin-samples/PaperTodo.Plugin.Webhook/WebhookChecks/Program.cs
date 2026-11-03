@@ -13,7 +13,8 @@ if (WebhookRoutes.TryRead("{\"routes\":\"{\\\"todoCreated\\\":\\\"file:///tmp\\\
     throw new Exception("Invalid URL was accepted");
 if (WebhookRoutes.TryRead("{\"routes\":\"{\"}", out _, out _))
     throw new Exception("Invalid JSON was accepted");
-if (WebhookRoutes.EventName(PaperTodoEventKind.TodoChanged) != "todoChanged")
+if (WebhookRoutes.EventName(PaperTodoEventKind.TodoChanged) != "todoChanged" ||
+    WebhookRoutes.EventName(PaperTodoEventKind.TodoReminderUpcoming) != "todoReminderUpcoming")
     throw new Exception("Event naming changed");
 
 var activeSubscriptions = 0;
