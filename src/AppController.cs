@@ -3493,8 +3493,8 @@ public sealed partial class AppController : IDisposable
                 var dlg = new Window
                 {
                     Title = Strings.Get("SaveFailureTitle"),
-                    Width = 360,
-                    Height = 180,
+                    Width = _store.OrdinaryWritesPaused ? 475 : 360,
+                    Height = _store.OrdinaryWritesPaused ? 205 : 180,
                     WindowStyle = WindowStyle.None,
                     WindowStartupLocation = WindowStartupLocation.CenterScreen,
                     AllowsTransparency = true,
@@ -3515,7 +3515,9 @@ public sealed partial class AppController : IDisposable
                 grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
                 var txt = new TextBlock
                 {
-                    Text = Strings.Format("SaveFailureMessage", ex.Message),
+                    Text = _store.OrdinaryWritesPaused
+                        ? ex.Message
+                        : Strings.Format("SaveFailureMessage", ex.Message),
                     Foreground = Theme.TextBrush,
                     TextWrapping = TextWrapping.Wrap,
                     FontSize = AppTypography.Scale(14)
@@ -3531,6 +3533,23 @@ public sealed partial class AppController : IDisposable
                 };
                 var btnIgnore = new Button { Content = Strings.Get("SaveFailureIgnore"), Width = 110, Style = BuildDialogButtonStyle() };
                 btnIgnore.Click += (s, e) => { _ignoreSaveFailures = true; dlg.Close(); };
+                if (_store.OrdinaryWritesPaused)
+                {
+                    var btnResolve = new Button
+                    {
+                        Content = Strings.Get("DataSaveResolveConflict"),
+                        MinWidth = 135,
+                        Margin = new Thickness(0, 0, 10, 0),
+                        Style = BuildDialogButtonStyle()
+                    };
+                    btnResolve.Click += (_, _) =>
+                    {
+                        _hasShownSaveFailure = false;
+                        dlg.Close();
+                        Application.Current.Dispatcher.BeginInvoke(new Action(ResolvePausedExternalSave));
+                    };
+                    btnPanel.Children.Add(btnResolve);
+                }
                 btnPanel.Children.Add(btnOk);
                 btnPanel.Children.Add(btnIgnore);
                 grid.Children.Add(btnPanel);
