@@ -1,0 +1,147 @@
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 8fa9223..11c735b 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -60,7 +60,7 @@ This log is written for general and power users alike. It focuses on user-facing
+ - **Creating todos through plugins**: When a plugin creates or appends a todo, it can set the initial completion state, reminder and linked paper without requesting separate permission to edit existing todo content.
+ - **Plugin actions and hints**: Plugins can add Settings buttons handled by their own runtime, such as Refresh Now or Test Connection, without registering shortcuts; unavailable actions are disabled. Action-button and top-bar status-label tooltips can span multiple lines. Web and email links in plugin popups open through the system's default applications.
+ - **Plugin-body reads and writes**: Queries for papers, todos, notes or images no longer commit unrelated plugin bodies; external writes likewise avoid committing unrelated papers. If an external write targets a built-in Markdown note with pending user edits, those edits are applied first so they are not overwritten. Background saves and cleanup after a paper is deleted no longer block typing, and edits made during a save are retained for the next write.
+-- **Plugin data and failure handling**: Plugin state is stored in ordinary data files. If existing data cannot be read, PaperTodo reports an error instead of treating it as empty and creating a recovery file; old recovery files are not automatically deleted. Errors in routine theme, font or activation callbacks no longer remove the entire plugin body. An initial background startup failure no longer causes repeated automatic retries; a plugin that has already run successfully can attempt limited recovery before stopping, without endless reloads or rapid save retries.
++- **Plugin data and failure handling**: Plugin state is stored in ordinary data files. If existing data cannot be read, PaperTodo reports an error instead of treating it as empty and creating a recovery file; old recovery files are not automatically deleted. Errors in routine theme, font or activation callbacks no longer remove the entire plugin body. An initial background startup failure no longer causes repeated automatic retries; a plugin that has already run successfully can attempt limited recovery before stopping, without endless reloads or rapid save retries. A plugin creating a paper during a theme or font callback no longer prevents other papers from receiving that update.
+ - **Codex CLI Bridge**:
+   - The default model is GPT-6 Astra (`gpt-6-astra`), with reasoning still set to `xhigh`. Leaving the model setting blank does not override the existing Codex CLI model selection. Sending a task opens a foreground PowerShell window by default, with background execution still available.
+   - The plugin interface and default prompts follow PaperTodo's current language without replacing prompts the user has edited. Startup, foreground/background execution and model settings remain on the plugin card; reasoning and path options are grouped under **More Settings**.
+diff --git a/CHANGELOG.zh.md b/CHANGELOG.zh.md
+index 0718a52..060ea63 100644
+--- a/CHANGELOG.zh.md
++++ b/CHANGELOG.zh.md
+@@ -54,7 +54,7 @@
+ - **插件创建待办**：通过插件新建或追加待办时，可以直接指定初始完成状态、提醒和关联纸片，无需额外申请修改已有待办内容的权限。
+ - **插件操作入口与提示**：插件可在设置页添加由自身运行时处理的动作按钮，例如「立即刷新」「测试连接」，无需配置快捷键；动作不可用时按钮会自动禁用。操作按钮与顶栏状态标签的提示文字支持换行，插件小弹窗中的网页、邮件链接则交由系统默认程序打开。
+ - **插件正文读写**：查询纸片、待办、笔记或图片时，不再连带提交其他插件正文；外部写入也不会全局提交无关纸片。如果写入目标是正在编辑的内置 Markdown 笔记，会先应用该纸片尚未写回模型的用户输入，避免覆盖正在编辑的内容。后台保存插件数据或清理已删除纸片的附属数据时，不再阻塞输入；保存期间产生的新修改也会在后续写入。
+-- **插件数据与失败处理**：插件状态保存在普通数据文件中；已有数据无法读取时会明确报错，不再将其视作空数据并自动创建恢复文件，已有的旧恢复文件也不会被自动删除。主题、字体或激活通知等常规回调出错时，不再直接撤掉插件正文。后台首次启动失败后不会自动反复重试；曾成功运行的插件只会尝试有限次数的恢复，持续失败后停止，避免无限重载或快速重复保存。
++- **插件数据与失败处理**：插件状态保存在普通数据文件中；已有数据无法读取时会明确报错，不再将其视作空数据并自动创建恢复文件，已有的旧恢复文件也不会被自动删除。主题、字体或激活通知等常规回调出错时，不再直接撤掉插件正文。后台首次启动失败后不会自动反复重试；曾成功运行的插件只会尝试有限次数的恢复，持续失败后停止，避免无限重载或快速重复保存。插件在主题或字体通知回调中创建纸片，不再打断其他纸片的同步刷新。
+ - **Codex CLI Bridge**：
+   - 默认模型更新为 GPT-6 Astra（`gpt-6-astra`），推理档位保持 `xhigh`。模型设置留空时不会覆盖 Codex CLI 原有的模型选择。发送任务默认打开前台 PowerShell 窗口，也可选择后台静默执行。
+   - 插件界面与默认提示词随 PaperTodo 当前语言切换，语言变化不会覆盖用户已经修改的默认提示词。插件卡片保留启动、前后台执行及模型设置；推理档位、路径等进阶选项集中在「更多设置」页面。
+diff --git a/src/AppController.Settings.cs b/src/AppController.Settings.cs
+index 759239d..8b07856 100644
+--- a/src/AppController.Settings.cs
++++ b/src/AppController.Settings.cs
+@@ -90,9 +90,9 @@ public sealed partial class AppController
+     {
+         Theme.Invalidate();
+         RefreshApplicationThemeResources();
+-        foreach (var window in _windows.Values)
++        foreach (var window in _windows.Values.ToArray())
+         {
+-            window.UpdateTheme();
++            if (!window.IsClosed) window.UpdateTheme();
+         }
+         foreach (var m in _masterCapsules.Values) m.UpdateTheme();
+         SkinBorder.RefreshLoadedSurfaces();
+@@ -650,9 +650,9 @@ public sealed partial class AppController
+     {
+         RebuildTrayMenu();
+ 
+-        foreach (var window in _windows.Values)
++        foreach (var window in _windows.Values.ToArray())
+         {
+-            window.UpdateTypography();
++            if (!window.IsClosed) window.UpdateTypography();
+         }
+ 
+         foreach (var masterCapsule in _masterCapsules.Values)
+diff --git a/tests/PaperTodo.SettingsApiChecks/ComponentBoundaryChecks.cs b/tests/PaperTodo.SettingsApiChecks/ComponentBoundaryChecks.cs
+new file mode 100644
+index 0000000..48995cb
+--- /dev/null
++++ b/tests/PaperTodo.SettingsApiChecks/ComponentBoundaryChecks.cs
+@@ -0,0 +1,75 @@
++using System.Windows;
++using System.Windows.Controls;
++using PaperTodo;
++using PaperTodo.Plugin;
++
++internal static partial class Program
++{
++    private static void VisualBroadcastSurvivesPaperCreation(AppController controller)
++    {
++        var windows = ReadField<Dictionary<string, PaperWindow>>(controller, "_windows");
++        var notes = windows.Values.Where(window => controller.State.Papers.Any(paper =>
++            paper.Id == window.PaperId && paper.Type == PaperTypes.Note)).Take(2).ToArray();
++        Check(notes.Length == 2, "Visual broadcast needs two existing note bodies.");
++        var firstHost = ReadField<PaperBodyHost>(notes[0], "_paperBodyHost");
++        var secondHost = ReadField<PaperBodyHost>(notes[1], "_paperBodyHost");
++        var firstBody = firstHost.Current!;
++        var secondBody = secondHost.Current!;
++        var first = new VisualBroadcastBodyProbe();
++        var second = new VisualBroadcastBodyProbe();
++        var created = new List<string>();
++        var oldTheme = controller.State.Theme;
++        var oldZoom = controller.State.Zoom;
++        Exception? callbackFailure = null;
++        void CreateFromCallback()
++        {
++            try
++            {
++                var result = controller.PaperCommands.CreatePaper(
++                    new CreatePaperRequest { Type = PaperTypes.Todo, Show = true },
++                    PaperOperationContext.Plugin("tests.visual-broadcast"));
++                created.Add(result.PaperId);
++            }
++            catch (Exception ex) { callbackFailure = ex; }
++        }
++        Field(firstHost, "<Current>k__BackingField", first);
++        Field(secondHost, "<Current>k__BackingField", second);
++        try
++        {
++            first.ThemeChanged = CreateFromCallback;
++            var result = controller.PublicSettings.Set("appearance.theme", Json(oldTheme == "dark" ? "light" : "dark"));
++            first.ThemeChanged = null;
++            Check(result.Changed && callbackFailure == null && created.Count == 1 && windows.ContainsKey(created[0]),
++                "A legitimate synchronous theme callback could not create a visible paper.");
++            Check(first.Themes == 1 && second.Themes == 1,
++                "Creating a paper in a theme callback stopped the theme broadcast to another existing paper.");
++
++            first.TypographyChanged = CreateFromCallback;
++            result = controller.PublicSettings.Set("appearance.font_scale", Json(oldZoom == 1.05 ? 1.0 : 1.05));
++            first.TypographyChanged = null;
++            Check(result.Changed && callbackFailure == null && created.Count == 2 && windows.ContainsKey(created[1]),
++                "A legitimate synchronous typography callback could not create a visible paper.");
++            Check(first.Typography == 1 && second.Typography == 1,
++                "Creating a paper in a typography callback stopped the font broadcast to another existing paper.");
++        }
++        finally
++        {
++            Field(firstHost, "<Current>k__BackingField", firstBody);
++            Field(secondHost, "<Current>k__BackingField", secondBody);
++            foreach (var id in created)
++                controller.PaperCommands.DeletePaper(id, PaperOperationContext.Plugin("tests.visual-broadcast"));
++            controller.PublicSettings.Set("appearance.theme", Json(oldTheme));
++            controller.PublicSettings.Set("appearance.font_scale", Json(oldZoom));
++        }
++    }
++
++    private sealed class VisualBroadcastBodyProbe : IPaperBodySession
++    {
++        public FrameworkElement View { get; } = new TextBlock();
++        public Action? ThemeChanged, TypographyChanged;
++        public int Themes, Typography;
++        public void OnThemeChanged(PaperBodyTheme theme) { Themes++; ThemeChanged?.Invoke(); }
++        public void OnTypographyChanged(PaperBodyTheme theme) { Typography++; TypographyChanged?.Invoke(); }
++        public void Dispose() { }
++    }
++}
+diff --git a/tests/PaperTodo.SettingsApiChecks/PluginBoundaryChecks.cs b/tests/PaperTodo.SettingsApiChecks/PluginBoundaryChecks.cs
+index d867d25..4a7f699 100644
+--- a/tests/PaperTodo.SettingsApiChecks/PluginBoundaryChecks.cs
++++ b/tests/PaperTodo.SettingsApiChecks/PluginBoundaryChecks.cs
+@@ -16,6 +16,7 @@ internal static partial class Program
+         StartingPluginRuntimeIsDisposedOnRemoval(c);
+         ReadsAndNotificationsDoNotCommitOrReplaceBodies(c, owner, note, todo);
+         await ExternalSavePreservesRuntimeCallbackDirtyState(c);
++        VisualBroadcastSurvivesPaperCreation(c);
+         CreationOwnsInitialTodoFields(c, note);
+         TodoPasteUsesEventPayload();
+         PartialReminderDeliveryKeepsUnsurfacedItemsPending(c);
