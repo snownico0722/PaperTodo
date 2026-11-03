@@ -46,7 +46,7 @@ internal sealed class WorkspaceCatalog
         _initialMain = null;
         if (Options.Enabled && Options.Active > 1)
         {
-            try { return Open(Options.Active, Options, allowCreate: true, main); }
+            try { return Open(Options.Active, Options, main); }
             catch (Exception ex)
             {
                 // An inaccessible slot can be retried later; do not reset the
@@ -58,7 +58,7 @@ internal sealed class WorkspaceCatalog
         return new(PathsFor(1), MainStore, main, false, null);
     }
 
-    internal WorkspaceSession Open(int number, WorkspaceConfiguration options, bool allowCreate,
+    internal WorkspaceSession Open(int number, WorkspaceConfiguration options,
         AppState? main = null, WorkspaceSession? current = null)
     {
         var paths = PathsFor(number);
@@ -97,8 +97,6 @@ internal sealed class WorkspaceCatalog
             inherited.ApplyTo(state);
             state.Papers.Add(new PaperData());
         }
-        if (initializedEmpty && !allowCreate)
-            throw new FileNotFoundException("Workspace data is missing or corrupt.", paths.Data);
         if (number == 1)
         {
             state.Workspaces = HasConfiguration ? options : null;
