@@ -50,9 +50,9 @@ public sealed partial class AppController
     private void NotifyWorkspaceStartup()
     {
         if (_workspaceCatalog.StartupError is not { } error) return;
+        // The selected data file may only be busy. Show the existing notice but do
+        // not save a new active slot or mutate either workspace on this fallback.
         ReportWorkspaceError(Strings.Format("WorkspaceStartupFallback", error));
-        // Save the fallback slot through the ordinary main StateStore, never over the bad secondary.
-        SaveNow(sync: true);
     }
 
     internal Task<bool> CycleWorkspaceAsync()
