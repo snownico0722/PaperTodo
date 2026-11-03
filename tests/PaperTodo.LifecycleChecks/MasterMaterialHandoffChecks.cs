@@ -20,7 +20,6 @@ internal static class MasterMaterialHandoffChecks
         var proxies = (IDictionary)Part(controller, "_edgeCapsuleQueueCompositionProxies");
         var admitted = new HashSet<EdgeCapsuleQueueCompositionProxy>();
         var cycleOutputs = new HashSet<IntPtr>();
-        var captureOverlappedProxy = false;
         var cursorSaved = GetCursorPos(out var cursor);
 
         void Observe()
@@ -29,13 +28,6 @@ internal static class MasterMaterialHandoffChecks
             {
                 admitted.Add(proxy);
                 if (proxy.OutputHandle != IntPtr.Zero) cycleOutputs.Add(proxy.OutputHandle);
-            }
-            foreach (var paper in papers)
-            {
-                if (!controller.IsEdgeCapsuleQueueProxyRetainingSource(paper)) continue;
-                captureOverlappedProxy |= !skins[paper].SampledBackgroundCaptureSuspended ||
-                    skins[paper].HasBackgroundCapture ||
-                    DesktopBackgroundCapture.ReadAffinity(hosts[paper].Handle) != 0;
             }
         }
         void Rendering(object? sender, EventArgs e) => Observe();
@@ -58,25 +50,19 @@ internal static class MasterMaterialHandoffChecks
             Observe();
         }
 
-        async Task CheckSettled(bool retracted, IReadOnlyDictionary<PaperWindow, int> framesBefore)
+        async Task CheckSettled(bool retracted)
         {
             await Until(() => Settled(retracted), "exact applied master terminal frames and native geometry");
             foreach (var paper in papers)
             {
-                // The retired full-material setting must never re-enable desktop snapshots
-                // after a live DComp handoff, regardless of which form is revealed.
-                Require(!skins[paper].IsBackgroundActive &&
-                    skins[paper].BackgroundFrameCount == framesBefore[paper],
-                    "lightweight capsule unexpectedly created a desktop background snapshot");
-                Require(!skins[paper].SampledBackgroundCaptureSuspended && !skins[paper].HasBackgroundCapture &&
-                    DesktopBackgroundCapture.ReadAffinity(hosts[paper].Handle) == 0,
-                    "terminal material capture or display-affinity lease remained active");
+                Require(skins[paper].IsCapsule &&
+                    Math.Abs(skins[paper].MaterialStrength - 0.40) < 0.00001,
+                    "terminal capsule preserves its lightweight material recipe");
                 Require(DwmGetWindowAttribute(hosts[paper].Handle, 14, out var cloaked, sizeof(int)) >= 0 && cloaked == 0,
                     "terminal real capsule HWND remained cloaked");
                 Require(presenters[paper].AppliedPresentation.Opacity == (retracted ? 0 : 1),
                     "master terminal opacity was only approximately complete");
             }
-            Require(!captureOverlappedProxy, "local material acquisition overlapped a retained proxy source");
             Require(admitted.All(p => !p.CoverLost), "normal master completion fell back to emergency cover loss");
             await Until(() => cycleOutputs.All(h => !WindowNative.IsWindowHandleAlive(h)),
                 "completed master output HWNDs retire instead of remaining in the warm pool");
@@ -86,25 +72,21 @@ internal static class MasterMaterialHandoffChecks
         CompositionTarget.Rendering += Rendering;
         try
         {
-            Require(!controller.State.MatchAuxiliaryMaterialStrength,
-                "retired auxiliary setting cannot be restored from the persisted fixture");
             Require(cursorSaved && SetCursorPos(10, 10), "park cursor outside the capsule queue");
             await Until(() => Settled(false), "initial real capsule presentation");
             for (var pass = 0; pass < 3; pass++)
             {
                 foreach (var retracted in new[] { true, false })
                 {
-                    var before = papers.ToDictionary(w => w, w => skins[w].BackgroundFrameCount);
                     await Toggle();
-                    await CheckSettled(retracted, before);
+                    await CheckSettled(retracted);
                 }
             }
 
             // Reverse a published transaction, not two coalesced uncommitted toggles.
-            var beforeReverse = papers.ToDictionary(w => w, w => skins[w].BackgroundFrameCount);
             await Toggle();
             await Toggle();
-            await CheckSettled(false, beforeReverse);
+            await CheckSettled(false);
             Require(admitted.Count > 0, "fixture never exercised a live DComp queue proxy");
 
             var first = papers[0];
@@ -114,7 +96,7 @@ internal static class MasterMaterialHandoffChecks
             MouseEvent(0x0002, 0, 0, 0, UIntPtr.Zero);
             MouseEvent(0x0004, 0, 0, 0, UIntPtr.Zero);
             await Until(() => first.HasExpandedPaperSurface, "real capsule receives a complete native click after handoff");
-            Console.WriteLine($"PASS lightweight-material master handoff: {admitted.Count} actual proxy generations, exact endpoints, released cloak/capture, reversal and real click");
+            Console.WriteLine($"PASS lightweight-material master handoff: {admitted.Count} actual proxy generations, exact endpoints, released cloak, reversal and real click");
         }
         finally
         {

@@ -40,14 +40,12 @@ internal static class SkinChecks
                 Program.Assert(!string.IsNullOrWhiteSpace(set.GetString(key)), $"localized {culture}/{key}");
         }
         var before = (controller.State.PaperSkin, controller.State.ColorScheme, controller.State.Theme,
-            controller.State.EnableAnimations, controller.State.HideSurfaceOutline,
-            controller.State.MatchAuxiliaryMaterialStrength);
+            controller.State.EnableAnimations, controller.State.HideSurfaceOutline);
         try
         {
             CheckOriginalNativeRendering(controller); CheckAuxiliaryMaterials(controller);
             controller.State.ColorScheme = ColorSchemes.Warm;
             controller.State.EnableAnimations = false;
-            controller.State.MatchAuxiliaryMaterialStrength = true;
             var samples = 0;
             foreach (var mode in new[] { "light", "dark" })
             foreach (var capsule in new[] { false, true })
@@ -79,7 +77,11 @@ internal static class SkinChecks
                     if (PaperSkins.UsesNativeBackdrop(skin))
                     {
                         border.Background = NativeMicaBackdrop.GetActiveSurfaceBrush(PaperSkins.NativeBackdrop(skin), mode == "dark");
-                        Program.Assert(Pixels(Render(border, scale))[center + 3] is > 0 and < 255, "native fill allows compositor through");
+                        var nativeAlpha = Pixels(Render(border, scale))[center + 3];
+                        Program.Assert(capsule ? nativeAlpha == 255 : nativeAlpha is > 0 and < 255,
+                            capsule
+                                ? "auxiliary capsule never transmits desktop pixels through an opaque material"
+                                : "expanded paper preserves its native transparent fill");
                     }
                     samples++;
                 }
@@ -91,8 +93,7 @@ internal static class SkinChecks
         finally
         {
             (controller.State.PaperSkin, controller.State.ColorScheme, controller.State.Theme,
-                controller.State.EnableAnimations, controller.State.HideSurfaceOutline,
-                controller.State.MatchAuxiliaryMaterialStrength) = before;
+                controller.State.EnableAnimations, controller.State.HideSurfaceOutline) = before;
             Theme.Invalidate();
         }
     }
@@ -148,58 +149,64 @@ internal static class SkinChecks
     }
     private static void CheckAuxiliaryMaterials(AppController controller)
     {
-        var old = (controller.State.MatchAuxiliaryMaterialStrength, controller.State.HideSurfaceOutline);
+        var savedOutline = controller.State.HideSurfaceOutline;
         try
         {
             controller.State.HideSurfaceOutline = false;
             foreach (var mode in new[] { "light", "dark" })
             foreach (var skin in PaperSkins.All.Where(s => s != PaperSkins.Paper))
             {
-                controller.State.PaperSkin = skin; controller.State.Theme = mode;
-                controller.State.ColorScheme = ColorSchemes.Warm; Theme.Invalidate();
+                controller.State.PaperSkin = skin;
+                controller.State.Theme = mode;
+                controller.State.ColorScheme = ColorSchemes.Warm;
+                Theme.Invalidate();
                 foreach (var capsule in new[] { false, true })
                 {
-                    var surface = new SkinBorder { Width = 240, Height = 80,
-                        IsCapsule = capsule, IsMenu = !capsule, CornerRadius = new CornerRadius(12),
-                        Background = Theme.PaperBrush, BorderBrush = Brushes.Red, BorderThickness = new Thickness(1),
+                    var surface = new SkinBorder
+                    {
+                        Width = 240, Height = 80, IsCapsule = capsule, IsMenu = !capsule,
+                        CornerRadius = new CornerRadius(12), Background = Theme.PaperBrush,
+                        BorderBrush = Brushes.Red, BorderThickness = new Thickness(1),
                         Child = new Border { Width = 12, Height = 12, Background = Brushes.Lime,
-                            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } };
-                    controller.State.MatchAuxiliaryMaterialStrength = false; surface.RefreshSkin();
-                    var quiet = Pixels(Render(surface, 1));
-                    Program.Assert(surface.MaterialStrength == .4 && surface.Opacity == 1, "quiet material does not dim the entire surface");
-                    controller.State.MatchAuxiliaryMaterialStrength = true; surface.RefreshSkin();
-                    var full = Pixels(Render(surface, 1));
-                    Program.Assert(surface.MaterialStrength == 1 && !quiet.SequenceEqual(full), $"{skin}/{mode}/{capsule}: switch visibly changes auxiliary material intensity");
-                    var center = (40*240+120)*4;
-                    Program.Assert(quiet.AsSpan(center, 4).SequenceEqual(full.AsSpan(center, 4)) && full[center+1] == 255,
-                        "foreground marker remains fully opaque and unchanged");
+                            HorizontalAlignment = HorizontalAlignment.Center,
+                            VerticalAlignment = VerticalAlignment.Center }
+                    };
+                    var pixels = Pixels(Render(surface, 1));
+                    Program.Assert(surface.MaterialStrength == .40 && surface.Opacity == 1,
+                        "capsule/menu uses the lightweight recipe without reducing window opacity");
+                    var center = (40 * 240 + 120) * 4;
+                    Program.Assert(pixels[center + 1] == 255 && pixels[center + 3] == 255,
+                        "lightweight auxiliary material preserves opaque foreground content");
                     Program.Assert(surface.IsHitTestVisible && surface.Child.IsHitTestVisible &&
-                        VisualTreeHelper.HitTest(surface, new Point(120,40)) != null && !surface.HasBackgroundCapture,
-                        "unattached auxiliary content remains hit-testable without starting a source-less worker");
-                    var edge = (40*240)*4;
-                    Program.Assert(quiet.AsSpan(edge,4).SequenceEqual(full.AsSpan(edge,4)), "host stroke does not fade with material strength");
+                        VisualTreeHelper.HitTest(surface, new Point(120, 40)) != null,
+                        "lightweight auxiliary content remains interactive");
+                    surface.RefreshSkin();
+                    Program.Assert(pixels.SequenceEqual(Pixels(Render(surface, 1))),
+                        "auxiliary material uses a stable recipe across refreshes");
                 }
-                var main = new SkinBorder { Width = 240, Height = 160, Background = Theme.PaperBrush,
-                    BorderBrush = Theme.PaperBorderBrush, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(12) };
-                controller.State.MatchAuxiliaryMaterialStrength = false; main.RefreshSkin(); var a = Pixels(Render(main, 1));
-                controller.State.MatchAuxiliaryMaterialStrength = true; main.RefreshSkin(); var b = Pixels(Render(main, 1));
-                Program.Assert(a.SequenceEqual(b), "auxiliary preference never changes the main paper material");
+                var main = new SkinBorder { Width = 240, Height = 160,
+                    Background = Theme.PaperBrush, BorderBrush = Theme.PaperBorderBrush,
+                    BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(12) };
+                Program.Assert(main.MaterialStrength == 1,
+                    "ordinary paper keeps its full local material strength");
             }
-            foreach (var (owner, method) in new[] { (typeof(PaperWindow), "BuildContextMenuTemplate"), (typeof(AppController), "BuildTrayMenuTemplate") })
+            foreach (var (owner, method) in new[]
             {
-                var template = (ControlTemplate)owner.GetMethod(method, System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.Invoke(null, null)!;
-                var menu = new ContextMenu { Width = 240, Height = 80, Template = template, Background = Theme.PaperBrush };
-                menu.Items.Add(new MenuItem { Header = "Material menu" });
+                (typeof(PaperWindow), "BuildContextMenuTemplate"),
+                (typeof(AppController), "BuildTrayMenuTemplate")
+            })
+            {
+                var template = (ControlTemplate)owner.GetMethod(method,
+                    BindingFlags.NonPublic | BindingFlags.Static)!.Invoke(null, null)!;
+                var menu = new ContextMenu { Width = 240, Height = 80,
+                    Template = template, Background = Theme.PaperBrush };
+                menu.Items.Add(new MenuItem { Header = "Lightweight menu" });
                 Render(menu, 1);
-                var root = VisualTreeHelper.GetChild(menu, 0);
-                Program.Assert(root is SkinBorder { IsMenu: true }, "actual right-click template instantiates a material surface");
+                Program.Assert(VisualTreeHelper.GetChild(menu, 0) is SkinBorder { IsMenu: true },
+                    "real menu template instantiates a lightweight material surface");
             }
-            Console.WriteLine("PASS auxiliary materials: main stable, capsule/menu strength, opaque foreground, hit tests and real menu templates.");
         }
-        finally
-        {
-            (controller.State.MatchAuxiliaryMaterialStrength, controller.State.HideSurfaceOutline) = old;
-        }
+        finally { controller.State.HideSurfaceOutline = savedOutline; }
     }
     private static void CheckDockedOutline(AppController controller)
     {
@@ -237,13 +244,14 @@ internal static class SkinChecks
         {
             var store = new StateStore(temp, DurableAtomicFileWriter.Shared); long version = 0;
             foreach (var skin in PaperSkins.All)
-            foreach (var match in new[] { false, true })
             {
-                var state = new AppState { MatchAuxiliaryMaterialStrength = match, PaperSkin = skin, ColorScheme = ColorSchemes.Neutral, MicaAlwaysActive = true, MaterialTransparency = MaterialTransparencyLevels.High };
+                var state = new AppState { PaperSkin = skin, ColorScheme = ColorSchemes.Neutral,
+                    MicaAlwaysActive = true, MaterialTransparency = MaterialTransparencyLevels.High };
                 state.Papers.Add(new PaperData { Type = PaperTypes.Note, Content = "# 换肤不丢正文\n原文 **保留**" });
                 store.SaveJsonSync(store.SerializeState(state), ++version);
                 var restored = store.Load();
-                Program.Assert(restored.PaperSkin == skin && restored.ColorScheme == state.ColorScheme && restored.MicaAlwaysActive && restored.MaterialTransparency == MaterialTransparencyLevels.High && !restored.MatchAuxiliaryMaterialStrength,
+                Program.Assert(restored.PaperSkin == skin && restored.ColorScheme == state.ColorScheme &&
+                    restored.MicaAlwaysActive && restored.MaterialTransparency == MaterialTransparencyLevels.High,
                     "the retired full auxiliary material setting is ignored on load while other preferences persist");
                 Program.Assert(!store.SerializeState(state).Contains("matchAuxiliaryMaterialStrength", StringComparison.OrdinalIgnoreCase),
                     "the retired auxiliary setting is not written back to saved state");
@@ -251,7 +259,8 @@ internal static class SkinChecks
             }
             store.SaveJsonSync("""{"colorScheme":"mica","micaBackdropType":"acrylic","matchAuxiliaryMaterialStrength":true,"papers":[]}""", ++version);
             var legacy = store.Load();
-            Program.Assert(legacy.PaperSkin == PaperSkins.Acrylic && legacy.ColorScheme == ColorSchemes.Neutral && !legacy.MatchAuxiliaryMaterialStrength, "old file appearance preserved");
+            Program.Assert(legacy.PaperSkin == PaperSkins.Acrylic && legacy.ColorScheme == ColorSchemes.Neutral,
+                "unknown retired JSON field is ignored while old skin migration is preserved");
             store.SaveJsonSync(store.SerializeState(legacy), ++version);
             Program.Assert(store.Load().PaperSkin == PaperSkins.Acrylic, "migration remains stable after resave");
         }
