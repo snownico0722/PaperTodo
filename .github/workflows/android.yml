@@ -1,0 +1,61 @@
+name: Android companion
+
+on:
+  pull_request:
+    paths:
+      - "mobile/android/**"
+      - ".github/workflows/android.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "mobile/android/**"
+      - ".github/workflows/android.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android:
+    name: Build and check Android
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: mobile/android
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Install Android SDK 36
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+      - name: Unit tests, lint and debug APK
+        run: bash ./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+      - name: Upload review APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: PaperTodo-Android-debug
+          path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 7
+
+  transfer:
+    name: Check Windows transfer tool
+    runs-on: windows-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: mobile/android/tools/desktop-transfer
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "8.0.x"
+      - name: Test real LMDB and ZIP transfer with synthetic data
+        run: dotnet run --project PaperTodoTransfer.csproj -c Release -- self-test

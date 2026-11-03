@@ -20,6 +20,10 @@ This log is written for general and power users alike. It focuses on user-facing
 
 ### Unreleased
 
+#### Android Companion (Experimental)
+
+- Adds a standalone Android app for quick todo capture, Markdown notes, floating papers and edge capsules, using the desktop logo and four light/dark palettes. Manual JSON and image-ZIP transfer targets v3.31; cloud sync and 4.0 plugin-paper compatibility are not included. See `mobile/android/` for build and installation instructions.
+
 #### Papers, Title Bar & Capsules
 
 - **More flexible paper titles**: The default title limit remains 6 full-width character equivalents. Latin letters, digits and other half-width characters now count as half a character; mixed Chinese/English titles fit more naturally without changing the 2–20 setting range. Existing length preferences are preserved.
