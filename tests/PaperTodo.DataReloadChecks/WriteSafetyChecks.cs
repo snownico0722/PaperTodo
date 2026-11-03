@@ -45,7 +45,26 @@ internal static partial class Program
                         File.ReadAllBytes(path).SequenceEqual(bytes)),
                 "the atomic writer destroyed the sole interrupted-write evidence");
         }
-        Console.WriteLine("PASS orphaned temps never block initialization and remain archived before writing");
+        // A locked historical backup temp must not prevent creating a valid
+        // primary, since it is not the data or backup selected for loading.
+        using (var scope = new Scope())
+        {
+            File.Delete(scope.Store.FilePath);
+            var history = scope.Store.BackupPath + ".tmp";
+            File.WriteAllText(history, "{incomplete previous backup");
+            using (var busy = new FileStream(history,
+                FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+            {
+                var store = new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared);
+                var blank = store.Load(out var initializedEmpty);
+                Require(initializedEmpty, "locked historical backup temp blocked loading");
+                store.SaveJsonSync(store.SerializeState(blank), 2);
+                Require(File.Exists(store.FilePath), "locked historical backup temp blocked normal save");
+            }
+            Require(File.ReadAllText(history) == "{incomplete previous backup",
+                "locked historical backup temp was overwritten");
+        }
+        Console.WriteLine("PASS orphaned temps never block initialization and preserve recoverable files when possible");
     }
 
     private static void ExternalEditsDoNotBlockOrdinarySaves()
