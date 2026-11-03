@@ -322,11 +322,15 @@ internal static partial class Program
         Check(service.Get("general.language").RequiresRestart, "Language is restart-based; API must not force exit.");
         Check(service.Get("appearance.paper_skin").Options.Count == PaperSkins.All.Length,
             "Public settings exposes every paper skin.");
-        Check(service.Get("appearance.match_auxiliary_material").Type == "boolean" &&
-            service.Get("appearance.material_transparency").Type == "string" &&
+        Check(service.Get("appearance.material_transparency").Type == "string" &&
             service.Get("appearance.material_transparency").Options.Count == 5 &&
             service.Get("appearance.native_material_always_active").Type == "boolean",
-            "All visible material toggles share the public settings catalog.");
+            "Remaining material settings use the shared public catalog.");
+        Check(!service.List("appearance").Any(s => s.Id == "appearance.match_auxiliary_material"),
+            "the retired full auxiliary material setting is absent from the public catalog");
+        Throws<PaperSettingsException>(() => service.Get("appearance.match_auxiliary_material"), "setting_not_found");
+        Throws<PaperSettingsException>(() => service.Set("appearance.match_auxiliary_material", Json(true)),
+            "setting_not_found");
         Throws<PaperSettingsException>(() => service.Set("appearance.font_scale", Json(1.3)), "invalid_setting_value");
         Throws<PaperSettingsException>(() => service.Set("appearance.font_scale", Json(1.01)), "invalid_setting_value");
         Throws<PaperSettingsException>(() => service.Set("appearance.theme", Json("unknown")), "invalid_setting_value");
@@ -355,11 +359,9 @@ internal static partial class Program
         service.Set("appearance.paper_skin", Json(PaperSkins.Mica));
         Check(c.State.PaperSkin == PaperSkins.Mica && c.State.MicaBackdropType == MicaBackdropTypes.Mica,
             "Successful system skin keeps the compatibility native recipe in the same transaction.");
-        service.Set("appearance.match_auxiliary_material", Json(true));
         service.Set("appearance.material_transparency", Json(MaterialTransparencyLevels.High));
         service.Set("appearance.native_material_always_active", Json(true));
-        Check(c.State.MatchAuxiliaryMaterialStrength &&
-            c.State.MaterialTransparency == MaterialTransparencyLevels.High &&
+        Check(c.State.MaterialTransparency == MaterialTransparencyLevels.High &&
             c.State.MicaAlwaysActive,
             "Material preferences mutate through the shared catalog.");
         Throws<PaperSettingsException>(

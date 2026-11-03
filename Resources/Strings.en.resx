@@ -1491,15 +1491,6 @@ When off, open at the docked edge or remembered position.</value>
   <data name="SkinNativeUnsupported" xml:space="preserve">
     <value>Native backdrops require Windows 11 22H2 or later.</value>
   </data>
-<data name="SettingsMatchAuxiliaryMaterial" xml:space="preserve">
-    <value>Full capsule and menu material</value>
-  </data>
-  <data name="TipMatchAuxiliaryMaterial" xml:space="preserve">
-    <value>On: match the paper. Off: lighter effects and a more solid, readable paper base. Edge previews always use lightweight effects.</value>
-  </data>
-  <data name="SkinCaptureNotice" xml:space="preserve">
-    <value>Capsules and menus take a temporary local snapshot of the background behind them; capsule dragging takes one low-resolution virtual-desktop snapshot. It is used only in local memory and is never saved or uploaded.</value>
-  </data>
   <data name="MenuPaperActions" xml:space="preserve">
     <value>Paper actions</value>
   </data>

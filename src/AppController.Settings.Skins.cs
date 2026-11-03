@@ -79,12 +79,6 @@ public sealed partial class AppController
             {
                 SetSettingFromUi("appearance.hide_surface_outline", !State.HideSurfaceOutline);
             }));
-        if (skin != PaperSkins.Paper)
-            panel.Children.Add(WrapWithHint(SettingsToggle(
-                Strings.Get("SettingsMatchAuxiliaryMaterial"), State.MatchAuxiliaryMaterialStrength, () =>
-                {
-                    SetSettingFromUi("appearance.match_auxiliary_material", !State.MatchAuxiliaryMaterialStrength);
-                }), "TipMatchAuxiliaryMaterial"));
         if (PaperSkins.UsesNativeBackdrop(skin))
         {
             if (!NativeMicaBackdrop.IsSupported || !UsesNativeMicaWindows)

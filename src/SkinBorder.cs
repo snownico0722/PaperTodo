@@ -35,6 +35,8 @@ internal sealed partial class SkinBorder : PaperChromeBorder
         set => SetValue(IsEdgeActiveMaterialProperty, value);
     }
     internal bool IsAuxiliary => IsCapsule || IsMenu;
+    // Product surfaces always take the quiet branch. The legacy full mode is only
+    // reachable from explicit internal regression fixtures, never saved settings.
     internal double MaterialStrength => IsAuxiliary &&
         AppController.Current?.State.MatchAuxiliaryMaterialStrength != true ? QuietAuxiliaryMaterialStrength : 1;
     // A weaker material means more ordinary paper, not more background transmission.

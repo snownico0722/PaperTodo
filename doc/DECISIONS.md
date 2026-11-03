@@ -62,10 +62,11 @@
 | D-051 | Aero 清透合成与辅助材质强度 | Partially superseded by D-052 | 主题 / Rendering |
 | D-052 | 实际辅助窗口背景处理与材质清理 | Partially superseded by D-053 | 主题 / Rendering |
 | D-053 | 材质绘制、原生背景与可选采样职责收敛 | Partially superseded by D-054 | 主题 / Rendering |
-| D-054 | 辅助材质背景改为一次性静态快照，拖动复用虚拟桌面纹理 | Accepted | 主题 / Rendering |
+| D-054 | 辅助材质背景改为一次性静态快照，拖动复用虚拟桌面纹理 | Superseded by D-058（产品功能） | 主题 / Rendering |
 | D-055 | Aero 不采用 ACCENT_ENABLE_BLURBEHIND 原生模糊 | Rejected | 主题 / Window integration |
 | D-056 | 精确终帧与主胶囊纯视觉输入隔离 | Accepted | Edge handoff / input |
 | D-057 | DWM 桌面截图退出 CI 自动验收 | Accepted | 测试 / Window integration |
+| D-058 | 辅助表面统一轻量材质，退休完整材质设置 | Accepted | 主题 / Rendering |
 
 ## 维护规则
 
@@ -1698,7 +1699,7 @@ PR #191 最初在现有透明 WPF 窗口上采样静态壁纸，生成类似云�
 
 ## D-054 — 辅助材质背景改为一次性静态快照，拖动复用虚拟桌面纹理（2026-09-23）
 
-**Status:** Accepted
+**Status:** Superseded by D-058（产品路径；历史采样协议和内部测试仍保留）
 
 **Context / Why:** D-053 将背景处理收敛到可选 `BackgroundSession`，但当时仍保留持续采样、帧检测与采样节拍。实际产品不需要材质跟随桌面内容实时变化；持续截图、变化判断和后台 worker 增加了常驻职责、性能波动与测试复杂度。用户只需要打开菜单或停住胶囊时看起来与当前位置背景一致，拖动期间则需要连续的空间对应，而不是连续重新截图。
 
@@ -1796,3 +1797,16 @@ PR #319 的初版把主胶囊完整材质收展后的卡死解释为终点迟到
 - `.github/workflows/pull-request-build.yml`：仍执行材质行为检查，但不再输出桌面截图 artifact。
 - `tests/PaperTodo.MicaChecks/Program.cs` 与 `MaterialStudyChecks.cs`：保留确定性渲染与运行时检查；历史屏幕采样源文件删除。
 - `doc/experiments/pr227-drag-followup-20260922.md`：基线、故障证据与失败补绘实验。
+
+
+## D-058 — 辅助表面统一轻量材质，退休完整材质设置（2026-11-03）
+
+**Status:** Accepted
+
+**Context:** 侧边胶囊和菜单的「完整材质」依赖一次性屏幕后景快照；后方窗口变化后不实时更新，造成用户对真实 Mica/Acrylic 的误解。完整与轻量两档带来独立设置、采样生命周期、拖动截屏和菜单延迟打开成本；产品决定侧边胶囊与菜单无需完整材质。
+
+**Decision:** 设置 UI、公共 Settings API 移除 `appearance.match_auxiliary_material`；旧 `matchAuxiliaryMaterialStrength` 字段不反序列化且不再写回，安装与升级后统一使用原轻量材质。辅助胶囊和菜单不再进入桌面采样的生产路径；普通展开纸片／设置窗口的原生 DWM 材质、皮肤透明度和边框设置不受影响。
+
+**Scope boundary:** 本次先关闭产品入口与持久化，不在同一提交删除 `DesktopBackgroundCapture`、`BackgroundSession`、`MaterialMenuOpening` 等旧实验的低层协议及其测试断言。内部测试仍可显式启用该测试路径，正常用户无法通过配置或 API 启用。后续若清理死代码，应独立核对 Edge 权限交接、捕获租约释放与 Popup 打开顺序，不把删除旧选项等同于已经删除所有旧实现。
+
+**Validation:** Settings API 不再列出或接受旧 ID；旧 JSON 字段不会激活材质或重新序列化；原有静态采样协议测试继续约束兼容层，正式 GUI 默认为轻量且不会触发截图。
