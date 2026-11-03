@@ -139,16 +139,35 @@ internal sealed class PaperBodyPluginEventHub : IDisposable
         _scheduledStamp = _observedStamp;
     }
 
-    // Settle pending changes before triggering so callbacks see the user transition first.
-    // The caller must revalidate candidates after these synchronous callbacks.
-    public void PrepareTriggeredReminderChanges(IReadOnlyList<TodoSnapshot> todos)
+    // Freeze any pending user changes without running plugin callbacks before the host
+    // completes its own reminder delivery. Deliver this batch before the system transition.
+    public Action CapturePendingChangesForReminder()
     {
         _dispatcher.VerifyAccess();
-        if (_disposed || _suppressionDepth > 0 || _subscriptions.Count == 0) return;
-        if (todos.Any(todo => !_baseline.TryGetValue(todo.PaperId, out var paper) ||
-                !paper.Todos.TryGetValue(todo.Id, out var baseline) ||
-                ChangedTodoFields(baseline, todo) != TodoChangedFields.None))
-            ScanNow(PaperOperationContext.User());
+        if (_disposed || _suppressionDepth > 0 || _subscriptions.Count == 0)
+            return static () => { };
+
+        _flushTimer.Stop();
+        var subscribers = _subscriptions.Values.ToArray();
+        var snapshot = CaptureState();
+        var events = BuildEvents(_baseline, snapshot, PaperOperationContext.User());
+        _baseline = snapshot;
+        _observedStamp = CaptureChangeStamp();
+        _scheduledStamp = _observedStamp;
+        return () =>
+        {
+            Dispatch(events, subscribers);
+            QueueUserChangesIfNeeded();
+        };
+    }
+
+    // The advance notice is intentionally a pre-notification hook. Unlike ordinary
+    // TodoChanged observers, it may prompt a plugin to suppress the default presentation.
+    public void PublishReminderUpcoming(IReadOnlyList<TodoReminderUpcomingEvent> events)
+    {
+        _dispatcher.VerifyAccess();
+        if (_disposed || _subscriptions.Count == 0 || events.Count == 0) return;
+        Dispatch(events, _subscriptions.Values.ToArray());
     }
 
     public Action CaptureTriggeredReminderChanges(
@@ -501,6 +520,7 @@ internal sealed class PaperBodyPluginEventHub : IDisposable
         TodoCreatedEvent item => item.Todo.PaperId,
         TodoChangedEvent item => item.After.PaperId,
         TodoDeletedEvent item => item.Todo.PaperId,
+        TodoReminderUpcomingEvent item => item.Todo.PaperId,
         NoteChangedEvent item => item.PaperId,
         _ => ""
     };

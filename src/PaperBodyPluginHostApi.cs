@@ -3,7 +3,7 @@ using PaperTodo.Plugin;
 
 namespace PaperTodo;
 
-internal sealed partial class PaperBodyPluginHostApi : IPaperTodoHostApi, IPaperTopBarApi, IPaperPresentationApi, IDisposable
+internal sealed partial class PaperBodyPluginHostApi : IPaperTodoHostApi, IPaperReminderNotificationControl, IPaperTopBarApi, IPaperPresentationApi, IDisposable
 {
     private readonly AppController _controller;
     private readonly PaperCommandService _commands;
@@ -210,6 +210,14 @@ internal sealed partial class PaperBodyPluginHostApi : IPaperTodoHostApi, IPaper
         _topBarActionHandler?.Invoke(invocation);
     }
 
+    public bool SuppressDefaultReminderNotification(Guid notificationId)
+    {
+        Require(PaperTodoPermissionNames.TodosUpdate);
+        if (notificationId == Guid.Empty)
+            throw Error("invalid_params", "notificationId must be a non-empty UUID.");
+        return Invoke(() => _controller.SuppressDefaultReminderNotification(notificationId));
+    }
+
     public IDisposable Subscribe(
         PaperTodoEventFilter filter,
         Action<PaperTodoEvent> handler)
@@ -282,6 +290,7 @@ internal sealed partial class PaperBodyPluginHostApi : IPaperTodoHostApi, IPaper
                 After = RedactTodo(item.After, canReadPapers, canReadTodos)
             },
             TodoDeletedEvent item => item with { Todo = RedactTodo(item.Todo, canReadPapers, canReadTodos) },
+            TodoReminderUpcomingEvent item => item with { Todo = RedactTodo(item.Todo, canReadPapers, canReadTodos) },
             NoteChangedEvent item when !canReadPapers => item with { PaperTitle = "" },
             _ => value
         };
@@ -351,6 +360,7 @@ internal sealed partial class PaperBodyPluginHostApi : IPaperTodoHostApi, IPaper
             HasReadOrLegacyObserve(PaperTodoPermissionNames.TodosRead, PaperTodoPermissionNames.TodosObserve),
         PaperTodoEventKind.NoteChanged =>
             HasReadOrLegacyObserve(PaperTodoPermissionNames.NotesRead, PaperTodoPermissionNames.NotesObserve),
+        PaperTodoEventKind.TodoReminderUpcoming => _permissions.Contains(PaperTodoPermissionNames.TodosRead),
         _ => throw Error("invalid_params", "Unknown event kind.")
     };
 
