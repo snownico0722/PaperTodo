@@ -56,11 +56,6 @@ public sealed partial class AppController
             title: Strings.Get("SettingsPaperSkin"),
             options: PaperSkins.All,
             description: "Paper surface style. A native style may require restarting a session that was created with layered windows.");
-        yield return DefineSetting<bool>("appearance.match_auxiliary_material",
-            () => State.MatchAuxiliaryMaterialStrength,
-            value => State.MatchAuxiliaryMaterialStrength = value,
-            SettingEffects.Skin,
-            title: Strings.Get("SettingsMatchAuxiliaryMaterial"));
         yield return DefineSetting<string>("appearance.material_transparency",
             () => MaterialTransparencyLevels.Normalize(State.MaterialTransparency),
             value => State.MaterialTransparency = value,
