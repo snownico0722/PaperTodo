@@ -36,7 +36,7 @@ internal static class SkinChecks
         foreach (var culture in new[] { "", "en", "ja", "ko" })
         {
             var set = resources.GetResourceSet(CultureInfo.GetCultureInfo(culture), true, false)!;
-            foreach (var key in PaperSkins.All.Select(PaperSkins.LabelKey).Append("SettingsPaperSkin").Append("SkinRestartRequired").Append("SkinCaptureNotice").Append("SettingsMatchAuxiliaryMaterial").Append("TipMatchAuxiliaryMaterial"))
+            foreach (var key in PaperSkins.All.Select(PaperSkins.LabelKey).Append("SettingsPaperSkin").Append("SkinRestartRequired"))
                 Program.Assert(!string.IsNullOrWhiteSpace(set.GetString(key)), $"localized {culture}/{key}");
         }
         var before = (controller.State.PaperSkin, controller.State.ColorScheme, controller.State.Theme,
@@ -243,10 +243,13 @@ internal static class SkinChecks
                 state.Papers.Add(new PaperData { Type = PaperTypes.Note, Content = "# 换肤不丢正文\n原文 **保留**" });
                 store.SaveJsonSync(store.SerializeState(state), ++version);
                 var restored = store.Load();
-                Program.Assert(restored.PaperSkin == skin && restored.ColorScheme == state.ColorScheme && restored.MicaAlwaysActive && restored.MaterialTransparency == MaterialTransparencyLevels.High && restored.MatchAuxiliaryMaterialStrength == match, "independent preferences persist");
+                Program.Assert(restored.PaperSkin == skin && restored.ColorScheme == state.ColorScheme && restored.MicaAlwaysActive && restored.MaterialTransparency == MaterialTransparencyLevels.High && !restored.MatchAuxiliaryMaterialStrength,
+                    "the retired full auxiliary material setting is ignored on load while other preferences persist");
+                Program.Assert(!store.SerializeState(state).Contains("matchAuxiliaryMaterialStrength", StringComparison.OrdinalIgnoreCase),
+                    "the retired auxiliary setting is not written back to saved state");
                 Program.Assert(restored.Papers.Single().Content == state.Papers.Single().Content, "note payload preserved");
             }
-            store.SaveJsonSync("""{"colorScheme":"mica","micaBackdropType":"acrylic","papers":[]}""", ++version);
+            store.SaveJsonSync("""{"colorScheme":"mica","micaBackdropType":"acrylic","matchAuxiliaryMaterialStrength":true,"papers":[]}""", ++version);
             var legacy = store.Load();
             Program.Assert(legacy.PaperSkin == PaperSkins.Acrylic && legacy.ColorScheme == ColorSchemes.Neutral && !legacy.MatchAuxiliaryMaterialStrength, "old file appearance preserved");
             store.SaveJsonSync(store.SerializeState(legacy), ++version);
