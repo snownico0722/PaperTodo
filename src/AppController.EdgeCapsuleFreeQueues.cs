@@ -271,7 +271,7 @@ public sealed partial class AppController
             // NewQueue 避让仍使用当前占位，因此同一个候选同时携带两套区间。
             var margin = DeepCapsuleStartTopMarginForQueueKey(key);
             var delta = restingDeltas.GetValueOrDefault(key);
-            var insertionSlotCount = slotCount + carried.Count;
+            var insertionSlotCount = slotCount + 1;
             result.Add(new EdgeCapsuleQueueMagnetCandidate(
                 key,
                 slotCount,
