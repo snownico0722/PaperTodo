@@ -66,9 +66,11 @@
 | D-055 | Aero 不采用 ACCENT_ENABLE_BLURBEHIND 原生模糊 | Rejected | 主题 / Window integration |
 | D-056 | 精确终帧与主胶囊纯视觉输入隔离 | Accepted | Edge handoff / input |
 | D-057 | DWM 桌面截图退出 CI 自动验收 | Accepted | 测试 / Window integration |
-| D-058 | data.json 仅显式重载，普通保存保持原路径 | Partially superseded by D-059 | 持久化 / 外部 API |
-| D-059 | 显式合并由调用方提供真实原始版本 | Accepted | 持久化 / 外部 API |
-| D-060 | 固定编号工作区共用代码，不共用运行数据 | Accepted | 工作区 / 持久化 |
+| D-058 | data.json 仅显式重载，普通保存保持原路径 | Accepted, restored by D-061 | 持久化 / 外部 API |
+| D-059 | 显式合并由调用方提供真实原始版本 | Revised by D-061 | 持久化 / 外部 API |
+| D-060 | 写入准入、外部变化暂停与终止边界 | Partially superseded by D-061 | 持久化 / 写入安全 |
+| D-061 | 仅显式热重载和有基线三方合并，普通保存不检测外部修改 | Accepted | 持久化 / 产品边界 |
+| D-062 | 固定编号工作区共用代码，不共用运行数据 | Accepted | 工作区 / 持久化 |
 
 ## 维护规则
 
@@ -1804,7 +1806,7 @@ PR #319 的初版把主胶囊完整材质收展后的卡死解释为终点迟到
 
 ## D-058 — data.json 仅显式重载，普通保存保持原路径
 
-**Status:** Partially superseded by D-059 / D-060（补充显式三方合并，普通保存增加内容指纹防覆盖；无监听/历史约束保留）
+**Status:** Accepted, complemented by D-059 and restored by D-061（显式重载与普通保存原路径仍成立）
 
 ### Context
 
@@ -1829,7 +1831,7 @@ PR #319 的初版把主胶囊完整材质收展后的卡死解释为终点迟到
 
 ## D-059 — 显式合并由调用方提供真实原始版本
 
-**Status:** Partially superseded by D-060（真实基线/显式裁决保留；普通保存不得盲目覆盖外部变化）
+**Status:** Revised by D-061（保留真实原始基线与三方冲突处理；移除缺失基线时的整份选择）
 
 ### Context
 
@@ -1855,7 +1857,7 @@ PR #319 的初版把主胶囊完整材质收展后的卡死解释为终点迟到
 
 ---
 
-## D-060 — 固定编号工作区共用代码，不共用运行数据
+## D-062 — 固定编号工作区共用代码，不共用运行数据
 
 **Status:** Accepted
 
@@ -1888,7 +1890,7 @@ PR #319 的初版把主胶囊完整材质收展后的卡死解释为终点迟到
 
 ## D-060 — 写入准入、外部变化暂停与终止边界
 
-**Status:** Accepted
+**Status:** Partially superseded by D-061（普通保存指纹/暂停策略撤销；系统终止与原子写入保护仍保留）
 
 ### Context
 
@@ -1911,3 +1913,28 @@ PR #319 的初版把主胶囊完整材质收展后的卡死解释为终点迟到
 ### Evidence
 
 `StateStore.WriteSafety`、`PersistenceWriteLifetime`、`AppController.PersistencePolicy`、`AppController.DataReload`、`StateStore.ConflictImages`；`WriteSafetyChecks`、`KillSafetyChecks`、`ShutdownSafetyChecks` 通过实际 IO/进程/控件边界约束行为。
+
+---
+
+## D-061 — 仅显式热重载与有基线三方合并，普通保存不检测外部修改
+
+**Status:** Accepted
+
+### Context
+
+此前 #340 将外部版本检测与暂停保存引入普通自动保存路径，并为缺少共同祖先的 `merge_data` 提供整份内存/磁盘选择。这使按需热重载与三方合并扩张成隐式外部变更监测和两方冲突恢复，超出了明确的产品需求，给普通保存额外增加读取和永久暂停状态。
+
+### Decision
+
+- `reload_data` 仅在明确调用时加载并校验当前磁盘文件，允许其替代正在运行的内存状态；不自动监听、轮询或比较普通保存前的外部文件变化。
+- `merge_data` **必须**提供调用方实际开始编辑前读取的完整原始 JSON。没有 Baseline（包括内存与磁盘一致时）直接拒绝，无整份二选一或 `unknown_baseline` 分支。真正的三方冲突继续复用现有选择器与三种策略。
+- 正常自动保存恢复原有版本化原子替换，可覆盖未显式导入的外部编辑。这是显式操作模型的已接受代价，不做自动停存。无效/取消的显式操作也不新增后续自动保存限制。
+- **保留**显式操作的写锁和版本栅栏，确保旧的排队保存不能覆盖已接受的热重载；三方合并及工作区目录提交前仍核对其本次读取的输入。关机/崩溃写入停止信号、启动异常恢复源保护、先归档后合并、图片引用保守清理均不变。
+
+### Consequences
+
+删除普通保存读取整个文件指纹的常驻成本、无基线冲突 UI 和暂停恢复协议；调用方需要传真实基线才能自动合并。如果外部程序只直接编辑磁盘但不及时调用热重载，后续普通保存可能覆盖其修改。该功能不承诺多程序自动同步。
+
+### Evidence
+
+#340 / #351 的 `StateStore.WriteSafety.cs`、`StateStore.Merge.cs`、`AppController.DataReload.cs`、`McpTools.cs` 及 `PaperTodo.DataReloadChecks`；D-058/059/060 保留为路线演进的历史证据。
