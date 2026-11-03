@@ -240,13 +240,14 @@ internal static class SkinChecks
         {
             var store = new StateStore(temp, DurableAtomicFileWriter.Shared); long version = 0;
             foreach (var skin in PaperSkins.All)
-            foreach (var match in new[] { false, true })
             {
-                var state = new AppState { MatchAuxiliaryMaterialStrength = match, PaperSkin = skin, ColorScheme = ColorSchemes.Neutral, MicaAlwaysActive = true, MaterialTransparency = MaterialTransparencyLevels.High };
+                var state = new AppState { PaperSkin = skin, ColorScheme = ColorSchemes.Neutral,
+                    MicaAlwaysActive = true, MaterialTransparency = MaterialTransparencyLevels.High };
                 state.Papers.Add(new PaperData { Type = PaperTypes.Note, Content = "# 换肤不丢正文\n原文 **保留**" });
                 store.SaveJsonSync(store.SerializeState(state), ++version);
                 var restored = store.Load();
-                Program.Assert(restored.PaperSkin == skin && restored.ColorScheme == state.ColorScheme && restored.MicaAlwaysActive && restored.MaterialTransparency == MaterialTransparencyLevels.High && !restored.MatchAuxiliaryMaterialStrength,
+                Program.Assert(restored.PaperSkin == skin && restored.ColorScheme == state.ColorScheme &&
+                    restored.MicaAlwaysActive && restored.MaterialTransparency == MaterialTransparencyLevels.High,
                     "the retired full auxiliary material setting is ignored on load while other preferences persist");
                 Program.Assert(!store.SerializeState(state).Contains("matchAuxiliaryMaterialStrength", StringComparison.OrdinalIgnoreCase),
                     "the retired auxiliary setting is not written back to saved state");
@@ -254,7 +255,8 @@ internal static class SkinChecks
             }
             store.SaveJsonSync("""{"colorScheme":"mica","micaBackdropType":"acrylic","matchAuxiliaryMaterialStrength":true,"papers":[]}""", ++version);
             var legacy = store.Load();
-            Program.Assert(legacy.PaperSkin == PaperSkins.Acrylic && legacy.ColorScheme == ColorSchemes.Neutral && !legacy.MatchAuxiliaryMaterialStrength, "old file appearance preserved");
+            Program.Assert(legacy.PaperSkin == PaperSkins.Acrylic && legacy.ColorScheme == ColorSchemes.Neutral,
+                "unknown retired JSON field is ignored while old skin migration is preserved");
             store.SaveJsonSync(store.SerializeState(legacy), ++version);
             Program.Assert(store.Load().PaperSkin == PaperSkins.Acrylic, "migration remains stable after resave");
         }
