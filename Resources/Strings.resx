@@ -347,6 +347,7 @@
 {0}
 请检查磁盘空间或权限。</value>
   </data>
+  <data name="DataSaveResolveConflict" xml:space="preserve"><value>处理数据冲突</value></data>
   <data name="SaveFailureTitle" xml:space="preserve">
     <value>保存失败</value>
   </data>
