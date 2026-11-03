@@ -565,6 +565,7 @@ internal static partial class Program
             await Until(() => controller.WorkspaceNumber == 2 && !controller.IsWorkspaceSwitching, "top-bar click did not switch");
             Require(await controller.SwitchWorkspaceAsync(1), "return after actual button event failed");
 
+            await WorkspaceMainCatalogSingleWriteChecks(controller);
             await WorkspaceRollbackChecks(controller, directory);
 
             // Both settings and tray choose an explicit slot, unlike the paper's cycle button.
