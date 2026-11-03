@@ -1542,4 +1542,8 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="TopBarExternalEditor" xml:space="preserve">
     <value>外部エディターで開く</value>
   </data>
+  <data name="NoteHtmlExport" xml:space="preserve"><value>ノートを HTML にエクスポート</value></data>
+  <data name="NoteHtmlSaved" xml:space="preserve"><value>保存先：{0}
+元のノートは保持されます。</value></data>
+  <data name="NoteHtmlMissingImage" xml:space="preserve"><value>エクスポートできません：画像が見つからないか、未対応です。</value></data>
 </root>

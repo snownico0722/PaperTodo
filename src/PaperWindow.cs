@@ -2710,6 +2710,9 @@ public sealed partial class PaperWindow : Window
         else if (_paper.Type == PaperTypes.Note)
         {
             menu.Items.Add(BuildPaperBodyProviderMenuItem());
+            if (IsCurrentBodyProviderMarkdown)
+                menu.Items.Add(MenuItem(Strings.Get("NoteHtmlExport"),
+                    (_, _) => ExportNoteHtml()));
         }
 
         AttachPluginPaperMenuActions(menu);

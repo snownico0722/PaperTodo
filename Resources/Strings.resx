@@ -1591,4 +1591,8 @@
   <data name="TopBarExternalEditor" xml:space="preserve">
     <value>外部编辑</value>
   </data>
+  <data name="NoteHtmlExport" xml:space="preserve"><value>导出笔记 HTML</value></data>
+  <data name="NoteHtmlSaved" xml:space="preserve"><value>已保存到：{0}
+原笔记仍保留。</value></data>
+  <data name="NoteHtmlMissingImage" xml:space="preserve"><value>无法导出：图片缺失或不受支持。</value></data>
 </root>
