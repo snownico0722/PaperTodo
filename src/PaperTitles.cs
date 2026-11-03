@@ -7,7 +7,6 @@ public static class PaperTitles
     // Title limits are full-width character equivalents: CJK/full-width = 2 units,
     // Latin/half-width = 1 unit. The configured limit is expressed in 2-unit characters.
     public const int MaxTitleLength = 20;
-    public const int MaxTitleInputCodeUnits = MaxTitleLength * 2;
 
     // New-install default. Existing saved preferences retain their configured value.
     public const int DefaultMaxTitleLength = 6;

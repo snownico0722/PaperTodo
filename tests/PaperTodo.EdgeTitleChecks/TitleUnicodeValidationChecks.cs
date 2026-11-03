@@ -33,8 +33,34 @@ internal static partial class Program
         Check(PaperTitles.CleanCustomTitle("e\u0301e\u0301x", 1) == "e\u0301e\u0301",
             "Combining-character clusters count as two half-width letters");
         Check(!PaperTitles.ExceedsTitleLengthLimit(new string('x', 40), 20) &&
-              PaperTitles.ExceedsTitleLengthLimit(new string('x', 41), 20) &&
-              PaperTitles.MaxTitleInputCodeUnits == 40,
-            "The hard limit allows forty half-width characters without an early WPF cutoff");
+              PaperTitles.ExceedsTitleLengthLimit(new string('x', 41), 20),
+            "The hard weighted limit allows forty half-width characters");
+
+        const string emojiHeart = "❤️";
+        const string emojiKeycap = "1️⃣";
+        Check(EdgeCapsuleLayout.DisplayWidth(emojiHeart) == 2 &&
+              EdgeCapsuleLayout.DisplayWidth(emojiKeycap) == 2 &&
+              EdgeCapsuleLayout.DisplayWidth("©️") == 2 &&
+              EdgeCapsuleLayout.DisplayWidth("☕") == 2 &&
+              EdgeCapsuleLayout.DisplayWidth("✅") == 2 &&
+              EdgeCapsuleLayout.DisplayWidth("⭐") == 2 &&
+              EdgeCapsuleLayout.DisplayWidth("⏰") == 2,
+            "BMP emoji sequences and default emoji glyphs each count as one full-width character");
+        Check(PaperTitles.CleanCustomTitle(emojiHeart + emojiHeart + emojiHeart, 2) ==
+              emojiHeart + emojiHeart &&
+              PaperTitles.ExceedsTitleLengthLimit(emojiHeart + emojiHeart + emojiHeart, 2) &&
+              PaperTitles.CleanCustomTitle(emojiKeycap + emojiKeycap + emojiKeycap, 2) ==
+              emojiKeycap + emojiKeycap &&
+              PaperTitles.ExceedsTitleLengthLimit(emojiKeycap + emojiKeycap + emojiKeycap, 2),
+            "Emoji weighted validation and truncation agree without splitting clusters");
+        Check(EdgeCapsuleLayout.DisplayWidth("a\u0301") == 1 &&
+              EdgeCapsuleLayout.DisplayWidth("ABC") == 3,
+            "Ordinary Latin combining text remains half-width");
+        var longEmojiTitle = string.Concat(
+            Enumerable.Repeat("👨‍👩‍👧‍👦", PaperTitles.MaxTitleLength));
+        Check(longEmojiTitle.Length > 40 &&
+              !PaperTitles.ExceedsTitleLengthLimit(longEmojiTitle, PaperTitles.MaxTitleLength) &&
+              PaperTitles.CleanCustomTitle(longEmojiTitle, PaperTitles.MaxTitleLength) == longEmojiTitle,
+            "Twenty legal emoji clusters can exceed the former forty-code-unit editor guard");
     }
 }

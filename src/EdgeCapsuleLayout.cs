@@ -72,8 +72,18 @@ public static class EdgeCapsuleLayout
         }
 
         var c = element[0];
-        // CJK Unified, Hiragana/Katakana, Hangul, fullwidth forms, CJK symbols/punct.
-        return char.IsHighSurrogate(c)         // Supplementary symbols (including emoji)
+        // Some BMP emoji need an emoji presentation selector (❤️) or a keycap mark (1️⃣).
+        // Others, such as clocks, dingbats and stars, render as emoji without selectors.
+        // CJK/fullwidth characters retain the existing width rules below.
+        return element.Contains('\uFE0F')    // Emoji presentation selector
+            || element.Contains('\u20E3')    // Combining enclosing keycap
+            || char.IsHighSurrogate(c)        // Supplementary symbols (including emoji)
+            || (c >= 0x231A && c <= 0x231B)   // Watch / hourglass
+            || (c >= 0x23E9 && c <= 0x23FA)   // Emoji controls / clock
+            || (c >= 0x25FB && c <= 0x27BF)   // Geometric emoji / symbols / dingbats
+            || (c >= 0x2B05 && c <= 0x2B07)   // Emoji arrows
+            || (c >= 0x2B1B && c <= 0x2B1C)   // Square emoji
+            || c is 0x2B50 or 0x2B55          // Star / circle emoji
             || (c >= 0x1100 && c <= 0x115F)   // Hangul Jamo
             || (c >= 0x2E80 && c <= 0x303E)   // CJK radicals / Kangxi / symbols
             || (c >= 0x3041 && c <= 0x33FF)   // Hiragana, Katakana, CJK symbols
