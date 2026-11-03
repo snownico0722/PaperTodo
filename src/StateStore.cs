@@ -45,6 +45,7 @@ public sealed partial class StateStore
     public string BackupPath { get; }
     private bool _preserveRecoveredLoadFilesOnNextSave;
     private bool _preserveOrphanedTempsOnNextSave;
+    internal bool NeedsStartupRecoverySave { get; private set; }
     private string? _preservedFailedPrimaryPath;
     private string? _preservedRecoveryBackupPath;
 
@@ -55,6 +56,7 @@ public sealed partial class StateStore
     internal AppState Load(out bool initializedEmpty)
     {
         initializedEmpty = false;
+        NeedsStartupRecoverySave = false;
         ClearRecoveredLoadPreservationState();
         var mainExists = FileExistsForCollection(FilePath);
         if (mainExists)
@@ -70,6 +72,7 @@ public sealed partial class StateStore
             {
                 var restored = ReadLoadDocument(BackupPath);
                 _preserveRecoveredLoadFilesOnNextSave = mainExists;
+                NeedsStartupRecoverySave = true;
                 return restored;
             }
             catch (JsonException) { /* Backup is also corrupt; rebuild. */ }
@@ -82,6 +85,7 @@ public sealed partial class StateStore
             FileExistsForCollection(FilePath + ".tmp") ||
             FileExistsForCollection(BackupPath + ".tmp");
         initializedEmpty = true;
+        NeedsStartupRecoverySave = true;
         return new AppState();
     }
 
@@ -378,12 +382,12 @@ public sealed partial class StateStore
             _preserveOrphanedTempsOnNextSave = false;
         }
 
-        if (File.Exists(FilePath) && string.IsNullOrWhiteSpace(_preservedFailedPrimaryPath))
+        if (FileExistsForCollection(FilePath) && string.IsNullOrWhiteSpace(_preservedFailedPrimaryPath))
         {
             _preservedFailedPrimaryPath = CopyRecoverySource(FilePath, "failed_load", validateWrite);
         }
 
-        if (File.Exists(BackupPath) && string.IsNullOrWhiteSpace(_preservedRecoveryBackupPath))
+        if (FileExistsForCollection(BackupPath) && string.IsNullOrWhiteSpace(_preservedRecoveryBackupPath))
         {
             _preservedRecoveryBackupPath = CopyRecoverySource(BackupPath, "used_for_recovery", validateWrite);
         }
