@@ -2804,6 +2804,16 @@ public sealed partial class AppController : IDisposable
             return;
         }
 
+        // Display disconnects can displace the expanded HWND before the topology
+        // reconciliation runs. Only persist its position while it is reachable.
+        if (window is PaperWindow { ShouldSaveDeepCapsuleExpandedGeometry: true } expanded &&
+            WindowNative.TryGetWindowDeviceBounds(expanded, out var expandedBounds) &&
+            !ExpandedPaperRecoveryPolicy.HasReachablePixels(
+                expandedBounds, WindowWorkAreaHelper.ConnectedMonitorGeometries()))
+        {
+            return;
+        }
+
         if (double.IsNaN(window.Left) || double.IsNaN(window.Top))
         {
             return;
