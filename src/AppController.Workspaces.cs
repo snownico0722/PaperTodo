@@ -169,7 +169,7 @@ public sealed partial class AppController
             // Complete/fence the source writer first. Candidate validation never overwrites it.
             CommitWorkspaceEditors();
             if (!TrySaveNow(sync: true, workspaceBoundary: true)) return false;
-            candidate = _workspaceCatalog.Open(number, nextOptions, allowCreate: true,
+            candidate = _workspaceCatalog.Open(number, nextOptions,
                 main: previous.Paths.Number == 1 ? previous.State : null,
                 current: number == previous.Paths.Number ? previous : null);
             if (number == previous.Paths.Number)

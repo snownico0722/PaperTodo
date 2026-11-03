@@ -31,16 +31,30 @@ internal sealed class CoreHistoryBackup
 
     internal string BackupDirectory => Path.Combine(_dataDirectory, "backups");
 
-    internal bool TryCreateIfDue(DateTimeOffset now)
+    internal bool TryCreateIfDue(DateTimeOffset now) => TryCreateIfDue(now, out _);
+
+    // A no-op (unchanged or not yet due) is different from a failed attempt.
+    // The caller uses this distinction for one bounded failure retry.
+    internal bool TryCreateIfDue(DateTimeOffset now, out bool failed)
     {
+        failed = false;
         var utc = now.UtcDateTime;
         try
         {
             _ensureWritesAllowed?.Invoke();
-            var archives = ListArchives();
+            var archives = ListArchives(utc);
             CleanAbandonedTemporaryFiles();
+            // Retry pruning left over from a prior successful publication even if
+            // no new content is due. Never make cleanup a prerequisite for saving.
+            if (archives.Count > CopiesToKeep)
+            {
+                PruneArchives(archives, utc);
+                archives = ListArchives(utc);
+            }
 
-            if (archives.Count > 0 && utc - archives[0].Timestamp < MinimumInterval)
+            // A clock correction must not let a future-dated ZIP suppress backups.
+            if (archives.Count > 0 && archives[0].Timestamp <= utc &&
+                utc - archives[0].Timestamp < MinimumInterval)
                 return false;
 
             // Preserve the original bytes even if a workspace JSON cannot be parsed.
@@ -61,7 +75,8 @@ internal sealed class CoreHistoryBackup
 
             // No new historical version is needed when every workspace file is unchanged.
             // This compares bytes, not JSON structure or application-level validity.
-            if (archives.Count > 0 && SameDocuments(archives[0].Path, documents))
+            if (archives.Count > 0 && archives[0].Timestamp <= utc &&
+                SameDocuments(archives[0].Path, documents))
                 return false;
 
             _ensureWritesAllowed?.Invoke();
@@ -72,16 +87,24 @@ internal sealed class CoreHistoryBackup
             try
             {
                 using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
-                using (var zip = new ZipArchive(stream, ZipArchiveMode.Create))
                 {
-                    foreach (var document in documents)
+                    using (var zip = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
                     {
-                        var entry = zip.CreateEntry(document.Name, CompressionLevel.Optimal);
-                        using var output = entry.Open();
-                        output.Write(document.Bytes);
+                        foreach (var document in documents)
+                        {
+                            var entry = zip.CreateEntry(document.Name, CompressionLevel.Optimal);
+                            using var output = entry.Open();
+                            output.Write(document.Bytes);
+                        }
                     }
+                    // Flush after the ZIP central directory has been finalized.
+                    stream.Flush(flushToDisk: true);
                 }
 
+                // Only publish a ZIP that reproduces the exact source bytes.
+                // No JSON parsing or semantic validation is performed.
+                if (!SameDocuments(temporary, documents))
+                    throw new InvalidDataException("Core history ZIP verification failed.");
                 _ensureWritesAllowed?.Invoke();
                 // Only a finalized archive becomes eligible for retention.
                 File.Move(temporary, destination);
@@ -89,27 +112,43 @@ internal sealed class CoreHistoryBackup
             finally
             {
                 try { if (File.Exists(temporary)) File.Delete(temporary); }
-                catch (IOException) { /* A failed temporary is never a restore point. */ }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    Trace.TraceWarning("Could not clean core history temporary ZIP: {0}", ex);
+                }
             }
 
-            var all = ListArchives();
-            var retained = ChooseRetainedArchives(all, utc);
-            foreach (var stale in all.Where(a => !retained.Contains(a.Path)))
-            {
-                try
-                {
-                    _ensureWritesAllowed?.Invoke();
-                    File.Delete(stale.Path);
-                }
-                catch (Exception ex) { Trace.TraceWarning("Could not prune core history backup: {0}", ex); }
-            }
+            PruneArchives(ListArchives(utc), utc);
             return true;
         }
         catch (Exception ex)
         {
+            failed = true;
             // Never affect ordinary saving, switching, startup or termination.
             Trace.TraceWarning("Core history backup skipped: {0}", ex);
             return false;
+        }
+    }
+
+    private void PruneArchives(List<(string Path, DateTime Timestamp)> archives, DateTime now)
+    {
+        if (archives.Count <= CopiesToKeep) return;
+
+        // Verify the old archives only when pruning is actually needed. A damaged
+        // ZIP must not use a recovery slot at the expense of a readable one.
+        var readable = archives.Where(a => IsReadableArchive(a.Path)).ToList();
+        var retained = ChooseRetainedArchives(readable, now);
+        foreach (var stale in archives.Where(a => !retained.Contains(a.Path)))
+        {
+            try
+            {
+                _ensureWritesAllowed?.Invoke();
+                File.Delete(stale.Path);
+            }
+            catch (Exception ex)
+            {
+                Trace.TraceWarning("Could not prune core history backup: {0}", ex);
+            }
         }
     }
 
@@ -185,12 +224,83 @@ internal sealed class CoreHistoryBackup
                 using var input = entry.Open();
                 using var copy = new MemoryStream();
                 input.CopyTo(copy);
-                if (!copy.GetBuffer().AsSpan(0, (int)copy.Length).SequenceEqual(document.Bytes))
+                var restored = copy.GetBuffer().AsSpan(0, (int)copy.Length);
+                if (!restored.SequenceEqual(document.Bytes) ||
+                    ~UpdateCrc32(uint.MaxValue, restored) != entry.Crc32)
                     return false;
             }
             return true;
         }
         catch { return false; } // a damaged older ZIP must not prevent a new backup
+    }
+
+    // .NET 10 doesn't verify ZIP CRC on entry reads, so check it only when
+    // deciding which older recovery points can be retained.
+    private static bool IsReadableArchive(string path)
+    {
+        try
+        {
+            using var zip = ZipFile.OpenRead(path);
+            if (zip.Entries.Count is < 1 or > 5) return false;
+            var names = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var entry in zip.Entries)
+            {
+                if (!IsCoreDocumentName(entry.FullName) || !names.Add(entry.FullName))
+                    return false;
+                using var input = entry.Open();
+                var buffer = new byte[16 * 1024];
+                long length = 0;
+                uint crc = uint.MaxValue;
+                int read;
+                while ((read = input.Read(buffer)) > 0)
+                {
+                    length += read;
+                    crc = UpdateCrc32(crc, buffer.AsSpan(0, read));
+                }
+                if (length != entry.Length || ~crc != entry.Crc32) return false;
+            }
+            return true;
+        }
+        catch (IOException)
+        {
+            // An archive temporarily locked by another program is not proven bad.
+            return true;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return true;
+        }
+        catch (InvalidDataException)
+        {
+            return false;
+        }
+    }
+
+    private static bool IsCoreDocumentName(string name) =>
+        name == "data.json" ||
+        (name.Length == 10 && name.StartsWith("data", StringComparison.Ordinal) &&
+         name[4] is >= '2' and <= '5' && name.EndsWith(".json", StringComparison.Ordinal));
+
+    private static readonly uint[] Crc32Table = BuildCrc32Table();
+
+    private static uint[] BuildCrc32Table()
+    {
+        var table = new uint[256];
+        for (var n = 0; n < table.Length; n++)
+        {
+            uint value = (uint)n;
+            for (var bit = 0; bit < 8; bit++)
+                value = (value & 1) == 0 ? value >> 1 : (value >> 1) ^ 0xEDB88320u;
+            table[n] = value;
+        }
+        return table;
+    }
+
+    private static uint UpdateCrc32(uint crc, ReadOnlySpan<byte> bytes)
+    {
+        foreach (var value in bytes)
+            crc = (crc >> 8) ^ Crc32Table[(int)((crc ^ value) & 0xFF)];
+        return crc;
     }
 
     private void CleanAbandonedTemporaryFiles()
@@ -199,11 +309,14 @@ internal sealed class CoreHistoryBackup
         foreach (var path in Directory.EnumerateFiles(BackupDirectory, "." + ArchivePrefix + "*.tmp"))
         {
             try { File.Delete(path); }
-            catch (IOException) { /* Best-effort cleanup of interrupted ZIP writes. */ }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                Trace.TraceWarning("Could not clean abandoned core history ZIP: {0}", ex);
+            }
         }
     }
 
-    private List<(string Path, DateTime Timestamp)> ListArchives()
+    private List<(string Path, DateTime Timestamp)> ListArchives(DateTime now)
     {
         var result = new List<(string Path, DateTime Timestamp)>();
         if (!Directory.Exists(BackupDirectory)) return result;
@@ -220,7 +333,15 @@ internal sealed class CoreHistoryBackup
                     DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var when))
                 result.Add((path, when));
         }
-        result.Sort((a, b) => b.Timestamp.CompareTo(a.Timestamp));
+        // Put impossible future-dated archives last, without deleting them just
+        // because the wall clock was corrected. The newest real backup wins.
+        result.Sort((a, b) =>
+        {
+            var aFuture = a.Timestamp > now;
+            var bFuture = b.Timestamp > now;
+            if (aFuture != bFuture) return aFuture ? 1 : -1;
+            return b.Timestamp.CompareTo(a.Timestamp);
+        });
         return result;
     }
 }

@@ -119,6 +119,91 @@ internal static partial class Program
                 "backup read blocked an atomic primary save");
         }
 
-        Console.WriteLine("PASS core history: raw files, ten-minute cadence, 90-day gradient and nonblocking reads");
+        // Clock correction: a future-dated archive may be retained as history
+        // but must not suppress a newly timestamped snapshot indefinitely.
+        using (var corrected = new Scope())
+        {
+            var clockBackup = new CoreHistoryBackup(corrected.DirectoryPath);
+            Require(clockBackup.TryCreateIfDue(start.AddYears(1)), "future-date fixture failed");
+            File.WriteAllText(corrected.Store.FilePath, "after clock correction");
+            Require(clockBackup.TryCreateIfDue(start.AddMinutes(10)),
+                "future-dated archive blocked the corrected clock");
+            var correctedZip = Directory.GetFiles(clockBackup.BackupDirectory, "*.zip")
+                .Single(p => Path.GetFileName(p).Contains("20261103-181000", StringComparison.Ordinal));
+            using var zip = ZipFile.OpenRead(correctedZip);
+            using var reader = new StreamReader(zip.GetEntry("data.json")!.Open());
+            Require(reader.ReadToEnd() == "after clock correction", "corrected-clock backup is not newest");
+        }
+
+        // A corrupt old ZIP must not displace a readable historical version.
+        using (var oldArchives = new Scope())
+        {
+            var archiveBackup = new CoreHistoryBackup(oldArchives.DirectoryPath);
+            for (var index = 0; index < 4; index++)
+            {
+                File.WriteAllText(oldArchives.Store.FilePath, "version-" + index);
+                Require(archiveBackup.TryCreateIfDue(start.AddMinutes(index * 10)),
+                    "could not seed four history ZIPs");
+            }
+            var toCorrupt = Directory.GetFiles(archiveBackup.BackupDirectory, "*.zip")
+                .OrderBy(x => x, StringComparer.Ordinal).First();
+            File.WriteAllText(toCorrupt, "not a ZIP");
+            File.WriteAllText(oldArchives.Store.FilePath, "fifth version");
+            Require(archiveBackup.TryCreateIfDue(start.AddMinutes(40)),
+                "damaged older ZIP blocked normal archival");
+            var survivors = Directory.GetFiles(archiveBackup.BackupDirectory, "*.zip");
+            Require(survivors.Length == 4 && !survivors.Contains(toCorrupt),
+                "corrupt history consumed a healthy recovery slot");
+
+            // Retry cleanup of extra archives even if no fresh content is saved.
+            var extra = Path.Combine(archiveBackup.BackupDirectory,
+                "PaperTodo-core-" + start.AddMinutes(15).UtcDateTime
+                    .ToString("yyyyMMdd-HHmmss-fffffff", CultureInfo.InvariantCulture) + ".zip");
+            File.Copy(survivors[0], extra);
+            Require(!archiveBackup.TryCreateIfDue(start.AddMinutes(50)),
+                "unchanged state should not create a new archive");
+            Require(Directory.GetFiles(archiveBackup.BackupDirectory, "*.zip").Length == 4,
+                "unchanged backup check did not retry pruning");
+        }
+
+        // A read-only abandoned temp is not allowed to prevent the next backup.
+        using (var abandoned = new Scope())
+        {
+            var tempBackup = new CoreHistoryBackup(abandoned.DirectoryPath);
+            Require(tempBackup.TryCreateIfDue(start), "temp-cleanup fixture could not start");
+            var locked = Path.Combine(tempBackup.BackupDirectory, ".PaperTodo-core-readonly.tmp");
+            File.WriteAllText(locked, "old temporary data");
+            File.SetAttributes(locked, FileAttributes.ReadOnly);
+            try
+            {
+                File.WriteAllText(abandoned.Store.FilePath, "after temp cleanup failure");
+                Require(tempBackup.TryCreateIfDue(start.AddMinutes(10)),
+                    "an inaccessible temporary ZIP blocked a valid backup");
+            }
+            finally
+            {
+                if (File.Exists(locked)) File.SetAttributes(locked, FileAttributes.Normal);
+            }
+        }
+
+        // Losing the write permission between finalization and publication
+        // cannot delete previously completed recovery points.
+        using (var interrupted = new Scope())
+        {
+            var baseline = new CoreHistoryBackup(interrupted.DirectoryPath);
+            Require(baseline.TryCreateIfDue(start), "publication fixture could not start");
+            File.WriteAllText(interrupted.Store.FilePath, "new but not published");
+            var calls = 0;
+            var failing = new CoreHistoryBackup(interrupted.DirectoryPath, () =>
+            {
+                if (++calls == 3) throw new IOException("Injected publication failure");
+            });
+            Require(!failing.TryCreateIfDue(start.AddMinutes(10), out var failed) && failed,
+                "publication fault injection did not report a failure");
+            Require(Directory.GetFiles(baseline.BackupDirectory, "*.zip").Length == 1,
+                "failed publication removed or replaced the previous archive");
+        }
+
+        Console.WriteLine("PASS core history: raw files, resilient publishing, clock correction, CRC, cleanup and gradient");
     }
 }

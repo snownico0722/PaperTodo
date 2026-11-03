@@ -45,6 +45,7 @@ public sealed partial class StateStore
     public string BackupPath { get; }
     private bool _preserveRecoveredLoadFilesOnNextSave;
     private bool _preserveOrphanedTempsOnNextSave;
+    internal bool NeedsStartupRecoverySave { get; private set; }
     private string? _preservedFailedPrimaryPath;
     private string? _preservedRecoveryBackupPath;
 
@@ -55,6 +56,7 @@ public sealed partial class StateStore
     internal AppState Load(out bool initializedEmpty)
     {
         initializedEmpty = false;
+        NeedsStartupRecoverySave = false;
         ClearRecoveredLoadPreservationState();
         var mainExists = FileExistsForCollection(FilePath);
         if (mainExists)
@@ -70,6 +72,7 @@ public sealed partial class StateStore
             {
                 var restored = ReadLoadDocument(BackupPath);
                 _preserveRecoveredLoadFilesOnNextSave = mainExists;
+                NeedsStartupRecoverySave = true;
                 return restored;
             }
             catch (JsonException) { /* Backup is also corrupt; rebuild. */ }
@@ -79,9 +82,9 @@ public sealed partial class StateStore
         // Keep any corrupt primary/backup before the next ordinary save replaces it.
         _preserveRecoveredLoadFilesOnNextSave = mainExists || backupExists;
         _preserveOrphanedTempsOnNextSave =
-            FileExistsForCollection(FilePath + ".tmp") ||
-            FileExistsForCollection(BackupPath + ".tmp");
+            File.Exists(FilePath + ".tmp") || File.Exists(BackupPath + ".tmp");
         initializedEmpty = true;
+        NeedsStartupRecoverySave = true;
         return new AppState();
     }
 
@@ -325,6 +328,7 @@ public sealed partial class StateStore
         {
             ClearRecoveredLoadPreservationState();
         }
+        NeedsStartupRecoverySave = false;
     }
 
     private static bool TryReadValidatedStateBytes(string path, out byte[] bytes)
@@ -372,18 +376,22 @@ public sealed partial class StateStore
             // to refuse a new workspace. Archive it before the atomic writer reuses .tmp.
             foreach (var path in new[] { FilePath + ".tmp", BackupPath + ".tmp" })
             {
-                if (FileExistsForCollection(path))
-                    CopyRecoverySource(path, "orphaned", validateWrite);
+                // Historical temps are best-effort only: they must not veto an
+                // otherwise valid new-workspace initialization or recovery.
+                if (!File.Exists(path)) continue;
+                try { CopyRecoverySource(path, "orphaned", validateWrite); }
+                catch (IOException) { }
+                catch (UnauthorizedAccessException) { }
             }
             _preserveOrphanedTempsOnNextSave = false;
         }
 
-        if (File.Exists(FilePath) && string.IsNullOrWhiteSpace(_preservedFailedPrimaryPath))
+        if (FileExistsForCollection(FilePath) && string.IsNullOrWhiteSpace(_preservedFailedPrimaryPath))
         {
             _preservedFailedPrimaryPath = CopyRecoverySource(FilePath, "failed_load", validateWrite);
         }
 
-        if (File.Exists(BackupPath) && string.IsNullOrWhiteSpace(_preservedRecoveryBackupPath))
+        if (FileExistsForCollection(BackupPath) && string.IsNullOrWhiteSpace(_preservedRecoveryBackupPath))
         {
             _preservedRecoveryBackupPath = CopyRecoverySource(BackupPath, "used_for_recovery", validateWrite);
         }
