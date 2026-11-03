@@ -386,7 +386,9 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
                     try { listener(message.event); } catch { }
                   }
                 } else if (message?.type === 'hostSubscriptionError') {
-                  hostEventListeners.delete(message.subscriptionId);
+                  if (!message.existingSubscriptionRetained) {
+                    hostEventListeners.delete(message.subscriptionId);
+                  }
                 }
                 for (const listener of [...listeners]) {
                   try { listener(message); } catch { }
@@ -865,6 +867,7 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
             {
                 type = "hostSubscriptionError",
                 subscriptionId,
+                existingSubscriptionRetained = _hostSubscriptions.ContainsKey(subscriptionId),
                 error = new { code = ex.Code, message = ex.Message }
             });
         }
