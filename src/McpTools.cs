@@ -29,7 +29,7 @@ internal sealed partial class McpTools
         _client.InvokeAsync("merge_data", new { baseline_json }, cancellationToken);
 
     [McpServerTool(Name = "get_data_reload_status", ReadOnly = true, Destructive = false, OpenWorld = false)]
-    [Description("Read WorkspaceNumber, DataFileName, FollowsMainSettings, the last explicit reload outcome and whether UI reconciliation is still in progress. Does not read or modify the data file.")]
+    [Description("Read WorkspaceNumber, DataFileName, FollowsMainSettings, the last explicit reload outcome and whether UI reconciliation is still in progress. Does not read or modify the data file. After a workspace switch, this query also acknowledges the current workspace so the internal MCP bridge can continue without restarting; old writes are never automatically retried.")]
     public Task<JsonElement> GetDataReloadStatus(CancellationToken cancellationToken = default) =>
         _client.InvokeAsync("get_data_reload_status", new { }, cancellationToken);
 
