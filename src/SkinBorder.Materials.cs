@@ -33,7 +33,7 @@ internal sealed partial class SkinBorder
         if (UseLightweightMaterial && PaperSkins.UsesNativeBackdrop(Skin))
         {
             var preview = palette.Preview;
-            if (IsAuxiliary && AppController.Current?.State.MatchAuxiliaryMaterialStrength != true)
+            if (IsAuxiliary)
                 preview = Color.FromArgb(255, preview.R, preview.G, preview.B);
             _fill = Frozen(new SolidColorBrush(preview));
             _shine = _header = Brushes.Transparent;
@@ -48,9 +48,8 @@ internal sealed partial class SkinBorder
             case PaperSkins.Mica:
             case PaperSkins.Acrylic:
             case PaperSkins.ClearAcrylic:
-                // Transmitted background + diffuse color, shared by both auxiliary strengths.
-                // Main Mica/Acrylic keeps its DWM backdrop; a layered popup uses real local
-                // background diffusion instead of pretending an opaque gradient is blur.
+                // Main Mica/Acrylic keeps its native DWM backdrop. Layered
+                // auxiliary surfaces receive an opaque, readable color recipe.
                 var nativeHighlight = Skin == PaperSkins.Mica ? .035 : .075;
                 var density = alpha;
                 _fill = Gradient(0, WithAlpha(Mix(paper, Colors.White, nativeHighlight), density),
@@ -100,9 +99,8 @@ internal sealed partial class SkinBorder
                 var retroTarget = Mix(paper,
                     _dark ? Color.FromRgb(22, 29, 46) : Color.FromRgb(240, 235, 217),
                     _dark ? .10 : .14);
-                // Pixel is an opaque decorative skin, not a transmission material. Bake quiet
-                // strength into the color instead of lowering the surface alpha. The active edge
-                // capsule keeps a stronger floor so it does not look washed out when full material is off.
+                // Pixel is opaque. Bake quiet strength into the color without
+                // lowering the surface alpha; active edge capsules keep a stronger floor.
                 var pixelStrength = IsEdgeActiveMaterial ? Math.Max(MaterialStrength, .70) : MaterialStrength;
                 var semanticPaper = ((SolidColorBrush)Theme.PaperBrush).Color;
                 var retro = Mix(semanticPaper, retroTarget, pixelStrength);
@@ -155,30 +153,8 @@ internal sealed partial class SkinBorder
             }
         }
     }
-    private byte EffectiveTransmissionAlpha(bool opaque, byte alpha)
-    {
-        if (opaque) return 255;
-        // Full material OFF means no transmission at all for capsule/menu surfaces.
-        // In particular DockedActive must not receive any separate alpha compensation.
-        if (IsAuxiliary && AppController.Current?.State.MatchAuxiliaryMaterialStrength != true)
-            return 255;
-        if (!IsEdgeActiveMaterial)
-            return alpha;
-
-        // DockedActive is a layered simulation rather than the expanded DWM surface.
-        // A small per-material density lift keeps "full material" visually coherent without
-        // changing the saved five-level transparency setting or affecting menus/resting pills.
-        var extra = Skin switch
-        {
-            PaperSkins.Mica => 8,
-            PaperSkins.Acrylic => 14,
-            PaperSkins.ClearAcrylic => 12,
-            PaperSkins.TracingPaper => 10,
-            PaperSkins.Aero => 10,
-            _ => 0
-        };
-        return (byte)Math.Min(255, alpha + extra);
-    }
+    private byte EffectiveTransmissionAlpha(bool opaque, byte alpha) =>
+        opaque || IsAuxiliary ? (byte)255 : alpha;
 
     private static Color White(int alpha) => Color.FromArgb((byte)alpha, 255, 255, 255);
 }
