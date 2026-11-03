@@ -19,9 +19,8 @@ internal sealed partial class WebPluginRuntime
             PaperIds = WebPaperBodySession.ReadStringSet(parameters, "paperIds"),
             ExcludeOwnOperations = exclude.ValueKind != JsonValueKind.False
         };
-        if (_hostSubscriptions.Remove(id, out var existing)) existing.Dispose();
         var documentToken = _extensionDocumentToken;
-        _hostSubscriptions[id] = _workspace.Subscribe(filter, value =>
+        var replacement = _workspace.Subscribe(filter, value =>
         {
             if (documentToken == null || documentToken != _extensionDocumentToken) return;
             Send(new
@@ -32,6 +31,9 @@ internal sealed partial class WebPluginRuntime
                     WebPluginRuntimeInfrastructure.JsonOptions)
             });
         });
+        _hostSubscriptions.TryGetValue(id, out var existing);
+        _hostSubscriptions[id] = replacement;
+        existing?.Dispose();
         return new { subscribed = true };
     }
 

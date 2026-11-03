@@ -48,4 +48,4 @@ powershell -ExecutionPolicy Bypass -File plugin-samples/Build-And-Install-Native
 
 插件使用单个后台队列按接收顺序发送，最多缓存 256 条，每次请求超时 15 秒；队列满、请求失败或非 2xx 响应不会重试，关闭 Runtime 时未完成的请求和队列会丢弃。事件本身也不提供离线重放；因此不适合要求必达的业务。失败信息写入 .NET Trace，不记录 URL 或事件正文。重定向不会自动跟随。
 
-Webhook URL 存在宿主插件设置中，URL 若包含令牌，能读取插件数据文件的人也能看到。事件可能包含纸片标题、待办文本和关联路径，请只配置可信的接收端。插件仅在 PaperTodo 运行且至少有一张该插件的实体纸片时运行。
+Webhook URL 不支持 `https://user:password@host/path` 形式的用户名/密码，配置中包含此类信息会被拒绝（不会自动生成 Basic Auth 请求头）。URL 存在宿主插件设置中，URL 若包含令牌，能读取插件数据文件的人也能看到。事件可能包含纸片标题、待办文本和关联路径，请只配置可信的接收端。插件仅在 PaperTodo 运行且至少有一张该插件的实体纸片时运行。

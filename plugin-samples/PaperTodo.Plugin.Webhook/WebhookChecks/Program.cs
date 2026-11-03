@@ -11,6 +11,11 @@ if (!WebhookRoutes.TryRead("{\"routes\":\"{\\\"futureEvent\\\":\\\"https://examp
     throw new Exception("Unknown future event route was not retained");
 if (WebhookRoutes.TryRead("{\"routes\":\"{\\\"todoCreated\\\":\\\"file:///tmp\\\"}\"}", out _, out _))
     throw new Exception("Invalid URL was accepted");
+var basicAuthRoute = JsonSerializer.Serialize(new {
+    routes = JsonSerializer.Serialize(new { todoChanged = "https://user:password@example.com/hook" }) });
+if (WebhookRoutes.TryRead(basicAuthRoute, out _, out var basicAuthError) ||
+    basicAuthError == null || !basicAuthError.Contains("username or password", StringComparison.OrdinalIgnoreCase))
+    throw new Exception("URL credentials were not rejected with a useful error.");
 if (WebhookRoutes.TryRead("{\"routes\":\"{\"}", out _, out _))
     throw new Exception("Invalid JSON was accepted");
 if (WebhookRoutes.EventName(PaperTodoEventKind.TodoChanged) != "todoChanged" ||
@@ -93,7 +98,7 @@ while (!string.IsNullOrEmpty(line = await nextReader.ReadLineAsync(timeout.Token
 }
 await nextClient.GetStream().WriteAsync(
     "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"u8.ToArray(), timeout.Token);
-// Hold the first request open while changing only credentials on the configured route.
+// Hold the first request open while rotating only a URL query token.
 using var credentialListener = new TcpListener(IPAddress.Loopback, 0);
 credentialListener.Start();
 var credentialPort = ((IPEndPoint)credentialListener.LocalEndpoint).Port;
@@ -105,14 +110,14 @@ using var credentialSubscriptions = new WebhookSubscriptions((filter, handler) =
 }, new WebhookDispatcher());
 string Settings(string password) => JsonSerializer.Serialize(new
 {
-    routes = JsonSerializer.Serialize(new { todoChanged = $"http://user:{password}@127.0.0.1:{credentialPort}/hook" })
+    routes = JsonSerializer.Serialize(new { todoChanged = $"http://127.0.0.1:{credentialPort}/hook?token={password}" })
 });
 credentialSubscriptions.Update(Settings("old"));
 deliver!(reminderChange);
 using var firstCredentialClient = await credentialListener.AcceptTcpClientAsync(timeout.Token);
 await using var firstCredentialStream = firstCredentialClient.GetStream();
 using var firstCredentialReader = new StreamReader(firstCredentialStream, Encoding.UTF8, leaveOpen: true);
-if (await firstCredentialReader.ReadLineAsync(timeout.Token) != "POST /hook HTTP/1.1")
+if (await firstCredentialReader.ReadLineAsync(timeout.Token) != "POST /hook?token=old HTTP/1.1")
     throw new Exception("First credential request was not received");
 while (!string.IsNullOrEmpty(await firstCredentialReader.ReadLineAsync(timeout.Token))) { }
 deliver(reminderChange);
@@ -123,7 +128,7 @@ await firstCredentialStream.WriteAsync("HTTP/1.1 204 No Content\r\nContent-Lengt
 firstCredentialClient.Close();
 using var nextCredentialClient = await credentialListener.AcceptTcpClientAsync(timeout.Token);
 using var nextCredentialReader = new StreamReader(nextCredentialClient.GetStream(), Encoding.UTF8);
-if (await nextCredentialReader.ReadLineAsync(timeout.Token) != "POST /hook HTTP/1.1")
+if (await nextCredentialReader.ReadLineAsync(timeout.Token) != "POST /hook?token=new HTTP/1.1")
     throw new Exception("New credential request was not received");
 var nextLength = 0;
 while (!string.IsNullOrEmpty(line = await nextCredentialReader.ReadLineAsync(timeout.Token)))
@@ -139,7 +144,7 @@ while (nextRead < nextBody.Length)
 }
 using var nextPayload = JsonDocument.Parse(new string(nextBody));
 if (nextPayload.RootElement.GetProperty("after").GetProperty("text").GetString() != "New route event")
-    throw new Exception("Queued event used old credentials after route change");
+    throw new Exception("Queued event used old URL token after route change");
 Console.WriteLine("Webhook POST, TodoChanged reminder transition and subscriptions verified.");
 
 sealed class CallbackDisposable(Action callback) : IDisposable

@@ -31,6 +31,8 @@ internal static class WebhookRoutes
                     !Uri.TryCreate(property.Value.GetString()?.Trim(), UriKind.Absolute, out var uri) ||
                     (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
                     throw new FormatException($"Invalid HTTP(S) URL for event '{property.Name}'.");
+                if (uri.UserInfo.Length > 0)
+                    throw new FormatException($"Webhook URL for event '{property.Name}' must not contain a username or password.");
                 if (string.IsNullOrWhiteSpace(property.Name) || !routes.TryAdd(property.Name, uri))
                     throw new FormatException("Event names must be nonempty and unique.");
             }
