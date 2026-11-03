@@ -499,6 +499,9 @@ internal static partial class Program
                 "workspace switch reused the old paper window");
             Require(controller.State.Theme == "dark" && controller.State.McpEnabled &&
                 UiLanguages.EffectiveUiCulture.Name == "en-US", "default inheritance missing");
+            var switchedStatus = controller.PaperCommands.GetDataReloadStatus();
+            Require(switchedStatus.LastResult == null && switchedStatus.LastAttemptAt == null,
+                "workspace switch retained the previous workspace's explicit reload history");
             var savedDraft = Str(J(File.ReadAllText(mainStore.FilePath))["papers"]![0]!["content"]);
             Require(savedDraft == expectedDraft,
                 "pending editor text was lost on departure: " + JsonSerializer.Serialize(savedDraft));
@@ -536,8 +539,8 @@ internal static partial class Program
             var workspaceStatus = controller.PaperCommands.GetDataReloadStatus();
             Require(workspaceStatus.WorkspaceNumber == 2 && workspaceStatus.DataFileName == "data2.json" &&
                 workspaceStatus.FollowsMainSettings && !workspaceStatus.IsReloading &&
-                workspaceStatus.LastResult == null && workspaceStatus.LastAttemptAt == null,
-                "status does not identify the actual reload target");
+                workspaceStatus.LastResult?.Applied == true && workspaceStatus.LastAttemptAt != null,
+                "post-rebind status does not identify the actual reload target");
             Require(!controller.PublicSettings.Get("appearance.theme").Writable, "inherited setting advertised writable");
             Throws<PaperSettingsException>(() => controller.PublicSettings.Set("appearance.theme", JsonSerializer.SerializeToElement("light")));
             controller.SaveNow(sync: true);
