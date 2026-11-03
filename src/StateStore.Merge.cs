@@ -64,7 +64,6 @@ public sealed partial class StateStore
             {
                 // Even a no-op request must fence older queued snapshots.
                 ValidatePrimaryHash(System.Security.Cryptography.SHA256.HashData(sourceBytes));
-                AcceptPrimaryBytes(sourceBytes);
                 _latestWrittenVersion = version;
                 return new(null, new() { Outcome = "unchanged" });
             }
