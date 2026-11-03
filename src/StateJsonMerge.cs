@@ -73,17 +73,36 @@ internal static class StateJsonMerge
     private static Dictionary<string, JsonNode?> Index(JsonArray array) =>
         array.ToDictionary(node => node!["id"]!.GetValue<string>(), node => node, StringComparer.Ordinal);
 
+    // Todo order is an index derived from the item array, not a second editable property.
+    // Compare the actual entity sequence below, then regenerate the persisted order values.
+    private static Value WithoutDerivedTodoOrder(Value value)
+    {
+        if (value.Node is not JsonObject item) return value;
+        var clone = (JsonObject)item.DeepClone();
+        clone.Remove("order");
+        return new(true, clone);
+    }
+
     private static JsonArray MergeEntities(JsonArray baseline, JsonArray memory, JsonArray external,
         string path, List<string> applied, List<StateMergeConflict> conflicts)
     {
         var b = Index(baseline);
         var m = Index(memory);
         var e = Index(external);
+        var todoItems = path.EndsWith("].items", StringComparison.Ordinal);
         var values = new Dictionary<string, JsonNode?>(StringComparer.Ordinal);
         foreach (var id in b.Keys.Concat(m.Keys).Concat(e.Keys).Distinct(StringComparer.Ordinal))
         {
-            var value = MergeValue(new(b.TryGetValue(id, out var bv), bv),
-                new(m.TryGetValue(id, out var mv), mv), new(e.TryGetValue(id, out var ev), ev),
+            Value baseValue = new(b.TryGetValue(id, out var bv), bv);
+            Value memoryValue = new(m.TryGetValue(id, out var mv), mv);
+            Value externalValue = new(e.TryGetValue(id, out var ev), ev);
+            if (todoItems)
+            {
+                baseValue = WithoutDerivedTodoOrder(baseValue);
+                memoryValue = WithoutDerivedTodoOrder(memoryValue);
+                externalValue = WithoutDerivedTodoOrder(externalValue);
+            }
+            var value = MergeValue(baseValue, memoryValue, externalValue,
                 JsonPath.EntityPath(path, id), applied, conflicts);
             if (value.Exists) values[id] = value.Node;
         }
@@ -103,7 +122,13 @@ internal static class StateJsonMerge
         var order = (preferExternal ? e.Keys : m.Keys).Where(values.ContainsKey).ToList();
         AddMissingIdentities(order, m.Keys.Where(values.ContainsKey).ToArray());
         AddMissingIdentities(order, e.Keys.Where(values.ContainsKey).ToArray());
-        return new JsonArray(order.Select(id => values[id]).ToArray());
+        var merged = new JsonArray(order.Select(id => values[id]).ToArray());
+        if (todoItems)
+        {
+            for (var index = 0; index < merged.Count; index++)
+                merged[index]!.AsObject()["order"] = index;
+        }
+        return merged;
     }
 
     private static JsonArray OrderNode(IEnumerable<string> ids) =>
