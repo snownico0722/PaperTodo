@@ -10,7 +10,7 @@ public static class PaperTitles
     public const int MaxTitleInputCodeUnits = MaxTitleLength * 2;
 
     // New-install default. Existing saved preferences retain their configured value.
-    public const int DefaultMaxTitleLength = 8;
+    public const int DefaultMaxTitleLength = 6;
     public const int MinConfigurableTitleLength = 2;
     public const int MaxConfigurableTitleLength = MaxTitleLength;
 

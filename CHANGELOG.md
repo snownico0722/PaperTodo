@@ -22,7 +22,7 @@ This log is written for general and power users alike. It focuses on user-facing
 
 #### Papers, Title Bar & Capsules
 
-- **More flexible paper titles**: The default title limit rises from 6 to 8 full-width character equivalents. Latin letters, digits and other half-width characters now count as half a character; mixed Chinese/English titles fit more naturally without changing the 2–20 setting range. Existing length preferences are preserved.
+- **More flexible paper titles**: The default title limit remains 6 full-width character equivalents. Latin letters, digits and other half-width characters now count as half a character; mixed Chinese/English titles fit more naturally without changing the 2–20 setting range. Existing length preferences are preserved.
 
 - **Paper menus and title-bar shortcuts**: On an expanded paper, the `···` button and right-click entry now open the same menu, including Quick, the paper title and Settings.
   - In Settings → General → Title-bar Shortcuts, move and reorder the four built-in actions (Associate by Drag, New Note, New Todo and External Editor) between the **Show in title bar** and **Show in menu** sections. Todo and Note papers share one layout; separate customization menus and visibility checkboxes are no longer needed.

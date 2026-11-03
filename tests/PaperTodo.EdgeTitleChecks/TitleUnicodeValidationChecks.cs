@@ -18,8 +18,8 @@ internal static partial class Program
         Check(!PaperTitles.ExceedsTitleLengthLimit("123456 ", 6),
             "Trailing whitespace removed by title cleanup does not cause a false overflow");
 
-        Check(PaperTitles.DefaultMaxTitleLength == 8,
-            "New installations allow eight full-width characters by default");
+        Check(PaperTitles.DefaultMaxTitleLength == 6,
+            "New installations allow six full-width characters by default");
         Check(!PaperTitles.ExceedsTitleLengthLimit("abcdefghijkl", 6) &&
               PaperTitles.ExceedsTitleLengthLimit("abcdefghijklm", 6),
             "Twelve half-width Latin letters fit the same limit as six CJK characters");
