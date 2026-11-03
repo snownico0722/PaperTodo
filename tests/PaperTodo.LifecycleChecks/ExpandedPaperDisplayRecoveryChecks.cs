@@ -12,6 +12,7 @@ internal static class ExpandedPaperDisplayRecoveryChecks
         state.ExperimentalEdgeCapsuleHoverPreview = false;
         state.ShowDeepCapsuleWhileExpanded = true;
         state.CollapseExpandedDeepCapsuleOnClick = true;
+        state.RememberDeepCapsuleExpandedPosition = true;
     }
 
     internal static async Task Run(
@@ -43,25 +44,66 @@ internal static class ExpandedPaperDisplayRecoveryChecks
             window.IsDeepCapsuleSlotVisible,
             "expanded paper must keep an active edge capsule");
 
+        // A resized expanded paper records its size separately from the base paper geometry.
+        // Rescue must use the live expanded size, not the older base size.
+        var baseWidth = paper.Width;
+        var baseHeight = paper.Height;
+        window.Width = baseWidth + 96;
+        window.Height = baseHeight + 48;
+        window.UpdateLayout();
+        await Dispatcher.CurrentDispatcher.InvokeAsync(
+            static () => { }, DispatcherPriority.Render);
+        controller.UpdateGeometry(paper, window);
+        Require(paper.Width == baseWidth && paper.Height == baseHeight &&
+            paper.DeepCapsuleExpandedWidth > baseWidth + 48 &&
+            paper.DeepCapsuleExpandedHeight > baseHeight + 24,
+            "expanded resize did not persist independently of the base paper size");
+
         Require(WindowNative.TryGetWindowDeviceBounds(window, out var original) &&
             ExpandedPaperRecoveryPolicy.HasReachablePixels(original, monitors),
             "paper must start on a reachable monitor");
+
+        var rememberedBeforeRescue = (
+            paper.X, paper.Y, paper.Width, paper.Height,
+            paper.DeepCapsuleExpandedX, paper.DeepCapsuleExpandedY,
+            paper.DeepCapsuleExpandedWidth, paper.DeepCapsuleExpandedHeight,
+            paper.DeepCapsuleExpandedDpiScale, paper.DeepCapsuleExpandedSide,
+            paper.DeepCapsuleExpandedMonitorDeviceName);
+        void RequireRememberedGeometryUnchanged(string phase)
+        {
+            var current = (
+                paper.X, paper.Y, paper.Width, paper.Height,
+                paper.DeepCapsuleExpandedX, paper.DeepCapsuleExpandedY,
+                paper.DeepCapsuleExpandedWidth, paper.DeepCapsuleExpandedHeight,
+                paper.DeepCapsuleExpandedDpiScale, paper.DeepCapsuleExpandedSide,
+                paper.DeepCapsuleExpandedMonitorDeviceName);
+            Require(current == rememberedBeforeRescue,
+                $"{phase} overwrote remembered expanded paper geometry");
+        }
 
         var rightEdge = monitors.Max(m => m.WorkArea.Right);
         var offscreen = new DeviceScreenRect(
             rightEdge + 2048, original.Top,
             rightEdge + 2048 + original.Width, original.Top + original.Height);
-        void ParkOffscreen()
+        Require(WindowWorkAreaHelper.TryGetMonitorGeometryForDeviceBounds(
+                offscreen, out var rescueMonitor),
+            "could not resolve a destination monitor for the displaced HWND");
+        var expectedRescue = PaperRestoreGeometry.ClampToMonitor(
+            offscreen, window.Width, window.Height, rescueMonitor);
+        async Task ParkOffscreen()
         {
             Require(WindowNative.TrySetWindowDeviceBounds(window, offscreen),
                 "could not simulate an HWND displaced by a monitor disconnect");
+            await Dispatcher.CurrentDispatcher.InvokeAsync(
+                static () => { }, DispatcherPriority.ApplicationIdle);
             Require(WindowNative.TryGetWindowDeviceBounds(window, out var actual) &&
                 !ExpandedPaperRecoveryPolicy.HasReachablePixels(actual, monitors),
                 "off-screen displacement did not take effect");
+            RequireRememberedGeometryUnchanged("off-screen displacement");
         }
 
         // Active capsule, expanded logical paper, but the real paper HWND is inaccessible.
-        ParkOffscreen();
+        await ParkOffscreen();
         window.ActivateFromEdgeShortcut();
         var hasRetrievedBounds = WindowNative.TryGetWindowDeviceBounds(window, out var retrieved);
         var clickRecovered = paper.IsVisible && !paper.IsCollapsed &&
@@ -83,15 +125,24 @@ internal static class ExpandedPaperDisplayRecoveryChecks
         }
         Require(clickRecovered,
             "clicking an active capsule failed to retrieve its off-screen expanded HWND");
+        Require(Math.Abs(retrieved.Width - expectedRescue.Bounds.Width) <= 2 &&
+            Math.Abs(retrieved.Height - expectedRescue.Bounds.Height) <= 2,
+            "rescue replaced the resized expanded dimensions with stale base paper dimensions");
+        await Dispatcher.CurrentDispatcher.InvokeAsync(
+            static () => { }, DispatcherPriority.ApplicationIdle);
+        RequireRememberedGeometryUnchanged("active-capsule retrieval");
 
         // Simulate display topology settling without requiring a real DP hot-unplug in CI.
-        ParkOffscreen();
+        await ParkOffscreen();
         typeof(AppController).GetMethod("RefreshAfterDisplayMetricsChanged", Private)!
             .Invoke(controller, null);
         Require(WindowNative.TryGetWindowDeviceBounds(window, out var restored) &&
             ExpandedPaperRecoveryPolicy.HasReachablePixels(restored, monitors) &&
             paper.IsVisible && !paper.IsCollapsed,
             "display-change reconciliation left the expanded paper inaccessible");
+        await Dispatcher.CurrentDispatcher.InvokeAsync(
+            static () => { }, DispatcherPriority.ApplicationIdle);
+        RequireRememberedGeometryUnchanged("display-change reconciliation");
 
         // Deliberate partly off-screen placement must never be recentered. Keep 64 DIP
         // reachable and convert that overlap through the destination monitor's DPI.
