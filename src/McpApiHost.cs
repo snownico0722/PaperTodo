@@ -208,6 +208,8 @@ internal sealed class McpApiHost : IDisposable
                 DispatcherPriority.Normal,
                 token);
             var result = await operation.Task;
+            if (result is McpWorkspaceStatusEnvelope status)
+                return new { id = requestId, ok = true, result = status.Result, workspace_token = status.WorkspaceToken };
             return new { id = requestId, ok = true, result };
         }
         catch (McpApiException ex)
