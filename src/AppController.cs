@@ -242,6 +242,10 @@ public sealed partial class AppController : IDisposable
     {
         CreateTrayIcon();
         NotifyWorkspaceStartup();
+        // Complete a successful backup recovery or a confirmed-corrupt rebuild using
+        // the ordinary guarded writer. This never runs after a failed/busy load.
+        if (_store.NeedsStartupRecoverySave)
+            SaveNow(sync: true);
         InitializeGlobalHotkeys();
         _ = Task.Run(PaperWindow.CleanupOldScriptCapsuleTempFiles);
         _ = Application.Current.Dispatcher.BeginInvoke(
