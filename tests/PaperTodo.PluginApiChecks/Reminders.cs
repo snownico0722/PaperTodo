@@ -331,7 +331,7 @@ internal static partial class Program
         execute.Invoke(runtime, [JsonSerializer.SerializeToElement(new { method = "events.unsubscribe", @params = new { subscriptionId = "s1" } })]);
         Assert(subscriptions.Count == 0, "Web Runtime unsubscribe failed.");
         execute.Invoke(runtime, [payload]);
-        typeof(WebPluginRuntime).GetMethod("TryResetExtensionUi", flags)!.Invoke(runtime, null);
+        typeof(WebPluginRuntime).GetMethod("ResetRuntimeDocument", flags)!.Invoke(runtime, null);
         Assert(subscriptions.Count == 0, "Navigation/failure cleanup retained subscriptions.");
         var kinds = WebPaperBodySession.ReadEventKinds(JsonSerializer.SerializeToElement(
             new { types = new[] { "todo.changed", "todo.reminderUpcoming" } }));
