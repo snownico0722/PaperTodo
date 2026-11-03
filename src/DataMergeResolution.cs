@@ -43,9 +43,7 @@ internal sealed class StateMergeResolution
         var decisions = new Dictionary<string, ResolvedStateMergeConflict>(StringComparer.Ordinal);
         foreach (var bucket in ConflictAggregator.Group(conflicts, externalJson))
         {
-            // Without the actual original version there is no field-level conflict to
-            // resolve. An automatic preference must not authorize a whole-state overwrite.
-            var interactive = selectedPolicy == DataMergeConflictPolicies.Ask || bucket is UnknownBaselineBucket;
+            var interactive = selectedPolicy == DataMergeConflictPolicies.Ask;
             var choice = interactive ? ask(bucket) : selectedPolicy == DataMergeConflictPolicies.External
                 ? ConflictChoice.KeepExternal : ConflictChoice.KeepMemory;
             if (choice is not (ConflictChoice.KeepMemory or ConflictChoice.KeepExternal))
@@ -54,7 +52,6 @@ internal sealed class StateMergeResolution
             {
                 PaperBucket paper => paper.Conflicts,
                 OrderBucket order => [order.Conflict],
-                UnknownBaselineBucket unknown => [unknown.Conflict],
                 SingleLeafBucket leaf => [leaf.Conflict],
                 _ => throw new InvalidOperationException("Unknown conflict group.")
             };

@@ -41,8 +41,6 @@ public sealed partial class AppController
         try
         {
             _store.TryRefreshBackupFromPrimary();
-            if (_store.OrdinaryWritesPaused && !IsDataReloading)
-                HandleSaveFailure(new StateWriteBlockedException());
         }
         catch
         {

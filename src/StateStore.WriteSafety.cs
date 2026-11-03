@@ -1,24 +1,12 @@
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
-using System.Threading;
 
 namespace PaperTodo;
-
-internal class StateWriteBlockedException : InvalidOperationException
-{
-    internal StateWriteBlockedException() : base(Strings.Get("DataSavePausedExternal")) { }
-}
 
 public sealed partial class StateStore
 {
     internal PersistenceWriteLifetime WriteLifetime { get; set; } = new();
-    private int _ordinaryWritesPaused;
-    // Only a fingerprint of the last accepted bytes, NOT a merge baseline or history.
-    // Access under _writeLock (Load is called only before binding a live session).
-    private byte[]? _acceptedPrimaryHash;
-    private bool _hasPrimaryObservation;
-    internal bool OrdinaryWritesPaused => Volatile.Read(ref _ordinaryWritesPaused) != 0;
 
     internal void StopWritesForTermination() => WriteLifetime.Stop();
 
@@ -40,6 +28,8 @@ public sealed partial class StateStore
         return System.Text.Json.JsonSerializer.Deserialize<AppState>(json, JsonOptions);
     }
 
+    // Only explicit merge/reload and workspace-catalog transactions use source validation.
+    // Ordinary autosaves do not observe or compare an external data.json generation.
     private byte[]? ReadPrimaryHash()
     {
         try
@@ -50,37 +40,13 @@ public sealed partial class StateStore
         }
         catch (FileNotFoundException) { return null; }
         catch (DirectoryNotFoundException) { return null; }
-        // Access denied, a directory at the path, etc. are NOT an absent document.
-    }
-
-    private void AcceptPrimaryBytes(byte[]? bytes)
-    {
-        _acceptedPrimaryHash = bytes == null ? null : SHA256.HashData(bytes);
-        _hasPrimaryObservation = true;
-        Volatile.Write(ref _ordinaryWritesPaused, 0);
     }
 
     private void BeginExternalRead(long version)
     {
         WriteLifetime.ThrowIfStopped();
-        // Fence even invalid/unreadable imports. An older queued snapshot must not erase
-        // an input just because validation failed; a newer ordinary save cannot bypass this.
-        Volatile.Write(ref _ordinaryWritesPaused, 1);
+        // An explicitly requested reload/merge supersedes snapshots queued before it.
         _latestWrittenVersion = version;
-    }
-
-    private void ValidateOrdinaryWriteSource()
-    {
-        WriteLifetime.ThrowIfStopped();
-        if (OrdinaryWritesPaused) throw new StateWriteBlockedException();
-        // Preserve StateStore's write-without-Load API for fresh/bootstrap/test writers.
-        // Every live application workspace binds its accepted bytes during Load first.
-        if (!_hasPrimaryObservation)
-        {
-            _acceptedPrimaryHash = ReadPrimaryHash();
-            _hasPrimaryObservation = true;
-        }
-        ValidatePrimaryHash(_acceptedPrimaryHash);
     }
 
     private void ValidatePrimaryHash(byte[]? expected)
@@ -89,7 +55,6 @@ public sealed partial class StateStore
         var actual = ReadPrimaryHash();
         if (expected == null ? actual == null : actual != null && expected.AsSpan().SequenceEqual(actual))
             return;
-        Volatile.Write(ref _ordinaryWritesPaused, 1);
         throw new ExternalDocumentChangedException();
     }
 

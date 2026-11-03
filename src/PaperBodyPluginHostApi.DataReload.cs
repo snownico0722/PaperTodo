@@ -9,9 +9,6 @@ internal sealed partial class PaperBodyPluginHostApi
     public DataReloadResult ReloadData() =>
         Invoke(() => _commands.ReloadData(PaperOperationContext.Plugin(_providerId)));
 
-    public DataReloadResult MergeData() =>
-        Invoke(() => _commands.MergeData(PaperOperationContext.Plugin(_providerId)));
-
     public DataReloadResult MergeData(string baselineJson) =>
         Invoke(() => _commands.MergeData(PaperOperationContext.Plugin(_providerId), baselineJson));
 
@@ -22,7 +19,6 @@ internal sealed partial class PaperBodyPluginHostApi
 internal sealed partial class PaperPluginRuntimeWorkspaceApi
 {
     public DataReloadResult ReloadData() => OnUi(_inner.ReloadData);
-    public DataReloadResult MergeData() => OnUi(_inner.MergeData);
     public DataReloadResult MergeData(string baselineJson) => OnUi(() => _inner.MergeData(baselineJson));
     public DataReloadStatus GetDataReloadStatus() => OnUi(_inner.GetDataReloadStatus);
 }

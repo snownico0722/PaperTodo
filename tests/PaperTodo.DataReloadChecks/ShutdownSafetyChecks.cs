@@ -40,7 +40,6 @@ internal static partial class Program
                     return bucket switch
                     {
                         PaperBucket paper => DataReloadPaperConflictDialog.Show(owner, paper),
-                        UnknownBaselineBucket unknown => DataReloadConflictDialog.Show(owner, unknown.Conflict),
                         _ => throw new InvalidOperationException("unexpected fixture group")
                     };
                 };
