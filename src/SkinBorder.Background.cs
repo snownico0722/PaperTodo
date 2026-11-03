@@ -7,8 +7,8 @@ namespace PaperTodo;
 
 internal sealed partial class SkinBorder
 {
-    // Aero parallax still observes its own HWND position and WPF opacity.
-    // No surface observes or captures the desktop behind the window.
+    // Aero parallax observes only HWND position and display changes.
+    // Auxiliary materials no longer sample the desktop or watch ancestor opacity.
     private MaterialSurfaceHost? _materialHost;
     internal bool HasMaterialHostSubscription => _materialHost?.IsObserving == true;
 
@@ -39,7 +39,12 @@ internal sealed partial class SkinBorder
         if ((change & MaterialHostChange.Environment) != 0)
             RefreshSkin();
         else if (change == MaterialHostChange.Translation)
+        {
+            // The reflection brush's mutable transform already invalidates WPF paint.
+            // Do not request a second full-surface redraw on a translation-only move.
             UpdateAeroReflection();
+            return;
+        }
         else
             RefreshBackground();
         InvalidateVisual();
