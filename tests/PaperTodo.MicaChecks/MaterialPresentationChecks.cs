@@ -16,32 +16,8 @@ internal static class MaterialPresentationChecks
 {
     internal static void Run(AppController controller)
     {
-        var desktop = new Int32Rect(-8192, -2160, 16384, 8640);
-        var ordinary = BackgroundCaptureLayout.Create(
-            new Int32Rect(100, 100, 560, 440),
-            new DesktopBackgroundCapture.Region(0, 0, 560, 440, 64),
-            desktop)!;
-        Program.Assert(
-            ordinary.PixelWidth == ordinary.Bounds.Width &&
-            ordinary.PixelHeight == ordinary.Bounds.Height,
-            "ordinary one-shot snapshots keep physical 1:1 detail");
-
-        foreach (var size in new[] { new Size(2400, 1200), new Size(2048, 2048), new Size(3968, 896) })
-        {
-            var region = new DesktopBackgroundCapture.Region(0, 0, (int)size.Width, (int)size.Height, 96);
-            var layout = BackgroundCaptureLayout.Create(
-                new Int32Rect(-3500, 100, region.Width, region.Height),
-                region,
-                desktop)!;
-            Program.Assert(
-                (long)layout.PixelWidth * layout.PixelHeight <= BackgroundCaptureLayout.PixelBudget &&
-                layout.PixelWidth <= 2048 &&
-                layout.PixelHeight <= 2048,
-                "large static snapshots downsample only to the bounded pixel budget");
-        }
-
-        var saved = (controller.State.PaperSkin, controller.State.Theme, controller.State.EnableAnimations,
-            controller.State.MatchAuxiliaryMaterialStrength, controller.State.MicaAlwaysActive);
+        var saved = (controller.State.PaperSkin, controller.State.Theme,
+            controller.State.EnableAnimations, controller.State.MicaAlwaysActive);
         Window? settings = null;
         var owner = new Window { Width = 200, Height = 100, Left = 40, Top = 40, ShowInTaskbar = false, Content = new Border() };
         ContextMenu? menu = null, aeroMenu = null;
@@ -49,32 +25,30 @@ internal static class MaterialPresentationChecks
         {
             controller.State.PaperSkin = PaperSkins.Acrylic; controller.State.Theme = "light";
             controller.State.EnableAnimations = false;
-            controller.State.MatchAuxiliaryMaterialStrength = true;
             Theme.Invalidate();
             owner.Show();
             menu = controller.CreateTrayMenu(); menu.Items.Add(new MenuItem { Header = "Cancel before background is ready" });
             menu.PlacementTarget = (UIElement)owner.Content; menu.Placement = PlacementMode.Bottom;
             var opens = 0; menu.Opened += (_, _) => opens++;
-            menu.SetCurrentValue(ContextMenu.IsOpenProperty, true); menu.IsOpen = false; Wait(400);
-            Program.Assert(!menu.IsOpen && opens == 0, "cancelling an async menu open never reopens it later");
-            menu.SetCurrentValue(ContextMenu.IsOpenProperty, true); Until(() => menu.IsOpen && opens == 1, "reopen after cancellation"); Wait(80);
+            menu.SetCurrentValue(ContextMenu.IsOpenProperty, true);
+            Until(() => menu.IsOpen && opens == 1, "tray menu opens immediately");
+            menu.IsOpen = false; Wait(80);
+            Program.Assert(!menu.IsOpen && opens == 1, "dismissed menu stays closed");
+            menu.SetCurrentValue(ContextMenu.IsOpenProperty, true);
+            Until(() => menu.IsOpen && opens == 2, "tray menu can reopen immediately");
             var menuSurface = Find(menu);
-            Program.Assert(menuSurface != null && menuSurface.FirstMenuRenderUsedBackground && menu.Opacity == 1,
-                "production tray menu opens with the real material, without a foreground fade");
+            Program.Assert(menuSurface is { IsMenu: true } && menu.Opacity == 1,
+                "tray menu uses the normal popup without a deferred background capture");
             menu.IsOpen = false; Wait(60);
 
             controller.State.PaperSkin = PaperSkins.Aero; Theme.Invalidate();
-            Program.Assert(!MaterialMenuOpening.NeedsBackground && MaterialMenuOpening.SuppressPopupAnimation,
-                "Aero popup skips screen capture but suppresses the solid-to-transparent Fade");
             aeroMenu = controller.CreateTrayMenu();
             aeroMenu.PlacementTarget = (UIElement)owner.Content; aeroMenu.Placement = PlacementMode.Bottom;
             aeroMenu.SetCurrentValue(ContextMenu.IsOpenProperty, true);
             Until(() => aeroMenu.IsOpen, "Aero menu opens immediately without capture preparation"); Wait(80);
-            AssertNoPopupFade(aeroMenu);
             var aeroSurface = Find(aeroMenu);
-            Program.Assert(aeroSurface is { Skin: PaperSkins.Aero } && !aeroSurface.HasBackgroundCapture &&
-                aeroSurface.MenuFallbackRenderCount == 0,
-                "Aero menu uses direct transparent transmission and never starts a background sampler");
+            Program.Assert(aeroSurface is { Skin: PaperSkins.Aero, IsMenu: true } &&
+                aeroMenu.Opacity == 1, "Aero menu uses the normal immediate popup path");
             aeroMenu.IsOpen = false; Wait(60);
             controller.State.PaperSkin = PaperSkins.Acrylic; Theme.Invalidate();
 
