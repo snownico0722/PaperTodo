@@ -334,6 +334,7 @@ Error: {0}</value>
   <data name="SaveFailureMessage" xml:space="preserve">
     <value>Failed to save data:&#x0A;{0}&#x0A;Please check disk space or permissions.</value>
   </data>
+  <data name="DataSaveResolveConflict" xml:space="preserve"><value>Resolve data conflict</value></data>
   <data name="SaveFailureTitle" xml:space="preserve">
     <value>Save Failed</value>
   </data>
