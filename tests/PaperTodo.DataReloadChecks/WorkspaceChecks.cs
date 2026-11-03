@@ -718,6 +718,33 @@ internal static partial class Program
             controller.SaveNow(sync: true);
             Require(Str(J(File.ReadAllText(store2.FilePath))["theme"]) == "light", "inherited settings saved over dormant settings");
 
+            // Catalog-only edits must not flush the active secondary's core data.
+            var secondaryStore = Field<WorkspaceCatalog>(controller, "_workspaceCatalog").StoreFor(2);
+            var secondaryWriterField = typeof(StateStore).GetField("_atomicWriter",
+                BindingFlags.Instance | BindingFlags.NonPublic)!;
+            var originalSecondaryWriter = (IDurableAtomicFileWriter)secondaryWriterField.GetValue(secondaryStore)!;
+            var beforeCatalogEdit = File.ReadAllBytes(store2.FilePath);
+            var earlierCount = controller.WorkspaceOptions.Count;
+            try
+            {
+                secondaryWriterField.SetValue(secondaryStore, new DurableAtomicFileWriter((stage, path) =>
+                {
+                    if (stage == DurableAtomicWriteStage.BeforeTempOpen && path == secondaryStore.FilePath)
+                        throw new IOException("Catalog update must not save secondary content.");
+                }));
+                var newCount = controller.WorkspaceOptions.Normalized();
+                newCount.Count = earlierCount == 5 ? 4 : 5;
+                Require(await controller.ChangeWorkspaceConfigurationAsync(newCount),
+                    "secondary catalog-only update triggered a secondary save");
+                Require(File.ReadAllBytes(store2.FilePath).SequenceEqual(beforeCatalogEdit),
+                    "secondary catalog-only update unexpectedly modified its document");
+            }
+            finally { secondaryWriterField.SetValue(secondaryStore, originalSecondaryWriter); }
+            var restoredCount = controller.WorkspaceOptions.Normalized();
+            restoredCount.Count = earlierCount;
+            Require(await controller.ChangeWorkspaceConfigurationAsync(restoredCount),
+                "secondary catalog-only restoration failed");
+
             // A follow toggle changes only the effective software settings. It must not
             // destroy editors, image handles, plugin state or the workspace binding.
             var followingWindow = windows["note-a"];
