@@ -301,6 +301,21 @@ internal static partial class Program
 
         using (var scope = new Scope())
         {
+            Require(scope.Store.TryRefreshBackupFromPrimary(), "missing-primary test needs a backup");
+            var original = File.ReadAllBytes(scope.Store.BackupPath);
+            File.Delete(scope.Store.FilePath);
+            var reader = new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared);
+            var restored = reader.Load(out var initializedEmpty);
+            Require(!initializedEmpty && reader.NeedsStartupRecoverySave &&
+                    restored.Papers.Count == scope.Memory.Papers.Count,
+                "valid backup did not recover a missing primary");
+            reader.SaveJsonSync(reader.SerializeState(restored), 2);
+            Require(File.Exists(reader.FilePath) && File.ReadAllBytes(reader.BackupPath).SequenceEqual(original),
+                "restoring the missing primary damaged its backup");
+        }
+
+        using (var scope = new Scope())
+        {
             // Neither damaged copy can be used, so both survive in recovery archives.
             File.WriteAllText(scope.Store.FilePath, "{broken-primary");
             File.WriteAllText(scope.Store.BackupPath, "{broken-backup");
