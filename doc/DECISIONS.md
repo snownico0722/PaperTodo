@@ -67,6 +67,7 @@
 | D-056 | 精确终帧与主胶囊纯视觉输入隔离 | Accepted | Edge handoff / input |
 | D-057 | DWM 桌面截图退出 CI 自动验收 | Accepted | 测试 / Window integration |
 | D-058 | 辅助表面统一轻量材质，退休完整材质设置 | Accepted | 主题 / Rendering |
+| D-059 | 删除辅助材质截图与离屏背景会话代码 | Accepted | 主题 / Rendering |
 
 ## 维护规则
 
@@ -1810,3 +1811,14 @@ PR #319 的初版把主胶囊完整材质收展后的卡死解释为终点迟到
 **Scope boundary:** 本次先关闭产品入口与持久化，不在同一提交删除 `DesktopBackgroundCapture`、`BackgroundSession`、`MaterialMenuOpening` 等旧实验的低层协议及其测试断言。内部测试仍可显式启用该测试路径，正常用户无法通过配置或 API 启用。后续若清理死代码，应独立核对 Edge 权限交接、捕获租约释放与 Popup 打开顺序，不把删除旧选项等同于已经删除所有旧实现。
 
 **Validation:** Settings API 不再列出或接受旧 ID；旧 JSON 字段不会激活材质或重新序列化；原有静态采样协议测试继续约束兼容层，正式 GUI 默认为轻量且不会触发截图。
+
+
+## D-059 — 删除辅助材质截图与离屏背景会话代码（2026-11-03）
+
+**Status:** Accepted
+
+**Context:** PR #387 已让辅助完整材质不可通过产品设置启用，但残留的 SRCCOPY 背景获取、模糊、会话缓存、拖动半分辨率桌面快照与菜单预采样仍与 Edge、Popup 和 UI 测试纠缠。该能力在边缘浏览中不连续，对动态背景存在滞后；为单一装饰效果保留复杂生命周期不再合理。
+
+**Decision:** 删除 `DesktopBackgroundCapture`、`BackgroundCaptureLayout`、`SkinBorder.BackgroundSession` 和相关状态、租约、暂停回调；`MaterialContextMenu` 与子菜单保留 WPF 正常即时打开、焦点和关闭行为，不再预截图。移除主胶囊/纸片拖动快照与 Edge DComp 的采样保护调用。胶囊、边缘浏览和菜单统一使用原轻量材质；展开纸片/设置窗口的 DWM Mica/Acrylic 与 Aero 位置视差观察仍保留。
+
+**Validation:** 删除纯截图专用测试，把真实 Edge 队列终态、反转、点击、窗口隐藏/恢复、ContextMenu 打开/关闭、Aero 光照复用和纸片收展测试从旧截图断言中拆出并保留。独立 Windows Release 编译、回归及材质行为 CI 验证。
