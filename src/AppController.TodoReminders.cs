@@ -169,6 +169,19 @@ public sealed partial class AppController
             return;
         }
 
+        // Settle pending user changes before displaying anything. Listener callbacks can
+        // cancel, reschedule, complete or remove reminders from this delivery attempt.
+        _paperBodyPluginEvents?.PrepareTriggeredReminderChanges(
+            due.Select(entry => CaptureTodoSnapshot(entry.Paper, entry.Item)).ToArray());
+        due = due.Where(entry =>
+            State.Papers.Contains(entry.Paper) && entry.Paper.Type == PaperTypes.Todo &&
+            entry.Paper.Items.Contains(entry.Item) && TodoReminderPolicy.IsDue(entry.Item, now)).ToList();
+        if (due.Count == 0)
+        {
+            RefreshTodoReminderSchedule();
+            return;
+        }
+
         var openedFirst = false;
         try
         {
@@ -200,19 +213,6 @@ public sealed partial class AppController
         // A successful multi-reminder balloon represents the whole due batch. If only the first
         // paper could be opened, acknowledge only that first item and leave the rest pending.
         var delivered = due.Take(deliveredCount).ToList();
-
-        // Settle pending user changes before the reminder transition; callbacks may
-        // synchronously remove or reschedule a delivered item.
-        _paperBodyPluginEvents?.PrepareTriggeredReminderChanges(
-            delivered.Select(entry => CaptureTodoSnapshot(entry.Paper, entry.Item)).ToArray());
-        delivered = delivered.Where(entry =>
-            State.Papers.Contains(entry.Paper) && entry.Paper.Type == PaperTypes.Todo &&
-            entry.Paper.Items.Contains(entry.Item) && TodoReminderPolicy.IsDue(entry.Item, now)).ToList();
-        if (delivered.Count == 0)
-        {
-            RefreshTodoReminderSchedule();
-            return;
-        }
 
         // Sound is an optional presentation channel. A bad custom file or unavailable system
         // sound must never keep a successfully surfaced reminder pending.
@@ -416,9 +416,30 @@ public sealed partial class AppController
             return;
         }
 
+        // Retry failed/partial delivery no later than 30 seconds, but do not postpone
+        // a different reminder scheduled to become due before that retry.
+        var interval = TimeSpan.FromSeconds(30);
+        var now = DateTimeOffset.Now;
+        var nextFutureReminder = State.Papers
+            .Where(paper => paper.Type == PaperTypes.Todo)
+            .SelectMany(paper => paper.Items)
+            .Where(TodoReminderPolicy.IsPending)
+            .Select(item => item.ReminderAt!.Value)
+            .Where(reminderAt => reminderAt > now)
+            .DefaultIfEmpty(DateTimeOffset.MaxValue)
+            .Min();
+        if (nextFutureReminder != DateTimeOffset.MaxValue)
+        {
+            var untilNext = nextFutureReminder - now;
+            if (untilNext < interval)
+                interval = untilNext;
+        }
+
         var timer = new DispatcherTimer(DispatcherPriority.Background)
         {
-            Interval = TimeSpan.FromSeconds(30)
+            Interval = interval < TodoReminderMinimumTimerInterval
+                ? TodoReminderMinimumTimerInterval
+                : interval
         };
         timer.Tick += OnTodoReminderTimerTick;
         _todoReminderTimer = timer;
