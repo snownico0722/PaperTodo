@@ -27,7 +27,7 @@ internal sealed class McpApiHost : IDisposable
     public McpApiHost(
         Dispatcher dispatcher,
         McpCommandService commands)
-        : this(dispatcher, commands.Execute, PipeName)
+        : this(dispatcher, commands.ExecutePipeBound, PipeName)
     {
     }
 
