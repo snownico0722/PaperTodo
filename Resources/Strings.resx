@@ -148,10 +148,7 @@
   <data name="MenuBold" xml:space="preserve">
     <value>加粗</value>
   </data>
-  <data name="MenuClearDone" xml:space="preserve">
-    <value>清理已完成</value>
-  </data>
-  <data name="MenuCodeBlock" xml:space="preserve">
+<data name="MenuCodeBlock" xml:space="preserve">
     <value>代码块</value>
   </data>
   <data name="MenuCollapseToCapsule" xml:space="preserve">
@@ -1591,8 +1588,18 @@
   <data name="TopBarExternalEditor" xml:space="preserve">
     <value>外部编辑</value>
   </data>
-  <data name="NoteHtmlExport" xml:space="preserve"><value>导出笔记 HTML</value></data>
-  <data name="NoteHtmlSaved" xml:space="preserve"><value>已保存到：{0}
+<data name="NoteHtmlSaved" xml:space="preserve"><value>已保存到：{0}
 原笔记仍保留。</value></data>
-  <data name="NoteHtmlMissingImage" xml:space="preserve"><value>无法导出：图片缺失或不受支持。</value></data>
+  <data name="NoteExportCurrent" xml:space="preserve"><value>导出当前笔记</value></data>
+  <data name="NoteExportAll" xml:space="preserve"><value>导出全部笔记</value></data>
+  <data name="NoteExportMarkdownType" xml:space="preserve"><value>Markdown 文档</value></data>
+  <data name="NoteExportHtmlType" xml:space="preserve"><value>HTML 网页</value></data>
+  <data name="NoteExportMarkdownZipType" xml:space="preserve"><value>Markdown 压缩包</value></data>
+  <data name="NoteExportHtmlZipType" xml:space="preserve"><value>HTML 压缩包</value></data>
+  <data name="NoteExportMissingImageText" xml:space="preserve"><value>图片缺失</value></data>
+  <data name="NoteExportSummary" xml:space="preserve"><value>已导出 {0}/{1} 篇笔记。&#xA;缺失图片：{2} 张（涉及 {3} 篇）。&#xA;保存到：{4}</value></data>
+  <data name="NoteExportFailedNotes" xml:space="preserve"><value>失败笔记：&#xA;{0}</value></data>
+  <data name="NoteExportFailure" xml:space="preserve"><value>导出失败：{0}</value></data>
+  <data name="NoteExportNoNotes" xml:space="preserve"><value>没有可导出的内置 Markdown 笔记。</value></data>
+  <data name="NoteExportProgress" xml:space="preserve"><value>正在导出 {0}/{1} 篇笔记</value></data>
 </root>

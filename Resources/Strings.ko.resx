@@ -139,10 +139,7 @@ PaperTodo를 수동으로 다시 여세요. 문제가 반복되면 PC를 다시 
   <data name="MenuBold" xml:space="preserve">
     <value>굵게</value>
   </data>
-  <data name="MenuClearDone" xml:space="preserve">
-    <value>완료 항목 정리</value>
-  </data>
-  <data name="MenuCodeBlock" xml:space="preserve">
+<data name="MenuCodeBlock" xml:space="preserve">
     <value>코드 블록</value>
   </data>
   <data name="MenuCollapseToCapsule" xml:space="preserve">
@@ -1542,8 +1539,18 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="TopBarExternalEditor" xml:space="preserve">
     <value>외부 편집기로 열기</value>
   </data>
-  <data name="NoteHtmlExport" xml:space="preserve"><value>노트를 HTML로 내보내기</value></data>
-  <data name="NoteHtmlSaved" xml:space="preserve"><value>저장 위치: {0}
+<data name="NoteHtmlSaved" xml:space="preserve"><value>저장 위치: {0}
 원본 노트는 유지됩니다.</value></data>
-  <data name="NoteHtmlMissingImage" xml:space="preserve"><value>내보낼 수 없습니다. 이미지가 없거나 지원되지 않습니다.</value></data>
+  <data name="NoteExportCurrent" xml:space="preserve"><value>현재 노트 내보내기</value></data>
+  <data name="NoteExportAll" xml:space="preserve"><value>모든 노트 내보내기</value></data>
+  <data name="NoteExportMarkdownType" xml:space="preserve"><value>Markdown 문서</value></data>
+  <data name="NoteExportHtmlType" xml:space="preserve"><value>HTML 문서</value></data>
+  <data name="NoteExportMarkdownZipType" xml:space="preserve"><value>Markdown ZIP</value></data>
+  <data name="NoteExportHtmlZipType" xml:space="preserve"><value>HTML ZIP</value></data>
+  <data name="NoteExportMissingImageText" xml:space="preserve"><value>이미지 없음</value></data>
+  <data name="NoteExportSummary" xml:space="preserve"><value>노트 {0}/{1}개를 내보냈습니다.&#xA;누락된 이미지: {2}개 (노트 {3}개).&#xA;저장 위치: {4}</value></data>
+  <data name="NoteExportFailedNotes" xml:space="preserve"><value>실패한 노트:&#xA;{0}</value></data>
+  <data name="NoteExportFailure" xml:space="preserve"><value>내보내기 실패: {0}</value></data>
+  <data name="NoteExportNoNotes" xml:space="preserve"><value>내보낼 수 있는 기본 Markdown 노트가 없습니다.</value></data>
+  <data name="NoteExportProgress" xml:space="preserve"><value>내보내는 중 {0}/{1}개</value></data>
 </root>

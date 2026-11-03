@@ -10,10 +10,12 @@ using Markdig.Syntax.Inlines;
 
 namespace PaperTodo;
 
-// Export owns a portable copy only. The original paper, plugin and archive keep their ownership.
+// Based on GitKUMA's original HTML exporter in PR #195. The rendered page is
+// independent of the note's original ownership, persistence and editor.
 internal static class NoteHtmlExport
 {
-    internal static string Render(string noteId, string title, string content, NoteImageStore images)
+    internal static string Render(string noteId, string title, string content,
+        NoteImageStore images, string missingImageLabel, ISet<string> missingImages)
     {
         var pipeline = new MarkdownPipelineBuilder()
             .DisableHtml()
@@ -23,15 +25,22 @@ internal static class NoteHtmlExport
             .Build();
         var exportContent = PrepareMarkdownForExport(content, out var imageWidths);
         var document = Markdown.Parse(exportContent, pipeline);
-        foreach (var link in document.Descendants<LinkInline>())
+        foreach (var link in document.Descendants<LinkInline>().ToArray())
         {
             if (link.IsImage)
             {
                 var url = link.Url ?? "";
+                var imageId = url.StartsWith("i:", StringComparison.Ordinal) ? url[2..] : url;
                 if (!url.StartsWith("i:", StringComparison.Ordinal) ||
-                    !images.TryGetEncodedImageBytes(url[2..], out var asset, out var bytes) ||
+                    !images.TryGetEncodedImageBytes(imageId, out var asset, out var bytes) ||
                     !string.Equals(asset.NoteId, noteId, StringComparison.Ordinal))
-                    throw new InvalidDataException(Strings.Get("NoteHtmlMissingImage") + " " + url);
+                {
+                    missingImages.Add(imageId);
+                    link.ReplaceBy(new LiteralInline("[" + missingImageLabel + ": " + imageId + "]"),
+                        copyChildren: false);
+                    continue;
+                }
+
                 link.Url = "data:" + asset.Mime + ";base64," + Convert.ToBase64String(bytes);
                 if (imageWidths.TryGetValue(link.Span.Start, out var displayOptions))
                     ApplyImageWidth(link, displayOptions, asset.Width);
@@ -40,6 +49,7 @@ internal static class NoteHtmlExport
                 Uri.TryCreate(link.Url, UriKind.Absolute, out var uri) && uri.Scheme is "https" or "http" or "mailto"))
                 link.Url = "";
         }
+
         var body = document.ToHtml(pipeline);
         var safeTitle = WebUtility.HtmlEncode(title);
         return "<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">" +
@@ -48,8 +58,8 @@ internal static class NoteHtmlExport
             safeTitle + "</h1><small>" + DateTime.Now.ToString("yyyy-MM-dd") + " · PaperTodo</small></header>" + body + "</body></html>";
     }
 
-    // Normalize PaperTodo's standalone image lines before Markdig so {width=...}
-    // does not appear as visible text in the exported HTML.
+    // PaperTodo's standalone image lines carry size syntax that standard Markdown
+    // would otherwise render as trailing text.
     private static string PrepareMarkdownForExport(
         string markdown, out Dictionary<int, MarkdownImageDisplayOptions> widths)
     {
@@ -101,29 +111,6 @@ internal static class NoteHtmlExport
                 unit + ";max-width:100%;height:auto");
     }
 
-    internal static void Save(string path, string html)
-    {
-        var fullPath = Path.GetFullPath(path);
-        var directory = Path.GetDirectoryName(fullPath)!;
-        var tempPath = Path.Combine(directory,
-            "." + Path.GetFileName(fullPath) + "." + Guid.NewGuid().ToString("N") + ".tmp");
-
-        try
-        {
-            using (var stream = new FileStream(tempPath, FileMode.CreateNew,
-                       FileAccess.Write, FileShare.None))
-            {
-                var bytes = new UTF8Encoding(false).GetBytes(html);
-                stream.Write(bytes);
-                stream.Flush(flushToDisk: true);
-            }
-            File.Move(tempPath, fullPath, overwrite: true);
-        }
-        finally
-        {
-            try { File.Delete(tempPath); }
-            catch (IOException) { }
-            catch (UnauthorizedAccessException) { }
-        }
-    }
+    internal static void Save(string path, string html) =>
+        NotePortableExport.SaveAtomic(path, Encoding.UTF8.GetBytes(html));
 }

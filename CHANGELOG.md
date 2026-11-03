@@ -45,12 +45,11 @@ This log is written for general and power users alike. It focuses on user-facing
 
 #### Todos & Notes
 
-- **Export Markdown notes as HTML**: Save a standalone HTML file from the note menu, with embedded images and their display sizes. The original note is kept; missing images stop the export.
-
 - **Todo bottom-bar toggle**: The bottom quick-add bar is visible by default but can be turned off. Hiding it also disables deleting todos by dragging them into the trash.
 - **Reorder selected todos as a group**: Move multiple selected todos together while preserving their relative order. Dragging near the top or bottom of the list scrolls smoothly, even while the trash preview is visible. Todos are deleted only when the pointer is released over the trash.
 - **Multiline and collapsible todos**: `Shift+Enter` inserts a line break within the current todo; `Enter` still creates a new item. When a todo occupies more than four displayed lines, an arrow above the drag grip lets you collapse it to two lines or expand it again. The collapsed second line ends with an ellipsis; editing temporarily reveals the full text. Searching for text hidden by the fold highlights the todo and its expand arrow without automatically expanding it.
 - **Linked-paper title updates**: Changing the maximum paper-title length immediately updates the linked-paper names displayed in Todo items.
+- **Export notes**: The note menu below Body Type exports the current note or all built-in Markdown notes as Markdown or HTML. HTML embeds images, Markdown includes an image folder, and all-note exports create a ZIP. Export runs without blocking editing; missing images become text placeholders with a completion warning. The Clear Completed menu action is removed.
 - **Open notes in an external editor**: PaperTodo first uses the Windows application associated with the configured export extension. If no application is associated with that extension, it falls back to Notepad, even after the user changes the export extension.
 
 #### Plugins, MCP & Codex

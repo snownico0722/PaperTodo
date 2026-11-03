@@ -134,7 +134,6 @@ public sealed partial class PaperWindow : Window
     private Rect? _snappedPresentationBoundsForRestore;
     private bool _collapsedFromMaximized;
     private int _themeAnimationGeneration;
-    private int _clearDoneGeneration;
     private int _todoRowsGeneration;
     private const double DeepCapsuleExpandedEdgeInset = EdgeCapsuleLayout.ExpandedEdgeInset;
     private const double DeepCapsuleTopMargin = EdgeCapsuleLayout.TopMargin;
@@ -2703,16 +2702,23 @@ public sealed partial class PaperWindow : Window
         menu.Items.Add(MenuSeparator());
         menu.Items.Add(MenuHeader(_controller.PaperCapsuleTitle(_paper)));
 
-        if (_paper.Type == PaperTypes.Todo)
-        {
-            menu.Items.Add(MenuItem(Strings.Get("MenuClearDone"), (_, _) => ClearDoneItems()));
-        }
-        else if (_paper.Type == PaperTypes.Note)
+        if (_paper.Type == PaperTypes.Note)
         {
             menu.Items.Add(BuildPaperBodyProviderMenuItem());
             if (IsCurrentBodyProviderMarkdown)
-                menu.Items.Add(MenuItem(Strings.Get("NoteHtmlExport"),
-                    (_, _) => ExportNoteHtml()));
+            {
+                var current = MenuItem(Strings.Get("NoteExportCurrent"),
+                    (_, _) => ExportNotes(all: false));
+                current.IsEnabled = !_noteExportRunning;
+                menu.Items.Add(current);
+
+                var allLabel = _noteExportRunning
+                    ? Strings.Format("NoteExportProgress", _noteExportCompleted, _noteExportTotal)
+                    : Strings.Get("NoteExportAll");
+                var exportAll = MenuItem(allLabel, (_, _) => ExportNotes(all: true));
+                exportAll.IsEnabled = !_noteExportRunning;
+                menu.Items.Add(exportAll);
+            }
         }
 
         AttachPluginPaperMenuActions(menu);
