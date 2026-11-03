@@ -4,6 +4,9 @@ using PaperTodo.Plugin;
 
 namespace PaperTodo;
 
+// Transport-only metadata. The public MCP tool response remains DataReloadStatus.
+internal sealed record McpWorkspaceStatusEnvelope(object? Result, string WorkspaceToken);
+
 /// <summary>
 /// MCP transport adapter. JSON parsing and MCP authorization stay here; all PaperTodo reads,
 /// validation, persistence, rollback and UI reconciliation are delegated to PaperCommandService.
@@ -34,7 +37,10 @@ internal sealed partial class McpCommandService
                 throw new McpApiException("workspace_changed",
                     "The workspace changed; restart the MCP connection before making another request.");
         }
-        return Execute(request);
+        var result = Execute(request);
+        return method == "get_data_reload_status"
+            ? new McpWorkspaceStatusEnvelope(result, _controller.WorkspaceBindingToken)
+            : result;
     }
 
     public object? Execute(JsonElement request)
