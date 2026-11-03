@@ -319,6 +319,19 @@ internal static partial class Program
                 freshImages.ImportBitmapSource("note-a", WorkspaceBitmap(255, 0)).Id == "1" &&
                 File.Exists(freshImagePath),
             "a fresh workspace was mistaken for missing historical image data");
+
+        // A malformed recovery record cannot establish that missing images are safe to replace.
+        File.WriteAllText(Path.Combine(scope.DirectoryPath, "data2conflict-broken.json"), "{broken");
+        Require(!store2.TryCollectProtectedImageIds(second, out _),
+            "malformed recovery archive unexpectedly produced a complete reference set");
+        var uncertainPath = Path.Combine(scope.DirectoryPath, "note-assets-uncertain.lmdb");
+        using var uncertain = new NoteImageStore(uncertainPath);
+        uncertain.Load();
+        var textOnly = NewState();
+        textOnly.Papers[0].Content = "";
+        uncertain.ProtectPersistedImageReferences(textOnly, null, hasPersistedDocument: true);
+        Require(uncertain.IsWriteDisabled && !File.Exists(uncertainPath),
+            "incomplete recovery scan must not permit recreating a missing image library");
     }
 
     private static void WorkspacePluginStores()
@@ -415,7 +428,7 @@ internal static partial class Program
         Require(manifest.Name == "original", "missing locale did not restore source labels");
     }
 
-    private static int RunWorkspaceStartupFallbackFixture()
+    private static int RunWorkspaceMissingImagesFixture()
     {
         if (!File.Exists(Path.Combine(AppContext.BaseDirectory, LiveMarker)))
             throw new InvalidOperationException("Refusing startup fallback checks outside isolated fixture.");
