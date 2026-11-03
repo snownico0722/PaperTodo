@@ -339,12 +339,12 @@ internal static partial class Program
         // An unrelated missing picture is NOT a reason to disable a healthy LMDB.
         using var partialImages = new NoteImageStore(Path.Combine(scope.DirectoryPath, "note-assets-partial.lmdb"));
         partialImages.Load();
-        Require(partialImages.ImportBitmapSource("note-a", WorkspaceBitmap(255, 0)).Id == "1",
+        Require(partialImages.ImportBitmapSource("note-a", WorkspaceBitmap(255, 0)).Id == "001",
             "image fixture did not start at the first ID");
-        var protectedWithGap = new HashSet<string>(secondaryIds, StringComparer.Ordinal) { "2" };
+        var protectedWithGap = new HashSet<string>(secondaryIds, StringComparer.Ordinal) { "002" };
         partialImages.ProtectPersistedImageReferences(second, protectedWithGap, hasPersistedDocument: true);
         Require(!partialImages.IsWriteDisabled &&
-                partialImages.ImportBitmapSource("note-a", WorkspaceBitmap(0, 255)).Id == "3",
+                partialImages.ImportBitmapSource("note-a", WorkspaceBitmap(0, 255)).Id == "003",
             "a dangling image ID was reused or blocked all healthy image imports");
 
         // A genuinely new, empty workspace must still be allowed to create its first LMDB.
@@ -353,7 +353,7 @@ internal static partial class Program
         freshImages.Load();
         freshImages.ProtectPersistedImageReferences(new AppState(), new HashSet<string>(), false);
         Require(!freshImages.IsWriteDisabled &&
-                freshImages.ImportBitmapSource("note-a", WorkspaceBitmap(255, 0)).Id == "1" &&
+                freshImages.ImportBitmapSource("note-a", WorkspaceBitmap(255, 0)).Id == "001" &&
                 File.Exists(freshImagePath),
             "a fresh workspace was mistaken for missing historical image data");
 
