@@ -35,8 +35,8 @@ internal sealed partial class SkinBorder : PaperChromeBorder
         set => SetValue(IsEdgeActiveMaterialProperty, value);
     }
     internal bool IsAuxiliary => IsCapsule || IsMenu;
-    internal double MaterialStrength => IsAuxiliary &&
-        AppController.Current?.State.MatchAuxiliaryMaterialStrength != true ? QuietAuxiliaryMaterialStrength : 1;
+    // Auxiliary surfaces consistently use the opaque, readable material recipe.
+    internal double MaterialStrength => IsAuxiliary ? QuietAuxiliaryMaterialStrength : 1;
     // A weaker material means more ordinary paper, not more background transmission.
     internal double PaperBackingOpacity => IsAuxiliary ? 1 - MaterialStrength * MaterialStrength : 0;
     // High contrast keeps an explicit edge for accessibility. Otherwise the preference
@@ -73,9 +73,7 @@ internal sealed partial class SkinBorder : PaperChromeBorder
     // Keep the opaque fallback fill cached. Interpolate only details and paper
     // backing so the expanded and quiet-capsule endpoints have identical paint.
     // Neither the window nor its editable content changes opacity.
-    private double FormMaterialStrength => 1 - _formCompactness *
-        (AppController.Current?.State.MatchAuxiliaryMaterialStrength == true
-            ? 0 : 1 - QuietAuxiliaryMaterialStrength);
+    private double FormMaterialStrength => 1 - _formCompactness * (1 - QuietAuxiliaryMaterialStrength);
     private double PaintedMaterialStrength => IsFormTransition
         ? PaperSkins.UsesNativeBackdrop(Skin) ? FormMaterialStrength : 1
         : MaterialStrength;
@@ -122,8 +120,6 @@ internal sealed partial class SkinBorder : PaperChromeBorder
     {
         SizeChanged += (_, _) =>
         {
-            _background?.ResetFailure();
-            PresentPreparedMenuBackground();
             RefreshBackground();
         };
         Loaded += (_, _) => { LoadedSurfaces.Add(new(this)); RefreshSkin(); };
@@ -192,12 +188,6 @@ internal sealed partial class SkinBorder : PaperChromeBorder
 
     private void RenderSurface(DrawingContext dc)
     {
-        PresentPreparedMenuBackground();
-        if (IsMenu)
-        {
-            if (!_menuRendered) { FirstMenuRenderUsedBackground = BackgroundVisual != null; _menuRendered = true; }
-            if (RequestsSampledBackground && BackgroundVisual == null) MenuFallbackRenderCount++;
-        }
         if (IsOutline)
         {
             if (ActualWidth <= 0 || ActualHeight <= 0) return;
@@ -236,23 +226,11 @@ internal sealed partial class SkinBorder : PaperChromeBorder
         EnsureGeometry();
         var background = Background is SolidColorBrush solid
             ? solid.Color : ((SolidColorBrush)Theme.PaperBrush).Color;
-        EnsureBrushes(BackgroundVisual != null || HasAuxiliaryTransmission ? Colors.Transparent : background);
-        if (BackgroundVisual != null)
-        {
-            // Keep a cheap base for pixels temporarily outside the cached scene. The
-            // actual finish belongs only above the scene, never duplicated underneath.
-            PaintMaterialBase(dc);
-            BackgroundVisual.Clip = _shape;
-            // Arrange has committed RenderSize before this paint. Publish the matching
-            // background extent/crop in this same render, not a later Rendering callback
-            // that would briefly stretch the old scene beneath the newly sized shell.
-            _background!.Project();
-            return;
-        }
+        EnsureBrushes(background);
         dc.PushClip(_shape);
-        // Both auxiliary strengths retain actual background processing. Only an unavailable
-        // source falls back to an opaque base; no foreground or HWND opacity is altered.
-        if (IsAuxiliary && !UseLightweightMaterial && BackgroundVisual == null && !HasAuxiliaryTransmission)
+        // Layered capsule/menu HWNDs are intentionally opaque beneath their
+        // lightweight material; they never capture or transmit the desktop.
+        if (IsAuxiliary && !UseLightweightMaterial)
             dc.DrawGeometry(Background ?? Theme.PaperBrush, null, _shape);
         PaintMaterialBase(dc);
         dc.PushOpacity(PaintedMaterialStrength);

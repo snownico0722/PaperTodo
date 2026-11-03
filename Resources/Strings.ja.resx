@@ -632,7 +632,7 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
     <value>ホバー時も通常どおり伸びますが、追加領域は閉じるボタンのない通常のカプセル領域として動作します。閉じる場合は右クリックメニューの「隠す」を使います。</value>
   </data>
   <data name="TipMaxTitleLength" xml:space="preserve">
-    <value>紙片タイトルとカプセルに表示する最大文字数。</value>
+    <value>タイトルは全角文字換算で数えます。全角1文字、英数字などの半角2文字を同じ長さとして扱います。上限を下げると既存のタイトルも短縮されます。</value>
   </data>
   <data name="TipStartup" xml:space="preserve">
     <value>Windows 起動時に PaperTodo を自動起動します。</value>
@@ -1490,15 +1490,6 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   </data>
   <data name="SkinNativeUnsupported" xml:space="preserve">
     <value>ネイティブ背景には Windows 11 22H2 以降が必要です。</value>
-  </data>
-<data name="SettingsMatchAuxiliaryMaterial" xml:space="preserve">
-    <value>カプセル・メニューのフル質感</value>
-  </data>
-  <data name="TipMatchAuxiliaryMaterial" xml:space="preserve">
-    <value>オン：紙と同じ質感。オフ：効果を弱め、紙の地色を濃くして読みやすくします。端のプレビューは常に軽量表示です。</value>
-  </data>
-  <data name="SkinCaptureNotice" xml:space="preserve">
-    <value>カプセルとメニューは表示時に背後の局所背景を一度だけ取得し、カプセルのドラッグ時は低解像度の仮想デスクトップを一度だけ取得します。ローカルメモリ内でのみ使用し、保存やアップロードはしません。</value>
   </data>
   <data name="MenuPaperActions" xml:space="preserve">
     <value>紙片の操作</value>

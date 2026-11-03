@@ -6,6 +6,11 @@
 </p>
 
 <p align="center">
+  <a href="https://apps.microsoft.com/detail/9pnfp27sjx13"><img src="https://get.microsoft.com/images/en-us%20dark.svg" width="260" alt="Get it from Microsoft — purchase PaperTodo to support development"></a><br>
+  <sub>PaperTodo 仍可在 GitHub 免费下载。如果你愿意支持项目持续开发，欢迎前往微软商店自愿购买。非常感谢！</sub>
+</p>
+
+<p align="center">
   <img src="https://img.shields.io/badge/version-v4.0.0--beta1-3b82f6" alt="version">
   <img src="https://img.shields.io/badge/platform-Windows%20x64-555" alt="platform">
   <img src="https://img.shields.io/badge/.NET-10-512bd4" alt=".NET">
