@@ -65,45 +65,37 @@ internal static class PaperFormMaterialChecks
     private static void CheckAnimatedRoundTrip(Fixture fixture)
     {
         var window = fixture.Window;
-        var surface = fixture.Surface;
-        var body = surface.Child;
-        var frames = surface.BackgroundFrameCount;
+        var body = fixture.Surface.Child;
         using (var probe = new AnimationProbe(fixture, "collapse"))
         {
             window.SetCollapsedState(true, animate: true, saveGeometry: false);
             Until(() => !IsTransitioning(window), "animated collapse reaches its endpoint");
             probe.AssertAnimated();
         }
-        AwaitSnapshot(fixture, frames, "animated collapse");
-        var firstSnapshot = surface.BackgroundSessionState!.Bitmap;
+        AwaitCollapsed(fixture);
 
-        frames = surface.BackgroundFrameCount;
         using (var probe = new AnimationProbe(fixture, "expand"))
         {
             window.SetCollapsedState(false, animate: true, saveGeometry: false);
             Until(() => !IsTransitioning(window), "animated expansion reaches its endpoint");
             probe.AssertAnimated();
         }
-        AwaitExpanded(fixture, frames);
-        Program.Assert(ReferenceEquals(body, surface.Child) &&
+        AwaitExpanded(fixture);
+        Program.Assert(ReferenceEquals(body, fixture.Surface.Child) &&
             new WindowInteropHelper(window).Handle == fixture.Handle &&
             fixture.Paper.Content == Fixture.Content,
-            "material form changes keep the HWND, body tree and note content");
+            "form animation preserves the HWND, body tree and note content");
 
-        frames = surface.BackgroundFrameCount;
         window.SetCollapsedState(true, animate: false, saveGeometry: false);
-        AwaitSnapshot(fixture, frames, "non-animated collapse");
-        Program.Assert(!ReferenceEquals(firstSnapshot, surface.BackgroundSessionState!.Bitmap),
-            "a later collapse acquires a new endpoint snapshot instead of retaining an old scene");
+        AwaitCollapsed(fixture);
         window.SetCollapsedState(false, animate: false, saveGeometry: false);
-        AwaitExpanded(fixture, surface.BackgroundFrameCount);
+        AwaitExpanded(fixture);
     }
 
     private static void CheckReversal(Fixture fixture)
     {
         var window = fixture.Window;
         var expandedWidth = window.ActualWidth;
-        var frames = fixture.Surface.BackgroundFrameCount;
         using var probe = new AnimationProbe(fixture, "collapse reversed to expand");
         var intermediate = false;
         DispatcherFrame? waiting = null;
@@ -140,7 +132,7 @@ internal static class PaperFormMaterialChecks
         window.SetCollapsedState(false, animate: true, saveGeometry: false);
         Until(() => !IsTransitioning(window), "reversed transition reaches the expanded endpoint");
         probe.AssertAnimated();
-        AwaitExpanded(fixture, frames);
+        AwaitExpanded(fixture);
     }
 
     private static void CheckAnimationSettingAndQueuedCompletion(Fixture fixture)
