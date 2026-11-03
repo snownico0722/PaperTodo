@@ -286,7 +286,23 @@ public sealed partial class AppController
         if (IsExiting || IsDataReloading || !_store.OrdinaryWritesPaused) return;
         // There is no trustworthy common ancestor for arbitrary external file edits.
         // Reuse the existing explicit whole-state choice instead of guessing a baseline.
-        ReloadDataCore(PaperOperationContext.User(), merge: true, cancelOnClose: true);
+        var result = ReloadDataCore(PaperOperationContext.User(), merge: true, cancelOnClose: true);
+        if (result.Outcome != "invalid") return;
+
+        // Invalid external JSON is not mergeable. Display the failure in the existing
+        // right-hand comparison pane without accepting or overwriting the original file.
+        string externalText;
+        try { externalText = File.ReadAllText(_store.FilePath); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            externalText = ex.Message;
+        }
+        var memoryText = JsonSerializer.Serialize(State,
+            new JsonSerializerOptions(StateStore.JsonOptions) { WriteIndented = true });
+        var owner = _windows.Values.FirstOrDefault(w =>
+            w.IsVisible && PresentationSource.FromVisual(w) is HwndSource);
+        DataReloadConflictDialog.ShowInvalidExternal(owner, memoryText, externalText,
+            result.Error ?? Strings.Get("DataReloadInvalidExternalHint"));
     }
 
     private StateMergeResolution ResolveDataMerge(PendingDataReload pending) =>
