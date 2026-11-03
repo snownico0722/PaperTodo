@@ -358,6 +358,51 @@ internal static partial class Program
         Require(manifest.Name == "original", "missing locale did not restore source labels");
     }
 
+    private static int RunWorkspaceStartupFallbackFixture()
+    {
+        if (!File.Exists(Path.Combine(AppContext.BaseDirectory, LiveMarker)))
+            throw new InvalidOperationException("Refusing startup fallback checks outside isolated fixture.");
+        var result = 0;
+        var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+        app.Dispatcher.InvokeAsync(async () =>
+        {
+            AppController? controller = null;
+            try
+            {
+                var main = NewState();
+                main.UiLanguage = UiLanguages.English;
+                main.PaperSkin = PaperSkins.Paper;
+                main.Workspaces = new()
+                {
+                    Enabled = true, Count = 2, Active = 2,
+                    FollowMainSettings = new() { [2] = false }
+                };
+                var independent = NewState();
+                independent.UiLanguage = UiLanguages.Japanese;
+                independent.PaperSkin = PaperSkins.Mica;
+                independent.Papers[0].Content = MarkdownImageReferences.CreateReference("999");
+                var writer = new StateStore();
+                writer.SaveJsonSync(writer.SerializeState(main), 1);
+                var secondary = new StateStore(AppContext.BaseDirectory, DurableAtomicFileWriter.Shared, 2);
+                secondary.SaveJsonSync(secondary.SerializeState(independent), 1);
+                controller = new AppController();
+                Require(controller.WorkspaceNumber == 1 &&
+                        Field<WorkspaceCatalog>(controller, "_workspaceCatalog").StartupError != null,
+                    "failed secondary image verification did not return to main workspace");
+                Require(UiLanguages.EffectiveUiCulture.Name == UiLanguages.English &&
+                        controller.State.PaperSkin == PaperSkins.Paper &&
+                        !Field<bool>(controller, "UsesNativeMicaWindows"),
+                    "startup fallback kept secondary language or window material");
+                await controller.StartAsync(createDefaultPaper: false);
+                Console.WriteLine("PASS startup image fallback re-applies final workspace language and skin");
+            }
+            catch (Exception ex) { result = 1; Console.Error.WriteLine(ex); }
+            finally { controller?.Dispose(); app.Shutdown(); }
+        });
+        app.Run();
+        return result;
+    }
+
     private static int RunWorkspaceFixture()
     {
         if (!File.Exists(Path.Combine(AppContext.BaseDirectory, LiveMarker)))
