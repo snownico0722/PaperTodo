@@ -10,9 +10,6 @@ internal enum ConflictChoice
 
     /// <summary>用户明确选择:保留外部文件传入的值。</summary>
     KeepExternal = 1,
-
-    /// <summary>Close a cancellable review without accepting either side.</summary>
-    Cancel = 2,
 }
 
 /// <summary>

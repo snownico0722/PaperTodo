@@ -13,7 +13,6 @@ internal sealed record PaperBucket(
     JsonNode? ExternalPaper) : ConflictBucket;
 
 internal sealed record OrderBucket(string Scope, StateMergeConflict Conflict) : ConflictBucket;
-internal sealed record UnknownBaselineBucket(StateMergeConflict Conflict) : ConflictBucket;
 internal sealed record SingleLeafBucket(StateMergeConflict Conflict) : ConflictBucket;
 
 /// <summary>Groups field, item existence and item order conflicts by stable paper identity.</summary>
@@ -25,13 +24,10 @@ internal static class ConflictAggregator
         if (conflicts.Count == 0) return Array.Empty<ConflictBucket>();
         var papers = new Dictionary<string, List<StateMergeConflict>>(StringComparer.Ordinal);
         var orders = new List<ConflictBucket>();
-        var unknown = new List<ConflictBucket>();
         var singles = new List<ConflictBucket>();
         foreach (var conflict in conflicts)
         {
-            if (string.IsNullOrEmpty(conflict.Path) || conflict.Path == "$")
-                unknown.Add(new UnknownBaselineBucket(conflict));
-            else if (conflict.Path == "papers.$order")
+            if (conflict.Path == "papers.$order")
                 orders.Add(new OrderBucket("papers", conflict));
             else if (JsonPath.TryGetPaperId(conflict.Path, out var id))
             {
@@ -48,10 +44,9 @@ internal static class ConflictAggregator
                 if (node is JsonObject paper && paper["id"] is JsonValue idValue &&
                     idValue.TryGetValue<string>(out var externalId)) externalById[externalId] = paper;
 
-        // Preserve the existing dialog order: global order, whole-state, global fields, then papers.
-        var result = new List<ConflictBucket>(orders.Count + unknown.Count + singles.Count + papers.Count);
+        // Preserve the existing dialog order: global order, global fields, then papers.
+        var result = new List<ConflictBucket>(orders.Count + singles.Count + papers.Count);
         result.AddRange(orders);
-        result.AddRange(unknown);
         result.AddRange(singles);
         foreach (var (id, list) in papers)
         {
