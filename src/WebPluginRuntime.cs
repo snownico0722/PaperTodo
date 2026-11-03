@@ -427,7 +427,7 @@ internal sealed partial class WebPluginRuntime : IDisposable
             TryClearGlobalShortcuts();
             TryClearTodoActions();
             TryClearTopBarLabels();
-        ResetRuntimeDocument();
+            ResetRuntimeDocument();
             FailStartupOrRestart(
                 $"Web Runtime navigation failed ({e.WebErrorStatus}).");
             return;
