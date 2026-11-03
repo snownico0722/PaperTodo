@@ -3344,7 +3344,6 @@ public sealed partial class AppController : IDisposable
                 if (!IsExiting) TryReleaseUnreferencedImageCache();
                 TryFlushPendingPluginPaperStateDeletes();
                 _hasShownSaveFailure = false;
-                if (!workspaceBoundary) QueueCoreHistoryBackup();
             }
             else
             {
@@ -3365,7 +3364,6 @@ public sealed partial class AppController : IDisposable
                                 TryFlushPendingPluginPaperStateDeletes();
                             }
                             _hasShownSaveFailure = false;
-                            QueueCoreHistoryBackup();
                         }));
                     }
                     catch (Exception ex)
@@ -4208,6 +4206,7 @@ public sealed partial class AppController : IDisposable
         TryExitCleanup(CancelMasterCapsuleQueueTransfers);
         _pluginStartupPaperGeneration++;
         StopStateBackupPolicy();
+        StopCoreHistoryBackupPolicy();
         MarkdownEdgePreviewPreload.For(Application.Current.Dispatcher).Clear();
         // Stop all child processes together; their grace periods overlap each other and WPF
         // teardown. Only non-UI process work runs in the pool, not Window/Host disposal.

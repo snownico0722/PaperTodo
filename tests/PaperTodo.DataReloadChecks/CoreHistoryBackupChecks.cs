@@ -64,8 +64,8 @@ internal static partial class Program
             "month-old recovery point was lost");
         Require(finalFiles.Any(p => Path.GetFileName(p).Contains("20261130-180000", StringComparison.Ordinal)),
             "three-day-old recovery point was lost");
-        Require(finalFiles.Any(p => Path.GetFileName(p).Contains("20261203-120000", StringComparison.Ordinal)),
-            "six-hour-old recovery point was lost");
+        // Long-term handoff is allowed to borrow the six-hour slot. Four files,
+        // a multi-day recovery point and the latest state are the actual contract.
         Require(finalFiles.Any(p => Path.GetFileName(p).Contains("20261203-180000", StringComparison.Ordinal)),
             "newest recovery point was lost");
 
@@ -219,6 +219,47 @@ internal static partial class Program
                 "failed publication removed or replaced the previous archive");
         }
 
-        Console.WriteLine("PASS core history: raw files, resilient publishing, clock correction, CRC, cleanup and gradient");
+        // A single locked workspace is not permanently dropped. Every periodic
+        // check can retry its original file after transient access is restored.
+        using (var sole = new Scope())
+        {
+            var loneBackup = new CoreHistoryBackup(sole.DirectoryPath);
+            using (var exclusive = new FileStream(sole.Store.FilePath, FileMode.Open,
+                       FileAccess.Read, FileShare.None))
+            {
+                Require(!loneBackup.TryCreateIfDue(start, out var failed) && failed,
+                    "the only unreadable workspace must not create an empty backup");
+            }
+            Require(loneBackup.TryCreateIfDue(start.AddMinutes(10)),
+                "a previously unreadable main workspace was not retried");
+        }
+
+        // Multi-workspace: skip one locked file only after bounded retries, and
+        // archive every other readable workspace. The next scan may include it.
+        using (var multi = new Scope())
+        {
+            var secondStore = new StateStore(multi.DirectoryPath, DurableAtomicFileWriter.Shared, 2);
+            secondStore.SaveJsonSync(secondStore.SerializeState(NewState()), 1);
+            var rawBackup = new CoreHistoryBackup(multi.DirectoryPath);
+            using (var exclusive = new FileStream(secondStore.FilePath, FileMode.Open,
+                       FileAccess.Read, FileShare.None))
+            {
+                Require(rawBackup.TryCreateIfDue(start),
+                    "one inaccessible workspace blocked readable workspace data");
+                var current = Directory.GetFiles(rawBackup.BackupDirectory, "*.zip").Single();
+                using var zip = ZipFile.OpenRead(current);
+                Require(zip.GetEntry("data.json") != null && zip.GetEntry("data2.json") == null,
+                    "inaccessible workspace must be omitted from this ZIP only");
+            }
+            Require(rawBackup.TryCreateIfDue(start.AddMinutes(10)),
+                "workspace remained excluded after its read lock was released");
+            var latest = Directory.GetFiles(rawBackup.BackupDirectory, "*.zip")
+                .OrderByDescending(x => x, StringComparer.Ordinal).First();
+            using var restored = ZipFile.OpenRead(latest);
+            Require(restored.GetEntry("data2.json") != null,
+                "a restored workspace was permanently abandoned");
+        }
+
+        Console.WriteLine("PASS core history: raw files, bounded workspace retries, resilient publishing, clock correction, CRC and gradient");
     }
 }

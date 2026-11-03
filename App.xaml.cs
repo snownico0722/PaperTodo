@@ -152,6 +152,7 @@ public partial class App : Application
             _controller.ExecuteStartupCommand(startupCommand);
         }
         _controller.StartStateBackupPolicy();
+        _controller.StartCoreHistoryBackupPolicy();
         CompleteSingleInstanceStartup();
     }
 

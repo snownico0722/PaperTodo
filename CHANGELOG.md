@@ -22,7 +22,7 @@ This log is written for general and power users alike. It focuses on user-facing
 
 #### Data Reliability
 
-- **Dynamic core JSON backups**: Keep up to four age-spaced restore points targeting the latest saved state (about 10 minutes), 6 hours, 3 days and 1 month. Unchanged files are not re-archived. Raw JSON files from all existing workspaces are archived without JSON validation; images and plugin files are excluded. Old snapshots are pruned only after publishing a complete new ZIP, with no unbounded rescue archive.
+- **Dynamic core JSON backups**: Keep up to four age-spaced restore points targeting the latest saved state (about 10 minutes), 6 hours, 3 days and 1 month. The first scan starts about one minute after startup, then runs every ten minutes independently of saving or workspace switching. Unreadable workspaces receive bounded retries and are skipped for that scan only. Unchanged files are not re-archived. Raw JSON files from all existing workspaces are archived without JSON validation; images and plugin files are excluded. Old snapshots are pruned only after publishing a complete new ZIP, with no unbounded rescue archive.
 
 #### Papers, Title Bar & Capsules
 

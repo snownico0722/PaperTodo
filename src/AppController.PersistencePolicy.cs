@@ -9,25 +9,65 @@ namespace PaperTodo;
 public sealed partial class AppController
 {
     private DispatcherTimer? _stateBackupTimer;
-    private DispatcherTimer? _coreHistoryDueTimer;
+    private DispatcherTimer? _coreHistoryTimer;
     private int _coreHistoryBackupRunning;
-    private bool _coreHistoryDueIsFailureRetry;
-    private DateTimeOffset _nextCoreHistoryCheckUtc = DateTimeOffset.MinValue;
 
-    internal void StartStateBackupPolicy()
+    // The core JSON history is independent of the active workspace and the normal
+    // autosave flow. Delay the first check so startup can settle, then scan every
+    // ten minutes, including after a workspace's transient read failure.
+    internal void StartCoreHistoryBackupPolicy()
     {
-        if (IsExiting || _stateBackupTimer != null)
+        if (IsExiting || _coreHistoryTimer != null) return;
+        _coreHistoryTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(1) };
+        _coreHistoryTimer.Tick += OnCoreHistoryTimerTick;
+        _coreHistoryTimer.Start();
+    }
+
+    private void OnCoreHistoryTimerTick(object? sender, EventArgs e)
+    {
+        if (IsExiting)
         {
+            StopCoreHistoryBackupPolicy();
             return;
         }
 
-        TryRefreshStateBackup();
-        QueueCoreHistoryBackup();
+        // This also changes the first-start delay into the steady ten-minute cycle.
+        if (_coreHistoryTimer != null)
+            _coreHistoryTimer.Interval = CoreHistoryBackup.MinimumInterval;
 
-        _stateBackupTimer = new DispatcherTimer
+        if (Interlocked.CompareExchange(ref _coreHistoryBackupRunning, 1, 0) != 0)
+            return;
+
+        // The shared write-lifetime is the only link to persistence: it prevents
+        // publishing files after shutdown. No workspace UI or save hooks participate.
+        var lifetime = _workspaceCatalog.MainStore.WriteLifetime;
+        _ = Task.Run(() =>
         {
-            Interval = TimeSpan.FromHours(6)
-        };
+            try
+            {
+                new CoreHistoryBackup(AppContext.BaseDirectory, lifetime.ThrowIfStopped)
+                    .TryCreateIfDue(DateTimeOffset.UtcNow);
+            }
+            catch (Exception ex) { Trace.TraceWarning("Core history backup failed: {0}", ex); }
+            finally { Interlocked.Exchange(ref _coreHistoryBackupRunning, 0); }
+        });
+    }
+
+    private void StopCoreHistoryBackupPolicy()
+    {
+        var timer = _coreHistoryTimer;
+        _coreHistoryTimer = null;
+        if (timer == null) return;
+        timer.Stop();
+        timer.Tick -= OnCoreHistoryTimerTick;
+    }
+
+    internal void StartStateBackupPolicy()
+    {
+        if (IsExiting || _stateBackupTimer != null) return;
+
+        TryRefreshStateBackup();
+        _stateBackupTimer = new DispatcherTimer { Interval = TimeSpan.FromHours(6) };
         _stateBackupTimer.Tick += OnStateBackupTimerTick;
         _stateBackupTimer.Start();
     }
@@ -39,83 +79,7 @@ public sealed partial class AppController
             StopStateBackupPolicy();
             return;
         }
-
         TryRefreshStateBackup();
-        QueueCoreHistoryBackup();
-    }
-
-    private void QueueCoreHistoryBackup(bool isFailureRetry = false)
-    {
-        if (IsExiting || _workspaceSwitching || IsDataReloading) return;
-        var now = DateTimeOffset.UtcNow;
-        // If the wall clock moves backward, don't leave a year-long due timer.
-        if (_nextCoreHistoryCheckUtc - now > CoreHistoryBackup.MinimumInterval)
-            _nextCoreHistoryCheckUtc = DateTimeOffset.MinValue;
-        if (now < _nextCoreHistoryCheckUtc)
-        {
-            ScheduleCoreHistoryDueCheck(_nextCoreHistoryCheckUtc - now, isFailureRetry);
-            return;
-        }
-        if (Interlocked.CompareExchange(ref _coreHistoryBackupRunning, 1, 0) != 0)
-        {
-            // A previous snapshot is still being compressed. Check again shortly.
-            ScheduleCoreHistoryDueCheck(TimeSpan.FromSeconds(1), isFailureRetry);
-            return;
-        }
-        _coreHistoryDueTimer?.Stop();
-        _coreHistoryDueIsFailureRetry = false;
-        _nextCoreHistoryCheckUtc = now.Add(CoreHistoryBackup.MinimumInterval);
-        var lifetime = _store.WriteLifetime;
-        _ = Task.Run(() =>
-        {
-            var failed = true;
-            try
-            {
-                new CoreHistoryBackup(AppContext.BaseDirectory, lifetime.ThrowIfStopped)
-                    .TryCreateIfDue(now, out failed);
-            }
-            catch (Exception ex) { Trace.TraceWarning("Core history backup failed: {0}", ex); }
-            finally
-            {
-                Interlocked.Exchange(ref _coreHistoryBackupRunning, 0);
-                if (failed && !isFailureRetry)
-                {
-                    var dispatcher = Application.Current?.Dispatcher;
-                    if (dispatcher is { HasShutdownStarted: false, HasShutdownFinished: false })
-                    {
-                        _ = dispatcher.BeginInvoke(new Action(() =>
-                        {
-                            if (!IsExiting && !lifetime.IsStopped)
-                                ScheduleCoreHistoryDueCheck(
-                                    _nextCoreHistoryCheckUtc - DateTimeOffset.UtcNow, isFailureRetry: true);
-                        }));
-                    }
-                }
-            }
-        });
-    }
-
-    private void ScheduleCoreHistoryDueCheck(TimeSpan delay, bool isFailureRetry = false)
-    {
-        _coreHistoryDueIsFailureRetry |= isFailureRetry;
-        if (_coreHistoryDueTimer?.IsEnabled == true) return;
-        if (_coreHistoryDueTimer == null)
-        {
-            _coreHistoryDueTimer = new DispatcherTimer();
-            _coreHistoryDueTimer.Tick += OnCoreHistoryDueTick;
-        }
-        _coreHistoryDueTimer.Interval = delay > TimeSpan.Zero
-            ? delay
-            : TimeSpan.FromMilliseconds(100);
-        _coreHistoryDueTimer.Start();
-    }
-
-    private void OnCoreHistoryDueTick(object? sender, EventArgs e)
-    {
-        _coreHistoryDueTimer?.Stop();
-        var isFailureRetry = _coreHistoryDueIsFailureRetry;
-        _coreHistoryDueIsFailureRetry = false;
-        QueueCoreHistoryBackup(isFailureRetry);
     }
 
     private void TryRefreshStateBackup()
@@ -133,7 +97,6 @@ public sealed partial class AppController
 
     private void StopStateBackupPolicy()
     {
-        _coreHistoryDueTimer?.Stop();
         var timer = _stateBackupTimer;
         _stateBackupTimer = null;
         if (timer == null)
@@ -169,6 +132,7 @@ public sealed partial class AppController
         _saveTimer.Stop();
         _forceSaveTimer.Stop();
         StopStateBackupPolicy();
+        StopCoreHistoryBackupPolicy();
         _paperBodyPlugins.DataStore.SuppressFinalFlushOnDispose();
         DisposeRuntimeResources();
         _lifecycleState = AppLifecycleState.Disposed;

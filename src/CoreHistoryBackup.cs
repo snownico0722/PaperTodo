@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.IO.Compression;
+using System.Threading;
 
 namespace PaperTodo;
 
@@ -12,6 +13,8 @@ namespace PaperTodo;
 internal sealed class CoreHistoryBackup
 {
     private const int CopiesToKeep = 4;
+    private const int WorkspaceReadAttempts = 3;
+    private const int WorkspaceReadRetryDelayMs = 200;
     private const string ArchivePrefix = "PaperTodo-core-";
     private const string TimestampFormat = "yyyyMMdd-HHmmss-fffffff";
     internal static readonly TimeSpan MinimumInterval = TimeSpan.FromMinutes(10);
@@ -57,21 +60,24 @@ internal sealed class CoreHistoryBackup
                 utc - archives[0].Timestamp < MinimumInterval)
                 return false;
 
-            // Preserve the original bytes even if a workspace JSON cannot be parsed.
-            // A missing numbered workspace is normal; it must not block the others.
+            // Missing slots are normal, and malformed JSON is copied as raw bytes.
+            // If an individual workspace is temporarily unreadable, retry briefly
+            // and then skip it for this snapshot only. The next scheduled scan will
+            // try it again: even a sole unreadable main workspace is never abandoned.
             var documents = new List<(string Name, byte[] Bytes)>();
+            var anyUnreadable = false;
             for (var number = 1; number <= 5; number++)
             {
                 var path = new WorkspacePaths(_dataDirectory, number).Data;
-                if (File.Exists(path))
-                {
-                    using var stream = OpenSourceSnapshot(path);
-                    using var copy = new MemoryStream();
-                    stream.CopyTo(copy);
-                    documents.Add((Path.GetFileName(path), copy.ToArray()));
-                }
+                if (TryReadWorkspaceBytes(path, out var bytes, out var unreadable))
+                    documents.Add((Path.GetFileName(path), bytes));
+                anyUnreadable |= unreadable;
             }
-            if (documents.Count == 0) return false;
+            if (documents.Count == 0)
+            {
+                failed = anyUnreadable;
+                return false;
+            }
 
             // No new historical version is needed when every workspace file is unchanged.
             // This compares bytes, not JSON structure or application-level validity.
@@ -204,6 +210,41 @@ internal sealed class CoreHistoryBackup
         var candidate = available.MinBy(a => Distance(now - a.Timestamp, target));
         available.Remove(candidate);
         return candidate;
+    }
+
+    private static bool TryReadWorkspaceBytes(string path, out byte[] bytes, out bool unreadable)
+    {
+        bytes = [];
+        unreadable = false;
+        for (var attempt = 0; attempt < WorkspaceReadAttempts; attempt++)
+        {
+            try
+            {
+                using var stream = OpenSourceSnapshot(path);
+                using var copy = new MemoryStream();
+                stream.CopyTo(copy);
+                bytes = copy.ToArray();
+                return true;
+            }
+            catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+            {
+                return false; // An unconfigured workspace does not need a backup.
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                if (attempt == WorkspaceReadAttempts - 1)
+                {
+                    unreadable = true;
+                    Trace.TraceWarning("Skipping unreadable workspace in this core history snapshot: {0}: {1}",
+                        path, ex);
+                }
+                else
+                {
+                    Thread.Sleep(WorkspaceReadRetryDelayMs); // background task, never UI thread
+                }
+            }
+        }
+        return false;
     }
 
     // Allow the primary's atomic file replacement while this read handle is open.
