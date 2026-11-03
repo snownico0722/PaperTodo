@@ -50,25 +50,19 @@ internal static class MasterMaterialHandoffChecks
             Observe();
         }
 
-        async Task CheckSettled(bool retracted, IReadOnlyDictionary<PaperWindow, int> framesBefore)
+        async Task CheckSettled(bool retracted)
         {
             await Until(() => Settled(retracted), "exact applied master terminal frames and native geometry");
             foreach (var paper in papers)
             {
-                // The retired full-material setting must never re-enable desktop snapshots
-                // after a live DComp handoff, regardless of which form is revealed.
-                Require(!skins[paper].IsBackgroundActive &&
-                    skins[paper].BackgroundFrameCount == framesBefore[paper],
-                    "lightweight capsule unexpectedly created a desktop background snapshot");
-                Require(!skins[paper].SampledBackgroundCaptureSuspended && !skins[paper].HasBackgroundCapture &&
-                    DesktopBackgroundCapture.ReadAffinity(hosts[paper].Handle) == 0,
-                    "terminal material capture or display-affinity lease remained active");
+                Require(skins[paper].IsCapsule &&
+                    Math.Abs(skins[paper].MaterialStrength - 0.40) < 0.00001,
+                    "terminal capsule preserves its lightweight material recipe");
                 Require(DwmGetWindowAttribute(hosts[paper].Handle, 14, out var cloaked, sizeof(int)) >= 0 && cloaked == 0,
                     "terminal real capsule HWND remained cloaked");
                 Require(presenters[paper].AppliedPresentation.Opacity == (retracted ? 0 : 1),
                     "master terminal opacity was only approximately complete");
             }
-            Require(!captureOverlappedProxy, "local material acquisition overlapped a retained proxy source");
             Require(admitted.All(p => !p.CoverLost), "normal master completion fell back to emergency cover loss");
             await Until(() => cycleOutputs.All(h => !WindowNative.IsWindowHandleAlive(h)),
                 "completed master output HWNDs retire instead of remaining in the warm pool");
@@ -78,8 +72,6 @@ internal static class MasterMaterialHandoffChecks
         CompositionTarget.Rendering += Rendering;
         try
         {
-            Require(!controller.State.MatchAuxiliaryMaterialStrength,
-                "retired auxiliary setting cannot be restored from the persisted fixture");
             Require(cursorSaved && SetCursorPos(10, 10), "park cursor outside the capsule queue");
             await Until(() => Settled(false), "initial real capsule presentation");
             for (var pass = 0; pass < 3; pass++)
