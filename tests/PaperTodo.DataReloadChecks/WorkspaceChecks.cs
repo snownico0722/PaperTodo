@@ -310,13 +310,10 @@ internal static partial class Program
         disk["papers"]![0]!["content"] = "external editor";
         scope.Write(disk);
         File.WriteAllText(catalog.PathsFor(2).Data, "{broken");
-        try
-        {
-            _ = catalog.Open(2, catalog.Options, allowCreate: true, main: active.State);
-            throw new InvalidOperationException("The corrupt candidate should not open.");
-        }
-        catch (InvalidDataException) { }
-        catch (System.Text.Json.JsonException) { }
+        var rejected = false;
+        try { _ = catalog.Open(2, catalog.Options, allowCreate: true, main: active.State); }
+        catch (InvalidOperationException) { rejected = true; }
+        Require(rejected, "The corrupt candidate should not open.");
         Throws<StateWriteBlockedException>(() =>
             active.Store.SaveJsonSync(active.Store.SerializeState(active.State), 4));
         Require(Str(scope.Read()["papers"]![0]!["content"]) == "external editor",
