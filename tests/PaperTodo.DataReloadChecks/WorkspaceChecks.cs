@@ -25,6 +25,7 @@ internal static partial class Program
             ("image recovery protection is per workspace", WorkspaceImageProtection),
             ("plugin detach flush is strict and recoverable", WorkspacePluginStores),
             ("bad startup workspace falls back without replacing it", WorkspaceStartupFallback),
+            ("previewing a candidate never accepts changed active source", WorkspacePreviewDoesNotAcceptSource),
             ("plugin language fallback restores discovered labels", WorkspacePluginLocalization),
             ("inactive following state is released but reload updates its settings projection", WorkspaceSessionRelease)
         };
@@ -290,6 +291,36 @@ internal static partial class Program
         Require(J(failing.ReadRuntimeState("fixture").Json)["kept"]!.GetValue<bool>(),
             "failed plugin detach discarded unsaved data");
         fail = false; failing.DetachForWorkspaceSwitch(); failing.ResumeAfterWorkspaceSwitch();
+    }
+
+    private static void WorkspacePreviewDoesNotAcceptSource()
+    {
+        using var scope = new Scope();
+        var seed = scope.Store.Load();
+        seed.Workspaces = new() { Enabled = true, Count = 2, Active = 1 };
+        scope.Store.SaveJsonSync(scope.Store.SerializeState(seed), 2);
+        var catalog = new WorkspaceCatalog(scope.DirectoryPath, DurableAtomicFileWriter.Shared);
+        var active = catalog.OpenInitial();
+        active.BindPersistence();
+        active.State.Papers[0].Content = "last saved local";
+        active.Store.SaveJsonSync(active.Store.SerializeState(active.State), 3);
+
+        // Another editor changes the source AFTER the outgoing workspace saved.
+        var disk = scope.Read();
+        disk["papers"]![0]!["content"] = "external editor";
+        scope.Write(disk);
+        File.WriteAllText(catalog.PathsFor(2).Data, "{broken");
+        try
+        {
+            _ = catalog.Open(2, catalog.Options, allowCreate: true, main: active.State);
+            throw new InvalidOperationException("The corrupt candidate should not open.");
+        }
+        catch (InvalidDataException) { }
+        catch (System.Text.Json.JsonException) { }
+        Throws<StateWriteBlockedException>(() =>
+            active.Store.SaveJsonSync(active.Store.SerializeState(active.State), 4));
+        Require(Str(scope.Read()["papers"]![0]!["content"]) == "external editor",
+            "candidate preview silently accepted the external source as safe to overwrite");
     }
 
     private static void WorkspaceStartupFallback()
