@@ -32,6 +32,18 @@ internal static partial class Program
         var empty = VisibleLines("", "opposite value", DataReloadConflictUi.LineMark.OnlyInMemory);
         Require(empty.Length == 1 && empty[0] == Strings.Get("DataReloadConflictEmpty"),
             "empty content was replaced by opposite-side text instead of an empty indication");
+        var invalidWindow = new DataReloadConflictDialogWindow(new StateMergeConflict(
+            "$", false, null, true, System.Text.Json.Nodes.JsonValue.Create("live data"),
+            true, System.Text.Json.Nodes.JsonValue.Create("invalid JSON at line 1\n{broken"),
+            "invalid_external"));
+        var controls = LogicalDescendants(invalidWindow).ToArray();
+        Require(controls.OfType<Button>().Any(button =>
+                    Equals(button.Content, Strings.Get("DataReloadConflictKeepExternal")) &&
+                    button.Visibility == Visibility.Collapsed) &&
+                controls.OfType<TextBlock>().Any(block => block.Text?.Contains("invalid JSON at line 1") == true),
+            "invalid JSON was not shown in the external comparison pane or could still be accepted");
+        invalidWindow.Close();
+        Console.WriteLine("PASS invalid external JSON is shown in comparison UI without accepting corrupt bytes");
         Console.WriteLine("PASS actual conflict panel values, side-specific markers and empty content");
     }
 
