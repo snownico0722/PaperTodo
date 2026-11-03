@@ -147,7 +147,22 @@ internal static partial class Program
             }
             var toCorrupt = Directory.GetFiles(archiveBackup.BackupDirectory, "*.zip")
                 .OrderBy(x => x, StringComparer.Ordinal).First();
-            File.WriteAllText(toCorrupt, "not a ZIP");
+            // Alter the central-directory CRC without damaging the ZIP framing:
+            // .NET 10 can still decompress the entry, but our check must reject it.
+            var damagedZipBytes = File.ReadAllBytes(toCorrupt);
+            var central = -1;
+            for (var offset = damagedZipBytes.Length - 20; offset >= 0; offset--)
+            {
+                if (damagedZipBytes[offset] == 0x50 && damagedZipBytes[offset + 1] == 0x4B &&
+                    damagedZipBytes[offset + 2] == 0x01 && damagedZipBytes[offset + 3] == 0x02)
+                {
+                    central = offset;
+                    break;
+                }
+            }
+            Require(central >= 0, "could not locate the ZIP central directory");
+            damagedZipBytes[central + 16] ^= 0x80;
+            File.WriteAllBytes(toCorrupt, damagedZipBytes);
             File.WriteAllText(oldArchives.Store.FilePath, "fifth version");
             Require(archiveBackup.TryCreateIfDue(start.AddMinutes(40)),
                 "damaged older ZIP blocked normal archival");
