@@ -16,6 +16,36 @@ namespace PaperTodo;
 /// </summary>
 internal static class DataReloadConflictDialog
 {
+    // Match the existing conflict-dialog test seam without opening a modal in CI fixtures.
+    internal static Action<string, string, string>? InvalidExternalDialogDriver;
+
+    internal static void ShowInvalidExternal(Window? owner, string memoryJson, string externalJson,
+        string error)
+    {
+        if (InvalidExternalDialogDriver is { } driver)
+        {
+            driver(memoryJson, externalJson, error);
+            return;
+        }
+
+        // Show the actual invalid text without pretending it is a parsed, mergeable JSON value.
+        static string Preview(string text) => text.Length <= 16_000
+            ? text : text[..16_000] + "\n…";
+        var conflict = new StateMergeConflict("$", false, null,
+            true, JsonValue.Create(Preview(memoryJson)), true,
+            JsonValue.Create(error + "\n\n" + Preview(externalJson)), "invalid_external");
+        var dialog = new DataReloadConflictDialogWindow(conflict);
+        if (owner != null && PresentationSource.FromVisual(owner) is HwndSource)
+        {
+            dialog.Owner = owner;
+            dialog.WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        }
+        else
+            dialog.WindowStartupLocation = WindowStartupLocation.CenterScreen;
+        dialog.ShowDialog();
+        dialog.Close();
+    }
+
     /// <summary>
     /// 弹一个 modal dialog,返回用户选择。
     /// </summary>
@@ -146,11 +176,13 @@ internal sealed class DataReloadConflictDialogWindow : Window
         content.Children.Add(headerGrid);
 
         // 路径
+        var invalidExternal = conflict.Reason == "invalid_external";
         var pathText = new TextBlock
         {
-            Text = conflict.Reason == "unknown_baseline"
-                ? Strings.Get("DataReloadMissingBaseline")
-                : Strings.Format("DataReloadConflictPath", conflict.Path),
+            Text = invalidExternal ? Strings.Get("DataReloadInvalidExternalHint")
+                : conflict.Reason == "unknown_baseline"
+                    ? Strings.Get("DataReloadMissingBaseline")
+                    : Strings.Format("DataReloadConflictPath", conflict.Path),
             Foreground = Theme.WeakTextBrush,
             FontSize = AppTypography.Scale(11),
             Margin = new Thickness(0, 8, 0, 8),
@@ -168,7 +200,7 @@ internal sealed class DataReloadConflictDialogWindow : Window
         };
         var keepMemoryBtn = new Button
         {
-            Content = Strings.Get("DataReloadConflictKeepMemory"),
+            Content = invalidExternal ? Strings.Get("CommonOk") : Strings.Get("DataReloadConflictKeepMemory"),
             MinWidth = 140,
             Padding = new Thickness(14, 6, 14, 6),
             Margin = new Thickness(0, 0, 8, 0),
@@ -181,6 +213,7 @@ internal sealed class DataReloadConflictDialogWindow : Window
         var keepExternalBtn = new Button
         {
             Content = Strings.Get("DataReloadConflictKeepExternal"),
+            Visibility = invalidExternal ? Visibility.Collapsed : Visibility.Visible,
             MinWidth = 140,
             Padding = new Thickness(14, 6, 14, 6),
             IsDefault = true,
@@ -215,7 +248,8 @@ internal sealed class DataReloadConflictDialogWindow : Window
             Strings.Get("DataReloadConflictExternalHeader"),
             externalText,
             memoryText,
-            DataReloadConflictUi.LineMark.OnlyInExternal,
+            invalidExternal ? DataReloadConflictUi.LineMark.InvalidExternal :
+                DataReloadConflictUi.LineMark.OnlyInExternal,
             sync);
         Grid.SetColumn(externalPanel.root, 2);
         grid.Children.Add(externalPanel.root);
@@ -442,7 +476,7 @@ internal sealed class DataReloadPaperConflictDialogWindow : Window
 internal static class DataReloadConflictUi
 {
     /// <summary>冲突行可视化标记。</summary>
-    public enum LineMark { Common, OnlyInMemory, OnlyInExternal }
+    public enum LineMark { Common, OnlyInMemory, OnlyInExternal, InvalidExternal }
 
     /// <summary>
     /// 构造一个可滚动的 diff 面板:头部 + ScrollViewer + 行集合。
@@ -485,19 +519,19 @@ internal static class DataReloadConflictUi
         // 保证文本在浅底色上仍清晰可读。
         var stripeBrush = thisSideMark switch
         {
-            LineMark.OnlyInMemory => new SolidColorBrush(Color.FromRgb(0xE5, 0x39, 0x35)),  // Material Red 600
+            LineMark.OnlyInMemory or LineMark.InvalidExternal => new SolidColorBrush(Color.FromRgb(0xE5, 0x39, 0x35)),  // Material Red 600
             LineMark.OnlyInExternal => new SolidColorBrush(Color.FromRgb(0x43, 0xA0, 0x47)), // Material Green 600
             _ => Brushes.Transparent
         };
         var subtleBg = thisSideMark switch
         {
-            LineMark.OnlyInMemory => new SolidColorBrush(Color.FromRgb(0xFD, 0xF2, 0xF2)),  // 极浅粉
+            LineMark.OnlyInMemory or LineMark.InvalidExternal => new SolidColorBrush(Color.FromRgb(0xFD, 0xF2, 0xF2)),  // 极浅粉
             LineMark.OnlyInExternal => new SolidColorBrush(Color.FromRgb(0xF1, 0xF8, 0xE9)), // 极浅绿
             _ => Brushes.Transparent
         };
         var markerBrush = thisSideMark switch
         {
-            LineMark.OnlyInMemory => new SolidColorBrush(Color.FromRgb(0xC6, 0x28, 0x28)),  // Material Red 800
+            LineMark.OnlyInMemory or LineMark.InvalidExternal => new SolidColorBrush(Color.FromRgb(0xC6, 0x28, 0x28)),  // Material Red 800
             LineMark.OnlyInExternal => new SolidColorBrush(Color.FromRgb(0x2E, 0x7D, 0x32)), // Material Green 800
             _ => Theme.TextBrush
         };
@@ -518,7 +552,12 @@ internal static class DataReloadConflictUi
             foreach (var entry in diff)
             {
                 var isThisSideOnly = entry.Kind == LineDiff.ChangeKind.Added;
-                var prefix = isThisSideOnly ? (thisSideMark == LineMark.OnlyInMemory ? "- " : "+ ") : "  ";
+                var prefix = isThisSideOnly ? thisSideMark switch
+                {
+                    LineMark.OnlyInMemory => "- ",
+                    LineMark.InvalidExternal => "! ",
+                    _ => "+ "
+                } : "  ";
                 var fullText = prefix + entry.Text;
 
                 // 单行容器:左侧 4px 色条 + 文本
@@ -547,7 +586,9 @@ internal static class DataReloadConflictUi
                     ToolTip = isThisSideOnly
                         ? (thisSideMark == LineMark.OnlyInMemory
                             ? Strings.Get("DataReloadConflictMemoryOnlyTooltip")
-                            : Strings.Get("DataReloadConflictExternalOnlyTooltip"))
+                            : thisSideMark == LineMark.InvalidExternal
+                                ? Strings.Get("DataReloadInvalidExternalHint")
+                                : Strings.Get("DataReloadConflictExternalOnlyTooltip"))
                         : null
                 };
                 Grid.SetColumn(tb, 1);
