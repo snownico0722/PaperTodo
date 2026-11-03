@@ -51,7 +51,8 @@ public sealed partial class AppController
             item.LinkedPath,
             item.ReminderAt)
         {
-            LinkedPathIsDirectory = item.LinkedPathIsDirectory
+            LinkedPathIsDirectory = item.LinkedPathIsDirectory,
+            ReminderTriggered = item.ReminderTriggered
         };
 
     internal NoteSnapshot CaptureNoteSnapshot(PaperData paper)

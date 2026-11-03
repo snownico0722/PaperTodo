@@ -7,6 +7,8 @@ public static class PaperTodoPermissionNames
     public const string SettingsRead = "settings.read";
     public const string SettingsUpdate = "settings.update";
     public const string PapersRead = "papers.read";
+    // Legacy listen-only grants remain valid for existing plugins. New plugins use *.read
+    // for both querying data and subscribing to change events.
     public const string PapersObserve = "papers.observe";
     public const string PapersCreate = "papers.create";
     public const string PapersDelete = "papers.delete";
@@ -53,7 +55,8 @@ public enum PaperTodoEventKind
     TodoCreated,
     TodoChanged,
     TodoDeleted,
-    NoteChanged
+    NoteChanged,
+    TodoReminderUpcoming
 }
 
 public enum PaperTodoEventOrigin
@@ -120,6 +123,9 @@ public sealed record TodoSnapshot(
     /// host cannot classify it; true means directory and false means file.
     /// </summary>
     public bool? LinkedPathIsDirectory { get; init; }
+
+    /// <summary>API 2.2: the occurrence was completed by host presentation or plugin suppression. This is not a plugin display receipt.</summary>
+    public bool ReminderTriggered { get; init; }
 }
 
 public sealed record NoteSnapshot(
@@ -174,6 +180,17 @@ public sealed record NoteChangedEvent(
     int CurrentLength,
     PaperTodoEventMetadata EventMetadata)
     : PaperTodoEvent(PaperTodoEventKind.NoteChanged, EventMetadata);
+
+/// <summary>
+ /// API 2.2: sent once when a pending reminder enters its five-second pre-notification window.
+ /// An earlier overdue reminder may skip this best-effort advance notice.
+ /// The notificationId is valid only for that reminder occurrence until its due time.
+ /// </summary>
+public sealed record TodoReminderUpcomingEvent(
+    TodoSnapshot Todo,
+    Guid NotificationId,
+    PaperTodoEventMetadata EventMetadata)
+    : PaperTodoEvent(PaperTodoEventKind.TodoReminderUpcoming, EventMetadata);
 
 public sealed class PaperTodoEventFilter
 {
@@ -289,6 +306,16 @@ public interface IPaperTodoHostApi
     IDisposable Subscribe(
         PaperTodoEventFilter filter,
         Action<PaperTodoEvent> handler);
+}
+
+/// <summary>
+/// Optional host capability for suppressing PaperTodo's default presentation of an upcoming
+/// reminder. Requires todos.update; it never cancels/reschedules the underlying Todo.
+/// A false result means this notification is no longer pending or its token is invalid.
+/// </summary>
+public interface IPaperReminderNotificationControl
+{
+    bool SuppressDefaultReminderNotification(Guid notificationId);
 }
 
 public sealed class PaperTodoPluginException : Exception
