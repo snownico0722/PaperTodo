@@ -131,6 +131,15 @@ internal sealed class McpPipeClient
             throw new McpException($"PaperTodo error ({code}): {message}");
         }
 
+        // An explicit workspace-status query is the caller's acknowledgement of the
+        // current slot. Refresh the bridge lease with that SAME response, never retry
+        // a stale mutation with a newly acquired token.
+        if (method == "get_data_reload_status" &&
+            root.TryGetProperty("workspace_token", out var binding) &&
+            binding.ValueKind == JsonValueKind.String &&
+            !string.IsNullOrWhiteSpace(binding.GetString()))
+            _workspaceToken = binding.GetString();
+
         return root.TryGetProperty("result", out var result)
             ? result.Clone()
             : JsonSerializer.SerializeToElement<object?>(null);
