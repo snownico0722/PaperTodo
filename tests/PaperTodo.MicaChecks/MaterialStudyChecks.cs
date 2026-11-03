@@ -62,8 +62,8 @@ internal static class MaterialStudyChecks
             Program.Assert(!surface.HasAeroReflectionSubscription && shift.Value.IsIdentity,
                 "Disabling animations releases the parallax and restores neutral translation");
             window.Hide();
-            Program.Assert(!surface.HasBackgroundCapture,
-                "Hiding Aero does not keep a background-capture worker alive");
+            Program.Assert(!surface.HasMaterialHostSubscription,
+                "Hiding Aero releases the window-position observer");
         }
         finally
         {
