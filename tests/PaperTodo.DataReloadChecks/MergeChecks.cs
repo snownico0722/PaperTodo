@@ -4,6 +4,36 @@ using PaperTodo;
 
 internal static partial class Program
 {
+    private static void MergeDerivedTodoOrderDoesNotConflict()
+    {
+        using var s = new Scope();
+        var todo = s.Memory.Papers.Single(p => p.Id == "todo");
+        todo.Items.Insert(0, new PaperItem { Id = "local-x", Text = "local X" });
+        todo.Items.Insert(1, new PaperItem { Id = "local-z", Text = "local Z" });
+        for (var i = 0; i < todo.Items.Count; i++) todo.Items[i].Order = i;
+
+        var disk = s.Read();
+        var items = disk["papers"]![1]!["items"]!.AsArray();
+        items.Insert(0, new JsonObject
+        {
+            ["id"] = "external-y",
+            ["text"] = "external Y",
+            ["done"] = false,
+            ["order"] = 0
+        });
+        for (var i = 0; i < items.Count; i++) items[i]!.AsObject()["order"] = i;
+        s.Write(disk);
+
+        var preview = s.Store.PreviewExternalMerge(s.Memory, 2, s.BaselineJson);
+        Require(preview.State != null && preview.Conflicts is { Count: 0 },
+            "independent todo insertions must not conflict only because derived order indexes moved");
+        var merged = preview.State!.Papers.Single(p => p.Id == "todo").Items;
+        Require(merged.Select(item => item.Id).ToHashSet(StringComparer.Ordinal)
+                    .SetEquals(new[] { "t1", "t2", "local-x", "local-z", "external-y" }) &&
+                merged.Select(item => item.Order).SequenceEqual(Enumerable.Range(0, merged.Count)),
+            "merged todo order is not the final array order or lost independently inserted items");
+    }
+
     private static void MergeIndependentEdits()
     {
         ConflictResolutionChecks();
