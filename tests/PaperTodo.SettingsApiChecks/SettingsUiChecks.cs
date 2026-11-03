@@ -160,7 +160,7 @@ internal static partial class Program
         title.State.Papers.Add(new PaperData { Title = "abcdef" });
         SettingsFor(title, () => true, _ => { });
         Invoke(title, "SetMaxTitleLength", 2);
-        Check(title.State.MaxTitleLength == 2 && title.State.Papers[0].Title == "ab", "UI title changes reuse catalog clamping.");
+        Check(title.State.MaxTitleLength == 2 && title.State.Papers[0].Title == "abcd", "UI title changes reuse weighted catalog clamping.");
         var failed = Controller();
         SettingsFor(failed, () => false, _ => throw new Exception("Failed writes must not publish."));
         Invoke(failed, "ToggleTodoPaperLinks");

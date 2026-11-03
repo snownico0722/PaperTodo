@@ -73,7 +73,7 @@ internal sealed partial class McpTools
         OpenWorld = false)]
     [Description("Create a new todo paper. Requires PaperTodo blank/additive writes.")]
     public Task<JsonElement> CreateTodoPaper(
-        [Description("Optional paper title. Limited by the current PaperTodo title.max_length setting (default 6, configurable from 2 to 20 displayed characters). For normal short titles, do not query the setting first; if rejected, the error reports the active limit.")] string? title = null,
+        [Description("Optional paper title. Limited by the current PaperTodo title.max_length setting (default 8, configurable from 2 to 20 full-width-equivalent characters; two half-width characters count as one). For normal short titles, do not query the setting first; if rejected, the error reports the active limit.")] string? title = null,
         [Description("Optional ordered todo steps.")] IReadOnlyList<McpTodoInput>? todos = null,
         [Description("Show the new paper immediately.")] bool show = true,
         CancellationToken cancellationToken = default)
@@ -89,7 +89,7 @@ internal sealed partial class McpTools
         OpenWorld = false)]
     [Description("Create a new note with optional Markdown content. Requires PaperTodo blank/additive writes.")]
     public Task<JsonElement> CreateNote(
-        [Description("Optional paper title. Limited by the current PaperTodo title.max_length setting (default 6, configurable from 2 to 20 displayed characters). For normal short titles, do not query the setting first; if rejected, the error reports the active limit.")] string? title = null,
+        [Description("Optional paper title. Limited by the current PaperTodo title.max_length setting (default 8, configurable from 2 to 20 full-width-equivalent characters; two half-width characters count as one). For normal short titles, do not query the setting first; if rejected, the error reports the active limit.")] string? title = null,
         [Description("Initial note content.")] string content = "",
         [Description("Show the new paper immediately.")] bool show = true,
         CancellationToken cancellationToken = default)

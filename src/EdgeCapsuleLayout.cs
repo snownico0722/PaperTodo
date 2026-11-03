@@ -44,9 +44,9 @@ public static class EdgeCapsuleLayout
     // the same floating HWND, so their wall-return motion must not drift apart.
     internal const int DockingHandoffMilliseconds = 160;
     internal const int DockingRevealMilliseconds = 80;
-    // Display-weighted character count: CJK / fullwidth glyphs count as 2, everything
-    // else as 1. A 6-digit number title then weighs the same as a 3-CJK-character title,
-    // so the capsule no longer looks long-but-empty for numeric titles.
+    // Shared display-width units for title limits and compact linked-paper labels:
+    // CJK/fullwidth and supplementary Unicode glyphs count as 2; halfwidth as 1.
+    // Count text elements, not UTF-16 code units, to keep emoji sequences intact.
     public static int DisplayWidth(string? text)
     {
         if (string.IsNullOrEmpty(text))
@@ -73,7 +73,8 @@ public static class EdgeCapsuleLayout
 
         var c = element[0];
         // CJK Unified, Hiragana/Katakana, Hangul, fullwidth forms, CJK symbols/punct.
-        return (c >= 0x1100 && c <= 0x115F)   // Hangul Jamo
+        return char.IsHighSurrogate(c)         // Supplementary symbols (including emoji)
+            || (c >= 0x1100 && c <= 0x115F)   // Hangul Jamo
             || (c >= 0x2E80 && c <= 0x303E)   // CJK radicals / Kangxi / symbols
             || (c >= 0x3041 && c <= 0x33FF)   // Hiragana, Katakana, CJK symbols
             || (c >= 0x3400 && c <= 0x4DBF)   // CJK Ext A

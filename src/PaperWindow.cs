@@ -2252,9 +2252,10 @@ public sealed partial class PaperWindow : Window
             FontSize = TitleFontSize,
             MinHeight = TitleLineHeight + 1,
             FontWeight = TitleFontWeight,
-            // UTF-16 unit guard at the hard full-width cap (20). Commit still clamps to the
-            // user setting (2–20) via PaperTitles.CleanCustomTitle so IME is not rewritten mid-edit.
-            MaxLength = PaperTitles.MaxTitleLength,
+            // WPF MaxLength counts UTF-16 units, not weighted characters. Allow up to
+            // 40 ASCII characters; commit applies the 2–20 full-width-equivalent limit
+            // without rewriting IME input during composition.
+            MaxLength = PaperTitles.MaxTitleInputCodeUnits,
             Padding = new Thickness(0),
             VerticalContentAlignment = VerticalAlignment.Center,
             FocusVisualStyle = null

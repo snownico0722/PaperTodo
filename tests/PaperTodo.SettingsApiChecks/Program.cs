@@ -383,14 +383,14 @@ internal static partial class Program
         var paper = new PaperData { Type = PaperTypes.Todo, Title = "abcdef", Items = [new PaperItem { Text = "done", Done = true, Order = 0 }, new PaperItem { Text = "open", Order = 1 }] };
         c.State.Papers.Add(paper);
         Throws<PaperSettingsException>(() => service.Set("title.max_length", Json(2)), "save_failed");
-        Check(paper.Title == "abcdef" && c.State.MaxTitleLength == 6, "Failed title limit changes do not truncate user data.");
+        Check(paper.Title == "abcdef" && c.State.MaxTitleLength == PaperTitles.DefaultMaxTitleLength, "Failed title limit changes do not truncate user data.");
         Throws<PaperSettingsException>(() => service.Set("todo.move_completed_to_bottom", Json(true)), "save_failed");
         Check(paper.Items[0].Done && paper.Items[0].Order == 0 && !c.State.AutoMoveCompletedTodosToBottom, "Failed reorder restores items and order.");
         success = true;
         service.Set("todo.move_completed_to_bottom", Json(true));
         Check(!paper.Items[0].Done && paper.Items[0].Order == 0 && paper.Items[1].Order == 1, "Completed group is reordered just like Settings UI.");
         service.Set("title.max_length", Json(2));
-        Check(paper.Title == "ab", "Successful max length applies existing title semantics.");
+        Check(paper.Title == "abcd", "Successful max length counts two half-width characters as one.");
     }
 
     private static void TodoMoveBehavior()

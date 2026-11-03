@@ -263,13 +263,13 @@ internal static partial class Program
         c.PublicSettings.Set("title.max_length", Json(4));
         await PresentationSettle();
         var visibleLabels = Labels(window).Select(label => label.Text).ToArray();
-        Check(note.Title == "Link" && visibleLabels.Any(text => text.Contains("Link", StringComparison.Ordinal)) &&
+        Check(note.Title == "LinkedAB" && visibleLabels.Any(text => text.Contains("LinkedAB", StringComparison.Ordinal)) &&
             visibleLabels.All(text => !text.Contains("LinkedABC", StringComparison.Ordinal)),
             "Title truncation updates the actual linked-paper label immediately.");
         // Verify current text, not whether the renderer reused or rebuilt a particular TextBlock.
         Invoke(c, "SetMaxTitleLength", 2);
-        Check(note.Title == "Li" && Labels(window).Any(label => label.Text.Contains("Li", StringComparison.Ordinal)) &&
-            Labels(window).All(label => !label.Text.Contains("Link", StringComparison.Ordinal)),
+        Check(note.Title == "Link" && Labels(window).Any(label => label.Text.Contains("Link", StringComparison.Ordinal)) &&
+            Labels(window).All(label => !label.Text.Contains("LinkedAB", StringComparison.Ordinal)),
             "UI title truncation replaces the previous linked title with its current text.");
     }
 
