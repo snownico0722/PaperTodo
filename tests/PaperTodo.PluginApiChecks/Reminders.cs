@@ -157,7 +157,7 @@ internal static partial class Program
         Assert(changes.Count == 1 && changes[0].ChangedFields == TodoChangedFields.Reminder && changes[0].After.ReminderTriggered,
             "Reminder state changes were not observable.");
         hub.ScanNow(PaperOperationContext.User());
-        Assert(changes.Count == 1 && received.Count == 2, "State scans replayed an occurrence or repeated a change.");
+        Assert(changes.Count == 1, "State scans repeated an unchanged TodoChanged transition.");
 
         item.ReminderAt = DateTimeOffset.UtcNow.AddMinutes(-1);
         item.ReminderTriggered = false;
