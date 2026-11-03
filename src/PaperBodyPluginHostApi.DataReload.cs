@@ -4,13 +4,19 @@ namespace PaperTodo;
 
 internal sealed partial class PaperBodyPluginHostApi
 {
-    // Native and local Web plugins share one explicit import entry with MCP.
-    // It does not create a second state writer or add a new permission gate.
-    public DataReloadResult ReloadData() =>
-        Invoke(() => _commands.ReloadData(PaperOperationContext.Plugin(_providerId)));
+    // A data import can replace an entire workspace. Both plugin routes need the
+    // dedicated high-risk grant; MCP retains its existing full-write permission gate.
+    public DataReloadResult ReloadData()
+    {
+        Require(PaperTodoPermissionNames.DataImport);
+        return Invoke(() => _commands.ReloadData(PaperOperationContext.Plugin(_providerId)));
+    }
 
-    public DataReloadResult MergeData(string baselineJson) =>
-        Invoke(() => _commands.MergeData(PaperOperationContext.Plugin(_providerId), baselineJson));
+    public DataReloadResult MergeData(string baselineJson)
+    {
+        Require(PaperTodoPermissionNames.DataImport);
+        return Invoke(() => _commands.MergeData(PaperOperationContext.Plugin(_providerId), baselineJson));
+    }
 
     public DataReloadStatus GetDataReloadStatus() =>
         Invoke(_commands.GetDataReloadStatus);
