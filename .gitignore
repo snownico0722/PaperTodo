@@ -3,7 +3,6 @@ bin/
 !native/lmdb/bin/win-x64/
 !native/lmdb/bin/win-x64/papertodo_lmdb.dll
 obj/
-__pycache__/
 输出/
 .vs/
 *.user

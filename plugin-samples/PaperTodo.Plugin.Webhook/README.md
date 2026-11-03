@@ -15,10 +15,10 @@ powershell -ExecutionPolicy Bypass -File plugin-samples/Build-And-Install-Native
 安装脚本会构建插件并写入 `plugins/sample.webhook.native`。退出并重新打开 PaperTodo 后，在插件设置的「事件路由」中填写 JSON 对象，键为事件名称，值为 HTTP 或 HTTPS 地址，例如：
 
 ```json
-{"todoCreated":"https://example.com/created","todoChanged":"https://example.com/reminder"}
+{"todoCreated":"https://example.com/created","todoChanged":"https://example.com/changes"}
 ```
 
-当前事件名称为 `paperCreated`、`paperChanged`、`paperDeleted`、`todoCreated`、`todoChanged`、`todoDeleted`、`todoChanged` 和 `noteChanged`。名称不区分大小写；未列出的事件不发送，填 `{}` 可停止全部转发。无效 JSON 或地址会停止全部转发，修正设置后恢复；保存时必须填写完整 JSON。未来宿主添加兼容事件类型时，可按其枚举名称首字母小写添加路由，不需要改插件代码；能否收到仍取决于宿主事件订阅与权限契约。
+当前事件名称为 `paperCreated`、`paperChanged`、`paperDeleted`、`todoCreated`、`todoChanged`、`todoDeleted` 和 `noteChanged`。名称不区分大小写；未列出的事件不发送，填 `{}` 可停止全部转发。无效 JSON 或地址会停止全部转发，修正设置后恢复；保存时必须填写完整 JSON。未来宿主添加兼容事件类型时，可按其枚举名称首字母小写添加路由，不需要改插件代码；能否收到仍取决于宿主事件订阅与权限契约。
 
 设置即时生效：路由变化时，旧配置下尚未开始发送的事件会丢弃；已经开始的 HTTP 请求无法撤回。没有可识别的事件路由时，插件不订阅工作区事件。插件默认在启动时创建或恢复一张隐藏纸片来运行；也可以手动创建该插件纸片。关闭「启动时运行」只影响后续启动，不会删除现有纸片。
 

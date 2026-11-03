@@ -15,10 +15,10 @@ powershell -ExecutionPolicy Bypass -File plugin-samples/Build-And-Install-Native
 The script builds the plugin and installs it to `plugins/sample.webhook.native`. Exit and restart PaperTodo, then enter a JSON object in the plugin's **事件路由** (Event Routes) setting. Each key is an event name and each value is an HTTP or HTTPS URL. For example:
 
 ```json
-{"todoCreated":"https://example.com/created","todoChanged":"https://example.com/reminder"}
+{"todoCreated":"https://example.com/created","todoChanged":"https://example.com/changes"}
 ```
 
-The current event names are `paperCreated`, `paperChanged`, `paperDeleted`, `todoCreated`, `todoChanged`, `todoDeleted`, `todoChanged`, and `noteChanged`. Names are case-insensitive. Events omitted from the object are not sent; use `{}` to stop all forwarding. Invalid JSON or URLs stop all forwarding until the configuration is corrected, so enter complete JSON when saving.
+The current event names are `paperCreated`, `paperChanged`, `paperDeleted`, `todoCreated`, `todoChanged`, `todoDeleted`, and `noteChanged`. Names are case-insensitive. Events omitted from the object are not sent; use `{}` to stop all forwarding. Invalid JSON or URLs stop all forwarding until the configuration is corrected, so enter complete JSON when saving.
 
 When the host adds a compatible event type, you can add a route using its enum name with the first letter lowercased without changing the plugin code. Whether the event is delivered still depends on the host's subscription and permission contracts.
 
