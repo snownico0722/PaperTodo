@@ -46,8 +46,6 @@ public sealed partial class StateStore
     public AppState Load()
     {
         ClearRecoveredLoadPreservationState();
-        Volatile.Write(ref _ordinaryWritesPaused, 1);
-
         bool mainExists = FileExistsForCollection(FilePath);
         bool backupExists = FileExistsForCollection(BackupPath);
 
@@ -58,27 +56,21 @@ public sealed partial class StateStore
             // document that would overwrite it on the next ordinary save either.
             if (FileExistsForCollection(FilePath + ".tmp") || FileExistsForCollection(BackupPath + ".tmp"))
                 throw new InvalidDataException(Strings.Get("StateLoadFailed"));
-            AcceptPrimaryBytes(null);
             return new AppState();
         }
 
-        byte[]? observedPrimaryBytes = null;
-        var observedPrimary = !mainExists;
         Exception? mainEx = null;
         if (mainExists)
         {
             try
             {
                 var primaryBytes = File.ReadAllBytes(FilePath);
-                observedPrimaryBytes = primaryBytes;
-                observedPrimary = true;
                 var json = DecodeStateBytes(primaryBytes);
                 var state = ReadCoreState(json);
                 if (state != null)
                 {
                     MigrateLegacyTopBarSettings(state, json);
                     NormalizeAfterLoad(state);
-                    AcceptPrimaryBytes(primaryBytes);
                     return state;
                 }
 
@@ -106,10 +98,6 @@ public sealed partial class StateStore
 
                     MigrateLegacyTopBarSettings(state, json);
                     NormalizeAfterLoad(state);
-                    // Never authorize a recovered backup against bytes read later: another
-                    // writer may have repaired/replaced the primary while we read the backup.
-                    // Unreadable primary: show recovery data, but keep saving paused.
-                    if (observedPrimary) AcceptPrimaryBytes(observedPrimaryBytes);
                     return state;
                 }
 
@@ -136,7 +124,7 @@ public sealed partial class StateStore
         {
             // The failed primary has not been copied to its recovery path yet. Until the first
             // successful save completes, no image can be proven unreachable.
-            if (WriteLifetime.IsStopped || OrdinaryWritesPaused || _preserveRecoveredLoadFilesOnNextSave ||
+            if (WriteLifetime.IsStopped || _preserveRecoveredLoadFilesOnNextSave ||
                 !TryAddImageReferences(currentState, protectedImageIds))
             {
                 protectedImageIds.Clear();
@@ -323,30 +311,14 @@ public sealed partial class StateStore
         try
         {
             WriteLifetime.ThrowIfStopped();
-            if (OrdinaryWritesPaused) return false;
-            ValidateOrdinaryWriteSource();
-            // If startup recovered from backup, keep both recovery sources untouched until a
-            // successful normal save has preserved them under timestamped recovery names.
+            // A recovered startup state must preserve its source files on its first save.
             if (_preserveRecoveredLoadFilesOnNextSave ||
                 !TryReadValidatedStateBytes(FilePath, out var primaryBytes))
-            {
                 return false;
-            }
-
-            // The bytes copied must be the accepted generation too, not just whatever
-            // happened to occupy the path between the initial check and this read.
-            if (_acceptedPrimaryHash == null ||
-                !System.Security.Cryptography.SHA256.HashData(primaryBytes).AsSpan().SequenceEqual(_acceptedPrimaryHash))
-            {
-                Volatile.Write(ref _ordinaryWritesPaused, 1);
-                return false;
-            }
 
             if (TryReadValidatedStateBytes(BackupPath, out var backupBytes) &&
                 primaryBytes.AsSpan().SequenceEqual(backupBytes))
-            {
                 return true;
-            }
 
             _atomicWriter.Write(
                 BackupPath,
@@ -354,32 +326,27 @@ public sealed partial class StateStore
                 tempPath =>
                     TryReadValidatedStateBytes(tempPath, out var writtenBytes) &&
                     primaryBytes.AsSpan().SequenceEqual(writtenBytes),
-                beforeReplace: ValidateOrdinaryWriteSource);
+                beforeReplace: WriteLifetime.ThrowIfStopped);
             return true;
         }
         catch
         {
             return false;
         }
-        finally
-        {
-            _writeLock.Release();
-        }
+        finally { _writeLock.Release(); }
     }
 
-    private void WriteJsonInternal(string json, Action? beforeReplace = null, bool acceptExternal = false)
+    private void WriteJsonInternal(string json, Action? beforeReplace = null)
     {
         void ValidateWrite()
         {
             WriteLifetime.ThrowIfStopped();
-            if (!acceptExternal) ValidateOrdinaryWriteSource();
             beforeReplace?.Invoke();
         }
         ValidateWrite();
         var preserveRecoverySources = PreserveRecoveredLoadFilesIfNeeded(ValidateWrite);
         var bytes = Encoding.UTF8.GetBytes(json);
         _atomicWriter.Write(FilePath, bytes, beforeReplace: ValidateWrite);
-        AcceptPrimaryBytes(bytes);
 
         if (preserveRecoverySources)
         {
