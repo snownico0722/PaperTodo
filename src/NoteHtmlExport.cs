@@ -5,6 +5,7 @@ using System.Net;
 using System.Text;
 using Markdig;
 using Markdig.Extensions.EmphasisExtras;
+using Markdig.Renderers;
 using Markdig.Renderers.Html;
 using Markdig.Renderers.Html.Inlines;
 using Markdig.Syntax;
