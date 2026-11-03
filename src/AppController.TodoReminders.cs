@@ -244,7 +244,6 @@ public sealed partial class AppController
         // delete another item; its callback must not change which reminders this batch surfaced.
         var triggered = delivered.Select(entry => CaptureTodoSnapshot(entry.Paper, entry.Item)).ToArray();
         var publishChanges = _paperBodyPluginEvents?.CaptureTriggeredReminderChanges(beforeTriggered, triggered, now);
-        var publishOccurrences = _paperBodyPluginEvents?.CaptureReminderTriggered(triggered, now);
         SaveNow();
         if (delivered.Count < due.Count)
         {
@@ -255,10 +254,9 @@ public sealed partial class AppController
             RefreshTodoReminderSchedule();
         }
 
-        // Publish the frozen state transition before callbacks can mutate another delivered item.
+        // Publish the frozen TodoChanged transitions after the host has settled delivery.
+        // A listener cannot acknowledge delivery or alter this already captured batch.
         publishChanges?.Invoke();
-        // Observation only. Plugins cannot acknowledge delivery or affect the host retry path.
-        publishOccurrences?.Invoke();
     }
 
     private void OpenTodoReminderTarget(

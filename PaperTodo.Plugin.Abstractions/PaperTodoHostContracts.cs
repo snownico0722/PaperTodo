@@ -7,6 +7,8 @@ public static class PaperTodoPermissionNames
     public const string SettingsRead = "settings.read";
     public const string SettingsUpdate = "settings.update";
     public const string PapersRead = "papers.read";
+    // Legacy listen-only grants remain valid for existing plugins. New plugins use *.read
+    // for both querying data and subscribing to change events.
     public const string PapersObserve = "papers.observe";
     public const string PapersCreate = "papers.create";
     public const string PapersDelete = "papers.delete";
@@ -53,8 +55,7 @@ public enum PaperTodoEventKind
     TodoCreated,
     TodoChanged,
     TodoDeleted,
-    NoteChanged,
-    TodoReminderTriggered
+    NoteChanged
 }
 
 public enum PaperTodoEventOrigin
@@ -170,16 +171,6 @@ public sealed record TodoDeletedEvent(
     TodoSnapshot Todo,
     PaperTodoEventMetadata EventMetadata)
     : PaperTodoEvent(PaperTodoEventKind.TodoDeleted, EventMetadata);
-
-/// <summary>
-/// API 2.2: emitted after the host surfaces a reminder through its normal delivery path.
-/// Live, best-effort notification only: no replay, acknowledgement or plugin-controlled delivery.
-/// Todo is an immutable snapshot of the triggered reminder; Metadata.Origin is System.
-/// </summary>
-public sealed record TodoReminderTriggeredEvent(
-    TodoSnapshot Todo,
-    PaperTodoEventMetadata EventMetadata)
-    : PaperTodoEvent(PaperTodoEventKind.TodoReminderTriggered, EventMetadata);
 
 public sealed record NoteChangedEvent(
     string PaperId,

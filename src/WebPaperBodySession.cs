@@ -910,7 +910,6 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
                 "todo.created" => PaperTodoEventKind.TodoCreated,
                 "todo.changed" => PaperTodoEventKind.TodoChanged,
                 "todo.deleted" => PaperTodoEventKind.TodoDeleted,
-                "todo.reminderTriggered" => PaperTodoEventKind.TodoReminderTriggered,
                 "note.changed" => PaperTodoEventKind.NoteChanged,
                 var unknown => throw new PaperTodoPluginException(
                     "invalid_params",

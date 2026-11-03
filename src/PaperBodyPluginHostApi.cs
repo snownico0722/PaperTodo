@@ -225,11 +225,13 @@ internal sealed partial class PaperBodyPluginHostApi : IPaperTodoHostApi, IPaper
         {
             throw Error(
                 "permission_denied",
-                "The plugin did not declare an observe permission.");
+                "The plugin needs a read permission (or a legacy observe grant) to subscribe.");
         }
         foreach (var kind in kinds)
         {
-            Require(ObservePermission(kind));
+            if (!CanSubscribeTo(kind))
+                throw Error("permission_denied",
+                    $"Subscription to '{kind}' requires the corresponding read permission (or legacy observe grant).");
         }
 
         var normalized = new PaperTodoEventFilter
@@ -280,7 +282,6 @@ internal sealed partial class PaperBodyPluginHostApi : IPaperTodoHostApi, IPaper
                 After = RedactTodo(item.After, canReadPapers, canReadTodos)
             },
             TodoDeletedEvent item => item with { Todo = RedactTodo(item.Todo, canReadPapers, canReadTodos) },
-            TodoReminderTriggeredEvent item => item with { Todo = RedactTodo(item.Todo, canReadPapers, canReadTodos) },
             NoteChangedEvent item when !canReadPapers => item with { PaperTitle = "" },
             _ => value
         };
@@ -335,40 +336,39 @@ internal sealed partial class PaperBodyPluginHostApi : IPaperTodoHostApi, IPaper
         }
     }
 
-    private static string ObservePermission(PaperTodoEventKind kind) => kind switch
+    private bool HasReadOrLegacyObserve(string read, string observe) =>
+        _permissions.Contains(read) || _permissions.Contains(observe);
+
+    private bool CanSubscribeTo(PaperTodoEventKind kind) => kind switch
     {
         PaperTodoEventKind.PaperCreated or
         PaperTodoEventKind.PaperChanged or
-        PaperTodoEventKind.PaperDeleted => PaperTodoPermissionNames.PapersObserve,
+        PaperTodoEventKind.PaperDeleted =>
+            HasReadOrLegacyObserve(PaperTodoPermissionNames.PapersRead, PaperTodoPermissionNames.PapersObserve),
         PaperTodoEventKind.TodoCreated or
         PaperTodoEventKind.TodoChanged or
-        PaperTodoEventKind.TodoReminderTriggered or
-        PaperTodoEventKind.TodoDeleted => PaperTodoPermissionNames.TodosObserve,
-        PaperTodoEventKind.NoteChanged => PaperTodoPermissionNames.NotesObserve,
+        PaperTodoEventKind.TodoDeleted =>
+            HasReadOrLegacyObserve(PaperTodoPermissionNames.TodosRead, PaperTodoPermissionNames.TodosObserve),
+        PaperTodoEventKind.NoteChanged =>
+            HasReadOrLegacyObserve(PaperTodoPermissionNames.NotesRead, PaperTodoPermissionNames.NotesObserve),
         _ => throw Error("invalid_params", "Unknown event kind.")
     };
 
     private HashSet<PaperTodoEventKind> DefaultObservableKinds()
     {
         var result = new HashSet<PaperTodoEventKind>();
-        if (_permissions.Contains(PaperTodoPermissionNames.PapersObserve))
-        {
+        if (HasReadOrLegacyObserve(PaperTodoPermissionNames.PapersRead, PaperTodoPermissionNames.PapersObserve))
             result.UnionWith([
                 PaperTodoEventKind.PaperCreated,
                 PaperTodoEventKind.PaperChanged,
                 PaperTodoEventKind.PaperDeleted]);
-        }
-        if (_permissions.Contains(PaperTodoPermissionNames.TodosObserve))
-        {
+        if (HasReadOrLegacyObserve(PaperTodoPermissionNames.TodosRead, PaperTodoPermissionNames.TodosObserve))
             result.UnionWith([
                 PaperTodoEventKind.TodoCreated,
                 PaperTodoEventKind.TodoChanged,
                 PaperTodoEventKind.TodoDeleted]);
-        }
-        if (_permissions.Contains(PaperTodoPermissionNames.NotesObserve))
-        {
+        if (HasReadOrLegacyObserve(PaperTodoPermissionNames.NotesRead, PaperTodoPermissionNames.NotesObserve))
             result.Add(PaperTodoEventKind.NoteChanged);
-        }
         return result;
     }
 
