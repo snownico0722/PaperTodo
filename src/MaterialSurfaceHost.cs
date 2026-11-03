@@ -29,8 +29,6 @@ internal sealed class MaterialSurfaceHost : IDisposable
     internal MaterialSurfaceHost(FrameworkElement surface, Action<MaterialHostChange> changed) =>
         (_surface, _changed) = (surface, changed);
     internal bool IsObserving => _source is { IsDisposed: false };
-    internal bool IsVisible => IsObserving && DesktopBackgroundCapture.IsVisible(_source!.Handle) &&
-        _opacityOwners.TrueForAll(element => element.Opacity >= .999 && element.IsVisible);
     internal IReadOnlyList<UIElement> OpacityOwners => _opacityOwners;
 
     internal void Observe(HwndSource? source)
