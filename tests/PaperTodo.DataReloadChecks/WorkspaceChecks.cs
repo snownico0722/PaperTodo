@@ -11,6 +11,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using PaperTodo;
+using PaperTodo.Plugin;
 
 internal static partial class Program
 {
