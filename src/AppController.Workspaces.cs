@@ -16,8 +16,10 @@ public sealed partial class AppController
     private bool _workspaceSwitching;
     private bool _workspaceClosingSurfaces;
     private long _workspaceGeneration;
+    private Guid _workspaceBindingId = Guid.NewGuid();
 
     internal long WorkspaceGeneration => Interlocked.Read(ref _workspaceGeneration);
+    internal string WorkspaceBindingToken => _workspaceBindingId.ToString("N");
     internal int WorkspaceNumber => _workspace.Paths.Number;
     internal WorkspaceConfiguration WorkspaceOptions => _workspaceCatalog.Options;
     internal bool FollowsMainWorkspaceSettings => _workspace.FollowsMain;
@@ -35,7 +37,6 @@ public sealed partial class AppController
         _store = _workspace.Store;
         State = _workspace.State;
         _imageStore = new NoteImageStore(_workspace.Paths.Images);
-        UiLanguages.ApplyWorkspacePreference(State.UiLanguage);
     }
 
     private void ValidateInitialWorkspaceImages()
@@ -176,7 +177,9 @@ public sealed partial class AppController
             // Complete/fence the source writer first. Candidate validation never overwrites it.
             CommitWorkspaceEditors();
             if (!TrySaveNow(sync: true, workspaceBoundary: true)) return false;
-            candidate = _workspaceCatalog.Open(number, nextOptions, allowCreate: true);
+            candidate = _workspaceCatalog.Open(number, nextOptions, allowCreate: true,
+                main: previous.Paths.Number == 1 ? previous.State : null,
+                current: number == previous.Paths.Number ? previous : null);
             if (number == previous.Paths.Number)
             {
                 // Toggling inheritance reloads software settings, not a second LMDB handle.
@@ -288,6 +291,7 @@ public sealed partial class AppController
         _startupShellPrewarmGeneration++;
         _pluginStartupPaperGeneration++;
         Interlocked.Increment(ref _workspaceGeneration);
+        _workspaceBindingId = Guid.NewGuid();
         // Complete an already committed response, but reject delayed old-workspace requests.
         // Each new workspace creates a command adapter bound to its own generation.
         _mcpApiHost?.StopAfterResponse();
