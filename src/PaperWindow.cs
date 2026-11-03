@@ -2252,9 +2252,10 @@ public sealed partial class PaperWindow : Window
             FontSize = TitleFontSize,
             MinHeight = TitleLineHeight + 1,
             FontWeight = TitleFontWeight,
-            // UTF-16 unit guard at the hard full-width cap (20). Commit still clamps to the
-            // user setting (2–20) via PaperTitles.CleanCustomTitle so IME is not rewritten mid-edit.
-            MaxLength = PaperTitles.MaxTitleLength,
+            // Keep a generous UTF-16 input guard against huge pastes without
+            // cutting off ordinary emoji sequences. The weighted title limit is
+            // applied on commit, after IME composition.
+            MaxLength = 4096,
             Padding = new Thickness(0),
             VerticalContentAlignment = VerticalAlignment.Center,
             FocusVisualStyle = null

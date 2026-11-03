@@ -632,7 +632,7 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
     <value>마우스를 올리면 기존처럼 늘어나지만 추가 영역은 닫기 버튼 없이 일반 캡슐 영역으로 동작합니다. 닫으려면 오른쪽 클릭 메뉴에서 '숨기기'를 사용하세요.</value>
   </data>
   <data name="TipMaxTitleLength" xml:space="preserve">
-    <value>종이 제목과 캡슐에 표시되는 최대 글자 수.</value>
+    <value>제목 길이는 전각 글자 기준입니다. 전각 1글자와 영문·숫자 등 반각 2글자를 같은 길이로 계산합니다. 제한을 낮추면 기존 제목도 잘립니다.</value>
   </data>
   <data name="TipStartup" xml:space="preserve">
     <value>Windows 시작 시 PaperTodo를 자동 실행합니다.</value>

@@ -619,7 +619,7 @@ About 5 full-width characters on one line, 10 on multiline.</value>
     <value>Edge capsules still extend on hover; the extra area acts like the main capsule without a close button. Use Hide in the context menu to close it.</value>
   </data>
   <data name="TipMaxTitleLength" xml:space="preserve">
-    <value>Max characters shown in paper titles and capsules.</value>
+    <value>Title length is measured in full-width characters; two half-width letters or digits count as one. Lowering the limit shortens existing titles.</value>
   </data>
   <data name="TipStartup" xml:space="preserve">
     <value>Start PaperTodo when Windows signs in.</value>

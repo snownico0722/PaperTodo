@@ -654,7 +654,7 @@
     <value>开启后仍会正常伸长；延长区域作为普通胶囊区域使用，不显示关闭按钮。需要关闭时可在右键菜单中选择「隐藏」。</value>
   </data>
   <data name="TipMaxTitleLength" xml:space="preserve">
-    <value>纸片标题与胶囊显示的最大字数。</value>
+    <value>标题按汉字长度计算：中文、全角字符算 1 字，英文、数字等半角字符算半字。调低上限会截短已有标题。</value>
   </data>
   <data name="TipStartup" xml:space="preserve">
     <value>开机时自动启动 PaperTodo。</value>

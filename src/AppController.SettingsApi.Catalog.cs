@@ -312,7 +312,7 @@ public sealed partial class AppController
             minimum: 2,
             maximum: 20,
             step: 1,
-            description: "Existing custom titles are shortened to this Unicode text-element limit.");
+            description: "Full-width character limit; two half-width characters count as one. Lowering it shortens existing custom titles.");
         yield return DefineSetting<int>("capsule.title_measure_limit",
             () => State.DeepCapsuleTitleMeasureCharacterLimit,
             value => State.DeepCapsuleTitleMeasureCharacterLimit = value,
