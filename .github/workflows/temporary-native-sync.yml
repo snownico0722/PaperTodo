@@ -1,0 +1,47 @@
+name: Temporary verified native plugin sync
+
+on:
+  push:
+    branches:
+      - feat/data-json-hot-reload-main-adapt
+      - feat/workspace-cycle-1016
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    if: contains(github.event.head_commit.message, '[sync-native]')
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          persist-credentials: true
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Rebuild delivered native plugins
+        run: |
+          Get-ChildItem plugin-samples -Recurse -Filter *.csproj | Sort-Object FullName | ForEach-Object {
+            ./plugin-samples/Build-And-Install-NativePlugin.ps1 -ProjectPath $_.FullName
+            if ($LASTEXITCODE -ne 0) { throw 'Native plugin build failed.' }
+          }
+          git add -- plugins
+          git diff --exit-code
+          if ($LASTEXITCODE -ne 0) { throw 'Unexpected unstaged modifications after native build.' }
+      - name: Commit generated native outputs
+        run: |
+          git diff --cached --quiet
+          if ($LASTEXITCODE -eq 0) { throw 'No generated native plugin output changed.' }
+          if ($LASTEXITCODE -ne 1) { throw 'Could not inspect generated plugin outputs.' }
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'build: refresh delivered native plugin outputs for explicit-only data operations'
+          if ($LASTEXITCODE -ne 0) { throw 'Could not commit regenerated plugin outputs.' }
+          git push origin HEAD:refs/heads/${{ github.ref_name }}
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot push generated outputs; branch changed.' }
