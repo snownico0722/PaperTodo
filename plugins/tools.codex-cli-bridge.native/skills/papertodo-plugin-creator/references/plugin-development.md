@@ -1320,3 +1320,22 @@ When starting a new plugin, copy the smallest structure from the sample closest 
 - Edge Mini does not depend on keyboard input;
 - declare only permissions / `runtime` that are actually needed;
 - 0↔1 Runtime ownership is correct when switching providers or deleting Papers; exiting PaperTodo fully removes Runtime and Global Top Bar contributions.
+
+## Explicit data.json reload (host 2.2 capability)
+
+Native Body/Runtime sessions use `Workspace.ReloadData()` and `Workspace.GetDataReloadStatus()`. Web Body/Mini/Runtime sessions use the Workspace bridge:
+
+Plugin calls to `ReloadData()` / `MergeData()` and Web `data.reload` / `data.merge` require the high-risk `data.import` permission in the plugin manifest. `data.status` remains readable without that grant. MCP continues to use its existing full-write gate.
+
+```js
+const result = await papertodo.workspace.request('data.reload', {});
+const status = await papertodo.workspace.request('data.status', {});
+```
+
+MCP exposes explicit `reload_data` and three-way `merge_data` (both require full writes), plus read-only `get_data_reload_status`. No file watcher, polling, revision history or normal-autosave fingerprint comparison is installed. Ordinary saves can overwrite external file edits until a deliberate reload/merge. Explicit requests fence obsolete queued saves; system termination still blocks new storage writes.
+
+Default `reload_data` adopts the validated current `data.json` as authoritative and may replace unsaved changes. For three-way merge, preserve the complete original JSON read **before editing**, then supply it to MCP `merge_data(baseline_json: originalJson)`, Native `Workspace.MergeData(originalJson)`, or Web `papertodo.workspace.request('data.merge', { baselineJson: originalJson })`. The argument is the original JSON string, not a path or a subsequently saved version. **Missing, blank, or invalid baselines return `invalid`**, even when current and disk states are equal. True conflicts obey `general.data_merge_conflicts` (`ask`, `external`, `internal`), affecting only conflicting values. Content merges at field level, not by lines. MCP retains the serialized request size limit of 8,000,000 characters; larger snapshots should use Native integration or domain APIs.
+
+On resolution, the host verifies that the external input has not changed, archives conflicting input, and commits through its atomic writer before applying the result. If the source changes during review, the merge aborts without installing the stale result. A queued merge returns `Outcome: pending` and `Applied: false`; query `get_data_reload_status` until `IsReloading` is false for its final outcome. The originating paper session may be released after reconciliation. This is not plugin-code hot reload. Prefer domain APIs for ordinary Todo/Note edits.
+
+See `doc/ARCHITECTURE.md` and D-060/061/063; D-062's regular-save file-monitoring policy was superseded. Shutdown/crash/passive disposal does not run a final save; explicit user exit is canceled if required writes fail.

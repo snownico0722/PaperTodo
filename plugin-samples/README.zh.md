@@ -1322,3 +1322,15 @@ Native 插件是 fully trusted / unsandboxed .NET/WPF 代码，与 PaperTodo 当
 - Edge Mini 不依赖键盘输入；
 - 只声明实际需要的 permissions / `runtime`；
 - 切换 provider、删除 paper 时 0↔1 Runtime ownership 正确；退出 PaperTodo 后 Runtime 与 Global Top Bar 完整撤销。
+
+## data.json 显式重载（宿主 2.2 能力）
+
+Native Body / Runtime 使用 `Workspace.ReloadData()` / `Workspace.GetDataReloadStatus()`；Web Body / Mini / Runtime 使用 `papertodo.workspace.request('data.reload', {})` 和 `papertodo.workspace.request('data.status', {})`。MCP 工具对应 `reload_data`（需要完整写入权限）和只读的 `get_data_reload_status`。
+
+插件侧调用 `ReloadData()` / `MergeData()` 或 Web 的 `data.reload` / `data.merge` 必须在插件清单声明高权限 `data.import`；`data.status` 无需此权限。MCP 仍使用原有完整写入权限控制。
+
+宿主**不监听或轮询磁盘文件，也不在普通自动保存时比较外部文件指纹**。`reload_data` 主动接受校验后的活动工作区数据，可能覆盖尚未保存的内存修改；无效或缺失输入直接报告错误。没有显式请求时，普通保存保持原行为，可能覆盖外部编辑。显式重载会使此前已排队的旧保存失效，关机/崩溃仍不会执行最后强存。
+
+可选的 `merge_data`（需要 MCP 完整写入权限）仅提供**有真实原始基线的三方合并**。外部工具必须保留开始编辑时实际读到的完整 JSON，传给 MCP `merge_data(baseline_json: originalJson)`、Native `Workspace.MergeData(originalJson)` 或 Web `papertodo.workspace.request('data.merge', { baselineJson: originalJson })`；参数是 JSON 字符串，不是路径或后来重新读取的文件。缺少、空白或无效的基线一律返回 `invalid`，不存在两方整份选择。`general.data_merge_conflicts` 的 `ask`（默认）、`external`（外部优先）、`internal`（内部优先）只处理真正冲突的字段，保留其他独立修改；正文按字段而不是逐行合并。MCP 的请求仍受 8,000,000 字符上限约束。
+
+对真正的三方冲突选择后，宿主会核对本次读取的外部文件未再次变化，再通过原子写入器提交；冲突归档在提交前完成。合并操作返回 `pending` 时通过 `get_data_reload_status` 查询最终结果；请求失败不改变已验证的内存状态，也不额外暂停普通保存。无插件 DLL 热替换；正常 Todo / Note 编辑仍优先用领域 API。技术选型见 D-060、D-061 和 D-063；D-062 中关于普通保存暂停/指纹的选择已废止。系统终止不执行最后保存，普通用户主动退出若必要保存失败则取消退出。

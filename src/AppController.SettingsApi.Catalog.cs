@@ -14,6 +14,12 @@ public sealed partial class AppController
             title: Strings.Get("SettingsUiLanguage"),
             options: ["system", "zh-CN", "en-US", "ja-JP", "ko-KR"],
             requiresRestart: true);
+        yield return DefineSetting<string>("general.data_merge_conflicts",
+            () => DataMergeConflictPolicies.Normalize(State.DataMergeConflictPolicy),
+            value => State.DataMergeConflictPolicy = value,
+            title: Strings.Get("SettingsDataMergeConflicts"),
+            options: [DataMergeConflictPolicies.Ask, DataMergeConflictPolicies.External, DataMergeConflictPolicies.Internal],
+            description: Strings.Get("TipDataMergeConflicts"));
         yield return DefineSetting<bool>("general.advanced_settings",
             () => State.AdvancedSettingsMode,
             value => State.AdvancedSettingsMode = value,

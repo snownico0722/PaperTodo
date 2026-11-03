@@ -6,9 +6,9 @@ using System.Threading.Tasks;
 
 namespace PaperTodo;
 
-public sealed class StateStore
+public sealed partial class StateStore
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerOptions.Strict)
+    internal static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerOptions.Strict)
     {
         WriteIndented = true,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -46,12 +46,16 @@ public sealed class StateStore
     public AppState Load()
     {
         ClearRecoveredLoadPreservationState();
-
-        bool mainExists = File.Exists(FilePath);
-        bool backupExists = File.Exists(BackupPath);
+        bool mainExists = FileExistsForCollection(FilePath);
+        bool backupExists = FileExistsForCollection(BackupPath);
 
         if (!mainExists && !backupExists)
         {
+            // A killed first write may leave the only user data in its temp file.
+            // Do not promote an uncommitted temp, but do not silently start an empty
+            // document that would overwrite it on the next ordinary save either.
+            if (FileExistsForCollection(FilePath + ".tmp") || FileExistsForCollection(BackupPath + ".tmp"))
+                throw new InvalidDataException(Strings.Get("StateLoadFailed"));
             return new AppState();
         }
 
@@ -60,8 +64,9 @@ public sealed class StateStore
         {
             try
             {
-                var json = File.ReadAllText(FilePath);
-                var state = JsonSerializer.Deserialize<AppState>(json, JsonOptions);
+                var primaryBytes = File.ReadAllBytes(FilePath);
+                var json = DecodeStateBytes(primaryBytes);
+                var state = ReadCoreState(json);
                 if (state != null)
                 {
                     MigrateLegacyTopBarSettings(state, json);
@@ -83,7 +88,7 @@ public sealed class StateStore
             try
             {
                 var json = File.ReadAllText(BackupPath);
-                var state = JsonSerializer.Deserialize<AppState>(json, JsonOptions);
+                var state = ReadCoreState(json);
                 if (state != null)
                 {
                     if (mainExists)
@@ -119,7 +124,7 @@ public sealed class StateStore
         {
             // The failed primary has not been copied to its recovery path yet. Until the first
             // successful save completes, no image can be proven unreachable.
-            if (_preserveRecoveredLoadFilesOnNextSave ||
+            if (WriteLifetime.IsStopped || _preserveRecoveredLoadFilesOnNextSave ||
                 !TryAddImageReferences(currentState, protectedImageIds))
             {
                 protectedImageIds.Clear();
@@ -128,6 +133,7 @@ public sealed class StateStore
 
             var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var hasPersistedState = FileExistsForCollection(FilePath);
+            AddIfExists(paths, FilePath);
             AddIfExists(paths, BackupPath);
             AddIfExists(paths, FilePath + ".tmp");
 
@@ -145,6 +151,13 @@ public sealed class StateStore
             {
                 paths.Add(path);
             }
+            // Recovery includes rejected local/baseline values, not just the external file.
+            // Half-written archives also disable GC until they can be inspected safely.
+            foreach (var path in Directory.EnumerateFiles(directory, "dataconflict-" + "*.json*"))
+            {
+                if (path.EndsWith(".json", StringComparison.OrdinalIgnoreCase) ||
+                    path.EndsWith(".json.tmp", StringComparison.OrdinalIgnoreCase)) paths.Add(path);
+            }
 
             hasPersistedState |= paths.Count > 0;
             if (!hasPersistedState)
@@ -156,6 +169,23 @@ public sealed class StateStore
             foreach (var path in paths)
             {
                 var json = File.ReadAllText(path);
+                var isDiff = path.EndsWith(".diff.json", StringComparison.OrdinalIgnoreCase) ||
+                    path.EndsWith(".diff.json.tmp", StringComparison.OrdinalIgnoreCase);
+                if (isDiff)
+                {
+                    if (TryAddConflictImageReferences(json, protectedImageIds)) continue;
+                    protectedImageIds.Clear();
+                    return false;
+                }
+                // Deserializing {} must not turn an incomplete snapshot into "no images".
+                var root = System.Text.Json.Nodes.JsonNode.Parse(json,
+                    documentOptions: StateJsonReadPolicy.DocumentOptions);
+                if (root is not System.Text.Json.Nodes.JsonObject obj ||
+                    obj["papers"] is not System.Text.Json.Nodes.JsonArray)
+                {
+                    protectedImageIds.Clear();
+                    return false;
+                }
                 var snapshot = JsonSerializer.Deserialize<AppState>(json, JsonOptions);
                 if (snapshot == null || !TryAddImageReferences(snapshot, protectedImageIds))
                 {
@@ -242,6 +272,7 @@ public sealed class StateStore
         _writeLock.Wait();
         try
         {
+            WriteLifetime.ThrowIfStopped();
             if (version < _latestWrittenVersion)
             {
                 return;
@@ -260,6 +291,7 @@ public sealed class StateStore
         await _writeLock.WaitAsync();
         try
         {
+            WriteLifetime.ThrowIfStopped();
             if (version < _latestWrittenVersion)
             {
                 return;
@@ -278,42 +310,43 @@ public sealed class StateStore
         _writeLock.Wait();
         try
         {
-            // If startup recovered from backup, keep both recovery sources untouched until a
-            // successful normal save has preserved them under timestamped recovery names.
+            WriteLifetime.ThrowIfStopped();
+            // A recovered startup state must preserve its source files on its first save.
             if (_preserveRecoveredLoadFilesOnNextSave ||
                 !TryReadValidatedStateBytes(FilePath, out var primaryBytes))
-            {
                 return false;
-            }
 
             if (TryReadValidatedStateBytes(BackupPath, out var backupBytes) &&
                 primaryBytes.AsSpan().SequenceEqual(backupBytes))
-            {
                 return true;
-            }
 
             _atomicWriter.Write(
                 BackupPath,
                 primaryBytes,
                 tempPath =>
                     TryReadValidatedStateBytes(tempPath, out var writtenBytes) &&
-                    primaryBytes.AsSpan().SequenceEqual(writtenBytes));
+                    primaryBytes.AsSpan().SequenceEqual(writtenBytes),
+                beforeReplace: WriteLifetime.ThrowIfStopped);
             return true;
         }
         catch
         {
             return false;
         }
-        finally
-        {
-            _writeLock.Release();
-        }
+        finally { _writeLock.Release(); }
     }
 
-    private void WriteJsonInternal(string json)
+    private void WriteJsonInternal(string json, Action? beforeReplace = null)
     {
-        var preserveRecoverySources = PreserveRecoveredLoadFilesIfNeeded();
-        _atomicWriter.Write(FilePath, Encoding.UTF8.GetBytes(json));
+        void ValidateWrite()
+        {
+            WriteLifetime.ThrowIfStopped();
+            beforeReplace?.Invoke();
+        }
+        ValidateWrite();
+        var preserveRecoverySources = PreserveRecoveredLoadFilesIfNeeded(ValidateWrite);
+        var bytes = Encoding.UTF8.GetBytes(json);
+        _atomicWriter.Write(FilePath, bytes, beforeReplace: ValidateWrite);
 
         if (preserveRecoverySources)
         {
@@ -337,7 +370,7 @@ public sealed class StateStore
                 return false;
             }
 
-            var state = JsonSerializer.Deserialize<AppState>(bytes, JsonOptions);
+            var state = ReadCoreState(DecodeStateBytes(bytes));
             if (state == null)
             {
                 return false;
@@ -353,7 +386,7 @@ public sealed class StateStore
         }
     }
 
-    private bool PreserveRecoveredLoadFilesIfNeeded()
+    private bool PreserveRecoveredLoadFilesIfNeeded(Action validateWrite)
     {
         if (!_preserveRecoveredLoadFilesOnNextSave)
         {
@@ -362,20 +395,21 @@ public sealed class StateStore
 
         if (File.Exists(FilePath) && string.IsNullOrWhiteSpace(_preservedFailedPrimaryPath))
         {
-            _preservedFailedPrimaryPath = CopyRecoverySource(FilePath, "failed_load");
+            _preservedFailedPrimaryPath = CopyRecoverySource(FilePath, "failed_load", validateWrite);
         }
 
         if (File.Exists(BackupPath) && string.IsNullOrWhiteSpace(_preservedRecoveryBackupPath))
         {
-            _preservedRecoveryBackupPath = CopyRecoverySource(BackupPath, "used_for_recovery");
+            _preservedRecoveryBackupPath = CopyRecoverySource(BackupPath, "used_for_recovery", validateWrite);
         }
 
         return true;
     }
 
-    private static string CopyRecoverySource(string sourcePath, string suffix)
+    private static string CopyRecoverySource(string sourcePath, string suffix, Action validateWrite)
     {
         var targetPath = UniqueRecoveryCopyPath(sourcePath, suffix);
+        validateWrite();
         File.Copy(sourcePath, targetPath, overwrite: false);
         return targetPath;
     }
@@ -550,6 +584,7 @@ public sealed class StateStore
         }
 
         state.UiLanguage = UiLanguages.Normalize(state.UiLanguage);
+        state.DataMergeConflictPolicy = DataMergeConflictPolicies.Normalize(state.DataMergeConflictPolicy);
         state.PaperSkin = PaperSkins.Resolve(state);
         state.ColorScheme = ColorSchemes.Normalize(state.ColorScheme);
         state.MicaBackdropType = MicaBackdropTypes.Normalize(state.MicaBackdropType);
