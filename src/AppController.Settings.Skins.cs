@@ -61,7 +61,7 @@ public sealed partial class AppController
         if (PaperSkins.UsesNativeBackdrop(skin))
         {
             panel.Children.Add(SettingsFieldLabel(SettingsSidebarLocalized(
-                "材质透明度", "Material transparency", "素材の透明度", "재질 투명도")));
+                "展开纸片材质透明度", "Expanded paper material transparency", "展開した紙片の素材透明度", "펼친 메모의 재질 투명도")));
             panel.Children.Add(CreateSegmentSelector(
                 [
                     (MaterialTransparencyLevels.VeryLow, SettingsSidebarLocalized("最低", "Very low", "最低", "매우 낮음")),
