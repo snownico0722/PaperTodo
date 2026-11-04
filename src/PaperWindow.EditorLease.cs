@@ -54,6 +54,8 @@ public sealed partial class PaperWindow
             destination.Child = _shell;
             host.Deactivated += OnExpandedEditorHostDeactivated;
             host.StateChanged += OnExpandedEditorHostStateChanged;
+            host.LocationChanged += OnExpandedEditorHostLocationChanged;
+            host.SizeChanged += OnExpandedEditorHostSizeChanged;
             IsVisibleChanged += OnExpandedEditorOwnerVisibilityChanged;
             NotifyCurrentPaperBodyVisibility(true);
             RefreshExpandedEditorPresentation();
@@ -130,6 +132,12 @@ public sealed partial class PaperWindow
     private void OnExpandedEditorBodyGotFocus(object sender, KeyboardFocusChangedEventArgs e)
         => NotifyCurrentPaperBodyActivated();
 
+    private void OnExpandedEditorHostLocationChanged(object? sender, EventArgs e)
+        => RepositionBuiltInFindPopup();
+
+    private void OnExpandedEditorHostSizeChanged(object? sender, SizeChangedEventArgs e)
+        => RepositionBuiltInFindPopup();
+
     private void OnExpandedEditorHostDeactivated(object? sender, EventArgs e)
     {
         NotifyCurrentPaperBodyDeactivated();
@@ -179,9 +187,12 @@ public sealed partial class PaperWindow
             _owner = null;
 
             owner.CommitPendingEditsForSave();
+            owner.HideBuiltInFind(restoreFocus: false);
             owner.AbortAllInteractions(InteractionAbortReason.FormChanging);
             _host.Deactivated -= owner.OnExpandedEditorHostDeactivated;
             _host.StateChanged -= owner.OnExpandedEditorHostStateChanged;
+            _host.LocationChanged -= owner.OnExpandedEditorHostLocationChanged;
+            _host.SizeChanged -= owner.OnExpandedEditorHostSizeChanged;
             owner.IsVisibleChanged -= owner.OnExpandedEditorOwnerVisibilityChanged;
             owner.HookExpandedEditorInput(false);
             if (ReferenceEquals(_destination.Child, owner._shell))
