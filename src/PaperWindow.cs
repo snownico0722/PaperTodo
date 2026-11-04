@@ -707,7 +707,6 @@ public sealed partial class PaperWindow : Window
             EnsureShellBuilt();
         }
 
-        IsVisibleChanged += (_, _) => OnExpandedEditorVisibilityChanged();
         Loaded += (_, _) =>
         {
             SaveGeometryIfAllowed();
@@ -766,6 +765,7 @@ public sealed partial class PaperWindow : Window
         };
         Deactivated += (_, _) =>
         {
+            if (IsExpandedEditorHosted) return;
             var suppressAutoCollapse = HasExperimentalAutoCollapseBlocker();
             NotifyCurrentPaperBodyDeactivated();
             AbortAllInteractions(InteractionAbortReason.Deactivated);
@@ -842,7 +842,7 @@ public sealed partial class PaperWindow : Window
 
     public void UpdateWindowSwitcherVisibility()
     {
-        if (_controller.State.HidePapersFromWindowSwitcher && !_isExpandedEditorMode)
+        if (_controller.State.HidePapersFromWindowSwitcher || IsExpandedEditorHosted)
         {
             WindowNative.ApplyWindowSwitcherVisibility(
                 this,
@@ -864,7 +864,7 @@ public sealed partial class PaperWindow : Window
 
     public void UpdateTaskbarVisibility(bool reapplyShellState = false)
     {
-        var shouldShow = ShouldShowInTaskbar();
+        var shouldShow = ShouldShowInTaskbar() && !IsExpandedEditorHosted;
         if (reapplyShellState && !shouldShow && !ShowInTaskbar)
         {
             ShowInTaskbar = true;
@@ -875,7 +875,7 @@ public sealed partial class PaperWindow : Window
 
     public void ApplySystemVisibility(bool reapplyTaskbarShellState = false)
     {
-        if (_controller.State.HidePapersFromWindowSwitcher && !_isExpandedEditorMode)
+        if (_controller.State.HidePapersFromWindowSwitcher || IsExpandedEditorHosted)
         {
             UpdateTaskbarVisibility(reapplyTaskbarShellState);
             UpdateWindowSwitcherVisibility();
@@ -900,8 +900,8 @@ public sealed partial class PaperWindow : Window
 
     private bool ShouldShowInTaskbar(bool? collapsed = null)
     {
-        return (_isExpandedEditorMode || !_controller.State.HidePapersFromWindowSwitcher) &&
-            (_isExpandedEditorMode || !_controller.State.HidePapersFromTaskbar) &&
+        return !_controller.State.HidePapersFromWindowSwitcher &&
+            !_controller.State.HidePapersFromTaskbar &&
             !(collapsed ?? _paper.IsCollapsed);
     }
 
@@ -2039,6 +2039,16 @@ public sealed partial class PaperWindow : Window
 
     private void BeginTitleBarDragGesture(FrameworkElement dragSource, MouseButtonEventArgs e)
     {
+        if (_expandedEditorHostWindow is { } editor)
+        {
+            if (e.ChangedButton == MouseButton.Left)
+            {
+                if (e.ClickCount == 2) editor.ToggleMaximized();
+                else editor.DragMove();
+                e.Handled = true;
+            }
+            return;
+        }
         if (e.ChangedButton != MouseButton.Left)
         {
             return;
@@ -2067,6 +2077,7 @@ public sealed partial class PaperWindow : Window
 
     private void UpdateTitleBarDragGesture(FrameworkElement dragSource, MouseEventArgs e)
     {
+        if (IsExpandedEditorHosted) return;
         var session = _titleBarDragSession;
         if (session == null || !ReferenceEquals(session.Source, dragSource))
         {
@@ -2369,7 +2380,7 @@ public sealed partial class PaperWindow : Window
         _closeButton.Margin = new Thickness(AppTypography.Scale(1), -AppTypography.Scale(0.6), AppTypography.Scale(1), AppTypography.Scale(0.6));
         _closeButton.Click += (_, _) =>
         {
-            if (_isExpandedEditorMode) ReturnFromExpandedEditor();
+            if (_isExpandedEditorMode) _expandedEditorHostWindow?.ReturnToPaper();
             if (CanDisplayAsCapsule())
             {
                 SetCollapsedState(true);
@@ -2878,6 +2889,7 @@ public sealed partial class PaperWindow : Window
     {
         var title = _controller.PaperDisplayTitle(_paper);
         Title = title;
+        _expandedEditorHostWindow?.RefreshPaperTitle(this);
 
         if (_titleText != null)
         {
