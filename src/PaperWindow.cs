@@ -2448,11 +2448,19 @@ public sealed partial class PaperWindow : Window
             var titleMinWidth = Math.Max(_topBarTitleHost.MinWidth,
                 titleChildMin + _topBarTitleHost.Padding.Left + _topBarTitleHost.Padding.Right) +
                 _topBarTitleHost.Margin.Left + _topBarTitleHost.Margin.Right;
+            // New editor chrome must never displace the user's existing pinned controls.
+            // On a small paper the editor entry may overflow into the existing more menu.
+            var editorChromeWidth = _isExpandedEditorMode
+                ? (_editorModeButton == null ? 0 : TopBarOuterWidth(_editorModeButton)) +
+                    (_editorSidebarButton == null ? 0 : TopBarOuterWidth(_editorSidebarButton)) +
+                    (_editorMinimizeButton == null ? 0 : TopBarOuterWidth(_editorMinimizeButton)) +
+                    (_editorMaximizeButton == null ? 0 : TopBarOuterWidth(_editorMaximizeButton)) +
+                    (_editorCloseButton == null ? 0 : TopBarOuterWidth(_editorCloseButton))
+                : 0;
             var fixedWidth = TopBarOuterWidth(_paperIconButton) +
                 TopBarOuterWidth(_moreActionsButton) +
-                TopBarOuterWidth(_closeButton) + WorkspacePersistentButtonWidth() +
-                (_editorModeButton == null ? 0 : TopBarOuterWidth(_editorModeButton)) +
-                (_isExpandedEditorMode ? 4 * 25 : 0) + TopBarCollisionGap;
+                TopBarOuterWidth(_closeButton) +
+                WorkspacePersistentButtonWidth() + editorChromeWidth + TopBarCollisionGap;
             var remaining = Math.Max(0, availableWidth - fixedWidth - titleMinWidth);
 
             // Built-in user shortcuts are atomic. Saved order affects placement,
@@ -2487,6 +2495,17 @@ public sealed partial class PaperWindow : Window
                     _pluginTopBarLabelsHost.Children.Count > 0 &&
                     groupFits &&
                     TopBarOuterWidth(_pluginTopBarLabelsHost) <= remaining
+                        ? Visibility.Visible : Visibility.Collapsed;
+
+            // The optional editor entry gets only genuine spare width, after the
+            // existing pinned shortcuts and plugin contributions have been fitted.
+            if (_editorModeButton != null)
+                _editorModeButton.Visibility = _isExpandedEditorMode ||
+                    (groupFits &&
+                     TopBarOuterWidth(_editorModeButton) <=
+                         remaining - (_pluginTopBarLabelsHost?.Visibility == Visibility.Visible
+                             ? TopBarOuterWidth(_pluginTopBarLabelsHost)
+                             : 0))
                         ? Visibility.Visible : Visibility.Collapsed;
 
             var hideTitle = availableWidth < fixedWidth + titleMinWidth;
