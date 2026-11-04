@@ -36,6 +36,8 @@ public sealed partial class PaperWindow
         CancelNotePresenterDeferredWork();
         _cancelNotePresenterInteractions = null;
         _showNotePreview = null;
+        _enterCurrentNoteEditor = null;
+        _noteEditorImageAction = null;
         _notePreviewContextMenu = null;
         return ++_notePresenterGeneration;
     }
@@ -95,7 +97,7 @@ public sealed partial class PaperWindow
 
     private void ExitNoteEditor()
     {
-        if (_paper.Type != PaperTypes.Note || _noteBox == null)
+        if (_paper.Type != PaperTypes.Note || _noteBox == null || _isExpandedEditorMode)
         {
             return;
         }
@@ -300,6 +302,24 @@ public sealed partial class PaperWindow
             }
             TraceNoteRender($"ShowEditor after focus={focus} isPreviewing={isPreviewing} boxPreview={box.IsPreviewMode} focused={box.IsKeyboardFocusWithin}");
         }
+
+        _enterCurrentNoteEditor = () => ShowEditor();
+        _noteEditorImageAction = () =>
+        {
+            isOpeningImagePicker = true;
+            try
+            {
+                ShowEditor(focus: false);
+                var paths = SelectImagesFromFilePicker();
+                if (paths.Length > 0 && IsCurrentPresenter())
+                    InsertImageFiles(box, paths);
+            }
+            finally
+            {
+                isOpeningImagePicker = false;
+                ShowEditor();
+            }
+        };
 
         void ShowEditorAtPreviewPoint(
             Point previewPoint,
@@ -849,7 +869,7 @@ public sealed partial class PaperWindow
 
         editorMenu.Closed += (_, _) =>
         {
-            if (!isOpeningImagePicker &&
+            if (!isOpeningImagePicker && !_isExpandedEditorMode &&
                 !isPreviewing &&
                 !box.IsFocused &&
                 !box.IsKeyboardFocusWithin)
@@ -858,7 +878,7 @@ public sealed partial class PaperWindow
             }
         };
 
-        if (box.IsFocused || string.IsNullOrEmpty(box.Text))
+        if (_isExpandedEditorMode || box.IsFocused || string.IsNullOrEmpty(box.Text))
         {
             ShowEditor();
         }
