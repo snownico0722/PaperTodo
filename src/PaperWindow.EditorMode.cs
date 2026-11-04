@@ -294,6 +294,7 @@ public sealed partial class PaperWindow
             Activate();
             return;
         }
+        restoreCollapsedPaper |= _paper.IsCollapsed;
         if (_paper.IsCollapsed)
             SetCollapsedState(false, animate: false, saveGeometry: false);
         EnsureShellBuilt();
