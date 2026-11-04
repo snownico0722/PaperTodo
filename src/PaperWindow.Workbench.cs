@@ -123,12 +123,14 @@ public sealed partial class PaperWindow
         private PaperWindow? _owner;
         private readonly Decorator _destination;
         private readonly bool _desktopWasVisible;
+        private readonly bool _paperWasVisibleOnDesktop;
         private readonly Visibility _topBarVisibility;
         internal Window Window { get; }
         internal WorkbenchBodyLease(PaperWindow owner, Window window, Decorator destination)
         {
             _owner = owner; Window = window; _destination = destination;
             _desktopWasVisible = owner.IsVisible;
+            _paperWasVisibleOnDesktop = owner._paper.IsVisible;
             _topBarVisibility = owner._topBarHost?.Visibility ?? Visibility.Visible;
         }
         internal void Return(bool restoreDesktop)
@@ -150,7 +152,8 @@ public sealed partial class PaperWindow
             owner._shell.Visibility = owner._paper.IsCollapsed ? Visibility.Collapsed : Visibility.Visible;
             owner._shell.Opacity = owner._paper.IsCollapsed ? 0 : 1;
             owner.SyncNoteImagePresentationState();
-            if (restoreDesktop && _desktopWasVisible && owner._paper.IsVisible && !owner.IsClosed)
+            if (restoreDesktop && owner._paper.IsVisible && !owner.IsClosed &&
+                (_desktopWasVisible || !_paperWasVisibleOnDesktop && !owner._paper.IsCollapsed))
             {
                 var showActivated = owner.ShowActivated;
                 owner.ShowActivated = false;
