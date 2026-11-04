@@ -22,11 +22,17 @@ internal static partial class Program
         "#B07A31", "#807050", "Segoe UI", 1);
 
     [STAThread]
-    private static int Main()
+    private static int Main(string[] args)
     {
         _ = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
         var checks = new (string Name, Action Run)[]
         {
+            ("reminder-due-and-delivery-policy", ReminderPolicy),
+            ("reminder-five-second-notice-and-suppression", ReminderAdvance),
+            ("reminder-snapshots-events-permissions-and-lifetime", ReminderEvents),
+            ("reminder-batch-reentrancy-and-state-diff", ReminderReentrancy),
+            ("reminder-web-runtime-routing-and-document-cleanup", ReminderWebRuntime),
+            ("reminder-web-runtime-js-subscription-lifecycle", ReminderWebBridge),
             ("note-image-permissions-ownership-independent-bytes-limits", AssetReads),
             ("plain-menu-order-replacement-and-revocation", PaperActions),
             ("menu-adapter-permissions-and-cleanup", PaperActionAdapter),
@@ -41,6 +47,8 @@ internal static partial class Program
             ("shared-web-process-recovery-classification", ProcessFailures),
             ("popup-js-bridge-read-only-images-and-messages", WebBridge)
         };
+        if (args.Contains("--reminders-only"))
+            checks = checks.Where(check => check.Name.StartsWith("reminder-", StringComparison.Ordinal)).ToArray();
         var failed = 0;
         foreach (var (name, run) in checks)
         {

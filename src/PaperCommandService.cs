@@ -884,13 +884,15 @@ internal sealed partial class PaperCommandService
             throw Error("invalid_params", $"{name} cannot be empty.");
         }
         var tooLong = string.Equals(name, "title", StringComparison.Ordinal)
-            ? PaperTitles.ExceedsTextElementLimit(text, maxLength)
+            ? PaperTitles.ExceedsTitleLengthLimit(text, maxLength)
             : text.Length > maxLength;
         if (tooLong)
         {
             throw Error(
                 "invalid_params",
-                $"{name} cannot exceed {maxLength} characters.");
+                string.Equals(name, "title", StringComparison.Ordinal)
+                    ? $"{name} cannot exceed {maxLength} full-width characters (two half-width characters count as one)."
+                    : $"{name} cannot exceed {maxLength} characters.");
         }
         return text;
     }

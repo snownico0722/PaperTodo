@@ -236,6 +236,12 @@ internal static partial class Program
             "projection lost content or wrote a second catalog");
         session.Store.SaveJsonSync(projected.ToJsonString(), 4);
         var independent = catalog.Options.Normalized(); independent.FollowMainSettings[2] = false;
+        var (preview, effectiveSettings) = catalog.PreviewSettingsChange(session, independent);
+        var effective = new AppState();
+        effectiveSettings.ApplyTo(effective);
+        Require(ReferenceEquals(preview.State, session.State) && !preview.FollowsMain &&
+                effective.Theme == "light" && !effective.McpEnabled,
+            "changing inheritance duplicated the live workspace or lost its independent preferences");
         var next = catalog.Open(2, independent);
         next.BindPersistence();
         Require(next.State.Theme == "light" && !next.State.McpEnabled && !next.FollowsMain,
@@ -243,6 +249,17 @@ internal static partial class Program
         var newSlot = catalog.Open(3, catalog.Options);
         Require(newSlot.State.Papers.Count == 1 && newSlot.State.Papers[0].Content.Length == 0 &&
             newSlot.State.Papers[0].Id != main.Papers[0].Id, "new workspace copied main content");
+        // New slots always start with main settings, even when they are
+        // immediately independent and are entered from another secondary slot.
+        var independentNew = catalog.Options.Normalized();
+        independentNew.FollowMainSettings[3] = false;
+        var fromMain = catalog.Open(3, independentNew, main);
+        var fromSecondary = catalog.Open(3, independentNew);
+        Require(!fromMain.FollowsMain && !fromSecondary.FollowsMain &&
+                fromMain.State.Theme == "dark" && fromSecondary.State.Theme == "dark" &&
+                fromMain.State.MaxTitleLength == 20 && fromSecondary.State.MaxTitleLength == 20 &&
+                fromMain.State.McpEnabled && fromSecondary.State.McpEnabled,
+            "independent new slot did not use consistent main-workspace initial settings");
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
@@ -707,15 +724,77 @@ internal static partial class Program
             controller.SaveNow(sync: true);
             Require(Str(J(File.ReadAllText(store2.FilePath))["theme"]) == "light", "inherited settings saved over dormant settings");
 
+            // Catalog-only edits must not flush the active secondary's core data.
+            var secondaryStore = Field<WorkspaceCatalog>(controller, "_workspaceCatalog").StoreFor(2);
+            var secondaryWriterField = typeof(StateStore).GetField("_atomicWriter",
+                BindingFlags.Instance | BindingFlags.NonPublic)!;
+            var originalSecondaryWriter = (IDurableAtomicFileWriter)secondaryWriterField.GetValue(secondaryStore)!;
+            var beforeCatalogEdit = File.ReadAllBytes(store2.FilePath);
+            var earlierCount = controller.WorkspaceOptions.Count;
+            try
+            {
+                secondaryWriterField.SetValue(secondaryStore, new DurableAtomicFileWriter((stage, path) =>
+                {
+                    if (stage == DurableAtomicWriteStage.BeforeTempOpen && path == secondaryStore.FilePath)
+                        throw new IOException("Catalog update must not save secondary content.");
+                }));
+                var newCount = controller.WorkspaceOptions.Normalized();
+                newCount.Count = earlierCount == 5 ? 4 : 5;
+                Require(await controller.ChangeWorkspaceConfigurationAsync(newCount),
+                    "secondary catalog-only update triggered a secondary save");
+                Require(File.ReadAllBytes(store2.FilePath).SequenceEqual(beforeCatalogEdit),
+                    "secondary catalog-only update unexpectedly modified its document");
+            }
+            finally { secondaryWriterField.SetValue(secondaryStore, originalSecondaryWriter); }
+            var restoredCount = controller.WorkspaceOptions.Normalized();
+            restoredCount.Count = earlierCount;
+            Require(await controller.ChangeWorkspaceConfigurationAsync(restoredCount),
+                "secondary catalog-only restoration failed");
+
+            // A follow toggle changes only the effective software settings. It must not
+            // destroy editors, image handles, plugin state or the workspace binding.
+            var followingWindow = windows["note-a"];
+            var followingState = controller.State;
+            var followingImages = controller.ImageStore;
+            var followingPluginData = controller.PaperBodyPlugins.DataStore;
+            var followingBinding = controller.WorkspaceBindingToken;
             var independent = controller.WorkspaceOptions.Normalized(); independent.FollowMainSettings[2] = false;
             Require(await controller.ChangeWorkspaceConfigurationAsync(independent), "unfollow failed");
+            Require(ReferenceEquals(controller.State, followingState) &&
+                    ReferenceEquals(windows["note-a"], followingWindow) && !followingWindow.IsClosed &&
+                    ReferenceEquals(controller.ImageStore, followingImages) &&
+                    ReferenceEquals(controller.PaperBodyPlugins.DataStore, followingPluginData) &&
+                    controller.WorkspaceBindingToken == followingBinding,
+                "unfollow rebuilt the workspace instead of updating its settings");
             Require(controller.State.Theme == "light" && !controller.State.McpEnabled &&
                 UiLanguages.EffectiveUiCulture.Name == "ja-JP" && controller.PublicSettings.Get("appearance.theme").Writable,
                 "independent software settings/language did not activate");
             var following = controller.WorkspaceOptions.Normalized(); following.FollowMainSettings[2] = true;
             Require(await controller.ChangeWorkspaceConfigurationAsync(following), "refollow failed");
             Require(controller.State.Theme == "dark" && controller.State.McpEnabled, "refollow did not reapply main settings");
+            Require(ReferenceEquals(controller.State, followingState) &&
+                    ReferenceEquals(windows["note-a"], followingWindow) && !followingWindow.IsClosed &&
+                    controller.WorkspaceBindingToken == followingBinding,
+                "refollow unnecessarily recreated the active workspace");
             Require(await controller.SwitchWorkspaceAsync(1), "return to main failed");
+            // The second slot has already been accepted and normalized. Re-entering
+            // an unchanged workspace must succeed without writing its content file.
+            var secondWriterField = typeof(StateStore).GetField("_atomicWriter",
+                BindingFlags.Instance | BindingFlags.NonPublic)!;
+            var storedSecond = Field<WorkspaceCatalog>(controller, "_workspaceCatalog").StoreFor(2);
+            var previousSecondWriter = (IDurableAtomicFileWriter)secondWriterField.GetValue(storedSecond)!;
+            try
+            {
+                secondWriterField.SetValue(storedSecond, new DurableAtomicFileWriter((stage, path) =>
+                {
+                    if (stage == DurableAtomicWriteStage.BeforeTempOpen && path == storedSecond.FilePath)
+                        throw new IOException("Healthy target should not be rewritten on entry.");
+                }));
+                Require(await controller.SwitchWorkspaceAsync(2),
+                    "re-entering an unchanged secondary unexpectedly saved its core data");
+            }
+            finally { secondWriterField.SetValue(storedSecond, previousSecondWriter); }
+            Require(await controller.SwitchWorkspaceAsync(1), "return after healthy read-only entry failed");
             Require(controller.ImageStore.TryGetEncodedImageBytes(imageId, out _, out var bytes1) && bytes1.SequenceEqual(mainImage),
                 "main image changed across roundtrip");
             Require(J(controller.PaperBodyPlugins.DataStore.ReadPaperState("fixture", "note-a").Json)["slot"]!.GetValue<int>() == 1,
@@ -732,6 +811,44 @@ internal static partial class Program
 
             await WorkspaceMainCatalogSingleWriteChecks(controller);
             await WorkspaceRollbackChecks(controller, directory);
+
+            // Restore can legitimately expand a saved capsule when the effective
+            // settings hide todo-linked papers from capsules. That UI change must
+            // persist, while a healthy unchanged target must still avoid writes.
+            var beforeRestoreOptions = controller.WorkspaceOptions.Normalized();
+            var localThirdOptions = controller.WorkspaceOptions.Normalized();
+            localThirdOptions.FollowMainSettings[3] = false;
+            Require(await controller.ChangeWorkspaceConfigurationAsync(localThirdOptions),
+                "restore mutation fixture could not enable independent third-slot settings");
+            var thirdState = NewState();
+            thirdState.UseCapsuleMode = true;
+            thirdState.EnableTodoPaperLinks = true;
+            thirdState.HideLinkedPapersFromCapsules = true;
+            thirdState.Papers[0].IsCollapsed = true;
+            thirdState.Papers[1].Items[0].RestoreQuickLaunch("note-a", null, false);
+            var thirdDataPath = Path.Combine(directory, "data3.json");
+            var thirdStore = Field<WorkspaceCatalog>(controller, "_workspaceCatalog").StoreFor(3);
+            File.WriteAllText(thirdDataPath, thirdStore.SerializeState(thirdState));
+            var restoreWriterField = typeof(StateStore).GetField("_atomicWriter",
+                BindingFlags.Instance | BindingFlags.NonPublic)!;
+            var originalRestoreWriter = (IDurableAtomicFileWriter)restoreWriterField.GetValue(thirdStore)!;
+            var restorationWrites = 0;
+            try
+            {
+                restoreWriterField.SetValue(thirdStore, new DurableAtomicFileWriter((stage, path) =>
+                {
+                    if (stage == DurableAtomicWriteStage.BeforeTempOpen && path == thirdStore.FilePath)
+                        restorationWrites++;
+                }));
+                Require(await controller.SwitchWorkspaceAsync(3), "restore mutation fixture could not enter slot 3");
+                Require(!controller.State.Papers[0].IsCollapsed && restorationWrites == 1 &&
+                        !J(File.ReadAllText(thirdDataPath))["papers"]![0]!["isCollapsed"]!.GetValue<bool>(),
+                    "presentation expanded a blocked capsule without saving its new state exactly once");
+            }
+            finally { restoreWriterField.SetValue(thirdStore, originalRestoreWriter); }
+            Require(await controller.SwitchWorkspaceAsync(1), "restore mutation fixture could not return to main");
+            Require(await controller.ChangeWorkspaceConfigurationAsync(beforeRestoreOptions),
+                "restore mutation fixture could not restore follow settings");
 
             // Both settings and tray choose an explicit slot, unlike the paper's cycle button.
             var workspacePage = (StackPanel)typeof(AppController)

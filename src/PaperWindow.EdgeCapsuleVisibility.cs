@@ -154,6 +154,14 @@ public sealed partial class PaperWindow
             return false;
         }
 
+        // A small on-screen intersection makes the paper reachable, but off-screen HWND pixels
+        // must not count toward the visibility ratio used to decide whether a repeat click retracts it.
+        var monitors = WindowWorkAreaHelper.ConnectedMonitorGeometries();
+        if (!ExpandedPaperRecoveryPolicy.HasReachablePixels(bounds, monitors))
+        {
+            return false;
+        }
+
         // WindowFromPoint skips disabled windows. A common modal-dialog pattern therefore makes
         // the still-visible disabled owner look transparent to the grid below it. Handle only
         // that narrow, externally-owned case and conservatively retrieve instead of retracting.
@@ -184,9 +192,15 @@ public sealed partial class PaperWindow
             {
                 var x = sampleBounds.Left +
                     (column + 0.5) * sampleBounds.Width / EdgeToggleVisibilityGridSize;
-                if (WindowNative.IsRootWindowAtDeviceScreenPoint(
-                        handle,
-                        new DeviceScreenPoint(x, y)))
+                var point = new DeviceScreenPoint(x, y);
+                // WindowFromPoint can still return a live HWND for coordinates outside the active
+                // desktop. Never let those off-screen samples inflate the visible-surface count.
+                if (!ExpandedPaperRecoveryPolicy.IsWithinConnectedWorkArea(point, monitors))
+                {
+                    continue;
+                }
+
+                if (WindowNative.IsRootWindowAtDeviceScreenPoint(handle, point))
                 {
                     visibleSamples++;
                 }
