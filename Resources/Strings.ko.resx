@@ -1691,4 +1691,7 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="WorkbenchSearchResult" xml:space="preserve"><value>검색 결과 {0}/{1}</value></data>
   <data name="WorkbenchShowOnDesktop" xml:space="preserve"><value>바탕 화면에 표시</value></data>
   <data name="WorkbenchHideOnDesktop" xml:space="preserve"><value>바탕 화면에서 숨기기</value></data>
+  <data name="WorkbenchBindToTodo" xml:space="preserve"><value>할 일 항목에 연결</value></data>
+  <data name="WorkbenchUnnamedTodo" xml:space="preserve"><value>제목 없는 할 일</value></data>
+  <data name="WorkbenchBindTodoFailed" xml:space="preserve"><value>해당 할 일에 연결할 수 없습니다.</value></data>
 </root>
