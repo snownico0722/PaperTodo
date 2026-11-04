@@ -17,7 +17,6 @@ public sealed partial class PaperWindow
 
     private bool _isExpandedEditorMode;
     private bool _isExpandedEditorSidebarOpen;
-    private bool _editorRestoreCollapsedPaper;
     private Button? _editorModeButton;
     private Button? _editorSidebarButton;
     private Button? _editorMinimizeButton;
@@ -33,19 +32,7 @@ public sealed partial class PaperWindow
 
     internal bool IsExpandedEditorMode => _isExpandedEditorMode;
     internal bool IsExpandedEditorSidebarOpen => _isExpandedEditorSidebarOpen;
-    internal bool IsExpandedEditorMaximized => WindowState == WindowState.Maximized;
-
-    internal Rect ExpandedEditorWindowBounds()
-    {
-        var bounds = WindowState == WindowState.Maximized ? RestoreBounds :
-            new Rect(Left, Top, Width, Height);
-        return IsValidEditorBounds(bounds) ? bounds : Rect.Empty;
-    }
-
-    private static bool IsValidEditorBounds(Rect bounds) =>
-        !bounds.IsEmpty && double.IsFinite(bounds.X) && double.IsFinite(bounds.Y) &&
-        double.IsFinite(bounds.Width) && double.IsFinite(bounds.Height) &&
-        bounds.Width > 300 && bounds.Height > 200;
+    internal bool IsExpandedEditorMaximized => _expandedEditorHostWindow?.WindowState == WindowState.Maximized;
 
     private void BuildExpandedEditorTopBarControls(StackPanel buttons)
     {
@@ -54,8 +41,8 @@ public sealed partial class PaperWindow
         _editorModeButton = IconButton("⤢", Strings.Get("EditorOpen"));
         _editorModeButton.Click += (_, _) =>
         {
-            if (_isExpandedEditorMode) ReturnFromExpandedEditor();
-            else EnterExpandedEditorMode();
+            if (_isExpandedEditorMode) _expandedEditorHostWindow?.ReturnToPaper();
+            else _controller.OpenExpandedEditorFor(this);
         };
 
         _editorSidebarButton = IconButton("☷", Strings.Get("EditorSidebarShow"));
@@ -66,13 +53,17 @@ public sealed partial class PaperWindow
         };
 
         _editorMinimizeButton = IconButton("−", Strings.Get("EditorMinimize"));
-        _editorMinimizeButton.Click += (_, _) => WindowState = WindowState.Minimized;
+        _editorMinimizeButton.Click += (_, _) =>
+        {
+            if (_expandedEditorHostWindow != null)
+                _expandedEditorHostWindow.WindowState = WindowState.Minimized;
+        };
 
         _editorMaximizeButton = IconButton("□", Strings.Get("EditorMaximizeRestore"));
         _editorMaximizeButton.Click += (_, _) => ToggleExpandedEditorMaximized();
 
         _editorCloseButton = IconButton("×", Strings.Get("EditorClosePaper"));
-        _editorCloseButton.Click += (_, _) => _controller.HidePaper(_paper);
+        _editorCloseButton.Click += (_, _) => _expandedEditorHostWindow?.CloseCurrentPaper();
 
         buttons.Children.Add(_editorModeButton);
         buttons.Children.Add(_editorSidebarButton);
@@ -98,7 +89,7 @@ public sealed partial class PaperWindow
         if (_editorMaximizeButton != null)
         {
             _editorMaximizeButton.Visibility = _isExpandedEditorMode ? Visibility.Visible : Visibility.Collapsed;
-            _editorMaximizeButton.Content = WindowState == WindowState.Maximized ? "❐" : "□";
+            _editorMaximizeButton.Content = IsExpandedEditorMaximized ? "❐" : "□";
         }
         if (_editorCloseButton != null)
             _editorCloseButton.Visibility = _isExpandedEditorMode ? Visibility.Visible : Visibility.Collapsed;
@@ -106,10 +97,8 @@ public sealed partial class PaperWindow
 
     private void ToggleExpandedEditorMaximized()
     {
-        if (!_isExpandedEditorMode) return;
-        WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+        _expandedEditorHostWindow?.ToggleMaximized();
         RefreshExpandedEditorTopBarControls();
-        RefreshSnappedPresentation(forceApply: true);
     }
 
     // This is deliberately layered over the existing body row. The Note/Plugin host
@@ -282,105 +271,4 @@ public sealed partial class PaperWindow
         UpdateTopBarResponsiveLayout();
     }
 
-    internal void EnterExpandedEditorMode(
-        Rect? preferredBounds = null,
-        bool openSidebar = false,
-        bool restoreCollapsedPaper = false,
-        bool maximized = false)
-    {
-        if (IsClosed || !_paper.IsVisible) return;
-        if (_isExpandedEditorMode)
-        {
-            Activate();
-            return;
-        }
-        restoreCollapsedPaper |= _paper.IsCollapsed;
-        if (_paper.IsCollapsed)
-            SetCollapsedState(false, animate: false, saveGeometry: false);
-        EnsureShellBuilt();
-        CancelExperimentalAutoCollapse();
-        _isExpandedEditorMode = true;
-        _editorRestoreCollapsedPaper = restoreCollapsedPaper;
-        _isExpandedEditorSidebarOpen = openSidebar;
-        var workArea = WindowWorkAreaHelper.WorkAreaFor(this);
-        Rect desired;
-        if (preferredBounds.HasValue && IsValidEditorBounds(preferredBounds.Value))
-        {
-            desired = preferredBounds.Value;
-        }
-        else
-        {
-            var width = Math.Min(1320, Math.Max(560, workArea.Width * 0.84));
-            var height = Math.Min(920, Math.Max(400, workArea.Height * 0.86));
-            width = Math.Min(width, workArea.Width);
-            height = Math.Min(height, workArea.Height);
-            desired = new Rect(
-                workArea.Left + (workArea.Width - width) / 2,
-                workArea.Top + (workArea.Height - height) / 2,
-                width, height);
-        }
-        _suppressGeometrySave = true;
-        try
-        {
-            WindowState = WindowState.Normal;
-            MinWidth = Math.Min(640, desired.Width);
-            MinHeight = Math.Min(420, desired.Height);
-            ResizeMode = ResizeMode.CanResize;
-            Left = desired.Left;
-            Top = desired.Top;
-            Width = desired.Width;
-            Height = desired.Height;
-            if (maximized) WindowState = WindowState.Maximized;
-        }
-        finally
-        {
-            _suppressGeometrySave = false;
-        }
-
-        ApplySystemVisibility(reapplyTaskbarShellState: true);
-        RefreshEffectiveTopmost();
-        RefreshSnappedPresentation(forceApply: true);
-        RefreshExpandedEditorPresentation();
-        _enterCurrentNoteEditor?.Invoke();
-        Activate();
-    }
-
-    internal void ReturnFromExpandedEditor()
-    {
-        if (!_isExpandedEditorMode) return;
-        _suppressGeometrySave = true;
-        try
-        {
-            _isExpandedEditorMode = false;
-            _isExpandedEditorSidebarOpen = false;
-            WindowState = WindowState.Normal;
-            MinWidth = PaperLayoutDefaults.MinWidth;
-            MinHeight = PaperLayoutDefaults.MinHeight;
-            ResizeMode = ResizeMode.CanResizeWithGrip;
-            Left = _paper.X;
-            Top = _paper.Y;
-            Width = _paper.Width;
-            Height = _paper.Height;
-            if (_editorRestoreCollapsedPaper && CanDisplayAsCapsule())
-                SetCollapsedState(true, animate: false, saveGeometry: false);
-            _editorRestoreCollapsedPaper = false;
-        }
-        finally
-        {
-            _suppressGeometrySave = false;
-        }
-        ApplySystemVisibility(reapplyTaskbarShellState: true);
-        RefreshEffectiveTopmost();
-        RefreshSnappedPresentation(forceApply: true);
-        RefreshExpandedEditorPresentation();
-        if (!_paper.IsCollapsed) _showNotePreview?.Invoke();
-    }
-
-    private void OnExpandedEditorVisibilityChanged()
-    {
-        // Closing an editor is the ordinary HidePaper action. Reset only once it is
-        // actually hidden so its exit does not flash a shrunken Paper during fade-out.
-        if (_isExpandedEditorMode && !IsVisible && !_paper.IsVisible)
-            ReturnFromExpandedEditor();
-    }
 }
