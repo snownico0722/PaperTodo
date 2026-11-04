@@ -49,7 +49,7 @@
 | D-034 | 整体预热保留不可变绘制结果，不缓存隐藏 WPF 正文 | Superseded by D-035 | Edge performance / lifecycle |
 | D-035 | 冷渲染与预热共用唯一 artifact renderer | Accepted | Edge structure / lifecycle |
 | D-036 | 正式分发保持两档单文件且不增加 ReadyToRun 变体 | Accepted | 启动性能 / 发布 |
-| D-037 | 可浏览队列保留已验证的 live authority | Deferred | Edge performance / lifecycle |
+| D-037 | 可浏览队列保留已验证的 live authority | Deferred; experiments archived | Edge performance / lifecycle |
 | D-038 | 活动就绪动画使用可撤销 render demand | Accepted | Edge animation / lifecycle |
 | D-039 | 插件 API 采用向后兼容的 major.minor 演进 | Accepted | 插件 / 兼容性 |
 | D-041 | 普通窗口原生 Mica 与 layered 胶囊边界 | Superseded by D-042 | 主题 / Window integration |
@@ -73,6 +73,7 @@
 | D-062 | 写入准入、外部变化暂停与终止边界 | Partially superseded by D-063 | 持久化 / 写入安全 |
 | D-063 | 仅显式热重载和有基线三方合并，普通保存不检测外部修改 | Accepted | 持久化 / 产品边界 |
 | D-064 | 固定编号工作区共用代码，不共用运行数据 | Accepted | 工作区 / 持久化 |
+| D-065 | DComp 视觉与 Win32 输入提交的非原子边界 | Accepted (historical findings; native-owner candidate deferred) | Edge input / composition |
 
 ## 维护规则
 
@@ -523,6 +524,7 @@ Hover、Preview 和 preview corridor 的物理命中，以当前用户实际看�
 
 - 当前 `EdgeCapsulePresenter.Reconcile`。
 - 当前 `src/EdgeCapsuleQueueCompositionProxy.Routing.cs`。
+- D-065 / E-019：逻辑上的同一 `InteractiveBounds` 或时间样本，不构成 DComp 可见帧与 Win32 输入区域原子生效的证明；历史实验与当前主线实现必须区分。
 - `dcf2033d41b3b52c3036eb6a3d4204b2b3441cd9` / `e15796d57f6126e242445c54a8813fd022c35978`。
 
 ---
@@ -1402,9 +1404,34 @@ FD no-runtime 的 Windows SDK 定向压缩另做了 12 轮交错 A/B。`PaperTod
 
 ## D-037 — 可浏览队列提前接管并保留已验证的 live authority
 
-**Status:** Deferred（从 #258 独立审查，尚未成为当前实现）
+**Status:** Deferred（实验已归档，未成为当前产品实现）
 
-资源预热不等于长期接管输入。原候选及性能证据保留在 E-005～E-016 和原 #258 `37fcf9b`；静态提前接管、长期保留、最大容量/来源复用及协调器作为完整依赖组另行审查。现有短时动画代理、后继接续与显式交接继续保留。控件级悬停、完整手势、空闲观察与预热退让仍须单独验收，不以历史性能数字代替通过。
+### Context
+
+该候选从 #258 `37fcf9b` 独立审查，目标是通过静态提前接管、长期保留和 source/output 容量复用减少反复浏览的准备成本。原始性能证据见 E-005～E-016；后续 #260 / #269 / #271 / #291 把完整控件输入、预热协调、源生命周期与视觉/输入时序问题推进到实证层面。2026-11-04 按用户要求收束旧实验 PR，将知识纳入主线；归档不代表采用候选代码。
+
+### Decision / Why
+
+现有短时动画代理、successor 接续和显式交接继续保留；长期保留代理、静态接管与新输入 owner 不因历史局部收益自动进入当前架构。资源预热不等于长期接管输入，既有 D-023 一次性 Lightweight Prewarm 不被本次归档推翻。
+
+#260 通过有限输入 HWND、逐卡真实 WPF 交还和隐藏输出 BeginPaint/EndPaint 修正了实验分支中的明确问题；#269 验证了跨队列失效隔离、持续移动下第一击、退休 predecessor 托管存活、空启动收尾及预热唯一入口。这些是可复用实现经验，但不能脱离其依赖组直接当作当前主线需要搬运的修复。
+
+长期保留的成本包括 source/output 驻留、容量失效、常驻采样、显示环境撤销和真实输入交还。H7 容量恢复候选最终专项失败且没有提升成产品提交；H10 空闲/规模成本未量化；#291 独立 input owner 有生产边界和连续浏览证据，但 capture/drag/handoff、平台环境与物理显示验收仍未完成。关闭 PR 只收束工作，不将这些未完成项写成路线已失败或已完成。
+
+### Rejected candidates / Boundaries
+
+- dormant cache 的合格重入 13/13 命中没有省去主要交接等待；额外 Commit completion 等待也没有取得可采用收益。不以命中率或“多一次同步”代替用户路径证据。
+- 按背景输入需求保留的方法没有有效覆盖；不能通过删除 hover、tooltip、完整手势或插件输入契约来制造收益。
+- 异步首段接管 v3 虽缩短同步事务，prepare→animation-clock 却变慢，因此当时不采用。结论仅针对该实现与实验，不是永久否定异步调度。
+- UI stall 下的视觉/输入时序、普通 worker 失败和独立 owner 证据见 D-065；不通过扩大透明输入范围、迟到重放点击或删除 cover/terminal 验证绕过问题。
+- #291 与历史 main 的真浏览对照是分支整体差异，不是独立线程的单变量因果证明；其“current main”固定为 `c10837b`，不是未来主线。
+- 本次按用户要求不重新运行云端性能 A/B；旧数字保留固定版本、分母和环境，不提升为当前性能承诺。
+
+### Evidence
+
+- [E-017 / E-018](EXPERIMENTS.md)：#260 输入修复、缓存/额外等待、按输入需求保留和异步 admission 的方法及样本。
+- [E-019 详细归档](experiments/edge-retained-proxy-archive-20261104.md)：四个固定 HEAD、H1～H11、H7 最终 CI 与候选状态、#291 夹具纠错和连续浏览数据、日志可用性。
+- [#260](https://github.com/snownico0722/PaperTodo/pull/260)、[#269](https://github.com/snownico0722/PaperTodo/pull/269)、[#271](https://github.com/snownico0722/PaperTodo/pull/271)、[#291](https://github.com/snownico0722/PaperTodo/pull/291)：原提交、讨论与阶段证据；远程实验分支保留。
 
 ---
 
@@ -1967,4 +1994,36 @@ PR #319 的初版把主胶囊完整材质收展后的卡死解释为终点迟到
 - `tests/PaperTodo.DataReloadChecks/WorkspaceChecks.cs`：存储/版本/继承及隔离 WPF 往返测试。
 - `WorkspaceFieldScopes` 显式列出 `AppState` 字段归属，缺失分类不自动继承且在持久化检查中失败；保留现有设置跟随和旧字段迁移行为，避免新增内容或布局字段被静默共享。
 
+---
+
+## D-065 — DComp 视觉与 Win32 输入提交的非原子边界
+
+**Status:** Accepted（接受已验证的历史教训；独立 native input owner 仍是 Deferred 候选）
+
+### Context
+
+#260 试图让 DComp 队列代理长期保留，以有限 HRGN 的 input HWND 保护真实可交互区域。#271 在真实 WPF/live surface/DComp 与跨进程 OS 点击中确认：UI 停顿时画面仍动，UI-owned 输入区域却停住，导致可见前沿漏点和旧空白位置误挡。#291 又比较独立 native owner 与同一应用样本依次推进视觉/输入两种路线。
+
+这些问题涉及两个系统的实际生效时机，不能只靠逻辑几何相等、线程名称、Rendering 回调或提交返回判断。归档时主线不是该常驻双 HWND / HRGN 实现；本条不宣称当前所有输入路径已复现同一种错误，也不改变当前 ownership。
+
+### Decision / Why
+
+- 不把 `worker → UI-owned HWND → SetWindowRgn` 当作解除 UI 阻塞依赖的修法。历史受控停顿中 worker 第一次 region 更新都未返回；窗口仍依赖其 owner 消息泵。真正独立的 owner 必须自己拥有窗口与原生消息循环。
+- 同一 QPC 样本、相同 easing 或同一个调用线程，不保证 DComp visual 与 Win32 HRGN 原子生效。#291 的 `Commit → HRGN` 出现 input-ahead，`Commit → DwmFlush → HRGN` 改成 visual-ahead，真实点击确认新可见区漏点、旧空白区误挡。所测“只改顺序/多加固定等待”方案已被否定；未来不同 authority/协议需新的证据，不能沿用这个同步假设。
+- 独立 native owner 已证明可在 UI stall 时继续发布 region，后续真浏览也有分支整体改善，但仍有相位差、业务 UI 不响应和集成边界。它不是零帧差证明，更不是当前产品已采用的架构。
+- UI 不可用时保持有限输入保护并丢弃无法及时交还的按下，可以避免漏给下层或迟到重放；这不等于业务点击成功。不能把 `absorbed` 当作完整交互通过。
+- cover 可见时清除输入区域、隐藏/关闭、DPI/source generation 改变，须与真实窗口恢复共同考虑；单个环境失效用例通过不代表完整 handoff 已验证。D-009 / D-013 / D-014 的既有交接与命中边界不被撤销。
+
+### Pitfalls / Evidence limits
+
+#291 R4/R5 一度把 production-boundary 失败归因于 native timer/publication；R5 机制诊断已证明 timer 正常，后续纵向 A/B 进一步确认旧横向 gate 不符合 queue 固定 wall X 的几何。保留失败历史，但撤回“独立 owner timer 失效”的结论。
+
+#271 窄原型只有一个有效动态像素 sample，最终路由正确不能升级为全程零误差。#291 真浏览对照不只差一个 commit，改善不能全部归因于 dedicated owner。历史 hosted desktop 采样保留为研究证据；遵守后续 D-057，不恢复一次性 DWM 截图工作流作为长期自动门槛。未验证的高刷新率/混合 DPI/完整交接不通过反复云端性能对照补成“通过”。
+
+### Evidence
+
+- [#271 双向输入实验](https://github.com/snownico0722/PaperTodo/actions/runs/34935212192)、[普通 worker 反例](https://github.com/snownico0722/PaperTodo/actions/runs/34941737943)、[独立 owner 窄原型](https://github.com/snownico0722/PaperTodo/pull/271#issuecomment-5677045821)。
+- [#291 R2 提交顺序反例](https://github.com/snownico0722/PaperTodo/actions/runs/35484858423)、[纵向纠错 A/B](https://github.com/snownico0722/PaperTodo/actions/runs/35515667098)、[真浏览 A/B](https://github.com/snownico0722/PaperTodo/actions/runs/35545416312)。
+- [固定实验源码](https://github.com/snownico0722/PaperTodo/blob/5aa796befa944b53bd0e1191ded2bd4fe89b0246/src/EdgeCapsuleQueueDedicatedInputOwner.cs)；[归档时主线的命中入口](https://github.com/snownico0722/PaperTodo/blob/f6041ca6b5ebd787a02aa8158c6e67660b421be0/src/EdgeCapsuleQueueProxyWindow.cs)。
+- [E-019 详细归档](experiments/edge-retained-proxy-archive-20261104.md)：固定版本、原始数值、纠正顺序、未完成项与过期日志的证据边界。
 
