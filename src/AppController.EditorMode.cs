@@ -20,6 +20,7 @@ public sealed partial class AppController
         // Each PaperWindow owns its existing editing session, plugin runtime and callbacks.
         // Handoff between those owners rather than grafting one Paper's body into another.
         source.ReturnFromExpandedEditor();
+        var wasCollapsed = paper.IsCollapsed;
         if (paper.IsCollapsed)
             SetPaperCollapsedRuntime(paper, collapsed: false, animate: false, saveGeometry: false);
         ShowPaper(paper);
@@ -27,7 +28,7 @@ public sealed partial class AppController
         target.EnterExpandedEditorMode(
             bounds.IsEmpty ? null : bounds,
             openSidebar: sidebarOpen,
-            restoreCollapsedPaper: false,
+            restoreCollapsedPaper: wasCollapsed,
             maximized: maximized);
     }
 }
