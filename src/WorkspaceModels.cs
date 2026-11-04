@@ -101,7 +101,11 @@ internal static class WorkspaceFieldScopes
             nameof(AppState.HidePapersFromTaskbar), nameof(AppState.HidePapersFromWindowSwitcher), nameof(AppState.EnableTodoPaperLinks),
             nameof(AppState.ShowLinkedPaperName), nameof(AppState.AllowLongLinkedPaperTitles), nameof(AppState.ShowLinkedPathExtensionOnly),
             nameof(AppState.HideLinkedPapersFromCapsules), nameof(AppState.RunLinkedScriptCapsulesOnClick), nameof(AppState.MaxTitleLength),
+<<<<<<< HEAD
             nameof(AppState.UseCapsuleCollapseAll), nameof(AppState.CompactMasterCapsule), nameof(AppState.ShowDeepCapsuleWhileExpanded),
+=======
+            nameof(AppState.UseCapsuleCollapseAll), nameof(AppState.UseCapsuleFreeQueues), nameof(AppState.CompactMasterCapsule), nameof(AppState.ShowDeepCapsuleWhileExpanded),
+>>>>>>> dd3ac0bd (merge: 同步 origin/main，修复自由队列决策编号冲突)
             nameof(AppState.HideEdgeCapsuleCloseButtonOnHover), nameof(AppState.CollapseExpandedDeepCapsuleOnClick), nameof(AppState.EnableAnimations),
             nameof(AppState.FastAnimations), nameof(AppState.EnableToolTips), nameof(AppState.ExperimentalInactivePaperOpacity),
             nameof(AppState.ExperimentalInactivePaperOpacityLevel), nameof(AppState.ExperimentalRestingCapsuleOpacity), nameof(AppState.ExperimentalRestingCapsuleOpacityLevel),

@@ -11,39 +11,11 @@ internal static class Program
 {
     private const BindingFlags Private = BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic;
     private const string FixtureMarker = ".papertodo-lifecycle-fixture";
-<<<<<<< HEAD
-    private static readonly string[] Cases = ["startup", "missing-monitor", "master-queue-transfer", "master-queue-cancel", "master-queue-drag-preparation", "master-queue-drop-handoff", "master-queue-membership", "master-queue-mutations", "master-queue-hide", "master-queue-disconnect", "master-queue-merge", "master-queue-merge-collapsed", "master-queue-lightweight-handoff", "controller-hide-create-reentry", "controller-hide-show-reentry", "controller-zorder-create-reentry", "controller-close-delete-reentry", "todo-visibility", "real-exit", "early-expand", "edge-expand-foreground", "expanded-paper-display-recovery", "cancel-prewarm", "real-exit-scripts", "early-exit", "todo-context-menu", "todo-history"];
-=======
-    private static readonly string[] Cases = ["startup", "missing-monitor", "master-queue-transfer", "master-queue-cancel", "master-queue-drag-preparation", "master-queue-drop-handoff", "master-queue-membership", "master-queue-mutations", "master-queue-hide", "master-queue-disconnect", "master-queue-merge", "master-queue-merge-collapsed", "master-queue-material-handoff", "controller-hide-create-reentry", "controller-hide-show-reentry", "controller-zorder-create-reentry", "controller-close-delete-reentry", "todo-visibility", "real-exit", "early-expand", "edge-expand-foreground", "cancel-prewarm", "real-exit-scripts", "early-exit", "todo-context-menu", "todo-history",
-<<<<<<< HEAD
-<<<<<<< HEAD
-        "free-queue-preview-restore"];
->>>>>>> 56595088 (fix(capsule): 离开磁吸区时恢复目标队列让位预览)
-=======
-        "free-queue-preview-restore", "free-queue-regressions"];
->>>>>>> ee7c9291 (fix(capsule): 修复拖拽期共享状态的 owner 归属、handoff 吞手势与描边不重试)
-=======
+    private static readonly string[] Cases = ["startup", "missing-monitor", "master-queue-transfer", "master-queue-cancel", "master-queue-drag-preparation", "master-queue-drop-handoff", "master-queue-membership", "master-queue-mutations", "master-queue-hide", "master-queue-disconnect", "master-queue-merge", "master-queue-merge-collapsed", "master-queue-lightweight-handoff", "controller-hide-create-reentry", "controller-hide-show-reentry", "controller-zorder-create-reentry", "controller-close-delete-reentry", "todo-visibility", "real-exit", "early-expand", "edge-expand-foreground", "expanded-paper-display-recovery", "cancel-prewarm", "real-exit-scripts", "early-exit", "todo-context-menu", "todo-history",
         "free-queue-preview-restore", "free-queue-regressions",
-<<<<<<< HEAD
-<<<<<<< HEAD
-        "edge-capsule-pending-drag-release", "free-queue-resting-avoidance"];
->>>>>>> 2c6b001f (fix(capsule): 修复等待租约松手误触与自由队列跨队列重叠)
-=======
-        "edge-capsule-pending-drag-release", "free-queue-resting-avoidance",
-<<<<<<< HEAD
-        "free-queue-shortcut-targeting"];
->>>>>>> a1c305fd (fix(capsule): 修复整队取消身份回写与快捷键漏选自由队列)
-=======
-=======
         "edge-capsule-pending-drag-release",
-<<<<<<< HEAD
->>>>>>> 42eff62e (test(capsule): 大幅删减自由队列测试，保留核心行为)
-        "free-queue-shortcut-targeting", "free-queue-bottom-insert"];
->>>>>>> d16a146f (fix(capsule): 修复贴底队列头插磁吸与复合设置重开失效)
-=======
         "free-queue-shortcut-targeting", "free-queue-bottom-insert",
         "free-queue-resting-delta-persist"];
->>>>>>> 361fc6e1 (fix(capsule): 修复静止避让持久化与设置级联)
 
     [STAThread]
     private static int Main(string[] args)
@@ -205,6 +177,13 @@ internal static class Program
             state.Papers[4].CapsuleQueueId = "qc";
             state.DeepCapsuleQueueStartTopMargins["|right#qb"] = 320;
             state.DeepCapsuleQueueStartTopMargins["|right#qc"] = 450;
+            if (name == "free-queue-shortcut-targeting")
+            {
+                // 模拟断连显示器回退：qc 与 qb 拥有相同基准 top，静止避让会把 qc 下推。
+                // 数字快捷键必须按屏幕上实际可见顺序编号，而不是按裸 margin 的 key 序。
+                state.Papers[4].CapsuleMonitorDeviceName = @"\\.\DISPLAY99";
+                state.DeepCapsuleQueueStartTopMargins[@"\\.\DISPLAY99|right#qc"] = 320;
+            }
         }
         if (name == "free-queue-bottom-insert")
         {

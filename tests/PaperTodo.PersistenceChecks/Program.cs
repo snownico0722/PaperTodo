@@ -178,7 +178,7 @@ static void DisabledCapsuleModeKeepsQueueLayoutMemory()
 
 // Free queues extend the persisted queue key with an instance suffix ("monitor|side#id").
 // These checks pin the two invariants that make old data safe: a suffixed key must round-trip
-// unchanged, and a paper with no suffix must keep deriving the pre-D-058 key.
+// unchanged, and a paper with no suffix must keep deriving the pre-D-065 key.
 static void FreeQueueInstanceKeysSurviveARoundTrip()
 {
     using var scope = new TempDirectory();
@@ -247,7 +247,7 @@ static void LegacyPapersKeepTheDefaultQueueKey()
         "a paper with no instance id was assigned one during normalization");
     Assert(loaded.DeepCapsuleQueueStartTopMargins.ContainsKey("DISPLAY1|right") &&
            loaded.DeepCapsuleQueueStartTopMargins["DISPLAY1|right"] == 64.0,
-        "the pre-D-058 queue key stopped resolving to its remembered layout");
+        "the pre-D-065 queue key stopped resolving to its remembered layout");
 }
 
 static void LegacyQueueKeysSurviveWhenFreeQueuesDisabled()

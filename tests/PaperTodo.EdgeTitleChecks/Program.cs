@@ -103,7 +103,7 @@ internal static partial class Program
     }
 
     // A free queue narrows (monitor, side) with an instance id. The whole backward-compatibility
-    // story rests on one invariant: an empty id must compose to the byte-identical pre-D-058 key.
+    // story rests on one invariant: an empty id must compose to the byte-identical pre-D-065 key.
     private static void QueueInstanceKeys()
     {
         const string edge = "DISPLAY1|right";
@@ -443,7 +443,7 @@ internal static partial class Program
     // pointer merely wobbles, so the hold behaviour is pinned across a simulated frame sequence.
 
     // A mini-view is placed by a pure relative displacement, so the same number applies to any
-    // queue on that edge (D-058). These checks pin the scope rule: everything below the owner's
+    // queue on that edge (D-065). These checks pin the scope rule: everything below the owner's
     // card is pushed, everything above is left alone, and a member that already clears the gap
     // stays put rather than the whole stack closing up.
 

@@ -656,7 +656,7 @@ public sealed partial class StateStore
         }
         else if (state.UseCapsuleFreeQueues)
         {
-            // D-058: with several queues per edge, slot 0 has no single owner, so the master pill
+            // D-065: with several queues per edge, slot 0 has no single owner, so the master pill
             // cannot coexist with free queues. Enforced here too because hand-edited or
             // plugin-written data can carry both flags.
             state.UseCapsuleCollapseAll = false;

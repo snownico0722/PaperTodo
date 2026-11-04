@@ -3202,7 +3202,7 @@ public sealed partial class AppController : IDisposable
             : "";
 
     // Queue instance key. An empty instance id yields the bare edge key, so papers that were
-    // never moved into a free queue group exactly as they did before D-058. This is the single
+    // never moved into a free queue group exactly as they did before D-065. This is the single
     // funnel every per-paper call site routes through, which is what keeps the ripple small.
     private static string QueueKey(string monitorDeviceName, string side, string? queueId)
         => EdgeCapsuleQueueIds.Compose(EdgeKey(monitorDeviceName, side), queueId);
@@ -4303,7 +4303,7 @@ public sealed partial class AppController : IDisposable
 
     // Per-queue vertical rest position, keyed by the queue instance (monitor, edge, id). Missing
     // entries use the current product default directly; the per-queue dictionary is the only
-    // persisted authority. An empty instance id yields the pre-D-058 edge key.
+    // persisted authority. An empty instance id yields the pre-D-065 edge key.
     public double DeepCapsuleStartTopMarginFor(PaperData paper)
     {
         // QueueKey(paper) 是唯一身份漏斗：free 开启时保留持久实例身份，关闭时退化为裸
@@ -4404,7 +4404,7 @@ public sealed partial class AppController : IDisposable
         {
             return;
         }
-        // FQ-15: 本方法只服务主胶囊拖拽，写裸 edge key（"|side"）。master 与 free 队列互斥（D-058），
+        // FQ-15: 本方法只服务主胶囊拖拽，写裸 edge key（"|side"）。master 与 free 队列互斥（D-065），
         // 自由队列开启时不存在主胶囊，且自由队列渲染读持久实例 key（"|side#id"）——此时写入既无视觉
         // 反馈又会留下永远读不到的陈旧裸 margin。guard 只能挡 free，不能挡 UseCapsuleCollapseAll：
         // 主胶囊正是在该开关为 true 时才存在（SyncMasterCapsules 反之则销毁），挡它会让本方法永不生效。
