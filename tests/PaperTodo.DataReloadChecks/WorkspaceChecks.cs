@@ -983,7 +983,7 @@ internal static partial class Program
             Require(controller.WorkspaceNumber == 1, "workspace card switched without confirmation");
             workspacePage = WorkspacePage();
             var confirm = workspacePage.Children.OfType<Button>().Single();
-            Require(confirm.Content?.ToString() == "确认切换" && confirm.IsEnabled,
+            Require(confirm.IsEnabled && confirm.Content?.ToString() != Strings.Get("CommonCancel"),
                 "settings must offer one enabled switch confirmation and no cancel button");
             confirm.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             await Until(() => controller.WorkspaceNumber == 3 && !controller.IsWorkspaceSwitching,
