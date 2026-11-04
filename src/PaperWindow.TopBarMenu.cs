@@ -112,7 +112,7 @@ public sealed partial class PaperWindow
             .Where(binding => binding.Action.Visible &&
                 !(_pluginTopBarActionElements.Any(entry =>
                     Equals(entry.Binding, binding)) &&
-                  !_paper.IsCollapsed && IsVisible &&
+                  !_paper.IsCollapsed && (IsVisible || IsExpandedEditorHosted) &&
                   _topBarActionButtonsHost?.Visibility == Visibility.Visible &&
                   _pluginTopBarButtonsHost?.Visibility == Visibility.Visible))
             .ToArray();
