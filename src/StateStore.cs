@@ -502,6 +502,8 @@ public sealed partial class StateStore
                 paper.DeepCapsuleExpandedDpiScale = null;
             }
 
+            WorkbenchPaperState.RepairForSave(paper);
+
             foreach (var item in paper.Items)
             {
                 item.Text ??= "";
@@ -789,6 +791,7 @@ public sealed partial class StateStore
         var paperIds = state.Papers
             .Select(p => p.Id)
             .ToHashSet(StringComparer.Ordinal);
+        WorkbenchPaperState.NormalizeAfterLoad(state.Papers, paperIds);
 
         foreach (var paper in state.Papers)
         {

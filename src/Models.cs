@@ -676,6 +676,20 @@ public sealed class PaperData
     public string DeepCapsuleExpandedSide { get; set; } = "";
     public string DeepCapsuleExpandedMonitorDeviceName { get; set; } = "";
 
+    // Workbench canvas origin inside this paper's own workspace. It is independent of the
+    // desktop X/Y and edge geometry above and never moves the real window. Null means the
+    // workbench has not placed this paper yet; its layout engine assigns a slot on demand.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? WorkbenchX { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? WorkbenchY { get; set; }
+
+    // Undirected paper-to-paper relations drawn on the workbench. A pair is stored once, on
+    // the paper where the user started the link. Todo-row links stay in PaperItem.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<string>? WorkbenchLinks { get; set; }
+
     public List<PaperItem> Items { get; set; } = new();
     public string Content { get; set; } = "";
 }

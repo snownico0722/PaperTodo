@@ -527,6 +527,11 @@ internal sealed partial class PaperCommandService
             .Select(entry => entry.PaperId)
             .Distinct(StringComparer.Ordinal)
             .ToArray();
+        // Workbench links to the deleted paper are removed with it and restored on rollback.
+        var affectedWorkbenchLinks = papers
+            .Where(candidate => candidate.WorkbenchLinks?.Contains(paper.Id, StringComparer.Ordinal) == true)
+            .Select(candidate => (Paper: candidate, Links: candidate.WorkbenchLinks!.ToList()))
+            .ToList();
         PaperData? replacement = null;
 
         using (_controller.SuppressPaperPluginEventScans())
@@ -536,6 +541,7 @@ internal sealed partial class PaperCommandService
             {
                 item.ClearQuickLaunch();
             }
+            WorkbenchPaperState.RemoveLinksTo(papers, paper.Id);
 
             if (papers.Count == 0)
             {
@@ -552,6 +558,7 @@ internal sealed partial class PaperCommandService
                         originalIndex,
                         paper,
                         affectedLinks,
+                        affectedWorkbenchLinks,
                         replacement);
                     _controller.ResetPaperPluginEventBaseline();
                     throw;
@@ -563,6 +570,7 @@ internal sealed partial class PaperCommandService
                         originalIndex,
                         paper,
                         affectedLinks,
+                        affectedWorkbenchLinks,
                         replacement);
                     _controller.ResetPaperPluginEventBaseline();
                     throw Error(
@@ -579,6 +587,7 @@ internal sealed partial class PaperCommandService
                     originalIndex,
                     paper,
                     affectedLinks,
+                    affectedWorkbenchLinks,
                     replacement);
                 _controller.RefreshAfterExternalRollback();
                 _controller.ResetPaperPluginEventBaseline();
@@ -607,6 +616,7 @@ internal sealed partial class PaperCommandService
         int originalIndex,
         PaperData paper,
         IEnumerable<(string PaperId, PaperItem Item, string? Link)> affectedLinks,
+        IEnumerable<(PaperData Paper, List<string> Links)> affectedWorkbenchLinks,
         PaperData? replacement)
     {
         if (!papers.Contains(paper))
@@ -616,6 +626,10 @@ internal sealed partial class PaperCommandService
         foreach (var (_, item, link) in affectedLinks)
         {
             item.LinkPaper(link);
+        }
+        foreach (var (linkedPaper, links) in affectedWorkbenchLinks)
+        {
+            linkedPaper.WorkbenchLinks = links;
         }
         if (replacement != null)
         {

@@ -51,6 +51,7 @@ internal static partial class Program
             }
             CoreHistoryBackupChecks();
             WorkspaceStorageChecks();
+            WorkbenchChecks();
             WorkspaceFollowingMergeBaseline();
             StorageSafetyChecks();
             WorkspaceWriteSafetyChecks();
