@@ -497,6 +497,30 @@ internal sealed class WorkbenchWindow : Window
         card.Menu.Click += (_, _) =>
         {
             var menu = owner.CreateWorkbenchBodyMenu();
+            // Only the existing Todo-item association is writable. There is no arbitrary
+            // paper-to-paper relationship graph or second link format.
+            if (_controller.State.EnableTodoPaperLinks)
+            {
+                var bind = new MenuItem { Header = Strings.Get("WorkbenchBindToTodo") };
+                foreach (var todo in _controller.State.Papers.Where(p => p.Type == PaperTypes.Todo && p.Id != paper.Id))
+                {
+                    var group = new MenuItem { Header = _controller.PaperCapsuleTitle(todo) };
+                    foreach (var item in todo.Items.Where(TodoRules.HasMeaningfulContent))
+                    {
+                        var label = string.IsNullOrWhiteSpace(item.Text) ? Strings.Get("WorkbenchUnnamedTodo") : item.Text;
+                        var target = new MenuItem { Header = label.Length > 80 ? label[..77] + "…" : label };
+                        target.Click += (_, _) =>
+                        {
+                            if (!_controller.WorkbenchPaperWindow(todo.Id).LinkPaperToTodo(item.Id, paper.Id))
+                                _status.Text = Strings.Get("WorkbenchBindTodoFailed");
+                            else SyncActiveScene();
+                        };
+                        group.Items.Add(target);
+                    }
+                    if (group.Items.Count > 0) bind.Items.Add(group);
+                }
+                if (bind.Items.Count > 0) menu.Items.Add(bind);
+            }
             var delete = new MenuItem { Header = Strings.Get("WorkbenchDelete") };
             delete.Click += (_, _) =>
             {
