@@ -45,7 +45,8 @@ public sealed class WorkspaceConfiguration
         {
             Enabled = Enabled,
             Count = Slots == null ? Math.Clamp(Count, 1, 5) : slots.Max(),
-            Active = Enabled && slots.Contains(Active) ? Active : 1,
+            Active = Enabled ? (Slots == null ? Math.Clamp(Active, 1, slots.Max()) :
+                slots.Contains(Active) ? Active : 1) : 1,
             Slots = Slots == null ? null : slots.ToList(),
             Names = (Names ?? new()).Where(pair => slots.Contains(pair.Key) && !string.IsNullOrWhiteSpace(pair.Value))
                 .ToDictionary(pair => pair.Key, pair => pair.Value.Trim()[..Math.Min(64, pair.Value.Trim().Length)]),
