@@ -11,9 +11,8 @@ namespace PaperTodo;
 
 public sealed partial class PaperWindow
 {
-    // Custom original SVG contour in assets/workspace-cycle.svg. Keep the WPF Geometry inline
-    // so the single-file application has no SVG renderer or loose-resource dependency.
-    private const string WorkspaceCycleSvgPath = "M4.2 7.8V6.25C4.2 5.05 5.15 4.1 6.35 4.1H10.25C11.45 4.1 12.4 5.05 12.4 6.25V7.65M10.35 5.65L12.4 7.7 14.45 5.65M12.4 9.35V10.15C12.4 11.35 11.45 12.3 10.25 12.3H6.35C5.15 12.3 4.2 11.35 4.2 10.15V8.75M2.15 10.8L4.2 8.75 6.25 10.8";
+    // WPF uses the shared path so the icon works in the single-file application
+    // without requiring an SVG renderer or an external asset.
 
     private Button? _workspaceButton;
     private TextBlock? _workspaceNumberBadge;
@@ -26,8 +25,8 @@ public sealed partial class PaperWindow
         var icon = new Grid { Width = 20, Height = 19, IsHitTestVisible = false };
         var loop = new Path
         {
-            Data = Geometry.Parse(WorkspaceCycleSvgPath),
-            StrokeThickness = 1.35,
+            Data = Geometry.Parse(WorkspaceCycleIcon.PathData),
+            StrokeThickness = WorkspaceCycleIcon.StrokeThickness,
             StrokeStartLineCap = PenLineCap.Round,
             StrokeEndLineCap = PenLineCap.Round,
             StrokeLineJoin = PenLineJoin.Round,

@@ -600,6 +600,7 @@ public sealed partial class AppController
 
         window.PreviewMouseDown += (_, e) =>
         {
+            CancelWorkspaceRenameOnPointer(e.OriginalSource as DependencyObject);
             if (_settingsExternalMarkdownTextBox is not { IsKeyboardFocusWithin: true } textBox ||
                 IsWithinElement(e.OriginalSource as DependencyObject, textBox))
             {
@@ -611,10 +612,15 @@ public sealed partial class AppController
         };
         window.PreviewKeyDown += OnSettingsWindowPreviewKeyDown;
         window.PreviewKeyUp += OnSettingsWindowPreviewKeyUp;
-        window.Deactivated += (_, _) => CommitSettingsExternalMarkdownEditor();
+        window.Deactivated += (_, _) =>
+        {
+            CancelWorkspaceRenameOnPointer(null);
+            CommitSettingsExternalMarkdownEditor();
+        };
         window.Activated += (_, _) => RefreshSettingsStartupStateFromWindows();
         window.Closed += (_, _) =>
         {
+            CancelWorkspaceRenameOnPointer(null);
             _workspaceSelectionDraft = 0;
             CommitSettingsExternalMarkdownEditor();
             StopSettingsStartupStateRefresh();

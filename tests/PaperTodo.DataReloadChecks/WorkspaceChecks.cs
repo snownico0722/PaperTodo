@@ -757,6 +757,17 @@ internal static partial class Program
                 workspaceStatus.LastResult?.Applied == true && workspaceStatus.LastAttemptAt != null,
                 "post-rebind status does not identify the actual reload target");
             Require(!controller.PublicSettings.Get("appearance.theme").Writable, "inherited setting advertised writable");
+
+            // The locked-settings jump must look like the framed restore-default
+            // button, not like an unadorned text label.
+            var inheritedPage = (StackPanel)typeof(AppController)
+                .GetMethod("WithWorkspaceSettingsInheritance", BindingFlags.NonPublic | BindingFlags.Instance)!
+                .Invoke(controller, [new TextBlock()])!;
+            var manageWorkspace = inheritedPage.Children.OfType<Button>().Single();
+            Require(manageWorkspace.Height == 27 &&
+                    manageWorkspace.BorderThickness.Left == 1 &&
+                    manageWorkspace.Background == Brushes.Transparent,
+                "the inherited-settings workspace jump needs the same outlined affordance as Restore defaults");
             Throws<PaperSettingsException>(() => controller.PublicSettings.Set("appearance.theme", JsonSerializer.SerializeToElement("light")));
             controller.SaveNow(sync: true);
             Require(Str(J(File.ReadAllText(store2.FilePath))["theme"]) == "light", "inherited settings saved over dormant settings");
@@ -945,6 +956,17 @@ internal static partial class Program
                     System.Reflection.BindingFlags.Instance)!
                 .Invoke(controller, null)!;
             var workspacePage = WorkspacePage();
+            var createWorkspace = workspacePage.Children.OfType<DockPanel>().Single()
+                .Children.OfType<Button>().Single();
+            Require(createWorkspace.Height == 27 && createWorkspace.BorderThickness.Left == 1,
+                "New workspace needs the same framed Settings button as Restore defaults");
+            var iconClass = typeof(AppController).Assembly.GetType("PaperTodo.WorkspaceCycleIcon", throwOnError: true)!;
+            var iconData = (string)iconClass.GetField("PathData", BindingFlags.NonPublic | BindingFlags.Static)!
+                .GetRawConstantValue()!;
+            var iconBounds = Geometry.Parse(iconData).Bounds;
+            Require(iconBounds.Width > 8 && iconBounds.Height > 8 &&
+                    iconBounds.Width < 17 && iconBounds.Height < 17,
+                "the redesigned workspace glyph must parse as a compact top-bar vector");
             Border SlotCard(StackPanel page, int slot) => page.Children.OfType<Border>()
                 .Single(card => AutomationProperties.GetAutomationId(card) == "WorkspaceSlot" + slot);
             var third = SlotCard(workspacePage, 3);
@@ -956,6 +978,11 @@ internal static partial class Program
             var rightRow = cardRow.Children.OfType<StackPanel>().Last();
             var rename = nameRow.Children.OfType<Button>().Single();
             var workspaceNameEditor = nameRow.Children.OfType<TextBox>().Single();
+            Require(workspaceNameEditor.Style is { } renameStyle &&
+                    renameStyle.Setters.OfType<Setter>().Any(setter => setter.Property == Control.TemplateProperty) &&
+                    workspaceNameEditor.BorderThickness.Left == 1 &&
+                    workspaceNameEditor.Padding.Left == 8,
+                "workspace rename editor should use the rounded external-file-extension textbox style");
             Require(rightRow.Children.OfType<CheckBox>().Single().Content?.ToString() ==
                     Strings.Get("WorkspaceFollowMain") &&
                     rightRow.Children.OfType<Button>().Count() == 1,
@@ -964,6 +991,23 @@ internal static partial class Program
             Require(rename.Content?.ToString() == "✓" && workspaceNameEditor.Visibility == Visibility.Visible &&
                 nameRow.Children.OfType<TextBlock>().First().Visibility == Visibility.Collapsed,
                 "pen did not switch the workspace name into same-row editing");
+            // In-place cursor placement and the checkmark remain interactive.
+            // Every click outside both cancels, including outside the card;
+            // the draft must not be silently saved.
+            var cancelRenamePointer = typeof(AppController).GetMethod(
+                "CancelWorkspaceRenameOnPointer", BindingFlags.NonPublic | BindingFlags.Instance)!;
+            cancelRenamePointer.Invoke(controller, [workspaceNameEditor]);
+            cancelRenamePointer.Invoke(controller, [rename]);
+            Require(rename.Content?.ToString() == "✓" &&
+                    workspaceNameEditor.Visibility == Visibility.Visible,
+                "mouse interactions inside the editor or on the checkmark must not cancel renaming");
+            workspaceNameEditor.Text = "Unsaved workspace";
+            cancelRenamePointer.Invoke(controller, [new Border()]);
+            Require(rename.Content?.ToString() == "✎" &&
+                    workspaceNameEditor.Visibility == Visibility.Collapsed &&
+                    controller.WorkspaceOptions.DisplayName(3) != "Unsaved workspace",
+                "a click anywhere outside the inline rename area must discard its draft");
+            rename.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             workspaceNameEditor.Text = "Review workspace";
             rename.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             await Until(() => controller.WorkspaceOptions.DisplayName(3) == "Review workspace" &&
@@ -983,8 +1027,9 @@ internal static partial class Program
             Require(controller.WorkspaceNumber == 1, "workspace card switched without confirmation");
             workspacePage = WorkspacePage();
             var confirm = workspacePage.Children.OfType<Button>().Single();
-            Require(confirm.IsEnabled && confirm.Content?.ToString() != Strings.Get("CommonCancel"),
-                "settings must offer one enabled switch confirmation and no cancel button");
+            Require(confirm.IsEnabled && confirm.Content?.ToString() != Strings.Get("CommonCancel") &&
+                    confirm.Height == 27 && confirm.BorderThickness.Left == 1,
+                "settings must offer one framed switch confirmation and no cancel button");
             confirm.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             await Until(() => controller.WorkspaceNumber == 3 && !controller.IsWorkspaceSwitching,
                 "settings card confirmation did not select slot 3");

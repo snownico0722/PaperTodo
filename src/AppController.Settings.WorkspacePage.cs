@@ -14,12 +14,20 @@ public sealed partial class AppController
 {
     private FrameworkElement? _workspaceSettingsPanel;
     private int _workspaceSelectionDraft;
+    // One active inline rename per settings window. The same window-wide pointer
+    // handler cancels it whether the user clicks another card, the sidebar, or
+    // the empty background; the editor and the checkmark remain interactive.
+    private Action<DependencyObject?>? _workspaceRenameOutsideClick;
+
+    private void CancelWorkspaceRenameOnPointer(DependencyObject? hit) =>
+        _workspaceRenameOutsideClick?.Invoke(hit);
 
     private string WorkspaceUi(string zh, string en, string ja, string ko) =>
         SettingsSidebarLocalized(zh, en, ja, ko);
 
     private UIElement BuildWorkspaceSettingsPage()
     {
+        CancelWorkspaceRenameOnPointer(null);
         var root = new StackPanel { Margin = new Thickness(2, 4, 4, 0) };
         _workspaceSettingsPanel = root;
         root.IsEnabled = !_workspaceSwitching;
@@ -32,7 +40,7 @@ public sealed partial class AppController
         }));
 
         var heading = new DockPanel { Margin = new Thickness(0, 12, 0, 5) };
-        var create = PluginPageButton(WorkspaceUi("＋ 新建", "＋ New", "＋ 新規", "＋ 새로 만들기"));
+        var create = SettingsTextButton(WorkspaceUi("＋ 新建", "＋ New", "＋ 新規", "＋ 새로 만들기"));
         create.HorizontalAlignment = HorizontalAlignment.Right;
         create.IsEnabled = WorkspaceOptions.Enabled && WorkspaceOptions.SlotNumbers.Count < 5;
         DockPanel.SetDock(create, Dock.Right);
@@ -108,9 +116,16 @@ public sealed partial class AppController
                 Text = label,
                 Width = AppTypography.Scale(154),
                 MaxLength = 64,
-                Height = 26,
+                Height = AppTypography.FitChrome(28),
                 FontSize = AppTypography.Scale(12),
+                Foreground = TrayTextBrush,
+                CaretBrush = TrayTextBrush,
+                Background = Brushes.Transparent,
+                BorderBrush = TrayBorderBrush,
+                BorderThickness = new Thickness(1),
+                Padding = new Thickness(8, 4, 8, 4),
                 VerticalContentAlignment = VerticalAlignment.Center,
+                Style = BuildSettingsTextBoxStyle(),
                 Visibility = Visibility.Collapsed
             };
             var numberLabel = new TextBlock
@@ -140,6 +155,7 @@ public sealed partial class AppController
             line.Children.Add(nameRow);
 
             var editing = false;
+            Action<DependencyObject?>? outsideClick = null;
             void ExitEditing()
             {
                 editing = false;
@@ -148,6 +164,8 @@ public sealed partial class AppController
                 rename.Content = "✎";
                 rename.ToolTip = WorkspaceUi("编辑名称", "Edit name", "名前を編集", "이름 편집");
                 rename.IsEnabled = true;
+                if (ReferenceEquals(_workspaceRenameOutsideClick, outsideClick))
+                    _workspaceRenameOutsideClick = null;
             }
             async void SaveName()
             {
@@ -157,22 +175,32 @@ public sealed partial class AppController
                 rename.IsEnabled = false;
                 var next = WorkspaceOptions.Normalized();
                 next.Names[slot] = value;
-                if (!await ChangeWorkspaceConfigurationAsync(next))
+                if (!await ChangeWorkspaceConfigurationAsync(next) && editing)
                 {
+                    // A rejected save must not refocus an editor already dismissed
+                    // by an outside click or by page navigation.
                     rename.IsEnabled = true;
                     editor.Focus();
                 }
                 // A successful save refreshes the settings page through the catalog update.
             }
+            outsideClick = hit =>
+            {
+                if (!IsWithinElement(hit, editor) && !IsWithinElement(hit, rename))
+                    ExitEditing();
+            };
             rename.Click += (_, _) =>
             {
                 if (editing) { SaveName(); return; }
+                // A second editor replaces the first draft rather than saving it.
+                CancelWorkspaceRenameOnPointer(null);
                 editing = true;
                 editor.Text = WorkspaceOptions.DisplayName(slot);
                 name.Visibility = Visibility.Collapsed;
                 editor.Visibility = Visibility.Visible;
                 rename.Content = "✓";
                 rename.ToolTip = WorkspaceUi("保存名称", "Save name", "名前を保存", "이름 저장");
+                _workspaceRenameOutsideClick = outsideClick;
                 editor.SelectAll();
                 editor.Focus();
             };
@@ -232,7 +260,7 @@ public sealed partial class AppController
             root.Children.Add(card);
         }
 
-        var confirm = PluginPageButton(WorkspaceUi(
+        var confirm = SettingsTextButton(WorkspaceUi(
             "确认切换", "Confirm switch", "切り替えを確認", "전환 확인"));
         confirm.HorizontalAlignment = HorizontalAlignment.Right;
         confirm.Margin = new Thickness(0, 8, 0, 2);
@@ -303,7 +331,7 @@ public sealed partial class AppController
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(2, 4, 0, 8)
         });
-        var manage = PluginPageButton(Strings.Get("WorkspaceSettingsTitle"));
+        var manage = SettingsTextButton(Strings.Get("WorkspaceSettingsTitle"));
         manage.Margin = new Thickness(0, 0, 0, 10);
         manage.HorizontalAlignment = HorizontalAlignment.Left;
         manage.Click += (_, _) => ShowSettingsWindow(SettingsPage.Workspaces);
