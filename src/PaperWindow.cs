@@ -2719,6 +2719,9 @@ public sealed partial class PaperWindow : Window
     {
         menu.Items.Clear();
         menu.Items.Add(MenuHeader(Strings.Get("MenuQuick")));
+        if (!_isExpandedEditorMode && _editorModeButton?.Visibility != Visibility.Visible)
+            menu.Items.Add(MenuItem(Strings.Get("EditorOpen"),
+                (_, _) => _controller.OpenExpandedEditorFor(this)));
 
         // Follow one global order for both the top bar and its dynamic overflow.
         // The menu lists only the commands not currently shown as title-bar buttons.
