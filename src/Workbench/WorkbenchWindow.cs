@@ -480,6 +480,9 @@ internal sealed class WorkbenchWindow : Window
     {
         var card = CreateCardShell(paper);
         card.Title.IsReadOnly = true;
+        card.Title.Focusable = false;
+        card.Title.IsHitTestVisible = false;
+        card.Title.Visibility = Visibility.Visible;
         card.Pin.Visibility = card.Menu.Visibility = card.Resize.Visibility = card.Move.Visibility = Visibility.Collapsed;
         card.Eye.IsEnabled = false;
         var preview = new StackPanel { Margin = new Thickness(16) };
