@@ -1198,6 +1198,8 @@ public sealed partial class PaperWindow : Window
         _paperChrome.BeginAnimation(Border.MarginProperty, null);
         _paperChrome.Margin = new Thickness(UsesNativePaperChrome ? 0 : WindowChromeMargin);
         _paperChrome.CornerRadius = targetCorner;
+        if (_topBarHost != null && _isExpandedEditorMode && !_controller.UsesNativeMicaWindows)
+            _topBarHost.CornerRadius = new CornerRadius(ExpandedEditorCornerRadius, ExpandedEditorCornerRadius, 0, 0);
         // Native expanded papers use the system frame, even during solid fallback.
         // Applying an Effect to a transparent content ancestor also shadows its glyphs.
         var materialShadow = Theme.UsesNativeBackdrop && (IsPaperFormTransitioning || isCapsule);
@@ -2601,6 +2603,11 @@ public sealed partial class PaperWindow : Window
         UIElement body = _paper.Type == PaperTypes.Note
             ? CreateAndAttachInitialPaperBody()
             : BuildTodoBody();
+        if (body is FrameworkElement editorBody)
+        {
+            _editorContentElement = editorBody;
+            _editorContentOriginalMargin = editorBody.Margin;
+        }
         Grid.SetRow(body, 1);
         _shell.Children.Add(body);
 
@@ -3621,7 +3628,8 @@ public sealed partial class PaperWindow : Window
     private CornerRadius PaperChromeCornerRadiusForState(bool collapsed)
     {
         return new CornerRadius(collapsed ? CapsuleChromeCornerRadius :
-            _controller.UsesNativeMicaWindows ? NativeMicaBackdrop.CornerRadius : ExpandedChromeCornerRadius);
+            _controller.UsesNativeMicaWindows ? NativeMicaBackdrop.CornerRadius :
+            _isExpandedEditorMode ? ExpandedEditorCornerRadius : ExpandedChromeCornerRadius);
     }
 
     private double CapsuleWindowWidth()
