@@ -96,6 +96,7 @@ public sealed partial class AppController
             window.UpdateTheme();
         }
         foreach (var m in _masterCapsules.Values) m.UpdateTheme();
+        _workbenchWindow?.RefreshTheme();
         SkinBorder.RefreshLoadedSurfaces();
 
         RebuildTrayMenu();
