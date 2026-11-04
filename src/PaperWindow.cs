@@ -2681,7 +2681,7 @@ public sealed partial class PaperWindow : Window
                     _controller.WorkspaceOptions.Enabled &&
                     _controller.WorkspaceOptions.SlotNumbers.Count > 1 &&
                     !IsTopBarCommandVisible(_workspaceButton):
-                    menu.Items.Add(BuildWorkspaceSelectionMenuItem(menu));
+                    menu.Items.Add(BuildWorkspaceShortcutMenuItem(menu));
                     break;
                 case PaperTopBarShortcuts.NewTodo when !IsTopBarCommandVisible(_newTodoButton):
                     menu.Items.Add(MenuItem(Strings.Get("MenuNewTodoPaper"),
