@@ -53,6 +53,7 @@ public sealed partial class AppController
             OwnerOffsetDip = (ownerIndex + (carriesMaster ? 1 : 0)) * pitch,
             SourceDpiY = source.Geometry.DpiScaleY, PreviewOrigin = previewOrigin
         };
+        if (EdgeCapsuleFreeQueuesEnabled) _nativeQueueDropGhost ??= new EdgeCapsuleQueueDropGhost();
         return true;
     }
 
@@ -78,10 +79,15 @@ public sealed partial class AppController
         {
             drag.Detached = EdgeCapsuleFreeQueuePolicy.ShouldDetachSingle(floating, ownerTopDip,
                 drag.SourceTopDip, drag.SourceIds.Length, EdgeCapsuleLayout.SlotHeight(DeepCapsuleGap));
-            if (!drag.Detached) return false; // Ordinary sorting uses the unchanged legacy gesture.
+            if (!drag.Detached)
+            {
+                _nativeQueueDropGhost?.Hide();
+                return false; // Ordinary sorting uses the unchanged legacy gesture.
+            }
         }
         drag.Drop = EvaluateNativeEdgeQueueDrop(drag, owner, pointer, ownerTopDip, floating);
         ApplyNativeEdgeQueuePreview(drag, ownerTopDip, floating);
+        UpdateNativeQueueDropGhost(drag, pointer);
         return true;
     }
 
@@ -284,6 +290,8 @@ public sealed partial class AppController
     {
         var drag = _nativeEdgeQueueDrag;
         if (drag == null || drag.OwnerId != ownerId) return;
+        _nativeQueueDropGhost?.Dispose();
+        _nativeQueueDropGhost = null;
         _nativeEdgeQueueDrag = null; // Consume before publishing any window callbacks.
         if (drag.FloatingCoverReady)
         {

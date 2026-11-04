@@ -45,6 +45,11 @@ internal static class EdgeCapsuleFreeQueuePolicy
         enteredAnotherMonitor || horizontalDistanceDip >= EdgeCapsuleLayout.CrossQueueDragUnlockDistance +
             (freeQueues ? DetachResistance : 0);
 
+    internal static double GhostSlotTop(EdgeFreeQueueDrop drop, bool targetHasMaster, double pitch) =>
+        drop.Kind == EdgeFreeQueueDropKind.Insert
+            ? drop.TopDip + (targetHasMaster ? pitch : 0) + drop.Index * pitch
+            : drop.TopDip;
+
     internal static double NudgeToward(double actualTop, double targetTop, double maximumDip) =>
         actualTop + Math.Clamp(targetTop - actualTop, -maximumDip, maximumDip);
 

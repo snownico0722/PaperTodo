@@ -504,18 +504,17 @@ public sealed partial class PaperWindow
             return;
         }
 
-        var geometry = DeepCapsuleMonitorGeometry();
-        var targetDeviceTop = currentScreenPos.Y - session.DockedPointerOffsetY;
-        if (!MoveEdgeCapsuleDockedReorder(
-                currentScreenPos,
-                NativeQueueLogicalOwnerTop(currentScreenPos, session, floating: false)))
+        var logicalTop = NativeQueueLogicalOwnerTop(currentScreenPos, session, floating: false);
+        // Only the dragged docked capsule receives a tiny positional nudge; hit testing,
+        // queue choice and final commit continue to use the unmodified physical pointer.
+        var visualTop = _controller.NativeEdgeQueueMagnetizedOwnerTop(_paper.Id, logicalTop);
+        if (!MoveEdgeCapsuleDockedReorder(currentScreenPos, visualTop))
         {
             CancelDeepCapsuleReorderDrag(restoreLayout: true);
             return;
         }
         FlushEdgeCapsulePresentation(EdgeCapsuleTransitionReason.Drag);
-        if (!_controller.PreviewNativeEdgeQueueDrag(_paper, currentScreenPos,
-                NativeQueueLogicalOwnerTop(currentScreenPos, session, floating: false), floating: false))
+        if (!_controller.PreviewNativeEdgeQueueDrag(_paper, currentScreenPos, logicalTop, floating: false))
             PreviewDeepCapsuleReorderForCurrentPosition();
     }
 

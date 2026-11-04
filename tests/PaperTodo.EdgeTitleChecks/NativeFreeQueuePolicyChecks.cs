@@ -20,6 +20,9 @@ internal static class NativeFreeQueuePolicyChecks
         Require(append.Accepted && append.TopDip == target.TopDip, "append does not move the old head");
         var interior = EdgeCapsuleFreeQueuePolicy.Insert([target], target.Key, 1, 2, 900, pitch, gap);
         Require(interior.Accepted && interior.TopDip == 400 && interior.Index == 1, "interior insertion keeps the prefix");
+        Require(EdgeCapsuleFreeQueuePolicy.GhostSlotTop(prepend, false, pitch) == 300 &&
+                EdgeCapsuleFreeQueuePolicy.GhostSlotTop(interior, false, pitch) == 450,
+            "instant ghost matches exactly the slot the commit will occupy");
         var returning = EdgeCapsuleFreeQueuePolicy.Insert([target], target.Key, 0, 1, 900, pitch, gap, prependAbove: false);
         Require(returning.Accepted && returning.TopDip == 400, "same-queue sorting retains the legacy anchor");
         var near = target with { Key = "|right#c", TopDip = 520, MemberCount = 1 };
