@@ -19,7 +19,8 @@ internal static class ExpandedEditorChecks
         {
             TelemetryEnabled = false,
             EnableAnimations = false,
-            UseCapsuleMode = false,
+            UseCapsuleMode = true,
+            UseDeepCapsuleMode = false,
             McpEnabled = false,
             UsePersistentPowerShellProcess = false,
             Papers =
@@ -29,7 +30,7 @@ internal static class ExpandedEditorChecks
                     X = 120, Y = 90, Width = 330, Height = 280 },
                 new() { Id = "editor-b", Type = PaperTypes.Note, Title = "Second",
                     Content = "# Second\nDifferent editor", IsVisible = true,
-                    X = 470, Y = 95, Width = 370, Height = 310 },
+                    IsCollapsed = true, X = 470, Y = 95, Width = 370, Height = 310 },
                 new() { Id = "editor-todo", Type = PaperTypes.Todo, Title = "Tasks",
                     IsVisible = false, X = 250, Y = 460, Width = 320, Height = 290,
                     Items = [new() { Id = "task-a", Text = "Keep the same HWND" }] }
@@ -60,12 +61,15 @@ internal static class ExpandedEditorChecks
         Check(hwnd != IntPtr.Zero && host.IsVisible, "No visible taskbar editor window");
         Check(a.IsExpandedEditorHosted && !a.IsVisible, "The original paper remained visible alongside the editor");
         Check(ReferenceEquals(firstEditor, Member(a, "_noteBox")), "The first Markdown control was duplicated");
+        a.SetExpandedEditorSidebarOpen(true);
 
         controller.SwitchExpandedEditorPaper(a, "editor-b");
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
         Check(ReferenceEquals(host, b.ExpandedEditorHostWindow), "Sidebar replaced the editor host");
         Check(new WindowInteropHelper(host).Handle == hwnd, "Switching papers changed the editor HWND");
         Check(host.CurrentPaperId == "editor-b", "Sidebar did not select the second paper");
+        Check(b.IsExpandedEditorSidebarOpen && !b.IsCollapsed,
+            "Switch did not preserve sidebar presentation or expand the borrowed capsule");
         Check(ReferenceEquals(secondEditor, Member(b, "_noteBox")) &&
               ReferenceEquals(secondSession, Member(b, "_markdownBodySession")),
               "The second paper recreated its Markdown editor/session");
@@ -83,7 +87,7 @@ internal static class ExpandedEditorChecks
         Check(host.CurrentPaperId == "editor-todo" && todo.IsExpandedEditorHosted,
             "Todo visual did not replace the Markdown visual");
         Check(new WindowInteropHelper(host).Handle == hwnd, "Todo switch changed the WPF HWND");
-        Check(!b.IsExpandedEditorHosted &&
+        Check(!b.IsExpandedEditorHosted && b.IsCollapsed &&
               ReferenceEquals(secondSession, Member(b, "_markdownBodySession")),
               "Leaving B disposed its original editor session");
 
