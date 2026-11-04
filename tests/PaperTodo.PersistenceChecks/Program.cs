@@ -35,6 +35,7 @@ var checks = new (string Name, Action Run)[]
     ("free-queue-instance-keys-do-not-collapse-into-one", FreeQueueInstanceKeysDoNotCollapseIntoOne),
     ("legacy-papers-keep-the-default-queue-key", LegacyPapersKeepTheDefaultQueueKey),
     ("legacy-queue-keys-survive-when-free-queues-disabled", LegacyQueueKeysSurviveWhenFreeQueuesDisabled),
+    ("free-queue-mode-dependencies-survive-load", FreeQueueModeDependenciesSurviveLoad),
     ("downward-preview-default-and-roundtrip", DownwardPreviewDefaultAndRoundTrip)
 };
 
@@ -267,6 +268,34 @@ static void LegacyQueueKeysSurviveWhenFreeQueuesDisabled()
     Assert(loaded.DeepCapsuleQueueStartTopMargins.ContainsKey("DISPLAY1|left") &&
            loaded.DeepCapsuleQueueStartTopMargins.ContainsKey("DISPLAY1|right#q1"),
         "disabling free queues discarded remembered queue layout");
+}
+
+// 加载归一化必须与运行期设置级联使用同一套不变式：自由队列要求胶囊/边缘模式开启，
+// 且与主胶囊互斥。手改 data.json 或旧插件写入的脏组合不能静默复活功能。
+static void FreeQueueModeDependenciesSurviveLoad()
+{
+    using var scope = new TempDirectory();
+    var store = NewStore(scope.Path, DurableAtomicFileWriter.Shared);
+
+    var missingParent = NewState("light");
+    missingParent.UseCapsuleMode = false;
+    missingParent.UseDeepCapsuleMode = true;
+    missingParent.UseCapsuleFreeQueues = true;
+    missingParent.UseCapsuleCollapseAll = true;
+    store.SaveJsonSync(store.SerializeState(missingParent), version: 1);
+    var normalized = NewStore(scope.Path, DurableAtomicFileWriter.Shared).Load();
+    Assert(!normalized.UseCapsuleFreeQueues && !normalized.UseCapsuleCollapseAll,
+        "load normalization kept free queues without their parent capsule modes");
+
+    var bothFeatures = NewState("light");
+    bothFeatures.UseCapsuleMode = true;
+    bothFeatures.UseDeepCapsuleMode = true;
+    bothFeatures.UseCapsuleFreeQueues = true;
+    bothFeatures.UseCapsuleCollapseAll = true;
+    store.SaveJsonSync(store.SerializeState(bothFeatures), version: 1);
+    var exclusive = NewStore(scope.Path, DurableAtomicFileWriter.Shared).Load();
+    Assert(exclusive.UseCapsuleFreeQueues && !exclusive.UseCapsuleCollapseAll,
+        "load normalization allowed free queues and the master pill to coexist");
 }
 
 static PaperData NewDockedPaper(string id, string monitor, string side, string queueId) => new()

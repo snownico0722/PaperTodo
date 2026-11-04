@@ -271,7 +271,11 @@ public sealed partial class AppController
             // NewQueue 避让仍使用当前占位，因此同一个候选同时携带两套区间。
             var margin = DeepCapsuleStartTopMarginForQueueKey(key);
             var delta = restingDeltas.GetValueOrDefault(key);
-            var insertionSlotCount = slotCount + 1;
+            // 插入回退区间必须与预览使用同一套槽位数：整队搬移时预览会把全部携带成员
+            // 展开进目标队列，若这里只按 +1 计算，贴底队列的队首/队尾会落在区间之外，
+            // 用户看到完整预览却无法吸附。真实占位优先由磁吸的 currentDistance 分支保证，
+            // 不应用缩小插入几何的方式限制整队吸附范围。
+            var insertionSlotCount = slotCount + carried.Count;
             result.Add(new EdgeCapsuleQueueMagnetCandidate(
                 key,
                 slotCount,

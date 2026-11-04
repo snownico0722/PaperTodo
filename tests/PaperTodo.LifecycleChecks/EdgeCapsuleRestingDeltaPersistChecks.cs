@@ -20,8 +20,8 @@ internal static class EdgeCapsuleRestingDeltaPersistChecks
         var source = controller.State.Papers.Single(paper => paper.Id == "fixture-3");
         var targetPaper = controller.State.Papers.Single(paper => paper.Id == "fixture-1");
         var targetKey = controller.QueueKeyForPaper(targetPaper);
-        var qaKey = controller.QueueKeyForPaper(
-            controller.State.Papers.Single(paper => paper.Id == "fixture-0"));
+        var qaPaper = controller.State.Papers.Single(paper => paper.Id == "fixture-0");
+        var qaKey = controller.QueueKeyForPaper(qaPaper);
         var qcKey = controller.QueueKeyForPaper(
             controller.State.Papers.Single(paper => paper.Id == "fixture-2"));
 
@@ -30,6 +30,7 @@ internal static class EdgeCapsuleRestingDeltaPersistChecks
             "primary monitor geometry was not resolved");
 
         // 预期值完全由当前 gap / 胶囊高度推导，避免依赖固定 DIP。
+        var area = geometry.LocalWorkAreaDip;
         var gap = controller.DeepCapsuleGap;
         var slotHeight = EdgeCapsuleLayout.SlotHeight(gap);
         var capsuleHeight = PaperLayoutDefaults.CapsuleHeight;
@@ -76,6 +77,46 @@ internal static class EdgeCapsuleRestingDeltaPersistChecks
             Math.Abs(saved.DeepCapsuleQueueStartTopMargins[qcKey] - 130) < 1e-6 &&
             Math.Abs(saved.DeepCapsuleQueueStartTopMargins[qaKey] - 60) < 1e-6,
             "the persisted file contains a transient resting offset");
+
+        // 直接覆盖“向上移动邻队”的持久化边界：求解位置 = 基准 + 静止 delta - 向上推移，
+        // 写回偏好时必须再扣掉静止 delta，不能把临时避让固化进 margin。
+        const double upwardDelta = 20;
+        const double upwardRise = 10;
+        var targetBaseTop = area.Top + 90;
+        var upwardBaseTop = area.Top + 60;
+        controller.State.DeepCapsuleQueueStartTopMargins[targetKey] = 90;
+        controller.State.DeepCapsuleQueueStartTopMargins[qaKey] = 60;
+        var plan = new EdgeCapsuleQueueDropLayoutPlan
+        {
+            Feasible = true,
+            TargetQueueKey = targetKey,
+            TargetIndex = 0,
+            CarriedCount = 1,
+            MonitorDeviceName = "",
+            Side = DeepCapsuleSides.Right,
+            GapDip = gap,
+            SourceQueueKey = "",
+            UpwardMovedQueueKeys = new HashSet<string>([qaKey], StringComparer.Ordinal),
+            Queues = new Dictionary<string, EdgeCapsuleQueueDropPreview>(StringComparer.Ordinal)
+            {
+                [targetKey] = new(
+                    targetKey, [targetPaper], targetBaseTop, targetBaseTop, 0, false),
+                [qaKey] = new(
+                    qaKey,
+                    [qaPaper],
+                    upwardBaseTop,
+                    upwardBaseTop + upwardDelta - upwardRise,
+                    upwardDelta,
+                    false)
+            }
+        };
+        Program.Invoke(controller, "PersistEdgeCapsuleQueueDropLayoutMargins", plan);
+        Require(
+            Math.Abs(controller.State.DeepCapsuleQueueStartTopMargins[qaKey] - 50) < 1e-6,
+            "an upward-moved neighbour persisted its transient resting delta");
+        Require(
+            Math.Abs(controller.State.DeepCapsuleQueueStartTopMargins[targetKey] - 90) < 1e-6,
+            "the upward-move persistence probe disturbed the target margin");
     }
 
     private static EdgeCapsulePlacement Placement(PaperWindow window) =>

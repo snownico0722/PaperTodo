@@ -32,8 +32,9 @@ internal static class EdgeCapsuleShortcutChecks
             windows.Values.All(window => !window.HasExpandedPaperSurface),
             "an out-of-range shortcut expanded a window");
 
-        // 可见顺序：qa=[0,1] @48、qb=[2,3] @320、qc=[4] @450。
-        // 第 3 个应命中 qb 的首成员 fixture-2。
+        // 可见顺序：qa=[0,1] @48、qb=[2,3] @320、qc=[4] 基准 @320 但被静止避让下推到 420。
+        // 第 3 个应命中 qb 的首成员 fixture-2；若快捷键忽略静止避让，qc 会因设备 key
+        // 的字典序排到 qb 前面，第 3 个就会错误命中 fixture-3。
         Program.Invoke(controller, "ActivateEdgeCapsuleShortcut", DeepCapsuleSides.Right, 3);
         await Program.Until(
             () => windows["fixture-2"].HasExpandedPaperSurface,

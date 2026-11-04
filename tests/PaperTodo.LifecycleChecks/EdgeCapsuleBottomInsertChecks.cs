@@ -40,19 +40,36 @@ internal static class EdgeCapsuleBottomInsertChecks
             previewTop < currentTop,
             "the bottom-anchored target did not move upward when the carried members were inserted");
 
-        double DeviceCenterY(double offsetDip) =>
-            geometry.WorkArea.Top + (previewTop + offsetDip) * geometry.DpiScaleY;
+        double DeviceCenterY(double topDip, double offsetDip) =>
+            geometry.WorkArea.Top + (topDip + offsetDip) * geometry.DpiScaleY;
 
-        EdgeCapsuleDropAnchor Anchor(double offsetDip)
+        EdgeCapsuleDropAnchor AnchorAt(double topDip, double offsetDip)
         {
-            var y = DeviceCenterY(offsetDip);
+            var y = DeviceCenterY(topDip, offsetDip);
             return new EdgeCapsuleDropAnchor(
                 new DeviceScreenPoint(geometry.WorkArea.Right - 10, y),
                 y);
         }
 
-        var headAnchor = Anchor(height / 2.0);
-        var tailAnchor = Anchor(slot + height / 2.0);
+        // 携带 2 颗时预览是 3 槽，磁吸插入回退区间也必须按 3 槽计算。
+        // 若只按 +1 槽生成区间，队首锚点会落在区间外，整队头插无法命中。
+        var previewTop2 = EdgeCapsuleLayout.TopForIndex(0, margin, area, 3, gap);
+        var source2 = source.Take(2).ToArray();
+        var head2 = controller.EvaluateDeepCapsuleQueueDrag(
+            source2, AnchorAt(previewTop2, height / 2.0), excludeEntireSourceQueue: true);
+        Program.Require(
+            head2.Outcome == EdgeCapsuleQueueMagnetOutcome.Merge &&
+            head2.TargetQueueKey == targetKey,
+            "a two-capsule head insertion did not stay inside the magnet");
+        var tail2 = controller.EvaluateDeepCapsuleQueueDrag(
+            source2, AnchorAt(previewTop2, slot + height / 2.0), excludeEntireSourceQueue: true);
+        Program.Require(
+            tail2.Outcome == EdgeCapsuleQueueMagnetOutcome.Merge &&
+            tail2.TargetQueueKey == targetKey,
+            "a two-capsule tail insertion did not stay inside the magnet");
+
+        var headAnchor = AnchorAt(previewTop, height / 2.0);
+        var tailAnchor = AnchorAt(previewTop, slot + height / 2.0);
 
         var head = controller.EvaluateDeepCapsuleQueueDrag(
             source, headAnchor, excludeEntireSourceQueue: true);

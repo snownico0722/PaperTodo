@@ -5,13 +5,15 @@ namespace PaperTodo;
 /// <summary>
 /// 计划中一条队列的预览成员与位置（目标显示器本地 DIP）。
 /// <see cref="BaseTopDip"/> 是按保存 margin 与新成员数算出的偏好位置，不含运行期静止避让；
-/// <see cref="TopDip"/> 是求解器实际使用/下发的屏幕位置。
+/// <see cref="TopDip"/> 是求解器实际使用/下发的屏幕位置；
+/// <see cref="RestingDeltaDip"/> 是本次求解叠加的临时静止避让位移，持久化时必须扣除。
 /// </summary>
 internal sealed record EdgeCapsuleQueueDropPreview(
     string QueueKey,
     IReadOnlyList<PaperData> PreviewMembers,
     double BaseTopDip,
     double TopDip,
+    double RestingDeltaDip,
     bool IsSource);
 
 /// <summary>
@@ -188,7 +190,8 @@ public sealed partial class AppController
                 area,
                 previewMembers.Count,
                 gap);
-            var top = baseTop + restingDeltas.GetValueOrDefault(queueKey);
+            var restingDelta = restingDeltas.GetValueOrDefault(queueKey);
+            var top = baseTop + restingDelta;
             var height = EdgeCapsuleQueueDropTargetGeometry.QueueHeightDip(
                 previewMembers.Count,
                 slotHeight,
@@ -199,6 +202,7 @@ public sealed partial class AppController
                 previewMembers,
                 baseTop,
                 top,
+                restingDelta,
                 isSource);
             boxes.Add(new EdgeCapsuleQueueInsertBox(queueKey, top, height));
         }
@@ -445,7 +449,9 @@ public sealed partial class AppController
             }
             else if (plan.UpwardMovedQueueKeys.Contains(queueKey))
             {
-                persistedTop = preview.TopDip;
+                // 求解位置仍叠加了本帧的临时静止避让；写回偏好前必须扣除，否则断屏回退
+                // 或队列碰撞造成的位移会被固化，下一次 Arrange 再叠加时产生额外偏移。
+                persistedTop = preview.TopDip - preview.RestingDeltaDip;
             }
             else
             {

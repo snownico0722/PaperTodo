@@ -269,6 +269,15 @@ internal static partial class Program
         Check(tieA.TargetQueueKey == tieB.TargetQueueKey && tieA.TargetQueueKey == "aaa",
             "Equidistant candidates resolve to the same queue regardless of input order");
 
+        // 真实占位距离同为 0 时，优先指针更接近队列中心的候选，而不是退化成 key 字典序。
+        // A [100,146] 中心 123，B [120,166] 中心 143，指针 140 同时落在两者内。
+        var centreA = new EdgeCapsuleQueueMagnetCandidate("a", 1, 100, slot, bandLeft, bandWidth, 1, 100);
+        var centreB = new EdgeCapsuleQueueMagnetCandidate("b", 1, 120, slot, bandLeft, bandWidth, 1, 120);
+        Check(Evaluate(140, "", [centreA, centreB]).TargetQueueKey == "b",
+            "Overlapping real spans prefer the queue whose centre is closer to the pointer");
+        Check(Evaluate(140, "", [centreB, centreA]).TargetQueueKey == "b",
+            "Centre-distance tie-breaks do not depend on candidate order");
+
         // 第 1 项回归：每条候选的插入后占位都会扩容，但目标选择必须优先使用当前真实占位。
         // A 单颗 [48,94] 的插入区间会覆盖 B，指针却在 B 的当前占位 [248,294] 正中。
         var farA = new EdgeCapsuleQueueMagnetCandidate(
