@@ -147,7 +147,11 @@ public sealed partial class PaperWindow
     private void OnExpandedEditorHostStateChanged(object? sender, EventArgs e)
     {
         if (_expandedEditorHostWindow is { } host)
-            NotifyCurrentPaperBodyVisibility(host.WindowState != WindowState.Minimized);
+        {
+            var visible = host.WindowState != WindowState.Minimized;
+            NotifyCurrentPaperBodyVisibility(visible);
+            if (!visible) HideBuiltInFind(restoreFocus: false);
+        }
         RefreshExpandedEditorTopBarControls();
     }
 
