@@ -1,0 +1,30 @@
+name: Workbench checks
+on:
+  push:
+    branches: [feature/infinite-workbench]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  checks:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Export implementation workspace
+        shell: pwsh
+        run: git archive --format=zip HEAD -o workbench-source.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: workbench-source
+          path: workbench-source.zip
+          retention-days: 1
+      - name: Layout behavior checks
+        if: hashFiles('tests/PaperTodo.WorkbenchChecks/PaperTodo.WorkbenchChecks.csproj') != ''
+        run: dotnet run --project tests/PaperTodo.WorkbenchChecks/PaperTodo.WorkbenchChecks.csproj -c Release
+      - name: Release build
+        run: dotnet build PaperTodo.csproj -c Release
