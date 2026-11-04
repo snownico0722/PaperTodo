@@ -556,6 +556,7 @@ public sealed partial class StateStore
         NormalizeGlobalState(state);
         NormalizePapers(state);
         NormalizeLinks(state);
+        state.Workbench?.Normalize(state.Papers.Select(p => p.Id));
     }
 
     private static void MigrateLegacyTopBarSettings(AppState state, string json)

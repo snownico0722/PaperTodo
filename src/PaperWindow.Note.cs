@@ -266,7 +266,7 @@ public sealed partial class PaperWindow
                         }
 
                         if (isPreviewing &&
-                            IsActive &&
+                            InteractionWindow.IsActive &&
                             !IsKeyboardFocusWithin &&
                             _findHost?.IsKeyboardFocusWithin != true &&
                             !IsPaperContextMenuInteractionActive)
@@ -711,7 +711,7 @@ public sealed partial class PaperWindow
                     {
                         return;
                     }
-                    if (IsActive)
+                    if (InteractionWindow.IsActive)
                     {
                         TraceNoteRender("ImageContextMenuClosed: refocus editor");
                         box.Focus();
@@ -879,7 +879,7 @@ public sealed partial class PaperWindow
             CheckFileExists = true
         };
 
-        if (dialog.ShowDialog(this) != true)
+        if (dialog.ShowDialog(InteractionWindow) != true)
         {
             return Array.Empty<string>();
         }

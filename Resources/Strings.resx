@@ -1716,4 +1716,27 @@
   <data name="NoteExportNoNotes" xml:space="preserve"><value>没有可导出的笔记或待办。</value></data>
   <data name="NoteExportProgress" xml:space="preserve"><value>正在导出 {0}/{1} 张纸片</value></data>
   <data name="TodoExportCurrent" xml:space="preserve"><value>导出当前待办</value></data>
+  <data name="WorkbenchTitle" xml:space="preserve"><value>无限工作台</value></data>
+  <data name="WorkbenchOverview" xml:space="preserve"><value>全部工作区</value></data>
+  <data name="WorkbenchCurrent" xml:space="preserve"><value>当前工作区</value></data>
+  <data name="WorkbenchNewNote" xml:space="preserve"><value>新笔记</value></data>
+  <data name="WorkbenchNewTodo" xml:space="preserve"><value>新待办</value></data>
+  <data name="WorkbenchArrange" xml:space="preserve"><value>整理布局</value></data>
+  <data name="WorkbenchUndo" xml:space="preserve"><value>撤销布局</value></data>
+  <data name="WorkbenchSearch" xml:space="preserve"><value>搜索并高亮，不改变布局</value></data>
+  <data name="WorkbenchRefresh" xml:space="preserve"><value>刷新概览</value></data>
+  <data name="WorkbenchClose" xml:space="preserve"><value>返回桌面</value></data>
+  <data name="WorkbenchHint" xml:space="preserve"><value>拖动纸片左上角移动；拖动右下角缩放。中键拖动画布，Alt＋滚轮缩放；Esc 返回桌面。其他工作区为只读概览。</value></data>
+  <data name="WorkbenchError" xml:space="preserve"><value>工作台操作失败：{0}</value></data>
+  <data name="WorkbenchPinConflict" xml:space="preserve"><value>有锁定纸片互相重叠；系统保留锁定位置，请移动或解锁其中一张。</value></data>
+  <data name="WorkbenchDelete" xml:space="preserve"><value>删除纸片</value></data>
+  <data name="WorkbenchDeleteConfirm" xml:space="preserve"><value>确定删除这张纸片及其内容？</value></data>
+  <data name="WorkbenchOpenWorkspace" xml:space="preserve"><value>进入此工作区</value></data>
+  <data name="WorkbenchPin" xml:space="preserve"><value>锁定或解锁位置</value></data>
+  <data name="WorkbenchConnect" xml:space="preserve"><value>连接纸片</value></data>
+  <data name="WorkbenchConnectHint" xml:space="preserve"><value>点击另一张纸片的连接按钮；Esc 取消。</value></data>
+  <data name="WorkbenchWorkspace" xml:space="preserve"><value>工作区 {0}</value></data>
+  <data name="WorkbenchReadError" xml:space="preserve"><value>无法读取此工作区：{0}</value></data>
+  <data name="WorkbenchDisconnect" xml:space="preserve"><value>移除此连接</value></data>
+  <data name="WorkbenchEmpty" xml:space="preserve"><value>这里还没有纸片。</value></data>
 </root>

@@ -1164,6 +1164,9 @@ public sealed partial class AppController : IDisposable
 
         switch (command.Kind)
         {
+            case StartupCommandKind.Workbench:
+                ToggleWorkbench();
+                break;
             case StartupCommandKind.Show:
                 ShowAllPapers();
                 break;
@@ -1264,6 +1267,7 @@ public sealed partial class AppController : IDisposable
 
     public void ShowPaper(PaperData paper, bool activate = true)
     {
+        if (!IsExiting && FocusWorkbenchPaper(paper, activate)) return;
         if (IsExiting)
         {
             return;
@@ -1835,6 +1839,7 @@ public sealed partial class AppController : IDisposable
 
     public void HidePaper(PaperData paper)
     {
+        CloseWorkbenchForDesktopAction();
         InvalidateVisibilityShortcutSnapshotForExternalCommand();
         var visibilityVersion = NextVisibilityAnimationVersion(paper.Id);
         _windows.TryGetValue(paper.Id, out var window);
@@ -1960,6 +1965,7 @@ public sealed partial class AppController : IDisposable
 
     public void HideAllPapers()
     {
+        CloseWorkbenchForDesktopAction();
         // Proxy handoff and body callbacks can run another UI command synchronously. Keep this
         // hide scoped to its original targets; each later show/delete supersedes that target.
         var papersToHide = State.Papers.ToArray();
@@ -2021,6 +2027,8 @@ public sealed partial class AppController : IDisposable
         }
 
         State.Papers.RemoveAll(p => p.Id == paper.Id);
+        State.Workbench?.Normalize(State.Papers.Select(p => p.Id));
+        WorkbenchModelChanged?.Invoke();
         QueuePluginPaperStateDeletion(paper.Id);
         _visibilityAnimationVersions.Remove(paper.Id);
         NotifyTodoReminderCollectionChanged();
@@ -3047,6 +3055,7 @@ public sealed partial class AppController : IDisposable
         bool animate = false,
         bool flushInitialPresentations = false)
     {
+        if (_workbenchWindow is { IsSuspended: false }) return;
         if (HasDeepCapsuleReorderDragInProgress())
         {
             _deepCapsuleArrangeGate.Defer(animate);
@@ -3320,6 +3329,7 @@ public sealed partial class AppController : IDisposable
         }
 
         Interlocked.Increment(ref _stateRevision);
+        WorkbenchModelChanged?.Invoke();
         NotifyPluginEventMutationStampChanged();
         if (!_hasPendingDirty)
         {
@@ -4139,6 +4149,7 @@ public sealed partial class AppController : IDisposable
         try
         {
             CommitSettingsExternalMarkdownEditor(saveImmediately: false);
+            _workbenchWindow?.CommitPendingTitles();
             foreach (var window in _windows.Values.ToList()) window.CommitPendingEditsForSave();
             // Ordinary exit owns the final coherent save. Failure leaves the editor alive;
             // Dispose/OnExit must never retry a rejected save after tearing down the UI.
@@ -4220,6 +4231,7 @@ public sealed partial class AppController : IDisposable
 
     private void DisposeRuntimeResources()
     {
+        TryExitCleanup(CloseWorkbenchForShutdown);
         TryExitCleanup(CancelMasterCapsuleQueueTransfers);
         _pluginStartupPaperGeneration++;
         StopStateBackupPolicy();

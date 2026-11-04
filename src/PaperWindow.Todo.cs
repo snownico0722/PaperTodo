@@ -1139,7 +1139,7 @@ public sealed partial class PaperWindow
                 {
                     _controller.OpenLinkedPaper(
                         item.LinkedPaperId,
-                        this,
+                        InteractionWindow,
                         toggleIfExcludedFromCapsules: true);
                 }
                 e.Handled = true;
@@ -1216,9 +1216,9 @@ public sealed partial class PaperWindow
                 item.Id,
                 row,
                 handle,
-                e.GetPosition(this),
+                e.GetPosition(InteractionRoot),
                 e.GetPosition(row));
-            CaptureMouse();
+            InteractionRoot.CaptureMouse();
             e.Handled = true;
         };
         AttachItemContextMenu(handle);
@@ -1610,7 +1610,7 @@ public sealed partial class PaperWindow
                 }
 
                 PaperNoticeDialog.Show(
-                    this,
+                    InteractionWindow,
                     Strings.Get("TodoPasteTruncatedTitle"),
                     string.Join(Environment.NewLine, messages));
             }),
@@ -1791,7 +1791,7 @@ public sealed partial class PaperWindow
     public bool TryHitTodoRow(Point screenPoint, out string? itemId)
     {
         itemId = null;
-        if (!_controller.State.EnableTodoPaperLinks || _paper.Type != PaperTypes.Todo || _paper.IsCollapsed || !IsVisible)
+        if (!_controller.State.EnableTodoPaperLinks || _paper.Type != PaperTypes.Todo || (!IsWorkbenchHosted && (_paper.IsCollapsed || !IsVisible)))
         {
             return false;
         }
@@ -2013,7 +2013,7 @@ public sealed partial class PaperWindow
             return;
         }
 
-        var current = e.GetPosition(this);
+        var current = e.GetPosition(InteractionRoot);
 
         if (!_todoDrag.IsDragging)
         {
@@ -2047,7 +2047,7 @@ public sealed partial class PaperWindow
             // drop target at the pointer's actual release-time position.
             FindVisualAncestor<ScrollViewer>(_todoPanel)?.UpdateLayout();
             if (_todoDrag?.IsDragging == true)
-                UpdateTodoMouseDrag(e.GetPosition(_todoPanel), e.GetPosition(this));
+                UpdateTodoMouseDrag(e.GetPosition(_todoPanel), e.GetPosition(InteractionRoot));
         }
 
         EndTodoMouseDrag(commit: _todoDrag?.IsDragging == true);
@@ -2062,7 +2062,7 @@ public sealed partial class PaperWindow
 
         try
         {
-            var pos = this.TransformToVisual(_appendArea).Transform(pointOnWindow);
+            var pos = InteractionRoot.TransformToVisual(_appendArea).Transform(pointOnWindow);
             return pos.X >= 0 && pos.X <= _appendArea.ActualWidth &&
                    pos.Y >= 0 && pos.Y <= _appendArea.ActualHeight;
         }
@@ -2275,9 +2275,9 @@ public sealed partial class PaperWindow
         _todoDrag = null;
         StopTodoDragEdgeScroll();
 
-        if (IsMouseCaptured)
+        if (InteractionRoot.IsMouseCaptured)
         {
-            ReleaseMouseCapture();
+            InteractionRoot.ReleaseMouseCapture();
         }
         Mouse.OverrideCursor = null;
 
@@ -2300,7 +2300,7 @@ public sealed partial class PaperWindow
         }
 
         if (state.DropAtEnd && _controller.State.ShowTodoBottomBar &&
-            IsPointerOverTodoTrash(Mouse.GetPosition(this)))
+            IsPointerOverTodoTrash(Mouse.GetPosition(InteractionRoot)))
         {
             if (DeleteTodoGroupDragItems())
             {
@@ -2382,7 +2382,7 @@ public sealed partial class PaperWindow
 
     private string? CurrentFocusedTodoItemId()
     {
-        var focused = FocusManager.GetFocusedElement(this);
+        var focused = FocusManager.GetFocusedElement(InteractionWindow);
 
         if (focused is TodoTextBox box)
         {
@@ -2624,6 +2624,7 @@ public sealed partial class PaperWindow
 
     private bool TryCollapseExpandedPaperFromEscape()
     {
+        if (IsWorkbenchHosted) return false;
         if (_todoDrag != null ||
             _topBarDrag != null ||
             IsDeepCapsuleReordering ||

@@ -1667,4 +1667,27 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="NoteExportNoNotes" xml:space="preserve"><value>내보낼 수 있는 메모 또는 할 일이 없습니다.</value></data>
   <data name="NoteExportProgress" xml:space="preserve"><value>내보내는 중 {0}/{1}개</value></data>
   <data name="TodoExportCurrent" xml:space="preserve"><value>현재 할 일 내보내기</value></data>
+  <data name="WorkbenchTitle" xml:space="preserve"><value>무한 작업대</value></data>
+  <data name="WorkbenchOverview" xml:space="preserve"><value>모든 작업 공간</value></data>
+  <data name="WorkbenchCurrent" xml:space="preserve"><value>현재 작업 공간</value></data>
+  <data name="WorkbenchNewNote" xml:space="preserve"><value>새 노트</value></data>
+  <data name="WorkbenchNewTodo" xml:space="preserve"><value>새 할 일</value></data>
+  <data name="WorkbenchArrange" xml:space="preserve"><value>레이아웃 정리</value></data>
+  <data name="WorkbenchUndo" xml:space="preserve"><value>배치 실행 취소</value></data>
+  <data name="WorkbenchSearch" xml:space="preserve"><value>배치를 바꾸지 않고 검색 및 강조</value></data>
+  <data name="WorkbenchRefresh" xml:space="preserve"><value>개요 새로 고침</value></data>
+  <data name="WorkbenchClose" xml:space="preserve"><value>바탕 화면으로 돌아가기</value></data>
+  <data name="WorkbenchHint" xml:space="preserve"><value>왼쪽 위 핸들로 이동하고 오른쪽 아래에서 크기를 조절합니다. 가운데 버튼 드래그로 화면 이동, Alt+휠로 확대/축소, Esc로 돌아갑니다. 다른 작업 공간은 읽기 전용 미리 보기입니다.</value></data>
+  <data name="WorkbenchError" xml:space="preserve"><value>작업대 작업 실패: {0}</value></data>
+  <data name="WorkbenchPinConflict" xml:space="preserve"><value>고정된 메모가 겹칩니다. 위치는 유지됩니다. 하나를 이동하거나 고정을 해제하세요.</value></data>
+  <data name="WorkbenchDelete" xml:space="preserve"><value>메모 삭제</value></data>
+  <data name="WorkbenchDeleteConfirm" xml:space="preserve"><value>이 메모와 내용을 삭제할까요?</value></data>
+  <data name="WorkbenchOpenWorkspace" xml:space="preserve"><value>이 작업 공간에서 작업</value></data>
+  <data name="WorkbenchPin" xml:space="preserve"><value>위치 고정 또는 해제</value></data>
+  <data name="WorkbenchConnect" xml:space="preserve"><value>메모 연결</value></data>
+  <data name="WorkbenchConnectHint" xml:space="preserve"><value>다른 메모의 연결 버튼을 클릭하세요. Esc로 취소합니다.</value></data>
+  <data name="WorkbenchWorkspace" xml:space="preserve"><value>작업 공간 {0}</value></data>
+  <data name="WorkbenchReadError" xml:space="preserve"><value>이 작업 공간을 읽을 수 없습니다: {0}</value></data>
+  <data name="WorkbenchDisconnect" xml:space="preserve"><value>연결 제거</value></data>
+  <data name="WorkbenchEmpty" xml:space="preserve"><value>아직 메모가 없습니다.</value></data>
 </root>

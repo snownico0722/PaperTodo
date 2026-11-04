@@ -46,6 +46,7 @@ internal sealed record GlobalShortcutDefinition(
 
 internal static class GlobalShortcutCatalog
 {
+    public const string Workbench = "startup.workbench";
     public const string Show = "startup.show";
     public const string Hide = "startup.hide";
     public const string Toggle = "startup.toggle";
@@ -207,6 +208,7 @@ internal static class GlobalShortcutCatalog
     {
         var definitions = new List<GlobalShortcutDefinition>
         {
+            new(Workbench, "WorkbenchTitle", "Ctrl+Alt+W", GlobalShortcutGroup.General, StartupCommandKind.Workbench),
             new(Show, "ShortcutShowAll", "", GlobalShortcutGroup.General, StartupCommandKind.Show),
             new(Hide, "ShortcutHideAll", "", GlobalShortcutGroup.General, StartupCommandKind.Hide),
             new(Toggle, "ShortcutToggleVisibility", "", GlobalShortcutGroup.General, StartupCommandKind.Toggle),

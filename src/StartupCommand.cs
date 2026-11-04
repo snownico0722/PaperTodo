@@ -9,7 +9,8 @@ public enum StartupCommandKind
     NewTodo,
     NewNote,
     Exit,
-    EnableMcpForCodex
+    EnableMcpForCodex,
+    Workbench
 }
 
 public sealed class StartupCommand
@@ -38,6 +39,7 @@ public sealed class StartupCommand
 
         return new StartupCommand(command switch
         {
+            "workbench" => StartupCommandKind.Workbench,
             "show" or "open" => StartupCommandKind.Show,
             "hide" => StartupCommandKind.Hide,
             "toggle" => StartupCommandKind.Toggle,

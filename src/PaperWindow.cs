@@ -764,6 +764,7 @@ public sealed partial class PaperWindow : Window
         };
         Deactivated += (_, _) =>
         {
+            if (_controller.HasWorkbench) return;
             var suppressAutoCollapse = HasExperimentalAutoCollapseBlocker();
             NotifyCurrentPaperBodyDeactivated();
             AbortAllInteractions(InteractionAbortReason.Deactivated);
@@ -3735,7 +3736,7 @@ public sealed partial class PaperWindow : Window
 
     private void SaveGeometryIfAllowed()
     {
-        if (IsPaperFormTransitioning || SuppressGeometrySave)
+        if (IsWorkbenchHosted || IsPaperFormTransitioning || SuppressGeometrySave)
         {
             return;
         }

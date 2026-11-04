@@ -1667,4 +1667,27 @@ The original note is kept.</value></data>
   <data name="NoteExportNoNotes" xml:space="preserve"><value>There are no Markdown notes or todo papers to export.</value></data>
   <data name="NoteExportProgress" xml:space="preserve"><value>Exporting {0}/{1} papers</value></data>
   <data name="TodoExportCurrent" xml:space="preserve"><value>Export this todo paper</value></data>
+  <data name="WorkbenchTitle" xml:space="preserve"><value>Infinite workbench</value></data>
+  <data name="WorkbenchOverview" xml:space="preserve"><value>All workspaces</value></data>
+  <data name="WorkbenchCurrent" xml:space="preserve"><value>Current workspace</value></data>
+  <data name="WorkbenchNewNote" xml:space="preserve"><value>New note</value></data>
+  <data name="WorkbenchNewTodo" xml:space="preserve"><value>New to-do</value></data>
+  <data name="WorkbenchArrange" xml:space="preserve"><value>Arrange</value></data>
+  <data name="WorkbenchUndo" xml:space="preserve"><value>Undo layout</value></data>
+  <data name="WorkbenchSearch" xml:space="preserve"><value>Search and highlight without moving papers</value></data>
+  <data name="WorkbenchRefresh" xml:space="preserve"><value>Refresh overview</value></data>
+  <data name="WorkbenchClose" xml:space="preserve"><value>Back to desktop</value></data>
+  <data name="WorkbenchHint" xml:space="preserve"><value>Drag the top-left grip to move; resize from the bottom-right. Middle-drag to pan, Alt+wheel to zoom; Esc returns to the desktop. Other workspaces are read-only previews.</value></data>
+  <data name="WorkbenchError" xml:space="preserve"><value>Workbench operation failed: {0}</value></data>
+  <data name="WorkbenchPinConflict" xml:space="preserve"><value>Pinned papers overlap. Their positions were kept; move or unpin one to resolve the conflict.</value></data>
+  <data name="WorkbenchDelete" xml:space="preserve"><value>Delete paper</value></data>
+  <data name="WorkbenchDeleteConfirm" xml:space="preserve"><value>Delete this paper and its contents?</value></data>
+  <data name="WorkbenchOpenWorkspace" xml:space="preserve"><value>Work in this workspace</value></data>
+  <data name="WorkbenchPin" xml:space="preserve"><value>Pin or unpin position</value></data>
+  <data name="WorkbenchConnect" xml:space="preserve"><value>Connect papers</value></data>
+  <data name="WorkbenchConnectHint" xml:space="preserve"><value>Click another paper’s connection button; Esc cancels.</value></data>
+  <data name="WorkbenchWorkspace" xml:space="preserve"><value>Workspace {0}</value></data>
+  <data name="WorkbenchReadError" xml:space="preserve"><value>Cannot read this workspace: {0}</value></data>
+  <data name="WorkbenchDisconnect" xml:space="preserve"><value>Remove connection</value></data>
+  <data name="WorkbenchEmpty" xml:space="preserve"><value>No papers here yet.</value></data>
 </root>
