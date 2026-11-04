@@ -75,6 +75,7 @@
 | D-064 | 固定编号工作区共用代码，不共用运行数据 | Accepted | 工作区 / 持久化 |
 | D-065 | DComp 视觉与 Win32 输入提交的非原子边界 | Accepted (historical findings; native-owner candidate deferred) | Edge input / composition |
 | D-066 | Free queues extend existing direct manipulation | Accepted | Edge queues / gestures |
+| D-067 | Free-queue masters follow queue identity | Accepted | Edge master ownership |
 
 ## 维护规则
 
@@ -2043,3 +2044,25 @@ The controller owns one queue-level input snapshot and a prospective membership/
 Free queues and the master are independent settings. A single master per live edge collects/restores all groups while preserving their identities and anchors. Its docked movement previews an edge-wide rigid translation without writing intermediate positions; its floating transfer preserves grouping rather than flattening the destination. Ctrl works without a master and also when free queues are disabled. Existing overflow remains unpaged.
 
 The native drop feedback is driven by the existing drag callbacks and pooled host movement, not an additional polling timer or indicator HWND. The final release samples the physical pointer before committing. The floating cover is established before peers retract; peers return via the existing placement/retraction transitions.
+
+
+## D-067 - Free-queue masters follow queue identity (2026-11-04)
+
+**Status:** Accepted
+
+### Decision
+
+When free queues are enabled, every non-empty independent queue owns its own master capsule. Clicking a master retracts only its members; moving it adjusts only its queue anchor; floating it transfers only its queue. Merging into another queue retains the destination master's identity, position and collapse choice, and retires the empty source master. Disabling free queues keeps the legacy one-master-per-physical-edge behavior.
+
+### Why
+
+Free queue identities already exist, so a side-wide master made independent groups behave as one for collapse and movement. The existing `MasterCapsuleWindow`, coordinator slots, identity keys, drag host and insertion policy suffice; no additional window type or master hierarchy is needed.
+
+### Consequences
+
+Collapse state and master lookup are keyed by the same queue instance identity as papers and saved anchors. Each queue reserves its own master slot; passive collision spacing still remains display-only. The master gesture changes a single group, while ordinary Ctrl dragging remains available. Previous side-wide collection semantics in D-066 are superseded by this decision; its direct-manipulation and no-global-solver rules remain accepted.
+
+### Evidence
+
+- `src/AppController.cs`, `src/AppController.EdgeCapsuleFreeQueueMaster.cs`, `src/AppController.EdgeCapsuleFreeQueues.cs` and `src/MasterCapsuleWindow.cs`.
+- PR #400 (superseding the master-ownership choice in D-066).

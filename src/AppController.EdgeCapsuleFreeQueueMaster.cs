@@ -1,39 +1,36 @@
 namespace PaperTodo;
 
 internal sealed record FreeMasterQueueGroup(string Key, string[] PaperIds, double TopDip, bool HasMaster);
-internal sealed record FreeMasterDragLayout(string EdgeKey, string Monitor, string Side, double MasterTopDip,
+internal sealed record FreeMasterDragLayout(string EdgeKey, string QueueKey, string Monitor, string Side, double MasterTopDip,
     IReadOnlyList<FreeMasterQueueGroup> Groups, IReadOnlyDictionary<string, string> MemberKeys);
 
 public sealed partial class AppController
 {
     private (FreeMasterDragLayout Layout, IReadOnlyDictionary<string, double> Tops)? _freeMasterDragPreview;
 
-    internal FreeMasterDragLayout? CaptureFreeMasterDragLayout(string monitor, EdgeCapsuleEdge edge)
+    internal FreeMasterDragLayout? CaptureFreeMasterDragLayout(string monitor, EdgeCapsuleEdge edge,
+        string? sourceQueueKey = null)
     {
         if (!EdgeCapsuleFreeQueuesEnabled) return null;
         var side = edge == EdgeCapsuleEdge.Left ? DeepCapsuleSides.Left : DeepCapsuleSides.Right;
-        var key = EdgeKey(monitor, side);
-        var groups = NativeQueueGroups().Where(g => LiveEdgeOfQueueKey(g.Key) == key).ToList();
-        return new(key, monitor, side, FreeQueueMasterTop(monitor, side),
-            groups.Select(g => new FreeMasterQueueGroup(g.Key, g.Papers.Select(p => p.Id).ToArray(), g.Box.TopDip, g.Box.HasMaster)).ToArray(),
-            groups.SelectMany(g => g.Papers).ToDictionary(p => p.Id, InstanceQueueKey, StringComparer.Ordinal));
+        var edgeKey = EdgeKey(monitor, side);
+        var queueKey = sourceQueueKey ?? edgeKey;
+        if (LiveEdgeOfQueueKey(queueKey) != edgeKey) return null;
+        var group = NativeQueueGroups().FirstOrDefault(g => g.Key == queueKey);
+        if (group == null) return null;
+        var ids = group.Papers.Select(p => p.Id).ToArray();
+        return new(edgeKey, queueKey, monitor, side, group.Box.TopDip,
+            [new FreeMasterQueueGroup(queueKey, ids, group.Box.TopDip, group.Box.HasMaster)],
+            group.Papers.ToDictionary(p => p.Id, InstanceQueueKey, StringComparer.Ordinal));
     }
 
     internal void PreviewFreeMasterQueueTop(FreeMasterDragLayout layout, double requestedTop)
     {
         if (!EdgeCapsuleFreeQueuesEnabled || !FreeMasterMembersMatch(layout)) return;
-        var area = EdgeCapsuleLayout.LocalWorkAreaForQueue(layout.Monitor);
-        var pitch = EdgeCapsuleLayout.SlotHeight(DeepCapsuleGap);
-        var low = Math.Min(layout.MasterTopDip, layout.Groups.Select(g => g.TopDip).DefaultIfEmpty(layout.MasterTopDip).Min());
-        var high = Math.Max(layout.MasterTopDip + PaperLayoutDefaults.CapsuleHeight,
-            layout.Groups.Select(g => g.TopDip + (g.PaperIds.Length + (g.HasMaster ? 1 : 0)) * pitch - DeepCapsuleGap)
-                .DefaultIfEmpty(layout.MasterTopDip + PaperLayoutDefaults.CapsuleHeight).Max());
-        var minDelta = EdgeCapsuleLayout.TopMargin - low;
-        var maxDelta = Math.Max(minDelta, area.Height - EdgeCapsuleLayout.TopMargin - high);
-        var delta = Math.Clamp(requestedTop - layout.MasterTopDip, minDelta, maxDelta);
-        var tops = layout.Groups.ToDictionary(g => g.Key, g => g.TopDip + delta, StringComparer.Ordinal);
-        tops[layout.EdgeKey] = layout.MasterTopDip + delta;
-        _freeMasterDragPreview = (layout, tops);
+        if (!double.IsFinite(requestedTop)) return;
+        // Free queues keep the requested anchor even if their tail extends past the work area.
+        _freeMasterDragPreview = (layout,
+            new Dictionary<string, double>(StringComparer.Ordinal) { [layout.QueueKey] = requestedTop });
         ArrangeDeepCapsules(animate: false);
     }
 
@@ -43,7 +40,7 @@ public sealed partial class AppController
         _freeMasterDragPreview = null;
         if (commit && EdgeCapsuleFreeQueuesEnabled && FreeMasterMembersMatch(layout))
         {
-            foreach (var (key, top) in preview.Tops) State.DeepCapsuleQueueStartTopMargins[key] = top;
+            State.DeepCapsuleQueueStartTopMargins[layout.QueueKey] = preview.Tops[layout.QueueKey];
             MarkDirty();
         }
         ArrangeDeepCapsules(animate: !commit);
@@ -51,8 +48,8 @@ public sealed partial class AppController
 
     private bool FreeMasterMembersMatch(FreeMasterDragLayout layout)
     {
-        var papers = DeepCapsulePapersInOrder().Where(p => EdgeKey(p.CapsuleMonitorDeviceName, p.CapsuleSide) == layout.EdgeKey).ToList();
-        return papers.Count == layout.MemberKeys.Count && papers.All(p =>
+        var papers = DeepCapsulePapersInOrder().Where(p => QueueKey(p) == layout.QueueKey).ToList();
+        return layout.Groups.Count == 1 && papers.Count == layout.MemberKeys.Count && papers.All(p =>
             layout.MemberKeys.TryGetValue(p.Id, out var key) && InstanceQueueKey(p) == key);
     }
 
@@ -62,90 +59,95 @@ public sealed partial class AppController
         handoffTarget = null;
         var layout = snapshot.FreeLayout!;
         var live = DeepCapsulePapersInOrder();
-        var moving = snapshot.PaperIds.ToHashSet(StringComparer.Ordinal);
-        if (!State.UseCapsuleFreeQueues || !live.Where(p => BelongsToMasterTransferSource(p, snapshot))
+        if (!EdgeCapsuleFreeQueuesEnabled || !FreeMasterMembersMatch(layout) ||
+            !live.Where(p => BelongsToMasterTransferSource(p, snapshot))
                 .Select(p => p.Id).SequenceEqual(snapshot.PaperIds) ||
-            live.Where(p => moving.Contains(p.Id)).Any(p => !layout.MemberKeys.TryGetValue(p.Id, out var old) || InstanceQueueKey(p) != old) ||
             !WindowWorkAreaHelper.TryGetMonitorGeometryAtDeviceScreenPoint(pointer, out var geometry))
         {
             CancelMasterCapsuleQueueTransfer(snapshot);
             return false;
         }
+
         var monitor = WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(geometry.DeviceName);
-        var side = pointer.X < geometry.WorkArea.Left + geometry.WorkArea.Width / 2.0 ? DeepCapsuleSides.Left : DeepCapsuleSides.Right;
-        var destinationEdge = EdgeKey(monitor, side);
-        var sameEdge = destinationEdge == layout.EdgeKey;
-        var pitch = EdgeCapsuleLayout.SlotHeight(DeepCapsuleGap);
-        var destinationPapers = live.Where(p => !moving.Contains(p.Id) && EdgeKey(p.CapsuleMonitorDeviceName, p.CapsuleSide) == destinationEdge).ToList();
-        var targetHasMembers = destinationPapers.Count > 0;
-        var targetWasCollapsed = IsCapsuleCollapseAllActiveForQueue(destinationEdge);
-        var groups = layout.Groups.Select(g => g with
+        var side = pointer.X < geometry.WorkArea.Left + geometry.WorkArea.Width / 2.0
+            ? DeepCapsuleSides.Left : DeepCapsuleSides.Right;
+        var edge = EdgeKey(monitor, side);
+        var gap = DeepCapsuleGap;
+        var pitch = EdgeCapsuleLayout.SlotHeight(gap);
+        var group = layout.Groups[0];
+        var count = group.PaperIds.Length;
+        var carried = group.PaperIds.Select(id => live.First(p => p.Id == id)).ToList();
+        var moving = carried.Select(p => p.Id).ToHashSet(StringComparer.Ordinal);
+        var boxes = NativeQueueGroups()
+            .Where(g => g.Key != layout.QueueKey && LiveEdgeOfQueueKey(g.Key) == edge)
+            .Select(g => g.Box).ToList();
+        var requestedTop = geometry.DeviceYToLocalDip(pointer.Y) - PaperLayoutDefaults.CapsuleHeight / 2;
+        var wallDistance = (side == DeepCapsuleSides.Left
+            ? pointer.X - geometry.WorkArea.Left : geometry.WorkArea.Right - pointer.X) / geometry.DpiScaleX;
+        // A master remains a valid merge target even when its queue is collapsed.
+        var target = EdgeCapsuleFreeQueuePolicy.FindInsertion(
+            boxes, requestedTop + pitch, count * pitch - gap, wallDistance, pitch, gap);
+        var decision = target is { } insert
+            ? EdgeCapsuleFreeQueuePolicy.Insert(boxes, insert.Key, insert.Index, count,
+                geometry.LocalWorkAreaDip.Height, pitch, gap)
+            : EdgeCapsuleFreeQueuePolicy.Place(boxes, requestedTop, count + 1,
+                geometry.LocalWorkAreaDip.Height, pitch, gap);
+        if (!decision.Accepted)
         {
-            TopDip = g.TopDip + (!sameEdge && g.HasMaster ? pitch : 0), HasMaster = sameEdge && g.HasMaster
-        }).ToList();
-        var low = Math.Min(layout.MasterTopDip, groups.Select(g => g.TopDip).DefaultIfEmpty(layout.MasterTopDip).Min());
-        var high = Math.Max(layout.MasterTopDip + PaperLayoutDefaults.CapsuleHeight,
-            groups.Select(g => g.TopDip + (g.PaperIds.Length + (g.HasMaster ? 1 : 0)) * pitch - DeepCapsuleGap)
-                .DefaultIfEmpty(layout.MasterTopDip + PaperLayoutDefaults.CapsuleHeight).Max());
-        var minDelta = EdgeCapsuleLayout.TopMargin - low;
-        var maxDelta = Math.Max(minDelta, geometry.LocalWorkAreaDip.Height - EdgeCapsuleLayout.TopMargin - high);
-        var desiredMasterTop = geometry.DeviceYToLocalDip(pointer.Y) - PaperLayoutDefaults.CapsuleHeight / 2;
-        var delta = Math.Clamp(desiredMasterTop - layout.MasterTopDip, minDelta, maxDelta);
-        var obstacles = NativeQueueGroups().Where(g => LiveEdgeOfQueueKey(g.Key) == destinationEdge &&
-            g.Papers.Any(p => !moving.Contains(p.Id))).Select(g => g.Box).ToList();
-        if (!sameEdge && targetHasMembers && !obstacles.Any(b => b.HasMaster))
-            obstacles.Add(new(destinationEdge, FreeQueueMasterTop(monitor, side), 0, true, PaperLayoutDefaults.CapsuleWidth));
-        foreach (var group in groups)
-        {
-            var requested = group.TopDip + delta;
-            var result = EdgeCapsuleFreeQueuePolicy.Place(obstacles, requested,
-                group.PaperIds.Length + (group.HasMaster ? 1 : 0), geometry.LocalWorkAreaDip.Height, pitch, DeepCapsuleGap);
-            if (!result.Accepted || Math.Abs(result.TopDip - requested) > .1)
-            {
-                CancelMasterCapsuleQueueTransfer(snapshot);
-                return false;
-            }
+            CancelMasterCapsuleQueueTransfer(snapshot);
+            return false;
         }
+
+        var destination = layout.QueueKey;
+        if (target.HasValue) destination = target.Value.Key;
+        else if (edge != layout.EdgeKey)
+        {
+            EdgeCapsuleQueueIds.TrySplit(layout.QueueKey, out _, out var id);
+            destination = EdgeCapsuleQueueIds.Compose(edge, id);
+            if (State.Papers.Any(p => !moving.Contains(p.Id) && InstanceQueueKey(p) == destination))
+                destination = EdgeCapsuleQueueIds.Compose(edge, EdgeCapsuleQueueIds.New());
+        }
+
+        var targetMembers = target is { } merge
+            ? NativeQueueGroups().First(g => g.Key == merge.Key).Papers.ToList() : [];
+        var targetWasCollapsed = target.HasValue && IsCapsuleCollapseAllActiveForQueue(destination);
+        var oldOrder = State.Papers.ToList();
         var oldMargins = new Dictionary<string, double>(State.DeepCapsuleQueueStartTopMargins, StringComparer.Ordinal);
         var oldCollapsed = new Dictionary<string, bool>(State.CapsuleCollapseAllActiveQueues, StringComparer.Ordinal);
-        var oldIdentities = live.Where(p => moving.Contains(p.Id)).Select(p =>
-            (Paper: p, Monitor: p.CapsuleMonitorDeviceName, Side: p.CapsuleSide, Id: p.CapsuleQueueId)).ToArray();
+        var oldIdentities = carried.Select(p => (Paper: p, Monitor: p.CapsuleMonitorDeviceName,
+            Side: p.CapsuleSide, Id: p.CapsuleQueueId)).ToArray();
         try
         {
-            foreach (var group in groups)
+            EdgeCapsuleQueueIds.TrySplit(destination, out _, out var queueId);
+            foreach (var paper in carried)
             {
-                var papers = group.PaperIds.Select(id => live.First(p => p.Id == id)).ToArray();
-                var id = papers[0].CapsuleQueueId;
-                var destinationKey = EdgeCapsuleQueueIds.Compose(destinationEdge, id);
-                if (!sameEdge && (id.Length == 0 || State.Papers.Any(p => !moving.Contains(p.Id) && InstanceQueueKey(p) == destinationKey)))
-                {
-                    id = EdgeCapsuleQueueIds.New();
-                    destinationKey = EdgeCapsuleQueueIds.Compose(destinationEdge, id);
-                }
-                if (!sameEdge)
-                    foreach (var paper in papers)
-                    {
-                        paper.CapsuleMonitorDeviceName = monitor;
-                        paper.CapsuleSide = side;
-                        paper.CapsuleQueueId = id;
-                    }
-                else destinationKey = group.Key;
-                State.DeepCapsuleQueueStartTopMargins[destinationKey] = group.TopDip + delta;
-                if (destinationKey != group.Key && !State.Papers.Any(p => InstanceQueueKey(p) == group.Key))
-                    State.DeepCapsuleQueueStartTopMargins.Remove(group.Key);
+                paper.CapsuleMonitorDeviceName = monitor;
+                paper.CapsuleSide = side;
+                paper.CapsuleQueueId = queueId;
             }
-            if (sameEdge || !targetHasMembers) State.DeepCapsuleQueueStartTopMargins[destinationEdge] = layout.MasterTopDip + delta;
-            if (!sameEdge && !State.Papers.Any(p => BelongsToMasterTransferSource(p, snapshot)))
+            if (target is { } t)
+                InsertNativeQueueBlock(carried, targetMembers, t.Index);
+
+            // A simple master move changes only its own preference. Neighbours may
+            // yield visually, but passive spacing must not become permanent layout memory.
+            if (decision.Kind == EdgeFreeQueueDropKind.Insert)
+                foreach (var (key, top) in decision.Tops)
+                    State.DeepCapsuleQueueStartTopMargins[key] = top;
+            State.DeepCapsuleQueueStartTopMargins[destination] = decision.TopDip;
+            if (destination != layout.QueueKey &&
+                !State.Papers.Any(p => InstanceQueueKey(p) == layout.QueueKey))
             {
-                State.DeepCapsuleQueueStartTopMargins.Remove(layout.EdgeKey);
-                State.CapsuleCollapseAllActiveQueues.Remove(layout.EdgeKey);
+                State.DeepCapsuleQueueStartTopMargins.Remove(layout.QueueKey);
+                State.CapsuleCollapseAllActiveQueues.Remove(layout.QueueKey);
             }
-            if (targetHasMembers ? targetWasCollapsed : snapshot.SourceWasCollapsed)
-                State.CapsuleCollapseAllActiveQueues[destinationEdge] = true;
-            else State.CapsuleCollapseAllActiveQueues.Remove(destinationEdge);
+            if (target.HasValue ? targetWasCollapsed : snapshot.SourceWasCollapsed)
+                State.CapsuleCollapseAllActiveQueues[destination] = true;
+            else
+                State.CapsuleCollapseAllActiveQueues.Remove(destination);
         }
         catch
         {
+            State.Papers = oldOrder;
             State.DeepCapsuleQueueStartTopMargins = oldMargins;
             State.CapsuleCollapseAllActiveQueues = oldCollapsed;
             foreach (var row in oldIdentities)
@@ -156,7 +158,9 @@ public sealed partial class AppController
             }
             throw;
         }
-        CompleteMasterCapsuleQueueTransfer(snapshot, destinationEdge, out handoffTarget);
+
+        _freeMasterDragPreview = null;
+        CompleteMasterCapsuleQueueTransfer(snapshot, destination, out handoffTarget);
         return true;
     }
 }

@@ -40,8 +40,12 @@ internal static class NativeFreeQueueChecks
         double Top(PaperData paper)
         {
             var placement = Placement(windows[paper.Id]);
-            return EdgeCapsuleLayout.TopForIndex(placement.VisualIndex, c.DeepCapsuleStartTopMarginFor(paper),
-                EdgeCapsuleLayout.LocalWorkAreaForQueue(paper.CapsuleMonitorDeviceName), placement.SlotCount, c.DeepCapsuleGap) + placement.TopOffsetDip;
+            var area = EdgeCapsuleLayout.LocalWorkAreaForQueue(paper.CapsuleMonitorDeviceName);
+            var margin = c.DeepCapsuleStartTopMarginFor(paper);
+            return (c.State.UseCapsuleFreeQueues
+                ? EdgeCapsuleLayout.FreeQueueTopForIndex(placement.VisualIndex, margin, area, c.DeepCapsuleGap)
+                : EdgeCapsuleLayout.TopForIndex(placement.VisualIndex, margin, area, placement.SlotCount, c.DeepCapsuleGap))
+                + placement.TopOffsetDip;
         }
         var margins = new Dictionary<string, double>(c.State.DeepCapsuleQueueStartTopMargins);
         // Exercise the real PaperWindow input entry points, not just the controller primitives.
@@ -117,85 +121,155 @@ internal static class NativeFreeQueueChecks
         await Idle();
         c.PublicSettings.Set("capsule.master_enabled", JsonSerializer.SerializeToElement(true));
         await Idle();
-        Require(c.State.UseCapsuleFreeQueues && c.State.UseCapsuleCollapseAll, "free queues and master coexist via the settings API");
+        Require(c.State.UseCapsuleFreeQueues && c.State.UseCapsuleCollapseAll,
+            "free queues and master coexist via the settings API");
         var masters = (Dictionary<string, MasterCapsuleWindow>)Part(c, "_masterCapsules");
-        Require(masters.Count == 1 && masters["|right"].IsVisible, "one collection control per side, not one per group");
+        var aKey = c.QueueKeyForPaper(a);
+        Require(masters.Count == 3 && masters.ContainsKey(aKey) &&
+                masters.ContainsKey("|right#qb") && masters.ContainsKey("|right#qc"),
+            "every independent group has its own master on the same edge");
         var idsBeforeCollection = c.State.Papers.Select(p => p.CapsuleQueueId).ToArray();
         margins = new(c.State.DeepCapsuleQueueStartTopMargins);
-        c.ToggleCapsuleCollapseAllActive("", EdgeCapsuleEdge.Right);
+        c.ToggleCapsuleCollapseAllActive("|right#qb");
         await Idle();
-        Require(windows.Values.All(w => w.IsCollapseAllRetracted) && masters["|right"].IsVisible,
-            "the master collects every independent queue without losing its own visible control");
-        c.ToggleCapsuleCollapseAllActive("", EdgeCapsuleEdge.Right);
+        Require(c.State.Papers.Where(p => p.CapsuleQueueId == "qb")
+                    .All(p => windows[p.Id].IsCollapseAllRetracted) &&
+                c.State.Papers.Where(p => p.CapsuleQueueId != "qb")
+                    .All(p => !windows[p.Id].IsCollapseAllRetracted),
+            "toggling one master retracts only its own members");
+        c.ToggleCapsuleCollapseAllActive("|right#qb");
         await Idle();
-        Require(windows.Values.All(w => !w.IsCollapseAllRetracted) && c.State.Papers.Select(p => p.CapsuleQueueId).SequenceEqual(idsBeforeCollection) &&
-                margins.All(p => c.State.DeepCapsuleQueueStartTopMargins[p.Key] == p.Value), "expansion restores groups and original anchors");
+        Require(windows.Values.All(w => !w.IsCollapseAllRetracted) &&
+                c.State.Papers.Select(p => p.CapsuleQueueId).SequenceEqual(idsBeforeCollection) &&
+                margins.All(p => c.State.DeepCapsuleQueueStartTopMargins[p.Key] == p.Value),
+            "expanding a single master restores the original groups and anchors");
 
-        var layout = c.CaptureFreeMasterDragLayout("", EdgeCapsuleEdge.Right)!;
+        var layout = c.CaptureFreeMasterDragLayout("", EdgeCapsuleEdge.Right, "|right#qb")!;
         c.PreviewFreeMasterQueueTop(layout, layout.MasterTopDip - 20);
-        Require(margins.All(p => c.State.DeepCapsuleQueueStartTopMargins[p.Key] == p.Value), "master preview never leaks to autosave");
+        Require(margins.All(p => c.State.DeepCapsuleQueueStartTopMargins[p.Key] == p.Value),
+            "master preview never leaks to autosave");
         c.FinishFreeMasterQueueDrag(layout, false);
         await Idle();
-        Require(margins.All(p => c.State.DeepCapsuleQueueStartTopMargins[p.Key] == p.Value), "canceled master movement preserves preferences");
-        layout = c.CaptureFreeMasterDragLayout("", EdgeCapsuleEdge.Right)!;
+        Require(margins.All(p => c.State.DeepCapsuleQueueStartTopMargins[p.Key] == p.Value),
+            "canceled individual master movement preserves preferences");
+        layout = c.CaptureFreeMasterDragLayout("", EdgeCapsuleEdge.Right, "|right#qb")!;
+        var otherAnchor = c.State.DeepCapsuleQueueStartTopMargins["|right#qc"];
         c.PreviewFreeMasterQueueTop(layout, layout.MasterTopDip - 10);
         c.FinishFreeMasterQueueDrag(layout, true);
         await Idle();
-        Require(Math.Abs(masters["|right"].AnchorTop - layout.MasterTopDip + 10) < .1, "master commits a rigid edge-wide translation");
-        var transferIds = c.State.Papers.Select(p => p.CapsuleQueueId).ToArray();
-        var transferTops = c.State.Papers.ToDictionary(p => p.Id, Top);
-        var masterTop = masters["|right"].AnchorTop;
-        Require(c.TryBeginMasterCapsuleQueueTransfer("", EdgeCapsuleEdge.Right, masterTop, out var transfer), "master free-group transfer begins");
-        Require(c.CommitMasterCapsuleQueueTransfer(transfer, Point(masterTop, left: true)), "master free-group transfer commits");
-        await Idle();
-        Require(c.State.Papers.All(p => p.CapsuleSide == DeepCapsuleSides.Left) && c.State.Papers.Select(p => p.CapsuleQueueId).SequenceEqual(transferIds),
-            "master cross-edge movement preserves independent identities");
-        Require(c.State.Papers.All(p => Math.Abs(Top(p) - transferTops[p.Id]) < .1), "master cross-edge movement preserves relative positions");
-        Require(masters.Count == 1 && masters.ContainsKey("|left"), "the old source collection control retires");
+        Require(Math.Abs(masters["|right#qb"].AnchorTop - layout.MasterTopDip + 10) < .1,
+            "one master commits its queue translation");
+        Require(c.State.DeepCapsuleQueueStartTopMargins["|right#qc"] == otherAnchor,
+            "moving a master never rewrites another queue anchor");
 
-        // Moving vertically before a floating transfer must not leak the docked preview.
-        var sameEdgeLayout = c.CaptureFreeMasterDragLayout("", EdgeCapsuleEdge.Left)!;
+        var transferIds = c.State.Papers.Select(p => p.CapsuleQueueId).ToArray();
+        var transferTops = c.State.Papers.Where(p => p.CapsuleQueueId == "qb")
+            .ToDictionary(p => p.Id, Top);
+        var masterTop = masters["|right#qb"].AnchorTop;
+        Require(c.TryBeginMasterCapsuleQueueTransfer("", EdgeCapsuleEdge.Right, masterTop, out var transfer,
+            sourceQueueKey: "|right#qb"), "individual master transfer begins");
+        Require(c.CommitMasterCapsuleQueueTransfer(transfer, Point(masterTop, left: true)),
+            "individual master transfer commits");
+        await Idle();
+        Require(c.State.Papers.Where(p => p.CapsuleQueueId == "qb").All(p => p.CapsuleSide == DeepCapsuleSides.Left) &&
+                c.State.Papers.Where(p => p.CapsuleQueueId != "qb").All(p => p.CapsuleSide == DeepCapsuleSides.Right) &&
+                c.State.Papers.Select(p => p.CapsuleQueueId).SequenceEqual(transferIds),
+            "cross-edge master movement moves only its own independent queue");
+        Require(c.State.Papers.Where(p => p.CapsuleQueueId == "qb")
+                .All(p => Math.Abs(Top(p) - transferTops[p.Id]) < .1),
+            "cross-edge transfer retains member positions");
+        Require(masters.Count == 3 && masters.ContainsKey("|left#qb") &&
+                masters.ContainsKey("|right#qc") && masters.ContainsKey(aKey),
+            "only the transferred master changes its physical edge");
+
+        // Vertical preview must be withdrawn before floating, including same-edge release.
+        var sameEdgeLayout = c.CaptureFreeMasterDragLayout("", EdgeCapsuleEdge.Left, "|left#qb")!;
         c.PreviewFreeMasterQueueTop(sameEdgeLayout, sameEdgeLayout.MasterTopDip + 12);
         Require(PartOrNull(c, "_freeMasterDragPreview") != null, "master has a docked preview before floating");
         Require(c.TryBeginMasterCapsuleQueueTransfer("", EdgeCapsuleEdge.Left, sameEdgeLayout.MasterTopDip,
-            out var sameEdgeTransfer, freeLayout: sameEdgeLayout), "same-edge master transfer begins after preview");
-        Require(PartOrNull(c, "_freeMasterDragPreview") == null, "floating transfer clears the old docked preview on entry");
-        Require(c.CommitMasterCapsuleQueueTransfer(sameEdgeTransfer, Point(sameEdgeLayout.MasterTopDip + 12, left: true)),
+            out var sameEdgeTransfer, freeLayout: sameEdgeLayout, sourceQueueKey: "|left#qb"),
+            "same-edge master transfer begins after preview");
+        Require(PartOrNull(c, "_freeMasterDragPreview") == null,
+            "floating transfer clears the old docked preview on entry");
+        Require(c.CommitMasterCapsuleQueueTransfer(sameEdgeTransfer,
+                Point(sameEdgeLayout.MasterTopDip + 12, left: true)),
             "same-edge master transfer commits after preview");
         await Idle();
-        Require(Math.Abs(masters["|left"].AnchorTop - sameEdgeLayout.MasterTopDip - 12) < .1,
-            "master uses the committed same-edge anchor rather than a stale preview");
+        Require(Math.Abs(masters["|left#qb"].AnchorTop - sameEdgeLayout.MasterTopDip - 12) < .1,
+            "master uses the committed same-edge anchor");
 
         c.SaveNow(sync: true);
         var saved = store.Load();
-        Require(saved.UseCapsuleFreeQueues && saved.UseCapsuleCollapseAll && saved.Papers.Select(p => p.CapsuleQueueId).SequenceEqual(transferIds),
-            "the complete operation survives a storage round trip");
-        Require(c.BeginNativeEdgeQueueDrag(a, true, Point(Top(a), left: true), false), "begin external-mutation cancellation");
+        Require(saved.UseCapsuleFreeQueues && saved.UseCapsuleCollapseAll &&
+                saved.Papers.Select(p => p.CapsuleQueueId).SequenceEqual(transferIds),
+            "separate masters and their groups survive a storage round trip");
+
+        Require(c.BeginNativeEdgeQueueDrag(a, true, Point(Top(a)), false),
+            "begin external-mutation cancellation");
         a.CapsuleQueueId = "external";
         c.EndNativeEdgeQueueDrag(a.Id);
-        Require(a.CapsuleQueueId == "external", "cancellation does not overwrite a legitimate external identity change");
+        Require(a.CapsuleQueueId == "external",
+            "cancellation does not overwrite a legitimate external identity change");
 
-        // B's saved anchor remains independent from its passive, collision-driven display offset.
+        // A neighboring queue can be pushed down for display without changing its saved margin.
+        a.CapsuleSide = DeepCapsuleSides.Left;
         c.State.UseCapsuleCollapseAll = false;
         c.State.DeepCapsuleQueueStartTopMargins["|left#external"] = 90;
         const double preferredSourceTop = 100;
         c.State.DeepCapsuleQueueStartTopMargins["|left#qb"] = preferredSourceTop;
-        c.State.DeepCapsuleQueueStartTopMargins["|left#qc"] = Math.Min(600, monitor.LocalWorkAreaDip.Height - 80);
         c.ArrangeDeepCapsules(false);
         await Idle();
         var displacedSourceTop = Top(aPeer);
-        Require(displacedSourceTop > preferredSourceTop + 1, "source has a passive display offset");
+        Require(displacedSourceTop > preferredSourceTop + 1,
+            "source has a passive display offset");
         Require(c.BeginNativeEdgeQueueDrag(aPeer, false, Point(displacedSourceTop, left: true), false),
             "begin detaching from a passively displaced queue");
         var detachedTop = Math.Min(420, monitor.LocalWorkAreaDip.Height - 140);
         var detachedPoint = Point(detachedTop, left: true);
-        Require(c.PreviewNativeEdgeQueueDrag(aPeer, detachedPoint, detachedTop, false), "single detach preview is handled");
-        Require(c.CommitNativeEdgeQueueDrag(aPeer, detachedPoint, detachedTop, false), "single detach drop is handled");
+        Require(c.PreviewNativeEdgeQueueDrag(aPeer, detachedPoint, detachedTop, false),
+            "single detach preview is handled");
+        Require(c.CommitNativeEdgeQueueDrag(aPeer, detachedPoint, detachedTop, false),
+            "single detach drop is handled");
         c.EndNativeEdgeQueueDrag(aPeer.Id);
         await Idle();
         Require(aPeer.CapsuleQueueId != "qb", "single capsule was detached");
         Require(Math.Abs(c.State.DeepCapsuleQueueStartTopMargins["|left#qb"] - preferredSourceTop) < .1,
-            "single detach does not persist the source's passive offset");
+            "single detach never saves the source's passive displacement");
+        // Merging two independently controlled groups keeps the target master, including
+        // when the target was already collapsed, and retires only the source master.
+        foreach (var paper in c.State.Papers)
+        {
+            paper.CapsuleMonitorDeviceName = "";
+            paper.CapsuleSide = DeepCapsuleSides.Right;
+            paper.CapsuleQueueId = paper.Id is "fixture-0" or "fixture-1" ? "qm" : "qn";
+        }
+        c.State.CapsuleCollapseAllActiveQueues.Clear();
+        c.State.DeepCapsuleQueueStartTopMargins.Clear();
+        c.State.DeepCapsuleQueueStartTopMargins["|right#qm"] = 80;
+        c.State.DeepCapsuleQueueStartTopMargins["|right#qn"] = 330;
+        c.State.UseCapsuleCollapseAll = true;
+        c.ArrangeDeepCapsules(false);
+        await Idle();
+        Require(masters.Count == 2 && masters.ContainsKey("|right#qm") && masters.ContainsKey("|right#qn"),
+            "two groups create two independent masters");
+        var targetOldTop = Top(b);
+        c.ToggleCapsuleCollapseAllActive("|right#qn");
+        await Idle();
+        var mergeMasterTop = masters["|right#qn"].AnchorTop;
+        Require(c.TryBeginMasterCapsuleQueueTransfer("", EdgeCapsuleEdge.Right,
+            masters["|right#qm"].AnchorTop, out var mergeTransfer, sourceQueueKey: "|right#qm"),
+            "begin one-master merge into another master");
+        Require(c.CommitMasterCapsuleQueueTransfer(mergeTransfer, Point(mergeMasterTop)),
+            "independent masters merge into the existing target");
+        await Idle();
+        Require(c.State.Papers.All(p => p.CapsuleQueueId == "qn") &&
+                masters.Count == 1 && masters.ContainsKey("|right#qn"),
+            "merged source master retires while target master remains");
+        Require(c.State.Papers.All(p => windows[p.Id].IsCollapseAllRetracted),
+            "merging into a collapsed master preserves the target's collapse choice");
+        Require(Math.Abs(Top(b) - targetOldTop) < .1 &&
+                !c.State.DeepCapsuleQueueStartTopMargins.ContainsKey("|right#qm"),
+            "merging into a master preserves old target members and removes the vacant anchor");
 
         Console.WriteLine("PASS native-free-queue-input-controller-master-and-roundtrip");
     }

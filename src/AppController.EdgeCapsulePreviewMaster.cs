@@ -4,17 +4,15 @@ public sealed partial class AppController
 {
     internal void SuppressEdgeCapsulePreviewForMasterQueueLayout(
         string monitorDeviceName,
-        EdgeCapsuleEdge edge)
+        EdgeCapsuleEdge edge) =>
+        SuppressEdgeCapsulePreviewForMasterQueueLayout(MasterCapsuleQueueKey(monitorDeviceName, edge));
+
+    internal void SuppressEdgeCapsulePreviewForMasterQueueLayout(string queueKey)
     {
         if (IsExiting)
         {
             return;
         }
-
-        var side = edge == EdgeCapsuleEdge.Left
-            ? DeepCapsuleSides.Left
-            : DeepCapsuleSides.Right;
-        var queueKey = QueueKey(monitorDeviceName, side);
 
         // Master collapse/expand moves real capsule HWNDs under a stationary pointer. Cancel any
         // activation work that was based on the pre-toggle layout before arming the same
@@ -26,7 +24,7 @@ public sealed partial class AppController
 
         var target = _windows.Values.FirstOrDefault(window =>
             string.Equals(
-                LiveEdgeOfQueueKey(QueueKey(window.EdgeCapsulePreviewPaper)),
+                QueueKey(window.EdgeCapsulePreviewPaper),
                 queueKey,
                 StringComparison.Ordinal));
         if (target == null)
@@ -44,7 +42,7 @@ public sealed partial class AppController
         // in that arrange can then stage into the same Send-priority commit and start from one QPC
         // timestamp instead of seven independent per-paper clocks.
         foreach (var window in _windows.Values.Where(w =>
-                     LiveEdgeOfQueueKey(QueueKey(w.EdgeCapsulePreviewPaper)) == queueKey).ToArray())
+                     QueueKey(w.EdgeCapsulePreviewPaper) == queueKey).ToArray())
             BeginEdgeCapsuleVisualTransaction(window);
     }
 }

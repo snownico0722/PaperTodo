@@ -19,6 +19,8 @@ public sealed partial class AppController
         var pitch = EdgeCapsuleLayout.SlotHeight(DeepCapsuleGap);
         var top = EdgeCapsuleFreeQueuePolicy.GhostSlotTop(drop.Decision,
             target?.Box.HasMaster == true, pitch);
+        if (State.UseCapsuleCollapseAll && drop.Decision.Kind == EdgeFreeQueueDropKind.Move)
+            top += pitch; // The new queue's master owns slot zero; the silhouette shows papers.
         var width = target?.Box.WidthDip ??
             drag.CarriedIds.Select(id => _windows.TryGetValue(id, out var window)
                 ? window.DeepCapsuleRestingVisibleWidth : PaperLayoutDefaults.CapsuleWidth).DefaultIfEmpty(PaperLayoutDefaults.CapsuleWidth).Max();
@@ -41,7 +43,9 @@ public sealed partial class AppController
         var target = NativeQueueGroups().FirstOrDefault(g => g.Key == drop.DestinationKey);
         var slotTop = EdgeCapsuleFreeQueuePolicy.GhostSlotTop(drop.Decision,
             target?.Box.HasMaster == true, pitch);
-        var ownerTop = slotTop + (drag.WholeQueue ? drag.OwnerOffsetDip : 0);
+        var offset = drag.WholeQueue
+            ? drag.OwnerOffsetDip - (State.UseCapsuleCollapseAll ? pitch : 0) : 0;
+        var ownerTop = slotTop + offset;
         return EdgeCapsuleFreeQueuePolicy.NudgeToward(requestedTop, ownerTop,
             EdgeCapsuleFreeQueuePolicy.JoinNudge);
     }

@@ -16,12 +16,10 @@ public sealed partial class AppController
 
     internal string QueueKeyForPaper(PaperData paper) => QueueKey(paper);
 
-    private bool QueueHasMaster(string key) => State.UseCapsuleCollapseAll &&
-        (!State.UseCapsuleFreeQueues || key == LiveEdgeOfQueueKey(key));
+    private bool QueueHasMaster(string key) => State.UseCapsuleCollapseAll;
 
     private EdgeCapsuleQueuePlan BuildEdgeQueuePlan(IEnumerable<EdgeCapsuleQueueMember> members, bool showMaster) =>
-        EdgeCapsuleQueueCoordinator.Build(members, showMaster,
-            State.UseCapsuleFreeQueues ? key => key == LiveEdgeOfQueueKey(key) : null);
+        EdgeCapsuleQueueCoordinator.Build(members, showMaster);
 
     private double DeepCapsuleStartTopMarginForQueueKey(string key)
     {
@@ -49,14 +47,12 @@ public sealed partial class AppController
             .Select(m => WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(m.DeviceName))
             .ToHashSet(StringComparer.Ordinal);
         var queues = new List<EdgeCapsuleRestingQueue>();
-        var edgesWithMaster = new HashSet<string>(StringComparer.Ordinal);
-        var liveEdges = new HashSet<string>(StringComparer.Ordinal);
+        // Every independent queue owns one master and its own anchor.
         var masterBases = new Dictionary<string, double>(StringComparer.Ordinal);
         var anchorDeltas = new Dictionary<string, double>(StringComparer.Ordinal);
         foreach (var queue in plan.Queues)
         {
             var liveEdge = LiveEdgeOfQueueKey(queue.Key);
-            liveEdges.Add(liveEdge);
             if (queue.Papers.Count == 0 || !EdgeCapsuleQueueIds.TryGetEdge(queue.Key, out var monitor, out _) ||
                 !WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(monitor, out var geometry)) continue;
             var slots = queue.Papers.Count + (queue.HasMaster ? 1 : 0);
@@ -66,7 +62,7 @@ public sealed partial class AppController
             var anchorDelta = restTop - EdgeCapsuleLayout.FreeQueueTopForIndex(0, savedMargin, geometry.LocalWorkAreaDip, gap);
             var top = queue.HasMaster ? restTop : double.PositiveInfinity;
             var bottom = queue.HasMaster ? restTop + PaperLayoutDefaults.CapsuleHeight : double.NegativeInfinity;
-            if (queue.HasMaster) { edgesWithMaster.Add(liveEdge); masterBases[liveEdge] = restTop; }
+            if (queue.HasMaster) masterBases[queue.Key] = restTop;
             var members = new List<EdgeCapsuleRestingQueueMember>();
             foreach (var paper in queue.Papers)
             {
@@ -81,21 +77,11 @@ public sealed partial class AppController
             }
             queues.Add(new(liveEdge, queue.Key, members, top, bottom, connected.Contains(monitor) ? 0 : 1, restTop));
         }
-        // The collection control still exists when no members remain in the default queue.
-        foreach (var edge in liveEdges.Where(e => State.UseCapsuleCollapseAll && !edgesWithMaster.Contains(e)))
-        {
-            if (!EdgeCapsuleQueueIds.TryGetEdge(edge, out var monitor, out _) ||
-                !WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(monitor, out var geometry)) continue;
-            var margin = anchors != null && anchors.TryGetValue(edge, out var requested) ? requested : DeepCapsuleStartTopMarginForQueueKey(edge);
-            var top = EdgeCapsuleLayout.FreeQueueTopForIndex(0, margin, geometry.LocalWorkAreaDip, gap);
-            masterBases[edge] = top;
-            queues.Add(new(edge, edge, [new("master:" + edge, top)], top, top + PaperLayoutDefaults.CapsuleHeight, -1, top));
-        }
         var offsets = EdgeCapsuleRestingLayoutCoordinator.BuildDownwardOffsets(queues, gap);
         var masterTops = new Dictionary<string, double>(StringComparer.Ordinal);
-        foreach (var queue in queues.Where(q => q.QueueKey == q.LiveEdgeKey))
-            if (masterBases.TryGetValue(queue.LiveEdgeKey, out var masterBase))
-                masterTops[queue.LiveEdgeKey] = masterBase + offsets.GetValueOrDefault(queue.Members[0].PaperId);
+        foreach (var queue in queues)
+            if (masterBases.TryGetValue(queue.QueueKey, out var masterBase))
+                masterTops[queue.QueueKey] = masterBase + offsets.GetValueOrDefault(queue.Members[0].PaperId);
         var placements = plan.Placements.ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
         foreach (var (id, placement) in plan.Placements)
             placements[id] = placement with

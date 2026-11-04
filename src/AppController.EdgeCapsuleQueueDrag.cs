@@ -41,7 +41,7 @@ public sealed partial class AppController
         var ownerIndex = source.Papers.FindIndex(p => p.Id == owner.Id);
         if (ownerIndex < 0) return false;
         var pitch = EdgeCapsuleLayout.SlotHeight(DeepCapsuleGap);
-        var carriesMaster = wholeQueue && !EdgeCapsuleFreeQueuesEnabled && source.Box.HasMaster;
+        var carriesMaster = wholeQueue && source.Box.HasMaster;
         _nativeEdgeQueueDrag = new()
         {
             OwnerId = owner.Id, SourceKey = source.Key,
@@ -112,22 +112,26 @@ public sealed partial class AppController
         var pitch = EdgeCapsuleLayout.SlotHeight(gap);
         var top = floating ? geometry.DeviceYToLocalDip(pointer.Y) - PaperLayoutDefaults.CapsuleHeight / 2
             : drag.WholeQueue ? ownerTopDip - drag.OwnerOffsetDip : ownerTopDip;
+        var carriedMaster = drag.WholeQueue && State.UseCapsuleCollapseAll;
+        var newMaster = drag.FreeQueues && State.UseCapsuleCollapseAll;
+        var memberTop = top + (carriedMaster ? pitch : 0);
+        var queueTop = top - (!drag.WholeQueue && newMaster ? pitch : 0);
         var boxes = new List<EdgeFreeQueueBox>();
         foreach (var group in groups.Where(g => LiveEdgeOfQueueKey(g.Key) == edge))
         {
             var count = group.Papers.Count(p => !carriedIds.Contains(p.Id));
-            var master = group.Box.HasMaster && !(drag.WholeQueue && !drag.FreeQueues && group.Key == drag.SourceKey);
+            var master = group.Box.HasMaster && count > 0; // A vacated queue's master leaves too.
             if (count > 0 || master) boxes.Add(group.Box with { MemberCount = count, HasMaster = master });
         }
-        // A side-wide master is a real obstacle even if its default queue has no papers.
-        if (drag.FreeQueues && State.UseCapsuleCollapseAll && !boxes.Any(b => b.Key == edge))
-            boxes.Add(new(edge, FreeQueueMasterTop(monitor, side), 0, true, PaperLayoutDefaults.CapsuleWidth));
-        var bodySlots = carried.Length + (!drag.FreeQueues && drag.WholeQueue && State.UseCapsuleCollapseAll ? 1 : 0);
-        var visibleHeight = floating ? PaperLayoutDefaults.CapsuleHeight : bodySlots * pitch - gap;
+        var bodySlots = carried.Length + (State.UseCapsuleCollapseAll && (drag.WholeQueue || drag.FreeQueues) ? 1 : 0);
+        var visibleHeight = drag.FreeQueues && State.UseCapsuleCollapseAll
+            ? carried.Length * pitch - gap
+            : floating ? PaperLayoutDefaults.CapsuleHeight : bodySlots * pitch - gap;
         var wallDistance = (side == DeepCapsuleSides.Left ? pointer.X - geometry.WorkArea.Left : geometry.WorkArea.Right - pointer.X) / geometry.DpiScaleX;
-        var candidates = IsCapsuleCollapseAllActiveForQueue(edge) ? Array.Empty<EdgeFreeQueueBox>() : boxes.ToArray();
-        var target = EdgeCapsuleFreeQueuePolicy.FindInsertion(candidates, top, visibleHeight, wallDistance,
-            pitch, gap, drag.HeldTargetKey);
+        var candidates = boxes.Where(b => !IsCapsuleCollapseAllActiveForQueue(b.Key)).ToArray();
+        var target = EdgeCapsuleFreeQueuePolicy.FindInsertion(candidates,
+            drag.FreeQueues && State.UseCapsuleCollapseAll ? memberTop : top,
+            visibleHeight, wallDistance, pitch, gap, drag.HeldTargetKey);
         // With the optional split mode off, cross-edge Ctrl movement retains legacy one-queue semantics.
         if (!drag.FreeQueues && edge != LiveEdgeOfQueueKey(drag.SourceKey) && boxes.Count > 0)
         {
@@ -137,13 +141,13 @@ public sealed partial class AppController
         var decision = target is { } insert
             ? EdgeCapsuleFreeQueuePolicy.Insert(boxes, insert.Key, insert.Index, carried.Length,
                 geometry.LocalWorkAreaDip.Height, pitch, gap, prependAbove: insert.Key != drag.SourceKey)
-            : EdgeCapsuleFreeQueuePolicy.Place(boxes, top, bodySlots, geometry.LocalWorkAreaDip.Height, pitch, gap);
+            : EdgeCapsuleFreeQueuePolicy.Place(boxes, queueTop, bodySlots, geometry.LocalWorkAreaDip.Height, pitch, gap);
         drag.HeldTargetKey = decision.Kind == EdgeFreeQueueDropKind.Insert ? decision.TargetKey : "";
         var targetMembers = target.HasValue
             ? groups.FirstOrDefault(g => g.Key == target.Value.Key)?.Papers.Where(p => !carriedIds.Contains(p.Id)).ToList() ?? []
             : new List<PaperData>();
         var sourceVacated = !State.Papers.Any(p => !carriedIds.Contains(p.Id) && InstanceQueueKey(p) == drag.SourceKey);
-        var reuse = sourceVacated && LiveEdgeOfQueueKey(drag.SourceKey) == edge && !QueueHasMaster(drag.SourceKey);
+        var reuse = sourceVacated && LiveEdgeOfQueueKey(drag.SourceKey) == edge;
         var destination = decision.Kind == EdgeFreeQueueDropKind.Insert ? decision.TargetKey
             : !drag.FreeQueues ? edge : reuse ? drag.SourceKey : EdgeCapsuleQueueIds.Compose(edge, drag.NewQueueId);
         // Surviving source members retain their saved anchor; a passive display offset
@@ -318,7 +322,7 @@ public sealed partial class AppController
         if (_nativeEdgeQueueDrag is { FloatingCoverReady: true } drag &&
             paper.Id != drag.OwnerId && drag.CarriedIds.Contains(paper.Id)) return drag.SourceTopDip;
         return State.UseCapsuleFreeQueues && State.UseCapsuleCollapseAll
-            ? _masterCapsules.GetValueOrDefault(EdgeKey(paper.CapsuleMonitorDeviceName, paper.CapsuleSide))?.AnchorTop : null;
+            ? _masterCapsules.GetValueOrDefault(QueueKey(paper))?.AnchorTop : null;
     }
 
     private double FreeQueueMasterTop(string monitor, string side)
@@ -337,7 +341,7 @@ public sealed partial class AppController
         foreach (var (key, master) in _masterCapsules.ToArray())
         {
             master.SetQueueTopPreview(tops.TryGetValue(key, out var top) ? top : null);
-            var count = DeepCapsulePapersInOrder().Count(p => LiveEdgeOfQueueKey(QueueKey(p)) == key);
+            var count = DeepCapsulePapersInOrder().Count(p => QueueKey(p) == key);
             master.UpdateState(count, IsCapsuleCollapseAllActiveForQueue(key), animate: true);
         }
     }

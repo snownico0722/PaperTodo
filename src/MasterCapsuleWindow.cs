@@ -66,6 +66,7 @@ public sealed class MasterCapsuleWindow : Window
     // own master pill at slot 0 of that queue. Geometry resolves against this queue's monitor+edge.
     private EdgeCapsuleEdge _queueEdge;
     private string _queueMonitorDeviceName = "";
+    private string _queueKey = "";
 
     private Border _pill = null!;
     private Border _hoverOverlay = null!;
@@ -105,11 +106,13 @@ public sealed class MasterCapsuleWindow : Window
         set => SetValue(AnimatedTopProperty, value);
     }
 
-    public MasterCapsuleWindow(AppController controller, EdgeCapsuleEdge queueEdge, string queueMonitorDeviceName)
+    public MasterCapsuleWindow(AppController controller, EdgeCapsuleEdge queueEdge, string queueMonitorDeviceName,
+        string? queueKey = null)
     {
         _controller = controller;
         _queueEdge = queueEdge;
         _queueMonitorDeviceName = queueMonitorDeviceName ?? "";
+        _queueKey = queueKey ?? controller.MasterCapsuleQueueKey(_queueMonitorDeviceName, _queueEdge);
         _contextMenuSession = new DeepCapsuleContextMenuSession(
             controller,
             $"master:{Guid.NewGuid():N}");
@@ -266,10 +269,10 @@ public sealed class MasterCapsuleWindow : Window
         {
             _dragSession = new MasterDragSession(
                 DeviceScreenPoint.FromPoint(PointToScreen(e.GetPosition(this))),
-                _controller.MasterCapsuleQueueKey(_queueMonitorDeviceName, _queueEdge),
-                _controller.HasDeepCapsuleStartTopMarginForQueue(_queueMonitorDeviceName, _queueEdge),
-                _controller.DeepCapsuleStartTopMarginForQueue(_queueMonitorDeviceName, _queueEdge),
-                _controller.CaptureFreeMasterDragLayout(_queueMonitorDeviceName, _queueEdge));
+                _queueKey,
+                _controller.HasDeepCapsuleStartTopMarginForQueue(_queueKey),
+                _controller.MasterCapsuleStartTopMargin(_queueKey),
+                _controller.CaptureFreeMasterDragLayout(_queueMonitorDeviceName, _queueEdge, _queueKey));
             _gestureState = MasterGestureState.Pending;
             _pill.CaptureMouse();
             e.Handled = true;
@@ -305,10 +308,8 @@ public sealed class MasterCapsuleWindow : Window
             var wasDragging = FinishMasterGesture(commit: true, clearFocus: false);
             if (hadGesture && !wasDragging)
             {
-                _controller.SuppressEdgeCapsulePreviewForMasterQueueLayout(
-                    _queueMonitorDeviceName,
-                    _queueEdge);
-                _controller.ToggleCapsuleCollapseAllActive(_queueMonitorDeviceName, _queueEdge);
+                _controller.SuppressEdgeCapsulePreviewForMasterQueueLayout(_queueKey);
+                _controller.ToggleCapsuleCollapseAllActive(_queueKey);
             }
 
             ClearCapsuleInteractionKeyboardFocus();
@@ -338,7 +339,7 @@ public sealed class MasterCapsuleWindow : Window
         // A display change can invalidate the pressed queue before the delayed layout refresh
         // retires its master. Never apply that gesture's source margin to the fallback queue.
         if (!string.Equals(session.SourceQueueKey,
-                _controller.MasterCapsuleQueueKey(_queueMonitorDeviceName, _queueEdge),
+                _queueKey,
                 StringComparison.Ordinal))
         {
             FinishMasterGesture(commit: false);
@@ -597,14 +598,16 @@ public sealed class MasterCapsuleWindow : Window
                 _queueEdge,
                 _glyph.Text,
                 _label.Text,
-                out var options) ||
+                out var options,
+                _queueKey) ||
             !_controller.TryBeginMasterCapsuleQueueTransfer(
                 _queueMonitorDeviceName,
                 _queueEdge,
                 session.StartTopMargin,
                 out var snapshot,
                 session.SourceHadStartTopMargin,
-                session.FreeLayout))
+                session.FreeLayout,
+                _queueKey))
         {
             return false;
         }
@@ -911,19 +914,25 @@ public sealed class MasterCapsuleWindow : Window
         }
     }
 
-    public void SetQueue(EdgeCapsuleEdge queueEdge, string queueMonitorDeviceName)
+    public void SetQueue(EdgeCapsuleEdge queueEdge, string queueMonitorDeviceName, string? queueKey = null)
     {
         _queueEdge = queueEdge;
         _queueMonitorDeviceName = queueMonitorDeviceName ?? "";
+        _queueKey = queueKey ?? _controller.MasterCapsuleQueueKey(_queueMonitorDeviceName, _queueEdge);
     }
 
     private double? _queueTopPreview;
     internal void SetQueueTopPreview(double? top) => _queueTopPreview = top;
 
     private double QueueStartTopMargin =>
-        _queueTopPreview ?? _controller.DeepCapsuleStartTopMarginForQueue(_queueMonitorDeviceName, _queueEdge);
+        _queueTopPreview ?? _controller.MasterCapsuleStartTopMargin(_queueKey);
 
-    private int QueueSlotCount => _controller.State.UseCapsuleFreeQueues ? 1 : Math.Max(1, _count + 1);
+    private int QueueSlotCount => Math.Max(1, _count + 1);
+
+    private double QueueTopForArea(Rect area) =>
+        _controller.State.UseCapsuleFreeQueues
+            ? EdgeCapsuleLayout.FreeQueueTopForIndex(0, QueueStartTopMargin, area, _controller.DeepCapsuleGap)
+            : EdgeCapsuleLayout.TopForIndex(0, QueueStartTopMargin, area, QueueSlotCount, _controller.DeepCapsuleGap);
 
     private void MoveToTarget(bool animate)
     {
@@ -945,12 +954,7 @@ public sealed class MasterCapsuleWindow : Window
         animate = animate && _controller.State.EnableAnimations;
         var localArea = geometry.LocalWorkAreaDip;
         var requestedWidth = MasterDockedWidth(geometry.DpiScaleY);
-        var targetTop = EdgeCapsuleLayout.TopForIndex(
-            0,
-            QueueStartTopMargin,
-            localArea,
-            QueueSlotCount,
-            _controller.DeepCapsuleGap);
+        var targetTop = QueueTopForArea(localArea);
         var currentTop = double.IsNaN(_currentTopDip) ? targetTop : _currentTopDip;
 
         ApplyMasterDeviceBounds(currentTop, requestedWidth, geometry);
@@ -1006,12 +1010,7 @@ public sealed class MasterCapsuleWindow : Window
                     return;
                 }
 
-                var targetTop = EdgeCapsuleLayout.TopForIndex(
-                    0,
-                    QueueStartTopMargin,
-                    geometry.LocalWorkAreaDip,
-                    QueueSlotCount,
-                    _controller.DeepCapsuleGap);
+                var targetTop = QueueTopForArea(geometry.LocalWorkAreaDip);
                 ApplyMasterDeviceBounds(
                     targetTop,
                     MasterDockedWidth(geometry.DpiScaleY),
@@ -1064,12 +1063,7 @@ public sealed class MasterCapsuleWindow : Window
     }
 
     // Local target-monitor DIP. Real capsule hosts use the same coordinate space.
-    public double AnchorTop => EdgeCapsuleLayout.TopForIndex(
-        0,
-        QueueStartTopMargin,
-        EdgeCapsuleLayout.LocalWorkAreaForQueue(_queueMonitorDeviceName),
-        QueueSlotCount,
-        _controller.DeepCapsuleGap);
+    public double AnchorTop => QueueTopForArea(EdgeCapsuleLayout.LocalWorkAreaForQueue(_queueMonitorDeviceName));
 
     private static void OnAnimatedTopChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
@@ -1148,12 +1142,7 @@ public sealed class MasterCapsuleWindow : Window
             return false;
         }
 
-        var targetTop = EdgeCapsuleLayout.TopForIndex(
-            0,
-            QueueStartTopMargin,
-            geometry.LocalWorkAreaDip,
-            QueueSlotCount,
-            _controller.DeepCapsuleGap);
+        var targetTop = QueueTopForArea(geometry.LocalWorkAreaDip);
         var docked = EdgeCapsuleGeometry.Calculate(new EdgeCapsuleGeometryInput(
             geometry,
             _queueEdge,
@@ -1177,7 +1166,7 @@ public sealed class MasterCapsuleWindow : Window
         MasterCapsuleWindow target,
         Action releaseCover)
     {
-        var targetMonitor = target._queueMonitorDeviceName;
+        var targetKey = target._queueKey;
         var targetEdge = target._queueEdge;
         var hasTarget = target.TryGetQueueTransferDockingTarget(
             out var targetBounds,
@@ -1194,13 +1183,13 @@ public sealed class MasterCapsuleWindow : Window
 
         void CompleteFlight(bool reachedTarget)
         {
-            var current = _controller.MasterCapsuleForQueue(targetMonitor, targetEdge);
+            var current = _controller.MasterCapsuleForQueue(targetKey);
             current?.PrepareQueueTransferHandoff();
 
             // Preparing the WPF surface pumps Render and can dispatch an arrange that replaces
             // the master or changes its geometry. Resolve once more after that boundary, then
             // publish synchronously so the cover uses the same current endpoint as the master.
-            current = _controller.MasterCapsuleForQueue(targetMonitor, targetEdge);
+            current = _controller.MasterCapsuleForQueue(targetKey);
             current?.PublishQueueTransferHandoff();
             if (current == null)
             {
