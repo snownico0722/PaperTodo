@@ -1671,6 +1671,7 @@ public sealed partial class PaperWindow : Window
         }
 
         RefreshNativeMica(force: true);
+        _expandedEditorHostWindow?.RefreshEditorTheme(this);
         if (!IsPaperFormTransitioning) ApplyPaperChromePresentation();
         RefreshPaperTitle();
         RefreshPaperIconButton();
