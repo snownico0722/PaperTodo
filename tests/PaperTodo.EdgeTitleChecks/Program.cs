@@ -37,6 +37,8 @@ internal static partial class Program
             Console.WriteLine("PASS queue-instance-key-codec");
             QueueDragModifierLatch();
             Console.WriteLine("PASS queue-drag-modifier-latch");
+            PreviewOriginDropAnchor();
+            Console.WriteLine("PASS preview-origin-drop-anchor");
             CursorPhysicalCoordinates();
             Console.WriteLine("PASS cursor-physical-coordinates");
             QueueMagnet();
@@ -100,6 +102,52 @@ internal static partial class Program
                 _ = SetThreadDpiAwarenessContext(previous);
             }
         }
+    }
+
+    // 预览 owner 起拖时紧凑胶囊会被视觉重定位到指针下，但逻辑顺序必须从原槽开始，
+    // 只累计按下之后的指针位移。否则展开卡片的高度会被磁吸当成拖拽距离。
+    private static void PreviewOriginDropAnchor()
+    {
+        Check(
+            Math.Abs(PaperWindow.DeepCapsuleDropCenterYDevice(
+                pointerYDevice: 500,
+                dockedPointerOffsetY: 20,
+                capsuleHeightDevice: 30,
+                hasPreviewOriginBaseline: false,
+                previewOriginCenterYDevice: 0,
+                pointerDownYDevice: 0) - 495) < 1e-6,
+            "Docked drop anchor should follow the pointer without a preview baseline");
+
+        Check(
+            Math.Abs(PaperWindow.DeepCapsuleDropCenterYDevice(
+                pointerYDevice: 500,
+                dockedPointerOffsetY: 20,
+                capsuleHeightDevice: 30,
+                hasPreviewOriginBaseline: true,
+                previewOriginCenterYDevice: 200,
+                pointerDownYDevice: 500) - 200) < 1e-6,
+            "Zero pointer travel from an expanded preview must keep the original slot center");
+
+        Check(
+            Math.Abs(PaperWindow.DeepCapsuleDropCenterYDevice(
+                pointerYDevice: 548,
+                dockedPointerOffsetY: 20,
+                capsuleHeightDevice: 30,
+                hasPreviewOriginBaseline: true,
+                previewOriginCenterYDevice: 200,
+                pointerDownYDevice: 500) - 248) < 1e-6,
+            "Preview-origin drag should count only pointer travel after the press");
+
+        // 指针绝对位置远低于原槽位（展开卡片中部）时，零位移仍不得被当成拖动。
+        Check(
+            Math.Abs(PaperWindow.DeepCapsuleDropCenterYDevice(
+                pointerYDevice: 900,
+                dockedPointerOffsetY: 20,
+                capsuleHeightDevice: 30,
+                hasPreviewOriginBaseline: true,
+                previewOriginCenterYDevice: 160,
+                pointerDownYDevice: 900) - 160) < 1e-6,
+            "A tall preview must not turn its own height into reorder motion");
     }
 
     // A free queue narrows (monitor, side) with an instance id. The whole backward-compatibility

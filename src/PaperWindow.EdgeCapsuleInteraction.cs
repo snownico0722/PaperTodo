@@ -20,7 +20,8 @@ public sealed partial class PaperWindow
     private readonly record struct PreviewOriginReorderBaseline(
         int OriginalIndex,
         DeviceScreenPoint PointerDownScreenPosition,
-        double DpiScaleY);
+        double DpiScaleY,
+        double OriginalCenterYDevice);
 
     private PreviewOriginReorderBaseline? _previewOriginReorderBaseline;
 
@@ -569,12 +570,21 @@ public sealed partial class PaperWindow
             // can still describe the tall preview until commit. Use the compact protocol target.
             ? compactHeightDevice / 2.0
             : currentScreenPos.Y - appliedBounds.Top;
-        var topDip = DeepCapsuleMonitorGeometry().DeviceYToLocalDip(appliedBounds.Top);
+        var geometry = DeepCapsuleMonitorGeometry();
+        var scaleY = Math.Max(1, geometry.DpiScaleY);
+        var topDip = geometry.DeviceYToLocalDip(appliedBounds.Top);
+        // 预览 owner 起拖时紧凑胶囊会被视觉重定位到指针下，但逻辑槽位仍停在原处。
+        // 记下原槽中心的设备坐标，磁吸/索引/提交都以它为原点累计指针位移。
+        var originalCenterYDevice = geometry.WorkArea.Top +
+            (DeepCapsuleTopForIndex(_edgeCapsule.Placement.VisualIndex) +
+             _edgeCapsule.Placement.TopOffsetDip +
+             PaperLayoutDefaults.CapsuleHeight / 2.0) * scaleY;
         var previewOriginBaseline = collapsedPreview
             ? new PreviewOriginReorderBaseline(
                 _edgeCapsule.Placement.Index,
                 session.PointerDownScreenPosition,
-                Math.Max(1, DeepCapsuleMonitorGeometry().DpiScaleY))
+                scaleY,
+                originalCenterYDevice)
             : (PreviewOriginReorderBaseline?)null;
         if (!BeginEdgeCapsuleDockedReorder(
                 currentScreenPos,
@@ -916,10 +926,40 @@ public sealed partial class PaperWindow
             return new EdgeCapsuleDropAnchor(pointer, pointer.Y);
         }
 
-        var scaleY = DeepCapsuleMonitorGeometry().DpiScaleY;
-        var centerY = pointer.Y - session.DockedPointerOffsetY
-                      + PaperLayoutDefaults.CapsuleHeight * scaleY / 2.0;
+        var scaleY = Math.Max(1, DeepCapsuleMonitorGeometry().DpiScaleY);
+        var baseline = _previewOriginReorderBaseline;
+        var centerY = DeepCapsuleDropCenterYDevice(
+            pointer.Y,
+            session.DockedPointerOffsetY,
+            PaperLayoutDefaults.CapsuleHeight * scaleY,
+            baseline.HasValue,
+            baseline?.OriginalCenterYDevice ?? 0,
+            baseline?.PointerDownScreenPosition.Y ?? 0);
         return new EdgeCapsuleDropAnchor(pointer, centerY);
+    }
+
+    /// <summary>
+    /// 贴边拖拽的纵向落点锚点（设备像素）。
+    ///
+    /// 普通贴边拖拽时胶囊顶边跟随光标，中心 = 光标 Y - 抓取偏移 + 半个胶囊高度。
+    /// 预览 owner 起拖时紧凑胶囊被视觉重定位到指针下；若继续用绝对指针，预览卡片的
+    /// 高度会被误当成用户拖动。此时以原槽中心为逻辑原点，只累计按下之后的指针位移。
+    /// 磁吸、预览索引与提交必须共用这一结果。
+    /// </summary>
+    internal static double DeepCapsuleDropCenterYDevice(
+        double pointerYDevice,
+        double dockedPointerOffsetY,
+        double capsuleHeightDevice,
+        bool hasPreviewOriginBaseline,
+        double previewOriginCenterYDevice,
+        double pointerDownYDevice)
+    {
+        if (hasPreviewOriginBaseline)
+        {
+            return previewOriginCenterYDevice + (pointerYDevice - pointerDownYDevice);
+        }
+
+        return pointerYDevice - dockedPointerOffsetY + capsuleHeightDevice / 2.0;
     }
 
     /// <summary>
