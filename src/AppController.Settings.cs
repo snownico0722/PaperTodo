@@ -551,6 +551,8 @@ public sealed partial class AppController
 
         var previousPage = _settingsPage;
         CommitSettingsExternalMarkdownEditor();
+        if (previousPage == SettingsPage.Workspaces && page != SettingsPage.Workspaces)
+            _workspaceSelectionDraft = 0;
         _settingsPage = page;
         if (previousPage != page && SupportsShortcutRecording(previousPage))
         {
@@ -613,6 +615,7 @@ public sealed partial class AppController
         window.Activated += (_, _) => RefreshSettingsStartupStateFromWindows();
         window.Closed += (_, _) =>
         {
+            _workspaceSelectionDraft = 0;
             CommitSettingsExternalMarkdownEditor();
             StopSettingsStartupStateRefresh();
             _settingsExternalMarkdownTextBox = null;
