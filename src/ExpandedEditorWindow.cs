@@ -71,7 +71,7 @@ internal sealed class ExpandedEditorWindow : Window
 
     private void SetFrameTheme(PaperWindow source)
     {
-        _frame.Background = source.Resources["PaperSurfaceBrushKey"] as Brush
+        _frame.Background = source.Resources["PaperBrushKey"] as Brush
             ?? Theme.PaperBrush;
         _frame.BorderBrush = source.Resources["PaperBorderBrushKey"] as Brush
             ?? Brushes.Gray;
