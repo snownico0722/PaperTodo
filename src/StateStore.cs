@@ -46,6 +46,7 @@ public sealed partial class StateStore
     private bool _preserveRecoveredLoadFilesOnNextSave;
     private bool _preserveOrphanedTempsOnNextSave;
     internal bool NeedsStartupRecoverySave { get; private set; }
+    internal bool NormalizedCollapsedStateOnLoad { get; private set; }
     private string? _preservedFailedPrimaryPath;
     private string? _preservedRecoveryBackupPath;
 
@@ -57,6 +58,7 @@ public sealed partial class StateStore
     {
         initializedEmpty = false;
         NeedsStartupRecoverySave = false;
+        NormalizedCollapsedStateOnLoad = false;
         ClearRecoveredLoadPreservationState();
         var mainExists = FileExistsForCollection(FilePath);
         if (mainExists)
@@ -94,7 +96,11 @@ public sealed partial class StateStore
         var state = ReadCoreState(json)
             ?? throw new JsonException($"{Path.GetFileName(path)} deserialized to null.");
         MigrateLegacyTopBarSettings(state, json);
+        // Keep track of normalization that changes visible paper presentation.
+        // It happens before the workspace UI restore can detect its own changes.
+        var collapsedBefore = state.Papers?.Where(p => p?.IsCollapsed == true).ToArray();
         NormalizeWorkspaceDocument(state);
+        NormalizedCollapsedStateOnLoad = collapsedBefore?.Any(p => !p.IsCollapsed) == true;
         return state;
     }
 
