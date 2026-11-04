@@ -12,11 +12,12 @@ internal static class PaperTopBarShortcuts
     internal const string ExternalEditor = "external-editor";
     internal const string NewTodo = "new-todo";
     internal const string NewNote = "new-note";
+    internal const string Workspace = "workspace";
 
     // Kept only for deserializing layouts saved by the former per-paper model.
     internal const string PluginActions = "plugin-actions";
 
-    private static readonly string[] Defaults = [Association, NewNote, NewTodo, ExternalEditor];
+    private static readonly string[] Defaults = [Association, Workspace, NewNote, NewTodo, ExternalEditor];
 
     internal static IReadOnlyList<string> All => Defaults;
 
@@ -33,6 +34,17 @@ internal static class PaperTopBarShortcuts
 
     internal static void Normalize(AppState state)
     {
+        // The old workspace button was always visible. Keep that visible on upgrade while
+        // moving it into the same configurable shortcut group as every other action.
+        if (state.TopBarShortcutOrder != null &&
+            !state.TopBarShortcutOrder.Contains(Workspace, StringComparer.Ordinal))
+        {
+            var old = state.TopBarShortcutOrder.Where(action => Defaults.Contains(action)).ToList();
+            var pinned = Math.Clamp(state.TopBarPinnedCount, 0, old.Count);
+            old.Insert(pinned, Workspace);
+            state.TopBarShortcutOrder = old;
+            state.TopBarPinnedCount = pinned + 1;
+        }
         state.TopBarShortcutOrder = NormalizeOrder(state.TopBarShortcutOrder);
         state.TopBarPinnedCount = Math.Clamp(state.TopBarPinnedCount, 0, Defaults.Length);
         state.TodoTopBarShortcuts = null;
