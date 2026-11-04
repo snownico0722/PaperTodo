@@ -4,12 +4,10 @@ namespace PaperTodo;
 public sealed class WorkbenchState
 {
     public Dictionary<string, WorkbenchCardState> Cards { get; set; } = new(StringComparer.Ordinal);
-    public List<WorkbenchConnection> Connections { get; set; } = new();
 
     internal WorkbenchState Copy() => new()
     {
-        Cards = Cards.ToDictionary(p => p.Key, p => p.Value.Copy(), StringComparer.Ordinal),
-        Connections = Connections.Select(e => new WorkbenchConnection { From = e.From, To = e.To }).ToList()
+        Cards = Cards.ToDictionary(p => p.Key, p => p.Value.Copy(), StringComparer.Ordinal)
     };
 
     internal void Normalize(IEnumerable<string> paperIds)
@@ -29,9 +27,6 @@ public sealed class WorkbenchState
             card.Width = WorkbenchCardState.ValidSize(card.Width, 320, 200, 1600);
             card.Height = WorkbenchCardState.ValidSize(card.Height, 360, 160, 1600);
         }
-        Connections = (Connections ?? new()).Where(e => e is not null &&
-                ids.Contains(e.From) && ids.Contains(e.To) && e.From != e.To)
-            .DistinctBy(e => (e.From, e.To)).ToList();
     }
 }
 
@@ -48,12 +43,6 @@ public sealed class WorkbenchCardState
     internal WorkbenchCardState Copy() => (WorkbenchCardState)MemberwiseClone();
     internal static double ValidSize(double value, double fallback, double min, double max) =>
         double.IsFinite(value) ? Math.Clamp(value, min, max) : fallback;
-}
-
-public sealed class WorkbenchConnection
-{
-    public string From { get; set; } = "";
-    public string To { get; set; } = "";
 }
 
 internal readonly record struct WorkbenchPoint(double X, double Y)
