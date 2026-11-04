@@ -92,97 +92,62 @@ public sealed partial class PaperWindow
         var menu = CreateContextMenu();
         menu.PlacementTarget = button;
         menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+        PopulateNamedWorkspaceChoices(menu, menu);
+        menu.IsOpen = true;
+    }
+
+    private MenuItem BuildWorkspaceShortcutMenuItem(ContextMenu menu)
+    {
+        if (!_controller.WorkspaceOptions.TopBarNamePicker)
+        {
+            var next = _controller.WorkspaceOptions.NextSlot(_controller.WorkspaceNumber);
+            return MenuItem(WorkspaceMenuText(
+                "切换到工作区" + next,
+                "Switch to workspace " + next,
+                "ワークスペース" + next + "に切り替える",
+                "작업 공간 " + next + "(으)로 전환"),
+                (_, _) =>
+                {
+                    menu.IsOpen = false;
+                    _ = Dispatcher.InvokeAsync(
+                        () => { if (!IsClosed) _ = _controller.CycleWorkspaceAsync(); },
+                        DispatcherPriority.Background);
+                });
+        }
+
+        var selector = new MenuItem
+        {
+            Header = WorkspaceMenuText("切换工作区", "Switch workspace",
+                "ワークスペースを切り替える", "작업 공간 전환")
+        };
+        PopulateNamedWorkspaceChoices(selector, menu);
+        return selector;
+    }
+
+    // Both top-bar and overflow use the same named-choice handler. Only the placement
+    // differs: a popup below the button versus a submenu beside the overflow item.
+    private void PopulateNamedWorkspaceChoices(ItemsControl choices, ContextMenu ownerMenu)
+    {
         foreach (var slot in _controller.WorkspaceOptions.SlotNumbers)
         {
             var target = slot;
+            var current = slot == _controller.WorkspaceNumber;
             var item = new MenuItem
             {
                 Header = _controller.WorkspaceOptions.DisplayName(slot),
                 IsCheckable = true,
-                IsChecked = slot == _controller.WorkspaceNumber
+                IsChecked = current,
+                IsEnabled = !current && !_controller.IsWorkspaceSwitching
             };
             item.Click += (_, _) =>
             {
-                menu.IsOpen = false;
-                if (target != _controller.WorkspaceNumber)
-                    _ = Dispatcher.InvokeAsync(
-                        () => { if (!IsClosed) _ = _controller.SwitchWorkspaceAsync(target); },
-                        DispatcherPriority.Background);
+                ownerMenu.IsOpen = false;
+                _ = Dispatcher.InvokeAsync(
+                    () => { if (!IsClosed) _ = _controller.SwitchWorkspaceAsync(target); },
+                    DispatcherPriority.Background);
             };
-            menu.Items.Add(item);
+            choices.Items.Add(item);
         }
-        menu.IsOpen = true;
-    }
-
-    // The ordinary overflow menu contains one horizontal row. Selection replaces that
-    // very row with a confirmation; no separate dialog or second line is introduced.
-    private MenuItem BuildWorkspaceSelectionMenuItem(ContextMenu menu)
-    {
-        var item = new MenuItem
-        {
-            StaysOpenOnClick = true,
-            Padding = new Thickness(8, 4, 8, 4)
-        };
-        var row = new StackPanel { Orientation = Orientation.Horizontal };
-        void RenderChoices()
-        {
-            row.Children.Clear();
-            row.Children.Add(new TextBlock
-            {
-                Text = Strings.Get("WorkspaceSettingsTitle"),
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, 8, 0),
-                Foreground = TextBrush
-            });
-            foreach (var slot in _controller.WorkspaceOptions.SlotNumbers)
-            {
-                var target = slot;
-                var choice = new Button
-                {
-                    Content = slot.ToString(UiLanguages.EffectiveCulture),
-                    MinWidth = 27,
-                    Height = 26,
-                    Margin = new Thickness(1, 0, 1, 0),
-                    FontWeight = slot == _controller.WorkspaceNumber
-                        ? FontWeights.Bold : FontWeights.Normal,
-                    IsEnabled = slot != _controller.WorkspaceNumber
-                };
-                choice.Click += (_, e) =>
-                {
-                    e.Handled = true;
-                    row.Children.Clear();
-                    row.Children.Add(new TextBlock
-                    {
-                        Text = SettingsWorkspaceConfirmation(target),
-                        VerticalAlignment = VerticalAlignment.Center,
-                        Margin = new Thickness(0, 0, 6, 0),
-                        Foreground = TextBrush
-                    });
-                    var yes = new Button
-                    {
-                        Content = WorkspaceMenuText("确定", "OK", "確定", "확인"),
-                        Padding = new Thickness(5, 2, 5, 2),
-                        Margin = new Thickness(0, 0, 4, 0)
-                    };
-                    yes.Click += (_, args) =>
-                    {
-                        args.Handled = true;
-                        menu.IsOpen = false;
-                        _ = Dispatcher.InvokeAsync(
-                            () => { if (!IsClosed) _ = _controller.SwitchWorkspaceAsync(target); },
-                            DispatcherPriority.Background);
-                    };
-                    var no = new Button { Content = Strings.Get("CommonCancel"), Padding = new Thickness(5, 2, 5, 2) };
-                    no.Click += (_, args) => { args.Handled = true; RenderChoices(); };
-                    row.Children.Add(yes);
-                    row.Children.Add(no);
-                };
-                row.Children.Add(choice);
-            }
-        }
-        RenderChoices();
-        item.Header = row;
-        return item;
     }
 
     private static string WorkspaceMenuText(string zh, string en, string ja, string ko) =>
@@ -193,10 +158,4 @@ public sealed partial class PaperWindow
             "ko" => ko,
             _ => zh
         };
-
-    private static string SettingsWorkspaceConfirmation(int number) =>
-        WorkspaceMenuText("确定切换为工作区" + number + "？",
-            "Switch to workspace " + number + "?",
-            "ワークスペース" + number + "に切り替えますか？",
-            "작업 공간 " + number + "(으)로 전환할까요?");
 }
