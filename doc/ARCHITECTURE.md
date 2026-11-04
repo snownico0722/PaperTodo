@@ -342,6 +342,16 @@ Web 弹窗复用可见 WebView 环境及本地 origin。普通网页/邮件链�
 
 需求的源版本与可选预热缓存资格分开：清空缓存不能阻止当前预览正常生成，但源已失效、上层刷新尚未送达时，旧版本仍不得准备或发布。关闭、移出队列和清空撤销缓存资格；有效预热请求被需求打断后可重新排队。Host 尚未就绪或尺寸暂不可用的 reader 休眠保留，只由 Host Loaded/Visible 或容量恢复唤醒；菜单、输入锁和手势不再被当作 artifact 准备资格。恢复一个来源不会打断另一个来源正在进行的预热，失败或永久失效目标不持续轮询。Host 仍提供资源、DPI、尺寸和实际输入边界，`Describe` 仍在 UI；正文等待不持有动画/窗口交接屏障，不改变 D-027 的编辑正文语义。当前选择及历史取舍见 D-035。
 
+### 5.7 工作台
+
+工作台是托盘「打开工作台」或全局快捷键 / `workbench` 启动命令进入的全屏模式（`WorkbenchWindow`，由 `AppController.Workbench` 打开和关闭）。它覆盖光标所在显示器，每个固定编号工作区是一张实线框画布，从左到右排列；只有当前工作区是活动、可编辑的，其他工作区只读预览。失去激活、Esc 或再次触发快捷键即退出。
+
+- **数据**：画布位置 `PaperData.WorkbenchX/WorkbenchY` 与无向关联 `PaperData.WorkbenchLinks` 属于纸片所在工作区的文档，与桌面 `X/Y`、Edge 几何互不覆盖。`WorkbenchPaperState` 统一保存修复、加载规范化（去掉自链、悬空、重复与半个坐标）和删除清理；GUI 删除与共享删除命令都会移除指向被删纸片的关联。虚线分区只由卡片位置推导，不持久化。
+- **编辑**：卡片的待办勾选/修改/新增、笔记正文和新建纸片走 `PaperCommandService`（`PaperOperationContext.User()`），标题走既有 `UpdatePaperTitle`；真实纸片由既有外部写入 reconcile 刷新。插件纸片只显示 presentation 文本，编辑需打开真实纸片。
+- **布局**：`WorkbenchLayout` 是纯几何：画布尺寸、90% 延展 / 95% 穿越阻力、单链接距离推导的虚线分区，以及三档布局（整理：关联分量排成双侧导图树、其余按类型/插件分组成网格、再货架装箱；增量落位：未摆放的纸片放到关联纸片或同组旁边；拖放：只推开刚放下的卡片）。首次打开或纸片尚无位置时由引擎落位，用户摆过的位置只在显式「整理」时改变。
+- **z-order**：工作台窗口打开期间成为所在显示器的避让窗口，`RefreshTopmostForForegroundWindow` 复用全屏避让路径让纸片与胶囊降到其下；关闭后恢复。
+- **跨工作区**：非活动工作区通过 `StateStore.ReadDocumentForWorkbenchPreview` 只读读取核心 JSON。移动纸片时，目标 `StateStore` 在自身写锁、版本栅栏和源哈希校验下只向 `papers` 追加节点（保留其他纸片与未知属性），成功后再由共享删除命令从当前工作区移除。当前只允许待办纸片和不含图片的内置笔记移动，图片资产与插件状态不跨工作区搬运。
+
 ## 6. Edge Capsule V3 Lite
 
 V3 Lite 的当前方向不是“再叠一个更聪明的代理”，而是保持 **单一 per-paper presentation authority + 极薄 native/compositor 边界**。

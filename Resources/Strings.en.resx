@@ -1667,4 +1667,60 @@ The original note is kept.</value></data>
   <data name="NoteExportNoNotes" xml:space="preserve"><value>There are no Markdown notes or todo papers to export.</value></data>
   <data name="NoteExportProgress" xml:space="preserve"><value>Exporting {0}/{1} papers</value></data>
   <data name="TodoExportCurrent" xml:space="preserve"><value>Export this todo paper</value></data>
+  <data name="WorkbenchTitle" xml:space="preserve"><value>Workbench</value></data>
+  <data name="TrayWorkbench" xml:space="preserve"><value>Open workbench</value></data>
+  <data name="ShortcutWorkbench" xml:space="preserve"><value>Open / close workbench</value></data>
+  <data name="WorkbenchWorkspaceNotCreated" xml:space="preserve"><value>This workspace has not been created yet. Switch to it once to see it here.</value></data>
+  <data name="WorkbenchWorkspaceUnreadable" xml:space="preserve"><value>This workspace cannot be read: {0}</value></data>
+  <data name="WorkbenchMoveUnavailable" xml:space="preserve"><value>The paper cannot move to this workspace.</value></data>
+  <data name="WorkbenchMoveBusy" xml:space="preserve"><value>The workspace is busy. Try again in a moment.</value></data>
+  <data name="WorkbenchMovePluginPaper" xml:space="preserve"><value>Plugin papers cannot move between workspaces yet.</value></data>
+  <data name="WorkbenchMoveImageNote" xml:space="preserve"><value>Notes with images cannot move between workspaces yet.</value></data>
+  <data name="WorkbenchMoveTargetFull" xml:space="preserve"><value>{0} already has 200 papers.</value></data>
+  <data name="WorkbenchMoveDuplicate" xml:space="preserve"><value>{0} already contains this paper.</value></data>
+  <data name="WorkbenchMoveFailed" xml:space="preserve"><value>Could not move to {0}: {1}</value></data>
+  <data name="WorkbenchMoveCopiedOnly" xml:space="preserve"><value>Copied to {0}, but it could not be removed from this workspace: {1}</value></data>
+  <data name="WorkbenchMoved" xml:space="preserve"><value>Moved to {0}</value></data>
+  <data name="WorkbenchLinkHandleTip" xml:space="preserve"><value>Drag onto another paper to link them</value></data>
+  <data name="WorkbenchOpenPaper" xml:space="preserve"><value>Open paper</value></data>
+  <data name="WorkbenchRename" xml:space="preserve"><value>Rename</value></data>
+  <data name="WorkbenchTitleTooLong" xml:space="preserve"><value>The title is too long.</value></data>
+  <data name="WorkbenchBoundToProgram" xml:space="preserve"><value>Bound to a program</value></data>
+  <data name="WorkbenchBoundToProgramNamed" xml:space="preserve"><value>Bound: {0}</value></data>
+  <data name="WorkbenchHiddenOnDesktop" xml:space="preserve"><value>Hidden on desktop</value></data>
+  <data name="WorkbenchCollapsedOnDesktop" xml:space="preserve"><value>Capsule on desktop</value></data>
+  <data name="WorkbenchPluginPaperHint" xml:space="preserve"><value>Use ↗ to open and edit this plugin paper.</value></data>
+  <data name="WorkbenchEmptyTodo" xml:space="preserve"><value>(No todos)</value></data>
+  <data name="WorkbenchAddTodo" xml:space="preserve"><value>Add a todo</value></data>
+  <data name="WorkbenchEditFailed" xml:space="preserve"><value>Could not save: {0}</value></data>
+  <data name="WorkbenchArrange" xml:space="preserve"><value>Arrange</value></data>
+  <data name="WorkbenchArrangeTip" xml:space="preserve"><value>Rearrange this workspace by links and paper type</value></data>
+  <data name="WorkbenchArranged" xml:space="preserve"><value>Arranged. You can undo it.</value></data>
+  <data name="WorkbenchUndoArrange" xml:space="preserve"><value>Undo arrange</value></data>
+  <data name="WorkbenchUndoArrangeTip" xml:space="preserve"><value>Restore the positions from before arranging</value></data>
+  <data name="WorkbenchFitCurrent" xml:space="preserve"><value>Current workspace</value></data>
+  <data name="WorkbenchFitCurrentTip" xml:space="preserve"><value>Zoom to the current workspace (Ctrl+0)</value></data>
+  <data name="WorkbenchOverview" xml:space="preserve"><value>Overview</value></data>
+  <data name="WorkbenchOverviewTip" xml:space="preserve"><value>Zoom out to every workspace</value></data>
+  <data name="WorkbenchCloseTip" xml:space="preserve"><value>Leave the workbench (Esc)</value></data>
+  <data name="WorkbenchHints" xml:space="preserve"><value>Drag a title to move · drag the dot to link · double-click a title to rename · right-click the canvas to create · wheel on empty space or Ctrl+wheel to zoom · drag empty space to pan · Esc to leave</value></data>
+  <data name="WorkbenchCurrentWorkspace" xml:space="preserve"><value>Current</value></data>
+  <data name="WorkbenchSwitchHere" xml:space="preserve"><value>Switch to this workspace</value></data>
+  <data name="WorkbenchSwitched" xml:space="preserve"><value>Switched to {0}</value></data>
+  <data name="WorkbenchSwitchFailed" xml:space="preserve"><value>The workspace could not be switched.</value></data>
+  <data name="WorkbenchRegionTodo" xml:space="preserve"><value>Todos</value></data>
+  <data name="WorkbenchRegionNote" xml:space="preserve"><value>Notes</value></data>
+  <data name="WorkbenchRegionTethered" xml:space="preserve"><value>Bound to programs</value></data>
+  <data name="WorkbenchRegionLinked" xml:space="preserve"><value>Linked</value></data>
+  <data name="WorkbenchRegionLabel" xml:space="preserve"><value>{0} · {1}</value></data>
+  <data name="WorkbenchLinkTip" xml:space="preserve"><value>{0} ↔ {1} (right-click to unlink)</value></data>
+  <data name="WorkbenchUnlink" xml:space="preserve"><value>Unlink</value></data>
+  <data name="WorkbenchUnlinkAll" xml:space="preserve"><value>Remove all links of this paper</value></data>
+  <data name="WorkbenchNewTodoHere" xml:space="preserve"><value>New todo here</value></data>
+  <data name="WorkbenchNewNoteHere" xml:space="preserve"><value>New note here</value></data>
+  <data name="WorkbenchDropToWorkspace" xml:space="preserve"><value>Release to move to {0}</value></data>
+  <data name="WorkbenchCannotMove" xml:space="preserve"><value>Cannot move to {0}
+{1}</value></data>
+  <data name="WorkbenchAlreadyLinked" xml:space="preserve"><value>These papers are already linked.</value></data>
+  <data name="WorkbenchLinkLimit" xml:space="preserve"><value>This paper has reached its link limit.</value></data>
 </root>

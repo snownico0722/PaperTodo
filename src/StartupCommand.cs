@@ -9,7 +9,8 @@ public enum StartupCommandKind
     NewTodo,
     NewNote,
     Exit,
-    EnableMcpForCodex
+    EnableMcpForCodex,
+    Workbench
 }
 
 public sealed class StartupCommand
@@ -45,6 +46,7 @@ public sealed class StartupCommand
             "new-note" or "note" or "paper" => StartupCommandKind.NewNote,
             "exit" or "quit" => StartupCommandKind.Exit,
             "enable-mcp-for-codex" => StartupCommandKind.EnableMcpForCodex,
+            "workbench" => StartupCommandKind.Workbench,
             _ => StartupCommandKind.None
         });
     }

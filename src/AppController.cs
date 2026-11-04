@@ -1191,6 +1191,9 @@ public sealed partial class AppController : IDisposable
                 break;
             case StartupCommandKind.EnableMcpForCodex:
                 return TryEnableMcpForCodex();
+            case StartupCommandKind.Workbench:
+                ToggleWorkbench();
+                break;
         }
         return true;
     }
@@ -1576,7 +1579,14 @@ public sealed partial class AppController : IDisposable
     {
         var avoidanceWindow = IntPtr.Zero;
         var avoidanceMonitorDeviceName = "";
-        if (ShouldAvoidFullscreenTopmost)
+        if (TryGetWorkbenchAvoidance(out var workbenchWindow, out var workbenchMonitor))
+        {
+            // The workbench is this process's own full-screen mode. It reuses the avoidance
+            // path independently of the fullscreen-app setting, which ignores own windows.
+            avoidanceWindow = workbenchWindow;
+            avoidanceMonitorDeviceName = workbenchMonitor;
+        }
+        else if (ShouldAvoidFullscreenTopmost)
         {
             var now = DateTimeOffset.UtcNow;
             var allowGlobalScan = forceGlobalScan ||
@@ -2026,6 +2036,7 @@ public sealed partial class AppController : IDisposable
         NotifyTodoReminderCollectionChanged();
 
         ClearTodoLinksToPaper(paper.Id);
+        ClearWorkbenchLinksToPaper(paper.Id);
 
         if (State.Papers.Count == 0)
         {

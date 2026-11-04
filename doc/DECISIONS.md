@@ -74,6 +74,7 @@
 | D-063 | 仅显式热重载和有基线三方合并，普通保存不检测外部修改 | Accepted | 持久化 / 产品边界 |
 | D-064 | 固定编号工作区共用代码，不共用运行数据 | Accepted | 工作区 / 持久化 |
 | D-065 | DComp 视觉与 Win32 输入提交的非原子边界 | Accepted (historical findings; native-owner candidate deferred) | Edge input / composition |
+| D-066 | 工作台作为全屏组织模式，复用纸片、命令与避让边界 | Accepted | 产品边界 / 工作台 |
 
 ## 维护规则
 
@@ -117,6 +118,7 @@ PaperTodo 当前的主要交互单元仍是一张可独立存在、独立显示�
 - `AppController` 可以全局协调，但不吸走所有单纸片业务行为。
 - `PaperWindow`、`PaperBodyHost`、edge per-paper presenter/host 保留清晰的 paper ownership。
 - 新功能先判断它属于 paper、paper body 还是应用级 runtime；若要改变这个分层，记录新的明确决策。
+- 全屏工作台（D-066）是在这一边界之上新增的组织模式：它读写的仍是纸片本身，退出后桌面纸片照旧是主要交互单元。
 
 ### Evidence
 
@@ -2027,3 +2029,37 @@ PR #319 的初版把主胶囊完整材质收展后的卡死解释为终点迟到
 - [固定实验源码](https://github.com/snownico0722/PaperTodo/blob/5aa796befa944b53bd0e1191ded2bd4fe89b0246/src/EdgeCapsuleQueueDedicatedInputOwner.cs)；[归档时主线的命中入口](https://github.com/snownico0722/PaperTodo/blob/f6041ca6b5ebd787a02aa8158c6e67660b421be0/src/EdgeCapsuleQueueProxyWindow.cs)。
 - [E-019 详细归档](experiments/edge-retained-proxy-archive-20261104.md)：固定版本、原始数值、纠正顺序、未完成项与过期日志的证据边界。
 
+---
+
+## D-066 — 工作台作为全屏组织模式，复用纸片、命令与避让边界
+
+**Status:** Accepted
+
+### Context
+
+产品明确新增「工作台」：一个快捷键或托盘入口进入的全屏模式，把 1～5 个固定工作区各作为一张自由画布从左到右排开，用来俯瞰、整理关联和在单个工作区内直接编辑；不引入项目中心，分区只需要虚线式的大概感觉，跨工作区移动少用但需要 90% 延展 / 95% 提示穿越的阻力。D-001 的「桌面纸片」边界因此有了一个明确的、额外的组织入口。
+
+### Decision
+
+- 工作台是**模式**，不是第二个主界面：退出（Esc、✕、快捷键或切到其他程序）即结束；桌面纸片、胶囊和插件 session 的生命周期与几何不变。
+- 位置与关联存在 `PaperData.WorkbenchX/WorkbenchY/WorkbenchLinks`，属于各自工作区文档；不新增 `AppState` 字段、画板对象或项目实体。虚线分区由卡片实际位置推导，不持久化。
+- 内容编辑走 `PaperCommandService`（与 MCP/插件相同的提交、回滚和 UI reconcile）；内置 Markdown 的真实纸片仍只有一个 `MarkdownTextBox`，工作台卡片相当于一个外部编辑者。
+- 工作台窗口作为所在显示器的避让目标，复用既有全屏避让路径把纸片和胶囊降到其下，不另建 z-order owner。
+- 非活动工作区只读预览（直接读核心 JSON，不恢复、不写、不开 LMDB/插件 Runtime）。跨工作区移动先在目标 Store 的锁与版本栅栏下只追加 `papers` 节点，再通过共享删除命令从当前工作区移除；失败时宁可两边都有，不会两边都没有。
+- 布局引擎三档：整理（导图树 + 分组 + 货架装箱，可撤销）、新纸片增量落位、拖放只推开被放下的卡片；用户摆过的位置只在显式整理时改变。
+
+### Why
+
+复用纸片模型、命令服务和避让路径，让工作台只新增一套空间表现层，而不是再造窗口、持久化或 z-order 体系。位置和关联挂在纸片上，删除、重载、合并与跨工作区边界都沿用纸片已有的语义。
+
+### Rejected / Do not reintroduce
+
+- 不为工作台建立项目中心、画板实体或独立的 `workbench.json`。
+- 不把工作台卡片做成第二个可同时编辑的内置 Markdown surface 并与 `PaperWindow` 双向同步（D-019）；卡片编辑只通过命令提交。
+- 跨工作区移动暂不搬运图片（LMDB 按工作区分域，编号复用依赖目标工作区的引用保护）和插件 per-paper 状态；在有可验证的目标侧保护之前，这两类纸片不允许移动。
+
+### Evidence
+
+- `src/AppController.Workbench.cs`、`src/WorkbenchWindow*.cs`、`src/WorkbenchCard.cs`、`src/WorkbenchLayout.cs`、`src/WorkbenchPaperState.cs`。
+- `src/StateStore.Workbench.cs`：只读预览与只追加 `papers` 的跨工作区写入。
+- `tests/PaperTodo.DataReloadChecks/WorkbenchChecks.cs`：写入栅栏、拒绝路径、规范化与布局策略。

@@ -20,6 +20,14 @@ This log is written for general and power users alike. It focuses on user-facing
 
 ### Unreleased
 
+#### Workbench
+
+- **Workbench**: Open the full-screen workbench from the tray menu ("Open workbench") or the global shortcut "Open / close workbench" (enable it in Settings → Keyboard shortcuts; default `Ctrl+Alt+W`). Each workspace is a free canvas with a solid frame, laid out left to right. The current workspace is editable; other workspaces are shown read-only and "Switch to this workspace" switches to one. Press Esc, click ✕ or switch to another app to leave.
+  - Edit right on the cards: check, edit and add todos, edit note text (Markdown source) and double-click a title to rename it. Plugin papers and anything needing the full editor open as the real paper via ↗. Right-click the canvas to create a todo or note at that spot. Workbench positions never move papers on the desktop.
+  - Drag the dot at a card's top right onto another paper to link them; right-click a link to remove it. Existing todo-to-paper links are shown as dotted lines.
+  - Automatic layout: on first open the canvas is laid out by links and paper type. Linked papers form a two-sided mind map, the rest are grouped as todos, notes, papers bound to programs and per plugin. New papers later appear next to related papers or their group, and an overlapping drop only nudges the card you dropped. "Arrange" re-applies the full layout to the current workspace and can be undone. Papers close to each other are outlined by an automatic dashed region; there is nothing to manage.
+  - Dragging a card to 90% of its canvas extends the canvas; at 95% extension stops and "Release to move to Workspace N" appears, and releasing moves the paper to the neighbouring workspace. For now only todo papers and notes without images can move between workspaces; plugin papers and notes with images explain why and stay where they are.
+
 #### Data Reliability
 
 - **Dynamic core JSON backups**: Keep up to four age-spaced restore points targeting the latest saved state (about 10 minutes), 6 hours, 3 days and 1 month. The first scan starts about one minute after startup, then runs every ten minutes independently of saving or workspace switching. Unreadable workspaces receive bounded retries and are skipped for that scan only. Unchanged files are not re-archived. Raw JSON files from all existing workspaces are archived without JSON validation; images and plugin files are excluded. Old snapshots are pruned only after publishing a complete new ZIP, with no unbounded rescue archive.

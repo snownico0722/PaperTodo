@@ -1667,4 +1667,60 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="NoteExportNoNotes" xml:space="preserve"><value>エクスポートできるメモまたは ToDo がありません。</value></data>
   <data name="NoteExportProgress" xml:space="preserve"><value>エクスポート中 {0}/{1} 件</value></data>
   <data name="TodoExportCurrent" xml:space="preserve"><value>この ToDo をエクスポート</value></data>
+  <data name="WorkbenchTitle" xml:space="preserve"><value>ワークベンチ</value></data>
+  <data name="TrayWorkbench" xml:space="preserve"><value>ワークベンチを開く</value></data>
+  <data name="ShortcutWorkbench" xml:space="preserve"><value>ワークベンチを開く / 閉じる</value></data>
+  <data name="WorkbenchWorkspaceNotCreated" xml:space="preserve"><value>このワークスペースはまだ作成されていません。一度切り替えるとここに表示されます。</value></data>
+  <data name="WorkbenchWorkspaceUnreadable" xml:space="preserve"><value>このワークスペースを読み込めません：{0}</value></data>
+  <data name="WorkbenchMoveUnavailable" xml:space="preserve"><value>このワークスペースには移動できません。</value></data>
+  <data name="WorkbenchMoveBusy" xml:space="preserve"><value>ワークスペースが処理中です。少し待ってからもう一度お試しください。</value></data>
+  <data name="WorkbenchMovePluginPaper" xml:space="preserve"><value>プラグインの紙はまだワークスペース間で移動できません。</value></data>
+  <data name="WorkbenchMoveImageNote" xml:space="preserve"><value>画像を含むノートはまだワークスペース間で移動できません。</value></data>
+  <data name="WorkbenchMoveTargetFull" xml:space="preserve"><value>{0} にはすでに 200 枚の紙があります。</value></data>
+  <data name="WorkbenchMoveDuplicate" xml:space="preserve"><value>{0} にはすでにこの紙があります。</value></data>
+  <data name="WorkbenchMoveFailed" xml:space="preserve"><value>{0} に移動できませんでした：{1}</value></data>
+  <data name="WorkbenchMoveCopiedOnly" xml:space="preserve"><value>{0} にコピーしましたが、このワークスペースから削除できませんでした：{1}</value></data>
+  <data name="WorkbenchMoved" xml:space="preserve"><value>{0} に移動しました</value></data>
+  <data name="WorkbenchLinkHandleTip" xml:space="preserve"><value>別の紙へドラッグして関連付け</value></data>
+  <data name="WorkbenchOpenPaper" xml:space="preserve"><value>紙を開く</value></data>
+  <data name="WorkbenchRename" xml:space="preserve"><value>名前を変更</value></data>
+  <data name="WorkbenchTitleTooLong" xml:space="preserve"><value>タイトルが長すぎます。</value></data>
+  <data name="WorkbenchBoundToProgram" xml:space="preserve"><value>プログラムに連結中</value></data>
+  <data name="WorkbenchBoundToProgramNamed" xml:space="preserve"><value>連結：{0}</value></data>
+  <data name="WorkbenchHiddenOnDesktop" xml:space="preserve"><value>デスクトップでは非表示</value></data>
+  <data name="WorkbenchCollapsedOnDesktop" xml:space="preserve"><value>デスクトップではカプセル</value></data>
+  <data name="WorkbenchPluginPaperHint" xml:space="preserve"><value>プラグインの紙は ↗ で開いて編集します。</value></data>
+  <data name="WorkbenchEmptyTodo" xml:space="preserve"><value>（ToDo なし）</value></data>
+  <data name="WorkbenchAddTodo" xml:space="preserve"><value>ToDo を追加</value></data>
+  <data name="WorkbenchEditFailed" xml:space="preserve"><value>保存できませんでした：{0}</value></data>
+  <data name="WorkbenchArrange" xml:space="preserve"><value>整理</value></data>
+  <data name="WorkbenchArrangeTip" xml:space="preserve"><value>関連と種類でこのワークスペースを並べ直す</value></data>
+  <data name="WorkbenchArranged" xml:space="preserve"><value>整理しました。元に戻すこともできます。</value></data>
+  <data name="WorkbenchUndoArrange" xml:space="preserve"><value>整理を元に戻す</value></data>
+  <data name="WorkbenchUndoArrangeTip" xml:space="preserve"><value>整理前の位置に戻す</value></data>
+  <data name="WorkbenchFitCurrent" xml:space="preserve"><value>現在のワークスペース</value></data>
+  <data name="WorkbenchFitCurrentTip" xml:space="preserve"><value>現在のワークスペースに合わせる（Ctrl+0）</value></data>
+  <data name="WorkbenchOverview" xml:space="preserve"><value>全体を表示</value></data>
+  <data name="WorkbenchOverviewTip" xml:space="preserve"><value>すべてのワークスペースを表示</value></data>
+  <data name="WorkbenchCloseTip" xml:space="preserve"><value>ワークベンチを終了（Esc）</value></data>
+  <data name="WorkbenchHints" xml:space="preserve"><value>タイトルをドラッグで移動 · 丸をドラッグで関連付け · タイトルをダブルクリックで名前変更 · キャンバスを右クリックで新規 · 空白でホイール／Ctrl+ホイールでズーム · 空白をドラッグで移動 · Esc で終了</value></data>
+  <data name="WorkbenchCurrentWorkspace" xml:space="preserve"><value>現在</value></data>
+  <data name="WorkbenchSwitchHere" xml:space="preserve"><value>このワークスペースに切り替え</value></data>
+  <data name="WorkbenchSwitched" xml:space="preserve"><value>{0} に切り替えました</value></data>
+  <data name="WorkbenchSwitchFailed" xml:space="preserve"><value>ワークスペースを切り替えられませんでした。</value></data>
+  <data name="WorkbenchRegionTodo" xml:space="preserve"><value>ToDo</value></data>
+  <data name="WorkbenchRegionNote" xml:space="preserve"><value>ノート</value></data>
+  <data name="WorkbenchRegionTethered" xml:space="preserve"><value>プログラム連結</value></data>
+  <data name="WorkbenchRegionLinked" xml:space="preserve"><value>関連</value></data>
+  <data name="WorkbenchRegionLabel" xml:space="preserve"><value>{0} · {1}</value></data>
+  <data name="WorkbenchLinkTip" xml:space="preserve"><value>{0} ↔ {1}（右クリックで解除）</value></data>
+  <data name="WorkbenchUnlink" xml:space="preserve"><value>関連を解除</value></data>
+  <data name="WorkbenchUnlinkAll" xml:space="preserve"><value>この紙の関連をすべて解除</value></data>
+  <data name="WorkbenchNewTodoHere" xml:space="preserve"><value>ここに ToDo を作成</value></data>
+  <data name="WorkbenchNewNoteHere" xml:space="preserve"><value>ここにノートを作成</value></data>
+  <data name="WorkbenchDropToWorkspace" xml:space="preserve"><value>離すと {0} に移動</value></data>
+  <data name="WorkbenchCannotMove" xml:space="preserve"><value>{0} には移動できません
+{1}</value></data>
+  <data name="WorkbenchAlreadyLinked" xml:space="preserve"><value>この 2 枚はすでに関連付けられています。</value></data>
+  <data name="WorkbenchLinkLimit" xml:space="preserve"><value>この紙の関連数が上限に達しました。</value></data>
 </root>

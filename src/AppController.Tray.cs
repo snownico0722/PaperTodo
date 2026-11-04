@@ -542,6 +542,11 @@ public sealed partial class AppController
         }
 
         menu.Items.Add(TraySeparator());
+        menu.Items.Add(TrayItem(
+            menu,
+            Strings.Get("TrayWorkbench"),
+            OpenWorkbench));
+        menu.Items.Add(TraySeparator());
         if (HasExperimentalPassiveSurfaces)
         {
             menu.Items.Add(TrayItem(

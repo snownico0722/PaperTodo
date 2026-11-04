@@ -1716,4 +1716,60 @@
   <data name="NoteExportNoNotes" xml:space="preserve"><value>没有可导出的笔记或待办。</value></data>
   <data name="NoteExportProgress" xml:space="preserve"><value>正在导出 {0}/{1} 张纸片</value></data>
   <data name="TodoExportCurrent" xml:space="preserve"><value>导出当前待办</value></data>
+  <data name="WorkbenchTitle" xml:space="preserve"><value>工作台</value></data>
+  <data name="TrayWorkbench" xml:space="preserve"><value>打开工作台</value></data>
+  <data name="ShortcutWorkbench" xml:space="preserve"><value>打开 / 关闭工作台</value></data>
+  <data name="WorkbenchWorkspaceNotCreated" xml:space="preserve"><value>这个工作区还没有创建。切换过去一次后就能在这里看到它。</value></data>
+  <data name="WorkbenchWorkspaceUnreadable" xml:space="preserve"><value>无法读取这个工作区：{0}</value></data>
+  <data name="WorkbenchMoveUnavailable" xml:space="preserve"><value>无法移到这个工作区。</value></data>
+  <data name="WorkbenchMoveBusy" xml:space="preserve"><value>工作区正忙，请稍后再试。</value></data>
+  <data name="WorkbenchMovePluginPaper" xml:space="preserve"><value>插件纸片暂不支持跨工作区移动。</value></data>
+  <data name="WorkbenchMoveImageNote" xml:space="preserve"><value>含图片的笔记暂不支持跨工作区移动。</value></data>
+  <data name="WorkbenchMoveTargetFull" xml:space="preserve"><value>{0} 已有 200 张纸片。</value></data>
+  <data name="WorkbenchMoveDuplicate" xml:space="preserve"><value>{0} 里已经有这张纸片。</value></data>
+  <data name="WorkbenchMoveFailed" xml:space="preserve"><value>无法移到 {0}：{1}</value></data>
+  <data name="WorkbenchMoveCopiedOnly" xml:space="preserve"><value>已复制到 {0}，但没能从当前工作区移除：{1}</value></data>
+  <data name="WorkbenchMoved" xml:space="preserve"><value>已移到 {0}</value></data>
+  <data name="WorkbenchLinkHandleTip" xml:space="preserve"><value>拖到另一张纸片上建立关联</value></data>
+  <data name="WorkbenchOpenPaper" xml:space="preserve"><value>打开纸片</value></data>
+  <data name="WorkbenchRename" xml:space="preserve"><value>重命名</value></data>
+  <data name="WorkbenchTitleTooLong" xml:space="preserve"><value>标题太长了。</value></data>
+  <data name="WorkbenchBoundToProgram" xml:space="preserve"><value>已绑定程序</value></data>
+  <data name="WorkbenchBoundToProgramNamed" xml:space="preserve"><value>绑定：{0}</value></data>
+  <data name="WorkbenchHiddenOnDesktop" xml:space="preserve"><value>桌面上已隐藏</value></data>
+  <data name="WorkbenchCollapsedOnDesktop" xml:space="preserve"><value>桌面上为胶囊</value></data>
+  <data name="WorkbenchPluginPaperHint" xml:space="preserve"><value>插件纸片请点 ↗ 打开后编辑。</value></data>
+  <data name="WorkbenchEmptyTodo" xml:space="preserve"><value>（没有待办）</value></data>
+  <data name="WorkbenchAddTodo" xml:space="preserve"><value>添加待办</value></data>
+  <data name="WorkbenchEditFailed" xml:space="preserve"><value>没能保存：{0}</value></data>
+  <data name="WorkbenchArrange" xml:space="preserve"><value>整理</value></data>
+  <data name="WorkbenchArrangeTip" xml:space="preserve"><value>按关联和类型重新排布当前工作区</value></data>
+  <data name="WorkbenchArranged" xml:space="preserve"><value>已整理。不满意可以撤销。</value></data>
+  <data name="WorkbenchUndoArrange" xml:space="preserve"><value>撤销整理</value></data>
+  <data name="WorkbenchUndoArrangeTip" xml:space="preserve"><value>恢复整理前的位置</value></data>
+  <data name="WorkbenchFitCurrent" xml:space="preserve"><value>当前工作区</value></data>
+  <data name="WorkbenchFitCurrentTip" xml:space="preserve"><value>缩放到当前工作区（Ctrl+0）</value></data>
+  <data name="WorkbenchOverview" xml:space="preserve"><value>俯瞰全部</value></data>
+  <data name="WorkbenchOverviewTip" xml:space="preserve"><value>缩放到所有工作区</value></data>
+  <data name="WorkbenchCloseTip" xml:space="preserve"><value>退出工作台（Esc）</value></data>
+  <data name="WorkbenchHints" xml:space="preserve"><value>拖动标题移动 · 拖动圆点建立关联 · 双击标题改名 · 右键画布新建 · 空白处滚轮或 Ctrl+滚轮缩放 · 拖动空白处平移 · Esc 退出</value></data>
+  <data name="WorkbenchCurrentWorkspace" xml:space="preserve"><value>当前</value></data>
+  <data name="WorkbenchSwitchHere" xml:space="preserve"><value>切换到此工作区</value></data>
+  <data name="WorkbenchSwitched" xml:space="preserve"><value>已切换到 {0}</value></data>
+  <data name="WorkbenchSwitchFailed" xml:space="preserve"><value>没能切换工作区。</value></data>
+  <data name="WorkbenchRegionTodo" xml:space="preserve"><value>待办</value></data>
+  <data name="WorkbenchRegionNote" xml:space="preserve"><value>笔记</value></data>
+  <data name="WorkbenchRegionTethered" xml:space="preserve"><value>绑定程序</value></data>
+  <data name="WorkbenchRegionLinked" xml:space="preserve"><value>关联</value></data>
+  <data name="WorkbenchRegionLabel" xml:space="preserve"><value>{0} · {1}</value></data>
+  <data name="WorkbenchLinkTip" xml:space="preserve"><value>{0} ↔ {1}（右键取消关联）</value></data>
+  <data name="WorkbenchUnlink" xml:space="preserve"><value>取消关联</value></data>
+  <data name="WorkbenchUnlinkAll" xml:space="preserve"><value>取消这张纸的所有关联</value></data>
+  <data name="WorkbenchNewTodoHere" xml:space="preserve"><value>在这里新建待办</value></data>
+  <data name="WorkbenchNewNoteHere" xml:space="preserve"><value>在这里新建笔记</value></data>
+  <data name="WorkbenchDropToWorkspace" xml:space="preserve"><value>松开，移到 {0}</value></data>
+  <data name="WorkbenchCannotMove" xml:space="preserve"><value>不能移到 {0}
+{1}</value></data>
+  <data name="WorkbenchAlreadyLinked" xml:space="preserve"><value>这两张纸片已经关联。</value></data>
+  <data name="WorkbenchLinkLimit" xml:space="preserve"><value>这张纸片的关联已达上限。</value></data>
 </root>

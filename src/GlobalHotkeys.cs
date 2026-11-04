@@ -52,6 +52,7 @@ internal static class GlobalShortcutCatalog
     public const string NewTodo = "startup.newTodo";
     public const string NewNote = "startup.newNote";
     public const string Exit = "startup.exit";
+    public const string Workbench = "startup.workbench";
     public const string CurrentPaperPassive = "labs.passiveCurrent";
     public const string AllSurfacesPassive = "labs.passiveAll";
     public const string LockAllPapers = "labs.lockAllPapers";
@@ -213,6 +214,7 @@ internal static class GlobalShortcutCatalog
             new(NewTodo, "ShortcutNewTodo", "", GlobalShortcutGroup.General, StartupCommandKind.NewTodo),
             new(NewNote, "ShortcutNewNote", "", GlobalShortcutGroup.General, StartupCommandKind.NewNote),
             new(Exit, "ShortcutExit", "", GlobalShortcutGroup.General, StartupCommandKind.Exit),
+            new(Workbench, "ShortcutWorkbench", "Ctrl+Alt+W", GlobalShortcutGroup.General, StartupCommandKind.Workbench),
             new(
                 CurrentPaperPassive,
                 "LabsCurrentPaperPassive",

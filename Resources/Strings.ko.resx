@@ -1667,4 +1667,60 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="NoteExportNoNotes" xml:space="preserve"><value>내보낼 수 있는 메모 또는 할 일이 없습니다.</value></data>
   <data name="NoteExportProgress" xml:space="preserve"><value>내보내는 중 {0}/{1}개</value></data>
   <data name="TodoExportCurrent" xml:space="preserve"><value>현재 할 일 내보내기</value></data>
+  <data name="WorkbenchTitle" xml:space="preserve"><value>워크벤치</value></data>
+  <data name="TrayWorkbench" xml:space="preserve"><value>워크벤치 열기</value></data>
+  <data name="ShortcutWorkbench" xml:space="preserve"><value>워크벤치 열기 / 닫기</value></data>
+  <data name="WorkbenchWorkspaceNotCreated" xml:space="preserve"><value>이 작업 공간은 아직 만들어지지 않았습니다. 한 번 전환하면 여기에 표시됩니다.</value></data>
+  <data name="WorkbenchWorkspaceUnreadable" xml:space="preserve"><value>이 작업 공간을 읽을 수 없습니다: {0}</value></data>
+  <data name="WorkbenchMoveUnavailable" xml:space="preserve"><value>이 작업 공간으로 옮길 수 없습니다.</value></data>
+  <data name="WorkbenchMoveBusy" xml:space="preserve"><value>작업 공간이 처리 중입니다. 잠시 후 다시 시도하세요.</value></data>
+  <data name="WorkbenchMovePluginPaper" xml:space="preserve"><value>플러그인 종이는 아직 작업 공간 간에 옮길 수 없습니다.</value></data>
+  <data name="WorkbenchMoveImageNote" xml:space="preserve"><value>이미지가 있는 노트는 아직 작업 공간 간에 옮길 수 없습니다.</value></data>
+  <data name="WorkbenchMoveTargetFull" xml:space="preserve"><value>{0}에 이미 종이가 200장 있습니다.</value></data>
+  <data name="WorkbenchMoveDuplicate" xml:space="preserve"><value>{0}에 이미 이 종이가 있습니다.</value></data>
+  <data name="WorkbenchMoveFailed" xml:space="preserve"><value>{0}(으)로 옮기지 못했습니다: {1}</value></data>
+  <data name="WorkbenchMoveCopiedOnly" xml:space="preserve"><value>{0}에 복사했지만 현재 작업 공간에서 제거하지 못했습니다: {1}</value></data>
+  <data name="WorkbenchMoved" xml:space="preserve"><value>{0}(으)로 옮겼습니다</value></data>
+  <data name="WorkbenchLinkHandleTip" xml:space="preserve"><value>다른 종이로 끌어서 연결</value></data>
+  <data name="WorkbenchOpenPaper" xml:space="preserve"><value>종이 열기</value></data>
+  <data name="WorkbenchRename" xml:space="preserve"><value>이름 바꾸기</value></data>
+  <data name="WorkbenchTitleTooLong" xml:space="preserve"><value>제목이 너무 깁니다.</value></data>
+  <data name="WorkbenchBoundToProgram" xml:space="preserve"><value>프로그램에 연결됨</value></data>
+  <data name="WorkbenchBoundToProgramNamed" xml:space="preserve"><value>연결: {0}</value></data>
+  <data name="WorkbenchHiddenOnDesktop" xml:space="preserve"><value>바탕 화면에서 숨김</value></data>
+  <data name="WorkbenchCollapsedOnDesktop" xml:space="preserve"><value>바탕 화면에서 캡슐</value></data>
+  <data name="WorkbenchPluginPaperHint" xml:space="preserve"><value>플러그인 종이는 ↗로 열어서 편집하세요.</value></data>
+  <data name="WorkbenchEmptyTodo" xml:space="preserve"><value>(할 일 없음)</value></data>
+  <data name="WorkbenchAddTodo" xml:space="preserve"><value>할 일 추가</value></data>
+  <data name="WorkbenchEditFailed" xml:space="preserve"><value>저장하지 못했습니다: {0}</value></data>
+  <data name="WorkbenchArrange" xml:space="preserve"><value>정리</value></data>
+  <data name="WorkbenchArrangeTip" xml:space="preserve"><value>연결과 종류에 따라 현재 작업 공간을 다시 배치</value></data>
+  <data name="WorkbenchArranged" xml:space="preserve"><value>정리했습니다. 실행 취소할 수 있습니다.</value></data>
+  <data name="WorkbenchUndoArrange" xml:space="preserve"><value>정리 실행 취소</value></data>
+  <data name="WorkbenchUndoArrangeTip" xml:space="preserve"><value>정리 전 위치로 되돌리기</value></data>
+  <data name="WorkbenchFitCurrent" xml:space="preserve"><value>현재 작업 공간</value></data>
+  <data name="WorkbenchFitCurrentTip" xml:space="preserve"><value>현재 작업 공간에 맞추기 (Ctrl+0)</value></data>
+  <data name="WorkbenchOverview" xml:space="preserve"><value>전체 보기</value></data>
+  <data name="WorkbenchOverviewTip" xml:space="preserve"><value>모든 작업 공간 보기</value></data>
+  <data name="WorkbenchCloseTip" xml:space="preserve"><value>워크벤치 나가기 (Esc)</value></data>
+  <data name="WorkbenchHints" xml:space="preserve"><value>제목을 끌어 이동 · 점을 끌어 연결 · 제목을 두 번 클릭해 이름 변경 · 캔버스를 오른쪽 클릭해 새로 만들기 · 빈 곳에서 휠 또는 Ctrl+휠로 확대/축소 · 빈 곳을 끌어 이동 · Esc로 나가기</value></data>
+  <data name="WorkbenchCurrentWorkspace" xml:space="preserve"><value>현재</value></data>
+  <data name="WorkbenchSwitchHere" xml:space="preserve"><value>이 작업 공간으로 전환</value></data>
+  <data name="WorkbenchSwitched" xml:space="preserve"><value>{0}(으)로 전환했습니다</value></data>
+  <data name="WorkbenchSwitchFailed" xml:space="preserve"><value>작업 공간을 전환하지 못했습니다.</value></data>
+  <data name="WorkbenchRegionTodo" xml:space="preserve"><value>할 일</value></data>
+  <data name="WorkbenchRegionNote" xml:space="preserve"><value>노트</value></data>
+  <data name="WorkbenchRegionTethered" xml:space="preserve"><value>프로그램 연결</value></data>
+  <data name="WorkbenchRegionLinked" xml:space="preserve"><value>연결됨</value></data>
+  <data name="WorkbenchRegionLabel" xml:space="preserve"><value>{0} · {1}</value></data>
+  <data name="WorkbenchLinkTip" xml:space="preserve"><value>{0} ↔ {1} (오른쪽 클릭으로 연결 해제)</value></data>
+  <data name="WorkbenchUnlink" xml:space="preserve"><value>연결 해제</value></data>
+  <data name="WorkbenchUnlinkAll" xml:space="preserve"><value>이 종이의 모든 연결 해제</value></data>
+  <data name="WorkbenchNewTodoHere" xml:space="preserve"><value>여기에 할 일 만들기</value></data>
+  <data name="WorkbenchNewNoteHere" xml:space="preserve"><value>여기에 노트 만들기</value></data>
+  <data name="WorkbenchDropToWorkspace" xml:space="preserve"><value>놓으면 {0}(으)로 이동</value></data>
+  <data name="WorkbenchCannotMove" xml:space="preserve"><value>{0}(으)로 옮길 수 없습니다
+{1}</value></data>
+  <data name="WorkbenchAlreadyLinked" xml:space="preserve"><value>두 종이는 이미 연결되어 있습니다.</value></data>
+  <data name="WorkbenchLinkLimit" xml:space="preserve"><value>이 종이의 연결 수가 한도에 도달했습니다.</value></data>
 </root>
