@@ -2706,22 +2706,23 @@ public sealed partial class PaperWindow : Window
         menu.Items.Add(MenuHeader(_controller.PaperCapsuleTitle(_paper)));
 
         if (_paper.Type == PaperTypes.Note)
-        {
             menu.Items.Add(BuildPaperBodyProviderMenuItem());
-            if (IsCurrentBodyProviderMarkdown)
-            {
-                var current = MenuItem(Strings.Get("NoteExportCurrent"),
-                    (_, _) => ExportNotes(all: false));
-                current.IsEnabled = !_noteExportRunning;
-                menu.Items.Add(current);
 
-                var allLabel = _noteExportRunning
-                    ? Strings.Format("NoteExportProgress", _noteExportCompleted, _noteExportTotal)
-                    : Strings.Get("NoteExportAll");
-                var exportAll = MenuItem(allLabel, (_, _) => ExportNotes(all: true));
-                exportAll.IsEnabled = !_noteExportRunning;
-                menu.Items.Add(exportAll);
-            }
+        if (IsExportablePaper(_paper))
+        {
+            var currentLabel = _paper.Type == PaperTypes.Todo
+                ? "TodoExportCurrent" : "NoteExportCurrent";
+            var current = MenuItem(Strings.Get(currentLabel),
+                (_, _) => ExportPapers(all: false));
+            current.IsEnabled = !_paperExportRunning;
+            menu.Items.Add(current);
+
+            var allLabel = _paperExportRunning
+                ? Strings.Format("NoteExportProgress", _paperExportCompleted, _paperExportTotal)
+                : Strings.Get("NoteExportAll");
+            var exportAll = MenuItem(allLabel, (_, _) => ExportPapers(all: true));
+            exportAll.IsEnabled = !_paperExportRunning;
+            menu.Items.Add(exportAll);
         }
 
         AttachPluginPaperMenuActions(menu);

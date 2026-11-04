@@ -1655,15 +1655,16 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="NoteHtmlSaved" xml:space="preserve"><value>저장 위치: {0}
 원본 노트는 유지됩니다.</value></data>
   <data name="NoteExportCurrent" xml:space="preserve"><value>현재 노트 내보내기</value></data>
-  <data name="NoteExportAll" xml:space="preserve"><value>모든 노트 내보내기</value></data>
+  <data name="NoteExportAll" xml:space="preserve"><value>모든 메모 및 할 일 내보내기</value></data>
   <data name="NoteExportMarkdownType" xml:space="preserve"><value>Markdown 문서</value></data>
   <data name="NoteExportHtmlType" xml:space="preserve"><value>HTML 문서</value></data>
   <data name="NoteExportMarkdownZipType" xml:space="preserve"><value>Markdown ZIP</value></data>
   <data name="NoteExportHtmlZipType" xml:space="preserve"><value>HTML ZIP</value></data>
   <data name="NoteExportMissingImageText" xml:space="preserve"><value>이미지 없음</value></data>
-  <data name="NoteExportSummary" xml:space="preserve"><value>노트 {0}/{1}개를 내보냈습니다.&#xA;누락된 이미지: {2}개 (노트 {3}개).&#xA;저장 위치: {4}</value></data>
-  <data name="NoteExportFailedNotes" xml:space="preserve"><value>실패한 노트:&#xA;{0}</value></data>
+  <data name="NoteExportSummary" xml:space="preserve"><value>메모/할 일 {0}/{1}개를 내보냈습니다.&#xA;누락된 이미지: {2}개 (항목 {3}개).&#xA;저장 위치: {4}</value></data>
+  <data name="NoteExportFailedNotes" xml:space="preserve"><value>내보내기에 실패한 항목:&#xA;{0}</value></data>
   <data name="NoteExportFailure" xml:space="preserve"><value>내보내기 실패: {0}</value></data>
-  <data name="NoteExportNoNotes" xml:space="preserve"><value>내보낼 수 있는 기본 Markdown 노트가 없습니다.</value></data>
+  <data name="NoteExportNoNotes" xml:space="preserve"><value>내보낼 수 있는 메모 또는 할 일이 없습니다.</value></data>
   <data name="NoteExportProgress" xml:space="preserve"><value>내보내는 중 {0}/{1}개</value></data>
+  <data name="TodoExportCurrent" xml:space="preserve"><value>현재 할 일 내보내기</value></data>
 </root>
