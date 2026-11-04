@@ -62,7 +62,7 @@ public sealed partial class AppController
                 ShowPaperBackgroundSaveFailure(ex);
             else if (id == "shortcuts.distinguish_numpad" && ex.Code == "shortcut_conflict")
                 ShowNumpadShortcutModeConflict();
-            else if (ex.Code != "save_failed")
+            else if (ex.Code is not ("save_failed" or "setting_read_only"))
                 _trayIcon?.ShowBalloonTip(Strings.Get("SaveFailureTitle"), ex.Message, BalloonIcon.Warning);
             RefreshSettingsForChange(id);
             return false;
