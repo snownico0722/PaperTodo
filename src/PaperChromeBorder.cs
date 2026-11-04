@@ -37,6 +37,7 @@ internal partial class PaperChromeBorder : Border
 
     protected override void OnRender(DrawingContext drawingContext)
     {
+        DrawNineSliceShadow(drawingContext);
         DrawMaterialShadow(drawingContext);
         if (_surface.Visibility != Visibility.Visible)
             base.OnRender(drawingContext);

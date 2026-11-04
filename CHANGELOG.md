@@ -26,6 +26,8 @@ This log is written for general and power users alike. It focuses on user-facing
 
 #### Papers, Title Bar & Capsules
 
+- **Paper resize performance**: Default floating paper and ordinary capsule shadows use cached Gaussian nine-slice tiles instead of a full-surface WPF blur. Resizing reuses corners and stretches only straight sides, without changing other material skins.
+
 - **Workspace cycling**: Enable 2–5 workspaces and switch using the paper top-bar's custom SVG cycle icon and number badge; the tray submenu and Settings page also offer direct workspace selection, with long setting explanations moved into ⓘ hints. The main workspace keeps `data.json` and `note-assets.lmdb`; others use `data2.json` / `note-assets2.lmdb` and separate host-managed plugin data. Secondary workspaces follow the main software settings by default; turning this off restores their own settings. Switching saves current edits and remembers the active slot. Reducing the count or disabling workspaces never deletes inactive files.
 
 - **More flexible paper titles**: The default title limit remains 6 full-width character equivalents. Latin letters, digits and other half-width characters now count as half a character; mixed Chinese/English titles fit more naturally without changing the 2–20 setting range. Existing length preferences are preserved.

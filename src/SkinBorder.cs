@@ -213,6 +213,7 @@ internal sealed partial class SkinBorder : PaperChromeBorder
         if (!decorated && !(systemMaterial && IsAuxiliary))
         {
             if (ActualWidth <= 0 || ActualHeight <= 0) return;
+            DrawNineSliceShadow(dc);
             DrawMaterialShadow(dc);
             EnsureGeometry();
             // BorderThickness keeps its layout role, but the outer stroke itself is absent.
@@ -222,6 +223,7 @@ internal sealed partial class SkinBorder : PaperChromeBorder
             return;
         }
         if (ActualWidth <= 0 || ActualHeight <= 0) return;
+        DrawNineSliceShadow(dc);
         DrawMaterialShadow(dc);
         EnsureGeometry();
         var background = Background is SolidColorBrush solid
