@@ -12,15 +12,15 @@ internal sealed record NoteExportResult(
 
 internal static class NotePortableExport
 {
-    internal static NoteExportDocument FromTodoPaper(PaperData paper, string title)
+    internal static NoteExportDocument FromTodoItems(string id, string title, IReadOnlyList<PaperItem> items)
     {
-        // Reuse the clipboard's literal-text and multiline Markdown rules.
-        // Ignore the empty row used only to keep the Todo editor available.
-        var content = TodoClipboardFormatter.ToMarkdown(paper.Items
+        // Work on the captured items, off the UI thread; reuse the clipboard's
+        // literal-text and multiline Markdown rules.
+        var content = TodoClipboardFormatter.ToMarkdown(items
             .OrderBy(item => item.Order)
             .Where(TodoRules.HasMeaningfulContent)
             .Select(item => (item.Text, item.Done)));
-        return new NoteExportDocument(paper.Id, title, content);
+        return new NoteExportDocument(id, title, content);
     }
 
     internal static NoteExportResult Export(string destination, IReadOnlyList<NoteExportDocument> notes,

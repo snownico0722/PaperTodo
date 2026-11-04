@@ -152,15 +152,18 @@ internal static class NoteHtmlChecks
                 new PaperItem { Id = "empty-done", Order = 30, Done = true }
             ]
         };
-        var todoDocument = NotePortableExport.FromTodoPaper(todoPaper, "Note");
+        // Capture a detached snapshot before the user changes the live Todo.
+        var capturedItems = TodoRules.CloneAll(todoPaper.Items);
+        todoPaper.Items[1].Text = "changed after snapshot";
+        var todoDocument = Task.Run(() =>
+            NotePortableExport.FromTodoItems(todoPaper.Id, "Note", capturedItems))
+            .GetAwaiter().GetResult();
         var expectedTodo = "- [ ] first" + Environment.NewLine +
             "    \\# continuation" + Environment.NewLine +
             "- [x] finished \\*\\*verbatim\\*\\*" + Environment.NewLine +
             "- [x] ";
         Require(todoDocument.Content == expectedTodo,
-            "Todo export must preserve order, status, multiline text, literal syntax and meaningful empty items");
-        todoPaper.Items[1].Text = "changed after snapshot";
-        Require(todoDocument.Content == expectedTodo, "Todo export must snapshot the current text");
+            "Todo export must preserve order, status, multiline text, literal syntax and the captured text");
 
         var todoMd = Path.Combine(temp.Path, "todo.md");
         var todoMdResult = NotePortableExport.Export(todoMd, [todoDocument],

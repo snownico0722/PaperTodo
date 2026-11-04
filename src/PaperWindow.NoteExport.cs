@@ -25,16 +25,19 @@ public sealed partial class PaperWindow
 
         try
         {
-            // Capture the live editor text on the WPF thread. Only immutable strings and
-            // the thread-safe image store cross into the export worker.
-            var documents = (all ? _controller.State.Papers.Where(IsExportablePaper) : new[] { _paper })
-                .Select(paper => paper.Type == PaperTypes.Todo
-                    ? NotePortableExport.FromTodoPaper(paper, _controller.PaperTitleText(paper))
-                    : new NoteExportDocument(paper.Id, _controller.PaperTitleText(paper),
-                        _controller.CurrentMarkdownContentForExternalRead(paper)))
+            // Capture live text and detached Todo items on the UI thread.
+            // Sort and render Todo Markdown only after the worker starts.
+            var snapshots = (all ? _controller.State.Papers.Where(IsExportablePaper) : new[] { _paper })
+                .Select(paper => (
+                    paper.Id,
+                    Title: _controller.PaperTitleText(paper),
+                    Markdown: paper.Type == PaperTypes.Note
+                        ? _controller.CurrentMarkdownContentForExternalRead(paper) : null,
+                    TodoItems: paper.Type == PaperTypes.Todo
+                        ? TodoRules.CloneAll(paper.Items) : null))
                 .ToArray();
 
-            if (documents.Length == 0)
+            if (snapshots.Length == 0)
             {
                 MessageBox.Show(this, Strings.Get("NoteExportNoNotes"), caption,
                     MessageBoxButton.OK, MessageBoxImage.Information);
@@ -54,7 +57,7 @@ public sealed partial class PaperWindow
                 AddExtension = true,
                 OverwritePrompt = true,
                 FileName = all ? DateTime.Now.ToString("yyyy-MM-dd") + "_PaperTodo"
-                    : NotePortableExport.SafeName(documents[0].Title)
+                    : NotePortableExport.SafeName(snapshots[0].Title)
             };
             if (dialog.ShowDialog(this) != true) return;
 
@@ -63,12 +66,19 @@ public sealed partial class PaperWindow
             var missingLabel = Strings.Get("NoteExportMissingImageText");
             _paperExportRunning = true;
             _paperExportCompleted = 0;
-            _paperExportTotal = documents.Length;
+            _paperExportTotal = snapshots.Length;
             var progress = new Progress<int>(value => _paperExportCompleted = value);
-            var result = await Task.Run(() => NotePortableExport.Export(
-                destination, documents, format, all, _controller.ImageStore, missingLabel, progress));
+            var result = await Task.Run(() =>
+            {
+                var documents = snapshots.Select(snapshot => snapshot.TodoItems is { } items
+                    ? NotePortableExport.FromTodoItems(snapshot.Id, snapshot.Title, items)
+                    : new NoteExportDocument(snapshot.Id, snapshot.Title, snapshot.Markdown!))
+                    .ToArray();
+                return NotePortableExport.Export(
+                    destination, documents, format, all, _controller.ImageStore, missingLabel, progress);
+            });
 
-            var message = Strings.Format("NoteExportSummary", result.Exported, documents.Length,
+            var message = Strings.Format("NoteExportSummary", result.Exported, snapshots.Length,
                 result.MissingImages, result.NotesWithMissingImages, destination);
             if (result.FailedNotes.Count > 0)
                 message += Environment.NewLine +
