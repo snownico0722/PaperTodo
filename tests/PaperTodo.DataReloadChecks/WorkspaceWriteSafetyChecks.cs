@@ -49,12 +49,14 @@ internal static partial class Program
                 controller = new AppController();
                 await controller.StartAsync(createDefaultPaper: false);
                 var catalog = Field<WorkspaceCatalog>(controller, "_workspaceCatalog");
-                var candidateStore = catalog.StoreFor(2);
-                typeof(StateStore).GetField("_atomicWriter", Private)!.SetValue(candidateStore,
+                // Healthy targets no longer need a save. Interrupt the main catalog
+                // commit after the target has been installed instead.
+                var mainCatalogStore = catalog.MainStore;
+                typeof(StateStore).GetField("_atomicWriter", Private)!.SetValue(mainCatalogStore,
                     new DurableAtomicFileWriter((stage, path) =>
                     {
-                        if (stage != DurableAtomicWriteStage.BeforeTempOpen || path != targetStore.FilePath) return;
-                        Require(controller.WorkspaceNumber == 2, "shutdown did not reach installed target");
+                        if (stage != DurableAtomicWriteStage.BeforeTempOpen ||
+                            path != Path.Combine(directory, "data.json") || controller.WorkspaceNumber != 2) return;
                         interrupted = true;
                         controller.ExitForSystemShutdown();
                     }));
@@ -72,7 +74,7 @@ internal static partial class Program
                 "target save continued after shutdown");
             Require(J(File.ReadAllText(Path.Combine(directory, "data.json")))["workspaces"]!["active"]!.GetValue<int>() == 1,
                 "shutdown published unfinished workspace catalog");
-            Require(!File.Exists(Path.Combine(directory, "data2.json.tmp")), "shutdown started target temp write");
+            Require(!File.Exists(Path.Combine(directory, "data.json.tmp")), "shutdown started catalog temp write");
             Console.WriteLine("PASS actual workspace shutdown after target install: target and active catalog retained");
             return 0;
         }
