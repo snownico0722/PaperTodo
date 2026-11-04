@@ -1667,4 +1667,27 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="NoteExportNoNotes" xml:space="preserve"><value>エクスポートできるメモまたは ToDo がありません。</value></data>
   <data name="NoteExportProgress" xml:space="preserve"><value>エクスポート中 {0}/{1} 件</value></data>
   <data name="TodoExportCurrent" xml:space="preserve"><value>この ToDo をエクスポート</value></data>
+  <data name="EditorOpen" xml:space="preserve"><value>エディターで開く</value></data>
+  <data name="EditorReturn" xml:space="preserve"><value>紙片に戻る</value></data>
+  <data name="EditorSidebarShow" xml:space="preserve"><value>紙片一覧を表示</value></data>
+  <data name="EditorSidebarHide" xml:space="preserve"><value>紙片一覧を閉じる</value></data>
+  <data name="EditorMinimize" xml:space="preserve"><value>最小化</value></data>
+  <data name="EditorMaximizeRestore" xml:space="preserve"><value>最大化 / 元に戻す</value></data>
+  <data name="EditorClosePaper" xml:space="preserve"><value>紙片を閉じる</value></data>
+  <data name="EditorUndo" xml:space="preserve"><value>元に戻す</value></data>
+  <data name="EditorRedo" xml:space="preserve"><value>やり直す</value></data>
+  <data name="EditorHeading" xml:space="preserve"><value>見出し</value></data>
+  <data name="EditorBold" xml:space="preserve"><value>太字</value></data>
+  <data name="EditorItalic" xml:space="preserve"><value>斜体</value></data>
+  <data name="EditorStrike" xml:space="preserve"><value>取り消し線</value></data>
+  <data name="EditorBullets" xml:space="preserve"><value>箇条書き</value></data>
+  <data name="EditorNumbers" xml:space="preserve"><value>番号付きリスト</value></data>
+  <data name="EditorQuote" xml:space="preserve"><value>引用</value></data>
+  <data name="EditorCode" xml:space="preserve"><value>コードブロック</value></data>
+  <data name="EditorLink" xml:space="preserve"><value>リンクを挿入</value></data>
+  <data name="EditorImage" xml:space="preserve"><value>画像を挿入</value></data>
+  <data name="EditorAllPapers" xml:space="preserve"><value>すべての紙片</value></data>
+  <data name="EditorTodo" xml:space="preserve"><value>ToDo</value></data>
+  <data name="EditorNote" xml:space="preserve"><value>ノート</value></data>
+  <data name="EditorPaper" xml:space="preserve"><value>紙片</value></data>
 </root>
