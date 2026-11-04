@@ -68,7 +68,7 @@ internal static class ExpandedEditorChecks
         Check(ReferenceEquals(host, b.ExpandedEditorHostWindow), "Sidebar replaced the editor host");
         Check(new WindowInteropHelper(host).Handle == hwnd, "Switching papers changed the editor HWND");
         Check(host.CurrentPaperId == "editor-b", "Sidebar did not select the second paper");
-        Check(b.IsExpandedEditorSidebarOpen && !b.IsCollapsed,
+        Check(b.IsExpandedEditorSidebarOpen && !controller.State.Papers.Single(p => p.Id == "editor-b").IsCollapsed,
             "Switch did not preserve sidebar presentation or expand the borrowed capsule");
         Check(ReferenceEquals(secondEditor, Member(b, "_noteBox")) &&
               ReferenceEquals(secondSession, Member(b, "_markdownBodySession")),
@@ -87,7 +87,7 @@ internal static class ExpandedEditorChecks
         Check(host.CurrentPaperId == "editor-todo" && todo.IsExpandedEditorHosted,
             "Todo visual did not replace the Markdown visual");
         Check(new WindowInteropHelper(host).Handle == hwnd, "Todo switch changed the WPF HWND");
-        Check(!b.IsExpandedEditorHosted && b.IsCollapsed &&
+        Check(!b.IsExpandedEditorHosted && controller.State.Papers.Single(p => p.Id == "editor-b").IsCollapsed &&
               ReferenceEquals(secondSession, Member(b, "_markdownBodySession")),
               "Leaving B disposed its original editor session");
 
