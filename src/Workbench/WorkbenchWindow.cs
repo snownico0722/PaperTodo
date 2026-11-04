@@ -17,10 +17,14 @@ internal sealed class WorkbenchWindow : Window
     private readonly Canvas _world = new();
     private readonly ScaleTransform _scale = new(1, 1);
     private readonly TranslateTransform _pan = new();
-    private readonly TextBox _search = new() { Width = 180, Margin = new Thickness(8, 4, 8, 4), Padding = new Thickness(8, 5, 8, 5) };
+    private readonly TextBox _search = new() { Width = 220, Margin = new Thickness(8, 4, 8, 4), Padding = new Thickness(8, 5, 8, 5) };
     private readonly TextBlock _status = new() { Margin = new Thickness(20, 6, 20, 8), TextWrapping = TextWrapping.Wrap };
     private readonly TextBlock _zoom = new() { VerticalAlignment = VerticalAlignment.Center, MinWidth = 48, TextAlignment = TextAlignment.Center };
-    private readonly WrapPanel _toolbar = new() { Margin = new Thickness(12, 8, 12, 8) };
+    private readonly Grid _toolbar = new();
+    private readonly StackPanel _layoutCommands = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Left };
+    private readonly StackPanel _rightCommands = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+    private readonly Border _toolbarHost = new();
+    private readonly List<Button> _chromeButtons = new();
     private readonly Dictionary<int, Scene> _scenes = new();
     private readonly DispatcherTimer _refreshTimer;
     private readonly Stack<WorkbenchState> _undo = new();
@@ -36,11 +40,13 @@ internal sealed class WorkbenchWindow : Window
     internal bool IsSuspended { get; private set; }
     internal int HostedPaperCount => _scenes.Values.Sum(s => s.Cards.Count(c => c.Value.Lease != null));
     private Scene? ActiveScene => _scenes.GetValueOrDefault(_controller.WorkspaceNumber);
-    private static Brush DeskBrush => new SolidColorBrush(Theme.IsDark ? Color.FromRgb(25, 28, 34) : Color.FromRgb(239, 242, 247));
-    private static Brush CardBrush => new SolidColorBrush(Theme.IsDark ? Color.FromRgb(36, 40, 48) : Colors.White);
-    private static Brush Ink => new SolidColorBrush(Theme.IsDark ? Color.FromRgb(228, 232, 240) : Color.FromRgb(38, 48, 67));
-    private static Brush Muted => new SolidColorBrush(Theme.IsDark ? Color.FromRgb(148, 160, 181) : Color.FromRgb(112, 128, 151));
-    private static Brush Accent => new SolidColorBrush(Color.FromRgb(77, 124, 216));
+    // Use PaperTodo's own palette (including the selected color scheme), not fixed blue/grey.
+    private static Brush DeskBrush => Theme.CodeBrush;
+    private static Brush CardBrush => Theme.PaperBrush;
+    private static Brush Outline => Theme.PaperBorderBrush;
+    private static Brush Ink => Theme.TextBrush;
+    private static Brush Muted => Theme.WeakTextBrush;
+    private static Brush Accent => Theme.ActiveBrush;
 
     internal WorkbenchWindow(AppController controller)
     {
@@ -60,49 +66,39 @@ internal sealed class WorkbenchWindow : Window
         _world.RenderTransform = transform;
         _viewport.Children.Add(_world);
 
-        // Use the compact floating workbench bar from #398, not a permanently docked
-        // ribbon. Navigation and creation stay available without losing canvas space.
-        var toolbarHost = new Border
-        {
-            CornerRadius = new CornerRadius(10),
-            Background = CardBrush, BorderBrush = Muted, BorderThickness = new Thickness(1),
-            Padding = new Thickness(8, 4, 6, 4), Margin = new Thickness(16, 14, 16, 0),
-            HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Top
-        };
-        var toolbarGrid = new Grid();
-        toolbarGrid.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
-        toolbarGrid.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
-        toolbarGrid.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
-        toolbarGrid.Children.Add(new TextBlock
-        {
-            Text = Title, FontSize = 14, FontWeight = FontWeights.SemiBold,
-            Foreground = Ink, VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(6, 0, 16, 0)
-        });
-        _toolbar.Margin = new Thickness(0);
-        Grid.SetColumn(_toolbar, 2);
-        toolbarGrid.Children.Add(_toolbar);
-        toolbarHost.Child = toolbarGrid;
-        Panel.SetZIndex(toolbarHost, 10);
-        root.Children.Add(toolbarHost);
+        // Left: layout. Center: search. Right: create and zoom. Equal side columns
+        // keep the search centered in the workbench, not beside the last toolbar button.
+        _toolbarHost.CornerRadius = new CornerRadius(10);
+        _toolbarHost.BorderThickness = new Thickness(1);
+        _toolbarHost.Padding = new Thickness(8, 4, 8, 4);
+        _toolbarHost.Margin = new Thickness(16, 14, 16, 0);
+        _toolbarHost.HorizontalAlignment = HorizontalAlignment.Stretch;
+        _toolbarHost.VerticalAlignment = VerticalAlignment.Top;
+        _toolbar.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
+        _toolbar.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+        _toolbar.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
+        Grid.SetColumn(_layoutCommands, 0); _toolbar.Children.Add(_layoutCommands);
+        Grid.SetColumn(_search, 1); _toolbar.Children.Add(_search);
+        Grid.SetColumn(_rightCommands, 2); _toolbar.Children.Add(_rightCommands);
+        _toolbarHost.Child = _toolbar;
+        Panel.SetZIndex(_toolbarHost, 10);
+        root.Children.Add(_toolbarHost);
         _status.VerticalAlignment = VerticalAlignment.Bottom;
         Panel.SetZIndex(_status, 10);
         root.Children.Add(_status);
 
-        AddButton("WorkbenchArrange", () => { RememberLayout(); _ = LayoutActiveAsync(arrange: true); });
-        AddButton("WorkbenchUndo", UndoLayout);
-        AddButton("WorkbenchCurrent", () => FitActive());
-        AddButton("WorkbenchOverview", () => FitOverview());
-        AddButton("WorkbenchNewNote", () => CreatePaper(PaperTypes.Note));
-        AddButton("WorkbenchNewTodo", () => CreatePaper(PaperTypes.Todo));
+        AddButton("WorkbenchArrange", () => { RememberLayout(); _ = LayoutActiveAsync(arrange: true); }, _layoutCommands);
+        AddButton("WorkbenchUndo", UndoLayout, _layoutCommands);
         _search.ToolTip = Strings.Get("WorkbenchSearch");
         _search.TextChanged += (_, _) => { _searchCursor = 0; ApplySearch(); };
         _search.KeyDown += (_, e) => { if (e.Key == Key.Enter) { SearchNext(); e.Handled = true; } };
-        _toolbar.Children.Add(_search);
-        AddSymbolButton("-", () => ZoomAt(_scale.ScaleX / 1.2, ViewportCenter));
-        _toolbar.Children.Add(_zoom);
-        AddSymbolButton("+", () => ZoomAt(_scale.ScaleX * 1.2, ViewportCenter));
-        AddButton("WorkbenchClose", Close);
+        AddButton("WorkbenchNewNote", () => CreatePaper(PaperTypes.Note), _rightCommands);
+        AddButton("WorkbenchNewTodo", () => CreatePaper(PaperTypes.Todo), _rightCommands);
+        AddSymbolButton("-", () => ZoomAt(_scale.ScaleX / 1.2, ViewportCenter), _rightCommands);
+        _rightCommands.Children.Add(_zoom);
+        AddSymbolButton("+", () => ZoomAt(_scale.ScaleX * 1.2, ViewportCenter), _rightCommands);
+        AddButton("WorkbenchClose", Close, _rightCommands);
+        RefreshTheme();
         _viewport.PreviewMouseDown += BeginPan;
         _viewport.PreviewMouseMove += MovePan;
         _viewport.PreviewMouseUp += EndPan;
@@ -139,16 +135,18 @@ internal sealed class WorkbenchWindow : Window
         SetHint(); UpdateZoomLabel();
     }
 
-    private void AddButton(string key, Action action) => AddSymbolButton(Strings.Get(key), action);
-    private void AddSymbolButton(string text, Action action)
+    private void AddButton(string key, Action action, Panel destination) => AddSymbolButton(Strings.Get(key), action, destination);
+    private void AddSymbolButton(string text, Action action, Panel destination)
     {
         var button = NewButton(text);
-        button.Click += (_, _) => action(); _toolbar.Children.Add(button);
+        button.Click += (_, _) => action();
+        destination.Children.Add(button);
+        _chromeButtons.Add(button);
     }
     private static Button NewButton(string text) => new()
     {
         Content = text, Padding = new Thickness(10, 6, 10, 6), Margin = new Thickness(3),
-        Background = CardBrush, Foreground = Ink, BorderBrush = Muted, BorderThickness = new Thickness(.5),
+        Background = CardBrush, Foreground = Ink, BorderBrush = Outline, BorderThickness = new Thickness(.5),
         FocusVisualStyle = null
     };
     private Point ViewportCenter => new(Math.Max(1, _viewport.ActualWidth) / 2, Math.Max(1, _viewport.ActualHeight) / 2);
