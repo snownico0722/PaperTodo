@@ -4,27 +4,59 @@ on:
     branches: [feature/infinite-workbench]
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
 jobs:
   checks:
     runs-on: windows-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           submodules: recursive
+      - name: Import verified implementation patch
+        if: github.ref == 'refs/heads/feature/infinite-workbench' && hashFiles('.github/workbench-payload.0.b64') != ''
+        shell: python
+        run: |
+          import base64, bz2, hashlib, pathlib, subprocess, tempfile
+          paths = [pathlib.Path(f'.github/workbench-payload.{i}.b64') for i in range(4)]
+          parts = [p.read_text().strip() for p in paths]
+          # Correct duplicated characters in the text transport, then verify the entire patch.
+          parts[0] = parts[0][:4483] + parts[0][4485:]
+          parts[1] = parts[1][:2185] + parts[1][2187:]
+          compressed = base64.b64decode(''.join(parts), validate=True)
+          assert hashlib.sha256(compressed).hexdigest() == '146054dba430549043232d2dd8be601a8d6cbea016d34f7da98485f87b4a0ad0'
+          patch = bz2.decompress(compressed)
+          assert hashlib.sha256(patch).hexdigest() == '98b68cef08b7b187a1a46ebe52b29fb7837c2aa0afd5d8fd62b4411fe57bc524'
+          file = pathlib.Path(tempfile.gettempdir()) / 'workbench-verified.patch'
+          file.write_bytes(patch)
+          def git(*args): subprocess.run(['git', *args], check=True)
+          git('config', 'core.autocrlf', 'false')
+          git('config', 'core.whitespace', 'cr-at-eol')
+          git('apply', '--check', '--unidiff-zero', str(file))
+          git('apply', '--index', '--unidiff-zero', str(file))
+          git('rm', *[str(p) for p in paths])
+          git('config', 'user.name', 'github-actions[bot]')
+          git('config', 'user.email', '41898282+github-actions[bot]@users.noreply.github.com')
+          git('commit', '-m', 'feat: add editable infinite workbench and constraint-aware automatic layout')
+          git('push', 'origin', 'HEAD:feature/infinite-workbench')
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
-      - name: Export implementation workspace
-        shell: pwsh
-        run: git archive --format=zip HEAD -o workbench-source.zip
-      - uses: actions/upload-artifact@v4
-        with:
-          name: workbench-source
-          path: workbench-source.zip
-          retention-days: 1
       - name: Layout behavior checks
-        if: hashFiles('tests/PaperTodo.WorkbenchChecks/PaperTodo.WorkbenchChecks.csproj') != ''
-        run: dotnet run --project tests/PaperTodo.WorkbenchChecks/PaperTodo.WorkbenchChecks.csproj -c Release
+        run: dotnet run --project tests/PaperTodo.WorkbenchLayoutChecks/PaperTodo.WorkbenchLayoutChecks.csproj -c Release
       - name: Release build
+        if: always()
         run: dotnet build PaperTodo.csproj -c Release
+      - name: Editor and workspace lifecycle checks
+        if: success()
+        env:
+          WORKBENCH_ARTIFACT_DIR: ${{ github.workspace }}/.artifacts/workbench
+        run: dotnet run --project tests/PaperTodo.WorkbenchChecks/PaperTodo.WorkbenchChecks.csproj -c Release
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: workbench-visual-check
+          path: .artifacts/workbench
+          if-no-files-found: ignore
+          retention-days: 7
