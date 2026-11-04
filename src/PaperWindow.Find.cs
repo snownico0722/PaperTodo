@@ -588,7 +588,7 @@ public sealed partial class PaperWindow
             return;
         }
 
-        var owner = _expandedEditorHostWindow ?? this;
+        var owner = (_expandedEditorHostWindow as Window) ?? this;
         if (!owner.IsVisible ||
             owner.WindowState == WindowState.Minimized ||
             _paper.IsCollapsed ||
@@ -999,7 +999,7 @@ public sealed partial class PaperWindow
         _findPopup.IsOpen = false;
         RefreshTodoFindCues();
 
-        var owner = _expandedEditorHostWindow ?? this;
+        var owner = (_expandedEditorHostWindow as Window) ?? this;
         if (!restoreFocus ||
             !owner.IsVisible ||
             _paper.IsCollapsed ||
@@ -1066,7 +1066,7 @@ public sealed partial class PaperWindow
         {
             if (!IsBuiltInFindOpen ||
                 _findHost?.IsKeyboardFocusWithin == true ||
-                (_expandedEditorHostWindow ?? this).IsActive)
+                ((_expandedEditorHostWindow as Window) ?? this).IsActive)
             {
                 return;
             }
