@@ -849,12 +849,20 @@ public sealed partial class PaperWindow
     /// Forget the last previewed target without touching the controller's held-queue state, so the
     /// next frame's Schmitt trigger still knows what this drag is attached to.
     /// </summary>
-    private void ResetDeepCapsuleQueueMagnetPreviewState()
+    /// <param name="resetTimestamp">
+    /// 手势结束时必须清零节流时间戳；拖拽中清空目标预览时不能清，否则下一次指针事件会
+    /// 被当作“从未评估过”，8ms 节流在整个整队拖拽期间失效。
+    /// </param>
+    private void ResetDeepCapsuleQueueMagnetPreviewState(bool resetTimestamp = true)
     {
         _deepCapsuleQueuePreviewKey = "";
         _deepCapsuleQueuePreviewIndex = -1;
         _deepCapsuleVacatedQueueKey = "";
-        _deepCapsuleQueuePreviewTimestamp = 0;
+        if (resetTimestamp)
+        {
+            _deepCapsuleQueuePreviewTimestamp = 0;
+        }
+
         _deepCapsuleSameQueueReorderPreviewed = false;
         _deepCapsuleQueuePlanInputVersion = -1;
     }
@@ -1082,8 +1090,9 @@ public sealed partial class PaperWindow
                 case EdgeCapsuleFreeQueuePreviewAction.KeepTransfer:
                     // The queue being carried is already lifted off the wall and hidden; there is
                     // no gap left to close, so re-running the close-up would only churn members.
+                    // 拖拽中只清空目标预览，保留节流时间戳；清零会让下一次指针事件立即全量评估。
                     ClearDeepCapsulePreviewIndex(session);
-                    ResetDeepCapsuleQueueMagnetPreviewState();
+                    ResetDeepCapsuleQueueMagnetPreviewState(resetTimestamp: false);
                     break;
 
                 case EdgeCapsuleFreeQueuePreviewAction.SameQueueReorder:
