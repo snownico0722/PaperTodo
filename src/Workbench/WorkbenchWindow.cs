@@ -736,12 +736,15 @@ internal sealed class WorkbenchWindow : Window
     private void WireDrag(Card card, Thumb thumb, bool resize)
     {
         WorkbenchRect before = default;
+        var changed = false;
         thumb.DragStarted += (_, _) =>
         {
             if (IsSuspended || (!resize && card.Snapshot.Placement?.Pinned == true)) return;
-            // A Thumb starts a gesture even when it is only clicked. Cancel an obsolete
-            // calculation now, but defer undo and writes until geometry actually changes.
-            CancelLayout(); _dragging = true; before = card.Bounds;
+            // Thumb fires DragStarted even on a click; leave the pending automatic layout
+            // running unless the pointer actually changes the paper geometry.
+            changed = false;
+            _dragging = true;
+            before = card.Bounds;
         };
         thumb.DragDelta += (_, e) =>
         {
@@ -750,6 +753,8 @@ internal sealed class WorkbenchWindow : Window
             var r = card.Bounds;
             r = resize ? r with { Width = Math.Clamp(r.Width + e.HorizontalChange, 240, 1600), Height = Math.Clamp(r.Height + e.VerticalChange, 240, 1600) }
                 : r with { X = Math.Clamp(r.X + e.HorizontalChange, -10_000_000, 10_000_000), Y = Math.Clamp(r.Y + e.VerticalChange, -10_000_000, 10_000_000) };
+            if (r == card.Bounds) return;
+            if (!changed) { CancelLayout(); changed = true; }
             Position(card, r);
             if (ActiveScene is { } scene) DrawDecorations(scene, dragging: true);
         };
