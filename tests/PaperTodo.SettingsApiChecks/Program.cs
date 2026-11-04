@@ -189,7 +189,7 @@ internal static partial class Program
             File.WriteAllText(Path.Combine(temp, "data.json"),
                 JsonSerializer.Serialize(loaded, options));
             var reloaded = store.Load();
-            Check(reloaded.TopBarPinnedCount == 3 &&
+            Check(reloaded.TopBarPinnedCount == 4 &&
                   PaperTopBarShortcuts.Menu(reloaded).SequenceEqual([PaperTopBarShortcuts.NewNote]) &&
                   reloaded.TodoTopBarShortcuts == null,
                 "A deliberate menu position survives restart without migrating again.");
@@ -202,7 +202,8 @@ internal static partial class Program
             File.WriteAllText(Path.Combine(temp, "data.json"), root.ToJsonString());
             var older = store.Load();
             Check(PaperTopBarShortcuts.Pinned(older).SequenceEqual(
-                [PaperTopBarShortcuts.Association, PaperTopBarShortcuts.NewNote]),
+                [PaperTopBarShortcuts.Association, PaperTopBarShortcuts.NewNote,
+                 PaperTopBarShortcuts.Workspace]),
                 "Pre-341 visibility booleans migrate through the same one-time global path.");
         }
         finally { Directory.Delete(temp, recursive: true); }
