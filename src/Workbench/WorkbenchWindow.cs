@@ -149,6 +149,46 @@ internal sealed class WorkbenchWindow : Window
         Background = CardBrush, Foreground = Ink, BorderBrush = Outline, BorderThickness = new Thickness(.5),
         FocusVisualStyle = null
     };
+    internal void RefreshTheme()
+    {
+        if (_closed) return;
+        Background = DeskBrush; Foreground = Ink;
+        _viewport.Background = DeskBrush;
+        _toolbarHost.Background = CardBrush;
+        _toolbarHost.BorderBrush = Outline;
+        _search.Background = CardBrush;
+        _search.Foreground = Ink;
+        _search.BorderBrush = Outline;
+        _search.CaretBrush = Accent;
+        _search.SelectionBrush = Theme.Tint(100);
+        _zoom.Foreground = Ink;
+        _status.Foreground = Muted;
+        foreach (var button in _chromeButtons)
+        {
+            button.Background = CardBrush;
+            button.Foreground = Ink;
+            button.BorderBrush = Outline;
+        }
+        foreach (var scene in _scenes.Values)
+        {
+            foreach (var card in scene.Cards.Values)
+            {
+                card.Frame.Background = CardBrush;
+                card.Frame.BorderBrush = Outline;
+                card.Title.Background = CardBrush;
+                card.Title.Foreground = Ink;
+                card.Binding.Foreground = Muted;
+                card.Move.Foreground = Ink;
+                card.Resize.Foreground = Muted;
+                foreach (var button in new[] { card.Pin, card.Eye, card.Menu })
+                    button.Foreground = Ink;
+                card.Eye.Content = EyeIcon(card.Snapshot.DesktopVisible);
+                if (card.PreviewText != null) card.PreviewText.Foreground = Ink;
+            }
+            DrawDecorations(scene);
+        }
+    }
+
     private Point ViewportCenter => new(Math.Max(1, _viewport.ActualWidth) / 2, Math.Max(1, _viewport.ActualHeight) / 2);
     private void SetHint() => _status.Text = Strings.Get("WorkbenchHint");
     private void Report(Exception error)
@@ -542,7 +582,8 @@ internal sealed class WorkbenchWindow : Window
         card.Pin.Visibility = card.Menu.Visibility = card.Resize.Visibility = card.Move.Visibility = Visibility.Collapsed;
         card.Eye.IsEnabled = false;
         var preview = new StackPanel { Margin = new Thickness(16) };
-        preview.Children.Add(new TextBlock { Text = paper.Summary, TextWrapping = TextWrapping.Wrap, MaxHeight = Math.Max(80, paper.Height - 120), TextTrimming = TextTrimming.CharacterEllipsis, Foreground = Ink });
+        card.PreviewText = new TextBlock { Text = paper.Summary, TextWrapping = TextWrapping.Wrap, MaxHeight = Math.Max(80, paper.Height - 120), TextTrimming = TextTrimming.CharacterEllipsis, Foreground = Ink };
+        preview.Children.Add(card.PreviewText);
         var open = NewButton(Strings.Get("WorkbenchOpenWorkspace"));
         open.Click += async (_, _) => await ActivateWorkspaceAsync(workspace, paper.Id);
         preview.Children.Add(open); card.Body.Child = preview;
@@ -552,7 +593,7 @@ internal sealed class WorkbenchWindow : Window
     private Card CreateCardShell(WorkbenchPaperSnapshot paper)
     {
         var card = new Card(paper);
-        card.Frame.Background = CardBrush; card.Frame.BorderBrush = Muted;
+        card.Frame.Background = CardBrush; card.Frame.BorderBrush = Outline;
         card.Frame.BorderThickness = new Thickness(1); card.Frame.CornerRadius = new CornerRadius(9);
         card.Frame.ClipToBounds = true;
         var grid = new Grid();
@@ -565,6 +606,7 @@ internal sealed class WorkbenchWindow : Window
         header.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
         header.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
         card.Move.Cursor = Cursors.SizeAll;
+        card.Move.Foreground = Ink;
         card.Move.Background = Brushes.Transparent;
         card.Move.MinHeight = 32;
         card.Move.Tag = paper.Title;
@@ -589,6 +631,7 @@ internal sealed class WorkbenchWindow : Window
         Grid.SetRow(card.Binding, 1); grid.Children.Add(card.Binding);
         Grid.SetRow(card.Body, 2); grid.Children.Add(card.Body);
         card.Resize.Width = 22; card.Resize.HorizontalAlignment = HorizontalAlignment.Right; card.Resize.Cursor = Cursors.SizeNWSE;
+        card.Resize.Foreground = Muted;
         card.Resize.Template = ThumbTemplate("\u25e2"); Grid.SetRow(card.Resize, 3); grid.Children.Add(card.Resize);
         Panel.SetZIndex(card.Frame, 2);
         Position(card, paper.Placement?.Bounds ?? new(32, 32, paper.Width, paper.Height));
@@ -624,7 +667,8 @@ internal sealed class WorkbenchWindow : Window
         var label = new FrameworkElementFactory(typeof(TextBlock));
         label.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding(nameof(FrameworkElement.Tag))
             { Source = owner });
-        label.SetValue(TextBlock.ForegroundProperty, Ink);
+        label.SetBinding(TextBlock.ForegroundProperty, new System.Windows.Data.Binding(nameof(Control.Foreground))
+            { Source = owner });
         label.SetValue(TextBlock.FontWeightProperty, FontWeights.SemiBold);
         label.SetValue(TextBlock.TextTrimmingProperty, TextTrimming.CharacterEllipsis);
         label.SetValue(TextBlock.VerticalAlignmentProperty, VerticalAlignment.Center);
@@ -636,7 +680,8 @@ internal sealed class WorkbenchWindow : Window
     private static ControlTemplate ThumbTemplate(string glyph)
     {
         var text = new FrameworkElementFactory(typeof(TextBlock));
-        text.SetValue(TextBlock.TextProperty, glyph); text.SetValue(TextBlock.ForegroundProperty, Muted);
+        text.SetValue(TextBlock.TextProperty, glyph);
+        text.SetValue(TextBlock.ForegroundProperty, new TemplateBindingExtension(Control.ForegroundProperty));
         text.SetValue(TextBlock.TextAlignmentProperty, TextAlignment.Center);
         text.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
         return new ControlTemplate(typeof(Thumb)) { VisualTree = text };
@@ -788,6 +833,7 @@ internal sealed class WorkbenchWindow : Window
         internal Border Frame { get; } = new();
         internal TextBox Title { get; } = new();
         internal TextBlock Binding { get; } = new();
+        internal TextBlock? PreviewText;
         internal Border Body { get; } = new() { ClipToBounds = true };
         internal Thumb Move { get; } = new();
         internal Thumb Resize { get; } = new();
