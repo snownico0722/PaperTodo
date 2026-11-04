@@ -2375,7 +2375,7 @@ public sealed partial class PaperWindow : Window
         actionButtons.Children.Add(_newTodoButton);
         actionButtons.Children.Add(_newNoteButton);
         buttons.Children.Add(_moreActionsButton);
-        buttons.Children.Add(CreateWorkspaceCycleButton());
+        actionButtons.Children.Add(CreateWorkspaceCycleButton());
         buttons.Children.Add(_closeButton);
         UpdateTopBarNewPaperButtons();
 
@@ -2427,7 +2427,7 @@ public sealed partial class PaperWindow : Window
                 _topBarTitleHost.Margin.Left + _topBarTitleHost.Margin.Right;
             var fixedWidth = TopBarOuterWidth(_paperIconButton) +
                 TopBarOuterWidth(_moreActionsButton) +
-                TopBarOuterWidth(_closeButton) + WorkspacePersistentButtonWidth() + TopBarCollisionGap;
+                TopBarOuterWidth(_closeButton) + TopBarCollisionGap;
             var remaining = Math.Max(0, availableWidth - fixedWidth - titleMinWidth);
 
             // Built-in user shortcuts are atomic. Saved order affects placement,
@@ -2677,6 +2677,12 @@ public sealed partial class PaperWindow : Window
         {
             switch (action)
             {
+                case PaperTopBarShortcuts.Workspace when
+                    _controller.WorkspaceOptions.Enabled &&
+                    _controller.WorkspaceOptions.SlotNumbers.Count > 1 &&
+                    !IsTopBarCommandVisible(_workspaceButton):
+                    menu.Items.Add(BuildWorkspaceSelectionMenuItem(menu));
+                    break;
                 case PaperTopBarShortcuts.NewTodo when !IsTopBarCommandVisible(_newTodoButton):
                     menu.Items.Add(MenuItem(Strings.Get("MenuNewTodoPaper"),
                         (_, _) => _controller.CreatePaper(PaperTypes.Todo, show: true, _paper)));
