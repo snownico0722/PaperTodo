@@ -106,6 +106,7 @@ internal sealed class WorkbenchWindow : Window
         _viewport.PreviewMouseDown += BeginPan;
         _viewport.PreviewMouseMove += MovePan;
         _viewport.PreviewMouseUp += EndPan;
+        _viewport.MouseRightButtonUp += OnCanvasRightClick;
         _viewport.LostMouseCapture += (_, _) => _panPointer = null;
         _viewport.PreviewMouseWheel += (_, e) =>
         {
@@ -370,12 +371,45 @@ internal sealed class WorkbenchWindow : Window
         CancelLayout(); StoreLayout(_undo.Pop());
         _modelSignature = ""; SyncActiveScene();
     }
-    private void CreatePaper(string type)
+    private void CreatePaper(string type, WorkbenchPoint? at = null)
     {
         if (IsSuspended) return;
+        var paper = _controller.CreatePaper(type, show: false);
+        if (paper == null) return;
         RememberLayout();
-        _controller.CreatePaper(type, show: false);
+        if (at is { } point)
+        {
+            var state = _controller.WorkbenchLayout.Copy();
+            state.Cards[paper.Id] = new WorkbenchCardState
+            {
+                X = point.X - WorkbenchCardState.ValidSize(paper.Width, 320, 240, 640) / 2,
+                Y = point.Y - 16,
+                Width = WorkbenchCardState.ValidSize(paper.Width, 320, 240, 640),
+                Height = WorkbenchCardState.ValidSize(paper.Height, 360, 240, 720),
+                Preferred = true
+            };
+            StoreLayout(state);
+        }
         SyncActiveScene();
+    }
+
+    private void OnCanvasRightClick(object sender, MouseButtonEventArgs e)
+    {
+        if (_closed || IsSuspended || _dragging || e.Handled ||
+            !ReferenceEquals(e.OriginalSource, _viewport) || ActiveScene is not { } active) return;
+        var screen = e.GetPosition(_viewport);
+        var point = new WorkbenchPoint((screen.X - _pan.X) / _scale.ScaleX - active.Origin.X,
+            (screen.Y - _pan.Y) / _scale.ScaleY - active.Origin.Y);
+        if (!active.Bounds.Inflate(128).Contains(point)) return;
+        var menu = new ContextMenu { PlacementTarget = _viewport };
+        var note = new MenuItem { Header = Strings.Get("WorkbenchNewNote") };
+        note.Click += (_, _) => CreatePaper(PaperTypes.Note, point);
+        var todo = new MenuItem { Header = Strings.Get("WorkbenchNewTodo") };
+        todo.Click += (_, _) => CreatePaper(PaperTypes.Todo, point);
+        menu.Items.Add(note);
+        menu.Items.Add(todo);
+        menu.IsOpen = true;
+        e.Handled = true;
     }
     private void FocusRequestedPaper()
     {
