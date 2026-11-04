@@ -40,6 +40,9 @@ internal static partial class Program
     {
         var controller = (AppController)RuntimeHelpers.GetUninitializedObject(typeof(AppController));
         Field(controller, "<State>k__BackingField", new AppState());
+        var paths = new WorkspacePaths(Path.Combine(Path.GetTempPath(), "PaperTodo.SettingsApiFixture"), 1);
+        Field(controller, "_workspace", new WorkspaceSession(paths,
+            new StateStore(paths.Directory, DurableAtomicFileWriter.Shared), controller.State, false, null));
         Field(controller, "_windows", new Dictionary<string, PaperWindow>());
         Field(controller, "_masterCapsules", new Dictionary<string, MasterCapsuleWindow>());
         return controller;
@@ -595,8 +598,11 @@ internal static partial class Program
         McpApiHost? host = null;
         host = new McpApiHost(Dispatcher.CurrentDispatcher, request =>
         {
+            var method = request.GetProperty("method").GetString();
+            if (method == "get_workspace_binding")
+                return new { token = "fixture-workspace" };
             requests.Add(request.Clone());
-            if (request.GetProperty("method").GetString() == "set_setting") host!.StopAfterResponse();
+            if (method == "set_setting") host!.StopAfterResponse();
             return new { received = true };
         }, name);
         using (host)
@@ -604,6 +610,8 @@ internal static partial class Program
             host.Start();
             var tools = new McpTools(new McpPipeClient(name));
             await tools.UpdateTodo("paper", "todo", text: "short");
+            Check(requests[^1].GetProperty("workspace_token").GetString() == "fixture-workspace",
+                "The real pipe request did not carry its workspace binding.");
             Check(!requests[^1].GetProperty("params").TryGetProperty("linked_paper_id", out _), "Omitted link is omitted on the real pipe.");
             await tools.UpdateTodo("paper", "todo", order: 0);
             Check(requests[^1].GetProperty("params").GetProperty("order").GetInt32() == 0, "Todo order survives actual tool serialization.");

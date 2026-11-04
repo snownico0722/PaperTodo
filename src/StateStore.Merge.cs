@@ -22,6 +22,7 @@ public sealed partial class StateStore
     /// </summary>
     internal StateReloadCommit PreviewExternalMerge(AppState memory, long version, string? baselineJson = null)
     {
+        memory = ProjectForPersistence(memory);
         _writeLock.Wait();
         try
         {
@@ -45,7 +46,7 @@ public sealed partial class StateStore
             // normalization is non-destructive. Keep original titles for the actual merge:
             // a disputed MaxTitleLength must not truncate text before resolution.
             var normalizedImported = CopyForReload(imported);
-            NormalizeAfterLoad(normalizedImported);
+            NormalizeWorkspaceDocument(normalizedImported);
             var external = JsonSerializer.SerializeToNode(normalizedImported, JsonOptions)!.AsObject();
             var current = JsonSerializer.SerializeToNode(memory, JsonOptions)!.AsObject();
             var originalDocument = JsonNode.Parse(baselineJson, documentOptions: StateJsonReadPolicy.DocumentOptions)
@@ -56,7 +57,9 @@ public sealed partial class StateStore
             MigrateLegacyTopBarSettings(original, baselineJson);
             var baselineRawTitles = CaptureMergeTitles(original);
             var normalizedOriginal = CopyForReload(original);
-            NormalizeAfterLoad(normalizedOriginal);
+            // Compare the baseline under the same effective workspace settings as
+            // the external snapshot, not dormant independent preferences.
+            NormalizeWorkspaceDocument(normalizedOriginal);
             var baselineNormalizedTitles = CaptureMergeTitles(normalizedOriginal);
             var baseline = JsonSerializer.SerializeToNode(normalizedOriginal, JsonOptions)!.AsObject();
             if (JsonNode.DeepEquals(current, external))
@@ -157,8 +160,8 @@ public sealed partial class StateStore
     {
         // Normalize against the selected settings, not the provisional conflict defaults.
         // The resolution owns a detached candidate; live objects are still untouched.
-        NormalizeAfterLoad(resolution.State);
-        var json = SerializeState(resolution.State);
+        NormalizeWorkspaceDocument(resolution.State);
+        var json = SerializeRawState(resolution.State);
         _writeLock.Wait();
         try
         {
@@ -187,8 +190,8 @@ public sealed partial class StateStore
     {
         var suffix = DateTime.UtcNow.ToString("yyyyMMddHHmmssfff") + "-" +
                      Guid.NewGuid().ToString("N")[..8];
-        var mainName = "dataconflict-" + suffix + ".json";
-        var diffName = "dataconflict-" + suffix + ".diff.json";
+        var mainName = ConflictFilePrefix + suffix + ".json";
+        var diffName = ConflictFilePrefix + suffix + ".diff.json";
         var directory = Path.GetDirectoryName(FilePath)!;
         // Flush the existing pair of recovery records BEFORE replacing the primary.
         // Use the bytes validated for this operation, not another racing read of the path.

@@ -1,5 +1,8 @@
 # PaperTodo Plugin Development
 
+Workspace status also includes `WorkspaceNumber`, `DataFileName`, and `FollowsMainSettings`. Query the active filename before authorized external edits: `data.json` always remains the main workspace; `reload_data` / `merge_data` target the active workspace and never switch it.
+
+
 **Language: English | [简体中文](README.zh.md)**
 
 This is the **current PaperTodo plugin development manual**. It documents the current plugin contract, runtime boundaries, build workflow, and examples, with a concise API-version history and compatibility summary. Detailed historical trade-offs remain in `doc/DECISIONS.md`.
@@ -1334,7 +1337,7 @@ const status = await papertodo.workspace.request('data.status', {});
 
 MCP exposes explicit `reload_data` and three-way `merge_data` (both require full writes), plus read-only `get_data_reload_status`. No file watcher, polling, revision history or normal-autosave fingerprint comparison is installed. Ordinary saves can overwrite external file edits until a deliberate reload/merge. Explicit requests fence obsolete queued saves; system termination still blocks new storage writes.
 
-Default `reload_data` adopts the validated current `data.json` as authoritative and may replace unsaved changes. For three-way merge, preserve the complete original JSON read **before editing**, then supply it to MCP `merge_data(baseline_json: originalJson)`, Native `Workspace.MergeData(originalJson)`, or Web `papertodo.workspace.request('data.merge', { baselineJson: originalJson })`. The argument is the original JSON string, not a path or a subsequently saved version. **Missing, blank, or invalid baselines return `invalid`**, even when current and disk states are equal. True conflicts obey `general.data_merge_conflicts` (`ask`, `external`, `internal`), affecting only conflicting values. Content merges at field level, not by lines. MCP retains the serialized request size limit of 8,000,000 characters; larger snapshots should use Native integration or domain APIs.
+Default `reload_data` adopts the validated active-workspace file as authoritative and may replace unsaved changes. For three-way merge, preserve the complete original JSON read **before editing**, then supply it to MCP `merge_data(baseline_json: originalJson)`, Native `Workspace.MergeData(originalJson)`, or Web `papertodo.workspace.request('data.merge', { baselineJson: originalJson })`. The argument is the original JSON string, not a path or a subsequently saved version. **Missing, blank, or invalid baselines return `invalid`**, even when current and disk states are equal. True conflicts obey `general.data_merge_conflicts` (`ask`, `external`, `internal`), affecting only conflicting values. Content merges at field level, not by lines. MCP retains the serialized request size limit of 8,000,000 characters; larger snapshots should use Native integration or domain APIs.
 
 On resolution, the host verifies that the external input has not changed, archives conflicting input, and commits through its atomic writer before applying the result. If the source changes during review, the merge aborts without installing the stale result. A queued merge returns `Outcome: pending` and `Applied: false`; query `get_data_reload_status` until `IsReloading` is false for its final outcome. The originating paper session may be released after reconciliation. This is not plugin-code hot reload. Prefer domain APIs for ordinary Todo/Note edits.
 

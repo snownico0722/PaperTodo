@@ -68,10 +68,11 @@
 | D-057 | DWM 桌面截图退出 CI 自动验收 | Accepted | 测试 / Window integration |
 | D-058 | 辅助表面统一轻量材质，退休完整材质设置 | Accepted | 主题 / Rendering |
 | D-059 | 删除辅助材质截图与离屏背景会话代码 | Accepted | 主题 / Rendering |
-| D-060 | data.json 仅显式重载，普通保存保持原路径 | Partially superseded by D-061 | 持久化 / 外部 API |
+| D-060 | data.json 仅显式重载，普通保存保持原路径 | Accepted, restored by D-063 | 持久化 / 外部 API |
 | D-061 | 显式合并由调用方提供真实原始版本 | Revised by D-063 | 持久化 / 外部 API |
 | D-062 | 写入准入、外部变化暂停与终止边界 | Partially superseded by D-063 | 持久化 / 写入安全 |
 | D-063 | 仅显式热重载和有基线三方合并，普通保存不检测外部修改 | Accepted | 持久化 / 产品边界 |
+| D-064 | 固定编号工作区共用代码，不共用运行数据 | Accepted | 工作区 / 持久化 |
 
 ## 维护规则
 
@@ -1935,3 +1936,35 @@ PR #319 的初版把主胶囊完整材质收展后的卡死解释为终点迟到
 ### Evidence
 
 #340 / #351 的 `StateStore.WriteSafety.cs`、`StateStore.Merge.cs`、`AppController.DataReload.cs`、`McpTools.cs` 及 `PaperTodo.DataReloadChecks`；D-060/061/062 保留为路线演进的历史证据。
+---
+
+## D-064 — 固定编号工作区共用代码，不共用运行数据
+
+**Status:** Accepted
+
+### Context
+
+#340 已有同一数据文件的显式重载，但其“纸片消失即删除附属状态”的语义、单一图片缓存和固定 Store 路径不能直接作为工作区切换。产品明确限定主工作区与 2～5 共五个固定槽位、顶栏循环按钮、编号放在扩展名前，以及全部工作区管理配置保存在主 data.json。
+
+### Decision
+
+- 新增 `WorkspaceCatalog` / `WorkspaceSession`，保持每个编号 Store 的不可变文件路径和既有原子写入/version fence；切换时捕获实际 writer，不临时重命名或覆盖主文件。
+- 数据、图片、宿主管理插件配置/Runtime/per-paper state 按编号独立；安装代码和 Native assembly cache 共享。界面卸载不等于业务删除。
+- 主 data.json 独占 catalog，副工作区只通过主 Store 更新该节点。减少数量/禁用不删除文件。
+- 默认跟随主软件设置，保存副工作区独立偏好的设置快照，在运行时覆盖而不持久化继承值。跟随期间公共设置只读，避免隐式反写主工作区。
+- 复用既有窗口恢复、胶囊生命周期和设置生效函数，完整切换采用新窗口/缓存代次；不复用同 ID 的旧工作区窗口。
+- 工作区打开仅根据核心 JSON 的实际读取结果判断：可用则加载；格式损坏才回退到备份，备份也不可用则重建；权限、占用与 I/O 错误不触发重建。图片、插件与历史文件不拦截进入，损坏原件在覆盖前尽量保留，沿用存储层的图片引用保护。
+
+### Why / Rejected
+
+共享 LMDB 会迫使图片回收扫描其他工作区，并使相同编号缓存含义不明确；独立 LMDB 与独立 StateStore 保持引用边界一致。额外 workspaces.json、目录式工作区容器、常驻监听和每次保存维护全状态历史均不符合本功能的固定槽位设计。普通 ReloadData 的删除与覆盖语义保持不变，不把跨工作区切换伪装为一次外部导入。
+
+### Evidence
+
+- `src/WorkspaceModels.cs` / `src/WorkspaceCatalog.cs` / `src/StateStore.Workspaces.cs`。
+- `src/AppController.Workspaces.cs` / `src/PaperBodyPluginDataStore.Workspaces.cs`。
+- `src/PaperWindow.Workspaces.cs` / `src/AppController.Settings.WorkspacePage.cs`。
+- `tests/PaperTodo.DataReloadChecks/WorkspaceChecks.cs`：存储/版本/继承及隔离 WPF 往返测试。
+- `WorkspaceFieldScopes` 显式列出 `AppState` 字段归属，缺失分类不自动继承且在持久化检查中失败；保留现有设置跟随和旧字段迁移行为，避免新增内容或布局字段被静默共享。
+
+

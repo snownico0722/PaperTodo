@@ -453,6 +453,9 @@ public readonly record struct TodoVisualMetrics(
 
 public sealed class AppState
 {
+    // The unnumbered data.json is the sole owner; absent in legacy and numbered documents.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WorkspaceConfiguration? Workspaces { get; set; }
     [JsonRequired]
     public List<PaperData> Papers { get; set; } = new();
     [JsonPropertyOrder(-100)]

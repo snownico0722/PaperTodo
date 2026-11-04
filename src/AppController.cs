@@ -36,8 +36,8 @@ public sealed partial class AppController : IDisposable
 
     public static AppController Current { get; private set; } = null!;
 
-    private readonly StateStore _store = new();
-    private readonly NoteImageStore _imageStore = new();
+    private StateStore _store = null!;
+    private NoteImageStore _imageStore = null!;
     private readonly Dictionary<string, PaperWindow> _windows = new();
     private readonly DispatcherTimer _saveTimer;
     private readonly DispatcherTimer _forceSaveTimer;
@@ -151,17 +151,21 @@ public sealed partial class AppController : IDisposable
     public AppController()
     {
         Current = this;
-        State = _store.Load();
+        InitializeWorkspaceState();
+        _imageStore.AutoCompressLargeImages = State.AutoCompressLargeImages;
+        _imageStore.Load();
+        // A missing or damaged picture must not redirect startup to another workspace.
+        UiLanguages.ApplyWorkspacePreference(State.UiLanguage);
         State.PaperSkin = PaperSkins.Resolve(State);
         UsesNativeMicaWindows = PaperSkins.UsesNativeBackdrop(State.PaperSkin) && NativeMicaBackdrop.IsSupported;
         Theme.Invalidate();
         RefreshApplicationThemeResources();
-        _imageStore.AutoCompressLargeImages = State.AutoCompressLargeImages;
-        _imageStore.Load();
         var protectedImageIdsForReuse = TryCollectUnprotectedImages();
         // Only rebuild free numbers when the same protection scan that gates GC succeeded.
         // A failed scan leaves reuse disabled so missing-but-referenced ids are never reissued.
         _imageStore.PrepareReusableImageNumbers(protectedImageIdsForReuse);
+        _imageStore.ProtectPersistedImageReferences(State, protectedImageIdsForReuse,
+            System.IO.File.Exists(_store.FilePath) || System.IO.File.Exists(_store.BackupPath));
         NormalizePaperSystemVisibilitySettings();
         AppTypography.Configure(
             State.UiFontPreset,
@@ -172,6 +176,7 @@ public sealed partial class AppController : IDisposable
         ToolTipPreferences.Register(() => State.EnableToolTips);
         _paperBodyPlugins = new PaperBodyPluginRegistry();
         _paperBodyPlugins.DataStore.WriteLifetime = _store.WriteLifetime;
+        InitializeWorkspacePluginData();
 
         // Idle debounce: save ~1s after the last change.
         // Force cap: while edits keep resetting the idle timer, still flush at least every 10s.
@@ -236,6 +241,11 @@ public sealed partial class AppController : IDisposable
         StartupCommandKind initialVisibilityCommand = StartupCommandKind.None)
     {
         CreateTrayIcon();
+        NotifyWorkspaceStartup();
+        // Complete a successful backup recovery or a confirmed-corrupt rebuild using
+        // the ordinary guarded writer. This never runs after a failed/busy load.
+        if (_store.NeedsStartupRecoverySave)
+            SaveNow(sync: true);
         InitializeGlobalHotkeys();
         _ = Task.Run(PaperWindow.CleanupOldScriptCapsuleTempFiles);
         _ = Application.Current.Dispatcher.BeginInvoke(
@@ -3327,10 +3337,10 @@ public sealed partial class AppController : IDisposable
         _ = TrySaveNow(sync);
     }
 
-    private bool TrySaveNow(bool sync)
+    private bool TrySaveNow(bool sync, bool workspaceBoundary = false)
     {
         if (IsExiting) return false;
-        if (IsDataReloading) return false;
+        if (IsDataReloading && !workspaceBoundary) return false;
         long? attemptedVersion = null;
         try
         {
@@ -3343,6 +3353,7 @@ public sealed partial class AppController : IDisposable
             attemptedVersion = version;
             var stateRevision = Interlocked.Read(ref _stateRevision);
             var store = _store;
+            var workspaceGeneration = Interlocked.Read(ref _workspaceGeneration);
             var json = store.SerializeState(State);
             if (sync)
             {
@@ -3362,6 +3373,7 @@ public sealed partial class AppController : IDisposable
                         Application.Current?.Dispatcher?.BeginInvoke(new Action(() =>
                         {
                             _pendingAsyncSaves.Remove((store, version));
+                            if (workspaceGeneration != Interlocked.Read(ref _workspaceGeneration) || IsExiting) return;
                             if (version == Interlocked.Read(ref _saveVersion) &&
                                 stateRevision == Interlocked.Read(ref _stateRevision))
                             {
@@ -3376,7 +3388,8 @@ public sealed partial class AppController : IDisposable
                         Application.Current?.Dispatcher?.BeginInvoke(new Action(() =>
                         {
                             _pendingAsyncSaves.Remove((store, version));
-                            HandleSaveFailure(ex, version);
+                            if (workspaceGeneration == Interlocked.Read(ref _workspaceGeneration) && !IsExiting)
+                                HandleSaveFailure(ex, version);
                         }));
                     }
                 });

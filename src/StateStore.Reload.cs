@@ -34,7 +34,7 @@ public sealed partial class StateStore
             var state = JsonSerializer.Deserialize<AppState>(json, JsonOptions)
                 ?? throw new JsonException("data.json cannot be null.");
             MigrateLegacyTopBarSettings(state, json);
-            NormalizeAfterLoad(state);
+            NormalizeWorkspaceDocument(state);
 
             // Any asynchronous normal save queued before this request is now obsolete.
             // This does not write to disk: the imported file is already the primary file.

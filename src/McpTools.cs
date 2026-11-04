@@ -17,19 +17,19 @@ internal sealed partial class McpTools
 
 
     [McpServerTool(Name = "reload_data", ReadOnly = false, Destructive = true, OpenWorld = false)]
-    [Description("Explicitly replace PaperTodo's running state with the validated current data.json file. Requires full writes. Unsaved in-memory edits may be discarded; no file watcher or automatic merge. Check get_data_reload_status for UI reconciliation.")]
+    [Description("Explicitly replace PaperTodo's running state with the validated active workspace data file (query get_data_reload_status.DataFileName first). Requires full writes. Unsaved in-memory edits may be discarded; no file watcher or automatic merge. Check get_data_reload_status for UI reconciliation.")]
     public Task<JsonElement> ReloadData(CancellationToken cancellationToken = default) =>
         _client.InvokeAsync("reload_data", new { }, cancellationToken);
 
     [McpServerTool(Name = "merge_data", ReadOnly = false, Destructive = true, OpenWorld = false)]
-    [Description("Explicit three-way merge of external data.json edits with local changes. Requires the complete original data.json read before editing as baseline_json; requests without it are rejected. Conflicts follow the current ask/external/internal preference. No file watcher or autosave source tracking is installed. Check get_data_reload_status. Requires full writes.")]
+    [Description("Explicit three-way merge of external edits to the active workspace data file. Requires the complete original JSON read before editing as baseline_json; requests without it are rejected. Conflicts follow the current ask/external/internal preference. No file watcher or autosave source tracking is installed. Check get_data_reload_status. Requires full writes.")]
     public Task<JsonElement> MergeData(
-        [Description("Required complete original data.json contents read before editing, as a JSON string. Preserve this snapshot even if PaperTodo saves again.")] string baseline_json,
+        [Description("Required complete original active-workspace JSON contents read before editing, as a JSON string. Preserve this snapshot even if PaperTodo saves again.")] string baseline_json,
         CancellationToken cancellationToken = default) =>
         _client.InvokeAsync("merge_data", new { baseline_json }, cancellationToken);
 
     [McpServerTool(Name = "get_data_reload_status", ReadOnly = true, Destructive = false, OpenWorld = false)]
-    [Description("Read the last explicit data reload outcome and whether UI reconciliation is still in progress. Does not read or modify the data file.")]
+    [Description("Read WorkspaceNumber, DataFileName, FollowsMainSettings, the last explicit reload outcome and whether UI reconciliation is still in progress. Does not read or modify the data file. After a workspace switch, this query also acknowledges the current workspace so the internal MCP bridge can continue without restarting; old writes are never automatically retried.")]
     public Task<JsonElement> GetDataReloadStatus(CancellationToken cancellationToken = default) =>
         _client.InvokeAsync("get_data_reload_status", new { }, cancellationToken);
 

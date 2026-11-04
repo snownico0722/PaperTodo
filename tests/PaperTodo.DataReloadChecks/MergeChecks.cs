@@ -103,7 +103,6 @@ internal static partial class Program
                     s.Store.SerializeState(s.Memory) == current,
                 "missing baseline entered a two-party merge or mutated data");
         }
-        // An invalid merge request must not fence the ordinary save path.
         s.Store.SaveJsonSync(current, 3);
         Require(Str(s.Read()["papers"]![0]!["title"]) == "LOCAL",
             "rejected baseline blocked an ordinary save");

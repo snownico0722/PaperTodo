@@ -1,4 +1,5 @@
 using System.IO;
+using System.Text.Json.Nodes;
 using System.Text;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -15,28 +16,55 @@ internal static partial class Program
         TerminationRejectsQueuedWrites();
         ConflictImagesRemainRecoverable();
         ArchiveFailureNeverCommits();
-        BrokenLoadsNeverBecomeBlankSaves();
-        OrphanedTempsNeverBecomeBlankSaves();
+        CorruptLoadsRecoverOrRebuild();
+        OrphanedTempsArePreservedWhenRebuilding();
         RecoveredLoadPreservesSourcesBeforeSaving();
         PluginExitFailureRetainsDirtyData();
         Console.WriteLine("PASS write safety: legacy ordinary saves, explicit transaction validation, shutdown, recovery images and archive failures");
     }
 
-    private static void OrphanedTempsNeverBecomeBlankSaves()
+    private static void OrphanedTempsArePreservedWhenRebuilding()
     {
         foreach (var backup in new[] { false, true })
         {
-            using var s = new Scope();
-            var bytes = File.ReadAllBytes(s.Store.FilePath);
-            File.Delete(s.Store.FilePath);
-            var path = (backup ? s.Store.BackupPath : s.Store.FilePath) + ".tmp";
-            File.WriteAllBytes(path, bytes);
-            var store = new StateStore(s.DirectoryPath, DurableAtomicFileWriter.Shared);
-            Throws<InvalidDataException>(() => store.Load());
-            Require(!File.Exists(store.FilePath) && File.ReadAllBytes(path).SequenceEqual(bytes),
-                "an orphaned first-write temp was replaced by an empty document");
+            using var scope = new Scope();
+            var bytes = File.ReadAllBytes(scope.Store.FilePath);
+            File.Delete(scope.Store.FilePath);
+            var tempPath = (backup ? scope.Store.BackupPath : scope.Store.FilePath) + ".tmp";
+            File.WriteAllBytes(tempPath, bytes);
+            var store = new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared);
+            var blank = store.Load(out var initializedEmpty);
+            Require(initializedEmpty && blank.Papers.Count == 0 &&
+                    File.ReadAllBytes(tempPath).SequenceEqual(bytes),
+                "an orphaned temp prevented new-workspace loading or was overwritten during reading");
+
+            store.SaveJsonSync(store.SerializeState(blank), 2);
+            var archived = Path.GetFileNameWithoutExtension(tempPath) + ".orphaned.*.tmp";
+            Require(File.Exists(store.FilePath) &&
+                    Directory.GetFiles(scope.DirectoryPath, archived).Any(path =>
+                        File.ReadAllBytes(path).SequenceEqual(bytes)),
+                "the atomic writer destroyed the sole interrupted-write evidence");
         }
-        Console.WriteLine("PASS incomplete first-write evidence is retained, never promoted or replaced by a blank state");
+        // A locked historical backup temp must not prevent creating a valid
+        // primary, since it is not the data or backup selected for loading.
+        using (var scope = new Scope())
+        {
+            File.Delete(scope.Store.FilePath);
+            var history = scope.Store.BackupPath + ".tmp";
+            File.WriteAllText(history, "{incomplete previous backup");
+            using (var busy = new FileStream(history,
+                FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+            {
+                var store = new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared);
+                var blank = store.Load(out var initializedEmpty);
+                Require(initializedEmpty, "locked historical backup temp blocked loading");
+                store.SaveJsonSync(store.SerializeState(blank), 2);
+                Require(File.Exists(store.FilePath), "locked historical backup temp blocked normal save");
+            }
+            Require(File.ReadAllText(history) == "{incomplete previous backup",
+                "locked historical backup temp was overwritten");
+        }
+        Console.WriteLine("PASS orphaned temps never block initialization and preserve recoverable files when possible");
     }
 
     private static void ExternalEditsDoNotBlockOrdinarySaves()
@@ -253,16 +281,83 @@ internal static partial class Program
         Throws<OperationCanceledException>(() => recovered.SaveJsonSync(recovered.SerializeState(state), 3));
     }
 
-    private static void BrokenLoadsNeverBecomeBlankSaves()
+    private static void CorruptLoadsRecoverOrRebuild()
     {
         foreach (var invalid in new[] { "{}", "{\"papers\":null}", "{\"papers\":[null]}", "not-json" })
         {
-            using var s = new Scope();
-            File.WriteAllText(s.Store.FilePath, invalid);
-            var reader = new StateStore(s.DirectoryPath, DurableAtomicFileWriter.Shared);
-            Throws<InvalidOperationException>(() => reader.Load());
-            Require(File.ReadAllText(reader.FilePath) == invalid, "failed load created an empty replacement");
+            using var scope = new Scope();
+            File.WriteAllText(scope.Store.FilePath, invalid);
+            var reader = new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared);
+            var state = reader.Load(out var initializedEmpty);
+            Require(initializedEmpty && reader.NeedsStartupRecoverySave &&
+                    state.Papers.Count == 0 && File.ReadAllText(reader.FilePath) == invalid,
+                "confirmed corrupt JSON was not rebuilt in memory or was overwritten during reading");
+            reader.SaveJsonSync(reader.SerializeState(state), 2);
+            Require(Directory.GetFiles(scope.DirectoryPath, "data.failed_load.*.json")
+                    .Any(path => File.ReadAllText(path) == invalid) &&
+                    J(File.ReadAllText(reader.FilePath))["papers"] is JsonArray,
+                "rebuilding discarded the corrupt original or failed to persist empty state");
         }
+
+        using (var scope = new Scope())
+        {
+            Require(scope.Store.TryRefreshBackupFromPrimary(), "missing-primary test needs a backup");
+            var original = File.ReadAllBytes(scope.Store.BackupPath);
+            File.Delete(scope.Store.FilePath);
+            var reader = new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared);
+            var restored = reader.Load(out var initializedEmpty);
+            Require(!initializedEmpty && reader.NeedsStartupRecoverySave &&
+                    restored.Papers.Count == scope.Memory.Papers.Count,
+                "valid backup did not recover a missing primary");
+            reader.SaveJsonSync(reader.SerializeState(restored), 2);
+            Require(File.Exists(reader.FilePath) && File.ReadAllBytes(reader.BackupPath).SequenceEqual(original),
+                "restoring the missing primary damaged its backup");
+        }
+
+        using (var scope = new Scope())
+        {
+            // Neither damaged copy can be used, so both survive in recovery archives.
+            File.WriteAllText(scope.Store.FilePath, "{broken-primary");
+            File.WriteAllText(scope.Store.BackupPath, "{broken-backup");
+            var reader = new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared);
+            var state = reader.Load(out var initializedEmpty);
+            Require(initializedEmpty, "two corrupt copies were not rebuilt");
+            reader.SaveJsonSync(reader.SerializeState(state), 2);
+            Require(Directory.GetFiles(scope.DirectoryPath, "data.failed_load.*.json")
+                    .Any(path => File.ReadAllText(path) == "{broken-primary") &&
+                    Directory.GetFiles(scope.DirectoryPath, "data.backup.used_for_recovery.*.json")
+                    .Any(path => File.ReadAllText(path) == "{broken-backup"),
+                "rebuilding overwrote a damaged original without archiving it");
+        }
+
+        using (var scope = new Scope())
+        {
+            Require(scope.Store.TryRefreshBackupFromPrimary(), "busy-file fixture needs a valid backup");
+            var bytes = File.ReadAllBytes(scope.Store.FilePath);
+            using (var busy = new FileStream(scope.Store.FilePath,
+                FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+            {
+                var reader = new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared);
+                Throws<IOException>(() => reader.Load());
+            }
+            Require(File.ReadAllBytes(scope.Store.FilePath).SequenceEqual(bytes),
+                "a busy primary was treated as corrupt and restored over");
+        }
+
+        using (var scope = new Scope())
+        {
+            Require(scope.Store.TryRefreshBackupFromPrimary(), "busy backup fixture needs a valid backup");
+            File.WriteAllText(scope.Store.FilePath, "{broken-primary");
+            using (var busy = new FileStream(scope.Store.BackupPath,
+                FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+            {
+                var reader = new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared);
+                Throws<IOException>(() => reader.Load());
+            }
+            Require(File.ReadAllText(scope.Store.FilePath) == "{broken-primary",
+                "an inaccessible backup incorrectly authorized a blank replacement");
+        }
+
         using var directoryPath = new Scope();
         File.Delete(directoryPath.Store.FilePath);
         Directory.CreateDirectory(directoryPath.Store.FilePath);

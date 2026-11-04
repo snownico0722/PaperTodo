@@ -20,6 +20,7 @@ public sealed partial class AppController
     private enum SettingsPage
     {
         General,
+        Workspaces,
         Todo,
         Note,
         Visual,

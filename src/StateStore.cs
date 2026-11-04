@@ -28,91 +28,80 @@ public sealed partial class StateStore
     }
 
     internal StateStore(string dataDirectory, IDurableAtomicFileWriter atomicWriter)
+        : this(dataDirectory, atomicWriter, 1) { }
+
+    internal StateStore(string dataDirectory, IDurableAtomicFileWriter atomicWriter, int workspaceNumber)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(dataDirectory);
         ArgumentNullException.ThrowIfNull(atomicWriter);
-
-        FilePath = Path.Combine(dataDirectory, "data.json");
-        BackupPath = Path.Combine(dataDirectory, "data.backup.json");
+        var paths = new WorkspacePaths(dataDirectory, workspaceNumber);
+        WorkspaceNumber = workspaceNumber;
+        FilePath = paths.Data;
+        BackupPath = paths.Backup;
         _atomicWriter = atomicWriter;
     }
 
     public string FilePath { get; }
     public string BackupPath { get; }
     private bool _preserveRecoveredLoadFilesOnNextSave;
+    private bool _preserveOrphanedTempsOnNextSave;
+    internal bool NeedsStartupRecoverySave { get; private set; }
+    internal bool NormalizedCollapsedStateOnLoad { get; private set; }
     private string? _preservedFailedPrimaryPath;
     private string? _preservedRecoveryBackupPath;
 
-    public AppState Load()
+    public AppState Load() => Load(out _);
+
+    // Only malformed state JSON permits recovery/reinitialization. File sharing,
+    // permissions and other I/O failures must reach the caller unchanged.
+    internal AppState Load(out bool initializedEmpty)
     {
+        initializedEmpty = false;
+        NeedsStartupRecoverySave = false;
+        NormalizedCollapsedStateOnLoad = false;
         ClearRecoveredLoadPreservationState();
-        bool mainExists = FileExistsForCollection(FilePath);
-        bool backupExists = FileExistsForCollection(BackupPath);
-
-        if (!mainExists && !backupExists)
-        {
-            // A killed first write may leave the only user data in its temp file.
-            // Do not promote an uncommitted temp, but do not silently start an empty
-            // document that would overwrite it on the next ordinary save either.
-            if (FileExistsForCollection(FilePath + ".tmp") || FileExistsForCollection(BackupPath + ".tmp"))
-                throw new InvalidDataException(Strings.Get("StateLoadFailed"));
-            return new AppState();
-        }
-
-        Exception? mainEx = null;
+        var mainExists = FileExistsForCollection(FilePath);
         if (mainExists)
         {
-            try
-            {
-                var primaryBytes = File.ReadAllBytes(FilePath);
-                var json = DecodeStateBytes(primaryBytes);
-                var state = ReadCoreState(json);
-                if (state != null)
-                {
-                    MigrateLegacyTopBarSettings(state, json);
-                    NormalizeAfterLoad(state);
-                    return state;
-                }
-
-                mainEx = new InvalidDataException($"{Path.GetFileName(FilePath)} deserialized to null.");
-            }
-            catch (Exception ex)
-            {
-                mainEx = ex;
-            }
+            try { return ReadLoadDocument(FilePath); }
+            catch (JsonException) { /* Confirmed corrupt; try the backup. */ }
         }
 
-        Exception? backupEx = null;
+        var backupExists = FileExistsForCollection(BackupPath);
         if (backupExists)
         {
             try
             {
-                var json = File.ReadAllText(BackupPath);
-                var state = ReadCoreState(json);
-                if (state != null)
-                {
-                    if (mainExists)
-                    {
-                        _preserveRecoveredLoadFilesOnNextSave = true;
-                    }
-
-                    MigrateLegacyTopBarSettings(state, json);
-                    NormalizeAfterLoad(state);
-                    return state;
-                }
-
-                backupEx = new InvalidDataException($"{Path.GetFileName(BackupPath)} deserialized to null.");
+                var restored = ReadLoadDocument(BackupPath);
+                _preserveRecoveredLoadFilesOnNextSave = mainExists;
+                NeedsStartupRecoverySave = true;
+                return restored;
             }
-            catch (Exception ex)
-            {
-                backupEx = ex;
-            }
+            catch (JsonException) { /* Backup is also corrupt; rebuild. */ }
         }
 
-        var innerEx = mainEx ?? backupEx;
-        throw new InvalidOperationException(
-            Strings.Get("StateLoadFailed"),
-            innerEx);
+        // Do not block an empty workspace on image/plugin data or historical files.
+        // Keep any corrupt primary/backup before the next ordinary save replaces it.
+        _preserveRecoveredLoadFilesOnNextSave = mainExists || backupExists;
+        _preserveOrphanedTempsOnNextSave =
+            File.Exists(FilePath + ".tmp") || File.Exists(BackupPath + ".tmp");
+        initializedEmpty = true;
+        NeedsStartupRecoverySave = true;
+        return new AppState();
+    }
+
+    private AppState ReadLoadDocument(string path)
+    {
+        var json = DecodeStateBytes(File.ReadAllBytes(path));
+        var state = ReadCoreState(json)
+            ?? throw new JsonException($"{Path.GetFileName(path)} deserialized to null.");
+        MigrateLegacyTopBarSettings(state, json);
+        // Keep track of normalization that changes visible paper presentation.
+        // It happens before the workspace UI restore can detect its own changes.
+        var collapsedBefore = state.Papers?.Where(p => p?.IsCollapsed == true).ToArray();
+        NormalizeWorkspaceDocument(state);
+        NormalizedCollapsedStateOnLoad = collapsedBefore?.Any(p => !p.IsCollapsed) == true;
+        return state;
     }
 
     internal bool TryCollectProtectedImageIds(
@@ -143,17 +132,17 @@ public sealed partial class StateStore
                 directory = AppContext.BaseDirectory;
             }
 
-            foreach (var path in Directory.EnumerateFiles(directory, "data.failed_load.*.json"))
+            foreach (var path in Directory.EnumerateFiles(directory, DocumentStem + ".failed_load.*.json"))
             {
                 paths.Add(path);
             }
-            foreach (var path in Directory.EnumerateFiles(directory, "data.backup.used_for_recovery.*.json"))
+            foreach (var path in Directory.EnumerateFiles(directory, DocumentStem + ".backup.used_for_recovery.*.json"))
             {
                 paths.Add(path);
             }
             // Recovery includes rejected local/baseline values, not just the external file.
             // Half-written archives also disable GC until they can be inspected safely.
-            foreach (var path in Directory.EnumerateFiles(directory, "dataconflict-" + "*.json*"))
+            foreach (var path in Directory.EnumerateFiles(directory, ConflictFilePrefix + "*.json*"))
             {
                 if (path.EndsWith(".json", StringComparison.OrdinalIgnoreCase) ||
                     path.EndsWith(".json.tmp", StringComparison.OrdinalIgnoreCase)) paths.Add(path);
@@ -261,11 +250,8 @@ public sealed partial class StateStore
     private readonly SemaphoreSlim _writeLock = new(1, 1);
     private long _latestWrittenVersion = 0;
 
-    public string SerializeState(AppState state)
-    {
-        PrepareForSave(state);
-        return JsonSerializer.Serialize(state, JsonOptions);
-    }
+    public string SerializeState(AppState state) =>
+        SerializeRawState(ProjectForPersistence(state));
 
     public void SaveJsonSync(string json, long version)
     {
@@ -311,7 +297,6 @@ public sealed partial class StateStore
         try
         {
             WriteLifetime.ThrowIfStopped();
-            // A recovered startup state must preserve its source files on its first save.
             if (_preserveRecoveredLoadFilesOnNextSave ||
                 !TryReadValidatedStateBytes(FilePath, out var primaryBytes))
                 return false;
@@ -329,10 +314,7 @@ public sealed partial class StateStore
                 beforeReplace: WriteLifetime.ThrowIfStopped);
             return true;
         }
-        catch
-        {
-            return false;
-        }
+        catch { return false; }
         finally { _writeLock.Release(); }
     }
 
@@ -352,6 +334,7 @@ public sealed partial class StateStore
         {
             ClearRecoveredLoadPreservationState();
         }
+        NeedsStartupRecoverySave = false;
     }
 
     private static bool TryReadValidatedStateBytes(string path, out byte[] bytes)
@@ -388,17 +371,33 @@ public sealed partial class StateStore
 
     private bool PreserveRecoveredLoadFilesIfNeeded(Action validateWrite)
     {
-        if (!_preserveRecoveredLoadFilesOnNextSave)
+        if (!_preserveRecoveredLoadFilesOnNextSave && !_preserveOrphanedTempsOnNextSave)
         {
             return false;
         }
 
-        if (File.Exists(FilePath) && string.IsNullOrWhiteSpace(_preservedFailedPrimaryPath))
+        if (_preserveOrphanedTempsOnNextSave)
+        {
+            // A previous interrupted first write is recovery evidence, not a reason
+            // to refuse a new workspace. Archive it before the atomic writer reuses .tmp.
+            foreach (var path in new[] { FilePath + ".tmp", BackupPath + ".tmp" })
+            {
+                // Historical temps are best-effort only: they must not veto an
+                // otherwise valid new-workspace initialization or recovery.
+                if (!File.Exists(path)) continue;
+                try { CopyRecoverySource(path, "orphaned", validateWrite); }
+                catch (IOException) { }
+                catch (UnauthorizedAccessException) { }
+            }
+            _preserveOrphanedTempsOnNextSave = false;
+        }
+
+        if (FileExistsForCollection(FilePath) && string.IsNullOrWhiteSpace(_preservedFailedPrimaryPath))
         {
             _preservedFailedPrimaryPath = CopyRecoverySource(FilePath, "failed_load", validateWrite);
         }
 
-        if (File.Exists(BackupPath) && string.IsNullOrWhiteSpace(_preservedRecoveryBackupPath))
+        if (FileExistsForCollection(BackupPath) && string.IsNullOrWhiteSpace(_preservedRecoveryBackupPath))
         {
             _preservedRecoveryBackupPath = CopyRecoverySource(BackupPath, "used_for_recovery", validateWrite);
         }
@@ -437,6 +436,7 @@ public sealed partial class StateStore
     private void ClearRecoveredLoadPreservationState()
     {
         _preserveRecoveredLoadFilesOnNextSave = false;
+        _preserveOrphanedTempsOnNextSave = false;
         _preservedFailedPrimaryPath = null;
         _preservedRecoveryBackupPath = null;
     }

@@ -60,7 +60,9 @@ public sealed partial class AppController
                 State.McpAllowFullWrites,
                 State.McpAllowDeletes);
             var target = CodexMcpPermission.FullAccess;
+            if (IsWorkspaceSwitching) return false;
             if (previous == target) return true;
+            if (FollowsMainWorkspaceSettings) return false;
 
             State.McpEnabled = target.Enabled;
             State.McpAllowBlankWrites = target.BlankWrites;

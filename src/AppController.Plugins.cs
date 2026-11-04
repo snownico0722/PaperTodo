@@ -206,6 +206,7 @@ public sealed partial class AppController
             Width = new GridLength(1, GridUnitType.Star)
         });
         var stateSwitch = CreatePluginStateSwitch(descriptor);
+        stateSwitch.Button.IsEnabled = !FollowsMainWorkspaceSettings;
         Grid.SetColumn(stateSwitch.Button, 0);
         titleRow.Children.Add(stateSwitch.Button);
 

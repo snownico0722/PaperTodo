@@ -1,5 +1,8 @@
 # PaperTodo 插件开发
 
+工作区状态还包含 `WorkspaceNumber`、`DataFileName` 和 `FollowsMainSettings`。获准外部编辑前先查询活动文件名：`data.json` 始终是主工作区，`reload_data` / `merge_data` 只处理当前活动工作区，不负责切换。
+
+
 **语言：简体中文 | [English](README.md)**
 
 本文是 **当前 PaperTodo 插件开发手册**。以当前可用的插件合同、运行边界、构建方式和示例为主，并提供精简的 API 版本历史与兼容摘要；完整历史取舍仍以 `doc/DECISIONS.md` 为准。

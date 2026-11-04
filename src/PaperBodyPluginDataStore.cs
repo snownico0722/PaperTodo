@@ -15,7 +15,7 @@ internal sealed class PaperBodyStoredState
 /// PaperTodo-managed plugin persistence. One JSON file stores one plugin's global settings and
 /// all of its per-paper state. These files are deliberately separate from data.json and its backup.
 /// </summary>
-internal sealed class PaperBodyPluginDataStore : IDisposable
+internal sealed partial class PaperBodyPluginDataStore : IDisposable
 {
     internal const int MaximumPaperStateBytes = 10 * 1024 * 1024;
     internal const int MaximumPluginRuntimeStateBytes = 20 * 1024 * 1024;
@@ -653,7 +653,7 @@ internal sealed class PaperBodyPluginDataStore : IDisposable
     }
 
     private void ThrowIfDisposed() =>
-        ObjectDisposedException.ThrowIf(_disposed, this);
+        ObjectDisposedException.ThrowIf(_disposed || _workspaceDetached, this);
 
     public void Dispose()
     {

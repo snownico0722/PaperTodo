@@ -9,7 +9,7 @@ public sealed partial class AppController
     private PaperSettingsService? _publicSettings;
     internal PaperSettingsService PublicSettings => _publicSettings ??= new(
         CreatePublicSettingsCatalog(), () => IsRunning,
-        TryCommitExternalMutation, RunExternalPostCommitUi);
+        TryCommitExternalMutation, RunExternalPostCommitUi, () => WorkspaceSettingsUnavailable);
 
     private enum SettingEffects
     {
