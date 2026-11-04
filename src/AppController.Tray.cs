@@ -593,35 +593,39 @@ public sealed partial class AppController
             IsEnabled = !_workspaceSwitching
         };
         AutomationProperties.SetAutomationId(item, "TrayWorkspaceSelector");
-        var content = new StackPanel
+
+        // One compact row, matching the settings page's rounded numeric segments.
+        var row = new Grid
         {
             MinWidth = 168,
-            Margin = new Thickness(3, 5, 3, 5)
+            Height = 26,
+            Margin = new Thickness(3, 0, 3, 0)
         };
-        content.Children.Add(new TextBlock
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        row.Children.Add(new TextBlock
         {
             Text = Strings.Get("WorkspaceSettingsTitle"),
             Foreground = TrayWeakTextBrush,
             FontSize = AppTypography.Scale(12),
             FontWeight = FontWeights.SemiBold,
-            Margin = new Thickness(1, 0, 0, 0)
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(1, 0, 9, 0)
         });
-
-        void SetSecondRow(UIElement element)
+        var choices = new ContentPresenter
         {
-            if (content.Children.Count > 1) content.Children.RemoveAt(1);
-            content.Children.Add(element);
-        }
+            VerticalAlignment = VerticalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
+        Grid.SetColumn(choices, 1);
+        row.Children.Add(choices);
 
         void ShowConfirmation(int target)
         {
-            // Keep the workspace heading. Replace only the number blocks with the
-            // same inline confirm/cancel interaction formerly in the paper menu.
             var actions = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 6, 0, 0)
+                VerticalAlignment = VerticalAlignment.Center
             };
             actions.Children.Add(new TextBlock
             {
@@ -632,24 +636,24 @@ public sealed partial class AppController
                     "작업 공간 " + target + "(으)로 전환할까요?"),
                 Foreground = TrayTextBrush,
                 VerticalAlignment = VerticalAlignment.Center,
-                FontSize = AppTypography.Scale(11.5),
+                FontSize = AppTypography.Scale(11),
                 Margin = new Thickness(0, 0, 6, 0)
             });
             var confirm = PluginPageButton(SettingsSidebarLocalized(
                 "确定", "OK", "確定", "확인"));
-            confirm.MinWidth = 42;
-            confirm.Height = 26;
-            confirm.Padding = new Thickness(5, 2, 5, 2);
-            confirm.Margin = new Thickness(0, 0, 4, 0);
+            confirm.MinWidth = 39;
+            confirm.Height = 24;
+            confirm.Padding = new Thickness(4, 1, 4, 1);
+            confirm.Margin = new Thickness(0, 0, 3, 0);
             confirm.Click += (_, e) =>
             {
                 e.Handled = true;
                 InvokeTrayAction(menu, () => { _ = SwitchWorkspaceAsync(target); });
             };
             var cancel = PluginPageButton(Strings.Get("CommonCancel"));
-            cancel.MinWidth = 42;
-            cancel.Height = 26;
-            cancel.Padding = new Thickness(5, 2, 5, 2);
+            cancel.MinWidth = 39;
+            cancel.Height = 24;
+            cancel.Padding = new Thickness(4, 1, 4, 1);
             cancel.Click += (_, e) =>
             {
                 e.Handled = true;
@@ -657,13 +661,11 @@ public sealed partial class AppController
             };
             actions.Children.Add(confirm);
             actions.Children.Add(cancel);
-            SetSecondRow(actions);
+            choices.Content = actions;
         }
 
         void ShowChoices()
         {
-            // Reuse the settings page's bordered, rounded segment selector instead
-            // of introducing a second appearance for the same workspace tiles.
             var segments = WorkspaceOptions.SlotNumbers.Select(number => (
                 Key: number.ToString(System.Globalization.CultureInfo.InvariantCulture),
                 Label: number.ToString(UiLanguages.EffectiveCulture))).ToArray();
@@ -674,14 +676,14 @@ public sealed partial class AppController
                     var target = int.Parse(key, System.Globalization.CultureInfo.InvariantCulture);
                     if (target != WorkspaceNumber) ShowConfirmation(target);
                 });
-            selector.Margin = new Thickness(0, 6, 0, 0);
-            selector.Height = 30;
-            selector.MinWidth = 168;
-            SetSecondRow(selector);
+            selector.Margin = new Thickness(0);
+            selector.Height = 24;
+            selector.MinWidth = 128;
+            choices.Content = selector;
         }
 
         ShowChoices();
-        item.Header = content;
+        item.Header = row;
         item.Click += (_, e) => e.Handled = true;
         return item;
     }
