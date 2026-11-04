@@ -128,10 +128,14 @@ public sealed partial class AppController
             ? carried.Length * pitch - gap
             : floating ? PaperLayoutDefaults.CapsuleHeight : bodySlots * pitch - gap;
         var wallDistance = (side == DeepCapsuleSides.Left ? pointer.X - geometry.WorkArea.Left : geometry.WorkArea.Right - pointer.X) / geometry.DpiScaleX;
-        var candidates = boxes.Where(b => !IsCapsuleCollapseAllActiveForQueue(b.Key)).ToArray();
+        // A collapsed free queue is still a merge target, but its hit area is
+        // the visible master alone. Legacy single-edge collapse retains its old rule.
+        var candidates = drag.FreeQueues ? boxes.ToArray() :
+            IsCapsuleCollapseAllActiveForQueue(edge) ? [] : boxes.ToArray();
         var target = EdgeCapsuleFreeQueuePolicy.FindInsertion(candidates,
             drag.FreeQueues && State.UseCapsuleCollapseAll ? memberTop : top,
-            visibleHeight, wallDistance, pitch, gap, drag.HeldTargetKey);
+            visibleHeight, wallDistance, pitch, gap, drag.HeldTargetKey,
+            geometry.DeviceYToLocalDip(pointer.Y));
         // With the optional split mode off, cross-edge Ctrl movement retains legacy one-queue semantics.
         if (!drag.FreeQueues && edge != LiveEdgeOfQueueKey(drag.SourceKey) && boxes.Count > 0)
         {

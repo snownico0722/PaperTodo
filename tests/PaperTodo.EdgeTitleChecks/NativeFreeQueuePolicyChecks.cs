@@ -39,6 +39,29 @@ internal static class NativeFreeQueuePolicyChecks
             "a whole visible block can attach from above without its first member crossing the target");
         Require(EdgeCapsuleFreeQueuePolicy.FindInsertion([target], 304, 96, 500, pitch, gap) == null,
             "vertical alignment in the middle of the screen is not a magnetic hit");
+        var folded = new EdgeFreeQueueBox("|right#folded", 400, 5, true, 55, Collapsed: true);
+        Require(folded.Height(pitch, gap) == PaperLayoutDefaults.CapsuleHeight,
+            "a collapsed queue occupies only the visible master, not its old expanded slots");
+        Require(EdgeCapsuleFreeQueuePolicy.FindInsertion([folded], 390, 300, 10, pitch, gap,
+                    pointerTopDip: 415) is { Key: "|right#folded", Index: 5 },
+            "pointer near the visible master can append a carried queue into a collapsed target");
+        Require(EdgeCapsuleFreeQueuePolicy.FindInsertion([folded], 390, 300, 10, pitch, gap,
+                    pointerTopDip: 600) == null &&
+                EdgeCapsuleFreeQueuePolicy.FindInsertion([folded], 390, 300, 10, pitch, gap,
+                    pointerTopDip: 280) == null,
+            "the expanded-but-hidden member area is not a collapsed target even when the carried block overlaps it");
+        Require(EdgeCapsuleFreeQueuePolicy.FindInsertion([folded], 390, 300, 90, pitch, gap,
+                    pointerTopDip: 415) == null,
+            "collapsed merge also requires horizontal proximity to the visible master");
+        var belowFolded = target with { Key = "|right#below", TopDip = 470, MemberCount = 1 };
+        var foldedMerge = EdgeCapsuleFreeQueuePolicy.Insert([folded, belowFolded], folded.Key, 0, 2,
+            900, pitch, gap);
+        Require(foldedMerge.Accepted && foldedMerge.Index == folded.MemberCount &&
+                foldedMerge.TopDip == folded.TopDip && !foldedMerge.Tops.ContainsKey(belowFolded.Key),
+            "joining a collapsed master appends, preserves its head, and does not push neighbours through invisible slots");
+        Require(EdgeCapsuleFreeQueuePolicy.GhostSlotTop(foldedMerge, true, pitch, targetCollapsed: true) == folded.TopDip,
+            "collapsed-target feedback points to the visible master instead of an invisible insertion slot");
+
         var overlap = EdgeCapsuleFreeQueuePolicy.Place([target], 420, 1, 900, pitch, gap);
         Require(overlap.Accepted && overlap.TopDip == 420 && overlap.Tops[target.Key] == 320,
             "an independent drop keeps its exact anchor and moves only the intersecting neighbour");
@@ -106,6 +129,7 @@ internal static class NativeFreeQueuePolicyChecks
             };
             state.DeepCapsuleQueueStartTopMargins["|right#qa"] = 100;
             state.DeepCapsuleQueueStartTopMargins["|right#qb"] = 400;
+            state.CapsuleCollapseAllActiveQueues["|right#qb"] = true;
             File.WriteAllText(store.FilePath, store.SerializeState(state));
             var loaded = store.Load();
             Require(loaded.UseCapsuleFreeQueues && loaded.UseCapsuleCollapseAll, "free queues and master coexist after loading");
@@ -118,6 +142,8 @@ internal static class NativeFreeQueuePolicyChecks
             var disabled = store.Load();
             Require(disabled.Papers[0].CapsuleQueueId == "qa" && disabled.DeepCapsuleQueueStartTopMargins.ContainsKey("|right#qb"),
                 "disabling the mode preserves layout memory");
+            Require(disabled.CapsuleCollapseAllActiveQueues.TryGetValue("|right#qb", out var foldedChoice) && foldedChoice,
+                "disabling free queues also preserves the independent master's collapse memory");
             File.WriteAllText(store.FilePath, "{\"deepCapsuleMonitorDeviceName\":\"LEGACY-SECONDARY\",\"papers\":[{\"id\":\"legacy\"}]}");
             Require(store.Load().Papers[0].CapsuleMonitorDeviceName == "LEGACY-SECONDARY", "genuinely old papers still inherit the global anchor");
         }

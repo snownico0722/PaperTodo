@@ -86,7 +86,8 @@ public sealed partial class AppController
             ? pointer.X - geometry.WorkArea.Left : geometry.WorkArea.Right - pointer.X) / geometry.DpiScaleX;
         // A master remains a valid merge target even when its queue is collapsed.
         var target = EdgeCapsuleFreeQueuePolicy.FindInsertion(
-            boxes, requestedTop + pitch, count * pitch - gap, wallDistance, pitch, gap);
+            boxes, requestedTop + pitch, count * pitch - gap, wallDistance, pitch, gap,
+            pointerTopDip: geometry.DeviceYToLocalDip(pointer.Y));
         var decision = target is { } insert
             ? EdgeCapsuleFreeQueuePolicy.Insert(boxes, insert.Key, insert.Index, count,
                 geometry.LocalWorkAreaDip.Height, pitch, gap)

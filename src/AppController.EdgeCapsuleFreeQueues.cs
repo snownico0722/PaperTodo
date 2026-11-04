@@ -55,7 +55,7 @@ public sealed partial class AppController
             var liveEdge = LiveEdgeOfQueueKey(queue.Key);
             if (queue.Papers.Count == 0 || !EdgeCapsuleQueueIds.TryGetEdge(queue.Key, out var monitor, out _) ||
                 !WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(monitor, out var geometry)) continue;
-            var slots = queue.Papers.Count + (queue.HasMaster ? 1 : 0);
+            var collapsed = queue.HasMaster && IsCapsuleCollapseAllActiveForQueue(queue.Key);
             var savedMargin = DeepCapsuleStartTopMarginForQueueKey(queue.Key);
             var margin = anchors != null && anchors.TryGetValue(queue.Key, out var requested) ? requested : savedMargin;
             var restTop = EdgeCapsuleLayout.FreeQueueTopForIndex(0, margin, geometry.LocalWorkAreaDip, gap);
@@ -72,8 +72,13 @@ public sealed partial class AppController
                     ? Math.Max(preview.Size.HeightDip, PaperLayoutDefaults.CapsuleHeight) : PaperLayoutDefaults.CapsuleHeight;
                 members.Add(new(paper.Id, memberTop));
                 anchorDeltas[paper.Id] = anchorDelta;
-                top = Math.Min(top, memberTop);
-                bottom = Math.Max(bottom, memberTop + height);
+                // A collapsed queue occupies only its visible master: hidden member
+                // slots must not reserve space or act as collision obstacles.
+                if (!collapsed)
+                {
+                    top = Math.Min(top, memberTop);
+                    bottom = Math.Max(bottom, memberTop + height);
+                }
             }
             queues.Add(new(liveEdge, queue.Key, members, top, bottom, connected.Contains(monitor) ? 0 : 1, restTop));
         }
@@ -134,8 +139,14 @@ public sealed partial class AppController
                     geometry.LocalWorkAreaDip, DeepCapsuleGap) + placement.TopOffsetDip
                 : EdgeCapsuleLayout.TopForIndex(0, DeepCapsuleStartTopMarginForQueueKey(queue.Key),
                     geometry.LocalWorkAreaDip, placement.SlotCount, DeepCapsuleGap) + placement.TopOffsetDip;
-            var width = queue.Papers.Max(p => _windows.TryGetValue(p.Id, out var w) ? w.DeepCapsuleRestingVisibleWidth : 0);
-            groups.Add(new(queue.Key, queue.Papers.ToList(), new(queue.Key, top, queue.Papers.Count, queue.HasMaster, width), geometry));
+            var collapsed = queue.HasMaster && IsCapsuleCollapseAllActiveForQueue(queue.Key);
+            var width = collapsed
+                ? _masterCapsules.TryGetValue(queue.Key, out var master)
+                    ? master.DesiredDockedWidth : PaperLayoutDefaults.CapsuleWidth
+                : queue.Papers.Max(p => _windows.TryGetValue(p.Id, out var w)
+                    ? w.DeepCapsuleRestingVisibleWidth : 0);
+            groups.Add(new(queue.Key, queue.Papers.ToList(),
+                new(queue.Key, top, queue.Papers.Count, queue.HasMaster, width, collapsed), geometry));
         }
         return groups;
     }

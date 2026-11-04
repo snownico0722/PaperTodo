@@ -3024,7 +3024,13 @@ public sealed partial class AppController : IDisposable
             // Moving the visible members must not reset those papers when they return.
             if (State.Papers.Any(paper =>
                     string.Equals(PersistentQueueKey(paper), staleKey, StringComparison.Ordinal) ||
-                    string.Equals(QueueKey(paper), staleKey, StringComparison.Ordinal)))
+                    string.Equals(QueueKey(paper), staleKey, StringComparison.Ordinal) ||
+                    // While the optional split mode is off, keep the remembered
+                    // per-instance collapse choice just as we keep its position.
+                    // Re-enabling it should restore independently folded groups.
+                    !State.UseCapsuleFreeQueues && (
+                        string.Equals(InstanceQueueKey(paper), staleKey, StringComparison.Ordinal) ||
+                        string.Equals(PersistentInstanceQueueKey(paper), staleKey, StringComparison.Ordinal))))
             {
                 continue;
             }
@@ -3032,11 +3038,14 @@ public sealed partial class AppController : IDisposable
         }
     }
 
-    private string PersistentQueueKey(PaperData paper)
-    {
-        var edge = $"{paper.CapsuleMonitorDeviceName.Trim()}|{DeepCapsuleSides.Normalize(paper.CapsuleSide)}";
-        return State.UseCapsuleFreeQueues ? EdgeCapsuleQueueIds.Compose(edge, paper.CapsuleQueueId) : edge;
-    }
+    private static string PersistentInstanceQueueKey(PaperData paper) =>
+        EdgeCapsuleQueueIds.Compose(
+            $"{paper.CapsuleMonitorDeviceName.Trim()}|{DeepCapsuleSides.Normalize(paper.CapsuleSide)}",
+            paper.CapsuleQueueId);
+
+    private string PersistentQueueKey(PaperData paper) =>
+        State.UseCapsuleFreeQueues ? PersistentInstanceQueueKey(paper) :
+        $"{paper.CapsuleMonitorDeviceName.Trim()}|{DeepCapsuleSides.Normalize(paper.CapsuleSide)}";
 
     private bool TryGetDisconnectedQueueFallbackKey(string queueKey, out string fallbackKey)
     {

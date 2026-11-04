@@ -2060,7 +2060,7 @@ Free queue identities already exist, so a side-wide master made independent grou
 
 ### Consequences
 
-Collapse state and master lookup are keyed by the same queue instance identity as papers and saved anchors. Each queue reserves its own master slot; passive collision spacing still remains display-only. The master gesture changes a single group, while ordinary Ctrl dragging remains available. Previous side-wide collection semantics in D-066 are superseded by this decision; its direct-manipulation and no-global-solver rules remain accepted.
+Collapse state and master lookup are keyed by the same queue instance identity as papers and saved anchors. Temporarily disabling free queues retains each instance's collapse choice, just as it retains its grouping and position. Each queue reserves its own master slot; when collapsed, only its visible master occupies space and accepts a merge. The invisible area where expanded members used to appear is never a hit target. This applies equally to master dragging and Ctrl whole-queue dragging. A collapsed-target merge appends members, keeps the target master and collapse choice, and previews over that one visible slot. Passive collision spacing still remains display-only. Previous side-wide collection semantics in D-066 are superseded by this decision; its direct-manipulation and no-global-solver rules remain accepted.
 
 ### Evidence
 

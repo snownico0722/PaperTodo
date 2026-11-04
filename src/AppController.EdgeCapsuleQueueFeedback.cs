@@ -17,15 +17,20 @@ public sealed partial class AppController
 
         var target = NativeQueueGroups().FirstOrDefault(g => g.Key == drop.DestinationKey);
         var pitch = EdgeCapsuleLayout.SlotHeight(DeepCapsuleGap);
+        var collapsedTarget = target?.Box.Collapsed == true;
         var top = EdgeCapsuleFreeQueuePolicy.GhostSlotTop(drop.Decision,
-            target?.Box.HasMaster == true, pitch);
+            target?.Box.HasMaster == true, pitch, collapsedTarget);
         if (State.UseCapsuleCollapseAll && drop.Decision.Kind == EdgeFreeQueueDropKind.Move)
             top += pitch; // The new queue's master owns slot zero; the silhouette shows papers.
         var width = target?.Box.WidthDip ??
             drag.CarriedIds.Select(id => _windows.TryGetValue(id, out var window)
                 ? window.DeepCapsuleRestingVisibleWidth : PaperLayoutDefaults.CapsuleWidth).DefaultIfEmpty(PaperLayoutDefaults.CapsuleWidth).Max();
-        _nativeQueueDropGhost?.ShowAt(geometry, side, top, drag.CarriedIds.Length,
-            Math.Max(PaperLayoutDefaults.CapsuleWidth, width), DeepCapsuleGap);
+        // A folded destination has just one visible slot: indicate its master,
+        // never render a ghost along the invisible expanded member positions.
+        _nativeQueueDropGhost?.ShowAt(geometry, side, top,
+            collapsedTarget ? 1 : drag.CarriedIds.Length,
+            collapsedTarget ? width : Math.Max(PaperLayoutDefaults.CapsuleWidth, width),
+            DeepCapsuleGap);
     }
 
     // Visual-only adhesion. The solver and final release always use the physical pointer,
@@ -42,7 +47,7 @@ public sealed partial class AppController
         if (drag.Drop is not { Decision.Kind: EdgeFreeQueueDropKind.Insert } drop) return requestedTop;
         var target = NativeQueueGroups().FirstOrDefault(g => g.Key == drop.DestinationKey);
         var slotTop = EdgeCapsuleFreeQueuePolicy.GhostSlotTop(drop.Decision,
-            target?.Box.HasMaster == true, pitch);
+            target?.Box.HasMaster == true, pitch, target?.Box.Collapsed == true);
         var offset = drag.WholeQueue
             ? drag.OwnerOffsetDip - (State.UseCapsuleCollapseAll ? pitch : 0) : 0;
         var ownerTop = slotTop + offset;

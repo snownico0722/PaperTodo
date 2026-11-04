@@ -137,6 +137,38 @@ internal static class NativeFreeQueueChecks
                 c.State.Papers.Where(p => p.CapsuleQueueId != "qb")
                     .All(p => !windows[p.Id].IsCollapseAllRetracted),
             "toggling one master retracts only its own members");
+        // Turning the optional free mode off must not discard an individual
+        // queue's collapsed choice. Legacy mode can temporarily use a side-wide master.
+        c.State.UseCapsuleFreeQueues = false;
+        c.ArrangeDeepCapsules(false);
+        await Idle();
+        Require(c.State.CapsuleCollapseAllActiveQueues.TryGetValue("|right#qb", out var rememberedFold) &&
+                rememberedFold, "legacy mode retains the free queue's remembered collapsed state");
+        c.State.UseCapsuleFreeQueues = true;
+        c.ArrangeDeepCapsules(false);
+        await Idle();
+        Require(masters.Count == 3 && windows[b.Id].IsCollapseAllRetracted &&
+                !windows[a.Id].IsCollapseAllRetracted,
+            "returning to free mode restores only the previously folded queue");
+
+        // A collapsed target accepts Ctrl-whole-queue drops only near its
+        // visible master, never over its hidden expanded member positions.
+        var foldedMasterTop = masters["|right#qb"].AnchorTop;
+        Require(c.BeginNativeEdgeQueueDrag(a, true, Point(Top(a)), false),
+            "begin Ctrl whole-queue probe against folded target");
+        c.PreviewNativeEdgeQueueDrag(a, Point(foldedMasterTop + 3 * pitch), Top(a), true);
+        var phantomDrop = ((NativeEdgeQueueDrag)Part(c, "_nativeEdgeQueueDrag")).Drop;
+        Require(phantomDrop?.DestinationKey != "|right#qb" ||
+                phantomDrop.Decision.Kind != EdgeFreeQueueDropKind.Insert,
+            "hidden member region is not a folded queue merge target");
+        c.PreviewNativeEdgeQueueDrag(a, Point(foldedMasterTop), Top(a), true);
+        var masterDrop = ((NativeEdgeQueueDrag)Part(c, "_nativeEdgeQueueDrag")).Drop;
+        Require(masterDrop?.Decision.Kind == EdgeFreeQueueDropKind.Insert &&
+                masterDrop.DestinationKey == "|right#qb",
+            "Ctrl whole-queue merges when the pointer reaches the visible master");
+        c.EndNativeEdgeQueueDrag(a.Id);
+        await Idle();
+
         c.ToggleCapsuleCollapseAllActive("|right#qb");
         await Idle();
         Require(windows.Values.All(w => !w.IsCollapseAllRetracted) &&
@@ -256,6 +288,15 @@ internal static class NativeFreeQueueChecks
         c.ToggleCapsuleCollapseAllActive("|right#qn");
         await Idle();
         var mergeMasterTop = masters["|right#qn"].AnchorTop;
+        Require(c.TryBeginMasterCapsuleQueueTransfer("", EdgeCapsuleEdge.Right,
+            masters["|right#qm"].AnchorTop, out var phantomTransfer, sourceQueueKey: "|right#qm"),
+            "begin master drag toward a folded queue's old member area");
+        Require(c.CommitMasterCapsuleQueueTransfer(phantomTransfer, Point(mergeMasterTop + 3 * pitch)),
+            "independent drop in hidden member area succeeds without merging");
+        await Idle();
+        Require(masters.Count == 2 && masters.ContainsKey("|right#qm") &&
+                masters.ContainsKey("|right#qn"),
+            "master drag cannot merge into a collapsed queue through invisible slots");
         Require(c.TryBeginMasterCapsuleQueueTransfer("", EdgeCapsuleEdge.Right,
             masters["|right#qm"].AnchorTop, out var mergeTransfer, sourceQueueKey: "|right#qm"),
             "begin one-master merge into another master");
