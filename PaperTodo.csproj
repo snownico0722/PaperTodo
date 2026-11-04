@@ -78,13 +78,13 @@
     <ProjectReference Include="vendor\wpf-notifyicon\src\NotifyIconWpf\NotifyIconWpf.csproj" />
     <PackageReference Include="AvalonEdit" Version="6.3.1.120" />
     <!-- Markdig is the semantic parser only; AvalonEdit remains the source document and renderer. -->
-    <PackageReference Include="Markdig" Version="1.4.2" />
+    <PackageReference Include="Markdig" Version="1.5.1" />
     <!-- Keep restore inputs independent of publish options, including publishing without restoring. -->
     <PackageReference Include="Fody" Version="6.9.3" PrivateAssets="all" />
     <PackageReference Include="Costura.Fody" Version="6.2.0" PrivateAssets="all" />
-    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.13" />
-    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4258.31" />
-    <PackageReference Include="ModelContextProtocol" Version="2.2.0" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.14" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4314.35" />
+    <PackageReference Include="ModelContextProtocol" Version="2.3.1" />
     <!-- DirectComposition wraps live layered WPF capsule HWNDs without per-frame pixel copies or
          the Windows App SDK runtime. Opening captures one compact shell; the queue proxy is
          transient and falls back to the normal HWND path when a surface cannot be created. -->
