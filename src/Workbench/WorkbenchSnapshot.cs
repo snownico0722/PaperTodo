@@ -4,7 +4,7 @@ namespace PaperTodo;
 // plugins, image stores, recovery flows or write-enabled StateStore sessions for an overview.
 internal sealed record WorkbenchPaperSnapshot(
     string Id, string Title, string Summary, string Kind, string Affinity, string BindingTitle,
-    double Width, double Height, WorkbenchCardState? Placement);
+    double Width, double Height, WorkbenchCardState? Placement, bool DesktopVisible);
 internal sealed record WorkbenchWorkspaceSnapshot(
     int Number, IReadOnlyList<WorkbenchPaperSnapshot> Papers,
     IReadOnlyList<WorkbenchLayoutEdge> Edges, string? Error = null)
