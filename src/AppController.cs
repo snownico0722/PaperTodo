@@ -1134,7 +1134,7 @@ public sealed partial class AppController : IDisposable
         _paperLinkTargetItemId = null;
     }
 
-    private PaperData? FindPaper(string? paperId)
+    internal PaperData? FindPaper(string? paperId)
     {
         if (string.IsNullOrWhiteSpace(paperId))
         {

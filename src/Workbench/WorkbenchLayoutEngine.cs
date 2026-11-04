@@ -293,7 +293,8 @@ internal static class WorkbenchLayoutEngine
         var map = cards.ToDictionary(p => p.Key, p => new Node(CurveFactory.CreateRectangle(
             p.Value.Width, p.Value.Height, new MsPoint(p.Value.Center.X, -p.Value.Center.Y))), StringComparer.Ordinal);
         foreach (var pair in cards.OrderBy(p => p.Key, StringComparer.Ordinal)) graph.Nodes.Add(map[pair.Key]);
-        foreach (var edge in edges) graph.Edges.Add(new Edge(map[edge.From], map[edge.To]));
+        var routedEdges = edges.Select(edge => new Edge(map[edge.From], map[edge.To])).ToArray();
+        foreach (var edge in routedEdges) graph.Edges.Add(edge);
         if (!conflictingPins)
         {
             var cancel = new CancelToken();
@@ -305,7 +306,7 @@ internal static class WorkbenchLayoutEngine
         {
             token.ThrowIfCancellationRequested();
             var edge = edges[i];
-            var curve = graph.Edges[i].Curve;
+            var curve = routedEdges[i].Curve;
             if (curve is null)
             {
                 // Overlapping hard pins have no obstacle-free route. Keep the relationship

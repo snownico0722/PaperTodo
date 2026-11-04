@@ -228,15 +228,16 @@ internal sealed class WorkbenchWindow : Window
     {
         _overviewCancellation?.Cancel(); _overviewCancellation?.Dispose();
         var cancellation = _overviewCancellation = new CancellationTokenSource();
+        var token = cancellation.Token;
         var generation = _controller.WorkspaceGeneration;
         try
         {
-            var snapshots = await _controller.ReadOtherWorkbenchWorkspacesAsync(cancellation.Token);
+            var snapshots = await _controller.ReadOtherWorkbenchWorkspacesAsync(token);
             foreach (var snapshot in snapshots)
             {
                 var layout = await Task.Run(() => WorkbenchLayoutEngine.Calculate(snapshot.Nodes, snapshot.Edges,
-                    cancellationToken: cancellation.Token), cancellation.Token);
-                if (_closed || IsSuspended || cancellation.IsCancellationRequested || generation != _controller.WorkspaceGeneration) return;
+                    cancellationToken: token), token);
+                if (_closed || IsSuspended || token.IsCancellationRequested || generation != _controller.WorkspaceGeneration) return;
                 var scene = GetScene(snapshot.Number);
                 scene.Snapshot = snapshot; scene.Layout = layout;
                 foreach (var id in scene.Cards.Keys.ToArray()) RemoveCard(scene, id, false);
@@ -254,7 +255,15 @@ internal sealed class WorkbenchWindow : Window
                 var old = _scenes[number]; foreach (var id in old.Cards.Keys.ToArray()) RemoveCard(old, id, false);
                 _world.Children.Remove(old.Canvas); _scenes.Remove(number);
             }
-            ArrangeWorkspaces(); ApplySearch();
+            if (_closed || IsSuspended || token.IsCancellationRequested || generation != _controller.WorkspaceGeneration) return;
+            var oldOrigin = ActiveScene?.Origin;
+            ArrangeWorkspaces();
+            if (oldOrigin is { } previous && ActiveScene is { } active)
+            {
+                _pan.X += (previous.X - active.Origin.X) * _scale.ScaleX;
+                _pan.Y += (previous.Y - active.Origin.Y) * _scale.ScaleY;
+            }
+            ApplySearch();
         }
         catch (OperationCanceledException) { }
         catch (Exception ex) { if (!_closed) Report(ex); }
@@ -266,6 +275,7 @@ internal sealed class WorkbenchWindow : Window
         CancelLayout();
         var revision = _layoutRevision;
         var cancellation = _layoutCancellation = new CancellationTokenSource();
+        var token = cancellation.Token;
         var generation = _controller.WorkspaceGeneration;
         var snapshot = _controller.SnapshotCurrentWorkbench();
         try
@@ -273,8 +283,8 @@ internal sealed class WorkbenchWindow : Window
             var nodes = snapshot.Nodes;
             if (scope != null) nodes = nodes.Select(n => !scope.Contains(n.Id) && n.Previous != null ? n with { Pinned = true } : n).ToArray();
             var result = await Task.Run(() => WorkbenchLayoutEngine.Calculate(nodes, snapshot.Edges, arrange,
-                preferredId, cancellation.Token), cancellation.Token);
-            if (_closed || IsSuspended || _dragging || revision != _layoutRevision || generation != _controller.WorkspaceGeneration || cancellation.IsCancellationRequested) return;
+                preferredId, token), token);
+            if (_closed || IsSuspended || _dragging || revision != _layoutRevision || generation != _controller.WorkspaceGeneration || token.IsCancellationRequested) return;
             var scene = ActiveScene;
             if (scene == null || !result.Cards.Keys.ToHashSet(StringComparer.Ordinal).SetEquals(scene.Cards.Keys)) return;
             var firstLayout = scene.Layout == null;

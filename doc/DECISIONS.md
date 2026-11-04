@@ -13,7 +13,7 @@
 
 | ID | 主题 | Status | 领域 |
 | --- | --- | --- | --- |
-| D-001 | “桌面纸片”作为主要交互和对象边界 | Accepted | 产品边界 |
+| D-001 | “桌面纸片”作为主要交互和对象边界 | Extended by D-066 | 产品边界 |
 | D-002 | `data.json` 与 LMDB 分域 | Accepted | 持久化 |
 | D-003 | Crash boundary 不做强制最终保存 | Accepted | 持久化 / 恢复 |
 | D-004 | Paper body 通过 session 边界接入 | Accepted | 插件 |
@@ -75,6 +75,8 @@
 | D-064 | 固定编号工作区共用代码，不共用运行数据 | Accepted | 工作区 / 持久化 |
 | D-065 | DComp 视觉与 Win32 输入提交的非原子边界 | Accepted (historical findings; native-owner candidate deferred) | Edge input / composition |
 
+| D-066 | 可编辑无限工作台与单正文租借 | Accepted | 工作台 / 布局 / 生命周期 |
+
 ## 维护规则
 
 Decisions 的核心问题是：**“为什么今天会这样设计，以及哪些已经付过代价的路不要轻易重走？”**
@@ -100,7 +102,7 @@ Decisions 的核心问题是：**“为什么今天会这样设计，以及哪�
 
 ## D-001 — 保持“桌面纸片”作为主要交互和对象边界
 
-**Status:** Accepted
+**Status:** Extended by D-066（保留 paper 对象边界，增加可选全屏工作台）
 
 ### Decision
 
@@ -2027,3 +2029,28 @@ PR #319 的初版把主胶囊完整材质收展后的卡死解释为终点迟到
 - [固定实验源码](https://github.com/snownico0722/PaperTodo/blob/5aa796befa944b53bd0e1191ded2bd4fe89b0246/src/EdgeCapsuleQueueDedicatedInputOwner.cs)；[归档时主线的命中入口](https://github.com/snownico0722/PaperTodo/blob/f6041ca6b5ebd787a02aa8158c6e67660b421be0/src/EdgeCapsuleQueueProxyWindow.cs)。
 - [E-019 详细归档](experiments/edge-retained-proxy-archive-20261104.md)：固定版本、原始数值、纠正顺序、未完成项与过期日志的证据边界。
 
+
+---
+
+## D-066 — 可编辑无限工作台与单正文租借
+
+**Status:** Accepted；扩展 D-001 的呈现方式，不改变 paper 和 session 的 ownership。
+
+### Context
+
+新的交互目标是在同一空间内俯瞰多个工作区，并在当前工作区长期直接工作；强自动整理代替用户手工维护大量位置，不增加项目中心或另一套内容管理制度。
+
+### Decision / Why
+
+使用普通全屏 WPF 工作台，继续保留原桌面纸片模式。当前工作区租借原有正文 visual，而不是复制可写 ViewModel 或插件会话；其他工作区只读预览。这样正文、撤销和插件生命周期保持唯一 owner，代价是必须明确迁移输入根、焦点和关闭时的交接。
+
+选择 .NET MSAGL 的关系布局与路由算法，不引入 Java/JavaScript 布局运行时。产品所需的增量稳定性、用户位置偏好和硬锁定由独立几何层处理，不把第三方算法的交互参数当作这些承诺。通常新增纸片保留无冲突旧位置；整体整理才主动重排，硬锁定冲突明确反馈。
+
+虚线区域表达自动布局的关系邻域，而非内容归属；跨工作区查看不迁移纸片。工作台坐标属于本地空间元数据，与原窗口坐标分离。模式无需绑定系统壁纸层；没有建立第二套全局写入或插件运行时。
+
+### Evidence
+
+- `src/Workbench/WorkbenchLayoutEngine.cs`、`WorkbenchState.cs`、`WorkbenchWindow.cs`。
+- `src/PaperWindow.Workbench.cs`、`src/AppController.Workbench.cs`、`src/StateStore.Workbench.cs`。
+- `tests/PaperTodo.WorkbenchLayoutChecks` 与 `tests/PaperTodo.WorkbenchChecks`：几何约束、单正文身份、桌面还原和工作区切换隔离。
+- 算法来源：https://github.com/microsoft/automatic-graph-layout；备选评估：https://eclipse.dev/elk/reference/algorithms/org-eclipse-elk-layered.html。

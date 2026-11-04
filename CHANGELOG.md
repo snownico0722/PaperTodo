@@ -20,6 +20,10 @@ This log is written for general and power users alike. It focuses on user-facing
 
 ### Unreleased
 
+#### Infinite workbench
+
+- Open a full-screen working desk from the tray or the configurable Workbench shortcut (suggested Ctrl+Alt+W; initially disabled). Edit the existing notes, to-dos and plugin papers in place, pan and zoom between workspace overviews, highlight search matches, create connections and pin cards. Automatic layout combines relationship-based arrangement, soft dashed neighborhoods, overlap avoidance and stable incremental placement; explicit arrangement can be undone without undoing content. Workbench positions are stored separately from desktop window geometry. Other workspaces remain read-only previews until activated through the normal workspace switch.
+
 #### Data Reliability
 
 - **Dynamic core JSON backups**: Keep up to four age-spaced restore points targeting the latest saved state (about 10 minutes), 6 hours, 3 days and 1 month. The first scan starts about one minute after startup, then runs every ten minutes independently of saving or workspace switching. Unreadable workspaces receive bounded retries and are skipped for that scan only. Unchanged files are not re-archived. Raw JSON files from all existing workspaces are archived without JSON validation; images and plugin files are excluded. Old snapshots are pruned only after publishing a complete new ZIP, with no unbounded rescue archive.
