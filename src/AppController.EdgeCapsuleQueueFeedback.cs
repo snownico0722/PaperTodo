@@ -22,15 +22,13 @@ public sealed partial class AppController
             target?.Box.HasMaster == true, pitch, collapsedTarget);
         if (State.UseCapsuleCollapseAll && drop.Decision.Kind == EdgeFreeQueueDropKind.Move)
             top += pitch; // The new queue's master owns slot zero; the silhouette shows papers.
-        var width = target?.Box.WidthDip ??
-            drag.CarriedIds.Select(id => _windows.TryGetValue(id, out var window)
-                ? window.DeepCapsuleRestingVisibleWidth : PaperLayoutDefaults.CapsuleWidth).DefaultIfEmpty(PaperLayoutDefaults.CapsuleWidth).Max();
-        // A folded destination has just one visible slot: indicate its master,
-        // never render a ghost along the invisible expanded member positions.
-        _nativeQueueDropGhost?.ShowAt(geometry, side, top,
-            collapsedTarget ? 1 : drag.CarriedIds.Length,
-            collapsedTarget ? width : Math.Max(PaperLayoutDefaults.CapsuleWidth, width),
-            DeepCapsuleGap);
+        // This is a one-capsule landing marker, even when Ctrl carries a whole
+        // group. Use the actual dragged capsule width rather than the widest
+        // member/target; for folded queues the visible target is the master itself.
+        var ownerWidth = _windows.TryGetValue(drag.OwnerId, out var ownerWindow)
+            ? ownerWindow.DeepCapsuleRestingVisibleWidth : PaperLayoutDefaults.CapsuleWidth;
+        var width = collapsedTarget ? target!.Box.WidthDip : ownerWidth;
+        _nativeQueueDropGhost?.ShowAt(geometry, side, top, width);
     }
 
     // Visual-only adhesion. The solver and final release always use the physical pointer,

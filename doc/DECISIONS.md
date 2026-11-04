@@ -2043,7 +2043,7 @@ The controller owns one queue-level input snapshot and a prospective membership/
 
 Free queues and the master are independent settings. A single master per live edge collects/restores all groups while preserving their identities and anchors. Its docked movement previews an edge-wide rigid translation without writing intermediate positions; its floating transfer preserves grouping rather than flattening the destination. Ctrl works without a master and also when free queues are disabled. Existing overflow remains unpaged.
 
-The native drop feedback is driven by the existing drag callbacks and pooled host movement, not an additional polling timer or indicator HWND. The final release samples the physical pointer before committing. The floating cover is established before peers retract; peers return via the existing placement/retraction transitions.
+The native drop feedback is driven by the existing drag callbacks and pooled host movement, not an additional polling timer. The transparent landing marker draws exactly one normal capsule silhouette regardless of how many members Ctrl carries, using the visible target master's width only when the destination is collapsed. In free-queue mode the marker alone previews the prospective destination: unaffected queues and their masters do not shift with pointer movement. The actual local insertion and collision displacement happen on release. The final release samples the physical pointer before committing. The floating cover is established before peers retract; peers return via the existing placement/retraction transitions.
 
 
 ## D-067 - Free-queue masters follow queue identity (2026-11-04)

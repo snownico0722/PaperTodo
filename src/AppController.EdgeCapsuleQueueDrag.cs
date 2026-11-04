@@ -194,9 +194,17 @@ public sealed partial class AppController
     private void ApplyNativeEdgeQueuePreview(NativeEdgeQueueDrag drag, double ownerTopDip, bool floating)
     {
         if (drag.Drop is not { } drop) return;
-        var carried = drag.CarriedIds.ToHashSet(StringComparer.Ordinal);
-        foreach (var (id, placement) in drop.Preview.Placements)
-            if (!carried.Contains(id) && _windows.TryGetValue(id, out var window)) window.PreviewDeepCapsulePlacement(placement);
+        // In free-queue mode the ghost alone represents the proposed insertion.
+        // Do not move untouched queues on every pointer sample: inserting them
+        // into the prospective plan made the entire target follow the ghost.
+        // Their final displacement is applied by the normal arrange on release.
+        if (!drag.FreeQueues)
+        {
+            var carried = drag.CarriedIds.ToHashSet(StringComparer.Ordinal);
+            foreach (var (id, placement) in drop.Preview.Placements)
+                if (!carried.Contains(id) && _windows.TryGetValue(id, out var window))
+                    window.PreviewDeepCapsulePlacement(placement);
+        }
         if (drag.WholeQueue && !floating)
         {
             var members = State.Papers.Where(p => drag.SourceIds.Contains(p.Id)).ToList();
@@ -217,7 +225,22 @@ public sealed partial class AppController
                 window.PreviewDeepCapsulePlacement(placement with { TopOffsetDip = desired - baseTop }, animate: false);
             }
         }
-        RefreshNativeQueueMasters(drop.Preview.MasterTopsDip);
+        if (drag.FreeQueues)
+        {
+            // Ctrl still carries its own group (including its master) as one
+            // rigid block, without previewing movements of unrelated masters.
+            if (drag.WholeQueue && !floating &&
+                _masterCapsules.TryGetValue(drag.SourceKey, out var sourceMaster))
+            {
+                sourceMaster.SetQueueTopPreview(ownerTopDip - drag.OwnerOffsetDip);
+                sourceMaster.UpdateState(drag.SourceIds.Length,
+                    IsCapsuleCollapseAllActiveForQueue(drag.SourceKey), animate: false);
+            }
+        }
+        else
+        {
+            RefreshNativeQueueMasters(drop.Preview.MasterTopsDip);
+        }
     }
 
     internal void PrepareNativeEdgeQueueFloating(string ownerId)

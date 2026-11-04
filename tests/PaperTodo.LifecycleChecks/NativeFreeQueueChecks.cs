@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Text.Json;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Threading;
 using PaperTodo;
 
@@ -72,6 +73,37 @@ internal static class NativeFreeQueueChecks
         await Idle();
         var originalTargetTop = Top(b);
         var originalNextTargetTop = Top(bPeer);
+
+        // Merely hovering the landing marker over an interior insertion slot
+        // must not shove the target around before the user releases the mouse.
+        Require(c.BeginNativeEdgeQueueDrag(a, true, Point(100), false),
+            "begin single-slot ghost and deferred-neighbour preview");
+        var interiorTop = originalTargetTop + pitch;
+        Require(c.PreviewNativeEdgeQueueDrag(a, Point(interiorTop), interiorTop, false),
+            "whole-queue interior ghost preview handled");
+        var interiorDrop = ((NativeEdgeQueueDrag)Part(c, "_nativeEdgeQueueDrag")).Drop;
+        Require(interiorDrop?.Decision.Kind == EdgeFreeQueueDropKind.Insert &&
+                interiorDrop.DestinationKey == "|right#qb" &&
+                interiorDrop.Decision.Index == 1,
+            "the ghost selects the actual interior target without committing it");
+        Require(Math.Abs(Top(b) - originalTargetTop) < .1 &&
+                Math.Abs(Top(bPeer) - originalNextTargetTop) < .1,
+            "a ghost must not push untouched members of the target while dragging");
+        var ghost = (EdgeCapsuleQueueDropGhost)Part(c, "_nativeQueueDropGhost");
+        var ghostWindow = (Window)Part(ghost, "_window");
+        var ghostBody = (Border)Part(ghost, "_silhouette");
+        Require(ghostWindow.IsVisible && ghostWindow.Opacity > 0 &&
+                Math.Abs(ghostWindow.Height - PaperLayoutDefaults.CapsuleHeight) < .1 &&
+                Math.Abs(ghostWindow.Width - ownerWindow.DeepCapsuleRestingVisibleWidth) < .1 &&
+                Math.Abs(ghostBody.Height - (PaperLayoutDefaults.CapsuleHeight -
+                    2 * EdgeCapsuleLayout.WindowChromeMargin)) < .1 &&
+                Math.Abs(ghostBody.Margin.Top - EdgeCapsuleLayout.WindowChromeMargin) < .1,
+            "the landing marker is exactly one ordinary docked capsule, not a tall queue silhouette");
+        c.EndNativeEdgeQueueDrag(a.Id);
+        await Idle();
+        Require(Math.Abs(Top(bPeer) - originalNextTargetTop) < .1,
+            "cancelled ghost preview does not leave target members displaced");
+
         Require(c.BeginNativeEdgeQueueDrag(a, true, Point(100), false), "begin prepend");
         var headTop = originalTargetTop - (2 * pitch - c.DeepCapsuleGap);
         Require(c.PreviewNativeEdgeQueueDrag(a, Point(headTop), headTop, false), "prepend preview handled");
@@ -128,6 +160,25 @@ internal static class NativeFreeQueueChecks
         Require(masters.Count == 3 && masters.ContainsKey(aKey) &&
                 masters.ContainsKey("|right#qb") && masters.ContainsKey("|right#qc"),
             "every independent group has its own master on the same edge");
+        // With independent masters enabled, hovering over B must not preview
+        // its members or move B's master; only the dragged A group can follow.
+        var untouchedPeerTop = Top(bPeer);
+        var untouchedMasterTop = masters["|right#qb"].AnchorTop;
+        Require(c.BeginNativeEdgeQueueDrag(a, true, Point(Top(a)), false),
+            "begin free-queue ghost with independently visible masters");
+        var masterTargetTop = Top(b) + pitch;
+        Require(c.PreviewNativeEdgeQueueDrag(a, Point(masterTargetTop), masterTargetTop, false),
+            "master-enabled interior ghost preview handled");
+        var hoverDrop = ((NativeEdgeQueueDrag)Part(c, "_nativeEdgeQueueDrag")).Drop;
+        Require(hoverDrop?.Decision.Kind == EdgeFreeQueueDropKind.Insert &&
+                hoverDrop.DestinationKey == "|right#qb",
+            "master-enabled ghost identifies the existing target queue");
+        Require(Math.Abs(Top(bPeer) - untouchedPeerTop) < .1 &&
+                Math.Abs(masters["|right#qb"].AnchorTop - untouchedMasterTop) < .1,
+            "the target's actual capsules and master stay fixed until drop");
+        c.EndNativeEdgeQueueDrag(a.Id);
+        await Idle();
+
         var idsBeforeCollection = c.State.Papers.Select(p => p.CapsuleQueueId).ToArray();
         margins = new(c.State.DeepCapsuleQueueStartTopMargins);
         c.ToggleCapsuleCollapseAllActive("|right#qb");
