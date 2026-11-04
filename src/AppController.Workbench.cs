@@ -161,7 +161,12 @@ public sealed partial class AppController
         return true;
     }
 
-    internal void CloseWorkbenchForDesktopAction() => _workbenchWindow?.Close();
+    // An internal reload/switch temporarily suspends the desk. Only an explicit desktop
+    // action while the desk is active should close it.
+    internal void CloseWorkbenchForDesktopAction()
+    {
+        if (_workbenchWindow is { IsSuspended: false } window) window.Close();
+    }
     private void SuspendWorkbench() => _workbenchWindow?.SuspendWorkspace();
     private void HideWorkbenchMasterCapsules()
     {
