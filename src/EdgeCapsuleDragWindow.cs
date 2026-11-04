@@ -216,21 +216,6 @@ internal sealed partial class EdgeCapsuleDragWindow : Window
         }
     }
 
-    internal void BeginDragBackground()
-    {
-        if (_paperBackground is SkinBorder skin) skin.BeginDragBackground();
-    }
-
-    internal void UseDragBackground(DesktopBackgroundCapture.Snapshot snapshot)
-    {
-        if (_paperBackground is SkinBorder skin) skin.UseDragBackground(snapshot);
-    }
-
-    internal void EndDragBackground()
-    {
-        if (_paperBackground is SkinBorder skin) skin.EndDragBackground();
-    }
-
     public void ReturnToPool()
     {
         VerifyAccess();
@@ -255,7 +240,6 @@ internal sealed partial class EdgeCapsuleDragWindow : Window
         try
         {
             ParkHidden();
-            EndDragBackground();
             ResetTransientPresentation();
             s_pooledHostLeased = false;
 #if DEBUG

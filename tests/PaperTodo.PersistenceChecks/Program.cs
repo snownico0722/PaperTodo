@@ -499,7 +499,7 @@ internal sealed class FailingRecordingWriter : IDurableAtomicFileWriter
     public void Write(
         string targetPath,
         byte[] bytes,
-        Func<string, bool>? validateTemp = null)
+        Func<string, bool>? validateTemp = null, Action? beforeReplace = null)
     {
         lock (_gate)
         {
@@ -520,7 +520,7 @@ internal sealed class RecordingWriter : IDurableAtomicFileWriter
     public void Write(
         string targetPath,
         byte[] bytes,
-        Func<string, bool>? validateTemp = null)
+        Func<string, bool>? validateTemp = null, Action? beforeReplace = null)
     {
         WriteCount++;
     }

@@ -1,6 +1,4 @@
 using System;
-using System.Collections.Generic;
-using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
@@ -18,20 +16,14 @@ internal sealed class MaterialSurfaceHost : IDisposable
 {
     private readonly FrameworkElement _surface;
     private readonly Action<MaterialHostChange> _changed;
-    private readonly List<UIElement> _opacityOwners = new();
     private HwndSource? _source;
     private DispatcherOperation? _refresh;
     private MaterialHostChange _pending;
     private bool _disposed;
-    private static readonly DependencyPropertyDescriptor OpacityDescriptor =
-        DependencyPropertyDescriptor.FromProperty(UIElement.OpacityProperty, typeof(UIElement))!;
 
     internal MaterialSurfaceHost(FrameworkElement surface, Action<MaterialHostChange> changed) =>
         (_surface, _changed) = (surface, changed);
     internal bool IsObserving => _source is { IsDisposed: false };
-    internal bool IsVisible => IsObserving && DesktopBackgroundCapture.IsVisible(_source!.Handle) &&
-        _opacityOwners.TrueForAll(element => element.Opacity >= .999 && element.IsVisible);
-    internal IReadOnlyList<UIElement> OpacityOwners => _opacityOwners;
 
     internal void Observe(HwndSource? source)
     {
@@ -41,12 +33,6 @@ internal sealed class MaterialSurfaceHost : IDisposable
         if (source == null || source.IsDisposed) return;
         source.AddHook(WindowMessage);
         source.Disposed += OnSourceDisposed;
-        for (DependencyObject? node = _surface; node is Visual; node = VisualTreeHelper.GetParent(node))
-        {
-            if (node is not UIElement element) continue;
-            _opacityOwners.Add(element);
-            OpacityDescriptor.AddValueChanged(element, OnOpacityChanged);
-        }
     }
 
     private IntPtr WindowMessage(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam, ref bool handled)
@@ -58,9 +44,8 @@ internal sealed class MaterialSurfaceHost : IDisposable
         }
         else if (message == 0x0047 /* WM_WINDOWPOSCHANGED */)
         {
-            // WINDOWPOS also reports Z-order-only changes. A translation does not change
-            // the local capture region, DPI, opacity or material recipe. Read the native
-            // flags; WPF Left/Top are not synchronized yet at this message boundary.
+            // WINDOWPOS also reports Z-order-only changes. Use its native flags
+            // because WPF Left/Top may not be synchronized at this message boundary.
             Queue(lParam == IntPtr.Zero ? MaterialHostChange.Geometry | MaterialHostChange.Visibility
                 : ClassifyWindowPosition(Marshal.PtrToStructure<WindowPosition>(lParam).Flags));
         }
@@ -99,7 +84,7 @@ internal sealed class MaterialSurfaceHost : IDisposable
         if (change == MaterialHostChange.None) return;
         _pending |= change;
         if (_refresh != null || _disposed || _surface.Dispatcher.HasShutdownStarted) return;
-        // SHOWWINDOW/WindowChrome/DPI changes settle before reading WPF ancestry/opacity.
+        // SHOWWINDOW/WindowChrome/DPI changes settle before refreshing Aero parallax.
         // One pending operation per source, rather than independent paint/lifecycle queues.
         _refresh = _surface.Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
         {
@@ -110,7 +95,6 @@ internal sealed class MaterialSurfaceHost : IDisposable
         }));
     }
 
-    private void OnOpacityChanged(object? sender, EventArgs e) => Queue(MaterialHostChange.Visibility);
     private void OnSourceDisposed(object? sender, EventArgs e)
     {
         Detach();
@@ -119,8 +103,6 @@ internal sealed class MaterialSurfaceHost : IDisposable
     private void Detach()
     {
         _refresh?.Abort(); _refresh = null; _pending = MaterialHostChange.None;
-        foreach (var element in _opacityOwners) OpacityDescriptor.RemoveValueChanged(element, OnOpacityChanged);
-        _opacityOwners.Clear();
         if (_source != null)
         {
             _source.Disposed -= OnSourceDisposed;

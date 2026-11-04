@@ -98,6 +98,37 @@ public sealed class NoteImageStore : IDisposable
         }
     }
 
+    // Protect unresolved IDs without treating a missing picture as a workspace-load
+    // failure. A missing entire LMDB must not be replaced by a new empty store when
+    // its live or recovery documents still reference the former image IDs.
+    internal void ProtectPersistedImageReferences(
+        AppState state, IReadOnlySet<string>? protectedImageIds, bool hasPersistedDocument)
+    {
+        var referenced = state.Papers
+            .Where(paper => paper.Type == PaperTypes.Note)
+            .SelectMany(paper => MarkdownImageReferences.CollectImageIds(paper.Content))
+            .ToHashSet(StringComparer.Ordinal);
+        if (protectedImageIds != null) referenced.UnionWith(protectedImageIds);
+
+        lock (_gate)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            foreach (var id in referenced)
+            {
+                if (!_images.ContainsKey(id)) _retiredImageIds.Add(id);
+            }
+
+            // No loaded image database + references to historical pictures means that
+            // creating a fresh LMDB could reuse IDs or obscure recovery of the old one.
+            // An unreadable protection scan is likewise not permission to replace a
+            // missing store for an existing document. Only image WRITES are disabled.
+            if (_database == null && !File.Exists(FilePath) &&
+                (referenced.Count > 0 ||
+                 (hasPersistedDocument && protectedImageIds == null)))
+                _writeDisabled = true;
+        }
+    }
+
     public bool TryGetAsset(string imageId, out NoteImageAsset asset)
     {
         lock (_gate)
