@@ -51,6 +51,9 @@ public sealed partial class AppController
 
     private bool SetSettingFromUi<T>(string id, T value)
     {
+        // A following workspace may still receive a stale click from a settings tree
+        // being replaced. Do not convert a rejected inherited edit into a save warning.
+        if (FollowsMainWorkspaceSettings) { RefreshSettingsForChange(id); return false; }
         try { return PublicSettings.Set(id, System.Text.Json.JsonSerializer.SerializeToElement(value)).Changed; }
         catch (PaperSettingsException ex)
         {
