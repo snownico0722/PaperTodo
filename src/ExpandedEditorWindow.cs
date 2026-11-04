@@ -153,9 +153,11 @@ internal sealed class ExpandedEditorWindow : Window
     {
         if (!_finishing)
         {
-            e.Cancel = true;
-            CloseCurrentPaper();
-            return;
+            _finishing = true;
+            var paper = _current;
+            ReleaseCurrent(restoreDesktop: false);
+            if (paper != null && !paper.IsClosed)
+                _controller.HideExpandedEditorPaper(paper.PaperId);
         }
         base.OnClosing(e);
     }
