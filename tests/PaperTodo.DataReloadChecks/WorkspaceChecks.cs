@@ -898,17 +898,47 @@ internal static partial class Program
                 "settings workspace confirmation did not select slot 3");
             Require(await controller.SwitchWorkspaceAsync(1), "return after settings selection failed");
 
+            // The tray uses a two-line workspace section: a heading and the settings
+            // segment control. The second line changes in place to confirm/cancel.
             var trayMenu = controller.CreateTrayMenu();
             controller.RebuildTrayMenu(trayMenu);
             var workspaceMenu = trayMenu.Items.OfType<MenuItem>().Single(item =>
-                item.Items.Count == controller.WorkspaceOptions.Count &&
-                item.Header?.ToString()?.Contains("workspace", StringComparison.OrdinalIgnoreCase) == true);
-            Require(workspaceMenu.Items.Count == 5 &&
-                ((MenuItem)workspaceMenu.Items[0]).Header?.ToString()?.Contains("✓") == true,
-                "tray workspace submenu did not mark the current slot");
-            ((MenuItem)workspaceMenu.Items[3]).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+                AutomationProperties.GetAutomationId(item) == "TrayWorkspaceSelector");
+            var trayWorkspaceContent = (StackPanel)workspaceMenu.Header;
+            Require(trayWorkspaceContent.Children.Count == 2 &&
+                ((TextBlock)trayWorkspaceContent.Children[0]).Text == Strings.Get("WorkspaceSettingsTitle"),
+                "tray workspace heading must be on its own line");
+            Border TileStrip() => (Border)trayWorkspaceContent.Children[1];
+            var strip = TileStrip();
+            var tiles = ((Grid)strip.Child).Children.OfType<Border>().ToArray();
+            Require(tiles.Length == 5 &&
+                ((TextBlock)tiles[0].Child).Text == "1" &&
+                ((TextBlock)tiles[3].Child).Text == "4",
+                "tray workspace choices must be horizontal numbered segments without names");
+            void SelectTrayTile(int index)
+            {
+                var itemTile = ((Grid)TileStrip().Child).Children.OfType<Border>().ElementAt(index);
+                itemTile.RaiseEvent(new System.Windows.Input.MouseButtonEventArgs(
+                    System.Windows.Input.Mouse.PrimaryDevice, 0, System.Windows.Input.MouseButton.Left)
+                {
+                    RoutedEvent = UIElement.MouseLeftButtonDownEvent
+                });
+            }
+            SelectTrayTile(3);
+            Require(controller.WorkspaceNumber == 1 &&
+                trayWorkspaceContent.Children[1] is StackPanel,
+                "tray tile must show an inline confirmation before switching");
+            var confirmRow = (StackPanel)trayWorkspaceContent.Children[1];
+            var confirmationButtons = confirmRow.Children.OfType<Button>().ToArray();
+            Require(confirmationButtons.Length == 2, "tray confirmation needs OK and Cancel");
+            confirmationButtons[1].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Require(trayWorkspaceContent.Children[1] is Border && controller.WorkspaceNumber == 1,
+                "tray Cancel must restore the numeric segments without switching");
+            SelectTrayTile(3);
+            confirmRow = (StackPanel)trayWorkspaceContent.Children[1];
+            confirmRow.Children.OfType<Button>().First().RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             await Until(() => controller.WorkspaceNumber == 4 && !controller.IsWorkspaceSwitching,
-                "tray workspace submenu did not select slot 4");
+                "tray confirmation did not switch to the selected slot");
             Require(await controller.SwitchWorkspaceAsync(1), "return after tray selection failed");
 
             // Missing images remain a local rendering failure, not a reason to reject
