@@ -866,6 +866,57 @@ internal static partial class Program
             await Until(() => controller.WorkspaceNumber == 2 && !controller.IsWorkspaceSwitching, "top-bar click did not switch");
             Require(await controller.SwitchWorkspaceAsync(1), "return after actual button event failed");
 
+            // The same configurable shortcut behaves identically in the title bar and
+            // paper overflow: default cycle, optional named choices. Only the tray uses tiles.
+            var originalShortcutOrder = controller.State.TopBarShortcutOrder.ToList();
+            var originalShortcutCount = controller.State.TopBarPinnedCount;
+            Require(PaperTopBarShortcuts.MoveTo(controller.State,
+                    PaperTopBarShortcuts.Workspace, pinned: false, targetIndex: 0),
+                "fixture could not move workspace shortcut to overflow");
+            var paperMenuWindow = windows["note-a"];
+            paperMenuWindow.UpdateTopBarNewPaperButtons();
+            var paperContextBuilder = typeof(PaperWindow).GetMethod(
+                "BuildPaperContextMenu", BindingFlags.Instance | BindingFlags.NonPublic)!;
+            ContextMenu PaperContext() => (ContextMenu)paperContextBuilder.Invoke(
+                windows["note-a"], [false])!;
+            var cyclingMenu = PaperContext();
+            var cyclingItem = cyclingMenu.Items.OfType<MenuItem>().Single(item =>
+                item.Header is string label &&
+                label.StartsWith("Switch to workspace ", StringComparison.Ordinal));
+            Require(cyclingItem.Header?.ToString()?.EndsWith("2", StringComparison.Ordinal) == true &&
+                    cyclingItem.Items.Count == 0,
+                "overflow must show the next workspace as a direct cycle command");
+            cyclingItem.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            await Until(() => controller.WorkspaceNumber == 2 && !controller.IsWorkspaceSwitching,
+                "overflow cycle did not use the top-bar switching behavior");
+            Require(await controller.SwitchWorkspaceAsync(1), "return after overflow cycle failed");
+
+            var named = controller.WorkspaceOptions.Normalized();
+            named.TopBarNamePicker = true;
+            named.Names[2] = "Project B";
+            Require(await controller.ChangeWorkspaceConfigurationAsync(named),
+                "fixture could not enable the named selector");
+            windows["note-a"].UpdateTopBarNewPaperButtons();
+            var namedMenu = PaperContext();
+            var namedItem = namedMenu.Items.OfType<MenuItem>().Single(item =>
+                item.Header?.ToString() == "Switch workspace");
+            Require(namedItem.Items.Count == 5 &&
+                    ((MenuItem)namedItem.Items[1]).Header?.ToString() == "Project B",
+                "overflow named mode must expose an expandable workspace-name submenu");
+            ((MenuItem)namedItem.Items[1]).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            await Until(() => controller.WorkspaceNumber == 2 && !controller.IsWorkspaceSwitching,
+                "overflow named selector did not switch to the chosen workspace");
+            Require(await controller.SwitchWorkspaceAsync(1), "return after named selection failed");
+            var restoreNamed = controller.WorkspaceOptions.Normalized();
+            restoreNamed.TopBarNamePicker = false;
+            restoreNamed.Names.Remove(2);
+            Require(await controller.ChangeWorkspaceConfigurationAsync(restoreNamed),
+                "could not restore the default workspace selection mode");
+            controller.State.TopBarShortcutOrder = originalShortcutOrder;
+            controller.State.TopBarPinnedCount = originalShortcutCount;
+            controller.SaveNow(sync: true);
+            windows["note-a"].UpdateTopBarNewPaperButtons();
+
             await WorkspaceMainCatalogSingleWriteChecks(controller);
             await WorkspaceRollbackChecks(controller, directory);
 
