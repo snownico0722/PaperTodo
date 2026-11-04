@@ -170,6 +170,7 @@ public sealed partial class PaperWindow
 
     internal void ReleaseHiddenNoteImages()
     {
+        if (IsExpandedEditorHosted) return;
         if (_paper.Type != PaperTypes.Note)
         {
             return;
@@ -196,10 +197,10 @@ public sealed partial class PaperWindow
             return;
         }
 
-        var visible =
+        var visible = IsExpandedEditorHosted || (
             _paper.IsVisible &&
             !_paper.IsCollapsed &&
-            WindowState != WindowState.Minimized;
+            WindowState != WindowState.Minimized);
         if (_paperBodyHost.HasCurrent)
         {
             NotifyCurrentPaperBodyVisibility(visible);
@@ -261,6 +262,8 @@ public sealed partial class PaperWindow
             return;
         }
 
+        // Return borrowed visuals before disposing the PaperWindow's body/session.
+        _expandedEditorHostWindow?.CloseWithoutPaperAction();
         // The compositor proxy can only hand off while this window still accepts endpoint frames.
         // Reveal the small real host before changing the lifecycle state to Closing.
         _controller.CompleteEdgeCapsuleQueueCompositionProxyFor(this);
