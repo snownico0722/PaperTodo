@@ -1020,6 +1020,7 @@ public sealed partial class PaperWindow
             UpdateTextZoom();
         }
         RefreshPaperContextMenus();
+        RefreshExpandedEditorPresentation();
     }
 
     private void RemoveTextZoomOverlay()
