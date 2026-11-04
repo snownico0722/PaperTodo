@@ -955,16 +955,16 @@ internal static partial class Program
             var nameRow = cardRow.Children.OfType<StackPanel>().First();
             var rightRow = cardRow.Children.OfType<StackPanel>().Last();
             var rename = nameRow.Children.OfType<Button>().Single();
-            var editor = nameRow.Children.OfType<TextBox>().Single();
+            var workspaceNameEditor = nameRow.Children.OfType<TextBox>().Single();
             Require(rightRow.Children.OfType<CheckBox>().Single().Content?.ToString() ==
                     Strings.Get("WorkspaceFollowMain") &&
                     rightRow.Children.OfType<Button>().Count() == 1,
                 "follow-main switch and delete must be inline with the workspace label");
             rename.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Require(rename.Content?.ToString() == "✓" && editor.Visibility == Visibility.Visible &&
+            Require(rename.Content?.ToString() == "✓" && workspaceNameEditor.Visibility == Visibility.Visible &&
                 nameRow.Children.OfType<TextBlock>().First().Visibility == Visibility.Collapsed,
                 "pen did not switch the workspace name into same-row editing");
-            editor.Text = "Review workspace";
+            workspaceNameEditor.Text = "Review workspace";
             rename.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             await Until(() => controller.WorkspaceOptions.DisplayName(3) == "Review workspace" &&
                            !controller.IsWorkspaceSwitching,
