@@ -199,9 +199,13 @@ internal sealed class WorkbenchWindow : Window
                     card = CreateActiveCard(paper); scene.Cards.Add(paper.Id, card); scene.Canvas.Children.Add(card.Frame);
                 }
                 card.Snapshot = paper;
-                if (!card.Title.IsKeyboardFocusWithin) card.Title.Text = paper.Title;
+                if (!card.Title.IsKeyboardFocusWithin)
+                {
+                    card.Title.Text = paper.Title;
+                    card.Move.Tag = paper.Title;
+                }
                 card.Pin.Content = paper.Placement?.Pinned == true ? "\u25c6" : "\u25c7";
-                card.Move.IsEnabled = paper.Placement?.Pinned != true;
+                card.Move.Cursor = paper.Placement?.Pinned == true ? Cursors.Arrow : Cursors.SizeAll;
                 card.Binding.Text = paper.BindingTitle;
                 card.Binding.Visibility = paper.BindingTitle.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
             }
@@ -368,13 +372,39 @@ internal sealed class WorkbenchWindow : Window
         var card = CreateCardShell(paper);
         var owner = _controller.WorkbenchPaperWindow(paper.Id);
         card.Lease = owner.BorrowWorkbenchBody(this, card.Body);
+        // The entire title area is a direct drag surface. Only a double-click changes it
+        // into a text editor; the borrowed paper body keeps all of its own mouse behavior.
+        card.Move.PreviewMouseLeftButtonDown += (_, e) =>
+        {
+            if (e.ChangedButton != MouseButton.Left || e.ClickCount != 2) return;
+            e.Handled = true;
+            card.Move.Visibility = Visibility.Collapsed;
+            card.Title.Visibility = Visibility.Visible;
+            card.Title.Focus();
+            card.Title.SelectAll();
+        };
         card.Title.LostKeyboardFocus += (_, _) =>
         {
-            if (_closed || IsSuspended || _controller.FindPaper(paper.Id) is not { } live) return;
-            _controller.UpdatePaperTitle(live, card.Title.Text);
-            card.Title.Text = live.Title;
+            if (card.Title.Visibility != Visibility.Visible) return;
+            if (!_closed && !IsSuspended && _controller.FindPaper(paper.Id) is { } live)
+            {
+                _controller.UpdatePaperTitle(live, card.Title.Text);
+                card.Title.Text = live.Title;
+            }
+            card.Move.Tag = card.Title.Text;
+            card.Title.Visibility = Visibility.Collapsed;
+            card.Move.Visibility = Visibility.Visible;
         };
-        card.Title.KeyDown += (_, e) => { if (e.Key == Key.Enter) { Keyboard.ClearFocus(); e.Handled = true; } };
+        card.Title.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Escape)
+            {
+                if (_controller.FindPaper(paper.Id) is { } live) card.Title.Text = live.Title;
+                Keyboard.ClearFocus();
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Enter) { Keyboard.ClearFocus(); e.Handled = true; }
+        };
         card.Pin.Click += (_, _) =>
         {
             RememberLayout(); var state = _controller.WorkbenchLayout.Copy();
@@ -423,21 +453,24 @@ internal sealed class WorkbenchWindow : Window
         grid.RowDefinitions.Add(new() { Height = new GridLength(12) });
         card.Frame.Child = grid;
         var header = new Grid { Margin = new Thickness(6, 4, 6, 2) };
-        header.ColumnDefinitions.Add(new() { Width = new GridLength(20) });
         header.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
         header.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
         card.Move.Cursor = Cursors.SizeAll;
         card.Move.Background = Brushes.Transparent;
-        card.Move.Template = ThumbTemplate("\u283f");
+        card.Move.MinHeight = 32;
+        card.Move.Tag = paper.Title;
+        card.Move.Template = TitleDragTemplate(card.Move);
         header.Children.Add(card.Move);
         card.Title.Text = paper.Title; card.Title.FontWeight = FontWeights.SemiBold;
         card.Title.Background = Brushes.Transparent; card.Title.Foreground = Ink; card.Title.BorderThickness = new Thickness(0);
-        card.Title.Padding = new Thickness(4, 6, 4, 6); Grid.SetColumn(card.Title, 1); header.Children.Add(card.Title);
+        card.Title.Padding = new Thickness(12, 5, 4, 5);
+        card.Title.Visibility = Visibility.Collapsed;
+        Grid.SetColumn(card.Title, 0); header.Children.Add(card.Title);
         var actions = new StackPanel { Orientation = Orientation.Horizontal };
         foreach (var button in new[] { card.Pin, card.Menu }) { button.Padding = new Thickness(5, 3, 5, 3); button.Margin = new Thickness(1); button.Background = Brushes.Transparent; button.Foreground = Ink; button.BorderThickness = new Thickness(0); actions.Children.Add(button); }
         card.Pin.Content = paper.Placement?.Pinned == true ? "\u25c6" : "\u25c7";
         card.Pin.ToolTip = Strings.Get("WorkbenchPin"); card.Menu.Content = "\u22ef";
-        Grid.SetColumn(actions, 2); header.Children.Add(actions); grid.Children.Add(header);
+        Grid.SetColumn(actions, 1); header.Children.Add(actions); grid.Children.Add(header);
         card.Binding.Text = paper.BindingTitle; card.Binding.Foreground = Muted; card.Binding.FontSize = 11;
         card.Binding.Margin = new Thickness(14, 0, 14, 4); card.Binding.TextTrimming = TextTrimming.CharacterEllipsis;
         card.Binding.Visibility = paper.BindingTitle.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
@@ -449,6 +482,22 @@ internal sealed class WorkbenchWindow : Window
         Position(card, paper.Placement?.Bounds ?? new(32, 32, paper.Width, paper.Height));
         return card;
     }
+    private static ControlTemplate TitleDragTemplate(Thumb owner)
+    {
+        var surface = new FrameworkElementFactory(typeof(Border));
+        surface.SetValue(Border.BackgroundProperty, Brushes.Transparent);
+        var label = new FrameworkElementFactory(typeof(TextBlock));
+        label.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding(nameof(FrameworkElement.Tag))
+            { Source = owner });
+        label.SetValue(TextBlock.ForegroundProperty, Ink);
+        label.SetValue(TextBlock.FontWeightProperty, FontWeights.SemiBold);
+        label.SetValue(TextBlock.TextTrimmingProperty, TextTrimming.CharacterEllipsis);
+        label.SetValue(TextBlock.VerticalAlignmentProperty, VerticalAlignment.Center);
+        label.SetValue(TextBlock.MarginProperty, new Thickness(12, 4, 4, 4));
+        surface.AppendChild(label);
+        return new ControlTemplate(typeof(Thumb)) { VisualTree = surface };
+    }
+
     private static ControlTemplate ThumbTemplate(string glyph)
     {
         var text = new FrameworkElementFactory(typeof(TextBlock));
@@ -465,7 +514,11 @@ internal sealed class WorkbenchWindow : Window
     private void WireDrag(Card card, Thumb thumb, bool resize)
     {
         WorkbenchRect before = default;
-        thumb.DragStarted += (_, _) => { if (IsSuspended) return; RememberLayout(); _dragging = true; before = card.Bounds; };
+        thumb.DragStarted += (_, _) =>
+        {
+            if (IsSuspended || (!resize && card.Snapshot.Placement?.Pinned == true)) return;
+            RememberLayout(); _dragging = true; before = card.Bounds;
+        };
         thumb.DragDelta += (_, e) =>
         {
             if (!_dragging) return;
