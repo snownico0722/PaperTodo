@@ -232,6 +232,8 @@ internal sealed class WorkbenchWindow : Window
                     card.Move.Tag = paper.Title;
                 }
                 card.Pin.Content = paper.Placement?.Pinned == true ? "\u25c6" : "\u25c7";
+                card.Eye.Content = EyeIcon(paper.DesktopVisible);
+                card.Eye.ToolTip = Strings.Get(paper.DesktopVisible ? "WorkbenchHideOnDesktop" : "WorkbenchShowOnDesktop");
                 card.Move.Cursor = paper.Placement?.Pinned == true ? Cursors.Arrow : Cursors.SizeAll;
                 card.Binding.Text = paper.BindingTitle;
                 card.Binding.Visibility = paper.BindingTitle.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -451,6 +453,13 @@ internal sealed class WorkbenchWindow : Window
             if (state.Cards.TryGetValue(paper.Id, out var placement)) placement.Pinned = !placement.Pinned;
             StoreLayout(state); SyncActiveScene();
         };
+        card.Eye.Click += (_, _) =>
+        {
+            if (_controller.FindPaper(paper.Id) is not { } current) return;
+            _controller.SetWorkbenchDesktopVisibility(current, !current.IsVisible);
+            card.Eye.Content = EyeIcon(current.IsVisible);
+            card.Eye.ToolTip = Strings.Get(current.IsVisible ? "WorkbenchHideOnDesktop" : "WorkbenchShowOnDesktop");
+        };
         card.Menu.Click += (_, _) =>
         {
             var menu = owner.CreateWorkbenchBodyMenu();
@@ -472,6 +481,7 @@ internal sealed class WorkbenchWindow : Window
         var card = CreateCardShell(paper);
         card.Title.IsReadOnly = true;
         card.Pin.Visibility = card.Menu.Visibility = card.Resize.Visibility = card.Move.Visibility = Visibility.Collapsed;
+        card.Eye.IsEnabled = false;
         var preview = new StackPanel { Margin = new Thickness(16) };
         preview.Children.Add(new TextBlock { Text = paper.Summary, TextWrapping = TextWrapping.Wrap, MaxHeight = Math.Max(80, paper.Height - 120), TextTrimming = TextTrimming.CharacterEllipsis, Foreground = Ink });
         var open = NewButton(Strings.Get("WorkbenchOpenWorkspace"));
@@ -507,9 +517,12 @@ internal sealed class WorkbenchWindow : Window
         card.Title.Visibility = Visibility.Collapsed;
         Grid.SetColumn(card.Title, 0); header.Children.Add(card.Title);
         var actions = new StackPanel { Orientation = Orientation.Horizontal };
-        foreach (var button in new[] { card.Pin, card.Menu }) { button.Padding = new Thickness(5, 3, 5, 3); button.Margin = new Thickness(1); button.Background = Brushes.Transparent; button.Foreground = Ink; button.BorderThickness = new Thickness(0); actions.Children.Add(button); }
+        foreach (var button in new[] { card.Pin, card.Eye, card.Menu }) { button.Padding = new Thickness(5, 3, 5, 3); button.Margin = new Thickness(1); button.Background = Brushes.Transparent; button.Foreground = Ink; button.BorderThickness = new Thickness(0); actions.Children.Add(button); }
         card.Pin.Content = paper.Placement?.Pinned == true ? "\u25c6" : "\u25c7";
-        card.Pin.ToolTip = Strings.Get("WorkbenchPin"); card.Menu.Content = "\u22ef";
+        card.Pin.ToolTip = Strings.Get("WorkbenchPin");
+        card.Eye.Content = EyeIcon(paper.DesktopVisible);
+        card.Eye.ToolTip = Strings.Get(paper.DesktopVisible ? "WorkbenchHideOnDesktop" : "WorkbenchShowOnDesktop");
+        card.Menu.Content = "\u22ef";
         Grid.SetColumn(actions, 1); header.Children.Add(actions); grid.Children.Add(header);
         card.Binding.Text = paper.BindingTitle; card.Binding.Foreground = Muted; card.Binding.FontSize = 11;
         card.Binding.Margin = new Thickness(14, 0, 14, 4); card.Binding.TextTrimming = TextTrimming.CharacterEllipsis;
@@ -522,6 +535,29 @@ internal sealed class WorkbenchWindow : Window
         Position(card, paper.Placement?.Bounds ?? new(32, 32, paper.Width, paper.Height));
         return card;
     }
+    private static FrameworkElement EyeIcon(bool shown)
+    {
+        var visual = new Grid { Width = 18, Height = 14 };
+        visual.Children.Add(new System.Windows.Shapes.Path
+        {
+            Data = Geometry.Parse("M1,7 C4,2 14,2 17,7 C14,12 4,12 1,7 Z"),
+            Stroke = Ink, StrokeThickness = 1.35, Fill = Brushes.Transparent
+        });
+        visual.Children.Add(new Ellipse
+        {
+            Width = 4.5, Height = 4.5, Fill = Ink,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        });
+        if (!shown)
+            visual.Children.Add(new System.Windows.Shapes.Path
+            {
+                Data = Geometry.Parse("M2,13 L16,1"),
+                Stroke = Ink, StrokeThickness = 2
+            });
+        return visual;
+    }
+
     private static ControlTemplate TitleDragTemplate(Thumb owner)
     {
         var surface = new FrameworkElementFactory(typeof(Border));
@@ -697,6 +733,7 @@ internal sealed class WorkbenchWindow : Window
         internal Thumb Move { get; } = new();
         internal Thumb Resize { get; } = new();
         internal Button Pin { get; } = new();
+        internal Button Eye { get; } = new();
         internal Button Menu { get; } = new();
         internal PaperWindow.WorkbenchBodyLease? Lease;
         internal WorkbenchRect Bounds;
