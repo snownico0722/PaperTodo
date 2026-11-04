@@ -1646,7 +1646,7 @@
     <value>主工作区（1）</value>
   </data>
   <data name="WorkspaceSlotLabel" xml:space="preserve">
-    <value>工作区 {0}</value>
+    <value>工作区{0}</value>
   </data>
   <data name="WorkspaceCurrent" xml:space="preserve">
     <value>当前工作区：{0}</value>
@@ -1664,8 +1664,8 @@
     <value>切换下一个工作区</value>
   </data>
   <data name="WorkspaceCycleTooltip" xml:space="preserve">
-    <value>工作区 {0} / {1}
-点击切换到工作区 {2}</value>
+    <value>工作区 {0}
+点击切换到工作区 {1}</value>
   </data>
   <data name="WorkspaceTrayCycle" xml:space="preserve">
     <value>切换工作区（当前 {0} / {1}）</value>
