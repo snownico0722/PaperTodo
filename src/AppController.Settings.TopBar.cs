@@ -273,6 +273,7 @@ public sealed partial class AppController
     {
         PaperTopBarShortcuts.NewTodo => Strings.Get("ShortcutNewTodo"),
         PaperTopBarShortcuts.NewNote => Strings.Get("ShortcutNewNote"),
+        PaperTopBarShortcuts.Workspace => Strings.Get("WorkspaceSettingsTitle"),
         PaperTopBarShortcuts.Association => Strings.Get("TopBarAssociation"),
         PaperTopBarShortcuts.ExternalEditor => Strings.Get("TopBarExternalEditor"),
         _ => action
@@ -308,7 +309,12 @@ public sealed partial class AppController
         {
             slot.Children.Add(new TextBlock
             {
-                Text = action == PaperTopBarShortcuts.NewTodo ? "✓" : "✎",
+                Text = action switch
+                {
+                    PaperTopBarShortcuts.NewTodo => "✓",
+                    PaperTopBarShortcuts.Workspace => "↻",
+                    _ => "✎"
+                },
                 FontFamily = AppTypography.SymbolFontFamily,
                 FontWeight = FontWeights.SemiBold,
                 Foreground = TrayWeakTextBrush,
