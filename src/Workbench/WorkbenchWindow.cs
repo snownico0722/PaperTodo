@@ -739,7 +739,9 @@ internal sealed class WorkbenchWindow : Window
         thumb.DragStarted += (_, _) =>
         {
             if (IsSuspended || (!resize && card.Snapshot.Placement?.Pinned == true)) return;
-            RememberLayout(); _dragging = true; before = card.Bounds;
+            // A Thumb starts a gesture even when it is only clicked. Cancel an obsolete
+            // calculation now, but defer undo and writes until geometry actually changes.
+            CancelLayout(); _dragging = true; before = card.Bounds;
         };
         thumb.DragDelta += (_, e) =>
         {
@@ -755,7 +757,21 @@ internal sealed class WorkbenchWindow : Window
         {
             if (!_dragging) return;
             _dragging = false;
-            if (e.Canceled) { Position(card, before); if (_undo.Count > 0) _undo.Pop(); if (ActiveScene is { } canceled) DrawDecorations(canceled); return; }
+            if (e.Canceled)
+            {
+                Position(card, before);
+                if (ActiveScene is { } canceled) DrawDecorations(canceled);
+                return;
+            }
+            if ((card.Bounds.Location - before.Location).LengthSquared < 0.25 &&
+                Math.Abs(card.Bounds.Width - before.Width) < 0.5 &&
+                Math.Abs(card.Bounds.Height - before.Height) < 0.5)
+            {
+                Position(card, before);
+                if (ActiveScene is { } unchanged) DrawDecorations(unchanged);
+                return;
+            }
+            RememberLayout();
             var state = _controller.WorkbenchLayout.Copy();
             if (!state.Cards.TryGetValue(card.Snapshot.Id, out var placement)) state.Cards[card.Snapshot.Id] = placement = new();
             placement.X = card.Bounds.X; placement.Y = card.Bounds.Y; placement.Width = card.Bounds.Width; placement.Height = card.Bounds.Height;
