@@ -1691,4 +1691,7 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="WorkbenchSearchResult" xml:space="preserve"><value>検索結果 {0}/{1}</value></data>
   <data name="WorkbenchShowOnDesktop" xml:space="preserve"><value>デスクトップに表示</value></data>
   <data name="WorkbenchHideOnDesktop" xml:space="preserve"><value>デスクトップから非表示</value></data>
+  <data name="WorkbenchBindToTodo" xml:space="preserve"><value>タスク項目に関連付ける</value></data>
+  <data name="WorkbenchUnnamedTodo" xml:space="preserve"><value>無題のタスク</value></data>
+  <data name="WorkbenchBindTodoFailed" xml:space="preserve"><value>そのタスクに関連付けできません。</value></data>
 </root>
