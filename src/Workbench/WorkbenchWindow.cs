@@ -36,6 +36,9 @@ internal sealed class WorkbenchWindow : Window
     private int _searchCursor;
     private Point? _panPointer;
     private Point _panStart;
+    private Camera? _cameraBeforePaperFocus;
+    private string? _focusedPaperId;
+    private readonly record struct Camera(double Zoom, double X, double Y);
     private bool _closed, _shutdown, _dragging, _storingLayout;
     internal bool IsSuspended { get; private set; }
     internal int HostedPaperCount => _scenes.Values.Sum(s => s.Cards.Count(c => c.Value.Lease != null));
@@ -216,6 +219,26 @@ internal sealed class WorkbenchWindow : Window
         _pan.Y = ViewportCenter.Y - bounds.Center.Y * zoom;
         UpdateZoomLabel();
     }
+    private void FocusPaper(Card card)
+    {
+        if (_closed || IsSuspended || _dragging || ActiveScene is not { } scene ||
+            !scene.Cards.ContainsKey(card.Snapshot.Id) || _focusedPaperId == card.Snapshot.Id) return;
+        _cameraBeforePaperFocus ??= new Camera(_scale.ScaleX, _pan.X, _pan.Y);
+        _focusedPaperId = card.Snapshot.Id;
+        Fit(card.Bounds.Inflate(64).Offset(scene.Origin), 1.35);
+    }
+
+    private void ClearPaperFocus(bool restoreCamera)
+    {
+        var previous = _cameraBeforePaperFocus;
+        _focusedPaperId = null;
+        _cameraBeforePaperFocus = null;
+        if (!restoreCamera || previous is not { } camera) return;
+        _scale.ScaleX = _scale.ScaleY = camera.Zoom;
+        _pan.X = camera.X; _pan.Y = camera.Y;
+        UpdateZoomLabel();
+    }
+
     private void FitActive() { if (ActiveScene is { } scene) Fit(scene.Bounds.Offset(scene.Origin)); }
     private void FitOverview() => Fit(WorkbenchRect.Union(_scenes.Values.Select(s => s.Bounds.Offset(s.Origin))));
     private void BeginPan(object sender, MouseButtonEventArgs e)
@@ -233,8 +256,12 @@ internal sealed class WorkbenchWindow : Window
     }
     private void EndPan(object sender, MouseButtonEventArgs e)
     {
-        if (_panPointer == null) return;
-        _panPointer = null; _viewport.ReleaseMouseCapture(); e.Handled = true;
+        if (_panPointer is not { } start) return;
+        var emptyClick = e.ChangedButton == MouseButton.Left &&
+            (e.GetPosition(_viewport) - start).LengthSquared < 16;
+        _panPointer = null; _viewport.ReleaseMouseCapture();
+        if (emptyClick) ClearPaperFocus(restoreCamera: true);
+        e.Handled = true;
     }
 
     internal void QueueModelRefresh(string? focusId)
@@ -476,6 +503,7 @@ internal sealed class WorkbenchWindow : Window
             .SelectMany(scene => scene.Cards.Values.Where(c => SearchMatches(c.Snapshot, query))
                 .Select(card => (Scene: scene, Card: card))).ToArray();
         if (matches.Length == 0) { _status.Text = Strings.Get("WorkbenchSearchNoResults"); return; }
+        ClearPaperFocus(restoreCamera: false);
         var found = matches[_searchCursor++ % matches.Length];
         Fit(found.Card.Bounds.Inflate(64).Offset(found.Scene.Origin));
         _status.Text = Strings.Format("WorkbenchSearchResult", (_searchCursor - 1) % matches.Length + 1, matches.Length);
@@ -486,6 +514,20 @@ internal sealed class WorkbenchWindow : Window
         var card = CreateCardShell(paper);
         var owner = _controller.WorkbenchPaperWindow(paper.Id);
         card.Lease = owner.BorrowWorkbenchBody(this, card.Body);
+        // Focus after an actual click, not during text selection, Todo dragging or
+        // the editor's button-down. The original camera is kept for the outside click.
+        Point? bodyDown = null;
+        card.Body.PreviewMouseLeftButtonDown += (_, e) =>
+        {
+            if (e.ChangedButton == MouseButton.Left) bodyDown = e.GetPosition(_viewport);
+        };
+        card.Body.PreviewMouseLeftButtonUp += (_, e) =>
+        {
+            if (bodyDown is not { } origin) return;
+            bodyDown = null;
+            if ((e.GetPosition(_viewport) - origin).LengthSquared > 16) return;
+            Dispatcher.BeginInvoke((Action)(() => FocusPaper(card)), DispatcherPriority.Background);
+        };
         // The entire title area is a direct drag surface. Only a double-click changes it
         // into a text editor; the borrowed paper body keeps all of its own mouse behavior.
         card.Move.PreviewMouseLeftButtonDown += (_, e) =>
@@ -782,6 +824,7 @@ internal sealed class WorkbenchWindow : Window
     internal void SuspendWorkspace()
     {
         if (_closed || IsSuspended) return;
+        ClearPaperFocus(restoreCamera: false);
         IsSuspended = true; _toolbar.IsEnabled = false; _viewport.IsEnabled = false;
         CancelLayout(); _overviewCancellation?.Cancel(); _refreshTimer.Stop();
         foreach (var scene in _scenes.Values)
@@ -810,7 +853,8 @@ internal sealed class WorkbenchWindow : Window
     private void DisposePresentation()
     {
         if (_closed) return;
-        _closed = true; _controller.WorkbenchModelChanged -= QueueModelRefresh;
+        _closed = true; ClearPaperFocus(restoreCamera: false);
+        _controller.WorkbenchModelChanged -= QueueModelRefresh;
         _refreshTimer.Stop(); CancelLayout(); _overviewCancellation?.Cancel(); _overviewCancellation?.Dispose();
         foreach (var scene in _scenes.Values)
             foreach (var id in scene.Cards.Keys.ToArray()) RemoveCard(scene, id, !_shutdown);
