@@ -945,42 +945,70 @@ internal static partial class Program
                     System.Reflection.BindingFlags.Instance)!
                 .Invoke(controller, null)!;
             var workspacePage = WorkspacePage();
-            Button SlotButton(StackPanel page, int slot) => page.Children.OfType<Border>()
-                .Select(border => border.Child).OfType<StackPanel>()
-                .SelectMany(row => row.Children.OfType<DockPanel>())
-                .SelectMany(line => line.Children.OfType<Button>())
-                .Single(button => AutomationProperties.GetAutomationId(button) == "WorkspaceSlot" + slot);
-            var selectThird = SlotButton(workspacePage, 3);
-            selectThird.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Require(controller.WorkspaceNumber == 1, "workspace selector switched without confirmation");
+            Border SlotCard(StackPanel page, int slot) => page.Children.OfType<Border>()
+                .Single(card => AutomationProperties.GetAutomationId(card) == "WorkspaceSlot" + slot);
+            var third = SlotCard(workspacePage, 3);
+            var cardRow = (Grid)third.Child;
+            Require(cardRow.RowDefinitions.Count == 0 &&
+                cardRow.Children.OfType<StackPanel>().Count() == 2,
+                "workspace card actions must share the name row");
+            var nameRow = cardRow.Children.OfType<StackPanel>().First();
+            var rightRow = cardRow.Children.OfType<StackPanel>().Last();
+            var rename = nameRow.Children.OfType<Button>().Single();
+            var editor = nameRow.Children.OfType<TextBox>().Single();
+            Require(rightRow.Children.OfType<CheckBox>().Single().Content?.ToString() ==
+                    Strings.Get("WorkspaceFollowMain") &&
+                    rightRow.Children.OfType<Button>().Count() == 1,
+                "follow-main switch and delete must be inline with the workspace label");
+            rename.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Require(rename.Content?.ToString() == "✓" && editor.Visibility == Visibility.Visible &&
+                nameRow.Children.OfType<TextBlock>().First().Visibility == Visibility.Collapsed,
+                "pen did not switch the workspace name into same-row editing");
+            editor.Text = "Review workspace";
+            rename.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            await Until(() => controller.WorkspaceOptions.DisplayName(3) == "Review workspace" &&
+                           !controller.IsWorkspaceSwitching,
+                "inline workspace name checkmark did not commit");
+            Require(controller.WorkspaceNumber == 1,
+                "renaming a workspace unexpectedly switched it");
+
+            // The card itself, not just its label, selects the target.
             workspacePage = WorkspacePage();
-            var actions = workspacePage.Children.OfType<StackPanel>()
-                .Single(panel => panel.Orientation == Orientation.Horizontal &&
-                    panel.Children.OfType<Button>().Count() == 2);
-            var confirm = actions.Children.OfType<Button>().Last();
-            Require(confirm.IsEnabled, "workspace confirmation did not enable for another slot");
+            third = SlotCard(workspacePage, 3);
+            third.RaiseEvent(new System.Windows.Input.MouseButtonEventArgs(
+                System.Windows.Input.Mouse.PrimaryDevice, 0, System.Windows.Input.MouseButton.Left)
+            {
+                RoutedEvent = UIElement.MouseLeftButtonUpEvent
+            });
+            Require(controller.WorkspaceNumber == 1, "workspace card switched without confirmation");
+            workspacePage = WorkspacePage();
+            var confirm = workspacePage.Children.OfType<Button>().Single();
+            Require(confirm.Content?.ToString() == "确认切换" && confirm.IsEnabled,
+                "settings must offer one enabled switch confirmation and no cancel button");
             confirm.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             await Until(() => controller.WorkspaceNumber == 3 && !controller.IsWorkspaceSwitching,
-                "settings workspace confirmation did not select slot 3");
+                "settings card confirmation did not select slot 3");
             Require(await controller.SwitchWorkspaceAsync(1), "return after settings selection failed");
 
-            // The tray uses a two-line workspace section: a heading and the settings
-            // segment control. The second line changes in place to confirm/cancel.
+            // The tray heading and settings-style number segments now share one
+            // compact row. Confirm/cancel replace the segments in that same row.
             var trayMenu = controller.CreateTrayMenu();
             controller.RebuildTrayMenu(trayMenu);
             var workspaceMenu = trayMenu.Items.OfType<MenuItem>().Single(item =>
                 AutomationProperties.GetAutomationId(item) == "TrayWorkspaceSelector");
-            var trayWorkspaceContent = (StackPanel)workspaceMenu.Header;
-            Require(trayWorkspaceContent.Children.Count == 2 &&
-                ((TextBlock)trayWorkspaceContent.Children[0]).Text == Strings.Get("WorkspaceSettingsTitle"),
-                "tray workspace heading must be on its own line");
-            Border TileStrip() => (Border)trayWorkspaceContent.Children[1];
+            var trayWorkspaceRow = (Grid)workspaceMenu.Header;
+            Require(trayWorkspaceRow.RowDefinitions.Count == 0 &&
+                trayWorkspaceRow.Height == 26 &&
+                ((TextBlock)trayWorkspaceRow.Children[0]).Text == Strings.Get("WorkspaceSettingsTitle"),
+                "tray workspace selector must share one compact row with its label");
+            var segmentHost = (ContentPresenter)trayWorkspaceRow.Children[1];
+            Border TileStrip() => (Border)segmentHost.Content;
             var strip = TileStrip();
             var tiles = ((Grid)strip.Child).Children.OfType<Border>().ToArray();
-            Require(tiles.Length == 5 &&
+            Require(strip.Height == 24 && tiles.Length == 5 &&
                 ((TextBlock)tiles[0].Child).Text == "1" &&
                 ((TextBlock)tiles[3].Child).Text == "4",
-                "tray workspace choices must be horizontal numbered segments without names");
+                "tray workspace choices must be compact horizontal numbered segments without names");
             void SelectTrayTile(int index)
             {
                 var itemTile = ((Grid)TileStrip().Child).Children.OfType<Border>().ElementAt(index);
@@ -991,20 +1019,19 @@ internal static partial class Program
                 });
             }
             SelectTrayTile(3);
-            Require(controller.WorkspaceNumber == 1 &&
-                trayWorkspaceContent.Children[1] is StackPanel,
-                "tray tile must show an inline confirmation before switching");
-            var confirmRow = (StackPanel)trayWorkspaceContent.Children[1];
+            Require(controller.WorkspaceNumber == 1 && segmentHost.Content is StackPanel,
+                "tray tile must show inline confirmation before switching");
+            var confirmRow = (StackPanel)segmentHost.Content;
             var confirmationButtons = confirmRow.Children.OfType<Button>().ToArray();
             Require(confirmationButtons.Length == 2, "tray confirmation needs OK and Cancel");
             confirmationButtons[1].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Require(trayWorkspaceContent.Children[1] is Border && controller.WorkspaceNumber == 1,
-                "tray Cancel must restore the numeric segments without switching");
+            Require(segmentHost.Content is Border && controller.WorkspaceNumber == 1,
+                "tray Cancel must restore numeric segments without switching");
             SelectTrayTile(3);
-            confirmRow = (StackPanel)trayWorkspaceContent.Children[1];
+            confirmRow = (StackPanel)segmentHost.Content;
             confirmRow.Children.OfType<Button>().First().RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             await Until(() => controller.WorkspaceNumber == 4 && !controller.IsWorkspaceSwitching,
-                "tray confirmation did not switch to the selected slot");
+                "tray confirmation did not switch to selected slot");
             Require(await controller.SwitchWorkspaceAsync(1), "return after tray selection failed");
 
             // Missing images remain a local rendering failure, not a reason to reject
