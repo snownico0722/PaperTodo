@@ -132,6 +132,28 @@ internal static partial class Program
         Require(options.Count == 5 && options.Active == 5 && options.FollowsMain(2) && !options.FollowsMain(1),
             "invalid limits or follow default");
         Require(!File.Exists(Path.Combine(scope.DirectoryPath, "workspaces.json")), "unexpected separate catalog");
+
+        var managed = new WorkspaceConfiguration
+        {
+            Enabled = true, Count = 5, Active = 4,
+            Slots = [1, 3, 4], Names = new() { [3] = "开发" },
+            TopBarNamePicker = true
+        }.Normalized();
+        Require(managed.SlotNumbers.SequenceEqual([1, 3, 4]) &&
+                !managed.ContainsSlot(2) && managed.NextSlot(1) == 3 &&
+                managed.NextSlot(4) == 1 && managed.DisplayName(3) == "开发" &&
+                managed.TopBarNamePicker,
+            "noncontiguous named workspace catalog lost its membership or display mode");
+        var oldFiles = catalog.PathsFor(2);
+        File.WriteAllText(oldFiles.Data, "legacy hidden data");
+        Require(catalog.SlotHasData(2) && !catalog.SlotHasData(3),
+            "a legacy hidden workspace cannot be reused as a fresh one");
+        Directory.CreateDirectory(oldFiles.PluginData);
+        File.WriteAllText(Path.Combine(oldFiles.PluginData, "settings.json"), "plugin state");
+        File.WriteAllText(oldFiles.Images, "image data");
+        catalog.DeleteInactiveSlotFiles(2);
+        Require(!catalog.SlotHasData(2) && File.Exists(catalog.PathsFor(1).Data),
+            "deleting an inactive workspace did not remove its independent data or damaged main data");
     }
 
     private static void WorkspaceMetadataWrites()
