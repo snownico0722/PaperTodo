@@ -129,7 +129,6 @@ public sealed partial class AppController
             ? EdgeCapsuleFreeQueuePolicy.Insert(boxes, insert.Key, insert.Index, carried.Length,
                 geometry.LocalWorkAreaDip.Height, pitch, gap, prependAbove: insert.Key != drag.SourceKey)
             : EdgeCapsuleFreeQueuePolicy.Place(boxes, top, bodySlots, geometry.LocalWorkAreaDip.Height, pitch, gap);
-        var source = groups.First(g => g.Key == drag.SourceKey);
         var targetMembers = target.HasValue
             ? groups.FirstOrDefault(g => g.Key == target.Value.Key)?.Papers.Where(p => !carriedIds.Contains(p.Id)).ToList() ?? []
             : new List<PaperData>();
@@ -137,9 +136,9 @@ public sealed partial class AppController
         var reuse = sourceVacated && LiveEdgeOfQueueKey(drag.SourceKey) == edge && !QueueHasMaster(drag.SourceKey);
         var destination = decision.Kind == EdgeFreeQueueDropKind.Insert ? decision.TargetKey
             : !drag.FreeQueues ? edge : reuse ? drag.SourceKey : EdgeCapsuleQueueIds.Compose(edge, drag.NewQueueId);
+        // Surviving source members retain their saved anchor; a passive display offset
+        // must never become a persisted position merely because one member detached.
         var anchors = new Dictionary<string, double>(StringComparer.Ordinal);
-        if (source.Papers.Count > carried.Length && drag.SourceKey != destination)
-            anchors[drag.SourceKey] = source.Box.TopDip;
         if (decision.Accepted)
         {
             foreach (var pair in decision.Tops) anchors[pair.Key] = pair.Value;

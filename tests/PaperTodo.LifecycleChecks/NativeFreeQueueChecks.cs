@@ -154,6 +154,20 @@ internal static class NativeFreeQueueChecks
             "master cross-edge movement preserves independent identities");
         Require(c.State.Papers.All(p => Math.Abs(Top(p) - transferTops[p.Id]) < .1), "master cross-edge movement preserves relative positions");
         Require(masters.Count == 1 && masters.ContainsKey("|left"), "the old source collection control retires");
+
+        // Moving vertically before a floating transfer must not leak the docked preview.
+        var sameEdgeLayout = c.CaptureFreeMasterDragLayout("", EdgeCapsuleEdge.Left)!;
+        c.PreviewFreeMasterQueueTop(sameEdgeLayout, sameEdgeLayout.MasterTopDip + 12);
+        Require(PartOrNull(c, "_freeMasterDragPreview") != null, "master has a docked preview before floating");
+        Require(c.TryBeginMasterCapsuleQueueTransfer("", EdgeCapsuleEdge.Left, sameEdgeLayout.MasterTopDip,
+            out var sameEdgeTransfer, freeLayout: sameEdgeLayout), "same-edge master transfer begins after preview");
+        Require(PartOrNull(c, "_freeMasterDragPreview") == null, "floating transfer clears the old docked preview on entry");
+        Require(c.CommitMasterCapsuleQueueTransfer(sameEdgeTransfer, Point(sameEdgeLayout.MasterTopDip + 12, left: true)),
+            "same-edge master transfer commits after preview");
+        await Idle();
+        Require(Math.Abs(masters["|left"].AnchorTop - sameEdgeLayout.MasterTopDip - 12) < .1,
+            "master uses the committed same-edge anchor rather than a stale preview");
+
         c.SaveNow(sync: true);
         var saved = store.Load();
         Require(saved.UseCapsuleFreeQueues && saved.UseCapsuleCollapseAll && saved.Papers.Select(p => p.CapsuleQueueId).SequenceEqual(transferIds),
@@ -162,6 +176,29 @@ internal static class NativeFreeQueueChecks
         a.CapsuleQueueId = "external";
         c.EndNativeEdgeQueueDrag(a.Id);
         Require(a.CapsuleQueueId == "external", "cancellation does not overwrite a legitimate external identity change");
+
+        // B's saved anchor remains independent from its passive, collision-driven display offset.
+        c.State.UseCapsuleCollapseAll = false;
+        c.State.DeepCapsuleQueueStartTopMargins["|left#external"] = 90;
+        const double preferredSourceTop = 100;
+        c.State.DeepCapsuleQueueStartTopMargins["|left#qb"] = preferredSourceTop;
+        c.State.DeepCapsuleQueueStartTopMargins["|left#qc"] = Math.Min(600, monitor.LocalWorkAreaDip.Height - 80);
+        c.ArrangeDeepCapsules(false);
+        await Idle();
+        var displacedSourceTop = Top(aPeer);
+        Require(displacedSourceTop > preferredSourceTop + 1, "source has a passive display offset");
+        Require(c.BeginNativeEdgeQueueDrag(aPeer, false, Point(displacedSourceTop, left: true), false),
+            "begin detaching from a passively displaced queue");
+        var detachedTop = Math.Min(420, monitor.LocalWorkAreaDip.Height - 140);
+        var detachedPoint = Point(detachedTop, left: true);
+        Require(c.PreviewNativeEdgeQueueDrag(aPeer, detachedPoint, detachedTop, false), "single detach preview is handled");
+        Require(c.CommitNativeEdgeQueueDrag(aPeer, detachedPoint, detachedTop, false), "single detach drop is handled");
+        c.EndNativeEdgeQueueDrag(aPeer.Id);
+        await Idle();
+        Require(aPeer.CapsuleQueueId != "qb", "single capsule was detached");
+        Require(Math.Abs(c.State.DeepCapsuleQueueStartTopMargins["|left#qb"] - preferredSourceTop) < .1,
+            "single detach does not persist the source's passive offset");
+
         Console.WriteLine("PASS native-free-queue-input-controller-master-and-roundtrip");
     }
 

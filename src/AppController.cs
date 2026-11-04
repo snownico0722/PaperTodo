@@ -2316,6 +2316,8 @@ public sealed partial class AppController : IDisposable
             return;
         }
 
+        var restingDelta = State.UseCapsuleFreeQueues
+            ? BuildEffectiveQueueRestingDeltas().GetValueOrDefault(queueKey) : 0;
         foreach (var member in queueMembers)
         {
             if (member.Id == paper.Id ||
@@ -2326,8 +2328,7 @@ public sealed partial class AppController : IDisposable
             }
 
             var placement = plan.Placements[member.Id];
-            var delta = State.UseCapsuleFreeQueues ? BuildEffectiveQueueRestingDeltas().GetValueOrDefault(queueKey) : 0;
-            window.PreviewDeepCapsulePlacement(placement with { TopOffsetDip = placement.TopOffsetDip + delta });
+            window.PreviewDeepCapsulePlacement(placement with { TopOffsetDip = placement.TopOffsetDip + restingDelta });
         }
     }
 
