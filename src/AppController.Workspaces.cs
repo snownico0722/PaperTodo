@@ -282,7 +282,7 @@ public sealed partial class AppController
 
             // A healthy existing target needs no content write. Save only when
             // initializing/recovering the document or rescuing off-screen geometry.
-            var targetChanged = needsInitialSave || relocated ||
+            var targetChanged = needsInitialSave || candidate.Store.NormalizedCollapsedStateOnLoad || relocated ||
                 candidate.State.HidePapersFromTaskbar != originalHideFromTaskbar;
             if (targetChanged && !TrySaveNow(sync: true, workspaceBoundary: true))
                 throw new IOException(Strings.Get("WorkspaceSaveFailed"));
