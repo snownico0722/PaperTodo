@@ -44,7 +44,11 @@ internal sealed class WorkbenchWindow : Window
     internal int HostedPaperCount => _scenes.Values.Sum(s => s.Cards.Count(c => c.Value.Lease != null));
     private Scene? ActiveScene => _scenes.GetValueOrDefault(_controller.WorkspaceNumber);
     // Use PaperTodo's own palette (including the selected color scheme), not fixed blue/grey.
-    private static Brush DeskBrush => Theme.CodeBrush;
+    private static Brush DeskBrush => Theme.WorkbenchDeskBrush;
+    private static Brush CanvasBrush => Theme.WorkbenchCanvasBrush;
+    private static Brush FrameBrush => Theme.WorkbenchFrameBrush;
+    private static Brush RegionBrush => Theme.WorkbenchRegionBrush;
+    private static Brush RegionFill => Theme.WorkbenchRegionFillBrush;
     private static Brush CardBrush => Theme.PaperBrush;
     private static Brush Outline => Theme.PaperBorderBrush;
     private static Brush Ink => Theme.TextBrush;
@@ -178,7 +182,8 @@ internal sealed class WorkbenchWindow : Window
             {
                 card.Frame.Background = CardBrush;
                 card.Frame.BorderBrush = Outline;
-                card.Title.Background = CardBrush;
+                card.Header.Background = Theme.TitleBarBrush(opaque: true);
+                card.Title.Background = Brushes.Transparent;
                 card.Title.Foreground = Ink;
                 card.Binding.Foreground = Muted;
                 card.Move.Foreground = Ink;
@@ -642,9 +647,11 @@ internal sealed class WorkbenchWindow : Window
         grid.RowDefinitions.Add(new() { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new() { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new() { Height = new GridLength(1, GridUnitType.Star) });
-        grid.RowDefinitions.Add(new() { Height = new GridLength(12) });
+        grid.RowDefinitions.Add(new() { Height = GridLength.Auto });
         card.Frame.Child = grid;
-        var header = new Grid { Margin = new Thickness(6, 4, 6, 2) };
+        var header = card.Header;
+        header.Margin = new Thickness(6, 4, 6, 2);
+        header.Background = Theme.TitleBarBrush(opaque: true);
         header.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
         header.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
         card.Move.Cursor = Cursors.SizeAll;
@@ -660,11 +667,17 @@ internal sealed class WorkbenchWindow : Window
         card.Title.Visibility = Visibility.Collapsed;
         Grid.SetColumn(card.Title, 0); header.Children.Add(card.Title);
         var actions = new StackPanel { Orientation = Orientation.Horizontal };
-        foreach (var button in new[] { card.Pin, card.Eye, card.Menu }) { button.Padding = new Thickness(5, 3, 5, 3); button.Margin = new Thickness(1); button.Background = Brushes.Transparent; button.Foreground = Ink; button.BorderThickness = new Thickness(0); actions.Children.Add(button); }
+        foreach (var button in new[] { card.Pin, card.Menu })
+        {
+            button.Padding = new Thickness(5, 3, 5, 3);
+            button.Margin = new Thickness(1);
+            button.Background = Brushes.Transparent;
+            button.Foreground = Ink;
+            button.BorderThickness = new Thickness(0);
+            actions.Children.Add(button);
+        }
         card.Pin.Content = paper.Placement?.Pinned == true ? "\u25c6" : "\u25c7";
         card.Pin.ToolTip = Strings.Get("WorkbenchPin");
-        card.Eye.Content = EyeIcon(paper.DesktopVisible);
-        card.Eye.ToolTip = Strings.Get(paper.DesktopVisible ? "WorkbenchHideOnDesktop" : "WorkbenchShowOnDesktop");
         card.Menu.Content = "\u22ef";
         Grid.SetColumn(actions, 1); header.Children.Add(actions); grid.Children.Add(header);
         card.Binding.Text = paper.BindingTitle; card.Binding.Foreground = Muted; card.Binding.FontSize = 11;
@@ -672,9 +685,28 @@ internal sealed class WorkbenchWindow : Window
         card.Binding.Visibility = paper.BindingTitle.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
         Grid.SetRow(card.Binding, 1); grid.Children.Add(card.Binding);
         Grid.SetRow(card.Body, 2); grid.Children.Add(card.Body);
-        card.Resize.Width = 22; card.Resize.HorizontalAlignment = HorizontalAlignment.Right; card.Resize.Cursor = Cursors.SizeNWSE;
+        // Keep the visibility eye outside the borrowed editor and the draggable title.
+        // It has its own hit area at the bottom left; the resize grip stays bottom right.
+        var footer = new Grid { Height = 30, Margin = new Thickness(8, 0, 8, 2) };
+        footer.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
+        footer.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+        card.Eye.Width = 36; card.Eye.Height = 26;
+        card.Eye.HorizontalAlignment = HorizontalAlignment.Left;
+        card.Eye.VerticalAlignment = VerticalAlignment.Center;
+        card.Eye.Padding = new Thickness(8, 5, 8, 5);
+        card.Eye.Background = Brushes.Transparent;
+        card.Eye.Foreground = Ink;
+        card.Eye.BorderThickness = new Thickness(0);
+        card.Eye.Cursor = Cursors.Hand;
+        card.Eye.Content = EyeIcon(paper.DesktopVisible);
+        card.Eye.ToolTip = Strings.Get(paper.DesktopVisible ? "WorkbenchHideOnDesktop" : "WorkbenchShowOnDesktop");
+        footer.Children.Add(card.Eye);
+        card.Resize.Width = 26; card.Resize.HorizontalAlignment = HorizontalAlignment.Right;
+        card.Resize.Cursor = Cursors.SizeNWSE;
         card.Resize.Foreground = Muted;
-        card.Resize.Template = ThumbTemplate("\u25e2"); Grid.SetRow(card.Resize, 3); grid.Children.Add(card.Resize);
+        card.Resize.Template = ThumbTemplate("\u25e2");
+        Grid.SetColumn(card.Resize, 1); footer.Children.Add(card.Resize);
+        Grid.SetRow(footer, 3); grid.Children.Add(footer);
         Panel.SetZIndex(card.Frame, 2);
         Position(card, paper.Placement?.Bounds ?? new(32, 32, paper.Width, paper.Height));
         return card;
@@ -792,8 +824,9 @@ internal sealed class WorkbenchWindow : Window
         void Add(UIElement element, double x, double y)
         { Canvas.SetLeft(element, x); Canvas.SetTop(element, y); Panel.SetZIndex(element, 0); scene.Canvas.Children.Add(element); scene.Decorations.Add(element); }
         var bounds = scene.Bounds;
-        var frame = new Rectangle { Width = bounds.Width, Height = bounds.Height, RadiusX = 22, RadiusY = 22,
-            Stroke = Muted, StrokeThickness = 1.5, Fill = Brushes.Transparent, IsHitTestVisible = false, Opacity = .3 };
+        var frame = new Rectangle { Width = bounds.Width, Height = bounds.Height, RadiusX = 18, RadiusY = 18,
+            Stroke = FrameBrush, StrokeThickness = scene.Number == _controller.WorkspaceNumber ? 2.5 : 2,
+            Fill = CanvasBrush, IsHitTestVisible = false, Opacity = scene.Number == _controller.WorkspaceNumber ? 1 : .82 };
         Add(frame, bounds.X, bounds.Y);
         var title = NewButton(Strings.Format("WorkbenchWorkspace", scene.Number));
         title.FontSize = 22; title.FontWeight = FontWeights.SemiBold;
@@ -805,9 +838,9 @@ internal sealed class WorkbenchWindow : Window
         foreach (var section in layout.Sections)
         {
             var sectionBounds = dragging ? WorkbenchRect.Union(section.Members.Where(scene.Cards.ContainsKey).Select(id => scene.Cards[id].Bounds)).Inflate(32) : section.Bounds;
-            Add(new Rectangle { Width = sectionBounds.Width, Height = sectionBounds.Height, RadiusX = 12, RadiusY = 12,
-                Stroke = Accent, StrokeThickness = 1.2, StrokeDashArray = new DoubleCollection { 6, 6 }, Opacity = .45,
-                IsHitTestVisible = false }, sectionBounds.X, sectionBounds.Y);
+            Add(new Rectangle { Width = sectionBounds.Width, Height = sectionBounds.Height, RadiusX = 18, RadiusY = 18,
+                Stroke = RegionBrush, StrokeThickness = 1.6, StrokeDashArray = new DoubleCollection { 6, 4 },
+                Fill = RegionFill, IsHitTestVisible = false }, sectionBounds.X, sectionBounds.Y);
         }
         foreach (var route in layout.Routes)
         {
@@ -896,6 +929,7 @@ internal sealed class WorkbenchWindow : Window
     {
         internal WorkbenchPaperSnapshot Snapshot = paper;
         internal Border Frame { get; } = new();
+        internal Grid Header { get; } = new();
         internal TextBox Title { get; } = new();
         internal TextBlock Binding { get; } = new();
         internal TextBlock? PreviewText;
