@@ -457,7 +457,7 @@ internal sealed class WorkbenchWindow : Window
     }
     private static bool SearchMatches(WorkbenchPaperSnapshot paper, string query) =>
         paper.Title.Contains(query, StringComparison.CurrentCultureIgnoreCase) ||
-        paper.Summary.Contains(query, StringComparison.CurrentCultureIgnoreCase) ||
+        paper.SearchText.Contains(query, StringComparison.CurrentCultureIgnoreCase) ||
         paper.BindingTitle.Contains(query, StringComparison.CurrentCultureIgnoreCase);
 
     private void ApplySearch()
