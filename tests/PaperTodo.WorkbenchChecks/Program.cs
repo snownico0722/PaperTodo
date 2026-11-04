@@ -119,6 +119,8 @@ internal static class Program
         await controller.StartAsync(createDefaultPaper: false);
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
         var windows = (Dictionary<string, PaperWindow>)Member(controller, "_windows");
+        var masters = (Dictionary<string, MasterCapsuleWindow>)Member(controller, "_masterCapsules");
+        Assert(masters.Count > 0 && masters.Values.All(master => master.IsVisible), "Startup master capsule was not visible");
         var originalWindow = controller.WorkbenchPaperWindow("note-a");
         var editor = Member(originalWindow, "_noteBox");
         var bodySession = Member(originalWindow, "_markdownBodySession");
@@ -129,6 +131,7 @@ internal static class Program
         Assert(ReferenceEquals(Member(originalWindow, "_noteBox"), editor), "Workbench duplicated the Markdown editor");
         Assert(ReferenceEquals(Member(originalWindow, "_markdownBodySession"), bodySession), "Workbench duplicated the body session");
         Assert(!originalWindow.IsVisible && originalWindow.IsWorkbenchHosted, "Desktop and workbench body both visible");
+        Assert(masters.Values.All(master => !master.IsVisible), "Workbench left a master capsule visible over the desk");
         foreach (var paper in controller.State.Papers) Assert(before[paper.Id] == Geometry(paper), "Desktop state changed while entering: " + paper.Id);
         editor.GetType().GetProperty("Text")!.SetValue(editor, "Edited inside the workbench");
         controller.CommitPendingMarkdownContentsForSave();
@@ -141,6 +144,7 @@ internal static class Program
         {
             SaveImage(workbench, "workbench-active.png");
             controller.ToggleWorkbench();
+            Assert(masters.Count > 0 && masters.Values.All(master => master.IsVisible), "Closing workbench did not restore master capsules");
             Assert(!originalWindow.IsWorkbenchHosted, "Lease not returned");
             Assert(ReferenceEquals(Member(originalWindow, "_noteBox"), editor), "Editor replaced on return");
             foreach (var paper in controller.State.Papers) Assert(before[paper.Id] == Geometry(paper), "Desktop state changed on return: " + paper.Id);
@@ -158,6 +162,7 @@ internal static class Program
                 Assert(!await controller.SwitchWorkspaceAsync(2), "Occupied workspace switch succeeded");
             Assert(controller.WorkspaceNumber == 1 && workbench.HostedPaperCount == 3, "Failed switch lost the current desk");
             Assert(await controller.SwitchWorkspaceAsync(2), "Workspace switch failed");
+            Assert(masters.Values.All(master => !master.IsVisible), "Workspace switch exposed master capsules over the workbench");
             await Until(() => workbench.HostedPaperCount == 1 && controller.State.Workbench?.Cards.Count == 1, "New workspace editor not mounted");
             Assert(originalWindow.IsClosed && !originalWindow.IsWorkbenchHosted, "Old workspace lease survived teardown");
             Assert(StateStore.ReadWorkbenchOverview(Path.Combine(AppContext.BaseDirectory, "data.json"))!.Papers.First(p => p.Id == "note-a").Content == "Edited inside the workbench", "Switch lost pending edits");
@@ -165,6 +170,7 @@ internal static class Program
             await Until(() => workbench.HostedPaperCount == 3, "Original workspace not restored");
             Assert(controller.WorkbenchLayout.Cards["note-a"].Pinned, "Workspace layout was not persisted");
             controller.ToggleWorkbench();
+            Assert(masters.Count > 0 && masters.Values.All(master => master.IsVisible), "Leaving switched workbench did not restore master capsules");
         }
         controller.SaveNow(sync: true);
     }
