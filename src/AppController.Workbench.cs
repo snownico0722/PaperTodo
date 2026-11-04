@@ -79,7 +79,6 @@ public sealed partial class AppController
         var links = state.Papers.SelectMany(p => p.Items
             .Where(i => !string.IsNullOrEmpty(i.LinkedPaperId) && ids.Contains(i.LinkedPaperId))
             .Select(i => new WorkbenchLayoutEdge(p.Id, i.LinkedPaperId!)))
-            .Concat((state.Workbench?.Connections ?? []).Select(e => new WorkbenchLayoutEdge(e.From, e.To)))
             .Where(e => e.From != e.To && ids.Contains(e.From) && ids.Contains(e.To)).Distinct().ToArray();
         return new(number, papers, links);
     }
@@ -130,7 +129,6 @@ public sealed partial class AppController
         var ids = papers.Select(p => p.Id).ToHashSet(StringComparer.Ordinal);
         var links = state.Papers.SelectMany(p => p.Items.Where(i => i.LinkedPaperId != null)
                 .Select(i => new WorkbenchLayoutEdge(p.Id, i.LinkedPaperId!)))
-            .Concat((state.Workbench?.Connections ?? []).Select(e => new WorkbenchLayoutEdge(e.From, e.To)))
             .Where(e => e.From != e.To && ids.Contains(e.From) && ids.Contains(e.To)).Distinct().ToArray();
         return new(number, papers, links);
     }
