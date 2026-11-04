@@ -29,6 +29,7 @@ internal sealed class WorkbenchWindow : Window
     private long _layoutRevision;
     private string _modelSignature = "";
     private string? _focusAfterRefresh;
+    private int _searchCursor;
     private Point? _panPointer;
     private Point _panStart;
     private bool _closed, _shutdown, _dragging, _storingLayout;
@@ -51,30 +52,56 @@ internal sealed class WorkbenchWindow : Window
         Background = DeskBrush;
         Foreground = Ink;
         MinWidth = 640; MinHeight = 420;
-        var root = new DockPanel();
+        var root = new Grid();
         Content = root;
-        var toolbarHost = new Border { Background = CardBrush, Child = _toolbar, BorderBrush = Muted, BorderThickness = new Thickness(0, 0, 0, .5) };
-        DockPanel.SetDock(toolbarHost, Dock.Top); root.Children.Add(toolbarHost);
-        DockPanel.SetDock(_status, Dock.Bottom); root.Children.Add(_status);
         root.Children.Add(_viewport);
         _viewport.Background = DeskBrush;
         var transform = new TransformGroup(); transform.Children.Add(_scale); transform.Children.Add(_pan);
         _world.RenderTransform = transform;
         _viewport.Children.Add(_world);
-        _toolbar.Children.Add(new TextBlock { Text = Title, FontSize = 19, FontWeight = FontWeights.SemiBold, Margin = new Thickness(6, 4, 18, 4), VerticalAlignment = VerticalAlignment.Center });
-        AddButton("WorkbenchOverview", () => FitOverview());
-        AddButton("WorkbenchCurrent", () => FitActive());
-        AddButton("WorkbenchNewNote", () => CreatePaper(PaperTypes.Note));
-        AddButton("WorkbenchNewTodo", () => CreatePaper(PaperTypes.Todo));
+
+        // Use the compact floating workbench bar from #398, not a permanently docked
+        // ribbon. Navigation and creation stay available without losing canvas space.
+        var toolbarHost = new Border
+        {
+            CornerRadius = new CornerRadius(10),
+            Background = CardBrush, BorderBrush = Muted, BorderThickness = new Thickness(1),
+            Padding = new Thickness(8, 4, 6, 4), Margin = new Thickness(16, 14, 16, 0),
+            HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Top
+        };
+        var toolbarGrid = new Grid();
+        toolbarGrid.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+        toolbarGrid.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
+        toolbarGrid.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+        toolbarGrid.Children.Add(new TextBlock
+        {
+            Text = Title, FontSize = 14, FontWeight = FontWeights.SemiBold,
+            Foreground = Ink, VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(6, 0, 16, 0)
+        });
+        _toolbar.Margin = new Thickness(0);
+        Grid.SetColumn(_toolbar, 2);
+        toolbarGrid.Children.Add(_toolbar);
+        toolbarHost.Child = toolbarGrid;
+        Panel.SetZIndex(toolbarHost, 10);
+        root.Children.Add(toolbarHost);
+        _status.VerticalAlignment = VerticalAlignment.Bottom;
+        Panel.SetZIndex(_status, 10);
+        root.Children.Add(_status);
+
         AddButton("WorkbenchArrange", () => { RememberLayout(); _ = LayoutActiveAsync(arrange: true); });
         AddButton("WorkbenchUndo", UndoLayout);
+        AddButton("WorkbenchCurrent", () => FitActive());
+        AddButton("WorkbenchOverview", () => FitOverview());
+        AddButton("WorkbenchNewNote", () => CreatePaper(PaperTypes.Note));
+        AddButton("WorkbenchNewTodo", () => CreatePaper(PaperTypes.Todo));
         _search.ToolTip = Strings.Get("WorkbenchSearch");
-        _search.TextChanged += (_, _) => ApplySearch();
+        _search.TextChanged += (_, _) => { _searchCursor = 0; ApplySearch(); };
+        _search.KeyDown += (_, e) => { if (e.Key == Key.Enter) { SearchNext(); e.Handled = true; } };
         _toolbar.Children.Add(_search);
         AddSymbolButton("-", () => ZoomAt(_scale.ScaleX / 1.2, ViewportCenter));
         _toolbar.Children.Add(_zoom);
         AddSymbolButton("+", () => ZoomAt(_scale.ScaleX * 1.2, ViewportCenter));
-        AddButton("WorkbenchRefresh", () => _ = RefreshOverviewAsync());
         AddButton("WorkbenchClose", Close);
         _viewport.PreviewMouseDown += BeginPan;
         _viewport.PreviewMouseMove += MovePan;
@@ -354,17 +381,30 @@ internal sealed class WorkbenchWindow : Window
         Fit(card.Bounds.Inflate(64).Offset(scene.Origin), 1);
         _focusAfterRefresh = null;
     }
+    private static bool SearchMatches(WorkbenchPaperSnapshot paper, string query) =>
+        paper.Title.Contains(query, StringComparison.CurrentCultureIgnoreCase) ||
+        paper.Summary.Contains(query, StringComparison.CurrentCultureIgnoreCase) ||
+        paper.BindingTitle.Contains(query, StringComparison.CurrentCultureIgnoreCase);
+
     private void ApplySearch()
     {
         var query = _search.Text.Trim();
         foreach (var scene in _scenes.Values)
         foreach (var card in scene.Cards.Values)
-        {
-            var match = query.Length == 0 || card.Snapshot.Title.Contains(query, StringComparison.CurrentCultureIgnoreCase)
-                || card.Snapshot.Summary.Contains(query, StringComparison.CurrentCultureIgnoreCase)
-                || card.Snapshot.BindingTitle.Contains(query, StringComparison.CurrentCultureIgnoreCase);
-            card.Frame.Opacity = match ? 1 : .3;
-        }
+            card.Frame.Opacity = query.Length == 0 || SearchMatches(card.Snapshot, query) ? 1 : .3;
+    }
+
+    private void SearchNext()
+    {
+        var query = _search.Text.Trim();
+        if (query.Length == 0) return;
+        var matches = _scenes.Values.OrderBy(s => s.Number)
+            .SelectMany(scene => scene.Cards.Values.Where(c => SearchMatches(c.Snapshot, query))
+                .Select(card => (Scene: scene, Card: card))).ToArray();
+        if (matches.Length == 0) { _status.Text = Strings.Get("WorkbenchSearchNoResults"); return; }
+        var found = matches[_searchCursor++ % matches.Length];
+        Fit(found.Card.Bounds.Inflate(64).Offset(found.Scene.Origin));
+        _status.Text = Strings.Format("WorkbenchSearchResult", (_searchCursor - 1) % matches.Length + 1, matches.Length);
     }
 
     private Card CreateActiveCard(WorkbenchPaperSnapshot paper)
