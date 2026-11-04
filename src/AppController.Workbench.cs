@@ -137,19 +137,6 @@ public sealed partial class AppController
         return new(number, papers, links);
     }
 
-    // The workbench owns the live body while it is open. Adjust only the desktop
-    // visibility preference here; the original window and capsule are restored on exit.
-    internal void SetWorkbenchDesktopVisibility(PaperData paper, bool visible)
-    {
-        if (_workbenchWindow is not { IsSuspended: false } ||
-            !State.Papers.Contains(paper) || paper.IsVisible == visible) return;
-        InvalidateVisibilityShortcutSnapshotForExternalCommand();
-        paper.IsVisible = visible;
-        MarkDirty();
-        RefreshTrayMenu();
-        RefreshTodoRowsForLinkedPaper(paper.Id);
-    }
-
     internal void StoreWorkbenchLayout(WorkbenchState layout)
     {
         if (IsExiting || IsDataReloading) return;
