@@ -2219,7 +2219,7 @@ public sealed partial class AppController : IDisposable
                 // During the first arrange the master HWND does not exist yet, so reserve the
                 // standard pill width. Subsequent layouts use the master's actual localized,
                 // DPI-aware text width.
-                var masterWidth = _masterCapsules.TryGetValue(targetKey, out var master)
+                var masterWidth = _masterCapsules.TryGetValue(State.UseCapsuleFreeQueues ? LiveEdgeOfQueueKey(targetKey) : targetKey, out var master)
                     ? master.DesiredDockedWidth
                     : PaperLayoutDefaults.CapsuleWidth;
                 width = Math.Max(width, masterWidth);
@@ -2304,7 +2304,7 @@ public sealed partial class AppController : IDisposable
         targetIndex = Math.Clamp(targetIndex, 0, queueMembers.Count);
         queueMembers.Insert(targetIndex, draggedPaper);
 
-        var plan = EdgeCapsuleQueueCoordinator.Build(
+        var plan = BuildEdgeQueuePlan(
             queueMembers.Select(member => new EdgeCapsuleQueueMember(member, queueKey)),
             State.UseCapsuleCollapseAll);
         if (plan.Queues.Count == 0)
@@ -2325,7 +2325,9 @@ public sealed partial class AppController : IDisposable
                 continue;
             }
 
-            window.PreviewDeepCapsulePlacement(plan.Placements[member.Id]);
+            var placement = plan.Placements[member.Id];
+            var delta = State.UseCapsuleFreeQueues ? BuildEffectiveQueueRestingDeltas().GetValueOrDefault(queueKey) : 0;
+            window.PreviewDeepCapsulePlacement(placement with { TopOffsetDip = placement.TopOffsetDip + delta });
         }
     }
 
@@ -2343,7 +2345,7 @@ public sealed partial class AppController : IDisposable
         var queueKey = QueueKey(monitorDeviceName, side);
         foreach (var paper in DeepCapsulePapersInOrder())
         {
-            if (!string.Equals(QueueKey(paper), queueKey, StringComparison.Ordinal) ||
+            if (!string.Equals(EdgeKey(paper.CapsuleMonitorDeviceName, paper.CapsuleSide), queueKey, StringComparison.Ordinal) ||
                 !_windows.TryGetValue(paper.Id, out var window))
             {
                 continue;
@@ -2366,7 +2368,8 @@ public sealed partial class AppController : IDisposable
         EdgeCapsuleEdge edge,
         double rollbackStartTopMargin,
         out MasterCapsuleQueueTransferSnapshot snapshot,
-        bool? rollbackHadStartTopMargin = null)
+        bool? rollbackHadStartTopMargin = null,
+        FreeMasterDragLayout? freeLayout = null)
     {
         snapshot = default;
         if (IsExiting ||
@@ -2386,7 +2389,7 @@ public sealed partial class AppController : IDisposable
             : DeepCapsuleSides.Right;
         var sourceKey = QueueKey(normalizedMonitor, side);
         var paperIds = DeepCapsulePapersInOrder()
-            .Where(paper => string.Equals(QueueKey(paper), sourceKey, StringComparison.Ordinal))
+            .Where(paper => string.Equals(EdgeKey(paper.CapsuleMonitorDeviceName, paper.CapsuleSide), sourceKey, StringComparison.Ordinal))
             .Select(paper => paper.Id)
             .ToArray();
         if (paperIds.Length == 0)
@@ -2397,7 +2400,7 @@ public sealed partial class AppController : IDisposable
         // Freeze the persisted monitor aliases behind this live queue. A disconnect may
         // change its live QueueKey, but must not look like a membership mutation.
         var sourceMonitorAliases = State.Papers
-            .Where(paper => string.Equals(QueueKey(paper), sourceKey, StringComparison.Ordinal))
+            .Where(paper => string.Equals(EdgeKey(paper.CapsuleMonitorDeviceName, paper.CapsuleSide), sourceKey, StringComparison.Ordinal))
             .Select(paper => paper.CapsuleMonitorDeviceName.Trim())
             .Append(normalizedMonitor)
             .Distinct(StringComparer.Ordinal)
@@ -2411,7 +2414,8 @@ public sealed partial class AppController : IDisposable
             sourceMonitorAliases,
             IsCapsuleCollapseAllActiveForQueue(sourceKey),
             rollbackHadStartTopMargin ?? State.DeepCapsuleQueueStartTopMargins.ContainsKey(sourceKey),
-            rollbackStartTopMargin);
+            rollbackStartTopMargin,
+            freeLayout ?? CaptureFreeMasterDragLayout(monitorDeviceName, edge));
 
         // Retraction belongs to this runtime transaction, never to the persisted collapse state.
         // Arm the gate before publishing it: initial placement may synchronously reenter arrange.
@@ -2508,6 +2512,9 @@ public sealed partial class AppController : IDisposable
         {
             return false;
         }
+
+        if (snapshot.FreeLayout != null)
+            return CommitFreeMasterQueueTransfer(snapshot, dropPoint, out handoffTarget);
 
         // Keep the key captured at gesture start. Live QueueKey falls back to the primary
         // monitor after a disconnect and must not redirect rollback or source cleanup there.
@@ -2700,6 +2707,11 @@ public sealed partial class AppController : IDisposable
     private void RestoreMasterCapsuleQueueStartTopMargin(
         MasterCapsuleQueueTransferSnapshot snapshot)
     {
+        if (snapshot.FreeLayout != null)
+        {
+            _freeMasterDragPreview = null;
+            return;
+        }
         if (snapshot.SourceHadStartTopMargin)
         {
             State.DeepCapsuleQueueStartTopMargins[snapshot.SourceQueueKey] =
@@ -2969,10 +2981,12 @@ public sealed partial class AppController : IDisposable
     private static string QueueKey(string monitorDeviceName, string side)
         => $"{LiveQueueMonitorDeviceName(monitorDeviceName)}|{(side == DeepCapsuleSides.Left ? DeepCapsuleSides.Left : DeepCapsuleSides.Right)}";
 
-    private static string QueueKey(PaperData paper) => QueueKey(paper.CapsuleMonitorDeviceName, paper.CapsuleSide);
+    private string QueueKey(PaperData paper) => State.UseCapsuleFreeQueues
+        ? InstanceQueueKey(paper) : QueueKey(paper.CapsuleMonitorDeviceName, paper.CapsuleSide);
 
     private bool IsCapsuleCollapseAllActiveForQueue(string queueKey)
     {
+        if (State.UseCapsuleFreeQueues) queueKey = LiveEdgeOfQueueKey(queueKey);
         return (_masterCapsuleQueueTransfer is { } transfer &&
                 string.Equals(transfer.SourceQueueKey, queueKey, StringComparison.Ordinal)) ||
             (State.CapsuleCollapseAllActiveQueues.TryGetValue(queueKey, out var active) && active);
@@ -3074,14 +3088,15 @@ public sealed partial class AppController : IDisposable
 
         var capsulePapers = DeepCapsulePapersInOrder();
 
-        var plan = EdgeCapsuleQueueCoordinator.Build(
+        var plan = BuildEdgeQueuePlan(
             capsulePapers.Select(paper => new EdgeCapsuleQueueMember(paper, QueueKey(paper))),
             State.UseCapsuleCollapseAll);
         plan = ApplyEdgeCapsulePreviewLayout(plan);
+        plan = ApplyFreeQueueRestingLayout(plan);
         var queueKeys = plan.Queues.Select(queue => queue.Key).ToList();
-        RemoveStaleCollapseAllActiveQueues(queueKeys);
+        RemoveStaleCollapseAllActiveQueues(State.UseCapsuleFreeQueues ? queueKeys.Select(LiveEdgeOfQueueKey) : queueKeys);
 
-        if (flushInitialPresentations)
+        if (flushInitialPresentations || State.UseCapsuleFreeQueues)
         {
             // The master owns slot 0, so startup creates it before publishing the real slots.
             // Suppress its standalone fade so the complete queue reaches the first frame together.
@@ -3103,7 +3118,7 @@ public sealed partial class AppController : IDisposable
                     window.DetachFromDeepCapsuleStack();
                     continue;
                 }
-                var retracted = placement.VisualOffset > 0 && IsCapsuleCollapseAllActiveForQueue(key);
+                var retracted = State.UseCapsuleCollapseAll && IsCapsuleCollapseAllActiveForQueue(key);
                 if (retracted)
                 {
                     window.RetractIntoMaster(placement, animate);
@@ -3146,7 +3161,7 @@ public sealed partial class AppController : IDisposable
             }
         }
 
-        if (!flushInitialPresentations)
+        if (!flushInitialPresentations && !State.UseCapsuleFreeQueues)
         {
             SyncMasterCapsules(plan, animate, masterTransferTargetKey);
         }
@@ -3163,6 +3178,10 @@ public sealed partial class AppController : IDisposable
             return;
         }
 
+        var masterTops = plan.MasterTopsDip;
+        if (State.UseCapsuleFreeQueues)
+            plan = EdgeCapsuleQueueCoordinator.Build(DeepCapsulePapersInOrder().Select(p =>
+                new EdgeCapsuleQueueMember(p, EdgeKey(p.CapsuleMonitorDeviceName, p.CapsuleSide))), true);
         var liveKeys = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var queue in plan.Queues)
@@ -3187,6 +3206,7 @@ public sealed partial class AppController : IDisposable
                 master = new MasterCapsuleWindow(this, edge, monitor);
                 _masterCapsules[key] = master;
                 master.SetExperimentalPassive(_experimentalAllSurfacesPassive);
+                master.SetQueueTopPreview(State.UseCapsuleFreeQueues ? masterTops.GetValueOrDefault(key, DeepCapsuleStartTopMarginForQueueKey(key)) : null);
                 if (isTransferTarget)
                 {
                     master.PrepareQueueTransferTarget(papers.Count, retracted);
@@ -3199,6 +3219,7 @@ public sealed partial class AppController : IDisposable
             else
             {
                 master.SetQueue(edge, monitor);
+                master.SetQueueTopPreview(State.UseCapsuleFreeQueues ? masterTops.GetValueOrDefault(key, DeepCapsuleStartTopMarginForQueueKey(key)) : null);
                 master.UpdateState(papers.Count, retracted, animateMaster);
             }
         }
@@ -4045,16 +4066,13 @@ public sealed partial class AppController : IDisposable
     // product default directly; the per-queue dictionary is the only persisted authority.
     public double DeepCapsuleStartTopMarginFor(PaperData paper)
     {
-        var edge = paper.CapsuleSide == DeepCapsuleSides.Left ? EdgeCapsuleEdge.Left : EdgeCapsuleEdge.Right;
-        return DeepCapsuleStartTopMarginForQueue(paper.CapsuleMonitorDeviceName, edge);
+        return DeepCapsuleStartTopMarginForQueueKey(QueueKey(paper));
     }
 
     public double DeepCapsuleStartTopMarginForQueue(string monitorDeviceName, EdgeCapsuleEdge edge)
     {
-        var key = QueueKey(monitorDeviceName, edge == EdgeCapsuleEdge.Left ? DeepCapsuleSides.Left : DeepCapsuleSides.Right);
-        return State.DeepCapsuleQueueStartTopMargins.TryGetValue(key, out var m)
-            ? m
-            : EdgeCapsuleLayout.StartTopMargin;
+        return DeepCapsuleStartTopMarginForQueueKey(QueueKey(monitorDeviceName,
+            edge == EdgeCapsuleEdge.Left ? DeepCapsuleSides.Left : DeepCapsuleSides.Right));
     }
 
     internal string MasterCapsuleQueueKey(string monitorDeviceName, EdgeCapsuleEdge edge)

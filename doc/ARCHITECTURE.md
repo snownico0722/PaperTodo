@@ -396,6 +396,8 @@ Presentation contract 区分：
 
 透明 capacity 不属于交互区域。
 
+Free queues extend the existing queue identity with an optional persisted instance id. Ctrl chooses a whole queue but does not change its drag phase: it slides along the edge until the normal sideways threshold or monitor crossing. Prepending grows upward while preserving the target's existing members; interior insertion reuses placement animation for the suffix and affected neighbours. Independent drops never search for another free position. Passive monitor/mini-preview spacing is derived and is not persisted. Preview and commit share the same prospective membership/anchor plan and the existing coordinator, reducer and presenter. One master per physical edge collects all instances without flattening them; its movement translates the side-wide layout, while Ctrl moves just one group. See D-066.
+
 ### 6.3 Surface 切分
 
 每张 docked capsule 由独立 `EdgeCapsuleHost` 长期拥有真实 HWND 和完整 WPF visual tree。Host 是 **bounded live host**：native capacity 稳定且有限，可见 shape 在其中由 WPF 变化。

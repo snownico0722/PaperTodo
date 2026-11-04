@@ -34,7 +34,8 @@ public sealed class MasterCapsuleWindow : Window
         DeviceScreenPoint StartScreenPosition,
         string SourceQueueKey,
         bool SourceHadStartTopMargin,
-        double StartTopMargin);
+        double StartTopMargin,
+        FreeMasterDragLayout? FreeLayout = null);
 
     private const int WmSettingChange = 0x001A;
     private const int WmDisplayChange = 0x007E;
@@ -267,7 +268,8 @@ public sealed class MasterCapsuleWindow : Window
                 DeviceScreenPoint.FromPoint(PointToScreen(e.GetPosition(this))),
                 _controller.MasterCapsuleQueueKey(_queueMonitorDeviceName, _queueEdge),
                 _controller.HasDeepCapsuleStartTopMarginForQueue(_queueMonitorDeviceName, _queueEdge),
-                _controller.DeepCapsuleStartTopMarginForQueue(_queueMonitorDeviceName, _queueEdge));
+                _controller.DeepCapsuleStartTopMarginForQueue(_queueMonitorDeviceName, _queueEdge),
+                _controller.CaptureFreeMasterDragLayout(_queueMonitorDeviceName, _queueEdge));
             _gestureState = MasterGestureState.Pending;
             _pill.CaptureMouse();
             e.Handled = true;
@@ -373,7 +375,12 @@ public sealed class MasterCapsuleWindow : Window
             BeginAnimation(AnimatedTopProperty, null);
         }
 
-        var targetMargin = session.StartTopMargin + deltaY;
+        var targetMargin = (session.FreeLayout?.MasterTopDip ?? session.StartTopMargin) + deltaY;
+        if (session.FreeLayout is { } freeLayout)
+        {
+            _controller.PreviewFreeMasterQueueTop(freeLayout, targetMargin);
+            return true;
+        }
         _controller.SetDeepCapsuleStartTopMargin(
             _queueMonitorDeviceName,
             _queueEdge,
@@ -516,6 +523,8 @@ public sealed class MasterCapsuleWindow : Window
 
     internal void CancelQueueTransfer()
     {
+        if (_gestureState is MasterGestureState.Pending or MasterGestureState.Dragging)
+            FinishMasterGesture(commit: false);
         if (_queueTransferSnapshot is not { } snapshot || _queueTransferCanceled)
         {
             return;
@@ -594,7 +603,8 @@ public sealed class MasterCapsuleWindow : Window
                 _queueEdge,
                 session.StartTopMargin,
                 out var snapshot,
-                session.SourceHadStartTopMargin))
+                session.SourceHadStartTopMargin,
+                session.FreeLayout))
         {
             return false;
         }
@@ -745,7 +755,11 @@ public sealed class MasterCapsuleWindow : Window
             // Live movement updates the queue immediately so the stack follows the pointer.
             // Only MouseUp commits that value. Every other exit restores the original margin
             // and its presence, so a canceled preview cannot pin the current product default.
-            if (commit)
+            if (session!.FreeLayout is { } freeLayout)
+            {
+                _controller.FinishFreeMasterQueueDrag(freeLayout, commit);
+            }
+            else if (commit)
             {
                 _controller.SetDeepCapsuleStartTopMargin(
                     _queueMonitorDeviceName,
@@ -903,10 +917,13 @@ public sealed class MasterCapsuleWindow : Window
         _queueMonitorDeviceName = queueMonitorDeviceName ?? "";
     }
 
-    private double QueueStartTopMargin =>
-        _controller.DeepCapsuleStartTopMarginForQueue(_queueMonitorDeviceName, _queueEdge);
+    private double? _queueTopPreview;
+    internal void SetQueueTopPreview(double? top) => _queueTopPreview = top;
 
-    private int QueueSlotCount => Math.Max(1, _count + 1);
+    private double QueueStartTopMargin =>
+        _queueTopPreview ?? _controller.DeepCapsuleStartTopMarginForQueue(_queueMonitorDeviceName, _queueEdge);
+
+    private int QueueSlotCount => _controller.State.UseCapsuleFreeQueues ? 1 : Math.Max(1, _count + 1);
 
     private void MoveToTarget(bool animate)
     {

@@ -26,7 +26,7 @@ public sealed partial class AppController
 
         var target = _windows.Values.FirstOrDefault(window =>
             string.Equals(
-                QueueKey(window.EdgeCapsulePreviewPaper),
+                LiveEdgeOfQueueKey(QueueKey(window.EdgeCapsulePreviewPaper)),
                 queueKey,
                 StringComparison.Ordinal));
         if (target == null)
@@ -43,6 +43,8 @@ public sealed partial class AppController
         // synchronously calls ArrangeDeepCapsules. Every RetractIntoMaster/ApplyDeepCapsulePlacement
         // in that arrange can then stage into the same Send-priority commit and start from one QPC
         // timestamp instead of seven independent per-paper clocks.
-        BeginEdgeCapsuleVisualTransaction(target);
+        foreach (var window in _windows.Values.Where(w =>
+                     LiveEdgeOfQueueKey(QueueKey(w.EdgeCapsulePreviewPaper)) == queueKey).ToArray())
+            BeginEdgeCapsuleVisualTransaction(window);
     }
 }

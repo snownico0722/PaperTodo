@@ -139,7 +139,7 @@ public sealed partial class PaperWindow
         RefreshEffectiveTopmost();
     }
 
-    internal void PreviewDeepCapsulePlacement(EdgeCapsulePlacement placement)
+    internal void PreviewDeepCapsulePlacement(EdgeCapsulePlacement placement, bool animate = true)
     {
         if (!HasDeepCapsuleSlotPlacement ||
             _edgeCapsuleHost?.IsVisible != true ||
@@ -149,18 +149,19 @@ public sealed partial class PaperWindow
             return;
         }
 
+        if (_edgeCapsule.Placement == placement.Normalize()) return;
         if (!UpdateEdgeCapsuleQueuePlacement(placement))
         {
             return;
         }
         if (!TryStageEdgeCapsuleVisualTransaction(
-                animate: true,
+                animate: animate,
                 EdgeCapsuleTransitionReason.Placement,
                 EdgeCapsuleLayout.SlotMoveMilliseconds,
                 refreshLayout: true))
         {
             RequestEdgeCapsulePresentation(
-                animate: true,
+                animate: animate,
                 EdgeCapsuleTransitionReason.Placement,
                 EdgeCapsuleLayout.SlotMoveMilliseconds,
                 refreshLayout: true);

@@ -13,14 +13,17 @@ internal sealed class EdgeCapsuleQueuePlan
 {
     public EdgeCapsuleQueuePlan(
         IReadOnlyList<EdgeCapsuleQueue> queues,
-        IReadOnlyDictionary<string, EdgeCapsulePlacement> placements)
+        IReadOnlyDictionary<string, EdgeCapsulePlacement> placements,
+        IReadOnlyDictionary<string, double>? masterTopsDip = null)
     {
         Queues = queues;
         Placements = placements;
+        MasterTopsDip = masterTopsDip ?? new Dictionary<string, double>();
     }
 
     public IReadOnlyList<EdgeCapsuleQueue> Queues { get; }
     public IReadOnlyDictionary<string, EdgeCapsulePlacement> Placements { get; }
+    public IReadOnlyDictionary<string, double> MasterTopsDip { get; }
 }
 
 internal sealed class EdgeCapsuleArrangeGate
@@ -56,7 +59,8 @@ internal static class EdgeCapsuleQueueCoordinator
 {
     public static EdgeCapsuleQueuePlan Build(
         IEnumerable<EdgeCapsuleQueueMember> members,
-        bool showMaster)
+        bool showMaster,
+        Func<string, bool>? masterForQueue = null)
     {
         var queueMembers = new Dictionary<string, List<PaperData>>(StringComparer.Ordinal);
         var queueOrder = new List<string>();
@@ -76,7 +80,7 @@ internal static class EdgeCapsuleQueueCoordinator
         foreach (var key in queueOrder)
         {
             var papers = queueMembers[key];
-            var hasMaster = showMaster && papers.Count > 0;
+            var hasMaster = showMaster && papers.Count > 0 && (masterForQueue?.Invoke(key) ?? true);
             var visualOffset = hasMaster ? 1 : 0;
             var slotCount = papers.Count + visualOffset;
             queues.Add(new EdgeCapsuleQueue(key, papers, hasMaster));

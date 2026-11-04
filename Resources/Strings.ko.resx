@@ -1667,4 +1667,6 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="NoteExportNoNotes" xml:space="preserve"><value>내보낼 수 있는 메모 또는 할 일이 없습니다.</value></data>
   <data name="NoteExportProgress" xml:space="preserve"><value>내보내는 중 {0}/{1}개</value></data>
   <data name="TodoExportCurrent" xml:space="preserve"><value>현재 할 일 내보내기</value></data>
+  <data name="SettingsCapsuleFreeQueues" xml:space="preserve"><value>자유로운 가장자리 캡슐 대기열</value></data>
+  <data name="TipCapsuleFreeQueues" xml:space="preserve"><value>캡슐을 멀리 드래그하면 독립된 대기열이 됩니다. Ctrl을 누른 채 대기열 전체를 옮기고, 옆으로 끌어 다른 가장자리나 화면으로 이동하세요. 메인 캡슐로 같은 쪽의 모든 대기열을 접을 수 있습니다.</value></data>
 </root>

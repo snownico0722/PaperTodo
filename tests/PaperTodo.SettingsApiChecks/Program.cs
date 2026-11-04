@@ -70,6 +70,7 @@ internal static partial class Program
             ServiceBehavior();
             StartupApprovalBehavior();
             CatalogBehavior();
+            NativeQueueSettingsBehavior();
             TopBarShortcutBehavior();
             TodoMoveBehavior();
             AdapterBehavior();

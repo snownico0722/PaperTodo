@@ -1667,4 +1667,6 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="NoteExportNoNotes" xml:space="preserve"><value>エクスポートできるメモまたは ToDo がありません。</value></data>
   <data name="NoteExportProgress" xml:space="preserve"><value>エクスポート中 {0}/{1} 件</value></data>
   <data name="TodoExportCurrent" xml:space="preserve"><value>この ToDo をエクスポート</value></data>
+  <data name="SettingsCapsuleFreeQueues" xml:space="preserve"><value>エッジカプセルの自由なキュー</value></data>
+  <data name="TipCapsuleFreeQueues" xml:space="preserve"><value>カプセルを離して独立したキューを作成します。Ctrl を押しながらキュー全体を移動し、横に引き出して別の端や画面へ移動できます。メインカプセルで同じ端のキューをまとめて収納できます。</value></data>
 </root>
