@@ -150,6 +150,12 @@ internal static class Program
             Theme.Invalidate(); workbench.RefreshTheme();
 
             var search = (TextBox)Member(workbench, "_search");
+            search.ApplyTemplate();
+            var searchFrame = search.Template.FindName("Bd", search) as Border;
+            Assert(search.Style != null && searchFrame?.CornerRadius == new CornerRadius(6) &&
+                   search.Background == Brushes.Transparent &&
+                   search.BorderThickness == new Thickness(1),
+                "Workbench search did not use the rounded external-open input style");
             var left = (StackPanel)Member(workbench, "_layoutCommands");
             var right = (StackPanel)Member(workbench, "_rightCommands");
             Assert(Grid.GetColumn(search) == 1 && left.Children.Count == 2 &&
@@ -173,19 +179,28 @@ internal static class Program
             var active = Member(workbench, "ActiveScene");
             var cards = (System.Collections.IDictionary)Member(active, "Cards");
             var card = cards["note-a"]!;
-            var eye = (Button)Member(card, "Eye");
+            var titleEditor = (TextBox)Member(card, "Title");
+            titleEditor.ApplyTemplate();
+            var titleFrame = titleEditor.Template.FindName("Bd", titleEditor) as Border;
+            Assert(titleFrame?.CornerRadius == new CornerRadius(6),
+                "Workbench rename editor did not use the rounded settings input style");
+            var eye = (Border)Member(card, "Eye");
             var footer = (Grid)eye.Parent;
             Assert(Grid.GetRow(footer) == 3 &&
                    eye.HorizontalAlignment == HorizontalAlignment.Left &&
-                   eye.IsEnabled && eye.IsHitTestVisible,
-                "Desktop eye is not clickable at the bottom-left of the paper");
-            var paperVisible = controller.FindPaper("note-a")!.IsVisible;
-            eye.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
-            Assert(controller.FindPaper("note-a")!.IsVisible != paperVisible,
-                "Clicking the workbench eye did not toggle desktop visibility");
-            eye.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
-            Assert(controller.FindPaper("note-a")!.IsVisible == paperVisible,
-                "Clicking the eye twice did not restore desktop visibility");
+                   !eye.IsHitTestVisible &&
+                   eye.Child is Grid visibleIcon &&
+                   visibleIcon.Children.OfType<System.Windows.Shapes.Path>().Count() == 1,
+                "Desktop eye is not a static status icon at the bottom-left");
+            var hiddenCard = cards["todo-a"]!;
+            var hiddenEye = (Border)Member(hiddenCard, "Eye");
+            Assert(hiddenEye.Child is Grid hiddenIcon &&
+                   hiddenIcon.Children.OfType<System.Windows.Shapes.Path>().Count() == 2 &&
+                   !hiddenEye.IsHitTestVisible,
+                "Hidden desktop paper did not have a noninteractive crossed-out eye");
+            Assert(controller.FindPaper("note-a")!.IsVisible &&
+                   !controller.FindPaper("todo-a")!.IsVisible,
+                "Status icons unexpectedly changed desktop visibility");
             var zoom = (ScaleTransform)Member(workbench, "_scale");
             var pan = (TranslateTransform)Member(workbench, "_pan");
             var camera = (zoom.ScaleX, pan.X, pan.Y);
@@ -254,15 +269,13 @@ internal static class Program
                 "Binding was not stored on the specific Todo item");
             Assert(controller.SnapshotCurrentWorkbench().Edges.Any(e => e.From == "todo-a" && e.To == "note-a"),
                 "Todo-item binding was not reflected by the workbench layout");
-            // The eye changes only desktop visibility while the real editor stays hosted.
-            controller.SetWorkbenchDesktopVisibility(controller.FindPaper("note-a")!, false);
-            controller.SetWorkbenchDesktopVisibility(controller.FindPaper("todo-a")!, true);
-            Assert(!controller.FindPaper("note-a")!.IsVisible && controller.FindPaper("todo-a")!.IsVisible,
-                "Eye did not change the desktop visibility model");
-            Assert(workbench.HostedPaperCount == 2, "Eye visibility detached the workbench editor");
+            // Visibility is a desktop property, not an action on the workbench eye.
+            Assert(controller.FindPaper("note-a")!.IsVisible && !controller.FindPaper("todo-a")!.IsVisible,
+                "Workbench changed desktop visibility while displaying it");
+            Assert(workbench.HostedPaperCount == 2, "Status display detached the workbench editor");
             controller.ToggleWorkbench();
-            Assert(!originalWindow.IsVisible, "Hidden-on-desktop paper was shown after closing workbench");
-            Assert(windows["todo-a"].IsVisible, "Eye did not show previously hidden paper on desktop");
+            Assert(originalWindow.IsVisible, "Visible desktop paper was not restored after closing workbench");
+            Assert(!windows["todo-a"].IsVisible, "Hidden desktop paper was incorrectly shown after closing workbench");
         }
         else
         {
