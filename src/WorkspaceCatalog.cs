@@ -44,8 +44,8 @@ internal sealed class WorkspaceCatalog
                  name.StartsWith(stem + "conflict-", StringComparison.OrdinalIgnoreCase)));
     }
 
-    // Only an inactive, explicitly removed slot may be purged. Reuse always purges before
-    // adding the slot to the catalog, so a previously deleted slot cannot revive old data.
+    // Purge only an inactive secondary slot. The caller removes its catalog entry
+    // only after all owned files were deleted, retaining the retry action on failure.
     internal void DeleteInactiveSlotFiles(int number)
     {
         if (number is < 2 or > 5 || Options.Active == number)
