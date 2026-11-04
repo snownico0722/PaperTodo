@@ -32,6 +32,11 @@ public sealed partial class PaperWindow
 
     internal bool IsExpandedEditorMode => _isExpandedEditorMode;
     internal bool IsExpandedEditorSidebarOpen => _isExpandedEditorSidebarOpen;
+    internal void SetExpandedEditorSidebarOpen(bool open)
+    {
+        _isExpandedEditorSidebarOpen = open;
+        RefreshExpandedEditorPresentation();
+    }
     internal bool IsExpandedEditorMaximized => _expandedEditorHostWindow?.WindowState == WindowState.Maximized;
 
     private void BuildExpandedEditorTopBarControls(StackPanel buttons)
