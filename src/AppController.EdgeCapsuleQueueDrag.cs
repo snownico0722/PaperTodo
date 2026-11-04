@@ -258,8 +258,12 @@ public sealed partial class AppController
             if (drop.Decision.Kind == EdgeFreeQueueDropKind.Insert)
                 InsertNativeQueueBlock(carried, drop.TargetMembers, drop.Decision.Index);
             foreach (var (key, top) in drop.Anchors) State.DeepCapsuleQueueStartTopMargins[key] = top;
-            if (drop.DestinationKey != drag.SourceKey && !QueueHasMaster(drag.SourceKey) &&
-                !State.Papers.Any(p => InstanceQueueKey(p) == drag.SourceKey)) State.DeepCapsuleQueueStartTopMargins.Remove(drag.SourceKey);
+            // A free-queue master is retired with its final member. It must not pin a
+            // vanished queue's saved anchor; hidden members still retain ownership.
+            if (drop.DestinationKey != drag.SourceKey &&
+                (drag.FreeQueues || !QueueHasMaster(drag.SourceKey)) &&
+                !State.Papers.Any(p => InstanceQueueKey(p) == drag.SourceKey))
+                State.DeepCapsuleQueueStartTopMargins.Remove(drag.SourceKey);
         }
         catch
         {
