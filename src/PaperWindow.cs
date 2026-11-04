@@ -233,7 +233,7 @@ public sealed partial class PaperWindow : Window
     // Ordinary collapsed capsules are the main PaperWindow and should still save X/Y.
     // Deep capsules use the slot-host window for docked geometry, so the hidden/parked
     // main window must not overwrite ordinary paper geometry.
-    public bool UsesNonPaperGeometry => _paper.IsCollapsed && HasDeepCapsuleSlotPlacement;
+    public bool UsesNonPaperGeometry => _isExpandedEditorMode || (_paper.IsCollapsed && HasDeepCapsuleSlotPlacement);
     public bool ShouldSaveDeepCapsuleExpandedGeometry => ExpandedFromDeepCapsuleEdge && !_paper.IsCollapsed && _paper.IsVisible;
     public double DesiredCapsuleWindowWidth => CapsuleWindowWidth();
     public double DeepCapsuleRestingVisibleWidth => HoldsDeepCapsuleSlotWhileExpanded
@@ -707,6 +707,7 @@ public sealed partial class PaperWindow : Window
             EnsureShellBuilt();
         }
 
+        IsVisibleChanged += (_, _) => OnExpandedEditorVisibilityChanged();
         Loaded += (_, _) =>
         {
             SaveGeometryIfAllowed();
@@ -727,6 +728,7 @@ public sealed partial class PaperWindow : Window
         StateChanged += (_, _) =>
         {
             RefreshSnappedPresentation(forceApply: true);
+            RefreshExpandedEditorTopBarControls();
             if (_paper.Type == PaperTypes.Note)
             {
                 NotifyCurrentPaperBodyVisibility(
@@ -840,7 +842,7 @@ public sealed partial class PaperWindow : Window
 
     public void UpdateWindowSwitcherVisibility()
     {
-        if (_controller.State.HidePapersFromWindowSwitcher)
+        if (_controller.State.HidePapersFromWindowSwitcher && !_isExpandedEditorMode)
         {
             WindowNative.ApplyWindowSwitcherVisibility(
                 this,
@@ -873,7 +875,7 @@ public sealed partial class PaperWindow : Window
 
     public void ApplySystemVisibility(bool reapplyTaskbarShellState = false)
     {
-        if (_controller.State.HidePapersFromWindowSwitcher)
+        if (_controller.State.HidePapersFromWindowSwitcher && !_isExpandedEditorMode)
         {
             UpdateTaskbarVisibility(reapplyTaskbarShellState);
             UpdateWindowSwitcherVisibility();
@@ -898,8 +900,8 @@ public sealed partial class PaperWindow : Window
 
     private bool ShouldShowInTaskbar(bool? collapsed = null)
     {
-        return !_controller.State.HidePapersFromWindowSwitcher &&
-            !_controller.State.HidePapersFromTaskbar &&
+        return (_isExpandedEditorMode || !_controller.State.HidePapersFromWindowSwitcher) &&
+            (_isExpandedEditorMode || !_controller.State.HidePapersFromTaskbar) &&
             !(collapsed ?? _paper.IsCollapsed);
     }
 
@@ -1927,6 +1929,7 @@ public sealed partial class PaperWindow : Window
 
         BuildTopBar();
         BuildBody();
+        BuildExpandedEditorChrome();
         BuildDragLayer();
 
         BuildCapsuleShell();
@@ -2377,6 +2380,7 @@ public sealed partial class PaperWindow : Window
         buttons.Children.Add(_moreActionsButton);
         buttons.Children.Add(CreateWorkspaceCycleButton());
         buttons.Children.Add(_closeButton);
+        BuildExpandedEditorTopBarControls(buttons);
         UpdateTopBarNewPaperButtons();
 
         Grid.SetColumn(buttons, 1);
@@ -2427,7 +2431,9 @@ public sealed partial class PaperWindow : Window
                 _topBarTitleHost.Margin.Left + _topBarTitleHost.Margin.Right;
             var fixedWidth = TopBarOuterWidth(_paperIconButton) +
                 TopBarOuterWidth(_moreActionsButton) +
-                TopBarOuterWidth(_closeButton) + WorkspacePersistentButtonWidth() + TopBarCollisionGap;
+                TopBarOuterWidth(_closeButton) + WorkspacePersistentButtonWidth() +
+                (_editorModeButton == null ? 0 : TopBarOuterWidth(_editorModeButton)) +
+                (_isExpandedEditorMode ? 4 * 25 : 0) + TopBarCollisionGap;
             var remaining = Math.Max(0, availableWidth - fixedWidth - titleMinWidth);
 
             // Built-in user shortcuts are atomic. Saved order affects placement,
@@ -2765,7 +2771,7 @@ public sealed partial class PaperWindow : Window
 
     internal void RefreshEffectiveTopmost()
     {
-        var shouldBeTopmost = !IsExperimentalPassive &&
+        var shouldBeTopmost = !IsExperimentalPassive && !_isExpandedEditorMode &&
             (_paper.AlwaysOnTop ||
              (_controller.State.UseCapsuleMode &&
               _paper.IsCollapsed &&
@@ -3735,7 +3741,7 @@ public sealed partial class PaperWindow : Window
 
     private void SaveGeometryIfAllowed()
     {
-        if (IsPaperFormTransitioning || SuppressGeometrySave)
+        if (IsPaperFormTransitioning || SuppressGeometrySave || _isExpandedEditorMode)
         {
             return;
         }
