@@ -86,12 +86,14 @@ internal sealed class ExpandedEditorWindow : Window
             target.ExpandedEditorHostWindow?.Activate();
             return;
         }
+        var keepSidebarOpen = _current?.IsExpandedEditorSidebarOpen ?? false;
         var former = _lease;
         _lease = null;
         _current = null;
         former?.Return(restoreDesktop: true);
         _lease = target.BorrowExpandedEditorVisual(this, _body);
         _current = target;
+        target.SetExpandedEditorSidebarOpen(keepSidebarOpen);
         Title = target.ExpandedEditorTitle;
         SetFrameTheme(target);
         if (IsVisible) Activate();
