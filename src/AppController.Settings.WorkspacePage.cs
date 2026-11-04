@@ -42,11 +42,18 @@ public sealed partial class AppController
         create.Click += async (_, _) =>
         {
             var options = WorkspaceOptions.Normalized();
-            var slot = Enumerable.Range(2, 4).FirstOrDefault(number => !options.ContainsSlot(number));
-            if (slot == 0) return;
-            // Reusing a deleted slot must not silently restore its former content.
-            try { _workspaceCatalog.DeleteInactiveSlotFiles(slot); }
-            catch (Exception ex) { ReportWorkspaceError(ex.GetBaseException().Message); return; }
+            // Legacy count reductions may have left hidden files behind. New means new:
+            // never overwrite or revive that data without an explicit user action.
+            var slot = Enumerable.Range(2, 4).FirstOrDefault(number =>
+                !options.ContainsSlot(number) && !_workspaceCatalog.SlotHasData(number));
+            if (slot == 0)
+            {
+                ReportWorkspaceError(WorkspaceUi("没有可安全新建的工作区编号。已有的历史文件不会被覆盖。",
+                    "No free workspace slot; existing historical files are preserved.",
+                    "空き番号がありません。既存の履歴ファイルは保持されます。",
+                    "사용 가능한 작업 공간 번호가 없습니다. 기존 파일은 보존됩니다."));
+                return;
+            }
             options.Slots = options.SlotNumbers.Append(slot).OrderBy(number => number).ToList();
             options.Count = options.Slots.Max();
             if (await ChangeWorkspaceConfigurationAsync(options))
