@@ -1667,4 +1667,27 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="NoteExportNoNotes" xml:space="preserve"><value>내보낼 수 있는 메모 또는 할 일이 없습니다.</value></data>
   <data name="NoteExportProgress" xml:space="preserve"><value>내보내는 중 {0}/{1}개</value></data>
   <data name="TodoExportCurrent" xml:space="preserve"><value>현재 할 일 내보내기</value></data>
+  <data name="EditorOpen" xml:space="preserve"><value>편집기로 열기</value></data>
+  <data name="EditorReturn" xml:space="preserve"><value>종이로 돌아가기</value></data>
+  <data name="EditorSidebarShow" xml:space="preserve"><value>종이 목록 표시</value></data>
+  <data name="EditorSidebarHide" xml:space="preserve"><value>종이 목록 닫기</value></data>
+  <data name="EditorMinimize" xml:space="preserve"><value>최소화</value></data>
+  <data name="EditorMaximizeRestore" xml:space="preserve"><value>최대화 / 복원</value></data>
+  <data name="EditorClosePaper" xml:space="preserve"><value>종이 닫기</value></data>
+  <data name="EditorUndo" xml:space="preserve"><value>실행 취소</value></data>
+  <data name="EditorRedo" xml:space="preserve"><value>다시 실행</value></data>
+  <data name="EditorHeading" xml:space="preserve"><value>제목</value></data>
+  <data name="EditorBold" xml:space="preserve"><value>굵게</value></data>
+  <data name="EditorItalic" xml:space="preserve"><value>기울임꼴</value></data>
+  <data name="EditorStrike" xml:space="preserve"><value>취소선</value></data>
+  <data name="EditorBullets" xml:space="preserve"><value>글머리 기호 목록</value></data>
+  <data name="EditorNumbers" xml:space="preserve"><value>번호 목록</value></data>
+  <data name="EditorQuote" xml:space="preserve"><value>인용</value></data>
+  <data name="EditorCode" xml:space="preserve"><value>코드 블록</value></data>
+  <data name="EditorLink" xml:space="preserve"><value>링크 삽입</value></data>
+  <data name="EditorImage" xml:space="preserve"><value>이미지 삽입</value></data>
+  <data name="EditorAllPapers" xml:space="preserve"><value>모든 종이</value></data>
+  <data name="EditorTodo" xml:space="preserve"><value>할 일</value></data>
+  <data name="EditorNote" xml:space="preserve"><value>메모</value></data>
+  <data name="EditorPaper" xml:space="preserve"><value>종이</value></data>
 </root>
