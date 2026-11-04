@@ -4,6 +4,7 @@ using System.Reflection;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -132,6 +133,73 @@ internal static class Program
         Assert(ReferenceEquals(Member(originalWindow, "_markdownBodySession"), bodySession), "Workbench duplicated the body session");
         Assert(!originalWindow.IsVisible && originalWindow.IsWorkbenchHosted, "Desktop and workbench body both visible");
         Assert(masters.Values.All(master => !master.IsVisible), "Workbench left a master capsule visible over the desk");
+        if (name == "surface")
+        {
+            // The workbench chrome follows PaperTodo's actual palette, including color-scheme changes.
+            var chrome = (Border)Member(workbench, "_toolbarHost");
+            Assert(ReferenceEquals(workbench.Background, Theme.CodeBrush) &&
+                   ReferenceEquals(chrome.Background, Theme.PaperBrush), "Workbench uses a fixed non-theme palette");
+            var originalScheme = controller.State.ColorScheme;
+            controller.State.ColorScheme = ColorSchemes.Forest;
+            Theme.Invalidate(); workbench.RefreshTheme();
+            Assert(ReferenceEquals(workbench.Background, Theme.CodeBrush) &&
+                   ReferenceEquals(chrome.Background, Theme.PaperBrush) &&
+                   ReferenceEquals(chrome.BorderBrush, Theme.PaperBorderBrush),
+                "Workbench chrome did not follow the updated palette");
+            controller.State.ColorScheme = originalScheme;
+            Theme.Invalidate(); workbench.RefreshTheme();
+
+            var search = (TextBox)Member(workbench, "_search");
+            var left = (StackPanel)Member(workbench, "_layoutCommands");
+            var right = (StackPanel)Member(workbench, "_rightCommands");
+            Assert(Grid.GetColumn(search) == 1 && left.Children.Count == 2 &&
+                right.Children.Count == 6, "Workbench toolbar groups are misplaced");
+
+            // A large document and a Todo item after the twelfth preview entry are searchable.
+            const string needle = "deep-search-target";
+            var searchState = new AppState { Papers =
+            [
+                new() { Id = "long-note", Type = PaperTypes.Note, Content = new string('x', 900) + needle },
+                new() { Id = "long-todo", Type = PaperTypes.Todo,
+                    Items = Enumerable.Range(0, 14).Select(i => new PaperItem
+                    { Id = "item-" + i, Text = i == 13 ? needle : "ordinary item" }).ToList() }
+            ] };
+            var searchSnapshot = controller.SnapshotWorkbench(searchState, controller.WorkspaceNumber, live: false);
+            var match = typeof(WorkbenchWindow).GetMethod("SearchMatches", BindingFlags.NonPublic | BindingFlags.Static)!;
+            foreach (var entry in searchSnapshot.Papers)
+                Assert(!entry.Summary.Contains(needle) &&
+                    (bool)match.Invoke(null, [entry, needle])!, "Search is still limited to preview content");
+
+            var active = Member(workbench, "ActiveScene");
+            var cards = (System.Collections.IDictionary)Member(active, "Cards");
+            var card = cards["note-a"]!;
+            var zoom = (ScaleTransform)Member(workbench, "_scale");
+            var pan = (TranslateTransform)Member(workbench, "_pan");
+            var camera = (zoom.ScaleX, pan.X, pan.Y);
+            var focus = typeof(WorkbenchWindow).GetMethod("FocusPaper", Private)!;
+            var clear = typeof(WorkbenchWindow).GetMethod("ClearPaperFocus", Private)!;
+            focus.Invoke(workbench, [card]);
+            Assert((string)Member(workbench, "_focusedPaperId") == "note-a" &&
+                   zoom.ScaleX > camera.ScaleX, "Click-to-focus camera did not zoom to the paper");
+            clear.Invoke(workbench, [true]);
+            Assert(Math.Abs(zoom.ScaleX - camera.ScaleX) < 0.001 &&
+                   Math.Abs(pan.X - camera.X) < 0.001 && Math.Abs(pan.Y - camera.Y) < 0.001,
+                "Outside click did not restore the previous camera");
+
+            // Thumb sends DragStarted/Completed even for a click with zero displacement.
+            var undo = (Stack<WorkbenchState>)Member(workbench, "_undo");
+            var originalUndoCount = undo.Count;
+            var move = (Thumb)Member(card, "Move");
+            move.RaiseEvent(new DragStartedEventArgs(0, 0) { RoutedEvent = Thumb.DragStartedEvent });
+            move.RaiseEvent(new DragCompletedEventArgs(0, 0, false) { RoutedEvent = Thumb.DragCompletedEvent });
+            Assert(undo.Count == originalUndoCount, "Clicking a title created a layout undo entry");
+
+            workbench.SuspendWorkspace();
+            controller.CloseWorkbenchForDesktopAction();
+            Assert(controller.HasWorkbench, "Suspended workbench was closed by an internal reload action");
+            workbench.ResumeWorkspace();
+            await Until(() => workbench.HostedPaperCount == 3, "Workbench failed to resume after reload");
+        }
         foreach (var paper in controller.State.Papers) Assert(before[paper.Id] == Geometry(paper), "Desktop state changed while entering: " + paper.Id);
         editor.GetType().GetProperty("Text")!.SetValue(editor, "Edited inside the workbench");
         controller.CommitPendingMarkdownContentsForSave();
