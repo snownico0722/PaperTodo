@@ -50,9 +50,14 @@ public sealed partial class PaperWindow
         button.Content = icon;
         button.Click += async (_, _) =>
         {
-            // Leave the Button mouse-capture/input turn before ending its owning workspace.
             if (_controller.IsWorkspaceSwitching) return;
-            await System.Windows.Threading.Dispatcher.Yield(DispatcherPriority.Background);
+            if (_controller.WorkspaceOptions.TopBarNamePicker)
+            {
+                ShowNamedWorkspaceSelector(button);
+                return;
+            }
+            // Leave the Button mouse-capture/input turn before ending its owning workspace.
+            await Dispatcher.Yield(DispatcherPriority.Background);
             if (!IsClosed) await _controller.CycleWorkspaceAsync();
         };
         RefreshWorkspaceButton();
@@ -64,7 +69,9 @@ public sealed partial class PaperWindow
         if (_workspaceButton == null || IsClosed) return;
         var options = _controller.WorkspaceOptions;
         var number = _controller.WorkspaceNumber;
-        _workspaceButton.Visibility = options.Enabled ? Visibility.Visible : Visibility.Collapsed;
+        _workspaceButton.Visibility = options.Enabled && options.SlotNumbers.Count > 1 &&
+            PaperTopBarShortcuts.Contains(_controller.State, _paper.Type, PaperTopBarShortcuts.Workspace)
+                ? Visibility.Visible : Visibility.Collapsed;
         _workspaceButton.IsEnabled = !_controller.IsWorkspaceSwitching;
         _workspaceButton.Foreground = TextBrush;
         if (_workspaceNumberBadge != null)
@@ -72,12 +79,125 @@ public sealed partial class PaperWindow
             _workspaceNumberBadge.Text = number.ToString(UiLanguages.EffectiveCulture);
             _workspaceNumberBadge.FontFamily = AppTypography.UiFontFamily;
         }
-        var next = number == options.Count ? 1 : number + 1;
-        _workspaceButton.ToolTip = Strings.Format("WorkspaceCycleTooltip", number, options.Count, next);
+        var next = options.NextSlot(number);
+        _workspaceButton.ToolTip = options.TopBarNamePicker
+            ? options.DisplayName(number)
+            : Strings.Format("WorkspaceCycleTooltip", number, options.SlotNumbers.Count, next);
         AutomationProperties.SetName(_workspaceButton, Strings.Format("WorkspaceCurrent", number));
         UpdateTopBarResponsiveLayout();
     }
 
-    private double WorkspacePersistentButtonWidth() => _workspaceButton?.Visibility == Visibility.Visible
-        ? TopBarOuterWidth(_workspaceButton) : 0;
+    private void ShowNamedWorkspaceSelector(Button button)
+    {
+        var menu = CreateContextMenu();
+        menu.PlacementTarget = button;
+        menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+        foreach (var slot in _controller.WorkspaceOptions.SlotNumbers)
+        {
+            var target = slot;
+            var item = new MenuItem
+            {
+                Header = _controller.WorkspaceOptions.DisplayName(slot),
+                IsCheckable = true,
+                IsChecked = slot == _controller.WorkspaceNumber
+            };
+            item.Click += (_, _) =>
+            {
+                menu.IsOpen = false;
+                if (target != _controller.WorkspaceNumber)
+                    _ = Dispatcher.InvokeAsync(
+                        () => { if (!IsClosed) _ = _controller.SwitchWorkspaceAsync(target); },
+                        DispatcherPriority.Background);
+            };
+            menu.Items.Add(item);
+        }
+        menu.IsOpen = true;
+    }
+
+    // The ordinary overflow menu contains one horizontal row. Selection replaces that
+    // very row with a confirmation; no separate dialog or second line is introduced.
+    private MenuItem BuildWorkspaceSelectionMenuItem(ContextMenu menu)
+    {
+        var item = new MenuItem
+        {
+            StaysOpenOnClick = true,
+            Padding = new Thickness(8, 4, 8, 4)
+        };
+        var row = new StackPanel { Orientation = Orientation.Horizontal };
+        void RenderChoices()
+        {
+            row.Children.Clear();
+            row.Children.Add(new TextBlock
+            {
+                Text = Strings.Get("WorkspaceSettingsTitle"),
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 8, 0),
+                Foreground = TextBrush
+            });
+            foreach (var slot in _controller.WorkspaceOptions.SlotNumbers)
+            {
+                var target = slot;
+                var choice = new Button
+                {
+                    Content = slot.ToString(UiLanguages.EffectiveCulture),
+                    MinWidth = 27,
+                    Height = 26,
+                    Margin = new Thickness(1, 0, 1, 0),
+                    FontWeight = slot == _controller.WorkspaceNumber
+                        ? FontWeights.Bold : FontWeights.Normal,
+                    ToolTip = _controller.WorkspaceOptions.DisplayName(slot),
+                    IsEnabled = slot != _controller.WorkspaceNumber
+                };
+                choice.Click += (_, e) =>
+                {
+                    e.Handled = true;
+                    row.Children.Clear();
+                    row.Children.Add(new TextBlock
+                    {
+                        Text = SettingsWorkspaceConfirmation(target),
+                        VerticalAlignment = VerticalAlignment.Center,
+                        Margin = new Thickness(0, 0, 6, 0),
+                        Foreground = TextBrush
+                    });
+                    var yes = new Button
+                    {
+                        Content = WorkspaceMenuText("确定", "OK", "確定", "확인"),
+                        Padding = new Thickness(5, 2, 5, 2),
+                        Margin = new Thickness(0, 0, 4, 0)
+                    };
+                    yes.Click += (_, args) =>
+                    {
+                        args.Handled = true;
+                        menu.IsOpen = false;
+                        _ = Dispatcher.InvokeAsync(
+                            () => { if (!IsClosed) _ = _controller.SwitchWorkspaceAsync(target); },
+                            DispatcherPriority.Background);
+                    };
+                    var no = new Button { Content = Strings.Get("CommonCancel"), Padding = new Thickness(5, 2, 5, 2) };
+                    no.Click += (_, args) => { args.Handled = true; RenderChoices(); };
+                    row.Children.Add(yes);
+                    row.Children.Add(no);
+                };
+                row.Children.Add(choice);
+            }
+        }
+        RenderChoices();
+        item.Header = row;
+        return item;
+    }
+
+    private static string WorkspaceMenuText(string zh, string en, string ja, string ko) =>
+        UiLanguages.EffectiveUiCulture.TwoLetterISOLanguageName switch
+        {
+            "en" => en,
+            "ja" => ja,
+            "ko" => ko,
+            _ => zh
+        };
+
+    private static string SettingsWorkspaceConfirmation(int number) =>
+        WorkspaceMenuText("确定切换为工作区" + number + "？",
+            "Switch to workspace " + number + "?",
+            "ワークスペース" + number + "に切り替えますか？",
+            "작업 공간 " + number + "(으)로 전환할까요?");
 }
