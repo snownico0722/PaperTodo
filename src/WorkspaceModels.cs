@@ -36,7 +36,7 @@ public sealed class WorkspaceConfiguration
 
     internal string DisplayName(int number) =>
         Names != null && Names.TryGetValue(number, out var value) && !string.IsNullOrWhiteSpace(value)
-            ? value : Strings.Format("WorkspaceSlotLabel", number);
+            ? value : Strings.Get("WorkspaceSettingsTitle") + number.ToString(CultureInfo.InvariantCulture);
 
     internal WorkspaceConfiguration Normalized()
     {
