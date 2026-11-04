@@ -73,7 +73,7 @@ public sealed partial class AppController
                 live && window != null ? window.WorkbenchAffinity : plugin ? "plugin:" + p.BodyProviderId : "",
                 live && window != null ? window.WorkbenchBindingTitle : "",
                 placement?.Width ?? WorkbenchCardState.ValidSize(p.Width, 320, 240, 640),
-                placement?.Height ?? WorkbenchCardState.ValidSize(p.Height, 360, 240, 720), placement);
+                placement?.Height ?? WorkbenchCardState.ValidSize(p.Height, 360, 240, 720), placement, p.IsVisible);
         }).ToArray();
         var ids = papers.Select(p => p.Id).ToHashSet(StringComparer.Ordinal);
         var links = state.Papers.SelectMany(p => p.Items
@@ -124,13 +124,26 @@ public sealed partial class AppController
             return new WorkbenchPaperSnapshot(p.Id, p.Title ?? "", text.Length > 800 ? text[..800] : text,
                 plugin ? "plugin" : p.Type, plugin ? "plugin:" + p.BodyProviderId : "", "",
                 placement?.Width ?? WorkbenchCardState.ValidSize(p.Width, 320, 240, 640),
-                placement?.Height ?? WorkbenchCardState.ValidSize(p.Height, 360, 240, 720), placement);
+                placement?.Height ?? WorkbenchCardState.ValidSize(p.Height, 360, 240, 720), placement, p.IsVisible);
         }).ToArray();
         var ids = papers.Select(p => p.Id).ToHashSet(StringComparer.Ordinal);
         var links = state.Papers.SelectMany(p => p.Items.Where(i => i.LinkedPaperId != null)
                 .Select(i => new WorkbenchLayoutEdge(p.Id, i.LinkedPaperId!)))
             .Where(e => e.From != e.To && ids.Contains(e.From) && ids.Contains(e.To)).Distinct().ToArray();
         return new(number, papers, links);
+    }
+
+    // The workbench owns the live body while it is open. Adjust only the desktop
+    // visibility preference here; the original window and capsule are restored on exit.
+    internal void SetWorkbenchDesktopVisibility(PaperData paper, bool visible)
+    {
+        if (_workbenchWindow is not { IsSuspended: false } ||
+            !State.Papers.Contains(paper) || paper.IsVisible == visible) return;
+        InvalidateVisibilityShortcutSnapshotForExternalCommand();
+        paper.IsVisible = visible;
+        MarkDirty();
+        RefreshTrayMenu();
+        RefreshTodoRowsForLinkedPaper(paper.Id);
     }
 
     internal void StoreWorkbenchLayout(WorkbenchState layout)
