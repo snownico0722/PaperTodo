@@ -30,26 +30,40 @@ internal static class NativeFreeQueuePolicyChecks
         var upperInsert = EdgeCapsuleFreeQueuePolicy.Insert([upper, target], target.Key, 0, 2, 900, pitch, gap);
         Require(upperInsert.Accepted && upperInsert.TopDip == 300 && upperInsert.Tops[upper.Key] == 200,
             "the upper neighbour moves upward instead of pushing the target towards the screen bottom");
-        Require(!EdgeCapsuleFreeQueuePolicy.Insert([target with { TopDip = 60 }], target.Key, 0, 2, 900, pitch, gap).Accepted,
-            "insufficient upper space rejects rather than silently changing the insertion anchor");
+        Require(EdgeCapsuleFreeQueuePolicy.Insert([target with { TopDip = 60 }], target.Key, 0, 2, 900, pitch, gap).TopDip == -40,
+            "prepend may extend above the work area without moving the target's existing head");
         Require(EdgeCapsuleFreeQueuePolicy.FindInsertion([target], 304, 96, 10, pitch, gap) is { Index: 0 },
             "a whole visible block can attach from above without its first member crossing the target");
         Require(EdgeCapsuleFreeQueuePolicy.FindInsertion([target], 304, 96, 500, pitch, gap) == null,
             "vertical alignment in the middle of the screen is not a magnetic hit");
-        Require(!EdgeCapsuleFreeQueuePolicy.Place([target], 420, 1, 900, pitch, gap).Accepted,
-            "an overlapping independent drop must not trigger a nearest-space search");
+        var overlap = EdgeCapsuleFreeQueuePolicy.Place([target], 420, 1, 900, pitch, gap);
+        Require(overlap.Accepted && overlap.TopDip == 420 && overlap.Tops[target.Key] == 320,
+            "an independent drop keeps its exact anchor and moves only the intersecting neighbour");
         var lower = target with { TopDip = 146, MemberCount = 1 };
-        Require(!EdgeCapsuleFreeQueuePolicy.Place([lower], 100, 1, 200, pitch, gap).Accepted,
-            "drop validation and resting layout use the same four-DIP gap");
+        var crowded = EdgeCapsuleFreeQueuePolicy.Place([lower], 100, 1, 200, pitch, gap);
+        Require(crowded.Accepted && crowded.Tops[lower.Key] == 150,
+            "a full edge allows the drop and pushes the neighbour instead of rejecting it");
         var exact = EdgeCapsuleFreeQueuePolicy.Place([lower], 96, 1, 200, pitch, gap);
         Require(exact.Accepted && exact.TopDip == 96, "a legal exact position stays exact");
         Require(EdgeCapsuleFreeQueuePolicy.Place([], 500, 1, 900, pitch, gap).TopDip == 500,
             "empty space never changes the requested anchor");
         Require(!EdgeCapsuleFreeQueuePolicy.ShouldFloat(0, false) && !EdgeCapsuleFreeQueuePolicy.ShouldFloat(55, false) &&
-                EdgeCapsuleFreeQueuePolicy.ShouldFloat(56, false) && EdgeCapsuleFreeQueuePolicy.ShouldFloat(0, true),
-            "Ctrl selects membership; floating requires horizontal unlock or crossing a monitor");
+                EdgeCapsuleFreeQueuePolicy.ShouldFloat(56, false) && EdgeCapsuleFreeQueuePolicy.ShouldFloat(0, true) &&
+                !EdgeCapsuleFreeQueuePolicy.ShouldFloat(60, false, freeQueues: true) &&
+                EdgeCapsuleFreeQueuePolicy.ShouldFloat(68, false, freeQueues: true),
+            "leaving a free queue requires slightly more pull; ordinary cross-edge gestures stay unchanged");
         Require(!EdgeCapsuleFreeQueuePolicy.ShouldDetachSingle(false, 400, 400, 2, pitch) &&
                 EdgeCapsuleFreeQueuePolicy.ShouldDetachSingle(false, 300, 400, 2, pitch), "sorting and explicit detachment remain distinct");
+        Require(EdgeCapsuleFreeQueuePolicy.FindInsertion([target], 325, 46, 10, pitch, gap) == null &&
+                EdgeCapsuleFreeQueuePolicy.FindInsertion([target], 325, 46, 10, pitch, gap, target.Key) is { Key: "|right#b" } &&
+                EdgeCapsuleFreeQueuePolicy.FindInsertion([target], 310, 46, 10, pitch, gap, target.Key) == null,
+            "held target survives pointer jitter but releases after the larger exit threshold");
+        Require(EdgeCapsuleFreeQueuePolicy.NudgeToward(100, 120, 6) == 106 &&
+                EdgeCapsuleFreeQueuePolicy.ResistLeavingSource(395, 400, 450) > 395 &&
+                EdgeCapsuleFreeQueuePolicy.ResistLeavingSource(320, 400, 450) == 320,
+            "join has a small nudge; leaving is sticky without a release jump");
+        Require(EdgeCapsuleLayout.FreeQueueTopForIndex(0, -40, new System.Windows.Rect(0, 0, 100, 900), gap) == -40,
+            "free queues do not clamp anchors back into the work area");
         Require(PaperWindow.NativeQueueControlPressed(8, ModifierKeys.None, false) &&
                 PaperWindow.NativeQueueControlPressed(0, ModifierKeys.Control, false) &&
                 PaperWindow.NativeQueueControlPressed(0, ModifierKeys.None, true) &&

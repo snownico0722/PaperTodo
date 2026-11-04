@@ -17,6 +17,7 @@ internal sealed class NativeEdgeQueueDrag
     internal required bool PreviewOrigin { get; init; }
     internal string NewQueueId { get; } = EdgeCapsuleQueueIds.New();
     internal bool Detached { get; set; }
+    internal string HeldTargetKey { get; set; } = "";
     internal bool FloatingCoverReady { get; set; }
     internal NativeEdgeQueueDrop? Drop { get; set; }
 }
@@ -63,7 +64,8 @@ public sealed partial class AppController
         if (drag.WholeQueue && EdgeCapsuleQueueIds.TryGetEdge(drag.SourceKey, out var monitor, out _))
         {
             var slots = drag.CarriedIds.Length + (!drag.FreeQueues && State.UseCapsuleCollapseAll ? 1 : 0);
-            top = EdgeCapsuleLayout.NormalizeStartTopMargin(top, EdgeCapsuleLayout.LocalWorkAreaForQueue(monitor), slots, DeepCapsuleGap);
+            if (!drag.FreeQueues)
+                top = EdgeCapsuleLayout.NormalizeStartTopMargin(top, EdgeCapsuleLayout.LocalWorkAreaForQueue(monitor), slots, DeepCapsuleGap);
         }
         return top + drag.OwnerOffsetDip;
     }
@@ -118,7 +120,8 @@ public sealed partial class AppController
         var visibleHeight = floating ? PaperLayoutDefaults.CapsuleHeight : bodySlots * pitch - gap;
         var wallDistance = (side == DeepCapsuleSides.Left ? pointer.X - geometry.WorkArea.Left : geometry.WorkArea.Right - pointer.X) / geometry.DpiScaleX;
         var candidates = IsCapsuleCollapseAllActiveForQueue(edge) ? Array.Empty<EdgeFreeQueueBox>() : boxes.ToArray();
-        var target = EdgeCapsuleFreeQueuePolicy.FindInsertion(candidates, top, visibleHeight, wallDistance, pitch, gap);
+        var target = EdgeCapsuleFreeQueuePolicy.FindInsertion(candidates, top, visibleHeight, wallDistance,
+            pitch, gap, drag.HeldTargetKey);
         // With the optional split mode off, cross-edge Ctrl movement retains legacy one-queue semantics.
         if (!drag.FreeQueues && edge != LiveEdgeOfQueueKey(drag.SourceKey) && boxes.Count > 0)
         {
@@ -129,6 +132,7 @@ public sealed partial class AppController
             ? EdgeCapsuleFreeQueuePolicy.Insert(boxes, insert.Key, insert.Index, carried.Length,
                 geometry.LocalWorkAreaDip.Height, pitch, gap, prependAbove: insert.Key != drag.SourceKey)
             : EdgeCapsuleFreeQueuePolicy.Place(boxes, top, bodySlots, geometry.LocalWorkAreaDip.Height, pitch, gap);
+        drag.HeldTargetKey = decision.Kind == EdgeFreeQueueDropKind.Insert ? decision.TargetKey : "";
         var targetMembers = target.HasValue
             ? groups.FirstOrDefault(g => g.Key == target.Value.Key)?.Papers.Where(p => !carriedIds.Contains(p.Id)).ToList() ?? []
             : new List<PaperData>();
@@ -159,8 +163,11 @@ public sealed partial class AppController
         var preview = ApplyFreeQueueRestingLayout(BuildEdgeQueuePlan(virtualMembers, State.UseCapsuleCollapseAll), anchors);
         if (decision.Accepted && preview.Placements.TryGetValue(owner.Id, out var placement))
         {
-            var firstTop = EdgeCapsuleLayout.TopForIndex(0, DeepCapsuleStartTopMarginForQueueKey(destination),
-                geometry.LocalWorkAreaDip, placement.SlotCount, gap) + placement.TopOffsetDip;
+            var firstTop = drag.FreeQueues
+                ? EdgeCapsuleLayout.FreeQueueTopForIndex(0, DeepCapsuleStartTopMarginForQueueKey(destination),
+                    geometry.LocalWorkAreaDip, gap) + placement.TopOffsetDip
+                : EdgeCapsuleLayout.TopForIndex(0, DeepCapsuleStartTopMarginForQueueKey(destination),
+                    geometry.LocalWorkAreaDip, placement.SlotCount, gap) + placement.TopOffsetDip;
             // Passive recovery must not turn an accepted exact drop into another chosen location.
             if (Math.Abs(firstTop - decision.TopDip) > .1) return RejectedNativeDrop();
         }
@@ -188,8 +195,11 @@ public sealed partial class AppController
                 var paper = members.First(p => p.Id == id);
                 var placement = sourcePlan.Placements[id];
                 var desired = ownerTopDip + (Array.IndexOf(drag.CarriedIds, id) - ownerIndex) * EdgeCapsuleLayout.SlotHeight(DeepCapsuleGap);
-                var baseTop = EdgeCapsuleLayout.TopForIndex(placement.VisualIndex, DeepCapsuleStartTopMarginForQueueKey(drag.SourceKey),
-                    EdgeCapsuleLayout.LocalWorkAreaForQueue(paper.CapsuleMonitorDeviceName), placement.SlotCount, DeepCapsuleGap);
+                var area = EdgeCapsuleLayout.LocalWorkAreaForQueue(paper.CapsuleMonitorDeviceName);
+                var start = DeepCapsuleStartTopMarginForQueueKey(drag.SourceKey);
+                var baseTop = drag.FreeQueues
+                    ? EdgeCapsuleLayout.FreeQueueTopForIndex(placement.VisualIndex, start, area, DeepCapsuleGap)
+                    : EdgeCapsuleLayout.TopForIndex(placement.VisualIndex, start, area, placement.SlotCount, DeepCapsuleGap);
                 window.PreviewDeepCapsulePlacement(placement with { TopOffsetDip = desired - baseTop }, animate: false);
             }
         }
@@ -281,8 +291,11 @@ public sealed partial class AppController
             var owner = State.Papers.FirstOrDefault(p => p.Id == ownerId);
             if (owner != null && plan.Placements.TryGetValue(ownerId, out var ownerPlacement))
             {
-                var top = EdgeCapsuleLayout.TopForIndex(ownerPlacement.VisualIndex, DeepCapsuleStartTopMarginFor(owner),
-                    EdgeCapsuleLayout.LocalWorkAreaForQueue(owner.CapsuleMonitorDeviceName), ownerPlacement.SlotCount, DeepCapsuleGap) + ownerPlacement.TopOffsetDip;
+                var area = EdgeCapsuleLayout.LocalWorkAreaForQueue(owner.CapsuleMonitorDeviceName);
+                var start = DeepCapsuleStartTopMarginFor(owner);
+                var top = drag.FreeQueues
+                    ? EdgeCapsuleLayout.FreeQueueTopForIndex(ownerPlacement.VisualIndex, start, area, DeepCapsuleGap) + ownerPlacement.TopOffsetDip
+                    : EdgeCapsuleLayout.TopForIndex(ownerPlacement.VisualIndex, start, area, ownerPlacement.SlotCount, DeepCapsuleGap) + ownerPlacement.TopOffsetDip;
                 foreach (var id in drag.CarriedIds)
                     if (id != ownerId && _windows.TryGetValue(id, out var window) && plan.Placements.TryGetValue(id, out var placement))
                         window.PrepareNativeQueueMemberReturn(placement, top);

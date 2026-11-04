@@ -526,7 +526,8 @@ public sealed partial class PaperWindow
                 _edgeCapsuleHostCapacityWidthDip,
                 _edgeCapsuleHostCapacityHeightDip,
                 expandedWidth,
-                _controller.State.DeepCapsuleTitleMeasureCharacterLimit == EdgeCapsuleTitleLimit.Hidden));
+                _controller.State.DeepCapsuleTitleMeasureCharacterLimit == EdgeCapsuleTitleLimit.Hidden,
+                _controller.EdgeCapsuleFreeQueuesEnabled));
         return _controller.NativeEdgeQueueRetractionTop(_paper) is { } top
             ? layout with { MasterTopDip = top } : layout;
     }
@@ -760,7 +761,8 @@ public sealed partial class PaperWindow
             index,
             slotCount,
             _controller.DeepCapsuleStartTopMarginFor(_paper),
-            DeepCapsuleGap);
+            DeepCapsuleGap,
+            _controller.EdgeCapsuleFreeQueuesEnabled);
     }
 
 }

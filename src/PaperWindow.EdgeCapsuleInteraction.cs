@@ -388,7 +388,9 @@ public sealed partial class PaperWindow
     {
         _nativeQueueClickRevoked = true;
         _previewOriginReorderBaseline = null;
-        if (EdgeCapsuleDragWindow.HasActiveLease)
+        // Docked sorting owns its existing host and does not require the shared floating HWND.
+        // An unrelated docking animation must not cancel an ordinary edge reorder.
+        if (EdgeCapsuleDragWindow.HasActiveLease && ShouldUnlockDeepCapsuleCrossQueueDrag(currentScreenPos))
         {
             CancelDeepCapsuleReorderDrag();
             return;
@@ -487,7 +489,8 @@ public sealed partial class PaperWindow
         }
 
         if (IsDeepCapsuleDockedReordering &&
-            ShouldUnlockDeepCapsuleCrossQueueDrag(currentScreenPos))
+            ShouldUnlockDeepCapsuleCrossQueueDrag(currentScreenPos) &&
+            !EdgeCapsuleDragWindow.HasActiveLease)
         {
             BeginDeepCapsuleFloatingReorder(currentScreenPos);
             return;
@@ -695,7 +698,8 @@ public sealed partial class PaperWindow
         var horizontalDelta = Math.Abs(
             currentScreenPos.X - session.PointerDownScreenPosition.X);
         return EdgeCapsuleFreeQueuePolicy.ShouldFloat(horizontalDelta / scaleX,
-            HasDeepCapsuleDragEnteredAnotherMonitor(currentScreenPos));
+            HasDeepCapsuleDragEnteredAnotherMonitor(currentScreenPos),
+            _controller.EdgeCapsuleFreeQueuesEnabled);
     }
     private bool HasDeepCapsuleDragEnteredAnotherMonitor(DeviceScreenPoint currentScreenPos)
     {

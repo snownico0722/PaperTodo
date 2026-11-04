@@ -62,8 +62,8 @@ public sealed partial class AppController
             var slots = queue.Papers.Count + (queue.HasMaster ? 1 : 0);
             var savedMargin = DeepCapsuleStartTopMarginForQueueKey(queue.Key);
             var margin = anchors != null && anchors.TryGetValue(queue.Key, out var requested) ? requested : savedMargin;
-            var restTop = EdgeCapsuleLayout.TopForIndex(0, margin, geometry.LocalWorkAreaDip, slots, gap);
-            var anchorDelta = restTop - EdgeCapsuleLayout.TopForIndex(0, savedMargin, geometry.LocalWorkAreaDip, slots, gap);
+            var restTop = EdgeCapsuleLayout.FreeQueueTopForIndex(0, margin, geometry.LocalWorkAreaDip, gap);
+            var anchorDelta = restTop - EdgeCapsuleLayout.FreeQueueTopForIndex(0, savedMargin, geometry.LocalWorkAreaDip, gap);
             var top = queue.HasMaster ? restTop : double.PositiveInfinity;
             var bottom = queue.HasMaster ? restTop + PaperLayoutDefaults.CapsuleHeight : double.NegativeInfinity;
             if (queue.HasMaster) { edgesWithMaster.Add(liveEdge); masterBases[liveEdge] = restTop; }
@@ -87,7 +87,7 @@ public sealed partial class AppController
             if (!EdgeCapsuleQueueIds.TryGetEdge(edge, out var monitor, out _) ||
                 !WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(monitor, out var geometry)) continue;
             var margin = anchors != null && anchors.TryGetValue(edge, out var requested) ? requested : DeepCapsuleStartTopMarginForQueueKey(edge);
-            var top = EdgeCapsuleLayout.TopForIndex(0, margin, geometry.LocalWorkAreaDip, 1, gap);
+            var top = EdgeCapsuleLayout.FreeQueueTopForIndex(0, margin, geometry.LocalWorkAreaDip, gap);
             masterBases[edge] = top;
             queues.Add(new(edge, edge, [new("master:" + edge, top)], top, top + PaperLayoutDefaults.CapsuleHeight, -1, top));
         }
@@ -143,8 +143,11 @@ public sealed partial class AppController
             if (queue.Papers.Count == 0 || !EdgeCapsuleQueueIds.TryGetEdge(queue.Key, out var monitor, out _) ||
                 !WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(monitor, out var geometry)) continue;
             var placement = plan.Placements[queue.Papers[0].Id];
-            var top = EdgeCapsuleLayout.TopForIndex(0, DeepCapsuleStartTopMarginForQueueKey(queue.Key),
-                geometry.LocalWorkAreaDip, placement.SlotCount, DeepCapsuleGap) + placement.TopOffsetDip;
+            var top = EdgeCapsuleFreeQueuesEnabled
+                ? EdgeCapsuleLayout.FreeQueueTopForIndex(0, DeepCapsuleStartTopMarginForQueueKey(queue.Key),
+                    geometry.LocalWorkAreaDip, DeepCapsuleGap) + placement.TopOffsetDip
+                : EdgeCapsuleLayout.TopForIndex(0, DeepCapsuleStartTopMarginForQueueKey(queue.Key),
+                    geometry.LocalWorkAreaDip, placement.SlotCount, DeepCapsuleGap) + placement.TopOffsetDip;
             var width = queue.Papers.Max(p => _windows.TryGetValue(p.Id, out var w) ? w.DeepCapsuleRestingVisibleWidth : 0);
             groups.Add(new(queue.Key, queue.Papers.ToList(), new(queue.Key, top, queue.Papers.Count, queue.HasMaster, width), geometry));
         }

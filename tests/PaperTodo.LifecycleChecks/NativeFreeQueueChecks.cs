@@ -90,16 +90,14 @@ internal static class NativeFreeQueueChecks
         c.EndNativeEdgeQueueDrag(a.Id);
         await Idle();
         Require(a.CapsuleQueueId != "qb" && Math.Abs(Top(a) - 100) < .1, "a single capsule forms a queue at the requested height");
-        var beforeRejected = c.State.Papers.Select(p => (p.Id, p.CapsuleQueueId)).ToArray();
-        margins = new(c.State.DeepCapsuleQueueStartTopMargins);
-        Require(c.BeginNativeEdgeQueueDrag(a, true, Point(100), false), "begin blocked independent drop");
+        var beforeMove = c.State.Papers.Select(p => (p.Id, p.CapsuleQueueId)).ToArray();
+        Require(c.BeginNativeEdgeQueueDrag(a, true, Point(100), false), "begin independent drop near another queue");
         c.PreviewNativeEdgeQueueDrag(a, Point(300, distant: true), 300, true);
         c.CommitNativeEdgeQueueDrag(a, Point(300, distant: true), 300, true);
         c.EndNativeEdgeQueueDrag(a.Id);
         await Idle();
-        Require(c.State.Papers.Select(p => (p.Id, p.CapsuleQueueId)).SequenceEqual(beforeRejected) &&
-                margins.Count == c.State.DeepCapsuleQueueStartTopMargins.Count && margins.All(p => c.State.DeepCapsuleQueueStartTopMargins[p.Key] == p.Value),
-            "rejection must not search for another position or change identity/margins");
+        Require(c.State.Papers.Select(p => (p.Id, p.CapsuleQueueId)).SequenceEqual(beforeMove) &&
+                Math.Abs(Top(a) - 300) < .1, "no free-space search or space-based refusal; the requested independent anchor wins");
 
         c.State.UseCapsuleFreeQueues = false;
         c.ArrangeDeepCapsules(false);

@@ -28,44 +28,76 @@ internal sealed record EdgeFreeQueueDrop(
 internal static class EdgeCapsuleFreeQueuePolicy
 {
     internal const double SnapDistance = 18;
+    internal const double ReleaseDistance = 30; // A held target must be pulled further away to release.
+    internal const double DetachResistance = 12; // Leaving the source is stickier than joining another.
+    internal const double JoinNudge = 6;
+    private const double TakeoverAdvantage = 6;
     private const double Epsilon = 0.1;
 
     internal static bool ShouldDetachSingle(
         bool floating, double draggedTop, double firstTop, int count, double pitch) =>
-        floating || draggedTop < firstTop - EdgeCapsuleLayout.CrossQueueDragUnlockDistance ||
+        floating || draggedTop < firstTop - EdgeCapsuleLayout.CrossQueueDragUnlockDistance - DetachResistance ||
         draggedTop > firstTop + Math.Max(0, count - 1) * pitch +
-            EdgeCapsuleLayout.CrossQueueDragUnlockDistance;
+            EdgeCapsuleLayout.CrossQueueDragUnlockDistance + DetachResistance;
 
     // Ctrl chooses membership, never the floating phase of the gesture.
-    internal static bool ShouldFloat(double horizontalDistanceDip, bool enteredAnotherMonitor) =>
-        enteredAnotherMonitor || horizontalDistanceDip >= EdgeCapsuleLayout.CrossQueueDragUnlockDistance;
+    internal static bool ShouldFloat(double horizontalDistanceDip, bool enteredAnotherMonitor, bool freeQueues = false) =>
+        enteredAnotherMonitor || horizontalDistanceDip >= EdgeCapsuleLayout.CrossQueueDragUnlockDistance +
+            (freeQueues ? DetachResistance : 0);
+
+    internal static double NudgeToward(double actualTop, double targetTop, double maximumDip) =>
+        actualTop + Math.Clamp(targetTop - actualTop, -maximumDip, maximumDip);
+
+    // Source resistance vanishes smoothly at the detachment threshold: no jump when the
+    // capsule becomes independent, and no resistance while sorting inside the source span.
+    internal static double ResistLeavingSource(double top, double sourceFirst, double sourceLast)
+    {
+        var displacement = top < sourceFirst ? top - sourceFirst :
+            top > sourceLast ? top - sourceLast : 0;
+        var distance = Math.Abs(displacement);
+        var threshold = EdgeCapsuleLayout.CrossQueueDragUnlockDistance + DetachResistance;
+        if (distance <= 0 || distance >= threshold) return top;
+        var resistance = Math.Min(10, distance) * (1 - distance / threshold);
+        return top - Math.Sign(displacement) * resistance;
+    }
 
     internal static (string Key, int Index)? FindInsertion(
         IReadOnlyList<EdgeFreeQueueBox> queues, double draggedTop, double visibleDraggedHeight,
-        double pointerDistanceFromWall, double pitch, double gap)
+        double pointerDistanceFromWall, double pitch, double gap, string? heldKey = null)
     {
         (string Key, int Index)? best = null;
+        (string Key, int Index)? held = null;
+        var heldDistance = double.PositiveInfinity;
         var bestDistance = double.PositiveInfinity;
         var bestCentre = double.PositiveInfinity;
         foreach (var queue in queues)
         {
-            if (queue.Slots == 0 || pointerDistanceFromWall > queue.WidthDip + SnapDistance) continue;
+            var isHeld = queue.Key == heldKey;
+            var range = isHeld ? ReleaseDistance : SnapDistance;
+            if (queue.Slots == 0 || pointerDistanceFromWall > queue.WidthDip + range) continue;
             var top = queue.MemberCount == 0 ? queue.TopDip : queue.FirstMemberTop(pitch);
             var bottom = queue.TopDip + queue.Height(pitch, gap);
             var draggedBottom = draggedTop + visibleDraggedHeight;
             var distance = Math.Max(0, Math.Max(top - draggedBottom, draggedTop - bottom));
-            if (distance > SnapDistance) continue;
+            if (distance > range) continue;
+            var index = draggedTop < top && draggedBottom <= top + pitch / 2
+                ? 0 : Math.Clamp((int)Math.Floor((draggedTop - top) / pitch + 0.5), 0, queue.MemberCount);
+            if (isHeld)
+            {
+                held = (queue.Key, index);
+                heldDistance = distance;
+                continue;
+            }
             var centre = Math.Abs((draggedTop + draggedBottom) / 2 - (top + bottom) / 2);
             if (distance > bestDistance || distance == bestDistance &&
                 (centre > bestCentre || centre == bestCentre && best.HasValue &&
                  string.CompareOrdinal(queue.Key, best.Value.Key) >= 0)) continue;
-            var index = draggedTop < top && draggedBottom <= top + pitch / 2
-                ? 0 : Math.Clamp((int)Math.Floor((draggedTop - top) / pitch + 0.5), 0, queue.MemberCount);
             best = (queue.Key, index);
             bestDistance = distance;
             bestCentre = centre;
         }
-        return best;
+        return held.HasValue && (!best.HasValue || heldDistance <= bestDistance + TakeoverAdvantage)
+            ? held : best;
     }
 
     internal static EdgeFreeQueueDrop Place(
@@ -73,17 +105,11 @@ internal static class EdgeCapsuleFreeQueuePolicy
         int slots, double areaHeight, double pitch, double gap)
     {
         if (!double.IsFinite(requestedTop) || slots < 1) return EdgeFreeQueueDrop.Rejected;
-        var height = slots * pitch - gap;
-        // D-006 retains overlong queues without paging. Clamp their head, not every member.
-        var top = Math.Clamp(requestedTop, EdgeCapsuleLayout.TopMargin,
-            Math.Max(EdgeCapsuleLayout.TopMargin, areaHeight - EdgeCapsuleLayout.TopMargin - height));
-        foreach (var box in obstacles)
-        {
-            if (box.Slots == 0) continue;
-            if (top < box.TopDip + box.Height(pitch, gap) + gap - Epsilon &&
-                top + height + gap > box.TopDip + Epsilon) return EdgeFreeQueueDrop.Rejected;
-        }
-        return new(EdgeFreeQueueDropKind.Move, "", 0, top, new Dictionary<string, double>());
+        // Never search for a different destination or reject because the monitor is full.
+        // Keep the exact requested anchor and push only neighbours intersecting it.
+        var moved = ShiftNeighbours(obstacles, "", requestedTop, requestedTop,
+            slots * pitch - gap, pitch, gap);
+        return new(EdgeFreeQueueDropKind.Move, "", 0, requestedTop, moved);
     }
 
     internal static EdgeFreeQueueDrop Insert(
@@ -98,40 +124,40 @@ internal static class EdgeCapsuleFreeQueuePolicy
         index = Math.Clamp(index, 0, target.MemberCount);
         var top = target.TopDip;
         if (prependAbove && index == 0 && target.MemberCount > 0) top -= carriedCount * pitch;
-        var height = (target.Slots + carriedCount) * pitch - gap;
-        var min = EdgeCapsuleLayout.TopMargin;
-        var max = areaHeight - min;
-        if (top < min - Epsilon || top + height > max + Epsilon) return EdgeFreeQueueDrop.Rejected;
+        // Prepending extends above the target. Appending/interior insertion leaves its head in
+        // place. Overflow is permitted; a full edge must never veto the user's chosen slot.
+        var tops = ShiftNeighbours(queues, targetKey, target.TopDip, top,
+            (target.Slots + carriedCount) * pitch - gap, pitch, gap);
+        tops[targetKey] = top;
+        return new(EdgeFreeQueueDropKind.Insert, targetKey, index, top, tops);
+    }
 
-        var tops = new Dictionary<string, double>(StringComparer.Ordinal) { [targetKey] = top };
+    private static Dictionary<string, double> ShiftNeighbours(
+        IReadOnlyList<EdgeFreeQueueBox> queues, string targetKey, double pivot,
+        double top, double height, double pitch, double gap)
+    {
+        var tops = new Dictionary<string, double>(StringComparer.Ordinal);
         var above = queues.Where(q => q.Key != targetKey && q.Slots > 0 &&
-                (q.TopDip < target.TopDip || q.TopDip == target.TopDip && string.CompareOrdinal(q.Key, targetKey) < 0))
+                (q.TopDip < pivot || q.TopDip == pivot && string.CompareOrdinal(q.Key, targetKey) < 0))
             .OrderByDescending(q => q.TopDip).ThenByDescending(q => q.Key, StringComparer.Ordinal);
         var below = queues.Where(q => q.Key != targetKey && q.Slots > 0 &&
-                (q.TopDip > target.TopDip || q.TopDip == target.TopDip && string.CompareOrdinal(q.Key, targetKey) > 0))
+                (q.TopDip > pivot || q.TopDip == pivot && string.CompareOrdinal(q.Key, targetKey) >= 0))
             .OrderBy(q => q.TopDip).ThenBy(q => q.Key, StringComparer.Ordinal);
+
         var edge = top - gap;
         foreach (var box in above)
         {
             var moved = Math.Min(box.TopDip, edge - box.Height(pitch, gap));
-            if (moved < box.TopDip - Epsilon)
-            {
-                if (moved < min - Epsilon) return EdgeFreeQueueDrop.Rejected;
-                tops[box.Key] = moved;
-            }
+            if (moved < box.TopDip - Epsilon) tops[box.Key] = moved;
             edge = moved - gap;
         }
         edge = top + height + gap;
         foreach (var box in below)
         {
             var moved = Math.Max(box.TopDip, edge);
-            if (moved > box.TopDip + Epsilon)
-            {
-                if (moved + box.Height(pitch, gap) > max + Epsilon) return EdgeFreeQueueDrop.Rejected;
-                tops[box.Key] = moved;
-            }
+            if (moved > box.TopDip + Epsilon) tops[box.Key] = moved;
             edge = moved + box.Height(pitch, gap) + gap;
         }
-        return new(EdgeFreeQueueDropKind.Insert, targetKey, index, top, tops);
+        return tops;
     }
 }
