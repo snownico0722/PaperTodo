@@ -2912,7 +2912,7 @@ public sealed partial class PaperWindow : Window
     private void BeginTitleEdit()
     {
         if (_windowLifecycle != PaperWindowLifecycleState.Alive ||
-            !_paper.IsVisible ||
+            (!_paper.IsVisible && !IsExpandedEditorHosted) ||
             _titleText == null ||
             _titleEditBox == null)
         {
@@ -2979,6 +2979,7 @@ public sealed partial class PaperWindow : Window
 
     private bool CanBeginTitleEditNow()
     {
+        if (IsExpandedEditorHosted) return true;
         return IsVisible &&
             !_paper.IsCollapsed &&
             !IsPaperFormTransitioning &&
