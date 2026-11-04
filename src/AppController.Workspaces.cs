@@ -220,7 +220,7 @@ public sealed partial class AppController
     {
         Application.Current.Dispatcher.VerifyAccess();
         var nextOptions = requested.Normalized();
-        if (!nextOptions.Enabled || !nextOptions.ContainsSlot(number)) return false;
+        if ((number != 1 && (!nextOptions.Enabled || !nextOptions.ContainsSlot(number))) || number is < 1 or > 5) return false;
         if (!CanBeginWorkspaceChange()) return false;
         if (number == WorkspaceNumber) return true;
         nextOptions.Active = number;
