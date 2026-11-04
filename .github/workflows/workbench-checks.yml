@@ -21,7 +21,6 @@ jobs:
           import base64, bz2, hashlib, pathlib, subprocess, tempfile
           paths = [pathlib.Path(f'.github/workbench-payload.{i}.b64') for i in range(4)]
           parts = [p.read_text().strip() for p in paths]
-          # Correct duplicated characters in the text transport, then verify the entire patch.
           parts[0] = parts[0][:4483] + parts[0][4485:]
           parts[1] = parts[1][:2185] + parts[1][2187:]
           compressed = base64.b64decode(''.join(parts), validate=True)
@@ -34,7 +33,9 @@ jobs:
           git('config', 'core.autocrlf', 'false')
           git('config', 'core.whitespace', 'cr-at-eol')
           git('apply', '--check', '--unidiff-zero', str(file))
-          git('apply', '--index', '--unidiff-zero', str(file))
+          git('apply', '--unidiff-zero', str(file))
+          git('config', 'core.autocrlf', 'true')
+          git('add', '--', 'PaperTodo.csproj', 'Resources', 'src', 'tests')
           git('rm', *[str(p) for p in paths])
           git('config', 'user.name', 'github-actions[bot]')
           git('config', 'user.email', '41898282+github-actions[bot]@users.noreply.github.com')
