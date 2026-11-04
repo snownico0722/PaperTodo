@@ -14,7 +14,7 @@ public sealed partial class PaperWindow
     internal string ExpandedEditorTitle => _controller.PaperTitleText(_paper);
     internal bool IsExpandedEditorHosted => _expandedEditorVisualLease != null;
     private FrameworkElement InteractionRoot => IsExpandedEditorHosted ? _shell : this;
-    private Window InteractionWindow => _expandedEditorHostWindow ?? this;
+    private Window InteractionWindow => (_expandedEditorHostWindow as Window) ?? this;
 
     // Same visual-lease boundary as the directly editable workspace canvas (#399).
     // The original PaperWindow retains its document, Undo stack, Markdown session and plugin
