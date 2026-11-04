@@ -87,7 +87,7 @@ internal static class WorkspaceFieldScopes
         Add(WorkspaceStateFieldScope.FollowMain,
             nameof(AppState.UiLanguage), nameof(AppState.DataMergeConflictPolicy), nameof(AppState.Theme), nameof(AppState.ColorScheme),
             nameof(AppState.PaperSkin), nameof(AppState.MaterialTransparency), nameof(AppState.HideSurfaceOutline),
-            nameof(AppState.MatchAuxiliaryMaterialStrength), nameof(AppState.MicaBackdropType), nameof(AppState.MicaAlwaysActive),
+            nameof(AppState.MicaBackdropType), nameof(AppState.MicaAlwaysActive),
             nameof(AppState.MarkdownRenderMode), nameof(AppState.ImageReferenceTextMode), nameof(AppState.MarkdownEditAnimationEnabled),
             nameof(AppState.TodoVisualSize), nameof(AppState.ShowTodoBottomBar), nameof(AppState.AutoClearCompletedTodos),
             nameof(AppState.AutoMoveCompletedTodosToBottom), nameof(AppState.AutoCompressLargeImages), nameof(AppState.UiFontPreset),
