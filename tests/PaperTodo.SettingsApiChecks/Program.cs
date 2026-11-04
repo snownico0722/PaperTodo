@@ -180,7 +180,8 @@ internal static partial class Program
             var loaded = store.Load();
             Check(PaperTopBarShortcuts.Pinned(loaded).SequenceEqual(
                       [PaperTopBarShortcuts.Association, PaperTopBarShortcuts.NewTodo,
-                       PaperTopBarShortcuts.ExternalEditor, PaperTopBarShortcuts.NewNote]) &&
+                       PaperTopBarShortcuts.ExternalEditor, PaperTopBarShortcuts.NewNote,
+                       PaperTopBarShortcuts.Workspace]) &&
                   loaded.TodoTopBarShortcuts == null && loaded.NoteTopBarShortcuts == null,
                 "Different Todo and Note layouts migrate to one union; old lists stop being authoritative.");
 
