@@ -145,7 +145,6 @@ public sealed partial class PaperWindow
                     Margin = new Thickness(1, 0, 1, 0),
                     FontWeight = slot == _controller.WorkspaceNumber
                         ? FontWeights.Bold : FontWeights.Normal,
-                    ToolTip = _controller.WorkspaceOptions.DisplayName(slot),
                     IsEnabled = slot != _controller.WorkspaceNumber
                 };
                 choice.Click += (_, e) =>
