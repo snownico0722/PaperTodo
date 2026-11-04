@@ -135,7 +135,7 @@ internal static class MasterQueueMonitorChecks
 
             RunReconnect(controller, cacheField, connected, originalCache, primary);
             RunPendingDisconnects(controller, cacheField, connected, originalCache, primary);
-            RunBeginRetirement(controller, cacheField, connected, originalCache);
+            RunStaleBeginRejection(controller, cacheField, connected, originalCache, primary);
             RunFreeQueuePendingDisconnect(controller, cacheField, connected, originalCache, primary);
         }
         finally
@@ -238,29 +238,37 @@ internal static class MasterQueueMonitorChecks
         }
     }
 
-    private static void RunBeginRetirement(AppController controller, FieldInfo cacheField,
-        Array connected, object disconnected)
+    private static void RunStaleBeginRejection(AppController controller, FieldInfo cacheField,
+        Array connected, object disconnected, MonitorGeometry primary)
     {
         cacheField.SetValue(null, connected);
         controller.ArrangeDeepCapsules(animate: false);
         cacheField.SetValue(null, connected);
         var source = (MasterCapsuleWindow)Masters(controller)[SourceMonitor + "|" + DeepCapsuleSides.Right]!;
         Require(controller.TryCreateMasterQueueFloatingDragHostOptions(SourceMonitor,
-                EdgeCapsuleEdge.Right, "▾", "2", out var options), "Begin retirement drag options");
+                EdgeCapsuleEdge.Right, "▾", "2", out var options),
+            "stale Begin fixture drag options");
         var host = EdgeCapsuleDragWindow.Rent(options);
         host.ReturnToPool();
-        var (_, session, start) = PressMaster(source);
-        var closedBeforeSnapshotReturned = false;
-        source.Closed += (_, _) => closedBeforeSnapshotReturned =
-            Field(controller, "_masterCapsuleQueueTransfer") != null &&
-            Field(source, "_queueTransferSnapshot") == null;
+        var (pill, session, start) = PressMaster(source);
         cacheField.SetValue(null, disconnected);
-        // Exercise the acquisition boundary itself: Begin's synchronous arrange retires this
-        // owner before returning its snapshot. Every uncommitted exit still owns rollback.
-        Require((bool)typeof(MasterCapsuleWindow).GetMethod("TryRunQueueTransfer", Private)!
-                .Invoke(source, [start, session])!, "retiring Begin did not consume the transfer");
-        Require(closedBeforeSnapshotReturned && !host.IsVisible,
-            "Begin retirement did not close the unclaimed owner and withdraw its floating cover");
+
+        // This used to enter Begin and retire the detached master synchronously.
+        // A stale physical edge must now be rejected before renting the floating
+        // host or starting a transfer; the real continuation then cancels its press.
+        Require(!(bool)typeof(MasterCapsuleWindow).GetMethod("TryRunQueueTransfer", Private)!
+                .Invoke(source, [start, session])!,
+            "disconnected master incorrectly entered its old queue transfer");
+        Require(!host.IsVisible && Field(controller, "_masterCapsuleQueueTransfer") == null &&
+                Field(source, "_queueTransferSnapshot") == null,
+            "rejecting a stale Begin acquired a floating lease or left a transaction");
+        var move = new DeviceScreenPoint(start.X, start.Y + 47 * primary.DpiScaleY);
+        Require((bool)typeof(MasterCapsuleWindow).GetMethod("ContinueMasterDrag", Private)!
+                .Invoke(source, [move, session])!,
+            "stale master gesture was not consumed after rejected Begin");
+        Require(!pill.IsMouseCaptured && Field(source, "_dragSession") == null,
+            "rejected stale Begin left the old master gesture captured");
+        RaiseLeftButton(pill, UIElement.PreviewMouseLeftButtonUpEvent);
         RequireTransferReleased(controller, options, host);
     }
 
