@@ -22,11 +22,24 @@ public sealed partial class AppController
         {
             if (!ReferenceEquals(_workbenchWindow, window)) return;
             _workbenchWindow = null;
-            if (!IsExiting && !IsWorkspaceSwitching) ArrangeDeepCapsules(animate: false);
+            if (!IsExiting && !IsWorkspaceSwitching)
+            {
+                ArrangeDeepCapsules(animate: false);
+                // Arrange updates existing masters but does not Show() a master hidden for the
+                // workbench. Publish those masters again after the workbench has closed.
+                foreach (var master in _masterCapsules.Values)
+                {
+                    if (!master.IsVisible)
+                    {
+                        master.Show();
+                        master.RefreshEffectiveTopmost();
+                    }
+                }
+            }
         };
         try
         {
-            foreach (var master in _masterCapsules.Values) master.Hide();
+            HideWorkbenchMasterCapsules();
             window.Show();
             window.Activate();
         }
@@ -139,6 +152,18 @@ public sealed partial class AppController
 
     internal void CloseWorkbenchForDesktopAction() => _workbenchWindow?.Close();
     private void SuspendWorkbench() => _workbenchWindow?.SuspendWorkspace();
-    private void ResumeWorkbench() => _workbenchWindow?.ResumeWorkspace();
+    private void HideWorkbenchMasterCapsules()
+    {
+        foreach (var master in _masterCapsules.Values)
+            if (master.IsVisible) master.Hide();
+    }
+
+    private void ResumeWorkbench()
+    {
+        _workbenchWindow?.ResumeWorkspace();
+        // Switching workspaces creates new master windows while the workbench is suspended.
+        // Keep them behind the workbench too, then restore them on explicit close.
+        if (_workbenchWindow != null) HideWorkbenchMasterCapsules();
+    }
     private void CloseWorkbenchForShutdown() => _workbenchWindow?.CloseForShutdown();
 }
