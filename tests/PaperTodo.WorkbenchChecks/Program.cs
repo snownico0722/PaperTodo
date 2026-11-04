@@ -76,7 +76,7 @@ internal static class Program
 
     private static AppState FixtureState() => new()
     {
-        UiLanguage = "en", TelemetryEnabled = false, EnableAnimations = false, UseCapsuleMode = true, UseDeepCapsuleMode = true,
+        UiLanguage = "en", TelemetryEnabled = false, EnableAnimations = false, UseCapsuleMode = true, UseDeepCapsuleMode = true, EnableTodoPaperLinks = true,
         UsePersistentPowerShellProcess = false, McpEnabled = false,
         Workspaces = new() { Enabled = true, Count = 2, Active = 1 },
         Papers = [
@@ -153,6 +153,13 @@ internal static class Program
             controller.DeletePaper(controller.FindPaper("note-b")!);
             await Until(() => workbench.HostedPaperCount == 2, "Deleted paper retained a leased editor");
             Assert(!controller.WorkbenchLayout.Cards.ContainsKey("note-b"), "Deleted paper retained spatial metadata");
+            // Reuse the native Todo-row association, never a generic paper-to-paper edge.
+            Assert(controller.WorkbenchPaperWindow("todo-a").LinkPaperToTodo("task-1", "note-a"),
+                "Native Todo-item binding was unavailable in the workbench");
+            Assert(controller.FindPaper("todo-a")!.Items.First(i => i.Id == "task-1").LinkedPaperId == "note-a",
+                "Binding was not stored on the specific Todo item");
+            Assert(controller.SnapshotCurrentWorkbench().Edges.Any(e => e.From == "todo-a" && e.To == "note-a"),
+                "Todo-item binding was not reflected by the workbench layout");
             // The eye changes only desktop visibility while the real editor stays hosted.
             controller.SetWorkbenchDesktopVisibility(controller.FindPaper("note-a")!, false);
             controller.SetWorkbenchDesktopVisibility(controller.FindPaper("todo-a")!, true);
