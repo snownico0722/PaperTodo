@@ -137,12 +137,12 @@ internal static class Program
         {
             // The workbench chrome follows PaperTodo's actual palette, including color-scheme changes.
             var chrome = (Border)Member(workbench, "_toolbarHost");
-            Assert(ReferenceEquals(workbench.Background, Theme.CodeBrush) &&
+            Assert(ReferenceEquals(workbench.Background, Theme.WorkbenchDeskBrush) &&
                    ReferenceEquals(chrome.Background, Theme.PaperBrush), "Workbench uses a fixed non-theme palette");
             var originalScheme = controller.State.ColorScheme;
             controller.State.ColorScheme = ColorSchemes.Forest;
             Theme.Invalidate(); workbench.RefreshTheme();
-            Assert(ReferenceEquals(workbench.Background, Theme.CodeBrush) &&
+            Assert(ReferenceEquals(workbench.Background, Theme.WorkbenchDeskBrush) &&
                    ReferenceEquals(chrome.Background, Theme.PaperBrush) &&
                    ReferenceEquals(chrome.BorderBrush, Theme.PaperBorderBrush),
                 "Workbench chrome did not follow the updated palette");
@@ -173,6 +173,19 @@ internal static class Program
             var active = Member(workbench, "ActiveScene");
             var cards = (System.Collections.IDictionary)Member(active, "Cards");
             var card = cards["note-a"]!;
+            var eye = (Button)Member(card, "Eye");
+            var footer = (Grid)eye.Parent;
+            Assert(Grid.GetRow(footer) == 3 &&
+                   eye.HorizontalAlignment == HorizontalAlignment.Left &&
+                   eye.IsEnabled && eye.IsHitTestVisible,
+                "Desktop eye is not clickable at the bottom-left of the paper");
+            var paperVisible = controller.FindPaper("note-a")!.IsVisible;
+            eye.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            Assert(controller.FindPaper("note-a")!.IsVisible != paperVisible,
+                "Clicking the workbench eye did not toggle desktop visibility");
+            eye.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            Assert(controller.FindPaper("note-a")!.IsVisible == paperVisible,
+                "Clicking the eye twice did not restore desktop visibility");
             var zoom = (ScaleTransform)Member(workbench, "_scale");
             var pan = (TranslateTransform)Member(workbench, "_pan");
             var camera = (zoom.ScaleX, pan.X, pan.Y);
@@ -185,6 +198,19 @@ internal static class Program
             Assert(Math.Abs(zoom.ScaleX - camera.ScaleX) < 0.001 &&
                    Math.Abs(pan.X - camera.X) < 0.001 && Math.Abs(pan.Y - camera.Y) < 0.001,
                 "Outside click did not restore the previous camera");
+
+            controller.State.EnableAnimations = true;
+            focus.Invoke(workbench, [card]);
+            Assert(zoom.HasAnimatedProperties && pan.HasAnimatedProperties,
+                "Paper focus did not animate zoom and translation");
+            await Task.Delay(80);
+            clear.Invoke(workbench, [true]);
+            Assert(zoom.HasAnimatedProperties && pan.HasAnimatedProperties,
+                "Leaving focus did not animate camera restoration");
+            await Until(() => Math.Abs(zoom.ScaleX - camera.ScaleX) < 0.001 &&
+                Math.Abs(pan.X - camera.X) < 0.001 && Math.Abs(pan.Y - camera.Y) < 0.001,
+                "Animated camera did not restore its previous viewpoint");
+            controller.State.EnableAnimations = false;
 
             // Thumb sends DragStarted/Completed even for a click with zero displacement.
             var undo = (Stack<WorkbenchState>)Member(workbench, "_undo");
