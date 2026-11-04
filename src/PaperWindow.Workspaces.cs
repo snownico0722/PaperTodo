@@ -82,7 +82,7 @@ public sealed partial class PaperWindow
         var next = options.NextSlot(number);
         _workspaceButton.ToolTip = options.TopBarNamePicker
             ? options.DisplayName(number)
-            : Strings.Format("WorkspaceCycleTooltip", number, options.SlotNumbers.Count, next);
+            : Strings.Format("WorkspaceCycleTooltip", number, next);
         AutomationProperties.SetName(_workspaceButton, Strings.Format("WorkspaceCurrent", number));
         UpdateTopBarResponsiveLayout();
     }
