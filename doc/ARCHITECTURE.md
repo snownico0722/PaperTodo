@@ -221,6 +221,8 @@ Markdown 中的 Note 图片只通过 PaperTodo 内部 `i:` asset URI 引用宿�
 
 `PaperWindow` 是单纸片 UI owner，负责普通 paper shell、Todo/Note 交互、标题/工具栏、窗口行为和各子系统适配。
 
+扩展编辑器是临时的单窗口 presentation：`ExpandedEditorWindow` 提供可在任务栏/Alt+Tab 出现的标准 WPF HWND、外框和单一正文插槽，不负责另一份 Paper 数据或编辑会话。选中纸片时，`PaperWindow.ExpandedEditorVisualLease` 将原有 `PaperWindow` 的 `_shell`（包含该纸片的原生顶栏、内置 Note/Todo 或插件 Body）临时借入插槽，并隐藏原 PaperWindow；纸片自身仍拥有 MarkdownTextBox、待办输入与插件会话。右侧列表切换仅归还上一份 visual、借入下一份，编辑器 HWND 不变；原有输入坐标、焦点、弹窗与插件可见回调使用当前承载窗口。归还时提交当前编辑并恢复原 PaperWindow/胶囊形态，编辑器 HWND 的尺寸不能写入 PaperData 普通窗口几何。工作区结束、删除纸片、关闭或退出前必须解除借用。编辑器外壳使用不透明 `PaperBrushKey`，不继承普通 Mica HWND 才能合成的透明底色；原 WPF 顶栏和用户快捷键顺序保留，不增加第二条原生标题栏。
+
 窗口交接的同步 Render 等待和正文回调允许同一 Dispatcher 上的外部命令重入。`AppController` 的批量隐藏与浮层 z-order 更新只遍历本次入口的窗口集合；隐藏复用既有逐纸片 visibility version，后到的显示／删除命令使旧目标失效，旧淡出回调也不能再修改新显示的 opacity 或图像资源。关闭过程由 `PaperWindow.CloseForReal` 的调用范围防重入，但在 compositor 交接完成前仍保持 Alive、接受精确端点；交接或正文回调返回后复核生命周期，Closed 不得回退到 Closing。
 
 Edge Capsule 启用后，一张纸的可见 surface 不再等价于一个 `PaperWindow` HWND：docked capsule 由 `EdgeCapsuleHost` 提供，跨队列/脱墙拖拽可以临时使用 `EdgeCapsuleDragWindow`；这些 surface 仍引用同一 `PaperData`，不复制业务对象。
