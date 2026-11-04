@@ -67,9 +67,11 @@ public sealed partial class AppController
             var content = p.Type == PaperTypes.Todo
                 ? string.Join("\n", p.Items.Take(12).Select(i => (i.Done ? "[x] " : "[ ] ") + i.Text))
                 : plugin ? p.BodyHeaderText : live && window != null ? window.CurrentMarkdownContentForExternalRead() : p.Content;
+            var searchText = p.Type == PaperTypes.Todo
+                ? string.Join("\n", p.Items.Select(i => i.Text)) : content ?? "";
             var summary = (content ?? "");
             if (summary.Length > 800) summary = summary[..800];
-            return new WorkbenchPaperSnapshot(p.Id, title ?? "", summary, plugin ? "plugin" : p.Type,
+            return new WorkbenchPaperSnapshot(p.Id, title ?? "", summary, searchText, plugin ? "plugin" : p.Type,
                 live && window != null ? window.WorkbenchAffinity : plugin ? "plugin:" + p.BodyProviderId : "",
                 live && window != null ? window.WorkbenchBindingTitle : "",
                 placement?.Width ?? WorkbenchCardState.ValidSize(p.Width, 320, 240, 640),
@@ -121,8 +123,10 @@ public sealed partial class AppController
             var text = p.Type == PaperTypes.Todo ? string.Join("\n", p.Items.Take(12).Select(i => (i.Done ? "[x] " : "[ ] ") + i.Text))
                 : plugin ? p.BodyHeaderText : p.Content;
             text ??= "";
+            var searchText = p.Type == PaperTypes.Todo
+                ? string.Join("\n", p.Items.Select(i => i.Text)) : text;
             return new WorkbenchPaperSnapshot(p.Id, p.Title ?? "", text.Length > 800 ? text[..800] : text,
-                plugin ? "plugin" : p.Type, plugin ? "plugin:" + p.BodyProviderId : "", "",
+                searchText, plugin ? "plugin" : p.Type, plugin ? "plugin:" + p.BodyProviderId : "", "",
                 placement?.Width ?? WorkbenchCardState.ValidSize(p.Width, 320, 240, 640),
                 placement?.Height ?? WorkbenchCardState.ValidSize(p.Height, 360, 240, 720), placement, p.IsVisible);
         }).ToArray();
