@@ -21,6 +21,7 @@ internal static class Program
         if (args is ["--fixture", var name] && Cases.Contains(name))
         {
             if (!File.Exists(Path.Combine(AppContext.BaseDirectory, Marker))) throw new InvalidOperationException("Not a fixture directory.");
+            Trace.Listeners.Add(new ConsoleTraceListener(useErrorStream: true));
             var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
             using (var source = typeof(Program).Assembly.GetManifestResourceStream("PaperTodo.App.xaml")!)
             {
@@ -41,7 +42,7 @@ internal static class Program
         }
         try
         {
-            foreach (var name in Cases) RunIsolated(name);
+            foreach (var fixtureName in Cases) RunIsolated(fixtureName);
             Console.WriteLine("PASS 3 isolated workbench lifecycle fixtures"); return 0;
         }
         catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }

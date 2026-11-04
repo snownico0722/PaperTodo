@@ -4,66 +4,23 @@ on:
     branches: [feature/infinite-workbench]
   workflow_dispatch:
 permissions:
-  contents: write
+  contents: read
 jobs:
   checks:
     runs-on: windows-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
-          fetch-depth: 0
           submodules: recursive
-      - name: Import verified integration fixes
-        id: import
-        if: github.ref == 'refs/heads/feature/infinite-workbench' && hashFiles('.github/workbench-fixes.b64') != ''
-        shell: python
-        run: |
-          import base64, bz2, hashlib, pathlib, re, subprocess, tempfile
-          source = pathlib.Path('.github/workbench-fixes.b64')
-          patch = bz2.decompress(base64.b64decode(source.read_text().strip(), validate=True))
-          assert hashlib.sha256(patch).hexdigest() == '28074213d78904ee8f7ef8b2aa3f41035f7bfc78b89caebeb57f62505317966a'
-          names = [s.decode() for s in re.findall(rb'^\+\+\+ b/(.+)$', patch, re.M)]
-          for name in names:
-              path = pathlib.Path(name)
-              assert not path.is_absolute() and '..' not in path.parts
-              if path.exists(): path.write_bytes(path.read_bytes().replace(b'\r\n', b'\n'))
-          file = pathlib.Path(tempfile.gettempdir()) / 'workbench-fixes.patch'
-          file.write_bytes(patch)
-          def git(*args): subprocess.run(['git', *args], check=True)
-          git('apply', '--check', '--unidiff-zero', str(file))
-          git('apply', '--unidiff-zero', str(file))
-          git('config', 'core.autocrlf', 'true')
-          git('add', '--', *names)
-          git('rm', str(source))
-          git('config', 'user.name', 'github-actions[bot]')
-          git('config', 'user.email', '41898282+github-actions[bot]@users.noreply.github.com')
-          git('commit', '-m', 'fix: correct workbench integration and document lifecycle boundaries')
-          git('push', 'origin', 'HEAD:feature/infinite-workbench')
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
-      - name: Layout behavior checks
-        run: dotnet run --project tests/PaperTodo.WorkbenchLayoutChecks/PaperTodo.WorkbenchLayoutChecks.csproj -c Release
-      - name: Release build
-        id: build
-        if: always() && steps.import.outcome != 'failure'
-        run: dotnet build PaperTodo.csproj -c Release
-      - name: Editor and workspace lifecycle checks
-        if: always() && steps.build.outcome == 'success'
+      - name: Layout and real editor lifecycle checks
+        shell: pwsh
         env:
           WORKBENCH_ARTIFACT_DIR: ${{ github.workspace }}/.artifacts/workbench
-        run: dotnet run --project tests/PaperTodo.WorkbenchChecks/PaperTodo.WorkbenchChecks.csproj -c Release
-      - name: Existing persistence and reload regressions
-        if: always() && steps.build.outcome == 'success'
-        shell: pwsh
-        run: |
-          $failed = $false
-          foreach ($name in @('PersistenceChecks', 'ThreadingChecks', 'DataReloadChecks', 'LifecycleChecks')) {
-            dotnet run --project "tests/PaperTodo.$name/PaperTodo.$name.csproj" -c Release
-            if ($LASTEXITCODE -ne 0) { $failed = $true }
-          }
-          if ($failed) { exit 1 }
+        run: ./tools/testing/Run-Checks.ps1 -Group regression -Project WorkbenchLayoutChecks,WorkbenchChecks
       - uses: actions/upload-artifact@v4
         if: always()
         with:
