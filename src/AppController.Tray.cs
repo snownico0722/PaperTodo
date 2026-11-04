@@ -592,6 +592,7 @@ public sealed partial class AppController
             StaysOpenOnClick = true,
             IsEnabled = !_workspaceSwitching
         };
+        AutomationProperties.SetAutomationId(item, "TrayWorkspaceSelector");
         var content = new StackPanel
         {
             MinWidth = 168,
