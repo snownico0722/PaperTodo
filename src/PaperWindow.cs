@@ -2366,6 +2366,7 @@ public sealed partial class PaperWindow : Window
         _closeButton.Margin = new Thickness(AppTypography.Scale(1), -AppTypography.Scale(0.6), AppTypography.Scale(1), AppTypography.Scale(0.6));
         _closeButton.Click += (_, _) =>
         {
+            if (_isExpandedEditorMode) ReturnFromExpandedEditor();
             if (CanDisplayAsCapsule())
             {
                 SetCollapsedState(true);
