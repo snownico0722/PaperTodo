@@ -1652,7 +1652,7 @@
     <value>当前工作区：{0}</value>
   </data>
   <data name="WorkspaceFollowMain" xml:space="preserve">
-    <value>本工作区设置跟随主工作区</value>
+    <value>设置跟随主工作区</value>
   </data>
   <data name="WorkspaceFollowHint" xml:space="preserve">
     <value>开启时使用主工作区的软件设置，纸片、图片、布局和插件私有数据保持独立。关闭后恢复本工作区原有的独立设置。</value>
