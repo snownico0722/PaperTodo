@@ -14,32 +14,31 @@ jobs:
         with:
           fetch-depth: 0
           submodules: recursive
-      - name: Import verified implementation patch
-        if: github.ref == 'refs/heads/feature/infinite-workbench' && hashFiles('.github/workbench-payload.0.b64') != ''
+      - name: Import verified integration fixes
+        id: import
+        if: github.ref == 'refs/heads/feature/infinite-workbench' && hashFiles('.github/workbench-fixes.b64') != ''
         shell: python
         run: |
-          import base64, bz2, hashlib, pathlib, subprocess, tempfile
-          paths = [pathlib.Path(f'.github/workbench-payload.{i}.b64') for i in range(4)]
-          parts = [p.read_text().strip() for p in paths]
-          parts[0] = parts[0][:4483] + parts[0][4485:]
-          parts[1] = parts[1][:2185] + parts[1][2187:]
-          compressed = base64.b64decode(''.join(parts), validate=True)
-          assert hashlib.sha256(compressed).hexdigest() == '146054dba430549043232d2dd8be601a8d6cbea016d34f7da98485f87b4a0ad0'
-          patch = bz2.decompress(compressed)
-          assert hashlib.sha256(patch).hexdigest() == '98b68cef08b7b187a1a46ebe52b29fb7837c2aa0afd5d8fd62b4411fe57bc524'
-          file = pathlib.Path(tempfile.gettempdir()) / 'workbench-verified.patch'
+          import base64, bz2, hashlib, pathlib, re, subprocess, tempfile
+          source = pathlib.Path('.github/workbench-fixes.b64')
+          patch = bz2.decompress(base64.b64decode(source.read_text().strip(), validate=True))
+          assert hashlib.sha256(patch).hexdigest() == '28074213d78904ee8f7ef8b2aa3f41035f7bfc78b89caebeb57f62505317966a'
+          names = [s.decode() for s in re.findall(rb'^\+\+\+ b/(.+)$', patch, re.M)]
+          for name in names:
+              path = pathlib.Path(name)
+              assert not path.is_absolute() and '..' not in path.parts
+              if path.exists(): path.write_bytes(path.read_bytes().replace(b'\r\n', b'\n'))
+          file = pathlib.Path(tempfile.gettempdir()) / 'workbench-fixes.patch'
           file.write_bytes(patch)
           def git(*args): subprocess.run(['git', *args], check=True)
-          git('config', 'core.autocrlf', 'false')
-          git('config', 'core.whitespace', 'cr-at-eol')
           git('apply', '--check', '--unidiff-zero', str(file))
           git('apply', '--unidiff-zero', str(file))
           git('config', 'core.autocrlf', 'true')
-          git('add', '--', 'PaperTodo.csproj', 'Resources', 'src', 'tests')
-          git('rm', *[str(p) for p in paths])
+          git('add', '--', *names)
+          git('rm', str(source))
           git('config', 'user.name', 'github-actions[bot]')
           git('config', 'user.email', '41898282+github-actions[bot]@users.noreply.github.com')
-          git('commit', '-m', 'feat: add editable infinite workbench and constraint-aware automatic layout')
+          git('commit', '-m', 'fix: correct workbench integration and document lifecycle boundaries')
           git('push', 'origin', 'HEAD:feature/infinite-workbench')
       - uses: actions/setup-dotnet@v4
         with:
@@ -47,13 +46,24 @@ jobs:
       - name: Layout behavior checks
         run: dotnet run --project tests/PaperTodo.WorkbenchLayoutChecks/PaperTodo.WorkbenchLayoutChecks.csproj -c Release
       - name: Release build
-        if: always()
+        id: build
+        if: always() && steps.import.outcome != 'failure'
         run: dotnet build PaperTodo.csproj -c Release
       - name: Editor and workspace lifecycle checks
-        if: success()
+        if: always() && steps.build.outcome == 'success'
         env:
           WORKBENCH_ARTIFACT_DIR: ${{ github.workspace }}/.artifacts/workbench
         run: dotnet run --project tests/PaperTodo.WorkbenchChecks/PaperTodo.WorkbenchChecks.csproj -c Release
+      - name: Existing persistence and reload regressions
+        if: always() && steps.build.outcome == 'success'
+        shell: pwsh
+        run: |
+          $failed = $false
+          foreach ($name in @('PersistenceChecks', 'ThreadingChecks', 'DataReloadChecks', 'LifecycleChecks')) {
+            dotnet run --project "tests/PaperTodo.$name/PaperTodo.$name.csproj" -c Release
+            if ($LASTEXITCODE -ne 0) { $failed = $true }
+          }
+          if ($failed) { exit 1 }
       - uses: actions/upload-artifact@v4
         if: always()
         with:
