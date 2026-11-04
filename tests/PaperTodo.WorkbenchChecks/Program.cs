@@ -136,6 +136,9 @@ internal static class Program
         Assert(ReferenceEquals(Member(originalWindow, "_markdownBodySession"), bodySession), "Workbench duplicated the body session");
         Assert(!originalWindow.IsVisible && originalWindow.IsWorkbenchHosted, "Desktop and workbench body both visible");
         Assert(masters.Values.All(master => !master.IsVisible), "Workbench left a master capsule visible over the desk");
+        foreach (var paper in controller.State.Papers)
+            Assert(before[paper.Id] == Geometry(paper),
+                $"First workbench entry changed {paper.Id}: {before[paper.Id]} -> {Geometry(paper)}");
         if (name == "surface")
         {
             // The workbench chrome follows PaperTodo's actual palette, including color-scheme changes.
@@ -244,7 +247,9 @@ internal static class Program
             workbench.ResumeWorkspace();
             await Until(() => workbench.HostedPaperCount == 3, "Workbench failed to resume after reload");
         }
-        foreach (var paper in controller.State.Papers) Assert(before[paper.Id] == Geometry(paper), "Desktop state changed while entering: " + paper.Id);
+        foreach (var paper in controller.State.Papers)
+            Assert(before[paper.Id] == Geometry(paper),
+                $"Workbench pause/resume changed {paper.Id}: {before[paper.Id]} -> {Geometry(paper)}");
         editor.GetType().GetProperty("Text")!.SetValue(editor, "Edited inside the workbench");
         controller.CommitPendingMarkdownContentsForSave();
         Assert(controller.FindPaper("note-a")!.Content == "Edited inside the workbench", "Workbench edits do not reach the authoritative model");
