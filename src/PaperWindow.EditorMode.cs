@@ -147,7 +147,7 @@ public sealed partial class PaperWindow
         AddTool("•", Strings.Get("EditorBullets"), () => _noteBox?.InsertLinePrefix("- "));
         AddTool("1.", Strings.Get("EditorNumbers"), () => _noteBox?.InsertLinePrefix("1. "));
         AddTool("❝", Strings.Get("EditorQuote"), () => _noteBox?.InsertLinePrefix("> "));
-        AddTool("</>", Strings.Get("EditorCode"), () => _noteBox?.WrapSelection(" " + "```" + "\n", "\n" + "```"));
+        AddTool("</>", Strings.Get("EditorCode"), () => _noteBox?.WrapSelection("```\n", "\n```"));
         AddTool("↗", Strings.Get("EditorLink"), () => _noteBox?.InsertMarkdownLink());
         AddTool("▧", Strings.Get("EditorImage"), () => _noteEditorImageAction?.Invoke());
 
