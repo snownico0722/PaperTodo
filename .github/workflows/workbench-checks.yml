@@ -12,6 +12,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          # Nerdbank.GitVersioning requires the history since the last version-height reset.
+          fetch-depth: 0
           submodules: recursive
       - uses: actions/setup-dotnet@v6
         with:
