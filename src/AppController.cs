@@ -1268,6 +1268,12 @@ public sealed partial class AppController : IDisposable
         {
             return;
         }
+        var hostedEditor = _expandedEditors.FirstOrDefault(e => e.CurrentPaperId == paper.Id);
+        if (hostedEditor != null)
+        {
+            if (activate) hostedEditor.Activate();
+            return;
+        }
 
         InvalidateVisibilityShortcutSnapshotForExternalCommand();
         if (!_suppressDirty)
@@ -1835,6 +1841,7 @@ public sealed partial class AppController : IDisposable
 
     public void HidePaper(PaperData paper)
     {
+        CloseExpandedEditorForPaper(paper.Id);
         InvalidateVisibilityShortcutSnapshotForExternalCommand();
         var visibilityVersion = NextVisibilityAnimationVersion(paper.Id);
         _windows.TryGetValue(paper.Id, out var window);
