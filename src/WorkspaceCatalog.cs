@@ -3,8 +3,8 @@ using System.IO;
 namespace PaperTodo;
 
 /// <summary>
-/// Resolves fixed slots and their immutable stores. No watcher, directory discovery, rename,
-/// mirrored catalog or inactive-workspace runtime is created.
+/// Resolves numbered workspace storage and the main-owned catalog. Display names never rename
+/// the on-disk documents, and inactive workspaces have no live presentation or plugin session.
 /// </summary>
 internal sealed class WorkspaceCatalog
 {
@@ -29,6 +29,30 @@ internal sealed class WorkspaceCatalog
     internal void SetStartupError(string message) => StartupError = message;
     internal StateStore MainStore => StoreFor(1);
     internal WorkspacePaths PathsFor(int number) => new(_directory, number);
+
+    // Only an inactive, explicitly removed slot may be purged. Reuse always purges before
+    // adding the slot to the catalog, so a previously deleted slot cannot revive old data.
+    internal void DeleteInactiveSlotFiles(int number)
+    {
+        if (number is < 2 or > 5 || Options.Active == number)
+            throw new InvalidOperationException("Only inactive secondary workspaces may be deleted.");
+        var paths = PathsFor(number);
+        var stem = "data" + number.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        foreach (var file in System.IO.Directory.EnumerateFiles(_directory))
+        {
+            var name = Path.GetFileName(file);
+            if (name.Equals(stem + ".json", StringComparison.OrdinalIgnoreCase) ||
+                name.Equals(stem + ".backup.json", StringComparison.OrdinalIgnoreCase) ||
+                name.StartsWith(stem + "conflict-", StringComparison.OrdinalIgnoreCase) ||
+                name.StartsWith(stem + ".failed_load.", StringComparison.OrdinalIgnoreCase) ||
+                name.StartsWith(stem + ".recovered", StringComparison.OrdinalIgnoreCase))
+                File.Delete(file);
+        }
+        File.Delete(paths.Images);
+        File.Delete(paths.Images + "-lock");
+        if (System.IO.Directory.Exists(paths.PluginData))
+            System.IO.Directory.Delete(paths.PluginData, recursive: true);
+    }
 
     internal StateStore StoreFor(int number)
     {
