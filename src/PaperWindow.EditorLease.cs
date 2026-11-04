@@ -41,6 +41,7 @@ public sealed partial class PaperWindow
         try
         {
             HideWithoutGeometrySave();
+            ApplySystemVisibility(reapplyTaskbarShellState: true);
             HideExpandedDeepCapsuleSlotHost(animate: false);
             _containerGrid.Children.Remove(_shell);
             _shell.Resources.MergedDictionaries.Add(Resources);
@@ -56,6 +57,7 @@ public sealed partial class PaperWindow
             IsVisibleChanged += OnExpandedEditorOwnerVisibilityChanged;
             NotifyCurrentPaperBodyVisibility(true);
             RefreshExpandedEditorPresentation();
+            _enterCurrentNoteEditor?.Invoke();
             RefreshExpandedEditorTopBarControls();
             return lease;
         }
@@ -197,9 +199,11 @@ public sealed partial class PaperWindow
             owner._shell.Visibility = Visibility.Visible;
             owner._shell.Opacity = 1;
             owner.RefreshExpandedEditorPresentation();
+            owner._showNotePreview?.Invoke();
             if (_wasCollapsed && owner.CanDisplayAsCapsule() && !owner._paper.IsCollapsed)
                 owner.SetCollapsedState(true, animate: false, saveGeometry: false);
             owner.ApplyPaperChromePresentation();
+            owner.ApplySystemVisibility(reapplyTaskbarShellState: true);
             owner.SyncNoteImagePresentationState();
 
             if (restoreDesktop && _desktopWasVisible && owner._paper.IsVisible && !owner.IsClosed)
