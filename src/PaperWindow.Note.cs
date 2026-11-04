@@ -227,7 +227,7 @@ public sealed partial class PaperWindow
         _notePreviewContextMenu = BuildPaperContextMenu();
         void ShowPreview()
         {
-            if (!IsCurrentPresenter())
+            if (_isExpandedEditorMode || !IsCurrentPresenter())
             {
                 return;
             }
@@ -303,7 +303,7 @@ public sealed partial class PaperWindow
             TraceNoteRender($"ShowEditor after focus={focus} isPreviewing={isPreviewing} boxPreview={box.IsPreviewMode} focused={box.IsKeyboardFocusWithin}");
         }
 
-        _enterCurrentNoteEditor = () => ShowEditor();
+        _enterCurrentNoteEditor = () => ShowEditor(focus: false);
         _noteEditorImageAction = () =>
         {
             isOpeningImagePicker = true;
