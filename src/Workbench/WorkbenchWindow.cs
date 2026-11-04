@@ -28,7 +28,6 @@ internal sealed class WorkbenchWindow : Window
     private CancellationTokenSource? _overviewCancellation;
     private long _layoutRevision;
     private string _modelSignature = "";
-    private string? _linkSource;
     private string? _focusAfterRefresh;
     private Point? _panPointer;
     private Point _panStart;
@@ -92,8 +91,7 @@ internal sealed class WorkbenchWindow : Window
         {
             if (e.Key == Key.Escape && !e.Handled)
             {
-                if (_linkSource != null) { _linkSource = null; UpdateSelection(); SetHint(); }
-                else if (_search.Text.Length > 0) _search.Clear();
+                if (_search.Text.Length > 0) _search.Clear();
                 else Close();
                 e.Handled = true;
             }
@@ -306,7 +304,7 @@ internal sealed class WorkbenchWindow : Window
             _pan.Y += (oldOrigin.Y - scene.Origin.Y) * _scale.ScaleY;
             if (firstLayout || arrange && scope == null) FitActive();
             if (result.LockedOverlaps.Count > 0) _status.Text = Strings.Get("WorkbenchPinConflict");
-            else if (_linkSource == null) SetHint();
+            else SetHint();
             FocusRequestedPaper(); ApplySearch();
             // Cache the applied geometry, otherwise every ordinary content edit would relayout.
             var applied = _controller.SnapshotCurrentWorkbench();
@@ -383,7 +381,6 @@ internal sealed class WorkbenchWindow : Window
             if (state.Cards.TryGetValue(paper.Id, out var placement)) placement.Pinned = !placement.Pinned;
             StoreLayout(state); SyncActiveScene();
         };
-        card.Link.Click += (_, _) => Connect(paper.Id);
         card.Menu.Click += (_, _) =>
         {
             var menu = owner.CreateWorkbenchBodyMenu();
@@ -404,7 +401,7 @@ internal sealed class WorkbenchWindow : Window
     {
         var card = CreateCardShell(paper);
         card.Title.IsReadOnly = true;
-        card.Pin.Visibility = card.Link.Visibility = card.Menu.Visibility = card.Resize.Visibility = card.Move.Visibility = Visibility.Collapsed;
+        card.Pin.Visibility = card.Menu.Visibility = card.Resize.Visibility = card.Move.Visibility = Visibility.Collapsed;
         var preview = new StackPanel { Margin = new Thickness(16) };
         preview.Children.Add(new TextBlock { Text = paper.Summary, TextWrapping = TextWrapping.Wrap, MaxHeight = Math.Max(80, paper.Height - 120), TextTrimming = TextTrimming.CharacterEllipsis, Foreground = Ink });
         var open = NewButton(Strings.Get("WorkbenchOpenWorkspace"));
@@ -437,9 +434,9 @@ internal sealed class WorkbenchWindow : Window
         card.Title.Background = Brushes.Transparent; card.Title.Foreground = Ink; card.Title.BorderThickness = new Thickness(0);
         card.Title.Padding = new Thickness(4, 6, 4, 6); Grid.SetColumn(card.Title, 1); header.Children.Add(card.Title);
         var actions = new StackPanel { Orientation = Orientation.Horizontal };
-        foreach (var button in new[] { card.Pin, card.Link, card.Menu }) { button.Padding = new Thickness(5, 3, 5, 3); button.Margin = new Thickness(1); button.Background = Brushes.Transparent; button.Foreground = Ink; button.BorderThickness = new Thickness(0); actions.Children.Add(button); }
+        foreach (var button in new[] { card.Pin, card.Menu }) { button.Padding = new Thickness(5, 3, 5, 3); button.Margin = new Thickness(1); button.Background = Brushes.Transparent; button.Foreground = Ink; button.BorderThickness = new Thickness(0); actions.Children.Add(button); }
         card.Pin.Content = paper.Placement?.Pinned == true ? "\u25c6" : "\u25c7";
-        card.Pin.ToolTip = Strings.Get("WorkbenchPin"); card.Link.Content = "\u2194"; card.Link.ToolTip = Strings.Get("WorkbenchConnect"); card.Menu.Content = "\u22ef";
+        card.Pin.ToolTip = Strings.Get("WorkbenchPin"); card.Menu.Content = "\u22ef";
         Grid.SetColumn(actions, 2); header.Children.Add(actions); grid.Children.Add(header);
         card.Binding.Text = paper.BindingTitle; card.Binding.Foreground = Muted; card.Binding.FontSize = 11;
         card.Binding.Margin = new Thickness(14, 0, 14, 4); card.Binding.TextTrimming = TextTrimming.CharacterEllipsis;
@@ -492,26 +489,6 @@ internal sealed class WorkbenchWindow : Window
         };
     }
 
-    private void Connect(string id)
-    {
-        if (_linkSource == null) { _linkSource = id; _status.Text = Strings.Get("WorkbenchConnectHint"); UpdateSelection(); return; }
-        var from = _linkSource; _linkSource = null; UpdateSelection();
-        if (from == id) { SetHint(); return; }
-        RememberLayout(); var state = _controller.WorkbenchLayout.Copy();
-        if (!state.Connections.Any(e => e.From == from && e.To == id)) state.Connections.Add(new() { From = from, To = id });
-        StoreLayout(state);
-        var snapshot = _controller.SnapshotCurrentWorkbench();
-        var component = new HashSet<string>(StringComparer.Ordinal) { from, id };
-        bool changed;
-        do { changed = false; foreach (var e in snapshot.Edges) if (component.Contains(e.From) || component.Contains(e.To)) { changed |= component.Add(e.From); changed |= component.Add(e.To); } } while (changed);
-        _ = LayoutActiveAsync(arrange: true, scope: component);
-    }
-    private void UpdateSelection()
-    {
-        if (ActiveScene is not { } scene) return;
-        foreach (var pair in scene.Cards) pair.Value.Frame.BorderBrush = pair.Key == _linkSource ? Accent : Muted;
-    }
-
     private void DrawDecorations(Scene scene, bool dragging = false)
     {
         foreach (var element in scene.Decorations) scene.Canvas.Children.Remove(element);
@@ -543,13 +520,7 @@ internal sealed class WorkbenchWindow : Window
             var line = new Polyline { Stroke = Accent, StrokeThickness = 2, Opacity = .65,
                 Points = new PointCollection(points.Select(p => new Point(p.X, p.Y))), IsHitTestVisible = false };
             Add(line, 0, 0);
-            if (!dragging && scene.Number == _controller.WorkspaceNumber && _controller.WorkbenchLayout.Connections.Any(e => e.From == route.From && e.To == route.To))
-            {
-                var hit = new Polyline { Stroke = Brushes.Transparent, StrokeThickness = 12, Points = line.Points };
-                var menu = new ContextMenu(); var remove = new MenuItem { Header = Strings.Get("WorkbenchDisconnect") };
-                remove.Click += (_, _) => { RememberLayout(); var state = _controller.WorkbenchLayout.Copy(); state.Connections.RemoveAll(e => e.From == route.From && e.To == route.To); StoreLayout(state); _ = LayoutActiveAsync(); };
-                menu.Items.Add(remove); hit.ContextMenu = menu; Add(hit, 0, 0);
-            }
+
         }
         if (scene.Cards.Count == 0)
             Add(new TextBlock { Text = Strings.Get("WorkbenchEmpty"), FontSize = 18, Foreground = Muted, Margin = new Thickness(32) }, bounds.X, bounds.Y);
@@ -582,7 +553,7 @@ internal sealed class WorkbenchWindow : Window
         CancelLayout(); _overviewCancellation?.Cancel(); _refreshTimer.Stop();
         foreach (var scene in _scenes.Values)
             foreach (var id in scene.Cards.Keys.ToArray()) RemoveCard(scene, id, false);
-        _world.Children.Clear(); _scenes.Clear(); _modelSignature = ""; _undo.Clear(); _linkSource = null;
+        _world.Children.Clear(); _scenes.Clear(); _modelSignature = ""; _undo.Clear();
     }
     internal void ResumeWorkspace()
     {
@@ -633,7 +604,6 @@ internal sealed class WorkbenchWindow : Window
         internal Thumb Move { get; } = new();
         internal Thumb Resize { get; } = new();
         internal Button Pin { get; } = new();
-        internal Button Link { get; } = new();
         internal Button Menu { get; } = new();
         internal PaperWindow.WorkbenchBodyLease? Lease;
         internal WorkbenchRect Bounds;
