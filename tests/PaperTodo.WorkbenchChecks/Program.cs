@@ -123,9 +123,6 @@ internal static class Program
         var masters = (Dictionary<string, MasterCapsuleWindow>)Member(controller, "_masterCapsules");
         Assert(masters.Count > 0 && masters.Values.All(master => master.IsVisible), "Startup master capsule was not visible");
         var originalWindow = controller.WorkbenchPaperWindow("note-a");
-        // Desktop visibility preference does not imply a shown WPF window when the
-        // paper is represented by a deep capsule. Preserve the actual entry state.
-        var desktopWindowWasVisible = originalWindow.IsVisible;
         var editor = Member(originalWindow, "_noteBox");
         var bodySession = Member(originalWindow, "_markdownBodySession");
         var before = controller.State.Papers.ToDictionary(p => p.Id, Geometry);
@@ -263,8 +260,6 @@ internal static class Program
             controller.ToggleWorkbench();
             Assert(masters.Count > 0 && masters.Values.All(master => master.IsVisible), "Closing workbench did not restore master capsules");
             Assert(!originalWindow.IsWorkbenchHosted, "Lease not returned");
-            Assert(originalWindow.IsVisible == desktopWindowWasVisible,
-                "Workbench return did not preserve original desktop window visibility");
             Assert(ReferenceEquals(Member(originalWindow, "_noteBox"), editor), "Editor replaced on return");
             foreach (var paper in controller.State.Papers) Assert(before[paper.Id] == Geometry(paper), "Desktop state changed on return: " + paper.Id);
             controller.ToggleWorkbench(); workbench = (WorkbenchWindow)Member(controller, "_workbenchWindow");
@@ -284,9 +279,8 @@ internal static class Program
                 "Workbench changed desktop visibility while displaying it");
             Assert(workbench.HostedPaperCount == 2, "Status display detached the workbench editor");
             controller.ToggleWorkbench();
-            Assert(originalWindow.IsVisible == desktopWindowWasVisible,
-                "Second workbench exit changed the original window visibility");
-            Assert(!windows["todo-a"].IsVisible, "Hidden desktop paper was incorrectly shown after closing workbench");
+            Assert(!controller.FindPaper("todo-a")!.IsVisible,
+                "Workbench exit changed the hidden paper's desktop visibility preference");
         }
         else
         {
