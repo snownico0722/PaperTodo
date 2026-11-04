@@ -223,13 +223,13 @@ public sealed partial class AppController
         next.Count = next.Slots.Max();
         next.Names.Remove(slot);
         next.FollowMainSettings.Remove(slot);
-        // Do not remove the catalog entry until file cleanup actually succeeds.
-        // If an image or plugin file is locked, the slot stays visible so that
-        // the user can retry deletion after releasing that file.
-        try { _workspaceCatalog.DeleteInactiveSlotFiles(slot); }
-        catch (Exception ex) { ReportWorkspaceError(ex.GetBaseException().Message); return; }
+        // The workspace is gone from the menu once its catalog update succeeds.
+        // External file locks may leave files behind; report the cleanup failure
+        // without restoring a deleted workspace or changing its active successor.
         if (!await ChangeWorkspaceConfigurationAsync(next)) return;
         if (_workspaceSelectionDraft == slot) _workspaceSelectionDraft = 0;
+        try { _workspaceCatalog.DeleteInactiveSlotFiles(slot); }
+        catch (Exception ex) { ReportWorkspaceError(ex.GetBaseException().Message); }
         RefreshSettingsWindowContent();
     }
 
