@@ -850,18 +850,30 @@ internal static partial class Program
             Require(await controller.ChangeWorkspaceConfigurationAsync(beforeRestoreOptions),
                 "restore mutation fixture could not restore follow settings");
 
-            // Both settings and tray choose an explicit slot, unlike the paper's cycle button.
-            var workspacePage = (StackPanel)typeof(AppController)
+            // Selecting a workspace in settings only drafts the target; the explicit
+            // confirmation is what crosses the workspace boundary.
+            StackPanel WorkspacePage() => (StackPanel)typeof(AppController)
                 .GetMethod("BuildWorkspaceSettingsPage", System.Reflection.BindingFlags.NonPublic |
                     System.Reflection.BindingFlags.Instance)!
                 .Invoke(controller, null)!;
-            var workspaceCombo = workspacePage.Children.OfType<ComboBox>().Single();
-            Require(workspaceCombo.Items.Count == 5 && workspaceCombo.SelectedIndex == 0 &&
-                AutomationProperties.GetAutomationId(workspaceCombo) == "WorkspaceSelect",
-                "settings workspace dropdown did not reflect the active slot");
-            workspaceCombo.SelectedIndex = 2;
+            var workspacePage = WorkspacePage();
+            Button SlotButton(StackPanel page, int slot) => page.Children.OfType<Border>()
+                .Select(border => border.Child).OfType<StackPanel>()
+                .SelectMany(row => row.Children.OfType<DockPanel>())
+                .SelectMany(line => line.Children.OfType<Button>())
+                .Single(button => AutomationProperties.GetAutomationId(button) == "WorkspaceSlot" + slot);
+            var selectThird = SlotButton(workspacePage, 3);
+            selectThird.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Require(controller.WorkspaceNumber == 1, "workspace selector switched without confirmation");
+            workspacePage = WorkspacePage();
+            var actions = workspacePage.Children.OfType<StackPanel>()
+                .Single(panel => panel.Orientation == Orientation.Horizontal &&
+                    panel.Children.OfType<Button>().Count() == 2);
+            var confirm = actions.Children.OfType<Button>().Last();
+            Require(confirm.IsEnabled, "workspace confirmation did not enable for another slot");
+            confirm.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             await Until(() => controller.WorkspaceNumber == 3 && !controller.IsWorkspaceSwitching,
-                "settings workspace dropdown did not select slot 3");
+                "settings workspace confirmation did not select slot 3");
             Require(await controller.SwitchWorkspaceAsync(1), "return after settings selection failed");
 
             var trayMenu = controller.CreateTrayMenu();
