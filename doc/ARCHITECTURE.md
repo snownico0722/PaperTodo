@@ -219,9 +219,9 @@ Markdown 中的 Note 图片只通过 PaperTodo 内部 `i:` asset URI 引用宿�
 
 `WorkbenchWindow` 是可选全屏工作模式，不是项目中心，也不嵌入 Windows WorkerW。当前工作区的纸片在画布中原位编辑；其他工作区通过 `StateStore.ReadWorkbenchOverview` 只读读取核心 JSON，再投影为不可变摘要。概览不创建图片库、插件会话或恢复文件；读取失败显示错误，不初始化或覆盖数据。实际激活仍调用原有工作区事务。
 
-正文采用 `PaperWindow.WorkbenchBodyLease` 单一 visual 租借：同一 `_shell` 从原窗口移入工作台，原窗口继续拥有 `PaperBodyHost`、Markdown 撤销记录和插件 session。输入坐标与对话框 owner 跟随当前 interaction root；租借期间暂停真实 HWND 跟随应用和几何保存。退出归还 visual，不回写工作台坐标到桌面窗口。切换、重载、删除和关闭必须先归还，不能由两套 owner 共同 Dispose。
+正文采用 `PaperWindow.WorkbenchBodyLease` 单一 visual 租借：同一 `_shell` 从原窗口移入工作台，原窗口继续拥有 `PaperBodyHost`、Markdown 撤销记录和插件 session。输入坐标与对话框 owner 跟随当前 interaction root；租借期间暂停真实 HWND 跟随应用和几何保存。退出归还 visual，不回写工作台坐标到桌面窗口；桌面可见性通过眼睛独立切换，退出时恢复对应原窗口/主胶囊。切换、重载、删除和关闭必须先归还，不能由两套 owner 共同 Dispose。
 
-`AppState.Workbench` 只保存纸片空间坐标、尺寸、固定/偏好标记和显式连线，属于各工作区本地布局，不继承主工作区设置；内容、图片和插件数据继续使用原有存储。布局撤销仅恢复该空间元数据。虚线分区由当前关系/绑定/类型推导，不增加用户维护的项目实体。
+`AppState.Workbench` 只保存纸片空间坐标、尺寸及固定/偏好标记，属于各工作区本地布局，不继承主工作区设置；内容、图片和插件数据继续使用原有存储。不建立任意纸片到纸片的关联模型，布局连线仅来自已有待办条目的关联。布局撤销仅恢复空间元数据。虚线分区由现有待办关联、绑定和类型推导，不增加用户维护的项目实体。
 
 `WorkbenchLayoutEngine` 只处理不可变几何输入；MSAGL 负责关系图初始排布和绕障连线，宿主负责分区装箱、稳定增量插入、硬锁定和冲突反馈。计算在工作线程进行，结果按取消标记、布局修订和工作区代次核验后应用。平移缩放使用 RenderTransform，不在每一帧重跑图算法。
 
