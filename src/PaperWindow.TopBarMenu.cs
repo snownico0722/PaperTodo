@@ -66,7 +66,7 @@ public sealed partial class PaperWindow
     };
 
     private bool IsTopBarCommandVisible(Button? button) =>
-        !_paper.IsCollapsed && IsVisible && _topBarActionButtonsHost?.Visibility == Visibility.Visible &&
+        !_paper.IsCollapsed && (IsVisible || IsExpandedEditorHosted) && _topBarActionButtonsHost?.Visibility == Visibility.Visible &&
         button?.Visibility == Visibility.Visible;
 
     private MenuItem BuildAssociationDragMenuItem(ContextMenu menu)
