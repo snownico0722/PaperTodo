@@ -68,79 +68,125 @@ public sealed partial class AppController
         foreach (var number in WorkspaceOptions.SlotNumbers)
         {
             var slot = number;
-            var row = new StackPanel
+            var label = WorkspaceOptions.DisplayName(slot);
+            var card = new Border
             {
-                Margin = new Thickness(0, 4, 0, 4),
-                Background = Brushes.Transparent
+                BorderBrush = selected == slot ? Theme.ActiveBrush : TrayBorderBrush,
+                BorderThickness = new Thickness(selected == slot ? 1.5 : 1),
+                CornerRadius = new CornerRadius(7),
+                Background = Brushes.Transparent,
+                Padding = new Thickness(9, 6, 9, 6),
+                Margin = new Thickness(0, 0, 0, 5),
+                MinHeight = 37,
+                Cursor = Cursors.Hand,
+                IsEnabled = WorkspaceOptions.Enabled
             };
-            var line = new DockPanel();
-            var label = WorkspaceOptions.DisplayName(slot) + "  #" + slot;
-            var rename = PluginPageButton(WorkspaceUi("重命名", "Rename", "名前変更", "이름 변경"));
-            rename.MinWidth = 60;
-            rename.Margin = new Thickness(3, 0, 0, 0);
-            rename.IsEnabled = WorkspaceOptions.Enabled;
-            DockPanel.SetDock(rename, Dock.Right);
-            line.Children.Add(rename);
-            if (slot > 1)
-            {
-                var delete = PluginPageButton(WorkspaceUi("删除", "Delete", "削除", "삭제"));
-                delete.MinWidth = 52;
-                delete.IsEnabled = WorkspaceOptions.Enabled;
-                delete.Margin = new Thickness(3, 0, 0, 0);
-                DockPanel.SetDock(delete, Dock.Right);
-                line.Children.Add(delete);
-                delete.Click += async (_, _) => await DeleteWorkspaceFromSettingsAsync(slot);
-            }
-            var choose = PluginPageButton(label);
-            choose.HorizontalAlignment = HorizontalAlignment.Stretch;
-            choose.HorizontalContentAlignment = HorizontalAlignment.Left;
-            choose.FontWeight = selected == slot ? FontWeights.SemiBold : FontWeights.Normal;
-            choose.BorderBrush = selected == slot ? Theme.ActiveBrush : TrayBorderBrush;
-            choose.IsEnabled = WorkspaceOptions.Enabled;
-            AutomationProperties.SetAutomationId(choose, "WorkspaceSlot" + slot);
-            AutomationProperties.SetName(choose, label);
-            choose.Click += (_, _) =>
-            {
-                _workspaceSelectionDraft = slot;
-                RefreshSettingsWindowContent();
-            };
-            line.Children.Add(choose);
-            row.Children.Add(line);
+            AutomationProperties.SetAutomationId(card, "WorkspaceSlot" + slot);
+            AutomationProperties.SetName(card, label + " #" + slot);
 
+            var line = new Grid();
+            line.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var nameRow = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            var name = new TextBlock
+            {
+                Text = label,
+                FontSize = AppTypography.Scale(12.5),
+                FontWeight = selected == slot ? FontWeights.SemiBold : FontWeights.Normal,
+                Foreground = TrayTextBrush,
+                VerticalAlignment = VerticalAlignment.Center,
+                MaxWidth = AppTypography.Scale(154),
+                TextTrimming = TextTrimming.CharacterEllipsis
+            };
+            var editor = new TextBox
+            {
+                Text = label,
+                Width = AppTypography.Scale(154),
+                MaxLength = 64,
+                Height = 26,
+                FontSize = AppTypography.Scale(12),
+                VerticalContentAlignment = VerticalAlignment.Center,
+                Visibility = Visibility.Collapsed
+            };
+            var numberLabel = new TextBlock
+            {
+                Text = "#" + slot.ToString(UiLanguages.EffectiveCulture),
+                Foreground = TrayWeakTextBrush,
+                FontSize = AppTypography.Scale(11.5),
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(7, 0, 3, 0)
+            };
+            var rename = PluginPageButton("✎");
+            rename.MinWidth = 27;
+            rename.Width = 27;
+            rename.Height = 25;
+            rename.Padding = new Thickness(3, 1, 3, 1);
+            rename.FontFamily = AppTypography.SymbolFontFamily;
+            rename.VerticalAlignment = VerticalAlignment.Center;
+            rename.ToolTip = WorkspaceUi("编辑名称", "Edit name", "名前を編集", "이름 편집");
+            AutomationProperties.SetAutomationId(rename, "WorkspaceRename" + slot);
+            AutomationProperties.SetName(rename, WorkspaceUi("编辑工作区名称", "Edit workspace name",
+                "ワークスペース名を編集", "작업 공간 이름 편집"));
+            nameRow.Children.Add(name);
+            nameRow.Children.Add(editor);
+            nameRow.Children.Add(numberLabel);
+            nameRow.Children.Add(rename);
+            Grid.SetColumn(nameRow, 0);
+            line.Children.Add(nameRow);
+
+            var editing = false;
+            void ExitEditing()
+            {
+                editing = false;
+                name.Visibility = Visibility.Visible;
+                editor.Visibility = Visibility.Collapsed;
+                rename.Content = "✎";
+                rename.ToolTip = WorkspaceUi("编辑名称", "Edit name", "名前を編集", "이름 편집");
+                rename.IsEnabled = true;
+            }
+            async void SaveName()
+            {
+                var value = editor.Text.Trim();
+                if (value.Length == 0) { editor.Focus(); return; }
+                if (value == WorkspaceOptions.DisplayName(slot)) { ExitEditing(); return; }
+                rename.IsEnabled = false;
+                var next = WorkspaceOptions.Normalized();
+                next.Names[slot] = value;
+                if (!await ChangeWorkspaceConfigurationAsync(next))
+                {
+                    rename.IsEnabled = true;
+                    editor.Focus();
+                }
+                // A successful save refreshes the settings page through the catalog update.
+            }
             rename.Click += (_, _) =>
             {
-                var editor = new TextBox
-                {
-                    Text = WorkspaceOptions.DisplayName(slot),
-                    Margin = new Thickness(0, 4, 0, 4),
-                    MinWidth = 160,
-                    MaxLength = 64
-                };
-                var save = PluginPageButton(WorkspaceUi("保存名称", "Save name", "名前を保存", "이름 저장"));
-                var editRow = new DockPanel();
-                DockPanel.SetDock(save, Dock.Right);
-                editRow.Children.Add(save);
-                editRow.Children.Add(editor);
-                row.Children.Add(editRow);
-                rename.IsEnabled = false;
-                async void Commit()
-                {
-                    if (string.IsNullOrWhiteSpace(editor.Text)) return;
-                    var next = WorkspaceOptions.Normalized();
-                    next.Names[slot] = editor.Text.Trim();
-                    await ChangeWorkspaceConfigurationAsync(next);
-                    RefreshSettingsWindowContent();
-                }
-                save.Click += (_, _) => Commit();
-                editor.KeyDown += (_, e) =>
-                {
-                    if (e.Key == Key.Enter) { Commit(); e.Handled = true; }
-                    if (e.Key == Key.Escape) { row.Children.Remove(editRow); rename.IsEnabled = true; e.Handled = true; }
-                };
+                if (editing) { SaveName(); return; }
+                editing = true;
+                editor.Text = WorkspaceOptions.DisplayName(slot);
+                name.Visibility = Visibility.Collapsed;
+                editor.Visibility = Visibility.Visible;
+                rename.Content = "✓";
+                rename.ToolTip = WorkspaceUi("保存名称", "Save name", "名前を保存", "이름 저장");
                 editor.SelectAll();
                 editor.Focus();
             };
+            editor.KeyDown += (_, e) =>
+            {
+                if (e.Key == Key.Enter) { SaveName(); e.Handled = true; }
+                else if (e.Key == Key.Escape) { ExitEditing(); e.Handled = true; }
+            };
 
+            var controls = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                VerticalAlignment = VerticalAlignment.Center
+            };
             if (slot > 1)
             {
                 var follow = SettingsToggle(Strings.Get("WorkspaceFollowMain"),
@@ -149,34 +195,47 @@ public sealed partial class AppController
                         var next = WorkspaceOptions.Normalized();
                         next.FollowMainSettings[slot] = !next.FollowsMain(slot);
                         await ChangeWorkspaceConfigurationAsync(next);
-                        RefreshSettingsWindowContent();
                     });
-                follow.Margin = new Thickness(10, 6, 0, 1);
-                follow.IsEnabled = WorkspaceOptions.Enabled;
-                row.Children.Add(follow);
+                follow.Margin = new Thickness(9, 0, 7, 0);
+                follow.FontSize = AppTypography.Scale(11.5);
+                follow.VerticalAlignment = VerticalAlignment.Center;
+                controls.Children.Add(follow);
+
+                var delete = PluginPageButton(WorkspaceUi("删除", "Delete", "削除", "삭제"));
+                delete.MinWidth = 48;
+                delete.Height = 25;
+                delete.Padding = new Thickness(5, 1, 5, 1);
+                delete.VerticalAlignment = VerticalAlignment.Center;
+                delete.Click += async (_, _) => await DeleteWorkspaceFromSettingsAsync(slot);
+                controls.Children.Add(delete);
             }
-            root.Children.Add(new Border
+            Grid.SetColumn(controls, 1);
+            line.Children.Add(controls);
+            card.Child = line;
+
+            // The whole card selects its workspace, except its independent controls.
+            // Inspect the routed hit to avoid selection on rename, delete or follow clicks.
+            card.MouseLeftButtonUp += (_, e) =>
             {
-                BorderBrush = selected == slot ? Theme.ActiveBrush : TrayBorderBrush,
-                BorderThickness = new Thickness(selected == slot ? 1.5 : 1),
-                CornerRadius = new CornerRadius(7),
-                Padding = new Thickness(9, 8, 9, 8),
-                Margin = new Thickness(0, 0, 0, 4),
-                Child = row
-            });
+                if (_workspaceSwitching) return;
+                var hit = e.OriginalSource as DependencyObject;
+                while (hit != null && !ReferenceEquals(hit, card))
+                {
+                    if (hit is System.Windows.Controls.Primitives.ButtonBase or TextBox) return;
+                    hit = hit is Visual ? VisualTreeHelper.GetParent(hit) : LogicalTreeHelper.GetParent(hit);
+                }
+                if (!ReferenceEquals(hit, card)) return;
+                _workspaceSelectionDraft = slot;
+                e.Handled = true;
+                RefreshSettingsWindowContent();
+            };
+            root.Children.Add(card);
         }
 
-        var actions = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0, 10, 0, 2)
-        };
-        var cancel = PluginPageButton(Strings.Get("CommonCancel"));
-        cancel.Click += (_, _) => { _workspaceSelectionDraft = WorkspaceNumber; RefreshSettingsWindowContent(); };
-        actions.Children.Add(cancel);
-        var confirm = PluginPageButton(WorkspaceUi("确定切换", "Switch", "切り替える", "전환"));
-        confirm.Margin = new Thickness(8, 0, 0, 0);
+        var confirm = PluginPageButton(WorkspaceUi(
+            "确认切换", "Confirm switch", "切り替えを確認", "전환 확인"));
+        confirm.HorizontalAlignment = HorizontalAlignment.Right;
+        confirm.Margin = new Thickness(0, 8, 0, 2);
         confirm.IsEnabled = WorkspaceOptions.Enabled && selected != WorkspaceNumber;
         confirm.Click += async (_, _) =>
         {
@@ -184,8 +243,7 @@ public sealed partial class AppController
             _workspaceSelectionDraft = 0;
             if (!await SwitchWorkspaceAsync(selected)) RefreshSettingsWindowContent();
         };
-        actions.Children.Add(confirm);
-        root.Children.Add(actions);
+        root.Children.Add(confirm);
 
         root.Children.Add(SettingsSectionLabel(WorkspaceUi(
             "顶栏快捷", "Top-bar shortcut", "上部バーのショートカット", "상단 표시줄 바로 가기")));
