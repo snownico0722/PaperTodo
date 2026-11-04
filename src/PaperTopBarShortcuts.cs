@@ -60,6 +60,8 @@ internal static class PaperTopBarShortcuts
             .Concat(state.NoteTopBarShortcuts ?? [])
             .Where(action => Defaults.Contains(action, StringComparer.Ordinal))
             .Distinct(StringComparer.Ordinal).ToList();
+        // Workspace switching was a permanently visible button before the unified editor.
+        pinned.Add(Workspace);
         state.TopBarShortcutOrder = NormalizeOrder(pinned);
         state.TopBarPinnedCount = pinned.Count;
         Normalize(state);
