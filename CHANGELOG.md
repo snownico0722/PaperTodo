@@ -22,7 +22,7 @@ This log is written for general and power users alike. It focuses on user-facing
 
 #### Infinite workbench
 
-- Open a full-screen working desk from the tray or the configurable Workbench shortcut (suggested Ctrl+Alt+W; initially disabled). Edit the existing notes, to-dos and plugin papers in place, pan and zoom between workspace overviews, highlight search matches, create connections and pin cards. Automatic layout combines relationship-based arrangement, soft dashed neighborhoods, overlap avoidance and stable incremental placement; explicit arrangement can be undone without undoing content. Workbench positions are stored separately from desktop window geometry. Other workspaces remain read-only previews until activated through the normal workspace switch.
+- Open a full-screen working desk from the tray or the configurable Workbench shortcut (suggested Ctrl+Alt+W; initially disabled). Edit the existing notes, to-dos and plugin papers in place, pan and zoom between workspace overviews, search across workspaces and navigate matches, drag cards by their title bars, toggle desktop visibility with an eye icon, and pin positions. Existing per-to-do paper associations remain visible; arbitrary paper-to-paper links are not introduced. Automatic layout combines relationship-based arrangement, soft dashed neighborhoods, overlap avoidance and stable incremental placement; explicit arrangement can be undone without undoing content. Workbench positions are stored separately from desktop window geometry. Other workspaces remain read-only previews until activated through the normal workspace switch. Switching to another application leaves the workbench open; leaving the workbench restores the master capsule queues.
 
 #### Data Reliability
 
