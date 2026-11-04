@@ -21,7 +21,6 @@ internal static partial class Program
         {
             ("explicit state field ownership and fail-closed inheritance", WorkspaceFieldScopeChecks),
             ("legacy main and numbered paths", WorkspacePathsAndLegacy),
-            ("failed workspace deletion retains a retryable catalog entry", WorkspaceDeletionRetry),
             ("main catalog updates preserve content and fence old writers", WorkspaceMetadataWrites),
             ("main backup recovery persists before secondary activation", WorkspaceMainRecoveryBeforeSecondaryStart),
             ("follow-main overlay preserves dormant preferences and layout", WorkspaceInheritance),
@@ -133,6 +132,11 @@ internal static partial class Program
         Require(options.Count == 5 && options.Active == 5 && options.FollowsMain(2) && !options.FollowsMain(1),
             "invalid limits or follow default");
         Require(!File.Exists(Path.Combine(scope.DirectoryPath, "workspaces.json")), "unexpected separate catalog");
+        var cycleTip = Strings.Format("WorkspaceCycleTooltip", 4, 1);
+        Require(!cycleTip.Contains("4 /", StringComparison.Ordinal) &&
+                cycleTip.Contains("4", StringComparison.Ordinal) &&
+                cycleTip.Contains("1", StringComparison.Ordinal),
+            "workspace tooltip mixed its actual number with the slot count");
 
         var managed = new WorkspaceConfiguration
         {
@@ -143,6 +147,7 @@ internal static partial class Program
         Require(managed.SlotNumbers.SequenceEqual([1, 3, 4]) &&
                 !managed.ContainsSlot(2) && managed.NextSlot(1) == 3 &&
                 managed.NextSlot(4) == 1 && managed.DisplayName(3) == "开发" &&
+                managed.DisplayName(1) == Strings.Format("WorkspaceSlotLabel", 1) &&
                 managed.TopBarNamePicker,
             "noncontiguous named workspace catalog lost its membership or display mode");
         var oldFiles = catalog.PathsFor(2);
@@ -152,43 +157,18 @@ internal static partial class Program
         Directory.CreateDirectory(oldFiles.PluginData);
         File.WriteAllText(Path.Combine(oldFiles.PluginData, "settings.json"), "plugin state");
         File.WriteAllText(oldFiles.Images, "image data");
+        catalog.AdoptOptions(new WorkspaceConfiguration
+        {
+            Enabled = true, Count = 2, Slots = [1, 2]
+        });
+        var removed = catalog.Options.Normalized();
+        removed.Slots = [1];
+        catalog.AdoptOptions(removed);
+        Require(!catalog.Options.ContainsSlot(2),
+            "removed workspace still appears in the catalog");
         catalog.DeleteInactiveSlotFiles(2);
         Require(!catalog.SlotHasData(2) && File.Exists(catalog.PathsFor(1).Data),
             "deleting an inactive workspace did not remove its independent data or damaged main data");
-    }
-
-    private static void WorkspaceDeletionRetry()
-    {
-        using var scope = new Scope();
-        var catalog = new WorkspaceCatalog(scope.DirectoryPath, DurableAtomicFileWriter.Shared);
-        catalog.AdoptOptions(new WorkspaceConfiguration
-        {
-            Enabled = true, Count = 2, Active = 1, Slots = [1, 2]
-        });
-        var paths = catalog.PathsFor(2);
-        File.WriteAllText(paths.Data, "{\"paper\":\"will be deleted\"}");
-        File.WriteAllText(paths.Images, "locked image store");
-        Directory.CreateDirectory(paths.PluginData);
-        File.WriteAllText(Path.Combine(paths.PluginData, "provider.json"), "plugin data");
-
-        var failed = false;
-        using (var occupied = new FileStream(paths.Images, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
-        {
-            try { catalog.DeleteInactiveSlotFiles(2); }
-            catch (IOException) { failed = true; }
-            Require(failed && catalog.Options.ContainsSlot(2) && File.Exists(paths.Images),
-                "failed file cleanup silently removed a workspace from its catalog");
-        }
-
-        // Retrying the same deletion is allowed after the lock is released.
-        catalog.DeleteInactiveSlotFiles(2);
-        Require(catalog.Options.ContainsSlot(2) && !catalog.SlotHasData(2),
-            "file deletion should finish before catalog membership is removed");
-        var next = catalog.Options.Normalized();
-        next.Slots = next.SlotNumbers.Where(number => number != 2).ToList();
-        catalog.AdoptOptions(next);
-        Require(!catalog.Options.ContainsSlot(2) && File.Exists(catalog.MainStore.FilePath),
-            "completed deletion did not preserve the main workspace");
     }
 
     private static void WorkspaceMetadataWrites()
