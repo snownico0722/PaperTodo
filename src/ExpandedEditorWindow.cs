@@ -99,6 +99,11 @@ internal sealed class ExpandedEditorWindow : Window
         if (IsVisible) Activate();
     }
 
+    internal void RefreshEditorTheme(PaperWindow paper)
+    {
+        if (ReferenceEquals(_current, paper)) SetFrameTheme(paper);
+    }
+
     internal void RefreshPaperTitle(PaperWindow paper)
     {
         if (ReferenceEquals(_current, paper))
