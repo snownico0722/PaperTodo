@@ -139,9 +139,6 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
   <data name="MenuBold" xml:space="preserve">
     <value>太字</value>
   </data>
-  <data name="MenuClearDone" xml:space="preserve">
-    <value>完了済みを消去</value>
-  </data>
   <data name="MenuCodeBlock" xml:space="preserve">
     <value>コードブロック</value>
   </data>
@@ -1655,4 +1652,18 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="DataMergeConflictInternal" xml:space="preserve"><value>内部を優先</value></data>
   <data name="TipDataMergeConflicts" xml:space="preserve"><value>明示的な統合では、双方の競合しない変更を保持します。この設定は競合部分にのみ適用されます。内部は現在の PaperTodo データ、外部は取り込むファイルです。元のバージョンがない場合は必ず確認します。バックグラウンド監視や自動同期は有効になりません。</value></data>
   <data name="DataReloadConflictEmpty" xml:space="preserve"><value>（空）</value></data>
+  <data name="NoteHtmlSaved" xml:space="preserve"><value>保存先：{0}
+元のノートは保持されます。</value></data>
+  <data name="NoteExportCurrent" xml:space="preserve"><value>このメモをエクスポート</value></data>
+  <data name="NoteExportAll" xml:space="preserve"><value>すべてのメモをエクスポート</value></data>
+  <data name="NoteExportMarkdownType" xml:space="preserve"><value>Markdown 文書</value></data>
+  <data name="NoteExportHtmlType" xml:space="preserve"><value>HTML 文書</value></data>
+  <data name="NoteExportMarkdownZipType" xml:space="preserve"><value>Markdown ZIP</value></data>
+  <data name="NoteExportHtmlZipType" xml:space="preserve"><value>HTML ZIP</value></data>
+  <data name="NoteExportMissingImageText" xml:space="preserve"><value>画像がありません</value></data>
+  <data name="NoteExportSummary" xml:space="preserve"><value>{0}/{1} 件のメモをエクスポートしました。&#xA;不足画像：{2} 件（{3} 件のメモ）。&#xA;保存先：{4}</value></data>
+  <data name="NoteExportFailedNotes" xml:space="preserve"><value>失敗したメモ：&#xA;{0}</value></data>
+  <data name="NoteExportFailure" xml:space="preserve"><value>エクスポートに失敗しました：{0}</value></data>
+  <data name="NoteExportNoNotes" xml:space="preserve"><value>エクスポートできる標準 Markdown メモがありません。</value></data>
+  <data name="NoteExportProgress" xml:space="preserve"><value>エクスポート中 {0}/{1} 件</value></data>
 </root>

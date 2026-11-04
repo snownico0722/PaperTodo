@@ -148,9 +148,6 @@
   <data name="MenuBold" xml:space="preserve">
     <value>加粗</value>
   </data>
-  <data name="MenuClearDone" xml:space="preserve">
-    <value>清理已完成</value>
-  </data>
   <data name="MenuCodeBlock" xml:space="preserve">
     <value>代码块</value>
   </data>
@@ -1704,4 +1701,18 @@
   <data name="DataMergeConflictInternal" xml:space="preserve"><value>内部优先</value></data>
   <data name="TipDataMergeConflicts" xml:space="preserve"><value>显式合并先保留双方没有冲突的修改，此选项只决定冲突部分。内部指 PaperTodo 当前数据，外部指本次导入文件。缺少原始版本时始终询问；不启用后台监听或自动同步。</value></data>
   <data name="DataReloadConflictEmpty" xml:space="preserve"><value>（空）</value></data>
+  <data name="NoteHtmlSaved" xml:space="preserve"><value>已保存到：{0}
+原笔记仍保留。</value></data>
+  <data name="NoteExportCurrent" xml:space="preserve"><value>导出当前笔记</value></data>
+  <data name="NoteExportAll" xml:space="preserve"><value>导出全部笔记</value></data>
+  <data name="NoteExportMarkdownType" xml:space="preserve"><value>Markdown 文档</value></data>
+  <data name="NoteExportHtmlType" xml:space="preserve"><value>HTML 网页</value></data>
+  <data name="NoteExportMarkdownZipType" xml:space="preserve"><value>Markdown 压缩包</value></data>
+  <data name="NoteExportHtmlZipType" xml:space="preserve"><value>HTML 压缩包</value></data>
+  <data name="NoteExportMissingImageText" xml:space="preserve"><value>图片缺失</value></data>
+  <data name="NoteExportSummary" xml:space="preserve"><value>已导出 {0}/{1} 篇笔记。&#xA;缺失图片：{2} 张（涉及 {3} 篇）。&#xA;保存到：{4}</value></data>
+  <data name="NoteExportFailedNotes" xml:space="preserve"><value>失败笔记：&#xA;{0}</value></data>
+  <data name="NoteExportFailure" xml:space="preserve"><value>导出失败：{0}</value></data>
+  <data name="NoteExportNoNotes" xml:space="preserve"><value>没有可导出的内置 Markdown 笔记。</value></data>
+  <data name="NoteExportProgress" xml:space="preserve"><value>正在导出 {0}/{1} 篇笔记</value></data>
 </root>

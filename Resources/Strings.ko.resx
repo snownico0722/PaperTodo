@@ -139,9 +139,6 @@ PaperTodo를 수동으로 다시 여세요. 문제가 반복되면 PC를 다시 
   <data name="MenuBold" xml:space="preserve">
     <value>굵게</value>
   </data>
-  <data name="MenuClearDone" xml:space="preserve">
-    <value>완료 항목 정리</value>
-  </data>
   <data name="MenuCodeBlock" xml:space="preserve">
     <value>코드 블록</value>
   </data>
@@ -1655,4 +1652,18 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="DataMergeConflictInternal" xml:space="preserve"><value>내부 우선</value></data>
   <data name="TipDataMergeConflicts" xml:space="preserve"><value>명시적 병합은 양쪽의 충돌하지 않는 변경을 유지합니다. 이 설정은 충돌 부분에만 적용됩니다. 내부는 현재 PaperTodo 데이터, 외부는 가져올 파일입니다. 원본 버전이 없으면 항상 확인합니다. 백그라운드 감시나 자동 동기화를 켜지 않습니다.</value></data>
   <data name="DataReloadConflictEmpty" xml:space="preserve"><value>(비어 있음)</value></data>
+  <data name="NoteHtmlSaved" xml:space="preserve"><value>저장 위치: {0}
+원본 노트는 유지됩니다.</value></data>
+  <data name="NoteExportCurrent" xml:space="preserve"><value>현재 노트 내보내기</value></data>
+  <data name="NoteExportAll" xml:space="preserve"><value>모든 노트 내보내기</value></data>
+  <data name="NoteExportMarkdownType" xml:space="preserve"><value>Markdown 문서</value></data>
+  <data name="NoteExportHtmlType" xml:space="preserve"><value>HTML 문서</value></data>
+  <data name="NoteExportMarkdownZipType" xml:space="preserve"><value>Markdown ZIP</value></data>
+  <data name="NoteExportHtmlZipType" xml:space="preserve"><value>HTML ZIP</value></data>
+  <data name="NoteExportMissingImageText" xml:space="preserve"><value>이미지 없음</value></data>
+  <data name="NoteExportSummary" xml:space="preserve"><value>노트 {0}/{1}개를 내보냈습니다.&#xA;누락된 이미지: {2}개 (노트 {3}개).&#xA;저장 위치: {4}</value></data>
+  <data name="NoteExportFailedNotes" xml:space="preserve"><value>실패한 노트:&#xA;{0}</value></data>
+  <data name="NoteExportFailure" xml:space="preserve"><value>내보내기 실패: {0}</value></data>
+  <data name="NoteExportNoNotes" xml:space="preserve"><value>내보낼 수 있는 기본 Markdown 노트가 없습니다.</value></data>
+  <data name="NoteExportProgress" xml:space="preserve"><value>내보내는 중 {0}/{1}개</value></data>
 </root>

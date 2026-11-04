@@ -139,9 +139,6 @@ Error: {0}</value>
   <data name="MenuBold" xml:space="preserve">
     <value>Bold</value>
   </data>
-  <data name="MenuClearDone" xml:space="preserve">
-    <value>Clear completed</value>
-  </data>
   <data name="MenuCodeBlock" xml:space="preserve">
     <value>Code block</value>
   </data>
@@ -1655,4 +1652,18 @@ Click to switch to workspace {2}</value>
   <data name="DataMergeConflictInternal" xml:space="preserve"><value>Prefer internal</value></data>
   <data name="TipDataMergeConflicts" xml:space="preserve"><value>An explicit merge preserves nonconflicting changes from both sides. This setting affects conflicts only: internal means current PaperTodo data; external means the incoming file. Without the original version, always ask. Does not enable background watching or automatic sync.</value></data>
   <data name="DataReloadConflictEmpty" xml:space="preserve"><value>(empty)</value></data>
+  <data name="NoteHtmlSaved" xml:space="preserve"><value>Saved to: {0}
+The original note is kept.</value></data>
+  <data name="NoteExportCurrent" xml:space="preserve"><value>Export this note</value></data>
+  <data name="NoteExportAll" xml:space="preserve"><value>Export all notes</value></data>
+  <data name="NoteExportMarkdownType" xml:space="preserve"><value>Markdown document</value></data>
+  <data name="NoteExportHtmlType" xml:space="preserve"><value>HTML document</value></data>
+  <data name="NoteExportMarkdownZipType" xml:space="preserve"><value>Markdown ZIP</value></data>
+  <data name="NoteExportHtmlZipType" xml:space="preserve"><value>HTML ZIP</value></data>
+  <data name="NoteExportMissingImageText" xml:space="preserve"><value>Missing image</value></data>
+  <data name="NoteExportSummary" xml:space="preserve"><value>Exported {0}/{1} notes.&#xA;Missing images: {2} across {3} notes.&#xA;Saved to: {4}</value></data>
+  <data name="NoteExportFailedNotes" xml:space="preserve"><value>Failed notes:&#xA;{0}</value></data>
+  <data name="NoteExportFailure" xml:space="preserve"><value>Export failed: {0}</value></data>
+  <data name="NoteExportNoNotes" xml:space="preserve"><value>There are no built-in Markdown notes to export.</value></data>
+  <data name="NoteExportProgress" xml:space="preserve"><value>Exporting {0}/{1} notes</value></data>
 </root>
