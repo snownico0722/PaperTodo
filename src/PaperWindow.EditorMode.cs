@@ -51,27 +51,27 @@ public sealed partial class PaperWindow
     {
         // Fixed mode/window controls live after the existing user-ordered top-bar group.
         // Do not insert them into PaperTopBarShortcuts or alter the pinned divider.
-        _editorModeButton = IconButton("⤢", "在编辑器中打开");
+        _editorModeButton = IconButton("⤢", Strings.Get("EditorOpen"));
         _editorModeButton.Click += (_, _) =>
         {
             if (_isExpandedEditorMode) ReturnFromExpandedEditor();
             else EnterExpandedEditorMode();
         };
 
-        _editorSidebarButton = IconButton("☷", "显示纸片列表");
+        _editorSidebarButton = IconButton("☷", Strings.Get("EditorSidebarShow"));
         _editorSidebarButton.Click += (_, _) =>
         {
             _isExpandedEditorSidebarOpen = !_isExpandedEditorSidebarOpen;
             RefreshExpandedEditorPresentation();
         };
 
-        _editorMinimizeButton = IconButton("−", "最小化");
+        _editorMinimizeButton = IconButton("−", Strings.Get("EditorMinimize"));
         _editorMinimizeButton.Click += (_, _) => WindowState = WindowState.Minimized;
 
-        _editorMaximizeButton = IconButton("□", "最大化 / 还原");
+        _editorMaximizeButton = IconButton("□", Strings.Get("EditorMaximizeRestore"));
         _editorMaximizeButton.Click += (_, _) => ToggleExpandedEditorMaximized();
 
-        _editorCloseButton = IconButton("×", "关闭纸片");
+        _editorCloseButton = IconButton("×", Strings.Get("EditorClosePaper"));
         _editorCloseButton.Click += (_, _) => _controller.HidePaper(_paper);
 
         buttons.Children.Add(_editorModeButton);
@@ -86,11 +86,11 @@ public sealed partial class PaperWindow
     {
         if (_editorModeButton == null) return;
         _editorModeButton.Content = _isExpandedEditorMode ? "⤡" : "⤢";
-        _editorModeButton.ToolTip = _isExpandedEditorMode ? "返回纸片" : "在编辑器中打开";
+        _editorModeButton.ToolTip = _isExpandedEditorMode ? Strings.Get("EditorReturn") : Strings.Get("EditorOpen");
         if (_editorSidebarButton != null)
         {
             _editorSidebarButton.Visibility = _isExpandedEditorMode ? Visibility.Visible : Visibility.Collapsed;
-            _editorSidebarButton.ToolTip = _isExpandedEditorSidebarOpen ? "收起纸片列表" : "显示纸片列表";
+            _editorSidebarButton.ToolTip = _isExpandedEditorSidebarOpen ? Strings.Get("EditorSidebarHide") : Strings.Get("EditorSidebarShow");
             _editorSidebarButton.Foreground = _isExpandedEditorSidebarOpen ? Theme.ActiveBrush : WeakTextBrush;
         }
         if (_editorMinimizeButton != null)
@@ -138,18 +138,18 @@ public sealed partial class PaperWindow
             tools.Children.Add(button);
         }
 
-        AddTool("↶", "撤销", () => _noteBox?.Undo());
-        AddTool("↷", "重做", () => _noteBox?.Redo());
-        AddTool("H", "标题", () => _noteBox?.InsertLinePrefix("# "));
-        AddTool("B", "加粗", () => _noteBox?.WrapSelection("**", "**"));
-        AddTool("I", "斜体", () => _noteBox?.WrapSelection("*", "*"));
-        AddTool("S", "删除线", () => _noteBox?.WrapSelection("~~", "~~"));
-        AddTool("•", "无序列表", () => _noteBox?.InsertLinePrefix("- "));
-        AddTool("1.", "有序列表", () => _noteBox?.InsertLinePrefix("1. "));
-        AddTool("❝", "引用", () => _noteBox?.InsertLinePrefix("> "));
-        AddTool("</>", "代码块", () => _noteBox?.WrapSelection(" " + "```" + "\n", "\n" + "```"));
-        AddTool("↗", "插入链接", () => _noteBox?.InsertMarkdownLink());
-        AddTool("▧", "插入图片", () => _noteEditorImageAction?.Invoke());
+        AddTool("↶", Strings.Get("EditorUndo"), () => _noteBox?.Undo());
+        AddTool("↷", Strings.Get("EditorRedo"), () => _noteBox?.Redo());
+        AddTool("H", Strings.Get("EditorHeading"), () => _noteBox?.InsertLinePrefix("# "));
+        AddTool("B", Strings.Get("EditorBold"), () => _noteBox?.WrapSelection("**", "**"));
+        AddTool("I", Strings.Get("EditorItalic"), () => _noteBox?.WrapSelection("*", "*"));
+        AddTool("S", Strings.Get("EditorStrike"), () => _noteBox?.WrapSelection("~~", "~~"));
+        AddTool("•", Strings.Get("EditorBullets"), () => _noteBox?.InsertLinePrefix("- "));
+        AddTool("1.", Strings.Get("EditorNumbers"), () => _noteBox?.InsertLinePrefix("1. "));
+        AddTool("❝", Strings.Get("EditorQuote"), () => _noteBox?.InsertLinePrefix("> "));
+        AddTool("</>", Strings.Get("EditorCode"), () => _noteBox?.WrapSelection(" " + "```" + "\n", "\n" + "```"));
+        AddTool("↗", Strings.Get("EditorLink"), () => _noteBox?.InsertMarkdownLink());
+        AddTool("▧", Strings.Get("EditorImage"), () => _noteEditorImageAction?.Invoke());
 
         _editorMarkdownToolbar = new Border
         {
@@ -168,7 +168,7 @@ public sealed partial class PaperWindow
         _editorPaperList = new StackPanel { Orientation = Orientation.Vertical };
         var listHeader = new TextBlock
         {
-            Text = "所有纸片",
+            Text = Strings.Get("EditorAllPapers"),
             FontWeight = FontWeights.SemiBold,
             FontSize = AppTypography.Scale(12),
             Margin = new Thickness(12, 12, 8, 8),
@@ -208,8 +208,8 @@ public sealed partial class PaperWindow
         {
             var current = paper.Id == _paper.Id;
             var title = _controller.PaperDisplayTitle(paper);
-            var kind = paper.Type == PaperTypes.Todo ? "待办" :
-                paper.Type == PaperTypes.Note ? "笔记" : "纸片";
+            var kind = paper.Type == PaperTypes.Todo ? Strings.Get("EditorTodo") :
+                paper.Type == PaperTypes.Note ? Strings.Get("EditorNote") : Strings.Get("EditorPaper");
             var line = new StackPanel
             {
                 Orientation = Orientation.Vertical,
