@@ -195,10 +195,20 @@ public sealed partial class PaperWindow
         return false;
     }
 
-    private bool OnEdgeCapsulePointerReleased(DeviceScreenPoint _)
+    private bool OnEdgeCapsulePointerReleased(DeviceScreenPoint releasePosition)
     {
         if (IsDeepCapsuleReordering)
         {
+            if (_controller.EdgeCapsuleFreeQueuesEnabled && IsDeepCapsuleDockedReordering)
+            {
+                // 贴边路径没有原生拖拽循环的最终光标采样。最后一次移动可能落在 8ms
+                // 节流窗口内；这里按松手位置强制重算，避免提交旧的预览目标/槽位。
+                if (UpdateEdgeCapsuleDragPointer(releasePosition))
+                {
+                    PreviewDeepCapsuleQueueMagnetForCurrentPosition(forceEvaluation: true);
+                }
+            }
+
             EndDeepCapsuleReorderDrag(commit: true);
             ClearCapsuleInteractionKeyboardFocus();
             return true;
