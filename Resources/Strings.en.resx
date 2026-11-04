@@ -1691,4 +1691,7 @@ The original note is kept.</value></data>
   <data name="WorkbenchSearchResult" xml:space="preserve"><value>Result {0}/{1}</value></data>
   <data name="WorkbenchShowOnDesktop" xml:space="preserve"><value>Show on desktop</value></data>
   <data name="WorkbenchHideOnDesktop" xml:space="preserve"><value>Hide from desktop</value></data>
+  <data name="WorkbenchBindToTodo" xml:space="preserve"><value>Link to a to-do item</value></data>
+  <data name="WorkbenchUnnamedTodo" xml:space="preserve"><value>Untitled to-do</value></data>
+  <data name="WorkbenchBindTodoFailed" xml:space="preserve"><value>Could not link to that to-do item.</value></data>
 </root>
