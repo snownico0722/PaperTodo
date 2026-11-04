@@ -2167,6 +2167,7 @@ public sealed partial class PaperWindow : Window
             Margin = new Thickness(3, 3, 6, 0),
             Background = Brushes.Transparent
         };
+        top.SizeChanged += (_, _) => UpdateTopBarResponsiveLayout();
 
         top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
