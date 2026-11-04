@@ -18,7 +18,7 @@ internal sealed class WorkbenchWindow : Window
     private readonly Canvas _world = new();
     private readonly ScaleTransform _scale = new(1, 1);
     private readonly TranslateTransform _pan = new();
-    private readonly TextBox _search = new() { Width = 220, Margin = new Thickness(8, 4, 8, 4), Padding = new Thickness(8, 5, 8, 5) };
+    private readonly TextBox _search = new() { Width = 220, Margin = new Thickness(8, 4, 8, 4), Padding = new Thickness(8, 4, 8, 4) };
     private readonly TextBlock _status = new() { Margin = new Thickness(20, 6, 20, 8), TextWrapping = TextWrapping.Wrap };
     private readonly TextBlock _zoom = new() { VerticalAlignment = VerticalAlignment.Center, MinWidth = 48, TextAlignment = TextAlignment.Center };
     private readonly Grid _toolbar = new();
@@ -98,6 +98,10 @@ internal sealed class WorkbenchWindow : Window
         AddButton("WorkbenchArrange", () => { RememberLayout(); _ = LayoutActiveAsync(arrange: true); }, _layoutCommands);
         AddButton("WorkbenchUndo", UndoLayout, _layoutCommands);
         _search.ToolTip = Strings.Get("WorkbenchSearch");
+        _search.Height = AppTypography.FitChrome(28);
+        _search.FontSize = AppTypography.Scale(13);
+        _search.HorizontalContentAlignment = HorizontalAlignment.Stretch;
+        _search.VerticalContentAlignment = VerticalAlignment.Center;
         _search.TextChanged += (_, _) => { _searchCursor = 0; ApplySearch(); };
         _search.KeyDown += (_, e) => { if (e.Key == Key.Enter) { SearchNext(); e.Handled = true; } };
         AddButton("WorkbenchNewNote", () => CreatePaper(PaperTypes.Note), _rightCommands);
@@ -164,11 +168,13 @@ internal sealed class WorkbenchWindow : Window
         _viewport.Background = DeskBrush;
         _toolbarHost.Background = CardBrush;
         _toolbarHost.BorderBrush = Outline;
-        _search.Background = CardBrush;
+        _search.Background = Brushes.Transparent;
         _search.Foreground = Ink;
         _search.BorderBrush = Outline;
-        _search.CaretBrush = Accent;
+        _search.BorderThickness = new Thickness(1);
+        _search.CaretBrush = Ink;
         _search.SelectionBrush = Theme.Tint(100);
+        _search.Style = WorkbenchInputStyle();
         _zoom.Foreground = Ink;
         _status.Foreground = Muted;
         foreach (var button in _chromeButtons)
@@ -186,6 +192,8 @@ internal sealed class WorkbenchWindow : Window
                 card.Header.Background = Theme.TitleBarBrush(opaque: true);
                 card.Title.Background = Brushes.Transparent;
                 card.Title.Foreground = Ink;
+                card.Title.BorderBrush = Outline;
+                card.Title.Style = WorkbenchInputStyle();
                 card.Binding.Foreground = Muted;
                 card.Move.Foreground = Ink;
                 card.Resize.Foreground = Muted;
@@ -196,6 +204,36 @@ internal sealed class WorkbenchWindow : Window
             }
             DrawDecorations(scene);
         }
+    }
+
+    // Match the rounded external-open extension editor in PaperTodo settings.
+    private static Style WorkbenchInputStyle()
+    {
+        var style = new Style(typeof(TextBox));
+        style.Setters.Add(new Setter(Control.FocusVisualStyleProperty, null));
+        style.Setters.Add(new Setter(UIElement.SnapsToDevicePixelsProperty, true));
+        style.Setters.Add(new Setter(FrameworkElement.UseLayoutRoundingProperty, true));
+        var frame = new FrameworkElementFactory(typeof(Border), "Bd");
+        frame.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(Control.BackgroundProperty));
+        frame.SetValue(Border.BorderBrushProperty, new TemplateBindingExtension(Control.BorderBrushProperty));
+        frame.SetValue(Border.BorderThicknessProperty, new TemplateBindingExtension(Control.BorderThicknessProperty));
+        frame.SetValue(Border.CornerRadiusProperty, new CornerRadius(6));
+        frame.SetValue(Border.PaddingProperty, new TemplateBindingExtension(Control.PaddingProperty));
+        frame.SetValue(UIElement.SnapsToDevicePixelsProperty, true);
+        var content = new FrameworkElementFactory(typeof(ScrollViewer), "PART_ContentHost");
+        content.SetValue(FrameworkElement.VerticalAlignmentProperty,
+            new TemplateBindingExtension(Control.VerticalContentAlignmentProperty));
+        content.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Stretch);
+        frame.AppendChild(content);
+        var template = new ControlTemplate(typeof(TextBox)) { VisualTree = frame };
+        var hover = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
+        hover.Setters.Add(new Setter(Border.BorderBrushProperty, Muted, "Bd"));
+        var focus = new Trigger { Property = UIElement.IsKeyboardFocusWithinProperty, Value = true };
+        focus.Setters.Add(new Setter(Border.BorderBrushProperty, Accent, "Bd"));
+        template.Triggers.Add(hover);
+        template.Triggers.Add(focus);
+        style.Setters.Add(new Setter(Control.TemplateProperty, template));
+        return style;
     }
 
     private Point ViewportCenter => new(Math.Max(1, _viewport.ActualWidth) / 2, Math.Max(1, _viewport.ActualHeight) / 2);
@@ -696,7 +734,9 @@ internal sealed class WorkbenchWindow : Window
         card.Move.Template = TitleDragTemplate(card.Move);
         header.Children.Add(card.Move);
         card.Title.Text = paper.Title; card.Title.FontWeight = FontWeights.SemiBold;
-        card.Title.Background = Brushes.Transparent; card.Title.Foreground = Ink; card.Title.BorderThickness = new Thickness(0);
+        card.Title.Style = WorkbenchInputStyle();
+        card.Title.Background = Brushes.Transparent; card.Title.Foreground = Ink;
+        card.Title.BorderBrush = Outline; card.Title.BorderThickness = new Thickness(1);
         card.Title.Padding = new Thickness(12, 5, 4, 5);
         card.Title.Visibility = Visibility.Collapsed;
         Grid.SetColumn(card.Title, 0); header.Children.Add(card.Title);
