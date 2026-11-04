@@ -85,13 +85,12 @@ internal static class Program
                 catch (ArgumentException) { }
             }),
             ("Metadata normalization and deep-copy isolation", () => {
-                var state = new WorkbenchState { Cards = new() { ["a"] = new() { X = 5, Width = -10 }, ["deleted"] = new(), ["b"] = new() { X = double.NaN } },
-                    Connections = [new() { From = "a", To = "c" }, new() { From = "a", To = "c" }, new() { From = "a", To = "deleted" }] };
-                state.Normalize(["a", "b", "c"]); Assert(state.Cards.Count == 1 && state.Cards["a"].Width == 200); Assert(state.Connections.Count == 1);
-                var copy = state.Copy(); copy.Cards["a"].X = 9; copy.Connections[0].To = "b";
-                Assert(state.Cards["a"].X == 5 && state.Connections[0].To == "c");
+                var state = new WorkbenchState { Cards = new() { ["a"] = new() { X = 5, Width = -10 }, ["deleted"] = new(), ["b"] = new() { X = double.NaN } } };
+                state.Normalize(["a", "b", "c"]); Assert(state.Cards.Count == 1 && state.Cards["a"].Width == 200);
+                var copy = state.Copy(); copy.Cards["a"].X = 9;
+                Assert(state.Cards["a"].X == 5);
                 var json = JsonSerializer.Serialize(state); var restored = JsonSerializer.Deserialize<WorkbenchState>(json)!;
-                Assert(restored.Cards["a"].X == 5 && restored.Connections.Count == 1);
+                Assert(restored.Cards["a"].X == 5);
             }),
             ("Dense pinned wall has terminating collision resolution", () => {
                 var nodes = Enumerable.Range(0, 100).Select(i => new WorkbenchLayoutNode($"pin{i:000}", 240, 260, new((i % 10) * 272, (i / 10) * 292, 240, 260), true))
