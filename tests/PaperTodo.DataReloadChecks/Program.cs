@@ -49,6 +49,7 @@ internal static partial class Program
                 check.Run();
                 Console.WriteLine("PASS " + check.Name);
             }
+            CoreHistoryBackupChecks();
             WorkspaceStorageChecks();
             WorkspaceFollowingMergeBaseline();
             StorageSafetyChecks();

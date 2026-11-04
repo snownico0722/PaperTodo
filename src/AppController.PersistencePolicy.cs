@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Threading;
 
@@ -7,20 +9,65 @@ namespace PaperTodo;
 public sealed partial class AppController
 {
     private DispatcherTimer? _stateBackupTimer;
+    private DispatcherTimer? _coreHistoryTimer;
+    private int _coreHistoryBackupRunning;
 
-    internal void StartStateBackupPolicy()
+    // The core JSON history is independent of the active workspace and the normal
+    // autosave flow. Delay the first check so startup can settle, then scan every
+    // ten minutes, including after a workspace's transient read failure.
+    internal void StartCoreHistoryBackupPolicy()
     {
-        if (IsExiting || _stateBackupTimer != null)
+        if (IsExiting || _coreHistoryTimer != null) return;
+        _coreHistoryTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(1) };
+        _coreHistoryTimer.Tick += OnCoreHistoryTimerTick;
+        _coreHistoryTimer.Start();
+    }
+
+    private void OnCoreHistoryTimerTick(object? sender, EventArgs e)
+    {
+        if (IsExiting)
         {
+            StopCoreHistoryBackupPolicy();
             return;
         }
 
-        TryRefreshStateBackup();
+        // This also changes the first-start delay into the steady ten-minute cycle.
+        if (_coreHistoryTimer != null)
+            _coreHistoryTimer.Interval = CoreHistoryBackup.MinimumInterval;
 
-        _stateBackupTimer = new DispatcherTimer
+        if (Interlocked.CompareExchange(ref _coreHistoryBackupRunning, 1, 0) != 0)
+            return;
+
+        // The shared write-lifetime is the only link to persistence: it prevents
+        // publishing files after shutdown. No workspace UI or save hooks participate.
+        var lifetime = _workspaceCatalog.MainStore.WriteLifetime;
+        _ = Task.Run(() =>
         {
-            Interval = TimeSpan.FromHours(6)
-        };
+            try
+            {
+                new CoreHistoryBackup(AppContext.BaseDirectory, lifetime.ThrowIfStopped)
+                    .TryCreateIfDue(DateTimeOffset.UtcNow);
+            }
+            catch (Exception ex) { Trace.TraceWarning("Core history backup failed: {0}", ex); }
+            finally { Interlocked.Exchange(ref _coreHistoryBackupRunning, 0); }
+        });
+    }
+
+    private void StopCoreHistoryBackupPolicy()
+    {
+        var timer = _coreHistoryTimer;
+        _coreHistoryTimer = null;
+        if (timer == null) return;
+        timer.Stop();
+        timer.Tick -= OnCoreHistoryTimerTick;
+    }
+
+    internal void StartStateBackupPolicy()
+    {
+        if (IsExiting || _stateBackupTimer != null) return;
+
+        TryRefreshStateBackup();
+        _stateBackupTimer = new DispatcherTimer { Interval = TimeSpan.FromHours(6) };
         _stateBackupTimer.Tick += OnStateBackupTimerTick;
         _stateBackupTimer.Start();
     }
@@ -32,7 +79,6 @@ public sealed partial class AppController
             StopStateBackupPolicy();
             return;
         }
-
         TryRefreshStateBackup();
     }
 
@@ -86,6 +132,7 @@ public sealed partial class AppController
         _saveTimer.Stop();
         _forceSaveTimer.Stop();
         StopStateBackupPolicy();
+        StopCoreHistoryBackupPolicy();
         _paperBodyPlugins.DataStore.SuppressFinalFlushOnDispose();
         DisposeRuntimeResources();
         _lifecycleState = AppLifecycleState.Disposed;

@@ -20,6 +20,10 @@ This log is written for general and power users alike. It focuses on user-facing
 
 ### Unreleased
 
+#### Data Reliability
+
+- **Dynamic core JSON backups**: Keep up to four age-spaced restore points targeting the latest saved state (about 10 minutes), 6 hours, 3 days and 1 month. The first scan starts about one minute after startup, then runs every ten minutes independently of saving or workspace switching. Unreadable workspaces receive bounded retries and are skipped for that scan only. Unchanged files are not re-archived. Raw JSON files from all existing workspaces are archived without JSON validation; images and plugin files are excluded. Old snapshots are pruned only after publishing a complete new ZIP, with no unbounded rescue archive.
+
 #### Papers, Title Bar & Capsules
 
 - **Workspace cycling**: Enable 2–5 workspaces and switch using the paper top-bar's custom SVG cycle icon and number badge; the tray submenu and Settings page also offer direct workspace selection, with long setting explanations moved into ⓘ hints. The main workspace keeps `data.json` and `note-assets.lmdb`; others use `data2.json` / `note-assets2.lmdb` and separate host-managed plugin data. Secondary workspaces follow the main software settings by default; turning this off restores their own settings. Switching saves current edits and remembers the active slot. Reducing the count or disabling workspaces never deletes inactive files.
