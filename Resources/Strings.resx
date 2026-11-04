@@ -1740,4 +1740,7 @@
   <data name="WorkbenchSearchResult" xml:space="preserve"><value>匹配结果 {0}/{1}</value></data>
   <data name="WorkbenchShowOnDesktop" xml:space="preserve"><value>在桌面显示</value></data>
   <data name="WorkbenchHideOnDesktop" xml:space="preserve"><value>从桌面隐藏</value></data>
+  <data name="WorkbenchBindToTodo" xml:space="preserve"><value>绑定到待办条目</value></data>
+  <data name="WorkbenchUnnamedTodo" xml:space="preserve"><value>未命名待办</value></data>
+  <data name="WorkbenchBindTodoFailed" xml:space="preserve"><value>无法绑定到该待办条目。</value></data>
 </root>
