@@ -29,7 +29,7 @@ internal sealed record EdgeCapsuleQueueCommitUndo(
     IReadOnlyDictionary<string, double> StartTopMargins);
 
 /// <summary>
-/// Whole-queue drag for free queues (D-065).
+/// Whole-queue drag for free queues (D-066).
 ///
 /// Holding Ctrl while dragging any member lifts the entire queue off the wall and drops it as a
 /// single capsule, mirroring what the master pill already does for a whole edge. The source

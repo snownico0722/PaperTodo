@@ -384,7 +384,7 @@ Measure / display-metrics 也是同一 presentation reconcile 的输入，而不
 
 ### 6.2 Queue placement 与 geometry
 
-队列由 monitor + edge（自由队列模式下再加 instance id，见 D-065）标识。`EdgeCapsuleQueueCoordinator` 只负责 index、master offset 和 slot count；`EdgeCapsuleGeometry` 只负责 monitor/edge/DIP 到物理像素矩形。
+队列由 monitor + edge（自由队列模式下再加 instance id，见 D-066）标识。`EdgeCapsuleQueueCoordinator` 只负责 index、master offset 和 slot count；`EdgeCapsuleGeometry` 只负责 monitor/edge/DIP 到物理像素矩形。
 
 自由队列模式下同一条边可并存多条队列，每条队列实例持有自己的 slot 0 起始高度（复用 `AppState.DeepCapsuleQueueStartTopMargins`，key 形态扩展为 `monitor|side#instanceId`，不另立字典）。合并／脱离的距离判定由无 WPF 依赖的纯函数 `EdgeCapsuleQueueMagnet` 独占，进入 18 DIP、退出 32 DIP 的 Schmitt trigger 使防抖内生于纯函数而非时间状态；控制器只负责把实时状态喂进判定并应用结果。
 

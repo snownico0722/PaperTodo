@@ -17,7 +17,7 @@ internal readonly record struct EdgeCapsuleDropAnchor(
     double CapsuleCenterYDevice);
 
 /// <summary>
-/// Free edge-capsule queues (D-065).
+/// Free edge-capsule queues (D-066).
 ///
 /// The default arrangement lets one edge hold exactly one queue, whose height comes from a single
 /// remembered start margin. Free mode keeps that arrangement intact but lets several queues share

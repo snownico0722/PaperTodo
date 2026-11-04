@@ -662,7 +662,7 @@ public sealed class PaperData
     // Free-queue mode narrows the above pair to one queue instance, so several queues can
     // coexist on the same edge. Empty means "the default queue for this edge" — which makes
     // the derived queue key byte-identical to the pre-free-queue one, so old data needs no
-    // migration. See D-065.
+    // migration. See D-066.
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public string CapsuleQueueId { get; set; } = "";
 

@@ -250,7 +250,7 @@ Edge capsule 同时存在单纸片状态与跨纸片会话。若 `PaperWindow`�
 
 ### Decision
 
-队列身份元组已在 [D-065](#d-065--自由队列以队列实例-key-扩展-d-006-的身份元组2026-10-16) 扩展为 `(monitor, edge, instanceId)`；本条的双 authority 划分与不分页约束均不变。
+队列身份元组已在 [D-066](#d-066--自由队列以队列实例-key-扩展-d-006-的身份元组2026-10-16) 扩展为 `(monitor, edge, instanceId)`；本条的双 authority 划分与不分页约束均不变。
 
 - 队列 index / master offset / slot count 只由 `EdgeCapsuleQueueCoordinator` 计算。
 - monitor/edge/DIP 到物理 `DeviceScreenRect` 的 docked geometry 只由 `EdgeCapsuleGeometry` 计算。

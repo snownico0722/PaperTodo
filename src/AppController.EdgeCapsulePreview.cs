@@ -176,7 +176,7 @@ public sealed partial class AppController
     /// Every queue resting on the owner's monitor+edge, ascending by slot-0 top, with each queue's
     /// member ids in their own order.
     ///
-    /// Free queues let one edge hold several independent stacks (D-065), so a mini-view on one of
+    /// Free queues let one edge hold several independent stacks (D-066), so a mini-view on one of
     /// them would otherwise be overlapped by the others. Only the controller can read the persisted
     /// per-queue start margins, so this descriptor is assembled here and handed to the pure policy.
     /// </summary>

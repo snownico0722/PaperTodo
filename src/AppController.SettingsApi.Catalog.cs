@@ -44,7 +44,7 @@ public sealed partial class AppController
                     Edge = value,
                     Capsule = value || Capsule
                 },
-                // D-065: 主胶囊与自由队列互斥；两者都蕴含 capsule + edge。
+                // D-066: 主胶囊与自由队列互斥；两者都蕴含 capsule + edge。
                 "capsule.master_enabled" => value
                     ? this with
                     {
@@ -359,7 +359,7 @@ public sealed partial class AppController
             value =>
             {
                 State.UseCapsuleCollapseAll = value;
-                // D-065: with several queues on one edge, slot 0 has no single owner, so the
+                // D-066: with several queues on one edge, slot 0 has no single owner, so the
                 // master pill and free queues are mutually exclusive. Enforced in the setter so
                 // the UI path and the public settings API cannot disagree.
                 if (value)
