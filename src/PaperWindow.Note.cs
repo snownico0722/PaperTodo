@@ -899,7 +899,7 @@ public sealed partial class PaperWindow
             CheckFileExists = true
         };
 
-        if (dialog.ShowDialog(this) != true)
+        if (dialog.ShowDialog(_expandedEditorHostWindow ?? this) != true)
         {
             return Array.Empty<string>();
         }
