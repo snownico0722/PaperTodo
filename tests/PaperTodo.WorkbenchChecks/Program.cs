@@ -153,7 +153,15 @@ internal static class Program
             controller.DeletePaper(controller.FindPaper("note-b")!);
             await Until(() => workbench.HostedPaperCount == 2, "Deleted paper retained a leased editor");
             Assert(!controller.WorkbenchLayout.Cards.ContainsKey("note-b"), "Deleted paper retained spatial metadata");
+            // The eye changes only desktop visibility while the real editor stays hosted.
+            controller.SetWorkbenchDesktopVisibility(controller.FindPaper("note-a")!, false);
+            controller.SetWorkbenchDesktopVisibility(controller.FindPaper("todo-a")!, true);
+            Assert(!controller.FindPaper("note-a")!.IsVisible && controller.FindPaper("todo-a")!.IsVisible,
+                "Eye did not change the desktop visibility model");
+            Assert(workbench.HostedPaperCount == 2, "Eye visibility detached the workbench editor");
             controller.ToggleWorkbench();
+            Assert(!originalWindow.IsVisible, "Hidden-on-desktop paper was shown after closing workbench");
+            Assert(windows["todo-a"].IsVisible, "Eye did not show previously hidden paper on desktop");
         }
         else
         {
