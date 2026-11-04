@@ -44,8 +44,8 @@ internal sealed class WorkspaceCatalog
                  name.StartsWith(stem + "conflict-", StringComparison.OrdinalIgnoreCase)));
     }
 
-    // Purge only an inactive secondary slot. The caller removes its catalog entry
-    // only after all owned files were deleted, retaining the retry action on failure.
+    // Purge inactive secondary data after removing the slot from the main catalog.
+    // A failed file cleanup is reported but does not restore catalog membership.
     internal void DeleteInactiveSlotFiles(int number)
     {
         if (number is < 2 or > 5 || Options.Active == number)
