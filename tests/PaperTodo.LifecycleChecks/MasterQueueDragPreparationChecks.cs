@@ -64,7 +64,7 @@ internal static class MasterQueueDragPreparationChecks
             var pointer = new DeviceScreenPoint(monitor.WorkArea.Right - 100, monitor.WorkArea.Top + 100);
             var sessionType = typeof(MasterCapsuleWindow).GetNestedType("MasterDragSession", Private)!;
             var session = Activator.CreateInstance(sessionType,
-                pointer, controller.MasterCapsuleQueueKey("", EdgeCapsuleEdge.Right), hadMargin, originalMargin)!;
+                pointer, controller.MasterCapsuleQueueKey("", EdgeCapsuleEdge.Right), hadMargin, originalMargin, null)!;
             Require((bool)typeof(MasterCapsuleWindow).GetMethod("TryRunQueueTransfer", Private)!
                     .Invoke(master, [pointer, session])!,
                 "master drag fixture did not consume the transfer gesture");
