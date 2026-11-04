@@ -588,14 +588,14 @@ public sealed partial class AppController
     {
         var selector = new MenuItem
         {
-            Header = Strings.Format("WorkspaceTrayCycle", WorkspaceNumber, WorkspaceOptions.Count),
+            Header = Strings.Format("WorkspaceTrayCycle", WorkspaceNumber, WorkspaceOptions.SlotNumbers.Count),
             Style = SharedTrayMenuItemStyle,
             IsEnabled = !_workspaceSwitching
         };
-        for (var number = 1; number <= WorkspaceOptions.Count; number++)
+        foreach (var number in WorkspaceOptions.SlotNumbers)
         {
             var target = number;
-            var label = WorkspaceSlotLabel(number);
+            var label = WorkspaceOptions.DisplayName(number) + " (" + number + ")";
             // This menu template presents plain text, so the active marker is explicit
             // rather than an IsChecked flag that its custom template would not display.
             var prefix = number == WorkspaceNumber ? "✓  " : "    ";
