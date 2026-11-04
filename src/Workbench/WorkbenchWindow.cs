@@ -197,9 +197,9 @@ internal sealed class WorkbenchWindow : Window
                 card.Binding.Foreground = Muted;
                 card.Move.Foreground = Ink;
                 card.Resize.Foreground = Muted;
-                foreach (var button in new[] { card.Pin, card.Eye, card.Menu })
+                foreach (var button in new[] { card.Pin, card.Menu })
                     button.Foreground = Ink;
-                card.Eye.Content = EyeIcon(card.Snapshot.DesktopVisible);
+                card.Eye.Child = EyeIcon(card.Snapshot.DesktopVisible);
                 if (card.PreviewText != null) card.PreviewText.Foreground = Ink;
             }
             DrawDecorations(scene);
@@ -375,8 +375,7 @@ internal sealed class WorkbenchWindow : Window
                     card.Move.Tag = paper.Title;
                 }
                 card.Pin.Content = paper.Placement?.Pinned == true ? "\u25c6" : "\u25c7";
-                card.Eye.Content = EyeIcon(paper.DesktopVisible);
-                card.Eye.ToolTip = Strings.Get(paper.DesktopVisible ? "WorkbenchHideOnDesktop" : "WorkbenchShowOnDesktop");
+                card.Eye.Child = EyeIcon(paper.DesktopVisible);
                 card.Move.Cursor = paper.Placement?.Pinned == true ? Cursors.Arrow : Cursors.SizeAll;
                 card.Binding.Text = paper.BindingTitle;
                 card.Binding.Visibility = paper.BindingTitle.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -644,13 +643,6 @@ internal sealed class WorkbenchWindow : Window
             if (state.Cards.TryGetValue(paper.Id, out var placement)) placement.Pinned = !placement.Pinned;
             StoreLayout(state); SyncActiveScene();
         };
-        card.Eye.Click += (_, _) =>
-        {
-            if (_controller.FindPaper(paper.Id) is not { } current) return;
-            _controller.SetWorkbenchDesktopVisibility(current, !current.IsVisible);
-            card.Eye.Content = EyeIcon(current.IsVisible);
-            card.Eye.ToolTip = Strings.Get(current.IsVisible ? "WorkbenchHideOnDesktop" : "WorkbenchShowOnDesktop");
-        };
         card.Menu.Click += (_, _) =>
         {
             var menu = owner.CreateWorkbenchBodyMenu();
@@ -699,7 +691,6 @@ internal sealed class WorkbenchWindow : Window
         card.Title.IsHitTestVisible = false;
         card.Title.Visibility = Visibility.Visible;
         card.Pin.Visibility = card.Menu.Visibility = card.Resize.Visibility = card.Move.Visibility = Visibility.Collapsed;
-        card.Eye.IsEnabled = false;
         var preview = new StackPanel { Margin = new Thickness(16) };
         card.PreviewText = new TextBlock { Text = paper.Summary, TextWrapping = TextWrapping.Wrap, MaxHeight = Math.Max(80, paper.Height - 120), TextTrimming = TextTrimming.CharacterEllipsis, Foreground = Ink };
         preview.Children.Add(card.PreviewText);
@@ -759,21 +750,17 @@ internal sealed class WorkbenchWindow : Window
         card.Binding.Visibility = paper.BindingTitle.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
         Grid.SetRow(card.Binding, 1); grid.Children.Add(card.Binding);
         Grid.SetRow(card.Body, 2); grid.Children.Add(card.Body);
-        // Keep the visibility eye outside the borrowed editor and the draggable title.
-        // It has its own hit area at the bottom left; the resize grip stays bottom right.
+        // The left eye is display-only. It does not intercept pointer input, and the
+        // resize grip on the right remains the only interactive footer control.
         var footer = new Grid { Height = 30, Margin = new Thickness(8, 0, 8, 2) };
         footer.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
         footer.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
-        card.Eye.Width = 36; card.Eye.Height = 26;
+        card.Eye.Width = 18; card.Eye.Height = 14;
+        card.Eye.Margin = new Thickness(8, 0, 0, 0);
         card.Eye.HorizontalAlignment = HorizontalAlignment.Left;
         card.Eye.VerticalAlignment = VerticalAlignment.Center;
-        card.Eye.Padding = new Thickness(8, 5, 8, 5);
-        card.Eye.Background = Brushes.Transparent;
-        card.Eye.Foreground = Ink;
-        card.Eye.BorderThickness = new Thickness(0);
-        card.Eye.Cursor = Cursors.Hand;
-        card.Eye.Content = EyeIcon(paper.DesktopVisible);
-        card.Eye.ToolTip = Strings.Get(paper.DesktopVisible ? "WorkbenchHideOnDesktop" : "WorkbenchShowOnDesktop");
+        card.Eye.IsHitTestVisible = false;
+        card.Eye.Child = EyeIcon(paper.DesktopVisible);
         footer.Children.Add(card.Eye);
         card.Resize.Width = 26; card.Resize.HorizontalAlignment = HorizontalAlignment.Right;
         card.Resize.Cursor = Cursors.SizeNWSE;
@@ -1011,7 +998,7 @@ internal sealed class WorkbenchWindow : Window
         internal Thumb Move { get; } = new();
         internal Thumb Resize { get; } = new();
         internal Button Pin { get; } = new();
-        internal Button Eye { get; } = new();
+        internal Border Eye { get; } = new();
         internal Button Menu { get; } = new();
         internal PaperWindow.WorkbenchBodyLease? Lease;
         internal WorkbenchRect Bounds;
