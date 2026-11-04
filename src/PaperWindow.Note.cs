@@ -268,7 +268,7 @@ public sealed partial class PaperWindow
                         }
 
                         if (isPreviewing &&
-                            IsActive &&
+                            InteractionWindow.IsActive &&
                             !IsKeyboardFocusWithin &&
                             _findHost?.IsKeyboardFocusWithin != true &&
                             !IsPaperContextMenuInteractionActive)
@@ -731,7 +731,7 @@ public sealed partial class PaperWindow
                     {
                         return;
                     }
-                    if (IsActive)
+                    if (InteractionWindow.IsActive)
                     {
                         TraceNoteRender("ImageContextMenuClosed: refocus editor");
                         box.Focus();
@@ -922,7 +922,7 @@ public sealed partial class PaperWindow
     private void ShowNoteImageImportFailure(Exception ex)
     {
         PaperNoticeDialog.Show(
-            this,
+            InteractionWindow,
             Strings.Get("ImageImportFailureTitle"),
             Strings.Format("ImageImportFailureMessage", ex.Message));
     }
@@ -930,7 +930,7 @@ public sealed partial class PaperWindow
     private void ShowNotePasteRejected()
     {
         PaperNoticeDialog.Show(
-            this,
+            InteractionWindow,
             Strings.Get("NotePasteRejectedTitle"),
             Strings.Get("NotePasteRejectedMessage"));
     }
