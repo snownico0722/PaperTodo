@@ -1655,15 +1655,16 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="NoteHtmlSaved" xml:space="preserve"><value>保存先：{0}
 元のノートは保持されます。</value></data>
   <data name="NoteExportCurrent" xml:space="preserve"><value>このメモをエクスポート</value></data>
-  <data name="NoteExportAll" xml:space="preserve"><value>すべてのメモをエクスポート</value></data>
+  <data name="NoteExportAll" xml:space="preserve"><value>すべてのメモと ToDo をエクスポート</value></data>
   <data name="NoteExportMarkdownType" xml:space="preserve"><value>Markdown 文書</value></data>
   <data name="NoteExportHtmlType" xml:space="preserve"><value>HTML 文書</value></data>
   <data name="NoteExportMarkdownZipType" xml:space="preserve"><value>Markdown ZIP</value></data>
   <data name="NoteExportHtmlZipType" xml:space="preserve"><value>HTML ZIP</value></data>
   <data name="NoteExportMissingImageText" xml:space="preserve"><value>画像がありません</value></data>
-  <data name="NoteExportSummary" xml:space="preserve"><value>{0}/{1} 件のメモをエクスポートしました。&#xA;不足画像：{2} 件（{3} 件のメモ）。&#xA;保存先：{4}</value></data>
-  <data name="NoteExportFailedNotes" xml:space="preserve"><value>失敗したメモ：&#xA;{0}</value></data>
+  <data name="NoteExportSummary" xml:space="preserve"><value>{0}/{1} 件をエクスポートしました。&#xA;不足画像：{2} 件（{3} 件に影響）。&#xA;保存先：{4}</value></data>
+  <data name="NoteExportFailedNotes" xml:space="preserve"><value>エクスポートに失敗した項目：&#xA;{0}</value></data>
   <data name="NoteExportFailure" xml:space="preserve"><value>エクスポートに失敗しました：{0}</value></data>
-  <data name="NoteExportNoNotes" xml:space="preserve"><value>エクスポートできる標準 Markdown メモがありません。</value></data>
+  <data name="NoteExportNoNotes" xml:space="preserve"><value>エクスポートできるメモまたは ToDo がありません。</value></data>
   <data name="NoteExportProgress" xml:space="preserve"><value>エクスポート中 {0}/{1} 件</value></data>
+  <data name="TodoExportCurrent" xml:space="preserve"><value>この ToDo をエクスポート</value></data>
 </root>

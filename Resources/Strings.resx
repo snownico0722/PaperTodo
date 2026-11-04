@@ -1704,15 +1704,16 @@
   <data name="NoteHtmlSaved" xml:space="preserve"><value>已保存到：{0}
 原笔记仍保留。</value></data>
   <data name="NoteExportCurrent" xml:space="preserve"><value>导出当前笔记</value></data>
-  <data name="NoteExportAll" xml:space="preserve"><value>导出全部笔记</value></data>
+  <data name="NoteExportAll" xml:space="preserve"><value>导出全部纸片</value></data>
   <data name="NoteExportMarkdownType" xml:space="preserve"><value>Markdown 文档</value></data>
   <data name="NoteExportHtmlType" xml:space="preserve"><value>HTML 网页</value></data>
   <data name="NoteExportMarkdownZipType" xml:space="preserve"><value>Markdown 压缩包</value></data>
   <data name="NoteExportHtmlZipType" xml:space="preserve"><value>HTML 压缩包</value></data>
   <data name="NoteExportMissingImageText" xml:space="preserve"><value>图片缺失</value></data>
-  <data name="NoteExportSummary" xml:space="preserve"><value>已导出 {0}/{1} 篇笔记。&#xA;缺失图片：{2} 张（涉及 {3} 篇）。&#xA;保存到：{4}</value></data>
-  <data name="NoteExportFailedNotes" xml:space="preserve"><value>失败笔记：&#xA;{0}</value></data>
+  <data name="NoteExportSummary" xml:space="preserve"><value>已导出 {0}/{1} 张纸片。&#xA;缺失图片：{2} 张（涉及 {3} 张纸片）。&#xA;保存到：{4}</value></data>
+  <data name="NoteExportFailedNotes" xml:space="preserve"><value>导出失败的纸片：&#xA;{0}</value></data>
   <data name="NoteExportFailure" xml:space="preserve"><value>导出失败：{0}</value></data>
-  <data name="NoteExportNoNotes" xml:space="preserve"><value>没有可导出的内置 Markdown 笔记。</value></data>
-  <data name="NoteExportProgress" xml:space="preserve"><value>正在导出 {0}/{1} 篇笔记</value></data>
+  <data name="NoteExportNoNotes" xml:space="preserve"><value>没有可导出的笔记或待办。</value></data>
+  <data name="NoteExportProgress" xml:space="preserve"><value>正在导出 {0}/{1} 张纸片</value></data>
+  <data name="TodoExportCurrent" xml:space="preserve"><value>导出当前待办</value></data>
 </root>

@@ -137,6 +137,73 @@ internal static class NoteHtmlChecks
                     Read(zip.GetEntry("Note (2).html")!).Contains("Missing image:"),
                 "HTML archive and missing-image placeholders");
         }
+
+        // Todo papers use the same portable Markdown/HTML writer as notes.
+        // Ordering is by the displayed Order field, not by backing-list position.
+        var todoPaper = new PaperData
+        {
+            Id = "todo-export",
+            Type = PaperTypes.Todo,
+            Items =
+            [
+                new PaperItem { Id = "placeholder", Order = 0 },
+                new PaperItem { Id = "done", Order = 20, Text = "finished **verbatim**", Done = true },
+                new PaperItem { Id = "first", Order = 10, Text = "first\r\n# continuation" },
+                new PaperItem { Id = "empty-done", Order = 30, Done = true }
+            ]
+        };
+        var todoDocument = NotePortableExport.FromTodoPaper(todoPaper, "Note");
+        var expectedTodo = "- [ ] first" + Environment.NewLine +
+            "    \\# continuation" + Environment.NewLine +
+            "- [x] finished \\*\\*verbatim\\*\\*" + Environment.NewLine +
+            "- [x] ";
+        Require(todoDocument.Content == expectedTodo,
+            "Todo export must preserve order, status, multiline text, literal syntax and meaningful empty items");
+        todoPaper.Items[1].Text = "changed after snapshot";
+        Require(todoDocument.Content == expectedTodo, "Todo export must snapshot the current text");
+
+        var todoMd = Path.Combine(temp.Path, "todo.md");
+        var todoMdResult = NotePortableExport.Export(todoMd, [todoDocument],
+            NoteExportFormat.Markdown, all: false, images, "Missing image");
+        Require(todoMdResult.Exported == 1 && todoMdResult.MissingImages == 0 &&
+                File.ReadAllText(todoMd) == expectedTodo,
+            "single Todo Markdown export");
+
+        var todoHtml = Path.Combine(temp.Path, "todo.html");
+        var todoHtmlResult = NotePortableExport.Export(todoHtml, [todoDocument],
+            NoteExportFormat.Html, all: false, images, "Missing image");
+        var exportedTodoHtml = File.ReadAllText(todoHtml);
+        Require(todoHtmlResult.Exported == 1 &&
+                exportedTodoHtml.Contains("type=\"checkbox\"") &&
+                exportedTodoHtml.Contains("finished **verbatim**") &&
+                exportedTodoHtml.Contains("# continuation") &&
+                !exportedTodoHtml.Contains("<strong>verbatim</strong>"),
+            "single Todo HTML export must show checkboxes without interpreting literal Todo text as Markdown");
+
+        var mixedMd = Path.Combine(temp.Path, "mixed-md.zip");
+        var mixedMdResult = NotePortableExport.Export(mixedMd, [source, todoDocument],
+            NoteExportFormat.Markdown, all: true, images, "Missing image");
+        using (var zip = ZipFile.OpenRead(mixedMd))
+        {
+            Require(mixedMdResult.Exported == 2 &&
+                    zip.GetEntry("Note.md") != null &&
+                    zip.GetEntry("Note-images/" + asset.Id + ".png") != null &&
+                    zip.GetEntry("Note (2).md") != null &&
+                    Read(zip.GetEntry("Note (2).md")!) == expectedTodo,
+                "mixed ZIP must include both notes and todos, with distinct filenames");
+        }
+
+        var mixedHtml = Path.Combine(temp.Path, "mixed-html.zip");
+        var mixedHtmlResult = NotePortableExport.Export(mixedHtml, [source, todoDocument],
+            NoteExportFormat.Html, all: true, images, "Missing image");
+        using (var zip = ZipFile.OpenRead(mixedHtml))
+        {
+            Require(mixedHtmlResult.Exported == 2 &&
+                    zip.GetEntry("Note.html") != null &&
+                    zip.GetEntry("Note (2).html") != null &&
+                    Read(zip.GetEntry("Note (2).html")!).Contains("type=\"checkbox\""),
+                "mixed HTML ZIP must include both document types");
+        }
     }
 
     private static string Read(ZipArchiveEntry entry)
