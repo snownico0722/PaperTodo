@@ -902,7 +902,7 @@ public sealed partial class PaperWindow
             if (!_controller.CanAssignPluginProvider(_paper, targetDescriptor))
             {
                 MessageBox.Show(
-                this,
+                InteractionWindow,
                 Strings.Format(
                     "PluginInstanceLimitMessage",
                     targetDescriptor.DisplayName,
