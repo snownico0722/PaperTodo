@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 
@@ -205,8 +206,44 @@ internal sealed class WorkbenchWindow : Window
         _status.Text = Strings.Format("WorkbenchError", error.GetBaseException().Message);
     }
     private void UpdateZoomLabel() => _zoom.Text = $"{_scale.ScaleX:P0}";
+    private void StopCameraAnimation()
+    {
+        // Keep the visible interpolated camera when a wheel, pan or new focus interrupts
+        // the short transition; clearing animation clocks alone would snap to the target.
+        var current = new Camera(_scale.ScaleX, _pan.X, _pan.Y);
+        _scale.BeginAnimation(ScaleTransform.ScaleXProperty, null);
+        _scale.BeginAnimation(ScaleTransform.ScaleYProperty, null);
+        _pan.BeginAnimation(TranslateTransform.XProperty, null);
+        _pan.BeginAnimation(TranslateTransform.YProperty, null);
+        _scale.ScaleX = _scale.ScaleY = current.Zoom;
+        _pan.X = current.X; _pan.Y = current.Y;
+    }
+
+    private void SetCamera(Camera target, bool animate)
+    {
+        var from = new Camera(_scale.ScaleX, _pan.X, _pan.Y);
+        StopCameraAnimation();
+        // Stop fill behavior leaves the target as the real base value. No extra timers
+        // or completion state are required, even if another gesture interrupts it.
+        _scale.ScaleX = _scale.ScaleY = target.Zoom;
+        _pan.X = target.X; _pan.Y = target.Y;
+        if (animate && _controller.State.EnableAnimations)
+        {
+            var ease = new QuadraticEase { EasingMode = EasingMode.EaseOut };
+            DoubleAnimation Step(double initial, double final) =>
+                new(initial, final, TimeSpan.FromMilliseconds(180))
+                { EasingFunction = ease, FillBehavior = FillBehavior.Stop };
+            _scale.BeginAnimation(ScaleTransform.ScaleXProperty, Step(from.Zoom, target.Zoom));
+            _scale.BeginAnimation(ScaleTransform.ScaleYProperty, Step(from.Zoom, target.Zoom));
+            _pan.BeginAnimation(TranslateTransform.XProperty, Step(from.X, target.X));
+            _pan.BeginAnimation(TranslateTransform.YProperty, Step(from.Y, target.Y));
+        }
+        _zoom.Text = $"{target.Zoom:P0}";
+    }
+
     private void ZoomAt(double zoom, Point point)
     {
+        StopCameraAnimation();
         zoom = Math.Clamp(zoom, .035, 2.0);
         var x = (point.X - _pan.X) / _scale.ScaleX;
         var y = (point.Y - _pan.Y) / _scale.ScaleY;
@@ -214,15 +251,13 @@ internal sealed class WorkbenchWindow : Window
         _pan.X = point.X - x * zoom; _pan.Y = point.Y - y * zoom;
         UpdateZoomLabel();
     }
-    private void Fit(WorkbenchRect bounds, double maxZoom = 1)
+    private void Fit(WorkbenchRect bounds, double maxZoom = 1, bool animate = false)
     {
         if (_viewport.ActualWidth <= 0 || _viewport.ActualHeight <= 0) return;
         var zoom = Math.Clamp(Math.Min((_viewport.ActualWidth - 80) / Math.Max(1, bounds.Width),
             (_viewport.ActualHeight - 60) / Math.Max(1, bounds.Height)), .035, maxZoom);
-        _scale.ScaleX = _scale.ScaleY = zoom;
-        _pan.X = ViewportCenter.X - bounds.Center.X * zoom;
-        _pan.Y = ViewportCenter.Y - bounds.Center.Y * zoom;
-        UpdateZoomLabel();
+        SetCamera(new Camera(zoom, ViewportCenter.X - bounds.Center.X * zoom,
+            ViewportCenter.Y - bounds.Center.Y * zoom), animate);
     }
     private void FocusPaper(Card card)
     {
@@ -230,7 +265,7 @@ internal sealed class WorkbenchWindow : Window
             !scene.Cards.ContainsKey(card.Snapshot.Id) || _focusedPaperId == card.Snapshot.Id) return;
         _cameraBeforePaperFocus ??= new Camera(_scale.ScaleX, _pan.X, _pan.Y);
         _focusedPaperId = card.Snapshot.Id;
-        Fit(card.Bounds.Inflate(64).Offset(scene.Origin), 1.35);
+        Fit(card.Bounds.Inflate(64).Offset(scene.Origin), 1.35, animate: true);
     }
 
     private void ClearPaperFocus(bool restoreCamera)
@@ -238,10 +273,8 @@ internal sealed class WorkbenchWindow : Window
         var previous = _cameraBeforePaperFocus;
         _focusedPaperId = null;
         _cameraBeforePaperFocus = null;
-        if (!restoreCamera || previous is not { } camera) return;
-        _scale.ScaleX = _scale.ScaleY = camera.Zoom;
-        _pan.X = camera.X; _pan.Y = camera.Y;
-        UpdateZoomLabel();
+        if (restoreCamera && previous is { } camera) SetCamera(camera, animate: true);
+        else StopCameraAnimation();
     }
 
     private void FitActive() { if (ActiveScene is { } scene) Fit(scene.Bounds.Offset(scene.Origin)); }
@@ -250,6 +283,7 @@ internal sealed class WorkbenchWindow : Window
     {
         if (_dragging || Mouse.Captured != null) return;
         if (e.ChangedButton != MouseButton.Middle && !(e.ChangedButton == MouseButton.Left && ReferenceEquals(e.OriginalSource, _viewport))) return;
+        StopCameraAnimation();
         _panPointer = e.GetPosition(_viewport); _panStart = new(_pan.X, _pan.Y);
         _viewport.CaptureMouse(); e.Handled = true;
     }
