@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.IO;
 using PaperTodo.Plugin;
 
@@ -38,37 +37,27 @@ internal sealed partial class PaperCommandService
             throw Error("image_import_failed", ex.Message);
         }
 
-        var committed = false;
-        try
+        var reference = MarkdownImageReferences.CreateReference(imported.Id);
+        var newContent = BuildNoteWriteResult(original, reference, NoteWriteMode.Append);
+        using (_controller.SuppressPaperPluginEventScans())
         {
-            var reference = MarkdownImageReferences.CreateReference(imported.Id);
-            var newContent = BuildNoteWriteResult(original, reference, NoteWriteMode.Append);
-            using (_controller.SuppressPaperPluginEventScans())
+            paper.Content = newContent;
+            if (!_controller.TryCommitExternalMutation())
             {
-                paper.Content = newContent;
-                if (!_controller.TryCommitExternalMutation())
-                {
-                    paper.Content = original;
-                    _controller.ResetPaperPluginEventBaseline();
-                    throw SaveFailed();
-                }
-
-                committed = true;
-                _controller.RunExternalPostCommitUi(
-                    () => _controller.RefreshExternalNotePaper(paper));
+                // A failed save may already have replaced data.json. Keep the image bytes:
+                // deleting them here could break a durable Markdown reference. Existing
+                // startup image GC reclaims blobs that are truly unreferenced.
+                paper.Content = original;
+                _controller.ResetPaperPluginEventBaseline();
+                throw SaveFailed();
             }
 
-            _controller.PublishExternalPaperOperation(context);
-            return new NoteImageInsertionResult(paper.Id, imported.Id, reference);
+            _controller.RunExternalPostCommitUi(
+                () => _controller.RefreshExternalNotePaper(paper));
         }
-        finally
-        {
-            if (!committed)
-            {
-                try { _controller.ImageStore.DiscardImportedImage(paper.Id, imported.Id); }
-                catch (Exception ex) { Trace.WriteLine($"[MCP] Uncommitted image cleanup failed: {ex}"); }
-            }
-        }
+
+        _controller.PublishExternalPaperOperation(context);
+        return new NoteImageInsertionResult(paper.Id, imported.Id, reference);
     }
 
     private static void EnsureImageReferenceRenders(string current, string reference)
