@@ -1768,7 +1768,7 @@
     <value>恢复写入后未能确认文件可正常读取，恢复来源仍保留。请重试。</value>
   </data>
   <data name="HistoryRecoveryCreate" xml:space="preserve">
-    <value>新建工作区</value>
+    <value>重建工作区</value>
   </data>
   <data name="AppStartupFailureBusy" xml:space="preserve">
     <value>文件被占用</value>

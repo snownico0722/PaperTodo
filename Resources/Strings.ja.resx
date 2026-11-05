@@ -1722,7 +1722,7 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
     <value>復元データの保存後にファイルを正常に読み込めることを確認できませんでした。復元元は保持しています。再試行してください。</value>
   </data>
   <data name="HistoryRecoveryCreate" xml:space="preserve">
-    <value>ワークスペースを新規作成</value>
+    <value>ワークスペースを再作成</value>
   </data>
   <data name="AppStartupFailureBusy" xml:space="preserve">
     <value>ファイルが使用中です</value>

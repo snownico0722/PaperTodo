@@ -1722,7 +1722,7 @@ Restoring will return this workspace to that point in time. Changes made since t
     <value>The restored file could not be verified after saving. The recovery source has been retained. Please retry.</value>
   </data>
   <data name="HistoryRecoveryCreate" xml:space="preserve">
-    <value>New workspace</value>
+    <value>Rebuild workspace</value>
   </data>
   <data name="AppStartupFailureBusy" xml:space="preserve">
     <value>the file is in use</value>
