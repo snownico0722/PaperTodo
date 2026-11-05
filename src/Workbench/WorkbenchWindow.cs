@@ -19,7 +19,12 @@ internal sealed partial class WorkbenchWindow : Window
     private readonly ScaleTransform _scale = new(1, 1);
     private readonly TranslateTransform _pan = new();
     private readonly TextBox _search = new() { Width = 220, Margin = new Thickness(8, 4, 8, 4), Padding = new Thickness(8, 4, 8, 4) };
-    private readonly TextBlock _status = new() { Margin = new Thickness(20, 6, 20, 8), TextWrapping = TextWrapping.Wrap };
+    private readonly TextBlock _status = new() { Margin = new Thickness(20, 6, 20, 8), TextWrapping = TextWrapping.Wrap, Visibility = Visibility.Collapsed, IsHitTestVisible = false };
+    private readonly DispatcherTimer _statusTimer = new() { Interval = TimeSpan.FromSeconds(6) };
+    private readonly Button _helpButton = NewButton("!");
+    private readonly Popup _helpPopup = new() { Placement = PlacementMode.Bottom, StaysOpen = false, AllowsTransparency = true };
+    private readonly Border _helpPanel = new() { BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(9), Padding = new Thickness(14), Margin = new Thickness(0, 7, 0, 0) };
+    private readonly TextBlock _helpText = new() { Width = 340, TextWrapping = TextWrapping.Wrap };
     private readonly TextBlock _zoom = new() { VerticalAlignment = VerticalAlignment.Center, MinWidth = 48, TextAlignment = TextAlignment.Center };
     private readonly WorkbenchToolbarPanel _toolbar = new();
     private readonly WrapPanel _layoutCommands = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Left };
@@ -94,6 +99,17 @@ internal sealed partial class WorkbenchWindow : Window
         _status.VerticalAlignment = VerticalAlignment.Bottom;
         Panel.SetZIndex(_status, 10);
         root.Children.Add(_status);
+        _statusTimer.Tick += (_, _) => SetHint();
+        _helpButton.Width = 32;
+        _helpButton.FontWeight = FontWeights.Bold;
+        _helpButton.ToolTip = Strings.Get("WorkbenchHelp");
+        _helpButton.Click += (_, _) => _helpPopup.IsOpen = !_helpPopup.IsOpen;
+        _helpPanel.Child = _helpText;
+        _helpText.Text = Strings.Get("WorkbenchHint");
+        _helpPopup.Child = _helpPanel;
+        _helpPopup.PlacementTarget = _helpButton;
+        _layoutCommands.Children.Add(_helpButton);
+        _chromeButtons.Add(_helpButton);
 
         AddButton("WorkbenchArrange", () => { RememberLayout(); _ = LayoutActiveAsync(arrange: true); }, _layoutCommands);
         AddButton("WorkbenchUndo", UndoWorkspaceAction, _layoutCommands);
@@ -201,6 +217,9 @@ internal sealed partial class WorkbenchWindow : Window
         _search.Style = WorkbenchInputStyle();
         _zoom.Foreground = Ink;
         _status.Foreground = Muted;
+        _helpPanel.Background = CardBrush;
+        _helpPanel.BorderBrush = Outline;
+        _helpText.Foreground = Ink;
         foreach (var button in _chromeButtons)
         {
             button.Background = CardBrush;
@@ -265,11 +284,25 @@ internal sealed partial class WorkbenchWindow : Window
     }
 
     private Point ViewportCenter => new(Math.Max(1, _viewport.ActualWidth) / 2, Math.Max(1, _viewport.ActualHeight) / 2);
-    private void SetHint() => _status.Text = Strings.Get("WorkbenchHint");
+    // Instructions live in the top-left help popup. Runtime notices alone appear
+    // temporarily at the bottom; no persistent text overlays the drawing surface.
+    private void SetHint()
+    {
+        _statusTimer.Stop();
+        _status.Text = "";
+        _status.Visibility = Visibility.Collapsed;
+    }
+    private void ShowStatus(string message)
+    {
+        _statusTimer.Stop();
+        _status.Text = message;
+        _status.Visibility = Visibility.Visible;
+        _statusTimer.Start();
+    }
     private void Report(Exception error)
     {
         Trace.TraceError("Workbench: {0}", error);
-        _status.Text = Strings.Format("WorkbenchError", error.GetBaseException().Message);
+        ShowStatus(Strings.Format("WorkbenchError", error.GetBaseException().Message));
     }
     private void UpdateZoomLabel() => _zoom.Text = $"{_scale.ScaleX:P0}";
     private void StopCameraAnimation()
@@ -546,7 +579,7 @@ internal sealed partial class WorkbenchWindow : Window
             _pan.X += (oldOrigin.X - scene.Origin.X) * _scale.ScaleX;
             _pan.Y += (oldOrigin.Y - scene.Origin.Y) * _scale.ScaleY;
             if (firstLayout || arrange && scope == null) FitActive();
-            if (result.LockedOverlaps.Count > 0) _status.Text = Strings.Get("WorkbenchPinConflict");
+            if (result.LockedOverlaps.Count > 0) ShowStatus(Strings.Get("WorkbenchPinConflict"));
             else SetHint();
             FocusRequestedPaper(); ApplySearch();
             // Cache the applied geometry, otherwise every ordinary content edit would relayout.
@@ -635,12 +668,12 @@ internal sealed partial class WorkbenchWindow : Window
         var matches = _scenes.Values.OrderBy(s => s.Number)
             .SelectMany(scene => scene.Cards.Values.Where(c => SearchMatches(c.Snapshot, query))
                 .Select(card => (Scene: scene, Card: card))).ToArray();
-        if (matches.Length == 0) { _status.Text = Strings.Get("WorkbenchSearchNoResults"); return; }
+        if (matches.Length == 0) { ShowStatus(Strings.Get("WorkbenchSearchNoResults")); return; }
         ClearPaperFocus(restoreCamera: false);
         var found = matches[_searchCursor++ % matches.Length];
         RevealCard(found.Scene, found.Card.Snapshot.Id);
         Fit(found.Card.Bounds.Inflate(64).Offset(found.Scene.Origin));
-        _status.Text = Strings.Format("WorkbenchSearchResult", (_searchCursor - 1) % matches.Length + 1, matches.Length);
+        ShowStatus(Strings.Format("WorkbenchSearchResult", (_searchCursor - 1) % matches.Length + 1, matches.Length));
     }
 
     private Card CreateActiveCard(WorkbenchPaperSnapshot paper)
@@ -1116,6 +1149,8 @@ internal sealed partial class WorkbenchWindow : Window
         _controller.WorkbenchContentTransferReplayed -= OnContentTransferReplayed;
         _controller.WorkbenchContentTransferBlocked -= OnTransferHistoryBlocked;
         _controller.WorkbenchContentTransfersRetired -= OnContentTransfersRetired;
+        _helpPopup.IsOpen = false;
+        _statusTimer.Stop();
         _refreshTimer.Stop(); CancelLayout(); _overviewCancellation?.Cancel(); _overviewCancellation?.Dispose();
         foreach (var scene in _scenes.Values)
             foreach (var id in scene.Cards.Keys.ToArray()) RemoveCard(scene, id, !_shutdown);
