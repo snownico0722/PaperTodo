@@ -57,7 +57,7 @@ internal static partial class Program
             Require(seeded.TryRefreshBackupFromPrimary(), "fixed backup fixture failed");
             var alternative = seeded.Load();
             alternative.Papers[0].Content =
-                "different complete temp " + MarkdownImageReferences.CreateReference("987");
+                "different complete temp\n" + MarkdownImageReferences.CreateReference("987");
             var originalTempBytes = Encoding.UTF8.GetBytes(seeded.SerializeState(alternative));
             File.WriteAllText(seeded.FilePath, "{corrupt committed document");
             File.WriteAllBytes(seeded.FilePath + ".tmp", originalTempBytes);
