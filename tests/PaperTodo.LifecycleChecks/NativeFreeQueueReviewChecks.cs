@@ -459,10 +459,16 @@ internal static class NativeFreeQueueReviewChecks
             var masters = Masters(c);
             EdgeCapsuleQueueCompositionProxy? yielding = null;
             if (animated)
-                Require(proxies.TryGetValue(A, out yielding) &&
-                        yielding.Members.Any(m => ReferenceEquals(m.Window, masters[A])) &&
-                        targetPapers.All(p => yielding.Members.Any(m => ReferenceEquals(m.Window, windows[p.Id]))) &&
-                        !proxies.ContainsKey(B), "independent placement animates A's master and members, not carried B");
+            {
+                var context = $"{route}, commit={commit}, proxies=" + string.Join(";", proxies.Select(pair =>
+                    pair.Key + ":" + string.Join(",", pair.Value.Members.Select(m => m.Plan.PaperId))));
+                Require(proxies.TryGetValue(A, out yielding), "independent target owns an animation: " + context);
+                Require(yielding!.Members.Any(m => ReferenceEquals(m.Window, masters[A])),
+                    "independent target master joins its members: " + context);
+                Require(targetPapers.All(p => yielding.Members.Any(m => ReferenceEquals(m.Window, windows[p.Id]))),
+                    "independent target includes every displaced member: " + context);
+                Require(!proxies.ContainsKey(B), "carried group remains direct: " + context);
+            }
             Near(expectedA, masters[A].AnchorTop, route + " previews A master displacement before release");
             foreach (var paper in targetPapers)
                 Near(memberTops[paper.Id] + expectedA - aTop, MemberTop(c, windows[paper.Id], paper),
