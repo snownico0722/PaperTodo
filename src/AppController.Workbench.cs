@@ -156,12 +156,21 @@ public sealed partial class AppController
         foreach (var item in document.Items.Values)
         {
             var placement = document.Layout.Cards.GetValueOrDefault(item.Id)?.Copy();
+            var iconTile = item.Kind is WorkspaceMaterialKinds.File or WorkspaceMaterialKinds.Link;
+            // Old imports were 320x260 paper cards. The tile is a view migration;
+            // the next ordinary layout save persists its compact dimensions.
+            if (iconTile && placement != null)
+            {
+                placement.Width = 120;
+                placement.Height = 128;
+                placement.Collapsed = false;
+            }
             var text = item.Content ?? "";
             yield return new WorkbenchPaperSnapshot(item.Id, item.Title,
                 text.Length > 800 ? text[..800] : text,
                 text + "\n" + item.Source, "material:" + item.Kind, "", "",
-                placement?.Width ?? (item.Kind == WorkspaceMaterialKinds.Node ? 220 : 320),
-                placement?.Height ?? (item.Kind == WorkspaceMaterialKinds.Node ? 120 : 260),
+                placement?.Width ?? (iconTile ? 120 : item.Kind == WorkspaceMaterialKinds.Node ? 220 : 320),
+                placement?.Height ?? (iconTile ? 128 : item.Kind == WorkspaceMaterialKinds.Node ? 120 : 260),
                 placement, false, item.Collapsed);
         }
     }

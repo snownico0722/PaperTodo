@@ -267,13 +267,16 @@ internal sealed partial class WorkbenchWindow
 
     private Card CreateMaterialCard(WorkbenchPaperSnapshot paper)
     {
-        var card = CreateCardShell(paper, compact: true);
         var item = _controller.FindWorkbenchMaterial(paper.Id);
+        if (item?.Kind is WorkspaceMaterialKinds.File or WorkspaceMaterialKinds.Link)
+            return CreateExternalIconCard(paper, item);
+        var card = CreateCardShell(paper, compact: true);
         var body = new DockPanel { Margin = item?.Kind == WorkspaceMaterialKinds.Image
             ? new Thickness(5) : new Thickness(8, 3, 8, 6) };
         if (item?.Kind == WorkspaceMaterialKinds.Image)
         {
             card.MaterialImage = new Image { Stretch = Stretch.Uniform, Source = _controller.ReadWorkbenchMaterialImage(paper.Id) };
+            WireMaterialImageDrag(card);
             body.Children.Add(card.MaterialImage);
         }
         else
@@ -327,11 +330,131 @@ internal sealed partial class WorkbenchWindow
             if (e.Key == Key.Escape) card.Title.Text = _controller.FindWorkbenchMaterial(paper.Id)?.Title ?? "";
             CommitCardTitle(card); Keyboard.ClearFocus(); e.Handled = true;
         };
-        card.Pin.IsHitTestVisible = false;
-        card.Pin.Focusable = false;
+        card.Pin.Click += (_, _) => ToggleWorkbenchCardPinned(paper.Id);
+        card.Fold.Click += (_, _) => ToggleWorkbenchCardCollapsed(paper.Id);
         card.Frame.ContextMenu = CreateMaterialContextMenu(paper.Id);
         WireCardSelection(card); WireConnectionDrag(card); WireDrag(card, card.Move, false); WireDrag(card, card.Resize, true);
         return card;
+    }
+
+    private static ControlTemplate IconTileDragTemplate()
+    {
+        var visual = new FrameworkElementFactory(typeof(Border));
+        visual.SetValue(Border.BackgroundProperty, Brushes.Transparent);
+        visual.SetValue(Border.CornerRadiusProperty, new CornerRadius(10));
+        return new ControlTemplate(typeof(Thumb)) { VisualTree = visual };
+    }
+
+    private Card CreateExternalIconCard(WorkbenchPaperSnapshot paper, WorkspaceMaterialItem item)
+    {
+        var card = new Card(paper);
+        card.Frame.Background = Brushes.Transparent;
+        card.Frame.BorderBrush = Brushes.Transparent;
+        card.Frame.BorderThickness = new Thickness(0);
+        card.Frame.CornerRadius = new CornerRadius(11);
+        card.Frame.ClipToBounds = true;
+        var surface = new Grid();
+        var content = new StackPanel
+        {
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(6, 6, 6, 8)
+        };
+        card.MaterialImage = new Image
+        {
+            Width = 48, Height = 48, Stretch = Stretch.Uniform,
+            HorizontalAlignment = HorizontalAlignment.Center
+        };
+        card.FileTitle = new TextBlock
+        {
+            Text = item.Title, Foreground = Ink, FontSize = AppTypography.Scale(12),
+            TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap,
+            TextTrimming = TextTrimming.CharacterEllipsis, MaxHeight = 40,
+            MaxWidth = 104, Margin = new Thickness(0, 7, 0, 0)
+        };
+        content.Children.Add(card.MaterialImage);
+        content.Children.Add(card.FileTitle);
+        surface.Children.Add(content);
+
+        card.Move.Template = IconTileDragTemplate();
+        card.Move.Background = Brushes.Transparent;
+        card.Move.Cursor = item.Kind == WorkspaceMaterialKinds.File && paper.Placement?.Pinned == true
+            ? Cursors.Arrow : Cursors.SizeAll;
+        surface.Children.Add(card.Move);
+        card.Pin.Content = LockIcon(paper.Placement?.Pinned == true);
+        card.Pin.ToolTip = Strings.Get(paper.Placement?.Pinned == true ? "WorkbenchUnlockCard" : "WorkbenchLockCard");
+        card.Pin.Background = Brushes.Transparent;
+        card.Pin.BorderThickness = new Thickness(0);
+        card.Pin.Padding = new Thickness(2);
+        card.Pin.Template = RoundedButtonTemplate();
+        card.Pin.HorizontalAlignment = HorizontalAlignment.Right;
+        card.Pin.VerticalAlignment = VerticalAlignment.Top;
+        Panel.SetZIndex(card.Pin, 3);
+        surface.Children.Add(card.Pin);
+        ConfigureConnectionThumb(card.Connect);
+        card.Connect.HorizontalAlignment = HorizontalAlignment.Right;
+        card.Connect.VerticalAlignment = VerticalAlignment.Bottom;
+        Panel.SetZIndex(card.Connect, 3);
+        surface.Children.Add(card.Connect);
+        card.Fold.Visibility = Visibility.Collapsed;
+        card.Resize.Visibility = Visibility.Collapsed;
+        card.Frame.Child = surface;
+        card.Frame.Tag = card;
+        Panel.SetZIndex(card.Frame, 2);
+        Position(card, paper.Placement?.Bounds ?? new(32, 32, paper.Width, paper.Height));
+        card.Move.PreviewMouseLeftButtonDown += (_, e) =>
+        {
+            if (e.ChangedButton != MouseButton.Left || e.ClickCount != 2) return;
+            e.Handled = true;
+            OpenMaterial(paper.Id);
+        };
+        card.Pin.Click += (_, _) => ToggleWorkbenchCardPinned(paper.Id);
+        card.Frame.ContextMenu = CreateMaterialContextMenu(paper.Id);
+        WireCardSelection(card); WireConnectionDrag(card); WireDrag(card, card.Move, false);
+        card.MaterialVersion = item.Source;
+        _ = LoadExternalIconAsync(card, item.Source, item.Kind == WorkspaceMaterialKinds.Link);
+        return card;
+    }
+
+    private async Task LoadExternalIconAsync(Card card, string source, bool link)
+    {
+        try
+        {
+            // Shell icon extraction may touch slow/remote disks. Never block the WPF UI thread.
+            var icon = await Task.Run(() => WorkbenchShellIcon.Load(source, link));
+            if (_closed || IsSuspended || card.MaterialImage == null ||
+                _controller.FindWorkbenchMaterial(card.Snapshot.Id)?.Source != source) return;
+            card.MaterialImage.Source = icon;
+        }
+        catch (Exception ex) { if (!_closed) Report(ex); }
+    }
+
+    private void WireMaterialImageDrag(Card card)
+    {
+        if (card.MaterialImage is not { } image) return;
+        Point? dragStart = null;
+        image.PreviewMouseLeftButtonDown += (_, e) =>
+        {
+            if (e.ClickCount == 1 && e.ChangedButton == MouseButton.Left)
+                dragStart = e.GetPosition(image);
+        };
+        image.PreviewMouseLeftButtonUp += (_, _) => dragStart = null;
+        image.PreviewMouseMove += (_, e) =>
+        {
+            if (dragStart is not { } start || e.LeftButton != MouseButtonState.Pressed ||
+                (e.GetPosition(image) - start).LengthSquared <
+                SystemParameters.MinimumHorizontalDragDistance * SystemParameters.MinimumHorizontalDragDistance)
+                return;
+            dragStart = null;
+            var item = _controller.FindWorkbenchMaterial(card.Snapshot.Id);
+            var id = item == null ? null : MarkdownImageReferences.CollectImageIds(item.Content).FirstOrDefault();
+            var bitmap = id == null ? null : _controller.ImageStore.GetBitmapSourceForClipboard(id);
+            if (bitmap == null) return;
+            var data = new DataObject();
+            data.SetData(DataFormats.Bitmap, bitmap);
+            DragDrop.DoDragDrop(image, data, DragDropEffects.Copy);
+            e.Handled = true;
+        };
     }
 
     private ContextMenu CreateMaterialContextMenu(string id)
@@ -351,10 +474,6 @@ internal sealed partial class WorkbenchWindow
                 item.Click += (_, _) => action();
                 menu.Items.Add(item);
             }
-            if (material.Kind is WorkspaceMaterialKinds.Link or WorkspaceMaterialKinds.File)
-                Add("WorkbenchOpenMaterial", () => OpenMaterial(id));
-            if (material.Kind is WorkspaceMaterialKinds.Link or WorkspaceMaterialKinds.File)
-                menu.Items.Add(new Separator());
             Add("WorkbenchDeleteMaterial", () =>
             {
                 if (MessageBox.Show(this, Strings.Get("WorkbenchDeleteMaterialConfirm"), Title,
@@ -374,6 +493,15 @@ internal sealed partial class WorkbenchWindow
             _controller.FindWorkbenchMaterial(card.Snapshot.Id) is not { } item) return;
         if (card.MaterialEditor is { IsKeyboardFocusWithin: false } editor && editor.Text != item.Content)
             editor.Text = item.Content;
+        if (item.Kind is WorkspaceMaterialKinds.File or WorkspaceMaterialKinds.Link)
+        {
+            if (card.MaterialVersion != item.Source)
+            {
+                card.MaterialVersion = item.Source;
+                _ = LoadExternalIconAsync(card, item.Source, item.Kind == WorkspaceMaterialKinds.Link);
+            }
+            return;
+        }
         if (card.MaterialImage != null && card.MaterialVersion != item.Content)
             card.MaterialImage.Source = _controller.ReadWorkbenchMaterialImage(card.Snapshot.Id);
         card.MaterialVersion = item.Content;

@@ -265,6 +265,7 @@ internal sealed partial class WorkbenchWindow : Window
                 card.Frame.Background = iconTile ? Brushes.Transparent : CardBrush;
                 card.Frame.BorderBrush = _selectedCards.Contains(card.Snapshot.Id) ? Accent
                     : iconTile ? Brushes.Transparent : Outline;
+                card.Frame.BorderThickness = new Thickness(_selectedCards.Contains(card.Snapshot.Id) ? 2 : iconTile ? 0 : 1);
                 card.Header.Background = WorkspaceMaterials.IsMaterialId(card.Snapshot.Id) ? Brushes.Transparent : Theme.TitleBarBrush(opaque: true);
                 card.Title.Background = Brushes.Transparent;
                 card.Title.Foreground = Ink;
@@ -276,6 +277,7 @@ internal sealed partial class WorkbenchWindow : Window
                 card.Pin.Foreground = Ink;
                 card.Pin.Content = LockIcon(card.Snapshot.Placement?.Pinned == true);
                 card.Fold.Content = FoldIcon(card.Snapshot.Placement?.Collapsed == true);
+                card.Fold.Foreground = Ink;
                 card.Connect.Foreground = Ink;
                 if (card.FileTitle != null) card.FileTitle.Foreground = Ink;
                 card.Eye.Child = EyeIcon(card.Snapshot.DesktopVisible);
@@ -945,12 +947,14 @@ internal sealed partial class WorkbenchWindow : Window
             card.Pin.Background = Brushes.Transparent;
             card.Pin.Foreground = Ink;
             card.Pin.BorderThickness = new Thickness(0);
+            card.Pin.Template = RoundedButtonTemplate();
             compactActions.Children.Add(card.Pin);
             card.Fold.Content = FoldIcon(paper.Placement?.Collapsed == true);
             card.Fold.ToolTip = Strings.Get(paper.Placement?.Collapsed == true ? "WorkbenchExpandCard" : "WorkbenchCollapseCard");
             card.Fold.Padding = new Thickness(3, 2, 3, 2);
             card.Fold.Background = Brushes.Transparent;
             card.Fold.BorderThickness = new Thickness(0);
+            card.Fold.Template = RoundedButtonTemplate();
             compactActions.Children.Add(card.Fold);
             Grid.SetColumn(compactActions, 1); card.Header.Children.Add(compactActions);
             surface.Children.Add(card.Header);
@@ -1002,6 +1006,7 @@ internal sealed partial class WorkbenchWindow : Window
             button.Background = Brushes.Transparent;
             button.Foreground = Ink;
             button.BorderThickness = new Thickness(0);
+            button.Template = RoundedButtonTemplate();
             actions.Children.Add(button);
         }
         card.Pin.Content = LockIcon(paper.Placement?.Pinned == true);

@@ -40,8 +40,12 @@ public sealed partial class AppController
         if (point is { } p)
             document.Layout.Cards[item.Id] = new WorkbenchCardState
             {
-                X = p.X, Y = p.Y, Width = kind == WorkspaceMaterialKinds.Node ? 220 : 320,
-                Height = kind == WorkspaceMaterialKinds.Node ? 120 : 260, Preferred = true
+                X = p.X, Y = p.Y,
+                Width = kind is WorkspaceMaterialKinds.File or WorkspaceMaterialKinds.Link ? 120
+                    : kind == WorkspaceMaterialKinds.Node ? 220 : 320,
+                Height = kind is WorkspaceMaterialKinds.File or WorkspaceMaterialKinds.Link ? 128
+                    : kind == WorkspaceMaterialKinds.Node ? 120 : 260,
+                Preferred = true
             };
         MarkDirty();
         return item.Id;
