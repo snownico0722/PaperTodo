@@ -9,6 +9,8 @@ namespace PaperTodo;
 internal sealed class McpPipeClient
 {
     private readonly string _pipeName;
+    private readonly SemaphoreSlim _bindingGate = new(1, 1);
+    private string? _workspaceToken;
     public McpPipeClient() : this(McpApiHost.PipeName) { }
     internal McpPipeClient(string pipeName) => _pipeName = pipeName;
 
@@ -20,6 +22,33 @@ internal sealed class McpPipeClient
     public async Task<JsonElement> InvokeAsync(
         string method,
         object parameters,
+        CancellationToken cancellationToken)
+    {
+        if (_workspaceToken == null)
+        {
+            await _bindingGate.WaitAsync(cancellationToken);
+            try
+            {
+                if (_workspaceToken == null)
+                {
+                    var binding = await InvokeCoreAsync("get_workspace_binding", new { }, null,
+                        cancellationToken);
+                    if (!binding.TryGetProperty("token", out var token) ||
+                        token.ValueKind != JsonValueKind.String ||
+                        string.IsNullOrWhiteSpace(token.GetString()))
+                        throw new McpException("PaperTodo did not supply a workspace binding.");
+                    _workspaceToken = token.GetString();
+                }
+            }
+            finally { _bindingGate.Release(); }
+        }
+        return await InvokeCoreAsync(method, parameters, _workspaceToken, cancellationToken);
+    }
+
+    private async Task<JsonElement> InvokeCoreAsync(
+        string method,
+        object parameters,
+        string? workspaceToken,
         CancellationToken cancellationToken)
     {
         await using var pipe = new NamedPipeClientStream(
@@ -57,7 +86,8 @@ internal sealed class McpPipeClient
         {
             id = Guid.NewGuid().ToString("N"),
             method,
-            @params = parameters
+            @params = parameters,
+            workspace_token = workspaceToken
         };
         await writer.WriteLineAsync(
             JsonSerializer.Serialize(request, JsonOptions));
@@ -100,6 +130,15 @@ internal sealed class McpPipeClient
                 "PaperTodo rejected the MCP request.";
             throw new McpException($"PaperTodo error ({code}): {message}");
         }
+
+        // An explicit workspace-status query is the caller's acknowledgement of the
+        // current slot. Refresh the bridge lease with that SAME response, never retry
+        // a stale mutation with a newly acquired token.
+        if (method == "get_data_reload_status" &&
+            root.TryGetProperty("workspace_token", out var binding) &&
+            binding.ValueKind == JsonValueKind.String &&
+            !string.IsNullOrWhiteSpace(binding.GetString()))
+            _workspaceToken = binding.GetString();
 
         return root.TryGetProperty("result", out var result)
             ? result.Clone()

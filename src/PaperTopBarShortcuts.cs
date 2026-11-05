@@ -12,11 +12,12 @@ internal static class PaperTopBarShortcuts
     internal const string ExternalEditor = "external-editor";
     internal const string NewTodo = "new-todo";
     internal const string NewNote = "new-note";
+    internal const string Workspace = "workspace";
 
     // Kept only for deserializing layouts saved by the former per-paper model.
     internal const string PluginActions = "plugin-actions";
 
-    private static readonly string[] Defaults = [Association, NewNote, NewTodo, ExternalEditor];
+    private static readonly string[] Defaults = [Association, Workspace, NewNote, NewTodo, ExternalEditor];
 
     internal static IReadOnlyList<string> All => Defaults;
 

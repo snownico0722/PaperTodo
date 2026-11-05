@@ -55,6 +55,7 @@ internal static class MasterCapsuleAnimationChecks
             }
             var missing = MasterCapsuleSkin.LoadVisualsFromDirectory(Case("missing"));
             Require(missing.Normal == null && missing.DragOrNormal == null, "Absent artwork must preserve the default pill");
+            VerifyDisplayRaster(Case("display-size"));
 
             var priority = Case("priority");
             WritePng(priority, "papertodomain.png", 8, 8, 250);
@@ -134,6 +135,49 @@ internal static class MasterCapsuleAnimationChecks
             Console.WriteLine("PASS artwork loading, GIF disposal, fallback, numeric ordering and common crop");
         }
         finally { Directory.Delete(root, recursive: true); }
+    }
+
+    private static void VerifyDisplayRaster(string directory)
+    {
+        WritePng(directory, "papertodomain1.png", 1000, 1000, 30);
+        WritePng(directory, "papertodomain2.png", 1000, 1000, 170);
+        var clip = MasterCapsuleSkin.LoadClip(directory, "papertodomain")!;
+        var logicalWidth = MasterCapsuleSkin.DisplayWidthDip(clip, 50);
+        var original = Pixels(clip.FirstFrame);
+        var normal = new object();
+        var highDpi = new object();
+        clip.RequestDisplaySize(normal, new Size(200, 200));
+        clip.ApplyDisplaySize();
+        Require(clip.CanvasWidth == 1000 && clip.CanvasHeight == 1000 && clip.FrameCount == 2 &&
+                clip.FirstFrame is { PixelWidth: 200, PixelHeight: 200, IsFrozen: true } &&
+                clip.FrameAt(1) is { PixelWidth: 200, PixelHeight: 200, IsFrozen: true },
+            "200-pixel display must retain 200-pixel frames without changing source geometry or frame count");
+        Require(Red(clip.FirstFrame) == 30 && Red(clip.FrameAt(1)) == 170,
+            "Reusing the decoder scratch buffer corrupted previously created frames");
+        var reduced = clip.FirstFrame;
+        clip.RequestDisplaySize(normal, new Size(200, 200));
+        clip.ApplyDisplaySize();
+        Require(ReferenceEquals(reduced, clip.FirstFrame), "Unchanged display size regenerated the cache");
+        clip.RequestDisplaySize(highDpi, new Size(400, 400));
+        clip.ApplyDisplaySize();
+        Require(clip.FirstFrame.PixelWidth == 400 && MasterCapsuleSkin.DisplayWidthDip(clip, 50) == logicalWidth,
+            "The largest visible DPI demand must win without changing capsule geometry");
+        clip.RequestDisplaySize(highDpi, null);
+        clip.ApplyDisplaySize();
+        Require(clip.FirstFrame.PixelWidth == 200, "Closing the high-DPI view did not release its larger raster");
+        clip.RequestDisplaySize(normal, new Size(2000, 2000));
+        clip.ApplyDisplaySize();
+        Require(clip.FirstFrame.PixelWidth == 1000 && Pixels(clip.FirstFrame).SequenceEqual(original),
+            "Enlarging must reload original detail and must never manufacture larger cached pixels");
+        clip.RequestDisplaySize(normal, new Size(200, 200));
+        clip.ApplyDisplaySize();
+        reduced = clip.FirstFrame;
+        File.Delete(Path.Combine(directory, "papertodomain1.png"));
+        clip.RequestDisplaySize(normal, new Size(800, 800));
+        clip.ApplyDisplaySize();
+        Require(ReferenceEquals(reduced, clip.FirstFrame), "A missing source discarded the playable raster");
+        clip.RequestDisplaySize(normal, null);
+        Console.WriteLine("PASS display raster: 1000→200→400→200→1000, shared DPI demand and source removal");
     }
 
     internal static async Task Verify(AppController controller, bool dragOnly)

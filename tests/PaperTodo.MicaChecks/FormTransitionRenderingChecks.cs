@@ -12,13 +12,12 @@ internal static class FormTransitionRenderingChecks
     internal static void Run(AppController controller)
     {
         var state = controller.State;
-        var saved = (state.PaperSkin, state.Theme, state.MatchAuxiliaryMaterialStrength, state.HideSurfaceOutline);
+        var saved = (state.PaperSkin, state.Theme, state.HideSurfaceOutline);
         try
         {
             state.PaperSkin = PaperSkins.Aero;
             state.Theme = "light";
-            state.MatchAuxiliaryMaterialStrength = false;
-            Theme.Invalidate();
+                        Theme.Invalidate();
             CheckContentViewport();
             CheckShadow(state);
             CheckReliefTiles();
@@ -30,7 +29,7 @@ internal static class FormTransitionRenderingChecks
         }
         finally
         {
-            (state.PaperSkin, state.Theme, state.MatchAuxiliaryMaterialStrength, state.HideSurfaceOutline) = saved;
+            (state.PaperSkin, state.Theme, state.HideSurfaceOutline) = saved;
             Theme.Invalidate();
         }
         Console.WriteLine("FORM RENDERING: scaled far-edge pixels, gutter-bounded shadow, " +

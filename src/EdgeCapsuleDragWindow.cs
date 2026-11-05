@@ -176,6 +176,10 @@ internal sealed partial class EdgeCapsuleDragWindow : Window
         }
     }
 
+    internal static IntPtr VisibleLeaseHandle => s_pooledHostLeased &&
+        s_pooledHost is { IsVisible: true } host
+            ? new System.Windows.Interop.WindowInteropHelper(host).Handle : IntPtr.Zero;
+
     public static EdgeCapsuleDragWindow Rent(EdgeCapsuleDragWindowOptions options)
     {
         VerifyPoolThreadAccess();
@@ -221,21 +225,6 @@ internal sealed partial class EdgeCapsuleDragWindow : Window
         }
     }
 
-    internal void BeginDragBackground()
-    {
-        if (_paperBackground is SkinBorder skin) skin.BeginDragBackground();
-    }
-
-    internal void UseDragBackground(DesktopBackgroundCapture.Snapshot snapshot)
-    {
-        if (_paperBackground is SkinBorder skin) skin.UseDragBackground(snapshot);
-    }
-
-    internal void EndDragBackground()
-    {
-        if (_paperBackground is SkinBorder skin) skin.EndDragBackground();
-    }
-
     public void ReturnToPool()
     {
         VerifyAccess();
@@ -261,7 +250,6 @@ internal sealed partial class EdgeCapsuleDragWindow : Window
         {
             ParkHidden();
             SetMasterSkinPlayback(null);
-            EndDragBackground();
             ResetTransientPresentation();
             s_pooledHostLeased = false;
 #if DEBUG

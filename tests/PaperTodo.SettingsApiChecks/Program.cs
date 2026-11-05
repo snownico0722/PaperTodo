@@ -40,6 +40,9 @@ internal static partial class Program
     {
         var controller = (AppController)RuntimeHelpers.GetUninitializedObject(typeof(AppController));
         Field(controller, "<State>k__BackingField", new AppState());
+        var paths = new WorkspacePaths(Path.Combine(Path.GetTempPath(), "PaperTodo.SettingsApiFixture"), 1);
+        Field(controller, "_workspace", new WorkspaceSession(paths,
+            new StateStore(paths.Directory, DurableAtomicFileWriter.Shared), controller.State, false, null));
         Field(controller, "_windows", new Dictionary<string, PaperWindow>());
         Field(controller, "_masterCapsules", new Dictionary<string, MasterCapsuleWindow>());
         return controller;
@@ -67,6 +70,7 @@ internal static partial class Program
             ServiceBehavior();
             StartupApprovalBehavior();
             CatalogBehavior();
+            NativeQueueSettingsBehavior();
             TopBarShortcutBehavior();
             TodoMoveBehavior();
             AdapterBehavior();
@@ -74,6 +78,7 @@ internal static partial class Program
             SettingsEditorBehavior();
             PostCommitFailureDoesNotReplay();
             Pump(PipeAndUnlinkBehavior());
+            Pump(ImageImportCommandBehavior());
             WebBridges();
             IsolatedPresentationBehavior();
             Console.WriteLine($"Settings API: {_checks} behavior checks passed.");
@@ -86,22 +91,22 @@ internal static partial class Program
     {
         var state = new AppState();
         Check(PaperTopBarShortcuts.Pinned(state).SequenceEqual(
-                  [PaperTopBarShortcuts.Association]) &&
+                  [PaperTopBarShortcuts.Association, PaperTopBarShortcuts.Workspace]) &&
               PaperTopBarShortcuts.Menu(state).SequenceEqual(
                   [PaperTopBarShortcuts.NewNote, PaperTopBarShortcuts.NewTodo,
                    PaperTopBarShortcuts.ExternalEditor]) &&
               PaperTopBarShortcuts.NormalizeOrder(null).SequenceEqual(
                   state.TopBarShortcutOrder),
-            "New installations pin only association and order Note, Todo, external editor in the menu.");
+            "New installations pin association and workspace switching.");
         Check(PaperTopBarShortcuts.MoveTo(state, PaperTopBarShortcuts.NewNote, true, 1) &&
               PaperTopBarShortcuts.Pinned(state).SequenceEqual(
-                  [PaperTopBarShortcuts.Association, PaperTopBarShortcuts.NewNote]) &&
+                  [PaperTopBarShortcuts.Association, PaperTopBarShortcuts.NewNote, PaperTopBarShortcuts.Workspace]) &&
               PaperTopBarShortcuts.Menu(state).SequenceEqual(
                   [PaperTopBarShortcuts.NewTodo, PaperTopBarShortcuts.ExternalEditor]),
             "Dragging a menu command above the divider pins it at the insertion slot.");
         Check(PaperTopBarShortcuts.MoveTo(state, PaperTopBarShortcuts.Association, false, 0) &&
               PaperTopBarShortcuts.Pinned(state).SequenceEqual(
-                  [PaperTopBarShortcuts.NewNote]) &&
+                  [PaperTopBarShortcuts.NewNote, PaperTopBarShortcuts.Workspace]) &&
               PaperTopBarShortcuts.Menu(state).SequenceEqual(
                   [PaperTopBarShortcuts.Association, PaperTopBarShortcuts.NewTodo,
                    PaperTopBarShortcuts.ExternalEditor]),
@@ -110,7 +115,7 @@ internal static partial class Program
             "Dropping in the same slot is a true no-op.");
         Check(PaperTopBarShortcuts.MoveTo(state, PaperTopBarShortcuts.NewTodo, true, 0) &&
               PaperTopBarShortcuts.Pinned(state).SequenceEqual(
-                  [PaperTopBarShortcuts.NewTodo, PaperTopBarShortcuts.NewNote]),
+                  [PaperTopBarShortcuts.NewTodo, PaperTopBarShortcuts.NewNote, PaperTopBarShortcuts.Workspace]),
             "Reordering within one group preserves divider membership.");
         Check(PaperTopBarShortcuts.Contains(state, PaperTypes.Note,
                   PaperTopBarShortcuts.NewNote) &&
@@ -124,7 +129,7 @@ internal static partial class Program
                    PaperTopBarShortcuts.PluginActions, "unknown"])
                   .SequenceEqual(
                   [PaperTopBarShortcuts.ExternalEditor, PaperTopBarShortcuts.Association,
-                   PaperTopBarShortcuts.NewNote, PaperTopBarShortcuts.NewTodo]),
+                   PaperTopBarShortcuts.Workspace, PaperTopBarShortcuts.NewNote, PaperTopBarShortcuts.NewTodo]),
             "Duplicates and obsolete plugin pins never enter the new global configuration.");
 
         var controller = Controller();
@@ -186,7 +191,8 @@ internal static partial class Program
                 JsonSerializer.Serialize(loaded, options));
             var reloaded = store.Load();
             Check(reloaded.TopBarPinnedCount == 3 &&
-                  PaperTopBarShortcuts.Menu(reloaded).SequenceEqual([PaperTopBarShortcuts.NewNote]) &&
+                  PaperTopBarShortcuts.Menu(reloaded).SequenceEqual(
+                      [PaperTopBarShortcuts.NewNote, PaperTopBarShortcuts.Workspace]) &&
                   reloaded.TodoTopBarShortcuts == null,
                 "A deliberate menu position survives restart without migrating again.");
 
@@ -322,11 +328,15 @@ internal static partial class Program
         Check(service.Get("general.language").RequiresRestart, "Language is restart-based; API must not force exit.");
         Check(service.Get("appearance.paper_skin").Options.Count == PaperSkins.All.Length,
             "Public settings exposes every paper skin.");
-        Check(service.Get("appearance.match_auxiliary_material").Type == "boolean" &&
-            service.Get("appearance.material_transparency").Type == "string" &&
+        Check(service.Get("appearance.material_transparency").Type == "string" &&
             service.Get("appearance.material_transparency").Options.Count == 5 &&
             service.Get("appearance.native_material_always_active").Type == "boolean",
-            "All visible material toggles share the public settings catalog.");
+            "Remaining material settings use the shared public catalog.");
+        Check(!service.List("appearance").Any(s => s.Id == "appearance.match_auxiliary_material"),
+            "the retired full auxiliary material setting is absent from the public catalog");
+        Throws<PaperSettingsException>(() => service.Get("appearance.match_auxiliary_material"), "setting_not_found");
+        Throws<PaperSettingsException>(() => service.Set("appearance.match_auxiliary_material", Json(true)),
+            "setting_not_found");
         Throws<PaperSettingsException>(() => service.Set("appearance.font_scale", Json(1.3)), "invalid_setting_value");
         Throws<PaperSettingsException>(() => service.Set("appearance.font_scale", Json(1.01)), "invalid_setting_value");
         Throws<PaperSettingsException>(() => service.Set("appearance.theme", Json("unknown")), "invalid_setting_value");
@@ -355,11 +365,9 @@ internal static partial class Program
         service.Set("appearance.paper_skin", Json(PaperSkins.Mica));
         Check(c.State.PaperSkin == PaperSkins.Mica && c.State.MicaBackdropType == MicaBackdropTypes.Mica,
             "Successful system skin keeps the compatibility native recipe in the same transaction.");
-        service.Set("appearance.match_auxiliary_material", Json(true));
         service.Set("appearance.material_transparency", Json(MaterialTransparencyLevels.High));
         service.Set("appearance.native_material_always_active", Json(true));
-        Check(c.State.MatchAuxiliaryMaterialStrength &&
-            c.State.MaterialTransparency == MaterialTransparencyLevels.High &&
+        Check(c.State.MaterialTransparency == MaterialTransparencyLevels.High &&
             c.State.MicaAlwaysActive,
             "Material preferences mutate through the shared catalog.");
         Throws<PaperSettingsException>(
@@ -383,14 +391,14 @@ internal static partial class Program
         var paper = new PaperData { Type = PaperTypes.Todo, Title = "abcdef", Items = [new PaperItem { Text = "done", Done = true, Order = 0 }, new PaperItem { Text = "open", Order = 1 }] };
         c.State.Papers.Add(paper);
         Throws<PaperSettingsException>(() => service.Set("title.max_length", Json(2)), "save_failed");
-        Check(paper.Title == "abcdef" && c.State.MaxTitleLength == 6, "Failed title limit changes do not truncate user data.");
+        Check(paper.Title == "abcdef" && c.State.MaxTitleLength == PaperTitles.DefaultMaxTitleLength, "Failed title limit changes do not truncate user data.");
         Throws<PaperSettingsException>(() => service.Set("todo.move_completed_to_bottom", Json(true)), "save_failed");
         Check(paper.Items[0].Done && paper.Items[0].Order == 0 && !c.State.AutoMoveCompletedTodosToBottom, "Failed reorder restores items and order.");
         success = true;
         service.Set("todo.move_completed_to_bottom", Json(true));
         Check(!paper.Items[0].Done && paper.Items[0].Order == 0 && paper.Items[1].Order == 1, "Completed group is reordered just like Settings UI.");
         service.Set("title.max_length", Json(2));
-        Check(paper.Title == "ab", "Successful max length applies existing title semantics.");
+        Check(paper.Title == "abcd", "Successful max length counts two half-width characters as one.");
     }
 
     private static void TodoMoveBehavior()
@@ -593,8 +601,16 @@ internal static partial class Program
         McpApiHost? host = null;
         host = new McpApiHost(Dispatcher.CurrentDispatcher, request =>
         {
+            var method = request.GetProperty("method").GetString();
+            if (method == "get_workspace_binding")
+                return new { token = "fixture-workspace" };
+            if (method == "read_note_image")
+            {
+                requests.Add(request.Clone());
+                return new { paper_id = "paper", image_id = "001", mime = "image/png", image_base64 = "AQID" };
+            }
             requests.Add(request.Clone());
-            if (request.GetProperty("method").GetString() == "set_setting") host!.StopAfterResponse();
+            if (method == "set_setting") host!.StopAfterResponse();
             return new { received = true };
         }, name);
         using (host)
@@ -602,6 +618,8 @@ internal static partial class Program
             host.Start();
             var tools = new McpTools(new McpPipeClient(name));
             await tools.UpdateTodo("paper", "todo", text: "short");
+            Check(requests[^1].GetProperty("workspace_token").GetString() == "fixture-workspace",
+                "The real pipe request did not carry its workspace binding.");
             Check(!requests[^1].GetProperty("params").TryGetProperty("linked_paper_id", out _), "Omitted link is omitted on the real pipe.");
             await tools.UpdateTodo("paper", "todo", order: 0);
             Check(requests[^1].GetProperty("params").GetProperty("order").GetInt32() == 0, "Todo order survives actual tool serialization.");
@@ -612,6 +630,15 @@ internal static partial class Program
             var count = requests.Count;
             Throws<McpException>(() => tools.UpdateTodo("paper", "todo", linked_paper_id: "note", clear_linked_paper: true));
             Check(requests.Count == count, "Conflicting link arguments cause no request or mutation.");
+            Check(typeof(McpTools).GetMethod("InsertNoteImage") is null,
+                  "Base64 image insertion must not be exposed as a model-callable MCP tool.");
+            var imageBlocks = await tools.ReadNoteImage("paper", "001");
+            Check(requests[^1].GetProperty("method").GetString() == "read_note_image" &&
+                  imageBlocks is [ModelContextProtocol.Protocol.TextContentBlock,
+                      ModelContextProtocol.Protocol.ImageContentBlock image] &&
+                  image.MimeType == "image/png" &&
+                  image.DecodedData.ToArray().SequenceEqual(new byte[] { 1, 2, 3 }),
+                "The MCP tool returns actual image content, not Base64 displayed as text.");
             await tools.ListSettings("todo");
             Check(requests[^1].GetProperty("params").GetProperty("category").GetString() == "todo", "MCP list category forwarded.");
             await tools.GetSetting("todo.paper_links");
@@ -659,3 +686,4 @@ internal static partial class Program
         finally { Directory.Delete(root, true); }
     }
 }
+

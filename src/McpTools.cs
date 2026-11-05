@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 
 namespace PaperTodo;
@@ -15,6 +16,23 @@ internal sealed partial class McpTools
         _client = client;
     }
 
+
+    [McpServerTool(Name = "reload_data", ReadOnly = false, Destructive = true, OpenWorld = false)]
+    [Description("Explicitly replace PaperTodo's running state with the validated active workspace data file (query get_data_reload_status.DataFileName first). Requires full writes. Unsaved in-memory edits may be discarded; no file watcher or automatic merge. Check get_data_reload_status for UI reconciliation.")]
+    public Task<JsonElement> ReloadData(CancellationToken cancellationToken = default) =>
+        _client.InvokeAsync("reload_data", new { }, cancellationToken);
+
+    [McpServerTool(Name = "merge_data", ReadOnly = false, Destructive = true, OpenWorld = false)]
+    [Description("Explicit three-way merge of external edits to the active workspace data file. Requires the complete original JSON read before editing as baseline_json; requests without it are rejected. Conflicts follow the current ask/external/internal preference. No file watcher or autosave source tracking is installed. Check get_data_reload_status. Requires full writes.")]
+    public Task<JsonElement> MergeData(
+        [Description("Required complete original active-workspace JSON contents read before editing, as a JSON string. Preserve this snapshot even if PaperTodo saves again.")] string baseline_json,
+        CancellationToken cancellationToken = default) =>
+        _client.InvokeAsync("merge_data", new { baseline_json }, cancellationToken);
+
+    [McpServerTool(Name = "get_data_reload_status", ReadOnly = true, Destructive = false, OpenWorld = false)]
+    [Description("Read WorkspaceNumber, DataFileName, FollowsMainSettings, the last explicit reload outcome and whether UI reconciliation is still in progress. Does not read or modify the data file. After a workspace switch, this query also acknowledges the current workspace so the internal MCP bridge can continue without restarting; old writes are never automatically retried.")]
+    public Task<JsonElement> GetDataReloadStatus(CancellationToken cancellationToken = default) =>
+        _client.InvokeAsync("get_data_reload_status", new { }, cancellationToken);
 
     [McpServerTool(Name = "list_settings", ReadOnly = true, Destructive = false, OpenWorld = false)]
     [Description("List public PaperTodo application settings, stable IDs, current values, types, constraints and this caller's writability. Plugin-private settings and internal state are not included.")]
@@ -73,7 +91,7 @@ internal sealed partial class McpTools
         OpenWorld = false)]
     [Description("Create a new todo paper. Requires PaperTodo blank/additive writes.")]
     public Task<JsonElement> CreateTodoPaper(
-        [Description("Optional paper title. Limited by the current PaperTodo title.max_length setting (default 6, configurable from 2 to 20 displayed characters). For normal short titles, do not query the setting first; if rejected, the error reports the active limit.")] string? title = null,
+        [Description("Optional paper title. Limited by the current PaperTodo title.max_length setting (default 6, configurable from 2 to 20 full-width-equivalent characters; two half-width characters count as one). For normal short titles, do not query the setting first; if rejected, the error reports the active limit.")] string? title = null,
         [Description("Optional ordered todo steps.")] IReadOnlyList<McpTodoInput>? todos = null,
         [Description("Show the new paper immediately.")] bool show = true,
         CancellationToken cancellationToken = default)
@@ -89,7 +107,7 @@ internal sealed partial class McpTools
         OpenWorld = false)]
     [Description("Create a new note with optional Markdown content. Requires PaperTodo blank/additive writes.")]
     public Task<JsonElement> CreateNote(
-        [Description("Optional paper title. Limited by the current PaperTodo title.max_length setting (default 6, configurable from 2 to 20 displayed characters). For normal short titles, do not query the setting first; if rejected, the error reports the active limit.")] string? title = null,
+        [Description("Optional paper title. Limited by the current PaperTodo title.max_length setting (default 6, configurable from 2 to 20 full-width-equivalent characters; two half-width characters count as one). For normal short titles, do not query the setting first; if rejected, the error reports the active limit.")] string? title = null,
         [Description("Initial note content.")] string content = "",
         [Description("Show the new paper immediately.")] bool show = true,
         CancellationToken cancellationToken = default)
@@ -166,6 +184,31 @@ internal sealed partial class McpTools
             "write_note",
             new { paper_id, content, mode },
             cancellationToken);
+
+    [McpServerTool(
+        Name = "read_note_image",
+        ReadOnly = true,
+        Destructive = false,
+        OpenWorld = false)]
+    [Description("Read one image from a built-in Markdown note as actual MCP image content for vision-capable clients. Get the image ID from the note's Markdown i: image reference via get_paper. Images owned by other notes are not accessible.")]
+    public async Task<ContentBlock[]> ReadNoteImage(
+        [Description("Exact note paper ID.")] string paper_id,
+        [Description("Image ID from a Markdown image reference, e.g. i:001. Supply only the ID (001).")] string image_id,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await _client.InvokeAsync(
+            "read_note_image", new { paper_id, image_id }, cancellationToken);
+        return
+        [
+            new TextContentBlock
+            {
+                Text = $"PaperTodo note {paper_id}, image {image_id}."
+            },
+            ImageContentBlock.FromBytes(
+                Convert.FromBase64String(result.GetProperty("image_base64").GetString()!),
+                result.GetProperty("mime").GetString()!)
+        ];
+    }
 
     [McpServerTool(
         Name = "delete_paper",
@@ -253,3 +296,4 @@ internal sealed record McpTodoInput
     [Description("Optional PaperTodo paper ID to link from the new todo, such as a Note containing longer details.")]
     public string? LinkedPaperId { get; init; }
 }
+

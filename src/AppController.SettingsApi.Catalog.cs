@@ -14,6 +14,12 @@ public sealed partial class AppController
             title: Strings.Get("SettingsUiLanguage"),
             options: ["system", "zh-CN", "en-US", "ja-JP", "ko-KR"],
             requiresRestart: true);
+        yield return DefineSetting<string>("general.data_merge_conflicts",
+            () => DataMergeConflictPolicies.Normalize(State.DataMergeConflictPolicy),
+            value => State.DataMergeConflictPolicy = value,
+            title: Strings.Get("SettingsDataMergeConflicts"),
+            options: [DataMergeConflictPolicies.Ask, DataMergeConflictPolicies.External, DataMergeConflictPolicies.Internal],
+            description: Strings.Get("TipDataMergeConflicts"));
         yield return DefineSetting<bool>("general.advanced_settings",
             () => State.AdvancedSettingsMode,
             value => State.AdvancedSettingsMode = value,
@@ -56,17 +62,13 @@ public sealed partial class AppController
             title: Strings.Get("SettingsPaperSkin"),
             options: PaperSkins.All,
             description: "Paper surface style. A native style may require restarting a session that was created with layered windows.");
-        yield return DefineSetting<bool>("appearance.match_auxiliary_material",
-            () => State.MatchAuxiliaryMaterialStrength,
-            value => State.MatchAuxiliaryMaterialStrength = value,
-            SettingEffects.Skin,
-            title: Strings.Get("SettingsMatchAuxiliaryMaterial"));
         yield return DefineSetting<string>("appearance.material_transparency",
             () => MaterialTransparencyLevels.Normalize(State.MaterialTransparency),
             value => State.MaterialTransparency = value,
             SettingEffects.MaterialTransparency,
-            title: SettingsSidebarLocalized("材质透明度", "Material transparency", "素材の透明度", "재질 투명도"),
-            options: MaterialTransparencyLevels.All);
+            title: SettingsSidebarLocalized("展开纸片材质透明度", "Expanded paper material transparency", "展開した紙片の素材透明度", "펼친 메모의 재질 투명도"),
+            options: MaterialTransparencyLevels.All,
+            description: "Controls the native material appearance of expanded papers and Settings windows. Capsules and menus keep an opaque lightweight surface; these levels do not enable background transmission for them.");
         yield return DefineSetting<bool>("appearance.hide_surface_outline",
             () => State.HideSurfaceOutline,
             value => State.HideSurfaceOutline = value,
@@ -272,6 +274,14 @@ public sealed partial class AppController
             value => State.UseCapsuleCollapseAll = value,
             SettingEffects.CapsuleMode,
             title: Strings.Get("SettingsCapsuleCollapseAll"));
+        yield return DefineSetting<bool>("capsule.free_queues",
+            () => State.UseCapsuleFreeQueues,
+            value => State.UseCapsuleFreeQueues = value,
+            SettingEffects.CapsuleMode,
+            title: Strings.Get("SettingsCapsuleFreeQueues"),
+            description: Strings.Get("TipCapsuleFreeQueues"),
+            isNoOp: value => State.UseCapsuleFreeQueues == value &&
+                (!value || State.UseCapsuleMode && State.UseDeepCapsuleMode));
         yield return DefineSetting<bool>("capsule.master_compact",
             () => State.CompactMasterCapsule,
             value => State.CompactMasterCapsule = value,
@@ -330,7 +340,7 @@ public sealed partial class AppController
             minimum: 2,
             maximum: 20,
             step: 1,
-            description: "Existing custom titles are shortened to this Unicode text-element limit.");
+            description: "Full-width character limit; two half-width characters count as one. Lowering it shortens existing custom titles.");
         yield return DefineSetting<int>("capsule.title_measure_limit",
             () => State.DeepCapsuleTitleMeasureCharacterLimit,
             value => State.DeepCapsuleTitleMeasureCharacterLimit = value,

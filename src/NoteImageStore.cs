@@ -98,6 +98,37 @@ public sealed class NoteImageStore : IDisposable
         }
     }
 
+    // Protect unresolved IDs without treating a missing picture as a workspace-load
+    // failure. A missing entire LMDB must not be replaced by a new empty store when
+    // its live or recovery documents still reference the former image IDs.
+    internal void ProtectPersistedImageReferences(
+        AppState state, IReadOnlySet<string>? protectedImageIds, bool hasPersistedDocument)
+    {
+        var referenced = state.Papers
+            .Where(paper => paper.Type == PaperTypes.Note)
+            .SelectMany(paper => MarkdownImageReferences.CollectImageIds(paper.Content))
+            .ToHashSet(StringComparer.Ordinal);
+        if (protectedImageIds != null) referenced.UnionWith(protectedImageIds);
+
+        lock (_gate)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            foreach (var id in referenced)
+            {
+                if (!_images.ContainsKey(id)) _retiredImageIds.Add(id);
+            }
+
+            // No loaded image database + references to historical pictures means that
+            // creating a fresh LMDB could reuse IDs or obscure recovery of the old one.
+            // An unreadable protection scan is likewise not permission to replace a
+            // missing store for an existing document. Only image WRITES are disabled.
+            if (_database == null && !File.Exists(FilePath) &&
+                (referenced.Count > 0 ||
+                 (hasPersistedDocument && protectedImageIds == null)))
+                _writeDisabled = true;
+        }
+    }
+
     public bool TryGetAsset(string imageId, out NoteImageAsset asset)
     {
         lock (_gate)
@@ -354,6 +385,9 @@ public sealed class NoteImageStore : IDisposable
     }
 
     public NoteImageAsset ImportBitmapSource(string noteId, BitmapSource source)
+        => ImportBitmapSource(noteId, source, repairMissingAlpha: true);
+
+    internal NoteImageAsset ImportBitmapSource(string noteId, BitmapSource source, bool repairMissingAlpha)
     {
         if (_writeDisabled)
         {
@@ -365,7 +399,7 @@ public sealed class NoteImageStore : IDisposable
             throw new InvalidOperationException(Strings.Get("ImageImportInvalidNote"));
         }
 
-        var image = PrepareBitmapSource(source);
+        var image = PrepareBitmapSource(source, repairMissingAlpha);
         return AddEncodedImage(
             noteId,
             image.Bytes,
@@ -402,6 +436,20 @@ public sealed class NoteImageStore : IDisposable
             image.OriginalName,
             image.Width,
             image.Height);
+    }
+
+    // MCP supplies encoded image bytes. Reuse the same WIC decoding, compression and
+    // LMDB limits as file/clipboard imports; never persist Base64 as Markdown content.
+    internal NoteImageAsset ImportImageBytes(string noteId, byte[] bytes, string originalName)
+    {
+        ArgumentNullException.ThrowIfNull(bytes);
+        if (_writeDisabled)
+            throw new InvalidOperationException(Strings.Get("ImageStoreUnavailable"));
+        if (string.IsNullOrWhiteSpace(noteId))
+            throw new InvalidOperationException(Strings.Get("ImageImportInvalidNote"));
+
+        var image = PrepareEncodedImage(bytes, Path.GetFileName(originalName));
+        return AddEncodedImages(noteId, [image])[0];
     }
 
     public IReadOnlyList<NoteImageAsset> ImportImageFiles(string noteId, IEnumerable<string> paths)
@@ -446,8 +494,12 @@ public sealed class NoteImageStore : IDisposable
             throw new InvalidDataException(Strings.Format("ImageImportTooLargeCompressionDisabled", MaxImageBytes / 1024 / 1024));
         }
 
-        var originalName = Path.GetFileName(path);
         var bytes = File.ReadAllBytes(path);
+        return PrepareEncodedImage(bytes, Path.GetFileName(path));
+    }
+
+    private PreparedImage PrepareEncodedImage(byte[] bytes, string originalName)
+    {
         if (bytes.Length > MaxInputImageBytes)
         {
             throw new InvalidDataException(Strings.Format("ImageImportSourceTooLarge", MaxInputImageBytes / 1024 / 1024));
@@ -479,13 +531,16 @@ public sealed class NoteImageStore : IDisposable
         return new PreparedImage(encoded.Bytes, encoded.Mime, originalName, width, height);
     }
 
-    private PreparedImage PrepareBitmapSource(BitmapSource source)
+    private PreparedImage PrepareBitmapSource(BitmapSource source, bool repairMissingAlpha)
     {
         ValidateImageDimensions(source.PixelWidth, source.PixelHeight);
 
-        // Clipboard CF_DIB / GetImage often reports Bgra32 with every alpha byte = 0 while RGB
-        // still holds the screenshot. Encoding that as PNG makes the whole image invisible.
-        source = NormalizeVacuousAlpha(source);
+        // Clipboard CF_DIB / GetImage can leave alpha unused while RGB holds a screenshot.
+        // Encoded PNG/GIF alpha is authoritative, including a legitimately transparent image.
+        if (repairMissingAlpha)
+        {
+            source = NormalizeVacuousAlpha(source);
+        }
 
         byte[] originalBytes;
         try

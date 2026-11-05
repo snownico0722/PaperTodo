@@ -251,6 +251,8 @@ internal static partial class Program
         todo.Items[0].LinkPaper(note.Id);
         c.ApplyPaperPresentation(todo, PaperPresentationAction.Expand, activate: false);
         var window = ReadField<Dictionary<string, PaperWindow>>(c, "_windows")[todo.Id];
+        Check(ReadField<System.Windows.Controls.TextBox>(window, "_titleEditBox").MaxLength == 4096,
+            "The title editor allows long emoji sequences but bounds oversized pastes");
         window.RefreshTodoRowsForExternalChange();
         await PresentationSettle();
         static IEnumerable<System.Windows.Controls.TextBlock> Labels(DependencyObject root)
@@ -263,13 +265,13 @@ internal static partial class Program
         c.PublicSettings.Set("title.max_length", Json(4));
         await PresentationSettle();
         var visibleLabels = Labels(window).Select(label => label.Text).ToArray();
-        Check(note.Title == "Link" && visibleLabels.Any(text => text.Contains("Link", StringComparison.Ordinal)) &&
+        Check(note.Title == "LinkedAB" && visibleLabels.Any(text => text.Contains("LinkedAB", StringComparison.Ordinal)) &&
             visibleLabels.All(text => !text.Contains("LinkedABC", StringComparison.Ordinal)),
             "Title truncation updates the actual linked-paper label immediately.");
         // Verify current text, not whether the renderer reused or rebuilt a particular TextBlock.
         Invoke(c, "SetMaxTitleLength", 2);
-        Check(note.Title == "Li" && Labels(window).Any(label => label.Text.Contains("Li", StringComparison.Ordinal)) &&
-            Labels(window).All(label => !label.Text.Contains("Link", StringComparison.Ordinal)),
+        Check(note.Title == "Link" && Labels(window).Any(label => label.Text.Contains("Link", StringComparison.Ordinal)) &&
+            Labels(window).All(label => !label.Text.Contains("LinkedAB", StringComparison.Ordinal)),
             "UI title truncation replaces the previous linked title with its current text.");
     }
 
@@ -279,6 +281,8 @@ internal static partial class Program
         var name = "PaperTodo.PresentationChecks." + Guid.NewGuid().ToString("N");
         using var pipe = new McpApiHost(Dispatcher.CurrentDispatcher, request =>
         {
+            if (request.GetProperty("method").GetString() == "get_workspace_binding")
+                return new { token = "presentation-fixture" };
             requests.Add(request.Clone());
             return new PaperPresentationResult("note", true, false);
         }, name);
@@ -296,6 +300,8 @@ internal static partial class Program
         for (var i = 0; i < expected.Length; i++)
         {
             Check(requests[i].GetProperty("method").GetString() == expected[i], "Tool method survives serialization: " + expected[i]);
+            Check(requests[i].GetProperty("workspace_token").GetString() == "presentation-fixture",
+                "Presentation request omitted the current workspace binding.");
             var p = requests[i].GetProperty("params");
             Check(p.GetProperty("paper_id").GetString() == "note", "Exact target ID reaches the GUI bridge.");
             if (i is 0 or 2 or 3 or 5)

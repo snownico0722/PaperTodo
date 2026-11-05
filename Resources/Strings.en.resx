@@ -139,9 +139,6 @@ Error: {0}</value>
   <data name="MenuBold" xml:space="preserve">
     <value>Bold</value>
   </data>
-  <data name="MenuClearDone" xml:space="preserve">
-    <value>Clear completed</value>
-  </data>
   <data name="MenuCodeBlock" xml:space="preserve">
     <value>Code block</value>
   </data>
@@ -619,7 +616,7 @@ About 5 full-width characters on one line, 10 on multiline.</value>
     <value>Edge capsules still extend on hover; the extra area acts like the main capsule without a close button. Use Hide in the context menu to close it.</value>
   </data>
   <data name="TipMaxTitleLength" xml:space="preserve">
-    <value>Max characters shown in paper titles and capsules.</value>
+    <value>Title length is measured in full-width characters; two half-width letters or digits count as one. Lowering the limit shortens existing titles.</value>
   </data>
   <data name="TipStartup" xml:space="preserve">
     <value>Start PaperTodo when Windows signs in.</value>
@@ -1497,15 +1494,6 @@ When off, open at the docked edge or remembered position.</value>
   <data name="SkinNativeUnsupported" xml:space="preserve">
     <value>Native backdrops require Windows 11 22H2 or later.</value>
   </data>
-<data name="SettingsMatchAuxiliaryMaterial" xml:space="preserve">
-    <value>Full capsule and menu material</value>
-  </data>
-  <data name="TipMatchAuxiliaryMaterial" xml:space="preserve">
-    <value>On: match the paper. Off: lighter effects and a more solid, readable paper base. Edge previews always use lightweight effects.</value>
-  </data>
-  <data name="SkinCaptureNotice" xml:space="preserve">
-    <value>Capsules and menus take a temporary local snapshot of the background behind them; capsule dragging takes one low-resolution virtual-desktop snapshot. It is used only in local memory and is never saved or uploaded.</value>
-  </data>
   <data name="MenuPaperActions" xml:space="preserve">
     <value>Paper actions</value>
   </data>
@@ -1554,4 +1542,143 @@ When off, open at the docked edge or remembered position.</value>
   <data name="TipMasterCapsuleAnimationSpeed" xml:space="preserve">
     <value>1–30 frames per second (default: 12). Normal and drag animations share this speed; GIF timing is overridden.</value>
   </data>
+  <data name="DataReloadConflictTitle" xml:space="preserve">
+    <value>PaperTodo data conflict</value>
+  </data>
+  <data name="DataReloadConflictPath" xml:space="preserve">
+    <value>Path: {0}</value>
+  </data>
+  <data name="DataReloadConflictMemoryHeader" xml:space="preserve">
+    <value>Current (PaperTodo)</value>
+  </data>
+  <data name="DataReloadConflictExternalHeader" xml:space="preserve">
+    <value>External (incoming file)</value>
+  </data>
+  <data name="DataReloadConflictKeepMemory" xml:space="preserve">
+    <value>Keep current</value>
+  </data>
+  <data name="DataReloadConflictKeepExternal" xml:space="preserve">
+    <value>Keep external</value>
+  </data>
+  <data name="DataReloadConflictValueMissing" xml:space="preserve">
+    <value>(missing)</value>
+  </data>
+  <data name="DataReloadConflictMemoryOnlyTooltip" xml:space="preserve">
+    <value>Present in PaperTodo but not in the external file. Kept by "Keep current"; discarded by "Keep external".</value>
+  </data>
+  <data name="DataReloadConflictExternalOnlyTooltip" xml:space="preserve">
+    <value>Present in the external file but not in PaperTodo. Adopted by "Keep external"; discarded by "Keep current".</value>
+  </data>
+  <data name="DataReloadPaperConflictTitle" xml:space="preserve">
+    <value>Paper data conflict</value>
+  </data>
+  <data name="DataReloadPaperConflictHeader" xml:space="preserve">
+    <value>Paper ID:{0}  Type:{1}</value>
+  </data>
+  <data name="DataReloadPaperConflictField" xml:space="preserve">
+    <value>Field:{0}</value>
+  </data>
+  <data name="DataReloadPaperConflictKeepAllMemory" xml:space="preserve">
+    <value>Keep current for all</value>
+  </data>
+  <data name="DataReloadPaperConflictKeepAllExternal" xml:space="preserve">
+    <value>Use external for all</value>
+  </data>
+  <data name="DataReloadPaperConflictWholePaper" xml:space="preserve">
+    <value>(whole paper)</value>
+  </data>
+  <data name="WorkspaceSettingsTitle" xml:space="preserve">
+    <value>Workspaces</value>
+  </data>
+  <data name="WorkspaceSettingsDescription" xml:space="preserve">
+    <value>Enable the cycle button in paper top bars. Each workspace keeps its own papers, images and plugin data.</value>
+  </data>
+  <data name="WorkspaceEnabled" xml:space="preserve">
+    <value>Enable workspaces</value>
+  </data>
+  <data name="WorkspaceCount" xml:space="preserve">
+    <value>Workspace count (including main)</value>
+  </data>
+  <data name="WorkspaceCountHint" xml:space="preserve">
+    <value>Up to 5. Reducing the count or disabling workspaces never deletes their files.</value>
+  </data>
+  <data name="WorkspaceSelectLabel" xml:space="preserve">
+    <value>Current workspace</value>
+  </data>
+  <data name="WorkspaceMainSlotLabel" xml:space="preserve">
+    <value>Main workspace (1)</value>
+  </data>
+  <data name="WorkspaceSlotLabel" xml:space="preserve">
+    <value>Workspace {0}</value>
+  </data>
+  <data name="WorkspaceCurrent" xml:space="preserve">
+    <value>Current workspace: {0}</value>
+  </data>
+  <data name="WorkspaceFollowMain" xml:space="preserve">
+    <value>Follow main workspace settings</value>
+  </data>
+  <data name="WorkspaceFollowHint" xml:space="preserve">
+    <value>Use the main software settings without sharing papers, images, layout or plugin-private data. Turning this off restores this workspace’s independent settings.</value>
+  </data>
+  <data name="WorkspaceMainHint" xml:space="preserve">
+    <value>This is the main workspace. Other workspaces that follow it use these software settings when opened.</value>
+  </data>
+  <data name="WorkspaceNext" xml:space="preserve">
+    <value>Next workspace</value>
+  </data>
+  <data name="WorkspaceCycleTooltip" xml:space="preserve">
+    <value>Workspace {0}
+Click to switch to workspace {1}</value>
+  </data>
+  <data name="WorkspaceTrayCycle" xml:space="preserve">
+    <value>Switch workspace (current {0} / {1})</value>
+  </data>
+  <data name="WorkspaceSettingsReadOnly" xml:space="preserve">
+    <value>Software settings currently follow the main workspace. Edit them there, or turn off “Follow main workspace settings” first.</value>
+  </data>
+  <data name="WorkspacePluginSettingsHint" xml:space="preserve">
+    <value>Plugin enablement follows the main workspace; plugin-private settings and data remain local to this workspace.</value>
+  </data>
+  <data name="WorkspaceSwitching" xml:space="preserve">
+    <value>A workspace switch is in progress. Try again after it completes.</value>
+  </data>
+  <data name="WorkspaceSwitchFailed" xml:space="preserve">
+    <value>Workspace switch did not complete</value>
+  </data>
+  <data name="WorkspaceSaveFailed" xml:space="preserve">
+    <value>The workspace could not be saved. Switching was stopped.</value>
+  </data>
+  <data name="WorkspaceImagesMissing" xml:space="preserve">
+    <value>This workspace references images, but its image database is missing.</value>
+  </data>
+  <data name="WorkspaceImagesUnavailable" xml:space="preserve">
+    <value>Cannot read workspace image database: {0}</value>
+  </data>
+  <data name="WorkspaceStartupFallback" xml:space="preserve">
+    <value>The last workspace could not be opened. The main workspace was opened instead; the original files were not replaced.
+{0}</value>
+  </data>
+  <data name="SettingsDataMergeConflicts" xml:space="preserve"><value>Data merge conflicts</value></data>
+  <data name="DataMergeConflictAsk" xml:space="preserve"><value>Ask on conflict (default)</value></data>
+  <data name="DataMergeConflictExternal" xml:space="preserve"><value>Prefer external</value></data>
+  <data name="DataMergeConflictInternal" xml:space="preserve"><value>Prefer internal</value></data>
+  <data name="TipDataMergeConflicts" xml:space="preserve"><value>An explicit merge preserves nonconflicting changes from both sides. This setting affects conflicts only: internal means current PaperTodo data; external means the incoming file. Without the original version, always ask. Does not enable background watching or automatic sync.</value></data>
+  <data name="DataReloadConflictEmpty" xml:space="preserve"><value>(empty)</value></data>
+  <data name="NoteHtmlSaved" xml:space="preserve"><value>Saved to: {0}
+The original note is kept.</value></data>
+  <data name="NoteExportCurrent" xml:space="preserve"><value>Export this note</value></data>
+  <data name="NoteExportAll" xml:space="preserve"><value>Export all papers</value></data>
+  <data name="NoteExportMarkdownType" xml:space="preserve"><value>Markdown document</value></data>
+  <data name="NoteExportHtmlType" xml:space="preserve"><value>HTML document</value></data>
+  <data name="NoteExportMarkdownZipType" xml:space="preserve"><value>Markdown ZIP</value></data>
+  <data name="NoteExportHtmlZipType" xml:space="preserve"><value>HTML ZIP</value></data>
+  <data name="NoteExportMissingImageText" xml:space="preserve"><value>Missing image</value></data>
+  <data name="NoteExportSummary" xml:space="preserve"><value>Exported {0}/{1} papers.&#xA;Missing images: {2} across {3} papers.&#xA;Saved to: {4}</value></data>
+  <data name="NoteExportFailedNotes" xml:space="preserve"><value>Failed papers:&#xA;{0}</value></data>
+  <data name="NoteExportFailure" xml:space="preserve"><value>Export failed: {0}</value></data>
+  <data name="NoteExportNoNotes" xml:space="preserve"><value>There are no Markdown notes or todo papers to export.</value></data>
+  <data name="NoteExportProgress" xml:space="preserve"><value>Exporting {0}/{1} papers</value></data>
+  <data name="TodoExportCurrent" xml:space="preserve"><value>Export this todo paper</value></data>
+  <data name="SettingsCapsuleFreeQueues" xml:space="preserve"><value>Free edge capsule queues</value></data>
+  <data name="TipCapsuleFreeQueues" xml:space="preserve"><value>Pull a capsule away to form a separate queue. Hold Ctrl to move a queue along the edge; pull sideways to move it across edges or displays. The master can still collect all queues on its edge.</value></data>
 </root>

@@ -134,7 +134,6 @@ public sealed partial class PaperWindow : Window
     private Rect? _snappedPresentationBoundsForRestore;
     private bool _collapsedFromMaximized;
     private int _themeAnimationGeneration;
-    private int _clearDoneGeneration;
     private int _todoRowsGeneration;
     private const double DeepCapsuleExpandedEdgeInset = EdgeCapsuleLayout.ExpandedEdgeInset;
     private const double DeepCapsuleTopMargin = EdgeCapsuleLayout.TopMargin;
@@ -1168,7 +1167,8 @@ public sealed partial class PaperWindow : Window
             return;
         }
 
-        if (_paperChrome is SkinBorder skin) skin.IsCapsule = _paper.IsCollapsed && _controller.State.UseCapsuleMode;
+        var isCapsule = _paper.IsCollapsed && _controller.State.UseCapsuleMode;
+        if (_paperChrome is SkinBorder skin) skin.IsCapsule = isCapsule;
         var snappedExpanded = _isSnappedPresentation && !_paper.IsCollapsed;
         if (_controller.UsesNativeMicaWindows && _topBarHost != null)
         {
@@ -1180,8 +1180,7 @@ public sealed partial class PaperWindow : Window
         // margin, square corners). Works for Normal-state tiles (half/quarter) and Maximized.
         if (snappedExpanded)
         {
-            _paperChrome.Effect = null;
-            _paperChrome.SetMaterialShadowMargin(0);
+            ApplyPaperChromeShadowPresentation(isCapsule, suppressShadow: true);
             _paperChrome.BeginAnimation(Border.MarginProperty, null);
             _paperChrome.Margin = new Thickness(0);
             _paperChrome.CornerRadius = new CornerRadius(0);
@@ -1192,21 +1191,47 @@ public sealed partial class PaperWindow : Window
         }
 
         // Floating or capsule: restore shadow, margin, and form-appropriate corner radius.
-        var isCapsule = _paper.IsCollapsed && _controller.State.UseCapsuleMode;
         var targetCorner = PaperChromeCornerRadiusForState(isCapsule);
         _paperChrome.BeginAnimation(Border.MarginProperty, null);
         _paperChrome.Margin = new Thickness(UsesNativePaperChrome ? 0 : WindowChromeMargin);
         _paperChrome.CornerRadius = targetCorner;
-        // Native expanded papers use the system frame, even during solid fallback.
-        // Applying an Effect to a transparent content ancestor also shadows its glyphs.
+        ApplyPaperChromeShadowPresentation(isCapsule, suppressShadow: false);
+        RefreshPluginBodyClip();
+        RefreshNativeMica();
+        RefreshExperimentalFocusPresentation(animate: false);
+    }
+
+    // A skin refresh must not reset transition-owned Margin or CornerRadius.
+    // Keep main's native-material shadow independent of ordinary Paper shadows.
+    private void ApplyPaperChromeShadowPresentation(bool isCapsule, bool suppressShadow)
+    {
+        if (_paperChrome == null) return;
+        if (suppressShadow)
+        {
+            _paperChrome.Effect = null;
+            _paperChrome.SetMaterialShadowMargin(0);
+            _paperChrome.ClearNineSliceShadow();
+            return;
+        }
+
+        if (!UsesNativePaperChrome && Theme.Skin == PaperSkins.Paper)
+        {
+            _paperChrome.Effect = null;
+            _paperChrome.SetMaterialShadowMargin(0);
+            if (isCapsule)
+                _paperChrome.SetNineSliceShadow(blurRadius: 8, depth: 1, opacity: 0.12, capsuleShape: true);
+            else
+                _paperChrome.SetNineSliceShadow(blurRadius: 14, depth: 2, opacity: 0.22, capsuleShape: false);
+            return;
+        }
+
+        _paperChrome.ClearNineSliceShadow();
+        // Other skins retain the current main native/material/legacy paths.
         var materialShadow = Theme.UsesNativeBackdrop && (IsPaperFormTransitioning || isCapsule);
         _paperChrome.Effect = UsesNativePaperChrome || materialShadow ? null : isCapsule
             ? CreatePaperChromeShadow(blurRadius: 8, opacity: 0.12, shadowDepth: 1)
             : CreatePaperChromeShadow();
         _paperChrome.SetMaterialShadowMargin(materialShadow ? _paperChrome.Margin.Left : 0);
-        RefreshPluginBodyClip();
-        RefreshNativeMica();
-        RefreshExperimentalFocusPresentation(animate: false);
     }
 
     private bool LooksSnappedNow()
@@ -1669,6 +1694,7 @@ public sealed partial class PaperWindow : Window
         RefreshPaperTitle();
         RefreshPaperIconButton();
         RefreshWindowBindingButton();
+        RefreshWorkspaceButton();
         UpdateTextZoom();
         UpdateDeepCapsuleSlotHostTheme();
 
@@ -1784,6 +1810,7 @@ public sealed partial class PaperWindow : Window
             CapsuleLabelFontWeight,
             AppTypography.Scale(18));
         RefreshThemedContextMenus();
+        RefreshWorkspaceButton();
 
         RefreshPaperTitle();
         UpdateTopBarResponsiveLayout();
@@ -2252,9 +2279,10 @@ public sealed partial class PaperWindow : Window
             FontSize = TitleFontSize,
             MinHeight = TitleLineHeight + 1,
             FontWeight = TitleFontWeight,
-            // UTF-16 unit guard at the hard full-width cap (20). Commit still clamps to the
-            // user setting (2–20) via PaperTitles.CleanCustomTitle so IME is not rewritten mid-edit.
-            MaxLength = PaperTitles.MaxTitleLength,
+            // Keep a generous UTF-16 input guard against huge pastes without
+            // cutting off ordinary emoji sequences. The weighted title limit is
+            // applied on commit, after IME composition.
+            MaxLength = 4096,
             Padding = new Thickness(0),
             VerticalContentAlignment = VerticalAlignment.Center,
             FocusVisualStyle = null
@@ -2373,6 +2401,7 @@ public sealed partial class PaperWindow : Window
         actionButtons.Children.Add(_newTodoButton);
         actionButtons.Children.Add(_newNoteButton);
         buttons.Children.Add(_moreActionsButton);
+        actionButtons.Children.Add(CreateWorkspaceCycleButton());
         buttons.Children.Add(_closeButton);
         UpdateTopBarNewPaperButtons();
 
@@ -2668,17 +2697,26 @@ public sealed partial class PaperWindow : Window
         menu.Items.Clear();
         menu.Items.Add(MenuHeader(Strings.Get("MenuQuick")));
 
-        // Follow one global order for both the top bar and its dynamic overflow.
-        // The menu lists only the commands not currently shown as title-bar buttons.
+        // Keep the same command order in both menus. Only the expanded paper's own
+        // menu skips commands already visible in its top bar; the edge capsule is a
+        // separate surface and must retain both creation actions.
         foreach (var action in PaperTopBarShortcuts.NormalizeOrder(_controller.State.TopBarShortcutOrder))
         {
             switch (action)
             {
-                case PaperTopBarShortcuts.NewTodo when !IsTopBarCommandVisible(_newTodoButton):
+                case PaperTopBarShortcuts.Workspace when
+                    _controller.WorkspaceOptions.Enabled &&
+                    _controller.WorkspaceOptions.SlotNumbers.Count > 1 &&
+                    !IsTopBarCommandVisible(_workspaceButton):
+                    menu.Items.Add(BuildWorkspaceShortcutMenuItem(menu));
+                    break;
+                case PaperTopBarShortcuts.NewTodo when
+                    forDeepCapsuleSlot || !IsTopBarCommandVisible(_newTodoButton):
                     menu.Items.Add(MenuItem(Strings.Get("MenuNewTodoPaper"),
                         (_, _) => _controller.CreatePaper(PaperTypes.Todo, show: true, _paper)));
                     break;
-                case PaperTopBarShortcuts.NewNote when !IsTopBarCommandVisible(_newNoteButton):
+                case PaperTopBarShortcuts.NewNote when
+                    forDeepCapsuleSlot || !IsTopBarCommandVisible(_newNoteButton):
                     menu.Items.Add(MenuItem(Strings.Get("MenuNewNotePaper"),
                         (_, _) => _controller.CreatePaper(PaperTypes.Note, show: true, _paper)));
                     break;
@@ -2702,13 +2740,24 @@ public sealed partial class PaperWindow : Window
         menu.Items.Add(MenuSeparator());
         menu.Items.Add(MenuHeader(_controller.PaperCapsuleTitle(_paper)));
 
-        if (_paper.Type == PaperTypes.Todo)
-        {
-            menu.Items.Add(MenuItem(Strings.Get("MenuClearDone"), (_, _) => ClearDoneItems()));
-        }
-        else if (_paper.Type == PaperTypes.Note)
-        {
+        if (_paper.Type == PaperTypes.Note)
             menu.Items.Add(BuildPaperBodyProviderMenuItem());
+
+        if (IsExportablePaper(_paper))
+        {
+            var currentLabel = _paper.Type == PaperTypes.Todo
+                ? "TodoExportCurrent" : "NoteExportCurrent";
+            var current = MenuItem(Strings.Get(currentLabel),
+                (_, _) => ExportPapers(all: false));
+            current.IsEnabled = !_paperExportRunning;
+            menu.Items.Add(current);
+
+            var allLabel = _paperExportRunning
+                ? Strings.Format("NoteExportProgress", _paperExportCompleted, _paperExportTotal)
+                : Strings.Get("NoteExportAll");
+            var exportAll = MenuItem(allLabel, (_, _) => ExportPapers(all: true));
+            exportAll.IsEnabled = !_paperExportRunning;
+            menu.Items.Add(exportAll);
         }
 
         AttachPluginPaperMenuActions(menu);

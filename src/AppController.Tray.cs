@@ -529,6 +529,8 @@ public sealed partial class AppController
         menu.Items.Add(TraySeparator());
 
         menu.Items.Add(TrayPaperToolbar(menu));
+        if (WorkspaceOptions.Enabled)
+            menu.Items.Add(TrayWorkspaceSelector(menu));
 
         if (State.Papers.Count > 0)
         {
@@ -580,6 +582,110 @@ public sealed partial class AppController
 
             RebuildTrayMenu(menu);
         }
+    }
+
+    private MenuItem TrayWorkspaceSelector(ContextMenu menu)
+    {
+        var item = new MenuItem
+        {
+            Style = SharedTrayToolbarItemStyle,
+            StaysOpenOnClick = true,
+            IsEnabled = !_workspaceSwitching
+        };
+        AutomationProperties.SetAutomationId(item, "TrayWorkspaceSelector");
+
+        // One compact row, matching the settings page's rounded numeric segments.
+        var row = new Grid
+        {
+            MinWidth = 168,
+            Height = 26,
+            Margin = new Thickness(3, 0, 3, 0)
+        };
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        row.Children.Add(new TextBlock
+        {
+            Text = Strings.Get("WorkspaceSettingsTitle"),
+            Foreground = TrayWeakTextBrush,
+            FontSize = AppTypography.Scale(12),
+            FontWeight = FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(1, 0, 9, 0)
+        });
+        var choices = new ContentPresenter
+        {
+            VerticalAlignment = VerticalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
+        Grid.SetColumn(choices, 1);
+        row.Children.Add(choices);
+
+        void ShowConfirmation(int target)
+        {
+            var actions = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            actions.Children.Add(new TextBlock
+            {
+                Text = SettingsSidebarLocalized(
+                    "确定切换为工作区" + target + "？",
+                    "Switch to workspace " + target + "?",
+                    "ワークスペース" + target + "に切り替えますか？",
+                    "작업 공간 " + target + "(으)로 전환할까요?"),
+                Foreground = TrayTextBrush,
+                VerticalAlignment = VerticalAlignment.Center,
+                FontSize = AppTypography.Scale(11),
+                Margin = new Thickness(0, 0, 6, 0)
+            });
+            var confirm = PluginPageButton(SettingsSidebarLocalized(
+                "确定", "OK", "確定", "확인"));
+            confirm.MinWidth = 39;
+            confirm.Height = 24;
+            confirm.Padding = new Thickness(4, 1, 4, 1);
+            confirm.Margin = new Thickness(0, 0, 3, 0);
+            confirm.Click += (_, e) =>
+            {
+                e.Handled = true;
+                InvokeTrayAction(menu, () => { _ = SwitchWorkspaceAsync(target); });
+            };
+            var cancel = PluginPageButton(Strings.Get("CommonCancel"));
+            cancel.MinWidth = 39;
+            cancel.Height = 24;
+            cancel.Padding = new Thickness(4, 1, 4, 1);
+            cancel.Click += (_, e) =>
+            {
+                e.Handled = true;
+                ShowChoices();
+            };
+            actions.Children.Add(confirm);
+            actions.Children.Add(cancel);
+            choices.Content = actions;
+        }
+
+        void ShowChoices()
+        {
+            var segments = WorkspaceOptions.SlotNumbers.Select(number => (
+                Key: number.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                Label: number.ToString(UiLanguages.EffectiveCulture))).ToArray();
+            var selector = (Border)CreateSegmentSelector(segments,
+                WorkspaceNumber.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                key =>
+                {
+                    var target = int.Parse(key, System.Globalization.CultureInfo.InvariantCulture);
+                    if (target != WorkspaceNumber) ShowConfirmation(target);
+                });
+            selector.Margin = new Thickness(0);
+            selector.Height = 24;
+            selector.MinWidth = 128;
+            choices.Content = selector;
+        }
+
+        ShowChoices();
+        item.Header = row;
+        item.Click += (_, e) => e.Handled = true;
+        return item;
     }
 
     private MenuItem TrayItem(

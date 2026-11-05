@@ -16,32 +16,11 @@ internal static class MaterialPresentationChecks
 {
     internal static void Run(AppController controller)
     {
-        var desktop = new Int32Rect(-8192, -2160, 16384, 8640);
-        var ordinary = BackgroundCaptureLayout.Create(
-            new Int32Rect(100, 100, 560, 440),
-            new DesktopBackgroundCapture.Region(0, 0, 560, 440, 64),
-            desktop)!;
-        Program.Assert(
-            ordinary.PixelWidth == ordinary.Bounds.Width &&
-            ordinary.PixelHeight == ordinary.Bounds.Height,
-            "ordinary one-shot snapshots keep physical 1:1 detail");
+        CheckDefaultPaperNineSliceShadow(controller);
+        NineSliceShadowSeamChecks.Run();
 
-        foreach (var size in new[] { new Size(2400, 1200), new Size(2048, 2048), new Size(3968, 896) })
-        {
-            var region = new DesktopBackgroundCapture.Region(0, 0, (int)size.Width, (int)size.Height, 96);
-            var layout = BackgroundCaptureLayout.Create(
-                new Int32Rect(-3500, 100, region.Width, region.Height),
-                region,
-                desktop)!;
-            Program.Assert(
-                (long)layout.PixelWidth * layout.PixelHeight <= BackgroundCaptureLayout.PixelBudget &&
-                layout.PixelWidth <= 2048 &&
-                layout.PixelHeight <= 2048,
-                "large static snapshots downsample only to the bounded pixel budget");
-        }
-
-        var saved = (controller.State.PaperSkin, controller.State.Theme, controller.State.EnableAnimations,
-            controller.State.MatchAuxiliaryMaterialStrength, controller.State.MicaAlwaysActive);
+        var saved = (controller.State.PaperSkin, controller.State.Theme,
+            controller.State.EnableAnimations, controller.State.MicaAlwaysActive);
         Window? settings = null;
         var owner = new Window { Width = 200, Height = 100, Left = 40, Top = 40, ShowInTaskbar = false, Content = new Border() };
         ContextMenu? menu = null, aeroMenu = null;
@@ -49,32 +28,30 @@ internal static class MaterialPresentationChecks
         {
             controller.State.PaperSkin = PaperSkins.Acrylic; controller.State.Theme = "light";
             controller.State.EnableAnimations = false;
-            controller.State.MatchAuxiliaryMaterialStrength = true;
             Theme.Invalidate();
             owner.Show();
             menu = controller.CreateTrayMenu(); menu.Items.Add(new MenuItem { Header = "Cancel before background is ready" });
             menu.PlacementTarget = (UIElement)owner.Content; menu.Placement = PlacementMode.Bottom;
             var opens = 0; menu.Opened += (_, _) => opens++;
-            menu.SetCurrentValue(ContextMenu.IsOpenProperty, true); menu.IsOpen = false; Wait(400);
-            Program.Assert(!menu.IsOpen && opens == 0, "cancelling an async menu open never reopens it later");
-            menu.SetCurrentValue(ContextMenu.IsOpenProperty, true); Until(() => menu.IsOpen && opens == 1, "reopen after cancellation"); Wait(80);
+            menu.SetCurrentValue(ContextMenu.IsOpenProperty, true);
+            Until(() => menu.IsOpen && opens == 1, "tray menu opens immediately");
+            menu.IsOpen = false; Wait(80);
+            Program.Assert(!menu.IsOpen && opens == 1, "dismissed menu stays closed");
+            menu.SetCurrentValue(ContextMenu.IsOpenProperty, true);
+            Until(() => menu.IsOpen && opens == 2, "tray menu can reopen immediately");
             var menuSurface = Find(menu);
-            Program.Assert(menuSurface != null && menuSurface.FirstMenuRenderUsedBackground && menu.Opacity == 1,
-                "production tray menu opens with the real material, without a foreground fade");
+            Program.Assert(menuSurface is { IsMenu: true } && menu.Opacity == 1,
+                "tray menu uses the normal popup without a deferred background capture");
             menu.IsOpen = false; Wait(60);
 
             controller.State.PaperSkin = PaperSkins.Aero; Theme.Invalidate();
-            Program.Assert(!MaterialMenuOpening.NeedsBackground && MaterialMenuOpening.SuppressPopupAnimation,
-                "Aero popup skips screen capture but suppresses the solid-to-transparent Fade");
             aeroMenu = controller.CreateTrayMenu();
             aeroMenu.PlacementTarget = (UIElement)owner.Content; aeroMenu.Placement = PlacementMode.Bottom;
             aeroMenu.SetCurrentValue(ContextMenu.IsOpenProperty, true);
             Until(() => aeroMenu.IsOpen, "Aero menu opens immediately without capture preparation"); Wait(80);
-            AssertNoPopupFade(aeroMenu);
             var aeroSurface = Find(aeroMenu);
-            Program.Assert(aeroSurface is { Skin: PaperSkins.Aero } && !aeroSurface.HasBackgroundCapture &&
-                aeroSurface.MenuFallbackRenderCount == 0,
-                "Aero menu uses direct transparent transmission and never starts a background sampler");
+            Program.Assert(aeroSurface is { Skin: PaperSkins.Aero, IsMenu: true } &&
+                aeroMenu.Opacity == 1, "Aero menu uses the normal immediate popup path");
             aeroMenu.IsOpen = false; Wait(60);
             controller.State.PaperSkin = PaperSkins.Acrylic; Theme.Invalidate();
 
@@ -93,16 +70,16 @@ internal static class MaterialPresentationChecks
             settings = (Window)typeof(AppController).GetField("_settingsWindow", Program.Private)!.GetValue(controller)!;
             var shell = (SkinBorder)settings.Content;
             Wait(120);
-            Program.Assert(!shell.IsBackgroundActive && !shell.HasBackgroundCapture,
-                "expanded Settings uses the native Acrylic backdrop without a software background-capture worker");
+            Program.Assert(shell.Background != null && settings.Opacity == 1,
+                "expanded settings shell keeps its native material composition");
             var oldContent = shell.Child;
             show.Invoke(controller, [Enum.Parse(pageType, "Visual")]);
             Program.Assert(ReferenceEquals(shell, settings.Content) && !ReferenceEquals(oldContent, shell.Child) &&
-                !shell.IsBackgroundActive && !shell.HasBackgroundCapture,
-                "page switch replaces only Settings content and keeps the native material path capture-free");
+                settings.Opacity == 1,
+                "page switch replaces only Settings content on the same native window");
             settings.Width += 12; settings.UpdateLayout(); shell.RefreshBackground();
-            Program.Assert(!shell.IsBackgroundActive && !shell.HasBackgroundCapture && settings.Opacity == 1,
-                "resizing Settings keeps the native material path capture-free and fully visible");
+            Program.Assert(settings.Opacity == 1 && ReferenceEquals(shell, settings.Content),
+                "resizing Settings retains its shell and visible content");
 
             // This real settings interaction was previously trapped inside the discarded
             // CopyFromScreen fixture; keep the independent WPF behavior without desktop pixels.
@@ -122,10 +99,204 @@ internal static class MaterialPresentationChecks
             if (aeroMenu != null) aeroMenu.IsOpen = false;
             settings?.Close(); owner.Close();
             (controller.State.PaperSkin, controller.State.Theme, controller.State.EnableAnimations,
-                controller.State.MatchAuxiliaryMaterialStrength, controller.State.MicaAlwaysActive) = saved;
+                controller.State.MicaAlwaysActive) = saved;
             Theme.Invalidate();
         }
     }
+    private static void CheckDefaultPaperNineSliceShadow(AppController controller)
+    {
+        var nativeProperty = typeof(AppController).GetProperty(
+            "UsesNativeMicaWindows",
+            Program.Private)!;
+        var savedNative = (bool)nativeProperty.GetValue(controller)!;
+        var saved = (
+            controller.State.PaperSkin,
+            controller.State.Theme,
+            controller.State.UseCapsuleMode);
+        var paper = new PaperData
+        {
+            Type = PaperTypes.Todo,
+            Title = "Lightweight shadow regression",
+            X = 80,
+            Y = 80,
+            Width = 360,
+            Height = 280
+        };
+        PaperWindow? window = null;
+        try
+        {
+            nativeProperty.SetValue(controller, false);
+            controller.State.PaperSkin = PaperSkins.Paper;
+            controller.State.Theme = "light";
+            controller.State.UseCapsuleMode = true;
+            Theme.Invalidate();
+
+            controller.State.Papers.Add(paper);
+            window = new PaperWindow(paper, controller);
+            window.Show();
+            Wait(120);
+
+            var chrome = (PaperChromeBorder)typeof(PaperWindow)
+                .GetField("_paperChrome", Program.Private)!.GetValue(window)!;
+            Program.Assert(
+                window.AllowsTransparency &&
+                chrome.Effect == null &&
+                chrome.HasNineSliceShadow,
+                "default floating paper uses cached nine-slice shadow instead of DropShadowEffect");
+            AssertLightweightShadowRamp(window);
+
+            // Shadow silhouette and blur strength are independent: do not infer
+            // capsule geometry from a small blur radius.
+            var capsuleShapeField = typeof(PaperChromeBorder).GetField(
+                "_shadowCapsuleShape", Program.Private)!;
+            chrome.SetNineSliceShadow(14, 2, 0.22, capsuleShape: true);
+            Program.Assert((bool)capsuleShapeField.GetValue(chrome)!,
+                "capsule template can use expanded-paper blur strength");
+            chrome.SetNineSliceShadow(8, 1, 0.12, capsuleShape: false);
+            Program.Assert(!(bool)capsuleShapeField.GetValue(chrome)!,
+                "paper template can use capsule blur strength");
+            window.RefreshSkin();
+
+            // The chrome corner itself animates continuously, but shadow masks
+            // share exactly the 12, 14 and 16 DIP texture radii.
+            var dpi = VisualTreeHelper.GetDpi(chrome);
+            var tierA = NineSlicePaperShadow.Get(14, 2, 0.22, 13.5, dpi, false);
+            var tierB = NineSlicePaperShadow.Get(14, 2, 0.22, 14.5, dpi, false);
+            var tierC = NineSlicePaperShadow.Get(14, 2, 0.22, 16, dpi, false);
+            Program.Assert(ReferenceEquals(tierA, tierB) &&
+                !ReferenceEquals(tierA, tierC),
+                "animated shadow reuses 14 DIP template until the 16 DIP tier");
+            Program.Assert(!ReferenceEquals(tierA,
+                NineSlicePaperShadow.Get(14, 2, 0.22, 14, dpi, true)),
+                "capsule/paper silhouette remains a distinct cache key with equal blur");
+
+            window.SetCollapsedState(true, animate: false, saveGeometry: false);
+            Wait(80);
+            Program.Assert(
+                chrome.Effect == null && chrome.HasNineSliceShadow,
+                "default capsule keeps the nine-slice shadow path");
+
+            window.SetCollapsedState(false, animate: false, saveGeometry: false);
+            Wait(80);
+            Program.Assert(
+                chrome.Effect == null && chrome.HasNineSliceShadow,
+                "expanded default paper restores the nine-slice shadow path");
+
+            // Theme/skin refresh may change only the shadow recipe here. During a real form
+            // transition Margin/CornerRadius are frame-owned, so refreshing paint must not
+            // snap those geometry values to an endpoint.
+            var normalMargin = chrome.Margin;
+            var normalCorner = chrome.CornerRadius;
+            var transitionMargin = new Thickness(3.25);
+            var transitionCorner = new CornerRadius(11.5);
+            chrome.Margin = transitionMargin;
+            chrome.CornerRadius = transitionCorner;
+            window.RefreshSkin();
+            Program.Assert(
+                chrome.Margin == transitionMargin &&
+                chrome.CornerRadius == transitionCorner &&
+                chrome.Effect == null &&
+                chrome.HasNineSliceShadow,
+                "skin refresh changes paper shadow without rewriting transition geometry");
+            chrome.Margin = normalMargin;
+            chrome.CornerRadius = normalCorner;
+            window.UpdateLayout();
+
+            var savedOutline = controller.State.HideSurfaceOutline;
+            controller.State.HideSurfaceOutline = true;
+            window.RefreshSkin();
+            Program.Assert(
+                chrome.Effect == null && chrome.HasNineSliceShadow,
+                "hiding the outer border does not disable the nine-slice paper shadow");
+            AssertLightweightShadowRamp(window);
+            controller.State.HideSurfaceOutline = savedOutline;
+            window.RefreshSkin();
+
+            controller.State.PaperSkin = PaperSkins.Acrylic;
+            Theme.Invalidate();
+            window.RefreshSkin();
+            Program.Assert(
+                !chrome.HasNineSliceShadow && chrome.Effect is System.Windows.Media.Effects.DropShadowEffect,
+                "switching away from paper clears the nine-slice shadow before restoring the legacy skin effect");
+
+            controller.State.PaperSkin = PaperSkins.Paper;
+            Theme.Invalidate();
+            window.RefreshSkin();
+            Program.Assert(
+                chrome.HasNineSliceShadow && chrome.Effect == null,
+                "switching back to paper restores only the nine-slice shadow");
+        }
+        finally
+        {
+            window?.CloseForReal();
+            controller.State.Papers.Remove(paper);
+            (controller.State.PaperSkin,
+                controller.State.Theme,
+                controller.State.UseCapsuleMode) = saved;
+            nativeProperty.SetValue(controller, savedNative);
+            Theme.Invalidate();
+        }
+    }
+
+    private static void AssertLightweightShadowRamp(PaperWindow window)
+    {
+        window.UpdateLayout();
+        if (window.Content is not FrameworkElement host ||
+            host.ActualWidth <= 24 ||
+            host.ActualHeight <= 24)
+        {
+            throw new InvalidOperationException("default paper host is not renderable");
+        }
+
+        var dpi = VisualTreeHelper.GetDpi(host);
+        var pixelWidth = Math.Max(1, (int)Math.Ceiling(host.ActualWidth * dpi.DpiScaleX));
+        var pixelHeight = Math.Max(1, (int)Math.Ceiling(host.ActualHeight * dpi.DpiScaleY));
+        var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(
+            pixelWidth,
+            pixelHeight,
+            96 * dpi.DpiScaleX,
+            96 * dpi.DpiScaleY,
+            PixelFormats.Pbgra32);
+        bitmap.Render(host);
+
+        byte Alpha(double xDip, double yDip)
+        {
+            var x = Math.Clamp((int)Math.Round(xDip * dpi.DpiScaleX), 0, pixelWidth - 1);
+            var y = Math.Clamp((int)Math.Round(yDip * dpi.DpiScaleY), 0, pixelHeight - 1);
+            var pixel = new byte[4];
+            bitmap.CopyPixels(new Int32Rect(x, y, 1, 1), pixel, 4, 0);
+            return pixel[3];
+        }
+
+        var midX = host.ActualWidth / 2;
+        var midY = host.ActualHeight / 2;
+        var left = new[] { Alpha(0, midY), Alpha(4, midY), Alpha(7, midY) };
+        var right = new[]
+        {
+            Alpha(host.ActualWidth - 1, midY),
+            Alpha(host.ActualWidth - 4, midY),
+            Alpha(host.ActualWidth - 7, midY)
+        };
+        var top = new[] { Alpha(midX, 0), Alpha(midX, 4), Alpha(midX, 7) };
+        var bottom = new[]
+        {
+            Alpha(midX, host.ActualHeight - 1),
+            Alpha(midX, host.ActualHeight - 4),
+            Alpha(midX, host.ActualHeight - 7)
+        };
+
+        static bool FadesIn(byte[] samples) =>
+            samples[0] < samples[1] &&
+            samples[1] < samples[2] &&
+            samples[1] >= 2;
+
+        Program.Assert(
+            FadesIn(left) && FadesIn(right) && FadesIn(top) && FadesIn(bottom),
+            $"nine-slice shadow fades through every gutter edge: " +
+            $"L={string.Join(',', left)} R={string.Join(',', right)} " +
+            $"T={string.Join(',', top)} B={string.Join(',', bottom)}");
+    }
+
     private static void CheckPaperTopBar(AppController controller)
     {
         var state = controller.State;
@@ -311,6 +482,16 @@ internal static class MaterialPresentationChecks
             var titles = wideMenu.Items.OfType<MenuItem>()
                 .Select(item => item.Header as string).ToArray();
             wideMenu.IsOpen = false;
+
+            // A still-visible edge capsule has its own menu, even when the source
+            // paper is expanded and both creation commands are pinned in its top bar.
+            var buildCapsuleMenu = typeof(PaperWindow).GetMethod(
+                "BuildDeepCapsuleSlotContextMenu", Program.Private)!;
+            var capsuleMenu = (ContextMenu)buildCapsuleMenu.Invoke(window, null)!;
+            Program.Assert(Has(capsuleMenu, Strings.Get("MenuNewTodoPaper")) &&
+                Has(capsuleMenu, Strings.Get("MenuNewNotePaper")),
+                "expanded edge capsule retains both creation entries despite visible top-bar shortcuts");
+
             var chrome = Field<SkinBorder>("_paperChrome");
             var rightClick = chrome.ContextMenu!;
             rightClick.PlacementTarget = chrome;
@@ -412,14 +593,15 @@ internal static class MaterialPresentationChecks
                 glyphs.Contains("✓") && glyphs.Contains("✎"),
                 "settings omit the redundant hint and reuse the paper capsule glyphs");
             var vectors = Descendants(root).OfType<System.Windows.Shapes.Path>().ToArray();
-            Program.Assert(vectors.Length == 2 &&
+            Program.Assert(vectors.Length == 3 &&
+                vectors.Count(path => path.StrokeThickness == 2) == 2 &&
+                vectors.Count(path => Math.Abs(path.StrokeThickness - 1.5) < 0.01) == 1 &&
                 vectors.All(path => path.Data != null &&
                     path.Data.Bounds.Width > 0 && path.Data.Bounds.Height > 0 &&
-                    path.StrokeThickness == 2 &&
                     path.StrokeStartLineCap == PenLineCap.Round &&
                     path.StrokeLineJoin == PenLineJoin.Round) &&
-                !glyphs.Contains("◎") && !glyphs.Contains("↗"),
-                "association and external editor use distinct round-stroke vectors instead of font glyphs");
+                !glyphs.Contains("◎") && !glyphs.Contains("↗") && !glyphs.Contains("↻"),
+                "association, external editor and workspace have distinct rounded vector icons");
 
             var shortcutIcons = new[]
                 {
@@ -432,11 +614,11 @@ internal static class MaterialPresentationChecks
                 .ToArray();
             var iconCenters = shortcutIcons.Select(icon => icon.TranslatePoint(
                 new Point(icon.ActualWidth / 2, icon.ActualHeight / 2), root).X).ToArray();
-            Program.Assert(shortcutIcons.Length == 4 &&
+            Program.Assert(shortcutIcons.Length == PaperTopBarShortcuts.All.Count &&
                 shortcutIcons.All(icon => icon is Grid &&
                     Math.Abs(icon.Width - AppTypography.Scale(24)) < 0.1) &&
                 iconCenters.Max() - iconCenters.Min() < 0.75,
-                "all four shortcut icons are horizontally centered on the same column");
+                "all five shortcut icons, including workspace, align on one column");
 
             var createDragEvent = typeof(DragEventArgs).GetConstructor(
                 BindingFlags.Instance | BindingFlags.NonPublic,
@@ -520,7 +702,8 @@ internal static class MaterialPresentationChecks
                 new Point(10, firstRow.ActualHeight * 0.2));
             Program.Assert(rowDrop.Handled &&
                 PaperTopBarShortcuts.Menu(state).SequenceEqual(
-                    [PaperTopBarShortcuts.ExternalEditor, PaperTopBarShortcuts.NewNote]) &&
+                    [PaperTopBarShortcuts.ExternalEditor, PaperTopBarShortcuts.NewNote,
+                     PaperTopBarShortcuts.Workspace]) &&
                 insertion.Visibility != Visibility.Visible,
                 "dropping on a real row reorders the menu and clears the insertion mark");
 
@@ -640,8 +823,8 @@ internal static class MaterialPresentationChecks
                     mouse_event(0x0010, 0, 0, 0, UIntPtr.Zero);
                     Until(() => menu!.IsOpen, $"actual right click opens {(collapsed ? "capsule" : "paper")} menu");
                     Wait(80);
-                    Program.Assert(Find(menu!)?.FirstMenuRenderUsedBackground == true,
-                        "service-opened menu retains its prepared first-frame material");
+                    Program.Assert(Find(menu!) is { IsMenu: true } && menu!.Opacity == 1,
+                        "service-opened menu paints the lightweight material immediately");
                     menu!.SetCurrentValue(ContextMenu.IsOpenProperty, false); Wait(80);
                     Program.Assert(!menu.IsOpen, "real right-click menu closes and can reopen");
                 }
@@ -655,14 +838,12 @@ internal static class MaterialPresentationChecks
     }
     private static void CheckMasterRightClicks(AppController controller)
     {
-        var original = (controller.State.PaperSkin, controller.State.Theme, controller.State.EnableAnimations,
-            controller.State.MatchAuxiliaryMaterialStrength);
+        var original = (controller.State.PaperSkin, controller.State.Theme, controller.State.EnableAnimations);
         controller.State.PaperSkin = PaperSkins.Paper; Theme.Invalidate();
         var master = new MasterCapsuleWindow(controller, EdgeCapsuleEdge.Left, "");
         GetCursorPos(out var cursor);
         ContextMenu? menu = null;
         Window? outside = null;
-        RoutedEventHandler? opened = null;
         EventHandler? rendered = null;
         var observedFrames = 0;
         try
@@ -682,17 +863,11 @@ internal static class MaterialPresentationChecks
             outside.Show(); Wait(60);
             var pill = (FrameworkElement)typeof(MasterCapsuleWindow).GetField("_pill", Program.Private)!.GetValue(master)!;
             menu = pill.ContextMenu!;
-            opened = (_, _) =>
-            {
-                if (controller.State.MatchAuxiliaryMaterialStrength) AssertNoPopupFade(menu);
-            };
             rendered = (_, _) =>
             {
                 if (!menu.IsOpen) return;
-                if (controller.State.MatchAuxiliaryMaterialStrength) AssertNoPopupFade(menu);
                 observedFrames++;
             };
-            menu.Opened += opened;
             CompositionTarget.Rendering += rendered;
             // The very same detached template survives Paper -> Mica -> Acrylic.
             menu.ApplyTemplate();
@@ -704,7 +879,6 @@ internal static class MaterialPresentationChecks
                 Theme.Invalidate(); master.UpdateTheme(); Wait(60);
                 for (var attempt = 0; attempt < 2; attempt++)
                 {
-                    controller.State.MatchAuxiliaryMaterialStrength = attempt == 1;
                     var beforeFrames = observedFrames;
                     var point = pill.PointToScreen(new Point(pill.ActualWidth / 2, pill.ActualHeight / 2));
                     SetCursorPos((int)point.X, (int)point.Y); Wait(25);
@@ -713,24 +887,9 @@ internal static class MaterialPresentationChecks
                     Until(() => menu.IsOpen, "actual MASTER right click opens " + skin);
                     Wait(180);
                     Program.Assert(observedFrames > beforeFrames, "observe actual opening frames, not just the settled menu");
-                    var fullMaterial = controller.State.MatchAuxiliaryMaterialStrength;
-                    // Only transparent material popups need a forced local None. Opaque quiet
-                    // menus may use the normal system animation without exposing a plain frame.
-                    menu.Resources[SystemParameters.MenuPopupAnimationKey] = PopupAnimation.Fade;
-                    if (fullMaterial) AssertNoPopupFade(menu);
-                    menu.Resources.Remove(SystemParameters.MenuPopupAnimationKey);
                     var surface = Find(menu)!;
-                    var opacityOwners = new List<string>();
-                    for (DependencyObject? node = surface; node is Visual; node = VisualTreeHelper.GetParent(node))
-                        if (node is UIElement ui) opacityOwners.Add($"{ui.GetType().Name}:{ui.Opacity:F3}/{ui.IsVisible}");
-                    Console.WriteLine($"MASTER {skin}/{theme}/{attempt}: recipe={surface.Skin}; first={surface.FirstMenuRenderUsedBackground}; active={surface.IsBackgroundActive}; fallback={surface.MenuFallbackRenderCount}; capture={surface.HasBackgroundCapture}; frames={surface.BackgroundFrameCount}; suppress={surface.SuppressStaticBackgroundForOpening}; failure={surface.BackgroundFailure}; opacity={string.Join(',', opacityOwners)}");
-                    Program.Assert(surface.Skin == skin && !surface.HasBackgroundCapture,
-                        $"master {skin}/{theme}: current recipe stays capture-free after opening");
-                    Program.Assert(fullMaterial ? surface.IsBackgroundActive : !surface.IsBackgroundActive,
-                        $"master {skin}/{theme}: background transmission follows the full-material switch");
-                    if (fullMaterial)
-                        Program.Assert(surface.MenuFallbackRenderCount == 0,
-                            $"master {skin}/{theme}: transparent material has no plain-paper fallback frame");
+                    Program.Assert(surface.Skin == skin && surface.IsMenu,
+                        $"master {skin}/{theme}: correct lightweight surface after real right-click");
                     Program.Assert(menu.Opacity == 1, "master menu never hides content with a foreground opacity fade");
                     if (theme == "light" && skin == PaperSkins.Mica && attempt == 0)
                     {
@@ -766,13 +925,11 @@ internal static class MaterialPresentationChecks
             if (rendered != null) CompositionTarget.Rendering -= rendered;
             if (menu != null)
             {
-                if (opened != null) menu.Opened -= opened;
                 menu.IsOpen = false;
             }
             outside?.Close();
             master.CloseForReal(); SetCursorPos(cursor.X, cursor.Y);
-            (controller.State.PaperSkin, controller.State.Theme, controller.State.EnableAnimations,
-                controller.State.MatchAuxiliaryMaterialStrength) = original;
+            (controller.State.PaperSkin, controller.State.Theme, controller.State.EnableAnimations) = original;
             Theme.Invalidate();
         }
     }
@@ -781,7 +938,7 @@ internal static class MaterialPresentationChecks
         var state = controller.State;
         var original = (state.UseCapsuleMode, state.UseDeepCapsuleMode,
             state.EnableAnimations, state.ExperimentalEdgeCapsuleHoverPreview,
-            state.PaperSkin, state.Theme, state.MatchAuxiliaryMaterialStrength);
+            state.PaperSkin, state.Theme);
         var area = SystemParameters.WorkArea;
         var paper = new PaperData
         {
@@ -817,14 +974,14 @@ internal static class MaterialPresentationChecks
             CheckCapsuleExternalForeground(controller, content, content.ContextMenu!,
                 host.Handle, "EDGE", host.RefreshSkin,
                 area.Left + 180, area.Top + 120);
-            Console.WriteLine("PASS real EDGE right-click: external foreground, stable popup, outside click (both material strengths)");
+            Console.WriteLine("PASS real EDGE right-click: external foreground, stable popup and outside click");
         }
         finally
         {
             if (state.Papers.Contains(paper)) controller.DeletePaper(paper);
             (state.UseCapsuleMode, state.UseDeepCapsuleMode,
                 state.EnableAnimations, state.ExperimentalEdgeCapsuleHoverPreview,
-                state.PaperSkin, state.Theme, state.MatchAuxiliaryMaterialStrength) = original;
+                state.PaperSkin, state.Theme) = original;
             Theme.Invalidate();
         }
     }
@@ -861,11 +1018,10 @@ internal static class MaterialPresentationChecks
                 System.Globalization.CultureInfo.InvariantCulture));
             var externalX = (int)Math.Round(left + 95);
             var externalY = (int)Math.Round(top + 60);
-            foreach (var fullMaterial in new[] { false, true })
+            foreach (var skin in new[] { PaperSkins.Mica, PaperSkins.Acrylic })
             {
-                controller.State.PaperSkin = PaperSkins.Mica;
+                controller.State.PaperSkin = skin;
                 controller.State.Theme = "light";
-                controller.State.MatchAuxiliaryMaterialStrength = fullMaterial;
                 Theme.Invalidate();
                 refreshTheme();
                 Wait(70);
@@ -942,17 +1098,6 @@ internal static class MaterialPresentationChecks
                 }
             }
         }
-    }
-    private static void AssertNoPopupFade(ContextMenu menu)
-    {
-        var popup = LogicalTreeHelper.GetParent(menu) as Popup;
-        Program.Assert(popup != null && popup.PopupAnimation == PopupAnimation.None &&
-            !DependencyPropertyHelper.GetValueSource(popup, Popup.PopupAnimationProperty).IsExpression,
-            "live popup animation is a local None, not a dynamic system Fade expression");
-        for (DependencyObject? node = menu; node is Visual; node = VisualTreeHelper.GetParent(node))
-            if (node is UIElement ui)
-                Program.Assert(ui.Opacity == 1 && !DependencyPropertyHelper.GetValueSource(ui, UIElement.OpacityProperty).IsAnimated,
-                    "menu and PopupRoot have no fade at Opened or during composition");
     }
     [StructLayout(LayoutKind.Sequential)] private struct CursorPoint { public int X, Y; }
     [DllImport("user32.dll")] private static extern bool GetCursorPos(out CursorPoint point);

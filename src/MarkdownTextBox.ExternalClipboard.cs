@@ -458,7 +458,7 @@ public sealed partial class MarkdownTextBox
                 BitmapCreateOptions.PreservePixelFormat,
                 BitmapCacheOption.OnLoad).Frames[0];
             frame.Freeze();
-            data.SetImage(frame);
+            ClipboardHelper.AddImageFormats(data, frame);
         }
         catch
         {

@@ -23,6 +23,28 @@ public sealed partial class AppController
             new(StringComparer.Ordinal);
     private long _edgeCapsuleNativeTransactionGroupGeneration;
 
+    private readonly Dictionary<string, MasterCapsuleWindow> _edgeCapsuleYieldMasters =
+        new(StringComparer.Ordinal);
+
+    // Placement previews are independent queue translations. Do not join their keys
+    // to the atomic cross-queue hover/ownership transaction (which must use HDWP).
+    internal void BeginEdgeCapsuleYieldTransaction(System.Windows.Threading.Dispatcher dispatcher)
+    {
+        if (IsExiting || !State.EnableAnimations ||
+            _edgeCapsuleVisualTransactionCommitOperation is
+                { Status: DispatcherOperationStatus.Pending }) return;
+        _edgeCapsuleVisualTransactionCommitOperation = dispatcher.BeginInvoke(
+            (Action)CommitEdgeCapsuleVisualTransaction, DispatcherPriority.Send);
+    }
+
+    internal bool TryStageMasterQueueYield(MasterCapsuleWindow master)
+    {
+        if (IsExiting || !State.EnableAnimations || !master.CanRouteQueueProxyInput) return false;
+        BeginEdgeCapsuleYieldTransaction(master.Dispatcher);
+        _edgeCapsuleYieldMasters[master.QueueProxyKey] = master;
+        return true;
+    }
+
     internal void BeginEdgeCapsuleVisualTransaction(
         PaperWindow initiator)
     {
@@ -134,9 +156,11 @@ public sealed partial class AppController
         var entries =
             _edgeCapsuleVisualTransactionEntries.Values.ToArray();
         _edgeCapsuleVisualTransactionEntries.Clear();
+        var masters = new Dictionary<string, MasterCapsuleWindow>(_edgeCapsuleYieldMasters);
+        _edgeCapsuleYieldMasters.Clear();
         try
         {
-            if (entries.Length == 0 || IsExiting)
+            if ((entries.Length == 0 && masters.Count == 0) || IsExiting)
             {
                 return;
             }
@@ -171,21 +195,24 @@ public sealed partial class AppController
             CommitEdgeCapsuleVisualTransactionGroup(
                 transactionEntries,
                 transactionQueueKeys,
-                transactionTimestamp);
+                transactionTimestamp,
+                transactionQueueKeys.Count == 1
+                    ? masters.GetValueOrDefault(transactionQueueKeys.First()) : null);
 
-            foreach (var queueGroup in entries
-                         .Where(entry =>
-                             !transactionQueueKeys.Contains(
-                                 entry.QueueKey))
-                         .GroupBy(
-                             entry => entry.QueueKey,
-                             StringComparer.Ordinal))
+            foreach (var queueKey in entries.Select(entry => entry.QueueKey)
+                         .Concat(masters.Keys).Distinct(StringComparer.Ordinal)
+                         .Where(key => !transactionQueueKeys.Contains(key)))
             {
                 CommitEdgeCapsuleVisualTransactionGroup(
-                    queueGroup.ToArray(),
-                    EmptyQueueKeySet,
-                    transactionTimestamp);
+                    entries.Where(entry => entry.QueueKey == queueKey).ToArray(),
+                    EmptyQueueKeySet, transactionTimestamp,
+                    masters.GetValueOrDefault(queueKey));
             }
+            // Explicit atomic transactions can include a master endpoint too; its
+            // own source remains direct when the paper group cannot be translated.
+            foreach (var (key, master) in masters)
+                if (transactionQueueKeys.Count > 1 && transactionQueueKeys.Contains(key))
+                    master.ApplyQueueProxyEndpoint();
         }
         finally
         {
@@ -228,15 +255,17 @@ public sealed partial class AppController
     private void CommitEdgeCapsuleVisualTransactionGroup(
         EdgeCapsuleVisualTransactionEntry[] entries,
         IReadOnlySet<string> transactionQueueKeys,
-        long transactionTimestamp)
+        long transactionTimestamp,
+        MasterCapsuleWindow? master = null)
     {
-        if (entries.Length == 0)
+        if (entries.Length == 0 && master == null)
         {
             return;
         }
 
         var queueKeys = entries
             .Select(entry => entry.QueueKey)
+            .Concat(master == null ? Array.Empty<string>() : new[] { master.QueueProxyKey })
             .Distinct(StringComparer.Ordinal)
             .ToArray();
         EdgeCapsuleQueueCompositionProxy? predecessor = null;
@@ -255,9 +284,9 @@ public sealed partial class AppController
                     // sources. Its completion resolves the latest reducer endpoint under cover.
                     return;
                 }
-                entries = CarryForwardEdgeCapsuleQueueProxyMembers(
-                    entries,
-                    predecessor);
+                entries = CarryForwardEdgeCapsuleQueueProxyMembers(entries, predecessor);
+                master ??= predecessor.Members.Select(member => member.Window)
+                    .OfType<MasterCapsuleWindow>().FirstOrDefault();
             }
         }
         else
@@ -286,7 +315,7 @@ public sealed partial class AppController
         var proxyPlan =
             TryCreateEdgeCapsuleQueueProxyPlan(
                 entries,
-                predecessor);
+                predecessor, master);
         if (proxyPlan != null)
         {
             var started =
@@ -294,7 +323,7 @@ public sealed partial class AppController
                     proxyPlan,
                     entries,
                     predecessor,
-                    out var proxyChangedRealHost);
+                    out var proxyChangedRealHost, master);
             realHostMayHaveChanged |= proxyChangedRealHost;
             if (started)
             {
@@ -320,8 +349,11 @@ public sealed partial class AppController
                 out var stillCurrent) &&
             ReferenceEquals(stillCurrent, predecessor))
         {
-            predecessor.CompleteAfterFailedSuccessor(
-                success: true);
+            predecessor.CompleteAfterFailedSuccessor(success: true);
+            // A newly moving master is not part of the retained generation's
+            // eventual handoff. Settle it explicitly if successor admission failed.
+            if (master != null && !predecessor.RetainsSource(master))
+                master.ApplyQueueProxyEndpoint();
             return;
         }
 
@@ -343,6 +375,8 @@ public sealed partial class AppController
                 .ToArray();
         }
 
+        master?.ApplyQueueProxyEndpoint();
+        if (entries.Length == 0) return;
         CommitEdgeCapsuleVisualTransactionNativeFallback(
             entries,
             transactionQueueKeys,
@@ -367,18 +401,18 @@ public sealed partial class AppController
 
         foreach (var member in predecessor.Members)
         {
-            if (member.Window.IsClosed)
+            if (member.Window is not PaperWindow window || window.IsClosed)
             {
                 continue;
             }
             if (byWindow.TryGetValue(
-                    member.Window,
+                    window,
                     out var existing))
             {
                 if (existing.Motion.Kind !=
                     EdgeCapsuleMotionKind.Animate)
                 {
-                    byWindow[member.Window] = existing with
+                    byWindow[window] = existing with
                     {
                         Motion = EdgeCapsuleMotion.Animate(
                             EdgeCapsuleTransitionReason.Placement,
@@ -388,9 +422,9 @@ public sealed partial class AppController
                 continue;
             }
 
-            byWindow[member.Window] =
+            byWindow[window] =
                 new EdgeCapsuleVisualTransactionEntry(
-                    member.Window,
+                    window,
                     predecessor.QueueKey,
                     EdgeCapsuleMotion.Animate(
                         EdgeCapsuleTransitionReason.Placement,

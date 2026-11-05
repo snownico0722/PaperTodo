@@ -6,10 +6,14 @@ using PaperTodo;
 internal static partial class Program
 {
     [STAThread]
-    private static int Main()
+    private static int Main(string[] args)
     {
+        if (ClipboardImageChecks.TryRunClipboardMode(args, out var clipboardResult))
+            return clipboardResult;
+
         new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
         var failures = 0;
+        ClipboardImageChecks.Run(Check);
         Check("Paper background image loading and layout", CheckPaperBackgroundToggle);
         Check("Full mode preserves quote source and undo history", () =>
         {
@@ -260,8 +264,6 @@ internal static partial class Program
             Require(table != null, "local rebase succeeds");
             WalkCaret(changed, next, table!, prefix.Length - 1, prefix.Length + syntax.Length + 3);
         });
-
-        RunLocalRedrawChecks(Check);
 
         Console.WriteLine($"Markdown editing checks: {failures} failure(s).");
         return failures == 0 ? 0 : 1;

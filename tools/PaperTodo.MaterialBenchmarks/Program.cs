@@ -12,7 +12,6 @@ internal static class Program
             Console.WriteLine("Material measurements:");
             Console.WriteLine("  --benchmark <json>");
             Console.WriteLine("  --drag-benchmark <json>");
-            Console.WriteLine("  --drag-snapshot-timing <json>");
             Console.WriteLine("Run in Release on Windows. Drag modes use real mouse input and an isolated fixture.");
             return 0;
         }
@@ -28,8 +27,6 @@ internal static class Program
             }
             if (args is ["--drag-benchmark", var dragOutput])
                 return MaterialDragBenchmarks.RunIsolated(dragOutput);
-            if (args is ["--drag-snapshot-timing", var timingOutput])
-                return MaterialDragBenchmarks.RunSnapshotTimingIsolated(timingOutput);
             if (args is ["--drag-fixture", var fixtureOutput])
             {
                 RequireFixture();
@@ -37,14 +34,6 @@ internal static class Program
                 MaterialDragBenchmarks.Run(controller, fixtureOutput);
                 return 0;
             }
-            if (args is ["--drag-snapshot-fixture", var snapshotOutput])
-            {
-                RequireFixture();
-                using var controller = new AppController();
-                MaterialDragBenchmarks.RunSnapshotTiming(controller, snapshotOutput);
-                return 0;
-            }
-
             Console.Error.WriteLine("Unknown arguments. Use --help.");
             return 2;
         }

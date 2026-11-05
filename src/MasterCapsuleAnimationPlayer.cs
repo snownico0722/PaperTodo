@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
+using System.Windows.Media;
 
 namespace PaperTodo;
 
@@ -49,19 +50,24 @@ internal sealed class MasterCapsuleAnimationPlayer : IDisposable
     private static long s_nextTimerId = 0x504100;
     private readonly Window _window;
     private readonly Image _image;
+    private readonly MasterCapsuleVisualClip? _standbyClip;
     private readonly nuint _timerId = (nuint)Interlocked.Increment(ref s_nextTimerId);
     private HwndSource? _source;
     private bool _timerRunning;
     private bool _disposed;
     private int _interval;
 
-    internal MasterCapsuleAnimationPlayer(Window window, Image image)
+    internal MasterCapsuleAnimationPlayer(Window window, Image image, MasterCapsuleVisualClip? standbyClip = null)
     {
         _window = window;
         _image = image;
+        _standbyClip = standbyClip;
         window.SourceInitialized += OnSourceInitialized;
         window.IsVisibleChanged += OnVisibilityChanged;
         image.IsVisibleChanged += OnVisibilityChanged;
+        image.SizeChanged += OnImageSizeChanged;
+        window.DpiChanged += OnDpiChanged;
+        window.SizeChanged += OnImageSizeChanged;
         window.Closed += OnClosed;
         window.Dispatcher.ShutdownStarted += OnClosed;
         AttachSource();
@@ -75,8 +81,14 @@ internal sealed class MasterCapsuleAnimationPlayer : IDisposable
     {
         if (_disposed) return;
         _window.VerifyAccess();
+        if (Playback?.Clip != playback?.Clip)
+        {
+            DetachClip();
+            if (playback != null) playback.Clip.FramesChanged += PresentFrame;
+        }
         Playback = playback;
         PresentFrame();
+        RefreshDisplaySize();
         RefreshTimer();
     }
 
@@ -110,7 +122,36 @@ internal sealed class MasterCapsuleAnimationPlayer : IDisposable
         AttachSource();
         Refresh();
     }
-    private void OnVisibilityChanged(object sender, DependencyPropertyChangedEventArgs e) => Refresh();
+    private void OnVisibilityChanged(object sender, DependencyPropertyChangedEventArgs e)
+    {
+        RefreshDisplaySize();
+        Refresh();
+    }
+    private void OnImageSizeChanged(object sender, SizeChangedEventArgs e) => RefreshDisplaySize();
+    private void OnDpiChanged(object sender, DpiChangedEventArgs e) => RefreshDisplaySize();
+
+    private void RefreshDisplaySize()
+    {
+        if (_disposed) return;
+        var dpi = VisualTreeHelper.GetDpi(_image);
+        Playback?.Clip.RequestDisplaySize(this, _window.IsVisible && _image.IsVisible
+            ? new Size(_image.ActualWidth * dpi.DpiScaleX, _image.ActualHeight * dpi.DpiScaleY)
+            : null);
+        // Prepare the independent drag artwork at the same display size before
+        // the first gesture. A drag-only image borrows the ordinary shell's bounds.
+        if (_standbyClip != null && _standbyClip != Playback?.Clip)
+            _standbyClip.RequestDisplaySize(this, _window.IsVisible
+                ? new Size((_image.IsVisible ? _image.ActualWidth : _window.ActualWidth) * dpi.DpiScaleX,
+                    (_image.IsVisible ? _image.ActualHeight : _window.ActualHeight) * dpi.DpiScaleY)
+                : null);
+    }
+
+    private void DetachClip()
+    {
+        if (Playback == null) return;
+        Playback.Clip.FramesChanged -= PresentFrame;
+        Playback.Clip.RequestDisplaySize(this, null);
+    }
     private void OnClosed(object? sender, EventArgs e) => Dispose();
 
     private void RefreshTimer()
@@ -155,10 +196,15 @@ internal sealed class MasterCapsuleAnimationPlayer : IDisposable
         StopTimer();
         if (_source is { IsDisposed: false }) _source.RemoveHook(OnWindowMessage);
         _source = null;
+        DetachClip();
+        _standbyClip?.RequestDisplaySize(this, null);
         Playback = null;
         _window.SourceInitialized -= OnSourceInitialized;
         _window.IsVisibleChanged -= OnVisibilityChanged;
         _image.IsVisibleChanged -= OnVisibilityChanged;
+        _image.SizeChanged -= OnImageSizeChanged;
+        _window.DpiChanged -= OnDpiChanged;
+        _window.SizeChanged -= OnImageSizeChanged;
         _window.Closed -= OnClosed;
         _window.Dispatcher.ShutdownStarted -= OnClosed;
     }

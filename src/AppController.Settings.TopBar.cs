@@ -273,6 +273,7 @@ public sealed partial class AppController
     {
         PaperTopBarShortcuts.NewTodo => Strings.Get("ShortcutNewTodo"),
         PaperTopBarShortcuts.NewNote => Strings.Get("ShortcutNewNote"),
+        PaperTopBarShortcuts.Workspace => Strings.Get("WorkspaceSettingsTitle"),
         PaperTopBarShortcuts.Association => Strings.Get("TopBarAssociation"),
         PaperTopBarShortcuts.ExternalEditor => Strings.Get("TopBarExternalEditor"),
         _ => action
@@ -293,6 +294,7 @@ public sealed partial class AppController
                 "M 15 3 H 21 V 9 M 10 14 L 21 3 " +
                 "M 21 13 V 19 A 2 2 0 0 1 19 21 H 5 " +
                 "A 2 2 0 0 1 3 19 V 5 A 2 2 0 0 1 5 3 H 11",
+            PaperTopBarShortcuts.Workspace => WorkspaceCycleIcon.PathData,
             _ => null
         };
         // Both font glyphs and vector paths live in the same centered slot.
@@ -308,7 +310,11 @@ public sealed partial class AppController
         {
             slot.Children.Add(new TextBlock
             {
-                Text = action == PaperTopBarShortcuts.NewTodo ? "✓" : "✎",
+                Text = action switch
+                {
+                    PaperTopBarShortcuts.NewTodo => "✓",
+                    _ => "✎"
+                },
                 FontFamily = AppTypography.SymbolFontFamily,
                 FontWeight = FontWeights.SemiBold,
                 Foreground = TrayWeakTextBrush,
@@ -320,12 +326,13 @@ public sealed partial class AppController
             return slot;
         }
 
-        var canvas = new Canvas { Width = 24, Height = 24 };
+        var isWorkspace = action == PaperTopBarShortcuts.Workspace;
+        var canvas = new Canvas { Width = isWorkspace ? 20 : 24, Height = isWorkspace ? 19 : 24 };
         canvas.Children.Add(new System.Windows.Shapes.Path
         {
             Data = Geometry.Parse(pathData),
             Stroke = TrayWeakTextBrush,
-            StrokeThickness = 2,
+            StrokeThickness = isWorkspace ? WorkspaceCycleIcon.StrokeThickness : 2,
             StrokeStartLineCap = PenLineCap.Round,
             StrokeEndLineCap = PenLineCap.Round,
             StrokeLineJoin = PenLineJoin.Round

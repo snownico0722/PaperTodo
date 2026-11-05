@@ -9,7 +9,7 @@ public sealed partial class AppController
     private PaperSettingsService? _publicSettings;
     internal PaperSettingsService PublicSettings => _publicSettings ??= new(
         CreatePublicSettingsCatalog(), () => IsRunning,
-        TryCommitExternalMutation, RunExternalPostCommitUi);
+        TryCommitExternalMutation, RunExternalPostCommitUi, () => WorkspaceSettingsUnavailable);
 
     private enum SettingEffects
     {
@@ -103,6 +103,8 @@ public sealed partial class AppController
 
         var oldCapsule = State.UseCapsuleMode;
         var oldDeep = State.UseDeepCapsuleMode;
+        var oldFreeQueues = State.UseCapsuleFreeQueues;
+        var oldMaster = State.UseCapsuleCollapseAll;
         var oldTaskbar = State.HidePapersFromTaskbar;
         var oldTopBarOrder = effects == SettingEffects.TopBar
             ? State.TopBarShortcutOrder.ToList() : null;
@@ -139,8 +141,13 @@ public sealed partial class AppController
                 {
                     if (id == "capsule.enabled" && value is false) State.UseDeepCapsuleMode = false;
                     if (id == "capsule.edge_enabled" && value is true) State.UseCapsuleMode = true;
-                    if (id == "capsule.master_enabled" && value is true)
+                    if ((id == "capsule.master_enabled" || id == "capsule.free_queues") && value is true)
                         State.UseCapsuleMode = State.UseDeepCapsuleMode = true;
+                    if (!State.UseCapsuleMode || !State.UseDeepCapsuleMode)
+                    {
+                        State.UseCapsuleFreeQueues = false;
+                        State.UseCapsuleCollapseAll = false;
+                    }
                     if (!State.UseDeepCapsuleMode || !State.UseCapsuleCollapseAll)
                     {
                         State.CapsuleCollapseAllActiveQueues.Clear();
@@ -177,6 +184,8 @@ public sealed partial class AppController
                 {
                     State.UseCapsuleMode = oldCapsule;
                     State.UseDeepCapsuleMode = oldDeep;
+                    State.UseCapsuleFreeQueues = oldFreeQueues;
+                    State.UseCapsuleCollapseAll = oldMaster;
                     State.CapsuleCollapseAllActiveQueues = oldQueues;
                 }
                 if (titles != null) foreach (var row in titles) row.Paper.Title = row.Title;

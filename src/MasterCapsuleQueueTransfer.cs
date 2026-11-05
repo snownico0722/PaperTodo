@@ -8,7 +8,8 @@ internal readonly record struct MasterCapsuleQueueTransferSnapshot(
     string[] SourceMonitorAliases,
     bool SourceWasCollapsed,
     bool SourceHadStartTopMargin,
-    double SourceStartTopMargin);
+    double SourceStartTopMargin,
+    FreeMasterDragLayout? FreeLayout = null);
 
 internal readonly record struct MasterCapsuleQueueTransferTarget(
     string MonitorDeviceName,

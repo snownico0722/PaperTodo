@@ -4,6 +4,9 @@ using PaperTodo.Plugin;
 
 namespace PaperTodo;
 
+// Transport-only metadata. The public MCP tool response remains DataReloadStatus.
+internal sealed record McpWorkspaceStatusEnvelope(object? Result, string WorkspaceToken);
+
 /// <summary>
 /// MCP transport adapter. JSON parsing and MCP authorization stay here; all PaperTodo reads,
 /// validation, persistence, rollback and UI reconciliation are delegated to PaperCommandService.
@@ -12,15 +15,38 @@ internal sealed partial class McpCommandService
 {
     private readonly AppController _controller;
     private readonly PaperCommandService _commands;
+    private readonly long _workspaceGeneration;
 
     public McpCommandService(AppController controller, PaperCommandService commands)
     {
         _controller = controller;
         _commands = commands;
+        _workspaceGeneration = controller.WorkspaceGeneration;
+    }
+
+    // Only the internal named-pipe protocol carries this lease. Public MCP tools stay unchanged.
+    // A stale bridge must not silently retarget its work after a workspace switch.
+    internal object? ExecutePipeBound(JsonElement request)
+    {
+        var method = RequiredString(request, "method", 80);
+        if (method is not ("get_workspace_binding" or "get_data_reload_status"))
+        {
+            if (!request.TryGetProperty("workspace_token", out var token) ||
+                token.ValueKind != JsonValueKind.String ||
+                !string.Equals(token.GetString(), _controller.WorkspaceBindingToken, StringComparison.Ordinal))
+                throw new McpApiException("workspace_changed",
+                    "The workspace changed; restart the MCP connection before making another request.");
+        }
+        var result = Execute(request);
+        return method == "get_data_reload_status"
+            ? new McpWorkspaceStatusEnvelope(result, _controller.WorkspaceBindingToken)
+            : result;
     }
 
     public object? Execute(JsonElement request)
     {
+        if (_workspaceGeneration != _controller.WorkspaceGeneration || _controller.IsWorkspaceSwitching)
+            throw new McpApiException("workspace_changed", "The workspace changed; query the current workspace before retrying.");
         if (!_controller.IsRunning)
         {
             throw new McpApiException("app_exiting", "PaperTodo is exiting.");
@@ -41,6 +67,10 @@ internal sealed partial class McpCommandService
         {
             return method switch
             {
+                "reload_data" => ReloadData(),
+                "merge_data" => MergeData(parameters),
+                "get_workspace_binding" => new { token = _controller.WorkspaceBindingToken },
+                "get_data_reload_status" => _commands.GetDataReloadStatus(),
                 "list_settings" => ListSettings(parameters),
                 "get_setting" => GetSetting(parameters),
                 "set_setting" => SetSetting(parameters),
@@ -59,6 +89,8 @@ internal sealed partial class McpCommandService
                 "update_todo" => UpdateTodo(parameters),
                 "set_todo_reminder" => SetTodoReminder(parameters),
                 "write_note" => WriteNote(parameters),
+                "insert_note_image" => InsertNoteImage(parameters),
+                "read_note_image" => ReadNoteImage(parameters),
                 "delete_paper" => DeletePaper(parameters),
                 "delete_todo" => DeleteTodo(parameters),
                 _ => throw new McpApiException(
@@ -96,6 +128,20 @@ internal sealed partial class McpCommandService
             throw new McpApiException("invalid_params", "value is required.");
         var result = _controller.PublicSettings.Set(id, value);
         return result with { Setting = SettingsAccess(result.Setting) };
+    }
+
+    private DataReloadResult ReloadData()
+    {
+        RequireFullWrites();
+        return _commands.ReloadData(PaperOperationContext.Mcp());
+    }
+
+
+    private DataReloadResult MergeData(JsonElement parameters)
+    {
+        RequireFullWrites();
+        return _commands.MergeData(PaperOperationContext.Mcp(),
+            RequiredString(parameters, "baseline_json", int.MaxValue));
     }
 
     private object ListPapers(JsonElement parameters)
@@ -636,13 +682,15 @@ internal sealed partial class McpCommandService
             throw new McpApiException("invalid_params", $"{name} cannot be empty.");
         }
         var tooLong = string.Equals(name, "title", StringComparison.Ordinal)
-            ? PaperTitles.ExceedsTextElementLimit(text, maxLength)
+            ? PaperTitles.ExceedsTitleLengthLimit(text, maxLength)
             : text.Length > maxLength;
         if (tooLong)
         {
             throw new McpApiException(
                 "invalid_params",
-                $"{name} cannot exceed {maxLength} characters.");
+                string.Equals(name, "title", StringComparison.Ordinal)
+                    ? $"{name} cannot exceed {maxLength} full-width characters (two half-width characters count as one)."
+                    : $"{name} cannot exceed {maxLength} characters.");
         }
         return text;
     }

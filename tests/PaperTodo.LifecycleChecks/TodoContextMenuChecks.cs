@@ -262,7 +262,6 @@ internal static class TodoContextMenuChecks
     {
         Item(menu, Strings.Get("MenuTodoItem"));
         Item(menu, Strings.Get("MenuDeleteItem"));
-        Item(menu, Strings.Get("MenuClearDone"));
     }
 
     private static MenuItem Item(ContextMenu menu, string header) =>

@@ -21,7 +21,7 @@ namespace PaperTodo;
 // down to slot 1..N). Clicking toggles queue retraction; vertical drag moves the queue anchor.
 // A horizontal pull hands only the floating visual to the shared EdgeCapsuleDragWindow while the
 // controller owns the queue transfer. The master never becomes a Paper/presenter authority.
-public sealed class MasterCapsuleWindow : Window
+public sealed partial class MasterCapsuleWindow : Window
 {
     private enum MasterGestureState
     {
@@ -35,7 +35,8 @@ public sealed class MasterCapsuleWindow : Window
         DeviceScreenPoint StartScreenPosition,
         string SourceQueueKey,
         bool SourceHadStartTopMargin,
-        double StartTopMargin);
+        double StartTopMargin,
+        FreeMasterDragLayout? FreeLayout = null);
 
     private const int WmSettingChange = 0x001A;
     private const int WmDisplayChange = 0x007E;
@@ -66,8 +67,9 @@ public sealed class MasterCapsuleWindow : Window
     // own master pill at slot 0 of that queue. Geometry resolves against this queue's monitor+edge.
     private EdgeCapsuleEdge _queueEdge;
     private string _queueMonitorDeviceName = "";
+    private string _queueKey = "";
 
-    private readonly BitmapSource? _skinSource;
+    private readonly MasterCapsuleVisualClip? _skinSource;
     private Image? _skinImage;
     private MasterCapsuleAnimationPlayer? _skinPlayer;
     private readonly MasterCapsulePlayback? _normalSkinPlayback;
@@ -86,8 +88,6 @@ public sealed class MasterCapsuleWindow : Window
     private bool _active;
     private MasterGestureState _gestureState;
     private double _currentTopDip = double.NaN;
-    private MonitorGeometry? _animatedMonitorGeometry;
-    private double _animatedWidthDip;
     private int _moveGeneration;
     private bool _isClosingForReal;
     // Small vertical movement keeps adjusting the queue anchor. Pulling horizontally beyond the
@@ -95,33 +95,21 @@ public sealed class MasterCapsuleWindow : Window
     // this master is represented by the shared FloatingFree drag HWND until the drop commits.
     private MasterDragSession? _dragSession;
     private EdgeCapsuleDragWindow? _floatingDragHost;
-    private CancellationTokenSource? _floatingDragBackgroundCapture;
     private IntPtr _floatingFullscreenAvoidanceWindow;
     private MasterCapsuleQueueTransferSnapshot? _queueTransferSnapshot;
     private bool _queueTransferCanceled;
 
-    private static readonly DependencyProperty AnimatedTopProperty =
-        DependencyProperty.Register(
-            nameof(AnimatedTop),
-            typeof(double),
-            typeof(MasterCapsuleWindow),
-            new PropertyMetadata(double.NaN, OnAnimatedTopChanged));
-
-    private double AnimatedTop
-    {
-        get => (double)GetValue(AnimatedTopProperty);
-        set => SetValue(AnimatedTopProperty, value);
-    }
-
-    public MasterCapsuleWindow(AppController controller, EdgeCapsuleEdge queueEdge, string queueMonitorDeviceName)
+    public MasterCapsuleWindow(AppController controller, EdgeCapsuleEdge queueEdge, string queueMonitorDeviceName,
+        string? queueKey = null)
     {
         _controller = controller;
-        _skinSource = MasterCapsuleSkin.Current;
+        _skinSource = MasterCapsuleSkin.Visuals.Normal;
         _normalSkinPlayback = MasterCapsuleSkin.Visuals.Normal is { } normalClip
             ? new MasterCapsulePlayback(normalClip, controller.State.MasterCapsuleAnimationFps)
             : null;
         _queueEdge = queueEdge;
         _queueMonitorDeviceName = queueMonitorDeviceName ?? "";
+        _queueKey = queueKey ?? controller.MasterCapsuleQueueKey(_queueMonitorDeviceName, _queueEdge);
         _contextMenuSession = new DeepCapsuleContextMenuSession(
             controller,
             $"master:{Guid.NewGuid():N}");
@@ -278,7 +266,7 @@ public sealed class MasterCapsuleWindow : Window
         {
             _skinImage = new Image
             {
-                Source = _skinSource,
+                Source = _skinSource?.FirstFrame,
                 Stretch = Stretch.Uniform,
                 IsHitTestVisible = false,
                 Visibility = _skinSource != null ? Visibility.Visible : Visibility.Collapsed,
@@ -286,7 +274,7 @@ public sealed class MasterCapsuleWindow : Window
             };
             RenderOptions.SetBitmapScalingMode(_skinImage, BitmapScalingMode.HighQuality);
             content.Children.Add(_skinImage);
-            _skinPlayer = new MasterCapsuleAnimationPlayer(this, _skinImage);
+            _skinPlayer = new MasterCapsuleAnimationPlayer(this, _skinImage, MasterCapsuleSkin.Visuals.Drag);
             _skinPlayer.Play(_normalSkinPlayback);
         }
 
@@ -314,11 +302,13 @@ public sealed class MasterCapsuleWindow : Window
         };
         _pill.PreviewMouseLeftButtonDown += (_, e) =>
         {
+            _controller.CompleteEdgeCapsuleQueueCompositionProxyFor(this);
             _dragSession = new MasterDragSession(
                 DeviceScreenPoint.FromPoint(PointToScreen(e.GetPosition(this))),
-                _controller.MasterCapsuleQueueKey(_queueMonitorDeviceName, _queueEdge),
-                _controller.HasDeepCapsuleStartTopMarginForQueue(_queueMonitorDeviceName, _queueEdge),
-                _controller.DeepCapsuleStartTopMarginForQueue(_queueMonitorDeviceName, _queueEdge));
+                _queueKey,
+                _controller.HasDeepCapsuleStartTopMarginForQueue(_queueKey),
+                _controller.MasterCapsuleStartTopMargin(_queueKey),
+                _controller.CaptureFreeMasterDragLayout(_queueMonitorDeviceName, _queueEdge, _queueKey));
             _gestureState = MasterGestureState.Pending;
             _pill.CaptureMouse();
             e.Handled = true;
@@ -351,13 +341,12 @@ public sealed class MasterCapsuleWindow : Window
             var hadGesture =
                 _gestureState != MasterGestureState.Idle &&
                 _dragSession != null;
-            var wasDragging = FinishMasterGesture(commit: true, clearFocus: false);
+            var wasDragging = FinishMasterGesture(commit: true, clearFocus: false,
+                releasePointer: DeviceScreenPoint.FromPoint(PointToScreen(e.GetPosition(this))));
             if (hadGesture && !wasDragging)
             {
-                _controller.SuppressEdgeCapsulePreviewForMasterQueueLayout(
-                    _queueMonitorDeviceName,
-                    _queueEdge);
-                _controller.ToggleCapsuleCollapseAllActive(_queueMonitorDeviceName, _queueEdge);
+                _controller.SuppressEdgeCapsulePreviewForMasterQueueLayout(_queueKey);
+                _controller.ToggleCapsuleCollapseAllActive(_queueKey);
             }
 
             ClearCapsuleInteractionKeyboardFocus();
@@ -386,7 +375,11 @@ public sealed class MasterCapsuleWindow : Window
 
         // A display change can invalidate the pressed queue before the delayed layout refresh
         // retires its master. Never apply that gesture's source margin to the fallback queue.
-        if (!string.Equals(session.SourceQueueKey,
+        if (!string.Equals(session.SourceQueueKey, _queueKey, StringComparison.Ordinal) ||
+            // FreeLayout captured the LIVE edge at pointer-down, which may already
+            // be the primary fallback. Keep the persistent identity separate so a
+            // new post-disconnect gesture works, while an older gesture is revoked.
+            !string.Equals(session.FreeLayout?.EdgeKey ?? EdgeCapsuleQueueIds.StripInstance(session.SourceQueueKey),
                 _controller.MasterCapsuleQueueKey(_queueMonitorDeviceName, _queueEdge),
                 StringComparison.Ordinal))
         {
@@ -423,11 +416,14 @@ public sealed class MasterCapsuleWindow : Window
         {
             _gestureState = MasterGestureState.Dragging;
             ++_moveGeneration;
-            _animatedMonitorGeometry = null;
-            BeginAnimation(AnimatedTopProperty, null);
         }
 
-        var targetMargin = session.StartTopMargin + deltaY;
+        var targetMargin = (session.FreeLayout?.MasterTopDip ?? session.StartTopMargin) + deltaY;
+        if (session.FreeLayout is { } freeLayout)
+        {
+            _controller.PreviewFreeMasterQueueTop(freeLayout, targetMargin, currentScreenPos);
+            return true;
+        }
         _controller.SetDeepCapsuleStartTopMargin(
             _queueMonitorDeviceName,
             _queueEdge,
@@ -497,6 +493,8 @@ public sealed class MasterCapsuleWindow : Window
             !_controller.State.ExperimentalDockedCapsulesNonTopmost &&
             avoidanceWindow == IntPtr.Zero &&
             !_controller.SuppressDeepCapsuleTopmostForContextMenu;
+        if (Topmost != topmost)
+            _controller.CompleteEdgeCapsuleQueueCompositionProxyFor(this);
         Topmost = topmost;
         if (IsVisible)
         {
@@ -533,12 +531,13 @@ public sealed class MasterCapsuleWindow : Window
 
     private void OnFloatingDragHostLocationChanged(object? sender, EventArgs e)
     {
-        if (ReferenceEquals(sender, _floatingDragHost) &&
-            _floatingFullscreenAvoidanceWindow !=
-                _controller.FullscreenAvoidanceWindowFor(_floatingDragHost))
-        {
+        if (!ReferenceEquals(sender, _floatingDragHost)) return;
+        if (_queueTransferSnapshot is { FreeLayout: not null } snapshot &&
+            WindowNative.TryGetCursorScreenPosition(out var pointer))
+            _controller.PreviewFreeMasterQueueDropGhost(snapshot, pointer);
+        if (_floatingFullscreenAvoidanceWindow !=
+            _controller.FullscreenAvoidanceWindowFor(_floatingDragHost))
             RefreshFloatingDragTopmost();
-        }
     }
 
     private void OnFloatingDragHostUnexpectedlyClosed(object? sender, EventArgs e)
@@ -552,7 +551,6 @@ public sealed class MasterCapsuleWindow : Window
 
     private void ReleaseFloatingDragHostHandlers()
     {
-        EndFloatingDragBackground();
         if (_floatingDragHost is { } host)
         {
             host.LocationChanged -= OnFloatingDragHostLocationChanged;
@@ -560,66 +558,6 @@ public sealed class MasterCapsuleWindow : Window
             _floatingDragHost = null;
         }
         _floatingFullscreenAvoidanceWindow = IntPtr.Zero;
-    }
-
-    private async Task PrepareFloatingDragBackgroundAsync(EdgeCapsuleDragWindow host)
-    {
-        EndFloatingDragBackground();
-        if (host.HasMasterSkin ||
-            !_controller.State.MatchAuxiliaryMaterialStrength ||
-            !PaperSkins.UsesSampledAuxiliary(Theme.Skin) ||
-            SystemParameters.HighContrast ||
-            !DwmMicaApi.Instance.EffectsEnabled)
-        {
-            return;
-        }
-
-        var capture = new CancellationTokenSource();
-        _floatingDragBackgroundCapture = capture;
-        host.BeginDragBackground();
-        var retained = false;
-        try
-        {
-            var snapshot = await DesktopBackgroundCapture.PrepareDragAsync(
-                new WindowInteropHelper(host).Handle,
-                capture.Token);
-            if (snapshot != null &&
-                ReferenceEquals(capture, _floatingDragBackgroundCapture) &&
-                ReferenceEquals(host, _floatingDragHost) &&
-                _controller.State.MatchAuxiliaryMaterialStrength &&
-                PaperSkins.UsesSampledAuxiliary(Theme.Skin) &&
-                !SystemParameters.HighContrast && DwmMicaApi.Instance.EffectsEnabled)
-            {
-                host.UseDragBackground(snapshot);
-                retained = true;
-            }
-        }
-        catch (OperationCanceledException)
-        {
-        }
-        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or
-            InvalidOperationException or ExternalException or ArgumentException or NotSupportedException)
-        {
-            System.Diagnostics.Debug.WriteLine(
-                "Master drag background unavailable; keeping the live material: " + ex.Message);
-        }
-        finally
-        {
-            if (!retained && ReferenceEquals(capture, _floatingDragBackgroundCapture))
-                EndFloatingDragBackground();
-        }
-    }
-
-    private void EndFloatingDragBackground()
-    {
-        var capture = _floatingDragBackgroundCapture;
-        _floatingDragBackgroundCapture = null;
-        if (capture != null)
-        {
-            capture.Cancel();
-            capture.Dispose();
-        }
-        _floatingDragHost?.EndDragBackground();
     }
 
     internal void MarkQueueTransferCommitted(MasterCapsuleQueueTransferSnapshot snapshot)
@@ -635,6 +573,8 @@ public sealed class MasterCapsuleWindow : Window
 
     internal void CancelQueueTransfer()
     {
+        if (_gestureState is MasterGestureState.Pending or MasterGestureState.Dragging)
+            FinishMasterGesture(commit: false);
         if (_queueTransferSnapshot is not { } snapshot || _queueTransferCanceled)
         {
             return;
@@ -644,7 +584,6 @@ public sealed class MasterCapsuleWindow : Window
         // The native move loop can still be on the stack. Withdraw its visible surface now,
         // but keep the lease until that call returns so no later drag can rebind its HWND.
         _floatingDragHost?.Hide();
-        EndFloatingDragBackground();
         _controller.CancelMasterCapsuleQueueTransfer(snapshot);
     }
 
@@ -708,13 +647,16 @@ public sealed class MasterCapsuleWindow : Window
                 _queueEdge,
                 _glyph.Text,
                 _label.Text,
-                out var options) ||
+                out var options,
+                _queueKey) ||
             !_controller.TryBeginMasterCapsuleQueueTransfer(
                 _queueMonitorDeviceName,
                 _queueEdge,
                 session.StartTopMargin,
                 out var snapshot,
-                session.SourceHadStartTopMargin))
+                session.SourceHadStartTopMargin,
+                session.FreeLayout,
+                _queueKey))
         {
             return false;
         }
@@ -751,8 +693,6 @@ public sealed class MasterCapsuleWindow : Window
             _queueTransferCanceled = false;
             _gestureState = MasterGestureState.QueueTransfer;
             ++_moveGeneration;
-            _animatedMonitorGeometry = null;
-            BeginAnimation(AnimatedTopProperty, null);
 
             if (_pill.IsMouseCaptured)
             {
@@ -780,10 +720,7 @@ public sealed class MasterCapsuleWindow : Window
             {
                 Hide();
             }
-
-            // The source is hidden and this HWND can now be excluded from the same one-shot
-            // virtual-desktop capture used by ordinary capsule drags. Movement only crops it.
-            _ = PrepareFloatingDragBackgroundAsync(floatingHost);
+            _controller.PreviewFreeMasterQueueDropGhost(snapshot, currentScreenPos);
 
             var outcome = floatingHost.PrepareAndRunNativeDrag(
                 currentScreenPos,
@@ -796,6 +733,7 @@ public sealed class MasterCapsuleWindow : Window
                 ReferenceEquals(floatingHost, _floatingDragHost) &&
                 outcome.Result == EdgeCapsuleNativeDragResult.Completed)
             {
+                _controller.PreviewFreeMasterQueueDropGhost(snapshot, outcome.DropPosition);
                 committed = _controller.CommitMasterCapsuleQueueTransfer(
                     snapshot,
                     outcome.DropPosition,
@@ -813,6 +751,7 @@ public sealed class MasterCapsuleWindow : Window
         }
         finally
         {
+            _controller.EndFreeMasterQueueDropGhost();
             _queueTransferSnapshot = null;
             _gestureState = MasterGestureState.Idle;
             _dragSession = null;
@@ -905,7 +844,8 @@ public sealed class MasterCapsuleWindow : Window
         _floatingDragHost?.RefreshMasterSkinFrameRate(rate);
     }
 
-    private bool FinishMasterGesture(bool commit, bool clearFocus = true)
+    private bool FinishMasterGesture(bool commit, bool clearFocus = true,
+        DeviceScreenPoint? releasePointer = null)
     {
         var session = _dragSession;
         var wasDragging = _gestureState == MasterGestureState.Dragging && session != null;
@@ -923,7 +863,19 @@ public sealed class MasterCapsuleWindow : Window
             // Live movement updates the queue immediately so the stack follows the pointer.
             // Only MouseUp commits that value. Every other exit restores the original margin
             // and its presence, so a canceled preview cannot pin the current product default.
-            if (commit)
+            if (session!.FreeLayout is { } freeLayout)
+            {
+                // The same captured vertical gesture can MERGE by releasing over a
+                // visible peer master. An independent drop commits its bounded anchor
+                // and the previewed local spacing; neither needs a floating handoff.
+                var merged = commit && releasePointer is { } point &&
+                    _controller.TryCommitDockedFreeMasterQueueMerge(
+                        freeLayout, point, session.StartTopMargin,
+                        session.SourceHadStartTopMargin);
+                if (!merged)
+                    _controller.FinishFreeMasterQueueDrag(freeLayout, commit);
+            }
+            else if (commit)
             {
                 _controller.SetDeepCapsuleStartTopMargin(
                     _queueMonitorDeviceName,
@@ -1093,82 +1045,53 @@ public sealed class MasterCapsuleWindow : Window
         }
     }
 
-    public void SetQueue(EdgeCapsuleEdge queueEdge, string queueMonitorDeviceName)
+    public void SetQueue(EdgeCapsuleEdge queueEdge, string queueMonitorDeviceName, string? queueKey = null)
     {
         _queueEdge = queueEdge;
         _queueMonitorDeviceName = queueMonitorDeviceName ?? "";
+        _queueKey = queueKey ?? _controller.MasterCapsuleQueueKey(_queueMonitorDeviceName, _queueEdge);
+    }
+
+    private double? _queueTopPreview;
+    internal void SetQueueTopPreview(double? top) => _queueTopPreview = top;
+
+    // Drag previews only change position. Keep count, theme and z-order updates
+    // in the normal state/lifecycle path, and do not schedule an unchanged move.
+    internal void PreviewQueueTop(double top, bool animate = false)
+    {
+        if (_queueTopPreview == top) return;
+        _queueTopPreview = top;
+        MoveToTarget(animate);
     }
 
     private double QueueStartTopMargin =>
-        _controller.DeepCapsuleStartTopMarginForQueue(_queueMonitorDeviceName, _queueEdge);
+        _queueTopPreview ?? _controller.MasterCapsuleStartTopMargin(_queueKey);
 
     private int QueueSlotCount => Math.Max(1, _count + 1);
 
+    private double QueueTopForArea(Rect area) =>
+        _controller.State.UseCapsuleFreeQueues
+            ? EdgeCapsuleLayout.FreeQueueTopForIndex(0, QueueStartTopMargin, area, _controller.DeepCapsuleGap)
+            : EdgeCapsuleLayout.TopForIndex(0, QueueStartTopMargin, area, QueueSlotCount, _controller.DeepCapsuleGap, _controller.MasterCapsuleExtraHeightDip);
+
     private void MoveToTarget(bool animate)
     {
-        if (_isClosingForReal)
-        {
-            return;
-        }
-
+        if (_isClosingForReal) return;
         RefreshMasterSkinFrameRate();
         var moveGeneration = ++_moveGeneration;
+        if (animate && _controller.TryStageMasterQueueYield(this)) return;
+        _controller.CompleteEdgeCapsuleQueueCompositionProxyFor(this);
+        if (_controller.IsEdgeCapsuleQueueProxyRetainingSource(this)) return;
         if (!WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(
-                _queueMonitorDeviceName,
-                this,
-                out var geometry))
+                _queueMonitorDeviceName, this, out var geometry))
         {
             ScheduleMasterSettle(moveGeneration);
             return;
         }
 
-        animate = animate && _controller.State.EnableAnimations;
-        var localArea = geometry.LocalWorkAreaDip;
-        var requestedWidth = MasterDockedWidth(geometry.DpiScaleY);
-        var targetTop = EdgeCapsuleLayout.TopForIndex(
-            0,
-            QueueStartTopMargin,
-            localArea,
-            QueueSlotCount,
-            _controller.DeepCapsuleGap,
-            _controller.MasterCapsuleExtraHeightDip);
-        var currentTop = double.IsNaN(_currentTopDip) ? targetTop : _currentTopDip;
-
-        ApplyMasterDeviceBounds(currentTop, requestedWidth, geometry);
-        if (!animate || Math.Abs(currentTop - targetTop) < 0.5)
-        {
-            _animatedMonitorGeometry = null;
-            BeginAnimation(AnimatedTopProperty, null);
-            ApplyMasterDeviceBounds(targetTop, requestedWidth, geometry);
-            ScheduleMasterSettle(moveGeneration);
-            return;
-        }
-
-        // One animation is one monitor-space transaction. A display/DPI refresh starts a new
-        // generation; individual frames never re-enumerate screens or switch scale mid-flight.
-        _animatedMonitorGeometry = geometry;
-        _animatedWidthDip = requestedWidth;
-        var topAnim = new DoubleAnimation
-        {
-            From = currentTop,
-            To = targetTop,
-            Duration = TimeSpan.FromMilliseconds(
-                AnimationTiming.ScaleMilliseconds(EdgeCapsuleLayout.SlotMoveMilliseconds)),
-            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
-        };
-        topAnim.Completed += (_, _) =>
-        {
-            if (moveGeneration != _moveGeneration)
-            {
-                return;
-            }
-
-            _animatedMonitorGeometry = null;
-            BeginAnimation(AnimatedTopProperty, null);
-            ApplyMasterDeviceBounds(targetTop, requestedWidth, geometry);
-            ScheduleMasterSettle(moveGeneration);
-        };
-        BeginAnimation(AnimatedTopProperty, topAnim, HandoffBehavior.SnapshotAndReplace);
+        ApplyMasterDeviceBounds(QueueTopForArea(geometry.LocalWorkAreaDip),
+            MasterDockedWidth(geometry.DpiScaleY), geometry);
+        ScheduleMasterSettle(moveGeneration);
     }
 
     private void ScheduleMasterSettle(int moveGeneration, int pass = 0)
@@ -1187,13 +1110,7 @@ public sealed class MasterCapsuleWindow : Window
                     return;
                 }
 
-                var targetTop = EdgeCapsuleLayout.TopForIndex(
-                    0,
-                    QueueStartTopMargin,
-                    geometry.LocalWorkAreaDip,
-                    QueueSlotCount,
-                    _controller.DeepCapsuleGap,
-                    _controller.MasterCapsuleExtraHeightDip);
+                var targetTop = QueueTopForArea(geometry.LocalWorkAreaDip);
                 ApplyMasterDeviceBounds(
                     targetTop,
                     MasterDockedWidth(geometry.DpiScaleY),
@@ -1246,32 +1163,8 @@ public sealed class MasterCapsuleWindow : Window
     }
 
     // Local target-monitor DIP. Real capsule hosts use the same coordinate space.
-    public double AnchorTop => EdgeCapsuleLayout.TopForIndex(
-        0,
-        QueueStartTopMargin,
-        EdgeCapsuleLayout.LocalWorkAreaForQueue(_queueMonitorDeviceName),
-        QueueSlotCount,
-        _controller.DeepCapsuleGap,
-        _controller.MasterCapsuleExtraHeightDip);
+    public double AnchorTop => QueueTopForArea(EdgeCapsuleLayout.LocalWorkAreaForQueue(_queueMonitorDeviceName));
 
-    private static void OnAnimatedTopChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
-    {
-        if (d is MasterCapsuleWindow w &&
-            !w._isClosingForReal &&
-            e.NewValue is double top &&
-            !double.IsNaN(top) &&
-            !double.IsInfinity(top))
-        {
-            if (w._animatedMonitorGeometry is MonitorGeometry geometry)
-            {
-                w.ApplyMasterDeviceBounds(top, w._animatedWidthDip, geometry);
-            }
-            else
-            {
-                w.ApplyMasterDeviceBounds(top);
-            }
-        }
-    }
     // First-time show: position at the final edge-aligned spot BEFORE becoming visible,
     // then fade in. This avoids both the top-left flash and the slide-in from the wrong place.
     internal void PrepareQueueTransferTarget(int count, bool active)
@@ -1331,13 +1224,7 @@ public sealed class MasterCapsuleWindow : Window
             return false;
         }
 
-        var targetTop = EdgeCapsuleLayout.TopForIndex(
-            0,
-            QueueStartTopMargin,
-            geometry.LocalWorkAreaDip,
-            QueueSlotCount,
-            _controller.DeepCapsuleGap,
-            _controller.MasterCapsuleExtraHeightDip);
+        var targetTop = QueueTopForArea(geometry.LocalWorkAreaDip);
         var docked = EdgeCapsuleGeometry.Calculate(new EdgeCapsuleGeometryInput(
             geometry,
             _queueEdge,
@@ -1361,7 +1248,7 @@ public sealed class MasterCapsuleWindow : Window
         MasterCapsuleWindow target,
         Action releaseCover)
     {
-        var targetMonitor = target._queueMonitorDeviceName;
+        var targetKey = target._queueKey;
         var targetEdge = target._queueEdge;
         // Release switches back to the destination's normal playhead before the return flight.
         // The cover and target therefore sample the same clip/time, including a canceled transfer.
@@ -1381,13 +1268,13 @@ public sealed class MasterCapsuleWindow : Window
 
         void CompleteFlight(bool reachedTarget)
         {
-            var current = _controller.MasterCapsuleForQueue(targetMonitor, targetEdge);
+            var current = _controller.MasterCapsuleForQueue(targetKey);
             current?.PrepareQueueTransferHandoff();
 
             // Preparing the WPF surface pumps Render and can dispatch an arrange that replaces
             // the master or changes its geometry. Resolve once more after that boundary, then
             // publish synchronously so the cover uses the same current endpoint as the master.
-            current = _controller.MasterCapsuleForQueue(targetMonitor, targetEdge);
+            current = _controller.MasterCapsuleForQueue(targetKey);
             if (current != null)
                 floatingHost.SetMasterSkinPlayback(current._normalSkinPlayback, current._queueEdge);
             current?.PublishQueueTransferHandoff();
@@ -1459,13 +1346,12 @@ public sealed class MasterCapsuleWindow : Window
             return;
         }
 
+        _controller.CompleteEdgeCapsuleQueueCompositionProxyFor(this);
         _isClosingForReal = true;
         CancelQueueTransfer();
         FinishMasterGesture(commit: false, clearFocus: false);
         _contextMenuSession.Dispose();
         ++_moveGeneration;
-        _animatedMonitorGeometry = null;
-        BeginAnimation(AnimatedTopProperty, null);
         Close();
     }
 

@@ -8,7 +8,7 @@ using PaperTodo;
 
 internal static class MasterCapsuleSkinChecks
 {
-    private static void Require(bool condition, string description)
+    private static void Require([System.Diagnostics.CodeAnalysis.DoesNotReturnIf(false)] bool condition, string description)
     {
         if (!condition) throw new InvalidOperationException(description);
     }

@@ -162,7 +162,7 @@ internal static class MasterCapsuleReviewChecks
             var pointer = new DeviceScreenPoint(monitor.WorkArea.Right - 100, monitor.WorkArea.Top + 100);
             var sessionType = typeof(MasterCapsuleWindow).GetNestedType("MasterDragSession", Private)!;
             var session = Activator.CreateInstance(sessionType, pointer,
-                controller.MasterCapsuleQueueKey("", EdgeCapsuleEdge.Right), hadMargin, originalMargin)!;
+                controller.MasterCapsuleQueueKey("", EdgeCapsuleEdge.Right), hadMargin, originalMargin, null)!;
             Require((bool)Call(master, "TryRunQueueTransfer", pointer, session)!, "Transfer did not start");
             master.Dispatcher.Invoke(static () => { }, DispatcherPriority.Render);
             if (failure != null) throw failure;

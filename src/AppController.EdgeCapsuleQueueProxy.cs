@@ -11,24 +11,24 @@ public sealed partial class AppController
         _edgeCapsuleQueueCompositionProxies =
             new(StringComparer.Ordinal);
     private readonly Dictionary<
-        PaperWindow,
+        System.Windows.Window,
         EdgeCapsuleQueueCompositionProxy>
         _edgeCapsuleQueueCompositionProxyByWindow = new();
 
     private EdgeCapsuleQueueProxyPlan?
         TryCreateEdgeCapsuleQueueProxyPlan(
             EdgeCapsuleVisualTransactionEntry[] entries,
-            EdgeCapsuleQueueCompositionProxy? predecessor = null)
+            EdgeCapsuleQueueCompositionProxy? predecessor = null,
+            MasterCapsuleWindow? master = null)
     {
-        if (entries.Length == 0 ||
+        if ((entries.Length == 0 && master == null) ||
             entries.Select(entry => entry.QueueKey)
-                .Distinct(StringComparer.Ordinal)
-                .Count() != 1)
+                .Distinct(StringComparer.Ordinal).Count() > 1)
         {
             return null;
         }
 
-        var queueKey = entries[0].QueueKey;
+        var queueKey = master?.QueueProxyKey ?? entries[0].QueueKey;
 
         var candidates =
             new List<EdgeCapsuleQueueProxyCandidate>(
@@ -71,6 +71,9 @@ public sealed partial class AppController
             candidates.Add(candidate.Value);
         }
 
+        if (master?.CaptureQueueProxyCandidate(predecessor) is { } masterCandidate)
+            candidates.Add(masterCandidate);
+
         var plan = EdgeCapsuleQueueProxyPolicy.TryCreate(
             queueKey,
             candidates);
@@ -108,6 +111,28 @@ public sealed partial class AppController
                 workAreaBottom,
                 capacity.WorkAreaBottomDevice);
         }
+        // Slot 0 and the carried block are part of this gesture's finite motion
+        // capacity, even when the first preview moves only the target suffix.
+        if (_masterCapsules.TryGetValue(queueKey, out var queueMaster))
+        {
+            capacityEnvelope = EdgeCapsuleQueueProxyGeometry.Union(
+                capacityEnvelope, queueMaster.QueueProxyTarget.HostBounds);
+            if (WindowNative.TryGetWindowDeviceBounds(queueMaster, out var masterBounds))
+                capacityEnvelope = EdgeCapsuleQueueProxyGeometry.Union(capacityEnvelope, masterBounds);
+        }
+        var carriedCount = _nativeEdgeQueueDrag?.CarriedIds.Length ??
+            _freeMasterDragPreview?.Layout.Groups[0].PaperIds.Length ??
+            _masterCapsuleQueueTransfer?.FreeLayout?.Groups[0].PaperIds.Length ?? 0;
+        if (carriedCount > 0)
+        {
+            var displacement = (int)Math.Ceiling(carriedCount *
+                EdgeCapsuleLayout.SlotHeight(DeepCapsuleGap) * plan.DpiScaleY);
+            capacityEnvelope = capacityEnvelope with
+            {
+                Top = capacityEnvelope.Top - displacement
+            };
+            maximumDownwardShift = Math.Max(maximumDownwardShift, displacement);
+        }
         capacityEnvelope =
             EdgeCapsuleQueueProxyGeometry.WithDownwardCapacity(
                 capacityEnvelope,
@@ -123,17 +148,19 @@ public sealed partial class AppController
         CommitEdgeCapsuleQueueProxyLogicalEndpoints(
             EdgeCapsuleVisualTransactionEntry[] entries,
             EdgeCapsuleQueueProxyPlan plan,
-            long transactionTimestamp)
+            long transactionTimestamp,
+            MasterCapsuleWindow? master)
     {
         var proxiedPlans = plan.Members.ToDictionary(
             member => member.PaperId,
             StringComparer.Ordinal);
         var committed = true;
-        using (entries[0].Window.Dispatcher.DisableProcessing())
+        using ((master?.Dispatcher ?? entries[0].Window.Dispatcher).DisableProcessing())
         {
             using var nativeBoundsBatch =
                 WindowNative.BeginWindowDeviceBoundsBatch(
-                    entries.Length);
+                    entries.Length + (master == null ? 0 : 1));
+            if (master != null) committed &= master.ApplyQueueProxyEndpoint();
             foreach (var entry in entries)
             {
                 if (entry.Window.IsClosed)
@@ -233,7 +260,8 @@ public sealed partial class AppController
         EdgeCapsuleQueueProxyPlan plan,
         EdgeCapsuleVisualTransactionEntry[] entries,
         EdgeCapsuleQueueCompositionProxy? predecessor,
-        out bool realHostMayHaveChanged)
+        out bool realHostMayHaveChanged,
+        MasterCapsuleWindow? master = null)
     {
         realHostMayHaveChanged = false;
         var sessionOrdinal =
@@ -251,6 +279,12 @@ public sealed partial class AppController
                 plan.Members.Count);
         foreach (var memberPlan in plan.Members)
         {
+            if (master != null && memberPlan.PaperId == master.QueueProxySourceId)
+            {
+                members.Add(new EdgeCapsuleQueueCompositionProxyMember(
+                    master, memberPlan, master.QueueProxySourceHandle));
+                continue;
+            }
             if (!byPaperId.TryGetValue(
                     memberPlan.PaperId,
                     out var entry))
@@ -264,6 +298,15 @@ public sealed partial class AppController
                     entry.Window.EdgeCapsuleQueueProxySourceHandle));
         }
 
+        var insertAfter = ResolveEdgeCapsuleQueueProxyInsertAfter(plan.QueueKey, members);
+        if (predecessor?.TryRetarget(plan, members,
+                timestamp => CommitEdgeCapsuleQueueProxyLogicalEndpoints(entries, plan, timestamp, master),
+                timestamp => RebaseEdgeCapsuleQueueProxyAnimationClock(entries, timestamp), insertAfter) == true)
+        {
+            realHostMayHaveChanged = true;
+            return true;
+        }
+
         var proxy = EdgeCapsuleQueueCompositionProxy.TryCreate(
             sessionOrdinal,
             plan,
@@ -273,7 +316,7 @@ public sealed partial class AppController
                 CommitEdgeCapsuleQueueProxyLogicalEndpoints(
                     entries,
                     plan,
-                    timestamp),
+                    timestamp, master),
             animationStartRequested: timestamp =>
                 RebaseEdgeCapsuleQueueProxyAnimationClock(
                     entries,
@@ -298,7 +341,8 @@ public sealed partial class AppController
                 FinishEdgeCapsuleQueueCompositionProxy(
                     plan.QueueKey,
                     completedProxy,
-                    success));
+                    success),
+            insertAfter: insertAfter);
         if (proxy == null)
         {
 #if DEBUG
@@ -308,23 +352,6 @@ public sealed partial class AppController
                 $"reason=create-failed");
 #endif
             return false;
-        }
-
-        // Successors can reveal predecessor-only members in the same DWM boundary. Keep the
-        // material gate coherent across both generations, then derive the final state from the
-        // controller's actual retained-source map after success/rollback.
-        var materialWindows = members
-            .Select(member => member.Window)
-            .Concat(predecessor?.Members.Select(member => member.Window) ??
-                Array.Empty<PaperWindow>())
-            .Distinct()
-            .ToArray();
-        foreach (var window in materialWindows)
-        {
-            // The compositor is about to retain this HWND as a live source. A sampled auxiliary
-            // background temporarily uses display-affinity on the same HWND; letting that start or
-            // remain active during the cloak/root handoff can poison the cover and delay cleanup.
-            window.SetEdgeCapsuleQueueProxyMaterialCaptureSuspended(true);
         }
 
         TraceEdgeCapsuleQueueVisibility(proxy, "before-start");
@@ -348,14 +375,11 @@ public sealed partial class AppController
             {
                 proxy.AbortStaged();
             }
-            RefreshEdgeCapsuleQueueProxyMaterialCaptureSuspension(materialWindows);
+
             return false;
         }
         TraceEdgeCapsuleQueueVisibility(proxy, "started");
-        // A successful successor may have revealed members that were present only in its
-        // predecessor. They no longer appear in the successor's finish set, so release their
-        // material gate here while retained successor sources remain suppressed.
-        RefreshEdgeCapsuleQueueProxyMaterialCaptureSuspension(materialWindows);
+
         return true;
     }
 
@@ -503,10 +527,7 @@ public sealed partial class AppController
             return true;
         }
 
-        var windows = current.Members
-            .Select(member => member.Window)
-            .Distinct()
-            .ToArray();
+        var windows = current.Members.ToArray();
 
         if (current.CoverLost)
         {
@@ -524,11 +545,11 @@ public sealed partial class AppController
             foreach (var window in windows)
             {
                 if (_edgeCapsuleQueueCompositionProxyByWindow
-                        .TryGetValue(window, out var routed) &&
+                        .TryGetValue(window.Window, out var routed) &&
                     ReferenceEquals(routed, current))
                 {
                     _edgeCapsuleQueueCompositionProxyByWindow
-                        .Remove(window);
+                        .Remove(window.Window);
                 }
             }
             current.CompleteDeferredPointerInput();
@@ -547,12 +568,12 @@ public sealed partial class AppController
                 {
                     try
                     {
-                        window.FlushEdgeCapsuleQueueProxyEndpoint();
+                        window.FlushEndpoint();
                     }
                     catch { }
                 }
             }
-            RefreshEdgeCapsuleQueueProxyMaterialCaptureSuspension(windows);
+
 #if DEBUG
             EdgeCapsulePerformanceDiagnostics.Trace(
                 $"proxy.session phase=emergency-release session={current.SessionOrdinal} " +
@@ -563,7 +584,7 @@ public sealed partial class AppController
 
         var endpointsReady = true;
         var endpoints = new List<(
-            PaperWindow Window,
+            EdgeCapsuleQueueCompositionProxyMember Window,
             EdgeCapsulePresentationFrame Endpoint)>(windows.Length);
 #if DEBUG
         var handoffStartedAt =
@@ -577,7 +598,7 @@ public sealed partial class AppController
             // latest Measure/Pointer/Presentation work first; only then capture and submit all real
             // endpoints through one HDWP transaction. Any final text/pixel correction therefore
             // happens under cover, never after the real HWNDs are revealed.
-            using (windows[0].Dispatcher.DisableProcessing())
+            using (windows[0].Window.Dispatcher.DisableProcessing())
             {
                 using var nativeBoundsBatch =
                     WindowNative.BeginWindowDeviceBoundsBatch(
@@ -586,13 +607,13 @@ public sealed partial class AppController
                 {
                     if (!window.IsClosed)
                     {
-                        window.FlushEdgeCapsuleQueueProxyEndpoint();
+                        window.FlushEndpoint();
                     }
                 }
                 foreach (var window in windows)
                 {
                     var applied = window
-                        .TryApplyLatestEdgeCapsuleQueueProxyEndpoint(
+                        .TryApplyEndpoint(
                             out var endpoint);
                     endpointsReady &= applied;
                     endpoints.Add((window, endpoint));
@@ -606,7 +627,7 @@ public sealed partial class AppController
                              item.Endpoint.Visible))
                 {
                     endpointsReady &= item.Window
-                        .PrepareEdgeCapsuleQueueProxyEndpointLayoutForHandoff();
+                        .PrepareEndpointLayout();
                 }
             }
 
@@ -617,7 +638,7 @@ public sealed partial class AppController
                 // TryReleaseForHandoff publishes these queued surface updates together with the
                 // real/proxy authority swap. A separate flush held the final proxy frame for one
                 // more presentation and made close look frozen before its last-frame flash.
-                windows[0].Dispatcher.Invoke(
+                windows[0].Window.Dispatcher.Invoke(
                     static () => { },
                     DispatcherPriority.Render);
             }
@@ -627,7 +648,7 @@ public sealed partial class AppController
                 foreach (var item in endpoints)
                 {
                     endpointsReady &= item.Window
-                        .VerifyEdgeCapsuleQueueProxyEndpoint(
+                        .VerifyEndpoint(
                             item.Endpoint);
                 }
             }
@@ -669,11 +690,11 @@ public sealed partial class AppController
         foreach (var window in windows)
         {
             if (_edgeCapsuleQueueCompositionProxyByWindow
-                    .TryGetValue(window, out var routed) &&
+                    .TryGetValue(window.Window, out var routed) &&
                 ReferenceEquals(routed, current))
             {
                 _edgeCapsuleQueueCompositionProxyByWindow
-                    .Remove(window);
+                    .Remove(window.Window);
             }
         }
         TraceEdgeCapsuleQueueVisibility(current, "released");
@@ -686,10 +707,7 @@ public sealed partial class AppController
         {
             current.ForceDisposeForShutdown();
         }
-        // The real HWNDs now own the visible pixels again. Re-enable sampled materials only after
-        // the output cover is hidden/detached, so each capsule takes exactly one fresh endpoint
-        // snapshot instead of sampling while its source is still cloaked under the proxy.
-        RefreshEdgeCapsuleQueueProxyMaterialCaptureSuspension(windows);
+
 #if DEBUG
         EdgeCapsulePerformanceDiagnostics.Trace(
             $"proxy.session phase=complete session={current.SessionOrdinal} " +
@@ -722,10 +740,18 @@ public sealed partial class AppController
         if (proxy.TryResolveInputTarget(input.ScreenPoint, out var handle, out var endpoint))
         {
             var target = proxy.Members.FirstOrDefault(member => member.SourceHandle == handle)?.Window;
-            if (target != null)
+            if (target is MasterCapsuleWindow master)
             {
-                var paperId = target.EdgeCapsulePreviewPaperId;
-                var valid = target.CaptureEdgeCapsulePointerInputValidity();
+                proxy.DeferPointerDown(
+                    () => !IsExiting && master.CanRouteQueueProxyInput &&
+                        master.QueueProxySourceHandle == handle &&
+                        ReferenceEquals(_masterCapsules.GetValueOrDefault(queueKey), master),
+                    () => WindowNative.TryPostMouseButtonDown(handle, input, endpoint));
+            }
+            else if (target is PaperWindow paper)
+            {
+                var paperId = paper.EdgeCapsulePreviewPaperId;
+                var valid = paper.CaptureEdgeCapsulePointerInputValidity();
                 proxy.DeferPointerDown(
                     () => !IsExiting && _windows.TryGetValue(paperId, out var current) &&
                         ReferenceEquals(current, target) && valid(),
@@ -740,8 +766,30 @@ public sealed partial class AppController
     }
 
 
+    private IntPtr ResolveEdgeCapsuleQueueProxyInsertAfter(string queueKey,
+        IReadOnlyList<EdgeCapsuleQueueCompositionProxyMember> members)
+    {
+        // Real interaction surfaces stay in front of passive translations. Include the
+        // stationary master so retracting members disappear beneath it, and carried sources
+        // from other queues so an independent landing never covers the user's drag surface.
+        var represented = members.Select(member => member.SourceHandle).ToHashSet();
+        var carriedIds = _nativeEdgeQueueDrag?.CarriedIds ??
+            _freeMasterDragPreview?.Layout.Groups[0].PaperIds ?? Array.Empty<string>();
+        var carriedMasterKey = _nativeEdgeQueueDrag is { CarriesMaster: true } drag
+            ? drag.SourceKey : _freeMasterDragPreview?.Layout.QueueKey;
+        var handles = _windows.Values.Where(window => !window.IsClosed &&
+                (QueueKey(window.EdgeCapsulePreviewPaper) == queueKey ||
+                 carriedIds.Contains(window.EdgeCapsulePreviewPaperId) || window.IsDeepCapsuleReorderDragInProgress))
+            .Select(window => window.EdgeCapsuleQueueProxySourceHandle)
+            .Concat(_masterCapsules.Where(pair => pair.Key == queueKey || pair.Key == carriedMasterKey)
+                .Select(pair => pair.Value.QueueProxySourceHandle))
+            .Append(EdgeCapsuleDragWindow.VisibleLeaseHandle)
+            .Where(handle => !represented.Contains(handle));
+        return WindowNative.LowestVisibleTopmostWindow(handles);
+    }
+
     internal bool TryGetEdgeCapsuleQueueProxyPresentation(
-        PaperWindow window,
+        System.Windows.Window window,
         out EdgeCapsulePresentationFrame frame)
     {
         if (_edgeCapsuleQueueCompositionProxyByWindow
@@ -770,31 +818,13 @@ public sealed partial class AppController
     }
 
     internal bool IsEdgeCapsuleQueueProxyRetainingSource(
-        PaperWindow window) =>
+        System.Windows.Window window) =>
         _edgeCapsuleQueueCompositionProxyByWindow
             .TryGetValue(window, out var proxy) &&
         proxy.RetainsSource(window);
 
-    private void RefreshEdgeCapsuleQueueProxyMaterialCaptureSuspension(
-        IEnumerable<PaperWindow> windows)
-    {
-        foreach (var window in windows.Distinct())
-        {
-            if (window.IsClosed)
-            {
-                continue;
-            }
-
-            var suspended =
-                _edgeCapsuleQueueCompositionProxyByWindow
-                    .TryGetValue(window, out var proxy) &&
-                proxy.RetainsSource(window);
-            window.SetEdgeCapsuleQueueProxyMaterialCaptureSuspended(suspended);
-        }
-    }
-
     internal void CompleteEdgeCapsuleQueueCompositionProxyFor(
-        PaperWindow window,
+        System.Windows.Window window,
         bool success = false)
     {
         if (_edgeCapsuleQueueCompositionProxyByWindow

@@ -42,6 +42,10 @@ public sealed partial class AppController
             Strings.Get("SettingsCapsuleCollapseAll"),
             State.UseCapsuleCollapseAll,
             ToggleCapsuleCollapseAll);
+        _settingsCapsuleFreeQueuesCheckBox = SettingsToggle(
+            Strings.Get("SettingsCapsuleFreeQueues"),
+            State.UseCapsuleFreeQueues,
+            ToggleCapsuleFreeQueues);
         _settingsCollapseExpandedDeepCapsuleOnClickCheckBox = SettingsToggle(
             Strings.Get("SettingsCollapseExpandedDeepCapsuleOnClick"),
             State.CollapseExpandedDeepCapsuleOnClick,
@@ -74,6 +78,9 @@ public sealed partial class AppController
                 editorWidth: 180,
                 tipKey: "TipMasterCapsuleAnimationSpeed",
                 topMargin: 7)));
+        rightColumn.Children.Add(WrapWithHint(
+            _settingsCapsuleFreeQueuesCheckBox,
+            "TipCapsuleFreeQueues"));
         rightColumn.Children.Add(WrapWithHint(
             _settingsCollapseExpandedDeepCapsuleOnClickCheckBox,
             "TipCollapseExpandedDeepCapsuleOnClick"));
@@ -151,6 +158,19 @@ public sealed partial class AppController
             Margin = new Thickness(0, 0, 14, 0)
         };
         leftColumn.Children.Add(CreateUiLanguageSettingsRow());
+        leftColumn.Children.Add(CompactSettingsField(
+            Strings.Get("SettingsDataMergeConflicts"),
+            CreateSettingsSelect(
+                [
+                    (DataMergeConflictPolicies.Ask, Strings.Get("DataMergeConflictAsk")),
+                    (DataMergeConflictPolicies.External, Strings.Get("DataMergeConflictExternal")),
+                    (DataMergeConflictPolicies.Internal, Strings.Get("DataMergeConflictInternal"))
+                ],
+                DataMergeConflictPolicies.Normalize(State.DataMergeConflictPolicy),
+                value => SetSettingFromUi("general.data_merge_conflicts", value)),
+            editorWidth: 156,
+            tipKey: "TipDataMergeConflicts",
+            topMargin: 8));
         leftColumn.Children.Add(WrapWithHint(
             SettingsToggle(
                 Strings.Get("TrayStartup"),
@@ -230,6 +250,7 @@ public sealed partial class AppController
         State.EnableAnimations = true;
         State.FastAnimations = false;
         State.UiLanguage = UiLanguages.Default;
+        State.DataMergeConflictPolicy = DataMergeConflictPolicies.Ask;
         State.HidePapersFromTaskbar = true;
         State.HidePapersFromWindowSwitcher = true;
         State.FullscreenTopmostMode = FullscreenTopmostModes.Avoid;
@@ -246,6 +267,7 @@ public sealed partial class AppController
         State.HideEdgeCapsuleCloseButtonOnHover = false;
         State.RememberDeepCapsuleExpandedPosition = true;
         State.UseCapsuleCollapseAll = true;
+        State.UseCapsuleFreeQueues = false;
         State.CompactMasterCapsule = false;
         State.MasterCapsuleSize = MasterCapsuleSizes.Default;
         State.MasterCapsuleAnimationFps = MasterCapsuleAnimationRates.Default;

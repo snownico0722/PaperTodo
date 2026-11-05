@@ -128,6 +128,47 @@ internal static class EdgeCapsuleQueueProxyPolicy
         target.Visible &&
         PresentedHostBounds(start) != target.HostBounds;
 
+    internal static bool RoutesPointerInput(EdgeCapsuleQueueProxyPlan plan) =>
+        !plan.Members.Any(member =>
+            member.Start.Surface == EdgeCapsuleSurfaceKind.DockedRetracted ||
+            member.Target.Surface == EdgeCapsuleSurfaceKind.DockedRetracted);
+
+    // Future preview/drag capacity is reserved at cold startup. A successor only
+    // needs its actual live sources and motion to fit the already-owned output;
+    // reserving capacity again around a shifted target must not move that output.
+    internal static DeviceScreenRect RequiredTranslationBounds(EdgeCapsuleQueueProxyPlan plan)
+    {
+        var bounds = default(DeviceScreenRect);
+        foreach (var member in plan.Members)
+        {
+            bounds = EdgeCapsuleQueueProxyGeometry.Union(bounds, PresentedHostBounds(member.Start));
+            bounds = EdgeCapsuleQueueProxyGeometry.Union(bounds, member.Source.HostBounds);
+            bounds = EdgeCapsuleQueueProxyGeometry.Union(bounds, member.Target.HostBounds);
+        }
+        return bounds;
+    }
+
+    internal static bool CanRetarget(EdgeCapsuleQueueProxyPlan current,
+        EdgeCapsuleQueueProxyPlan next, DeviceScreenRect outputBounds)
+    {
+        if (current.QueueKey != next.QueueKey || current.Topmost != next.Topmost ||
+            RoutesPointerInput(current) != RoutesPointerInput(next) ||
+            current.Members.Count != next.Members.Count) return false;
+        var previous = current.Members.ToDictionary(member => member.PaperId,
+            StringComparer.Ordinal);
+        foreach (var member in next.Members)
+        {
+            if (!previous.TryGetValue(member.PaperId, out var old) ||
+                !CanWrapMovingMemberLive(old.Target, member.Source) ||
+                !CanWrapMovingMemberLive(member.Source, member.Target) ||
+                old.Target.Surface != member.Target.Surface ||
+                !EdgeCapsuleQueueProxyGeometry.Contains(outputBounds, PresentedHostBounds(member.Start)) ||
+                !EdgeCapsuleQueueProxyGeometry.Contains(outputBounds, member.Target.HostBounds))
+                return false;
+        }
+        return true;
+    }
+
     public static EdgeCapsuleQueueProxyPlan? TryCreate(
         string queueKey,
         IReadOnlyList<EdgeCapsuleQueueProxyCandidate> candidates)

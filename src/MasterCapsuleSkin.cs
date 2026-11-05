@@ -7,18 +7,91 @@ using System.Windows.Media.Imaging;
 
 namespace PaperTodo;
 
-/// <summary>Fully decoded, frozen frames on one shared canvas. Never owns a window or a clock.</summary>
+/// <summary>Frozen frames and stable artwork geometry. Playback never owns queue geometry.</summary>
 internal sealed class MasterCapsuleVisualClip
 {
-    private readonly BitmapSource[] _frames;
+    private BitmapSource[] _frames;
     internal MasterCapsuleVisualClip(BitmapSource[] frames)
     {
         if (frames.Length == 0) throw new ArgumentException("A visual clip needs a frame.", nameof(frames));
         _frames = frames;
+        CanvasWidth = frames[0].PixelWidth;
+        CanvasHeight = frames[0].PixelHeight;
     }
     internal int FrameCount => _frames.Length;
     internal BitmapSource FirstFrame => _frames[0];
     internal BitmapSource FrameAt(int index) => _frames[index];
+    internal int CanvasWidth { get; }
+    internal int CanvasHeight { get; }
+    internal event Action? FramesChanged;
+    private Func<MasterCapsuleVisualClip?>? _reload;
+    private readonly Dictionary<object, Size> _displayRequests = new();
+    private System.Windows.Threading.DispatcherTimer? _resizeTimer;
+
+    internal void SetReload(Func<MasterCapsuleVisualClip?> reload) => _reload = reload;
+
+    // The docked masters and floating cover share ONE raster, sized for their largest
+    // visible physical-pixel demand. No per-frame decoding and no per-window frame caches.
+    internal void RequestDisplaySize(object owner, Size? pixels)
+    {
+        if (pixels is { Width: > 0, Height: > 0 } size &&
+            double.IsFinite(size.Width) && double.IsFinite(size.Height))
+        {
+            if (_displayRequests.TryGetValue(owner, out var previous) && previous == size) return;
+            _displayRequests[owner] = size;
+        }
+        else if (!_displayRequests.Remove(owner)) return;
+
+        _resizeTimer?.Stop();
+        if (_displayRequests.Count == 0) return;
+        _resizeTimer ??= new System.Windows.Threading.DispatcherTimer(
+            TimeSpan.FromMilliseconds(180), System.Windows.Threading.DispatcherPriority.Background,
+            (_, _) => { _resizeTimer!.Stop(); ApplyDisplaySize(); },
+            System.Windows.Threading.Dispatcher.CurrentDispatcher);
+        _resizeTimer.Start();
+    }
+
+    internal void ApplyDisplaySize()
+    {
+        _resizeTimer?.Stop();
+        if (_displayRequests.Count == 0) return;
+        var scale = Math.Min(1, _displayRequests.Values.Max(size =>
+            Math.Min(size.Width / CanvasWidth, size.Height / CanvasHeight)));
+        var width = Math.Max(1, (int)Math.Ceiling(CanvasWidth * scale));
+        var height = Math.Max(1, (int)Math.Ceiling(CanvasHeight * scale));
+        if (FirstFrame.PixelWidth == width && FirstFrame.PixelHeight == height) return;
+        try
+        {
+            // Always resample the original decoded canvas, not an already reduced frame.
+            // The initial full-resolution frames can be consumed directly and then released.
+            var source = FirstFrame.PixelWidth == CanvasWidth && FirstFrame.PixelHeight == CanvasHeight
+                ? this : _reload?.Invoke();
+            if (source == null || source.CanvasWidth != CanvasWidth ||
+                source.CanvasHeight != CanvasHeight || source.FrameCount != FrameCount) return;
+            var frames = new BitmapSource[FrameCount];
+            var stride = checked(width * 4);
+            var pixels = new byte[checked(stride * height)];
+            for (var i = 0; i < frames.Length; i++)
+            {
+                BitmapSource frame = source.FrameAt(i);
+                if (width != CanvasWidth || height != CanvasHeight)
+                    frame = new TransformedBitmap(frame,
+                        new ScaleTransform((double)width / CanvasWidth, (double)height / CanvasHeight));
+                frame.CopyPixels(pixels, stride, 0);
+                frames[i] = BitmapSource.Create(width, height, 96, 96,
+                    PixelFormats.Pbgra32, null, pixels, stride);
+                frames[i].Freeze();
+            }
+            _frames = frames;
+            FramesChanged?.Invoke();
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            // Optional artwork can disappear between startup and a settings/DPI change.
+            // Keep the already playable raster; no retry loop or hot-reload watcher.
+            Trace.TraceWarning("Master capsule raster resize skipped: {0}", ex.Message);
+        }
+    }
 }
 
 internal sealed record MasterCapsuleVisualSet(
@@ -30,7 +103,7 @@ internal sealed record MasterCapsuleVisualSet(
 
 /// <summary>
 /// Optional artwork beside PaperTodo.exe, discovered once per process. Static images, GIFs and
-/// numbered images become the same immutable clip; no file watcher, decoder or IO runs during playback.
+/// numbered images share one clip. Resizing may reread the selected source; playback never does IO.
 /// </summary>
 internal static class MasterCapsuleSkin
 {
@@ -49,8 +122,15 @@ internal static class MasterCapsuleSkin
 
     internal static double DisplayWidthDip(
         BitmapSource image, int size = MasterCapsuleSizes.Default) =>
+        DisplayWidthDip(image.PixelWidth, image.PixelHeight, size);
+
+    internal static double DisplayWidthDip(
+        MasterCapsuleVisualClip clip, int size = MasterCapsuleSizes.Default) =>
+        DisplayWidthDip(clip.CanvasWidth, clip.CanvasHeight, size);
+
+    private static double DisplayWidthDip(int width, int height, int size) =>
         Math.Clamp(
-            Math.Ceiling(PaperLayoutDefaults.CapsuleHeight * (double)image.PixelWidth / image.PixelHeight),
+            Math.Ceiling(PaperLayoutDefaults.CapsuleHeight * (double)width / height),
             16,
             MaxWidthDip) * MasterCapsuleSizes.Scale(size);
 
@@ -150,6 +230,8 @@ internal static class MasterCapsuleSkin
         var frames = new BitmapSource[paths.Length];
         var sourceWidth = 0;
         var sourceHeight = 0;
+        byte[]? pixels = null;
+        AlphaBounds? bounds = null;
         for (var index = 0; index < paths.Length; index++)
         {
             using var stream = OpenImage(paths[index]);
@@ -171,16 +253,19 @@ internal static class MasterCapsuleSkin
             bitmap.Freeze();
             // File DPI is printing metadata, not the animation canvas contract. Normalize
             // after bounded decoding so equal pixel canvases also have equal WPF DIP sizes.
-            var converted = new FormatConvertedBitmap(bitmap, PixelFormats.Pbgra32, null, 0);
+            BitmapSource converted = bitmap.Format == PixelFormats.Pbgra32 ? bitmap
+                : new FormatConvertedBitmap(bitmap, PixelFormats.Pbgra32, null, 0);
             var stride = checked(size.Width * 4);
-            var pixels = new byte[checked(stride * size.Height)];
+            pixels ??= new byte[checked(stride * size.Height)];
+            bounds ??= new AlphaBounds(size.Width, size.Height);
             converted.CopyPixels(pixels, stride, 0);
+            bounds.Include(pixels, stride);
             var normalized = BitmapSource.Create(size.Width, size.Height, 96, 96,
                 PixelFormats.Pbgra32, null, pixels, stride);
             normalized.Freeze();
             frames[index] = normalized;
         }
-        return TrimTogether(frames);
+        return FinishClip(frames, bounds!, paths, () => DecodeSequence(paths));
     }
 
     private static System.Drawing.Image OpenGifImage(Stream stream)
@@ -216,6 +301,9 @@ internal static class MasterCapsuleSkin
         graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
         graphics.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
         var rectangle = new System.Drawing.Rectangle(0, 0, size.Width, size.Height);
+        var stride = checked(size.Width * 4);
+        var pixels = new byte[checked(stride * size.Height)];
+        var bounds = new AlphaBounds(size.Width, size.Height);
         for (var index = 0; index < count; index++)
         {
             image.SelectActiveFrame(System.Drawing.Imaging.FrameDimension.Time, index);
@@ -225,10 +313,12 @@ internal static class MasterCapsuleSkin
                 System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
             try
             {
-                var pixels = new byte[checked(size.Width * size.Height * 4)];
-                for (var y = 0; y < size.Height; y++)
-                    Marshal.Copy(IntPtr.Add(data.Scan0, y * data.Stride), pixels,
-                        y * size.Width * 4, size.Width * 4);
+                if (data.Stride == stride)
+                    Marshal.Copy(data.Scan0, pixels, 0, pixels.Length);
+                else
+                    for (var y = 0; y < size.Height; y++)
+                        Marshal.Copy(IntPtr.Add(data.Scan0, y * data.Stride), pixels, y * stride, stride);
+                bounds.Include(pixels, stride);
                 var bitmap = BitmapSource.Create(size.Width, size.Height, 96, 96,
                     PixelFormats.Pbgra32, null, pixels, size.Width * 4);
                 bitmap.Freeze();
@@ -238,46 +328,87 @@ internal static class MasterCapsuleSkin
         }
         // File delays and finite repeat counts intentionally do not drive this feature: the
         // user's common frames-per-second setting loops GIF and numbered frames identically.
-        return TrimTogether(frames);
+        return FinishClip(frames, bounds, [path], () => DecodeGif(path));
     }
 
-    private static MasterCapsuleVisualClip? TrimTogether(BitmapSource[] frames)
+    private static MasterCapsuleVisualClip? FinishClip(BitmapSource[] frames, AlphaBounds bounds,
+        string[] paths, Func<MasterCapsuleVisualClip?> reload)
     {
+        if (bounds.Empty) return null;
+        var crop = bounds.Rectangle;
         var width = frames[0].PixelWidth;
         var height = frames[0].PixelHeight;
-        var left = width;
-        var top = height;
-        var right = -1;
-        var bottom = -1;
-        var stride = checked(width * 4);
-        var pixels = new byte[checked(stride * height)];
-        foreach (var source in frames)
+        if (crop.Width != width || crop.Height != height)
         {
-            if (source.PixelWidth != width || source.PixelHeight != height)
-                throw new InvalidDataException("Animation frame canvases must match.");
-            var bgra = new FormatConvertedBitmap(source, PixelFormats.Bgra32, null, 0);
-            bgra.CopyPixels(pixels, stride, 0);
-            for (var y = 0; y < height; y++)
-            for (var x = 0; x < width; x++)
-            {
-                if (pixels[y * stride + x * 4 + 3] <= VisibleAlphaThreshold) continue;
-                left = Math.Min(left, x); top = Math.Min(top, y);
-                right = Math.Max(right, x); bottom = Math.Max(bottom, y);
-            }
-        }
-        if (right < left || bottom < top) return null;
-        if (left != 0 || top != 0 || right != width - 1 || bottom != height - 1)
-        {
-            var crop = new Int32Rect(left, top, right - left + 1, bottom - top + 1);
+            // Materialize useful crops so the original large bitmaps can be collected.
+            // Tiny crops keep the cheap view until display-sized rasterization detaches it.
+            var detach = (long)crop.Width * crop.Height * 4 <= (long)width * height * 3;
+            var stride = checked(crop.Width * 4);
+            var pixels = detach ? new byte[checked(stride * crop.Height)] : null;
             for (var index = 0; index < frames.Length; index++)
             {
-                var cropped = new CroppedBitmap(frames[index], crop);
-                cropped.Freeze();
-                frames[index] = cropped;
+                if (pixels != null)
+                {
+                    frames[index].CopyPixels(crop, pixels, stride, 0);
+                    frames[index] = BitmapSource.Create(crop.Width, crop.Height, 96, 96,
+                        PixelFormats.Pbgra32, null, pixels, stride);
+                }
+                else frames[index] = new CroppedBitmap(frames[index], crop);
+                frames[index].Freeze();
             }
         }
-        return new MasterCapsuleVisualClip(frames);
+        var clip = new MasterCapsuleVisualClip(frames);
+        // Replacement still takes effect on restart. Keep only source identities, not
+        // duplicate full-size frames or every compressed sequence file in memory.
+        var versions = paths.Select(path =>
+        {
+            var file = new FileInfo(path);
+            return (file.Length, file.LastWriteTimeUtc);
+        }).ToArray();
+        clip.SetReload(() =>
+        {
+            for (var i = 0; i < paths.Length; i++)
+            {
+                var file = new FileInfo(paths[i]);
+                if (!file.Exists || (file.Length, file.LastWriteTimeUtc) != versions[i]) return null;
+            }
+            return reload();
+        });
+        return clip;
     }
+
+    // Inspect the Pbgra32 alpha bytes while they are already available. Once the
+    // union covers the canvas, later frames cannot change the common crop.
+    private sealed class AlphaBounds
+    {
+        private readonly int _width, _height;
+        private int _left, _top, _right = -1, _bottom = -1;
+        internal AlphaBounds(int width, int height)
+        {
+            _left = _width = width;
+            _top = _height = height;
+        }
+        internal bool Empty => _right < _left;
+        internal Int32Rect Rectangle => new(_left, _top, _right - _left + 1, _bottom - _top + 1);
+        internal void Include(byte[] pixels, int stride)
+        {
+            if (_left == 0 && _top == 0 && _right == _width - 1 && _bottom == _height - 1) return;
+            for (var y = 0; y < _height; y++)
+            for (var x = 0; x < _width; x++)
+            {
+                // Pixels inside the established union cannot expand its bounding box.
+                if (y >= _top && y <= _bottom && x >= _left && x <= _right)
+                {
+                    x = _right;
+                    continue;
+                }
+                if (pixels[y * stride + x * 4 + 3] <= VisibleAlphaThreshold) continue;
+                _left = Math.Min(_left, x); _top = Math.Min(_top, y);
+                _right = Math.Max(_right, x); _bottom = Math.Max(_bottom, y);
+            }
+        }
+    }
+
 }
 
 internal static class MasterCapsuleSizes
