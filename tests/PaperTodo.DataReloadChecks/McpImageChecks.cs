@@ -193,6 +193,10 @@ internal static partial class Program
                 controller.SaveNow(sync: true);
                 Require(Str(LivePaper(ReadLive(), note.Id)["content"]) == originalContent,
                     "The next normal save did not reconcile the restored in-memory note.");
+                Require(controller.ImageStore.TryReadOwnedImage(
+                            note.Id, retainedId, 16 * 1024 * 1024,
+                            out _, out _, out _),
+                    "A later normal save unexpectedly purged an image kept for recovery.");
             }
             Console.WriteLine("PASS MCP image in-memory import, image-content read, permissions, ownership and early/late save failure safety");
         }
