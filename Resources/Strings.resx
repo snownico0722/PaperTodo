@@ -1726,7 +1726,14 @@
   <data name="WorkbenchSearch" xml:space="preserve"><value>全局搜索，按 Enter 定位结果</value></data>
   <data name="WorkbenchRefresh" xml:space="preserve"><value>刷新概览</value></data>
   <data name="WorkbenchClose" xml:space="preserve"><value>返回桌面</value></data>
-  <data name="WorkbenchHint" xml:space="preserve"><value>空白处拖动框选，Ctrl＋点击标题栏多选，Ctrl＋G 成组；右键按住平移，Alt＋滚轮缩放。拖动卡片顶栏的连接图标即可连线。</value></data>
+  <data name="WorkbenchHint" xml:space="preserve"><value>空白处拖动：框选纸片；Ctrl＋点击：多选；Ctrl＋G：成组。右键单击纸片：完整操作菜单；右键拖动：平移画布。Alt＋滚轮：缩放；拖动顶栏连接图标：连线。</value></data>
+  <data name="WorkbenchHelp" xml:space="preserve"><value>操作说明</value></data>
+  <data name="WorkbenchImportMaterials" xml:space="preserve"><value>导入素材</value></data>
+  <data name="WorkbenchImportDialogFilter" xml:space="preserve"><value>所有文件 (*.*)|*.*|图片文件 (*.png;*.jpg;*.jpeg;*.gif;*.webp;*.bmp)|*.png;*.jpg;*.jpeg;*.gif;*.webp;*.bmp</value></data>
+  <data name="WorkbenchCollapseCard" xml:space="preserve"><value>折叠纸片</value></data>
+  <data name="WorkbenchExpandCard" xml:space="preserve"><value>展开纸片</value></data>
+  <data name="WorkbenchLockCard" xml:space="preserve"><value>锁定位置</value></data>
+  <data name="WorkbenchUnlockCard" xml:space="preserve"><value>解锁位置</value></data>
   <data name="WorkbenchError" xml:space="preserve"><value>工作台操作失败：{0}</value></data>
   <data name="WorkbenchPinConflict" xml:space="preserve"><value>有锁定纸片互相重叠；系统保留锁定位置，请移动或解锁其中一张。</value></data>
   <data name="WorkbenchDelete" xml:space="preserve"><value>删除纸片</value></data>
