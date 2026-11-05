@@ -89,22 +89,23 @@ internal static partial class Program
     {
         var state = new AppState();
         Check(PaperTopBarShortcuts.Pinned(state).SequenceEqual(
-                  [PaperTopBarShortcuts.Association]) &&
+                  [PaperTopBarShortcuts.Association, PaperTopBarShortcuts.ExpandedEditor]) &&
               PaperTopBarShortcuts.Menu(state).SequenceEqual(
                   [PaperTopBarShortcuts.NewNote, PaperTopBarShortcuts.NewTodo,
                    PaperTopBarShortcuts.ExternalEditor]) &&
               PaperTopBarShortcuts.NormalizeOrder(null).SequenceEqual(
                   state.TopBarShortcutOrder),
-            "New installations pin only association and order Note, Todo, external editor in the menu.");
+            "New installations pin association and the expandable editor, without changing other menu order.");
         Check(PaperTopBarShortcuts.MoveTo(state, PaperTopBarShortcuts.NewNote, true, 1) &&
               PaperTopBarShortcuts.Pinned(state).SequenceEqual(
-                  [PaperTopBarShortcuts.Association, PaperTopBarShortcuts.NewNote]) &&
+                  [PaperTopBarShortcuts.Association, PaperTopBarShortcuts.NewNote,
+                   PaperTopBarShortcuts.ExpandedEditor]) &&
               PaperTopBarShortcuts.Menu(state).SequenceEqual(
                   [PaperTopBarShortcuts.NewTodo, PaperTopBarShortcuts.ExternalEditor]),
             "Dragging a menu command above the divider pins it at the insertion slot.");
         Check(PaperTopBarShortcuts.MoveTo(state, PaperTopBarShortcuts.Association, false, 0) &&
               PaperTopBarShortcuts.Pinned(state).SequenceEqual(
-                  [PaperTopBarShortcuts.NewNote]) &&
+                  [PaperTopBarShortcuts.NewNote, PaperTopBarShortcuts.ExpandedEditor]) &&
               PaperTopBarShortcuts.Menu(state).SequenceEqual(
                   [PaperTopBarShortcuts.Association, PaperTopBarShortcuts.NewTodo,
                    PaperTopBarShortcuts.ExternalEditor]),
@@ -113,7 +114,8 @@ internal static partial class Program
             "Dropping in the same slot is a true no-op.");
         Check(PaperTopBarShortcuts.MoveTo(state, PaperTopBarShortcuts.NewTodo, true, 0) &&
               PaperTopBarShortcuts.Pinned(state).SequenceEqual(
-                  [PaperTopBarShortcuts.NewTodo, PaperTopBarShortcuts.NewNote]),
+                  [PaperTopBarShortcuts.NewTodo, PaperTopBarShortcuts.NewNote,
+                   PaperTopBarShortcuts.ExpandedEditor]),
             "Reordering within one group preserves divider membership.");
         Check(PaperTopBarShortcuts.Contains(state, PaperTypes.Note,
                   PaperTopBarShortcuts.NewNote) &&
@@ -127,7 +129,8 @@ internal static partial class Program
                    PaperTopBarShortcuts.PluginActions, "unknown"])
                   .SequenceEqual(
                   [PaperTopBarShortcuts.ExternalEditor, PaperTopBarShortcuts.Association,
-                   PaperTopBarShortcuts.NewNote, PaperTopBarShortcuts.NewTodo]),
+                   PaperTopBarShortcuts.ExpandedEditor, PaperTopBarShortcuts.NewNote,
+                   PaperTopBarShortcuts.NewTodo]),
             "Duplicates and obsolete plugin pins never enter the new global configuration.");
 
         var controller = Controller();
@@ -180,7 +183,8 @@ internal static partial class Program
             var loaded = store.Load();
             Check(PaperTopBarShortcuts.Pinned(loaded).SequenceEqual(
                       [PaperTopBarShortcuts.Association, PaperTopBarShortcuts.NewTodo,
-                       PaperTopBarShortcuts.ExternalEditor, PaperTopBarShortcuts.NewNote]) &&
+                       PaperTopBarShortcuts.ExternalEditor, PaperTopBarShortcuts.NewNote,
+                       PaperTopBarShortcuts.ExpandedEditor]) &&
                   loaded.TodoTopBarShortcuts == null && loaded.NoteTopBarShortcuts == null,
                 "Different Todo and Note layouts migrate to one union; old lists stop being authoritative.");
 
@@ -188,7 +192,7 @@ internal static partial class Program
             File.WriteAllText(Path.Combine(temp, "data.json"),
                 JsonSerializer.Serialize(loaded, options));
             var reloaded = store.Load();
-            Check(reloaded.TopBarPinnedCount == 3 &&
+            Check(reloaded.TopBarPinnedCount == 4 &&
                   PaperTopBarShortcuts.Menu(reloaded).SequenceEqual([PaperTopBarShortcuts.NewNote]) &&
                   reloaded.TodoTopBarShortcuts == null,
                 "A deliberate menu position survives restart without migrating again.");
@@ -201,7 +205,8 @@ internal static partial class Program
             File.WriteAllText(Path.Combine(temp, "data.json"), root.ToJsonString());
             var older = store.Load();
             Check(PaperTopBarShortcuts.Pinned(older).SequenceEqual(
-                [PaperTopBarShortcuts.Association, PaperTopBarShortcuts.NewNote]),
+                [PaperTopBarShortcuts.Association, PaperTopBarShortcuts.NewNote,
+                 PaperTopBarShortcuts.ExpandedEditor]),
                 "Pre-341 visibility booleans migrate through the same one-time global path.");
         }
         finally { Directory.Delete(temp, recursive: true); }
