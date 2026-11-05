@@ -1726,7 +1726,7 @@
   <data name="WorkbenchSearch" xml:space="preserve"><value>全局搜索，按 Enter 定位结果</value></data>
   <data name="WorkbenchRefresh" xml:space="preserve"><value>刷新概览</value></data>
   <data name="WorkbenchClose" xml:space="preserve"><value>返回桌面</value></data>
-  <data name="WorkbenchHint" xml:space="preserve"><value>空白处拖动框选，Ctrl＋点击标题栏多选，Ctrl＋G 成组；中键平移，Alt＋滚轮缩放。节点内 Tab 添加子节点，Enter 添加同级节点。</value></data>
+  <data name="WorkbenchHint" xml:space="preserve"><value>空白处拖动框选，Ctrl＋点击标题栏多选，Ctrl＋G 成组；右键按住平移，Alt＋滚轮缩放。拖动卡片顶栏的连接图标即可连线。</value></data>
   <data name="WorkbenchError" xml:space="preserve"><value>工作台操作失败：{0}</value></data>
   <data name="WorkbenchPinConflict" xml:space="preserve"><value>有锁定纸片互相重叠；系统保留锁定位置，请移动或解锁其中一张。</value></data>
   <data name="WorkbenchDelete" xml:space="preserve"><value>删除纸片</value></data>
@@ -1752,7 +1752,7 @@
   <data name="WorkbenchFocusGroup" xml:space="preserve"><value>只看这一组</value></data>
   <data name="WorkbenchLeaveGroup" xml:space="preserve"><value>返回全部内容</value></data>
   <data name="WorkbenchRenameGroup" xml:space="preserve"><value>重命名分组</value></data>
-  <data name="WorkbenchConnect" xml:space="preserve"><value>连接到…</value></data>
+  <data name="WorkbenchConnect" xml:space="preserve"><value>拖动以连线</value></data>
   <data name="WorkbenchConnectHint" xml:space="preserve"><value>点击要连接的卡片，Esc 取消</value></data>
   <data name="WorkbenchConnectionLabel" xml:space="preserve"><value>关系说明</value></data>
   <data name="WorkbenchRemoveConnection" xml:space="preserve"><value>删除连线</value></data>
