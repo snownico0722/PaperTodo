@@ -290,7 +290,8 @@ public sealed class MasterCapsuleWindow : Window
             var hadGesture =
                 _gestureState != MasterGestureState.Idle &&
                 _dragSession != null;
-            var wasDragging = FinishMasterGesture(commit: true, clearFocus: false);
+            var wasDragging = FinishMasterGesture(commit: true, clearFocus: false,
+                releasePointer: DeviceScreenPoint.FromPoint(PointToScreen(e.GetPosition(this))));
             if (hadGesture && !wasDragging)
             {
                 _controller.SuppressEdgeCapsulePreviewForMasterQueueLayout(_queueKey);
@@ -367,7 +368,7 @@ public sealed class MasterCapsuleWindow : Window
         var targetMargin = (session.FreeLayout?.MasterTopDip ?? session.StartTopMargin) + deltaY;
         if (session.FreeLayout is { } freeLayout)
         {
-            _controller.PreviewFreeMasterQueueTop(freeLayout, targetMargin);
+            _controller.PreviewFreeMasterQueueTop(freeLayout, targetMargin, currentScreenPos);
             return true;
         }
         _controller.SetDeepCapsuleStartTopMargin(
@@ -730,7 +731,8 @@ public sealed class MasterCapsuleWindow : Window
         }
     }
 
-    private bool FinishMasterGesture(bool commit, bool clearFocus = true)
+    private bool FinishMasterGesture(bool commit, bool clearFocus = true,
+        DeviceScreenPoint? releasePointer = null)
     {
         var session = _dragSession;
         var wasDragging = _gestureState == MasterGestureState.Dragging && session != null;
@@ -749,7 +751,15 @@ public sealed class MasterCapsuleWindow : Window
             // and its presence, so a canceled preview cannot pin the current product default.
             if (session!.FreeLayout is { } freeLayout)
             {
-                _controller.FinishFreeMasterQueueDrag(freeLayout, commit);
+                // The same captured vertical gesture can MERGE by releasing over a
+                // visible peer master. Ordinary motion still commits only its own
+                // bounded anchor; neither path needs a sideways floating handoff.
+                var merged = commit && releasePointer is { } point &&
+                    _controller.TryCommitDockedFreeMasterQueueMerge(
+                        freeLayout, point, session.StartTopMargin,
+                        session.SourceHadStartTopMargin);
+                if (!merged)
+                    _controller.FinishFreeMasterQueueDrag(freeLayout, commit);
             }
             else if (commit)
             {

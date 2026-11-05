@@ -2719,6 +2719,8 @@ public sealed partial class AppController : IDisposable
         if (snapshot.FreeLayout != null)
         {
             _freeMasterDragPreview = null;
+            _freeMasterSlotPreview = new();
+            _nativeQueueDropGhost?.Hide();
             return;
         }
         if (snapshot.SourceHadStartTopMargin)
