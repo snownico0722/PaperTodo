@@ -98,7 +98,7 @@ PaperTodo.exe
 
 `--mcp` 是同一可执行文件的独立 bridge 模式。它在 GUI Mutex 之前分流，通过 stdio 暴露 MCP server；GUI 主宿主内部的 MCP runtime 由 `AppController` 管理。
 
-`--import-note-image --paper-id <id> [--image-name <name>]` 由 `McpImageImportCommand` 在独立进程中接收有界的原始二进制 stdin，编码后复用 `McpPipeClient` 调用 `insert_note_image`。它先查询目标以绑定当前工作区，再读取输入并使用同一 client 提交；接收期间工作区变化直接拒绝，不自动重绑或重放写入。原始数据只在程序间流转，stdout 仅输出图片 ID 与引用。此入口不读取外部文件/网址、不启动 GUI、不自行开启权限；GUI 侧继续统一检查 MCP 权限，并通过 `PaperCommandService` / `NoteImageStore` 保存。
+`--import-note-image --paper-id <id> [--image-name <name>]` 由 `McpImageImportCommand` 在独立进程中接收有界的原始二进制 stdin，编码后复用 `McpPipeClient` 调用 `insert_note_image`。它先查询目标以绑定当前工作区，再读取输入并使用同一 client 提交；接收期间工作区变化直接拒绝，不自动重绑或重放写入。原始数据只在程序间流转，stdout 仅输出图片 ID 与引用。内部 `insert_note_image` 命名管道操作不作为公开 MCP 工具；MCP 只公开 `read_note_image` 供视觉读取。此入口不读取外部文件/网址、不启动 GUI、不自行开启权限；GUI 侧继续统一检查 MCP 权限，并通过 `PaperCommandService` / `NoteImageStore` 保存。
 
 Codex CLI Bridge 通过单次 CLI 配置连接同一可执行文件的 stdio bridge；勾选 `allowMcp` 后，任务需要 MCP 且 MCP 或所需权限未开启时可发送 `--enable-mcp-for-codex` 单实例命令。GUI 主宿主重新检查插件实际运行状态和当前设置后，一次性开启 MCP 总开关、空白/追加写入、完整写入和直接删除权限。该命令等待主实例的实际执行结果：退出码 0 表示宿主执行成功，1 表示宿主拒绝或执行失败，2 表示主实例不存在或未收到确认；传输失败不重放已经发送的命令。没有现成 GUI 主实例时不启动或恢复纸片；普通 PaperTodo 功能开关（例如待办关联纸片）不由该命令自动修改。
 
