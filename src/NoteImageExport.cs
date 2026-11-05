@@ -24,7 +24,7 @@ internal sealed record NoteImageArtifact(DrawingGroup Drawing, double Height, in
 }
 
 internal sealed record NoteImageSource(BitmapSource Bitmap, int NaturalWidth,
-    long EncodedBytes = 0, string Mime = "", int NaturalHeight = 0, NoteImageJpegInfo JpegInfo = default);
+    long EncodedBytes = 0, string Mime = "", int NaturalHeight = 0, NoteImageJpegInfo JpegInfo = default, NoteImagePngInfo PngInfo = default);
 
 internal enum NoteImageFormat { Jpeg, Png }
 
@@ -81,7 +81,8 @@ internal static class NoteImageExport
         bitmap.EndInit();
         bitmap.Freeze();
         return new NoteImageSource(bitmap, asset.Width, bytes.LongLength, asset.Mime, asset.Height,
-            asset.Mime == "image/jpeg" ? NoteImageJpegInfo.Read(bytes) : default);
+            asset.Mime == "image/jpeg" ? NoteImageJpegInfo.Read(bytes) : default,
+            asset.Mime == "image/png" ? NoteImagePngInfo.Read(bytes) : default);
     }
 
     internal static void Save(string path, NoteImageArtifact artifact, CancellationToken cancellation,
@@ -428,7 +429,7 @@ internal static class NoteImageExport
             var imageHeight = imageWidth * bitmap.PixelHeight / bitmap.PixelWidth;
             _sizeEstimate.AddImage(image.EncodedBytes, image.Mime, image.NaturalWidth,
                 image.NaturalHeight > 0 ? image.NaturalHeight : image.NaturalWidth * bitmap.PixelHeight / (double)bitmap.PixelWidth,
-                imageWidth * NoteImageArtifact.Scale, imageHeight * NoteImageArtifact.Scale, image.JpegInfo);
+                imageWidth * NoteImageArtifact.Scale, imageHeight * NoteImageArtifact.Scale, image.JpegInfo, image.PngInfo);
             _y += 8;
             var bounds = new Rect(x + (width - imageWidth) / 2, _y, imageWidth, imageHeight);
             _dc.DrawRectangle(Brushes.White, null, bounds);

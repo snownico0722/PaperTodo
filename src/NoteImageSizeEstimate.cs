@@ -26,7 +26,7 @@ internal sealed class NoteImageSizeEstimate
     }
 
     internal void AddImage(long encodedBytes, string mime, double sourceWidth, double sourceHeight,
-        double outputWidth, double outputHeight, NoteImageJpegInfo jpegInfo = default)
+        double outputWidth, double outputHeight, NoteImageJpegInfo jpegInfo = default, NoteImagePngInfo pngInfo = default)
     {
         var area = outputWidth * outputHeight;
         if (area <= 0) return;
@@ -39,7 +39,8 @@ internal sealed class NoteImageSizeEstimate
             return;
         }
         var jpegSource = mime == "image/jpeg";
-        var imageBytes = jpegSource && jpegInfo.PayloadBytes > 0 ? jpegInfo.PayloadBytes : encodedBytes;
+        var imageBytes = jpegSource && jpegInfo.PayloadBytes > 0 ? jpegInfo.PayloadBytes :
+            !jpegSource && pngInfo.PayloadBytes > 0 ? pngInfo.PayloadBytes : encodedBytes;
         var density = Math.Log(Math.Clamp(imageBytes / (sourceWidth * sourceHeight), .001, 4));
         var scale = Math.Log(Math.Clamp(Math.Sqrt(area / (sourceWidth * sourceHeight)), .01, 100));
         var jpegRate = jpegSource
@@ -70,6 +71,14 @@ internal sealed class NoteImageSizeEstimate
             if (payload > 1.5 * (.01171875 + .015625 / jpegInfo.Sampling))
                 pngRate = HeaderRate(d, scale, q, h, PngCoefficients);
         }
+        if (!jpegSource && pngInfo.PayloadBytes > 0 && !pngInfo.Interlaced && pngInfo.BitDepth <= 8 &&
+            (pngInfo.ColorType == 6 || (!pngInfo.HasAlpha && pngInfo.ColorType is 0 or 3)))
+        {
+            var candidate = Math.Clamp(PngSourceRate(density, scale, pngInfo, PngSourceJpegCoefficients), .015, 2);
+            // An alpha channel does not reveal how much of the picture is transparent.
+            jpegRate = pngInfo.HasAlpha ? Math.Sqrt(Math.Clamp(jpegRate, .015, 2) * candidate) : candidate;
+            pngRate = PngSourceRate(density, scale, pngInfo, PngSourcePngCoefficients);
+        }
         _imageJpeg += area * Math.Clamp(jpegRate, .015, 2);
         _imagePng += area * Math.Clamp(pngRate, .001, 3);
     }
@@ -85,6 +94,24 @@ internal sealed class NoteImageSizeEstimate
             d * s * c[5] + q * (c[6] + q * c[7]) + d * q * c[8] + s * q * c[9] +
             h * (c[10] + d * c[11] + s * c[12]) + d * d * s * c[14] + d * d * q * c[15] +
             d * q * q * c[16] + d * s * q * c[17] + s * s * q * c[18]);
+
+    private static ReadOnlySpan<double> PngSourceJpegCoefficients =>
+        [-1.60944610, 0.60368653, 0.11481673, -0.28348935, -0.15656912, 0.21924539, 0.60761837, 0.11351605, 0.30361767, -0.30437676, -0.05421878, -0.09811950, 0.67634605, -0.09697836, 0.32640004, -0.00611967, -0.04777830, -0.47781888, 0.01316901, 0.02177283, -0.04696148];
+    private static ReadOnlySpan<double> PngSourcePngCoefficients =>
+        [0.01281997, 0.95503125, -0.01497241, -0.15619905, 0.02934515, 0.37029901, 0.14264137, -0.07857718, 0.10608676, -0.20707307, -0.03287594, -0.10505387, 0.70804490, -0.16859696, 0.03928826, 0.03458994, -0.03434166, -0.35769595, -0.00279873, 0.04886133, -0.06660659];
+
+    private static double PngSourceRate(double d, double s, NoteImagePngInfo info, ReadOnlySpan<double> c)
+    {
+        var gray = info.ColorType is 0 or 4 ? 1d : 0;
+        var palette = info.ColorType == 3 ? 1d : 0;
+        var alpha = info.HasAlpha ? 1d : 0;
+        var colors = palette * Math.Log(Math.Max(1, info.PaletteColors) / 256d);
+        var depth = Math.Log(info.BitDepth / 8d);
+        return Math.Exp(c[0] + d * (c[1] + d * (c[2] + d * c[18])) + s * (c[3] + s * c[4]) +
+            d * s * (c[5] + d * c[19] + s * c[20]) + gray * (c[6] + d * c[7] + s * c[8]) +
+            alpha * (c[9] + d * c[10] + s * c[11]) + palette * (c[12] + d * c[13] + s * c[14]) +
+            colors * (c[15] + d * c[16]) + depth * c[17]);
+    }
 
     private static double Rate(double density, double scale,
         double a, double b, double c, double d, double e, double f, double g, double h) =>
