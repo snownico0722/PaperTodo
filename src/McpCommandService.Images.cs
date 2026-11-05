@@ -1,0 +1,57 @@
+using System.Text.Json;
+
+namespace PaperTodo;
+
+internal sealed partial class McpCommandService
+{
+    // The named pipe allows up to 8 million JSON characters. Cap Base64 at 4 MiB decoded
+    // to stay within that envelope; larger valid files can use image_path (32 MiB input).
+    internal const int MaxBase64ImageBytes = 4 * 1024 * 1024;
+    internal const int MaxBase64ImageCharacters = ((MaxBase64ImageBytes + 2) / 3) * 4;
+
+    private object InsertNoteImage(JsonElement parameters)
+    {
+        RequireAdditiveWrites();
+        var paperId = RequiredString(parameters, "paper_id", 64);
+        var imagePath = OptionalString(parameters, "image_path", 2048);
+        var encoded = OptionalString(parameters, "image_base64", MaxBase64ImageCharacters);
+        var imageName = OptionalString(parameters, "image_name", 200);
+        if ((imagePath == null) == (encoded == null))
+            throw new McpApiException("invalid_params", "Provide exactly one of image_path or image_base64.");
+
+        byte[]? imageBytes = null;
+        if (encoded != null)
+        {
+            try { imageBytes = Convert.FromBase64String(encoded); }
+            catch (FormatException)
+            {
+                throw new McpApiException("invalid_params", "image_base64 must contain valid Base64 image data.");
+            }
+            if (imageBytes.Length > MaxBase64ImageBytes)
+                throw new McpApiException("invalid_params", "image_base64 cannot exceed 4 MiB decoded.");
+        }
+
+        var result = _commands.InsertNoteImage(
+            paperId, imagePath, imageBytes, imageName, PaperOperationContext.Mcp());
+        return new
+        {
+            paper_id = result.PaperId,
+            image_id = result.ImageId,
+            markdown_reference = result.Reference
+        };
+    }
+
+    private object ReadNoteImage(JsonElement parameters)
+    {
+        var paperId = RequiredString(parameters, "paper_id", 64);
+        var imageId = RequiredString(parameters, "image_id", 64);
+        var image = _commands.ReadNoteImage(paperId, imageId);
+        return new
+        {
+            paper_id = paperId,
+            image_id = image.Id,
+            mime = image.Mime,
+            image_base64 = Convert.ToBase64String(image.Bytes)
+        };
+    }
+}
