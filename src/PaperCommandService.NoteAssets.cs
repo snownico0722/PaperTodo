@@ -22,12 +22,12 @@ internal sealed partial class PaperCommandService
         // Check against the editor draft before settling pending user text or touching LMDB.
         // Image IDs are at most 8 digits, so this bounds the eventual appended reference.
         var maximumReference = MarkdownImageReferences.CreateReference("99999999");
-        _ = BuildNoteWriteResult(
+        EnsureImageReferenceRenders(
             _controller.CurrentMarkdownContentForExternalRead(paper),
-            maximumReference, NoteWriteMode.Append);
+            maximumReference);
         PrepareExternalMutation(paper);
         var original = paper.Content ?? "";
-        _ = BuildNoteWriteResult(original, maximumReference, NoteWriteMode.Append);
+        EnsureImageReferenceRenders(original, maximumReference);
 
         NoteImageAsset imported;
         try
@@ -72,6 +72,21 @@ internal sealed partial class PaperCommandService
                 try { _controller.ImageStore.DiscardImportedImage(paper.Id, imported.Id); }
                 catch (Exception ex) { Trace.WriteLine($"[MCP] Uncommitted image cleanup failed: {ex}"); }
             }
+        }
+    }
+
+    private static void EnsureImageReferenceRenders(string current, string reference)
+    {
+        // The append must form a real image block, not text inside an unclosed
+        // Markdown fence. Validate the semantic result before importing an LMDB blob.
+        var candidate = BuildNoteWriteResult(current, reference, NoteWriteMode.Append);
+        var start = candidate.Length - reference.Length;
+        if (!MarkdownImageReferences.Enumerate(candidate)
+            .Any(image => image.LineStart == start &&
+                          string.Equals(image.ImageId, "99999999", StringComparison.Ordinal)))
+        {
+            throw Error("image_reference_not_renderable",
+                "The note ends in a Markdown context where the image would not render. Close the open code block before inserting an image.");
         }
     }
 
