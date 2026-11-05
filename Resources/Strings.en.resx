@@ -1667,4 +1667,16 @@ The original note is kept.</value></data>
   <data name="NoteExportNoNotes" xml:space="preserve"><value>There are no Markdown notes or todo papers to export.</value></data>
   <data name="NoteExportProgress" xml:space="preserve"><value>Exporting {0}/{1} papers</value></data>
   <data name="TodoExportCurrent" xml:space="preserve"><value>Export this todo paper</value></data>
+  <data name="HistoryRecoveryTitle" xml:space="preserve">
+    <value>Restore workspace</value>
+  </data>
+  <data name="HistoryRecoveryMessage" xml:space="preserve">
+    <value>The current data for workspace {0} cannot be read.
+Latest usable historical backup: {1}.
+
+Restoring returns this workspace to that time; later changes may be lost. Only notes, todos and settings are restored. Images and plugin data are not included.</value>
+  </data>
+  <data name="HistoryRecoveryRestore" xml:space="preserve">
+    <value>Restore backup</value>
+  </data>
 </root>

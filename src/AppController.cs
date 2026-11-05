@@ -242,7 +242,7 @@ public sealed partial class AppController : IDisposable
     {
         CreateTrayIcon();
         NotifyWorkspaceStartup();
-        // Complete a successful backup recovery or a confirmed-corrupt rebuild using
+        // Complete a successful backup/temp/history recovery or new workspace using
         // the ordinary guarded writer. This never runs after a failed/busy load.
         if (_store.NeedsStartupRecoverySave)
             SaveNow(sync: true);

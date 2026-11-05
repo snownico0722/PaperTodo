@@ -1667,4 +1667,16 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="NoteExportNoNotes" xml:space="preserve"><value>エクスポートできるメモまたは ToDo がありません。</value></data>
   <data name="NoteExportProgress" xml:space="preserve"><value>エクスポート中 {0}/{1} 件</value></data>
   <data name="TodoExportCurrent" xml:space="preserve"><value>この ToDo をエクスポート</value></data>
+  <data name="HistoryRecoveryTitle" xml:space="preserve">
+    <value>ワークスペースを復元</value>
+  </data>
+  <data name="HistoryRecoveryMessage" xml:space="preserve">
+    <value>ワークスペース {0} の現在のデータを読み込めません。
+利用可能な最新の履歴バックアップ：{1}。
+
+復元すると、この時点の状態に戻り、それ以降の変更は失われる可能性があります。このワークスペースのノート、ToDo、設定のみを復元します。画像とプラグインデータは含まれません。</value>
+  </data>
+  <data name="HistoryRecoveryRestore" xml:space="preserve">
+    <value>バックアップから復元</value>
+  </data>
 </root>

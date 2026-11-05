@@ -53,7 +53,7 @@ public sealed partial class StateStore
     // Only if both are unavailable do we select the newest complete interrupted write.
     // Corrupt input is never rebuilt into blank data, and an uncommitted temp never
     // silently replaces an otherwise healthy primary or fixed backup.
-    internal AppState Load(out bool initializedEmpty)
+    internal AppState Load(out bool initializedEmpty, Func<DateTime, bool>? confirmHistoryRecovery = null)
     {
         initializedEmpty = false;
         NeedsStartupRecoverySave = false;
@@ -112,9 +112,28 @@ public sealed partial class StateStore
         // The existence of corrupt input means there was user data: never replace it
         // with a blank document or force users to repair raw files by hand.
         if (primaryExists || backupExists || HasInterruptedWriteFiles())
+        {
+            if (confirmHistoryRecovery != null)
+            {
+                var history = new CoreHistoryBackup(Path.GetDirectoryName(FilePath)!);
+                foreach (var snapshot in history.ReadWorkspaceSnapshots(WorkspaceNumber))
+                {
+                    if (!TryReadCompleteDocument(snapshot.Bytes, out _, out _)) continue;
+                    WriteLifetime.ThrowIfStopped();
+                    if (!confirmHistoryRecovery(snapshot.TimestampUtc))
+                        throw new OperationCanceledException("Historical workspace recovery was canceled.");
+                    // The modal choice may allow shutdown or external edits. The
+                    // ordinary recovery writer rechecks both source and primary.
+                    WriteLifetime.ThrowIfStopped();
+                    _pendingStartupRecovery = PendingStartupRecovery.FromHistory(snapshot, primaryBytes);
+                    NeedsStartupRecoverySave = true;
+                    return ReadLoadDocument(snapshot.Bytes);
+                }
+            }
             throw new InvalidDataException(
                 "The workspace data and its fixed backup cannot be read, and no " +
                 "complete interrupted-write file is available. Original files were not overwritten.");
+        }
 
         initializedEmpty = true;
         NeedsStartupRecoverySave = true;

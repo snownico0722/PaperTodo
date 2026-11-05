@@ -16,11 +16,11 @@ public sealed partial class StateStore
         internal List<(string Path, byte[] Hash)> EquivalentTempPaths { get; }
 
         private PendingStartupRecovery(
-            string sourcePath, byte[] sourceBytes, byte[]? originalPrimary,
+            string sourcePath, byte[] sourceHash, byte[]? originalPrimary,
             bool fromTemporary, IEnumerable<(string Path, byte[] Hash)> equivalentTempPaths)
         {
             SourcePath = sourcePath;
-            SourceHash = SHA256.HashData(sourceBytes);
+            SourceHash = sourceHash;
             ExpectedPrimaryHash = originalPrimary == null ? null : SHA256.HashData(originalPrimary);
             IsTemporary = fromTemporary;
             EquivalentTempPaths = equivalentTempPaths.ToList();
@@ -28,12 +28,16 @@ public sealed partial class StateStore
 
         internal static PendingStartupRecovery FromFixedBackup(
             string path, byte[] backupBytes, byte[]? originalPrimary) =>
-            new(path, backupBytes, originalPrimary, false, []);
+            new(path, SHA256.HashData(backupBytes), originalPrimary, false, []);
+
+        internal static PendingStartupRecovery FromHistory(
+            CoreHistoryBackup.WorkspaceSnapshot snapshot, byte[]? originalPrimary) =>
+            new(snapshot.ArchivePath, snapshot.ArchiveHash, originalPrimary, false, []);
 
         internal static PendingStartupRecovery FromTemporary(
             string path, byte[] tempBytes, byte[]? originalPrimary,
             (string Path, byte[] Hash)[] equivalentPaths) =>
-            new(path, tempBytes, originalPrimary, true, equivalentPaths);
+            new(path, SHA256.HashData(tempBytes), originalPrimary, true, equivalentPaths);
     }
 
     private PendingStartupRecovery? _pendingStartupRecovery;
@@ -222,7 +226,7 @@ public sealed partial class StateStore
             throw new IOException("Recovery commit could not be verified; the source was retained.");
 
         _pendingStartupRecovery = null;
-        if (!pending.IsTemporary) return; // A fixed backup remains the normal backup.
+        if (!pending.IsTemporary) return; // Fixed backups and history ZIPs remain intact.
 
         foreach (var (path, hash) in pending.EquivalentTempPaths)
         {

@@ -1716,4 +1716,16 @@
   <data name="NoteExportNoNotes" xml:space="preserve"><value>没有可导出的笔记或待办。</value></data>
   <data name="NoteExportProgress" xml:space="preserve"><value>正在导出 {0}/{1} 张纸片</value></data>
   <data name="TodoExportCurrent" xml:space="preserve"><value>导出当前待办</value></data>
+  <data name="HistoryRecoveryTitle" xml:space="preserve">
+    <value>恢复工作区</value>
+  </data>
+  <data name="HistoryRecoveryMessage" xml:space="preserve">
+    <value>工作区 {0} 的当前数据无法读取。
+找到最近可用的历史备份：{1}。
+
+恢复后将回到该时间的状态，此后的修改可能丢失。仅恢复此工作区的便签、待办和设置，不包含图片或插件数据。</value>
+  </data>
+  <data name="HistoryRecoveryRestore" xml:space="preserve">
+    <value>从备份恢复</value>
+  </data>
 </root>

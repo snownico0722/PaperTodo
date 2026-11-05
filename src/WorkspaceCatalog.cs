@@ -12,13 +12,16 @@ internal sealed class WorkspaceCatalog
     private readonly IDurableAtomicFileWriter _writer;
     private readonly Dictionary<int, StateStore> _stores = new();
     private readonly PersistenceWriteLifetime _writeLifetime = new();
+    private readonly Func<StateStore, DateTime, bool>? _confirmHistoryRecovery;
     private AppState? _initialMain;
 
-    internal WorkspaceCatalog(string directory, IDurableAtomicFileWriter writer)
+    internal WorkspaceCatalog(string directory, IDurableAtomicFileWriter writer,
+        Func<StateStore, DateTime, bool>? confirmHistoryRecovery = null)
     {
         _directory = Path.GetFullPath(directory);
         _writer = writer;
-        _initialMain = StoreFor(1).Load();
+        _confirmHistoryRecovery = confirmHistoryRecovery;
+        _initialMain = LoadWorkspace(StoreFor(1), out _);
         HasConfiguration = _initialMain.Workspaces != null;
         Options = (_initialMain.Workspaces ?? new()).Normalized();
     }
@@ -29,6 +32,10 @@ internal sealed class WorkspaceCatalog
     internal void SetStartupError(string message) => StartupError = message;
     internal StateStore MainStore => StoreFor(1);
     internal WorkspacePaths PathsFor(int number) => new(_directory, number);
+
+    private AppState LoadWorkspace(StateStore store, out bool initializedEmpty) =>
+        store.Load(out initializedEmpty, _confirmHistoryRecovery == null ? null :
+            timestamp => _confirmHistoryRecovery(store, timestamp));
 
     // Purge inactive secondary data after removing the slot from the main catalog.
     // A failed file cleanup is reported but does not restore catalog membership.
@@ -85,7 +92,7 @@ internal sealed class WorkspaceCatalog
         if (Options.Enabled && Options.Active > 1)
         {
             try { return Open(Options.Active, Options, main); }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 // An inaccessible slot can be retried later; do not reset the
                 // user's selected workspace or write over its unavailable data.
@@ -104,20 +111,20 @@ internal sealed class WorkspaceCatalog
         WorkspaceSettingsSnapshot? inherited = null;
         if (number > 1 && follows)
         {
-            main ??= MainStore.Load();
+            main ??= LoadWorkspace(MainStore, out _);
             inherited = WorkspaceSettingsSnapshot.Capture(main);
         }
         // Normalize papers against effective settings, not dormant local preferences.
         store.InheritedSettings = inherited;
-        var state = store.Load(out var initializedEmpty);
+        var state = LoadWorkspace(store, out var initializedEmpty);
         if (initializedEmpty && number > 1)
         {
-            // New or irrecoverably corrupt slots both start with one blank paper.
+            // Only genuinely new slots start with one blank paper.
             // Image, plugin and historical files never veto initialization.
             // Every new slot begins with main-workspace settings. Unfollowing later
             // keeps this initial copy as its independent preference, regardless of
             // which workspace was active when the slot was first opened.
-            main ??= MainStore.Load();
+            main ??= LoadWorkspace(MainStore, out _);
             inherited ??= WorkspaceSettingsSnapshot.Capture(main);
             inherited.ApplyTo(state);
             state.Papers.Add(new PaperData());
@@ -149,7 +156,7 @@ internal sealed class WorkspaceCatalog
         var independent = current.FollowsMain
             ? current.IndependentSettings!
             : WorkspaceSettingsSnapshot.Capture(current.State);
-        var inherited = follows ? WorkspaceSettingsSnapshot.Capture(MainStore.Load()) : null;
+        var inherited = follows ? WorkspaceSettingsSnapshot.Capture(LoadWorkspace(MainStore, out _)) : null;
         var session = new WorkspaceSession(current.Paths, current.Store, current.State, follows, independent)
         {
             InheritedSettings = inherited

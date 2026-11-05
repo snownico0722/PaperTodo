@@ -1667,4 +1667,16 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="NoteExportNoNotes" xml:space="preserve"><value>내보낼 수 있는 메모 또는 할 일이 없습니다.</value></data>
   <data name="NoteExportProgress" xml:space="preserve"><value>내보내는 중 {0}/{1}개</value></data>
   <data name="TodoExportCurrent" xml:space="preserve"><value>현재 할 일 내보내기</value></data>
+  <data name="HistoryRecoveryTitle" xml:space="preserve">
+    <value>작업 공간 복원</value>
+  </data>
+  <data name="HistoryRecoveryMessage" xml:space="preserve">
+    <value>작업 공간 {0}의 현재 데이터를 읽을 수 없습니다.
+사용 가능한 최신 기록 백업: {1}.
+
+복원하면 해당 시점의 상태로 돌아가며 이후 변경 사항은 사라질 수 있습니다. 이 작업 공간의 메모, 할 일, 설정만 복원하며 이미지와 플러그인 데이터는 포함되지 않습니다.</value>
+  </data>
+  <data name="HistoryRecoveryRestore" xml:space="preserve">
+    <value>백업에서 복원</value>
+  </data>
 </root>

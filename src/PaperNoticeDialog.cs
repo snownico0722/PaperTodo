@@ -20,7 +20,7 @@ internal static class PaperNoticeDialog
     }
 
     public static bool ShowChoice(
-        Window owner,
+        Window? owner,
         string titleText,
         string messageText,
         string secondaryText,
@@ -35,7 +35,7 @@ internal static class PaperNoticeDialog
     }
 
     private static bool ShowCore(
-        Window owner,
+        Window? owner,
         string titleText,
         string messageText,
         string? secondaryText,
@@ -49,13 +49,13 @@ internal static class PaperNoticeDialog
             Width = 360,
             MinHeight = 164,
             SizeToContent = SizeToContent.Height,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            WindowStartupLocation = owner == null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner,
             WindowStyle = WindowStyle.None,
             ResizeMode = ResizeMode.NoResize,
             AllowsTransparency = true,
             Background = Brushes.Transparent,
-            ShowInTaskbar = false,
-            Topmost = owner.Topmost,
+            ShowInTaskbar = owner == null,
+            Topmost = owner?.Topmost ?? false,
             FontFamily = AppTypography.UiFontFamily,
             FontSize = AppTypography.Scale(12),
             Language = AppTypography.Language,

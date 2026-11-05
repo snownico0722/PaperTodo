@@ -1,7 +1,5 @@
 # PaperTodo Changelog
 
-- **Startup recovery and temporary files**: Restore the newest complete interrupted-write snapshot by modification time, even when other versions differ when the primary and fixed backup are unavailable; refuse blank replacement of unreadable old data. Orphaned temporary files are cleared once the workspace's primary is healthy and recovery has completed; an invalid, missing or inaccessible primary leaves them untouched.
-
 [简体中文](CHANGELOG.zh.md)
 
 > **Related Links**: [Back to Home](README.md) · [User Manual](doc/USER_GUIDE.en.md)
@@ -23,6 +21,8 @@ This log is written for general and power users alike. It focuses on user-facing
 ### Unreleased
 
 #### Data Reliability
+
+- **Startup recovery and temporary files**: If the primary and fixed backup are unavailable, restore the newest complete temporary snapshot by modification time, even when other versions differ. If old core files remain but no complete source is usable, offer the latest valid historical backup for that workspace with its time and recovery scope; cancellation never creates blank replacement data. Orphaned temporary files are cleared only after the primary is healthy and recovery is complete.
 
 - **Dynamic core JSON backups**: Keep up to four age-spaced restore points targeting the latest saved state (about 10 minutes), 6 hours, 3 days and 1 month. The first scan starts about one minute after startup, then runs every ten minutes independently of saving or workspace switching. Unreadable workspaces receive bounded retries and are skipped for that scan only. Unchanged files are not re-archived. Raw JSON files from all existing workspaces are archived without JSON validation; images and plugin files are excluded. Old snapshots are pruned only after publishing a complete new ZIP, with no unbounded rescue archive.
 

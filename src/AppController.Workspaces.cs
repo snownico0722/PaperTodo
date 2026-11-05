@@ -31,12 +31,33 @@ public sealed partial class AppController
     [System.Diagnostics.CodeAnalysis.MemberNotNull(nameof(State), nameof(_store), nameof(_imageStore))]
     private void InitializeWorkspaceState()
     {
-        _workspaceCatalog = new WorkspaceCatalog(AppContext.BaseDirectory, DurableAtomicFileWriter.Shared);
+        _workspaceCatalog = new WorkspaceCatalog(AppContext.BaseDirectory,
+            DurableAtomicFileWriter.Shared, ConfirmHistoryRecovery);
         _workspace = _workspaceCatalog.OpenInitial();
         _workspace.BindPersistence();
         _store = _workspace.Store;
         State = _workspace.State;
         _imageStore = new NoteImageStore(_workspace.Paths.Images);
+    }
+
+    private bool ConfirmHistoryRecovery(StateStore store, DateTime timestampUtc)
+    {
+        // Startup may not have any windows or a fully constructed controller yet.
+        // Fence this store even if Windows ends the session inside the modal loop.
+        var app = Application.Current;
+        SessionEndingCancelEventHandler stopWrites = (_, _) => store.StopWritesForTermination();
+        app.SessionEnding += stopWrites;
+        try
+        {
+            var owner = _settingsWindow is { IsVisible: true } ? _settingsWindow :
+                app.Windows.OfType<Window>().FirstOrDefault(window => window.IsActive);
+            return PaperNoticeDialog.ShowChoice(owner,
+                Strings.Get("HistoryRecoveryTitle"),
+                Strings.Format("HistoryRecoveryMessage", store.WorkspaceNumber,
+                    timestampUtc.ToLocalTime().ToString("g", System.Globalization.CultureInfo.CurrentCulture)),
+                Strings.Get("CommonCancel"), Strings.Get("HistoryRecoveryRestore"));
+        }
+        finally { app.SessionEnding -= stopWrites; }
     }
 
     private void InitializeWorkspacePluginData()
@@ -327,7 +348,8 @@ public sealed partial class AppController
                     Trace.TraceError("Workspace UI restoration failed: {0}", restoreError);
                 }
             }
-            ReportWorkspaceError(ex.GetBaseException().Message);
+            if (ex is not OperationCanceledException)
+                ReportWorkspaceError(ex.GetBaseException().Message);
             return committed;
         }
         finally

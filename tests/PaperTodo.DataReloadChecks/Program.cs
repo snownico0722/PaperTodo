@@ -12,6 +12,7 @@ internal static partial class Program
         if (args.Contains("--kill-writer")) return RunKillWriter(args);
         if (args.Contains("--shutdown-merge")) return RunShutdownMergeFixture(false);
         if (args.Contains("--live-fixture")) return RunLiveFixture();
+        if (args.Contains("--history-dialog")) return RunHistoryDialogFixture();
         if (args.Contains("--exit-fixture")) return RunDeferredExitFixture();
         if (args.Contains("--passive-dispose")) return RunPassiveDisposeFixture();
         if (args.Contains("--workspace-fixture")) return RunWorkspaceFixture();
@@ -34,7 +35,7 @@ internal static partial class Program
                 ("conflicts group by paper and archive input", MergePaperConflict),
                 ("delete/edit conflicts honor both choices for notes and todos", MergePaperDeletionConflicts),
                 ("merge preserves links to a paper chosen to survive", MergeDeletedPaperRetainsChosenLinks),
-                ("conflict archives expire only when older than three days AND beyond five groups",
+                ("conflict archives retain the latest five complete groups",
                     ConflictArchiveRetentionChecks),
                 ("stale external source cannot overwrite a newer edit", MergeRejectChangedSource),
                 ("source changed after flush is rejected before replacement", MergeRejectDuringReplace),
@@ -54,12 +55,14 @@ internal static partial class Program
                 Console.WriteLine("PASS " + check.Name);
             }
             CoreHistoryBackupChecks();
+            HistoryRecoveryChecks();
             WorkspaceStorageChecks();
             WorkspaceFollowingMergeBaseline();
             StorageSafetyChecks();
             WorkspaceWriteSafetyChecks();
             KillSafetyChecks();
             RunIsolatedLiveChecks();
+            RunIsolatedLiveChecks("--history-dialog");
             RunIsolatedLiveChecks("--shutdown-merge");
             RunIsolatedLiveChecks("--shutdown-workspace");
             RunIsolatedLiveChecks("--exit-fixture");
