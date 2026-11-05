@@ -55,6 +55,7 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
     private bool _visualResourcesRetired;
     private bool _successfulRetireScheduled;
     private StaticCoverResources? _successorAdmissionCover;
+    private IntPtr _insertAfter;
 
     private EdgeCapsuleQueueCompositionProxy(
         long sessionOrdinal,
@@ -176,7 +177,8 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
         Action environmentChanged,
         Func<EdgeCapsuleQueueCompositionProxy, bool> coverReady,
         Action<EdgeCapsuleQueueCompositionProxy> coverRollback,
-        Action<EdgeCapsuleQueueCompositionProxy, bool> completed)
+        Action<EdgeCapsuleQueueCompositionProxy, bool> completed,
+        IntPtr insertAfter = default)
     {
         if (members.Count == 0 ||
             members.Count != plan.Members.Count ||
@@ -253,6 +255,7 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
                 coverReady,
                 coverRollback,
                 completed);
+            proxy._insertAfter = insertAfter;
             if (!host.TryStage(proxy, predecessor))
             {
                 throw new InvalidOperationException(

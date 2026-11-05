@@ -45,6 +45,7 @@ internal static class NativeFreeQueueReviewChecks
         await CheckDisplacedInsertion(c, windows, store, monitor);
         await CheckDragPreviewUpdates(c, windows, monitor);
         await CheckYieldAnimations(c, windows, monitor);
+        await CheckMasterAnimationStacking(c, windows);
         await CheckVacatedSourcePreview(c, windows, store, monitor);
         await CheckIndependentGroupPreview(c, windows, store, monitor);
         await CheckFoldedDropAndShortcuts(c, monitor);
@@ -434,9 +435,18 @@ internal static class NativeFreeQueueReviewChecks
             var point = Point(monitor, ctrl && !floating ? ownerTop : top);
             FreeMasterDragLayout? layout = null;
             MasterCapsuleQueueTransferSnapshot transfer = default;
+            EdgeCapsuleDragWindow? floatingHost = null;
+            void ShowFloatingHost()
+            {
+                Require(c.TryCreateMasterQueueFloatingDragHostOptions("", EdgeCapsuleEdge.Right,
+                    "▾", "3", out var options, sourceQueueKey: B), "floating stacking fixture options");
+                floatingHost = EdgeCapsuleDragWindow.Rent(options);
+                floatingHost.ShowWithEntrance(point, animate: false, scaleFrom: 1, durationMilliseconds: 0);
+            }
             if (ctrl)
             {
                 Require(c.BeginNativeEdgeQueueDrag(owner, true, Point(monitor, bTop + pitch), false), route);
+                if (floating) ShowFloatingHost();
                 c.PreviewNativeEdgeQueueDrag(owner, point, ownerTop, floating);
                 Require(Field<NativeEdgeQueueDrag>(c, "_nativeEdgeQueueDrag").Drop!.Decision.Kind == EdgeFreeQueueDropKind.Move,
                     "B above A remains an independent group");
@@ -448,6 +458,7 @@ internal static class NativeFreeQueueReviewChecks
                 {
                     Require(c.TryBeginMasterCapsuleQueueTransfer("", EdgeCapsuleEdge.Right, bTop,
                         out transfer, freeLayout: layout, sourceQueueKey: B), route);
+                    ShowFloatingHost();
                     c.PreviewFreeMasterQueueDropGhost(transfer, point);
                 }
                 else c.PreviewFreeMasterQueueTop(layout, top, point);
@@ -468,6 +479,10 @@ internal static class NativeFreeQueueReviewChecks
                 Require(targetPapers.All(p => yielding.Members.Any(m => ReferenceEquals(m.Window, windows[p.Id]))),
                     "independent target includes every displaced member: " + context);
                 Require(!proxies.ContainsKey(B), "carried group remains direct: " + context);
+                var interactionHandle = floating ? EdgeCapsuleDragWindow.VisibleLeaseHandle :
+                    ctrl ? windows[owner.Id].EdgeCapsuleQueueProxySourceHandle : masters[B].QueueProxySourceHandle;
+                Require(WindowNative.IsWindowBehind(yielding.OutputHandle, interactionHandle),
+                    "independent yield remains behind the actual drag HWND: " + context);
             }
             Near(expectedA, masters[A].AnchorTop, route + " previews A master displacement before release");
             foreach (var paper in targetPapers)
@@ -503,6 +518,7 @@ internal static class NativeFreeQueueReviewChecks
                 c.EndFreeMasterQueueDropGhost();
             }
             else c.FinishFreeMasterQueueDrag(layout!, commit);
+            floatingHost?.ReturnToPool();
             await Dispatcher.CurrentDispatcher.InvokeAsync(static () => { }, DispatcherPriority.Send);
             foreach (var proxy in proxies.Values.ToArray()) proxy.CompleteNow(true);
             await Idle();
@@ -555,10 +571,16 @@ internal static class NativeFreeQueueReviewChecks
             Require(proxies.TryGetValue(B, out var ordinary), "ordinary reorder owns a queue translation");
             Require(!ordinary!.Members.Any(m => ReferenceEquals(m.Window, windows[first.Id])),
                 "ordinary reorder excludes the directly dragged capsule");
+            Require(WindowNative.IsWindowBehind(ordinary.OutputHandle,
+                    windows[first.Id].EdgeCapsuleQueueProxySourceHandle),
+                "ordinary yield stays below the operated capsule");
             c.PreviewDeepCapsuleReorder(first, 0);
             await Dispatcher.CurrentDispatcher.InvokeAsync(static () => { }, DispatcherPriority.Send);
             Require(proxies.TryGetValue(B, out var reversed) && ReferenceEquals(reversed, ordinary),
                 "rapid reverse reuses the same real queue compositor and live sources");
+            Require(WindowNative.IsWindowBehind(reversed!.OutputHandle,
+                    windows[first.Id].EdgeCapsuleQueueProxySourceHandle),
+                "retarget preserves the operated capsule's foreground position");
             ordinary.CompleteNow(true);
             Require(!proxies.ContainsKey(B) &&
                     windows["review-7"].VerifyEdgeCapsuleQueueProxyEndpoint(
@@ -630,6 +652,54 @@ internal static class NativeFreeQueueReviewChecks
             await Idle();
         }
         Console.WriteLine("PASS ordinary and merge yield: independent queues, shared master clock, direct drag, stable slot and animated return");
+    }
+
+    private static async Task CheckMasterAnimationStacking(AppController c,
+        IReadOnlyDictionary<string, PaperWindow> windows)
+    {
+        var proxies = Field<Dictionary<string, EdgeCapsuleQueueCompositionProxy>>(
+            c, "_edgeCapsuleQueueCompositionProxies");
+        foreach (var side in new[] { DeepCapsuleSides.Left, DeepCapsuleSides.Right })
+        {
+            c.State.EnableAnimations = false;
+            foreach (var paper in c.State.Papers)
+            {
+                paper.CapsuleMonitorDeviceName = "";
+                paper.CapsuleSide = side;
+                paper.CapsuleQueueId = "stack";
+            }
+            var key = "|" + side + "#stack";
+            c.State.CapsuleCollapseAllActiveQueues.Clear();
+            c.State.DeepCapsuleQueueStartTopMargins.Clear();
+            c.State.DeepCapsuleQueueStartTopMargins[key] = 40;
+            c.ArrangeDeepCapsules(false);
+            await Idle();
+            c.State.EnableAnimations = true;
+            var master = Masters(c)[key];
+            var foreground = WindowNative.ForegroundWindow;
+            foreach (var collapsed in new[] { true, false, true })
+            {
+                c.SuppressEdgeCapsulePreviewForMasterQueueLayout(key);
+                c.ToggleCapsuleCollapseAllActive(key);
+                await Dispatcher.CurrentDispatcher.InvokeAsync(static () => { }, DispatcherPriority.Send);
+                Require(proxies.TryGetValue(key, out var proxy) && proxy.Members.Count == windows.Count,
+                    "master toggle publishes a complete member animation");
+                Require(WindowNative.IsWindowBehind(proxy!.OutputHandle, master.QueueProxySourceHandle),
+                    "collapse and rapid reverse stay behind the master on " + side);
+                Require(WindowNative.ForegroundWindow == foreground,
+                    "animation stacking must not activate a window");
+                Require(c.State.CapsuleCollapseAllActiveQueues.GetValueOrDefault(key) == collapsed,
+                    "stacking must retain the requested collapse state");
+            }
+            foreach (var proxy in proxies.Values.ToArray()) proxy.CompleteNow(true);
+            await Idle();
+            Require(proxies.Count == 0 && windows.Values.All(window =>
+                    window.VerifyEdgeCapsuleQueueProxyEndpoint(
+                        Field<EdgeCapsulePresenter>(window, "_edgeCapsule").AppliedPresentation)),
+                "collapse hands all real endpoints back beneath the master");
+        }
+        c.State.EnableAnimations = false;
+        Console.WriteLine("PASS animation stacking: both edges, master collapse, rapid expand/retract and native handoff without activation");
     }
 
     private static async Task CheckAnimatedPrepend(AppController c,

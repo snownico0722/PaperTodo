@@ -8,7 +8,8 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
     // A different source/shape still uses the established successor handoff.
     internal bool TryRetarget(EdgeCapsuleQueueProxyPlan plan,
         IReadOnlyList<EdgeCapsuleQueueCompositionProxyMember> members,
-        Func<long, bool> commitEndpoints, Func<long, bool> rebaseClock)
+        Func<long, bool> commitEndpoints, Func<long, bool> rebaseClock,
+        IntPtr insertAfter = default)
     {
         if (!_successorHeld || _disposed || _coverLost || _sourcesReleased ||
             members.Count != _members.Count ||
@@ -19,6 +20,8 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
 
         try
         {
+            if (!_window.PlaceBehind(insertAfter))
+                throw new InvalidOperationException("Queue translation could not stay behind its interaction surface.");
             // Keep the old clock running while logical/native endpoints settle beneath
             // the same live cover. Sample after that work, just before the new commit.
             if (!commitEndpoints(Stopwatch.GetTimestamp()))

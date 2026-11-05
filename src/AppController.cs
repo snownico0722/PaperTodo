@@ -2437,6 +2437,14 @@ public sealed partial class AppController : IDisposable
             MarkDirty();
             SuppressEdgeCapsulePreviewForMasterQueueLayout(sourceKey);
             ArrangeDeepCapsulesCore(animate: false, flushInitialPresentations: false);
+            // Publish the source retraction before accepting floating drop previews. Otherwise
+            // this arrange's pending Snap entries suppress the next target's animated placement.
+            if (_edgeCapsuleVisualTransactionCommitOperation is
+                { Status: System.Windows.Threading.DispatcherOperationStatus.Pending } preparation)
+            {
+                preparation.Abort();
+                CommitEdgeCapsuleVisualTransaction();
+            }
         }
         catch
         {

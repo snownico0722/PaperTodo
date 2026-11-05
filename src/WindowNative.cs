@@ -415,7 +415,7 @@ internal static partial class WindowNative
         return false;
     }
 
-    private static bool IsWindowBehind(IntPtr handle, IntPtr reference)
+    internal static bool IsWindowBehind(IntPtr handle, IntPtr reference)
     {
         if (handle == IntPtr.Zero ||
             reference == IntPtr.Zero ||
@@ -465,6 +465,18 @@ internal static partial class WindowNative
         }
 
         return (GetWindowLong(handle, GwlExStyle) & WsExTopmost) != 0;
+    }
+
+    internal static IntPtr LowestVisibleTopmostWindow(IEnumerable<IntPtr> handles)
+    {
+        var lowest = IntPtr.Zero;
+        foreach (var handle in handles.Distinct())
+        {
+            if (handle == IntPtr.Zero || !IsWindow(handle) || !IsWindowVisible(handle) ||
+                (GetWindowLong(handle, GwlExStyle) & WsExTopmost) == 0) continue;
+            if (lowest == IntPtr.Zero || IsWindowBehind(handle, lowest)) lowest = handle;
+        }
+        return lowest;
     }
 
     public static void BringToFrontNoActivate(Window window)

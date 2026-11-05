@@ -298,9 +298,10 @@ public sealed partial class AppController
                     entry.Window.EdgeCapsuleQueueProxySourceHandle));
         }
 
+        var insertAfter = ResolveEdgeCapsuleQueueProxyInsertAfter(plan.QueueKey, members);
         if (predecessor?.TryRetarget(plan, members,
                 timestamp => CommitEdgeCapsuleQueueProxyLogicalEndpoints(entries, plan, timestamp, master),
-                timestamp => RebaseEdgeCapsuleQueueProxyAnimationClock(entries, timestamp)) == true)
+                timestamp => RebaseEdgeCapsuleQueueProxyAnimationClock(entries, timestamp), insertAfter) == true)
         {
             realHostMayHaveChanged = true;
             return true;
@@ -340,7 +341,8 @@ public sealed partial class AppController
                 FinishEdgeCapsuleQueueCompositionProxy(
                     plan.QueueKey,
                     completedProxy,
-                    success));
+                    success),
+            insertAfter: insertAfter);
         if (proxy == null)
         {
 #if DEBUG
@@ -763,6 +765,28 @@ public sealed partial class AppController
         proxy.CompleteNow(success: true);
     }
 
+
+    private IntPtr ResolveEdgeCapsuleQueueProxyInsertAfter(string queueKey,
+        IReadOnlyList<EdgeCapsuleQueueCompositionProxyMember> members)
+    {
+        // Real interaction surfaces stay in front of passive translations. Include the
+        // stationary master so retracting members disappear beneath it, and carried sources
+        // from other queues so an independent landing never covers the user's drag surface.
+        var represented = members.Select(member => member.SourceHandle).ToHashSet();
+        var carriedIds = _nativeEdgeQueueDrag?.CarriedIds ??
+            _freeMasterDragPreview?.Layout.Groups[0].PaperIds ?? Array.Empty<string>();
+        var carriedMasterKey = _nativeEdgeQueueDrag is { CarriesMaster: true } drag
+            ? drag.SourceKey : _freeMasterDragPreview?.Layout.QueueKey;
+        var handles = _windows.Values.Where(window => !window.IsClosed &&
+                (QueueKey(window.EdgeCapsulePreviewPaper) == queueKey ||
+                 carriedIds.Contains(window.EdgeCapsulePreviewPaperId) || window.IsDeepCapsuleReordering))
+            .Select(window => window.EdgeCapsuleQueueProxySourceHandle)
+            .Concat(_masterCapsules.Where(pair => pair.Key == queueKey || pair.Key == carriedMasterKey)
+                .Select(pair => pair.Value.QueueProxySourceHandle))
+            .Append(EdgeCapsuleDragWindow.VisibleLeaseHandle)
+            .Where(handle => !represented.Contains(handle));
+        return WindowNative.LowestVisibleTopmostWindow(handles);
+    }
 
     internal bool TryGetEdgeCapsuleQueueProxyPresentation(
         System.Windows.Window window,
