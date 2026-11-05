@@ -11,11 +11,11 @@ using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using PaperTodo;
 
-internal static class Program
+internal static partial class Program
 {
     private const BindingFlags Private = BindingFlags.Instance | BindingFlags.NonPublic;
     private const string Marker = ".papertodo-workbench-fixture";
-    private static readonly string[] Cases = ["surface", "workspaces", "readonly", "desktop"];
+    private static readonly string[] Cases = ["surface", "workspaces", "readonly", "desktop", "materials", "groups", "graph", "transfers"];
 
     [STAThread]
     private static int Main(string[] args)
@@ -90,6 +90,10 @@ internal static class Program
     };
     private static async Task Run(string name)
     {
+        if (name == "materials") { await RunMaterials(); return; }
+        if (name == "groups") { await RunGroups(); return; }
+        if (name == "graph") { await RunGraph(); return; }
+        if (name == "transfers") { await RunTransfers(); return; }
         if (name == "desktop") { await RunDesktopRestore(); return; }
         if (name == "readonly")
         {
@@ -106,7 +110,9 @@ internal static class Program
             var state = FixtureState(); state.Workbench = new() { Cards = new() { ["note-a"] = new() { X = 12, Y = 34, Pinned = true } } };
             var store = new StateStore(); store.SaveJsonSync(store.SerializeState(state), 1);
             var read = StateStore.ReadWorkbenchOverview(store.FilePath)!;
-            Assert(read.Workbench!.Cards["note-a"].Pinned && read.Papers[0].X == 100, "Spatial metadata did not round-trip independently");
+            Assert(WorkspaceMaterials.FindOwner(read)?.WorkspaceMaterials?.Layout.Cards["note-a"].Pinned == true &&
+                   read.Papers.First(p => p.Id == "note-a").X == 100,
+                "Legacy spatial metadata did not migrate and round-trip independently");
             Assert(!WorkspaceFieldScopes.Inherits(nameof(AppState.Workbench)), "Layout inherits across workspaces");
             return;
         }
@@ -131,7 +137,7 @@ internal static class Program
         var before = controller.State.Papers.ToDictionary(p => p.Id, Geometry);
         controller.ToggleWorkbench();
         var workbench = (WorkbenchWindow)Member(controller, "_workbenchWindow");
-        await Until(() => workbench.HostedPaperCount == 3 && controller.State.Workbench?.Cards.Count == 3, "Workbench layout did not settle");
+        await Until(() => workbench.HostedPaperCount == 3 && controller.WorkbenchLayout.Cards.Count == 3, "Workbench layout did not settle");
         Assert(ReferenceEquals(Member(originalWindow, "_noteBox"), editor), "Workbench duplicated the Markdown editor");
         Assert(ReferenceEquals(Member(originalWindow, "_markdownBodySession"), bodySession), "Workbench duplicated the body session");
         Assert(!originalWindow.IsVisible && originalWindow.IsWorkbenchHosted, "Desktop and workbench body both visible");
@@ -142,7 +148,7 @@ internal static class Program
             await Until(() => scenes.Contains(3), "Sparse workspace 3 is missing from the overview");
             Assert(!scenes.Contains(2), "Removed workspace 2 was incorrectly shown in the overview");
         }
-        foreach (var paper in controller.State.Papers)
+        foreach (var paper in controller.State.Papers.Where(p => p.WorkspaceMaterials == null))
             Assert(before[paper.Id] == Geometry(paper),
                 $"First workbench entry changed {paper.Id}: {before[paper.Id]} -> {Geometry(paper)}");
         if (name == "surface")
@@ -181,8 +187,10 @@ internal static class Program
 
             var left = (StackPanel)Member(workbench, "_layoutCommands");
             var right = (StackPanel)Member(workbench, "_rightCommands");
-            Assert(Grid.GetColumn(search) == 1 && left.Children.Count == 2 &&
-                right.Children.Count == 6, "Workbench toolbar groups are misplaced");
+            Assert(Grid.GetColumn(search) == 1 && Grid.GetColumn(left) == 0 && Grid.GetColumn(right) == 2 &&
+                left.Children.OfType<Button>().Any(b => Equals(b.Content, Strings.Get("WorkbenchArrange"))) &&
+                right.Children.OfType<Button>().Any(b => Equals(b.Content, Strings.Get("WorkbenchClose"))),
+                "Workbench toolbar groups are misplaced or missing their primary commands");
 
             // A large document and a Todo item after the twelfth preview entry are searchable.
             const string needle = "deep-search-target";
@@ -251,7 +259,7 @@ internal static class Program
             controller.State.EnableAnimations = false;
 
             // Thumb sends DragStarted/Completed even for a click with zero displacement.
-            var undo = (Stack<WorkbenchState>)Member(workbench, "_undo");
+            var undo = (System.Collections.ICollection)Member(workbench, "_undo");
             var originalUndoCount = undo.Count;
             var move = (Thumb)Member(card, "Move");
             move.RaiseEvent(new DragStartedEventArgs(0, 0) { RoutedEvent = Thumb.DragStartedEvent });
@@ -277,7 +285,7 @@ internal static class Program
             workbench.ResumeWorkspace();
             await Until(() => workbench.HostedPaperCount == 3, "Workbench failed to resume after reload");
         }
-        foreach (var paper in controller.State.Papers)
+        foreach (var paper in controller.State.Papers.Where(p => p.WorkspaceMaterials == null))
             Assert(before[paper.Id] == Geometry(paper),
                 $"Workbench pause/resume changed {paper.Id}: {before[paper.Id]} -> {Geometry(paper)}");
         editor.GetType().GetProperty("Text")!.SetValue(editor, "Edited inside the workbench");
@@ -294,13 +302,15 @@ internal static class Program
             Assert(masters.Count > 0 && masters.Values.All(master => master.IsVisible), "Closing workbench did not restore master capsules");
             Assert(!originalWindow.IsWorkbenchHosted, "Lease not returned");
             Assert(ReferenceEquals(Member(originalWindow, "_noteBox"), editor), "Editor replaced on return");
-            foreach (var paper in controller.State.Papers) Assert(before[paper.Id] == Geometry(paper), "Desktop state changed on return: " + paper.Id);
+            foreach (var paper in controller.State.Papers.Where(p => p.WorkspaceMaterials == null))
+                Assert(before[paper.Id] == Geometry(paper), "Desktop state changed on return: " + paper.Id);
             controller.ToggleWorkbench(); workbench = (WorkbenchWindow)Member(controller, "_workbenchWindow");
             await Until(() => workbench.HostedPaperCount == 3, "Second enter failed");
             controller.DeletePaper(controller.FindPaper("note-b")!);
             await Until(() => workbench.HostedPaperCount == 2, "Deleted paper retained a leased editor");
             Assert(!controller.WorkbenchLayout.Cards.ContainsKey("note-b"), "Deleted paper retained spatial metadata");
-            // Reuse the native Todo-row association, never a generic paper-to-paper edge.
+            // Native Todo-row associations remain on their exact Todo item; free canvas
+            // connections must not replace or mutate this existing business relationship.
             Assert(controller.WorkbenchPaperWindow("todo-a").LinkPaperToTodo("task-1", "note-a"),
                 "Native Todo-item binding was unavailable in the workbench");
             Assert(controller.FindPaper("todo-a")!.Items.First(i => i.Id == "task-1").LinkedPaperId == "note-a",
@@ -317,18 +327,36 @@ internal static class Program
         }
         else
         {
+            var workspaceOneMaterial = controller.CreateWorkbenchMaterial(WorkspaceMaterialKinds.Text,
+                "Workspace one", "Only in workspace one", "", new WorkbenchPoint(1800, 120));
+            await Until(() => ActiveCards(workbench).Contains(workspaceOneMaterial),
+                "First workspace material did not appear before switching");
             var secondPath = Path.Combine(AppContext.BaseDirectory, "data3.json");
             using (new FileStream(secondPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
                 Assert(!await controller.SwitchWorkspaceAsync(3), "Occupied workspace switch succeeded");
             Assert(controller.WorkspaceNumber == 1 && workbench.HostedPaperCount == 3, "Failed switch lost the current desk");
             Assert(await controller.SwitchWorkspaceAsync(3), "Workspace switch failed");
             Assert(masters.Values.All(master => !master.IsVisible), "Workspace switch exposed master capsules over the workbench");
-            await Until(() => workbench.HostedPaperCount == 1 && controller.State.Workbench?.Cards.Count == 1, "New workspace editor not mounted");
+            await Until(() => workbench.HostedPaperCount == 1 && controller.WorkbenchLayout.Cards.Count == 1, "New workspace editor not mounted");
             Assert(originalWindow.IsClosed && !originalWindow.IsWorkbenchHosted, "Old workspace lease survived teardown");
             Assert(StateStore.ReadWorkbenchOverview(Path.Combine(AppContext.BaseDirectory, "data.json"))!.Papers.First(p => p.Id == "note-a").Content == "Edited inside the workbench", "Switch lost pending edits");
+            Assert(controller.FindWorkbenchMaterial(workspaceOneMaterial) == null &&
+                   controller.State.Papers.Count(p => p.WorkspaceMaterials != null) == 1,
+                "A material collection leaked from the previous workspace");
+            var workspaceThreeMaterial = controller.CreateWorkbenchMaterial(WorkspaceMaterialKinds.Text,
+                "Workspace three", "Only in workspace three", "", new WorkbenchPoint(800, 120));
+            await Until(() => ActiveCards(workbench).Contains(workspaceThreeMaterial),
+                "Second workspace material did not appear");
             Assert(await controller.SwitchWorkspaceAsync(1), "Switch back failed");
             await Until(() => workbench.HostedPaperCount == 3, "Original workspace not restored");
             Assert(controller.WorkbenchLayout.Cards["note-a"].Pinned, "Workspace layout was not persisted");
+            Assert(controller.FindWorkbenchMaterial(workspaceOneMaterial)?.Content == "Only in workspace one" &&
+                   controller.FindWorkbenchMaterial(workspaceThreeMaterial) == null &&
+                   controller.State.Papers.Count(p => p.WorkspaceMaterials != null) == 1,
+                "Switching back mixed or lost workspace-specific materials");
+            Assert(WorkspaceMaterials.FindOwner(StateStore.ReadWorkbenchOverview(secondPath)!)!
+                       .WorkspaceMaterials!.Items[workspaceThreeMaterial].Content == "Only in workspace three",
+                "Leaving the second workspace did not save its own collection");
             controller.ToggleWorkbench();
             Assert(masters.Count > 0 && masters.Values.All(master => master.IsVisible), "Leaving switched workbench did not restore master capsules");
         }
@@ -360,7 +388,7 @@ internal static class Program
         // desk without unfolding it, closing the desk or modifying desktop XY.
         controller.OpenLinkedPaper("note-b", desk, toggleIfExcludedFromCapsules: true);
         Assert(controller.HasWorkbench, "Linked paper navigation closed the workbench");
-        foreach (var paper in controller.State.Papers)
+        foreach (var paper in controller.State.Papers.Where(p => p.WorkspaceMaterials == null))
             Assert(Geometry(paper) == before[paper.Id], "Linked navigation changed desktop paper geometry");
 
         // The desktop lock is intentionally not a lock on the workbench editor.
@@ -375,7 +403,7 @@ internal static class Program
         Assert(desktopWindow.IsVisible, "Normal desktop paper stayed hidden after reload and workbench exit");
         Assert(((Border)Member(desktopWindow, "_advancedLockShield")).Visibility == Visibility.Visible,
             "Desktop lock did not resume when leaving the workbench");
-        foreach (var paper in controller.State.Papers)
+        foreach (var paper in controller.State.Papers.Where(p => p.WorkspaceMaterials == null))
             Assert(Geometry(paper) == before[paper.Id], "Workbench exit modified desktop paper geometry");
     }
 

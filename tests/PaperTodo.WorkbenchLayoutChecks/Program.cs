@@ -2,7 +2,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using PaperTodo;
 
-internal static class Program
+internal static partial class Program
 {
     private static int Main()
     {
@@ -92,6 +92,11 @@ internal static class Program
                 var json = JsonSerializer.Serialize(state); var restored = JsonSerializer.Deserialize<WorkbenchState>(json)!;
                 Assert(restored.Cards["a"].X == 5);
             }),
+            ("Materials retain individual content and compact geometry", MaterialsRoundTrip),
+            ("Material descriptions retain original links and file paths in export", MaterialsSourceProjection),
+            ("Groups prune missing members without sharing ownership", MaterialsGroups),
+            ("Branch normalization preserves invalid trees as free connections", MaterialsBranches),
+            ("Material identity repair preserves content and positions", MaterialsIdentityRepair),
             ("Dense pinned wall has terminating collision resolution", () => {
                 var nodes = Enumerable.Range(0, 100).Select(i => new WorkbenchLayoutNode($"pin{i:000}", 240, 260, new((i % 10) * 272, (i / 10) * 292, 240, 260), true))
                     .Append(new("new", 700, 600, new(1000, 1000, 700, 600))).ToArray();

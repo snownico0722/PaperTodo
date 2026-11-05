@@ -453,6 +453,8 @@ public readonly record struct TodoVisualMetrics(
 
 public sealed class AppState
 {
+    // Compatibility input from the first workbench implementation. Normalization moves
+    // this layout into the workspace materials paper and clears this field.
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public WorkbenchState? Workbench { get; set; }
     // The unnumbered data.json is the sole owner; absent in legacy and numbered documents.
@@ -680,6 +682,11 @@ public sealed class PaperData
 
     public List<PaperItem> Items { get; set; } = new();
     public string Content { get; set; } = "";
+
+    // This built-in Note owns the workspace's material entries and spatial document.
+    // Content remains optional introductory text; entries are never mirrored into it.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WorkspaceMaterialsDocument? WorkspaceMaterials { get; set; }
 }
 
 public sealed class PaperItem

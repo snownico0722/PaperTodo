@@ -80,6 +80,36 @@ public sealed partial class StateStore
                 throw new JsonException("Note content exceeds the editor length limit.");
             if (node["items"] is JsonArray items) ValidateIdentities(items, "items");
             else if (node!.AsObject().ContainsKey("items")) throw new JsonException("items must be an array.");
+            if (node["workspaceMaterials"] is { } materials) ValidateWorkspaceMaterials(materials);
+        }
+    }
+
+    private static void ValidateWorkspaceMaterials(JsonNode node)
+    {
+        if (node is not JsonObject document)
+            throw new JsonException("workspaceMaterials must be an object.");
+        if (document.TryGetPropertyValue("items", out var itemsNode))
+        {
+            if (itemsNode is not JsonObject items)
+                throw new JsonException("workspaceMaterials.items must be an object.");
+            foreach (var pair in items)
+            {
+                if (!pair.Key.StartsWith(WorkspaceMaterialItem.IdPrefix, StringComparison.Ordinal) ||
+                    pair.Key.Length == WorkspaceMaterialItem.IdPrefix.Length ||
+                    pair.Value is not JsonObject item || item["id"] is not JsonValue idNode ||
+                    !idNode.TryGetValue<string>(out var id) || id != pair.Key)
+                    throw new JsonException("Material keys must match their nonempty material: ids.");
+                if (item["content"] is JsonValue content && content.TryGetValue<string>(out var text) &&
+                    text.Length > PaperWindow.NoteTextMaxLength)
+                    throw new JsonException("Material content exceeds the editor length limit.");
+            }
+        }
+        if (document["layout"] is JsonObject layout &&
+            layout.TryGetPropertyValue("connections", out var connectionsNode))
+        {
+            if (connectionsNode is not JsonArray connections)
+                throw new JsonException("Material connections must be an array.");
+            ValidateIdentities(connections, "connections");
         }
     }
 

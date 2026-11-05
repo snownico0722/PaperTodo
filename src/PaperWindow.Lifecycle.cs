@@ -145,7 +145,9 @@ public sealed partial class PaperWindow
         _markdownBodySession?.ContentDirty == true;
 
     internal string CurrentMarkdownContentForExternalRead() =>
-        _markdownBodySession?.NoteBox?.PersistentText ?? _paper.Content ?? "";
+        _paper.WorkspaceMaterials != null
+            ? WorkspaceMaterials.GetReadableContent(_paper)
+            : _markdownBodySession?.NoteBox?.PersistentText ?? _paper.Content ?? "";
 
     private void CommitPendingNoteContent()
     {

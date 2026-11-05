@@ -411,6 +411,12 @@ internal sealed partial class PaperCommandService
         var paper = RequirePaper(
             RequiredId(request.PaperId, "paperId"),
             PaperTypes.Note);
+        if (paper.WorkspaceMaterials != null)
+        {
+            throw Error(
+                "workspace_materials_structured_body",
+                "Workspace materials must be edited as individual items in the workbench or materials note; the Markdown projection is read-only.");
+        }
         if (!string.Equals(
                 paper.BodyProviderId,
                 PaperBodyProviderIds.Markdown,
@@ -511,6 +517,8 @@ internal sealed partial class PaperCommandService
         _controller.PrepareExternalPaperOperation(paper);
         var papers = _controller.State.Papers;
         var originalIndex = papers.IndexOf(paper);
+        var materials = WorkspaceMaterials.FindOwner(_controller.State)?.WorkspaceMaterials;
+        var layoutBefore = materials?.Layout.Copy();
         var affectedLinks = papers
             .Where(candidate => candidate.Type == PaperTypes.Todo)
             .SelectMany(candidate => candidate.Items
@@ -552,7 +560,9 @@ internal sealed partial class PaperCommandService
                         originalIndex,
                         paper,
                         affectedLinks,
-                        replacement);
+                        replacement,
+                        materials,
+                        layoutBefore);
                     _controller.ResetPaperPluginEventBaseline();
                     throw;
                 }
@@ -563,7 +573,9 @@ internal sealed partial class PaperCommandService
                         originalIndex,
                         paper,
                         affectedLinks,
-                        replacement);
+                        replacement,
+                        materials,
+                        layoutBefore);
                     _controller.ResetPaperPluginEventBaseline();
                     throw Error(
                         "paper_limit",
@@ -572,6 +584,10 @@ internal sealed partial class PaperCommandService
                 replacement.IsVisible = true;
             }
 
+            // Remove references in the same commit as the paper. Deleting the materials
+            // owner removes its document; it must not manufacture a new empty owner.
+            WorkspaceMaterials.FindOwner(_controller.State)?.WorkspaceMaterials?.Normalize(
+                papers.Where(p => p.WorkspaceMaterials == null).Select(p => p.Id));
             if (!_controller.TryCommitExternalMutation())
             {
                 RestoreDeletedPaper(
@@ -579,7 +595,9 @@ internal sealed partial class PaperCommandService
                     originalIndex,
                     paper,
                     affectedLinks,
-                    replacement);
+                    replacement,
+                    materials,
+                    layoutBefore);
                 _controller.RefreshAfterExternalRollback();
                 _controller.ResetPaperPluginEventBaseline();
                 throw SaveFailed();
@@ -607,7 +625,9 @@ internal sealed partial class PaperCommandService
         int originalIndex,
         PaperData paper,
         IEnumerable<(string PaperId, PaperItem Item, string? Link)> affectedLinks,
-        PaperData? replacement)
+        PaperData? replacement,
+        WorkspaceMaterialsDocument? materials,
+        WorkbenchState? layoutBefore)
     {
         if (!papers.Contains(paper))
         {
@@ -617,6 +637,8 @@ internal sealed partial class PaperCommandService
         {
             item.LinkPaper(link);
         }
+        if (materials != null && layoutBefore != null)
+            materials.Layout = layoutBefore;
         if (replacement != null)
         {
             _controller.RollbackExternalCreatedPaper(replacement);

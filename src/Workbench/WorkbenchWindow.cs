@@ -11,10 +11,10 @@ using System.Windows.Threading;
 namespace PaperTodo;
 
 /// <summary>A presentation owner for the continuous desk, not an alternative content store.</summary>
-internal sealed class WorkbenchWindow : Window
+internal sealed partial class WorkbenchWindow : Window
 {
     private readonly AppController _controller;
-    private readonly Grid _viewport = new() { ClipToBounds = true };
+    private readonly Grid _viewport = new() { ClipToBounds = true, Focusable = true };
     private readonly Canvas _world = new();
     private readonly ScaleTransform _scale = new(1, 1);
     private readonly TranslateTransform _pan = new();
@@ -28,7 +28,9 @@ internal sealed class WorkbenchWindow : Window
     private readonly List<Button> _chromeButtons = new();
     private readonly Dictionary<int, Scene> _scenes = new();
     private readonly DispatcherTimer _refreshTimer;
-    private readonly Stack<WorkbenchState> _undo = new();
+    private readonly Stack<WorkbenchUndoEntry> _undo = new();
+    private readonly Stack<WorkbenchUndoEntry> _redo = new();
+    private sealed record WorkbenchUndoEntry(WorkbenchState? Layout, Guid? TransferId = null);
     private CancellationTokenSource? _layoutCancellation;
     private CancellationTokenSource? _overviewCancellation;
     private long _layoutRevision;
@@ -97,7 +99,7 @@ internal sealed class WorkbenchWindow : Window
         root.Children.Add(_status);
 
         AddButton("WorkbenchArrange", () => { RememberLayout(); _ = LayoutActiveAsync(arrange: true); }, _layoutCommands);
-        AddButton("WorkbenchUndo", UndoLayout, _layoutCommands);
+        AddButton("WorkbenchUndo", UndoWorkspaceAction, _layoutCommands);
         _search.ToolTip = Strings.Get("WorkbenchSearch");
         _search.Height = AppTypography.FitChrome(28);
         _search.FontSize = AppTypography.Scale(13);
@@ -111,12 +113,13 @@ internal sealed class WorkbenchWindow : Window
         _rightCommands.Children.Add(_zoom);
         AddSymbolButton("+", () => ZoomAt(_scale.ScaleX * 1.2, ViewportCenter), _rightCommands);
         AddButton("WorkbenchClose", Close, _rightCommands);
+        InitializeWorkspaceTools();
         RefreshTheme();
         _viewport.PreviewMouseDown += BeginPan;
         _viewport.PreviewMouseMove += MovePan;
         _viewport.PreviewMouseUp += EndPan;
         _viewport.MouseRightButtonUp += OnCanvasRightClick;
-        _viewport.LostMouseCapture += (_, _) => _panPointer = null;
+        _viewport.LostMouseCapture += (_, _) => { _panPointer = null; CancelMarquee(); };
         _viewport.PreviewMouseWheel += (_, e) =>
         {
             // Preserve ordinary wheel scrolling and Ctrl+wheel text zoom inside editors.
@@ -134,7 +137,9 @@ internal sealed class WorkbenchWindow : Window
         {
             if (e.Key == Key.Escape && !e.Handled)
             {
-                if (_search.Text.Length > 0) _search.Clear();
+                if (CancelWorkspaceGesture()) { }
+                else if (_search.Text.Length > 0) _search.Clear();
+                else if (_focusedGroupId != null) LeaveGroupFocus();
                 else Close();
                 e.Handled = true;
             }
@@ -142,6 +147,8 @@ internal sealed class WorkbenchWindow : Window
         _refreshTimer = new DispatcherTimer(DispatcherPriority.Background, Dispatcher) { Interval = TimeSpan.FromMilliseconds(180) };
         _refreshTimer.Tick += (_, _) => { _refreshTimer.Stop(); SyncActiveScene(); };
         controller.WorkbenchModelChanged += QueueModelRefresh;
+        controller.WorkbenchContentTransferReplayed += OnContentTransferReplayed;
+        controller.WorkbenchContentTransferBlocked += OnTransferHistoryBlocked;
         Loaded += async (_, _) =>
         {
             SyncActiveScene();
@@ -204,7 +211,7 @@ internal sealed class WorkbenchWindow : Window
             foreach (var card in scene.Cards.Values)
             {
                 card.Frame.Background = CardBrush;
-                card.Frame.BorderBrush = Outline;
+                card.Frame.BorderBrush = _selectedCards.Contains(card.Snapshot.Id) ? Accent : Outline;
                 card.Header.Background = Theme.TitleBarBrush(opaque: true);
                 card.Title.Background = Brushes.Transparent;
                 card.Title.Foreground = Ink;
@@ -217,6 +224,10 @@ internal sealed class WorkbenchWindow : Window
                     button.Foreground = Ink;
                 card.Eye.Child = EyeIcon(card.Snapshot.DesktopVisible);
                 if (card.PreviewText != null) card.PreviewText.Foreground = Ink;
+                if (card.MaterialEditor != null)
+                { card.MaterialEditor.Foreground = Ink; card.MaterialEditor.CaretBrush = Ink; }
+                if (card.MaterialOpen != null)
+                { card.MaterialOpen.Background = CardBrush; card.MaterialOpen.Foreground = Ink; card.MaterialOpen.BorderBrush = Outline; }
             }
             DrawDecorations(scene);
         }
@@ -336,19 +347,23 @@ internal sealed class WorkbenchWindow : Window
     private void BeginPan(object sender, MouseButtonEventArgs e)
     {
         if (_dragging || Mouse.Captured != null) return;
-        if (e.ChangedButton != MouseButton.Middle && !(e.ChangedButton == MouseButton.Left && ReferenceEquals(e.OriginalSource, _viewport))) return;
+        if (e.ChangedButton == MouseButton.Left && ReferenceEquals(e.OriginalSource, _viewport))
+        { BeginMarquee(e); return; }
+        if (e.ChangedButton != MouseButton.Middle) return;
         StopCameraAnimation();
         _panPointer = e.GetPosition(_viewport); _panStart = new(_pan.X, _pan.Y);
         _viewport.CaptureMouse(); e.Handled = true;
     }
     private void MovePan(object sender, MouseEventArgs e)
     {
+        if (MoveMarquee(e)) return;
         if (_panPointer is not { } start) return;
         var point = e.GetPosition(_viewport); _pan.X = _panStart.X + point.X - start.X; _pan.Y = _panStart.Y + point.Y - start.Y;
         e.Handled = true;
     }
     private void EndPan(object sender, MouseButtonEventArgs e)
     {
+        if (EndMarquee(e)) return;
         if (_panPointer is not { } start) return;
         var emptyClick = e.ChangedButton == MouseButton.Left &&
             (e.GetPosition(_viewport) - start).LengthSquared < 16;
@@ -397,12 +412,17 @@ internal sealed class WorkbenchWindow : Window
                 card.Move.Cursor = paper.Placement?.Pinned == true ? Cursors.Arrow : Cursors.SizeAll;
                 card.Binding.Text = paper.BindingTitle;
                 card.Binding.Visibility = paper.BindingTitle.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+                RefreshMaterialCard(card);
             }
             var signature = string.Join("|", snapshot.Nodes.Select(n => $"{n.Id}:{n.Width}:{n.Height}:{n.Affinity}:{n.Kind}:{n.Pinned}:{n.Previous}"))
                 + string.Join("|", snapshot.Edges.Select(e => $"{e.From}>{e.To}"));
             if (signature != _modelSignature || scene.Layout == null)
             { _modelSignature = signature; _ = LayoutActiveAsync(); }
             else FocusRequestedPaper();
+            _selectedCards.IntersectWith(ids);
+            ApplySelectionStyle();
+            ApplySceneVisibility();
+            DrawDecorations(scene);
             ApplySearch();
         }
         catch (Exception ex) { Report(ex); }
@@ -438,6 +458,7 @@ internal sealed class WorkbenchWindow : Window
                     scene.Cards.Add(paper.Id, preview); scene.Canvas.Children.Add(preview.Frame);
                     Position(preview, layout.Cards[paper.Id]);
                 }
+                ApplySceneVisibility();
                 DrawDecorations(scene);
             }
             var validNumbers = snapshots.Select(s => s.Number).Append(_controller.WorkspaceNumber).ToHashSet();
@@ -460,7 +481,7 @@ internal sealed class WorkbenchWindow : Window
         catch (Exception ex) { if (!_closed) Report(ex); }
     }
 
-    private async Task LayoutActiveAsync(bool arrange = false, string? preferredId = null, HashSet<string>? scope = null)
+    private async Task LayoutActiveAsync(bool arrange = false, string? preferredId = null, HashSet<string>? scope = null, HashSet<string>? fixedIds = null)
     {
         if (_closed || IsSuspended || _dragging) return;
         CancelLayout();
@@ -472,6 +493,13 @@ internal sealed class WorkbenchWindow : Window
         try
         {
             var nodes = snapshot.Nodes;
+            // Automatic updates keep the internal arrangement of a manual group intact.
+            if (!arrange)
+            {
+                var grouped = _controller.WorkbenchLayout.Groups.Values.SelectMany(g => g.Members).ToHashSet(StringComparer.Ordinal);
+                nodes = nodes.Select(n => grouped.Contains(n.Id) && n.Previous != null ? n with { Pinned = true } : n).ToArray();
+            }
+            if (fixedIds != null) nodes = nodes.Select(n => fixedIds.Contains(n.Id) && n.Previous != null ? n with { Pinned = true } : n).ToArray();
             if (scope != null) nodes = nodes.Select(n => !scope.Contains(n.Id) && n.Previous != null ? n with { Pinned = true } : n).ToArray();
             var result = await Task.Run(() => WorkbenchLayoutEngine.Calculate(nodes, snapshot.Edges, arrange,
                 preferredId, token), token);
@@ -491,6 +519,7 @@ internal sealed class WorkbenchWindow : Window
             scene.Layout = result; scene.Snapshot = snapshot;
             StoreLayout(state);
             _modelSignature = "";
+            ApplySceneVisibility();
             DrawDecorations(scene); ArrangeWorkspaces();
             // Keep the active desk under the camera when another region changes its envelope.
             _pan.X += (oldOrigin.X - scene.Origin.X) * _scale.ScaleX;
@@ -522,14 +551,14 @@ internal sealed class WorkbenchWindow : Window
         {
             var newest = _undo.Take(31).Reverse().ToArray(); _undo.Clear(); foreach (var item in newest) _undo.Push(item);
         }
-        _undo.Push(_controller.WorkbenchLayout.Copy());
+        _undo.Push(new(_controller.WorkbenchLayout.Copy()));
+        _redo.Clear();
     }
     private void UndoLayout()
     {
-        if (_dragging || _undo.Count == 0 || IsSuspended) return;
-        CancelLayout(); StoreLayout(_undo.Pop());
-        _modelSignature = ""; SyncActiveScene();
+        UndoWorkspaceAction();
     }
+
     private void CreatePaper(string type, WorkbenchPoint? at = null)
     {
         if (IsSuspended) return;
@@ -559,7 +588,7 @@ internal sealed class WorkbenchWindow : Window
         var screen = e.GetPosition(_viewport);
         var point = new WorkbenchPoint((screen.X - _pan.X) / _scale.ScaleX - active.Origin.X,
             (screen.Y - _pan.Y) / _scale.ScaleY - active.Origin.Y);
-        if (!active.Bounds.Inflate(128).Contains(point)) return;
+
         var menu = new ContextMenu { PlacementTarget = _viewport };
         var note = new MenuItem { Header = Strings.Get("WorkbenchNewNote") };
         note.Click += (_, _) => CreatePaper(PaperTypes.Note, point);
@@ -567,14 +596,22 @@ internal sealed class WorkbenchWindow : Window
         todo.Click += (_, _) => CreatePaper(PaperTypes.Todo, point);
         menu.Items.Add(note);
         menu.Items.Add(todo);
+        AddWorkspaceCanvasMenu(menu, point);
         menu.IsOpen = true;
         e.Handled = true;
     }
     private void FocusRequestedPaper()
     {
         if (_focusAfterRefresh is not { } id || ActiveScene is not { } scene || !scene.Cards.TryGetValue(id, out var card)) return;
+        RevealCard(scene, id);
         Fit(card.Bounds.Inflate(64).Offset(scene.Origin), 1);
         _focusAfterRefresh = null;
+        if (card.MaterialEditor != null)
+            Dispatcher.BeginInvoke((Action)(() =>
+            {
+                if (!_closed && !IsSuspended && ActiveScene?.Cards.GetValueOrDefault(id) == card)
+                    card.MaterialEditor.Focus();
+            }), DispatcherPriority.Input);
     }
     private static bool SearchMatches(WorkbenchPaperSnapshot paper, string query) =>
         paper.Title.Contains(query, StringComparison.CurrentCultureIgnoreCase) ||
@@ -599,12 +636,14 @@ internal sealed class WorkbenchWindow : Window
         if (matches.Length == 0) { _status.Text = Strings.Get("WorkbenchSearchNoResults"); return; }
         ClearPaperFocus(restoreCamera: false);
         var found = matches[_searchCursor++ % matches.Length];
+        RevealCard(found.Scene, found.Card.Snapshot.Id);
         Fit(found.Card.Bounds.Inflate(64).Offset(found.Scene.Origin));
         _status.Text = Strings.Format("WorkbenchSearchResult", (_searchCursor - 1) % matches.Length + 1, matches.Length);
     }
 
     private Card CreateActiveCard(WorkbenchPaperSnapshot paper)
     {
+        if (WorkspaceMaterials.IsMaterialId(paper.Id)) return CreateMaterialCard(paper);
         var card = CreateCardShell(paper);
         var owner = _controller.WorkbenchPaperWindow(paper.Id);
         card.Lease = owner.BorrowWorkbenchBody(this, card.Body);
@@ -626,7 +665,7 @@ internal sealed class WorkbenchWindow : Window
         // into a text editor; the borrowed paper body keeps all of its own mouse behavior.
         card.Move.PreviewMouseLeftButtonDown += (_, e) =>
         {
-            if (e.ChangedButton != MouseButton.Left || e.ClickCount != 2) return;
+            if (e.ChangedButton != MouseButton.Left || e.ClickCount != 2 || Keyboard.Modifiers != ModifierKeys.None) return;
             e.Handled = true;
             card.Move.Visibility = Visibility.Collapsed;
             card.Title.Visibility = Visibility.Visible;
@@ -664,8 +703,9 @@ internal sealed class WorkbenchWindow : Window
         card.Menu.Click += (_, _) =>
         {
             var menu = owner.CreateWorkbenchBodyMenu();
-            // Only the existing Todo-item association is writable. There is no arbitrary
-            // paper-to-paper relationship graph or second link format.
+            AddCardWorkspaceMenu(menu, card, owner);
+            // Keep the existing Todo-item association separate from visual canvas links;
+            // its native navigation and completion behavior remain owned by the Todo.
             if (_controller.State.EnableTodoPaperLinks)
             {
                 var bind = new MenuItem { Header = Strings.Get("WorkbenchBindToTodo") };
@@ -696,6 +736,8 @@ internal sealed class WorkbenchWindow : Window
             };
             menu.Items.Add(delete); menu.PlacementTarget = card.Menu; menu.IsOpen = true;
         };
+        WireCardSelection(card);
+        WireContentDrop(card);
         WireDrag(card, card.Move, resize: false);
         WireDrag(card, card.Resize, resize: true);
         return card;
@@ -786,6 +828,7 @@ internal sealed class WorkbenchWindow : Window
         card.Resize.Template = ThumbTemplate("\u25e2");
         Grid.SetColumn(card.Resize, 1); footer.Children.Add(card.Resize);
         Grid.SetRow(footer, 3); grid.Children.Add(footer);
+        card.Frame.Tag = card;
         Panel.SetZIndex(card.Frame, 2);
         Position(card, paper.Placement?.Bounds ?? new(32, 32, paper.Width, paper.Height));
         return card;
@@ -854,60 +897,69 @@ internal sealed class WorkbenchWindow : Window
 
     private void WireDrag(Card card, Thumb thumb, bool resize)
     {
-        WorkbenchRect before = default;
+        Dictionary<string, WorkbenchRect>? before = null;
         var changed = false;
         thumb.DragStarted += (_, _) =>
         {
-            if (IsSuspended || (!resize && card.Snapshot.Placement?.Pinned == true)) return;
-            // Thumb fires DragStarted even on a click; leave the pending automatic layout
-            // running unless the pointer actually changes the paper geometry.
+            if (IsSuspended || ActiveScene is not { } scene || (!resize && card.Snapshot.Placement?.Pinned == true)) return;
+            if (!resize && !_selectedCards.Contains(card.Snapshot.Id)) SelectOnly(card.Snapshot.Id);
+            var ids = resize ? new[] { card.Snapshot.Id } : MovingSelection(card.Snapshot.Id);
+            if (!resize && ids.Any(id => scene.Cards.TryGetValue(id, out var selected) && selected.Snapshot.Placement?.Pinned == true)) return;
+            before = ids.Where(scene.Cards.ContainsKey).ToDictionary(id => id, id => scene.Cards[id].Bounds, StringComparer.Ordinal);
             changed = false;
             _dragging = true;
-            before = card.Bounds;
         };
         thumb.DragDelta += (_, e) =>
         {
-            if (!_dragging) return;
-            // Thumb deltas are in the thumb's local (already transformed) coordinate space.
-            var r = card.Bounds;
-            r = resize ? r with { Width = Math.Clamp(r.Width + e.HorizontalChange, 240, 1600), Height = Math.Clamp(r.Height + e.VerticalChange, 240, 1600) }
-                : r with { X = Math.Clamp(r.X + e.HorizontalChange, -10_000_000, 10_000_000), Y = Math.Clamp(r.Y + e.VerticalChange, -10_000_000, 10_000_000) };
-            if (r == card.Bounds) return;
+            if (!_dragging || before == null || ActiveScene is not { } scene) return;
+            var dx = e.HorizontalChange; var dy = e.VerticalChange;
+            if (Math.Abs(dx) + Math.Abs(dy) < .001) return;
             if (!changed) { CancelLayout(); changed = true; }
-            Position(card, r);
-            if (ActiveScene is { } scene) DrawDecorations(scene, dragging: true);
+            foreach (var id in before.Keys)
+            {
+                if (!scene.Cards.TryGetValue(id, out var selected)) continue;
+                var r = selected.Bounds;
+                Position(selected, resize
+                    ? r with { Width = Math.Clamp(r.Width + dx, ResizeMinimum(card).Width, 1600), Height = Math.Clamp(r.Height + dy, ResizeMinimum(card).Height, 1600) }
+                    : r with { X = Math.Clamp(r.X + dx, -10_000_000, 10_000_000), Y = Math.Clamp(r.Y + dy, -10_000_000, 10_000_000) });
+            }
+            DrawDecorations(scene, dragging: true);
         };
         thumb.DragCompleted += (_, e) =>
         {
-            if (!_dragging) return;
+            if (!_dragging || before == null) return;
             _dragging = false;
-            if (e.Canceled)
-            {
-                Position(card, before);
-                if (ActiveScene is { } canceled) DrawDecorations(canceled);
-                ResumeDeferredModelRefresh();
-                return;
-            }
-            if ((card.Bounds.Location - before.Location).LengthSquared < 0.25 &&
-                Math.Abs(card.Bounds.Width - before.Width) < 0.5 &&
-                Math.Abs(card.Bounds.Height - before.Height) < 0.5)
-            {
-                Position(card, before);
-                if (ActiveScene is { } unchanged) DrawDecorations(unchanged);
-                ResumeDeferredModelRefresh();
-                return;
-            }
-            RememberLayout();
-            var state = _controller.WorkbenchLayout.Copy();
-            if (!state.Cards.TryGetValue(card.Snapshot.Id, out var placement)) state.Cards[card.Snapshot.Id] = placement = new();
-            placement.X = card.Bounds.X; placement.Y = card.Bounds.Y; placement.Width = card.Bounds.Width; placement.Height = card.Bounds.Height;
-            placement.Preferred = true;
-            StoreLayout(state);
-            // Additions/deletions during the gesture must update card membership
-            // before the geometry result is compared against the visible scene.
-            ResumeDeferredModelRefresh();
-            _ = LayoutActiveAsync(preferredId: card.Snapshot.Id);
+            FinishCardMove(before, e.Canceled || !changed);
+            before = null;
         };
+    }
+
+    private void FinishCardMove(Dictionary<string, WorkbenchRect> before, bool cancel)
+    {
+        if (ActiveScene is not { } scene) return;
+        var changed = before.Any(p => scene.Cards.TryGetValue(p.Key, out var card) && card.Bounds != p.Value);
+        if (cancel || !changed)
+        {
+            foreach (var pair in before)
+                if (scene.Cards.TryGetValue(pair.Key, out var card)) Position(card, pair.Value);
+            DrawDecorations(scene);
+            ResumeDeferredModelRefresh();
+            return;
+        }
+        RememberLayout();
+        var state = _controller.WorkbenchLayout.Copy();
+        foreach (var id in before.Keys)
+        {
+            if (!scene.Cards.TryGetValue(id, out var card)) continue;
+            if (!state.Cards.TryGetValue(id, out var placement)) state.Cards[id] = placement = new();
+            placement.X = card.Bounds.X; placement.Y = card.Bounds.Y;
+            placement.Width = card.Bounds.Width; placement.Height = card.Bounds.Height;
+            placement.Preferred = true;
+        }
+        StoreLayout(state);
+        ResumeDeferredModelRefresh();
+        _modelSignature = "";
+        _ = LayoutActiveAsync(fixedIds: before.Keys.ToHashSet(StringComparer.Ordinal));
     }
 
     private void DrawDecorations(Scene scene, bool dragging = false)
@@ -930,6 +982,7 @@ internal sealed class WorkbenchWindow : Window
         if (scene.Layout is not { } layout) return;
         foreach (var section in layout.Sections)
         {
+            if (section.Members.Any(id => SceneState(scene).Groups.Values.Any(g => g.Members.Contains(id)))) continue;
             var sectionBounds = dragging ? WorkbenchRect.Union(section.Members.Where(scene.Cards.ContainsKey).Select(id => scene.Cards[id].Bounds)).Inflate(32) : section.Bounds;
             Add(new Rectangle { Width = sectionBounds.Width, Height = sectionBounds.Height, RadiusX = 18, RadiusY = 18,
                 Stroke = RegionBrush, StrokeThickness = 1.6, StrokeDashArray = new DoubleCollection { 6, 4 },
@@ -937,6 +990,8 @@ internal sealed class WorkbenchWindow : Window
         }
         foreach (var route in layout.Routes)
         {
+            if (!IsCardShown(scene, route.From) || !IsCardShown(scene, route.To) ||
+                SceneState(scene).Connections.Any(c => c.From == route.From && c.To == route.To)) continue;
             var points = dragging && scene.Cards.TryGetValue(route.From, out var from) && scene.Cards.TryGetValue(route.To, out var to)
                 ? new[] { from.Bounds.Center, to.Bounds.Center } : route.Points;
             var line = new Polyline { Stroke = Accent, StrokeThickness = 2, Opacity = .65,
@@ -944,6 +999,8 @@ internal sealed class WorkbenchWindow : Window
             Add(line, 0, 0);
 
         }
+        DrawWorkspaceGroups(scene);
+        DrawWorkspaceConnections(scene);
         if (scene.Cards.Count == 0)
             Add(new TextBlock { Text = Strings.Get("WorkbenchEmpty"), FontSize = 18, Foreground = Muted, Margin = new Thickness(32) }, bounds.X, bounds.Y);
     }
@@ -971,13 +1028,15 @@ internal sealed class WorkbenchWindow : Window
     internal void SuspendWorkspace()
     {
         if (_closed || IsSuspended) return;
+        CancelWorkspaceGesture();
+        _selectedCards.Clear(); _focusedGroupId = null; _cameraBeforeGroupFocus = null;
         ClearPaperFocus(restoreCamera: false);
         IsSuspended = true; _toolbar.IsEnabled = false; _viewport.IsEnabled = false;
         _dragging = false; _refreshPendingAfterDrag = false;
         CancelLayout(); _overviewCancellation?.Cancel(); _refreshTimer.Stop();
         foreach (var scene in _scenes.Values)
             foreach (var id in scene.Cards.Keys.ToArray()) RemoveCard(scene, id, false);
-        _world.Children.Clear(); _scenes.Clear(); _modelSignature = ""; _undo.Clear();
+        _world.Children.Clear(); _scenes.Clear(); _modelSignature = ""; _undo.Clear(); _redo.Clear();
     }
     internal void ResumeWorkspace()
     {
@@ -989,8 +1048,7 @@ internal sealed class WorkbenchWindow : Window
     {
         if (_closed || IsSuspended || ActiveScene is not { } scene) return;
         foreach (var card in scene.Cards.Values)
-            if (card.Title.IsKeyboardFocusWithin && _controller.FindPaper(card.Snapshot.Id) is { } paper)
-                _controller.UpdatePaperTitle(paper, card.Title.Text);
+            if (card.Title.IsKeyboardFocusWithin) CommitCardTitle(card);
     }
     internal void CloseForShutdown() { _shutdown = true; Close(); }
     private static void RemoveCard(Scene scene, string id, bool restoreDesktop)
@@ -1003,6 +1061,8 @@ internal sealed class WorkbenchWindow : Window
         if (_closed) return;
         _closed = true; ClearPaperFocus(restoreCamera: false);
         _controller.WorkbenchModelChanged -= QueueModelRefresh;
+        _controller.WorkbenchContentTransferReplayed -= OnContentTransferReplayed;
+        _controller.WorkbenchContentTransferBlocked -= OnTransferHistoryBlocked;
         _refreshTimer.Stop(); CancelLayout(); _overviewCancellation?.Cancel(); _overviewCancellation?.Dispose();
         foreach (var scene in _scenes.Values)
             foreach (var id in scene.Cards.Keys.ToArray()) RemoveCard(scene, id, !_shutdown);
@@ -1027,6 +1087,10 @@ internal sealed class WorkbenchWindow : Window
         internal TextBox Title { get; } = new();
         internal TextBlock Binding { get; } = new();
         internal TextBlock? PreviewText;
+        internal TextBox? MaterialEditor;
+        internal Image? MaterialImage;
+        internal Button? MaterialOpen;
+        internal string MaterialVersion = "";
         internal Border Body { get; } = new() { ClipToBounds = true };
         internal Thumb Move { get; } = new();
         internal Thumb Resize { get; } = new();

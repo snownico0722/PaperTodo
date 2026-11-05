@@ -2031,7 +2031,8 @@ public sealed partial class AppController : IDisposable
         }
 
         State.Papers.RemoveAll(p => p.Id == paper.Id);
-        State.Workbench?.Normalize(State.Papers.Select(p => p.Id));
+        WorkspaceMaterials.FindOwner(State)?.WorkspaceMaterials?.Normalize(
+            State.Papers.Where(p => p.WorkspaceMaterials == null).Select(p => p.Id));
         WorkbenchModelChanged?.Invoke();
         QueuePluginPaperStateDeletion(paper.Id);
         _visibilityAnimationVersions.Remove(paper.Id);
@@ -2151,6 +2152,10 @@ public sealed partial class AppController : IDisposable
 
     public bool IsPaperEmpty(PaperData paper)
     {
+        if (paper.WorkspaceMaterials is { } materials)
+            return materials.Items.Count == 0 && materials.Layout.Cards.Count == 0 &&
+                materials.Layout.Groups.Count == 0 && materials.Layout.Connections.Count == 0 &&
+                string.IsNullOrWhiteSpace(paper.Content);
         if (paper.Type == PaperTypes.Note)
         {
             if (!string.Equals(

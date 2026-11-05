@@ -879,7 +879,7 @@ public sealed partial class PaperWindow
 
     internal void SwitchPaperBodyProvider(string providerId)
     {
-        if (_paper.Type != PaperTypes.Note || IsClosed)
+        if (_paper.Type != PaperTypes.Note || IsClosed || _paper.WorkspaceMaterials != null)
         {
             return;
         }
@@ -1239,7 +1239,8 @@ public sealed partial class PaperWindow
     {
         var root = new MenuItem
         {
-            Header = Strings.Get("PaperBodyMenu")
+            Header = Strings.Get("PaperBodyMenu"),
+            IsEnabled = _paper.WorkspaceMaterials == null
         };
         var currentId = NormalizeBodyProviderId(_paper.BodyProviderId);
         foreach (var descriptor in _controller.PaperBodyPlugins.Descriptors)
@@ -1284,6 +1285,12 @@ public sealed partial class PaperWindow
 
     internal void RefreshLegacyMarkdownFromModel()
     {
+        if (_paper.WorkspaceMaterials != null)
+        {
+            RefreshWorkspaceMaterialsBodyFromModel();
+            InvalidateEdgeCapsulePreviewContent();
+            return;
+        }
         if (_paper.Type != PaperTypes.Note || _noteBox == null)
         {
             return;
@@ -1314,7 +1321,9 @@ public sealed partial class PaperWindow
     }
 
     internal FrameworkElement CreateMarkdownBodyView() =>
-        (FrameworkElement)BuildNoteBody();
+        _paper.WorkspaceMaterials != null
+            ? BuildWorkspaceMaterialsBody()
+            : (FrameworkElement)BuildNoteBody();
 
     private void ClearPluginRuntimeStateOnFailure()
     {

@@ -13,7 +13,7 @@
 
 | ID | 主题 | Status | 领域 |
 | --- | --- | --- | --- |
-| D-001 | “桌面纸片”作为主要交互和对象边界 | Extended by D-066 | 产品边界 |
+| D-001 | “桌面纸片”作为主要交互和对象边界 | Extended by D-066 / D-067 | 产品边界 |
 | D-002 | `data.json` 与 LMDB 分域 | Accepted | 持久化 |
 | D-003 | Crash boundary 不做强制最终保存 | Accepted | 持久化 / 恢复 |
 | D-004 | Paper body 通过 session 边界接入 | Accepted | 插件 |
@@ -75,7 +75,8 @@
 | D-064 | 固定编号工作区共用代码，不共用运行数据 | Accepted | 工作区 / 持久化 |
 | D-065 | DComp 视觉与 Win32 输入提交的非原子边界 | Accepted (historical findings; native-owner candidate deferred) | Edge input / composition |
 
-| D-066 | 可编辑无限工作台与单正文租借 | Accepted | 工作台 / 布局 / 生命周期 |
+| D-066 | 可编辑无限工作台与单正文租借 | Superseded by D-067（内容归属与关系范围） | 工作台 / 布局 / 生命周期 |
+| D-067 | 工作空间素材 Note、手动分组与跨纸内容搬运 | Accepted | 工作台 / 内容 / 持久化 |
 
 ## 维护规则
 
@@ -102,7 +103,7 @@ Decisions 的核心问题是：**“为什么今天会这样设计，以及哪�
 
 ## D-001 — 保持“桌面纸片”作为主要交互和对象边界
 
-**Status:** Extended by D-066（保留 paper 对象边界，增加可选全屏工作台）
+**Status:** Extended by D-066 / D-067（保留 paper 对象边界，增加可选全屏工作台及归属于素材 Note 的画布内容）
 
 ### Decision
 
@@ -2034,7 +2035,7 @@ PR #319 的初版把主胶囊完整材质收展后的卡死解释为终点迟到
 
 ## D-066 — 可编辑无限工作台与单正文租借
 
-**Status:** Accepted；扩展 D-001 的呈现方式，不改变 paper 和 session 的 ownership。
+**Status:** Superseded by D-067（内容归属与关系范围）；单正文租借和 paper/session ownership 继续有效。
 
 ### Context
 
@@ -2054,3 +2055,33 @@ PR #319 的初版把主胶囊完整材质收展后的卡死解释为终点迟到
 - `src/PaperWindow.Workbench.cs`、`src/AppController.Workbench.cs`、`src/StateStore.Workbench.cs`。
 - `tests/PaperTodo.WorkbenchLayoutChecks` 与 `tests/PaperTodo.WorkbenchChecks`：几何约束、单正文身份、桌面还原和工作区切换隔离。
 - 算法来源：https://github.com/microsoft/automatic-graph-layout；备选评估：https://eclipse.dev/elk/reference/algorithms/org-eclipse-elk-layered.html。
+
+---
+
+## D-067 — 工作空间素材 Note、手动分组与跨纸内容搬运
+
+**Status:** Accepted；扩展 D-066 的工作台内容与关系范围，保留普通纸片的单正文 ownership。
+
+### Context
+
+最初工作台只整理已有纸片，布局另存 `AppState.Workbench`，关系限于待办条目绑定。随后确定的新需求包括把外部素材直接放进画布、快速编辑导图节点、手动成组以及在纸片间拆分和合并内容。只有位置和自动关系布局已不足以承载这些操作；新内容仍需明确的保存归属，并能在离开画布后找到和编辑。
+
+### Decision
+
+- 每个工作区用一张初始名为「工作空间素材」的内置 Note 持有 `WorkspaceMaterialsDocument`。素材项保存唯一正文，布局保存纸片/素材的位置、组和连线；普通纸片正文不复制进素材 Note。归属独立于标题，素材 Note 不再作为自身画布中的卡片。
+- 旧布局在加载规范化时迁入该 Note，继续通过 `StateStore` 保存。素材图片使用现有图片库与引用保护；文件/文件夹保留原路径，不隐式复制文件或随卡片删除原文件。
+- 素材笔记采用直接编辑素材项的列表；搜索、外部读取和导出按需生成只读 Markdown 投影。通用 `notes.write` 拒绝该结构化 Note，专用界面直接编辑素材项与说明，避免外部读后回写造成重复正文。普通 Note 继续租借原编辑器，不能把生成的汇总正文与素材项都变成可写来源。
+- 手动组属于画布布局，可整体移动、折叠和临时只看这一组，不改变桌面窗口或胶囊队列。自由连线和导图分支属于视觉关系，不复用待办完成或窗口绑定语义。
+- 同类型普通纸片之间的搬运先校验、后一次提交两侧变化。原生编辑撤销栈保留共享事务边界；两侧同时回到边界后才共同撤销/重做，避免单侧撤销把已移动内容复制回来。保留搬运前的历史和留空的原纸片。
+
+### Why / Consequences
+
+素材 Note 给画布新内容提供普通笔记入口和统一保存位置，同时让每张图片、每段文字和每个节点继续独立摆放。用结构化素材项保存正文与布局能保留稳定 ID、自由连接和独立编辑；代价是素材 Note 需要专用列表及只读导出投影，不能直接把普通 Markdown 文本当成可任意回写的等价表示。跨纸搬运牵涉两份既有编辑历史，共享边界比清空历史或仅撤销一侧更符合移动语义；后续编辑须先按各自历史撤回，才能跨过该边界。
+
+### Evidence
+
+- `src/Workbench/WorkspaceMaterials.cs`、`WorkspaceMaterialsDocument.cs`、`WorkbenchState.cs`：归属、迁移、素材与空间元数据。
+- `src/AppController.WorkspaceMaterials.cs`、`src/PaperWindow.WorkspaceMaterials.cs`：导入、素材编辑与笔记入口。
+- `src/Workbench/WorkbenchWindow.Selection.cs`、`WorkbenchWindow.Materials.cs`：手动组、节点与自由连线。
+- `src/Workbench/WorkbenchContentTransfer.cs`、`src/AppController.WorkbenchTransfer.cs`、`src/PaperWindow.WorkbenchTransfer.cs`：两侧校验、提交与撤销边界。
+- `tests/PaperTodo.WorkbenchLayoutChecks`、`tests/PaperTodo.WorkbenchChecks`、`tests/PaperTodo.DataReloadChecks/WorkspaceMaterialsChecks.cs`：模型、交互与持久化回归。

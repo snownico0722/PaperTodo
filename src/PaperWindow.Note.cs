@@ -137,6 +137,7 @@ public sealed partial class PaperWindow
             FocusVisualStyle = null
         };
         var box = _noteBox;
+        AttachWorkbenchNoteTransfer(box);
         box.ImageContextMenuFactory = CreateContextMenu;
         box.SetMarkdownRenderMode(_controller.State.MarkdownRenderMode);
         box.SetImageReferenceTextMode(_controller.State.ImageReferenceTextMode);
@@ -1061,7 +1062,7 @@ public sealed partial class PaperWindow
 
         var fileStem = ExternalMarkdownFileStem();
         var path = Path.Combine(directory, fileStem + CurrentExternalMarkdownExtension());
-        var text = _paper.Content ?? "";
+        var text = CurrentMarkdownContentForExternalRead();
         text = _controller.ImageStore.ConvertMarkdownForExternalEditor(
             _paper.Id,
             text,
@@ -1115,6 +1116,10 @@ public sealed partial class PaperWindow
 
     internal bool IsCurrentNoteEmpty()
     {
+        if (_paper.WorkspaceMaterials is { } materials)
+            return materials.Items.Count == 0 && materials.Layout.Cards.Count == 0 &&
+                materials.Layout.Groups.Count == 0 && materials.Layout.Connections.Count == 0 &&
+                string.IsNullOrWhiteSpace(_paper.Content);
         if (_paper.Type != PaperTypes.Note ||
             !IsCurrentBodyProviderMarkdown)
         {

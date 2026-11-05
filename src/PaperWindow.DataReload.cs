@@ -6,8 +6,14 @@ public sealed partial class PaperWindow
 {
     internal void ApplyReloadedPaper(PaperData before)
     {
-        if (_paper.Type == PaperTypes.Note && before.Content != _paper.Content)
-            RefreshNoteForExternalChange();
+        if (_paper.Type == PaperTypes.Note)
+        {
+            if ((before.WorkspaceMaterials == null) != (_paper.WorkspaceMaterials == null))
+                ReloadCurrentPaperBody();
+            else if (before.Content != _paper.Content ||
+                !StateReloadModels.Equivalent(before.WorkspaceMaterials, _paper.WorkspaceMaterials))
+                RefreshNoteForExternalChange();
+        }
         if (_paper.Type == PaperTypes.Todo && !StateReloadModels.Equivalent(before.Items, _paper.Items))
         {
             RecordExternalTodoMutationAsUndoStep(before.Items);

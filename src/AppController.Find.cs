@@ -18,7 +18,12 @@ public sealed partial class AppController
                 continue;
             }
 
-            if (paper.Type == PaperTypes.Todo)
+            if (paper.WorkspaceMaterials != null)
+            {
+                foreach (var field in PaperWindow.GetWorkspaceMaterialsFindFields(paper))
+                    sources.Add(CreateBuiltInFindSource(paper, field.Key, field.Text));
+            }
+            else if (paper.Type == PaperTypes.Todo)
             {
                 foreach (var item in paper.Items.OrderBy(item => item.Order))
                 {
