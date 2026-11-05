@@ -136,8 +136,11 @@ internal sealed partial class WorkbenchWindow : Window
         _viewport.PreviewMouseDown += BeginPan;
         _viewport.PreviewMouseMove += MovePan;
         _viewport.PreviewMouseUp += EndPan;
-        _viewport.LostMouseCapture += (_, _) =>
+        _viewport.LostMouseCapture += (_, e) =>
         {
+            // Borrowed editors can lose their own capture as the workbench starts
+            // panning. That bubbled event must not cancel the viewport's new capture.
+            if (!ReferenceEquals(e.OriginalSource, _viewport)) return;
             _panPointer = null; _rightDown = null; _rightPanning = false;
             CancelMarquee();
         };
