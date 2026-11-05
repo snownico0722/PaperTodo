@@ -7,6 +7,7 @@ internal sealed record FreeMasterDragLayout(string EdgeKey, string QueueKey, str
 public sealed partial class AppController
 {
     private (FreeMasterDragLayout Layout, IReadOnlyDictionary<string, double> Tops)? _freeMasterDragPreview;
+    private FreeQueueSlotPreviewState _freeMasterSlotPreview = new();
 
     internal FreeMasterDragLayout? CaptureFreeMasterDragLayout(string monitor, EdgeCapsuleEdge edge,
         string? sourceQueueKey = null)
@@ -24,7 +25,8 @@ public sealed partial class AppController
             group.Papers.ToDictionary(p => p.Id, InstanceQueueKey, StringComparer.Ordinal));
     }
 
-    internal void PreviewFreeMasterQueueTop(FreeMasterDragLayout layout, double requestedTop)
+    internal void PreviewFreeMasterQueueTop(FreeMasterDragLayout layout, double requestedTop,
+        DeviceScreenPoint? pointer = null)
     {
         if (!EdgeCapsuleFreeQueuesEnabled || !FreeMasterMembersMatch(layout)) return;
         if (!double.IsFinite(requestedTop)) return;
@@ -39,12 +41,15 @@ public sealed partial class AppController
         _freeMasterDragPreview = (layout,
             new Dictionary<string, double>(StringComparer.Ordinal) { [layout.QueueKey] = boundedTop });
         ArrangeDeepCapsules(animate: false);
+        if (pointer is { } screenPoint)
+            UpdateFreeMasterMergePreview(layout, screenPoint, docked: true);
     }
 
     internal void FinishFreeMasterQueueDrag(FreeMasterDragLayout layout, bool commit)
     {
         if (_freeMasterDragPreview is not { } preview || !ReferenceEquals(preview.Layout, layout)) return;
         _freeMasterDragPreview = null;
+        EndFreeMasterQueueDropGhost();
         if (commit && EdgeCapsuleFreeQueuesEnabled && FreeMasterMembersMatch(layout))
         {
             State.DeepCapsuleQueueStartTopMargins[layout.QueueKey] = preview.Tops[layout.QueueKey];
@@ -60,31 +65,50 @@ public sealed partial class AppController
             layout.MemberKeys.TryGetValue(p.Id, out var key) && InstanceQueueKey(p) == key);
     }
 
-    // Master dragging uses the same target-slot policy as an ordinary floating paper.
-    // The master is the visible drag shell; hidden member height is not a hit-testing area.
+    // The visible master itself is a merge target even when its queue is expanded.
+    // The ordinary insertion selector deliberately starts at the first paper, not
+    // at the master: direct master-to-master joins must check that master first.
     private static (string Key, int Index)? FindFreeMasterTarget(
         IReadOnlyList<EdgeFreeQueueBox> boxes, double topDip, double pointerTopDip,
-        double pitch, double gap) =>
-        EdgeCapsuleFreeQueuePolicy.FindInsertion(boxes, topDip,
+        double pitch, double gap)
+    {
+        EdgeFreeQueueBox? closestMaster = null;
+        var shortestDistance = double.PositiveInfinity;
+        foreach (var box in boxes)
+        {
+            if (!box.HasMaster) continue;
+            var distance = Math.Max(0, Math.Max(box.TopDip - pointerTopDip,
+                pointerTopDip - box.TopDip - PaperLayoutDefaults.CapsuleHeight));
+            if (distance > EdgeCapsuleFreeQueuePolicy.SnapDistance ||
+                distance >= shortestDistance) continue;
+            closestMaster = box;
+            shortestDistance = distance;
+        }
+        if (closestMaster is { } target)
+            return (target.Key, target.MemberCount); // Join the visible master, append its members.
+
+        return EdgeCapsuleFreeQueuePolicy.FindInsertion(boxes, topDip,
             PaperLayoutDefaults.CapsuleHeight, 0, pitch, gap,
             pointerTopDip: pointerTopDip, floating: true);
+    }
 
-    internal void PreviewFreeMasterQueueDropGhost(
-        MasterCapsuleQueueTransferSnapshot snapshot, DeviceScreenPoint pointer)
+    private bool TryGetFreeMasterMerge(FreeMasterDragLayout layout, DeviceScreenPoint pointer,
+        bool docked, out MonitorGeometry geometry, out string side,
+        out EdgeFreeQueueBox targetBox, out EdgeFreeQueueDrop decision)
     {
-        if (snapshot.FreeLayout is not { } layout ||
-            _masterCapsuleQueueTransfer != snapshot || !EdgeCapsuleFreeQueuesEnabled ||
-            !FreeMasterMembersMatch(layout) ||
-            !WindowWorkAreaHelper.TryGetMonitorGeometryAtDeviceScreenPoint(pointer, out var geometry))
-        {
-            _nativeQueueDropGhost?.Hide();
-            return;
-        }
+        geometry = default;
+        side = "";
+        targetBox = default;
+        decision = EdgeFreeQueueDrop.Rejected;
+        if (!EdgeCapsuleFreeQueuesEnabled || !FreeMasterMembersMatch(layout) ||
+            !WindowWorkAreaHelper.TryGetMonitorGeometryAtDeviceScreenPoint(pointer, out geometry))
+            return false;
 
         var monitor = WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(geometry.DeviceName);
-        var side = pointer.X < geometry.WorkArea.Left + geometry.WorkArea.Width / 2.0
+        side = pointer.X < geometry.WorkArea.Left + geometry.WorkArea.Width / 2.0
             ? DeepCapsuleSides.Left : DeepCapsuleSides.Right;
         var edge = EdgeKey(monitor, side);
+        if (docked && edge != layout.EdgeKey) return false;
         var pitch = EdgeCapsuleLayout.SlotHeight(DeepCapsuleGap);
         var boxes = NativeQueueGroups()
             .Where(g => g.Key != layout.QueueKey && LiveEdgeOfQueueKey(g.Key) == edge)
@@ -93,22 +117,31 @@ public sealed partial class AppController
         var target = FindFreeMasterTarget(boxes,
             pointerTop - PaperLayoutDefaults.CapsuleHeight / 2, pointerTop,
             pitch, DeepCapsuleGap);
-        if (target is not { } insert)
+        if (target is not { } insert) return false;
+
+        decision = EdgeCapsuleFreeQueuePolicy.Insert(boxes, insert.Key, insert.Index,
+            layout.Groups[0].PaperIds.Length, geometry.LocalWorkAreaDip.Height,
+            pitch, DeepCapsuleGap);
+        if (!decision.Accepted) return false;
+        targetBox = boxes.First(b => b.Key == insert.Key);
+        return true;
+    }
+
+    private void UpdateFreeMasterMergePreview(FreeMasterDragLayout layout,
+        DeviceScreenPoint pointer, bool docked)
+    {
+        if (!TryGetFreeMasterMerge(layout, pointer, docked, out var geometry,
+                out var side, out var targetBox, out var decision))
         {
+            PreviewFreeQueueDropSlot(_freeMasterSlotPreview, null, layout.QueueKey,
+                layout.Groups[0].PaperIds, forceReapply: docked);
             _nativeQueueDropGhost?.Hide();
             return;
         }
 
-        var decision = EdgeCapsuleFreeQueuePolicy.Insert(boxes,
-            insert.Key, insert.Index, layout.Groups[0].PaperIds.Length,
-            geometry.LocalWorkAreaDip.Height, pitch, DeepCapsuleGap);
-        if (!decision.Accepted)
-        {
-            _nativeQueueDropGhost?.Hide();
-            return;
-        }
-
-        var targetBox = boxes.First(b => b.Key == insert.Key);
+        PreviewFreeQueueDropSlot(_freeMasterSlotPreview, decision, layout.QueueKey,
+            layout.Groups[0].PaperIds, forceReapply: docked);
+        var pitch = EdgeCapsuleLayout.SlotHeight(DeepCapsuleGap);
         var top = EdgeCapsuleFreeQueuePolicy.GhostSlotTop(
             decision, targetBox.HasMaster, pitch, targetBox.Collapsed);
         _nativeQueueDropGhost ??= new EdgeCapsuleQueueDropGhost();
@@ -117,10 +150,43 @@ public sealed partial class AppController
             layout.Groups[0].PaperIds.Length, DeepCapsuleGap);
     }
 
+    internal void PreviewFreeMasterQueueDropGhost(
+        MasterCapsuleQueueTransferSnapshot snapshot, DeviceScreenPoint pointer)
+    {
+        if (snapshot.FreeLayout is not { } layout ||
+            _masterCapsuleQueueTransfer != snapshot || !EdgeCapsuleFreeQueuesEnabled ||
+            !FreeMasterMembersMatch(layout))
+        {
+            _nativeQueueDropGhost?.Hide();
+            return;
+        }
+        UpdateFreeMasterMergePreview(layout, pointer, docked: false);
+    }
+
     internal void EndFreeMasterQueueDropGhost()
     {
         _nativeQueueDropGhost?.Dispose();
         _nativeQueueDropGhost = null;
+        _freeMasterSlotPreview = new();
+    }
+
+    // A vertical master drag can merge without a horizontal pull or a pooled
+    // floating HWND. Reuse the existing master transfer transaction on release;
+    // it also owns rollback, collapse choice, and retirement of the old master.
+    internal bool TryCommitDockedFreeMasterQueueMerge(FreeMasterDragLayout layout,
+        DeviceScreenPoint pointer, double originalMargin, bool originalHadMargin)
+    {
+        if (_freeMasterDragPreview?.Layout != layout ||
+            !TryGetFreeMasterMerge(layout, pointer, docked: true,
+                out _, out _, out _, out _)) return false;
+        var edge = layout.Side == DeepCapsuleSides.Left
+            ? EdgeCapsuleEdge.Left : EdgeCapsuleEdge.Right;
+        if (!TryBeginMasterCapsuleQueueTransfer(layout.Monitor, edge, originalMargin,
+                out var snapshot, originalHadMargin, layout, layout.QueueKey))
+            return false;
+        var committed = CommitMasterCapsuleQueueTransfer(snapshot, pointer);
+        EndFreeMasterQueueDropGhost();
+        return committed;
     }
 
     private bool CommitFreeMasterQueueTransfer(MasterCapsuleQueueTransferSnapshot snapshot,
