@@ -20,12 +20,19 @@ jobs:
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
+          submodules: recursive
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - name: Build the distributed Codex plugin with the repository installer
         shell: pwsh
         run: ./plugin-samples/Build-And-Install-NativePlugin.ps1 -ProjectPath plugin-samples/PaperTodo.Plugin.CodexCliBridge/PaperTodo.Plugin.CodexCliBridge.csproj
+      - name: Verify image import boundaries and distributed plugin instructions
+        shell: pwsh
+        run: ./tools/testing/Run-Checks.ps1 -Group plugins
       - name: Commit only the rebuilt plugin
         shell: pwsh
         run: |
