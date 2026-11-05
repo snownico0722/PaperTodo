@@ -1673,7 +1673,6 @@ The original note is kept.</value></data>
   <data name="EditorSidebarHide" xml:space="preserve"><value>Hide paper list</value></data>
   <data name="EditorMinimize" xml:space="preserve"><value>Minimize</value></data>
   <data name="EditorMaximizeRestore" xml:space="preserve"><value>Maximize / Restore</value></data>
-  <data name="EditorClosePaper" xml:space="preserve"><value>Close paper</value></data>
   <data name="EditorUndo" xml:space="preserve"><value>Undo</value></data>
   <data name="EditorRedo" xml:space="preserve"><value>Redo</value></data>
   <data name="EditorHeading" xml:space="preserve"><value>Heading</value></data>
