@@ -166,10 +166,10 @@ internal static class NativeFreeQueueChecks
                 c.NativeEdgeQueueMagnetizedOwnerTop(b.Id, fourthTop) == fourthTop &&
                 c.NativeEdgeQueueMagnetizedOwnerTop(b.Id, fourthTop + 8) == fourthTop,
             "after 18-DIP release, inward travel is free and the next outward pull snaps again");
-        c.PreviewNativeEdgeQueueDrag(b, Point(fourthTop + EdgeCapsuleLayout.CrossQueueDragUnlockDistance),
-            fourthTop + EdgeCapsuleLayout.CrossQueueDragUnlockDistance, false);
+        var beyondDetach = fourthTop + EdgeCapsuleLayout.CrossQueueDragUnlockDistance + 1;
+        c.PreviewNativeEdgeQueueDrag(b, Point(beyondDetach), beyondDetach, false);
         Require(((NativeEdgeQueueDrag)Part(c, "_nativeEdgeQueueDrag")).Detached,
-            "the single-member drag transitions to detached without ending the gesture");
+            "the member becomes detached after crossing, not merely touching, its 56-DIP boundary");
         Require(c.NativeEdgeQueueMagnetizedOwnerTop(b.Id,
                 fourthTop + EdgeCapsuleLayout.CrossQueueDragUnlockDistance) ==
                 fourthTop + EdgeCapsuleLayout.CrossQueueDragUnlockDistance &&
