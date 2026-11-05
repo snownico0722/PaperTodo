@@ -191,8 +191,7 @@ internal static partial class Program
 
                 // Normal persistence recovers without requiring the MCP caller to retry.
                 controller.SaveNow(sync: true);
-                Require(File.ReadAllText(store.FilePath).Contains(
-                            originalContent, StringComparison.Ordinal),
+                Require(Str(LivePaper(ReadLive(), note.Id)["content"]) == originalContent,
                     "The next normal save did not reconcile the restored in-memory note.");
             }
             Console.WriteLine("PASS MCP image in-memory import, image-content read, permissions, ownership and early/late save failure safety");
