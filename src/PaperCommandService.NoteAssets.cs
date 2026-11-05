@@ -1,9 +1,79 @@
+using System.Diagnostics;
 using PaperTodo.Plugin;
 
 namespace PaperTodo;
 
 internal sealed partial class PaperCommandService
 {
+    internal NoteImageInsertionResult InsertNoteImage(
+        string paperId, string? imagePath, byte[]? imageBytes, string? imageName,
+        PaperOperationContext context)
+    {
+        EnsureRunning();
+        var paper = RequirePaper(RequiredId(paperId, "paperId"), PaperTypes.Note);
+        if (!_controller.CaptureNoteSnapshot(paper).ContentAvailable)
+            throw Error("note_content_unavailable", "Only built-in Markdown notes support image insertion.");
+        if ((imagePath == null) == (imageBytes == null))
+            throw Error("invalid_params", "Provide exactly one of image_path or image_base64.");
+        if (imagePath != null && (!Path.IsPathFullyQualified(imagePath) || !File.Exists(imagePath)))
+            throw Error("invalid_params", "image_path must be an existing absolute file path.");
+
+        // Check against the editor draft before settling pending user text or touching LMDB.
+        // Image IDs are at most 8 digits, so this bounds the eventual appended reference.
+        var maximumReference = MarkdownImageReferences.CreateReference("99999999");
+        _ = BuildNoteWriteResult(
+            _controller.CurrentMarkdownContentForExternalRead(paper),
+            maximumReference, NoteWriteMode.Append);
+        PrepareExternalMutation(paper);
+        var original = paper.Content ?? "";
+        _ = BuildNoteWriteResult(original, maximumReference, NoteWriteMode.Append);
+
+        NoteImageAsset imported;
+        try
+        {
+            imported = imagePath != null
+                ? _controller.ImageStore.ImportImageFile(paper.Id, imagePath)
+                : _controller.ImageStore.ImportImageBytes(paper.Id, imageBytes!, imageName ?? "mcp-image");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or
+                                   InvalidDataException or InvalidOperationException)
+        {
+            throw Error("image_import_failed", ex.Message);
+        }
+
+        var committed = false;
+        try
+        {
+            var reference = MarkdownImageReferences.CreateReference(imported.Id);
+            var newContent = BuildNoteWriteResult(original, reference, NoteWriteMode.Append);
+            using (_controller.SuppressPaperPluginEventScans())
+            {
+                paper.Content = newContent;
+                if (!_controller.TryCommitExternalMutation())
+                {
+                    paper.Content = original;
+                    _controller.ResetPaperPluginEventBaseline();
+                    throw SaveFailed();
+                }
+
+                committed = true;
+                _controller.RunExternalPostCommitUi(
+                    () => _controller.RefreshExternalNotePaper(paper));
+            }
+
+            _controller.PublishExternalPaperOperation(context);
+            return new NoteImageInsertionResult(paper.Id, imported.Id, reference);
+        }
+        finally
+        {
+            if (!committed)
+            {
+                try { _controller.ImageStore.DiscardImportedImage(paper.Id, imported.Id); }
+                catch (Exception ex) { Trace.WriteLine($"[MCP] Uncommitted image cleanup failed: {ex}"); }
+            }
+        }
+    }
+
     internal PaperNoteImage ReadNoteImage(string paperId, string imageId)
     {
         EnsureRunning();
@@ -18,3 +88,5 @@ internal sealed partial class PaperCommandService
         return new PaperNoteImage(id, mime, bytes);
     }
 }
+
+internal sealed record NoteImageInsertionResult(string PaperId, string ImageId, string Reference);
