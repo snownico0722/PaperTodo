@@ -1722,7 +1722,6 @@
   <data name="EditorSidebarHide" xml:space="preserve"><value>收起纸片列表</value></data>
   <data name="EditorMinimize" xml:space="preserve"><value>最小化</value></data>
   <data name="EditorMaximizeRestore" xml:space="preserve"><value>最大化 / 还原</value></data>
-  <data name="EditorClosePaper" xml:space="preserve"><value>关闭纸片</value></data>
   <data name="EditorUndo" xml:space="preserve"><value>撤销</value></data>
   <data name="EditorRedo" xml:space="preserve"><value>重做</value></data>
   <data name="EditorHeading" xml:space="preserve"><value>标题</value></data>
