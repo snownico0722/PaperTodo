@@ -770,9 +770,13 @@ internal static partial class Program
             inheritedControls.Children.Add(new Button { Content = "Inherited setting" });
             var inheritedPage = (StackPanel)inheritanceMethod.Invoke(controller, [inheritedControls])!;
             var manageWorkspace = inheritedPage.Children.OfType<Button>().Single();
-            bool HasWorkspaceButtonInset(Button action) =>
-                action.Content is TextBlock text &&
-                text.Margin.Left >= 12 && text.Margin.Right >= 12;
+            bool HasWorkspaceButtonInset(Button action)
+            {
+                action.ApplyTemplate();
+                return action.Template?.FindName("Bd", action) is Border border &&
+                    border.Padding.Left >= 12 && border.Padding.Right >= 12 &&
+                    border.Padding == action.Padding;
+            }
             Require(manageWorkspace.Height == 27 &&
                     manageWorkspace.BorderThickness.Left == 1 &&
                     manageWorkspace.Background == Brushes.Transparent &&
@@ -998,8 +1002,8 @@ internal static partial class Program
                 .Children.OfType<Button>().Single();
             Require(createWorkspace.Height == 27 && createWorkspace.BorderThickness.Left == 1 &&
                     HasWorkspaceButtonInset(createWorkspace) &&
-                    createWorkspace.Content is TextBlock createText &&
-                    !createText.Text.Contains('＋'),
+                    createWorkspace.Content is string createText &&
+                    !createText.Contains('＋'),
                 "New workspace must omit the plus and use a framed button with horizontal inset");
             var iconClass = typeof(AppController).Assembly.GetType("PaperTodo.WorkspaceCycleIcon", throwOnError: true)!;
             var iconData = (string)iconClass.GetField("PathData", BindingFlags.NonPublic | BindingFlags.Static)!
@@ -1069,8 +1073,8 @@ internal static partial class Program
             workspacePage = WorkspacePage();
             var confirm = WorkspaceOptionsGroup(workspacePage).Children.OfType<Button>().Single();
             Require(confirm.IsEnabled && HasWorkspaceButtonInset(confirm) &&
-                    confirm.Content is TextBlock confirmText &&
-                    confirmText.Text != Strings.Get("CommonCancel") &&
+                    confirm.Content is string confirmText &&
+                    confirmText != Strings.Get("CommonCancel") &&
                     confirm.Height == 27 && confirm.BorderThickness.Left == 1,
                 "settings must offer one inset framed switch confirmation and no cancel button");
             confirm.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
