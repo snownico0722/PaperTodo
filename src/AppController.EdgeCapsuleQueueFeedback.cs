@@ -64,6 +64,11 @@ public sealed partial class AppController
     {
         if (_legacyLandingPreview is { } current && current.OwnerId == owner.Id &&
             current.TargetKey == targetKey && current.Index == index) return;
+        if (_legacyLandingPreview is { } prior && prior.OwnerId == owner.Id &&
+            prior.TargetKey != targetKey &&
+            _masterCapsules.TryGetValue(prior.TargetKey, out var priorMaster))
+            priorMaster.PreviewQueueTop(DeepCapsuleStartTopMarginForQueueKey(prior.TargetKey),
+                animate: true);
 
         var members = DeepCapsulePapersInOrder()
             .Where(p => p.Id != owner.Id)
