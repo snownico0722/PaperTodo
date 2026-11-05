@@ -1673,7 +1673,6 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="EditorSidebarHide" xml:space="preserve"><value>종이 목록 닫기</value></data>
   <data name="EditorMinimize" xml:space="preserve"><value>최소화</value></data>
   <data name="EditorMaximizeRestore" xml:space="preserve"><value>최대화 / 복원</value></data>
-  <data name="EditorClosePaper" xml:space="preserve"><value>종이 닫기</value></data>
   <data name="EditorUndo" xml:space="preserve"><value>실행 취소</value></data>
   <data name="EditorRedo" xml:space="preserve"><value>다시 실행</value></data>
   <data name="EditorHeading" xml:space="preserve"><value>제목</value></data>
