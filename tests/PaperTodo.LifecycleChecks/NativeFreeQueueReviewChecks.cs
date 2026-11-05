@@ -43,6 +43,7 @@ internal static class NativeFreeQueueReviewChecks
         Require(WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(null, out var monitor), "review monitor");
         CheckDropGhostShapes(monitor);
         var originalContents = c.State.Papers.ToDictionary(p => p.Id, p => p.Content);
+        await CheckSingleQueueGhost(c, windows);
         await CheckDisplacedInsertion(c, windows, store, monitor);
         await CheckDragPreviewUpdates(c, windows, monitor);
         await CheckYieldAnimations(c, windows, monitor);
@@ -51,7 +52,6 @@ internal static class NativeFreeQueueReviewChecks
         await CheckIndependentGroupPreview(c, windows, store, monitor);
         await CheckFoldedDropAndShortcuts(c, monitor);
         await CheckDisconnectedGesturesAndMerge(c, windows, store, monitor);
-        await CheckSingleQueueGhost(c, windows);
         Require(c.State.Papers.Count == originalContents.Count &&
                 c.State.Papers.All(p => originalContents[p.Id] == p.Content),
             "queue operations changed paper identities or note contents");
@@ -63,6 +63,7 @@ internal static class NativeFreeQueueReviewChecks
     {
         var free = c.State.UseCapsuleFreeQueues;
         var master = c.State.UseCapsuleCollapseAll;
+        var folded = new Dictionary<string, bool>(c.State.CapsuleCollapseAllActiveQueues, StringComparer.Ordinal);
         PaperData? ghostOwner = null;
         try
         {
@@ -127,6 +128,7 @@ internal static class NativeFreeQueueReviewChecks
             if (ghostOwner != null) c.EndSingleCapsuleDropGhost(ghostOwner.Id);
             c.State.UseCapsuleFreeQueues = free;
             c.State.UseCapsuleCollapseAll = master;
+            c.State.CapsuleCollapseAllActiveQueues = folded;
             c.ArrangeDeepCapsules(false);
         }
     }
