@@ -1677,7 +1677,7 @@ The original note is kept.</value></data>
   <data name="WorkbenchSearch" xml:space="preserve"><value>Search all workspaces; press Enter to navigate</value></data>
   <data name="WorkbenchRefresh" xml:space="preserve"><value>Refresh overview</value></data>
   <data name="WorkbenchClose" xml:space="preserve"><value>Back to desktop</value></data>
-  <data name="WorkbenchHint" xml:space="preserve"><value>Drag empty canvas to select; Ctrl+click to multi-select; Ctrl+G to group. Right-click a card for its full menu; right-drag to pan. Alt+wheel to zoom; drag a header link icon to connect.</value></data>
+  <data name="WorkbenchHint" xml:space="preserve"><value>Drag empty canvas: select cards&#10;Ctrl + click: multi-select; Ctrl + G: group&#10;Right-click a card: full actions menu&#10;Right-drag: pan canvas&#10;Alt + wheel: zoom canvas&#10;Drag the header link icon: connect cards</value></data>
   <data name="WorkbenchHelp" xml:space="preserve"><value>Workbench help</value></data>
   <data name="WorkbenchImportMaterials" xml:space="preserve"><value>Import materials</value></data>
   <data name="WorkbenchImportDialogFilter" xml:space="preserve"><value>All files (*.*)|*.*|Images (*.png;*.jpg;*.jpeg;*.gif;*.webp;*.bmp)|*.png;*.jpg;*.jpeg;*.gif;*.webp;*.bmp</value></data>
