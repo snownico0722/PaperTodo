@@ -220,7 +220,9 @@ internal static class NativeFreeQueueReviewChecks
         IReadOnlyDictionary<string, PaperWindow> windows, StateStore store, MonitorGeometry monitor)
     {
         var pitch = EdgeCapsuleLayout.SlotHeight(c.DeepCapsuleGap);
-        var sourceTop = 3 * pitch;
+        // Leave enough space below B for its inserted member on the CI desktop;
+        // downward-first overflow is covered separately by the policy checks.
+        var sourceTop = pitch;
         var targetTop = sourceTop + 7 * pitch;
         var emptyTop = targetTop + 5 * pitch;
         foreach (var hasMaster in new[] { true, false })
