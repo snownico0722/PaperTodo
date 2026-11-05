@@ -1677,7 +1677,14 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="WorkbenchSearch" xml:space="preserve"><value>모든 작업 공간 검색. Enter를 눌러 결과로 이동</value></data>
   <data name="WorkbenchRefresh" xml:space="preserve"><value>개요 새로 고침</value></data>
   <data name="WorkbenchClose" xml:space="preserve"><value>바탕 화면으로 돌아가기</value></data>
-  <data name="WorkbenchHint" xml:space="preserve"><value>빈 공간 드래그로 범위 선택, Ctrl+제목 클릭으로 다중 선택, Ctrl+G로 그룹을 만듭니다. 마우스 오른쪽 드래그로 이동, Alt+휠로 확대·축소합니다. 카드의 연결 아이콘을 드래그해 연결합니다.</value></data>
+  <data name="WorkbenchHint" xml:space="preserve"><value>빈 공간 드래그로 범위 선택, Ctrl+클릭으로 다중 선택, Ctrl+G로 그룹화. 카드를 오른쪽 클릭하면 전체 메뉴, 오른쪽 드래그로 화면 이동. Alt+휠로 확대·축소, 제목줄 연결 아이콘을 드래그해 연결합니다.</value></data>
+  <data name="WorkbenchHelp" xml:space="preserve"><value>작업대 도움말</value></data>
+  <data name="WorkbenchImportMaterials" xml:space="preserve"><value>자료 가져오기</value></data>
+  <data name="WorkbenchImportDialogFilter" xml:space="preserve"><value>모든 파일 (*.*)|*.*|이미지 (*.png;*.jpg;*.jpeg;*.gif;*.webp;*.bmp)|*.png;*.jpg;*.jpeg;*.gif;*.webp;*.bmp</value></data>
+  <data name="WorkbenchCollapseCard" xml:space="preserve"><value>카드 접기</value></data>
+  <data name="WorkbenchExpandCard" xml:space="preserve"><value>카드 펼치기</value></data>
+  <data name="WorkbenchLockCard" xml:space="preserve"><value>위치 잠금</value></data>
+  <data name="WorkbenchUnlockCard" xml:space="preserve"><value>위치 잠금 해제</value></data>
   <data name="WorkbenchError" xml:space="preserve"><value>작업대 작업 실패: {0}</value></data>
   <data name="WorkbenchPinConflict" xml:space="preserve"><value>고정된 메모가 겹칩니다. 위치는 유지됩니다. 하나를 이동하거나 고정을 해제하세요.</value></data>
   <data name="WorkbenchDelete" xml:space="preserve"><value>메모 삭제</value></data>
