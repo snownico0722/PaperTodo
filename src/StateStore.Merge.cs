@@ -45,8 +45,10 @@ public sealed partial class StateStore
             // Normalize a detached copy for semantic comparison and for all fields whose
             // normalization is non-destructive. Keep original titles for the actual merge:
             // a disputed MaxTitleLength must not truncate text before resolution.
+            // Link validity depends on the final set of papers, not the incoming side
+            // alone. Preserve both sides' links until the user resolves delete/edit.
             var normalizedImported = CopyForReload(imported);
-            NormalizeWorkspaceDocument(normalizedImported);
+            NormalizeWorkspaceDocument(normalizedImported, deferLinkNormalization: true);
             var external = JsonSerializer.SerializeToNode(normalizedImported, JsonOptions)!.AsObject();
             var current = JsonSerializer.SerializeToNode(memory, JsonOptions)!.AsObject();
             var originalDocument = JsonNode.Parse(baselineJson, documentOptions: StateJsonReadPolicy.DocumentOptions)
@@ -59,7 +61,7 @@ public sealed partial class StateStore
             var normalizedOriginal = CopyForReload(original);
             // Compare the baseline under the same effective workspace settings as
             // the external snapshot, not dormant independent preferences.
-            NormalizeWorkspaceDocument(normalizedOriginal);
+            NormalizeWorkspaceDocument(normalizedOriginal, deferLinkNormalization: true);
             var baselineNormalizedTitles = CaptureMergeTitles(normalizedOriginal);
             var baseline = JsonSerializer.SerializeToNode(normalizedOriginal, JsonOptions)!.AsObject();
             if (JsonNode.DeepEquals(current, external))
@@ -113,7 +115,7 @@ public sealed partial class StateStore
     }
 
     private static Dictionary<string, string?> CaptureMergeTitles(AppState state) =>
-        state.Papers.ToDictionary(paper => paper.Id, paper => paper.Title, StringComparer.Ordinal);
+        state.Papers.ToDictionary(paper => paper.Id, paper => (string?)paper.Title, StringComparer.Ordinal);
 
     private static void RestoreRawMergeTitles(
         JsonObject document,
@@ -178,8 +180,17 @@ public sealed partial class StateStore
             string? diffFile = null;
             if (resolution.Conflicts.Count > 0)
                 (conflictFile, diffFile) = ArchiveConflicts(resolution, sourceBytes, ValidateSource);
-            WriteJsonInternal(json, beforeReplace: ValidateSource);
-            _latestWrittenVersion = version;
+            WriteJsonInternal(json, version, beforeReplace: ValidateSource);
+            // Retention is best-effort maintenance; a successfully committed
+            // merge must never be reported as failed because deletion is blocked.
+            try { PruneConflictArchivesCore(); }
+            catch (Exception ex)
+            {
+                // All retention failures (including shutdown cancellation) occur
+                // AFTER the main merge commit. Never convert that commit into a
+                // reported failure or let an old in-memory state save over it.
+                System.Diagnostics.Trace.TraceWarning("Conflict archive retention failed: {0}", ex);
+            }
             return (conflictFile, diffFile);
         }
         finally { _writeLock.Release(); }

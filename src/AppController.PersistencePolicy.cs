@@ -87,6 +87,9 @@ public sealed partial class AppController
         try
         {
             _store.TryRefreshBackupFromPrimary();
+            // Reuse the existing maintenance timer; do not install another
+            // background loop just to prune excess conflict recovery records.
+            _store.TryPruneConflictArchives();
         }
         catch
         {
@@ -106,6 +109,16 @@ public sealed partial class AppController
 
         timer.Stop();
         timer.Tick -= OnStateBackupTimerTick;
+    }
+
+    // The primary write has already succeeded. Independent maintenance must neither
+    // turn it into a reported save failure nor borrow another component's cleanup hook.
+    private void CompleteStateSaveMaintenance(bool releaseImageCache)
+    {
+        if (IsExiting) return;
+        if (releaseImageCache) TryReleaseUnreferencedImageCache();
+        RunExternalPostCommitUi(TryFlushPendingPluginPaperStateDeletes);
+        RunExternalPostCommitUi(ReconcilePluginRuntimes);
     }
 
     // May run from an AppDomain crash callback: no I/O, locks, waits or UI dispatch here.
@@ -147,3 +160,4 @@ public sealed partial class AppController
         }
     }
 }
+

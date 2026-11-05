@@ -133,7 +133,7 @@ internal sealed class EdgeCapsuleQueueProxyWindow : IDisposable
         return window;
     }
 
-    public bool Show(DeviceScreenRect bounds, bool topmost)
+    public bool Show(DeviceScreenRect bounds, bool topmost, IntPtr insertAfter = default)
     {
         if (_disposed || Handle == IntPtr.Zero || bounds.IsEmpty)
         {
@@ -143,13 +143,17 @@ internal sealed class EdgeCapsuleQueueProxyWindow : IDisposable
         // A second ShowWindow request would repeat that native publication on the cold path.
         return SetWindowPos(
             Handle,
-            topmost ? HwndTopmost : HwndTop,
+            insertAfter != IntPtr.Zero ? insertAfter : topmost ? HwndTopmost : HwndTop,
             bounds.Left,
             bounds.Top,
             bounds.Width,
             bounds.Height,
             SwpNoActivate | SwpShowWindow | SwpNoOwnerZOrder);
     }
+
+    public bool PlaceBehind(IntPtr insertAfter) => insertAfter == IntPtr.Zero ||
+        (!_disposed && Handle != IntPtr.Zero && SetWindowPos(Handle, insertAfter,
+            0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpNoActivate | SwpNoOwnerZOrder));
 
     public void Hide()
     {

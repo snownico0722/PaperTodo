@@ -12,8 +12,8 @@ namespace PaperTodo;
 internal sealed partial class EdgeCapsuleQueueCompositionProxy
 {
     private const int CompletionGuardMilliseconds = 1;
-    private readonly EdgeCapsuleQueueProxyPlan _plan;
-    private readonly IReadOnlyList<EdgeCapsuleQueueCompositionProxyMember> _members;
+    private EdgeCapsuleQueueProxyPlan _plan;
+    private IReadOnlyList<EdgeCapsuleQueueCompositionProxyMember> _members;
     private readonly EdgeCapsuleQueueCompositionProxy? _predecessor;
     private readonly SharedRuntime _runtime;
     private readonly QueueHost _host;
@@ -55,6 +55,7 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
     private bool _visualResourcesRetired;
     private bool _successfulRetireScheduled;
     private StaticCoverResources? _successorAdmissionCover;
+    private IntPtr _insertAfter;
 
     private EdgeCapsuleQueueCompositionProxy(
         long sessionOrdinal,
@@ -176,7 +177,8 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
         Action environmentChanged,
         Func<EdgeCapsuleQueueCompositionProxy, bool> coverReady,
         Action<EdgeCapsuleQueueCompositionProxy> coverRollback,
-        Action<EdgeCapsuleQueueCompositionProxy, bool> completed)
+        Action<EdgeCapsuleQueueCompositionProxy, bool> completed,
+        IntPtr insertAfter = default)
     {
         if (members.Count == 0 ||
             members.Count != plan.Members.Count ||
@@ -198,22 +200,22 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
         var outputBounds = requestedBounds;
         if (predecessor != null)
         {
-            // Repositioning the target HWND would move the still-visible predecessor root. A
-            // successor is therefore admitted only when the current queue envelope already owns
-            // the requested physical area. Normal queue browse transactions include every affected
-            // member and satisfy this invariant.
+            // Keep the target HWND fixed under the still-visible predecessor. The
+            // new motion must fit, but another round of optional capacity around
+            // the shifted target need not fit (e.g. an interior slot -> prepend).
+            var requiredBounds = EdgeCapsuleQueueProxyPolicy.RequiredTranslationBounds(plan);
             if (!EdgeCapsuleQueueProxyGeometry.Contains(
                     predecessor._outputBounds,
-                    requestedBounds))
+                    requiredBounds))
             {
 #if DEBUG
                 EdgeCapsulePerformanceDiagnostics.Trace(
                     $"proxy.successor phase=admission queue={plan.QueueKey} " +
                     $"from={predecessor.SessionOrdinal} outcome=rejected " +
-                    $"reason=output-growth current={predecessor._outputBounds.Left}," +
+                    $"reason=motion-outside-output current={predecessor._outputBounds.Left}," +
                     $"{predecessor._outputBounds.Top},{predecessor._outputBounds.Width}x" +
-                    $"{predecessor._outputBounds.Height} requested={requestedBounds.Left}," +
-                    $"{requestedBounds.Top},{requestedBounds.Width}x{requestedBounds.Height}");
+                    $"{predecessor._outputBounds.Height} required={requiredBounds.Left}," +
+                    $"{requiredBounds.Top},{requiredBounds.Width}x{requiredBounds.Height}");
 #endif
                 return null;
             }
@@ -253,6 +255,7 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
                 coverReady,
                 coverRollback,
                 completed);
+            proxy._insertAfter = insertAfter;
             if (!host.TryStage(proxy, predecessor))
             {
                 throw new InvalidOperationException(

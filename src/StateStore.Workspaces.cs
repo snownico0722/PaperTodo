@@ -23,11 +23,11 @@ public sealed partial class StateStore
         return JsonSerializer.Serialize(state, JsonOptions);
     }
 
-    private void NormalizeWorkspaceDocument(AppState state)
+    private void NormalizeWorkspaceDocument(AppState state, bool deferLinkNormalization = false)
     {
         if (InheritedSettings == null)
         {
-            NormalizeAfterLoad(state);
+            NormalizeAfterLoad(state, deferLinkNormalization);
             return;
         }
         var ownSettings = new AppState();
@@ -35,7 +35,7 @@ public sealed partial class StateStore
         NormalizeGlobalState(ownSettings);
         var independent = WorkspaceSettingsSnapshot.Capture(ownSettings);
         InheritedSettings.ApplyTo(state);
-        NormalizeAfterLoad(state);
+        NormalizeAfterLoad(state, deferLinkNormalization);
         // The reader returns a persistable document; the session applies the effective overlay.
         // Its layout was nevertheless normalized against the settings the user will actually use.
         independent.ApplyTo(state);
@@ -62,9 +62,8 @@ public sealed partial class StateStore
             ValidateExternalDocument(document);
             document["workspaces"] = JsonSerializer.SerializeToNode(options.Normalized(), JsonOptions);
             var sourceHash = System.Security.Cryptography.SHA256.HashData(bytes);
-            WriteJsonInternal(document.ToJsonString(JsonOptions),
+            WriteJsonInternal(document.ToJsonString(JsonOptions), version,
                 beforeReplace: () => ValidatePrimaryHash(sourceHash));
-            _latestWrittenVersion = version;
         }
         finally { _writeLock.Release(); }
     }

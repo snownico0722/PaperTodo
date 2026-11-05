@@ -345,7 +345,7 @@ internal static partial class Program
             Require(!windows.ContainsKey("merge-renamed-window"),
                 "deleted paper surface survived merge");
             Console.WriteLine("PASS external paper ID rename and delete close old windows");
-
+            await DeletedPaperHistoryChecks(controller);
 
             using (var runtime = new PaperPluginRuntimeWorkspaceApi(controller, "fixture.runtime", [PaperTodoPermissionNames.DataImport], () => true))
             {
@@ -397,6 +397,8 @@ internal static partial class Program
                 "explicit reload could not recover after repairing invalid JSON");
             await Until(() => !controller.IsDataReloading, "recovery after invalid explicit reload");
             Console.WriteLine("PASS explicit invalid reload does not modify disk or running state");
+            McpImageLiveChecks(controller);
+            await McpImageImportProcessChecks(controller);
         }
         finally
         {
@@ -404,3 +406,5 @@ internal static partial class Program
         }
     }
 }
+
+

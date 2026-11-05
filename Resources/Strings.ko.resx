@@ -13,7 +13,10 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="AppStartupFailureMessage" xml:space="preserve">
-    <value>시작에 실패했습니다: 데이터 파일을 불러올 수 없습니다. 파일이 사용 중이거나 손상되었을 수 있습니다.&#x0A;기존 데이터가 덮어써지지 않도록 앱 시작을 중지했습니다.&#x0A;&#x0A;오류: {0}</value>
+    <value>시작 실패: 데이터 파일을 불러올 수 없습니다({0}).
+기존 데이터를 덮어쓰지 않도록 시작을 중단했습니다.
+
+오류 정보: {1}</value>
   </data>
   <data name="ResourceTextVersion" xml:space="preserve">
     <value>3.1</value>
@@ -1615,8 +1618,8 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
     <value>다음 작업 공간</value>
   </data>
   <data name="WorkspaceCycleTooltip" xml:space="preserve">
-    <value>작업 공간 {0} / {1}
-클릭하여 {2}(으)로 전환</value>
+    <value>작업 공간 {0}
+클릭하여 {1}(으)로 전환</value>
   </data>
   <data name="WorkspaceTrayCycle" xml:space="preserve">
     <value>작업 공간 전환 (현재 {0} / {1})</value>
@@ -1667,6 +1670,80 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="NoteExportNoNotes" xml:space="preserve"><value>내보낼 수 있는 메모 또는 할 일이 없습니다.</value></data>
   <data name="NoteExportProgress" xml:space="preserve"><value>내보내는 중 {0}/{1}개</value></data>
   <data name="TodoExportCurrent" xml:space="preserve"><value>현재 할 일 내보내기</value></data>
+  <data name="SettingsCapsuleFreeQueues" xml:space="preserve"><value>자유로운 가장자리 캡슐 대기열</value></data>
+  <data name="TipCapsuleFreeQueues" xml:space="preserve"><value>캡슐을 멀리 드래그하면 독립된 대기열이 됩니다. Ctrl을 누른 채 대기열 전체를 옮기고, 옆으로 끌어 다른 가장자리나 화면으로 이동하세요. 메인 캡슐로 같은 쪽의 모든 대기열을 접을 수 있습니다.</value></data>
+  <data name="HistoryRecoveryTitle" xml:space="preserve">
+    <value>작업 공간 복원</value>
+  </data>
+  <data name="HistoryRecoveryMessage" xml:space="preserve">
+    <value>작업 공간 {0}의 현재 데이터를 읽을 수 없습니다.
+사용 가능한 최신 백업: {1}.
+
+복원하면 해당 시점의 상태로 돌아가며, 그 이후의 변경 사항은 사라집니다. 이 작업 공간의 메모, 할 일, 설정만 복원되며 이미지와 플러그인 데이터는 포함되지 않습니다.</value>
+  </data>
+  <data name="HistoryRecoveryRestore" xml:space="preserve">
+    <value>백업에서 복원 시도</value>
+  </data>
+  <data name="WorkspaceFailureRetry" xml:space="preserve">
+    <value>다시 시도</value>
+  </data>
+  <data name="WorkspaceFailureExit" xml:space="preserve">
+    <value>PaperTodo 종료</value>
+  </data>
+  <data name="WorkspaceFailureHistoryChoiceRequired" xml:space="preserve">
+    <value>사용 가능한 이전 백업이 있습니다. 이 작업 공간을 열어 복원 또는 다시 만들기를 선택하세요.</value>
+  </data>
+  <data name="WorkspaceFailureAccessDenied" xml:space="preserve">
+    <value>작업 공간 파일에 접근할 권한이 없습니다. 폴더 권한을 확인한 후 다시 시도하세요.</value>
+  </data>
+  <data name="WorkspaceFailureMissing" xml:space="preserve">
+    <value>필요한 작업 공간 파일이나 폴더를 찾을 수 없습니다. 이동하거나 삭제하지 않았는지 확인한 후 다시 시도하세요.</value>
+  </data>
+  <data name="WorkspaceFailureInvalidData" xml:space="preserve">
+    <value>작업 공간 데이터 형식이 올바르지 않아 전환하지 못했습니다. 데이터 파일을 확인한 후 다시 시도하세요.</value>
+  </data>
+  <data name="WorkspaceFailureBusy" xml:space="preserve">
+    <value>작업 공간 파일이 사용 중입니다. 해당 파일에 접근 중인 프로그램을 닫고 다시 시도하세요.</value>
+  </data>
+  <data name="WorkspaceFailureDiskFull" xml:space="preserve">
+    <value>디스크 공간이 부족하여 작업 공간 데이터를 저장할 수 없습니다. 공간을 확보한 후 다시 시도하세요.</value>
+  </data>
+  <data name="WorkspaceFailureIo" xml:space="preserve">
+    <value>작업 공간 파일을 읽거나 쓸 수 없습니다. 디스크나 저장 장치를 확인한 후 다시 시도하세요.</value>
+  </data>
+  <data name="WorkspaceFailureUnknown" xml:space="preserve">
+    <value>작업 공간 전환을 완료하지 못했습니다. 다시 시도해도 실패하면 PaperTodo를 종료한 후 다시 여세요.</value>
+  </data>
+  <data name="WorkspaceFailurePrimaryChanged" xml:space="preserve">
+    <value>복원 중 다른 작업으로 데이터 파일이 변경되었습니다. 새 내용을 덮어쓰지 않도록 복원을 중단했습니다. 다시 시도하세요.</value>
+  </data>
+  <data name="WorkspaceFailureRecoveryChanged" xml:space="preserve">
+    <value>복원에 사용되는 파일이 변경되었습니다. 복원 원본을 다시 선택할 수 있도록 다시 시도하세요.</value>
+  </data>
+  <data name="WorkspaceFailureRecoveryUnverified" xml:space="preserve">
+    <value>복원 데이터를 저장한 후 파일을 정상적으로 읽을 수 있는지 확인하지 못했습니다. 복원 원본은 보관되어 있습니다. 다시 시도하세요.</value>
+  </data>
+  <data name="HistoryRecoveryCreate" xml:space="preserve">
+    <value>작업 공간 다시 만들기</value>
+  </data>
+  <data name="AppStartupFailureBusy" xml:space="preserve">
+    <value>파일이 사용 중입니다</value>
+  </data>
+  <data name="AppStartupFailureCorrupt" xml:space="preserve">
+    <value>데이터 파일이 손상되었거나 형식이 올바르지 않습니다</value>
+  </data>
+  <data name="AppStartupFailureUnknown" xml:space="preserve">
+    <value>원인 불명</value>
+  </data>
+  <data name="WorkspaceFailureMainRecoveryRequired" xml:space="preserve">
+    <value>기본 작업 공간의 데이터를 읽을 수 없습니다. 먼저 기본 작업 공간을 열어 복원하거나 다시 만든 후 다시 시도하세요.</value>
+  </data>
+  <data name="WorkspaceRecoveryUnavailable" xml:space="preserve">
+    <value>현재 작업 공간의 데이터와 백업이 모두 손상되었습니다.</value>
+  </data>
+  <data name="WorkspaceRecoveryFallback" xml:space="preserve">
+    <value>작업 공간 {0}(으)로 돌아가기</value>
+  </data>
   <data name="EditorOpen" xml:space="preserve"><value>편집기로 열기</value></data>
   <data name="EditorReturn" xml:space="preserve"><value>종이로 돌아가기</value></data>
   <data name="EditorSidebarShow" xml:space="preserve"><value>종이 목록 표시</value></data>

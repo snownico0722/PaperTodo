@@ -192,7 +192,7 @@ public sealed partial class AppController
             }
             if (StateReloadModels.SettingsChanged(pending.Before, State)) RefreshReloadedSettings(pending.Before);
             foreach (var id in oldPapers.Keys.Except(nextPapers.Keys, StringComparer.Ordinal))
-                QueuePluginPaperStateDeletion(id);
+                NotifyPaperRemoved(id);
             TryFlushPendingPluginPaperStateDeletes();
             ReconcilePluginRuntimes();
             RefreshTodoReminderSchedule();
@@ -344,3 +344,4 @@ public sealed partial class AppController
         Application.Current.Dispatcher.BeginInvoke(new Action(Exit), DispatcherPriority.Background);
     }
 }
+

@@ -164,6 +164,12 @@ public static class EdgeCapsuleLayout
         return Math.Round(Math.Clamp(value, TopMargin, max), 1);
     }
 
+    // Free queues promise an exact anchor, even when a member extends beyond the work area.
+    // The legacy one-queue mode keeps its existing fit-to-monitor normalization.
+    internal static double FreeQueueTopForIndex(int index, double startTopMargin, Rect area, double gap) =>
+        area.Top + Math.Round(double.IsFinite(startTopMargin) ? startTopMargin : StartTopMargin, 1) +
+        Math.Max(0, index) * SlotHeight(gap);
+
     public static double SlotHeight(double gap) =>
         PaperLayoutDefaults.CapsuleHeight + Math.Max(0, gap);
 }

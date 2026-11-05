@@ -13,7 +13,10 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="AppStartupFailureMessage" xml:space="preserve">
-    <value>Startup failed: the data file could not be loaded. It may be in use or corrupted.&#x0A;To avoid overwriting existing data, the app has stopped.&#x0A;&#x0A;Error: {0}</value>
+    <value>Startup failed: unable to load the data file ({0}).
+To avoid overwriting existing data, startup has been stopped.
+
+Error: {1}</value>
   </data>
   <data name="ResourceTextVersion" xml:space="preserve">
     <value>3.1</value>
@@ -1615,8 +1618,8 @@ When off, open at the docked edge or remembered position.</value>
     <value>Next workspace</value>
   </data>
   <data name="WorkspaceCycleTooltip" xml:space="preserve">
-    <value>Workspace {0} / {1}
-Click to switch to workspace {2}</value>
+    <value>Workspace {0}
+Click to switch to workspace {1}</value>
   </data>
   <data name="WorkspaceTrayCycle" xml:space="preserve">
     <value>Switch workspace (current {0} / {1})</value>
@@ -1667,6 +1670,80 @@ The original note is kept.</value></data>
   <data name="NoteExportNoNotes" xml:space="preserve"><value>There are no Markdown notes or todo papers to export.</value></data>
   <data name="NoteExportProgress" xml:space="preserve"><value>Exporting {0}/{1} papers</value></data>
   <data name="TodoExportCurrent" xml:space="preserve"><value>Export this todo paper</value></data>
+  <data name="SettingsCapsuleFreeQueues" xml:space="preserve"><value>Free edge capsule queues</value></data>
+  <data name="TipCapsuleFreeQueues" xml:space="preserve"><value>Pull a capsule away to form a separate queue. Hold Ctrl to move a queue along the edge; pull sideways to move it across edges or displays. The master can still collect all queues on its edge.</value></data>
+  <data name="HistoryRecoveryTitle" xml:space="preserve">
+    <value>Restore workspace</value>
+  </data>
+  <data name="HistoryRecoveryMessage" xml:space="preserve">
+    <value>The current data for workspace {0} could not be read.
+Latest available backup: {1}.
+
+Restoring will return this workspace to that point in time. Changes made since then will be lost. Only notes, to-dos, and settings in this workspace will be restored. Images and plugin data are not included.</value>
+  </data>
+  <data name="HistoryRecoveryRestore" xml:space="preserve">
+    <value>Try restoring from backup</value>
+  </data>
+  <data name="WorkspaceFailureRetry" xml:space="preserve">
+    <value>Retry</value>
+  </data>
+  <data name="WorkspaceFailureExit" xml:space="preserve">
+    <value>Exit PaperTodo</value>
+  </data>
+  <data name="WorkspaceFailureHistoryChoiceRequired" xml:space="preserve">
+    <value>A historical backup is available. Open this workspace to choose Restore or Rebuild.</value>
+  </data>
+  <data name="WorkspaceFailureAccessDenied" xml:space="preserve">
+    <value>Permission to access the workspace files was denied. Check folder permissions and retry.</value>
+  </data>
+  <data name="WorkspaceFailureMissing" xml:space="preserve">
+    <value>A required workspace file or folder could not be found. Check whether it was moved or deleted, then retry.</value>
+  </data>
+  <data name="WorkspaceFailureInvalidData" xml:space="preserve">
+    <value>The workspace data has an invalid format, so the switch could not be completed. Check the data file and retry.</value>
+  </data>
+  <data name="WorkspaceFailureBusy" xml:space="preserve">
+    <value>A workspace file is in use. Close the program accessing it and retry.</value>
+  </data>
+  <data name="WorkspaceFailureDiskFull" xml:space="preserve">
+    <value>There is not enough disk space to save the workspace data. Free up space and retry.</value>
+  </data>
+  <data name="WorkspaceFailureIo" xml:space="preserve">
+    <value>The workspace files could not be read or written. Check the disk or storage device and retry.</value>
+  </data>
+  <data name="WorkspaceFailureUnknown" xml:space="preserve">
+    <value>The workspace switch could not be completed. Retry; if it still fails, exit PaperTodo and open it again.</value>
+  </data>
+  <data name="WorkspaceFailurePrimaryChanged" xml:space="preserve">
+    <value>The data file changed during recovery. Recovery was stopped to avoid overwriting newer content. Please retry.</value>
+  </data>
+  <data name="WorkspaceFailureRecoveryChanged" xml:space="preserve">
+    <value>The recovery file has changed. Retry to select a recovery source again.</value>
+  </data>
+  <data name="WorkspaceFailureRecoveryUnverified" xml:space="preserve">
+    <value>The restored file could not be verified after saving. The recovery source has been retained. Please retry.</value>
+  </data>
+  <data name="HistoryRecoveryCreate" xml:space="preserve">
+    <value>Rebuild workspace</value>
+  </data>
+  <data name="AppStartupFailureBusy" xml:space="preserve">
+    <value>the file is in use</value>
+  </data>
+  <data name="AppStartupFailureCorrupt" xml:space="preserve">
+    <value>the data file is corrupted or has an invalid format</value>
+  </data>
+  <data name="AppStartupFailureUnknown" xml:space="preserve">
+    <value>unknown cause</value>
+  </data>
+  <data name="WorkspaceFailureMainRecoveryRequired" xml:space="preserve">
+    <value>The main workspace data could not be read. Open the main workspace to restore or rebuild it, then try again.</value>
+  </data>
+  <data name="WorkspaceRecoveryUnavailable" xml:space="preserve">
+    <value>The current workspace data and backups are corrupted.</value>
+  </data>
+  <data name="WorkspaceRecoveryFallback" xml:space="preserve">
+    <value>Return to workspace {0}</value>
+  </data>
   <data name="EditorOpen" xml:space="preserve"><value>Open in editor</value></data>
   <data name="EditorReturn" xml:space="preserve"><value>Return to paper</value></data>
   <data name="EditorSidebarShow" xml:space="preserve"><value>Show paper list</value></data>

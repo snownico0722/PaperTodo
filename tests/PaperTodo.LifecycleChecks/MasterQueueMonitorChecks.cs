@@ -135,7 +135,8 @@ internal static class MasterQueueMonitorChecks
 
             RunReconnect(controller, cacheField, connected, originalCache, primary);
             RunPendingDisconnects(controller, cacheField, connected, originalCache, primary);
-            RunBeginRetirement(controller, cacheField, connected, originalCache);
+            RunStaleBeginRejection(controller, cacheField, connected, originalCache, primary);
+            RunFreeQueuePendingDisconnect(controller, cacheField, connected, originalCache, primary);
         }
         finally
         {
@@ -237,30 +238,109 @@ internal static class MasterQueueMonitorChecks
         }
     }
 
-    private static void RunBeginRetirement(AppController controller, FieldInfo cacheField,
-        Array connected, object disconnected)
+    private static void RunStaleBeginRejection(AppController controller, FieldInfo cacheField,
+        Array connected, object disconnected, MonitorGeometry primary)
     {
         cacheField.SetValue(null, connected);
         controller.ArrangeDeepCapsules(animate: false);
         cacheField.SetValue(null, connected);
         var source = (MasterCapsuleWindow)Masters(controller)[SourceMonitor + "|" + DeepCapsuleSides.Right]!;
         Require(controller.TryCreateMasterQueueFloatingDragHostOptions(SourceMonitor,
-                EdgeCapsuleEdge.Right, "▾", "2", out var options), "Begin retirement drag options");
+                EdgeCapsuleEdge.Right, "▾", "2", out var options),
+            "stale Begin fixture drag options");
         var host = EdgeCapsuleDragWindow.Rent(options);
         host.ReturnToPool();
-        var (_, session, start) = PressMaster(source);
-        var closedBeforeSnapshotReturned = false;
-        source.Closed += (_, _) => closedBeforeSnapshotReturned =
-            Field(controller, "_masterCapsuleQueueTransfer") != null &&
-            Field(source, "_queueTransferSnapshot") == null;
+        var (pill, session, start) = PressMaster(source);
         cacheField.SetValue(null, disconnected);
-        // Exercise the acquisition boundary itself: Begin's synchronous arrange retires this
-        // owner before returning its snapshot. Every uncommitted exit still owns rollback.
-        Require((bool)typeof(MasterCapsuleWindow).GetMethod("TryRunQueueTransfer", Private)!
-                .Invoke(source, [start, session])!, "retiring Begin did not consume the transfer");
-        Require(closedBeforeSnapshotReturned && !host.IsVisible,
-            "Begin retirement did not close the unclaimed owner and withdraw its floating cover");
+
+        // This used to enter Begin and retire the detached master synchronously.
+        // A stale physical edge must now be rejected before renting the floating
+        // host or starting a transfer; the real continuation then cancels its press.
+        Require(!(bool)typeof(MasterCapsuleWindow).GetMethod("TryRunQueueTransfer", Private)!
+                .Invoke(source, [start, session])!,
+            "disconnected master incorrectly entered its old queue transfer");
+        Require(!host.IsVisible && Field(controller, "_masterCapsuleQueueTransfer") == null &&
+                Field(source, "_queueTransferSnapshot") == null,
+            "rejecting a stale Begin acquired a floating lease or left a transaction");
+        var move = new DeviceScreenPoint(start.X, start.Y + 47 * primary.DpiScaleY);
+        Require((bool)typeof(MasterCapsuleWindow).GetMethod("ContinueMasterDrag", Private)!
+                .Invoke(source, [move, session])!,
+            "stale master gesture was not consumed after rejected Begin");
+        Require(!pill.IsMouseCaptured && Field(source, "_dragSession") == null,
+            "rejected stale Begin left the old master gesture captured");
+        RaiseLeftButton(pill, UIElement.PreviewMouseLeftButtonUpEvent);
         RequireTransferReleased(controller, options, host);
+    }
+
+    private static void RunFreeQueuePendingDisconnect(AppController controller, FieldInfo cacheField,
+        Array connected, object disconnected, MonitorGeometry primary)
+    {
+        var priorFreeMode = controller.State.UseCapsuleFreeQueues;
+        var priorPapers = controller.State.Papers.Select(p =>
+            (Paper: p, Monitor: p.CapsuleMonitorDeviceName, Side: p.CapsuleSide, Id: p.CapsuleQueueId)).ToArray();
+        var priorMargins = new Dictionary<string, double>(
+            controller.State.DeepCapsuleQueueStartTopMargins, StringComparer.Ordinal);
+        var priorCollapse = new Dictionary<string, bool>(
+            controller.State.CapsuleCollapseAllActiveQueues, StringComparer.Ordinal);
+        try
+        {
+            controller.State.UseCapsuleFreeQueues = true;
+            const string sourceId = "qa";
+            const string primaryId = "qb";
+            var sourceKey = SourceMonitor + "|" + DeepCapsuleSides.Right + "#" + sourceId;
+            var primaryKey = "|" + DeepCapsuleSides.Right + "#" + primaryId;
+            foreach (var horizontal in new[] { false, true })
+            {
+                controller.State.CapsuleCollapseAllActiveQueues.Clear();
+                for (var i = 0; i < controller.State.Papers.Count; i++)
+                {
+                    var paper = controller.State.Papers[i];
+                    paper.CapsuleMonitorDeviceName = i < 2 ? SourceMonitor : "";
+                    paper.CapsuleSide = DeepCapsuleSides.Right;
+                    paper.CapsuleQueueId = i < 2 ? sourceId : primaryId;
+                }
+                controller.State.DeepCapsuleQueueStartTopMargins[sourceKey] = 73;
+                controller.State.DeepCapsuleQueueStartTopMargins[primaryKey] = 137;
+                cacheField.SetValue(null, connected);
+                controller.ArrangeDeepCapsules(animate: false);
+                cacheField.SetValue(null, connected);
+                var source = (MasterCapsuleWindow)Masters(controller)[sourceKey]!;
+                var (pill, session, start) = PressMaster(source);
+                Require((string)Value(session, "SourceQueueKey") == sourceKey,
+                    "free master captured its own instance before monitor disconnect");
+
+                cacheField.SetValue(null, disconnected);
+                var pointer = new DeviceScreenPoint(
+                    start.X + (horizontal ? EdgeCapsuleLayout.CrossQueueDragUnlockDistance + 20 : 0) * primary.DpiScaleX,
+                    start.Y + 47 * primary.DpiScaleY);
+                Require((bool)typeof(MasterCapsuleWindow).GetMethod("ContinueMasterDrag", Private)!
+                        .Invoke(source, [pointer, session])!,
+                    "stale free master gesture was not consumed");
+                Require(!pill.IsMouseCaptured && Field(source, "_dragSession") == null,
+                    "disconnected free master kept ownership of a stale pressed gesture");
+                RaiseLeftButton(pill, UIElement.PreviewMouseLeftButtonUpEvent);
+                Require(controller.State.DeepCapsuleQueueStartTopMargins[sourceKey] == 73 &&
+                        controller.State.DeepCapsuleQueueStartTopMargins[primaryKey] == 137 &&
+                        controller.State.CapsuleCollapseAllActiveQueues.Count == 0 &&
+                        Field(controller, "_masterCapsuleQueueTransfer") == null &&
+                        controller.State.Papers.Take(2).All(p => p.CapsuleMonitorDeviceName == SourceMonitor),
+                    "stale free master gesture modified an unrelated anchor, membership or collapse state");
+            }
+        }
+        finally
+        {
+            cacheField.SetValue(null, disconnected);
+            controller.State.UseCapsuleFreeQueues = priorFreeMode;
+            foreach (var row in priorPapers)
+            {
+                row.Paper.CapsuleMonitorDeviceName = row.Monitor;
+                row.Paper.CapsuleSide = row.Side;
+                row.Paper.CapsuleQueueId = row.Id;
+            }
+            controller.State.DeepCapsuleQueueStartTopMargins = priorMargins;
+            controller.State.CapsuleCollapseAllActiveQueues = priorCollapse;
+            controller.ArrangeDeepCapsules(animate: false);
+        }
     }
 
     private static (FrameworkElement Pill, object Session, DeviceScreenPoint Start) PressMaster(

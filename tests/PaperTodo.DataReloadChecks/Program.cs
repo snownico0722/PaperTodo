@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Text.Json.Nodes;
 using PaperTodo;
@@ -11,6 +12,9 @@ internal static partial class Program
         if (args.Contains("--kill-writer")) return RunKillWriter(args);
         if (args.Contains("--shutdown-merge")) return RunShutdownMergeFixture(false);
         if (args.Contains("--live-fixture")) return RunLiveFixture();
+        if (args.Contains("--history-dialog")) return RunHistoryDialogFixture();
+        if (args.Contains("--history-actions")) return RunHistoryActionsFixture();
+        if (args.Contains("--workspace-failure")) return RunWorkspaceFailureFixture();
         if (args.Contains("--exit-fixture")) return RunDeferredExitFixture();
         if (args.Contains("--passive-dispose")) return RunPassiveDisposeFixture();
         if (args.Contains("--workspace-fixture")) return RunWorkspaceFixture();
@@ -32,6 +36,9 @@ internal static partial class Program
                 ("unchanged external snapshot retains local edits", MergeUneditedExternal),
                 ("conflicts group by paper and archive input", MergePaperConflict),
                 ("delete/edit conflicts honor both choices for notes and todos", MergePaperDeletionConflicts),
+                ("merge preserves links to a paper chosen to survive", MergeDeletedPaperRetainsChosenLinks),
+                ("conflict archives retain the latest five complete groups",
+                    ConflictArchiveRetentionChecks),
                 ("stale external source cannot overwrite a newer edit", MergeRejectChangedSource),
                 ("source changed after flush is rejected before replacement", MergeRejectDuringReplace),
                 ("source changed during replace retry is also rejected", MergeRejectDuringRetry),
@@ -50,12 +57,17 @@ internal static partial class Program
                 Console.WriteLine("PASS " + check.Name);
             }
             CoreHistoryBackupChecks();
+            HistoryRecoveryChecks();
+            WorkspaceFailureMessageChecks();
             WorkspaceStorageChecks();
             WorkspaceFollowingMergeBaseline();
             StorageSafetyChecks();
             WorkspaceWriteSafetyChecks();
             KillSafetyChecks();
             RunIsolatedLiveChecks();
+            RunIsolatedLiveChecks("--history-dialog");
+            RunIsolatedLiveChecks("--history-actions");
+            RunIsolatedLiveChecks("--workspace-failure");
             RunIsolatedLiveChecks("--shutdown-merge");
             RunIsolatedLiveChecks("--shutdown-workspace");
             RunIsolatedLiveChecks("--exit-fixture");
@@ -69,7 +81,7 @@ internal static partial class Program
     }
 
     private static JsonObject J(string json) => JsonNode.Parse(json)!.AsObject();
-    private static void Require(bool condition, string message)
+    private static void Require([DoesNotReturnIf(false)] bool condition, string message)
     {
         if (!condition) throw new InvalidOperationException(message);
     }

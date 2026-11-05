@@ -3,8 +3,8 @@ using System.IO;
 namespace PaperTodo;
 
 /// <summary>
-/// Resolves fixed slots and their immutable stores. No watcher, directory discovery, rename,
-/// mirrored catalog or inactive-workspace runtime is created.
+/// Resolves numbered workspace storage and the main-owned catalog. Display names never rename
+/// the on-disk documents, and inactive workspaces have no live presentation or plugin session.
 /// </summary>
 internal sealed class WorkspaceCatalog
 {
@@ -12,13 +12,16 @@ internal sealed class WorkspaceCatalog
     private readonly IDurableAtomicFileWriter _writer;
     private readonly Dictionary<int, StateStore> _stores = new();
     private readonly PersistenceWriteLifetime _writeLifetime = new();
+    private readonly Func<StateStore, DateTime?, WorkspaceRecoveryChoice>? _confirmRecovery;
     private AppState? _initialMain;
 
-    internal WorkspaceCatalog(string directory, IDurableAtomicFileWriter writer)
+    internal WorkspaceCatalog(string directory, IDurableAtomicFileWriter writer,
+        Func<StateStore, DateTime?, WorkspaceRecoveryChoice>? confirmRecovery = null)
     {
         _directory = Path.GetFullPath(directory);
         _writer = writer;
-        _initialMain = StoreFor(1).Load();
+        _confirmRecovery = confirmRecovery;
+        _initialMain = LoadWorkspace(StoreFor(1), out _);
         HasConfiguration = _initialMain.Workspaces != null;
         Options = (_initialMain.Workspaces ?? new()).Normalized();
     }
@@ -29,6 +32,52 @@ internal sealed class WorkspaceCatalog
     internal void SetStartupError(string message) => StartupError = message;
     internal StateStore MainStore => StoreFor(1);
     internal WorkspacePaths PathsFor(int number) => new(_directory, number);
+
+    private AppState LoadWorkspace(StateStore store, out bool initializedEmpty) =>
+        store.Load(out initializedEmpty, _confirmRecovery == null ? null :
+            timestamp => _confirmRecovery(store, timestamp));
+
+    private AppState ReadMainForSettings()
+    {
+        try { return MainStore.ReadCommittedWorkspaceState(); }
+        catch (Exception ex) when (ex is System.Text.Json.JsonException or FileNotFoundException or DirectoryNotFoundException)
+        {
+            throw new StateRecoveryException("WorkspaceFailureMainRecoveryRequired");
+        }
+    }
+
+    // Purge inactive secondary data after removing the slot from the main catalog.
+    // A failed file cleanup is reported but does not restore catalog membership.
+    internal void DeleteInactiveSlotFiles(int number)
+    {
+        if (number is < 2 or > 5 || Options.Active == number)
+            throw new InvalidOperationException("Only inactive secondary workspaces may be deleted.");
+        var paths = PathsFor(number);
+        var stem = "data" + number.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var primary = stem + ".json";
+        var backup = stem + ".backup.json";
+        foreach (var file in System.IO.Directory.EnumerateFiles(_directory))
+        {
+            var name = Path.GetFileName(file);
+            // Include atomic-write temps and copies created by StateStore recovery.
+            // Match the complete numbered stem: deleting data2 must not touch data20.
+            if (name.Equals(primary, StringComparison.OrdinalIgnoreCase) ||
+                name.Equals(primary + ".tmp", StringComparison.OrdinalIgnoreCase) ||
+                name.Equals(backup, StringComparison.OrdinalIgnoreCase) ||
+                name.Equals(backup + ".tmp", StringComparison.OrdinalIgnoreCase) ||
+                name.StartsWith(stem + "conflict-", StringComparison.OrdinalIgnoreCase) ||
+                name.StartsWith(stem + ".failed_load.", StringComparison.OrdinalIgnoreCase) ||
+                name.StartsWith(stem + ".backup.used_for_recovery.", StringComparison.OrdinalIgnoreCase) ||
+                name.StartsWith(primary + ".orphaned.", StringComparison.OrdinalIgnoreCase) ||
+                name.StartsWith(backup + ".orphaned.", StringComparison.OrdinalIgnoreCase) ||
+                name.StartsWith(stem + ".recovered", StringComparison.OrdinalIgnoreCase))
+                File.Delete(file);
+        }
+        File.Delete(paths.Images);
+        File.Delete(paths.Images + "-lock");
+        if (System.IO.Directory.Exists(paths.PluginData))
+            System.IO.Directory.Delete(paths.PluginData, recursive: true);
+    }
 
     internal StateStore StoreFor(int number)
     {
@@ -52,11 +101,17 @@ internal sealed class WorkspaceCatalog
         if (Options.Enabled && Options.Active > 1)
         {
             try { return Open(Options.Active, Options, main); }
-            catch (Exception ex)
+            catch (WorkspaceRecoveryFallbackException)
+            {
+                // Explicit fallback uses the already loaded, committed main workspace.
+                Options.Active = 1;
+                SaveOptions(1);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 // An inaccessible slot can be retried later; do not reset the
                 // user's selected workspace or write over its unavailable data.
-                StartupError = ex.GetBaseException().Message;
+                StartupError = WorkspaceFailureMessage.For(ex);
             }
         }
         main.Workspaces = HasConfiguration ? Options : null;
@@ -71,20 +126,20 @@ internal sealed class WorkspaceCatalog
         WorkspaceSettingsSnapshot? inherited = null;
         if (number > 1 && follows)
         {
-            main ??= MainStore.Load();
+            main ??= ReadMainForSettings();
             inherited = WorkspaceSettingsSnapshot.Capture(main);
         }
         // Normalize papers against effective settings, not dormant local preferences.
         store.InheritedSettings = inherited;
-        var state = store.Load(out var initializedEmpty);
+        var state = LoadWorkspace(store, out var initializedEmpty);
         if (initializedEmpty && number > 1)
         {
-            // New or irrecoverably corrupt slots both start with one blank paper.
+            // New slots and explicitly restarted slots begin with one blank paper.
             // Image, plugin and historical files never veto initialization.
             // Every new slot begins with main-workspace settings. Unfollowing later
             // keeps this initial copy as its independent preference, regardless of
             // which workspace was active when the slot was first opened.
-            main ??= MainStore.Load();
+            main ??= ReadMainForSettings();
             inherited ??= WorkspaceSettingsSnapshot.Capture(main);
             inherited.ApplyTo(state);
             state.Papers.Add(new PaperData());
@@ -116,7 +171,7 @@ internal sealed class WorkspaceCatalog
         var independent = current.FollowsMain
             ? current.IndependentSettings!
             : WorkspaceSettingsSnapshot.Capture(current.State);
-        var inherited = follows ? WorkspaceSettingsSnapshot.Capture(MainStore.Load()) : null;
+        var inherited = follows ? WorkspaceSettingsSnapshot.Capture(ReadMainForSettings()) : null;
         var session = new WorkspaceSession(current.Paths, current.Store, current.State, follows, independent)
         {
             InheritedSettings = inherited

@@ -1,6 +1,7 @@
 using System.IO;
 using System.Text;
 using System.Text.Json;
+using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -43,61 +44,131 @@ public sealed partial class StateStore
 
     public string FilePath { get; }
     public string BackupPath { get; }
-    private bool _preserveRecoveredLoadFilesOnNextSave;
-    private bool _preserveOrphanedTempsOnNextSave;
     internal bool NeedsStartupRecoverySave { get; private set; }
     internal bool NormalizedCollapsedStateOnLoad { get; private set; }
-    private string? _preservedFailedPrimaryPath;
-    private string? _preservedRecoveryBackupPath;
 
     public AppState Load() => Load(out _);
 
-    // Only malformed state JSON permits recovery/reinitialization. File sharing,
-    // permissions and other I/O failures must reach the caller unchanged.
-    internal AppState Load(out bool initializedEmpty)
+    // Settings inheritance reads the committed main document only. It must not
+    // open recovery UI, stage a recovery write or initialize a blank workspace.
+    internal AppState ReadCommittedWorkspaceState() => ReadLoadDocument(File.ReadAllBytes(FilePath));
+
+    // A healthy committed primary is authoritative. A healthy fixed backup is next.
+    // Only if both are unavailable do we select the newest complete interrupted write.
+    // Existing data is never replaced by a blank workspace without an explicit choice.
+    internal AppState Load(out bool initializedEmpty,
+        Func<DateTime?, WorkspaceRecoveryChoice>? confirmRecovery = null)
     {
         initializedEmpty = false;
         NeedsStartupRecoverySave = false;
         NormalizedCollapsedStateOnLoad = false;
-        ClearRecoveredLoadPreservationState();
-        var mainExists = FileExistsForCollection(FilePath);
-        if (mainExists)
-        {
-            try { return ReadLoadDocument(FilePath); }
-            catch (JsonException) { /* Confirmed corrupt; try the backup. */ }
-        }
+        _pendingStartupRecovery = null;
+        TryPruneConflictArchives();
 
-        var backupExists = FileExistsForCollection(BackupPath);
-        if (backupExists)
+        var primaryExists = FileExistsForCollection(FilePath);
+        var primaryBytes = primaryExists ? File.ReadAllBytes(FilePath) : null;
+        if (primaryBytes != null)
         {
             try
             {
-                var restored = ReadLoadDocument(BackupPath);
-                _preserveRecoveredLoadFilesOnNextSave = mainExists;
-                NeedsStartupRecoverySave = true;
-                return restored;
+                var state = ReadLoadDocument(primaryBytes);
+                _writeLock.Wait();
+                try { TryCleanupOrphanedTempsCore(); }
+                finally { _writeLock.Release(); }
+                return state;
             }
-            catch (JsonException) { /* Backup is also corrupt; rebuild. */ }
+            catch (JsonException) { /* Try the fixed backup. */ }
         }
 
-        // Do not block an empty workspace on image/plugin data or historical files.
-        // Keep any corrupt primary/backup before the next ordinary save replaces it.
-        _preserveRecoveredLoadFilesOnNextSave = mainExists || backupExists;
-        _preserveOrphanedTempsOnNextSave =
-            File.Exists(FilePath + ".tmp") || File.Exists(BackupPath + ".tmp");
+        var backupExists = FileExistsForCollection(BackupPath);
+        var backupBytes = backupExists ? File.ReadAllBytes(BackupPath) : null;
+        if (backupBytes != null)
+        {
+            try
+            {
+                var state = ReadLoadDocument(backupBytes);
+                _pendingStartupRecovery = PendingStartupRecovery.FromFixedBackup(
+                    BackupPath, backupBytes, primaryBytes);
+                NeedsStartupRecoverySave = true;
+                return state;
+            }
+            catch (JsonException) { /* Try complete interrupted snapshots. */ }
+        }
+
+        var candidates = FindValidInterruptedWrites(out var readFailure);
+        if (candidates.Count > 0)
+        {
+            // Last-write time describes the snapshot; the orphan filename only
+            // describes when it was moved aside. Path order breaks timestamp ties.
+            var first = candidates.OrderByDescending(candidate => candidate.LastWriteTimeUtc)
+                .ThenBy(candidate => candidate.Path, StringComparer.OrdinalIgnoreCase).First();
+
+            _pendingStartupRecovery = PendingStartupRecovery.FromTemporary(
+                first.Path, first.Bytes, primaryBytes,
+                candidates.Where(candidate => System.Text.Json.Nodes.JsonNode.DeepEquals(
+                    first.Document, candidate.Document)).Select(candidate => (candidate.Path,
+                    SHA256.HashData(candidate.Bytes))).ToArray());
+            NeedsStartupRecoverySave = true;
+            return ReadLoadDocument(first.Bytes);
+        }
+
+        // Existing data requires a choice, whether history is available or not.
+        if (primaryExists || backupExists || HasInterruptedWriteFiles())
+        {
+            var history = new CoreHistoryBackup(Path.GetDirectoryName(FilePath)!);
+            foreach (var snapshot in history.ReadWorkspaceSnapshots(WorkspaceNumber, ex => readFailure ??= ex))
+            {
+                if (!TryReadCompleteDocument(snapshot.Bytes, out _, out var historicalState)) continue;
+                var choice = ChooseWorkspaceRecovery(confirmRecovery, snapshot.TimestampUtc);
+                NeedsStartupRecoverySave = true;
+                if (choice == WorkspaceRecoveryChoice.CreateEmpty)
+                {
+                    _pendingStartupRecovery = PendingStartupRecovery.ForEmptyWorkspace(primaryBytes);
+                    initializedEmpty = true;
+                    // Keep other workspace entries when a valid catalog is available.
+                    var catalog = WorkspaceNumber == 1 ? historicalState!.Workspaces?.Normalized() : null;
+                    if (catalog != null) catalog.Active = 1;
+                    return new AppState { Workspaces = catalog };
+                }
+                _pendingStartupRecovery = PendingStartupRecovery.FromHistory(snapshot, primaryBytes);
+                return ReadLoadDocument(snapshot.Bytes);
+            }
+
+            if (readFailure != null)
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(readFailure).Throw();
+            ChooseWorkspaceRecovery(confirmRecovery, null);
+            _pendingStartupRecovery = PendingStartupRecovery.ForEmptyWorkspace(primaryBytes);
+        }
+
         initializedEmpty = true;
         NeedsStartupRecoverySave = true;
         return new AppState();
     }
 
-    private AppState ReadLoadDocument(string path)
+    private WorkspaceRecoveryChoice ChooseWorkspaceRecovery(
+        Func<DateTime?, WorkspaceRecoveryChoice>? confirmRecovery, DateTime? timestamp)
     {
-        var json = DecodeStateBytes(File.ReadAllBytes(path));
+        if (confirmRecovery == null)
+            throw new StateRecoveryException(timestamp.HasValue
+                ? "WorkspaceFailureHistoryChoiceRequired" : "WorkspaceRecoveryUnavailable");
+        WriteLifetime.ThrowIfStopped();
+        var choice = confirmRecovery(timestamp);
+        // Recheck after the modal loop before staging any recovery or fallback.
+        WriteLifetime.ThrowIfStopped();
+        if (choice == WorkspaceRecoveryChoice.Exit) throw new WorkspaceRecoveryExitException();
+        if (choice == WorkspaceRecoveryChoice.Fallback) throw new WorkspaceRecoveryFallbackException();
+        if (choice != WorkspaceRecoveryChoice.CreateEmpty &&
+            !(choice == WorkspaceRecoveryChoice.Restore && timestamp.HasValue))
+            throw new OperationCanceledException("Workspace recovery was canceled.");
+        return choice;
+    }
+
+    private AppState ReadLoadDocument(byte[] bytes)
+    {
+        var json = DecodeStateBytes(bytes);
         var state = ReadCoreState(json)
-            ?? throw new JsonException($"{Path.GetFileName(path)} deserialized to null.");
+            ?? throw new JsonException("The state document deserialized to null.");
         MigrateLegacyTopBarSettings(state, json);
-        // Keep track of normalization that changes visible paper presentation.
-        // It happens before the workspace UI restore can detect its own changes.
         var collapsedBefore = state.Papers?.Where(p => p?.IsCollapsed == true).ToArray();
         NormalizeWorkspaceDocument(state);
         NormalizedCollapsedStateOnLoad = collapsedBefore?.Any(p => !p.IsCollapsed) == true;
@@ -111,9 +182,9 @@ public sealed partial class StateStore
         protectedImageIds = new HashSet<string>(StringComparer.Ordinal);
         try
         {
-            // The failed primary has not been copied to its recovery path yet. Until the first
-            // successful save completes, no image can be proven unreachable.
-            if (WriteLifetime.IsStopped || _preserveRecoveredLoadFilesOnNextSave ||
+            // Never collect while an interrupted source is still the authority
+            // for the first recovery save.
+            if (WriteLifetime.IsStopped || _pendingStartupRecovery != null ||
                 !TryAddImageReferences(currentState, protectedImageIds))
             {
                 protectedImageIds.Clear();
@@ -125,6 +196,7 @@ public sealed partial class StateStore
             AddIfExists(paths, FilePath);
             AddIfExists(paths, BackupPath);
             AddIfExists(paths, FilePath + ".tmp");
+            AddIfExists(paths, BackupPath + ".tmp");
 
             var directory = Path.GetDirectoryName(FilePath);
             if (string.IsNullOrWhiteSpace(directory))
@@ -132,13 +204,21 @@ public sealed partial class StateStore
                 directory = AppContext.BaseDirectory;
             }
 
-            foreach (var path in Directory.EnumerateFiles(directory, DocumentStem + ".failed_load.*.json"))
+            // An interrupted first save may have been moved aside before the next
+            // primary/backup write. Its references are as important as the live JSON.
+            foreach (var tempPath in new[] { FilePath + ".tmp", BackupPath + ".tmp" })
             {
-                paths.Add(path);
+                foreach (var orphan in Directory.EnumerateFiles(
+                             directory, Path.GetFileNameWithoutExtension(tempPath) + ".orphaned.*.tmp"))
+                    paths.Add(orphan);
             }
-            foreach (var path in Directory.EnumerateFiles(directory, DocumentStem + ".backup.used_for_recovery.*.json"))
+            // An interrupted first save may have been moved aside before the next
+            // primary/backup write. Its references are as important as the live JSON.
+            foreach (var tempPath in new[] { FilePath + ".tmp", BackupPath + ".tmp" })
             {
-                paths.Add(path);
+                foreach (var orphan in Directory.EnumerateFiles(
+                             directory, Path.GetFileNameWithoutExtension(tempPath) + ".orphaned.*.tmp"))
+                    paths.Add(orphan);
             }
             // Recovery includes rejected local/baseline values, not just the external file.
             // Half-written archives also disable GC until they can be inspected safely.
@@ -157,29 +237,32 @@ public sealed partial class StateStore
 
             foreach (var path in paths)
             {
-                var json = File.ReadAllText(path);
-                var isDiff = path.EndsWith(".diff.json", StringComparison.OrdinalIgnoreCase) ||
-                    path.EndsWith(".diff.json.tmp", StringComparison.OrdinalIgnoreCase);
-                if (isDiff)
+                try
                 {
-                    if (TryAddConflictImageReferences(json, protectedImageIds)) continue;
-                    protectedImageIds.Clear();
-                    return false;
+                    var json = File.ReadAllText(path);
+                    var isDiff = path.EndsWith(".diff.json", StringComparison.OrdinalIgnoreCase) ||
+                        path.EndsWith(".diff.json.tmp", StringComparison.OrdinalIgnoreCase);
+                    if (isDiff)
+                    {
+                        // Damaged files are not a recovery source. Valid archives still
+                        // protect every rejected local, baseline and external image.
+                        _ = TryAddConflictImageReferences(json, protectedImageIds);
+                        continue;
+                    }
+                    var root = System.Text.Json.Nodes.JsonNode.Parse(json,
+                        documentOptions: StateJsonReadPolicy.DocumentOptions);
+                    if (root is not System.Text.Json.Nodes.JsonObject obj ||
+                        obj["papers"] is not System.Text.Json.Nodes.JsonArray)
+                        continue;
+                    var snapshot = JsonSerializer.Deserialize<AppState>(json, JsonOptions);
+                    if (snapshot != null)
+                        _ = TryAddImageReferences(snapshot, protectedImageIds);
                 }
-                // Deserializing {} must not turn an incomplete snapshot into "no images".
-                var root = System.Text.Json.Nodes.JsonNode.Parse(json,
-                    documentOptions: StateJsonReadPolicy.DocumentOptions);
-                if (root is not System.Text.Json.Nodes.JsonObject obj ||
-                    obj["papers"] is not System.Text.Json.Nodes.JsonArray)
+                catch (JsonException)
                 {
-                    protectedImageIds.Clear();
-                    return false;
-                }
-                var snapshot = JsonSerializer.Deserialize<AppState>(json, JsonOptions);
-                if (snapshot == null || !TryAddImageReferences(snapshot, protectedImageIds))
-                {
-                    protectedImageIds.Clear();
-                    return false;
+                    // The product does not salvage malformed snapshots; a stale broken
+                    // recovery file must not disable image cleanup forever.
+                    continue;
                 }
             }
 
@@ -263,8 +346,7 @@ public sealed partial class StateStore
             {
                 return;
             }
-            WriteJsonInternal(json);
-            _latestWrittenVersion = version;
+            WriteJsonInternal(json, version);
         }
         finally
         {
@@ -282,8 +364,7 @@ public sealed partial class StateStore
             {
                 return;
             }
-            await Task.Run(() => WriteJsonInternal(json));
-            _latestWrittenVersion = version;
+            await Task.Run(() => WriteJsonInternal(json, version));
         }
         finally
         {
@@ -297,14 +378,23 @@ public sealed partial class StateStore
         try
         {
             WriteLifetime.ThrowIfStopped();
-            if (_preserveRecoveredLoadFilesOnNextSave ||
+            if (_pendingStartupRecovery != null ||
                 !TryReadValidatedStateBytes(FilePath, out var primaryBytes))
                 return false;
+
+            // Existing maintenance also retries cleanup after a temporary file lock.
+            TryCleanupOrphanedTempsCore();
 
             if (TryReadValidatedStateBytes(BackupPath, out var backupBytes) &&
                 primaryBytes.AsSpan().SequenceEqual(backupBytes))
                 return true;
 
+            // A complete interrupted backup snapshot can be different from the
+            // committed primary. Preserve that full alternative before the fixed
+            // temporary name is reused; incomplete fragments are not salvaged.
+            var preservedTemporarySource = PreserveDistinctTemporarySource(
+                BackupPath + ".tmp", DecodeStateBytes(primaryBytes),
+                WriteLifetime.ThrowIfStopped);
             _atomicWriter.Write(
                 BackupPath,
                 primaryBytes,
@@ -312,29 +402,36 @@ public sealed partial class StateStore
                     TryReadValidatedStateBytes(tempPath, out var writtenBytes) &&
                     primaryBytes.AsSpan().SequenceEqual(writtenBytes),
                 beforeReplace: WriteLifetime.ThrowIfStopped);
+            if (preservedTemporarySource) TryCleanupOrphanedTempsCore();
             return true;
         }
         catch { return false; }
         finally { _writeLock.Release(); }
     }
 
-    private void WriteJsonInternal(string json, Action? beforeReplace = null)
+    private void WriteJsonInternal(string json, long version, Action? beforeReplace = null)
     {
         void ValidateWrite()
         {
             WriteLifetime.ThrowIfStopped();
+            ValidatePendingStartupRecovery();
             beforeReplace?.Invoke();
         }
         ValidateWrite();
-        var preserveRecoverySources = PreserveRecoveredLoadFilesIfNeeded(ValidateWrite);
+        var completingRecovery = _pendingStartupRecovery != null;
+        PreparePendingStartupRecoveryForSave(ValidateWrite);
+        // Backup recovery or a healthy primary may coexist with a complete,
+        // uncommitted primary temp. Never truncate a DISTINCT full snapshot.
+        var preservedTemporarySource = PreserveDistinctTemporarySource(FilePath + ".tmp", json, ValidateWrite);
         var bytes = Encoding.UTF8.GetBytes(json);
         _atomicWriter.Write(FilePath, bytes, beforeReplace: ValidateWrite);
-
-        if (preserveRecoverySources)
-        {
-            ClearRecoveredLoadPreservationState();
-        }
+        // Replacement is already durable even if recovery readback fails.
+        // Older queued snapshots must not roll back that committed generation.
+        _latestWrittenVersion = version;
+        CompletePendingStartupRecovery(bytes);
         NeedsStartupRecoverySave = false;
+        // Ordinary saves with no displaced source do not scan recovery files.
+        if (completingRecovery || preservedTemporarySource) TryCleanupOrphanedTempsCore();
     }
 
     private static bool TryReadValidatedStateBytes(string path, out byte[] bytes)
@@ -369,47 +466,13 @@ public sealed partial class StateStore
         }
     }
 
-    private bool PreserveRecoveredLoadFilesIfNeeded(Action validateWrite)
-    {
-        if (!_preserveRecoveredLoadFilesOnNextSave && !_preserveOrphanedTempsOnNextSave)
-        {
-            return false;
-        }
-
-        if (_preserveOrphanedTempsOnNextSave)
-        {
-            // A previous interrupted first write is recovery evidence, not a reason
-            // to refuse a new workspace. Archive it before the atomic writer reuses .tmp.
-            foreach (var path in new[] { FilePath + ".tmp", BackupPath + ".tmp" })
-            {
-                // Historical temps are best-effort only: they must not veto an
-                // otherwise valid new-workspace initialization or recovery.
-                if (!File.Exists(path)) continue;
-                try { CopyRecoverySource(path, "orphaned", validateWrite); }
-                catch (IOException) { }
-                catch (UnauthorizedAccessException) { }
-            }
-            _preserveOrphanedTempsOnNextSave = false;
-        }
-
-        if (FileExistsForCollection(FilePath) && string.IsNullOrWhiteSpace(_preservedFailedPrimaryPath))
-        {
-            _preservedFailedPrimaryPath = CopyRecoverySource(FilePath, "failed_load", validateWrite);
-        }
-
-        if (FileExistsForCollection(BackupPath) && string.IsNullOrWhiteSpace(_preservedRecoveryBackupPath))
-        {
-            _preservedRecoveryBackupPath = CopyRecoverySource(BackupPath, "used_for_recovery", validateWrite);
-        }
-
-        return true;
-    }
-
-    private static string CopyRecoverySource(string sourcePath, string suffix, Action validateWrite)
+    private static string MoveRecoverySource(string sourcePath, string suffix, Action validateWrite)
     {
         var targetPath = UniqueRecoveryCopyPath(sourcePath, suffix);
         validateWrite();
-        File.Copy(sourcePath, targetPath, overwrite: false);
+        // Move within the SAME directory rather than allocating a second full copy.
+        // Failure leaves the original path intact, and its writer must not reuse it.
+        File.Move(sourcePath, targetPath);
         return targetPath;
     }
 
@@ -431,14 +494,6 @@ public sealed partial class StateStore
         }
 
         return candidate;
-    }
-
-    private void ClearRecoveredLoadPreservationState()
-    {
-        _preserveRecoveredLoadFilesOnNextSave = false;
-        _preserveOrphanedTempsOnNextSave = false;
-        _preservedFailedPrimaryPath = null;
-        _preservedRecoveryBackupPath = null;
     }
 
     private static void PrepareForSave(AppState state)
@@ -559,7 +614,7 @@ public sealed partial class StateStore
         }
     }
 
-    private static void NormalizeAfterLoad(AppState state)
+    private static void NormalizeAfterLoad(AppState state, bool deferLinkNormalization = false)
     {
         if (state.Papers == null)
         {
@@ -570,7 +625,10 @@ public sealed partial class StateStore
 
         NormalizeGlobalState(state);
         NormalizePapers(state);
-        NormalizeLinks(state);
+        // A three-way preview must not treat references to a provisionally deleted
+        // paper as user edits. The final merged state is normalized after choices.
+        if (!deferLinkNormalization)
+            NormalizeLinks(state);
     }
 
     private static void MigrateLegacyTopBarSettings(AppState state, string json)
@@ -667,6 +725,7 @@ public sealed partial class StateStore
         if (!state.UseCapsuleMode || !state.UseDeepCapsuleMode)
         {
             state.UseCapsuleCollapseAll = false;
+            state.UseCapsuleFreeQueues = false;
         }
 
         state.CapsuleCollapseAllActiveQueues ??= new Dictionary<string, bool>();
@@ -729,13 +788,15 @@ public sealed partial class StateStore
             // Per-paper queue identity. Migration: a capsule with no explicit side inherits the
             // legacy single global anchor, so existing docked capsules keep their current edge /
             // monitor. New papers default to the global side until dragged to a queue.
-            paper.CapsuleSide = string.IsNullOrWhiteSpace(paper.CapsuleSide)
+            var inheritsLegacyQueueAnchor = string.IsNullOrWhiteSpace(paper.CapsuleSide);
+            paper.CapsuleSide = inheritsLegacyQueueAnchor
                 ? state.DeepCapsuleSide
                 : DeepCapsuleSides.Normalize(paper.CapsuleSide);
-            var capsuleMonitorDeviceName = string.IsNullOrWhiteSpace(paper.CapsuleMonitorDeviceName)
+            var capsuleMonitorDeviceName = inheritsLegacyQueueAnchor && string.IsNullOrWhiteSpace(paper.CapsuleMonitorDeviceName)
                 ? (state.DeepCapsuleMonitorDeviceName ?? "")
-                : paper.CapsuleMonitorDeviceName.Trim();
+                : (paper.CapsuleMonitorDeviceName ?? "").Trim();
             paper.CapsuleMonitorDeviceName = WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(capsuleMonitorDeviceName);
+            paper.CapsuleQueueId = EdgeCapsuleQueueIds.Normalize(paper.CapsuleQueueId);
             NormalizeDeepCapsuleExpandedGeometry(paper);
 
             paper.Title = PaperTitles.CleanCustomTitle(paper.Title, state.MaxTitleLength);
@@ -977,16 +1038,11 @@ public sealed partial class StateStore
 
     private static string NormalizeQueueKey(string? key)
     {
-        var value = (key ?? "").Trim();
-        var separator = value.LastIndexOf('|');
-        if (separator < 0)
-        {
-            return QueueKey("", value);
-        }
-
-        var monitorDeviceName = value[..separator];
-        var side = value[(separator + 1)..];
-        return QueueKey(monitorDeviceName, side);
+        EdgeCapsuleQueueIds.TrySplit((key ?? "").Trim(), out var edgeKey, out var id);
+        var separator = edgeKey.LastIndexOf('|');
+        var monitor = separator >= 0 ? edgeKey[..separator] : "";
+        var side = separator >= 0 ? edgeKey[(separator + 1)..] : edgeKey;
+        return EdgeCapsuleQueueIds.Compose(QueueKey(monitor, side), id);
     }
 
     private static string QueueKey(string? monitorDeviceName, string? side)

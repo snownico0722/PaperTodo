@@ -24,6 +24,7 @@ internal static partial class Program
             ("main catalog updates preserve content and fence old writers", WorkspaceMetadataWrites),
             ("main backup recovery persists before secondary activation", WorkspaceMainRecoveryBeforeSecondaryStart),
             ("follow-main overlay preserves dormant preferences and layout", WorkspaceInheritance),
+            ("settings reads never stage a main-workspace recovery", WorkspaceSettingsReadDoesNotRecover),
             ("image recovery protection is per workspace", WorkspaceImageProtection),
             ("plugin detach flush is strict and recoverable", WorkspacePluginStores),
             ("bad startup workspace falls back without replacing it", WorkspaceStartupFallback),
@@ -128,10 +129,75 @@ internal static partial class Program
                 "revisiting a slot created an independent writer lock/version");
         }
         Throws<ArgumentOutOfRangeException>(() => catalog.PathsFor(6));
-        var options = new WorkspaceConfiguration { Enabled = true, Count = 99, Active = 99 }.Normalized();
-        Require(options.Count == 5 && options.Active == 5 && options.FollowsMain(2) && !options.FollowsMain(1),
-            "invalid limits or follow default");
+        var options = new WorkspaceConfiguration
+        {
+            Enabled = true, Slots = [0, 1, 2, 3, 4, 5, 6], Active = 99
+        }.Normalized();
+        Require(options.SlotNumbers.SequenceEqual([1, 2, 3, 4, 5]) &&
+                options.Active == 1 && options.FollowsMain(2) && !options.FollowsMain(1),
+            "invalid slot IDs or follow default");
         Require(!File.Exists(Path.Combine(scope.DirectoryPath, "workspaces.json")), "unexpected separate catalog");
+        var cycleTip = Strings.Format("WorkspaceCycleTooltip", 4, 1);
+        Require(!cycleTip.Contains("4 /", StringComparison.Ordinal) &&
+                cycleTip.Contains("4", StringComparison.Ordinal) &&
+                cycleTip.Contains("1", StringComparison.Ordinal),
+            "workspace tooltip mixed its actual number with the slot count");
+
+        var managed = new WorkspaceConfiguration
+        {
+            Enabled = true, Active = 4,
+            Slots = [1, 3, 4], Names = new() { [3] = "开发" },
+            TopBarNamePicker = true
+        }.Normalized();
+        Require(managed.SlotNumbers.SequenceEqual([1, 3, 4]) &&
+                !managed.ContainsSlot(2) && managed.NextSlot(1) == 3 &&
+                managed.NextSlot(4) == 1 && managed.DisplayName(3) == "开发" &&
+                managed.DisplayName(1) == Strings.Format("WorkspaceSlotLabel", 1) &&
+                managed.TopBarNamePicker,
+            "noncontiguous named workspace catalog lost its membership or display mode");
+        var secondFiles = catalog.PathsFor(2);
+        var deletedArtifacts = new[]
+        {
+            secondFiles.Data, secondFiles.Data + ".tmp",
+            secondFiles.Backup, secondFiles.Backup + ".tmp",
+            Path.Combine(scope.DirectoryPath, "data2conflict-sample.json"),
+            Path.Combine(scope.DirectoryPath, "data2conflict-sample.diff.json.tmp"),
+            Path.Combine(scope.DirectoryPath, "data2.failed_load.20260101.json"),
+            Path.Combine(scope.DirectoryPath, "data2.backup.used_for_recovery.20260101.json"),
+            Path.Combine(scope.DirectoryPath, "data2.json.orphaned.20260101.tmp"),
+            Path.Combine(scope.DirectoryPath, "data2.backup.json.orphaned.20260101.tmp"),
+            Path.Combine(scope.DirectoryPath, "data2.recovered.20260101.json")
+        };
+        foreach (var artifact in deletedArtifacts)
+            File.WriteAllText(artifact, "to be deleted");
+        Directory.CreateDirectory(secondFiles.PluginData);
+        File.WriteAllText(Path.Combine(secondFiles.PluginData, "settings.json"), "plugin state");
+        File.WriteAllText(secondFiles.Images, "image data");
+        File.WriteAllText(secondFiles.Images + "-lock", "image lock");
+
+        // Another workspace and a similarly prefixed filename must remain untouched.
+        var otherWorkspaceArtifact = Path.Combine(scope.DirectoryPath, "data3.json.tmp");
+        var similarlyNamedArtifact = Path.Combine(scope.DirectoryPath, "data20.json.tmp");
+        File.WriteAllText(otherWorkspaceArtifact, "keep workspace 3");
+        File.WriteAllText(similarlyNamedArtifact, "keep unrelated file");
+
+        catalog.AdoptOptions(new WorkspaceConfiguration
+        {
+            Enabled = true, Slots = [1, 2]
+        });
+        var removed = catalog.Options.Normalized();
+        removed.Slots = [1];
+        catalog.AdoptOptions(removed);
+        Require(!catalog.Options.ContainsSlot(2),
+            "removed workspace still appears in the catalog");
+        catalog.DeleteInactiveSlotFiles(2);
+        Require(deletedArtifacts.All(file => !File.Exists(file)) &&
+                !File.Exists(secondFiles.Images) && !File.Exists(secondFiles.Images + "-lock") &&
+                !Directory.Exists(secondFiles.PluginData) &&
+                File.Exists(catalog.PathsFor(1).Data) &&
+                File.ReadAllText(otherWorkspaceArtifact) == "keep workspace 3" &&
+                File.ReadAllText(similarlyNamedArtifact) == "keep unrelated file",
+            "deleting a workspace left storage artifacts or affected other workspaces");
     }
 
     private static void WorkspaceMetadataWrites()
@@ -140,7 +206,7 @@ internal static partial class Program
         var source = scope.Read();
         source["futureExtension"] = J("{\"keep\":123}");
         scope.Write(source);
-        var options = new WorkspaceConfiguration { Enabled = true, Count = 5, Active = 3 };
+        var options = new WorkspaceConfiguration { Enabled = true, Slots = [1, 2, 3, 4, 5], Active = 3 };
         scope.Store.UpdateWorkspaceConfiguration(options, 5);
         scope.Store.SaveJsonAsync(scope.BaselineJson, 4).GetAwaiter().GetResult();
         var saved = scope.Read();
@@ -157,7 +223,7 @@ internal static partial class Program
             if (stage == DurableAtomicWriteStage.BeforeReplace) throw new IOException("injected catalog failure");
         }));
         Throws<IOException>(() => failed.UpdateWorkspaceConfiguration(
-            new WorkspaceConfiguration { Enabled = true, Count = 2, Active = 2 }, 7));
+            new WorkspaceConfiguration { Enabled = true, Slots = [1, 2], Active = 2 }, 7));
         Require(File.ReadAllBytes(scope.Store.FilePath).SequenceEqual(bytes), "failed catalog write replaced main");
     }
 
@@ -165,7 +231,7 @@ internal static partial class Program
     {
         using var scope = new Scope();
         var main = scope.Store.Load();
-        main.Workspaces = new() { Enabled = true, Count = 3, Active = 2 };
+        main.Workspaces = new() { Enabled = true, Slots = [1, 2, 3], Active = 2 };
         main.Papers[0].Content = "main content must survive recovery";
         scope.Store.SaveJsonSync(scope.Store.SerializeState(main), 2);
         Require(scope.Store.TryRefreshBackupFromPrimary(), "main recovery test needs a valid backup");
@@ -184,10 +250,10 @@ internal static partial class Program
         var recoveredMain = J(File.ReadAllText(catalog.MainStore.FilePath));
         Require(recoveredMain["workspaces"]!["active"]!.GetValue<int>() == 2 &&
                 Str(recoveredMain["papers"]![0]!["content"]) == "main content must survive recovery" &&
-                Directory.GetFiles(scope.DirectoryPath, "data.failed_load.*.json")
-                    .Any(p => File.ReadAllText(p) == "{corrupt main") &&
+                Directory.GetFiles(scope.DirectoryPath, "data.failed_load.*.json").Length == 0 &&
+                Directory.GetFiles(scope.DirectoryPath, "data.backup.used_for_recovery.*.json").Length == 0 &&
                 File.ReadAllBytes(secondary.FilePath).SequenceEqual(originalSecondary),
-            "main recovery lost the selected slot, main content, or secondary data");
+            "main recovery lost the selected slot, saved content, or added redundant copies");
 
         var next = catalog.Options.Normalized();
         next.Active = 3;
@@ -195,6 +261,46 @@ internal static partial class Program
         catalog.SaveOptions(3);
         Require(J(File.ReadAllText(catalog.MainStore.FilePath))["workspaces"]!["active"]!.GetValue<int>() == 3,
             "restored main catalog could not accept a subsequent workspace switch");
+    }
+
+    private static void WorkspaceSettingsReadDoesNotRecover()
+    {
+        foreach (var missing in new[] { false, true })
+        {
+            using var scope = new Scope();
+            var state = NewState();
+            state.Workspaces = new() { Enabled = true, Slots = [1, 2, 3], FollowMainSettings = new() { [2] = false } };
+            scope.Store.SaveJsonSync(scope.Store.SerializeState(state), 2);
+            var prompts = 0;
+            var catalog = new WorkspaceCatalog(scope.DirectoryPath, DurableAtomicFileWriter.Shared, (_, _) =>
+            {
+                prompts++;
+                return WorkspaceRecoveryChoice.Restore;
+            });
+            catalog.OpenInitial();
+            var current = catalog.Open(2, catalog.Options);
+            var next = catalog.Options.Normalized();
+            next.FollowMainSettings[2] = true;
+            WriteHistoryFixture(scope.DirectoryPath, DateTime.UtcNow, ("data.json", scope.Store.SerializeState(state)));
+            File.WriteAllText(scope.Store.BackupPath, "{broken backup");
+            if (missing) File.Delete(scope.Store.FilePath);
+            else File.WriteAllText(scope.Store.FilePath, "{broken main");
+
+            Throws<StateRecoveryException>(() => catalog.PreviewSettingsChange(current, next));
+            Throws<StateRecoveryException>(() => catalog.Open(3, next));
+            Require(prompts == 0 && !catalog.MainStore.NeedsStartupRecoverySave &&
+                    !current.FollowsMain && (missing ? !File.Exists(scope.Store.FilePath) :
+                        File.ReadAllText(scope.Store.FilePath) == "{broken main"),
+                "settings-only read prompted, staged recovery or replaced main");
+
+            var recovered = catalog.Open(1, catalog.Options);
+            Require(prompts == 1 && recovered.Store.NeedsStartupRecoverySave,
+                "actual main entry failed to offer historical recovery");
+            recovered.Store.SaveJsonSync(recovered.Store.SerializeState(recovered.State), 3);
+            var preview = catalog.PreviewSettingsChange(current, next);
+            Require(preview.Session.FollowsMain && prompts == 1 && !catalog.MainStore.NeedsStartupRecoverySave,
+                "settings inheritance did not resume after main recovery committed");
+        }
     }
 
     private static void WorkspaceInheritance()
@@ -205,7 +311,7 @@ internal static partial class Program
         main.MaxTitleLength = 20;
         main.UseCapsuleMode = main.UseDeepCapsuleMode = true;
         main.McpEnabled = main.McpAllowFullWrites = true;
-        main.Workspaces = new() { Enabled = true, Count = 3 };
+        main.Workspaces = new() { Enabled = true, Slots = [1, 2, 3] };
         main.DeepCapsuleQueueStartTopMargins[@"\\.\DISPLAY1|left"] = 55;
         scope.Store.SaveJsonSync(scope.Store.SerializeState(main), 2);
         var secondaryStore = new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared, 2);
@@ -374,10 +480,12 @@ internal static partial class Program
                 File.Exists(freshImagePath),
             "a fresh workspace was mistaken for missing historical image data");
 
-        // A malformed recovery record cannot establish that missing images are safe to replace.
+        // Damaged records are explicitly abandoned rather than permanently stopping
+        // cleanup for all healthy images in the same workspace.
         File.WriteAllText(Path.Combine(scope.DirectoryPath, "data2conflict-broken.json"), "{broken");
-        Require(!store2.TryCollectProtectedImageIds(second, out _),
-            "malformed recovery archive unexpectedly produced a complete reference set");
+        Require(store2.TryCollectProtectedImageIds(second, out var stillProtected) &&
+                stillProtected.Contains("303"),
+            "a damaged legacy archive disabled the healthy workspace image scan");
         var uncertainPath = Path.Combine(scope.DirectoryPath, "note-assets-uncertain.lmdb");
         using var uncertain = new NoteImageStore(uncertainPath);
         uncertain.Load();
@@ -423,7 +531,7 @@ internal static partial class Program
     {
         using var scope = new Scope();
         var seed = scope.Store.Load();
-        seed.Workspaces = new() { Enabled = true, Count = 2, Active = 1 };
+        seed.Workspaces = new() { Enabled = true, Slots = [1, 2], Active = 1 };
         scope.Store.SaveJsonSync(scope.Store.SerializeState(seed), 2);
         var catalog = new WorkspaceCatalog(scope.DirectoryPath, DurableAtomicFileWriter.Shared);
         var active = catalog.OpenInitial();
@@ -457,22 +565,29 @@ internal static partial class Program
     {
         using var scope = new Scope();
         var state = scope.Store.Load();
-        state.Workspaces = new() { Enabled = true, Count = 3, Active = 2 };
+        state.Workspaces = new() { Enabled = true, Slots = [1, 2, 3], Active = 2 };
         scope.Store.SaveJsonSync(scope.Store.SerializeState(state), 2);
         var path = Path.Combine(scope.DirectoryPath, "data2.json");
 
         File.WriteAllText(path, "{broken");
-        var catalog = new WorkspaceCatalog(scope.DirectoryPath, DurableAtomicFileWriter.Shared);
+        var catalog = new WorkspaceCatalog(scope.DirectoryPath, DurableAtomicFileWriter.Shared,
+            (_, time) => time == null ? WorkspaceRecoveryChoice.CreateEmpty : WorkspaceRecoveryChoice.Cancel);
         var rebuilt = catalog.OpenInitial();
-        Require(rebuilt.Paths.Number == 2 && rebuilt.State.Papers.Count == 1 &&
-                catalog.StartupError == null && File.ReadAllText(path) == "{broken",
-            "confirmed corrupt secondary JSON did not initialize without modifying the disk first");
-        rebuilt.BindPersistence();
-        rebuilt.Store.SaveJsonSync(rebuilt.Store.SerializeState(rebuilt.State), 2);
-        Require(J(File.ReadAllText(path))["papers"] is JsonArray &&
-                Directory.GetFiles(scope.DirectoryPath, "data2.failed_load.*.json")
-                    .Any(file => File.ReadAllText(file) == "{broken"),
-            "reconstructed secondary lost its original damaged source");
+        Require(rebuilt.Paths.Number == 2 && catalog.StartupError == null &&
+                rebuilt.State.Papers.Count == 1 && rebuilt.State.Papers[0].Content.Length == 0 &&
+                rebuilt.Store.NeedsStartupRecoverySave &&
+                catalog.Options.Active == 2 && File.ReadAllText(path) == "{broken" &&
+                !Directory.GetFiles(scope.DirectoryPath, "data2.failed_load.*.json").Any(),
+            "unrecoverable secondary did not stage a blank workspace or wrote it prematurely");
+
+        var returning = new WorkspaceCatalog(scope.DirectoryPath, DurableAtomicFileWriter.Shared,
+            (_, time) => time == null ? WorkspaceRecoveryChoice.Fallback : WorkspaceRecoveryChoice.Cancel);
+        var returned = returning.OpenInitial();
+        Require(returned.Paths.Number == 1 && returning.Options.Active == 1 && returning.StartupError == null &&
+                File.ReadAllText(path) == "{broken" &&
+                new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared).Load().Workspaces!.Active == 1,
+            "explicit startup fallback did not select healthy main or altered corrupt secondary");
+        scope.Store.SaveJsonSync(scope.Store.SerializeState(state), 3);
 
         // Historical files, plugin data and a broken image library are not barriers
         // to creating a workspace whose primary and backup do not exist.
@@ -545,7 +660,7 @@ internal static partial class Program
                 main.PaperSkin = PaperSkins.Paper;
                 main.Workspaces = new()
                 {
-                    Enabled = true, Count = 2, Active = 2,
+                    Enabled = true, Slots = [1, 2], Active = 2,
                     FollowMainSettings = new() { [2] = false }
                 };
                 var independent = NewState();
@@ -606,7 +721,7 @@ internal static partial class Program
         var main = NewState();
         main.Theme = "dark"; main.UiLanguage = "en-US";
         main.McpEnabled = main.McpAllowFullWrites = true;
-        main.Workspaces = new() { Enabled = true, Count = 5 };
+        main.Workspaces = new() { Enabled = true, Slots = [1, 2, 3, 4, 5] };
         var second = NewState();
         second.Theme = "light"; second.UiLanguage = "ja-JP";
         second.McpEnabled = second.McpAllowFullWrites = false;
@@ -720,6 +835,51 @@ internal static partial class Program
                 workspaceStatus.LastResult?.Applied == true && workspaceStatus.LastAttemptAt != null,
                 "post-rebind status does not identify the actual reload target");
             Require(!controller.PublicSettings.Get("appearance.theme").Writable, "inherited setting advertised writable");
+
+            // The locked-settings jump must look like the framed restore-default
+            // button, not like an unadorned text label.
+            var inheritanceMethod = typeof(AppController).GetMethod(
+                "WithWorkspaceSettingsInheritance", BindingFlags.NonPublic | BindingFlags.Instance)!;
+            var inheritedControls = new StackPanel();
+            inheritedControls.Children.Add(new Button { Content = "Inherited setting" });
+            var inheritedPage = (StackPanel)inheritanceMethod.Invoke(controller, [inheritedControls])!;
+            var manageWorkspace = inheritedPage.Children.OfType<Button>().Single();
+            bool HasWorkspaceButtonInset(Button action)
+            {
+                action.ApplyTemplate();
+                return action.Template?.FindName("Bd", action) is Border border &&
+                    border.Padding.Left >= 12 && border.Padding.Right >= 12 &&
+                    border.Padding == action.Padding;
+            }
+            Require(manageWorkspace.Height == 27 &&
+                    manageWorkspace.BorderThickness.Left == 1 &&
+                    manageWorkspace.Background == Brushes.Transparent &&
+                    manageWorkspace.IsEnabled && HasWorkspaceButtonInset(manageWorkspace),
+                "the inherited-settings workspace jump needs a clickable frame and content inset");
+            Require(!inheritedControls.IsEnabled && inheritedControls.Opacity < 0.8,
+                "following software settings must disable and visually dim the entire settings page");
+
+            // The plugin page must not look active while this workspace inherits
+            // its software settings. Workspace management remains available.
+            var pageField = typeof(AppController).GetField("_settingsPage",
+                BindingFlags.NonPublic | BindingFlags.Instance)!;
+            var originalPage = pageField.GetValue(controller);
+            try
+            {
+                pageField.SetValue(controller, Enum.Parse(pageField.FieldType, "Plugins"));
+                var pluginControls = new StackPanel();
+                pluginControls.Children.Add(new Button { Content = "Plugin setting" });
+                var inheritedPlugins = (StackPanel)inheritanceMethod.Invoke(controller, [pluginControls])!;
+                Require(!pluginControls.IsEnabled && pluginControls.Opacity < 0.8 &&
+                        inheritedPlugins.Children.OfType<Button>().Single().IsEnabled,
+                    "inherited plugin settings still looked or acted editable");
+                pageField.SetValue(controller, Enum.Parse(pageField.FieldType, "Workspaces"));
+                var workspaceControls = new StackPanel();
+                Require(ReferenceEquals(inheritanceMethod.Invoke(controller, [workspaceControls]),
+                        workspaceControls),
+                    "workspace management became read-only so follow mode cannot be disabled");
+            }
+            finally { pageField.SetValue(controller, originalPage); }
             Throws<PaperSettingsException>(() => controller.PublicSettings.Set("appearance.theme", JsonSerializer.SerializeToElement("light")));
             controller.SaveNow(sync: true);
             Require(Str(J(File.ReadAllText(store2.FilePath))["theme"]) == "light", "inherited settings saved over dormant settings");
@@ -730,7 +890,7 @@ internal static partial class Program
                 BindingFlags.Instance | BindingFlags.NonPublic)!;
             var originalSecondaryWriter = (IDurableAtomicFileWriter)secondaryWriterField.GetValue(secondaryStore)!;
             var beforeCatalogEdit = File.ReadAllBytes(store2.FilePath);
-            var earlierCount = controller.WorkspaceOptions.Count;
+            var earlierSlots = controller.WorkspaceOptions.SlotNumbers.ToArray();
             try
             {
                 secondaryWriterField.SetValue(secondaryStore, new DurableAtomicFileWriter((stage, path) =>
@@ -738,17 +898,19 @@ internal static partial class Program
                     if (stage == DurableAtomicWriteStage.BeforeTempOpen && path == secondaryStore.FilePath)
                         throw new IOException("Catalog update must not save secondary content.");
                 }));
-                var newCount = controller.WorkspaceOptions.Normalized();
-                newCount.Count = earlierCount == 5 ? 4 : 5;
-                Require(await controller.ChangeWorkspaceConfigurationAsync(newCount),
+                var changedMembership = controller.WorkspaceOptions.Normalized();
+                changedMembership.Slots = earlierSlots.Contains(5)
+                    ? earlierSlots.Where(n => n != 5).ToList()
+                    : earlierSlots.Append(5).OrderBy(n => n).ToList();
+                Require(await controller.ChangeWorkspaceConfigurationAsync(changedMembership),
                     "secondary catalog-only update triggered a secondary save");
                 Require(File.ReadAllBytes(store2.FilePath).SequenceEqual(beforeCatalogEdit),
                     "secondary catalog-only update unexpectedly modified its document");
             }
             finally { secondaryWriterField.SetValue(secondaryStore, originalSecondaryWriter); }
-            var restoredCount = controller.WorkspaceOptions.Normalized();
-            restoredCount.Count = earlierCount;
-            Require(await controller.ChangeWorkspaceConfigurationAsync(restoredCount),
+            var restoredMembership = controller.WorkspaceOptions.Normalized();
+            restoredMembership.Slots = earlierSlots.ToList();
+            Require(await controller.ChangeWorkspaceConfigurationAsync(restoredMembership),
                 "secondary catalog-only restoration failed");
 
             // A follow toggle changes only the effective software settings. It must not
@@ -809,6 +971,57 @@ internal static partial class Program
             await Until(() => controller.WorkspaceNumber == 2 && !controller.IsWorkspaceSwitching, "top-bar click did not switch");
             Require(await controller.SwitchWorkspaceAsync(1), "return after actual button event failed");
 
+            // The same configurable shortcut behaves identically in the title bar and
+            // paper overflow: default cycle, optional named choices. Only the tray uses tiles.
+            var originalShortcutOrder = controller.State.TopBarShortcutOrder.ToList();
+            var originalShortcutCount = controller.State.TopBarPinnedCount;
+            Require(PaperTopBarShortcuts.MoveTo(controller.State,
+                    PaperTopBarShortcuts.Workspace, pinned: false, targetIndex: 0),
+                "fixture could not move workspace shortcut to overflow");
+            var paperMenuWindow = windows["note-a"];
+            paperMenuWindow.UpdateTopBarNewPaperButtons();
+            var paperContextBuilder = typeof(PaperWindow).GetMethod(
+                "BuildPaperContextMenu", BindingFlags.Instance | BindingFlags.NonPublic)!;
+            ContextMenu PaperContext() => (ContextMenu)paperContextBuilder.Invoke(
+                windows["note-a"], [false])!;
+            var cyclingMenu = PaperContext();
+            var cyclingItem = cyclingMenu.Items.OfType<MenuItem>().Single(item =>
+                item.Header is string label &&
+                label.StartsWith("Switch to workspace ", StringComparison.Ordinal));
+            Require(cyclingItem.Header?.ToString()?.EndsWith("2", StringComparison.Ordinal) == true &&
+                    cyclingItem.Items.Count == 0,
+                "overflow must show the next workspace as a direct cycle command");
+            cyclingItem.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            await Until(() => controller.WorkspaceNumber == 2 && !controller.IsWorkspaceSwitching,
+                "overflow cycle did not use the top-bar switching behavior");
+            Require(await controller.SwitchWorkspaceAsync(1), "return after overflow cycle failed");
+
+            var named = controller.WorkspaceOptions.Normalized();
+            named.TopBarNamePicker = true;
+            named.Names[2] = "Project B";
+            Require(await controller.ChangeWorkspaceConfigurationAsync(named),
+                "fixture could not enable the named selector");
+            windows["note-a"].UpdateTopBarNewPaperButtons();
+            var namedMenu = PaperContext();
+            var namedItem = namedMenu.Items.OfType<MenuItem>().Single(item =>
+                item.Header?.ToString() == "Switch workspace");
+            Require(namedItem.Items.Count == 5 &&
+                    ((MenuItem)namedItem.Items[1]).Header?.ToString() == "Project B",
+                "overflow named mode must expose an expandable workspace-name submenu");
+            ((MenuItem)namedItem.Items[1]).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            await Until(() => controller.WorkspaceNumber == 2 && !controller.IsWorkspaceSwitching,
+                "overflow named selector did not switch to the chosen workspace");
+            Require(await controller.SwitchWorkspaceAsync(1), "return after named selection failed");
+            var restoreNamed = controller.WorkspaceOptions.Normalized();
+            restoreNamed.TopBarNamePicker = false;
+            restoreNamed.Names.Remove(2);
+            Require(await controller.ChangeWorkspaceConfigurationAsync(restoreNamed),
+                "could not restore the default workspace selection mode");
+            controller.State.TopBarShortcutOrder = originalShortcutOrder;
+            controller.State.TopBarPinnedCount = originalShortcutCount;
+            controller.SaveNow(sync: true);
+            windows["note-a"].UpdateTopBarNewPaperButtons();
+
             await WorkspaceMainCatalogSingleWriteChecks(controller);
             await WorkspaceRollbackChecks(controller, directory);
 
@@ -850,31 +1063,141 @@ internal static partial class Program
             Require(await controller.ChangeWorkspaceConfigurationAsync(beforeRestoreOptions),
                 "restore mutation fixture could not restore follow settings");
 
-            // Both settings and tray choose an explicit slot, unlike the paper's cycle button.
-            var workspacePage = (StackPanel)typeof(AppController)
+            // Selecting a workspace in settings only drafts the target; the explicit
+            // confirmation is what crosses the workspace boundary.
+            StackPanel WorkspacePage() => (StackPanel)typeof(AppController)
                 .GetMethod("BuildWorkspaceSettingsPage", System.Reflection.BindingFlags.NonPublic |
                     System.Reflection.BindingFlags.Instance)!
                 .Invoke(controller, null)!;
-            var workspaceCombo = workspacePage.Children.OfType<ComboBox>().Single();
-            Require(workspaceCombo.Items.Count == 5 && workspaceCombo.SelectedIndex == 0 &&
-                AutomationProperties.GetAutomationId(workspaceCombo) == "WorkspaceSelect",
-                "settings workspace dropdown did not reflect the active slot");
-            workspaceCombo.SelectedIndex = 2;
+            var workspacePage = WorkspacePage();
+            StackPanel WorkspaceOptionsGroup(StackPanel page) =>
+                page.Children.OfType<StackPanel>().Single();
+            var createWorkspace = WorkspaceOptionsGroup(workspacePage).Children.OfType<DockPanel>().Single()
+                .Children.OfType<Button>().Single();
+            Require(createWorkspace.Height == 27 && createWorkspace.BorderThickness.Left == 1 &&
+                    HasWorkspaceButtonInset(createWorkspace) &&
+                    createWorkspace.Content is string createText &&
+                    !createText.Contains('＋'),
+                "New workspace must omit the plus and use a framed button with horizontal inset");
+            var iconClass = typeof(AppController).Assembly.GetType("PaperTodo.WorkspaceCycleIcon", throwOnError: true)!;
+            var iconData = (string)iconClass.GetField("PathData", BindingFlags.NonPublic | BindingFlags.Static)!
+                .GetRawConstantValue()!;
+            var iconBounds = Geometry.Parse(iconData).Bounds;
+            Require(iconBounds.Width > 8 && iconBounds.Height > 8 &&
+                    iconBounds.Width < 17 && iconBounds.Height < 17,
+                "the redesigned workspace glyph must parse as a compact top-bar vector");
+            Border SlotCard(StackPanel page, int slot) => WorkspaceOptionsGroup(page).Children.OfType<Border>()
+                .Single(card => AutomationProperties.GetAutomationId(card) == "WorkspaceSlot" + slot);
+            var third = SlotCard(workspacePage, 3);
+            var cardRow = (Grid)third.Child;
+            Require(cardRow.RowDefinitions.Count == 0 &&
+                cardRow.Children.OfType<StackPanel>().Count() == 2,
+                "workspace card actions must share the name row");
+            var nameRow = cardRow.Children.OfType<StackPanel>().First();
+            var rightRow = cardRow.Children.OfType<StackPanel>().Last();
+            var rename = nameRow.Children.OfType<Button>().Single();
+            var workspaceNameEditor = nameRow.Children.OfType<TextBox>().Single();
+            Require(workspaceNameEditor.Style is { } renameStyle &&
+                    renameStyle.Setters.OfType<Setter>().Any(setter => setter.Property == Control.TemplateProperty) &&
+                    workspaceNameEditor.BorderThickness.Left == 1 &&
+                    workspaceNameEditor.Padding.Left == 8,
+                "workspace rename editor should use the rounded external-file-extension textbox style");
+            Require(rightRow.Children.OfType<CheckBox>().Single().Content?.ToString() ==
+                    Strings.Get("WorkspaceFollowMain") &&
+                    rightRow.Children.OfType<Button>().Count() == 1,
+                "follow-main switch and delete must be inline with the workspace label");
+            rename.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Require(rename.Content?.ToString() == "✓" && workspaceNameEditor.Visibility == Visibility.Visible &&
+                nameRow.Children.OfType<TextBlock>().First().Visibility == Visibility.Collapsed,
+                "pen did not switch the workspace name into same-row editing");
+            // In-place cursor placement and the checkmark remain interactive.
+            // Every click outside both cancels, including outside the card;
+            // the draft must not be silently saved.
+            var cancelRenamePointer = typeof(AppController).GetMethod(
+                "CancelWorkspaceRenameOnPointer", BindingFlags.NonPublic | BindingFlags.Instance)!;
+            cancelRenamePointer.Invoke(controller, [workspaceNameEditor]);
+            cancelRenamePointer.Invoke(controller, [rename]);
+            Require(rename.Content?.ToString() == "✓" &&
+                    workspaceNameEditor.Visibility == Visibility.Visible,
+                "mouse interactions inside the editor or on the checkmark must not cancel renaming");
+            workspaceNameEditor.Text = "Unsaved workspace";
+            cancelRenamePointer.Invoke(controller, [new Border()]);
+            Require(rename.Content?.ToString() == "✎" &&
+                    workspaceNameEditor.Visibility == Visibility.Collapsed &&
+                    controller.WorkspaceOptions.DisplayName(3) != "Unsaved workspace",
+                "a click anywhere outside the inline rename area must discard its draft");
+            rename.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            workspaceNameEditor.Text = "Review workspace";
+            rename.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            await Until(() => controller.WorkspaceOptions.DisplayName(3) == "Review workspace" &&
+                           !controller.IsWorkspaceSwitching,
+                "inline workspace name checkmark did not commit");
+            Require(controller.WorkspaceNumber == 1,
+                "renaming a workspace unexpectedly switched it");
+
+            // The card itself, not just its label, selects the target.
+            workspacePage = WorkspacePage();
+            third = SlotCard(workspacePage, 3);
+            third.RaiseEvent(new System.Windows.Input.MouseButtonEventArgs(
+                System.Windows.Input.Mouse.PrimaryDevice, 0, System.Windows.Input.MouseButton.Left)
+            {
+                RoutedEvent = UIElement.MouseLeftButtonUpEvent
+            });
+            Require(controller.WorkspaceNumber == 1, "workspace card switched without confirmation");
+            workspacePage = WorkspacePage();
+            var confirm = WorkspaceOptionsGroup(workspacePage).Children.OfType<Button>().Single();
+            Require(confirm.IsEnabled && HasWorkspaceButtonInset(confirm) &&
+                    confirm.Content is string confirmText &&
+                    confirmText != Strings.Get("CommonCancel") &&
+                    confirm.Height == 27 && confirm.BorderThickness.Left == 1,
+                "settings must offer one inset framed switch confirmation and no cancel button");
+            confirm.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             await Until(() => controller.WorkspaceNumber == 3 && !controller.IsWorkspaceSwitching,
-                "settings workspace dropdown did not select slot 3");
+                "settings card confirmation did not select slot 3");
             Require(await controller.SwitchWorkspaceAsync(1), "return after settings selection failed");
 
+            // The tray heading and settings-style number segments now share one
+            // compact row. Confirm/cancel replace the segments in that same row.
             var trayMenu = controller.CreateTrayMenu();
             controller.RebuildTrayMenu(trayMenu);
             var workspaceMenu = trayMenu.Items.OfType<MenuItem>().Single(item =>
-                item.Items.Count == controller.WorkspaceOptions.Count &&
-                item.Header?.ToString()?.Contains("workspace", StringComparison.OrdinalIgnoreCase) == true);
-            Require(workspaceMenu.Items.Count == 5 &&
-                ((MenuItem)workspaceMenu.Items[0]).Header?.ToString()?.Contains("✓") == true,
-                "tray workspace submenu did not mark the current slot");
-            ((MenuItem)workspaceMenu.Items[3]).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+                AutomationProperties.GetAutomationId(item) == "TrayWorkspaceSelector");
+            var trayWorkspaceRow = (Grid)workspaceMenu.Header;
+            Require(trayWorkspaceRow.RowDefinitions.Count == 0 &&
+                trayWorkspaceRow.Height == 26 &&
+                ((TextBlock)trayWorkspaceRow.Children[0]).Text == Strings.Get("WorkspaceSettingsTitle"),
+                "tray workspace selector must share one compact row with its label");
+            var segmentHost = (ContentPresenter)trayWorkspaceRow.Children[1];
+            Border TileStrip() => (Border)segmentHost.Content;
+            var strip = TileStrip();
+            var tiles = ((Grid)strip.Child).Children.OfType<Border>().ToArray();
+            Require(strip.Height == 24 && tiles.Length == 5 &&
+                ((TextBlock)tiles[0].Child).Text == "1" &&
+                ((TextBlock)tiles[3].Child).Text == "4",
+                "tray workspace choices must be compact horizontal numbered segments without names");
+            void SelectTrayTile(int index)
+            {
+                var itemTile = ((Grid)TileStrip().Child).Children.OfType<Border>().ElementAt(index);
+                itemTile.RaiseEvent(new System.Windows.Input.MouseButtonEventArgs(
+                    System.Windows.Input.Mouse.PrimaryDevice, 0, System.Windows.Input.MouseButton.Left)
+                {
+                    RoutedEvent = UIElement.MouseLeftButtonDownEvent
+                });
+            }
+            SelectTrayTile(3);
+            Require(controller.WorkspaceNumber == 1 && segmentHost.Content is StackPanel,
+                "tray tile must show inline confirmation before switching");
+            var confirmRow = (StackPanel)segmentHost.Content;
+            var confirmationButtons = confirmRow.Children.OfType<Button>().ToArray();
+            Require(confirmationButtons.Length == 2, "tray confirmation needs OK and Cancel");
+            confirmationButtons[1].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Require(segmentHost.Content is Border && controller.WorkspaceNumber == 1,
+                "tray Cancel must restore numeric segments without switching");
+            SelectTrayTile(3);
+            confirmRow = (StackPanel)segmentHost.Content;
+            confirmRow.Children.OfType<Button>().First().RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             await Until(() => controller.WorkspaceNumber == 4 && !controller.IsWorkspaceSwitching,
-                "tray workspace submenu did not select slot 4");
+                "tray confirmation did not switch to selected slot");
             Require(await controller.SwitchWorkspaceAsync(1), "return after tray selection failed");
 
             // Missing images remain a local rendering failure, not a reason to reject
@@ -900,32 +1223,114 @@ internal static partial class Program
             var busyFifthBytes = File.ReadAllBytes(busyFifthPath);
             using (var busy = new FileStream(busyFifthPath,
                 FileMode.Open, FileAccess.ReadWrite, FileShare.None))
-                Require(!await controller.SwitchWorkspaceAsync(5) && controller.WorkspaceNumber == 1,
+                Require(!await WithWorkspaceFailureDialog(() => controller.SwitchWorkspaceAsync(5), dialog => dialog.Close()) && controller.WorkspaceNumber == 1,
                     "busy fifth workspace caused a switch or a destructive recovery");
             Require(File.ReadAllBytes(busyFifthPath).SequenceEqual(busyFifthBytes),
                 "busy fifth workspace was overwritten during the rejected switch");
 
-            // Corrupt JSON is a different outcome: the same slot can be rebuilt.
+            // With no usable source, blank initialization requires an explicit choice.
             File.WriteAllText(busyFifthPath, "{invalid target");
-            Require(await controller.SwitchWorkspaceAsync(5) && controller.WorkspaceNumber == 5,
-                "corrupt fifth workspace was not rebuilt during a normal switch");
-            Require(Directory.GetFiles(directory, "data5.failed_load.*.json")
-                    .Any(file => File.ReadAllText(file) == "{invalid target"),
-                "corrupt fifth workspace was overwritten without preserving its source");
-            Require(controller.State.Papers.Count == 1 && controller.State.Papers[0].Content.Length == 0,
-                "new fifth workspace duplicated main content");
+            Require(await WithWorkspaceFailureDialog(() => controller.SwitchWorkspaceAsync(5),
+                    dialog => ClickFailureAction(dialog, "HistoryRecoveryCreate"), "HistoryRecoveryTitle") &&
+                    controller.WorkspaceNumber == 5 &&
+                    controller.State.Papers.Count == 1 && controller.State.Papers[0].Content.Length == 0,
+                "unrecoverable fifth workspace did not initialize blank");
+            Require(await controller.SwitchWorkspaceAsync(1), "return after explicit rebuild failed");
+            File.WriteAllText(busyFifthPath, "{invalid target");
+            File.Delete(Path.Combine(directory, "data5.backup.json"));
+            var fifthRecovered = NewState();
+            fifthRecovered.Papers[0].Content = "automatically recovered fifth";
+            File.WriteAllText(busyFifthPath + ".tmp", store2.SerializeState(fifthRecovered));
+            Require(await controller.SwitchWorkspaceAsync(5) && controller.WorkspaceNumber == 5 &&
+                    controller.State.Papers[0].Content == "automatically recovered fifth" &&
+                    !File.Exists(busyFifthPath + ".tmp") &&
+                    !Directory.GetFiles(directory, "data5.failed_load.*.json").Any(),
+                "complete fifth-workspace temp was not automatically recovered");
             var fifthPath = Path.Combine(directory, "data5.json");
             var fifthId = controller.State.Papers[0].Id;
-            var reduced = controller.WorkspaceOptions.Normalized(); reduced.Count = 3;
+            var reduced = controller.WorkspaceOptions.Normalized(); reduced.Slots = [1, 2, 3];
             Require(await controller.ChangeWorkspaceConfigurationAsync(reduced) && controller.WorkspaceNumber == 1,
-                "reducing count did not return an excluded active slot to main");
+                "removing a slot did not return an excluded active workspace to main");
             Require(File.Exists(fifthPath) && Str(J(File.ReadAllText(fifthPath))["papers"]![0]!["id"]) == fifthId,
-                "reducing count removed or changed fifth workspace data");
+                "removing a slot unexpectedly deleted its data");
             Require(await controller.CycleWorkspaceAsync() && controller.WorkspaceNumber == 2, "cycle to2 failed");
             Require(await controller.CycleWorkspaceAsync() && controller.WorkspaceNumber == 3, "cycle to3 failed");
-            Require(await controller.CycleWorkspaceAsync() && controller.WorkspaceNumber == 1, "cycle did not wrap at count");
+            Require(await controller.CycleWorkspaceAsync() && controller.WorkspaceNumber == 1, "cycle did not wrap at the last active slot");
+
+            // The tray keeps five fixed positions. Only the first vacant position
+            // shows a vector create action; creating a slot never switches away.
+            ContextMenu TrayForCreate()
+            {
+                var menu = controller.CreateTrayMenu();
+                controller.RebuildTrayMenu(menu);
+                return menu;
+            }
+            Border[] TraySlots(ContextMenu menu)
+            {
+                var workspaceItem = menu.Items.OfType<MenuItem>().Single(item =>
+                    AutomationProperties.GetAutomationId(item) == "TrayWorkspaceSelector");
+                var row = (Grid)workspaceItem.Header;
+                var presenter = (ContentPresenter)row.Children[1];
+                return ((Grid)((Border)presenter.Content).Child).Children.OfType<Border>().ToArray();
+            }
+            void ClickTraySlot(Border tile) => tile.RaiseEvent(new System.Windows.Input.MouseButtonEventArgs(
+                System.Windows.Input.Mouse.PrimaryDevice, 0, System.Windows.Input.MouseButton.Left)
+            {
+                RoutedEvent = UIElement.MouseLeftButtonDownEvent
+            });
+
+            var originalWorkspaceState = controller.State;
+            var threeSlotMenu = TrayForCreate();
+            var threeTiles = TraySlots(threeSlotMenu);
+            Require(threeTiles.Length == 5 &&
+                    ((TextBlock)threeTiles[0].Child).Text == "1" &&
+                    ((TextBlock)threeTiles[1].Child).Text == "2" &&
+                    ((TextBlock)threeTiles[2].Child).Text == "3" &&
+                    threeTiles[3].Child is System.Windows.Shapes.Path plusIcon &&
+                    plusIcon.Data.Bounds.Width > 8 && plusIcon.Data.Bounds.Height > 8 &&
+                    AutomationProperties.GetAutomationId(threeTiles[3]) == "TrayCreateWorkspace" &&
+                    threeTiles[4].Child == null && !threeTiles[4].IsHitTestVisible,
+                "tray did not put a vector create action in the first free slot and leave the rest inert");
+            ClickTraySlot(threeTiles[3]);
+            await Until(() => controller.WorkspaceOptions.ContainsSlot(4) && !controller.IsWorkspaceSwitching,
+                "tray plus did not create workspace 4");
+            Require(controller.WorkspaceNumber == 1 && ReferenceEquals(controller.State, originalWorkspaceState),
+                "creating a tray workspace changed the active workspace or its state");
+
+            var fourTiles = TraySlots(TrayForCreate());
+            Require(((TextBlock)fourTiles[3].Child).Text == "4" &&
+                    fourTiles[4].Child is System.Windows.Shapes.Path,
+                "tray plus did not move to the next vacant position");
+            ClickTraySlot(fourTiles[4]);
+            await Until(() => controller.WorkspaceOptions.ContainsSlot(5) && !controller.IsWorkspaceSwitching,
+                "tray plus did not create workspace 5");
+            Require(controller.WorkspaceNumber == 1 &&
+                    TraySlots(TrayForCreate()).All(tile => tile.Child is TextBlock),
+                "five full workspace slots still showed a create action or switched workspaces");
+
+            var withGap = controller.WorkspaceOptions.Normalized();
+            withGap.Slots.Remove(2);
+            Require(await controller.ChangeWorkspaceConfigurationAsync(withGap),
+                "could not remove an intermediate slot for tray gap test");
+            var gapTiles = TraySlots(TrayForCreate());
+            Require(gapTiles[1].Child is System.Windows.Shapes.Path &&
+                    ((TextBlock)gapTiles[2].Child).Text == "3",
+                "tray did not offer to reuse the first missing workspace number");
+            ClickTraySlot(gapTiles[1]);
+            await Until(() => controller.WorkspaceOptions.ContainsSlot(2) && !controller.IsWorkspaceSwitching,
+                "tray plus did not reuse the missing workspace number");
+            Require(controller.WorkspaceNumber == 1 && ReferenceEquals(controller.State, originalWorkspaceState),
+                "recreating an intermediate workspace unexpectedly switched workspace");
+
             var disabled = controller.WorkspaceOptions.Normalized(); disabled.Enabled = false;
             Require(await controller.ChangeWorkspaceConfigurationAsync(disabled), "disable failed");
+            var disabledPage = WorkspacePage();
+            var disabledToggle = disabledPage.Children.OfType<CheckBox>().Single();
+            var disabledOptions = WorkspaceOptionsGroup(disabledPage);
+            Require(disabledToggle.IsEnabled && disabledToggle.IsChecked == false &&
+                    !disabledOptions.IsEnabled && disabledOptions.Opacity < 0.8 &&
+                    disabledPage.Children.OfType<TextBlock>().First().Opacity < 0.8,
+                "disabling workspaces must dim all workspace controls except the enable toggle");
             foreach (var window in windows.Values)
             {
                 window.EnsureShellBuilt();

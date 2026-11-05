@@ -130,7 +130,7 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
                 EdgeCapsuleColdStartDiagnostics.Boundary("root-committed-static");
 #endif
 
-                if (!_window.Show(_outputBounds, _plan.Topmost))
+                if (!_window.Show(_outputBounds, _plan.Topmost, _insertAfter))
                 {
                     return false;
                 }
@@ -142,6 +142,10 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
                 EdgeCapsuleColdStartDiagnostics.Boundary("output-ready");
                 EdgeCapsuleColdStartDiagnostics.Boundary("cover-static-visible");
 #endif
+            }
+            else if (!_window.PlaceBehind(_insertAfter))
+            {
+                return false;
             }
             else if (newHandles.Length > 0)
             {
