@@ -228,6 +228,8 @@ internal sealed partial class WorkbenchWindow : Window
         _helpPanel.Background = CardBrush;
         _helpPanel.BorderBrush = Outline;
         _helpText.Foreground = Ink;
+        _helpText.Text = Strings.Get("WorkbenchHint");
+        _helpButton.ToolTip = Strings.Get("WorkbenchHelp");
         foreach (var button in _chromeButtons)
         {
             button.Background = CardBrush;
