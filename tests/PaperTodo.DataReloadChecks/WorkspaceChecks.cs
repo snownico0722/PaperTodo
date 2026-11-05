@@ -766,11 +766,14 @@ internal static partial class Program
             inheritedControls.Children.Add(new Button { Content = "Inherited setting" });
             var inheritedPage = (StackPanel)inheritanceMethod.Invoke(controller, [inheritedControls])!;
             var manageWorkspace = inheritedPage.Children.OfType<Button>().Single();
+            bool HasWorkspaceButtonInset(Button action) =>
+                action.Content is TextBlock text &&
+                text.Margin.Left >= 12 && text.Margin.Right >= 12;
             Require(manageWorkspace.Height == 27 &&
                     manageWorkspace.BorderThickness.Left == 1 &&
                     manageWorkspace.Background == Brushes.Transparent &&
-                    manageWorkspace.IsEnabled,
-                "the inherited-settings workspace jump must remain usable to disable follow mode");
+                    manageWorkspace.IsEnabled && HasWorkspaceButtonInset(manageWorkspace),
+                "the inherited-settings workspace jump needs a clickable frame and content inset");
             Require(!inheritedControls.IsEnabled && inheritedControls.Opacity < 0.8,
                 "following software settings must disable and visually dim the entire settings page");
 
@@ -987,8 +990,11 @@ internal static partial class Program
                 page.Children.OfType<StackPanel>().Single();
             var createWorkspace = WorkspaceOptionsGroup(workspacePage).Children.OfType<DockPanel>().Single()
                 .Children.OfType<Button>().Single();
-            Require(createWorkspace.Height == 27 && createWorkspace.BorderThickness.Left == 1,
-                "New workspace needs the same framed Settings button as Restore defaults");
+            Require(createWorkspace.Height == 27 && createWorkspace.BorderThickness.Left == 1 &&
+                    HasWorkspaceButtonInset(createWorkspace) &&
+                    createWorkspace.Content is TextBlock createText &&
+                    !createText.Text.Contains('＋'),
+                "New workspace must omit the plus and use a framed button with horizontal inset");
             var iconClass = typeof(AppController).Assembly.GetType("PaperTodo.WorkspaceCycleIcon", throwOnError: true)!;
             var iconData = (string)iconClass.GetField("PathData", BindingFlags.NonPublic | BindingFlags.Static)!
                 .GetRawConstantValue()!;
@@ -1056,9 +1062,11 @@ internal static partial class Program
             Require(controller.WorkspaceNumber == 1, "workspace card switched without confirmation");
             workspacePage = WorkspacePage();
             var confirm = WorkspaceOptionsGroup(workspacePage).Children.OfType<Button>().Single();
-            Require(confirm.IsEnabled && confirm.Content?.ToString() != Strings.Get("CommonCancel") &&
+            Require(confirm.IsEnabled && HasWorkspaceButtonInset(confirm) &&
+                    confirm.Content is TextBlock confirmText &&
+                    confirmText.Text != Strings.Get("CommonCancel") &&
                     confirm.Height == 27 && confirm.BorderThickness.Left == 1,
-                "settings must offer one framed switch confirmation and no cancel button");
+                "settings must offer one inset framed switch confirmation and no cancel button");
             confirm.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             await Until(() => controller.WorkspaceNumber == 3 && !controller.IsWorkspaceSwitching,
                 "settings card confirmation did not select slot 3");
