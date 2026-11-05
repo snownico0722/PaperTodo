@@ -779,7 +779,7 @@ public sealed partial class AppController
             ? drag.SourceKey : _freeMasterDragPreview?.Layout.QueueKey;
         var handles = _windows.Values.Where(window => !window.IsClosed &&
                 (QueueKey(window.EdgeCapsulePreviewPaper) == queueKey ||
-                 carriedIds.Contains(window.EdgeCapsulePreviewPaperId) || window.IsDeepCapsuleReordering))
+                 carriedIds.Contains(window.EdgeCapsulePreviewPaperId) || window.IsDeepCapsuleReorderDragInProgress))
             .Select(window => window.EdgeCapsuleQueueProxySourceHandle)
             .Concat(_masterCapsules.Where(pair => pair.Key == queueKey || pair.Key == carriedMasterKey)
                 .Select(pair => pair.Value.QueueProxySourceHandle))
