@@ -219,30 +219,14 @@ internal sealed class NoteImageExportWindow : Window
                 ? Strings.Format("EditorImageExportSize", artifact.PixelWidth, artifact.PixelHeight)
                 : Strings.Format("EditorImageExportMissing", artifact.MissingImages);
             _save.IsEnabled = true;
-            // The preview and Save are usable before the optional estimate finishes.
-            await PrepareSizeAsync(artifact, cancellation);
-        }
-        catch (OperationCanceledException) { }
-        catch (Exception ex)
-        {
-            if (!_closed) _status.Text = Strings.Format("NoteExportFailure", ex.Message);
-        }
-    }
-
-    private async Task PrepareSizeAsync(NoteImageArtifact artifact, CancellationToken cancellation)
-    {
-        try
-        {
-            var estimate = await NoteImageExport.OnStaAsync(() => NoteImageExport.MeasureSize(artifact, cancellation));
-            if (_closed) return;
-            _sizeEstimate = estimate;
+            // Composition already produced both hints; no second STA or rasterization pass.
+            _sizeEstimate = artifact.SizeEstimate;
             UpdateEstimatedSize();
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            // A size hint cannot prevent saving an otherwise valid preview.
-            System.Diagnostics.Debug.WriteLine($"Note image size estimate: {ex}");
+            if (!_closed) _status.Text = Strings.Format("NoteExportFailure", ex.Message);
         }
     }
 

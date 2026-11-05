@@ -74,6 +74,7 @@
 | D-063 | 仅显式热重载和有基线三方合并，普通保存不检测外部修改 | Accepted | 持久化 / 产品边界 |
 | D-064 | 固定编号工作区共用代码，不共用运行数据 | Accepted | 工作区 / 持久化 |
 | D-065 | DComp 视觉与 Win32 输入提交的非原子边界 | Accepted (historical findings; native-owner candidate deferred) | Edge input / composition |
+| D-066 | 长图体积提示使用排版元数据粗估 | Accepted | Note / 导出性能 |
 
 ## 维护规则
 
@@ -2027,3 +2028,15 @@ PR #319 的初版把主胶囊完整材质收展后的卡死解释为终点迟到
 - [固定实验源码](https://github.com/snownico0722/PaperTodo/blob/5aa796befa944b53bd0e1191ded2bd4fe89b0246/src/EdgeCapsuleQueueDedicatedInputOwner.cs)；[归档时主线的命中入口](https://github.com/snownico0722/PaperTodo/blob/f6041ca6b5ebd787a02aa8158c6e67660b421be0/src/EdgeCapsuleQueueProxyWindow.cs)。
 - [E-019 详细归档](experiments/edge-retained-proxy-archive-20261104.md)：固定版本、原始数值、纠正顺序、未完成项与过期日志的证据边界。
 
+
+## D-066 — 长图体积提示使用排版元数据粗估
+
+**Status**：Accepted。
+
+**Context**：最初为避免预压缩，使用全输出像素统计模型。它仍需额外光栅化，Windows 实测长中文笔记预估约 2.62 秒，单次 JPG 导出约 1.09 秒、PNG 约 1.91 秒；后台执行不等于低计算成本。
+
+**Decision / Why**：在接受约 50% 粗估误差后，复用 Composer 已有文字及图片编码元数据，随排版累计两个体积数字；取消第二次全图渲染和预测任务。不在生产路径增加抽样、试压缩或为了精度而回退至像素扫描。格式、画质和保存选择仍由原导出路径负责。
+
+**Consequences**：元数据不能唯一决定压缩体积，跨格式图片、特殊纹理和大幅缩放仍可能超过目标误差；测试应同时报告原始误差与显示取整，不能把固定样例通过宣称为通用保证。
+
+**Evidence**：`NoteImageSizeEstimate`、`NoteImageExport.Composer`、`NoteImageSizeChecks`；旧实现在 `b187a149d50fe486590edb7bed6c08b7a0f06df0`，原性能数据见 [Windows CI](https://github.com/snownico0722/PaperTodo/actions/runs/42098466208)。

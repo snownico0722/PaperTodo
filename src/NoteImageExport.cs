@@ -15,7 +15,7 @@ namespace PaperTodo;
 
 // An immutable export artifact, never another editor or a screenshot of the live surface.
 // Fixed typography makes the saved image independent of window width, zoom and theme.
-internal sealed record NoteImageArtifact(DrawingGroup Drawing, double Height, int MissingImages)
+internal sealed record NoteImageArtifact(DrawingGroup Drawing, double Height, int MissingImages, NoteImageSizePrediction SizeEstimate)
 {
     internal const double Width = 600;
     internal const double Scale = 2;
@@ -23,7 +23,8 @@ internal sealed record NoteImageArtifact(DrawingGroup Drawing, double Height, in
     internal int PixelHeight => checked((int)Math.Ceiling(Height * Scale));
 }
 
-internal sealed record NoteImageSource(BitmapSource Bitmap, int NaturalWidth);
+internal sealed record NoteImageSource(BitmapSource Bitmap, int NaturalWidth,
+    long EncodedBytes = 0, string Mime = "", int NaturalHeight = 0);
 
 internal enum NoteImageFormat { Jpeg, Png }
 
@@ -79,7 +80,7 @@ internal static class NoteImageExport
         bitmap.StreamSource = stream;
         bitmap.EndInit();
         bitmap.Freeze();
-        return new NoteImageSource(bitmap, asset.Width);
+        return new NoteImageSource(bitmap, asset.Width, bytes.LongLength, asset.Mime, asset.Height);
     }
 
     internal static void Save(string path, NoteImageArtifact artifact, CancellationToken cancellation,
@@ -107,13 +108,6 @@ internal static class NoteImageExport
         RenderBands(artifact, cancellation, jpeg.WriteBgrRows);
         cancellation.ThrowIfCancellationRequested();
         jpeg.Complete();
-    }
-
-    internal static NoteImageSizePrediction MeasureSize(NoteImageArtifact artifact, CancellationToken cancellation)
-    {
-        var estimate = new NoteImageSizeEstimate(artifact.PixelWidth);
-        RenderBands(artifact, cancellation, estimate.AddBgrRows);
-        return new NoteImageSizePrediction(estimate.JpegBytes, estimate.PngBytes);
     }
 
     private static void RenderBands(NoteImageArtifact artifact, CancellationToken cancellation,
@@ -165,6 +159,7 @@ internal static class NoteImageExport
         private const double Margin = 48;
         private const double BodySize = 18;
         private readonly DrawingGroup _content = new();
+        private readonly NoteImageSizeEstimate _sizeEstimate = new();
         private readonly HashSet<string> _missing = new(StringComparer.Ordinal);
         private DrawingContext _dc = null!;
         private double _y = 48;
@@ -205,7 +200,9 @@ internal static class NoteImageExport
                 dc.DrawDrawing(_content);
             }
             result.Freeze();
-            return new NoteImageArtifact(result, Math.Ceiling(_y), _missing.Count);
+            return new NoteImageArtifact(result, Math.Ceiling(_y), _missing.Count,
+                _sizeEstimate.Finish((int)(NoteImageArtifact.Width * NoteImageArtifact.Scale),
+                    checked((int)(Math.Ceiling(_y) * NoteImageArtifact.Scale))));
         }
 
         private void Blocks(ContainerBlock blocks, double x, double width)
@@ -257,6 +254,7 @@ internal static class NoteImageExport
                         break;
                     case CodeBlock code:
                         var value = code.Lines.ToString();
+                        _sizeEstimate.AddText(value, 15);
                         var formatted = Format(value.Length == 0 ? " " : value, width - 28, 15, false, CodeFont);
                         formatted.LineHeight = 25;
                         _dc.DrawRoundedRectangle(CodeFill, null, new Rect(x, _y, width, formatted.Height + 28), 7, 7);
@@ -376,6 +374,7 @@ internal static class NoteImageExport
         private void Text(string value, IReadOnlyList<RunStyle> styles, double x, double width,
             double size, bool bold)
         {
+            _sizeEstimate.AddText(value, size, bold);
             var formatted = Format(value, width, size, bold);
             foreach (var run in styles.Where(run => run.Length > 0))
             {
@@ -403,8 +402,11 @@ internal static class NoteImageExport
             _y += formatted.Height;
         }
 
-        private void TextAt(string value, double x, double y, double width, double size, Brush brush) =>
+        private void TextAt(string value, double x, double y, double width, double size, Brush brush)
+        {
+            _sizeEstimate.AddText(value, size);
             _dc.DrawText(Format(value, width, size, color: brush), new Point(x, y));
+        }
 
         private void Image(LinkInline link, double x, double width)
         {
@@ -423,6 +425,9 @@ internal static class NoteImageExport
             var bitmap = image.Bitmap;
             var imageWidth = Math.Min(width, options.ResolveWidth(image.NaturalWidth, width));
             var imageHeight = imageWidth * bitmap.PixelHeight / bitmap.PixelWidth;
+            _sizeEstimate.AddImage(image.EncodedBytes, image.Mime, image.NaturalWidth,
+                image.NaturalHeight > 0 ? image.NaturalHeight : image.NaturalWidth * bitmap.PixelHeight / (double)bitmap.PixelWidth,
+                imageWidth * NoteImageArtifact.Scale, imageHeight * NoteImageArtifact.Scale);
             _y += 8;
             var bounds = new Rect(x + (width - imageWidth) / 2, _y, imageWidth, imageHeight);
             _dc.DrawRectangle(Brushes.White, null, bounds);
