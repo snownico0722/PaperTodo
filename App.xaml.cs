@@ -39,13 +39,18 @@ public partial class App : Application
 
     protected override async void OnStartup(StartupEventArgs e)
     {
-        if (McpBridge.IsRequested(e.Args))
+        var imageImportRequested = McpImageImportCommand.IsRequested(e.Args);
+        if (imageImportRequested || McpBridge.IsRequested(e.Args))
         {
             base.OnStartup(e);
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            var exitCode = 0;
             try
             {
-                await McpBridge.RunAsync(e.Args);
+                if (imageImportRequested)
+                    exitCode = await McpImageImportCommand.RunAsync(e.Args);
+                else
+                    await McpBridge.RunAsync(e.Args);
             }
             catch (Exception ex)
             {
@@ -58,9 +63,10 @@ public partial class App : Application
                 {
                     // stderr is optional; never replace an MCP failure with a logging failure.
                 }
-                Environment.ExitCode = 1;
+                exitCode = 1;
             }
-            Shutdown();
+            Shutdown(exitCode);
+            Environment.ExitCode = exitCode;
             return;
         }
 
@@ -404,3 +410,4 @@ public partial class App : Application
 #endif
     }
 }
+

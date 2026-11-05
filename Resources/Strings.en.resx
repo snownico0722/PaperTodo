@@ -1615,8 +1615,8 @@ When off, open at the docked edge or remembered position.</value>
     <value>Next workspace</value>
   </data>
   <data name="WorkspaceCycleTooltip" xml:space="preserve">
-    <value>Workspace {0} / {1}
-Click to switch to workspace {2}</value>
+    <value>Workspace {0}
+Click to switch to workspace {1}</value>
   </data>
   <data name="WorkspaceTrayCycle" xml:space="preserve">
     <value>Switch workspace (current {0} / {1})</value>

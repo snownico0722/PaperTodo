@@ -1615,8 +1615,8 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
     <value>다음 작업 공간</value>
   </data>
   <data name="WorkspaceCycleTooltip" xml:space="preserve">
-    <value>작업 공간 {0} / {1}
-클릭하여 {2}(으)로 전환</value>
+    <value>작업 공간 {0}
+클릭하여 {1}(으)로 전환</value>
   </data>
   <data name="WorkspaceTrayCycle" xml:space="preserve">
     <value>작업 공간 전환 (현재 {0} / {1})</value>

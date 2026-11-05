@@ -78,6 +78,7 @@ internal static partial class Program
             SettingsEditorBehavior();
             PostCommitFailureDoesNotReplay();
             Pump(PipeAndUnlinkBehavior());
+            Pump(ImageImportCommandBehavior());
             WebBridges();
             IsolatedPresentationBehavior();
             Console.WriteLine($"Settings API: {_checks} behavior checks passed.");
@@ -90,22 +91,22 @@ internal static partial class Program
     {
         var state = new AppState();
         Check(PaperTopBarShortcuts.Pinned(state).SequenceEqual(
-                  [PaperTopBarShortcuts.Association]) &&
+                  [PaperTopBarShortcuts.Association, PaperTopBarShortcuts.Workspace]) &&
               PaperTopBarShortcuts.Menu(state).SequenceEqual(
                   [PaperTopBarShortcuts.NewNote, PaperTopBarShortcuts.NewTodo,
                    PaperTopBarShortcuts.ExternalEditor]) &&
               PaperTopBarShortcuts.NormalizeOrder(null).SequenceEqual(
                   state.TopBarShortcutOrder),
-            "New installations pin only association and order Note, Todo, external editor in the menu.");
+            "New installations pin association and workspace switching.");
         Check(PaperTopBarShortcuts.MoveTo(state, PaperTopBarShortcuts.NewNote, true, 1) &&
               PaperTopBarShortcuts.Pinned(state).SequenceEqual(
-                  [PaperTopBarShortcuts.Association, PaperTopBarShortcuts.NewNote]) &&
+                  [PaperTopBarShortcuts.Association, PaperTopBarShortcuts.NewNote, PaperTopBarShortcuts.Workspace]) &&
               PaperTopBarShortcuts.Menu(state).SequenceEqual(
                   [PaperTopBarShortcuts.NewTodo, PaperTopBarShortcuts.ExternalEditor]),
             "Dragging a menu command above the divider pins it at the insertion slot.");
         Check(PaperTopBarShortcuts.MoveTo(state, PaperTopBarShortcuts.Association, false, 0) &&
               PaperTopBarShortcuts.Pinned(state).SequenceEqual(
-                  [PaperTopBarShortcuts.NewNote]) &&
+                  [PaperTopBarShortcuts.NewNote, PaperTopBarShortcuts.Workspace]) &&
               PaperTopBarShortcuts.Menu(state).SequenceEqual(
                   [PaperTopBarShortcuts.Association, PaperTopBarShortcuts.NewTodo,
                    PaperTopBarShortcuts.ExternalEditor]),
@@ -114,7 +115,7 @@ internal static partial class Program
             "Dropping in the same slot is a true no-op.");
         Check(PaperTopBarShortcuts.MoveTo(state, PaperTopBarShortcuts.NewTodo, true, 0) &&
               PaperTopBarShortcuts.Pinned(state).SequenceEqual(
-                  [PaperTopBarShortcuts.NewTodo, PaperTopBarShortcuts.NewNote]),
+                  [PaperTopBarShortcuts.NewTodo, PaperTopBarShortcuts.NewNote, PaperTopBarShortcuts.Workspace]),
             "Reordering within one group preserves divider membership.");
         Check(PaperTopBarShortcuts.Contains(state, PaperTypes.Note,
                   PaperTopBarShortcuts.NewNote) &&
@@ -128,7 +129,7 @@ internal static partial class Program
                    PaperTopBarShortcuts.PluginActions, "unknown"])
                   .SequenceEqual(
                   [PaperTopBarShortcuts.ExternalEditor, PaperTopBarShortcuts.Association,
-                   PaperTopBarShortcuts.NewNote, PaperTopBarShortcuts.NewTodo]),
+                   PaperTopBarShortcuts.Workspace, PaperTopBarShortcuts.NewNote, PaperTopBarShortcuts.NewTodo]),
             "Duplicates and obsolete plugin pins never enter the new global configuration.");
 
         var controller = Controller();
@@ -190,7 +191,8 @@ internal static partial class Program
                 JsonSerializer.Serialize(loaded, options));
             var reloaded = store.Load();
             Check(reloaded.TopBarPinnedCount == 3 &&
-                  PaperTopBarShortcuts.Menu(reloaded).SequenceEqual([PaperTopBarShortcuts.NewNote]) &&
+                  PaperTopBarShortcuts.Menu(reloaded).SequenceEqual(
+                      [PaperTopBarShortcuts.NewNote, PaperTopBarShortcuts.Workspace]) &&
                   reloaded.TodoTopBarShortcuts == null,
                 "A deliberate menu position survives restart without migrating again.");
 
@@ -602,6 +604,11 @@ internal static partial class Program
             var method = request.GetProperty("method").GetString();
             if (method == "get_workspace_binding")
                 return new { token = "fixture-workspace" };
+            if (method == "read_note_image")
+            {
+                requests.Add(request.Clone());
+                return new { paper_id = "paper", image_id = "001", mime = "image/png", image_base64 = "AQID" };
+            }
             requests.Add(request.Clone());
             if (method == "set_setting") host!.StopAfterResponse();
             return new { received = true };
@@ -623,6 +630,15 @@ internal static partial class Program
             var count = requests.Count;
             Throws<McpException>(() => tools.UpdateTodo("paper", "todo", linked_paper_id: "note", clear_linked_paper: true));
             Check(requests.Count == count, "Conflicting link arguments cause no request or mutation.");
+            Check(typeof(McpTools).GetMethod("InsertNoteImage") is null,
+                  "Base64 image insertion must not be exposed as a model-callable MCP tool.");
+            var imageBlocks = await tools.ReadNoteImage("paper", "001");
+            Check(requests[^1].GetProperty("method").GetString() == "read_note_image" &&
+                  imageBlocks is [ModelContextProtocol.Protocol.TextContentBlock,
+                      ModelContextProtocol.Protocol.ImageContentBlock image] &&
+                  image.MimeType == "image/png" &&
+                  image.DecodedData.ToArray().SequenceEqual(new byte[] { 1, 2, 3 }),
+                "The MCP tool returns actual image content, not Base64 displayed as text.");
             await tools.ListSettings("todo");
             Check(requests[^1].GetProperty("params").GetProperty("category").GetString() == "todo", "MCP list category forwarded.");
             await tools.GetSetting("todo.paper_links");
@@ -670,3 +686,4 @@ internal static partial class Program
         finally { Directory.Delete(root, true); }
     }
 }
+

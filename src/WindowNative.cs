@@ -920,7 +920,6 @@ internal static partial class WindowNative
         private readonly int _capacity;
         private readonly Dictionary<IntPtr, DeviceScreenRect> _pendingBounds = new();
         private IntPtr _deferredWindowPosition;
-        private bool _beginAttempted;
         private bool _nativeCommitAttempted;
         private bool _completed;
 #if DEBUG
@@ -1090,12 +1089,10 @@ internal static partial class WindowNative
                 _currentDeviceBoundsBatch = null;
             }
 
-            var outcome = "committed";
             if (_pendingBounds.Count == 0)
             {
-                outcome = "noop";
 #if DEBUG
-                TraceBatch(outcome);
+                TraceBatch("noop");
 #endif
                 return !HasFailed;
             }
@@ -1152,14 +1149,12 @@ internal static partial class WindowNative
 
             if (nativeChanges.Count == 0)
             {
-                outcome = "noop-final";
 #if DEBUG
-                TraceBatch(outcome);
+                TraceBatch("noop-final");
 #endif
                 return !HasFailed;
             }
 
-            _beginAttempted = true;
 #if DEBUG
             var beginStartedAt = EdgeCapsulePerformanceDiagnostics.Timestamp();
 #endif
@@ -1173,9 +1168,8 @@ internal static partial class WindowNative
             if (_deferredWindowPosition == IntPtr.Zero)
             {
                 HasFailed = true;
-                outcome = "begin-failed";
 #if DEBUG
-                TraceBatch(outcome);
+                TraceBatch("begin-failed");
 #endif
                 return false;
             }
@@ -1211,9 +1205,8 @@ internal static partial class WindowNative
                 {
                     HasFailed = true;
                     _deferredWindowPosition = IntPtr.Zero;
-                    outcome = "defer-failed";
 #if DEBUG
-                    TraceBatch(outcome);
+                    TraceBatch("defer-failed");
 #endif
                     return false;
                 }
@@ -1269,9 +1262,8 @@ internal static partial class WindowNative
             if (!committed)
             {
                 HasFailed = true;
-                outcome = "end-failed";
 #if DEBUG
-                TraceBatch(outcome);
+                TraceBatch("end-failed");
 #endif
                 return false;
             }
@@ -1313,15 +1305,14 @@ internal static partial class WindowNative
                 if (!verified)
                 {
                     HasFailed = true;
-                    outcome = "verify-failed";
 #if DEBUG
-                    TraceBatch(outcome);
+                    TraceBatch("verify-failed");
 #endif
                     return false;
                 }
             }
 #if DEBUG
-            TraceBatch(outcome);
+            TraceBatch("committed");
 #endif
             return true;
         }

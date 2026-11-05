@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 
 namespace PaperTodo;
@@ -185,6 +186,31 @@ internal sealed partial class McpTools
             cancellationToken);
 
     [McpServerTool(
+        Name = "read_note_image",
+        ReadOnly = true,
+        Destructive = false,
+        OpenWorld = false)]
+    [Description("Read one image from a built-in Markdown note as actual MCP image content for vision-capable clients. Get the image ID from the note's Markdown i: image reference via get_paper. Images owned by other notes are not accessible.")]
+    public async Task<ContentBlock[]> ReadNoteImage(
+        [Description("Exact note paper ID.")] string paper_id,
+        [Description("Image ID from a Markdown image reference, e.g. i:001. Supply only the ID (001).")] string image_id,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await _client.InvokeAsync(
+            "read_note_image", new { paper_id, image_id }, cancellationToken);
+        return
+        [
+            new TextContentBlock
+            {
+                Text = $"PaperTodo note {paper_id}, image {image_id}."
+            },
+            ImageContentBlock.FromBytes(
+                Convert.FromBase64String(result.GetProperty("image_base64").GetString()!),
+                result.GetProperty("mime").GetString()!)
+        ];
+    }
+
+    [McpServerTool(
         Name = "delete_paper",
         ReadOnly = false,
         Destructive = true,
@@ -270,3 +296,4 @@ internal sealed record McpTodoInput
     [Description("Optional PaperTodo paper ID to link from the new todo, such as a Note containing longer details.")]
     public string? LinkedPaperId { get; init; }
 }
+

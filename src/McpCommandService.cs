@@ -89,6 +89,8 @@ internal sealed partial class McpCommandService
                 "update_todo" => UpdateTodo(parameters),
                 "set_todo_reminder" => SetTodoReminder(parameters),
                 "write_note" => WriteNote(parameters),
+                "insert_note_image" => InsertNoteImage(parameters),
+                "read_note_image" => ReadNoteImage(parameters),
                 "delete_paper" => DeletePaper(parameters),
                 "delete_todo" => DeleteTodo(parameters),
                 _ => throw new McpApiException(
