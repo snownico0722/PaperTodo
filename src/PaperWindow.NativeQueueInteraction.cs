@@ -40,8 +40,10 @@ public sealed partial class PaperWindow
         try
         {
             UpdateEdgeCapsuleDragPointer(pointer);
-            _controller.PreviewNativeEdgeQueueDrag(_paper, pointer,
-                NativeQueueLogicalOwnerTop(pointer, session, floating: true), floating: true);
+            if (!_controller.PreviewNativeEdgeQueueDrag(_paper, pointer,
+                    NativeQueueLogicalOwnerTop(pointer, session, floating: true), floating: true))
+                _controller.PreviewSingleCapsuleDropGhost(_paper,
+                    DeepCapsuleDropIndexForCurrentPosition(), pointer, floating: true);
         }
         finally { _nativeQueueFeedbackSampling = false; }
     }
@@ -57,7 +59,9 @@ public sealed partial class PaperWindow
             MoveEdgeCapsuleDockedReorder(pointer, top);
             FlushEdgeCapsulePresentation(EdgeCapsuleTransitionReason.Drag);
         }
-        _controller.PreviewNativeEdgeQueueDrag(_paper, pointer, top, floating);
+        if (!_controller.PreviewNativeEdgeQueueDrag(_paper, pointer, top, floating))
+            _controller.PreviewSingleCapsuleDropGhost(_paper,
+                DeepCapsuleDropIndexForCurrentPosition(), pointer, floating);
     }
 
     // Establish invisible terminal endpoints under the still-visible pooled drag cover. The next
