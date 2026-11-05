@@ -2755,6 +2755,8 @@ public sealed partial class AppController
         window.EnsureShellBuilt();
         window.CancelPendingVisibilityTransitions();
         window.DetachFromDeepCapsuleStack(animate: false);
+        // Unlike ShowPaper, this path reuses a hidden window whose Note images are suspended.
+        window.PrepareForShow();
 
         Rect? snapTileBounds = null;
         if (!paper.IsCollapsed && window.TryGetRememberedSnapTileBoundsForRestore(out var rememberedSnapTileBounds))
