@@ -1,5 +1,7 @@
 using System;
 using System.Windows;
+using System.Runtime.InteropServices;
+using System.Windows.Interop;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Shell;
@@ -15,6 +17,7 @@ internal sealed class ExpandedEditorWindow : Window
 {
     private readonly AppController _controller;
     private readonly Border _frame;
+    private readonly RectangleGeometry _frameClip = new();
     private readonly Decorator _body = new();
     private PaperWindow? _current;
     private PaperWindow.ExpandedEditorVisualLease? _lease;
@@ -32,7 +35,7 @@ internal sealed class ExpandedEditorWindow : Window
         ResizeMode = ResizeMode.CanResize;
         ShowInTaskbar = true;
         AllowsTransparency = false;
-        Background = Brushes.Transparent;
+        Background = Theme.PaperBrush;
         MinWidth = 600;
         MinHeight = 400;
         WindowChrome.SetWindowChrome(this, new WindowChrome
@@ -47,8 +50,9 @@ internal sealed class ExpandedEditorWindow : Window
         _frame = new Border
         {
             CornerRadius = new CornerRadius(12),
-            BorderThickness = new Thickness(1),
+            BorderThickness = new Thickness(0),
             ClipToBounds = true,
+            Clip = _frameClip,
             Child = _body
         };
         Content = _frame;
@@ -60,10 +64,20 @@ internal sealed class ExpandedEditorWindow : Window
         Left = area.Left + (area.Width - Width) / 2;
         Top = area.Top + (area.Height - Height) / 2;
 
-        StateChanged += (_, _) =>
+        _frame.SizeChanged += (_, _) => RefreshEditorWindowCorners();
+        StateChanged += (_, _) => RefreshEditorWindowCorners();
+        SourceInitialized += (_, _) =>
         {
-            _frame.CornerRadius = WindowState == WindowState.Maximized
-                ? new CornerRadius(0) : new CornerRadius(12);
+            // DWM clips the real non-layered HWND, while WPF clips the inner visual.
+            // Rounding only an extra Border left black square corners on the host.
+            try
+            {
+                var rounding = 2u; // DWMWCP_ROUND
+                _ = DwmSetWindowAttribute(new WindowInteropHelper(this).Handle,
+                    33, ref rounding, sizeof(uint));
+            }
+            catch (DllNotFoundException) { } // Older Windows without DWM.
+            catch (EntryPointNotFoundException) { }
         };
 
         SwitchTo(initial);
@@ -71,8 +85,8 @@ internal sealed class ExpandedEditorWindow : Window
 
     private void SetFrameTheme(PaperWindow source)
     {
-        _frame.Background = source.Resources["PaperBrushKey"] as Brush
-            ?? Theme.PaperBrush;
+        Background = source.Resources["PaperBrushKey"] as Brush ?? Theme.PaperBrush;
+        _frame.Background = Background;
         _frame.BorderBrush = source.Resources["PaperBorderBrushKey"] as Brush
             ?? Brushes.Gray;
     }
@@ -90,12 +104,13 @@ internal sealed class ExpandedEditorWindow : Window
         var former = _lease;
         _lease = null;
         _current = null;
-        former?.Return(restoreDesktop: true);
+        former?.Return(restoreDesktop: true, keepBehind: this);
         _lease = target.BorrowExpandedEditorVisual(this, _body);
         _current = target;
         target.SetExpandedEditorSidebarOpen(keepSidebarOpen);
         Title = target.ExpandedEditorTitle;
         SetFrameTheme(target);
+        SetPaperTopmost(target.ExpandedEditorShouldTopmost);
         if (IsVisible) Activate();
     }
 
@@ -109,6 +124,25 @@ internal sealed class ExpandedEditorWindow : Window
         if (ReferenceEquals(_current, paper))
             Title = paper.ExpandedEditorTitle;
     }
+
+    internal void SetPaperTopmost(bool topmost)
+    {
+        if (Topmost != topmost) Topmost = topmost;
+    }
+
+    private void RefreshEditorWindowCorners()
+    {
+        var radius = WindowState == WindowState.Maximized ? 0d : 12d;
+        _frame.CornerRadius = new CornerRadius(radius);
+        _frameClip.Rect = new Rect(0, 0,
+            Math.Max(0, _frame.ActualWidth), Math.Max(0, _frame.ActualHeight));
+        _frameClip.RadiusX = radius;
+        _frameClip.RadiusY = radius;
+    }
+
+    [DllImport("dwmapi.dll", PreserveSig = true)]
+    private static extern int DwmSetWindowAttribute(
+        IntPtr hwnd, uint attribute, ref uint value, int size);
 
     internal void ToggleMaximized()
     {
@@ -125,6 +159,19 @@ internal sealed class ExpandedEditorWindow : Window
         Close();
         if (current != null && !current.IsClosed)
             _controller.RestoreExpandedEditorPaper(current.PaperId);
+    }
+
+    // The original far-right × always folds the editor's current paper to a
+    // capsule (or hides it when capsules are disabled). It is not a second close button.
+    internal void CollapseCurrentPaper()
+    {
+        if (_finishing) return;
+        _finishing = true;
+        var current = _current;
+        ReleaseCurrent(restoreDesktop: false);
+        Close();
+        if (current != null && !current.IsClosed)
+            _controller.CollapseExpandedEditorPaper(current.PaperId);
     }
 
     internal void CloseCurrentPaper()
@@ -160,11 +207,10 @@ internal sealed class ExpandedEditorWindow : Window
     {
         if (!_finishing)
         {
-            _finishing = true;
-            var paper = _current;
-            ReleaseCurrent(restoreDesktop: false);
-            if (paper != null && !paper.IsClosed)
-                _controller.HideExpandedEditorPaper(paper.PaperId);
+            // Alt+F4/taskbar close follows the same capsule policy as the far-right ×.
+            e.Cancel = true;
+            CollapseCurrentPaper();
+            return;
         }
         base.OnClosing(e);
     }
