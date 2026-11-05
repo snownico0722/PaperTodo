@@ -2072,7 +2072,7 @@ Collapse state and master lookup are keyed by the same queue instance identity a
 
 ## D-068 - Free-queue drops preview independent placement and prefer downward insertion (2026-11-05)
 
-**Status:** Accepted. Supersedes D-066's upward prepend and insertion-only feedback choices; D-067's per-queue master ownership remains unchanged.
+**Status:** Accepted for downward insertion and shared preview/commit. Independent positioning is superseded by D-069. Supersedes D-066's upward prepend and insertion-only feedback choices; D-067's per-queue master ownership remains unchanged.
 
 ### Context
 
@@ -2088,3 +2088,26 @@ The existing anchor conversion also covers independent drops, preserving the cho
 
 - `EdgeCapsuleFreeQueuePolicy.Insert`, `PreviewFreeQueueDropSlot`, `BuildFreeQueueDropAnchors` and the native/master drag paths.
 - `NativeFreeQueuePolicyChecks` and `NativeFreeQueueReviewChecks`: first/interior slots with room below and near the bottom, independent-group ghosts, cancellation, release and saved-position reconstruction.
+
+## D-069 - Independent landing ghosts consume the adjacent gap before moving neighbours (2026-11-05)
+
+**Status:** Accepted. Supersedes D-068's pointer-following independent collision displacement; its downward insertion and shared preview/commit remain accepted.
+
+### Context
+
+Reserving the entire carried block at every pointer height pushed a prospective target away before the held capsule reached its merge entrance. The neighbouring queue then returned when insertion replaced independent placement. Keeping the full block as the docked Ctrl hit probe also let its tail trigger a merge ahead of the held capsule.
+
+### Decision
+
+The held capsule selects a merge in both docked and floating free-queue drags. For independent placement, the existing drop policy fits the landing stack into the immediately selected gap: above a neighbour the ghost moves upward first, and below one it clears that neighbour's tail. Only a gap's missing space displaces neighbours, by one fixed amount calculated from resting geometry. Leaving that gap restores its previewed displacement. Work-area clamping and unpaged oversized queues remain unchanged; legacy Ctrl placement is unchanged. The selected landing, not the raw pointer height, is committed through the existing anchor conversion.
+
+The same passive ghost window distinguishes an independent stack's short master from its ordinary members, including compact masters and either screen edge. A folded source shows only its short master; merging shows members only. No timer, extra preview state machine, global free-space search or persistence format is added.
+
+### Why
+
+The preview should show an available landing rather than make a target continuously retreat. Using the adjacent resting gap gives stable feedback without feeding last frame's temporary displacement into the next calculation.
+
+### Evidence
+
+- `EdgeCapsuleFreeQueuePolicy.Place`, `EvaluateNativeEdgeQueueDrop`, `PreviewFreeQueueDropSlot` and `EdgeCapsuleQueueDropGhost.ShowAt`.
+- `NativeFreeQueuePolicyChecks` and `NativeFreeQueueReviewChecks`: continuous approach, enough/insufficient top space, below/merge/return, actual ghost widths, cancellation, release and persisted anchor reconstruction.

@@ -22,8 +22,8 @@ internal sealed record EdgeFreeQueueDrop(
 }
 
 /// <summary>
-/// Direct manipulation, not automatic free-space search. Independent queues stay at the
-/// requested height. Every insertion moves the suffix down, including the first slot;
+/// Direct manipulation, not automatic free-space search. Independent queues use the
+/// adjacent gap before displacing neighbours. Every insertion moves the suffix down, including the first slot;
 /// only insufficient space below lifts the merged queue. Intersected neighbours give way.
 /// </summary>
 // Gesture-local: a snap is a short-lived attachment to an exact slot, never a
@@ -173,14 +173,32 @@ internal static class EdgeCapsuleFreeQueuePolicy
 
     internal static EdgeFreeQueueDrop Place(
         IReadOnlyList<EdgeFreeQueueBox> obstacles, double requestedTop,
-        int slots, double areaHeight, double pitch, double gap)
+        int slots, double areaHeight, double pitch, double gap, bool stableNeighbours = true)
     {
         if (!double.IsFinite(requestedTop) || slots < 1) return EdgeFreeQueueDrop.Rejected;
         // Block a user-controlled position from leaving the display. This does not
         // search for a free slot or refuse a drop when the queue is longer than the screen.
         var height = slots * pitch - gap;
         var top = ClampVisibleTop(requestedTop, areaHeight, height);
-        var moved = ShiftNeighbours(obstacles, "", top, top, height, pitch, gap);
+        var pivot = top;
+        if (stableNeighbours)
+        {
+            // Use the resting gap selected by the drag, never last frame's displaced
+            // tops. The landing stack fits above the next queue before moving it;
+            // a short gap pushes down only by its deficit, once for this gap.
+            // Below a queue, move the ghost past its tail instead of pushing it up.
+            var floor = 0d;
+            var ceiling = double.PositiveInfinity;
+            foreach (var box in obstacles.Where(q => q.Slots > 0))
+            {
+                if (box.TopDip < pivot)
+                    floor = Math.Max(floor, box.TopDip + box.Height(pitch, gap) + gap);
+                else
+                    ceiling = Math.Min(ceiling, box.TopDip - height - gap);
+            }
+            top = ClampVisibleTop(Math.Max(floor, Math.Min(top, ceiling)), areaHeight, height);
+        }
+        var moved = ShiftNeighbours(obstacles, "", pivot, top, height, pitch, gap);
         return new(EdgeFreeQueueDropKind.Move, "", 0, top, moved);
     }
 
