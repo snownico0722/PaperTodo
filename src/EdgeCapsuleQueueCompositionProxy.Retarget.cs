@@ -20,7 +20,7 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
 
         try
         {
-            if (!_window.PlaceBehind(insertAfter))
+            if (insertAfter != IntPtr.Zero && !_window.PlaceBehind(insertAfter))
                 throw new InvalidOperationException("Queue translation could not stay behind its interaction surface.");
             // Keep the old clock running while logical/native endpoints settle beneath
             // the same live cover. Sample after that work, just before the new commit.
