@@ -1171,9 +1171,14 @@ public sealed partial class PaperWindow : Window
 
         if (_paperChrome is SkinBorder skin) skin.IsCapsule = _paper.IsCollapsed && _controller.State.UseCapsuleMode;
         var snappedExpanded = _isSnappedPresentation && !_paper.IsCollapsed;
-        if (_controller.UsesNativeMicaWindows && _topBarHost != null)
+        if (_topBarHost != null)
         {
-            var innerRadius = snappedExpanded ? 0 : Math.Max(0, NativeMicaBackdrop.CornerRadius - _paperChrome.BorderThickness.Left);
+            var innerRadius = _isExpandedEditorMode
+                ? ExpandedEditorCornerRadius
+                : _controller.UsesNativeMicaWindows
+                    ? (snappedExpanded ? 0 : Math.Max(0,
+                        NativeMicaBackdrop.CornerRadius - _paperChrome.BorderThickness.Left))
+                    : RadiusShell;
             _topBarHost.CornerRadius = new CornerRadius(innerRadius, innerRadius, 0, 0);
         }
 
