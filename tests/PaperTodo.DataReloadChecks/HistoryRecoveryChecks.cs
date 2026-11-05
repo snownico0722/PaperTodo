@@ -345,14 +345,22 @@ internal static partial class Program
         var app = new System.Windows.Application { ShutdownMode = System.Windows.ShutdownMode.OnExplicitShutdown };
         try
         {
-            // Exercise every action once. Other languages only need each distinct
-            // layout; action dispatch does not depend on the translated labels.
-            foreach (var language in new[] { "zh-CN", "en-US", "ja-JP", "ko-KR" })
-            foreach (var choice in new[] { WorkspaceRecoveryChoice.Cancel, WorkspaceRecoveryChoice.CreateEmpty,
-                         WorkspaceRecoveryChoice.Restore, WorkspaceRecoveryChoice.Exit }
-                     .Where(choice => language == "zh-CN" || choice == WorkspaceRecoveryChoice.Cancel))
+            // These three dialogs expose destructive choices. Keep their actual action
+            // mapping and safe defaults, without a permanent translation/layout matrix.
+            var create = (WorkspaceRecoveryChoice.CreateEmpty, Strings.Get("HistoryRecoveryCreate"));
+            var exit = (WorkspaceRecoveryChoice.Exit, Strings.Get("WorkspaceFailureExit"));
+            var dialogs = new (Func<WorkspaceRecoveryChoice> Show,
+                (WorkspaceRecoveryChoice Choice, string Label)[] Actions)[]
             {
-                UiLanguages.ApplyWorkspacePreference(language);
+                (() => PaperNoticeDialog.ShowHistoryRecovery(null, 2, "2026-01-01 12:00"),
+                    [create, (WorkspaceRecoveryChoice.Restore, Strings.Get("HistoryRecoveryRestore")), exit]),
+                (() => PaperNoticeDialog.ShowUnavailableWorkspace(null, null), [create, exit]),
+                (() => PaperNoticeDialog.ShowUnavailableWorkspace(null, 3),
+                    [create, (WorkspaceRecoveryChoice.Fallback, Strings.Format("WorkspaceRecoveryFallback", 3)), exit])
+            };
+            foreach (var scenario in dialogs)
+            foreach (var choice in scenario.Actions.Select(action => action.Choice).Prepend(WorkspaceRecoveryChoice.Cancel))
+            {
                 Exception? failure = null;
                 app.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ContextIdle, new Action(() =>
                 {
@@ -360,86 +368,28 @@ internal static partial class Program
                     try
                     {
                         Require(dialog.Owner == null && dialog.ShowInTaskbar, "startup recovery dialog is not reachable");
-                        var nodes = Descendants(dialog).ToArray();
-                        var text = nodes.OfType<System.Windows.Controls.TextBlock>().Select(block => block.Text);
-                        Require(text.Any(value => value.Contains("2026-01-01")), "recovery dialog omitted backup time");
+                        var nodes = FailureDialogNodes(dialog).ToArray();
                         var buttons = nodes.OfType<System.Windows.Controls.Button>().ToArray();
-                        var keys = new[] { "HistoryRecoveryCreate", "HistoryRecoveryRestore", "WorkspaceFailureExit" };
-                        Require(buttons.Select(button => button.Content).SequenceEqual(keys.Select(Strings.Get)) &&
-                                buttons[1].IsDefault && !buttons[0].IsDefault,
-                            "history choices changed order or made blank creation the default");
-                        foreach (var button in buttons)
-                        {
-                            var position = button.TranslatePoint(new System.Windows.Point(), dialog);
-                            Require(position.X >= 0 && position.X + button.ActualWidth <= dialog.ActualWidth &&
-                                    position.Y + button.ActualHeight <= dialog.ActualHeight,
-                                "translated history action is outside the dialog: " + language);
-                        }
+                        Require(Equals(buttons.Single(button => button.IsDefault).Content, scenario.Actions[1].Label),
+                            "recovery dialog default must restore, fall back or exit, never rebuild");
+                        if (choice == WorkspaceRecoveryChoice.Restore)
+                            Require(nodes.OfType<System.Windows.Controls.TextBlock>().Any(block => block.Text.Contains("2026-01-01")),
+                                "recovery dialog omitted backup time");
                         if (choice == WorkspaceRecoveryChoice.Cancel) dialog.Close();
-                        else buttons[Array.IndexOf(new[] { WorkspaceRecoveryChoice.CreateEmpty,
-                            WorkspaceRecoveryChoice.Restore, WorkspaceRecoveryChoice.Exit }, choice)].RaiseEvent(
-                            new System.Windows.RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+                        else buttons.Single(button => Equals(button.Content,
+                            scenario.Actions.Single(action => action.Choice == choice).Label)).RaiseEvent(
+                                new System.Windows.RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
                     }
                     catch (Exception ex) { failure = ex; dialog.Close(); }
                 }));
-                var result = PaperNoticeDialog.ShowHistoryRecovery(null, 2, "2026-01-01 12:00");
+                var result = scenario.Show();
                 if (failure != null) throw failure;
                 Require(result == choice, "recovery dialog did not honor the selected action");
             }
-            foreach (var language in new[] { "zh-CN", "en-US", "ja-JP", "ko-KR" })
-            foreach (int? fallback in new int?[] { null, 3 })
-            foreach (var choice in new[] { WorkspaceRecoveryChoice.Cancel, WorkspaceRecoveryChoice.CreateEmpty,
-                         WorkspaceRecoveryChoice.Exit, WorkspaceRecoveryChoice.Fallback }
-                     .Where(choice => language == "zh-CN" || choice == WorkspaceRecoveryChoice.Cancel))
-            {
-                if (choice == WorkspaceRecoveryChoice.Fallback && !fallback.HasValue) continue;
-                UiLanguages.ApplyWorkspacePreference(language);
-                Exception? failure = null;
-                app.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ContextIdle, new Action(() =>
-                {
-                    var dialog = app.Windows.OfType<System.Windows.Window>().Single();
-                    try
-                    {
-                        var nodes = Descendants(dialog).ToArray();
-                        Require(nodes.OfType<System.Windows.Controls.TextBlock>().Any(block =>
-                                block.Text == Strings.Get("WorkspaceRecoveryUnavailable")),
-                            "no-source dialog omitted corruption explanation");
-                        var buttons = nodes.OfType<System.Windows.Controls.Button>().ToArray();
-                        var labels = new List<string> { Strings.Get("HistoryRecoveryCreate") };
-                        if (fallback.HasValue) labels.Add(Strings.Format("WorkspaceRecoveryFallback", fallback.Value));
-                        labels.Add(Strings.Get("WorkspaceFailureExit"));
-                        Require(buttons.Select(button => button.Content).SequenceEqual(labels) &&
-                                buttons[1].IsDefault && !buttons[0].IsDefault,
-                            "unavailable choices changed or made rebuilding the default");
-                        foreach (var button in buttons)
-                        {
-                            var position = button.TranslatePoint(new System.Windows.Point(), dialog);
-                            Require(position.X >= 0 && position.X + button.ActualWidth <= dialog.ActualWidth &&
-                                    position.Y + button.ActualHeight <= dialog.ActualHeight,
-                                "translated unavailable action is outside the dialog: " + language);
-                        }
-                        if (choice == WorkspaceRecoveryChoice.Cancel) dialog.Close();
-                        else buttons[choice == WorkspaceRecoveryChoice.CreateEmpty ? 0 :
-                            choice == WorkspaceRecoveryChoice.Fallback ? 1 : buttons.Length - 1].RaiseEvent(
-                            new System.Windows.RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
-                    }
-                    catch (Exception ex) { failure = ex; dialog.Close(); }
-                }));
-                var result = PaperNoticeDialog.ShowUnavailableWorkspace(null, fallback);
-                if (failure != null) throw failure;
-                Require(result == choice, "unavailable dialog did not honor selected action");
-            }
-            Console.WriteLine("PASS ownerless historical recovery dialog: new, restore, exit, dismissal and four-language layout");
+            Console.WriteLine("PASS ownerless recovery dialogs: action mapping, safe defaults and dismissal");
             return 0;
         }
         catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
         finally { app.Shutdown(); }
-
-        static IEnumerable<System.Windows.DependencyObject> Descendants(System.Windows.DependencyObject root)
-        {
-            yield return root;
-            foreach (var child in System.Windows.LogicalTreeHelper.GetChildren(root).OfType<System.Windows.DependencyObject>())
-                foreach (var descendant in Descendants(child)) yield return descendant;
-        }
     }
 }

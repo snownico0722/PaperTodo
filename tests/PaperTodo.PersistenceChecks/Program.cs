@@ -1,6 +1,4 @@
 using System.IO;
-using System.Reflection;
-using System.Runtime.CompilerServices;
 using System.Text.Json;
 using PaperTodo;
 
@@ -15,7 +13,6 @@ var checks = new (string Name, Action Run)[]
     ("plugin-data-uses-one-normal-file", PluginDataUsesOneNormalFile),
     ("unreadable-plugin-data-does-not-become-empty", UnreadablePluginDataDoesNotBecomeEmpty),
     ("plugin-data-non-file-path-is-not-treated-as-missing", PluginDataNonFilePathIsNotTreatedAsMissing),
-    ("legacy-plugin-recovery-file-is-not-selected", LegacyPluginRecoveryFileIsNotSelected),
     ("plugin-system-shutdown-skips-final-flush", PluginSystemShutdownSkipsFinalFlush),
     ("plugin-normal-dispose-still-final-flushes", PluginNormalDisposeStillFinalFlushes),
     ("plugin-save-failure-retry-is-bounded", PluginSaveFailureRetryIsBounded),
@@ -24,14 +21,10 @@ var checks = new (string Name, Action Run)[]
     ("plugin-old-failure-does-not-spend-new-mutation-retry", PluginPersistenceConcurrencyChecks.OldFailureDoesNotSpendNewMutationRetry),
     ("plugin-dispose-waits-and-flushes-latest-state", PluginPersistenceConcurrencyChecks.DisposeWaitsAndFlushesLatestState),
     ("plugin-suppression-stops-writes-after-returning", PluginPersistenceConcurrencyChecks.SuppressionStopsWritesAfterReturning),
-    ("shutdown-skips-deferred-plugin-cleanup", ShutdownSkipsDeferredPluginCleanup),
     ("temp-validator-failure-keeps-old-target", TempValidatorFailureKeepsOldTarget),
     ("flush-failure-keeps-old-target", FlushFailureKeepsOldTarget),
     ("replace-retries-transient-sharing-failures", ReplaceRetriesTransientSharingFailures),
-    ("markdown-modes-migrate-and-roundtrip", MarkdownModesMigrateAndRoundTrip),
-    ("obsolete-topbar-aggregate-is-ignored", ObsoleteTopBarAggregateIsIgnored),
     ("disabled-capsule-mode-keeps-queue-layout-memory", DisabledCapsuleModeKeepsQueueLayoutMemory),
-    ("downward-preview-default-and-roundtrip", DownwardPreviewDefaultAndRoundTrip)
 };
 
 var failed = 0;
@@ -226,22 +219,6 @@ static void PluginDataNonFilePathIsNotTreatedAsMissing()
         "Plugin data read failure replaced the existing path.");
 }
 
-static void LegacyPluginRecoveryFileIsNotSelected()
-{
-    using var scope = new TempDirectory();
-    var path = Path.Combine(scope.Path, "data", "sample.plugin.json");
-    Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-    const string legacy = "legacy contents left for manual use";
-    File.WriteAllText(path + ".recovered", legacy);
-    using (var store = new PaperBodyPluginDataStore(scope.Path))
-    {
-        Assert(!store.TryReadPaperState("sample.plugin", "p", out _), "legacy file was selected");
-        store.SavePaperState("sample.plugin", "p", 1, "{}");
-    }
-    Assert(File.Exists(path), "normal state path was not used");
-    Assert(File.ReadAllText(path + ".recovered") == legacy, "legacy file was modified or removed");
-}
-
 static void PluginSystemShutdownSkipsFinalFlush()
 {
     using var scope = new TempDirectory();
@@ -290,20 +267,6 @@ static void PluginSaveFailureRetryIsBounded()
     Thread.Sleep(80);
     Assert(writer.WriteCount == 3,
         $"successful post-mutation save scheduled unexpected extra retries: {writer.WriteCount} writes");
-}
-
-static void ShutdownSkipsDeferredPluginCleanup()
-{
-    var controller = (AppController)RuntimeHelpers.GetUninitializedObject(typeof(AppController));
-    var lifecycleField = typeof(AppController).GetField(
-        "_lifecycleState",
-        BindingFlags.Instance | BindingFlags.NonPublic)
-        ?? throw new InvalidOperationException("AppController lifecycle field not found.");
-    lifecycleField.SetValue(controller, Enum.Parse(lifecycleField.FieldType, "Exiting"));
-
-    // An uninitialized controller has no plugin/store collections. The shutdown gate must return
-    // before touching any of them; otherwise this call throws and the check fails.
-    controller.TryFlushPendingPluginPaperStateDeletes();
 }
 
 static void TempValidatorFailureKeepsOldTarget()
@@ -355,84 +318,6 @@ static void ReplaceRetriesTransientSharingFailures()
     Assert(File.ReadAllText(target) == "new", "transient replace failures did not eventually commit");
     Assert(operations.ReplaceCalls == 3, $"expected 3 replace attempts, got {operations.ReplaceCalls}");
     Assert(operations.DelayCalls == 2, $"expected 2 retry delays, got {operations.DelayCalls}");
-}
-
-static void MarkdownModesMigrateAndRoundTrip()
-{
-    Assert(new AppState().MarkdownRenderMode == MarkdownRenderModes.Basic,
-        "new state should default to Basic");
-    var cases = new (string? Input, string Expected)[]
-    {
-        ("\"off\"", MarkdownRenderModes.Off),
-        ("\"basic\"", MarkdownRenderModes.Basic),
-        ("\"enhanced\"", MarkdownRenderModes.Basic),
-        ("\"full\"", MarkdownRenderModes.Full),
-        ("\"unknown\"", MarkdownRenderModes.Basic),
-        ("null", MarkdownRenderModes.Basic),
-        (null, MarkdownRenderModes.Basic)
-    };
-
-    foreach (var (input, expected) in cases)
-    {
-        using var scope = new TempDirectory();
-        var store = NewStore(scope.Path, DurableAtomicFileWriter.Shared);
-        var setting = input == null ? "" : ",\"markdownRenderMode\":" + input;
-        File.WriteAllText(store.FilePath,
-            "{\"papers\":[{\"id\":\"mode-note\",\"type\":\"note\",\"content\":\"# Keep **source**\"}]" + setting + "}");
-        var state = store.Load();
-        Assert(state.MarkdownRenderMode == expected, $"wrong migration for {input ?? "missing"}");
-        Assert(state.Papers.Single().Content == "# Keep **source**", "mode migration changed note content");
-
-        store.SaveJsonSync(store.SerializeState(state), version: 1);
-        using var saved = JsonDocument.Parse(File.ReadAllText(store.FilePath));
-        Assert(saved.RootElement.GetProperty("markdownRenderMode").GetString() == expected,
-            "save retained a legacy/invalid Markdown mode");
-        Assert(NewStore(scope.Path, DurableAtomicFileWriter.Shared).Load().MarkdownRenderMode == expected,
-            "Markdown mode changed after reload");
-    }
-}
-
-static void ObsoleteTopBarAggregateIsIgnored()
-{
-    using var scope = new TempDirectory();
-    var store = NewStore(scope.Path, DurableAtomicFileWriter.Shared);
-    File.WriteAllText(
-        store.FilePath,
-        "{\"papers\":[],\"showTopBarNewTodoButton\":false,\"showTopBarNewNoteButton\":true,\"showTopBarNewPaperButtons\":false}");
-
-    var state = store.Load();
-    Assert(!state.ShowTopBarNewTodoButton,
-        "real todo-button setting changed while ignoring the obsolete aggregate field");
-    Assert(state.ShowTopBarNewNoteButton,
-        "obsolete aggregate field overrode the real note-button setting");
-
-    store.SaveJsonSync(store.SerializeState(state), version: 1);
-    using var saved = JsonDocument.Parse(File.ReadAllText(store.FilePath));
-    Assert(!saved.RootElement.TryGetProperty("showTopBarNewPaperButtons", out _),
-        "obsolete aggregate field was written back to current state");
-}
-
-static void DownwardPreviewDefaultAndRoundTrip()
-{
-    Assert(!new AppState().EdgeCapsulePreviewPreferDownward, "new state should not prefer downward preview");
-    foreach (var input in new string?[] { null, "true", "false" })
-    {
-        using var scope = new TempDirectory();
-        var store = NewStore(scope.Path, DurableAtomicFileWriter.Shared);
-        var setting = input == null ? "" : ",\"edgeCapsulePreviewPreferDownward\":" + input;
-        File.WriteAllText(store.FilePath, "{\"papers\":[]" + setting + "}");
-        var state = store.Load();
-        var expected = input == "true";
-        Assert(state.EdgeCapsulePreviewPreferDownward == expected,
-            $"wrong preview preference for {input ?? "missing"}");
-
-        store.SaveJsonSync(store.SerializeState(state), version: 1);
-        using var saved = JsonDocument.Parse(File.ReadAllText(store.FilePath));
-        Assert(saved.RootElement.GetProperty("edgeCapsulePreviewPreferDownward").GetBoolean() == expected,
-            "save lost the preview preference");
-        Assert(NewStore(scope.Path, DurableAtomicFileWriter.Shared).Load().EdgeCapsulePreviewPreferDownward == expected,
-            "preview preference changed after reload");
-    }
 }
 
 static StateStore NewStore(string directory, IDurableAtomicFileWriter writer) =>

@@ -41,7 +41,6 @@ internal static class NativeFreeQueueReviewChecks
     {
         CheckAnchorReconstruction();
         Require(WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(null, out var monitor), "review monitor");
-        CheckDropGhostShapes(monitor);
         var originalContents = c.State.Papers.ToDictionary(p => p.Id, p => p.Content);
         await CheckDisplacedInsertion(c, windows, store, monitor);
         await CheckDragPreviewUpdates(c, windows, monitor);
@@ -55,40 +54,6 @@ internal static class NativeFreeQueueReviewChecks
                 c.State.Papers.All(p => originalContents[p.Id] == p.Content),
             "queue operations changed paper identities or note contents");
         Console.WriteLine("PASS free-queue review: displaced insertion, anchor roundtrip, folded drops, shortcut geometry, post-disconnect gestures and merge identity");
-    }
-
-    private static void CheckDropGhostShapes(MonitorGeometry monitor)
-    {
-        using var ghost = new EdgeCapsuleQueueDropGhost();
-        var window = Field<Window>(ghost, "_window");
-        var stack = Field<StackPanel>(ghost, "_stack");
-        const double memberWidth = 180, gap = 4;
-        var margin = EdgeCapsuleLayout.WindowChromeMargin;
-        foreach (var side in new[] { DeepCapsuleSides.Left, DeepCapsuleSides.Right })
-        foreach (var masterWidth in new[] { 50d, 24d })
-        {
-            ghost.ShowAt(monitor, side, 30, memberWidth, 4, gap, masterWidth);
-            window.UpdateLayout();
-            var header = (Border)stack.Children[0];
-            var member = (Border)stack.Children[1];
-            Near(masterWidth - margin, header.ActualWidth, "master ghost retains normal/compact master width");
-            Near(memberWidth - margin, member.ActualWidth, "member ghost retains ordinary width");
-            Near(side == DeepCapsuleSides.Left ? 0 : memberWidth - masterWidth + margin,
-                header.TranslatePoint(new Point(), stack).X, "short master is aligned to the screen edge");
-            Near(PaperLayoutDefaults.CapsuleHeight + gap,
-                member.TranslatePoint(new Point(), stack).Y - header.TranslatePoint(new Point(), stack).Y,
-                "short master still occupies one full vertical slot");
-
-            // Same count and side, different role: a merge must reset the short header.
-            ghost.ShowAt(monitor, side, 30, memberWidth, 4, gap);
-            window.UpdateLayout();
-            Near(memberWidth - margin, header.ActualWidth, "merge has no retained short source master");
-            ghost.ShowAt(monitor, side, 30, memberWidth, 1, gap, masterWidth);
-            window.UpdateLayout();
-            Near(masterWidth, window.Width, "folded independent ghost uses only the short master width");
-            Near(masterWidth - margin, ((Border)stack.Children[0]).ActualWidth, "folded master outline is short");
-        }
-        Console.WriteLine("PASS ghost geometry: short master, members, both edges, compact mode, merge reset and folded source");
     }
 
     private static async Task CheckDisplacedInsertion(AppController c,

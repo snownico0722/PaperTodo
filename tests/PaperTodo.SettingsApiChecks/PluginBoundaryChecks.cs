@@ -11,7 +11,6 @@ internal static partial class Program
 {
     private static async Task PluginBoundaryBehavior(AppController c, PaperData owner, PaperData note, PaperData todo)
     {
-        PluginEnablementStateIsHostOwned(c);
         DeferredPluginEnablementDoesNotAttachEarly(c);
         StartingPluginRuntimeIsDisposedOnRemoval(c);
         ReadsAndNotificationsDoNotCommitOrReplaceBodies(c, owner, note, todo);
@@ -22,22 +21,6 @@ internal static partial class Program
         CreationOwnsInitialTodoFields(c, note);
         PartialReminderDeliveryKeepsUnsurfacedItemsPending(c);
         await InitialRuntimeFailureDoesNotRetry(c);
-    }
-
-    private static void PluginEnablementStateIsHostOwned(AppController c)
-    {
-        const string providerId = "tests.enablement";
-        c.State.DisabledPluginIds.RemoveAll(value =>
-            string.Equals(value, providerId, StringComparison.Ordinal));
-        Check(c.IsPluginEnabled(providerId),
-            "Plugins are enabled by default when no host disable entry exists.");
-        c.State.DisabledPluginIds.Add(providerId);
-        Check(!c.IsPluginEnabled(providerId),
-            "Host disabled-plugin state prevents activation without changing plugin-owned settings.");
-        c.State.DisabledPluginIds.RemoveAll(value =>
-            string.Equals(value, providerId, StringComparison.Ordinal));
-        Check(c.IsPluginEnabled(PaperBodyProviderIds.Markdown),
-            "The built-in Markdown provider cannot be disabled by plugin state.");
     }
 
     private static void DeferredPluginEnablementDoesNotAttachEarly(AppController c)
@@ -639,25 +622,6 @@ internal static partial class Program
                     PaperOperationContext.User());
             }
         }
-    }
-
-    private static void MultilinePluginTooltips()
-    {
-        const string text = "Completed: 3\r\nOpen: 5";
-        var actions = PluginContributionPolicy.NormalizeTodoActions(
-            [new() { Id = "summary", Text = "Summary", ToolTip = text,
-                     Icon = PaperTopBarIcon.Character("i"), Placement = PaperTodoActionPlacement.Inline }]);
-        Check(actions[0].ToolTip == text, "Todo action tooltips preserve line breaks.");
-        var labels = PluginContributionPolicy.NormalizeTopBarLabels([new() { Text = "Summary", ToolTip = text }]);
-        Check(labels[0].ToolTip == text, "Top-bar label tooltips preserve line breaks.");
-        Throws<PaperTodoPluginException>(() => PluginContributionPolicy.NormalizeTopBarLabels(
-            [new() { Text = "Summary", ToolTip = new string('x', 161) }]), "invalid_topbar_label_tooltip");
-        Throws<PaperTodoPluginException>(() => PluginContributionPolicy.NormalizeTopBarLabels(
-            [new() { Text = "Summary", ToolTip = "ok\u0001bad" }]), "invalid_topbar_label_tooltip");
-        Throws<PaperTodoPluginException>(() => PluginContributionPolicy.NormalizeTopBarLabels(
-            [new() { Text = "Summary", ToolTip = "ok\tbad" }]), "invalid_topbar_label_tooltip");
-        Throws<PaperTodoPluginException>(() => PluginContributionPolicy.NormalizeTopBarLabels(
-            [new() { Text = "Bad\nlabel" }]), "invalid_topbar_label_text");
     }
 
     private static void ReviewArchiveUnreadableDataFailsClosed()

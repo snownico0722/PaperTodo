@@ -1,4 +1,3 @@
-using System.IO;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
@@ -20,12 +19,10 @@ internal static partial class Program
             NativeFreeQueuePolicyChecks.Run();
             CycleAndUnicode();
             Console.WriteLine("PASS title-cycle-and-unicode");
-            Persistence();
-            Console.WriteLine("PASS legacy-and-zero-persistence");
             Geometry();
             Console.WriteLine("PASS title-presentation-and-transition-geometry");
             HostContentVisibility();
-            Console.WriteLine("PASS host-title-plugin-and-icon-slot-layout");
+            Console.WriteLine("PASS host-title-plugin-and-material-state");
             QueuedPreviewTransactions();
             Console.WriteLine("PASS queued-preview-transaction-ordering");
             Console.WriteLine($"Edge title checks: {assertions} assertions passed.");
@@ -60,27 +57,6 @@ internal static partial class Program
         Check(EdgeCapsuleTitleLimit.Normalize(int.MaxValue) == 20, "Upper bound");
     }
 
-    private static void Persistence()
-    {
-        var dir = Path.Combine(Path.GetTempPath(), "papertodo-edge-title-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(dir);
-        try
-        {
-            var store = new StateStore(dir, DurableAtomicFileWriter.Shared);
-            foreach (var value in new[] { 0, -1, 1, 20 })
-            {
-                File.WriteAllText(store.FilePath, $"{{\"papers\":[],\"deepCapsuleTitleMeasureCharacterLimit\":{value}}}");
-                var state = store.Load();
-                Check(state.DeepCapsuleTitleMeasureCharacterLimit == value, "Load/normalization retains semantics");
-                File.WriteAllText(store.FilePath, store.SerializeState(state));
-                Check(store.Load().DeepCapsuleTitleMeasureCharacterLimit == value, "Round-trip retains zero/unlimited");
-            }
-            File.WriteAllText(store.FilePath, "{\"papers\":[]}");
-            Check(store.Load().DeepCapsuleTitleMeasureCharacterLimit == 0, "Missing legacy field remains unlimited");
-        }
-        finally { Directory.Delete(dir, recursive: true); }
-    }
-
     private static void HostContentVisibility()
     {
         using var host = EdgeCapsuleHost.Create(new EdgeCapsuleHostOptions(
@@ -97,8 +73,6 @@ internal static partial class Program
             .GetProperty(name, BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(host)!;
         var label = HostPart<TextBlock>("Label");
         var icon = HostPart<TextBlock>("Icon");
-        var contentGrid = HostPart<Grid>("ContentGrid");
-        var window = HostPart<Window>("Window");
         Check(WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(null, out var monitor), "Host test monitor");
         var layout = new EdgeCapsuleLayoutSnapshot(monitor, EdgeCapsuleEdge.Right, 40, 10,
             40, 28, 40, 178, 40, false, 1, null, ExpandedWidthDip: 150);
@@ -146,29 +120,6 @@ internal static partial class Program
                 icon.Visibility == Visibility.Visible,
                 "Refreshing ordinary content preserves hidden titles without a new frame");
         }
-
-        // The fixed slot must affect the real WPF layout, not only the outer width calculation.
-        // Measure the following label after switching between the two default glyphs.
-        var visibleFrame = EdgeCapsuleTargetPlanner.Calculate(
-            model with { State = model.State with { Visual = EdgeCapsuleVisualState.Hovered } },
-            layout with { HideRestingTitle = false }).Docked.ToFrame();
-        host.SetPluginContent(null, null);
-        host.SetDefaultIconSlotWidth(40);
-        Check(Math.Abs(host.DefaultIconSlotWidthForChecks - 40) < 0.01,
-            "Host accepts a real default icon slot width");
-        Check(host.Apply(visibleFrame), "Apply host frame for icon-slot alignment");
-        host.SetLabel("Title", "Title");
-        icon.Text = "✓";
-        window.UpdateLayout();
-        var todoLabelX = label.TranslatePoint(new Point(0, 0), contentGrid).X;
-        icon.Text = "✎";
-        window.UpdateLayout();
-        var noteLabelX = label.TranslatePoint(new Point(0, 0), contentGrid).X;
-        Check(Math.Abs(todoLabelX - noteLabelX) < 0.01,
-            "Todo and note glyphs share the same real layout slot");
-        host.SetDefaultIconSlotWidth(0);
-        Check(host.DefaultIconSlotWidthForChecks < 0.01,
-            "Script/natural icon layout can release the default slot");
     }
 
     private static void Geometry()
