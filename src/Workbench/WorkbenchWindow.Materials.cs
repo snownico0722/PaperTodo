@@ -1,3 +1,4 @@
+using Microsoft.Win32;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -16,6 +17,7 @@ internal sealed partial class WorkbenchWindow
 
     private void InitializeWorkspaceTools()
     {
+        AddButton("WorkbenchImportMaterials", ImportMaterialsFromPicker, _rightCommands);
         AddButton("WorkbenchNewNode", () => AddNode(ActivePoint(ViewportCenter)), _rightCommands);
         _groupButton = NewButton(Strings.Get("WorkbenchGroupSelection"));
         _groupButton.Visibility = Visibility.Collapsed;
@@ -66,6 +68,32 @@ internal sealed partial class WorkbenchWindow
                 }
             }
         };
+    }
+
+    private void ImportMaterialsFromPicker()
+    {
+        if (_closed || IsSuspended) return;
+        var picker = new OpenFileDialog
+        {
+            Title = Strings.Get("WorkbenchImportMaterials"),
+            Filter = Strings.Get("WorkbenchImportDialogFilter"),
+            Multiselect = true,
+            CheckFileExists = true,
+            CheckPathExists = true
+        };
+        if (picker.ShowDialog(this) != true) return;
+        try
+        {
+            // Exactly the same import path as files dragged onto the canvas:
+            // images belong to the image library, other files stay as path references.
+            var data = new DataObject(DataFormats.FileDrop, picker.FileNames);
+            var ids = _controller.ImportWorkbenchData(data, ActivePoint(ViewportCenter));
+            SyncActiveScene();
+            _selectedCards.Clear();
+            _selectedCards.UnionWith(ids);
+            ApplySelectionStyle();
+        }
+        catch (Exception ex) { Report(ex); }
     }
 
     private bool HasTextEditorFocus() => ActiveScene?.Cards.Values.Any(c => c.Body.IsKeyboardFocusWithin) == true;
@@ -144,7 +172,7 @@ internal sealed partial class WorkbenchWindow
         }
     }
 
-    private void OnTransferHistoryBlocked() => _status.Text = Strings.Get("WorkbenchTransferHistoryBlocked");
+    private void OnTransferHistoryBlocked() => ShowStatus(Strings.Get("WorkbenchTransferHistoryBlocked"));
 
     private void OnContentTransferReplayed(Guid id, bool redo)
     {
@@ -231,7 +259,7 @@ internal sealed partial class WorkbenchWindow
     {
         if (!_controller.CanTransferWorkbenchContent(payload, target) ||
             !_controller.TransferWorkbenchContent(payload, target, point))
-        { _status.Text = Strings.Get("WorkbenchTransferRejected"); return false; }
+        { ShowStatus(Strings.Get("WorkbenchTransferRejected")); return false; }
         _undo.Push(new(null, _controller.LastWorkbenchContentTransferId)); _redo.Clear();
         SyncActiveScene();
         return true;
@@ -299,14 +327,48 @@ internal sealed partial class WorkbenchWindow
             if (e.Key == Key.Escape) card.Title.Text = _controller.FindWorkbenchMaterial(paper.Id)?.Title ?? "";
             CommitCardTitle(card); Keyboard.ClearFocus(); e.Handled = true;
         };
-        card.Pin.Click += (_, _) =>
-        {
-            RememberLayout(); var state = _controller.WorkbenchLayout.Copy();
-            if (state.Cards.TryGetValue(paper.Id, out var placement)) placement.Pinned = !placement.Pinned;
-            StoreLayout(state); SyncActiveScene();
-        };
+        card.Pin.IsHitTestVisible = false;
+        card.Pin.Focusable = false;
+        card.Frame.ContextMenu = CreateMaterialContextMenu(paper.Id);
         WireCardSelection(card); WireConnectionDrag(card); WireDrag(card, card.Move, false); WireDrag(card, card.Resize, true);
         return card;
+    }
+
+    private ContextMenu CreateMaterialContextMenu(string id)
+    {
+        var menu = new ContextMenu();
+        void Populate()
+        {
+            menu.Items.Clear();
+            menu.Background = CardBrush;
+            menu.Foreground = Ink;
+            menu.BorderBrush = Outline;
+            menu.BorderThickness = new Thickness(1);
+            if (_controller.FindWorkbenchMaterial(id) is not { } material) return;
+            void Add(string key, Action action)
+            {
+                var item = new MenuItem { Header = Strings.Get(key) };
+                item.Click += (_, _) => action();
+                menu.Items.Add(item);
+            }
+            if (material.Kind is WorkspaceMaterialKinds.Link or WorkspaceMaterialKinds.File)
+                Add("WorkbenchOpenMaterial", () => OpenMaterial(id));
+            Add(IsWorkbenchCardCollapsed(id) ? "WorkbenchExpandCard" : "WorkbenchCollapseCard",
+                () => ToggleWorkbenchCardCollapsed(id));
+            Add(IsWorkbenchCardPinned(id) ? "WorkbenchUnlockCard" : "WorkbenchLockCard",
+                () => ToggleWorkbenchCardPinned(id));
+            menu.Items.Add(new Separator());
+            Add("WorkbenchDeleteMaterial", () =>
+            {
+                if (MessageBox.Show(this, Strings.Get("WorkbenchDeleteMaterialConfirm"), Title,
+                    MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
+                _controller.DeleteWorkbenchMaterial(id);
+                SyncActiveScene();
+            });
+        }
+        Populate();
+        menu.Opened += (_, _) => Populate();
+        return menu;
     }
 
     private void RefreshMaterialCard(Card card)
