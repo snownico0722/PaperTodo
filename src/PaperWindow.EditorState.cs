@@ -19,7 +19,7 @@ public sealed partial class PaperWindow
     internal void CaptureExpandedEditorState(bool markDirty)
     {
         if (_expandedEditorHostWindow is not { IsLoaded: true } host ||
-            _controller.IsExiting || _controller.SuppressDataReloadEditorCommit)
+            !_controller.IsRunning || _controller.SuppressDataReloadEditorCommit)
             return;
 
         var state = host.CaptureWindowState();
