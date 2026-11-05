@@ -302,7 +302,7 @@ internal static class NoteImageExportChecks
             {
                 preview = Application.Current.Windows.OfType<NoteImageExportWindow>().Single();
                 var started = System.Diagnostics.Stopwatch.StartNew();
-                while (MemberOrNull(preview, "_artifact") == null)
+                while (MemberOrNull(preview, "_sizeEstimate") == null)
                 {
                     if (started.Elapsed.TotalSeconds > 8) throw new TimeoutException("Image preview did not finish");
                     await Task.Delay(10);
@@ -310,20 +310,23 @@ internal static class NoteImageExportChecks
                 var artifact = (NoteImageArtifact)Member(preview, "_artifact");
                 Check(preview.Owner == paper.ExpandedEditorHostWindow, "Preview has hidden paper owner");
                 var formatButton = (Button)Member(preview, "_formatToggle");
+                var estimate = (NoteImageSizePrediction)Member(preview, "_sizeEstimate");
                 var sizeLabel = (TextBlock)Member(preview, "_estimatedSize");
                 var saveButton = (Button)Member(preview, "_save");
                 var frame = (Border)Member(preview, "_frame");
                 Check(preview.WindowStyle == WindowStyle.None && frame.CornerRadius.TopLeft == 12 &&
                       saveButton.Style != null && Equals(formatButton.Content, "JPG") &&
-                      sizeLabel.Text == Strings.Get("EditorImageExportEstimatedSize"),
-                    "Preview does not use the themed window, rounded save button or size placeholder");
+                      sizeLabel.Text == NoteImageExportWindow.FormatEstimatedSize(estimate.JpegBytes),
+                    "Preview does not use the themed window, rounded save button or JPG size estimate");
                 formatButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
                 Check(Equals(formatButton.Content, "PNG") &&
-                      Equals(Member(preview, "_preferredFormat"), NoteImageFormat.Png),
+                      Equals(Member(preview, "_preferredFormat"), NoteImageFormat.Png) &&
+                      sizeLabel.Text == NoteImageExportWindow.FormatEstimatedSize(estimate.PngBytes),
                     "Preview did not switch its preferred file format to PNG");
                 formatButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
                 Check(Equals(formatButton.Content, "JPG") &&
-                      Equals(Member(preview, "_preferredFormat"), NoteImageFormat.Jpeg),
+                      Equals(Member(preview, "_preferredFormat"), NoteImageFormat.Jpeg) &&
+                      sizeLabel.Text == NoteImageExportWindow.FormatEstimatedSize(estimate.JpegBytes),
                     "Preview did not switch its preferred file format back to JPG");
                 Check(Text(artifact.Drawing).Contains("latest unsaved text"), "Export read the debounced model instead of live editor");
                 Check(Text(artifact.Drawing).Contains("末尾仍然存在"), "Export lost final paragraph");
@@ -382,4 +385,3 @@ internal static class NoteImageExportChecks
     private static object Member(object value, string name) => MemberOrNull(value, name) ?? throw new MissingMemberException(name);
     private static void Check(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }
 }
-

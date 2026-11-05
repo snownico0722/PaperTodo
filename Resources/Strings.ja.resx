@@ -1700,10 +1700,9 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="EditorImageExportJpeg" xml:space="preserve"><value>JPG</value></data>
   <data name="EditorImageExportJpegHeightLimit" xml:space="preserve"><value>JPG の高さは最大 65535 ピクセルです。さらに長い画像は PNG を選択してください。</value></data>
   <data name="EditorImageExportSwitchFormat" xml:space="preserve"><value>画像形式を切り替え</value></data>
-  <data name="EditorImageExportEstimatedSize" xml:space="preserve"><value>容量：約xMB</value></data>
+  <data name="EditorImageExportEstimatedSize" xml:space="preserve"><value>容量：約{0}MB</value></data>
+  <data name="EditorImageExportEstimatedSizeSmall" xml:space="preserve"><value>容量：1MB未満</value></data>
   <data name="EditorImageExportPng" xml:space="preserve"><value>PNG</value></data>
   <data name="EditorImageExportSaving" xml:space="preserve"><value>保存中…</value></data>
   <data name="EditorImageExportSaved" xml:space="preserve"><value>画像を保存しました</value></data>
 </root>
-
-

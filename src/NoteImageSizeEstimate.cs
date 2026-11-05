@@ -1,6 +1,8 @@
 namespace PaperTodo;
 
-// Experimental content statistics. No DCT/quantization, LZ matching, encoder or output stream.
+internal readonly record struct NoteImageSizePrediction(long JpegBytes, long PngBytes);
+
+// Content statistics calibrated for the note export raster. No DCT/quantization, LZ matching, encoder or output stream.
 // Every pixel participates; the eight-row window stays below PNG's 32 KiB history at 1200 px.
 internal sealed class NoteImageSizeEstimate(int width)
 {
@@ -8,9 +10,14 @@ internal sealed class NoteImageSizeEstimate(int width)
     private readonly HashSet<uint> _triplets = [];
     private readonly HashSet<ulong> _pairs = [];
     private readonly double[][] _planes = [new double[width * 8], new double[width * 8], new double[width * 8]];
+    private readonly int[] _blockColors = new int[(width + 7) / 8];
+    private readonly bool[] _activeBlocks = new bool[(width + 7) / 8];
     private readonly double[] _features = new double[19];
-    internal IReadOnlyList<double> Features => _features;
 
+    // Feature slots: pixels; Sub-byte entropy; distinct RGB residuals/pairs; nonzero/
+    // chromatic residual pixels; [log/sqrt/active] luma and chroma block differences;
+    // nonzero/mask entropy; pair/triplet entropy interactions; 2x2/4x4 mean differences;
+    // checker convolution. See tools/analysis/note-image-size for reproducible calibration.
     // Calibration is separate from prediction; coefficients target JPG quality 90 and RGB/Sub PNG.
     private static readonly double[] JpegWeights = [0.02620894134, 0, 0, 0, 0, 0, -16.02240855, 2.953482557, 10.40373536, 1.892996141, -1.023628099, -6.112995095, 0, 0, 0, 0, 12.33110438, 0.4453119676, 14.30932592];
     private static readonly double[] PngWeights = [0.007179149902, 0, -1.836534969, 1.836375021, -0.3257814573, 0.3874675017, 0, 0, 0, 0, 0, 0, 0.2761414786, 0.2478138984, 1.205872879, 0.9085711291, 0, 0, 0];
@@ -31,24 +38,37 @@ internal sealed class NoteImageSizeEstimate(int width)
         {
             var count = Math.Min(8, rows - top);
             Array.Clear(_histogram);
+            Array.Clear(_activeBlocks);
             _triplets.Clear(); _pairs.Clear();
             for (var y = 0; y < count; y++)
             {
                 var previousR = 0; var previousG = 0; var previousB = 0;
                 uint previousCode = 0;
+                ulong previousPair = 0;
                 for (var x = 0; x < width; x++)
                 {
                     var offset = ((top + y) * width + x) * 3;
                     var b = pixels[offset]; var g = pixels[offset + 1]; var r = pixels[offset + 2];
                     var dr = (r - previousR) & 255; var dg = (g - previousG) & 255; var db = (b - previousB) & 255;
                     previousR = r; previousG = g; previousB = b;
-                    _histogram[dr]++; _histogram[dg]++; _histogram[db]++;
+                    if (dr == dg && dg == db) _histogram[dr] += 3;
+                    else { _histogram[dr]++; _histogram[dg]++; _histogram[db]++; }
                     var code = (uint)(dr | (dg << 8) | (db << 16));
-                    _triplets.Add(code);
-                    if (x > 0) _pairs.Add(code | ((ulong)previousCode << 24));
+                    // Consecutive duplicates are already present; this changes no statistics.
+                    if (x == 0 || code != previousCode) _triplets.Add(code);
+                    if (x > 0)
+                    {
+                        var pair = code | ((ulong)previousCode << 24);
+                        if (x == 1 || pair != previousPair) _pairs.Add(pair);
+                        previousPair = pair;
+                    }
                     previousCode = code;
                     if (code != 0) _features[4]++;
                     if (dr != dg || dg != db) _features[5]++;
+                    var block = x / 8;
+                    var color = b | (g << 8) | (r << 16);
+                    if (y == 0 && x % 8 == 0) _blockColors[block] = color;
+                    else if (color != _blockColors[block]) _activeBlocks[block] = true;
                     var luma = (77 * r + 150 * g + 29 * b) / 256.0;
                     var index = y * width + x;
                     _planes[0][index] = luma;
@@ -76,6 +96,9 @@ internal sealed class NoteImageSizeEstimate(int width)
                 for (var y = count; y < 8; y++) Array.Copy(plane, (count - 1) * width, plane, y * width, width);
             for (var x = 0; x < width; x += 8)
             {
+                // All pixels were inspected above. A constant block contributes exactly zero
+                // to every spatial-difference feature, so no transform arithmetic is needed.
+                if (!_activeBlocks[x / 8]) continue;
                 for (var channel = 0; channel < 3; channel++)
                 {
                     var plane = _planes[channel];

@@ -1749,10 +1749,9 @@
   <data name="EditorImageExportJpeg" xml:space="preserve"><value>JPG</value></data>
   <data name="EditorImageExportJpegHeightLimit" xml:space="preserve"><value>JPG 长图最高支持 65535 像素高度。请改选 PNG 导出。</value></data>
   <data name="EditorImageExportSwitchFormat" xml:space="preserve"><value>切换图片格式</value></data>
-  <data name="EditorImageExportEstimatedSize" xml:space="preserve"><value>体积：约xm</value></data>
+  <data name="EditorImageExportEstimatedSize" xml:space="preserve"><value>体积：约{0}m</value></data>
+  <data name="EditorImageExportEstimatedSizeSmall" xml:space="preserve"><value>体积：小于1m</value></data>
   <data name="EditorImageExportPng" xml:space="preserve"><value>PNG</value></data>
   <data name="EditorImageExportSaving" xml:space="preserve"><value>正在保存…</value></data>
   <data name="EditorImageExportSaved" xml:space="preserve"><value>图片已保存</value></data>
 </root>
-
-

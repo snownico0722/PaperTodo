@@ -37,6 +37,7 @@ internal static class NoteImageSizeChecks
             using var png = new MemoryStream();
             NoteImageExport.Write(png, artifact, CancellationToken.None);
             var pngMs = watch.Elapsed.TotalMilliseconds;
+            CheckEstimate(name + " PNG", estimate.PngBytes, png.Length);
             var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".jpg");
             long jpegBytes = 0;
             watch.Restart();
@@ -46,16 +47,27 @@ internal static class NoteImageSizeChecks
                 {
                     NoteImageExport.WriteJpeg(path, artifact, CancellationToken.None);
                     jpegBytes = new FileInfo(path).Length;
+                    CheckEstimate(name + " JPG", estimate.JpegBytes, jpegBytes);
                 }
                 Console.WriteLine("SIZE_ESTIMATE " + JsonSerializer.Serialize(new
                 {
                     name, width = artifact.PixelWidth, height = artifact.PixelHeight,
-                    features = estimate.Features, pngBytes = png.Length, jpegBytes,
+                    pngBytes = png.Length, jpegBytes,
                     scanMs, pngMs, jpegMs = watch.Elapsed.TotalMilliseconds, estimatedPng = estimate.PngBytes, estimatedJpeg = estimate.JpegBytes
                 }));
             }
             finally { File.Delete(path); }
         }
+    }
+
+    private static void CheckEstimate(string name, long estimate, long actual)
+    {
+        // Small notes: within 1 MiB, INCLUDING integer rounding. Larger images allow
+        // proportional error; this is a regression envelope for these fixtures, not a guarantee.
+        var displayBytes = estimate < 1048576 ? 524288d : Math.Round(estimate / 1048576d, MidpointRounding.AwayFromZero) * 1048576;
+        var allowance = Math.Max(1048576, actual * .20);
+        if (estimate <= 0 || Math.Abs(displayBytes - actual) > allowance)
+            throw new InvalidOperationException($"{name}: estimated {estimate}, actual {actual}, rounded {displayBytes}");
     }
 
     private static NoteImageSource Source(string kind)

@@ -1700,10 +1700,9 @@ The original note is kept.</value></data>
   <data name="EditorImageExportJpeg" xml:space="preserve"><value>JPG</value></data>
   <data name="EditorImageExportJpegHeightLimit" xml:space="preserve"><value>JPG supports a maximum height of 65535 pixels. Choose PNG for longer images.</value></data>
   <data name="EditorImageExportSwitchFormat" xml:space="preserve"><value>Switch image format</value></data>
-  <data name="EditorImageExportEstimatedSize" xml:space="preserve"><value>Size: approx. x MB</value></data>
+  <data name="EditorImageExportEstimatedSize" xml:space="preserve"><value>Size: approx. {0} MB</value></data>
+  <data name="EditorImageExportEstimatedSizeSmall" xml:space="preserve"><value>Size: less than 1 MB</value></data>
   <data name="EditorImageExportPng" xml:space="preserve"><value>PNG</value></data>
   <data name="EditorImageExportSaving" xml:space="preserve"><value>Saving…</value></data>
   <data name="EditorImageExportSaved" xml:space="preserve"><value>Image saved</value></data>
 </root>
-
-

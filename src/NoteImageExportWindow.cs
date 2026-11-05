@@ -22,6 +22,7 @@ internal sealed class NoteImageExportWindow : Window
     private readonly RectangleGeometry _windowClip = new();
     private readonly Border _frame;
     private NoteImageArtifact? _artifact;
+    private NoteImageSizePrediction? _sizeEstimate;
     private NoteImageFormat _preferredFormat = NoteImageFormat.Jpeg;
     private bool _closed;
 
@@ -132,8 +133,9 @@ internal sealed class NoteImageExportWindow : Window
             _preferredFormat = _preferredFormat == NoteImageFormat.Jpeg
                 ? NoteImageFormat.Png : NoteImageFormat.Jpeg;
             _formatToggle.Content = _preferredFormat == NoteImageFormat.Jpeg ? "JPG" : "PNG";
+            UpdateEstimatedSize();
         };
-        _estimatedSize.Text = Strings.Get("EditorImageExportEstimatedSize");
+        _estimatedSize.Text = Strings.Format("EditorImageExportEstimatedSize", "x");
         _estimatedSize.Foreground = Theme.WeakTextBrush;
         _estimatedSize.FontSize = AppTypography.Scale(12);
         _estimatedSize.VerticalAlignment = VerticalAlignment.Center;
@@ -217,6 +219,8 @@ internal sealed class NoteImageExportWindow : Window
                 ? Strings.Format("EditorImageExportSize", artifact.PixelWidth, artifact.PixelHeight)
                 : Strings.Format("EditorImageExportMissing", artifact.MissingImages);
             _save.IsEnabled = true;
+            // The preview and Save are usable before the optional estimate finishes.
+            await PrepareSizeAsync(artifact, cancellation);
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
@@ -224,6 +228,35 @@ internal sealed class NoteImageExportWindow : Window
             if (!_closed) _status.Text = Strings.Format("NoteExportFailure", ex.Message);
         }
     }
+
+    private async Task PrepareSizeAsync(NoteImageArtifact artifact, CancellationToken cancellation)
+    {
+        try
+        {
+            var estimate = await NoteImageExport.OnStaAsync(() => NoteImageExport.MeasureSize(artifact, cancellation));
+            if (_closed) return;
+            _sizeEstimate = estimate;
+            UpdateEstimatedSize();
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            // A size hint cannot prevent saving an otherwise valid preview.
+            System.Diagnostics.Debug.WriteLine($"Note image size estimate: {ex}");
+        }
+    }
+
+    private void UpdateEstimatedSize()
+    {
+        _estimatedSize.Text = _sizeEstimate is not { } estimate ||
+            (_preferredFormat == NoteImageFormat.Jpeg && _artifact?.PixelHeight > ushort.MaxValue)
+            ? Strings.Format("EditorImageExportEstimatedSize", "x")
+            : FormatEstimatedSize(_preferredFormat == NoteImageFormat.Jpeg ? estimate.JpegBytes : estimate.PngBytes);
+    }
+
+    internal static string FormatEstimatedSize(long bytes) => bytes < 1024 * 1024
+        ? Strings.Get("EditorImageExportEstimatedSizeSmall")
+        : Strings.Format("EditorImageExportEstimatedSize", Math.Round(bytes / (1024d * 1024), MidpointRounding.AwayFromZero));
 
     private async Task SaveAsync()
     {
