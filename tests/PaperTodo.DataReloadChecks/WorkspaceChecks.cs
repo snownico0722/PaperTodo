@@ -1197,6 +1197,72 @@ internal static partial class Program
             Require(await controller.CycleWorkspaceAsync() && controller.WorkspaceNumber == 2, "cycle to2 failed");
             Require(await controller.CycleWorkspaceAsync() && controller.WorkspaceNumber == 3, "cycle to3 failed");
             Require(await controller.CycleWorkspaceAsync() && controller.WorkspaceNumber == 1, "cycle did not wrap at the last active slot");
+
+            // The tray keeps five fixed positions. Only the first vacant position
+            // shows a vector create action; creating a slot never switches away.
+            ContextMenu TrayForCreate()
+            {
+                var menu = controller.CreateTrayMenu();
+                controller.RebuildTrayMenu(menu);
+                return menu;
+            }
+            Border[] TraySlots(ContextMenu menu)
+            {
+                var workspaceItem = menu.Items.OfType<MenuItem>().Single(item =>
+                    AutomationProperties.GetAutomationId(item) == "TrayWorkspaceSelector");
+                var row = (Grid)workspaceItem.Header;
+                var presenter = (ContentPresenter)row.Children[1];
+                return ((Grid)((Border)presenter.Content).Child).Children.OfType<Border>().ToArray();
+            }
+            void ClickTraySlot(Border tile) => tile.RaiseEvent(new System.Windows.Input.MouseButtonEventArgs(
+                System.Windows.Input.Mouse.PrimaryDevice, 0, System.Windows.Input.MouseButton.Left)
+            {
+                RoutedEvent = UIElement.MouseLeftButtonDownEvent
+            });
+
+            var originalWorkspaceState = controller.State;
+            var threeSlotMenu = TrayForCreate();
+            var threeTiles = TraySlots(threeSlotMenu);
+            Require(threeTiles.Length == 5 &&
+                    ((TextBlock)threeTiles[0].Child).Text == "1" &&
+                    ((TextBlock)threeTiles[1].Child).Text == "2" &&
+                    ((TextBlock)threeTiles[2].Child).Text == "3" &&
+                    threeTiles[3].Child is System.Windows.Shapes.Path plusIcon &&
+                    plusIcon.Data.Bounds.Width > 8 && plusIcon.Data.Bounds.Height > 8 &&
+                    AutomationProperties.GetAutomationId(threeTiles[3]) == "TrayCreateWorkspace" &&
+                    threeTiles[4].Child == null && !threeTiles[4].IsHitTestVisible,
+                "tray did not put a vector create action in the first free slot and leave the rest inert");
+            ClickTraySlot(threeTiles[3]);
+            await Until(() => controller.WorkspaceOptions.ContainsSlot(4) && !controller.IsWorkspaceSwitching,
+                "tray plus did not create workspace 4");
+            Require(controller.WorkspaceNumber == 1 && ReferenceEquals(controller.State, originalWorkspaceState),
+                "creating a tray workspace changed the active workspace or its state");
+
+            var fourTiles = TraySlots(TrayForCreate());
+            Require(((TextBlock)fourTiles[3].Child).Text == "4" &&
+                    fourTiles[4].Child is System.Windows.Shapes.Path,
+                "tray plus did not move to the next vacant position");
+            ClickTraySlot(fourTiles[4]);
+            await Until(() => controller.WorkspaceOptions.ContainsSlot(5) && !controller.IsWorkspaceSwitching,
+                "tray plus did not create workspace 5");
+            Require(controller.WorkspaceNumber == 1 &&
+                    TraySlots(TrayForCreate()).All(tile => tile.Child is TextBlock),
+                "five full workspace slots still showed a create action or switched workspaces");
+
+            var withGap = controller.WorkspaceOptions.Normalized();
+            withGap.Slots.Remove(2);
+            Require(await controller.ChangeWorkspaceConfigurationAsync(withGap),
+                "could not remove an intermediate slot for tray gap test");
+            var gapTiles = TraySlots(TrayForCreate());
+            Require(gapTiles[1].Child is System.Windows.Shapes.Path &&
+                    ((TextBlock)gapTiles[2].Child).Text == "3",
+                "tray did not offer to reuse the first missing workspace number");
+            ClickTraySlot(gapTiles[1]);
+            await Until(() => controller.WorkspaceOptions.ContainsSlot(2) && !controller.IsWorkspaceSwitching,
+                "tray plus did not reuse the missing workspace number");
+            Require(controller.WorkspaceNumber == 1 && ReferenceEquals(controller.State, originalWorkspaceState),
+                "recreating an intermediate workspace unexpectedly switched workspace");
+
             var disabled = controller.WorkspaceOptions.Normalized(); disabled.Enabled = false;
             Require(await controller.ChangeWorkspaceConfigurationAsync(disabled), "disable failed");
             var disabledPage = WorkspacePage();

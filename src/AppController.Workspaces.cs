@@ -55,6 +55,18 @@ public sealed partial class AppController
         ReportWorkspaceError(Strings.Format("WorkspaceStartupFallback", error));
     }
 
+    // Shared by the settings page and the tray. Creating a slot only updates the
+    // catalog; its document and presentation are initialized on first switch.
+    private async Task<int> CreateWorkspaceAsync()
+    {
+        var options = WorkspaceOptions.Normalized();
+        if (!options.Enabled) return 0;
+        var slot = Enumerable.Range(2, 4).FirstOrDefault(number => !options.ContainsSlot(number));
+        if (slot == 0) return 0;
+        options.Slots = options.SlotNumbers.Append(slot).OrderBy(number => number).ToList();
+        return await ChangeWorkspaceConfigurationAsync(options) ? slot : 0;
+    }
+
     internal Task<bool> CycleWorkspaceAsync()
     {
         Application.Current.Dispatcher.VerifyAccess();
