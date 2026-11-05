@@ -18,6 +18,7 @@ internal static partial class Program
         await ExternalSavePreservesRuntimeCallbackDirtyState(c);
         VisualBroadcastSurvivesPaperCreation(c);
         PopupThemeNotificationsFollowAppearance(c);
+        await ExtendedComponentBoundaryBehavior(c);
         CreationOwnsInitialTodoFields(c, note);
         TodoPasteUsesEventPayload();
         PartialReminderDeliveryKeepsUnsurfacedItemsPending(c);

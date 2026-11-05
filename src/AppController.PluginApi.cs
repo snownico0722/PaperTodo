@@ -192,6 +192,9 @@ public sealed partial class AppController
         string providerId)
     {
         PrepareExternalPaperOperation(paper);
+        if (!ReferenceEquals(FindPluginRuntimePaper(providerId, paper.Id), paper))
+            throw new PaperTodoPluginException("paper_not_owned",
+                "The requested Paper is not an instance of this plugin Runtime.");
         using (SuppressPaperPluginEventScans())
         {
             UpdatePaperTitle(paper, title);
