@@ -1677,7 +1677,7 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="WorkbenchSearch" xml:space="preserve"><value>すべてのワークスペースを検索。Enter で結果へ移動</value></data>
   <data name="WorkbenchRefresh" xml:space="preserve"><value>一覧を更新</value></data>
   <data name="WorkbenchClose" xml:space="preserve"><value>デスクトップへ戻る</value></data>
-  <data name="WorkbenchHint" xml:space="preserve"><value>空白をドラッグで範囲選択、Ctrl＋クリックで複数選択、Ctrl＋G でグループ化。カードを右クリックで全メニュー、右ドラッグでキャンバスを移動。Alt＋ホイールで拡大縮小、接続アイコンをドラッグしてリンク。</value></data>
+  <data name="WorkbenchHint" xml:space="preserve"><value>空白をドラッグ：範囲選択&#10;Ctrl + クリック：複数選択、Ctrl + G：グループ化&#10;カードを右クリック：すべての操作&#10;右ドラッグ：キャンバス移動&#10;Alt + ホイール：拡大縮小&#10;接続アイコンをドラッグ：カードを接続</value></data>
   <data name="WorkbenchHelp" xml:space="preserve"><value>ワークベンチのヘルプ</value></data>
   <data name="WorkbenchImportMaterials" xml:space="preserve"><value>素材を読み込む</value></data>
   <data name="WorkbenchImportDialogFilter" xml:space="preserve"><value>すべてのファイル (*.*)|*.*|画像 (*.png;*.jpg;*.jpeg;*.gif;*.webp;*.bmp)|*.png;*.jpg;*.jpeg;*.gif;*.webp;*.bmp</value></data>
