@@ -125,6 +125,8 @@ internal static partial class Program
             Rejected("invalid_params", () => Invoke("insert_note_image",
                 new { paper_id = note.Id, image_base64 = "not base64!" }));
             Rejected("invalid_params", () => Invoke("insert_note_image",
+                new { paper_id = note.Id, image_base64 = "data:image/png;base64," + base64 }));
+            Rejected("invalid_params", () => Invoke("insert_note_image",
                 new { paper_id = note.Id, image_base64 = base64, image_path = @"C:\fixture\picture.png" }));
             Rejected("invalid_params", () => Invoke("insert_note_image",
                 new { paper_id = note.Id, image_path = @"C:\fixture\picture.png" }));
