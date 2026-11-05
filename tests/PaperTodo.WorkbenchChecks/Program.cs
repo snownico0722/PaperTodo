@@ -159,6 +159,31 @@ internal static partial class Program
             var scenes = (System.Collections.IDictionary)Member(workbench, "_scenes");
             await Until(() => scenes.Contains(3), "Sparse workspace 3 is missing from the overview");
             Assert(!scenes.Contains(2), "Removed workspace 2 was incorrectly shown in the overview");
+            var active = Member(workbench, "ActiveScene");
+            var preview = scenes[3]!;
+            var previewOrigin = (WorkbenchPoint)Member(preview, "Origin");
+            var previewBounds = ((WorkbenchRect)Member(preview, "Bounds")).Offset(previewOrigin);
+            var activeBounds = ((WorkbenchRect)Member(active, "Bounds")).Offset((WorkbenchPoint)Member(active, "Origin"));
+            var previewCards = (System.Collections.IDictionary)Member(preview, "Cards");
+            var previewCard = ((WorkbenchRect)Member(previewCards["other"]!, "Bounds")).Offset(previewOrigin);
+            var scale = (ScaleTransform)Member(workbench, "_scale");
+            var pan = (TranslateTransform)Member(workbench, "_pan");
+            bool IsReadOnly(WorkbenchPoint world) => (bool)typeof(WorkbenchWindow)
+                .GetMethod("IsReadOnlyWorkspacePoint", Private)!.Invoke(workbench,
+                    [new Point(world.X * scale.ScaleX + pan.X, world.Y * scale.ScaleY + pan.Y)])!;
+            Assert(IsReadOnly(previewCard.Center) && IsReadOnly(new(previewBounds.X + 1, previewBounds.Y + 1)),
+                "A drop over a read-only workspace card or its blank frame would target the active workspace");
+            Assert(!IsReadOnly(activeBounds.Center), "The active workspace was incorrectly treated as a read-only drop region");
+            Assert(!IsReadOnly(new((activeBounds.Right + previewBounds.X) / 2, activeBounds.Y + 1)),
+                "Unassigned space between workspaces was incorrectly treated as a read-only drop region");
+            var previewCanvas = (Canvas)Member(preview, "Canvas");
+            var previewVisibility = previewCanvas.Visibility;
+            try
+            {
+                previewCanvas.Visibility = Visibility.Collapsed;
+                Assert(!IsReadOnly(previewCard.Center), "A hidden workspace continued to block drops on its old canvas region");
+            }
+            finally { previewCanvas.Visibility = previewVisibility; }
         }
         foreach (var paper in controller.State.Papers.Where(p => p.WorkspaceMaterials == null))
             Assert(before[paper.Id] == Geometry(paper),

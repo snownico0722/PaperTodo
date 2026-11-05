@@ -363,6 +363,14 @@ internal sealed partial class WorkbenchWindow
         return scene.Cards.Values.LastOrDefault(c => c.Frame.Visibility == Visibility.Visible && c.Bounds.Contains(p));
     }
 
+    private bool IsReadOnlyWorkspacePoint(Point screen)
+    {
+        var worldPoint = new WorkbenchPoint((screen.X - _pan.X) / _scale.ScaleX,
+            (screen.Y - _pan.Y) / _scale.ScaleY);
+        return _scenes.Values.Any(scene => scene.Number != _controller.WorkspaceNumber &&
+            scene.Canvas.Visibility == Visibility.Visible && scene.Bounds.Offset(scene.Origin).Contains(worldPoint));
+    }
+
     private void WireContentDrop(Card card)
     {
         card.Frame.AllowDrop = true;
@@ -387,7 +395,10 @@ internal sealed partial class WorkbenchWindow
     private void OnWorkspaceDragOver(object sender, DragEventArgs e)
     {
         if (e.Handled || IsSuspended || _closed) return;
-        var card = CardAt(e.GetPosition(_viewport));
+        var screen = e.GetPosition(_viewport);
+        if (IsReadOnlyWorkspacePoint(screen))
+        { e.Effects = DragDropEffects.None; e.Handled = true; return; }
+        var card = CardAt(screen);
         if (card != null) return; // Body editors retain their native drag/drop behavior.
         if (e.Data.GetData(ContentTransferFormat) is WorkbenchContentTransferPayload payload)
             e.Effects = _controller.CanTransferWorkbenchContent(payload, null) ? DragDropEffects.Move : DragDropEffects.None;
@@ -401,8 +412,14 @@ internal sealed partial class WorkbenchWindow
 
     private void OnWorkspaceDrop(object sender, DragEventArgs e)
     {
-        if (e.Handled || IsSuspended || _closed || CardAt(e.GetPosition(_viewport)) != null) return;
-        var point = ActivePoint(e.GetPosition(_viewport));
+        if (e.Handled || IsSuspended || _closed) return;
+        var screen = e.GetPosition(_viewport);
+        // Overview regions are read-only. Unassigned canvas space still belongs to the
+        // active workspace, but a visible neighboring workspace must never redirect a drop.
+        if (IsReadOnlyWorkspacePoint(screen))
+        { e.Effects = DragDropEffects.None; e.Handled = true; return; }
+        if (CardAt(screen) != null) return;
+        var point = ActivePoint(screen);
         try
         {
             if (e.Data.GetData(ContentTransferFormat) is WorkbenchContentTransferPayload payload)
