@@ -75,6 +75,9 @@ internal static class NoteImageExport
         // One PNG, streamed in narrow bands: no full-height bitmap, no cropping or silent cap.
         using var png = new NoteImagePngWriter(stream, artifact.PixelWidth, artifact.PixelHeight);
         const int bandHeight = 512;
+        // Rasterize past each stripe edge so glyph / image antialiasing sees its
+        // neighbours. Only the middle scanlines are written to the PNG.
+        const int gutter = 4;
         var stride = checked(artifact.PixelWidth * 4);
         var pixels = new byte[stride * bandHeight];
         for (var top = 0; top < artifact.PixelHeight; top += bandHeight)
@@ -84,13 +87,13 @@ internal static class NoteImageExport
             var visual = new DrawingVisual();
             using (var drawing = visual.RenderOpen())
             {
-                drawing.PushTransform(new TranslateTransform(0, -top));
+                drawing.PushTransform(new TranslateTransform(0, gutter - top));
                 drawing.PushTransform(new ScaleTransform(NoteImageArtifact.Scale, NoteImageArtifact.Scale));
                 drawing.DrawDrawing(artifact.Drawing);
             }
-            var bitmap = new RenderTargetBitmap(artifact.PixelWidth, height, 96, 96, PixelFormats.Pbgra32);
+            var bitmap = new RenderTargetBitmap(artifact.PixelWidth, height + gutter * 2, 96, 96, PixelFormats.Pbgra32);
             bitmap.Render(visual);
-            bitmap.CopyPixels(pixels, stride, 0);
+            bitmap.CopyPixels(new Int32Rect(0, gutter, artifact.PixelWidth, height), pixels, stride, 0);
             png.WriteBgraRows(pixels, height);
         }
         cancellation.ThrowIfCancellationRequested();
@@ -133,8 +136,9 @@ internal static class NoteImageExport
             {
                 _dc.DrawRoundedRectangle(Accent, null, new Rect(Margin, _y, 30, 3), 1.5, 1.5);
                 _y += 25;
-                var headingOwnsTitle = document.FirstOrDefault() is HeadingBlock { Level: 1 } heading &&
-                    string.Equals(Plain(heading.Inline).Trim(), title.Trim(), StringComparison.Ordinal);
+                // The document's opening H1 is the article title. A short paper label
+                // remains the suggested filename, not a second competing title.
+                var headingOwnsTitle = document.FirstOrDefault() is HeadingBlock { Level: 1 };
                 if (!headingOwnsTitle && !string.IsNullOrWhiteSpace(title))
                 {
                     Text(title, [], Margin, NoteImageArtifact.Width - 2 * Margin, 30, true);
@@ -378,17 +382,5 @@ internal static class NoteImageExport
             _dc.DrawText(wordmark, new Point(left + 29, _y));
         }
 
-        private static string Plain(ContainerInline? container)
-        {
-            var result = new StringBuilder();
-            for (var inline = container?.FirstChild; inline != null; inline = inline.NextSibling)
-                switch (inline)
-                {
-                    case LiteralInline literal: result.Append(literal.Content); break;
-                    case CodeInline code: result.Append(code.Content); break;
-                    case ContainerInline nested: result.Append(Plain(nested)); break;
-                }
-            return result.ToString();
-        }
     }
 }

@@ -61,6 +61,12 @@ internal static class NoteImageExportChecks
         Check(words.Split("把想法，写成自己的样子").Length == 2, "Title repeated above identical first H1");
         using var png = new MemoryStream();
         NoteImageExport.Write(png, sample, token);
+        var artifacts = Environment.GetEnvironmentVariable("PAPERTODO_IMAGE_EXPORT_ARTIFACTS");
+        if (!string.IsNullOrWhiteSpace(artifacts))
+        {
+            Directory.CreateDirectory(artifacts);
+            File.WriteAllBytes(Path.Combine(artifacts, "note-share-sample.png"), png.ToArray());
+        }
         png.Position = 0;
         var frame = BitmapDecoder.Create(png, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad).Frames[0];
         Check(frame.PixelWidth == sample.PixelWidth && frame.PixelHeight == sample.PixelHeight,
@@ -82,7 +88,17 @@ internal static class NoteImageExportChecks
             var bounds = new Int32Rect(0, row, sample.PixelWidth, 1);
             reference.CopyPixels(bounds, expected, expected.Length, 0);
             decoded.CopyPixels(bounds, actual, actual.Length, 0);
-            Check(expected.SequenceEqual(actual), "PNG stripe seam or RGB channel error at " + row);
+            if (!expected.SequenceEqual(actual))
+            {
+                var differences = Enumerable.Range(0, expected.Length).Where(i => expected[i] != actual[i]).ToArray();
+                if (!string.IsNullOrWhiteSpace(artifacts))
+                {
+                    var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(reference));
+                    using var file = File.Create(Path.Combine(artifacts, "note-share-reference.png")); encoder.Save(file);
+                }
+                throw new InvalidOperationException($"PNG stripe seam at {row}: {differences.Length} channels; " +
+                    string.Join(", ", differences.Take(8).Select(i => $"{i}: {expected[i]} != {actual[i]}")));
+            }
         }
 
         var missing = NoteImageExport.Compose("Missing image", "before\n\n![](i:999)\n\nafter", _ => null, "missing", token);
@@ -107,12 +123,6 @@ internal static class NoteImageExportChecks
               !Directory.EnumerateFiles(AppContext.BaseDirectory, ".export-cancel.png.*.tmp").Any(),
             "Cancelled export replaced destination or left an intermediate file");
 
-        var artifacts = Environment.GetEnvironmentVariable("PAPERTODO_IMAGE_EXPORT_ARTIFACTS");
-        if (!string.IsNullOrWhiteSpace(artifacts))
-        {
-            Directory.CreateDirectory(artifacts);
-            File.WriteAllBytes(Path.Combine(artifacts, "note-share-sample.png"), png.ToArray());
-        }
         Console.WriteLine($"PASS note image: {sample.PixelWidth}x{sample.PixelHeight}; long note {longNote.PixelHeight}px; native decode, stripe seams, complete scanlines and atomic cancellation");
     }
 

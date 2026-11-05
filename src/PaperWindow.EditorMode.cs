@@ -206,7 +206,13 @@ public sealed partial class PaperWindow
         {
             Height = ExpandedEditorToolbarHeight,
             BorderThickness = new Thickness(0, 0, 0, 1),
-            Child = tools,
+            Child = new Viewbox
+            {
+                Stretch = Stretch.Uniform,
+                StretchDirection = StretchDirection.DownOnly,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                Child = tools
+            },
             Visibility = Visibility.Collapsed,
             VerticalAlignment = VerticalAlignment.Top
         };
