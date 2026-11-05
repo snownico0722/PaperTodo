@@ -11,7 +11,7 @@ internal static partial class Program
         var initial = FixtureState();
         initial.UseCapsuleMode = false;
         initial.UseDeepCapsuleMode = false;
-        initial.Papers.Single(p => p.Id == "todo-a").Items.First().LinkedPaperId = "note-a";
+        initial.Papers.Single(p => p.Id == "todo-a").Items.First().LinkPaper("note-a");
         var store = new StateStore();
         store.SaveJsonSync(store.SerializeState(initial), 1);
         using var controller = new AppController();
