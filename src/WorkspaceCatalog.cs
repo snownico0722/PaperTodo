@@ -96,7 +96,7 @@ internal sealed class WorkspaceCatalog
             {
                 // An inaccessible slot can be retried later; do not reset the
                 // user's selected workspace or write over its unavailable data.
-                StartupError = ex.GetBaseException().Message;
+                StartupError = WorkspaceFailureMessage.For(ex);
             }
         }
         main.Workspaces = HasConfiguration ? Options : null;
