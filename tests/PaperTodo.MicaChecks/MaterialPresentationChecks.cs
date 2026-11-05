@@ -17,6 +17,7 @@ internal static class MaterialPresentationChecks
     internal static void Run(AppController controller)
     {
         CheckDefaultPaperNineSliceShadow(controller);
+        NineSliceShadowSeamChecks.Run();
 
         var saved = (controller.State.PaperSkin, controller.State.Theme,
             controller.State.EnableAnimations, controller.State.MicaAlwaysActive);
