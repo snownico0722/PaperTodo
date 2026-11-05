@@ -25,6 +25,22 @@ public sealed partial class AppController
     private string WorkspaceUi(string zh, string en, string ja, string ko) =>
         SettingsSidebarLocalized(zh, en, ja, ko);
 
+    // The shared settings button template does not apply Button.Padding to its
+    // content presenter. Add real inset to these three outlined workspace actions
+    // without changing the sizing of unrelated settings buttons.
+    private Button WorkspaceFramedButton(string label)
+    {
+        var button = SettingsTextButton(label);
+        button.Content = new TextBlock
+        {
+            Text = label,
+            Margin = new Thickness(14, 0, 14, 0),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        AutomationProperties.SetName(button, label);
+        return button;
+    }
+
     private UIElement BuildWorkspaceSettingsPage()
     {
         CancelWorkspaceRenameOnPointer(null);
@@ -50,7 +66,7 @@ public sealed partial class AppController
         root.Children.Add(optionsPanel);
 
         var heading = new DockPanel { Margin = new Thickness(0, 12, 0, 5) };
-        var create = SettingsTextButton(WorkspaceUi("＋ 新建", "＋ New", "＋ 新規", "＋ 새로 만들기"));
+        var create = WorkspaceFramedButton(WorkspaceUi("新建", "New", "新規", "새로 만들기"));
         create.HorizontalAlignment = HorizontalAlignment.Right;
         create.IsEnabled = WorkspaceOptions.Enabled && WorkspaceOptions.SlotNumbers.Count < 5;
         DockPanel.SetDock(create, Dock.Right);
@@ -270,7 +286,7 @@ public sealed partial class AppController
             optionsPanel.Children.Add(card);
         }
 
-        var confirm = SettingsTextButton(WorkspaceUi(
+        var confirm = WorkspaceFramedButton(WorkspaceUi(
             "确认切换", "Confirm switch", "切り替えを確認", "전환 확인"));
         confirm.HorizontalAlignment = HorizontalAlignment.Right;
         confirm.Margin = new Thickness(0, 8, 0, 2);
@@ -341,7 +357,7 @@ public sealed partial class AppController
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(2, 4, 0, 8)
         });
-        var manage = SettingsTextButton(Strings.Get("WorkspaceSettingsTitle"));
+        var manage = WorkspaceFramedButton(Strings.Get("WorkspaceSettingsTitle"));
         manage.Margin = new Thickness(0, 0, 0, 10);
         manage.HorizontalAlignment = HorizontalAlignment.Left;
         manage.Click += (_, _) => ShowSettingsWindow(SettingsPage.Workspaces);
