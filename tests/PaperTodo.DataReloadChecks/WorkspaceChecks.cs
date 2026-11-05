@@ -128,9 +128,13 @@ internal static partial class Program
                 "revisiting a slot created an independent writer lock/version");
         }
         Throws<ArgumentOutOfRangeException>(() => catalog.PathsFor(6));
-        var options = new WorkspaceConfiguration { Enabled = true, Count = 99, Active = 99 }.Normalized();
-        Require(options.Count == 5 && options.Active == 5 && options.FollowsMain(2) && !options.FollowsMain(1),
-            "invalid limits or follow default");
+        var options = new WorkspaceConfiguration
+        {
+            Enabled = true, Slots = [0, 1, 2, 3, 4, 5, 6], Active = 99
+        }.Normalized();
+        Require(options.SlotNumbers.SequenceEqual([1, 2, 3, 4, 5]) &&
+                options.Active == 1 && options.FollowsMain(2) && !options.FollowsMain(1),
+            "invalid slot IDs or follow default");
         Require(!File.Exists(Path.Combine(scope.DirectoryPath, "workspaces.json")), "unexpected separate catalog");
         var cycleTip = Strings.Format("WorkspaceCycleTooltip", 4, 1);
         Require(!cycleTip.Contains("4 /", StringComparison.Ordinal) &&
@@ -140,7 +144,7 @@ internal static partial class Program
 
         var managed = new WorkspaceConfiguration
         {
-            Enabled = true, Count = 5, Active = 4,
+            Enabled = true, Active = 4,
             Slots = [1, 3, 4], Names = new() { [3] = "开发" },
             TopBarNamePicker = true
         }.Normalized();
@@ -150,16 +154,14 @@ internal static partial class Program
                 managed.DisplayName(1) == Strings.Format("WorkspaceSlotLabel", 1) &&
                 managed.TopBarNamePicker,
             "noncontiguous named workspace catalog lost its membership or display mode");
-        var oldFiles = catalog.PathsFor(2);
-        File.WriteAllText(oldFiles.Data, "legacy hidden data");
-        Require(catalog.SlotHasData(2) && !catalog.SlotHasData(3),
-            "a legacy hidden workspace cannot be reused as a fresh one");
-        Directory.CreateDirectory(oldFiles.PluginData);
-        File.WriteAllText(Path.Combine(oldFiles.PluginData, "settings.json"), "plugin state");
-        File.WriteAllText(oldFiles.Images, "image data");
+        var secondFiles = catalog.PathsFor(2);
+        File.WriteAllText(secondFiles.Data, "to be deleted");
+        Directory.CreateDirectory(secondFiles.PluginData);
+        File.WriteAllText(Path.Combine(secondFiles.PluginData, "settings.json"), "plugin state");
+        File.WriteAllText(secondFiles.Images, "image data");
         catalog.AdoptOptions(new WorkspaceConfiguration
         {
-            Enabled = true, Count = 2, Slots = [1, 2]
+            Enabled = true, Slots = [1, 2]
         });
         var removed = catalog.Options.Normalized();
         removed.Slots = [1];
@@ -167,8 +169,10 @@ internal static partial class Program
         Require(!catalog.Options.ContainsSlot(2),
             "removed workspace still appears in the catalog");
         catalog.DeleteInactiveSlotFiles(2);
-        Require(!catalog.SlotHasData(2) && File.Exists(catalog.PathsFor(1).Data),
-            "deleting an inactive workspace did not remove its independent data or damaged main data");
+        Require(!File.Exists(secondFiles.Data) && !File.Exists(secondFiles.Images) &&
+                !Directory.Exists(secondFiles.PluginData) &&
+                File.Exists(catalog.PathsFor(1).Data),
+            "deleting an inactive workspace did not remove its files or damaged main data");
     }
 
     private static void WorkspaceMetadataWrites()
@@ -177,7 +181,7 @@ internal static partial class Program
         var source = scope.Read();
         source["futureExtension"] = J("{\"keep\":123}");
         scope.Write(source);
-        var options = new WorkspaceConfiguration { Enabled = true, Count = 5, Active = 3 };
+        var options = new WorkspaceConfiguration { Enabled = true, Slots = [1, 2, 3, 4, 5], Active = 3 };
         scope.Store.UpdateWorkspaceConfiguration(options, 5);
         scope.Store.SaveJsonAsync(scope.BaselineJson, 4).GetAwaiter().GetResult();
         var saved = scope.Read();
@@ -194,7 +198,7 @@ internal static partial class Program
             if (stage == DurableAtomicWriteStage.BeforeReplace) throw new IOException("injected catalog failure");
         }));
         Throws<IOException>(() => failed.UpdateWorkspaceConfiguration(
-            new WorkspaceConfiguration { Enabled = true, Count = 2, Active = 2 }, 7));
+            new WorkspaceConfiguration { Enabled = true, Slots = [1, 2], Active = 2 }, 7));
         Require(File.ReadAllBytes(scope.Store.FilePath).SequenceEqual(bytes), "failed catalog write replaced main");
     }
 
@@ -202,7 +206,7 @@ internal static partial class Program
     {
         using var scope = new Scope();
         var main = scope.Store.Load();
-        main.Workspaces = new() { Enabled = true, Count = 3, Active = 2 };
+        main.Workspaces = new() { Enabled = true, Slots = [1, 2, 3], Active = 2 };
         main.Papers[0].Content = "main content must survive recovery";
         scope.Store.SaveJsonSync(scope.Store.SerializeState(main), 2);
         Require(scope.Store.TryRefreshBackupFromPrimary(), "main recovery test needs a valid backup");
@@ -242,7 +246,7 @@ internal static partial class Program
         main.MaxTitleLength = 20;
         main.UseCapsuleMode = main.UseDeepCapsuleMode = true;
         main.McpEnabled = main.McpAllowFullWrites = true;
-        main.Workspaces = new() { Enabled = true, Count = 3 };
+        main.Workspaces = new() { Enabled = true, Slots = [1, 2, 3] };
         main.DeepCapsuleQueueStartTopMargins[@"\\.\DISPLAY1|left"] = 55;
         scope.Store.SaveJsonSync(scope.Store.SerializeState(main), 2);
         var secondaryStore = new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared, 2);
@@ -460,7 +464,7 @@ internal static partial class Program
     {
         using var scope = new Scope();
         var seed = scope.Store.Load();
-        seed.Workspaces = new() { Enabled = true, Count = 2, Active = 1 };
+        seed.Workspaces = new() { Enabled = true, Slots = [1, 2], Active = 1 };
         scope.Store.SaveJsonSync(scope.Store.SerializeState(seed), 2);
         var catalog = new WorkspaceCatalog(scope.DirectoryPath, DurableAtomicFileWriter.Shared);
         var active = catalog.OpenInitial();
@@ -494,7 +498,7 @@ internal static partial class Program
     {
         using var scope = new Scope();
         var state = scope.Store.Load();
-        state.Workspaces = new() { Enabled = true, Count = 3, Active = 2 };
+        state.Workspaces = new() { Enabled = true, Slots = [1, 2, 3], Active = 2 };
         scope.Store.SaveJsonSync(scope.Store.SerializeState(state), 2);
         var path = Path.Combine(scope.DirectoryPath, "data2.json");
 
@@ -582,7 +586,7 @@ internal static partial class Program
                 main.PaperSkin = PaperSkins.Paper;
                 main.Workspaces = new()
                 {
-                    Enabled = true, Count = 2, Active = 2,
+                    Enabled = true, Slots = [1, 2], Active = 2,
                     FollowMainSettings = new() { [2] = false }
                 };
                 var independent = NewState();
@@ -643,7 +647,7 @@ internal static partial class Program
         var main = NewState();
         main.Theme = "dark"; main.UiLanguage = "en-US";
         main.McpEnabled = main.McpAllowFullWrites = true;
-        main.Workspaces = new() { Enabled = true, Count = 5 };
+        main.Workspaces = new() { Enabled = true, Slots = [1, 2, 3, 4, 5] };
         var second = NewState();
         second.Theme = "light"; second.UiLanguage = "ja-JP";
         second.McpEnabled = second.McpAllowFullWrites = false;
@@ -808,7 +812,7 @@ internal static partial class Program
                 BindingFlags.Instance | BindingFlags.NonPublic)!;
             var originalSecondaryWriter = (IDurableAtomicFileWriter)secondaryWriterField.GetValue(secondaryStore)!;
             var beforeCatalogEdit = File.ReadAllBytes(store2.FilePath);
-            var earlierCount = controller.WorkspaceOptions.Count;
+            var earlierSlots = controller.WorkspaceOptions.SlotNumbers.ToArray();
             try
             {
                 secondaryWriterField.SetValue(secondaryStore, new DurableAtomicFileWriter((stage, path) =>
@@ -816,17 +820,19 @@ internal static partial class Program
                     if (stage == DurableAtomicWriteStage.BeforeTempOpen && path == secondaryStore.FilePath)
                         throw new IOException("Catalog update must not save secondary content.");
                 }));
-                var newCount = controller.WorkspaceOptions.Normalized();
-                newCount.Count = earlierCount == 5 ? 4 : 5;
-                Require(await controller.ChangeWorkspaceConfigurationAsync(newCount),
+                var changedMembership = controller.WorkspaceOptions.Normalized();
+                changedMembership.Slots = earlierSlots.Contains(5)
+                    ? earlierSlots.Where(n => n != 5).ToList()
+                    : earlierSlots.Append(5).OrderBy(n => n).ToList();
+                Require(await controller.ChangeWorkspaceConfigurationAsync(changedMembership),
                     "secondary catalog-only update triggered a secondary save");
                 Require(File.ReadAllBytes(store2.FilePath).SequenceEqual(beforeCatalogEdit),
                     "secondary catalog-only update unexpectedly modified its document");
             }
             finally { secondaryWriterField.SetValue(secondaryStore, originalSecondaryWriter); }
-            var restoredCount = controller.WorkspaceOptions.Normalized();
-            restoredCount.Count = earlierCount;
-            Require(await controller.ChangeWorkspaceConfigurationAsync(restoredCount),
+            var restoredMembership = controller.WorkspaceOptions.Normalized();
+            restoredMembership.Slots = earlierSlots.ToList();
+            Require(await controller.ChangeWorkspaceConfigurationAsync(restoredMembership),
                 "secondary catalog-only restoration failed");
 
             // A follow toggle changes only the effective software settings. It must not
@@ -1155,14 +1161,14 @@ internal static partial class Program
                 "new fifth workspace duplicated main content");
             var fifthPath = Path.Combine(directory, "data5.json");
             var fifthId = controller.State.Papers[0].Id;
-            var reduced = controller.WorkspaceOptions.Normalized(); reduced.Count = 3;
+            var reduced = controller.WorkspaceOptions.Normalized(); reduced.Slots = [1, 2, 3];
             Require(await controller.ChangeWorkspaceConfigurationAsync(reduced) && controller.WorkspaceNumber == 1,
-                "reducing count did not return an excluded active slot to main");
+                "removing a slot did not return an excluded active workspace to main");
             Require(File.Exists(fifthPath) && Str(J(File.ReadAllText(fifthPath))["papers"]![0]!["id"]) == fifthId,
-                "reducing count removed or changed fifth workspace data");
+                "removing a slot unexpectedly deleted its data");
             Require(await controller.CycleWorkspaceAsync() && controller.WorkspaceNumber == 2, "cycle to2 failed");
             Require(await controller.CycleWorkspaceAsync() && controller.WorkspaceNumber == 3, "cycle to3 failed");
-            Require(await controller.CycleWorkspaceAsync() && controller.WorkspaceNumber == 1, "cycle did not wrap at count");
+            Require(await controller.CycleWorkspaceAsync() && controller.WorkspaceNumber == 1, "cycle did not wrap at the last active slot");
             var disabled = controller.WorkspaceOptions.Normalized(); disabled.Enabled = false;
             Require(await controller.ChangeWorkspaceConfigurationAsync(disabled), "disable failed");
             var disabledPage = WorkspacePage();
