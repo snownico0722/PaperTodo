@@ -1679,4 +1679,43 @@ Restoring returns this workspace to that time; later changes may be lost. Only n
   <data name="HistoryRecoveryRestore" xml:space="preserve">
     <value>Restore backup</value>
   </data>
+  <data name="WorkspaceFailureRetry" xml:space="preserve">
+    <value>Retry</value>
+  </data>
+  <data name="WorkspaceFailureExit" xml:space="preserve">
+    <value>Exit PaperTodo</value>
+  </data>
+  <data name="WorkspaceFailureNoRecovery" xml:space="preserve">
+    <value>The workspace data cannot be read, and no usable backup or temporary file was found. The original files were not overwritten.</value>
+  </data>
+  <data name="WorkspaceFailureAccessDenied" xml:space="preserve">
+    <value>Permission to access the workspace files was denied. Check folder permissions and retry.</value>
+  </data>
+  <data name="WorkspaceFailureMissing" xml:space="preserve">
+    <value>A required workspace file or folder could not be found. Check whether it was moved or deleted, then retry.</value>
+  </data>
+  <data name="WorkspaceFailureInvalidData" xml:space="preserve">
+    <value>The workspace data has an invalid format, so the switch could not be completed. Check the data file and retry.</value>
+  </data>
+  <data name="WorkspaceFailureBusy" xml:space="preserve">
+    <value>A workspace file is in use. Close the program accessing it and retry.</value>
+  </data>
+  <data name="WorkspaceFailureDiskFull" xml:space="preserve">
+    <value>There is not enough disk space to save the workspace data. Free up space and retry.</value>
+  </data>
+  <data name="WorkspaceFailureIo" xml:space="preserve">
+    <value>The workspace files could not be read or written. Check the disk or storage device and retry.</value>
+  </data>
+  <data name="WorkspaceFailureUnknown" xml:space="preserve">
+    <value>The workspace switch could not be completed. Retry; if it still fails, exit PaperTodo and open it again.</value>
+  </data>
+  <data name="WorkspaceFailurePrimaryChanged" xml:space="preserve">
+    <value>The data file changed during recovery. Recovery was stopped to avoid overwriting newer content. Please retry.</value>
+  </data>
+  <data name="WorkspaceFailureRecoveryChanged" xml:space="preserve">
+    <value>The recovery file has changed. Retry to select a recovery source again.</value>
+  </data>
+  <data name="WorkspaceFailureRecoveryUnverified" xml:space="preserve">
+    <value>The restored file could not be verified after saving. The recovery source has been retained. Please retry.</value>
+  </data>
 </root>

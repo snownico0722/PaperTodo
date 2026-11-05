@@ -1170,7 +1170,7 @@ internal static partial class Program
             var busyFifthBytes = File.ReadAllBytes(busyFifthPath);
             using (var busy = new FileStream(busyFifthPath,
                 FileMode.Open, FileAccess.ReadWrite, FileShare.None))
-                Require(!await controller.SwitchWorkspaceAsync(5) && controller.WorkspaceNumber == 1,
+                Require(!await WithWorkspaceFailureDialog(() => controller.SwitchWorkspaceAsync(5), dialog => dialog.Close()) && controller.WorkspaceNumber == 1,
                     "busy fifth workspace caused a switch or a destructive recovery");
             Require(File.ReadAllBytes(busyFifthPath).SequenceEqual(busyFifthBytes),
                 "busy fifth workspace was overwritten during the rejected switch");
@@ -1178,7 +1178,7 @@ internal static partial class Program
             // Confirmed corruption is NOT a blank new workspace. Reject the switch
             // until a complete interrupted-write source can be recovered.
             File.WriteAllText(busyFifthPath, "{invalid target");
-            Require(!await controller.SwitchWorkspaceAsync(5) &&
+            Require(!await WithWorkspaceFailureDialog(() => controller.SwitchWorkspaceAsync(5), dialog => dialog.Close()) &&
                     controller.WorkspaceNumber == 1 &&
                     File.ReadAllText(busyFifthPath) == "{invalid target",
                 "corrupt fifth workspace was overwritten with a new blank note");

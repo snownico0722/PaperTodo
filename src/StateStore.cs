@@ -130,9 +130,7 @@ public sealed partial class StateStore
                     return ReadLoadDocument(snapshot.Bytes);
                 }
             }
-            throw new InvalidDataException(
-                "The workspace data and its fixed backup cannot be read, and no " +
-                "complete interrupted-write file is available. Original files were not overwritten.");
+            throw new StateRecoveryException("WorkspaceFailureNoRecovery");
         }
 
         initializedEmpty = true;

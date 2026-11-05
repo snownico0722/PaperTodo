@@ -398,7 +398,7 @@ internal static partial class Program
             using var scope = new Scope();
             File.WriteAllText(scope.Store.FilePath, invalid);
             var reader = new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared);
-            Throws<InvalidDataException>(() => reader.Load());
+            Throws<StateRecoveryException>(() => reader.Load());
             Require(File.ReadAllText(reader.FilePath) == invalid &&
                     !Directory.GetFiles(scope.DirectoryPath, "data.failed_load.*.json").Any(),
                 "unrecoverable corruption generated blank state or duplicate recovery files");
@@ -425,7 +425,7 @@ internal static partial class Program
             File.WriteAllText(scope.Store.FilePath, "{broken-primary");
             File.WriteAllText(scope.Store.BackupPath, "{broken-backup");
             var reader = new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared);
-            Throws<InvalidDataException>(() => reader.Load());
+            Throws<StateRecoveryException>(() => reader.Load());
             Require(File.ReadAllText(reader.FilePath) == "{broken-primary" &&
                     File.ReadAllText(reader.BackupPath) == "{broken-backup",
                 "two corrupt sources were silently replaced with empty data");

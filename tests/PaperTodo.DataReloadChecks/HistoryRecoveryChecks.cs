@@ -60,7 +60,7 @@ internal static partial class Program
                 number == 1 ? 2 : 1).FilePath;
             File.WriteAllText(otherPath, "other workspace must stay untouched");
 
-            Throws<InvalidDataException>(() => store.Load());
+            Throws<StateRecoveryException>(() => store.Load());
             var prompts = 0;
             Throws<OperationCanceledException>(() => store.Load(out _, time =>
             {
@@ -139,7 +139,7 @@ internal static partial class Program
                 ? new FileStream(scope.Store.FilePath, FileMode.Open, FileAccess.ReadWrite, FileShare.None) : null;
             bool UnexpectedPrompt(DateTime _) => throw new InvalidOperationException("Unexpected history offer: " + source);
             var store = new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared);
-            if (source == "none") Throws<InvalidDataException>(() => store.Load(out _, UnexpectedPrompt));
+            if (source == "none") Throws<StateRecoveryException>(() => store.Load(out _, UnexpectedPrompt));
             else if (source == "busy") Throws<IOException>(() => store.Load(out _, UnexpectedPrompt));
             else store.Load(out _, UnexpectedPrompt);
         }

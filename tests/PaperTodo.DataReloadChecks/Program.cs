@@ -13,6 +13,7 @@ internal static partial class Program
         if (args.Contains("--shutdown-merge")) return RunShutdownMergeFixture(false);
         if (args.Contains("--live-fixture")) return RunLiveFixture();
         if (args.Contains("--history-dialog")) return RunHistoryDialogFixture();
+        if (args.Contains("--workspace-failure")) return RunWorkspaceFailureFixture();
         if (args.Contains("--exit-fixture")) return RunDeferredExitFixture();
         if (args.Contains("--passive-dispose")) return RunPassiveDisposeFixture();
         if (args.Contains("--workspace-fixture")) return RunWorkspaceFixture();
@@ -56,6 +57,7 @@ internal static partial class Program
             }
             CoreHistoryBackupChecks();
             HistoryRecoveryChecks();
+            WorkspaceFailureMessageChecks();
             WorkspaceStorageChecks();
             WorkspaceFollowingMergeBaseline();
             StorageSafetyChecks();
@@ -63,6 +65,7 @@ internal static partial class Program
             KillSafetyChecks();
             RunIsolatedLiveChecks();
             RunIsolatedLiveChecks("--history-dialog");
+            RunIsolatedLiveChecks("--workspace-failure");
             RunIsolatedLiveChecks("--shutdown-merge");
             RunIsolatedLiveChecks("--shutdown-workspace");
             RunIsolatedLiveChecks("--exit-fixture");

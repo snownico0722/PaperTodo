@@ -26,22 +26,26 @@ internal static class PaperNoticeDialog
         string secondaryText,
         string primaryText)
     {
-        return ShowCore(
+        return ShowDecision(
             owner,
             titleText,
             messageText,
             secondaryText,
-            primaryText);
+            primaryText) == true;
     }
 
-    private static bool ShowCore(
+    public static bool? ShowDecision(
+        Window? owner, string titleText, string messageText, string secondaryText, string primaryText) =>
+        ShowCore(owner, titleText, messageText, secondaryText, primaryText);
+
+    private static bool? ShowCore(
         Window? owner,
         string titleText,
         string messageText,
         string? secondaryText,
         string primaryText)
     {
-        var accepted = false;
+        bool? accepted = null;
         var dialog = new Window
         {
             Owner = owner,
@@ -115,7 +119,7 @@ internal static class PaperNoticeDialog
         {
             var secondary = CreateButton(secondaryText, primary: false);
             secondary.IsCancel = true;
-            secondary.Click += (_, _) => dialog.Close();
+            secondary.Click += (_, _) => { accepted = false; dialog.Close(); };
             buttonRow.Children.Add(secondary);
         }
 

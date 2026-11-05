@@ -239,6 +239,51 @@ public sealed partial class AppController
 
     private async Task<bool> SwitchWorkspaceCoreAsync(int number, WorkspaceConfiguration requested)
     {
+        while (!IsExiting)
+        {
+            try { return await SwitchWorkspaceAttemptAsync(number, requested); }
+            catch (OperationCanceledException) { return false; }
+            catch (Exception ex)
+            {
+                if (IsExiting) return false;
+                Trace.TraceWarning("Workspace switch failed: {0}", ex);
+                // The attempt has restored the previous owner and finished its
+                // cleanup. Keep other transitions and autosave out of the modal
+                // choice; retry begins a fresh attempt after releasing this gate.
+                _workspaceSwitching = true;
+                _saveTimer.Stop();
+                _forceSaveTimer.Stop();
+                bool? retry;
+                try
+                {
+                    RefreshWorkspaceButtons();
+                    var owner = _settingsWindow is { IsVisible: true } ? _settingsWindow :
+                        Application.Current.Windows.OfType<Window>().FirstOrDefault(window => window.IsActive);
+                    retry = PaperNoticeDialog.ShowDecision(owner,
+                        Strings.Get("WorkspaceSwitchFailed"), WorkspaceFailureMessage.For(ex),
+                        Strings.Get("WorkspaceFailureExit"), Strings.Get("WorkspaceFailureRetry"));
+                }
+                finally
+                {
+                    _workspaceSwitching = false;
+                    if (!IsExiting)
+                    {
+                        RefreshWorkspaceButtons();
+                        if (_hasPendingDirty) ArmSaveRetryIfNeeded(null);
+                    }
+                }
+                ResumeExitAfterDataReload();
+                if (IsExiting) return false;
+                if (retry == true) continue;
+                if (retry == false) Exit();
+                return false; // Escape/window close dismisses; it never implies exit.
+            }
+        }
+        return false;
+    }
+
+    private async Task<bool> SwitchWorkspaceAttemptAsync(int number, WorkspaceConfiguration requested)
+    {
         Application.Current.Dispatcher.VerifyAccess();
         var nextOptions = requested.Normalized();
         if ((number != 1 && (!nextOptions.Enabled || !nextOptions.ContainsSlot(number))) || number is < 1 or > 5) return false;
@@ -266,7 +311,7 @@ public sealed partial class AppController
         {
             // Complete/fence the source writer first. Candidate validation never overwrites it.
             CommitWorkspaceEditors();
-            if (!TrySaveNow(sync: true, workspaceBoundary: true)) return false;
+            if (!TrySaveNow(sync: true, workspaceBoundary: true, throwOnFailure: true)) return false;
             candidate = _workspaceCatalog.Open(number, nextOptions,
                 main: previous.Paths.Number == 1 ? previous.State : null);
             var needsInitialSave = candidate.Store.NeedsStartupRecoverySave;
@@ -305,7 +350,7 @@ public sealed partial class AppController
             // initializing/recovering the document or rescuing off-screen geometry.
             var targetChanged = needsInitialSave || candidate.Store.NormalizedCollapsedStateOnLoad || relocated ||
                 candidate.State.HidePapersFromTaskbar != originalHideFromTaskbar;
-            if (targetChanged && !TrySaveNow(sync: true, workspaceBoundary: true))
+            if (targetChanged && !TrySaveNow(sync: true, workspaceBoundary: true, throwOnFailure: true))
                 throw new IOException(Strings.Get("WorkspaceSaveFailed"));
             // The active slot always belongs to the main catalog. Returning to a
             // healthy main workspace updates that node alone, without resaving papers.
@@ -348,9 +393,12 @@ public sealed partial class AppController
                     Trace.TraceError("Workspace UI restoration failed: {0}", restoreError);
                 }
             }
-            if (ex is not OperationCanceledException)
-                ReportWorkspaceError(ex.GetBaseException().Message);
-            return committed;
+            if (committed)
+            {
+                Trace.TraceWarning("Committed workspace switch cleanup failed: {0}", ex);
+                return true;
+            }
+            throw;
         }
         finally
         {

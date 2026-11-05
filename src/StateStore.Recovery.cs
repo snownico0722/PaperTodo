@@ -145,7 +145,7 @@ public sealed partial class StateStore
         // the selected snapshot into an unchecked replacement.
         var originalHash = SHA256.HashData(bytes);
         if (!originalHash.AsSpan().SequenceEqual(ReadFileHash(tempPath)))
-            throw new IOException("The interrupted-write file changed during preservation.");
+            throw new StateRecoveryException("WorkspaceFailureRecoveryChanged");
         var archived = MoveRecoverySource(tempPath, "orphaned", validateWrite);
         // Another equivalent temp may be selected as the recovery authority.
         // Keep the path fingerprint aligned so a successful full restore also
@@ -181,10 +181,10 @@ public sealed partial class StateStore
             ? actualPrimary != null
             : actualPrimary == null ||
               !pending.ExpectedPrimaryHash.AsSpan().SequenceEqual(actualPrimary))
-            throw new IOException("The primary file changed during automatic recovery; refusing overwrite.");
+            throw new StateRecoveryException("WorkspaceFailurePrimaryChanged");
 
         if (!pending.SourceHash.AsSpan().SequenceEqual(ReadFileHash(pending.SourcePath)))
-            throw new IOException("The automatic recovery source changed; refusing overwrite.");
+            throw new StateRecoveryException("WorkspaceFailureRecoveryChanged");
     }
 
     private void PreparePendingStartupRecoveryForSave(Action validateWrite)
@@ -223,7 +223,7 @@ public sealed partial class StateStore
         // exactly the bytes that the normal durable writer was asked to commit.
         if (!ReadFileHash(FilePath).AsSpan().SequenceEqual(committedHash) ||
             !TryReadValidatedStateBytes(FilePath, out _))
-            throw new IOException("Recovery commit could not be verified; the source was retained.");
+            throw new StateRecoveryException("WorkspaceFailureRecoveryUnverified");
 
         _pendingStartupRecovery = null;
         if (!pending.IsTemporary) return; // Fixed backups and history ZIPs remain intact.
