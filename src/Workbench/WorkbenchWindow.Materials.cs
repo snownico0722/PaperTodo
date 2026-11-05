@@ -353,11 +353,8 @@ internal sealed partial class WorkbenchWindow
             }
             if (material.Kind is WorkspaceMaterialKinds.Link or WorkspaceMaterialKinds.File)
                 Add("WorkbenchOpenMaterial", () => OpenMaterial(id));
-            Add(IsWorkbenchCardCollapsed(id) ? "WorkbenchExpandCard" : "WorkbenchCollapseCard",
-                () => ToggleWorkbenchCardCollapsed(id));
-            Add(IsWorkbenchCardPinned(id) ? "WorkbenchUnlockCard" : "WorkbenchLockCard",
-                () => ToggleWorkbenchCardPinned(id));
-            menu.Items.Add(new Separator());
+            if (material.Kind is WorkspaceMaterialKinds.Link or WorkspaceMaterialKinds.File)
+                menu.Items.Add(new Separator());
             Add("WorkbenchDeleteMaterial", () =>
             {
                 if (MessageBox.Show(this, Strings.Get("WorkbenchDeleteMaterialConfirm"), Title,

@@ -207,8 +207,29 @@ internal sealed partial class WorkbenchWindow : Window
     {
         Content = text, Padding = new Thickness(10, 6, 10, 6), Margin = new Thickness(3),
         Background = CardBrush, Foreground = Ink, BorderBrush = Outline, BorderThickness = new Thickness(.5),
-        FocusVisualStyle = null
+        FocusVisualStyle = null, Template = RoundedButtonTemplate()
     };
+
+    private static ControlTemplate RoundedButtonTemplate()
+    {
+        var border = new FrameworkElementFactory(typeof(Border), "Chrome");
+        border.SetValue(Border.CornerRadiusProperty, new CornerRadius(8));
+        border.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(Control.BackgroundProperty));
+        border.SetValue(Border.BorderBrushProperty, new TemplateBindingExtension(Control.BorderBrushProperty));
+        border.SetValue(Border.BorderThicknessProperty, new TemplateBindingExtension(Control.BorderThicknessProperty));
+        var content = new FrameworkElementFactory(typeof(ContentPresenter));
+        content.SetValue(ContentPresenter.ContentProperty, new TemplateBindingExtension(ContentControl.ContentProperty));
+        content.SetValue(ContentPresenter.ContentTemplateProperty, new TemplateBindingExtension(ContentControl.ContentTemplateProperty));
+        content.SetValue(FrameworkElement.MarginProperty, new TemplateBindingExtension(Control.PaddingProperty));
+        content.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+        content.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+        border.AppendChild(content);
+        var template = new ControlTemplate(typeof(Button)) { VisualTree = border };
+        var hover = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
+        hover.Setters.Add(new Setter(Border.BorderBrushProperty, Accent, "Chrome"));
+        template.Triggers.Add(hover);
+        return template;
+    }
     internal void RefreshTheme()
     {
         if (_closed) return;
@@ -240,8 +261,10 @@ internal sealed partial class WorkbenchWindow : Window
         {
             foreach (var card in scene.Cards.Values)
             {
-                card.Frame.Background = CardBrush;
-                card.Frame.BorderBrush = _selectedCards.Contains(card.Snapshot.Id) ? Accent : Outline;
+                var iconTile = IsExternalIconCard(card.Snapshot);
+                card.Frame.Background = iconTile ? Brushes.Transparent : CardBrush;
+                card.Frame.BorderBrush = _selectedCards.Contains(card.Snapshot.Id) ? Accent
+                    : iconTile ? Brushes.Transparent : Outline;
                 card.Header.Background = WorkspaceMaterials.IsMaterialId(card.Snapshot.Id) ? Brushes.Transparent : Theme.TitleBarBrush(opaque: true);
                 card.Title.Background = Brushes.Transparent;
                 card.Title.Foreground = Ink;
@@ -251,7 +274,10 @@ internal sealed partial class WorkbenchWindow : Window
                 card.Move.Foreground = Ink;
                 card.Resize.Foreground = Muted;
                 card.Pin.Foreground = Ink;
+                card.Pin.Content = LockIcon(card.Snapshot.Placement?.Pinned == true);
+                card.Fold.Content = FoldIcon(card.Snapshot.Placement?.Collapsed == true);
                 card.Connect.Foreground = Ink;
+                if (card.FileTitle != null) card.FileTitle.Foreground = Ink;
                 card.Eye.Child = EyeIcon(card.Snapshot.DesktopVisible);
                 if (card.PreviewText != null) card.PreviewText.Foreground = Ink;
                 if (card.MaterialEditor != null)
@@ -486,6 +512,10 @@ internal sealed partial class WorkbenchWindow : Window
                     card.Move.Tag = paper.Title;
                 }
                 card.Pin.Content = LockIcon(paper.Placement?.Pinned == true);
+                card.Pin.ToolTip = Strings.Get(paper.Placement?.Pinned == true ? "WorkbenchUnlockCard" : "WorkbenchLockCard");
+                card.Fold.Content = FoldIcon(paper.Placement?.Collapsed == true);
+                card.Fold.ToolTip = Strings.Get(paper.Placement?.Collapsed == true ? "WorkbenchExpandCard" : "WorkbenchCollapseCard");
+                if (card.FileTitle != null) card.FileTitle.Text = paper.Title;
                 card.Eye.Child = EyeIcon(paper.DesktopVisible);
                 ApplyCardFold(card, paper.Placement?.Collapsed == true);
                 card.Move.Cursor = paper.Placement?.Pinned == true ? Cursors.Arrow : Cursors.SizeAll;
@@ -493,8 +523,7 @@ internal sealed partial class WorkbenchWindow : Window
                 card.Binding.Visibility = paper.BindingTitle.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
                 RefreshMaterialCard(card);
             }
-            var signature = string.Join("|", snapshot.Nodes.Select(n => $"{n.Id}:{n.Width}:{n.Height}:{n.Affinity}:{n.Kind}:{n.Pinned}:{n.Previous}"))
-                + string.Join("|", snapshot.Edges.Select(e => $"{e.From}>{e.To}"));
+            var signature = ModelSignature(snapshot);
             if (signature != _modelSignature || scene.Layout == null)
             { _modelSignature = signature; _ = LayoutActiveAsync(); }
             else FocusRequestedPaper();
@@ -506,6 +535,10 @@ internal sealed partial class WorkbenchWindow : Window
         }
         catch (Exception ex) { Report(ex); }
     }
+
+    private static string ModelSignature(WorkbenchWorkspaceSnapshot snapshot) =>
+        string.Join("|", snapshot.Nodes.Select(n => $"{n.Id}:{n.Width}:{n.Height}:{n.Affinity}:{n.Kind}:{n.Pinned}:{n.Previous}"))
+        + string.Join("|", snapshot.Edges.Select(e => $"{e.From}>{e.To}"));
 
     private Scene GetScene(int number)
     {
@@ -622,8 +655,7 @@ internal sealed partial class WorkbenchWindow : Window
             FocusRequestedPaper(); ApplySearch();
             // Cache the applied geometry, otherwise every ordinary content edit would relayout.
             var applied = _controller.SnapshotCurrentWorkbench();
-            _modelSignature = string.Join("|", applied.Nodes.Select(n => $"{n.Id}:{n.Width}:{n.Height}:{n.Affinity}:{n.Kind}:{n.Pinned}:{n.Previous}"))
-                + string.Join("|", applied.Edges.Select(e => $"{e.From}>{e.To}"));
+            _modelSignature = ModelSignature(applied);
         }
         catch (OperationCanceledException) { }
         catch (Exception ex) { if (!_closed && revision == _layoutRevision) Report(ex); }
@@ -672,7 +704,7 @@ internal sealed partial class WorkbenchWindow : Window
             };
         placement.Collapsed = !placement.Collapsed;
         StoreLayout(state);
-        SyncActiveScene();
+        RefreshLocalCardState(scene, card, placement);
     }
 
     internal void ToggleWorkbenchCardPinned(string id)
@@ -689,11 +721,26 @@ internal sealed partial class WorkbenchWindow : Window
             };
         placement.Pinned = !placement.Pinned;
         StoreLayout(state);
-        SyncActiveScene();
+        RefreshLocalCardState(scene, card, placement);
+    }
+
+    private void RefreshLocalCardState(Scene scene, Card card, WorkbenchCardState placement)
+    {
+        card.Snapshot = card.Snapshot with { Placement = placement.Copy() };
+        card.Pin.Content = LockIcon(placement.Pinned);
+        card.Pin.ToolTip = Strings.Get(placement.Pinned ? "WorkbenchUnlockCard" : "WorkbenchLockCard");
+        card.Fold.Content = FoldIcon(placement.Collapsed);
+        card.Fold.ToolTip = Strings.Get(placement.Collapsed ? "WorkbenchExpandCard" : "WorkbenchCollapseCard");
+        card.Move.Cursor = placement.Pinned ? Cursors.Arrow : Cursors.SizeAll;
+        ApplyCardFold(card, placement.Collapsed);
+        var snapshot = _controller.SnapshotCurrentWorkbench();
+        scene.Snapshot = snapshot;
+        _modelSignature = ModelSignature(snapshot);
     }
 
     private static void ApplyCardFold(Card card, bool collapsed)
     {
+        if (IsExternalIconCard(card.Snapshot)) return;
         card.Body.Visibility = collapsed ? Visibility.Collapsed : Visibility.Visible;
         card.Binding.Visibility = collapsed || string.IsNullOrEmpty(card.Snapshot.BindingTitle)
             ? Visibility.Collapsed : Visibility.Visible;
@@ -824,9 +871,8 @@ internal sealed partial class WorkbenchWindow : Window
             }
             else if (e.Key == Key.Enter) { Keyboard.ClearFocus(); e.Handled = true; }
         };
-        // The lock symbol indicates state; the complete action lives in the right-click menu.
-        card.Pin.IsHitTestVisible = false;
-        card.Pin.Focusable = false;
+        card.Pin.Click += (_, _) => ToggleWorkbenchCardPinned(paper.Id);
+        card.Fold.Click += (_, _) => ToggleWorkbenchCardCollapsed(paper.Id);
         WireCardSelection(card);
         WireConnectionDrag(card);
         WireContentDrop(card);
@@ -842,7 +888,7 @@ internal sealed partial class WorkbenchWindow : Window
         card.Title.Focusable = false;
         card.Title.IsHitTestVisible = false;
         card.Title.Visibility = Visibility.Visible;
-        card.Pin.Visibility = card.Connect.Visibility = card.Resize.Visibility = card.Move.Visibility = Visibility.Collapsed;
+        card.Pin.Visibility = card.Fold.Visibility = card.Connect.Visibility = card.Resize.Visibility = card.Move.Visibility = Visibility.Collapsed;
         var preview = new StackPanel { Margin = new Thickness(16) };
         card.PreviewText = new TextBlock { Text = paper.Summary, TextWrapping = TextWrapping.Wrap, MaxHeight = Math.Max(80, paper.Height - 120), TextTrimming = TextTrimming.CharacterEllipsis, Foreground = Ink };
         preview.Children.Add(card.PreviewText);
@@ -894,12 +940,18 @@ internal sealed partial class WorkbenchWindow : Window
             ConfigureConnectionThumb(card.Connect);
             compactActions.Children.Add(card.Connect);
             card.Pin.Content = LockIcon(paper.Placement?.Pinned == true);
-            card.Pin.ToolTip = Strings.Get("WorkbenchPin");
+            card.Pin.ToolTip = Strings.Get(paper.Placement?.Pinned == true ? "WorkbenchUnlockCard" : "WorkbenchLockCard");
             card.Pin.Padding = new Thickness(3, 2, 3, 2);
             card.Pin.Background = Brushes.Transparent;
             card.Pin.Foreground = Ink;
             card.Pin.BorderThickness = new Thickness(0);
             compactActions.Children.Add(card.Pin);
+            card.Fold.Content = FoldIcon(paper.Placement?.Collapsed == true);
+            card.Fold.ToolTip = Strings.Get(paper.Placement?.Collapsed == true ? "WorkbenchExpandCard" : "WorkbenchCollapseCard");
+            card.Fold.Padding = new Thickness(3, 2, 3, 2);
+            card.Fold.Background = Brushes.Transparent;
+            card.Fold.BorderThickness = new Thickness(0);
+            compactActions.Children.Add(card.Fold);
             Grid.SetColumn(compactActions, 1); card.Header.Children.Add(compactActions);
             surface.Children.Add(card.Header);
             Grid.SetRow(card.Body, 1); surface.Children.Add(card.Body);
@@ -943,7 +995,7 @@ internal sealed partial class WorkbenchWindow : Window
         var actions = new StackPanel { Orientation = Orientation.Horizontal };
         ConfigureConnectionThumb(card.Connect);
         actions.Children.Add(card.Connect);
-        foreach (var button in new[] { card.Pin })
+        foreach (var button in new[] { card.Pin, card.Fold })
         {
             button.Padding = new Thickness(5, 3, 5, 3);
             button.Margin = new Thickness(1);
@@ -953,7 +1005,9 @@ internal sealed partial class WorkbenchWindow : Window
             actions.Children.Add(button);
         }
         card.Pin.Content = LockIcon(paper.Placement?.Pinned == true);
-        card.Pin.ToolTip = Strings.Get("WorkbenchPin");
+        card.Pin.ToolTip = Strings.Get(paper.Placement?.Pinned == true ? "WorkbenchUnlockCard" : "WorkbenchLockCard");
+        card.Fold.Content = FoldIcon(paper.Placement?.Collapsed == true);
+        card.Fold.ToolTip = Strings.Get(paper.Placement?.Collapsed == true ? "WorkbenchExpandCard" : "WorkbenchCollapseCard");
         Grid.SetColumn(actions, 1); header.Children.Add(actions); grid.Children.Add(header);
         card.Binding.Text = paper.BindingTitle; card.Binding.Foreground = Muted; card.Binding.FontSize = 11;
         card.Binding.Margin = new Thickness(14, 0, 14, 4); card.Binding.TextTrimming = TextTrimming.CharacterEllipsis;
@@ -984,14 +1038,47 @@ internal sealed partial class WorkbenchWindow : Window
         Position(card, paper.Placement?.Bounds ?? new(32, 32, paper.Width, paper.Height));
         return card;
     }
-    private static FrameworkElement LockIcon(bool locked) => new System.Windows.Shapes.Path
+    private static FrameworkElement LockIcon(bool locked)
     {
-        Data = Geometry.Parse(locked
-            ? "M5,9 L5,6 C5,0 15,0 15,6 L15,9 M3,9 L17,9 L17,19 L3,19 Z M10,12 L10,16"
-            : "M5,9 L5,6 C5,0 15,0 15,6 M3,9 L17,9 L17,19 L3,19 Z M10,12 L10,16"),
-        Stroke = Ink, StrokeThickness = 1.65, StrokeLineJoin = PenLineJoin.Round,
-        Fill = Brushes.Transparent, Width = 17, Height = 17, Stretch = Stretch.Uniform
+        var icon = new Grid { Width = 20, Height = 20, IsHitTestVisible = false };
+        icon.Children.Add(new Path
+        {
+            Data = Geometry.Parse(locked
+                ? "M5,10 L5,7 C5,1 15,1 15,7 L15,10"
+                : "M5,10 L5,6 C5,1 14,1 14,6"),
+            Stroke = locked ? Accent : Ink, StrokeThickness = 2.4,
+            StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round,
+            Fill = Brushes.Transparent
+        });
+        icon.Children.Add(new Path
+        {
+            Data = Geometry.Parse("M3,10 L17,10 L17,19 L3,19 Z"),
+            Stroke = locked ? Accent : Ink, StrokeThickness = 2,
+            Fill = locked ? Accent : Brushes.Transparent,
+            StrokeLineJoin = PenLineJoin.Round
+        });
+        icon.Children.Add(new Path
+        {
+            Data = Geometry.Parse("M10,13 L10,16"),
+            Stroke = locked ? Brushes.White : Ink, StrokeThickness = 2,
+            StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round
+        });
+        return icon;
+    }
+
+    private static FrameworkElement FoldIcon(bool collapsed) => new Path
+    {
+        Data = Geometry.Parse(collapsed
+            ? "M3,8 L17,8 L17,14 L3,14 Z M7,11 L13,11"
+            : "M3,3 L17,3 L17,18 L3,18 Z M7,7 L13,7 M7,11 L13,11"),
+        Stroke = Ink, StrokeThickness = 1.8, StrokeLineJoin = PenLineJoin.Round,
+        StrokeStartLineCap = PenLineCap.Round,
+        Fill = Brushes.Transparent, Width = 20, Height = 20, Stretch = Stretch.Uniform,
+        IsHitTestVisible = false
     };
+
+    private static bool IsExternalIconCard(WorkbenchPaperSnapshot snapshot) =>
+        snapshot.Kind is "material:file" or "material:link";
 
     private static void ConfigureConnectionThumb(Thumb thumb)
     {
@@ -1159,19 +1246,39 @@ internal sealed partial class WorkbenchWindow : Window
 
     private void DrawDecorations(Scene scene, bool dragging = false)
     {
-        foreach (var element in scene.Decorations) scene.Canvas.Children.Remove(element);
-        scene.Decorations.Clear();
+        // Keep the workspace background/title mounted. Recreating them on every model
+        // notification caused the entire desk to briefly repaint when locking or folding.
+        foreach (var element in scene.Decorations.Where(e =>
+                     !ReferenceEquals(e, scene.BackgroundFrame) && !ReferenceEquals(e, scene.TitleButton)).ToArray())
+        { scene.Canvas.Children.Remove(element); scene.Decorations.Remove(element); }
         void Add(UIElement element, double x, double y)
-        { Canvas.SetLeft(element, x); Canvas.SetTop(element, y); Panel.SetZIndex(element, 0); scene.Canvas.Children.Add(element); scene.Decorations.Add(element); }
+        {
+            Canvas.SetLeft(element, x); Canvas.SetTop(element, y); Panel.SetZIndex(element, 0);
+            if (!scene.Canvas.Children.Contains(element)) scene.Canvas.Children.Add(element);
+            if (!scene.Decorations.Contains(element)) scene.Decorations.Add(element);
+        }
         var bounds = scene.Bounds;
-        var frame = new Rectangle { Width = bounds.Width, Height = bounds.Height, RadiusX = 18, RadiusY = 18,
-            Stroke = FrameBrush, StrokeThickness = scene.Number == _controller.WorkspaceNumber ? 2.5 : 2,
-            Fill = CanvasBrush, IsHitTestVisible = false, Opacity = scene.Number == _controller.WorkspaceNumber ? 1 : .82 };
+        var frame = scene.BackgroundFrame ??= new Rectangle
+        {
+            RadiusX = 18, RadiusY = 18, IsHitTestVisible = false
+        };
+        frame.Width = bounds.Width; frame.Height = bounds.Height;
+        frame.Stroke = FrameBrush; frame.StrokeThickness = scene.Number == _controller.WorkspaceNumber ? 2.5 : 2;
+        frame.Fill = CanvasBrush; frame.Opacity = scene.Number == _controller.WorkspaceNumber ? 1 : .82;
         Add(frame, bounds.X, bounds.Y);
-        var title = NewButton(_controller.WorkbenchWorkspaceName(scene.Number));
-        title.FontSize = 22; title.FontWeight = FontWeights.SemiBold;
-        title.Click += async (_, _) => { if (scene.Number == _controller.WorkspaceNumber) FitActive(); else await ActivateWorkspaceAsync(scene.Number, null); };
-        Add(title, bounds.X + 14, bounds.Y - 50);
+        if (scene.TitleButton == null)
+        {
+            var button = NewButton(_controller.WorkbenchWorkspaceName(scene.Number));
+            button.FontSize = 22; button.FontWeight = FontWeights.SemiBold;
+            button.Click += async (_, _) =>
+            {
+                if (scene.Number == _controller.WorkspaceNumber) FitActive();
+                else await ActivateWorkspaceAsync(scene.Number, null);
+            };
+            scene.TitleButton = button;
+        }
+        scene.TitleButton.Content = _controller.WorkbenchWorkspaceName(scene.Number);
+        Add(scene.TitleButton, bounds.X + 14, bounds.Y - 50);
         if (scene.Snapshot?.Error is { } error)
         { Add(new TextBlock { Text = Strings.Format("WorkbenchReadError", error), Width = 560, TextWrapping = TextWrapping.Wrap, Foreground = Ink, Margin = new Thickness(20) }, bounds.X, bounds.Y); return; }
         if (scene.Layout is not { } layout) return;
@@ -1264,6 +1371,8 @@ internal sealed partial class WorkbenchWindow : Window
         internal Canvas Canvas { get; } = new();
         internal Dictionary<string, Card> Cards { get; } = new(StringComparer.Ordinal);
         internal List<UIElement> Decorations { get; } = new();
+        internal Rectangle? BackgroundFrame;
+        internal Button? TitleButton;
         internal WorkbenchWorkspaceSnapshot? Snapshot;
         internal WorkbenchLayoutResult? Layout;
         internal WorkbenchPoint Origin;
@@ -1286,6 +1395,8 @@ internal sealed partial class WorkbenchWindow : Window
         internal Thumb Move { get; } = new();
         internal Thumb Resize { get; } = new();
         internal Button Pin { get; } = new();
+        internal Button Fold { get; } = new();
+        internal TextBlock? FileTitle;
         internal Thumb Connect { get; } = new();
         internal Border Eye { get; } = new();
         internal PaperWindow.WorkbenchBodyLease? Lease;

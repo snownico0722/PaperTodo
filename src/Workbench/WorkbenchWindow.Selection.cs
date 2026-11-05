@@ -34,8 +34,10 @@ internal sealed partial class WorkbenchWindow
         if (ActiveScene is not { } scene) return;
         foreach (var card in scene.Cards.Values)
         {
-            card.Frame.BorderBrush = _selectedCards.Contains(card.Snapshot.Id) ? Accent : Outline;
-            card.Frame.BorderThickness = new Thickness(_selectedCards.Contains(card.Snapshot.Id) ? 2 : 1);
+            var selected = _selectedCards.Contains(card.Snapshot.Id);
+            var iconTile = IsExternalIconCard(card.Snapshot);
+            card.Frame.BorderBrush = selected ? Accent : iconTile ? Brushes.Transparent : Outline;
+            card.Frame.BorderThickness = new Thickness(selected ? 2 : iconTile ? 0 : 1);
         }
         if (_groupButton != null)
             _groupButton.Visibility = _selectedCards.Count > 1 ? Visibility.Visible : Visibility.Collapsed;
