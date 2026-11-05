@@ -10,10 +10,7 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
     // A queue generation that enters or leaves DockedRetracted is the master collapse-all/release
     // animation. It is purely visual: the master owns the gesture, and moving proxy pixels must
     // never become a temporary mouse owner for the desktop or another application.
-    private bool RoutesPointerInput =>
-        !_plan.Members.Any(member =>
-            member.Start.Surface == EdgeCapsuleSurfaceKind.DockedRetracted ||
-            member.Target.Surface == EdgeCapsuleSurfaceKind.DockedRetracted);
+    private bool RoutesPointerInput => EdgeCapsuleQueueProxyPolicy.RoutesPointerInput(_plan);
 
     // The plan's pointer role is stable, but native messages can re-enter while a cover is
     // being published/replaced or released. All input entry points share this readiness boundary.

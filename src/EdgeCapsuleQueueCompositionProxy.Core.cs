@@ -198,22 +198,22 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
         var outputBounds = requestedBounds;
         if (predecessor != null)
         {
-            // Repositioning the target HWND would move the still-visible predecessor root. A
-            // successor is therefore admitted only when the current queue envelope already owns
-            // the requested physical area. Normal queue browse transactions include every affected
-            // member and satisfy this invariant.
+            // Keep the target HWND fixed under the still-visible predecessor. The
+            // new motion must fit, but another round of optional capacity around
+            // the shifted target need not fit (e.g. an interior slot -> prepend).
+            var requiredBounds = EdgeCapsuleQueueProxyPolicy.RequiredTranslationBounds(plan);
             if (!EdgeCapsuleQueueProxyGeometry.Contains(
                     predecessor._outputBounds,
-                    requestedBounds))
+                    requiredBounds))
             {
 #if DEBUG
                 EdgeCapsulePerformanceDiagnostics.Trace(
                     $"proxy.successor phase=admission queue={plan.QueueKey} " +
                     $"from={predecessor.SessionOrdinal} outcome=rejected " +
-                    $"reason=output-growth current={predecessor._outputBounds.Left}," +
+                    $"reason=motion-outside-output current={predecessor._outputBounds.Left}," +
                     $"{predecessor._outputBounds.Top},{predecessor._outputBounds.Width}x" +
-                    $"{predecessor._outputBounds.Height} requested={requestedBounds.Left}," +
-                    $"{requestedBounds.Top},{requestedBounds.Width}x{requestedBounds.Height}");
+                    $"{predecessor._outputBounds.Height} required={requiredBounds.Left}," +
+                    $"{requiredBounds.Top},{requiredBounds.Width}x{requiredBounds.Height}");
 #endif
                 return null;
             }

@@ -250,11 +250,49 @@ internal static partial class Program
                 "Changing queue/source requires a successor handoff");
             Check(!EdgeCapsuleQueueProxyPolicy.CanRetarget(current, next,
                     _plan.Target.HostBounds), "Retarget cannot escape its native output capacity");
+            var extraReserve = next with
+            {
+                Envelope = _output with { Top = _output.Top - 50, Bottom = _output.Bottom + 50 }
+            };
+            Check(EdgeCapsuleQueueProxyGeometry.Contains(_output,
+                    EdgeCapsuleQueueProxyPolicy.RequiredTranslationBounds(extraReserve)),
+                "A successor's optional future reserve cannot reject motion that already fits");
+            var outsideHost = nextMember.Target.HostBounds with
+            {
+                Top = _output.Bottom - nextMember.Target.HostBounds.Height + 1,
+                Bottom = _output.Bottom + 1
+            };
+            var outsideMotion = next with
+            {
+                Members = [nextMember with { Target = nextMember.Target with { HostBounds = outsideHost } }]
+            };
+            Check(!EdgeCapsuleQueueProxyGeometry.Contains(_output,
+                    EdgeCapsuleQueueProxyPolicy.RequiredTranslationBounds(outsideMotion)),
+                "A successor whose real target exceeds the output must still be rejected");
             var member = new EdgeCapsuleQueueCompositionProxyMember(_paper, nextMember, _handle);
             var visualBefore = _state.GetType().GetProperty("Visual")!.GetValue(_state);
             long newClock = 0;
             EdgeCapsulePresentationFrame expectedStart = default;
-            Check(_proxy.TryReserveForSuccessor(), "Reserve existing translation for retarget");
+            var releasing = current with
+            {
+                Members = [_plan with
+                {
+                    Start = _plan.Start with { Surface = EdgeCapsuleSurfaceKind.DockedRetracted }
+                }]
+            };
+            Check(!EdgeCapsuleQueueProxyPolicy.CanRetarget(releasing, next, _output) &&
+                  !EdgeCapsuleQueueProxyPolicy.CanRetarget(current, releasing, _output),
+                "Retarget cannot cross the native interactive/passthrough boundary in either direction");
+            Set("_plan", releasing);
+            Check(_proxy.TryReserveForSuccessor(), "Reserve the expanding queue for a new placement");
+            var endpointCommits = 0;
+            Check(!_proxy.TryRetarget(next, [member], _ => { endpointCommits++; return true; }, _ => true) &&
+                    endpointCommits == 0 &&
+                    ReferenceEquals(ProxyType.GetField("_plan", Private)!.GetValue(_proxy), releasing),
+                "Production retarget rejects input-role changes before moving sources or publishing a new role");
+            // The rejected request retains the old authority. Restore the compatible
+            // plan in this fixture, then exercise the normal successful retarget.
+            Set("_plan", current);
             Check(_proxy.TryRetarget(next, [member], _ => true, timestamp =>
             {
                 newClock = timestamp;

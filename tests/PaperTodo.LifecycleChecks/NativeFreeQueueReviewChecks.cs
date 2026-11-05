@@ -248,6 +248,8 @@ internal static class NativeFreeQueueReviewChecks
             c.ArrangeDeepCapsules(false);
             await Idle();
 
+            await CheckAnimatedPrepend(c, source, monitor, pitch);
+
             var layout = c.CaptureFreeMasterDragLayout("", EdgeCapsuleEdge.Right, sourceKey)!;
             var insertion = 160 + 2 * pitch;
             c.PreviewFreeMasterQueueTop(layout, insertion, Point(monitor, insertion));
@@ -266,6 +268,7 @@ internal static class NativeFreeQueueReviewChecks
             c.PreviewFreeMasterQueueTop(layout, insertion, Point(monitor, insertion));
             Require(ReferenceEquals(proxies[B], target) && ReferenceEquals(proxies[C], neighbour),
                 "same insertion sample retains both active translations");
+
             foreach (var proxy in proxies.Values.ToArray()) proxy.CompleteNow(true);
             c.PreviewFreeMasterQueueTop(layout, 24, Point(monitor, 24));
             await Dispatcher.CurrentDispatcher.InvokeAsync(static () => { }, DispatcherPriority.Send);
@@ -308,6 +311,48 @@ internal static class NativeFreeQueueReviewChecks
             await Idle();
         }
         Console.WriteLine("PASS ordinary and merge yield: independent queues, shared master clock, direct drag, stable slot and animated return");
+    }
+
+    private static async Task CheckAnimatedPrepend(AppController c, PaperData source,
+        MonitorGeometry monitor, double pitch)
+    {
+        var proxies = Field<Dictionary<string, EdgeCapsuleQueueCompositionProxy>>(
+            c, "_edgeCapsuleQueueCompositionProxies");
+        var master = Masters(c)[B];
+        var insertion = 160 + 2 * pitch;
+        Require(c.BeginNativeEdgeQueueDrag(source, false, Point(monitor, 20 + pitch), false),
+            "begin a single-capsule transfer for animated prepend");
+        c.PreviewNativeEdgeQueueDrag(source, Point(monitor, insertion), insertion, floating: true);
+        Require(Field<NativeEdgeQueueDrag>(c, "_nativeEdgeQueueDrag").Drop?.Decision.Index == 1,
+            "select the interior slot before testing the head transition");
+        await Dispatcher.CurrentDispatcher.InvokeAsync(static () => { }, DispatcherPriority.Send);
+        Require(proxies.TryGetValue(B, out var interior), "interior insertion starts a real translation");
+        Require(WindowNative.TryGetWindowDeviceBounds(master, out var masterBeforeHead),
+            "capture the unshifted destination master");
+        var outputBeforeHead = interior!.OutputHandle;
+
+        // Admit a new master source before the suffix's first animation finishes.
+        c.PreviewNativeEdgeQueueDrag(source, Point(monitor, 160), 160, floating: true);
+        Require(Field<NativeEdgeQueueDrag>(c, "_nativeEdgeQueueDrag").Drop?.Decision.Index == 0,
+            "the second sample selects prepend, not append to the master");
+        await Dispatcher.CurrentDispatcher.InvokeAsync(static () => { }, DispatcherPriority.Send);
+        Require(proxies.TryGetValue(B, out var head) && !ReferenceEquals(head, interior) &&
+                head.OutputHandle == outputBeforeHead &&
+                head.Members.Any(m => ReferenceEquals(m.Window, master)),
+            "interior-to-head joins the master through a successor on the existing output");
+        Require(head!.TryGetPresentationAt(master,
+                Field<long>(head, "_animationStartedAtTimestamp"), out var masterStart) &&
+                masterStart.Bounds.Top == masterBeforeHead.Top,
+            "the newly admitted master starts at its visible position without a jump");
+        c.PreviewNativeEdgeQueueDrag(source, Point(monitor, insertion), insertion, floating: true);
+        await Dispatcher.CurrentDispatcher.InvokeAsync(static () => { }, DispatcherPriority.Send);
+        Require(proxies.TryGetValue(B, out var backToMiddle) && ReferenceEquals(backToMiddle, head),
+            "head-to-interior reverses the master and suffix through the retained live sources");
+        c.EndNativeEdgeQueueDrag(source.Id);
+        await Dispatcher.CurrentDispatcher.InvokeAsync(static () => { }, DispatcherPriority.Send);
+        foreach (var proxy in proxies.Values.ToArray()) proxy.CompleteNow(true);
+        await Idle();
+        Console.WriteLine("PASS animated prepend: interior -> head -> interior without draining the old animation");
     }
 
     private static int ReconcileGeneration(PaperWindow window) =>
