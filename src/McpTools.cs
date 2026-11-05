@@ -221,11 +221,9 @@ internal sealed partial class McpTools
             {
                 Text = $"PaperTodo note {paper_id}, image {image_id}."
             },
-            new ImageContentBlock
-            {
-                Data = result.GetProperty("image_base64").GetString()!,
-                MimeType = result.GetProperty("mime").GetString()!
-            }
+            ImageContentBlock.FromBytes(
+                Convert.FromBase64String(result.GetProperty("image_base64").GetString()!),
+                result.GetProperty("mime").GetString()!)
         ];
     }
 
