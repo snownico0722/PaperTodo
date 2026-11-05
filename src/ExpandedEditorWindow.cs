@@ -22,6 +22,7 @@ internal sealed class ExpandedEditorWindow : Window
     private PaperWindow? _current;
     private PaperWindow.ExpandedEditorVisualLease? _lease;
     private bool _finishing;
+    private string? _collapseAfterSystemClose;
 
     internal PaperWindow? CurrentPaper => _current;
     internal string? CurrentPaperId => _current?.PaperId;
@@ -130,6 +131,13 @@ internal sealed class ExpandedEditorWindow : Window
         if (Topmost != topmost) Topmost = topmost;
     }
 
+    internal void ActivateEditor()
+    {
+        if (WindowState == WindowState.Minimized)
+            WindowState = WindowState.Normal;
+        Activate();
+    }
+
     private void RefreshEditorWindowCorners()
     {
         var radius = WindowState == WindowState.Maximized ? 0d : 12d;
@@ -205,14 +213,15 @@ internal sealed class ExpandedEditorWindow : Window
 
     protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
     {
-        if (!_finishing)
-        {
-            // Alt+F4/taskbar close follows the same capsule policy as the far-right ×.
-            e.Cancel = true;
-            CollapseCurrentPaper();
-            return;
-        }
         base.OnClosing(e);
+        if (e.Cancel || _finishing) return;
+
+        // A system close is already in progress. Calling Close() again from here is
+        // re-entrant and can throw on WPF; finish the host close once, then fold the paper.
+        _finishing = true;
+        var current = _current;
+        _collapseAfterSystemClose = current?.PaperId;
+        ReleaseCurrent(restoreDesktop: false);
     }
 
     protected override void OnClosed(EventArgs e)
@@ -220,5 +229,10 @@ internal sealed class ExpandedEditorWindow : Window
         ReleaseCurrent(restoreDesktop: false);
         _controller.UnregisterExpandedEditor(this);
         base.OnClosed(e);
+        if (_collapseAfterSystemClose is { } paperId)
+        {
+            _collapseAfterSystemClose = null;
+            _controller.CollapseExpandedEditorPaper(paperId);
+        }
     }
 }
