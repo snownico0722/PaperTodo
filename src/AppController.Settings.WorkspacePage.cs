@@ -31,13 +31,23 @@ public sealed partial class AppController
         var root = new StackPanel { Margin = new Thickness(2, 4, 4, 0) };
         _workspaceSettingsPanel = root;
         root.IsEnabled = !_workspaceSwitching;
-        root.Children.Add(SettingsSectionLabel(Strings.Get("WorkspaceSettingsTitle")));
-        root.Children.Add(SettingsToggle(Strings.Get("WorkspaceEnabled"), WorkspaceOptions.Enabled, async () =>
+        var enabled = WorkspaceOptions.Enabled;
+        var title = SettingsSectionLabel(Strings.Get("WorkspaceSettingsTitle"));
+        title.Opacity = enabled ? 1 : 0.5;
+        root.Children.Add(title);
+        // Keep only this toggle active when workspaces are disabled.
+        root.Children.Add(SettingsToggle(Strings.Get("WorkspaceEnabled"), enabled, async () =>
         {
             var next = WorkspaceOptions.Normalized();
             next.Enabled = !next.Enabled;
             await ChangeWorkspaceConfigurationAsync(next);
         }));
+        var optionsPanel = new StackPanel
+        {
+            IsEnabled = enabled,
+            Opacity = enabled ? 1 : 0.5
+        };
+        root.Children.Add(optionsPanel);
 
         var heading = new DockPanel { Margin = new Thickness(0, 12, 0, 5) };
         var create = SettingsTextButton(WorkspaceUi("＋ 新建", "＋ New", "＋ 新規", "＋ 새로 만들기"));
@@ -46,7 +56,7 @@ public sealed partial class AppController
         DockPanel.SetDock(create, Dock.Right);
         heading.Children.Add(create);
         heading.Children.Add(SettingsFieldLabel(Strings.Get("WorkspaceSettingsTitle")));
-        root.Children.Add(heading);
+        optionsPanel.Children.Add(heading);
         create.Click += async (_, _) =>
         {
             var options = WorkspaceOptions.Normalized();
@@ -257,7 +267,7 @@ public sealed partial class AppController
                 e.Handled = true;
                 RefreshSettingsWindowContent();
             };
-            root.Children.Add(card);
+            optionsPanel.Children.Add(card);
         }
 
         var confirm = SettingsTextButton(WorkspaceUi(
@@ -271,11 +281,11 @@ public sealed partial class AppController
             _workspaceSelectionDraft = 0;
             if (!await SwitchWorkspaceAsync(selected)) RefreshSettingsWindowContent();
         };
-        root.Children.Add(confirm);
+        optionsPanel.Children.Add(confirm);
 
-        root.Children.Add(SettingsSectionLabel(WorkspaceUi(
+        optionsPanel.Children.Add(SettingsSectionLabel(WorkspaceUi(
             "顶栏快捷", "Top-bar shortcut", "上部バーのショートカット", "상단 표시줄 바로 가기")));
-        root.Children.Add(SettingsToggle(WorkspaceUi(
+        optionsPanel.Children.Add(SettingsToggle(WorkspaceUi(
                 "顶栏快捷切换显示具体名称", "Choose workspaces by name in the top bar",
                 "上部バーで名前を表示して選択", "상단 표시줄에서 이름으로 선택"),
             WorkspaceOptions.TopBarNamePicker, async () =>
@@ -336,9 +346,10 @@ public sealed partial class AppController
         manage.HorizontalAlignment = HorizontalAlignment.Left;
         manage.Click += (_, _) => ShowSettingsWindow(SettingsPage.Workspaces);
         root.Children.Add(manage);
-        // Plugin-private settings and their actions are workspace-local; host enablement,
-        // global hotkeys and public software settings remain read-only.
-        if (_settingsPage != SettingsPage.Plugins) content.IsEnabled = false;
+        // Following the main workspace makes the entire settings page visibly read-only.
+        // Keep only the workspace-management link enabled so follow mode can be changed.
+        content.IsEnabled = false;
+        content.Opacity = 0.5;
         root.Children.Add(content);
         return root;
     }
