@@ -7,17 +7,14 @@ namespace PaperTodo;
 internal sealed partial class PaperCommandService
 {
     internal NoteImageInsertionResult InsertNoteImage(
-        string paperId, string? imagePath, byte[]? imageBytes, string? imageName,
+        string paperId, byte[] imageBytes, string? imageName,
         PaperOperationContext context)
     {
         EnsureRunning();
         var paper = RequirePaper(RequiredId(paperId, "paperId"), PaperTypes.Note);
         if (!_controller.CaptureNoteSnapshot(paper).ContentAvailable)
             throw Error("note_content_unavailable", "Only built-in Markdown notes support image insertion.");
-        if ((imagePath == null) == (imageBytes == null))
-            throw Error("invalid_params", "Provide exactly one of image_path or image_base64.");
-        if (imagePath != null && (!Path.IsPathFullyQualified(imagePath) || !File.Exists(imagePath)))
-            throw Error("invalid_params", "image_path must be an existing absolute file path.");
+        ArgumentNullException.ThrowIfNull(imageBytes);
 
         // Check against the editor draft before settling pending user text or touching LMDB.
         // Image IDs are at most 8 digits, so this bounds the eventual appended reference.
@@ -32,9 +29,8 @@ internal sealed partial class PaperCommandService
         NoteImageAsset imported;
         try
         {
-            imported = imagePath != null
-                ? _controller.ImageStore.ImportImageFile(paper.Id, imagePath)
-                : _controller.ImageStore.ImportImageBytes(paper.Id, imageBytes!, imageName ?? "mcp-image");
+            imported = _controller.ImageStore.ImportImageBytes(
+                paper.Id, imageBytes, imageName ?? "mcp-image");
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or
                                    InvalidDataException or InvalidOperationException)
