@@ -89,6 +89,9 @@ public sealed partial class PaperWindow
             _shell.PreviewKeyDown += OnWindowPreviewKeyDown;
             _shell.PreviewKeyUp += OnWindowPreviewKeyUp;
             _shell.PreviewKeyDown += OnExpandedEditorFindShortcut;
+            _shell.PreviewKeyDown += OnExpandedEditorCloseShortcut;
+            _shell.PreviewMouseDown += OnExpandedEditorMiddleMouseDown;
+            _shell.PreviewMouseUp += OnExpandedEditorMiddleMouseUp;
             _shell.GotKeyboardFocus += OnExpandedEditorBodyGotFocus;
             if (_paper.Type == PaperTypes.Todo)
             {
@@ -111,6 +114,9 @@ public sealed partial class PaperWindow
             _shell.PreviewKeyDown -= OnWindowPreviewKeyDown;
             _shell.PreviewKeyUp -= OnWindowPreviewKeyUp;
             _shell.PreviewKeyDown -= OnExpandedEditorFindShortcut;
+            _shell.PreviewKeyDown -= OnExpandedEditorCloseShortcut;
+            _shell.PreviewMouseDown -= OnExpandedEditorMiddleMouseDown;
+            _shell.PreviewMouseUp -= OnExpandedEditorMiddleMouseUp;
             _shell.GotKeyboardFocus -= OnExpandedEditorBodyGotFocus;
             _shell.PreviewMouseLeftButtonDown -= OnTodoSelectionWindowPreviewMouseLeftButtonDown;
             _shell.PreviewKeyDown -= OnTodoSelectionWindowPreviewKeyDown;
