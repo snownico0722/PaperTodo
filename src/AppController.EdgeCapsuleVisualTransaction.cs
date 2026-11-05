@@ -349,8 +349,11 @@ public sealed partial class AppController
                 out var stillCurrent) &&
             ReferenceEquals(stillCurrent, predecessor))
         {
-            predecessor.CompleteAfterFailedSuccessor(
-                success: true);
+            predecessor.CompleteAfterFailedSuccessor(success: true);
+            // A newly moving master is not part of the retained generation's
+            // eventual handoff. Settle it explicitly if successor admission failed.
+            if (master != null && !predecessor.RetainsSource(master))
+                master.ApplyQueueProxyEndpoint();
             return;
         }
 

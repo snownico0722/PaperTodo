@@ -268,6 +268,29 @@ internal static class NativeFreeQueueReviewChecks
             await Dispatcher.CurrentDispatcher.InvokeAsync(static () => { }, DispatcherPriority.Send);
             foreach (var proxy in proxies.Values.ToArray()) proxy.CompleteNow(true);
             Require(proxies.Count == 0, "completion releases all queue covers");
+
+            c.State.EnableAnimations = false;
+            c.State.CapsuleCollapseAllActiveQueues[C] = true;
+            c.ArrangeDeepCapsules(false);
+            await Idle();
+            layout = c.CaptureFreeMasterDragLayout("", EdgeCapsuleEdge.Right, sourceKey)!;
+            c.State.EnableAnimations = true;
+            c.PreviewFreeMasterQueueTop(layout, insertion, Point(monitor, insertion));
+            await Dispatcher.CurrentDispatcher.InvokeAsync(static () => { }, DispatcherPriority.Send);
+            Require(proxies.TryGetValue(C, out var folded) && folded.Members.Count == 1 &&
+                    ReferenceEquals(folded.Members[0].Window, masters[C]),
+                "a folded neighbour animates its master without fabricating a paper member");
+            foreach (var proxy in proxies.Values.ToArray()) proxy.CompleteNow(true);
+            c.FinishFreeMasterQueueDrag(layout, false);
+            await Dispatcher.CurrentDispatcher.InvokeAsync(static () => { }, DispatcherPriority.Send);
+            foreach (var proxy in proxies.Values.ToArray()) proxy.CompleteNow(true);
+
+            c.State.EnableAnimations = false;
+            layout = c.CaptureFreeMasterDragLayout("", EdgeCapsuleEdge.Right, sourceKey)!;
+            c.PreviewFreeMasterQueueTop(layout, insertion, Point(monitor, insertion));
+            await Dispatcher.CurrentDispatcher.InvokeAsync(static () => { }, DispatcherPriority.Send);
+            Require(proxies.Count == 0, "disabled animations leave all sources directly owned");
+            c.FinishFreeMasterQueueDrag(layout, false);
         }
         finally
         {

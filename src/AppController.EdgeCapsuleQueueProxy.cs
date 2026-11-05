@@ -111,6 +111,28 @@ public sealed partial class AppController
                 workAreaBottom,
                 capacity.WorkAreaBottomDevice);
         }
+        // Slot 0 and the carried block are part of this gesture's finite motion
+        // capacity, even when the first preview moves only the target suffix.
+        if (_masterCapsules.TryGetValue(queueKey, out var queueMaster))
+        {
+            capacityEnvelope = EdgeCapsuleQueueProxyGeometry.Union(
+                capacityEnvelope, queueMaster.QueueProxyTarget.HostBounds);
+            if (WindowNative.TryGetWindowDeviceBounds(queueMaster, out var masterBounds))
+                capacityEnvelope = EdgeCapsuleQueueProxyGeometry.Union(capacityEnvelope, masterBounds);
+        }
+        var carriedCount = _nativeEdgeQueueDrag?.CarriedIds.Length ??
+            _freeMasterDragPreview?.Layout.Groups[0].PaperIds.Length ??
+            _masterCapsuleQueueTransfer?.FreeLayout?.Groups[0].PaperIds.Length ?? 0;
+        if (carriedCount > 0)
+        {
+            var displacement = (int)Math.Ceiling(carriedCount *
+                EdgeCapsuleLayout.SlotHeight(DeepCapsuleGap) * plan.DpiScaleY);
+            capacityEnvelope = capacityEnvelope with
+            {
+                Top = capacityEnvelope.Top - displacement
+            };
+            maximumDownwardShift = Math.Max(maximumDownwardShift, displacement);
+        }
         capacityEnvelope =
             EdgeCapsuleQueueProxyGeometry.WithDownwardCapacity(
                 capacityEnvelope,
