@@ -1689,4 +1689,7 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="EditorTodo" xml:space="preserve"><value>할 일</value></data>
   <data name="EditorNote" xml:space="preserve"><value>메모</value></data>
   <data name="EditorPaper" xml:space="preserve"><value>종이</value></data>
+  <data name="EditorCharacterCount" xml:space="preserve"><value>{0:N0}자</value></data>
+  <data name="EditorSelectionCount" xml:space="preserve"><value>{0:N0}자 · 선택 {1:N0}자</value></data>
 </root>
+

@@ -227,6 +227,8 @@ Markdown 中的 Note 图片只通过 PaperTodo 内部 `i:` asset URI 引用宿�
 
 编辑器宿主是系统关闭的唯一入口：Alt+F4/任务栏关闭只能完成一次 WPF 关闭流程，释放正文后再折叠原纸片，不能在 `OnClosing` 中同步再次调用 `Close()`；Ctrl+W 和顶栏中键借由 `_shell` 的输入转发复用纸片已有关闭动作。宿主最小化时，外部激活操作先恢复编辑器；外部折叠操作应通过宿主归还 `_shell` 后再折叠原纸片。侧栏内容来自当前工作区的权威 Paper 集合，在新建、删除、改名和外部提交/回滚后刷新。导出与 Markdown 提示对话框必须以实际承载窗口为 owner，而不是隐藏的原 `PaperWindow`。
 
+每张纸的可选 `PaperData.ExpandedEditor` 保存编辑器普通窗口边界、最大化与侧栏状态，以及内置 Markdown 的光标、选区和滚动位置，随工作区核心状态进入既有 `StateStore` 保存流程；不覆盖桌面或胶囊几何，不保存第二份正文，也不在程序启动时自动弹出编辑器。正常保存和正文归还前采集现场，显式外部重载及终止阶段不反向提交旧现场。侧栏切换继续保留当前宿主窗口，仅恢复目标笔记的位置；布局就绪后应用位置，并校验 visual lease 身份，避免旧回调影响新宿主。内置笔记的右下角统计复用现有 Markdown 纯文本转换，按非空白 Unicode 字符计数；合并连续输入/选区通知并缓存总字数，光标移动不重新解析整篇正文。
+
 窗口交接的同步 Render 等待和正文回调允许同一 Dispatcher 上的外部命令重入。`AppController` 的批量隐藏与浮层 z-order 更新只遍历本次入口的窗口集合；隐藏复用既有逐纸片 visibility version，后到的显示／删除命令使旧目标失效，旧淡出回调也不能再修改新显示的 opacity 或图像资源。关闭过程由 `PaperWindow.CloseForReal` 的调用范围防重入，但在 compositor 交接完成前仍保持 Alive、接受精确端点；交接或正文回调返回后复核生命周期，Closed 不得回退到 Closing。
 
 Edge Capsule 启用后，一张纸的可见 surface 不再等价于一个 `PaperWindow` HWND：docked capsule 由 `EdgeCapsuleHost` 提供，跨队列/脱墙拖拽可以临时使用 `EdgeCapsuleDragWindow`；这些 surface 仍引用同一 `PaperData`，不复制业务对象。
@@ -562,3 +564,4 @@ same AvalonEdit TextView
 - Full 固定槽位对应的引用竖线直接读取 TextView 的实际坐标；有序列表的续行对齐及 Basic/Enhanced 定位保持原行为。省略 `>` 的惰性续行由 `QuoteIndentElement` 占位，并与真实引用共用“引用槽宽 + 原生空格宽”；该元素仍可合并消费同偏移的塌缩语法，保持一份源码和光标边界。
 - 图片 `i:` 协议、URL 打开白名单、原生保存仍属于 PaperTodo host concern；图片是否位于 code/container 等 Markdown 语义由同一 Markdig snapshot 决定。启动图片 GC 额外采用保守保护扫描，允许多保留但不因 parser 分歧误删 blob。
 - `MarkdownFencedCodeScanner` 只保留在“边界发现/受限预览”角色：Edge Mini 的有限导航近似以及大 Note incremental fence-window discovery 可以使用；它不是正文、持久化或数据回收的 Markdown authority，也不扩展成第二套 container-aware Markdown parser。
+

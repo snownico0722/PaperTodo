@@ -1738,4 +1738,7 @@
   <data name="EditorTodo" xml:space="preserve"><value>待办</value></data>
   <data name="EditorNote" xml:space="preserve"><value>笔记</value></data>
   <data name="EditorPaper" xml:space="preserve"><value>纸片</value></data>
+  <data name="EditorCharacterCount" xml:space="preserve"><value>{0:N0} 字</value></data>
+  <data name="EditorSelectionCount" xml:space="preserve"><value>{0:N0} 字 · 选中 {1:N0} 字</value></data>
 </root>
+

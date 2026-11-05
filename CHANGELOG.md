@@ -26,6 +26,8 @@ This log is written for general and power users alike. It focuses on user-facing
 
 #### Papers, Title Bar & Capsules
 
+- **Expanded editor**: Open a paper in a resizable taskbar window, with the original editing session, formatting tools and a paper-switching sidebar. Reopening restores its window bounds, maximized state, sidebar and each built-in note's caret, selection and scroll position. Desktop and capsule positions stay independent. The bottom-right corner shows the note's character count and selected-character count, excluding whitespace, Markdown formatting and link destinations.
+
 - **Workspace cycling**: Enable 2–5 workspaces and switch using the paper top-bar's custom SVG cycle icon and number badge; the tray submenu and Settings page also offer direct workspace selection, with long setting explanations moved into ⓘ hints. The main workspace keeps `data.json` and `note-assets.lmdb`; others use `data2.json` / `note-assets2.lmdb` and separate host-managed plugin data. Secondary workspaces follow the main software settings by default; turning this off restores their own settings. Switching saves current edits and remembers the active slot. Reducing the count or disabling workspaces never deletes inactive files.
 
 - **More flexible paper titles**: The default title limit remains 6 full-width character equivalents. Latin letters, digits and other half-width characters now count as half a character; mixed Chinese/English titles fit more naturally without changing the 2–20 setting range. Existing length preferences are preserved.
@@ -420,3 +422,4 @@ Language arguments apply when starting a new app instance. They do not change sa
 ### v1.0.0
 
 - **Initial Official Release**: Lightweight, multi-window, zero-framework Windows desktop paper note app built on native .NET and WPF.
+

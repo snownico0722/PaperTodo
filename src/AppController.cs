@@ -3389,6 +3389,7 @@ public sealed partial class AppController : IDisposable
             _forceSaveTimer.Stop();
             _hasPendingDirty = false;
             CommitPendingMarkdownContentsForSave();
+            CaptureExpandedEditorStates();
             var version = Interlocked.Increment(ref _saveVersion);
             NotifyPluginEventMutationStampChanged();
             attemptedVersion = version;
@@ -4311,6 +4312,7 @@ public sealed partial class AppController : IDisposable
         TryExitCleanup(() => scriptShutdown.GetAwaiter().GetResult());
     }
 }
+
 
 
 

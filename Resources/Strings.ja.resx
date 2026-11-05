@@ -1689,4 +1689,7 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="EditorTodo" xml:space="preserve"><value>ToDo</value></data>
   <data name="EditorNote" xml:space="preserve"><value>ノート</value></data>
   <data name="EditorPaper" xml:space="preserve"><value>紙片</value></data>
+  <data name="EditorCharacterCount" xml:space="preserve"><value>{0:N0} 文字</value></data>
+  <data name="EditorSelectionCount" xml:space="preserve"><value>{0:N0} 文字 · 選択 {1:N0} 文字</value></data>
 </root>
+

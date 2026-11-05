@@ -1689,4 +1689,7 @@ The original note is kept.</value></data>
   <data name="EditorTodo" xml:space="preserve"><value>Todo</value></data>
   <data name="EditorNote" xml:space="preserve"><value>Note</value></data>
   <data name="EditorPaper" xml:space="preserve"><value>Paper</value></data>
+  <data name="EditorCharacterCount" xml:space="preserve"><value>{0:N0} characters</value></data>
+  <data name="EditorSelectionCount" xml:space="preserve"><value>{0:N0} characters · {1:N0} selected</value></data>
 </root>
+

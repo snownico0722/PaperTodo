@@ -35,6 +35,7 @@ public sealed partial class PaperWindow
     {
         _isExpandedEditorSidebarOpen = open;
         RefreshExpandedEditorPresentation();
+        MarkExpandedEditorViewDirty();
     }
     internal bool IsExpandedEditorMaximized => _expandedEditorHostWindow?.WindowState == WindowState.Maximized;
 
@@ -237,6 +238,7 @@ public sealed partial class PaperWindow
         Grid.SetRow(_editorPaperSidebar, 1);
         Panel.SetZIndex(_editorPaperSidebar, 90);
         _shell.Children.Add(_editorPaperSidebar);
+        BuildExpandedEditorStatistics();
     }
 
     private Style BuildEditorPaperListButtonStyle()
@@ -320,6 +322,7 @@ public sealed partial class PaperWindow
         if (_editorMarkdownToolbar == null || _editorPaperSidebar == null) return;
         var showMarkdownTools = _isExpandedEditorMode &&
             _paper.Type == PaperTypes.Note && IsCurrentBodyProviderMarkdown && _noteBox != null;
+        RefreshExpandedEditorStatistics(showMarkdownTools);
         _editorMarkdownToolbar.Visibility = showMarkdownTools ? Visibility.Visible : Visibility.Collapsed;
         _editorMarkdownToolbar.Margin = new Thickness(
             0, 0, _isExpandedEditorMode && _isExpandedEditorSidebarOpen ? ExpandedEditorSidebarWidth : 0, 0);
@@ -345,8 +348,12 @@ public sealed partial class PaperWindow
                 m.Left,
                 m.Top + (showMarkdownTools ? ExpandedEditorToolbarHeight : 0),
                 m.Right + (_isExpandedEditorMode && _isExpandedEditorSidebarOpen ? ExpandedEditorSidebarWidth : 0),
-                m.Bottom);
+                m.Bottom + (showMarkdownTools ? ExpandedEditorStatusHeight : 0));
         }
+        if (_textZoomIndicator?.Parent is Border zoomHost)
+            zoomHost.Margin = new Thickness(0, 0,
+                12 + (_isExpandedEditorMode && _isExpandedEditorSidebarOpen ? ExpandedEditorSidebarWidth : 0),
+                7 + (showMarkdownTools ? ExpandedEditorStatusHeight : 0));
         if (_isExpandedEditorSidebarOpen)
             RefreshExpandedEditorPaperList();
         RefreshExpandedEditorTopBarControls();
@@ -354,3 +361,4 @@ public sealed partial class PaperWindow
     }
 
 }
+

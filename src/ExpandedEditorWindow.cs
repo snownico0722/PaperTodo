@@ -23,6 +23,7 @@ internal sealed class ExpandedEditorWindow : Window
     private PaperWindow.ExpandedEditorVisualLease? _lease;
     private bool _finishing;
     private string? _collapseAfterSystemClose;
+    private bool _lastNonMinimizedMaximized;
 
     internal PaperWindow? CurrentPaper => _current;
     internal string? CurrentPaperId => _current?.PaperId;
@@ -65,8 +66,31 @@ internal sealed class ExpandedEditorWindow : Window
         Left = area.Left + (area.Width - Width) / 2;
         Top = area.Top + (area.Height - Height) / 2;
 
+        if (initial.SavedExpandedEditorState is { } saved &&
+            double.IsFinite(saved.X) && double.IsFinite(saved.Y) &&
+            double.IsFinite(saved.Width) && double.IsFinite(saved.Height) &&
+            saved.Width > 0 && saved.Height > 0)
+        {
+            var savedBounds = new Rect(saved.X, saved.Y, saved.Width, saved.Height);
+            area = WindowWorkAreaHelper.WorkAreaFor(savedBounds);
+            Width = Math.Min(area.Width, Math.Max(MinWidth, saved.Width));
+            Height = Math.Min(area.Height, Math.Max(MinHeight, saved.Height));
+            Left = Math.Clamp(saved.X, area.Left, Math.Max(area.Left, area.Right - Width));
+            Top = Math.Clamp(saved.Y, area.Top, Math.Max(area.Top, area.Bottom - Height));
+            _lastNonMinimizedMaximized = saved.Maximized;
+            if (saved.Maximized) WindowState = WindowState.Maximized;
+        }
+
         _frame.SizeChanged += (_, _) => RefreshEditorWindowCorners();
-        StateChanged += (_, _) => RefreshEditorWindowCorners();
+        StateChanged += (_, _) =>
+        {
+            if (WindowState != WindowState.Minimized)
+                _lastNonMinimizedMaximized = WindowState == WindowState.Maximized;
+            RefreshEditorWindowCorners();
+            _current?.MarkExpandedEditorViewDirty();
+        };
+        LocationChanged += (_, _) => _current?.MarkExpandedEditorViewDirty();
+        SizeChanged += (_, _) => _current?.MarkExpandedEditorViewDirty();
         SourceInitialized += (_, _) =>
         {
             // DWM clips the real non-layered HWND, while WPF clips the inner visual.
@@ -101,7 +125,8 @@ internal sealed class ExpandedEditorWindow : Window
             target.ExpandedEditorHostWindow?.Activate();
             return;
         }
-        var keepSidebarOpen = _current?.IsExpandedEditorSidebarOpen ?? false;
+        var keepSidebarOpen = _current?.IsExpandedEditorSidebarOpen ??
+            target.SavedExpandedEditorState?.SidebarOpen ?? false;
         var former = _lease;
         _lease = null;
         _current = null;
@@ -109,6 +134,7 @@ internal sealed class ExpandedEditorWindow : Window
         _lease = target.BorrowExpandedEditorVisual(this, _body);
         _current = target;
         target.SetExpandedEditorSidebarOpen(keepSidebarOpen);
+        target.RestoreExpandedEditorPosition();
         Title = target.ExpandedEditorTitle;
         SetFrameTheme(target);
         SetPaperTopmost(target.ExpandedEditorShouldTopmost);
@@ -134,8 +160,20 @@ internal sealed class ExpandedEditorWindow : Window
     internal void ActivateEditor()
     {
         if (WindowState == WindowState.Minimized)
-            WindowState = WindowState.Normal;
+            WindowState = _lastNonMinimizedMaximized ? WindowState.Maximized : WindowState.Normal;
         Activate();
+    }
+
+    internal ExpandedEditorState CaptureWindowState()
+    {
+        var bounds = WindowState == WindowState.Normal
+            ? new Rect(Left, Top, Width, Height) : RestoreBounds;
+        return new ExpandedEditorState
+        {
+            X = bounds.Left, Y = bounds.Top, Width = bounds.Width, Height = bounds.Height,
+            Maximized = _lastNonMinimizedMaximized,
+            SidebarOpen = _current?.IsExpandedEditorSidebarOpen ?? false
+        };
     }
 
     private void RefreshEditorWindowCorners()
@@ -236,3 +274,4 @@ internal sealed class ExpandedEditorWindow : Window
         }
     }
 }
+

@@ -89,4 +89,12 @@ public sealed partial class AppController
         foreach (var editor in _expandedEditors.ToArray())
             editor.CloseWithoutPaperAction();
     }
+
+    private void CaptureExpandedEditorStates()
+    {
+        if (SuppressDataReloadEditorCommit) return;
+        foreach (var editor in _expandedEditors.ToArray())
+            editor.CurrentPaper?.CaptureExpandedEditorState(markDirty: false);
+    }
 }
+

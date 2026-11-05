@@ -467,6 +467,21 @@ public sealed partial class StateStore
             RemoveNullEntriesInPlace(paper.Items);
 
             paper.Content ??= "";
+            if (paper.ExpandedEditor is { } editor)
+            {
+                if (!IsFinite(editor.X) || !IsFinite(editor.Y) ||
+                    !IsFinite(editor.Width) || !IsFinite(editor.Height))
+                    paper.ExpandedEditor = null;
+                else if (editor.NotePosition is { } position)
+                    paper.ExpandedEditor = editor with
+                    {
+                        NotePosition = position with
+                        {
+                            HorizontalOffset = IsFinite(position.HorizontalOffset) ? position.HorizontalOffset : 0,
+                            VerticalOffset = IsFinite(position.VerticalOffset) ? position.VerticalOffset : 0
+                        }
+                    };
+            }
             paper.X = NormalizeCoordinate(paper.X, 120);
             paper.Y = NormalizeCoordinate(paper.Y, 120);
             if (!IsFinite(paper.TextZoom))
@@ -978,3 +993,4 @@ public sealed partial class StateStore
         => $"{WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(monitorDeviceName)}|{(side == DeepCapsuleSides.Left ? DeepCapsuleSides.Left : DeepCapsuleSides.Right)}";
 
 }
+

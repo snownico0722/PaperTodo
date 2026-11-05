@@ -196,6 +196,7 @@ public sealed partial class PaperWindow
             if (owner == null) return;
             _owner = null;
 
+            owner.CaptureExpandedEditorState(markDirty: true);
             owner.CommitPendingEditsForSave();
             owner.HideBuiltInFind(restoreFocus: false);
             owner.AbortAllInteractions(InteractionAbortReason.FormChanging);
@@ -248,3 +249,4 @@ public sealed partial class PaperWindow
         public void Dispose() => Return(restoreDesktop: true);
     }
 }
+

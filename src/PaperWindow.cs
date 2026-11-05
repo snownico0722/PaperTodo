@@ -1759,6 +1759,10 @@ public sealed partial class PaperWindow : Window
         {
             _textZoomIndicator.FontSize = AppTypography.Scale(10.5);
         }
+        if (_editorStatisticsText != null)
+        {
+            _editorStatisticsText.FontSize = AppTypography.Scale(10.5);
+        }
 
         if (_paper.Type == PaperTypes.Note)
         {
@@ -3858,3 +3862,4 @@ public sealed partial class PaperWindow : Window
     }
 
 }
+

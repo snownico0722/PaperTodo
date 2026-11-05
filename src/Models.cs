@@ -631,6 +631,10 @@ public sealed class PaperData
     public bool IsCollapsed { get; set; } = false;
     public double TextZoom { get; set; } = 1.0;
 
+    // Editor presentation is independent of desktop/capsule geometry and document content.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ExpandedEditorState? ExpandedEditor { get; set; }
+
     // Note body provider.
     public string BodyProviderId { get; set; } = PaperBodyProviderIds.Markdown;
     // Expanded runtime header and folded capsule fallback are independent lightweight caches.
@@ -678,6 +682,26 @@ public sealed class PaperData
 
     public List<PaperItem> Items { get; set; } = new();
     public string Content { get; set; } = "";
+}
+
+public sealed record ExpandedEditorState
+{
+    public double X { get; init; }
+    public double Y { get; init; }
+    public double Width { get; init; }
+    public double Height { get; init; }
+    public bool Maximized { get; init; }
+    public bool SidebarOpen { get; init; }
+    public NoteEditorPosition? NotePosition { get; init; }
+}
+
+public sealed record NoteEditorPosition
+{
+    public int Caret { get; init; }
+    public int SelectionStart { get; init; }
+    public int SelectionLength { get; init; }
+    public double HorizontalOffset { get; init; }
+    public double VerticalOffset { get; init; }
 }
 
 public sealed class PaperItem
@@ -749,3 +773,4 @@ public sealed class PaperItem
         return string.IsNullOrEmpty(normalized) ? null : normalized;
     }
 }
+
