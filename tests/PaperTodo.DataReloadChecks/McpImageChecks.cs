@@ -94,6 +94,33 @@ internal static partial class Program
                         .GetProperty("mime").GetString() == "image/png",
                 "Disabling writes prevented authorized image reads.");
 
+            // A removed reference must immediately stop being readable through MCP,
+            // even though the underlying asset is retained for the normal undo path.
+            controller.State.McpAllowFullWrites = true;
+            var contentWithImage = note.Content;
+            var withoutFirstImage = contentWithImage.Replace(reference, "", StringComparison.Ordinal);
+            Invoke("write_note", new { paper_id = note.Id, content = withoutFirstImage, mode = "replace" });
+            Require(imageAssets.ContainsKey(imageId),
+                "Deleting a reference should not force-delete undo/recovery image bytes.");
+            Rejected("asset_not_found", () => Invoke("read_note_image",
+                new { paper_id = note.Id, image_id = imageId }));
+            Invoke("write_note", new { paper_id = note.Id, content = contentWithImage, mode = "replace" });
+            Require(Invoke("read_note_image", new { paper_id = note.Id, image_id = imageId })
+                        .GetProperty("mime").GetString() == "image/png",
+                "Restoring the image reference did not restore MCP visibility.");
+
+            // A trailing unclosed fence would turn the inserted reference into code.
+            // Reject before touching LMDB or committing the target note.
+            var unclosedFence = contentWithImage + Environment.NewLine + "```text" +
+                                Environment.NewLine + "still inside fence";
+            Invoke("write_note", new { paper_id = note.Id, content = unclosedFence, mode = "replace" });
+            var beforeFenceAssets = imageAssets.Count;
+            Rejected("image_reference_not_renderable", () => Invoke("insert_note_image",
+                new { paper_id = note.Id, image_base64 = base64 }));
+            Require(note.Content == unclosedFence && imageAssets.Count == beforeFenceAssets,
+                "An image in an unclosed code block mutated the note or LMDB.");
+            Invoke("write_note", new { paper_id = note.Id, content = contentWithImage, mode = "replace" });
+
             controller.State.McpAllowBlankWrites = true;
             var contentBeforeBad = note.Content;
             var countBeforeBad = imageAssets.Count;
