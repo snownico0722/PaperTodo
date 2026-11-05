@@ -4,6 +4,7 @@ public sealed partial class AppController
 {
     private EdgeCapsuleQueueDropGhost? _nativeQueueDropGhost;
     private string? _singleCapsuleGhostOwnerId;
+    private (string OwnerId, string TargetKey, int Index)? _legacyLandingPreview;
 
     private double NativeDropGhostMemberWidth(string paperId, MonitorGeometry geometry) =>
         _windows.TryGetValue(paperId, out var window)
@@ -56,14 +57,63 @@ public sealed partial class AppController
         return (index, firstTop);
     }
 
-    // Ordinary sorting keeps its existing index, animation and commit paths.
-    // Only the landing silhouette is shared with free-queue dragging.
+    // Project ordinary cross-edge membership without mutating State.Papers.
+    // The existing capsule placement animator moves the source gap shut and the
+    // target suffix apart. Repeated pointer samples in one slot do no work.
+    private void PreviewLegacyCrossEdgeLanding(PaperData owner, string targetKey, int index)
+    {
+        if (_legacyLandingPreview is { } current && current.OwnerId == owner.Id &&
+            current.TargetKey == targetKey && current.Index == index) return;
+
+        var members = DeepCapsulePapersInOrder()
+            .Where(p => p.Id != owner.Id)
+            .Select(p => new EdgeCapsuleQueueMember(p, QueueKey(p))).ToList();
+        var targetPositions = members.Select((member, position) => (member, position))
+            .Where(row => row.member.QueueKey == targetKey)
+            .Select(row => row.position).ToArray();
+        var at = index < targetPositions.Length ? targetPositions[index]
+            : targetPositions.Length > 0 ? targetPositions[^1] + 1 : members.Count;
+        members.Insert(at, new EdgeCapsuleQueueMember(owner, targetKey));
+        var preview = BuildEdgeQueuePlan(members, State.UseCapsuleCollapseAll);
+        foreach (var (id, placement) in preview.Placements)
+            if (id != owner.Id && _windows.TryGetValue(id, out var window))
+                window.PreviewDeepCapsulePlacement(placement);
+
+        if (State.UseCapsuleCollapseAll && _masterCapsules.TryGetValue(targetKey, out var master) &&
+            EdgeCapsuleQueueIds.TryGetEdge(targetKey, out var monitor, out _) &&
+            WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(monitor, out var geometry))
+        {
+            var count = preview.Queues.First(q => q.Key == targetKey).Papers.Count + 1;
+            var margin = EdgeCapsuleLayout.NormalizeStartTopMargin(
+                DeepCapsuleStartTopMarginForQueueKey(targetKey),
+                geometry.LocalWorkAreaDip, count, DeepCapsuleGap);
+            master.PreviewQueueTop(margin, animate: true);
+        }
+        _legacyLandingPreview = (owner.Id, targetKey, index);
+    }
+
+    private void RestoreLegacyCrossEdgeLanding(string ownerId)
+    {
+        if (_legacyLandingPreview is not { } previous || previous.OwnerId != ownerId) return;
+        _legacyLandingPreview = null;
+        var resting = BuildRestingEdgeQueuePlan();
+        foreach (var (id, placement) in resting.Placements)
+            if (id != ownerId && _windows.TryGetValue(id, out var window))
+                window.PreviewDeepCapsulePlacement(placement);
+        if (_masterCapsules.TryGetValue(previous.TargetKey, out var master))
+            master.PreviewQueueTop(DeepCapsuleStartTopMarginForQueueKey(previous.TargetKey),
+                animate: true);
+    }
+
+    // Ordinary sorting keeps its existing index and commit paths, while
+    // cross-edge insertions reuse the current capsule movement animation.
     internal void PreviewSingleCapsuleDropGhost(PaperData owner, int targetIndex,
         DeviceScreenPoint pointer, bool floating)
     {
         if (!State.UseCapsuleMode || !State.UseDeepCapsuleMode ||
             !_windows.ContainsKey(owner.Id))
         {
+            RestoreLegacyCrossEdgeLanding(owner.Id);
             _nativeQueueDropGhost?.Hide();
             return;
         }
@@ -76,6 +126,7 @@ public sealed partial class AppController
         {
             if (!WindowWorkAreaHelper.TryGetMonitorGeometryAtDeviceScreenPoint(pointer, out geometry))
             {
+                RestoreLegacyCrossEdgeLanding(owner.Id);
                 _nativeQueueDropGhost?.Hide();
                 return;
             }
@@ -89,6 +140,7 @@ public sealed partial class AppController
             if (!WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(
                     owner.CapsuleMonitorDeviceName, out geometry))
             {
+                RestoreLegacyCrossEdgeLanding(owner.Id);
                 _nativeQueueDropGhost?.Hide();
                 return;
             }
@@ -98,6 +150,7 @@ public sealed partial class AppController
         if (IsCapsuleCollapseAllActiveForQueue(targetKey))
         {
             // An entirely folded destination has no visible member slots.
+            RestoreLegacyCrossEdgeLanding(owner.Id);
             _nativeQueueDropGhost?.Hide();
             return;
         }
@@ -111,9 +164,12 @@ public sealed partial class AppController
             var projection = LegacyCrossEdgeDrop(geometry, monitor, side, pointer, existing);
             top = projection.FirstTopDip +
                 projection.Index * EdgeCapsuleLayout.SlotHeight(DeepCapsuleGap);
+            if (!EdgeCapsuleFreeQueuesEnabled)
+                PreviewLegacyCrossEdgeLanding(owner, targetKey, projection.Index);
         }
         else
         {
+            RestoreLegacyCrossEdgeLanding(owner.Id);
             // The source queue's original anchor and passive offset still apply,
             // even while its neighbours temporarily yield to the dragged capsule.
             var plan = BuildRestingEdgeQueuePlan();
@@ -144,6 +200,8 @@ public sealed partial class AppController
     {
         if (_singleCapsuleGhostOwnerId != ownerId) return;
         _singleCapsuleGhostOwnerId = null;
+        // The final existing arrange restores or commits the projected peer slots.
+        _legacyLandingPreview = null;
         if (_nativeEdgeQueueDrag != null)
             _nativeQueueDropGhost?.Hide();
         else
