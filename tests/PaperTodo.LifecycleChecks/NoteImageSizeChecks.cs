@@ -30,7 +30,7 @@ internal static class NoteImageSizeChecks
         foreach (var kind in new[] { "flat", "gradient", "texture", "noise" })
         {
             var source = Source(kind);
-            var text = string.Concat(Enumerable.Repeat("## 图文测试\n\n一段文字和一张图片。\n\n![image|100%](i:1)\n\n", 6));
+            var text = string.Concat(Enumerable.Repeat("## 图文测试\n\n一段文字和一张图片。\n\n![image|100%](i:123)\n\n", 6));
             cases.Add((kind, NoteImageExport.Compose("测试", text, _ => source, "缺图", CancellationToken.None)));
         }
         foreach (var kind in new[] { "gradient", "texture", "noise" })
@@ -39,7 +39,7 @@ internal static class NoteImageSizeChecks
             var previousHeight = 0;
             foreach (var percent in new[] { 50, 100 })
             {
-                var text = string.Concat(Enumerable.Repeat($"## 图片记录\n\n![image](i:1){{width={percent}%}}\n\n保留图片和文字。\n\n", 4));
+                var text = string.Concat(Enumerable.Repeat($"## 图片记录\n\n![image](i:123){{width={percent}%}}\n\n保留图片和文字。\n\n", 4));
                 var artifact = NoteImageExport.Compose("测试", text, _ => source, "缺图", CancellationToken.None);
                 if (artifact.PixelHeight <= previousHeight) throw new InvalidOperationException("Image scale fixture did not change the output size");
                 previousHeight = artifact.PixelHeight;
@@ -49,7 +49,7 @@ internal static class NoteImageSizeChecks
         foreach (var kind in new[] { "gradient", "texture" })
         {
             var source = Source(kind, jpeg: true, quality: 95);
-            var text = string.Concat(Enumerable.Repeat("## 分享\n\n![image](i:1){width=25%}\n\n随手记下今天的事情。\n\n", 5));
+            var text = string.Concat(Enumerable.Repeat("## 分享\n\n![image](i:123){width=25%}\n\n随手记下今天的事情。\n\n", 5));
             cases.Add(($"jpeg95-{kind}-25-heldout", NoteImageExport.Compose("记录", text, _ => source, "缺图", CancellationToken.None)));
         }
         foreach (var (name, artifact) in cases)
