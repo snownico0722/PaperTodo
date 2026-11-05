@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 
 namespace PaperTodo;
@@ -183,6 +184,50 @@ internal sealed partial class McpTools
             "write_note",
             new { paper_id, content, mode },
             cancellationToken);
+
+    [McpServerTool(
+        Name = "insert_note_image",
+        ReadOnly = false,
+        Destructive = false,
+        OpenWorld = false)]
+    [Description("Import a local image into an existing built-in Markdown note and append its rendered image reference. Supply exactly one of image_path (absolute path on the PaperTodo PC, up to 32 MiB source) or image_base64 (raw Base64, up to 4 MiB decoded); no data URI. Requires additive writes. The image bytes are kept in PaperTodo's LMDB store.")]
+    public Task<JsonElement> InsertNoteImage(
+        [Description("Exact Markdown note paper ID.")] string paper_id,
+        [Description("Optional absolute local image file path on the computer running PaperTodo. Do not combine with image_base64.")] string? image_path = null,
+        [Description("Optional raw Base64-encoded image bytes (up to 4 MiB decoded). Do not combine with image_path.")] string? image_base64 = null,
+        [Description("Optional filename metadata for Base64 images.")] string? image_name = null,
+        CancellationToken cancellationToken = default)
+        => _client.InvokeAsync(
+            "insert_note_image",
+            new { paper_id, image_path, image_base64, image_name },
+            cancellationToken);
+
+    [McpServerTool(
+        Name = "read_note_image",
+        ReadOnly = true,
+        Destructive = false,
+        OpenWorld = false)]
+    [Description("Read one image from a built-in Markdown note as actual MCP image content for vision-capable clients. Get the image ID from the note's Markdown i: image reference via get_paper. Images owned by other notes are not accessible.")]
+    public async Task<ContentBlock[]> ReadNoteImage(
+        [Description("Exact note paper ID.")] string paper_id,
+        [Description("Image ID from a Markdown image reference, e.g. i:001. Supply only the ID (001).")] string image_id,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await _client.InvokeAsync(
+            "read_note_image", new { paper_id, image_id }, cancellationToken);
+        return
+        [
+            new TextContentBlock
+            {
+                Text = $"PaperTodo note {paper_id}, image {image_id}."
+            },
+            new ImageContentBlock
+            {
+                Data = result.GetProperty("image_base64").GetString()!,
+                MimeType = result.GetProperty("mime").GetString()!
+            }
+        ];
+    }
 
     [McpServerTool(
         Name = "delete_paper",
