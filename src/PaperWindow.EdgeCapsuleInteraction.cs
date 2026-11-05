@@ -284,7 +284,8 @@ public sealed partial class PaperWindow
 
         var options = CreateDeepCapsuleFloatingDragHostOptions(shape);
         var carriedCount = _controller.NativeEdgeQueueCarriedCount(_paper.Id);
-        if (carriedCount > 1 && TryCreateMasterQueueFloatingDragHostOptions("\u25BE",
+        if ((carriedCount > 1 || _controller.NativeEdgeQueueCarriesMaster(_paper.Id)) &&
+            TryCreateMasterQueueFloatingDragHostOptions("\u25BE",
                 carriedCount.ToString(UiLanguages.EffectiveCulture), out var queueOptions)) options = queueOptions;
         var host = EdgeCapsuleDragWindow.Rent(options);
         host.UnexpectedlyClosed += OnDeepCapsuleFloatingDragHostUnexpectedlyClosed;
@@ -507,6 +508,9 @@ public sealed partial class PaperWindow
         var logicalTop = NativeQueueLogicalOwnerTop(currentScreenPos, session, floating: false);
         // Only the dragged docked capsule receives a tiny positional nudge; hit testing,
         // queue choice and final commit continue to use the unmodified physical pointer.
+        var nativePreview = _controller.PreviewNativeEdgeQueueDrag(_paper,
+            currentScreenPos, logicalTop, floating: false);
+        // Use the target confirmed in THIS pointer sample; stale feedback is a one-frame lag.
         var visualTop = _controller.NativeEdgeQueueMagnetizedOwnerTop(_paper.Id, logicalTop);
         if (!MoveEdgeCapsuleDockedReorder(currentScreenPos, visualTop))
         {
@@ -514,8 +518,7 @@ public sealed partial class PaperWindow
             return;
         }
         FlushEdgeCapsulePresentation(EdgeCapsuleTransitionReason.Drag);
-        if (!_controller.PreviewNativeEdgeQueueDrag(_paper, currentScreenPos, logicalTop, floating: false))
-            PreviewDeepCapsuleReorderForCurrentPosition();
+        if (!nativePreview) PreviewDeepCapsuleReorderForCurrentPosition();
     }
 
     private void PreviewDeepCapsuleReorderForCurrentPosition()
@@ -697,8 +700,7 @@ public sealed partial class PaperWindow
         var horizontalDelta = Math.Abs(
             currentScreenPos.X - session.PointerDownScreenPosition.X);
         return EdgeCapsuleFreeQueuePolicy.ShouldFloat(horizontalDelta / scaleX,
-            HasDeepCapsuleDragEnteredAnotherMonitor(currentScreenPos),
-            _controller.EdgeCapsuleFreeQueuesEnabled);
+            HasDeepCapsuleDragEnteredAnotherMonitor(currentScreenPos));
     }
     private bool HasDeepCapsuleDragEnteredAnotherMonitor(DeviceScreenPoint currentScreenPos)
     {

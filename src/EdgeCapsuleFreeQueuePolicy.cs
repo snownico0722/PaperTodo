@@ -30,21 +30,25 @@ internal static class EdgeCapsuleFreeQueuePolicy
 {
     internal const double SnapDistance = 18;
     internal const double ReleaseDistance = 30; // A held target must be pulled further away to release.
-    internal const double DetachResistance = 12; // Leaving the source is stickier than joining another.
     internal const double JoinNudge = 6;
+    internal const double SourceJoinNudge = 9; // Returning to the source snaps a little more than joining elsewhere.
     private const double TakeoverAdvantage = 6;
     private const double Epsilon = 0.1;
 
     internal static bool ShouldDetachSingle(
         bool floating, double draggedTop, double firstTop, int count, double pitch) =>
-        floating || draggedTop < firstTop - EdgeCapsuleLayout.CrossQueueDragUnlockDistance - DetachResistance ||
+        floating || draggedTop < firstTop - EdgeCapsuleLayout.CrossQueueDragUnlockDistance ||
         draggedTop > firstTop + Math.Max(0, count - 1) * pitch +
-            EdgeCapsuleLayout.CrossQueueDragUnlockDistance + DetachResistance;
+            EdgeCapsuleLayout.CrossQueueDragUnlockDistance;
 
     // Ctrl chooses membership, never the floating phase of the gesture.
-    internal static bool ShouldFloat(double horizontalDistanceDip, bool enteredAnotherMonitor, bool freeQueues = false) =>
-        enteredAnotherMonitor || horizontalDistanceDip >= EdgeCapsuleLayout.CrossQueueDragUnlockDistance +
-            (freeQueues ? DetachResistance : 0);
+    internal static bool ShouldFloat(double horizontalDistanceDip, bool enteredAnotherMonitor) =>
+        enteredAnotherMonitor || horizontalDistanceDip >= EdgeCapsuleLayout.CrossQueueDragUnlockDistance;
+
+    // A detached floating shell is centered at the pointer. Measure proximity from the
+    // visible shell edge, not just the pointer, or a visible landing can be rejected.
+    internal static double FloatingWallGap(double pointerWallDistanceDip, double floatingWidthDip) =>
+        Math.Max(0, pointerWallDistanceDip - Math.Max(0, floatingWidthDip) / 2);
 
     internal static double GhostSlotTop(EdgeFreeQueueDrop drop, bool targetHasMaster, double pitch,
         bool targetCollapsed = false) =>
@@ -54,19 +58,6 @@ internal static class EdgeCapsuleFreeQueuePolicy
 
     internal static double NudgeToward(double actualTop, double targetTop, double maximumDip) =>
         actualTop + Math.Clamp(targetTop - actualTop, -maximumDip, maximumDip);
-
-    // Source resistance vanishes smoothly at the detachment threshold: no jump when the
-    // capsule becomes independent, and no resistance while sorting inside the source span.
-    internal static double ResistLeavingSource(double top, double sourceFirst, double sourceLast)
-    {
-        var displacement = top < sourceFirst ? top - sourceFirst :
-            top > sourceLast ? top - sourceLast : 0;
-        var distance = Math.Abs(displacement);
-        var threshold = EdgeCapsuleLayout.CrossQueueDragUnlockDistance + DetachResistance;
-        if (distance <= 0 || distance >= threshold) return top;
-        var resistance = Math.Min(10, distance) * (1 - distance / threshold);
-        return top - Math.Sign(displacement) * resistance;
-    }
 
     internal static (string Key, int Index)? FindInsertion(
         IReadOnlyList<EdgeFreeQueueBox> queues, double draggedTop, double visibleDraggedHeight,

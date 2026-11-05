@@ -16,14 +16,17 @@ internal sealed class EdgeCapsuleQueueDropGhost : IDisposable
 
     internal EdgeCapsuleQueueDropGhost()
     {
-        var accent = SystemColors.HighlightColor;
+        // Resolve the PaperTodo skin at drag creation, not the Windows system accent.
+        // A new ghost is created per gesture, so every gesture adopts the current theme.
+        var outline = Theme.CapsuleFocusBorderBrush.Clone();
+        outline.Opacity *= 0.68;
         _silhouette = new Border
         {
             Height = PaperLayoutDefaults.CapsuleHeight - 2 * EdgeCapsuleLayout.WindowChromeMargin,
             VerticalAlignment = VerticalAlignment.Top,
             BorderThickness = new Thickness(1.5),
-            BorderBrush = new SolidColorBrush(Color.FromArgb(170, accent.R, accent.G, accent.B)),
-            Background = new SolidColorBrush(Color.FromArgb(40, accent.R, accent.G, accent.B)),
+            BorderBrush = outline,
+            Background = Theme.Tint(42),
             IsHitTestVisible = false
         };
         _window = new Window
