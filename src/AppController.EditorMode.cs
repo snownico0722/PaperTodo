@@ -49,6 +49,20 @@ public sealed partial class AppController
         if (paper != null && !IsExiting) ShowPaper(paper);
     }
 
+    internal void CollapseExpandedEditorPaper(string id)
+    {
+        var paper = State.Papers.FirstOrDefault(p => p.Id == id);
+        if (paper == null || IsExiting) return;
+        if (!CanPaperDisplayAsCapsule(paper))
+        {
+            HidePaper(paper);
+            return;
+        }
+        var window = GetOrCreatePaperWindow(paper);
+        window.SetCollapsedState(true, animate: false, saveGeometry: false);
+        ShowPaper(paper, activate: false);
+    }
+
     internal void HideExpandedEditorPaper(string id)
     {
         var paper = State.Papers.FirstOrDefault(p => p.Id == id);
