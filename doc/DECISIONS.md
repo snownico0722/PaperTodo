@@ -76,6 +76,7 @@
 | D-065 | DComp 视觉与 Win32 输入提交的非原子边界 | Accepted (historical findings; native-owner candidate deferred) | Edge input / composition |
 | D-066 | Free queues extend existing direct manipulation | Accepted | Edge queues / gestures |
 | D-067 | Free-queue masters follow queue identity | Accepted | Edge master ownership |
+| D-068 | Free-queue drops preview independent placement and prefer downward insertion | Accepted | Edge queues / gestures |
 
 ## 维护规则
 
@@ -2066,3 +2067,24 @@ Collapse state and master lookup are keyed by the same queue instance identity a
 
 - `src/AppController.cs`, `src/AppController.EdgeCapsuleFreeQueueMaster.cs`, `src/AppController.EdgeCapsuleFreeQueues.cs` and `src/MasterCapsuleWindow.cs`.
 - PR #400 (superseding the master-ownership choice in D-066).
+
+
+
+## D-068 - Free-queue drops preview independent placement and prefer downward insertion (2026-11-05)
+
+**Status:** Accepted. Supersedes D-066's upward prepend and insertion-only feedback choices; D-067's per-queue master ownership remains unchanged.
+
+### Context
+
+Dropping an independent group above another group already displaced the lower group on release, but omitted that displacement and the independent landing marker during dragging. Inserting into the first member slot also lifted the head while the other slots pushed their suffix down, so adjacent slots behaved inconsistently despite enough space below.
+
+### Decision
+
+All accepted free-queue placements preview the same local displacement used on release. An independent landing stack includes its own master; a merge previews only the carried members under the destination master. All insertion slots prefer downward displacement, lifting the merged queue only by the space missing below it. Oversized queues retain the existing unpaged, first-slot-visible rule. Ctrl and direct master dragging share this behavior in docked and floating phases. The preview cache compares the drop kind and displaced queue positions as well as the slot, so changing edges or independent positions restores the previous preview without accumulating movement.
+
+The existing anchor conversion also covers independent drops, preserving the chosen spatial order when saved preferences differ from displayed positions. No new persistence format, window type, timer or global free-space search is introduced. Cancellation still restores the resting layout without writing anchors.
+
+### Evidence
+
+- `EdgeCapsuleFreeQueuePolicy.Insert`, `PreviewFreeQueueDropSlot`, `BuildFreeQueueDropAnchors` and the native/master drag paths.
+- `NativeFreeQueuePolicyChecks` and `NativeFreeQueueReviewChecks`: first/interior slots with room below and near the bottom, independent-group ghosts, cancellation, release and saved-position reconstruction.

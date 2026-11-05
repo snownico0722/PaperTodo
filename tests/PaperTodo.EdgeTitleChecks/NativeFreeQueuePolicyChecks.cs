@@ -14,16 +14,35 @@ internal static class NativeFreeQueuePolicyChecks
         const double pitch = 50, gap = 4;
         var target = new EdgeFreeQueueBox("|right#b", 400, 2, false, 100);
         var prepend = EdgeCapsuleFreeQueuePolicy.Insert([target], target.Key, 0, 2, 900, pitch, gap);
-        Require(prepend.Accepted && prepend.TopDip == 300, "prepend grows above the existing target");
-        Require(prepend.TopDip + 2 * pitch == target.TopDip, "prepend preserves the first old member");
+        Require(prepend.Accepted && prepend.TopDip == 400, "prepend keeps the existing queue head");
+        Require(prepend.TopDip + 2 * pitch == 500, "prepend makes room by moving old members down");
+        // A has its own master plus four members; B contributes three members
+        // on merge. A1/A2, A2/A3 and A3/A4 must choose the same direction.
+        var masterTarget = target with { HasMaster = true, MemberCount = 4, TopDip = 200 };
+        for (var slot = 0; slot < 4; slot++)
+        {
+            var roomy = EdgeCapsuleFreeQueuePolicy.Insert([masterTarget], target.Key, slot, 3, 900, pitch, gap);
+            Require(roomy.TopDip == 200 &&
+                    EdgeCapsuleFreeQueuePolicy.GhostSlotTop(roomy, true, pitch) == 250 + slot * pitch,
+                "all master-enabled insertion slots prefer downward space and retain the prefix");
+            var bottomTarget = masterTarget with { TopDip = 600 };
+            var bounded = EdgeCapsuleFreeQueuePolicy.Insert([bottomTarget], target.Key, slot, 3, 900, pitch, gap);
+            Require(bounded.TopDip == 504,
+                "every insertion slot lifts only by the missing space below (96 DIP)");
+        }
+        var independentGroup = EdgeCapsuleFreeQueuePolicy.Place([masterTarget], 100, 4, 900, pitch, gap);
+        Require(independentGroup.Kind == EdgeFreeQueueDropKind.Move && independentGroup.TopDip == 100 &&
+                independentGroup.Tops[target.Key] == 300 &&
+                EdgeCapsuleFreeQueuePolicy.GhostSlotTop(independentGroup, true, pitch) == 100,
+            "independent B keeps its master and previews A's downward displacement before release");
         var append = EdgeCapsuleFreeQueuePolicy.Insert([target], target.Key, 2, 2, 900, pitch, gap);
         Require(append.Accepted && append.TopDip == target.TopDip, "append does not move the old head");
         var interior = EdgeCapsuleFreeQueuePolicy.Insert([target], target.Key, 1, 2, 900, pitch, gap);
         Require(interior.Accepted && interior.TopDip == 400 && interior.Index == 1, "interior insertion keeps the prefix");
-        Require(EdgeCapsuleFreeQueuePolicy.GhostSlotTop(prepend, false, pitch) == 300 &&
+        Require(EdgeCapsuleFreeQueuePolicy.GhostSlotTop(prepend, false, pitch) == 400 &&
                 EdgeCapsuleFreeQueuePolicy.GhostSlotTop(interior, false, pitch) == 450,
             "instant ghost matches exactly the slot the commit will occupy");
-        var returning = EdgeCapsuleFreeQueuePolicy.Insert([target], target.Key, 0, 1, 900, pitch, gap, prependAbove: false);
+        var returning = EdgeCapsuleFreeQueuePolicy.Insert([target], target.Key, 0, 1, 900, pitch, gap);
         Require(returning.Accepted && returning.TopDip == 400, "same-queue sorting retains the legacy anchor");
         var near = target with { Key = "|right#c", TopDip = 520, MemberCount = 1 };
         var far = target with { Key = "|right#d", TopDip = 780, MemberCount = 1 };
@@ -31,10 +50,10 @@ internal static class NativeFreeQueuePolicyChecks
         Require(chain.Accepted && chain.Tops[near.Key] == 600 && !chain.Tops.ContainsKey(far.Key), "only the intersected neighbour moves");
         var upper = target with { Key = "|right#a", TopDip = 250 };
         var upperInsert = EdgeCapsuleFreeQueuePolicy.Insert([upper, target], target.Key, 0, 2, 900, pitch, gap);
-        Require(upperInsert.Accepted && upperInsert.TopDip == 300 && upperInsert.Tops[upper.Key] == 200,
-            "the upper neighbour moves upward instead of pushing the target towards the screen bottom");
-        Require(EdgeCapsuleFreeQueuePolicy.Insert([target with { TopDip = 60 }], target.Key, 0, 2, 900, pitch, gap).TopDip == 0,
-            "a user-inserted block is stopped at the upper screen boundary instead of disappearing above it");
+        Require(upperInsert.Accepted && upperInsert.TopDip == 400 && !upperInsert.Tops.ContainsKey(upper.Key),
+            "enough room below keeps the upper neighbour and target head unchanged");
+        Require(EdgeCapsuleFreeQueuePolicy.Insert([target with { TopDip = 60 }], target.Key, 0, 2, 900, pitch, gap).TopDip == 60,
+            "inserting at the first slot does not consume available space above");
         Require(EdgeCapsuleFreeQueuePolicy.Insert([target with { TopDip = 780 }], target.Key, 2, 2, 900, pitch, gap).TopDip ==
                     900 - (4 * pitch - gap),
             "an expanded merge is lifted just enough to keep its full block inside the display");
@@ -154,7 +173,7 @@ internal static class NativeFreeQueuePolicyChecks
             var m = new MonitorGeometry("test", new DeviceScreenRect(0, 0, (int)(1000 * scale), (int)(900 * scale)), scale, scale);
             var y = m.DeviceYToLocalDip(400 * scale);
             Require(y == 400 && EdgeCapsuleFreeQueuePolicy.Insert([target with { TopDip = y }], target.Key, 0, 2,
-                m.LocalWorkAreaDip.Height, pitch, gap).TopDip == 300, "DPI does not change prepend anchoring");
+                m.LocalWorkAreaDip.Height, pitch, gap).TopDip == 400, "DPI does not change downward-first anchoring");
         }
         Persistence();
         Console.WriteLine("PASS native-free-queue-policy-and-persistence");
@@ -197,3 +216,4 @@ internal static class NativeFreeQueuePolicyChecks
         finally { Directory.Delete(directory, recursive: true); }
     }
 }
+

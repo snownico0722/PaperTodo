@@ -754,8 +754,8 @@ public sealed partial class MasterCapsuleWindow : Window
             if (session!.FreeLayout is { } freeLayout)
             {
                 // The same captured vertical gesture can MERGE by releasing over a
-                // visible peer master. Ordinary motion still commits only its own
-                // bounded anchor; neither path needs a sideways floating handoff.
+                // visible peer master. An independent drop commits its bounded anchor
+                // and the previewed local spacing; neither needs a floating handoff.
                 var merged = commit && releasePointer is { } point &&
                     _controller.TryCommitDockedFreeMasterQueueMerge(
                         freeLayout, point, session.StartTopMargin,
@@ -1236,4 +1236,5 @@ public sealed partial class MasterCapsuleWindow : Window
         return IntPtr.Zero;
     }
 }
+
 

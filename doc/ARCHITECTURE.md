@@ -396,7 +396,7 @@ Presentation contract 区分：
 
 透明 capacity 不属于交互区域。
 
-Free queues extend the existing queue identity with an optional persisted instance id. Ctrl chooses a whole queue but does not change its drag phase: it slides along the edge until the normal sideways threshold or monitor crossing. Prepending grows upward while preserving the target's existing members; interior insertion reuses placement animation for the suffix and affected neighbours. Independent drops never search for another free position. Passive monitor/mini-preview spacing is derived and is not persisted. Preview and commit share the same prospective membership/anchor plan and the existing coordinator, reducer and presenter. In free-queue mode each instance owns its own master: clicking collapses only that queue, dragging its master moves only that group, and merging keeps the destination master. A collapsed queue's hit-test and collision footprint is only its visible master; its hidden expanded slots cannot accept a drop. Switching to legacy mode retains the instance identities, anchors and collapse memory; legacy mode itself uses one master per physical edge. See D-066 and D-067.
+Free queues extend the existing queue identity with an optional persisted instance id. Ctrl chooses a whole queue but does not change its drag phase: it slides along the edge until the normal sideways threshold or monitor crossing. All insertion slots, including the first member slot, retain the target head and move the suffix down; the merged queue moves upward only as far as needed to fit above the work-area bottom. Independent placement and insertion both preview affected neighbours and a landing stack, including the independent group's own master. Independent drops never search for another free position. Passive monitor/mini-preview spacing is derived and is not persisted. Preview and commit share the same prospective membership/anchor plan and the existing coordinator, reducer and presenter. That plan also closes a detached member's source gap; returning to the source reopens its selected slot through the same preview cache and cancellation lifecycle. In free-queue mode each instance owns its own master: clicking collapses only that queue, dragging its master moves only that group, and merging keeps the destination master. A collapsed queue's hit-test and collision footprint is only its visible master; its hidden expanded slots cannot accept a drop. Switching to legacy mode retains the instance identities, anchors and collapse memory; legacy mode itself uses one master per physical edge. See D-066, D-067 and D-068.
 
 ### 6.3 Surface 切分
 
@@ -438,7 +438,7 @@ Production translation backend 不承担 snapshot、clip/scale/effect resize 或
 
 同队列 successor 继承 predecessor 当前 live authority 和可见 sample，而不是 dispose 后冷启动另一套互不相关 proxy。端点提交期间 predecessor 仍可继续移动；successor 校准起点后，显示取样、输入命中、点击坐标转交和下一代临时 cover 均使用本代 `VisualState` 实际提交给 DComp 的起止偏移及同一动画时钟，不能继续沿用较早捕获的 plan 起点。该校准只调整平移，WPF 的形状、内容、opacity 和真实端点容量仍沿用原有 presentation contract。
 
-普通排序与自由队列插入／合并的被动让位按队列分别提交 translation，不把彼此独立的位移合成跨队列 ownership 事务。相邻队列的 master 作为真实 HWND source 与成员共享 cover、动画时钟和输入交接；它仍只拥有自身 slot 0 几何，不创建 PaperData 或 per-paper presenter。被拖动的 capsule／master／整队继续直接跟手；相同槽位不重新启动让位。source 集合、尺寸、输入角色和 output 容量兼容时，在现有 cover 下提交新端点，再从当前可见位置重设同一批 visual 的平移；无需重建 surface 或重复 cloak／uncloak。成员变化仍走既有 successor 交接，环境不兼容时安全退回真实窗口。
+普通排序、自由队列独立落位／插入／合并及源组补位均消费当前落位计划，按队列分别提交 translation，不把彼此独立的位移合成跨队列 ownership 事务。相邻队列的 master 作为真实 HWND source 与成员共享 cover、动画时钟和输入交接；它仍只拥有自身 slot 0 几何，不创建 PaperData 或 per-paper presenter。被拖动的 capsule／master／整队继续直接跟手；单颗拖出后留在源组的成员及被动让位的源组 master 仍参与动画。保留落位类型、位置及邻组位移的现有缓存判断，相同落位不重新启动；落点虚影保持即时反馈。source 集合、尺寸、输入角色和 output 容量兼容时，在现有 cover 下提交新端点，再从当前可见位置重设同一批 visual 的平移；无需重建 surface 或重复 cloak／uncloak。成员变化仍走既有 successor 交接，环境不兼容时安全退回真实窗口。
 
 代理收到按下消息时保存原始客户区坐标转换得到的屏幕位置和按键状态。只有这次按下触发的同步 authority handoff 当场成功，才把该按下消息转交给真实端点；一旦需要 completion retry、cover 丢失或目标已失效，就直接丢弃该按下，不跨重试保存或迟到重放。该路径只转交原始按下消息，不承诺合成完整按下—抬起手势；正常 Windows 输入仍由真实端点接管。
 
@@ -560,3 +560,4 @@ same AvalonEdit TextView
 - Full 固定槽位对应的引用竖线直接读取 TextView 的实际坐标；有序列表的续行对齐及 Basic/Enhanced 定位保持原行为。省略 `>` 的惰性续行由 `QuoteIndentElement` 占位，并与真实引用共用“引用槽宽 + 原生空格宽”；该元素仍可合并消费同偏移的塌缩语法，保持一份源码和光标边界。
 - 图片 `i:` 协议、URL 打开白名单、原生保存仍属于 PaperTodo host concern；图片是否位于 code/container 等 Markdown 语义由同一 Markdig snapshot 决定。启动图片 GC 额外采用保守保护扫描，允许多保留但不因 parser 分歧误删 blob。
 - `MarkdownFencedCodeScanner` 只保留在“边界发现/受限预览”角色：Edge Mini 的有限导航近似以及大 Note incremental fence-window discovery 可以使用；它不是正文、持久化或数据回收的 Markdown authority，也不扩展成第二套 container-aware Markdown parser。
+
