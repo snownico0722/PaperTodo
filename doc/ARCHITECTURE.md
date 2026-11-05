@@ -227,7 +227,7 @@ Markdown 中的 Note 图片只通过 PaperTodo 内部 `i:` asset URI 引用宿�
 
 编辑器宿主是系统关闭的唯一入口：Alt+F4/任务栏关闭只能完成一次 WPF 关闭流程，释放正文后再折叠原纸片，不能在 `OnClosing` 中同步再次调用 `Close()`；Ctrl+W 和顶栏中键借由 `_shell` 的输入转发复用纸片已有关闭动作。宿主最小化时，外部激活操作先恢复编辑器；外部折叠操作应通过宿主归还 `_shell` 后再折叠原纸片。侧栏内容来自当前工作区的权威 Paper 集合，在新建、删除、改名和外部提交/回滚后刷新。导出与 Markdown 提示对话框必须以实际承载窗口为 owner，而不是隐藏的原 `PaperWindow`。
 
-编辑器的整篇 PNG 导出从当前 `MarkdownTextBox.Text` 捕获只读快照，`NoteImageExport` 用 Markdig 和共享图片标记预处理生成冻结的 WPF Drawing；不创建第二个编辑会话，也不更改源码、撤销或选区。行内 HTML 仅消费既有 `MarkdownSemanticSnapshot` 验证后的格式与标记范围，未支持的标签保留为文字；图片尺寸由 `MarkdownImageDisplayOptions` 提供编辑器与导出共用的计算，解码降采样不改变原始尺寸语义。专用短生命周期 STA 负责排版和分条绘制，预览与 JPG/PNG 使用同一冻结结果。保存默认选择 JPG（Windows WIC 编码器，质量 90），也可选无损 PNG；两个格式共享分条渲染，不创建整篇超高位图。`NoteImagePngWriter` 按扫描行写入同一 PNG，避免整篇超高位图分配；最终文件沿用 `NotePortableExport.SaveAtomic`，关闭预览取消未完成工作。
+编辑器的整篇图片导出从当前 `MarkdownTextBox.Text` 捕获只读快照，`NoteImageExport` 用 Markdig 和共享图片标记预处理生成冻结的 WPF Drawing；不创建第二个编辑会话，也不更改源码、撤销或选区。行内 HTML 仅消费既有 `MarkdownSemanticSnapshot` 验证后的格式与标记范围，未支持的标签保留为文字；图片尺寸由 `MarkdownImageDisplayOptions` 提供编辑器与导出共用的计算，解码降采样不改变原始尺寸语义。专用短生命周期 STA 负责排版和分条绘制，预览与 JPG/PNG 使用同一冻结结果。预览窗口沿用 PaperTodo 的主题色、圆角按钮和自绘标题栏；底部单按钮切换 JPG/PNG，体积暂仅显示“体积：约xm”的占位文案，不执行估算或预压缩。该选择只改变 Windows 文件保存对话框的初始格式，用户仍可在保存窗口中切换；实际 JPG 编码仍固定质量 90。两个格式共享分条渲染，不创建整篇超高位图。`NoteImagePngWriter` 按扫描行写入同一 PNG，避免整篇超高位图分配；最终文件沿用 `NotePortableExport.SaveAtomic`，关闭预览取消未完成工作。
 
 每张纸的可选 `PaperData.ExpandedEditor` 保存编辑器普通窗口边界、最大化与侧栏状态，以及内置 Markdown 的光标、选区和滚动位置，随工作区核心状态进入既有 `StateStore` 保存流程；不覆盖桌面或胶囊几何，不保存第二份正文，也不在程序启动时自动弹出编辑器。正常保存和正文归还前采集现场，显式外部重载及终止阶段不反向提交旧现场。侧栏切换继续保留当前宿主窗口，仅恢复目标笔记的位置；布局就绪后应用位置，并校验 visual lease 身份，避免旧回调影响新宿主。内置笔记的右下角统计复用现有 Markdown 纯文本转换，按非空白 Unicode 字符计数；合并连续输入/选区通知并缓存总字数，光标移动不重新解析整篇正文。
 
