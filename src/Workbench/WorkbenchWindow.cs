@@ -45,6 +45,9 @@ internal sealed partial class WorkbenchWindow : Window
     private int _searchCursor;
     private Point? _panPointer;
     private Point _panStart;
+    private Point? _rightDown;
+    private bool _rightPanning;
+    private const double RightPanDragThresholdSquared = 25;
     private Camera? _cameraBeforePaperFocus;
     private string? _focusedPaperId;
     private readonly record struct Camera(double Zoom, double X, double Y);
@@ -128,14 +131,16 @@ internal sealed partial class WorkbenchWindow : Window
         AddSymbolButton("+", () => ZoomAt(_scale.ScaleX * 1.2, ViewportCenter), _rightCommands);
         AddButton("WorkbenchClose", Close, _rightCommands);
         RefreshTheme();
-        // Handle right gestures at the window level, including borrowed editor bodies
-        // and the toolbar, so none of them can open a context menu.
-        PreviewMouseRightButtonDown += BeginPan;
-        PreviewMouseRightButtonUp += EndPan;
+        // Keep right-click native on cards and text editors; after a small movement
+        // the same button becomes canvas panning and suppresses its context menu.
         _viewport.PreviewMouseDown += BeginPan;
         _viewport.PreviewMouseMove += MovePan;
         _viewport.PreviewMouseUp += EndPan;
-        _viewport.LostMouseCapture += (_, _) => { _panPointer = null; CancelMarquee(); };
+        _viewport.LostMouseCapture += (_, _) =>
+        {
+            _panPointer = null; _rightDown = null; _rightPanning = false;
+            CancelMarquee();
+        };
         _viewport.PreviewMouseWheel += (_, e) =>
         {
             // Preserve ordinary wheel scrolling and Ctrl+wheel text zoom inside editors.
@@ -380,16 +385,16 @@ internal sealed partial class WorkbenchWindow : Window
     private void FitOverview() => Fit(WorkbenchRect.Union(_scenes.Values.Select(s => s.Bounds.Offset(s.Origin))));
     private void BeginPan(object sender, MouseButtonEventArgs e)
     {
-        // Preview routing reaches editors and materials before their right-click menus.
-        if (e.ChangedButton == MouseButton.Right && !_dragging && !IsSuspended)
+        if (IsSuspended || _dragging) return;
+        if (e.ChangedButton == MouseButton.Right)
         {
-            CancelWorkspaceGesture();
-            StopCameraAnimation();
-            _panPointer = e.GetPosition(_viewport); _panStart = new(_pan.X, _pan.Y);
-            _viewport.CaptureMouse(); e.Handled = true;
+            // Do not handle the down-event: nested native note/Todo menus and
+            // the full paper menu remain available on a stationary right-click.
+            _rightDown = e.GetPosition(_viewport);
+            _rightPanning = false;
             return;
         }
-        if (_dragging || Mouse.Captured != null) return;
+        if (Mouse.Captured != null) return;
         if (e.ChangedButton == MouseButton.Left && ReferenceEquals(e.OriginalSource, _viewport))
         { BeginMarquee(e); return; }
         if (e.ChangedButton != MouseButton.Middle) return;
@@ -400,13 +405,38 @@ internal sealed partial class WorkbenchWindow : Window
     private void MovePan(object sender, MouseEventArgs e)
     {
         if (MoveMarquee(e)) return;
+        if (_rightDown is { } down && e.RightButton == MouseButtonState.Pressed && !_rightPanning)
+        {
+            if ((e.GetPosition(_viewport) - down).LengthSquared >= RightPanDragThresholdSquared)
+            {
+                _rightPanning = true;
+                StopCameraAnimation();
+                _panPointer = down; _panStart = new(_pan.X, _pan.Y);
+                _viewport.CaptureMouse();
+            }
+        }
         if (_panPointer is not { } start) return;
-        var point = e.GetPosition(_viewport); _pan.X = _panStart.X + point.X - start.X; _pan.Y = _panStart.Y + point.Y - start.Y;
+        var point = e.GetPosition(_viewport);
+        _pan.X = _panStart.X + point.X - start.X;
+        _pan.Y = _panStart.Y + point.Y - start.Y;
         e.Handled = true;
     }
     private void EndPan(object sender, MouseButtonEventArgs e)
     {
         if (EndMarquee(e)) return;
+        if (e.ChangedButton == MouseButton.Right)
+        {
+            var wasPanning = _rightPanning;
+            _rightDown = null; _rightPanning = false;
+            if (wasPanning)
+            {
+                _panPointer = null;
+                _viewport.ReleaseMouseCapture();
+                // A right drag must never open the editor or card context menu.
+                e.Handled = true;
+            }
+            return;
+        }
         if (_panPointer is not { } start) return;
         var emptyClick = e.ChangedButton == MouseButton.Left &&
             (e.GetPosition(_viewport) - start).LengthSquared < 16;
