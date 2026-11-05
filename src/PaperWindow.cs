@@ -2671,8 +2671,9 @@ public sealed partial class PaperWindow : Window
         menu.Items.Clear();
         menu.Items.Add(MenuHeader(Strings.Get("MenuQuick")));
 
-        // Follow one global order for both the top bar and its dynamic overflow.
-        // The menu lists only the commands not currently shown as title-bar buttons.
+        // Keep the same command order in both menus. Only the expanded paper's own
+        // menu skips commands already visible in its top bar; the edge capsule is a
+        // separate surface and must retain both creation actions.
         foreach (var action in PaperTopBarShortcuts.NormalizeOrder(_controller.State.TopBarShortcutOrder))
         {
             switch (action)
@@ -2683,11 +2684,13 @@ public sealed partial class PaperWindow : Window
                     !IsTopBarCommandVisible(_workspaceButton):
                     menu.Items.Add(BuildWorkspaceShortcutMenuItem(menu));
                     break;
-                case PaperTopBarShortcuts.NewTodo when !IsTopBarCommandVisible(_newTodoButton):
+                case PaperTopBarShortcuts.NewTodo when
+                    forDeepCapsuleSlot || !IsTopBarCommandVisible(_newTodoButton):
                     menu.Items.Add(MenuItem(Strings.Get("MenuNewTodoPaper"),
                         (_, _) => _controller.CreatePaper(PaperTypes.Todo, show: true, _paper)));
                     break;
-                case PaperTopBarShortcuts.NewNote when !IsTopBarCommandVisible(_newNoteButton):
+                case PaperTopBarShortcuts.NewNote when
+                    forDeepCapsuleSlot || !IsTopBarCommandVisible(_newNoteButton):
                     menu.Items.Add(MenuItem(Strings.Get("MenuNewNotePaper"),
                         (_, _) => _controller.CreatePaper(PaperTypes.Note, show: true, _paper)));
                     break;

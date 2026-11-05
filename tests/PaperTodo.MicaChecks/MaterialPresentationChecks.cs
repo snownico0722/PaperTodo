@@ -285,6 +285,16 @@ internal static class MaterialPresentationChecks
             var titles = wideMenu.Items.OfType<MenuItem>()
                 .Select(item => item.Header as string).ToArray();
             wideMenu.IsOpen = false;
+
+            // A still-visible edge capsule has its own menu, even when the source
+            // paper is expanded and both creation commands are pinned in its top bar.
+            var buildCapsuleMenu = typeof(PaperWindow).GetMethod(
+                "BuildDeepCapsuleSlotContextMenu", Program.Private)!;
+            var capsuleMenu = (ContextMenu)buildCapsuleMenu.Invoke(window, null)!;
+            Program.Assert(Has(capsuleMenu, Strings.Get("MenuNewTodoPaper")) &&
+                Has(capsuleMenu, Strings.Get("MenuNewNotePaper")),
+                "expanded edge capsule retains both creation entries despite visible top-bar shortcuts");
+
             var chrome = Field<SkinBorder>("_paperChrome");
             var rightClick = chrome.ContextMenu!;
             rightClick.PlacementTarget = chrome;
