@@ -36,14 +36,5 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "10.0.x"
-      - name: Journal Debug collection and exit checks
-        run: dotnet run --project tests/PaperTodo.EdgeDiagnosticJournalChecks -c Debug
-      - name: Journal Release disabled collection checks
-        if: ${{ !cancelled() }}
-        run: dotnet run --project tests/PaperTodo.EdgeDiagnosticJournalChecks -c Release
-      - name: Native and Dispatcher observer checks
-        if: ${{ !cancelled() }}
-        run: dotnet run --project tests/PaperTodo.EdgeLatencyObservationChecks -c Debug
-      - name: Edge title and prewarm Debug checks
-        if: ${{ !cancelled() }}
-        run: dotnet run --project tests/PaperTodo.EdgeTitleChecks -c Debug
+      - name: Run diagnostics checks
+        run: ./tools/testing/Run-Checks.ps1 -Group diagnostics

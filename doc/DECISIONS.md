@@ -49,8 +49,31 @@
 | D-034 | 整体预热保留不可变绘制结果，不缓存隐藏 WPF 正文 | Superseded by D-035 | Edge performance / lifecycle |
 | D-035 | 冷渲染与预热共用唯一 artifact renderer | Accepted | Edge structure / lifecycle |
 | D-036 | 正式分发保持两档单文件且不增加 ReadyToRun 变体 | Accepted | 启动性能 / 发布 |
-| D-037 | 可浏览队列保留已验证的 live authority | Deferred | Edge performance / lifecycle |
+| D-037 | 可浏览队列保留已验证的 live authority | Deferred; experiments archived | Edge performance / lifecycle |
 | D-038 | 活动就绪动画使用可撤销 render demand | Accepted | Edge animation / lifecycle |
+| D-039 | 插件 API 采用向后兼容的 major.minor 演进 | Accepted | 插件 / 兼容性 |
+| D-041 | 普通窗口原生 Mica 与 layered 胶囊边界 | Superseded by D-042 | 主题 / Window integration |
+| D-042 | 原生云母使用单一窗口外框，验证最终桌面像素 | Partially superseded by D-057（CI 截图） | 主题 / Window integration |
+| D-043 | 透色亚克力试用可调色 accent，保留单窗口边界 | Experimental | 主题 / Window integration |
+| D-044 | 自绘材质顶栏使用零物理 glass，清透皮肤分离 alpha recipe | Superseded by D-045 | 主题 / Window integration |
+| D-045 | 系统材质保留 full glass，清透接法的零边距不通用 | Partially superseded by D-046 | 主题 / Window integration |
+| D-046 | 现代 redirection alpha 消除材质下方原生 caption | Experimental | 主题 / Window integration |
+| D-049 | Aero 独立透明合成与材质光照分层 | Experimental | 主题 / Rendering |
+| D-051 | Aero 清透合成与辅助材质强度 | Partially superseded by D-052 | 主题 / Rendering |
+| D-052 | 实际辅助窗口背景处理与材质清理 | Partially superseded by D-053 | 主题 / Rendering |
+| D-053 | 材质绘制、原生背景与可选采样职责收敛 | Partially superseded by D-054 | 主题 / Rendering |
+| D-054 | 辅助材质背景改为一次性静态快照，拖动复用虚拟桌面纹理 | Superseded by D-058（产品功能） | 主题 / Rendering |
+| D-055 | Aero 不采用 ACCENT_ENABLE_BLURBEHIND 原生模糊 | Rejected | 主题 / Window integration |
+| D-056 | 精确终帧与主胶囊纯视觉输入隔离 | Accepted | Edge handoff / input |
+| D-057 | DWM 桌面截图退出 CI 自动验收 | Accepted | 测试 / Window integration |
+| D-058 | 辅助表面统一轻量材质，退休完整材质设置 | Accepted | 主题 / Rendering |
+| D-059 | 删除辅助材质截图与离屏背景会话代码 | Accepted | 主题 / Rendering |
+| D-060 | data.json 仅显式重载，普通保存保持原路径 | Accepted, restored by D-063 | 持久化 / 外部 API |
+| D-061 | 显式合并由调用方提供真实原始版本 | Revised by D-063 | 持久化 / 外部 API |
+| D-062 | 写入准入、外部变化暂停与终止边界 | Partially superseded by D-063 | 持久化 / 写入安全 |
+| D-063 | 仅显式热重载和有基线三方合并，普通保存不检测外部修改 | Accepted | 持久化 / 产品边界 |
+| D-064 | 固定编号工作区共用代码，不共用运行数据 | Accepted | 工作区 / 持久化 |
+| D-065 | DComp 视觉与 Win32 输入提交的非原子边界 | Accepted (historical findings; native-owner candidate deferred) | Edge input / composition |
 
 ## 维护规则
 
@@ -340,7 +363,7 @@ V3 Lite production translation backend 明确不包含：
 
 Queue compositor、真实 docked HWND 和 floating drag HWND 是显式 visual authority。publication / successor / handoff / rollback 任一边界都必须保证至少一个可见 authority 存在。
 
-DComp root replacement 与 DWM cloak/uncloak 通过可验证 transaction boundary 协调。cover 丢失时先立即尝试恢复真实 HWND；只有即时恢复本身失败时才进入有界 completion retry。
+DComp root replacement 与 DWM cloak/uncloak 通过可验证 transaction boundary 协调。cover 丢失时先立即尝试恢复真实 HWND；只有即时恢复本身失败时才进入有界 completion retry。普通 handoff completion 同样最多只安排两次延迟重试；预算耗尽后保留当前 cover authority，不把它升级成另一套自动恢复循环。
 
 一次 visual transaction 的原子单位对应**用户看到的一次 authority swap**，而不是一个 HWND。涉及同一队列的 endpoint settle / reveal / cloak / root detach 时，优先先完成所有成员需要的 apply/layout，再跨一个共享的 render / desktop-composition boundary，最后统一验证和交接；不要让每个成员各自完成一套完整 flush/handoff。
 
@@ -354,6 +377,7 @@ V2.5 的日志还证明了 transaction 粒度本身会成为性能和正确性�
 
 - 不允许“先全部 cloak，稍后再发布 cover”。
 - 不允许 cover 丢失后什么都不做、先空等 timer 才首次恢复 real source。
+- 不在 completion retry 预算耗尽后再切入另一套持续定时恢复。
 - 不把资源 Dispose 当作 authority transfer。
 - 不为同一 visual transaction 按 HWND 重复执行 `apply → render/flush → verify → next member` 的完整交接；成员级准备可以独立，但 authority swap 应在共享边界统一完成和验证。
 
@@ -399,7 +423,7 @@ V2.5 的日志还证明了 transaction 粒度本身会成为性能和正确性�
 
 ### Decision
 
-脱离队列/跨边拖拽使用 `EdgeCapsuleDragWindow`，不复用 docked 单边 host。controller 序列化 capsule reorder，因此进程级只维护一个 pooled drag HWND；其 HWND 和 WPF tree 长期存在，lease 时只重新绑定 paper-specific presentation。
+脱离队列/跨边拖拽使用 `EdgeCapsuleDragWindow`，不复用 docked 单边 host。controller 序列化 capsule reorder，因此进程级只维护一个 pooled drag HWND；其 HWND 和 WPF tree 长期存在，lease 时只重新绑定当前拖动对象的 presentation。主胶囊横向整队迁移同样租用这一 pooled HWND，只复用 `FloatingFree` 视觉与 native drag；队列成员、monitor/edge、collapse 状态和起始高度仍由 controller 的 queue transfer 一次提交，master 不伪装成 Paper。
 
 ### Why
 
@@ -415,6 +439,7 @@ Docked capsule 有 wall-side straight edge、close segment、bounded capacity �
 
 - `cc9906ab940bc0e11905401fb079fdedc1f05427` — `fix(edge): keep one persistent drag host`。
 - 当前 `src/EdgeCapsuleDragWindow.cs`。
+- 当前 `src/MasterCapsuleQueueTransfer.cs` / `src/MasterCapsuleWindow.cs`。
 
 ---
 
@@ -455,7 +480,7 @@ Docked capsule 有 wall-side straight edge、close segment、bounded capacity �
 
 proxy animation 到逻辑终点后，最终 real/WPF presentation 必须先完成 endpoint flush/apply、必要的 WPF render turn、真实 bounds verify 和 authority swap 条件，再允许撤 compositor cover。
 
-completion timer 只能发起完成尝试，本身不是 WPF terminal frame 已就绪的证明；尝试失败时 cover 继续持有 authority，并在后续重试中重新走 endpoint 准备与验证。
+completion timer 只能发起完成尝试，本身不是 WPF terminal frame 已就绪的证明；尝试失败时 cover 继续持有 authority，并在后续重试中重新走 endpoint 准备与验证。D-056 补充精确终帧要求；不能用动画准入容差替代终态提交与 handoff 验证。
 
 ### Why
 
@@ -483,7 +508,7 @@ DComp 动画结束和 WPF 最后一帧真正进入 DWM 并非天然同一个调�
 
 ### Decision
 
-Hover、Preview 和 preview corridor 的物理命中，以当前用户实际看见/已应用 presentation 的 `InteractiveBounds` 为准。WPF/native enter/leave 只是触发重新采样的 signal。proxy 拥有可见像素时，也消费同一 sampled logical frame 的 `InteractiveBounds` 做输入路由。
+Hover、Preview 和 preview corridor 的物理命中，以当前用户实际看见/已应用 presentation 的 `InteractiveBounds` 为准。WPF/native enter/leave 只是触发重新采样的 signal。proxy 拥有可见像素时，也消费同一 sampled logical frame 的 `InteractiveBounds` 做输入路由。主胶囊收起／展开 proxy 不拥有 capsule 输入语义，因此其 output HWND 在 publication 前进入已验证的原生 passthrough 模式，而不是把整个透明 envelope 交给 hit-test 兜底；该模式按 host generation 单向锁存，interactive proxy 使用未进入 passthrough 的 output host。
 
 ### Why
 
@@ -499,6 +524,7 @@ Hover、Preview 和 preview corridor 的物理命中，以当前用户实际看�
 
 - 当前 `EdgeCapsulePresenter.Reconcile`。
 - 当前 `src/EdgeCapsuleQueueCompositionProxy.Routing.cs`。
+- D-065 / E-019：逻辑上的同一 `InteractiveBounds` 或时间样本，不构成 DComp 可见帧与 Win32 输入区域原子生效的证明；历史实验与当前主线实现必须区分。
 - `dcf2033d41b3b52c3036eb6a3d4204b2b3441cd9` / `e15796d57f6126e242445c54a8813fd022c35978`。
 
 ---
@@ -653,7 +679,7 @@ PR #94 为完成 V3 Lite 曾引入 source export、finalizer、clean-state verif
 
 ## D-020 — 插件状态与核心 `data.json` 分域持久化
 
-**Status:** Accepted
+**Status:** Partially superseded by D-040（恢复分流部分由 D-040 替代；数据分域与附属清理边界保留）
 
 ### Context
 
@@ -688,7 +714,7 @@ Paper body plugin 引入后，provider settings、provider-scoped Runtime state�
 
 ## D-021 — 插件与 MCP 共用 `PaperCommandService` 作为外部业务命令边界
 
-**Status:** Accepted
+**Status:** Partially superseded by D-040（读取前提交部分由 D-040 替代；共享 mutation 边界保留）
 
 ### Context
 
@@ -698,7 +724,7 @@ MCP 和 paper-body plugin 是两种不同的外部入口，但都需要读取和
 
 所有供插件 Host API 与 GUI 侧 MCP 共用的 Paper/Todo/Note 读取和业务 mutation 统一进入 `PaperCommandService`。该 service 拥有跨 transport 一致的业务边界，包括：
 
-- 在外部操作前提交仍停留在 UI/provider session 的待提交内容；
+- 外部写入若目标是正在编辑的内置 Markdown，只先提交该目标的待提交文字；不为其他目标或第三方正文做全局 Commit；
 - 统一参数、类型和业务约束；
 - 对一次 mutation 做同步持久化提交；
 - 保存失败时恢复内存 snapshot / 新建对象等可回滚状态；
@@ -785,7 +811,7 @@ Global 的关键不是“某张纸片 session 是否正活着”，也不是“�
 - `runtime` 是显式 opt-in 的 provider 生命周期，但其存在性由实体插件 Paper 集合派生；普通插件没有实体 Paper 时不会仅因安装而运行。
 - 插件没有 Reload/hot-replace UI；修改插件文件后统一重启 PaperTodo，避免同时维护 Web 热重载与 Native CLR 已加载版本两套语义。
 - Web Body/Mini/Runtime 可以复用底层 request/response transport，但各 surface 的 API scope 必须由宿主来源决定，不能靠页面自己声明身份。
-- 当前宿主只接受 `apiVersion: "2.1"`；不再保留 1.8/2.0 兼容基线或按能力版本分支的 Top Bar 路由。
+- 当时宿主只接受 `apiVersion: "2.1"`；后续版本兼容与演进策略由 D-039 更新，Top Bar 的 ownership 决策本身不变。
 
 ### Evidence
 
@@ -884,9 +910,9 @@ Runtime 使用 provider-scoped state；Body/Mini 继续使用 per-paper frontend
 
 - manifest 统一使用 capability `runtime`，公开类型统一使用 `PluginRuntime` / `PaperPluginRuntime*`，不再保留 `AppRuntime` 或 `PaperRuntime` 第二套名字。
 - 每张 Paper frontend/body state 最大 10 MiB，整个 provider Runtime state 最大 20 MiB，独立计额；新版 Runtime 不用低 `stateVersion` 覆盖已存在的高版本状态。
-- Runtime 启动时通过 `Papers.List()` 读取全量快照，之后 `Subscribe()` 只接收增量。删除 provider 最后一张 Paper 时，若当前仍有存活且可投递的 Runtime lease，宿主在撤销 lifetime 前先 reconcile 并投递最终 `PaperRemoved`。启动失败、Backoff/Failed 或 Web document 不可投递期间不承诺该事件必达。
+- Runtime 启动时通过 `Papers.List()` 读取全量快照，之后 `Subscribe()` 只接收增量。删除 provider 最后一张 Paper 时，若当前仍有存活且可投递的 Runtime lease，宿主在撤销 lifetime 前先 reconcile 并投递最终 `PaperRemoved`。启动/重建中、`Failed` 或 Web document 不可投递期间不承诺该事件必达。
 - Web Runtime renderer 恢复期间不缓存业务消息；不能真实投递时返回 `runtime_unavailable`，宿主不提供 exactly-once 或延迟业务命令队列。
-- Backoff 保留最后展示；最终 Failed 清除 Runtime 动态 Header/Capsule 并回退静态 Paper 展示。
+- 宿主级恢复不维护 Backoff 队列：成功运行后的 Runtime 需要整体重建时只立即尝试一次，重建期间保留最后展示；再次失败后清除 Runtime 动态 Header/Capsule 并回退静态 Paper 展示。
 
 ### Why
 
@@ -1000,7 +1026,7 @@ D-026 把内置 Note 的 Markdown 语义统一到 Markdig 后，第一版为了�
 ### Decision
 
 - `MarkdownSemanticDocument` 与其 AvalonEdit `TextDocument` 由同一线程拥有；初次打开总是同步全文 parse，每次完整 `TextChanged` 也在返回 WPF 之前同步发布新的 current snapshot。
-- 正文少于 2000 字符时直接全文 parse；较大 Note 先使用 D-028 的轻量局部路径，只有该路径明确拒绝的 reference 等全局依赖才同步回退全文。
+- 正文少于 8000 字符时直接全文 parse；较大 Note 先使用 D-028 的轻量局部路径，只有该路径明确拒绝的 reference 等全局依赖才同步回退全文。
 - 不再为每个 Note 建 permanent parser worker，也不维护 semaphore、pending generation、stale/current 双语义或并发 publish 路径。
 - derived line query 使用简单的连续 buffer + per-line range compact index；`lineStarts` 只在本次 parse / rebuild 中临时使用，不作为 snapshot 常驻状态，也不恢复 segmented/rebase/lazy-cache 层。
 - 每个 live semantic session 保留一份与当前 snapshot 对应的 source string，供下一次差异定位和局部 splice 使用。AST 仍只在 parse 期间存在，不长期持有。
@@ -1051,7 +1077,7 @@ PaperTodo 的产品需求更接近：打开 Note 时建立全文正确基线；�
 
 ### Decision
 
-- 打开 Note 时仍全文 Markdig parse；小于 2000 字符的正文每次编辑也全文 parse。
+- 打开 Note 时仍全文 Markdig parse；小于 8000 字符的正文每次编辑也全文 parse。
 - 较大 Note 普通编辑使用单次约 1K 的行对齐目标窗口。窗口与上一份 snapshot 中已存在的 span/link 相交时，扩到这些已有 semantic container 的完整范围，再局部 Markdig parse + splice。
 - 删除 1K→16K retry、guard proof、窗口外 semantic 等价比较和“必须证明整篇 exact 才允许局部发布”的合同。大 Note 普通编辑明确是 **best-effort local**。
 - reference definition / reference use 仍保留便宜的显式 tripwire；局部窗口无法安全解析这些全局依赖时直接返回 full-parse fallback，不在局部路径内再造 reference resolver。
@@ -1378,9 +1404,34 @@ FD no-runtime 的 Windows SDK 定向压缩另做了 12 轮交错 A/B。`PaperTod
 
 ## D-037 — 可浏览队列提前接管并保留已验证的 live authority
 
-**Status:** Deferred（从 #258 独立审查，尚未成为当前实现）
+**Status:** Deferred（实验已归档，未成为当前产品实现）
 
-资源预热不等于长期接管输入。原候选及性能证据保留在 E-005～E-016 和原 #258 `37fcf9b`；静态提前接管、长期保留、最大容量/来源复用及协调器作为完整依赖组另行审查。现有短时动画代理、后继接续与显式交接继续保留。控件级悬停、完整手势、空闲观察与预热退让仍须单独验收，不以历史性能数字代替通过。
+### Context
+
+该候选从 #258 `37fcf9b` 独立审查，目标是通过静态提前接管、长期保留和 source/output 容量复用减少反复浏览的准备成本。原始性能证据见 E-005～E-016；后续 #260 / #269 / #271 / #291 把完整控件输入、预热协调、源生命周期与视觉/输入时序问题推进到实证层面。2026-11-04 按用户要求收束旧实验 PR，将知识纳入主线；归档不代表采用候选代码。
+
+### Decision / Why
+
+现有短时动画代理、successor 接续和显式交接继续保留；长期保留代理、静态接管与新输入 owner 不因历史局部收益自动进入当前架构。资源预热不等于长期接管输入，既有 D-023 一次性 Lightweight Prewarm 不被本次归档推翻。
+
+#260 通过有限输入 HWND、逐卡真实 WPF 交还和隐藏输出 BeginPaint/EndPaint 修正了实验分支中的明确问题；#269 验证了跨队列失效隔离、持续移动下第一击、退休 predecessor 托管存活、空启动收尾及预热唯一入口。这些是可复用实现经验，但不能脱离其依赖组直接当作当前主线需要搬运的修复。
+
+长期保留的成本包括 source/output 驻留、容量失效、常驻采样、显示环境撤销和真实输入交还。H7 容量恢复候选最终专项失败且没有提升成产品提交；H10 空闲/规模成本未量化；#291 独立 input owner 有生产边界和连续浏览证据，但 capture/drag/handoff、平台环境与物理显示验收仍未完成。关闭 PR 只收束工作，不将这些未完成项写成路线已失败或已完成。
+
+### Rejected candidates / Boundaries
+
+- dormant cache 的合格重入 13/13 命中没有省去主要交接等待；额外 Commit completion 等待也没有取得可采用收益。不以命中率或“多一次同步”代替用户路径证据。
+- 按背景输入需求保留的方法没有有效覆盖；不能通过删除 hover、tooltip、完整手势或插件输入契约来制造收益。
+- 异步首段接管 v3 虽缩短同步事务，prepare→animation-clock 却变慢，因此当时不采用。结论仅针对该实现与实验，不是永久否定异步调度。
+- UI stall 下的视觉/输入时序、普通 worker 失败和独立 owner 证据见 D-065；不通过扩大透明输入范围、迟到重放点击或删除 cover/terminal 验证绕过问题。
+- #291 与历史 main 的真浏览对照是分支整体差异，不是独立线程的单变量因果证明；其“current main”固定为 `c10837b`，不是未来主线。
+- 本次按用户要求不重新运行云端性能 A/B；旧数字保留固定版本、分母和环境，不提升为当前性能承诺。
+
+### Evidence
+
+- [E-017 / E-018](EXPERIMENTS.md)：#260 输入修复、缓存/额外等待、按输入需求保留和异步 admission 的方法及样本。
+- [E-019 详细归档](experiments/edge-retained-proxy-archive-20261104.md)：四个固定 HEAD、H1～H11、H7 最终 CI 与候选状态、#291 夹具纠错和连续浏览数据、日志可用性。
+- [#260](https://github.com/snownico0722/PaperTodo/pull/260)、[#269](https://github.com/snownico0722/PaperTodo/pull/269)、[#271](https://github.com/snownico0722/PaperTodo/pull/271)、[#291](https://github.com/snownico0722/PaperTodo/pull/291)：原提交、讨论与阶段证据；远程实验分支保留。
 
 ---
 
@@ -1416,3 +1467,563 @@ E-016 的同包对照及去除实验开关后的整合回放支持应用端 owne
 - `src/EdgeCapsulePresenter.cs`：native apply 就绪变化、普通 reconcile 和真实输入优先级。
 - `tests/PaperTodo.EdgeTitleChecks/RenderDemandChecks.cs` / `SharedFrameRenderingChecks.cs`：请求、屏障、取消重启和真实 Dispatcher 事件顺序检查。
 - `doc/EXPERIMENTS.md` E-016：独立及组合对照、最终整合验证、source-anchor 未采用及 collection 评估的证据与测量限制。
+
+
+---
+
+## D-039 — 插件 API 采用向后兼容的 major.minor 演进
+
+**Status:** Accepted
+
+### Context
+
+Protocol 2.1 发布后，宿主继续加入了新的插件可见契约。如果仍把 `apiVersion` 固定写成 2.1，manifest/API 的真实能力会持续增长，但插件作者无法从版本号判断哪些能力可用；反过来，如果宿主每次只接受一个精确版本，简单把当前版本改成 2.2 又会让已有 2.1 插件全部拒载。
+
+### Decision
+
+插件协议使用 major.minor 版本演进：
+
+- 当前最新版本为 **2.2**，最低继续兼容 **2.1**。
+- 2.1 插件继续加载并保持 2.1 已发布语义；声明 2.2-only 能力时必须把 manifest 的 `apiVersion` 提升到 2.2。
+- 2.2 首批显式版本化能力包括 `startupPaper.presentation: hidden`、settings `type: action`、公共 Application Settings API，以及 `settings.read` / `settings.update` 权限。
+- 同一未发布 minor 内可以合并多项向后兼容的新契约，不要求每增加一个字段就连续制造 2.3、2.4；一旦 2.2 成为已发布稳定合同，下一批新的插件可见契约使用 2.3。
+- 仅宿主内部实现、性能优化、bugfix，或完全复用既有通用合同而没有新增插件可观察语义时，不提升协议版本。
+- 删除/改名公开字段、改变既有调用语义或其他无法保持旧插件行为的修改，提升 major，例如 3.0。
+
+宿主拒绝低于最低兼容版本以及高于当前实现的未来版本，避免插件在未知合同上静默运行。
+
+### Why
+
+`version` 是插件自身发布版本，`apiVersion` 是宿主与插件之间的合同版本，两者必须独立。minor 表达向后兼容的合同扩展，major 表达破坏兼容；这样版本号能够真实说明能力边界，同时不因为宿主发布新协议就强迫所有旧插件立即重建。
+
+### Consequences
+
+- Registry 需要保留一个最低兼容版本和一个当前最新版本，而不是单一精确版本。
+- 新能力必须在 manifest 校验或权限边界上声明其最低协议版本，避免 2.1 插件“偷用”2.2-only manifest 能力。
+- CI 必须同时保留至少一个 2.1 compatibility sample 和一个 2.2 sample。
+- 文档默认示例面向当前 2.2；历史 2.1 专项文档需要明确哪些部分属于 2.1、哪些是后加的 2.2。
+- 插件自身 semantic version 不跟随宿主 API version 自动变化。
+
+### Evidence
+
+- `src/PaperBodyPluginRegistry.cs`：最低/当前协议版本和版本比较。
+- `src/PaperBodyPluginRegistry.Settings.cs`、`Startup.cs`、`Permissions.cs`：2.2-only manifest 能力门槛。
+- `tests/PaperTodo.ProtocolPolicyChecks/Program.cs`：2.1/2.2 接受范围及 2.2-only 能力拒绝测试。
+- `plugin-samples/PaperTodo.Plugin.Protocol21Web/`：2.1 向后兼容样例。
+- `plugin-samples/PaperTodo.Plugin.TopBarWeb/` 与 Codex CLI Bridge：2.2 样例。
+
+
+---
+
+## D-040 — 插件基础读写不承担业务恢复，查询与普通通知不扩大副作用
+
+**Status:** Accepted
+
+### Context
+
+协议 1.2 的恢复分流在读取错误后生成空文档、改写另一条文件路径，并把恢复标记传播到插件页与后来的 MCP 启用条件。共享外部操作准备又让只读查询提交所有正文；复盘插件的提交会写入整个记录池。为小操作追加这些职责，会扩大正常调用和失败的影响范围。
+
+### Decision
+
+- 保留插件数据与核心数据分域及一次保存的临时文件替换；删除宿主 `.json.recovered` 路径、恢复标记和基于它的权限阻断。不存在的文件可默认初始化；已有文件读不出来就报告读取失败，不以空数据继续。旧恢复文件保留在磁盘但不自动选择、迁移或删除。
+- 插件自己的长期业务数据、备份与恢复由插件负责。复盘示例移除自己的 `.bak` 回退和复制，使用原来的临时文件替换；只有明确不存在的记录文件才初始化为空，已有文件损坏、不可读或版本不受支持时直接失败，不用空记录覆盖原文件。
+- Paper/Todo/Note/图片查询不触发正文提交或强制同步，接受模型相对实时编辑的短暂延迟；外部 mutation 只有写同一内置 Markdown 时才先提交该目标的用户文字。为提交一次外部 mutation 做的同步落盘只序列化当前模型，不顺带结算其他 Markdown 编辑器；其他 Markdown 已有的 dirty 状态和正常保存计时继续保留。普通应用保存仍按正常规则同步全部内置 Markdown，不把第三方 Body `Commit()` 当作全局保存钩子；回滚和事件来源处理保持不变。
+- 普通正文通知异常不升级成正文销毁；新建待办的初始属性属于创建/追加权限；轻弹窗外链复用正文已有系统打开，不新增权限或桥接接口。
+- 首次后台启动失败不重试；Web 后台在首次成功前遇到 renderer 故障同样按启动失败处理，不先做内部 reload。实际成功运行后，renderer 最多沿 WebView2 当前页面直接 reload 一次；若必须重建整个 Runtime，宿主每个进程生命周期也只立即重建一次，再失败进入 `Failed`。不维护 1/3/10 秒 Backoff、失败次数或稳定期重置。
+
+### Why
+
+宿主负责稳定接口与当前操作，不替每个插件定义业务数据恢复策略。删除扩大职责的分支，比在恢复文件、读取同步和失败补偿上继续加状态更可控。参数有效性、已有内容修改权限和一次保存的完整性不是本次删除对象。
+
+### Evidence
+
+- `src/PaperBodyPluginDataStore.cs`、`src/AppController.Mcp.cs`：单路径读写与当前有效设置。
+- `src/PaperCommandService.cs`、`src/PaperCommandService.NoteAssets.cs`：纯读取；mutation 仍保留原准备。
+- `src/PaperWindow.PluginBodies.cs`、`src/AppController.PluginRuntime.cs`：普通通知与首次启动失败。
+- `tests/PaperTodo.PersistenceChecks/Program.cs`、`tests/PaperTodo.SettingsApiChecks/PluginBoundaryChecks.cs`：真实文件、调用次数、初始属性和后台生命周期回归。
+
+---
+
+## D-041 — 普通窗口原生 Mica 与 layered 胶囊边界
+
+**Status:** Superseded by D-042（替代外框/裁切实现，保留原生材质与 Edge 边界）
+
+### Context
+
+PR #191 最初在现有透明 WPF 窗口上采样静态壁纸，生成类似云母的背景。用户随后明确要求原生 DWM Mica，壁纸模拟不再满足本次皮肤需求。与此同时，Edge bounded HWND 仍依赖 WPF alpha/shape 和 DComp translation-only 的已确定边界，不能为了皮肤把胶囊改成整窗原生背景，覆盖容量空白或打断 handoff。
+
+### Decision
+
+- 展开的普通纸片与设置窗口在 Windows 11 22H2+ 使用官方 `DWMWA_SYSTEMBACKDROP_TYPE` / `DWMSBT_MAINWINDOW`，不使用 undocumented 22000 属性，不引入 Windows App SDK 运行时。
+- 普通窗口的 non-layered 模式只在启动时根据已保存的配色确定。由其他皮肤切入时提示重启，并先显示实色；不关闭重建正在编辑的窗口，不迁移光标或撤销栈。退出保存仍经过现有生命周期。
+- DWM、glass、dark-mode 和窗口区域设置都成功后才让 WPF chrome 透明。正文和插件仍获得实色 `Theme.PaperBrush`，原生背景失败时不留透明正文壳。
+- 原生背景区域取自既有 chrome 的最终布局，按当前 DPI 更新裁切；同一几何不重复设置。裁切期间不使用会给文字投影的 WPF 外壳阴影，也不承诺自定义窗口区域具有系统阴影。
+- 折叠形态、形态动画与部分透明时关闭原生背景并恢复 WPF alpha 绘制；完成边界恢复 Mica。所有贴边、拖动、主和系绳胶囊保留原 layered 路线和实色背景，不接入原生适配器。
+- 移除壁纸采样、模拟模糊、异步材质缓存。无后台 HWND 或逐帧截图。关闭透明效果、高对比度和接口失败使用实色；系统的材质节能/非活动回退仍由 DWM 决定。
+
+### Why / Consequences
+
+原生材质属于 HWND 合成，不是一个可放进所有 WPF Brush 槽位的画刷。把非矩形动态 Edge surface 强行挂到 full-HWND Mica 上会改变既有 shape authority；一次性重启普通窗口比重建用户正在编辑的所有对象更简单，也不会丢失未持久化的撤销状态。代价是首次换肤需要重启，胶囊不具备原生材质，真机视觉、跨 DPI 与 alpha fallback 仍需人工确认；这些限制在设置说明和 PR 中明确呈现。
+
+### Evidence
+
+- `src/NativeMicaBackdrop.cs`、`src/DwmMicaApi.cs`。
+- `src/AppController.Mica.cs`、`src/AppController.Settings.cs`。
+- `src/PaperWindow.cs`、`src/PaperWindow.Lifecycle.cs`。
+- `tests/PaperTodo.MicaChecks/Program.cs`。
+- PR #191 的原生替换提交；原始壁纸模拟仅保留在 git 历史中。
+
+
+---
+
+## D-042 — 原生云母使用单一窗口外框，验证最终桌面像素
+
+**Status:** Partially superseded by D-057（仅 CI 桌面截图验收方式；单窗口与材质约束保留）
+
+### Context
+
+用户报告展开纸片出现白色外圈、内层纸面压暗，且明确未开启失焦半透明。旧适配器把带 8 DIP 阴影留白的 WPF Border 与全 HWND 原生背景并置，手动处理 NCCALCSIZE 并按内层圆角裁切；启动/形态动画又在 legacy blur-behind alpha 和系统背景之间切换。仅检查 HRESULT、背景属性与裁切坐标无法证明最终桌面图像正确，不能据此把压暗归因于用户设置或正常失焦行为。
+
+### Decision
+
+- 保留官方 DWM Mica 与启动时选择 non-layered 普通窗口的策略，不引入 Windows App SDK，不重建窗口、编辑器、光标或撤销栈。
+- `WindowChrome` 是普通原生窗口唯一 non-client/glass 集成入口，移除适配器自己的 NCCALCSIZE 和 SetWindowRgn 路线。展开纸片在整个会话中填满 HWND，实色或动画回退时也不重新出现阴影外边距；圆角/外框由 DWM 处理，缩放命中保留现有实现。
+- legacy blur-behind alpha 只用于折叠、形态动画和显式透明的 WPF 回退；恢复系统背景前明确停用它。启动淡入提交终值并清除 opacity 时钟，过期显示回调不得覆盖后续隐藏状态。
+- 原生形态动画的系统缩放外框必须在动画入口关闭、目标形态完成或中断时恢复。不要在材质类的布局/宽高监听中反复设置 `ResizeMode` 或推算 HWND 尺寸：前者会覆盖结束状态，后者让旧的 16 DIP 外边距与原生展开态零外边距产生第二套尺寸口径。窗口动画直接应用同一进度对应的内外尺寸和外边距，反转与中断继续走同一个结束路径。
+- 不把截图中的灰色直接判定为 DWM 非活动色。系统允许的材质回退仍由 DWM 管理；测试同时验证激活/失焦、浅/深色、启动淡入、折叠展开、隐藏显示、缩放和正文黑白色块的最终桌面像素。
+- Edge、drag、master、tether 的 layered shape/translation-only ownership、数据持久化和正文编辑行为不变。
+
+### Rejected / Why
+
+在 Windows CI 上试验 `MicaController.SetTarget(WindowId, DesktopWindowTarget)` 直接挂到现有 WPF HWND：接口成功并不代表兼容，捕获到的结果是背景覆盖 WPF 正文。没有把这条试验路线或额外 SDK 运行时留在产品中；要避免再次为了一个皮肤增加平行内容宿主、窗口和打包路径。
+
+原生系统圆角不承诺复刻旧皮肤的 16 DIP 轮廓。桌面捕获只属于测试，不是运行时生成材质的输入。CI 的 Windows Server 图形会话也不能替代用户 Windows 11 显卡、多屏 DPI 和系统材质策略的真机验证。
+
+### Evidence
+
+- `src/NativeMicaBackdrop.cs`、`src/DwmMicaApi.cs`、`src/PaperWindow.cs`。
+- `src/AppController.cs` 的显示动画终点，`src/AppController.Settings.cs` 的窗口集成。
+- 历史上 `tests/PaperTodo.MicaChecks/Program.cs`、`VisualChecks.cs` 的桌面/WPF 双通道捕获；此项 CI 验证方式于 D-057 移除，历史结论不再代表当前 CI 能自动证明最终桌面像素。
+
+
+## D-043 — 透色亚克力试用可调色 accent，保留单窗口边界
+
+**Status:** Experimental（仅透色模式；Windows 11 真机视觉与拖动性能待验）
+
+### Context
+
+标准和透色亚克力原先共享固定的系统 Acrylic；降低 WPF 白色覆盖层强度后，用户反馈透色模式明显发灰。用户授权试用社区 WPF 可调色接法。D-042 的单窗口和形态动画边界继续有效。
+
+### Decision / Why
+
+- 仅透色模式使用 `SetWindowCompositionAttribute` 的 `WCA_ACCENT_POLICY`，直接设置原生混合颜色与 alpha；WPF 外壳不再叠加底色。标准云母/亚克力保留官方系统 backdrop。
+- accent 只保留顶部 1 DIP glass，系统 backdrop 使用 full glass；由现有 `WindowChrome` 和适配器统一切换。不能直接设为 zero glass：WPF 会在缩放时安装窗口 region，破坏系统圆角和阴影。 顶部 glass 必须显式使用纸片边框色；`DWMWA_COLOR_NONE` 只适用于边框，不能用它隐藏 caption，否则该区域可能露出系统强调色。进入动画、退出透色模式或释放时清除 accent，失败恢复实色。正文、HWND、编辑器和 Edge 胶囊不重建。
+- 这是未公开保证兼容性的 accent policy，有版本与拖动/缩放性能代价；不能以接口成功或 CI 像素正确替代用户机器上的视觉和流畅度确认。暂不引入 Windows App SDK、第二个内容窗口或背景捕获。
+
+### Evidence
+
+- `src/DwmMicaApi.cs` 的 `SetClearAcrylic`、`src/NativeMicaBackdrop.cs` 的材质切换与清理。
+- `tests/PaperTodo.MicaChecks/Program.cs` 的接法互斥/失败回退；`VisualChecks.cs` 的白底/彩色底和形态动画捕获。
+- 社区接法：[SlimeNull 的 WPF 示例](https://slimenull.com/posts/20240530104846/)、[WindowEffectTest 源码](https://github.com/TwilightLemon/WindowEffectTest/blob/master/WindowEffectTest/WindowMaterial.cs)。
+
+
+---
+
+## D-044 — 自绘材质顶栏不再叠加 native caption，清透玻璃不用磨砂
+
+**Status:** Superseded by D-045（仅纠正所有材质统一零 glass 的选择）。
+
+日期：2026-09-10。补充 D-042 / D-043，替代其 full/top-1 glass margin 细节，不替代单窗口边界。
+
+用户真机反馈暴露了 WPF-only 图像检查的盲区：透明 WPF 顶栏下仍有固定 CAPTION_COLOR 的实色 native 带；透色模式保留顶部 1 DIP glass 还可能露出亮线。Windows 独立探针对比确认固定 caption 色与最终桌面顶栏／正文色差有关。
+
+当前选择：caption 使用 COLOR_DEFAULT，适配器刷新原生状态时把实际 DWM glass margin 归零；WindowChrome 的逻辑 glass 标志保持非零，仅用于留在无 HRGN 的管理路径。禁止通过裁窗口、负 margin 或新增 NCCALCSIZE 处理补洞。主题、DPI、composition 和形态终点沿用既有刷新入口。
+
+
+验证必须包含最终桌面顶栏／正文像素和清透背景的高频条纹，而不仅仅是 WPF Background.A 或不同皮肤图像 hash；真实 Windows 11 主观材质与混合 DPI 仍需人工验收。
+
+---
+
+## D-045 — 系统材质保留 full glass，清透接法的零边距不通用
+
+**Status:** Partially superseded by D-046（不支持现代 alpha 的系统继续使用此兼容路径）
+
+**Context / Why:** `d36a4f47` 把全部材质的实际 DWM glass margin 归零，同时关闭 legacy alpha。用户反馈云母纯黑、带半透明画刷的亚克力／描图纸／Aero 为深灰：透明 WPF 像素没有系统材质承接，白色覆盖层只能把黑底混成灰底。原生 API 成功、顶栏与正文同色，都不能证明背景已正确合成。独立探针原本使用 full glass，不能据此推导所有接法都应清零。
+
+**Decision:** 恢复系统 Mica/Acrylic 的 full glass，保持清理旧 alpha → 设置对应 glass → 启用系统 backdrop 的顺序；零实际边距只属于 accent 与清透 alpha 接法。caption 颜色仍用默认值，不恢复实色顶栏遮盖。窗口、编辑器、形态动画和 Edge authority 不变。
+
+**Evidence:** `NativeMicaBackdrop.Refresh` 与 `PaperTodo.MicaChecks` 的 full-glass 互斥检查、浅色云母黑底拒绝检查及最终桌面捕获。Windows Server 无法显示真实 Acrylic 透色时仍记录 SKIP，不冒充 Windows 11 真机验收。
+
+
+---
+
+## D-046 — 显式 redirection alpha 消除材质下方原生 caption
+
+**Status:** Experimental
+
+**Context / Why:** full glass 保住了系统材质，但即使 WPF 顶栏完全透明，原生 extended caption 仍可盖住背景。均匀色的 Server 回退材质会隐藏这个错误；仅比较顶栏与正文同色不够。
+
+**Decision:** Windows 11 26100+ 设置 `DWMWA_REDIRECTIONBITMAP_ALPHA`，成功后才将系统材质的实际 glass margin 归零。API 不支持时保留 D-045 的 full glass，绝不恢复无 alpha 的零 glass 黑底路线。仅改变现有 adapter 的合成参数，不创建第二个内容 HWND、负 margin 或窗口 region。释放时清理自己启用的属性。
+
+**Evidence:** `NativeMicaBackdrop.Refresh`、`DwmMicaApi.SetRedirectionAlpha`；历史 `NativeSurfaceChecks.CheckCaptionSentinel` 用原生 caption 的紫红色正对照验证过此接法，但该 CI 桌面截图手段因不稳定在 D-057 中移除。能力失败／回退检查保留于材质行为用例。微软 `DWMWINDOWATTRIBUTE` 文档明确 alpha 通道要求 premultiplied 内容、最低 build 26100。旧 OS 的顶栏视觉与真实 Windows 11 多屏效果不能借用 Server 的结果作已验收结论。
+
+---
+
+## D-049 — Aero 独立透明合成与材质光照分层
+
+**Status:** Partially superseded by D-051 / D-052（state=3 黑底禁区保留）
+
+**Context / Why:** 用户反复反馈 Aero 与标准亚克力无区别或出现假的大片反光。系统 Acrylic 自带亮度／染色层，叠加另一层 WPF 染色不能得到清透玻璃；陶瓷的整面明暗渐变也不足以表达釉面。
+
+**Decision:** Aero 的内部 `aeroGlass` recipe 在现有 adapter 内使用低中性色 alpha 的兼容 accent blur（state=4），不叠加 system backdrop，主要染色由 WPF 统一绘制并绘制固定逻辑尺寸、轻微位置视差的反光。与 Clear Acrylic 的 state=4 共享低层接口和清理，不复制状态 owner。接口不公开，任一步失败仍回退不透明表面；原标准云母／亚克力接法不改。陶瓷用不透明漫反射底、局部清釉反光和缓存的法线边缘照明，不新增采样或材质定时器。
+
+**Rejected:** 在受控白色后窗上，旧 state=3 纯模糊 API 返回成功但最终桌面为固定黑底；不能以 HRESULT 成功认定有效。不将这条接法作为当前 Aero 后端。CI 若所有透明模糊均被系统抑制，只有独立的标准 Acrylic 后窗对照也失败时，才跳过透色比较；浅色不得黑底的检查始终执行。
+
+**Evidence / Limits:** `Program` 验证 Aero／Acrylic 双向切换、失败清理和 alpha 互斥；`MaterialStudyChecks` 检查开口、视差生命周期和最终桌面截图。Aero 的反光与位置视差为独立实现，不声称 Windows 7 像素级复现。
+
+
+---
+
+## D-051 — Aero 清透合成与辅助材质强度
+
+**Status:** Partially superseded by D-052（辅助表面开始处理真实局部背景；Aero alpha 保留）
+
+**Context:** 用户反复反馈 Aero 过度磨砂，同时胶囊与菜单的材质强弱需要和正文／命中逻辑分离。
+
+**Decision:** Aero 复用现有清透 alpha 接法，去掉 Acrylic 模糊，保留蓝色透光、柔化斜反光和移动视差；不恢复已失败的 state=3，也不为 Aero 新增采样和截图排除。所有配色对云母和亚克力开放，Neutral 不改变原系统色。胶囊、右键菜单及子菜单复用材质绘制，`MatchAuxiliaryMaterialStrength` 关闭时减弱材质并增加更接近普通纸片的底层，开启时使用完整强度。文字、图标、host 描边与命中不衰减。
+
+**Validation / limits:** 原生互斥与失败回退、配色选择与旧配置、辅助表面强度及前景像素、菜单模板实例化、Aero 后窗响应和编辑器身份检查进入 `PaperTodo.MicaChecks`。Windows CI 不代替用户对真实 Windows 11、HDR、混合 DPI 和高刷新率流畅度的验收。
+
+## D-052 · 实际辅助窗口背景处理与材质清理（2026-09-11）
+
+**Status:** Partially superseded by D-053（资源与缓存边界）；保留辅助面真实背景与 Aero alpha 后端。
+
+**Context / Why:** 用户要求胶囊与菜单的弱档也真实处理背景，而不是只给实色表面染色。
+
+**Decision:** 分层云母／亚克力／透色亚克力／描图纸使用有限范围的局部 Gaussian 背景柔化；`SkinBorder.CaptureHost` 使用每个表面的实际 `HwndSource`，避免捕获／排除菜单 owner。辅助强度为完整或弱档，两者都使用同一正文、命中和资源 owner；不重建 HWND 或编辑器。Aero 使用既有透明通道，不增加捕获。已退役皮肤的运行时代码、资源、选项和专属测试删除，旧数据走通用未知 ID 回退。
+
+**Lifetime / limits:** 背景处理沿用像素预算、单最新帧 mailbox 和逐源释放；监听源 HWND、祖先 opacity 与卸载。独立开关明确软件采样表面的截图／共享排除副作用。辅助 Mica/Acrylic 只是软件近似，SDR、混合 DPI 和主观审美边界不冒充原生或真人验收。
+
+**Validation:** 实际 layered 窗口、生产 popup／submenu 模板测试两个强度档、前景不变、所有者隔离及隐藏／半透明／关闭恢复；同时保留主纸片与编辑回归。
+
+---
+
+## D-053 — 材质绘制、原生背景与可选采样职责收敛（2026-09-22）
+
+**Status:** Partially superseded by D-054（BackgroundSession 的职责边界保留；持续采样与采样节拍由 D-054 替代）
+
+**Context / Why:** #227 多轮材质实验后，功能已收敛，但绘制控件仍承担采样线程、HWND 观察、取消和缓存失效；普通原生窗口也会注册采样相关监听，辅助开关会重建无关顶栏图标，改变尺寸又重建不依赖尺寸的渐变。用户要求完整重构，同时必须理解旧修复的原因，不以减少代码行为为由恢复已解决的黑底、首帧闪烁、菜单打不开或编辑器重建。
+
+**Decision:** 保留 NativeMicaBackdrop 的原生合成所有权，SkinBorder 保留绘制和轻量接入，将采样／位图／呈现资源收敛到可选 BackgroundSession，实际 HWND 与祖先透明度订阅收敛到 MaterialSurfaceHost。仅辅助采样或 Aero 透光／视差需要观察；不创建通用插件化材质框架、全局截图中心或额外窗口。设置变化沿现有共享事务发布，按画刷、几何、采样、动画分别失效。原生环境值缓存通过真实系统事件更新；激活外观独立于背景安装。
+
+**Preserved historical fixes:**
+- `37c10b27` 的真实右键回归：WPF ContextMenuService 使用 SetCurrentValue。异步预备完成后必须重放仍有效的请求，不能仅 CoerceValue 读回被强制为 false 的默认值。
+- `8d22d040` 的 Clear Acrylic 首帧：accent 不能先于真正 ContentRendered 启用。重新请求重绘不等价于已经产生首张 redirected bitmap。
+- `cabd99a` 的呈现与采样：预备首帧和映射变化必须冻结完成后发布，像素与世界坐标一起切换；同一区域保留可写位图复用；沿用 SRCCOPY，避免 CAPTUREBLT 扰动指针；实时 popup 的动画仍用本地值关闭，防止动态资源重新引入 Fade。
+- D-045 / D-046 的 full glass 与现代 alpha 能力顺序不改。零 margin 不是适用于所有系统的通用修复。PaperWindow/Edge 的尺寸、形状、DComp translation-only、正文与撤销栈 owner 不改。
+
+**Performance boundaries:** 菜单的采样余量独立于拖动胶囊，模糊半径、采样节拍与弱档真实背景语义不变。较小覆盖范围可能在高 DPI 下恢复原像素密度，因此不能把面积降幅冒充所有机器上的速度或内存降幅。Aero 仅缓存直边相同深度／法线的光照结果，以明暗、异形圆角、开口和分数 DPI 的逐字节对照约束。保留缓冲清零、零等待上传、背景与正文分离、每个 popup 独立释放和截图排除提示，不为了少几次拷贝削弱所有权。
+
+**Research / alternatives:** 阅读 [WPF UI WindowBackdrop](https://github.com/lepoco/wpfui/blob/ffebacd61058170cf63864b7d5aa730cffff848a/src/Wpf.Ui/Controls/Window/WindowBackdrop.cs) 的窄原生适配边界；阅读 [dotnet/wpf WriteableBitmap](https://github.com/dotnet/wpf/blob/main/src/Microsoft.DotNet.Wpf/src/PresentationCore/System/Windows/Media/Imaging/WriteableBitmap.cs)、[issue 5816](https://github.com/dotnet/wpf/issues/5816) 的锁与缩放冻结讨论和 [BlurEffect 原生实现](https://github.com/dotnet/wpf/blob/main/src/Microsoft.DotNet.Wpf/src/WpfGfx/core/resources/BlurEffect.cpp)。这些支持不跨异步持锁、后台准备／UI 短上传、明确 native 与软件采样边界；不是把第三方库直接替换进本项目的理由。截图排除仍服从 [SetWindowDisplayAffinity](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setwindowdisplayaffinity) 的本进程顶层窗口与 DWM 限制，并非安全／DRM 边界。未引入新的 capture 后端、降低应用帧率或用先开普通纸片再补材质掩饰首帧延迟。
+
+**Validation:** MaterialRefactorChecks 检查并发最新帧交接／停止、缓存失效、主窗口无采样资源、Aero 像素等价、菜单取消／替换／迟到结果／卸载／超时。既有 MicaChecks 保留真实原生窗口、生产右键与子菜单、首帧素材、前景像素、位图复用、截图排除和设置切页。`tools/PaperTodo.MaterialBenchmarks` 为可选手动测量入口，使用同一 harness 在两个版本独立进程测 CPU 指令记录时间、线程分配、菜单打开延迟和真实鼠标拖动；不进入默认回归，也不是屏幕 FPS、GPU/DWM 占用或 Windows 11 人工视觉验收。
+
+---
+
+## D-054 — 辅助材质背景改为一次性静态快照，拖动复用虚拟桌面纹理（2026-09-23）
+
+**Status:** Superseded by D-058（产品路径；历史采样协议和内部测试仍保留）
+
+**Context / Why:** D-053 将背景处理收敛到可选 `BackgroundSession`，但当时仍保留持续采样、帧检测与采样节拍。实际产品不需要材质跟随桌面内容实时变化；持续截图、变化判断和后台 worker 增加了常驻职责、性能波动与测试复杂度。用户只需要打开菜单或停住胶囊时看起来与当前位置背景一致，拖动期间则需要连续的空间对应，而不是连续重新截图。
+
+**Decision:** 菜单在打开前只准备一次局部背景快照，打开期间冻结；静止胶囊在稳定位置只读取一次局部背景，不再按 100/250ms 轮询桌面。胶囊开始拖动时只读取一次整个虚拟桌面，宽高各降至 50%，一次性应用轻微高斯模糊；拖动过程中只按屏幕坐标移动同一张纹理的裁剪，不再截图、不再模糊。贴边胶囊与 floating drag host 共用同一张拖动纹理，docking handoff 期间继续保留，避免中途闪回；拖动结束后清掉全桌面纹理，并在最终位置重新读取一次局部静态快照。Aero 不读取桌面背景。
+
+**Ownership / settings:** 删除 `LiveBackgroundProcessing`、`appearance.live_background_processing` 与对应 UI 开关；静态快照是需要软件背景材质的实现细节，不再作为用户可切换的实时处理模式。截图只存在于本进程内存，不保存或上传。材质透明度是独立设置，只改变材质覆盖/染色强度，不使用 `Window.Opacity`，不让正文、控件、Aero 反光、relief 或描图纸纤维一起消失。
+
+**Validation:** `DesktopBackgroundCapture` 必须是 one-shot capture，不存在 polling loop、motion wake-up 或 change detection；`MaterialDragChecks` 验证静止快照移动时只重投影、拖动纹理为 50% 虚拟桌面且已预模糊、拖动结束只补一次最终局部快照。真实鼠标拖动基准额外验证按键尚未释放时 sampled capsule 已进入 drag snapshot 状态，防止异步截图直到 `DragMove` 返回后才发布的假实现。
+
+
+---
+
+## D-055 — Aero 不采用 `ACCENT_ENABLE_BLURBEHIND` 原生模糊（2026-09-23）
+
+**Status:** Rejected
+
+**Context / Why:** Aero 清透路线在高背景复杂度下可读性有限，因此尝试避免重新引入截图 worker，优先让 Windows compositor 直接完成实时背景模糊。现有 `DwmMicaApi` 已经通过 `SetWindowCompositionAttribute` 使用 AccentPolicy state 4 实现 Clear Acrylic，因此实验复用同一封装，将 Aero 改为 `ACCENT_ENABLE_BLURBEHIND`（state 3），并保留 PaperTodo 自己的 tint、readability veil、reflection 与 relief。
+
+**Experiment:** state 3 在接口层能够成功安装，Aero / Acrylic / Clear Acrylic 的切换、失败回退和同 HWND 热切换测试也能通过。随后又单独试过把 Aero 从 Windows 11 的 `DWMWA_REDIRECTIONBITMAP_ALPHA` 路径隔离，避免两种合成机制互相干扰。
+
+**Result / Pitfall:** HRESULT 成功不代表真实桌面像素已经进入模糊背景。真实窗口像素验证中，Aero 后方分别放置白色与蓝色窗口时，state 3 路线得到的前景仍是近似相同的深灰底（实验记录中两种后景均约为 `Color [61,64,68]`），说明当前 **WPF + WindowChrome + 自定义透明内容** 组合没有可靠采样真实后方窗口。去掉 redirection alpha 后仍未通过真实像素验证，因此不能把“AccentPolicy 调用成功”当作可用材质证据。
+
+**Decision:** 当前 PaperTodo 不采用 state 3 作为 Aero 背景模糊实现，恢复既有 clear-alpha Aero。若未来重新需要实时模糊，必须先在与 PaperTodo 相同的 HWND / WindowChrome / WPF 内容结构上通过“不同真实后景产生不同最终像素”的验收；否则优先使用 PaperTodo 自己显式拥有的静态/低频背景采样，而不是继续叠加未验证的 compositor recipe。
+
+**Rejected / Do not reintroduce:**
+
+- 不因为 `SetWindowCompositionAttribute` 返回成功就认定 BlurBehind 工作正常。
+- 不在没有真实后景像素对照的情况下重新接入 state 3。
+- 不把 state 3 与 `DWMWA_REDIRECTIONBITMAP_ALPHA` 的组合继续扩展成另一套恢复/自愈体系。
+- 若重新实验，失败实现仍应撤回，只保留结论与最小证据。
+
+**Evidence:**
+
+- `c1e92b6413578971d4af690b435d215f907a9583` — 首次将 Aero 切到 AccentPolicy state 3。
+- `903d3a4ec2a34656b8e4b9954455c2203bd203e7` / `21e09d4b30c6f72347597dc6582725eb98d87bf5` — 隔离 redirection alpha 并做真实材质验证。
+- `b93efc3b369e231070198146a44468962427d5f0` — 撤回失败的 BlurBehind 产品实现。
+- 历史 `tests/PaperTodo.MicaChecks/MaterialStudyChecks.cs` 的真实后景像素对照已按 D-057 退出 CI；不可靠的自动截图不能替代此历史实验结论或 Windows 11 真机验收。
+
+---
+
+## D-056 — 精确终帧与主胶囊纯视觉输入隔离（2026-10-07）
+
+**Status:** Accepted
+
+### Context / Evidence
+
+PR #319 的初版把主胶囊完整材质收展后的卡死解释为终点迟到，并叠加两阶段 settle recovery 与强制 cover-loss。重新审查并等待真实队列事务提交后，Windows 日志记录到 applied opacity 为 `0.9994429137551172`，而 endpoint 为 `1`；几何一致，但严格 frame equality 持续拒绝 handoff。
+
+`ResolveSettledFrame` 把动画准入使用的近似相等误用为终态，反复 Flush／ForceApply 仍保留该尾差。Windows A/B（PR #319，run `37529373611`）中，原版精确终帧测试失败；提交 canonical target 的同一测试在左右边缘 × 四档 DPI 下通过。实际完整材质收展对照中，修正后六次 proxy 启动均正常交接，没有 retry-exhausted／emergency-release。
+
+### Decision
+
+- timeline 结束或取消后，Presenter 提交 `TargetPresentation.ToFrame()`。近似比较只用于决定是否需要动画；handoff 保持精确一致性验证。
+- 撤掉此次 PR 尚未合并的 stage-local settle recovery 和 synthetic cover-loss。它们未解决终帧尾差，还会把局部失败扩大为共享 compositor runtime 失效；保留既有真实设备／output 丢失恢复路径。
+- 主胶囊收展 output 仍是纯视觉层：首次 publication 前进入 layered + transparent passthrough，完成后退休该 host；interactive proxy 使用未切入该模式的 host。同 HWND 反向切换不作为已验证能力。
+- 输入测试同时检查真实 live DComp 像素与跨线程原生点击，不能把“不可见窗口让点击通过”当作有效视觉代理。生命周期测试必须等待已排队事务执行，并验证 applied/native 终态、capture/affinity 释放与恢复后真实点击；空代理字典不能替代“曾经成功接管”。
+
+### Boundaries
+
+此次审查确认的是精确终帧缺陷及原生 passthrough 行为，不声称复现了用户每一种显卡／显示器时序，也不声称任意持续 Win32 失败都能自动恢复。#227 新增材质采样与 #318 的采样隔离是另一条生命周期边界；不能仅按 PR 出现顺序证明所有卡死均由材质采样触发。
+
+### Code
+
+- `src/EdgeCapsulePresenter.cs` / `src/EdgeCapsuleTransitionPolicy.cs`
+- `src/EdgeCapsuleQueueCompositionProxy.Runtime.cs` / `src/EdgeCapsuleQueueProxyWindow.cs`
+- `tests/PaperTodo.EdgeTitleChecks/TerminalHandoffFrameChecks.cs` / `ProxyVisualEvidence.cs`
+- `tests/PaperTodo.LifecycleChecks/MasterMaterialHandoffChecks.cs`
+
+---
+
+## D-057 — DWM 桌面截图退出 CI 自动验收（2026-10-12）
+
+**Status:** Accepted
+
+### Context / Evidence
+
+`NativeSurfaceChecks.WaitForDesktopInk` 曾在 GitHub 托管 Windows 环境中要求真实纸片置顶图标的绿色像素连续两次出现在 `CopyFromScreen`；即使进程内 WPF 画面、HWND、窗口层级与原生材质属性均正常，也可能在 12 轮 × 200ms 后检测到零像素，从而把当前 PR 误判为失败。它没有提供确定性的 DWM 最终提交屏障。
+
+历史 #227 的 [同机基线与候选对照](https://github.com/snownico0722/PaperTodo/actions/runs/35690637855) 已确认未修改的基线也失败；[ABBA 补绘实验](https://github.com/snownico0722/PaperTodo/actions/runs/35692739417) 中补绘方案 7/24、原方案 6/24 轮失败，证明增加 `ContentRendered` 补绘不能消除故障。PR #341 的 [运行 38213083862](https://github.com/snownico0722/PaperTodo/actions/runs/38213083862) 首轮在 Clear Acrylic 失去桌面像素而失败、完全相同的 SHA 重跑通过，进一步确认它不是当前业务改动的可靠回归信号。
+
+### Decision / Why
+
+- 从自动化 `MicaChecks` 中**删除** `NativeSurfaceChecks`、`VisualChecks` 的最终 DWM 桌面截图检查及对应辅助代码，不再通过 `PAPER_MICA_CAPTURE` / `PAPER_SKIN_CAPTURE` 触发桌面采样、上传数百张伪证据或延长重试。Aero 的素材采样试验同样移除实际 `CopyFromScreen`，保留快速的 WPF 控件级反光平移和材质 relief 检查。
+- 保留可稳定判断的原生材质属性／失败回退、同一 HWND 与编辑器生命周期、激活层级、胶囊变化、内存中的 WPF 离屏像素、订阅释放、背景采样生命周期等现有用例，继续纳入同一 Release CI。MicaChecks 单步设置两分钟硬超时；正常目标显著短于上限。
+- **不会**把上述检查的通过描述成真实桌面最终效果正确。Windows 11／多屏 DPI／HDR 的材质显示与体验仍需按涉及材质更改的发布场景进行人工验收，这也不意味着要保留一套长期依赖截图稳定性的 CI 脚手架。
+
+### Rejected / Do not reintroduce
+
+- 不把红灯归因于某台共享 CI 机器并改到另一台机器继续跑相同的 DWM 桌面截图用例。
+- 不通过扩大 `WaitForDesktopInk` 等待次数、插入固定 `Sleep`、一遍遍重试或人工判定全白像素为“通过”继续维护该测试。
+- 不把 `RenderTargetBitmap` 的成功冒充最终 DWM 桌面像素正确，也不把截图测试改名成可选 CI 的长期并行系统。
+
+### Current code
+
+- `.github/workflows/pull-request-build.yml`：仍执行材质行为检查，但不再输出桌面截图 artifact。
+- `tests/PaperTodo.MicaChecks/Program.cs` 与 `MaterialStudyChecks.cs`：保留确定性渲染与运行时检查；历史屏幕采样源文件删除。
+- `doc/experiments/pr227-drag-followup-20260922.md`：基线、故障证据与失败补绘实验。
+
+
+## D-058 — 辅助表面统一轻量材质，退休完整材质设置（2026-11-03）
+
+**Status:** Accepted
+
+**Context:** 侧边胶囊和菜单的「完整材质」依赖一次性屏幕后景快照；后方窗口变化后不实时更新，造成用户对真实 Mica/Acrylic 的误解。完整与轻量两档带来独立设置、采样生命周期、拖动截屏和菜单延迟打开成本；产品决定侧边胶囊与菜单无需完整材质。
+
+**Decision:** 设置 UI、公共 Settings API 移除 `appearance.match_auxiliary_material`；旧 `matchAuxiliaryMaterialStrength` 字段不反序列化且不再写回，安装与升级后统一使用原轻量材质。辅助胶囊和菜单不再进入桌面采样的生产路径；普通展开纸片／设置窗口的原生 DWM 材质、皮肤透明度和边框设置不受影响。
+
+**Scope boundary:** 本次先关闭产品入口与持久化，不在同一提交删除 `DesktopBackgroundCapture`、`BackgroundSession`、`MaterialMenuOpening` 等旧实验的低层协议及其测试断言。内部测试仍可显式启用该测试路径，正常用户无法通过配置或 API 启用。后续若清理死代码，应独立核对 Edge 权限交接、捕获租约释放与 Popup 打开顺序，不把删除旧选项等同于已经删除所有旧实现。
+
+**Validation:** Settings API 不再列出或接受旧 ID；旧 JSON 字段不会激活材质或重新序列化；原有静态采样协议测试继续约束兼容层，正式 GUI 默认为轻量且不会触发截图。
+
+
+## D-059 — 删除辅助材质截图与离屏背景会话代码（2026-11-03）
+
+**Status:** Accepted
+
+**Context:** PR #387 已让辅助完整材质不可通过产品设置启用，但残留的 SRCCOPY 背景获取、模糊、会话缓存、拖动半分辨率桌面快照与菜单预采样仍与 Edge、Popup 和 UI 测试纠缠。该能力在边缘浏览中不连续，对动态背景存在滞后；为单一装饰效果保留复杂生命周期不再合理。
+
+**Decision:** 删除 `DesktopBackgroundCapture`、`BackgroundCaptureLayout`、`SkinBorder.BackgroundSession` 和相关状态、租约、暂停回调；`MaterialContextMenu` 与子菜单保留 WPF 正常即时打开、焦点和关闭行为，不再预截图。移除主胶囊/纸片拖动快照与 Edge DComp 的采样保护调用。胶囊、边缘浏览和菜单统一使用原轻量材质；展开纸片/设置窗口的 DWM Mica/Acrylic 与 Aero 位置视差观察仍保留。
+
+**外部设置契约：** `appearance.match_auxiliary_material` 从公开设置目录彻底删除；插件读写旧 ID 返回 `setting_not_found`，应删去旧调用，不再保留或补充一个无效的兼容项。`appearance.material_transparency` 保留五档，主要控制展开纸片与设置窗口的原生材质表现；胶囊与菜单仍是固定不透传桌面背景的轻量材质，不借此恢复截图或玻璃透传。
+
+**Validation:** 删除纯截图专用测试，把真实 Edge 队列终态、反转、点击、窗口隐藏/恢复、ContextMenu 打开/关闭、Aero 光照复用和纸片收展测试从旧截图断言中拆出并保留。独立 Windows Release 编译、回归及材质行为 CI 验证。
+
+---
+
+## D-060 — data.json 仅显式重载，普通保存保持原路径
+
+**Status:** Accepted, complemented by D-061 and restored by D-063（显式重载与普通保存原路径仍成立）
+
+### Context
+
+用户需要在 PaperTodo 运行期间由外部工具修改 `data.json`，并在需要时主动让宿主接受磁盘状态。早期候选实现使用常驻 FileSystemWatcher、历史版本快照、字段级三方合并与写前磁盘一致性检查；实测 4 MB 状态下正常保存的额外 JSON 解析、复制及历史维护带来明显成本。用户已明确接受：没有显式请求时，普通保存可覆盖外部编辑。
+
+### Decision
+
+仅保留 Native/Web Workspace 与 GUI MCP 的显式请求入口，统一经 `PaperCommandService` → `AppController.DataReload` → `StateStore.Reload`。读取并校验当前主文件，不自动监听或追踪修订元数据；磁盘内容作为唯一待导入结果，不做三方合并。当前运行的未保存修改可能被替换。无效输入只报告错误，不调用启动时的 backup 恢复，也不生成恢复/冲突文件。
+
+重载使用原 `StateStore` 写锁和版本序号读取文件并淘汰尚未执行的旧异步保存；不把重载变成第二条写入路径。普通保存完整恢复为原有序列化、原子临时文件替换和备份语义，不添加重载专用磁盘检查、历史快照或修订字段。已验证的 ID 原位模型更新及下一 UI 调度轮次的窗口/插件/Edge 生命周期协调仍保留，以维护存活对象引用。
+
+### Why / Consequences
+
+功能按需付费：不使用重载时不付出历史追踪成本。直接编辑主文件与正常自动保存可以竞争，属于明确接受的结果；需要可控的外部编辑工具应自行协调文件写入并及时调用 `reload_data`。显式请求不会保留未提交用户编辑或自动识别冲突，不承诺文件监听及跨进程同步；第三方插件业务状态与核心 `data.json` 继续分域。
+
+### Evidence
+
+`src/StateStore.Reload.cs`、`src/AppController.DataReload.cs`、`src/StateReloadModels.cs`、`src/PaperCommandService.DataReload.cs` 和 `tests/PaperTodo.DataReloadChecks`。
+
+
+---
+
+## D-061 — 显式合并由调用方提供真实原始版本
+
+**Status:** Revised by D-063（保留真实原始基线与三方冲突处理；移除缺失基线时的整份选择）
+
+### Context
+
+#350 在 #340 的显式重载上吸收 #349 的 ID 感知三方合并与冲突选择。初版缓存最近一次成功加载/保存的 JSON，但外部工具可能仍在编辑更早读到的版本。如果把后一次保存当作共同基线，算法会把外部旧字段误判为新修改，撤回已经保存的本地工作；同字段竞争也可能被误判为单方修改。写入前确认磁盘没有再次变化，只能保护请求期间的输入，不能证明共同基线正确。
+
+### Decision
+
+- 保留直接采用磁盘的 `reload_data`；另提供按需 `merge_data`，全部经共享命令、controller 和 StateStore 写入边界。
+- 冲突处理扩展为询问（默认）、外部优先、内部优先，三者仍共用同一个三方比较结果。缺失原始基线必须询问，不能把字段优先级偷偷升级为整份覆盖授权。请求前捕获当前策略，统一选择结果同时驱动数据和归档，避免日志仍写死内部优先。最终跨字段规范化必须在选择之后执行：待定的较短标题上限不能提前截断本应随较长上限保留的文本。归档在写盘前保护输入，不能把归档存在当作成功凭证。
+- 外部工具保留开始编辑时实际读到的完整 JSON，调用时传 `baseline_json`（MCP）或 `baselineJson`（Native/Web）。基线作为单次操作输入，按主文件相同规则校验和规范化，不保存为宿主历史。调用方应传原始快照，不能补传之后重新读取的文件。
+- 没有基线且双方不同，只提供整份当前/外部状态的明确选择；双方相同返回 `unchanged`。明确传入的非法基线返回 `invalid`，不能悄悄退回猜测或整状态导入。
+- 原有 Native `MergeData()` 保持可调用；新增带基线重载；未实现该重载时由默认接口实现明确报告不支持，不能丢掉调用方的基线。
+- 保持冲突选择、原件归档、提交前及替换重试时的源文件检查，成功写盘后才应用模型/窗口。普通保存不持有基线，不增加 JSON 解析、历史库、revision 字段或文件监听。
+
+### Why / Consequences
+
+合并所需的原始版本由实际读取它的编辑方持有，避免自动保存移动比较起点。代价是调用方需保留并传输一份完整状态；无法提供时，宿主不会声称能识别双方的独立修改。正常自动保存仍可能覆盖尚未显式导入的外部文件，外部编辑方仍需协调写入和请求。这不是跨进程事务或自动同步协议。
+
+### Evidence
+
+`src/StateStore.Merge.cs`、`src/McpTools.cs`、`src/PaperBodyPluginHostApi.DataReload.cs`、`src/WebPaperBodySession.HostRequests.cs`；`tests/PaperTodo.DataReloadChecks` 覆盖读取旧版本后同步/异步保存、同字段冲突、缺失/非法基线，以及 MCP/Native/Web 和窗口生命周期。
+
+
+---
+
+## D-062 — 写入准入、外部变化暂停与终止边界
+
+**Status:** Partially superseded by D-063（普通保存指纹/暂停策略撤销；系统终止与原子写入保护仍保留）
+
+### Context
+
+关掉保存计时器不能撤销已经排队的任务。WPF 模态窗口在 Hide/关闭后会返回，若关机只设置顶层退出状态，旧合并调用仍可把默认结果提交。另一次修复在拒绝过期合并后恢复普通保存，虽保住了内存脏标记，却允许随后的普通保存覆盖刚检测到的新外部输入；测试只看拒绝瞬间而未继续执行保存与退出，不能证明安全。
+
+用户这次把避免错误覆盖置于旧的无请求外部覆盖约定之上，但仍要求少副本、无常驻历史。因此不能恢复完整历史库，也不能在关机/崩溃时抢写内存状态。
+
+### Decision / Why
+
+- 在 StateStore 原写锁内保留最后接受文件的 SHA-256 内容指纹，只在写入边界检查；不增加 JSON 解析、文件时间猜测、revision 字段、轮询或常驻历史副本。显式导入先栅栏旧写入并暂停普通覆盖，只有成功接受输入才解除；普通版本递增不提供覆盖权限。
+- 系统终止信号共享给全部已存在和未来打开的工作区存储以及宿主管理插件。在临时文件打开/替换重试、异步任务开始及冲突模态返回后检查；崩溃处理在可能泵消息的错误框之前发布信号。已进入 OS 的替换允许完成，不宣传绝对取消正在执行的系统调用。
+- 用户主动退出只有同步保存和已脏插件数据刷新成功才进入不可逆拆除；Dispose/OnExit 不承接第二次保存。失败保留内存、磁盘与可用编辑器，关机和强杀仍不补最后强存。
+- 现有冲突原件/差异归档先持久化，再替换主文件；引用保护包含原始、内部、外部冲突值和未完成临时文件。内容不完整时禁止 GC/编号复用。沿用两文件归档，不创建额外图片库、pending 副本或每次保存快照。
+- 加入真实模态关机入口、拒绝后继续保存/普通退出、排队写入终止、各原子写阶段强杀子进程后精确内容重读，以及实际 LMDB 清理验证。时限只检测挂起，不作为性能或像素阈值。
+
+### Consequences / Boundaries
+
+每次写入多出内容哈希读取成本（与文件大小线性相关），换取不静默覆盖；指纹不是三方共同基线。没有合作锁的检查与替换仍有窄竞争窗口；未落盘 RAM、硬件断电、多文件事务不声称零丢失。未解决外部变化期间会暂停自动保存并提示、拒绝正常退出；用户必须显式处理，强杀依然可能丢掉未保存的本地编辑。原备份周期与正常文件数量不变。
+
+### Evidence
+
+`StateStore.WriteSafety`、`PersistenceWriteLifetime`、`AppController.PersistencePolicy`、`AppController.DataReload`、`StateStore.ConflictImages`；`WriteSafetyChecks`、`KillSafetyChecks`、`ShutdownSafetyChecks` 通过实际 IO/进程/控件边界约束行为。
+
+
+---
+
+## D-063 — 仅显式热重载与有基线三方合并，普通保存不检测外部修改
+
+**Status:** Accepted
+
+### Context
+
+此前 #340 将外部版本检测与暂停保存引入普通自动保存路径，并为缺少共同祖先的 `merge_data` 提供整份内存/磁盘选择。这使按需热重载与三方合并扩张成隐式外部变更监测和两方冲突恢复，超出了明确的产品需求，给普通保存额外增加读取和永久暂停状态。
+
+### Decision
+
+- `reload_data` 仅在明确调用时加载并校验当前磁盘文件，允许其替代正在运行的内存状态；不自动监听、轮询或比较普通保存前的外部文件变化。
+- `merge_data` **必须**提供调用方实际开始编辑前读取的完整原始 JSON。没有 Baseline（包括内存与磁盘一致时）直接拒绝，无整份二选一或 `unknown_baseline` 分支。真正的三方冲突继续复用现有选择器与三种策略。
+- 正常自动保存恢复原有版本化原子替换，可覆盖未显式导入的外部编辑。这是显式操作模型的已接受代价，不做自动停存。无效/取消的显式操作也不新增后续自动保存限制。
+- **保留**显式操作的写锁和版本栅栏，确保旧的排队保存不能覆盖已接受的热重载；三方合并及工作区目录提交前仍核对其本次读取的输入。关机/崩溃写入停止信号、启动异常恢复源保护、先归档后合并、图片引用保守清理均不变。
+
+### Consequences
+
+删除普通保存读取整个文件指纹的常驻成本、无基线冲突 UI 和暂停恢复协议；调用方需要传真实基线才能自动合并。如果外部程序只直接编辑磁盘但不及时调用热重载，后续普通保存可能覆盖其修改。该功能不承诺多程序自动同步。
+
+### Evidence
+
+#340 / #351 的 `StateStore.WriteSafety.cs`、`StateStore.Merge.cs`、`AppController.DataReload.cs`、`McpTools.cs` 及 `PaperTodo.DataReloadChecks`；D-060/061/062 保留为路线演进的历史证据。
+---
+
+## D-064 — 固定编号工作区共用代码，不共用运行数据
+
+**Status:** Accepted
+
+### Context
+
+#340 已有同一数据文件的显式重载，但其“纸片消失即删除附属状态”的语义、单一图片缓存和固定 Store 路径不能直接作为工作区切换。产品明确限定主工作区与 2～5 共五个固定槽位、顶栏循环按钮、编号放在扩展名前，以及全部工作区管理配置保存在主 data.json。
+
+### Decision
+
+- 新增 `WorkspaceCatalog` / `WorkspaceSession`，保持每个编号 Store 的不可变文件路径和既有原子写入/version fence；切换时捕获实际 writer，不临时重命名或覆盖主文件。
+- 数据、图片、宿主管理插件配置/Runtime/per-paper state 按编号独立；安装代码和 Native assembly cache 共享。界面卸载不等于业务删除。
+- 主 data.json 独占 catalog，副工作区只通过主 Store 更新该节点。减少数量/禁用不删除文件。
+- 默认跟随主软件设置，保存副工作区独立偏好的设置快照，在运行时覆盖而不持久化继承值。跟随期间公共设置只读，避免隐式反写主工作区。
+- 复用既有窗口恢复、胶囊生命周期和设置生效函数，完整切换采用新窗口/缓存代次；不复用同 ID 的旧工作区窗口。
+- 工作区打开仅根据核心 JSON 的实际读取结果判断：可用则加载；格式损坏才回退到备份，备份也不可用则重建；权限、占用与 I/O 错误不触发重建。图片、插件与历史文件不拦截进入，损坏原件在覆盖前尽量保留，沿用存储层的图片引用保护。
+
+### Why / Rejected
+
+共享 LMDB 会迫使图片回收扫描其他工作区，并使相同编号缓存含义不明确；独立 LMDB 与独立 StateStore 保持引用边界一致。额外 workspaces.json、目录式工作区容器、常驻监听和每次保存维护全状态历史均不符合本功能的固定槽位设计。普通 ReloadData 的删除与覆盖语义保持不变，不把跨工作区切换伪装为一次外部导入。
+
+### Evidence
+
+- `src/WorkspaceModels.cs` / `src/WorkspaceCatalog.cs` / `src/StateStore.Workspaces.cs`。
+- `src/AppController.Workspaces.cs` / `src/PaperBodyPluginDataStore.Workspaces.cs`。
+- `src/PaperWindow.Workspaces.cs` / `src/AppController.Settings.WorkspacePage.cs`。
+- `tests/PaperTodo.DataReloadChecks/WorkspaceChecks.cs`：存储/版本/继承及隔离 WPF 往返测试。
+- `WorkspaceFieldScopes` 显式列出 `AppState` 字段归属，缺失分类不自动继承且在持久化检查中失败；保留现有设置跟随和旧字段迁移行为，避免新增内容或布局字段被静默共享。
+
+---
+
+## D-065 — DComp 视觉与 Win32 输入提交的非原子边界
+
+**Status:** Accepted（接受已验证的历史教训；独立 native input owner 仍是 Deferred 候选）
+
+### Context
+
+#260 试图让 DComp 队列代理长期保留，以有限 HRGN 的 input HWND 保护真实可交互区域。#271 在真实 WPF/live surface/DComp 与跨进程 OS 点击中确认：UI 停顿时画面仍动，UI-owned 输入区域却停住，导致可见前沿漏点和旧空白位置误挡。#291 又比较独立 native owner 与同一应用样本依次推进视觉/输入两种路线。
+
+这些问题涉及两个系统的实际生效时机，不能只靠逻辑几何相等、线程名称、Rendering 回调或提交返回判断。归档时主线不是该常驻双 HWND / HRGN 实现；本条不宣称当前所有输入路径已复现同一种错误，也不改变当前 ownership。
+
+### Decision / Why
+
+- 不把 `worker → UI-owned HWND → SetWindowRgn` 当作解除 UI 阻塞依赖的修法。历史受控停顿中 worker 第一次 region 更新都未返回；窗口仍依赖其 owner 消息泵。真正独立的 owner 必须自己拥有窗口与原生消息循环。
+- 同一 QPC 样本、相同 easing 或同一个调用线程，不保证 DComp visual 与 Win32 HRGN 原子生效。#291 的 `Commit → HRGN` 出现 input-ahead，`Commit → DwmFlush → HRGN` 改成 visual-ahead，真实点击确认新可见区漏点、旧空白区误挡。所测“只改顺序/多加固定等待”方案已被否定；未来不同 authority/协议需新的证据，不能沿用这个同步假设。
+- 独立 native owner 已证明可在 UI stall 时继续发布 region，后续真浏览也有分支整体改善，但仍有相位差、业务 UI 不响应和集成边界。它不是零帧差证明，更不是当前产品已采用的架构。
+- UI 不可用时保持有限输入保护并丢弃无法及时交还的按下，可以避免漏给下层或迟到重放；这不等于业务点击成功。不能把 `absorbed` 当作完整交互通过。
+- cover 可见时清除输入区域、隐藏/关闭、DPI/source generation 改变，须与真实窗口恢复共同考虑；单个环境失效用例通过不代表完整 handoff 已验证。D-009 / D-013 / D-014 的既有交接与命中边界不被撤销。
+
+### Pitfalls / Evidence limits
+
+#291 R4/R5 一度把 production-boundary 失败归因于 native timer/publication；R5 机制诊断已证明 timer 正常，后续纵向 A/B 进一步确认旧横向 gate 不符合 queue 固定 wall X 的几何。保留失败历史，但撤回“独立 owner timer 失效”的结论。
+
+#271 窄原型只有一个有效动态像素 sample，最终路由正确不能升级为全程零误差。#291 真浏览对照不只差一个 commit，改善不能全部归因于 dedicated owner。历史 hosted desktop 采样保留为研究证据；遵守后续 D-057，不恢复一次性 DWM 截图工作流作为长期自动门槛。未验证的高刷新率/混合 DPI/完整交接不通过反复云端性能对照补成“通过”。
+
+### Evidence
+
+- [#271 双向输入实验](https://github.com/snownico0722/PaperTodo/actions/runs/34935212192)、[普通 worker 反例](https://github.com/snownico0722/PaperTodo/actions/runs/34941737943)、[独立 owner 窄原型](https://github.com/snownico0722/PaperTodo/pull/271#issuecomment-5677045821)。
+- [#291 R2 提交顺序反例](https://github.com/snownico0722/PaperTodo/actions/runs/35484858423)、[纵向纠错 A/B](https://github.com/snownico0722/PaperTodo/actions/runs/35515667098)、[真浏览 A/B](https://github.com/snownico0722/PaperTodo/actions/runs/35545416312)。
+- [固定实验源码](https://github.com/snownico0722/PaperTodo/blob/5aa796befa944b53bd0e1191ded2bd4fe89b0246/src/EdgeCapsuleQueueDedicatedInputOwner.cs)；[归档时主线的命中入口](https://github.com/snownico0722/PaperTodo/blob/f6041ca6b5ebd787a02aa8158c6e67660b421be0/src/EdgeCapsuleQueueProxyWindow.cs)。
+- [E-019 详细归档](experiments/edge-retained-proxy-archive-20261104.md)：固定版本、原始数值、纠正顺序、未完成项与过期日志的证据边界。
+

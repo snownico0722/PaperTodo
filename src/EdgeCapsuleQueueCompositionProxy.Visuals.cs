@@ -5,6 +5,21 @@ namespace PaperTodo;
 
 internal sealed partial class EdgeCapsuleQueueCompositionProxy
 {
+    private EdgeCapsulePresentationFrame SamplePresentation(
+        VisualState state,
+        long timestamp) =>
+        EdgeCapsuleQueueProxyPolicy.SamplePresentedFrame(
+            state.Member.Plan,
+            new DeviceScreenPoint(
+                _outputBounds.Left + state.StartOffsetX,
+                _outputBounds.Top + state.StartOffsetY),
+            new DeviceScreenPoint(
+                _outputBounds.Left + state.TargetOffsetX,
+                _outputBounds.Top + state.TargetOffsetY),
+            AnimationStartedAtTimestamp,
+            _plan.DurationMilliseconds,
+            timestamp);
+
     private VisualState AddVisual(
         EdgeCapsuleQueueCompositionProxyMember member,
         IntPtr sourceHandle,
@@ -86,11 +101,7 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
         var sources = new List<StaticCoverSource>(_visuals.Count);
         foreach (var state in _visuals)
         {
-            var frame = EdgeCapsuleQueueProxyPolicy.SampleLogicalFrame(
-                state.Member.Plan,
-                AnimationStartedAtTimestamp,
-                _plan.DurationMilliseconds,
-                timestamp);
+            var frame = SamplePresentation(state, timestamp);
             var bounds =
                 EdgeCapsuleQueueProxyPolicy.PresentedHostBounds(frame);
             if (bounds.IsEmpty ||

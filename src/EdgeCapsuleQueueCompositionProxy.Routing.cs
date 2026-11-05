@@ -29,18 +29,14 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
         }
 
         var now = Stopwatch.GetTimestamp();
-        return _members.Any(member =>
+        return _visuals.Any(state =>
         {
+            var member = state.Member;
             if (!member.Window.CanRouteEdgeCapsuleQueueProxyInput)
             {
                 return false;
             }
-            var frame =
-                EdgeCapsuleQueueProxyPolicy.SampleLogicalFrame(
-                    member.Plan,
-                    AnimationStartedAtTimestamp,
-                    _plan.DurationMilliseconds,
-                    now);
+            var frame = SamplePresentation(state, now);
             return frame.Visible &&
                 frame.IsHitTestVisible &&
                 !frame.InteractiveBounds.IsEmpty &&
@@ -79,19 +75,15 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
         long timestamp,
         out EdgeCapsulePresentationFrame frame)
     {
-        var member = _members.FirstOrDefault(candidate =>
-            ReferenceEquals(candidate.Window, window));
-        if (_disposed || _coverLost || member == null)
+        var state = _visuals.FirstOrDefault(candidate =>
+            ReferenceEquals(candidate.Member.Window, window));
+        if (_disposed || _coverLost || state == null)
         {
             frame = EdgeCapsulePresentationFrame.Hidden;
             return false;
         }
 
-        frame = EdgeCapsuleQueueProxyPolicy.SampleLogicalFrame(
-            member.Plan,
-            AnimationStartedAtTimestamp,
-            _plan.DurationMilliseconds,
-            timestamp);
+        frame = SamplePresentation(state, timestamp);
         return true;
     }
 
@@ -235,19 +227,15 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
         }
 
         var now = Stopwatch.GetTimestamp();
-        foreach (var member in _members)
+        foreach (var state in _visuals)
         {
+            var member = state.Member;
             if (!member.Window.CanRouteEdgeCapsuleQueueProxyInput)
             {
                 continue;
             }
 
-            var current =
-                EdgeCapsuleQueueProxyPolicy.SampleLogicalFrame(
-                    member.Plan,
-                    AnimationStartedAtTimestamp,
-                    _plan.DurationMilliseconds,
-                    now);
+            var current = SamplePresentation(state, now);
             if (!current.IsHitTestVisible ||
                 current.InteractiveBounds.IsEmpty ||
                 !EdgeCapsuleGeometry.Contains(
@@ -259,10 +247,8 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
 
             var offset =
                 EdgeCapsuleQueueProxyPolicy.TranslationOffset(
-                    member.Plan,
-                    AnimationStartedAtTimestamp,
-                    _plan.DurationMilliseconds,
-                    now);
+                    current,
+                    member.Plan.Target.HostBounds);
             targetHandle = member.SourceHandle;
             endpointPoint = new DeviceScreenPoint(
                 point.X - offset.X,
@@ -404,38 +390,19 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
         }
 
         _finishing = false;
-        _completionRetrySuccess = success;
         _completionTimer.Stop();
-
-        if (_coverLost)
-        {
-            // The normal handoff budget is already exhausted (or the DComp output was lost). Source
-            // reveal is now the only safe authority transition. Keep that emergency recovery paced
-            // at 50 ms if Windows temporarily refuses the uncloak; never turn it into a Send loop.
-            _completionRetrySuccess = false;
-            _completionTimer.Interval = TimeSpan.FromMilliseconds(50);
-            _completionTimer.Start();
-            return;
-        }
-
         if (_completionRetryCount >= MaximumCompletionRetryCount)
         {
-            // Two delayed retries are enough for transient WPF/native settlement. After that the
-            // last proxy frame must not become a permanent authority: enter the existing cover-loss
-            // path, which reveals real sources before this broken generation can retire.
-            _coverLost = true;
-            _completionRetrySuccess = false;
 #if DEBUG
             EdgeCapsulePerformanceDiagnostics.Trace(
                 $"proxy.handoff phase=retry-exhausted session={_sessionOrdinal} " +
                 $"cold={IsColdSession} queue={_plan.QueueKey} " +
-                $"attempts={_completionRetryCount} successTarget={success}");
+                $"attempts={_completionRetryCount} successTarget={success} scheduled=false");
 #endif
-            _completionTimer.Interval = TimeSpan.FromMilliseconds(50);
-            _completionTimer.Start();
             return;
         }
 
+        _completionRetrySuccess = success;
         _completionRetryCount++;
         _completionTimer.Interval = TimeSpan.FromMilliseconds(50);
         _completionTimer.Start();

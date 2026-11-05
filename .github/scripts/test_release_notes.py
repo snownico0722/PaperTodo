@@ -21,12 +21,14 @@ class ReleaseNotesTests(unittest.TestCase):
         content = "**Fixes**\n\n- Use `<b>`\n\n---\n\nMore notes"
         self.assertEqual(release_section(f"### v3.0\n\n{content}\n\n---\n", "v3.0"), content)
 
-    def test_english_first_chinese_collapsed_downloads_visible(self):
+    def test_chinese_collapsed_first_english_then_downloads_visible(self):
         assets = ["PaperTodo-v3.0-win-x64-self-contained-compressed.exe", "PaperTodo-v3.0-win-x64-no-runtime-uncompressed.exe", "SHA256SUMS.txt"]
         notes = render_notes("English **notes**", "中文 `原文`", "owner/repo", "v3.0", assets)
-        self.assertTrue(notes.startswith("English **notes**\n\n<details>"))
+        self.assertTrue(notes.startswith("<details>\n<summary>简体中文更新日志</summary>"))
         self.assertIn("\n\n中文 `原文`\n\n</details>", notes)
-        downloads = notes.split("</details>")[1]
+        after_chinese = notes.split("</details>", 1)[1]
+        self.assertTrue(after_chinese.lstrip().startswith("English **notes**"))
+        downloads = after_chinese.split("## Downloads / 下载", 1)[1]
         for name in assets:
             self.assertIn(f"https://github.com/owner/repo/releases/download/v3.0/{name}", downloads)
         self.assertIn("runtime included", downloads)

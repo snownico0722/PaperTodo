@@ -8,7 +8,6 @@ namespace PaperTodo;
 
 internal static class PaperBackgroundLayouts
 {
-    internal const string Stretch = "stretch";
     internal const string Center = "center";
     internal const string BottomLeft = "bottomLeft";
     internal const string BottomCenter = "bottomCenter";
@@ -16,7 +15,6 @@ internal static class PaperBackgroundLayouts
 
     internal static string Normalize(string? layout) => layout switch
     {
-        Stretch => Stretch,
         BottomLeft => BottomLeft,
         BottomCenter => BottomCenter,
         BottomRight => BottomRight,
@@ -33,6 +31,7 @@ internal static class PaperBackground
         }
 
         public bool BlendWithTheme { get; set; } = true;
+        public bool Stretch { get; set; }
         public string Layout { get; set; } = PaperBackgroundLayouts.Center;
     }
 
@@ -54,6 +53,7 @@ internal static class PaperBackground
 
     internal static bool IsAvailable => FindPath() != null;
     internal static bool BlendWithTheme => _preferences.BlendWithTheme;
+    internal static bool StretchImage => _preferences.Stretch;
     internal static string Layout => PaperBackgroundLayouts.Normalize(_preferences.Layout);
 
     internal static string? LoadError
@@ -66,7 +66,7 @@ internal static class PaperBackground
                 return null;
             }
 
-            _ = CreateBrush(BlendWithTheme, Layout);
+            _ = CreateBrush(BlendWithTheme, Layout, StretchImage);
             return _lastLoadError;
         }
     }
@@ -81,6 +81,25 @@ internal static class PaperBackground
         var next = new BackgroundPreferences
         {
             BlendWithTheme = enabled,
+            Stretch = StretchImage,
+            Layout = Layout
+        };
+        SavePreferences(next);
+        _preferences = next;
+        InvalidateCache();
+    }
+
+    internal static void SetStretch(bool enabled)
+    {
+        if (StretchImage == enabled)
+        {
+            return;
+        }
+
+        var next = new BackgroundPreferences
+        {
+            BlendWithTheme = BlendWithTheme,
+            Stretch = enabled,
             Layout = Layout
         };
         SavePreferences(next);
@@ -99,6 +118,7 @@ internal static class PaperBackground
         var next = new BackgroundPreferences
         {
             BlendWithTheme = BlendWithTheme,
+            Stretch = StretchImage,
             Layout = normalized
         };
         SavePreferences(next);
@@ -118,7 +138,12 @@ internal static class PaperBackground
     {
         if (host != null)
         {
-            host.Background = (Brush?)CreateBrush(BlendWithTheme, Layout) ?? Brushes.Transparent;
+            host.Background = (Brush?)CreateBrush(
+                BlendWithTheme,
+                Layout,
+                StretchImage,
+                host.ActualWidth,
+                host.ActualHeight) ?? Brushes.Transparent;
         }
     }
 
@@ -126,11 +151,37 @@ internal static class PaperBackground
     {
         if (host != null)
         {
-            host.Background = (Brush?)CreateBrush(BlendWithTheme, Layout) ?? Brushes.Transparent;
+            host.Background = (Brush?)CreateBrush(
+                BlendWithTheme,
+                Layout,
+                StretchImage,
+                host.ActualWidth,
+                host.ActualHeight) ?? Brushes.Transparent;
         }
     }
 
-    internal static ImageBrush? CreateBrush(bool blendWithTheme, string layout)
+    internal static bool NeedsSizeRefresh(Brush? currentBrush, double availableWidth, double availableHeight)
+    {
+        if (StretchImage ||
+            currentBrush is not ImageBrush imageBrush ||
+            imageBrush.ImageSource is not BitmapSource bitmap)
+        {
+            return false;
+        }
+
+        return imageBrush.Stretch != ResolveStretch(
+            stretch: false,
+            bitmap,
+            availableWidth,
+            availableHeight);
+    }
+
+    internal static ImageBrush? CreateBrush(
+        bool blendWithTheme,
+        string layout,
+        bool stretch,
+        double availableWidth = double.NaN,
+        double availableHeight = double.NaN)
     {
         var path = FindPath();
         if (path == null)
@@ -164,7 +215,13 @@ internal static class PaperBackground
             {
                 Opacity = blendWithTheme ? BlendedImageOpacity : 1.0
             };
-            ApplyLayout(brush, PaperBackgroundLayouts.Normalize(layout));
+            ApplyLayout(
+                brush,
+                PaperBackgroundLayouts.Normalize(layout),
+                stretch,
+                _cachedBitmap!,
+                availableWidth,
+                availableHeight);
             brush.Freeze();
             _lastLoadError = null;
             return brush;
@@ -222,11 +279,19 @@ internal static class PaperBackground
         return (frame.PixelWidth, frame.PixelHeight);
     }
 
-    private static void ApplyLayout(ImageBrush brush, string layout)
+    private static void ApplyLayout(
+        ImageBrush brush,
+        string layout,
+        bool stretch,
+        BitmapSource bitmap,
+        double availableWidth,
+        double availableHeight)
     {
-        brush.Stretch = layout == PaperBackgroundLayouts.Stretch
-            ? Stretch.Fill
-            : Stretch.Uniform;
+        brush.Stretch = ResolveStretch(
+            stretch,
+            bitmap,
+            availableWidth,
+            availableHeight);
         brush.AlignmentX = layout switch
         {
             PaperBackgroundLayouts.BottomLeft => AlignmentX.Left,
@@ -240,6 +305,43 @@ internal static class PaperBackground
             PaperBackgroundLayouts.BottomRight => AlignmentY.Bottom,
             _ => AlignmentY.Center
         };
+    }
+
+    private static Stretch ResolveStretch(
+        bool stretch,
+        BitmapSource bitmap,
+        double availableWidth,
+        double availableHeight)
+    {
+        if (stretch)
+        {
+            // Fill the paper while preserving the source aspect ratio.
+            return Stretch.UniformToFill;
+        }
+
+        if (!double.IsFinite(availableWidth) ||
+            !double.IsFinite(availableHeight) ||
+            availableWidth <= 0 ||
+            availableHeight <= 0)
+        {
+            return Stretch.None;
+        }
+
+        var imageWidth = bitmap.Width;
+        var imageHeight = bitmap.Height;
+        if (!double.IsFinite(imageWidth) ||
+            !double.IsFinite(imageHeight) ||
+            imageWidth <= 0 ||
+            imageHeight <= 0)
+        {
+            return Stretch.None;
+        }
+
+        // Small images stay at their native size. Oversized images are only
+        // scaled down, uniformly, until the whole image fits inside the paper.
+        return imageWidth > availableWidth || imageHeight > availableHeight
+            ? Stretch.Uniform
+            : Stretch.None;
     }
 
     private static BackgroundPreferences LoadPreferences()

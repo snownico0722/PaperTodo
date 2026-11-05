@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Media;
 
@@ -73,8 +74,52 @@ public sealed partial class PaperWindow
 
     private void RejectEdgeCapsuleNativeBatchApply()
     {
-        _edgeCapsuleHost?.RejectNativeBatchApply();
-        ScheduleEdgeCapsuleApplyFailureRecovery();
+        if (_edgeCapsuleHost is not { } host)
+        {
+            return;
+        }
+
+        host.RejectNativeBatchApply();
+        if (!_edgeCapsule.IsApplyRetryExhausted ||
+            CurrentEdgeCapsuleVisualAuthority !=
+                EdgeCapsuleVisualAuthority.RealDocked)
+        {
+            return;
+        }
+
+        var confirmed = _edgeCapsule.AppliedPresentation;
+        if (!confirmed.Visible ||
+            confirmed.Surface is not (
+                EdgeCapsuleSurfaceKind.DockedResting or
+                EdgeCapsuleSurfaceKind.DockedHovered or
+                EdgeCapsuleSurfaceKind.DockedActive or
+                EdgeCapsuleSurfaceKind.DockedPreview))
+        {
+            return;
+        }
+
+        if (host.Apply(confirmed))
+        {
+            // Re-arm the presenter's budget for a future real invalidation. This synchronous
+            // terminal restore does not create another scheduler or reinterpret desired state.
+            _edgeCapsule.ForceApplyCurrentPresentation();
+            return;
+        }
+
+        // Host.Apply can synchronously dispatch native messages. Respect any visual authority that
+        // appeared during the failed terminal restore instead of tearing down its handoff.
+        if (CurrentEdgeCapsuleVisualAuthority !=
+            EdgeCapsuleVisualAuthority.RealDocked)
+        {
+            return;
+        }
+
+        Trace.TraceWarning(
+            "Edge capsule terminal apply recovery failed. Paper={0}; Surface={1}. " +
+            "Restoring the expanded paper surface.",
+            _paper.Id,
+            confirmed.Surface);
+        RestoreFromCapsuleAfterEligibilityLoss();
     }
 
     private void RecoverDeferredEdgeCapsuleNativeBatchApply()
@@ -201,7 +246,9 @@ public sealed partial class PaperWindow
     {
         animate = animate && _controller.State.EnableAnimations;
         _edgeCapsule.RequestPresentation(animate
-            ? EdgeCapsuleMotion.Animate(reason, durationMilliseconds)
+            ? EdgeCapsuleMotion.Animate(
+                reason,
+                AnimationTiming.ScaleMilliseconds(durationMilliseconds))
             : EdgeCapsuleMotion.Snap(reason));
 
         // State-driven requests are allowed to depend on controller settings captured in the
@@ -240,7 +287,9 @@ public sealed partial class PaperWindow
         _edgeCapsuleHost?.InvalidateNativeMetrics();
         _edgeCapsule.ForceApplyCurrentPresentation();
         _edgeCapsule.RequestPresentation(EdgeCapsuleMotion.Preserve(
-            EdgeCapsuleTransitionReason.DisplayMetrics));
+            EdgeCapsuleTransitionReason.DisplayMetrics,
+            AnimationTiming.ScaleMilliseconds(
+                EdgeCapsuleLayout.SlotMoveMilliseconds)));
         InvalidateEdgeCapsule(
             EdgeCapsuleDirty.Presentation |
             EdgeCapsuleDirty.Measure |
@@ -563,7 +612,11 @@ public sealed partial class PaperWindow
             CaptureEdgeCapsuleLayoutSnapshot,
             CaptureEdgeCapsulePointerPosition,
             ResolveEdgeCapsulePresentedFrame,
-            ApplyEdgeCapsulePresentationFrame);
+            ApplyEdgeCapsulePresentationFrame,
+            pointerDurationMilliseconds: AnimationTiming.ScaleMilliseconds(
+                EdgeCapsuleLayout.HorizontalResizeMilliseconds),
+            preserveDurationMilliseconds: AnimationTiming.ScaleMilliseconds(
+                EdgeCapsuleLayout.SlotMoveMilliseconds));
         var pointer = _edgeCapsule.LastPointerSample;
         if (!_edgeCapsuleReconcileNotificationPending)
         {

@@ -78,10 +78,22 @@ Edge 任务先阅读本文件的硬约束，再按实际影响范围选择资料
 
 - 在 Web Chat 中处理本仓库时，先发现并优先使用当前可用的 GitHub 连接器操作；不得仅因本地缺少 `git` / `gh`、凭据或网络，或依据旧会话、通用产品说明，就断言无法提交、推送或创建 PR。
 - 对用户已授权的 GitHub 写入，优先使用当前实际可用的连接器操作执行，并在写入后回读核对结果；受阻时应区分“工具未提供”“连接器授权 / 仓库策略限制”和“调用故障”，报告具体证据，不得未经核验笼统声称“只有读取权限”，也不要为了探测权限创建无意义提交或 PR。
+- Agent 创建 PR，或更新当前用户自己创建的 PR 时，PR 标题和描述默认使用中文；维护其他贡献者已经以英文创建的 PR 时继续沿用英文，不为了统一语言强制改写。
 
 验证规模按行为风险和影响范围决定，不按修改行数决定。目标与改动点明确、低风险的局部修改，只核对相关上下文、最终 diff 和必要的直接验证，不重复读全仓、整文件或走完整审查流程。涉及持久化、兼容性、权限或窗口/状态交接等高风险边界，即使只改一行也要完成对应验证。既有明确的构建、CI 和发布验收要求仍须遵守；验证充分后停止，只有新的失败证据或尚未覆盖的具体风险才扩大或重复检查。
 
 需要提交时，如果改动能按功能边界无损拆分，并且每个提交都保持**可构建、可理解、可独立回滚**，应拆成独立提交；否则保持原子提交。不要混入无关文档、备份文件或用户的其他改动。
+
+### 代码审查与复杂度控制
+
+审查以产品要求、实际正确性和职责边界为依据，不以发现问题的数量、增加的防御代码或删除的代码量衡量质量。没有发现需要修改的问题，是有效结论。
+
+- **审查意见必须有依据。** 对需要修改代码的问题，简要说明可达的触发条件、违反的要求或不变量，以及实际后果。区分已确认的缺陷、有明确机制的风险和待验证的猜测；不得将纯理论可能性直接列为必须修复的问题。
+- **证据不限于复现。** 可以通过复现、测试或完整的代码因果链确认问题。对于数据丢失、权限越界等高风险问题，不因尚未复现而忽略；也不以测试通过代替对未覆盖路径的判断。
+- **问题成立，不代表建议的修法值得采用。** 修复前评估实际收益与新增复杂度，选择满足既定需求的最简单方案。不为低价值风险引入额外状态、兜底机制、兼容分支或跨组件依赖，不借修复擅自扩大产品的功能和支持范围。
+- **检查职责边界。** 关注某项行为为什么依赖另一个组件、操作或生命周期，确认这种依赖有实际必要。测试通过不能证明需求合理或职责划分正确。
+- **简化也需要依据。** 优先消除导致问题的不必要状态、依赖和分支，但不得为了减少代码而删除已支持的行为、必要保护或合理的恢复能力。
+- **验证充分后停止。** 完成与变更相关的验证后，除非出现新的失败证据或具体未解决风险，不反复扩大审查范围，也不为凑出新问题继续修改。
 
 ## 产品边界
 
@@ -93,13 +105,15 @@ Markdown 当前保持轻量。若要扩展到网络图片、表格、附件、�
 
 ## 数据与持久化硬约束
 
-当前数据结构和技术方向见 Architecture「状态与持久化架构」；历史安全取舍见 D-002、D-003、D-020。
+当前数据结构和技术方向见 Architecture「状态与持久化架构」；历史取舍见 D-002、D-003、D-020、D-040。
 
 - `data.json` 是核心用户数据协议，不是缓存。字段删除/改名必须考虑旧数据兼容。
-- 不绕过 `StateStore` 建立第二套主状态写入；保留版本化写入和退出同步保存语义。
+- 不绕过 `StateStore` 建立第二套主状态写入；保留版本化写入。用户主动退出须同步保存成功才关闭；系统关机、崩溃和被动 Dispose 不新增最后保存。停止计时器不等于撤销已排队写入：实际写入入口和模态/异步返回后都要核对同一终止信号。
 - 不绕过 `NoteImageStore` 直接开启 LMDB transaction；图片 GC / id reuse 不能在保护引用扫描不可信时继续执行。
-- provider settings / per-paper plugin state 由 `PaperBodyPluginDataStore` 管理；不要塞回 `data.json`，也不要让插件自行建立另一套会与宿主竞争的 authoritative state。
-- 启动解析失败时不能用默认空状态覆盖旧数据；crash handler 不走普通“最后强存一次”流程。
+- provider settings / per-paper plugin state 由 `PaperBodyPluginDataStore` 管理；不要塞回 `data.json`，也不要让插件自行建立另一套会与宿主竞争的 authoritative state。宿主不提供插件业务数据恢复系统；只保留普通文件读写和一次写入完整性，不恢复 `.json.recovered` 分流。插件自己的业务存储、备份和恢复由插件负责。
+- 核心保存只同步内置 Markdown 的待提交文本；不要把第三方 `IPaperBodySession.Commit()` 恢复成全局保存钩子。外部写入只有在目标就是该内置 Markdown 时才先提交目标用户文本；修改其他纸片不得因此调用无关第三方正文的 `Commit()`。
+- 启动解析失败时不能用默认空状态覆盖旧数据；crash handler 在日志/提示框之前封闭持久化入口，不走普通“最后强存一次”流程。
+- 普通自动保存不监听或比对外部数据文件，仍按原有版本化原子写入；显式 `reload_data` 使过期排队保存失效，`merge_data` 必须携带调用方实际读取的原始基线，并在确认与提交之间核验本次外部输入未被替换。终止阶段禁止新写入，冲突差异记录及未完成临时记录仍作为图片保护输入，扫描不完整时禁止 GC/编号复用。
 - 普通纸片几何与 edge slot/expanded 恢复几何不能互相覆盖。
 - 外部打开笔记的临时文件后缀只做文件名合法性校验；不要擅自收窄成固定白名单。
 
@@ -153,15 +167,17 @@ Architecture / Decisions 按「项目知识入口」中的 Edge 影响范围路�
 ## 构建与发布
 
 - `README.md` 为默认英文首页，`README.zh.md` 保留中文，顶部互链。
+- `README.zh.md` 本身保持完整中文内容；当用户要求把中文 README 翻译成英文 README 时，不把 QQ 群号、QQ群链接或其他 QQ 群联系方式翻译进英文正文。
 - `README.zh.md` 是首页中文折叠区的唯一来源；修改后运行 `python .github/scripts/sync_readme.py`，同步更新 `README.md` 底部默认收起的完整中文 `<details>`，不要手改生成区。
-- Release 说明由 `.github/scripts/release_notes.py` 从 `CHANGELOG.md` 与 `CHANGELOG.zh.md` 提取同一版本：英文在前，中文放入 `<details>`，双语下载链接保持展开。发布前必须补齐两种语言的对应版本小节；仅补历史说明时只更新 Release 正文，不重建资产、移动 tag 或改变最新版本。
+- Release 说明由 `.github/scripts/release_notes.py` 从 `CHANGELOG.md` 与 `CHANGELOG.zh.md` 提取同一版本：中文折叠区放在最上面，英文正文随后，双语下载链接保持展开。发布前必须补齐两种语言的对应版本小节；仅补历史说明时只更新 Release 正文，不重建资产、移动 tag 或改变最新版本。
 - 版本号显式维护在 `PaperTodo.csproj`；不要恢复自动递增。
 - `plugin-samples/` 保存插件源码/说明，`plugins/` 保存可直接加载的最终产物；主程序 publish/Release 不捆绑插件。最终插件目录不保留无必要的 PDB/XML/重复 native/shared assemblies。
 - PR 分支 Windows CI 由 HEAD commit marker 控制：`[debug]` → Debug 测试包，`[ci]` → Release build，`[debug-ci]` → 两者。标记必须在本次 push 的最后一个 HEAD；不要为了触发制造空提交。
+- 已确认 Markdown/AvalonEdit 的 WPF 离屏局部重绘与强制全重绘两次 `RenderTargetBitmap` 逐字节对照，在同一测试及产品源码下出现相反 CI 结果，不得再次作为正确性门槛；不通过加等待、重复运行、放宽容差或改成长期可选 fixture 掩盖该不确定性。保留语义、编辑、撤销、可观察布局等有明确行为边界的回归，只有找到可证明稳定的渲染同步机制后才能重新设计局部像素验收。
 - 不重新引入已删除的 `scripts/edge-refinement-tests/` 或依赖源码字符串/文件路径/方法排列的 source-shape test；若新增 Edge 自动化，应验证可执行 reducer/geometry/policy/transaction 行为，而不是源码排布。真实集成回归仍依赖编译、诊断日志和真机验证。
 - 普通编译：`dotnet build PaperTodo.csproj -c Release`。
 - `vendor/wpf-notifyicon` 使用父仓库记录的固定 submodule commit；更新 fork 时显式更新 gitlink，并完成构建和真实托盘手测。构建过程不自动拉取最新分支。
-- 用户在chat中要求打包时，默认生成用于测试的 Windows x64 单文件、不含 .NET 运行时且启用压缩的包；明确指定其他形式时或者语境中明显不是用于测试时无视此规则。
+- 用户在 chat 中要求“打包”时，默认使用 GitHub Actions `Package`（`.github/workflows/debug.yml`）打包指定分支，配置为 `Release`（正式版）、Windows x64、`single_file=true`（单文件）、`include_dotnet=false`（不内置 .NET）；明确指定的选项只覆盖对应默认值。允许 `Release`/`Debug`、单文件/多文件、内置/不内置 .NET 三项独立组合；每次只生成所选组合的一个产物，非单文件以 ZIP 提供，不默认同时打包其他组合；单文件内部压缩保持关闭。普通聊天打包不创建 GitHub Release；主线 push 的自动打包也使用上述默认组合。对仓库内 PR 的默认包，可通过移除后重新添加 `package` 标签触发 `Package`，无需制造提交；工作流固定签出的 PR head SHA，不打外部 fork，不赋予写权限或 Secrets。其他打包选项仍通过手动 `workflow_dispatch` 选择。PR `[debug]` 测试包触发规则保持不变。
 - 云端 Release 发布 Windows x64 self-contained 与 no-runtime 两个单文件。WPF 版本不启用 `PublishTrimmed` 或 Native AOT。
 - 普通 build/publish 使用仓库内默认 `papertodo_lmdb.dll`；GitHub Release 必须先从仓库内 LMDB 源码 `-ForceRebuild`，不能把默认 DLL 冒充云端编译产物。
 - 稳定正式版只通过完成真实多屏/混合 DPI 等发布前手测后的 `workflow_dispatch` 发布；稳定 tag push 不是发布步骤。`rc` / `alpha` / `beta` / `preview` tag 可以发布预发行版。

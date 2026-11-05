@@ -1,3 +1,4 @@
+using System.Windows;
 using System.Text.Json;
 using PaperTodo.Plugin;
 
@@ -105,5 +106,28 @@ public sealed partial class PaperWindow
             return false;
         }
         return _paperBodyHost.Current?.OnRuntimeMessage(payload) == true;
+    }
+
+
+    private static void EnsurePluginLoadedRefreshHandler(
+        ref bool registered,
+        Action<PaperWindow> refresh)
+    {
+        if (registered)
+        {
+            return;
+        }
+
+        registered = true;
+        EventManager.RegisterClassHandler(
+            typeof(PaperWindow),
+            LoadedEvent,
+            new RoutedEventHandler((sender, _) =>
+            {
+                if (sender is PaperWindow window && !window.IsClosed)
+                {
+                    refresh(window);
+                }
+            }));
     }
 }

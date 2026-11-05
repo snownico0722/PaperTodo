@@ -28,30 +28,11 @@ public sealed partial class AppController
         };
     }
 
-    private void ToggleLinkedPathExtensionOnly()
-    {
-        State.ShowLinkedPathExtensionOnly = !State.ShowLinkedPathExtensionOnly;
-        foreach (var window in _windows.Values)
-        {
-            window.RefreshTodoRowsForExternalChange();
-        }
+    private void ToggleLinkedPathExtensionOnly() =>
+        SetSettingFromUi("todo.linked_path_extension_only", !State.ShowLinkedPathExtensionOnly);
 
-        SaveNow();
-        RefreshSettingsRegions("general.todos");
-    }
-
-    private void SetDeepCapsuleGapSize(string size)
-    {
-        var normalized = DeepCapsuleGapSizes.Normalize(size);
-        if (State.DeepCapsuleGapSize == normalized)
-        {
-            return;
-        }
-
-        State.DeepCapsuleGapSize = normalized;
-        SaveNow();
-        ArrangeDeepCapsules(animate: State.EnableAnimations);
-    }
+    private void SetDeepCapsuleGapSize(string size) =>
+        SetSettingFromUi("capsule.gap", DeepCapsuleGapSizes.Normalize(size));
 
     private UIElement CreateDeepCapsuleGapSegmentSelector()
     {

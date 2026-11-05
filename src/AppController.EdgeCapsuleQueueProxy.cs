@@ -331,9 +331,11 @@ public sealed partial class AppController
             {
                 proxy.AbortStaged();
             }
+
             return false;
         }
         TraceEdgeCapsuleQueueVisibility(proxy, "started");
+
         return true;
     }
 
@@ -530,6 +532,7 @@ public sealed partial class AppController
                     catch { }
                 }
             }
+
 #if DEBUG
             EdgeCapsulePerformanceDiagnostics.Trace(
                 $"proxy.session phase=emergency-release session={current.SessionOrdinal} " +
@@ -663,6 +666,7 @@ public sealed partial class AppController
         {
             current.ForceDisposeForShutdown();
         }
+
 #if DEBUG
         EdgeCapsulePerformanceDiagnostics.Trace(
             $"proxy.session phase=complete session={current.SessionOrdinal} " +

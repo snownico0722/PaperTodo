@@ -68,6 +68,7 @@ public sealed partial class AppController
 
     private void RefreshPluginShortcutsAfterRuntimeChange()
     {
+        CommandManager.InvalidateRequerySuggested();
         if (_pluginShortcutRecordingCommandId == null && _shortcutRecordingCommandId == null)
         {
             RefreshPluginShortcuts();
@@ -83,6 +84,7 @@ public sealed partial class AppController
             return;
         }
 
+        CommandManager.InvalidateRequerySuggested();
         EnsurePluginShortcutWindowTracking();
         _pluginShortcutRegistrations.Clear();
         _pluginShortcutStatuses.Clear();
@@ -94,7 +96,9 @@ public sealed partial class AppController
 
         foreach (var descriptor in _paperBodyPlugins.Descriptors)
         {
-            if (descriptor.Kind == PaperBodyPluginKind.BuiltIn || descriptor.Manifest == null)
+            if (descriptor.Kind == PaperBodyPluginKind.BuiltIn ||
+                descriptor.Manifest == null ||
+                !IsPluginEnabled(descriptor.Id))
             {
                 continue;
             }
@@ -109,10 +113,22 @@ public sealed partial class AppController
                     setting.ShortcutAction);
                 _pluginShortcutRegistrations[commandId] = registration;
 
-                var binding = bindingOverrides != null &&
+                string binding;
+                try
+                {
+                    binding = bindingOverrides != null &&
                               bindingOverrides.TryGetValue(commandId, out var overridden)
-                    ? overridden
-                    : ReadPluginShortcutBinding(descriptor, setting);
+                        ? overridden
+                        : ReadPluginShortcutBinding(descriptor, setting);
+                }
+                catch (Exception ex)
+                {
+                    // A failed plugin read must not abort registration of unrelated shortcuts.
+                    Trace.TraceWarning("Plugin shortcut settings could not be read: {0}: {1}",
+                        descriptor.Id, ex.GetBaseException().Message);
+                    _pluginShortcutStatuses[commandId] = ShortcutUiStatus.RegistrationFailed;
+                    continue;
+                }
                 desiredBindings[commandId] = binding;
 
                 if (string.Equals(commandId, excludedCommandId, StringComparison.Ordinal) ||
@@ -618,63 +634,52 @@ public sealed partial class AppController
         return true;
     }
 
-    private void ExecutePluginShortcut(PluginShortcutRegistration registration)
+    private bool ExecutePluginShortcut(PluginShortcutRegistration registration)
     {
         if (IsExiting)
         {
-            return;
+            return false;
         }
 
-        if (!PluginShortcutActions.TryParsePaperAction(
-                registration.ActionId,
-                out var paperAction))
+        if (!PluginShortcutActions.TryParsePaperAction(registration.ActionId, out var paperAction))
         {
-            DispatchPluginShortcutAction(registration);
-            return;
+            return DispatchPluginShortcutAction(registration);
         }
 
         var paper = ResolvePluginShortcutPaper(registration.ProviderId);
         if (paper == null)
         {
-            return;
+            return false;
         }
 
-        switch (paperAction)
+        return paperAction switch
         {
-            case PluginShortcutPaperAction.Show:
-                TryShowPluginHostPaper(paper.Id, registration.ProviderId, activate: true);
-                break;
-            case PluginShortcutPaperAction.Hide:
-                TryHidePluginHostPaper(paper.Id, registration.ProviderId);
-                break;
-            case PluginShortcutPaperAction.Toggle:
-                TryTogglePluginHostPaperVisibility(
-                    paper.Id,
-                    registration.ProviderId,
-                    activate: true);
-                break;
-            case PluginShortcutPaperAction.Expand:
-                TryExpandPluginHostPaper(paper.Id, registration.ProviderId, activate: true);
-                break;
-            case PluginShortcutPaperAction.Collapse:
-                TryCollapsePluginHostPaper(paper.Id, registration.ProviderId);
-                break;
-            case PluginShortcutPaperAction.Activate:
-                TryActivatePluginHostPaper(paper.Id, registration.ProviderId);
-                break;
-        }
+            PluginShortcutPaperAction.Show =>
+                TryShowPluginHostPaper(paper.Id, registration.ProviderId, activate: true),
+            PluginShortcutPaperAction.Hide =>
+                TryHidePluginHostPaper(paper.Id, registration.ProviderId),
+            PluginShortcutPaperAction.Toggle =>
+                TryTogglePluginHostPaperVisibility(paper.Id, registration.ProviderId, activate: true),
+            PluginShortcutPaperAction.Expand =>
+                TryExpandPluginHostPaper(paper.Id, registration.ProviderId, activate: true),
+            PluginShortcutPaperAction.Collapse =>
+                TryCollapsePluginHostPaper(paper.Id, registration.ProviderId),
+            PluginShortcutPaperAction.Activate =>
+                TryActivatePluginHostPaper(paper.Id, registration.ProviderId),
+            _ => false
+        };
     }
 
-    private void DispatchPluginShortcutAction(PluginShortcutRegistration registration)
+    private bool DispatchPluginShortcutAction(PluginShortcutRegistration registration)
     {
         if (!_pluginShortcutRuntimes.TryGetValue(registration.ProviderId, out var runtime))
         {
-            return;
+            return false;
         }
         if (!runtime.IsActive())
         {
             RemovePluginGlobalShortcutRuntime(runtime.RuntimeId, registration.ProviderId);
-            return;
+            return false;
         }
 
         try
@@ -682,14 +687,16 @@ public sealed partial class AppController
             runtime.Dispatch(new PaperShortcutActionInvocation(
                 registration.SettingId,
                 registration.ActionId));
+            return true;
         }
         catch (Exception ex)
         {
             Trace.TraceWarning(
-                "Plugin shortcut action failed. Provider={0}; Action={1}; Exception={2}",
+                "Plugin action failed. Provider={0}; Action={1}; Exception={2}",
                 registration.ProviderId,
                 registration.ActionId,
                 ex.GetBaseException());
+            return false;
         }
     }
 
@@ -779,5 +786,15 @@ public sealed partial class AppController
         _pluginShortcutRuntimes.Clear();
         _pluginShortcutTrackedWindows.Clear();
         _pluginShortcutPaperRecency.Clear();
+    }
+
+
+    private void SuspendPluginShortcutRegistrations()
+    {
+        // Keep configured reservations inside the process-global broker while releasing only this
+        // owner's active RegisterHotKey entries. That prevents a built-in shortcut transaction from
+        // stealing a plugin key merely because the plugin is temporarily suspended for recording or
+        // numpad-mode reconciliation.
+        _pluginHotkeys?.Suspend();
     }
 }

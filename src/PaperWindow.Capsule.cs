@@ -2,7 +2,10 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Interop;
 using System.Text.RegularExpressions;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -596,6 +599,7 @@ public sealed partial class PaperWindow
 
         PrepareExperimentalAttachmentForFormTransition(collapsed);
 
+        var startChromeMargin = _paperChrome.Margin.Left;
         double? interruptedVisualWidth = null;
         double? interruptedVisualHeight = null;
         if (IsPaperFormTransitioning)
@@ -604,10 +608,10 @@ public sealed partial class PaperWindow
             // collapse the HWND remains expanded while the chrome is scaled toward the capsule;
             // using Window.Width here made a reversed transition jump to an endpoint first.
             interruptedVisualWidth = IsFiniteWindowCoordinate(_paperChrome.Width)
-                ? _paperChrome.Width + WindowChromeInset
+                ? _paperChrome.Width + (_controller.UsesNativeMicaWindows ? startChromeMargin * 2 : WindowChromeInset)
                 : Width;
             interruptedVisualHeight = IsFiniteWindowCoordinate(_paperChrome.Height)
-                ? _paperChrome.Height + WindowChromeInset
+                ? _paperChrome.Height + (_controller.UsesNativeMicaWindows ? startChromeMargin * 2 : WindowChromeInset)
                 : Height;
             double currentShellOpacity = _shell.Opacity;
             double currentCapsuleOpacity = _capsuleShell.Opacity;
@@ -626,7 +630,7 @@ public sealed partial class PaperWindow
         }
 
         PrepareForFormTransition();
-        BeginPaperFormTransition(collapsed);
+        BeginPaperFormTransition(collapsed, animate);
         var transitionGeneration = ++_collapseTransitionGeneration;
         var shouldRestoreCollapseStartPosition = collapsed &&
             IsVisible &&
@@ -695,9 +699,21 @@ public sealed partial class PaperWindow
         double finalTargetHeight = rememberedDeepCapsuleExpandedGeometry?.HeightDip ?? RoundToDevicePixelY(targetHeight);
 
         _paper.IsCollapsed = collapsed;
+        if (_controller.UsesNativeMicaWindows)
+        {
+            // Alpha fallback has a WPF-shaped surface. A resizable native frame can expose
+            // the system accent outline in its transparent gutter while shrinking. Remove
+            // it once at entry; the completion/settle paths restore the final resize mode.
+            ResizeMode = ResizeMode.NoResize;
+            RefreshNativeMica();
+        }
         RefreshExperimentalOpacity();
-        var expandedWidth = collapsed ? RoundToDevicePixelX(Width) : finalTargetWidth;
-        var expandedHeight = collapsed ? RoundToDevicePixelY(Height) : finalTargetHeight;
+        var expandedWidth = collapsed
+    ? RoundToDevicePixelX(_controller.UsesNativeMicaWindows && interruptedVisualWidth.HasValue ? _transitionBaseWidth : Width)
+    : finalTargetWidth;
+var expandedHeight = collapsed
+    ? RoundToDevicePixelY(_controller.UsesNativeMicaWindows && interruptedVisualHeight.HasValue ? _transitionBaseHeight : Height)
+    : finalTargetHeight;
         if (animate)
         {
             _transitionBaseWidth = expandedWidth;
@@ -706,12 +722,33 @@ public sealed partial class PaperWindow
             _startTransitionHeight = interruptedVisualHeight ?? (collapsed ? expandedHeight : PaperLayoutDefaults.CapsuleHeight);
             _targetTransitionWidth = collapsed ? finalTargetWidth : expandedWidth;
             _targetTransitionHeight = collapsed ? finalTargetHeight : expandedHeight;
+            _startTransitionChromeMargin = startChromeMargin;
+            // _paper.IsCollapsed already reflects the target form here. Do not read the
+            // source chrome's current margin: collapse targets the 8-DIP WPF gutter while
+            // expanded native papers target edge-to-edge chrome.
+            _targetTransitionChromeMargin = UsesNativePaperChrome ? 0 : WindowChromeMargin;
+
+            if (_controller.UsesNativeMicaWindows)
+            {
+                // Minimum changes can resize a live WPF HWND immediately. Establish the
+                // animation's lower bounds once; completion/settle restores the final policy.
+                MinWidth = Math.Min(PaperLayoutDefaults.MinWidth,
+                    Math.Min(RoundToDevicePixelX(_startTransitionWidth),
+                        RoundToDevicePixelX(_targetTransitionWidth)));
+                MinHeight = Math.Min(PaperLayoutDefaults.MinHeight,
+                    Math.Min(RoundToDevicePixelY(_startTransitionHeight),
+                        RoundToDevicePixelY(_targetTransitionHeight)));
+            }
 
             // Establish the initial visual BEFORE native placement can resize the HWND and
             // synchronously run WPF layout. Otherwise the full-size chrome is exposed first,
             // then reset to capsule size when the expand animation starts.
-            _shell.Width = Math.Max(0, expandedWidth - WindowChromeInset);
-            _shell.Height = Math.Max(0, expandedHeight - WindowChromeInset);
+            var expandedInset = _controller.UsesNativeMicaWindows ? 0 : WindowChromeInset;
+            _shell.Width = Math.Max(0, expandedWidth - expandedInset -
+                _paperChrome.BorderThickness.Left - _paperChrome.BorderThickness.Right);
+            _shell.Height = Math.Max(0, expandedHeight - expandedInset -
+                _paperChrome.BorderThickness.Top - _paperChrome.BorderThickness.Bottom);
+            _formContentHost.ExpandedSize = new Size(_shell.Width, _shell.Height);
             TransitionProgress = 0.0;
             UpdateTransitionVisuals(0.0);
             if (!collapsed)
@@ -719,6 +756,18 @@ public sealed partial class PaperWindow
                 _shell.Opacity = 0.0;
                 _capsuleShell.Opacity = 1.0;
             }
+        }
+
+        if (animate && !collapsed && activateOnExpand)
+        {
+            // The initial capsule-sized frame is ready. Consume the user's activation before
+            // queue handoff or native surface preparation can pump/publish an expansion frame.
+            TryActivateAfterCapsuleInteraction();
+            // Activation invokes application/plugin handlers and may pump a Render turn.
+            // A reentrant hide, close or reversal must not continue this obsolete expansion.
+            if (transitionGeneration != _collapseTransitionGeneration ||
+                _windowLifecycle != PaperWindowLifecycleState.Alive || !IsPaperFormTransitioning)
+                return;
         }
 
         if (!collapsed)
@@ -808,11 +857,18 @@ public sealed partial class PaperWindow
         // null Effect (snap suppression) can't make the local `is DropShadowEffect` update
         // silently no-op and leave the wrong shadow parameters on the capsule/expanded form.
         ApplyPaperChromePresentation();
+        // ApplyPaperChromePresentation selects the target form's margin. During an animated
+        // form change the current frame still owns geometry, so immediately re-apply the
+        // current transition progress before the first animation tick can be presented.
+        if (animate)
+        {
+            UpdateTransitionVisuals(TransitionProgress);
+        }
         RestoreCollapseStartPositionIfNeeded(shouldRestoreCollapseStartPosition, collapseStartLeft, collapseStartTop);
 
         if (animate)
         {
-            if (!collapsed)
+            if (!collapsed && !_controller.UsesNativeMicaWindows)
             {
                 Width = expandedWidth;
                 Height = expandedHeight;
@@ -824,11 +880,16 @@ public sealed partial class PaperWindow
             {
                 From = 0.0,
                 To = 1.0,
-                Duration = TimeSpan.FromMilliseconds(collapsed ? CollapseResizeMilliseconds : ExpandAnimationMilliseconds),
-                BeginTime = collapsed ? TimeSpan.FromMilliseconds(CollapseShellFadeMilliseconds) : TimeSpan.Zero,
+                Duration = TimeSpan.FromMilliseconds(AnimationTiming.ScaleMilliseconds(
+                    collapsed ? CollapseResizeMilliseconds : ExpandAnimationMilliseconds)),
+                BeginTime = collapsed
+                    ? TimeSpan.FromMilliseconds(AnimationTiming.ScaleMilliseconds(CollapseShellFadeMilliseconds))
+                    : TimeSpan.Zero,
                 EasingFunction = easeOut
             };
 
+            System.Windows.Media.Animation.DoubleAnimation shellAnimation;
+            System.Windows.Media.Animation.DoubleAnimation capsuleAnimation;
             if (collapsed)
             {
                 _shell.Opacity = 1.0;
@@ -838,20 +899,20 @@ public sealed partial class PaperWindow
                 {
                     From = 1.0,
                     To = 0.0,
-                    Duration = TimeSpan.FromMilliseconds(CollapseShellFadeMilliseconds),
+                    Duration = TimeSpan.FromMilliseconds(AnimationTiming.ScaleMilliseconds(CollapseShellFadeMilliseconds)),
                     EasingFunction = easeOut
                 };
-                _shell.BeginAnimation(UIElement.OpacityProperty, fadeOutShell);
+                shellAnimation = fadeOutShell;
 
                 var fadeInCapsule = new System.Windows.Media.Animation.DoubleAnimation
                 {
                     From = 0.0,
                     To = 1.0,
-                    Duration = TimeSpan.FromMilliseconds(CollapseResizeMilliseconds),
-                    BeginTime = TimeSpan.FromMilliseconds(CollapseShellFadeMilliseconds),
+                    Duration = TimeSpan.FromMilliseconds(AnimationTiming.ScaleMilliseconds(CollapseResizeMilliseconds)),
+                    BeginTime = TimeSpan.FromMilliseconds(AnimationTiming.ScaleMilliseconds(CollapseShellFadeMilliseconds)),
                     EasingFunction = easeOut
                 };
-                _capsuleShell.BeginAnimation(UIElement.OpacityProperty, fadeInCapsule);
+                capsuleAnimation = fadeInCapsule;
             }
             else
             {
@@ -863,20 +924,20 @@ public sealed partial class PaperWindow
                 {
                     From = 1.0,
                     To = 0.0,
-                    Duration = TimeSpan.FromMilliseconds(ExpandCapsuleFadeOutMilliseconds),
+                    Duration = TimeSpan.FromMilliseconds(AnimationTiming.ScaleMilliseconds(ExpandCapsuleFadeOutMilliseconds)),
                     EasingFunction = easeOut
                 };
-                _capsuleShell.BeginAnimation(UIElement.OpacityProperty, fadeOutCapsule);
+                capsuleAnimation = fadeOutCapsule;
 
                 var fadeInShell = new System.Windows.Media.Animation.DoubleAnimation
                 {
                     From = 0.0,
                     To = 1.0,
-                    Duration = TimeSpan.FromMilliseconds(ExpandShellFadeInMilliseconds),
-                    BeginTime = TimeSpan.FromMilliseconds(ExpandCapsuleFadeOutMilliseconds),
+                    Duration = TimeSpan.FromMilliseconds(AnimationTiming.ScaleMilliseconds(ExpandShellFadeInMilliseconds)),
+                    BeginTime = TimeSpan.FromMilliseconds(AnimationTiming.ScaleMilliseconds(ExpandCapsuleFadeOutMilliseconds)),
                     EasingFunction = easeOut
                 };
-                _shell.BeginAnimation(UIElement.OpacityProperty, fadeInShell);
+                shellAnimation = fadeInShell;
             }
 
             progressAnim.Completed += (s, e) =>
@@ -955,7 +1016,17 @@ public sealed partial class PaperWindow
                 UpdateTaskbarVisibility();
             };
 
-            BeginAnimation(TransitionProgressProperty, progressAnim);
+            void StartAnimation()
+            {
+                if (transitionGeneration != _collapseTransitionGeneration ||
+                    _windowLifecycle != PaperWindowLifecycleState.Alive || !IsPaperFormTransitioning)
+                    return;
+                _shell.BeginAnimation(UIElement.OpacityProperty, shellAnimation);
+                _capsuleShell.BeginAnimation(UIElement.OpacityProperty, capsuleAnimation);
+                BeginAnimation(TransitionProgressProperty, progressAnim);
+            }
+            if (_nativeMica != null) _nativeMica.StartFormAnimation(StartAnimation);
+            else StartAnimation();
         }
         else
         {
@@ -1017,6 +1088,12 @@ public sealed partial class PaperWindow
                 FinishExpandSnapStateRestore();
             }
             UpdateTaskbarVisibility();
+            if (!collapsed && activateOnExpand &&
+                transitionGeneration == _collapseTransitionGeneration &&
+                _windowLifecycle == PaperWindowLifecycleState.Alive && !_paper.IsCollapsed)
+            {
+                TryActivateAfterCapsuleInteraction();
+            }
         }
 
         RefreshPaperContextMenus();
@@ -1024,29 +1101,32 @@ public sealed partial class PaperWindow
 
         if (!collapsed && activateOnExpand)
         {
-            QueueActivateAfterExpandInteraction(transitionGeneration);
+            QueueRestoreFocusAfterExpandInteraction(transitionGeneration);
         }
     }
 
-    private void QueueActivateAfterExpandInteraction(int transitionGeneration)
+    private void QueueRestoreFocusAfterExpandInteraction(int transitionGeneration)
     {
-        // Capsule mouse-up handlers clear native keyboard focus after SetCollapsedState returns,
-        // and repeat that cleanup at Background priority. Run below Background so the explicit
-        // user activation is the final focus operation even when animations are disabled.
+        // Capsule mouse-up handlers clear native keyboard focus after SetCollapsedState returns.
+        // Repair that focus only while this interaction still owns the foreground. Never queue
+        // activation here: a later user switch must win, including during the animation.
         Dispatcher.BeginInvoke(
             (Action)(() =>
             {
                 if (transitionGeneration != _collapseTransitionGeneration ||
+                    _windowLifecycle != PaperWindowLifecycleState.Alive ||
                     _paper.IsCollapsed ||
                     !IsVisible ||
+                    IsExperimentalPassive ||
+                    WindowNative.ForegroundWindow != new WindowInteropHelper(this).Handle ||
                     _controller.FullscreenAvoidanceWindowFor(this) != IntPtr.Zero)
                 {
                     return;
                 }
 
-                TryActivateAfterCapsuleInteraction();
+                Focus();
             }),
-            System.Windows.Threading.DispatcherPriority.ContextIdle);
+            System.Windows.Threading.DispatcherPriority.Send);
     }
 
     // Runs when an expand transition finishes. If the paper was collapsed while maximized,

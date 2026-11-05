@@ -35,7 +35,9 @@ internal sealed partial class WebPluginRuntime : IDisposable
         TopBarLabelsClear,
         TopBarLabelsClearAll,
         PaperActions,
-        Popups
+        Popups,
+        EventsSubscribe,
+        EventsUnsubscribe
     }
 
     private readonly PaperBodyPluginDescriptor _descriptor;
@@ -58,6 +60,7 @@ internal sealed partial class WebPluginRuntime : IDisposable
     private ulong _documentNavigationId;
     private bool _hasDocumentNavigation;
     private bool _reloadRecoveryPending;
+    private bool _rendererRecoveryAttempted;
     private bool _restartRequested;
     private bool _startupCompleted;
     private bool _disposed;
@@ -180,6 +183,7 @@ internal sealed partial class WebPluginRuntime : IDisposable
               const expectedOrigin = {{originJson}};
               if (window !== window.top || location.origin !== expectedOrigin || window.papertodo) return;
               const listeners = new Set();
+              const hostEventListeners = new Map();
               const pending = new Map();
               const queuedRequests = [];
               let sequence = 0;
@@ -292,6 +296,11 @@ internal sealed partial class WebPluginRuntime : IDisposable
                 clearAll() { return request('paperActions.clearAll'); }
               });
               window.papertodo = Object.freeze({
+                settingsApi: Object.freeze({
+                    list(category) { return workspace.request('appSettings.list', {category}); },
+                    get(id) { return workspace.request('appSettings.get', {id}); },
+                    set(id, value) { return workspace.request('appSettings.set', {id, value}); }
+                }),
                 paperActions,
                 noteAssets,
                 popups,
@@ -304,6 +313,27 @@ internal sealed partial class WebPluginRuntime : IDisposable
                 todoActions,
                 topBarLabels,
                 request,
+                onHostEvent(types, listener, options = {}) {
+                  if (typeof listener !== 'function' || !Array.isArray(types) || types.length === 0) return () => {};
+                  const subscriptionId = `s${++sequence}`;
+                  hostEventListeners.set(subscriptionId, listener);
+                  void request('events.subscribe', {
+                    subscriptionId,
+                    types,
+                    paperIds: options.paperIds ?? null,
+                    excludeOwnOperations: options.excludeOwnOperations !== false
+                  }).catch(error => {
+                    hostEventListeners.delete(subscriptionId);
+                    for (const callback of [...listeners]) {
+                      try { callback({ type: 'hostSubscriptionError', subscriptionId,
+                        error: { code: error.code, message: error.message } }); } catch { }
+                    }
+                  });
+                  return () => {
+                    if (!hostEventListeners.delete(subscriptionId)) return;
+                    void request('events.unsubscribe', { subscriptionId }).catch(() => {});
+                  };
+                },
                 onEvent(listener) {
                   if (typeof listener !== 'function') return () => {};
                   listeners.add(listener);
@@ -329,6 +359,12 @@ internal sealed partial class WebPluginRuntime : IDisposable
                       error.code = message.error?.code ?? 'host_error';
                       waiter.reject(error);
                     }
+                  }
+                }
+                if (message?.type === 'hostEvent') {
+                  const listener = hostEventListeners.get(message.subscriptionId);
+                  if (listener) {
+                    try { listener(message.event); } catch { }
                   }
                 }
                 for (const listener of [...listeners]) {
@@ -366,13 +402,16 @@ internal sealed partial class WebPluginRuntime : IDisposable
         TryClearGlobalShortcuts();
         TryClearTodoActions();
         TryClearTopBarLabels();
+        ResetRuntimeDocument();
     }
 
     private void OnNavigationCompleted(
         object? sender,
         CoreWebView2NavigationCompletedEventArgs e)
     {
-        if (!ReferenceEquals(sender, _webView.CoreWebView2) ||
+        if (_disposed ||
+            !_isActive() ||
+            !ReferenceEquals(sender, _webView.CoreWebView2) ||
             !_hasDocumentNavigation ||
             e.NavigationId != _documentNavigationId)
         {
@@ -388,15 +427,22 @@ internal sealed partial class WebPluginRuntime : IDisposable
             TryClearGlobalShortcuts();
             TryClearTodoActions();
             TryClearTopBarLabels();
+            ResetRuntimeDocument();
             FailStartupOrRestart(
                 $"Web Runtime navigation failed ({e.WebErrorStatus}).");
             return;
         }
 
         _reloadRecoveryPending = false;
+        IReadOnlyList<PaperPluginRuntimePaper> startupPapers;
         if (_papers is PaperPluginRuntimePapersApi runtimePapers)
         {
             runtimePapers.ResetWebDocumentPresentation();
+            startupPapers = runtimePapers.CaptureStartupSnapshot();
+        }
+        else
+        {
+            startupPapers = _papers.List();
         }
         _documentReady = true;
         _extensionDocumentToken = Guid.NewGuid().ToString("N");
@@ -409,12 +455,13 @@ internal sealed partial class WebPluginRuntime : IDisposable
             surface = "runtime",
             providerId = _descriptor.Id,
             apiVersion = _descriptor.ApiVersion,
+            uiLanguage = PaperPluginEnvironment.UiLanguage,
             permissions = _workspace.GrantedPermissions.OrderBy(value => value).ToArray(),
             settings = ReadSettings(),
             state = runtimeState.State,
             stateVersion = runtimeState.Version,
             targetStateVersion = _state.TargetStateVersion,
-            papers = _papers.List()
+            papers = startupPapers
         });
         _startupReady.TrySetResult(true);
     }
@@ -432,12 +479,23 @@ internal sealed partial class WebPluginRuntime : IDisposable
                 FailStartupOrRestart("The WebView2 browser process exited.");
                 return;
             case WebPluginProcessFailurePolicy.Recovery.Reload:
+                if (!CanRecoverRendererByReload(_startupCompleted) ||
+                    _rendererRecoveryAttempted)
+                {
+                    FailStartupOrRestart(
+                        "The Web Runtime renderer could not be recovered by its one allowed reload.");
+                    return;
+                }
+                _rendererRecoveryAttempted = true;
                 RecoverRendererByReload();
                 return;
             default:
                 return;
         }
     }
+
+    internal static bool CanRecoverRendererByReload(bool startupCompleted) =>
+        startupCompleted;
 
     private void RecoverRendererByReload()
     {
@@ -452,6 +510,7 @@ internal sealed partial class WebPluginRuntime : IDisposable
         TryClearGlobalShortcuts();
         TryClearTodoActions();
         TryClearTopBarLabels();
+        ResetRuntimeDocument();
 
         var dispatcher = _webView.Dispatcher;
         if (dispatcher.HasShutdownStarted || dispatcher.HasShutdownFinished)
@@ -495,6 +554,7 @@ internal sealed partial class WebPluginRuntime : IDisposable
         TryClearGlobalShortcuts();
         TryClearTodoActions();
         TryClearTopBarLabels();
+        ResetRuntimeDocument();
 
         if (!_startupCompleted &&
             _startupReady.TrySetException(new InvalidOperationException(message)))
@@ -520,6 +580,7 @@ internal sealed partial class WebPluginRuntime : IDisposable
         TryClearGlobalShortcuts();
         TryClearTodoActions();
         TryClearTopBarLabels();
+        ResetRuntimeDocument();
         try { _requestRestart(); } catch { }
     }
 
@@ -614,6 +675,8 @@ internal sealed partial class WebPluginRuntime : IDisposable
             HostRequestRoute.TopBarLabelsClear => ClearTopBarLabels(parameters),
             HostRequestRoute.TopBarLabelsClearAll => ClearTopBarLabels(),
             HostRequestRoute.PaperActions => ExecutePaperActionRequest(method, parameters),
+            HostRequestRoute.EventsSubscribe => SubscribeHostEvents(parameters),
+            HostRequestRoute.EventsUnsubscribe => UnsubscribeHostEvents(parameters),
             HostRequestRoute.Popups => WebPluginPopupRequests.Execute((IPaperPluginPopups)_workspace,
                 _workspace, _descriptor.Manifest!, method, parameters, Send),
             _ => throw new PaperTodoPluginException(
@@ -809,6 +872,8 @@ internal sealed partial class WebPluginRuntime : IDisposable
             "topbar.labels.clearAll" => HostRequestRoute.TopBarLabelsClearAll,
             "paperActions.set" or "paperActions.clear" or "paperActions.clearAll" => HostRequestRoute.PaperActions,
             "popups.open" or "popups.close" => HostRequestRoute.Popups,
+            "events.subscribe" => HostRequestRoute.EventsSubscribe,
+            "events.unsubscribe" => HostRequestRoute.EventsUnsubscribe,
             _ => HostRequestRoute.Workspace
         };
     }
@@ -952,7 +1017,6 @@ internal sealed partial class WebPluginRuntime : IDisposable
     private void TryClearTopBarLabels()
     {
         try { TopBarLabels.Clear(); } catch { }
-        TryResetExtensionUi();
     }
 
     private void ThrowIfInactive()
@@ -974,6 +1038,7 @@ internal sealed partial class WebPluginRuntime : IDisposable
         TryClearGlobalShortcuts();
         TryClearTodoActions();
         TryClearTopBarLabels();
+        ResetRuntimeDocument();
         _disposed = true;
         try { _papersSubscription.Dispose(); } catch { }
         try { _settingsSubscription.Dispose(); } catch { }

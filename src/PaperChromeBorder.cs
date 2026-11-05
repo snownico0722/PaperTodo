@@ -8,11 +8,12 @@ namespace PaperTodo;
 
 // The outer Border still owns the shell's original layout and shadow. Only the
 // empty background Border is arranged shorter; the editor never changes size.
-internal sealed class PaperChromeBorder : Border
+internal partial class PaperChromeBorder : Border
 {
     private readonly Border _surface = new() { IsHitTestVisible = false, Visibility = Visibility.Collapsed };
     private Geometry? _contentClip;
     private int _animationGeneration;
+    private double _surfaceInset;
 
     internal static readonly DependencyProperty HeaderOpacityProperty = DependencyProperty.Register(
         nameof(HeaderOpacity), typeof(double), typeof(PaperChromeBorder),
@@ -37,6 +38,8 @@ internal sealed class PaperChromeBorder : Border
 
     protected override void OnRender(DrawingContext drawingContext)
     {
+        DrawNineSliceShadow(drawingContext);
+        DrawMaterialShadow(drawingContext);
         if (_surface.Visibility != Visibility.Visible)
             base.OnRender(drawingContext);
     }
@@ -80,6 +83,7 @@ internal sealed class PaperChromeBorder : Border
             var dpi = VisualTreeHelper.GetDpi(this).DpiScaleY;
             inset = Math.Round(inset * dpi) / dpi;
         }
+        _surfaceInset = inset;
         if (inset <= 0 || size.Width <= 0 || size.Height <= 0)
         {
             _surface.Visibility = Visibility.Collapsed;

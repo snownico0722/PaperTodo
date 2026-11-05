@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -31,6 +32,27 @@ internal sealed partial class WebPaperBodySession
 /// </summary>
 internal static class WebPluginRuntimeInfrastructure
 {
+    internal static bool TryOpenExternalNavigation(Uri uri)
+    {
+        if (uri.Scheme is not ("http" or "https" or "mailto"))
+        {
+            return false;
+        }
+
+        try
+        {
+            Process.Start(new ProcessStartInfo(uri.AbsoluteUri)
+            {
+                UseShellExecute = true
+            });
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     private static class BackgroundWebViewHost
     {
         private static Window? _window;

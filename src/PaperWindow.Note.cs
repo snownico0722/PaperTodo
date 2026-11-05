@@ -1,4 +1,5 @@
 using System;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Security.Cryptography;
@@ -16,6 +17,7 @@ namespace PaperTodo;
 public sealed partial class PaperWindow
 {
     internal const int NoteTextMaxLength = 100000;
+    private const int WindowsErrorNoAssociation = 1155;
     private static readonly object PersistentScriptProcessLock = new();
     private static readonly Dictionary<string, Process> PersistentScriptProcesses = new(StringComparer.OrdinalIgnoreCase);
     private static readonly object ActiveScriptProcessLock = new();
@@ -90,33 +92,6 @@ public sealed partial class PaperWindow
         }
     }
 
-    private void TraceNoteRender(string message)
-    {
-#if DEBUG
-        if (EdgeDiagnosticJournal.Enabled)
-        {
-            EdgeDiagnosticJournal.AppendText("md-render-trace.log", $"paper={_paper.Id[..Math.Min(6, _paper.Id.Length)]} {message}");
-            return;
-        }
-        // edgeJournal: default non-memory diagnostics preserve their original behavior.
-#endif
-
-#if DEBUG
-        try
-        {
-            var path = System.IO.Path.Combine(AppContext.BaseDirectory, "md-render-trace.log");
-            var line = $"{DateTime.Now:HH:mm:ss.fff} paper={_paper.Id[..Math.Min(6, _paper.Id.Length)]} {message}{Environment.NewLine}";
-            lock (NoteRenderTraceLock)
-            {
-                System.IO.File.AppendAllText(path, line);
-            }
-        }
-        catch
-        {
-            // Test-only diagnostics must never affect note interaction.
-        }
-#endif
-    }
 
     private void ExitNoteEditor()
     {
@@ -1007,10 +982,7 @@ public sealed partial class PaperWindow
         try
         {
             var path = WriteExternalMarkdownFile();
-            Process.Start(new ProcessStartInfo(path)
-            {
-                UseShellExecute = true
-            });
+            OpenExternalNoteFile(path);
         }
         catch (Exception ex)
         {
@@ -1019,6 +991,27 @@ public sealed partial class PaperWindow
                 Strings.Get("OpenMarkdownFailureTitle"),
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
+        }
+    }
+
+    private static void OpenExternalNoteFile(string path)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(path)
+            {
+                UseShellExecute = true
+            });
+        }
+        catch (Win32Exception ex) when (ex.NativeErrorCode == WindowsErrorNoAssociation)
+        {
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = "notepad.exe",
+                UseShellExecute = false
+            };
+            startInfo.ArgumentList.Add(path);
+            Process.Start(startInfo);
         }
     }
 

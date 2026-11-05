@@ -32,10 +32,12 @@ public sealed partial class AppController : IDisposable
         DeferredForCapsuleDrag
     }
 
+    private const int StartupMissingMonitorGraceMilliseconds = 1500;
+
     public static AppController Current { get; private set; } = null!;
 
-    private readonly StateStore _store = new();
-    private readonly NoteImageStore _imageStore = new();
+    private StateStore _store = null!;
+    private NoteImageStore _imageStore = null!;
     private readonly Dictionary<string, PaperWindow> _windows = new();
     private readonly DispatcherTimer _saveTimer;
     private readonly DispatcherTimer _forceSaveTimer;
@@ -44,6 +46,9 @@ public sealed partial class AppController : IDisposable
     private readonly DispatcherTimer _displayMetricsRefreshTimer;
     private DispatcherTimer? _todoReminderTimer;
     private bool _hasPendingDirty;
+    // UI-thread bookkeeping for snapshots queued to the background writer. A merge
+    // preview can supersede one after _hasPendingDirty was already cleared.
+    private readonly HashSet<(StateStore Store, long Version)> _pendingAsyncSaves = new();
 
     private TaskbarIcon? _trayIcon;
     private ContextMenu? _trayMenu;
@@ -52,6 +57,8 @@ public sealed partial class AppController : IDisposable
     private bool _suppressDirty;
     private bool _hasShownSaveFailure;
     private bool _ignoreSaveFailures;
+    private bool _preparingUserExit;
+    private bool _persistenceTerminationRequested;
     private int _trayRefreshSuppressionDepth;
     private bool _isRestoringStartupPapers;
     private bool _isRestoringRuntimePaperBatch;
@@ -68,6 +75,7 @@ public sealed partial class AppController : IDisposable
     private DateTimeOffset _lastFullscreenGlobalScanAt = DateTimeOffset.MinValue;
     private DisplayMetricsRefreshState _displayMetricsRefreshState;
     private readonly EdgeCapsuleArrangeGate _deepCapsuleArrangeGate = new();
+    private MasterCapsuleQueueTransferSnapshot? _masterCapsuleQueueTransfer;
     private PaperWindow? _paperLinkTargetWindow;
     private string? _paperLinkTargetItemId;
     private readonly HashSet<string> _deepCapsuleContextMenuOwners = new(StringComparer.Ordinal);
@@ -84,13 +92,14 @@ public sealed partial class AppController : IDisposable
     public NoteImageStore ImageStore => _imageStore;
     internal double DeepCapsuleGap =>
         DeepCapsuleGapSizes.Value(State.DeepCapsuleGapSize);
-    internal bool IsRunning => _lifecycleState == AppLifecycleState.Running;
+    internal bool IsRunning => !IsExiting;
     internal bool HasPaperLinkDropTarget =>
         _paperLinkTargetWindow != null &&
         !string.IsNullOrWhiteSpace(_paperLinkTargetItemId);
     public bool SuppressDeepCapsuleTopmostForContextMenu => _deepCapsuleContextMenuOwners.Count > 0;
     private bool ShouldAvoidFullscreenTopmost => FullscreenTopmostModes.Normalize(State.FullscreenTopmostMode) == FullscreenTopmostModes.Avoid;
-    private bool IsExiting => _lifecycleState != AppLifecycleState.Running;
+    private bool IsExiting => _lifecycleState != AppLifecycleState.Running ||
+        Volatile.Read(ref _persistenceTerminationRequested);
 
     internal IntPtr FullscreenAvoidanceWindowFor(Window? window)
     {
@@ -142,16 +151,21 @@ public sealed partial class AppController : IDisposable
     public AppController()
     {
         Current = this;
-        State = _store.Load();
-        Theme.Invalidate();
-        RefreshApplicationThemeResources();
+        InitializeWorkspaceState();
         _imageStore.AutoCompressLargeImages = State.AutoCompressLargeImages;
         _imageStore.Load();
-        var strippedInternalImageMarkers = StripInternalImageRenderMarkersFromState();
+        // A missing or damaged picture must not redirect startup to another workspace.
+        UiLanguages.ApplyWorkspacePreference(State.UiLanguage);
+        State.PaperSkin = PaperSkins.Resolve(State);
+        UsesNativeMicaWindows = PaperSkins.UsesNativeBackdrop(State.PaperSkin) && NativeMicaBackdrop.IsSupported;
+        Theme.Invalidate();
+        RefreshApplicationThemeResources();
         var protectedImageIdsForReuse = TryCollectUnprotectedImages();
         // Only rebuild free numbers when the same protection scan that gates GC succeeded.
         // A failed scan leaves reuse disabled so missing-but-referenced ids are never reissued.
         _imageStore.PrepareReusableImageNumbers(protectedImageIdsForReuse);
+        _imageStore.ProtectPersistedImageReferences(State, protectedImageIdsForReuse,
+            System.IO.File.Exists(_store.FilePath) || System.IO.File.Exists(_store.BackupPath));
         NormalizePaperSystemVisibilitySettings();
         AppTypography.Configure(
             State.UiFontPreset,
@@ -161,6 +175,8 @@ public sealed partial class AppController : IDisposable
         NoteTypography.Configure(State.NoteTextSize, State.NoteTextBold);
         ToolTipPreferences.Register(() => State.EnableToolTips);
         _paperBodyPlugins = new PaperBodyPluginRegistry();
+        _paperBodyPlugins.DataStore.WriteLifetime = _store.WriteLifetime;
+        InitializeWorkspacePluginData();
 
         // Idle debounce: save ~1s after the last change.
         // Force cap: while edits keep resetting the idle timer, still flush at least every 10s.
@@ -182,11 +198,6 @@ public sealed partial class AppController : IDisposable
             _forceSaveTimer.Stop();
             SaveNow();
         };
-
-        if (strippedInternalImageMarkers)
-        {
-            MarkDirty();
-        }
 
         _topmostRefreshTimer = new DispatcherTimer
         {
@@ -225,32 +236,16 @@ public sealed partial class AppController : IDisposable
         SystemEvents.TimeChanged += OnSystemTimeChanged;
     }
 
-    private bool StripInternalImageRenderMarkersFromState()
-    {
-        var changed = false;
-        foreach (var paper in State.Papers)
-        {
-            if (paper.Type != PaperTypes.Note || string.IsNullOrEmpty(paper.Content))
-            {
-                continue;
-            }
-
-            var cleaned = MarkdownImageReferences.StripRenderMarkers(paper.Content);
-            if (!string.Equals(cleaned, paper.Content, StringComparison.Ordinal))
-            {
-                paper.Content = cleaned;
-                changed = true;
-            }
-        }
-
-        return changed;
-    }
-
     public async Task StartAsync(
         bool createDefaultPaper = true,
         StartupCommandKind initialVisibilityCommand = StartupCommandKind.None)
     {
         CreateTrayIcon();
+        NotifyWorkspaceStartup();
+        // Complete a successful backup recovery or a confirmed-corrupt rebuild using
+        // the ordinary guarded writer. This never runs after a failed/busy load.
+        if (_store.NeedsStartupRecoverySave)
+            SaveNow(sync: true);
         InitializeGlobalHotkeys();
         _ = Task.Run(PaperWindow.CleanupOldScriptCapsuleTempFiles);
         _ = Application.Current.Dispatcher.BeginInvoke(
@@ -278,9 +273,10 @@ public sealed partial class AppController : IDisposable
             return;
         }
 
+        ApplyHiddenPluginStartupPaperVisibility(initialVisibilityCommand);
         ApplyInitialStartupVisibility(initialVisibilityCommand);
-        DeferStartupPapersWithoutMonitor();
-        var rescuedPapers = EnsurePapersOnScreen();
+        var startupDeferredPaperIds = StartupPaperIdsAwaitingMonitor();
+        var rescuedPapers = EnsurePapersOnScreen(startupDeferredPaperIds);
 
         // Establish entity-paper background ownership before any visible Body/Mini frontend can
         // initialize and emit commands toward the provider Runtime during restore.
@@ -289,9 +285,14 @@ public sealed partial class AppController : IDisposable
         // Respect persisted IsVisible: hide closes the paper surface, delete removes it.
         // Tray/show-all (and second-instance show) still restore everything intentionally.
         var papersToRestore = State.Papers.Where(paper =>
-            paper.IsVisible && !_startupDisplayDeferredPapers.Contains(paper)).ToList();
+            paper.IsVisible && !startupDeferredPaperIds.Contains(paper.Id)).ToList();
         await RestorePaperSurfacesAsync(papersToRestore);
-        CompleteDeferredStartupDisplayRestore();
+        if (startupDeferredPaperIds.Count > 0)
+        {
+            _ = CompleteStartupMissingMonitorGraceAsync(
+                startupDeferredPaperIds.ToArray(),
+                _paperSurfaceRestoreGeneration);
+        }
 
         if (rescuedPapers)
         {
@@ -928,7 +929,10 @@ public sealed partial class AppController : IDisposable
             IsPaperLinkedToAnyTodo(paper));
     }
 
-    public void OpenLinkedPaper(string? paperId, Window? anchorWindow = null)
+    public void OpenLinkedPaper(
+        string? paperId,
+        Window? anchorWindow = null,
+        bool toggleIfExcludedFromCapsules = false)
     {
         var paper = FindPaper(paperId);
         if (paper == null)
@@ -940,6 +944,17 @@ public sealed partial class AppController : IDisposable
         {
             if (IsLinkedPaperShown(paper.Id))
             {
+                if (toggleIfExcludedFromCapsules &&
+                    State.CollapseExpandedDeepCapsuleOnClick &&
+                    State.UseCapsuleMode &&
+                    State.EnableTodoPaperLinks &&
+                    State.HideLinkedPapersFromCapsules &&
+                    IsPaperLinkedToAnyTodo(paper))
+                {
+                    HidePaper(paper);
+                    return;
+                }
+
                 if (State.CollapseExpandedDeepCapsuleOnClick && window.TryHandleLinkedPaperRepeatedOpenAsDeepCapsuleToggle())
                 {
                     RefreshTodoRowsForLinkedPaper(paper.Id);
@@ -1135,7 +1150,7 @@ public sealed partial class AppController : IDisposable
         return paper?.Type == PaperTypes.Note ? paper : null;
     }
 
-    public void ExecuteStartupCommand(StartupCommand command)
+    public bool ExecuteStartupCommand(StartupCommand command)
     {
         if (command.Kind is StartupCommandKind.Show or
             StartupCommandKind.Toggle or
@@ -1174,7 +1189,10 @@ public sealed partial class AppController : IDisposable
             case StartupCommandKind.Exit:
                 Exit();
                 break;
+            case StartupCommandKind.EnableMcpForCodex:
+                return TryEnableMcpForCodex();
         }
+        return true;
     }
 
     private int NextVisibilityAnimationVersion(string paperId)
@@ -1251,8 +1269,6 @@ public sealed partial class AppController : IDisposable
             return;
         }
 
-        // An explicit show is a user decision, not a late startup callback.
-        _startupDisplayDeferredPapers.Remove(paper);
         InvalidateVisibilityShortcutSnapshotForExternalCommand();
         if (!_suppressDirty)
         {
@@ -1342,9 +1358,28 @@ public sealed partial class AppController : IDisposable
                 // 显示动画：淡入
                 if (State.EnableAnimations && originalOpacity > 0)
                 {
-                    var fadeIn = new System.Windows.Media.Animation.DoubleAnimation(0, originalOpacity, TimeSpan.FromMilliseconds(200))
+                    var fadeIn = new System.Windows.Media.Animation.DoubleAnimation(
+                        0,
+                        originalOpacity,
+                        TimeSpan.FromMilliseconds(AnimationTiming.ScaleMilliseconds(200)))
                     {
                         EasingFunction = AnimationHelper.QuickEase
+                    };
+                    fadeIn.Completed += (_, _) =>
+                    {
+                        if (window.IsClosed || !paper.IsVisible ||
+                            !IsVisibilityAnimationCurrent(paper.Id, visibilityVersion) ||
+                            !_windows.TryGetValue(paper.Id, out var latestWindow) ||
+                            !ReferenceEquals(latestWindow, window))
+                        {
+                            return;
+                        }
+                        // Commit the opaque endpoint before removing the animation. Keeping
+                        // a HoldEnd clock over the original Opacity=0 can leave a temporary
+                        // layered composition path around a native-backdrop window.
+                        window.Opacity = originalOpacity;
+                        window.BeginAnimation(Window.OpacityProperty, null);
+                        window.RefreshNativeMica(force: true);
                     };
                     window.BeginAnimation(Window.OpacityProperty, fadeIn);
                 }
@@ -1653,13 +1688,20 @@ public sealed partial class AppController : IDisposable
         else
         {
             _displayMetricsRefreshState = DisplayMetricsRefreshState.Idle;
-            _ = WindowWorkAreaHelper.ConnectedMonitorGeometries();
+            var monitors = WindowWorkAreaHelper.ConnectedMonitorGeometries();
             foreach (var window in _windows.Values)
             {
                 window.InvalidateEdgeCapsuleDisplayMetrics();
             }
             RefreshExperimentalAttachmentsAfterDisplayMetrics();
             ArrangeDeepCapsules(animate: false);
+            // A DP hot-unplug can move an expanded paper's HWND beyond the work areas
+            // while its independent edge host still advertises an Active slot.
+            foreach (var window in _windows.Values.ToArray())
+            {
+                if (!window.IsClosed)
+                    window.RecoverInaccessibleExpandedSurface(monitors);
+            }
         }
         foreach (var window in _windows.Values)
         {
@@ -1673,7 +1715,8 @@ public sealed partial class AppController : IDisposable
     }
 
     private bool HasDeepCapsuleReorderDragInProgress()
-        => _windows.Values.Any(window => window.IsDeepCapsuleReorderDragInProgress);
+        => _masterCapsuleQueueTransfer.HasValue ||
+            _windows.Values.Any(window => window.IsDeepCapsuleReorderDragInProgress);
 
     internal void BeginDeepCapsuleReorderDrag(PaperData draggedPaper)
     {
@@ -1763,8 +1806,12 @@ public sealed partial class AppController : IDisposable
 
     public void RefreshFloatingSurfaceZOrder()
     {
-        foreach (var window in _windows.Values)
+        // A changed native z-order completes the queue proxy through a synchronous Render wait.
+        foreach (var window in _windows.Values.ToArray())
         {
+            if (window.IsClosed ||
+                !_windows.TryGetValue(window.PaperId, out var current) ||
+                !ReferenceEquals(current, window)) continue;
             window.RefreshDeepCapsuleSlotTopmost();
         }
         foreach (var m in _masterCapsules.Values) m.RefreshEffectiveTopmost();
@@ -1788,47 +1835,52 @@ public sealed partial class AppController : IDisposable
 
     public void HidePaper(PaperData paper)
     {
-        _startupDisplayDeferredPapers.Remove(paper);
         InvalidateVisibilityShortcutSnapshotForExternalCommand();
+        var visibilityVersion = NextVisibilityAnimationVersion(paper.Id);
         _windows.TryGetValue(paper.Id, out var window);
+        bool IsCurrentHideWindow() => window != null && !window.IsClosed &&
+            IsVisibilityAnimationCurrent(paper.Id, visibilityVersion) &&
+            _windows.TryGetValue(paper.Id, out var current) && ReferenceEquals(current, window);
         if (window != null)
         {
             RestoreExperimentalPassiveForWindow(window);
+            if (IsCurrentHideWindow()) window.PrepareForHide();
         }
-        window?.PrepareForHide();
+        // A later show/delete can run inside proxy handoff or a body lifecycle callback.
+        if (!IsVisibilityAnimationCurrent(paper.Id, visibilityVersion)) return;
         paper.IsVisible = false;
-        var visibilityVersion = NextVisibilityAnimationVersion(paper.Id);
 
-        if (window != null)
+        if (window != null && IsCurrentHideWindow())
         {
             if (!paper.IsCollapsed && !window.IsDeepCapsulePlaced)
             {
                 window.SaveGeometryForCurrentPresentation();
             }
+            if (!IsCurrentHideWindow()) return;
             window.DetachFromDeepCapsuleStack(animate: State.EnableAnimations);
+            if (!IsCurrentHideWindow()) return;
 
             // 隐藏动画：淡出
             if (State.EnableAnimations && window.IsVisible)
             {
-                var fadeOut = new System.Windows.Media.Animation.DoubleAnimation(window.Opacity, 0, TimeSpan.FromMilliseconds(150))
+                var fadeOut = new System.Windows.Media.Animation.DoubleAnimation(
+                    window.Opacity,
+                    0,
+                    TimeSpan.FromMilliseconds(AnimationTiming.ScaleMilliseconds(150)))
                 {
                     EasingFunction = AnimationHelper.QuickEase
                 };
                 fadeOut.Completed += (s, e) =>
                 {
-                    window.BeginAnimation(Window.OpacityProperty, null);
-                    window.Opacity = 1;
-                    if (paper.IsVisible ||
-                        window.IsClosed ||
-                        !IsVisibilityAnimationCurrent(paper.Id, visibilityVersion) ||
-                        !_windows.TryGetValue(paper.Id, out var currentWindow) ||
-                        !ReferenceEquals(currentWindow, window))
+                    if (paper.IsVisible || !IsCurrentHideWindow())
                     {
                         return;
                     }
 
+                    window.BeginAnimation(Window.OpacityProperty, null);
+                    window.Opacity = 1;
                     window.HideWithoutGeometrySave();
-                    window.ReleaseHiddenNoteImages();
+                    if (IsCurrentHideWindow()) window.ReleaseHiddenNoteImages();
                 };
                 window.BeginAnimation(Window.OpacityProperty, fadeOut);
             }
@@ -1837,7 +1889,7 @@ public sealed partial class AppController : IDisposable
                 window.BeginAnimation(Window.OpacityProperty, null);
                 window.Opacity = 1;
                 window.HideWithoutGeometrySave();
-                window.ReleaseHiddenNoteImages();
+                if (IsCurrentHideWindow()) window.ReleaseHiddenNoteImages();
             }
         }
 
@@ -1860,8 +1912,6 @@ public sealed partial class AppController : IDisposable
             return;
         }
 
-        // Explicit show-all supersedes delayed monitor recovery as well as staged surfaces.
-        CancelStartupDisplayRestore();
         _paperSurfaceRestoreGeneration++;
         _startupShellPrewarmGeneration++;
         _isPreparingStartupEdgeCapsules = false;
@@ -1903,36 +1953,51 @@ public sealed partial class AppController : IDisposable
         {
             if (_windows.TryGetValue(paper.Id, out var window))
             {
-                window.RefreshTodoRowsForExternalChange();
+                window.RefreshLinkedPaperRowsForVisibility();
             }
         }
     }
 
     public void HideAllPapers()
     {
-        CancelStartupDisplayRestore();
+        // Proxy handoff and body callbacks can run another UI command synchronously. Keep this
+        // hide scoped to its original targets; each later show/delete supersedes that target.
+        var papersToHide = State.Papers.ToArray();
+        var windowsToHide = _windows.Values.ToArray();
+        var visibilityVersions = papersToHide.Select(paper => paper.Id)
+            .Concat(windowsToHide.Select(window => window.PaperId))
+            .Distinct(StringComparer.Ordinal)
+            .ToDictionary(id => id, NextVisibilityAnimationVersion, StringComparer.Ordinal);
+        bool IsCurrentHideWindow(PaperWindow window) => !window.IsClosed &&
+            IsVisibilityAnimationCurrent(window.PaperId, visibilityVersions[window.PaperId]) &&
+            _windows.TryGetValue(window.PaperId, out var current) && ReferenceEquals(current, window);
+        CancelMasterCapsuleQueueTransfers();
         InvalidateVisibilityShortcutSnapshotForExternalCommand();
         _paperSurfaceRestoreGeneration++;
         _isPreparingStartupEdgeCapsules = false;
 
-        foreach (var window in _windows.Values)
+        foreach (var window in windowsToHide)
         {
+            if (!IsCurrentHideWindow(window)) continue;
             RestoreExperimentalPassiveForWindow(window);
-            window.PrepareForHide();
+            if (IsCurrentHideWindow(window)) window.PrepareForHide();
         }
 
-        foreach (var paper in State.Papers)
+        foreach (var paper in papersToHide)
         {
-            paper.IsVisible = false;
+            if (IsVisibilityAnimationCurrent(paper.Id, visibilityVersions[paper.Id]))
+                paper.IsVisible = false;
         }
 
-        foreach (var window in _windows.Values)
+        foreach (var window in windowsToHide)
         {
+            if (!IsCurrentHideWindow(window)) continue;
             // Fully detach from the stack, not just the expanded reservation: a docked collapsed
             // capsule shows its own slot-host window that a reservation-only clear leaves on screen.
             window.DetachFromDeepCapsuleStack();
+            if (!IsCurrentHideWindow(window)) continue;
             window.HideWithoutGeometrySave();
-            window.ReleaseHiddenNoteImages();
+            if (IsCurrentHideWindow(window)) window.ReleaseHiddenNoteImages();
         }
 
         // Linked-paper buttons cache whether their target currently has an expanded surface.
@@ -1956,7 +2021,7 @@ public sealed partial class AppController : IDisposable
         }
 
         State.Papers.RemoveAll(p => p.Id == paper.Id);
-        QueuePluginPaperStateDeletion(paper.Id);
+        NotifyPaperRemoved(paper.Id);
         _visibilityAnimationVersions.Remove(paper.Id);
         NotifyTodoReminderCollectionChanged();
 
@@ -1978,6 +2043,15 @@ public sealed partial class AppController : IDisposable
         ArrangeDeepCapsules();
         RefreshTrayMenu();
         SaveNow();
+    }
+
+    // Called by UI deletion, committed external deletion, and accepted data reload/merge.
+    // Cross-paper history belongs to entity removal, not plugin-state persistence.
+    internal void NotifyPaperRemoved(string paperId)
+    {
+        foreach (var window in _windows.Values)
+            window.PruneDeletedLinkedPaperFromTodoHistory(paperId);
+        QueuePluginPaperStateDeletion(paperId);
     }
 
     private void ClearTodoLinksToPaper(string linkedPaperId)
@@ -2264,6 +2338,388 @@ public sealed partial class AppController : IDisposable
         }
     }
 
+    internal bool TryCreateMasterQueueFloatingDragHostOptions(
+        string monitorDeviceName,
+        EdgeCapsuleEdge edge,
+        string icon,
+        string label,
+        out EdgeCapsuleDragWindowOptions options)
+    {
+        options = null!;
+        var side = edge == EdgeCapsuleEdge.Left
+            ? DeepCapsuleSides.Left
+            : DeepCapsuleSides.Right;
+        var queueKey = QueueKey(monitorDeviceName, side);
+        foreach (var paper in DeepCapsulePapersInOrder())
+        {
+            if (!string.Equals(QueueKey(paper), queueKey, StringComparison.Ordinal) ||
+                !_windows.TryGetValue(paper.Id, out var window))
+            {
+                continue;
+            }
+
+            if (window.TryCreateMasterQueueFloatingDragHostOptions(
+                    icon,
+                    label,
+                    out options))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    internal bool TryBeginMasterCapsuleQueueTransfer(
+        string monitorDeviceName,
+        EdgeCapsuleEdge edge,
+        double rollbackStartTopMargin,
+        out MasterCapsuleQueueTransferSnapshot snapshot,
+        bool? rollbackHadStartTopMargin = null)
+    {
+        snapshot = default;
+        if (IsExiting ||
+            EdgeCapsuleDragWindow.HasActiveLease ||
+            HasDeepCapsuleReorderDragInProgress() ||
+            !State.UseCapsuleMode ||
+            !State.UseDeepCapsuleMode ||
+            !State.UseCapsuleCollapseAll)
+        {
+            return false;
+        }
+
+        var normalizedMonitor =
+            WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(monitorDeviceName);
+        var side = edge == EdgeCapsuleEdge.Left
+            ? DeepCapsuleSides.Left
+            : DeepCapsuleSides.Right;
+        var sourceKey = QueueKey(normalizedMonitor, side);
+        var paperIds = DeepCapsulePapersInOrder()
+            .Where(paper => string.Equals(QueueKey(paper), sourceKey, StringComparison.Ordinal))
+            .Select(paper => paper.Id)
+            .ToArray();
+        if (paperIds.Length == 0)
+        {
+            return false;
+        }
+
+        // Freeze the persisted monitor aliases behind this live queue. A disconnect may
+        // change its live QueueKey, but must not look like a membership mutation.
+        var sourceMonitorAliases = State.Papers
+            .Where(paper => string.Equals(QueueKey(paper), sourceKey, StringComparison.Ordinal))
+            .Select(paper => paper.CapsuleMonitorDeviceName.Trim())
+            .Append(normalizedMonitor)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        snapshot = new MasterCapsuleQueueTransferSnapshot(
+            sourceKey,
+            normalizedMonitor,
+            edge,
+            paperIds,
+            sourceMonitorAliases,
+            IsCapsuleCollapseAllActiveForQueue(sourceKey),
+            rollbackHadStartTopMargin ?? State.DeepCapsuleQueueStartTopMargins.ContainsKey(sourceKey),
+            rollbackStartTopMargin);
+
+        // Retraction belongs to this runtime transaction, never to the persisted collapse state.
+        // Arm the gate before publishing it: initial placement may synchronously reenter arrange.
+        _masterCapsuleQueueTransfer = snapshot;
+        try
+        {
+            // A vertical preview may precede the horizontal pull. Stop exposing its uncommitted
+            // margin to autosave once the floating transfer owns the gesture.
+            RestoreMasterCapsuleQueueStartTopMargin(snapshot);
+            MarkDirty();
+            SuppressEdgeCapsulePreviewForMasterQueueLayout(
+                normalizedMonitor,
+                edge);
+            ArrangeDeepCapsulesCore(animate: false, flushInitialPresentations: false);
+        }
+        catch
+        {
+            CancelMasterCapsuleQueueTransfer(snapshot);
+            throw;
+        }
+        return _masterCapsuleQueueTransfer == snapshot;
+    }
+
+    internal void CancelMasterCapsuleQueueTransfer(
+        MasterCapsuleQueueTransferSnapshot snapshot)
+    {
+        if (_masterCapsuleQueueTransfer != snapshot)
+        {
+            return;
+        }
+
+        var refreshDisplayMetrics = EndMasterCapsuleQueueTransferGate();
+        RestoreMasterCapsuleQueueStartTopMargin(snapshot);
+        MarkDirty();
+        try
+        {
+            if (!IsExiting)
+            {
+                ArrangeDeepCapsules(animate: true);
+            }
+        }
+        finally
+        {
+            if (refreshDisplayMetrics)
+            {
+                ScheduleDisplayMetricsRefresh();
+            }
+        }
+    }
+
+    private void CancelMasterCapsuleQueueTransfers()
+    {
+        foreach (var master in _masterCapsules.Values.ToArray())
+        {
+            master.CancelQueueTransfer();
+        }
+
+        // Begin can synchronously enter lifecycle code before the master has received its
+        // snapshot. The controller still owns the transaction and must release that gate.
+        if (_masterCapsuleQueueTransfer is { } snapshot)
+        {
+            CancelMasterCapsuleQueueTransfer(snapshot);
+        }
+    }
+
+    internal bool CommitMasterCapsuleQueueTransfer(
+        MasterCapsuleQueueTransferSnapshot snapshot,
+        DeviceScreenPoint dropPoint)
+    {
+        var committed = CommitMasterCapsuleQueueTransfer(
+            snapshot,
+            dropPoint,
+            out var handoffTarget);
+        if (committed)
+        {
+            // Non-gesture callers do not own a floating cover. Preserve the established
+            // synchronous publication contract for lifecycle checks and direct transactions.
+            handoffTarget?.PrepareQueueTransferHandoff();
+        }
+        return committed;
+    }
+
+    internal bool CommitMasterCapsuleQueueTransfer(
+        MasterCapsuleQueueTransferSnapshot snapshot,
+        DeviceScreenPoint dropPoint,
+        out MasterCapsuleWindow? handoffTarget)
+    {
+        handoffTarget = null;
+        if (IsExiting ||
+            _masterCapsuleQueueTransfer != snapshot ||
+            !State.UseCapsuleMode ||
+            !State.UseDeepCapsuleMode ||
+            !State.UseCapsuleCollapseAll)
+        {
+            return false;
+        }
+
+        // Keep the key captured at gesture start. Live QueueKey falls back to the primary
+        // monitor after a disconnect and must not redirect rollback or source cleanup there.
+        var sourceKey = snapshot.SourceQueueKey;
+        var sourceIds = snapshot.PaperIds.ToHashSet(StringComparer.Ordinal);
+        var livePapers = DeepCapsulePapersInOrder();
+        // Native dragging pumps the Dispatcher: API/plugin/UI operations may have changed
+        // queue membership. Retraction does not change this logical slot query. Never apply
+        // an old member snapshot over a newer add/hide/delete/reassign operation.
+        if (!livePapers.Where(paper => BelongsToMasterTransferSource(paper, snapshot))
+                .Select(paper => paper.Id).SequenceEqual(snapshot.PaperIds))
+        {
+            CancelMasterCapsuleQueueTransfer(snapshot);
+            return false;
+        }
+        var sourceLiveCount = snapshot.PaperIds.Length;
+        if (!MasterCapsuleQueueTransferPolicy.TryResolveTarget(
+                dropPoint,
+                snapshot.SourceMonitorDeviceName,
+                snapshot.SourceEdge,
+                slotCount: sourceLiveCount + 1,
+                DeepCapsuleGap,
+                out var preliminaryTarget))
+        {
+            CancelMasterCapsuleQueueTransfer(snapshot);
+            return false;
+        }
+
+        var targetSide = preliminaryTarget.Edge == EdgeCapsuleEdge.Left
+            ? DeepCapsuleSides.Left
+            : DeepCapsuleSides.Right;
+        var targetKey = QueueKey(
+            preliminaryTarget.MonitorDeviceName,
+            targetSide);
+        var targetLiveCount = livePapers.Count(
+            paper => !sourceIds.Contains(paper.Id) &&
+                string.Equals(
+                    QueueKey(paper),
+                    targetKey,
+                    StringComparison.Ordinal));
+        var finalSlotCount =
+            sourceLiveCount +
+            targetLiveCount +
+            (State.UseCapsuleCollapseAll ? 1 : 0);
+        if (!MasterCapsuleQueueTransferPolicy.TryResolveTarget(
+                dropPoint,
+                snapshot.SourceMonitorDeviceName,
+                snapshot.SourceEdge,
+                finalSlotCount,
+                DeepCapsuleGap,
+                out var target))
+        {
+            CancelMasterCapsuleQueueTransfer(snapshot);
+            return false;
+        }
+
+        targetSide = target.Edge == EdgeCapsuleEdge.Left
+            ? DeepCapsuleSides.Left
+            : DeepCapsuleSides.Right;
+        targetKey = QueueKey(target.MonitorDeviceName, targetSide);
+
+        // A reconnected monitor may have split the pressed fallback queue while dragging.
+        // Only skip reassignment when every captured member still belongs to this target.
+        if (string.Equals(sourceKey, targetKey, StringComparison.Ordinal) &&
+            livePapers.Where(paper => sourceIds.Contains(paper.Id)).All(paper =>
+                string.Equals(QueueKey(paper), targetKey, StringComparison.Ordinal)))
+        {
+            if (snapshot.SourceWasCollapsed)
+            {
+                State.CapsuleCollapseAllActiveQueues[sourceKey] = true;
+            }
+            else
+            {
+                State.CapsuleCollapseAllActiveQueues.Remove(sourceKey);
+            }
+            State.DeepCapsuleQueueStartTopMargins[sourceKey] =
+                target.StartTopMargin;
+
+            CompleteMasterCapsuleQueueTransfer(snapshot, targetKey, out handoffTarget);
+            return true;
+        }
+
+        var targetWasCollapsed =
+            IsCapsuleCollapseAllActiveForQueue(targetKey);
+        var targetHasLiveQueue = targetLiveCount > 0;
+        var sourceBlock = State.Papers
+            .Where(paper => sourceIds.Contains(paper.Id))
+            .ToList();
+        var firstSourceIndex = State.Papers.FindIndex(
+            paper => sourceIds.Contains(paper.Id));
+        var remaining = State.Papers
+            .Where(paper => !sourceIds.Contains(paper.Id))
+            .ToList();
+        var lastTargetIndex = remaining.FindLastIndex(
+            paper => string.Equals(
+                QueueKey(paper),
+                targetKey,
+                StringComparison.Ordinal));
+        var insertAt = lastTargetIndex >= 0
+            ? lastTargetIndex + 1
+            : Math.Clamp(firstSourceIndex, 0, remaining.Count);
+
+        foreach (var paper in sourceBlock)
+        {
+            paper.CapsuleMonitorDeviceName = target.MonitorDeviceName;
+            paper.CapsuleSide = targetSide;
+        }
+        remaining.InsertRange(insertAt, sourceBlock);
+        State.Papers = remaining;
+
+        var sourceHasRemainingMembers = State.Papers.Any(
+            paper => !sourceIds.Contains(paper.Id) && BelongsToMasterTransferSource(paper, snapshot));
+        if (!sourceHasRemainingMembers)
+        {
+            State.CapsuleCollapseAllActiveQueues.Remove(sourceKey);
+            State.DeepCapsuleQueueStartTopMargins.Remove(sourceKey);
+        }
+        if (targetHasLiveQueue
+                ? targetWasCollapsed
+                : snapshot.SourceWasCollapsed)
+        {
+            State.CapsuleCollapseAllActiveQueues[targetKey] = true;
+        }
+        else
+        {
+            State.CapsuleCollapseAllActiveQueues.Remove(targetKey);
+        }
+
+        State.DeepCapsuleQueueStartTopMargins[targetKey] =
+            target.StartTopMargin;
+
+        CompleteMasterCapsuleQueueTransfer(snapshot, targetKey, out handoffTarget);
+        return true;
+    }
+
+    private static bool BelongsToMasterTransferSource(
+        PaperData paper,
+        MasterCapsuleQueueTransferSnapshot snapshot)
+        => (paper.CapsuleSide == DeepCapsuleSides.Left
+                ? EdgeCapsuleEdge.Left : EdgeCapsuleEdge.Right) == snapshot.SourceEdge &&
+            snapshot.SourceMonitorAliases.Contains(
+                paper.CapsuleMonitorDeviceName.Trim(), StringComparer.Ordinal);
+
+    private void CompleteMasterCapsuleQueueTransfer(
+        MasterCapsuleQueueTransferSnapshot snapshot,
+        string targetKey,
+        out MasterCapsuleWindow? handoffTarget)
+    {
+        handoffTarget = null;
+        // The data transaction is committed, but its caller still owns the floating lease.
+        // Retiring the source master must no longer cancel or hide that cover.
+        if (_masterCapsules.TryGetValue(snapshot.SourceQueueKey, out var source))
+        {
+            source.MarkQueueTransferCommitted(snapshot);
+        }
+        var shouldRefreshDisplayMetrics = EndMasterCapsuleQueueTransferGate();
+        try
+        {
+            ArrangeDeepCapsulesCore(animate: true, flushInitialPresentations: false,
+                masterTransferTargetKey: targetKey);
+            // Finish all plan-based cleanup first: no old liveKeys/placements may retire a queue
+            // created during this handoff. The gesture caller keeps a newly created target
+            // transparent until its floating HWND finishes the ordinary return flight.
+            _masterCapsules.TryGetValue(targetKey, out handoffTarget);
+            RefreshTrayMenu();
+            SaveNow();
+        }
+        finally
+        {
+            if (shouldRefreshDisplayMetrics)
+            {
+                ScheduleDisplayMetricsRefresh();
+            }
+        }
+    }
+
+    private bool EndMasterCapsuleQueueTransferGate()
+    {
+        _masterCapsuleQueueTransfer = null;
+        if (_displayMetricsRefreshState !=
+            DisplayMetricsRefreshState.DeferredForCapsuleDrag)
+        {
+            return false;
+        }
+
+        _displayMetricsRefreshState = DisplayMetricsRefreshState.Idle;
+        return true;
+    }
+
+    private void RestoreMasterCapsuleQueueStartTopMargin(
+        MasterCapsuleQueueTransferSnapshot snapshot)
+    {
+        if (snapshot.SourceHadStartTopMargin)
+        {
+            State.DeepCapsuleQueueStartTopMargins[snapshot.SourceQueueKey] =
+                snapshot.SourceStartTopMargin;
+        }
+        else
+        {
+            State.DeepCapsuleQueueStartTopMargins.Remove(snapshot.SourceQueueKey);
+        }
+    }
+
     // Reassign a capsule to a different (monitor, edge) queue — the cross-edge / cross-monitor
     // drag. The paper keeps its identity; only its queue tag + position among the target queue's
     // members change. Order within State.Papers is rebuilt so the dragged paper lands at the slot
@@ -2364,12 +2820,23 @@ public sealed partial class AppController : IDisposable
 
     public void UpdateGeometry(PaperData paper, Window window)
     {
+        if (IsDataReloading) return;
         if (window is PaperWindow { SuppressGeometrySave: true })
         {
             return;
         }
 
         if (window is PaperWindow { UsesNonPaperGeometry: true })
+        {
+            return;
+        }
+
+        // Display disconnects can displace the expanded HWND before the topology
+        // reconciliation runs. Only persist its position while it is reachable.
+        if (window is PaperWindow { ShouldSaveDeepCapsuleExpandedGeometry: true } expanded &&
+            WindowNative.TryGetWindowDeviceBounds(expanded, out var expandedBounds) &&
+            !ExpandedPaperRecoveryPolicy.HasReachablePixels(
+                expandedBounds, WindowWorkAreaHelper.ConnectedMonitorGeometries()))
         {
             return;
         }
@@ -2515,7 +2982,9 @@ public sealed partial class AppController : IDisposable
 
     private bool IsCapsuleCollapseAllActiveForQueue(string queueKey)
     {
-        return State.CapsuleCollapseAllActiveQueues.TryGetValue(queueKey, out var active) && active;
+        return (_masterCapsuleQueueTransfer is { } transfer &&
+                string.Equals(transfer.SourceQueueKey, queueKey, StringComparison.Ordinal)) ||
+            (State.CapsuleCollapseAllActiveQueues.TryGetValue(queueKey, out var active) && active);
     }
 
 
@@ -2538,9 +3007,20 @@ public sealed partial class AppController : IDisposable
                 continue;
             }
 
+            // Hidden/non-slot papers still own their queue's persisted collapse choice.
+            // Moving the visible members must not reset those papers when they return.
+            if (State.Papers.Any(paper =>
+                    string.Equals(PersistentQueueKey(paper), staleKey, StringComparison.Ordinal) ||
+                    string.Equals(QueueKey(paper), staleKey, StringComparison.Ordinal)))
+            {
+                continue;
+            }
             State.CapsuleCollapseAllActiveQueues.Remove(staleKey);
         }
     }
+
+    private static string PersistentQueueKey(PaperData paper)
+        => $"{paper.CapsuleMonitorDeviceName.Trim()}|{DeepCapsuleSides.Normalize(paper.CapsuleSide)}";
 
     private bool TryGetDisconnectedQueueFallbackKey(string queueKey, out string fallbackKey)
     {
@@ -2582,6 +3062,12 @@ public sealed partial class AppController : IDisposable
             return;
         }
 
+        ArrangeDeepCapsulesCore(animate, flushInitialPresentations);
+    }
+
+    private void ArrangeDeepCapsulesCore(bool animate, bool flushInitialPresentations,
+        string? masterTransferTargetKey = null)
+    {
         animate = _deepCapsuleArrangeGate.Consume(animate);
         animate = animate && State.EnableAnimations;
         if (!State.UseCapsuleMode || !State.UseDeepCapsuleMode)
@@ -2591,6 +3077,7 @@ public sealed partial class AppController : IDisposable
             {
                 window.DetachFromDeepCapsuleStack();
             }
+            State.CapsuleCollapseAllActiveQueues.Clear();
             DestroyAllMasterCapsules();
             return;
         }
@@ -2608,7 +3095,7 @@ public sealed partial class AppController : IDisposable
         {
             // The master owns slot 0, so startup creates it before publishing the real slots.
             // Suppress its standalone fade so the complete queue reaches the first frame together.
-            SyncMasterCapsules(plan, animate: false);
+            SyncMasterCapsules(plan, animate: false, masterTransferTargetKey);
         }
 
         foreach (var paper in State.Papers)
@@ -2671,16 +3158,18 @@ public sealed partial class AppController : IDisposable
 
         if (!flushInitialPresentations)
         {
-            SyncMasterCapsules(plan, animate);
+            SyncMasterCapsules(plan, animate, masterTransferTargetKey);
         }
     }
 
     // Reconcile one master pill per non-empty queue (when collapse-all is on). Creates/updates the
     // masters for live queues and closes masters whose queue disappeared.
-    private void SyncMasterCapsules(EdgeCapsuleQueuePlan plan, bool animate)
+    private void SyncMasterCapsules(EdgeCapsuleQueuePlan plan, bool animate,
+        string? masterTransferTargetKey = null)
     {
         if (!State.UseCapsuleCollapseAll)
         {
+            State.CapsuleCollapseAllActiveQueues.Clear();
             DestroyAllMasterCapsules();
             return;
         }
@@ -2701,18 +3190,27 @@ public sealed partial class AppController : IDisposable
             var edge = sample.CapsuleSide == DeepCapsuleSides.Left ? EdgeCapsuleEdge.Left : EdgeCapsuleEdge.Right;
             var monitor = sample.CapsuleMonitorDeviceName;
             var retracted = IsCapsuleCollapseAllActiveForQueue(key);
+            var isTransferTarget = string.Equals(key, masterTransferTargetKey, StringComparison.Ordinal);
+            var animateMaster = animate && !isTransferTarget;
 
             if (!_masterCapsules.TryGetValue(key, out var master))
             {
                 master = new MasterCapsuleWindow(this, edge, monitor);
                 _masterCapsules[key] = master;
                 master.SetExperimentalPassive(_experimentalAllSurfacesPassive);
-                master.ShowPlaced(papers.Count, retracted, animate);
+                if (isTransferTarget)
+                {
+                    master.PrepareQueueTransferTarget(papers.Count, retracted);
+                }
+                else
+                {
+                    master.ShowPlaced(papers.Count, retracted, animateMaster);
+                }
             }
             else
             {
                 master.SetQueue(edge, monitor);
-                master.UpdateState(papers.Count, retracted, animate);
+                master.UpdateState(papers.Count, retracted, animateMaster);
             }
         }
 
@@ -2722,10 +3220,10 @@ public sealed partial class AppController : IDisposable
             return;
         }
 
-        // Close masters for queues that no longer exist.
+        // Retire only the live master. Persisted queue cleanup is owned by
+        // RemoveStaleCollapseAllActiveQueues, including hidden/non-slot members.
         foreach (var staleKey in _masterCapsules.Keys.Where(k => !liveKeys.Contains(k)).ToList())
         {
-            State.CapsuleCollapseAllActiveQueues.Remove(staleKey);
             _masterCapsules[staleKey].CloseForReal();
             _masterCapsules.Remove(staleKey);
         }
@@ -2733,12 +3231,8 @@ public sealed partial class AppController : IDisposable
 
     private void DestroyAllMasterCapsules()
     {
-        // Collapsing the masters must never strand retracted capsules off-screen at Opacity 0.
-        if (State.CapsuleCollapseAllActiveQueues.Count > 0)
-        {
-            State.CapsuleCollapseAllActiveQueues.Clear();
-        }
-
+        // This retires live windows only. Hidden/non-slot papers retain their queue
+        // preferences; feature disablement and stale-queue cleanup own model changes.
         if (_masterCapsules.Count == 0)
         {
             return;
@@ -2774,33 +3268,8 @@ public sealed partial class AppController : IDisposable
         SaveNow();
     }
 
-    private void ToggleCapsuleCollapseAll()
-    {
-        State.UseCapsuleCollapseAll = !State.UseCapsuleCollapseAll;
-
-        if (!State.UseCapsuleCollapseAll)
-        {
-            State.CapsuleCollapseAllActiveQueues.Clear();
-            ResetDeepCapsuleStartTopMargins();
-        }
-
-        // Collapse-all rides on top of edge-aligned capsules; enabling it implies both prerequisites.
-        if (State.UseCapsuleCollapseAll && (!State.UseCapsuleMode || !State.UseDeepCapsuleMode))
-        {
-            State.UseCapsuleMode = true;
-            State.UseDeepCapsuleMode = true;
-            foreach (var window in _windows.Values)
-            {
-                window.UpdateCapsuleMode();
-                window.UpdateDeepCapsuleMode();
-            }
-        }
-
-        ArrangeDeepCapsules(animate: true);
-        SaveNow();
-        RebuildTrayMenu();
-        RefreshSettingsCapsuleToggleStates();
-    }
+    private void ToggleCapsuleCollapseAll() =>
+        SetSettingFromUi("capsule.master_enabled", !State.UseCapsuleCollapseAll);
 
     private List<PaperData> DeepCapsulePapersInOrder()
     {
@@ -2875,41 +3344,46 @@ public sealed partial class AppController : IDisposable
         _ = TrySaveNow(sync);
     }
 
-    private bool TrySaveNow(bool sync)
+    private bool TrySaveNow(bool sync, bool workspaceBoundary = false)
     {
+        if (IsExiting) return false;
+        if (IsDataReloading && !workspaceBoundary) return false;
         long? attemptedVersion = null;
         try
         {
             _saveTimer.Stop();
             _forceSaveTimer.Stop();
             _hasPendingDirty = false;
-            CommitPendingNoteContentsForSave();
+            CommitPendingMarkdownContentsForSave();
             var version = Interlocked.Increment(ref _saveVersion);
             NotifyPluginEventMutationStampChanged();
             attemptedVersion = version;
             var stateRevision = Interlocked.Read(ref _stateRevision);
-            var json = _store.SerializeState(State);
+            var store = _store;
+            var workspaceGeneration = Interlocked.Read(ref _workspaceGeneration);
+            var json = store.SerializeState(State);
             if (sync)
             {
-                _store.SaveJsonSync(json, version);
-                if (!IsExiting) TryReleaseUnreferencedImageCache();
-                TryFlushPendingPluginPaperStateDeletes();
+                store.SaveJsonSync(json, version);
+                CompleteStateSaveMaintenance(releaseImageCache: true);
                 _hasShownSaveFailure = false;
             }
             else
             {
+                _pendingAsyncSaves.Add((store, version));
                 _ = Task.Run(async () =>
                 {
                     try
                     {
-                        await _store.SaveJsonAsync(json, version);
+                        await store.SaveJsonAsync(json, version);
                         Application.Current?.Dispatcher?.BeginInvoke(new Action(() =>
                         {
+                            _pendingAsyncSaves.Remove((store, version));
+                            if (workspaceGeneration != Interlocked.Read(ref _workspaceGeneration) || IsExiting) return;
                             if (version == Interlocked.Read(ref _saveVersion) &&
                                 stateRevision == Interlocked.Read(ref _stateRevision))
                             {
-                                TryReleaseUnreferencedImageCache();
-                                TryFlushPendingPluginPaperStateDeletes();
+                                CompleteStateSaveMaintenance(releaseImageCache: true);
                             }
                             _hasShownSaveFailure = false;
                         }));
@@ -2918,7 +3392,9 @@ public sealed partial class AppController : IDisposable
                     {
                         Application.Current?.Dispatcher?.BeginInvoke(new Action(() =>
                         {
-                            HandleSaveFailure(ex, version);
+                            _pendingAsyncSaves.Remove((store, version));
+                            if (workspaceGeneration == Interlocked.Read(ref _workspaceGeneration) && !IsExiting)
+                                HandleSaveFailure(ex, version);
                         }));
                     }
                 });
@@ -2933,18 +3409,19 @@ public sealed partial class AppController : IDisposable
         }
     }
 
-    internal void CommitPendingNoteContentsForSave()
+    internal void CommitPendingMarkdownContentsForSave()
     {
+        if (SuppressDataReloadEditorCommit) return;
         var dispatcher = Application.Current?.Dispatcher;
         if (dispatcher != null && !dispatcher.CheckAccess())
         {
-            // Note commit touches WPF controls; only run on the UI thread.
+            // Markdown editor commit touches WPF controls; only run on the UI thread.
             return;
         }
 
         foreach (var window in _windows.Values)
         {
-            window.CommitPendingNoteContentForSave();
+            window.CommitPendingMarkdownContentForSave();
         }
     }
 
@@ -3028,8 +3505,6 @@ public sealed partial class AppController : IDisposable
             return;
         }
 
-        // If nothing newer has superseded this attempt, keep trying after the force interval
-        // so a transient write failure does not drop the dirty state permanently.
         ArmSaveRetryIfNeeded(failedVersion);
 
         if (!_hasShownSaveFailure && !_ignoreSaveFailures)
@@ -3212,13 +3687,128 @@ public sealed partial class AppController : IDisposable
         return paper.IsVisible && _windows.TryGetValue(paper.Id, out var window) && window.HasVisibleSurface;
     }
 
-    private bool EnsurePapersOnScreen()
+    private HashSet<string> StartupPaperIdsAwaitingMonitor()
+    {
+        var workAreas = new List<Rect>();
+        foreach (var monitor in WindowWorkAreaHelper.ConnectedMonitorGeometries())
+        {
+            var area = WindowWorkAreaHelper.WorkAreaForDevice(monitor.DeviceName);
+            if (area.HasValue &&
+                !area.Value.IsEmpty &&
+                area.Value.Width > 0 &&
+                area.Value.Height > 0)
+            {
+                workAreas.Add(area.Value);
+            }
+        }
+
+        var result = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var paper in State.Papers)
+        {
+            if (PaperAwaitsStartupMonitor(paper, workAreas))
+            {
+                result.Add(paper.Id);
+            }
+        }
+
+        return result;
+    }
+
+    private bool PaperAwaitsStartupMonitor(PaperData paper, IReadOnlyList<Rect> workAreas)
+    {
+        // Deep capsules restore from their persisted queue identity rather than Paper X/Y.
+        if (paper.IsCollapsed &&
+            State.UseCapsuleMode &&
+            State.UseDeepCapsuleMode &&
+            CanPaperDisplayAsCapsule(paper))
+        {
+            return false;
+        }
+
+        if (!IsFinite(paper.X) ||
+            !IsFinite(paper.Y) ||
+            !IsFinite(paper.Width) ||
+            !IsFinite(paper.Height) ||
+            paper.Width <= 0 ||
+            paper.Height <= 0)
+        {
+            return false;
+        }
+
+        var center = new Point(
+            paper.X + paper.Width / 2,
+            paper.Y + paper.Height / 2);
+        return !workAreas.Any(area => area.Contains(center));
+    }
+
+    private async Task CompleteStartupMissingMonitorGraceAsync(
+        IReadOnlyList<string> paperIds,
+        int restoreGeneration)
+    {
+        try
+        {
+            await Task.Delay(StartupMissingMonitorGraceMilliseconds);
+            if (IsExiting || restoreGeneration != _paperSurfaceRestoreGeneration)
+            {
+                return;
+            }
+
+            // One refresh after the grace period is enough: this is not a second topology watcher.
+            WindowWorkAreaHelper.InvalidateMonitorGeometryCache();
+            var rescued = false;
+            var shown = false;
+            foreach (var paperId in paperIds)
+            {
+                var paper = State.Papers.FirstOrDefault(candidate =>
+                    string.Equals(candidate.Id, paperId, StringComparison.Ordinal));
+                if (paper == null)
+                {
+                    continue;
+                }
+
+                var index = State.Papers.IndexOf(paper);
+                rescued |= RescuePaperIfOffScreen(paper, Math.Max(0, index));
+                if (!paper.IsVisible ||
+                    (_windows.TryGetValue(paper.Id, out var existing) && !existing.IsClosed))
+                {
+                    continue;
+                }
+
+                ShowPaper(paper, activate: false);
+                shown = true;
+            }
+
+            if (rescued)
+            {
+                SaveNow();
+            }
+            if (shown)
+            {
+                RefreshTrayMenu();
+            }
+        }
+        catch (Exception ex)
+        {
+            if (!IsExiting)
+            {
+                System.Diagnostics.Trace.TraceWarning(
+                    "One-shot startup monitor recovery failed: {0}",
+                    ex);
+            }
+        }
+    }
+
+    private bool EnsurePapersOnScreen(IReadOnlySet<string>? excludedPaperIds = null)
     {
         var changed = false;
         for (var i = 0; i < State.Papers.Count; i++)
         {
-            if (!_startupDisplayDeferredPapers.Contains(State.Papers[i]))
-                changed |= RescuePaperIfOffScreen(State.Papers[i], i);
+            if (excludedPaperIds?.Contains(State.Papers[i].Id) == true)
+            {
+                continue;
+            }
+
+            changed |= RescuePaperIfOffScreen(State.Papers[i], i);
         }
 
         return changed;
@@ -3456,9 +4046,8 @@ public sealed partial class AppController : IDisposable
         return SystemParameters.WorkArea;
     }
 
-    // Per-queue vertical rest position, keyed by (monitor, edge). Falls back to the legacy global
-    // margin when a queue has no stored value, so old configs are unchanged and a queue's first
-    // slide forks it from the global default.
+    // Per-queue vertical rest position, keyed by (monitor, edge). Missing entries use the current
+    // product default directly; the per-queue dictionary is the only persisted authority.
     public double DeepCapsuleStartTopMarginFor(PaperData paper)
     {
         var edge = paper.CapsuleSide == DeepCapsuleSides.Left ? EdgeCapsuleEdge.Left : EdgeCapsuleEdge.Right;
@@ -3473,10 +4062,33 @@ public sealed partial class AppController : IDisposable
             : EdgeCapsuleLayout.StartTopMargin;
     }
 
-    // Reset ALL deep-capsule start heights to the default — both the legacy global scalar AND the
-    // per-queue dictionary. Must clear the dict too: layout reads per-queue values first, so
-    // leaving stale entries would resurrect old queue heights when the mode is re-enabled (and
-    // persist them to data.json). Single chokepoint so no reset path forgets the dict again.
+    internal string MasterCapsuleQueueKey(string monitorDeviceName, EdgeCapsuleEdge edge)
+        => QueueKey(monitorDeviceName, edge == EdgeCapsuleEdge.Left ? DeepCapsuleSides.Left : DeepCapsuleSides.Right);
+
+    internal MasterCapsuleWindow? MasterCapsuleForQueue(string monitorDeviceName, EdgeCapsuleEdge edge)
+        => _masterCapsules.GetValueOrDefault(MasterCapsuleQueueKey(monitorDeviceName, edge));
+
+    internal bool HasDeepCapsuleStartTopMarginForQueue(string monitorDeviceName, EdgeCapsuleEdge edge)
+        => State.DeepCapsuleQueueStartTopMargins.ContainsKey(MasterCapsuleQueueKey(monitorDeviceName, edge));
+
+    internal void RestoreMasterCapsuleQueueStartTopMargin(
+        string key,
+        bool hadStartTopMargin,
+        double startTopMargin)
+    {
+        if (hadStartTopMargin)
+        {
+            State.DeepCapsuleQueueStartTopMargins[key] = startTopMargin;
+        }
+        else
+        {
+            State.DeepCapsuleQueueStartTopMargins.Remove(key);
+        }
+        ArrangeDeepCapsules(animate: false);
+        MarkDirty();
+    }
+
+    // Reset every persisted per-queue start height to the product default.
     private void ResetDeepCapsuleStartTopMargins()
     {
         State.DeepCapsuleQueueStartTopMargins.Clear();
@@ -3526,42 +4138,35 @@ public sealed partial class AppController : IDisposable
 
     public void Exit()
     {
-        if (IsExiting)
+        if (IsExiting || _preparingUserExit) return;
+        if (!FinishDataReloadBeforeExit()) return;
+        _preparingUserExit = true;
+        try
         {
-            return;
-        }
-
-        CommitSettingsExternalMarkdownEditor(saveImmediately: false);
-        foreach (var window in _windows.Values.ToList())
-        {
-            window.CommitPendingEditsForSave();
-        }
-
-        _lifecycleState = AppLifecycleState.Exiting;
-        _saveTimer.Stop();
-        _forceSaveTimer.Stop();
-        StopFullscreenAvoidanceRuntime(restoreTopmost: false);
-        _displayMetricsRefreshTimer.Stop();
-        StopTodoReminderTimer();
-
-        if (!TrySaveNow(sync: true))
-        {
-            TryExitCleanup(() =>
+            CommitSettingsExternalMarkdownEditor(saveImmediately: false);
+            foreach (var window in _windows.Values.ToList()) window.CommitPendingEditsForSave();
+            // Ordinary exit owns the final coherent save. Failure leaves the editor alive;
+            // Dispose/OnExit must never retry a rejected save after tearing down the UI.
+            if (IsExiting || !TrySaveNow(sync: true)) return;
+            try { _paperBodyPlugins.DataStore.FlushForUserExit(); }
+            catch (Exception ex)
             {
-                MessageBox.Show(
-                    Strings.Get("ExitSaveFailureMessage"),
-                    Strings.Get("SaveFailureTitle"),
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Error);
-            });
+                HandleSaveFailure(ex);
+                return;
+            }
+            if (IsExiting) return;
+            _lifecycleState = AppLifecycleState.Exiting;
+            _saveTimer.Stop();
+            _forceSaveTimer.Stop();
+            StopFullscreenAvoidanceRuntime(restoreTopmost: false);
+            _displayMetricsRefreshTimer.Stop();
+            StopTodoReminderTimer();
+            DisposeRuntimeResources();
+            _lifecycleState = AppLifecycleState.Disposed;
+            _store.StopWritesForTermination();
+            Application.Current.Shutdown();
         }
-
-        DisposeRuntimeResources();
-        _lifecycleState = AppLifecycleState.Disposed;
-        // Let the owning Dispatcher finish WPF shutdown and App.OnExit (single-instance
-        // listener, telemetry and Application resources). Environment.Exit here preempts
-        // that queued work and was slower in the process-exit A/B; owned work is already stopped.
-        Application.Current.Shutdown();
+        finally { _preparingUserExit = false; }
     }
 
     private static void TryExitCleanup(Action cleanup)
@@ -3610,16 +4215,9 @@ public sealed partial class AppController : IDisposable
             return;
         }
 
-        if (_lifecycleState == AppLifecycleState.Running)
-        {
-            foreach (var window in _windows.Values.ToList())
-            {
-                window.CommitPendingEditsForSave();
-            }
-
-            TrySaveNow(sync: true);
-        }
-
+        // Disposal can be reached by WPF shutdown or failed startup, not just user Exit.
+        // The explicit Exit owner already saved successfully; never invent a fallback save.
+        AbortPersistenceForTermination();
         _lifecycleState = AppLifecycleState.Exiting;
         DisposeRuntimeResources();
         _lifecycleState = AppLifecycleState.Disposed;
@@ -3627,9 +4225,10 @@ public sealed partial class AppController : IDisposable
 
     private void DisposeRuntimeResources()
     {
-        CancelStartupDisplayRestore();
+        TryExitCleanup(CancelMasterCapsuleQueueTransfers);
         _pluginStartupPaperGeneration++;
         StopStateBackupPolicy();
+        StopCoreHistoryBackupPolicy();
         MarkdownEdgePreviewPreload.For(Application.Current.Dispatcher).Clear();
         // Stop all child processes together; their grace periods overlap each other and WPF
         // teardown. Only non-UI process work runs in the pool, not Window/Host disposal.
@@ -3675,3 +4274,7 @@ public sealed partial class AppController : IDisposable
         TryExitCleanup(() => scriptShutdown.GetAwaiter().GetResult());
     }
 }
+
+
+
+

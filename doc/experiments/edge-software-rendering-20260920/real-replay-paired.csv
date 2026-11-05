@@ -1,0 +1,5 @@
+round,order,owner_p95_ms,owner_max_ms,owner_over33_count,deduplicated_shape_p95_ms,transaction_p95_ms,transaction_max_ms,cpu_ms,end_working_set_bytes,end_private_bytes,allocation_mib
+1,"default, software",-0.1047,2.3485,0,0.6088,-8.446,27.582,-15.625,-21323776,-112861184,0.10089111328126
+2,"software, default",0.0909,-2.5021,0,-0.2526,-10.528,11.985,-46.875,-19574784,-97808384,-0.71804809570313
+3,"default, software",0.1832,-1.2903,0,0.7730,0.550,-1.309,718.750,-22503424,-111161344,-2.22385406494140
+4,"software, default",0.0010,0.3348,0,0.7201,1.660,-19.123,640.625,-20807680,-107085824,7.72266387939454

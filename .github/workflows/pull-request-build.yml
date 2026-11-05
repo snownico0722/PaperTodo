@@ -48,23 +48,35 @@ jobs:
       - name: Build
         run: dotnet build .\PaperTodo.csproj -c Release --no-restore
 
-      - name: Markdown semantic checks
-        run: dotnet run --project .\tests\PaperTodo.MarkdownSemanticChecks\PaperTodo.MarkdownSemanticChecks.csproj -c Release
+      - name: Run regression checks
+        run: |
+          ./tools/testing/Run-Checks.ps1 -Group all -List
+          ./tools/testing/Run-Checks.ps1 -Group regression
 
-      - name: Markdown editing checks
-        run: dotnet run --project .\tests\PaperTodo.MarkdownEditingChecks\PaperTodo.MarkdownEditingChecks.csproj -c Release
+      - name: Material and skin behavior checks
+        # DWM desktop screenshot acceptance was retired on main (see its D-057).
+        # Preserve native behavior and WPF offscreen material checks only.
+        timeout-minutes: 2
+        run: ./tools/testing/Run-Checks.ps1 -Group visual -Project MicaChecks
 
-      - name: Todo navigation checks
-        run: dotnet run --project .\tests\PaperTodo.TodoNavigationChecks\PaperTodo.TodoNavigationChecks.csproj -c Release
-
-      - name: Edge title checks
-        run: dotnet run --project .\tests\PaperTodo.EdgeTitleChecks\PaperTodo.EdgeTitleChecks.csproj -c Release
-
-      - name: Edge preview rendering and lifecycle checks
-        run: dotnet run --project .\tests\PaperTodo.EdgePreviewChecks\PaperTodo.EdgePreviewChecks.csproj -c Release
-
-      - name: Threading regression checks
-        run: dotnet run --project .\tests\PaperTodo.ThreadingChecks\PaperTodo.ThreadingChecks.csproj -c Release
-
-      - name: Startup, shutdown and small-workset checks
-        run: dotnet run --project .\tests\PaperTodo.LifecycleChecks\PaperTodo.LifecycleChecks.csproj -c Release
+  persistence:
+    name: Persistence and data reload
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.head_commit.message, '[ci]') ||
+      contains(github.event.head_commit.message, '[debug-ci]')
+    runs-on: windows-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+      - name: Persistence and data reload checks
+        run: ./tools/testing/Run-Checks.ps1 -Group persistence

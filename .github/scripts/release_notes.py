@@ -1,4 +1,4 @@
-"""Render English-first GitHub release notes from the two changelogs."""
+"""Render GitHub release notes with collapsed Chinese first, followed by English."""
 
 import argparse
 from pathlib import Path
@@ -54,10 +54,11 @@ def render_notes(english, chinese, repository, tag, assets):
         downloads.append(f"- **{label}**: [{name}]({url})")
 
     return (
-        english.strip()
-        + "\n\n<details>\n<summary>简体中文更新日志</summary>\n\n"
+        "<details>\n<summary>简体中文更新日志</summary>\n\n"
         + chinese.strip()
-        + "\n\n</details>\n\n## Downloads / 下载\n\n"
+        + "\n\n</details>\n\n"
+        + english.strip()
+        + "\n\n## Downloads / 下载\n\n"
         + "\n".join(downloads)
         + "\n"
     )

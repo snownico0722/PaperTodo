@@ -69,8 +69,8 @@ public sealed partial class PaperWindow
             return;
         }
 
-        // A post-commit UI retry can run after another human edit. Settle that edit before
-        // rebuilding rows, but do not record the already-committed external mutation again.
+        // Settle any focused human edit before rebuilding rows, without recording the already
+        // committed external mutation a second time.
         CommitFocusedTextIfNeeded();
         _activeOriginalItemId = null;
         _activeOriginalText = null;

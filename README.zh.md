@@ -6,10 +6,16 @@
 </p>
 
 <p align="center">
+  <a href="https://apps.microsoft.com/detail/9pnfp27sjx13"><img src="https://get.microsoft.com/images/en-us%20dark.svg" width="260" alt="Get it from Microsoft — purchase PaperTodo to support development"></a><br>
+  <sub>PaperTodo 仍可在 GitHub 免费下载。如果你愿意支持项目持续开发，欢迎前往微软商店自愿购买。非常感谢！</sub>
+</p>
+
+<p align="center">
   <img src="https://img.shields.io/badge/version-v4.0.0--beta1-3b82f6" alt="version">
   <img src="https://img.shields.io/badge/platform-Windows%20x64-555" alt="platform">
   <img src="https://img.shields.io/badge/.NET-10-512bd4" alt=".NET">
   <img src="https://img.shields.io/badge/UI-WPF-0078d4" alt="UI">
+  <a href="https://hellogithub.com/repository/snownico0722/PaperTodo" target="_blank"><img src="https://api.hellogithub.com/v1/widgets/recommend.svg?rid=9adac990f66445c58b6be0a70b1734b8&claim_uid=ZRN8AOH73TorfIK&theme=small" alt="Featured｜HelloGitHub" /></a>
 </p>
 <p align="center">
   <strong>语言：简体中文 | <a href="README.md">English</a></strong><br>
@@ -28,7 +34,11 @@
 
 | Markdown 浏览 |
 | :---: |
-| <img src="assets/Md.jpg" alt="Markdown 浏览" width="100%"> |
+| <img src="assets/Md4.0.jpg" alt="Markdown 浏览" width="100%"> |
+
+| 边缘浏览 |
+| :---: |
+| <img src="assets/edge4.0.gif" alt="边缘浏览" width="100%"> |
 
 | 胶囊模式 | 高级胶囊 |
 | :---: | :---: |

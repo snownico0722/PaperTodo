@@ -1691,9 +1691,6 @@ public sealed partial class PaperWindow
             _controller.State.ExperimentalRestingCapsuleOpacity &&
             _controller.State.ExperimentalRestingCapsuleOpacityAlways);
         _experimentalTetherCapsule = capsule;
-        ToolTipPreferences.Apply(
-            capsule,
-            _controller.State.EnableToolTips);
         capsule.UnexpectedlyClosed += (_, _) =>
         {
             if (!ReferenceEquals(_experimentalTetherCapsule, capsule))

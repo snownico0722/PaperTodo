@@ -12,10 +12,21 @@ namespace PaperTodo;
 
 public sealed class TodoTextBox : TextBox
 {
+    public TodoTextBox()
+    {
+        // Completed-item strike lines and selection overlays must never paint
+        // into the next row when a long todo is folded to two visible lines.
+        ClipToBounds = true;
+    }
+
     private const double StrikeInset = 3;
     private const double StrikeThickness = 1.35;
     private const double StrikeVerticalRatio = 0.56;
     private bool _transientFindHighlightEnabled;
+
+    // A folded preview must yield to the editor's own selection renderer during
+    // find and sweep selection, without adding a second highlighting algorithm.
+    internal event EventHandler? FoldSelectionVisualChanged;
 
     public static readonly DependencyProperty IsDoneProperty =
         DependencyProperty.Register(
@@ -35,7 +46,10 @@ public sealed class TodoTextBox : TextBox
             nameof(IsSweepSelected),
             typeof(bool),
             typeof(TodoTextBox),
-            new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender));
+            new FrameworkPropertyMetadata(false,
+                FrameworkPropertyMetadataOptions.AffectsRender,
+                (element, _) => ((TodoTextBox)element).FoldSelectionVisualChanged?
+                    .Invoke(element, EventArgs.Empty)));
 
     public bool IsSweepSelected
     {
@@ -58,6 +72,7 @@ public sealed class TodoTextBox : TextBox
 
             _transientFindHighlightEnabled = value;
             InvalidateVisual();
+            FoldSelectionVisualChanged?.Invoke(this, EventArgs.Empty);
         }
     }
 
@@ -82,6 +97,7 @@ public sealed class TodoTextBox : TextBox
         {
             InvalidateVisual();
         }
+        FoldSelectionVisualChanged?.Invoke(this, EventArgs.Empty);
     }
 
     protected override void OnIsKeyboardFocusWithinChanged(DependencyPropertyChangedEventArgs e)
@@ -267,6 +283,11 @@ public sealed class TodoTextBox : TextBox
 
         for (var lineIndex = 0; lineIndex < lineCount; lineIndex++)
         {
+            var y = SnapToDevicePixel(firstLineStrikeY + (lineIndex * lineAdvance), dpiScaleY);
+            if (!IsFinite(y)) continue;
+            if (y - StrikeThickness / 2 >= ActualHeight) break;
+            if (y + StrikeThickness / 2 <= 0) continue;
+
             int start;
             int length;
             try
@@ -294,8 +315,7 @@ public sealed class TodoTextBox : TextBox
                 continue;
             }
 
-            var y = SnapToDevicePixel(firstLineStrikeY + (lineIndex * lineAdvance), dpiScaleY);
-            if (rightLimit <= StrikeInset + 1 || !IsFinite(y))
+            if (rightLimit <= StrikeInset + 1)
             {
                 continue;
             }

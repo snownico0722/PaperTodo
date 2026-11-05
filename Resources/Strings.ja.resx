@@ -139,9 +139,6 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
   <data name="MenuBold" xml:space="preserve">
     <value>太字</value>
   </data>
-  <data name="MenuClearDone" xml:space="preserve">
-    <value>完了済みを消去</value>
-  </data>
   <data name="MenuCodeBlock" xml:space="preserve">
     <value>コードブロック</value>
   </data>
@@ -434,7 +431,7 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
     <value>展開位置を記憶</value>
   </data>
   <data name="SettingsCollapseExpandedDeepCapsuleOnClick" xml:space="preserve">
-    <value>端のカプセルを再クリックして紙片を戻す</value>
+    <value>カプセルを再クリックして紙片を戻す</value>
   </data>
   <data name="SettingsHideEdgeCapsuleCloseButtonOnHover" xml:space="preserve">
     <value>閉じるボタンを隠す</value>
@@ -623,7 +620,7 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
     <value>端から開くとき、前回の位置とサイズを復元します。使えない場合は端寄せで開きます。</value>
   </data>
   <data name="TipCollapseExpandedDeepCapsuleOnClick" xml:space="preserve">
-    <value>端から開いた紙片に対し、同じカプセルをもう一度クリックすると戻します。</value>
+    <value>展開中の紙片は同じカプセルを再クリックすると戻ります。関連紙片をカプセルに表示しない場合は、関連入口を再クリックすると非表示になります。</value>
   </data>
   <data name="TipCapsuleCollapseAll" xml:space="preserve">
     <value>列の先頭にメインカプセルを表示し、現在の列を一括で折りたたみ／展開します。</value>
@@ -632,7 +629,7 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
     <value>ホバー時も通常どおり伸びますが、追加領域は閉じるボタンのない通常のカプセル領域として動作します。閉じる場合は右クリックメニューの「隠す」を使います。</value>
   </data>
   <data name="TipMaxTitleLength" xml:space="preserve">
-    <value>紙片タイトルとカプセルに表示する最大文字数。</value>
+    <value>タイトルは全角文字換算で数えます。全角1文字、英数字などの半角2文字を同じ長さとして扱います。上限を下げると既存のタイトルも短縮されます。</value>
   </data>
   <data name="TipStartup" xml:space="preserve">
     <value>Windows 起動時に PaperTodo を自動起動します。</value>
@@ -664,6 +661,12 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   </data>
   <data name="TipEnableAnimations" xml:space="preserve">
     <value>よく使う操作に遷移アニメーションを付けます。オフにすると反応がより直接的になります。</value>
+  </data>
+  <data name="SettingsFastAnimations" xml:space="preserve">
+    <value>高速アニメーション</value>
+  </data>
+  <data name="TipFastAnimations" xml:space="preserve">
+    <value>画面アニメーションの時間を通常の約 60% に短縮し、遷移効果を残したまま操作を素早くします。「アニメーションを有効化」がオフの場合は適用されません。</value>
   </data>
   <data name="SettingsResizeGripMode" xml:space="preserve">
     <value>リサイズグリップ</value>
@@ -1111,6 +1114,12 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="TipDeepCapsuleTitleMeasureLimit" xml:space="preserve">
     <value>静止時のエッジカプセルのタイトル長を制限します。0 は文字のみ非表示にし、アイコンと保存済みタイトルは保持します。＋／−で「無制限、0、1…20」を循環します。ホバープレビューがオフの場合、ホバーで省略されたタイトルを広げ、離れると戻します。</value>
   </data>
+  <data name="SettingsCompactMasterCapsule" xml:space="preserve">
+    <value>メインカプセルを短縮</value>
+  </data>
+  <data name="TipCompactMasterCapsule" xml:space="preserve">
+    <value>有効にすると、メインカプセルは矢印のみを表示し、現在のキューのカプセル数を非表示にします。</value>
+  </data>
   <data name="SettingsAllCharacters" xml:space="preserve">
     <value>無制限</value>
   </data>
@@ -1254,23 +1263,32 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="PluginsMoreSettings" xml:space="preserve">
     <value>その他の設定</value>
   </data>
+  <data name="PluginsSettingsUnavailable" xml:space="preserve">
+    <value>設定を読み込めません</value>
+  </data>
   <data name="PluginsLessSettings" xml:space="preserve">
     <value>設定を閉じる</value>
   </data>
   <data name="PluginsProtocolTooltipFormat" xml:space="preserve">
     <value>プラグインプロトコル {0}</value>
   </data>
-  <data name="PluginsDataRecoveryPending" xml:space="preserve">
-    <value>データを読み取れないため空の状態で実行しています。新しいデータは復旧ファイルに保存されます。</value>
-  </data>
-  <data name="PluginsDataRecoveryActive" xml:space="preserve">
-    <value>元のデータを読み取れないため、復旧データファイルを使用しています。</value>
-  </data>
   <data name="PluginsOpenFolder" xml:space="preserve">
     <value>フォルダーを開く</value>
   </data>
+  <data name="PluginsRestartTooltip" xml:space="preserve">
+    <value>PaperTodo を再起動してプラグインを再スキャン</value>
+  </data>
+  <data name="PluginsRestartTitle" xml:space="preserve">
+    <value>PaperTodo を再起動</value>
+  </data>
+  <data name="PluginsRestartMessage" xml:space="preserve">
+    <value>再起動して本文プラグインを再スキャンし、読み込みますか？</value>
+  </data>
+  <data name="PluginsRestartNow" xml:space="preserve">
+    <value>今すぐ再起動</value>
+  </data>
   <data name="PluginsLoadedCountFormat" xml:space="preserve">
-    <value>本文プラグイン {0} 件を検出</value>
+    <value>{0} 件</value>
   </data>
   <data name="PluginsLoadProblems" xml:space="preserve">
     <value>読み込みの問題</value>
@@ -1296,6 +1314,9 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="PluginsMissingProviderFormat" xml:space="preserve">
     <value>本文プラグインが見つかりません：{0}</value>
   </data>
+  <data name="PluginsDisabledProviderFormat" xml:space="preserve">
+    <value>{0}（無効）</value>
+  </data>
   <data name="PaperBodyMenu" xml:space="preserve">
     <value>本文の種類</value>
   </data>
@@ -1304,6 +1325,12 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   </data>
   <data name="BodyProviderMarkdownDescription" xml:space="preserve">
     <value>PaperTodo 内蔵の Markdown 編集・プレビュー・画像本文です。</value>
+  </data>
+  <data name="PluginBodyDisabledTitle" xml:space="preserve">
+    <value>本文プラグインは無効です</value>
+  </data>
+  <data name="PluginBodyDisabledMessageFormat" xml:space="preserve">
+    <value>「{0}」は無効です。設定 → プラグインから再度有効にできます。</value>
   </data>
   <data name="PluginBodyFailureTitle" xml:space="preserve">
     <value>本文プラグインを実行できません</value>
@@ -1365,7 +1392,10 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
     <value>プラグインに問題があります</value>
   </data>
   <data name="PluginsStatusStopped" xml:space="preserve">
-    <value>現在未使用</value>
+    <value>プラグインは有効ですが、現在は実行されていません</value>
+  </data>
+  <data name="PluginsStatusDisabled" xml:space="preserve">
+    <value>プラグインは無効です</value>
   </data>
   <data name="PluginsStatusRunning" xml:space="preserve">
     <value>プラグインは実行中です</value>
@@ -1385,4 +1415,256 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="NoteCopyTextOnlyMessage" xml:space="preserve">
     <value>選択した画像の内容が大きすぎるため、今回はテキストのみコピーしました。</value>
   </data>
+  <data name="ColorSchemeMica" xml:space="preserve">
+    <value>マイカ</value>
+  </data>
+  <data name="TipColorSchemeMica" xml:space="preserve">
+    <value>Windows 11 22H2 以降のネイティブ DWM Mica を使用します。壁紙を読み込んだり模倣したりせず、Windows が背景を合成します。展開した紙片と設定画面が対象です。カプセル、折りたたみアニメーション、半透明状態では単色描画を維持します。透明効果がオフ、高コントラストがオン、またはネイティブ API が利用できない場合は単色になります。他のスキンから初めて切り替えた後は PaperTodo を終了して開き直してください。</value>
+  </data>
+  <data name="MicaRestartRequired" xml:space="preserve">
+    <value>マイカの選択を保存しました。トレイから PaperTodo を終了して開き直すと、ネイティブ Mica が有効になります。現在のウィンドウは単色のままです。スキン変更で編集画面や元に戻す履歴は作り直しません。</value>
+  </data>
+  <data name="MicaUnsupported" xml:space="preserve">
+    <value>ネイティブ Mica には Windows 11 22H2（ビルド 22621）以降が必要です。このシステムではマイカ配色の単色背景を使用します。</value>
+  </data>
+  <data name="MicaScope" xml:space="preserve">
+    <value>ネイティブ Mica は展開した紙片と設定画面に適用されます。カプセル、折りたたみアニメーション、半透明状態では単色背景を使用します。Windows の透明効果や省電力設定によっても単色表示になります。</value>
+  </data>
+  <data name="SettingsMicaBackdrop" xml:space="preserve">
+    <value>背景効果</value>
+  </data>
+  <data name="TipMicaBackdrop" xml:space="preserve">
+    <value>標準マイカ、標準アクリル、透色アクリルから選べます。標準アクリルは柔らかなすりガラス効果、透色アクリルは薄い色の重ね合わせで背後の色をより透かします。</value>
+  </data>
+  <data name="MicaBackdropMica" xml:space="preserve">
+    <value>標準マイカ</value>
+  </data>
+  <data name="MicaBackdropAcrylic" xml:space="preserve">
+    <value>標準アクリル</value>
+  </data>
+  <data name="MicaBackdropClearAcrylic" xml:space="preserve">
+    <value>透色アクリル</value>
+  </data>
+  <data name="SettingsMicaAlwaysActive" xml:space="preserve">
+    <value>常にアクティブ時の素材を表示</value>
+  </data>
+  <data name="TipMicaAlwaysActive" xml:space="preserve">
+    <value>展開したペーパーと設定ウィンドウは、フォーカスを失ってもアクティブ時の素材の見た目を保ちます。</value>
+  </data>
+
+  <data name="ColorSchemeNeutral" xml:space="preserve">
+    <value>ニュートラル</value>
+  </data>
+  <data name="SettingsPaperSkin" xml:space="preserve">
+    <value>スキン（実験）</value>
+  </data>
+  <data name="TipPaperSkin" xml:space="preserve">
+    <value>スキンは質感、配色は色を変更します。</value>
+  </data>
+  <data name="SkinPaper" xml:space="preserve">
+    <value>標準の紙</value>
+  </data>
+  <data name="SkinTracingPaper" xml:space="preserve">
+    <value>半透明トレーシングペーパー</value>
+  </data>
+  <data name="SkinAero" xml:space="preserve">
+    <value>Aero ガラス</value>
+  </data>
+  <data name="SkinPixel" xml:space="preserve">
+    <value>ピクセル</value>
+  </data>
+  <data name="TipSkinTracingPaper" xml:space="preserve">
+    <value>乳白色と細かな繊維模様で背景色をほのかに透かし、文字の読みやすさを保ちます。</value>
+  </data>
+  <data name="TipSkinAero" xml:space="preserve">
+    <value>淡い青の透明ガラスと斜めの反射。画面の取り込みは行いません。</value>
+  </data>
+  <data name="TipSkinPixel" xml:space="preserve">
+    <value>レトロなクエストパネル風。小さな段状の角、一重の外枠、ピクセル整列アイコン、四角い操作部。本文は通常のフォントです。</value>
+  </data>
+  <data name="SkinRestartRequired" xml:space="preserve">
+    <value>ネイティブ背景を有効にするには PaperTodo を再起動してください。</value>
+  </data>
+  <data name="SkinNativeUnsupported" xml:space="preserve">
+    <value>ネイティブ背景には Windows 11 22H2 以降が必要です。</value>
+  </data>
+  <data name="MenuPaperActions" xml:space="preserve">
+    <value>紙片の操作</value>
+  </data>
+  <data name="MenuCustomizeTopBar" xml:space="preserve">
+    <value>タイトルバーをカスタマイズ</value>
+  </data>
+  <data name="MenuReorderTopBar" xml:space="preserve">
+    <value>ボタンの順序を変更</value>
+  </data>
+  <data name="MenuTopBarMoveLeft" xml:space="preserve">
+    <value>左へ移動</value>
+  </data>
+  <data name="MenuTopBarMoveRight" xml:space="preserve">
+    <value>右へ移動</value>
+  </data>
+  <data name="MenuTopBarAssociationDrag" xml:space="preserve">
+    <value>押したままドラッグして関連付け</value>
+  </data>
+  <data name="MenuTopBarPluginActions" xml:space="preserve">
+    <value>プラグイン操作</value>
+  </data>
+  <data name="TopBarSettingsTitle" xml:space="preserve">
+    <value>上部バーのショートカット</value>
+  </data>
+  <data name="TipTopBarShortcutSettings" xml:space="preserve">
+    <value>ドラッグで並べ替え、区切り線を越えると上部バーとメニューの表示先を切り替えられます。幅が足りない場合、固定した標準ショートカットはまとめて一時的にメニューへ移動します。</value>
+  </data>
+  <data name="TopBarShownHeading" xml:space="preserve">
+    <value>上部バーに表示</value>
+  </data>
+  <data name="TopBarMenuHeading" xml:space="preserve">
+    <value>メニューに表示</value>
+  </data>
+  <data name="TopBarEmptyDropArea" xml:space="preserve">
+    <value>ここにドラッグ</value>
+  </data>
+  <data name="TopBarAssociation" xml:space="preserve">
+    <value>関連付けドラッグ</value>
+  </data>
+  <data name="TopBarExternalEditor" xml:space="preserve">
+    <value>外部エディターで開く</value>
+  </data>
+  <data name="DataReloadConflictTitle" xml:space="preserve">
+    <value>PaperTodo データの競合</value>
+  </data>
+  <data name="DataReloadConflictPath" xml:space="preserve">
+    <value>パス:{0}</value>
+  </data>
+  <data name="DataReloadConflictMemoryHeader" xml:space="preserve">
+    <value>現在 (PaperTodo)</value>
+  </data>
+  <data name="DataReloadConflictExternalHeader" xml:space="preserve">
+    <value>外部ファイル</value>
+  </data>
+  <data name="DataReloadConflictKeepMemory" xml:space="preserve">
+    <value>現在を保持</value>
+  </data>
+  <data name="DataReloadConflictKeepExternal" xml:space="preserve">
+    <value>外部を採用</value>
+  </data>
+  <data name="DataReloadConflictValueMissing" xml:space="preserve">
+    <value>(なし)</value>
+  </data>
+  <data name="DataReloadConflictMemoryOnlyTooltip" xml:space="preserve">
+    <value>PaperTodo には存在するが外部ファイルにない行です。「現在を保持」で採用、「外部を採用」で破棄されます。</value>
+  </data>
+  <data name="DataReloadConflictExternalOnlyTooltip" xml:space="preserve">
+    <value>外部ファイルには存在するが PaperTodo にない行です。「外部を採用」で採用、「現在を保持」で破棄されます。</value>
+  </data>
+  <data name="DataReloadPaperConflictTitle" xml:space="preserve">
+    <value>Paper データの競合</value>
+  </data>
+  <data name="DataReloadPaperConflictHeader" xml:space="preserve">
+    <value>Paper ID:{0}  種類:{1}</value>
+  </data>
+  <data name="DataReloadPaperConflictField" xml:space="preserve">
+    <value>フィールド:{0}</value>
+  </data>
+  <data name="DataReloadPaperConflictKeepAllMemory" xml:space="preserve">
+    <value>すべて現在を保持</value>
+  </data>
+  <data name="DataReloadPaperConflictKeepAllExternal" xml:space="preserve">
+    <value>すべて外部を採用</value>
+  </data>
+  <data name="DataReloadPaperConflictWholePaper" xml:space="preserve">
+    <value>(Paper 全体)</value>
+  </data>
+  <data name="WorkspaceSettingsTitle" xml:space="preserve">
+    <value>ワークスペース</value>
+  </data>
+  <data name="WorkspaceSettingsDescription" xml:space="preserve">
+    <value>有効にすると紙片の上部ボタンで切り替えられます。紙片・画像・プラグインデータはワークスペースごとに保存されます。</value>
+  </data>
+  <data name="WorkspaceEnabled" xml:space="preserve">
+    <value>ワークスペースを有効にする</value>
+  </data>
+  <data name="WorkspaceCount" xml:space="preserve">
+    <value>ワークスペース数（メインを含む）</value>
+  </data>
+  <data name="WorkspaceCountHint" xml:space="preserve">
+    <value>最大5個。数を減らしたり無効にしてもファイルは削除されません。</value>
+  </data>
+  <data name="WorkspaceSelectLabel" xml:space="preserve">
+    <value>現在のワークスペース</value>
+  </data>
+  <data name="WorkspaceMainSlotLabel" xml:space="preserve">
+    <value>メインワークスペース（1）</value>
+  </data>
+  <data name="WorkspaceSlotLabel" xml:space="preserve">
+    <value>ワークスペース {0}</value>
+  </data>
+  <data name="WorkspaceCurrent" xml:space="preserve">
+    <value>現在のワークスペース：{0}</value>
+  </data>
+  <data name="WorkspaceFollowMain" xml:space="preserve">
+    <value>メインの設定を使用する</value>
+  </data>
+  <data name="WorkspaceFollowHint" xml:space="preserve">
+    <value>ソフトウェア設定のみメインに従います。紙片・画像・配置・プラグイン独自データは独立したままです。解除すると以前の独自設定に戻ります。</value>
+  </data>
+  <data name="WorkspaceMainHint" xml:space="preserve">
+    <value>メインのワークスペースです。設定を共有する他のワークスペースは、開くときにここの設定を使用します。</value>
+  </data>
+  <data name="WorkspaceNext" xml:space="preserve">
+    <value>次のワークスペース</value>
+  </data>
+  <data name="WorkspaceCycleTooltip" xml:space="preserve">
+    <value>ワークスペース {0}
+クリックで {1} に切り替え</value>
+  </data>
+  <data name="WorkspaceTrayCycle" xml:space="preserve">
+    <value>ワークスペース切替（現在 {0} / {1}）</value>
+  </data>
+  <data name="WorkspaceSettingsReadOnly" xml:space="preserve">
+    <value>現在の設定はメインに従っています。メインで変更するか、「メインの設定を使用する」を解除してください。</value>
+  </data>
+  <data name="WorkspacePluginSettingsHint" xml:space="preserve">
+    <value>プラグインの有効状態はメインに従います。プラグイン独自の設定・データはこのワークスペースに保存されます。</value>
+  </data>
+  <data name="WorkspaceSwitching" xml:space="preserve">
+    <value>ワークスペースの切り替え中です。完了後に操作してください。</value>
+  </data>
+  <data name="WorkspaceSwitchFailed" xml:space="preserve">
+    <value>ワークスペースを切り替えられませんでした</value>
+  </data>
+  <data name="WorkspaceSaveFailed" xml:space="preserve">
+    <value>保存できないため、切り替えを中止しました。</value>
+  </data>
+  <data name="WorkspaceImagesMissing" xml:space="preserve">
+    <value>画像への参照がありますが、画像データベースが見つかりません。</value>
+  </data>
+  <data name="WorkspaceImagesUnavailable" xml:space="preserve">
+    <value>画像データベースを読み込めません：{0}</value>
+  </data>
+  <data name="WorkspaceStartupFallback" xml:space="preserve">
+    <value>前回のワークスペースを開けないためメインを開きました。元のファイルは変更していません。
+{0}</value>
+  </data>
+  <data name="SettingsDataMergeConflicts" xml:space="preserve"><value>データ統合時の競合</value></data>
+  <data name="DataMergeConflictAsk" xml:space="preserve"><value>競合時に確認（既定）</value></data>
+  <data name="DataMergeConflictExternal" xml:space="preserve"><value>外部を優先</value></data>
+  <data name="DataMergeConflictInternal" xml:space="preserve"><value>内部を優先</value></data>
+  <data name="TipDataMergeConflicts" xml:space="preserve"><value>明示的な統合では、双方の競合しない変更を保持します。この設定は競合部分にのみ適用されます。内部は現在の PaperTodo データ、外部は取り込むファイルです。元のバージョンがない場合は必ず確認します。バックグラウンド監視や自動同期は有効になりません。</value></data>
+  <data name="DataReloadConflictEmpty" xml:space="preserve"><value>（空）</value></data>
+  <data name="NoteHtmlSaved" xml:space="preserve"><value>保存先：{0}
+元のノートは保持されます。</value></data>
+  <data name="NoteExportCurrent" xml:space="preserve"><value>このメモをエクスポート</value></data>
+  <data name="NoteExportAll" xml:space="preserve"><value>すべてのメモと ToDo をエクスポート</value></data>
+  <data name="NoteExportMarkdownType" xml:space="preserve"><value>Markdown 文書</value></data>
+  <data name="NoteExportHtmlType" xml:space="preserve"><value>HTML 文書</value></data>
+  <data name="NoteExportMarkdownZipType" xml:space="preserve"><value>Markdown ZIP</value></data>
+  <data name="NoteExportHtmlZipType" xml:space="preserve"><value>HTML ZIP</value></data>
+  <data name="NoteExportMissingImageText" xml:space="preserve"><value>画像がありません</value></data>
+  <data name="NoteExportSummary" xml:space="preserve"><value>{0}/{1} 件をエクスポートしました。&#xA;不足画像：{2} 件（{3} 件に影響）。&#xA;保存先：{4}</value></data>
+  <data name="NoteExportFailedNotes" xml:space="preserve"><value>エクスポートに失敗した項目：&#xA;{0}</value></data>
+  <data name="NoteExportFailure" xml:space="preserve"><value>エクスポートに失敗しました：{0}</value></data>
+  <data name="NoteExportNoNotes" xml:space="preserve"><value>エクスポートできるメモまたは ToDo がありません。</value></data>
+  <data name="NoteExportProgress" xml:space="preserve"><value>エクスポート中 {0}/{1} 件</value></data>
+  <data name="TodoExportCurrent" xml:space="preserve"><value>この ToDo をエクスポート</value></data>
 </root>

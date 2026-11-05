@@ -54,7 +54,7 @@ internal sealed class MarkdownEdgeCapsulePreviewProvider : IEdgeCapsulePreviewPr
             : Math.Clamp(
                 74 + lines * AppTypography.Scale(22) * textScale,
                 150,
-                410);
+                EdgeCapsulePreviewSize.BuiltInMaximumHeightDip);
         if (empty)
         {
             width = Math.Max(130, width);

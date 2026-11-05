@@ -4,23 +4,49 @@ using PaperTodo.Plugin;
 
 namespace PaperTodo;
 
+// Transport-only metadata. The public MCP tool response remains DataReloadStatus.
+internal sealed record McpWorkspaceStatusEnvelope(object? Result, string WorkspaceToken);
+
 /// <summary>
 /// MCP transport adapter. JSON parsing and MCP authorization stay here; all PaperTodo reads,
 /// validation, persistence, rollback and UI reconciliation are delegated to PaperCommandService.
 /// </summary>
-internal sealed class McpCommandService
+internal sealed partial class McpCommandService
 {
     private readonly AppController _controller;
     private readonly PaperCommandService _commands;
+    private readonly long _workspaceGeneration;
 
     public McpCommandService(AppController controller, PaperCommandService commands)
     {
         _controller = controller;
         _commands = commands;
+        _workspaceGeneration = controller.WorkspaceGeneration;
+    }
+
+    // Only the internal named-pipe protocol carries this lease. Public MCP tools stay unchanged.
+    // A stale bridge must not silently retarget its work after a workspace switch.
+    internal object? ExecutePipeBound(JsonElement request)
+    {
+        var method = RequiredString(request, "method", 80);
+        if (method is not ("get_workspace_binding" or "get_data_reload_status"))
+        {
+            if (!request.TryGetProperty("workspace_token", out var token) ||
+                token.ValueKind != JsonValueKind.String ||
+                !string.Equals(token.GetString(), _controller.WorkspaceBindingToken, StringComparison.Ordinal))
+                throw new McpApiException("workspace_changed",
+                    "The workspace changed; restart the MCP connection before making another request.");
+        }
+        var result = Execute(request);
+        return method == "get_data_reload_status"
+            ? new McpWorkspaceStatusEnvelope(result, _controller.WorkspaceBindingToken)
+            : result;
     }
 
     public object? Execute(JsonElement request)
     {
+        if (_workspaceGeneration != _controller.WorkspaceGeneration || _controller.IsWorkspaceSwitching)
+            throw new McpApiException("workspace_changed", "The workspace changed; query the current workspace before retrying.");
         if (!_controller.IsRunning)
         {
             throw new McpApiException("app_exiting", "PaperTodo is exiting.");
@@ -41,6 +67,20 @@ internal sealed class McpCommandService
         {
             return method switch
             {
+                "reload_data" => ReloadData(),
+                "merge_data" => MergeData(parameters),
+                "get_workspace_binding" => new { token = _controller.WorkspaceBindingToken },
+                "get_data_reload_status" => _commands.GetDataReloadStatus(),
+                "list_settings" => ListSettings(parameters),
+                "get_setting" => GetSetting(parameters),
+                "set_setting" => SetSetting(parameters),
+                "show_paper" => PresentPaper(parameters, PaperPresentationAction.Show),
+                "hide_paper" => PresentPaper(parameters, PaperPresentationAction.Hide),
+                "toggle_paper_visibility" => PresentPaper(parameters, PaperPresentationAction.ToggleVisibility),
+                "expand_paper" => PresentPaper(parameters, PaperPresentationAction.Expand),
+                "collapse_paper" => PresentPaper(parameters, PaperPresentationAction.Collapse),
+                "toggle_paper_collapsed" => PresentPaper(parameters, PaperPresentationAction.ToggleCollapsed),
+                "activate_paper" => PresentPaper(parameters, PaperPresentationAction.Activate),
                 "list_papers" => ListPapers(parameters),
                 "get_paper" => GetPaper(parameters),
                 "create_todo_paper" => CreateTodoPaper(parameters),
@@ -56,10 +96,50 @@ internal sealed class McpCommandService
                     $"Unknown PaperTodo method: {method}")
             };
         }
+        catch (PaperSettingsException ex)
+        {
+            throw new McpApiException(ex.Code, ex.Message);
+        }
         catch (PaperCommandException ex)
         {
             throw new McpApiException(ex.Code, ex.Message);
         }
+    }
+
+    private PaperSettingSnapshot SettingsAccess(PaperSettingSnapshot setting) =>
+        PaperSettingsService.WithAccess(setting, _controller.State.McpAllowFullWrites);
+
+    private object ListSettings(JsonElement parameters) => new
+    {
+        settings = _controller.PublicSettings.List(OptionalString(parameters, "category", 80))
+            .Select(SettingsAccess).ToArray()
+    };
+
+    private object GetSetting(JsonElement parameters) =>
+        SettingsAccess(_controller.PublicSettings.Get(RequiredString(parameters, "id", 120)));
+
+    private object SetSetting(JsonElement parameters)
+    {
+        RequireFullWrites();
+        var id = RequiredString(parameters, "id", 120);
+        if (!parameters.TryGetProperty("value", out var value))
+            throw new McpApiException("invalid_params", "value is required.");
+        var result = _controller.PublicSettings.Set(id, value);
+        return result with { Setting = SettingsAccess(result.Setting) };
+    }
+
+    private DataReloadResult ReloadData()
+    {
+        RequireFullWrites();
+        return _commands.ReloadData(PaperOperationContext.Mcp());
+    }
+
+
+    private DataReloadResult MergeData(JsonElement parameters)
+    {
+        RequireFullWrites();
+        return _commands.MergeData(PaperOperationContext.Mcp(),
+            RequiredString(parameters, "baseline_json", int.MaxValue));
     }
 
     private object ListPapers(JsonElement parameters)
@@ -77,9 +157,11 @@ internal sealed class McpCommandService
                 return new
                 {
                     id = paper.Id,
+                    paper_id = paper.Id,
                     type = paper.Type,
                     title = paper.Title,
                     is_visible = paper.IsVisible,
+                    is_collapsed = paper.IsCollapsed,
                     item_count = paper.Type == PaperTypes.Todo
                         ? _commands.ListTodos(paper.Id, includeBlank: true).Count
                         : 0,
@@ -112,7 +194,6 @@ internal sealed class McpCommandService
             _controller.State.MaxTitleLength);
         var show = OptionalBoolean(parameters, "show") ?? true;
         var todos = ReadTodoInputs(parameters, required: false);
-        RequireFullWritesForTodoMetadata(todos);
 
         var result = _commands.CreatePaper(
             new CreatePaperRequest
@@ -157,7 +238,6 @@ internal sealed class McpCommandService
         RequireAdditiveWrites();
         var paperId = RequiredString(parameters, "paper_id", 64);
         var todos = ReadTodoInputs(parameters, required: true);
-        RequireFullWritesForTodoMetadata(todos);
         var result = _commands.AppendTodos(
             new AppendTodosRequest
             {
@@ -389,9 +469,11 @@ internal sealed class McpCommandService
             return new
             {
                 id = paper.Id,
+                paper_id = paper.Id,
                 type = paper.Type,
                 title = paper.Title,
                 is_visible = paper.IsVisible,
+                is_collapsed = paper.IsCollapsed,
                 body_provider_id = paper.BodyProviderId,
                 body_state = bodyState == null
                     ? null
@@ -403,9 +485,11 @@ internal sealed class McpCommandService
         return new
         {
             id = paper.Id,
+            paper_id = paper.Id,
             type = paper.Type,
             title = paper.Title,
             is_visible = paper.IsVisible,
+            is_collapsed = paper.IsCollapsed,
             todos = _commands.ListTodos(paper.Id, includeBlank: true)
                 .OrderBy(item => item.Order)
                 .Select(TodoDetails)
@@ -511,18 +595,6 @@ internal sealed class McpCommandService
         return result;
     }
 
-    private void RequireFullWritesForTodoMetadata(
-        IReadOnlyList<TodoCreateItem> inputs)
-    {
-        if (inputs.Any(input =>
-                input.Done ||
-                input.ReminderAt.HasValue ||
-                !string.IsNullOrWhiteSpace(input.LinkedPaperId)))
-        {
-            RequireFullWrites();
-        }
-    }
-
     private void RequireAdditiveWrites()
     {
         if (!_controller.State.McpAllowBlankWrites &&
@@ -608,13 +680,15 @@ internal sealed class McpCommandService
             throw new McpApiException("invalid_params", $"{name} cannot be empty.");
         }
         var tooLong = string.Equals(name, "title", StringComparison.Ordinal)
-            ? PaperTitles.ExceedsTextElementLimit(text, maxLength)
+            ? PaperTitles.ExceedsTitleLengthLimit(text, maxLength)
             : text.Length > maxLength;
         if (tooLong)
         {
             throw new McpApiException(
                 "invalid_params",
-                $"{name} cannot exceed {maxLength} characters.");
+                string.Equals(name, "title", StringComparison.Ordinal)
+                    ? $"{name} cannot exceed {maxLength} full-width characters (two half-width characters count as one)."
+                    : $"{name} cannot exceed {maxLength} characters.");
         }
         return text;
     }
@@ -661,5 +735,13 @@ internal sealed class McpCommandService
             throw new McpApiException("invalid_params", $"{name} must be an integer.");
         }
         return result;
+    }
+
+
+    private PaperPresentationResult PresentPaper(JsonElement parameters, PaperPresentationAction action)
+    {
+        var paperId = RequiredString(parameters, "paper_id", 64);
+        var activate = OptionalBoolean(parameters, "activate") ?? true;
+        return _controller.PresentWorkspacePaper(paperId, action, activate, PaperOperationContext.Mcp());
     }
 }

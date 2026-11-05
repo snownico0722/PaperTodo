@@ -106,7 +106,8 @@ internal sealed partial class MarkdownSemanticPresentation
         }
 
         var elapsedMs = (DateTime.UtcNow - _fadeStartedAt).TotalMilliseconds;
-        var t = Math.Clamp(elapsedMs / RevealFadeMs, 0.0, 1.0);
+        var durationMs = AnimationTiming.ScaleMilliseconds(RevealFadeMs);
+        var t = Math.Clamp(elapsedMs / durationMs, 0.0, 1.0);
         _fadeAlpha = 1 - (1 - t) * (1 - t); // EaseOutQuad：先快后慢、无过冲。
         RedrawRevealRange();
 

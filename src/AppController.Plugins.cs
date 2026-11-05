@@ -53,27 +53,53 @@ public sealed partial class AppController
             }
         };
 
+        var descriptors = _paperBodyPlugins.Descriptors
+            .Where(descriptor => descriptor.Kind != PaperBodyPluginKind.BuiltIn)
+            .ToArray();
+        _pluginStatusRefreshers.Clear();
+
         var header = new Grid();
         header.ColumnDefinitions.Add(new ColumnDefinition
         {
             Width = new GridLength(1, GridUnitType.Star)
         });
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var title = new TextBlock
+        var heading = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        heading.Children.Add(new TextBlock
         {
             Text = Strings.Get("PluginsPageTitle"),
             Foreground = TrayTextBrush,
             FontSize = AppTypography.Scale(13),
             FontWeight = FontWeights.SemiBold,
             VerticalAlignment = VerticalAlignment.Center
-        };
+        });
+        heading.Children.Add(new TextBlock
+        {
+            Text = Strings.Format("PluginsLoadedCountFormat", descriptors.Length),
+            Foreground = TrayWeakTextBrush,
+            FontSize = AppTypography.Scale(10.5),
+            FontWeight = FontWeights.Medium,
+            Margin = new Thickness(7, 0, 1, 0),
+            VerticalAlignment = VerticalAlignment.Center
+        });
+        var restart = SettingsIconButton("↻", Strings.Get("PluginsRestartTooltip"));
+        restart.Width = 23;
+        restart.Height = 23;
+        restart.Margin = new Thickness(2, 0, 0, 0);
+        restart.Click += (_, _) => ConfirmPluginRestart();
+        heading.Children.Add(restart);
+
         var openFolder = PluginPageButton(Strings.Get("PluginsOpenFolder"));
         openFolder.Margin = new Thickness(8, 0, 0, 0);
         openFolder.ToolTip = _paperBodyPlugins.PluginRoot;
         openFolder.Click += (_, _) => OpenPluginFolder();
-        Grid.SetColumn(title, 0);
+        Grid.SetColumn(heading, 0);
         Grid.SetColumn(openFolder, 1);
-        header.Children.Add(title);
+        header.Children.Add(heading);
         header.Children.Add(openFolder);
         root.Children.Add(header);
 
@@ -83,15 +109,20 @@ public sealed partial class AppController
             Foreground = TrayWeakTextBrush,
             FontSize = AppTypography.Scale(11.5),
             TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 7, 0, 0)
+            Margin = new Thickness(0, 4, 0, 1)
         });
 
-        var descriptors = _paperBodyPlugins.Descriptors;
-        root.Children.Add(SettingsSectionLabel(
-            Strings.Format("PluginsLoadedCountFormat", descriptors.Count)));
         foreach (var descriptor in descriptors)
         {
-            root.Children.Add(BuildPluginDescriptorCard(descriptor));
+            try
+            {
+                root.Children.Add(BuildPluginDescriptorCard(descriptor));
+            }
+            catch (Exception ex)
+            {
+                root.Children.Add(BuildPluginIssueCard(new PaperBodyPluginLoadIssue(
+                    descriptor.SourcePath, ex.GetBaseException().Message)));
+            }
         }
 
         if (_paperBodyPlugins.Issues.Count > 0)
@@ -104,6 +135,26 @@ public sealed partial class AppController
         }
 
         return root;
+    }
+
+    private void ConfirmPluginRestart()
+    {
+        if (_settingsWindow == null ||
+            !PaperNoticeDialog.ShowChoice(
+                _settingsWindow,
+                Strings.Get("PluginsRestartTitle"),
+                Strings.Get("PluginsRestartMessage"),
+                Strings.Get("CommonCancel"),
+                Strings.Get("PluginsRestartNow")))
+        {
+            return;
+        }
+
+        if (Application.Current is App app)
+        {
+            app.RequestRestartAfterExit();
+        }
+        Exit();
     }
 
     private Button PluginPageButton(string text)
@@ -138,14 +189,6 @@ public sealed partial class AppController
         });
 
         var settings = descriptor.Manifest?.Settings ?? [];
-        PaperBodyPluginDataReadIssue? dataIssue = null;
-        if (descriptor.Kind != PaperBodyPluginKind.BuiltIn &&
-            _paperBodyPlugins.DataStore.TryGetReadIssue(
-                descriptor.Id,
-                out var detectedDataIssue))
-        {
-            dataIssue = detectedDataIssue;
-        }
         if (settings.Length > 0)
         {
             content.ColumnDefinitions.Add(new ColumnDefinition
@@ -155,20 +198,17 @@ public sealed partial class AppController
         }
 
         var text = new StackPanel();
-        var status = PluginStatusFor(descriptor, dataIssue != null);
+        var state = PluginStateFor(descriptor);
         var titleRow = new Grid();
         titleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         titleRow.ColumnDefinitions.Add(new ColumnDefinition
         {
             Width = new GridLength(1, GridUnitType.Star)
         });
-        var statusDot = CreatePluginStatusDot(status);
-        _pluginStatusRefreshers[descriptor.Id] = () =>
-            ApplyPluginStatusDot(
-                statusDot,
-                PluginStatusFor(descriptor, dataIssue != null));
-        Grid.SetColumn(statusDot, 0);
-        titleRow.Children.Add(statusDot);
+        var stateSwitch = CreatePluginStateSwitch(descriptor);
+        stateSwitch.Button.IsEnabled = !FollowsMainWorkspaceSettings;
+        Grid.SetColumn(stateSwitch.Button, 0);
+        titleRow.Children.Add(stateSwitch.Button);
 
         var titleFlow = new TextBlock
         {
@@ -184,6 +224,15 @@ public sealed partial class AppController
             FontSize = AppTypography.Scale(13),
             FontWeight = FontWeights.SemiBold
         });
+        var warningRun = new System.Windows.Documents.Run(
+            state.HasIssue ? "  ⚠" : "")
+        {
+            Foreground = Theme.DangerBrush,
+            FontSize = AppTypography.Scale(12),
+            FontWeight = FontWeights.SemiBold,
+            ToolTip = Strings.Get("PluginsStatusIssue")
+        };
+        titleFlow.Inlines.Add(warningRun);
         titleFlow.Inlines.Add(new System.Windows.Documents.Run(
             $" — {PluginKindText(descriptor.Kind)} · v{PluginVersionText(descriptor.Version)} · s{descriptor.ApiVersion}")
         {
@@ -191,6 +240,12 @@ public sealed partial class AppController
             FontSize = AppTypography.Scale(10.5),
             FontWeight = FontWeights.Medium
         });
+        _pluginStatusRefreshers[descriptor.Id] = () =>
+        {
+            var refreshed = PluginStateFor(descriptor);
+            ApplyPluginStateSwitch(stateSwitch, refreshed);
+            warningRun.Text = refreshed.HasIssue ? "  ⚠" : "";
+        };
         Grid.SetColumn(titleFlow, 1);
         titleRow.Children.Add(titleFlow);
         text.Children.Add(titleRow);
@@ -214,29 +269,29 @@ public sealed partial class AppController
             TextTrimming = TextTrimming.CharacterEllipsis,
             ToolTip = descriptor.SourcePath
         });
-        if (dataIssue != null)
-        {
-            text.Children.Add(new TextBlock
-            {
-                Text = Strings.Get(
-                    dataIssue.UsingEmptyState
-                        ? "PluginsDataRecoveryPending"
-                        : "PluginsDataRecoveryActive"),
-                Foreground = Theme.DangerBrush,
-                FontSize = AppTypography.Scale(10.5),
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 4, settings.Length > 0 ? 14 : 0, 0),
-                ToolTip = string.IsNullOrWhiteSpace(dataIssue.Details)
-                    ? dataIssue.ActivePath
-                    : $"{dataIssue.ActivePath}{Environment.NewLine}{dataIssue.Details}"
-            });
-        }
         Grid.SetColumn(text, 0);
         content.Children.Add(text);
 
         if (settings.Length > 0)
         {
-            var settingsPanel = BuildPluginSettingsPanel(descriptor, settings);
+            FrameworkElement settingsPanel;
+            try
+            {
+                settingsPanel = BuildPluginSettingsPanel(descriptor, settings);
+            }
+            catch (Exception ex)
+            {
+                settingsPanel = new TextBlock
+                {
+                    Text = Strings.Get("PluginsSettingsUnavailable"),
+                    Foreground = Theme.DangerBrush,
+                    FontSize = AppTypography.Scale(11.5),
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(12, 2, 0, 0),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    ToolTip = ex.GetBaseException().Message
+                };
+            }
             Grid.SetColumn(settingsPanel, 1);
             content.Children.Add(settingsPanel);
         }
@@ -282,14 +337,14 @@ public sealed partial class AppController
             more.Children.Add(BuildPluginSettingControl(descriptor, setting));
         }
 
-        var toggle = PluginPageButton(Strings.Get("PluginsMoreSettings"));
-        toggle.MinWidth = 0;
+        var toggle = SettingsIconButton("⌄", Strings.Get("PluginsMoreSettings"));
         toggle.HorizontalAlignment = HorizontalAlignment.Left;
         toggle.Click += (_, _) =>
         {
             var expand = more.Visibility != Visibility.Visible;
             more.Visibility = expand ? Visibility.Visible : Visibility.Collapsed;
-            toggle.Content = Strings.Get(
+            toggle.Content = expand ? "⌃" : "⌄";
+            toggle.ToolTip = Strings.Get(
                 expand ? "PluginsLessSettings" : "PluginsMoreSettings");
         };
 
@@ -368,8 +423,7 @@ public sealed partial class AppController
         Grid.SetColumn(finalPrimary, 0);
         tail.Children.Add(finalPrimary);
 
-        var more = PluginPageButton(Strings.Get("PluginsMoreSettings"));
-        more.MinWidth = 0;
+        var more = SettingsIconButton("⚙", Strings.Get("PluginsMoreSettings"));
         more.Margin = new Thickness(8, 4, 0, 0);
         more.HorizontalAlignment = HorizontalAlignment.Right;
         more.Click += (_, _) => ShowPluginSettingsWindow(descriptor, settings);
@@ -433,7 +487,6 @@ public sealed partial class AppController
             }
         };
         window.Content = BuildPluginSettingsWindowContent(window, descriptor, settings);
-        ApplyToolTipSetting(window);
         window.ShowDialog();
         if (!IsExiting)
         {
@@ -697,6 +750,11 @@ public sealed partial class AppController
         PaperBodyPluginDescriptor descriptor,
         PaperBodyPluginSettingManifest setting)
     {
+        if (setting.Type == "action")
+        {
+            return BuildPluginActionSetting(descriptor, setting);
+        }
+
         if (setting.Type == "boolean")
         {
             var value = _paperBodyPlugins.DataStore
@@ -748,6 +806,56 @@ public sealed partial class AppController
         Grid.SetColumn(editor, 1);
         row.Children.Add(editor);
         return row;
+    }
+
+    private FrameworkElement BuildPluginActionSetting(
+        PaperBodyPluginDescriptor descriptor,
+        PaperBodyPluginSettingManifest setting)
+    {
+        var button = SettingsTextButton(setting.Name);
+        button.MinWidth = 112;
+        button.HorizontalAlignment = HorizontalAlignment.Right;
+        button.Margin = new Thickness(0, 5, 0, 0);
+        button.ToolTip = PluginSettingToolTip(setting);
+        var isPaperAction = PluginShortcutActions.TryParsePaperAction(setting.Action, out _);
+        var registration = new PluginShortcutRegistration(
+            PluginShortcutCommandId(descriptor.Id, setting.Id),
+            descriptor.Id,
+            setting.Id,
+            setting.Action);
+
+        // WPF owns availability refresh; no polling timer or retained settings-window subscription.
+        var command = new RoutedCommand();
+        button.CommandBindings.Add(new CommandBinding(command,
+            (_, e) =>
+            {
+                e.Handled = true;
+                var owner = Window.GetWindow(button);
+                if (isPaperAction && owner != null && ReferenceEquals(owner.Owner, _settingsWindow))
+                {
+                    owner.Close();
+                    // Closing the modal page must re-enable paper windows before activation.
+                    _ = Application.Current.Dispatcher.BeginInvoke(
+                        (Action)(() => ExecutePluginShortcut(registration)),
+                        System.Windows.Threading.DispatcherPriority.Input);
+                }
+                else
+                {
+                    // Custom actions run in the provider Runtime, without closing its settings page.
+                    ExecutePluginShortcut(registration);
+                }
+            },
+            (_, e) =>
+            {
+                e.CanExecute = !IsExiting &&
+                    IsPluginEnabled(descriptor.Id) &&
+                    (isPaperAction
+                        ? HasEntityPluginPaper(descriptor.Id)
+                        : HasActivePluginShortcutRuntime(descriptor.Id));
+                e.Handled = true;
+            }));
+        button.Command = command;
+        return button;
     }
 
     private FrameworkElement BuildPluginStringSetting(
@@ -1157,7 +1265,7 @@ public sealed partial class AppController
                         Orientation = Orientation.Horizontal,
                         Children =
                         {
-                            CreatePluginStatusDot(PluginPageStatus.Issue),
+                            CreatePluginIssueDot(),
                             new TextBlock
                             {
                                 Text = Path.GetFileName(issue.SourcePath),
@@ -1228,5 +1336,50 @@ public sealed partial class AppController
         DisposePluginShortcuts();
         DisposePaperPluginHostRuntime();
         _paperBodyPlugins.Dispose();
+    }
+
+
+    internal event Action? PluginPopupThemeChanged;
+
+
+    internal bool CanAssignPluginProvider(
+        PaperData paper,
+        PaperBodyPluginDescriptor descriptor)
+    {
+        if (!IsPluginEnabled(descriptor.Id))
+        {
+            return false;
+        }
+
+        var limit = descriptor.Manifest?.MaxPaperInstances ?? 1;
+        if (limit == 0)
+        {
+            return true;
+        }
+
+        var otherInstances = State.Papers.Count(candidate =>
+            !ReferenceEquals(candidate, paper) &&
+            candidate.Type == PaperTypes.Note &&
+            string.Equals(
+                candidate.BodyProviderId,
+                descriptor.Id,
+                StringComparison.Ordinal));
+        return otherInstances < limit;
+    }
+
+    internal bool CanCreatePluginPaper(PaperBodyPluginDescriptor descriptor)
+    {
+        if (!IsPluginEnabled(descriptor.Id))
+        {
+            return false;
+        }
+
+        var limit = descriptor.Manifest?.MaxPaperInstances ?? 1;
+        return limit == 0 || State.Papers.Count(candidate =>
+            candidate.Type == PaperTypes.Note &&
+            string.Equals(
+                candidate.BodyProviderId,
+                descriptor.Id,
+                StringComparison.Ordinal)) < limit;
     }
 }

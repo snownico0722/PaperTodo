@@ -368,8 +368,10 @@ internal static class EdgeCapsuleQueueProxyPolicy
             .Frame;
     }
 
-    internal static DeviceScreenPoint TranslationOffset(
+    internal static EdgeCapsulePresentationFrame SamplePresentedFrame(
         EdgeCapsuleQueueProxyMemberPlan member,
+        DeviceScreenPoint startHostOrigin,
+        DeviceScreenPoint targetHostOrigin,
         long startedAtTimestamp,
         int durationMilliseconds,
         long nowTimestamp)
@@ -380,7 +382,47 @@ internal static class EdgeCapsuleQueueProxyPolicy
             durationMilliseconds,
             nowTimestamp);
         var currentHost = PresentedHostBounds(frame);
-        var targetHost = member.Target.HostBounds;
+        if (currentHost.IsEmpty)
+        {
+            return frame;
+        }
+
+        // A successor's live DComp start can advance after plan capture while publication waits
+        // for native work. Shape still follows the same WPF plan; only its screen translation must
+        // use the actual offsets installed on that generation's visual.
+        var progress = SampleProgress(
+            startedAtTimestamp,
+            durationMilliseconds,
+            nowTimestamp);
+        var left = (int)Math.Round(
+            startHostOrigin.X +
+            (targetHostOrigin.X - startHostOrigin.X) * progress,
+            MidpointRounding.AwayFromZero);
+        var top = (int)Math.Round(
+            startHostOrigin.Y +
+            (targetHostOrigin.Y - startHostOrigin.Y) * progress,
+            MidpointRounding.AwayFromZero);
+        var offsetX = left - currentHost.Left;
+        var offsetY = top - currentHost.Top;
+        DeviceScreenRect Translate(DeviceScreenRect bounds) => bounds.IsEmpty
+            ? bounds
+            : new DeviceScreenRect(
+                bounds.Left + offsetX,
+                bounds.Top + offsetY,
+                bounds.Right + offsetX,
+                bounds.Bottom + offsetY);
+        return frame with
+        {
+            Bounds = Translate(frame.Bounds),
+            InteractiveBounds = Translate(frame.InteractiveBounds)
+        };
+    }
+
+    internal static DeviceScreenPoint TranslationOffset(
+        EdgeCapsulePresentationFrame presentedFrame,
+        DeviceScreenRect targetHost)
+    {
+        var currentHost = PresentedHostBounds(presentedFrame);
         return currentHost.IsEmpty || targetHost.IsEmpty
             ? default
             : new DeviceScreenPoint(

@@ -31,9 +31,6 @@ public static class MarkdownRenderModes
     public const string Basic = "basic";
     public const string Full = "full";
 
-    // Old builds persisted "enhanced" as a separate mode. Keep only the wire token for migration.
-    private const string LegacyEnhanced = "enhanced";
-
     public static bool IsValid(string? mode)
     {
         return mode is Off or Basic or Full;
@@ -42,7 +39,7 @@ public static class MarkdownRenderModes
     public static string Normalize(string? mode) => mode switch
     {
         Off => Off,
-        Basic or LegacyEnhanced => Basic,
+        Basic => Basic,
         Full => Full,
         _ => Basic
     };
@@ -395,6 +392,53 @@ public static class TextRenderingProfiles
     }
 }
 
+public static class MaterialTransparencyLevels
+{
+    public const string VeryLow = "veryLow";
+    public const string Low = "low";
+    public const string Medium = "medium";
+    public const string High = "high";
+    public const string VeryHigh = "veryHigh";
+
+    public static readonly string[] All = { VeryLow, Low, Medium, High, VeryHigh };
+
+    public static string Normalize(string? level) => level switch
+    {
+        VeryLow or Low or High or VeryHigh => level,
+        _ => Medium
+    };
+
+    // The saved value describes transparency, so lower transparency means more material cover.
+    // Medium is exactly the pre-setting appearance.
+    public static double CoverScale(string? level) => Normalize(level) switch
+    {
+        VeryLow => 1.30,
+        Low => 1.15,
+        High => 0.85,
+        VeryHigh => 0.70,
+        _ => 1.0
+    };
+
+    public static byte ScaleCover(byte alpha, string? level)
+    {
+        return Normalize(level) switch
+        {
+            Low => (byte)Math.Min(254, Math.Round(alpha * 1.15)),
+            VeryLow => ScaleVeryLow(alpha),
+            High => (byte)Math.Clamp((int)Math.Round(alpha * 0.85), 0, 255),
+            VeryHigh => (byte)Math.Clamp((int)Math.Round(alpha * 0.70), 0, 255),
+            _ => alpha
+        };
+    }
+
+    private static byte ScaleVeryLow(byte alpha)
+    {
+        var low = Math.Min(254, (int)Math.Round(alpha * 1.15));
+        var stronger = Math.Min(255, (int)Math.Round(alpha * 1.30));
+        return (byte)Math.Min(255, Math.Max(low + 1, stronger));
+    }
+}
+
 public readonly record struct TodoVisualMetrics(
     double TextFontSize,
     double TextVerticalPadding,
@@ -409,18 +453,30 @@ public readonly record struct TodoVisualMetrics(
 
 public sealed class AppState
 {
+    // The unnumbered data.json is the sole owner; absent in legacy and numbered documents.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WorkspaceConfiguration? Workspaces { get; set; }
     [JsonRequired]
     public List<PaperData> Papers { get; set; } = new();
     [JsonPropertyOrder(-100)]
     public string UiLanguage { get; set; } = UiLanguages.Default;
+    public string DataMergeConflictPolicy { get; set; } = DataMergeConflictPolicies.Ask;
     public string Theme { get; set; } = "system";
     public string ColorScheme { get; set; } = ColorSchemes.Warm;
+    // Null is the legacy migration sentinel; an explicit "paper" never implies Mica.
+    public string? PaperSkin { get; set; }
+    public string MaterialTransparency { get; set; } = MaterialTransparencyLevels.Medium;
+    // Hides only the ordinary outer stroke. Active/focus capsule outlines stay separate.
+    public bool HideSurfaceOutline { get; set; } = false;
+    public string MicaBackdropType { get; set; } = MicaBackdropTypes.Mica;
+    public bool MicaAlwaysActive { get; set; }
     [System.Diagnostics.CodeAnalysis.AllowNull]
     public string MarkdownRenderMode { get; set; } = MarkdownRenderModes.Basic;
     public string ImageReferenceTextMode { get; set; } = ImageReferenceTextModes.Always;
     /// <summary>Full 编辑态控制符显灵时是否播放短淡入动画。</summary>
     public bool MarkdownEditAnimationEnabled { get; set; } = true;
     public string TodoVisualSize { get; set; } = TodoVisualSizes.Medium;
+    public bool ShowTodoBottomBar { get; set; } = true;
     public bool AutoClearCompletedTodos { get; set; }
     public bool AutoMoveCompletedTodosToBottom { get; set; }
     public bool AutoCompressLargeImages { get; set; } = true;
@@ -447,6 +503,17 @@ public sealed class AppState
     public bool ShowTopBarNewTodoButton { get; set; } = true;
     public bool ShowTopBarNewNoteButton { get; set; } = true;
     public bool ShowTopBarExternalOpenButton { get; set; } = true;
+    // One global ordered list. The first TopBarPinnedCount commands live in the bar;
+    // the remaining commands live in the menu. The per-paper types have no separate layout.
+    public List<string> TopBarShortcutOrder { get; set; } =
+        PaperTopBarShortcuts.NormalizeOrder(null);
+    public int TopBarPinnedCount { get; set; } = 2;
+    // Read-only legacy migration inputs from older data.json versions. Do not write
+    // obsolete per-type lists back once converted to the single global layout.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<string>? TodoTopBarShortcuts { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<string>? NoteTopBarShortcuts { get; set; }
     public bool HidePapersFromTaskbar { get; set; } = true;
     public bool HidePapersFromWindowSwitcher { get; set; } = true;
     [JsonPropertyName("enableTodoNoteLinks")]
@@ -461,11 +528,13 @@ public sealed class AppState
     public bool RunLinkedScriptCapsulesOnClick { get; set; }
     public int MaxTitleLength { get; set; } = PaperTitles.DefaultMaxTitleLength;
     public bool UseCapsuleCollapseAll { get; set; } = true;
+    public bool CompactMasterCapsule { get; set; }
     public Dictionary<string, bool> CapsuleCollapseAllActiveQueues { get; set; } = new();
     public bool ShowDeepCapsuleWhileExpanded { get; set; } = true;
     public bool HideEdgeCapsuleCloseButtonOnHover { get; set; }
     public bool CollapseExpandedDeepCapsuleOnClick { get; set; }
     public bool EnableAnimations { get; set; } = true;
+    public bool FastAnimations { get; set; }
     public bool EnableToolTips { get; set; } = true;
     public bool ExperimentalInactivePaperOpacity { get; set; }
     public double ExperimentalInactivePaperOpacityLevel { get; set; } =
@@ -480,7 +549,7 @@ public sealed class AppState
     public bool ExperimentalHideInactiveTitleBar { get; set; }
     public bool ExperimentalDockedCapsulesNonTopmost { get; set; }
     public bool ExperimentalEdgeCapsuleHoverPreview { get; set; } = true;
-    public bool EdgeCapsulePreviewPreferDownward { get; set; } = true;
+    public bool EdgeCapsulePreviewPreferDownward { get; set; }
     public bool ExperimentalEdgeCapsuleHoverIntent { get; set; } = true;
     public string ExperimentalEdgeCapsuleHoverIntentSensitivity { get; set; } =
         EdgeCapsuleHoverIntentSensitivities.Medium;
@@ -523,6 +592,9 @@ public sealed class AppState
     public int DeepCapsuleTitleMeasureCharacterLimit { get; set; }
     public Dictionary<string, string> GlobalHotkeys { get; set; } = new();
     public Dictionary<string, bool> GlobalHotkeyEnabled { get; set; } = new();
+    // Host-owned plugin enablement. Disabled plugins are still discovered from plugin.json, but
+    // PaperTodo does not activate their Body, Runtime, shortcuts, or startupPaper.
+    public List<string> DisabledPluginIds { get; set; } = new();
     public bool DistinguishNumpadShortcutDigits { get; set; }
     public bool PreserveLinkedPaperHiddenStateInVisibilityShortcuts { get; set; } = true;
     // When true, edge-queue shortcuts expand the paper centered under the current mouse pointer
@@ -541,8 +613,6 @@ public sealed class AppState
     // so unplugging the anchored monitor gracefully lands the stack on a surviving screen.
     public string DeepCapsuleMonitorDeviceName { get; set; } = "";
 
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public bool? ShowTopBarNewPaperButtons { get; set; }
 }
 
 public sealed class PaperData

@@ -58,6 +58,8 @@ public sealed partial class PaperWindow
         PreviewMouseLeftButtonUp += OnTodoSweepPreviewMouseLeftButtonUp;
         LostMouseCapture += OnTodoSweepLostMouseCapture;
         Deactivated += OnTodoSweepWindowDeactivated;
+        LostMouseCapture += OnTodoDragLostMouseCapture;
+        Deactivated += OnTodoDragWindowDeactivated;
     }
 
     private void OnTodoSelectionWindowPreviewMouseLeftButtonDown(
@@ -642,7 +644,9 @@ public sealed partial class PaperWindow
             ? TodoSelectionBrush
             : reminding
                 ? TodoReminderActiveBrush
-                : row.IsMouseOver ? HoverBrush : Brushes.Transparent;
+                : itemId != null && _findHiddenTodoItemIds.Contains(itemId)
+                    ? Theme.Tint((byte)(Theme.IsDark ? 42 : 28))
+                    : row.IsMouseOver ? HoverBrush : Brushes.Transparent;
 
         if (itemId == null || !_todoEditors.TryGetValue(itemId, out var text))
         {
@@ -775,12 +779,10 @@ public sealed partial class PaperWindow
         RefreshCapsuleEligibilityForLinkedPaperChanges(previousItems);
     }
 
-    private bool TryCreateTodoSelectionContextMenu(
+    private bool TryPopulateTodoSelectionContextMenu(
         PaperItem item,
-        Border row,
-        out ContextMenu menu)
+        ContextMenu menu)
     {
-        menu = null!;
         if (_selectedTodoItemIds.Count <= 1 ||
             !_selectedTodoItemIds.Contains(item.Id))
         {
@@ -788,7 +790,6 @@ public sealed partial class PaperWindow
         }
 
         var selected = SelectedTodoItems();
-        menu = CreateContextMenu();
         menu.Items.Add(MenuHeader(Strings.Format(
             "MenuSelectedTodoCount",
             selected.Count)));
@@ -805,8 +806,6 @@ public sealed partial class PaperWindow
         menu.Items.Add(MenuItem(
             Strings.Format("MenuDeleteSelectedTodos", selected.Count),
             (_, _) => DeleteSelectedTodoItems()));
-        menu.Opened += (_, _) => row.Background = TodoSelectionBrush;
-        menu.Closed += (_, _) => UpdateTodoRowBackground(row);
         return true;
     }
 
@@ -877,21 +876,6 @@ public sealed partial class PaperWindow
             UpdateTodoRowBackground(row);
         }
         _todoGroupDragRestingOpacities.Clear();
-    }
-
-    private bool RestrictTodoGroupDragToTrash()
-    {
-        if (!IsTodoGroupDrag)
-        {
-            return false;
-        }
-
-        if (_todoDrag != null)
-        {
-            _todoDrag.TargetId = null;
-            _todoDrag.DropAtEnd = false;
-        }
-        return true;
     }
 
     private string TodoDragGhostText(string fallback)
@@ -1348,5 +1332,52 @@ public sealed partial class PaperWindow
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
         }
+    }
+
+
+    internal void RefreshLinkedPaperRowsForVisibility()
+    {
+        if (_paper.Type != PaperTypes.Todo ||
+            _todoPanel == null ||
+            !_controller.State.EnableTodoPaperLinks)
+        {
+            return;
+        }
+
+        // These existing callbacks only refresh the linked button's presentation. No row,
+        // editor, native text history, selection or append area needs rebuilding for visibility.
+        foreach (var refreshers in _linkedPaperTitleRefreshers.Values)
+        {
+            foreach (var refresh in refreshers.Values)
+            {
+                refresh();
+            }
+        }
+    }
+
+    public void RefreshLinkedPaperRows(string? paperId)
+    {
+        if (_paper.Type != PaperTypes.Todo ||
+            _todoPanel == null ||
+            string.IsNullOrWhiteSpace(paperId))
+        {
+            return;
+        }
+
+        var affectedItemIds = _paper.Items
+            .Where(item => string.Equals(
+                item.LinkedPaperId,
+                paperId,
+                StringComparison.Ordinal))
+            .Select(item => item.Id)
+            .ToArray();
+        if (affectedItemIds.Length == 0)
+        {
+            return;
+        }
+
+        ReconcileTodoRows(
+            affectedItemIds,
+            CurrentFocusedTodoItemId());
     }
 }

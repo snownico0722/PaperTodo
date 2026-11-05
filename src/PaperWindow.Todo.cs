@@ -14,7 +14,12 @@ namespace PaperTodo;
 public sealed partial class PaperWindow
 {
     private readonly TodoArrowNavigation _todoArrowNavigation = new();
+    private readonly HashSet<string> _foldedTodoItemIds = new(StringComparer.Ordinal);
+    private static readonly Geometry TodoFoldUp = Geometry.Parse("M 2,8 L 6,4 L 10,8");
+    private static readonly Geometry TodoFoldDown = Geometry.Parse("M 2,4 L 6,8 L 10,4");
 
+    private const int TodoFoldThreshold = 4;
+    private const int TodoFoldVisibleLines = 2;
     internal const int TodoTextMaxLength = 5000;
     internal const int MaxPastedTodoLines = 200;
 
@@ -40,6 +45,7 @@ public sealed partial class PaperWindow
             Content = _todoPanel,
             FocusVisualStyle = null
         };
+        scrollViewer.ScrollChanged += OnTodoDragScrollChanged;
         AttachTodoBackgroundHost(scrollViewer);
         return scrollViewer;
     }
@@ -80,11 +86,13 @@ public sealed partial class PaperWindow
         NormalizeTodoItems();
         NormalizeOrders();
         PruneTodoSelection();
+        _foldedTodoItemIds.IntersectWith(_paper.Items.Select(item => item.Id));
 
         // 记录现有行的ID，用于判断哪些是新增的
         var existingIds = new HashSet<string>(_todoRows.Select(r => (string)r.Tag));
 
         _todoPanel.Children.Clear();
+        _todoFoldFindControls.Clear();
         _todoEditors.Clear();
         _todoReminderCountdowns.Clear();
         _todoRows.Clear();
@@ -98,7 +106,8 @@ public sealed partial class PaperWindow
             _todoPanel.Children.Add(row);
         }
 
-        _todoPanel.Children.Add(BuildTodoAppendArea());
+        SyncTodoAppendArea();
+        RefreshTodoFindCues();
 
         if (!string.IsNullOrWhiteSpace(targetFocus))
         {
@@ -123,6 +132,7 @@ public sealed partial class PaperWindow
         NormalizeTodoItems();
         NormalizeOrders();
         PruneTodoSelection();
+        _foldedTodoItemIds.IntersectWith(_paper.Items.Select(item => item.Id));
 
         var rebuildIds = rebuildItemIds?.ToHashSet(StringComparer.Ordinal) ?? [];
         var orderedItems = OrderedItems().ToList();
@@ -151,50 +161,121 @@ public sealed partial class PaperWindow
             .Where(row => row.Tag is string)
             .ToDictionary(row => (string)row.Tag, StringComparer.Ordinal);
         var orderedRows = new List<Border>(orderedItems.Count);
-        for (var index = 0; index < orderedItems.Count; index++)
+        foreach (var item in orderedItems)
         {
-            var item = orderedItems[index];
             if (!rowsById.TryGetValue(item.Id, out var row))
             {
                 row = BuildTodoRow(
                     item,
                     isNewItem: !existingIds.Contains(item.Id));
-                _todoPanel.Children.Insert(
-                    Math.Min(index, _todoPanel.Children.Count),
-                    row);
-            }
-            else
-            {
-                var currentIndex = _todoPanel.Children.IndexOf(row);
-                if (currentIndex != index)
-                {
-                    _todoPanel.Children.RemoveAt(currentIndex);
-                    _todoPanel.Children.Insert(index, row);
-                }
             }
             orderedRows.Add(row);
         }
 
-        _todoRows.Clear();
-        _todoRows.AddRange(orderedRows);
-        if (_appendArea == null || !_todoPanel.Children.Contains(_appendArea))
+        // Most visibility/content refreshes keep the same visual row order. Avoid allocating
+        // the LIS index, predecessor arrays and retained set when nothing needs moving.
+        if (!TodoRowsAreInPlace(orderedRows, _todoPanel.Children))
         {
-            _todoPanel.Children.Add(BuildTodoAppendArea());
-        }
-        else
-        {
-            var appendIndex = _todoPanel.Children.IndexOf(_appendArea);
-            if (appendIndex != _todoPanel.Children.Count - 1)
+            // Keep the largest set of rows whose relative order is already correct.
+            // Moving the first item to the end should detach one row, not every other row.
+            var retainedRows = TodoRowsToKeepInPlace(orderedRows, _todoPanel.Children);
+            UIElement? nextRow = _appendArea != null &&
+                _todoPanel.Children.Count > 0 &&
+                ReferenceEquals(_todoPanel.Children[_todoPanel.Children.Count - 1], _appendArea)
+                    ? _appendArea
+                    : null;
+            for (var index = orderedRows.Count - 1; index >= 0; index--)
             {
-                _todoPanel.Children.RemoveAt(appendIndex);
-                _todoPanel.Children.Add(_appendArea);
+                var row = orderedRows[index];
+                if (!retainedRows.Contains(row))
+                {
+                    var nextIndex = nextRow != null
+                        ? _todoPanel.Children.IndexOf(nextRow)
+                        : _todoPanel.Children.Count;
+                    var currentIndex = _todoPanel.Children.IndexOf(row);
+                    if (currentIndex < 0 || currentIndex != nextIndex - 1)
+                    {
+                        if (currentIndex >= 0)
+                        {
+                            _todoPanel.Children.RemoveAt(currentIndex);
+                            if (currentIndex < nextIndex)
+                            {
+                                nextIndex--;
+                            }
+                        }
+                        _todoPanel.Children.Insert(nextIndex, row);
+                    }
+                }
+                nextRow = row;
             }
         }
+
+        _todoRows.Clear();
+        _todoRows.AddRange(orderedRows);
+        SyncTodoAppendArea();
+        RefreshTodoFindCues();
 
         if (!string.IsNullOrWhiteSpace(targetFocus))
         {
             FocusTodoItem(targetFocus, focusPlacement);
         }
+    }
+
+    private static bool TodoRowsAreInPlace(
+        IReadOnlyList<Border> orderedRows,
+        UIElementCollection children)
+    {
+        if (children.Count < orderedRows.Count) return false;
+        for (var index = 0; index < orderedRows.Count; index++)
+        {
+            if (!ReferenceEquals(children[index], orderedRows[index])) return false;
+        }
+        return true;
+    }
+
+    private static HashSet<Border> TodoRowsToKeepInPlace(
+        IReadOnlyList<Border> orderedRows,
+        UIElementCollection children)
+    {
+        var currentIndices = new Dictionary<UIElement, int>();
+        for (var index = 0; index < children.Count; index++)
+        {
+            currentIndices.Add(children[index], index);
+        }
+
+        // Find a longest increasing subsequence of the rows' current visual indices.
+        // New and rebuilt rows have no visual index and must be inserted separately.
+        var tails = new int[orderedRows.Count];
+        var predecessors = new int[orderedRows.Count];
+        Array.Fill(predecessors, -1);
+        var length = 0;
+        for (var index = 0; index < orderedRows.Count; index++)
+        {
+            if (!currentIndices.TryGetValue(orderedRows[index], out var currentIndex))
+            {
+                continue;
+            }
+            var low = 0;
+            var high = length;
+            while (low < high)
+            {
+                var middle = low + (high - low) / 2;
+                if (currentIndices[orderedRows[tails[middle]]] < currentIndex)
+                    low = middle + 1;
+                else
+                    high = middle;
+            }
+            if (low > 0) predecessors[index] = tails[low - 1];
+            tails[low] = index;
+            if (low == length) length++;
+        }
+
+        var retainedRows = new HashSet<Border>();
+        for (var index = length == 0 ? -1 : tails[length - 1]; index >= 0; index = predecessors[index])
+        {
+            retainedRows.Add(orderedRows[index]);
+        }
+        return retainedRows;
     }
 
     private void RemoveTodoRowRegistration(Border row)
@@ -205,6 +286,7 @@ public sealed partial class PaperWindow
         }
 
         _todoEditors.Remove(itemId);
+        _todoFoldFindControls.Remove(itemId);
         _todoReminderCountdowns.Remove(itemId);
         foreach (var paperId in _linkedPaperTitleRefreshers.Keys.ToList())
         {
@@ -242,7 +324,39 @@ public sealed partial class PaperWindow
         }), System.Windows.Threading.DispatcherPriority.Input);
     }
 
-    private UIElement BuildTodoAppendArea()
+    private void SyncTodoAppendArea()
+    {
+        if (_todoPanel == null)
+        {
+            _appendArea = null;
+            return;
+        }
+
+        if (!_controller.State.ShowTodoBottomBar)
+        {
+            if (_appendArea != null)
+            {
+                _todoPanel.Children.Remove(_appendArea);
+            }
+            _appendArea = null;
+            return;
+        }
+
+        if (_appendArea == null || !_todoPanel.Children.Contains(_appendArea))
+        {
+            _todoPanel.Children.Add(BuildTodoAppendArea());
+            return;
+        }
+
+        var appendIndex = _todoPanel.Children.IndexOf(_appendArea);
+        if (appendIndex != _todoPanel.Children.Count - 1)
+        {
+            _todoPanel.Children.RemoveAt(appendIndex);
+            _todoPanel.Children.Add(_appendArea);
+        }
+    }
+
+    private Border BuildTodoAppendArea()
     {
         var metrics = TodoVisualSizes.Metrics(_controller.State.TodoVisualSize);
         var area = new Border
@@ -253,7 +367,7 @@ public sealed partial class PaperWindow
                 Math.Max(AppTypography.Scale(3), metrics.TextVerticalPadding + AppTypography.Scale(1)),
                 0,
                 Math.Max(AppTypography.Scale(3), metrics.TextVerticalPadding + AppTypography.Scale(1))),
-            CornerRadius = new CornerRadius(RadiusControl),
+            CornerRadius = new CornerRadius(Theme.IsPixelSkin ? 0 : RadiusControl),
             BorderThickness = new Thickness(1),
             BorderBrush = AppendBorderBrush,
             Background = AppendBgBrush,
@@ -458,7 +572,7 @@ public sealed partial class PaperWindow
         {
             Margin = new Thickness(0, 2, 0, 2),
             Padding = new Thickness(2),
-            CornerRadius = new CornerRadius(RadiusControl),
+            CornerRadius = new CornerRadius(Theme.IsPixelSkin ? 0 : RadiusControl),
             Background = Brushes.Transparent,
             BorderBrush = Brushes.Transparent,
             BorderThickness = new Thickness(0, 2, 0, 2),
@@ -549,6 +663,11 @@ public sealed partial class PaperWindow
             MaxLength = TodoTextMaxLength
         };
 
+        Grid.SetColumn(text, 1);
+        grid.Children.Add(text);
+        var foldPreview = new TodoFoldPreview(text, grid);
+        foldPreview.SetDone(item.Done);
+
         _todoEditors[item.Id] = text;
 
         text.TextChanged += (_, _) =>
@@ -614,6 +733,7 @@ public sealed partial class PaperWindow
             }
             text.IsDone = true;
             text.Foreground = BrightWeakTextBrush;
+            foldPreview.SetDone(true);
             _controller.MarkDirty();
 
             if (_controller.State.AutoClearCompletedTodos)
@@ -656,6 +776,7 @@ public sealed partial class PaperWindow
             }
             text.IsDone = false;
             text.Foreground = TextBrush;
+            foldPreview.SetDone(false);
             _controller.MarkDirty();
 
             if (MoveTodoItemsAfterDoneChange([item], done: false))
@@ -676,14 +797,13 @@ public sealed partial class PaperWindow
             }
         };
 
-        ContextMenu CreateItemMenu()
+        MenuItem? PopulateItemMenu(ContextMenu itemMenu)
         {
-            if (TryCreateTodoSelectionContextMenu(item, row, out var selectedMenu))
+            if (TryPopulateTodoSelectionContextMenu(item, itemMenu))
             {
-                return selectedMenu;
+                return null;
             }
 
-            var itemMenu = CreateContextMenu();
             MenuItem? reminderMenu = null;
             itemMenu.Items.Add(MenuHeader(Strings.Get("MenuTodoItem")));
             if (hasLinkedPaper)
@@ -716,34 +836,54 @@ public sealed partial class PaperWindow
                 itemMenu.Items.Add(MenuSeparator());
             }
             itemMenu.Items.Add(MenuItem(Strings.Get("MenuDeleteItem"), (_, _) => RemoveItem(item)));
-            itemMenu.Items.Add(MenuItem(Strings.Get("MenuClearDone"), (_, _) => ClearDoneItems()));
 
-            itemMenu.Opened += (_, _) =>
-            {
-                row.Background = HoverBrush;
-                if (reminderMenu != null)
-                {
-                    reminderMenu.IsEnabled = !item.Done;
-                }
-            };
-            itemMenu.Closed += (_, _) =>
-            {
-                if (!row.IsMouseOver)
-                {
-                    UpdateTodoRowBackground(row);
-                }
-            };
-
-            return itemMenu;
+            return reminderMenu;
         }
 
         void AttachItemContextMenu(FrameworkElement element)
         {
-            element.ContextMenu = CreateItemMenu();
+            // WPF needs a non-null menu before ContextMenuOpening to open on the first
+            // mouse or keyboard request. Populate the same instance: TextBox's class
+            // handler attaches its Closed cleanup before our Opening handler runs.
+            var menu = new MaterialContextMenu();
+            var initialized = false;
+            MenuItem? reminderMenu = null;
+            element.ContextMenu = menu;
+            element.ContextMenuOpening += (_, e) =>
+            {
+                // The event bubbles through the row as well as the clicked child. Only
+                // the nearest owner fills its menu; the window can then append its actions.
+                if (!ReferenceEquals(element.ContextMenu, menu) || !ReferenceEquals(
+                        FindContextMenuOwner(e.OriginalSource as DependencyObject, this),
+                        element))
+                {
+                    return;
+                }
+
+                if (!initialized)
+                {
+                    InitializeContextMenu(menu);
+                    menu.Opened += (_, _) =>
+                    {
+                        row.Background = _selectedTodoItemIds.Count > 1 && _selectedTodoItemIds.Contains(item.Id)
+                            ? TodoSelectionBrush
+                            : HoverBrush;
+                        if (reminderMenu != null)
+                        {
+                            reminderMenu.IsEnabled = !item.Done;
+                        }
+                    };
+                    menu.Closed += (_, _) => UpdateTodoRowBackground(row);
+                    initialized = true;
+                }
+
+                PrepareTodoSelectionForContextMenu(item.Id);
+                menu.Items.Clear();
+                reminderMenu = PopulateItemMenu(menu);
+            };
             element.PreviewMouseRightButtonDown += (_, _) =>
             {
                 PrepareTodoSelectionForContextMenu(item.Id);
-                element.ContextMenu = CreateItemMenu();
                 text.Focus();
             };
         }
@@ -751,9 +891,6 @@ public sealed partial class PaperWindow
         AttachItemContextMenu(row);
         AttachItemContextMenu(check);
         AttachItemContextMenu(text);
-
-        Grid.SetColumn(text, 1);
-        grid.Children.Add(text);
 
         if (hasLinkedPath)
         {
@@ -862,7 +999,7 @@ public sealed partial class PaperWindow
                 MinHeight = Math.Max(22, metrics.RowMinHeight - 2),
                 Margin = new Thickness(1, 0, 0, 0),
                 Padding = showLinkedPaperName ? new Thickness(3, 1, 3, 1) : new Thickness(0),
-                CornerRadius = new CornerRadius(RadiusControl),
+                CornerRadius = new CornerRadius(Theme.IsPixelSkin ? 0 : RadiusControl),
                 Background = linkedPaperActive ? LinkedPaperLightBgBrush : LinkedPaperNormalBgBrush,
                 Cursor = Cursors.Hand,
                 ToolTip = runLinkedScriptOnClick
@@ -927,7 +1064,23 @@ public sealed partial class PaperWindow
                     return;
                 }
 
+                // Visibility is button presentation, not a reason to replace its Todo editor.
+                linkedPaperActive = _controller.IsLinkedPaperShown(item.LinkedPaperId);
+                var hovered = linkButton.IsMouseOver;
+                linkButton.Background = linkedPaperActive
+                    ? hovered ? LinkedPaperMediumBgBrush : LinkedPaperLightBgBrush
+                    : hovered ? LinkedPaperLightBgBrush : LinkedPaperNormalBgBrush;
+                linkGlyph.Foreground = linkedPaperActive
+                    ? LinkedPaperActiveTextBrush : hovered ? TextBrush : WeakTextBrush;
+                linkGlyph.Opacity = linkedPaperActive || hovered ? 1.0 : 0.72;
+
+                var runScript = _controller.ShouldRunLinkedScriptCapsule(item.LinkedPaperId);
+                if (linkedPaperTitle == refreshedTitle && runLinkedScriptOnClick == runScript)
+                {
+                    return;
+                }
                 linkedPaperTitle = refreshedTitle;
+                runLinkedScriptOnClick = runScript;
                 linkedPaperButtonText = showLinkedPaperName
                     ? LinkedPaperButtonLabel(isTodoMultiline: false)
                     : runLinkedScriptOnClick ? "⚡" : "\uE71B";
@@ -943,6 +1096,14 @@ public sealed partial class PaperWindow
                 linkButton.ToolTip = runLinkedScriptOnClick
                     ? Strings.Format("ToolTipRunLinkedScriptCapsule", linkedPaperTitle)
                     : Strings.Format("ToolTipOpenLinkedPaper", linkedPaperTitle);
+                if (!showLinkedPaperName)
+                {
+                    linkGlyph.Text = linkedPaperButtonText;
+                    linkGlyph.FontFamily = new FontFamily(runLinkedScriptOnClick
+                        ? "Segoe UI Symbol" : "Segoe MDL2 Assets");
+                    linkGlyph.FontSize = runLinkedScriptOnClick
+                        ? metrics.LinkedPaperIconFontSize + 1 : metrics.LinkedPaperIconFontSize;
+                }
                 lastLinkedPaperNameMultiline = null;
                 UpdateLinkedPaperNameLayout();
             }
@@ -976,7 +1137,10 @@ public sealed partial class PaperWindow
                 if (!_controller.ShouldRunLinkedScriptCapsule(item.LinkedPaperId) ||
                     !_controller.RunLinkedScriptCapsule(item.LinkedPaperId))
                 {
-                    _controller.OpenLinkedPaper(item.LinkedPaperId, this);
+                    _controller.OpenLinkedPaper(
+                        item.LinkedPaperId,
+                        this,
+                        toggleIfExcludedFromCapsules: true);
                 }
                 e.Handled = true;
             };
@@ -1059,8 +1223,147 @@ public sealed partial class PaperWindow
         };
         AttachItemContextMenu(handle);
 
-        Grid.SetColumn(handle, showTodoReminderControl ? 4 : 3);
-        grid.Children.Add(handle);
+        // Reuse the trailing drag column; clipping the native editor never alters its text.
+        var foldGlyph = new System.Windows.Shapes.Path
+        {
+            Data = TodoFoldUp,
+            Stroke = WeakTextBrush,
+            StrokeThickness = AppTypography.Scale(1.15),
+            StrokeStartLineCap = PenLineCap.Round,
+            StrokeEndLineCap = PenLineCap.Round,
+            StrokeLineJoin = PenLineJoin.Round,
+            Stretch = Stretch.Uniform,
+            Width = AppTypography.Scale(9),
+            Height = AppTypography.Scale(6),
+            Opacity = 0.48,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        var foldButton = new Border
+        {
+            Width = Math.Max(AppTypography.Scale(18), metrics.CheckColumnWidth - AppTypography.Scale(4)),
+            Height = AppTypography.Scale(16),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Top,
+            Background = Brushes.Transparent,
+            Cursor = Cursors.Hand,
+            Visibility = Visibility.Collapsed,
+            Child = foldGlyph
+        };
+        _todoFoldFindControls[item.Id] = (foldButton, foldGlyph);
+        var trailingControls = new Grid();
+        trailingControls.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        trailingControls.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        Grid.SetRow(foldButton, 0);
+        trailingControls.Children.Add(foldButton);
+        Grid.SetRow(handle, 1);
+        trailingControls.Children.Add(handle);
+
+        var foldRefreshQueued = false;
+
+        bool ApplyFoldLineLimit(int maxLines)
+        {
+            if (text.MaxLines == maxLines) return false;
+
+            // WPF caches MaxLines as a cap on the inner ScrollViewer. Restoring
+            // int.MaxValue alone leaves that cap in place; an explicit unbounded
+            // MaxHeight makes WPF clear it. Remove the override before folding.
+            if (maxLines == int.MaxValue)
+                text.MaxHeight = double.PositiveInfinity;
+            else
+                text.ClearValue(FrameworkElement.MaxHeightProperty);
+
+            text.MaxLines = maxLines;
+            return true;
+        }
+
+        void RefreshFoldPresentation()
+        {
+            foldRefreshQueued = false;
+            if (!_todoEditors.TryGetValue(item.Id, out var live) || !ReferenceEquals(live, text))
+                return;
+
+            var lineCount = text.LineCount;
+            if (lineCount < 0) return; // Layout/width change will retry when lines become available.
+            var available = lineCount > TodoFoldThreshold;
+            if (!available) _foldedTodoItemIds.Remove(item.Id);
+            var folded = available && _foldedTodoItemIds.Contains(item.Id) && !text.IsKeyboardFocusWithin;
+
+            foldButton.Visibility = available ? Visibility.Visible : Visibility.Collapsed;
+            foldGlyph.Data = folded ? TodoFoldDown : TodoFoldUp;
+            foldButton.ToolTip = Strings.Get(folded ? "TodoExpandFold" : "TodoCollapseFold");
+            handle.MinHeight = available
+                ? Math.Max(AppTypography.Scale(16), metrics.RowMinHeight - AppTypography.Scale(9))
+                : metrics.RowMinHeight;
+            text.VerticalContentAlignment = folded ? VerticalAlignment.Top : VerticalAlignment.Center;
+            var maxLines = folded ? TodoFoldVisibleLines : int.MaxValue;
+            foldPreview.SetFolded(folded);
+            if (ApplyFoldLineLimit(maxLines) && folded)
+            {
+                // After editing near the end, folding should show the first two lines.
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    if (_todoEditors.TryGetValue(item.Id, out var current) &&
+                        ReferenceEquals(current, text) &&
+                        text.MaxLines == TodoFoldVisibleLines && !text.IsKeyboardFocusWithin)
+                    {
+                        text.ScrollToLine(0);
+                    }
+                }), System.Windows.Threading.DispatcherPriority.Loaded);
+            }
+            QueueTodoFindCueRefresh();
+        }
+
+        void QueueFoldRefresh()
+        {
+            if (foldRefreshQueued) return;
+            foldRefreshQueued = true;
+            Dispatcher.BeginInvoke(new Action(RefreshFoldPresentation),
+                System.Windows.Threading.DispatcherPriority.Loaded);
+        }
+
+        foldButton.MouseEnter += (_, _) => foldGlyph.Opacity = 0.78;
+        foldButton.MouseLeave += (_, _) =>
+            foldGlyph.Opacity = _findHiddenTodoItemIds.Contains(item.Id) ? 1.0 : 0.48;
+        foldButton.MouseLeftButtonDown += (_, e) => e.Handled = true;
+        foldButton.MouseLeftButtonUp += (_, e) =>
+        {
+            var alreadyFolded = _foldedTodoItemIds.Contains(item.Id) && !text.IsKeyboardFocusWithin;
+            if (alreadyFolded)
+            {
+                _foldedTodoItemIds.Remove(item.Id);
+            }
+            else
+            {
+                _foldedTodoItemIds.Add(item.Id);
+                if (text.IsKeyboardFocusWithin) Keyboard.ClearFocus();
+            }
+            RefreshFoldPresentation();
+            if (IsBuiltInFindOpen)
+            {
+                // Wait for MaxLines layout before selecting a newly visible search hit.
+                _ = Dispatcher.BeginInvoke((Action)(() =>
+                {
+                    if (!IsBuiltInFindOpen) return;
+                    RefreshTodoFindCues();
+                    ApplyCurrentFindMatch();
+                }), System.Windows.Threading.DispatcherPriority.Loaded);
+            }
+            e.Handled = true;
+        };
+        text.Loaded += (_, _) => QueueFoldRefresh();
+        text.SizeChanged += (_, e) => { if (e.WidthChanged) QueueFoldRefresh(); };
+        text.TextChanged += (_, _) => QueueFoldRefresh();
+        text.GotKeyboardFocus += (_, _) =>
+        {
+            foldPreview.SetFolded(false);
+            if (_foldedTodoItemIds.Contains(item.Id)) ApplyFoldLineLimit(int.MaxValue);
+            QueueFoldRefresh();
+        };
+        text.LostKeyboardFocus += (_, _) => QueueFoldRefresh();
+
+        Grid.SetColumn(trailingControls, showTodoReminderControl ? 4 : 3);
+        grid.Children.Add(trailingControls);
 
         row.Child = grid;
         ConfigureTodoPathDrop(row, item);
@@ -1086,6 +1389,21 @@ public sealed partial class PaperWindow
     {
         if (e.Key == Key.Back && _suppressTodoBackspaceUntilKeyUp)
         {
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Key.Enter && Keyboard.Modifiers == ModifierKeys.Shift)
+        {
+            // Keep the native TextBox undo/redo path and honor the existing text limit.
+            if (box.Text.Length - box.SelectionLength + Environment.NewLine.Length <= box.MaxLength)
+            {
+                var insertionStart = box.SelectionStart;
+                box.SelectedText = Environment.NewLine;
+                // SelectedText preserves the inserted range as a selection in WPF.
+                // Collapse it so the next keystroke continues on the new line.
+                box.Select(insertionStart + Environment.NewLine.Length, 0);
+            }
             e.Handled = true;
             return;
         }
@@ -1137,38 +1455,55 @@ public sealed partial class PaperWindow
 
     private void HandleTodoPaste(DataObjectPastingEventArgs e, PaperItem item, TodoTextBox box)
     {
-        if (!ClipboardHelper.TryGetText(out var raw) || string.IsNullOrEmpty(raw))
+        if (!TryGetTodoPastingText(e.DataObject, out var raw))
         {
             return;
         }
 
-        var lines = raw
+        var cleanedLines = raw
             .Replace("\r\n", "\n")
             .Replace('\r', '\n')
             .Split('\n')
             .Select(CleanPastedTodoLine)
             .Where(line => !string.IsNullOrWhiteSpace(line))
+            .ToList();
+        var tooManyItems = cleanedLines.Count > MaxPastedTodoLines;
+        var textTruncated = cleanedLines.Any(line => line.Length > TodoTextMaxLength);
+        var lines = cleanedLines
+            .Take(MaxPastedTodoLines)
             .Select(LimitTodoText)
             .ToList();
 
-        if (lines.Count > MaxPastedTodoLines)
-        {
-            lines = lines.Take(MaxPastedTodoLines).ToList();
-        }
-
         if (lines.Count <= 1)
         {
+            var originalText = box.Text ?? "";
+            var selectionStart = Math.Clamp(box.SelectionStart, 0, originalText.Length);
+            var selectionLength = Math.Clamp(
+                box.SelectionLength,
+                0,
+                originalText.Length - selectionStart);
+            textTruncated |=
+                (long)originalText.Length - selectionLength + raw.Length >
+                TodoTextMaxLength;
+            ShowTodoPasteLimitNotice(tooManyItems, textTruncated);
             return;
         }
 
         e.CancelCommand();
 
-        var originalText = box.Text ?? "";
-        var selectionStart = Math.Clamp(box.SelectionStart, 0, originalText.Length);
-        var selectionLength = Math.Clamp(box.SelectionLength, 0, originalText.Length - selectionStart);
-        var selectionEnd = selectionStart + selectionLength;
-        var prefix = originalText[..selectionStart];
-        var suffix = originalText[selectionEnd..];
+        var currentText = box.Text ?? "";
+        var currentSelectionStart = Math.Clamp(box.SelectionStart, 0, currentText.Length);
+        var currentSelectionLength = Math.Clamp(
+            box.SelectionLength,
+            0,
+            currentText.Length - currentSelectionStart);
+        var selectionEnd = currentSelectionStart + currentSelectionLength;
+        var prefix = currentText[..currentSelectionStart];
+        var suffix = currentText[selectionEnd..];
+        textTruncated |=
+            (long)prefix.Length + lines[0].Length > TodoTextMaxLength ||
+            (long)lines[^1].Length + suffix.Length > TodoTextMaxLength;
+
         var pastedItemTexts = lines.ToList();
         pastedItemTexts[0] = LimitTodoText(prefix + pastedItemTexts[0]);
         pastedItemTexts[^1] = LimitTodoText(pastedItemTexts[^1] + suffix);
@@ -1246,7 +1581,40 @@ public sealed partial class PaperWindow
             }
         }
 
+        ShowTodoPasteLimitNotice(tooManyItems, textTruncated);
         _controller.MarkDirty();
+    }
+
+    private void ShowTodoPasteLimitNotice(bool tooManyItems, bool textTruncated)
+    {
+        if (!tooManyItems && !textTruncated)
+        {
+            return;
+        }
+
+        _ = Dispatcher.BeginInvoke(
+            (Action)(() =>
+            {
+                var messages = new List<string>(2);
+                if (tooManyItems)
+                {
+                    messages.Add(Strings.Format(
+                        "TodoPasteItemLimitMessage",
+                        MaxPastedTodoLines));
+                }
+                if (textTruncated)
+                {
+                    messages.Add(Strings.Format(
+                        "TodoPasteTextLimitMessage",
+                        TodoTextMaxLength));
+                }
+
+                PaperNoticeDialog.Show(
+                    this,
+                    Strings.Get("TodoPasteTruncatedTitle"),
+                    string.Join(Environment.NewLine, messages));
+            }),
+            System.Windows.Threading.DispatcherPriority.Background);
     }
 
     private static string CleanPastedTodoLine(string line)
@@ -1352,8 +1720,14 @@ public sealed partial class PaperWindow
                 var animationGeneration = _todoRowsGeneration;
                 row.IsHitTestVisible = false;
                 AnimationHelper.EnsureTransform(row);
-                var fadeOut = new System.Windows.Media.Animation.DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(200));
-                var slideOut = new System.Windows.Media.Animation.DoubleAnimation(0, 30, TimeSpan.FromMilliseconds(200))
+                var fadeOut = new System.Windows.Media.Animation.DoubleAnimation(
+                    1,
+                    0,
+                    TimeSpan.FromMilliseconds(AnimationTiming.ScaleMilliseconds(200)));
+                var slideOut = new System.Windows.Media.Animation.DoubleAnimation(
+                    0,
+                    30,
+                    TimeSpan.FromMilliseconds(AnimationTiming.ScaleMilliseconds(200)))
                 {
                     EasingFunction = AnimationHelper.QuickEase
                 };
@@ -1392,124 +1766,6 @@ public sealed partial class PaperWindow
         {
             ReconcileTodoRows(focusItemId: fallbackFocus);
         }
-    }
-
-    private void ClearDoneItems()
-    {
-        if (_paper.Type != PaperTypes.Todo)
-        {
-            return;
-        }
-
-        var focusedId = CurrentFocusedTodoItemId();
-        var completedItems = OrderedItems().Where(i => i.Done).ToList();
-        if (completedItems.Count == 0)
-        {
-            return;
-        }
-
-        var completedItemIds = new HashSet<string>(completedItems.Select(i => i.Id), StringComparer.Ordinal);
-        var removedLinkedPaperIds = completedItems
-            .Select(i => i.LinkedPaperId)
-            .ToList();
-        var clearDoneGeneration = ++_clearDoneGeneration;
-
-        PushUndoSnapshot();
-        var remainingItems = OrderedItems()
-            .Where(i => !completedItemIds.Contains(i.Id))
-            .ToList();
-
-        if (remainingItems.Count == 0)
-        {
-            remainingItems.Add(new PaperItem());
-        }
-
-        _paper.Items = remainingItems;
-        NormalizeTodoItems();
-        NormalizeOrders();
-
-        var focus = remainingItems.FirstOrDefault(i => i.Id == focusedId)?.Id
-            ?? remainingItems.FirstOrDefault(i => !TodoRules.IsPlaceholder(i))?.Id
-            ?? remainingItems.FirstOrDefault()?.Id;
-
-        _controller.MarkDirty();
-        _controller.NotifyTodoReminderCollectionChanged();
-        RefreshCapsuleEligibilityForLinkedPapers(removedLinkedPaperIds);
-
-        // 批量消失动画
-        if (_controller.State.EnableAnimations && completedItems.Count > 0)
-        {
-            var animatedRows = completedItems
-                .Take(15)
-                .Select(item => _todoRows.FirstOrDefault(r => (string)r.Tag == item.Id))
-                .Where(row => row != null)
-                .Cast<Border>()
-                .ToList();
-
-            if (animatedRows.Count > 0)
-            {
-                var rowGeneration = _todoRowsGeneration;
-                for (int i = 0; i < animatedRows.Count; i++)
-                {
-                    var row = animatedRows[i];
-                    row.IsHitTestVisible = false;
-                    var delay = i * 30;
-                    void StartRowAnimation()
-                    {
-                        if (clearDoneGeneration != _clearDoneGeneration ||
-                            rowGeneration != _todoRowsGeneration ||
-                            !_todoRows.Contains(row))
-                        {
-                            return;
-                        }
-
-                        var fadeOut = new System.Windows.Media.Animation.DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(180));
-                        var slideOut = new System.Windows.Media.Animation.DoubleAnimation(0, 20, TimeSpan.FromMilliseconds(180))
-                        {
-                            EasingFunction = AnimationHelper.QuickEase
-                        };
-
-                        row.BeginAnimation(OpacityProperty, fadeOut);
-                        AnimationHelper.GetTranslateTransform(row).BeginAnimation(TranslateTransform.XProperty, slideOut);
-                    }
-
-                    if (delay == 0)
-                    {
-                        StartRowAnimation();
-                        continue;
-                    }
-
-                    var timer = new System.Windows.Threading.DispatcherTimer
-                    {
-                        Interval = TimeSpan.FromMilliseconds(delay)
-                    };
-                    timer.Tick += (s, _) =>
-                    {
-                        timer.Stop();
-                        StartRowAnimation();
-                    };
-                    timer.Start();
-                }
-
-                var finalizeTimer = new System.Windows.Threading.DispatcherTimer
-                {
-                    Interval = TimeSpan.FromMilliseconds(((animatedRows.Count - 1) * 30) + 180)
-                };
-                finalizeTimer.Tick += (_, _) =>
-                {
-                    finalizeTimer.Stop();
-                    if (clearDoneGeneration == _clearDoneGeneration &&
-                        rowGeneration == _todoRowsGeneration)
-                    {
-                        ReconcileTodoRows(focusItemId: focus);
-                    }
-                };
-                finalizeTimer.Start();
-                return;
-            }
-        }
-
-        ReconcileTodoRows(focusItemId: focus);
     }
 
     private void RefreshCapsuleEligibilityForLinkedPapers(IEnumerable<string?> paperIds)
@@ -1737,6 +1993,7 @@ public sealed partial class PaperWindow
         UpdateTodoDragGhost(_todoDrag, _todoDrag.StartPoint);
 
         ShowAppendAreaAsTrashBin(active: true);
+        StartTodoDragEdgeScroll();
     }
 
     private void OnWindowPreviewMouseMove(object sender, MouseEventArgs e)
@@ -1784,8 +2041,36 @@ public sealed partial class PaperWindow
             return;
         }
 
-        EndTodoMouseDrag(commit: _todoDrag.IsDragging);
+        if (_todoDrag.IsDragging && _todoPanel != null)
+        {
+            // Flush a pending ScrollToVerticalOffset request, then commit the
+            // drop target at the pointer's actual release-time position.
+            FindVisualAncestor<ScrollViewer>(_todoPanel)?.UpdateLayout();
+            if (_todoDrag?.IsDragging == true)
+                UpdateTodoMouseDrag(e.GetPosition(_todoPanel), e.GetPosition(this));
+        }
+
+        EndTodoMouseDrag(commit: _todoDrag?.IsDragging == true);
         e.Handled = true;
+    }
+
+    // The trash and edge-scroll timer share exactly one hit-test.
+    private bool IsPointerOverTodoTrash(Point pointOnWindow)
+    {
+        if (_appendArea == null || !_appendArea.IsVisible)
+            return false;
+
+        try
+        {
+            var pos = this.TransformToVisual(_appendArea).Transform(pointOnWindow);
+            return pos.X >= 0 && pos.X <= _appendArea.ActualWidth &&
+                   pos.Y >= 0 && pos.Y <= _appendArea.ActualHeight;
+        }
+        catch
+        {
+            // Match the legacy fallback when a layout change detaches the bar.
+            return false;
+        }
     }
 
     private void UpdateTodoMouseDrag(Point pointOnPanel, Point pointOnWindow)
@@ -1796,50 +2081,35 @@ public sealed partial class PaperWindow
         }
 
         UpdateTodoDragGhost(_todoDrag, pointOnWindow);
-        ClearActiveDropIndicator();
 
-        bool overTrash = false;
-        if (_appendArea != null && _appendArea.IsVisible)
-        {
-            try
-            {
-                var transform = this.TransformToVisual(_appendArea);
-                Point posInAppend = transform.Transform(pointOnWindow);
-                if (posInAppend.X >= 0 && posInAppend.X <= _appendArea.ActualWidth &&
-                    posInAppend.Y >= 0 && posInAppend.Y <= _appendArea.ActualHeight)
-                {
-                    overTrash = true;
-                }
-            }
-            catch
-            {
-                // Fallback in case layout is not fully updated
-            }
-        }
-
+        // The current pointer/target geometry decides whether deletion is previewed,
+        // regardless of whether the pointer or the list moved.
+        var overTrash = IsPointerOverTodoTrash(pointOnWindow);
         if (overTrash)
         {
+            ClearActiveDropIndicator();
             _todoDrag.TargetId = null;
+            if (!_todoDrag.DropAtEnd)
+                ShowAppendAreaAsTrashBin(active: true, hovered: true);
             _todoDrag.DropAtEnd = true;
-            ShowAppendAreaAsTrashBin(active: true, hovered: true);
             return;
         }
 
-        ShowAppendAreaAsTrashBin(active: true, hovered: false);
-
-        if (RestrictTodoGroupDragToTrash())
-        {
-            return;
-        }
+        if (_todoDrag.DropAtEnd)
+            ShowAppendAreaAsTrashBin(active: true, hovered: false);
+        _todoDrag.DropAtEnd = false;
 
         var candidates = _todoRows
-            .Where(row => row.Tag is string id && id != _todoDrag.ItemId)
+            .Where(row =>
+                row.IsVisible &&
+                row.Tag is string id &&
+                !_todoGroupDragItemIds.Contains(id))
             .ToList();
 
         if (candidates.Count == 0)
         {
+            ClearActiveDropIndicator();
             _todoDrag.TargetId = null;
-            _todoDrag.DropAtEnd = false;
             return;
         }
 
@@ -1856,8 +2126,8 @@ public sealed partial class PaperWindow
 
         if (bestRow == null)
         {
+            ClearActiveDropIndicator();
             _todoDrag.TargetId = null;
-            _todoDrag.DropAtEnd = false;
             return;
         }
 
@@ -1892,7 +2162,7 @@ public sealed partial class PaperWindow
             Width = Math.Max(state.SourceRow.ActualWidth, 160),
             MinHeight = Math.Max(state.SourceRow.ActualHeight, 30),
             Padding = new Thickness(2),
-            CornerRadius = new CornerRadius(RadiusControl),
+            CornerRadius = new CornerRadius(Theme.IsPixelSkin ? 0 : RadiusControl),
             Background = PaperBrush,
             BorderBrush = Theme.Tint(150),
             BorderThickness = new Thickness(1),
@@ -2003,6 +2273,7 @@ public sealed partial class PaperWindow
         }
 
         _todoDrag = null;
+        StopTodoDragEdgeScroll();
 
         if (IsMouseCaptured)
         {
@@ -2028,7 +2299,8 @@ public sealed partial class PaperWindow
             return;
         }
 
-        if (state.DropAtEnd)
+        if (state.DropAtEnd && _controller.State.ShowTodoBottomBar &&
+            IsPointerOverTodoTrash(Mouse.GetPosition(this)))
         {
             if (DeleteTodoGroupDragItems())
             {
@@ -2046,8 +2318,15 @@ public sealed partial class PaperWindow
 
         if (!string.IsNullOrWhiteSpace(state.TargetId))
         {
+            var draggedIds = _todoGroupDragItemIds.Count > 0
+                ? _todoGroupDragItemIds.ToArray()
+                : new[] { state.ItemId };
             ClearTodoDragGroupState();
-            MoveItem(state.ItemId, state.TargetId, state.TargetPlacement, focusDragged: true);
+            MoveItems(
+                draggedIds,
+                state.TargetId,
+                state.TargetPlacement,
+                focusItemId: state.ItemId);
             return;
         }
 
@@ -2055,52 +2334,29 @@ public sealed partial class PaperWindow
         ReconcileTodoRows(focusItemId: state.ItemId);
     }
 
-    private void MoveItem(string draggedId, string targetId, DropPlacement placement, bool focusDragged)
+    private void MoveItems(
+        IReadOnlyCollection<string> draggedIds,
+        string targetId,
+        DropPlacement placement,
+        string focusItemId)
     {
-        if (draggedId == targetId)
-        {
-            return;
-        }
-
-        var ordered = OrderedItems().ToList();
-        var originalOrder = ordered.Select(i => i.Id).ToList();
-
-        var dragged = ordered.FirstOrDefault(i => i.Id == draggedId);
-        var target = ordered.FirstOrDefault(i => i.Id == targetId);
-
-        if (dragged == null || target == null)
-        {
-            return;
-        }
-
-        ordered.Remove(dragged);
-
-        var targetIndex = ordered.IndexOf(target);
-        if (targetIndex < 0)
-        {
-            return;
-        }
-
-        if (placement == DropPlacement.After)
-        {
-            targetIndex++;
-        }
-
-        targetIndex = Math.Clamp(targetIndex, 0, ordered.Count);
-        ordered.Insert(targetIndex, dragged);
-
-        if (originalOrder.SequenceEqual(ordered.Select(i => i.Id)))
+        if (!TodoRules.TryCreateMovedOrder(
+                _paper.Items,
+                draggedIds,
+                targetId,
+                placement == DropPlacement.After,
+                out var reordered))
         {
             return;
         }
 
         PushUndoSnapshot();
-        _paper.Items = ordered;
+        _paper.Items = reordered;
         NormalizeTodoItems();
         NormalizeOrders();
         _controller.MarkDirty();
 
-        ReconcileTodoRows(focusItemId: focusDragged ? dragged.Id : null);
+        ReconcileTodoRows(focusItemId: focusItemId);
     }
 
     private IEnumerable<PaperItem> OrderedItems()
@@ -2273,13 +2529,7 @@ public sealed partial class PaperWindow
         var previousItems = _undoStack[^1];
         _undoStack.RemoveAt(_undoStack.Count - 1);
 
-        _paper.Items = previousItems;
-        NormalizeTodoItems();
-        NormalizeOrders();
-        _controller.MarkDirty();
-        _controller.NotifyTodoReminderCollectionChanged();
-
-        RebuildTodoRows(focusedId);
+        RestoreTodoHistorySnapshot(previousItems, focusedId);
         RefreshCapsuleEligibilityForLinkedPaperChanges(currentItems);
     }
 
@@ -2298,15 +2548,79 @@ public sealed partial class PaperWindow
         var nextItems = _redoStack[^1];
         _redoStack.RemoveAt(_redoStack.Count - 1);
 
-        _paper.Items = nextItems;
+        RestoreTodoHistorySnapshot(nextItems, focusedId);
+        RefreshCapsuleEligibilityForLinkedPaperChanges(currentItems);
+    }
+
+    private void RestoreTodoHistorySnapshot(List<PaperItem> snapshot, string? focusedId)
+    {
+        var currentById = _paper.Items.ToDictionary(item => item.Id, StringComparer.Ordinal);
+        var rebuildIds = new HashSet<string>(StringComparer.Ordinal);
+        for (var index = 0; index < snapshot.Count; index++)
+        {
+            var restored = snapshot[index];
+            if (currentById.TryGetValue(restored.Id, out var current) &&
+                TodoHistoryRowContentEquals(current, restored))
+            {
+                // Retained row handlers close over this exact model instance. Replacing it
+                // with an equal snapshot would leave subsequent edits writing to a stale item.
+                snapshot[index] = current;
+            }
+            else
+            {
+                rebuildIds.Add(restored.Id);
+            }
+        }
+
+        var retainedFocus = focusedId != null &&
+            !rebuildIds.Contains(focusedId) &&
+            snapshot.Any(item => item.Id == focusedId) &&
+            _todoEditors.ContainsKey(focusedId);
+
+        // Applying history is not a new human edit. Row removal/reordering may raise LostFocus;
+        // an unchanged focused editor, on the other hand, will not raise GotFocus again.
+        _activeOriginalItemId = null;
+        _activeOriginalText = null;
+        _pendingFocusItemId = null;
+        _paper.Items = snapshot;
         NormalizeTodoItems();
         NormalizeOrders();
         _controller.MarkDirty();
         _controller.NotifyTodoReminderCollectionChanged();
+        ReconcileTodoRows(rebuildIds, retainedFocus ? null : focusedId);
 
-        RebuildTodoRows(focusedId);
-        RefreshCapsuleEligibilityForLinkedPaperChanges(currentItems);
+        // The former full rebuild reset native TextBox history. Keep that paper-history
+        // boundary so a retained editor cannot replay stale local edits ahead of Ctrl+Y/Z.
+        foreach (var editor in _todoEditors.Values)
+        {
+            if (editor.IsUndoEnabled)
+            {
+                editor.SetCurrentValue(TextBoxBase.IsUndoEnabledProperty, false);
+                editor.SetCurrentValue(TextBoxBase.IsUndoEnabledProperty, true);
+            }
+        }
+        if (retainedFocus && _todoEditors.TryGetValue(focusedId!, out var focusedEditor))
+        {
+            // A reorder can detach and reinsert the focused row. Restore its keyboard focus
+            // without moving the caret or replacing its selection as FocusTodoItem would.
+            if (!focusedEditor.IsKeyboardFocused)
+            {
+                focusedEditor.Focus();
+            }
+            _activeOriginalItemId = focusedId;
+            _activeOriginalText = focusedEditor.Text;
+        }
     }
+
+    private static bool TodoHistoryRowContentEquals(PaperItem current, PaperItem restored) =>
+        current.Text == restored.Text &&
+        current.Done == restored.Done &&
+        current.LinkedPaperId == restored.LinkedPaperId &&
+        current.LinkedPath == restored.LinkedPath &&
+        current.LinkedPathIsDirectory == restored.LinkedPathIsDirectory &&
+        current.ReminderAt == restored.ReminderAt &&
+        current.ReminderAt?.Offset == restored.ReminderAt?.Offset &&
+        current.ReminderTriggered == restored.ReminderTriggered;
 
     private bool TryCollapseExpandedPaperFromEscape()
     {
@@ -2417,5 +2731,25 @@ public sealed partial class PaperWindow
         }
     }
 
+private static bool TryGetTodoPastingText(
+        IDataObject dataObject,
+        out string raw)
+    {
+        raw = "";
+        try
+        {
+            raw = dataObject.GetDataPresent(DataFormats.UnicodeText)
+                ? dataObject.GetData(DataFormats.UnicodeText) as string ?? ""
+                : dataObject.GetDataPresent(DataFormats.Text)
+                    ? dataObject.GetData(DataFormats.Text) as string ?? ""
+                    : "";
+        }
+        catch
+        {
+            raw = "";
+            return false;
+        }
 
+        return raw.Length > 0;
+    }
 }

@@ -540,4 +540,30 @@ public sealed partial class PaperWindow
             local,
             TimeZoneInfo.Local.GetUtcOffset(local));
     }
+
+internal void PreserveTriggeredTodoReminderInHistory(
+        string itemId,
+        DateTimeOffset reminderAt)
+    {
+        PreserveTriggeredTodoReminderInHistory(_undoStack, itemId, reminderAt);
+        PreserveTriggeredTodoReminderInHistory(_redoStack, itemId, reminderAt);
+    }
+
+    private static void PreserveTriggeredTodoReminderInHistory(
+        IEnumerable<List<PaperItem>> history,
+        string itemId,
+        DateTimeOffset reminderAt)
+    {
+        foreach (var snapshot in history)
+        {
+            var item = snapshot.FirstOrDefault(candidate =>
+                string.Equals(candidate.Id, itemId, StringComparison.Ordinal));
+            if (item?.ReminderAt == reminderAt)
+            {
+                // Delivery is runtime truth for this exact scheduled reminder. Replaying an older
+                // unrelated snapshot must not turn the same already-surfaced reminder pending again.
+                item.ReminderTriggered = true;
+            }
+        }
+    }
 }

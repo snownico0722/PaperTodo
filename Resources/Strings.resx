@@ -148,9 +148,6 @@
   <data name="MenuBold" xml:space="preserve">
     <value>加粗</value>
   </data>
-  <data name="MenuClearDone" xml:space="preserve">
-    <value>清理已完成</value>
-  </data>
   <data name="MenuCodeBlock" xml:space="preserve">
     <value>代码块</value>
   </data>
@@ -447,7 +444,7 @@
     <value>记住展开位置</value>
   </data>
   <data name="SettingsCollapseExpandedDeepCapsuleOnClick" xml:space="preserve">
-    <value>再次点击边缘胶囊收回纸片</value>
+    <value>再次点击胶囊收回纸片</value>
   </data>
   <data name="SettingsHideEdgeCapsuleCloseButtonOnHover" xml:space="preserve">
     <value>悬停时隐藏关闭按钮</value>
@@ -645,7 +642,7 @@
     <value>从边缘展开时，恢复上次位置与大小；无记忆或不可用时仍按边缘展开。</value>
   </data>
   <data name="TipCollapseExpandedDeepCapsuleOnClick" xml:space="preserve">
-    <value>纸片已从边缘展开时，再点同一胶囊会收回。</value>
+    <value>纸片已展开时，再点同一胶囊会收回；关联纸片不显示为胶囊时，再点关联入口会隐藏。</value>
   </data>
   <data name="TipCapsuleCollapseAll" xml:space="preserve">
     <value>队列顶部显示主胶囊，一键收起或展开当前队列。</value>
@@ -654,7 +651,7 @@
     <value>开启后仍会正常伸长；延长区域作为普通胶囊区域使用，不显示关闭按钮。需要关闭时可在右键菜单中选择「隐藏」。</value>
   </data>
   <data name="TipMaxTitleLength" xml:space="preserve">
-    <value>纸片标题与胶囊显示的最大字数。</value>
+    <value>标题按汉字长度计算：中文、全角字符算 1 字，英文、数字等半角字符算半字。调低上限会截短已有标题。</value>
   </data>
   <data name="TipStartup" xml:space="preserve">
     <value>开机时自动启动 PaperTodo。</value>
@@ -686,6 +683,12 @@
   </data>
   <data name="TipEnableAnimations" xml:space="preserve">
     <value>常见操作使用过渡动画；关闭后响应更直接。</value>
+  </data>
+  <data name="SettingsFastAnimations" xml:space="preserve">
+    <value>快速动画</value>
+  </data>
+  <data name="TipFastAnimations" xml:space="preserve">
+    <value>将界面动画时长缩短至约 60%，保留过渡效果但让操作响应更快。关闭“启用动画效果”时此设置不生效。</value>
   </data>
   <data name="SettingsResizeGripMode" xml:space="preserve">
     <value>缩放把手</value>
@@ -1124,6 +1127,12 @@
   <data name="TipDeepCapsuleTitleMeasureLimit" xml:space="preserve">
     <value>限制静止时边缘胶囊显示的标题长度，0 隐藏标题文字但保留图标，不修改真实标题。加减可在「无限制、0、1…20」之间循环。关闭悬停预览时，鼠标移入会展开被截短的标题，移出后收回。</value>
   </data>
+  <data name="SettingsCompactMasterCapsule" xml:space="preserve">
+    <value>主胶囊缩短</value>
+  </data>
+  <data name="TipCompactMasterCapsule" xml:space="preserve">
+    <value>开启后主胶囊仅显示箭头，不显示当前队列的胶囊数量。</value>
+  </data>
   <data name="SettingsAllCharacters" xml:space="preserve">
     <value>无限制</value>
   </data>
@@ -1267,23 +1276,32 @@
   <data name="PluginsMoreSettings" xml:space="preserve">
     <value>更多设置</value>
   </data>
+  <data name="PluginsSettingsUnavailable" xml:space="preserve">
+    <value>设置不可用</value>
+  </data>
   <data name="PluginsLessSettings" xml:space="preserve">
     <value>收起设置</value>
   </data>
   <data name="PluginsProtocolTooltipFormat" xml:space="preserve">
     <value>插件协议 {0}</value>
   </data>
-  <data name="PluginsDataRecoveryPending" xml:space="preserve">
-    <value>数据读取失败，当前使用空数据；新数据将写入恢复文件。</value>
-  </data>
-  <data name="PluginsDataRecoveryActive" xml:space="preserve">
-    <value>原数据读取失败，当前使用恢复数据文件。</value>
-  </data>
   <data name="PluginsOpenFolder" xml:space="preserve">
     <value>打开目录</value>
   </data>
+  <data name="PluginsRestartTooltip" xml:space="preserve">
+    <value>重启 PaperTodo 并重新扫描插件</value>
+  </data>
+  <data name="PluginsRestartTitle" xml:space="preserve">
+    <value>重启 PaperTodo</value>
+  </data>
+  <data name="PluginsRestartMessage" xml:space="preserve">
+    <value>重启后将重新扫描并加载正文插件。是否立即重启？</value>
+  </data>
+  <data name="PluginsRestartNow" xml:space="preserve">
+    <value>立即重启</value>
+  </data>
   <data name="PluginsLoadedCountFormat" xml:space="preserve">
-    <value>发现 {0} 个正文插件</value>
+    <value>{0}个</value>
   </data>
   <data name="PluginsLoadProblems" xml:space="preserve">
     <value>加载问题</value>
@@ -1309,6 +1327,9 @@
   <data name="PluginsMissingProviderFormat" xml:space="preserve">
     <value>找不到正文插件：{0}</value>
   </data>
+  <data name="PluginsDisabledProviderFormat" xml:space="preserve">
+    <value>{0}（已禁用）</value>
+  </data>
   <data name="PaperBodyMenu" xml:space="preserve">
     <value>正文类型</value>
   </data>
@@ -1317,6 +1338,12 @@
   </data>
   <data name="BodyProviderMarkdownDescription" xml:space="preserve">
     <value>PaperTodo 内置 Markdown 编辑、预览与图片正文。</value>
+  </data>
+  <data name="PluginBodyDisabledTitle" xml:space="preserve">
+    <value>正文插件已关闭</value>
+  </data>
+  <data name="PluginBodyDisabledMessageFormat" xml:space="preserve">
+    <value>“{0}”已禁用。可在设置 → 插件中重新启用。</value>
   </data>
   <data name="PluginBodyFailureTitle" xml:space="preserve">
     <value>正文插件无法运行</value>
@@ -1414,7 +1441,10 @@
     <value>插件有问题</value>
   </data>
   <data name="PluginsStatusStopped" xml:space="preserve">
-    <value>当前未使用</value>
+    <value>插件已启用，当前未运行</value>
+  </data>
+  <data name="PluginsStatusDisabled" xml:space="preserve">
+    <value>插件已禁用</value>
   </data>
   <data name="PluginsStatusRunning" xml:space="preserve">
     <value>插件运行中</value>
@@ -1434,4 +1464,256 @@
   <data name="NoteCopyTextOnlyMessage" xml:space="preserve">
     <value>选中的图片内容过大，本次仅复制了文字。</value>
   </data>
+  <data name="ColorSchemeMica" xml:space="preserve">
+    <value>云母</value>
+  </data>
+  <data name="TipColorSchemeMica" xml:space="preserve">
+    <value>使用 Windows 11 22H2 及以上的原生 DWM Mica，背景由系统合成，不读取或模拟壁纸。用于展开的纸片和设置窗口；胶囊、折叠动画和半透明状态保留实色绘制。关闭系统透明效果、开启高对比度或原生接口不可用时回退实色。首次从其他皮肤切换后需退出并重新打开 PaperTodo。</value>
+  </data>
+  <data name="MicaRestartRequired" xml:space="preserve">
+    <value>已保存云母选择。请从托盘退出并重新打开 PaperTodo，以启用原生 Mica；当前窗口先使用实色，编辑内容和撤销记录不会因换肤被重建。</value>
+  </data>
+  <data name="MicaUnsupported" xml:space="preserve">
+    <value>原生 Mica 需要 Windows 11 22H2（22621）及以上。当前系统使用云母配色的实色背景。</value>
+  </data>
+  <data name="MicaScope" xml:space="preserve">
+    <value>原生 Mica 用于展开的纸片和设置窗口。胶囊、折叠动画及半透明状态使用实色背景；系统也可能按透明效果和节能策略回退。</value>
+  </data>
+  <data name="SettingsMicaBackdrop" xml:space="preserve">
+    <value>材质效果</value>
+  </data>
+  <data name="TipMicaBackdrop" xml:space="preserve">
+    <value>选择标准云母、标准亚克力或透色亚克力。标准亚克力保留柔和磨砂效果；透色亚克力使用更轻的底色，让背后的颜色更明显。</value>
+  </data>
+  <data name="MicaBackdropMica" xml:space="preserve">
+    <value>标准云母</value>
+  </data>
+  <data name="MicaBackdropAcrylic" xml:space="preserve">
+    <value>标准亚克力</value>
+  </data>
+  <data name="MicaBackdropClearAcrylic" xml:space="preserve">
+    <value>透色亚克力</value>
+  </data>
+  <data name="SettingsMicaAlwaysActive" xml:space="preserve">
+    <value>材质始终显示激活效果</value>
+  </data>
+  <data name="TipMicaAlwaysActive" xml:space="preserve">
+    <value>勾选后，展开纸片和设置窗口失去焦点时仍保持激活时的材质外观。</value>
+  </data>
+
+  <data name="ColorSchemeNeutral" xml:space="preserve">
+    <value>素灰</value>
+  </data>
+  <data name="SettingsPaperSkin" xml:space="preserve">
+    <value>皮肤（实验）</value>
+  </data>
+  <data name="TipPaperSkin" xml:space="preserve">
+    <value>皮肤控制材质，配色控制颜色。</value>
+  </data>
+  <data name="SkinPaper" xml:space="preserve">
+    <value>默认纸片</value>
+  </data>
+  <data name="SkinTracingPaper" xml:space="preserve">
+    <value>半透明描图纸</value>
+  </data>
+  <data name="SkinAero" xml:space="preserve">
+    <value>Aero 玻璃</value>
+  </data>
+  <data name="SkinPixel" xml:space="preserve">
+    <value>像素风</value>
+  </data>
+  <data name="TipSkinTracingPaper" xml:space="preserve">
+    <value>乳白底色和轻微纤维纹理，背景颜色隐约透入；正文保持清晰。</value>
+  </data>
+  <data name="TipSkinAero" xml:space="preserve">
+    <value>淡蓝透明玻璃与斜向反光，不采样桌面。</value>
+  </data>
+  <data name="TipSkinPixel" xml:space="preserve">
+    <value>复古任务面板：紧凑阶梯角、单层外框、像素对齐图标和方形按钮。中文正文仍使用普通字体。</value>
+  </data>
+  <data name="SkinRestartRequired" xml:space="preserve">
+    <value>重启 PaperTodo 后启用原生背景。</value>
+  </data>
+  <data name="SkinNativeUnsupported" xml:space="preserve">
+    <value>原生背景需要 Windows 11 22H2 或更新版本。</value>
+  </data>
+  <data name="MenuPaperActions" xml:space="preserve">
+    <value>纸片操作</value>
+  </data>
+  <data name="MenuCustomizeTopBar" xml:space="preserve">
+    <value>自定义顶栏</value>
+  </data>
+  <data name="MenuReorderTopBar" xml:space="preserve">
+    <value>调整按钮顺序</value>
+  </data>
+  <data name="MenuTopBarMoveLeft" xml:space="preserve">
+    <value>向左移动</value>
+  </data>
+  <data name="MenuTopBarMoveRight" xml:space="preserve">
+    <value>向右移动</value>
+  </data>
+  <data name="MenuTopBarAssociationDrag" xml:space="preserve">
+    <value>按住此项拖动以关联</value>
+  </data>
+  <data name="MenuTopBarPluginActions" xml:space="preserve">
+    <value>插件操作</value>
+  </data>
+  <data name="TopBarSettingsTitle" xml:space="preserve">
+    <value>顶栏快捷</value>
+  </data>
+  <data name="TipTopBarShortcutSettings" xml:space="preserve">
+    <value>拖动操作可调整顺序，跨过分割线可切换显示位置。顶栏空间不足时，已固定的内置快捷会整组临时收纳到菜单。</value>
+  </data>
+  <data name="TopBarShownHeading" xml:space="preserve">
+    <value>显示在顶栏</value>
+  </data>
+  <data name="TopBarMenuHeading" xml:space="preserve">
+    <value>显示在菜单</value>
+  </data>
+  <data name="TopBarEmptyDropArea" xml:space="preserve">
+    <value>拖动快捷项到这里</value>
+  </data>
+  <data name="TopBarAssociation" xml:space="preserve">
+    <value>关联拖拽</value>
+  </data>
+  <data name="TopBarExternalEditor" xml:space="preserve">
+    <value>外部编辑</value>
+  </data>
+  <data name="DataReloadConflictTitle" xml:space="preserve">
+    <value>PaperTodo 数据冲突</value>
+  </data>
+  <data name="DataReloadConflictPath" xml:space="preserve">
+    <value>路径:{0}</value>
+  </data>
+  <data name="DataReloadConflictMemoryHeader" xml:space="preserve">
+    <value>当前(PaperTodo)</value>
+  </data>
+  <data name="DataReloadConflictExternalHeader" xml:space="preserve">
+    <value>传入(外部文件)</value>
+  </data>
+  <data name="DataReloadConflictKeepMemory" xml:space="preserve">
+    <value>保留当前</value>
+  </data>
+  <data name="DataReloadConflictKeepExternal" xml:space="preserve">
+    <value>保留传入</value>
+  </data>
+  <data name="DataReloadConflictValueMissing" xml:space="preserve">
+    <value>(缺失)</value>
+  </data>
+  <data name="DataReloadConflictMemoryOnlyTooltip" xml:space="preserve">
+    <value>当前 PaperTodo 内存中有,外部文件中没有。"保留当前" 会保留;"保留传入" 会丢弃。</value>
+  </data>
+  <data name="DataReloadConflictExternalOnlyTooltip" xml:space="preserve">
+    <value>外部文件中有,当前 PaperTodo 内存中没有。"保留传入" 会采用;"保留当前" 会丢弃。</value>
+  </data>
+  <data name="DataReloadPaperConflictTitle" xml:space="preserve">
+    <value>Paper 数据冲突</value>
+  </data>
+  <data name="DataReloadPaperConflictHeader" xml:space="preserve">
+    <value>Paper ID:{0}  类型:{1}</value>
+  </data>
+  <data name="DataReloadPaperConflictField" xml:space="preserve">
+    <value>字段:{0}</value>
+  </data>
+  <data name="DataReloadPaperConflictKeepAllMemory" xml:space="preserve">
+    <value>全部保留当前</value>
+  </data>
+  <data name="DataReloadPaperConflictKeepAllExternal" xml:space="preserve">
+    <value>全部保留传入</value>
+  </data>
+  <data name="DataReloadPaperConflictWholePaper" xml:space="preserve">
+    <value>(整张 paper)</value>
+  </data>
+  <data name="WorkspaceSettingsTitle" xml:space="preserve">
+    <value>工作区</value>
+  </data>
+  <data name="WorkspaceSettingsDescription" xml:space="preserve">
+    <value>启用后，通过纸片顶栏的循环按钮切换工作区。每个工作区独立保存纸片、图片和插件数据。</value>
+  </data>
+  <data name="WorkspaceEnabled" xml:space="preserve">
+    <value>启用工作区</value>
+  </data>
+  <data name="WorkspaceCount" xml:space="preserve">
+    <value>工作区数量（包含主工作区）</value>
+  </data>
+  <data name="WorkspaceCountHint" xml:space="preserve">
+    <value>最多 5 个。减少数量或关闭功能只停止使用对应工作区，不删除其文件。</value>
+  </data>
+  <data name="WorkspaceSelectLabel" xml:space="preserve">
+    <value>当前工作区</value>
+  </data>
+  <data name="WorkspaceMainSlotLabel" xml:space="preserve">
+    <value>主工作区（1）</value>
+  </data>
+  <data name="WorkspaceSlotLabel" xml:space="preserve">
+    <value>工作区{0}</value>
+  </data>
+  <data name="WorkspaceCurrent" xml:space="preserve">
+    <value>当前工作区：{0}</value>
+  </data>
+  <data name="WorkspaceFollowMain" xml:space="preserve">
+    <value>设置跟随主工作区</value>
+  </data>
+  <data name="WorkspaceFollowHint" xml:space="preserve">
+    <value>开启时使用主工作区的软件设置，纸片、图片、布局和插件私有数据保持独立。关闭后恢复本工作区原有的独立设置。</value>
+  </data>
+  <data name="WorkspaceMainHint" xml:space="preserve">
+    <value>这是主工作区。跟随主工作区的其他工作区，会在进入时采用这里的软件设置。</value>
+  </data>
+  <data name="WorkspaceNext" xml:space="preserve">
+    <value>切换下一个工作区</value>
+  </data>
+  <data name="WorkspaceCycleTooltip" xml:space="preserve">
+    <value>工作区 {0}
+点击切换到工作区 {1}</value>
+  </data>
+  <data name="WorkspaceTrayCycle" xml:space="preserve">
+    <value>切换工作区（当前 {0} / {1}）</value>
+  </data>
+  <data name="WorkspaceSettingsReadOnly" xml:space="preserve">
+    <value>当前软件设置跟随主工作区。请在主工作区修改，或先关闭本工作区的“设置跟随主工作区”。</value>
+  </data>
+  <data name="WorkspacePluginSettingsHint" xml:space="preserve">
+    <value>插件启用状态跟随主工作区；插件自己的配置和业务数据仍属于本工作区。</value>
+  </data>
+  <data name="WorkspaceSwitching" xml:space="preserve">
+    <value>正在切换工作区，请在切换完成后操作。</value>
+  </data>
+  <data name="WorkspaceSwitchFailed" xml:space="preserve">
+    <value>工作区切换未完成</value>
+  </data>
+  <data name="WorkspaceSaveFailed" xml:space="preserve">
+    <value>无法保存工作区，已停止切换。</value>
+  </data>
+  <data name="WorkspaceImagesMissing" xml:space="preserve">
+    <value>该工作区引用了图片，但对应图片数据库不存在。</value>
+  </data>
+  <data name="WorkspaceImagesUnavailable" xml:space="preserve">
+    <value>无法读取工作区图片数据库：{0}</value>
+  </data>
+  <data name="WorkspaceStartupFallback" xml:space="preserve">
+    <value>上次使用的工作区无法打开，已进入主工作区。原文件未被替换。
+{0}</value>
+  </data>
+  <data name="SettingsDataMergeConflicts" xml:space="preserve"><value>数据合并冲突</value></data>
+  <data name="DataMergeConflictAsk" xml:space="preserve"><value>冲突时询问（默认）</value></data>
+  <data name="DataMergeConflictExternal" xml:space="preserve"><value>外部优先</value></data>
+  <data name="DataMergeConflictInternal" xml:space="preserve"><value>内部优先</value></data>
+  <data name="TipDataMergeConflicts" xml:space="preserve"><value>显式合并先保留双方没有冲突的修改，此选项只决定冲突部分。内部指 PaperTodo 当前数据，外部指本次导入文件。缺少原始版本时始终询问；不启用后台监听或自动同步。</value></data>
+  <data name="DataReloadConflictEmpty" xml:space="preserve"><value>（空）</value></data>
+  <data name="NoteHtmlSaved" xml:space="preserve"><value>已保存到：{0}
+原笔记仍保留。</value></data>
+  <data name="NoteExportCurrent" xml:space="preserve"><value>导出当前笔记</value></data>
+  <data name="NoteExportAll" xml:space="preserve"><value>导出全部纸片</value></data>
+  <data name="NoteExportMarkdownType" xml:space="preserve"><value>Markdown 文档</value></data>
+  <data name="NoteExportHtmlType" xml:space="preserve"><value>HTML 网页</value></data>
+  <data name="NoteExportMarkdownZipType" xml:space="preserve"><value>Markdown 压缩包</value></data>
+  <data name="NoteExportHtmlZipType" xml:space="preserve"><value>HTML 压缩包</value></data>
+  <data name="NoteExportMissingImageText" xml:space="preserve"><value>图片缺失</value></data>
+  <data name="NoteExportSummary" xml:space="preserve"><value>已导出 {0}/{1} 张纸片。&#xA;缺失图片：{2} 张（涉及 {3} 张纸片）。&#xA;保存到：{4}</value></data>
+  <data name="NoteExportFailedNotes" xml:space="preserve"><value>导出失败的纸片：&#xA;{0}</value></data>
+  <data name="NoteExportFailure" xml:space="preserve"><value>导出失败：{0}</value></data>
+  <data name="NoteExportNoNotes" xml:space="preserve"><value>没有可导出的笔记或待办。</value></data>
+  <data name="NoteExportProgress" xml:space="preserve"><value>正在导出 {0}/{1} 张纸片</value></data>
+  <data name="TodoExportCurrent" xml:space="preserve"><value>导出当前待办</value></data>
 </root>

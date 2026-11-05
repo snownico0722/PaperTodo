@@ -5,12 +5,6 @@ using System.Threading;
 
 namespace PaperTodo;
 
-internal sealed record PaperBodyPluginDataReadIssue(
-    string ActivePath,
-    bool RecoveredFileExists,
-    bool UsingEmptyState,
-    string Details);
-
 internal sealed class PaperBodyStoredState
 {
     public int Version { get; set; } = 1;
@@ -21,14 +15,15 @@ internal sealed class PaperBodyStoredState
 /// PaperTodo-managed plugin persistence. One JSON file stores one plugin's global settings and
 /// all of its per-paper state. These files are deliberately separate from data.json and its backup.
 /// </summary>
-internal sealed class PaperBodyPluginDataStore : IDisposable
+internal sealed partial class PaperBodyPluginDataStore : IDisposable
 {
     internal const int MaximumPaperStateBytes = 10 * 1024 * 1024;
     internal const int MaximumPluginRuntimeStateBytes = 20 * 1024 * 1024;
     private const int StorageVersion = 1;
     private const int SaveDebounceMilliseconds = 750;
+    // A failed fast flush gets one delayed retry. A second failure remains dirty until the next
+    // real mutation or normal disposal instead of creating a background retry loop.
     private const int ForceSaveMilliseconds = 10_000;
-    private const string RecoveredSuffix = ".json.recovered";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -50,21 +45,29 @@ internal sealed class PaperBodyPluginDataStore : IDisposable
 
     private sealed class PaperDataState
     {
-        public int StateVersion { get; set; } = 1;
-        public JsonElement Data { get; set; } =
+        public int StateVersion { get; init; } = 1;
+        public JsonElement Data { get; init; } =
             JsonSerializer.SerializeToElement(new { });
     }
 
+    private readonly record struct SaveSnapshot(
+        string ProviderId,
+        long Revision,
+        PluginDataDocument Document);
+
     private readonly object _gate = new();
+    private readonly object _writeGate = new();
     private readonly Dictionary<string, PluginDataDocument> _cache =
         new(StringComparer.Ordinal);
-    private readonly HashSet<string> _recoveredProviderIds = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, PaperBodyPluginDataReadIssue> _readIssues =
-        new(StringComparer.Ordinal);
     private readonly HashSet<string> _dirtyProviderIds = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, long> _providerRevisions = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, int> _saveFailureAttempts = new(StringComparer.Ordinal);
     private readonly Timer _saveTimer;
     private readonly Timer _forceSaveTimer;
     private readonly IDurableAtomicFileWriter _atomicWriter;
+    internal PersistenceWriteLifetime WriteLifetime { get; set; } = new();
+    private readonly int _saveDebounceMilliseconds;
+    private readonly int _forceSaveMilliseconds;
     private bool _suppressFinalFlushOnDispose;
     private bool _disposed;
 
@@ -76,12 +79,29 @@ internal sealed class PaperBodyPluginDataStore : IDisposable
     internal PaperBodyPluginDataStore(
         string pluginRoot,
         IDurableAtomicFileWriter atomicWriter)
+        : this(
+            pluginRoot,
+            atomicWriter,
+            SaveDebounceMilliseconds,
+            ForceSaveMilliseconds)
+    {
+    }
+
+    internal PaperBodyPluginDataStore(
+        string pluginRoot,
+        IDurableAtomicFileWriter atomicWriter,
+        int saveDebounceMilliseconds,
+        int forceSaveMilliseconds)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(pluginRoot);
         ArgumentNullException.ThrowIfNull(atomicWriter);
+        ArgumentOutOfRangeException.ThrowIfNegative(saveDebounceMilliseconds);
+        ArgumentOutOfRangeException.ThrowIfNegative(forceSaveMilliseconds);
 
         DataRoot = Path.Combine(pluginRoot, "data");
         _atomicWriter = atomicWriter;
+        _saveDebounceMilliseconds = saveDebounceMilliseconds;
+        _forceSaveMilliseconds = forceSaveMilliseconds;
         _saveTimer = new Timer(
             _ => FlushDirty(),
             null,
@@ -226,6 +246,7 @@ internal sealed class PaperBodyPluginDataStore : IDisposable
         PaperBodyPluginDescriptor descriptor,
         PaperBodyPluginSettingManifest setting)
     {
+        RejectActionSettingValue(setting);
         lock (_gate)
         {
             ThrowIfDisposed();
@@ -243,6 +264,7 @@ internal sealed class PaperBodyPluginDataStore : IDisposable
         PaperBodyPluginSettingManifest setting,
         JsonElement value)
     {
+        RejectActionSettingValue(setting);
         var normalized = PaperBodyPluginRegistry.NormalizeSettingValue(setting, value);
         lock (_gate)
         {
@@ -260,9 +282,19 @@ internal sealed class PaperBodyPluginDataStore : IDisposable
         }
     }
 
+    private static void RejectActionSettingValue(PaperBodyPluginSettingManifest setting)
+    {
+        if (setting.Type == "action")
+        {
+            throw new InvalidOperationException("Action settings are commands, not stored values.");
+        }
+    }
+
     public string GetSettingsJson(PaperBodyPluginDescriptor descriptor)
     {
-        var settings = descriptor.Manifest?.Settings ?? [];
+        var settings = (descriptor.Manifest?.Settings ?? [])
+            .Where(setting => setting.Type != "action")
+            .ToArray();
         if (settings.Length == 0)
         {
             return "{}";
@@ -280,18 +312,6 @@ internal sealed class PaperBodyPluginDataStore : IDisposable
                     : PaperBodyPluginRegistry.DefaultSettingValue(setting);
             }
             return JsonSerializer.Serialize(values, JsonOptions);
-        }
-    }
-
-    public bool TryGetReadIssue(
-        string providerId,
-        out PaperBodyPluginDataReadIssue issue)
-    {
-        lock (_gate)
-        {
-            ThrowIfDisposed();
-            _ = Load(providerId);
-            return _readIssues.TryGetValue(providerId, out issue!);
         }
     }
 
@@ -315,25 +335,16 @@ internal sealed class PaperBodyPluginDataStore : IDisposable
                         continue;
                     }
 
-                    try
-                    {
-                        SaveNow(providerId, document);
-                        _dirtyProviderIds.Remove(providerId);
-                    }
-                    catch
-                    {
-                        // Keep the in-memory deletion dirty so the normal retry path can finish it.
-                        _dirtyProviderIds.Add(providerId);
-                    }
+                    // Core deletion is already committed. Persist this independent mutation
+                    // through the same ordered writer as settings and plugin state updates.
+                    ScheduleSave(providerId);
                 }
                 catch
                 {
                     // One plugin's unreadable data must not block deletion of the paper itself or
-                    // cleanup of other plugins. Load records the problem for the plugin page.
+                    // cleanup of other plugins. Reads of that plugin still report the original failure.
                 }
             }
-
-            UpdateSaveTimersAfterFlush();
         }
     }
 
@@ -377,51 +388,17 @@ internal sealed class PaperBodyPluginDataStore : IDisposable
             return cached;
         }
 
+        var path = DataPath(providerId);
         PluginDataDocument document;
-        var primaryPath = DataPath(providerId);
-        var recoveredPath = RecoveredDataPath(providerId);
-        if (File.Exists(recoveredPath))
+        try
         {
-            _recoveredProviderIds.Add(providerId);
-            try
-            {
-                document = ReadDocument(recoveredPath);
-                _readIssues[providerId] = new PaperBodyPluginDataReadIssue(
-                    recoveredPath,
-                    RecoveredFileExists: true,
-                    UsingEmptyState: false,
-                    Details: "");
-            }
-            catch (Exception ex)
-            {
-                document = NewDocument();
-                _readIssues[providerId] = new PaperBodyPluginDataReadIssue(
-                    recoveredPath,
-                    RecoveredFileExists: true,
-                    UsingEmptyState: true,
-                    ex.GetBaseException().Message);
-            }
+            document = ReadDocument(path);
         }
-        else if (File.Exists(primaryPath))
+        catch (FileNotFoundException)
         {
-            try
-            {
-                document = ReadDocument(primaryPath);
-            }
-            catch (Exception ex)
-            {
-                // Preserve the unreadable original. This process runs from an empty document and
-                // all later writes go to the single stable .recovered file.
-                document = NewDocument();
-                _recoveredProviderIds.Add(providerId);
-                _readIssues[providerId] = new PaperBodyPluginDataReadIssue(
-                    recoveredPath,
-                    RecoveredFileExists: false,
-                    UsingEmptyState: true,
-                    ex.GetBaseException().Message);
-            }
+            document = NewDocument();
         }
-        else
+        catch (DirectoryNotFoundException)
         {
             document = NewDocument();
         }
@@ -464,17 +441,6 @@ internal sealed class PaperBodyPluginDataStore : IDisposable
         {
             providerIds.Add(Path.GetFileNameWithoutExtension(path));
         }
-        foreach (var path in Directory.EnumerateFiles(
-                     DataRoot,
-                     "*" + RecoveredSuffix,
-                     SearchOption.TopDirectoryOnly))
-        {
-            var fileName = Path.GetFileName(path);
-            if (fileName.EndsWith(RecoveredSuffix, StringComparison.OrdinalIgnoreCase))
-            {
-                providerIds.Add(fileName[..^RecoveredSuffix.Length]);
-            }
-        }
         return providerIds;
     }
 
@@ -482,102 +448,197 @@ internal sealed class PaperBodyPluginDataStore : IDisposable
     {
         var startForceTimer = _dirtyProviderIds.Count == 0;
         _dirtyProviderIds.Add(providerId);
+        _providerRevisions[providerId] = _providerRevisions.GetValueOrDefault(providerId) + 1;
+        _saveFailureAttempts[providerId] = 0;
         if (_suppressFinalFlushOnDispose)
         {
             return;
         }
 
-        _saveTimer.Change(SaveDebounceMilliseconds, Timeout.Infinite);
+        _saveTimer.Change(_saveDebounceMilliseconds, Timeout.Infinite);
         if (startForceTimer)
         {
-            _forceSaveTimer.Change(ForceSaveMilliseconds, Timeout.Infinite);
+            _forceSaveTimer.Change(_forceSaveMilliseconds, Timeout.Infinite);
         }
     }
 
     private void FlushDirty()
     {
+        // A slow write must not accumulate waiting timer callbacks or hold up UI state access.
+        // The current writer rearms any dirty work that arrives while it owns this gate.
+        if (!Monitor.TryEnter(_writeGate))
+        {
+            return;
+        }
+
+        try
+        {
+            SaveSnapshot[] snapshots;
+            lock (_gate)
+            {
+                if (_disposed || WriteLifetime.IsStopped ||
+                    _suppressFinalFlushOnDispose ||
+                    _dirtyProviderIds.Count == 0)
+                {
+                    return;
+                }
+
+                snapshots = CaptureDirtySnapshots(includeFailed: false);
+            }
+
+            foreach (var snapshot in snapshots)
+            {
+                WriteSnapshot(snapshot);
+            }
+        }
+        finally
+        {
+            lock (_gate)
+            {
+                // Release the writer before rearming: even an immediate timer callback can
+                // become the next writer. The state gate keeps its capture after this update.
+                Monitor.Exit(_writeGate);
+                if (!_disposed && !_suppressFinalFlushOnDispose && !WriteLifetime.IsStopped)
+                {
+                    UpdateSaveTimersAfterFlush();
+                }
+            }
+        }
+    }
+
+    // Call under _gate. Dirty providers are already loaded; only their mutable dictionaries
+    // need copying. JsonElement and the stored PaperDataState values are immutable.
+    private SaveSnapshot[] CaptureDirtySnapshots(bool includeFailed) =>
+        _dirtyProviderIds
+            .Where(providerId => includeFailed ||
+                _saveFailureAttempts.GetValueOrDefault(providerId) < 2)
+            .Select(providerId =>
+            {
+                var document = _cache[providerId];
+                return new SaveSnapshot(
+                    providerId,
+                    _providerRevisions[providerId],
+                    new PluginDataDocument
+                    {
+                        StorageVersion = document.StorageVersion,
+                        Settings = new(document.Settings, StringComparer.Ordinal),
+                        Runtime = document.Runtime,
+                        Papers = new(document.Papers, StringComparer.Ordinal)
+                    });
+            })
+            .ToArray();
+
+    // The caller owns _writeGate so temp-file replacement and normal final flush stay ordered.
+    private void WriteSnapshot(SaveSnapshot snapshot)
+    {
+        var succeeded = false;
+        try
+        {
+            SaveNow(snapshot.ProviderId, snapshot.Document);
+            succeeded = true;
+        }
+        catch
+        {
+            // Keep the same bounded retry policy; a later mutation has its own retry budget.
+        }
+
         lock (_gate)
         {
-            if (_disposed ||
-                _suppressFinalFlushOnDispose ||
-                _dirtyProviderIds.Count == 0)
+            if (_providerRevisions[snapshot.ProviderId] != snapshot.Revision)
             {
                 return;
             }
 
-            foreach (var providerId in _dirtyProviderIds.ToArray())
+            if (succeeded)
             {
-                try
-                {
-                    SaveNow(providerId, Load(providerId));
-                    _dirtyProviderIds.Remove(providerId);
-                }
-                catch
-                {
-                    // Keep the provider dirty. The timers below retry without requiring another
-                    // plugin mutation.
-                }
+                _dirtyProviderIds.Remove(snapshot.ProviderId);
+                _saveFailureAttempts.Remove(snapshot.ProviderId);
             }
-
-            UpdateSaveTimersAfterFlush();
+            else
+            {
+                _saveFailureAttempts[snapshot.ProviderId] =
+                    _saveFailureAttempts.GetValueOrDefault(snapshot.ProviderId) + 1;
+            }
         }
     }
 
     private void UpdateSaveTimersAfterFlush()
     {
-        if (_suppressFinalFlushOnDispose || _dirtyProviderIds.Count == 0)
+        _saveTimer.Change(Timeout.Infinite, Timeout.Infinite);
+        if (_disposed || WriteLifetime.IsStopped ||
+            _suppressFinalFlushOnDispose ||
+            _dirtyProviderIds.Count == 0 ||
+            !_dirtyProviderIds.Any(providerId =>
+                _saveFailureAttempts.GetValueOrDefault(providerId) < 2))
         {
-            _saveTimer.Change(Timeout.Infinite, Timeout.Infinite);
             _forceSaveTimer.Change(Timeout.Infinite, Timeout.Infinite);
             return;
         }
 
-        _saveTimer.Change(SaveDebounceMilliseconds, Timeout.Infinite);
-        _forceSaveTimer.Change(ForceSaveMilliseconds, Timeout.Infinite);
+        if (_dirtyProviderIds.Any(providerId =>
+                _saveFailureAttempts.GetValueOrDefault(providerId) == 0))
+        {
+            // A mutation during the write still gets the normal debounce, even if its original
+            // timer fired while _writeGate was busy. It is not a failed-write retry.
+            _saveTimer.Change(_saveDebounceMilliseconds, Timeout.Infinite);
+        }
+        _forceSaveTimer.Change(_forceSaveMilliseconds, Timeout.Infinite);
     }
 
     private void SaveNow(string providerId, PluginDataDocument document)
     {
-        var useRecovered = _recoveredProviderIds.Contains(providerId);
-        var path = useRecovered
-            ? RecoveredDataPath(providerId)
-            : DataPath(providerId);
+        WriteLifetime.ThrowIfStopped();
         var bytes = JsonSerializer.SerializeToUtf8Bytes(document, JsonOptions);
-        _atomicWriter.Write(path, bytes);
+        _atomicWriter.Write(DataPath(providerId), bytes, beforeReplace: WriteLifetime.ThrowIfStopped);
+    }
 
-        if (useRecovered)
+    // Unlike best-effort disposal, a user-requested exit must not discard known dirty
+    // plugin data after a failed write. Keep the store and runtime usable on failure.
+    internal void FlushForUserExit()
+    {
+        lock (_writeGate)
         {
-            _readIssues.TryGetValue(providerId, out var existingIssue);
-            _readIssues[providerId] = new PaperBodyPluginDataReadIssue(
-                path,
-                RecoveredFileExists: true,
-                UsingEmptyState: false,
-                existingIssue?.Details ?? "");
+            SaveSnapshot[] snapshots;
+            lock (_gate)
+            {
+                ThrowIfDisposed();
+                WriteLifetime.ThrowIfStopped();
+                snapshots = CaptureDirtySnapshots(includeFailed: true);
+            }
+            foreach (var snapshot in snapshots) WriteSnapshot(snapshot);
+            lock (_gate)
+            {
+                if (_dirtyProviderIds.Count != 0)
+                {
+                    UpdateSaveTimersAfterFlush();
+                    throw new IOException("Plugin data could not be saved; exit was cancelled.");
+                }
+            }
         }
     }
 
     internal void SuppressFinalFlushOnDispose()
     {
-        lock (_gate)
+        lock (_writeGate)
         {
-            if (_disposed)
+            lock (_gate)
             {
-                return;
-            }
+                if (_disposed)
+                {
+                    return;
+                }
 
-            // Waiting for the gate lets any write already inside FlushDirty/SaveNow finish first.
-            // Once this flag is set, queued timer callbacks and disposal must not start new writes.
-            _suppressFinalFlushOnDispose = true;
-            _saveTimer.Change(Timeout.Infinite, Timeout.Infinite);
-            _forceSaveTimer.Change(Timeout.Infinite, Timeout.Infinite);
+                // Wait for the active writer without holding the state gate. Once this flag is
+                // set, queued timer callbacks and disposal must not start any more writes.
+                _suppressFinalFlushOnDispose = true;
+                _saveTimer.Change(Timeout.Infinite, Timeout.Infinite);
+                _forceSaveTimer.Change(Timeout.Infinite, Timeout.Infinite);
+            }
         }
     }
 
     private string DataPath(string providerId) =>
         Path.Combine(DataRoot, providerId + ".json");
-
-    private string RecoveredDataPath(string providerId) =>
-        Path.Combine(DataRoot, providerId + RecoveredSuffix);
 
     private static bool JsonElementEquals(JsonElement left, JsonElement right)
     {
@@ -592,34 +653,32 @@ internal sealed class PaperBodyPluginDataStore : IDisposable
     }
 
     private void ThrowIfDisposed() =>
-        ObjectDisposedException.ThrowIf(_disposed, this);
+        ObjectDisposedException.ThrowIf(_disposed || _workspaceDetached, this);
 
     public void Dispose()
     {
-        lock (_gate)
+        lock (_writeGate)
         {
-            if (_disposed)
+            SaveSnapshot[] snapshots;
+            lock (_gate)
             {
-                return;
+                if (_disposed)
+                {
+                    return;
+                }
+
+                _saveTimer.Change(Timeout.Infinite, Timeout.Infinite);
+                _forceSaveTimer.Change(Timeout.Infinite, Timeout.Infinite);
+                _disposed = true;
+                snapshots = _suppressFinalFlushOnDispose || WriteLifetime.IsStopped
+                    ? []
+                    : CaptureDirtySnapshots(includeFailed: true);
             }
 
-            _saveTimer.Change(Timeout.Infinite, Timeout.Infinite);
-            _forceSaveTimer.Change(Timeout.Infinite, Timeout.Infinite);
-            if (!_suppressFinalFlushOnDispose)
+            foreach (var snapshot in snapshots)
             {
-                foreach (var providerId in _dirtyProviderIds.ToArray())
-                {
-                    try
-                    {
-                        SaveNow(providerId, Load(providerId));
-                        _dirtyProviderIds.Remove(providerId);
-                    }
-                    catch
-                    {
-                    }
-                }
+                WriteSnapshot(snapshot);
             }
-            _disposed = true;
         }
         _saveTimer.Dispose();
         _forceSaveTimer.Dispose();

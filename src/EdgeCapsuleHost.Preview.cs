@@ -892,7 +892,8 @@ internal sealed partial class EdgeCapsuleHost
                 From = currentOpacity,
                 To = targetOpacity,
                 Duration = new Duration(
-                    TimeSpan.FromMilliseconds(CompactLabelFadeMilliseconds)),
+                    TimeSpan.FromMilliseconds(
+                        AnimationTiming.ScaleMilliseconds(CompactLabelFadeMilliseconds))),
                 FillBehavior = FillBehavior.Stop
             },
             HandoffBehavior.SnapshotAndReplace);

@@ -11,14 +11,14 @@ internal readonly record struct MarkdownSourceChange(
 
 /// <summary>
 /// Per-editor semantic cache owned by the same thread as AvalonEdit's TextDocument. Opening a note
-/// always publishes one exact full-document Markdig snapshot. Completed edits below 2K characters
+/// always publishes one exact full-document Markdig snapshot. Completed edits below 8K characters
 /// are also parsed in full; larger notes use the lightweight local reparse path and synchronously
 /// fall back to a full parse only for the few global reference-definition cases it declines.
 /// There is no worker, semaphore, pending queue, stale generation or concurrent publication path.
 /// </summary>
 internal sealed class MarkdownSemanticDocument : IDisposable
 {
-    internal const int FullParseThresholdChars = 2000;
+    internal const int FullParseThresholdChars = 8_000;
 
     private readonly ICSharpCode.AvalonEdit.Document.TextDocument _document;
     private MarkdownSemanticSnapshot _snapshot;

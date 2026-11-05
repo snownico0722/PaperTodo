@@ -49,6 +49,59 @@ internal static class TodoRules
         }
     }
 
+    public static bool TryCreateMovedOrder(
+        IReadOnlyList<PaperItem> items,
+        IReadOnlyCollection<string> movedItemIds,
+        string targetItemId,
+        bool insertAfter,
+        out List<PaperItem> reordered)
+    {
+        reordered = items.OrderBy(item => item.Order).ToList();
+        if (movedItemIds.Count == 0 ||
+            string.IsNullOrWhiteSpace(targetItemId))
+        {
+            return false;
+        }
+
+        var movedIds = movedItemIds.ToHashSet(StringComparer.Ordinal);
+        if (movedIds.Contains(targetItemId))
+        {
+            return false;
+        }
+
+        var moved = reordered
+            .Where(item => movedIds.Contains(item.Id))
+            .ToList();
+        if (moved.Count == 0)
+        {
+            return false;
+        }
+
+        var remaining = reordered
+            .Where(item => !movedIds.Contains(item.Id))
+            .ToList();
+        var targetIndex = remaining.FindIndex(item =>
+            string.Equals(item.Id, targetItemId, StringComparison.Ordinal));
+        if (targetIndex < 0)
+        {
+            return false;
+        }
+        if (insertAfter)
+        {
+            targetIndex++;
+        }
+
+        remaining.InsertRange(targetIndex, moved);
+        if (reordered.Select(item => item.Id)
+            .SequenceEqual(remaining.Select(item => item.Id)))
+        {
+            return false;
+        }
+
+        reordered = remaining;
+        return true;
+    }
+
     public static bool ApplyCompletedOrdering(
         List<PaperItem> items,
         bool enabled)

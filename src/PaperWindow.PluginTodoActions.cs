@@ -209,7 +209,7 @@ public sealed partial class PaperWindow
             return;
         }
 
-        var menu = (e.Source as FrameworkElement)?.ContextMenu ?? row.ContextMenu;
+        var menu = FindContextMenuOwner(e.OriginalSource as DependencyObject, this)?.ContextMenu;
         if (menu == null)
         {
             return;

@@ -56,8 +56,9 @@ internal sealed class ExperimentalTetherCapsuleWindow : Window
             VerticalAlignment = VerticalAlignment.Center,
             MaxWidth = AppTypography.Scale(220)
         };
-        _pill = new Border
+        _pill = new SkinBorder
         {
+            IsCapsule = true,
             CornerRadius = new CornerRadius(16),
             BorderThickness = new Thickness(1),
             Padding = new Thickness(12, 6, 12, 6),
@@ -174,6 +175,7 @@ internal sealed class ExperimentalTetherCapsuleWindow : Window
 
     public void UpdateTheme()
     {
+        SkinBorder.Refresh(_pill);
         _pill.Background = Theme.PaperBrush;
         _pill.BorderBrush = Theme.PaperBorderBrush;
         _label.Foreground = Theme.TextBrush;

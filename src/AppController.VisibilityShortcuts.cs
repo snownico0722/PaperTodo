@@ -125,15 +125,7 @@ public sealed partial class AppController
         _visibilityShortcutVisibleLinkedPaperIds = null;
     }
 
-    private void TogglePreserveLinkedPaperHiddenStateInVisibilityShortcuts()
-    {
-        State.PreserveLinkedPaperHiddenStateInVisibilityShortcuts =
-            !State.PreserveLinkedPaperHiddenStateInVisibilityShortcuts;
-        if (!State.PreserveLinkedPaperHiddenStateInVisibilityShortcuts)
-        {
-            ClearVisibilityShortcutRestoreSnapshot();
-        }
-        MarkDirty();
-    }
+    private void TogglePreserveLinkedPaperHiddenStateInVisibilityShortcuts() =>
+        SetSettingFromUi("shortcuts.preserve_linked_hidden", !State.PreserveLinkedPaperHiddenStateInVisibilityShortcuts);
 
 }

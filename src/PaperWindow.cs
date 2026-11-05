@@ -51,10 +51,16 @@ public sealed partial class PaperWindow : Window
     private readonly PaperData _paper;
     private readonly AppController _controller;
     private bool _isShellBuilt;
+    private NativeMicaBackdrop? _nativeMica;
+    internal bool IsNativeMicaEffective => _nativeMica?.IsActive == true;
+    // Stable for the session, including solid/opacity fallback; no inset frame may reappear
+    // just because a startup animation temporarily suspends the material.
+    private bool UsesNativePaperChrome => _controller.UsesNativeMicaWindows && !_paper.IsCollapsed;
 
     private Grid _windowHost = null!;
     private PaperChromeBorder _paperChrome = null!;
     private readonly Grid _containerGrid = new();
+    private readonly PaperFormContentHost _formContentHost = new();
     private readonly Grid _shell = new();
     private readonly ScaleTransform _shellScale = new(1.0, 1.0);
     private Canvas? _dragLayer;
@@ -98,6 +104,7 @@ public sealed partial class PaperWindow : Window
     private string? _activeOriginalText;
     private bool _suppressTodoBackspaceUntilKeyUp;
     private Button? _closeButton;
+    private Button? _moreActionsButton;
     private Grid _capsuleShell = null!;
     private Grid? _capsuleOpacityHost;
     private EdgeCapsuleHost? _edgeCapsuleHost;
@@ -120,12 +127,13 @@ public sealed partial class PaperWindow : Window
     private double _targetTransitionHeight;
     private double _transitionBaseWidth;
     private double _transitionBaseHeight;
+    private double _startTransitionChromeMargin;
+    private double _targetTransitionChromeMargin;
     private bool _isEditingTitle;
     private bool _suppressTitleEditFromCurrentClick;
     private Rect? _snappedPresentationBoundsForRestore;
     private bool _collapsedFromMaximized;
     private int _themeAnimationGeneration;
-    private int _clearDoneGeneration;
     private int _todoRowsGeneration;
     private const double DeepCapsuleExpandedEdgeInset = EdgeCapsuleLayout.ExpandedEdgeInset;
     private const double DeepCapsuleTopMargin = EdgeCapsuleLayout.TopMargin;
@@ -188,18 +196,15 @@ public sealed partial class PaperWindow : Window
     private const double DeepCapsuleSlotOutlineOverlap =
         EdgeCapsuleLayout.OutlineOverlap;
     private const double DeepCapsuleReorderDragExtraThreshold = 4;
-    private const double DeepCapsuleCrossQueueDragUnlockDistance = 56;
+    private const double DeepCapsuleCrossQueueDragUnlockDistance = EdgeCapsuleLayout.CrossQueueDragUnlockDistance;
     private const double DeepCapsuleCrossQueueDragScaleFrom = 0.97;
     private const int DeepCapsuleCrossQueueDragMorphMilliseconds = 90;
-    private const int DeepCapsuleDockingHandoffMilliseconds = 160;
-    private const int DeepCapsuleDockingRevealMilliseconds = 80;
     // 圆角阶梯：所有元素只从这四档取值，避免散落的随手圆角。
     // 小元素（勾选框）/ 控件（按钮、徽标、行）/ 块（菜单、面板）/ 外壳（纸片、顶栏）。
     private const double RadiusSmall = 4;
     private const double RadiusControl = 8;
     private const double RadiusBlock = 12;
     private const double RadiusShell = 16;
-    private static readonly object NoteRenderTraceLock = new();
 
     public bool IsDeepCapsulePlaced => _paper.IsCollapsed && HasDeepCapsuleSlotPlacement;
     internal bool IsShellBuilt => _isShellBuilt;
@@ -241,13 +246,8 @@ public sealed partial class PaperWindow : Window
         Start
     }
 
-    private void ClearCapsuleInteractionKeyboardFocus()
-    {
+    private void ClearCapsuleInteractionKeyboardFocus() =>
         WindowNative.ClearCurrentThreadKeyboardFocus();
-        Dispatcher.BeginInvoke(
-            (Action)WindowNative.ClearCurrentThreadKeyboardFocus,
-            System.Windows.Threading.DispatcherPriority.Background);
-    }
 
     private sealed class TodoDragState
     {
@@ -298,8 +298,8 @@ public sealed partial class PaperWindow : Window
     private static Brush DropIndicatorBgBrush => Theme.Tint(12);
     private static Brush DropIndicatorBrush => Theme.Tint(180);
     private static Brush AppendDropBrush => Theme.Tint(34);
-    private static Brush AppendBorderBrush => Theme.Tint(45);
-    private static Brush AppendBgBrush => Theme.Tint(12);
+    private static Brush AppendBorderBrush => Theme.Tint((byte)(Theme.IsPixelSkin ? 100 : 45));
+    private static Brush AppendBgBrush => Theme.Tint((byte)(Theme.IsPixelSkin ? 24 : 12));
     private static Brush AppendHoverBgBrush => Theme.Tint(26);
     private static Brush PaperLinkTargetBgBrush => Theme.Tint((byte)(Theme.IsDark ? 36 : 28));
     private static Brush PaperLinkTargetBorderBrush => Theme.Tint(150);
@@ -316,7 +316,9 @@ public sealed partial class PaperWindow : Window
     private static Brush TrashHoverBgBrush => Theme.Danger((byte)(Theme.IsDark ? 32 : 26));
     private static Brush TrashHoverBorderBrush => Theme.DangerBrush;
 
-    private static Brush TitleBarBrush => Theme.Tint((byte)(Theme.IsDark ? 18 : 12));
+    // The single skin surface continues behind the controls. Native caption color is
+    // still explicitly owned by DwmMicaApi; a second opaque header is not needed.
+    private Brush TitleBarBrush => HasMaterialHeader ? Brushes.Transparent : Theme.TitleBarBrush(_controller.UsesNativeMicaWindows);
     private static Brush TitleBarDividerBrush => Theme.Tint((byte)(Theme.IsDark ? 34 : 28));
     private const string PinOutlineHeadPathData = "M 7.5,4.25 H 16.5 V 5.75 H 15.5 V 12.05 L 17.6,14.15 V 15.35 H 6.4 V 14.15 L 8.5,12.05 V 5.75 H 7.5 Z";
     private const string PinNeedlePathData = "M 10.85,15.35 H 13.15 V 22.1 L 12,23.25 L 10.85,22.1 Z";
@@ -354,7 +356,8 @@ public sealed partial class PaperWindow : Window
 
     private static ControlTemplate BuildContextMenuTemplate()
     {
-        var border = new FrameworkElementFactory(typeof(Border));
+        var border = new FrameworkElementFactory(typeof(SkinBorder));
+        border.SetValue(SkinBorder.IsMenuProperty, true);
         border.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(Control.BackgroundProperty));
         border.SetValue(Border.BorderBrushProperty, new TemplateBindingExtension(Control.BorderBrushProperty));
         border.SetValue(Border.BorderThicknessProperty, new Thickness(1));
@@ -446,7 +449,7 @@ public sealed partial class PaperWindow : Window
         border.AppendChild(itemGrid);
         rootGrid.AppendChild(border);
 
-        var popup = new FrameworkElementFactory(typeof(Popup));
+        var popup = new FrameworkElementFactory(typeof(MaterialSubmenuPopup));
         popup.Name = "PART_Popup";
         popup.SetValue(
             Popup.IsOpenProperty,
@@ -456,7 +459,8 @@ public sealed partial class PaperWindow : Window
         popup.SetValue(Popup.FocusableProperty, false);
         popup.SetValue(Popup.PopupAnimationProperty, PopupAnimation.Fade);
 
-        var popupBorder = new FrameworkElementFactory(typeof(Border));
+        var popupBorder = new FrameworkElementFactory(typeof(SkinBorder));
+        popupBorder.SetValue(SkinBorder.IsMenuProperty, true);
         popupBorder.SetValue(
             Border.BackgroundProperty,
             new DynamicResourceExtension("PaperBrushKey"));
@@ -543,7 +547,7 @@ public sealed partial class PaperWindow : Window
 
         var border = new FrameworkElementFactory(typeof(Border));
         border.Name = "Bd";
-        border.SetValue(Border.CornerRadiusProperty, new CornerRadius(RadiusControl));
+        border.SetValue(Border.CornerRadiusProperty, new DynamicResourceExtension("SkinButtonRadiusKey"));
         border.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(Control.BackgroundProperty));
         border.SetValue(Border.PaddingProperty, new TemplateBindingExtension(Control.PaddingProperty));
 
@@ -573,6 +577,7 @@ public sealed partial class PaperWindow : Window
         };
         pressed.Setters.Add(new Setter(UIElement.OpacityProperty, 0.7));
 
+        pressed.Setters.Add(new Setter(UIElement.RenderTransformProperty, new DynamicResourceExtension("SkinButtonPressedOffsetKey"), "Bd"));
         template.Triggers.Add(mouseOver);
         template.Triggers.Add(pressed);
         style.Setters.Add(new Setter(Control.TemplateProperty, template));
@@ -612,7 +617,7 @@ public sealed partial class PaperWindow : Window
         border.SetValue(FrameworkElement.WidthProperty, checkBoxSize);
         border.SetValue(FrameworkElement.HeightProperty, checkBoxSize);
         border.SetValue(Border.BorderThicknessProperty, new Thickness(AppTypography.Scale(1.5)));
-        border.SetValue(Border.CornerRadiusProperty, new CornerRadius(AppTypography.Scale(RadiusSmall)));
+        border.SetValue(Border.CornerRadiusProperty, new CornerRadius(Theme.IsPixelSkin ? 0 : AppTypography.Scale(RadiusSmall)));
         border.SetValue(Border.BorderBrushProperty, new DynamicResourceExtension("CheckBoxBorderBrushKey"));
         border.SetValue(Border.BackgroundProperty, Brushes.Transparent);
         border.SetValue(UIElement.SnapsToDevicePixelsProperty, true);
@@ -620,12 +625,15 @@ public sealed partial class PaperWindow : Window
 
         var path = new FrameworkElementFactory(typeof(System.Windows.Shapes.Path));
         path.Name = "CheckMark";
-        path.SetValue(System.Windows.Shapes.Path.DataProperty, Geometry.Parse("M 3,7.5 L 6.5,11 L 13,4"));
+        path.SetValue(RenderOptions.EdgeModeProperty, Theme.IsPixelSkin ? EdgeMode.Aliased : EdgeMode.Unspecified);
+        path.SetValue(System.Windows.Shapes.Path.DataProperty, Geometry.Parse(Theme.IsPixelSkin ? "M 2,7 H 4 V 9 H 6 V 7 H 8 V 5 H 10 V 3 H 12 V 5 H 10 V 7 H 8 V 9 H 6 V 11 H 4 V 9 H 2 Z" : "M 3,7.5 L 6.5,11 L 13,4"));
         path.SetValue(System.Windows.Shapes.Path.StrokeProperty, new DynamicResourceExtension("PaperBrushKey"));
-        path.SetValue(System.Windows.Shapes.Path.StrokeThicknessProperty, 2.0);
-        path.SetValue(System.Windows.Shapes.Path.StrokeStartLineCapProperty, PenLineCap.Round);
-        path.SetValue(System.Windows.Shapes.Path.StrokeEndLineCapProperty, PenLineCap.Round);
-        path.SetValue(System.Windows.Shapes.Path.StrokeLineJoinProperty, PenLineJoin.Round);
+        if (Theme.IsPixelSkin)
+            path.SetValue(System.Windows.Shapes.Path.FillProperty, new DynamicResourceExtension("PaperBrushKey"));
+        path.SetValue(System.Windows.Shapes.Path.StrokeThicknessProperty, Theme.IsPixelSkin ? 0.0 : 2.0);
+        path.SetValue(System.Windows.Shapes.Path.StrokeStartLineCapProperty, Theme.IsPixelSkin ? PenLineCap.Square : PenLineCap.Round);
+        path.SetValue(System.Windows.Shapes.Path.StrokeEndLineCapProperty, Theme.IsPixelSkin ? PenLineCap.Square : PenLineCap.Round);
+        path.SetValue(System.Windows.Shapes.Path.StrokeLineJoinProperty, Theme.IsPixelSkin ? PenLineJoin.Miter : PenLineJoin.Round);
         path.SetValue(UIElement.VisibilityProperty, Visibility.Collapsed);
         path.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
         path.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
@@ -683,17 +691,18 @@ public sealed partial class PaperWindow : Window
         _deepCapsuleContextMenuSession = new DeepCapsuleContextMenuSession(
             controller,
             paper.Id,
-            Dispatcher,
-            IsPointInsideDeepCapsuleOwnerSurface,
             OnDeepCapsuleContextMenuOpenChanged);
         InitializePaperPresentationState();
 
         ConfigureWindow();
-        if (deferShellConstruction)
+        if (_controller.UsesNativeMicaWindows)
         {
-            UpdateToolTipSetting();
+            _nativeMica = new NativeMicaBackdrop(this, () => _paperChrome,
+                () => !_paper.IsCollapsed && !IsPaperFormTransitioning,
+                brush => Resources["PaperSurfaceBrushKey"] = brush);
+            RefreshNativeMica();
         }
-        else
+        if (!deferShellConstruction)
         {
             EnsureShellBuilt();
         }
@@ -790,7 +799,6 @@ public sealed partial class PaperWindow : Window
         Dispatcher.VerifyAccess();
         BuildShell();
         _isShellBuilt = true;
-        UpdateToolTipSetting();
         RefreshExperimentalOpacity(animate: false);
         UpdateExperimentalFocusPresentationSettings();
         UpdateAdvancedInteractionLockVisuals();
@@ -809,21 +817,25 @@ public sealed partial class PaperWindow : Window
 
     public void CloseForReal()
     {
-        if (IsClosed)
+        if (IsClosed || _isClosingForReal)
         {
             return;
         }
 
-        BeginPaperWindowClose();
-        CloseExpandedDeepCapsuleSlotHostForReal();
-
-        Close();
-    }
-
-    public void UpdateToolTipSetting()
-    {
-        ToolTipPreferences.Apply(this, _controller.State.EnableToolTips);
-        _edgeCapsuleHost?.ApplyToolTipSetting(_controller.State.EnableToolTips);
+        // Keep accepting endpoint frames during handoff, but let only this invocation close
+        // the window when a queued command or plugin callback reenters before Closing is set.
+        _isClosingForReal = true;
+        try
+        {
+            BeginPaperWindowClose();
+            if (IsClosed) return;
+            CloseExpandedDeepCapsuleSlotHostForReal();
+            Close();
+        }
+        finally
+        {
+            _isClosingForReal = false;
+        }
     }
 
     public void UpdateWindowSwitcherVisibility()
@@ -891,11 +903,11 @@ public sealed partial class PaperWindow : Window
             !(collapsed ?? _paper.IsCollapsed);
     }
 
-    private bool TryGetHiddenResizeHitTest(IntPtr hwnd, IntPtr lParam, out int hitTest)
+    private bool TryGetPaperResizeHitTest(IntPtr hwnd, IntPtr lParam, out int hitTest)
     {
         hitTest = 0;
-        if (ResizeGripModes.Normalize(_controller.State.ResizeGripMode) != ResizeGripModes.Hidden ||
-            _paper.IsCollapsed ||
+        if (_paper.IsCollapsed ||
+            _advancedInteractionLocked ||
             IsPaperFormTransitioning ||
             WindowState != WindowState.Normal ||
             (ResizeMode != ResizeMode.CanResize && ResizeMode != ResizeMode.CanResizeWithGrip) ||
@@ -927,13 +939,30 @@ public sealed partial class PaperWindow : Window
         {
             return false;
         }
-        var resizeBorder = Math.Max(1.0, WindowChromeMargin * dpiScale);
+        // All grip modes share the same resize hit test; the setting only changes the dots.
+        // Layered windows can pass mouse input through their transparent shadow gutter,
+        // so reach a few DIPs into the painted paper edge instead of relying on the gutter.
+        // Snapped and native papers have no gutter and keep a 5-DIP interior band.
+        var chromeMargin = _paperChrome?.Margin.Left ?? (UsesNativePaperChrome ? 0 : WindowChromeMargin);
+        var resizeBorder = Math.Max(1.0, (chromeMargin + 5) * dpiScale);
         var nearLeft = pointerX < bounds.Left + resizeBorder;
         var nearRight = pointerX >= bounds.Right - resizeBorder;
         var nearTop = pointerY < bounds.Top + resizeBorder;
         var nearBottom = pointerY >= bounds.Bottom - resizeBorder;
 
-        if (nearTop && nearLeft)
+        // The stock Window-template ResizeGrip is anchored to the HWND corner, not to
+        // the paper's inset chrome. Adding chromeMargin again steals clicks beside the
+        // grip in layered skins; the separate narrow edge band already covers paper edges.
+        var gripRightBand = SystemParameters.VerticalScrollBarWidth * dpiScale;
+        var gripBottomBand = SystemParameters.HorizontalScrollBarHeight * dpiScale;
+        var overGrip = pointerX >= bounds.Right - gripRightBand &&
+            pointerY >= bounds.Bottom - gripBottomBand;
+
+        if (overGrip)
+        {
+            hitTest = HtBottomRight;
+        }
+        else if (nearTop && nearLeft)
         {
             hitTest = HtTopLeft;
         }
@@ -984,7 +1013,7 @@ public sealed partial class PaperWindow : Window
             return IntPtr.Zero;
         }
 
-        if (msg == WmNcHitTest && TryGetHiddenResizeHitTest(hwnd, lParam, out var resizeHitTest))
+        if (msg == WmNcHitTest && TryGetPaperResizeHitTest(hwnd, lParam, out var resizeHitTest))
         {
             handled = true;
             return new IntPtr(resizeHitTest);
@@ -1138,32 +1167,71 @@ public sealed partial class PaperWindow : Window
             return;
         }
 
+        var isCapsule = _paper.IsCollapsed && _controller.State.UseCapsuleMode;
+        if (_paperChrome is SkinBorder skin) skin.IsCapsule = isCapsule;
         var snappedExpanded = _isSnappedPresentation && !_paper.IsCollapsed;
+        if (_controller.UsesNativeMicaWindows && _topBarHost != null)
+        {
+            var innerRadius = snappedExpanded ? 0 : Math.Max(0, NativeMicaBackdrop.CornerRadius - _paperChrome.BorderThickness.Left);
+            _topBarHost.CornerRadius = new CornerRadius(innerRadius, innerRadius, 0, 0);
+        }
 
         // Snapped presentation: make the paper fill the tile edge-to-edge (no shadow, no
         // margin, square corners). Works for Normal-state tiles (half/quarter) and Maximized.
         if (snappedExpanded)
         {
-            _paperChrome.Effect = null;
+            ApplyPaperChromeShadowPresentation(isCapsule, suppressShadow: true);
             _paperChrome.BeginAnimation(Border.MarginProperty, null);
             _paperChrome.Margin = new Thickness(0);
             _paperChrome.CornerRadius = new CornerRadius(0);
             RefreshPluginBodyClip();
+            RefreshNativeMica();
             RefreshExperimentalFocusPresentation(animate: false);
             return;
         }
 
         // Floating or capsule: restore shadow, margin, and form-appropriate corner radius.
-        var isCapsule = _paper.IsCollapsed && _controller.State.UseCapsuleMode;
         var targetCorner = PaperChromeCornerRadiusForState(isCapsule);
         _paperChrome.BeginAnimation(Border.MarginProperty, null);
-        _paperChrome.Margin = new Thickness(WindowChromeMargin);
+        _paperChrome.Margin = new Thickness(UsesNativePaperChrome ? 0 : WindowChromeMargin);
         _paperChrome.CornerRadius = targetCorner;
-        _paperChrome.Effect = isCapsule
+        ApplyPaperChromeShadowPresentation(isCapsule, suppressShadow: false);
+        RefreshPluginBodyClip();
+        RefreshNativeMica();
+        RefreshExperimentalFocusPresentation(animate: false);
+    }
+
+    // A skin refresh must not reset transition-owned Margin or CornerRadius.
+    // Keep main's native-material shadow independent of ordinary Paper shadows.
+    private void ApplyPaperChromeShadowPresentation(bool isCapsule, bool suppressShadow)
+    {
+        if (_paperChrome == null) return;
+        if (suppressShadow)
+        {
+            _paperChrome.Effect = null;
+            _paperChrome.SetMaterialShadowMargin(0);
+            _paperChrome.ClearNineSliceShadow();
+            return;
+        }
+
+        if (!UsesNativePaperChrome && Theme.Skin == PaperSkins.Paper)
+        {
+            _paperChrome.Effect = null;
+            _paperChrome.SetMaterialShadowMargin(0);
+            if (isCapsule)
+                _paperChrome.SetNineSliceShadow(blurRadius: 8, depth: 1, opacity: 0.12, capsuleShape: true);
+            else
+                _paperChrome.SetNineSliceShadow(blurRadius: 14, depth: 2, opacity: 0.22, capsuleShape: false);
+            return;
+        }
+
+        _paperChrome.ClearNineSliceShadow();
+        // Other skins retain the current main native/material/legacy paths.
+        var materialShadow = Theme.UsesNativeBackdrop && (IsPaperFormTransitioning || isCapsule);
+        _paperChrome.Effect = UsesNativePaperChrome || materialShadow ? null : isCapsule
             ? CreatePaperChromeShadow(blurRadius: 8, opacity: 0.12, shadowDepth: 1)
             : CreatePaperChromeShadow();
-        RefreshPluginBodyClip();
-        RefreshExperimentalFocusPresentation(animate: false);
+        _paperChrome.SetMaterialShadowMargin(materialShadow ? _paperChrome.Margin.Left : 0);
     }
 
     private bool LooksSnappedNow()
@@ -1460,12 +1528,7 @@ public sealed partial class PaperWindow : Window
         double opacity = 0.22,
         double shadowDepth = 2)
     {
-        return new DropShadowEffect
-        {
-            BlurRadius = blurRadius,
-            ShadowDepth = shadowDepth,
-            Opacity = opacity
-        };
+        return SkinBorder.CreateShadow(blurRadius, shadowDepth, opacity);
     }
 
     public void CancelPendingVisibilityTransitions()
@@ -1524,7 +1587,7 @@ public sealed partial class PaperWindow : Window
 
         RefreshEffectiveTopmost();
         WindowStyle = WindowStyle.None;
-        AllowsTransparency = true;
+        AllowsTransparency = !_controller.UsesNativeMicaWindows;
         Background = Brushes.Transparent;
         FontFamily = AppTypography.UiFontFamily;
         FontSize = AppTypography.Scale(12);
@@ -1536,7 +1599,12 @@ public sealed partial class PaperWindow : Window
 
     private void InitializeThemeResources()
     {
+        Resources["SkinButtonRadiusKey"] = new CornerRadius(Theme.IsPixelSkin ? 0 : RadiusControl);
+        Resources["SkinButtonPressedOffsetKey"] = new TranslateTransform(0, Theme.IsPixelSkin ? 1 : 0);
         Resources["PaperBrushKey"] = PaperBrush;
+        Resources["PaperSurfaceBrushKey"] = IsNativeMicaEffective
+            ? NativeMicaBackdrop.GetActiveSurfaceBrush(PaperSkins.NativeBackdrop(Theme.Skin), Theme.IsDark)
+            : PaperBrush;
         Resources["PaperBorderBrushKey"] = PaperBorderBrush;
         Resources["TextBrushKey"] = TextBrush;
         Resources["WeakTextBrushKey"] = WeakTextBrush;
@@ -1545,6 +1613,8 @@ public sealed partial class PaperWindow : Window
         Resources["DropIndicatorBrushKey"] = DropIndicatorBrush;
         Resources["AppendDropBrushKey"] = AppendDropBrush;
         Resources["MenuHoverBrushKey"] = MenuHoverBrush;
+        Resources["SkinTopBarMarginKey"] = HasMaterialHeader ? new Thickness() : new Thickness(0, 0, 0, 1.5);
+        Resources["SkinTopBarBorderKey"] = HasMaterialHeader ? new Thickness() : new Thickness(0, 0, 0, 1);
         Resources["TitleBarBrushKey"] = TitleBarBrush;
         Resources["TitleBarDividerBrushKey"] = TitleBarDividerBrush;
 
@@ -1557,6 +1627,7 @@ public sealed partial class PaperWindow : Window
 
     public void UpdateTheme()
     {
+        RefreshSkin();
         var oldPaperColor = TryGetSolidColor(_paperChrome?.Background, out var capturedPaperColor)
             ? capturedPaperColor
             : (Color?)null;
@@ -1571,7 +1642,7 @@ public sealed partial class PaperWindow : Window
         _experimentalTetherCapsule?.UpdateTheme();
         RefreshThemedContextMenus();
 
-        var canAnimateTheme = _controller.State.EnableAnimations &&
+        var canAnimateTheme = !PaperSkins.IsDecorated(Theme.Skin) && _nativeMica == null && _controller.State.EnableAnimations &&
             _paperChrome != null &&
             oldPaperColor.HasValue &&
             oldBorderColor.HasValue &&
@@ -1618,9 +1689,12 @@ public sealed partial class PaperWindow : Window
             RestorePaperChromeThemeReferences();
         }
 
+        RefreshNativeMica(force: true);
+        if (!IsPaperFormTransitioning) ApplyPaperChromePresentation();
         RefreshPaperTitle();
         RefreshPaperIconButton();
         RefreshWindowBindingButton();
+        RefreshWorkspaceButton();
         UpdateTextZoom();
         UpdateDeepCapsuleSlotHostTheme();
 
@@ -1736,6 +1810,7 @@ public sealed partial class PaperWindow : Window
             CapsuleLabelFontWeight,
             AppTypography.Scale(18));
         RefreshThemedContextMenus();
+        RefreshWorkspaceButton();
 
         RefreshPaperTitle();
         UpdateTopBarResponsiveLayout();
@@ -1787,12 +1862,21 @@ public sealed partial class PaperWindow : Window
         var transitionBrush = new SolidColorBrush(from);
         assignBrush(transitionBrush);
 
-        var animation = new System.Windows.Media.Animation.ColorAnimation(to, TimeSpan.FromMilliseconds(300))
+        var animation = new System.Windows.Media.Animation.ColorAnimation(
+            to,
+            TimeSpan.FromMilliseconds(AnimationTiming.ScaleMilliseconds(300)))
         {
             EasingFunction = AnimationHelper.SmoothEase
         };
         animation.Completed += (_, _) => onComplete();
         transitionBrush.BeginAnimation(SolidColorBrush.ColorProperty, animation);
+    }
+
+    internal void RefreshNativeMica(bool force = false)
+    {
+        _nativeMica?.Refresh(Theme.UsesNativeBackdrop, Theme.IsDark, PaperSkins.NativeBackdrop(Theme.Skin),
+            _controller.State.MicaAlwaysActive, force);
+        (_paperChrome as SkinBorder)?.RefreshBackground();
     }
 
     private void RestorePaperChromeThemeReferences()
@@ -1802,7 +1886,7 @@ public sealed partial class PaperWindow : Window
             return;
         }
 
-        _paperChrome.SetResourceReference(Border.BackgroundProperty, "PaperBrushKey");
+        _paperChrome.SetResourceReference(Border.BackgroundProperty, "PaperSurfaceBrushKey");
         _paperChrome.SetResourceReference(Border.BorderBrushProperty, "PaperBorderBrushKey");
     }
 
@@ -1815,15 +1899,15 @@ public sealed partial class PaperWindow : Window
         };
         Content = _windowHost;
 
-        _paperChrome = new PaperChromeBorder
+        _paperChrome = new SkinBorder
         {
-            Margin = new Thickness(WindowChromeMargin),
+            Margin = new Thickness(UsesNativePaperChrome ? 0 : WindowChromeMargin),
             CornerRadius = PaperChromeCornerRadiusForState(_paper.IsCollapsed && _controller.State.UseCapsuleMode),
             BorderThickness = new Thickness(1),
             SnapsToDevicePixels = true,
             Effect = CreatePaperChromeShadow()
         };
-        _paperChrome.SetResourceReference(Border.BackgroundProperty, "PaperBrushKey");
+        _paperChrome.SetResourceReference(Border.BackgroundProperty, "PaperSurfaceBrushKey");
         _paperChrome.SetResourceReference(Border.BorderBrushProperty, "PaperBorderBrushKey");
 
         // Chrome-level drag gesture: when users click the chrome background itself (top margin
@@ -1859,7 +1943,8 @@ public sealed partial class PaperWindow : Window
         _containerGrid.ClipToBounds = false;
         _containerGrid.RenderTransform = _shellScale;
         _containerGrid.RenderTransformOrigin = new Point(0, 0);
-        _paperChrome.Child = _containerGrid;
+        _formContentHost.Child = _containerGrid;
+        _paperChrome.Child = _formContentHost;
 
         _shell.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         _shell.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
@@ -2160,6 +2245,7 @@ public sealed partial class PaperWindow : Window
             MaxWidth = 86,
             ToolTip = Strings.Get("ToolTipEditTitle")
         };
+        titleHost.CornerRadius = new CornerRadius(Theme.IsPixelSkin ? 0 : RadiusControl);
         titleHost.SetResourceReference(Border.BorderBrushProperty, "TitleBarDividerBrushKey");
 
         var titleEditLayer = new Grid
@@ -2193,9 +2279,10 @@ public sealed partial class PaperWindow : Window
             FontSize = TitleFontSize,
             MinHeight = TitleLineHeight + 1,
             FontWeight = TitleFontWeight,
-            // UTF-16 unit guard at the hard full-width cap (20). Commit still clamps to the
-            // user setting (2–20) via PaperTitles.CleanCustomTitle so IME is not rewritten mid-edit.
-            MaxLength = PaperTitles.MaxTitleLength,
+            // Keep a generous UTF-16 input guard against huge pastes without
+            // cutting off ordinary emoji sequences. The weighted title limit is
+            // applied on commit, after IME composition.
+            MaxLength = 4096,
             Padding = new Thickness(0),
             VerticalContentAlignment = VerticalAlignment.Center,
             FocusVisualStyle = null
@@ -2289,6 +2376,12 @@ public sealed partial class PaperWindow : Window
             actionButtons.Children.Add(_openMarkdownButton);
         }
 
+        _moreActionsButton = IconButton("⋯", Strings.Get("MenuPaperActions"));
+        _moreActionsButton.Width = 23;
+        _moreActionsButton.FontSize = AppTypography.Scale(16);
+        _moreActionsButton.FontWeight = FontWeights.SemiBold;
+        _moreActionsButton.Click += (_, _) => OpenPaperActionsMenu();
+
         _closeButton = IconButton("", Strings.Get("ToolTipHideThisPaper"));
         _closeButton.FontSize = AppTypography.Scale(16);
         _closeButton.Margin = new Thickness(AppTypography.Scale(1), -AppTypography.Scale(0.6), AppTypography.Scale(1), AppTypography.Scale(0.6));
@@ -2307,6 +2400,8 @@ public sealed partial class PaperWindow : Window
 
         actionButtons.Children.Add(_newTodoButton);
         actionButtons.Children.Add(_newNoteButton);
+        buttons.Children.Add(_moreActionsButton);
+        actionButtons.Children.Add(CreateWorkspaceCycleButton());
         buttons.Children.Add(_closeButton);
         UpdateTopBarNewPaperButtons();
 
@@ -2320,7 +2415,11 @@ public sealed partial class PaperWindow : Window
             CornerRadius = new CornerRadius(RadiusShell, RadiusShell, 0, 0),
             Child = top
         };
+        topHost.SetResourceReference(FrameworkElement.MarginProperty, "SkinTopBarMarginKey");
+        topHost.SetResourceReference(Border.BorderThicknessProperty, "SkinTopBarBorderKey");
         topHost.SetResourceReference(Border.BackgroundProperty, "TitleBarBrushKey");
+        _paperChrome.SetBinding(SkinBorder.HeaderHeightProperty,
+            new System.Windows.Data.Binding(nameof(ActualHeight)) { Source = topHost });
         topHost.SetResourceReference(Border.BorderBrushProperty, "TitleBarDividerBrushKey");
         topHost.MouseLeftButtonDown += (_, e) => BeginTitleBarDragGesture(topHost, e);
         topHost.PreviewMouseMove += (_, e) => UpdateTitleBarDragGesture(topHost, e);
@@ -2337,76 +2436,63 @@ public sealed partial class PaperWindow : Window
     private void UpdateTopBarResponsiveLayout()
     {
         if (_updatingTopBarResponsiveLayout ||
-            _topBar == null ||
-            _topBarTitleArea == null ||
-            _topBarTitleHost == null ||
-            _topBarButtonsHost == null ||
-            _topBarActionButtonsHost == null ||
-            _paperIconButton == null ||
-            _closeButton == null ||
-            _paper.IsCollapsed)
-        {
+            _topBar == null || _topBarTitleHost == null ||
+            _topBarActionButtonsHost == null || _paperIconButton == null ||
+            _moreActionsButton == null || _closeButton == null || _paper.IsCollapsed)
             return;
-        }
 
         var availableWidth = _topBar.ActualWidth;
-        if (!double.IsFinite(availableWidth) || availableWidth <= 0)
-        {
-            return;
-        }
+        if (!double.IsFinite(availableWidth) || availableWidth <= 0) return;
 
         _updatingTopBarResponsiveLayout = true;
         try
         {
-            // Use only stable, explicit layout sizes. Do not temporarily reveal collapsed
-            // controls or call Measure on the live visual tree: that can trigger extra
-            // SizeChanged passes and makes the decision depend on the previous state.
-            var leftButtonWidth = TopBarOuterWidth(_paperIconButton);
-            var titleChildMinimumWidth =
-                (_topBarTitleHost.Child as FrameworkElement)?.MinWidth ?? 0;
-            var titleMinimumWidth =
-                Math.Max(
-                    Math.Max(0, _topBarTitleHost.MinWidth),
-                    Math.Max(0, titleChildMinimumWidth) +
-                    _topBarTitleHost.Padding.Left +
-                    _topBarTitleHost.Padding.Right) +
-                _topBarTitleHost.Margin.Left +
-                _topBarTitleHost.Margin.Right;
-            var actionButtonsWidth = VisibleTopBarActionButtonsWidth();
-            var persistentButtonsWidth = TopBarOuterWidth(_closeButton);
+            var titleChildMin = (_topBarTitleHost.Child as FrameworkElement)?.MinWidth ?? 0;
+            var titleMinWidth = Math.Max(_topBarTitleHost.MinWidth,
+                titleChildMin + _topBarTitleHost.Padding.Left + _topBarTitleHost.Padding.Right) +
+                _topBarTitleHost.Margin.Left + _topBarTitleHost.Margin.Right;
+            var fixedWidth = TopBarOuterWidth(_paperIconButton) +
+                TopBarOuterWidth(_moreActionsButton) +
+                TopBarOuterWidth(_closeButton) + TopBarCollisionGap;
+            var remaining = Math.Max(0, availableWidth - fixedWidth - titleMinWidth);
 
-            // Stage 1: keep the left button, the title at its minimum width and a 2-DIP
-            // draggable gap. Collapse the complete right action group only when those
-            // stable minimum requirements would collide with it.
-            var hideRightButtons =
-                leftButtonWidth +
-                titleMinimumWidth +
-                TopBarCollisionGap +
-                actionButtonsWidth +
-                persistentButtonsWidth >
-                availableWidth;
-
-            // Stage 2: after the right group has yielded, hide the title only when even its
-            // minimum width collides with the fixed left button and the 2-DIP gap.
-            var hideTitle =
-                hideRightButtons &&
-                leftButtonWidth +
-                titleMinimumWidth +
-                TopBarCollisionGap +
-                persistentButtonsWidth >
-                availableWidth;
-
-            if (hideTitle && _isEditingTitle)
+            // Built-in user shortcuts are atomic. Saved order affects placement,
+            // never which subset survives a narrow title bar.
+            _topBarActionButtonsHost.Visibility = Visibility.Visible;
+            foreach (var button in _topBarActionButtonsHost.Children.OfType<Button>())
+                button.Visibility = Visibility.Collapsed;
+            var pinnedButtons = PaperTopBarShortcuts.Pinned(_controller.State)
+                .Select(GetTopBarUserButton)
+                .OfType<Button>()
+                .Where(ShouldShowPinnedHostButton)
+                .ToArray();
+            var groupWidth = pinnedButtons.Sum(TopBarOuterWidth);
+            var groupFits = groupWidth <= remaining;
+            if (groupFits)
             {
-                CommitTitleEdit();
+                foreach (var button in pinnedButtons)
+                    button.Visibility = Visibility.Visible;
+                remaining -= groupWidth;
             }
 
-            _topBarActionButtonsHost.Visibility = hideRightButtons
-                ? Visibility.Collapsed
-                : Visibility.Visible;
-            _topBarTitleHost.Visibility = hideTitle
-                ? Visibility.Collapsed
-                : Visibility.Visible;
+            // Plugins cannot displace any built-in shortcut. Paper-scoped actions
+            // stay atomic, while global plugin actions can yield one by one.
+            var pluginCount = groupFits ? PluginTopBarFittingCount(remaining) : 0;
+            ReconcilePluginTopBarCapacity(pluginCount);
+            if (pluginCount > 0 && _pluginTopBarButtonsHost != null)
+                remaining -= TopBarOuterWidth(_pluginTopBarButtonsHost);
+
+            // Passive plugin labels receive only the last available space.
+            if (_pluginTopBarLabelsHost != null)
+                _pluginTopBarLabelsHost.Visibility =
+                    _pluginTopBarLabelsHost.Children.Count > 0 &&
+                    groupFits &&
+                    TopBarOuterWidth(_pluginTopBarLabelsHost) <= remaining
+                        ? Visibility.Visible : Visibility.Collapsed;
+
+            var hideTitle = availableWidth < fixedWidth + titleMinWidth;
+            if (hideTitle && _isEditingTitle) CommitTitleEdit();
+            _topBarTitleHost.Visibility = hideTitle ? Visibility.Collapsed : Visibility.Visible;
         }
         finally
         {
@@ -2599,28 +2685,79 @@ public sealed partial class PaperWindow : Window
     private ContextMenu BuildPaperContextMenu(bool forDeepCapsuleSlot = false)
     {
         var menu = CreateContextMenu();
+        PopulatePaperContextMenu(menu, forDeepCapsuleSlot);
+        // Context menus survive resizes and paper preference changes. Rebuild when
+        // opened so right-click and ellipsis reflect the actual visible bar.
+        menu.Opened += (_, _) => PopulatePaperContextMenu(menu, forDeepCapsuleSlot);
+        return menu;
+    }
 
+    private void PopulatePaperContextMenu(ContextMenu menu, bool forDeepCapsuleSlot)
+    {
+        menu.Items.Clear();
         menu.Items.Add(MenuHeader(Strings.Get("MenuQuick")));
-        menu.Items.Add(MenuItem(Strings.Get("MenuNewTodoPaper"), (_, _) => _controller.CreatePaper(PaperTypes.Todo, show: true, _paper)));
-        menu.Items.Add(MenuItem(Strings.Get("MenuNewNotePaper"), (_, _) => _controller.CreatePaper(PaperTypes.Note, show: true, _paper)));
-        menu.Items.Add(MenuItem(Strings.Get("TraySettings"), (_, _) => _controller.OpenSettingsWindow()));
+
+        // Keep the same command order in both menus. Only the expanded paper's own
+        // menu skips commands already visible in its top bar; the edge capsule is a
+        // separate surface and must retain both creation actions.
+        foreach (var action in PaperTopBarShortcuts.NormalizeOrder(_controller.State.TopBarShortcutOrder))
+        {
+            switch (action)
+            {
+                case PaperTopBarShortcuts.Workspace when
+                    _controller.WorkspaceOptions.Enabled &&
+                    _controller.WorkspaceOptions.SlotNumbers.Count > 1 &&
+                    !IsTopBarCommandVisible(_workspaceButton):
+                    menu.Items.Add(BuildWorkspaceShortcutMenuItem(menu));
+                    break;
+                case PaperTopBarShortcuts.NewTodo when
+                    forDeepCapsuleSlot || !IsTopBarCommandVisible(_newTodoButton):
+                    menu.Items.Add(MenuItem(Strings.Get("MenuNewTodoPaper"),
+                        (_, _) => _controller.CreatePaper(PaperTypes.Todo, show: true, _paper)));
+                    break;
+                case PaperTopBarShortcuts.NewNote when
+                    forDeepCapsuleSlot || !IsTopBarCommandVisible(_newNoteButton):
+                    menu.Items.Add(MenuItem(Strings.Get("MenuNewNotePaper"),
+                        (_, _) => _controller.CreatePaper(PaperTypes.Note, show: true, _paper)));
+                    break;
+                case PaperTopBarShortcuts.Association when
+                    CanBeginAssociationDrag() && !IsTopBarCommandVisible(_windowBindingButton):
+                    menu.Items.Add(BuildAssociationDragMenuItem(menu));
+                    break;
+                case PaperTopBarShortcuts.ExternalEditor when
+                    _paper.Type == PaperTypes.Note && IsCurrentBodyProviderMarkdown &&
+                    !IsTopBarCommandVisible(_openMarkdownButton):
+                    menu.Items.Add(MenuItem(OpenMarkdownEditorToolTip(),
+                        (_, _) => OpenMarkdownInDefaultEditor()));
+                    break;
+            }
+        }
+
+        AttachPluginTopBarActionsToMenu(menu);
+        menu.Items.Add(MenuItem(Strings.Get("TraySettings"),
+            (_, _) => _controller.OpenSettingsWindow()));
 
         menu.Items.Add(MenuSeparator());
         menu.Items.Add(MenuHeader(_controller.PaperCapsuleTitle(_paper)));
 
-        if (_paper.Type == PaperTypes.Todo)
-        {
-            menu.Items.Add(MenuItem(Strings.Get("MenuClearDone"), (_, _) => ClearDoneItems()));
-        }
-        else if (_paper.Type == PaperTypes.Note)
-        {
+        if (_paper.Type == PaperTypes.Note)
             menu.Items.Add(BuildPaperBodyProviderMenuItem());
-            if (IsCurrentBodyProviderMarkdown)
-            {
-                menu.Items.Add(MenuItem(
-                    OpenMarkdownEditorToolTip(),
-                    (_, _) => OpenMarkdownInDefaultEditor()));
-            }
+
+        if (IsExportablePaper(_paper))
+        {
+            var currentLabel = _paper.Type == PaperTypes.Todo
+                ? "TodoExportCurrent" : "NoteExportCurrent";
+            var current = MenuItem(Strings.Get(currentLabel),
+                (_, _) => ExportPapers(all: false));
+            current.IsEnabled = !_paperExportRunning;
+            menu.Items.Add(current);
+
+            var allLabel = _paperExportRunning
+                ? Strings.Format("NoteExportProgress", _paperExportCompleted, _paperExportTotal)
+                : Strings.Get("NoteExportAll");
+            var exportAll = MenuItem(allLabel, (_, _) => ExportPapers(all: true));
+            exportAll.IsEnabled = !_paperExportRunning;
+            menu.Items.Add(exportAll);
         }
 
         AttachPluginPaperMenuActions(menu);
@@ -2651,8 +2788,6 @@ public sealed partial class PaperWindow : Window
             Strings.Get("MenuDelete"),
             (_, _) => DeletePaperFromPaperMenu(),
             isDanger: true));
-
-        return menu;
     }
 
     private void ToggleTopmost()
@@ -2873,7 +3008,9 @@ public sealed partial class PaperWindow : Window
             EnsureExpandedSurfaceGeometry(alignToDockedEdge: true);
         }
 
-        var delay = Math.Max(ExpandAnimationMilliseconds, CollapseResizeMilliseconds) + 30;
+        var delay = Math.Max(
+            AnimationTiming.ScaleMilliseconds(ExpandAnimationMilliseconds),
+            AnimationTiming.ScaleMilliseconds(CollapseResizeMilliseconds)) + 30;
         var timer = new System.Windows.Threading.DispatcherTimer
         {
             Interval = TimeSpan.FromMilliseconds(delay)
@@ -2908,29 +3045,13 @@ public sealed partial class PaperWindow : Window
 
     public void UpdateTopBarNewPaperButtons()
     {
-        if (_newTodoButton != null)
-        {
-            _newTodoButton.Visibility =
-                _controller.State.ShowTopBarNewTodoButton
-                    ? Visibility.Visible
-                    : Visibility.Collapsed;
-        }
-        if (_newNoteButton != null)
-        {
-            _newNoteButton.Visibility =
-                _controller.State.ShowTopBarNewNoteButton
-                    ? Visibility.Visible
-                    : Visibility.Collapsed;
-        }
-        if (_openMarkdownButton != null)
-        {
-            _openMarkdownButton.Visibility =
-                _controller.State.ShowTopBarExternalOpenButton &&
-                IsCurrentBodyProviderMarkdown
-                    ? Visibility.Visible
-                    : Visibility.Collapsed;
-        }
-
+        if (_topBarActionButtonsHost == null) return;
+        ReorderTopBarUserButtons();
+        // Establish initial visibility before first layout: new papers must not flash the
+        // legacy full toolbar for a frame while the title bar still has zero ActualWidth.
+        foreach (var button in _topBarActionButtonsHost.Children.OfType<Button>())
+            button.Visibility = ShouldShowPinnedHostButton(button)
+                ? Visibility.Visible : Visibility.Collapsed;
         UpdateTopBarResponsiveLayout();
     }
 
@@ -3175,6 +3296,9 @@ public sealed partial class PaperWindow : Window
 
     private static FrameworkElement CreateTopmostPinIcon(Button owner, bool pinned)
     {
+        if (Theme.IsPixelSkin) return pinned
+            ? CreatePixelIcon(owner, "..####..", "...##...", "..####..", ".######.", "...##...", "...##...", "...#....")
+            : CreatePixelIcon(owner, "..####..", "..#..#..", "..#..#..", ".######.", "...##...", "...##...", "...#....");
         var canvas = new Canvas
         {
             Width = 24,
@@ -3247,15 +3371,21 @@ public sealed partial class PaperWindow : Window
 
     private ContextMenu CreateContextMenu()
     {
-        var menu = new ContextMenu
-        {
-            Padding = new Thickness(4, 4, 4, 4),
-            FontFamily = AppTypography.UiFontFamily,
-            Language = AppTypography.Language,
-            FontSize = AppTypography.Scale(13),
-            HasDropShadow = true,
-            Template = SharedContextMenuTemplate
-        };
+        var menu = new MaterialContextMenu();
+        InitializeContextMenu(menu);
+        return menu;
+    }
+
+    // Called once for each owned menu, either at creation or when a Todo placeholder
+    // is first requested. Preserve that instance so WPF's TextBox Closed hook survives.
+    private void InitializeContextMenu(ContextMenu menu)
+    {
+        menu.Padding = new Thickness(4, 4, 4, 4);
+        menu.FontFamily = AppTypography.UiFontFamily;
+        menu.Language = AppTypography.Language;
+        menu.FontSize = AppTypography.Scale(13);
+        menu.HasDropShadow = true;
+        menu.Template = SharedContextMenuTemplate;
         AppTypography.ApplyTextRendering(menu);
         UpdateContextMenuTheme(menu);
         menu.Opened += (_, _) =>
@@ -3278,7 +3408,6 @@ public sealed partial class PaperWindow : Window
 
         menu.Resources.Add(typeof(MenuItem), SharedCompactMenuItemStyle);
         RegisterThemedContextMenu(menu);
-        return menu;
     }
 
     private bool IsPaperContextMenuInteractionActive =>
@@ -3434,22 +3563,56 @@ public sealed partial class PaperWindow : Window
 
         var visualWidth = _startTransitionWidth + (_targetTransitionWidth - _startTransitionWidth) * currentProgress;
         var visualHeight = _startTransitionHeight + (_targetTransitionHeight - _startTransitionHeight) * currentProgress;
-        var visualChromeWidth = Math.Max(1.0, visualWidth - WindowChromeInset);
-        var visualChromeHeight = Math.Max(1.0, visualHeight - WindowChromeInset);
-        var baseChromeWidth = Math.Max(1.0, _transitionBaseWidth - WindowChromeInset);
-        var baseChromeHeight = Math.Max(1.0, _transitionBaseHeight - WindowChromeInset);
+        var nativeWindow = _controller.UsesNativeMicaWindows;
+        var pixelWidth = 0;
+        var pixelHeight = 0;
+        if (nativeWindow)
+        {
+            // WM_SIZE reports whole physical pixels back to WPF. Round before deriving the
+            // inner bounds, using the same DPI and rectangle for the shell and native commit.
+            var dpi = VisualTreeHelper.GetDpi(this);
+            pixelWidth = Math.Max(1, (int)Math.Round(visualWidth * dpi.DpiScaleX, MidpointRounding.AwayFromZero));
+            pixelHeight = Math.Max(1, (int)Math.Round(visualHeight * dpi.DpiScaleY, MidpointRounding.AwayFromZero));
+            visualWidth = pixelWidth / dpi.DpiScaleX;
+            visualHeight = pixelHeight / dpi.DpiScaleY;
+        }
+        var margin = nativeWindow
+            ? _startTransitionChromeMargin + (_targetTransitionChromeMargin - _startTransitionChromeMargin) * currentProgress
+            : WindowChromeMargin;
+        var expandedInset = nativeWindow ? 0 : WindowChromeInset;
+        var visualChromeWidth = Math.Max(1.0, visualWidth - margin * 2);
+        var visualChromeHeight = Math.Max(1.0, visualHeight - margin * 2);
+        var baseChromeWidth = Math.Max(1.0, _transitionBaseWidth - expandedInset);
+        var baseChromeHeight = Math.Max(1.0, _transitionBaseHeight - expandedInset);
+
+        if (nativeWindow)
+        {
+            _paperChrome.Margin = new Thickness(margin);
+        }
 
         _paperChrome.HorizontalAlignment = HorizontalAlignment.Left;
         _paperChrome.VerticalAlignment = VerticalAlignment.Top;
         _paperChrome.Width = visualChromeWidth;
         _paperChrome.Height = visualChromeHeight;
-        _shellScale.ScaleX = Math.Max(0.01, visualChromeWidth / baseChromeWidth);
-        _shellScale.ScaleY = Math.Max(0.01, visualChromeHeight / baseChromeHeight);
+        var borderX = _paperChrome.BorderThickness.Left + _paperChrome.BorderThickness.Right;
+        var borderY = _paperChrome.BorderThickness.Top + _paperChrome.BorderThickness.Bottom;
+        if (Theme.UsesNativeBackdrop) _paperChrome.SetMaterialShadowMargin(margin);
+        _shellScale.ScaleX = Math.Max(0.01, (visualChromeWidth - borderX) / Math.Max(1, baseChromeWidth - borderX));
+        _shellScale.ScaleY = Math.Max(0.01, (visualChromeHeight - borderY) / Math.Max(1, baseChromeHeight - borderY));
         UpdateTransitionCornerRadius(visualChromeWidth, visualChromeHeight, baseChromeWidth, baseChromeHeight);
+
+        // Publish the inner frame before WM_SIZE can synchronously run layout. Separate WPF
+        // Width/Height (and growing minimums) otherwise submit intermediate one-axis HWNDs.
+        if (nativeWindow && !WindowNative.TrySetWindowDeviceSize(this, pixelWidth, pixelHeight))
+        {
+            Width = visualWidth;
+            Height = visualHeight;
+        }
     }
 
     private void ResetTransitionVisuals()
     {
+        _formContentHost.ExpandedSize = null;
         _paperChrome.Width = double.NaN;
         _paperChrome.Height = double.NaN;
         _paperChrome.HorizontalAlignment = HorizontalAlignment.Stretch;
@@ -3477,14 +3640,17 @@ public sealed partial class PaperWindow : Window
         var compactRange = Math.Max(1.0, expandedChromeMin - capsuleChromeMin);
         var compactness = Math.Clamp((expandedChromeMin - visualChromeMin) / compactRange, 0.0, 1.0);
         var compactVisualRadius = Math.Min(CapsuleChromeCornerRadius, visualChromeMin / 2.0);
-        var desiredVisualRadius = ExpandedChromeCornerRadius + (compactVisualRadius - ExpandedChromeCornerRadius) * compactness;
+        var expandedRadius = PaperChromeCornerRadiusForState(collapsed: false).TopLeft;
+        var desiredVisualRadius = expandedRadius + (compactVisualRadius - expandedRadius) * compactness;
 
         _paperChrome.CornerRadius = new CornerRadius(desiredVisualRadius);
+        if (_paperChrome is SkinBorder skin) skin.SetFormTransitionCompactness(compactness);
     }
 
-    private static CornerRadius PaperChromeCornerRadiusForState(bool collapsed)
+    private CornerRadius PaperChromeCornerRadiusForState(bool collapsed)
     {
-        return new CornerRadius(collapsed ? CapsuleChromeCornerRadius : ExpandedChromeCornerRadius);
+        return new CornerRadius(collapsed ? CapsuleChromeCornerRadius :
+            _controller.UsesNativeMicaWindows ? NativeMicaBackdrop.CornerRadius : ExpandedChromeCornerRadius);
     }
 
     private double CapsuleWindowWidth()
@@ -3624,6 +3790,7 @@ public sealed partial class PaperWindow : Window
 
     internal void HideWithoutGeometrySave()
     {
+        HandoffForegroundBeforeSurfaceRemoval();
         MoveWindowWithoutGeometrySave(Hide);
     }
 
@@ -3638,6 +3805,29 @@ public sealed partial class PaperWindow : Window
         finally
         {
             _suppressGeometrySave = wasSuppressing;
+        }
+    }
+
+    // Register before any PaperWindow instance is constructed so the interaction lock consumes
+    // tunneled keyboard input before child controls or window shortcuts can act on it.
+    private static readonly bool TodoInteractionLockGuardRegistered =
+        RegisterTodoInteractionLockGuard();
+
+    private static bool RegisterTodoInteractionLockGuard()
+    {
+        EventManager.RegisterClassHandler(
+            typeof(PaperWindow),
+            UIElement.PreviewKeyDownEvent,
+            new KeyEventHandler(OnInteractionLockPreviewKeyDown),
+            handledEventsToo: true);
+        return true;
+    }
+
+    private static void OnInteractionLockPreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (sender is PaperWindow { _advancedInteractionLocked: true })
+        {
+            e.Handled = true;
         }
     }
 

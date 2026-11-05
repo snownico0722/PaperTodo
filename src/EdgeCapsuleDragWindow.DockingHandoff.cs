@@ -131,6 +131,13 @@ internal sealed partial class EdgeCapsuleDragWindow
             Stopwatch.GetTimestamp(),
             AnimationDurationTicks(durationMilliseconds),
             completed);
+        if (durationMilliseconds <= 0)
+        {
+            // A changed destination can be aligned once without starting another flight.
+            // Keep the same endpoint apply, layout and physical-bounds verification.
+            CompleteDockingHandoffAnimation(reachedTarget: true);
+            return;
+        }
         CompositionTarget.Rendering += OnDockingHandoffFrame;
         AdvanceDockingHandoffFrame();
     }

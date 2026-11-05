@@ -139,9 +139,6 @@ Error: {0}</value>
   <data name="MenuBold" xml:space="preserve">
     <value>Bold</value>
   </data>
-  <data name="MenuClearDone" xml:space="preserve">
-    <value>Clear completed</value>
-  </data>
   <data name="MenuCodeBlock" xml:space="preserve">
     <value>Code block</value>
   </data>
@@ -434,7 +431,7 @@ Error: {0}</value>
     <value>Remember open position</value>
   </data>
   <data name="SettingsCollapseExpandedDeepCapsuleOnClick" xml:space="preserve">
-    <value>Click edge capsule again to retract paper</value>
+    <value>Click capsule again to retract paper</value>
   </data>
   <data name="SettingsHideEdgeCapsuleCloseButtonOnHover" xml:space="preserve">
     <value>Hide edge close button</value>
@@ -610,7 +607,7 @@ About 5 full-width characters on one line, 10 on multiline.</value>
     <value>When expanding from the edge, restore the last position and size; otherwise use edge placement.</value>
   </data>
   <data name="TipCollapseExpandedDeepCapsuleOnClick" xml:space="preserve">
-    <value>If the paper is already expanded from the edge, click the same capsule again to retract it.</value>
+    <value>Click the same capsule again to retract an expanded paper. If a linked paper is excluded from capsules, click its linked-paper entry again to hide it.</value>
   </data>
   <data name="TipCapsuleCollapseAll" xml:space="preserve">
     <value>Show a master capsule at the top of the queue to collapse or expand it.</value>
@@ -619,7 +616,7 @@ About 5 full-width characters on one line, 10 on multiline.</value>
     <value>Edge capsules still extend on hover; the extra area acts like the main capsule without a close button. Use Hide in the context menu to close it.</value>
   </data>
   <data name="TipMaxTitleLength" xml:space="preserve">
-    <value>Max characters shown in paper titles and capsules.</value>
+    <value>Title length is measured in full-width characters; two half-width letters or digits count as one. Lowering the limit shortens existing titles.</value>
   </data>
   <data name="TipStartup" xml:space="preserve">
     <value>Start PaperTodo when Windows signs in.</value>
@@ -651,6 +648,12 @@ Settings info icons always stay available.</value>
   </data>
   <data name="TipEnableAnimations" xml:space="preserve">
     <value>Transition animations for common actions; off feels more immediate.</value>
+  </data>
+  <data name="SettingsFastAnimations" xml:space="preserve">
+    <value>Fast animations</value>
+  </data>
+  <data name="TipFastAnimations" xml:space="preserve">
+    <value>Shorten interface animations to about 60% of their normal duration for faster responses while keeping transitions. This has no effect when animations are disabled.</value>
   </data>
   <data name="SettingsResizeGripMode" xml:space="preserve">
     <value>Resize grip</value>
@@ -1111,6 +1114,12 @@ Per-note percentage zoom stacks on top.</value>
   <data name="TipDeepCapsuleTitleMeasureLimit" xml:space="preserve">
     <value>Limit the title shown by resting edge capsules. 0 hides the title but keeps the icon and stored title. Plus/minus cycle through Unlimited, 0, 1…20. With hover preview off, hovering reveals a shortened title; leaving restores the limit.</value>
   </data>
+  <data name="SettingsCompactMasterCapsule" xml:space="preserve">
+    <value>Shorten main capsule</value>
+  </data>
+  <data name="TipCompactMasterCapsule" xml:space="preserve">
+    <value>When enabled, the main capsule shows only the arrow and hides the capsule count for the current queue.</value>
+  </data>
   <data name="SettingsAllCharacters" xml:space="preserve">
     <value>Unlimited</value>
   </data>
@@ -1254,23 +1263,32 @@ When off, open at the docked edge or remembered position.</value>
   <data name="PluginsMoreSettings" xml:space="preserve">
     <value>More settings</value>
   </data>
+  <data name="PluginsSettingsUnavailable" xml:space="preserve">
+    <value>Settings unavailable</value>
+  </data>
   <data name="PluginsLessSettings" xml:space="preserve">
     <value>Hide settings</value>
   </data>
   <data name="PluginsProtocolTooltipFormat" xml:space="preserve">
     <value>Plugin protocol {0}</value>
   </data>
-  <data name="PluginsDataRecoveryPending" xml:space="preserve">
-    <value>Plugin data could not be read. Empty data is in use; new data will be written to the recovery file.</value>
-  </data>
-  <data name="PluginsDataRecoveryActive" xml:space="preserve">
-    <value>The original data could not be read. The recovery data file is in use.</value>
-  </data>
   <data name="PluginsOpenFolder" xml:space="preserve">
     <value>Open folder</value>
   </data>
+  <data name="PluginsRestartTooltip" xml:space="preserve">
+    <value>Restart PaperTodo and rescan plugins</value>
+  </data>
+  <data name="PluginsRestartTitle" xml:space="preserve">
+    <value>Restart PaperTodo</value>
+  </data>
+  <data name="PluginsRestartMessage" xml:space="preserve">
+    <value>Restart PaperTodo to rescan and load body plugins?</value>
+  </data>
+  <data name="PluginsRestartNow" xml:space="preserve">
+    <value>Restart now</value>
+  </data>
   <data name="PluginsLoadedCountFormat" xml:space="preserve">
-    <value>{0} body plugins found</value>
+    <value>{0}</value>
   </data>
   <data name="PluginsLoadProblems" xml:space="preserve">
     <value>Load problems</value>
@@ -1296,6 +1314,9 @@ When off, open at the docked edge or remembered position.</value>
   <data name="PluginsMissingProviderFormat" xml:space="preserve">
     <value>Body plugin not found: {0}</value>
   </data>
+  <data name="PluginsDisabledProviderFormat" xml:space="preserve">
+    <value>{0} (disabled)</value>
+  </data>
   <data name="PaperBodyMenu" xml:space="preserve">
     <value>Body type</value>
   </data>
@@ -1304,6 +1325,12 @@ When off, open at the docked edge or remembered position.</value>
   </data>
   <data name="BodyProviderMarkdownDescription" xml:space="preserve">
     <value>PaperTodo built-in Markdown editing, preview, and image body.</value>
+  </data>
+  <data name="PluginBodyDisabledTitle" xml:space="preserve">
+    <value>Body plugin is disabled</value>
+  </data>
+  <data name="PluginBodyDisabledMessageFormat" xml:space="preserve">
+    <value>{0} is disabled. Re-enable it in Settings → Plugins.</value>
   </data>
   <data name="PluginBodyFailureTitle" xml:space="preserve">
     <value>The body plugin could not run</value>
@@ -1365,7 +1392,10 @@ When off, open at the docked edge or remembered position.</value>
     <value>Plugin has an issue</value>
   </data>
   <data name="PluginsStatusStopped" xml:space="preserve">
-    <value>Not in use</value>
+    <value>Plugin enabled, currently idle</value>
+  </data>
+  <data name="PluginsStatusDisabled" xml:space="preserve">
+    <value>Plugin disabled</value>
   </data>
   <data name="PluginsStatusRunning" xml:space="preserve">
     <value>Plugin is running</value>
@@ -1385,4 +1415,256 @@ When off, open at the docked edge or remembered position.</value>
   <data name="NoteCopyTextOnlyMessage" xml:space="preserve">
     <value>The selected images are too large to include. Only the text was copied.</value>
   </data>
+  <data name="ColorSchemeMica" xml:space="preserve">
+    <value>Mica</value>
+  </data>
+  <data name="TipColorSchemeMica" xml:space="preserve">
+    <value>Uses native DWM Mica on Windows 11 22H2 or later, composed by Windows without reading or simulating the wallpaper. Applies to expanded papers and Settings; capsules, folding animations and translucent states keep solid rendering. Falls back to solid colors when transparency is disabled, high contrast is enabled, or native APIs are unavailable. After switching from another skin for the first time, exit and reopen PaperTodo.</value>
+  </data>
+  <data name="MicaRestartRequired" xml:space="preserve">
+    <value>Mica selection saved. Exit PaperTodo from the tray and reopen it to enable native Mica. Existing windows use solid colors for now; changing skins does not recreate your editors or undo history.</value>
+  </data>
+  <data name="MicaUnsupported" xml:space="preserve">
+    <value>Native Mica requires Windows 11 22H2 (build 22621) or later. This system uses solid Mica palette colors.</value>
+  </data>
+  <data name="MicaScope" xml:space="preserve">
+    <value>Native Mica applies to expanded papers and Settings. Capsules, folding animations and translucent states use solid backgrounds. Windows may also use its fallback based on transparency and power settings.</value>
+  </data>
+  <data name="SettingsMicaBackdrop" xml:space="preserve">
+    <value>Backdrop material</value>
+  </data>
+  <data name="TipMicaBackdrop" xml:space="preserve">
+    <value>Choose Mica, standard Acrylic or Clear Acrylic. Standard Acrylic has a soft frosted finish; Clear Acrylic uses a lighter tint to reveal more background color.</value>
+  </data>
+  <data name="MicaBackdropMica" xml:space="preserve">
+    <value>Mica</value>
+  </data>
+  <data name="MicaBackdropAcrylic" xml:space="preserve">
+    <value>Acrylic</value>
+  </data>
+  <data name="MicaBackdropClearAcrylic" xml:space="preserve">
+    <value>Clear Acrylic</value>
+  </data>
+  <data name="SettingsMicaAlwaysActive" xml:space="preserve">
+    <value>Always show active material</value>
+  </data>
+  <data name="TipMicaAlwaysActive" xml:space="preserve">
+    <value>Keep the active material appearance on expanded papers and Settings when they lose focus.</value>
+  </data>
+
+  <data name="ColorSchemeNeutral" xml:space="preserve">
+    <value>Neutral</value>
+  </data>
+  <data name="SettingsPaperSkin" xml:space="preserve">
+    <value>Skin (experimental)</value>
+  </data>
+  <data name="TipPaperSkin" xml:space="preserve">
+    <value>Skins control materials; palettes control colors.</value>
+  </data>
+  <data name="SkinPaper" xml:space="preserve">
+    <value>Default paper</value>
+  </data>
+  <data name="SkinTracingPaper" xml:space="preserve">
+    <value>Tracing paper</value>
+  </data>
+  <data name="SkinAero" xml:space="preserve">
+    <value>Aero glass</value>
+  </data>
+  <data name="SkinPixel" xml:space="preserve">
+    <value>Pixel</value>
+  </data>
+  <data name="TipSkinTracingPaper" xml:space="preserve">
+    <value>A milky wash and fine fibers let background colors softly show through while keeping text readable.</value>
+  </data>
+  <data name="TipSkinAero" xml:space="preserve">
+    <value>Pale blue transparent glass with diagonal reflections. No desktop capture.</value>
+  </data>
+  <data name="TipSkinPixel" xml:space="preserve">
+    <value>A retro quest panel with compact stepped corners, a single frame, pixel-aligned icons and square controls. Body text keeps the normal font.</value>
+  </data>
+  <data name="SkinRestartRequired" xml:space="preserve">
+    <value>Restart PaperTodo to enable native backdrops.</value>
+  </data>
+  <data name="SkinNativeUnsupported" xml:space="preserve">
+    <value>Native backdrops require Windows 11 22H2 or later.</value>
+  </data>
+  <data name="MenuPaperActions" xml:space="preserve">
+    <value>Paper actions</value>
+  </data>
+  <data name="MenuCustomizeTopBar" xml:space="preserve">
+    <value>Customize title bar</value>
+  </data>
+  <data name="MenuReorderTopBar" xml:space="preserve">
+    <value>Reorder shortcuts</value>
+  </data>
+  <data name="MenuTopBarMoveLeft" xml:space="preserve">
+    <value>Move left</value>
+  </data>
+  <data name="MenuTopBarMoveRight" xml:space="preserve">
+    <value>Move right</value>
+  </data>
+  <data name="MenuTopBarAssociationDrag" xml:space="preserve">
+    <value>Hold and drag to associate</value>
+  </data>
+  <data name="MenuTopBarPluginActions" xml:space="preserve">
+    <value>Plugin actions</value>
+  </data>
+  <data name="TopBarSettingsTitle" xml:space="preserve">
+    <value>Top-bar shortcuts</value>
+  </data>
+  <data name="TipTopBarShortcutSettings" xml:space="preserve">
+    <value>Drag actions to reorder them or move them across the divider to switch between the title bar and menu. If space is limited, pinned built-in shortcuts move to the menu together.</value>
+  </data>
+  <data name="TopBarShownHeading" xml:space="preserve">
+    <value>Show in title bar</value>
+  </data>
+  <data name="TopBarMenuHeading" xml:space="preserve">
+    <value>Show in menu</value>
+  </data>
+  <data name="TopBarEmptyDropArea" xml:space="preserve">
+    <value>Drag an action here</value>
+  </data>
+  <data name="TopBarAssociation" xml:space="preserve">
+    <value>Drag to associate</value>
+  </data>
+  <data name="TopBarExternalEditor" xml:space="preserve">
+    <value>Open externally</value>
+  </data>
+  <data name="DataReloadConflictTitle" xml:space="preserve">
+    <value>PaperTodo data conflict</value>
+  </data>
+  <data name="DataReloadConflictPath" xml:space="preserve">
+    <value>Path: {0}</value>
+  </data>
+  <data name="DataReloadConflictMemoryHeader" xml:space="preserve">
+    <value>Current (PaperTodo)</value>
+  </data>
+  <data name="DataReloadConflictExternalHeader" xml:space="preserve">
+    <value>External (incoming file)</value>
+  </data>
+  <data name="DataReloadConflictKeepMemory" xml:space="preserve">
+    <value>Keep current</value>
+  </data>
+  <data name="DataReloadConflictKeepExternal" xml:space="preserve">
+    <value>Keep external</value>
+  </data>
+  <data name="DataReloadConflictValueMissing" xml:space="preserve">
+    <value>(missing)</value>
+  </data>
+  <data name="DataReloadConflictMemoryOnlyTooltip" xml:space="preserve">
+    <value>Present in PaperTodo but not in the external file. Kept by "Keep current"; discarded by "Keep external".</value>
+  </data>
+  <data name="DataReloadConflictExternalOnlyTooltip" xml:space="preserve">
+    <value>Present in the external file but not in PaperTodo. Adopted by "Keep external"; discarded by "Keep current".</value>
+  </data>
+  <data name="DataReloadPaperConflictTitle" xml:space="preserve">
+    <value>Paper data conflict</value>
+  </data>
+  <data name="DataReloadPaperConflictHeader" xml:space="preserve">
+    <value>Paper ID:{0}  Type:{1}</value>
+  </data>
+  <data name="DataReloadPaperConflictField" xml:space="preserve">
+    <value>Field:{0}</value>
+  </data>
+  <data name="DataReloadPaperConflictKeepAllMemory" xml:space="preserve">
+    <value>Keep current for all</value>
+  </data>
+  <data name="DataReloadPaperConflictKeepAllExternal" xml:space="preserve">
+    <value>Use external for all</value>
+  </data>
+  <data name="DataReloadPaperConflictWholePaper" xml:space="preserve">
+    <value>(whole paper)</value>
+  </data>
+  <data name="WorkspaceSettingsTitle" xml:space="preserve">
+    <value>Workspaces</value>
+  </data>
+  <data name="WorkspaceSettingsDescription" xml:space="preserve">
+    <value>Enable the cycle button in paper top bars. Each workspace keeps its own papers, images and plugin data.</value>
+  </data>
+  <data name="WorkspaceEnabled" xml:space="preserve">
+    <value>Enable workspaces</value>
+  </data>
+  <data name="WorkspaceCount" xml:space="preserve">
+    <value>Workspace count (including main)</value>
+  </data>
+  <data name="WorkspaceCountHint" xml:space="preserve">
+    <value>Up to 5. Reducing the count or disabling workspaces never deletes their files.</value>
+  </data>
+  <data name="WorkspaceSelectLabel" xml:space="preserve">
+    <value>Current workspace</value>
+  </data>
+  <data name="WorkspaceMainSlotLabel" xml:space="preserve">
+    <value>Main workspace (1)</value>
+  </data>
+  <data name="WorkspaceSlotLabel" xml:space="preserve">
+    <value>Workspace {0}</value>
+  </data>
+  <data name="WorkspaceCurrent" xml:space="preserve">
+    <value>Current workspace: {0}</value>
+  </data>
+  <data name="WorkspaceFollowMain" xml:space="preserve">
+    <value>Follow main workspace settings</value>
+  </data>
+  <data name="WorkspaceFollowHint" xml:space="preserve">
+    <value>Use the main software settings without sharing papers, images, layout or plugin-private data. Turning this off restores this workspace’s independent settings.</value>
+  </data>
+  <data name="WorkspaceMainHint" xml:space="preserve">
+    <value>This is the main workspace. Other workspaces that follow it use these software settings when opened.</value>
+  </data>
+  <data name="WorkspaceNext" xml:space="preserve">
+    <value>Next workspace</value>
+  </data>
+  <data name="WorkspaceCycleTooltip" xml:space="preserve">
+    <value>Workspace {0}
+Click to switch to workspace {1}</value>
+  </data>
+  <data name="WorkspaceTrayCycle" xml:space="preserve">
+    <value>Switch workspace (current {0} / {1})</value>
+  </data>
+  <data name="WorkspaceSettingsReadOnly" xml:space="preserve">
+    <value>Software settings currently follow the main workspace. Edit them there, or turn off “Follow main workspace settings” first.</value>
+  </data>
+  <data name="WorkspacePluginSettingsHint" xml:space="preserve">
+    <value>Plugin enablement follows the main workspace; plugin-private settings and data remain local to this workspace.</value>
+  </data>
+  <data name="WorkspaceSwitching" xml:space="preserve">
+    <value>A workspace switch is in progress. Try again after it completes.</value>
+  </data>
+  <data name="WorkspaceSwitchFailed" xml:space="preserve">
+    <value>Workspace switch did not complete</value>
+  </data>
+  <data name="WorkspaceSaveFailed" xml:space="preserve">
+    <value>The workspace could not be saved. Switching was stopped.</value>
+  </data>
+  <data name="WorkspaceImagesMissing" xml:space="preserve">
+    <value>This workspace references images, but its image database is missing.</value>
+  </data>
+  <data name="WorkspaceImagesUnavailable" xml:space="preserve">
+    <value>Cannot read workspace image database: {0}</value>
+  </data>
+  <data name="WorkspaceStartupFallback" xml:space="preserve">
+    <value>The last workspace could not be opened. The main workspace was opened instead; the original files were not replaced.
+{0}</value>
+  </data>
+  <data name="SettingsDataMergeConflicts" xml:space="preserve"><value>Data merge conflicts</value></data>
+  <data name="DataMergeConflictAsk" xml:space="preserve"><value>Ask on conflict (default)</value></data>
+  <data name="DataMergeConflictExternal" xml:space="preserve"><value>Prefer external</value></data>
+  <data name="DataMergeConflictInternal" xml:space="preserve"><value>Prefer internal</value></data>
+  <data name="TipDataMergeConflicts" xml:space="preserve"><value>An explicit merge preserves nonconflicting changes from both sides. This setting affects conflicts only: internal means current PaperTodo data; external means the incoming file. Without the original version, always ask. Does not enable background watching or automatic sync.</value></data>
+  <data name="DataReloadConflictEmpty" xml:space="preserve"><value>(empty)</value></data>
+  <data name="NoteHtmlSaved" xml:space="preserve"><value>Saved to: {0}
+The original note is kept.</value></data>
+  <data name="NoteExportCurrent" xml:space="preserve"><value>Export this note</value></data>
+  <data name="NoteExportAll" xml:space="preserve"><value>Export all papers</value></data>
+  <data name="NoteExportMarkdownType" xml:space="preserve"><value>Markdown document</value></data>
+  <data name="NoteExportHtmlType" xml:space="preserve"><value>HTML document</value></data>
+  <data name="NoteExportMarkdownZipType" xml:space="preserve"><value>Markdown ZIP</value></data>
+  <data name="NoteExportHtmlZipType" xml:space="preserve"><value>HTML ZIP</value></data>
+  <data name="NoteExportMissingImageText" xml:space="preserve"><value>Missing image</value></data>
+  <data name="NoteExportSummary" xml:space="preserve"><value>Exported {0}/{1} papers.&#xA;Missing images: {2} across {3} papers.&#xA;Saved to: {4}</value></data>
+  <data name="NoteExportFailedNotes" xml:space="preserve"><value>Failed papers:&#xA;{0}</value></data>
+  <data name="NoteExportFailure" xml:space="preserve"><value>Export failed: {0}</value></data>
+  <data name="NoteExportNoNotes" xml:space="preserve"><value>There are no Markdown notes or todo papers to export.</value></data>
+  <data name="NoteExportProgress" xml:space="preserve"><value>Exporting {0}/{1} papers</value></data>
+  <data name="TodoExportCurrent" xml:space="preserve"><value>Export this todo paper</value></data>
 </root>

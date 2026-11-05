@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Markup;
 using System.Windows.Media;
@@ -116,6 +117,8 @@ internal sealed partial class EdgeCapsuleDragWindow : Window
     }
 
     public event EventHandler? UnexpectedlyClosed;
+
+    internal static bool HasActiveLease => s_pooledHostLeased;
 
     public static bool NeedsInfrastructurePrewarm
     {
@@ -389,7 +392,8 @@ internal sealed partial class EdgeCapsuleDragWindow : Window
         {
             From = scaleFrom,
             To = 1,
-            Duration = TimeSpan.FromMilliseconds(durationMilliseconds),
+            Duration = TimeSpan.FromMilliseconds(
+                AnimationTiming.ScaleMilliseconds(durationMilliseconds)),
             EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
         };
         _entranceScale.BeginAnimation(ScaleTransform.ScaleXProperty, animation, HandoffBehavior.SnapshotAndReplace);
@@ -448,6 +452,52 @@ internal sealed partial class EdgeCapsuleDragWindow : Window
         {
             PlaceCenteredAtForShow(fallbackPointer);
         }
+    }
+
+    public EdgeCapsuleNativeDragOutcome PrepareAndRunNativeDrag(
+        DeviceScreenPoint fallbackPointer,
+        Func<bool> stillOwnsDrag,
+        Func<Func<EdgeCapsuleNativeDragOutcome>, EdgeCapsuleNativeDragOutcome>? transferContentPointer = null)
+    {
+        // Finish the shown floating HWND's pending layout before native code samples the live
+        // cursor and fixes its caption anchor. Do not pump Input or DwmFlush on this hot path.
+        // Render can reenter the owner, so its paper/queue transaction must still be current.
+#if DEBUG
+        var renderStartedAt = EdgeCapsulePerformanceDiagnostics.Timestamp();
+#endif
+        Dispatcher.Invoke(static () => { }, System.Windows.Threading.DispatcherPriority.Render);
+#if DEBUG
+        EdgeCapsulePerformanceDiagnostics.Trace(
+            $"drag.host phase=native-ready paper={_diagnosticId} dragHost={_diagnosticHostId} " +
+            $"renderBarrierMs={EdgeCapsulePerformanceDiagnostics.ElapsedMilliseconds(renderStartedAt):F3}");
+#endif
+        if (_isClosed || !stillOwnsDrag())
+        {
+            return new EdgeCapsuleNativeDragOutcome(EdgeCapsuleNativeDragResult.NotStarted, default);
+        }
+
+        if (Mouse.LeftButton != MouseButtonState.Pressed)
+        {
+            var drop = WindowNative.TryGetCursorScreenPosition(out var livePointer)
+                ? livePointer
+                : fallbackPointer;
+            return new EdgeCapsuleNativeDragOutcome(EdgeCapsuleNativeDragResult.Completed, drop);
+        }
+
+        // The docked paper host alone owns its WPF capture-loss reason. Masters have already
+        // released their pill capture; neither caller needs another native-drag implementation.
+        return transferContentPointer != null
+            ? transferContentPointer(RunNativeDragFromCursor)
+            : RunNativeDragFromCursor();
+    }
+
+    public void CompleteHandoff(Action releaseCover)
+    {
+        // The owner has prepared and confirmed its permanent target (Presenter/slot for a paper,
+        // opaque master for a queue). Publish it to DWM before withdrawing the floating cover.
+        // Target layout, animation, recovery and transaction state remain with that owner.
+        WindowNative.FlushDesktopComposition();
+        releaseCover();
     }
 
     public EdgeCapsuleNativeDragOutcome RunNativeDragFromCursor()
@@ -637,6 +687,9 @@ internal sealed partial class EdgeCapsuleDragWindow : Window
         Topmost = options.Topmost;
 
         _paperBackground.Margin = new Thickness(options.WindowChromeMargin);
+        SkinBorder.Refresh(_paperBackground);
+        _paperBackground.Effect = SkinBorder.CreateShadow(8, 1, 0.12);
+        SkinBorder.Refresh(_outline);
         _paperBackground.Background = options.PaperBrush;
         _paperBackground.BorderBrush = options.PaperBorderBrush;
         _paperBackground.CornerRadius = new CornerRadius(
@@ -838,16 +891,12 @@ internal sealed partial class EdgeCapsuleDragWindow : Window
         };
         _root.Children.Add(_surface);
 
-        _paperBackground = new Border
+        _paperBackground = new SkinBorder
         {
+            IsCapsule = true,
             BorderThickness = new Thickness(1),
             SnapsToDevicePixels = true,
-            Effect = new DropShadowEffect
-            {
-                BlurRadius = 8,
-                ShadowDepth = 1,
-                Opacity = 0.12
-            }
+            Effect = SkinBorder.CreateShadow(8, 1, 0.12)
         };
         _surface.Children.Add(_paperBackground);
 
@@ -897,8 +946,9 @@ internal sealed partial class EdgeCapsuleDragWindow : Window
         Panel.SetZIndex(_shell, 10);
         _surface.Children.Add(_shell);
 
-        _outline = new Border
+        _outline = new SkinBorder
         {
+            IsOutline = true, IsCapsule = true,
             Background = Brushes.Transparent,
             IsHitTestVisible = false,
             SnapsToDevicePixels = true

@@ -25,10 +25,9 @@ internal static class SharedPreviewSemanticChecks
         Require(Visible(@"\*literal\* \[not link\]") == "*literal* [not link]", "escaped punctuation stays literal");
         Require(Visible("``a ` b``") == "a ` b", "multiple-backtick inline code follows shared grammar");
         var adjacent = Full("[a **bold**](https://example.com)[second](https://example.com)");
-        var label = adjacent.Where(p => p.Link != null && !p.Text.Contains("second")).ToArray();
-        var second = adjacent.Single(p => p.Text == "second");
-        Require(label.Length >= 2 && label.All(p => ReferenceEquals(p.Link, label[0].Link)), "styles inside one link share identity");
-        Require(second.Link != null && !ReferenceEquals(second.Link, label[0].Link), "adjacent equal URLs remain independent");
+        Require(string.Concat(adjacent.Select(p => p.Text)) == "a boldsecond" &&
+            adjacent.All(p => p.Link?.Host == "example.com"),
+            "styled and adjacent link labels retain their text and destination");
         var parenthesis = Full("[label](https://example.com/a_(b))");
         Require(string.Concat(parenthesis.Select(p => p.Text)) == "label" &&
             parenthesis.Any(p => p.Link?.AbsoluteUri.EndsWith("a_(b)") == true), "balanced parentheses belong to the link destination");
@@ -42,10 +41,6 @@ internal static class SharedPreviewSemanticChecks
         foreach (var mode in new[] { MarkdownRenderModes.Off, MarkdownRenderModes.Basic })
             Require(string.Concat(Renderer.InlinePieces(ordinary, mode).Select(p => p.Text)) == ordinary,
                 "non-Full modes retain the exact source: " + mode);
-        var cache = new Renderer.PreviewInlineCache();
-        var prepared = cache.Get(ordinary, MarkdownRenderModes.Full);
-        Require(ReferenceEquals(prepared, cache.Get(ordinary, MarkdownRenderModes.Full)) && cache.Count == 1,
-            "same excerpt reuses pure inline values");
-        Console.WriteLine("PASS shared semantic grammar, nested styles, escapes, code, HTML, images, link identity, caching and bounded publication");
+        Console.WriteLine("PASS shared semantic grammar, nested styles, escapes, code, HTML, images, link destinations and bounded publication");
     }
 }

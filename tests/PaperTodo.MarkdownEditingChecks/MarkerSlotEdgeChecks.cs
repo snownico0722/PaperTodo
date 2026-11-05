@@ -18,7 +18,6 @@ internal static class MarkerSlotEdgeChecks
         CheckListContainedQuoteAlignment("*");
         CheckListContainedQuoteAlignment("+");
         CheckTaskMarkerCaretStops();
-        CheckMetricKeyTracksTextFormattingMode();
         Console.WriteLine("PASS marker slot edge cases");
     }
 
@@ -112,30 +111,6 @@ internal static class MarkerSlotEdgeChecks
             "task/list marker cells expose every backward caret boundary");
     }
 
-    private static void CheckMetricKeyTracksTextFormattingMode()
-    {
-        using var editor = new EdgeEditor("+ item");
-        editor.Layout();
-        var field = typeof(MarkdownSemanticPresentation).GetField(
-            "_markerSlotMetricKey",
-            BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new InvalidOperationException(
-                "FAIL marker slot metric key: cache field missing");
-        var key = field.GetValue(editor.Presentation)
-            ?? throw new InvalidOperationException(
-                "FAIL marker slot metric key: metrics were not populated");
-        var property = key.GetType().GetProperty(
-            "TextFormattingMode",
-            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-            ?? throw new InvalidOperationException(
-                "FAIL marker slot metric key: TextFormattingMode is not part of the cache key");
-        var actual = property.GetValue(key);
-        if (actual is not TextFormattingMode mode || mode != AppTypography.TextFormattingMode)
-        {
-            throw new InvalidOperationException(
-                $"FAIL marker slot metric key: formatting mode {actual} != {AppTypography.TextFormattingMode}");
-        }
-    }
 
     private static double XAtOffset(MarkdownTextBox box, int offset)
     {

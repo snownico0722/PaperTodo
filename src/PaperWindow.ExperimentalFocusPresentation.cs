@@ -82,6 +82,7 @@ public sealed partial class PaperWindow
 
     private bool CanFadeInactiveTitleBar() =>
         AllowsTransparency &&
+        (_paperChrome is not SkinBorder skin || !PaperSkins.IsDecorated(skin.Skin)) &&
         IsVisible &&
         !_paper.IsCollapsed &&
         WindowState == WindowState.Normal &&
@@ -117,7 +118,7 @@ public sealed partial class PaperWindow
         _paperChrome.SetHeaderOpacity(
             hidden ? 0 : 1,
             animate && _controller.State.EnableAnimations
-                ? ExperimentalOpacityTransitionMilliseconds : 0,
+                ? AnimationTiming.ScaleMilliseconds(ExperimentalOpacityTransitionMilliseconds) : 0,
             hidden ? null : RestoreExperimentalInactiveTitleBarPresentation);
     }
 

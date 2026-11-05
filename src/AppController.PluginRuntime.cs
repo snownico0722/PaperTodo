@@ -9,49 +9,14 @@ namespace PaperTodo;
 public sealed partial class AppController
 {
     private const string PluginRuntimeCapability = "runtime";
-    private static readonly TimeSpan[] PluginRuntimeRetryDelays =
-    [
-        TimeSpan.FromSeconds(1),
-        TimeSpan.FromSeconds(3),
-        TimeSpan.FromSeconds(10)
-    ];
-    private static readonly TimeSpan PluginRuntimeStableFailureResetAfter =
-        TimeSpan.FromSeconds(30);
 
     private enum PluginRuntimeState
     {
         Stopped,
         Starting,
         Running,
-        Backoff,
         Failed,
         Disposing
-    }
-
-    private static class PluginRuntimeTransitions
-    {
-        public static PluginRuntimeState BeginStart(PluginRuntimeState state) =>
-            state == PluginRuntimeState.Stopped
-                ? PluginRuntimeState.Starting
-                : state;
-
-        public static PluginRuntimeState StartSucceeded(PluginRuntimeState state) =>
-            state == PluginRuntimeState.Starting
-                ? PluginRuntimeState.Running
-                : state;
-
-        public static PluginRuntimeState StartFailed(int failureCount, int retryCount) =>
-            failureCount <= retryCount
-                ? PluginRuntimeState.Backoff
-                : PluginRuntimeState.Failed;
-
-        public static PluginRuntimeState RetryElapsed(PluginRuntimeState state) =>
-            state == PluginRuntimeState.Backoff
-                ? PluginRuntimeState.Stopped
-                : state;
-
-        public static bool RuntimeMatches(Guid currentRuntimeId, Guid callbackRuntimeId) =>
-            currentRuntimeId == callbackRuntimeId;
     }
 
     private sealed class PluginRuntimeLifetime
@@ -64,9 +29,6 @@ public sealed partial class AppController
             Interlocked.Exchange(ref _active, 0) != 0;
     }
 
-    private sealed class PluginRuntimeOwnershipCanceledException(string message)
-        : Exception(message);
-
     private sealed class PluginRuntimeStateVersionException(string message)
         : Exception(message);
 
@@ -77,11 +39,10 @@ public sealed partial class AppController
         public PluginRuntimeState State { get; set; }
         public Guid RuntimeId { get; set; }
         public PluginRuntimeLifetime? Lifetime { get; set; }
+        public IDisposable? StartingRuntime { get; set; }
         public PluginRuntimeLease? Lease { get; set; }
-        public int FailureCount { get; set; }
-        public int RetryGeneration { get; set; }
+        public bool RecoveryAttempted { get; set; }
         public bool RestartRequested { get; set; }
-        public DateTimeOffset RunningSinceUtc { get; set; }
     }
 
     private sealed class PluginRuntimeLease : IDisposable
@@ -150,6 +111,7 @@ public sealed partial class AppController
         }
 
         var desired = PaperBodyPlugins.Descriptors
+            .Where(descriptor => IsPluginEnabled(descriptor.Id))
             .Where(DeclaresPluginRuntime)
             .Where(descriptor => HasEntityPluginPaper(descriptor.Id))
             .ToDictionary(descriptor => descriptor.Id, StringComparer.Ordinal);
@@ -214,7 +176,7 @@ public sealed partial class AppController
 
     private bool HasPluginRuntimeFailure(string providerId) =>
         _pluginRuntimeSlots.TryGetValue(providerId, out var slot) &&
-        slot.State is PluginRuntimeState.Backoff or PluginRuntimeState.Failed;
+        slot.State == PluginRuntimeState.Failed;
 
     private void StartPluginRuntimeSlot(
         PluginRuntimeSlot slot,
@@ -226,11 +188,10 @@ public sealed partial class AppController
             return;
         }
 
-        slot.State = PluginRuntimeTransitions.BeginStart(slot.State);
+        slot.State = PluginRuntimeState.Starting;
         slot.Descriptor = descriptor;
         slot.RuntimeId = Guid.NewGuid();
         slot.RestartRequested = false;
-        slot.RunningSinceUtc = default;
         var runtimeId = slot.RuntimeId;
         var lifetime = new PluginRuntimeLifetime();
         slot.Lifetime = lifetime;
@@ -255,6 +216,11 @@ public sealed partial class AppController
                 descriptor,
                 runtimeId,
                 lifetime);
+
+            if (ReferenceEquals(slot.StartingRuntime, lease.Runtime))
+            {
+                slot.StartingRuntime = null;
+            }
 
             if (!IsCurrentPluginRuntimeSlot(slot, runtimeId) ||
                 !IsPluginRuntimeDesired(descriptor.Id))
@@ -287,9 +253,7 @@ public sealed partial class AppController
 
             slot.Lease = lease;
             lease = null;
-            slot.State = PluginRuntimeTransitions.StartSucceeded(slot.State);
-            slot.RunningSinceUtc = DateTimeOffset.UtcNow;
-            slot.RetryGeneration++;
+            slot.State = PluginRuntimeState.Running;
             QueuePluginStatusUiRefresh();
         }
         catch (PluginRuntimeStateVersionException ex)
@@ -306,10 +270,9 @@ public sealed partial class AppController
                 slot,
                 descriptor,
                 ex,
-                "state-version",
-                retry: false);
+                "state-version");
         }
-        catch (PluginRuntimeOwnershipCanceledException)
+        catch (OperationCanceledException) when (!lifetime.IsActive)
         {
             ClearPluginRuntimeLifetime(slot, lifetime);
             lifetime.TryDeactivate();
@@ -348,7 +311,7 @@ public sealed partial class AppController
             !IsPluginRuntimeDesired(descriptor.Id) ||
             !lifetime.IsActive)
         {
-            throw new PluginRuntimeOwnershipCanceledException(
+            throw new OperationCanceledException(
                 "The plugin runtime no longer has an entity-paper owner.");
         }
 
@@ -432,6 +395,7 @@ public sealed partial class AppController
                     IsActive,
                     () => RequestPluginRuntimeRestart(runtimeId, descriptor.Id));
                 runtime = webRuntime;
+                slot.StartingRuntime = webRuntime;
                 await webRuntime.StartAsync();
             }
             else
@@ -442,7 +406,7 @@ public sealed partial class AppController
 
             if (!lifetime.IsActive)
             {
-                throw new PluginRuntimeOwnershipCanceledException(
+                throw new OperationCanceledException(
                     "The plugin runtime lost its entity-paper owner while starting.");
             }
 
@@ -463,6 +427,10 @@ public sealed partial class AppController
         }
         catch
         {
+            if (ReferenceEquals(slot.StartingRuntime, runtime))
+            {
+                slot.StartingRuntime = null;
+            }
             lifetime.TryDeactivate();
             try { runtime?.Dispose(); } catch { }
             try { papers.Dispose(); } catch { }
@@ -485,94 +453,37 @@ public sealed partial class AppController
         PaperBodyPluginDescriptor descriptor,
         Exception exception,
         string phase,
-        bool retry = true)
+        bool allowRecovery = false)
     {
         slot.Lease = null;
         slot.Lifetime?.TryDeactivate();
         slot.Lifetime = null;
         slot.RestartRequested = false;
-        slot.RunningSinceUtc = default;
-        slot.FailureCount++;
-        var attempt = slot.FailureCount;
 
         Trace.TraceWarning(
-            "Plugin runtime failure. Provider={0}; Phase={1}; Attempt={2}; Exception={3}",
+            "Plugin runtime failure. Provider={0}; Phase={1}; RecoveryAttempted={2}; Exception={3}",
             descriptor.Id,
             phase,
-            attempt,
+            slot.RecoveryAttempted,
             exception.GetBaseException());
 
-        var nextState = retry
-            ? PluginRuntimeTransitions.StartFailed(
-                attempt,
-                PluginRuntimeRetryDelays.Length)
-            : PluginRuntimeState.Failed;
-        if (nextState == PluginRuntimeState.Backoff &&
+        if (allowRecovery &&
+            !slot.RecoveryAttempted &&
             IsPluginRuntimeDesired(descriptor.Id))
         {
-            slot.State = nextState;
-            SchedulePluginRuntimeRetry(
-                slot,
-                PluginRuntimeRetryDelays[attempt - 1]);
-        }
-        else
-        {
-            slot.State = PluginRuntimeState.Failed;
-            ClearPluginRuntimePresentation(descriptor.Id);
-        }
-
-        QueuePluginStatusUiRefresh();
-    }
-
-    private void SchedulePluginRuntimeRetry(
-        PluginRuntimeSlot slot,
-        TimeSpan delay)
-    {
-        var generation = ++slot.RetryGeneration;
-        _ = RetryPluginRuntimeAfterDelayAsync(
-            slot.ProviderId,
-            slot,
-            generation,
-            delay);
-    }
-
-    private async Task RetryPluginRuntimeAfterDelayAsync(
-        string providerId,
-        PluginRuntimeSlot slot,
-        int generation,
-        TimeSpan delay)
-    {
-        await Task.Delay(delay).ConfigureAwait(false);
-        var dispatcher = Application.Current?.Dispatcher;
-        if (dispatcher == null || dispatcher.HasShutdownStarted || dispatcher.HasShutdownFinished)
-        {
+            // A successfully running Runtime gets one host-level rebuild opportunity per process.
+            // There is no timed backoff or recurring retry loop; another failure stops here until
+            // settings change or the application restarts.
+            slot.RecoveryAttempted = true;
+            slot.State = PluginRuntimeState.Stopped;
+            QueuePluginStatusUiRefresh();
+            ReconcilePluginRuntimes();
             return;
         }
 
-        _ = dispatcher.BeginInvoke(
-            (Action)(() =>
-            {
-                if (_pluginRuntimeDisposing ||
-                    IsExiting ||
-                    !_pluginRuntimeReconciliationEnabled ||
-                    !_pluginRuntimeSlots.TryGetValue(providerId, out var current) ||
-                    !ReferenceEquals(current, slot) ||
-                    slot.RetryGeneration != generation ||
-                    slot.State != PluginRuntimeState.Backoff)
-                {
-                    return;
-                }
-
-                if (!IsPluginRuntimeDesired(providerId))
-                {
-                    ReconcilePluginRuntimes();
-                    return;
-                }
-
-                slot.State = PluginRuntimeTransitions.RetryElapsed(slot.State);
-                ReconcilePluginRuntimes();
-            }),
-            DispatcherPriority.Background);
+        slot.State = PluginRuntimeState.Failed;
+        ClearPluginRuntimePresentation(descriptor.Id);
+        QueuePluginStatusUiRefresh();
     }
 
     private bool IsCurrentPluginRuntimeSlot(
@@ -582,13 +493,14 @@ public sealed partial class AppController
         _pluginRuntimeReconciliationEnabled &&
         _pluginRuntimeSlots.TryGetValue(slot.ProviderId, out var current) &&
         ReferenceEquals(current, slot) &&
-        PluginRuntimeTransitions.RuntimeMatches(slot.RuntimeId, runtimeId) &&
+        slot.RuntimeId == runtimeId &&
         slot.State != PluginRuntimeState.Disposing;
 
     private bool IsPluginRuntimeDesired(string providerId) =>
         _pluginRuntimeReconciliationEnabled &&
         !_pluginRuntimeDisposing &&
         !IsExiting &&
+        IsPluginEnabled(providerId) &&
         HasEntityPluginPaper(providerId) &&
         PaperBodyPlugins.TryGet(providerId, out var descriptor) &&
         DeclaresPluginRuntime(descriptor);
@@ -612,7 +524,7 @@ public sealed partial class AppController
                 if (_pluginRuntimeDisposing ||
                     IsExiting ||
                     !_pluginRuntimeSlots.TryGetValue(providerId, out var slot) ||
-                    !PluginRuntimeTransitions.RuntimeMatches(slot.RuntimeId, runtimeId))
+                    slot.RuntimeId != runtimeId)
                 {
                     return;
                 }
@@ -630,19 +542,11 @@ public sealed partial class AppController
                     return;
                 }
 
-                if (slot.RunningSinceUtc != default &&
-                    DateTimeOffset.UtcNow - slot.RunningSinceUtc >=
-                    PluginRuntimeStableFailureResetAfter)
-                {
-                    slot.FailureCount = 0;
-                }
-
                 var descriptor = slot.Descriptor;
                 var lease = slot.Lease;
                 slot.Lease = null;
                 slot.Lifetime?.TryDeactivate();
                 slot.Lifetime = null;
-                slot.RetryGeneration++;
                 slot.RestartRequested = false;
                 lease.Dispose();
                 HandlePluginRuntimeFailure(
@@ -650,7 +554,8 @@ public sealed partial class AppController
                     descriptor,
                     new InvalidOperationException(
                         "The Web plugin runtime requested restart after a fatal navigation or browser-process failure."),
-                    "running");
+                    "running",
+                    allowRecovery: true);
             }),
             DispatcherPriority.Background);
     }
@@ -670,15 +575,13 @@ public sealed partial class AppController
         if (_pluginRuntimeDisposing ||
             IsExiting ||
             !_pluginRuntimeSlots.TryGetValue(providerId, out var slot) ||
-            slot.State is not (PluginRuntimeState.Backoff or PluginRuntimeState.Failed))
+            slot.State != PluginRuntimeState.Failed)
         {
             return;
         }
 
-        slot.RetryGeneration++;
         slot.RestartRequested = false;
-        slot.FailureCount = 0;
-        slot.RunningSinceUtc = default;
+        slot.RecoveryAttempted = false;
         slot.State = PluginRuntimeState.Stopped;
         QueuePluginStatusUiRefresh();
         ReconcilePluginRuntimes();
@@ -705,13 +608,15 @@ public sealed partial class AppController
         // PaperRemoved and the plugin may persist its final provider-scoped state before teardown.
         try { slot.Lease?.Papers.Reconcile(); } catch { }
 
-        slot.RetryGeneration++;
         slot.RestartRequested = false;
         slot.State = PluginRuntimeState.Disposing;
         slot.Lifetime?.TryDeactivate();
         slot.Lifetime = null;
+        var startingRuntime = slot.StartingRuntime;
+        slot.StartingRuntime = null;
         var lease = slot.Lease;
         slot.Lease = null;
+        try { startingRuntime?.Dispose(); } catch { }
         lease?.Dispose();
     }
 

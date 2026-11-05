@@ -587,50 +587,11 @@ public sealed partial class AppController
         return card;
     }
 
-    private void ToggleOpenEdgeCapsuleShortcutAtCursor()
-    {
-        State.OpenEdgeCapsuleShortcutAtCursor = !State.OpenEdgeCapsuleShortcutAtCursor;
-        MarkDirty();
-    }
+    private void ToggleOpenEdgeCapsuleShortcutAtCursor() =>
+        SetSettingFromUi("shortcuts.open_edge_at_cursor", !State.OpenEdgeCapsuleShortcutAtCursor);
 
-    private void ToggleDistinguishNumpadShortcutDigits()
-    {
-        var desiredMode = !State.DistinguishNumpadShortcutDigits;
-        var desiredBindings = GlobalShortcutCatalog.NormalizeBindings(State.GlobalHotkeys);
-        var desiredEnabled = GlobalShortcutCatalog.NormalizeEnabled(State.GlobalHotkeyEnabled);
-        if (!desiredMode &&
-            NumpadEquivalentConflictIds(desiredBindings, desiredEnabled).Count > 0)
-        {
-            ShowNumpadShortcutModeConflict();
-            RefreshSettingsWindowContent();
-            return;
-        }
-
-        var enabledCommandIds = GlobalShortcutCatalog.ExecutableIds
-            .Where(id => desiredEnabled.GetValueOrDefault(id))
-            .ToArray();
-        var manager = EnsureGlobalHotkeyManager();
-
-        SuspendPluginShortcutRegistrations();
-        if (!manager.TryApply(
-                desiredBindings,
-                enabledCommandIds,
-                desiredMode,
-                out _,
-                out _))
-        {
-            RefreshPluginShortcuts();
-            ShowNumpadShortcutModeConflict();
-            RefreshSettingsWindowContent();
-            return;
-        }
-
-        State.DistinguishNumpadShortcutDigits = desiredMode;
-        RefreshPluginShortcuts();
-        ClearShortcutApplyFailure();
-        SaveNow();
-        RefreshSettingsWindowContent();
-    }
+    private void ToggleDistinguishNumpadShortcutDigits() =>
+        SetSettingFromUi("shortcuts.distinguish_numpad", !State.DistinguishNumpadShortcutDigits);
 
     private void ShowNumpadShortcutModeConflict()
     {
@@ -1477,20 +1438,6 @@ public sealed partial class AppController
             : (limit == EdgeCapsuleTitleLimit.Hidden ? 0 : limit).ToString(CultureInfo.InvariantCulture);
     }
 
-    private void SetDeepCapsuleTitleMeasureCharacterLimit(int value)
-    {
-        var normalized = EdgeCapsuleTitleLimit.Normalize(value);
-        if (State.DeepCapsuleTitleMeasureCharacterLimit == normalized)
-        {
-            return;
-        }
-
-        State.DeepCapsuleTitleMeasureCharacterLimit = normalized;
-        foreach (var window in _windows.Values)
-        {
-            window.RefreshPaperTitle();
-        }
-        ArrangeDeepCapsules(animate: true);
-        SaveNow();
-    }
+    private void SetDeepCapsuleTitleMeasureCharacterLimit(int value) =>
+        SetSettingFromUi("capsule.title_measure_limit", EdgeCapsuleTitleLimit.Normalize(value));
 }

@@ -182,6 +182,7 @@ public sealed partial class PaperWindow
 
         var presentation = _pluginCapsulePresentation;
         if (presentation == null ||
+            _bodyDisabled ||
             IsCurrentBodyProviderMarkdown ||
             (_bodyFailed && !HasPluginRuntimePresentationOwner))
         {
@@ -211,6 +212,7 @@ public sealed partial class PaperWindow
 
         var presentation = _pluginCapsulePresentation;
         if (presentation == null ||
+            _bodyDisabled ||
             IsCurrentBodyProviderMarkdown ||
             (_bodyFailed && !HasPluginRuntimePresentationOwner))
         {

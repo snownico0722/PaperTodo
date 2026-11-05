@@ -10,6 +10,18 @@ internal static class WebPluginWorkspaceRequests
         string method,
         JsonElement parameters) => method switch
     {
+        "appSettings.list" or "appSettings.get" or "appSettings.set" =>
+            WebPluginSettingsRequests.Execute(host, method, parameters),
+        "papers.show" => WorkspacePresentation(host).ShowPaper(RequiredString(parameters, "paperId"), OptionalBoolean(parameters, "activate") ?? true),
+        "papers.hide" => WorkspacePresentation(host).HidePaper(RequiredString(parameters, "paperId")),
+        "papers.toggle" => WorkspacePresentation(host).TogglePaperVisibility(RequiredString(parameters, "paperId"), OptionalBoolean(parameters, "activate") ?? true),
+        "papers.expand" => WorkspacePresentation(host).ExpandPaper(RequiredString(parameters, "paperId"), OptionalBoolean(parameters, "activate") ?? true),
+        "papers.collapse" => WorkspacePresentation(host).CollapsePaper(RequiredString(parameters, "paperId")),
+        "papers.toggleCollapsed" => WorkspacePresentation(host).TogglePaperCollapsed(RequiredString(parameters, "paperId"), OptionalBoolean(parameters, "activate") ?? true),
+        "papers.activate" => WorkspacePresentation(host).ActivatePaper(RequiredString(parameters, "paperId")),
+        "data.reload" => host.ReloadData(),
+        "data.merge" => host.MergeData(RequiredString(parameters, "baselineJson")),
+        "data.status" => host.GetDataReloadStatus(),
         "papers.list" => host.ListPapers(OptionalString(parameters, "type")),
         "papers.get" => host.GetPaper(RequiredString(parameters, "paperId")),
         "todos.list" => host.ListTodos(
@@ -24,6 +36,8 @@ internal static class WebPluginWorkspaceRequests
         "todos.update" => host.UpdateTodo(Deserialize<UpdateTodoRequest>(parameters)),
         "todos.setReminder" => host.SetTodoReminder(
             Deserialize<SetTodoReminderRequest>(parameters)),
+        "reminders.suppressDefault" => ReminderControl(host).SuppressDefaultReminderNotification(
+            RequiredGuid(parameters, "notificationId")),
         "notes.write" => host.WriteNote(Deserialize<WriteNoteRequest>(parameters)),
         "todos.delete" => host.DeleteTodo(Deserialize<DeleteTodoRequest>(parameters)),
         "papers.delete" => host.DeletePaper(RequiredString(parameters, "paperId")),
@@ -31,6 +45,21 @@ internal static class WebPluginWorkspaceRequests
             "method_not_found",
             $"Unknown PaperTodo workspace method: {method}")
     };
+
+    private static IPaperReminderNotificationControl ReminderControl(IPaperTodoHostApi host) =>
+        host as IPaperReminderNotificationControl
+        ?? throw new PaperTodoPluginException("reminder_control_unavailable", "Reminder notification controls are unavailable.");
+
+    private static Guid RequiredGuid(JsonElement parameters, string name)
+    {
+        if (!Guid.TryParse(RequiredString(parameters, name), out var value) || value == Guid.Empty)
+            throw new PaperTodoPluginException("invalid_params", $"{name} must be a non-empty UUID.");
+        return value;
+    }
+
+    private static IPaperWorkspacePresentationApi WorkspacePresentation(IPaperTodoHostApi host) =>
+        host as IPaperWorkspacePresentationApi
+        ?? throw new PaperTodoPluginException("presentation_unavailable", "Cross-paper presentation is unavailable.");
 
     private static T Deserialize<T>(JsonElement payload)
     {

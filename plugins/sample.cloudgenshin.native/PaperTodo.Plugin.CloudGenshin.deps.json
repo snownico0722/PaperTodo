@@ -9,11 +9,11 @@
     ".NETCoreApp,Version=v10.0/win-x64": {
       "PaperTodo.Plugin.CloudGenshin/1.3.0": {
         "dependencies": {
-          "Microsoft.Web.WebView2": "1.0.4078.44",
+          "Microsoft.Web.WebView2": "1.0.4314.35",
           "PaperTodo.Plugin.Abstractions": "1.0.0",
-          "Microsoft.Web.WebView2.Core": "1.0.4078.44",
-          "Microsoft.Web.WebView2.WinForms": "1.0.4078.44",
-          "Microsoft.Web.WebView2.Wpf": "1.0.4078.44",
+          "Microsoft.Web.WebView2.Core": "1.0.4314.35",
+          "Microsoft.Web.WebView2.WinForms": "1.0.4314.35",
+          "Microsoft.Web.WebView2.Wpf": "1.0.4314.35",
           "runtimepack.Microsoft.Windows.SDK.NET.Ref": "10.0.17763.57"
         },
         "runtime": {
@@ -32,10 +32,10 @@
           }
         }
       },
-      "Microsoft.Web.WebView2/1.0.4078.44": {
+      "Microsoft.Web.WebView2/1.0.4314.35": {
         "native": {
           "runtimes/win-x64/native/WebView2Loader.dll": {
-            "fileVersion": "1.0.4078.44"
+            "fileVersion": "1.0.4314.35"
           }
         }
       },
@@ -47,27 +47,27 @@
           }
         }
       },
-      "Microsoft.Web.WebView2.Core/1.0.4078.44": {
+      "Microsoft.Web.WebView2.Core/1.0.4314.35": {
         "runtime": {
           "Microsoft.Web.WebView2.Core.dll": {
-            "assemblyVersion": "1.0.4078.44",
-            "fileVersion": "1.0.4078.44"
+            "assemblyVersion": "1.0.4314.35",
+            "fileVersion": "1.0.4314.35"
           }
         }
       },
-      "Microsoft.Web.WebView2.WinForms/1.0.4078.44": {
+      "Microsoft.Web.WebView2.WinForms/1.0.4314.35": {
         "runtime": {
           "Microsoft.Web.WebView2.WinForms.dll": {
-            "assemblyVersion": "1.0.4078.44",
-            "fileVersion": "1.0.4078.44"
+            "assemblyVersion": "1.0.4314.35",
+            "fileVersion": "1.0.4314.35"
           }
         }
       },
-      "Microsoft.Web.WebView2.Wpf/1.0.4078.44": {
+      "Microsoft.Web.WebView2.Wpf/1.0.4314.35": {
         "runtime": {
           "Microsoft.Web.WebView2.Wpf.dll": {
-            "assemblyVersion": "1.0.4078.44",
-            "fileVersion": "1.0.4078.44"
+            "assemblyVersion": "1.0.4314.35",
+            "fileVersion": "1.0.4314.35"
           }
         }
       }
@@ -84,29 +84,29 @@
       "serviceable": false,
       "sha512": ""
     },
-    "Microsoft.Web.WebView2/1.0.4078.44": {
+    "Microsoft.Web.WebView2/1.0.4314.35": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-TQkHa/aOHUqFHnJIJ/2ZmJ4nLcQJi0Pc0rj9BAs7SP5sT/KtVtb8jFp9uqQL6cKzCRSrwjS/wEPA43NWUOzU+A==",
-      "path": "microsoft.web.webview2/1.0.4078.44",
-      "hashPath": "microsoft.web.webview2.1.0.4078.44.nupkg.sha512"
+      "sha512": "sha512-x5MFf2W03xueU1mMNvivXfHSsQ+ODo7vJ36qw/dLtU5Gs+8d7+7N7zzmNNDoT3ffosmcvZNBtUnlzyiDUuBkSQ==",
+      "path": "microsoft.web.webview2/1.0.4314.35",
+      "hashPath": "microsoft.web.webview2.1.0.4314.35.nupkg.sha512"
     },
     "PaperTodo.Plugin.Abstractions/1.0.0": {
       "type": "project",
       "serviceable": false,
       "sha512": ""
     },
-    "Microsoft.Web.WebView2.Core/1.0.4078.44": {
+    "Microsoft.Web.WebView2.Core/1.0.4314.35": {
       "type": "reference",
       "serviceable": false,
       "sha512": ""
     },
-    "Microsoft.Web.WebView2.WinForms/1.0.4078.44": {
+    "Microsoft.Web.WebView2.WinForms/1.0.4314.35": {
       "type": "reference",
       "serviceable": false,
       "sha512": ""
     },
-    "Microsoft.Web.WebView2.Wpf/1.0.4078.44": {
+    "Microsoft.Web.WebView2.Wpf/1.0.4314.35": {
       "type": "reference",
       "serviceable": false,
       "sha512": ""

@@ -1,0 +1,4 @@
+run,from_seq,to_seq,from_qpc,to_qpc,gap_ms,next_rendering_offset_ms,callback_to_shape_ms,max_overlapping_instrumented_scope_ms,scopes_with_gc
+final-full-r1,111989,112188,3897565467386,3897565849044,38.1658,37.9989,0.1669,0.2438,0
+final-full-r1,43242,43316,3897426580918,3897426932641,35.1723,35.0479,0.1244,0.1939,0
+final-full-r2,63629,63721,3902188710386,3902189087114,37.6728,37.6161,0.0567,0.0952,0

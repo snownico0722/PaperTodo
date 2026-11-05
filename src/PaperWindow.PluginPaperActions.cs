@@ -5,9 +5,12 @@ namespace PaperTodo;
 public sealed partial class PaperWindow
 {
     private void AttachPluginPaperMenuActions(ContextMenu menu) =>
-        AttachPluginPaperMenuActions(menu, _controller, _paper.Id);
+        // The shared paper menu already rebuilds every item on Opened. Registering
+        // another handler here would accumulate callbacks on each rebuild.
+        AttachPluginPaperMenuActions(menu, _controller, _paper.Id, refreshOnOpen: false);
 
-    internal static void AttachPluginPaperMenuActions(ContextMenu menu, AppController controller, string paperId)
+    internal static void AttachPluginPaperMenuActions(ContextMenu menu, AppController controller,
+        string paperId, bool refreshOnOpen = true)
     {
         var insertionIndex = menu.Items.Count;
         var contributed = new List<MenuItem>();
@@ -24,7 +27,9 @@ public sealed partial class PaperWindow
             }
         }
         Refresh();
-        // Cached paper/capsule menus read current registrations; stale callbacks are also rejected.
-        menu.Opened += (_, _) => Refresh();
+        // Standalone plugin menus still refresh lazily, but the paper's single builder
+        // already owns refresh and must not accumulate another Opened subscriber.
+        if (refreshOnOpen)
+            menu.Opened += (_, _) => Refresh();
     }
 }

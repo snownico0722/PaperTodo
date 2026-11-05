@@ -12,15 +12,18 @@ namespace PaperTodo;
 public sealed partial class AppController
 {
     private readonly Dictionary<SettingsPage, double> _settingsPageScrollOffsets = new();
+    private string? _settingsNativePalette;
 
     private void RefreshSettingsWindowContent()
     {
-        RefreshPluginPopupThemeForSettingsRefresh();
-
         if (_settingsWindow is not { } window)
         {
             return;
         }
+
+        // Rebuilding or navigating away from the workspace page discards its inline
+        // rename draft, without silently saving it.
+        CancelWorkspaceRenameOnPointer(null);
 
         // Focus loss after detaching the old tree is deferred. Commit the active editor
         // before its replacement reads State, so a theme/display refresh keeps the draft.
@@ -69,20 +72,77 @@ public sealed partial class AppController
         window.Language = AppTypography.Language;
         AppTypography.ApplyTextRendering(window);
         window.Content = BuildSettingsSidebarWindowContent(window);
-        ApplyToolTipSetting(window);
         ApplySettingsSidebarFrame(window);
+        _settingsMica?.Refresh(Theme.UsesNativeBackdrop, Theme.IsDark, PaperSkins.NativeBackdrop(Theme.Skin), State.MicaAlwaysActive, force: _settingsNativePalette != State.ColorScheme);
+        _settingsNativePalette = State.ColorScheme;
+    }
+
+    private void RefreshSettingsForChange(string id)
+    {
+        if (id is "window.hide_from_taskbar" or "window.hide_from_switcher")
+        {
+            RefreshSettingsSystemVisibilityToggleStates();
+            return;
+        }
+        if (id is "capsule.enabled" or "capsule.edge_enabled" or "capsule.master_enabled" or
+            "capsule.show_while_expanded" or "capsule.remember_expanded_position" or "capsule.click_to_collapse")
+        {
+            RefreshSettingsCapsuleToggleStates();
+            return;
+        }
+        if (id is "todo.paper_links" or "todo.hide_linked_paper_capsules")
+        {
+            RefreshSettingsCapsuleToggleStates();
+            RefreshSettingsRegions("general.todos");
+            return;
+        }
+        if (id == "note.external_extension") return; // The live editor is synchronized by its effect.
+        var region = id switch
+        {
+            "appearance.animations" or "appearance.fast_animations" or
+                "window.fullscreen_mode" => "general.options",
+            "title.max_length" or "capsule.title_measure_limit" or "capsule.hide_close_button" or
+                "capsule.master_compact" => "general.capsuleAppearance",
+            "capsule.gap" or "window.resize_grip" or "note.image_reference_text" => "visual.options",
+            "edge.non_topmost" => "general.edgeTopmost",
+            "scripts.run_linked_on_click" => "general.todos",
+            "note.markdown_mode" or "note.edit_animations" => "note.markdown",
+            "note.compress_large_images" => "note.images",
+            _ when id.StartsWith("todo.reminder", StringComparison.Ordinal) => "labs.reminders",
+            _ => id.Split('.')[0] switch
+            {
+                "general" => "general.options",
+                "topbar" => "general.topbar",
+                "privacy" => "general.telemetry",
+                "appearance" => "visual.options",
+                "todo" => "general.todos",
+                "edge" => "general.edgeBrowsing",
+                "focus" => "labs.focus",
+                "interaction" => "labs.passive",
+                "window" => "labs.window",
+                "scripts" => "note.scripts",
+                "shortcuts" => "shortcuts.bindings",
+                "mcp" => "labs.mcp",
+                _ => ""
+            }
+        };
+        RefreshSettingsRegions(region);
+        if (region == "shortcuts.bindings") RefreshSettingsRegions("labs.passive");
     }
 
     private UIElement BuildSettingsSidebarWindowContent(Window window)
     {
-        var frame = new Border
+        // Navigation replaces page content, not the HWND's material owner. Keep its
+        // current scene, exclusion lease and DWM state alive across a page switch.
+        var frame = window.Content as SkinBorder ?? new SkinBorder
         {
-            Background = TrayPaperBrush,
-            BorderBrush = TrayBorderBrush,
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(10),
             SnapsToDevicePixels = true
         };
+        if (_settingsMica?.IsActive != true)
+        { frame.Background = TrayPaperBrush; frame.BorderBrush = TrayBorderBrush; }
+        frame.CornerRadius = new CornerRadius(UsesNativeMicaWindows ? NativeMicaBackdrop.CornerRadius : 10);
+        frame.RefreshSkin();
 
         var root = new Grid();
         root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(158) });
@@ -261,6 +321,7 @@ public sealed partial class AppController
             ToggleAdvancedSettingsMode);
         advancedModeToggle.FontSize = AppTypography.Scale(11.5);
         advancedModeToggle.Margin = new Thickness(2, 2, 0, 0);
+        advancedModeToggle.IsEnabled = !FollowsMainWorkspaceSettings;
         advancedModeToggle.ToolTip = BuildSettingsHintTooltip(Strings.Get("TipAdvancedSettingsMode"));
         footer.Children.Add(advancedModeToggle);
 
@@ -290,6 +351,7 @@ public sealed partial class AppController
     private IEnumerable<SettingsPage> SettingsPages()
     {
         yield return SettingsPage.General;
+        yield return SettingsPage.Workspaces;
         yield return SettingsPage.Todo;
         yield return SettingsPage.Note;
         yield return SettingsPage.Visual;
@@ -386,7 +448,7 @@ public sealed partial class AppController
             Width = SettingsContentWidth() + 18,
             Padding = new Thickness(8, 0, 8, 0),
             HorizontalAlignment = HorizontalAlignment.Left,
-            Child = BuildSettingsPage()
+            Child = WithWorkspaceSettingsInheritance(BuildSettingsPage())
         };
 
         var scrollViewer = new ScrollViewer
@@ -413,10 +475,11 @@ public sealed partial class AppController
     private UIElement BuildSettingsPage() => _settingsPage switch
     {
         SettingsPage.General => BuildSettingsSidebarGeneralPage(),
+        SettingsPage.Workspaces => BuildWorkspaceSettingsPage(),
         SettingsPage.Todo => BuildSettingsSidebarTodoPage(),
         SettingsPage.Note => BuildSettingsSidebarNotePage(),
-        SettingsPage.Visual => BuildVisualSettingsPage(),
-        SettingsPage.Shortcuts => BuildShortcutSettingsPage(),
+        SettingsPage.Visual => BuildSettingsLiveRegion("visual.options", BuildVisualSettingsPage),
+        SettingsPage.Shortcuts => BuildSettingsLiveRegion("shortcuts.bindings", BuildShortcutSettingsPage),
         SettingsPage.Plugins => BuildPluginsSettingsPage(),
         SettingsPage.Labs => BuildLabsSettingsPage(),
         _ => BuildSettingsSidebarGeneralPage()
@@ -426,6 +489,7 @@ public sealed partial class AppController
     {
         SettingsPage.General => SettingsSidebarLocalized(
             "常规", "General", "一般", "일반"),
+        SettingsPage.Workspaces => Strings.Get("WorkspaceSettingsTitle"),
         SettingsPage.Todo => Strings.Get("MenuTodo"),
         SettingsPage.Note => Strings.Get("PaperKindNote"),
         SettingsPage.Visual => Strings.Get("SettingsVisual"),
@@ -479,4 +543,25 @@ public sealed partial class AppController
             workArea.Top + 16,
             workArea.Bottom - targetHeight - 16);
     }
+
+
+    private static (double Width, double Height) SettingsSidebarSizeForWorkArea(Rect workArea)
+    {
+        var targetWidth = Math.Min(840, Math.Max(360, workArea.Width - 48));
+        var targetHeight = Math.Min(620, Math.Max(320, workArea.Height - 48));
+
+        // Preserve the normal minimum size when possible, but never let that minimum push the
+        // window outside a tiny/high-DPI work area. Keep 16 DIPs of margin on each side.
+        targetWidth = Math.Min(targetWidth, Math.Max(1, workArea.Width - 32));
+        targetHeight = Math.Min(targetHeight, Math.Max(1, workArea.Height - 32));
+        return (targetWidth, targetHeight);
+    }
+
+    private void RefreshSettingsSidebarAfterMonitorChange(Window window)
+    {
+        _ = window.Dispatcher.BeginInvoke(
+            (Action)RefreshSettingsWindowContent,
+            DispatcherPriority.Background);
+    }
 }
+

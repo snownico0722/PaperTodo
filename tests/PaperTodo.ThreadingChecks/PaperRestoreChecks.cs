@@ -1,11 +1,59 @@
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Windows;
+using System.Windows.Interop;
 
 namespace PaperTodo.ThreadingChecks;
 
 internal static partial class Program
 {
+    private static void CheckNativeWindowBatchReturnToOrigin()
+    {
+        var window = new Window
+        {
+            Width = 300,
+            Height = 220,
+            Left = 120,
+            Top = 120,
+            ShowInTaskbar = false,
+            ShowActivated = false
+        };
+        try
+        {
+            window.Show();
+            window.UpdateLayout();
+            var handle = new WindowInteropHelper(window).Handle;
+            Assert(handle != IntPtr.Zero,
+                "native batch fixture window handle unavailable");
+            Assert(WindowNative.TryGetWindowDeviceBounds(window, out var original),
+                "native batch fixture window bounds unavailable");
+
+            var shifted = new DeviceScreenRect(
+                original.Left + 24,
+                original.Top,
+                original.Right + 24,
+                original.Bottom);
+
+            using var batch = WindowNative.BeginWindowDeviceBoundsBatch(1);
+            Assert(batch.TryDefer(handle, shifted),
+                "native batch did not accept the initial A-to-B move");
+            Assert(batch.TryGetPending(handle, out var pendingB) && pendingB == shifted,
+                "native batch did not retain the first pending bounds");
+            Assert(batch.TryDefer(handle, original),
+                "native batch rejected the final return-to-origin request");
+            Assert(batch.TryGetPending(handle, out var pendingA) && pendingA == original,
+                "return-to-origin request left the obsolete B bounds pending");
+            Assert(batch.Commit(), "native batch commit failed");
+            Assert(WindowNative.TryGetWindowDeviceBounds(window, out var actual) &&
+                actual == original,
+                "A-to-B-to-A native batch finished at the obsolete B position");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
     private static void CheckRememberedPaperRestore()
     {
         // Regression: a paper at physical X=2100 on a 150% secondary has WPF Left=1400.

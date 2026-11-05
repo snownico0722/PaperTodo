@@ -33,7 +33,7 @@ internal static partial class Program
     }
 
     // A deterministic test gate on the worker Dispatcher, not a production pause/scheduling API.
-    // It allows checking demand priority, coalescing and UI animation while formatting is pending.
+    // It allows checking demand priority, duplicate requests and UI animation while formatting is pending.
     private static IDisposable HoldWorker(MarkdownLayoutWorker worker)
     {
         AwaitWorkerCheck(worker.PrepareAsync(WorkerRequest("initialize"), false, default));
@@ -95,8 +95,11 @@ internal static partial class Program
             first = worker.PrepareAsync(requestPair, false, default);
             second = worker.PrepareAsync(WorkerRequest(new string('文', 1500)), false, default);
         }
-        Require(ReferenceEquals(AwaitWorkerCheck(first), AwaitWorkerCheck(second)),
-            "equal queued requests share one immutable layout result");
+        var firstResult = AwaitWorkerCheck(first);
+        var secondResult = AwaitWorkerCheck(second);
+        Require(firstResult.Size == secondResult.Size && firstResult.VisibleText == secondResult.VisibleText &&
+            firstResult.Truncated == secondResult.Truncated && DrawingPixels(firstResult).SequenceEqual(DrawingPixels(secondResult)),
+            "equal queued requests produce equivalent visible results, whether reused or rebuilt");
         using (HoldWorker(worker))
         {
             speculative = Enumerable.Range(0, 16).Select(i => worker.PrepareAsync(
@@ -122,7 +125,7 @@ internal static partial class Program
         WorkerLiveAnimation();
         worker.Dispose(); UntilReview(() => worker.Completion.IsCompleted, "worker shuts down without a UI Join");
         Require(worker.OutstandingCount == 0, "all worker consumers are released");
-        Console.WriteLine("PASS worker STA execution, frozen pixels (4 DPI values), coalescing, demand priority, cancellation and shutdown");
+        Console.WriteLine("PASS worker STA execution, frozen pixels (4 DPI values), duplicate requests, demand priority, cancellation and shutdown");
     }
 
     private static void WorkerResourceInvalidation()

@@ -1,5 +1,7 @@
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Interop;
+using System.Windows.Threading;
 
 namespace PaperTodo;
 
@@ -52,6 +54,7 @@ public sealed partial class PaperWindow
     }
 
     private PaperWindowLifecycleState _windowLifecycle = PaperWindowLifecycleState.Alive;
+    private bool _isClosingForReal;
     private PaperPresentationState _presentationState;
     private TitleBarDragSession? _titleBarDragSession;
     private int _titleEditIntentGeneration;
@@ -68,11 +71,15 @@ public sealed partial class PaperWindow
             : PaperPresentationState.Expanded;
     }
 
-    private void BeginPaperFormTransition(bool collapsed)
+    private void BeginPaperFormTransition(bool collapsed, bool animate)
     {
+        if (_paperChrome is SkinBorder surface) surface.SetFormTransition(true);
+        if (animate) _nativeMica?.PrepareFormTransition();
+        else _nativeMica?.CancelFormTransitionPreparation();
         _presentationState = collapsed
             ? PaperPresentationState.Collapsing
             : PaperPresentationState.Expanding;
+        // Native refresh belongs after target/frame preparation in SetCollapsedStateCore.
     }
 
     private void CompletePaperFormTransition(bool collapsed)
@@ -82,9 +89,15 @@ public sealed partial class PaperWindow
             return;
         }
 
+        _nativeMica?.CancelFormTransitionPreparation();
+        if (_paperChrome is SkinBorder surface) surface.SetFormTransition(false);
         _presentationState = collapsed
             ? PaperPresentationState.Collapsed
             : PaperPresentationState.Expanded;
+
+        // ResetTransitionVisuals may have chosen a temporary shadow while the
+        // state still said "transitioning". Re-select the actual endpoint here.
+        ApplyPaperChromePresentation();
 
         // Collapse: release images only after the form transition finishes so the fading shell
         // still shows bitmaps. Expand restores rendering earlier (when the shell becomes visible).
@@ -101,6 +114,7 @@ public sealed partial class PaperWindow
 
     internal void CommitPendingEditsForSave()
     {
+        if (_controller.SuppressDataReloadEditorCommit) return;
         CancelPendingTitleEditIntent();
         if (_isEditingTitle)
         {
@@ -110,8 +124,28 @@ public sealed partial class PaperWindow
         CommitPendingNoteContent();
     }
 
+    // An external data.json reload must collect host-owned edits without flushing
+    // unrelated third-party plugin bodies (which have independent persistence).
+    internal void CommitPendingEditsForDataReload()
+    {
+        CancelPendingTitleEditIntent();
+        if (_isEditingTitle) EndTitleEdit(commit: true);
+        CommitPendingMarkdownContentForSave();
+    }
+
     internal void CommitPendingNoteContentForSave()
         => CommitPendingNoteContent();
+
+    // Core persistence and external command preparation only need PaperTodo-owned Markdown
+    // editor text. Third-party body Commit() is a best-effort lifecycle callback, not a host save hook.
+    internal void CommitPendingMarkdownContentForSave() =>
+        _markdownBodySession?.Commit();
+
+    internal bool HasPendingMarkdownContentForSave =>
+        _markdownBodySession?.ContentDirty == true;
+
+    internal string CurrentMarkdownContentForExternalRead() =>
+        _markdownBodySession?.NoteBox?.PersistentText ?? _paper.Content ?? "";
 
     private void CommitPendingNoteContent()
     {
@@ -230,14 +264,38 @@ public sealed partial class PaperWindow
         // The compositor proxy can only hand off while this window still accepts endpoint frames.
         // Reveal the small real host before changing the lifecycle state to Closing.
         _controller.CompleteEdgeCapsuleQueueCompositionProxyFor(this);
+        if (_windowLifecycle != PaperWindowLifecycleState.Alive) return;
         // Controller exit already committed all editors and saved the final snapshot. Ordinary
         // close/hide still commits here; shutdown must not commit them for a second time.
         if (_controller.IsRunning) CommitPendingEditsForSave();
+        if (_windowLifecycle != PaperWindowLifecycleState.Alive) return;
+        _nativeMica?.CancelFormTransitionPreparation();
+        if (_paperChrome is SkinBorder surface) surface.SetFormTransition(false);
         _windowLifecycle = PaperWindowLifecycleState.Closing;
         _presentationState = PaperPresentationState.Closing;
         _collapseTransitionGeneration++;
         CancelPaperFormAnimationClocks();
         AbortAllInteractions(InteractionAbortReason.Closing);
+
+        HandoffForegroundBeforeSurfaceRemoval();
+    }
+
+    private void HandoffForegroundBeforeSurfaceRemoval()
+    {
+        // Native hide/close can activate a same-thread paper behind an external window, even
+        // without a hidden owner. Choose from the live stack immediately before removal, not
+        // at the start of a fade or in a delayed focus-repair callback. The native helper checks
+        // actual foreground again, so background removal and a newer user activation are no-ops.
+        if (_controller.IsRunning)
+        {
+            WindowNative.TryHandoffForegroundBeforeClose(
+                new WindowInteropHelper(this).Handle,
+                static handle => HwndSource.FromHwnd(handle)?.RootVisual is not PaperWindow paper ||
+                    (paper._windowLifecycle == PaperWindowLifecycleState.Alive &&
+                     paper._paper.IsVisible && !paper.IsExperimentalPassive));
+        }
+        // In particular, HideAll marks every paper invisible before withdrawing their HWNDs:
+        // none of those still-visible, soon-to-hide papers may become the handoff target.
     }
 
     private void CompletePaperWindowClose()
@@ -299,7 +357,6 @@ public sealed partial class PaperWindow
 
         _collapseTransitionGeneration++;
         CancelPaperFormAnimationClocks();
-        CompletePaperFormTransition(_paper.IsCollapsed);
         ResetTransitionVisuals();
         _shell.Width = double.NaN;
         _shell.Height = double.NaN;
@@ -327,13 +384,19 @@ public sealed partial class PaperWindow
             MinWidth = PaperLayoutDefaults.MinWidth;
             MinHeight = PaperLayoutDefaults.MinHeight;
             ResizeMode = ResizeMode.CanResizeWithGrip;
-            if (Width <= DesiredCapsuleWindowWidth + 8 ||
+            if (_controller.UsesNativeMicaWindows)
+            {
+                Width = Math.Max(_targetTransitionWidth, PaperLayoutDefaults.MinWidth);
+                Height = Math.Max(_targetTransitionHeight, PaperLayoutDefaults.MinHeight);
+            }
+            else if (Width <= DesiredCapsuleWindowWidth + 8 ||
                 Height <= PaperLayoutDefaults.CapsuleHeight + 8)
             {
                 Width = Math.Max(_paper.Width, PaperLayoutDefaults.MinWidth);
                 Height = Math.Max(_paper.Height, PaperLayoutDefaults.MinHeight);
             }
         });
+        CompletePaperFormTransition(_paper.IsCollapsed);
         UpdateTaskbarVisibility();
     }
 }

@@ -14,6 +14,9 @@ internal readonly record struct EdgeCapsulePreviewSize(
     public const double MinimumHeightDip = 90;
     public const double MaximumHeightDip = double.MaxValue;
 
+    // Built-in Todo and Markdown preview cap; plugin Mini sizes have independent contracts.
+    internal const double BuiltInMaximumHeightDip = 320;
+
     // Descriptor sizes include close/chrome. Preload, first display and replacement must
     // use the same content box; height is part of the prepared-body cache key.
     internal Size ContentSize => new(

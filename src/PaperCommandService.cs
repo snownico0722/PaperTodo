@@ -25,7 +25,6 @@ internal sealed partial class PaperCommandService
     public IReadOnlyList<PaperSnapshot> ListPapers(string? type = null)
     {
         EnsureRunning();
-        _controller.PrepareExternalPaperOperation();
         if (type != null && type is not PaperTypes.Todo and not PaperTypes.Note)
         {
             throw Error("invalid_params", "type must be 'todo' or 'note'.");
@@ -40,7 +39,6 @@ internal sealed partial class PaperCommandService
     public PaperSnapshot? GetPaper(string paperId)
     {
         EnsureRunning();
-        _controller.PrepareExternalPaperOperation();
         var paper = FindPaper(RequiredId(paperId, "paperId"));
         return paper == null ? null : _controller.CapturePaperSnapshot(paper);
     }
@@ -50,7 +48,6 @@ internal sealed partial class PaperCommandService
         bool includeBlank = false)
     {
         EnsureRunning();
-        _controller.PrepareExternalPaperOperation();
         var normalizedPaperId = string.IsNullOrWhiteSpace(paperId)
             ? null
             : RequiredId(paperId, "paperId");
@@ -77,7 +74,6 @@ internal sealed partial class PaperCommandService
     public NoteSnapshot? GetNote(string paperId)
     {
         EnsureRunning();
-        _controller.PrepareExternalPaperOperation();
         var paper = FindPaper(RequiredId(paperId, "paperId"));
         if (paper == null)
         {
@@ -96,7 +92,7 @@ internal sealed partial class PaperCommandService
     {
         ArgumentNullException.ThrowIfNull(request);
         EnsureRunning();
-        _controller.PrepareExternalPaperOperation();
+        PrepareExternalMutation();
         EnsurePaperCapacity();
 
         var type = request.Type?.Trim().ToLowerInvariant();
@@ -173,10 +169,10 @@ internal sealed partial class PaperCommandService
     {
         ArgumentNullException.ThrowIfNull(request);
         EnsureRunning();
-        _controller.PrepareExternalPaperOperation();
         var paper = RequirePaper(
             RequiredId(request.PaperId, "paperId"),
             PaperTypes.Todo);
+        PrepareExternalMutation(paper);
         var inputs = request.Todos?.ToArray() ?? [];
         ValidateTodoInputs(
             inputs,
@@ -218,7 +214,6 @@ internal sealed partial class PaperCommandService
     {
         ArgumentNullException.ThrowIfNull(request);
         EnsureRunning();
-        _controller.PrepareExternalPaperOperation();
         if (request.Text == null &&
             !request.Done.HasValue &&
             !request.Order.HasValue &&
@@ -232,6 +227,7 @@ internal sealed partial class PaperCommandService
         var paper = RequirePaper(
             RequiredId(request.PaperId, "paperId"),
             PaperTypes.Todo);
+        PrepareExternalMutation(paper);
         var item = RequireTodo(
             paper,
             RequiredId(request.TodoId, "todoId"));
@@ -357,7 +353,6 @@ internal sealed partial class PaperCommandService
     {
         ArgumentNullException.ThrowIfNull(request);
         EnsureRunning();
-        _controller.PrepareExternalPaperOperation();
         if (!_controller.State.ExperimentalTodoReminders)
         {
             throw Error(
@@ -368,6 +363,7 @@ internal sealed partial class PaperCommandService
         var paper = RequirePaper(
             RequiredId(request.PaperId, "paperId"),
             PaperTypes.Todo);
+        PrepareExternalMutation(paper);
         var item = RequireTodo(
             paper,
             RequiredId(request.TodoId, "todoId"));
@@ -412,7 +408,6 @@ internal sealed partial class PaperCommandService
     {
         ArgumentNullException.ThrowIfNull(request);
         EnsureRunning();
-        _controller.PrepareExternalPaperOperation();
         var paper = RequirePaper(
             RequiredId(request.PaperId, "paperId"),
             PaperTypes.Note);
@@ -426,30 +421,15 @@ internal sealed partial class PaperCommandService
                 "Writing note content only applies to the built-in Markdown body.");
         }
         var content = request.Content ?? "";
-        if (content.Length > PaperWindow.NoteTextMaxLength)
-        {
-            throw Error(
-                "content_too_long",
-                $"A note cannot exceed {PaperWindow.NoteTextMaxLength} characters.");
-        }
+        var current = _controller.CurrentMarkdownContentForExternalRead(paper);
+        _ = BuildNoteWriteResult(current, content, request.Mode);
+
+        // Only a request that is already valid may settle pending user text and establish
+        // user-before-external ordering for this same Markdown paper.
+        PrepareExternalMutation(paper);
 
         var original = paper.Content ?? "";
-        var result = request.Mode switch
-        {
-            NoteWriteMode.FillBlank when original.Length == 0 => content,
-            NoteWriteMode.FillBlank => throw Error(
-                "note_not_blank",
-                "fillBlank can only write to an empty note."),
-            NoteWriteMode.Append => AppendNoteText(original, content),
-            NoteWriteMode.Replace => content,
-            _ => throw Error("invalid_params", "Unknown note write mode.")
-        };
-        if (result.Length > PaperWindow.NoteTextMaxLength)
-        {
-            throw Error(
-                "content_too_long",
-                $"A note cannot exceed {PaperWindow.NoteTextMaxLength} characters.");
-        }
+        var result = BuildNoteWriteResult(original, content, request.Mode);
 
         if (string.Equals(result, original, StringComparison.Ordinal))
         {
@@ -480,10 +460,10 @@ internal sealed partial class PaperCommandService
     {
         ArgumentNullException.ThrowIfNull(request);
         EnsureRunning();
-        _controller.PrepareExternalPaperOperation();
         var paper = RequirePaper(
             RequiredId(request.PaperId, "paperId"),
             PaperTypes.Todo);
+        PrepareExternalMutation(paper);
         var item = RequireTodo(
             paper,
             RequiredId(request.TodoId, "todoId"));
@@ -527,8 +507,8 @@ internal sealed partial class PaperCommandService
         PaperOperationContext context)
     {
         EnsureRunning();
-        _controller.PrepareExternalPaperOperation();
         var paper = RequirePaper(RequiredId(paperId, "paperId"));
+        PrepareExternalMutation(paper);
         var papers = _controller.State.Papers;
         var originalIndex = papers.IndexOf(paper);
         var affectedLinks = papers
@@ -605,7 +585,7 @@ internal sealed partial class PaperCommandService
                 throw SaveFailed();
             }
 
-            _controller.QueuePluginPaperStateDeletion(paper.Id);
+            _controller.NotifyPaperRemoved(paper.Id);
             _controller.TryFlushPendingPluginPaperStateDeletes();
             _controller.RunExternalPostCommitUi(() =>
             {
@@ -776,6 +756,37 @@ internal sealed partial class PaperCommandService
         }
     }
 
+    private static string BuildNoteWriteResult(
+        string original,
+        string content,
+        NoteWriteMode mode)
+    {
+        if (content.Length > PaperWindow.NoteTextMaxLength)
+        {
+            throw Error(
+                "content_too_long",
+                $"A note cannot exceed {PaperWindow.NoteTextMaxLength} characters.");
+        }
+
+        var result = mode switch
+        {
+            NoteWriteMode.FillBlank when original.Length == 0 => content,
+            NoteWriteMode.FillBlank => throw Error(
+                "note_not_blank",
+                "fillBlank can only write to an empty note."),
+            NoteWriteMode.Append => AppendNoteText(original, content),
+            NoteWriteMode.Replace => content,
+            _ => throw Error("invalid_params", "Unknown note write mode.")
+        };
+        if (result.Length > PaperWindow.NoteTextMaxLength)
+        {
+            throw Error(
+                "content_too_long",
+                $"A note cannot exceed {PaperWindow.NoteTextMaxLength} characters.");
+        }
+        return result;
+    }
+
     private static string AppendNoteText(string original, string content)
     {
         var separator =
@@ -841,8 +852,20 @@ internal sealed partial class PaperCommandService
         }
     }
 
+    private void PrepareExternalMutation(PaperData? targetPaper = null)
+    {
+        // Flushing pending user events can synchronously run plugin commands, including
+        // deleting/replacing this target. Never mutate a detached pre-callback object.
+        _controller.PrepareExternalPaperOperation(targetPaper);
+        EnsureRunning();
+        if (targetPaper != null && !ReferenceEquals(FindPaper(targetPaper.Id), targetPaper))
+            throw Error("paper_not_found", "The requested paper no longer exists.");
+    }
+
     private void EnsureRunning()
     {
+        if (_controller.IsDataReloading)
+            throw Error("data_reload_in_progress", "PaperTodo is applying a committed data reload; retry after it completes.");
         if (!_controller.IsRunning)
         {
             throw Error("app_exiting", "PaperTodo is exiting.");
@@ -871,13 +894,15 @@ internal sealed partial class PaperCommandService
             throw Error("invalid_params", $"{name} cannot be empty.");
         }
         var tooLong = string.Equals(name, "title", StringComparison.Ordinal)
-            ? PaperTitles.ExceedsTextElementLimit(text, maxLength)
+            ? PaperTitles.ExceedsTitleLengthLimit(text, maxLength)
             : text.Length > maxLength;
         if (tooLong)
         {
             throw Error(
                 "invalid_params",
-                $"{name} cannot exceed {maxLength} characters.");
+                string.Equals(name, "title", StringComparison.Ordinal)
+                    ? $"{name} cannot exceed {maxLength} full-width characters (two half-width characters count as one)."
+                    : $"{name} cannot exceed {maxLength} characters.");
         }
         return text;
     }
@@ -983,3 +1008,4 @@ internal sealed partial class PaperCommandService
         }
     }
 }
+

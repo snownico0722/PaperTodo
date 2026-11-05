@@ -1,6 +1,4 @@
-using System.Windows;
 using System.Windows.Controls;
-using Point = System.Windows.Point;
 using ContextMenu = System.Windows.Controls.ContextMenu;
 
 namespace PaperTodo;
@@ -41,15 +39,13 @@ public sealed partial class PaperWindow
     private ContextMenu BuildDeepCapsuleSlotContextMenu()
     {
         var menu = BuildPaperContextMenu(forDeepCapsuleSlot: true);
+        DeepCapsuleContextMenuSession.PrepareOwnerActivation((MaterialContextMenu)menu);
 
         menu.Opened += (_, _) => _deepCapsuleContextMenuSession.HandleOpened(menu);
         menu.Closed += (_, _) => _deepCapsuleContextMenuSession.HandleClosed(menu);
 
         return menu;
     }
-
-    private void QueueCloseDeepCapsuleSlotContextMenu() =>
-        _deepCapsuleContextMenuSession.RequestClose();
 
     private void CloseDeepCapsuleSlotContextMenu() =>
         _deepCapsuleContextMenuSession.Close();
@@ -69,7 +65,4 @@ public sealed partial class PaperWindow
             InvalidateEdgeCapsulePointer();
         }
     }
-
-    private bool IsPointInsideDeepCapsuleOwnerSurface(Point screenPoint) =>
-        _edgeCapsuleHost?.ContainsWindowScreenPoint(screenPoint) == true;
 }

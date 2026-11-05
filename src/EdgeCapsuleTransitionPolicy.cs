@@ -33,9 +33,7 @@ internal static class EdgeCapsuleTransitionPolicy
             return null;
         }
 
-        var durationMilliseconds = motion.Kind == EdgeCapsuleMotionKind.Preserve
-            ? EdgeCapsuleLayout.SlotMoveMilliseconds
-            : Math.Max(1, motion.DurationMilliseconds);
+        var durationMilliseconds = Math.Max(1, motion.DurationMilliseconds);
         var durationTicks = Math.Max(
             1,
             (long)Math.Round(timestampFrequency * durationMilliseconds / 1000.0));
@@ -154,18 +152,6 @@ internal static class EdgeCapsuleTransitionPolicy
         }
 #endif
         return new EdgeCapsuleTransitionSample(frame, false);
-    }
-
-    public static EdgeCapsulePresentationFrame ResolveSettledFrame(
-        EdgeCapsulePresentationFrame applied,
-        EdgeCapsuleTargetPresentation target)
-    {
-        if (FramesMatch(applied, target))
-        {
-            return applied;
-        }
-
-        return target.ToFrame();
     }
 
     public static bool FramesMatch(

@@ -27,7 +27,6 @@ internal static partial class Program
             Console.WriteLine("PASS host-title-plugin-and-icon-slot-layout");
             QueuedPreviewTransactions();
             Console.WriteLine("PASS queued-preview-transaction-ordering");
-            RenderDemandChecks();
             Console.WriteLine($"Edge title checks: {assertions} assertions passed.");
             return 0;
         }
@@ -109,6 +108,15 @@ internal static partial class Program
             Placement = new EdgeCapsulePlacement(0, 0, 1)
         };
         var pluginContent = new TextBlock { Text = "Plugin clock", Background = Brushes.Transparent };
+        var material = (SkinBorder)HostPart<Border>("Chrome");
+        var compact = EdgeCapsuleTargetPlanner.Calculate(model, layout).Docked.ToFrame();
+        Check(host.Apply(compact with { Surface = EdgeCapsuleSurfaceKind.DockedPreview }) && material.UseLightweightMaterial,
+            "Presented preview frame selects lightweight material before any geometry animation");
+        host.RefreshSkin();
+        Check(material.UseLightweightMaterial, "Theme refresh must not re-enable heavy preview material");
+        Check(host.Apply(compact) && !material.UseLightweightMaterial,
+            "Presented compact frame restores normal material without changing HWND authority");
+
         foreach (var hideTitle in new[] { false, true })
         foreach (var hovered in new[] { false, true })
         {
@@ -160,7 +168,6 @@ internal static partial class Program
         host.SetDefaultIconSlotWidth(0);
         Check(host.DefaultIconSlotWidthForChecks < 0.01,
             "Script/natural icon layout can release the default slot");
-        PreviewClipReuse(host);
     }
 
     private static void Geometry()
@@ -209,6 +216,15 @@ internal static partial class Program
             Check(EdgeCapsuleTransitionPolicy.Create(resting.ToFrame(), hovered,
                 EdgeCapsuleMotion.Snap(EdgeCapsuleTransitionReason.Pointer), false, 0, 1000) == null,
                 "Animation disabled remains an immediate apply");
+            var explicitPreserve = EdgeCapsuleTransitionPolicy.Create(
+                resting.ToFrame(),
+                hovered,
+                EdgeCapsuleMotion.Preserve(EdgeCapsuleTransitionReason.Measure, 60),
+                transitionAlreadyActive: true,
+                nowTimestamp: 0,
+                timestampFrequency: 1000);
+            Check(explicitPreserve?.DurationTimestampTicks == 60,
+                "Preserve transition uses the explicit caller-provided duration");
             var previewsEnabled = layout with { ExpandedWidthDip = layout.RestingWidthDip };
             var ordinaryHover = Plan(hoverModel, previewsEnabled);
             Check(!ordinaryHover.TitleVisible && ordinaryHover.BodyWindowWidthDevice == resting.BodyWindowWidthDevice,

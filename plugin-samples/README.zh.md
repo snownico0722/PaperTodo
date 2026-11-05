@@ -1,16 +1,38 @@
 # PaperTodo 插件开发
 
+工作区状态还包含 `WorkspaceNumber`、`DataFileName` 和 `FollowsMainSettings`。获准外部编辑前先查询活动文件名：`data.json` 始终是主工作区，`reload_data` / `merge_data` 只处理当前活动工作区，不负责切换。
+
+
 **语言：简体中文 | [English](README.md)**
 
-本文是 **当前 PaperTodo 插件开发手册**。只描述现在可用的插件合同、运行边界、构建方式和示例，不记录协议演进历史。
+本文是 **当前 PaperTodo 插件开发手册**。以当前可用的插件合同、运行边界、构建方式和示例为主，并提供精简的 API 版本历史与兼容摘要；完整历史取舍仍以 `doc/DECISIONS.md` 为准。
 
 新插件使用：
 
 ```json
-"apiVersion": "2.1"
+"apiVersion": "2.2"
 ```
 
-当前宿主只接受 `2.1` 插件。清理前的实验性 `2.0` 以及更早 manifest 不再兼容加载；旧插件需要更新 manifest，并使用当前 `PaperTodo.Plugin.Abstractions` 重新构建。
+当前宿主最新协议为 `2.2`，并继续兼容 `2.1`。实验性 `2.0` 及更早 manifest 不再兼容加载。新插件应以 `2.2` 为目标；已有 `2.1` 插件只要不声明 2.2-only 能力仍可继续运行。
+
+### 插件 API 版本历史
+
+`apiVersion` 表示**这个插件最低需要哪一版 PaperTodo 插件 API**，不是插件自己的发布版本。宿主只在下面条件成立时加载：
+
+```text
+MinimumSupportedApiVersion <= plugin.apiVersion <= CurrentApiVersion
+```
+
+因此新宿主可以继续加载仍在兼容范围内的旧插件；旧宿主遇到依赖更高 API 的新插件则必须拒绝加载。当前 PaperTodo 支持 **2.1～2.2**。
+
+| API | 状态 | 主要合同里程碑 |
+| --- | --- | --- |
+| 1.x | 旧版 / 不再兼容 | 早期 paper-body 合同。已确认的里程碑包括：1.2 将插件 settings/state 移入独立插件数据域；1.8 加入由宿主持有窗口/队列/输入 authority 的 Edge Mini。 |
+| 2.0 | 实验过渡 / 不再兼容 | 引入宿主绘制 Top Bar 等方向，但仍同时存在 provider app Runtime 与 per-Paper Web Runtime；后续被 2.1 收敛路线替代，没有保留加载兼容。 |
+| 2.1 | 当前最低兼容 | 后台统一为单 provider Runtime，Body/Mini 只做前端；包括 Workspace 的 Paper/Todo/Note、Runtime state/Papers、宿主绘制 Top Bar/Todo contribution、全局快捷键与自定义 shortcut action、纸片菜单、笔记图片读取和临时弹窗。 |
+| 2.2 | 当前最新 | 新增跨纸片显示控制、公共软件 Settings API（`settings.read/update`）、settings `type: "action"` 命令按钮、`startupPaper.presentation: "hidden"`、提醒触发状态/事件及 Web Runtime 宿主事件订阅。新插件默认面向 2.2。 |
+
+**升版规则：**当前 minor 正式发布后，只要新增向后兼容、插件可观察的新合同（manifest 字段/类型、permission、事件、公开 API surface 或新语义），下一批就升 minor；纯宿主内部实现、性能优化和 bugfix 不升。破坏已有插件合同才升 major。同一个尚未发布的 minor 可以一起收纳多项兼容新增，不需要每加一个字段就连续制造多个版本号。
 
 插件公开类型以 [`../PaperTodo.Plugin.Abstractions/`](../PaperTodo.Plugin.Abstractions/) 为编译期合同；宿主实际校验和运行行为以当前代码为准。需要理解 PaperTodo 内部 ownership 时再看 [`../doc/ARCHITECTURE.md`](../doc/ARCHITECTURE.md)，插件作者不需要先阅读主程序架构才能开始开发。
 
@@ -52,7 +74,7 @@ plugins/com.example.hello/
   "id": "com.example.hello",
   "name": "Hello",
   "version": "1.0.0",
-  "apiVersion": "2.1",
+  "apiVersion": "2.2",
   "stateVersion": 1,
   "entry": "web/index.html"
 }
@@ -156,7 +178,7 @@ Native `plugin.json`：
   "id": "com.example.hello-native",
   "name": "Hello Native",
   "version": "1.0.0",
-  "apiVersion": "2.1",
+  "apiVersion": "2.2",
   "stateVersion": 1,
   "entry": "HelloPlugin.dll"
 }
@@ -227,7 +249,7 @@ Native 最终目录只保留运行所需内容。不要分发无必要的 PDB/XM
 | `name` | 显示名称；为空时回退到 ID |
 | `description` | 插件说明 |
 | `version` | 插件版本，必须能解析为 `Version` |
-| `apiVersion` | 必须为 `"2.1"` |
+| `apiVersion` | 新插件使用 `"2.2"`；`"2.1"` 继续兼容加载 |
 | `stateVersion` | 宿主代管 JSON 的目标版本；同时用于 per-paper frontend state 和 provider Runtime state，至少为 1 |
 | `maxPaperInstances` | 可选；同一 Provider 最多允许存在的真实 Paper 数。省略默认 `1`，`0` 表示不限制；隐藏/折叠 Paper 仍计数 |
 | `entry` | Web 主页面或 Native 入口 DLL，必须位于插件目录内 |
@@ -257,7 +279,7 @@ Native 最终目录只保留运行所需内容。不要分发无必要的 PDB/XM
   "id": "com.example.weather",
   "name": "天气",
   "version": "1.0.0",
-  "apiVersion": "2.1",
+  "apiVersion": "2.2",
   "stateVersion": 1,
   "entry": "web/index.html",
   "miniEntry": "web/mini.html",
@@ -295,7 +317,7 @@ Native 最终目录只保留运行所需内容。不要分发无必要的 PDB/XM
 
 - `enabledSetting` 必须引用同一 manifest 中的 boolean setting；
 - `instanceKey` 为 1～80 个 ASCII 字母、数字、`.`、`_`、`-`；
-- `presentation` 只能是 `capsule` 或 `expanded`；
+- `presentation` 可为 `capsule`、`expanded` 或 `hidden`；`hidden` 属于 Protocol 2.2，会创建/恢复真实插件 Paper 作为 Runtime owner，但正常启动时不显示它的窗口；
 - `title` 最长 120 个字符；
 - 创建时机、去重和恢复由宿主管理；插件只声明意图；
 - 如果用户已经把原自动创建纸片改造成其他 provider/type，宿主不会强行接管或偷偷再创建副本。
@@ -400,6 +422,9 @@ Runtime state 与 Body/Mini 的 per-paper frontend state 是不同数据：Runti
 
 ## 5. 状态、设置与 `.runtime`
 
+后台首次启动失败不自动重试；修改设置或下次正常启动可再尝试。已经成功运行后的网页后台故障仍沿用有界恢复。正文的普通主题、字体、激活等通知失败只记录错误，不替换当前正文；真正创建正文失败仍显示原有错误页。
+
+
 ### 5.1 宿主代管状态
 
 每个插件的宿主管理状态位于：
@@ -437,22 +462,17 @@ papertodo.registerStateProvider(() => currentState);
 
 Body、Mini 和 Web Runtime 的 `initialize` 都提供各自状态域的 `state`、`stateVersion`、`targetStateVersion`。Web 插件自己负责把旧 shape 归一化为当前 shape，并在真实迁移后保存。Native Runtime 不调用 Body 的 `MigrateState(...)`，而是比较 `context.State.StateVersion` / `TargetStateVersion` 并在迁移后显式调用 `State.Save(...)`。已保存版本高于目标版本时，Body 不会创建、Runtime 不会启动，宿主也不会猜测降级；不要因为解析失败直接用空对象覆盖旧状态。
 
-### 5.2 恢复行为
+### 5.2 基础存储与读取失败
 
-宿主读取正常数据文件失败时：
+宿主只读写普通的 `<插件 ID>.json`。文件不存在才采用默认状态；已有文件无法读取就报告错误，不假装是空数据，也不改写另一条路径。一次保存保留原有临时文件替换方式。旧 `.json.recovered` 文件不再自动选用，也不自动迁移或删除。
 
-- 保留原文件；
-- 当前进程从空插件状态继续；
-- 后续写入稳定的 `<插件 ID>.json.recovered`；
-- `.recovered` 存在时后续优先使用它。
-
-插件数据故障不会让 PaperTodo 核心 `data.json` 失效。
+插件自己的业务数据备份、恢复或数据库由插件负责。单个插件的数据错误不会使核心 `data.json` 无法读取；不要另造一份与宿主管理状态竞争写入的副本。
 
 ### 5.3 全局 settings
 
-宿主支持：`boolean`、`string`、`number`、`select`、`shortcut`。设置仍只有一份存储和读写协议，下面两种只是宿主展示方式。
+宿主支持：`boolean`、`string`、`number`、`select`、`shortcut`，以及 Protocol 2.2 新增的 `action`。`action` 是宿主绘制的命令按钮，不写入 settings 持久化数据；`paper.*` 由宿主直接执行，自定义动作需要声明 `runtime`，并复用已有 Runtime action handler 投递，无需配置快捷键。其余设置类型仍共用一份存储和读写协议，下面两种只是宿主展示方式。
 
-`shortcut` 的 `shortcutAction`、宿主 `paper.*` 动作和自定义 Runtime action 规则见 [`PROTOCOL-2.1-SHORTCUTS.md`](PROTOCOL-2.1-SHORTCUTS.md)。
+Protocol 2.1 的 `shortcut` 与 Protocol 2.2 的 `action` 按钮、宿主 `paper.*` 动作、自定义 Runtime action 规则见 [`PROTOCOL-2.1-SHORTCUTS.md`](PROTOCOL-2.1-SHORTCUTS.md)。
 
 默认不声明 `advancedSettings`（或为 `false`）时，行为保持原样：最多三个 `quick: true` 设置直接显示在插件卡片上，其余设置通过“更多设置”在**当前卡片内**展开/收起。没有 `quick` 时不会自动猜主要设置。
 
@@ -494,24 +514,53 @@ Runtime 不借用 paper-session settings 生命周期：Native 随时读取 `Pap
 
 插件自己负责 `.runtime/` 的格式版本、原子写入、损坏恢复和容量控制。普通单纸片 UI/业务状态不要同时写进 `.runtime/` 和 `plugins/data/`，否则会产生两份 authoritative state。
 
+### 5.5 公共软件 Settings API
+
+这是操作 **PaperTodo 面向用户的设置** 的可选能力，不是插件私有的 `context.Settings`、`SettingsJson`、State 或 `.runtime/`。Native Body / provider Runtime 使用 `context.SettingsApi`（`IPaperSettingsApi`）；Web Body / Mini / Runtime 使用 `papertodo.settingsApi`。没有向 `IPaperTodoHostApi` 增加必需方法。
+
+List/Get 需要声明 `settings.read`，Set 需要 `settings.update`；调用方权限在修改前校验。
+
+```csharp
+var links = context.SettingsApi.Get("todo.paper_links");
+var todoSettings = context.SettingsApi.List("todo");
+// 仅在任务明确要求修改设置时：
+context.SettingsApi.Set("todo.paper_links", true);
+```
+
+```javascript
+const links = await papertodo.settingsApi.get('todo.paper_links');
+const catalog = await papertodo.settingsApi.list('todo');
+await papertodo.settingsApi.set('todo.paper_links', true);
+```
+
+MCP 提供 `list_settings(category?)`、`get_setting(id)`、`set_setting(id, value)`。查询需要 MCP 总开关；修改需要完整写入。另行获准的 Codex 自动开启路径可以开启现有写入和删除权限。关闭 `mcp.enabled` 时先返回本次结果，再停止传输。
+
+List 返回数组。每项包含稳定的 `id`、`category`、本地化 `title`、`type`、当前 `value`、针对调用方权限的 `writable`、`requires_restart`，以及适用时的 `unavailable_reason`、`min`、`max`、`step`、`max_length`、`options`。Set 返回 `setting`、`previous_value`、`changed`；设置为当前值不会重复保存或刷新。应先查询目录，不能猜内部字段名。
+
+目录覆盖一般/语言/开机启动、隐私、外观/字体/背景偏好、笔记/待办/标题/胶囊、边缘浏览、提醒、窗口/专注/交互、脚本、MCP 和全局快捷键。返回的是保存的偏好：从属选项可能保持勾选，但要等主功能开启才生效。快捷键分别提供 `.gesture`、`.enabled`；每侧胶囊序列用“修饰键组合＋1”配置，同步应用到 1～9。快捷键录制/未提交草稿以及系统注册冲突会明确报错，不静默覆盖。语言标记 `requires_restart: true`，接口不强制退出重启。
+
+目录是显式注册的类型化设置集合。纸片正文/几何、实时队列状态、迁移字段、插件私有设置、文件内容及导入/导出/重置等一次性命令不是设置值，继续由原 API/owner 管理；不提供反射读写 `AppState` 的通道。新增公开设置须明确登记校验与生效处理。
+
+三种入口共用一个服务。核心设置同步通过 `StateStore` 保存，保存失败恢复原值及联动状态；提交成功后再刷新对应界面/Runtime。Windows 启动项、背景偏好沿用各自的持久化 owner。错误包括 `setting_not_found`、`invalid_setting_value`、`setting_dependency`、`settings_busy`、`setting_read_only`、`shortcut_conflict`、`save_failed`。已提交的数据不会因后续界面刷新异常被误报为写入失败。
+
+待办关联沿用 Workspace 更新请求：`UpdateLinkedPaper=true`、`LinkedPaperId=null` 表示解绑。MCP 增加 `update_todo(clear_linked_paper=true)`，与非空 `linked_paper_id` 互斥；两者都省略表示不改关联。准备为长待办创建详细 Note 前，应先查询 `todo.paper_links`；关闭或未知时跳过该方案，除非用户明确要求先改设置。
+
+
 ## 6. Workspace 权限与数据 API
 
 manifest 可声明：
 
 ```text
 papers.read
-papers.observe
 papers.create
 papers.delete
 
 todos.read
-todos.observe
 todos.append
 todos.update
 todos.delete
 
 notes.read
-notes.observe
 notes.append
 notes.replace
 ```
@@ -539,12 +588,12 @@ notes.write
 几个容易遗漏的权限组合：
 
 - 创建带正文的 Note：除了 `papers.create` 还需要 `notes.append`；
-- 创建/追加带完成状态、提醒或 `linkedPaperId` 的 Todo：还需要 `todos.update`；
+- 新建/追加待办的初始完成状态、提醒与 `linkedPaperId` 属于创建/追加权限；修改已有待办仍需要 `todos.update`；
 - `todos.setReminder` 使用 `todos.update`；
 - `notes.write` 的 append/fill-blank 使用 `notes.append`，replace 使用 `notes.replace`；
 - paper session 插件不能删除承载当前 active session 的 paper；Runtime 没有 host paper，因此不受这条单纸片自删除限制。
 
-Observe 权限独立于 Read 权限。没有对应 read 权限时，事件仍可按 observe 权限投递，但敏感字段会被宿主裁剪。
+读取权限允许查询同类数据，也允许订阅对应事件。旧插件的 `papers.observe`、`todos.observe` 和 `notes.observe` 声明仍然有效，但仅保留事件订阅能力，不授予主动查询权限，事件中缺少 read 权限的敏感内容继续被脱敏。
 
 Native paper session：
 
@@ -571,7 +620,53 @@ const dispose = papertodo.onHostEvent(
 );
 ```
 
-可订阅：`paper.created`、`paper.changed`、`paper.deleted`、`todo.created`、`todo.changed`、`todo.deleted`、`note.changed`。会话失效或销毁后订阅自动失效；插件自己也应及时 unsubscribe 不再需要的监听。
+可订阅：`paper.created`、`paper.changed`、`paper.deleted`、`todo.created`、`todo.changed`、`todo.deleted`、`note.changed`，以及 API 2.2 的 `todo.reminderUpcoming` 前置事件；提醒实际触发通过已有的 `todo.changed` 表达。会话失效或销毁后订阅自动失效；插件自己也应及时 unsubscribe 不再需要的监听。
+
+### 提醒 API（2.2）
+
+PaperTodo 在到期前**约 5 秒**发出一次前置事件（Upcoming 与防抖后的用户变更事件不保证全局严格顺序；快照反映通知时的当前状态，用户事件的 `occurredAt` 不一定是实际编辑时间），插件可取消本次默认展示；到期后的状态变化仍由普通 `TodoChanged` 表达。
+
+- `todos.read` 允许查询待办与订阅 Native `PaperTodoEventKind.TodoReminderUpcoming`（Web：`todo.reminderUpcoming`）。新事件包含 `todo` 快照、一次性的 `notificationId` 及 System 来源的 `metadata`，不是提醒已触发的通知；旧的 `todos.observe` 仅保留旧事件兼容，不能订阅这个新前置事件。
+- 宿主在预定时间前 5 秒尝试发送前置事件。若创建/改期时剩余不到 5 秒，会尽快发送；启动恢复时已过期的提醒直接进入宿主默认处理，不保证补发前置事件。同一轮提醒最多发一次，改期后旧 `notificationId` 失效。
+- 要接管默认展示，插件还需 `todos.update`，在到期前调用 Native `(context.Workspace as IPaperReminderNotificationControl)?.SuppressDefaultReminderNotification(notificationId)` 或 Web `papertodo.workspace.request('reminders.suppressDefault', { notificationId })`。成功返回 `true`；过期/无效返回 `false`。取消只跳过本次 PaperTodo 默认纸片/托盘通知与提示音，**不会删除、改期或反复重试这条待办**。多个插件都能收到事件，但宿主不协调它们自己的提示。
+- PaperTodo 不会阻塞 UI 线程等待插件应答：五秒窗口允许 Web 插件异步回复；插件未回复、崩溃或未取消时，宿主照常提示。用户停用提醒、完成/取消/改期待办时，旧取消令牌自动无效。
+- 提醒被宿主展示成功或被插件取消默认展示后，`reminderTriggered` 都变为 `true`，并发送 System 来源的 `TodoChanged`。按 `!before.reminderTriggered && after.reminderTriggered` 过滤本次触发；仅凭 `changedFields.Reminder` 不够，因为修改时间也会变化。
+- 普通用户修改事件在宿主完成本轮提醒之后再通知插件，**不是前置拦截钩子**。提醒事件尽力实时投递，无离线重放和跨重启的恰好一次保证；插件展示自己的通知失败后，宿主不会重新弹窗。
+- 长期通知集成放在插件 Runtime；Web Body 和 Runtime 可用 `onHostEvent`，Web Mini 不支持。Native 回调应避免阻塞 UI 线程。
+
+Native Runtime 前置钩子示例（需 `todos.read` + `todos.update`）：
+
+```csharp
+var stop = context.Workspace.Subscribe(
+    new PaperTodoEventFilter { Kinds = new HashSet<PaperTodoEventKind>
+        { PaperTodoEventKind.TodoReminderUpcoming } },
+    evt =>
+    {
+        if (evt is TodoReminderUpcomingEvent upcoming &&
+            context.Workspace is IPaperReminderNotificationControl control)
+        {
+            // 启动桌宠自己的提示流程；只有决定接管时才取消默认通知。
+            control.SuppressDefaultReminderNotification(upcoming.NotificationId);
+        }
+    });
+```
+
+Web Runtime 示例（需 `permissions: ["todos.read", "todos.update"]`）：
+
+```js
+const stop = papertodo.onHostEvent(['todo.reminderUpcoming'], async event => {
+  const { notificationId, todo } = event;
+  // 插件决定负责展示这条 todo 后，抢在到期前取消默认通知：
+  const suppressed = await papertodo.workspace.request(
+    'reminders.suppressDefault', { notificationId });
+  if (suppressed) {
+    // 桌宠展示自己的提示；宿主不再显示默认通知。
+  }
+});
+// 不再监听时调用 stop()。
+```
+
+纸片、待办、笔记与图片查询只读当前模型/资产，不提交或强制同步编辑器；最新输入可能等待原有编辑/保存流程后再可见。外部写入如果目标就是同一张内置 Markdown，会先提交这张纸片尚未写回模型的用户文字，再执行插件/MCP修改；修改其他纸片不会因此调用无关第三方 Body 的 `Commit()`。核心 `data.json` 保存仍按正常规则同步内置 Markdown，不把第三方 Body `Commit()` 当作全局保存钩子。MCP 新建/追加同样允许设置新待办的初始属性，不额外要求完整写入；修改已有内容的权限不变。
 
 ### 6.1 正文读写边界
 
@@ -582,6 +677,42 @@ Top Bar 不提供另一套 `GetBodyText/SetBodyText`。需要读写目标纸片�
 - 自定义插件正文：正文数据仍由对应 provider 的 state/capability 拥有，宿主不会假装所有正文都是文本。
 
 插件 Workspace 与 MCP 共用 `PaperCommandService` 业务边界，因此保存、失败回滚、UI reconcile 和事件顺序不因为入口不同而复制第二套实现。
+
+### 跨纸片显示控制（API 2.2）
+
+使用 `apiVersion: "2.2"` 即可按准确 ID 操作任意已有纸片，包括 Todo、Markdown 和其他插件的纸片，不需要额外的展示权限。查询 ID 另需 `papers.read`；显示控制结果不返回标题或正文。
+
+Native Body 和 Runtime 都通过可选能力 `context.WorkspacePresentation`（`IPaperWorkspacePresentationApi`）调用，不向旧 Workspace 接口添加必实现方法：
+
+```csharp
+context.WorkspacePresentation.ShowPaper(paperId, activate: false);
+context.WorkspacePresentation.HidePaper(paperId);
+context.WorkspacePresentation.TogglePaperVisibility(paperId, activate: false);
+context.WorkspacePresentation.ExpandPaper(paperId, activate: false);
+context.WorkspacePresentation.CollapsePaper(paperId);
+context.WorkspacePresentation.TogglePaperCollapsed(paperId, activate: false);
+context.WorkspacePresentation.ActivatePaper(paperId);
+```
+
+Web Body、Mini、Runtime 沿用 Workspace 请求通道：
+
+```js
+await papertodo.workspace.request('papers.show', { paperId, activate: false });
+await papertodo.workspace.request('papers.hide', { paperId });
+await papertodo.workspace.request('papers.toggle', { paperId, activate: false });
+await papertodo.workspace.request('papers.expand', { paperId, activate: false });
+await papertodo.workspace.request('papers.collapse', { paperId });
+await papertodo.workspace.request('papers.toggleCollapsed', { paperId, activate: false });
+await papertodo.workspace.request('papers.activate', { paperId });
+```
+
+显示保留当前折叠状态；展开同时显示纸片；折叠保留可见性，不会把隐藏纸片弹出。激活会显示隐藏纸片并请求焦点，但不强制展开。显示、展开和两种切换操作的 `activate` 默认是 `true`。仍遵守宿主的胶囊资格检查：无法折叠时返回 `presentation_unavailable`，不偷偷打开功能开关；ID 不存在返回 `paper_not_found`，不会创建新纸片。
+
+结果为 `{ paper_id, is_visible, is_collapsed }`，表示请求处理后的逻辑状态，**不表示动画已完成，也不承诺同步落盘**。窗口、动画和常规保存调度仍归已有宿主流程。隐藏不删除内容，也不移除维持插件 Runtime 的实体 Paper。toggle 会反转状态，结果不明时先查询，不要盲目重试。Native Runtime 后台调用会切回 UI Dispatcher，已销毁的上下文会被拒绝。
+
+2.1 的 `context.Presentation` / `papertodo.paper.*` 不变：仍只操作承载自己的纸片，仍保持自身作用域。Web popup 不获得通用 Workspace 能力。
+
+MCP 对应提供 `show_paper`、`hide_paper`、`toggle_paper_visibility`、`expand_paper`、`collapse_paper`、`toggle_paper_collapsed`、`activate_paper`，参数使用 `paper_id` 和同义的可选 `activate`。只要求 MCP 总开关，不额外要求完整写入或删除权限。`list_papers` / `get_paper` 同时返回 `is_visible`、`is_collapsed`。
 
 ## 7. Top Bar 扩展（2.1）
 
@@ -700,7 +831,7 @@ manifest：
 
 ```json
 {
-  "apiVersion": "2.1",
+  "apiVersion": "2.2",
   "entry": "web/index.html",
   "runtime": "web/background.html",
   "capabilities": ["runtime"]
@@ -831,7 +962,7 @@ await papertodo.popup.post({ selected: imageId }); // 创建者收到 popupMessa
 papertodo.popup.close();
 ```
 
-弹窗可读取初始数据、接收主题事件、读取有权限的笔记图片、给创建者发消息和关闭自己；**不直接获得通用 Workspace 写入、菜单注册或再次开窗能力**。业务写入交给创建者处理。初始数据与单条消息上限 64 KiB；入口只接收本地 HTML，外部跳转、新窗口和下载被取消。页面导航会撤销旧消息凭证；可自动恢复的网页辅助进程故障不会关闭弹窗，主渲染或浏览器故障则关闭并向创建者报告 `popupError`。
+弹窗可读取初始数据、接收主题事件、读取有权限的笔记图片、给创建者发消息和关闭自己；**不直接获得通用 Workspace 写入、菜单注册或再次开窗能力**。业务写入交给创建者处理。初始数据与单条消息上限 64 KiB；入口只接收本地 HTML，普通网页/邮件链接和外部新窗口请求交给系统默认程序打开，弹窗自身不导航；下载仍取消。页面导航会撤销旧消息凭证；可自动恢复的网页辅助进程故障不会关闭弹窗，主渲染或浏览器故障则关闭并向创建者报告 `popupError`。
 
 `NoteAssets.ReadImage(paperId, imageId)` 返回 `PaperNoteImage` 的 MIME 和独立编码字节；Web 的 `bytes` 为 Base64。沿用 `notes.read`，只读内置 Markdown 笔记拥有的图片，单次上限 16 MiB。缺失、损坏或归属错误报告 `asset_not_found`，超限报告 `asset_too_large`；不提供图片写入、磁盘路径或内部存储对象，也不承诺整篇笔记的原子导出快照。
 
@@ -1062,7 +1193,7 @@ papertodo.request(method, params);    // root transport
 papertodo.onEvent(listener);
 ```
 
-Runtime 的 `initialize` 包含 `settings`、provider Runtime `state` 及其版本、当前 provider `papers` 快照；后续设置变更会收到 `settingsChanged`，Paper 增删和 Body 消息会收到 `paperEvent`。它没有 `paper`、`body`、`mini`、`saveState` 等 paper-session API，也没有 Web `onHostEvent` 订阅 bridge。
+Runtime 的 `initialize` 包含 `settings`、provider Runtime `state` 及其版本、当前 provider `papers` 快照；后续设置变更会收到 `settingsChanged`，Paper 增删和 Body 消息会收到 `paperEvent`。API 2.2 另提供 `papertodo.onHostEvent(types, listener, options)` 订阅 Workspace 事件，复用 Native 的 observe/read 权限。它没有 `paper`、`body`、`mini`、`saveState` 等 paper-session API。
 
 `papertodo.papers.postBody(...)` / Native `Papers.PostToBody(...)` 只尝试交给当前 live Body，返回值表示该 Body 当前是否接受（Web Body 可能暂存至 document ready）；它不是持久消息队列，也不是业务 ACK 或最终送达保证。
 
@@ -1096,7 +1227,7 @@ Native 插件是 fully trusted / unsandboxed .NET/WPF 代码，与 PaperTodo 当
 | 示例 | 重点 |
 | --- | --- |
 | `PaperTodo.Plugin.Protocol21Web` | **Protocol 2.1 contribution 专项示例**：Todo 行操作、顶栏标签、最新 TodoSnapshot |
-| `PaperTodo.Plugin.TopBarWeb` | **Protocol 2.1 Top Bar 专项示例**：body Paper action + Web Runtime Global action、字符/Stroke SVG、目标 Paper context、Workspace 复用 |
+| `PaperTodo.Plugin.TopBarWeb` | **Protocol 2.2 Top Bar/action 专项示例**：body Paper action + Web Runtime Global action、字符/Stroke SVG、目标 Paper context、Workspace 复用 |
 | `PaperTodo.Plugin.SampleClock` | Native 主示例：settings、background updates、标准 capsule、自定义 WPF capsule、dedicated WPF mini |
 | `PaperTodo.Plugin.OfficialClockWeb` | Web 主示例：body/mini 双页面、`miniEntry`、state/settings 同步、startup paper、background updates |
 | `PaperTodo.Plugin.FocusTimer` | Native 有状态交互：正文与 dedicated mini 共享计时 model，mini 内直接开始/暂停/继续 |
@@ -1109,7 +1240,7 @@ Native 插件是 fully trusted / unsandboxed .NET/WPF 代码，与 PaperTodo 当
 
 ### Manifest / Runtime
 
-- 新插件仍以 `apiVersion: "2.0"` 或更早版本为目标；当前宿主只接受 `2.1`；
+- 新插件仍以 `apiVersion: "2.0"` 或更早版本为目标；新开发应使用 `2.2`，已有 `2.1` 插件继续兼容；
 - 插件目录名和 `id` 不一致；
 - `id` 使用非法字符或宿主保留 ID `data` / `builtin.markdown`；
 - Web 声明 `runtime`，但默认 `runtime.html` 不存在，或显式 `runtime` 路径不存在/跑出 Web `entry` 静态目录；
@@ -1176,7 +1307,7 @@ Native 插件是 fully trusted / unsandboxed .NET/WPF 代码，与 PaperTodo 当
 
 ## 14. 提交插件前
 
-- `plugin.json` 使用当前目标 `apiVersion: "2.1"`；
+- 新 `plugin.json` 使用当前目标 `apiVersion: "2.2"`；只有刻意停留在 2.1 合同时才继续写 `2.1`；
 - 所有 metadata 只在 `plugin.json` 中声明，Native 入口 DLL 只提供行为实现；
 - 声明 `runtime` 时：Native 实现 `IPaperPluginRuntimeProvider`；Web 默认提供 `entry` 同目录 `runtime.html`，或用 `runtime` 指定同一 Web 静态目录内的其他入口；
 - Runtime 需要插件设置时使用自己的 `context.Settings.Json` + `Settings.Subscribe(...)` / `papertodo.settings.get()` + `settingsChanged`，不借用隐藏 paper session；
@@ -1194,3 +1325,15 @@ Native 插件是 fully trusted / unsandboxed .NET/WPF 代码，与 PaperTodo 当
 - Edge Mini 不依赖键盘输入；
 - 只声明实际需要的 permissions / `runtime`；
 - 切换 provider、删除 paper 时 0↔1 Runtime ownership 正确；退出 PaperTodo 后 Runtime 与 Global Top Bar 完整撤销。
+
+## data.json 显式重载（宿主 2.2 能力）
+
+Native Body / Runtime 使用 `Workspace.ReloadData()` / `Workspace.GetDataReloadStatus()`；Web Body / Mini / Runtime 使用 `papertodo.workspace.request('data.reload', {})` 和 `papertodo.workspace.request('data.status', {})`。MCP 工具对应 `reload_data`（需要完整写入权限）和只读的 `get_data_reload_status`。
+
+插件侧调用 `ReloadData()` / `MergeData()` 或 Web 的 `data.reload` / `data.merge` 必须在插件清单声明高权限 `data.import`；`data.status` 无需此权限。MCP 仍使用原有完整写入权限控制。
+
+宿主**不监听或轮询磁盘文件，也不在普通自动保存时比较外部文件指纹**。`reload_data` 主动接受校验后的活动工作区数据，可能覆盖尚未保存的内存修改；无效或缺失输入直接报告错误。没有显式请求时，普通保存保持原行为，可能覆盖外部编辑。显式重载会使此前已排队的旧保存失效，关机/崩溃仍不会执行最后强存。
+
+可选的 `merge_data`（需要 MCP 完整写入权限）仅提供**有真实原始基线的三方合并**。外部工具必须保留开始编辑时实际读到的完整 JSON，传给 MCP `merge_data(baseline_json: originalJson)`、Native `Workspace.MergeData(originalJson)` 或 Web `papertodo.workspace.request('data.merge', { baselineJson: originalJson })`；参数是 JSON 字符串，不是路径或后来重新读取的文件。缺少、空白或无效的基线一律返回 `invalid`，不存在两方整份选择。`general.data_merge_conflicts` 的 `ask`（默认）、`external`（外部优先）、`internal`（内部优先）只处理真正冲突的字段，保留其他独立修改；正文按字段而不是逐行合并。MCP 的请求仍受 8,000,000 字符上限约束。
+
+对真正的三方冲突选择后，宿主会核对本次读取的外部文件未再次变化，再通过原子写入器提交；冲突归档在提交前完成。合并操作返回 `pending` 时通过 `get_data_reload_status` 查询最终结果；请求失败不改变已验证的内存状态，也不额外暂停普通保存。无插件 DLL 热替换；正常 Todo / Note 编辑仍优先用领域 API。技术选型见 D-060、D-061 和 D-063；D-062 中关于普通保存暂停/指纹的选择已废止。系统终止不执行最后保存，普通用户主动退出若必要保存失败则取消退出。

@@ -305,6 +305,11 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
                 close() { return request('popups.close'); }
               });
               window.papertodo = Object.freeze({
+                settingsApi: Object.freeze({
+                    list(category) { return request('appSettings.list', {category}); },
+                    get(id) { return request('appSettings.get', {id}); },
+                    set(id, value) { return request('appSettings.set', {id, value}); }
+                }),
                 noteAssets,
                 popups,
                 surface: 'body',
@@ -381,7 +386,9 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
                     try { listener(message.event); } catch { }
                   }
                 } else if (message?.type === 'hostSubscriptionError') {
-                  hostEventListeners.delete(message.subscriptionId);
+                  if (!message.existingSubscriptionRetained) {
+                    hostEventListeners.delete(message.subscriptionId);
+                  }
                 }
                 for (const listener of [...listeners]) {
                   try { listener(message); } catch { }
@@ -409,7 +416,7 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
             e.Cancel = true;
             if (Uri.TryCreate(e.Uri, UriKind.Absolute, out var external))
             {
-                TryOpenExternalNavigation(external);
+                WebPluginRuntimeInfrastructure.TryOpenExternalNavigation(external);
             }
             return;
         }
@@ -422,7 +429,7 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
             _activeDocumentToken = null;
         }
         _documentGeneration++;
-        ClearHostSubscriptions();
+        ResetDocumentResources();
         _documentReady = false;
         _pluginDocumentReady = false;
     }
@@ -474,7 +481,7 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
         e.Handled = true;
         if (Uri.TryCreate(e.Uri, UriKind.Absolute, out var uri))
         {
-            _ = TryOpenExternalNavigation(uri);
+            _ = WebPluginRuntimeInfrastructure.TryOpenExternalNavigation(uri);
         }
     }
 
@@ -490,7 +497,7 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
             return;
         }
 
-        if (TryOpenExternalNavigation(uri))
+        if (WebPluginRuntimeInfrastructure.TryOpenExternalNavigation(uri))
         {
             e.Cancel = true;
         }
@@ -500,27 +507,6 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
     {
         return Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
             string.Equals(uri.GetLeftPart(UriPartial.Authority), _expectedOrigin, StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static bool TryOpenExternalNavigation(Uri uri)
-    {
-        if (uri.Scheme is not ("http" or "https" or "mailto"))
-        {
-            return false;
-        }
-
-        try
-        {
-            Process.Start(new ProcessStartInfo(uri.AbsoluteUri)
-            {
-                UseShellExecute = true
-            });
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
     }
 
     private void ShowWebView()
@@ -564,7 +550,7 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
             _activeDocumentToken = null;
             _departingDocumentToken = null;
             _documentGeneration++;
-            ClearHostSubscriptions();
+            ResetDocumentResources();
         }
         webView.Loaded -= OnWebViewLoaded;
         webView.SizeChanged -= OnWebViewSizeChanged;
@@ -595,6 +581,7 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
             paperId = _context.PaperId,
             providerId = _context.ProviderId,
             apiVersion = _context.ApiVersion,
+            uiLanguage = _context.UiLanguage,
             state = ParseState(_stateJson),
             stateVersion = _context.StateVersion,
             targetStateVersion = _context.TargetStateVersion,
@@ -791,6 +778,18 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
 
         return method switch
         {
+        "appSettings.list" or
+        "appSettings.get" or
+        "appSettings.set" =>
+            WebPluginWorkspaceRequests.Execute(_context.Host, method, parameters),
+        "papers.show" or
+        "papers.hide" or
+        "papers.toggle" or
+        "papers.expand" or
+        "papers.collapse" or
+        "papers.toggleCollapsed" or
+        "papers.activate" =>
+            WebPluginWorkspaceRequests.Execute(_context.Host, method, parameters),
         "papers.list" => _context.Host.ListPapers(OptionalPayloadString(parameters, "type")),
         "papers.get" => _context.Host.GetPaper(PayloadString(parameters, "paperId")),
         "todos.list" => _context.Host.ListTodos(
@@ -835,11 +834,7 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
         var documentGeneration = _documentGeneration;
         try
         {
-            if (_hostSubscriptions.Remove(subscriptionId, out var existing))
-            {
-                existing.Dispose();
-            }
-            _hostSubscriptions[subscriptionId] = _context.Host.Subscribe(
+            var replacement = _context.Host.Subscribe(
                 new PaperTodoEventFilter
                 {
                     Kinds = ReadEventKinds(payload),
@@ -862,6 +857,9 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
                         @event = eventJson
                     });
                 });
+            _hostSubscriptions.TryGetValue(subscriptionId, out var existing);
+            _hostSubscriptions[subscriptionId] = replacement;
+            existing?.Dispose();
         }
         catch (PaperTodoPluginException ex)
         {
@@ -869,6 +867,7 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
             {
                 type = "hostSubscriptionError",
                 subscriptionId,
+                existingSubscriptionRetained = _hostSubscriptions.ContainsKey(subscriptionId),
                 error = new { code = ex.Code, message = ex.Message }
             });
         }
@@ -883,9 +882,14 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
         }
     }
 
-    private void ClearHostSubscriptions()
+    private void ResetDocumentResources()
     {
         (_context.Host as PaperBodyPluginHostApi)?.ResetExtensionUi();
+        ClearHostSubscriptions();
+    }
+
+    private void ClearHostSubscriptions()
+    {
         foreach (var subscription in _hostSubscriptions.Values)
         {
             try { subscription.Dispose(); } catch { }
@@ -893,7 +897,7 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
         _hostSubscriptions.Clear();
     }
 
-    private static HashSet<PaperTodoEventKind> ReadEventKinds(JsonElement payload)
+    internal static HashSet<PaperTodoEventKind> ReadEventKinds(JsonElement payload)
     {
         if (payload.ValueKind != JsonValueKind.Object ||
             !payload.TryGetProperty("types", out var values) ||
@@ -912,6 +916,7 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
                 "paper.deleted" => PaperTodoEventKind.PaperDeleted,
                 "todo.created" => PaperTodoEventKind.TodoCreated,
                 "todo.changed" => PaperTodoEventKind.TodoChanged,
+                "todo.reminderUpcoming" => PaperTodoEventKind.TodoReminderUpcoming,
                 "todo.deleted" => PaperTodoEventKind.TodoDeleted,
                 "note.changed" => PaperTodoEventKind.NoteChanged,
                 var unknown => throw new PaperTodoPluginException(
@@ -928,7 +933,7 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
         return result;
     }
 
-    private static HashSet<string>? ReadStringSet(JsonElement payload, string name)
+    internal static HashSet<string>? ReadStringSet(JsonElement payload, string name)
     {
         if (payload.ValueKind != JsonValueKind.Object ||
             !payload.TryGetProperty(name, out var values) ||
@@ -1019,7 +1024,7 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
         _activeDocumentToken = null;
         _departingDocumentToken = null;
         _documentGeneration++;
-        ClearHostSubscriptions();
+        ResetDocumentResources();
         ShowFailure(Strings.Format("PluginsWebProcessFailedFormat", e.ProcessFailedKind));
     }
 
@@ -1116,7 +1121,7 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
         _activeDocumentToken = null;
         _departingDocumentToken = null;
         _documentGeneration++;
-        ClearHostSubscriptions();
+        ResetDocumentResources();
         _documentReady = false;
         _pluginDocumentReady = false;
         _webViewFailed = true;
@@ -1385,7 +1390,7 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
         _activeDocumentToken = null;
         _departingDocumentToken = null;
         _documentGeneration++;
-        ClearHostSubscriptions();
+        ResetDocumentResources();
         _pendingRuntimeMessages.Clear();
         _lifetime.Cancel();
         _webViewGeneration++;
@@ -1393,3 +1398,4 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
         _lifetime.Dispose();
     }
 }
+

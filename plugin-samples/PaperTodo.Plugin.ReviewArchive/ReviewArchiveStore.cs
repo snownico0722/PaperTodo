@@ -35,9 +35,7 @@ internal static class ReviewArchiveStore
                 typeof(ReviewArchivePlugin).Assembly.Location) ?? AppContext.BaseDirectory;
             var runtimeDirectory = Path.Combine(pluginDirectory, ".runtime");
             _path = Path.Combine(runtimeDirectory, "review-archive.json");
-            _document = ReadDocument(_path) ??
-                ReadDocument(_path + ".bak") ??
-                new ReviewArchiveDocument();
+            _document = ReadDocument(_path) ?? new ReviewArchiveDocument();
         }
     }
 
@@ -464,21 +462,19 @@ internal static class ReviewArchiveStore
     {
         try
         {
-            if (!File.Exists(path))
-            {
-                return null;
-            }
             var document = JsonSerializer.Deserialize<ReviewArchiveDocument>(
                 File.ReadAllText(path),
-                JsonOptions);
-            if (document == null)
-            {
-                return null;
-            }
+                JsonOptions)
+                ?? throw new InvalidDataException(
+                    "Review archive deserialized to null.");
             NormalizeDocument(document);
             return document;
         }
-        catch
+        catch (FileNotFoundException)
+        {
+            return null;
+        }
+        catch (DirectoryNotFoundException)
         {
             return null;
         }
@@ -584,8 +580,16 @@ internal static class ReviewArchiveStore
         {
             _ = Prune(settings);
         }
-        Changed?.Invoke();
+        // Persistence belongs to the mutation, not to successful UI notifications.
         ScheduleSave();
+        foreach (Action handler in Changed?.GetInvocationList() ?? [])
+        {
+            try { handler(); }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Trace.TraceWarning("Review archive observer failed: {0}", ex.GetType().Name);
+            }
+        }
     }
 
     private static void ScheduleSave()
@@ -665,10 +669,6 @@ internal static class ReviewArchiveStore
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             var temp = path + ".tmp";
             File.WriteAllText(temp, json, new UTF8Encoding(false));
-            if (File.Exists(path))
-            {
-                File.Copy(path, path + ".bak", overwrite: true);
-            }
             File.Move(temp, path, overwrite: true);
             LastSaveError = "";
         }
@@ -695,3 +695,4 @@ internal static class ReviewArchiveStore
         });
     }
 }
+
