@@ -77,6 +77,7 @@ internal static partial class Program
             SettingsEditorBehavior();
             PostCommitFailureDoesNotReplay();
             Pump(PipeAndUnlinkBehavior());
+            Pump(ImageImportCommandBehavior());
             WebBridges();
             IsolatedPresentationBehavior();
             Console.WriteLine($"Settings API: {_checks} behavior checks passed.");
@@ -698,3 +699,4 @@ internal static partial class Program
         finally { Directory.Delete(root, true); }
     }
 }
+

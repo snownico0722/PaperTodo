@@ -398,6 +398,7 @@ internal static partial class Program
             await Until(() => !controller.IsDataReloading, "recovery after invalid explicit reload");
             Console.WriteLine("PASS explicit invalid reload does not modify disk or running state");
             McpImageLiveChecks(controller);
+            await McpImageImportProcessChecks(controller);
         }
         finally
         {
@@ -405,4 +406,5 @@ internal static partial class Program
         }
     }
 }
+
 

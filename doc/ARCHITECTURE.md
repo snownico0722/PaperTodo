@@ -27,7 +27,7 @@ PaperTodo 是 Windows 桌面“纸片”应用。当前技术路线围绕几个�
 
 ## 2. 系统形态与 ownership
 
-正常 GUI 模式由 `App` 建立一个单实例 WPF 主宿主；`AppController` 是应用级协调器。相同的 `PaperTodo.exe` 还支持独立 `--mcp` bridge 模式，该模式在 GUI 单实例协议之前分流，不拥有第二份 `AppState`。
+正常 GUI 模式由 `App` 建立一个单实例 WPF 主宿主；`AppController` 是应用级协调器。相同的 `PaperTodo.exe` 还支持独立 `--mcp` bridge 和 `--import-note-image` 单次图片导入模式，两者在 GUI 单实例协议之前分流，不拥有第二份 `AppState`。
 
 高层关系：
 
@@ -97,6 +97,8 @@ PaperTodo.exe
 ### 3.2 MCP
 
 `--mcp` 是同一可执行文件的独立 bridge 模式。它在 GUI Mutex 之前分流，通过 stdio 暴露 MCP server；GUI 主宿主内部的 MCP runtime 由 `AppController` 管理。
+
+`--import-note-image --paper-id <id> [--image-name <name>]` 由 `McpImageImportCommand` 在独立进程中接收有界的原始二进制 stdin，编码后复用 `McpPipeClient` 调用 `insert_note_image`。它先查询目标以绑定当前工作区，再读取输入并使用同一 client 提交；接收期间工作区变化直接拒绝，不自动重绑或重放写入。原始数据只在程序间流转，stdout 仅输出图片 ID 与引用。此入口不读取外部文件/网址、不启动 GUI、不自行开启权限；GUI 侧继续统一检查 MCP 权限，并通过 `PaperCommandService` / `NoteImageStore` 保存。
 
 Codex CLI Bridge 通过单次 CLI 配置连接同一可执行文件的 stdio bridge；勾选 `allowMcp` 后，任务需要 MCP 且 MCP 或所需权限未开启时可发送 `--enable-mcp-for-codex` 单实例命令。GUI 主宿主重新检查插件实际运行状态和当前设置后，一次性开启 MCP 总开关、空白/追加写入、完整写入和直接删除权限。该命令等待主实例的实际执行结果：退出码 0 表示宿主执行成功，1 表示宿主拒绝或执行失败，2 表示主实例不存在或未收到确认；传输失败不重放已经发送的命令。没有现成 GUI 主实例时不启动或恢复纸片；普通 PaperTodo 功能开关（例如待办关联纸片）不由该命令自动修改。
 
@@ -560,4 +562,5 @@ same AvalonEdit TextView
 - Full 固定槽位对应的引用竖线直接读取 TextView 的实际坐标；有序列表的续行对齐及 Basic/Enhanced 定位保持原行为。省略 `>` 的惰性续行由 `QuoteIndentElement` 占位，并与真实引用共用“引用槽宽 + 原生空格宽”；该元素仍可合并消费同偏移的塌缩语法，保持一份源码和光标边界。
 - 图片 `i:` 协议、URL 打开白名单、原生保存仍属于 PaperTodo host concern；图片是否位于 code/container 等 Markdown 语义由同一 Markdig snapshot 决定。启动图片 GC 额外采用保守保护扫描，允许多保留但不因 parser 分歧误删 blob。
 - `MarkdownFencedCodeScanner` 只保留在“边界发现/受限预览”角色：Edge Mini 的有限导航近似以及大 Note incremental fence-window discovery 可以使用；它不是正文、持久化或数据回收的 Markdown authority，也不扩展成第二套 container-aware Markdown parser。
+
 
