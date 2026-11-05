@@ -190,7 +190,9 @@ public sealed partial class AppController
             Math.Max(PaperLayoutDefaults.CapsuleWidth, targetBox.WidthDip),
             decision.Kind == EdgeFreeQueueDropKind.Move
                 ? targetBox.Collapsed ? 1 : layout.Groups[0].PaperIds.Length + 1
-                : layout.Groups[0].PaperIds.Length, DeepCapsuleGap);
+                : layout.Groups[0].PaperIds.Length, DeepCapsuleGap,
+            decision.Kind == EdgeFreeQueueDropKind.Move
+                ? targetBox.WidthDip : null);
     }
 
     internal void PreviewFreeMasterQueueDropGhost(
