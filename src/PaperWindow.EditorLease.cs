@@ -13,6 +13,7 @@ public sealed partial class PaperWindow
     internal ExpandedEditorWindow? ExpandedEditorHostWindow => _expandedEditorHostWindow;
     internal string ExpandedEditorTitle => _controller.PaperTitleText(_paper);
     internal bool IsExpandedEditorHosted => _expandedEditorVisualLease != null;
+    internal bool ExpandedEditorShouldTopmost => _paper.AlwaysOnTop;
     private FrameworkElement InteractionRoot => IsExpandedEditorHosted ? _shell : this;
     private Window InteractionWindow => (_expandedEditorHostWindow as Window) ?? this;
 
@@ -40,6 +41,9 @@ public sealed partial class PaperWindow
         _expandedEditorVisualLease = lease;
         _expandedEditorHostWindow = host;
         _isExpandedEditorMode = true;
+        host.SetPaperTopmost(_paper.AlwaysOnTop);
+        RefreshCloseButton();
+        ApplyPaperChromePresentation();
         try
         {
             HideWithoutGeometrySave();
@@ -186,7 +190,7 @@ public sealed partial class PaperWindow
             _topBarVisibility = owner._topBarHost?.Visibility ?? Visibility.Visible;
         }
 
-        internal void Return(bool restoreDesktop)
+        internal void Return(bool restoreDesktop, Window? keepBehind = null)
         {
             var owner = _owner;
             if (owner == null) return;
@@ -207,6 +211,7 @@ public sealed partial class PaperWindow
             owner._expandedEditorVisualLease = null;
             owner._expandedEditorHostWindow = null;
             owner._isExpandedEditorMode = false;
+            owner.RefreshCloseButton();
             if (!owner._containerGrid.Children.Contains(owner._shell))
                 owner._containerGrid.Children.Add(owner._shell);
             if (owner._topBarHost != null)
@@ -227,7 +232,12 @@ public sealed partial class PaperWindow
             {
                 var activated = owner.ShowActivated;
                 owner.ShowActivated = false;
-                try { owner.MoveWindowWithoutGeometrySave(owner.Show); }
+                try
+                {
+                    owner.MoveWindowWithoutGeometrySave(owner.Show);
+                    if (keepBehind != null)
+                        WindowNative.TryPlaceWindowBehindWithoutActivation(owner, keepBehind);
+                }
                 finally { owner.ShowActivated = activated; }
             }
         }
