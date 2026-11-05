@@ -13,6 +13,21 @@ public sealed partial class AppController
         TimeSpan.FromMinutes(1);
     private static readonly TimeSpan TodoReminderMinimumTimerInterval =
         TimeSpan.FromMilliseconds(250);
+    private static readonly TimeSpan ReminderAdvanceNotice = TimeSpan.FromSeconds(5);
+
+    // One short-lived token per pending Todo occurrence, invalidated by edits/rescheduling.
+    // Tokens do not persist: overdue reminders after startup use the usual host notification.
+    private sealed class AdvanceReminderNotice(PaperData paper, PaperItem item, DateTimeOffset dueAt)
+    {
+        public PaperData Paper { get; } = paper;
+        public PaperItem Item { get; } = item;
+        public DateTimeOffset DueAt { get; } = dueAt;
+        public Guid NotificationId { get; } = Guid.NewGuid();
+        public bool SuppressDefault { get; set; }
+    }
+
+    private readonly Dictionary<PaperItem, AdvanceReminderNotice> _advanceReminderNotices =
+        new(ReferenceEqualityComparer.Instance);
     private SoundPlayer? _todoReminderCustomSoundPlayer;
     private long _todoReminderCustomSoundLength = -1;
     private DateTime _todoReminderCustomSoundWriteTimeUtc;
@@ -49,6 +64,41 @@ public sealed partial class AppController
         RefreshTodoReminderSchedule();
     }
 
+    private void PruneAdvanceReminderNotices()
+    {
+        foreach (var notice in _advanceReminderNotices.Values.ToArray())
+        {
+            if (!State.ExperimentalTodoReminders || !TodoReminderPolicy.IsPending(notice.Item) ||
+                notice.Item.ReminderAt != notice.DueAt ||
+                !State.Papers.Contains(notice.Paper) || !notice.Paper.Items.Contains(notice.Item))
+                _advanceReminderNotices.Remove(notice.Item);
+        }
+    }
+
+    // Once an advance notice was sent, schedule the actual due time, not the already
+    // elapsed five-second lead time. During retry, skip overdue items to avoid a hot loop.
+    private DateTimeOffset NextReminderWake(DateTimeOffset now, bool includeOverdue)
+    {
+        var next = DateTimeOffset.MaxValue;
+        foreach (var paper in State.Papers.Where(p => p.Type == PaperTypes.Todo))
+        {
+            foreach (var item in paper.Items.Where(TodoReminderPolicy.IsPending))
+            {
+                var dueAt = item.ReminderAt!.Value;
+                if (dueAt <= now)
+                {
+                    if (includeOverdue) return now;
+                    continue;
+                }
+                var wake = _advanceReminderNotices.ContainsKey(item)
+                    ? dueAt
+                    : dueAt - ReminderAdvanceNotice;
+                if (wake < next) next = wake;
+            }
+        }
+        return next;
+    }
+
     private void RefreshTodoReminderSchedule()
     {
         var dispatcher = Application.Current?.Dispatcher;
@@ -61,40 +111,73 @@ public sealed partial class AppController
         }
 
         StopTodoReminderTimer();
+        PruneAdvanceReminderNotices();
         if (IsExiting || !State.ExperimentalTodoReminders)
-        {
             return;
-        }
 
-        var nextReminder = State.Papers
-            .Where(paper => paper.Type == PaperTypes.Todo)
-            .SelectMany(paper => paper.Items)
-            .Where(item =>
-                !item.Done &&
-                !item.ReminderTriggered &&
-                item.ReminderAt.HasValue)
-            .Select(item => item.ReminderAt!.Value)
-            .DefaultIfEmpty(DateTimeOffset.MaxValue)
-            .Min();
-        if (nextReminder == DateTimeOffset.MaxValue)
-        {
+        var now = DateTimeOffset.Now;
+        var nextWake = NextReminderWake(now, includeOverdue: true);
+        if (nextWake == DateTimeOffset.MaxValue)
             return;
-        }
 
-        var delay = nextReminder - DateTimeOffset.Now;
+        var delay = nextWake - now;
         var interval = delay <= TodoReminderMinimumTimerInterval
             ? TodoReminderMinimumTimerInterval
             : delay >= TodoReminderMaximumTimerInterval
                 ? TodoReminderMaximumTimerInterval
                 : delay;
-        var timer = new DispatcherTimer(DispatcherPriority.Background)
-        {
-            Interval = interval
-        };
+        var timer = new DispatcherTimer(DispatcherPriority.Background) { Interval = interval };
         timer.Tick += OnTodoReminderTimerTick;
         _todoReminderTimer = timer;
         timer.Start();
     }
+
+    // A plugin receives this event five seconds before due (or as soon as possible if a
+    // reminder is scheduled with fewer than five seconds left). It can call the explicit
+    // suppression API before due; the normal notification is never blocked awaiting JS.
+    private void PublishUpcomingTodoReminders(DateTimeOffset now)
+    {
+        PruneAdvanceReminderNotices();
+        if (IsExiting || !State.ExperimentalTodoReminders)
+            return;
+
+        var operationId = Guid.NewGuid();
+        var events = new List<PaperTodo.Plugin.TodoReminderUpcomingEvent>();
+        foreach (var paper in State.Papers.Where(p => p.Type == PaperTypes.Todo))
+        {
+            foreach (var item in paper.Items.Where(TodoReminderPolicy.IsPending))
+            {
+                var dueAt = item.ReminderAt!.Value;
+                if (dueAt <= now || dueAt > now + ReminderAdvanceNotice ||
+                    _advanceReminderNotices.ContainsKey(item))
+                    continue;
+
+                var notice = new AdvanceReminderNotice(paper, item, dueAt);
+                _advanceReminderNotices.Add(item, notice);
+                events.Add(new PaperTodo.Plugin.TodoReminderUpcomingEvent(
+                    CaptureTodoSnapshot(paper, item), notice.NotificationId,
+                    new(Guid.NewGuid(), operationId, now, PaperTodo.Plugin.PaperTodoEventOrigin.System, null)));
+            }
+        }
+        _paperBodyPluginEvents?.PublishReminderUpcoming(events);
+    }
+
+    // Suppress only this default presentation; the Todo and reminder time are untouched.
+    // The host treats the occurrence as triggered when it reaches its due time.
+    internal bool SuppressDefaultReminderNotification(Guid notificationId)
+    {
+        if (IsExiting || !State.ExperimentalTodoReminders) return false;
+        PruneAdvanceReminderNotices();
+        var notice = _advanceReminderNotices.Values.FirstOrDefault(
+            value => value.NotificationId == notificationId);
+        if (notice == null || notice.DueAt <= DateTimeOffset.Now) return false;
+        notice.SuppressDefault = true;
+        return true;
+    }
+
+    private bool IsDefaultReminderSuppressed(PaperItem item) =>
+        _advanceReminderNotices.TryGetValue(item, out var notice) &&
+        notice.SuppressDefault && notice.DueAt == item.ReminderAt;
 
     private void OnTodoReminderTimerTick(object? sender, EventArgs e)
     {
@@ -150,6 +233,7 @@ public sealed partial class AppController
         {
             window.RefreshTodoReminderCountdowns(now);
         }
+        PublishUpcomingTodoReminders(now);
         ProcessDueTodoReminders(now);
     }
 
@@ -163,11 +247,7 @@ public sealed partial class AppController
         var due = State.Papers
             .Where(paper => paper.Type == PaperTypes.Todo)
             .SelectMany(paper => paper.Items
-                .Where(item =>
-                    !item.Done &&
-                    !item.ReminderTriggered &&
-                    item.ReminderAt is { } reminderAt &&
-                    reminderAt <= now)
+                .Where(item => TodoReminderPolicy.IsDue(item, now))
                 .Select(item => (Paper: paper, Item: item)))
             .ToList();
         if (due.Count == 0)
@@ -176,11 +256,37 @@ public sealed partial class AppController
             return;
         }
 
+        // Record pending user changes without executing plugin callbacks. They are
+        // delivered after host presentation, ahead of the system reminder transitions.
+        var publishPending = _paperBodyPluginEvents?.CapturePendingChangesForReminder();
+        Action? publishPresentation = null;
+        try
+        {
+            ProcessDueTodoReminderPresentations(now, due, ref publishPending, ref publishPresentation);
+        }
+        finally
+        {
+            // Even on a delivery failure, pending user changes must not disappear.
+            publishPending?.Invoke();
+            publishPresentation?.Invoke();
+        }
+    }
+
+    private void ProcessDueTodoReminderPresentations(
+        DateTimeOffset now, List<(PaperData Paper, PaperItem Item)> due,
+        ref Action? publishPending, ref Action? publishPresentation)
+    {
+        var suppressed = due.Where(entry => IsDefaultReminderSuppressed(entry.Item)).ToList();
+        var defaultDue = due.Where(entry => !IsDefaultReminderSuppressed(entry.Item)).ToList();
+
         var openedFirst = false;
         try
         {
-            OpenTodoReminderTarget(due[0].Paper, due[0].Item);
-            openedFirst = true;
+            if (defaultDue.Count > 0)
+            {
+                OpenTodoReminderTarget(defaultDue[0].Paper, defaultDue[0].Item);
+                openedFirst = true;
+            }
         }
         catch
         {
@@ -190,29 +296,34 @@ public sealed partial class AppController
         var balloonSurfaced = false;
         try
         {
-            balloonSurfaced = ShowTodoReminderBalloon(due);
+            if (defaultDue.Count > 0)
+                balloonSurfaced = ShowTodoReminderBalloon(defaultDue);
         }
         catch
         {
             // Keep reminders pending when their delivery path was not available.
         }
 
-        if (!openedFirst && !balloonSurfaced)
+        // Showing the first default reminder can open a previously hidden Paper.
+        // Attribute that visibility/collapse transition to the system, not a later user scan.
+        publishPresentation = defaultDue.Count > 0
+            ? _paperBodyPluginEvents?.CaptureReminderPresentationChanges(defaultDue[0].Paper, now)
+            : null;
+
+        var deliveredCount = TodoReminderPolicy.DeliveredCount(defaultDue.Count, openedFirst, balloonSurfaced);
+        if (deliveredCount == 0 && suppressed.Count == 0)
         {
             ScheduleTodoReminderRetry();
             return;
         }
 
-        // A successful multi-reminder balloon represents the whole due batch. If only the first
-        // paper could be opened, acknowledge only that first item and leave the rest pending.
-        var delivered = balloonSurfaced
-            ? due
-            : due.Take(1).ToList();
+        // Plugin-suppressed occurrences are acknowledged without host UI or sound.
+        // Other due reminders retain the existing partial-delivery and retry rules.
+        var delivered = suppressed.Concat(defaultDue.Take(deliveredCount)).ToList();
+        if (deliveredCount > 0)
+            PlayTodoReminderSound();
 
-        // Sound is an optional presentation channel. A bad custom file or unavailable system
-        // sound must never keep a successfully surfaced reminder pending.
-        PlayTodoReminderSound();
-
+        var beforeTriggered = delivered.Select(entry => CaptureTodoSnapshot(entry.Paper, entry.Item)).ToArray();
         foreach (var (paper, item) in delivered)
         {
             item.ReminderTriggered = true;
@@ -234,6 +345,10 @@ public sealed partial class AppController
             }
         }
 
+        // Freeze the whole batch before invoking plugins. A listener may synchronously edit or
+        // delete another item; its callback must not change which reminders this batch surfaced.
+        var triggered = delivered.Select(entry => CaptureTodoSnapshot(entry.Paper, entry.Item)).ToArray();
+        var publishChanges = _paperBodyPluginEvents?.CaptureTriggeredReminderChanges(beforeTriggered, triggered, now);
         SaveNow();
         if (delivered.Count < due.Count)
         {
@@ -243,6 +358,14 @@ public sealed partial class AppController
         {
             RefreshTodoReminderSchedule();
         }
+
+        // Ordinary TodoChanged callbacks run only after the host's presentation
+        // decision is final. Preserve user-before-system ordering without a hidden hook.
+        publishPending?.Invoke();
+        publishPending = null;
+        publishPresentation?.Invoke();
+        publishPresentation = null;
+        publishChanges?.Invoke();
     }
 
     private void OpenTodoReminderTarget(
@@ -395,14 +518,26 @@ public sealed partial class AppController
     private void ScheduleTodoReminderRetry()
     {
         StopTodoReminderTimer();
+        PruneAdvanceReminderNotices();
         if (IsExiting || !State.ExperimentalTodoReminders)
-        {
             return;
+
+        // Retry failed/partial delivery within thirty seconds, but honor a different
+        // reminder's earlier advance-notice or due-time wake.
+        var interval = TimeSpan.FromSeconds(30);
+        var now = DateTimeOffset.Now;
+        var nextFutureWake = NextReminderWake(now, includeOverdue: false);
+        if (nextFutureWake != DateTimeOffset.MaxValue)
+        {
+            var untilNext = nextFutureWake - now;
+            if (untilNext < interval) interval = untilNext;
         }
 
         var timer = new DispatcherTimer(DispatcherPriority.Background)
         {
-            Interval = TimeSpan.FromSeconds(30)
+            Interval = interval < TodoReminderMinimumTimerInterval
+                ? TodoReminderMinimumTimerInterval
+                : interval
         };
         timer.Tick += OnTodoReminderTimerTick;
         _todoReminderTimer = timer;

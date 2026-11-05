@@ -25,10 +25,11 @@ internal sealed class PaperBodyPluginStartupLocaleManifest
     public string? Title { get; set; }
 }
 
-internal static class PaperBodyPluginLocalization
+internal static partial class PaperBodyPluginLocalization
 {
     internal static void ValidateAndApply(PaperBodyPluginManifest manifest, CultureInfo culture)
     {
+        RestoreDiscoveredLabels(manifest);
         if (!TryResolve(manifest.Locales, culture, out var locale))
         {
             return;

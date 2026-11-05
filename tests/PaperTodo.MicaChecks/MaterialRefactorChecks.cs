@@ -1,66 +1,30 @@
-using System.Diagnostics;
+using System;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
-using System.Windows.Threading;
 using PaperTodo;
 
-// Check rendered results and capture ownership without prescribing cache hit/build counts.
+// Keep the native-surface boundary and byte-identical Aero lighting regressions.
 internal static class MaterialRefactorChecks
 {
     internal static void Run(AppController controller)
     {
-        CheckPadding();
-        CheckReliefReuse();
-        var saved = (controller.State.PaperSkin, controller.State.Theme, controller.State.ColorScheme,
-            controller.State.EnableAnimations, controller.State.MatchAuxiliaryMaterialStrength);
+        var saved = (controller.State.PaperSkin, controller.State.Theme,
+            controller.State.ColorScheme, controller.State.EnableAnimations);
         try
         {
             controller.State.Theme = "light";
             controller.State.ColorScheme = ColorSchemes.Neutral;
             controller.State.EnableAnimations = false;
-            controller.State.MatchAuxiliaryMaterialStrength = false;
             CheckNativeIsolation(controller);
-            controller.State.MatchAuxiliaryMaterialStrength = true;
-            CheckOpeningRequests(controller);
+            CheckReliefReuse();
         }
         finally
         {
-            (controller.State.PaperSkin, controller.State.Theme, controller.State.ColorScheme,
-                controller.State.EnableAnimations, controller.State.MatchAuxiliaryMaterialStrength) = saved;
+            (controller.State.PaperSkin, controller.State.Theme,
+                controller.State.ColorScheme, controller.State.EnableAnimations) = saved;
             Theme.Invalidate();
-        }
-    }
-
-    private static DesktopBackgroundCapture.Frame Frame(byte value = 37)
-    {
-        var pixels = new byte[64 * 32 * 4];
-        pixels.AsSpan().Fill(value);
-        return new(new BackgroundCaptureLayout.Scene(new Int32Rect(0, 0, 64, 32), 64, 32), pixels);
-    }
-
-    private static void CheckPadding()
-    {
-        var desktop = new Int32Rect(-8192, -4096, 16384, 8192);
-        foreach (var scale in new[] { 1d, 1.25, 1.5, 2d })
-        {
-            var dpi = new DpiScale(scale, scale);
-            var padding = BackgroundCaptureLayout.Padding(dpi);
-            Program.Assert(
-                padding / 2 >= Math.Ceiling(38 * scale),
-                "static snapshot guard fully covers the strongest Gaussian diffusion");
-            Program.Assert(
-                padding == (int)Math.Ceiling(96 * scale),
-                "static menu/capsule snapshots use one compact 96-DIP guard");
-
-            var window = new Int32Rect(-200, 100, (int)(240 * scale), (int)(160 * scale));
-            var region = new DesktopBackgroundCapture.Region(0, 0, window.Width, window.Height, padding);
-            var layout = BackgroundCaptureLayout.Create(window, region, desktop)!;
-            Program.Assert(
-                (long)layout.PixelWidth * layout.PixelHeight <= BackgroundCaptureLayout.PixelBudget,
-                "static snapshot stays inside its pixel budget");
         }
     }
 
@@ -77,8 +41,8 @@ internal static class MaterialRefactorChecks
                 window.Show(); Program.Pump();
                 window.Left += 10; window.Width += 12; Program.Pump();
                 surface.RefreshBackground();
-                Program.Assert(surface.BackgroundSessionState == null && !surface.HasMaterialHostSubscription && !surface.HasBackgroundCapture,
-                    skin + ": ordinary/native main surfaces stay completely outside software capture lifetime");
+                Program.Assert(!surface.HasMaterialHostSubscription,
+                    skin + ": ordinary and native surfaces need no auxiliary observer");
             }
             finally { window.Close(); }
         }
@@ -106,80 +70,10 @@ internal static class MaterialRefactorChecks
         Console.WriteLine($"AERO: {cases} byte-identical lighting cases.");
     }
 
-    private static void CheckOpeningRequests(AppController controller)
-    {
-        controller.State.PaperSkin = PaperSkins.Acrylic;
-        Theme.Invalidate();
-        if (!MaterialMenuOpening.NeedsBackground) throw new InvalidOperationException("Test requires composed desktop with transparency enabled.");
-        var completions = new List<TaskCompletionSource<DesktopBackgroundCapture.Frame?>>();
-        var probe = new OpeningProbe((_, _) =>
-        {
-            var completion = new TaskCompletionSource<DesktopBackgroundCapture.Frame?>(TaskCreationOptions.RunContinuationsAsynchronously);
-            completions.Add(completion);
-            return completion.Task; // Deliberately ignore cancellation like an in-flight GDI call.
-        });
-        probe.Request(true); probe.Request(false); Program.Pump();
-        Program.Assert(completions.Count == 0 && !probe.Open && !probe.Opening.IsPending,
-            "cancel-before-dispatch does not acquire a background or reopen");
-
-        probe.Request(true); Until(() => completions.Count == 1, "first pending acquisition");
-        probe.Request(false);
-        probe.Request(true); Until(() => completions.Count == 2, "replacement acquisition");
-        var stale = Frame(); completions[0].SetResult(stale); Program.Pump();
-        Program.Assert(!probe.Open && probe.Opening.IsPending &&
-            probe.Surface.BackgroundSessionState?.Visual == null,
-            "old result cannot publish into a newer opening");
-        var fresh = Frame(83); completions[1].SetResult(fresh);
-        Until(() => probe.Open, "current acquisition opens with prepared material");
-        Program.Assert(probe.Surface.BackgroundSessionState?.Bitmap is BitmapSource { IsFrozen: true } &&
-            !probe.Surface.HasBackgroundCapture,
-            "first pixels are immutable before any HWND exists and no ongoing capture remains");
-        probe.Request(false);
-
-        probe.Request(true); Until(() => completions.Count == 3, "cancel-after-completion request");
-        var ready = Frame(); completions[2].SetResult(ready); probe.Request(false); Program.Pump();
-        Program.Assert(!probe.Open, "a queued completion cannot undo a dismissal");
-
-        probe.Request(true); Until(() => completions.Count == 4, "unload pending request");
-        probe.RaiseEvent(new RoutedEventArgs(FrameworkElement.UnloadedEvent));
-        var unloaded = Frame(); completions[3].SetResult(unloaded); Program.Pump();
-        Program.Assert(!probe.Open && !probe.Opening.IsPending,
-            "an unloaded owner is not reopened by a late immutable frame");
-
-        var timed = new OpeningProbe((_, _) => Task.FromException<DesktopBackgroundCapture.Frame?>(new TimeoutException("injected")));
-        timed.Request(true); Until(() => timed.Open, "timeout produces a stable fallback");
-        Program.Assert(timed.Surface.SuppressStaticBackgroundForOpening && timed.Surface.BackgroundSessionState?.Visual == null,
-            "failed acquisition opens once with a stable fallback, not a later material flash");
-        timed.Request(false);
-        probe.Surface.PrepareMenuBackground(null, false);
-        timed.Surface.PrepareMenuBackground(null, false);
-        Console.WriteLine("PASS menu tickets: pre-dispatch cancel, replacement, late result, post-capture cancel, unload and timeout.");
-    }
-
-    private sealed class OpeningProbe : FrameworkElement
-    {
-        private static readonly DependencyProperty OpenProperty = DependencyProperty.Register("Open", typeof(bool), typeof(OpeningProbe),
-            new FrameworkPropertyMetadata(false, null, (d, value) => ((OpeningProbe)d).Opening.Coerce((bool)value)));
-        internal readonly SkinBorder Surface = new() { IsMenu = true, Width = 240, Height = 160 };
-        internal readonly MaterialMenuOpening Opening;
-        internal bool Open => (bool)GetValue(OpenProperty);
-        internal OpeningProbe(Func<Int32Rect, CancellationToken, Task<DesktopBackgroundCapture.Frame?>> capture) =>
-            Opening = new MaterialMenuOpening(this, OpenProperty, () => Surface, () => null, () => PlacementMode.MousePoint, capture);
-        internal void Request(bool open) => SetCurrentValue(OpenProperty, open);
-    }
-
     private static byte[] Pixels(BitmapSource bitmap)
     {
         var data = new byte[bitmap.PixelWidth * bitmap.PixelHeight * 4];
-        bitmap.CopyPixels(data, bitmap.PixelWidth * 4, 0); return data;
-    }
-    private static void Until(Func<bool> predicate, string reason)
-    {
-        var deadline = Stopwatch.StartNew();
-        while (!predicate() && deadline.ElapsedMilliseconds < 6000)
-        {
-            Program.Pump(); Thread.Sleep(1);
-        }
-        Program.Assert(predicate(), reason);
+        bitmap.CopyPixels(data, bitmap.PixelWidth * 4, 0);
+        return data;
     }
 }

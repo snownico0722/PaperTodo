@@ -1,5 +1,8 @@
 # PaperTodo 插件开发
 
+工作区状态还包含 `WorkspaceNumber`、`DataFileName` 和 `FollowsMainSettings`。获准外部编辑前先查询活动文件名：`data.json` 始终是主工作区，`reload_data` / `merge_data` 只处理当前活动工作区，不负责切换。
+
+
 **语言：简体中文 | [English](README.md)**
 
 本文是 **当前 PaperTodo 插件开发手册**。以当前可用的插件合同、运行边界、构建方式和示例为主，并提供精简的 API 版本历史与兼容摘要；完整历史取舍仍以 `doc/DECISIONS.md` 为准。
@@ -27,7 +30,7 @@ MinimumSupportedApiVersion <= plugin.apiVersion <= CurrentApiVersion
 | 1.x | 旧版 / 不再兼容 | 早期 paper-body 合同。已确认的里程碑包括：1.2 将插件 settings/state 移入独立插件数据域；1.8 加入由宿主持有窗口/队列/输入 authority 的 Edge Mini。 |
 | 2.0 | 实验过渡 / 不再兼容 | 引入宿主绘制 Top Bar 等方向，但仍同时存在 provider app Runtime 与 per-Paper Web Runtime；后续被 2.1 收敛路线替代，没有保留加载兼容。 |
 | 2.1 | 当前最低兼容 | 后台统一为单 provider Runtime，Body/Mini 只做前端；包括 Workspace 的 Paper/Todo/Note、Runtime state/Papers、宿主绘制 Top Bar/Todo contribution、全局快捷键与自定义 shortcut action、纸片菜单、笔记图片读取和临时弹窗。 |
-| 2.2 | 当前最新 | 新增跨纸片显示控制、公共软件 Settings API（`settings.read/update`）、settings `type: "action"` 命令按钮，以及 `startupPaper.presentation: "hidden"`。新插件默认面向 2.2。 |
+| 2.2 | 当前最新 | 新增跨纸片显示控制、公共软件 Settings API（`settings.read/update`）、settings `type: "action"` 命令按钮、`startupPaper.presentation: "hidden"`、提醒触发状态/事件及 Web Runtime 宿主事件订阅。新插件默认面向 2.2。 |
 
 **升版规则：**当前 minor 正式发布后，只要新增向后兼容、插件可观察的新合同（manifest 字段/类型、permission、事件、公开 API surface 或新语义），下一批就升 minor；纯宿主内部实现、性能优化和 bugfix 不升。破坏已有插件合同才升 major。同一个尚未发布的 minor 可以一起收纳多项兼容新增，不需要每加一个字段就连续制造多个版本号。
 
@@ -549,18 +552,15 @@ manifest 可声明：
 
 ```text
 papers.read
-papers.observe
 papers.create
 papers.delete
 
 todos.read
-todos.observe
 todos.append
 todos.update
 todos.delete
 
 notes.read
-notes.observe
 notes.append
 notes.replace
 ```
@@ -593,7 +593,7 @@ notes.write
 - `notes.write` 的 append/fill-blank 使用 `notes.append`，replace 使用 `notes.replace`；
 - paper session 插件不能删除承载当前 active session 的 paper；Runtime 没有 host paper，因此不受这条单纸片自删除限制。
 
-Observe 权限独立于 Read 权限。没有对应 read 权限时，事件仍可按 observe 权限投递，但敏感字段会被宿主裁剪。
+读取权限允许查询同类数据，也允许订阅对应事件。旧插件的 `papers.observe`、`todos.observe` 和 `notes.observe` 声明仍然有效，但仅保留事件订阅能力，不授予主动查询权限，事件中缺少 read 权限的敏感内容继续被脱敏。
 
 Native paper session：
 
@@ -620,7 +620,51 @@ const dispose = papertodo.onHostEvent(
 );
 ```
 
-可订阅：`paper.created`、`paper.changed`、`paper.deleted`、`todo.created`、`todo.changed`、`todo.deleted`、`note.changed`。会话失效或销毁后订阅自动失效；插件自己也应及时 unsubscribe 不再需要的监听。
+可订阅：`paper.created`、`paper.changed`、`paper.deleted`、`todo.created`、`todo.changed`、`todo.deleted`、`note.changed`，以及 API 2.2 的 `todo.reminderUpcoming` 前置事件；提醒实际触发通过已有的 `todo.changed` 表达。会话失效或销毁后订阅自动失效；插件自己也应及时 unsubscribe 不再需要的监听。
+
+### 提醒 API（2.2）
+
+PaperTodo 在到期前**约 5 秒**发出一次前置事件（Upcoming 与防抖后的用户变更事件不保证全局严格顺序；快照反映通知时的当前状态，用户事件的 `occurredAt` 不一定是实际编辑时间），插件可取消本次默认展示；到期后的状态变化仍由普通 `TodoChanged` 表达。
+
+- `todos.read` 允许查询待办与订阅 Native `PaperTodoEventKind.TodoReminderUpcoming`（Web：`todo.reminderUpcoming`）。新事件包含 `todo` 快照、一次性的 `notificationId` 及 System 来源的 `metadata`，不是提醒已触发的通知；旧的 `todos.observe` 仅保留旧事件兼容，不能订阅这个新前置事件。
+- 宿主在预定时间前 5 秒尝试发送前置事件。若创建/改期时剩余不到 5 秒，会尽快发送；启动恢复时已过期的提醒直接进入宿主默认处理，不保证补发前置事件。同一轮提醒最多发一次，改期后旧 `notificationId` 失效。
+- 要接管默认展示，插件还需 `todos.update`，在到期前调用 Native `(context.Workspace as IPaperReminderNotificationControl)?.SuppressDefaultReminderNotification(notificationId)` 或 Web `papertodo.workspace.request('reminders.suppressDefault', { notificationId })`。成功返回 `true`；过期/无效返回 `false`。取消只跳过本次 PaperTodo 默认纸片/托盘通知与提示音，**不会删除、改期或反复重试这条待办**。多个插件都能收到事件，但宿主不协调它们自己的提示。
+- PaperTodo 不会阻塞 UI 线程等待插件应答：五秒窗口允许 Web 插件异步回复；插件未回复、崩溃或未取消时，宿主照常提示。用户停用提醒、完成/取消/改期待办时，旧取消令牌自动无效。
+- 提醒被宿主展示成功或被插件取消默认展示后，`reminderTriggered` 都变为 `true`，并发送 System 来源的 `TodoChanged`。按 `!before.reminderTriggered && after.reminderTriggered` 过滤本次触发；仅凭 `changedFields.Reminder` 不够，因为修改时间也会变化。
+- 普通用户修改事件在宿主完成本轮提醒之后再通知插件，**不是前置拦截钩子**。提醒事件尽力实时投递，无离线重放和跨重启的恰好一次保证；插件展示自己的通知失败后，宿主不会重新弹窗。
+- 长期通知集成放在插件 Runtime；Web Body 和 Runtime 可用 `onHostEvent`，Web Mini 不支持。Native 回调应避免阻塞 UI 线程。
+
+Native Runtime 前置钩子示例（需 `todos.read` + `todos.update`）：
+
+```csharp
+var stop = context.Workspace.Subscribe(
+    new PaperTodoEventFilter { Kinds = new HashSet<PaperTodoEventKind>
+        { PaperTodoEventKind.TodoReminderUpcoming } },
+    evt =>
+    {
+        if (evt is TodoReminderUpcomingEvent upcoming &&
+            context.Workspace is IPaperReminderNotificationControl control)
+        {
+            // 启动桌宠自己的提示流程；只有决定接管时才取消默认通知。
+            control.SuppressDefaultReminderNotification(upcoming.NotificationId);
+        }
+    });
+```
+
+Web Runtime 示例（需 `permissions: ["todos.read", "todos.update"]`）：
+
+```js
+const stop = papertodo.onHostEvent(['todo.reminderUpcoming'], async event => {
+  const { notificationId, todo } = event;
+  // 插件决定负责展示这条 todo 后，抢在到期前取消默认通知：
+  const suppressed = await papertodo.workspace.request(
+    'reminders.suppressDefault', { notificationId });
+  if (suppressed) {
+    // 桌宠展示自己的提示；宿主不再显示默认通知。
+  }
+});
+// 不再监听时调用 stop()。
+```
 
 纸片、待办、笔记与图片查询只读当前模型/资产，不提交或强制同步编辑器；最新输入可能等待原有编辑/保存流程后再可见。外部写入如果目标就是同一张内置 Markdown，会先提交这张纸片尚未写回模型的用户文字，再执行插件/MCP修改；修改其他纸片不会因此调用无关第三方 Body 的 `Commit()`。核心 `data.json` 保存仍按正常规则同步内置 Markdown，不把第三方 Body `Commit()` 当作全局保存钩子。MCP 新建/追加同样允许设置新待办的初始属性，不额外要求完整写入；修改已有内容的权限不变。
 
@@ -1149,7 +1193,7 @@ papertodo.request(method, params);    // root transport
 papertodo.onEvent(listener);
 ```
 
-Runtime 的 `initialize` 包含 `settings`、provider Runtime `state` 及其版本、当前 provider `papers` 快照；后续设置变更会收到 `settingsChanged`，Paper 增删和 Body 消息会收到 `paperEvent`。它没有 `paper`、`body`、`mini`、`saveState` 等 paper-session API，也没有 Web `onHostEvent` 订阅 bridge。
+Runtime 的 `initialize` 包含 `settings`、provider Runtime `state` 及其版本、当前 provider `papers` 快照；后续设置变更会收到 `settingsChanged`，Paper 增删和 Body 消息会收到 `paperEvent`。API 2.2 另提供 `papertodo.onHostEvent(types, listener, options)` 订阅 Workspace 事件，复用 Native 的 observe/read 权限。它没有 `paper`、`body`、`mini`、`saveState` 等 paper-session API。
 
 `papertodo.papers.postBody(...)` / Native `Papers.PostToBody(...)` 只尝试交给当前 live Body，返回值表示该 Body 当前是否接受（Web Body 可能暂存至 document ready）；它不是持久消息队列，也不是业务 ACK 或最终送达保证。
 
@@ -1281,3 +1325,15 @@ Native 插件是 fully trusted / unsandboxed .NET/WPF 代码，与 PaperTodo 当
 - Edge Mini 不依赖键盘输入；
 - 只声明实际需要的 permissions / `runtime`；
 - 切换 provider、删除 paper 时 0↔1 Runtime ownership 正确；退出 PaperTodo 后 Runtime 与 Global Top Bar 完整撤销。
+
+## data.json 显式重载（宿主 2.2 能力）
+
+Native Body / Runtime 使用 `Workspace.ReloadData()` / `Workspace.GetDataReloadStatus()`；Web Body / Mini / Runtime 使用 `papertodo.workspace.request('data.reload', {})` 和 `papertodo.workspace.request('data.status', {})`。MCP 工具对应 `reload_data`（需要完整写入权限）和只读的 `get_data_reload_status`。
+
+插件侧调用 `ReloadData()` / `MergeData()` 或 Web 的 `data.reload` / `data.merge` 必须在插件清单声明高权限 `data.import`；`data.status` 无需此权限。MCP 仍使用原有完整写入权限控制。
+
+宿主**不监听或轮询磁盘文件，也不在普通自动保存时比较外部文件指纹**。`reload_data` 主动接受校验后的活动工作区数据，可能覆盖尚未保存的内存修改；无效或缺失输入直接报告错误。没有显式请求时，普通保存保持原行为，可能覆盖外部编辑。显式重载会使此前已排队的旧保存失效，关机/崩溃仍不会执行最后强存。
+
+可选的 `merge_data`（需要 MCP 完整写入权限）仅提供**有真实原始基线的三方合并**。外部工具必须保留开始编辑时实际读到的完整 JSON，传给 MCP `merge_data(baseline_json: originalJson)`、Native `Workspace.MergeData(originalJson)` 或 Web `papertodo.workspace.request('data.merge', { baselineJson: originalJson })`；参数是 JSON 字符串，不是路径或后来重新读取的文件。缺少、空白或无效的基线一律返回 `invalid`，不存在两方整份选择。`general.data_merge_conflicts` 的 `ask`（默认）、`external`（外部优先）、`internal`（内部优先）只处理真正冲突的字段，保留其他独立修改；正文按字段而不是逐行合并。MCP 的请求仍受 8,000,000 字符上限约束。
+
+对真正的三方冲突选择后，宿主会核对本次读取的外部文件未再次变化，再通过原子写入器提交；冲突归档在提交前完成。合并操作返回 `pending` 时通过 `get_data_reload_status` 查询最终结果；请求失败不改变已验证的内存状态，也不额外暂停普通保存。无插件 DLL 热替换；正常 Todo / Note 编辑仍优先用领域 API。技术选型见 D-060、D-061 和 D-063；D-062 中关于普通保存暂停/指纹的选择已废止。系统终止不执行最后保存，普通用户主动退出若必要保存失败则取消退出。

@@ -341,13 +341,13 @@ internal static class Program
                     }
                     finally { controller.State.HideSurfaceOutline = savedOutline; }
                 });
-                Check("material translation invariants", () => MaterialDragChecks.Run(controller));
+                Check("Aero translation invariants", () => MaterialDragChecks.Run(controller));
                 controller.State.PaperSkin = null; // Exercise the pre-skin Mica settings format.
                 controller.State.EnableAnimations = false;
                 controller.State.UseCapsuleMode = true;
                 controller.State.UseDeepCapsuleMode = false;
                 controller.State.ExperimentalInactivePaperOpacity = false;
-                Check("material isolation, relief pixels and capture handoffs", () => MaterialRefactorChecks.Run(controller));
+                Check("native material isolation and Aero lighting reuse", () => MaterialRefactorChecks.Run(controller));
                 Check("readable opaque semantic palette in light and dark", () =>
                 {
                     controller.State.ColorScheme = "mica";
@@ -393,13 +393,11 @@ internal static class Program
                 {
                     Check("experimental skins", () => SkinChecks.Run(controller));
                     Check("curved material lighting and parallax", () => MaterialStudyChecks.Run(controller));
-                    Check("shared live capsule and popup material diffusion and lifecycle", () => SharedMaterialChecks.Run(controller));
                     Check("material-specific colors and stable preview opacity", () => MaterialPaletteChecks.Run(controller));
                 }
-                Check("retained scene efficiency and source ownership", () => MaterialPipelineChecks.Run(controller));
-                Check("stable sampling, retained settings shell and cancelled menu opening", () => MaterialPresentationChecks.Run(controller));
+                Check("immediate menus, native settings and real right-click interactions", () => MaterialPresentationChecks.Run(controller));
                 Check("paper form rendering and native fallback publication", () => FormTransitionRenderingChecks.Run(controller));
-                Check("paper form animations defer material capture until the endpoint", () => PaperFormMaterialChecks.Run(controller));
+                Check("paper form animation and native material endpoints", () => PaperFormMaterialChecks.Run(controller));
                 // Final DWM desktop screenshots are not deterministic on shared Windows CI:
                 // WPF can be rendered and active without having been committed to CopyFromScreen.
                 // The native behavior checks above and WPF raster tests remain; see D-057.

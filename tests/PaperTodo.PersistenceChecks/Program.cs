@@ -6,6 +6,7 @@ using PaperTodo;
 
 var checks = new (string Name, Action Run)[]
 {
+    ("note-html-embeds-images-and-rejects-missing-assets", NoteHtmlChecks.Run),
     ("primary-save-faults-keep-a-loadable-generation", PrimarySaveFaultsKeepALoadableGeneration),
     ("backup-refresh-fault-keeps-old-backup", BackupRefreshFaultKeepsOldBackup),
     ("corrupt-primary-never-refreshes-backup", CorruptPrimaryNeverRefreshesBackup),
@@ -498,7 +499,7 @@ internal sealed class FailingRecordingWriter : IDurableAtomicFileWriter
     public void Write(
         string targetPath,
         byte[] bytes,
-        Func<string, bool>? validateTemp = null)
+        Func<string, bool>? validateTemp = null, Action? beforeReplace = null)
     {
         lock (_gate)
         {
@@ -519,7 +520,7 @@ internal sealed class RecordingWriter : IDurableAtomicFileWriter
     public void Write(
         string targetPath,
         byte[] bytes,
-        Func<string, bool>? validateTemp = null)
+        Func<string, bool>? validateTemp = null, Action? beforeReplace = null)
     {
         WriteCount++;
     }

@@ -1,0 +1,8 @@
+run,aggregate_file,disposition,actions,common_prefix,valid_capture,drops,runtime,package_sha256,transaction_count,transaction_p50_ms,transaction_p90_ms,transaction_p95_ms,transaction_p98_ms,transaction_p99_ms,owner_intervals,owner_p95_ms,cpu_seconds
+methods-async-r1,method-performance-r1.json,known_invalid_implementation,36,36,True,0,10.0.12,56FABDFA561A6E051A3E0CABC9A1C7473847AE6EF6E5B19478C35CDC5D702D50,36,2.196,53.054,59.785,72.453,72.453,19,18.2316,7.265625
+methods-async-v3-r1,method-performance-final.json,isolated_not_adopted,36,36,True,0,10.0.12,EC9032A59DCACD8BB081C0D2484C85924A8A22FFE90402937E524538DC2B71CD,36,2.459,12.391,15.717,26.825,26.825,468,13.4513,8.25
+methods-async-v3-r2,method-performance-final.json,isolated_not_adopted,36,36,True,0,10.0.12,EC9032A59DCACD8BB081C0D2484C85924A8A22FFE90402937E524538DC2B71CD,36,2.506,11.921,18.983,23.358,23.358,503,13.6352,7.453125
+methods-base-r1,method-performance-final.json,corrected_product_baseline,36,36,True,0,10.0.12,D5B7F19300D44A7340CD5F1D6777F1A7F7DCC5BC0B6BF9FF67AA482ADD10A687,36,2.832,47.974,52.938,59.392,59.392,505,13.6765,8.21875
+methods-base-r2,method-performance-final.json,corrected_product_baseline,36,36,True,0,10.0.12,D5B7F19300D44A7340CD5F1D6777F1A7F7DCC5BC0B6BF9FF67AA482ADD10A687,36,3.213,49.043,53.225,57.031,57.031,493,13.5868,7.53125
+methods-base-r3,method-performance-final.json,corrected_product_baseline,36,36,True,0,10.0.12,D5B7F19300D44A7340CD5F1D6777F1A7F7DCC5BC0B6BF9FF67AA482ADD10A687,36,3.167,50.484,61.024,61.208,61.208,506,13.937,7.515625
+methods-input-r1,method-performance-final.json,isolated_not_adopted,36,36,True,0,10.0.12,C0BCCB77E8A9582703B6ADE5978C48ABF7EB84251648BB0D7DB4DBAA58E25D14,36,3.292,50.858,51.197,58.783,58.783,502,14.1364,7.65625
