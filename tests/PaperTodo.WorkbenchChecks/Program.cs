@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -14,7 +15,7 @@ internal static class Program
 {
     private const BindingFlags Private = BindingFlags.Instance | BindingFlags.NonPublic;
     private const string Marker = ".papertodo-workbench-fixture";
-    private static readonly string[] Cases = ["surface", "workspaces", "readonly"];
+    private static readonly string[] Cases = ["surface", "workspaces", "readonly", "desktop"];
 
     [STAThread]
     private static int Main(string[] args)
@@ -44,7 +45,7 @@ internal static class Program
         try
         {
             foreach (var fixtureName in Cases) RunIsolated(fixtureName);
-            Console.WriteLine("PASS 3 isolated workbench lifecycle fixtures"); return 0;
+            Console.WriteLine($"PASS {Cases.Length} isolated workbench lifecycle fixtures"); return 0;
         }
         catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
     }
@@ -89,6 +90,7 @@ internal static class Program
     };
     private static async Task Run(string name)
     {
+        if (name == "desktop") { await RunDesktopRestore(); return; }
         if (name == "readonly")
         {
             var path = Path.Combine(AppContext.BaseDirectory, "data2.json");
@@ -159,6 +161,17 @@ internal static class Program
                    search.Background == Brushes.Transparent &&
                    search.BorderThickness == new Thickness(1),
                 "Workbench search did not use the rounded external-open input style");
+            var openSearch = typeof(WorkbenchWindow).GetMethod("TryFocusSearch", Private)!;
+            search.Text = "workbench";
+            search.Select(0, 0);
+            Assert((bool)openSearch.Invoke(workbench, [Key.F, ModifierKeys.Control])! &&
+                search.IsKeyboardFocusWithin && search.SelectionLength == search.Text.Length,
+                "Ctrl+F did not focus and select the workbench search");
+            Assert((bool)openSearch.Invoke(workbench, [Key.F, ModifierKeys.Control | ModifierKeys.Shift])! &&
+                !(bool)openSearch.Invoke(workbench, [Key.F, ModifierKeys.None])!,
+                "Workbench search shortcuts have the wrong modifiers");
+            search.Clear();
+
             var left = (StackPanel)Member(workbench, "_layoutCommands");
             var right = (StackPanel)Member(workbench, "_rightCommands");
             Assert(Grid.GetColumn(search) == 1 && left.Children.Count == 2 &&
@@ -238,6 +251,19 @@ internal static class Program
             move.RaiseEvent(new DragCompletedEventArgs(0, 0, false) { RoutedEvent = Thumb.DragCompletedEvent });
             Assert(undo.Count == originalUndoCount, "Clicking a title created a layout undo entry");
 
+            // A model event during a title drag must survive the 180 ms refresh
+            // timer; the canceled/no-move path must also drain the pending work.
+            move.RaiseEvent(new DragStartedEventArgs(0, 0) { RoutedEvent = Thumb.DragStartedEvent });
+            var newPaper = controller.CreatePaper(PaperTypes.Note, show: false);
+            Assert(newPaper != null, "Cannot create paper while dragging");
+            await Task.Delay(300);
+            Assert(workbench.HostedPaperCount == 3, "Drag unexpectedly rebuilt the active desk");
+            move.RaiseEvent(new DragCompletedEventArgs(0, 0, false) { RoutedEvent = Thumb.DragCompletedEvent });
+            await Until(() => workbench.HostedPaperCount == 4, "Model refresh was lost during drag");
+            controller.DeletePaper(newPaper!);
+            await Until(() => workbench.HostedPaperCount == 3, "Removed paper was not refreshed");
+            Assert(undo.Count == originalUndoCount, "No-move drag with refresh created undo");
+
             workbench.SuspendWorkspace();
             controller.CloseWorkbenchForDesktopAction();
             Assert(controller.HasWorkbench, "Suspended workbench was closed by an internal reload action");
@@ -301,6 +327,51 @@ internal static class Program
         }
         controller.SaveNow(sync: true);
     }
+    private static async Task RunDesktopRestore()
+    {
+        var initial = FixtureState();
+        initial.UseCapsuleMode = false; initial.UseDeepCapsuleMode = false;
+        var store = new StateStore();
+        store.SaveJsonSync(store.SerializeState(initial), 1);
+        using var controller = new AppController();
+        await controller.StartAsync(createDefaultPaper: false);
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        var desktopWindow = controller.WorkbenchPaperWindow("note-a");
+        Assert(desktopWindow.IsVisible, "Ordinary desktop paper was not visible before entering the workbench");
+        var before = controller.State.Papers.ToDictionary(p => p.Id, Geometry);
+
+        controller.ToggleWorkbench();
+        var desk = (WorkbenchWindow)Member(controller, "_workbenchWindow");
+        await Until(() => desk.HostedPaperCount == 3, "Ordinary desktop papers were not leased");
+
+        // Simulate the suspend/reborrow boundary used by a hot data reload.
+        desk.SuspendWorkspace();
+        desk.ResumeWorkspace();
+        await Until(() => desk.HostedPaperCount == 3, "Reborrow after reload failed");
+
+        // An associated, collapsed desktop paper must be navigated inside the
+        // desk without unfolding it, closing the desk or modifying desktop XY.
+        controller.OpenLinkedPaper("note-b", desk, toggleIfExcludedFromCapsules: true);
+        Assert(controller.HasWorkbench, "Linked paper navigation closed the workbench");
+        foreach (var paper in controller.State.Papers)
+            Assert(Geometry(paper) == before[paper.Id], "Linked navigation changed desktop paper geometry");
+
+        // The desktop lock is intentionally not a lock on the workbench editor.
+        desktopWindow.SetAdvancedInteractionLocked(true);
+        var shell = (UIElement)Member(desktopWindow, "_shell");
+        var args = new KeyEventArgs(Keyboard.PrimaryDevice, PresentationSource.FromVisual(desk), 0, Key.A)
+        { RoutedEvent = Keyboard.PreviewKeyDownEvent };
+        shell.RaiseEvent(args);
+        Assert(!args.Handled, "Desktop interaction lock blocked workbench keyboard input");
+
+        controller.ToggleWorkbench();
+        Assert(desktopWindow.IsVisible, "Normal desktop paper stayed hidden after reload and workbench exit");
+        Assert(((Border)Member(desktopWindow, "_advancedLockShield")).Visibility == Visibility.Visible,
+            "Desktop lock did not resume when leaving the workbench");
+        foreach (var paper in controller.State.Papers)
+            Assert(Geometry(paper) == before[paper.Id], "Workbench exit modified desktop paper geometry");
+    }
+
     private static (double X, double Y, double Width, double Height, bool IsVisible, bool IsCollapsed) Geometry(PaperData paper) =>
         (paper.X, paper.Y, paper.Width, paper.Height, paper.IsVisible, paper.IsCollapsed);
     private static object Member(object target, string name) => target.GetType().GetField(name, Private)?.GetValue(target)

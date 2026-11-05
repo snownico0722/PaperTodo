@@ -33,6 +33,7 @@ internal sealed class WorkbenchWindow : Window
     private CancellationTokenSource? _overviewCancellation;
     private long _layoutRevision;
     private string _modelSignature = "";
+    private bool _refreshPendingAfterDrag;
     private string? _focusAfterRefresh;
     private int _searchCursor;
     private Point? _panPointer;
@@ -123,6 +124,12 @@ internal sealed class WorkbenchWindow : Window
             ZoomAt(_scale.ScaleX * Math.Pow(1.15, e.Delta / 120.0), e.GetPosition(_viewport));
             e.Handled = true;
         };
+        // Capture before the borrowed editor handles the keystroke. Both Ctrl+F
+        // and the existing Ctrl+Shift+F navigate the single workbench search.
+        PreviewKeyDown += (_, e) =>
+        {
+            if (!e.Handled && TryFocusSearch(e.Key, Keyboard.Modifiers)) e.Handled = true;
+        };
         KeyDown += (_, e) =>
         {
             if (e.Key == Key.Escape && !e.Handled)
@@ -131,8 +138,6 @@ internal sealed class WorkbenchWindow : Window
                 else Close();
                 e.Handled = true;
             }
-            if (e.Key == Key.F && Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift))
-            { _search.Focus(); _search.SelectAll(); e.Handled = true; }
         };
         _refreshTimer = new DispatcherTimer(DispatcherPriority.Background, Dispatcher) { Interval = TimeSpan.FromMilliseconds(180) };
         _refreshTimer.Tick += (_, _) => { _refreshTimer.Stop(); SyncActiveScene(); };
@@ -145,6 +150,17 @@ internal sealed class WorkbenchWindow : Window
         Closing += (_, _) => { if (!_shutdown) CommitPendingTitles(); };
         Closed += (_, _) => DisposePresentation();
         SetHint(); UpdateZoomLabel();
+    }
+
+    private bool TryFocusSearch(Key key, ModifierKeys modifiers)
+    {
+        if (_closed || IsSuspended || key != Key.F ||
+            (modifiers != ModifierKeys.Control &&
+             modifiers != (ModifierKeys.Control | ModifierKeys.Shift)))
+            return false;
+        _search.Focus();
+        _search.SelectAll();
+        return true;
     }
 
     private void AddButton(string key, Action action, Panel destination) => AddSymbolButton(Strings.Get(key), action, destination);
@@ -350,11 +366,13 @@ internal sealed class WorkbenchWindow : Window
     private void QueueModelRefresh()
     {
         if (_closed || IsSuspended || _storingLayout) return;
+        if (_dragging) { _refreshPendingAfterDrag = true; return; }
         _refreshTimer.Stop(); _refreshTimer.Start();
     }
     private void SyncActiveScene()
     {
-        if (_closed || IsSuspended || _dragging || _controller.IsDataReloading) return;
+        if (_closed || IsSuspended || _controller.IsDataReloading) return;
+        if (_dragging) { _refreshPendingAfterDrag = true; return; }
         try
         {
             var snapshot = _controller.SnapshotCurrentWorkbench();
@@ -826,6 +844,14 @@ internal sealed class WorkbenchWindow : Window
         card.Bounds = bounds; Canvas.SetLeft(card.Frame, bounds.X); Canvas.SetTop(card.Frame, bounds.Y);
         card.Frame.Width = bounds.Width; card.Frame.Height = bounds.Height;
     }
+    private void ResumeDeferredModelRefresh()
+    {
+        if (!_refreshPendingAfterDrag) return;
+        _refreshPendingAfterDrag = false;
+        _refreshTimer.Stop();
+        SyncActiveScene();
+    }
+
     private void WireDrag(Card card, Thumb thumb, bool resize)
     {
         WorkbenchRect before = default;
@@ -859,6 +885,7 @@ internal sealed class WorkbenchWindow : Window
             {
                 Position(card, before);
                 if (ActiveScene is { } canceled) DrawDecorations(canceled);
+                ResumeDeferredModelRefresh();
                 return;
             }
             if ((card.Bounds.Location - before.Location).LengthSquared < 0.25 &&
@@ -867,6 +894,7 @@ internal sealed class WorkbenchWindow : Window
             {
                 Position(card, before);
                 if (ActiveScene is { } unchanged) DrawDecorations(unchanged);
+                ResumeDeferredModelRefresh();
                 return;
             }
             RememberLayout();
@@ -874,7 +902,11 @@ internal sealed class WorkbenchWindow : Window
             if (!state.Cards.TryGetValue(card.Snapshot.Id, out var placement)) state.Cards[card.Snapshot.Id] = placement = new();
             placement.X = card.Bounds.X; placement.Y = card.Bounds.Y; placement.Width = card.Bounds.Width; placement.Height = card.Bounds.Height;
             placement.Preferred = true;
-            StoreLayout(state); _ = LayoutActiveAsync(preferredId: card.Snapshot.Id);
+            StoreLayout(state);
+            // Additions/deletions during the gesture must update card membership
+            // before the geometry result is compared against the visible scene.
+            ResumeDeferredModelRefresh();
+            _ = LayoutActiveAsync(preferredId: card.Snapshot.Id);
         };
     }
 
@@ -941,6 +973,7 @@ internal sealed class WorkbenchWindow : Window
         if (_closed || IsSuspended) return;
         ClearPaperFocus(restoreCamera: false);
         IsSuspended = true; _toolbar.IsEnabled = false; _viewport.IsEnabled = false;
+        _dragging = false; _refreshPendingAfterDrag = false;
         CancelLayout(); _overviewCancellation?.Cancel(); _refreshTimer.Stop();
         foreach (var scene in _scenes.Values)
             foreach (var id in scene.Cards.Keys.ToArray()) RemoveCard(scene, id, false);

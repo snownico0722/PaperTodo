@@ -940,6 +940,10 @@ public sealed partial class AppController : IDisposable
             return;
         }
 
+        // An associated paper is already on the desk, even when its original HWND
+        // is hidden or the desktop paper is collapsed. Do not mutate desktop state.
+        if (FocusWorkbenchPaper(paper, activate: true)) return;
+
         if (_windows.TryGetValue(paper.Id, out var window))
         {
             if (IsLinkedPaperShown(paper.Id))

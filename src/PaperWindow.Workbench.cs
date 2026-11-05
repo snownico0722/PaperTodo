@@ -7,6 +7,10 @@ namespace PaperTodo;
 public sealed partial class PaperWindow
 {
     private WorkbenchBodyLease? _workbenchBody;
+    // A reload can return and immediately reborrow the visual while the original
+    // HWND remains hidden. The first lease owns the real desktop presentation.
+    private bool? _workbenchDesktopVisibleBeforeSuspension;
+    private bool? _workbenchPaperVisibleBeforeSuspension;
     internal bool IsWorkbenchHosted => _workbenchBody != null;
     private FrameworkElement InteractionRoot => IsWorkbenchHosted ? _shell : this;
     private Window InteractionWindow => _workbenchBody?.Window ?? this;
@@ -25,6 +29,9 @@ public sealed partial class PaperWindow
         _controller.CompleteEdgeCapsuleQueueCompositionProxyFor(this);
         AbortAllInteractions(InteractionAbortReason.FormChanging);
         CancelExperimentalAutoCollapse();
+        // Settle the original form before moving its visual: invalidates old
+        // completion callbacks and restores resize/visibility endpoint state.
+        SettlePaperFormPresentation();
         CancelPaperFormAnimationClocks();
         ResetTransitionVisuals();
         var lease = new WorkbenchBodyLease(this, window, destination);
@@ -54,7 +61,9 @@ public sealed partial class PaperWindow
     {
         if (attach)
         {
-            _shell.AddHandler(PreviewKeyDownEvent, new KeyEventHandler(WorkbenchInteractionLock), true);
+            _shell.AddHandler(PreviewKeyDownEvent, new KeyEventHandler(WorkbenchCopyTranslationPreviewKeyDown), true);
+            _shell.AddHandler(ContextMenuService.ContextMenuOpeningEvent,
+                new ContextMenuEventHandler(WorkbenchCopyTranslationContextMenuOpening), true);
             _shell.PreviewMouseMove += OnWindowPreviewMouseMove;
             _shell.PreviewMouseWheel += OnWindowPreviewMouseWheel;
             _shell.PreviewMouseLeftButtonUp += OnWindowPreviewMouseLeftButtonUp;
@@ -74,7 +83,9 @@ public sealed partial class PaperWindow
         }
         else
         {
-            _shell.RemoveHandler(PreviewKeyDownEvent, new KeyEventHandler(WorkbenchInteractionLock));
+            _shell.RemoveHandler(PreviewKeyDownEvent, new KeyEventHandler(WorkbenchCopyTranslationPreviewKeyDown));
+            _shell.RemoveHandler(ContextMenuService.ContextMenuOpeningEvent,
+                new ContextMenuEventHandler(WorkbenchCopyTranslationContextMenuOpening));
             _shell.PreviewMouseMove -= OnWindowPreviewMouseMove;
             _shell.PreviewMouseWheel -= OnWindowPreviewMouseWheel;
             _shell.PreviewMouseLeftButtonUp -= OnWindowPreviewMouseLeftButtonUp;
@@ -96,10 +107,12 @@ public sealed partial class PaperWindow
         if (IsWorkbenchHosted && IsVisible) HideWithoutGeometrySave();
     }
 
-    private void WorkbenchInteractionLock(object sender, KeyEventArgs e)
-    {
-        if (_advancedInteractionLocked) e.Handled = true;
-    }
+    // Desktop lock is deliberately not applied to the editing workbench.
+    // Keep original copy/translation commands on the borrowed editor surface.
+    private void WorkbenchCopyTranslationPreviewKeyDown(object sender, KeyEventArgs e)
+        => OnCopyTranslationPreviewKeyDown(this, e);
+    private void WorkbenchCopyTranslationContextMenuOpening(object sender, ContextMenuEventArgs e)
+        => OnCopyTranslationContextMenuOpening(this, e);
     private void WorkbenchGotFocus(object sender, KeyboardFocusChangedEventArgs e) => NotifyCurrentPaperBodyActivated();
     private void WorkbenchDeactivated(object? sender, EventArgs e)
     {
@@ -129,8 +142,8 @@ public sealed partial class PaperWindow
         internal WorkbenchBodyLease(PaperWindow owner, Window window, Decorator destination)
         {
             _owner = owner; Window = window; _destination = destination;
-            _desktopWasVisible = owner.IsVisible;
-            _paperWasVisibleOnDesktop = owner._paper.IsVisible;
+            _desktopWasVisible = owner._workbenchDesktopVisibleBeforeSuspension ?? owner.IsVisible;
+            _paperWasVisibleOnDesktop = owner._workbenchPaperVisibleBeforeSuspension ?? owner._paper.IsVisible;
             _topBarVisibility = owner._topBarHost?.Visibility ?? Visibility.Visible;
         }
         internal void Return(bool restoreDesktop)
@@ -145,6 +158,8 @@ public sealed partial class PaperWindow
             if (ReferenceEquals(_destination.Child, owner._shell)) _destination.Child = null;
             owner._shell.Resources.MergedDictionaries.Remove(owner.Resources);
             owner._workbenchBody = null;
+            owner._workbenchDesktopVisibleBeforeSuspension = restoreDesktop ? null : _desktopWasVisible;
+            owner._workbenchPaperVisibleBeforeSuspension = restoreDesktop ? null : _paperWasVisibleOnDesktop;
             if (!owner._containerGrid.Children.Contains(owner._shell)) owner._containerGrid.Children.Add(owner._shell);
             if (owner._topBarHost != null) owner._topBarHost.Visibility = _topBarVisibility;
             // Neither desktop geometry nor collapsed/visible flags are copied from the workbench.
@@ -152,6 +167,7 @@ public sealed partial class PaperWindow
             owner._shell.Visibility = owner._paper.IsCollapsed ? Visibility.Collapsed : Visibility.Visible;
             owner._shell.Opacity = owner._paper.IsCollapsed ? 0 : 1;
             owner.SyncNoteImagePresentationState();
+            if (restoreDesktop) owner.UpdateAdvancedInteractionLockVisuals();
             if (restoreDesktop && owner._paper.IsVisible && !owner.IsClosed &&
                 (_desktopWasVisible || !_paperWasVisibleOnDesktop && !owner._paper.IsCollapsed))
             {
