@@ -85,7 +85,7 @@ internal static partial class Program
                         throw new IOException("Injected main-catalog failure after target installation.");
                     }
                 }));
-                var switched = await controller.SwitchWorkspaceAsync(3);
+                var switched = await WithWorkspaceFailureDialog(() => controller.SwitchWorkspaceAsync(3), dialog => dialog.Close());
                 writerField.SetValue(mainStore, originalWriter);
                 Require(!switched && reached && targetHadExpectedRuntime,
                     "rollback fixture did not fail after installing the target runtime");
