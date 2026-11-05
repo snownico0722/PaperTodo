@@ -64,7 +64,15 @@ internal sealed class NoteImageJpegWriter : IDisposable
         if (_completed || count <= 0 || count > _height - _written ||
             pixels.Length < (long)_stride * count)
             throw new InvalidOperationException("Invalid JPEG scanline count.");
-        _frame!.WritePixels((uint)count, (uint)_stride, checked((uint)(_stride * count)), pixels);
+        // Pass the pixel address, not a COM-marshaled array descriptor.
+        // The latter can produce a valid JPEG header with corrupt image content.
+        var pinned = GCHandle.Alloc(pixels, GCHandleType.Pinned);
+        try
+        {
+            _frame!.WritePixels((uint)count, (uint)_stride,
+                checked((uint)(_stride * count)), pinned.AddrOfPinnedObject());
+        }
+        finally { pinned.Free(); }
         _written += count;
     }
 
@@ -140,7 +148,7 @@ internal sealed class NoteImageJpegWriter : IDisposable
         void SetColorContexts();
         void SetPalette();
         void SetThumbnail();
-        void WritePixels(uint lineCount, uint stride, uint bufferSize, [In] byte[] pixels);
+        void WritePixels(uint lineCount, uint stride, uint bufferSize, IntPtr pixels);
         void WriteSource();
         void Commit();
     }
