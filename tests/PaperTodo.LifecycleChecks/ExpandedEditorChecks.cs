@@ -83,6 +83,22 @@ internal static class ExpandedEditorChecks
         var sidebar = (Border)Member(a, "_editorPaperSidebar");
         a.SetExpandedEditorSidebarOpen(true);
         Check(sidebar.Margin.Top == 0, "Paper list leaves an empty strip for the Markdown toolbar");
+        var livePaperList = (StackPanel)Member(a, "_editorPaperList");
+        Check(livePaperList.Children.Count == 3, "Initial editor sidebar did not list all papers");
+        var createdPaper = controller.CreatePaper(PaperTypes.Note, show: false)
+            ?? throw new InvalidOperationException("Could not create an additional note");
+        Check(livePaperList.Children.Count == 4,
+            "Open editor sidebar did not update after creating another paper");
+        var paperB = controller.State.Papers.Single(p => p.Id == "editor-b");
+        paperB.Title = "Renamed second paper";
+        b.RefreshPaperTitle();
+        Check(livePaperList.Children.OfType<Button>().Any(item =>
+                ((StackPanel)item.Content).Children.OfType<TextBlock>().First().Text ==
+                    "Renamed second paper"),
+            "Open editor sidebar did not update after renaming a paper");
+        controller.DeletePaper(createdPaper);
+        Check(livePaperList.Children.Count == 3,
+            "Open editor sidebar did not update after deleting another paper");
         var paperItems = (StackPanel)Member(a, "_editorPaperList");
         var firstItem = (Button)paperItems.Children[0];
         firstItem.ApplyTemplate();
@@ -101,6 +117,11 @@ internal static class ExpandedEditorChecks
         Check(ReferenceEquals(host, b.ExpandedEditorHostWindow), "Sidebar replaced the editor host");
         Check(new WindowInteropHelper(host).Handle == hwnd, "Switching papers changed the editor HWND");
         Check(host.CurrentPaperId == "editor-b", "Sidebar did not select the second paper");
+        host.WindowState = WindowState.Minimized;
+        Check(controller.ApplyPaperPresentation(paperB, PaperPresentationAction.Activate, true) &&
+              host.WindowState != WindowState.Minimized &&
+              ReferenceEquals(b.ExpandedEditorHostWindow, host),
+            "Plugin Activate did not restore and focus the editor's real window");
         Check(host.IsActive && !a.IsActive,
             "Sidebar switch incorrectly activated the previous desktop paper");
         Check(b.IsExpandedEditorSidebarOpen && !controller.State.Papers.Single(p => p.Id == "editor-b").IsCollapsed,
@@ -133,6 +154,12 @@ internal static class ExpandedEditorChecks
         Check(!todo.IsExpandedEditorHosted && controller.State.Papers.Single(p => p.Id == "editor-todo").IsVisible,
             "Return did not restore the selected paper as an ordinary paper");
 
+        controller.OpenExpandedEditorFor(b);
+        var pluginHost = b.ExpandedEditorHostWindow!;
+        Check(controller.ApplyPaperPresentation(paperB, PaperPresentationAction.Collapse, true) &&
+              !b.IsExpandedEditorHosted && !pluginHost.IsVisible && paperB.IsCollapsed,
+            "Plugin Collapse left a borrowed body inside the editor HWND");
+
         controller.OpenExpandedEditorFor(a);
         var secondHost = a.ExpandedEditorHostWindow!;
         var close = (Button)Member(a, "_closeButton");
@@ -143,6 +170,14 @@ internal static class ExpandedEditorChecks
         var collapsedPaper = controller.State.Papers.Single(p => p.Id == "editor-a");
         Check(collapsedPaper.IsVisible && collapsedPaper.IsCollapsed &&
               !a.IsExpandedEditorHosted, "Far-right editor × did not collapse the paper to a capsule");
+
+        controller.OpenExpandedEditorFor(todo);
+        var systemCloseHost = todo.ExpandedEditorHostWindow!;
+        systemCloseHost.Close(); // WPF OnClosing: Alt+F4 / taskbar close
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(!todo.IsExpandedEditorHosted && !systemCloseHost.IsVisible &&
+              controller.State.Papers.Single(p => p.Id == "editor-todo").IsCollapsed,
+            "System Close must complete once and collapse the selected paper");
 
         foreach (var p in controller.State.Papers)
             Check(before[p.Id] == (p.X, p.Y, p.Width, p.Height),
