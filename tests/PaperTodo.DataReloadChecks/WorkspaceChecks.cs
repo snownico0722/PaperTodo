@@ -155,10 +155,31 @@ internal static partial class Program
                 managed.TopBarNamePicker,
             "noncontiguous named workspace catalog lost its membership or display mode");
         var secondFiles = catalog.PathsFor(2);
-        File.WriteAllText(secondFiles.Data, "to be deleted");
+        var deletedArtifacts = new[]
+        {
+            secondFiles.Data, secondFiles.Data + ".tmp",
+            secondFiles.Backup, secondFiles.Backup + ".tmp",
+            Path.Combine(scope.DirectoryPath, "data2conflict-sample.json"),
+            Path.Combine(scope.DirectoryPath, "data2conflict-sample.diff.json.tmp"),
+            Path.Combine(scope.DirectoryPath, "data2.failed_load.20260101.json"),
+            Path.Combine(scope.DirectoryPath, "data2.backup.used_for_recovery.20260101.json"),
+            Path.Combine(scope.DirectoryPath, "data2.json.orphaned.20260101.tmp"),
+            Path.Combine(scope.DirectoryPath, "data2.backup.json.orphaned.20260101.tmp"),
+            Path.Combine(scope.DirectoryPath, "data2.recovered.20260101.json")
+        };
+        foreach (var artifact in deletedArtifacts)
+            File.WriteAllText(artifact, "to be deleted");
         Directory.CreateDirectory(secondFiles.PluginData);
         File.WriteAllText(Path.Combine(secondFiles.PluginData, "settings.json"), "plugin state");
         File.WriteAllText(secondFiles.Images, "image data");
+        File.WriteAllText(secondFiles.Images + "-lock", "image lock");
+
+        // Another workspace and a similarly prefixed filename must remain untouched.
+        var otherWorkspaceArtifact = Path.Combine(scope.DirectoryPath, "data3.json.tmp");
+        var similarlyNamedArtifact = Path.Combine(scope.DirectoryPath, "data20.json.tmp");
+        File.WriteAllText(otherWorkspaceArtifact, "keep workspace 3");
+        File.WriteAllText(similarlyNamedArtifact, "keep unrelated file");
+
         catalog.AdoptOptions(new WorkspaceConfiguration
         {
             Enabled = true, Slots = [1, 2]
@@ -169,10 +190,13 @@ internal static partial class Program
         Require(!catalog.Options.ContainsSlot(2),
             "removed workspace still appears in the catalog");
         catalog.DeleteInactiveSlotFiles(2);
-        Require(!File.Exists(secondFiles.Data) && !File.Exists(secondFiles.Images) &&
+        Require(deletedArtifacts.All(file => !File.Exists(file)) &&
+                !File.Exists(secondFiles.Images) && !File.Exists(secondFiles.Images + "-lock") &&
                 !Directory.Exists(secondFiles.PluginData) &&
-                File.Exists(catalog.PathsFor(1).Data),
-            "deleting an inactive workspace did not remove its files or damaged main data");
+                File.Exists(catalog.PathsFor(1).Data) &&
+                File.ReadAllText(otherWorkspaceArtifact) == "keep workspace 3" &&
+                File.ReadAllText(similarlyNamedArtifact) == "keep unrelated file",
+            "deleting a workspace left storage artifacts or affected other workspaces");
     }
 
     private static void WorkspaceMetadataWrites()
