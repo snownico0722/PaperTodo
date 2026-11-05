@@ -45,9 +45,9 @@ public sealed partial class AppController
         var resting = BuildRestingEdgeQueuePlan();
         var groups = NativeQueueGroups(resting);
         if (pointer is { } screenPoint)
-            UpdateFreeMasterMergePreview(layout, screenPoint, docked: true, resting, groups);
+            UpdateFreeMasterDropPreview(layout, screenPoint, docked: true, resting, groups);
         else
-            PreviewFreeQueueDropSlot(_freeMasterSlotPreview, null, layout.QueueKey,
+            PreviewFreeQueueDropSlot(_freeMasterSlotPreview, null,
                 layout.Groups[0].PaperIds, resting, groups, includeResting: true);
 
         // Peers have already received their final resting/merge placement once.
@@ -63,13 +63,23 @@ public sealed partial class AppController
     internal void FinishFreeMasterQueueDrag(FreeMasterDragLayout layout, bool commit)
     {
         if (_freeMasterDragPreview is not { } preview || !ReferenceEquals(preview.Layout, layout)) return;
-        _freeMasterDragPreview = null;
-        EndFreeMasterQueueDropGhost();
         if (commit && EdgeCapsuleFreeQueuesEnabled && FreeMasterMembersMatch(layout))
         {
-            State.DeepCapsuleQueueStartTopMargins[layout.QueueKey] = preview.Tops[layout.QueueKey];
+            var boxes = NativeQueueGroups()
+                .Where(g => g.Key != layout.QueueKey && LiveEdgeOfQueueKey(g.Key) == layout.EdgeKey)
+                .Select(g => g.Box).ToList();
+            var collapsed = IsCapsuleCollapseAllActiveForQueue(layout.QueueKey);
+            var count = layout.Groups[0].PaperIds.Length;
+            var decision = EdgeCapsuleFreeQueuePolicy.Place(boxes, preview.Tops[layout.QueueKey],
+                collapsed ? 1 : count + 1, EdgeCapsuleLayout.LocalWorkAreaForQueue(layout.Monitor).Height,
+                EdgeCapsuleLayout.SlotHeight(DeepCapsuleGap), DeepCapsuleGap);
+            foreach (var (key, top) in BuildFreeQueueDropAnchors(
+                         boxes, decision, layout.QueueKey, count, hasMaster: true, collapsed: collapsed))
+                State.DeepCapsuleQueueStartTopMargins[key] = top;
             MarkDirty();
         }
+        _freeMasterDragPreview = null;
+        EndFreeMasterQueueDropGhost();
         ArrangeDeepCapsules(animate: !commit);
     }
 
@@ -107,7 +117,7 @@ public sealed partial class AppController
             pointerTopDip: pointerTopDip, floating: true);
     }
 
-    private bool TryGetFreeMasterMerge(FreeMasterDragLayout layout, DeviceScreenPoint pointer,
+    private bool TryGetFreeMasterDrop(FreeMasterDragLayout layout, DeviceScreenPoint pointer,
         bool docked, out MonitorGeometry geometry, out string side,
         out EdgeFreeQueueBox targetBox, out EdgeFreeQueueDrop decision,
         IReadOnlyList<NativeQueueGroup>? groups = null)
@@ -133,32 +143,41 @@ public sealed partial class AppController
         var target = FindFreeMasterTarget(boxes,
             pointerTop - PaperLayoutDefaults.CapsuleHeight / 2, pointerTop,
             pitch, DeepCapsuleGap);
-        if (target is not { } insert) return false;
-
-        decision = EdgeCapsuleFreeQueuePolicy.Insert(boxes, insert.Key, insert.Index,
-            layout.Groups[0].PaperIds.Length, geometry.LocalWorkAreaDip.Height,
-            pitch, DeepCapsuleGap);
+        var count = layout.Groups[0].PaperIds.Length;
+        var collapsed = IsCapsuleCollapseAllActiveForQueue(layout.QueueKey);
+        // Docked movement preserves the point where the master was grabbed;
+        // the floating shell is centred on the pointer, as on final release.
+        var requestedTop = docked && _freeMasterDragPreview is { } preview && preview.Layout == layout
+            ? preview.Tops[layout.QueueKey] : pointerTop - PaperLayoutDefaults.CapsuleHeight / 2;
+        decision = target is { } insert
+            ? EdgeCapsuleFreeQueuePolicy.Insert(boxes, insert.Key, insert.Index, count,
+                geometry.LocalWorkAreaDip.Height, pitch, DeepCapsuleGap)
+            : EdgeCapsuleFreeQueuePolicy.Place(boxes, requestedTop, collapsed ? 1 : count + 1,
+                geometry.LocalWorkAreaDip.Height, pitch, DeepCapsuleGap);
         if (!decision.Accepted) return false;
-        targetBox = boxes.First(b => b.Key == insert.Key);
+        targetBox = target is { } selected ? boxes.First(b => b.Key == selected.Key)
+            : new(layout.QueueKey, decision.TopDip, count, true,
+                _masterCapsules.TryGetValue(layout.QueueKey, out var master)
+                    ? master.DesiredDockedWidth : PaperLayoutDefaults.CapsuleWidth, collapsed);
         return true;
     }
 
-    private void UpdateFreeMasterMergePreview(FreeMasterDragLayout layout,
+    private void UpdateFreeMasterDropPreview(FreeMasterDragLayout layout,
         DeviceScreenPoint pointer, bool docked, EdgeCapsuleQueuePlan? resting = null,
         IReadOnlyList<NativeQueueGroup>? groups = null)
     {
         resting ??= BuildRestingEdgeQueuePlan();
         groups ??= NativeQueueGroups(resting);
-        if (!TryGetFreeMasterMerge(layout, pointer, docked, out var geometry,
+        if (!TryGetFreeMasterDrop(layout, pointer, docked, out var geometry,
                 out var side, out var targetBox, out var decision, groups))
         {
-            PreviewFreeQueueDropSlot(_freeMasterSlotPreview, null, layout.QueueKey,
+            PreviewFreeQueueDropSlot(_freeMasterSlotPreview, null,
                 layout.Groups[0].PaperIds, resting, groups, includeResting: docked);
             _nativeQueueDropGhost?.Hide();
             return;
         }
 
-        PreviewFreeQueueDropSlot(_freeMasterSlotPreview, decision, layout.QueueKey,
+        PreviewFreeQueueDropSlot(_freeMasterSlotPreview, decision,
             layout.Groups[0].PaperIds, resting, groups, includeResting: docked);
         var pitch = EdgeCapsuleLayout.SlotHeight(DeepCapsuleGap);
         var top = EdgeCapsuleFreeQueuePolicy.GhostSlotTop(
@@ -166,7 +185,9 @@ public sealed partial class AppController
         _nativeQueueDropGhost ??= new EdgeCapsuleQueueDropGhost();
         _nativeQueueDropGhost.ShowAt(geometry, side, top,
             Math.Max(PaperLayoutDefaults.CapsuleWidth, targetBox.WidthDip),
-            layout.Groups[0].PaperIds.Length, DeepCapsuleGap);
+            decision.Kind == EdgeFreeQueueDropKind.Move
+                ? targetBox.Collapsed ? 1 : layout.Groups[0].PaperIds.Length + 1
+                : layout.Groups[0].PaperIds.Length, DeepCapsuleGap);
     }
 
     internal void PreviewFreeMasterQueueDropGhost(
@@ -179,7 +200,7 @@ public sealed partial class AppController
             _nativeQueueDropGhost?.Hide();
             return;
         }
-        UpdateFreeMasterMergePreview(layout, pointer, docked: false);
+        UpdateFreeMasterDropPreview(layout, pointer, docked: false);
     }
 
     internal void EndFreeMasterQueueDropGhost()
@@ -196,8 +217,9 @@ public sealed partial class AppController
         DeviceScreenPoint pointer, double originalMargin, bool originalHadMargin)
     {
         if (_freeMasterDragPreview?.Layout != layout ||
-            !TryGetFreeMasterMerge(layout, pointer, docked: true,
-                out _, out _, out _, out _)) return false;
+            !TryGetFreeMasterDrop(layout, pointer, docked: true,
+                out _, out _, out _, out var decision) ||
+            decision.Kind != EdgeFreeQueueDropKind.Insert) return false;
         var edge = layout.Side == DeepCapsuleSides.Left
             ? EdgeCapsuleEdge.Left : EdgeCapsuleEdge.Right;
         if (!TryBeginMasterCapsuleQueueTransfer(layout.Monitor, edge, originalMargin,
@@ -266,11 +288,10 @@ public sealed partial class AppController
         var targetMembers = target is { } merge
             ? NativeQueueGroups().First(g => g.Key == merge.Key).Papers.ToList() : [];
         var targetWasCollapsed = target.HasValue && IsCapsuleCollapseAllActiveForQueue(destination);
-        // Insertions share the normal drag's saved/screen conversion. A plain
-        // master move still changes only its own anchor, not passive neighbours.
-        var anchors = decision.Kind == EdgeFreeQueueDropKind.Insert
-            ? BuildFreeQueueDropAnchors(boxes, decision, destination, count, hasMaster: true)
-            : new Dictionary<string, double>(StringComparer.Ordinal) { [destination] = decision.TopDip };
+        // Both independent placement and merging reproduce the preview, even
+        // when a neighbour's saved preference differs from its displayed top.
+        var anchors = BuildFreeQueueDropAnchors(boxes, decision, destination, count,
+            hasMaster: true, collapsed: snapshot.SourceWasCollapsed);
         var oldOrder = State.Papers.ToList();
         var oldMargins = new Dictionary<string, double>(State.DeepCapsuleQueueStartTopMargins, StringComparer.Ordinal);
         var oldCollapsed = new Dictionary<string, bool>(State.CapsuleCollapseAllActiveQueues, StringComparer.Ordinal);
@@ -324,3 +345,4 @@ public sealed partial class AppController
         return true;
     }
 }
+

@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Controls;
 using System.Windows.Threading;
 using PaperTodo;
 
@@ -43,6 +44,7 @@ internal static class NativeFreeQueueReviewChecks
         var originalContents = c.State.Papers.ToDictionary(p => p.Id, p => p.Content);
         await CheckDisplacedInsertion(c, windows, store, monitor);
         await CheckDragPreviewUpdates(c, windows, monitor);
+        await CheckIndependentGroupPreview(c, windows, store, monitor);
         await CheckFoldedDropAndShortcuts(c, monitor);
         await CheckDisconnectedGesturesAndMerge(c, windows, store, monitor);
         Require(c.State.Papers.Count == originalContents.Count &&
@@ -77,10 +79,10 @@ internal static class NativeFreeQueueReviewChecks
             var drop = Field<NativeEdgeQueueDrag>(c, "_nativeEdgeQueueDrag").Drop!;
             Require(drop.Decision.Kind == EdgeFreeQueueDropKind.Insert && drop.DestinationKey == B &&
                     drop.Decision.Index == 0, "a displaced queue must accept its visible head insertion");
-            Near(beforeB - pitch, masters[B].AnchorTop, "preview moves the target master up one slot");
-            Near(beforeC, masters[C].AnchorTop, "unchanged lower neighbour stays in place");
-            Near(targetMemberBefore, MemberTop(c, windows[firstTarget.Id], firstTarget),
-                "prepend preserves the old target member position");
+            Near(beforeB, masters[B].AnchorTop, "first-slot preview retains the target master");
+            Near(beforeC + pitch, masters[C].AnchorTop, "intersected lower neighbour gives way down");
+            Near(targetMemberBefore + pitch, MemberTop(c, windows[firstTarget.Id], firstTarget),
+                "first-slot insertion moves old members down");
             Require(savedBefore.All(pair => c.State.DeepCapsuleQueueStartTopMargins[pair.Key] == pair.Value),
                 "preview wrote saved preferences");
             if (pass == 1)
@@ -98,12 +100,12 @@ internal static class NativeFreeQueueReviewChecks
         }
 
         Require(c.QueueKeyForPaper(source) == B, "accepted drop actually joined the target");
-        Near(100 - pitch, masters[A].AnchorTop, "upper neighbour has the selected final position");
-        Near(beforeB - pitch, masters[B].AnchorTop, "commit reproduces B's preview");
-        Near(beforeC, masters[C].AnchorTop, "commit does not reorder C above B");
+        Near(100, masters[A].AnchorTop, "upper neighbour remains at its original position");
+        Near(beforeB, masters[B].AnchorTop, "commit reproduces B's preview");
+        Near(beforeC + pitch, masters[C].AnchorTop, "commit reproduces the lower neighbour preview");
         Near(350, c.State.DeepCapsuleQueueStartTopMargins[C], "C's passive offset was not saved");
-        Near(200 - pitch, c.State.DeepCapsuleQueueStartTopMargins[B], "target preference excludes its passive displacement");
-        Near(targetMemberBefore, MemberTop(c, windows[firstTarget.Id], firstTarget), "commit preserves old target members");
+        Near(200, c.State.DeepCapsuleQueueStartTopMargins[B], "target preference excludes its passive displacement");
+        Near(targetMemberBefore + pitch, MemberTop(c, windows[firstTarget.Id], firstTarget), "commit reproduces downward member positions");
         c.SaveNow(sync: true);
         var loaded = store.Load();
         Require(loaded.Papers.Single(p => p.Id == source.Id).CapsuleQueueId == "qb", "merged membership reloads");
@@ -111,7 +113,7 @@ internal static class NativeFreeQueueReviewChecks
         // Repeated ordinary arrange must neither ratchet positions nor undo the insertion.
         for (var i = 0; i < 3; i++) c.ArrangeDeepCapsules(animate: false);
         await Idle();
-        Near(beforeB - pitch, masters[B].AnchorTop, "repeated layout does not add displacement");
+        Near(beforeB, masters[B].AnchorTop, "repeated layout does not add displacement");
         Console.WriteLine("PASS displaced head insertion: cancel, commit, preferences, reload and stable rearrange");
     }
 
@@ -211,6 +213,123 @@ internal static class NativeFreeQueueReviewChecks
         c.FinishFreeMasterQueueDrag(layout, false);
         await Idle();
         Console.WriteLine("PASS selective drag updates: live anchor refresh, unchanged peers, stable slot, neighbour restore, cancel and folded source");
+    }
+
+    private static async Task CheckIndependentGroupPreview(AppController c,
+        IReadOnlyDictionary<string, PaperWindow> windows, StateStore store, MonitorGeometry monitor)
+    {
+        var pitch = EdgeCapsuleLayout.SlotHeight(c.DeepCapsuleGap);
+        var aTop = 4 * pitch;
+        var bTop = aTop + 6 * pitch;
+        // A = master + four members, B = master + three members. Cover both
+        // input owners and both drag phases, with cancellation and real commit.
+        foreach (var route in new[] { "ctrl-docked", "ctrl-floating", "master-docked", "master-floating" })
+        foreach (var commit in new[] { false, true })
+        {
+            foreach (var paper in c.State.Papers)
+            {
+                var i = int.Parse(paper.Id["review-".Length..]);
+                paper.CapsuleMonitorDeviceName = "";
+                paper.CapsuleSide = i < 7 ? DeepCapsuleSides.Right : DeepCapsuleSides.Left;
+                paper.CapsuleQueueId = i < 4 ? "qa" : i < 7 ? "qb" : "qc";
+            }
+            c.State.DeepCapsuleQueueStartTopMargins.Clear();
+            c.State.DeepCapsuleQueueStartTopMargins[A] = aTop;
+            c.State.DeepCapsuleQueueStartTopMargins[B] = bTop;
+            c.State.DeepCapsuleQueueStartTopMargins["|left#qc"] = 40;
+            c.State.CapsuleCollapseAllActiveQueues.Clear();
+            c.ArrangeDeepCapsules(false);
+            await Idle();
+            var saved = new Dictionary<string, double>(c.State.DeepCapsuleQueueStartTopMargins);
+            var targetPapers = c.State.Papers.Where(p => p.CapsuleQueueId == "qa").ToArray();
+            var memberTops = targetPapers.ToDictionary(p => p.Id, p => MemberTop(c, windows[p.Id], p));
+            var owner = c.State.Papers.Single(p => p.Id == "review-4");
+            var ctrl = route.StartsWith("ctrl", StringComparison.Ordinal);
+            var floating = route.EndsWith("floating", StringComparison.Ordinal);
+            // The docked Ctrl block touches only A's master region, stopping
+            // short of its first-member merge range. Floating selects by shell.
+            var top = ctrl && !floating ? aTop - 4 * pitch + 25 : aTop - 2 * pitch;
+            var ownerTop = top + pitch;
+            var point = Point(monitor, ctrl && !floating ? ownerTop : top);
+            FreeMasterDragLayout? layout = null;
+            MasterCapsuleQueueTransferSnapshot transfer = default;
+            if (ctrl)
+            {
+                Require(c.BeginNativeEdgeQueueDrag(owner, true, Point(monitor, bTop + pitch), false), route);
+                c.PreviewNativeEdgeQueueDrag(owner, point, ownerTop, floating);
+                Require(Field<NativeEdgeQueueDrag>(c, "_nativeEdgeQueueDrag").Drop!.Decision.Kind == EdgeFreeQueueDropKind.Move,
+                    "B above A remains an independent group");
+            }
+            else
+            {
+                layout = c.CaptureFreeMasterDragLayout("", EdgeCapsuleEdge.Right, B)!;
+                if (floating)
+                {
+                    Require(c.TryBeginMasterCapsuleQueueTransfer("", EdgeCapsuleEdge.Right, bTop,
+                        out transfer, freeLayout: layout, sourceQueueKey: B), route);
+                    c.PreviewFreeMasterQueueDropGhost(transfer, point);
+                }
+                else c.PreviewFreeMasterQueueTop(layout, top, point);
+                Require(Field<FreeQueueSlotPreviewState>(c, "_freeMasterSlotPreview").Decision?.Kind == EdgeFreeQueueDropKind.Move,
+                    "master preview keeps the two groups separate");
+            }
+            var expectedA = top + 4 * pitch;
+            var masters = Masters(c);
+            Near(expectedA, masters[A].AnchorTop, route + " previews A master displacement before release");
+            foreach (var paper in targetPapers)
+                Near(memberTops[paper.Id] + expectedA - aTop, MemberTop(c, windows[paper.Id], paper),
+                    route + " previews A as one rigid group");
+            var ghost = Field<EdgeCapsuleQueueDropGhost>(c, "_nativeQueueDropGhost");
+            Require(Field<Window>(ghost, "_window").Opacity > 0 &&
+                    Field<StackPanel>(ghost, "_stack").Children.Count == 4,
+                "independent B ghost includes its own master plus three members");
+            Require(saved.All(pair => c.State.DeepCapsuleQueueStartTopMargins[pair.Key] == pair.Value),
+                "independent preview must not write saved positions");
+
+            // Identical samples retain the preview instead of pushing A again.
+            var work = targetPapers.ToDictionary(p => p.Id, p => ReconcileGeneration(windows[p.Id]));
+            if (ctrl) c.PreviewNativeEdgeQueueDrag(owner, point, ownerTop, floating);
+            else if (floating) c.PreviewFreeMasterQueueDropGhost(transfer, point);
+            else c.PreviewFreeMasterQueueTop(layout!, top, point);
+            Require(targetPapers.All(p => ReconcileGeneration(windows[p.Id]) == work[p.Id]),
+                "same independent drop does not requeue unchanged target geometry");
+            Near(expectedA, masters[A].AnchorTop, "independent preview does not accumulate displacement");
+
+            if (ctrl)
+            {
+                if (commit) Require(c.CommitNativeEdgeQueueDrag(owner, point, ownerTop, floating), route + " commit");
+                c.EndNativeEdgeQueueDrag(owner.Id);
+            }
+            else if (floating)
+            {
+                if (commit) Require(c.CommitMasterCapsuleQueueTransfer(transfer, point), route + " commit");
+                else c.CancelMasterCapsuleQueueTransfer(transfer);
+                c.EndFreeMasterQueueDropGhost();
+            }
+            else c.FinishFreeMasterQueueDrag(layout!, commit);
+            await Idle();
+            Near(commit ? expectedA : aTop, masters[A].AnchorTop, route + " A release result matches preview or cancel");
+            Near(commit ? top : bTop, masters[B].AnchorTop, route + " B release result matches preview or cancel");
+            Require(c.State.Papers.Count(p => p.CapsuleQueueId == "qa") == 4 &&
+                    c.State.Papers.Count(p => p.CapsuleQueueId == "qb") == 3,
+                "independent placement never merges membership");
+            if (!commit)
+                Require(saved.All(pair => c.State.DeepCapsuleQueueStartTopMargins[pair.Key] == pair.Value),
+                    "cancel retains every original anchor");
+            else
+            {
+                c.SaveNow(sync: true);
+                var loaded = store.Load();
+                Near(top, loaded.DeepCapsuleQueueStartTopMargins[B], "independent landing anchor survives reload");
+                foreach (var pair in loaded.DeepCapsuleQueueStartTopMargins)
+                    c.State.DeepCapsuleQueueStartTopMargins[pair.Key] = pair.Value;
+                c.ArrangeDeepCapsules(false);
+                await Idle();
+                Near(expectedA, masters[A].AnchorTop, "saved independent order reproduces A's preview");
+                Near(top, masters[B].AnchorTop, "saved independent order reproduces B's preview");
+            }
+        }
+        Console.WriteLine("PASS independent group preview: Ctrl/master, docked/floating, ghost slots, cancel, commit and reload");
     }
 
     private static int ReconcileGeneration(PaperWindow window) =>
@@ -407,3 +526,4 @@ internal static class NativeFreeQueueReviewChecks
         return (pill, session!, (DeviceScreenPoint)session!.GetType().GetProperty("StartScreenPosition")!.GetValue(session)!);
     }
 }
+

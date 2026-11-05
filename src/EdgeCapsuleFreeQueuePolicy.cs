@@ -23,8 +23,8 @@ internal sealed record EdgeFreeQueueDrop(
 
 /// <summary>
 /// Direct manipulation, not automatic free-space search. Independent queues stay at the
-/// requested height. A prepend grows above existing members; an interior insertion moves
-/// the suffix. Only neighbours actually intersected by that expansion need to move.
+/// requested height. Every insertion moves the suffix down, including the first slot;
+/// only insufficient space below lifts the merged queue. Intersected neighbours give way.
 /// </summary>
 // Gesture-local: a snap is a short-lived attachment to an exact slot, never a
 // continuously varying drag resistance. Moving back into the source rearms it.
@@ -186,7 +186,7 @@ internal static class EdgeCapsuleFreeQueuePolicy
 
     internal static EdgeFreeQueueDrop Insert(
         IReadOnlyList<EdgeFreeQueueBox> queues, string targetKey, int index,
-        int carriedCount, double areaHeight, double pitch, double gap, bool prependAbove = true)
+        int carriedCount, double areaHeight, double pitch, double gap)
     {
         var targetIndex = -1;
         for (var i = 0; i < queues.Count; i++)
@@ -196,7 +196,8 @@ internal static class EdgeCapsuleFreeQueuePolicy
         index = target.Collapsed && target.HasMaster
             ? target.MemberCount : Math.Clamp(index, 0, target.MemberCount);
         var top = target.TopDip;
-        if (prependAbove && index == 0 && target.MemberCount > 0) top -= carriedCount * pitch;
+        // Slot zero follows the same downward-first rule as every interior slot.
+        // Keep the head unless the expanded queue would cross the bottom boundary.
         // Keep the merged block in view when it can fit. If the combined queue is
         // taller than the work area, preserve the merge and pin its first slot in view.
         var visibleHeight = target.Collapsed && target.HasMaster
@@ -237,3 +238,4 @@ internal static class EdgeCapsuleFreeQueuePolicy
         return tops;
     }
 }
+

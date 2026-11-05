@@ -8,7 +8,7 @@ public sealed partial class AppController
         IReadOnlyList<NativeQueueGroup> groups)
     {
         var drop = drag.Drop;
-        if (!drag.FreeQueues || drop == null || drop.Decision.Kind != EdgeFreeQueueDropKind.Insert ||
+        if (!drag.FreeQueues || drop == null || !drop.Decision.Accepted ||
             !WindowWorkAreaHelper.TryGetMonitorGeometryAtDeviceScreenPoint(pointer, out var geometry) ||
             !EdgeCapsuleQueueIds.TryGetEdge(drop.DestinationKey, out _, out var side))
         {
@@ -26,8 +26,11 @@ public sealed partial class AppController
         var ownerWidth = _windows.TryGetValue(drag.OwnerId, out var ownerWindow)
             ? ownerWindow.DeepCapsuleRestingVisibleWidth : PaperLayoutDefaults.CapsuleWidth;
         var width = collapsedTarget ? target!.Box.WidthDip : ownerWidth;
-        _nativeQueueDropGhost?.ShowAt(geometry, side, top, width,
-            drag.CarriedIds.Length, DeepCapsuleGap);
+        // An independent group retains (or creates) its own master. A merge
+        // contributes only members to the destination's existing master.
+        var slots = drag.CarriedIds.Length +
+            (drop.Decision.Kind == EdgeFreeQueueDropKind.Move && State.UseCapsuleCollapseAll ? 1 : 0);
+        _nativeQueueDropGhost?.ShowAt(geometry, side, top, width, slots, DeepCapsuleGap);
     }
 
     // The only magnetic movement is a repeatable snap to the source's OUTER
@@ -45,3 +48,4 @@ public sealed partial class AppController
             drag.ExitSnap);
     }
 }
+

@@ -1,12 +1,13 @@
 namespace PaperTodo;
 
-// One cached insertion decision per gesture: moving the pointer within a chosen
+// One cached drop decision per gesture: moving the pointer within a chosen
 // slot never accumulates displacement or advances a second collision simulation.
 internal sealed class FreeQueueSlotPreviewState
 {
-    internal string TargetKey { get; set; } = "";
-    internal int Index { get; set; } = -1;
-    internal double Top { get; set; } = double.NaN;
+    internal EdgeFreeQueueDrop? Decision { get; set; }
+    internal string TargetKey => Decision is { Kind: EdgeFreeQueueDropKind.Insert } ? Decision.TargetKey : "";
+    internal int Index => Decision is { Kind: EdgeFreeQueueDropKind.Insert } ? Decision.Index : -1;
+    internal double Top => Decision is { Accepted: true } ? Decision.TopDip : double.NaN;
     internal HashSet<string> MemberIds { get; } = new(StringComparer.Ordinal);
     internal HashSet<string> MasterKeys { get; } = new(StringComparer.Ordinal);
 }
@@ -20,17 +21,23 @@ public sealed partial class AppController
     // An unchanged slot keeps its already-presented displacement; it is never
     // reset to the resting layout and then pushed away a second time.
     private void PreviewFreeQueueDropSlot(FreeQueueSlotPreviewState state,
-        EdgeFreeQueueDrop? decision, string sourceKey,
+        EdgeFreeQueueDrop? decision,
         IReadOnlyCollection<string> carriedIds, EdgeCapsuleQueuePlan resting,
         IReadOnlyList<NativeQueueGroup> groups, bool includeResting = false)
     {
         var inserting = decision is { Kind: EdgeFreeQueueDropKind.Insert };
         var key = inserting ? decision!.TargetKey : "";
         var index = inserting ? decision!.Index : -1;
-        var top = inserting ? decision!.TopDip : double.NaN;
+        var accepted = decision is { Accepted: true };
+        var top = accepted ? decision!.TopDip : double.NaN;
         var sameSlot = key == state.TargetKey && index == state.Index &&
             (double.IsNaN(top) && double.IsNaN(state.Top) ||
-             Math.Abs(top - state.Top) < .1);
+             Math.Abs(top - state.Top) < .1) &&
+            decision?.Kind == state.Decision?.Kind &&
+            (decision == null || state.Decision != null &&
+             decision.Tops.Count == state.Decision.Tops.Count &&
+             decision.Tops.All(pair => state.Decision.Tops.TryGetValue(pair.Key, out var oldTop) &&
+                 Math.Abs(pair.Value - oldTop) < .1));
         if (sameSlot && !includeResting) return;
 
         var moving = carriedIds.ToHashSet(StringComparer.Ordinal);
@@ -56,12 +63,11 @@ public sealed partial class AppController
 
         var changedIds = new HashSet<string>(StringComparer.Ordinal);
         var changedMasters = new HashSet<string>(StringComparer.Ordinal);
-        if (!sameSlot && inserting && groups.FirstOrDefault(g => g.Key == key) is { } target)
+        if (!sameSlot && accepted)
         {
-            var pitch = EdgeCapsuleLayout.SlotHeight(DeepCapsuleGap);
             foreach (var group in groups)
             {
-                if (group.Key == sourceKey || group.Key == key ||
+                if (group.Key == key ||
                     !decision!.Tops.TryGetValue(group.Key, out var movedTop) ||
                     Math.Abs(movedTop - group.Box.TopDip) < .1) continue;
 
@@ -69,7 +75,7 @@ public sealed partial class AppController
                 // intersects; its master and members use one rigid displacement.
                 var delta = movedTop - group.Box.TopDip;
                 if (!group.Box.Collapsed)
-                    foreach (var paper in group.Papers)
+                    foreach (var paper in group.Papers.Where(p => !moving.Contains(p.Id)))
                         if (resting.Placements.TryGetValue(paper.Id, out var placement))
                         {
                             desired[paper.Id] = placement with { TopOffsetDip = placement.TopOffsetDip + delta };
@@ -81,7 +87,11 @@ public sealed partial class AppController
                     changedMasters.Add(group.Key);
                 }
             }
+        }
 
+        if (!sameSlot && inserting && groups.FirstOrDefault(g => g.Key == key) is { } target)
+        {
+            var pitch = EdgeCapsuleLayout.SlotHeight(DeepCapsuleGap);
             if (!target.Box.Collapsed)
             {
                 var members = target.Papers.Where(p => !moving.Contains(p.Id)).ToList();
@@ -121,8 +131,7 @@ public sealed partial class AppController
         foreach (var id in changedIds) state.MemberIds.Add(id);
         state.MasterKeys.Clear();
         foreach (var masterKey in changedMasters) state.MasterKeys.Add(masterKey);
-        state.TargetKey = key;
-        state.Index = index;
-        state.Top = top;
+        state.Decision = decision;
     }
 }
+

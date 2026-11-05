@@ -164,7 +164,7 @@ public sealed partial class AppController
         }
         var decision = target is { } insert
             ? EdgeCapsuleFreeQueuePolicy.Insert(boxes, insert.Key, insert.Index, carried.Length,
-                geometry.LocalWorkAreaDip.Height, pitch, gap, prependAbove: insert.Key != drag.SourceKey)
+                geometry.LocalWorkAreaDip.Height, pitch, gap)
             : EdgeCapsuleFreeQueuePolicy.Place(boxes, queueTop, bodySlots, geometry.LocalWorkAreaDip.Height, pitch, gap);
         drag.HeldTargetKey = decision.Kind == EdgeFreeQueueDropKind.Insert ? decision.TargetKey : "";
         var targetMembers = target.HasValue
@@ -179,7 +179,7 @@ public sealed partial class AppController
         var anchors = new Dictionary<string, double>(StringComparer.Ordinal);
         if (decision.Accepted)
         {
-            if (drag.FreeQueues && decision.Kind == EdgeFreeQueueDropKind.Insert)
+            if (drag.FreeQueues)
                 anchors = BuildFreeQueueDropAnchors(boxes, decision, destination,
                     carried.Length, State.UseCapsuleCollapseAll);
             else
@@ -232,7 +232,7 @@ public sealed partial class AppController
         }
         else
         {
-            PreviewFreeQueueDropSlot(drag.SlotPreview, drop.Decision, drag.SourceKey,
+            PreviewFreeQueueDropSlot(drag.SlotPreview, drop.Decision,
                 drag.CarriedIds, resting, groups);
         }
         if (drag.WholeQueue && !floating)
@@ -424,3 +424,4 @@ public sealed partial class AppController
         }
     }
 }
+

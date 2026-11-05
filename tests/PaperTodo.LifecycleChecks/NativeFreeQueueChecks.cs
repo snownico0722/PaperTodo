@@ -139,8 +139,8 @@ internal static class NativeFreeQueueChecks
         Require(c.BeginNativeEdgeQueueDrag(a, true, Point(100), false), "begin prepend");
         var headTop = originalTargetTop - (2 * pitch - c.DeepCapsuleGap);
         Require(c.PreviewNativeEdgeQueueDrag(a, Point(headTop), headTop, false), "prepend preview handled");
-        Require(Math.Abs(Top(b) - originalTargetTop) < .1 && Math.Abs(Top(bPeer) - originalNextTargetTop) < .1,
-            "prepending must not push the existing target down");
+        Require(Math.Abs(Top(b) - originalTargetTop - 2 * pitch) < .1 && Math.Abs(Top(bPeer) - originalNextTargetTop - 2 * pitch) < .1,
+            "prepending moves existing members down by the whole carried block");
         Require(a.CapsuleQueueId == "qa" && b.CapsuleQueueId == "qb", "preview does not change queue membership");
         Require(c.CommitNativeEdgeQueueDrag(a, Point(headTop), headTop, false), "whole queue prepend handled");
         c.EndNativeEdgeQueueDrag(a.Id);
@@ -148,8 +148,8 @@ internal static class NativeFreeQueueChecks
         Require(a.CapsuleQueueId == "qb" && aPeer.CapsuleQueueId == "qb", "whole-queue merge commits all carried members");
         Require(c.State.Papers.Where(p => p.CapsuleQueueId == "qb").Select(p => p.Id)
             .SequenceEqual(["fixture-0", "fixture-1", "fixture-2", "fixture-3"]), "block insertion preserves member order");
-        Require(Math.Abs(Top(b) - originalTargetTop) < .1 && Math.Abs(Top(bPeer) - originalNextTargetTop) < .1,
-            "committed prepend exactly reproduces the old target's visible position");
+        Require(Math.Abs(Top(b) - originalTargetTop - 2 * pitch) < .1 && Math.Abs(Top(bPeer) - originalNextTargetTop - 2 * pitch) < .1,
+            "committed prepend exactly reproduces the downward preview");
         Require(!c.State.DeepCapsuleQueueStartTopMargins.ContainsKey("|right#qa"), "vacated independent anchor is removed");
 
         // Four member slots: a, aPeer, b, bPeer. Snap is to the fixed outer slot,
@@ -211,8 +211,9 @@ internal static class NativeFreeQueueChecks
         Require(c.BeginNativeEdgeQueueDrag(a, true, Point(100), false), "begin independent drop near another queue");
         c.PreviewNativeEdgeQueueDrag(a, Point(130, distant: true), 130, true);
         var independentGhost = (EdgeCapsuleQueueDropGhost)Part(c, "_nativeQueueDropGhost");
-        Require(((Window)Part(independentGhost, "_window")).Opacity == 0,
-            "vertically unaligned independent placement must not show a merge ghost");
+        Require(((Window)Part(independentGhost, "_window")).Opacity > 0 &&
+                ((StackPanel)Part(independentGhost, "_stack")).Children.Count == 1,
+            "independent placement shows its own single-capsule landing position");
         c.CommitNativeEdgeQueueDrag(a, Point(130, distant: true), 130, true);
         c.EndNativeEdgeQueueDrag(a.Id);
         await Idle();
@@ -557,3 +558,4 @@ internal static class NativeFreeQueueChecks
 
     private static object? PartOrNull(object o, string name) => o.GetType().GetField(name, Private)!.GetValue(o);
 }
+
