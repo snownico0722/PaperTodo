@@ -125,6 +125,34 @@ internal static class NativeFreeQueueChecks
             "committed prepend exactly reproduces the old target's visible position");
         Require(!c.State.DeepCapsuleQueueStartTopMargins.ContainsKey("|right#qa"), "vacated independent anchor is removed");
 
+        // This queue has four paper slots now (a, aPeer, b, bPeer). The third may move
+        // into the fourth slot freely, but moving beyond the fourth resists detachment.
+        var fourthTop = Top(bPeer);
+        Require(c.BeginNativeEdgeQueueDrag(b, false, Point(Top(b)), false),
+            "begin moving the third capsule in a four-member queue");
+        Require(Math.Abs(c.NativeEdgeQueueMagnetizedOwnerTop(b.Id, fourthTop) - fourthTop) < .01,
+            "moving the third capsule to the fourth slot does not magnetize it");
+        var beyondFourth = fourthTop + EdgeCapsuleLayout.CrossQueueDragUnlockDistance / 2;
+        Require(Math.Abs(c.NativeEdgeQueueMagnetizedOwnerTop(b.Id, beyondFourth) -
+                (beyondFourth - 18)) < .01,
+            "only after passing the fourth slot does a single capsule get 18 DIP of inward pull");
+        c.PreviewNativeEdgeQueueDrag(b, Point(fourthTop + EdgeCapsuleLayout.CrossQueueDragUnlockDistance),
+            fourthTop + EdgeCapsuleLayout.CrossQueueDragUnlockDistance, false);
+        Require(c.NativeEdgeQueueMagnetizedOwnerTop(b.Id,
+                fourthTop + EdgeCapsuleLayout.CrossQueueDragUnlockDistance) ==
+                fourthTop + EdgeCapsuleLayout.CrossQueueDragUnlockDistance,
+            "a detached member is no longer magnetically held and may join other queues freely");
+        c.EndNativeEdgeQueueDrag(b.Id);
+        await Idle();
+        Require(c.BeginNativeEdgeQueueDrag(bPeer, false, Point(Top(bPeer)), false),
+            "begin dragging the final capsule outside a four-member queue");
+        fourthTop = Top(bPeer);
+        Require(c.NativeEdgeQueueMagnetizedOwnerTop(bPeer.Id, fourthTop) == fourthTop &&
+                c.NativeEdgeQueueMagnetizedOwnerTop(bPeer.Id, fourthTop + 16) < fourthTop + 16,
+            "the fourth capsule starts feeling inward attraction immediately after its own slot");
+        c.EndNativeEdgeQueueDrag(bPeer.Id);
+        await Idle();
+
         Require(c.BeginNativeEdgeQueueDrag(a, false, Point(Top(a)), false), "begin single detach");
         c.PreviewNativeEdgeQueueDrag(a, Point(100), 100, false);
         c.CommitNativeEdgeQueueDrag(a, Point(100), 100, false);
@@ -185,6 +213,19 @@ internal static class NativeFreeQueueChecks
         Require(masters.Count == 3 && masters.ContainsKey(aKey) &&
                 masters.ContainsKey("|right#qb") && masters.ContainsKey("|right#qc"),
             "every independent group has its own master on the same edge");
+        var masterForMove = masters["|right#qb"];
+        var originalMasterPosition = masterForMove.AnchorTop;
+        var originalAnimations = c.State.EnableAnimations;
+        c.State.EnableAnimations = true;
+        masterForMove.SetQueueTopPreview(originalMasterPosition + 10);
+        masterForMove.UpdateState(2, false, animate: true);
+        Require(Math.Abs((double)Part(masterForMove, "_currentTopDip") -
+                (originalMasterPosition + 10)) < .1,
+            "a master relocated by layout must reach the new position immediately, even with animations enabled");
+        masterForMove.SetQueueTopPreview(null);
+        masterForMove.UpdateState(2, false, animate: true);
+        c.State.EnableAnimations = originalAnimations;
+        await Idle();
         var masterLayout = c.CaptureFreeMasterDragLayout("", EdgeCapsuleEdge.Right, aKey)!;
         Require(c.TryBeginMasterCapsuleQueueTransfer("", EdgeCapsuleEdge.Right,
                 masterLayout.MasterTopDip, out var masterPreviewSnapshot,

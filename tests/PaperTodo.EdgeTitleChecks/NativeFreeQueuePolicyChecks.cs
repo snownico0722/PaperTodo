@@ -86,15 +86,28 @@ internal static class NativeFreeQueuePolicyChecks
                 EdgeCapsuleFreeQueuePolicy.FindInsertion([target], 325, 46, 10, pitch, gap, target.Key) is { Key: "|right#b" } &&
                 EdgeCapsuleFreeQueuePolicy.FindInsertion([target], 310, 46, 10, pitch, gap, target.Key) == null,
             "held target survives pointer jitter but releases after the larger exit threshold");
-        Require(EdgeCapsuleFreeQueuePolicy.JoinNudge == 12 &&
-                EdgeCapsuleFreeQueuePolicy.ExitNudge == 18 &&
-                EdgeCapsuleFreeQueuePolicy.NudgeToward(100, 140, EdgeCapsuleFreeQueuePolicy.JoinNudge) == 112,
-            "joining snaps at most 12 DIP");
-        Require(EdgeCapsuleFreeQueuePolicy.SnapOutward(344, 400, 450) == 326 &&
-                EdgeCapsuleFreeQueuePolicy.SnapOutward(330, 400, 450) == 319 &&
-                EdgeCapsuleFreeQueuePolicy.SnapOutward(400, 400, 450) == 400 &&
-                EdgeCapsuleFreeQueuePolicy.SnapOutward(300, 400, 450) == 300,
-            "leaving briefly leads the pointer by up to 18 DIP near release, without a sticky pause");
+        // Four members: sorting the third into the fourth slot must not feel magnetic.
+        var firstMemberTop = 400d;
+        var lastMemberTop = firstMemberTop + 3 * pitch;
+        var halfRelease = EdgeCapsuleLayout.CrossQueueDragUnlockDistance / 2;
+        Require(EdgeCapsuleFreeQueuePolicy.ExitMagnetMaxDip == 18 &&
+                EdgeCapsuleFreeQueuePolicy.ResistLeavingSource(firstMemberTop + 2 * pitch,
+                    firstMemberTop, lastMemberTop) == firstMemberTop + 2 * pitch &&
+                EdgeCapsuleFreeQueuePolicy.ResistLeavingSource(lastMemberTop,
+                    firstMemberTop, lastMemberTop) == lastMemberTop,
+            "every slot inside a four-member queue remains completely pointer-driven");
+        Require(Math.Abs(EdgeCapsuleFreeQueuePolicy.ResistLeavingSource(lastMemberTop + halfRelease,
+                    firstMemberTop, lastMemberTop) - (lastMemberTop + halfRelease - 18)) < 0.01 &&
+                Math.Abs(EdgeCapsuleFreeQueuePolicy.ResistLeavingSource(firstMemberTop - halfRelease,
+                    firstMemberTop, lastMemberTop) - (firstMemberTop - halfRelease + 18)) < 0.01,
+            "leaving either outer member produces at most 18 DIP of inward magnetic attraction");
+        Require(EdgeCapsuleFreeQueuePolicy.ResistLeavingSource(lastMemberTop +
+                    EdgeCapsuleLayout.CrossQueueDragUnlockDistance, firstMemberTop, lastMemberTop) ==
+                lastMemberTop + EdgeCapsuleLayout.CrossQueueDragUnlockDistance &&
+                EdgeCapsuleFreeQueuePolicy.ResistLeavingSource(firstMemberTop -
+                    EdgeCapsuleLayout.CrossQueueDragUnlockDistance, firstMemberTop, lastMemberTop) ==
+                firstMemberTop - EdgeCapsuleLayout.CrossQueueDragUnlockDistance,
+            "dragging beyond the actual release point is again fully pointer-driven without a jump");
         var narrowTarget = target with { WidthDip = 60 };
         Require(EdgeCapsuleFreeQueuePolicy.FindInsertion([narrowTarget], 410, 46, 500, pitch, gap) == null &&
                 EdgeCapsuleFreeQueuePolicy.FindInsertion([narrowTarget], 410, 46, 500,
