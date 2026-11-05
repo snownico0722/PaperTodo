@@ -1,5 +1,8 @@
 # PaperTodo Plugin Development
 
+Workspace status also includes `WorkspaceNumber`, `DataFileName`, and `FollowsMainSettings`. Query the active filename before authorized external edits: `data.json` always remains the main workspace; `reload_data` / `merge_data` target the active workspace and never switch it.
+
+
 **Language: English | [简体中文](README.zh.md)**
 
 This is the **current PaperTodo plugin development manual**. It documents the current plugin contract, runtime boundaries, build workflow, and examples, with a concise API-version history and compatibility summary. Detailed historical trade-offs remain in `doc/DECISIONS.md`.
@@ -27,7 +30,7 @@ A newer host may load an older compatible plugin. An older host must reject a pl
 | 1.x | Legacy / unsupported | Early paper-body contracts. Known milestones include 1.2 moving plugin settings/state into the independent plugin data store, and 1.8 adding host-owned Edge Mini views. |
 | 2.0 | Experimental / unsupported | Transitional generation that introduced host-rendered Top Bar concepts while still carrying separate provider app Runtime and per-Paper Web Runtime paths. It was superseded rather than kept load-compatible. |
 | 2.1 | Supported minimum | Consolidated background work into one provider Runtime; Body/Mini are frontend surfaces. Includes Workspace Paper/Todo/Note access, Runtime state/Papers, host-rendered Top Bar and Todo contributions, global shortcuts/custom shortcut actions, paper menus, note-image reads and temporary popups. |
-| 2.2 | Current | Adds cross-paper presentation, public application Settings API (`settings.read/update`), settings `type: "action"` command buttons, and `startupPaper.presentation: "hidden"`. New plugins should target 2.2. |
+| 2.2 | Current | Adds cross-paper presentation, public application Settings API (`settings.read/update`), settings `type: "action"` command buttons, `startupPaper.presentation: "hidden"`, reminder trigger state/events, and Web Runtime host-event subscriptions. New plugins should target 2.2. |
 
 **Versioning rule:** a backward-compatible new plugin-visible contract (manifest field/type, permission, event, public API surface, or new observable semantics) advances the minor version after the current minor is published. Host-only implementation changes and bug fixes do not. Breaking an existing plugin contract advances the major version. Multiple compatible additions developed before one minor is released may ship together in that minor.
 
@@ -548,18 +551,15 @@ A manifest may declare:
 
 ```text
 papers.read
-papers.observe
 papers.create
 papers.delete
 
 todos.read
-todos.observe
 todos.append
 todos.update
 todos.delete
 
 notes.read
-notes.observe
 notes.append
 notes.replace
 ```
@@ -592,7 +592,7 @@ Permission combinations that are easy to miss:
 - `notes.write` append/fill-blank operations use `notes.append`, while replace uses `notes.replace`;
 - a paper-session plugin cannot delete the Paper that hosts its own active session; Runtime has no host Paper and is not subject to this single-Paper self-deletion restriction.
 
-Observe permissions are independent of Read permissions. Without the matching read permission, events may still be delivered under observe permission, but the host removes sensitive fields.
+Read permissions allow both querying a resource and subscribing to its change events. Legacy `papers.observe`, `todos.observe`, and `notes.observe` declarations still allow subscriptions but do not grant querying or access to sensitive fields without the matching read permission.
 
 Native paper session:
 
@@ -619,7 +619,50 @@ const dispose = papertodo.onHostEvent(
 );
 ```
 
-Subscribable events are `paper.created`, `paper.changed`, `paper.deleted`, `todo.created`, `todo.changed`, `todo.deleted`, and `note.changed`. Subscriptions become invalid automatically when the session becomes invalid or is disposed; plugins should still unsubscribe promptly when a listener is no longer needed.
+Subscribable events are `paper.created`, `paper.changed`, `paper.deleted`, `todo.created`, `todo.changed`, `todo.deleted`, `note.changed`, and API 2.2 `todo.reminderUpcoming`. Actual reminder triggers remain regular `todo.changed` events. Subscriptions become invalid automatically when the session becomes invalid or is disposed; plugins should still unsubscribe promptly when a listener is no longer needed.
+
+### Reminder API (2.2)
+
+PaperTodo emits a one-shot **upcoming notification event about five seconds before a reminder is due**. Upcoming is not globally ordered with debounced user-change events; its Todo snapshot reflects the state observed at notification time. The `occurredAt` of a batched user event reflects scan time rather than the exact edit time. Plugins may suppress only the default presentation. The eventual reminder transition remains an ordinary `TodoChanged`.
+
+- `todos.read` grants queries and subscription to Native `PaperTodoEventKind.TodoReminderUpcoming` / Web `todo.reminderUpcoming`. The event contains a `todo` snapshot, one-time `notificationId`, and System `metadata`. Legacy `todos.observe` grants remain valid only for the older events, not this new advance hook.
+- The host aims to emit five seconds before due. A reminder created or rescheduled with less lead time receives an immediate best-effort notice; already-overdue reminders at startup use normal host presentation without an advance notice. A reschedule invalidates the old token.
+- A plugin with **`todos.update`** may suppress the default notification before due through Native `IPaperReminderNotificationControl.SuppressDefaultReminderNotification(notificationId)` or Web `papertodo.workspace.request('reminders.suppressDefault', { notificationId })`. It returns `true` on success, `false` for invalid/expired tokens. This only suppresses the PaperTodo paper/tray presentation and sound; it does not change the todo or schedule. Multiple plugins can receive notices and may independently display their own notifications.
+- The host never blocks its UI awaiting JavaScript. Web plugins have up to the remaining advance window to respond; absent/late responses fall back to the default presentation. Completing/cancelling/rescheduling the Todo invalidates the token.
+- A reminder either successfully surfaced by the host or suppressed by a plugin is acknowledged with `reminderTriggered: true`, followed by System `TodoChanged`. Filter `!before.reminderTriggered && after.reminderTriggered`; a generic Reminder changed field may also mean rescheduling.
+- Regular pending `TodoChanged` callbacks run **after** the host presentation, not as a hidden veto hook. Events are live/best effort without replay or cross-restart exactly-once guarantees. A plugin's own display failure after suppression is not retried by the host.
+- Long-running listeners belong in provider Runtime; Web Body and Runtime support `onHostEvent`, Web Mini does not. Keep Native callbacks short.
+
+Native Runtime example (requires `todos.read` + `todos.update`):
+
+```csharp
+var stop = context.Workspace.Subscribe(
+    new PaperTodoEventFilter { Kinds = new HashSet<PaperTodoEventKind>
+        { PaperTodoEventKind.TodoReminderUpcoming } },
+    evt =>
+    {
+        if (evt is TodoReminderUpcomingEvent upcoming &&
+            context.Workspace is IPaperReminderNotificationControl control)
+        {
+            // Only suppress if this plugin is taking over presentation.
+            control.SuppressDefaultReminderNotification(upcoming.NotificationId);
+        }
+    });
+```
+
+Web Runtime example (requires `permissions: ["todos.read", "todos.update"]`):
+
+```js
+const stop = papertodo.onHostEvent(['todo.reminderUpcoming'], async event => {
+  const { notificationId, todo } = event;
+  // If the plugin will handle presentation, cancel the host's default:
+  const suppressed = await papertodo.workspace.request(
+    'reminders.suppressDefault', { notificationId });
+  if (suppressed) {
+    // Render the pet's own notification.
+  }
+});
+```
 
 Paper, Todo, Note and Note-image reads use the current host model/assets without committing editors. Recent typing may appear after the normal editor/save synchronization; reads do not force a flush. When an external write targets the same built-in Markdown paper, PaperTodo commits that paper's pending user text first so the write follows it; writes to other papers do not invoke unrelated third-party Body `Commit()`. Core `data.json` saves still synchronize built-in Markdown normally and do not use third-party Body `Commit()` as a global save hook. MCP creation/append accepts the new Todo's initial fields under additive writes; changing existing content still needs full writes.
 
@@ -1148,7 +1191,7 @@ papertodo.request(method, params);    // root transport
 papertodo.onEvent(listener);
 ```
 
-Runtime `initialize` contains `settings`, provider Runtime `state` plus its versions, and the current provider `papers` snapshot. Later setting changes produce `settingsChanged`; Paper add/remove events and Body messages produce `paperEvent`. Runtime does not receive paper-session APIs such as `paper`, `body`, `mini`, or `saveState`, and it does not have the Web `onHostEvent` subscription bridge.
+Runtime `initialize` contains `settings`, provider Runtime `state` plus its versions, and the current provider `papers` snapshot. Later setting changes produce `settingsChanged`; Paper add/remove events and Body messages produce `paperEvent`. API 2.2 also provides `papertodo.onHostEvent(types, listener, options)` for Workspace events, with the same observe/read permissions as Native. Runtime does not receive paper-session APIs such as `paper`, `body`, `mini`, or `saveState`.
 
 `papertodo.papers.postBody(...)` / Native `Papers.PostToBody(...)` only attempts delivery to the current live Body. Its return value tells whether that Body currently accepts the message; a Web Body may temporarily buffer until its document is ready. It is not a persistent message queue, business ACK, or guarantee of final delivery.
 
@@ -1280,3 +1323,22 @@ When starting a new plugin, copy the smallest structure from the sample closest 
 - Edge Mini does not depend on keyboard input;
 - declare only permissions / `runtime` that are actually needed;
 - 0↔1 Runtime ownership is correct when switching providers or deleting Papers; exiting PaperTodo fully removes Runtime and Global Top Bar contributions.
+
+## Explicit data.json reload (host 2.2 capability)
+
+Native Body/Runtime sessions use `Workspace.ReloadData()` and `Workspace.GetDataReloadStatus()`. Web Body/Mini/Runtime sessions use the Workspace bridge:
+
+Plugin calls to `ReloadData()` / `MergeData()` and Web `data.reload` / `data.merge` require the high-risk `data.import` permission in the plugin manifest. `data.status` remains readable without that grant. MCP continues to use its existing full-write gate.
+
+```js
+const result = await papertodo.workspace.request('data.reload', {});
+const status = await papertodo.workspace.request('data.status', {});
+```
+
+MCP exposes explicit `reload_data` and three-way `merge_data` (both require full writes), plus read-only `get_data_reload_status`. No file watcher, polling, revision history or normal-autosave fingerprint comparison is installed. Ordinary saves can overwrite external file edits until a deliberate reload/merge. Explicit requests fence obsolete queued saves; system termination still blocks new storage writes.
+
+Default `reload_data` adopts the validated active-workspace file as authoritative and may replace unsaved changes. For three-way merge, preserve the complete original JSON read **before editing**, then supply it to MCP `merge_data(baseline_json: originalJson)`, Native `Workspace.MergeData(originalJson)`, or Web `papertodo.workspace.request('data.merge', { baselineJson: originalJson })`. The argument is the original JSON string, not a path or a subsequently saved version. **Missing, blank, or invalid baselines return `invalid`**, even when current and disk states are equal. True conflicts obey `general.data_merge_conflicts` (`ask`, `external`, `internal`), affecting only conflicting values. Content merges at field level, not by lines. MCP retains the serialized request size limit of 8,000,000 characters; larger snapshots should use Native integration or domain APIs.
+
+On resolution, the host verifies that the external input has not changed, archives conflicting input, and commits through its atomic writer before applying the result. If the source changes during review, the merge aborts without installing the stale result. A queued merge returns `Outcome: pending` and `Applied: false`; query `get_data_reload_status` until `IsReloading` is false for its final outcome. The originating paper session may be released after reconciliation. This is not plugin-code hot reload. Prefer domain APIs for ordinary Todo/Note edits.
+
+See `doc/ARCHITECTURE.md` and D-060/061/063; D-062's regular-save file-monitoring policy was superseded. Shutdown/crash/passive disposal does not run a final save; explicit user exit is canceled if required writes fail.

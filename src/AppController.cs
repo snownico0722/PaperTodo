@@ -36,8 +36,8 @@ public sealed partial class AppController : IDisposable
 
     public static AppController Current { get; private set; } = null!;
 
-    private readonly StateStore _store = new();
-    private readonly NoteImageStore _imageStore = new();
+    private StateStore _store = null!;
+    private NoteImageStore _imageStore = null!;
     private readonly Dictionary<string, PaperWindow> _windows = new();
     private readonly DispatcherTimer _saveTimer;
     private readonly DispatcherTimer _forceSaveTimer;
@@ -46,6 +46,9 @@ public sealed partial class AppController : IDisposable
     private readonly DispatcherTimer _displayMetricsRefreshTimer;
     private DispatcherTimer? _todoReminderTimer;
     private bool _hasPendingDirty;
+    // UI-thread bookkeeping for snapshots queued to the background writer. A merge
+    // preview can supersede one after _hasPendingDirty was already cleared.
+    private readonly HashSet<(StateStore Store, long Version)> _pendingAsyncSaves = new();
 
     private TaskbarIcon? _trayIcon;
     private ContextMenu? _trayMenu;
@@ -54,6 +57,8 @@ public sealed partial class AppController : IDisposable
     private bool _suppressDirty;
     private bool _hasShownSaveFailure;
     private bool _ignoreSaveFailures;
+    private bool _preparingUserExit;
+    private bool _persistenceTerminationRequested;
     private int _trayRefreshSuppressionDepth;
     private bool _isRestoringStartupPapers;
     private bool _isRestoringRuntimePaperBatch;
@@ -87,13 +92,14 @@ public sealed partial class AppController : IDisposable
     public NoteImageStore ImageStore => _imageStore;
     internal double DeepCapsuleGap =>
         DeepCapsuleGapSizes.Value(State.DeepCapsuleGapSize);
-    internal bool IsRunning => _lifecycleState == AppLifecycleState.Running;
+    internal bool IsRunning => !IsExiting;
     internal bool HasPaperLinkDropTarget =>
         _paperLinkTargetWindow != null &&
         !string.IsNullOrWhiteSpace(_paperLinkTargetItemId);
     public bool SuppressDeepCapsuleTopmostForContextMenu => _deepCapsuleContextMenuOwners.Count > 0;
     private bool ShouldAvoidFullscreenTopmost => FullscreenTopmostModes.Normalize(State.FullscreenTopmostMode) == FullscreenTopmostModes.Avoid;
-    private bool IsExiting => _lifecycleState != AppLifecycleState.Running;
+    private bool IsExiting => _lifecycleState != AppLifecycleState.Running ||
+        Volatile.Read(ref _persistenceTerminationRequested);
 
     internal IntPtr FullscreenAvoidanceWindowFor(Window? window)
     {
@@ -145,17 +151,21 @@ public sealed partial class AppController : IDisposable
     public AppController()
     {
         Current = this;
-        State = _store.Load();
+        InitializeWorkspaceState();
+        _imageStore.AutoCompressLargeImages = State.AutoCompressLargeImages;
+        _imageStore.Load();
+        // A missing or damaged picture must not redirect startup to another workspace.
+        UiLanguages.ApplyWorkspacePreference(State.UiLanguage);
         State.PaperSkin = PaperSkins.Resolve(State);
         UsesNativeMicaWindows = PaperSkins.UsesNativeBackdrop(State.PaperSkin) && NativeMicaBackdrop.IsSupported;
         Theme.Invalidate();
         RefreshApplicationThemeResources();
-        _imageStore.AutoCompressLargeImages = State.AutoCompressLargeImages;
-        _imageStore.Load();
         var protectedImageIdsForReuse = TryCollectUnprotectedImages();
         // Only rebuild free numbers when the same protection scan that gates GC succeeded.
         // A failed scan leaves reuse disabled so missing-but-referenced ids are never reissued.
         _imageStore.PrepareReusableImageNumbers(protectedImageIdsForReuse);
+        _imageStore.ProtectPersistedImageReferences(State, protectedImageIdsForReuse,
+            System.IO.File.Exists(_store.FilePath) || System.IO.File.Exists(_store.BackupPath));
         NormalizePaperSystemVisibilitySettings();
         AppTypography.Configure(
             State.UiFontPreset,
@@ -165,6 +175,8 @@ public sealed partial class AppController : IDisposable
         NoteTypography.Configure(State.NoteTextSize, State.NoteTextBold);
         ToolTipPreferences.Register(() => State.EnableToolTips);
         _paperBodyPlugins = new PaperBodyPluginRegistry();
+        _paperBodyPlugins.DataStore.WriteLifetime = _store.WriteLifetime;
+        InitializeWorkspacePluginData();
 
         // Idle debounce: save ~1s after the last change.
         // Force cap: while edits keep resetting the idle timer, still flush at least every 10s.
@@ -229,6 +241,11 @@ public sealed partial class AppController : IDisposable
         StartupCommandKind initialVisibilityCommand = StartupCommandKind.None)
     {
         CreateTrayIcon();
+        NotifyWorkspaceStartup();
+        // Complete a successful backup recovery or a confirmed-corrupt rebuild using
+        // the ordinary guarded writer. This never runs after a failed/busy load.
+        if (_store.NeedsStartupRecoverySave)
+            SaveNow(sync: true);
         InitializeGlobalHotkeys();
         _ = Task.Run(PaperWindow.CleanupOldScriptCapsuleTempFiles);
         _ = Application.Current.Dispatcher.BeginInvoke(
@@ -2028,7 +2045,7 @@ public sealed partial class AppController : IDisposable
         SaveNow();
     }
 
-    // Called by both UI deletion and a successfully committed external deletion.
+    // Called by UI deletion, committed external deletion, and accepted data reload/merge.
     // Cross-paper history belongs to entity removal, not plugin-state persistence.
     internal void NotifyPaperRemoved(string paperId)
     {
@@ -2803,6 +2820,7 @@ public sealed partial class AppController : IDisposable
 
     public void UpdateGeometry(PaperData paper, Window window)
     {
+        if (IsDataReloading) return;
         if (window is PaperWindow { SuppressGeometrySave: true })
         {
             return;
@@ -3326,8 +3344,10 @@ public sealed partial class AppController : IDisposable
         _ = TrySaveNow(sync);
     }
 
-    private bool TrySaveNow(bool sync)
+    private bool TrySaveNow(bool sync, bool workspaceBoundary = false)
     {
+        if (IsExiting) return false;
+        if (IsDataReloading && !workspaceBoundary) return false;
         long? attemptedVersion = null;
         try
         {
@@ -3339,22 +3359,27 @@ public sealed partial class AppController : IDisposable
             NotifyPluginEventMutationStampChanged();
             attemptedVersion = version;
             var stateRevision = Interlocked.Read(ref _stateRevision);
-            var json = _store.SerializeState(State);
+            var store = _store;
+            var workspaceGeneration = Interlocked.Read(ref _workspaceGeneration);
+            var json = store.SerializeState(State);
             if (sync)
             {
-                _store.SaveJsonSync(json, version);
+                store.SaveJsonSync(json, version);
                 CompleteStateSaveMaintenance(releaseImageCache: true);
                 _hasShownSaveFailure = false;
             }
             else
             {
+                _pendingAsyncSaves.Add((store, version));
                 _ = Task.Run(async () =>
                 {
                     try
                     {
-                        await _store.SaveJsonAsync(json, version);
+                        await store.SaveJsonAsync(json, version);
                         Application.Current?.Dispatcher?.BeginInvoke(new Action(() =>
                         {
+                            _pendingAsyncSaves.Remove((store, version));
+                            if (workspaceGeneration != Interlocked.Read(ref _workspaceGeneration) || IsExiting) return;
                             if (version == Interlocked.Read(ref _saveVersion) &&
                                 stateRevision == Interlocked.Read(ref _stateRevision))
                             {
@@ -3367,7 +3392,9 @@ public sealed partial class AppController : IDisposable
                     {
                         Application.Current?.Dispatcher?.BeginInvoke(new Action(() =>
                         {
-                            HandleSaveFailure(ex, version);
+                            _pendingAsyncSaves.Remove((store, version));
+                            if (workspaceGeneration == Interlocked.Read(ref _workspaceGeneration) && !IsExiting)
+                                HandleSaveFailure(ex, version);
                         }));
                     }
                 });
@@ -3384,6 +3411,7 @@ public sealed partial class AppController : IDisposable
 
     internal void CommitPendingMarkdownContentsForSave()
     {
+        if (SuppressDataReloadEditorCommit) return;
         var dispatcher = Application.Current?.Dispatcher;
         if (dispatcher != null && !dispatcher.CheckAccess())
         {
@@ -3477,8 +3505,6 @@ public sealed partial class AppController : IDisposable
             return;
         }
 
-        // If nothing newer has superseded this attempt, keep trying after the force interval
-        // so a transient write failure does not drop the dirty state permanently.
         ArmSaveRetryIfNeeded(failedVersion);
 
         if (!_hasShownSaveFailure && !_ignoreSaveFailures)
@@ -4112,42 +4138,35 @@ public sealed partial class AppController : IDisposable
 
     public void Exit()
     {
-        if (IsExiting)
+        if (IsExiting || _preparingUserExit) return;
+        if (!FinishDataReloadBeforeExit()) return;
+        _preparingUserExit = true;
+        try
         {
-            return;
-        }
-
-        CommitSettingsExternalMarkdownEditor(saveImmediately: false);
-        foreach (var window in _windows.Values.ToList())
-        {
-            window.CommitPendingEditsForSave();
-        }
-
-        _lifecycleState = AppLifecycleState.Exiting;
-        _saveTimer.Stop();
-        _forceSaveTimer.Stop();
-        StopFullscreenAvoidanceRuntime(restoreTopmost: false);
-        _displayMetricsRefreshTimer.Stop();
-        StopTodoReminderTimer();
-
-        if (!TrySaveNow(sync: true))
-        {
-            TryExitCleanup(() =>
+            CommitSettingsExternalMarkdownEditor(saveImmediately: false);
+            foreach (var window in _windows.Values.ToList()) window.CommitPendingEditsForSave();
+            // Ordinary exit owns the final coherent save. Failure leaves the editor alive;
+            // Dispose/OnExit must never retry a rejected save after tearing down the UI.
+            if (IsExiting || !TrySaveNow(sync: true)) return;
+            try { _paperBodyPlugins.DataStore.FlushForUserExit(); }
+            catch (Exception ex)
             {
-                MessageBox.Show(
-                    Strings.Get("ExitSaveFailureMessage"),
-                    Strings.Get("SaveFailureTitle"),
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Error);
-            });
+                HandleSaveFailure(ex);
+                return;
+            }
+            if (IsExiting) return;
+            _lifecycleState = AppLifecycleState.Exiting;
+            _saveTimer.Stop();
+            _forceSaveTimer.Stop();
+            StopFullscreenAvoidanceRuntime(restoreTopmost: false);
+            _displayMetricsRefreshTimer.Stop();
+            StopTodoReminderTimer();
+            DisposeRuntimeResources();
+            _lifecycleState = AppLifecycleState.Disposed;
+            _store.StopWritesForTermination();
+            Application.Current.Shutdown();
         }
-
-        DisposeRuntimeResources();
-        _lifecycleState = AppLifecycleState.Disposed;
-        // Let the owning Dispatcher finish WPF shutdown and App.OnExit (single-instance
-        // listener, telemetry and Application resources). Environment.Exit here preempts
-        // that queued work and was slower in the process-exit A/B; owned work is already stopped.
-        Application.Current.Shutdown();
+        finally { _preparingUserExit = false; }
     }
 
     private static void TryExitCleanup(Action cleanup)
@@ -4196,16 +4215,9 @@ public sealed partial class AppController : IDisposable
             return;
         }
 
-        if (_lifecycleState == AppLifecycleState.Running)
-        {
-            foreach (var window in _windows.Values.ToList())
-            {
-                window.CommitPendingEditsForSave();
-            }
-
-            TrySaveNow(sync: true);
-        }
-
+        // Disposal can be reached by WPF shutdown or failed startup, not just user Exit.
+        // The explicit Exit owner already saved successfully; never invent a fallback save.
+        AbortPersistenceForTermination();
         _lifecycleState = AppLifecycleState.Exiting;
         DisposeRuntimeResources();
         _lifecycleState = AppLifecycleState.Disposed;
@@ -4216,6 +4228,7 @@ public sealed partial class AppController : IDisposable
         TryExitCleanup(CancelMasterCapsuleQueueTransfers);
         _pluginStartupPaperGeneration++;
         StopStateBackupPolicy();
+        StopCoreHistoryBackupPolicy();
         MarkdownEdgePreviewPreload.For(Application.Current.Dispatcher).Clear();
         // Stop all child processes together; their grace periods overlap each other and WPF
         // teardown. Only non-UI process work runs in the pool, not Window/Host disposal.
@@ -4261,6 +4274,7 @@ public sealed partial class AppController : IDisposable
         TryExitCleanup(() => scriptShutdown.GetAwaiter().GetResult());
     }
 }
+
 
 
 

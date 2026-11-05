@@ -453,10 +453,14 @@ public readonly record struct TodoVisualMetrics(
 
 public sealed class AppState
 {
+    // The unnumbered data.json is the sole owner; absent in legacy and numbered documents.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WorkspaceConfiguration? Workspaces { get; set; }
     [JsonRequired]
     public List<PaperData> Papers { get; set; } = new();
     [JsonPropertyOrder(-100)]
     public string UiLanguage { get; set; } = UiLanguages.Default;
+    public string DataMergeConflictPolicy { get; set; } = DataMergeConflictPolicies.Ask;
     public string Theme { get; set; } = "system";
     public string ColorScheme { get; set; } = ColorSchemes.Warm;
     // Null is the legacy migration sentinel; an explicit "paper" never implies Mica.
@@ -464,7 +468,6 @@ public sealed class AppState
     public string MaterialTransparency { get; set; } = MaterialTransparencyLevels.Medium;
     // Hides only the ordinary outer stroke. Active/focus capsule outlines stay separate.
     public bool HideSurfaceOutline { get; set; } = false;
-    public bool MatchAuxiliaryMaterialStrength { get; set; }
     public string MicaBackdropType { get; set; } = MicaBackdropTypes.Mica;
     public bool MicaAlwaysActive { get; set; }
     [System.Diagnostics.CodeAnalysis.AllowNull]
@@ -504,7 +507,7 @@ public sealed class AppState
     // the remaining commands live in the menu. The per-paper types have no separate layout.
     public List<string> TopBarShortcutOrder { get; set; } =
         PaperTopBarShortcuts.NormalizeOrder(null);
-    public int TopBarPinnedCount { get; set; } = 1;
+    public int TopBarPinnedCount { get; set; } = 2;
     // Read-only legacy migration inputs from older data.json versions. Do not write
     // obsolete per-type lists back once converted to the single global layout.
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

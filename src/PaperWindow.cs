@@ -134,7 +134,6 @@ public sealed partial class PaperWindow : Window
     private Rect? _snappedPresentationBoundsForRestore;
     private bool _collapsedFromMaximized;
     private int _themeAnimationGeneration;
-    private int _clearDoneGeneration;
     private int _todoRowsGeneration;
     private const double DeepCapsuleExpandedEdgeInset = EdgeCapsuleLayout.ExpandedEdgeInset;
     private const double DeepCapsuleTopMargin = EdgeCapsuleLayout.TopMargin;
@@ -1669,6 +1668,7 @@ public sealed partial class PaperWindow : Window
         RefreshPaperTitle();
         RefreshPaperIconButton();
         RefreshWindowBindingButton();
+        RefreshWorkspaceButton();
         UpdateTextZoom();
         UpdateDeepCapsuleSlotHostTheme();
 
@@ -1784,6 +1784,7 @@ public sealed partial class PaperWindow : Window
             CapsuleLabelFontWeight,
             AppTypography.Scale(18));
         RefreshThemedContextMenus();
+        RefreshWorkspaceButton();
 
         RefreshPaperTitle();
         UpdateTopBarResponsiveLayout();
@@ -2374,6 +2375,7 @@ public sealed partial class PaperWindow : Window
         actionButtons.Children.Add(_newTodoButton);
         actionButtons.Children.Add(_newNoteButton);
         buttons.Children.Add(_moreActionsButton);
+        actionButtons.Children.Add(CreateWorkspaceCycleButton());
         buttons.Children.Add(_closeButton);
         UpdateTopBarNewPaperButtons();
 
@@ -2669,17 +2671,26 @@ public sealed partial class PaperWindow : Window
         menu.Items.Clear();
         menu.Items.Add(MenuHeader(Strings.Get("MenuQuick")));
 
-        // Follow one global order for both the top bar and its dynamic overflow.
-        // The menu lists only the commands not currently shown as title-bar buttons.
+        // Keep the same command order in both menus. Only the expanded paper's own
+        // menu skips commands already visible in its top bar; the edge capsule is a
+        // separate surface and must retain both creation actions.
         foreach (var action in PaperTopBarShortcuts.NormalizeOrder(_controller.State.TopBarShortcutOrder))
         {
             switch (action)
             {
-                case PaperTopBarShortcuts.NewTodo when !IsTopBarCommandVisible(_newTodoButton):
+                case PaperTopBarShortcuts.Workspace when
+                    _controller.WorkspaceOptions.Enabled &&
+                    _controller.WorkspaceOptions.SlotNumbers.Count > 1 &&
+                    !IsTopBarCommandVisible(_workspaceButton):
+                    menu.Items.Add(BuildWorkspaceShortcutMenuItem(menu));
+                    break;
+                case PaperTopBarShortcuts.NewTodo when
+                    forDeepCapsuleSlot || !IsTopBarCommandVisible(_newTodoButton):
                     menu.Items.Add(MenuItem(Strings.Get("MenuNewTodoPaper"),
                         (_, _) => _controller.CreatePaper(PaperTypes.Todo, show: true, _paper)));
                     break;
-                case PaperTopBarShortcuts.NewNote when !IsTopBarCommandVisible(_newNoteButton):
+                case PaperTopBarShortcuts.NewNote when
+                    forDeepCapsuleSlot || !IsTopBarCommandVisible(_newNoteButton):
                     menu.Items.Add(MenuItem(Strings.Get("MenuNewNotePaper"),
                         (_, _) => _controller.CreatePaper(PaperTypes.Note, show: true, _paper)));
                     break;
@@ -2703,13 +2714,24 @@ public sealed partial class PaperWindow : Window
         menu.Items.Add(MenuSeparator());
         menu.Items.Add(MenuHeader(_controller.PaperCapsuleTitle(_paper)));
 
-        if (_paper.Type == PaperTypes.Todo)
-        {
-            menu.Items.Add(MenuItem(Strings.Get("MenuClearDone"), (_, _) => ClearDoneItems()));
-        }
-        else if (_paper.Type == PaperTypes.Note)
-        {
+        if (_paper.Type == PaperTypes.Note)
             menu.Items.Add(BuildPaperBodyProviderMenuItem());
+
+        if (IsExportablePaper(_paper))
+        {
+            var currentLabel = _paper.Type == PaperTypes.Todo
+                ? "TodoExportCurrent" : "NoteExportCurrent";
+            var current = MenuItem(Strings.Get(currentLabel),
+                (_, _) => ExportPapers(all: false));
+            current.IsEnabled = !_paperExportRunning;
+            menu.Items.Add(current);
+
+            var allLabel = _paperExportRunning
+                ? Strings.Format("NoteExportProgress", _paperExportCompleted, _paperExportTotal)
+                : Strings.Get("NoteExportAll");
+            var exportAll = MenuItem(allLabel, (_, _) => ExportPapers(all: true));
+            exportAll.IsEnabled = !_paperExportRunning;
+            menu.Items.Add(exportAll);
         }
 
         AttachPluginPaperMenuActions(menu);

@@ -456,8 +456,23 @@ internal static partial class Program
             Items =
             [
                 new PaperItem { Id = "reminder-1", Text = "first", Order = 0, ReminderAt = now.AddSeconds(-2) },
-                new PaperItem { Id = "reminder-2", Text = "second", Order = 1, ReminderAt = now.AddSeconds(-1) }
+                new PaperItem { Id = "reminder-2", Text = "second", Order = 1, ReminderAt = now.AddSeconds(-1) },
+                new PaperItem { Id = "reminder-future", Text = "future", Order = 2, ReminderAt = now.AddSeconds(12) }
             ]
+        };
+        var cancelledPaper = new PaperData
+        {
+            Id = "tests.cancelled-before-display",
+            Type = PaperTypes.Todo,
+            IsVisible = false
+        };
+        var delegated = new PaperData
+        {
+            Id = "tests.suppressed-reminder-notification",
+            Type = PaperTypes.Todo,
+            IsVisible = false,
+            Items = [new PaperItem { Id = "delegated", Text = "pet notification",
+                ReminderAt = DateTimeOffset.Now.AddMinutes(1) }]
         };
         c.State.Papers.Add(paper);
 
@@ -466,14 +481,141 @@ internal static partial class Program
             c.State.ExperimentalTodoReminders = true;
             c.State.ExperimentalTodoReminderSoundEnabled = false;
             Field(c, "_trayIcon", null!);
+            c.PaperBodyPluginEvents.ScanNow(PaperOperationContext.User());
+            var events = new List<PaperTodoEvent>();
+            using var subscription = c.PaperBodyPluginEvents.Subscribe(
+                Guid.NewGuid(), "reminder-test", new PaperTodoEventFilter
+                {
+                    Kinds = new HashSet<PaperTodoEventKind>
+                    {
+                        PaperTodoEventKind.TodoChanged,
+                        PaperTodoEventKind.PaperChanged
+                    }
+                }, events.Add);
+            paper.Items[0].Text = "pending user edit";
+            c.MarkDirty();
 
             _ = Invoke(c, "ProcessDueTodoReminders", now);
+            c.PaperBodyPluginEvents.ScanNow(PaperOperationContext.User());
+            var presentationEvents = events.OfType<PaperChangedEvent>()
+                .Where(e => e.After.Id == paper.Id &&
+                    e.ChangedFields.HasFlag(PaperChangedFields.Visibility))
+                .ToArray();
+            Check(presentationEvents.Length == 1 &&
+                presentationEvents[0].Metadata.Origin == PaperTodoEventOrigin.System &&
+                !presentationEvents[0].Before.IsVisible && presentationEvents[0].After.IsVisible,
+                "Automatic reminder presentation must emit exactly one system-origin visibility event.");
+            Check(events.FindIndex(e => e is TodoChangedEvent change &&
+                    change.After.Id == "reminder-1" &&
+                    change.Metadata.Origin == PaperTodoEventOrigin.User) <
+                  events.FindIndex(e => e is PaperChangedEvent changed &&
+                    changed.After.Id == paper.Id &&
+                    changed.Metadata.Origin == PaperTodoEventOrigin.System),
+                "Pending user changes must be delivered before reminder presentation changes.");
+            var changes = events.OfType<TodoChangedEvent>().ToArray();
+            Check(changes.Any(e => e.After.Id == "reminder-1" &&
+                e.ChangedFields == TodoChangedFields.Reminder &&
+                e.Metadata.Origin == PaperTodoEventOrigin.System),
+                "Delivered reminder state must be attributed to the system. Events: " +
+                string.Join(", ", events.Select(e => e is TodoChangedEvent change
+                    ? $"{change.After.Id}:{change.ChangedFields}:{change.Metadata.Origin}"
+                    : e.Kind.ToString())));
+            var reminderChanges = changes.Where(e => e.After.Id == "reminder-1").ToArray();
+            Check(reminderChanges.Length == 2 &&
+                reminderChanges[0].ChangedFields == TodoChangedFields.Text &&
+                reminderChanges[0].Metadata.Origin == PaperTodoEventOrigin.User &&
+                reminderChanges[1].Metadata.Origin == PaperTodoEventOrigin.System &&
+                reminderChanges[0].After == reminderChanges[1].Before,
+                "Pending user edits must precede the system transition with continuous snapshots.");
+            Check(!events.OfType<TodoChangedEvent>().Any(e => e.After.Id == "reminder-2" && e.Metadata.Origin == PaperTodoEventOrigin.System && !e.Before.ReminderTriggered && e.After.ReminderTriggered),
+                "An undelivered reminder must not emit an occurrence.");
+            var retryTimer = ReadField<System.Windows.Threading.DispatcherTimer?>(c, "_todoReminderTimer");
+            Check(retryTimer?.IsEnabled == true && retryTimer.Interval < TimeSpan.FromSeconds(25),
+                "Partial delivery retry postponed a separately scheduled future reminder.");
 
-            Check(paper.Items[0].ReminderTriggered && !paper.Items[1].ReminderTriggered,
-                "Opening only the first due reminder must not acknowledge the unseen remainder.");
+            // Ordinary TodoChanged handlers run after presentation. Even if a listener
+            // edits the reminder, it cannot retroactively veto the occurrence.
+            var edited = paper.Items[1];
+            var callbackSawTriggered = false;
+            using (var changeSub = c.PaperBodyPluginEvents.Subscribe(
+                Guid.NewGuid(), "post-edit-test", new PaperTodoEventFilter
+                {
+                    Kinds = new HashSet<PaperTodoEventKind> { PaperTodoEventKind.TodoChanged }
+                }, e =>
+                {
+                    if (e is TodoChangedEvent change && change.After.Id == edited.Id &&
+                        change.Metadata.Origin == PaperTodoEventOrigin.User)
+                    {
+                        callbackSawTriggered = edited.ReminderTriggered;
+                        edited.ReminderAt = null;
+                    }
+                }))
+            {
+                edited.Text = "edited before reminder";
+                c.MarkDirty();
+                _ = Invoke(c, "ProcessDueTodoReminders", now);
+                Check(callbackSawTriggered && edited.ReminderTriggered &&
+                    events.OfType<TodoChangedEvent>().Any(e => e.After.Id == edited.Id &&
+                        e.Metadata.Origin == PaperTodoEventOrigin.System &&
+                        !e.Before.ReminderTriggered && e.After.ReminderTriggered),
+                    "Ordinary TodoChanged callback ran before host reminder delivery.");
+            }
+
+            // A just-created due Todo must still emit creation then system transition,
+            // but its creation callback must not become an implicit pre-notification hook.
+            paper.Items[0].Done = true;
+            paper.Items[1].Done = true;
+            c.State.Papers.Add(cancelledPaper);
+            c.PaperBodyPluginEvents.ScanNow(PaperOperationContext.User());
+            var newDue = new PaperItem { Id = "reminder-cancelled", Text = "new reminder", ReminderAt = now.AddSeconds(-1) };
+            var callbackRanAfterTrigger = false;
+            using var createSub = c.PaperBodyPluginEvents.Subscribe(
+                Guid.NewGuid(), "creation-test", new PaperTodoEventFilter
+                {
+                    Kinds = new HashSet<PaperTodoEventKind> { PaperTodoEventKind.TodoCreated }
+                }, e =>
+                {
+                    if (e is TodoCreatedEvent created && created.Todo.Id == newDue.Id)
+                    {
+                        callbackRanAfterTrigger = newDue.ReminderTriggered;
+                        newDue.ReminderAt = null;
+                    }
+                });
+            cancelledPaper.Items.Add(newDue);
+            _ = Invoke(c, "ProcessDueTodoReminders", now);
+            Check(newDue.ReminderTriggered && callbackRanAfterTrigger && cancelledPaper.IsVisible,
+                "Todo creation callback incorrectly prevented the host reminder.");
+
+            Check(paper.Items[0].ReminderTriggered && paper.Items[1].ReminderTriggered,
+                "An undelivered second reminder was not retried on the next delivery pass.");
+
+            // Advance reminder notification is an explicit opt-in hook: the plugin may suppress
+            // this one default presentation. No PaperTodo paper/balloon/sound is shown, but
+            // the Todo is acknowledged and a normal System TodoChanged is still emitted.
+            paper.Items[2].Done = true;
+            c.State.Papers.Add(delegated);
+            c.PaperBodyPluginEvents.ScanNow(PaperOperationContext.User());
+            var upcoming = new List<TodoReminderUpcomingEvent>();
+            using var preSub = c.PaperBodyPluginEvents.Subscribe(
+                Guid.NewGuid(), "advance-test", new PaperTodoEventFilter
+                {
+                    Kinds = new HashSet<PaperTodoEventKind> { PaperTodoEventKind.TodoReminderUpcoming }
+                }, e => upcoming.Add((TodoReminderUpcomingEvent)e));
+            var delegatedAt = delegated.Items[0].ReminderAt!.Value;
+            _ = Invoke(c, "PublishUpcomingTodoReminders", delegatedAt.AddSeconds(-5));
+            Check(upcoming.Count == 1 && upcoming[0].Todo.Id == "delegated" &&
+                c.SuppressDefaultReminderNotification(upcoming[0].NotificationId),
+                "Advance notification did not supply a valid suppression token.");
+            _ = Invoke(c, "ProcessDueTodoReminders", delegatedAt);
+            Check(delegated.Items[0].ReminderTriggered && !delegated.IsVisible &&
+                events.OfType<TodoChangedEvent>().Any(e =>
+                    e.After.Id == "delegated" && e.Metadata.Origin == PaperTodoEventOrigin.System &&
+                    !e.Before.ReminderTriggered && e.After.ReminderTriggered) &&
+                !c.SuppressDefaultReminderNotification(upcoming[0].NotificationId),
+                "A suppressed default notification was displayed, retried, or failed to publish TodoChanged.");
             var timer = ReadField<System.Windows.Threading.DispatcherTimer?>(c, "_todoReminderTimer");
             Check(timer?.IsEnabled == true,
-                "Unsurfaced due reminders must remain scheduled for retry.");
+                "A remaining future reminder must stay scheduled.");
         }
         finally
         {
@@ -481,6 +623,18 @@ internal static partial class Program
             Field(c, "_trayIcon", tray!);
             c.State.ExperimentalTodoReminders = previousEnabled;
             c.State.ExperimentalTodoReminderSoundEnabled = previousSound;
+            if (c.State.Papers.Contains(cancelledPaper))
+            {
+                _ = c.PaperCommands.DeletePaper(
+                    cancelledPaper.Id,
+                    PaperOperationContext.User());
+            }
+            if (c.State.Papers.Contains(delegated))
+            {
+                _ = c.PaperCommands.DeletePaper(
+                    delegated.Id,
+                    PaperOperationContext.User());
+            }
             if (c.State.Papers.Contains(paper))
             {
                 _ = c.PaperCommands.DeletePaper(
@@ -673,3 +827,4 @@ public sealed class BoundaryRuntimePlugin : IPaperBodyPlugin, IPaperPluginRuntim
     }
     private sealed class Runtime : IPaperPluginRuntime { public void Dispose() { } }
 }
+

@@ -79,9 +79,6 @@ public sealed partial class PaperWindow
         _presentationState = collapsed
             ? PaperPresentationState.Collapsing
             : PaperPresentationState.Expanding;
-        // IsCapsule changes to the target form before its size animation starts. Keep the
-        // current scene, but never acquire a new desktop snapshot for an intermediate frame.
-        if (_paperChrome is SkinBorder skin) skin.SetSampledBackgroundCaptureSuspended(true);
         // Native refresh belongs after target/frame preparation in SetCollapsedStateCore.
     }
 
@@ -102,21 +99,6 @@ public sealed partial class PaperWindow
         // state still said "transitioning". Re-select the actual endpoint here.
         ApplyPaperChromePresentation();
 
-        if (_paperChrome is SkinBorder skin)
-        {
-            var generation = _collapseTransitionGeneration;
-            // Render/layout and already queued native geometry notifications must settle
-            // before the one endpoint capture. A reversed/closed transition cannot resume it.
-            Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
-            {
-                if (_windowLifecycle == PaperWindowLifecycleState.Alive &&
-                    generation == _collapseTransitionGeneration && !IsPaperFormTransitioning)
-                {
-                    skin.SetSampledBackgroundCaptureSuspended(false);
-                }
-            }));
-        }
-
         // Collapse: release images only after the form transition finishes so the fading shell
         // still shows bitmaps. Expand restores rendering earlier (when the shell becomes visible).
         if (collapsed && _paper.Type == PaperTypes.Note)
@@ -132,6 +114,7 @@ public sealed partial class PaperWindow
 
     internal void CommitPendingEditsForSave()
     {
+        if (_controller.SuppressDataReloadEditorCommit) return;
         CancelPendingTitleEditIntent();
         if (_isEditingTitle)
         {
@@ -139,6 +122,15 @@ public sealed partial class PaperWindow
         }
 
         CommitPendingNoteContent();
+    }
+
+    // An external data.json reload must collect host-owned edits without flushing
+    // unrelated third-party plugin bodies (which have independent persistence).
+    internal void CommitPendingEditsForDataReload()
+    {
+        CancelPendingTitleEditIntent();
+        if (_isEditingTitle) EndTitleEdit(commit: true);
+        CommitPendingMarkdownContentForSave();
     }
 
     internal void CommitPendingNoteContentForSave()
@@ -281,7 +273,6 @@ public sealed partial class PaperWindow
         if (_paperChrome is SkinBorder surface) surface.SetFormTransition(false);
         _windowLifecycle = PaperWindowLifecycleState.Closing;
         _presentationState = PaperPresentationState.Closing;
-        if (_paperChrome is SkinBorder skin) skin.SetSampledBackgroundCaptureSuspended(true);
         _collapseTransitionGeneration++;
         CancelPaperFormAnimationClocks();
         AbortAllInteractions(InteractionAbortReason.Closing);

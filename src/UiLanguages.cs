@@ -22,20 +22,32 @@ public static class UiLanguages
     private const int MaximumPreferenceReadBufferBytes = 1024 * 1024;
 
     // Capture the real process/system cultures before PaperTodo applies any preference.
-    // Language switching is restart-based: resolve one effective culture for this process
-    // and keep resource lookup independent from async/Dispatcher ExecutionContext culture flow.
+    // Ordinary setting edits remain restart-based. A workspace boundary can replace the
+    // effective culture after its old windows end, independent of async ExecutionContext flow.
     private static readonly CultureInfo SystemCulture = CultureInfo.CurrentCulture;
     private static readonly CultureInfo SystemUiCulture = CultureInfo.CurrentUICulture;
     private static readonly string StartupPreference = LoadPersistedPreferenceCore();
 
-    // Intentionally fixed for the process lifetime; a settings change takes effect after restart.
+    // A regular setting change takes effect after restart or a complete workspace handoff.
     // EffectiveCulture owns user-visible number/date formatting and parsing; EffectiveUiCulture
     // owns resource lookup plus WPF language/shaping. Persistence and protocols choose explicitly.
-    public static CultureInfo EffectiveCulture { get; } =
+    public static CultureInfo EffectiveCulture { get; private set; } =
         ResolveCulture(StartupPreference, SystemCulture);
 
-    public static CultureInfo EffectiveUiCulture { get; } =
+    public static CultureInfo EffectiveUiCulture { get; private set; } =
         ResolveCulture(StartupPreference, SystemUiCulture);
+
+    // A workspace switch has already ended the previous UI/session generation. Ordinary
+    // setting edits retain their restart contract; only this full lifecycle boundary changes it.
+    internal static void ApplyWorkspacePreference(string preference)
+    {
+        EffectiveCulture = ResolveCulture(preference, SystemCulture);
+        EffectiveUiCulture = ResolveCulture(preference, SystemUiCulture);
+        CultureInfo.DefaultThreadCurrentCulture = EffectiveCulture;
+        CultureInfo.DefaultThreadCurrentUICulture = EffectiveUiCulture;
+        CultureInfo.CurrentCulture = EffectiveCulture;
+        CultureInfo.CurrentUICulture = EffectiveUiCulture;
+    }
 
     public static string Normalize(string? language)
     {

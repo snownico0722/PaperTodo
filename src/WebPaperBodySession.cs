@@ -386,7 +386,9 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
                     try { listener(message.event); } catch { }
                   }
                 } else if (message?.type === 'hostSubscriptionError') {
-                  hostEventListeners.delete(message.subscriptionId);
+                  if (!message.existingSubscriptionRetained) {
+                    hostEventListeners.delete(message.subscriptionId);
+                  }
                 }
                 for (const listener of [...listeners]) {
                   try { listener(message); } catch { }
@@ -832,11 +834,7 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
         var documentGeneration = _documentGeneration;
         try
         {
-            if (_hostSubscriptions.Remove(subscriptionId, out var existing))
-            {
-                existing.Dispose();
-            }
-            _hostSubscriptions[subscriptionId] = _context.Host.Subscribe(
+            var replacement = _context.Host.Subscribe(
                 new PaperTodoEventFilter
                 {
                     Kinds = ReadEventKinds(payload),
@@ -859,6 +857,9 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
                         @event = eventJson
                     });
                 });
+            _hostSubscriptions.TryGetValue(subscriptionId, out var existing);
+            _hostSubscriptions[subscriptionId] = replacement;
+            existing?.Dispose();
         }
         catch (PaperTodoPluginException ex)
         {
@@ -866,6 +867,7 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
             {
                 type = "hostSubscriptionError",
                 subscriptionId,
+                existingSubscriptionRetained = _hostSubscriptions.ContainsKey(subscriptionId),
                 error = new { code = ex.Code, message = ex.Message }
             });
         }
@@ -890,7 +892,7 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
         _hostSubscriptions.Clear();
     }
 
-    private static HashSet<PaperTodoEventKind> ReadEventKinds(JsonElement payload)
+    internal static HashSet<PaperTodoEventKind> ReadEventKinds(JsonElement payload)
     {
         if (payload.ValueKind != JsonValueKind.Object ||
             !payload.TryGetProperty("types", out var values) ||
@@ -909,6 +911,7 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
                 "paper.deleted" => PaperTodoEventKind.PaperDeleted,
                 "todo.created" => PaperTodoEventKind.TodoCreated,
                 "todo.changed" => PaperTodoEventKind.TodoChanged,
+                "todo.reminderUpcoming" => PaperTodoEventKind.TodoReminderUpcoming,
                 "todo.deleted" => PaperTodoEventKind.TodoDeleted,
                 "note.changed" => PaperTodoEventKind.NoteChanged,
                 var unknown => throw new PaperTodoPluginException(
@@ -925,7 +928,7 @@ internal sealed partial class WebPaperBodySession : IPaperBodySession
         return result;
     }
 
-    private static HashSet<string>? ReadStringSet(JsonElement payload, string name)
+    internal static HashSet<string>? ReadStringSet(JsonElement payload, string name)
     {
         if (payload.ValueKind != JsonValueKind.Object ||
             !payload.TryGetProperty(name, out var values) ||
