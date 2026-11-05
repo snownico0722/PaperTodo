@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Automation;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -410,6 +411,27 @@ internal static partial class Program
         using var controller = new AppController();
         await controller.StartAsync(createDefaultPaper: false);
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+
+        // Workbench moved from a full text row to a native, icon-only tray action.
+        var tray = controller.CreateTrayMenu();
+        controller.RebuildTrayMenu(tray);
+        Assert(!tray.Items.OfType<MenuItem>().Any(item =>
+                Equals(item.Header, Strings.Get("WorkbenchTitle"))),
+            "Tray still exposes a standalone text row for the workbench");
+        var toolbar = (MenuItem)tray.Items[2];
+        var controls = ((Grid)toolbar.Header).Children.OfType<Border>()
+            .OrderBy(Grid.GetColumn).ToArray();
+        Assert(controls.Length == 4 &&
+               Grid.GetColumn(controls[1]) == 2 &&
+               Grid.GetColumn(controls[2]) == 3 &&
+               Grid.GetColumn(controls[3]) == 4 &&
+               AutomationProperties.GetAutomationId(controls[1]) == "TrayWorkbench" &&
+               AutomationProperties.GetName(controls[1]) == Strings.Get("WorkbenchTitle") &&
+               Equals(controls[1].ToolTip, Strings.Get("WorkbenchTitle")) &&
+               controls[1].Child is System.Windows.Shapes.Path &&
+               controls[1].Focusable,
+            "Workbench tray icon is absent, mislabeled or out of order beside the two creation actions");
+
         var desktopWindow = controller.WorkbenchPaperWindow("note-a");
         Assert(desktopWindow.IsVisible, "Ordinary desktop paper was not visible before entering the workbench");
         var before = controller.State.Papers.ToDictionary(p => p.Id, Geometry);
