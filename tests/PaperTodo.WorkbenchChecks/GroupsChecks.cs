@@ -20,6 +20,66 @@ internal static partial class Program
         controller.ToggleWorkbench();
         var desk = (WorkbenchWindow)Member(controller, "_workbenchWindow");
         await Until(() => desk.HostedPaperCount == 3, "Group fixture did not mount its source papers");
+
+        // Help lives in the leftmost toolbar slot. Routine status is absent from
+        // the canvas, while runtime error/status messages remain available.
+        var left = (WrapPanel)Member(desk, "_layoutCommands");
+        var helpButton = (Button)Member(desk, "_helpButton");
+        Assert(ReferenceEquals(left.Children[0], helpButton) &&
+               ((TextBlock)Member(desk, "_status")).Visibility == Visibility.Collapsed,
+            "Workbench still shows permanent bottom help or has no leftmost help action");
+        var helpPopup = (Popup)Member(desk, "_helpPopup");
+        helpButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert(helpPopup.IsOpen, "Help button did not open its popover");
+        helpPopup.IsOpen = false;
+        var right = (WrapPanel)Member(desk, "_rightCommands");
+        Assert(right.Children.OfType<Button>().Any(b => Equals(b.Content, Strings.Get("WorkbenchImportMaterials"))),
+            "Workbench has no Windows file chooser import action");
+
+        // Native paper actions are available in full from the card. Hiding and
+        // desktop capsule transitions are forbidden while its editor is borrowed.
+        var original = controller.FindPaper("note-a")!;
+        var desktopWasCollapsed = original.IsCollapsed;
+        var desktopWasVisible = original.IsVisible;
+        var desktopGeometry = Geometry(original);
+        var expandedHeight = controller.WorkbenchLayout.Cards["note-a"].Height;
+        var contextMenu = CardFrame(desk, "note-a").ContextMenu
+            ?? throw new Exception("Card lost its native right-click menu");
+        bool HasAction(string key) => contextMenu.Items.OfType<MenuItem>()
+            .Any(item => Equals(item.Header, Strings.Get(key)));
+        Assert(!HasAction("MenuHide") && !HasAction("MenuCollapseToCapsule") &&
+               HasAction("WorkbenchCollapseCard") && HasAction("WorkbenchLockCard") &&
+               HasAction("MenuDelete"),
+            "Workbench paper menu is incomplete, hides desktop papers or changes capsule state");
+        Assert(!HasAction("WorkbenchGroupSelection") && !HasAction("WorkbenchUngroup"),
+            "Grouping controls were unexpectedly moved out of the toolbar");
+
+        desk.ToggleWorkbenchCardCollapsed("note-a");
+        await Until(() => controller.WorkbenchLayout.Cards["note-a"].Collapsed &&
+                    Math.Abs(CardFrame(desk, "note-a").Height - WorkbenchCardState.CollapsedHeight) < .01,
+            "Paper could not be folded on the canvas");
+        Assert(controller.WorkbenchLayout.Cards["note-a"].Height == expandedHeight &&
+               original.IsCollapsed == desktopWasCollapsed &&
+               original.IsVisible == desktopWasVisible && Geometry(original) == desktopGeometry,
+            "Canvas folding changed the paper's expanded size or desktop state");
+        controller.SaveNow(sync: true);
+        var foldedSaved = WorkspaceMaterials.FindOwner(StateStore.ReadWorkbenchOverview(store.FilePath)!)!
+            .WorkspaceMaterials!.Layout.Cards["note-a"];
+        Assert(foldedSaved.Collapsed && foldedSaved.Height == expandedHeight,
+            "Paper folding did not persist separately from its expanded size");
+        controller.ToggleWorkbench();
+        controller.ToggleWorkbench();
+        desk = (WorkbenchWindow)Member(controller, "_workbenchWindow");
+        await Until(() => desk.HostedPaperCount == 3 && controller.WorkbenchLayout.Cards["note-a"].Collapsed &&
+                    Math.Abs(CardFrame(desk, "note-a").Height - WorkbenchCardState.CollapsedHeight) < .01,
+            "Reopened workbench did not restore folded paper state");
+        desk.ToggleWorkbenchCardCollapsed("note-a");
+        await Until(() => !controller.WorkbenchLayout.Cards["note-a"].Collapsed &&
+                    Math.Abs(CardFrame(desk, "note-a").Height - expandedHeight) < .01,
+            "Expanding a folded card did not restore its original canvas height");
+        Assert(original.IsCollapsed == desktopWasCollapsed && original.IsVisible == desktopWasVisible &&
+               Geometry(original) == desktopGeometry, "Canvas expansion changed desktop presentation state");
+
         var nodeId = controller.CreateWorkbenchMaterial(WorkspaceMaterialKinds.Node,
             "Grouped idea", "Grouped idea", "", new WorkbenchPoint(1600, 100));
         await Until(() => CardReady(desk, nodeId) && controller.WorkbenchLayout.Cards.ContainsKey(nodeId),
