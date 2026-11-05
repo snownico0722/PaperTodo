@@ -12,11 +12,12 @@ internal static class PaperTopBarShortcuts
     internal const string ExternalEditor = "external-editor";
     internal const string NewTodo = "new-todo";
     internal const string NewNote = "new-note";
+    internal const string ExpandedEditor = "expanded-editor";
 
     // Kept only for deserializing layouts saved by the former per-paper model.
     internal const string PluginActions = "plugin-actions";
 
-    private static readonly string[] Defaults = [Association, NewNote, NewTodo, ExternalEditor];
+    private static readonly string[] Defaults = [Association, ExpandedEditor, NewNote, NewTodo, ExternalEditor];
 
     internal static IReadOnlyList<string> All => Defaults;
 
@@ -33,7 +34,19 @@ internal static class PaperTopBarShortcuts
 
     internal static void Normalize(AppState state)
     {
-        state.TopBarShortcutOrder = NormalizeOrder(state.TopBarShortcutOrder);
+        // The new action is a normal, user-orderable shortcut. On an old saved layout,
+        // pin it at the old divider once; preserve the relative order of all old actions.
+        var old = state.TopBarShortcutOrder ?? [];
+        var hadEditor = old.Contains(ExpandedEditor, StringComparer.Ordinal);
+        var oldPinned = Math.Clamp(state.TopBarPinnedCount, 0, old.Count);
+        var order = NormalizeOrder(old);
+        if (!hadEditor)
+        {
+            order.Remove(ExpandedEditor);
+            order.Insert(oldPinned, ExpandedEditor);
+            state.TopBarPinnedCount = oldPinned + 1;
+        }
+        state.TopBarShortcutOrder = order;
         state.TopBarPinnedCount = Math.Clamp(state.TopBarPinnedCount, 0, Defaults.Length);
         state.TodoTopBarShortcuts = null;
         state.NoteTopBarShortcuts = null;
@@ -48,6 +61,7 @@ internal static class PaperTopBarShortcuts
             .Concat(state.NoteTopBarShortcuts ?? [])
             .Where(action => Defaults.Contains(action, StringComparer.Ordinal))
             .Distinct(StringComparer.Ordinal).ToList();
+        pinned.Add(ExpandedEditor);
         state.TopBarShortcutOrder = NormalizeOrder(pinned);
         state.TopBarPinnedCount = pinned.Count;
         Normalize(state);
