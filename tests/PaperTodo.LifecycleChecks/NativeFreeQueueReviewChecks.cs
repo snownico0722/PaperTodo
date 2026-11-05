@@ -236,7 +236,15 @@ internal static class NativeFreeQueueReviewChecks
             Require(proxies.TryGetValue(B, out var ordinary), "ordinary reorder owns a queue translation");
             Require(!ordinary!.Members.Any(m => ReferenceEquals(m.Window, windows[first.Id])),
                 "ordinary reorder excludes the directly dragged capsule");
+            c.PreviewDeepCapsuleReorder(first, 0);
+            await Dispatcher.CurrentDispatcher.InvokeAsync(static () => { }, DispatcherPriority.Send);
+            Require(proxies.TryGetValue(B, out var reversed) && ReferenceEquals(reversed, ordinary),
+                "rapid reverse reuses the same real queue compositor and live sources");
             ordinary.CompleteNow(true);
+            Require(!proxies.ContainsKey(B) &&
+                    windows["review-7"].VerifyEdgeCapsuleQueueProxyEndpoint(
+                        Field<EdgeCapsulePresenter>(windows["review-7"], "_edgeCapsule").AppliedPresentation),
+                "retarget handoff leaves the real capsule at its current endpoint");
             c.ArrangeDeepCapsules(false);
             await Idle();
 
