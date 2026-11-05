@@ -30,20 +30,6 @@ internal sealed class WorkspaceCatalog
     internal StateStore MainStore => StoreFor(1);
     internal WorkspacePaths PathsFor(int number) => new(_directory, number);
 
-    internal bool SlotHasData(int number)
-    {
-        var paths = PathsFor(number);
-        if (File.Exists(paths.Data) || File.Exists(paths.Backup) ||
-            File.Exists(paths.Images) || System.IO.Directory.Exists(paths.PluginData)) return true;
-        var stem = "data" + number.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        return System.IO.Directory.EnumerateFiles(_directory)
-            .Select(Path.GetFileName)
-            .Any(name => name != null &&
-                (name.StartsWith(stem + ".recovered", StringComparison.OrdinalIgnoreCase) ||
-                 name.StartsWith(stem + ".failed_load.", StringComparison.OrdinalIgnoreCase) ||
-                 name.StartsWith(stem + "conflict-", StringComparison.OrdinalIgnoreCase)));
-    }
-
     // Purge inactive secondary data after removing the slot from the main catalog.
     // A failed file cleanup is reported but does not restore catalog membership.
     internal void DeleteInactiveSlotFiles(int number)
