@@ -99,6 +99,39 @@ internal static class NativeFreeQueueReviewChecks
             Require(Field<object?>(c, "_nativeQueueDropGhost") == null,
                 "ordinary gesture disposes the shared ghost");
 
+            // Floating into the other physical edge opens its projected target
+            // slot and closes the source gap without changing persisted membership.
+            var targetPaper = c.State.Papers.First(p => p.IsVisible &&
+                p.CapsuleSide == DeepCapsuleSides.Left && windows.ContainsKey(p.Id));
+            Require(WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(
+                targetPaper.CapsuleMonitorDeviceName, out var targetGeometry),
+                "ordinary cross-edge target monitor");
+            var targetCount = c.State.Papers.Count(p => p.IsVisible &&
+                p.CapsuleSide == DeepCapsuleSides.Left &&
+                WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(p.CapsuleMonitorDeviceName) ==
+                WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(targetPaper.CapsuleMonitorDeviceName));
+            var targetFirst = EdgeCapsuleLayout.TopForIndex(0,
+                c.DeepCapsuleStartTopMarginFor(targetPaper),
+                targetGeometry.LocalWorkAreaDip, targetCount + 1, c.DeepCapsuleGap);
+            var targetPointer = Point(targetGeometry,
+                targetFirst - PaperLayoutDefaults.CapsuleHeight / 2, left: true);
+            c.PreviewSingleCapsuleDropGhost(ghostOwner, 0, targetPointer, floating: true);
+            Require(Field<EdgeCapsulePresenter>(windows[targetPaper.Id],
+                "_edgeCapsule").Placement.Index == 1,
+                "ordinary cross-edge hover opens one real target slot");
+            var targetGhost = Field<Window>(Field<EdgeCapsuleQueueDropGhost>(
+                c, "_nativeQueueDropGhost"), "_window");
+            Require(WindowNative.TryGetWindowDeviceBounds(targetGhost, out var targetBounds),
+                "cross-edge ghost has physical bounds");
+            Near(targetGeometry.WorkArea.Top + Math.Round(targetFirst * targetGeometry.DpiScaleY),
+                targetBounds.Top, "cross-edge ghost matches eventual insertion index");
+            c.PreviewSingleCapsuleDropGhost(ghostOwner, 0,
+                Point(geometry, 80), floating: false);
+            Require(Field<EdgeCapsulePresenter>(windows[targetPaper.Id],
+                "_edgeCapsule").Placement.Index == 0,
+                "returning to original edge restores the target without persisting it");
+            c.EndSingleCapsuleDropGhost(ghostOwner.Id);
+
             // With a master enabled, the same member index must be one visual
             // slot lower; the ghost must not be mistaken for the master itself.
             c.State.UseCapsuleCollapseAll = true;
