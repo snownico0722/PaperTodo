@@ -217,8 +217,8 @@ internal sealed partial class WorkbenchWindow : Window
                 card.Binding.Foreground = Muted;
                 card.Move.Foreground = Ink;
                 card.Resize.Foreground = Muted;
-                foreach (var button in new[] { card.Pin, card.Menu })
-                    button.Foreground = Ink;
+                card.Pin.Foreground = Ink;
+                card.Connect.Foreground = Ink;
                 card.Eye.Child = EyeIcon(card.Snapshot.DesktopVisible);
                 if (card.PreviewText != null) card.PreviewText.Foreground = Ink;
                 if (card.MaterialEditor != null)
@@ -698,6 +698,7 @@ internal sealed partial class WorkbenchWindow : Window
             StoreLayout(state); SyncActiveScene();
         };
         WireCardSelection(card);
+        WireConnectionDrag(card);
         WireContentDrop(card);
         WireDrag(card, card.Move, resize: false);
         WireDrag(card, card.Resize, resize: true);
@@ -711,7 +712,7 @@ internal sealed partial class WorkbenchWindow : Window
         card.Title.Focusable = false;
         card.Title.IsHitTestVisible = false;
         card.Title.Visibility = Visibility.Visible;
-        card.Pin.Visibility = card.Resize.Visibility = card.Move.Visibility = Visibility.Collapsed;
+        card.Pin.Visibility = card.Connect.Visibility = card.Resize.Visibility = card.Move.Visibility = Visibility.Collapsed;
         var preview = new StackPanel { Margin = new Thickness(16) };
         card.PreviewText = new TextBlock { Text = paper.Summary, TextWrapping = TextWrapping.Wrap, MaxHeight = Math.Max(80, paper.Height - 120), TextTrimming = TextTrimming.CharacterEllipsis, Foreground = Ink };
         preview.Children.Add(card.PreviewText);
@@ -721,12 +722,61 @@ internal sealed partial class WorkbenchWindow : Window
         return card;
     }
 
-    private Card CreateCardShell(WorkbenchPaperSnapshot paper)
+    private Card CreateCardShell(WorkbenchPaperSnapshot paper, bool compact = false)
     {
         var card = new Card(paper);
         card.Frame.Background = CardBrush; card.Frame.BorderBrush = Outline;
         card.Frame.BorderThickness = new Thickness(1); card.Frame.CornerRadius = new CornerRadius(9);
         card.Frame.ClipToBounds = true;
+        if (compact)
+        {
+            // Materials have a small border and a minimal drag strip, not a full paper chrome.
+            var surface = new Grid();
+            surface.RowDefinitions.Add(new() { Height = GridLength.Auto });
+            surface.RowDefinitions.Add(new() { Height = new GridLength(1, GridUnitType.Star) });
+            surface.RowDefinitions.Add(new() { Height = GridLength.Auto });
+            card.Frame.Child = surface;
+            card.Header.Margin = new Thickness(3, 2, 3, 0);
+            card.Header.Background = Brushes.Transparent;
+            card.Header.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
+            card.Header.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+            card.Move.MinHeight = 23;
+            card.Move.Tag = paper.Title;
+            card.Move.Foreground = Ink; card.Move.Cursor = Cursors.SizeAll;
+            card.Move.Background = Brushes.Transparent;
+            card.Move.Template = TitleDragTemplate(card.Move);
+            card.Header.Children.Add(card.Move);
+            card.Title.Text = paper.Title;
+            card.Title.Style = WorkbenchInputStyle();
+            card.Title.Background = Brushes.Transparent; card.Title.Foreground = Ink;
+            card.Title.Visibility = Visibility.Collapsed;
+            card.Title.Padding = new Thickness(5, 2, 5, 2);
+            card.Header.Children.Add(card.Title);
+            var compactActions = new StackPanel { Orientation = Orientation.Horizontal };
+            ConfigureConnectionThumb(card.Connect);
+            compactActions.Children.Add(card.Connect);
+            card.Pin.Content = LockIcon(paper.Placement?.Pinned == true);
+            card.Pin.ToolTip = Strings.Get("WorkbenchPin");
+            card.Pin.Padding = new Thickness(3, 2, 3, 2);
+            card.Pin.Background = Brushes.Transparent;
+            card.Pin.Foreground = Ink;
+            card.Pin.BorderThickness = new Thickness(0);
+            compactActions.Children.Add(card.Pin);
+            Grid.SetColumn(compactActions, 1); card.Header.Children.Add(compactActions);
+            surface.Children.Add(card.Header);
+            Grid.SetRow(card.Body, 1); surface.Children.Add(card.Body);
+            card.Resize.Width = 20; card.Resize.Height = 15;
+            card.Resize.HorizontalAlignment = HorizontalAlignment.Right;
+            card.Resize.Cursor = Cursors.SizeNWSE;
+            card.Resize.Foreground = Muted;
+            card.Resize.Template = ThumbTemplate("\u25e2");
+            Grid.SetRow(card.Resize, 2); surface.Children.Add(card.Resize);
+            card.Eye.Visibility = Visibility.Collapsed;
+            card.Frame.Tag = card;
+            Panel.SetZIndex(card.Frame, 2);
+            Position(card, paper.Placement?.Bounds ?? new(32, 32, paper.Width, paper.Height));
+            return card;
+        }
         var grid = new Grid();
         grid.RowDefinitions.Add(new() { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new() { Height = GridLength.Auto });
@@ -753,6 +803,8 @@ internal sealed partial class WorkbenchWindow : Window
         card.Title.Visibility = Visibility.Collapsed;
         Grid.SetColumn(card.Title, 0); header.Children.Add(card.Title);
         var actions = new StackPanel { Orientation = Orientation.Horizontal };
+        ConfigureConnectionThumb(card.Connect);
+        actions.Children.Add(card.Connect);
         foreach (var button in new[] { card.Pin })
         {
             button.Padding = new Thickness(5, 3, 5, 3);
@@ -801,6 +853,34 @@ internal sealed partial class WorkbenchWindow : Window
         Stroke = Ink, StrokeThickness = 1.65, StrokeLineJoin = PenLineJoin.Round,
         Fill = Brushes.Transparent, Width = 17, Height = 17, Stretch = Stretch.Uniform
     };
+
+    private static void ConfigureConnectionThumb(Thumb thumb)
+    {
+        thumb.Width = 27; thumb.Height = 25;
+        thumb.Margin = new Thickness(1);
+        thumb.Cursor = Cursors.Cross;
+        thumb.Foreground = Ink;
+        thumb.Background = Brushes.Transparent;
+        thumb.ToolTip = Strings.Get("WorkbenchConnect");
+        thumb.Template = ConnectionThumbTemplate();
+    }
+
+    private static ControlTemplate ConnectionThumbTemplate()
+    {
+        var link = new FrameworkElementFactory(typeof(System.Windows.Shapes.Path));
+        link.SetValue(System.Windows.Shapes.Path.DataProperty, Geometry.Parse(
+            "M7,12 L13,6 M8,6 L10,4 C12,2 15,2 17,4 C19,6 19,9 17,11 L15,13 M5,7 L3,9 C1,11 1,14 3,16 C5,18 8,18 10,16 L12,14"));
+        link.SetValue(System.Windows.Shapes.Path.StrokeProperty, new TemplateBindingExtension(Control.ForegroundProperty));
+        link.SetValue(System.Windows.Shapes.Path.StrokeThicknessProperty, 2.0);
+        link.SetValue(System.Windows.Shapes.Path.StrokeLineJoinProperty, PenLineJoin.Round);
+        link.SetValue(System.Windows.Shapes.Path.FillProperty, Brushes.Transparent);
+        link.SetValue(System.Windows.Shapes.Path.StretchProperty, Stretch.Uniform);
+        link.SetValue(FrameworkElement.WidthProperty, 18.0);
+        link.SetValue(FrameworkElement.HeightProperty, 18.0);
+        link.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+        link.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+        return new ControlTemplate(typeof(Thumb)) { VisualTree = link };
+    }
 
     private static FrameworkElement EyeIcon(bool shown)
     {
@@ -1063,6 +1143,7 @@ internal sealed partial class WorkbenchWindow : Window
         internal Thumb Move { get; } = new();
         internal Thumb Resize { get; } = new();
         internal Button Pin { get; } = new();
+        internal Thumb Connect { get; } = new();
         internal Border Eye { get; } = new();
         internal PaperWindow.WorkbenchBodyLease? Lease;
         internal WorkbenchRect Bounds;
