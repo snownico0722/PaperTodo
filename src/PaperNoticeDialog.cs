@@ -15,8 +15,7 @@ internal static class PaperNoticeDialog
             owner,
             titleText,
             messageText,
-            secondaryText: null,
-            primaryText: Strings.Get("CommonOk"));
+            [Strings.Get("CommonOk")], primaryIndex: 0);
     }
 
     public static bool ShowChoice(
@@ -36,21 +35,39 @@ internal static class PaperNoticeDialog
 
     public static bool? ShowDecision(
         Window? owner, string titleText, string messageText, string secondaryText, string primaryText) =>
-        ShowCore(owner, titleText, messageText, secondaryText, primaryText);
+        ShowCore(owner, titleText, messageText, [secondaryText, primaryText], primaryIndex: 1) switch
+        {
+            0 => false,
+            1 => true,
+            _ => null
+        };
 
-    private static bool? ShowCore(
+    public static WorkspaceRecoveryChoice ShowHistoryRecovery(Window? owner, int number, string backupTime) =>
+        ShowCore(owner, Strings.Get("HistoryRecoveryTitle"),
+            Strings.Format("HistoryRecoveryMessage", number, backupTime),
+            [Strings.Get("HistoryRecoveryCreate"), Strings.Get("HistoryRecoveryRestore"),
+                Strings.Get("WorkspaceFailureExit")], primaryIndex: 1, width: 560) switch
+        {
+            0 => WorkspaceRecoveryChoice.CreateEmpty,
+            1 => WorkspaceRecoveryChoice.Restore,
+            2 => WorkspaceRecoveryChoice.Exit,
+            _ => WorkspaceRecoveryChoice.Cancel
+        };
+
+    private static int? ShowCore(
         Window? owner,
         string titleText,
         string messageText,
-        string? secondaryText,
-        string primaryText)
+        string[] actions,
+        int primaryIndex,
+        double width = 360)
     {
-        bool? accepted = null;
+        int? selected = null;
         var dialog = new Window
         {
             Owner = owner,
             Title = titleText,
-            Width = 360,
+            Width = width,
             MinHeight = 164,
             SizeToContent = SizeToContent.Height,
             WindowStartupLocation = owner == null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner,
@@ -104,39 +121,26 @@ internal static class PaperNoticeDialog
             FontSize = AppTypography.Scale(13),
             TextWrapping = TextWrapping.Wrap,
             LineHeight = 20,
-            MaxWidth = 324,
+            MaxWidth = width - 38,
             Margin = new Thickness(0, 2, 0, 0)
         };
 
-        var buttonRow = new StackPanel
+        var buttonRow = new WrapPanel
         {
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = HorizontalAlignment.Right,
             Margin = new Thickness(0, 16, 0, 0)
         };
 
-        if (!string.IsNullOrWhiteSpace(secondaryText))
+        for (var index = 0; index < actions.Length; index++)
         {
-            var secondary = CreateButton(secondaryText, primary: false);
-            secondary.IsCancel = true;
-            secondary.Click += (_, _) => { accepted = false; dialog.Close(); };
-            buttonRow.Children.Add(secondary);
+            var action = index;
+            var button = CreateButton(actions[index], primary: index == primaryIndex && actions.Length > 1);
+            button.IsDefault = index == primaryIndex;
+            if (index > 0) button.Margin = new Thickness(8, 0, 0, 0);
+            button.Click += (_, _) => { selected = action; dialog.Close(); };
+            buttonRow.Children.Add(button);
         }
-
-        var primary = CreateButton(
-            primaryText,
-            primary: !string.IsNullOrWhiteSpace(secondaryText));
-        primary.IsDefault = true;
-        if (buttonRow.Children.Count > 0)
-        {
-            primary.Margin = new Thickness(8, 0, 0, 0);
-        }
-        primary.Click += (_, _) =>
-        {
-            accepted = true;
-            dialog.Close();
-        };
-        buttonRow.Children.Add(primary);
 
         dialog.PreviewKeyDown += (_, e) =>
         {
@@ -159,7 +163,7 @@ internal static class PaperNoticeDialog
         root.Child = layout;
         dialog.Content = root;
         dialog.ShowDialog();
-        return accepted;
+        return selected;
     }
 
     private static Button CreateButton(string text, bool primary)

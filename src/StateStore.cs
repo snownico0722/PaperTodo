@@ -51,9 +51,10 @@ public sealed partial class StateStore
 
     // A healthy committed primary is authoritative. A healthy fixed backup is next.
     // Only if both are unavailable do we select the newest complete interrupted write.
-    // Corrupt input is never rebuilt into blank data, and an uncommitted temp never
+    // Corrupt input is never silently rebuilt into blank data, and an uncommitted temp never
     // silently replaces an otherwise healthy primary or fixed backup.
-    internal AppState Load(out bool initializedEmpty, Func<DateTime, bool>? confirmHistoryRecovery = null)
+    internal AppState Load(out bool initializedEmpty,
+        Func<DateTime, WorkspaceRecoveryChoice>? confirmHistoryRecovery = null)
     {
         initializedEmpty = false;
         NeedsStartupRecoverySave = false;
@@ -63,6 +64,7 @@ public sealed partial class StateStore
 
         var primaryExists = FileExistsForCollection(FilePath);
         var primaryBytes = primaryExists ? File.ReadAllBytes(FilePath) : null;
+        JsonException? invalidData = null;
         if (primaryBytes != null)
         {
             try
@@ -73,7 +75,7 @@ public sealed partial class StateStore
                 finally { _writeLock.Release(); }
                 return state;
             }
-            catch (JsonException) { /* Invalid committed primary: fixed backup is next. */ }
+            catch (JsonException ex) { invalidData = ex; }
         }
 
         var backupExists = FileExistsForCollection(BackupPath);
@@ -88,7 +90,7 @@ public sealed partial class StateStore
                 NeedsStartupRecoverySave = true;
                 return state;
             }
-            catch (JsonException) { /* Invalid fixed backup: try complete temp candidates. */ }
+            catch (JsonException ex) { invalidData ??= ex; }
         }
 
         var candidates = FindValidInterruptedWrites();
@@ -108,9 +110,8 @@ public sealed partial class StateStore
             return ReadLoadDocument(first.Bytes);
         }
 
-        // Only a genuinely new, empty workspace may initialize defaults.
-        // The existence of corrupt input means there was user data: never replace it
-        // with a blank document or force users to repair raw files by hand.
+        // Existing data needs an explicit choice. A blank document is allowed only
+        // when the user selects CreateEmpty, with a valid history backup retained.
         if (primaryExists || backupExists || HasInterruptedWriteFiles())
         {
             if (confirmHistoryRecovery != null)
@@ -120,17 +121,25 @@ public sealed partial class StateStore
                 {
                     if (!TryReadCompleteDocument(snapshot.Bytes, out _, out _)) continue;
                     WriteLifetime.ThrowIfStopped();
-                    if (!confirmHistoryRecovery(snapshot.TimestampUtc))
+                    var choice = confirmHistoryRecovery(snapshot.TimestampUtc);
+                    if (choice == WorkspaceRecoveryChoice.Exit)
+                        throw new WorkspaceRecoveryExitException();
+                    if (choice is not (WorkspaceRecoveryChoice.Restore or WorkspaceRecoveryChoice.CreateEmpty))
                         throw new OperationCanceledException("Historical workspace recovery was canceled.");
                     // The modal choice may allow shutdown or external edits. The
                     // ordinary recovery writer rechecks both source and primary.
                     WriteLifetime.ThrowIfStopped();
                     _pendingStartupRecovery = PendingStartupRecovery.FromHistory(snapshot, primaryBytes);
                     NeedsStartupRecoverySave = true;
+                    if (choice == WorkspaceRecoveryChoice.CreateEmpty)
+                    {
+                        initializedEmpty = true;
+                        return new AppState();
+                    }
                     return ReadLoadDocument(snapshot.Bytes);
                 }
             }
-            throw new StateRecoveryException("WorkspaceFailureNoRecovery");
+            throw new StateRecoveryException("WorkspaceFailureNoRecovery", invalidData);
         }
 
         initializedEmpty = true;

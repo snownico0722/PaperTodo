@@ -18,7 +18,7 @@ internal static partial class Program
             .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
     private static async Task<bool> WithWorkspaceFailureDialog(
-        Func<Task<bool>> operation, Action<Window> respond)
+        Func<Task<bool>> operation, Action<Window> respond, string titleKey = "WorkspaceSwitchFailed")
     {
         var response = RespondAsync();
         var result = await operation();
@@ -29,7 +29,7 @@ internal static partial class Program
         {
             Window? dialog = null;
             await Until(() => (dialog = Application.Current.Windows.OfType<Window>()
-                .FirstOrDefault(window => window.IsVisible && window.Title == Strings.Get("WorkspaceSwitchFailed"))) != null,
+                .FirstOrDefault(window => window.IsVisible && window.Title == Strings.Get(titleKey))) != null,
                 "workspace failure dialog did not appear");
             try { respond(dialog!); }
             finally { if (dialog!.IsVisible) dialog.Close(); }
@@ -65,6 +65,25 @@ internal static partial class Program
                 }
                 Require(Strings.Get("WorkspaceFailureRetry") != "WorkspaceFailureRetry" &&
                         Strings.Get("WorkspaceFailureExit") != "WorkspaceFailureExit", "failure actions lack translations");
+                var startupCases = new (Exception Error, string Key)[]
+                {
+                    (new IOException("busy detail", unchecked((int)0x80070020)), "AppStartupFailureBusy"),
+                    (new IOException("locked detail", unchecked((int)0x80070021)), "AppStartupFailureBusy"),
+                    (new StateRecoveryException("WorkspaceFailureNoRecovery",
+                        new System.Text.Json.JsonException("JSON detail")), "AppStartupFailureCorrupt"),
+                    (new InvalidOperationException("unknown detail"), "AppStartupFailureUnknown"),
+                    (new InvalidDataException("directory at file path"), "AppStartupFailureUnknown")
+                };
+                foreach (var (error, key) in startupCases)
+                {
+                    var message = WorkspaceFailureMessage.ForStartup(error);
+                    Require(message == Strings.Format("AppStartupFailureMessage", Strings.Get(key),
+                                error.GetBaseException().Message) && !message.Contains(key),
+                        "startup failure lost its cause category, details or translation: " + language);
+                }
+                Require(WorkspaceFailureMessage.For(new StateRecoveryException("WorkspaceFailureNoRecovery",
+                            new System.Text.Json.JsonException("raw"))) == Strings.Get("WorkspaceFailureNoRecovery"),
+                    "parser details replaced the localized recovery explanation");
             }
             UiLanguages.ApplyWorkspacePreference("en-US");
             var beforeRollback = new StateRecoveryException("WorkspaceFailurePrimaryChanged");

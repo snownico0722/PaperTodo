@@ -66,12 +66,15 @@ internal static partial class Program
             {
                 prompts++;
                 Require(time == stamp, "offer did not choose the latest valid workspace entry");
-                return false;
+                return WorkspaceRecoveryChoice.Cancel;
             }));
             Require(prompts == 1 && !store.NeedsStartupRecoverySave && File.Exists(orphan) &&
                     File.ReadAllText(store.FilePath) == "{unrecoverable primary" &&
                     File.ReadAllBytes(selected).SequenceEqual(archiveBytes),
                 "declined history recovery changed old data or tried another backup");
+            Throws<WorkspaceRecoveryExitException>(() => store.Load(out _, _ => WorkspaceRecoveryChoice.Exit));
+            Require(!store.NeedsStartupRecoverySave && File.ReadAllText(store.FilePath) == "{unrecoverable primary",
+                "exit from history recovery changed the unavailable workspace");
 
             var reject = true;
             var writer = new DurableAtomicFileWriter((stage, target) =>
@@ -80,7 +83,7 @@ internal static partial class Program
                     throw new IOException("Injected historical recovery write failure.");
             });
             var recovering = new StateStore(scope.DirectoryPath, writer, number);
-            var state = recovering.Load(out var empty, time => time == stamp);
+            var state = recovering.Load(out var empty, time => time == stamp ? WorkspaceRecoveryChoice.Restore : WorkspaceRecoveryChoice.Cancel);
             Require(!empty && recovering.NeedsStartupRecoverySave &&
                     state.Papers[0].Content == "latest valid history" &&
                     !recovering.TryCollectProtectedImageIds(state, out _) && File.Exists(orphan),
@@ -98,6 +101,33 @@ internal static partial class Program
                 "history restore did not commit exactly one workspace and retain its ZIP");
         }
 
+        foreach (var number in new[] { 1, 2 })
+        {
+            using var scope = new Scope();
+            var store = new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared, number);
+            var archive = WriteHistoryFixture(scope.DirectoryPath, stamp,
+                (Path.GetFileName(store.FilePath), store.SerializeState(NewState())));
+            var archiveBytes = File.ReadAllBytes(archive);
+            File.WriteAllText(store.FilePath, "{old unavailable data");
+            var fail = true;
+            var restarting = new StateStore(scope.DirectoryPath, new DurableAtomicFileWriter((stage, path) =>
+            {
+                if (fail && path == store.FilePath && stage == DurableAtomicWriteStage.BeforeReplace)
+                    throw new IOException("Restart write failure.");
+            }), number);
+            var blank = restarting.Load(out var empty, _ => WorkspaceRecoveryChoice.CreateEmpty);
+            Require(empty && blank.Papers.Count == 0 && restarting.NeedsStartupRecoverySave &&
+                    File.ReadAllText(store.FilePath) == "{old unavailable data",
+                "new workspace was not staged as an explicit blank choice");
+            Throws<IOException>(() => restarting.SaveJsonSync(restarting.SerializeState(blank), 2));
+            Require(File.ReadAllText(store.FilePath) == "{old unavailable data", "failed restart overwrote old data");
+            fail = false;
+            restarting.SaveJsonSync(restarting.SerializeState(blank), 3);
+            Require(restarting.Load().Papers.Count == 0 && File.ReadAllBytes(archive).SequenceEqual(archiveBytes),
+                "explicit restart restored old content or removed the historical backup");
+        }
+
+        foreach (var choice in new[] { WorkspaceRecoveryChoice.Restore, WorkspaceRecoveryChoice.CreateEmpty })
         foreach (var changed in new[] { "primary", "archive", "shutdown" })
         {
             using var scope = new Scope();
@@ -105,12 +135,12 @@ internal static partial class Program
             var archive = WriteHistoryFixture(scope.DirectoryPath, stamp, ("data.json", json));
             File.WriteAllText(scope.Store.FilePath, "{broken");
             var store = new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared);
-            bool Confirm(DateTime _)
+            WorkspaceRecoveryChoice Confirm(DateTime _)
             {
                 if (changed == "primary") File.WriteAllText(store.FilePath, json);
                 if (changed == "archive") File.AppendAllText(archive, "changed during prompt");
                 if (changed == "shutdown") store.StopWritesForTermination();
-                return true;
+                return choice;
             }
             if (changed == "shutdown")
             {
@@ -137,7 +167,7 @@ internal static partial class Program
             if (source == "fresh") File.Delete(scope.Store.FilePath);
             using var held = source == "busy"
                 ? new FileStream(scope.Store.FilePath, FileMode.Open, FileAccess.ReadWrite, FileShare.None) : null;
-            bool UnexpectedPrompt(DateTime _) => throw new InvalidOperationException("Unexpected history offer: " + source);
+            WorkspaceRecoveryChoice UnexpectedPrompt(DateTime _) => throw new InvalidOperationException("Unexpected history offer: " + source);
             var store = new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared);
             if (source == "none") Throws<StateRecoveryException>(() => store.Load(out _, UnexpectedPrompt));
             else if (source == "busy") Throws<IOException>(() => store.Load(out _, UnexpectedPrompt));
@@ -153,7 +183,7 @@ internal static partial class Program
             File.WriteAllText(Path.Combine(scope.DirectoryPath, "data2.json"), "{broken secondary");
             var offered = new List<int>();
             var catalog = new WorkspaceCatalog(scope.DirectoryPath, DurableAtomicFileWriter.Shared,
-                (store, time) => { offered.Add(store.WorkspaceNumber); return time == stamp; });
+                (store, time) => { offered.Add(store.WorkspaceNumber); return time == stamp ? WorkspaceRecoveryChoice.Restore : WorkspaceRecoveryChoice.Cancel; });
             var main = catalog.OpenInitial();
             var second = catalog.Open(2, catalog.Options, main.State);
             Require(offered.SequenceEqual(new[] { 1, 2 }) && !main.Store.NeedsStartupRecoverySave &&
@@ -163,17 +193,77 @@ internal static partial class Program
         Console.WriteLine("PASS historical recovery: latest valid ZIP entry, confirmation, isolation, retry and source/termination fences");
     }
 
+    private static int RunHistoryActionsFixture()
+    {
+        if (!File.Exists(Path.Combine(AppContext.BaseDirectory, LiveMarker))) return 2;
+        var app = new System.Windows.Application { ShutdownMode = System.Windows.ShutdownMode.OnExplicitShutdown };
+        AppController? controller = null;
+        var result = 1;
+        app.Dispatcher.InvokeAsync(async () =>
+        {
+            try
+            {
+                var seed = NewState();
+                seed.UiLanguage = "en-US";
+                seed.Workspaces = new() { Enabled = true, Slots = [1, 2], Active = 1 };
+                var main = new StateStore();
+                main.SaveJsonSync(main.SerializeState(seed), 1);
+                var target = new StateStore(AppContext.BaseDirectory, DurableAtomicFileWriter.Shared, 2);
+                var archive = WriteHistoryFixture(AppContext.BaseDirectory, DateTime.UtcNow,
+                    ("data2.json", target.SerializeState(NewState())));
+                var archiveBytes = File.ReadAllBytes(archive);
+                controller = new AppController();
+                await controller.StartAsync(createDefaultPaper: false);
+                foreach (var choice in new[] { WorkspaceRecoveryChoice.Restore, WorkspaceRecoveryChoice.CreateEmpty })
+                {
+                    File.WriteAllText(target.FilePath, "{broken target");
+                    File.Delete(target.BackupPath);
+                    Require(await WithWorkspaceFailureDialog(() => controller.SwitchWorkspaceAsync(2), dialog =>
+                        ClickFailureAction(dialog, choice == WorkspaceRecoveryChoice.Restore
+                            ? "HistoryRecoveryRestore" : "HistoryRecoveryCreate"), "HistoryRecoveryTitle"),
+                        "history action failed to enter its target workspace");
+                    Require(controller.WorkspaceNumber == 2 && (choice == WorkspaceRecoveryChoice.Restore
+                            ? controller.State.Papers[0].Content == "original"
+                            : controller.State.Papers.Count == 1 && controller.State.Papers[0].Content != "original"),
+                        "history action restored content when blank was selected or lost restored content");
+                    Require(File.ReadAllBytes(archive).SequenceEqual(archiveBytes), "history action changed its source ZIP");
+                    Require(await controller.SwitchWorkspaceAsync(1), "return from historical workspace failed");
+                }
+                File.WriteAllText(target.FilePath, "{broken target");
+                File.Delete(target.BackupPath);
+                Require(!await WithWorkspaceFailureDialog(() => controller.SwitchWorkspaceAsync(2), dialog =>
+                {
+                    controller.State.Papers[0].Content = "edit saved on history exit";
+                    controller.MarkDirty();
+                    ClickFailureAction(dialog, "WorkspaceFailureExit");
+                }, "HistoryRecoveryTitle") && !controller.IsRunning,
+                    "history Exit did not leave through normal application exit");
+                Require(new StateStore().Load().Papers[0].Content == "edit saved on history exit" &&
+                        File.ReadAllText(target.FilePath) == "{broken target",
+                    "history exit lost active edits or replaced the unavailable target");
+                Console.WriteLine("PASS live history choices: restore, restart current number, retain ZIP and normal exit");
+                result = 0;
+            }
+            catch (Exception ex) { Console.Error.WriteLine(ex); }
+            finally { if (controller?.IsRunning == true) controller.Dispose(); app.Shutdown(); }
+        });
+        app.Run();
+        return result;
+    }
+
     private static int RunHistoryDialogFixture()
     {
         var app = new System.Windows.Application { ShutdownMode = System.Windows.ShutdownMode.OnExplicitShutdown };
         try
         {
             // Startup has no owning window. Exercise the real themed dialog and
-            // both buttons through its modal Dispatcher loop.
-            foreach (var accept in new[] { false, true })
+            // all three buttons and dismissal through its modal Dispatcher loop.
+            foreach (var language in new[] { "zh-CN", "en-US", "ja-JP", "ko-KR" })
+            foreach (var choice in Enum.GetValues<WorkspaceRecoveryChoice>())
             {
+                UiLanguages.ApplyWorkspacePreference(language);
                 Exception? failure = null;
-                app.Dispatcher.BeginInvoke(new Action(() =>
+                app.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ContextIdle, new Action(() =>
                 {
                     var dialog = app.Windows.OfType<System.Windows.Window>().Single();
                     try
@@ -182,19 +272,29 @@ internal static partial class Program
                         var nodes = Descendants(dialog).ToArray();
                         var text = nodes.OfType<System.Windows.Controls.TextBlock>().Select(block => block.Text);
                         Require(text.Any(value => value.Contains("2026-01-01")), "recovery dialog omitted backup time");
-                        var label = Strings.Get(accept ? "HistoryRecoveryRestore" : "CommonCancel");
-                        var button = nodes.OfType<System.Windows.Controls.Button>().Single(item => Equals(item.Content, label));
-                        button.RaiseEvent(new System.Windows.RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+                        var buttons = nodes.OfType<System.Windows.Controls.Button>().ToArray();
+                        var keys = new[] { "HistoryRecoveryCreate", "HistoryRecoveryRestore", "WorkspaceFailureExit" };
+                        Require(buttons.Select(button => button.Content).SequenceEqual(keys.Select(Strings.Get)) &&
+                                buttons[1].IsDefault && !buttons[0].IsDefault,
+                            "history choices changed order or made blank creation the default");
+                        foreach (var button in buttons)
+                        {
+                            var position = button.TranslatePoint(new System.Windows.Point(), dialog);
+                            Require(position.X >= 0 && position.X + button.ActualWidth <= dialog.ActualWidth &&
+                                    position.Y + button.ActualHeight <= dialog.ActualHeight,
+                                "translated history action is outside the dialog: " + language);
+                        }
+                        if (choice == WorkspaceRecoveryChoice.Cancel) dialog.Close();
+                        else buttons[(int)choice - 1].RaiseEvent(
+                            new System.Windows.RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
                     }
                     catch (Exception ex) { failure = ex; dialog.Close(); }
                 }));
-                var result = PaperNoticeDialog.ShowChoice(null, Strings.Get("HistoryRecoveryTitle"),
-                    Strings.Format("HistoryRecoveryMessage", 2, "2026-01-01 12:00"),
-                    Strings.Get("CommonCancel"), Strings.Get("HistoryRecoveryRestore"));
+                var result = PaperNoticeDialog.ShowHistoryRecovery(null, 2, "2026-01-01 12:00");
                 if (failure != null) throw failure;
-                Require(result == accept, "recovery dialog did not honor the selected action");
+                Require(result == choice, "recovery dialog did not honor the selected action");
             }
-            Console.WriteLine("PASS ownerless historical recovery dialog: restore and cancel");
+            Console.WriteLine("PASS ownerless historical recovery dialog: new, restore, exit, dismissal and four-language layout");
             return 0;
         }
         catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }

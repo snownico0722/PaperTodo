@@ -126,7 +126,7 @@ public partial class App : Application
         {
             WriteCrashLog(ex);
             MessageBox.Show(
-                Strings.Format("AppStartupFailureMessage", ex.Message),
+                WorkspaceFailureMessage.ForStartup(ex),
                 Strings.Get("AppStartupFailureTitle"),
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);

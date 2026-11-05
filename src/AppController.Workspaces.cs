@@ -40,7 +40,7 @@ public sealed partial class AppController
         _imageStore = new NoteImageStore(_workspace.Paths.Images);
     }
 
-    private bool ConfirmHistoryRecovery(StateStore store, DateTime timestampUtc)
+    private WorkspaceRecoveryChoice ConfirmHistoryRecovery(StateStore store, DateTime timestampUtc)
     {
         // Startup may not have any windows or a fully constructed controller yet.
         // Fence this store even if Windows ends the session inside the modal loop.
@@ -51,11 +51,8 @@ public sealed partial class AppController
         {
             var owner = _settingsWindow is { IsVisible: true } ? _settingsWindow :
                 app.Windows.OfType<Window>().FirstOrDefault(window => window.IsActive);
-            return PaperNoticeDialog.ShowChoice(owner,
-                Strings.Get("HistoryRecoveryTitle"),
-                Strings.Format("HistoryRecoveryMessage", store.WorkspaceNumber,
-                    timestampUtc.ToLocalTime().ToString("g", System.Globalization.CultureInfo.CurrentCulture)),
-                Strings.Get("CommonCancel"), Strings.Get("HistoryRecoveryRestore"));
+            return PaperNoticeDialog.ShowHistoryRecovery(owner, store.WorkspaceNumber,
+                timestampUtc.ToLocalTime().ToString("g", System.Globalization.CultureInfo.CurrentCulture));
         }
         finally { app.SessionEnding -= stopWrites; }
     }
@@ -150,6 +147,7 @@ public sealed partial class AppController
         _workspaceSwitching = true;
         RefreshWorkspaceButtons();
         var catalogCommitted = false;
+        var exitRequested = false;
         try
         {
             var (session, effectiveSettings) = _workspaceCatalog.PreviewSettingsChange(_workspace, options);
@@ -183,6 +181,8 @@ public sealed partial class AppController
                 ReportWorkspaceError(ex.GetBaseException().Message);
             }
         }
+        catch (WorkspaceRecoveryExitException) { exitRequested = true; }
+        catch (OperationCanceledException) { }
         catch (Exception ex)
         {
             ReportWorkspaceError(ex.GetBaseException().Message);
@@ -194,7 +194,8 @@ public sealed partial class AppController
             ResumeExitAfterDataReload();
         }
 
-        if (catalogCommitted) OfferWorkspaceSettingsRestart();
+        if (exitRequested) Exit();
+        else if (catalogCommitted) OfferWorkspaceSettingsRestart();
         return catalogCommitted;
     }
 
@@ -242,6 +243,13 @@ public sealed partial class AppController
         while (!IsExiting)
         {
             try { return await SwitchWorkspaceAttemptAsync(number, requested); }
+            catch (WorkspaceRecoveryExitException)
+            {
+                // The attempted switch has rolled back and released its gates.
+                // Save and close the original workspace through normal exit.
+                Exit();
+                return false;
+            }
             catch (OperationCanceledException) { return false; }
             catch (Exception ex)
             {

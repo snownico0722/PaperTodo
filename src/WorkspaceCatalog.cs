@@ -12,11 +12,11 @@ internal sealed class WorkspaceCatalog
     private readonly IDurableAtomicFileWriter _writer;
     private readonly Dictionary<int, StateStore> _stores = new();
     private readonly PersistenceWriteLifetime _writeLifetime = new();
-    private readonly Func<StateStore, DateTime, bool>? _confirmHistoryRecovery;
+    private readonly Func<StateStore, DateTime, WorkspaceRecoveryChoice>? _confirmHistoryRecovery;
     private AppState? _initialMain;
 
     internal WorkspaceCatalog(string directory, IDurableAtomicFileWriter writer,
-        Func<StateStore, DateTime, bool>? confirmHistoryRecovery = null)
+        Func<StateStore, DateTime, WorkspaceRecoveryChoice>? confirmHistoryRecovery = null)
     {
         _directory = Path.GetFullPath(directory);
         _writer = writer;
@@ -119,7 +119,7 @@ internal sealed class WorkspaceCatalog
         var state = LoadWorkspace(store, out var initializedEmpty);
         if (initializedEmpty && number > 1)
         {
-            // Only genuinely new slots start with one blank paper.
+            // New slots and explicitly restarted slots begin with one blank paper.
             // Image, plugin and historical files never veto initialization.
             // Every new slot begins with main-workspace settings. Unfollowing later
             // keeps this initial copy as its independent preference, regardless of

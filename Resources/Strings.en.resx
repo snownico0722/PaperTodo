@@ -13,7 +13,10 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="AppStartupFailureMessage" xml:space="preserve">
-    <value>Startup failed: the data file could not be loaded. It may be in use or corrupted.&#x0A;To avoid overwriting existing data, the app has stopped.&#x0A;&#x0A;Error: {0}</value>
+    <value>Startup failed: unable to load the data file ({0}).
+To avoid overwriting existing data, startup has been stopped.
+
+Error: {1}</value>
   </data>
   <data name="ResourceTextVersion" xml:space="preserve">
     <value>3.1</value>
@@ -1671,13 +1674,13 @@ The original note is kept.</value></data>
     <value>Restore workspace</value>
   </data>
   <data name="HistoryRecoveryMessage" xml:space="preserve">
-    <value>The current data for workspace {0} cannot be read.
-Latest usable historical backup: {1}.
+    <value>The current data for workspace {0} could not be read.
+Latest available backup: {1}.
 
-Restoring returns this workspace to that time; later changes may be lost. Only notes, todos and settings are restored. Images and plugin data are not included.</value>
+Restoring will return this workspace to that point in time. Changes made since then will be lost. Only notes, to-dos, and settings in this workspace will be restored. Images and plugin data are not included.</value>
   </data>
   <data name="HistoryRecoveryRestore" xml:space="preserve">
-    <value>Restore backup</value>
+    <value>Try restoring from backup</value>
   </data>
   <data name="WorkspaceFailureRetry" xml:space="preserve">
     <value>Retry</value>
@@ -1717,5 +1720,17 @@ Restoring returns this workspace to that time; later changes may be lost. Only n
   </data>
   <data name="WorkspaceFailureRecoveryUnverified" xml:space="preserve">
     <value>The restored file could not be verified after saving. The recovery source has been retained. Please retry.</value>
+  </data>
+  <data name="HistoryRecoveryCreate" xml:space="preserve">
+    <value>New workspace</value>
+  </data>
+  <data name="AppStartupFailureBusy" xml:space="preserve">
+    <value>the file is in use</value>
+  </data>
+  <data name="AppStartupFailureCorrupt" xml:space="preserve">
+    <value>the data file is corrupted or has an invalid format</value>
+  </data>
+  <data name="AppStartupFailureUnknown" xml:space="preserve">
+    <value>unknown cause</value>
   </data>
 </root>

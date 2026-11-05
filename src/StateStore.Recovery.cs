@@ -5,6 +5,10 @@ using System.Text.Json.Nodes;
 
 namespace PaperTodo;
 
+internal enum WorkspaceRecoveryChoice { Cancel, CreateEmpty, Restore, Exit }
+
+internal sealed class WorkspaceRecoveryExitException : OperationCanceledException { }
+
 public sealed partial class StateStore
 {
     private sealed class PendingStartupRecovery

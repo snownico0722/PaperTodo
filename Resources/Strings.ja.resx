@@ -13,7 +13,10 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="AppStartupFailureMessage" xml:space="preserve">
-    <value>起動に失敗しました: データファイルを読み込めません。ファイルが使用中、または破損している可能性があります。&#x0A;既存データの上書きを避けるため、アプリは起動を停止しました。&#x0A;&#x0A;エラー: {0}</value>
+    <value>起動に失敗しました：データファイルを読み込めません（{0}）。
+既存データの上書きを防ぐため、起動を停止しました。
+
+エラー情報：{1}</value>
   </data>
   <data name="ResourceTextVersion" xml:space="preserve">
     <value>3.1</value>
@@ -1672,12 +1675,12 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   </data>
   <data name="HistoryRecoveryMessage" xml:space="preserve">
     <value>ワークスペース {0} の現在のデータを読み込めません。
-利用可能な最新の履歴バックアップ：{1}。
+利用可能な最新のバックアップ：{1}。
 
-復元すると、この時点の状態に戻り、それ以降の変更は失われる可能性があります。このワークスペースのノート、ToDo、設定のみを復元します。画像とプラグインデータは含まれません。</value>
+復元すると、その時点の状態に戻り、それ以降の変更は失われます。このワークスペースのノート、タスク、設定のみを復元します。画像やプラグインデータは含まれません。</value>
   </data>
   <data name="HistoryRecoveryRestore" xml:space="preserve">
-    <value>バックアップから復元</value>
+    <value>バックアップからの復元を試す</value>
   </data>
   <data name="WorkspaceFailureRetry" xml:space="preserve">
     <value>再試行</value>
@@ -1717,5 +1720,17 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   </data>
   <data name="WorkspaceFailureRecoveryUnverified" xml:space="preserve">
     <value>復元データの保存後にファイルを正常に読み込めることを確認できませんでした。復元元は保持しています。再試行してください。</value>
+  </data>
+  <data name="HistoryRecoveryCreate" xml:space="preserve">
+    <value>ワークスペースを新規作成</value>
+  </data>
+  <data name="AppStartupFailureBusy" xml:space="preserve">
+    <value>ファイルが使用中です</value>
+  </data>
+  <data name="AppStartupFailureCorrupt" xml:space="preserve">
+    <value>データファイルが破損しているか、形式が無効です</value>
+  </data>
+  <data name="AppStartupFailureUnknown" xml:space="preserve">
+    <value>原因不明</value>
   </data>
 </root>
