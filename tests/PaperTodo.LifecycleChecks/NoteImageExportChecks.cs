@@ -289,6 +289,22 @@ internal static class NoteImageExportChecks
                 }
                 var artifact = (NoteImageArtifact)Member(preview, "_artifact");
                 Check(preview.Owner == paper.ExpandedEditorHostWindow, "Preview has hidden paper owner");
+                var formatButton = (Button)Member(preview, "_formatToggle");
+                var sizeLabel = (TextBlock)Member(preview, "_estimatedSize");
+                var saveButton = (Button)Member(preview, "_save");
+                var frame = (Border)Member(preview, "_frame");
+                Check(preview.WindowStyle == WindowStyle.None && frame.CornerRadius.TopLeft == 12 &&
+                      saveButton.Style != null && Equals(formatButton.Content, "JPG") &&
+                      sizeLabel.Text == Strings.Get("EditorImageExportEstimatedSize"),
+                    "Preview does not use the themed window, rounded save button or size placeholder");
+                formatButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+                Check(Equals(formatButton.Content, "PNG") &&
+                      Equals(Member(preview, "_preferredFormat"), NoteImageFormat.Png),
+                    "Preview did not switch its preferred file format to PNG");
+                formatButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+                Check(Equals(formatButton.Content, "JPG") &&
+                      Equals(Member(preview, "_preferredFormat"), NoteImageFormat.Jpeg),
+                    "Preview did not switch its preferred file format back to JPG");
                 Check(Text(artifact.Drawing).Contains("latest unsaved text"), "Export read the debounced model instead of live editor");
                 Check(Text(artifact.Drawing).Contains("末尾仍然存在"), "Export lost final paragraph");
             }
