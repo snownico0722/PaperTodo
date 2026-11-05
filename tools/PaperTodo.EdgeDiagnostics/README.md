@@ -43,4 +43,4 @@ dotnet run --project tests/PaperTodo.EdgeLatencyObservationChecks -c Debug
 if ($LASTEXITCODE -ne 0) { throw 'Latency observer 检查失败' }
 ```
 
-Journal 的缓冲、边界和并发检查运行两个配置；子进程检查在 Debug 验证采集与退出，在 Release 验证即使设置 memory 也不启用采集或创建目录。Latency 检查需要 Windows/WPF 桌面。执行入口不等于实机验收结果。
+Journal 的缓冲、边界和并发检查在 Debug 运行；Release 只检查即使设置 memory 也不启用采集或创建目录。Latency 检查需要 Windows/WPF 桌面，保留消息原样转发、调度顺序和卸载等宿主不受影响的边界；数值读取器类型矩阵、诊断关联字段及实时 DWM 时钟校准已退出永久回归。执行入口不等于实机验收结果。
