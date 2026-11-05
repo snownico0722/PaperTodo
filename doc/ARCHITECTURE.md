@@ -225,6 +225,8 @@ Markdown 中的 Note 图片只通过 PaperTodo 内部 `i:` asset URI 引用宿�
 
 扩展编辑器与普通纸片共用全局 `PaperTopBarShortcuts` 排序及溢出菜单：编辑器入口只是可排序快捷键，退出状态使用不同的居中矢量图标；原有关闭按钮仍在最右侧，编辑器中显示 × 并遵循折叠成胶囊的交互（胶囊功能关闭时退回隐藏）。编辑器宿主继承当前纸片的置顶偏好，正文切换不改变宿主 HWND 和 Alt+Tab 入口。借出正文后，顶栏本身显式拥有纸片右键菜单，避免菜单仍只挂在未借走的 `PaperChrome` 上。侧栏覆盖正文行完整高度，Markdown 工具栏仅占左侧正文宽度；选中项与悬停采用圆角。切换时原窗口以非激活方式恢复到编辑器后方，不允许恢复过程抢占焦点或覆盖编辑器。编辑器外框去掉第二条描边，WPF 内容和实际 HWND 都执行圆角约束，最大化时去掉装饰圆角。
 
+编辑器宿主是系统关闭的唯一入口：Alt+F4/任务栏关闭只能完成一次 WPF 关闭流程，释放正文后再折叠原纸片，不能在 `OnClosing` 中同步再次调用 `Close()`；Ctrl+W 和顶栏中键借由 `_shell` 的输入转发复用纸片已有关闭动作。宿主最小化时，外部激活操作先恢复编辑器；外部折叠操作应通过宿主归还 `_shell` 后再折叠原纸片。侧栏内容来自当前工作区的权威 Paper 集合，在新建、删除、改名和外部提交/回滚后刷新。导出与 Markdown 提示对话框必须以实际承载窗口为 owner，而不是隐藏的原 `PaperWindow`。
+
 窗口交接的同步 Render 等待和正文回调允许同一 Dispatcher 上的外部命令重入。`AppController` 的批量隐藏与浮层 z-order 更新只遍历本次入口的窗口集合；隐藏复用既有逐纸片 visibility version，后到的显示／删除命令使旧目标失效，旧淡出回调也不能再修改新显示的 opacity 或图像资源。关闭过程由 `PaperWindow.CloseForReal` 的调用范围防重入，但在 compositor 交接完成前仍保持 Alive、接受精确端点；交接或正文回调返回后复核生命周期，Closed 不得回退到 Closing。
 
 Edge Capsule 启用后，一张纸的可见 surface 不再等价于一个 `PaperWindow` HWND：docked capsule 由 `EdgeCapsuleHost` 提供，跨队列/脱墙拖拽可以临时使用 `EdgeCapsuleDragWindow`；这些 surface 仍引用同一 `PaperData`，不复制业务对象。
