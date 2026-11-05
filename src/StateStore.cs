@@ -212,14 +212,6 @@ public sealed partial class StateStore
                              directory, Path.GetFileNameWithoutExtension(tempPath) + ".orphaned.*.tmp"))
                     paths.Add(orphan);
             }
-            // An interrupted first save may have been moved aside before the next
-            // primary/backup write. Its references are as important as the live JSON.
-            foreach (var tempPath in new[] { FilePath + ".tmp", BackupPath + ".tmp" })
-            {
-                foreach (var orphan in Directory.EnumerateFiles(
-                             directory, Path.GetFileNameWithoutExtension(tempPath) + ".orphaned.*.tmp"))
-                    paths.Add(orphan);
-            }
             // Recovery includes rejected local/baseline values, not just the external file.
             // Half-written archives also disable GC until they can be inspected safely.
             foreach (var path in Directory.EnumerateFiles(directory, ConflictFilePrefix + "*.json*"))
