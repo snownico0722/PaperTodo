@@ -137,35 +137,65 @@ internal static partial class Program
             Require(note.Content == contentBeforeBad && imageAssets.Count == countBeforeBad,
                 "Invalid images or conflicting inputs modified the note/image store.");
 
-            // The LMDB blob commits before core JSON; a failed core save must discard that
-            // newly imported image and restore the original note text.
+            // An exception after the atomic replace is not proof that the new JSON
+            // was never committed. Both early and late save failures must retain the
+            // imported LMDB blob, or a durable reference can become a broken image.
             var store = Field<StateStore>(controller, "_store");
             var writer = typeof(StateStore).GetField("_atomicWriter", Private)!;
             var priorWriter = writer.GetValue(store);
             var ignore = typeof(AppController).GetField("_ignoreSaveFailures", Private)!;
             var priorIgnore = ignore.GetValue(controller);
-            var beforeFailedText = note.Content;
-            var beforeFailedAssets = imageAssets.Count;
-            try
+            foreach (var failureStage in new[]
+                     { DurableAtomicWriteStage.BeforeTempOpen, DurableAtomicWriteStage.AfterReplace })
             {
-                ignore.SetValue(controller, true);
-                writer.SetValue(store, new DurableAtomicFileWriter((stage, _) =>
+                var originalContent = note.Content;
+                var diskBefore = File.ReadAllText(store.FilePath);
+                var idsBefore = imageAssets.Keys.ToHashSet(StringComparer.Ordinal);
+                try
                 {
-                    if (stage == DurableAtomicWriteStage.BeforeTempOpen)
-                        throw new IOException("Injected MCP image save failure.");
-                }));
-                Rejected("save_failed", () => Invoke("insert_note_image",
-                    new { paper_id = note.Id, image_base64 = base64 }));
+                    ignore.SetValue(controller, true);
+                    writer.SetValue(store, new DurableAtomicFileWriter((stage, target) =>
+                    {
+                        if (stage == failureStage &&
+                            string.Equals(target, store.FilePath, StringComparison.OrdinalIgnoreCase))
+                            throw new IOException("Injected MCP image save failure at " + stage);
+                    }));
+                    Rejected("save_failed", () => Invoke("insert_note_image",
+                        new { paper_id = note.Id, image_base64 = base64 }));
+                }
+                finally
+                {
+                    writer.SetValue(store, priorWriter);
+                    ignore.SetValue(controller, priorIgnore);
+                }
+
+                var retainedIds = imageAssets.Keys.Where(id => !idsBefore.Contains(id)).ToArray();
+                Require(note.Content == originalContent && retainedIds.Length == 1,
+                    "Failed note save must restore its in-memory content and retain one new image.");
+                var retainedId = retainedIds[0];
+                Require(controller.ImageStore.TryReadOwnedImage(
+                            note.Id, retainedId, 16 * 1024 * 1024,
+                            out var retainedMime, out var retainedBytes, out var tooLarge) &&
+                        !tooLarge && retainedMime == "image/png" &&
+                        retainedBytes.SequenceEqual(png),
+                    "The image backing a potentially committed reference was deleted or corrupted.");
+
+                var diskAfter = File.ReadAllText(store.FilePath);
+                if (failureStage == DurableAtomicWriteStage.BeforeTempOpen)
+                    Require(diskAfter == diskBefore,
+                        "The early failed save unexpectedly replaced the persisted note.");
+                else
+                    Require(diskAfter.Contains(
+                            MarkdownImageReferences.CreateReference(retainedId), StringComparison.Ordinal),
+                        "The late failed save did not exercise a committed image reference.");
+
+                // Normal persistence recovers without requiring the MCP caller to retry.
+                controller.SaveNow(sync: true);
+                Require(File.ReadAllText(store.FilePath).Contains(
+                            originalContent, StringComparison.Ordinal),
+                    "The next normal save did not reconcile the restored in-memory note.");
             }
-            finally
-            {
-                writer.SetValue(store, priorWriter);
-                ignore.SetValue(controller, priorIgnore);
-            }
-            Require(note.Content == beforeFailedText && imageAssets.Count == beforeFailedAssets,
-                "Failed core save left an orphaned image or a partially appended reference.");
-            controller.SaveNow(sync: true);
-            Console.WriteLine("PASS MCP image in-memory import, image-content read, permissions, ownership and rollback");
+            Console.WriteLine("PASS MCP image in-memory import, image-content read, permissions, ownership and early/late save failure safety");
         }
         finally
         {
