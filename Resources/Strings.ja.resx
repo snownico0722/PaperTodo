@@ -1677,7 +1677,7 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="WorkbenchSearch" xml:space="preserve"><value>すべてのワークスペースを検索。Enter で結果へ移動</value></data>
   <data name="WorkbenchRefresh" xml:space="preserve"><value>一覧を更新</value></data>
   <data name="WorkbenchClose" xml:space="preserve"><value>デスクトップへ戻る</value></data>
-  <data name="WorkbenchHint" xml:space="preserve"><value>空白をドラッグで範囲選択、Ctrl＋タイトルをクリックで複数選択、Ctrl＋G でグループ化。中ボタンドラッグで移動、Alt＋ホイールで拡大縮小。ノード内は Tab で子、Enter で同階層を追加。</value></data>
+  <data name="WorkbenchHint" xml:space="preserve"><value>空白をドラッグで範囲選択、Ctrl＋タイトルで複数選択、Ctrl＋G でグループ化。右ボタンドラッグで移動、Alt＋ホイールで拡大縮小。カードの接続アイコンをドラッグして接続。</value></data>
   <data name="WorkbenchError" xml:space="preserve"><value>ワークベンチの操作に失敗しました：{0}</value></data>
   <data name="WorkbenchPinConflict" xml:space="preserve"><value>固定した紙片が重なっています。位置は維持されます。移動または固定解除してください。</value></data>
   <data name="WorkbenchDelete" xml:space="preserve"><value>紙片を削除</value></data>
@@ -1703,7 +1703,7 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="WorkbenchFocusGroup" xml:space="preserve"><value>このグループだけ表示</value></data>
   <data name="WorkbenchLeaveGroup" xml:space="preserve"><value>すべて表示</value></data>
   <data name="WorkbenchRenameGroup" xml:space="preserve"><value>グループ名を変更</value></data>
-  <data name="WorkbenchConnect" xml:space="preserve"><value>接続先を選択…</value></data>
+  <data name="WorkbenchConnect" xml:space="preserve"><value>ドラッグして接続</value></data>
   <data name="WorkbenchConnectHint" xml:space="preserve"><value>接続先のカードをクリック。Esc でキャンセル</value></data>
   <data name="WorkbenchConnectionLabel" xml:space="preserve"><value>接続の説明</value></data>
   <data name="WorkbenchRemoveConnection" xml:space="preserve"><value>接続線を削除</value></data>
