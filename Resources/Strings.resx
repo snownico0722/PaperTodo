@@ -1740,5 +1740,15 @@
   <data name="EditorPaper" xml:space="preserve"><value>纸片</value></data>
   <data name="EditorCharacterCount" xml:space="preserve"><value>{0:N0} 字</value></data>
   <data name="EditorSelectionCount" xml:space="preserve"><value>{0:N0} 字 · 选中 {1:N0} 字</value></data>
+  <data name="EditorImageExport" xml:space="preserve"><value>导出图片</value></data>
+  <data name="EditorImageExportSave" xml:space="preserve"><value>保存图片</value></data>
+  <data name="EditorImageExportPreparing" xml:space="preserve"><value>正在排版…</value></data>
+  <data name="EditorImageExportPreview" xml:space="preserve"><value>整篇长图预览</value></data>
+  <data name="EditorImageExportSize" xml:space="preserve"><value>{0} × {1} 像素 · PNG</value></data>
+  <data name="EditorImageExportMissing" xml:space="preserve"><value>有 {0} 张图片无法读取，已在对应位置标注。</value></data>
+  <data name="EditorImageExportPng" xml:space="preserve"><value>PNG 图片</value></data>
+  <data name="EditorImageExportSaving" xml:space="preserve"><value>正在保存…</value></data>
+  <data name="EditorImageExportSaved" xml:space="preserve"><value>图片已保存</value></data>
 </root>
+
 

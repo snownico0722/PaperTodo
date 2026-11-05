@@ -1691,5 +1691,15 @@ The original note is kept.</value></data>
   <data name="EditorPaper" xml:space="preserve"><value>Paper</value></data>
   <data name="EditorCharacterCount" xml:space="preserve"><value>{0:N0} characters</value></data>
   <data name="EditorSelectionCount" xml:space="preserve"><value>{0:N0} characters · {1:N0} selected</value></data>
+  <data name="EditorImageExport" xml:space="preserve"><value>Export as image</value></data>
+  <data name="EditorImageExportSave" xml:space="preserve"><value>Save image</value></data>
+  <data name="EditorImageExportPreparing" xml:space="preserve"><value>Preparing layout…</value></data>
+  <data name="EditorImageExportPreview" xml:space="preserve"><value>Full note preview</value></data>
+  <data name="EditorImageExportSize" xml:space="preserve"><value>{0} × {1} pixels · PNG</value></data>
+  <data name="EditorImageExportMissing" xml:space="preserve"><value>{0} image(s) could not be loaded; their positions are marked.</value></data>
+  <data name="EditorImageExportPng" xml:space="preserve"><value>PNG image</value></data>
+  <data name="EditorImageExportSaving" xml:space="preserve"><value>Saving…</value></data>
+  <data name="EditorImageExportSaved" xml:space="preserve"><value>Image saved</value></data>
 </root>
+
 

@@ -1691,5 +1691,15 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="EditorPaper" xml:space="preserve"><value>紙片</value></data>
   <data name="EditorCharacterCount" xml:space="preserve"><value>{0:N0} 文字</value></data>
   <data name="EditorSelectionCount" xml:space="preserve"><value>{0:N0} 文字 · 選択 {1:N0} 文字</value></data>
+  <data name="EditorImageExport" xml:space="preserve"><value>画像として書き出す</value></data>
+  <data name="EditorImageExportSave" xml:space="preserve"><value>画像を保存</value></data>
+  <data name="EditorImageExportPreparing" xml:space="preserve"><value>レイアウトを作成中…</value></data>
+  <data name="EditorImageExportPreview" xml:space="preserve"><value>ノート全体のプレビュー</value></data>
+  <data name="EditorImageExportSize" xml:space="preserve"><value>{0} × {1} ピクセル · PNG</value></data>
+  <data name="EditorImageExportMissing" xml:space="preserve"><value>{0} 枚の画像を読み込めませんでした。該当箇所に表示しています。</value></data>
+  <data name="EditorImageExportPng" xml:space="preserve"><value>PNG 画像</value></data>
+  <data name="EditorImageExportSaving" xml:space="preserve"><value>保存中…</value></data>
+  <data name="EditorImageExportSaved" xml:space="preserve"><value>画像を保存しました</value></data>
 </root>
+
 

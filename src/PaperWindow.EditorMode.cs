@@ -192,6 +192,16 @@ public sealed partial class PaperWindow
         AddTool("↗", Strings.Get("EditorLink"), () => _noteBox?.InsertMarkdownLink());
         AddTool("▧", Strings.Get("EditorImage"), () => _noteEditorImageAction?.Invoke());
 
+        // Separate from source-editing tools: opening export must not enter edit mode,
+        // refocus the document or replace its selection.
+        var export = IconButton("", Strings.Get("EditorImageExport"));
+        export.Content = CreateEditorVectorIcon(export,
+            "M 5 3 H 15 L 20 8 V 20 H 5 Z M 15 3 V 8 H 20 " +
+            "M 8 16 L 11 12 L 14 15 L 16 13 L 18 17");
+        System.Windows.Automation.AutomationProperties.SetName(export, Strings.Get("EditorImageExport"));
+        export.Click += (_, _) => ExportNoteAsImage();
+        tools.Children.Add(export);
+
         _editorMarkdownToolbar = new Border
         {
             Height = ExpandedEditorToolbarHeight,
