@@ -16,12 +16,14 @@ public sealed partial class AppController
 
     private void RefreshSettingsWindowContent()
     {
-        RefreshPluginPopupThemeForSettingsRefresh();
-
         if (_settingsWindow is not { } window)
         {
             return;
         }
+
+        // Rebuilding or navigating away from the workspace page discards its inline
+        // rename draft, without silently saving it.
+        CancelWorkspaceRenameOnPointer(null);
 
         // Focus loss after detaching the old tree is deferred. Commit the active editor
         // before its replacement reads State, so a theme/display refresh keeps the draft.
@@ -543,14 +545,6 @@ public sealed partial class AppController
     }
 
 
-    // Keep this helper separate from the page builder so conflict-resolution fixes stay localized.
-    // Theme/font changes eventually rebuild the settings surface; notify open plugin popups even
-    // when the settings window itself is closed (for example, a system theme change).
-    private void RefreshPluginPopupThemeForSettingsRefresh()
-    {
-        PluginPopupThemeChanged?.Invoke();
-    }
-
     private static (double Width, double Height) SettingsSidebarSizeForWorkArea(Rect workArea)
     {
         var targetWidth = Math.Min(840, Math.Max(360, workArea.Width - 48));
@@ -570,3 +564,4 @@ public sealed partial class AppController
             DispatcherPriority.Background);
     }
 }
+

@@ -12,6 +12,8 @@ on:
       - ".github/workflows/plugin-samples.yml"
       - "plugin-samples/**"
       - "plugins/**"
+  pull_request:
+    types: [labeled]
   workflow_dispatch:
     inputs:
       configuration:
@@ -36,13 +38,20 @@ on:
 permissions:
   contents: read
 
-# A new push can replace an older automatic build; it must not cancel a manually requested package.
+# Only newer main pushes replace older automatic builds; manual and PR-label requests stay independent.
 concurrency:
-  group: package-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.ref }}
+  group: package-${{ github.event_name == 'push' && github.ref || github.run_id }}
   cancel-in-progress: true
 
 jobs:
   package:
+    # Only the "package" label on a PR branch in this repository can request a package.
+    if: >-
+      github.event_name != 'pull_request' ||
+      (github.event.action == 'labeled' &&
+       github.event.label.name == 'package' &&
+       github.event.pull_request.state == 'open' &&
+       github.event.pull_request.head.repo.full_name == github.repository)
     name: Build selected Windows package
     runs-on: windows-latest
     timeout-minutes: 15
@@ -59,8 +68,11 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v7
         with:
+          # Package the exact PR head, not GitHub's synthetic merge commit.
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
           submodules: recursive
+          persist-credentials: false
 
       - name: Set up .NET
         uses: actions/setup-dotnet@v6

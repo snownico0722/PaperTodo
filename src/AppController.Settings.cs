@@ -51,6 +51,9 @@ public sealed partial class AppController
 
     private bool SetSettingFromUi<T>(string id, T value)
     {
+        // A following workspace may still receive a stale click from a settings tree
+        // being replaced. Do not convert a rejected inherited edit into a save warning.
+        if (FollowsMainWorkspaceSettings) { RefreshSettingsForChange(id); return false; }
         try { return PublicSettings.Set(id, System.Text.Json.JsonSerializer.SerializeToElement(value)).Changed; }
         catch (PaperSettingsException ex)
         {
@@ -62,7 +65,7 @@ public sealed partial class AppController
                 ShowPaperBackgroundSaveFailure(ex);
             else if (id == "shortcuts.distinguish_numpad" && ex.Code == "shortcut_conflict")
                 ShowNumpadShortcutModeConflict();
-            else if (ex.Code != "save_failed")
+            else if (ex.Code is not ("save_failed" or "setting_read_only"))
                 _trayIcon?.ShowBalloonTip(Strings.Get("SaveFailureTitle"), ex.Message, BalloonIcon.Warning);
             RefreshSettingsForChange(id);
             return false;
@@ -91,12 +94,13 @@ public sealed partial class AppController
     {
         Theme.Invalidate();
         RefreshApplicationThemeResources();
-        foreach (var window in _windows.Values)
+        foreach (var window in _windows.Values.ToArray())
         {
-            window.UpdateTheme();
+            if (!window.IsClosed) window.UpdateTheme();
         }
         foreach (var m in _masterCapsules.Values) m.UpdateTheme();
         SkinBorder.RefreshLoadedSurfaces();
+        PluginPopupThemeChanged?.Invoke();
 
         RebuildTrayMenu();
         RefreshSettingsWindowContent();
@@ -548,6 +552,8 @@ public sealed partial class AppController
 
         var previousPage = _settingsPage;
         CommitSettingsExternalMarkdownEditor();
+        if (previousPage == SettingsPage.Workspaces && page != SettingsPage.Workspaces)
+            _workspaceSelectionDraft = 0;
         _settingsPage = page;
         if (previousPage != page && SupportsShortcutRecording(previousPage))
         {
@@ -595,6 +601,7 @@ public sealed partial class AppController
 
         window.PreviewMouseDown += (_, e) =>
         {
+            CancelWorkspaceRenameOnPointer(e.OriginalSource as DependencyObject);
             if (_settingsExternalMarkdownTextBox is not { IsKeyboardFocusWithin: true } textBox ||
                 IsWithinElement(e.OriginalSource as DependencyObject, textBox))
             {
@@ -606,10 +613,16 @@ public sealed partial class AppController
         };
         window.PreviewKeyDown += OnSettingsWindowPreviewKeyDown;
         window.PreviewKeyUp += OnSettingsWindowPreviewKeyUp;
-        window.Deactivated += (_, _) => CommitSettingsExternalMarkdownEditor();
+        window.Deactivated += (_, _) =>
+        {
+            CancelWorkspaceRenameOnPointer(null);
+            CommitSettingsExternalMarkdownEditor();
+        };
         window.Activated += (_, _) => RefreshSettingsStartupStateFromWindows();
         window.Closed += (_, _) =>
         {
+            CancelWorkspaceRenameOnPointer(null);
+            _workspaceSelectionDraft = 0;
             CommitSettingsExternalMarkdownEditor();
             StopSettingsStartupStateRefresh();
             _settingsExternalMarkdownTextBox = null;
@@ -651,9 +664,9 @@ public sealed partial class AppController
     {
         RebuildTrayMenu();
 
-        foreach (var window in _windows.Values)
+        foreach (var window in _windows.Values.ToArray())
         {
-            window.UpdateTypography();
+            if (!window.IsClosed) window.UpdateTypography();
         }
 
         foreach (var masterCapsule in _masterCapsules.Values)
@@ -661,6 +674,7 @@ public sealed partial class AppController
             masterCapsule.UpdateTypography();
         }
         ArrangeDeepCapsules(animate: false);
+        PluginPopupThemeChanged?.Invoke();
     }
 
     private UIElement BuildLabsSettingsPage()
@@ -2482,6 +2496,7 @@ public sealed partial class AppController
         border.SetValue(Border.BorderBrushProperty, new TemplateBindingExtension(Control.BorderBrushProperty));
         border.SetValue(Border.BorderThicknessProperty, new TemplateBindingExtension(Control.BorderThicknessProperty));
         border.SetValue(Border.CornerRadiusProperty, new CornerRadius(6));
+        border.SetValue(Border.PaddingProperty, new TemplateBindingExtension(Control.PaddingProperty));
         border.SetValue(UIElement.SnapsToDevicePixelsProperty, true);
 
         var content = new FrameworkElementFactory(typeof(ContentPresenter));
@@ -2742,6 +2757,8 @@ public sealed partial class AppController
         window.EnsureShellBuilt();
         window.CancelPendingVisibilityTransitions();
         window.DetachFromDeepCapsuleStack(animate: false);
+        // Unlike ShowPaper, this path reuses a hidden window whose Note images are suspended.
+        window.PrepareForShow();
 
         Rect? snapTileBounds = null;
         if (!paper.IsCollapsed && window.TryGetRememberedSnapTileBoundsForRestore(out var rememberedSnapTileBounds))
@@ -2788,3 +2805,4 @@ public sealed partial class AppController
     }
 
 }
+
