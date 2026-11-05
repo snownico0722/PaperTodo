@@ -8,6 +8,7 @@ public sealed partial class AppController
     internal Guid LastWorkbenchContentTransferId { get; private set; }
     internal event Action<Guid, bool>? WorkbenchContentTransferReplayed;
     internal event Action? WorkbenchContentTransferBlocked;
+    internal event Action<IReadOnlySet<Guid>>? WorkbenchContentTransfersRetired;
 
     internal bool CanTransferWorkbenchContent(WorkbenchContentTransferPayload payload, string? targetPaperId)
     {
@@ -115,6 +116,50 @@ public sealed partial class AppController
         suppress.Dispose();
         CompleteWorkbenchTransferUi(source, target);
         return true;
+    }
+
+    internal void RetireWorkbenchContentHistory(string? paperId = null)
+    {
+        // A deleted editor or a replaced native undo stack can never return to its shared
+        // boundary. Retire the connected histories together: merely dropping the controller
+        // token would let the surviving editor undo one half of a move and duplicate content.
+        var retired = new HashSet<WorkbenchTransferTransaction>();
+        var papers = new HashSet<string>(StringComparer.Ordinal);
+        if (paperId != null) papers.Add(paperId);
+        bool added;
+        do
+        {
+            added = false;
+            foreach (var transaction in _workbenchContentTransfers)
+            {
+                if (retired.Contains(transaction) || paperId != null &&
+                    (!IsCurrentWorkbenchTransfer(transaction) ||
+                     !papers.Contains(transaction.Source.Id) && !papers.Contains(transaction.Target.Id))) continue;
+                retired.Add(transaction);
+                papers.Add(transaction.Source.Id);
+                papers.Add(transaction.Target.Id);
+                added = true;
+            }
+        } while (added);
+        if (retired.Count == 0) return;
+
+        var ids = retired.Select(transaction => transaction.Id).ToHashSet();
+        _workbenchContentTransfers.RemoveAll(transaction => ids.Contains(transaction.Id));
+        foreach (var window in retired.SelectMany(transaction =>
+                     new[] { transaction.SourceWindow, transaction.TargetWindow }).Distinct())
+            window.ResetWorkbenchContentHistory();
+        foreach (var transaction in retired.Where(entry => entry.CreatedTarget && !entry.Applied))
+        {
+            // An undone split retained this hidden window solely for redo. Retirement ends
+            // that lifetime; dispose it without performing another paper deletion or save.
+            if (FindPaper(transaction.Target.Id) != null ||
+                !_windows.TryGetValue(transaction.Target.Id, out var window) ||
+                !ReferenceEquals(window, transaction.TargetWindow)) continue;
+            _windows.Remove(transaction.Target.Id);
+            _visibilityAnimationVersions.Remove(transaction.Target.Id);
+            TryExitCleanup(window.CloseForReal);
+        }
+        WorkbenchContentTransfersRetired?.Invoke(ids);
     }
 
     internal bool TryUndoWorkbenchContentTransfer(Guid? id = null) => ReplayWorkbenchContentTransfer(id, redo: false);

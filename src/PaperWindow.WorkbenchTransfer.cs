@@ -108,6 +108,28 @@ public sealed partial class PaperWindow
         else CommitPendingMarkdownContentForSave();
     }
 
+    internal void ResetWorkbenchContentHistory()
+    {
+        if (IsClosed) return;
+        _workbenchNoteHistoryPosition = new();
+        _workbenchNoteRedoPosition = null;
+        _workbenchNoteSelection = null;
+        _noteBox?.Document.UndoStack.ClearAll();
+        _undoStack.Clear();
+        _redoStack.Clear();
+        _workbenchTodoHistory.Clear();
+        foreach (var editor in _todoEditors.Values)
+        {
+            if (!editor.IsUndoEnabled) continue;
+            editor.SetCurrentValue(System.Windows.Controls.Primitives.TextBoxBase.IsUndoEnabledProperty, false);
+            editor.SetCurrentValue(System.Windows.Controls.Primitives.TextBoxBase.IsUndoEnabledProperty, true);
+        }
+        // A later LostFocus must not recreate a snapshot spanning the retired boundary.
+        _activeOriginalItemId = CurrentFocusedTodoItemId();
+        _activeOriginalText = _activeOriginalItemId is { } id && _todoEditors.TryGetValue(id, out var focused)
+            ? focused.Text : null;
+    }
+
     internal WorkbenchTransferBoundary ApplyWorkbenchContentTransfer(
         Guid id, WorkbenchContentSnapshot before, WorkbenchContentSnapshot after)
     {

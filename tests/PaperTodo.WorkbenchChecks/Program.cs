@@ -15,7 +15,7 @@ internal static partial class Program
 {
     private const BindingFlags Private = BindingFlags.Instance | BindingFlags.NonPublic;
     private const string Marker = ".papertodo-workbench-fixture";
-    private static readonly string[] Cases = ["surface", "workspaces", "readonly", "desktop", "materials", "groups", "graph", "transfers", "history"];
+    private static readonly string[] Cases = ["surface", "workspaces", "readonly", "desktop", "materials", "groups", "graph", "search", "transfers", "history", "mixed-history"];
 
     [STAThread]
     private static int Main(string[] args)
@@ -104,8 +104,10 @@ internal static partial class Program
         if (name == "materials") { await RunMaterials(); return; }
         if (name == "groups") { await RunGroups(); return; }
         if (name == "graph") { await RunGraph(); return; }
+        if (name == "search") { await RunSearch(); return; }
         if (name == "transfers") { await RunTransfers(); return; }
         if (name == "history") { await RunTransferHistory(); return; }
+        if (name == "mixed-history") { await RunMixedHistory(); return; }
         if (name == "desktop") { await RunDesktopRestore(); return; }
         if (name == "readonly")
         {

@@ -249,23 +249,38 @@ internal sealed partial class WorkbenchWindow
 
     private void RevealCard(Scene scene, string id)
     {
-        if (scene.Number != _controller.WorkspaceNumber) return;
-        if (_focusedGroupId != null && (!_controller.WorkbenchLayout.Groups.TryGetValue(_focusedGroupId, out var focused) || !focused.Members.Contains(id))) LeaveGroupFocus();
-        var state = _controller.WorkbenchLayout.Copy();
+        var active = scene.Number == _controller.WorkspaceNumber;
+        if (_focusedGroupId != null && (!active || !_controller.WorkbenchLayout.Groups.TryGetValue(_focusedGroupId, out var focused) || !focused.Members.Contains(id))) LeaveGroupFocus();
+        var state = SceneState(scene).Copy();
         var changed = false;
         foreach (var group in state.Groups.Values.Where(g => g.Collapsed && g.Members.Contains(id)))
         { group.Collapsed = false; changed = true; }
         // Reveal ancestors only; unrelated collapsed branches stay closed.
         var current = id; var visited = new HashSet<string>(StringComparer.Ordinal);
+        var ancestors = new HashSet<string>(StringComparer.Ordinal);
         while (visited.Add(current))
         {
             var parent = state.Connections.FirstOrDefault(e => e.IsBranch && e.To == current)?.From;
             if (parent == null) break;
-            var item = _controller.FindWorkbenchMaterial(parent);
-            if (item?.Collapsed == true) _controller.SetWorkbenchMaterialCollapsed(parent, false);
+            ancestors.Add(parent);
+            if (active && _controller.FindWorkbenchMaterial(parent)?.Collapsed == true)
+                _controller.SetWorkbenchMaterialCollapsed(parent, false);
             current = parent;
         }
-        if (changed) StoreLayout(state);
+        if (active)
+        {
+            if (changed) StoreLayout(state);
+        }
+        else if (scene.Snapshot is { } snapshot)
+        {
+            // Inactive workspaces are read-only. Reveal only this overview's copied
+            // layout and immutable summaries; a refresh restores their saved collapse state.
+            var papers = snapshot.Papers.Select(p => ancestors.Contains(p.Id)
+                ? p with { MaterialCollapsed = false } : p).ToArray();
+            scene.Snapshot = snapshot with { Layout = state, Papers = papers };
+            foreach (var paper in papers)
+                if (scene.Cards.TryGetValue(paper.Id, out var card)) card.Snapshot = paper;
+        }
         ApplySceneVisibility(); DrawDecorations(scene);
     }
 

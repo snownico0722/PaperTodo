@@ -146,6 +146,7 @@ internal sealed partial class WorkbenchWindow : Window
         controller.WorkbenchModelChanged += QueueModelRefresh;
         controller.WorkbenchContentTransferReplayed += OnContentTransferReplayed;
         controller.WorkbenchContentTransferBlocked += OnTransferHistoryBlocked;
+        controller.WorkbenchContentTransfersRetired += OnContentTransfersRetired;
         Loaded += async (_, _) =>
         {
             SyncActiveScene();
@@ -548,7 +549,7 @@ internal sealed partial class WorkbenchWindow : Window
         {
             var newest = _undo.Take(31).Reverse().ToArray(); _undo.Clear(); foreach (var item in newest) _undo.Push(item);
         }
-        _undo.Push(new(_controller.WorkbenchLayout.Copy()));
+        _undo.Push(new(_controller.CaptureWorkbenchHistoryLayout()));
         _redo.Clear();
     }
     private void UndoLayout()
@@ -1060,6 +1061,7 @@ internal sealed partial class WorkbenchWindow : Window
         _controller.WorkbenchModelChanged -= QueueModelRefresh;
         _controller.WorkbenchContentTransferReplayed -= OnContentTransferReplayed;
         _controller.WorkbenchContentTransferBlocked -= OnTransferHistoryBlocked;
+        _controller.WorkbenchContentTransfersRetired -= OnContentTransfersRetired;
         _refreshTimer.Stop(); CancelLayout(); _overviewCancellation?.Cancel(); _overviewCancellation?.Dispose();
         foreach (var scene in _scenes.Values)
             foreach (var id in scene.Cards.Keys.ToArray()) RemoveCard(scene, id, !_shutdown);

@@ -828,6 +828,7 @@ public sealed partial class PaperWindow : Window
         _isClosingForReal = true;
         try
         {
+            _controller.RetireWorkbenchContentHistory(_paper.Id);
             BeginPaperWindowClose();
             if (IsClosed) return;
             CloseExpandedDeepCapsuleSlotHostForReal();

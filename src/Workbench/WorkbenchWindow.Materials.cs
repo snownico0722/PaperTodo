@@ -76,8 +76,8 @@ internal sealed partial class WorkbenchWindow
         }
         else
         {
-            CancelLayout(); _undo.Pop(); _redo.Push(new(_controller.WorkbenchLayout.Copy()));
-            StoreLayout(entry.Layout);
+            CancelLayout(); _undo.Pop(); _redo.Push(new(_controller.CaptureWorkbenchHistoryLayout()));
+            RestoreHistoryLayout(entry.Layout);
         }
         _modelSignature = ""; SyncActiveScene();
     }
@@ -96,10 +96,29 @@ internal sealed partial class WorkbenchWindow
         }
         else
         {
-            CancelLayout(); _redo.Pop(); _undo.Push(new(_controller.WorkbenchLayout.Copy()));
-            StoreLayout(entry.Layout);
+            CancelLayout(); _redo.Pop(); _undo.Push(new(_controller.CaptureWorkbenchHistoryLayout()));
+            RestoreHistoryLayout(entry.Layout);
         }
         _modelSignature = ""; SyncActiveScene();
+    }
+
+    private void RestoreHistoryLayout(WorkbenchState layout)
+    {
+        _storingLayout = true;
+        try { _controller.RestoreWorkbenchHistoryLayout(layout); }
+        finally { _storingLayout = false; }
+    }
+
+    private void OnContentTransfersRetired(IReadOnlySet<Guid> ids)
+    {
+        RemoveRetired(_undo);
+        RemoveRetired(_redo);
+        void RemoveRetired(Stack<WorkbenchUndoEntry> stack)
+        {
+            var retained = stack.Where(entry => entry.TransferId is not { } id || !ids.Contains(id)).Reverse().ToArray();
+            stack.Clear();
+            foreach (var entry in retained) stack.Push(entry);
+        }
     }
 
     private void OnTransferHistoryBlocked() => _status.Text = Strings.Get("WorkbenchTransferHistoryBlocked");
