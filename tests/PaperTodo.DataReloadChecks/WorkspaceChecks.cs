@@ -760,14 +760,41 @@ internal static partial class Program
 
             // The locked-settings jump must look like the framed restore-default
             // button, not like an unadorned text label.
-            var inheritedPage = (StackPanel)typeof(AppController)
-                .GetMethod("WithWorkspaceSettingsInheritance", BindingFlags.NonPublic | BindingFlags.Instance)!
-                .Invoke(controller, [new TextBlock()])!;
+            var inheritanceMethod = typeof(AppController).GetMethod(
+                "WithWorkspaceSettingsInheritance", BindingFlags.NonPublic | BindingFlags.Instance)!;
+            var inheritedControls = new StackPanel();
+            inheritedControls.Children.Add(new Button { Content = "Inherited setting" });
+            var inheritedPage = (StackPanel)inheritanceMethod.Invoke(controller, [inheritedControls])!;
             var manageWorkspace = inheritedPage.Children.OfType<Button>().Single();
             Require(manageWorkspace.Height == 27 &&
                     manageWorkspace.BorderThickness.Left == 1 &&
-                    manageWorkspace.Background == Brushes.Transparent,
-                "the inherited-settings workspace jump needs the same outlined affordance as Restore defaults");
+                    manageWorkspace.Background == Brushes.Transparent &&
+                    manageWorkspace.IsEnabled,
+                "the inherited-settings workspace jump must remain usable to disable follow mode");
+            Require(!inheritedControls.IsEnabled && inheritedControls.Opacity < 0.8,
+                "following software settings must disable and visually dim the entire settings page");
+
+            // The plugin page must not look active while this workspace inherits
+            // its software settings. Workspace management remains available.
+            var pageField = typeof(AppController).GetField("_settingsPage",
+                BindingFlags.NonPublic | BindingFlags.Instance)!;
+            var originalPage = pageField.GetValue(controller);
+            try
+            {
+                pageField.SetValue(controller, Enum.Parse(pageField.FieldType, "Plugins"));
+                var pluginControls = new StackPanel();
+                pluginControls.Children.Add(new Button { Content = "Plugin setting" });
+                var inheritedPlugins = (StackPanel)inheritanceMethod.Invoke(controller, [pluginControls])!;
+                Require(!pluginControls.IsEnabled && pluginControls.Opacity < 0.8 &&
+                        inheritedPlugins.Children.OfType<Button>().Single().IsEnabled,
+                    "inherited plugin settings still looked or acted editable");
+                pageField.SetValue(controller, Enum.Parse(pageField.FieldType, "Workspaces"));
+                var workspaceControls = new StackPanel();
+                Require(ReferenceEquals(inheritanceMethod.Invoke(controller, [workspaceControls]),
+                        workspaceControls),
+                    "workspace management became read-only so follow mode cannot be disabled");
+            }
+            finally { pageField.SetValue(controller, originalPage); }
             Throws<PaperSettingsException>(() => controller.PublicSettings.Set("appearance.theme", JsonSerializer.SerializeToElement("light")));
             controller.SaveNow(sync: true);
             Require(Str(J(File.ReadAllText(store2.FilePath))["theme"]) == "light", "inherited settings saved over dormant settings");
@@ -956,7 +983,9 @@ internal static partial class Program
                     System.Reflection.BindingFlags.Instance)!
                 .Invoke(controller, null)!;
             var workspacePage = WorkspacePage();
-            var createWorkspace = workspacePage.Children.OfType<DockPanel>().Single()
+            StackPanel WorkspaceOptionsGroup(StackPanel page) =>
+                page.Children.OfType<StackPanel>().Single();
+            var createWorkspace = WorkspaceOptionsGroup(workspacePage).Children.OfType<DockPanel>().Single()
                 .Children.OfType<Button>().Single();
             Require(createWorkspace.Height == 27 && createWorkspace.BorderThickness.Left == 1,
                 "New workspace needs the same framed Settings button as Restore defaults");
@@ -967,7 +996,7 @@ internal static partial class Program
             Require(iconBounds.Width > 8 && iconBounds.Height > 8 &&
                     iconBounds.Width < 17 && iconBounds.Height < 17,
                 "the redesigned workspace glyph must parse as a compact top-bar vector");
-            Border SlotCard(StackPanel page, int slot) => page.Children.OfType<Border>()
+            Border SlotCard(StackPanel page, int slot) => WorkspaceOptionsGroup(page).Children.OfType<Border>()
                 .Single(card => AutomationProperties.GetAutomationId(card) == "WorkspaceSlot" + slot);
             var third = SlotCard(workspacePage, 3);
             var cardRow = (Grid)third.Child;
@@ -1026,7 +1055,7 @@ internal static partial class Program
             });
             Require(controller.WorkspaceNumber == 1, "workspace card switched without confirmation");
             workspacePage = WorkspacePage();
-            var confirm = workspacePage.Children.OfType<Button>().Single();
+            var confirm = WorkspaceOptionsGroup(workspacePage).Children.OfType<Button>().Single();
             Require(confirm.IsEnabled && confirm.Content?.ToString() != Strings.Get("CommonCancel") &&
                     confirm.Height == 27 && confirm.BorderThickness.Left == 1,
                 "settings must offer one framed switch confirmation and no cancel button");
@@ -1128,6 +1157,13 @@ internal static partial class Program
             Require(await controller.CycleWorkspaceAsync() && controller.WorkspaceNumber == 1, "cycle did not wrap at count");
             var disabled = controller.WorkspaceOptions.Normalized(); disabled.Enabled = false;
             Require(await controller.ChangeWorkspaceConfigurationAsync(disabled), "disable failed");
+            var disabledPage = WorkspacePage();
+            var disabledToggle = disabledPage.Children.OfType<CheckBox>().Single();
+            var disabledOptions = WorkspaceOptionsGroup(disabledPage);
+            Require(disabledToggle.IsEnabled && disabledToggle.IsChecked == false &&
+                    !disabledOptions.IsEnabled && disabledOptions.Opacity < 0.8 &&
+                    disabledPage.Children.OfType<TextBlock>().First().Opacity < 0.8,
+                "disabling workspaces must dim all workspace controls except the enable toggle");
             foreach (var window in windows.Values)
             {
                 window.EnsureShellBuilt();
