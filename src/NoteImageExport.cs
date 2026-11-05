@@ -7,6 +7,7 @@ using System.Windows.Media.Imaging;
 using Markdig;
 using Markdig.Extensions.EmphasisExtras;
 using Markdig.Extensions.TaskLists;
+using Markdig.Parsers;
 using Markdig.Syntax;
 using Markdig.Syntax.Inlines;
 
@@ -22,11 +23,22 @@ internal sealed record NoteImageArtifact(DrawingGroup Drawing, double Height, in
     internal int PixelHeight => checked((int)Math.Ceiling(Height * Scale));
 }
 
+internal sealed record NoteImageSource(BitmapSource Bitmap, int NaturalWidth);
+
 internal static class NoteImageExport
 {
-    private static readonly MarkdownPipeline Pipeline = new MarkdownPipelineBuilder()
-        .DisableHtml().UsePreciseSourceLocation()
-        .UseEmphasisExtras(EmphasisExtraOptions.Strikethrough).UseTaskLists().Build();
+    private static readonly MarkdownPipeline Pipeline = CreatePipeline();
+
+    private static MarkdownPipeline CreatePipeline()
+    {
+        var builder = new MarkdownPipelineBuilder().UsePreciseSourceLocation()
+            .UseEmphasisExtras(EmphasisExtraOptions.Strikethrough).UseTaskLists();
+        // Keep HTML as inline tokens, then apply only the editor's validated
+        // formatting spans. Block/unsupported HTML remains visible source text.
+        var htmlBlocks = builder.BlockParsers.Find<HtmlBlockParser>();
+        if (htmlBlocks != null) builder.BlockParsers.Remove(htmlBlocks);
+        return builder.Build();
+    }
 
     internal static Task<T> OnStaAsync<T>(Func<T> work)
     {
@@ -44,15 +56,16 @@ internal static class NoteImageExport
     }
 
     internal static NoteImageArtifact Compose(string title, string markdown,
-        Func<string, BitmapSource?> resolveImage, string missingLabel, CancellationToken cancellation)
+        Func<string, NoteImageSource?> resolveImage, string missingLabel, CancellationToken cancellation)
     {
         cancellation.ThrowIfCancellationRequested();
         var source = NoteHtmlExport.PrepareMarkdownForExport(markdown, out var imageWidths);
         var document = Markdown.Parse(source, Pipeline);
-        return new Composer(resolveImage, missingLabel, imageWidths, cancellation).Compose(title, document);
+        var html = source.Contains('<') ? MarkdownSemanticSnapshot.Parse(source) : null;
+        return new Composer(resolveImage, missingLabel, imageWidths, html, cancellation).Compose(title, document);
     }
 
-    internal static BitmapSource? ReadImage(NoteImageStore store, string noteId, string imageId)
+    internal static NoteImageSource? ReadImage(NoteImageStore store, string noteId, string imageId)
     {
         if (!store.TryGetEncodedImageBytes(imageId, out var asset, out var bytes) ||
             !string.Equals(asset.NoteId, noteId, StringComparison.Ordinal)) return null;
@@ -64,7 +77,7 @@ internal static class NoteImageExport
         bitmap.StreamSource = stream;
         bitmap.EndInit();
         bitmap.Freeze();
-        return bitmap;
+        return new NoteImageSource(bitmap, asset.Width);
     }
 
     internal static void Save(string path, NoteImageArtifact artifact, CancellationToken cancellation) =>
@@ -102,11 +115,12 @@ internal static class NoteImageExport
     }
 
     [Flags]
-    private enum Style { Normal = 0, Bold = 1, Italic = 2, Strike = 4, Code = 8, Link = 16 }
+    private enum Style { Normal = 0, Bold = 1, Italic = 2, Strike = 4, Code = 8, Link = 16, Underline = 32 }
     private sealed record RunStyle(int Start, int Length, Style Style);
 
-    private sealed class Composer(Func<string, BitmapSource?> resolveImage, string missingLabel,
-        IReadOnlyDictionary<int, MarkdownImageDisplayOptions> widths, CancellationToken token)
+    private sealed class Composer(Func<string, NoteImageSource?> resolveImage, string missingLabel,
+        IReadOnlyDictionary<int, MarkdownImageDisplayOptions> widths,
+        MarkdownSemanticSnapshot? html, CancellationToken token)
     {
         private static readonly Brush Paper = Brush("#FCFAF5");
         private static readonly Brush Ink = Brush("#302D29");
@@ -255,28 +269,65 @@ internal static class NoteImageExport
                 for (var inline = parent?.FirstChild; inline != null; inline = inline.NextSibling)
                 {
                     token.ThrowIfCancellationRequested();
+                    var inlineStyle = style | HtmlStyle(inline);
                     switch (inline)
                     {
-                        case LiteralInline literal: Append(literal.Content.ToString(), style); break;
-                        case CodeInline code: Append(code.Content, style | Style.Code); break;
-                        case LineBreakInline: Append("\n", style); break;
-                        case AutolinkInline link: Append(link.Url, style | Style.Link); break;
+                        case LiteralInline literal: Append(literal.Content.ToString(), inlineStyle); break;
+                        case HtmlEntityInline entity: Append(entity.Transcoded.ToString(), inlineStyle); break;
+                        case HtmlInline tag:
+                            if (!IsHtmlMarker(tag)) Append(tag.Tag, inlineStyle);
+                            break;
+                        case CodeInline code: Append(code.Content, inlineStyle | Style.Code); break;
+                        case LineBreakInline: Append("\n", inlineStyle); break;
+                        case AutolinkInline link: Append(link.Url, inlineStyle | Style.Link); break;
                         case TaskList: break; // The list row draws its own vector checkbox.
                         case EmphasisInline emphasis:
-                            Visit(emphasis, style | (emphasis.DelimiterChar == '~' ? Style.Strike :
+                            Visit(emphasis, inlineStyle | (emphasis.DelimiterChar == '~' ? Style.Strike :
                                 emphasis.DelimiterCount >= 2 ? Style.Bold : Style.Italic));
                             break;
                         case LinkInline { IsImage: true } image:
                             Flush();
                             Image(image, x, width);
                             break;
-                        case LinkInline link: Visit(link, style | Style.Link); break;
-                        case ContainerInline nested: Visit(nested, style); break;
+                        case LinkInline link: Visit(link, inlineStyle | Style.Link); break;
+                        case ContainerInline nested: Visit(nested, inlineStyle); break;
                     }
                 }
             }
             Visit(container, Style.Normal);
             Flush();
+        }
+
+        private bool IsHtmlMarker(HtmlInline tag)
+        {
+            if (html == null) return false;
+            foreach (var span in html.SpansForLine(tag.Line))
+                if (span.Kind == MarkdownSemanticSpanKind.HtmlMarker &&
+                    span.Start == tag.Span.Start && span.End == tag.Span.End + 1) return true;
+            return false;
+        }
+
+        private Style HtmlStyle(Inline inline)
+        {
+            if (html == null) return Style.Normal;
+            var style = Style.Normal;
+            foreach (var span in html.SpansForLine(inline.Line))
+            {
+                if (inline.Span.Start < span.Start || inline.Span.Start >= span.End) continue;
+                style |= span.Kind switch
+                {
+                    MarkdownSemanticSpanKind.HtmlStrong => Style.Bold,
+                    MarkdownSemanticSpanKind.HtmlEmphasis => Style.Italic,
+                    MarkdownSemanticSpanKind.HtmlStrikethrough => Style.Strike,
+                    MarkdownSemanticSpanKind.HtmlUnderline => Style.Underline,
+                    MarkdownSemanticSpanKind.HtmlCode => Style.Code,
+                    _ => Style.Normal
+                };
+            }
+            foreach (var link in html.LinksForLine(inline.Line))
+                if (inline.Span.Start >= link.LabelStart && inline.Span.Start < link.LabelEnd)
+                    style |= Style.Link;
+            return style;
         }
 
         private static FormattedText Format(string text, double width, double size,
@@ -299,11 +350,15 @@ internal static class NoteImageExport
             {
                 if (run.Style.HasFlag(Style.Bold)) formatted.SetFontWeight(FontWeights.Bold, run.Start, run.Length);
                 if (run.Style.HasFlag(Style.Italic)) formatted.SetFontStyle(FontStyles.Italic, run.Start, run.Length);
-                if (run.Style.HasFlag(Style.Strike)) formatted.SetTextDecorations(TextDecorations.Strikethrough, run.Start, run.Length);
+                var decorations = new TextDecorationCollection();
+                if (run.Style.HasFlag(Style.Strike))
+                    foreach (var decoration in TextDecorations.Strikethrough) decorations.Add(decoration);
+                if (run.Style.HasFlag(Style.Underline) || run.Style.HasFlag(Style.Link))
+                    foreach (var decoration in TextDecorations.Underline) decorations.Add(decoration);
+                if (decorations.Count > 0) formatted.SetTextDecorations(decorations, run.Start, run.Length);
                 if (run.Style.HasFlag(Style.Link))
                 {
                     formatted.SetForegroundBrush(Accent, run.Start, run.Length);
-                    formatted.SetTextDecorations(TextDecorations.Underline, run.Start, run.Length);
                 }
                 if (run.Style.HasFlag(Style.Code))
                 {
@@ -324,26 +379,18 @@ internal static class NoteImageExport
         {
             var url = link.Url ?? "";
             var id = url.StartsWith("i:", StringComparison.Ordinal) ? url[2..] : url;
-            BitmapSource? bitmap = null;
-            if (url.StartsWith("i:", StringComparison.Ordinal)) bitmap = resolveImage(id);
-            if (bitmap == null)
+            NoteImageSource? image = null;
+            if (url.StartsWith("i:", StringComparison.Ordinal)) image = resolveImage(id);
+            if (image == null)
             {
                 _missing.Add(id);
                 Text("[" + missingLabel + "]", [], x, width, BodySize, false);
                 _y += 12;
                 return;
             }
-            var requestedWidth = width;
-            if (widths.TryGetValue(link.Span.Start, out var options))
-            {
-                if (options.WidthAttribute is { } attribute)
-                    requestedWidth = attribute.IsPercent ? width * attribute.Value / 100 : attribute.Value;
-                else if (options.LabelWidth is { } labelWidth)
-                    requestedWidth = labelWidth * (options.LabelScalePercent ?? 100) / 100;
-                else if (options.LabelScalePercent is { } percent)
-                    requestedWidth = width * percent / 100;
-            }
-            var imageWidth = Math.Clamp(requestedWidth, 1, width);
+            widths.TryGetValue(link.Span.Start, out var options);
+            var bitmap = image.Bitmap;
+            var imageWidth = Math.Min(width, options.ResolveWidth(image.NaturalWidth, width));
             var imageHeight = imageWidth * bitmap.PixelHeight / bitmap.PixelWidth;
             _y += 8;
             var bounds = new Rect(x + (width - imageWidth) / 2, _y, imageWidth, imageHeight);

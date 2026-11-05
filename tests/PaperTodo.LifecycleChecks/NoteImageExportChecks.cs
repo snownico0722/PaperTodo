@@ -21,6 +21,7 @@ internal static class NoteImageExportChecks
     private static void CheckRendering()
     {
         var token = CancellationToken.None;
+        CheckContentCompatibility();
         var sample = NoteImageExport.Compose("把想法，写成自己的样子", """
             # 把想法，写成自己的样子
 
@@ -28,7 +29,7 @@ internal static class NoteImageExportChecks
 
             ## 留一点空间，给思考
 
-            好的排版让阅读更轻松：**重要的内容自然突出**，其余文字安静地陪伴。中文与 English、日本語、한국어 都留在同一页。
+            好的排版让阅读更轻松：**重要的内容自然突出**，<u>想强调的话也能留下划线</u>。中文与 English、日本語、한국어 都留在同一页。
 
             > 不必等到想清楚才开始记录。
             > 写下来的过程，本身就是整理。
@@ -127,6 +128,90 @@ internal static class NoteImageExportChecks
         Console.WriteLine($"PASS note image: {sample.PixelWidth}x{sample.PixelHeight}; long note {longNote.PixelHeight}px; native decode, stripe seams, complete scanlines and atomic cancellation");
     }
 
+    private static void CheckContentCompatibility()
+    {
+        NoteImageArtifact Compose(string markdown, NoteImageSource? image = null) =>
+            NoteImageExport.Compose("", markdown, _ => image, "missing", CancellationToken.None);
+
+        var entities = Compose("A &amp; B &lt; C &gt; D &#x4E2D;&#25991; &quot;quoted&quot; &#x1F642;");
+        Check(Text(entities.Drawing).Contains("A & B < C > D 中文 \"quoted\" 🙂"),
+            "Named/numeric entities were dropped or left encoded");
+        Check(Text(Compose("`&amp; <u>code</u>`").Drawing).Contains("&amp; <u>code</u>"),
+            "Literal inline code was decoded or formatted as HTML");
+
+        foreach (var (html, markdown) in new[]
+        {
+            ("<strong>bold</strong>", "**bold**"),
+            ("<em>italic</em>", "*italic*"),
+            ("<b><i>nested</i></b>", "**_nested_**"),
+            ("<del>removed</del>", "~~removed~~"),
+            ("<code>code</code>", "`code`"),
+            ("<a href=\"https://example.com\">link</a>", "[link](https://example.com)"),
+            ("**<u>mixed</u>**", "<u><b>mixed</b></u>")
+        })
+        {
+            var actual = Compose(html); var expected = Compose(markdown);
+            Check(GlyphStyles(actual.Drawing) == GlyphStyles(expected.Drawing) &&
+                  GeometryCount(actual.Drawing) == GeometryCount(expected.Drawing),
+                "Supported HTML differs from equivalent formatting: " + html);
+        }
+        var underlined = Compose("<u>underlined</u>");
+        Check(Text(underlined.Drawing).Contains("underlined") && !Text(underlined.Drawing).Contains("<u>") &&
+              GeometryCount(underlined.Drawing) > GeometryCount(Compose("underlined").Drawing),
+            "HTML underline was not drawn");
+        Check(GeometryCount(Compose("<u><s>both</s></u>").Drawing) > GeometryCount(Compose("~~both~~").Drawing),
+            "Nested underline/strike lost one decoration");
+        foreach (var literal in new[]
+        {
+            "<span>plain</span>", "<b class=\"x\">plain</b>", "<b><i>crossed</b></i>",
+            "<a href=\"javascript:alert(1)\">plain</a>", "<div>plain</div>"
+        })
+            Check(Text(Compose(literal).Drawing).Contains(literal), "Unsupported HTML was hidden: " + literal);
+        Check(Text(Compose("\\<u>escaped\\</u>").Drawing).Contains("<u>escaped</u>"),
+            "Escaped tags were treated as formatting");
+
+        NoteImageSource Source(int originalWidth, int decodedWidth)
+        {
+            var pixels = new byte[decodedWidth * (decodedWidth / 2) * 4];
+            var bitmap = BitmapSource.Create(decodedWidth, decodedWidth / 2, 96, 96,
+                PixelFormats.Bgr32, null, pixels, decodedWidth * 4);
+            bitmap.Freeze();
+            return new NoteImageSource(bitmap, originalWidth);
+        }
+        var small = Source(200, 200); var large = Source(2400, 1200);
+        foreach (var (markdown, source, width) in new[]
+        {
+            ("![image](i:123)", small, 200.0),
+            ("![image|100%](i:123)", small, 200.0),
+            ("![image|50%](i:123)", small, 100.0),
+            ("![image](i:123){width=50%}", small, 252.0),
+            ("![image|300x150,50%](i:123)", small, 150.0),
+            ("![image|10%](i:123)", large, 240.0),
+            ("![image|100%](i:123)", large, 504.0)
+        })
+        {
+            var drawing = Drawings(Compose(markdown, source).Drawing).OfType<ImageDrawing>().Single();
+            Check(Math.Abs(drawing.Rect.Width - width) < .01, "Image width changed: " + markdown);
+            Check(Math.Abs(drawing.Rect.Width / drawing.Rect.Height - 2) < .01, "Image aspect ratio changed");
+        }
+        Console.WriteLine("PASS note image compatibility: entities, shared HTML styles and literal boundaries, original-size image scaling");
+    }
+
+    private static IEnumerable<Drawing> Drawings(Drawing drawing)
+    {
+        yield return drawing;
+        if (drawing is DrawingGroup group)
+            foreach (var child in group.Children)
+                foreach (var nested in Drawings(child)) yield return nested;
+    }
+
+    private static int GeometryCount(Drawing drawing) => Drawings(drawing).OfType<GeometryDrawing>().Count();
+
+    private static string GlyphStyles(Drawing drawing) => string.Join("|", Drawings(drawing).OfType<GlyphRunDrawing>()
+        .Select(glyph => $"{new string(glyph.GlyphRun.Characters?.ToArray() ?? [])}:" +
+            $"{glyph.GlyphRun.GlyphTypeface.FontUri}:{glyph.GlyphRun.GlyphTypeface.Weight}:" +
+            $"{glyph.GlyphRun.GlyphTypeface.StyleSimulations}:{glyph.ForegroundBrush}"));
+
     private static async Task CheckEditorSnapshot()
     {
         var state = new AppState
@@ -195,7 +280,7 @@ internal static class NoteImageExportChecks
         Check(total == (long)(width * 3 + 1) * height, "Long PNG is missing scanlines");
     }
 
-    private static BitmapSource Illustration()
+    private static NoteImageSource Illustration()
     {
         var visual = new DrawingVisual();
         using (var dc = visual.RenderOpen())
@@ -208,7 +293,7 @@ internal static class NoteImageExportChecks
                 Geometry.Parse("M 0 400 Q 300 230 600 420 Q 850 310 1008 370 L 1008 480 L 0 480 Z"));
         }
         var bitmap = new RenderTargetBitmap(1008, 480, 96, 96, PixelFormats.Pbgra32);
-        bitmap.Render(visual); bitmap.Freeze(); return bitmap;
+        bitmap.Render(visual); bitmap.Freeze(); return new NoteImageSource(bitmap, 1008);
     }
 
     private static string Text(Drawing drawing) => drawing switch

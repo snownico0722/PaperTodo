@@ -2030,32 +2030,7 @@ public sealed partial class MarkdownTextBox : TextEditor
         MarkdownImageDisplayOptions options,
         double naturalWidth,
         double targetWidth)
-    {
-        targetWidth = Math.Max(80, targetWidth);
-        naturalWidth = Math.Max(1, naturalWidth);
-        var width = Math.Min(targetWidth, naturalWidth);
-
-        if (options.WidthAttribute is { } widthAttribute)
-        {
-            width = widthAttribute.IsPercent
-                ? targetWidth * Math.Clamp(widthAttribute.Value, 1, 1000) / 100.0
-                : widthAttribute.Value;
-        }
-        else if (options.LabelWidth.HasValue)
-        {
-            width = options.LabelWidth.Value;
-            if (options.LabelScalePercent.HasValue)
-            {
-                width *= Math.Clamp(options.LabelScalePercent.Value, 1, 1000) / 100.0;
-            }
-        }
-        else if (options.LabelScalePercent.HasValue)
-        {
-            width = naturalWidth * Math.Clamp(options.LabelScalePercent.Value, 1, 1000) / 100.0;
-        }
-
-        return Math.Round(Math.Clamp(width, 24, targetWidth), 1);
-    }
+        => options.ResolveWidth(naturalWidth, targetWidth);
 
     private int ImageDecodePixelWidth(double displayWidth)
     {
@@ -2509,3 +2484,4 @@ public sealed partial class MarkdownTextBox : TextEditor
         return value is >= 'A' and <= 'Z' or >= 'a' and <= 'z';
     }
 }
+
