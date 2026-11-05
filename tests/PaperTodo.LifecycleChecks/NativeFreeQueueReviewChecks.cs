@@ -99,6 +99,27 @@ internal static class NativeFreeQueueReviewChecks
             Require(Field<object?>(c, "_nativeQueueDropGhost") == null,
                 "ordinary gesture disposes the shared ghost");
 
+            // With a master enabled, the same member index must be one visual
+            // slot lower; the ghost must not be mistaken for the master itself.
+            c.State.UseCapsuleCollapseAll = true;
+            c.State.CapsuleCollapseAllActiveQueues.Clear();
+            c.ArrangeDeepCapsules(false);
+            await Idle();
+            c.PreviewSingleCapsuleDropGhost(ghostOwner, 1, Point(geometry, 80), floating: false);
+            var withMaster = Field<Window>(Field<EdgeCapsuleQueueDropGhost>(
+                c, "_nativeQueueDropGhost"), "_window");
+            Require(WindowNative.TryGetWindowDeviceBounds(withMaster, out var masterBounds),
+                "ordinary master-enabled ghost has a physical window");
+            Near(geometry.WorkArea.Top + Math.Round(
+                    EdgeCapsuleLayout.TopForIndex(2,
+                        c.DeepCapsuleStartTopMarginFor(ghostOwner),
+                        geometry.LocalWorkAreaDip, count + 1, c.DeepCapsuleGap) * geometry.DpiScaleY),
+                masterBounds.Top, "ordinary master occupies one slot ahead of the landing ghost");
+            c.EndSingleCapsuleDropGhost(ghostOwner.Id);
+            c.State.UseCapsuleCollapseAll = false;
+            c.ArrangeDeepCapsules(false);
+            await Idle();
+
             // Ctrl whole-queue transfer uses the same window when free queues are off.
             var ctrlOwner = c.State.Papers.First(p => p.IsVisible &&
                 p.CapsuleSide == DeepCapsuleSides.Left && windows.ContainsKey(p.Id));
