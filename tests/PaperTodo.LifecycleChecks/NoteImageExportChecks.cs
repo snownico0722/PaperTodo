@@ -143,6 +143,7 @@ internal static class NoteImageExportChecks
         var windows = (Dictionary<string, PaperWindow>)Member(controller, "_windows");
         var paper = windows["export-note"];
         controller.OpenExpandedEditorFor(paper);
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
         var box = (MarkdownTextBox)Member(paper, "_noteBox");
         box.Text = "latest unsaved text\n\n末尾仍然存在";
         box.Select(2, 6);
@@ -216,7 +217,9 @@ internal static class NoteImageExportChecks
         DrawingGroup group => string.Concat(group.Children.Select(Text)),
         _ => ""
     };
-    private static object? MemberOrNull(object value, string name) => value.GetType().GetField(name, Private)?.GetValue(value);
+    private static object? MemberOrNull(object value, string name) =>
+        value.GetType().GetField(name, Private)?.GetValue(value) ??
+        value.GetType().GetProperty(name, Private)?.GetValue(value);
     private static object Member(object value, string name) => MemberOrNull(value, name) ?? throw new MissingMemberException(name);
     private static void Check(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }
 }
