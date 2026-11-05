@@ -96,6 +96,25 @@ internal static partial class Program
               PaperTopBarShortcuts.NormalizeOrder(null).SequenceEqual(
                   state.TopBarShortcutOrder),
             "New installations pin association and the expandable editor, without changing other menu order.");
+
+        var oldLayout = new AppState
+        {
+            TopBarShortcutOrder = [PaperTopBarShortcuts.NewNote, PaperTopBarShortcuts.Association,
+                PaperTopBarShortcuts.NewTodo, PaperTopBarShortcuts.ExternalEditor],
+            TopBarPinnedCount = 2
+        };
+        PaperTopBarShortcuts.Normalize(oldLayout);
+        Check(oldLayout.TopBarPinnedCount == 3 &&
+              oldLayout.TopBarShortcutOrder.SequenceEqual(
+                [PaperTopBarShortcuts.NewNote, PaperTopBarShortcuts.Association,
+                 PaperTopBarShortcuts.ExpandedEditor, PaperTopBarShortcuts.NewTodo,
+                 PaperTopBarShortcuts.ExternalEditor]),
+            "Existing users keep their pin order and receive one editable mode shortcut.");
+        PaperTopBarShortcuts.Normalize(oldLayout);
+        Check(oldLayout.TopBarPinnedCount == 3 &&
+              PaperTopBarShortcuts.Pinned(oldLayout).Count == 3,
+            "Shortcut migration must not re-pin an item after the first normalization.");
+
         Check(PaperTopBarShortcuts.MoveTo(state, PaperTopBarShortcuts.NewNote, true, 1) &&
               PaperTopBarShortcuts.Pinned(state).SequenceEqual(
                   [PaperTopBarShortcuts.Association, PaperTopBarShortcuts.NewNote,
