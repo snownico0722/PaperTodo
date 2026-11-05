@@ -1726,7 +1726,7 @@
   <data name="WorkbenchSearch" xml:space="preserve"><value>全局搜索，按 Enter 定位结果</value></data>
   <data name="WorkbenchRefresh" xml:space="preserve"><value>刷新概览</value></data>
   <data name="WorkbenchClose" xml:space="preserve"><value>返回桌面</value></data>
-  <data name="WorkbenchHint" xml:space="preserve"><value>空白处拖动：框选纸片；Ctrl＋点击：多选；Ctrl＋G：成组。右键单击纸片：完整操作菜单；右键拖动：平移画布。Alt＋滚轮：缩放；拖动顶栏连接图标：连线。</value></data>
+  <data name="WorkbenchHint" xml:space="preserve"><value>左键拖动空白：框选纸片&#10;Ctrl + 点击：多选纸片，Ctrl + G：成组&#10;右键单击纸片：打开完整操作菜单&#10;右键拖动：平移画布&#10;Alt + 滚轮：缩放画布&#10;拖动顶栏连接图标：连接卡片</value></data>
   <data name="WorkbenchHelp" xml:space="preserve"><value>操作说明</value></data>
   <data name="WorkbenchImportMaterials" xml:space="preserve"><value>导入素材</value></data>
   <data name="WorkbenchImportDialogFilter" xml:space="preserve"><value>所有文件 (*.*)|*.*|图片文件 (*.png;*.jpg;*.jpeg;*.gif;*.webp;*.bmp)|*.png;*.jpg;*.jpeg;*.gif;*.webp;*.bmp</value></data>
