@@ -307,7 +307,7 @@ GitHub 提供 PaperTodo 的 Windows x64 便携版，可从 [Releases 页面](htt
 
 图片以 Markdown 图片引用出现在正文中，实际数据保存在当前工作区的图片库：主工作区为 `note-assets.lmdb`，工作区 2～5 分别为 `note-assets2.lmdb`～`note-assets5.lmdb`。右键已渲染图片可复制图片或删除引用。迁移时应同时保留同一工作区的文字数据和图片库。
 
-**MCP 图片操作**：启用 MCP 并允许新增/追加写入后，可调用 `insert_note_image(paper_id, image_path=绝对本地路径)`，或用 `image_base64`（纯 Base64，不带 data URI；解码后最多 4 MiB，可选 `image_name`）将图片**追加到现有内置 Markdown 笔记末尾**。本地路径指运行 PaperTodo 的电脑，仍沿用图片导入的格式、压缩和 32 MiB 源文件限制。返回图片 ID 和 Markdown 引用。读取时，先用 `get_paper` 找到 `i:图片ID`，再用 `read_note_image(paper_id, image_id)` 获取支持视觉的 MCP 客户端可直接查看的图片；不可跨笔记读取别的笔记的图片。读取不需要写入权限。
+**MCP 图片操作**：启用 MCP 并允许新增/追加写入后，可调用 `insert_note_image(paper_id, image_path=绝对本地路径)`，或用 `image_base64`（纯 Base64，不带 data URI；解码后最多 4 MiB，可选 `image_name`）将图片**追加到现有内置 Markdown 笔记末尾**。本地路径指运行 PaperTodo 的电脑，仍沿用图片导入的格式、压缩和 32 MiB 源文件限制。返回图片 ID 和 Markdown 引用。读取时，先用 `get_paper` 找到 `i:图片ID`，再用 `read_note_image(paper_id, image_id)` 获取支持视觉的 MCP 客户端可直接查看的图片；不可跨笔记读取别的笔记的图片。读取不需要写入权限；实际能否显示图片，取决于 MCP 客户端是否支持图片内容块。
 
 ### 4.4 外部编辑器临时打开
 
