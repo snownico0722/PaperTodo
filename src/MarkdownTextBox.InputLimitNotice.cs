@@ -32,7 +32,7 @@ public sealed partial class MarkdownTextBox
         _ = Dispatcher.BeginInvoke(
             (Action)(() =>
             {
-                if (Window.GetWindow(this) is not PaperWindow owner)
+                if (Window.GetWindow(this) is not Window owner)
                 {
                     return;
                 }
