@@ -112,6 +112,10 @@ internal sealed partial class WorkbenchWindow : Window
         AddSymbolButton("+", () => ZoomAt(_scale.ScaleX * 1.2, ViewportCenter), _rightCommands);
         AddButton("WorkbenchClose", Close, _rightCommands);
         RefreshTheme();
+        // Handle right gestures at the window level, including borrowed editor bodies
+        // and the toolbar, so none of them can open a context menu.
+        PreviewMouseRightButtonDown += BeginPan;
+        PreviewMouseRightButtonUp += EndPan;
         _viewport.PreviewMouseDown += BeginPan;
         _viewport.PreviewMouseMove += MovePan;
         _viewport.PreviewMouseUp += EndPan;
@@ -346,6 +350,7 @@ internal sealed partial class WorkbenchWindow : Window
         // Preview routing reaches editors and materials before their right-click menus.
         if (e.ChangedButton == MouseButton.Right && !_dragging && !IsSuspended)
         {
+            CancelWorkspaceGesture();
             StopCameraAnimation();
             _panPointer = e.GetPosition(_viewport); _panStart = new(_pan.X, _pan.Y);
             _viewport.CaptureMouse(); e.Handled = true;
