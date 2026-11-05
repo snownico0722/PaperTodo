@@ -17,7 +17,14 @@ internal sealed class NativeEdgeQueueDrag
     internal required bool PreviewOrigin { get; init; }
     internal string NewQueueId { get; } = EdgeCapsuleQueueIds.New();
     internal bool Detached { get; set; }
+    internal required bool CarriesMaster { get; init; }
+    internal bool FloatingMasterHidden { get; set; }
     internal string HeldTargetKey { get; set; } = "";
+    internal string PreviewedTargetKey { get; set; } = "";
+    internal int PreviewedTargetIndex { get; set; } = -1;
+    internal double PreviewedTargetTop { get; set; } = double.NaN;
+    internal HashSet<string> PreviewedMemberIds { get; } = new(StringComparer.Ordinal);
+    internal string PreviewedMasterKey { get; set; } = "";
     internal bool FloatingCoverReady { get; set; }
     internal NativeEdgeQueueDrop? Drop { get; set; }
 }
@@ -48,6 +55,7 @@ public sealed partial class AppController
             SourceIds = source.Papers.Select(p => p.Id).ToArray(),
             CarriedIds = wholeQueue ? source.Papers.Select(p => p.Id).ToArray() : [owner.Id],
             WholeQueue = wholeQueue, FreeQueues = EdgeCapsuleFreeQueuesEnabled,
+            CarriesMaster = wholeQueue && source.Box.HasMaster,
             PointerDown = pointerDown,
             SourceTopDip = carriesMaster ? source.Box.TopDip : source.Box.FirstMemberTop(pitch),
             OwnerOffsetDip = (ownerIndex + (carriesMaster ? 1 : 0)) * pitch,
@@ -124,16 +132,25 @@ public sealed partial class AppController
             if (count > 0 || master) boxes.Add(group.Box with { MemberCount = count, HasMaster = master });
         }
         var bodySlots = carried.Length + (State.UseCapsuleCollapseAll && (drag.WholeQueue || drag.FreeQueues) ? 1 : 0);
-        var visibleHeight = drag.FreeQueues && State.UseCapsuleCollapseAll
-            ? carried.Length * pitch - gap
-            : floating ? PaperLayoutDefaults.CapsuleHeight : bodySlots * pitch - gap;
+        // While floating, the native drag shell (one capsule) is what touches the target.
+        // The carried block's full height matters only after a slot has been selected.
+        var visibleHeight = floating ? PaperLayoutDefaults.CapsuleHeight :
+            drag.FreeQueues && State.UseCapsuleCollapseAll ? carried.Length * pitch - gap :
+            bodySlots * pitch - gap;
         var wallDistance = (side == DeepCapsuleSides.Left ? pointer.X - geometry.WorkArea.Left : geometry.WorkArea.Right - pointer.X) / geometry.DpiScaleX;
+        if (floating)
+        {
+            var floatingWidth = drag.CarriesMaster ? PaperLayoutDefaults.CapsuleWidth :
+                _windows.TryGetValue(drag.OwnerId, out var ownerWindow)
+                    ? ownerWindow.DeepCapsuleRestingVisibleWidth : PaperLayoutDefaults.CapsuleWidth;
+            wallDistance = EdgeCapsuleFreeQueuePolicy.FloatingWallGap(wallDistance, floatingWidth);
+        }
         // A collapsed free queue is still a merge target, but its hit area is
         // the visible master alone. Legacy single-edge collapse retains its old rule.
         var candidates = drag.FreeQueues ? boxes.ToArray() :
             IsCapsuleCollapseAllActiveForQueue(edge) ? [] : boxes.ToArray();
         var target = EdgeCapsuleFreeQueuePolicy.FindInsertion(candidates,
-            drag.FreeQueues && State.UseCapsuleCollapseAll ? memberTop : top,
+            floating ? top : drag.FreeQueues && State.UseCapsuleCollapseAll ? memberTop : top,
             visibleHeight, wallDistance, pitch, gap, drag.HeldTargetKey,
             geometry.DeviceYToLocalDip(pointer.Y));
         // With the optional split mode off, cross-edge Ctrl movement retains legacy one-queue semantics.
@@ -205,6 +222,10 @@ public sealed partial class AppController
                 if (!carried.Contains(id) && _windows.TryGetValue(id, out var window))
                     window.PreviewDeepCapsulePlacement(placement);
         }
+        else
+        {
+            PreviewStableFreeQueueSlot(drag, drop);
+        }
         if (drag.WholeQueue && !floating)
         {
             var members = State.Papers.Where(p => drag.SourceIds.Contains(p.Id)).ToList();
@@ -243,10 +264,93 @@ public sealed partial class AppController
         }
     }
 
+    // A stable insertion slot is one layout preview, not a continuous collision
+    // simulation. Only members whose FINAL slot changes receive a short placement
+    // animation. The untouched queues and their masters never follow pointer samples.
+    private void PreviewStableFreeQueueSlot(NativeEdgeQueueDrag drag, NativeEdgeQueueDrop drop)
+    {
+        var inserting = drop.Decision.Kind == EdgeFreeQueueDropKind.Insert;
+        var key = inserting ? drop.DestinationKey : "";
+        var index = inserting ? drop.Decision.Index : -1;
+        var top = inserting ? drop.Decision.TopDip : double.NaN;
+        if (key == drag.PreviewedTargetKey && index == drag.PreviewedTargetIndex &&
+            (double.IsNaN(top) && double.IsNaN(drag.PreviewedTargetTop) ||
+             Math.Abs(top - drag.PreviewedTargetTop) < 0.1)) return;
+
+        var resting = BuildRestingEdgeQueuePlan();
+        var desired = new Dictionary<string, EdgeCapsulePlacement>(StringComparer.Ordinal);
+        foreach (var id in drag.PreviewedMemberIds)
+            if (resting.Placements.TryGetValue(id, out var placement)) desired[id] = placement;
+
+        var masterKey = "";
+        if (inserting)
+        {
+            var target = NativeQueueGroups().FirstOrDefault(g => g.Key == key);
+            if (target != null)
+            {
+                var pitch = EdgeCapsuleLayout.SlotHeight(DeepCapsuleGap);
+                var carried = drag.CarriedIds.ToHashSet(StringComparer.Ordinal);
+                var targetMembers = target.Papers.Where(p => !carried.Contains(p.Id)).ToList();
+                var baseMargin = DeepCapsuleStartTopMarginForQueueKey(key);
+                for (var i = 0; i < targetMembers.Count; i++)
+                {
+                    var paper = targetMembers[i];
+                    if (!resting.Placements.TryGetValue(paper.Id, out var placement)) continue;
+                    // Always derive absolute slots from the chosen insertion. Never use the
+                    // prospective global avoidance plan as a live cursor-driven layout.
+                    var slot = i < index ? i : i + drag.CarriedIds.Length;
+                    var targetTop = top + (target.Box.HasMaster ? pitch : 0) + slot * pitch;
+                    var baseTop = EdgeCapsuleLayout.FreeQueueTopForIndex(placement.VisualIndex,
+                        baseMargin, target.Geometry.LocalWorkAreaDip, DeepCapsuleGap);
+                    desired[paper.Id] = placement with { TopOffsetDip = targetTop - baseTop };
+                }
+                if (target.Box.HasMaster && Math.Abs(top - target.Box.TopDip) >= 0.1)
+                    masterKey = key;
+            }
+        }
+
+        foreach (var (id, placement) in desired)
+            if (_windows.TryGetValue(id, out var window))
+                window.PreviewDeepCapsulePlacement(placement);
+
+        drag.PreviewedMemberIds.Clear();
+        if (inserting)
+            foreach (var id in desired.Keys)
+                if (drop.TargetMembers.Any(p => p.Id == id)) drag.PreviewedMemberIds.Add(id);
+
+        if (drag.PreviewedMasterKey != masterKey)
+        {
+            if (_masterCapsules.TryGetValue(drag.PreviewedMasterKey, out var previousMaster) &&
+                resting.MasterTopsDip.TryGetValue(drag.PreviewedMasterKey, out var restingTop))
+            {
+                previousMaster.SetQueueTopPreview(restingTop);
+                previousMaster.UpdateState(State.Papers.Count(p => QueueKey(p) == drag.PreviewedMasterKey),
+                    IsCapsuleCollapseAllActiveForQueue(drag.PreviewedMasterKey), animate: true);
+            }
+        }
+        if (masterKey.Length > 0 && _masterCapsules.TryGetValue(masterKey, out var targetMaster))
+        {
+            targetMaster.SetQueueTopPreview(top);
+            targetMaster.UpdateState(State.Papers.Count(p => QueueKey(p) == masterKey),
+                IsCapsuleCollapseAllActiveForQueue(masterKey), animate: true);
+        }
+        drag.PreviewedMasterKey = masterKey;
+        drag.PreviewedTargetKey = key;
+        drag.PreviewedTargetIndex = index;
+        drag.PreviewedTargetTop = top;
+    }
+
     internal void PrepareNativeEdgeQueueFloating(string ownerId)
     {
         if (_nativeEdgeQueueDrag is not { WholeQueue: true } drag || drag.OwnerId != ownerId) return;
         drag.FloatingCoverReady = true; // The pooled floating HWND already owns visible pixels.
+        if (drag.CarriesMaster && _masterCapsules.TryGetValue(drag.SourceKey, out var sourceMaster))
+        {
+            // The master is a separate HWND, not a PaperData member. Withdraw it with its
+            // members so it does not remain stranded at the old edge during Ctrl transfer.
+            sourceMaster.Hide();
+            drag.FloatingMasterHidden = true;
+        }
         var plan = BuildRestingEdgeQueuePlan();
         if (_windows.TryGetValue(ownerId, out var owner)) BeginEdgeCapsuleVisualTransaction(owner);
         foreach (var id in drag.CarriedIds)
@@ -256,6 +360,9 @@ public sealed partial class AppController
 
     internal int NativeEdgeQueueCarriedCount(string ownerId) =>
         _nativeEdgeQueueDrag is { WholeQueue: true } drag && drag.OwnerId == ownerId ? drag.CarriedIds.Length : 0;
+
+    internal bool NativeEdgeQueueCarriesMaster(string ownerId) =>
+        _nativeEdgeQueueDrag is { CarriesMaster: true } drag && drag.OwnerId == ownerId;
 
     internal bool CommitNativeEdgeQueueDrag(PaperData owner, DeviceScreenPoint pointer, double ownerTopDip, bool floating)
     {
@@ -345,6 +452,15 @@ public sealed partial class AppController
             }
         }
         RefreshNativeQueueMasters();
+        if (drag.FloatingMasterHidden && _masterCapsules.TryGetValue(drag.SourceKey, out var master))
+        {
+            var count = State.Papers.Count(p => QueueKey(p) == drag.SourceKey);
+            if (count > 0)
+                master.ShowPlaced(count, IsCapsuleCollapseAllActiveForQueue(drag.SourceKey),
+                    animate: false);
+            // If merged into another queue, the now-vacant source master stays hidden and
+            // the next ordinary arrange retires it alongside its vacated queue.
+        }
         ArrangeDeepCapsules(animate: true);
     }
 
