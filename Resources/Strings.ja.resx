@@ -1677,7 +1677,14 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="WorkbenchSearch" xml:space="preserve"><value>すべてのワークスペースを検索。Enter で結果へ移動</value></data>
   <data name="WorkbenchRefresh" xml:space="preserve"><value>一覧を更新</value></data>
   <data name="WorkbenchClose" xml:space="preserve"><value>デスクトップへ戻る</value></data>
-  <data name="WorkbenchHint" xml:space="preserve"><value>空白をドラッグで範囲選択、Ctrl＋タイトルで複数選択、Ctrl＋G でグループ化。右ボタンドラッグで移動、Alt＋ホイールで拡大縮小。カードの接続アイコンをドラッグして接続。</value></data>
+  <data name="WorkbenchHint" xml:space="preserve"><value>空白をドラッグで範囲選択、Ctrl＋クリックで複数選択、Ctrl＋G でグループ化。カードを右クリックで全メニュー、右ドラッグでキャンバスを移動。Alt＋ホイールで拡大縮小、接続アイコンをドラッグしてリンク。</value></data>
+  <data name="WorkbenchHelp" xml:space="preserve"><value>ワークベンチのヘルプ</value></data>
+  <data name="WorkbenchImportMaterials" xml:space="preserve"><value>素材を読み込む</value></data>
+  <data name="WorkbenchImportDialogFilter" xml:space="preserve"><value>すべてのファイル (*.*)|*.*|画像 (*.png;*.jpg;*.jpeg;*.gif;*.webp;*.bmp)|*.png;*.jpg;*.jpeg;*.gif;*.webp;*.bmp</value></data>
+  <data name="WorkbenchCollapseCard" xml:space="preserve"><value>カードを折りたたむ</value></data>
+  <data name="WorkbenchExpandCard" xml:space="preserve"><value>カードを展開</value></data>
+  <data name="WorkbenchLockCard" xml:space="preserve"><value>位置を固定</value></data>
+  <data name="WorkbenchUnlockCard" xml:space="preserve"><value>位置の固定を解除</value></data>
   <data name="WorkbenchError" xml:space="preserve"><value>ワークベンチの操作に失敗しました：{0}</value></data>
   <data name="WorkbenchPinConflict" xml:space="preserve"><value>固定した紙片が重なっています。位置は維持されます。移動または固定解除してください。</value></data>
   <data name="WorkbenchDelete" xml:space="preserve"><value>紙片を削除</value></data>
