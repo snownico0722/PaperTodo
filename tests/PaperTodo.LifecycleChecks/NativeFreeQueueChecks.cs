@@ -133,15 +133,15 @@ internal static class NativeFreeQueueChecks
         Require(a.CapsuleQueueId != "qb" && Math.Abs(Top(a) - 100) < .1, "a single capsule forms a queue at the requested height");
         var beforeMove = c.State.Papers.Select(p => (p.Id, p.CapsuleQueueId)).ToArray();
         Require(c.BeginNativeEdgeQueueDrag(a, true, Point(100), false), "begin independent drop near another queue");
-        c.PreviewNativeEdgeQueueDrag(a, Point(160, distant: true), 160, true);
+        c.PreviewNativeEdgeQueueDrag(a, Point(130, distant: true), 130, true);
         var independentGhost = (EdgeCapsuleQueueDropGhost)Part(c, "_nativeQueueDropGhost");
         Require(((Window)Part(independentGhost, "_window")).Opacity == 0,
             "vertically unaligned independent placement must not show a merge ghost");
-        c.CommitNativeEdgeQueueDrag(a, Point(160, distant: true), 160, true);
+        c.CommitNativeEdgeQueueDrag(a, Point(130, distant: true), 130, true);
         c.EndNativeEdgeQueueDrag(a.Id);
         await Idle();
         Require(c.State.Papers.Select(p => (p.Id, p.CapsuleQueueId)).SequenceEqual(beforeMove) &&
-                Math.Abs(Top(a) - 160) < .1, "no free-space search or space-based refusal; the requested independent anchor wins");
+                Math.Abs(Top(a) - 130) < .1, "an independent floating landing outside all vertical merge slots keeps its exact anchor");
 
         // A floating drag previews a confirmed vertical target even from the middle of
         // the screen; the mouse does not first have to touch the edge or ghost window.
@@ -293,7 +293,8 @@ internal static class NativeFreeQueueChecks
         c.FinishFreeMasterQueueDrag(layout, true);
         await Idle();
         Require(Math.Abs(masters["|right#qb"].AnchorTop - layout.MasterTopDip + 10) < .1,
-            "one master commits its queue translation");
+            $"one master commits its queue translation: actual={masters["|right#qb"].AnchorTop:F1}, " +
+            $"expected={layout.MasterTopDip - 10:F1}");
         Require(c.State.DeepCapsuleQueueStartTopMargins["|right#qc"] == otherAnchor,
             "moving a master never rewrites another queue anchor");
 
