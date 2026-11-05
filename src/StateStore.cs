@@ -125,6 +125,7 @@ public sealed partial class StateStore
             AddIfExists(paths, FilePath);
             AddIfExists(paths, BackupPath);
             AddIfExists(paths, FilePath + ".tmp");
+            AddIfExists(paths, BackupPath + ".tmp");
 
             var directory = Path.GetDirectoryName(FilePath);
             if (string.IsNullOrWhiteSpace(directory))
@@ -139,6 +140,14 @@ public sealed partial class StateStore
             foreach (var path in Directory.EnumerateFiles(directory, DocumentStem + ".backup.used_for_recovery.*.json"))
             {
                 paths.Add(path);
+            }
+            // An interrupted first save may have been moved aside before the next
+            // primary/backup write. Its references are as important as the live JSON.
+            foreach (var tempPath in new[] { FilePath + ".tmp", BackupPath + ".tmp" })
+            {
+                foreach (var orphan in Directory.EnumerateFiles(
+                             directory, Path.GetFileNameWithoutExtension(tempPath) + ".orphaned.*.tmp"))
+                    paths.Add(orphan);
             }
             // Recovery includes rejected local/baseline values, not just the external file.
             // Half-written archives also disable GC until they can be inspected safely.
@@ -316,6 +325,12 @@ public sealed partial class StateStore
                 primaryBytes.AsSpan().SequenceEqual(backupBytes))
                 return true;
 
+            // The backup writer also reuses a fixed .tmp path. A leftover interrupted
+            // backup is recovery evidence: do not truncate it until it is safely moved.
+            var backupTemp = BackupPath + ".tmp";
+            if (File.Exists(backupTemp))
+                MoveRecoverySource(backupTemp, "orphaned", WriteLifetime.ThrowIfStopped);
+
             _atomicWriter.Write(
                 BackupPath,
                 primaryBytes,
@@ -389,14 +404,19 @@ public sealed partial class StateStore
 
         if (_preserveOrphanedTempsOnNextSave)
         {
-            // A previous interrupted first write is recovery evidence, not a reason
-            // to refuse a new workspace. Archive it before the atomic writer reuses .tmp.
-            foreach (var path in new[] { FilePath + ".tmp", BackupPath + ".tmp" })
+            // The main writer will truncate this exact .tmp path. Never discard the
+            // only recoverable bytes if preserving them fails; the save must fail instead.
+            var primaryTemp = FilePath + ".tmp";
+            if (File.Exists(primaryTemp))
+                MoveRecoverySource(primaryTemp, "orphaned", validateWrite);
+
+            // A locked historical backup temp need not block writing the main file,
+            // which does not reuse its path. Backup refresh has its own mandatory
+            // preservation check before reusing that name.
+            var backupTemp = BackupPath + ".tmp";
+            if (File.Exists(backupTemp))
             {
-                // Historical temps are best-effort only: they must not veto an
-                // otherwise valid new-workspace initialization or recovery.
-                if (!File.Exists(path)) continue;
-                try { CopyRecoverySource(path, "orphaned", validateWrite); }
+                try { MoveRecoverySource(backupTemp, "orphaned", validateWrite); }
                 catch (IOException) { }
                 catch (UnauthorizedAccessException) { }
             }
@@ -414,6 +434,16 @@ public sealed partial class StateStore
         }
 
         return true;
+    }
+
+    private static string MoveRecoverySource(string sourcePath, string suffix, Action validateWrite)
+    {
+        var targetPath = UniqueRecoveryCopyPath(sourcePath, suffix);
+        validateWrite();
+        // Move within the SAME directory rather than allocating a second full copy.
+        // Failure leaves the original path intact, and its writer must not reuse it.
+        File.Move(sourcePath, targetPath);
+        return targetPath;
     }
 
     private static string CopyRecoverySource(string sourcePath, string suffix, Action validateWrite)
@@ -556,7 +586,7 @@ public sealed partial class StateStore
         }
     }
 
-    private static void NormalizeAfterLoad(AppState state)
+    private static void NormalizeAfterLoad(AppState state, bool deferLinkNormalization = false)
     {
         if (state.Papers == null)
         {
@@ -567,7 +597,10 @@ public sealed partial class StateStore
 
         NormalizeGlobalState(state);
         NormalizePapers(state);
-        NormalizeLinks(state);
+        // A three-way preview must not treat references to a provisionally deleted
+        // paper as user edits. The final merged state is normalized after choices.
+        if (!deferLinkNormalization)
+            NormalizeLinks(state);
         WorkspaceMaterials.Normalize(state);
     }
 
@@ -665,6 +698,7 @@ public sealed partial class StateStore
         if (!state.UseCapsuleMode || !state.UseDeepCapsuleMode)
         {
             state.UseCapsuleCollapseAll = false;
+            state.UseCapsuleFreeQueues = false;
         }
 
         state.CapsuleCollapseAllActiveQueues ??= new Dictionary<string, bool>();
@@ -727,13 +761,15 @@ public sealed partial class StateStore
             // Per-paper queue identity. Migration: a capsule with no explicit side inherits the
             // legacy single global anchor, so existing docked capsules keep their current edge /
             // monitor. New papers default to the global side until dragged to a queue.
-            paper.CapsuleSide = string.IsNullOrWhiteSpace(paper.CapsuleSide)
+            var inheritsLegacyQueueAnchor = string.IsNullOrWhiteSpace(paper.CapsuleSide);
+            paper.CapsuleSide = inheritsLegacyQueueAnchor
                 ? state.DeepCapsuleSide
                 : DeepCapsuleSides.Normalize(paper.CapsuleSide);
-            var capsuleMonitorDeviceName = string.IsNullOrWhiteSpace(paper.CapsuleMonitorDeviceName)
+            var capsuleMonitorDeviceName = inheritsLegacyQueueAnchor && string.IsNullOrWhiteSpace(paper.CapsuleMonitorDeviceName)
                 ? (state.DeepCapsuleMonitorDeviceName ?? "")
-                : paper.CapsuleMonitorDeviceName.Trim();
+                : (paper.CapsuleMonitorDeviceName ?? "").Trim();
             paper.CapsuleMonitorDeviceName = WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(capsuleMonitorDeviceName);
+            paper.CapsuleQueueId = EdgeCapsuleQueueIds.Normalize(paper.CapsuleQueueId);
             NormalizeDeepCapsuleExpandedGeometry(paper);
 
             paper.Title = PaperTitles.CleanCustomTitle(paper.Title, state.MaxTitleLength);
@@ -975,16 +1011,11 @@ public sealed partial class StateStore
 
     private static string NormalizeQueueKey(string? key)
     {
-        var value = (key ?? "").Trim();
-        var separator = value.LastIndexOf('|');
-        if (separator < 0)
-        {
-            return QueueKey("", value);
-        }
-
-        var monitorDeviceName = value[..separator];
-        var side = value[(separator + 1)..];
-        return QueueKey(monitorDeviceName, side);
+        EdgeCapsuleQueueIds.TrySplit((key ?? "").Trim(), out var edgeKey, out var id);
+        var separator = edgeKey.LastIndexOf('|');
+        var monitor = separator >= 0 ? edgeKey[..separator] : "";
+        var side = separator >= 0 ? edgeKey[(separator + 1)..] : edgeKey;
+        return EdgeCapsuleQueueIds.Compose(QueueKey(monitor, side), id);
     }
 
     private static string QueueKey(string? monitorDeviceName, string? side)

@@ -11,7 +11,7 @@ internal static class Program
 {
     private const BindingFlags Private = BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic;
     private const string FixtureMarker = ".papertodo-lifecycle-fixture";
-    private static readonly string[] Cases = ["startup", "missing-monitor", "master-queue-transfer", "master-queue-cancel", "master-queue-drag-preparation", "master-queue-drop-handoff", "master-queue-membership", "master-queue-mutations", "master-queue-hide", "master-queue-disconnect", "master-queue-merge", "master-queue-merge-collapsed", "master-queue-lightweight-handoff", "controller-hide-create-reentry", "controller-hide-show-reentry", "controller-zorder-create-reentry", "controller-close-delete-reentry", "todo-visibility", "real-exit", "early-expand", "edge-expand-foreground", "expanded-paper-display-recovery", "cancel-prewarm", "real-exit-scripts", "early-exit", "todo-context-menu", "todo-history"];
+    private static readonly string[] Cases = ["native-free-queue-review", "native-free-queues", "startup", "missing-monitor", "master-queue-transfer", "master-queue-cancel", "master-queue-drag-preparation", "master-queue-drop-handoff", "master-queue-membership", "master-queue-mutations", "master-queue-hide", "master-queue-hidden-retains-collapse", "master-queue-disconnect", "master-queue-merge", "master-queue-merge-collapsed", "master-queue-lightweight-handoff", "controller-hide-create-reentry", "controller-hide-show-reentry", "controller-zorder-create-reentry", "controller-close-delete-reentry", "todo-visibility", "real-exit", "early-expand", "edge-expand-foreground", "expanded-paper-display-recovery", "cancel-prewarm", "real-exit-scripts", "early-exit", "todo-context-menu", "todo-history"];
 
     [STAThread]
     private static int Main(string[] args)
@@ -188,6 +188,8 @@ internal static class Program
             EdgeExpandForegroundChecks.Prepare(state);
         if (name == "expanded-paper-display-recovery")
             ExpandedPaperDisplayRecoveryChecks.Prepare(state);
+        if (name == "native-free-queues") NativeFreeQueueChecks.Prepare(state);
+        if (name == "native-free-queue-review") NativeFreeQueueReviewChecks.Prepare(state);
         var store = new StateStore();
         store.SaveJsonSync(store.SerializeState(state), 1);
         var controller = new AppController();
@@ -199,6 +201,16 @@ internal static class Program
             await controller.StartAsync(createDefaultPaper: false);
             await Dispatcher.CurrentDispatcher.InvokeAsync(static () => { }, DispatcherPriority.Render);
             var visible = windows.Values.Count(window => window.HasVisibleSurface);
+            if (name == "native-free-queues")
+            {
+                await NativeFreeQueueChecks.Run(controller, windows, store);
+                return;
+            }
+            if (name == "native-free-queue-review")
+            {
+                await NativeFreeQueueReviewChecks.Run(controller, windows, store);
+                return;
+            }
             if (name == "edge-expand-foreground")
             {
                 await EdgeExpandForegroundChecks.Run(controller, windows);
@@ -267,6 +279,11 @@ internal static class Program
                 MasterQueueDragPreparationChecks.Run(controller);
                 await Until(() => windows.Values.All(window => !window.IsCollapseAllRetracted),
                     "master drag cancelled during layout restored presentation");
+                return;
+            }
+            if (name == "master-queue-hidden-retains-collapse")
+            {
+                await MasterQueueMembershipChecks.RunVisibilityRetention(controller, windows, store);
                 return;
             }
             if (name == "master-queue-hide")
@@ -406,7 +423,7 @@ internal static class Program
                     "master drag did not temporarily retract the source queue");
                 Require(
                     controller.State.CapsuleCollapseAllActiveQueues.Count == 0,
-                    "temporary drag retraction changed persistent collapse state");
+                    "temporary master-drag retraction changed persistent collapse state");
 
                 Require(
                     WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(
@@ -569,3 +586,4 @@ internal static class Program
         if (!condition) throw new InvalidOperationException(message);
     }
 }
+

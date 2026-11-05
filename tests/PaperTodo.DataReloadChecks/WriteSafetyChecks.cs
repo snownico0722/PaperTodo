@@ -18,6 +18,7 @@ internal static partial class Program
         ArchiveFailureNeverCommits();
         CorruptLoadsRecoverOrRebuild();
         OrphanedTempsArePreservedWhenRebuilding();
+        OrphanedTempImageAndWriteChecks();
         RecoveredLoadPreservesSourcesBeforeSaving();
         PluginExitFailureRetainsDirtyData();
         Console.WriteLine("PASS write safety: legacy ordinary saves, explicit transaction validation, shutdown, recovery images and archive failures");

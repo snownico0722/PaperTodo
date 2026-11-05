@@ -666,16 +666,44 @@ public sealed partial class AppController
 
         void ShowChoices()
         {
-            var segments = WorkspaceOptions.SlotNumbers.Select(number => (
+            var existing = WorkspaceOptions.SlotNumbers.ToHashSet();
+            var firstEmpty = Enumerable.Range(2, 4).FirstOrDefault(number => !existing.Contains(number));
+            var segments = Enumerable.Range(1, 5).Select(number => (
                 Key: number.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                Label: number.ToString(UiLanguages.EffectiveCulture))).ToArray();
+                Label: existing.Contains(number) ? number.ToString(UiLanguages.EffectiveCulture) : string.Empty
+            )).ToArray();
             var selector = (Border)CreateSegmentSelector(segments,
                 WorkspaceNumber.ToString(System.Globalization.CultureInfo.InvariantCulture),
                 key =>
                 {
                     var target = int.Parse(key, System.Globalization.CultureInfo.InvariantCulture);
-                    if (target != WorkspaceNumber) ShowConfirmation(target);
+                    if (target == firstEmpty)
+                        InvokeTrayAction(menu, () => { _ = CreateWorkspaceAsync(); });
+                    else if (existing.Contains(target) && target != WorkspaceNumber)
+                        ShowConfirmation(target);
                 });
+            var tiles = ((Grid)selector.Child).Children.OfType<Border>().ToArray();
+            for (var number = 1; number <= 5; number++)
+            {
+                if (existing.Contains(number)) continue;
+                var tile = tiles[number - 1];
+                if (number == firstEmpty)
+                {
+                    var tooltip = SettingsSidebarLocalized(
+                        "新建工作区", "Create workspace", "ワークスペースを作成", "작업 공간 만들기");
+                    tile.Child = CreateTrayWorkspacePlusIcon();
+                    tile.ToolTip = tooltip;
+                    ToolTipService.SetInitialShowDelay(tile, 300);
+                    AutomationProperties.SetName(tile, tooltip);
+                    AutomationProperties.SetAutomationId(tile, "TrayCreateWorkspace");
+                }
+                else
+                {
+                    tile.Child = null;
+                    tile.IsHitTestVisible = false;
+                    tile.Cursor = Cursors.Arrow;
+                }
+            }
             selector.Margin = new Thickness(0);
             selector.Height = 24;
             selector.MinWidth = 128;
@@ -980,6 +1008,20 @@ public sealed partial class AppController
             VerticalAlignment = VerticalAlignment.Center
         };
     }
+
+    private FrameworkElement CreateTrayWorkspacePlusIcon() => new System.Windows.Shapes.Path
+    {
+        Width = 14,
+        Height = 14,
+        Stretch = Stretch.Uniform,
+        Data = Geometry.Parse("M 7,1.75 L 7,12.25 M 1.75,7 L 12.25,7"),
+        Stroke = TrayTextBrush,
+        StrokeThickness = 1.7,
+        StrokeStartLineCap = PenLineCap.Round,
+        StrokeEndLineCap = PenLineCap.Round,
+        HorizontalAlignment = HorizontalAlignment.Center,
+        VerticalAlignment = VerticalAlignment.Center
+    };
 
     private FrameworkElement CreateTrayVisibilityIcon(bool anyShown, bool allShown)
     {

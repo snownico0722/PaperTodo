@@ -1331,22 +1331,38 @@ public sealed partial class AppController
         var oppositeSide = normalizedPreferredSide == DeepCapsuleSides.Left
             ? DeepCapsuleSides.Right
             : DeepCapsuleSides.Left;
-        var queuePlan = EdgeCapsuleQueueCoordinator.Build(
+        var queuePlan = BuildEdgeQueuePlan(
             papers.Select(paper => new EdgeCapsuleQueueMember(paper, QueueKey(paper))),
             State.UseCapsuleCollapseAll);
-        var queuesByKey = queuePlan.Queues.ToDictionary(queue => queue.Key, StringComparer.Ordinal);
+        var restingDeltas = BuildEffectiveQueueRestingDeltas();
+        // 自由队列的 key 带 #instance；按物理边汇总，才能把同一侧的全部队列纳入序号。
+        var queuesByLiveEdge = queuePlan.Queues
+            .Where(queue => queue.Papers.Count > 0)
+            .Select(queue => (
+                LiveEdge: LiveEdgeOfQueueKey(queue.Key),
+                Queue: EdgeShortcutQueue(queue, restingDeltas)))
+            .Where(entry => entry.LiveEdge.Length > 0 && entry.Queue.HasValue)
+            .GroupBy(entry => entry.LiveEdge, StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Select(entry => entry.Queue!.Value).ToList(),
+                StringComparer.Ordinal);
 
         foreach (var monitorName in EdgeShortcutMonitorSearchOrder())
         {
             foreach (var side in new[] { normalizedPreferredSide, oppositeSide })
             {
-                var queueKey = QueueKey(monitorName, side);
-                if (!queuesByKey.TryGetValue(queueKey, out var queue) || queue.Papers.Count < ordinal)
+                if (!queuesByLiveEdge.TryGetValue(EdgeKey(monitorName, side), out var edgeQueues))
                 {
                     continue;
                 }
 
-                var target = queue.Papers[ordinal - 1];
+                var target = EdgeCapsuleShortcutResolver.Resolve(edgeQueues, ordinal);
+                if (target == null)
+                {
+                    continue;
+                }
+
                 if (_windows.TryGetValue(target.Id, out var window))
                 {
                     window.ActivateFromEdgeShortcut();
@@ -1354,6 +1370,30 @@ public sealed partial class AppController
                 return;
             }
         }
+    }
+
+    /// <summary>
+    /// 把队列转换成快捷键解析器的输入；几何不可解析的队列直接排除。
+    /// </summary>
+    private EdgeCapsuleShortcutQueue? EdgeShortcutQueue(
+        EdgeCapsuleQueue queue,
+        IReadOnlyDictionary<string, double> restingDeltas)
+    {
+        if (!EdgeCapsuleQueueIds.TryGetEdge(queue.Key, out var monitor, out _) ||
+            !WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(monitor, out var geometry))
+        {
+            return null;
+        }
+
+        // Use the same base geometry as the actual queue. Legacy fit-to-screen
+        // normalization would lift a folded free queue by its hidden full height.
+        var margin = DeepCapsuleStartTopMarginForQueueKey(queue.Key);
+        var top = EdgeCapsuleFreeQueuesEnabled
+            ? EdgeCapsuleLayout.FreeQueueTopForIndex(0, margin, geometry.LocalWorkAreaDip, DeepCapsuleGap)
+            : EdgeCapsuleLayout.TopForIndex(0, margin, geometry.LocalWorkAreaDip,
+                queue.Papers.Count + (queue.HasMaster ? 1 : 0), DeepCapsuleGap);
+        return new EdgeCapsuleShortcutQueue(
+            queue.Key, top + restingDeltas.GetValueOrDefault(queue.Key), queue.Papers);
     }
 
     private static IReadOnlyList<string> EdgeShortcutMonitorSearchOrder()

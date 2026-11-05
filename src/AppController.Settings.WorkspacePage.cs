@@ -60,15 +60,10 @@ public sealed partial class AppController
         optionsPanel.Children.Add(heading);
         create.Click += async (_, _) =>
         {
-            var options = WorkspaceOptions.Normalized();
-            var slot = Enumerable.Range(2, 4).FirstOrDefault(number => !options.ContainsSlot(number));
+            var slot = await CreateWorkspaceAsync();
             if (slot == 0) return;
-            options.Slots = options.SlotNumbers.Append(slot).OrderBy(number => number).ToList();
-            if (await ChangeWorkspaceConfigurationAsync(options))
-            {
-                _workspaceSelectionDraft = slot;
-                RefreshSettingsWindowContent();
-            }
+            _workspaceSelectionDraft = slot;
+            RefreshSettingsWindowContent();
         };
 
         var selected = WorkspaceOptions.ContainsSlot(_workspaceSelectionDraft)

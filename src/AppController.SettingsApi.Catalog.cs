@@ -274,6 +274,14 @@ public sealed partial class AppController
             value => State.UseCapsuleCollapseAll = value,
             SettingEffects.CapsuleMode,
             title: Strings.Get("SettingsCapsuleCollapseAll"));
+        yield return DefineSetting<bool>("capsule.free_queues",
+            () => State.UseCapsuleFreeQueues,
+            value => State.UseCapsuleFreeQueues = value,
+            SettingEffects.CapsuleMode,
+            title: Strings.Get("SettingsCapsuleFreeQueues"),
+            description: Strings.Get("TipCapsuleFreeQueues"),
+            isNoOp: value => State.UseCapsuleFreeQueues == value &&
+                (!value || State.UseCapsuleMode && State.UseDeepCapsuleMode));
         yield return DefineSetting<bool>("capsule.master_compact",
             () => State.CompactMasterCapsule,
             value => State.CompactMasterCapsule = value,
