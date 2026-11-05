@@ -38,13 +38,22 @@ internal sealed class WorkspaceCatalog
             throw new InvalidOperationException("Only inactive secondary workspaces may be deleted.");
         var paths = PathsFor(number);
         var stem = "data" + number.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var primary = stem + ".json";
+        var backup = stem + ".backup.json";
         foreach (var file in System.IO.Directory.EnumerateFiles(_directory))
         {
             var name = Path.GetFileName(file);
-            if (name.Equals(stem + ".json", StringComparison.OrdinalIgnoreCase) ||
-                name.Equals(stem + ".backup.json", StringComparison.OrdinalIgnoreCase) ||
+            // Include atomic-write temps and copies created by StateStore recovery.
+            // Match the complete numbered stem: deleting data2 must not touch data20.
+            if (name.Equals(primary, StringComparison.OrdinalIgnoreCase) ||
+                name.Equals(primary + ".tmp", StringComparison.OrdinalIgnoreCase) ||
+                name.Equals(backup, StringComparison.OrdinalIgnoreCase) ||
+                name.Equals(backup + ".tmp", StringComparison.OrdinalIgnoreCase) ||
                 name.StartsWith(stem + "conflict-", StringComparison.OrdinalIgnoreCase) ||
                 name.StartsWith(stem + ".failed_load.", StringComparison.OrdinalIgnoreCase) ||
+                name.StartsWith(stem + ".backup.used_for_recovery.", StringComparison.OrdinalIgnoreCase) ||
+                name.StartsWith(primary + ".orphaned.", StringComparison.OrdinalIgnoreCase) ||
+                name.StartsWith(backup + ".orphaned.", StringComparison.OrdinalIgnoreCase) ||
                 name.StartsWith(stem + ".recovered", StringComparison.OrdinalIgnoreCase))
                 File.Delete(file);
         }
