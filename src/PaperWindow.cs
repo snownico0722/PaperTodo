@@ -1167,7 +1167,8 @@ public sealed partial class PaperWindow : Window
             return;
         }
 
-        if (_paperChrome is SkinBorder skin) skin.IsCapsule = _paper.IsCollapsed && _controller.State.UseCapsuleMode;
+        var isCapsule = _paper.IsCollapsed && _controller.State.UseCapsuleMode;
+        if (_paperChrome is SkinBorder skin) skin.IsCapsule = isCapsule;
         var snappedExpanded = _isSnappedPresentation && !_paper.IsCollapsed;
         if (_controller.UsesNativeMicaWindows && _topBarHost != null)
         {
@@ -1179,8 +1180,7 @@ public sealed partial class PaperWindow : Window
         // margin, square corners). Works for Normal-state tiles (half/quarter) and Maximized.
         if (snappedExpanded)
         {
-            _paperChrome.Effect = null;
-            _paperChrome.SetMaterialShadowMargin(0);
+            ApplyPaperChromeShadowPresentation(isCapsule, suppressShadow: true);
             _paperChrome.BeginAnimation(Border.MarginProperty, null);
             _paperChrome.Margin = new Thickness(0);
             _paperChrome.CornerRadius = new CornerRadius(0);
@@ -1191,21 +1191,47 @@ public sealed partial class PaperWindow : Window
         }
 
         // Floating or capsule: restore shadow, margin, and form-appropriate corner radius.
-        var isCapsule = _paper.IsCollapsed && _controller.State.UseCapsuleMode;
         var targetCorner = PaperChromeCornerRadiusForState(isCapsule);
         _paperChrome.BeginAnimation(Border.MarginProperty, null);
         _paperChrome.Margin = new Thickness(UsesNativePaperChrome ? 0 : WindowChromeMargin);
         _paperChrome.CornerRadius = targetCorner;
-        // Native expanded papers use the system frame, even during solid fallback.
-        // Applying an Effect to a transparent content ancestor also shadows its glyphs.
+        ApplyPaperChromeShadowPresentation(isCapsule, suppressShadow: false);
+        RefreshPluginBodyClip();
+        RefreshNativeMica();
+        RefreshExperimentalFocusPresentation(animate: false);
+    }
+
+    // A skin refresh must not reset transition-owned Margin or CornerRadius.
+    // Keep main's native-material shadow independent of ordinary Paper shadows.
+    private void ApplyPaperChromeShadowPresentation(bool isCapsule, bool suppressShadow)
+    {
+        if (_paperChrome == null) return;
+        if (suppressShadow)
+        {
+            _paperChrome.Effect = null;
+            _paperChrome.SetMaterialShadowMargin(0);
+            _paperChrome.ClearNineSliceShadow();
+            return;
+        }
+
+        if (!UsesNativePaperChrome && Theme.Skin == PaperSkins.Paper)
+        {
+            _paperChrome.Effect = null;
+            _paperChrome.SetMaterialShadowMargin(0);
+            if (isCapsule)
+                _paperChrome.SetNineSliceShadow(blurRadius: 8, depth: 1, opacity: 0.12, capsuleShape: true);
+            else
+                _paperChrome.SetNineSliceShadow(blurRadius: 14, depth: 2, opacity: 0.22, capsuleShape: false);
+            return;
+        }
+
+        _paperChrome.ClearNineSliceShadow();
+        // Other skins retain the current main native/material/legacy paths.
         var materialShadow = Theme.UsesNativeBackdrop && (IsPaperFormTransitioning || isCapsule);
         _paperChrome.Effect = UsesNativePaperChrome || materialShadow ? null : isCapsule
             ? CreatePaperChromeShadow(blurRadius: 8, opacity: 0.12, shadowDepth: 1)
             : CreatePaperChromeShadow();
         _paperChrome.SetMaterialShadowMargin(materialShadow ? _paperChrome.Margin.Left : 0);
-        RefreshPluginBodyClip();
-        RefreshNativeMica();
-        RefreshExperimentalFocusPresentation(animate: false);
     }
 
     private bool LooksSnappedNow()
