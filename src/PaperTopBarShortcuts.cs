@@ -34,17 +34,6 @@ internal static class PaperTopBarShortcuts
 
     internal static void Normalize(AppState state)
     {
-        // The old workspace button was always visible. Keep that visible on upgrade while
-        // moving it into the same configurable shortcut group as every other action.
-        if (state.TopBarShortcutOrder != null &&
-            !state.TopBarShortcutOrder.Contains(Workspace, StringComparer.Ordinal))
-        {
-            var old = state.TopBarShortcutOrder.Where(action => Defaults.Contains(action)).ToList();
-            var pinned = Math.Clamp(state.TopBarPinnedCount, 0, old.Count);
-            old.Insert(pinned, Workspace);
-            state.TopBarShortcutOrder = old;
-            state.TopBarPinnedCount = pinned + 1;
-        }
         state.TopBarShortcutOrder = NormalizeOrder(state.TopBarShortcutOrder);
         state.TopBarPinnedCount = Math.Clamp(state.TopBarPinnedCount, 0, Defaults.Length);
         state.TodoTopBarShortcuts = null;
@@ -60,8 +49,6 @@ internal static class PaperTopBarShortcuts
             .Concat(state.NoteTopBarShortcuts ?? [])
             .Where(action => Defaults.Contains(action, StringComparer.Ordinal))
             .Distinct(StringComparer.Ordinal).ToList();
-        // Workspace switching was a permanently visible button before the unified editor.
-        pinned.Add(Workspace);
         state.TopBarShortcutOrder = NormalizeOrder(pinned);
         state.TopBarPinnedCount = pinned.Count;
         Normalize(state);
