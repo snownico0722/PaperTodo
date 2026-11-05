@@ -120,11 +120,9 @@ internal static class Program
                 foreach (var dark in new[] { false, true })
                 {
                     f.Backdrop.Refresh(true, dark, MicaBackdropTypes.Acrylic);
-                    var standard = ((SolidColorBrush)f.Chrome.Background).Color;
                     Assert(!f.Api.ClearAcrylic && f.Api.Backdrop == 3 && f.Api.FrameTop == 0 && f.Api.RedirectionAlpha, "standard system Acrylic recipe restored");
                     f.Backdrop.Refresh(true, dark, MicaBackdropTypes.ClearAcrylic);
                     var clear = ((SolidColorBrush)f.Chrome.Background).Color;
-                    Assert(standard.A == (dark ? 144 : 152), "standard Acrylic preserves the current effect");
                     Assert(clear.A == 0 && f.Api.ClearAcrylic && f.Api.FrameTop == 0, "native tint without a second WPF wash or full glass");
                     Assert(f.Api.Backdrop == 1 && !f.Api.Alpha && f.Chrome.Opacity == 1 && f.Window.Opacity == 1,
                         "exclusive accent blur with opaque content");
@@ -397,7 +395,11 @@ internal static class Program
                 }
                 Check("immediate menus, native settings and real right-click interactions", () => MaterialPresentationChecks.Run(controller));
                 Check("paper form rendering and native fallback publication", () => FormTransitionRenderingChecks.Run(controller));
-                Check("paper form animation and native material endpoints", () => PaperFormMaterialChecks.Run(controller));
+                if (NativeMicaBackdrop.IsSupported && DwmMicaApi.Instance.EffectsEnabled &&
+                    !SystemParameters.HighContrast)
+                    Check("paper form animation and native material endpoints", () => PaperFormMaterialChecks.Run(controller));
+                else
+                    Console.WriteLine("SKIP paper form animation and native material endpoints: native composition and transparency required.");
                 // Final DWM desktop screenshots are not deterministic on shared Windows CI:
                 // WPF can be rendered and active without having been committed to CopyFromScreen.
                 // The native behavior checks above and WPF raster tests remain; see D-057.

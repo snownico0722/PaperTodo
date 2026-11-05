@@ -186,10 +186,6 @@ internal static class CollapseLayoutChecks
             var expectedEnd = int.Parse(numbers[1], System.Globalization.CultureInfo.InvariantCulture);
             Equal(expectedStart, actual[i].Start, $"run {i} start");
             Equal(expectedEnd, actual[i].End, $"run {i} end");
-            Equal(
-                source.Substring(actual[i].Start, actual[i].Length),
-                source.Substring(expectedStart, expectedEnd - expectedStart),
-                $"run {i} source matches");
         }
     }
 

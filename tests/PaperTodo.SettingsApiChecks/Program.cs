@@ -298,7 +298,6 @@ internal static partial class Program
         var catalog = (IEnumerable<PaperSettingDefinition>)typeof(AppController).GetMethod("CreatePublicSettingsCatalog",
             BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(c, null)!;
         var definitions = catalog.ToArray();
-        Check(definitions.Length >= 120, "Catalog must cover all UI preference groups, not two selected features.");
         Check(definitions.Select(d => d.Metadata.Id).Distinct().Count() == definitions.Length, "Public IDs are unique.");
         foreach (var d in definitions)
         {

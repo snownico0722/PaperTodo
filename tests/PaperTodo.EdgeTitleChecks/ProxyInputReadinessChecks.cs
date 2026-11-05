@@ -170,61 +170,68 @@ internal static partial class Program
         EdgeCapsuleQueueProxyWindow? target = null;
         Dispatcher? targetDispatcher = null;
         var targetClicks = 0;
-        using var ready = new ManualResetEventSlim();
+        var stopTarget = 0;
+        var targetShown = false;
+        var ready = new ManualResetEventSlim();
         var targetThread = new Thread(() =>
         {
-            targetDispatcher = Dispatcher.CurrentDispatcher;
-            target = EdgeCapsuleQueueProxyWindow.TryCreate(
+            try
+            {
+                targetDispatcher = Dispatcher.CurrentDispatcher;
+                target = EdgeCapsuleQueueProxyWindow.TryCreate(
+                    bounds,
+                    topmost: false,
+                    _ => true,
+                    input =>
+                    {
+                        if (input.Message == 0x0201)
+                        {
+                            Interlocked.Increment(ref targetClicks);
+                        }
+                    },
+                    () => { },
+                    () => { },
+                    () => { });
+                targetShown = target != null && target.Show(bounds, topmost: false);
+                ready.Set();
+                // A timed-out setup may request cleanup before this thread starts pumping.
+                if (targetShown && Volatile.Read(ref stopTarget) == 0) Dispatcher.Run();
+            }
+            finally
+            {
+                target?.Dispose();
+                ready.Set();
+            }
+        }) { IsBackground = true };
+        targetThread.SetApartmentState(ApartmentState.STA);
+        GetCursorPosForProxyCheck(out var originalCursor);
+        targetThread.Start();
+        try
+        {
+            Check(ready.Wait(TimeSpan.FromSeconds(5)) && targetShown,
+                "Create cross-thread native target below proxy output");
+
+            var routesInput = true;
+            var proxyClicks = 0;
+            using var proxy = EdgeCapsuleQueueProxyWindow.TryCreate(
                 bounds,
-                topmost: false,
-                _ => true,
+                topmost: true,
+                _ => routesInput,
                 input =>
                 {
                     if (input.Message == 0x0201)
                     {
-                        Interlocked.Increment(ref targetClicks);
+                        proxyClicks++;
                     }
                 },
                 () => { },
                 () => { },
                 () => { });
-            if (target == null || !target.Show(bounds, topmost: false))
-            {
-                ready.Set();
-                return;
-            }
-            ready.Set();
-            Dispatcher.Run();
-        });
-        targetThread.SetApartmentState(ApartmentState.STA);
-        targetThread.Start();
-        Check(ready.Wait(TimeSpan.FromSeconds(5)) && target != null && targetDispatcher != null,
-            "Create cross-thread native target below proxy output");
+            Check(proxy != null && proxy.Show(bounds, topmost: true),
+                "Show cross-thread passthrough proxy above target");
+            var liveProxy = proxy!;
+            using var visibleCover = new ProxyVisualEvidence(liveProxy.Handle, bounds);
 
-        var routesInput = true;
-        var proxyClicks = 0;
-        using var proxy = EdgeCapsuleQueueProxyWindow.TryCreate(
-            bounds,
-            topmost: true,
-            _ => routesInput,
-            input =>
-            {
-                if (input.Message == 0x0201)
-                {
-                    proxyClicks++;
-                }
-            },
-            () => { },
-            () => { },
-            () => { });
-        Check(proxy != null && proxy.Show(bounds, topmost: true),
-            "Show cross-thread passthrough proxy above target");
-        var liveProxy = proxy!;
-        using var visibleCover = new ProxyVisualEvidence(liveProxy.Handle, bounds);
-
-        GetCursorPosForProxyCheck(out var originalCursor);
-        try
-        {
             var x = bounds.Left + bounds.Width / 2;
             var y = bounds.Top + bounds.Height / 2;
             Check(SetCursorPosForProxyCheck(x, y), "Position pointer over proxy test windows");
@@ -290,16 +297,12 @@ internal static partial class Program
         finally
         {
             _ = SetCursorPosForProxyCheck(originalCursor.X, originalCursor.Y);
-            liveProxy.Hide();
-            targetDispatcher!.BeginInvoke(
-                DispatcherPriority.Send,
-                (Action)(() =>
-                {
-                    target?.Dispose();
-                    Dispatcher.CurrentDispatcher.BeginInvokeShutdown(
-                        DispatcherPriority.Send);
-                }));
-            targetThread.Join(TimeSpan.FromSeconds(5));
+            Volatile.Write(ref stopTarget, 1);
+            targetDispatcher?.BeginInvokeShutdown(DispatcherPriority.Send);
+            var stopped = targetThread.Join(TimeSpan.FromSeconds(5));
+            // Do not dispose a signal that a timed-out background thread can still publish.
+            if (stopped) ready.Dispose();
+            Check(stopped, "Cross-thread native target releases its window and dispatcher");
         }
 
         Console.WriteLine("PASS visible live master proxy, cold/warm cross-thread passthrough and fresh interactive replacement");

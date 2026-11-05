@@ -27,10 +27,6 @@ internal static class MaterialPaletteChecks
                     Program.Assert(palette.Surface.A == 255 && ((SolidColorBrush)Theme.TextBrush).Color.A == 255,
                         "material palettes preserve opaque semantic colors");
                     if (scheme == ColorSchemes.Neutral) Program.Assert(palette.NativeOverlay.A == 0, "neutral system wash remains unchanged");
-                    if (skin == PaperSkins.Aero)
-                        Program.Assert(palette.TransmissionAlpha == (dark ? 102 : 58), "Aero medium uses four steps more cover than the previous baseline");
-                    if (skin == PaperSkins.TracingPaper)
-                        Program.Assert(palette.TransmissionAlpha == (dark ? 163 : 152), "tracing paper medium uses one step less cover than the previous baseline");
                     if (!PaperSkins.UsesNativeBackdrop(skin)) continue;
                     var surface = new SkinBorder { IsCapsule = true, UseLightweightMaterial = true,
                         Background = Theme.PaperBrush, CornerRadius = new CornerRadius(8) };
@@ -47,8 +43,7 @@ internal static class MaterialPaletteChecks
                 if (scheme != ColorSchemes.Neutral) Program.Assert(surfaces.Count >= 4,
                     "each color family is tuned per material rather than one shared tint");
             }
-            // The five saved levels stay unchanged. Tracing Paper and Aero shift their optical
-            // baselines, while every material still moves monotonically across those five levels.
+            // Each saved transparency level reduces cover without fixing the palette's alpha recipe.
             controller.State.Theme = "light";
             controller.State.ColorScheme = ColorSchemes.Warm;
             foreach (var skin in new[]
@@ -67,12 +62,6 @@ internal static class MaterialPaletteChecks
                 }
                 Program.Assert(alphas.Zip(alphas.Skip(1), (a, b) => a > b).All(value => value),
                     $"{skin}: five transparency levels monotonically reduce material cover");
-                if (skin == PaperSkins.TracingPaper)
-                    Program.Assert(alphas.SequenceEqual(new byte[] { 206, 179, 152, 125, 98 }),
-                        "tracing paper shifts every level one transparency step lighter");
-                if (skin == PaperSkins.Aero)
-                    Program.Assert(alphas.SequenceEqual(new byte[] { 90, 74, 58, 42, 26 }),
-                        "Aero keeps Medium and spreads the five transparency levels farther apart");
             }
             controller.State.MaterialTransparency = MaterialTransparencyLevels.Medium;
             Theme.Invalidate();

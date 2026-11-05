@@ -314,7 +314,8 @@ internal static partial class Program
         execute.Invoke(runtime, [payload]);
         var subscriptions = (Dictionary<string, IDisposable>)typeof(WebPluginRuntime).GetField("_hostSubscriptions", flags)!.GetValue(runtime)!;
         Assert(subscriptions.Count == 1, "Web Runtime event request did not reach Workspace.");
-        var original = subscriptions["s1"];
+        var original = new SubscriptionProbe(subscriptions["s1"]);
+        subscriptions["s1"] = original;
         var rejected = JsonSerializer.SerializeToElement(new { method = "events.subscribe", @params = new {
             subscriptionId = "s1", types = new[] { "note.changed" } } });
         try
@@ -323,11 +324,11 @@ internal static partial class Program
             throw new Exception("Web Runtime accepted a replacement without note read permission.");
         }
         catch (TargetInvocationException ex) when (ex.InnerException is PaperTodoPluginException { Code: "permission_denied" }) { }
-        Assert(subscriptions.Count == 1 && ReferenceEquals(subscriptions["s1"], original),
-            "Failed Web Runtime replacement removed an existing subscription.");
+        Assert(subscriptions.Count == 1 && ReferenceEquals(subscriptions["s1"], original) && !original.IsDisposed,
+            "Failed Web Runtime replacement removed or disposed an existing subscription.");
         execute.Invoke(runtime, [payload]);
-        Assert(subscriptions.Count == 1 && !ReferenceEquals(subscriptions["s1"], original),
-            "Successful Web Runtime replacement did not replace the old subscription.");
+        Assert(subscriptions.Count == 1 && !ReferenceEquals(subscriptions["s1"], original) && original.IsDisposed,
+            "Successful Web Runtime replacement did not release the old subscription.");
         execute.Invoke(runtime, [JsonSerializer.SerializeToElement(new { method = "events.unsubscribe", @params = new { subscriptionId = "s1" } })]);
         Assert(subscriptions.Count == 0, "Web Runtime unsubscribe failed.");
         execute.Invoke(runtime, [payload]);
@@ -375,13 +376,14 @@ internal static partial class Program
             subscriptionId = "same", types = new[] { "note.changed" } });
         bodySubscribe.Invoke(body, [bodyValid]);
         Assert(bodySubscriptions.Count == 1, "Web Body initial subscription failed.");
-        var bodyOriginal = bodySubscriptions["same"];
+        var bodyOriginal = new SubscriptionProbe(bodySubscriptions["same"]);
+        bodySubscriptions["same"] = bodyOriginal;
         bodySubscribe.Invoke(body, [bodyInvalid]);
-        Assert(bodySubscriptions.Count == 1 && ReferenceEquals(bodySubscriptions["same"], bodyOriginal),
-            "Failed Web Body replacement removed an existing subscription.");
+        Assert(bodySubscriptions.Count == 1 && ReferenceEquals(bodySubscriptions["same"], bodyOriginal) && !bodyOriginal.IsDisposed,
+            "Failed Web Body replacement removed or disposed an existing subscription.");
         bodySubscribe.Invoke(body, [bodyValid]);
-        Assert(bodySubscriptions.Count == 1 && !ReferenceEquals(bodySubscriptions["same"], bodyOriginal),
-            "Successful Web Body replacement did not replace the old subscription.");
+        Assert(bodySubscriptions.Count == 1 && !ReferenceEquals(bodySubscriptions["same"], bodyOriginal) && bodyOriginal.IsDisposed,
+            "Successful Web Body replacement did not release the old subscription.");
         bodySubscriptions["same"].Dispose();
 
         var before = controller.CaptureTodoSnapshot(paper, item) with { ReminderTriggered = false };
@@ -394,6 +396,16 @@ internal static partial class Program
             !serialized.GetProperty("before").GetProperty("reminderTriggered").GetBoolean() &&
             serialized.GetProperty("after").GetProperty("reminderTriggered").GetBoolean(),
             "Web reminder transition payload shape is incorrect.");
+    }
+
+    private sealed class SubscriptionProbe(IDisposable inner) : IDisposable
+    {
+        public bool IsDisposed { get; private set; }
+        public void Dispose()
+        {
+            inner.Dispose();
+            IsDisposed = true;
+        }
     }
 
     private static void ReminderWebBridge()

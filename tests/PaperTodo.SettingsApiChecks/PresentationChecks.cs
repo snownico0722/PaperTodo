@@ -63,10 +63,10 @@ internal static partial class Program
         if (!File.Exists(Path.Combine(AppContext.BaseDirectory, PresentationMarker)))
             throw new InvalidOperationException("Refusing to open non-fixture PaperTodo data.");
         var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
-        var result = 0;
+        var result = 1;
         app.Dispatcher.InvokeAsync(async () =>
         {
-            try { await PresentationBehavior(mode == "edge"); }
+            try { await PresentationBehavior(mode == "edge"); result = 0; }
             catch (Exception ex) { Console.Error.WriteLine(ex); result = 1; }
             finally { app.Shutdown(); }
         });
@@ -236,7 +236,15 @@ internal static partial class Program
         current = true;
         await LinkedTitleTruncationBehavior(c, note, todo);
         await PluginBoundaryBehavior(c, owner, note, todo);
-        await PresentationPipeBehavior();
+        // These checks own their stores/transport and do not depend on paper presentation.
+        if (!edge)
+        {
+            TodoPasteUsesEventPayload();
+            MultilinePluginTooltips();
+            ReviewArchiveUnreadableDataFailsClosed();
+            await ArchiveNotificationsCannotBlockPersistence();
+            await PresentationPipeBehavior();
+        }
         Console.WriteLine($"Presentation ({(edge ? "edge" : "normal")}): {_checks} behavior checks passed.");
     }
 

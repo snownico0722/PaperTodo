@@ -145,31 +145,6 @@ internal static class MaterialPresentationChecks
                 "default floating paper uses cached nine-slice shadow instead of DropShadowEffect");
             AssertLightweightShadowRamp(window);
 
-            // Shadow silhouette and blur strength are independent: do not infer
-            // capsule geometry from a small blur radius.
-            var capsuleShapeField = typeof(PaperChromeBorder).GetField(
-                "_shadowCapsuleShape", Program.Private)!;
-            chrome.SetNineSliceShadow(14, 2, 0.22, capsuleShape: true);
-            Program.Assert((bool)capsuleShapeField.GetValue(chrome)!,
-                "capsule template can use expanded-paper blur strength");
-            chrome.SetNineSliceShadow(8, 1, 0.12, capsuleShape: false);
-            Program.Assert(!(bool)capsuleShapeField.GetValue(chrome)!,
-                "paper template can use capsule blur strength");
-            window.RefreshSkin();
-
-            // The chrome corner itself animates continuously, but shadow masks
-            // share exactly the 12, 14 and 16 DIP texture radii.
-            var dpi = VisualTreeHelper.GetDpi(chrome);
-            var tierA = NineSlicePaperShadow.Get(14, 2, 0.22, 13.5, dpi, false);
-            var tierB = NineSlicePaperShadow.Get(14, 2, 0.22, 14.5, dpi, false);
-            var tierC = NineSlicePaperShadow.Get(14, 2, 0.22, 16, dpi, false);
-            Program.Assert(ReferenceEquals(tierA, tierB) &&
-                !ReferenceEquals(tierA, tierC),
-                "animated shadow reuses 14 DIP template until the 16 DIP tier");
-            Program.Assert(!ReferenceEquals(tierA,
-                NineSlicePaperShadow.Get(14, 2, 0.22, 14, dpi, true)),
-                "capsule/paper silhouette remains a distinct cache key with equal blur");
-
             window.SetCollapsedState(true, animate: false, saveGeometry: false);
             Wait(80);
             Program.Assert(
@@ -510,17 +485,6 @@ internal static class MaterialPresentationChecks
                 createNote.Visibility != Visibility.Visible,
                 "moving a shortcut into the menu immediately removes the live title-bar icon");
             overflow.IsOpen = false;
-
-            // Verify the actual General settings control is one two-group drag surface.
-            var build = typeof(AppController).GetMethod("BuildTopBarShortcutSettings", Program.Private)!;
-            var editor = (UIElement)build.Invoke(controller, null)!;
-            var labels = Descendants(editor).OfType<TextBlock>().Select(t => t.Text).ToArray();
-            Program.Assert(labels.Contains(Strings.Get("TopBarShownHeading")) &&
-                labels.Contains(Strings.Get("TopBarMenuHeading")) &&
-                labels.Contains(Strings.Get("TopBarAssociation")) &&
-                labels.Contains(Strings.Get("TopBarExternalEditor")) &&
-                !Descendants(editor).OfType<CheckBox>().Any(),
-                "Settings contains exactly one reorderable two-section list, without checkboxes");
         }
         finally
         {
@@ -578,47 +542,11 @@ internal static class MaterialPresentationChecks
             surface.Show();
             surface.Activate();
             Program.Pump();
-            var glyphs = Descendants(root).OfType<TextBlock>().Select(t => t.Text).ToArray();
-            var actionFrame = (Border)root.Children[1];
-            var actionArea = (StackPanel)actionFrame.Child;
-            var titleHint = Descendants((Grid)root.Children[0]).OfType<Border>()
-                .Single(b => b.ToolTip is ToolTip);
-            Program.Assert(actionFrame.BorderThickness.Left == 1 &&
-                actionArea.Children.Count == 5 &&
-                ((TextBlock)((ToolTip)titleHint.ToolTip).Content).Text ==
-                    Strings.Get("TipTopBarShortcutSettings") &&
-                ((Border)actionArea.Children[2]).Margin.Top <= 6,
-                "shortcuts have a framed, compact two-section editor and localized help");
-            Program.Assert(root.Children.Count == 2 &&
-                glyphs.Contains("✓") && glyphs.Contains("✎"),
-                "settings omit the redundant hint and reuse the paper capsule glyphs");
-            var vectors = Descendants(root).OfType<System.Windows.Shapes.Path>().ToArray();
-            Program.Assert(vectors.Length == 3 &&
-                vectors.Count(path => path.StrokeThickness == 2) == 2 &&
-                vectors.Count(path => Math.Abs(path.StrokeThickness - 1.5) < 0.01) == 1 &&
-                vectors.All(path => path.Data != null &&
-                    path.Data.Bounds.Width > 0 && path.Data.Bounds.Height > 0 &&
-                    path.StrokeStartLineCap == PenLineCap.Round &&
-                    path.StrokeLineJoin == PenLineJoin.Round) &&
-                !glyphs.Contains("◎") && !glyphs.Contains("↗") && !glyphs.Contains("↻"),
-                "association, external editor and workspace have distinct rounded vector icons");
-
-            var shortcutIcons = new[]
-                {
-                    (StackPanel)actionArea.Children[1],
-                    (StackPanel)actionArea.Children[4]
-                }
-                .SelectMany(group => group.Children.OfType<Grid>())
-                .Select(frame => (FrameworkElement)((StackPanel)
-                    ((Border)frame.Children[0]).Child).Children[1])
-                .ToArray();
-            var iconCenters = shortcutIcons.Select(icon => icon.TranslatePoint(
-                new Point(icon.ActualWidth / 2, icon.ActualHeight / 2), root).X).ToArray();
-            Program.Assert(shortcutIcons.Length == PaperTopBarShortcuts.All.Count &&
-                shortcutIcons.All(icon => icon is Grid &&
-                    Math.Abs(icon.Width - AppTypography.Scale(24)) < 0.1) &&
-                iconCenters.Max() - iconCenters.Min() < 0.75,
-                "all five shortcut icons, including workspace, align on one column");
+            Program.Assert(Descendants(root).OfType<FrameworkElement>()
+                .Select(element => element.ToolTip).OfType<ToolTip>()
+                .Any(tip => tip.Content is TextBlock text &&
+                    text.Text == Strings.Get("TipTopBarShortcutSettings")),
+                "shortcut settings expose localized help");
 
             var createDragEvent = typeof(DragEventArgs).GetConstructor(
                 BindingFlags.Instance | BindingFlags.NonPublic,

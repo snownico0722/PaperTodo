@@ -21,10 +21,10 @@ internal static class Program
             if (!File.Exists(Path.Combine(AppContext.BaseDirectory, Marker)))
                 throw new InvalidOperationException("Refusing to open non-fixture PaperTodo data.");
             var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
-            var result = 0;
+            var result = 1;
             app.Dispatcher.InvokeAsync(async () =>
             {
-                try { await RunFixture(args[1], args[2]); }
+                try { await RunFixture(args[1], args[2]); result = 0; }
                 catch (Exception ex) { Console.Error.WriteLine(ex); result = 1; }
                 finally { app.Shutdown(); }
             });

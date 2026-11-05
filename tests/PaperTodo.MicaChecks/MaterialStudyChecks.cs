@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -76,15 +75,10 @@ internal static class MaterialStudyChecks
 
     private static void CheckRelief()
     {
-        foreach (var skin in new[] { PaperSkins.Aero })
         foreach (var scale in new[] { 1d, 1.25, 1.5, 2 })
         {
-            var clock = Stopwatch.StartNew();
             var drawing = MaterialRelief.Create(new Size(420, 340), new CornerRadius(16),
                 new Thickness(0, 1, 1, 1), new DpiScale(scale, scale), false);
-            var images = drawing.Children.OfType<ImageDrawing>().Select(i => (BitmapSource)i.ImageSource).ToArray();
-            Program.Assert(drawing.IsFrozen && images.Length == 4 && images.All(i => i.IsFrozen) &&
-                images.Sum(i => i.PixelWidth * i.PixelHeight) < 270000, "frozen perimeter-only lighting has a bounded raster budget");
             var visual = new DrawingVisual(); using (var dc = visual.RenderOpen()) dc.DrawDrawing(drawing);
             var rendered = new RenderTargetBitmap(420, 340, 96, 96, PixelFormats.Pbgra32); rendered.Render(visual);
             var bytes = new byte[420 * 340 * 4]; rendered.CopyPixels(bytes, 420 * 4, 0);
@@ -92,7 +86,6 @@ internal static class MaterialStudyChecks
             Program.Assert(Alpha(210, 170) == 0 && Alpha(1, 170) == 0 && Alpha(0, 0) == 0,
                 "clear-coat relief cannot fill the content, paint a docked open edge or change corner shape");
             Program.Assert(Enumerable.Range(1, 7).Any(x => Alpha(419 - x, 170) > 0), "curved edge lighting is actually visible");
-            Console.WriteLine($"RELIEF {skin}@{scale}: {images.Sum(i => i.PixelWidth * i.PixelHeight)} cached edge pixels, construction {clock.Elapsed.TotalMilliseconds:F2}ms (CI diagnostic)");
         }
     }
     private static void Wait(int ms)

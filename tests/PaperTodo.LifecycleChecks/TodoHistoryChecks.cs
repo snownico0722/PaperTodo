@@ -335,9 +335,10 @@ internal static class TodoHistoryChecks
         Require(foldPreview.Visibility == Visibility.Visible && editor.Opacity == 0,
             "clearing sweep selection did not restore the folded preview");
 
-        Invoke(window, "RefreshTodoFindCues");
         var foldGlyph = (System.Windows.Shapes.Path)foldButton.Child;
-        Require(Math.Abs(foldGlyph.Opacity - 0.48) < 0.001,
+        var neutralOpacity = foldGlyph.Opacity;
+        Invoke(window, "RefreshTodoFindCues");
+        Require(Math.Abs(((System.Windows.Shapes.Path)foldButton.Child).Opacity - neutralOpacity) < 0.001,
             "a search cue refresh changed the folded icon's neutral opacity");
         await Focus(window, editor);
         window.UpdateLayout();

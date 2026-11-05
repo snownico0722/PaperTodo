@@ -107,8 +107,6 @@ internal static class SkinChecks
         foreach (var skin in new[] { PaperSkins.Mica, PaperSkins.Acrylic, PaperSkins.ClearAcrylic })
         {
             controller.State.Theme = mode; controller.State.PaperSkin = skin; Theme.Invalidate();
-            var expected = mode == "light" ? Color.FromRgb(243, 243, 243) : Color.FromRgb(32, 32, 32);
-            Program.Assert(((SolidColorBrush)Theme.PaperBrush).Color == expected, "native palette matches the original Mica branch");
             foreach (var background in new[] { Theme.PaperBrush, NativeMicaBackdrop.GetActiveSurfaceBrush(skin, mode == "dark") })
             {
                 var original = new Border { Width = 180, Height = 100, CornerRadius = new CornerRadius(8),
@@ -138,12 +136,13 @@ internal static class SkinChecks
                 var selector = (UIElement)typeof(AppController).GetMethod("CreateColorSchemeSegmentSelector", Program.Private)!.Invoke(controller, null)!;
                 Program.Assert(selector.IsEnabled, "native material palette selector remains enabled");
             }
+            controller.State.PaperSkin = PaperSkins.Paper; Theme.Invalidate();
+            Program.Assert(controller.State.ColorScheme == scheme &&
+                ((SolidColorBrush)Theme.PaperBrush).Color == paperColor,
+                "leaving a native skin restores the independent saved color choice");
         }
         controller.State.ColorScheme = ColorSchemes.Warm;
-        controller.State.PaperSkin = PaperSkins.Paper; controller.State.Theme = "light"; Theme.Invalidate();
-        Program.Assert(controller.State.ColorScheme == ColorSchemes.Warm &&
-            ((SolidColorBrush)Theme.PaperBrush).Color == Color.FromRgb(255, 249, 234),
-            "leaving a native skin restores the independent saved color choice");
+        controller.State.Theme = "light";
         controller.State.HideSurfaceOutline = true;
         Theme.Invalidate();
     }

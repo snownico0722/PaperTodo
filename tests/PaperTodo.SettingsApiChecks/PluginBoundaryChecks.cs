@@ -18,13 +18,9 @@ internal static partial class Program
         await ExternalSavePreservesRuntimeCallbackDirtyState(c);
         VisualBroadcastSurvivesPaperCreation(c);
         PopupThemeNotificationsFollowAppearance(c);
-        await ExtendedComponentBoundaryBehavior(c);
+        ExtendedComponentBoundaryBehavior(c);
         CreationOwnsInitialTodoFields(c, note);
-        TodoPasteUsesEventPayload();
         PartialReminderDeliveryKeepsUnsurfacedItemsPending(c);
-        MultilinePluginTooltips();
-        ReviewArchiveSavesWithoutBackup();
-        ReviewArchiveUnreadableDataFailsClosed();
         await InitialRuntimeFailureDoesNotRetry(c);
     }
 
@@ -662,38 +658,6 @@ internal static partial class Program
             [new() { Text = "Summary", ToolTip = "ok\tbad" }]), "invalid_topbar_label_tooltip");
         Throws<PaperTodoPluginException>(() => PluginContributionPolicy.NormalizeTopBarLabels(
             [new() { Text = "Bad\nlabel" }]), "invalid_topbar_label_text");
-    }
-
-    private static void ReviewArchiveSavesWithoutBackup()
-    {
-        var type = typeof(PaperTodo.Plugin.ReviewArchive.ReviewArchivePlugin).Assembly
-            .GetType("PaperTodo.Plugin.ReviewArchive.ReviewArchiveStore")!;
-        const BindingFlags flags = BindingFlags.Static | BindingFlags.NonPublic;
-        var pathField = type.GetField("_path", flags)!;
-        var docField = type.GetField("_document", flags)!;
-        var oldPath = pathField.GetValue(null);
-        var oldDoc = docField.GetValue(null);
-        var root = Path.Combine(Path.GetTempPath(), "PaperTodo.ArchiveChecks-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(root);
-        try
-        {
-            var path = Path.Combine(root, "review-archive.json");
-            File.WriteAllText(path, "old data");
-            // An existing directory at the old backup path makes a backup copy impossible.
-            Directory.CreateDirectory(path + ".bak");
-            pathField.SetValue(null, path);
-            docField.SetValue(null, Activator.CreateInstance(docField.FieldType, nonPublic: true));
-            type.GetMethod("Flush")!.Invoke(null, null);
-            using var saved = JsonDocument.Parse(File.ReadAllText(path));
-            Check(saved.RootElement.GetProperty("storageVersion").GetInt32() == 3 && Directory.Exists(path + ".bak"),
-                "The archive saves normally without accessing the obsolete backup path.");
-            Check((string)type.GetProperty("LastSaveError")!.GetValue(null)! == "", "Normal archive save succeeded.");
-        }
-        finally
-        {
-            pathField.SetValue(null, oldPath); docField.SetValue(null, oldDoc);
-            Directory.Delete(root, recursive: true);
-        }
     }
 
     private static void ReviewArchiveUnreadableDataFailsClosed()

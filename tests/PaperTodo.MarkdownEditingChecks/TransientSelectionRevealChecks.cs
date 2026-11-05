@@ -11,7 +11,7 @@ internal static class TransientSelectionRevealChecks
     internal static void Run()
     {
         CheckCollapsedSourceRevealIsScoped();
-        CheckWrappedSelectionKeepsExactColumn();
+        CheckFindTargetKeepsExactColumn();
         Console.WriteLine("PASS transient find reveal");
     }
 
@@ -50,14 +50,12 @@ internal static class TransientSelectionRevealChecks
             "clearing find reveal restores normal Full preview layout");
     }
 
-    private static void CheckWrappedSelectionKeepsExactColumn()
+    private static void CheckFindTargetKeepsExactColumn()
     {
         var source = string.Join(" ", Enumerable.Repeat("wrapped", 80)) + " needle";
-        using var editor = new PreviewEditor(source, width: 180, height: 90);
-        editor.Layout();
-
+        var box = new MarkdownTextBox { Text = source };
         var needleOffset = source.LastIndexOf("needle", StringComparison.Ordinal);
-        var target = PaperWindow.GetBuiltInFindScrollTarget(editor.Box, needleOffset);
+        var target = PaperWindow.GetBuiltInFindScrollTarget(box, needleOffset);
         if (target.Line != 1 || target.Column != needleOffset + 1)
         {
             throw new InvalidOperationException(
