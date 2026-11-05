@@ -36,8 +36,15 @@ internal static partial class Program
         var selectedBefore = selected.ToDictionary(id => id, id => controller.WorkbenchLayout.Cards[id].Bounds);
         var moveSelection = (Thumb)Member(ActiveCards(desk)["note-a"]!, "Move");
         moveSelection.RaiseEvent(new DragStartedEventArgs(0, 0) { RoutedEvent = Thumb.DragStartedEvent });
+        Assert(Panel.GetZIndex(CardFrame(desk, "note-a")) == 13 &&
+               Panel.GetZIndex(CardFrame(desk, nodeId)) == 12 &&
+               Panel.GetZIndex(CardFrame(desk, "todo-a")) == 2,
+            "Dragged selection was not raised above neighboring papers");
         moveSelection.RaiseEvent(new DragDeltaEventArgs(60, 35) { RoutedEvent = Thumb.DragDeltaEvent });
         moveSelection.RaiseEvent(new DragCompletedEventArgs(60, 35, false) { RoutedEvent = Thumb.DragCompletedEvent });
+        Assert(Panel.GetZIndex(CardFrame(desk, "note-a")) == 2 &&
+               Panel.GetZIndex(CardFrame(desk, nodeId)) == 2,
+            "Dragging selection left floating elevated layers behind");
         await Until(() => controller.WorkbenchLayout.Cards["note-a"].X != selectedBefore["note-a"].X,
             "Dragging a multiselection did not store its new position");
         Assert(selected.All(id => Math.Abs(controller.WorkbenchLayout.Cards[id].X - selectedBefore[id].X - 60) < .001 &&
@@ -61,8 +68,12 @@ internal static partial class Program
         var before = group.Members.ToDictionary(id => id, id => controller.WorkbenchLayout.Cards[id].Bounds);
         var groupThumb = GroupThumb(desk, group.Title);
         groupThumb.RaiseEvent(new DragStartedEventArgs(0, 0) { RoutedEvent = Thumb.DragStartedEvent });
+        Assert(group.Members.All(id => Panel.GetZIndex(CardFrame(desk, id)) == 12),
+            "Moving group members did not raise them above other papers");
         groupThumb.RaiseEvent(new DragDeltaEventArgs(130, 80) { RoutedEvent = Thumb.DragDeltaEvent });
         groupThumb.RaiseEvent(new DragCompletedEventArgs(130, 80, false) { RoutedEvent = Thumb.DragCompletedEvent });
+        Assert(group.Members.All(id => Panel.GetZIndex(CardFrame(desk, id)) == 2),
+            "Moving a group did not restore member Z order");
         await Until(() => controller.WorkbenchLayout.Cards["note-a"].X != before["note-a"].X,
             "Dragging a collapsed group did not store its new position");
         var after = group.Members.ToDictionary(id => id, id => controller.WorkbenchLayout.Cards[id].Bounds);
