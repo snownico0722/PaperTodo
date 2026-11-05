@@ -239,11 +239,42 @@ public sealed partial class PaperWindow
         _shell.Children.Add(_editorPaperSidebar);
     }
 
+    private Style BuildEditorPaperListButtonStyle()
+    {
+        var style = new Style(typeof(Button));
+        style.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(9, 7, 9, 7)));
+        style.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(0)));
+        style.Setters.Add(new Setter(Control.CursorProperty, Cursors.Hand));
+        var surface = new FrameworkElementFactory(typeof(Border));
+        surface.Name = "ItemSurface";
+        surface.SetValue(Border.CornerRadiusProperty, new CornerRadius(7));
+        surface.SetValue(Border.BackgroundProperty,
+            new TemplateBindingExtension(Control.BackgroundProperty));
+        surface.SetValue(Border.PaddingProperty,
+            new TemplateBindingExtension(Control.PaddingProperty));
+        var presenter = new FrameworkElementFactory(typeof(ContentPresenter));
+        presenter.SetValue(ContentPresenter.ContentProperty,
+            new TemplateBindingExtension(ContentControl.ContentProperty));
+        presenter.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Stretch);
+        surface.AppendChild(presenter);
+        var template = new ControlTemplate(typeof(Button)) { VisualTree = surface };
+        var hovering = new Trigger
+        {
+            Property = UIElement.IsMouseOverProperty,
+            Value = true
+        };
+        hovering.Setters.Add(new Setter(Border.BackgroundProperty, HoverBrush, "ItemSurface"));
+        template.Triggers.Add(hovering);
+        style.Setters.Add(new Setter(Control.TemplateProperty, template));
+        return style;
+    }
+
     private void RefreshExpandedEditorPaperList()
     {
         if (_editorPaperList == null || !_isExpandedEditorMode || !_isExpandedEditorSidebarOpen)
             return;
         _editorPaperList.Children.Clear();
+        var itemStyle = BuildEditorPaperListButtonStyle();
         foreach (var paper in _controller.State.Papers.ToArray())
         {
             var current = paper.Id == _paper.Id;
@@ -277,7 +308,7 @@ public sealed partial class PaperWindow
                 Margin = new Thickness(4, 1, 4, 1),
                 BorderThickness = new Thickness(0),
                 Background = current ? HoverBrush : Brushes.Transparent,
-                Cursor = Cursors.Hand
+                Style = itemStyle
             };
             button.Click += (_, _) => _controller.SwitchExpandedEditorPaper(this, paper.Id);
             _editorPaperList.Children.Add(button);
