@@ -58,7 +58,9 @@ public sealed partial class MasterCapsuleWindow
         if (!target.Visible || !target.IsUsable) return false;
         ApplyMasterEdgeLayout();
         ++_moveGeneration; // Retire idle settles belonging to the preceding direct move.
-        return WindowNative.TrySetWindowDeviceBounds(this, target.Bounds);
+        var applied = WindowNative.TrySetWindowDeviceBounds(this, target.Bounds);
+        if (applied) _currentTopDip = AnchorTop;
+        return applied;
     }
 
     internal bool VerifyQueueProxyEndpoint(EdgeCapsulePresentationFrame target) =>
