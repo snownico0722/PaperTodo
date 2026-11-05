@@ -3,6 +3,7 @@ using System.Collections.Specialized;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -79,6 +80,23 @@ internal static partial class Program
             "Ordinary files and folders were not retained as external references");
         Assert(controller.ReadWorkbenchMaterialImage(imageId) != null,
             "Imported image has no readable stored image asset");
+        await Until(() => CardReady(desk, fileId) && CardReady(desk, directoryId) &&
+                           CardReady(desk, linkIds[0]), "External icons were not mounted");
+        foreach (var id in new[] { fileId, directoryId, linkIds[0] })
+        {
+            var tile = ActiveCards(desk)[id]!;
+            var frame = (Border)Member(tile, "Frame");
+            Assert(frame.Child is Grid && Member(tile, "FileTitle") is TextBlock &&
+                   Member(tile, "MaterialImage") is Image &&
+                   Member(tile, "Move") is Thumb &&
+                   ((FrameworkElement)Member(tile, "Resize")).Visibility == Visibility.Collapsed &&
+                   Math.Abs(frame.Width - 120) < .01 && Math.Abs(frame.Height - 128) < .01,
+                "File, folder and URL imports should appear as small native icon tiles, not paper cards");
+            var menu = frame.ContextMenu!;
+            Assert(menu.Items.OfType<MenuItem>().Count() == 1 &&
+                   Equals(((MenuItem)menu.Items[0]).Header, Strings.Get("WorkbenchDeleteMaterial")),
+                "External icons must have only Delete on right click");
+        }
         File.Delete(imagePath);
         Assert(controller.ReadWorkbenchMaterialImage(imageId) != null,
             "Imported image still depends on the original source file");

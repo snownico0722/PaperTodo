@@ -48,13 +48,32 @@ internal static partial class Program
         bool HasAction(string key) => contextMenu.Items.OfType<MenuItem>()
             .Any(item => Equals(item.Header, Strings.Get(key)));
         Assert(!HasAction("MenuHide") && !HasAction("MenuCollapseToCapsule") &&
-               HasAction("WorkbenchCollapseCard") && HasAction("WorkbenchLockCard") &&
+               !HasAction("WorkbenchCollapseCard") && !HasAction("WorkbenchLockCard") &&
+               !HasAction("WorkbenchExpandCard") && !HasAction("WorkbenchUnlockCard") &&
                HasAction("MenuDelete"),
-            "Workbench paper menu is incomplete, hides desktop papers or changes capsule state");
+            "Workbench paper menu must keep standard actions but put lock/fold only in the card header");
         Assert(!HasAction("WorkbenchGroupSelection") && !HasAction("WorkbenchUngroup"),
             "Grouping controls were unexpectedly moved out of the toolbar");
 
-        desk.ToggleWorkbenchCardCollapsed("note-a");
+        var sceneBefore = Member(desk, "ActiveScene");
+        var backgroundBefore = Member(sceneBefore, "BackgroundFrame");
+        var cardBefore = ActiveCards(desk)["note-a"]!;
+        var pin = (Button)Member(cardBefore, "Pin");
+        var fold = (Button)Member(cardBefore, "Fold");
+        Assert(pin.IsHitTestVisible && fold.IsHitTestVisible &&
+            pin.Content is Grid && fold.Content is System.Windows.Shapes.Path,
+            "Lock and fold must be distinct clickable header icons");
+        pin.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert(controller.WorkbenchLayout.Cards["note-a"].Pinned &&
+            ReferenceEquals(Member(desk, "ActiveScene"), sceneBefore) &&
+            ReferenceEquals(Member(sceneBefore, "BackgroundFrame"), backgroundBefore),
+            "Pinning did not change the position lock or recreated the workbench background");
+        pin.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert(!controller.WorkbenchLayout.Cards["note-a"].Pinned,
+            "Unlock header click did not release the position lock");
+        fold.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert(ReferenceEquals(Member(sceneBefore, "BackgroundFrame"), backgroundBefore),
+            "Folding recreated the workbench background and can flash the entire desk");
         await Until(() => controller.WorkbenchLayout.Cards["note-a"].Collapsed &&
                     Math.Abs(CardFrame(desk, "note-a").Height - WorkbenchCardState.CollapsedHeight) < .01,
             "Paper could not be folded on the canvas");
@@ -73,7 +92,7 @@ internal static partial class Program
         await Until(() => desk.HostedPaperCount == 3 && controller.WorkbenchLayout.Cards["note-a"].Collapsed &&
                     Math.Abs(CardFrame(desk, "note-a").Height - WorkbenchCardState.CollapsedHeight) < .01,
             "Reopened workbench did not restore folded paper state");
-        desk.ToggleWorkbenchCardCollapsed("note-a");
+        ((Button)Member(ActiveCards(desk)["note-a"]!, "Fold")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         await Until(() => !controller.WorkbenchLayout.Cards["note-a"].Collapsed &&
                     Math.Abs(CardFrame(desk, "note-a").Height - expandedHeight) < .01,
             "Expanding a folded card did not restore its original canvas height");

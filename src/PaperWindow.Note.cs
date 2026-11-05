@@ -827,7 +827,9 @@ public sealed partial class PaperWindow
             }),
             true);
 
-        box.MouseMove += (sender, e) =>
+        // AvalonEdit may handle internal pointer events, so listen in the preview
+        // phase and opt in to handled events for rendered images.
+        box.AddHandler(UIElement.PreviewMouseMoveEvent, new MouseEventHandler((_, e) =>
         {
             // A rendered note image can be dragged onto the workbench (or another
             // note) as a bitmap. Keep a normal click selecting the image; only a
@@ -852,6 +854,10 @@ public sealed partial class PaperWindow
                 }
             }
             if (e.LeftButton != MouseButtonState.Pressed) imageDragOrigin = null;
+        }), true);
+
+        box.MouseMove += (sender, e) =>
+        {
             if (!isPreviewing &&
                 (Keyboard.Modifiers & ModifierKeys.Control) != ModifierKeys.Control)
             {

@@ -378,8 +378,7 @@ internal sealed partial class WorkbenchWindow
 
         card.Move.Template = IconTileDragTemplate();
         card.Move.Background = Brushes.Transparent;
-        card.Move.Cursor = item.Kind == WorkspaceMaterialKinds.File && paper.Placement?.Pinned == true
-            ? Cursors.Arrow : Cursors.SizeAll;
+        card.Move.Cursor = paper.Placement?.Pinned == true ? Cursors.Arrow : Cursors.SizeAll;
         surface.Children.Add(card.Move);
         card.Pin.Content = LockIcon(paper.Placement?.Pinned == true);
         card.Pin.ToolTip = Strings.Get(paper.Placement?.Pinned == true ? "WorkbenchUnlockCard" : "WorkbenchLockCard");

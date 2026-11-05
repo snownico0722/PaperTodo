@@ -51,8 +51,10 @@ internal static partial class Program
         var compact = (Grid)CardFrame(desk, root).Child;
         Assert(compact.RowDefinitions.Count == 3 && Member(materialCard, "Connect") is Thumb,
             "Material uses the full paper shell or has no connection handle");
-        Assert(Member(materialCard, "Pin") is Button pin && pin.Content is System.Windows.Shapes.Path,
-            "Lock control is not a vector lock icon");
+        Assert(Member(materialCard, "Pin") is Button pin && pin.IsHitTestVisible &&
+            pin.Content is Grid icon && icon.Children.OfType<System.Windows.Shapes.Path>().Count() >= 2 &&
+            Member(materialCard, "Fold") is Button fold && fold.IsHitTestVisible,
+            "The material has no clickable, high-contrast lock and fold icons");
         Assert(Member(ActiveCards(desk)["note-b"]!, "Connect") is Thumb,
             "Paper header has no connection drag handle");
 
