@@ -9,12 +9,9 @@ namespace PaperTodo;
 public sealed class WorkspaceConfiguration
 {
     public bool Enabled { get; set; }
-    // Legacy slot-count metadata. New configurations use Slots to express actual membership.
-    public int Count { get; set; } = 1;
     public int Active { get; set; } = 1;
     public Dictionary<int, bool> FollowMainSettings { get; set; } = new();
-    // Null means a pre-management catalog: its original 1..Count slots remain available.
-    public List<int>? Slots { get; set; }
+    public List<int> Slots { get; set; } = [1];
     public Dictionary<int, string> Names { get; set; } = new();
     public bool TopBarNamePicker { get; set; }
 
@@ -22,8 +19,7 @@ public sealed class WorkspaceConfiguration
         (FollowMainSettings == null || !FollowMainSettings.TryGetValue(number, out var follow) || follow);
 
     internal IReadOnlyList<int> SlotNumbers =>
-        (Slots ?? Enumerable.Range(1, Math.Clamp(Count, 1, 5)).ToList())
-            .Append(1).Where(number => number is >= 1 and <= 5)
+        (Slots ?? []).Append(1).Where(number => number is >= 1 and <= 5)
             .Distinct().OrderBy(number => number).ToArray();
 
     internal bool ContainsSlot(int number) => SlotNumbers.Contains(number);
@@ -44,10 +40,8 @@ public sealed class WorkspaceConfiguration
         return new WorkspaceConfiguration
         {
             Enabled = Enabled,
-            Count = Slots == null ? Math.Clamp(Count, 1, 5) : slots.Max(),
-            Active = Enabled ? (Slots == null ? Math.Clamp(Active, 1, slots.Max()) :
-                slots.Contains(Active) ? Active : 1) : 1,
-            Slots = Slots == null ? null : slots.ToList(),
+            Active = Enabled && slots.Contains(Active) ? Active : 1,
+            Slots = slots.ToList(),
             Names = (Names ?? new()).Where(pair => slots.Contains(pair.Key) && !string.IsNullOrWhiteSpace(pair.Value))
                 .ToDictionary(pair => pair.Key, pair => pair.Value.Trim()[..Math.Min(64, pair.Value.Trim().Length)]),
             TopBarNamePicker = TopBarNamePicker,
