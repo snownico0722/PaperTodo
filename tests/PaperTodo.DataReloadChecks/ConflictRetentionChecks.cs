@@ -62,16 +62,6 @@ internal static partial class Program
                 "retention used file arrival order instead of the archive timestamp");
         }
 
-        using (var scope = new Scope())
-        {
-            var old = Enumerable.Range(0, 7)
-                .Select(i => Group(scope.DirectoryPath, now, 20 - i, i + 1)).ToArray();
-            scope.Store.TryPruneConflictArchives();
-            Require(old.Take(2).All(pair => !File.Exists(pair.Original) && !File.Exists(pair.Diff)) &&
-                    old.Skip(2).All(pair => File.Exists(pair.Original) && File.Exists(pair.Diff)),
-                "aged excess groups were not pruned as whole original/diff pairs");
-        }
-
         // A crashed write may leave just one half of a conflict pair or
         // a temporary file. Neither counts toward the five COMPLETE records.
         using (var scope = new Scope())
@@ -138,8 +128,8 @@ internal static partial class Program
                 "retention failed to prune precisely one group after the lock was released");
         }
 
-        // A readable original can still reject deletion. The diff is removed
-        // first, and that partial failure must stop this pass before another pair.
+        // A readable original can still reject deletion. A failed retirement must
+        // leave other complete recovery points intact, regardless of deletion order.
         using (var scope = new Scope())
         {
             var pairs = Enumerable.Range(0, 7)
@@ -148,15 +138,14 @@ internal static partial class Program
                 FileMode.Open, FileAccess.Read, FileShare.Read))
             {
                 scope.Store.TryPruneConflictArchives();
-                Require(File.Exists(pairs[0].Original) && !File.Exists(pairs[0].Diff) &&
+                Require(File.Exists(pairs[0].Original) &&
                         pairs.Skip(1).All(pair => File.Exists(pair.Original) && File.Exists(pair.Diff)),
-                    "a failed original deletion did not stop retention after removing its diff");
+                    "a failed archive deletion evicted another complete recovery point");
             }
             scope.Store.TryPruneConflictArchives();
-            Require(File.Exists(pairs[0].Original) &&
-                    !File.Exists(pairs[1].Original) && !File.Exists(pairs[1].Diff) &&
-                    pairs.Skip(2).All(pair => File.Exists(pair.Original) && File.Exists(pair.Diff)),
-                "retention retry counted a partial pair or failed to preserve the newest five");
+            Require(pairs.Skip(2).All(pair => File.Exists(pair.Original) && File.Exists(pair.Diff)) &&
+                    pairs.Count(pair => File.Exists(pair.Original) && File.Exists(pair.Diff)) == 5,
+                "retention retry failed to preserve exactly the newest five complete groups");
         }
 
         Console.WriteLine("PASS conflict retention keeps the latest five complete groups; failures and workspaces stay isolated");

@@ -93,8 +93,8 @@ internal static partial class Program
                 "failed historical recovery changed primary or cleaned orphans");
             reject = false;
             recovering.SaveJsonSync(recovering.SerializeState(state), 3);
-            Require(recovering.Load().Papers[0].Content == "latest valid history" &&
-                    !recovering.NeedsStartupRecoverySave && !File.Exists(orphan) &&
+            Require(!recovering.NeedsStartupRecoverySave && !File.Exists(orphan) &&
+                    recovering.Load().Papers[0].Content == "latest valid history" &&
                     File.ReadAllText(otherPath) == "other workspace must stay untouched" &&
                     File.ReadAllText(store.BackupPath) == "{unrecoverable backup" &&
                     File.ReadAllBytes(selected).SequenceEqual(archiveBytes),
@@ -345,11 +345,12 @@ internal static partial class Program
         var app = new System.Windows.Application { ShutdownMode = System.Windows.ShutdownMode.OnExplicitShutdown };
         try
         {
-            // Startup has no owning window. Exercise the real themed dialog and
-            // all three buttons and dismissal through its modal Dispatcher loop.
+            // Exercise every action once. Other languages only need each distinct
+            // layout; action dispatch does not depend on the translated labels.
             foreach (var language in new[] { "zh-CN", "en-US", "ja-JP", "ko-KR" })
             foreach (var choice in new[] { WorkspaceRecoveryChoice.Cancel, WorkspaceRecoveryChoice.CreateEmpty,
-                         WorkspaceRecoveryChoice.Restore, WorkspaceRecoveryChoice.Exit })
+                         WorkspaceRecoveryChoice.Restore, WorkspaceRecoveryChoice.Exit }
+                     .Where(choice => language == "zh-CN" || choice == WorkspaceRecoveryChoice.Cancel))
             {
                 UiLanguages.ApplyWorkspacePreference(language);
                 Exception? failure = null;
@@ -375,7 +376,8 @@ internal static partial class Program
                                 "translated history action is outside the dialog: " + language);
                         }
                         if (choice == WorkspaceRecoveryChoice.Cancel) dialog.Close();
-                        else buttons[(int)choice - 1].RaiseEvent(
+                        else buttons[Array.IndexOf(new[] { WorkspaceRecoveryChoice.CreateEmpty,
+                            WorkspaceRecoveryChoice.Restore, WorkspaceRecoveryChoice.Exit }, choice)].RaiseEvent(
                             new System.Windows.RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
                     }
                     catch (Exception ex) { failure = ex; dialog.Close(); }
@@ -387,7 +389,8 @@ internal static partial class Program
             foreach (var language in new[] { "zh-CN", "en-US", "ja-JP", "ko-KR" })
             foreach (int? fallback in new int?[] { null, 3 })
             foreach (var choice in new[] { WorkspaceRecoveryChoice.Cancel, WorkspaceRecoveryChoice.CreateEmpty,
-                         WorkspaceRecoveryChoice.Exit, WorkspaceRecoveryChoice.Fallback })
+                         WorkspaceRecoveryChoice.Exit, WorkspaceRecoveryChoice.Fallback }
+                     .Where(choice => language == "zh-CN" || choice == WorkspaceRecoveryChoice.Cancel))
             {
                 if (choice == WorkspaceRecoveryChoice.Fallback && !fallback.HasValue) continue;
                 UiLanguages.ApplyWorkspacePreference(language);
