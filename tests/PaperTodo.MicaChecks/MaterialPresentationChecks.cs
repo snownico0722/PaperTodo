@@ -285,6 +285,16 @@ internal static class MaterialPresentationChecks
             var titles = wideMenu.Items.OfType<MenuItem>()
                 .Select(item => item.Header as string).ToArray();
             wideMenu.IsOpen = false;
+
+            // A still-visible edge capsule has its own menu, even when the source
+            // paper is expanded and both creation commands are pinned in its top bar.
+            var buildCapsuleMenu = typeof(PaperWindow).GetMethod(
+                "BuildDeepCapsuleSlotContextMenu", Program.Private)!;
+            var capsuleMenu = (ContextMenu)buildCapsuleMenu.Invoke(window, null)!;
+            Program.Assert(Has(capsuleMenu, Strings.Get("MenuNewTodoPaper")) &&
+                Has(capsuleMenu, Strings.Get("MenuNewNotePaper")),
+                "expanded edge capsule retains both creation entries despite visible top-bar shortcuts");
+
             var chrome = Field<SkinBorder>("_paperChrome");
             var rightClick = chrome.ContextMenu!;
             rightClick.PlacementTarget = chrome;
@@ -386,14 +396,15 @@ internal static class MaterialPresentationChecks
                 glyphs.Contains("✓") && glyphs.Contains("✎"),
                 "settings omit the redundant hint and reuse the paper capsule glyphs");
             var vectors = Descendants(root).OfType<System.Windows.Shapes.Path>().ToArray();
-            Program.Assert(vectors.Length == 2 &&
+            Program.Assert(vectors.Length == 3 &&
+                vectors.Count(path => path.StrokeThickness == 2) == 2 &&
+                vectors.Count(path => Math.Abs(path.StrokeThickness - 1.5) < 0.01) == 1 &&
                 vectors.All(path => path.Data != null &&
                     path.Data.Bounds.Width > 0 && path.Data.Bounds.Height > 0 &&
-                    path.StrokeThickness == 2 &&
                     path.StrokeStartLineCap == PenLineCap.Round &&
                     path.StrokeLineJoin == PenLineJoin.Round) &&
-                !glyphs.Contains("◎") && !glyphs.Contains("↗"),
-                "association and external editor use distinct round-stroke vectors instead of font glyphs");
+                !glyphs.Contains("◎") && !glyphs.Contains("↗") && !glyphs.Contains("↻"),
+                "association, external editor and workspace have distinct rounded vector icons");
 
             var shortcutIcons = new[]
                 {
@@ -406,11 +417,11 @@ internal static class MaterialPresentationChecks
                 .ToArray();
             var iconCenters = shortcutIcons.Select(icon => icon.TranslatePoint(
                 new Point(icon.ActualWidth / 2, icon.ActualHeight / 2), root).X).ToArray();
-            Program.Assert(shortcutIcons.Length == 4 &&
+            Program.Assert(shortcutIcons.Length == PaperTopBarShortcuts.All.Count &&
                 shortcutIcons.All(icon => icon is Grid &&
                     Math.Abs(icon.Width - AppTypography.Scale(24)) < 0.1) &&
                 iconCenters.Max() - iconCenters.Min() < 0.75,
-                "all four shortcut icons are horizontally centered on the same column");
+                "all five shortcut icons, including workspace, align on one column");
 
             var createDragEvent = typeof(DragEventArgs).GetConstructor(
                 BindingFlags.Instance | BindingFlags.NonPublic,
@@ -494,7 +505,8 @@ internal static class MaterialPresentationChecks
                 new Point(10, firstRow.ActualHeight * 0.2));
             Program.Assert(rowDrop.Handled &&
                 PaperTopBarShortcuts.Menu(state).SequenceEqual(
-                    [PaperTopBarShortcuts.ExternalEditor, PaperTopBarShortcuts.NewNote]) &&
+                    [PaperTopBarShortcuts.ExternalEditor, PaperTopBarShortcuts.NewNote,
+                     PaperTopBarShortcuts.Workspace]) &&
                 insertion.Visibility != Visibility.Visible,
                 "dropping on a real row reorders the menu and clears the insertion mark");
 

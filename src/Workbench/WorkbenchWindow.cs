@@ -921,7 +921,7 @@ internal sealed class WorkbenchWindow : Window
             Stroke = FrameBrush, StrokeThickness = scene.Number == _controller.WorkspaceNumber ? 2.5 : 2,
             Fill = CanvasBrush, IsHitTestVisible = false, Opacity = scene.Number == _controller.WorkspaceNumber ? 1 : .82 };
         Add(frame, bounds.X, bounds.Y);
-        var title = NewButton(Strings.Format("WorkbenchWorkspace", scene.Number));
+        var title = NewButton(_controller.WorkbenchWorkspaceName(scene.Number));
         title.FontSize = 22; title.FontWeight = FontWeights.SemiBold;
         title.Click += async (_, _) => { if (scene.Number == _controller.WorkspaceNumber) FitActive(); else await ActivateWorkspaceAsync(scene.Number, null); };
         Add(title, bounds.X + 14, bounds.Y - 50);

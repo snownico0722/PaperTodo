@@ -51,6 +51,8 @@ public sealed partial class AppController
         }
     }
 
+    internal string WorkbenchWorkspaceName(int number) => WorkspaceOptions.DisplayName(number);
+
     internal PaperWindow WorkbenchPaperWindow(string id) => GetOrCreatePaperWindow(
         FindPaper(id) ?? throw new InvalidOperationException("Paper no longer exists."));
 
@@ -90,12 +92,12 @@ public sealed partial class AppController
     internal async Task<IReadOnlyList<WorkbenchWorkspaceSnapshot>> ReadOtherWorkbenchWorkspacesAsync(CancellationToken token)
     {
         var active = WorkspaceNumber;
-        var count = WorkspaceOptions.Enabled ? WorkspaceOptions.Count : 1;
+        IReadOnlyList<int> slots = WorkspaceOptions.Enabled ? WorkspaceOptions.SlotNumbers : [1];
         var root = AppContext.BaseDirectory;
         return await Task.Run(() =>
         {
             var result = new List<WorkbenchWorkspaceSnapshot>();
-            for (var number = 1; number <= count; number++)
+            foreach (var number in slots)
             {
                 if (number == active) continue;
                 token.ThrowIfCancellationRequested();

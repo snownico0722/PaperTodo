@@ -23,6 +23,10 @@ public sealed partial class AppController
             return;
         }
 
+        // Rebuilding or navigating away from the workspace page discards its inline
+        // rename draft, without silently saving it.
+        CancelWorkspaceRenameOnPointer(null);
+
         // Focus loss after detaching the old tree is deferred. Commit the active editor
         // before its replacement reads State, so a theme/display refresh keeps the draft.
         // Unfocused editors may still show values superseded by a page-defaults restore.

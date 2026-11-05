@@ -80,7 +80,7 @@ internal static class Program
     {
         UiLanguage = "en", TelemetryEnabled = false, EnableAnimations = false, UseCapsuleMode = true, UseDeepCapsuleMode = true, EnableTodoPaperLinks = true,
         UsePersistentPowerShellProcess = false, McpEnabled = false,
-        Workspaces = new() { Enabled = true, Count = 2, Active = 1 },
+        Workspaces = new() { Enabled = true, Slots = [1, 2], Active = 1 },
         Papers = [
             new() { Id = "note-a", Type = PaperTypes.Note, Title = "Research", Content = "# Workbench\nA real editable paper, not a screenshot.\n\n- Strong automatic layout\n- Stable positions\n- Shared editor", X = 100, Y = 80, Width = 360, Height = 400, IsVisible = true, IsCollapsed = false },
             new() { Id = "note-b", Type = PaperTypes.Note, Title = "Ideas", Content = "## Connections\nBuild a continuous desk without a project center.", X = 520, Y = 100, Width = 320, Height = 300, IsVisible = true, IsCollapsed = true },
@@ -111,11 +111,12 @@ internal static class Program
             return;
         }
         var initial = FixtureState();
+        if (name == "workspaces") initial.Workspaces!.Slots = [1, 3];
         var initialStore = new StateStore(); initialStore.SaveJsonSync(initialStore.SerializeState(initial), 1);
         if (name == "workspaces")
         {
             var other = FixtureState(); other.Workspaces = null; other.Papers = [new() { Id = "other", Type = PaperTypes.Note, Content = "Second workspace", IsVisible = true, X = 100, Y = 100, Width = 320, Height = 360 }];
-            var second = new StateStore(AppContext.BaseDirectory, DurableAtomicFileWriter.Shared, 2);
+            var second = new StateStore(AppContext.BaseDirectory, DurableAtomicFileWriter.Shared, 3);
             second.SaveJsonSync(second.SerializeState(other), 1);
         }
         using var controller = new AppController();
@@ -135,6 +136,12 @@ internal static class Program
         Assert(ReferenceEquals(Member(originalWindow, "_markdownBodySession"), bodySession), "Workbench duplicated the body session");
         Assert(!originalWindow.IsVisible && originalWindow.IsWorkbenchHosted, "Desktop and workbench body both visible");
         Assert(masters.Values.All(master => !master.IsVisible), "Workbench left a master capsule visible over the desk");
+        if (name == "workspaces")
+        {
+            var scenes = (System.Collections.IDictionary)Member(workbench, "_scenes");
+            await Until(() => scenes.Contains(3), "Sparse workspace 3 is missing from the overview");
+            Assert(!scenes.Contains(2), "Removed workspace 2 was incorrectly shown in the overview");
+        }
         foreach (var paper in controller.State.Papers)
             Assert(before[paper.Id] == Geometry(paper),
                 $"First workbench entry changed {paper.Id}: {before[paper.Id]} -> {Geometry(paper)}");
@@ -310,11 +317,11 @@ internal static class Program
         }
         else
         {
-            var secondPath = Path.Combine(AppContext.BaseDirectory, "data2.json");
+            var secondPath = Path.Combine(AppContext.BaseDirectory, "data3.json");
             using (new FileStream(secondPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
-                Assert(!await controller.SwitchWorkspaceAsync(2), "Occupied workspace switch succeeded");
+                Assert(!await controller.SwitchWorkspaceAsync(3), "Occupied workspace switch succeeded");
             Assert(controller.WorkspaceNumber == 1 && workbench.HostedPaperCount == 3, "Failed switch lost the current desk");
-            Assert(await controller.SwitchWorkspaceAsync(2), "Workspace switch failed");
+            Assert(await controller.SwitchWorkspaceAsync(3), "Workspace switch failed");
             Assert(masters.Values.All(master => !master.IsVisible), "Workspace switch exposed master capsules over the workbench");
             await Until(() => workbench.HostedPaperCount == 1 && controller.State.Workbench?.Cards.Count == 1, "New workspace editor not mounted");
             Assert(originalWindow.IsClosed && !originalWindow.IsWorkbenchHosted, "Old workspace lease survived teardown");

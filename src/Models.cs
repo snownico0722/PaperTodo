@@ -509,7 +509,7 @@ public sealed class AppState
     // the remaining commands live in the menu. The per-paper types have no separate layout.
     public List<string> TopBarShortcutOrder { get; set; } =
         PaperTopBarShortcuts.NormalizeOrder(null);
-    public int TopBarPinnedCount { get; set; } = 1;
+    public int TopBarPinnedCount { get; set; } = 2;
     // Read-only legacy migration inputs from older data.json versions. Do not write
     // obsolete per-type lists back once converted to the single global layout.
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
