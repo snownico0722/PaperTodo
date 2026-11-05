@@ -84,10 +84,16 @@ public sealed partial class PaperWindow
     protected override void OnPreviewKeyDown(KeyEventArgs e)
     {
         base.OnPreviewKeyDown(e);
+        TryHandlePaperCloseShortcut(e);
+    }
 
-        // Normally the HWND hook above consumes Ctrl+W before WPF creates a routed key event.
-        // Keep this as a bounded fallback for input surfaces that can still route a WPF key event
-        // without delivering the parent PaperWindow's WM_KEYDOWN first.
+    private void OnExpandedEditorCloseShortcut(object sender, KeyEventArgs e)
+        => TryHandlePaperCloseShortcut(e);
+
+    private void TryHandlePaperCloseShortcut(KeyEventArgs e)
+    {
+        // The original PaperWindow HWND consumes Ctrl+W. Borrowed visuals are on a
+        // different HWND, so its shell must forward the same gesture to the same ×.
         if (e.Handled ||
             _advancedInteractionLocked ||
             _paper.IsCollapsed ||
@@ -104,7 +110,14 @@ public sealed partial class PaperWindow
     protected override void OnPreviewMouseDown(MouseButtonEventArgs e)
     {
         base.OnPreviewMouseDown(e);
+        ArmTitleMiddleClose(e);
+    }
 
+    private void OnExpandedEditorMiddleMouseDown(object sender, MouseButtonEventArgs e)
+        => ArmTitleMiddleClose(e);
+
+    private void ArmTitleMiddleClose(MouseButtonEventArgs e)
+    {
         if (e.ChangedButton != MouseButton.Middle)
         {
             return;
@@ -122,7 +135,14 @@ public sealed partial class PaperWindow
     protected override void OnPreviewMouseUp(MouseButtonEventArgs e)
     {
         base.OnPreviewMouseUp(e);
+        CompleteTitleMiddleClose(e);
+    }
 
+    private void OnExpandedEditorMiddleMouseUp(object sender, MouseButtonEventArgs e)
+        => CompleteTitleMiddleClose(e);
+
+    private void CompleteTitleMiddleClose(MouseButtonEventArgs e)
+    {
         if (e.ChangedButton != MouseButton.Middle)
         {
             return;
