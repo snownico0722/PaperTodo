@@ -758,9 +758,9 @@ public sealed partial class AppController : IDisposable
 
         paper.Title = cleaned;
         if (_windows.TryGetValue(paper.Id, out var window))
-        {
             window.RefreshPaperTitle();
-        }
+        else
+            RefreshExpandedEditorPaperLists();
         NotifyPaperDisplayTitleChanged(paper.Id);
         RefreshTrayMenu();
         MarkDirty();
