@@ -180,8 +180,7 @@ internal static partial class Program
             var loaded = store.Load();
             Check(PaperTopBarShortcuts.Pinned(loaded).SequenceEqual(
                       [PaperTopBarShortcuts.Association, PaperTopBarShortcuts.NewTodo,
-                       PaperTopBarShortcuts.ExternalEditor, PaperTopBarShortcuts.NewNote,
-                       PaperTopBarShortcuts.Workspace]) &&
+                       PaperTopBarShortcuts.ExternalEditor, PaperTopBarShortcuts.NewNote]) &&
                   loaded.TodoTopBarShortcuts == null && loaded.NoteTopBarShortcuts == null,
                 "Different Todo and Note layouts migrate to one union; old lists stop being authoritative.");
 
@@ -189,8 +188,9 @@ internal static partial class Program
             File.WriteAllText(Path.Combine(temp, "data.json"),
                 JsonSerializer.Serialize(loaded, options));
             var reloaded = store.Load();
-            Check(reloaded.TopBarPinnedCount == 4 &&
-                  PaperTopBarShortcuts.Menu(reloaded).SequenceEqual([PaperTopBarShortcuts.NewNote]) &&
+            Check(reloaded.TopBarPinnedCount == 3 &&
+                  PaperTopBarShortcuts.Menu(reloaded).SequenceEqual(
+                      [PaperTopBarShortcuts.NewNote, PaperTopBarShortcuts.Workspace]) &&
                   reloaded.TodoTopBarShortcuts == null,
                 "A deliberate menu position survives restart without migrating again.");
 
@@ -202,8 +202,7 @@ internal static partial class Program
             File.WriteAllText(Path.Combine(temp, "data.json"), root.ToJsonString());
             var older = store.Load();
             Check(PaperTopBarShortcuts.Pinned(older).SequenceEqual(
-                [PaperTopBarShortcuts.Association, PaperTopBarShortcuts.NewNote,
-                 PaperTopBarShortcuts.Workspace]),
+                [PaperTopBarShortcuts.Association, PaperTopBarShortcuts.NewNote]),
                 "Pre-341 visibility booleans migrate through the same one-time global path.");
         }
         finally { Directory.Delete(temp, recursive: true); }
