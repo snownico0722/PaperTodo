@@ -16,6 +16,8 @@ internal sealed partial class WorkbenchWindow
     private string? _focusedGroupId;
     private Camera? _cameraBeforeGroupFocus;
     private Button? _leaveGroupButton;
+    private Button? _groupButton;
+    private Button? _ungroupButton;
 
     private WorkbenchState SceneState(Scene scene) => scene.Number == _controller.WorkspaceNumber
         ? _controller.WorkbenchLayout : scene.Snapshot?.Layout ?? new WorkbenchState();
@@ -34,6 +36,13 @@ internal sealed partial class WorkbenchWindow
         {
             card.Frame.BorderBrush = _selectedCards.Contains(card.Snapshot.Id) ? Accent : Outline;
             card.Frame.BorderThickness = new Thickness(_selectedCards.Contains(card.Snapshot.Id) ? 2 : 1);
+        }
+        if (_groupButton != null)
+            _groupButton.Visibility = _selectedCards.Count > 1 ? Visibility.Visible : Visibility.Collapsed;
+        if (_ungroupButton != null)
+        {
+            var matches = _controller.WorkbenchLayout.Groups.Values.Count(g => g.Members.Any(_selectedCards.Contains));
+            _ungroupButton.Visibility = matches == 1 ? Visibility.Visible : Visibility.Collapsed;
         }
     }
 
@@ -131,6 +140,12 @@ internal sealed partial class WorkbenchWindow
         return ids.ToArray();
     }
 
+    private void UngroupSelection()
+    {
+        var groups = _controller.WorkbenchLayout.Groups.Values.Where(g => g.Members.Any(_selectedCards.Contains)).ToArray();
+        if (groups.Length == 1) Ungroup(groups[0].Id);
+    }
+
     private void CreateGroupFromSelection()
     {
         if (IsSuspended || ActiveScene is not { } scene) return;
@@ -146,7 +161,7 @@ internal sealed partial class WorkbenchWindow
         };
         state.Groups[group.Id] = group;
         StoreLayout(state);
-        ApplySceneVisibility(); DrawDecorations(scene);
+        ApplySceneVisibility(); ApplySelectionStyle(); DrawDecorations(scene);
     }
 
     private void ToggleGroupCollapsed(string id)
@@ -166,7 +181,7 @@ internal sealed partial class WorkbenchWindow
         RememberLayout(); var state = _controller.WorkbenchLayout.Copy();
         state.Groups.Remove(id); StoreLayout(state);
         if (_focusedGroupId == id) LeaveGroupFocus();
-        ApplySceneVisibility();
+        ApplySceneVisibility(); ApplySelectionStyle();
         if (ActiveScene is { } scene) DrawDecorations(scene);
     }
 
