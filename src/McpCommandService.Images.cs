@@ -45,6 +45,22 @@ internal sealed partial class McpCommandService
     {
         var paperId = RequiredString(parameters, "paper_id", 64);
         var imageId = RequiredString(parameters, "image_id", 64);
+
+        // A deleted image reference may leave its LMDB blob behind for undo/recovery.
+        // MCP reads only images still present as renderable references in the *current*
+        // note draft; do not change the broader plugin asset API's recovery semantics.
+        var paper = _controller.State.Papers.FirstOrDefault(candidate =>
+            candidate.Id == paperId &&
+            candidate.Type == PaperTypes.Note &&
+            candidate.BodyProviderId == PaperBodyProviderIds.Markdown);
+        if (paper != null &&
+            !MarkdownImageReferences.Enumerate(
+                _controller.CurrentMarkdownContentForExternalRead(paper))
+                .Any(reference => string.Equals(reference.ImageId, imageId, StringComparison.Ordinal)))
+        {
+            throw new McpApiException("asset_not_found", "The image is not referenced by this note.");
+        }
+
         var image = _commands.ReadNoteImage(paperId, imageId);
         return new
         {
