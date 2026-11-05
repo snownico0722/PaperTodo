@@ -11,11 +11,20 @@ internal sealed partial class WorkbenchWindow
 {
     private const string ContentTransferFormat = "PaperTodo.WorkbenchContent";
     private string? _connectionSource;
+    private Line? _connectionPreview;
     private bool _replayingWorkspaceHistory;
 
     private void InitializeWorkspaceTools()
     {
         AddButton("WorkbenchNewNode", () => AddNode(ActivePoint(ViewportCenter)), _rightCommands);
+        _groupButton = NewButton(Strings.Get("WorkbenchGroupSelection"));
+        _groupButton.Visibility = Visibility.Collapsed;
+        _groupButton.Click += (_, _) => CreateGroupFromSelection();
+        _layoutCommands.Children.Add(_groupButton); _chromeButtons.Add(_groupButton);
+        _ungroupButton = NewButton(Strings.Get("WorkbenchUngroup"));
+        _ungroupButton.Visibility = Visibility.Collapsed;
+        _ungroupButton.Click += (_, _) => UngroupSelection();
+        _layoutCommands.Children.Add(_ungroupButton); _chromeButtons.Add(_ungroupButton);
         _leaveGroupButton = NewButton(Strings.Get("WorkbenchLeaveGroup"));
         _leaveGroupButton.Visibility = Visibility.Collapsed;
         _leaveGroupButton.Click += (_, _) => LeaveGroupFocus();
@@ -56,7 +65,7 @@ internal sealed partial class WorkbenchWindow
     private bool CancelWorkspaceGesture()
     {
         if (_connectionSource != null)
-        { _connectionSource = null; SetHint(); return true; }
+        { _connectionSource = null; ClearConnectionPreview(); SetHint(); return true; }
         if (_marqueeStart != null)
         { CancelMarquee(); _viewport.ReleaseMouseCapture(); return true; }
         return false;
@@ -138,34 +147,14 @@ internal sealed partial class WorkbenchWindow
         }
     }
 
-    private void AddWorkspaceCanvasMenu(ContextMenu menu, WorkbenchPoint point)
-    {
-        AddMenu(menu, "WorkbenchNewNode", () => AddNode(point));
-        AddMenu(menu, "WorkbenchViewMaterials", _controller.OpenWorkspaceMaterialsNote);
-        if (_selectedCards.Count > 1) AddMenu(menu, "WorkbenchGroupSelection", CreateGroupFromSelection);
-        if (_focusedGroupId != null) AddMenu(menu, "WorkbenchLeaveGroup", LeaveGroupFocus);
-    }
-
-    private string AddNode(WorkbenchPoint point, string? parentId = null)
+    private string AddNode(WorkbenchPoint point)
     {
         if (IsSuspended) return "";
         var id = _controller.CreateWorkbenchMaterial(WorkspaceMaterialKinds.Node, "", "", "", point);
         if (string.IsNullOrEmpty(id)) return "";
-        if (parentId != null) CreateConnection(parentId, id, branch: true);
         _focusAfterRefresh = id;
         SyncActiveScene(); SelectOnly(id);
         return id;
-    }
-
-    private void AddBranch(string id, bool sibling)
-    {
-        if (ActiveScene is not { } scene || !scene.Cards.TryGetValue(id, out var source)) return;
-        var parent = sibling ? _controller.WorkbenchLayout.Connections.FirstOrDefault(c => c.IsBranch && c.To == id)?.From : id;
-        var point = sibling
-            ? new WorkbenchPoint(source.Bounds.X, source.Bounds.Bottom + 40)
-            : new WorkbenchPoint(source.Bounds.Right + 72, source.Bounds.Y);
-        if (parent != null) _controller.SetWorkbenchMaterialCollapsed(parent, false);
-        AddNode(point, parent);
     }
 
     private void CreateConnection(string from, string to, bool branch = false)
@@ -182,63 +171,46 @@ internal sealed partial class WorkbenchWindow
         StoreLayout(state); _modelSignature = ""; SyncActiveScene();
     }
 
-    private void CompleteConnection(string target)
+    private void ClearConnectionPreview()
     {
-        var source = _connectionSource; _connectionSource = null;
-        if (source != null) CreateConnection(source, target);
-        SetHint();
+        if (_connectionPreview == null) return;
+        foreach (var scene in _scenes.Values) scene.Canvas.Children.Remove(_connectionPreview);
+        _connectionPreview = null;
     }
 
-    private void AddCardWorkspaceMenu(ContextMenu menu, Card card, PaperWindow? owner)
+    private void WireConnectionDrag(Card card)
     {
-        if (!_selectedCards.Contains(card.Snapshot.Id)) SelectOnly(card.Snapshot.Id);
-        if (_selectedCards.Count > 1) AddMenu(menu, "WorkbenchGroupSelection", CreateGroupFromSelection);
-        foreach (var group in _controller.WorkbenchLayout.Groups.Values.Where(g => g.Members.Contains(card.Snapshot.Id)))
+        var id = card.Snapshot.Id;
+        card.Connect.DragStarted += (_, _) =>
         {
-            AddMenu(menu, "WorkbenchFocusGroup", () => FocusGroup(group.Id));
-            AddMenu(menu, group.Collapsed ? "WorkbenchExpandGroup" : "WorkbenchCollapseGroup", () => ToggleGroupCollapsed(group.Id));
-            AddMenu(menu, "WorkbenchUngroup", () => Ungroup(group.Id));
-        }
-        AddMenu(menu, "WorkbenchConnect", () =>
-        { _connectionSource = card.Snapshot.Id; _status.Text = Strings.Get("WorkbenchConnectHint"); });
-        AddMenu(menu, "WorkbenchAddChild", () => AddBranch(card.Snapshot.Id, sibling: false));
-        if (_controller.FindWorkbenchMaterial(card.Snapshot.Id) is { } material)
-        {
-            AddMenu(menu, "WorkbenchAddSibling", () => AddBranch(card.Snapshot.Id, sibling: true));
-            if (_controller.WorkbenchLayout.Connections.Any(c => c.IsBranch && c.From == card.Snapshot.Id))
-                AddMenu(menu, material.Collapsed ? "WorkbenchExpandBranch" : "WorkbenchCollapseBranch", () =>
-                {
-                    _controller.SetWorkbenchMaterialCollapsed(card.Snapshot.Id, !material.Collapsed);
-                    ApplySceneVisibility(); if (ActiveScene is { } scene) DrawDecorations(scene);
-                });
-        }
-        if (owner == null) return;
-        menu.Items.Add(new Separator());
-        AddMenu(menu, "WorkbenchSplitSelection", () =>
-        {
-            if (!owner.TryCreateWorkbenchContentTransfer(out var payload)) { _status.Text = Strings.Get("WorkbenchNoSelection"); return; }
-            ApplyContentTransfer(payload, null, new(card.Bounds.Right + 40, card.Bounds.Y));
-        });
-        AddTransferTargets(menu, card, owner, wholePaper: false);
-        AddTransferTargets(menu, card, owner, wholePaper: true);
-    }
-
-    private void AddTransferTargets(ContextMenu menu, Card card, PaperWindow owner, bool wholePaper)
-    {
-        var targets = new MenuItem { Header = Strings.Get(wholePaper ? "WorkbenchMergePaperTo" : "WorkbenchMoveSelectionTo") };
-        foreach (var paper in _controller.State.Papers.Where(p => p.Id != card.Snapshot.Id &&
-            p.WorkspaceMaterials == null && p.Type == card.Snapshot.Kind))
-        {
-            var target = new MenuItem { Header = _controller.PaperTitleText(paper) };
-            target.Click += (_, _) =>
+            if (_closed || IsSuspended || ActiveScene is not { } scene || !scene.Cards.ContainsKey(id)) return;
+            CancelWorkspaceGesture();
+            _connectionSource = id;
+            var start = scene.Cards[id].Bounds.Center;
+            _connectionPreview = new Line
             {
-                if (!owner.TryCreateWorkbenchContentTransfer(out var payload, wholePaper))
-                { _status.Text = Strings.Get("WorkbenchNoSelection"); return; }
-                ApplyContentTransfer(payload, paper.Id, null);
+                X1 = start.X, Y1 = start.Y, X2 = start.X, Y2 = start.Y,
+                Stroke = Accent, StrokeThickness = 2, Opacity = .7, IsHitTestVisible = false
             };
-            targets.Items.Add(target);
-        }
-        targets.IsEnabled = targets.Items.Count > 0; menu.Items.Add(targets);
+            Panel.SetZIndex(_connectionPreview, 8);
+            scene.Canvas.Children.Add(_connectionPreview);
+        };
+        card.Connect.DragDelta += (_, _) =>
+        {
+            if (_connectionSource != id || _connectionPreview == null) return;
+            var at = ActivePoint(Mouse.GetPosition(_viewport));
+            _connectionPreview.X2 = at.X; _connectionPreview.Y2 = at.Y;
+        };
+        card.Connect.DragCompleted += (_, e) =>
+        {
+            if (_connectionSource != id) return;
+            var target = ActiveScene is { } scene && !e.Canceled
+                ? CardAt(Mouse.GetPosition(_viewport)) : null;
+            _connectionSource = null;
+            ClearConnectionPreview();
+            if (target != null && target.Snapshot.Id != id) CreateConnection(id, target.Snapshot.Id);
+            else SetHint();
+        };
     }
 
     private bool ApplyContentTransfer(WorkbenchContentTransferPayload payload, string? target, WorkbenchPoint? point)
@@ -253,17 +225,10 @@ internal sealed partial class WorkbenchWindow
 
     private Card CreateMaterialCard(WorkbenchPaperSnapshot paper)
     {
-        var card = CreateCardShell(paper);
-        card.Eye.Visibility = Visibility.Collapsed;
-        if (paper.Kind == "material:" + WorkspaceMaterialKinds.Node && card.Frame.Child is Grid shell)
-        {
-            card.Header.Margin = new Thickness(3, 1, 3, 0);
-            card.Move.MinHeight = 22;
-            foreach (var button in new[] { card.Pin, card.Menu }) button.Padding = new Thickness(3, 0, 3, 0);
-            if (shell.Children.OfType<Grid>().LastOrDefault(g => Grid.GetRow(g) == 3) is { } footer) footer.Height = 16;
-        }
+        var card = CreateCardShell(paper, compact: true);
         var item = _controller.FindWorkbenchMaterial(paper.Id);
-        var body = new DockPanel { Margin = new Thickness(12, 4, 12, 10) };
+        var body = new DockPanel { Margin = item?.Kind == WorkspaceMaterialKinds.Image
+            ? new Thickness(5) : new Thickness(8, 3, 8, 6) };
         if (item?.Kind == WorkspaceMaterialKinds.Image)
         {
             card.MaterialImage = new Image { Stretch = Stretch.Uniform, Source = _controller.ReadWorkbenchMaterialImage(paper.Id) };
@@ -299,13 +264,6 @@ internal sealed partial class WorkbenchWindow
                 }
                 catch (Exception ex) { Report(ex); }
             };
-            if (item?.Kind == WorkspaceMaterialKinds.Node)
-                editor.PreviewKeyDown += (_, e) =>
-                {
-                    if (Keyboard.Modifiers != ModifierKeys.None) return;
-                    if (e.Key is Key.Tab or Key.Enter)
-                    { AddBranch(paper.Id, sibling: e.Key == Key.Enter); e.Handled = true; }
-                };
             body.Children.Add(editor);
         }
         card.Body.Child = body;
@@ -333,19 +291,7 @@ internal sealed partial class WorkbenchWindow
             if (state.Cards.TryGetValue(paper.Id, out var placement)) placement.Pinned = !placement.Pinned;
             StoreLayout(state); SyncActiveScene();
         };
-        card.Menu.Click += (_, _) =>
-        {
-            var menu = new ContextMenu { PlacementTarget = card.Menu };
-            AddCardWorkspaceMenu(menu, card, null);
-            menu.Items.Add(new Separator());
-            AddMenu(menu, "WorkbenchDeleteMaterial", () =>
-            {
-                if (MessageBox.Show(this, Strings.Get("WorkbenchDeleteMaterialConfirm"), Title, MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
-                _controller.DeleteWorkbenchMaterial(paper.Id); SyncActiveScene();
-            });
-            menu.IsOpen = true;
-        };
-        WireCardSelection(card); WireDrag(card, card.Move, false); WireDrag(card, card.Resize, true);
+        WireCardSelection(card); WireConnectionDrag(card); WireDrag(card, card.Move, false); WireDrag(card, card.Resize, true);
         return card;
     }
 
@@ -380,7 +326,8 @@ internal sealed partial class WorkbenchWindow
     {
         if (ActiveScene is not { } scene) return null;
         var p = ActivePoint(screen);
-        return scene.Cards.Values.LastOrDefault(c => c.Frame.Visibility == Visibility.Visible && c.Bounds.Contains(p));
+        return scene.Cards.Values.Where(c => c.Frame.Visibility == Visibility.Visible && c.Bounds.Contains(p))
+            .OrderByDescending(c => Panel.GetZIndex(c.Frame)).FirstOrDefault();
     }
 
     private bool IsReadOnlyWorkspacePoint(Point screen)
@@ -485,15 +432,28 @@ internal sealed partial class WorkbenchWindow
                 AddConnectionVisual(scene, new Border { Background = CardBrush, Padding = new Thickness(5, 2, 5, 2), CornerRadius = new CornerRadius(4),
                     Child = new TextBlock { Text = connection.Label, Foreground = Ink, MaxWidth = 240, TextTrimming = TextTrimming.CharacterEllipsis } }, middle.X, middle.Y);
             if (scene.Number != _controller.WorkspaceNumber) continue;
-            var hit = new Line { X1 = start.X, Y1 = start.Y, X2 = end.X, Y2 = end.Y, Stroke = Brushes.Transparent, StrokeThickness = 14 };
-            var menu = new ContextMenu();
-            AddMenu(menu, "WorkbenchConnectionLabel", () => EditConnectionLabel(scene, connection.Id, middle));
-            AddMenu(menu, "WorkbenchRemoveConnection", () =>
+            // Left-double-click a connection to edit its label; select it and press
+            // Delete to remove it. No right-click menu on the canvas.
+            var hit = new Line
             {
+                X1 = start.X, Y1 = start.Y, X2 = end.X, Y2 = end.Y,
+                Stroke = Brushes.Transparent, StrokeThickness = 14, Focusable = true
+            };
+            hit.MouseLeftButtonDown += (_, e) =>
+            {
+                hit.Focus();
+                if (e.ClickCount == 2) EditConnectionLabel(scene, connection.Id, middle);
+                e.Handled = true;
+            };
+            hit.KeyDown += (_, e) =>
+            {
+                if (e.Key != Key.Delete) return;
                 RememberLayout(); var state = _controller.WorkbenchLayout.Copy();
-                state.Connections.RemoveAll(c => c.Id == connection.Id); StoreLayout(state); _modelSignature = ""; SyncActiveScene();
-            });
-            hit.ContextMenu = menu; AddConnectionVisual(scene, hit, 0, 0);
+                state.Connections.RemoveAll(c => c.Id == connection.Id);
+                StoreLayout(state); _modelSignature = ""; SyncActiveScene();
+                e.Handled = true;
+            };
+            AddConnectionVisual(scene, hit, 0, 0);
         }
     }
 
