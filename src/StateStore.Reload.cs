@@ -41,6 +41,10 @@ public sealed partial class StateStore
             ValidatePrimaryHash(System.Security.Cryptography.SHA256.HashData(bytes));
             // An invalid or failed reload must leave previously queued saves eligible.
             BeginExternalRead(version);
+            // Explicitly accepting this validated primary supersedes startup
+            // recovery. Its old source is retained, not consumed by the reload.
+            _pendingStartupRecovery = null;
+            NeedsStartupRecoverySave = false;
             return new(state, new() { Outcome = "applied", Applied = true });
         }
         catch (Exception ex) when (ex is JsonException or ArgumentException)

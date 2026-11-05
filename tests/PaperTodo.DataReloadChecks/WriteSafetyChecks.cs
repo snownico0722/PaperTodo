@@ -21,6 +21,8 @@ internal static partial class Program
         InterruptedWriteSelectionChecks();
         OrphanedTempImageAndWriteChecks();
         RecoveredBackupDoesNotOverwriteRepairedPrimary();
+        RecoveryReadbackFailureCanRetry();
+        RecoveryReloadSupersedesPendingSource();
         PluginExitFailureRetainsDirtyData();
         Console.WriteLine("PASS write safety: legacy ordinary saves, explicit transaction validation, shutdown, recovery images and archive failures");
     }

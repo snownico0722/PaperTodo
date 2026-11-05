@@ -290,8 +290,7 @@ public sealed partial class StateStore
             {
                 return;
             }
-            WriteJsonInternal(json);
-            _latestWrittenVersion = version;
+            WriteJsonInternal(json, version);
         }
         finally
         {
@@ -309,8 +308,7 @@ public sealed partial class StateStore
             {
                 return;
             }
-            await Task.Run(() => WriteJsonInternal(json));
-            _latestWrittenVersion = version;
+            await Task.Run(() => WriteJsonInternal(json, version));
         }
         finally
         {
@@ -351,7 +349,7 @@ public sealed partial class StateStore
         finally { _writeLock.Release(); }
     }
 
-    private void WriteJsonInternal(string json, Action? beforeReplace = null)
+    private void WriteJsonInternal(string json, long version, Action? beforeReplace = null)
     {
         void ValidateWrite()
         {
@@ -366,6 +364,9 @@ public sealed partial class StateStore
         PreserveDistinctTemporarySource(FilePath + ".tmp", json, ValidateWrite);
         var bytes = Encoding.UTF8.GetBytes(json);
         _atomicWriter.Write(FilePath, bytes, beforeReplace: ValidateWrite);
+        // Replacement is already durable even if recovery readback fails.
+        // Older queued snapshots must not roll back that committed generation.
+        _latestWrittenVersion = version;
         CompletePendingStartupRecovery(bytes);
         NeedsStartupRecoverySave = false;
     }

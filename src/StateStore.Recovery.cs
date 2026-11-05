@@ -11,7 +11,7 @@ public sealed partial class StateStore
     {
         internal string SourcePath { get; set; }
         internal byte[] SourceHash { get; }
-        internal byte[]? ExpectedPrimaryHash { get; }
+        internal byte[]? ExpectedPrimaryHash { get; set; }
         internal bool IsTemporary { get; }
         internal List<(string Path, byte[] Hash)> EquivalentTempPaths { get; }
 
@@ -182,9 +182,15 @@ public sealed partial class StateStore
     {
         var pending = _pendingStartupRecovery;
         if (pending == null) return;
+        // The atomic writer has already committed these bytes. Advance the
+        // expected primary BEFORE any fallible readback, so a retry recognizes
+        // our own successful replacement instead of the pre-recovery document.
+        // Keep the source protected until verification and cleanup complete.
+        var committedHash = SHA256.HashData(savedBytes);
+        pending.ExpectedPrimaryHash = committedHash;
         // Only retire a source after the committed primary is readable and contains
         // exactly the bytes that the normal durable writer was asked to commit.
-        if (!ReadFileHash(FilePath).AsSpan().SequenceEqual(SHA256.HashData(savedBytes)) ||
+        if (!ReadFileHash(FilePath).AsSpan().SequenceEqual(committedHash) ||
             !TryReadValidatedStateBytes(FilePath, out _))
             throw new IOException("Recovery commit could not be verified; the source was retained.");
 

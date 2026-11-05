@@ -180,8 +180,7 @@ public sealed partial class StateStore
             string? diffFile = null;
             if (resolution.Conflicts.Count > 0)
                 (conflictFile, diffFile) = ArchiveConflicts(resolution, sourceBytes, ValidateSource);
-            WriteJsonInternal(json, beforeReplace: ValidateSource);
-            _latestWrittenVersion = version;
+            WriteJsonInternal(json, version, beforeReplace: ValidateSource);
             // Retention is best-effort maintenance; a successfully committed
             // merge must never be reported as failed because deletion is blocked.
             try { PruneConflictArchivesCore(DateTime.UtcNow); }
