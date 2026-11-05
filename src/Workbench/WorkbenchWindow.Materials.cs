@@ -268,6 +268,7 @@ internal sealed partial class WorkbenchWindow
                 BorderThickness = new Thickness(0), Padding = new Thickness(4),
                 FontSize = AppTypography.Scale(item?.Kind == WorkspaceMaterialKinds.Node ? 16 : 14)
             };
+            _controller.AttachWorkspaceMaterialImagePaste(editor, Report);
             card.MaterialEditor = editor;
             editor.TextChanged += (_, _) =>
             {

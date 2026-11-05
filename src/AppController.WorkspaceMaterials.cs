@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
@@ -26,7 +27,11 @@ public sealed partial class AppController
         if (IsExiting || IsDataReloading) return "";
         if (content.Length > PaperWindow.NoteTextMaxLength)
             throw new InvalidOperationException(Strings.Format("NoteInputLimitMessage", PaperWindow.NoteTextMaxLength));
-        var document = EnsureWorkspaceMaterialsOwner().WorkspaceMaterials!;
+        var owner = EnsureWorkspaceMaterialsOwner();
+        content = ImageStore.CloneForeignImageReferencesForNote(owner.Id, content);
+        if (content.Length > PaperWindow.NoteTextMaxLength)
+            throw new InvalidOperationException(Strings.Format("NoteInputLimitMessage", PaperWindow.NoteTextMaxLength));
+        var document = owner.WorkspaceMaterials!;
         var item = new WorkspaceMaterialItem
         {
             Kind = WorkspaceMaterialKinds.Normalize(kind), Title = title, Content = content, Source = source
@@ -51,6 +56,49 @@ public sealed partial class AppController
         item.Title = title;
         item.Content = content;
         MarkDirty();
+    }
+
+    internal void AttachWorkspaceMaterialImagePaste(TextBox editor, Action<Exception> reportFailure)
+    {
+        DataObject.AddPastingHandler(editor, (_, e) =>
+        {
+            if (IsExiting || IsDataReloading)
+            {
+                e.CancelCommand();
+                return;
+            }
+            try
+            {
+                var text = e.DataObject.GetData(DataFormats.UnicodeText) as string ??
+                    e.DataObject.GetData(DataFormats.Text) as string;
+                if (string.IsNullOrEmpty(text)) return;
+                var references = MarkdownImageReferences.Enumerate(text).ToArray();
+                if (references.Length == 0) return;
+
+                // Native TextBox paste clips at MaxLength. Image references must remain whole,
+                // including when cloning expands a short source ID to an eight-digit ID.
+                var maximumLength = (long)editor.Text.Length - editor.SelectionLength + text.Length +
+                    references.Sum(reference => 8 - reference.ImageId.Length);
+                if (maximumLength > PaperWindow.NoteTextMaxLength)
+                    throw new InvalidOperationException(Strings.Format("NoteInputLimitMessage", PaperWindow.NoteTextMaxLength));
+                var owner = EnsureWorkspaceMaterialsOwner();
+                var cloned = ImageStore.CloneForeignImageReferencesForNote(owner.Id, text);
+                if (cloned == text) return;
+
+                // Rewrite this paste, not TextChanged: the focused editor and its native undo
+                // stack must retain the owned IDs instead of repeatedly cloning the same source.
+                var replacement = new DataObject();
+                replacement.SetData(DataFormats.UnicodeText, cloned);
+                replacement.SetData(DataFormats.Text, cloned);
+                e.DataObject = replacement;
+                e.FormatToApply = DataFormats.UnicodeText;
+            }
+            catch (Exception ex)
+            {
+                e.CancelCommand();
+                reportFailure(ex);
+            }
+        });
     }
 
     internal void SetWorkbenchMaterialCollapsed(string id, bool collapsed)

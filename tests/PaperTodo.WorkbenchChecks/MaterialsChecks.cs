@@ -185,6 +185,8 @@ internal static partial class Program
             "Restoring the collection note displayed stale material content");
         Assert(Geometry(owner) == ownerGeometry,
             "Temporarily hiding the materials note changed its saved desktop geometry or visibility");
+        await CheckMaterialImageClipboardAndExports(controller, ownerWindow);
+        await CheckMaterialNoteEvents(controller, ownerWindow, textId);
         controller.SaveNow(sync: true);
     }
 

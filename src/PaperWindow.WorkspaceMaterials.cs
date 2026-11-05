@@ -158,6 +158,9 @@ public sealed partial class PaperWindow
         editor.SetResourceReference(Control.ForegroundProperty, "TextBrushKey");
         editor.SetResourceReference(TextBoxBase.CaretBrushProperty, "TextBrushKey");
         editor.SetResourceReference(Control.BorderBrushProperty, "PaperBorderBrushKey");
+        if (multiline)
+            _controller.AttachWorkspaceMaterialImagePaste(editor, ex =>
+                PaperNoticeDialog.Show(InteractionWindow, Strings.Get("WorkbenchTitle"), ex.Message));
         _workspaceMaterialEditors[key] = editor;
         return editor;
     }
