@@ -33,8 +33,11 @@ internal static class NativeFreeQueuePolicyChecks
         var upperInsert = EdgeCapsuleFreeQueuePolicy.Insert([upper, target], target.Key, 0, 2, 900, pitch, gap);
         Require(upperInsert.Accepted && upperInsert.TopDip == 300 && upperInsert.Tops[upper.Key] == 200,
             "the upper neighbour moves upward instead of pushing the target towards the screen bottom");
-        Require(EdgeCapsuleFreeQueuePolicy.Insert([target with { TopDip = 60 }], target.Key, 0, 2, 900, pitch, gap).TopDip == -40,
-            "prepend may extend above the work area without moving the target's existing head");
+        Require(EdgeCapsuleFreeQueuePolicy.Insert([target with { TopDip = 60 }], target.Key, 0, 2, 900, pitch, gap).TopDip == 0,
+            "a user-inserted block is stopped at the upper screen boundary instead of disappearing above it");
+        Require(EdgeCapsuleFreeQueuePolicy.Insert([target with { TopDip = 780 }], target.Key, 2, 2, 900, pitch, gap).TopDip ==
+                    900 - (4 * pitch - gap),
+            "an expanded merge is lifted just enough to keep its full block inside the display");
         Require(EdgeCapsuleFreeQueuePolicy.FindInsertion([target], 304, 96, 10, pitch, gap) is { Index: 0 },
             "a whole visible block can attach from above without its first member crossing the target");
         Require(EdgeCapsuleFreeQueuePolicy.FindInsertion([target], 304, 96, 500, pitch, gap) == null &&
@@ -76,7 +79,14 @@ internal static class NativeFreeQueuePolicyChecks
         var exact = EdgeCapsuleFreeQueuePolicy.Place([lower], 96, 1, 200, pitch, gap);
         Require(exact.Accepted && exact.TopDip == 96, "a legal exact position stays exact");
         Require(EdgeCapsuleFreeQueuePolicy.Place([], 500, 1, 900, pitch, gap).TopDip == 500,
-            "empty space never changes the requested anchor");
+            "valid independent placement preserves the requested anchor");
+        Require(EdgeCapsuleFreeQueuePolicy.Place([], -120, 1, 900, pitch, gap).TopDip == 0 &&
+                EdgeCapsuleFreeQueuePolicy.Place([], 1000, 1, 900, pitch, gap).TopDip ==
+                    900 - PaperLayoutDefaults.CapsuleHeight,
+            "dragged capsules stop at both work-area edges instead of leaving the screen");
+        Require(EdgeCapsuleFreeQueuePolicy.Place([], 500, 20, 500, pitch, gap) is
+                    { Accepted: true, TopDip: 0 },
+            "an oversized group still drops successfully with its first capsule visible");
         Require(!EdgeCapsuleFreeQueuePolicy.ShouldFloat(0, false) && !EdgeCapsuleFreeQueuePolicy.ShouldFloat(55, false) &&
                 EdgeCapsuleFreeQueuePolicy.ShouldFloat(56, false) && EdgeCapsuleFreeQueuePolicy.ShouldFloat(0, true),
             "free and ordinary queues unlock without additional sticky distance");
