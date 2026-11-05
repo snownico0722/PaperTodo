@@ -94,11 +94,15 @@ internal sealed class NoteImageExportWindow : Window
         if (_artifact is not { } artifact || !_save.IsEnabled) return;
         var dialog = new SaveFileDialog
         {
-            Title = Title, Filter = Strings.Get("EditorImageExportPng") + " (*.png)|*.png",
-            DefaultExt = ".png", AddExtension = true, OverwritePrompt = true,
-            FileName = NotePortableExport.SafeName(_noteTitle) + ".png"
+            Title = Title,
+            Filter = Strings.Get("EditorImageExportJpeg") + " (*.jpg)|*.jpg|" +
+                Strings.Get("EditorImageExportPng") + " (*.png)|*.png",
+            FilterIndex = 1,
+            DefaultExt = ".jpg", AddExtension = true, OverwritePrompt = true,
+            FileName = NotePortableExport.SafeName(_noteTitle)
         };
         if (dialog.ShowDialog(this) != true || _closed) return;
+        var format = dialog.FilterIndex == 2 ? NoteImageFormat.Png : NoteImageFormat.Jpeg;
         _save.IsEnabled = false;
         _status.Text = Strings.Get("EditorImageExportSaving");
         var cancellation = _lifetime.Token;
@@ -106,7 +110,7 @@ internal sealed class NoteImageExportWindow : Window
         {
             await NoteImageExport.OnStaAsync(() =>
             {
-                NoteImageExport.Save(dialog.FileName, artifact, cancellation);
+                NoteImageExport.Save(dialog.FileName, artifact, cancellation, format);
                 return true;
             });
             if (!_closed) _status.Text = Strings.Get("EditorImageExportSaved");
