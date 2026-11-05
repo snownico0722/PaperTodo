@@ -602,6 +602,11 @@ internal static partial class Program
             var method = request.GetProperty("method").GetString();
             if (method == "get_workspace_binding")
                 return new { token = "fixture-workspace" };
+            if (method == "read_note_image")
+            {
+                requests.Add(request.Clone());
+                return new { paper_id = "paper", image_id = "001", mime = "image/png", image_base64 = "AQID" };
+            }
             requests.Add(request.Clone());
             if (method == "set_setting") host!.StopAfterResponse();
             return new { received = true };
@@ -623,6 +628,21 @@ internal static partial class Program
             var count = requests.Count;
             Throws<McpException>(() => tools.UpdateTodo("paper", "todo", linked_paper_id: "note", clear_linked_paper: true));
             Check(requests.Count == count, "Conflicting link arguments cause no request or mutation.");
+            await tools.InsertNoteImage("paper", image_path: @"C:\fixture\picture.png");
+            Check(requests[^1].GetProperty("method").GetString() == "insert_note_image" &&
+                  requests[^1].GetProperty("params").GetProperty("image_path").GetString() ==
+                      @"C:\fixture\picture.png",
+                "MCP image path reaches the real pipe as a local path.");
+            await tools.InsertNoteImage("paper", image_base64: "AQID", image_name: "picture.png");
+            Check(requests[^1].GetProperty("params").GetProperty("image_base64").GetString() == "AQID" &&
+                  requests[^1].GetProperty("params").GetProperty("image_name").GetString() == "picture.png",
+                "MCP Base64 image and its name survive pipe serialization.");
+            var imageBlocks = await tools.ReadNoteImage("paper", "001");
+            Check(requests[^1].GetProperty("method").GetString() == "read_note_image" &&
+                  imageBlocks is [ModelContextProtocol.Protocol.TextContentBlock,
+                      ModelContextProtocol.Protocol.ImageContentBlock image] &&
+                  image.MimeType == "image/png" && image.Data == "AQID",
+                "The MCP tool returns actual image content, not Base64 displayed as text.");
             await tools.ListSettings("todo");
             Check(requests[^1].GetProperty("params").GetProperty("category").GetString() == "todo", "MCP list category forwarded.");
             await tools.GetSetting("todo.paper_links");
