@@ -233,7 +233,7 @@ public sealed partial class AppController
         else
         {
             PreviewFreeQueueDropSlot(drag.SlotPreview, drop.Decision,
-                drag.CarriedIds, resting, groups);
+                drag.CarriedIds, resting, groups, membershipPreview: drop.Preview);
         }
         if (drag.WholeQueue && !floating)
         {

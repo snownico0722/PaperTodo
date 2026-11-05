@@ -23,7 +23,8 @@ public sealed partial class AppController
     private void PreviewFreeQueueDropSlot(FreeQueueSlotPreviewState state,
         EdgeFreeQueueDrop? decision,
         IReadOnlyCollection<string> carriedIds, EdgeCapsuleQueuePlan resting,
-        IReadOnlyList<NativeQueueGroup> groups, bool includeResting = false)
+        IReadOnlyList<NativeQueueGroup> groups, bool includeResting = false,
+        EdgeCapsuleQueuePlan? membershipPreview = null)
     {
         var inserting = decision is { Kind: EdgeFreeQueueDropKind.Insert };
         var key = inserting ? decision!.TargetKey : "";
@@ -67,21 +68,32 @@ public sealed partial class AppController
         {
             foreach (var group in groups)
             {
-                if (group.Key == key ||
-                    !decision!.Tops.TryGetValue(group.Key, out var movedTop) ||
-                    Math.Abs(movedTop - group.Box.TopDip) < .1) continue;
+                if (group.Key == key) continue;
+                // #354 (Just1ceCATT): close the source gap as soon as a member
+                // leaves. Reuse this drop's coordinator plan and preview cache,
+                // rather than adding a separate vacated-source state machine.
+                var compacting = membershipPreview != null &&
+                    group.Papers.Any(p => moving.Contains(p.Id)) &&
+                    group.Papers.Any(p => !moving.Contains(p.Id));
+                var movedTop = compacting
+                    ? membershipPreview!.MasterTopsDip.GetValueOrDefault(group.Key, group.Box.TopDip)
+                    : decision!.Tops.GetValueOrDefault(group.Key, group.Box.TopDip);
+                if (!compacting && Math.Abs(movedTop - group.Box.TopDip) < .1) continue;
 
                 // Shift only the neighbouring queue that the selected block actually
-                // intersects; its master and members use one rigid displacement.
+                // intersects. The source instead uses its remaining-member plan,
+                // including any displacement already chosen by this same drop.
                 var delta = movedTop - group.Box.TopDip;
                 if (!group.Box.Collapsed)
                     foreach (var paper in group.Papers.Where(p => !moving.Contains(p.Id)))
                         if (resting.Placements.TryGetValue(paper.Id, out var placement))
                         {
-                            desired[paper.Id] = placement with { TopOffsetDip = placement.TopOffsetDip + delta };
+                            desired[paper.Id] = compacting
+                                ? membershipPreview!.Placements[paper.Id]
+                                : placement with { TopOffsetDip = placement.TopOffsetDip + delta };
                             changedIds.Add(paper.Id);
                         }
-                if (group.Box.HasMaster)
+                if (group.Box.HasMaster && Math.Abs(movedTop - group.Box.TopDip) >= .1)
                 {
                     masterTops[group.Key] = movedTop;
                     changedMasters.Add(group.Key);

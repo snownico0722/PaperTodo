@@ -44,6 +44,7 @@ internal static class NativeFreeQueueReviewChecks
         var originalContents = c.State.Papers.ToDictionary(p => p.Id, p => p.Content);
         await CheckDisplacedInsertion(c, windows, store, monitor);
         await CheckDragPreviewUpdates(c, windows, monitor);
+        await CheckVacatedSourcePreview(c, windows, store, monitor);
         await CheckIndependentGroupPreview(c, windows, store, monitor);
         await CheckFoldedDropAndShortcuts(c, monitor);
         await CheckDisconnectedGesturesAndMerge(c, windows, store, monitor);
@@ -213,6 +214,132 @@ internal static class NativeFreeQueueReviewChecks
         c.FinishFreeMasterQueueDrag(layout, false);
         await Idle();
         Console.WriteLine("PASS selective drag updates: live anchor refresh, unchanged peers, stable slot, neighbour restore, cancel and folded source");
+    }
+
+    private static async Task CheckVacatedSourcePreview(AppController c,
+        IReadOnlyDictionary<string, PaperWindow> windows, StateStore store, MonitorGeometry monitor)
+    {
+        var pitch = EdgeCapsuleLayout.SlotHeight(c.DeepCapsuleGap);
+        var sourceTop = 3 * pitch;
+        var targetTop = sourceTop + 7 * pitch;
+        var emptyTop = targetTop + 5 * pitch;
+        foreach (var hasMaster in new[] { true, false })
+        foreach (var floating in new[] { false, true })
+        foreach (var ending in new[] { "cancel", "return", "split", "merge" })
+        {
+            c.State.UseCapsuleCollapseAll = hasMaster;
+            c.State.Papers = c.State.Papers.OrderBy(p => int.Parse(p.Id["review-".Length..])).ToList();
+            foreach (var paper in c.State.Papers)
+            {
+                var i = int.Parse(paper.Id["review-".Length..]);
+                paper.CapsuleMonitorDeviceName = "";
+                paper.CapsuleSide = i < 8 ? DeepCapsuleSides.Right : DeepCapsuleSides.Left;
+                paper.CapsuleQueueId = i < 5 ? "qa" : i < 8 ? "qb" : "qc";
+            }
+            c.State.DeepCapsuleQueueStartTopMargins.Clear();
+            c.State.DeepCapsuleQueueStartTopMargins[A] = sourceTop;
+            c.State.DeepCapsuleQueueStartTopMargins[B] = targetTop;
+            c.State.DeepCapsuleQueueStartTopMargins["|left#qc"] = sourceTop;
+            c.State.CapsuleCollapseAllActiveQueues.Clear();
+            c.ArrangeDeepCapsules(false);
+            await Idle();
+
+            var source = c.State.Papers.Take(5).ToArray();
+            var owner = source[1];
+            var target = c.State.Papers.Skip(5).Take(3).ToArray();
+            var peers = c.State.Papers.Where(p => p != owner).ToArray();
+            var before = c.State.Papers.ToDictionary(p => p.Id, p => MemberTop(c, windows[p.Id], p));
+            var saved = new Dictionary<string, double>(c.State.DeepCapsuleQueueStartTopMargins);
+            var order = c.State.Papers.Select(p => p.Id).ToArray();
+            var identities = c.State.Papers.ToDictionary(p => p.Id, c.QueueKeyForPaper);
+            var start = Point(monitor, before[owner.Id]);
+            var outside = Point(monitor, emptyTop, left: floating);
+            Require(c.BeginNativeEdgeQueueDrag(owner, false, start, false), "begin single-source drag");
+            Require(!c.PreviewNativeEdgeQueueDrag(owner, start, before[owner.Id], false),
+                "ordinary sorting remains on its existing path before detachment");
+            // Start from an existing in-group sorting preview, not only from rest.
+            c.PreviewDeepCapsuleReorder(owner, 3);
+            Require(c.PreviewNativeEdgeQueueDrag(owner, outside, emptyTop, floating), "detach single member");
+            var drag = Field<NativeEdgeQueueDrag>(c, "_nativeEdgeQueueDrag");
+            Require(drag.Drop!.Decision.Kind == EdgeFreeQueueDropKind.Move, "independent destination selected");
+            await Idle();
+            for (var i = 0; i < source.Length; i++)
+                if (i != 1)
+                {
+                    var expected = before[source[i].Id] - (i > 1 ? pitch : 0);
+                    Near(expected, MemberTop(c, windows[source[i].Id], source[i]), "source immediately closes its gap");
+                    var frame = Field<EdgeCapsulePresenter>(windows[source[i].Id], "_edgeCapsule").AppliedPresentation;
+                    Require(Math.Abs(frame.Bounds.Top - (monitor.WorkArea.Top + expected * monitor.DpiScaleY)) <= 1,
+                        "source compaction reaches the visible frame");
+                }
+            var work = peers.ToDictionary(p => p.Id, p => ReconcileGeneration(windows[p.Id]));
+            for (var sample = 0; sample < 10; sample++)
+                c.PreviewNativeEdgeQueueDrag(owner, outside, emptyTop, floating);
+            Require(peers.All(p => ReconcileGeneration(windows[p.Id]) == work[p.Id]),
+                "unchanged source gap does not restart peer presentation");
+
+            // Return to the compacted source's second slot, then leave again.
+            // The selected index must use the remaining members, not an empty old slot.
+            c.PreviewNativeEdgeQueueDrag(owner, start, before[owner.Id], floating);
+            Require(drag.Drop!.Decision.Kind == EdgeFreeQueueDropKind.Insert &&
+                    drag.Drop.DestinationKey == A && drag.Drop.Decision.Index == 1,
+                "return uses the compacted source insertion index");
+            foreach (var paper in source.Where(p => p != owner))
+                Near(before[paper.Id], MemberTop(c, windows[paper.Id], paper), "return reopens the source slot");
+            var releasePoint = start;
+            var releaseTop = before[owner.Id];
+            if (ending != "return")
+            {
+                c.PreviewNativeEdgeQueueDrag(owner, outside, emptyTop, floating);
+                Near(before[source[2].Id] - pitch, MemberTop(c, windows[source[2].Id], source[2]),
+                    "leaving the reopened source closes it again");
+                releaseTop = before[target[1].Id];
+                releasePoint = Point(monitor, releaseTop);
+                c.PreviewNativeEdgeQueueDrag(owner, releasePoint, releaseTop, floating);
+                Require(drag.Drop!.Decision.Kind == EdgeFreeQueueDropKind.Insert &&
+                        drag.Drop.DestinationKey == B && drag.Drop.Decision.Index == 1, "merge selects target middle");
+                Near(before[source[2].Id] - pitch, MemberTop(c, windows[source[2].Id], source[2]),
+                    "source remains compact while target opens a slot");
+                Near(before[target[1].Id] + pitch, MemberTop(c, windows[target[1].Id], target[1]),
+                    "target suffix makes room simultaneously");
+                if (ending == "split")
+                {
+                    releasePoint = outside;
+                    releaseTop = emptyTop;
+                    c.PreviewNativeEdgeQueueDrag(owner, releasePoint, releaseTop, floating);
+                    foreach (var paper in target)
+                        Near(before[paper.Id], MemberTop(c, windows[paper.Id], paper), "leaving target restores it");
+                }
+            }
+            Require(order.SequenceEqual(c.State.Papers.Select(p => p.Id)) &&
+                    c.State.Papers.All(p => c.QueueKeyForPaper(p) == identities[p.Id]) &&
+                    saved.Count == c.State.DeepCapsuleQueueStartTopMargins.Count &&
+                    saved.All(pair => c.State.DeepCapsuleQueueStartTopMargins[pair.Key] == pair.Value),
+                "source and target previews do not mutate data");
+            var preview = peers.ToDictionary(p => p.Id, p => MemberTop(c, windows[p.Id], p));
+            if (ending != "cancel")
+                Require(c.CommitNativeEdgeQueueDrag(owner, releasePoint, releaseTop, floating), "commit single-source drag");
+            c.EndNativeEdgeQueueDrag(owner.Id);
+            await Idle();
+            foreach (var paper in peers)
+                Near(ending == "cancel" ? before[paper.Id] : preview[paper.Id],
+                    MemberTop(c, windows[paper.Id], paper), "cancel or commit matches the source/target preview");
+            if (ending is "cancel" or "return")
+                Require(c.QueueKeyForPaper(owner) == A, "owner returns to source");
+            else
+            {
+                Require(ending == "merge" ? c.QueueKeyForPaper(owner) == B :
+                    c.QueueKeyForPaper(owner) != A && c.QueueKeyForPaper(owner) != B, "committed destination identity");
+                c.SaveNow(sync: true);
+                var loaded = store.Load();
+                Require(loaded.Papers.Single(p => p.Id == owner.Id).CapsuleQueueId == owner.CapsuleQueueId &&
+                        loaded.Papers.Where(p => p.CapsuleQueueId == "qa").Select(p => p.Id)
+                            .SequenceEqual(source.Where(p => p != owner).Select(p => p.Id)),
+                    "saved source membership and destination reload together");
+            }
+        }
+        c.State.UseCapsuleCollapseAll = true;
+        Console.WriteLine("PASS vacated source: master on/off, docked/floating, sorting-to-detach, repeat, return, cancel, split, merge and reload");
     }
 
     private static async Task CheckIndependentGroupPreview(AppController c,
