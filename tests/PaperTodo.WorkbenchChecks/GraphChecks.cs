@@ -84,7 +84,7 @@ internal static partial class Program
         controller.ToggleWorkbench();
         controller.ToggleWorkbench();
         desk = (WorkbenchWindow)Member(controller, "_workbenchWindow");
-        await Until(() => desk.HostedPaperCount == 3 && ActiveCards(desk).ContainsKey(child),
+        await Until(() => desk.HostedPaperCount == 3 && ActiveCards(desk).Contains(child),
             "Reopened workspace lost its graph nodes");
         Assert(CardFrame(desk, root).Visibility == Visibility.Visible &&
                CardFrame(desk, child).Visibility == Visibility.Visible &&
@@ -92,7 +92,7 @@ internal static partial class Program
             "Free connections unexpectedly hid their targets");
 
         controller.DeleteWorkbenchMaterial(root);
-        await Until(() => !ActiveCards(desk).ContainsKey(root), "Deleting a node left its visual behind");
+        await Until(() => !ActiveCards(desk).Contains(root), "Deleting a node left its visual behind");
         Assert(controller.WorkbenchLayout.Connections.All(c => c.From != root && c.To != root) &&
                controller.FindWorkbenchMaterial(child) != null,
             "Deleting a node left dangling connections or removed another node");
