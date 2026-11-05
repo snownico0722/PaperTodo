@@ -2683,26 +2683,36 @@ public sealed partial class PaperWindow : Window
                 case PaperTopBarShortcuts.Workspace when
                     _controller.WorkspaceOptions.Enabled &&
                     _controller.WorkspaceOptions.SlotNumbers.Count > 1 &&
-                    !IsTopBarCommandVisible(_workspaceButton):
+                    (IsWorkbenchHosted || !IsTopBarCommandVisible(_workspaceButton)):
                     menu.Items.Add(BuildWorkspaceShortcutMenuItem(menu));
                     break;
                 case PaperTopBarShortcuts.NewTodo when
-                    forDeepCapsuleSlot || !IsTopBarCommandVisible(_newTodoButton):
+                    forDeepCapsuleSlot || IsWorkbenchHosted || !IsTopBarCommandVisible(_newTodoButton):
                     menu.Items.Add(MenuItem(Strings.Get("MenuNewTodoPaper"),
-                        (_, _) => _controller.CreatePaper(PaperTypes.Todo, show: true, _paper)));
+                        (_, _) =>
+                        {
+                            if (_workbenchBody?.Window is WorkbenchWindow desk)
+                                desk.CreatePaperFromMenu(PaperTypes.Todo);
+                            else _controller.CreatePaper(PaperTypes.Todo, show: true, _paper);
+                        }));
                     break;
                 case PaperTopBarShortcuts.NewNote when
-                    forDeepCapsuleSlot || !IsTopBarCommandVisible(_newNoteButton):
+                    forDeepCapsuleSlot || IsWorkbenchHosted || !IsTopBarCommandVisible(_newNoteButton):
                     menu.Items.Add(MenuItem(Strings.Get("MenuNewNotePaper"),
-                        (_, _) => _controller.CreatePaper(PaperTypes.Note, show: true, _paper)));
+                        (_, _) =>
+                        {
+                            if (_workbenchBody?.Window is WorkbenchWindow desk)
+                                desk.CreatePaperFromMenu(PaperTypes.Note);
+                            else _controller.CreatePaper(PaperTypes.Note, show: true, _paper);
+                        }));
                     break;
                 case PaperTopBarShortcuts.Association when
-                    CanBeginAssociationDrag() && !IsTopBarCommandVisible(_windowBindingButton):
+                    CanBeginAssociationDrag() && (IsWorkbenchHosted || !IsTopBarCommandVisible(_windowBindingButton)):
                     menu.Items.Add(BuildAssociationDragMenuItem(menu));
                     break;
                 case PaperTopBarShortcuts.ExternalEditor when
                     _paper.Type == PaperTypes.Note && IsCurrentBodyProviderMarkdown &&
-                    !IsTopBarCommandVisible(_openMarkdownButton):
+                    (IsWorkbenchHosted || !IsTopBarCommandVisible(_openMarkdownButton)):
                     menu.Items.Add(MenuItem(OpenMarkdownEditorToolTip(),
                         (_, _) => OpenMarkdownInDefaultEditor()));
                     break;
@@ -2738,7 +2748,19 @@ public sealed partial class PaperWindow : Window
 
         AttachPluginPaperMenuActions(menu);
 
-        if (CanDisplayAsCapsule())
+        if (_workbenchBody?.Window is WorkbenchWindow workbench)
+        {
+            // Fold only the workbench card; never change desktop capsule visibility.
+            menu.Items.Add(MenuItem(
+                Strings.Get(workbench.IsWorkbenchCardCollapsed(_paper.Id)
+                    ? "WorkbenchExpandCard" : "WorkbenchCollapseCard"),
+                (_, _) => workbench.ToggleWorkbenchCardCollapsed(_paper.Id)));
+            menu.Items.Add(MenuItem(
+                Strings.Get(workbench.IsWorkbenchCardPinned(_paper.Id)
+                    ? "WorkbenchUnlockCard" : "WorkbenchLockCard"),
+                (_, _) => workbench.ToggleWorkbenchCardPinned(_paper.Id)));
+        }
+        else if (CanDisplayAsCapsule())
         {
             menu.Items.Add(_paper.IsCollapsed
                 ? MenuItem(Strings.Get("MenuRestoreWindow"), (_, _) => OpenCapsuleForEditing())
@@ -2759,7 +2781,9 @@ public sealed partial class PaperWindow : Window
                 (_, _) => DetachExperimentalWindowAttachment(savePosition: true)));
         }
 
-        menu.Items.Add(MenuItem(Strings.Get("MenuHide"), (_, _) => _controller.HidePaper(_paper)));
+        // Hiding an editor borrowed by the workbench would mutate desktop visibility.
+        if (!IsWorkbenchHosted)
+            menu.Items.Add(MenuItem(Strings.Get("MenuHide"), (_, _) => _controller.HidePaper(_paper)));
         menu.Items.Add(MenuItem(
             Strings.Get("MenuDelete"),
             (_, _) => DeletePaperFromPaperMenu(),
