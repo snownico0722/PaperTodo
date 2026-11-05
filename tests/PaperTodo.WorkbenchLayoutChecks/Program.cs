@@ -63,9 +63,19 @@ internal static partial class Program
                 var result = Layout(nodes, [new("a", "b")]);
                 Assert(Math.Abs(result.Cards["b"].Center.X - result.Cards["a"].Center.X) < 400); NoOverlaps(result);
             }),
-            ("Shared app affinity creates a dashed neighborhood", () => {
-                WorkbenchLayoutNode[] nodes = [new("a", 320, 360, Affinity: "app:123"), new("b", 240, 280, Affinity: "app:123"), new("c", 320, 360)];
-                var result = Layout(nodes); Assert(result.Sections.Any(s => s.Key == "app:123" && s.Members.Count == 2));
+            ("Paper and material kinds do not create separate layout regions", () => {
+                WorkbenchLayoutNode[] nodes = [new("a", 320, 360, Kind: "note"),
+                    new("b", 240, 280, Kind: "todo"), new("c", 320, 360, Kind: "material:image")];
+                var result = Layout(nodes); NoOverlaps(result);
+                Assert(result.Sections.Count == 1 && result.Sections[0].Members.Count == 3 &&
+                       result.Sections[0].Key == "ungrouped");
+            }),
+            ("Explicit groups stay together in approximate layout", () => {
+                WorkbenchLayoutNode[] nodes = [new("a", 320, 360, Affinity: "group:my-set", Kind: "note"),
+                    new("b", 240, 280, Affinity: "group:my-set", Kind: "material:node"), new("c", 320, 360, Kind: "todo")];
+                var result = Layout(nodes); NoOverlaps(result);
+                Assert(result.Sections.Any(s => s.Key == "group:my-set" && s.Members.Count == 2) &&
+                       result.Sections.Any(s => s.Key == "ungrouped" && s.Members.Count == 1));
             }),
             ("Dangling and duplicate edges do not enter routing", () => {
                 var result = Layout(Nodes(3), [new("p000", "p001"), new("p000", "p001"), new("missing", "p001"), new("p000", "p000")]);
