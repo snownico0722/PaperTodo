@@ -21,7 +21,6 @@ public sealed partial class PaperWindow
     private Button? _editorSidebarButton;
     private Button? _editorMinimizeButton;
     private Button? _editorMaximizeButton;
-    private Button? _editorCloseButton;
     private Border? _editorMarkdownToolbar;
     private Border? _editorPaperSidebar;
     private StackPanel? _editorPaperList;
@@ -39,23 +38,27 @@ public sealed partial class PaperWindow
     }
     internal bool IsExpandedEditorMaximized => _expandedEditorHostWindow?.WindowState == WindowState.Maximized;
 
-    private void BuildExpandedEditorTopBarControls(StackPanel buttons)
+    // The mode action participates in PaperTopBarShortcuts' saved order like any other
+    // user action. Only system-window controls and the sidebar switch remain fixed.
+    private void BuildExpandedEditorTopBarControls(
+        StackPanel windowButtons, StackPanel userShortcuts)
     {
-        // Fixed mode/window controls live after the existing user-ordered top-bar group.
-        // Do not insert them into PaperTopBarShortcuts or alter the pinned divider.
-        _editorModeButton = IconButton("⤢", Strings.Get("EditorOpen"));
+        _editorModeButton = IconButton("", Strings.Get("EditorOpen"));
+        _editorModeButton.Content = CreateExpandedEditorModeIcon(_editorModeButton, expanded: false);
         _editorModeButton.Click += (_, _) =>
         {
             if (_isExpandedEditorMode) _expandedEditorHostWindow?.ReturnToPaper();
             else _controller.OpenExpandedEditorFor(this);
         };
+        userShortcuts.Children.Add(_editorModeButton);
 
-        _editorSidebarButton = IconButton("☷", Strings.Get("EditorSidebarShow"));
+        _editorSidebarButton = IconButton("", Strings.Get("EditorSidebarShow"));
+        _editorSidebarButton.Content = CreateEditorVectorIcon(_editorSidebarButton,
+            "M 5 4 H 19 A 2 2 0 0 1 21 6 V 18 A 2 2 0 0 1 19 20 H 5 " +
+            "A 2 2 0 0 1 3 18 V 6 A 2 2 0 0 1 5 4 Z " +
+            "M 15 4 V 20 M 7 9 H 11 M 7 12 H 11 M 7 15 H 11");
         _editorSidebarButton.Click += (_, _) =>
-        {
-            _isExpandedEditorSidebarOpen = !_isExpandedEditorSidebarOpen;
-            RefreshExpandedEditorPresentation();
-        };
+            SetExpandedEditorSidebarOpen(!_isExpandedEditorSidebarOpen);
 
         _editorMinimizeButton = IconButton("−", Strings.Get("EditorMinimize"));
         _editorMinimizeButton.Click += (_, _) =>
@@ -63,41 +66,84 @@ public sealed partial class PaperWindow
             if (_expandedEditorHostWindow != null)
                 _expandedEditorHostWindow.WindowState = WindowState.Minimized;
         };
-
         _editorMaximizeButton = IconButton("□", Strings.Get("EditorMaximizeRestore"));
         _editorMaximizeButton.Click += (_, _) => ToggleExpandedEditorMaximized();
 
-        _editorCloseButton = IconButton("×", Strings.Get("EditorClosePaper"));
-        _editorCloseButton.Click += (_, _) => _expandedEditorHostWindow?.CloseCurrentPaper();
-
-        buttons.Children.Add(_editorModeButton);
-        buttons.Children.Add(_editorSidebarButton);
-        buttons.Children.Add(_editorMinimizeButton);
-        buttons.Children.Add(_editorMaximizeButton);
-        buttons.Children.Add(_editorCloseButton);
+        windowButtons.Children.Add(_editorSidebarButton);
+        windowButtons.Children.Add(_editorMinimizeButton);
+        windowButtons.Children.Add(_editorMaximizeButton);
         RefreshExpandedEditorTopBarControls();
+    }
+
+    private static FrameworkElement CreateExpandedEditorModeIcon(Button owner, bool expanded) =>
+        CreateEditorVectorIcon(owner, expanded
+            // Two arrows face toward the center when returning to a paper.
+            ? "M 4 10 H 10 V 4 M 10 10 L 4 4 M 20 14 H 14 V 20 M 14 14 L 20 20"
+            // Two arrows open toward opposite corners in paper mode.
+            : "M 8 3 H 3 V 8 M 3 3 L 9 9 M 16 21 H 21 V 16 M 21 21 L 15 15");
+
+    // WPF Paths use SVG-compatible geometry commands: centered in the same 24-unit
+    // canvas used by PaperTodo's native top-bar vectors, independent of font metrics.
+    private static FrameworkElement CreateEditorVectorIcon(Button owner, string geometry)
+    {
+        var iconCanvas = new Canvas
+        {
+            Width = 24,
+            Height = 24,
+            SnapsToDevicePixels = true,
+            IsHitTestVisible = false
+        };
+        var outline = new System.Windows.Shapes.Path
+        {
+            Data = Geometry.Parse(geometry),
+            StrokeThickness = 1.9,
+            StrokeStartLineCap = PenLineCap.Round,
+            StrokeEndLineCap = PenLineCap.Round,
+            StrokeLineJoin = PenLineJoin.Round,
+            Fill = Brushes.Transparent,
+            SnapsToDevicePixels = true
+        };
+        outline.SetBinding(
+            System.Windows.Shapes.Shape.StrokeProperty, CreateForegroundBinding(owner));
+        iconCanvas.Children.Add(outline);
+        return new Viewbox
+        {
+            Width = Math.Round(16 * TopBarIconScale(), 1),
+            Height = Math.Round(16 * TopBarIconScale(), 1),
+            Stretch = Stretch.Uniform,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            IsHitTestVisible = false,
+            Child = iconCanvas
+        };
     }
 
     private void RefreshExpandedEditorTopBarControls()
     {
         if (_editorModeButton == null) return;
-        _editorModeButton.Content = _isExpandedEditorMode ? "⤡" : "⤢";
-        _editorModeButton.ToolTip = _isExpandedEditorMode ? Strings.Get("EditorReturn") : Strings.Get("EditorOpen");
+        _editorModeButton.Content =
+            CreateExpandedEditorModeIcon(_editorModeButton, _isExpandedEditorMode);
+        _editorModeButton.ToolTip = _isExpandedEditorMode
+            ? Strings.Get("EditorReturn") : Strings.Get("EditorOpen");
+
         if (_editorSidebarButton != null)
         {
-            _editorSidebarButton.Visibility = _isExpandedEditorMode ? Visibility.Visible : Visibility.Collapsed;
-            _editorSidebarButton.ToolTip = _isExpandedEditorSidebarOpen ? Strings.Get("EditorSidebarHide") : Strings.Get("EditorSidebarShow");
-            _editorSidebarButton.Foreground = _isExpandedEditorSidebarOpen ? Theme.ActiveBrush : WeakTextBrush;
+            _editorSidebarButton.Visibility = _isExpandedEditorMode
+                ? Visibility.Visible : Visibility.Collapsed;
+            _editorSidebarButton.ToolTip = _isExpandedEditorSidebarOpen
+                ? Strings.Get("EditorSidebarHide") : Strings.Get("EditorSidebarShow");
+            _editorSidebarButton.Foreground = _isExpandedEditorSidebarOpen
+                ? Theme.ActiveBrush : WeakTextBrush;
         }
         if (_editorMinimizeButton != null)
-            _editorMinimizeButton.Visibility = _isExpandedEditorMode ? Visibility.Visible : Visibility.Collapsed;
+            _editorMinimizeButton.Visibility = _isExpandedEditorMode
+                ? Visibility.Visible : Visibility.Collapsed;
         if (_editorMaximizeButton != null)
         {
-            _editorMaximizeButton.Visibility = _isExpandedEditorMode ? Visibility.Visible : Visibility.Collapsed;
+            _editorMaximizeButton.Visibility = _isExpandedEditorMode
+                ? Visibility.Visible : Visibility.Collapsed;
             _editorMaximizeButton.Content = IsExpandedEditorMaximized ? "❐" : "□";
         }
-        if (_editorCloseButton != null)
-            _editorCloseButton.Visibility = _isExpandedEditorMode ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void ToggleExpandedEditorMaximized()
@@ -248,8 +294,8 @@ public sealed partial class PaperWindow
             0, 0, _isExpandedEditorMode && _isExpandedEditorSidebarOpen ? ExpandedEditorSidebarWidth : 0, 0);
         _editorPaperSidebar.Visibility = _isExpandedEditorMode && _isExpandedEditorSidebarOpen
             ? Visibility.Visible : Visibility.Collapsed;
-        _editorPaperSidebar.Margin = new Thickness(
-            0, showMarkdownTools ? ExpandedEditorToolbarHeight : 0, 0, 0);
+        // The sidebar spans the whole body area, independently of Markdown's toolbar.
+        _editorPaperSidebar.Margin = new Thickness(0);
 
         // A plugin provider can swap out _bodyElement after the shell was constructed.
         var body = (_paper.Type == PaperTypes.Note ? _bodyElement : null) as FrameworkElement
