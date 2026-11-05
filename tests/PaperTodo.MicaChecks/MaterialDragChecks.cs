@@ -22,7 +22,7 @@ internal static class MaterialDragChecks
         controller.State.PaperSkin = PaperSkins.Aero;
         controller.State.EnableAnimations = true;
         Theme.Invalidate();
-        var surface = new SkinBorder { IsCapsule = true, CornerRadius = new CornerRadius(8) };
+        var surface = new SkinBorder { CornerRadius = new CornerRadius(8) };
         var window = new Window
         {
             Left = 220,
@@ -40,6 +40,8 @@ internal static class MaterialDragChecks
         {
             window.Show();
             Wait(200);
+            Program.Assert(surface.HasAeroReflectionSubscription,
+                "expanded Aero surface observes native movement");
             Transform ReflectionShift() => (Transform)typeof(SkinBorder)
                 .GetField("_reflectionShift", Program.Private)!.GetValue(surface)!;
             var hwnd = new WindowInteropHelper(window).Handle;
@@ -59,6 +61,14 @@ internal static class MaterialDragChecks
             surface.RefreshSkin();
             Program.Assert(ReflectionShift().Value.IsIdentity,
                 "disabling reflection restores identity without retaining motion");
+            Program.Assert(!surface.HasMaterialHostSubscription,
+                "disabling animation releases the reflection observer");
+            controller.State.EnableAnimations = true;
+            surface.RefreshSkin();
+            Program.Assert(surface.HasMaterialHostSubscription, "reflection observer resumes");
+            window.Hide();
+            Program.Assert(!surface.HasMaterialHostSubscription,
+                "hiding the surface releases its window observer");
         }
         finally
         {

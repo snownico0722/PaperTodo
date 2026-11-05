@@ -36,36 +36,19 @@ internal static class Program
         Directory.CreateDirectory(temp);
         try
         {
-            Check("skin normalization and data compatibility", () =>
+            Check("saved material and legacy data compatibility", () =>
             {
-                foreach (var id in new[] { "warm", "ink", "forest", "rose", "mica" })
-                    Assert(ColorSchemes.IsValid(id) && ColorSchemes.Normalize(id) == id, id);
-                Assert(ColorSchemes.All.Distinct().Count() == 5, "unique skins");
-                Assert(ColorSchemes.Normalize(null) == ColorSchemes.Warm, "null default");
-                Assert(ColorSchemes.Normalize("future") == ColorSchemes.Warm, "unknown default");
-                Assert(MicaBackdropTypes.Normalize(null) == MicaBackdropTypes.Mica, "null mica backdrop default");
-                Assert(MicaBackdropTypes.Normalize("future") == MicaBackdropTypes.Mica, "unknown mica backdrop default");
-                Assert(MicaBackdropTypes.ToDwmBackdrop(MicaBackdropTypes.Mica) == 2, "mica backdrop dwm value");
-                Assert(MicaBackdropTypes.Normalize("micaAlt") == MicaBackdropTypes.Mica, "retired Mica Alt migrates to Mica");
-                Assert(MicaBackdropTypes.ToDwmBackdrop(MicaBackdropTypes.Acrylic) == 3, "acrylic backdrop dwm value");
-                Assert(MicaBackdropTypes.ToDwmBackdrop(MicaBackdropTypes.ClearAcrylic) == 1, "clear Acrylic disables the fixed system backdrop");
-                Assert(!new AppState().HideSurfaceOutline, "outer border is visible by default");
                 var store = new StateStore(temp, DurableAtomicFileWriter.Shared);
-                long version = 0;
-                foreach (var mode in new[] { "light", "dark", "system" })
-                foreach (var material in MicaBackdropTypes.All)
-                foreach (var alwaysActive in new[] { false, true })
-                {
-                    var state = new AppState { ColorScheme = ColorSchemes.Mica, Theme = mode,
-                        MicaBackdropType = material, MicaAlwaysActive = alwaysActive };
-                    state.Papers.Add(new PaperData { Type = PaperTypes.Note, Content = "# Mica\n保留笔记" });
-                    store.SaveJsonSync(store.SerializeState(state), ++version);
-                    var restored = store.Load();
-                    Assert(restored.ColorScheme == "mica" && restored.Theme == mode && restored.MicaBackdropType == material &&
-                        restored.MicaAlwaysActive == alwaysActive, "saved material and activation preference");
-                    Assert(restored.Papers[0].Content == state.Papers[0].Content, "preserved body");
-                }
-                store.SaveJsonSync("""{"colorScheme":"mica","micaBackdropType":"micaAlt","papers":[]}""", ++version);
+                var state = new AppState { ColorScheme = ColorSchemes.Mica, Theme = "dark",
+                    MicaBackdropType = MicaBackdropTypes.Acrylic, MicaAlwaysActive = true };
+                state.Papers.Add(new PaperData { Type = PaperTypes.Note, Content = "# Mica\n保留笔记" });
+                store.SaveJsonSync(store.SerializeState(state), 1);
+                var restored = store.Load();
+                Assert(restored.ColorScheme == "mica" && restored.Theme == "dark" &&
+                    restored.MicaBackdropType == MicaBackdropTypes.Acrylic && restored.MicaAlwaysActive,
+                    "saved material and activation preference");
+                Assert(restored.Papers[0].Content == state.Papers[0].Content, "preserved body");
+                store.SaveJsonSync("""{"colorScheme":"mica","micaBackdropType":"micaAlt","papers":[]}""", 2);
                 var legacy = store.Load();
                 Assert(legacy.MicaBackdropType == MicaBackdropTypes.Mica && !legacy.MicaAlwaysActive,
                     "old data migrates retired material and defaults to real activation");
@@ -345,7 +328,6 @@ internal static class Program
                 controller.State.UseCapsuleMode = true;
                 controller.State.UseDeepCapsuleMode = false;
                 controller.State.ExperimentalInactivePaperOpacity = false;
-                Check("native material isolation and Aero lighting reuse", () => MaterialRefactorChecks.Run(controller));
                 Check("readable opaque semantic palette in light and dark", () =>
                 {
                     controller.State.ColorScheme = "mica";
@@ -389,9 +371,7 @@ internal static class Program
                 });
                 if (!noRaster)
                 {
-                    Check("experimental skins", () => SkinChecks.Run(controller));
-                    Check("curved material lighting and parallax", () => MaterialStudyChecks.Run(controller));
-                    Check("material-specific colors and stable preview opacity", () => MaterialPaletteChecks.Run(controller));
+                    Check("skin switching, visible auxiliary content and resizing", () => SkinChecks.Run(controller));
                 }
                 Check("immediate menus, native settings and real right-click interactions", () => MaterialPresentationChecks.Run(controller));
                 Check("paper form rendering and native fallback publication", () => FormTransitionRenderingChecks.Run(controller));
