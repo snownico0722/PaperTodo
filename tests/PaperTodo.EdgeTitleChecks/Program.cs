@@ -17,6 +17,7 @@ internal static partial class Program
         try
         {
             DetachedPointerAdmissionChecks();
+            NativeFreeQueuePolicyChecks.Run();
             CycleAndUnicode();
             Console.WriteLine("PASS title-cycle-and-unicode");
             Persistence();

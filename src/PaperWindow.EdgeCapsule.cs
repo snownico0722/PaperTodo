@@ -149,6 +149,7 @@ public sealed partial class PaperWindow
         IntPtr lParam,
         ref bool handled)
     {
+        if (msg == 0x0201) _nativeQueuePointerDownKeys = unchecked((int)wParam.ToInt64());
         // WM_MOUSELEAVE / WM_NCMOUSELEAVE are the authoritative boundary signal for the real host.
         // WPF can raise MouseLeave while the physical point is still inside the applied rectangle;
         // consume the native leave as well so that a later genuine exit cannot be lost.
@@ -270,11 +271,13 @@ public sealed partial class PaperWindow
 
     private void FlushEdgeCapsulePresentation(
         EdgeCapsuleTransitionReason reason,
-        EdgeCapsuleDirty dirty = EdgeCapsuleDirty.Presentation)
+        EdgeCapsuleDirty dirty = EdgeCapsuleDirty.Presentation,
+        double? retractionTopDip = null)
     {
         _edgeCapsule.RequestPresentation(EdgeCapsuleMotion.Snap(reason));
         var dispatcher = _edgeCapsuleHost?.Dispatcher ?? Dispatcher;
-        _edgeCapsule.Flush(dirty, dispatcher, ReconcileEdgeCapsule);
+        _edgeCapsule.Flush(dirty, dispatcher,
+            retractionTopDip.HasValue ? flags => ReconcileEdgeCapsuleCore(flags, retractionTopDip) : ReconcileEdgeCapsule);
     }
 
     internal void InvalidateEdgeCapsuleDisplayMetrics()
@@ -504,7 +507,7 @@ public sealed partial class PaperWindow
                     .ExperimentalRestingCapsuleOpacityAlways
                     ? restingOpacity
                     : null;
-        return EdgeCapsuleLayoutService.Calculate(
+        var layout = EdgeCapsuleLayoutService.Calculate(
             new EdgeCapsuleLayoutFacts(
                 monitor,
                 edge,
@@ -523,7 +526,10 @@ public sealed partial class PaperWindow
                 _edgeCapsuleHostCapacityWidthDip,
                 _edgeCapsuleHostCapacityHeightDip,
                 expandedWidth,
-                _controller.State.DeepCapsuleTitleMeasureCharacterLimit == EdgeCapsuleTitleLimit.Hidden));
+                _controller.State.DeepCapsuleTitleMeasureCharacterLimit == EdgeCapsuleTitleLimit.Hidden,
+                _controller.EdgeCapsuleFreeQueuesEnabled));
+        return _controller.NativeEdgeQueueRetractionTop(_paper) is { } top
+            ? layout with { MasterTopDip = top } : layout;
     }
 
     private bool ApplyEdgeCapsulePresentationFrame(
@@ -601,7 +607,9 @@ public sealed partial class PaperWindow
         _edgeCapsule.Invalidate(dirty, dispatcher, ReconcileEdgeCapsule);
     }
 
-    private EdgeCapsuleDirty ReconcileEdgeCapsule(EdgeCapsuleDirty dirty)
+    private EdgeCapsuleDirty ReconcileEdgeCapsule(EdgeCapsuleDirty dirty) => ReconcileEdgeCapsuleCore(dirty, null);
+
+    private EdgeCapsuleDirty ReconcileEdgeCapsuleCore(EdgeCapsuleDirty dirty, double? retractionTopDip)
     {
         var wasRetracting = IsDeepCapsuleSlotRetracting;
         var wasPointerOver = _edgeCapsule.PointerOverSurface;
@@ -609,7 +617,9 @@ public sealed partial class PaperWindow
             _edgeCapsule.AppliedPresentationVersion;
         var remaining = _edgeCapsule.Reconcile(
             dirty,
-            CaptureEdgeCapsuleLayoutSnapshot,
+            retractionTopDip is { } returnTop
+                ? () => CaptureEdgeCapsuleLayoutSnapshot() with { MasterTopDip = returnTop }
+                : CaptureEdgeCapsuleLayoutSnapshot,
             CaptureEdgeCapsulePointerPosition,
             ResolveEdgeCapsulePresentedFrame,
             ApplyEdgeCapsulePresentationFrame,
@@ -751,7 +761,8 @@ public sealed partial class PaperWindow
             index,
             slotCount,
             _controller.DeepCapsuleStartTopMarginFor(_paper),
-            DeepCapsuleGap);
+            DeepCapsuleGap,
+            _controller.EdgeCapsuleFreeQueuesEnabled);
     }
 
 }

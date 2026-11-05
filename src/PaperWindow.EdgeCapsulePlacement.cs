@@ -139,7 +139,8 @@ public sealed partial class PaperWindow
         RefreshEffectiveTopmost();
     }
 
-    internal void PreviewDeepCapsulePlacement(EdgeCapsulePlacement placement)
+    internal void PreviewDeepCapsulePlacement(EdgeCapsulePlacement placement, bool animate = true,
+        bool anchorChanged = false)
     {
         if (!HasDeepCapsuleSlotPlacement ||
             _edgeCapsuleHost?.IsVisible != true ||
@@ -149,18 +150,24 @@ public sealed partial class PaperWindow
             return;
         }
 
-        if (!UpdateEdgeCapsuleQueuePlacement(placement))
+        // A moving master changes the queue's layout anchor without changing its
+        // members' slot indices. Refresh that layout through the same Presenter.
+        if (_edgeCapsule.Placement == placement.Normalize())
+        {
+            if (!anchorChanged) return;
+        }
+        else if (!UpdateEdgeCapsuleQueuePlacement(placement))
         {
             return;
         }
         if (!TryStageEdgeCapsuleVisualTransaction(
-                animate: true,
+                animate: animate,
                 EdgeCapsuleTransitionReason.Placement,
                 EdgeCapsuleLayout.SlotMoveMilliseconds,
                 refreshLayout: true))
         {
             RequestEdgeCapsulePresentation(
-                animate: true,
+                animate: animate,
                 EdgeCapsuleTransitionReason.Placement,
                 EdgeCapsuleLayout.SlotMoveMilliseconds,
                 refreshLayout: true);

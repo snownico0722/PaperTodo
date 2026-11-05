@@ -1667,4 +1667,6 @@ The original note is kept.</value></data>
   <data name="NoteExportNoNotes" xml:space="preserve"><value>There are no Markdown notes or todo papers to export.</value></data>
   <data name="NoteExportProgress" xml:space="preserve"><value>Exporting {0}/{1} papers</value></data>
   <data name="TodoExportCurrent" xml:space="preserve"><value>Export this todo paper</value></data>
+  <data name="SettingsCapsuleFreeQueues" xml:space="preserve"><value>Free edge capsule queues</value></data>
+  <data name="TipCapsuleFreeQueues" xml:space="preserve"><value>Pull a capsule away to form a separate queue. Hold Ctrl to move a queue along the edge; pull sideways to move it across edges or displays. The master can still collect all queues on its edge.</value></data>
 </root>

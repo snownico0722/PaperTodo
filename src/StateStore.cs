@@ -685,6 +685,7 @@ public sealed partial class StateStore
         if (!state.UseCapsuleMode || !state.UseDeepCapsuleMode)
         {
             state.UseCapsuleCollapseAll = false;
+            state.UseCapsuleFreeQueues = false;
         }
 
         state.CapsuleCollapseAllActiveQueues ??= new Dictionary<string, bool>();
@@ -747,13 +748,15 @@ public sealed partial class StateStore
             // Per-paper queue identity. Migration: a capsule with no explicit side inherits the
             // legacy single global anchor, so existing docked capsules keep their current edge /
             // monitor. New papers default to the global side until dragged to a queue.
-            paper.CapsuleSide = string.IsNullOrWhiteSpace(paper.CapsuleSide)
+            var inheritsLegacyQueueAnchor = string.IsNullOrWhiteSpace(paper.CapsuleSide);
+            paper.CapsuleSide = inheritsLegacyQueueAnchor
                 ? state.DeepCapsuleSide
                 : DeepCapsuleSides.Normalize(paper.CapsuleSide);
-            var capsuleMonitorDeviceName = string.IsNullOrWhiteSpace(paper.CapsuleMonitorDeviceName)
+            var capsuleMonitorDeviceName = inheritsLegacyQueueAnchor && string.IsNullOrWhiteSpace(paper.CapsuleMonitorDeviceName)
                 ? (state.DeepCapsuleMonitorDeviceName ?? "")
-                : paper.CapsuleMonitorDeviceName.Trim();
+                : (paper.CapsuleMonitorDeviceName ?? "").Trim();
             paper.CapsuleMonitorDeviceName = WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(capsuleMonitorDeviceName);
+            paper.CapsuleQueueId = EdgeCapsuleQueueIds.Normalize(paper.CapsuleQueueId);
             NormalizeDeepCapsuleExpandedGeometry(paper);
 
             paper.Title = PaperTitles.CleanCustomTitle(paper.Title, state.MaxTitleLength);
@@ -995,16 +998,11 @@ public sealed partial class StateStore
 
     private static string NormalizeQueueKey(string? key)
     {
-        var value = (key ?? "").Trim();
-        var separator = value.LastIndexOf('|');
-        if (separator < 0)
-        {
-            return QueueKey("", value);
-        }
-
-        var monitorDeviceName = value[..separator];
-        var side = value[(separator + 1)..];
-        return QueueKey(monitorDeviceName, side);
+        EdgeCapsuleQueueIds.TrySplit((key ?? "").Trim(), out var edgeKey, out var id);
+        var separator = edgeKey.LastIndexOf('|');
+        var monitor = separator >= 0 ? edgeKey[..separator] : "";
+        var side = separator >= 0 ? edgeKey[(separator + 1)..] : edgeKey;
+        return EdgeCapsuleQueueIds.Compose(QueueKey(monitor, side), id);
     }
 
     private static string QueueKey(string? monitorDeviceName, string? side)

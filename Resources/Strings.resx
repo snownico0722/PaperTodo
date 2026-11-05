@@ -1716,4 +1716,6 @@
   <data name="NoteExportNoNotes" xml:space="preserve"><value>没有可导出的笔记或待办。</value></data>
   <data name="NoteExportProgress" xml:space="preserve"><value>正在导出 {0}/{1} 张纸片</value></data>
   <data name="TodoExportCurrent" xml:space="preserve"><value>导出当前待办</value></data>
+  <data name="SettingsCapsuleFreeQueues" xml:space="preserve"><value>边缘胶囊自由队列</value></data>
+  <data name="TipCapsuleFreeQueues" xml:space="preserve"><value>拖远单个胶囊可独立成队；Ctrl 拖动整队，横向拉出后可换边或换屏。主胶囊仍可收纳整侧队列。</value></data>
 </root>
