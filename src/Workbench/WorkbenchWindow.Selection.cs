@@ -39,12 +39,6 @@ internal sealed partial class WorkbenchWindow
 
     private void WireCardSelection(Card card)
     {
-        card.Frame.PreviewMouseLeftButtonDown += (_, e) =>
-        {
-            if (_connectionSource == null) return;
-            CompleteConnection(card.Snapshot.Id);
-            e.Handled = true;
-        };
         card.Move.PreviewMouseLeftButtonDown += (_, e) =>
         {
             if (e.Handled || e.ClickCount != 1) return;
@@ -305,8 +299,12 @@ internal sealed partial class WorkbenchWindow
             head.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
             var thumb = new Thumb { Tag = group.Title, Foreground = Ink, Cursor = Cursors.SizeAll, Background = Brushes.Transparent };
             thumb.Template = TitleDragTemplate(thumb); head.Children.Add(thumb);
-            var menuButton = NewButton("⋯"); menuButton.Padding = new Thickness(5, 2, 5, 2);
-            Grid.SetColumn(menuButton, 1); head.Children.Add(menuButton);
+            var collapseButton = NewButton(collapsed ? "▸" : "▾");
+            collapseButton.Padding = new Thickness(5, 2, 5, 2);
+            collapseButton.Background = Brushes.Transparent;
+            collapseButton.BorderThickness = new Thickness(0);
+            collapseButton.ToolTip = Strings.Get(collapsed ? "WorkbenchExpandGroup" : "WorkbenchCollapseGroup");
+            Grid.SetColumn(collapseButton, 1); head.Children.Add(collapseButton);
             frame.Child = head;
             Canvas.SetLeft(frame, b.X); Canvas.SetTop(frame, b.Y - 42);
             Panel.SetZIndex(frame, collapsed ? 4 : 1);
@@ -316,23 +314,17 @@ internal sealed partial class WorkbenchWindow
             {
                 _viewport.Focus();
                 _selectedCards.Clear(); _selectedCards.UnionWith(group.Members); ApplySelectionStyle();
-                if (e.ClickCount == 2) { ToggleGroupCollapsed(group.Id); e.Handled = true; }
+                if (e.ClickCount == 2) { RenameGroup(scene, group.Id, head, thumb); e.Handled = true; }
             };
-            menuButton.Click += (_, _) =>
-            {
-                var menu = new ContextMenu { PlacementTarget = menuButton };
-                AddMenu(menu, collapsed ? "WorkbenchExpandGroup" : "WorkbenchCollapseGroup", () => ToggleGroupCollapsed(group.Id));
-                AddMenu(menu, "WorkbenchFocusGroup", () => FocusGroup(group.Id));
-                AddMenu(menu, "WorkbenchRenameGroup", () => RenameGroup(scene, group.Id, head, thumb));
-                AddMenu(menu, "WorkbenchUngroup", () => Ungroup(group.Id));
-                menu.IsOpen = true;
-            };
+            collapseButton.Click += (_, _) => ToggleGroupCollapsed(group.Id);
             Dictionary<string, WorkbenchRect>? before = null;
             var changed = false;
             thumb.DragStarted += (_, _) =>
             {
                 if (IsSuspended || cards.Any(c => c.Snapshot.Placement?.Pinned == true)) return;
                 before = cards.ToDictionary(c => c.Snapshot.Id, c => c.Bounds, StringComparer.Ordinal);
+                foreach (var card in cards) Panel.SetZIndex(card.Frame, 12);
+                Panel.SetZIndex(frame, 14);
                 changed = false; _dragging = true;
             };
             thumb.DragDelta += (_, e) =>
@@ -347,7 +339,10 @@ internal sealed partial class WorkbenchWindow
             thumb.DragCompleted += (_, e) =>
             {
                 if (!_dragging || before == null) return;
-                _dragging = false; FinishCardMove(before, e.Canceled || !changed); before = null;
+                _dragging = false;
+                foreach (var card in cards) Panel.SetZIndex(card.Frame, 2);
+                Panel.SetZIndex(frame, collapsed ? 4 : 1);
+                FinishCardMove(before, e.Canceled || !changed); before = null;
             };
         }
     }
@@ -377,9 +372,4 @@ internal sealed partial class WorkbenchWindow
         editor.Focus(); editor.SelectAll();
     }
 
-    private static void AddMenu(ContextMenu menu, string key, Action action, bool enabled = true)
-    {
-        var item = new MenuItem { Header = Strings.Get(key), IsEnabled = enabled };
-        item.Click += (_, _) => action(); menu.Items.Add(item);
-    }
 }
