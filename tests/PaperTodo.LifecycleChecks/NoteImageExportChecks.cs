@@ -87,6 +87,24 @@ internal static class NoteImageExportChecks
                   NoteImageJpegWriter.Quality == 90, "Default JPEG quality or image dimensions changed");
             if (!string.IsNullOrWhiteSpace(artifacts))
                 File.WriteAllBytes(Path.Combine(artifacts, "note-share-sample.jpg"), bytes);
+
+            // A decodable JPEG with the right dimensions can still contain garbage
+            // when native pixel-buffer marshaling is wrong; verify actual colors.
+            var expectedJpeg = new FormatConvertedBitmap(frame, PixelFormats.Bgr24, null, 0);
+            var actualJpeg = new FormatConvertedBitmap(jpeg, PixelFormats.Bgr24, null, 0);
+            foreach (var row in new[] { 0, 255, 511, 512, 1023, 1024, sample.PixelHeight - 1 })
+            {
+                var expectedRow = new byte[sample.PixelWidth * 3];
+                var actualRow = new byte[expectedRow.Length];
+                var area = new Int32Rect(0, row, sample.PixelWidth, 1);
+                expectedJpeg.CopyPixels(area, expectedRow, expectedRow.Length, 0);
+                actualJpeg.CopyPixels(area, actualRow, actualRow.Length, 0);
+                var error = 0L;
+                for (var channel = 0; channel < expectedRow.Length; channel++)
+                    error += Math.Abs(expectedRow[channel] - actualRow[channel]);
+                Check(error < expectedRow.Length * 20L,
+                    "JPEG content differs too far from the preview at row " + row);
+            }
         }
         finally { File.Delete(jpgPath); }
 
