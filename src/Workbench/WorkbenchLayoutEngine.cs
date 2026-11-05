@@ -141,10 +141,11 @@ internal static class WorkbenchLayoutEngine
             var sameAffinity = component[0].Affinity.Length > 0 && component.All(n => n.Affinity == component[0].Affinity);
             groups.Add(new(sameAffinity ? component[0].Affinity : "related:" + component[0].Id, component));
         }
-        // Unrelated papers get loose visual neighborhoods, not a new user-maintained taxonomy.
-        foreach (var loose in components.Where(g => g.Length == 1 && g[0].Affinity.Length == 0)
-                     .Select(g => g[0]).GroupBy(n => n.Kind, StringComparer.Ordinal))
-            groups.Add(new("loose:" + loose.Key, loose.ToArray()));
+        // Ungrouped papers share one loose layout pool, regardless of paper/material type.
+        // Only explicit groups (passed as Affinity) and actual connections cluster cards.
+        var loose = components.Where(g => g.Length == 1 && g[0].Affinity.Length == 0)
+            .Select(g => g[0]).ToArray();
+        if (loose.Length > 0) groups.Add(new("ungrouped", loose));
         return groups.OrderBy(g => g.Key, StringComparer.Ordinal).ToArray();
     }
 
