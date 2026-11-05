@@ -95,7 +95,7 @@ public sealed partial class PaperWindow
         // The original PaperWindow HWND consumes Ctrl+W. Borrowed visuals are on a
         // different HWND, so its shell must forward the same gesture to the same ×.
         if (e.Handled ||
-            _advancedInteractionLocked ||
+            IsAdvancedDesktopInteractionLocked ||
             _paper.IsCollapsed ||
             e.Key != Key.W ||
             Keyboard.Modifiers != ModifierKeys.Control)
@@ -127,7 +127,7 @@ public sealed partial class PaperWindow
         // buttons and drag space. As with a normal button, the release must still land on it.
         _middleClickTitleArmed =
             !e.Handled &&
-            !_advancedInteractionLocked &&
+            !IsAdvancedDesktopInteractionLocked &&
             !_paper.IsCollapsed &&
             _topBarHost?.IsMouseOver == true;
     }
@@ -151,7 +151,7 @@ public sealed partial class PaperWindow
         var shouldClose =
             _middleClickTitleArmed &&
             !e.Handled &&
-            !_advancedInteractionLocked &&
+            !IsAdvancedDesktopInteractionLocked &&
             !_paper.IsCollapsed &&
             _topBarHost?.IsMouseOver == true;
         _middleClickTitleArmed = false;

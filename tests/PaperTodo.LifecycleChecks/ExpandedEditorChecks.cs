@@ -161,6 +161,25 @@ internal static class ExpandedEditorChecks
               host.WindowState != WindowState.Minimized,
             "Global find target navigation failed to restore the editor host");
 
+        // Global interaction lock protects desktop papers, never the currently borrowed editor.
+        SetGlobalPaperLock(controller, locked: true);
+        var desktopShield = (Border)Member(a, "_advancedLockShield");
+        var hostedShield = (Border)Member(b, "_advancedLockShield");
+        Check(desktopShield.Visibility == Visibility.Visible &&
+              hostedShield.Visibility == Visibility.Collapsed &&
+              ((Button)Member(b, "_paperIconButton")).Visibility == Visibility.Visible,
+            "Desktop lock hid editor controls or failed to protect a desktop paper");
+        var editorKey = new System.Windows.Input.KeyEventArgs(
+            System.Windows.Input.Keyboard.PrimaryDevice,
+            PresentationSource.FromVisual(host),
+            Environment.TickCount,
+            System.Windows.Input.Key.G)
+        {
+            RoutedEvent = System.Windows.Input.Keyboard.PreviewKeyDownEvent
+        };
+        ((UIElement)Member(b, "_shell")).RaiseEvent(editorKey);
+        Check(!editorKey.Handled, "Desktop lock intercepted a normal key in the editor");
+
         Check(b.IsExpandedEditorSidebarOpen && !controller.State.Papers.Single(p => p.Id == "editor-b").IsCollapsed,
             "Switch did not preserve sidebar presentation or expand the borrowed capsule");
         Check(ReferenceEquals(secondEditor, Member(b, "_noteBox")) &&
@@ -180,6 +199,12 @@ internal static class ExpandedEditorChecks
         Check(host.CurrentPaperId == "editor-todo" && todo.IsExpandedEditorHosted,
             "Todo visual did not replace the Markdown visual");
         Check(new WindowInteropHelper(host).Handle == hwnd, "Todo switch changed the WPF HWND");
+        var todoShield = (Border)Member(todo, "_advancedLockShield");
+        Check(hostedShield.Visibility == Visibility.Visible &&
+              desktopShield.Visibility == Visibility.Visible &&
+              todoShield.Visibility == Visibility.Collapsed &&
+              ((Button)Member(todo, "_paperIconButton")).Visibility == Visibility.Visible,
+            "Switching papers under global lock did not restore desktop protection and free the editor");
         Check(!b.IsExpandedEditorHosted && controller.State.Papers.Single(p => p.Id == "editor-b").IsCollapsed &&
               ReferenceEquals(secondSession, Member(b, "_markdownBodySession")),
               "Leaving B disposed its original editor session");
@@ -190,6 +215,13 @@ internal static class ExpandedEditorChecks
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
         Check(!todo.IsExpandedEditorHosted && controller.State.Papers.Single(p => p.Id == "editor-todo").IsVisible,
             "Return did not restore the selected paper as an ordinary paper");
+        Check(todoShield.Visibility == Visibility.Visible && desktopShield.Visibility == Visibility.Visible,
+            "Returning from editor did not reapply global desktop lock");
+        SetGlobalPaperLock(controller, locked: false);
+        Check(todoShield.Visibility == Visibility.Collapsed &&
+              hostedShield.Visibility == Visibility.Collapsed &&
+              desktopShield.Visibility == Visibility.Collapsed,
+            "Unlocking desktop papers failed after an editor handoff");
 
         controller.OpenExpandedEditorFor(b);
         var pluginHost = b.ExpandedEditorHostWindow!;
@@ -222,6 +254,13 @@ internal static class ExpandedEditorChecks
         Check(ReferenceEquals(firstSession, Member(a, "_markdownBodySession")),
             "Switching or closing replaced the initial editor session");
         controller.Exit();
+    }
+
+    private static void SetGlobalPaperLock(AppController controller, bool locked)
+    {
+        var method = typeof(AppController).GetMethod("SetAdvancedAllPapersLocked", Private)
+            ?? throw new InvalidOperationException("Global paper lock handler missing");
+        method.Invoke(controller, [locked]);
     }
 
     private static string ModeGeometry(Button button)

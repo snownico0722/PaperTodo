@@ -58,6 +58,9 @@ public sealed partial class PaperWindow
             if (_topBarHost != null) _topBarHost.Visibility = Visibility.Visible;
             HookExpandedEditorInput(true);
             destination.Child = _shell;
+            // Reapply visuals after handoff: the desktop shield remains on the hidden owner,
+            // while the editor toolbar and native plugin body must stay interactive.
+            UpdateAdvancedInteractionLockVisuals();
             host.Deactivated += OnExpandedEditorHostDeactivated;
             host.StateChanged += OnExpandedEditorHostStateChanged;
             host.LocationChanged += OnExpandedEditorHostLocationChanged;
@@ -80,8 +83,6 @@ public sealed partial class PaperWindow
     {
         if (attach)
         {
-            _shell.AddHandler(PreviewKeyDownEvent,
-                new KeyEventHandler(OnExpandedEditorInputLock), true);
             _shell.PreviewMouseMove += OnWindowPreviewMouseMove;
             _shell.PreviewMouseWheel += OnWindowPreviewMouseWheel;
             _shell.PreviewMouseLeftButtonUp += OnWindowPreviewMouseLeftButtonUp;
@@ -105,8 +106,6 @@ public sealed partial class PaperWindow
         }
         else
         {
-            _shell.RemoveHandler(PreviewKeyDownEvent,
-                new KeyEventHandler(OnExpandedEditorInputLock));
             _shell.PreviewMouseMove -= OnWindowPreviewMouseMove;
             _shell.PreviewMouseWheel -= OnWindowPreviewMouseWheel;
             _shell.PreviewMouseLeftButtonUp -= OnWindowPreviewMouseLeftButtonUp;
@@ -125,11 +124,6 @@ public sealed partial class PaperWindow
             _shell.LostMouseCapture -= OnTodoSweepLostMouseCapture;
             _shell.LostMouseCapture -= OnTodoDragLostMouseCapture;
         }
-    }
-
-    private void OnExpandedEditorInputLock(object sender, KeyEventArgs e)
-    {
-        if (_advancedInteractionLocked) e.Handled = true;
     }
 
     private void OnExpandedEditorFindShortcut(object sender, KeyEventArgs e)
@@ -233,6 +227,8 @@ public sealed partial class PaperWindow
             owner.ApplyPaperChromePresentation();
             owner.ApplySystemVisibility(reapplyTaskbarShellState: true);
             owner.RefreshEffectiveTopmost();
+            // Restore the still-active desktop lock without changing the global shortcut state.
+            owner.UpdateAdvancedInteractionLockVisuals();
             owner.SyncNoteImagePresentationState();
 
             if (restoreDesktop && _desktopWasVisible && owner._paper.IsVisible && !owner.IsClosed)
