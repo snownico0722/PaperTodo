@@ -144,8 +144,13 @@ public sealed class WorkbenchCardState
     public double Height { get; set; } = 360;
     public bool Pinned { get; set; }
     public bool Preferred { get; set; }
+    // Canvas-only folding never changes the desktop paper's capsule state.
+    // Height remains the last expanded height so unfolding is lossless.
+    public bool Collapsed { get; set; }
 
+    internal const double CollapsedHeight = 48;
     internal WorkbenchRect Bounds => new(X, Y, Width, Height);
+    internal WorkbenchRect LayoutBounds => new(X, Y, Width, Collapsed ? CollapsedHeight : Height);
     internal WorkbenchCardState Copy() => (WorkbenchCardState)MemberwiseClone();
     internal static double ValidSize(double value, double fallback, double min, double max) =>
         double.IsFinite(value) ? Math.Clamp(value, min, max) : fallback;
