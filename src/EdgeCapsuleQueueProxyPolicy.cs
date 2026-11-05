@@ -128,6 +128,26 @@ internal static class EdgeCapsuleQueueProxyPolicy
         target.Visible &&
         PresentedHostBounds(start) != target.HostBounds;
 
+    internal static bool CanRetarget(EdgeCapsuleQueueProxyPlan current,
+        EdgeCapsuleQueueProxyPlan next, DeviceScreenRect outputBounds)
+    {
+        if (current.QueueKey != next.QueueKey || current.Topmost != next.Topmost ||
+            current.Members.Count != next.Members.Count) return false;
+        var previous = current.Members.ToDictionary(member => member.PaperId,
+            StringComparer.Ordinal);
+        foreach (var member in next.Members)
+        {
+            if (!previous.TryGetValue(member.PaperId, out var old) ||
+                !CanWrapMovingMemberLive(old.Target, member.Source) ||
+                !CanWrapMovingMemberLive(member.Source, member.Target) ||
+                old.Target.Surface != member.Target.Surface ||
+                !EdgeCapsuleQueueProxyGeometry.Contains(outputBounds, PresentedHostBounds(member.Start)) ||
+                !EdgeCapsuleQueueProxyGeometry.Contains(outputBounds, member.Target.HostBounds))
+                return false;
+        }
+        return true;
+    }
+
     public static EdgeCapsuleQueueProxyPlan? TryCreate(
         string queueKey,
         IReadOnlyList<EdgeCapsuleQueueProxyCandidate> candidates)

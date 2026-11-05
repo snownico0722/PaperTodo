@@ -111,10 +111,10 @@ public sealed partial class AppController
 
         foreach (var (id, placement) in desired)
             if (_windows.TryGetValue(id, out var window))
-                window.PreviewDeepCapsulePlacement(placement, animate: false);
+                window.PreviewDeepCapsulePlacement(placement, animate: true);
         foreach (var (masterKey, desiredTop) in masterTops)
             if (_masterCapsules.TryGetValue(masterKey, out var master))
-                master.PreviewQueueTop(desiredTop);
+                master.PreviewQueueTop(desiredTop, animate: masterKey != sourceKey);
 
         if (sameSlot) return;
         state.MemberIds.Clear();

@@ -160,6 +160,8 @@ public sealed partial class PaperWindow
         {
             return;
         }
+        if (!animate)
+            _controller.CompleteEdgeCapsuleQueueCompositionProxyFor(this);
         if (!TryStageEdgeCapsuleVisualTransaction(
                 animate: animate,
                 EdgeCapsuleTransitionReason.Placement,

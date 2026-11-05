@@ -11,24 +11,24 @@ public sealed partial class AppController
         _edgeCapsuleQueueCompositionProxies =
             new(StringComparer.Ordinal);
     private readonly Dictionary<
-        PaperWindow,
+        System.Windows.Window,
         EdgeCapsuleQueueCompositionProxy>
         _edgeCapsuleQueueCompositionProxyByWindow = new();
 
     private EdgeCapsuleQueueProxyPlan?
         TryCreateEdgeCapsuleQueueProxyPlan(
             EdgeCapsuleVisualTransactionEntry[] entries,
-            EdgeCapsuleQueueCompositionProxy? predecessor = null)
+            EdgeCapsuleQueueCompositionProxy? predecessor = null,
+            MasterCapsuleWindow? master = null)
     {
-        if (entries.Length == 0 ||
+        if ((entries.Length == 0 && master == null) ||
             entries.Select(entry => entry.QueueKey)
-                .Distinct(StringComparer.Ordinal)
-                .Count() != 1)
+                .Distinct(StringComparer.Ordinal).Count() > 1)
         {
             return null;
         }
 
-        var queueKey = entries[0].QueueKey;
+        var queueKey = master?.QueueProxyKey ?? entries[0].QueueKey;
 
         var candidates =
             new List<EdgeCapsuleQueueProxyCandidate>(
@@ -70,6 +70,9 @@ public sealed partial class AppController
             }
             candidates.Add(candidate.Value);
         }
+
+        if (master?.CaptureQueueProxyCandidate(predecessor) is { } masterCandidate)
+            candidates.Add(masterCandidate);
 
         var plan = EdgeCapsuleQueueProxyPolicy.TryCreate(
             queueKey,
@@ -123,17 +126,19 @@ public sealed partial class AppController
         CommitEdgeCapsuleQueueProxyLogicalEndpoints(
             EdgeCapsuleVisualTransactionEntry[] entries,
             EdgeCapsuleQueueProxyPlan plan,
-            long transactionTimestamp)
+            long transactionTimestamp,
+            MasterCapsuleWindow? master)
     {
         var proxiedPlans = plan.Members.ToDictionary(
             member => member.PaperId,
             StringComparer.Ordinal);
         var committed = true;
-        using (entries[0].Window.Dispatcher.DisableProcessing())
+        using ((master?.Dispatcher ?? entries[0].Window.Dispatcher).DisableProcessing())
         {
             using var nativeBoundsBatch =
                 WindowNative.BeginWindowDeviceBoundsBatch(
-                    entries.Length);
+                    entries.Length + (master == null ? 0 : 1));
+            if (master != null) committed &= master.ApplyQueueProxyEndpoint();
             foreach (var entry in entries)
             {
                 if (entry.Window.IsClosed)
@@ -233,7 +238,8 @@ public sealed partial class AppController
         EdgeCapsuleQueueProxyPlan plan,
         EdgeCapsuleVisualTransactionEntry[] entries,
         EdgeCapsuleQueueCompositionProxy? predecessor,
-        out bool realHostMayHaveChanged)
+        out bool realHostMayHaveChanged,
+        MasterCapsuleWindow? master = null)
     {
         realHostMayHaveChanged = false;
         var sessionOrdinal =
@@ -251,6 +257,12 @@ public sealed partial class AppController
                 plan.Members.Count);
         foreach (var memberPlan in plan.Members)
         {
+            if (master != null && memberPlan.PaperId == master.QueueProxySourceId)
+            {
+                members.Add(new EdgeCapsuleQueueCompositionProxyMember(
+                    master, memberPlan, master.QueueProxySourceHandle));
+                continue;
+            }
             if (!byPaperId.TryGetValue(
                     memberPlan.PaperId,
                     out var entry))
@@ -264,6 +276,14 @@ public sealed partial class AppController
                     entry.Window.EdgeCapsuleQueueProxySourceHandle));
         }
 
+        if (predecessor?.TryRetarget(plan, members,
+                timestamp => CommitEdgeCapsuleQueueProxyLogicalEndpoints(entries, plan, timestamp, master),
+                timestamp => RebaseEdgeCapsuleQueueProxyAnimationClock(entries, timestamp)) == true)
+        {
+            realHostMayHaveChanged = true;
+            return true;
+        }
+
         var proxy = EdgeCapsuleQueueCompositionProxy.TryCreate(
             sessionOrdinal,
             plan,
@@ -273,7 +293,7 @@ public sealed partial class AppController
                 CommitEdgeCapsuleQueueProxyLogicalEndpoints(
                     entries,
                     plan,
-                    timestamp),
+                    timestamp, master),
             animationStartRequested: timestamp =>
                 RebaseEdgeCapsuleQueueProxyAnimationClock(
                     entries,
@@ -483,10 +503,7 @@ public sealed partial class AppController
             return true;
         }
 
-        var windows = current.Members
-            .Select(member => member.Window)
-            .Distinct()
-            .ToArray();
+        var windows = current.Members.ToArray();
 
         if (current.CoverLost)
         {
@@ -504,11 +521,11 @@ public sealed partial class AppController
             foreach (var window in windows)
             {
                 if (_edgeCapsuleQueueCompositionProxyByWindow
-                        .TryGetValue(window, out var routed) &&
+                        .TryGetValue(window.Window, out var routed) &&
                     ReferenceEquals(routed, current))
                 {
                     _edgeCapsuleQueueCompositionProxyByWindow
-                        .Remove(window);
+                        .Remove(window.Window);
                 }
             }
             current.CompleteDeferredPointerInput();
@@ -527,7 +544,7 @@ public sealed partial class AppController
                 {
                     try
                     {
-                        window.FlushEdgeCapsuleQueueProxyEndpoint();
+                        window.FlushEndpoint();
                     }
                     catch { }
                 }
@@ -543,7 +560,7 @@ public sealed partial class AppController
 
         var endpointsReady = true;
         var endpoints = new List<(
-            PaperWindow Window,
+            EdgeCapsuleQueueCompositionProxyMember Window,
             EdgeCapsulePresentationFrame Endpoint)>(windows.Length);
 #if DEBUG
         var handoffStartedAt =
@@ -557,7 +574,7 @@ public sealed partial class AppController
             // latest Measure/Pointer/Presentation work first; only then capture and submit all real
             // endpoints through one HDWP transaction. Any final text/pixel correction therefore
             // happens under cover, never after the real HWNDs are revealed.
-            using (windows[0].Dispatcher.DisableProcessing())
+            using (windows[0].Window.Dispatcher.DisableProcessing())
             {
                 using var nativeBoundsBatch =
                     WindowNative.BeginWindowDeviceBoundsBatch(
@@ -566,13 +583,13 @@ public sealed partial class AppController
                 {
                     if (!window.IsClosed)
                     {
-                        window.FlushEdgeCapsuleQueueProxyEndpoint();
+                        window.FlushEndpoint();
                     }
                 }
                 foreach (var window in windows)
                 {
                     var applied = window
-                        .TryApplyLatestEdgeCapsuleQueueProxyEndpoint(
+                        .TryApplyEndpoint(
                             out var endpoint);
                     endpointsReady &= applied;
                     endpoints.Add((window, endpoint));
@@ -586,7 +603,7 @@ public sealed partial class AppController
                              item.Endpoint.Visible))
                 {
                     endpointsReady &= item.Window
-                        .PrepareEdgeCapsuleQueueProxyEndpointLayoutForHandoff();
+                        .PrepareEndpointLayout();
                 }
             }
 
@@ -597,7 +614,7 @@ public sealed partial class AppController
                 // TryReleaseForHandoff publishes these queued surface updates together with the
                 // real/proxy authority swap. A separate flush held the final proxy frame for one
                 // more presentation and made close look frozen before its last-frame flash.
-                windows[0].Dispatcher.Invoke(
+                windows[0].Window.Dispatcher.Invoke(
                     static () => { },
                     DispatcherPriority.Render);
             }
@@ -607,7 +624,7 @@ public sealed partial class AppController
                 foreach (var item in endpoints)
                 {
                     endpointsReady &= item.Window
-                        .VerifyEdgeCapsuleQueueProxyEndpoint(
+                        .VerifyEndpoint(
                             item.Endpoint);
                 }
             }
@@ -649,11 +666,11 @@ public sealed partial class AppController
         foreach (var window in windows)
         {
             if (_edgeCapsuleQueueCompositionProxyByWindow
-                    .TryGetValue(window, out var routed) &&
+                    .TryGetValue(window.Window, out var routed) &&
                 ReferenceEquals(routed, current))
             {
                 _edgeCapsuleQueueCompositionProxyByWindow
-                    .Remove(window);
+                    .Remove(window.Window);
             }
         }
         TraceEdgeCapsuleQueueVisibility(current, "released");
@@ -699,10 +716,18 @@ public sealed partial class AppController
         if (proxy.TryResolveInputTarget(input.ScreenPoint, out var handle, out var endpoint))
         {
             var target = proxy.Members.FirstOrDefault(member => member.SourceHandle == handle)?.Window;
-            if (target != null)
+            if (target is MasterCapsuleWindow master)
             {
-                var paperId = target.EdgeCapsulePreviewPaperId;
-                var valid = target.CaptureEdgeCapsulePointerInputValidity();
+                proxy.DeferPointerDown(
+                    () => !IsExiting && master.CanRouteQueueProxyInput &&
+                        master.QueueProxySourceHandle == handle &&
+                        ReferenceEquals(_masterCapsules.GetValueOrDefault(queueKey), master),
+                    () => WindowNative.TryPostMouseButtonDown(handle, input, endpoint));
+            }
+            else if (target is PaperWindow paper)
+            {
+                var paperId = paper.EdgeCapsulePreviewPaperId;
+                var valid = paper.CaptureEdgeCapsulePointerInputValidity();
                 proxy.DeferPointerDown(
                     () => !IsExiting && _windows.TryGetValue(paperId, out var current) &&
                         ReferenceEquals(current, target) && valid(),
@@ -718,7 +743,7 @@ public sealed partial class AppController
 
 
     internal bool TryGetEdgeCapsuleQueueProxyPresentation(
-        PaperWindow window,
+        System.Windows.Window window,
         out EdgeCapsulePresentationFrame frame)
     {
         if (_edgeCapsuleQueueCompositionProxyByWindow
@@ -747,13 +772,13 @@ public sealed partial class AppController
     }
 
     internal bool IsEdgeCapsuleQueueProxyRetainingSource(
-        PaperWindow window) =>
+        System.Windows.Window window) =>
         _edgeCapsuleQueueCompositionProxyByWindow
             .TryGetValue(window, out var proxy) &&
         proxy.RetainsSource(window);
 
     internal void CompleteEdgeCapsuleQueueCompositionProxyFor(
-        PaperWindow window,
+        System.Windows.Window window,
         bool success = false)
     {
         if (_edgeCapsuleQueueCompositionProxyByWindow

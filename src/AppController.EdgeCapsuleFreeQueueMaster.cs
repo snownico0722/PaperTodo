@@ -70,7 +70,7 @@ public sealed partial class AppController
             State.DeepCapsuleQueueStartTopMargins[layout.QueueKey] = preview.Tops[layout.QueueKey];
             MarkDirty();
         }
-        ArrangeDeepCapsules(animate: !commit);
+        ArrangeDeepCapsules(animate: true);
     }
 
     private bool FreeMasterMembersMatch(FreeMasterDragLayout layout)

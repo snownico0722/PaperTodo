@@ -3126,7 +3126,7 @@ public sealed partial class AppController : IDisposable
         {
             // The master owns slot 0, so startup creates it before publishing the real slots.
             // Suppress its standalone fade so the complete queue reaches the first frame together.
-            SyncMasterCapsules(plan, animate: false, masterTransferTargetKey);
+            SyncMasterCapsules(plan, animate: animate && !flushInitialPresentations, masterTransferTargetKey);
         }
 
         foreach (var paper in State.Papers)

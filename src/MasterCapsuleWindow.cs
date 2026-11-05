@@ -20,7 +20,7 @@ namespace PaperTodo;
 // down to slot 1..N). Clicking toggles queue retraction; vertical drag moves the queue anchor.
 // A horizontal pull hands only the floating visual to the shared EdgeCapsuleDragWindow while the
 // controller owns the queue transfer. The master never becomes a Paper/presenter authority.
-public sealed class MasterCapsuleWindow : Window
+public sealed partial class MasterCapsuleWindow : Window
 {
     private enum MasterGestureState
     {
@@ -252,6 +252,7 @@ public sealed class MasterCapsuleWindow : Window
         };
         _pill.PreviewMouseLeftButtonDown += (_, e) =>
         {
+            _controller.CompleteEdgeCapsuleQueueCompositionProxyFor(this);
             _dragSession = new MasterDragSession(
                 DeviceScreenPoint.FromPoint(PointToScreen(e.GetPosition(this))),
                 _queueKey,
@@ -435,6 +436,8 @@ public sealed class MasterCapsuleWindow : Window
             !_controller.State.ExperimentalDockedCapsulesNonTopmost &&
             avoidanceWindow == IntPtr.Zero &&
             !_controller.SuppressDeepCapsuleTopmostForContextMenu;
+        if (Topmost != topmost)
+            _controller.CompleteEdgeCapsuleQueueCompositionProxyFor(this);
         Topmost = topmost;
         if (IsVisible)
         {
@@ -924,11 +927,11 @@ public sealed class MasterCapsuleWindow : Window
 
     // Drag previews only change position. Keep count, theme and z-order updates
     // in the normal state/lifecycle path, and do not schedule an unchanged move.
-    internal void PreviewQueueTop(double top)
+    internal void PreviewQueueTop(double top, bool animate = false)
     {
         if (_queueTopPreview == top) return;
         _queueTopPreview = top;
-        MoveToTarget(animate: false);
+        MoveToTarget(animate);
     }
 
     private double QueueStartTopMargin =>
@@ -944,9 +947,10 @@ public sealed class MasterCapsuleWindow : Window
     private void MoveToTarget(bool animate)
     {
         if (_isClosingForReal) return;
-        // Every master position update is immediate, even when the caller requested
-        // animation. Opacity/expand/collapse have separate animation paths.
         var moveGeneration = ++_moveGeneration;
+        if (animate && _controller.TryStageMasterQueueYield(this)) return;
+        _controller.CompleteEdgeCapsuleQueueCompositionProxyFor(this);
+        if (_controller.IsEdgeCapsuleQueueProxyRetainingSource(this)) return;
         if (!WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(
                 _queueMonitorDeviceName, this, out var geometry))
         {
@@ -1206,6 +1210,7 @@ public sealed class MasterCapsuleWindow : Window
             return;
         }
 
+        _controller.CompleteEdgeCapsuleQueueCompositionProxyFor(this);
         _isClosingForReal = true;
         CancelQueueTransfer();
         FinishMasterGesture(commit: false, clearFocus: false);

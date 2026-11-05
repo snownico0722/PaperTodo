@@ -32,7 +32,7 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
         return _visuals.Any(state =>
         {
             var member = state.Member;
-            if (!member.Window.CanRouteEdgeCapsuleQueueProxyInput)
+            if (!member.CanRouteInput)
             {
                 return false;
             }
@@ -60,7 +60,8 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
         }
         foreach (var member in _members)
         {
-            member.Window.InvalidateEdgeCapsuleQueueProxyPointer();
+            if (member.Window is PaperWindow paper)
+                paper.InvalidateEdgeCapsuleQueueProxyPointer();
         }
     }
 
@@ -71,7 +72,7 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
     }
 
     internal bool TryGetPresentationAt(
-        PaperWindow window,
+        System.Windows.Window window,
         long timestamp,
         out EdgeCapsulePresentationFrame frame)
     {
@@ -88,7 +89,7 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
     }
 
     public bool TryGetPresentation(
-        PaperWindow window,
+        System.Windows.Window window,
         out EdgeCapsulePresentationFrame frame) =>
         TryGetPresentationAt(
             window,
@@ -96,7 +97,7 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
             out frame);
 
     public bool TryGetSourcePresentation(
-        PaperWindow window,
+        System.Windows.Window window,
         out EdgeCapsulePresentationFrame frame)
     {
         var member = _members.FirstOrDefault(candidate =>
@@ -113,19 +114,19 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
         return frame.IsUsable;
     }
 
-    public bool RetainsSource(PaperWindow window) =>
+    public bool RetainsSource(System.Windows.Window window) =>
         !_disposed &&
         !_sourcesReleased &&
         _members.Any(member =>
             ReferenceEquals(member.Window, window) &&
             member.SourceHandle != IntPtr.Zero);
 
-    public bool Routes(PaperWindow window) =>
+    public bool Routes(System.Windows.Window window) =>
         !_disposed &&
         _members.Any(member =>
             ReferenceEquals(member.Window, window));
 
-    public IntPtr SourceHandleFor(PaperWindow window) =>
+    public IntPtr SourceHandleFor(System.Windows.Window window) =>
         _members.FirstOrDefault(member =>
             ReferenceEquals(member.Window, window))
             ?.SourceHandle ?? IntPtr.Zero;
@@ -230,7 +231,7 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
         foreach (var state in _visuals)
         {
             var member = state.Member;
-            if (!member.Window.CanRouteEdgeCapsuleQueueProxyInput)
+            if (!member.CanRouteInput)
             {
                 continue;
             }

@@ -12,8 +12,8 @@ namespace PaperTodo;
 internal sealed partial class EdgeCapsuleQueueCompositionProxy
 {
     private const int CompletionGuardMilliseconds = 1;
-    private readonly EdgeCapsuleQueueProxyPlan _plan;
-    private readonly IReadOnlyList<EdgeCapsuleQueueCompositionProxyMember> _members;
+    private EdgeCapsuleQueueProxyPlan _plan;
+    private IReadOnlyList<EdgeCapsuleQueueCompositionProxyMember> _members;
     private readonly EdgeCapsuleQueueCompositionProxy? _predecessor;
     private readonly SharedRuntime _runtime;
     private readonly QueueHost _host;

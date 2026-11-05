@@ -43,6 +43,7 @@ internal static class NativeFreeQueueReviewChecks
         var originalContents = c.State.Papers.ToDictionary(p => p.Id, p => p.Content);
         await CheckDisplacedInsertion(c, windows, store, monitor);
         await CheckDragPreviewUpdates(c, windows, monitor);
+        await CheckYieldAnimations(c, windows, monitor);
         await CheckFoldedDropAndShortcuts(c, monitor);
         await CheckDisconnectedGesturesAndMerge(c, windows, store, monitor);
         Require(c.State.Papers.Count == originalContents.Count &&
@@ -211,6 +212,71 @@ internal static class NativeFreeQueueReviewChecks
         c.FinishFreeMasterQueueDrag(layout, false);
         await Idle();
         Console.WriteLine("PASS selective drag updates: live anchor refresh, unchanged peers, stable slot, neighbour restore, cancel and folded source");
+    }
+
+    private static async Task CheckYieldAnimations(AppController c,
+        IReadOnlyDictionary<string, PaperWindow> windows, MonitorGeometry monitor)
+    {
+        const string sourceKey = "|right#source";
+        var pitch = EdgeCapsuleLayout.SlotHeight(c.DeepCapsuleGap);
+        c.State.CapsuleCollapseAllActiveQueues.Clear();
+        c.ArrangeDeepCapsules(false);
+        await Idle();
+        var proxies = Field<Dictionary<string, EdgeCapsuleQueueCompositionProxy>>(
+            c, "_edgeCapsuleQueueCompositionProxies");
+        var masters = Masters(c);
+        var source = c.State.Papers.Single(p => p.Id == "review-10");
+        c.State.EnableAnimations = true;
+        try
+        {
+            // Exercise ordinary reorder through the public controller path.
+            var first = c.State.Papers.Single(p => p.Id == "review-6");
+            c.PreviewDeepCapsuleReorder(first, 1);
+            await Dispatcher.CurrentDispatcher.InvokeAsync(static () => { }, DispatcherPriority.Send);
+            Require(proxies.TryGetValue(B, out var ordinary), "ordinary reorder owns a queue translation");
+            Require(!ordinary!.Members.Any(m => ReferenceEquals(m.Window, windows[first.Id])),
+                "ordinary reorder excludes the directly dragged capsule");
+            ordinary.CompleteNow(true);
+            c.ArrangeDeepCapsules(false);
+            await Idle();
+
+            var layout = c.CaptureFreeMasterDragLayout("", EdgeCapsuleEdge.Right, sourceKey)!;
+            var insertion = 160 + 2 * pitch;
+            c.PreviewFreeMasterQueueTop(layout, insertion, Point(monitor, insertion));
+            await Dispatcher.CurrentDispatcher.InvokeAsync(static () => { }, DispatcherPriority.Send);
+            Require(proxies.TryGetValue(B, out var target), "merge preview translates the target queue");
+            Require(proxies.TryGetValue(C, out var neighbour),
+                "merge preview translates the neighbouring queue independently");
+            Require(neighbour!.Members.Any(m => ReferenceEquals(m.Window, masters[C])) &&
+                    neighbour.Members.Any(m => m.Window is PaperWindow),
+                "passive neighbour master and members share the same native translation");
+            Require(!proxies.ContainsKey(sourceKey), "carried queue remains direct while merging");
+            var sourceFrame = Field<EdgeCapsulePresenter>(windows[source.Id], "_edgeCapsule").AppliedPresentation;
+            Require(Math.Abs(sourceFrame.Bounds.Top -
+                    (monitor.WorkArea.Top + (insertion + pitch) * monitor.DpiScaleY)) <= 1,
+                "carried queue follows the pointer without waiting for passive animation");
+            c.PreviewFreeMasterQueueTop(layout, insertion, Point(monitor, insertion));
+            Require(ReferenceEquals(proxies[B], target) && ReferenceEquals(proxies[C], neighbour),
+                "same insertion sample retains both active translations");
+            foreach (var proxy in proxies.Values.ToArray()) proxy.CompleteNow(true);
+            c.PreviewFreeMasterQueueTop(layout, 24, Point(monitor, 24));
+            await Dispatcher.CurrentDispatcher.InvokeAsync(static () => { }, DispatcherPriority.Send);
+            Require(proxies.ContainsKey(B) && proxies.ContainsKey(C),
+                "leaving the merge slot animates both suffix and neighbour back");
+            foreach (var proxy in proxies.Values.ToArray()) proxy.CompleteNow(true);
+            c.FinishFreeMasterQueueDrag(layout, false);
+            await Dispatcher.CurrentDispatcher.InvokeAsync(static () => { }, DispatcherPriority.Send);
+            foreach (var proxy in proxies.Values.ToArray()) proxy.CompleteNow(true);
+            Require(proxies.Count == 0, "completion releases all queue covers");
+        }
+        finally
+        {
+            foreach (var proxy in proxies.Values.ToArray()) proxy.CompleteNow(false);
+            c.State.EnableAnimations = false;
+            c.ArrangeDeepCapsules(false);
+            await Idle();
+        }
+        Console.WriteLine("PASS ordinary and merge yield: independent queues, shared master clock, direct drag, stable slot and animated return");
     }
 
     private static int ReconcileGeneration(PaperWindow window) =>

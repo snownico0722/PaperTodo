@@ -438,6 +438,8 @@ Production translation backend 不承担 snapshot、clip/scale/effect resize 或
 
 同队列 successor 继承 predecessor 当前 live authority 和可见 sample，而不是 dispose 后冷启动另一套互不相关 proxy。端点提交期间 predecessor 仍可继续移动；successor 校准起点后，显示取样、输入命中、点击坐标转交和下一代临时 cover 均使用本代 `VisualState` 实际提交给 DComp 的起止偏移及同一动画时钟，不能继续沿用较早捕获的 plan 起点。该校准只调整平移，WPF 的形状、内容、opacity 和真实端点容量仍沿用原有 presentation contract。
 
+普通排序与自由队列插入／合并的被动让位按队列分别提交 translation，不把彼此独立的位移合成跨队列 ownership 事务。相邻队列的 master 作为真实 HWND source 与成员共享 cover、动画时钟和输入交接；它仍只拥有自身 slot 0 几何，不创建 PaperData 或 per-paper presenter。被拖动的 capsule／master／整队继续直接跟手；相同槽位不重新启动让位。source 集合、尺寸、输入角色和 output 容量兼容时，在现有 cover 下提交新端点，再从当前可见位置重设同一批 visual 的平移；无需重建 surface 或重复 cloak／uncloak。成员变化仍走既有 successor 交接，环境不兼容时安全退回真实窗口。
+
 代理收到按下消息时保存原始客户区坐标转换得到的屏幕位置和按键状态。只有这次按下触发的同步 authority handoff 当场成功，才把该按下消息转交给真实端点；一旦需要 completion retry、cover 丢失或目标已失效，就直接丢弃该按下，不跨重试保存或迟到重放。该路径只转交原始按下消息，不承诺合成完整按下—抬起手势；正常 Windows 输入仍由真实端点接管。
 
 Proxy 动画逻辑结束不等于 real WPF 已经可以接管。只有 terminal real/WPF presentation 已完成必要的 apply/layout/render/verify 边界后才撤 cover；completion timer 只负责发起完成尝试，不作为 correctness proof。动画准入可使用近似帧比较，但结束或取消 timeline 后必须提交精确的 target frame，不能沿用仅在容差内相等的 opacity／材质状态，否则会与 handoff 的精确一致性验证永久冲突。真实失败仍走既有有界 retry 与 cover-loss 生命周期，不把普通终帧不一致伪装成 compositor 丢失，也不通过新增恢复层或放宽 verify 掩盖它。
