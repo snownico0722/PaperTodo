@@ -24,6 +24,7 @@ internal static partial class Program
             ("main catalog updates preserve content and fence old writers", WorkspaceMetadataWrites),
             ("main backup recovery persists before secondary activation", WorkspaceMainRecoveryBeforeSecondaryStart),
             ("follow-main overlay preserves dormant preferences and layout", WorkspaceInheritance),
+            ("settings reads never stage a main-workspace recovery", WorkspaceSettingsReadDoesNotRecover),
             ("image recovery protection is per workspace", WorkspaceImageProtection),
             ("plugin detach flush is strict and recoverable", WorkspacePluginStores),
             ("bad startup workspace falls back without replacing it", WorkspaceStartupFallback),
@@ -249,10 +250,10 @@ internal static partial class Program
         var recoveredMain = J(File.ReadAllText(catalog.MainStore.FilePath));
         Require(recoveredMain["workspaces"]!["active"]!.GetValue<int>() == 2 &&
                 Str(recoveredMain["papers"]![0]!["content"]) == "main content must survive recovery" &&
-                Directory.GetFiles(scope.DirectoryPath, "data.failed_load.*.json")
-                    .Any(p => File.ReadAllText(p) == "{corrupt main") &&
+                Directory.GetFiles(scope.DirectoryPath, "data.failed_load.*.json").Length == 0 &&
+                Directory.GetFiles(scope.DirectoryPath, "data.backup.used_for_recovery.*.json").Length == 0 &&
                 File.ReadAllBytes(secondary.FilePath).SequenceEqual(originalSecondary),
-            "main recovery lost the selected slot, main content, or secondary data");
+            "main recovery lost the selected slot, saved content, or added redundant copies");
 
         var next = catalog.Options.Normalized();
         next.Active = 3;
@@ -260,6 +261,46 @@ internal static partial class Program
         catalog.SaveOptions(3);
         Require(J(File.ReadAllText(catalog.MainStore.FilePath))["workspaces"]!["active"]!.GetValue<int>() == 3,
             "restored main catalog could not accept a subsequent workspace switch");
+    }
+
+    private static void WorkspaceSettingsReadDoesNotRecover()
+    {
+        foreach (var missing in new[] { false, true })
+        {
+            using var scope = new Scope();
+            var state = NewState();
+            state.Workspaces = new() { Enabled = true, Slots = [1, 2, 3], FollowMainSettings = new() { [2] = false } };
+            scope.Store.SaveJsonSync(scope.Store.SerializeState(state), 2);
+            var prompts = 0;
+            var catalog = new WorkspaceCatalog(scope.DirectoryPath, DurableAtomicFileWriter.Shared, (_, _) =>
+            {
+                prompts++;
+                return WorkspaceRecoveryChoice.Restore;
+            });
+            catalog.OpenInitial();
+            var current = catalog.Open(2, catalog.Options);
+            var next = catalog.Options.Normalized();
+            next.FollowMainSettings[2] = true;
+            WriteHistoryFixture(scope.DirectoryPath, DateTime.UtcNow, ("data.json", scope.Store.SerializeState(state)));
+            File.WriteAllText(scope.Store.BackupPath, "{broken backup");
+            if (missing) File.Delete(scope.Store.FilePath);
+            else File.WriteAllText(scope.Store.FilePath, "{broken main");
+
+            Throws<StateRecoveryException>(() => catalog.PreviewSettingsChange(current, next));
+            Throws<StateRecoveryException>(() => catalog.Open(3, next));
+            Require(prompts == 0 && !catalog.MainStore.NeedsStartupRecoverySave &&
+                    !current.FollowsMain && (missing ? !File.Exists(scope.Store.FilePath) :
+                        File.ReadAllText(scope.Store.FilePath) == "{broken main"),
+                "settings-only read prompted, staged recovery or replaced main");
+
+            var recovered = catalog.Open(1, catalog.Options);
+            Require(prompts == 1 && recovered.Store.NeedsStartupRecoverySave,
+                "actual main entry failed to offer historical recovery");
+            recovered.Store.SaveJsonSync(recovered.Store.SerializeState(recovered.State), 3);
+            var preview = catalog.PreviewSettingsChange(current, next);
+            Require(preview.Session.FollowsMain && prompts == 1 && !catalog.MainStore.NeedsStartupRecoverySave,
+                "settings inheritance did not resume after main recovery committed");
+        }
     }
 
     private static void WorkspaceInheritance()
@@ -439,10 +480,12 @@ internal static partial class Program
                 File.Exists(freshImagePath),
             "a fresh workspace was mistaken for missing historical image data");
 
-        // A malformed recovery record cannot establish that missing images are safe to replace.
+        // Damaged records are explicitly abandoned rather than permanently stopping
+        // cleanup for all healthy images in the same workspace.
         File.WriteAllText(Path.Combine(scope.DirectoryPath, "data2conflict-broken.json"), "{broken");
-        Require(!store2.TryCollectProtectedImageIds(second, out _),
-            "malformed recovery archive unexpectedly produced a complete reference set");
+        Require(store2.TryCollectProtectedImageIds(second, out var stillProtected) &&
+                stillProtected.Contains("303"),
+            "a damaged legacy archive disabled the healthy workspace image scan");
         var uncertainPath = Path.Combine(scope.DirectoryPath, "note-assets-uncertain.lmdb");
         using var uncertain = new NoteImageStore(uncertainPath);
         uncertain.Load();
@@ -527,17 +570,24 @@ internal static partial class Program
         var path = Path.Combine(scope.DirectoryPath, "data2.json");
 
         File.WriteAllText(path, "{broken");
-        var catalog = new WorkspaceCatalog(scope.DirectoryPath, DurableAtomicFileWriter.Shared);
+        var catalog = new WorkspaceCatalog(scope.DirectoryPath, DurableAtomicFileWriter.Shared,
+            (_, time) => time == null ? WorkspaceRecoveryChoice.CreateEmpty : WorkspaceRecoveryChoice.Cancel);
         var rebuilt = catalog.OpenInitial();
-        Require(rebuilt.Paths.Number == 2 && rebuilt.State.Papers.Count == 1 &&
-                catalog.StartupError == null && File.ReadAllText(path) == "{broken",
-            "confirmed corrupt secondary JSON did not initialize without modifying the disk first");
-        rebuilt.BindPersistence();
-        rebuilt.Store.SaveJsonSync(rebuilt.Store.SerializeState(rebuilt.State), 2);
-        Require(J(File.ReadAllText(path))["papers"] is JsonArray &&
-                Directory.GetFiles(scope.DirectoryPath, "data2.failed_load.*.json")
-                    .Any(file => File.ReadAllText(file) == "{broken"),
-            "reconstructed secondary lost its original damaged source");
+        Require(rebuilt.Paths.Number == 2 && catalog.StartupError == null &&
+                rebuilt.State.Papers.Count == 1 && rebuilt.State.Papers[0].Content.Length == 0 &&
+                rebuilt.Store.NeedsStartupRecoverySave &&
+                catalog.Options.Active == 2 && File.ReadAllText(path) == "{broken" &&
+                !Directory.GetFiles(scope.DirectoryPath, "data2.failed_load.*.json").Any(),
+            "unrecoverable secondary did not stage a blank workspace or wrote it prematurely");
+
+        var returning = new WorkspaceCatalog(scope.DirectoryPath, DurableAtomicFileWriter.Shared,
+            (_, time) => time == null ? WorkspaceRecoveryChoice.Fallback : WorkspaceRecoveryChoice.Cancel);
+        var returned = returning.OpenInitial();
+        Require(returned.Paths.Number == 1 && returning.Options.Active == 1 && returning.StartupError == null &&
+                File.ReadAllText(path) == "{broken" &&
+                new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared).Load().Workspaces!.Active == 1,
+            "explicit startup fallback did not select healthy main or altered corrupt secondary");
+        scope.Store.SaveJsonSync(scope.Store.SerializeState(state), 3);
 
         // Historical files, plugin data and a broken image library are not barriers
         // to creating a workspace whose primary and backup do not exist.
@@ -1173,20 +1223,29 @@ internal static partial class Program
             var busyFifthBytes = File.ReadAllBytes(busyFifthPath);
             using (var busy = new FileStream(busyFifthPath,
                 FileMode.Open, FileAccess.ReadWrite, FileShare.None))
-                Require(!await controller.SwitchWorkspaceAsync(5) && controller.WorkspaceNumber == 1,
+                Require(!await WithWorkspaceFailureDialog(() => controller.SwitchWorkspaceAsync(5), dialog => dialog.Close()) && controller.WorkspaceNumber == 1,
                     "busy fifth workspace caused a switch or a destructive recovery");
             Require(File.ReadAllBytes(busyFifthPath).SequenceEqual(busyFifthBytes),
                 "busy fifth workspace was overwritten during the rejected switch");
 
-            // Corrupt JSON is a different outcome: the same slot can be rebuilt.
+            // With no usable source, blank initialization requires an explicit choice.
             File.WriteAllText(busyFifthPath, "{invalid target");
-            Require(await controller.SwitchWorkspaceAsync(5) && controller.WorkspaceNumber == 5,
-                "corrupt fifth workspace was not rebuilt during a normal switch");
-            Require(Directory.GetFiles(directory, "data5.failed_load.*.json")
-                    .Any(file => File.ReadAllText(file) == "{invalid target"),
-                "corrupt fifth workspace was overwritten without preserving its source");
-            Require(controller.State.Papers.Count == 1 && controller.State.Papers[0].Content.Length == 0,
-                "new fifth workspace duplicated main content");
+            Require(await WithWorkspaceFailureDialog(() => controller.SwitchWorkspaceAsync(5),
+                    dialog => ClickFailureAction(dialog, "HistoryRecoveryCreate"), "HistoryRecoveryTitle") &&
+                    controller.WorkspaceNumber == 5 &&
+                    controller.State.Papers.Count == 1 && controller.State.Papers[0].Content.Length == 0,
+                "unrecoverable fifth workspace did not initialize blank");
+            Require(await controller.SwitchWorkspaceAsync(1), "return after explicit rebuild failed");
+            File.WriteAllText(busyFifthPath, "{invalid target");
+            File.Delete(Path.Combine(directory, "data5.backup.json"));
+            var fifthRecovered = NewState();
+            fifthRecovered.Papers[0].Content = "automatically recovered fifth";
+            File.WriteAllText(busyFifthPath + ".tmp", store2.SerializeState(fifthRecovered));
+            Require(await controller.SwitchWorkspaceAsync(5) && controller.WorkspaceNumber == 5 &&
+                    controller.State.Papers[0].Content == "automatically recovered fifth" &&
+                    !File.Exists(busyFifthPath + ".tmp") &&
+                    !Directory.GetFiles(directory, "data5.failed_load.*.json").Any(),
+                "complete fifth-workspace temp was not automatically recovered");
             var fifthPath = Path.Combine(directory, "data5.json");
             var fifthId = controller.State.Papers[0].Id;
             var reduced = controller.WorkspaceOptions.Normalized(); reduced.Slots = [1, 2, 3];
