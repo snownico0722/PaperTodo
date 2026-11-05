@@ -62,7 +62,6 @@ internal sealed class NoteImageExportWindow : Window
         layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
         var close = TodoReminderDialogControls.Button("×", compact: true);
-        close.ToolTip = Strings.Get("CommonClose");
         close.Click += (_, _) => Close();
         var heading = new TextBlock
         {
@@ -174,7 +173,7 @@ internal sealed class NoteImageExportWindow : Window
             Child = layout
         };
         Content = _frame;
-        SizeChanged += (_, _) => RefreshCorners();
+        _frame.SizeChanged += (_, _) => RefreshCorners();
         StateChanged += (_, _) => RefreshCorners();
         SourceInitialized += (_, _) =>
         {
