@@ -397,6 +397,7 @@ internal static partial class Program
                 "explicit reload could not recover after repairing invalid JSON");
             await Until(() => !controller.IsDataReloading, "recovery after invalid explicit reload");
             Console.WriteLine("PASS explicit invalid reload does not modify disk or running state");
+            McpImageLiveChecks(controller);
         }
         finally
         {
