@@ -1,4 +1,4 @@
-"""Offline PNG format-header calibration; no image processing runs in the app.
+"""Offline PNG format-header calibration; never imported by PaperTodo.
 
 python png_calibrate.py [--data cached-png-corpus.json] [--photo-dir source-jpegs]
 The four independent source photographs never enter coefficient fitting.
@@ -26,6 +26,7 @@ def header(data):
 def variant(im,mode):
  if mode=='RGB':return im,{}
  if mode=='L':return im.convert('L'),{}
+ if mode=='1-dither':return im.convert('1'),{}
  if mode=='1':return im.convert('L').point(lambda p:255 if p>130 else 0,mode='1'),{}
  if mode.startswith('P'):
   k=int(mode[1:]);return im.quantize(colors=k,method=Image.Quantize.MEDIANCUT),{'bits':int(math.log2(k))}
@@ -37,7 +38,7 @@ def variant(im,mode):
 
 def measure(name, im, split):
     rows = []
-    for mode in ('RGB', 'L', '1', 'P4', 'P16', 'P256', 'RGBA-opaque', 'RGBA-fade'):
+    for mode in ('RGB', 'L', '1', '1-dither', 'P4', 'P16', 'P256', 'RGBA-opaque', 'RGBA-fade'):
         source, options = variant(im, mode)
         targets = []
         for scale in (.25, .5, 1., 1.5):
@@ -87,7 +88,13 @@ def report(rows,pred,t):
  actual=np.array([r['y'][t] for r in rows]);err=np.abs(pred/actual-1)
  return dict(n=len(rows),median=float(np.median(err)),p90=float(np.quantile(err,.9)),within50=float(np.mean(err<=.5)),logMAE=float(np.mean(abs(np.log(pred/actual)))),budgetPass=float(np.mean(abs(pred-actual)<=np.maximum(524288,actual*.5))))
 
-def predict(rows, coefficients, target):
+def bilevel_features(rows):
+    d = np.log([max(.001, r['payload']) for r in rows])
+    s = np.log([r['scale'] for r in rows])
+    return np.column_stack([np.ones_like(d), d, d*d, d*d*d, s, s*s, d*s, d*d*s, d*s*s])
+
+
+def predict(rows, coefficients, target, bilevel):
     area = np.array([r['area'] for r in rows])
     candidate = np.clip(np.exp(features(rows, 2) @ coefficients),
         .015 if target == 0 else .001, 2 if target == 0 else 3) * area
@@ -96,7 +103,11 @@ def predict(rows, coefficients, target):
         (not r['alpha'] and r['type'] in (0, 3))) for r in rows])
     if target == 0:
         candidate = np.where([bool(r['alpha']) for r in rows], np.sqrt(fallback*candidate), candidate)
-    return np.where(usable, candidate, fallback)
+    result = np.where(usable, candidate, fallback)
+    if target == 0:
+        mono = np.clip(np.exp(bilevel_features(rows) @ bilevel), .015, 2) * area
+        result = np.where([r['type'] == 0 and r['depth'] == 1 and not r['alpha'] for r in rows], mono, result)
+    return result
 
 
 def main():
@@ -105,7 +116,10 @@ def main():
     parser.add_argument('--photo-dir', type=Path)
     args = parser.parse_args()
     rows = json.loads(args.data.read_text()) if args.data else dataset()
-    train = [r for r in rows if r['split'] == 'train']
+    train = [r for r in rows if r['split'] == 'train' and r['mode'] != '1-dither']
+    mono = [r for r in rows if r['split'] == 'train' and r['mode'] in ('1', '1-dither')]
+    bilevel = Ridge(alpha=.1, fit_intercept=False).fit(bilevel_features(mono), np.log([r['y'][0]/r['area'] for r in mono])).coef_
+    print('bilevel JPG coefficients', bilevel.tolist())
     validation = [r for r in rows if r['split'] == 'validation']
     independent = json.loads(ROOT.joinpath('png-validation.json').read_text())['records']
     if args.photo_dir:
@@ -119,7 +133,7 @@ def main():
         print(name, 'coefficients', coefficients.tolist())
         for split, group in (('validation', validation), ('independent photos', independent)):
             print(name, split, 'before', report(group, baseline(group, target), target),
-                  'after', report(group, predict(group, coefficients, target), target))
+                  'after', report(group, predict(group, coefficients, target, bilevel), target))
 
 
 if __name__ == '__main__':

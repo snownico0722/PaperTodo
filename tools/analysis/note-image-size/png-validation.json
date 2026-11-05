@@ -1,5 +1,5 @@
 {
-  "description": "Four independent photographs, eight PNG color modes, compression levels 1/6/9, output scale 0.25/0.5/1/1.5: 384 combinations per output format, not 384 independent photographs. Pillow JPEG90 and RGB/Sub/zlib6 PNG labels, separate from Windows/WIC tests. Alpha composited onto white; alpha coverage is not a runtime feature. Sources excluded from fitting.",
+  "description": "Four independent photographs, nine PNG color modes (including thresholded and Floyd-Steinberg dithered bilevel), compression levels 1/6/9, output scale 0.25/0.5/1/1.5: 432 combinations per output format, not 432 independent photographs. Pillow JPEG90 and RGB/Sub/zlib6 PNG labels, separate from Windows/WIC tests. Alpha composited onto white; alpha coverage is not a runtime feature. Sources excluded from fitting.",
   "sources": [
     {
       "name": "baboon",
@@ -6937,6 +6937,870 @@
       "y": [
         8805,
         53960
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "1-dither",
+      "level": 1,
+      "density": 0.1230316162109375,
+      "payload": 0.12281417846679688,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 16384,
+      "y": [
+        6866,
+        19791
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "1-dither",
+      "level": 1,
+      "density": 0.1230316162109375,
+      "payload": 0.12281417846679688,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 65536,
+      "y": [
+        31005,
+        69186
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "1-dither",
+      "level": 1,
+      "density": 0.1230316162109375,
+      "payload": 0.12281417846679688,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1,
+      "area": 262144,
+      "y": [
+        232792,
+        54487
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "1-dither",
+      "level": 1,
+      "density": 0.1230316162109375,
+      "payload": 0.12281417846679688,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 589824,
+      "y": [
+        415990,
+        191999
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "1-dither",
+      "level": 6,
+      "density": 0.12265777587890625,
+      "payload": 0.12244033813476562,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 16384,
+      "y": [
+        6866,
+        19791
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "1-dither",
+      "level": 6,
+      "density": 0.12265777587890625,
+      "payload": 0.12244033813476562,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 65536,
+      "y": [
+        31005,
+        69186
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "1-dither",
+      "level": 6,
+      "density": 0.12265777587890625,
+      "payload": 0.12244033813476562,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1,
+      "area": 262144,
+      "y": [
+        232792,
+        54487
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "1-dither",
+      "level": 6,
+      "density": 0.12265777587890625,
+      "payload": 0.12244033813476562,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 589824,
+      "y": [
+        415990,
+        191999
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "1-dither",
+      "level": 9,
+      "density": 0.12264633178710938,
+      "payload": 0.12242889404296875,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 16384,
+      "y": [
+        6866,
+        19791
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "1-dither",
+      "level": 9,
+      "density": 0.12264633178710938,
+      "payload": 0.12242889404296875,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 65536,
+      "y": [
+        31005,
+        69186
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "1-dither",
+      "level": 9,
+      "density": 0.12264633178710938,
+      "payload": 0.12242889404296875,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1,
+      "area": 262144,
+      "y": [
+        232792,
+        54487
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "1-dither",
+      "level": 9,
+      "density": 0.12264633178710938,
+      "payload": 0.12242889404296875,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 589824,
+      "y": [
+        415990,
+        191999
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "1-dither",
+      "level": 1,
+      "density": 0.10501536098310292,
+      "payload": 0.10490591397849462,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 32550,
+      "y": [
+        14285,
+        40409
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "1-dither",
+      "level": 1,
+      "density": 0.10501536098310292,
+      "payload": 0.10490591397849462,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 130200,
+      "y": [
+        61888,
+        123804
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "1-dither",
+      "level": 1,
+      "density": 0.10501536098310292,
+      "payload": 0.10490591397849462,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1,
+      "area": 520800,
+      "y": [
+        430487,
+        90940
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "1-dither",
+      "level": 1,
+      "density": 0.10501536098310292,
+      "payload": 0.10490591397849462,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 1171800,
+      "y": [
+        759345,
+        302380
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "1-dither",
+      "level": 6,
+      "density": 0.10164170506912443,
+      "payload": 0.10153225806451613,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 32550,
+      "y": [
+        14285,
+        40409
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "1-dither",
+      "level": 6,
+      "density": 0.10164170506912443,
+      "payload": 0.10153225806451613,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 130200,
+      "y": [
+        61888,
+        123804
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "1-dither",
+      "level": 6,
+      "density": 0.10164170506912443,
+      "payload": 0.10153225806451613,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1,
+      "area": 520800,
+      "y": [
+        430487,
+        90940
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "1-dither",
+      "level": 6,
+      "density": 0.10164170506912443,
+      "payload": 0.10153225806451613,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 1171800,
+      "y": [
+        759345,
+        302380
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "1-dither",
+      "level": 9,
+      "density": 0.10164170506912443,
+      "payload": 0.10153225806451613,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 32550,
+      "y": [
+        14285,
+        40409
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "1-dither",
+      "level": 9,
+      "density": 0.10164170506912443,
+      "payload": 0.10153225806451613,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 130200,
+      "y": [
+        61888,
+        123804
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "1-dither",
+      "level": 9,
+      "density": 0.10164170506912443,
+      "payload": 0.10153225806451613,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1,
+      "area": 520800,
+      "y": [
+        430487,
+        90940
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "1-dither",
+      "level": 9,
+      "density": 0.10164170506912443,
+      "payload": 0.10153225806451613,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 1171800,
+      "y": [
+        759345,
+        302380
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "1-dither",
+      "level": 1,
+      "density": 0.11004231770833334,
+      "payload": 0.10981038411458334,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 15360,
+      "y": [
+        5206,
+        16883
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "1-dither",
+      "level": 1,
+      "density": 0.11004231770833334,
+      "payload": 0.10981038411458334,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 61440,
+      "y": [
+        25023,
+        52365
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "1-dither",
+      "level": 1,
+      "density": 0.11004231770833334,
+      "payload": 0.10981038411458334,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1,
+      "area": 245760,
+      "y": [
+        204475,
+        39900
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "1-dither",
+      "level": 1,
+      "density": 0.11004231770833334,
+      "payload": 0.10981038411458334,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 552960,
+      "y": [
+        360721,
+        126989
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "1-dither",
+      "level": 6,
+      "density": 0.10887044270833333,
+      "payload": 0.10863850911458334,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 15360,
+      "y": [
+        5206,
+        16883
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "1-dither",
+      "level": 6,
+      "density": 0.10887044270833333,
+      "payload": 0.10863850911458334,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 61440,
+      "y": [
+        25023,
+        52365
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "1-dither",
+      "level": 6,
+      "density": 0.10887044270833333,
+      "payload": 0.10863850911458334,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1,
+      "area": 245760,
+      "y": [
+        204475,
+        39900
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "1-dither",
+      "level": 6,
+      "density": 0.10887044270833333,
+      "payload": 0.10863850911458334,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 552960,
+      "y": [
+        360721,
+        126989
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "1-dither",
+      "level": 9,
+      "density": 0.10881754557291666,
+      "payload": 0.10858561197916666,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 15360,
+      "y": [
+        5206,
+        16883
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "1-dither",
+      "level": 9,
+      "density": 0.10881754557291666,
+      "payload": 0.10858561197916666,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 61440,
+      "y": [
+        25023,
+        52365
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "1-dither",
+      "level": 9,
+      "density": 0.10881754557291666,
+      "payload": 0.10858561197916666,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1,
+      "area": 245760,
+      "y": [
+        204475,
+        39900
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "1-dither",
+      "level": 9,
+      "density": 0.10881754557291666,
+      "payload": 0.10858561197916666,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 552960,
+      "y": [
+        360721,
+        126989
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "1-dither",
+      "level": 1,
+      "density": 0.12005615234375,
+      "payload": 0.1165771484375,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 1024,
+      "y": [
+        1219,
+        1824
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "1-dither",
+      "level": 1,
+      "density": 0.12005615234375,
+      "payload": 0.1165771484375,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 4096,
+      "y": [
+        2871,
+        4848
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "1-dither",
+      "level": 1,
+      "density": 0.12005615234375,
+      "payload": 0.1165771484375,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1,
+      "area": 16384,
+      "y": [
+        14561,
+        3170
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "1-dither",
+      "level": 1,
+      "density": 0.12005615234375,
+      "payload": 0.1165771484375,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 36864,
+      "y": [
+        25114,
+        11812
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "1-dither",
+      "level": 6,
+      "density": 0.11712646484375,
+      "payload": 0.1136474609375,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 1024,
+      "y": [
+        1219,
+        1824
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "1-dither",
+      "level": 6,
+      "density": 0.11712646484375,
+      "payload": 0.1136474609375,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 4096,
+      "y": [
+        2871,
+        4848
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "1-dither",
+      "level": 6,
+      "density": 0.11712646484375,
+      "payload": 0.1136474609375,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1,
+      "area": 16384,
+      "y": [
+        14561,
+        3170
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "1-dither",
+      "level": 6,
+      "density": 0.11712646484375,
+      "payload": 0.1136474609375,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 36864,
+      "y": [
+        25114,
+        11812
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "1-dither",
+      "level": 9,
+      "density": 0.11712646484375,
+      "payload": 0.1136474609375,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 1024,
+      "y": [
+        1219,
+        1824
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "1-dither",
+      "level": 9,
+      "density": 0.11712646484375,
+      "payload": 0.1136474609375,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 4096,
+      "y": [
+        2871,
+        4848
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "1-dither",
+      "level": 9,
+      "density": 0.11712646484375,
+      "payload": 0.1136474609375,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1,
+      "area": 16384,
+      "y": [
+        14561,
+        3170
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "1-dither",
+      "level": 9,
+      "density": 0.11712646484375,
+      "payload": 0.1136474609375,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 36864,
+      "y": [
+        25114,
+        11812
       ]
     }
   ]

@@ -10,20 +10,34 @@ internal sealed class NoteImageSizeEstimate
 {
     private double _wideText;
     private double _narrowText;
+    private double _kanaText;
+    private double _hangulText;
+    private double _codeText;
+    private int _quotes;
+    private int _checkboxes;
     private double _imageJpeg;
     private double _imagePng;
 
-    internal void AddText(string text, double fontSize, bool bold = false)
+    internal void AddText(ReadOnlySpan<char> text, double fontSize, bool bold = false, bool code = false)
     {
         var scale = Math.Pow(fontSize / 18, 1.6) * (bold ? 1.08 : 1);
         foreach (var rune in text.EnumerateRunes())
         {
             if (Rune.IsWhiteSpace(rune)) continue;
             var units = scale * (Rune.IsPunctuation(rune) ? .6 : 1);
-            if (rune.Value >= 0x2e80) _wideText += units;
+            var value = rune.Value;
+            if (value is >= 0x3040 and <= 0x30ff or >= 0x31f0 and <= 0x31ff or >= 0xff66 and <= 0xff9f)
+                _kanaText += units;
+            else if (value is >= 0xac00 and <= 0xd7a3 or >= 0x1100 and <= 0x11ff or >= 0x3130 and <= 0x318f)
+                _hangulText += units;
+            else if (value >= 0x2e80) _wideText += units;
+            else if (code) _codeText += units;
             else _narrowText += units;
         }
     }
+
+    internal void AddQuote() => _quotes++;
+    internal void AddCheckbox() => _checkboxes++;
 
     internal void AddImage(long encodedBytes, string mime, double sourceWidth, double sourceHeight,
         double outputWidth, double outputHeight, NoteImageJpegInfo jpegInfo = default, NoteImagePngInfo pngInfo = default)
@@ -78,6 +92,8 @@ internal sealed class NoteImageSizeEstimate
             // An alpha channel does not reveal how much of the picture is transparent.
             jpegRate = pngInfo.HasAlpha ? Math.Sqrt(Math.Clamp(jpegRate, .015, 2) * candidate) : candidate;
             pngRate = PngSourceRate(density, scale, pngInfo, PngSourcePngCoefficients);
+            if (pngInfo.ColorType == 0 && pngInfo.BitDepth == 1)
+                jpegRate = BilevelJpegRate(density, scale);
         }
         _imageJpeg += area * Math.Clamp(jpegRate, .015, 2);
         _imagePng += area * Math.Clamp(pngRate, .001, 3);
@@ -113,6 +129,14 @@ internal sealed class NoteImageSizeEstimate
             colors * (c[15] + d * c[16]) + depth * c[17]);
     }
 
+    // Both thresholded and dithered 1-bit sources: dense dithering creates costly JPEG edges.
+    private static double BilevelJpegRate(double d, double s)
+    {
+        ReadOnlySpan<double> c = [0.64532969, 0.05081215, -0.22253955, -0.01968963, 2.19297746, -0.66775246, 1.09827830, 0.10454234, -0.13787834];
+        return Math.Exp(c[0] + d * (c[1] + d * (c[2] + d * c[3])) + s * (c[4] + s * c[5]) +
+            d * s * (c[6] + d * c[7] + s * c[8]));
+    }
+
     private static double Rate(double density, double scale,
         double a, double b, double c, double d, double e, double f, double g, double h) =>
         Math.Exp(a + density * (b + density * (c + density * (d + density * e))) +
@@ -123,7 +147,9 @@ internal sealed class NoteImageSizeEstimate
         var area = (double)width * height;
         // Text coefficients target the fixed export fonts, not arbitrary raster images.
         return new NoteImageSizePrediction(
-            (long)Math.Round(3500 + area * .012 + _wideText * 760 + _narrowText * 350 + _imageJpeg),
-            (long)Math.Round(3500 + area * .0015 + _wideText * 550 + _narrowText * 275 + _imagePng));
+            (long)Math.Round(3500 + area * .012 + _wideText * 760 + _narrowText * 330 +
+                _kanaText * 520 + _hangulText * 600 + _codeText * 350 + _quotes * 2000 + _checkboxes * 950 + _imageJpeg),
+            (long)Math.Round(3500 + area * .0015 + _wideText * 550 + _narrowText * 235 +
+                _kanaText * 425 + _hangulText * 345 + _codeText * 275 + _quotes * 1700 + _checkboxes * 1400 + _imagePng));
     }
 }

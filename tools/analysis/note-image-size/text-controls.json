@@ -1,0 +1,94 @@
+{
+  "commit": "7e7344a820cb45d281b0765314bc208f0ff3b385",
+  "description": "Windows/WPF control measurements before text refinement. Only these eight controls determine new text/decorative coefficients; the four new-* notes are excluded.",
+  "records": [
+    {
+      "name": "text-japanese-calibration",
+      "width": 1200,
+      "height": 13094,
+      "pngBytes": 1945087,
+      "jpegBytes": 2674119,
+      "pngMs": 492.2883,
+      "jpegMs": 336.0791,
+      "estimatedPng": 2291359,
+      "estimatedJpeg": 3320891
+    },
+    {
+      "name": "text-korean-calibration",
+      "width": 1200,
+      "height": 13094,
+      "pngBytes": 1408657,
+      "jpegBytes": 2600640,
+      "pngMs": 536.3132,
+      "jpegMs": 392.8451,
+      "estimatedPng": 2225359,
+      "estimatedJpeg": 3225371
+    },
+    {
+      "name": "text-plain-calibration",
+      "width": 1200,
+      "height": 13094,
+      "pngBytes": 1617345,
+      "jpegBytes": 2311304,
+      "pngMs": 320.8968,
+      "jpegMs": 180.1412,
+      "estimatedPng": 1701759,
+      "estimatedJpeg": 2411131
+    },
+    {
+      "name": "text-quote-calibration",
+      "width": 1200,
+      "height": 18534,
+      "pngBytes": 1765095,
+      "jpegBytes": 2549055,
+      "pngMs": 447.5876,
+      "jpegMs": 270.1966,
+      "estimatedPng": 1711551,
+      "estimatedJpeg": 2489467
+    },
+    {
+      "name": "text-bold-calibration",
+      "width": 1200,
+      "height": 13094,
+      "pngBytes": 1606486,
+      "jpegBytes": 2459662,
+      "pngMs": 319.6393,
+      "jpegMs": 176.2224,
+      "estimatedPng": 1701759,
+      "estimatedJpeg": 2411131
+    },
+    {
+      "name": "text-inlinecode-calibration",
+      "width": 1200,
+      "height": 13094,
+      "pngBytes": 1536165,
+      "jpegBytes": 2173403,
+      "pngMs": 325.1621,
+      "jpegMs": 202.8968,
+      "estimatedPng": 1701759,
+      "estimatedJpeg": 2411131
+    },
+    {
+      "name": "text-list-calibration",
+      "width": 1200,
+      "height": 13114,
+      "pngBytes": 1730449,
+      "jpegBytes": 2386870,
+      "pngMs": 395.6389,
+      "jpegMs": 248.0606,
+      "estimatedPng": 1701795,
+      "estimatedJpeg": 2411419
+    },
+    {
+      "name": "text-english-calibration",
+      "width": 1200,
+      "height": 18276,
+      "pngBytes": 2125860,
+      "jpegBytes": 3205764,
+      "pngMs": 464.0247,
+      "jpegMs": 266.7863,
+      "estimatedPng": 2467887,
+      "estimatedJpeg": 3361592
+    }
+  ]
+}

@@ -225,6 +225,7 @@ internal static class NoteImageExport
                         _y += 14;
                         break;
                     case QuoteBlock quote:
+                        _sizeEstimate.AddQuote();
                         var quoteTop = _y;
                         var quoteDrawing = new DrawingGroup();
                         var outer = _dc;
@@ -256,7 +257,7 @@ internal static class NoteImageExport
                         break;
                     case CodeBlock code:
                         var value = code.Lines.ToString();
-                        _sizeEstimate.AddText(value, 15);
+                        _sizeEstimate.AddText(value, 15, code: true);
                         var formatted = Format(value.Length == 0 ? " " : value, width - 28, 15, false, CodeFont);
                         formatted.LineHeight = 25;
                         _dc.DrawRoundedRectangle(CodeFill, null, new Rect(x, _y, width, formatted.Height + 28), 7, 7);
@@ -376,10 +377,14 @@ internal static class NoteImageExport
         private void Text(string value, IReadOnlyList<RunStyle> styles, double x, double width,
             double size, bool bold)
         {
-            _sizeEstimate.AddText(value, size, bold);
+            // Inlines.Append supplies a non-overlapping partition, including normal runs.
+            if (styles.Count == 0) _sizeEstimate.AddText(value, size, bold);
             var formatted = Format(value, width, size, bold);
             foreach (var run in styles.Where(run => run.Length > 0))
             {
+                var code = run.Style.HasFlag(Style.Code);
+                _sizeEstimate.AddText(value.AsSpan(run.Start, run.Length), code ? size * .9 : size,
+                    bold || run.Style.HasFlag(Style.Bold), code);
                 if (run.Style.HasFlag(Style.Bold)) formatted.SetFontWeight(FontWeights.Bold, run.Start, run.Length);
                 if (run.Style.HasFlag(Style.Italic)) formatted.SetFontStyle(FontStyles.Italic, run.Start, run.Length);
                 var decorations = new TextDecorationCollection();
@@ -439,6 +444,7 @@ internal static class NoteImageExport
 
         private void Checkbox(double x, double y, bool check)
         {
+            _sizeEstimate.AddCheckbox();
             _dc.DrawRoundedRectangle(check ? Accent : null, new Pen(Accent, 1.3), new Rect(x, y, 14, 14), 3, 3);
             if (!check) return;
             var pen = new Pen(Brushes.White, 1.5) { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round };
