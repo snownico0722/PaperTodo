@@ -641,7 +641,8 @@ internal static partial class Program
             Check(requests[^1].GetProperty("method").GetString() == "read_note_image" &&
                   imageBlocks is [ModelContextProtocol.Protocol.TextContentBlock,
                       ModelContextProtocol.Protocol.ImageContentBlock image] &&
-                  image.MimeType == "image/png" && image.Data == "AQID",
+                  image.MimeType == "image/png" &&
+                  image.Data.Span.SequenceEqual(new byte[] { 1, 2, 3 }),
                 "The MCP tool returns actual image content, not Base64 displayed as text.");
             await tools.ListSettings("todo");
             Check(requests[^1].GetProperty("params").GetProperty("category").GetString() == "todo", "MCP list category forwarded.");
