@@ -21,11 +21,7 @@ internal sealed class NativeEdgeQueueDrag
     internal required bool CarriesMaster { get; init; }
     internal bool FloatingMasterHidden { get; set; }
     internal string HeldTargetKey { get; set; } = "";
-    internal string PreviewedTargetKey { get; set; } = "";
-    internal int PreviewedTargetIndex { get; set; } = -1;
-    internal double PreviewedTargetTop { get; set; } = double.NaN;
-    internal HashSet<string> PreviewedMemberIds { get; } = new(StringComparer.Ordinal);
-    internal string PreviewedMasterKey { get; set; } = "";
+    internal FreeQueueSlotPreviewState SlotPreview { get; } = new();
     internal bool FloatingCoverReady { get; set; }
     internal NativeEdgeQueueDrop? Drop { get; set; }
 }
@@ -267,81 +263,10 @@ public sealed partial class AppController
         }
     }
 
-    // A stable insertion slot is one layout preview, not a continuous collision
-    // simulation. Only members whose FINAL slot changes receive a short placement
-    // animation. The untouched queues and their masters never follow pointer samples.
-    private void PreviewStableFreeQueueSlot(NativeEdgeQueueDrag drag, NativeEdgeQueueDrop drop)
-    {
-        var inserting = drop.Decision.Kind == EdgeFreeQueueDropKind.Insert;
-        var key = inserting ? drop.DestinationKey : "";
-        var index = inserting ? drop.Decision.Index : -1;
-        var top = inserting ? drop.Decision.TopDip : double.NaN;
-        if (key == drag.PreviewedTargetKey && index == drag.PreviewedTargetIndex &&
-            (double.IsNaN(top) && double.IsNaN(drag.PreviewedTargetTop) ||
-             Math.Abs(top - drag.PreviewedTargetTop) < 0.1)) return;
-
-        var resting = BuildRestingEdgeQueuePlan();
-        var desired = new Dictionary<string, EdgeCapsulePlacement>(StringComparer.Ordinal);
-        foreach (var id in drag.PreviewedMemberIds)
-            if (resting.Placements.TryGetValue(id, out var placement)) desired[id] = placement;
-
-        var masterKey = "";
-        if (inserting)
-        {
-            var target = NativeQueueGroups().FirstOrDefault(g => g.Key == key);
-            if (target != null)
-            {
-                var pitch = EdgeCapsuleLayout.SlotHeight(DeepCapsuleGap);
-                var carried = drag.CarriedIds.ToHashSet(StringComparer.Ordinal);
-                var targetMembers = target.Papers.Where(p => !carried.Contains(p.Id)).ToList();
-                var baseMargin = DeepCapsuleStartTopMarginForQueueKey(key);
-                for (var i = 0; i < targetMembers.Count; i++)
-                {
-                    var paper = targetMembers[i];
-                    if (!resting.Placements.TryGetValue(paper.Id, out var placement)) continue;
-                    // Always derive absolute slots from the chosen insertion. Never use the
-                    // prospective global avoidance plan as a live cursor-driven layout.
-                    var slot = i < index ? i : i + drag.CarriedIds.Length;
-                    var targetTop = top + (target.Box.HasMaster ? pitch : 0) + slot * pitch;
-                    var baseTop = EdgeCapsuleLayout.FreeQueueTopForIndex(placement.VisualIndex,
-                        baseMargin, target.Geometry.LocalWorkAreaDip, DeepCapsuleGap);
-                    desired[paper.Id] = placement with { TopOffsetDip = targetTop - baseTop };
-                }
-                if (target.Box.HasMaster && Math.Abs(top - target.Box.TopDip) >= 0.1)
-                    masterKey = key;
-            }
-        }
-
-        foreach (var (id, placement) in desired)
-            if (_windows.TryGetValue(id, out var window))
-                window.PreviewDeepCapsulePlacement(placement);
-
-        drag.PreviewedMemberIds.Clear();
-        if (inserting)
-            foreach (var id in desired.Keys)
-                if (drop.TargetMembers.Any(p => p.Id == id)) drag.PreviewedMemberIds.Add(id);
-
-        if (drag.PreviewedMasterKey != masterKey)
-        {
-            if (_masterCapsules.TryGetValue(drag.PreviewedMasterKey, out var previousMaster) &&
-                resting.MasterTopsDip.TryGetValue(drag.PreviewedMasterKey, out var restingTop))
-            {
-                previousMaster.SetQueueTopPreview(restingTop);
-                previousMaster.UpdateState(State.Papers.Count(p => QueueKey(p) == drag.PreviewedMasterKey),
-                    IsCapsuleCollapseAllActiveForQueue(drag.PreviewedMasterKey), animate: true);
-            }
-        }
-        if (masterKey.Length > 0 && _masterCapsules.TryGetValue(masterKey, out var targetMaster))
-        {
-            targetMaster.SetQueueTopPreview(top);
-            targetMaster.UpdateState(State.Papers.Count(p => QueueKey(p) == masterKey),
-                IsCapsuleCollapseAllActiveForQueue(masterKey), animate: true);
-        }
-        drag.PreviewedMasterKey = masterKey;
-        drag.PreviewedTargetKey = key;
-        drag.PreviewedTargetIndex = index;
-        drag.PreviewedTargetTop = top;
-    }
+    // The same slot preview is shared by Ctrl whole-queue dragging and the master
+    // capsule path. It only updates the confirmed suffix and intersected neighbours.
+    private void PreviewStableFreeQueueSlot(NativeEdgeQueueDrag drag, NativeEdgeQueueDrop drop) =>
+        PreviewFreeQueueDropSlot(drag.SlotPreview, drop.Decision, drag.SourceKey, drag.CarriedIds);
 
     internal void PrepareNativeEdgeQueueFloating(string ownerId)
     {
