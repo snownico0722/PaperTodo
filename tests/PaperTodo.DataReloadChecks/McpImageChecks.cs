@@ -40,7 +40,6 @@ internal static partial class Program
             throw new InvalidOperationException("Expected MCP error: " + code);
         }
 
-        var file = Path.Combine(AppContext.BaseDirectory, "mcp-image-fixture.png");
         try
         {
             controller.State.McpEnabled = true;
@@ -78,17 +77,16 @@ internal static partial class Program
             }
             finally { controller.State.Papers.Remove(otherNote); }
 
-            File.WriteAllBytes(file, png);
-            var fromPath = Invoke("insert_note_image",
-                new { paper_id = note.Id, image_path = file });
-            Require(fromPath.GetProperty("image_id").GetString() != imageId &&
+            var second = Invoke("insert_note_image",
+                new { paper_id = note.Id, image_base64 = base64 });
+            Require(second.GetProperty("image_id").GetString() != imageId &&
                     note.Content.EndsWith(
-                        fromPath.GetProperty("markdown_reference").GetString()!,
+                        second.GetProperty("markdown_reference").GetString()!,
                         StringComparison.Ordinal),
-                "Absolute path import did not append a fresh local image.");
+                "Repeated in-memory import did not append a distinct image reference.");
             controller.State.McpAllowBlankWrites = false;
             Rejected("blank_writes_disabled", () => Invoke("insert_note_image",
-                new { paper_id = note.Id, image_path = file }));
+                new { paper_id = note.Id, image_base64 = base64 }));
             // Image reads are not gated by modification permissions.
             Require(Invoke("read_note_image", new { paper_id = note.Id, image_id = imageId })
                         .GetProperty("mime").GetString() == "image/png",
@@ -127,9 +125,11 @@ internal static partial class Program
             Rejected("invalid_params", () => Invoke("insert_note_image",
                 new { paper_id = note.Id, image_base64 = "not base64!" }));
             Rejected("invalid_params", () => Invoke("insert_note_image",
-                new { paper_id = note.Id, image_base64 = base64, image_path = file }));
+                new { paper_id = note.Id, image_base64 = base64, image_path = @"C:\fixture\picture.png" }));
             Rejected("invalid_params", () => Invoke("insert_note_image",
-                new { paper_id = note.Id, image_path = "relative.png" }));
+                new { paper_id = note.Id, image_path = @"C:\fixture\picture.png" }));
+            Rejected("invalid_params", () => Invoke("insert_note_image",
+                new { paper_id = note.Id }));
             Rejected("image_import_failed", () => Invoke("insert_note_image",
                 new { paper_id = note.Id, image_base64 = Convert.ToBase64String(new byte[] { 1, 2, 3 }) }));
             Require(note.Content == contentBeforeBad && imageAssets.Count == countBeforeBad,
@@ -163,14 +163,13 @@ internal static partial class Program
             Require(note.Content == beforeFailedText && imageAssets.Count == beforeFailedAssets,
                 "Failed core save left an orphaned image or a partially appended reference.");
             controller.SaveNow(sync: true);
-            Console.WriteLine("PASS MCP image Base64/path import, image-content read, permissions, ownership and rollback");
+            Console.WriteLine("PASS MCP image in-memory import, image-content read, permissions, ownership and rollback");
         }
         finally
         {
             controller.State.McpEnabled = originalEnabled;
             controller.State.McpAllowBlankWrites = originalAdditive;
             controller.State.McpAllowFullWrites = originalFull;
-            try { File.Delete(file); } catch { }
         }
     }
 }
