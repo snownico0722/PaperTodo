@@ -94,12 +94,13 @@ public sealed partial class AppController
     {
         Theme.Invalidate();
         RefreshApplicationThemeResources();
-        foreach (var window in _windows.Values)
+        foreach (var window in _windows.Values.ToArray())
         {
-            window.UpdateTheme();
+            if (!window.IsClosed) window.UpdateTheme();
         }
         foreach (var m in _masterCapsules.Values) m.UpdateTheme();
         SkinBorder.RefreshLoadedSurfaces();
+        PluginPopupThemeChanged?.Invoke();
 
         RebuildTrayMenu();
         RefreshSettingsWindowContent();
@@ -663,9 +664,9 @@ public sealed partial class AppController
     {
         RebuildTrayMenu();
 
-        foreach (var window in _windows.Values)
+        foreach (var window in _windows.Values.ToArray())
         {
-            window.UpdateTypography();
+            if (!window.IsClosed) window.UpdateTypography();
         }
 
         foreach (var masterCapsule in _masterCapsules.Values)
@@ -673,6 +674,7 @@ public sealed partial class AppController
             masterCapsule.UpdateTypography();
         }
         ArrangeDeepCapsules(animate: false);
+        PluginPopupThemeChanged?.Invoke();
     }
 
     private UIElement BuildLabsSettingsPage()
@@ -2803,3 +2805,4 @@ public sealed partial class AppController
     }
 
 }
+

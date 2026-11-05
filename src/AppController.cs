@@ -2021,7 +2021,7 @@ public sealed partial class AppController : IDisposable
         }
 
         State.Papers.RemoveAll(p => p.Id == paper.Id);
-        QueuePluginPaperStateDeletion(paper.Id);
+        NotifyPaperRemoved(paper.Id);
         _visibilityAnimationVersions.Remove(paper.Id);
         NotifyTodoReminderCollectionChanged();
 
@@ -2043,6 +2043,15 @@ public sealed partial class AppController : IDisposable
         ArrangeDeepCapsules();
         RefreshTrayMenu();
         SaveNow();
+    }
+
+    // Called by UI deletion, committed external deletion, and accepted data reload/merge.
+    // Cross-paper history belongs to entity removal, not plugin-state persistence.
+    internal void NotifyPaperRemoved(string paperId)
+    {
+        foreach (var window in _windows.Values)
+            window.PruneDeletedLinkedPaperFromTodoHistory(paperId);
+        QueuePluginPaperStateDeletion(paperId);
     }
 
     private void ClearTodoLinksToPaper(string linkedPaperId)
@@ -3068,6 +3077,7 @@ public sealed partial class AppController : IDisposable
             {
                 window.DetachFromDeepCapsuleStack();
             }
+            State.CapsuleCollapseAllActiveQueues.Clear();
             DestroyAllMasterCapsules();
             return;
         }
@@ -3159,6 +3169,7 @@ public sealed partial class AppController : IDisposable
     {
         if (!State.UseCapsuleCollapseAll)
         {
+            State.CapsuleCollapseAllActiveQueues.Clear();
             DestroyAllMasterCapsules();
             return;
         }
@@ -3220,12 +3231,8 @@ public sealed partial class AppController : IDisposable
 
     private void DestroyAllMasterCapsules()
     {
-        // Collapsing the masters must never strand retracted capsules off-screen at Opacity 0.
-        if (State.CapsuleCollapseAllActiveQueues.Count > 0)
-        {
-            State.CapsuleCollapseAllActiveQueues.Clear();
-        }
-
+        // This retires live windows only. Hidden/non-slot papers retain their queue
+        // preferences; feature disablement and stale-queue cleanup own model changes.
         if (_masterCapsules.Count == 0)
         {
             return;
@@ -3358,8 +3365,7 @@ public sealed partial class AppController : IDisposable
             if (sync)
             {
                 store.SaveJsonSync(json, version);
-                if (!IsExiting) TryReleaseUnreferencedImageCache();
-                TryFlushPendingPluginPaperStateDeletes();
+                CompleteStateSaveMaintenance(releaseImageCache: true);
                 _hasShownSaveFailure = false;
             }
             else
@@ -3377,8 +3383,7 @@ public sealed partial class AppController : IDisposable
                             if (version == Interlocked.Read(ref _saveVersion) &&
                                 stateRevision == Interlocked.Read(ref _stateRevision))
                             {
-                                TryReleaseUnreferencedImageCache();
-                                TryFlushPendingPluginPaperStateDeletes();
+                                CompleteStateSaveMaintenance(releaseImageCache: true);
                             }
                             _hasShownSaveFailure = false;
                         }));
@@ -4269,6 +4274,7 @@ public sealed partial class AppController : IDisposable
         TryExitCleanup(() => scriptShutdown.GetAwaiter().GetResult());
     }
 }
+
 
 
 

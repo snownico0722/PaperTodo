@@ -16,6 +16,8 @@ internal static partial class Program
         StartingPluginRuntimeIsDisposedOnRemoval(c);
         ReadsAndNotificationsDoNotCommitOrReplaceBodies(c, owner, note, todo);
         await ExternalSavePreservesRuntimeCallbackDirtyState(c);
+        VisualBroadcastSurvivesPaperCreation(c);
+        PopupThemeNotificationsFollowAppearance(c);
         CreationOwnsInitialTodoFields(c, note);
         TodoPasteUsesEventPayload();
         PartialReminderDeliveryKeepsUnsurfacedItemsPending(c);
@@ -303,10 +305,17 @@ internal static partial class Program
             BoundaryRuntimePlugin.Starts = 0;
             BoundaryRuntimePlugin.Fail = false;
             var removedCallbacks = 0;
+            var addedCallbacks = 0;
+            var added = new PaperData
+            {
+                Id = "post-save-added", Type = PaperTypes.Note, BodyProviderId = id, IsVisible = false
+            };
             BoundaryRuntimePlugin.Configure = context =>
             {
                 _ = context.Papers.Subscribe(value =>
                 {
+                    if (value.Kind == PaperPluginRuntimeEventKind.PaperAdded && value.PaperId == added.Id)
+                        addedCallbacks++;
                     if (value.Kind == PaperPluginRuntimeEventKind.PaperRemoved &&
                         string.Equals(value.PaperId, removed.Id, StringComparison.Ordinal))
                     {
@@ -331,6 +340,16 @@ internal static partial class Program
                   slot.GetType().GetProperty("State")!.GetValue(slot)!.ToString() == "Running",
                 "Post-save dirty fixture Runtime did not finish startup.");
 
+            c.State.Papers.Add(added);
+            c.TryFlushPendingPluginPaperStateDeletes();
+            Check(addedCallbacks == 0,
+                "Plugin file cleanup must not publish unrelated Runtime membership changes.");
+            c.SaveNow(sync: true);
+            Check(addedCallbacks == 1,
+                "An ordinary successful save must still publish Runtime membership changes.");
+            c.State.Papers.Remove(added);
+            c.SaveNow(sync: true);
+
             _ = c.PaperCommands.DeletePaper(
                 removed.Id,
                 PaperOperationContext.Plugin("tests.boundary"));
@@ -349,6 +368,7 @@ internal static partial class Program
             BoundaryRuntimePlugin.Configure = null;
             c.State.Papers.Remove(removed);
             c.State.Papers.Remove(survivor);
+            c.State.Papers.RemoveAll(paper => paper.Id == "post-save-added");
             c.ReconcilePluginRuntimes();
             descriptors.Remove(id);
             loaded.Remove(path);
@@ -807,3 +827,4 @@ public sealed class BoundaryRuntimePlugin : IPaperBodyPlugin, IPaperPluginRuntim
     }
     private sealed class Runtime : IPaperPluginRuntime { public void Dispose() { } }
 }
+

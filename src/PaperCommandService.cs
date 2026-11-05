@@ -585,7 +585,7 @@ internal sealed partial class PaperCommandService
                 throw SaveFailed();
             }
 
-            _controller.QueuePluginPaperStateDeletion(paper.Id);
+            _controller.NotifyPaperRemoved(paper.Id);
             _controller.TryFlushPendingPluginPaperStateDeletes();
             _controller.RunExternalPostCommitUi(() =>
             {
@@ -998,3 +998,4 @@ internal sealed partial class PaperCommandService
         }
     }
 }
+
