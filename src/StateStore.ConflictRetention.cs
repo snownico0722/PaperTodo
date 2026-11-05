@@ -18,12 +18,12 @@ public sealed partial class StateStore
 
     // An archive is ONE completed (original,diff) pair. Incomplete fragments
     // must never force eviction of a complete, still-recoverable pair.
-    internal void TryPruneConflictArchives(DateTime utcNow)
+    internal void TryPruneConflictArchives()
     {
         try
         {
             _writeLock.Wait();
-            try { PruneConflictArchivesCore(utcNow); }
+            try { PruneConflictArchivesCore(); }
             finally { _writeLock.Release(); }
         }
         catch (OperationCanceledException)
@@ -38,7 +38,7 @@ public sealed partial class StateStore
     }
 
     // Caller may already hold the StateStore write lock (explicit merge).
-    private void PruneConflictArchivesCore(DateTime utcNow)
+    private void PruneConflictArchivesCore()
     {
         WriteLifetime.ThrowIfStopped();
         var directory = Path.GetDirectoryName(FilePath)!;
@@ -59,19 +59,18 @@ public sealed partial class StateStore
         // A pair of filenames with damaged contents is not a complete recovery
         // record. Do not allow such a pair to evict five genuinely usable ones.
         var paired = groups.Values.Where(group => group.IsComplete).ToArray();
-        if (paired.Length <= 5 ||
-            paired.All(group => utcNow - group.CreatedUtc <= TimeSpan.FromDays(3)))
-            return; // No deletions possible: do not parse large young archives at startup.
+        if (paired.Length <= 5)
+            return; // No deletions possible: do not parse archives within the retention limit.
         var complete = paired.Where(IsUsableCompleteConflictGroup)
             .OrderBy(group => group.CreatedUtc)
             .ThenBy(group => group.Key, StringComparer.Ordinal).ToArray();
         var remaining = complete.Length;
         if (remaining <= 5) return;
 
-        // The policy is AND: older than 3 days AND more than 5 complete groups.
+        // Keep the latest five complete groups, regardless of their age.
         foreach (var group in complete)
         {
-            if (remaining <= 5 || utcNow - group.CreatedUtc <= TimeSpan.FromDays(3))
+            if (remaining <= 5)
                 break;
             try
             {

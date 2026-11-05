@@ -26,14 +26,14 @@ internal static partial class Program
         {
             var old = Enumerable.Range(0, 5)
                 .Select(i => Group(scope.DirectoryPath, now, 10 - i, i + 1)).ToArray();
-            scope.Store.TryPruneConflictArchives(now);
+            scope.Store.TryPruneConflictArchives();
             Require(old.All(p => File.Exists(p.Original) && File.Exists(p.Diff)),
                 "five old groups must survive regardless of their age");
 
             var young = Enumerable.Range(0, 3)
                 .Select(i => Group(scope.DirectoryPath, now, 1, i + 11)).ToArray();
             var unrelated = Group(scope.DirectoryPath, now, 100, 1, "data2");
-            scope.Store.TryPruneConflictArchives(now);
+            scope.Store.TryPruneConflictArchives();
             Require(old.Take(3).All(p => !File.Exists(p.Original) && !File.Exists(p.Diff)) &&
                     old.Skip(3).All(p => File.Exists(p.Original) && File.Exists(p.Diff)) &&
                     young.All(p => File.Exists(p.Original) && File.Exists(p.Diff)) &&
@@ -46,22 +46,27 @@ internal static partial class Program
         using (var scope = new Scope())
         {
             var young = Enumerable.Range(0, 12)
-                .Select(i => Group(scope.DirectoryPath, now, 1, i + 1)).ToArray();
-            scope.Store.TryPruneConflictArchives(now);
-            Require(young.All(pair => File.Exists(pair.Original) && File.Exists(pair.Diff)),
-                "a large number of young conflict groups must be retained");
-            // Crossing the exact 3-day boundary is still NOT 'older than 3 days'.
-            var boundary = Group(scope.DirectoryPath, now, 3, 21);
-            scope.Store.TryPruneConflictArchives(now);
-            Require(File.Exists(boundary.Original) && File.Exists(boundary.Diff),
-                "an exactly three-day-old pair was deleted");
+                .Select(i => Group(scope.DirectoryPath, now.AddMinutes(i), 0, i + 1)).ToArray();
+            scope.Store.TryPruneConflictArchives();
+            Require(young.Take(7).All(pair => !File.Exists(pair.Original) && !File.Exists(pair.Diff)) &&
+                    young.Skip(7).All(pair => File.Exists(pair.Original) && File.Exists(pair.Diff)),
+                "same-day conflict groups were not reduced to the latest five complete pairs");
+            Require(Directory.GetFiles(scope.DirectoryPath, "dataconflict-*").Length == 10,
+                "young archive retention did not stop at five complete groups");
+
+            // An older archive added later must not displace one of the newest five.
+            var older = Group(scope.DirectoryPath, now, 3, 21);
+            scope.Store.TryPruneConflictArchives();
+            Require(!File.Exists(older.Original) && !File.Exists(older.Diff) &&
+                    young.Skip(7).All(pair => File.Exists(pair.Original) && File.Exists(pair.Diff)),
+                "retention used file arrival order instead of the archive timestamp");
         }
 
         using (var scope = new Scope())
         {
             var old = Enumerable.Range(0, 7)
                 .Select(i => Group(scope.DirectoryPath, now, 20 - i, i + 1)).ToArray();
-            scope.Store.TryPruneConflictArchives(now);
+            scope.Store.TryPruneConflictArchives();
             Require(old.Take(2).All(pair => !File.Exists(pair.Original) && !File.Exists(pair.Diff)) &&
                     old.Skip(2).All(pair => File.Exists(pair.Original) && File.Exists(pair.Diff)),
                 "aged excess groups were not pruned as whole original/diff pairs");
@@ -78,7 +83,7 @@ internal static partial class Program
             var interrupted = Path.Combine(scope.DirectoryPath,
                 $"dataconflict-{now.AddDays(-22):yyyyMMddHHmmssfff}-00000020.diff.json.tmp");
             File.WriteAllText(interrupted, "{unfinished");
-            scope.Store.TryPruneConflictArchives(now);
+            scope.Store.TryPruneConflictArchives();
             Require(old.All(pair => File.Exists(pair.Original) && File.Exists(pair.Diff)) &&
                     File.Exists(partial.Original) && File.Exists(interrupted),
                 "incomplete records consumed full-group retention slots or were treated as completed data");
@@ -92,7 +97,7 @@ internal static partial class Program
                 .Select(i => Group(scope.DirectoryPath, now, 15 - i, i + 1)).ToArray();
             var orphan = Group(scope.DirectoryPath, now, 22, 19);
             File.Delete(orphan.Diff);
-            scope.Store.TryPruneConflictArchives(now);
+            scope.Store.TryPruneConflictArchives();
             Require(!File.Exists(old[0].Original) && !File.Exists(old[0].Diff) &&
                     old.Skip(1).All(pair => File.Exists(pair.Original) && File.Exists(pair.Diff)) &&
                     File.Exists(orphan.Original),
@@ -107,7 +112,7 @@ internal static partial class Program
                 .Select(i => Group(scope.DirectoryPath, now, 15 - i, i + 1)).ToArray();
             var invalid = Group(scope.DirectoryPath, now, 20, 19);
             File.WriteAllText(invalid.Diff, "{incomplete diff");
-            scope.Store.TryPruneConflictArchives(now);
+            scope.Store.TryPruneConflictArchives();
             Require(old.All(pair => File.Exists(pair.Original) && File.Exists(pair.Diff)) &&
                     File.Exists(invalid.Original) && File.Exists(invalid.Diff),
                 "an invalid conflict pair incorrectly displaced one of five usable whole records");
@@ -122,17 +127,38 @@ internal static partial class Program
             using (var locked = new FileStream(old[0].Original,
                 FileMode.Open, FileAccess.ReadWrite, FileShare.None))
             {
-                scope.Store.TryPruneConflictArchives(now);
+                scope.Store.TryPruneConflictArchives();
                 Require(old.All(pair => File.Exists(pair.Original) && File.Exists(pair.Diff)),
                     "an inaccessible archive caused deletion of another complete record");
             }
             // When access returns, exactly one eligible complete pair is retired.
-            scope.Store.TryPruneConflictArchives(now);
+            scope.Store.TryPruneConflictArchives();
             Require(!File.Exists(old[0].Original) && !File.Exists(old[0].Diff) &&
                     old.Skip(1).All(pair => File.Exists(pair.Original) && File.Exists(pair.Diff)),
                 "retention failed to prune precisely one group after the lock was released");
         }
 
-        Console.WriteLine("PASS conflict retention requires both age and count; pairs and workspaces stay isolated");
+        // A readable original can still reject deletion. The diff is removed
+        // first, and that partial failure must stop this pass before another pair.
+        using (var scope = new Scope())
+        {
+            var pairs = Enumerable.Range(0, 7)
+                .Select(i => Group(scope.DirectoryPath, now.AddMinutes(i), 0, i + 1)).ToArray();
+            using (var locked = new FileStream(pairs[0].Original,
+                FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                scope.Store.TryPruneConflictArchives();
+                Require(File.Exists(pairs[0].Original) && !File.Exists(pairs[0].Diff) &&
+                        pairs.Skip(1).All(pair => File.Exists(pair.Original) && File.Exists(pair.Diff)),
+                    "a failed original deletion did not stop retention after removing its diff");
+            }
+            scope.Store.TryPruneConflictArchives();
+            Require(File.Exists(pairs[0].Original) &&
+                    !File.Exists(pairs[1].Original) && !File.Exists(pairs[1].Diff) &&
+                    pairs.Skip(2).All(pair => File.Exists(pair.Original) && File.Exists(pair.Diff)),
+                "retention retry counted a partial pair or failed to preserve the newest five");
+        }
+
+        Console.WriteLine("PASS conflict retention keeps the latest five complete groups; failures and workspaces stay isolated");
     }
 }

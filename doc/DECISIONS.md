@@ -74,7 +74,8 @@
 | D-063 | 仅显式热重载和有基线三方合并，普通保存不检测外部修改 | Accepted | 持久化 / 产品边界 |
 | D-064 | 固定编号工作区共用代码，不共用运行数据 | Accepted | 工作区 / 持久化 |
 | D-065 | DComp 视觉与 Win32 输入提交的非原子边界 | Accepted (historical findings; native-owner candidate deferred) | Edge input / composition |
-| D-066 | 异常恢复只接受完整数据，不保留重复救援文件；冲突归档双条件清理 | Accepted | 核心持久化 / 恢复 |
+| D-066 | 异常恢复只接受完整数据，不保留重复救援文件；冲突归档双条件清理 | Accepted；归档保留部分 Superseded by D-067 | 核心持久化 / 恢复 |
+| D-067 | 冲突归档仅保留最近五组完整记录 | Accepted | 核心持久化 / 归档 |
 
 ## 维护规则
 
@@ -2034,7 +2035,7 @@ PR #319 的初版把主胶囊完整材质收展后的卡死解释为终点迟到
 
 ## D-066 — 异常恢复只接受完整数据，取消重复救援副本
 
-**Status:** Accepted
+**Status:** Accepted；冲突归档双条件保留部分 Superseded by D-067，完整恢复等其他决定保持有效
 
 ### Context
 
@@ -2058,3 +2059,24 @@ PR #319 的初版把主胶囊完整材质收展后的卡死解释为终点迟到
 
 - \`src/StateStore.Recovery.cs\`、\`src/StateStore.cs\`、\`src/StateStore.ConflictRetention.cs\`、\`src/StateStore.Merge.cs\`。
 - \`tests/PaperTodo.DataReloadChecks/RecoveryRetentionChecks.cs\`、\`ConflictRetentionChecks.cs\`、\`WriteSafetyChecks.cs\`、\`WorkspaceChecks.cs\`。
+
+---
+
+## D-067 — 冲突归档仅保留最近五组完整记录
+
+**Status:** Accepted
+
+### Context
+
+D-066 曾同时按三天和五组保护冲突归档，短时间产生大量冲突时会保留全部年轻记录。已有四档核心 JSON 历史备份承担更早的恢复点，冲突归档收束为最近几次合并的恢复记录。
+
+### Decision / Why
+
+- 仅保留最近五组内容有效、原件与差异文件齐全的冲突归档；超出时按归档时间从旧到新成组删除，不再设置三天门槛。
+- 不完整或损坏记录不占五组名额。先删除差异文件，再删除原件；失败即停止本轮，主数据已提交的结果不受清理失败影响。
+- 接受大量连续冲突可能挤掉异常发生前的归档；更早恢复依靠已有历史备份，可能回退最近修改。固定备份、四档历史备份和完整临时文件恢复均保持原协议。
+
+### Evidence
+
+- `src/StateStore.ConflictRetention.cs`、`src/StateStore.Merge.cs`。
+- `tests/PaperTodo.DataReloadChecks/ConflictRetentionChecks.cs`。

@@ -59,7 +59,7 @@ public sealed partial class StateStore
         NeedsStartupRecoverySave = false;
         NormalizedCollapsedStateOnLoad = false;
         _pendingStartupRecovery = null;
-        TryPruneConflictArchives(DateTime.UtcNow);
+        TryPruneConflictArchives();
 
         var primaryExists = FileExistsForCollection(FilePath);
         var primaryBytes = primaryExists ? File.ReadAllBytes(FilePath) : null;

@@ -183,7 +183,7 @@ public sealed partial class StateStore
             WriteJsonInternal(json, version, beforeReplace: ValidateSource);
             // Retention is best-effort maintenance; a successfully committed
             // merge must never be reported as failed because deletion is blocked.
-            try { PruneConflictArchivesCore(DateTime.UtcNow); }
+            try { PruneConflictArchivesCore(); }
             catch (Exception ex)
             {
                 // All retention failures (including shutdown cancellation) occur
