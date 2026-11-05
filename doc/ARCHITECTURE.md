@@ -203,7 +203,7 @@ Markdown 中的 Note 图片只通过 PaperTodo 内部 `i:` asset URI 引用宿�
 
 ### 4.5 固定编号工作区
 
-`WorkspaceCatalog` 从主 `data.json` 的可选 `workspaces` 对象解析总开关、实际工作区编号列表（最多五个，默认仅主工作区）、自定义名称、最后激活编号、副工作区设置跟随开关及顶栏选择模式。旧版仅保存数量的配置按连续的 1～Count 编号迁移；减少旧版数量时遗留的隐藏文件不作为新建空槽使用，也不会被自动覆盖。不创建额外目录扫描器或 `workspaces.json`；未配置的旧数据仍只有原来的主工作区。
+`WorkspaceCatalog` 从主 `data.json` 的可选 `workspaces` 对象解析总开关、实际工作区编号列表（最多五个，默认仅主工作区）、自定义名称、最后激活编号、副工作区设置跟随开关及顶栏选择模式。当前目录以 `Slots` 唯一决定现有工作区成员；没有列表时默认仅工作区1，不再迁移测试版基于 `Count` 的旧目录，也不扫描隐藏的旧文件。不创建额外目录扫描器或 `workspaces.json`。
 
 每个固定编号拥有不可变的 `WorkspacePaths` 与复用的 `StateStore` writer：1 使用 `data.json` / `data.backup.json` / `note-assets.lmdb` / `plugins/data`；2～5 使用 `data2.json` / `data2.backup.json` / `note-assets2.lmdb` / `plugins/data2` 等。备份、失败恢复源及冲突归档的图片引用扫描只保护对应工作区；未激活工作区不维持窗口、LMDB 连接或插件 Runtime。图片缺失或读取损坏不阻止工作区启动和切换，也不额外弹出预检查提示；图片读取按原有局部失败处理。图片库加载失败时禁止危险写入，缺失库如有历史引用则不创建新库覆盖其恢复位置，缺失的引用编号不得重新分配；只有图片写入受到必要限制，不影响纸片和工作区的正常使用。插件代码发现与 Native assembly 缓存仍属于进程，不随切换重新发现。
 
