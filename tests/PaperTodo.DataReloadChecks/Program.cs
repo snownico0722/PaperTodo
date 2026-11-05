@@ -34,6 +34,8 @@ internal static partial class Program
                 ("conflicts group by paper and archive input", MergePaperConflict),
                 ("delete/edit conflicts honor both choices for notes and todos", MergePaperDeletionConflicts),
                 ("merge preserves links to a paper chosen to survive", MergeDeletedPaperRetainsChosenLinks),
+                ("conflict archives expire only when older than three days AND beyond five groups",
+                    ConflictArchiveRetentionChecks),
                 ("stale external source cannot overwrite a newer edit", MergeRejectChangedSource),
                 ("source changed after flush is rejected before replacement", MergeRejectDuringReplace),
                 ("source changed during replace retry is also rejected", MergeRejectDuringRetry),

@@ -182,6 +182,13 @@ public sealed partial class StateStore
                 (conflictFile, diffFile) = ArchiveConflicts(resolution, sourceBytes, ValidateSource);
             WriteJsonInternal(json, beforeReplace: ValidateSource);
             _latestWrittenVersion = version;
+            // Retention is best-effort maintenance; a successfully committed
+            // merge must never be reported as failed because deletion is blocked.
+            try { PruneConflictArchivesCore(DateTime.UtcNow); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                System.Diagnostics.Trace.TraceWarning("Conflict archive retention failed: {0}", ex);
+            }
             return (conflictFile, diffFile);
         }
         finally { _writeLock.Release(); }

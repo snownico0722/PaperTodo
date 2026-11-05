@@ -249,10 +249,10 @@ internal static partial class Program
         var recoveredMain = J(File.ReadAllText(catalog.MainStore.FilePath));
         Require(recoveredMain["workspaces"]!["active"]!.GetValue<int>() == 2 &&
                 Str(recoveredMain["papers"]![0]!["content"]) == "main content must survive recovery" &&
-                Directory.GetFiles(scope.DirectoryPath, "data.failed_load.*.json")
-                    .Any(p => File.ReadAllText(p) == "{corrupt main") &&
+                Directory.GetFiles(scope.DirectoryPath, "data.failed_load.*.json").Length == 0 &&
+                Directory.GetFiles(scope.DirectoryPath, "data.backup.used_for_recovery.*.json").Length == 0 &&
                 File.ReadAllBytes(secondary.FilePath).SequenceEqual(originalSecondary),
-            "main recovery lost the selected slot, main content, or secondary data");
+            "main recovery lost the selected slot, saved content, or added redundant copies");
 
         var next = catalog.Options.Normalized();
         next.Active = 3;
@@ -439,10 +439,12 @@ internal static partial class Program
                 File.Exists(freshImagePath),
             "a fresh workspace was mistaken for missing historical image data");
 
-        // A malformed recovery record cannot establish that missing images are safe to replace.
+        // Damaged records are explicitly abandoned rather than permanently stopping
+        // cleanup for all healthy images in the same workspace.
         File.WriteAllText(Path.Combine(scope.DirectoryPath, "data2conflict-broken.json"), "{broken");
-        Require(!store2.TryCollectProtectedImageIds(second, out _),
-            "malformed recovery archive unexpectedly produced a complete reference set");
+        Require(store2.TryCollectProtectedImageIds(second, out var stillProtected) &&
+                stillProtected.Contains("303"),
+            "a damaged legacy archive disabled the healthy workspace image scan");
         var uncertainPath = Path.Combine(scope.DirectoryPath, "note-assets-uncertain.lmdb");
         using var uncertain = new NoteImageStore(uncertainPath);
         uncertain.Load();
@@ -528,16 +530,11 @@ internal static partial class Program
 
         File.WriteAllText(path, "{broken");
         var catalog = new WorkspaceCatalog(scope.DirectoryPath, DurableAtomicFileWriter.Shared);
-        var rebuilt = catalog.OpenInitial();
-        Require(rebuilt.Paths.Number == 2 && rebuilt.State.Papers.Count == 1 &&
-                catalog.StartupError == null && File.ReadAllText(path) == "{broken",
-            "confirmed corrupt secondary JSON did not initialize without modifying the disk first");
-        rebuilt.BindPersistence();
-        rebuilt.Store.SaveJsonSync(rebuilt.Store.SerializeState(rebuilt.State), 2);
-        Require(J(File.ReadAllText(path))["papers"] is JsonArray &&
-                Directory.GetFiles(scope.DirectoryPath, "data2.failed_load.*.json")
-                    .Any(file => File.ReadAllText(file) == "{broken"),
-            "reconstructed secondary lost its original damaged source");
+        var fallback = catalog.OpenInitial();
+        Require(fallback.Paths.Number == 1 && catalog.StartupError != null &&
+                catalog.Options.Active == 2 && File.ReadAllText(path) == "{broken" &&
+                !Directory.GetFiles(scope.DirectoryPath, "data2.failed_load.*.json").Any(),
+            "unrecoverable secondary data was silently rebuilt or changed on disk");
 
         // Historical files, plugin data and a broken image library are not barriers
         // to creating a workspace whose primary and backup do not exist.
@@ -1178,15 +1175,21 @@ internal static partial class Program
             Require(File.ReadAllBytes(busyFifthPath).SequenceEqual(busyFifthBytes),
                 "busy fifth workspace was overwritten during the rejected switch");
 
-            // Corrupt JSON is a different outcome: the same slot can be rebuilt.
+            // Confirmed corruption is NOT a blank new workspace. Reject the switch
+            // until a complete interrupted-write source can be recovered.
             File.WriteAllText(busyFifthPath, "{invalid target");
-            Require(await controller.SwitchWorkspaceAsync(5) && controller.WorkspaceNumber == 5,
-                "corrupt fifth workspace was not rebuilt during a normal switch");
-            Require(Directory.GetFiles(directory, "data5.failed_load.*.json")
-                    .Any(file => File.ReadAllText(file) == "{invalid target"),
-                "corrupt fifth workspace was overwritten without preserving its source");
-            Require(controller.State.Papers.Count == 1 && controller.State.Papers[0].Content.Length == 0,
-                "new fifth workspace duplicated main content");
+            Require(!await controller.SwitchWorkspaceAsync(5) &&
+                    controller.WorkspaceNumber == 1 &&
+                    File.ReadAllText(busyFifthPath) == "{invalid target",
+                "corrupt fifth workspace was overwritten with a new blank note");
+            var fifthRecovered = NewState();
+            fifthRecovered.Papers[0].Content = "automatically recovered fifth";
+            File.WriteAllText(busyFifthPath + ".tmp", store2.SerializeState(fifthRecovered));
+            Require(await controller.SwitchWorkspaceAsync(5) && controller.WorkspaceNumber == 5 &&
+                    controller.State.Papers[0].Content == "automatically recovered fifth" &&
+                    !File.Exists(busyFifthPath + ".tmp") &&
+                    !Directory.GetFiles(directory, "data5.failed_load.*.json").Any(),
+                "complete fifth-workspace temp was not automatically recovered");
             var fifthPath = Path.Combine(directory, "data5.json");
             var fifthId = controller.State.Papers[0].Id;
             var reduced = controller.WorkspaceOptions.Normalized(); reduced.Slots = [1, 2, 3];
