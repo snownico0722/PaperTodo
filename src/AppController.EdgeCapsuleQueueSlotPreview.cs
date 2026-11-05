@@ -16,37 +16,49 @@ public sealed partial class AppController
     // Reuses the same exact slot geometry for Ctrl transfers and direct master
     // drags. The target suffix leaves precisely carriedIds.Count slots; only
     // actual colliding neighbour queues from the drop policy also give way.
-    // forceReapply is for docked master movement: its own queue position is
-    // recomputed every pointer sample, while the insertion slot stays fixed.
+    // A docked master includes resting placements in this single final pass.
+    // An unchanged slot keeps its already-presented displacement; it is never
+    // reset to the resting layout and then pushed away a second time.
     private void PreviewFreeQueueDropSlot(FreeQueueSlotPreviewState state,
         EdgeFreeQueueDrop? decision, string sourceKey,
-        IReadOnlyCollection<string> carriedIds, bool forceReapply = false)
+        IReadOnlyCollection<string> carriedIds, EdgeCapsuleQueuePlan resting,
+        IReadOnlyList<NativeQueueGroup> groups, bool includeResting = false)
     {
         var inserting = decision is { Kind: EdgeFreeQueueDropKind.Insert };
         var key = inserting ? decision!.TargetKey : "";
         var index = inserting ? decision!.Index : -1;
         var top = inserting ? decision!.TopDip : double.NaN;
-        if (!forceReapply && key == state.TargetKey && index == state.Index &&
+        var sameSlot = key == state.TargetKey && index == state.Index &&
             (double.IsNaN(top) && double.IsNaN(state.Top) ||
-             Math.Abs(top - state.Top) < .1)) return;
+             Math.Abs(top - state.Top) < .1);
+        if (sameSlot && !includeResting) return;
 
-        var resting = BuildRestingEdgeQueuePlan();
-        var groups = NativeQueueGroups();
+        var moving = carriedIds.ToHashSet(StringComparer.Ordinal);
         var desired = new Dictionary<string, EdgeCapsulePlacement>(StringComparer.Ordinal);
-        foreach (var id in state.MemberIds)
-            if (resting.Placements.TryGetValue(id, out var placement)) desired[id] = placement;
-
         var masterTops = new Dictionary<string, double>(StringComparer.Ordinal);
-        foreach (var masterKey in state.MasterKeys)
-            if (resting.MasterTopsDip.TryGetValue(masterKey, out var oldTop))
-                masterTops[masterKey] = oldTop;
+        if (includeResting)
+        {
+            foreach (var (id, placement) in resting.Placements)
+                if (!moving.Contains(id) && (!sameSlot || !state.MemberIds.Contains(id)))
+                    desired[id] = placement;
+            foreach (var (masterKey, masterTop) in resting.MasterTopsDip)
+                if (!sameSlot || !state.MasterKeys.Contains(masterKey))
+                    masterTops[masterKey] = masterTop;
+        }
+        else
+        {
+            foreach (var id in state.MemberIds)
+                if (resting.Placements.TryGetValue(id, out var placement)) desired[id] = placement;
+            foreach (var masterKey in state.MasterKeys)
+                if (resting.MasterTopsDip.TryGetValue(masterKey, out var oldTop))
+                    masterTops[masterKey] = oldTop;
+        }
 
         var changedIds = new HashSet<string>(StringComparer.Ordinal);
         var changedMasters = new HashSet<string>(StringComparer.Ordinal);
-        if (inserting && groups.FirstOrDefault(g => g.Key == key) is { } target)
+        if (!sameSlot && inserting && groups.FirstOrDefault(g => g.Key == key) is { } target)
         {
             var pitch = EdgeCapsuleLayout.SlotHeight(DeepCapsuleGap);
-            var moving = carriedIds.ToHashSet(StringComparer.Ordinal);
             foreach (var group in groups)
             {
                 if (group.Key == sourceKey || group.Key == key ||
@@ -102,12 +114,9 @@ public sealed partial class AppController
                 window.PreviewDeepCapsulePlacement(placement, animate: false);
         foreach (var (masterKey, desiredTop) in masterTops)
             if (_masterCapsules.TryGetValue(masterKey, out var master))
-            {
-                master.SetQueueTopPreview(desiredTop);
-                master.UpdateState(State.Papers.Count(p => QueueKey(p) == masterKey),
-                    IsCapsuleCollapseAllActiveForQueue(masterKey), animate: false);
-            }
+                master.PreviewQueueTop(desiredTop);
 
+        if (sameSlot) return;
         state.MemberIds.Clear();
         foreach (var id in changedIds) state.MemberIds.Add(id);
         state.MasterKeys.Clear();

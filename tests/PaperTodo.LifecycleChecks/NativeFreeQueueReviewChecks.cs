@@ -42,6 +42,7 @@ internal static class NativeFreeQueueReviewChecks
         Require(WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(null, out var monitor), "review monitor");
         var originalContents = c.State.Papers.ToDictionary(p => p.Id, p => p.Content);
         await CheckDisplacedInsertion(c, windows, store, monitor);
+        await CheckDragPreviewUpdates(c, windows, monitor);
         await CheckFoldedDropAndShortcuts(c, monitor);
         await CheckDisconnectedGesturesAndMerge(c, windows, store, monitor);
         Require(c.State.Papers.Count == originalContents.Count &&
@@ -113,6 +114,107 @@ internal static class NativeFreeQueueReviewChecks
         Near(beforeB - pitch, masters[B].AnchorTop, "repeated layout does not add displacement");
         Console.WriteLine("PASS displaced head insertion: cancel, commit, preferences, reload and stable rearrange");
     }
+
+    private static async Task CheckDragPreviewUpdates(AppController c,
+        IReadOnlyDictionary<string, PaperWindow> windows, MonitorGeometry monitor)
+    {
+        const string sourceKey = "|right#source", unrelatedKey = "|left#unrelated";
+        var pitch = EdgeCapsuleLayout.SlotHeight(c.DeepCapsuleGap);
+        foreach (var paper in c.State.Papers)
+        {
+            var i = int.Parse(paper.Id["review-".Length..]);
+            paper.CapsuleMonitorDeviceName = "";
+            paper.CapsuleSide = i < 6 ? DeepCapsuleSides.Left : DeepCapsuleSides.Right;
+            paper.CapsuleQueueId = i < 6 ? "unrelated" : i < 8 ? "qb" : i < 10 ? "qc" : "source";
+        }
+        c.State.DeepCapsuleQueueStartTopMargins.Clear();
+        c.State.DeepCapsuleQueueStartTopMargins[sourceKey] = 20;
+        c.State.DeepCapsuleQueueStartTopMargins[unrelatedKey] = 50;
+        c.State.DeepCapsuleQueueStartTopMargins[B] = 160;
+        c.State.DeepCapsuleQueueStartTopMargins[C] = 160 + 3 * pitch;
+        c.State.CapsuleCollapseAllActiveQueues.Clear();
+        c.ArrangeDeepCapsules(false);
+        await Idle();
+
+        var source = c.State.Papers.Single(p => p.Id == "review-10");
+        var peers = c.State.Papers.Where(p => p != source).ToArray();
+        var beforeTops = peers.ToDictionary(p => p.Id, p => MemberTop(c, windows[p.Id], p));
+        var beforeMargins = new Dictionary<string, double>(c.State.DeepCapsuleQueueStartTopMargins);
+        var masters = Masters(c);
+        var layout = c.CaptureFreeMasterDragLayout("", EdgeCapsuleEdge.Right, sourceKey)!;
+        var peerWork = peers.ToDictionary(p => p.Id, p => ReconcileGeneration(windows[p.Id]));
+        c.PreviewFreeMasterQueueTop(layout, 28);
+        Require(peers.All(p => ReconcileGeneration(windows[p.Id]) == peerWork[p.Id]),
+            "moving one master must not queue reconciliation for unchanged peers");
+        await Idle();
+        Near(28, masters[sourceKey].AnchorTop, "source master follows its temporary anchor");
+        Near(28 + pitch, MemberTop(c, windows[source.Id], source), "source member follows its temporary anchor");
+        var sourceFrame = Field<EdgeCapsulePresenter>(windows[source.Id], "_edgeCapsule").AppliedPresentation;
+        Require(Math.Abs(sourceFrame.Bounds.Top - (monitor.WorkArea.Top + (28 + pitch) * monitor.DpiScaleY)) <= 1,
+            "unchanged source slot indices must still refresh actual presented geometry");
+
+        var allWork = c.State.Papers.ToDictionary(p => p.Id, p => ReconcileGeneration(windows[p.Id]));
+        var masterWork = masters.ToDictionary(pair => pair.Key, pair => Field<int>(pair.Value, "_moveGeneration"));
+        c.PreviewFreeMasterQueueTop(layout, 28);
+        Require(c.State.Papers.All(p => ReconcileGeneration(windows[p.Id]) == allWork[p.Id]) &&
+                masters.All(pair => Field<int>(pair.Value, "_moveGeneration") == masterWork[pair.Key]),
+            "an identical pointer sample must not schedule capsule or master movement");
+
+        var insertionTop = 160 + 2 * pitch;
+        c.PreviewFreeMasterQueueTop(layout, insertionTop, Point(monitor, insertionTop));
+        var slot = Field<FreeQueueSlotPreviewState>(c, "_freeMasterSlotPreview");
+        Require(slot.TargetKey == B && slot.Index == 1, "master selects the interior target slot");
+        await Idle();
+        Near(beforeTops["review-6"], MemberTop(c, windows["review-6"], peers.Single(p => p.Id == "review-6")),
+            "target prefix stays in place");
+        Near(beforeTops["review-7"] + pitch, MemberTop(c, windows["review-7"], peers.Single(p => p.Id == "review-7")),
+            "target suffix reserves one carried slot");
+        Require(masters[C].AnchorTop > beforeMargins[C], "intersected neighbouring queue gives way");
+        var previewTops = peers.ToDictionary(p => p.Id, p => MemberTop(c, windows[p.Id], p));
+        peerWork = peers.ToDictionary(p => p.Id, p => ReconcileGeneration(windows[p.Id]));
+        masterWork = masters.Where(pair => pair.Key != sourceKey)
+            .ToDictionary(pair => pair.Key, pair => Field<int>(pair.Value, "_moveGeneration"));
+        for (var delta = 1; delta <= 3; delta++)
+            c.PreviewFreeMasterQueueTop(layout, insertionTop + delta, Point(monitor, insertionTop + delta));
+        Require(peers.All(p => ReconcileGeneration(windows[p.Id]) == peerWork[p.Id] &&
+                    Math.Abs(MemberTop(c, windows[p.Id], p) - previewTops[p.Id]) < .1) &&
+                masterWork.All(pair => Field<int>(masters[pair.Key], "_moveGeneration") == pair.Value),
+            "same-slot dragging must retain the gap without resetting or reconciling its peers");
+        await Idle();
+
+        c.ArrangeDeepCapsules(false);
+        await Idle();
+        c.PreviewFreeMasterQueueTop(layout, insertionTop + 3, Point(monitor, insertionTop + 3));
+        await Idle();
+        Require(peers.All(p => Math.Abs(MemberTop(c, windows[p.Id], p) - previewTops[p.Id]) < .1),
+            "a global arrange invalidates the old gap and the next sample restores its current preview");
+
+        c.PreviewFreeMasterQueueTop(layout, 24, Point(monitor, 24));
+        await Idle();
+        Require(peers.All(p => Math.Abs(MemberTop(c, windows[p.Id], p) - beforeTops[p.Id]) < .1),
+            "leaving the slot restores its suffix and displaced neighbours");
+        Near(beforeMargins[C], masters[C].AnchorTop, "leaving restores the neighbour master");
+        c.FinishFreeMasterQueueDrag(layout, false);
+        await Idle();
+        Near(20, masters[sourceKey].AnchorTop, "cancel restores the source anchor");
+        Require(beforeMargins.All(pair => c.State.DeepCapsuleQueueStartTopMargins[pair.Key] == pair.Value),
+            "preview and cancel must not persist temporary anchors");
+
+        c.ToggleCapsuleCollapseAllActive(sourceKey);
+        await Idle();
+        layout = c.CaptureFreeMasterDragLayout("", EdgeCapsuleEdge.Right, sourceKey)!;
+        var hiddenWork = ReconcileGeneration(windows[source.Id]);
+        c.PreviewFreeMasterQueueTop(layout, 32);
+        Require(ReconcileGeneration(windows[source.Id]) == hiddenWork,
+            "moving a folded queue only updates its visible master");
+        Near(32, masters[sourceKey].AnchorTop, "folded master still follows the pointer");
+        c.FinishFreeMasterQueueDrag(layout, false);
+        await Idle();
+        Console.WriteLine("PASS selective drag updates: live anchor refresh, unchanged peers, stable slot, neighbour restore, cancel and folded source");
+    }
+
+    private static int ReconcileGeneration(PaperWindow window) =>
+        Field<int>(Field<EdgeCapsulePresenter>(window, "_edgeCapsule"), "_reconcileGeneration");
 
     private static async Task CheckFoldedDropAndShortcuts(AppController c, MonitorGeometry monitor)
     {

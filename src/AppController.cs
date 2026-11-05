@@ -3116,6 +3116,9 @@ public sealed partial class AppController : IDisposable
             State.UseCapsuleCollapseAll);
         plan = ApplyEdgeCapsulePreviewLayout(plan);
         plan = ApplyFreeQueueRestingLayout(plan);
+        // A real global arrange supersedes any presented master-drag gap.
+        // The next pointer sample must rebuild it against this new layout.
+        _freeMasterSlotPreview = new();
         var queueKeys = plan.Queues.Select(queue => queue.Key).ToList();
         RemoveStaleCollapseAllActiveQueues(queueKeys);
 

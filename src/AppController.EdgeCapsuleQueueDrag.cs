@@ -99,23 +99,27 @@ public sealed partial class AppController
                 return false; // Ordinary sorting uses the unchanged legacy gesture.
             }
         }
-        drag.Drop = EvaluateNativeEdgeQueueDrop(drag, owner, pointer, ownerTopDip, floating);
-        ApplyNativeEdgeQueuePreview(drag, ownerTopDip, floating);
-        UpdateNativeQueueDropGhost(drag, pointer);
+        var resting = BuildRestingEdgeQueuePlan();
+        var groups = NativeQueueGroups(resting);
+        drag.Drop = EvaluateNativeEdgeQueueDrop(drag, owner, pointer, ownerTopDip, floating, resting, groups);
+        ApplyNativeEdgeQueuePreview(drag, ownerTopDip, floating, resting, groups);
+        UpdateNativeQueueDropGhost(drag, pointer, groups);
         return true;
     }
 
     private NativeEdgeQueueDrop EvaluateNativeEdgeQueueDrop(NativeEdgeQueueDrag drag, PaperData owner,
-        DeviceScreenPoint pointer, double ownerTopDip, bool floating)
+        DeviceScreenPoint pointer, double ownerTopDip, bool floating,
+        EdgeCapsuleQueuePlan? resting = null, IReadOnlyList<NativeQueueGroup>? groups = null)
     {
-        var groups = NativeQueueGroups();
+        resting ??= BuildRestingEdgeQueuePlan();
+        groups ??= NativeQueueGroups(resting);
         var live = groups.SelectMany(g => g.Papers).ToDictionary(p => p.Id, StringComparer.Ordinal);
         if (!live.TryGetValue(owner.Id, out var current) || QueueKey(current) != drag.SourceKey ||
             drag.CarriedIds.Any(id => !live.ContainsKey(id)) ||
             drag.WholeQueue && !groups.Where(g => g.Key == drag.SourceKey).SelectMany(g => g.Papers)
                 .Select(p => p.Id).SequenceEqual(drag.SourceIds) ||
             !WindowWorkAreaHelper.TryGetMonitorGeometryAtDeviceScreenPoint(pointer, out var geometry))
-            return RejectedNativeDrop();
+            return RejectedNativeDrop(resting);
         var carriedIds = drag.CarriedIds.ToHashSet(StringComparer.Ordinal);
         var carried = drag.CarriedIds.Select(id => live[id]).ToArray();
         var monitor = WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(geometry.DeviceName);
@@ -205,21 +209,20 @@ public sealed partial class AppController
                 : EdgeCapsuleLayout.TopForIndex(0, DeepCapsuleStartTopMarginForQueueKey(destination),
                     geometry.LocalWorkAreaDip, placement.SlotCount, gap) + placement.TopOffsetDip;
             // Passive recovery must not turn an accepted exact drop into another chosen location.
-            if (Math.Abs(firstTop - decision.TopDip) > .1) return RejectedNativeDrop();
+            if (Math.Abs(firstTop - decision.TopDip) > .1) return RejectedNativeDrop(resting);
         }
         return new(decision, destination, anchors, preview, targetMembers);
     }
 
-    private NativeEdgeQueueDrop RejectedNativeDrop() => new(EdgeFreeQueueDrop.Rejected, "",
-        new Dictionary<string, double>(), BuildRestingEdgeQueuePlan(), []);
+    private static NativeEdgeQueueDrop RejectedNativeDrop(EdgeCapsuleQueuePlan resting) => new(EdgeFreeQueueDrop.Rejected, "",
+        new Dictionary<string, double>(), resting, []);
 
-    private void ApplyNativeEdgeQueuePreview(NativeEdgeQueueDrag drag, double ownerTopDip, bool floating)
+    private void ApplyNativeEdgeQueuePreview(NativeEdgeQueueDrag drag, double ownerTopDip, bool floating,
+        EdgeCapsuleQueuePlan resting, IReadOnlyList<NativeQueueGroup> groups)
     {
         if (drag.Drop is not { } drop) return;
-        // In free-queue mode the ghost alone represents the proposed insertion.
-        // Do not move untouched queues on every pointer sample: inserting them
-        // into the prospective plan made the entire target follow the ghost.
-        // Their final displacement is applied by the normal arrange on release.
+        // The prospective commit plan and the stable visual gap share this
+        // pointer sample's resting geometry, without rebuilding it for the ghost.
         if (!drag.FreeQueues)
         {
             var carried = drag.CarriedIds.ToHashSet(StringComparer.Ordinal);
@@ -229,7 +232,8 @@ public sealed partial class AppController
         }
         else
         {
-            PreviewStableFreeQueueSlot(drag, drop);
+            PreviewFreeQueueDropSlot(drag.SlotPreview, drop.Decision, drag.SourceKey,
+                drag.CarriedIds, resting, groups);
         }
         if (drag.WholeQueue && !floating)
         {
@@ -258,9 +262,7 @@ public sealed partial class AppController
             if (drag.WholeQueue && !floating &&
                 _masterCapsules.TryGetValue(drag.SourceKey, out var sourceMaster))
             {
-                sourceMaster.SetQueueTopPreview(ownerTopDip - drag.OwnerOffsetDip);
-                sourceMaster.UpdateState(drag.SourceIds.Length,
-                    IsCapsuleCollapseAllActiveForQueue(drag.SourceKey), animate: false);
+                sourceMaster.PreviewQueueTop(ownerTopDip - drag.OwnerOffsetDip);
             }
         }
         else
@@ -268,11 +270,6 @@ public sealed partial class AppController
             RefreshNativeQueueMasters(drop.Preview.MasterTopsDip);
         }
     }
-
-    // The same slot preview is shared by Ctrl whole-queue dragging and the master
-    // capsule path. It only updates the confirmed suffix and intersected neighbours.
-    private void PreviewStableFreeQueueSlot(NativeEdgeQueueDrag drag, NativeEdgeQueueDrop drop) =>
-        PreviewFreeQueueDropSlot(drag.SlotPreview, drop.Decision, drag.SourceKey, drag.CarriedIds);
 
     internal void PrepareNativeEdgeQueueFloating(string ownerId)
     {

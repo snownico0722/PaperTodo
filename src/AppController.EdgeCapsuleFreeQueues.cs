@@ -131,9 +131,9 @@ public sealed partial class AppController
 
     private sealed record NativeQueueGroup(string Key, List<PaperData> Papers, EdgeFreeQueueBox Box, MonitorGeometry Geometry);
 
-    private List<NativeQueueGroup> NativeQueueGroups()
+    private List<NativeQueueGroup> NativeQueueGroups(EdgeCapsuleQueuePlan? plan = null)
     {
-        var plan = BuildRestingEdgeQueuePlan();
+        plan ??= BuildRestingEdgeQueuePlan();
         var groups = new List<NativeQueueGroup>();
         foreach (var queue in plan.Queues)
         {

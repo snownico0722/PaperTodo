@@ -38,11 +38,26 @@ public sealed partial class AppController
             : (layout.Groups[0].PaperIds.Length + (layout.Groups[0].HasMaster ? 1 : 0)) * pitch - DeepCapsuleGap;
         var boundedTop = EdgeCapsuleFreeQueuePolicy.ClampVisibleTop(
             requestedTop, geometry.LocalWorkAreaDip.Height, visibleHeight);
+        var anchorChanged = _freeMasterDragPreview is not { } previous ||
+            !ReferenceEquals(previous.Layout, layout) || previous.Tops[layout.QueueKey] != boundedTop;
         _freeMasterDragPreview = (layout,
             new Dictionary<string, double>(StringComparer.Ordinal) { [layout.QueueKey] = boundedTop });
-        ArrangeDeepCapsules(animate: false);
+        var resting = BuildRestingEdgeQueuePlan();
+        var groups = NativeQueueGroups(resting);
         if (pointer is { } screenPoint)
-            UpdateFreeMasterMergePreview(layout, screenPoint, docked: true);
+            UpdateFreeMasterMergePreview(layout, screenPoint, docked: true, resting, groups);
+        else
+            PreviewFreeQueueDropSlot(_freeMasterSlotPreview, null, layout.QueueKey,
+                layout.Groups[0].PaperIds, resting, groups, includeResting: true);
+
+        // Peers have already received their final resting/merge placement once.
+        // Only the carried queue needs a new anchor measurement while following
+        // the pointer; its unchanged slot indices must not suppress that refresh.
+        if (anchorChanged)
+            foreach (var id in layout.Groups[0].PaperIds)
+                if (_windows.TryGetValue(id, out var window) &&
+                    resting.Placements.TryGetValue(id, out var placement))
+                    window.PreviewDeepCapsulePlacement(placement, animate: false, anchorChanged: true);
     }
 
     internal void FinishFreeMasterQueueDrag(FreeMasterDragLayout layout, bool commit)
@@ -94,7 +109,8 @@ public sealed partial class AppController
 
     private bool TryGetFreeMasterMerge(FreeMasterDragLayout layout, DeviceScreenPoint pointer,
         bool docked, out MonitorGeometry geometry, out string side,
-        out EdgeFreeQueueBox targetBox, out EdgeFreeQueueDrop decision)
+        out EdgeFreeQueueBox targetBox, out EdgeFreeQueueDrop decision,
+        IReadOnlyList<NativeQueueGroup>? groups = null)
     {
         geometry = default;
         side = "";
@@ -110,7 +126,7 @@ public sealed partial class AppController
         var edge = EdgeKey(monitor, side);
         if (docked && edge != layout.EdgeKey) return false;
         var pitch = EdgeCapsuleLayout.SlotHeight(DeepCapsuleGap);
-        var boxes = NativeQueueGroups()
+        var boxes = (groups ?? NativeQueueGroups())
             .Where(g => g.Key != layout.QueueKey && LiveEdgeOfQueueKey(g.Key) == edge)
             .Select(g => g.Box).ToList();
         var pointerTop = geometry.DeviceYToLocalDip(pointer.Y);
@@ -128,19 +144,22 @@ public sealed partial class AppController
     }
 
     private void UpdateFreeMasterMergePreview(FreeMasterDragLayout layout,
-        DeviceScreenPoint pointer, bool docked)
+        DeviceScreenPoint pointer, bool docked, EdgeCapsuleQueuePlan? resting = null,
+        IReadOnlyList<NativeQueueGroup>? groups = null)
     {
+        resting ??= BuildRestingEdgeQueuePlan();
+        groups ??= NativeQueueGroups(resting);
         if (!TryGetFreeMasterMerge(layout, pointer, docked, out var geometry,
-                out var side, out var targetBox, out var decision))
+                out var side, out var targetBox, out var decision, groups))
         {
             PreviewFreeQueueDropSlot(_freeMasterSlotPreview, null, layout.QueueKey,
-                layout.Groups[0].PaperIds, forceReapply: docked);
+                layout.Groups[0].PaperIds, resting, groups, includeResting: docked);
             _nativeQueueDropGhost?.Hide();
             return;
         }
 
         PreviewFreeQueueDropSlot(_freeMasterSlotPreview, decision, layout.QueueKey,
-            layout.Groups[0].PaperIds, forceReapply: docked);
+            layout.Groups[0].PaperIds, resting, groups, includeResting: docked);
         var pitch = EdgeCapsuleLayout.SlotHeight(DeepCapsuleGap);
         var top = EdgeCapsuleFreeQueuePolicy.GhostSlotTop(
             decision, targetBox.HasMaster, pitch, targetBox.Collapsed);

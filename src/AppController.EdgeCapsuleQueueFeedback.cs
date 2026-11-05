@@ -4,7 +4,8 @@ public sealed partial class AppController
 {
     private EdgeCapsuleQueueDropGhost? _nativeQueueDropGhost;
 
-    private void UpdateNativeQueueDropGhost(NativeEdgeQueueDrag drag, DeviceScreenPoint pointer)
+    private void UpdateNativeQueueDropGhost(NativeEdgeQueueDrag drag, DeviceScreenPoint pointer,
+        IReadOnlyList<NativeQueueGroup> groups)
     {
         var drop = drag.Drop;
         if (!drag.FreeQueues || drop == null || drop.Decision.Kind != EdgeFreeQueueDropKind.Insert ||
@@ -15,14 +16,13 @@ public sealed partial class AppController
             return;
         }
 
-        var target = NativeQueueGroups().FirstOrDefault(g => g.Key == drop.DestinationKey);
+        var target = groups.FirstOrDefault(g => g.Key == drop.DestinationKey);
         var pitch = EdgeCapsuleLayout.SlotHeight(DeepCapsuleGap);
         var collapsedTarget = target?.Box.Collapsed == true;
         var top = EdgeCapsuleFreeQueuePolicy.GhostSlotTop(drop.Decision,
             target?.Box.HasMaster == true, pitch, collapsedTarget);
-        // This is a one-capsule landing marker, even when Ctrl carries a whole
-        // group. Use the actual dragged capsule width rather than the widest
-        // member/target; for folded queues the visible target is the master itself.
+        // Each carried member gets a normal-sized marker. Use the actual dragged
+        // capsule width; for folded queues the visible target is the master itself.
         var ownerWidth = _windows.TryGetValue(drag.OwnerId, out var ownerWindow)
             ? ownerWindow.DeepCapsuleRestingVisibleWidth : PaperLayoutDefaults.CapsuleWidth;
         var width = collapsedTarget ? target!.Box.WidthDip : ownerWidth;

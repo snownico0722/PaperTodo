@@ -922,6 +922,15 @@ public sealed class MasterCapsuleWindow : Window
     private double? _queueTopPreview;
     internal void SetQueueTopPreview(double? top) => _queueTopPreview = top;
 
+    // Drag previews only change position. Keep count, theme and z-order updates
+    // in the normal state/lifecycle path, and do not schedule an unchanged move.
+    internal void PreviewQueueTop(double top)
+    {
+        if (_queueTopPreview == top) return;
+        _queueTopPreview = top;
+        MoveToTarget(animate: false);
+    }
+
     private double QueueStartTopMargin =>
         _queueTopPreview ?? _controller.MasterCapsuleStartTopMargin(_queueKey);
 
