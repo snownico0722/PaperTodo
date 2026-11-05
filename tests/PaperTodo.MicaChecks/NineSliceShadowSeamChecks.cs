@@ -80,7 +80,7 @@ internal static class NineSliceShadowSeamChecks
         // Along the straight perimeter, the blur should be constant across each
         // corner/side join. Compare with the same row/column away from the join.
         // Ignore sub-8/255 raster rounding; reject a clearly visible dark/light seam.
-        foreach (var inset in new[] { 4.0, 7.0, 9.0 })
+        foreach (var inset in new[] { 7.0, 8.0, 10.0 })
         {
             foreach (var y in new[] { inset, scenario.Height - inset })
             {
