@@ -80,7 +80,7 @@ public sealed partial class AppController
         }
         _freeMasterDragPreview = null;
         EndFreeMasterQueueDropGhost();
-        ArrangeDeepCapsules(animate: !commit);
+        ArrangeDeepCapsules(animate: true);
     }
 
     private bool FreeMasterMembersMatch(FreeMasterDragLayout layout)

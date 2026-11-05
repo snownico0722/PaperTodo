@@ -2446,6 +2446,14 @@ public sealed partial class AppController : IDisposable
             MarkDirty();
             SuppressEdgeCapsulePreviewForMasterQueueLayout(sourceKey);
             ArrangeDeepCapsulesCore(animate: false, flushInitialPresentations: false);
+            // Publish the source retraction before accepting floating drop previews. Otherwise
+            // this arrange's pending Snap entries suppress the next target's animated placement.
+            if (_edgeCapsuleVisualTransactionCommitOperation is
+                { Status: System.Windows.Threading.DispatcherOperationStatus.Pending } preparation)
+            {
+                preparation.Abort();
+                CommitEdgeCapsuleVisualTransaction();
+            }
         }
         catch
         {
@@ -3136,7 +3144,7 @@ public sealed partial class AppController : IDisposable
         {
             // The master owns slot 0, so startup creates it before publishing the real slots.
             // Suppress its standalone fade so the complete queue reaches the first frame together.
-            SyncMasterCapsules(plan, animate: false, masterTransferTargetKey);
+            SyncMasterCapsules(plan, animate: animate && !flushInitialPresentations, masterTransferTargetKey);
         }
 
         foreach (var paper in State.Papers)

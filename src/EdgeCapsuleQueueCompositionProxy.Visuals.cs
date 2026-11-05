@@ -288,18 +288,30 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
     {
         foreach (var state in _visuals)
         {
-            state.OffsetXAnimation = ApplyAnimatedValue(
-                state.StartOffsetX,
-                state.TargetOffsetX,
-                value => state.Visual.SetOffsetX(value),
-                animation => state.Visual.SetOffsetX(animation),
-                absoluteBeginTimestamp);
-            state.OffsetYAnimation = ApplyAnimatedValue(
-                state.StartOffsetY,
-                state.TargetOffsetY,
-                value => state.Visual.SetOffsetY(value),
-                animation => state.Visual.SetOffsetY(animation),
-                absoluteBeginTimestamp);
+            var previousX = state.OffsetXAnimation;
+            var previousY = state.OffsetYAnimation;
+            state.OffsetXAnimation = null;
+            state.OffsetYAnimation = null;
+            try
+            {
+                state.OffsetXAnimation = ApplyAnimatedValue(
+                    state.StartOffsetX,
+                    state.TargetOffsetX,
+                    value => state.Visual.SetOffsetX(value),
+                    animation => state.Visual.SetOffsetX(animation),
+                    absoluteBeginTimestamp);
+                state.OffsetYAnimation = ApplyAnimatedValue(
+                    state.StartOffsetY,
+                    state.TargetOffsetY,
+                    value => state.Visual.SetOffsetY(value),
+                    animation => state.Visual.SetOffsetY(animation),
+                    absoluteBeginTimestamp);
+            }
+            finally
+            {
+                previousX?.Dispose();
+                previousY?.Dispose();
+            }
         }
     }
 

@@ -171,6 +171,10 @@ internal sealed partial class EdgeCapsuleDragWindow : Window
         }
     }
 
+    internal static IntPtr VisibleLeaseHandle => s_pooledHostLeased &&
+        s_pooledHost is { IsVisible: true } host
+            ? new System.Windows.Interop.WindowInteropHelper(host).Handle : IntPtr.Zero;
+
     public static EdgeCapsuleDragWindow Rent(EdgeCapsuleDragWindowOptions options)
     {
         VerifyPoolThreadAccess();

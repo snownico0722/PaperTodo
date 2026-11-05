@@ -295,11 +295,18 @@ internal static class NativeFreeQueueChecks
         c.State.EnableAnimations = true;
         masterForMove.SetQueueTopPreview(originalMasterPosition + 10);
         masterForMove.UpdateState(2, false, animate: true);
-        Require(Math.Abs((double)Part(masterForMove, "_currentTopDip") -
-                (originalMasterPosition + 10)) < .1,
-            "a master relocated by layout must reach the new position immediately, even with animations enabled");
+        Require(Math.Abs(masterForMove.AnchorTop - (originalMasterPosition + 10)) < .1,
+            "passive master movement publishes its logical endpoint immediately");
+        await Dispatcher.CurrentDispatcher.InvokeAsync(static () => { }, DispatcherPriority.Send);
+        Require(c.TryGetEdgeCapsuleQueueProxyPresentation(masterForMove, out var movingMaster) &&
+                movingMaster.Visible, "passive master movement uses the shared queue compositor");
+        c.CompleteEdgeCapsuleQueueCompositionProxyFor(masterForMove, success: true);
+        Require(masterForMove.VerifyQueueProxyEndpoint(masterForMove.QueueProxyTarget),
+            "master handoff settles the real HWND at its exact logical endpoint");
         masterForMove.SetQueueTopPreview(null);
         masterForMove.UpdateState(2, false, animate: true);
+        await Dispatcher.CurrentDispatcher.InvokeAsync(static () => { }, DispatcherPriority.Send);
+        c.CompleteEdgeCapsuleQueueCompositionProxyFor(masterForMove, success: true);
         c.State.EnableAnimations = originalAnimations;
         await Idle();
         var masterLayout = c.CaptureFreeMasterDragLayout("", EdgeCapsuleEdge.Right, aKey)!;

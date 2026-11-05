@@ -8,9 +8,50 @@ using Vortice.DirectComposition;
 namespace PaperTodo;
 
 internal sealed record EdgeCapsuleQueueCompositionProxyMember(
-    PaperWindow Window,
+    System.Windows.Window Window,
     EdgeCapsuleQueueProxyMemberPlan Plan,
-    IntPtr SourceHandle);
+    IntPtr SourceHandle)
+{
+    // Native translation sources share cover/input/handoff, not a per-paper model.
+    internal bool IsClosed => Window switch
+    {
+        PaperWindow paper => paper.IsClosed,
+        MasterCapsuleWindow master => master.IsQueueProxyClosed,
+        _ => true
+    };
+    internal bool CanRouteInput => Window switch
+    {
+        PaperWindow paper => paper.CanRouteEdgeCapsuleQueueProxyInput,
+        MasterCapsuleWindow master => master.CanRouteQueueProxyInput,
+        _ => false
+    };
+    internal void FlushEndpoint()
+    {
+        if (Window is PaperWindow paper) paper.FlushEdgeCapsuleQueueProxyEndpoint();
+        else if (Window is MasterCapsuleWindow master) master.ApplyQueueProxyEndpoint();
+    }
+    internal bool TryApplyEndpoint(out EdgeCapsulePresentationFrame frame)
+    {
+        if (Window is PaperWindow paper)
+            return paper.TryApplyLatestEdgeCapsuleQueueProxyEndpoint(out frame);
+        var master = (MasterCapsuleWindow)Window;
+        frame = master.QueueProxyTarget;
+        return master.ApplyQueueProxyEndpoint();
+    }
+    internal bool PrepareEndpointLayout()
+    {
+        if (Window is PaperWindow paper)
+            return paper.PrepareEdgeCapsuleQueueProxyEndpointLayoutForHandoff();
+        Window.UpdateLayout();
+        return !IsClosed;
+    }
+    internal bool VerifyEndpoint(EdgeCapsulePresentationFrame frame) => Window switch
+    {
+        PaperWindow paper => paper.VerifyEdgeCapsuleQueueProxyEndpoint(frame),
+        MasterCapsuleWindow master => master.VerifyQueueProxyEndpoint(frame),
+        _ => false
+    };
+}
 
 /// <summary>
 /// Dispatcher-shared DirectComposition device, queue-scoped output hosts and
@@ -22,15 +63,15 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy : IDisposable
     private sealed class VisualState : IDisposable
     {
         public required EdgeCapsuleQueueCompositionProxyMember Member
-            { get; init; }
+            { get; set; }
         public required IntPtr PresentedSourceHandle { get; init; }
         public required DeviceScreenRect SourceBounds { get; init; }
         public required IUnknown Surface { get; init; }
         public required IDCompositionVisual Visual { get; init; }
         public required float StartOffsetX { get; set; }
         public required float StartOffsetY { get; set; }
-        public required float TargetOffsetX { get; init; }
-        public required float TargetOffsetY { get; init; }
+        public required float TargetOffsetX { get; set; }
+        public required float TargetOffsetY { get; set; }
 
         public IDCompositionAnimation? OffsetXAnimation { get; set; }
         public IDCompositionAnimation? OffsetYAnimation { get; set; }

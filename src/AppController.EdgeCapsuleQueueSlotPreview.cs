@@ -133,10 +133,16 @@ public sealed partial class AppController
 
         foreach (var (id, placement) in desired)
             if (_windows.TryGetValue(id, out var window))
-                window.PreviewDeepCapsulePlacement(placement, animate: false);
+                window.PreviewDeepCapsulePlacement(placement, animate: true);
         foreach (var (masterKey, desiredTop) in masterTops)
             if (_masterCapsules.TryGetValue(masterKey, out var master))
-                master.PreviewQueueTop(desiredTop);
+            {
+                // Only a wholly carried group follows the pointer directly.
+                // The remaining source of a single-member drag is passive too.
+                var carriedGroup = groups.Any(group => group.Key == masterKey &&
+                    group.Papers.All(paper => moving.Contains(paper.Id)));
+                master.PreviewQueueTop(desiredTop, animate: !carriedGroup);
+            }
 
         if (sameSlot) return;
         state.MemberIds.Clear();
