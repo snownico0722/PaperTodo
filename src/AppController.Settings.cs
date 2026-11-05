@@ -46,6 +46,7 @@ public sealed partial class AppController
     private CheckBox? _settingsRememberDeepCapsuleExpandedPositionCheckBox;
     private CheckBox? _settingsCollapseExpandedDeepCapsuleOnClickCheckBox;
     private CheckBox? _settingsCapsuleCollapseAllCheckBox;
+    private CheckBox? _settingsCapsuleFreeQueuesCheckBox;
     private readonly Dictionary<string, Action> _settingsRegionRefreshers =
         new(StringComparer.Ordinal);
 
@@ -94,13 +95,14 @@ public sealed partial class AppController
     {
         Theme.Invalidate();
         RefreshApplicationThemeResources();
-        foreach (var window in _windows.Values)
+        foreach (var window in _windows.Values.ToArray())
         {
-            window.UpdateTheme();
+            if (!window.IsClosed) window.UpdateTheme();
         }
         foreach (var m in _masterCapsules.Values) m.UpdateTheme();
         _workbenchWindow?.RefreshTheme();
         SkinBorder.RefreshLoadedSurfaces();
+        PluginPopupThemeChanged?.Invoke();
 
         RebuildTrayMenu();
         RefreshSettingsWindowContent();
@@ -634,6 +636,7 @@ public sealed partial class AppController
             _settingsRememberDeepCapsuleExpandedPositionCheckBox = null;
             _settingsCollapseExpandedDeepCapsuleOnClickCheckBox = null;
             _settingsCapsuleCollapseAllCheckBox = null;
+            _settingsCapsuleFreeQueuesCheckBox = null;
             _settingsPageScrollViewer = null;
             _settingsPageScrollViewerPage = null;
             _settingsPageScrollOffsets.Clear();
@@ -664,9 +667,9 @@ public sealed partial class AppController
     {
         RebuildTrayMenu();
 
-        foreach (var window in _windows.Values)
+        foreach (var window in _windows.Values.ToArray())
         {
-            window.UpdateTypography();
+            if (!window.IsClosed) window.UpdateTypography();
         }
 
         foreach (var masterCapsule in _masterCapsules.Values)
@@ -674,6 +677,7 @@ public sealed partial class AppController
             masterCapsule.UpdateTypography();
         }
         ArrangeDeepCapsules(animate: false);
+        PluginPopupThemeChanged?.Invoke();
     }
 
     private UIElement BuildLabsSettingsPage()
@@ -2297,6 +2301,11 @@ public sealed partial class AppController
             _settingsCapsuleCollapseAllCheckBox.IsChecked = State.UseCapsuleCollapseAll;
             _settingsCapsuleCollapseAllCheckBox.IsEnabled = State.UseCapsuleMode && State.UseDeepCapsuleMode;
         }
+        if (_settingsCapsuleFreeQueuesCheckBox != null)
+        {
+            _settingsCapsuleFreeQueuesCheckBox.IsChecked = State.UseCapsuleFreeQueues;
+            _settingsCapsuleFreeQueuesCheckBox.IsEnabled = State.UseCapsuleMode && State.UseDeepCapsuleMode;
+        }
         RefreshSettingsRegions("general.edgeBrowsing");
     }
 
@@ -2756,6 +2765,8 @@ public sealed partial class AppController
         window.EnsureShellBuilt();
         window.CancelPendingVisibilityTransitions();
         window.DetachFromDeepCapsuleStack(animate: false);
+        // Unlike ShowPaper, this path reuses a hidden window whose Note images are suspended.
+        window.PrepareForShow();
 
         Rect? snapTileBounds = null;
         if (!paper.IsCollapsed && window.TryGetRememberedSnapTileBoundsForRestore(out var rememberedSnapTileBounds))
@@ -2802,3 +2813,4 @@ public sealed partial class AppController
     }
 
 }
+

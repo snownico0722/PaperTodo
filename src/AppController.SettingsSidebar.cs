@@ -16,8 +16,6 @@ public sealed partial class AppController
 
     private void RefreshSettingsWindowContent()
     {
-        RefreshPluginPopupThemeForSettingsRefresh();
-
         if (_settingsWindow is not { } window)
         {
             return;
@@ -66,6 +64,7 @@ public sealed partial class AppController
         _settingsRememberDeepCapsuleExpandedPositionCheckBox = null;
         _settingsCollapseExpandedDeepCapsuleOnClickCheckBox = null;
         _settingsCapsuleCollapseAllCheckBox = null;
+        _settingsCapsuleFreeQueuesCheckBox = null;
 
         window.Title = Strings.Get("TraySettings");
         window.SizeToContent = SizeToContent.Manual;
@@ -87,7 +86,8 @@ public sealed partial class AppController
             return;
         }
         if (id is "capsule.enabled" or "capsule.edge_enabled" or "capsule.master_enabled" or
-            "capsule.show_while_expanded" or "capsule.remember_expanded_position" or "capsule.click_to_collapse")
+            "capsule.free_queues" or "capsule.show_while_expanded" or
+            "capsule.remember_expanded_position" or "capsule.click_to_collapse")
         {
             RefreshSettingsCapsuleToggleStates();
             return;
@@ -547,14 +547,6 @@ public sealed partial class AppController
     }
 
 
-    // Keep this helper separate from the page builder so conflict-resolution fixes stay localized.
-    // Theme/font changes eventually rebuild the settings surface; notify open plugin popups even
-    // when the settings window itself is closed (for example, a system theme change).
-    private void RefreshPluginPopupThemeForSettingsRefresh()
-    {
-        PluginPopupThemeChanged?.Invoke();
-    }
-
     private static (double Width, double Height) SettingsSidebarSizeForWorkArea(Rect workArea)
     {
         var targetWidth = Math.Min(840, Math.Max(360, workArea.Width - 48));
@@ -574,3 +566,4 @@ public sealed partial class AppController
             DispatcherPriority.Background);
     }
 }
+

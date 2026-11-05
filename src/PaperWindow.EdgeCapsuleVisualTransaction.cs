@@ -12,6 +12,8 @@ public sealed partial class PaperWindow
         bool refreshLayout = false)
     {
         animate = animate && _controller.State.EnableAnimations;
+        if (animate && reason == EdgeCapsuleTransitionReason.Placement)
+            _controller.BeginEdgeCapsuleYieldTransaction(Dispatcher);
         var motion = animate
             ? EdgeCapsuleMotion.Animate(
                 reason,

@@ -99,13 +99,17 @@ internal static class TodoVisibilityChecks
         foreach (var id in LinkedIds) RequireLinkActivity(linkedWindow, id, active: true);
         Require(LinkText(linkedWindow, "script-link").Text == "⚡", "bulk visibility refresh changed a script link into an ordinary link");
 
+        var noteWindow = windows[note.Id];
+        RequireNoteImagesSuspended(noteWindow, expected: false, "before linked-note hide");
         Click(LinkButton(linkedWindow, "note-link")!);
         await Idle();
         Require(!controller.IsLinkedPaperShown(note.Id), "a refreshed active link did not hide its target on click");
+        RequireNoteImagesSuspended(noteWindow, expected: true, "after linked-note hide");
         RequireLinkActivity(linkedWindow, "note-link", active: false);
         Click(LinkButton(linkedWindow, "note-link")!);
         await Idle();
         Require(controller.IsLinkedPaperShown(note.Id), "a refreshed inactive link did not reopen its target on click");
+        RequireNoteImagesSuspended(noteWindow, expected: false, "after linked-note reopen");
         RequireLinkActivity(linkedWindow, "note-link", active: true);
 
         var linkedEditor = Editors(linkedWindow)["note-link"];
@@ -224,6 +228,14 @@ internal static class TodoVisibilityChecks
     {
         RoutedEvent = UIElement.MouseLeftButtonUpEvent
     });
+
+    private static void RequireNoteImagesSuspended(PaperWindow window, bool expected, string stage)
+    {
+        var session = OptionalField(window, "_markdownBodySession");
+        var noteBox = session == null ? null : OptionalField(session, "_noteBox");
+        Require(noteBox != null && (bool)Field(noteBox, "_imageRenderingSuspended") == expected,
+            "Linked Note image rendering state was not restored " + stage);
+    }
 
     private static void RequireSelection(TextBox editor, (int Start, int Length, int Caret) expected, string operation) =>
         Require((editor.SelectionStart, editor.SelectionLength, editor.CaretIndex) == expected,

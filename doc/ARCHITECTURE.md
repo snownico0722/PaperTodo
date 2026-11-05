@@ -27,7 +27,7 @@ PaperTodo 是 Windows 桌面“纸片”应用。当前技术路线围绕几个�
 
 ## 2. 系统形态与 ownership
 
-正常 GUI 模式由 `App` 建立一个单实例 WPF 主宿主；`AppController` 是应用级协调器。相同的 `PaperTodo.exe` 还支持独立 `--mcp` bridge 模式，该模式在 GUI 单实例协议之前分流，不拥有第二份 `AppState`。
+正常 GUI 模式由 `App` 建立一个单实例 WPF 主宿主；`AppController` 是应用级协调器。相同的 `PaperTodo.exe` 还支持独立 `--mcp` bridge 和 `--import-note-image` 单次图片导入模式，两者在 GUI 单实例协议之前分流，不拥有第二份 `AppState`。
 
 高层关系：
 
@@ -97,6 +97,8 @@ PaperTodo.exe
 ### 3.2 MCP
 
 `--mcp` 是同一可执行文件的独立 bridge 模式。它在 GUI Mutex 之前分流，通过 stdio 暴露 MCP server；GUI 主宿主内部的 MCP runtime 由 `AppController` 管理。
+
+`--import-note-image --paper-id <id> [--image-name <name>]` 由 `McpImageImportCommand` 在独立进程中接收有界的原始二进制 stdin，编码后复用 `McpPipeClient` 调用 `insert_note_image`。它先查询目标以绑定当前工作区，再读取输入并使用同一 client 提交；接收期间工作区变化直接拒绝，不自动重绑或重放写入。原始数据只在程序间流转，stdout 仅输出图片 ID 与引用。内部 `insert_note_image` 命名管道操作不作为公开 MCP 工具；MCP 只公开 `read_note_image` 供视觉读取。此入口不读取外部文件/网址、不启动 GUI、不自行开启权限；GUI 侧继续统一检查 MCP 权限，并通过 `PaperCommandService` / `NoteImageStore` 保存。
 
 Codex CLI Bridge 通过单次 CLI 配置连接同一可执行文件的 stdio bridge；勾选 `allowMcp` 后，任务需要 MCP 且 MCP 或所需权限未开启时可发送 `--enable-mcp-for-codex` 单实例命令。GUI 主宿主重新检查插件实际运行状态和当前设置后，一次性开启 MCP 总开关、空白/追加写入、完整写入和直接删除权限。该命令等待主实例的实际执行结果：退出码 0 表示宿主执行成功，1 表示宿主拒绝或执行失败，2 表示主实例不存在或未收到确认；传输失败不重放已经发送的命令。没有现成 GUI 主实例时不启动或恢复纸片；普通 PaperTodo 功能开关（例如待办关联纸片）不由该命令自动修改。
 
@@ -173,6 +175,10 @@ Edge 展开记忆保留原有窗口 DIP 字段，并用可选 `DeepCapsuleExpand
 
 全局 crash boundary 不执行普通“最后强行保存”。正常 durability 由常规保存、同步退出保存和 backup 提供。
 
+主数据写入成功后，由保存完成路径分别触发图片缓存回收、已删除纸片的插件文件清理和 Runtime 成员同步；后两者不再借用对方的入口。这些后续操作失败不得将已成功的主数据写入改判为保存失败。删除纸片后清除 Todo 撤销/重做历史中的关联，属于实体删除边界，不属于插件文件删除队列；用户删除、外部命令删除及成功应用的显式重载/合并共用此边界。
+
+主胶囊窗口的销毁只退出当前呈现，不清空队列的持久化收起选择。隐藏队列后再显示保留该选择；显式关闭胶囊/主胶囊功能及清理已不存在的队列，仍由相应的设置和队列逻辑修改持久化状态。
+
 系统关机、崩溃与被动 Dispose 共用 `PersistenceWriteLifetime` 的单向停止信号。先封闭所有核心/宿主管理插件存储（工作区之间共享），再允许窗口清理或崩溃提示框；排队任务、打开临时文件、替换重试与模态返回后重新核对。不等待 UI 来决定是否还能写，不增加终止阶段最后保存。已经进入 OS 的单次替换可能完成；不宣称可取消任意时刻已经执行的文件系统调用。普通用户 Exit 与该终止路径分开，OnExit/Dispose 不重新执行一遍保存。
 
 保护范围是显式数据操作的版本边界、原子写入、恢复来源、图片引用和系统终止写入准入；普通保存不主动检测外部编辑。强杀前尚未落盘的 RAM 编辑、未合作外部进程与普通保存的写入竞争、硬件断电持久性和跨 JSON/LMDB/插件文件事务不作绝对保证。普通保存的短期 backup 仍遵循原有六小时策略，不增加 journal 或 pending 副本。独立的核心 JSON 梯度历史 ZIP 在应用启动约一分钟后第一次扫描，之后每十分钟由单独的计时器检查磁盘上已落盘的 data.json～data5.json；它不参与工作区切换、保存事件、同步恢复或编辑器生命周期。只复制原始字节，不解析 JSON；单个文件读取失败会在后台短暂重试，仍失败则本轮跳过该文件，下轮继续尝试；如果所有工作区都不可读或不存在则不创建空 ZIP。最多四份恢复点，目标接近最新、6 小时、3 天、1 个月；更新长期档时允许中间档暂时偏离。ZIP 完整生成、落盘及字节核对成功后才发布；轮换时校验旧 ZIP CRC，不包含图片或插件数据。
@@ -207,7 +213,7 @@ Markdown 中的 Note 图片只通过 PaperTodo 内部 `i:` asset URI 引用宿�
 
 每个固定编号拥有不可变的 `WorkspacePaths` 与复用的 `StateStore` writer：1 使用 `data.json` / `data.backup.json` / `note-assets.lmdb` / `plugins/data`；2～5 使用 `data2.json` / `data2.backup.json` / `note-assets2.lmdb` / `plugins/data2` 等。备份、失败恢复源及冲突归档的图片引用扫描只保护对应工作区；未激活工作区不维持窗口、LMDB 连接或插件 Runtime。图片缺失或读取损坏不阻止工作区启动和切换，也不额外弹出预检查提示；图片读取按原有局部失败处理。图片库加载失败时禁止危险写入，缺失库如有历史引用则不创建新库覆盖其恢复位置，缺失的引用编号不得重新分配；只有图片写入受到必要限制，不影响纸片和工作区的正常使用。插件代码发现与 Native assembly 缓存仍属于进程，不随切换重新发现。
 
-`AppController.Workspaces` 协调显式切换：先提交原编辑器并同步保存以淘汰旧异步快照，再加载目标核心数据与图片库，结束旧窗口、胶囊与插件 session/runtime。主数据正常就直接加载；只有 JSON 确认损坏时才尝试备份，备份也损坏或不存在则创建空工作区；占用、权限或 I/O 读取异常不等同于损坏，绝不据此覆盖。重建时沿用现有写入器保存，损坏的主数据及备份在覆盖前保留恢复副本，遗留临时数据仅尽量归档、不作为阻断条件；图片、插件目录及历史归档不参与创建准入。启动时选中的副工作区暂时不可访问会提示并临时显示主区，不重置原先记录的活动编号。插件 datastore 的严格 detach 会等待当前写入、保存最新状态并报告失败；切换失败可恢复原缓存。切换不是删除，不发送永久纸片删除清理。目标使用新窗口及对应图片缓存，目标保存成功后才提交主文件中的活动编号。副工作区运行时更新主 catalog，必须通过主 `StateStore` 的锁与版本序号只替换 `workspaces` 节点，不能将当前副工作区 AppState 写入主文件。普通异步保存捕获具体 store 和界面代次，晚到的回调不能操作另一个工作区。成功切换清空旧工作区的重载结果；切换失败回滚则保留旧结果。目标已安装后失败时，先结束目标脚本进程，再按目标到原工作区的设置差异恢复运行时。MCP adapter 也绑定工作区代次：旧请求可完成已提交响应，但不得在新工作区执行；状态查询返回当前编号、数据文件名及设置跟随状态。缓存 writer 的保存投影只持有设置快照，不持有整份未激活 AppState。
+`AppController.Workspaces` 协调显式切换：先提交原编辑器并同步保存以淘汰旧异步快照，再加载目标核心数据与图片库，结束旧窗口、胶囊与插件 session/runtime。主数据正常就直接加载；只有 JSON 确认损坏时才尝试备份，备份也损坏或不存在则创建空工作区；占用、权限或 I/O 读取异常不等同于损坏，绝不据此覆盖。重建时沿用现有写入器保存，损坏的主数据及备份在覆盖前保留恢复副本，遗留主临时文件在首次保存复用同名临时路径前必须安全移走，失败则拒绝这次写入；历史备份临时文件可以不阻断主文件保存，但备份刷新复用它之前同样必须先保留。临时文件、孤立恢复文件及其图片引用按工作区保护，无法可靠扫描时不进行破坏性图片清理；图片、插件目录及历史归档不参与创建准入。启动时选中的副工作区暂时不可访问会提示并临时显示主区，不重置原先记录的活动编号。插件 datastore 的严格 detach 会等待当前写入、保存最新状态并报告失败；切换失败可恢复原缓存。切换不是删除，不发送永久纸片删除清理。目标使用新窗口及对应图片缓存，目标保存成功后才提交主文件中的活动编号。副工作区运行时更新主 catalog，必须通过主 `StateStore` 的锁与版本序号只替换 `workspaces` 节点，不能将当前副工作区 AppState 写入主文件。普通异步保存捕获具体 store 和界面代次，晚到的回调不能操作另一个工作区。成功切换清空旧工作区的重载结果；切换失败回滚则保留旧结果。目标已安装后失败时，先结束目标脚本进程，再按目标到原工作区的设置差异恢复运行时。MCP adapter 也绑定工作区代次：旧请求可完成已提交响应，但不得在新工作区执行；状态查询返回当前编号、数据文件名及设置跟随状态。缓存 writer 的保存投影只持有设置快照，不持有整份未激活 AppState。
 
 副工作区默认继承主工作区 AppState 的软件设置。`WorkspaceFieldScopes` 对每个 `AppState` 可写字段显式声明归属（主设置、独立内容、独立布局、主区专属或旧版迁移）；只有列入主设置及保留兼容语义的旧版迁移字段才参与 `WorkspaceSettingsSnapshot`。新增字段未登记时默认不继承，工作区持久化 CI 必须检查全部字段均已分类，不能靠排除少数属性而隐式共享。MCP 权限、全局快捷键、插件启用状态等仍按原有主设置继承语义处理。`WorkspaceSettingsSnapshot` 不继承 Papers、胶囊位置、队列折叠记忆与布局；副工作区自己的设置保留在自身 JSON。加载时先按有效设置规范化纸片，再保留独立设置，避免用休眠偏好提前截短标题或改变折叠状态。保存时投影独立设置而不回写继承值；正常单工作区不启用投影。设置 UI / Native / Web / MCP 的公共设置目录在继承期间为只读；设置页面（包括插件页）整体禁用并降低亮度，只保留跳转工作区管理的入口，插件私有数据仍按工作区独立。关闭继承恢复自己的设置，再开启时读取当前主设置。不进行持续文件监听或后台同步。
 
@@ -406,6 +412,8 @@ Presentation contract 区分：
 
 透明 capacity 不属于交互区域。
 
+Free queues extend the existing queue identity with an optional persisted instance id. Ctrl chooses a whole queue but does not change its drag phase: it slides along the edge until the normal sideways threshold or monitor crossing. The held capsule, rather than the full carried block, selects the merge entrance. All insertion slots, including the first member slot, retain the target head and move the suffix down; the merged queue moves upward only as far as needed to fit above the work-area bottom. Independent placement and insertion both preview a landing stack; independent stacks distinguish their short master from ordinary members. An independent drop fits into its selected adjacent gap before moving neighbours. A short gap previews only the fixed space deficit, based on resting positions; moving below or away withdraws that displacement. It never searches a different queue gap. Passive monitor/mini-preview spacing is derived and is not persisted. Preview and commit share the same prospective membership/anchor plan and the existing coordinator, reducer and presenter. That plan also closes a detached member's source gap; returning to the source reopens its selected slot through the same preview cache and cancellation lifecycle. In free-queue mode each instance owns its own master: clicking collapses only that queue, dragging its master moves only that group, and merging keeps the destination master. A collapsed queue's hit-test and collision footprint is only its visible master; its hidden expanded slots cannot accept a drop. Switching to legacy mode retains the instance identities, anchors and collapse memory; legacy mode itself uses one master per physical edge. See D-066 through D-069.
+
 ### 6.3 Surface 切分
 
 每张 docked capsule 由独立 `EdgeCapsuleHost` 长期拥有真实 HWND 和完整 WPF visual tree。Host 是 **bounded live host**：native capacity 稳定且有限，可见 shape 在其中由 WPF 变化。
@@ -445,6 +453,8 @@ Production translation backend 不承担 snapshot、clip/scale/effect resize 或
 真实 docked HWND、queue compositor cover、floating drag HWND 是显式 visual authority。任何 publication、successor、handoff 或 rollback 边界都必须保证至少有一个可见 authority。
 
 同队列 successor 继承 predecessor 当前 live authority 和可见 sample，而不是 dispose 后冷启动另一套互不相关 proxy。端点提交期间 predecessor 仍可继续移动；successor 校准起点后，显示取样、输入命中、点击坐标转交和下一代临时 cover 均使用本代 `VisualState` 实际提交给 DComp 的起止偏移及同一动画时钟，不能继续沿用较早捕获的 plan 起点。该校准只调整平移，WPF 的形状、内容、opacity 和真实端点容量仍沿用原有 presentation contract。
+
+普通排序、自由队列独立落位／插入／合并及源组补位均消费当前落位计划，按队列分别提交 translation，不把彼此独立的位移合成跨队列 ownership 事务。相邻队列的 master 作为真实 HWND source 与成员共享 cover、动画时钟和输入交接；它仍只拥有自身 slot 0 几何，不创建 PaperData 或 per-paper presenter。被拖动的 capsule／master／整队继续直接跟手；单颗拖出后留在源组的成员及被动让位的源组 master 仍参与动画。保留落位类型、位置及邻组位移的现有缓存判断，相同落位不重新启动；落点虚影保持即时反馈。source 集合、尺寸、输入角色和 output 容量兼容时，在现有 cover 下提交新端点，再从当前可见位置重设同一批 visual 的平移；无需重建 surface 或重复 cloak／uncloak。成员变化仍走既有 successor 交接，环境不兼容时安全退回真实窗口。 output HWND 发布、successor 接替和原地 retarget 时，由 controller 从同队仍直接呈现的 capsule／master、当前携带组及有效 floating lease 的真实 HWND 解析 Z-order 上界；proxy 排在这些可见置顶窗口之后，收起成员始终从 master 下方经过。层级只在这些发布边界提交，不激活窗口、不在动画帧中反复置顶。浮动主胶囊接管前先提交源组收起事务，避免其 Snap 请求覆盖下一次落位的让位动画。
 
 代理收到按下消息时保存原始客户区坐标转换得到的屏幕位置和按键状态。只有这次按下触发的同步 authority handoff 当场成功，才把该按下消息转交给真实端点；一旦需要 completion retry、cover 丢失或目标已失效，就直接丢弃该按下，不跨重试保存或迟到重放。该路径只转交原始按下消息，不承诺合成完整按下—抬起手势；正常 Windows 输入仍由真实端点接管。
 
@@ -566,3 +576,4 @@ same AvalonEdit TextView
 - Full 固定槽位对应的引用竖线直接读取 TextView 的实际坐标；有序列表的续行对齐及 Basic/Enhanced 定位保持原行为。省略 `>` 的惰性续行由 `QuoteIndentElement` 占位，并与真实引用共用“引用槽宽 + 原生空格宽”；该元素仍可合并消费同偏移的塌缩语法，保持一份源码和光标边界。
 - 图片 `i:` 协议、URL 打开白名单、原生保存仍属于 PaperTodo host concern；图片是否位于 code/container 等 Markdown 语义由同一 Markdig snapshot 决定。启动图片 GC 额外采用保守保护扫描，允许多保留但不因 parser 分歧误删 blob。
 - `MarkdownFencedCodeScanner` 只保留在“边界发现/受限预览”角色：Edge Mini 的有限导航近似以及大 Note incremental fence-window discovery 可以使用；它不是正文、持久化或数据回收的 Markdown authority，也不扩展成第二套 container-aware Markdown parser。
+

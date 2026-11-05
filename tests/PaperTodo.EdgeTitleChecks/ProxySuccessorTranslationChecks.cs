@@ -65,6 +65,9 @@ internal static partial class Program
             third.Rebase(At(secondStart, duration * 0.1 + 25));
             third.CheckTimeline();
             third.CheckInputAtStartAndEnd();
+            using var retarget = new SuccessorTranslationFixture(device, firstPlan, output, duration, start);
+            retarget.Rebase(start);
+            retarget.CheckRetarget();
         }
         Console.WriteLine("PASS successor/third-generation live translation, hit geometry, cover sources and endpoint coordinates (both edges, four DPIs, normal/short durations)");
     }
@@ -98,6 +101,9 @@ internal static partial class Program
             Set("_plan", new EdgeCapsuleQueueProxyPlan("successor", output, plan.Target.Edge,
                 plan.Target.WallDeviceX, plan.Target.DpiScaleX, plan.Target.DpiScaleY, duration, true, [plan]));
             Set("_members", new[] { member });
+            Set("_device", device);
+            Set("_sampleTimer", new System.Windows.Threading.DispatcherTimer());
+            Set("_completionTimer", new System.Windows.Threading.DispatcherTimer());
             Set("_outputBounds", output);
             Set("_animationStartedAtTimestamp", start);
             Set("_coverPublished", true);
@@ -128,7 +134,7 @@ internal static partial class Program
             typeof(AppController).GetProperty(nameof(AppController.State))!.SetValue(controller,
                 new AppState { ExperimentalEdgeCapsuleHoverPreview = true });
             typeof(AppController).GetField("_edgeCapsuleQueueCompositionProxyByWindow", Private)!
-                .SetValue(controller, new Dictionary<PaperWindow, EdgeCapsuleQueueCompositionProxy>());
+                .SetValue(controller, new Dictionary<System.Windows.Window, EdgeCapsuleQueueCompositionProxy>());
             var paper = (PaperWindow)RuntimeHelpers.GetUninitializedObject(typeof(PaperWindow));
             typeof(PaperWindow).GetField("_controller", Private)!.SetValue(paper, controller);
             typeof(PaperWindow).GetField("_paper", Private)!.SetValue(paper,
@@ -226,6 +232,92 @@ internal static partial class Program
             finally { Set("_animationStartedAtTimestamp", _start); }
         }
 
-        public void Dispose() => _visual.Dispose();
+        internal void CheckRetarget()
+        {
+            var oldClock = Stopwatch.GetTimestamp() - Stopwatch.Frequency * _duration / 2000;
+            Set("_animationStartedAtTimestamp", oldClock);
+            var startHost = StartHost;
+            var current = (EdgeCapsuleQueueProxyPlan)ProxyType.GetField("_plan", Private)!.GetValue(_proxy)!;
+            var nextMember = _plan with { Start = Sample(Stopwatch.GetTimestamp()),
+                Source = _plan.Target, Target = _plan.Start };
+            var next = current with { Members = [nextMember] };
+            Check(EdgeCapsuleQueueProxyPolicy.CanRetarget(current, next, _output),
+                "Reversed same-source translation can reuse live visuals");
+            Check(!EdgeCapsuleQueueProxyPolicy.CanRetarget(current,
+                    next with { QueueKey = "other" }, _output) &&
+                  !EdgeCapsuleQueueProxyPolicy.CanRetarget(current,
+                    next with { Members = [nextMember with { PaperId = "replacement" }] }, _output),
+                "Changing queue/source requires a successor handoff");
+            Check(!EdgeCapsuleQueueProxyPolicy.CanRetarget(current, next,
+                    _plan.Target.HostBounds), "Retarget cannot escape its native output capacity");
+            var extraReserve = next with
+            {
+                Envelope = _output with { Top = _output.Top - 50, Bottom = _output.Bottom + 50 }
+            };
+            Check(EdgeCapsuleQueueProxyGeometry.Contains(_output,
+                    EdgeCapsuleQueueProxyPolicy.RequiredTranslationBounds(extraReserve)),
+                "A successor's optional future reserve cannot reject motion that already fits");
+            var outsideHost = nextMember.Target.HostBounds with
+            {
+                Top = _output.Bottom - nextMember.Target.HostBounds.Height + 1,
+                Bottom = _output.Bottom + 1
+            };
+            var outsideMotion = next with
+            {
+                Members = [nextMember with { Target = nextMember.Target with { HostBounds = outsideHost } }]
+            };
+            Check(!EdgeCapsuleQueueProxyGeometry.Contains(_output,
+                    EdgeCapsuleQueueProxyPolicy.RequiredTranslationBounds(outsideMotion)),
+                "A successor whose real target exceeds the output must still be rejected");
+            var member = new EdgeCapsuleQueueCompositionProxyMember(_paper, nextMember, _handle);
+            var visualBefore = _state.GetType().GetProperty("Visual")!.GetValue(_state);
+            long newClock = 0;
+            EdgeCapsulePresentationFrame expectedStart = default;
+            var releasing = current with
+            {
+                Members = [_plan with
+                {
+                    Start = _plan.Start with { Surface = EdgeCapsuleSurfaceKind.DockedRetracted }
+                }]
+            };
+            Check(!EdgeCapsuleQueueProxyPolicy.CanRetarget(releasing, next, _output) &&
+                  !EdgeCapsuleQueueProxyPolicy.CanRetarget(current, releasing, _output),
+                "Retarget cannot cross the native interactive/passthrough boundary in either direction");
+            Set("_plan", releasing);
+            Check(_proxy.TryReserveForSuccessor(), "Reserve the expanding queue for a new placement");
+            var endpointCommits = 0;
+            Check(!_proxy.TryRetarget(next, [member], _ => { endpointCommits++; return true; }, _ => true) &&
+                    endpointCommits == 0 &&
+                    ReferenceEquals(ProxyType.GetField("_plan", Private)!.GetValue(_proxy), releasing),
+                "Production retarget rejects input-role changes before moving sources or publishing a new role");
+            // The rejected request retains the old authority. Restore the compatible
+            // plan in this fixture, then exercise the normal successful retarget.
+            Set("_plan", current);
+            Check(_proxy.TryRetarget(next, [member], _ => true, timestamp =>
+            {
+                newClock = timestamp;
+                expectedStart = EdgeCapsuleQueueProxyPolicy.SamplePresentedFrame(_plan,
+                    new DeviceScreenPoint(startHost.Left, startHost.Top),
+                    new DeviceScreenPoint(_plan.Target.HostBounds.Left, _plan.Target.HostBounds.Top),
+                    oldClock, _duration, timestamp);
+                return true;
+            }), "Production retarget consumes the reversed placement");
+            Check(ReferenceEquals(visualBefore, _state.GetType().GetProperty("Visual")!.GetValue(_state)),
+                "Retarget reuses the existing native visual");
+            var rebased = Sample(newClock);
+            Check(rebased.Bounds.Top == expectedStart.Bounds.Top,
+                "Retarget begins at the current visible position after endpoint work");
+            Check(Sample(newClock + Stopwatch.Frequency) == nextMember.Target,
+                "Retarget reaches the exact reversed endpoint");
+        }
+
+        public void Dispose()
+        {
+            ((System.Windows.Threading.DispatcherTimer)ProxyType.GetField("_sampleTimer", Private)!.GetValue(_proxy)!).Stop();
+            ((System.Windows.Threading.DispatcherTimer)ProxyType.GetField("_completionTimer", Private)!.GetValue(_proxy)!).Stop();
+            (_state.GetType().GetProperty("OffsetXAnimation")!.GetValue(_state) as IDisposable)?.Dispose();
+            (_state.GetType().GetProperty("OffsetYAnimation")!.GetValue(_state) as IDisposable)?.Dispose();
+            _visual.Dispose();
+        }
     }
 }

@@ -438,6 +438,20 @@ public sealed class NoteImageStore : IDisposable
             image.Height);
     }
 
+    // MCP supplies encoded image bytes. Reuse the same WIC decoding, compression and
+    // LMDB limits as file/clipboard imports; never persist Base64 as Markdown content.
+    internal NoteImageAsset ImportImageBytes(string noteId, byte[] bytes, string originalName)
+    {
+        ArgumentNullException.ThrowIfNull(bytes);
+        if (_writeDisabled)
+            throw new InvalidOperationException(Strings.Get("ImageStoreUnavailable"));
+        if (string.IsNullOrWhiteSpace(noteId))
+            throw new InvalidOperationException(Strings.Get("ImageImportInvalidNote"));
+
+        var image = PrepareEncodedImage(bytes, Path.GetFileName(originalName));
+        return AddEncodedImages(noteId, [image])[0];
+    }
+
     public IReadOnlyList<NoteImageAsset> ImportImageFiles(string noteId, IEnumerable<string> paths)
     {
         if (_writeDisabled)
@@ -480,8 +494,12 @@ public sealed class NoteImageStore : IDisposable
             throw new InvalidDataException(Strings.Format("ImageImportTooLargeCompressionDisabled", MaxImageBytes / 1024 / 1024));
         }
 
-        var originalName = Path.GetFileName(path);
         var bytes = File.ReadAllBytes(path);
+        return PrepareEncodedImage(bytes, Path.GetFileName(path));
+    }
+
+    private PreparedImage PrepareEncodedImage(byte[] bytes, string originalName)
+    {
         if (bytes.Length > MaxInputImageBytes)
         {
             throw new InvalidDataException(Strings.Format("ImageImportSourceTooLarge", MaxInputImageBytes / 1024 / 1024));

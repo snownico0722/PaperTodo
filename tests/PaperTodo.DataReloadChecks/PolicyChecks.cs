@@ -157,9 +157,11 @@ internal static partial class Program
         s.Write(external);
 
         var preview = s.Store.PreviewExternalMerge(memory, 3, baseline);
+        var conflicts = preview.Conflicts;
         Require(preview.State != null &&
-            preview.Conflicts!.Any(conflict => conflict.Path == "maxTitleLength") &&
-            !preview.Conflicts.Any(conflict => conflict.Path.EndsWith(".title", StringComparison.Ordinal)),
+            conflicts is not null &&
+            conflicts.Any(conflict => conflict.Path == "maxTitleLength") &&
+            !conflicts.Any(conflict => conflict.Path.EndsWith(".title", StringComparison.Ordinal)),
             "lowering the external title limit was mistaken for an external title edit");
 
         var resolution = StateMergeResolution.Resolve(preview.State!, preview.Conflicts,

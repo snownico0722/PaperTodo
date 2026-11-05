@@ -530,6 +530,7 @@ public sealed class AppState
     public bool RunLinkedScriptCapsulesOnClick { get; set; }
     public int MaxTitleLength { get; set; } = PaperTitles.DefaultMaxTitleLength;
     public bool UseCapsuleCollapseAll { get; set; } = true;
+    public bool UseCapsuleFreeQueues { get; set; }
     public bool CompactMasterCapsule { get; set; }
     public Dictionary<string, bool> CapsuleCollapseAllActiveQueues { get; set; } = new();
     public bool ShowDeepCapsuleWhileExpanded { get; set; } = true;
@@ -657,6 +658,9 @@ public sealed class PaperData
     // assigned" — on load it inherits the legacy global anchor so existing capsules keep place.
     public string CapsuleSide { get; set; } = "";
     public string CapsuleMonitorDeviceName { get; set; } = "";
+
+    // An empty instance id preserves the original one-queue-per-edge data format.
+    public string CapsuleQueueId { get; set; } = "";
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public double? DeepCapsuleExpandedX { get; set; }
