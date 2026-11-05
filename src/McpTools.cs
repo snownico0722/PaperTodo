@@ -190,16 +190,15 @@ internal sealed partial class McpTools
         ReadOnly = false,
         Destructive = false,
         OpenWorld = false)]
-    [Description("Import a local image into an existing built-in Markdown note and append its rendered image reference. Supply exactly one of image_path (absolute path on the PaperTodo PC, up to 32 MiB source) or image_base64 (raw Base64, up to 4 MiB decoded); no data URI. Requires additive writes. The image bytes are kept in PaperTodo's LMDB store.")]
+    [Description("Append an image to an existing built-in Markdown note. Supply image bytes as raw Base64 (up to 4 MiB decoded, without a data URI). File paths are not accepted: the MCP caller must provide the bytes. Requires additive writes; the image is stored in PaperTodo's LMDB store.")]
     public Task<JsonElement> InsertNoteImage(
         [Description("Exact Markdown note paper ID.")] string paper_id,
-        [Description("Optional absolute local image file path on the computer running PaperTodo. Do not combine with image_base64.")] string? image_path = null,
-        [Description("Optional raw Base64-encoded image bytes (up to 4 MiB decoded). Do not combine with image_path.")] string? image_base64 = null,
-        [Description("Optional filename metadata for Base64 images.")] string? image_name = null,
+        [Description("Required raw Base64-encoded image bytes (up to 4 MiB decoded), not a file path or data URI.")] string image_base64,
+        [Description("Optional original filename metadata.")] string? image_name = null,
         CancellationToken cancellationToken = default)
         => _client.InvokeAsync(
             "insert_note_image",
-            new { paper_id, image_path, image_base64, image_name },
+            new { paper_id, image_base64, image_name },
             cancellationToken);
 
     [McpServerTool(
