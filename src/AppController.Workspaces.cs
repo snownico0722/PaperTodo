@@ -59,7 +59,7 @@ public sealed partial class AppController
     {
         Application.Current.Dispatcher.VerifyAccess();
         if (!WorkspaceOptions.Enabled || _workspaceSwitching) return Task.FromResult(false);
-        var next = WorkspaceNumber == WorkspaceOptions.Count ? 1 : WorkspaceNumber + 1;
+        var next = WorkspaceOptions.NextSlot(WorkspaceNumber);
         return SwitchWorkspaceAsync(next);
     }
 
@@ -71,7 +71,7 @@ public sealed partial class AppController
         Application.Current.Dispatcher.VerifyAccess();
         if (!CanBeginWorkspaceChange()) return false;
         var next = requested.Normalized();
-        next.Active = !next.Enabled || WorkspaceNumber > next.Count ? 1 : WorkspaceNumber;
+        next.Active = !next.Enabled || !next.ContainsSlot(WorkspaceNumber) ? 1 : WorkspaceNumber;
         var followsChanged = WorkspaceNumber > 1 &&
             next.FollowsMain(WorkspaceNumber) != _workspace.FollowsMain;
         if (next.Active != WorkspaceNumber)
@@ -220,7 +220,7 @@ public sealed partial class AppController
     {
         Application.Current.Dispatcher.VerifyAccess();
         var nextOptions = requested.Normalized();
-        if (number < 1 || number > (nextOptions.Enabled ? nextOptions.Count : 1)) return false;
+        if ((number != 1 && (!nextOptions.Enabled || !nextOptions.ContainsSlot(number))) || number is < 1 or > 5) return false;
         if (!CanBeginWorkspaceChange()) return false;
         if (number == WorkspaceNumber) return true;
         nextOptions.Active = number;

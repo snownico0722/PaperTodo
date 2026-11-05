@@ -40,7 +40,7 @@ internal static partial class Program
             try
             {
                 var main = NewState();
-                main.Workspaces = new() { Enabled = true, Count = 2, Active = 1 };
+                main.Workspaces = new() { Enabled = true, Slots = [1, 2], Active = 1 };
                 var seed = new StateStore(); seed.SaveJsonSync(seed.SerializeState(main), 1);
                 var target = NewState(); target.Papers[0].Content = "saved secondary";
                 var targetStore = new StateStore(directory, DurableAtomicFileWriter.Shared, 2);
