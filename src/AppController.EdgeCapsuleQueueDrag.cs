@@ -77,6 +77,15 @@ public sealed partial class AppController
             if (!drag.FreeQueues)
                 top = EdgeCapsuleLayout.NormalizeStartTopMargin(top, EdgeCapsuleLayout.LocalWorkAreaForQueue(monitor), slots, DeepCapsuleGap);
         }
+        if (drag.FreeQueues && drag.WholeQueue && EdgeCapsuleQueueIds.TryGetEdge(drag.SourceKey, out var freeMonitor, out _))
+        {
+            var area = EdgeCapsuleLayout.LocalWorkAreaForQueue(freeMonitor);
+            var pitch = EdgeCapsuleLayout.SlotHeight(DeepCapsuleGap);
+            var totalSlots = drag.SourceIds.Length + (drag.CarriesMaster ? 1 : 0);
+            var visibleHeight = IsCapsuleCollapseAllActiveForQueue(drag.SourceKey)
+                ? PaperLayoutDefaults.CapsuleHeight : totalSlots * pitch - DeepCapsuleGap;
+            top = EdgeCapsuleFreeQueuePolicy.ClampVisibleTop(top, area.Height, visibleHeight);
+        }
         return top + drag.OwnerOffsetDip;
     }
 

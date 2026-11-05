@@ -82,7 +82,13 @@ public sealed partial class AppController
             }
             queues.Add(new(liveEdge, queue.Key, members, top, bottom, connected.Contains(monitor) ? 0 : 1, restTop));
         }
-        var offsets = EdgeCapsuleRestingLayoutCoordinator.BuildDownwardOffsets(queues, gap);
+        // The master currently being dragged is not a passive collision obstacle.
+        // Otherwise the resting-layout solver pushes it back BELOW the master the
+        // user is trying to drag onto, making a vertical merge impossible.
+        var draggedMasterKey = _freeMasterDragPreview?.Layout.QueueKey;
+        var offsets = EdgeCapsuleRestingLayoutCoordinator.BuildDownwardOffsets(
+            draggedMasterKey == null ? queues : queues.Where(q => q.QueueKey != draggedMasterKey).ToList(),
+            gap);
         var masterTops = new Dictionary<string, double>(StringComparer.Ordinal);
         foreach (var queue in queues)
             if (masterBases.TryGetValue(queue.QueueKey, out var masterBase))

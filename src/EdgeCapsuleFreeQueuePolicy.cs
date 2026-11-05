@@ -40,6 +40,17 @@ internal static class EdgeCapsuleFreeQueuePolicy
     internal const double SnapDistance = 18;
     internal const double ReleaseDistance = 30; // A held target must be pulled further away to release.
     internal const double ExitSnapDistance = 18; // Pointer distance needed to break an outer-slot snap.
+
+    // An actively dragged block must not be positioned outside the visible work area
+    // when it fits. Oversized queues keep their first slot visible; adding members is
+    // never rejected simply because a full queue cannot physically fit on screen.
+    internal static double ClampVisibleTop(double requestedTop, double areaHeight, double visibleHeight)
+    {
+        if (!double.IsFinite(requestedTop) || !double.IsFinite(areaHeight) || areaHeight <= 0)
+            return requestedTop;
+        var maxTop = Math.Max(0, areaHeight - Math.Max(PaperLayoutDefaults.CapsuleHeight, visibleHeight));
+        return Math.Clamp(requestedTop, 0, maxTop);
+    }
     private const double TakeoverAdvantage = 6;
     private const double Epsilon = 0.1;
 
@@ -160,11 +171,12 @@ internal static class EdgeCapsuleFreeQueuePolicy
         int slots, double areaHeight, double pitch, double gap)
     {
         if (!double.IsFinite(requestedTop) || slots < 1) return EdgeFreeQueueDrop.Rejected;
-        // Never search for a different destination or reject because the monitor is full.
-        // Keep the exact requested anchor and push only neighbours intersecting it.
-        var moved = ShiftNeighbours(obstacles, "", requestedTop, requestedTop,
-            slots * pitch - gap, pitch, gap);
-        return new(EdgeFreeQueueDropKind.Move, "", 0, requestedTop, moved);
+        // Block a user-controlled position from leaving the display. This does not
+        // search for a free slot or refuse a drop when the queue is longer than the screen.
+        var height = slots * pitch - gap;
+        var top = ClampVisibleTop(requestedTop, areaHeight, height);
+        var moved = ShiftNeighbours(obstacles, "", top, top, height, pitch, gap);
+        return new(EdgeFreeQueueDropKind.Move, "", 0, top, moved);
     }
 
     internal static EdgeFreeQueueDrop Insert(
@@ -180,10 +192,11 @@ internal static class EdgeCapsuleFreeQueuePolicy
             ? target.MemberCount : Math.Clamp(index, 0, target.MemberCount);
         var top = target.TopDip;
         if (prependAbove && index == 0 && target.MemberCount > 0) top -= carriedCount * pitch;
-        // Prepending extends above the target. Appending/interior insertion leaves its head in
-        // place. Overflow is permitted; a full edge must never veto the user's chosen slot.
+        // Keep the merged block in view when it can fit. If the combined queue is
+        // taller than the work area, preserve the merge and pin its first slot in view.
         var visibleHeight = target.Collapsed && target.HasMaster
             ? PaperLayoutDefaults.CapsuleHeight : (target.Slots + carriedCount) * pitch - gap;
+        top = ClampVisibleTop(top, areaHeight, visibleHeight);
         var tops = ShiftNeighbours(queues, targetKey, target.TopDip, top,
             visibleHeight, pitch, gap);
         tops[targetKey] = top;

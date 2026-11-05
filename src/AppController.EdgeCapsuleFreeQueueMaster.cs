@@ -28,9 +28,16 @@ public sealed partial class AppController
     {
         if (!EdgeCapsuleFreeQueuesEnabled || !FreeMasterMembersMatch(layout)) return;
         if (!double.IsFinite(requestedTop)) return;
-        // Free queues keep the requested anchor even if their tail extends past the work area.
+        if (!WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(layout.Monitor, out var geometry))
+            return;
+        var pitch = EdgeCapsuleLayout.SlotHeight(DeepCapsuleGap);
+        var visibleHeight = IsCapsuleCollapseAllActiveForQueue(layout.QueueKey)
+            ? PaperLayoutDefaults.CapsuleHeight
+            : (layout.Groups[0].PaperIds.Length + (layout.Groups[0].HasMaster ? 1 : 0)) * pitch - DeepCapsuleGap;
+        var boundedTop = EdgeCapsuleFreeQueuePolicy.ClampVisibleTop(
+            requestedTop, geometry.LocalWorkAreaDip.Height, visibleHeight);
         _freeMasterDragPreview = (layout,
-            new Dictionary<string, double>(StringComparer.Ordinal) { [layout.QueueKey] = requestedTop });
+            new Dictionary<string, double>(StringComparer.Ordinal) { [layout.QueueKey] = boundedTop });
         ArrangeDeepCapsules(animate: false);
     }
 

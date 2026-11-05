@@ -512,7 +512,9 @@ public sealed partial class PaperWindow
             currentScreenPos, logicalTop, floating: false);
         // Visual pull never modifies hit testing or the eventual drop point.
         var visualTop = _controller.NativeEdgeQueueMagnetizedOwnerTop(_paper.Id, logicalTop);
-        if (!MoveEdgeCapsuleDockedReorder(currentScreenPos, visualTop))
+        var boundedTop = EdgeCapsuleFreeQueuePolicy.ClampVisibleTop(visualTop,
+            DeepCapsuleMonitorGeometry().LocalWorkAreaDip.Height, PaperLayoutDefaults.CapsuleHeight);
+        if (!MoveEdgeCapsuleDockedReorder(currentScreenPos, boundedTop))
         {
             CancelDeepCapsuleReorderDrag(restoreLayout: true);
             return;
