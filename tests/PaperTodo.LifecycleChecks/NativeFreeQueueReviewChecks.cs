@@ -51,10 +51,84 @@ internal static class NativeFreeQueueReviewChecks
         await CheckIndependentGroupPreview(c, windows, store, monitor);
         await CheckFoldedDropAndShortcuts(c, monitor);
         await CheckDisconnectedGesturesAndMerge(c, windows, store, monitor);
+        await CheckSingleQueueGhost(c, windows);
         Require(c.State.Papers.Count == originalContents.Count &&
                 c.State.Papers.All(p => originalContents[p.Id] == p.Content),
             "queue operations changed paper identities or note contents");
         Console.WriteLine("PASS free-queue review: displaced insertion, anchor roundtrip, folded drops, shortcut geometry, post-disconnect gestures and merge identity");
+    }
+
+    private static async Task CheckSingleQueueGhost(AppController c,
+        IReadOnlyDictionary<string, PaperWindow> windows)
+    {
+        var free = c.State.UseCapsuleFreeQueues;
+        var master = c.State.UseCapsuleCollapseAll;
+        PaperData? ghostOwner = null;
+        try
+        {
+            c.State.UseCapsuleFreeQueues = false;
+            c.State.UseCapsuleCollapseAll = false;
+            c.ArrangeDeepCapsules(false);
+            await Idle();
+
+            var queue = c.State.Papers.Where(p => p.IsVisible &&
+                p.CapsuleSide == DeepCapsuleSides.Right && windows.ContainsKey(p.Id)).ToList();
+            Require(queue.Count >= 2, "single-queue fixture needs two right-edge members");
+            ghostOwner = queue[0];
+            Require(WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(
+                ghostOwner.CapsuleMonitorDeviceName, out var geometry), "single-queue monitor");
+            c.PreviewSingleCapsuleDropGhost(ghostOwner, 1, Point(geometry, 80), floating: false);
+            var ghost = Field<EdgeCapsuleQueueDropGhost>(c, "_nativeQueueDropGhost");
+            var window = Field<Window>(ghost, "_window");
+            window.UpdateLayout();
+            var count = c.State.Papers.Count(p => p.IsVisible &&
+                p.CapsuleSide == ghostOwner.CapsuleSide &&
+                WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(p.CapsuleMonitorDeviceName) ==
+                WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(ghostOwner.CapsuleMonitorDeviceName));
+            var expected = EdgeCapsuleLayout.TopForIndex(1,
+                c.DeepCapsuleStartTopMarginFor(ghostOwner),
+                geometry.LocalWorkAreaDip, count, c.DeepCapsuleGap);
+            Require(WindowNative.TryGetWindowDeviceBounds(window, out var bounds),
+                "ordinary ghost has a physical window");
+            Near(geometry.WorkArea.Top + Math.Round(expected * geometry.DpiScaleY),
+                bounds.Top, "ordinary ghost keeps its original reorder index");
+            Near(windows[ghostOwner.Id].DeepCapsuleRestingVisibleWidthFor(geometry),
+                window.Width, "ordinary ghost uses its own docked width");
+            c.EndSingleCapsuleDropGhost(ghostOwner.Id);
+            Require(Field<object?>(c, "_nativeQueueDropGhost") == null,
+                "ordinary gesture disposes the shared ghost");
+
+            // Ctrl whole-queue transfer uses the same window when free queues are off.
+            var ctrlOwner = c.State.Papers.First(p => p.IsVisible &&
+                p.CapsuleSide == DeepCapsuleSides.Left && windows.ContainsKey(p.Id));
+            Require(WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(
+                ctrlOwner.CapsuleMonitorDeviceName, out var ctrlGeometry), "Ctrl legacy monitor");
+            var ctrlCount = c.State.Papers.Count(p => p.IsVisible &&
+                p.CapsuleSide == DeepCapsuleSides.Left &&
+                WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(p.CapsuleMonitorDeviceName) ==
+                WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(ctrlOwner.CapsuleMonitorDeviceName));
+            var ctrlTop = EdgeCapsuleLayout.TopForIndex(0,
+                c.DeepCapsuleStartTopMarginFor(ctrlOwner),
+                ctrlGeometry.LocalWorkAreaDip, ctrlCount, c.DeepCapsuleGap);
+            var pointer = Point(ctrlGeometry, ctrlTop, left: true);
+            Require(c.BeginNativeEdgeQueueDrag(ctrlOwner, true, pointer, false),
+                "Ctrl whole-queue starts with free queues off");
+            Require(c.PreviewNativeEdgeQueueDrag(ctrlOwner, pointer, ctrlTop, false),
+                "Ctrl ordinary-mode preview processes its drop");
+            Require(Field<Window>(Field<EdgeCapsuleQueueDropGhost>(c,
+                "_nativeQueueDropGhost"), "_window").Opacity > 0,
+                "Ctrl ordinary-mode preview shows the shared landing ghost");
+            c.EndNativeEdgeQueueDrag(ctrlOwner.Id);
+            await Idle();
+            Console.WriteLine("PASS ordinary landing ghost: index/width, cleanup and Ctrl transfer");
+        }
+        finally
+        {
+            if (ghostOwner != null) c.EndSingleCapsuleDropGhost(ghostOwner.Id);
+            c.State.UseCapsuleFreeQueues = free;
+            c.State.UseCapsuleCollapseAll = master;
+            c.ArrangeDeepCapsules(false);
+        }
     }
 
     private static void CheckDropGhostShapes(MonitorGeometry monitor)
