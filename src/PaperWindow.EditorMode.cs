@@ -269,7 +269,7 @@ public sealed partial class PaperWindow
         return style;
     }
 
-    private void RefreshExpandedEditorPaperList()
+    internal void RefreshExpandedEditorPaperList()
     {
         if (_editorPaperList == null || !_isExpandedEditorMode || !_isExpandedEditorSidebarOpen)
             return;
