@@ -152,4 +152,3 @@ internal sealed class EdgeCapsuleQueueDropGhost : IDisposable
         _window.Close();
     }
 }
-
