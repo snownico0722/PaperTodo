@@ -109,6 +109,30 @@ internal static class NativeFreeQueueChecks
         Require(Math.Abs(Top(bPeer) - originalNextTargetTop) < .1,
             "cancelling a local insertion preview restores the original layout");
 
+        // A two-capsule insertion must also make room in the NEXT independent
+        // queue when it would overlap, but only for the selected slot. No
+        // continuous global pushing as the pointer moves within that slot.
+        var neighbour = c.State.Papers.Single(p => p.CapsuleQueueId == "qc");
+        var oldNeighbourMargin = c.State.DeepCapsuleQueueStartTopMargins["|right#qc"];
+        c.State.DeepCapsuleQueueStartTopMargins["|right#qc"] = originalTargetTop + 2 * pitch + 20;
+        c.ArrangeDeepCapsules(false);
+        await Idle();
+        var neighbourBefore = Top(neighbour);
+        Require(c.BeginNativeEdgeQueueDrag(a, true, Point(100), false),
+            "begin a multi-capsule merge with a neighbouring queue close below");
+        c.PreviewNativeEdgeQueueDrag(a, Point(interiorTop), interiorTop, false);
+        var displacedNeighbourTop = Top(neighbour);
+        Require(displacedNeighbourTop > neighbourBefore + 2 &&
+                Math.Abs(Top(bPeer) - originalNextTargetTop - 2 * pitch) < .1,
+            "the target suffix AND the intersected neighbouring queue make room for two capsules");
+        c.PreviewNativeEdgeQueueDrag(a, Point(interiorTop + 2), interiorTop + 2, false);
+        Require(Math.Abs(Top(neighbour) - displacedNeighbourTop) < .1,
+            "the same insertion slot cannot push the neighbouring queue a second time");
+        c.EndNativeEdgeQueueDrag(a.Id);
+        c.State.DeepCapsuleQueueStartTopMargins["|right#qc"] = oldNeighbourMargin;
+        c.ArrangeDeepCapsules(false);
+        await Idle();
+
         Require(c.BeginNativeEdgeQueueDrag(a, true, Point(100), false), "begin prepend");
         var headTop = originalTargetTop - (2 * pitch - c.DeepCapsuleGap);
         Require(c.PreviewNativeEdgeQueueDrag(a, Point(headTop), headTop, false), "prepend preview handled");
@@ -234,6 +258,28 @@ internal static class NativeFreeQueueChecks
         Require(masters.Count == 3 && masters.ContainsKey(aKey) &&
                 masters.ContainsKey("|right#qb") && masters.ContainsKey("|right#qc"),
             "every independent group has its own master on the same edge");
+
+        var upwardMasterLayout = c.CaptureFreeMasterDragLayout("", EdgeCapsuleEdge.Right, "|right#qc")!;
+        var upperMasterTop = masters["|right#qb"].AnchorTop;
+        c.PreviewFreeMasterQueueTop(upwardMasterLayout, upperMasterTop, Point(upperMasterTop));
+        Require(Math.Abs(masters["|right#qc"].AnchorTop - upperMasterTop) < .1 &&
+                ((Window)Part(Part(c, "_nativeQueueDropGhost"), "_window")).Opacity > 0,
+            "dragging a master straight UP may overlap and target the upper master without being pushed below it");
+        c.FinishFreeMasterQueueDrag(upwardMasterLayout, false);
+        await Idle();
+
+        var boundedMasterLayout = c.CaptureFreeMasterDragLayout("", EdgeCapsuleEdge.Right, "|right#qc")!;
+        c.PreviewFreeMasterQueueTop(boundedMasterLayout, -200);
+        Require(masters["|right#qc"].AnchorTop >= -.1,
+            "actively dragged master may not be pulled above the top of its screen");
+        c.PreviewFreeMasterQueueTop(boundedMasterLayout, monitor.LocalWorkAreaDip.Height + 200);
+        Require(masters["|right#qc"].AnchorTop +
+                (boundedMasterLayout.Groups[0].PaperIds.Length + 1) * pitch - c.DeepCapsuleGap <=
+                    monitor.LocalWorkAreaDip.Height + .1,
+            "a movable queue that fits must stop before its final capsule leaves the bottom of the screen");
+        c.FinishFreeMasterQueueDrag(boundedMasterLayout, false);
+        await Idle();
+
         var masterForMove = masters["|right#qb"];
         var originalMasterPosition = masterForMove.AnchorTop;
         var originalAnimations = c.State.EnableAnimations;
@@ -450,6 +496,27 @@ internal static class NativeFreeQueueChecks
         await Idle();
         Require(masters.Count == 2 && masters.ContainsKey("|right#qm") && masters.ContainsKey("|right#qn"),
             "two groups create two independent masters");
+
+        // Expanded direct-master transfer of THREE members into the upper queue:
+        // entering its second member slot must move that suffix by exactly 3 pitches.
+        var lowerMasterLayout = c.CaptureFreeMasterDragLayout("", EdgeCapsuleEdge.Right, "|right#qn")!;
+        var upperMembers = c.State.Papers.Where(p => p.CapsuleQueueId == "qm").ToList();
+        var upperSecondBefore = Top(upperMembers[1]);
+        c.PreviewFreeMasterQueueTop(lowerMasterLayout, upperSecondBefore, Point(upperSecondBefore));
+        var upperSecondShifted = Top(upperMembers[1]);
+        Require(Math.Abs(upperSecondShifted - upperSecondBefore -
+                lowerMasterLayout.Groups[0].PaperIds.Length * pitch) < .1 &&
+                ((StackPanel)Part(Part(c, "_nativeQueueDropGhost"), "_stack")).Children.Count ==
+                    lowerMasterLayout.Groups[0].PaperIds.Length,
+            "a vertically dragged master carrying multiple capsules reserves their entire insertion space");
+        c.PreviewFreeMasterQueueTop(lowerMasterLayout, upperSecondBefore + 2, Point(upperSecondBefore + 2));
+        Require(Math.Abs(Top(upperMembers[1]) - upperSecondShifted) < .1,
+            "within one chosen slot the multi-capsule preview stays stable without progressive pushing");
+        c.FinishFreeMasterQueueDrag(lowerMasterLayout, false);
+        await Idle();
+        Require(Math.Abs(Top(upperMembers[1]) - upperSecondBefore) < .1,
+            "cancelling a multi-capsule master insertion restores the upper queue");
+
         var targetOldTop = Top(b);
         c.ToggleCapsuleCollapseAllActive("|right#qn");
         await Idle();
@@ -463,15 +530,15 @@ internal static class NativeFreeQueueChecks
         Require(masters.Count == 2 && masters.ContainsKey("|right#qm") &&
                 masters.ContainsKey("|right#qn"),
             "master drag cannot merge into a collapsed queue through invisible slots");
-        Require(c.TryBeginMasterCapsuleQueueTransfer("", EdgeCapsuleEdge.Right,
-            masters["|right#qm"].AnchorTop, out var mergeTransfer, sourceQueueKey: "|right#qm"),
-            "begin one-master merge into another master");
-        c.PreviewFreeMasterQueueDropGhost(mergeTransfer, Point(mergeMasterTop, distant: true));
-        Require(((Window)Part(Part(c, "_nativeQueueDropGhost"), "_window")).Opacity > 0,
-            "a distant master can preview merging into the visible collapsed target");
-        c.EndFreeMasterQueueDropGhost();
-        Require(c.CommitMasterCapsuleQueueTransfer(mergeTransfer, Point(mergeMasterTop, distant: true)),
-            "independent masters merge into the existing target from the screen interior");
+        var directMergeLayout = c.CaptureFreeMasterDragLayout("", EdgeCapsuleEdge.Right, "|right#qm")!;
+        c.PreviewFreeMasterQueueTop(directMergeLayout, mergeMasterTop, Point(mergeMasterTop));
+        Require(Math.Abs(masters["|right#qm"].AnchorTop - mergeMasterTop) < .1 &&
+                ((Window)Part(Part(c, "_nativeQueueDropGhost"), "_window")).Opacity > 0,
+            "docked master can approach the upper collapsed master and show a confirmed merge");
+        var oldSourceMargin = c.State.DeepCapsuleQueueStartTopMargins["|right#qm"];
+        Require(c.TryCommitDockedFreeMasterQueueMerge(
+                directMergeLayout, Point(mergeMasterTop), oldSourceMargin, true),
+            "dropping a docked master onto an upper master merges directly without a horizontal pull");
         await Idle();
         Require(c.State.Papers.All(p => p.CapsuleQueueId == "qn") &&
                 masters.Count == 1 && masters.ContainsKey("|right#qn"),
