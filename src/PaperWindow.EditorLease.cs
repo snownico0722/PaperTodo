@@ -232,6 +232,7 @@ public sealed partial class PaperWindow
                 owner.SetCollapsedState(true, animate: false, saveGeometry: false);
             owner.ApplyPaperChromePresentation();
             owner.ApplySystemVisibility(reapplyTaskbarShellState: true);
+            owner.RefreshEffectiveTopmost();
             owner.SyncNoteImagePresentationState();
 
             if (restoreDesktop && _desktopWasVisible && owner._paper.IsVisible && !owner.IsClosed)

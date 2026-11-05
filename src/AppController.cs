@@ -828,7 +828,7 @@ public sealed partial class AppController : IDisposable
         return paper != null &&
             _windows.TryGetValue(paper.Id, out var window) &&
             paper.IsVisible &&
-            window.HasExpandedPaperSurface;
+            (window.HasExpandedPaperSurface || window.IsExpandedEditorHosted);
     }
 
     public bool ShouldRunLinkedScriptCapsule(string? noteId)
@@ -938,6 +938,14 @@ public sealed partial class AppController : IDisposable
         var paper = FindPaper(paperId);
         if (paper == null)
         {
+            return;
+        }
+
+        if (_windows.TryGetValue(paper.Id, out var hostedWindow) &&
+            hostedWindow.ExpandedEditorHostWindow is { } editor)
+        {
+            editor.ActivateEditor();
+            RefreshTodoRowsForLinkedPaper(paper.Id);
             return;
         }
 
@@ -1938,6 +1946,12 @@ public sealed partial class AppController : IDisposable
         _isPreparingStartupEdgeCapsules = false;
         EnsurePapersOnScreen();
 
+        // The taskbar editor is independent of desktop-wide show/hide and visibility shortcuts.
+        var desktopPapersToShow = papersToShow
+            .Where(paper => !_windows.TryGetValue(paper.Id, out var window) ||
+                            !window.IsExpandedEditorHosted)
+            .ToList();
+
         // Runtime show-all and shortcut restore deliberately share this path so remembered expanded
         // geometry wins before edge placement. Shortcut restore only filters which papers enter it.
         var wasSuppressingDirty = _suppressDirty;
@@ -1947,9 +1961,9 @@ public sealed partial class AppController : IDisposable
         _isRestoringRuntimePaperBatch = true;
         try
         {
-            var activationPaper = papersToShow.LastOrDefault(paper =>
+            var activationPaper = desktopPapersToShow.LastOrDefault(paper =>
                 !(State.UseCapsuleMode && State.UseDeepCapsuleMode && paper.IsCollapsed && CanPaperDisplayAsCapsule(paper)));
-            foreach (var paper in papersToShow)
+            foreach (var paper in desktopPapersToShow)
             {
                 ShowPaper(paper, activate: ReferenceEquals(paper, activationPaper));
             }
@@ -1962,7 +1976,7 @@ public sealed partial class AppController : IDisposable
         }
 
         ArrangeDeepCapsules(animate: State.EnableAnimations);
-        ScheduleStartupShellPrewarm(papersToShow);
+        ScheduleStartupShellPrewarm(desktopPapersToShow);
         RefreshAllTodoRowsForPaperVisibility();
         RefreshTrayMenu();
         MarkDirty();
@@ -1983,8 +1997,13 @@ public sealed partial class AppController : IDisposable
     {
         // Proxy handoff and body callbacks can run another UI command synchronously. Keep this
         // hide scoped to its original targets; each later show/delete supersedes that target.
-        var papersToHide = State.Papers.ToArray();
-        var windowsToHide = _windows.Values.ToArray();
+        var papersToHide = State.Papers
+            .Where(paper => !_windows.TryGetValue(paper.Id, out var window) ||
+                            !window.IsExpandedEditorHosted)
+            .ToArray();
+        var windowsToHide = _windows.Values
+            .Where(window => !window.IsExpandedEditorHosted)
+            .ToArray();
         var visibilityVersions = papersToHide.Select(paper => paper.Id)
             .Concat(windowsToHide.Select(window => window.PaperId))
             .Distinct(StringComparer.Ordinal)
@@ -3701,7 +3720,8 @@ public sealed partial class AppController : IDisposable
 
     private bool IsPaperShown(PaperData paper)
     {
-        return paper.IsVisible && _windows.TryGetValue(paper.Id, out var window) && window.HasVisibleSurface;
+        return paper.IsVisible && _windows.TryGetValue(paper.Id, out var window) &&
+            !window.IsExpandedEditorHosted && window.HasVisibleSurface;
     }
 
     private HashSet<string> StartupPaperIdsAwaitingMonitor()

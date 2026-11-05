@@ -111,12 +111,17 @@ internal static class ExpandedEditorChecks
         controller.State.Papers.Single(p => p.Id == "editor-a").AlwaysOnTop = false;
         a.RefreshEffectiveTopmost();
         Check(!host.Topmost, "Unpin did not update the visible editor host");
+        controller.State.Papers.Single(p => p.Id == "editor-a").AlwaysOnTop = true;
+        a.RefreshEffectiveTopmost();
 
         controller.SwitchExpandedEditorPaper(a, "editor-b");
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
         Check(ReferenceEquals(host, b.ExpandedEditorHostWindow), "Sidebar replaced the editor host");
         Check(new WindowInteropHelper(host).Handle == hwnd, "Switching papers changed the editor HWND");
         Check(host.CurrentPaperId == "editor-b", "Sidebar did not select the second paper");
+        Check(a.Topmost, "Returning the prior desktop paper lost its pin state");
+        controller.State.Papers.Single(p => p.Id == "editor-a").AlwaysOnTop = false;
+        a.RefreshEffectiveTopmost();
         host.WindowState = WindowState.Minimized;
         Check(controller.ApplyPaperPresentation(paperB, PaperPresentationAction.Activate, true) &&
               host.WindowState != WindowState.Minimized &&
@@ -124,6 +129,38 @@ internal static class ExpandedEditorChecks
             "Plugin Activate did not restore and focus the editor's real window");
         Check(host.IsActive && !a.IsActive,
             "Sidebar switch incorrectly activated the previous desktop paper");
+
+        controller.State.ExperimentalHideInactiveTitleBar = true;
+        controller.State.ExperimentalHideInactiveTopBarButtons = true;
+        b.UpdateExperimentalFocusPresentationSettings();
+        Check(((Border)Member(b, "_topBarHost")).IsHitTestVisible &&
+              ((StackPanel)Member(b, "_topBarActionButtonsHost")).IsHitTestVisible &&
+              ((StackPanel)Member(b, "_topBarActionButtonsHost")).Opacity == 1,
+            "Editor inherited desktop inactive titlebar/button hiding");
+        controller.State.ExperimentalHideInactiveTitleBar = false;
+        controller.State.ExperimentalHideInactiveTopBarButtons = false;
+        b.UpdateExperimentalFocusPresentationSettings();
+
+        controller.HideAllPapers();
+        Check(host.IsVisible && b.IsExpandedEditorHosted && paperB.IsVisible && !a.IsVisible,
+            "Hide All hid the editor or its authoritative paper");
+        controller.ExecuteStartupCommand(new StartupCommand(StartupCommandKind.Toggle));
+        Check(host.IsVisible && b.IsExpandedEditorHosted && a.IsVisible,
+            "Global toggle failed to restore desktop papers independently of the editor");
+        controller.ExecuteStartupCommand(new StartupCommand(StartupCommandKind.Toggle));
+        Check(host.IsVisible && b.IsExpandedEditorHosted && !a.IsVisible,
+            "Global toggle incorrectly included the editor in desktop visibility");
+        controller.ShowAllPapers();
+
+        host.WindowState = WindowState.Minimized;
+        controller.OpenLinkedPaper("editor-b");
+        Check(host.WindowState != WindowState.Minimized && b.IsExpandedEditorHosted,
+            "Linked paper navigation targeted the hidden desktop window");
+        host.WindowState = WindowState.Minimized;
+        Check(ReferenceEquals(controller.OpenBuiltInFindTarget("editor-b"), b) &&
+              host.WindowState != WindowState.Minimized,
+            "Global find target navigation failed to restore the editor host");
+
         Check(b.IsExpandedEditorSidebarOpen && !controller.State.Papers.Single(p => p.Id == "editor-b").IsCollapsed,
             "Switch did not preserve sidebar presentation or expand the borrowed capsule");
         Check(ReferenceEquals(secondEditor, Member(b, "_noteBox")) &&

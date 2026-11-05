@@ -149,6 +149,16 @@ public sealed partial class AppController
             _startupShellPrewarmGeneration++;
             var oldPapers = pending.Before.Papers.ToDictionary(p => p.Id, StringComparer.Ordinal);
             var nextPapers = pending.Next.Papers.ToDictionary(p => p.Id, StringComparer.Ordinal);
+            // Return borrowed visuals before installing an externally requested collapse.
+            // The accepted disk/merge state must not be replaced by stale editor content.
+            var externallyCollapsedEditorIds = _expandedEditors
+                .Select(editor => editor.CurrentPaperId)
+                .OfType<string>()
+                .Where(id => nextPapers.TryGetValue(id, out var next) && next.IsCollapsed)
+                .ToHashSet(StringComparer.Ordinal);
+            foreach (var id in externallyCollapsedEditorIds)
+                CloseExpandedEditorForPaper(id);
+
             foreach (var pair in _windows.ToArray())
             {
                 if (!nextPapers.TryGetValue(pair.Key, out var next) ||
@@ -174,7 +184,9 @@ public sealed partial class AppController
                     window.ApplyReloadedPaper(old);
                     if (!StateReloadModels.Equivalent(old.Items, paper.Items)) PrunePluginTodoActionsForPaper(paper.Id);
                     if (!paper.IsVisible && old.IsVisible) HidePaper(paper);
-                    else if (paper.IsVisible && !old.IsVisible) ShowPaper(paper, activate: false);
+                    else if (paper.IsVisible &&
+                             (!old.IsVisible || externallyCollapsedEditorIds.Contains(paper.Id)))
+                        ShowPaper(paper, activate: false);
                 }
                 else if (paper.IsVisible) ShowPaper(paper, activate: false);
             }

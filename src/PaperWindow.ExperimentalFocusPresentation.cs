@@ -54,6 +54,19 @@ public sealed partial class PaperWindow
             return;
         }
 
+        // Expanded editors own their title bar even while the original paper HWND is hidden.
+        // Desktop-only inactive-titlebar settings must never hide editor controls.
+        if (IsExpandedEditorHosted)
+        {
+            SetInactiveTitleBarHidden(hidden: false, animate: false);
+            if (_topBarActionButtonsHost != null)
+            {
+                _topBarActionButtonsHost.IsHitTestVisible = true;
+                SetExperimentalVisualOpacity(_topBarActionButtonsHost, 1.0, animate: false);
+            }
+            return;
+        }
+
         var interactionReveal =
             IsActive ||
             IsBuiltInFindOpen ||
