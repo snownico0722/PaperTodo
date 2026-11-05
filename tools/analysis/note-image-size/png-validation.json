@@ -1,0 +1,6943 @@
+{
+  "description": "Four independent photographs, eight PNG color modes, compression levels 1/6/9, output scale 0.25/0.5/1/1.5: 384 combinations per output format, not 384 independent photographs. Pillow JPEG90 and RGB/Sub/zlib6 PNG labels, separate from Windows/WIC tests. Alpha composited onto white; alpha coverage is not a runtime feature. Sources excluded from fitting.",
+  "sources": [
+    {
+      "name": "baboon",
+      "repository": "opencv/opencv",
+      "path": "samples/data/baboon.jpg",
+      "blob": "2f98d8359b8d9776b54ba71f6168f2da80aaba96"
+    },
+    {
+      "name": "building",
+      "repository": "opencv/opencv",
+      "path": "samples/data/building.jpg",
+      "blob": "6056492f2fa97d2e57ed078b54b5afd8b6fbb6cb"
+    },
+    {
+      "name": "fruits",
+      "repository": "opencv/opencv",
+      "path": "samples/data/fruits.jpg",
+      "blob": "a89b84a58487c8db5a71c65b0c1050d498b801d9"
+    },
+    {
+      "name": "hopper",
+      "repository": "python-pillow/Pillow",
+      "path": "Tests/images/hopper.jpg",
+      "blob": "82ab5b96773001d8810a28ceb487ab3069dc6fa9"
+    }
+  ],
+  "records": [
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "RGB",
+      "level": 1,
+      "density": 2.4261207580566406,
+      "payload": 2.4254913330078125,
+      "depth": 8,
+      "type": 2,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 16384,
+      "y": [
+        7760,
+        38441
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "RGB",
+      "level": 1,
+      "density": 2.4261207580566406,
+      "payload": 2.4254913330078125,
+      "depth": 8,
+      "type": 2,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 65536,
+      "y": [
+        28296,
+        151262
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "RGB",
+      "level": 1,
+      "density": 2.4261207580566406,
+      "payload": 2.4254913330078125,
+      "depth": 8,
+      "type": 2,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1,
+      "area": 262144,
+      "y": [
+        137996,
+        639603
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "RGB",
+      "level": 1,
+      "density": 2.4261207580566406,
+      "payload": 2.4254913330078125,
+      "depth": 8,
+      "type": 2,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 589824,
+      "y": [
+        210633,
+        1216031
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "RGB",
+      "level": 6,
+      "density": 2.385570526123047,
+      "payload": 2.3849411010742188,
+      "depth": 8,
+      "type": 2,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 16384,
+      "y": [
+        7760,
+        38441
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "RGB",
+      "level": 6,
+      "density": 2.385570526123047,
+      "payload": 2.3849411010742188,
+      "depth": 8,
+      "type": 2,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 65536,
+      "y": [
+        28296,
+        151262
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "RGB",
+      "level": 6,
+      "density": 2.385570526123047,
+      "payload": 2.3849411010742188,
+      "depth": 8,
+      "type": 2,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1,
+      "area": 262144,
+      "y": [
+        137996,
+        639603
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "RGB",
+      "level": 6,
+      "density": 2.385570526123047,
+      "payload": 2.3849411010742188,
+      "depth": 8,
+      "type": 2,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 589824,
+      "y": [
+        210633,
+        1216031
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "RGB",
+      "level": 9,
+      "density": 2.385570526123047,
+      "payload": 2.3849411010742188,
+      "depth": 8,
+      "type": 2,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 16384,
+      "y": [
+        7760,
+        38441
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "RGB",
+      "level": 9,
+      "density": 2.385570526123047,
+      "payload": 2.3849411010742188,
+      "depth": 8,
+      "type": 2,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 65536,
+      "y": [
+        28296,
+        151262
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "RGB",
+      "level": 9,
+      "density": 2.385570526123047,
+      "payload": 2.3849411010742188,
+      "depth": 8,
+      "type": 2,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1,
+      "area": 262144,
+      "y": [
+        137996,
+        639603
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "RGB",
+      "level": 9,
+      "density": 2.385570526123047,
+      "payload": 2.3849411010742188,
+      "depth": 8,
+      "type": 2,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 589824,
+      "y": [
+        210633,
+        1216031
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "L",
+      "level": 1,
+      "density": 0.8216819763183594,
+      "payload": 0.8213272094726562,
+      "depth": 8,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 16384,
+      "y": [
+        6595,
+        19597
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "L",
+      "level": 1,
+      "density": 0.8216819763183594,
+      "payload": 0.8213272094726562,
+      "depth": 8,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 65536,
+      "y": [
+        24529,
+        75681
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "L",
+      "level": 1,
+      "density": 0.8216819763183594,
+      "payload": 0.8213272094726562,
+      "depth": 8,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1,
+      "area": 262144,
+      "y": [
+        121687,
+        320323
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "L",
+      "level": 1,
+      "density": 0.8216819763183594,
+      "payload": 0.8213272094726562,
+      "depth": 8,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 589824,
+      "y": [
+        180211,
+        602963
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "L",
+      "level": 6,
+      "density": 0.7912445068359375,
+      "payload": 0.7908897399902344,
+      "depth": 8,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 16384,
+      "y": [
+        6595,
+        19597
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "L",
+      "level": 6,
+      "density": 0.7912445068359375,
+      "payload": 0.7908897399902344,
+      "depth": 8,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 65536,
+      "y": [
+        24529,
+        75681
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "L",
+      "level": 6,
+      "density": 0.7912445068359375,
+      "payload": 0.7908897399902344,
+      "depth": 8,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1,
+      "area": 262144,
+      "y": [
+        121687,
+        320323
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "L",
+      "level": 6,
+      "density": 0.7912445068359375,
+      "payload": 0.7908897399902344,
+      "depth": 8,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 589824,
+      "y": [
+        180211,
+        602963
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "L",
+      "level": 9,
+      "density": 0.7912445068359375,
+      "payload": 0.7908897399902344,
+      "depth": 8,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 16384,
+      "y": [
+        6595,
+        19597
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "L",
+      "level": 9,
+      "density": 0.7912445068359375,
+      "payload": 0.7908897399902344,
+      "depth": 8,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 65536,
+      "y": [
+        24529,
+        75681
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "L",
+      "level": 9,
+      "density": 0.7912445068359375,
+      "payload": 0.7908897399902344,
+      "depth": 8,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1,
+      "area": 262144,
+      "y": [
+        121687,
+        320323
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "L",
+      "level": 9,
+      "density": 0.7912445068359375,
+      "payload": 0.7908897399902344,
+      "depth": 8,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 589824,
+      "y": [
+        180211,
+        602963
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "1",
+      "level": 1,
+      "density": 0.08509063720703125,
+      "payload": 0.08487319946289062,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 16384,
+      "y": [
+        10083,
+        21807
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "1",
+      "level": 1,
+      "density": 0.08509063720703125,
+      "payload": 0.08487319946289062,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 65536,
+      "y": [
+        38781,
+        62438
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "1",
+      "level": 1,
+      "density": 0.08509063720703125,
+      "payload": 0.08487319946289062,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1,
+      "area": 262144,
+      "y": [
+        179199,
+        40561
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "1",
+      "level": 1,
+      "density": 0.08509063720703125,
+      "payload": 0.08487319946289062,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 589824,
+      "y": [
+        288597,
+        144681
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "1",
+      "level": 6,
+      "density": 0.079071044921875,
+      "payload": 0.07885360717773438,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 16384,
+      "y": [
+        10083,
+        21807
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "1",
+      "level": 6,
+      "density": 0.079071044921875,
+      "payload": 0.07885360717773438,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 65536,
+      "y": [
+        38781,
+        62438
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "1",
+      "level": 6,
+      "density": 0.079071044921875,
+      "payload": 0.07885360717773438,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1,
+      "area": 262144,
+      "y": [
+        179199,
+        40561
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "1",
+      "level": 6,
+      "density": 0.079071044921875,
+      "payload": 0.07885360717773438,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 589824,
+      "y": [
+        288597,
+        144681
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "1",
+      "level": 9,
+      "density": 0.07882308959960938,
+      "payload": 0.07860565185546875,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 16384,
+      "y": [
+        10083,
+        21807
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "1",
+      "level": 9,
+      "density": 0.07882308959960938,
+      "payload": 0.07860565185546875,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 65536,
+      "y": [
+        38781,
+        62438
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "1",
+      "level": 9,
+      "density": 0.07882308959960938,
+      "payload": 0.07860565185546875,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1,
+      "area": 262144,
+      "y": [
+        179199,
+        40561
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "1",
+      "level": 9,
+      "density": 0.07882308959960938,
+      "payload": 0.07860565185546875,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 589824,
+      "y": [
+        288597,
+        144681
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "P4",
+      "level": 1,
+      "density": 0.1660003662109375,
+      "payload": 0.16569137573242188,
+      "depth": 2,
+      "type": 3,
+      "colors": 4,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 16384,
+      "y": [
+        6820,
+        31312
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "P4",
+      "level": 1,
+      "density": 0.1660003662109375,
+      "payload": 0.16569137573242188,
+      "depth": 2,
+      "type": 3,
+      "colors": 4,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 65536,
+      "y": [
+        25134,
+        110041
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "P4",
+      "level": 1,
+      "density": 0.1660003662109375,
+      "payload": 0.16569137573242188,
+      "depth": 2,
+      "type": 3,
+      "colors": 4,
+      "alpha": 0,
+      "scale": 1,
+      "area": 262144,
+      "y": [
+        122814,
+        63913
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "P4",
+      "level": 1,
+      "density": 0.1660003662109375,
+      "payload": 0.16569137573242188,
+      "depth": 2,
+      "type": 3,
+      "colors": 4,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 589824,
+      "y": [
+        189846,
+        343789
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "P4",
+      "level": 6,
+      "density": 0.15517425537109375,
+      "payload": 0.15486526489257812,
+      "depth": 2,
+      "type": 3,
+      "colors": 4,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 16384,
+      "y": [
+        6820,
+        31312
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "P4",
+      "level": 6,
+      "density": 0.15517425537109375,
+      "payload": 0.15486526489257812,
+      "depth": 2,
+      "type": 3,
+      "colors": 4,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 65536,
+      "y": [
+        25134,
+        110041
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "P4",
+      "level": 6,
+      "density": 0.15517425537109375,
+      "payload": 0.15486526489257812,
+      "depth": 2,
+      "type": 3,
+      "colors": 4,
+      "alpha": 0,
+      "scale": 1,
+      "area": 262144,
+      "y": [
+        122814,
+        63913
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "P4",
+      "level": 6,
+      "density": 0.15517425537109375,
+      "payload": 0.15486526489257812,
+      "depth": 2,
+      "type": 3,
+      "colors": 4,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 589824,
+      "y": [
+        189846,
+        343789
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "P4",
+      "level": 9,
+      "density": 0.15368270874023438,
+      "payload": 0.15337371826171875,
+      "depth": 2,
+      "type": 3,
+      "colors": 4,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 16384,
+      "y": [
+        6820,
+        31312
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "P4",
+      "level": 9,
+      "density": 0.15368270874023438,
+      "payload": 0.15337371826171875,
+      "depth": 2,
+      "type": 3,
+      "colors": 4,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 65536,
+      "y": [
+        25134,
+        110041
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "P4",
+      "level": 9,
+      "density": 0.15368270874023438,
+      "payload": 0.15337371826171875,
+      "depth": 2,
+      "type": 3,
+      "colors": 4,
+      "alpha": 0,
+      "scale": 1,
+      "area": 262144,
+      "y": [
+        122814,
+        63913
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "P4",
+      "level": 9,
+      "density": 0.15368270874023438,
+      "payload": 0.15337371826171875,
+      "depth": 2,
+      "type": 3,
+      "colors": 4,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 589824,
+      "y": [
+        189846,
+        343789
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "P16",
+      "level": 1,
+      "density": 0.36977386474609375,
+      "payload": 0.3692817687988281,
+      "depth": 4,
+      "type": 3,
+      "colors": 16,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 16384,
+      "y": [
+        7392,
+        35879
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "P16",
+      "level": 1,
+      "density": 0.36977386474609375,
+      "payload": 0.3692817687988281,
+      "depth": 4,
+      "type": 3,
+      "colors": 16,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 65536,
+      "y": [
+        27133,
+        133811
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "P16",
+      "level": 1,
+      "density": 0.36977386474609375,
+      "payload": 0.3692817687988281,
+      "depth": 4,
+      "type": 3,
+      "colors": 16,
+      "alpha": 0,
+      "scale": 1,
+      "area": 262144,
+      "y": [
+        130922,
+        145904
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "P16",
+      "level": 1,
+      "density": 0.36977386474609375,
+      "payload": 0.3692817687988281,
+      "depth": 4,
+      "type": 3,
+      "colors": 16,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 589824,
+      "y": [
+        202909,
+        875247
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "P16",
+      "level": 6,
+      "density": 0.35115814208984375,
+      "payload": 0.3506660461425781,
+      "depth": 4,
+      "type": 3,
+      "colors": 16,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 16384,
+      "y": [
+        7392,
+        35879
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "P16",
+      "level": 6,
+      "density": 0.35115814208984375,
+      "payload": 0.3506660461425781,
+      "depth": 4,
+      "type": 3,
+      "colors": 16,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 65536,
+      "y": [
+        27133,
+        133811
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "P16",
+      "level": 6,
+      "density": 0.35115814208984375,
+      "payload": 0.3506660461425781,
+      "depth": 4,
+      "type": 3,
+      "colors": 16,
+      "alpha": 0,
+      "scale": 1,
+      "area": 262144,
+      "y": [
+        130922,
+        145904
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "P16",
+      "level": 6,
+      "density": 0.35115814208984375,
+      "payload": 0.3506660461425781,
+      "depth": 4,
+      "type": 3,
+      "colors": 16,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 589824,
+      "y": [
+        202909,
+        875247
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "P16",
+      "level": 9,
+      "density": 0.3493614196777344,
+      "payload": 0.34886932373046875,
+      "depth": 4,
+      "type": 3,
+      "colors": 16,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 16384,
+      "y": [
+        7392,
+        35879
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "P16",
+      "level": 9,
+      "density": 0.3493614196777344,
+      "payload": 0.34886932373046875,
+      "depth": 4,
+      "type": 3,
+      "colors": 16,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 65536,
+      "y": [
+        27133,
+        133811
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "P16",
+      "level": 9,
+      "density": 0.3493614196777344,
+      "payload": 0.34886932373046875,
+      "depth": 4,
+      "type": 3,
+      "colors": 16,
+      "alpha": 0,
+      "scale": 1,
+      "area": 262144,
+      "y": [
+        130922,
+        145904
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "P16",
+      "level": 9,
+      "density": 0.3493614196777344,
+      "payload": 0.34886932373046875,
+      "depth": 4,
+      "type": 3,
+      "colors": 16,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 589824,
+      "y": [
+        202909,
+        875247
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "P256",
+      "level": 1,
+      "density": 0.7911300659179688,
+      "payload": 0.7877998352050781,
+      "depth": 8,
+      "type": 3,
+      "colors": 256,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 16384,
+      "y": [
+        7639,
+        38239
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "P256",
+      "level": 1,
+      "density": 0.7911300659179688,
+      "payload": 0.7877998352050781,
+      "depth": 8,
+      "type": 3,
+      "colors": 256,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 65536,
+      "y": [
+        27915,
+        150533
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "P256",
+      "level": 1,
+      "density": 0.7911300659179688,
+      "payload": 0.7877998352050781,
+      "depth": 8,
+      "type": 3,
+      "colors": 256,
+      "alpha": 0,
+      "scale": 1,
+      "area": 262144,
+      "y": [
+        135278,
+        485686
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "P256",
+      "level": 1,
+      "density": 0.7911300659179688,
+      "payload": 0.7877998352050781,
+      "depth": 8,
+      "type": 3,
+      "colors": 256,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 589824,
+      "y": [
+        209555,
+        1218037
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "P256",
+      "level": 6,
+      "density": 0.8071250915527344,
+      "payload": 0.8037948608398438,
+      "depth": 8,
+      "type": 3,
+      "colors": 256,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 16384,
+      "y": [
+        7639,
+        38239
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "P256",
+      "level": 6,
+      "density": 0.8071250915527344,
+      "payload": 0.8037948608398438,
+      "depth": 8,
+      "type": 3,
+      "colors": 256,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 65536,
+      "y": [
+        27915,
+        150533
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "P256",
+      "level": 6,
+      "density": 0.8071250915527344,
+      "payload": 0.8037948608398438,
+      "depth": 8,
+      "type": 3,
+      "colors": 256,
+      "alpha": 0,
+      "scale": 1,
+      "area": 262144,
+      "y": [
+        135278,
+        485686
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "P256",
+      "level": 6,
+      "density": 0.8071250915527344,
+      "payload": 0.8037948608398438,
+      "depth": 8,
+      "type": 3,
+      "colors": 256,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 589824,
+      "y": [
+        209555,
+        1218037
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "P256",
+      "level": 9,
+      "density": 0.8070755004882812,
+      "payload": 0.8037452697753906,
+      "depth": 8,
+      "type": 3,
+      "colors": 256,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 16384,
+      "y": [
+        7639,
+        38239
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "P256",
+      "level": 9,
+      "density": 0.8070755004882812,
+      "payload": 0.8037452697753906,
+      "depth": 8,
+      "type": 3,
+      "colors": 256,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 65536,
+      "y": [
+        27915,
+        150533
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "P256",
+      "level": 9,
+      "density": 0.8070755004882812,
+      "payload": 0.8037452697753906,
+      "depth": 8,
+      "type": 3,
+      "colors": 256,
+      "alpha": 0,
+      "scale": 1,
+      "area": 262144,
+      "y": [
+        135278,
+        485686
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "P256",
+      "level": 9,
+      "density": 0.8070755004882812,
+      "payload": 0.8037452697753906,
+      "depth": 8,
+      "type": 3,
+      "colors": 256,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 589824,
+      "y": [
+        209555,
+        1218037
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "RGBA-opaque",
+      "level": 1,
+      "density": 2.8421478271484375,
+      "payload": 2.8414268493652344,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 0.25,
+      "area": 16384,
+      "y": [
+        7760,
+        38441
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "RGBA-opaque",
+      "level": 1,
+      "density": 2.8421478271484375,
+      "payload": 2.8414268493652344,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 0.5,
+      "area": 65536,
+      "y": [
+        28296,
+        151262
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "RGBA-opaque",
+      "level": 1,
+      "density": 2.8421478271484375,
+      "payload": 2.8414268493652344,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 1,
+      "area": 262144,
+      "y": [
+        137996,
+        639603
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "RGBA-opaque",
+      "level": 1,
+      "density": 2.8421478271484375,
+      "payload": 2.8414268493652344,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 1.5,
+      "area": 589824,
+      "y": [
+        210633,
+        1216031
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "RGBA-opaque",
+      "level": 6,
+      "density": 2.733837127685547,
+      "payload": 2.7331619262695312,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 0.25,
+      "area": 16384,
+      "y": [
+        7760,
+        38441
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "RGBA-opaque",
+      "level": 6,
+      "density": 2.733837127685547,
+      "payload": 2.7331619262695312,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 0.5,
+      "area": 65536,
+      "y": [
+        28296,
+        151262
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "RGBA-opaque",
+      "level": 6,
+      "density": 2.733837127685547,
+      "payload": 2.7331619262695312,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 1,
+      "area": 262144,
+      "y": [
+        137996,
+        639603
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "RGBA-opaque",
+      "level": 6,
+      "density": 2.733837127685547,
+      "payload": 2.7331619262695312,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 1.5,
+      "area": 589824,
+      "y": [
+        210633,
+        1216031
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "RGBA-opaque",
+      "level": 9,
+      "density": 2.733837127685547,
+      "payload": 2.7331619262695312,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 0.25,
+      "area": 16384,
+      "y": [
+        7760,
+        38441
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "RGBA-opaque",
+      "level": 9,
+      "density": 2.733837127685547,
+      "payload": 2.7331619262695312,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 0.5,
+      "area": 65536,
+      "y": [
+        28296,
+        151262
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "RGBA-opaque",
+      "level": 9,
+      "density": 2.733837127685547,
+      "payload": 2.7331619262695312,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 1,
+      "area": 262144,
+      "y": [
+        137996,
+        639603
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "RGBA-opaque",
+      "level": 9,
+      "density": 2.733837127685547,
+      "payload": 2.7331619262695312,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 1.5,
+      "area": 589824,
+      "y": [
+        210633,
+        1216031
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "RGBA-fade",
+      "level": 1,
+      "density": 2.976654052734375,
+      "payload": 2.975933074951172,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 0.25,
+      "area": 16384,
+      "y": [
+        5406,
+        31255
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "RGBA-fade",
+      "level": 1,
+      "density": 2.976654052734375,
+      "payload": 2.975933074951172,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 0.5,
+      "area": 65536,
+      "y": [
+        18417,
+        118817
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "RGBA-fade",
+      "level": 1,
+      "density": 2.976654052734375,
+      "payload": 2.975933074951172,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 1,
+      "area": 262144,
+      "y": [
+        86402,
+        495757
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "RGBA-fade",
+      "level": 1,
+      "density": 2.976654052734375,
+      "payload": 2.975933074951172,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 1.5,
+      "area": 589824,
+      "y": [
+        133145,
+        909674
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "RGBA-fade",
+      "level": 6,
+      "density": 2.8689422607421875,
+      "payload": 2.8682212829589844,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 0.25,
+      "area": 16384,
+      "y": [
+        5406,
+        31255
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "RGBA-fade",
+      "level": 6,
+      "density": 2.8689422607421875,
+      "payload": 2.8682212829589844,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 0.5,
+      "area": 65536,
+      "y": [
+        18417,
+        118817
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "RGBA-fade",
+      "level": 6,
+      "density": 2.8689422607421875,
+      "payload": 2.8682212829589844,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 1,
+      "area": 262144,
+      "y": [
+        86402,
+        495757
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "RGBA-fade",
+      "level": 6,
+      "density": 2.8689422607421875,
+      "payload": 2.8682212829589844,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 1.5,
+      "area": 589824,
+      "y": [
+        133145,
+        909674
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "RGBA-fade",
+      "level": 9,
+      "density": 2.8689422607421875,
+      "payload": 2.8682212829589844,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 0.25,
+      "area": 16384,
+      "y": [
+        5406,
+        31255
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "RGBA-fade",
+      "level": 9,
+      "density": 2.8689422607421875,
+      "payload": 2.8682212829589844,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 0.5,
+      "area": 65536,
+      "y": [
+        18417,
+        118817
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "RGBA-fade",
+      "level": 9,
+      "density": 2.8689422607421875,
+      "payload": 2.8682212829589844,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 1,
+      "area": 262144,
+      "y": [
+        86402,
+        495757
+      ]
+    },
+    {
+      "name": "baboon",
+      "split": "test",
+      "mode": "RGBA-fade",
+      "level": 9,
+      "density": 2.8689422607421875,
+      "payload": 2.8682212829589844,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 1.5,
+      "area": 589824,
+      "y": [
+        133145,
+        909674
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "RGB",
+      "level": 1,
+      "density": 1.4125940860215054,
+      "payload": 1.4122311827956988,
+      "depth": 8,
+      "type": 2,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 32550,
+      "y": [
+        14640,
+        68585
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "RGB",
+      "level": 1,
+      "density": 1.4125940860215054,
+      "payload": 1.4122311827956988,
+      "depth": 8,
+      "type": 2,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 130200,
+      "y": [
+        43645,
+        238119
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "RGB",
+      "level": 1,
+      "density": 1.4125940860215054,
+      "payload": 1.4122311827956988,
+      "depth": 8,
+      "type": 2,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1,
+      "area": 520800,
+      "y": [
+        112696,
+        763092
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "RGB",
+      "level": 1,
+      "density": 1.4125940860215054,
+      "payload": 1.4122311827956988,
+      "depth": 8,
+      "type": 2,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 1171800,
+      "y": [
+        205831,
+        1415287
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "RGB",
+      "level": 6,
+      "density": 1.3072215821812596,
+      "payload": 1.3068817204301075,
+      "depth": 8,
+      "type": 2,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 32550,
+      "y": [
+        14640,
+        68585
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "RGB",
+      "level": 6,
+      "density": 1.3072215821812596,
+      "payload": 1.3068817204301075,
+      "depth": 8,
+      "type": 2,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 130200,
+      "y": [
+        43645,
+        238119
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "RGB",
+      "level": 6,
+      "density": 1.3072215821812596,
+      "payload": 1.3068817204301075,
+      "depth": 8,
+      "type": 2,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1,
+      "area": 520800,
+      "y": [
+        112696,
+        763092
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "RGB",
+      "level": 6,
+      "density": 1.3072215821812596,
+      "payload": 1.3068817204301075,
+      "depth": 8,
+      "type": 2,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 1171800,
+      "y": [
+        205831,
+        1415287
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "RGB",
+      "level": 9,
+      "density": 1.2737135176651306,
+      "payload": 1.2733736559139786,
+      "depth": 8,
+      "type": 2,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 32550,
+      "y": [
+        14640,
+        68585
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "RGB",
+      "level": 9,
+      "density": 1.2737135176651306,
+      "payload": 1.2733736559139786,
+      "depth": 8,
+      "type": 2,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 130200,
+      "y": [
+        43645,
+        238119
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "RGB",
+      "level": 9,
+      "density": 1.2737135176651306,
+      "payload": 1.2733736559139786,
+      "depth": 8,
+      "type": 2,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1,
+      "area": 520800,
+      "y": [
+        112696,
+        763092
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "RGB",
+      "level": 9,
+      "density": 1.2737135176651306,
+      "payload": 1.2733736559139786,
+      "depth": 8,
+      "type": 2,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 1171800,
+      "y": [
+        205831,
+        1415287
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "L",
+      "level": 1,
+      "density": 0.5660042242703534,
+      "payload": 0.5658026113671275,
+      "depth": 8,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 32550,
+      "y": [
+        13554,
+        38154
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "L",
+      "level": 1,
+      "density": 0.5660042242703534,
+      "payload": 0.5658026113671275,
+      "depth": 8,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 130200,
+      "y": [
+        40009,
+        136471
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "L",
+      "level": 1,
+      "density": 0.5660042242703534,
+      "payload": 0.5658026113671275,
+      "depth": 8,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1,
+      "area": 520800,
+      "y": [
+        104172,
+        476077
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "L",
+      "level": 1,
+      "density": 0.5660042242703534,
+      "payload": 0.5658026113671275,
+      "depth": 8,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 1171800,
+      "y": [
+        188198,
+        832703
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "L",
+      "level": 6,
+      "density": 0.4998828725038402,
+      "payload": 0.4997043010752688,
+      "depth": 8,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 32550,
+      "y": [
+        13554,
+        38154
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "L",
+      "level": 6,
+      "density": 0.4998828725038402,
+      "payload": 0.4997043010752688,
+      "depth": 8,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 130200,
+      "y": [
+        40009,
+        136471
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "L",
+      "level": 6,
+      "density": 0.4998828725038402,
+      "payload": 0.4997043010752688,
+      "depth": 8,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1,
+      "area": 520800,
+      "y": [
+        104172,
+        476077
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "L",
+      "level": 6,
+      "density": 0.4998828725038402,
+      "payload": 0.4997043010752688,
+      "depth": 8,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 1171800,
+      "y": [
+        188198,
+        832703
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "L",
+      "level": 9,
+      "density": 0.4941705069124424,
+      "payload": 0.493991935483871,
+      "depth": 8,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 32550,
+      "y": [
+        13554,
+        38154
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "L",
+      "level": 9,
+      "density": 0.4941705069124424,
+      "payload": 0.493991935483871,
+      "depth": 8,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 130200,
+      "y": [
+        40009,
+        136471
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "L",
+      "level": 9,
+      "density": 0.4941705069124424,
+      "payload": 0.493991935483871,
+      "depth": 8,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1,
+      "area": 520800,
+      "y": [
+        104172,
+        476077
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "L",
+      "level": 9,
+      "density": 0.4941705069124424,
+      "payload": 0.493991935483871,
+      "depth": 8,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 1171800,
+      "y": [
+        188198,
+        832703
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "1",
+      "level": 1,
+      "density": 0.027538402457757297,
+      "payload": 0.027428955453149002,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 32550,
+      "y": [
+        14138,
+        20623
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "1",
+      "level": 1,
+      "density": 0.027538402457757297,
+      "payload": 0.027428955453149002,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 130200,
+      "y": [
+        37589,
+        31252
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "1",
+      "level": 1,
+      "density": 0.027538402457757297,
+      "payload": 0.027428955453149002,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1,
+      "area": 520800,
+      "y": [
+        109874,
+        21563
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "1",
+      "level": 1,
+      "density": 0.027538402457757297,
+      "payload": 0.027428955453149002,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 1171800,
+      "y": [
+        158645,
+        67211
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "1",
+      "level": 6,
+      "density": 0.022682411674347158,
+      "payload": 0.022572964669738863,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 32550,
+      "y": [
+        14138,
+        20623
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "1",
+      "level": 6,
+      "density": 0.022682411674347158,
+      "payload": 0.022572964669738863,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 130200,
+      "y": [
+        37589,
+        31252
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "1",
+      "level": 6,
+      "density": 0.022682411674347158,
+      "payload": 0.022572964669738863,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1,
+      "area": 520800,
+      "y": [
+        109874,
+        21563
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "1",
+      "level": 6,
+      "density": 0.022682411674347158,
+      "payload": 0.022572964669738863,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 1171800,
+      "y": [
+        158645,
+        67211
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "1",
+      "level": 9,
+      "density": 0.020950460829493086,
+      "payload": 0.02084101382488479,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 32550,
+      "y": [
+        14138,
+        20623
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "1",
+      "level": 9,
+      "density": 0.020950460829493086,
+      "payload": 0.02084101382488479,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 130200,
+      "y": [
+        37589,
+        31252
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "1",
+      "level": 9,
+      "density": 0.020950460829493086,
+      "payload": 0.02084101382488479,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1,
+      "area": 520800,
+      "y": [
+        109874,
+        21563
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "1",
+      "level": 9,
+      "density": 0.020950460829493086,
+      "payload": 0.02084101382488479,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 1171800,
+      "y": [
+        158645,
+        67211
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "P4",
+      "level": 1,
+      "density": 0.07102534562211982,
+      "payload": 0.07086981566820276,
+      "depth": 2,
+      "type": 3,
+      "colors": 4,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 32550,
+      "y": [
+        14277,
+        46446
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "P4",
+      "level": 1,
+      "density": 0.07102534562211982,
+      "payload": 0.07086981566820276,
+      "depth": 2,
+      "type": 3,
+      "colors": 4,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 130200,
+      "y": [
+        42041,
+        105098
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "P4",
+      "level": 1,
+      "density": 0.07102534562211982,
+      "payload": 0.07086981566820276,
+      "depth": 2,
+      "type": 3,
+      "colors": 4,
+      "alpha": 0,
+      "scale": 1,
+      "area": 520800,
+      "y": [
+        150237,
+        52429
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "P4",
+      "level": 1,
+      "density": 0.07102534562211982,
+      "payload": 0.07086981566820276,
+      "depth": 2,
+      "type": 3,
+      "colors": 4,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 1171800,
+      "y": [
+        217218,
+        203433
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "P4",
+      "level": 6,
+      "density": 0.05854454685099846,
+      "payload": 0.05838901689708141,
+      "depth": 2,
+      "type": 3,
+      "colors": 4,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 32550,
+      "y": [
+        14277,
+        46446
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "P4",
+      "level": 6,
+      "density": 0.05854454685099846,
+      "payload": 0.05838901689708141,
+      "depth": 2,
+      "type": 3,
+      "colors": 4,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 130200,
+      "y": [
+        42041,
+        105098
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "P4",
+      "level": 6,
+      "density": 0.05854454685099846,
+      "payload": 0.05838901689708141,
+      "depth": 2,
+      "type": 3,
+      "colors": 4,
+      "alpha": 0,
+      "scale": 1,
+      "area": 520800,
+      "y": [
+        150237,
+        52429
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "P4",
+      "level": 6,
+      "density": 0.05854454685099846,
+      "payload": 0.05838901689708141,
+      "depth": 2,
+      "type": 3,
+      "colors": 4,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 1171800,
+      "y": [
+        217218,
+        203433
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "P4",
+      "level": 9,
+      "density": 0.05559523809523809,
+      "payload": 0.05543970814132104,
+      "depth": 2,
+      "type": 3,
+      "colors": 4,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 32550,
+      "y": [
+        14277,
+        46446
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "P4",
+      "level": 9,
+      "density": 0.05559523809523809,
+      "payload": 0.05543970814132104,
+      "depth": 2,
+      "type": 3,
+      "colors": 4,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 130200,
+      "y": [
+        42041,
+        105098
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "P4",
+      "level": 9,
+      "density": 0.05559523809523809,
+      "payload": 0.05543970814132104,
+      "depth": 2,
+      "type": 3,
+      "colors": 4,
+      "alpha": 0,
+      "scale": 1,
+      "area": 520800,
+      "y": [
+        150237,
+        52429
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "P4",
+      "level": 9,
+      "density": 0.05559523809523809,
+      "payload": 0.05543970814132104,
+      "depth": 2,
+      "type": 3,
+      "colors": 4,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 1171800,
+      "y": [
+        217218,
+        203433
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "P16",
+      "level": 1,
+      "density": 0.2019662058371736,
+      "payload": 0.20171850998463903,
+      "depth": 4,
+      "type": 3,
+      "colors": 16,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 32550,
+      "y": [
+        14319,
+        64448
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "P16",
+      "level": 1,
+      "density": 0.2019662058371736,
+      "payload": 0.20171850998463903,
+      "depth": 4,
+      "type": 3,
+      "colors": 16,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 130200,
+      "y": [
+        43377,
+        214904
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "P16",
+      "level": 1,
+      "density": 0.2019662058371736,
+      "payload": 0.20171850998463903,
+      "depth": 4,
+      "type": 3,
+      "colors": 16,
+      "alpha": 0,
+      "scale": 1,
+      "area": 520800,
+      "y": [
+        152554,
+        165685
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "P16",
+      "level": 1,
+      "density": 0.2019662058371736,
+      "payload": 0.20171850998463903,
+      "depth": 4,
+      "type": 3,
+      "colors": 16,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 1171800,
+      "y": [
+        239808,
+        872789
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "P16",
+      "level": 6,
+      "density": 0.17111175115207372,
+      "payload": 0.17086405529953916,
+      "depth": 4,
+      "type": 3,
+      "colors": 16,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 32550,
+      "y": [
+        14319,
+        64448
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "P16",
+      "level": 6,
+      "density": 0.17111175115207372,
+      "payload": 0.17086405529953916,
+      "depth": 4,
+      "type": 3,
+      "colors": 16,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 130200,
+      "y": [
+        43377,
+        214904
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "P16",
+      "level": 6,
+      "density": 0.17111175115207372,
+      "payload": 0.17086405529953916,
+      "depth": 4,
+      "type": 3,
+      "colors": 16,
+      "alpha": 0,
+      "scale": 1,
+      "area": 520800,
+      "y": [
+        152554,
+        165685
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "P16",
+      "level": 6,
+      "density": 0.17111175115207372,
+      "payload": 0.17086405529953916,
+      "depth": 4,
+      "type": 3,
+      "colors": 16,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 1171800,
+      "y": [
+        239808,
+        872789
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "P16",
+      "level": 9,
+      "density": 0.16597926267281107,
+      "payload": 0.1657315668202765,
+      "depth": 4,
+      "type": 3,
+      "colors": 16,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 32550,
+      "y": [
+        14319,
+        64448
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "P16",
+      "level": 9,
+      "density": 0.16597926267281107,
+      "payload": 0.1657315668202765,
+      "depth": 4,
+      "type": 3,
+      "colors": 16,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 130200,
+      "y": [
+        43377,
+        214904
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "P16",
+      "level": 9,
+      "density": 0.16597926267281107,
+      "payload": 0.1657315668202765,
+      "depth": 4,
+      "type": 3,
+      "colors": 16,
+      "alpha": 0,
+      "scale": 1,
+      "area": 520800,
+      "y": [
+        152554,
+        165685
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "P16",
+      "level": 9,
+      "density": 0.16597926267281107,
+      "payload": 0.1657315668202765,
+      "depth": 4,
+      "type": 3,
+      "colors": 16,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 1171800,
+      "y": [
+        239808,
+        872789
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "P256",
+      "level": 1,
+      "density": 0.5865917818740399,
+      "payload": 0.5848924731182795,
+      "depth": 8,
+      "type": 3,
+      "colors": 256,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 32550,
+      "y": [
+        14525,
+        67966
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "P256",
+      "level": 1,
+      "density": 0.5865917818740399,
+      "payload": 0.5848924731182795,
+      "depth": 8,
+      "type": 3,
+      "colors": 256,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 130200,
+      "y": [
+        43266,
+        243815
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "P256",
+      "level": 1,
+      "density": 0.5865917818740399,
+      "payload": 0.5848924731182795,
+      "depth": 8,
+      "type": 3,
+      "colors": 256,
+      "alpha": 0,
+      "scale": 1,
+      "area": 520800,
+      "y": [
+        120313,
+        594453
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "P256",
+      "level": 1,
+      "density": 0.5865917818740399,
+      "payload": 0.5848924731182795,
+      "depth": 8,
+      "type": 3,
+      "colors": 256,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 1171800,
+      "y": [
+        215043,
+        1542355
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "P256",
+      "level": 6,
+      "density": 0.5644047619047619,
+      "payload": 0.5627054531490016,
+      "depth": 8,
+      "type": 3,
+      "colors": 256,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 32550,
+      "y": [
+        14525,
+        67966
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "P256",
+      "level": 6,
+      "density": 0.5644047619047619,
+      "payload": 0.5627054531490016,
+      "depth": 8,
+      "type": 3,
+      "colors": 256,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 130200,
+      "y": [
+        43266,
+        243815
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "P256",
+      "level": 6,
+      "density": 0.5644047619047619,
+      "payload": 0.5627054531490016,
+      "depth": 8,
+      "type": 3,
+      "colors": 256,
+      "alpha": 0,
+      "scale": 1,
+      "area": 520800,
+      "y": [
+        120313,
+        594453
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "P256",
+      "level": 6,
+      "density": 0.5644047619047619,
+      "payload": 0.5627054531490016,
+      "depth": 8,
+      "type": 3,
+      "colors": 256,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 1171800,
+      "y": [
+        215043,
+        1542355
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "P256",
+      "level": 9,
+      "density": 0.5642012288786482,
+      "payload": 0.5625019201228879,
+      "depth": 8,
+      "type": 3,
+      "colors": 256,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 32550,
+      "y": [
+        14525,
+        67966
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "P256",
+      "level": 9,
+      "density": 0.5642012288786482,
+      "payload": 0.5625019201228879,
+      "depth": 8,
+      "type": 3,
+      "colors": 256,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 130200,
+      "y": [
+        43266,
+        243815
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "P256",
+      "level": 9,
+      "density": 0.5642012288786482,
+      "payload": 0.5625019201228879,
+      "depth": 8,
+      "type": 3,
+      "colors": 256,
+      "alpha": 0,
+      "scale": 1,
+      "area": 520800,
+      "y": [
+        120313,
+        594453
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "P256",
+      "level": 9,
+      "density": 0.5642012288786482,
+      "payload": 0.5625019201228879,
+      "depth": 8,
+      "type": 3,
+      "colors": 256,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 1171800,
+      "y": [
+        215043,
+        1542355
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "RGBA-opaque",
+      "level": 1,
+      "density": 1.6111098310291858,
+      "payload": 1.610723886328725,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 0.25,
+      "area": 32550,
+      "y": [
+        14640,
+        68585
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "RGBA-opaque",
+      "level": 1,
+      "density": 1.6111098310291858,
+      "payload": 1.610723886328725,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 0.5,
+      "area": 130200,
+      "y": [
+        43645,
+        238119
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "RGBA-opaque",
+      "level": 1,
+      "density": 1.6111098310291858,
+      "payload": 1.610723886328725,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 1,
+      "area": 520800,
+      "y": [
+        112696,
+        763092
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "RGBA-opaque",
+      "level": 1,
+      "density": 1.6111098310291858,
+      "payload": 1.610723886328725,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 1.5,
+      "area": 1171800,
+      "y": [
+        205831,
+        1415287
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "RGBA-opaque",
+      "level": 6,
+      "density": 1.43926267281106,
+      "payload": 1.4388997695852535,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 0.25,
+      "area": 32550,
+      "y": [
+        14640,
+        68585
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "RGBA-opaque",
+      "level": 6,
+      "density": 1.43926267281106,
+      "payload": 1.4388997695852535,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 0.5,
+      "area": 130200,
+      "y": [
+        43645,
+        238119
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "RGBA-opaque",
+      "level": 6,
+      "density": 1.43926267281106,
+      "payload": 1.4388997695852535,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 1,
+      "area": 520800,
+      "y": [
+        112696,
+        763092
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "RGBA-opaque",
+      "level": 6,
+      "density": 1.43926267281106,
+      "payload": 1.4388997695852535,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 1.5,
+      "area": 1171800,
+      "y": [
+        205831,
+        1415287
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "RGBA-opaque",
+      "level": 9,
+      "density": 1.4032488479262673,
+      "payload": 1.402885944700461,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 0.25,
+      "area": 32550,
+      "y": [
+        14640,
+        68585
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "RGBA-opaque",
+      "level": 9,
+      "density": 1.4032488479262673,
+      "payload": 1.402885944700461,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 0.5,
+      "area": 130200,
+      "y": [
+        43645,
+        238119
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "RGBA-opaque",
+      "level": 9,
+      "density": 1.4032488479262673,
+      "payload": 1.402885944700461,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 1,
+      "area": 520800,
+      "y": [
+        112696,
+        763092
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "RGBA-opaque",
+      "level": 9,
+      "density": 1.4032488479262673,
+      "payload": 1.402885944700461,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 1.5,
+      "area": 1171800,
+      "y": [
+        205831,
+        1415287
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "RGBA-fade",
+      "level": 1,
+      "density": 1.75894777265745,
+      "payload": 1.758538786482335,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 0.25,
+      "area": 32550,
+      "y": [
+        10114,
+        54460
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "RGBA-fade",
+      "level": 1,
+      "density": 1.75894777265745,
+      "payload": 1.758538786482335,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 0.5,
+      "area": 130200,
+      "y": [
+        29154,
+        187840
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "RGBA-fade",
+      "level": 1,
+      "density": 1.75894777265745,
+      "payload": 1.758538786482335,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 1,
+      "area": 520800,
+      "y": [
+        81952,
+        618180
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "RGBA-fade",
+      "level": 1,
+      "density": 1.75894777265745,
+      "payload": 1.758538786482335,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 1.5,
+      "area": 1171800,
+      "y": [
+        141231,
+        1125602
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "RGBA-fade",
+      "level": 6,
+      "density": 1.5814535330261137,
+      "payload": 1.5810675883256529,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 0.25,
+      "area": 32550,
+      "y": [
+        10114,
+        54460
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "RGBA-fade",
+      "level": 6,
+      "density": 1.5814535330261137,
+      "payload": 1.5810675883256529,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 0.5,
+      "area": 130200,
+      "y": [
+        29154,
+        187840
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "RGBA-fade",
+      "level": 6,
+      "density": 1.5814535330261137,
+      "payload": 1.5810675883256529,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 1,
+      "area": 520800,
+      "y": [
+        81952,
+        618180
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "RGBA-fade",
+      "level": 6,
+      "density": 1.5814535330261137,
+      "payload": 1.5810675883256529,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 1.5,
+      "area": 1171800,
+      "y": [
+        141231,
+        1125602
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "RGBA-fade",
+      "level": 9,
+      "density": 1.5416743471582182,
+      "payload": 1.5412884024577573,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 0.25,
+      "area": 32550,
+      "y": [
+        10114,
+        54460
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "RGBA-fade",
+      "level": 9,
+      "density": 1.5416743471582182,
+      "payload": 1.5412884024577573,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 0.5,
+      "area": 130200,
+      "y": [
+        29154,
+        187840
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "RGBA-fade",
+      "level": 9,
+      "density": 1.5416743471582182,
+      "payload": 1.5412884024577573,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 1,
+      "area": 520800,
+      "y": [
+        81952,
+        618180
+      ]
+    },
+    {
+      "name": "building",
+      "split": "test",
+      "mode": "RGBA-fade",
+      "level": 9,
+      "density": 1.5416743471582182,
+      "payload": 1.5412884024577573,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 1.5,
+      "area": 1171800,
+      "y": [
+        141231,
+        1125602
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "RGB",
+      "level": 1,
+      "density": 1.7659016927083333,
+      "payload": 1.7653767903645834,
+      "depth": 8,
+      "type": 2,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 15360,
+      "y": [
+        5675,
+        31260
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "RGB",
+      "level": 1,
+      "density": 1.7659016927083333,
+      "payload": 1.7653767903645834,
+      "depth": 8,
+      "type": 2,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 61440,
+      "y": [
+        18210,
+        117802
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "RGB",
+      "level": 1,
+      "density": 1.7659016927083333,
+      "payload": 1.7653767903645834,
+      "depth": 8,
+      "type": 2,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1,
+      "area": 245760,
+      "y": [
+        65800,
+        429260
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "RGB",
+      "level": 1,
+      "density": 1.7659016927083333,
+      "payload": 1.7653767903645834,
+      "depth": 8,
+      "type": 2,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 552960,
+      "y": [
+        102996,
+        801590
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "RGB",
+      "level": 6,
+      "density": 1.5817097981770833,
+      "payload": 1.5812337239583334,
+      "depth": 8,
+      "type": 2,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 15360,
+      "y": [
+        5675,
+        31260
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "RGB",
+      "level": 6,
+      "density": 1.5817097981770833,
+      "payload": 1.5812337239583334,
+      "depth": 8,
+      "type": 2,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 61440,
+      "y": [
+        18210,
+        117802
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "RGB",
+      "level": 6,
+      "density": 1.5817097981770833,
+      "payload": 1.5812337239583334,
+      "depth": 8,
+      "type": 2,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1,
+      "area": 245760,
+      "y": [
+        65800,
+        429260
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "RGB",
+      "level": 6,
+      "density": 1.5817097981770833,
+      "payload": 1.5812337239583334,
+      "depth": 8,
+      "type": 2,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 552960,
+      "y": [
+        102996,
+        801590
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "RGB",
+      "level": 9,
+      "density": 1.5730224609375,
+      "payload": 1.57254638671875,
+      "depth": 8,
+      "type": 2,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 15360,
+      "y": [
+        5675,
+        31260
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "RGB",
+      "level": 9,
+      "density": 1.5730224609375,
+      "payload": 1.57254638671875,
+      "depth": 8,
+      "type": 2,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 61440,
+      "y": [
+        18210,
+        117802
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "RGB",
+      "level": 9,
+      "density": 1.5730224609375,
+      "payload": 1.57254638671875,
+      "depth": 8,
+      "type": 2,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1,
+      "area": 245760,
+      "y": [
+        65800,
+        429260
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "RGB",
+      "level": 9,
+      "density": 1.5730224609375,
+      "payload": 1.57254638671875,
+      "depth": 8,
+      "type": 2,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 552960,
+      "y": [
+        102996,
+        801590
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "L",
+      "level": 1,
+      "density": 0.5884358723958333,
+      "payload": 0.5881062825520833,
+      "depth": 8,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 15360,
+      "y": [
+        4875,
+        16037
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "L",
+      "level": 1,
+      "density": 0.5884358723958333,
+      "payload": 0.5881062825520833,
+      "depth": 8,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 61440,
+      "y": [
+        15751,
+        59031
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "L",
+      "level": 1,
+      "density": 0.5884358723958333,
+      "payload": 0.5881062825520833,
+      "depth": 8,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1,
+      "area": 245760,
+      "y": [
+        56243,
+        223454
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "L",
+      "level": 1,
+      "density": 0.5884358723958333,
+      "payload": 0.5881062825520833,
+      "depth": 8,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 552960,
+      "y": [
+        85397,
+        389218
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "L",
+      "level": 6,
+      "density": 0.5180094401041667,
+      "payload": 0.5177286783854167,
+      "depth": 8,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 15360,
+      "y": [
+        4875,
+        16037
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "L",
+      "level": 6,
+      "density": 0.5180094401041667,
+      "payload": 0.5177286783854167,
+      "depth": 8,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 61440,
+      "y": [
+        15751,
+        59031
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "L",
+      "level": 6,
+      "density": 0.5180094401041667,
+      "payload": 0.5177286783854167,
+      "depth": 8,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1,
+      "area": 245760,
+      "y": [
+        56243,
+        223454
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "L",
+      "level": 6,
+      "density": 0.5180094401041667,
+      "payload": 0.5177286783854167,
+      "depth": 8,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 552960,
+      "y": [
+        85397,
+        389218
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "L",
+      "level": 9,
+      "density": 0.51697998046875,
+      "payload": 0.51669921875,
+      "depth": 8,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 15360,
+      "y": [
+        4875,
+        16037
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "L",
+      "level": 9,
+      "density": 0.51697998046875,
+      "payload": 0.51669921875,
+      "depth": 8,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 61440,
+      "y": [
+        15751,
+        59031
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "L",
+      "level": 9,
+      "density": 0.51697998046875,
+      "payload": 0.51669921875,
+      "depth": 8,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1,
+      "area": 245760,
+      "y": [
+        56243,
+        223454
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "L",
+      "level": 9,
+      "density": 0.51697998046875,
+      "payload": 0.51669921875,
+      "depth": 8,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 552960,
+      "y": [
+        85397,
+        389218
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "1",
+      "level": 1,
+      "density": 0.03579508463541667,
+      "payload": 0.035563151041666664,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 15360,
+      "y": [
+        6293,
+        11490
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "1",
+      "level": 1,
+      "density": 0.03579508463541667,
+      "payload": 0.035563151041666664,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 61440,
+      "y": [
+        20011,
+        22109
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "1",
+      "level": 1,
+      "density": 0.03579508463541667,
+      "payload": 0.035563151041666664,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1,
+      "area": 245760,
+      "y": [
+        69048,
+        13966
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "1",
+      "level": 1,
+      "density": 0.03579508463541667,
+      "payload": 0.035563151041666664,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 552960,
+      "y": [
+        99606,
+        45104
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "1",
+      "level": 6,
+      "density": 0.03031005859375,
+      "payload": 0.030078125,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 15360,
+      "y": [
+        6293,
+        11490
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "1",
+      "level": 6,
+      "density": 0.03031005859375,
+      "payload": 0.030078125,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 61440,
+      "y": [
+        20011,
+        22109
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "1",
+      "level": 6,
+      "density": 0.03031005859375,
+      "payload": 0.030078125,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1,
+      "area": 245760,
+      "y": [
+        69048,
+        13966
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "1",
+      "level": 6,
+      "density": 0.03031005859375,
+      "payload": 0.030078125,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 552960,
+      "y": [
+        99606,
+        45104
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "1",
+      "level": 9,
+      "density": 0.02916259765625,
+      "payload": 0.0289306640625,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 15360,
+      "y": [
+        6293,
+        11490
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "1",
+      "level": 9,
+      "density": 0.02916259765625,
+      "payload": 0.0289306640625,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 61440,
+      "y": [
+        20011,
+        22109
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "1",
+      "level": 9,
+      "density": 0.02916259765625,
+      "payload": 0.0289306640625,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1,
+      "area": 245760,
+      "y": [
+        69048,
+        13966
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "1",
+      "level": 9,
+      "density": 0.02916259765625,
+      "payload": 0.0289306640625,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 552960,
+      "y": [
+        99606,
+        45104
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "P4",
+      "level": 1,
+      "density": 0.09098307291666667,
+      "payload": 0.09065348307291667,
+      "depth": 2,
+      "type": 3,
+      "colors": 4,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 15360,
+      "y": [
+        5180,
+        20635
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "P4",
+      "level": 1,
+      "density": 0.09098307291666667,
+      "payload": 0.09065348307291667,
+      "depth": 2,
+      "type": 3,
+      "colors": 4,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 61440,
+      "y": [
+        16811,
+        57027
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "P4",
+      "level": 1,
+      "density": 0.09098307291666667,
+      "payload": 0.09065348307291667,
+      "depth": 2,
+      "type": 3,
+      "colors": 4,
+      "alpha": 0,
+      "scale": 1,
+      "area": 245760,
+      "y": [
+        68394,
+        31572
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "P4",
+      "level": 1,
+      "density": 0.09098307291666667,
+      "payload": 0.09065348307291667,
+      "depth": 2,
+      "type": 3,
+      "colors": 4,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 552960,
+      "y": [
+        98237,
+        123319
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "P4",
+      "level": 6,
+      "density": 0.07645670572916667,
+      "payload": 0.07612711588541667,
+      "depth": 2,
+      "type": 3,
+      "colors": 4,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 15360,
+      "y": [
+        5180,
+        20635
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "P4",
+      "level": 6,
+      "density": 0.07645670572916667,
+      "payload": 0.07612711588541667,
+      "depth": 2,
+      "type": 3,
+      "colors": 4,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 61440,
+      "y": [
+        16811,
+        57027
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "P4",
+      "level": 6,
+      "density": 0.07645670572916667,
+      "payload": 0.07612711588541667,
+      "depth": 2,
+      "type": 3,
+      "colors": 4,
+      "alpha": 0,
+      "scale": 1,
+      "area": 245760,
+      "y": [
+        68394,
+        31572
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "P4",
+      "level": 6,
+      "density": 0.07645670572916667,
+      "payload": 0.07612711588541667,
+      "depth": 2,
+      "type": 3,
+      "colors": 4,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 552960,
+      "y": [
+        98237,
+        123319
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "P4",
+      "level": 9,
+      "density": 0.07393798828125,
+      "payload": 0.0736083984375,
+      "depth": 2,
+      "type": 3,
+      "colors": 4,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 15360,
+      "y": [
+        5180,
+        20635
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "P4",
+      "level": 9,
+      "density": 0.07393798828125,
+      "payload": 0.0736083984375,
+      "depth": 2,
+      "type": 3,
+      "colors": 4,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 61440,
+      "y": [
+        16811,
+        57027
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "P4",
+      "level": 9,
+      "density": 0.07393798828125,
+      "payload": 0.0736083984375,
+      "depth": 2,
+      "type": 3,
+      "colors": 4,
+      "alpha": 0,
+      "scale": 1,
+      "area": 245760,
+      "y": [
+        68394,
+        31572
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "P4",
+      "level": 9,
+      "density": 0.07393798828125,
+      "payload": 0.0736083984375,
+      "depth": 2,
+      "type": 3,
+      "colors": 4,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 552960,
+      "y": [
+        98237,
+        123319
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "P16",
+      "level": 1,
+      "density": 0.21553141276041668,
+      "payload": 0.21505533854166667,
+      "depth": 4,
+      "type": 3,
+      "colors": 16,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 15360,
+      "y": [
+        5701,
+        27771
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "P16",
+      "level": 1,
+      "density": 0.21553141276041668,
+      "payload": 0.21505533854166667,
+      "depth": 4,
+      "type": 3,
+      "colors": 16,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 61440,
+      "y": [
+        18510,
+        93710
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "P16",
+      "level": 1,
+      "density": 0.21553141276041668,
+      "payload": 0.21505533854166667,
+      "depth": 4,
+      "type": 3,
+      "colors": 16,
+      "alpha": 0,
+      "scale": 1,
+      "area": 245760,
+      "y": [
+        73493,
+        70393
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "P16",
+      "level": 1,
+      "density": 0.21553141276041668,
+      "payload": 0.21505533854166667,
+      "depth": 4,
+      "type": 3,
+      "colors": 16,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 552960,
+      "y": [
+        111521,
+        364062
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "P16",
+      "level": 6,
+      "density": 0.1857421875,
+      "payload": 0.18526611328125,
+      "depth": 4,
+      "type": 3,
+      "colors": 16,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 15360,
+      "y": [
+        5701,
+        27771
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "P16",
+      "level": 6,
+      "density": 0.1857421875,
+      "payload": 0.18526611328125,
+      "depth": 4,
+      "type": 3,
+      "colors": 16,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 61440,
+      "y": [
+        18510,
+        93710
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "P16",
+      "level": 6,
+      "density": 0.1857421875,
+      "payload": 0.18526611328125,
+      "depth": 4,
+      "type": 3,
+      "colors": 16,
+      "alpha": 0,
+      "scale": 1,
+      "area": 245760,
+      "y": [
+        73493,
+        70393
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "P16",
+      "level": 6,
+      "density": 0.1857421875,
+      "payload": 0.18526611328125,
+      "depth": 4,
+      "type": 3,
+      "colors": 16,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 552960,
+      "y": [
+        111521,
+        364062
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "P16",
+      "level": 9,
+      "density": 0.18208821614583334,
+      "payload": 0.18161214192708333,
+      "depth": 4,
+      "type": 3,
+      "colors": 16,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 15360,
+      "y": [
+        5701,
+        27771
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "P16",
+      "level": 9,
+      "density": 0.18208821614583334,
+      "payload": 0.18161214192708333,
+      "depth": 4,
+      "type": 3,
+      "colors": 16,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 61440,
+      "y": [
+        18510,
+        93710
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "P16",
+      "level": 9,
+      "density": 0.18208821614583334,
+      "payload": 0.18161214192708333,
+      "depth": 4,
+      "type": 3,
+      "colors": 16,
+      "alpha": 0,
+      "scale": 1,
+      "area": 245760,
+      "y": [
+        73493,
+        70393
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "P16",
+      "level": 9,
+      "density": 0.18208821614583334,
+      "payload": 0.18161214192708333,
+      "depth": 4,
+      "type": 3,
+      "colors": 16,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 552960,
+      "y": [
+        111521,
+        364062
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "P256",
+      "level": 1,
+      "density": 0.5593343098958333,
+      "payload": 0.5558308919270833,
+      "depth": 8,
+      "type": 3,
+      "colors": 256,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 15360,
+      "y": [
+        5631,
+        30816
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "P256",
+      "level": 1,
+      "density": 0.5593343098958333,
+      "payload": 0.5558308919270833,
+      "depth": 8,
+      "type": 3,
+      "colors": 256,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 61440,
+      "y": [
+        18223,
+        115705
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "P256",
+      "level": 1,
+      "density": 0.5593343098958333,
+      "payload": 0.5558308919270833,
+      "depth": 8,
+      "type": 3,
+      "colors": 256,
+      "alpha": 0,
+      "scale": 1,
+      "area": 245760,
+      "y": [
+        66620,
+        253679
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "P256",
+      "level": 1,
+      "density": 0.5593343098958333,
+      "payload": 0.5558308919270833,
+      "depth": 8,
+      "type": 3,
+      "colors": 256,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 552960,
+      "y": [
+        108191,
+        766059
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "P256",
+      "level": 6,
+      "density": 0.5348592122395833,
+      "payload": 0.5314046223958333,
+      "depth": 8,
+      "type": 3,
+      "colors": 256,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 15360,
+      "y": [
+        5631,
+        30816
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "P256",
+      "level": 6,
+      "density": 0.5348592122395833,
+      "payload": 0.5314046223958333,
+      "depth": 8,
+      "type": 3,
+      "colors": 256,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 61440,
+      "y": [
+        18223,
+        115705
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "P256",
+      "level": 6,
+      "density": 0.5348592122395833,
+      "payload": 0.5314046223958333,
+      "depth": 8,
+      "type": 3,
+      "colors": 256,
+      "alpha": 0,
+      "scale": 1,
+      "area": 245760,
+      "y": [
+        66620,
+        253679
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "P256",
+      "level": 6,
+      "density": 0.5348592122395833,
+      "payload": 0.5314046223958333,
+      "depth": 8,
+      "type": 3,
+      "colors": 256,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 552960,
+      "y": [
+        108191,
+        766059
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "P256",
+      "level": 9,
+      "density": 0.5345743815104167,
+      "payload": 0.5311197916666667,
+      "depth": 8,
+      "type": 3,
+      "colors": 256,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 15360,
+      "y": [
+        5631,
+        30816
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "P256",
+      "level": 9,
+      "density": 0.5345743815104167,
+      "payload": 0.5311197916666667,
+      "depth": 8,
+      "type": 3,
+      "colors": 256,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 61440,
+      "y": [
+        18223,
+        115705
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "P256",
+      "level": 9,
+      "density": 0.5345743815104167,
+      "payload": 0.5311197916666667,
+      "depth": 8,
+      "type": 3,
+      "colors": 256,
+      "alpha": 0,
+      "scale": 1,
+      "area": 245760,
+      "y": [
+        66620,
+        253679
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "P256",
+      "level": 9,
+      "density": 0.5345743815104167,
+      "payload": 0.5311197916666667,
+      "depth": 8,
+      "type": 3,
+      "colors": 256,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 552960,
+      "y": [
+        108191,
+        766059
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "RGBA-opaque",
+      "level": 1,
+      "density": 2.08411865234375,
+      "payload": 2.083544921875,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 0.25,
+      "area": 15360,
+      "y": [
+        5675,
+        31260
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "RGBA-opaque",
+      "level": 1,
+      "density": 2.08411865234375,
+      "payload": 2.083544921875,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 0.5,
+      "area": 61440,
+      "y": [
+        18210,
+        117802
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "RGBA-opaque",
+      "level": 1,
+      "density": 2.08411865234375,
+      "payload": 2.083544921875,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 1,
+      "area": 245760,
+      "y": [
+        65800,
+        429260
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "RGBA-opaque",
+      "level": 1,
+      "density": 2.08411865234375,
+      "payload": 2.083544921875,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 1.5,
+      "area": 552960,
+      "y": [
+        102996,
+        801590
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "RGBA-opaque",
+      "level": 6,
+      "density": 1.8158406575520833,
+      "payload": 1.8153157552083334,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 0.25,
+      "area": 15360,
+      "y": [
+        5675,
+        31260
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "RGBA-opaque",
+      "level": 6,
+      "density": 1.8158406575520833,
+      "payload": 1.8153157552083334,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 0.5,
+      "area": 61440,
+      "y": [
+        18210,
+        117802
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "RGBA-opaque",
+      "level": 6,
+      "density": 1.8158406575520833,
+      "payload": 1.8153157552083334,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 1,
+      "area": 245760,
+      "y": [
+        65800,
+        429260
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "RGBA-opaque",
+      "level": 6,
+      "density": 1.8158406575520833,
+      "payload": 1.8153157552083334,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 1.5,
+      "area": 552960,
+      "y": [
+        102996,
+        801590
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "RGBA-opaque",
+      "level": 9,
+      "density": 1.8024332682291666,
+      "payload": 1.8019083658854167,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 0.25,
+      "area": 15360,
+      "y": [
+        5675,
+        31260
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "RGBA-opaque",
+      "level": 9,
+      "density": 1.8024332682291666,
+      "payload": 1.8019083658854167,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 0.5,
+      "area": 61440,
+      "y": [
+        18210,
+        117802
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "RGBA-opaque",
+      "level": 9,
+      "density": 1.8024332682291666,
+      "payload": 1.8019083658854167,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 1,
+      "area": 245760,
+      "y": [
+        65800,
+        429260
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "RGBA-opaque",
+      "level": 9,
+      "density": 1.8024332682291666,
+      "payload": 1.8019083658854167,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 1.5,
+      "area": 552960,
+      "y": [
+        102996,
+        801590
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "RGBA-fade",
+      "level": 1,
+      "density": 2.1764119466145835,
+      "payload": 2.175789388020833,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 0.25,
+      "area": 15360,
+      "y": [
+        4253,
+        25269
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "RGBA-fade",
+      "level": 1,
+      "density": 2.1764119466145835,
+      "payload": 2.175789388020833,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 0.5,
+      "area": 61440,
+      "y": [
+        13099,
+        92003
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "RGBA-fade",
+      "level": 1,
+      "density": 2.1764119466145835,
+      "payload": 2.175789388020833,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 1,
+      "area": 245760,
+      "y": [
+        46027,
+        337610
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "RGBA-fade",
+      "level": 1,
+      "density": 2.1764119466145835,
+      "payload": 2.175789388020833,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 1.5,
+      "area": 552960,
+      "y": [
+        73862,
+        623384
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "RGBA-fade",
+      "level": 6,
+      "density": 1.9156982421875,
+      "payload": 1.91512451171875,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 0.25,
+      "area": 15360,
+      "y": [
+        4253,
+        25269
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "RGBA-fade",
+      "level": 6,
+      "density": 1.9156982421875,
+      "payload": 1.91512451171875,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 0.5,
+      "area": 61440,
+      "y": [
+        13099,
+        92003
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "RGBA-fade",
+      "level": 6,
+      "density": 1.9156982421875,
+      "payload": 1.91512451171875,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 1,
+      "area": 245760,
+      "y": [
+        46027,
+        337610
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "RGBA-fade",
+      "level": 6,
+      "density": 1.9156982421875,
+      "payload": 1.91512451171875,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 1.5,
+      "area": 552960,
+      "y": [
+        73862,
+        623384
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "RGBA-fade",
+      "level": 9,
+      "density": 1.9049397786458333,
+      "payload": 1.9043660481770834,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 0.25,
+      "area": 15360,
+      "y": [
+        4253,
+        25269
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "RGBA-fade",
+      "level": 9,
+      "density": 1.9049397786458333,
+      "payload": 1.9043660481770834,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 0.5,
+      "area": 61440,
+      "y": [
+        13099,
+        92003
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "RGBA-fade",
+      "level": 9,
+      "density": 1.9049397786458333,
+      "payload": 1.9043660481770834,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 1,
+      "area": 245760,
+      "y": [
+        46027,
+        337610
+      ]
+    },
+    {
+      "name": "fruits",
+      "split": "test",
+      "mode": "RGBA-fade",
+      "level": 9,
+      "density": 1.9049397786458333,
+      "payload": 1.9043660481770834,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 1.5,
+      "area": 552960,
+      "y": [
+        73862,
+        623384
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "RGB",
+      "level": 1,
+      "density": 1.97705078125,
+      "payload": 1.97357177734375,
+      "depth": 8,
+      "type": 2,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 1024,
+      "y": [
+        1263,
+        2651
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "RGB",
+      "level": 1,
+      "density": 1.97705078125,
+      "payload": 1.97357177734375,
+      "depth": 8,
+      "type": 2,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 4096,
+      "y": [
+        2614,
+        9212
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "RGB",
+      "level": 1,
+      "density": 1.97705078125,
+      "payload": 1.97357177734375,
+      "depth": 8,
+      "type": 2,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1,
+      "area": 16384,
+      "y": [
+        7134,
+        33030
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "RGB",
+      "level": 1,
+      "density": 1.97705078125,
+      "payload": 1.97357177734375,
+      "depth": 8,
+      "type": 2,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 36864,
+      "y": [
+        10792,
+        63502
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "RGB",
+      "level": 6,
+      "density": 1.85089111328125,
+      "payload": 1.847412109375,
+      "depth": 8,
+      "type": 2,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 1024,
+      "y": [
+        1263,
+        2651
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "RGB",
+      "level": 6,
+      "density": 1.85089111328125,
+      "payload": 1.847412109375,
+      "depth": 8,
+      "type": 2,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 4096,
+      "y": [
+        2614,
+        9212
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "RGB",
+      "level": 6,
+      "density": 1.85089111328125,
+      "payload": 1.847412109375,
+      "depth": 8,
+      "type": 2,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1,
+      "area": 16384,
+      "y": [
+        7134,
+        33030
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "RGB",
+      "level": 6,
+      "density": 1.85089111328125,
+      "payload": 1.847412109375,
+      "depth": 8,
+      "type": 2,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 36864,
+      "y": [
+        10792,
+        63502
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "RGB",
+      "level": 9,
+      "density": 1.84063720703125,
+      "payload": 1.837158203125,
+      "depth": 8,
+      "type": 2,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 1024,
+      "y": [
+        1263,
+        2651
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "RGB",
+      "level": 9,
+      "density": 1.84063720703125,
+      "payload": 1.837158203125,
+      "depth": 8,
+      "type": 2,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 4096,
+      "y": [
+        2614,
+        9212
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "RGB",
+      "level": 9,
+      "density": 1.84063720703125,
+      "payload": 1.837158203125,
+      "depth": 8,
+      "type": 2,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1,
+      "area": 16384,
+      "y": [
+        7134,
+        33030
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "RGB",
+      "level": 9,
+      "density": 1.84063720703125,
+      "payload": 1.837158203125,
+      "depth": 8,
+      "type": 2,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 36864,
+      "y": [
+        10792,
+        63502
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "L",
+      "level": 1,
+      "density": 0.69097900390625,
+      "payload": 0.6875,
+      "depth": 8,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 1024,
+      "y": [
+        1165,
+        1744
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "L",
+      "level": 1,
+      "density": 0.69097900390625,
+      "payload": 0.6875,
+      "depth": 8,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 4096,
+      "y": [
+        2314,
+        5239
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "L",
+      "level": 1,
+      "density": 0.69097900390625,
+      "payload": 0.6875,
+      "depth": 8,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1,
+      "area": 16384,
+      "y": [
+        6249,
+        18724
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "L",
+      "level": 1,
+      "density": 0.69097900390625,
+      "payload": 0.6875,
+      "depth": 8,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 36864,
+      "y": [
+        9388,
+        33859
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "L",
+      "level": 6,
+      "density": 0.63995361328125,
+      "payload": 0.636474609375,
+      "depth": 8,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 1024,
+      "y": [
+        1165,
+        1744
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "L",
+      "level": 6,
+      "density": 0.63995361328125,
+      "payload": 0.636474609375,
+      "depth": 8,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 4096,
+      "y": [
+        2314,
+        5239
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "L",
+      "level": 6,
+      "density": 0.63995361328125,
+      "payload": 0.636474609375,
+      "depth": 8,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1,
+      "area": 16384,
+      "y": [
+        6249,
+        18724
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "L",
+      "level": 6,
+      "density": 0.63995361328125,
+      "payload": 0.636474609375,
+      "depth": 8,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 36864,
+      "y": [
+        9388,
+        33859
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "L",
+      "level": 9,
+      "density": 0.639404296875,
+      "payload": 0.63592529296875,
+      "depth": 8,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 1024,
+      "y": [
+        1165,
+        1744
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "L",
+      "level": 9,
+      "density": 0.639404296875,
+      "payload": 0.63592529296875,
+      "depth": 8,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 4096,
+      "y": [
+        2314,
+        5239
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "L",
+      "level": 9,
+      "density": 0.639404296875,
+      "payload": 0.63592529296875,
+      "depth": 8,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1,
+      "area": 16384,
+      "y": [
+        6249,
+        18724
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "L",
+      "level": 9,
+      "density": 0.639404296875,
+      "payload": 0.63592529296875,
+      "depth": 8,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 36864,
+      "y": [
+        9388,
+        33859
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "1",
+      "level": 1,
+      "density": 0.066650390625,
+      "payload": 0.06317138671875,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 1024,
+      "y": [
+        1272,
+        1640
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "1",
+      "level": 1,
+      "density": 0.066650390625,
+      "payload": 0.06317138671875,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 4096,
+      "y": [
+        2763,
+        3063
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "1",
+      "level": 1,
+      "density": 0.066650390625,
+      "payload": 0.06317138671875,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1,
+      "area": 16384,
+      "y": [
+        8466,
+        1795
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "1",
+      "level": 1,
+      "density": 0.066650390625,
+      "payload": 0.06317138671875,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 36864,
+      "y": [
+        11624,
+        5870
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "1",
+      "level": 6,
+      "density": 0.059326171875,
+      "payload": 0.05584716796875,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 1024,
+      "y": [
+        1272,
+        1640
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "1",
+      "level": 6,
+      "density": 0.059326171875,
+      "payload": 0.05584716796875,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 4096,
+      "y": [
+        2763,
+        3063
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "1",
+      "level": 6,
+      "density": 0.059326171875,
+      "payload": 0.05584716796875,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1,
+      "area": 16384,
+      "y": [
+        8466,
+        1795
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "1",
+      "level": 6,
+      "density": 0.059326171875,
+      "payload": 0.05584716796875,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 36864,
+      "y": [
+        11624,
+        5870
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "1",
+      "level": 9,
+      "density": 0.0589599609375,
+      "payload": 0.05548095703125,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 1024,
+      "y": [
+        1272,
+        1640
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "1",
+      "level": 9,
+      "density": 0.0589599609375,
+      "payload": 0.05548095703125,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 4096,
+      "y": [
+        2763,
+        3063
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "1",
+      "level": 9,
+      "density": 0.0589599609375,
+      "payload": 0.05548095703125,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1,
+      "area": 16384,
+      "y": [
+        8466,
+        1795
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "1",
+      "level": 9,
+      "density": 0.0589599609375,
+      "payload": 0.05548095703125,
+      "depth": 1,
+      "type": 0,
+      "colors": 0,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 36864,
+      "y": [
+        11624,
+        5870
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "P4",
+      "level": 1,
+      "density": 0.13818359375,
+      "payload": 0.13323974609375,
+      "depth": 2,
+      "type": 3,
+      "colors": 4,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 1024,
+      "y": [
+        1160,
+        2254
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "P4",
+      "level": 1,
+      "density": 0.13818359375,
+      "payload": 0.13323974609375,
+      "depth": 2,
+      "type": 3,
+      "colors": 4,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 4096,
+      "y": [
+        2339,
+        6646
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "P4",
+      "level": 1,
+      "density": 0.13818359375,
+      "payload": 0.13323974609375,
+      "depth": 2,
+      "type": 3,
+      "colors": 4,
+      "alpha": 0,
+      "scale": 1,
+      "area": 16384,
+      "y": [
+        7132,
+        3767
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "P4",
+      "level": 1,
+      "density": 0.13818359375,
+      "payload": 0.13323974609375,
+      "depth": 2,
+      "type": 3,
+      "colors": 4,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 36864,
+      "y": [
+        10143,
+        18309
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "P4",
+      "level": 6,
+      "density": 0.1246337890625,
+      "payload": 0.11968994140625,
+      "depth": 2,
+      "type": 3,
+      "colors": 4,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 1024,
+      "y": [
+        1160,
+        2254
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "P4",
+      "level": 6,
+      "density": 0.1246337890625,
+      "payload": 0.11968994140625,
+      "depth": 2,
+      "type": 3,
+      "colors": 4,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 4096,
+      "y": [
+        2339,
+        6646
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "P4",
+      "level": 6,
+      "density": 0.1246337890625,
+      "payload": 0.11968994140625,
+      "depth": 2,
+      "type": 3,
+      "colors": 4,
+      "alpha": 0,
+      "scale": 1,
+      "area": 16384,
+      "y": [
+        7132,
+        3767
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "P4",
+      "level": 6,
+      "density": 0.1246337890625,
+      "payload": 0.11968994140625,
+      "depth": 2,
+      "type": 3,
+      "colors": 4,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 36864,
+      "y": [
+        10143,
+        18309
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "P4",
+      "level": 9,
+      "density": 0.12408447265625,
+      "payload": 0.119140625,
+      "depth": 2,
+      "type": 3,
+      "colors": 4,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 1024,
+      "y": [
+        1160,
+        2254
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "P4",
+      "level": 9,
+      "density": 0.12408447265625,
+      "payload": 0.119140625,
+      "depth": 2,
+      "type": 3,
+      "colors": 4,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 4096,
+      "y": [
+        2339,
+        6646
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "P4",
+      "level": 9,
+      "density": 0.12408447265625,
+      "payload": 0.119140625,
+      "depth": 2,
+      "type": 3,
+      "colors": 4,
+      "alpha": 0,
+      "scale": 1,
+      "area": 16384,
+      "y": [
+        7132,
+        3767
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "P4",
+      "level": 9,
+      "density": 0.12408447265625,
+      "payload": 0.119140625,
+      "depth": 2,
+      "type": 3,
+      "colors": 4,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 36864,
+      "y": [
+        10143,
+        18309
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "P16",
+      "level": 1,
+      "density": 0.2822265625,
+      "payload": 0.27508544921875,
+      "depth": 4,
+      "type": 3,
+      "colors": 16,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 1024,
+      "y": [
+        1255,
+        2451
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "P16",
+      "level": 1,
+      "density": 0.2822265625,
+      "payload": 0.27508544921875,
+      "depth": 4,
+      "type": 3,
+      "colors": 16,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 4096,
+      "y": [
+        2586,
+        7742
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "P16",
+      "level": 1,
+      "density": 0.2822265625,
+      "payload": 0.27508544921875,
+      "depth": 4,
+      "type": 3,
+      "colors": 16,
+      "alpha": 0,
+      "scale": 1,
+      "area": 16384,
+      "y": [
+        7668,
+        7952
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "P16",
+      "level": 1,
+      "density": 0.2822265625,
+      "payload": 0.27508544921875,
+      "depth": 4,
+      "type": 3,
+      "colors": 16,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 36864,
+      "y": [
+        11021,
+        37464
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "P16",
+      "level": 6,
+      "density": 0.254638671875,
+      "payload": 0.24749755859375,
+      "depth": 4,
+      "type": 3,
+      "colors": 16,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 1024,
+      "y": [
+        1255,
+        2451
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "P16",
+      "level": 6,
+      "density": 0.254638671875,
+      "payload": 0.24749755859375,
+      "depth": 4,
+      "type": 3,
+      "colors": 16,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 4096,
+      "y": [
+        2586,
+        7742
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "P16",
+      "level": 6,
+      "density": 0.254638671875,
+      "payload": 0.24749755859375,
+      "depth": 4,
+      "type": 3,
+      "colors": 16,
+      "alpha": 0,
+      "scale": 1,
+      "area": 16384,
+      "y": [
+        7668,
+        7952
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "P16",
+      "level": 6,
+      "density": 0.254638671875,
+      "payload": 0.24749755859375,
+      "depth": 4,
+      "type": 3,
+      "colors": 16,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 36864,
+      "y": [
+        11021,
+        37464
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "P16",
+      "level": 9,
+      "density": 0.252685546875,
+      "payload": 0.24554443359375,
+      "depth": 4,
+      "type": 3,
+      "colors": 16,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 1024,
+      "y": [
+        1255,
+        2451
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "P16",
+      "level": 9,
+      "density": 0.252685546875,
+      "payload": 0.24554443359375,
+      "depth": 4,
+      "type": 3,
+      "colors": 16,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 4096,
+      "y": [
+        2586,
+        7742
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "P16",
+      "level": 9,
+      "density": 0.252685546875,
+      "payload": 0.24554443359375,
+      "depth": 4,
+      "type": 3,
+      "colors": 16,
+      "alpha": 0,
+      "scale": 1,
+      "area": 16384,
+      "y": [
+        7668,
+        7952
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "P16",
+      "level": 9,
+      "density": 0.252685546875,
+      "payload": 0.24554443359375,
+      "depth": 4,
+      "type": 3,
+      "colors": 16,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 36864,
+      "y": [
+        11021,
+        37464
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "P256",
+      "level": 1,
+      "density": 0.831298828125,
+      "payload": 0.78021240234375,
+      "depth": 8,
+      "type": 3,
+      "colors": 256,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 1024,
+      "y": [
+        1260,
+        2619
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "P256",
+      "level": 1,
+      "density": 0.831298828125,
+      "payload": 0.78021240234375,
+      "depth": 8,
+      "type": 3,
+      "colors": 256,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 4096,
+      "y": [
+        2617,
+        9131
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "P256",
+      "level": 1,
+      "density": 0.831298828125,
+      "payload": 0.78021240234375,
+      "depth": 8,
+      "type": 3,
+      "colors": 256,
+      "alpha": 0,
+      "scale": 1,
+      "area": 16384,
+      "y": [
+        7221,
+        27619
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "P256",
+      "level": 1,
+      "density": 0.831298828125,
+      "payload": 0.78021240234375,
+      "depth": 8,
+      "type": 3,
+      "colors": 256,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 36864,
+      "y": [
+        10825,
+        62990
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "P256",
+      "level": 6,
+      "density": 0.82086181640625,
+      "payload": 0.769775390625,
+      "depth": 8,
+      "type": 3,
+      "colors": 256,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 1024,
+      "y": [
+        1260,
+        2619
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "P256",
+      "level": 6,
+      "density": 0.82086181640625,
+      "payload": 0.769775390625,
+      "depth": 8,
+      "type": 3,
+      "colors": 256,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 4096,
+      "y": [
+        2617,
+        9131
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "P256",
+      "level": 6,
+      "density": 0.82086181640625,
+      "payload": 0.769775390625,
+      "depth": 8,
+      "type": 3,
+      "colors": 256,
+      "alpha": 0,
+      "scale": 1,
+      "area": 16384,
+      "y": [
+        7221,
+        27619
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "P256",
+      "level": 6,
+      "density": 0.82086181640625,
+      "payload": 0.769775390625,
+      "depth": 8,
+      "type": 3,
+      "colors": 256,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 36864,
+      "y": [
+        10825,
+        62990
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "P256",
+      "level": 9,
+      "density": 0.82086181640625,
+      "payload": 0.769775390625,
+      "depth": 8,
+      "type": 3,
+      "colors": 256,
+      "alpha": 0,
+      "scale": 0.25,
+      "area": 1024,
+      "y": [
+        1260,
+        2619
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "P256",
+      "level": 9,
+      "density": 0.82086181640625,
+      "payload": 0.769775390625,
+      "depth": 8,
+      "type": 3,
+      "colors": 256,
+      "alpha": 0,
+      "scale": 0.5,
+      "area": 4096,
+      "y": [
+        2617,
+        9131
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "P256",
+      "level": 9,
+      "density": 0.82086181640625,
+      "payload": 0.769775390625,
+      "depth": 8,
+      "type": 3,
+      "colors": 256,
+      "alpha": 0,
+      "scale": 1,
+      "area": 16384,
+      "y": [
+        7221,
+        27619
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "P256",
+      "level": 9,
+      "density": 0.82086181640625,
+      "payload": 0.769775390625,
+      "depth": 8,
+      "type": 3,
+      "colors": 256,
+      "alpha": 0,
+      "scale": 1.5,
+      "area": 36864,
+      "y": [
+        10825,
+        62990
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "RGBA-opaque",
+      "level": 1,
+      "density": 2.2691650390625,
+      "payload": 2.26568603515625,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 0.25,
+      "area": 1024,
+      "y": [
+        1263,
+        2651
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "RGBA-opaque",
+      "level": 1,
+      "density": 2.2691650390625,
+      "payload": 2.26568603515625,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 0.5,
+      "area": 4096,
+      "y": [
+        2614,
+        9212
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "RGBA-opaque",
+      "level": 1,
+      "density": 2.2691650390625,
+      "payload": 2.26568603515625,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 1,
+      "area": 16384,
+      "y": [
+        7134,
+        33030
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "RGBA-opaque",
+      "level": 1,
+      "density": 2.2691650390625,
+      "payload": 2.26568603515625,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 1.5,
+      "area": 36864,
+      "y": [
+        10792,
+        63502
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "RGBA-opaque",
+      "level": 6,
+      "density": 2.08251953125,
+      "payload": 2.07904052734375,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 0.25,
+      "area": 1024,
+      "y": [
+        1263,
+        2651
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "RGBA-opaque",
+      "level": 6,
+      "density": 2.08251953125,
+      "payload": 2.07904052734375,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 0.5,
+      "area": 4096,
+      "y": [
+        2614,
+        9212
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "RGBA-opaque",
+      "level": 6,
+      "density": 2.08251953125,
+      "payload": 2.07904052734375,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 1,
+      "area": 16384,
+      "y": [
+        7134,
+        33030
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "RGBA-opaque",
+      "level": 6,
+      "density": 2.08251953125,
+      "payload": 2.07904052734375,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 1.5,
+      "area": 36864,
+      "y": [
+        10792,
+        63502
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "RGBA-opaque",
+      "level": 9,
+      "density": 2.06781005859375,
+      "payload": 2.0643310546875,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 0.25,
+      "area": 1024,
+      "y": [
+        1263,
+        2651
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "RGBA-opaque",
+      "level": 9,
+      "density": 2.06781005859375,
+      "payload": 2.0643310546875,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 0.5,
+      "area": 4096,
+      "y": [
+        2614,
+        9212
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "RGBA-opaque",
+      "level": 9,
+      "density": 2.06781005859375,
+      "payload": 2.0643310546875,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 1,
+      "area": 16384,
+      "y": [
+        7134,
+        33030
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "RGBA-opaque",
+      "level": 9,
+      "density": 2.06781005859375,
+      "payload": 2.0643310546875,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 1.5,
+      "area": 36864,
+      "y": [
+        10792,
+        63502
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "RGBA-fade",
+      "level": 1,
+      "density": 2.5198974609375,
+      "payload": 2.51641845703125,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 0.25,
+      "area": 1024,
+      "y": [
+        1149,
+        2463
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "RGBA-fade",
+      "level": 1,
+      "density": 2.5198974609375,
+      "payload": 2.51641845703125,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 0.5,
+      "area": 4096,
+      "y": [
+        2180,
+        8169
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "RGBA-fade",
+      "level": 1,
+      "density": 2.5198974609375,
+      "payload": 2.51641845703125,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 1,
+      "area": 16384,
+      "y": [
+        5927,
+        28522
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "RGBA-fade",
+      "level": 1,
+      "density": 2.5198974609375,
+      "payload": 2.51641845703125,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 1.5,
+      "area": 36864,
+      "y": [
+        8805,
+        53960
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "RGBA-fade",
+      "level": 6,
+      "density": 2.3079833984375,
+      "payload": 2.30450439453125,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 0.25,
+      "area": 1024,
+      "y": [
+        1149,
+        2463
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "RGBA-fade",
+      "level": 6,
+      "density": 2.3079833984375,
+      "payload": 2.30450439453125,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 0.5,
+      "area": 4096,
+      "y": [
+        2180,
+        8169
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "RGBA-fade",
+      "level": 6,
+      "density": 2.3079833984375,
+      "payload": 2.30450439453125,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 1,
+      "area": 16384,
+      "y": [
+        5927,
+        28522
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "RGBA-fade",
+      "level": 6,
+      "density": 2.3079833984375,
+      "payload": 2.30450439453125,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 1.5,
+      "area": 36864,
+      "y": [
+        8805,
+        53960
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "RGBA-fade",
+      "level": 9,
+      "density": 2.3021240234375,
+      "payload": 2.29864501953125,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 0.25,
+      "area": 1024,
+      "y": [
+        1149,
+        2463
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "RGBA-fade",
+      "level": 9,
+      "density": 2.3021240234375,
+      "payload": 2.29864501953125,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 0.5,
+      "area": 4096,
+      "y": [
+        2180,
+        8169
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "RGBA-fade",
+      "level": 9,
+      "density": 2.3021240234375,
+      "payload": 2.29864501953125,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 1,
+      "area": 16384,
+      "y": [
+        5927,
+        28522
+      ]
+    },
+    {
+      "name": "hopper",
+      "split": "test",
+      "mode": "RGBA-fade",
+      "level": 9,
+      "density": 2.3021240234375,
+      "payload": 2.29864501953125,
+      "depth": 8,
+      "type": 6,
+      "colors": 0,
+      "alpha": 1,
+      "scale": 1.5,
+      "area": 36864,
+      "y": [
+        8805,
+        53960
+      ]
+    }
+  ]
+}

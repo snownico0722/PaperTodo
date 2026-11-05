@@ -277,7 +277,7 @@ internal static class NoteImageSizeChecks
                 }
             bitmap = BitmapSource.Create(width, height, 96, 96, PixelFormats.Bgra32, null, rgba, width * 4);
         }
-        bitmap.Freeze();
+        // The conversion chain stays on this STA; only the decoded asset below is frozen.
         // Fixture setup encodes once to represent a stored asset. Prediction never encodes.
         BitmapEncoder encoder = jpeg ? new JpegBitmapEncoder { QualityLevel = quality } : new PngBitmapEncoder();
         encoder.Frames.Add(BitmapFrame.Create(bitmap));
