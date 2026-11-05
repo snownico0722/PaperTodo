@@ -15,7 +15,9 @@ internal static partial class Program
         var originalWriter = (IDurableAtomicFileWriter)writerField.GetValue(store)!;
         var original = controller.WorkspaceOptions.Normalized();
         var next = controller.WorkspaceOptions.Normalized();
-        next.Count = next.Count == 5 ? 4 : 5;
+        next.Slots = next.ContainsSlot(5)
+            ? next.SlotNumbers.Where(number => number != 5).ToList()
+            : next.SlotNumbers.Append(5).OrderBy(number => number).ToList();
         var writes = 0;
         var activeState = controller.State;
         try
@@ -29,15 +31,16 @@ internal static partial class Program
                 "main workspace configuration update failed");
             Require(writes == 1, "main workspace catalog update performed a second accepting write");
             Require(ReferenceEquals(activeState, controller.State) &&
-                    controller.WorkspaceOptions.Count == next.Count &&
-                    controller.State.Workspaces?.Count == next.Count &&
-                    J(File.ReadAllText(store.FilePath))["workspaces"]!["count"]!.GetValue<int>() == next.Count,
+                    controller.WorkspaceOptions.SlotNumbers.SequenceEqual(next.SlotNumbers) &&
+                    controller.State.Workspaces?.SlotNumbers.SequenceEqual(next.SlotNumbers) == true &&
+                    J(File.ReadAllText(store.FilePath))["workspaces"]!["slots"]!.AsArray()
+                        .Select(value => value!.GetValue<int>()).SequenceEqual(next.SlotNumbers),
                 "one-pass main configuration update did not keep disk and live state aligned");
         }
         finally
         {
             writerField.SetValue(store, originalWriter);
-            if (controller.WorkspaceOptions.Count != original.Count)
+            if (!controller.WorkspaceOptions.SlotNumbers.SequenceEqual(original.SlotNumbers))
                 Require(await controller.ChangeWorkspaceConfigurationAsync(original),
                     "main catalog fixture could not restore workspace configuration");
         }
