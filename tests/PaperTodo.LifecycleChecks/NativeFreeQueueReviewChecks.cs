@@ -384,8 +384,16 @@ internal static class NativeFreeQueueReviewChecks
             var layout = c.CaptureFreeMasterDragLayout("", EdgeCapsuleEdge.Right, currentKey)!;
             Require(c.TryBeginMasterCapsuleQueueTransfer("", EdgeCapsuleEdge.Right, bottom,
                     out var transfer, freeLayout: layout, sourceQueueKey: currentKey), "begin folded floating transfer");
+            c.PreviewFreeMasterQueueDropGhost(transfer, Point(monitor, bottom, left));
+            var ghost = Field<EdgeCapsuleQueueDropGhost>(c, "_nativeQueueDropGhost");
+            Require(Field<Window>(ghost, "_window").Opacity > 0 &&
+                    Field<StackPanel>(ghost, "_stack").Children.Count == 1,
+                "an actually folded source previews only its retained master slot");
+            Near(bottom, Field<FreeQueueSlotPreviewState>(c, "_freeMasterSlotPreview").Top,
+                "folded preview uses the same visible height as commit");
             Require(c.CommitMasterCapsuleQueueTransfer(transfer, Point(monitor, bottom, left)),
                 "folded independent drop commits");
+            c.EndFreeMasterQueueDropGhost();
             await Idle();
             currentKey = left ? "|left#long" : longKey;
             Near(bottom, Masters(c)[currentKey].AnchorTop, "folded drop uses only the visible master height");

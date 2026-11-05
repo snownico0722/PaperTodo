@@ -144,7 +144,10 @@ public sealed partial class AppController
             pointerTop - PaperLayoutDefaults.CapsuleHeight / 2, pointerTop,
             pitch, DeepCapsuleGap);
         var count = layout.Groups[0].PaperIds.Length;
-        var collapsed = IsCapsuleCollapseAllActiveForQueue(layout.QueueKey);
+        // Floating transfer temporarily retracts every source queue. Reserve
+        // its eventual landing footprint, not that transient one-master shell.
+        var collapsed = _masterCapsuleQueueTransfer is { } transfer && transfer.FreeLayout == layout
+            ? transfer.SourceWasCollapsed : IsCapsuleCollapseAllActiveForQueue(layout.QueueKey);
         // Docked movement preserves the point where the master was grabbed;
         // the floating shell is centred on the pointer, as on final release.
         var requestedTop = docked && _freeMasterDragPreview is { } preview && preview.Layout == layout
