@@ -62,6 +62,7 @@ public sealed partial class PaperWindow
         PaperTopBarShortcuts.ExternalEditor => _openMarkdownButton,
         PaperTopBarShortcuts.NewTodo => _newTodoButton,
         PaperTopBarShortcuts.NewNote => _newNoteButton,
+        PaperTopBarShortcuts.ExpandedEditor => _editorModeButton,
         _ => null
     };
 
@@ -89,6 +90,8 @@ public sealed partial class PaperWindow
     private bool ShouldShowPinnedHostButton(Button button)
     {
         var state = _controller.State;
+        if (ReferenceEquals(button, _editorModeButton))
+            return PaperTopBarShortcuts.Contains(state, _paper.Type, PaperTopBarShortcuts.ExpandedEditor);
         if (ReferenceEquals(button, _windowBindingButton))
             return PaperTopBarShortcuts.Contains(state, _paper.Type, PaperTopBarShortcuts.Association) &&
                 (state.EnableTodoPaperLinks || state.ExperimentalWindowTethering);
