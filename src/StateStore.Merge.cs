@@ -45,8 +45,10 @@ public sealed partial class StateStore
             // Normalize a detached copy for semantic comparison and for all fields whose
             // normalization is non-destructive. Keep original titles for the actual merge:
             // a disputed MaxTitleLength must not truncate text before resolution.
+            // Link validity depends on the final set of papers, not the incoming side
+            // alone. Preserve both sides' links until the user resolves delete/edit.
             var normalizedImported = CopyForReload(imported);
-            NormalizeWorkspaceDocument(normalizedImported);
+            NormalizeWorkspaceDocument(normalizedImported, deferLinkNormalization: true);
             var external = JsonSerializer.SerializeToNode(normalizedImported, JsonOptions)!.AsObject();
             var current = JsonSerializer.SerializeToNode(memory, JsonOptions)!.AsObject();
             var originalDocument = JsonNode.Parse(baselineJson, documentOptions: StateJsonReadPolicy.DocumentOptions)
@@ -59,7 +61,7 @@ public sealed partial class StateStore
             var normalizedOriginal = CopyForReload(original);
             // Compare the baseline under the same effective workspace settings as
             // the external snapshot, not dormant independent preferences.
-            NormalizeWorkspaceDocument(normalizedOriginal);
+            NormalizeWorkspaceDocument(normalizedOriginal, deferLinkNormalization: true);
             var baselineNormalizedTitles = CaptureMergeTitles(normalizedOriginal);
             var baseline = JsonSerializer.SerializeToNode(normalizedOriginal, JsonOptions)!.AsObject();
             if (JsonNode.DeepEquals(current, external))
