@@ -50,7 +50,7 @@ public sealed partial class StateStore
     public AppState Load() => Load(out _);
 
     // A healthy committed primary is authoritative. A healthy fixed backup is next.
-    // Only if both are unavailable do we consider unique, complete interrupted writes.
+    // Only if both are unavailable do we select the newest complete interrupted write.
     // Corrupt input is never rebuilt into blank data, and an uncommitted temp never
     // silently replaces an otherwise healthy primary or fixed backup.
     internal AppState Load(out bool initializedEmpty)
@@ -94,19 +94,18 @@ public sealed partial class StateStore
         var candidates = FindValidInterruptedWrites();
         if (candidates.Count > 0)
         {
-            var first = candidates[0];
-            if (candidates.Any(candidate =>
-                    !System.Text.Json.Nodes.JsonNode.DeepEquals(first.Document, candidate.Document)))
-                throw new InvalidDataException(
-                    "Several different complete interrupted-write files exist for this workspace. " +
-                    "Automatic recovery cannot safely select one; no files were overwritten.");
+            // Last-write time describes the snapshot; the orphan filename only
+            // describes when it was moved aside. Path order breaks timestamp ties.
+            var first = candidates.OrderByDescending(candidate => candidate.LastWriteTimeUtc)
+                .ThenBy(candidate => candidate.Path, StringComparer.OrdinalIgnoreCase).First();
 
             _pendingStartupRecovery = PendingStartupRecovery.FromTemporary(
                 first.Path, first.Bytes, primaryBytes,
-                candidates.Select(candidate => (candidate.Path,
+                candidates.Where(candidate => System.Text.Json.Nodes.JsonNode.DeepEquals(
+                    first.Document, candidate.Document)).Select(candidate => (candidate.Path,
                     SHA256.HashData(candidate.Bytes))).ToArray());
             NeedsStartupRecoverySave = true;
-            return first.State;
+            return ReadLoadDocument(first.Bytes);
         }
 
         // Only a genuinely new, empty workspace may initialize defaults.
@@ -114,7 +113,7 @@ public sealed partial class StateStore
         // with a blank document or force users to repair raw files by hand.
         if (primaryExists || backupExists || HasInterruptedWriteFiles())
             throw new InvalidDataException(
-                "The workspace data and its fixed backup cannot be read, and no unique " +
+                "The workspace data and its fixed backup cannot be read, and no " +
                 "complete interrupted-write file is available. Original files were not overwritten.");
 
         initializedEmpty = true;

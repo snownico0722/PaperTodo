@@ -2036,7 +2036,7 @@ PR #319 的初版把主胶囊完整材质收展后的卡死解释为终点迟到
 
 ## D-066 — 异常恢复只接受完整数据，取消重复救援副本
 
-**Status:** Accepted；冲突归档双条件保留部分 Superseded by D-067，孤立临时文件保留部分 Superseded by D-068，完整恢复等其他决定保持有效
+**Status:** Accepted；冲突归档双条件保留部分 Superseded by D-067，孤立临时文件保留部分 Superseded by D-068，临时版本选择部分 Superseded by D-069，完整恢复等其他决定保持有效
 
 ### Context
 
@@ -2100,3 +2100,23 @@ D-066 保护了未采用的完整临时文件，但健康主文件旁的孤立�
 
 - `src/StateStore.Recovery.cs`、`src/StateStore.cs`、`src/StateStore.Reload.cs`。
 - `tests/PaperTodo.DataReloadChecks/RecoveryRetentionChecks.cs`、`RecoveryCompletionChecks.cs`。
+
+
+---
+
+## D-069 — 最新完整临时版本
+
+**Status:** Accepted
+
+### Context / Decision
+
+D-066 要求所有完整临时版本一致，否则拒绝恢复。恢复目标改为找回最近可用的完整状态，接受时间顺序不是内容正确性的证明。
+
+健康主文件、健康固定备份的优先级不变。两者不可用时，从完整且通过校验的临时文件中按最后修改时间选最新一份，时间相同按路径确定；不使用孤立文件名的移开时间，不做字段拼接。恢复后仍按 D-068 清理孤立临时文件。
+
+### Why / Evidence
+
+完整数据之间的差异不能单独证明恢复不可用；拒绝全部候选会制造不必要的使用障碍。
+
+- `src/StateStore.cs`、`src/StateStore.Recovery.cs`。
+- `tests/PaperTodo.DataReloadChecks/WriteSafetyChecks.cs`。

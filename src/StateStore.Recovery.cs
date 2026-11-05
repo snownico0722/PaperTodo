@@ -80,7 +80,7 @@ public sealed partial class StateStore
     }
 
     private sealed record CompleteInterruptedWrite(
-        string Path, byte[] Bytes, JsonObject Document, AppState State);
+        string Path, byte[] Bytes, JsonObject Document, DateTime LastWriteTimeUtc);
 
     // This is full-snapshot validation, not extraction or merging. Unknown JSON
     // properties stay in Document and participate in equality comparisons.
@@ -113,8 +113,8 @@ public sealed partial class StateStore
             // A read error is not evidence of corruption. Do not guess around
             // a locked or inaccessible candidate when the authority is missing.
             var bytes = File.ReadAllBytes(path);
-            if (TryReadCompleteDocument(bytes, out var document, out var state))
-                valid.Add(new CompleteInterruptedWrite(path, bytes, document!, state!));
+            if (TryReadCompleteDocument(bytes, out var document, out _))
+                valid.Add(new CompleteInterruptedWrite(path, bytes, document!, File.GetLastWriteTimeUtc(path)));
         }
         return valid;
     }

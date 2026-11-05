@@ -64,21 +64,34 @@ internal static partial class Program
             Require(!File.Exists(orphan), "consumed orphan was left behind");
         }
 
-        using (var scope = new Scope())
+        // Selection follows the snapshot modification time, including moved
+        // orphans, rather than filenames or the order directory entries arrive.
+        foreach (var newestKind in new[] { "primary", "backup", "orphan" })
+        foreach (var number in new[] { 1, 2 })
         {
-            var aBytes = File.ReadAllBytes(scope.Store.FilePath);
-            var different = scope.Store.Load();
-            different.Papers[0].Content = "conflicting alternate temp";
-            var bBytes = Encoding.UTF8.GetBytes(scope.Store.SerializeState(different));
-            File.Delete(scope.Store.FilePath);
-            File.WriteAllBytes(scope.Store.FilePath + ".tmp", aBytes);
-            File.WriteAllBytes(scope.Store.BackupPath + ".tmp", bBytes);
-            var reader = new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared);
-            Throws<InvalidDataException>(() => reader.Load());
-            Require(!File.Exists(scope.Store.FilePath) &&
-                    File.ReadAllBytes(scope.Store.FilePath + ".tmp").SequenceEqual(aBytes) &&
-                    File.ReadAllBytes(scope.Store.BackupPath + ".tmp").SequenceEqual(bBytes),
-                "ambiguous temporary versions were silently chosen or overwritten");
+            using var scope = new Scope();
+            var store = new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared, number);
+            var paths = new[] { store.FilePath + ".tmp", store.BackupPath + ".tmp",
+                store.FilePath + ".orphaned.20990101-000000-000.tmp" };
+            var kinds = new[] { "primary", "backup", "orphan" };
+            File.WriteAllText(store.FilePath, "{broken primary");
+            var old = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            for (var index = 0; index < paths.Length; index++)
+            {
+                var alternate = NewState();
+                alternate.Papers[0].Content = kinds[index];
+                File.WriteAllText(paths[index], store.SerializeState(alternate));
+                File.SetLastWriteTimeUtc(paths[index], old.AddHours(kinds[index] == newestKind ? 2 : 1));
+            }
+            var broken = store.BackupPath + ".orphaned.20990102-000000-000.tmp";
+            File.WriteAllText(broken, "{}");
+            File.SetLastWriteTimeUtc(broken, old.AddHours(3));
+            var restored = store.Load(out var empty);
+            Require(!empty && restored.Papers[0].Content == newestKind && paths.All(File.Exists),
+                "newest complete temporary snapshot was not selected without modifying sources");
+            store.SaveJsonSync(store.SerializeState(restored), 2);
+            Require(store.Load().Papers[0].Content == newestKind && !File.Exists(paths[2]) && !File.Exists(broken),
+                "latest snapshot did not commit before orphan cleanup");
         }
         // Complete documents may differ only in whitespace or property layout.
         // That is ONE full snapshot, not two conflicting revisions, and neither
@@ -104,23 +117,26 @@ internal static partial class Program
                 "semantically equivalent temporary documents were not both retired after full restore");
         }
 
-        // Unknown properties still belong to the complete JSON document.
-        // A difference there cannot be ignored by comparing only AppState fields.
+        // Different unknown fields do not veto selection. Equal timestamps use
+        // deterministic path order, without inventing another recovery prompt.
         using (var scope = new Scope())
         {
             var first = scope.Read();
             var second = scope.Read();
             first["futureExtension"] = "revision-one";
             second["futureExtension"] = "revision-two";
+            second["papers"]![0]!["content"] = "tie winner";
             File.Delete(scope.Store.FilePath);
             File.WriteAllText(scope.Store.FilePath + ".tmp", first.ToJsonString());
             File.WriteAllText(scope.Store.BackupPath + ".tmp", second.ToJsonString());
+            var stamp = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            File.SetLastWriteTimeUtc(scope.Store.FilePath + ".tmp", stamp);
+            File.SetLastWriteTimeUtc(scope.Store.BackupPath + ".tmp", stamp);
             var recovered = new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared);
-            Throws<InvalidDataException>(() => recovered.Load());
-            Require(!File.Exists(recovered.FilePath),
-                "two full documents with different unknown properties were silently merged");
+            Require(recovered.Load().Papers[0].Content == "tie winner" && !File.Exists(recovered.FilePath),
+                "timestamp tie was inconsistent or different unknown fields blocked selection");
         }
-        Console.WriteLine("PASS unique interrupted writes auto-restore, ambiguous versions stop safely");
+        Console.WriteLine("PASS newest complete interrupted writes, invalid candidates and timestamp ties");
     }
 
     private static void ExternalEditsDoNotBlockOrdinarySaves()
