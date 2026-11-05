@@ -2935,6 +2935,7 @@ public sealed partial class PaperWindow : Window
 
         RefreshCapsuleLabel(invalidatePreview);
         RefreshPaperContextMenus();
+        _controller.RefreshExpandedEditorPaperLists();
     }
 
     private void BeginTitleEdit()
