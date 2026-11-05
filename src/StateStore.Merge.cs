@@ -113,7 +113,7 @@ public sealed partial class StateStore
     }
 
     private static Dictionary<string, string?> CaptureMergeTitles(AppState state) =>
-        state.Papers.ToDictionary(paper => paper.Id, paper => paper.Title, StringComparer.Ordinal);
+        state.Papers.ToDictionary(paper => paper.Id, paper => (string?)paper.Title, StringComparer.Ordinal);
 
     private static void RestoreRawMergeTitles(
         JsonObject document,
