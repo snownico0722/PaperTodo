@@ -4,14 +4,16 @@ using System.Windows.Media;
 
 namespace PaperTodo;
 
-// One passive, ordinary-capsule-sized silhouette reused during a drag. It indicates
-// the selected drop slot, not the height of all carried queue members. No animation
-// or independent placement model: the controller supplies the final target slot.
+// One passive, theme-aware landing stack reused during a drag. Every carried paper has
+// its own silhouette at the confirmed insertion slot; there is no animation or input.
 internal sealed class EdgeCapsuleQueueDropGhost : IDisposable
 {
     private readonly Window _window;
     private readonly Border _silhouette;
+    private readonly StackPanel _stack;
     private string _side = "";
+    private int _count = 1;
+    private double _gap;
     private bool _shown;
 
     internal EdgeCapsuleQueueDropGhost()
@@ -29,6 +31,8 @@ internal sealed class EdgeCapsuleQueueDropGhost : IDisposable
             Background = Theme.Tint(42),
             IsHitTestVisible = false
         };
+        _stack = new StackPanel { Orientation = Orientation.Vertical, IsHitTestVisible = false };
+        _stack.Children.Add(_silhouette);
         _window = new Window
         {
             ShowInTaskbar = false,
@@ -42,7 +46,7 @@ internal sealed class EdgeCapsuleQueueDropGhost : IDisposable
             Focusable = false,
             Topmost = true,
             Opacity = 0,
-            Content = _silhouette
+            Content = _stack
         };
         _window.SourceInitialized += (_, _) =>
         {
@@ -51,7 +55,8 @@ internal sealed class EdgeCapsuleQueueDropGhost : IDisposable
         };
     }
 
-    internal void ShowAt(MonitorGeometry geometry, string side, double topDip, double widthDip)
+    internal void ShowAt(MonitorGeometry geometry, string side, double topDip, double widthDip,
+        int count = 1, double gapDip = 0)
     {
         if (!double.IsFinite(topDip) || !double.IsFinite(widthDip) || widthDip <= 0)
         {
@@ -59,27 +64,50 @@ internal sealed class EdgeCapsuleQueueDropGhost : IDisposable
             return;
         }
 
-        // Match the real docked capsule: its HWND owns one 46-DIP slot while the
-        // visible pill sits inside the vertical chrome margins, flush to the wall.
+        count = Math.Max(1, count);
+        gapDip = Math.Max(0, gapDip);
+        if (count != _count || Math.Abs(gapDip - _gap) > 0.01)
+        {
+            _stack.Children.Clear();
+            for (var i = 0; i < count; i++)
+                _stack.Children.Add(i == 0 ? _silhouette : new Border
+                {
+                    Height = _silhouette.Height,
+                    BorderBrush = _silhouette.BorderBrush,
+                    Background = _silhouette.Background,
+                    BorderThickness = _silhouette.BorderThickness,
+                    CornerRadius = _silhouette.CornerRadius,
+                    IsHitTestVisible = false
+                });
+            _count = count;
+            _gap = gapDip;
+            _side = ""; // Reapply wall-facing chrome to every silhouette.
+        }
+
+        // Every ghost occupies one normal capsule pitch, including the real inter-slot gap.
         if (_side != side)
         {
             var left = side == DeepCapsuleSides.Left;
             var margin = EdgeCapsuleLayout.WindowChromeMargin;
             var radius = EdgeCapsuleLayout.CornerRadius;
-            _silhouette.Margin = left
-                ? new Thickness(0, margin, margin, margin)
-                : new Thickness(margin, margin, 0, margin);
-            _silhouette.CornerRadius = left
-                ? new CornerRadius(0, radius, radius, 0)
-                : new CornerRadius(radius, 0, 0, radius);
-            _silhouette.BorderThickness = left
-                ? new Thickness(0, 1.5, 1.5, 1.5)
-                : new Thickness(1.5, 1.5, 0, 1.5);
+            for (var i = 0; i < _stack.Children.Count; i++)
+            {
+                var pill = (Border)_stack.Children[i];
+                pill.Margin = left
+                    ? new Thickness(0, margin, margin, margin + (i < count - 1 ? gapDip : 0))
+                    : new Thickness(margin, margin, 0, margin + (i < count - 1 ? gapDip : 0));
+                pill.CornerRadius = left
+                    ? new CornerRadius(0, radius, radius, 0)
+                    : new CornerRadius(radius, 0, 0, radius);
+                pill.BorderThickness = left
+                    ? new Thickness(0, 1.5, 1.5, 1.5)
+                    : new Thickness(1.5, 1.5, 0, 1.5);
+            }
             _side = side;
         }
 
         var width = Math.Min(geometry.LocalWorkAreaDip.Width, Math.Max(34, widthDip));
-        var height = PaperLayoutDefaults.CapsuleHeight;
+        var height = count * PaperLayoutDefaults.CapsuleHeight + (count - 1) * gapDip;
         _window.Width = width;
         _window.Height = height;
         var deviceWidth = Math.Max(1, (int)Math.Round(width * geometry.DpiScaleX));

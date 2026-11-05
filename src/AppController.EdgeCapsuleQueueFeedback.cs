@@ -26,7 +26,8 @@ public sealed partial class AppController
         var ownerWidth = _windows.TryGetValue(drag.OwnerId, out var ownerWindow)
             ? ownerWindow.DeepCapsuleRestingVisibleWidth : PaperLayoutDefaults.CapsuleWidth;
         var width = collapsedTarget ? target!.Box.WidthDip : ownerWidth;
-        _nativeQueueDropGhost?.ShowAt(geometry, side, top, width);
+        _nativeQueueDropGhost?.ShowAt(geometry, side, top, width,
+            drag.CarriedIds.Length, DeepCapsuleGap);
     }
 
     // Visual-only adhesion. The solver and final release always use the physical pointer,
@@ -35,9 +36,12 @@ public sealed partial class AppController
     {
         var drag = _nativeEdgeQueueDrag;
         if (drag == null || !drag.FreeQueues || drag.OwnerId != ownerId) return requestedTop;
-        if (!drag.WholeQueue && !drag.Detached) return requestedTop; // Never delay the pointer while pulling out.
-        if (drag.Drop is not { Decision.Kind: EdgeFreeQueueDropKind.Insert } drop) return requestedTop;
         var pitch = EdgeCapsuleLayout.SlotHeight(DeepCapsuleGap);
+        if (drag.Drop is not { Decision.Kind: EdgeFreeQueueDropKind.Insert } drop)
+            return !drag.WholeQueue
+                ? EdgeCapsuleFreeQueuePolicy.SnapOutward(requestedTop, drag.SourceTopDip,
+                    drag.SourceTopDip + Math.Max(0, drag.SourceIds.Length - 1) * pitch)
+                : requestedTop;
         var target = NativeQueueGroups().FirstOrDefault(g => g.Key == drop.DestinationKey);
         var slotTop = EdgeCapsuleFreeQueuePolicy.GhostSlotTop(drop.Decision,
             target?.Box.HasMaster == true, pitch, target?.Box.Collapsed == true);
@@ -45,7 +49,6 @@ public sealed partial class AppController
             ? drag.OwnerOffsetDip - (State.UseCapsuleCollapseAll ? pitch : 0) : 0;
         var ownerTop = slotTop + offset;
         return EdgeCapsuleFreeQueuePolicy.NudgeToward(requestedTop, ownerTop,
-            drop.DestinationKey == drag.SourceKey
-                ? EdgeCapsuleFreeQueuePolicy.SourceJoinNudge : EdgeCapsuleFreeQueuePolicy.JoinNudge);
+            EdgeCapsuleFreeQueuePolicy.JoinNudge);
     }
 }

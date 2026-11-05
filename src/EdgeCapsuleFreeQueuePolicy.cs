@@ -30,8 +30,8 @@ internal static class EdgeCapsuleFreeQueuePolicy
 {
     internal const double SnapDistance = 18;
     internal const double ReleaseDistance = 30; // A held target must be pulled further away to release.
-    internal const double JoinNudge = 6;
-    internal const double SourceJoinNudge = 9; // Returning to the source snaps a little more than joining elsewhere.
+    internal const double JoinNudge = 12;
+    internal const double ExitNudge = 18; // Brief outward snap around release, never drag resistance.
     private const double TakeoverAdvantage = 6;
     private const double Epsilon = 0.1;
 
@@ -45,11 +45,6 @@ internal static class EdgeCapsuleFreeQueuePolicy
     internal static bool ShouldFloat(double horizontalDistanceDip, bool enteredAnotherMonitor) =>
         enteredAnotherMonitor || horizontalDistanceDip >= EdgeCapsuleLayout.CrossQueueDragUnlockDistance;
 
-    // A detached floating shell is centered at the pointer. Measure proximity from the
-    // visible shell edge, not just the pointer, or a visible landing can be rejected.
-    internal static double FloatingWallGap(double pointerWallDistanceDip, double floatingWidthDip) =>
-        Math.Max(0, pointerWallDistanceDip - Math.Max(0, floatingWidthDip) / 2);
-
     internal static double GhostSlotTop(EdgeFreeQueueDrop drop, bool targetHasMaster, double pitch,
         bool targetCollapsed = false) =>
         drop.Kind == EdgeFreeQueueDropKind.Insert && !targetCollapsed
@@ -59,10 +54,22 @@ internal static class EdgeCapsuleFreeQueuePolicy
     internal static double NudgeToward(double actualTop, double targetTop, double maximumDip) =>
         actualTop + Math.Clamp(targetTop - actualTop, -maximumDip, maximumDip);
 
+    // At the source's release boundary, briefly lead the pointer outward rather than
+    // pulling back against it. The lead rises and falls continuously over a wide zone;
+    // the capsule always keeps moving in the same direction as the pointer.
+    internal static double SnapOutward(double top, double first, double last)
+    {
+        var displacement = top < first ? top - first : top > last ? top - last : 0;
+        if (displacement == 0) return top;
+        var distance = Math.Abs(displacement);
+        var lead = ExitNudge - Math.Abs(distance - EdgeCapsuleLayout.CrossQueueDragUnlockDistance) / 2;
+        return lead > 0 ? top + Math.Sign(displacement) * lead : top;
+    }
+
     internal static (string Key, int Index)? FindInsertion(
         IReadOnlyList<EdgeFreeQueueBox> queues, double draggedTop, double visibleDraggedHeight,
         double pointerDistanceFromWall, double pitch, double gap, string? heldKey = null,
-        double? pointerTopDip = null)
+        double? pointerTopDip = null, bool floating = false)
     {
         (string Key, int Index)? best = null;
         (string Key, int Index)? held = null;
@@ -73,7 +80,9 @@ internal static class EdgeCapsuleFreeQueuePolicy
         {
             var isHeld = queue.Key == heldKey;
             var range = isHeld ? ReleaseDistance : SnapDistance;
-            if (queue.Slots == 0 || pointerDistanceFromWall > queue.WidthDip + range) continue;
+            // Floating drags choose the nearer wall, but may hover far from it.
+            // Horizontal distance cannot veto an otherwise valid target slot.
+            if (queue.Slots == 0 || !floating && pointerDistanceFromWall > queue.WidthDip + range) continue;
             // Collapsed queues expose only their visible master. Never hit-test the
             // invisible member slots, even if the carried queue overlaps their old span.
             var masterOnly = queue.Collapsed && queue.HasMaster;
