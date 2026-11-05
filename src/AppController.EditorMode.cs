@@ -13,7 +13,7 @@ public sealed partial class AppController
         if (IsExiting || !State.Papers.Any(p => p.Id == source.PaperId)) return;
         if (source.ExpandedEditorHostWindow is { } existing)
         {
-            existing.Activate();
+            existing.ActivateEditor();
             return;
         }
 
@@ -34,7 +34,7 @@ public sealed partial class AppController
         var alreadyOpen = _expandedEditors.FirstOrDefault(e => e.CurrentPaperId == paperId);
         if (alreadyOpen != null)
         {
-            alreadyOpen.Activate();
+            alreadyOpen.ActivateEditor();
             return;
         }
 
@@ -71,6 +71,12 @@ public sealed partial class AppController
 
     internal void UnregisterExpandedEditor(ExpandedEditorWindow editor)
         => _expandedEditors.Remove(editor);
+
+    internal void RefreshExpandedEditorPaperLists()
+    {
+        foreach (var editor in _expandedEditors.ToArray())
+            editor.CurrentPaper?.RefreshExpandedEditorPaperList();
+    }
 
     internal void CloseExpandedEditorForPaper(string id)
     {
