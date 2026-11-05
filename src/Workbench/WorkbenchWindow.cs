@@ -482,6 +482,7 @@ internal sealed partial class WorkbenchWindow : Window
                 }
                 card.Pin.Content = LockIcon(paper.Placement?.Pinned == true);
                 card.Eye.Child = EyeIcon(paper.DesktopVisible);
+                ApplyCardFold(card, paper.Placement?.Collapsed == true);
                 card.Move.Cursor = paper.Placement?.Pinned == true ? Cursors.Arrow : Cursors.SizeAll;
                 card.Binding.Text = paper.BindingTitle;
                 card.Binding.Visibility = paper.BindingTitle.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -530,6 +531,7 @@ internal sealed partial class WorkbenchWindow : Window
                     var preview = CreatePreview(paper, snapshot.Number);
                     scene.Cards.Add(paper.Id, preview); scene.Canvas.Children.Add(preview.Frame);
                     Position(preview, layout.Cards[paper.Id]);
+                    ApplyCardFold(preview, paper.Placement?.Collapsed == true);
                 }
                 ApplySceneVisibility();
                 DrawDecorations(scene);
@@ -597,7 +599,8 @@ internal sealed partial class WorkbenchWindow : Window
             {
                 if (!state.Cards.TryGetValue(pair.Key, out var placement)) state.Cards[pair.Key] = placement = new();
                 placement.X = pair.Value.X; placement.Y = pair.Value.Y;
-                placement.Width = pair.Value.Width; placement.Height = pair.Value.Height;
+                placement.Width = pair.Value.Width;
+                if (!placement.Collapsed) placement.Height = pair.Value.Height;
                 Position(scene.Cards[pair.Key], pair.Value);
             }
             scene.Layout = result; scene.Snapshot = snapshot;
@@ -641,6 +644,62 @@ internal sealed partial class WorkbenchWindow : Window
     private void UndoLayout()
     {
         UndoWorkspaceAction();
+    }
+
+    internal void CreatePaperFromMenu(string type) => CreatePaper(type, ActivePoint(ViewportCenter));
+
+    internal bool IsWorkbenchCardCollapsed(string id) =>
+        _controller.WorkbenchLayout.Cards.GetValueOrDefault(id)?.Collapsed == true;
+    internal bool IsWorkbenchCardPinned(string id) =>
+        _controller.WorkbenchLayout.Cards.GetValueOrDefault(id)?.Pinned == true;
+
+    internal void ToggleWorkbenchCardCollapsed(string id)
+    {
+        if (_closed || IsSuspended || ActiveScene is not { } scene ||
+            !scene.Cards.TryGetValue(id, out var card)) return;
+        RememberLayout();
+        var state = _controller.WorkbenchLayout.Copy();
+        if (!state.Cards.TryGetValue(id, out var placement))
+            state.Cards[id] = placement = new WorkbenchCardState
+            {
+                X = card.Bounds.X, Y = card.Bounds.Y,
+                Width = card.Bounds.Width, Height = card.Bounds.Height
+            };
+        placement.Collapsed = !placement.Collapsed;
+        StoreLayout(state);
+        SyncActiveScene();
+    }
+
+    internal void ToggleWorkbenchCardPinned(string id)
+    {
+        if (_closed || IsSuspended || ActiveScene is not { } scene ||
+            !scene.Cards.TryGetValue(id, out var card)) return;
+        RememberLayout();
+        var state = _controller.WorkbenchLayout.Copy();
+        if (!state.Cards.TryGetValue(id, out var placement))
+            state.Cards[id] = placement = new WorkbenchCardState
+            {
+                X = card.Bounds.X, Y = card.Bounds.Y,
+                Width = card.Bounds.Width, Height = card.Bounds.Height
+            };
+        placement.Pinned = !placement.Pinned;
+        StoreLayout(state);
+        SyncActiveScene();
+    }
+
+    private static void ApplyCardFold(Card card, bool collapsed)
+    {
+        card.Body.Visibility = collapsed ? Visibility.Collapsed : Visibility.Visible;
+        card.Binding.Visibility = collapsed || string.IsNullOrEmpty(card.Snapshot.BindingTitle)
+            ? Visibility.Collapsed : Visibility.Visible;
+        if (card.Footer != null)
+            card.Footer.Visibility = collapsed ? Visibility.Collapsed : Visibility.Visible;
+        card.Resize.Visibility = collapsed ? Visibility.Collapsed : Visibility.Visible;
+        var height = collapsed
+            ? WorkbenchCardState.CollapsedHeight
+            : card.Snapshot.Placement?.Height ?? card.Snapshot.Height;
+        if (Math.Abs(card.Bounds.Height - height) > .01)
+            Position(card, card.Bounds with { Height = height });
     }
 
     private void CreatePaper(string type, WorkbenchPoint? at = null)
@@ -712,6 +771,7 @@ internal sealed partial class WorkbenchWindow : Window
         var card = CreateCardShell(paper);
         var owner = _controller.WorkbenchPaperWindow(paper.Id);
         card.Lease = owner.BorrowWorkbenchBody(this, card.Body);
+        card.Frame.ContextMenu = owner.CreateWorkbenchBodyMenu();
         // Focus after an actual click, not during text selection, Todo dragging or
         // the editor's button-down. The original camera is kept for the outside click.
         Point? bodyDown = null;
@@ -759,12 +819,9 @@ internal sealed partial class WorkbenchWindow : Window
             }
             else if (e.Key == Key.Enter) { Keyboard.ClearFocus(); e.Handled = true; }
         };
-        card.Pin.Click += (_, _) =>
-        {
-            RememberLayout(); var state = _controller.WorkbenchLayout.Copy();
-            if (state.Cards.TryGetValue(paper.Id, out var placement)) placement.Pinned = !placement.Pinned;
-            StoreLayout(state); SyncActiveScene();
-        };
+        // The lock symbol indicates state; the complete action lives in the right-click menu.
+        card.Pin.IsHitTestVisible = false;
+        card.Pin.Focusable = false;
         WireCardSelection(card);
         WireConnectionDrag(card);
         WireContentDrop(card);
@@ -908,6 +965,7 @@ internal sealed partial class WorkbenchWindow : Window
         card.Resize.Template = ThumbTemplate("\u25e2");
         Grid.SetColumn(card.Resize, 1); footer.Children.Add(card.Resize);
         Grid.SetRow(footer, 3); grid.Children.Add(footer);
+        card.Footer = footer;
         card.Frame.Tag = card;
         Panel.SetZIndex(card.Frame, 2);
         Position(card, paper.Placement?.Bounds ?? new(32, 32, paper.Width, paper.Height));
@@ -1076,7 +1134,8 @@ internal sealed partial class WorkbenchWindow : Window
             if (!scene.Cards.TryGetValue(id, out var card)) continue;
             if (!state.Cards.TryGetValue(id, out var placement)) state.Cards[id] = placement = new();
             placement.X = card.Bounds.X; placement.Y = card.Bounds.Y;
-            placement.Width = card.Bounds.Width; placement.Height = card.Bounds.Height;
+            placement.Width = card.Bounds.Width;
+            if (!placement.Collapsed) placement.Height = card.Bounds.Height;
             placement.Preferred = true;
         }
         StoreLayout(state);
@@ -1210,6 +1269,7 @@ internal sealed partial class WorkbenchWindow : Window
         internal Button? MaterialOpen;
         internal string MaterialVersion = "";
         internal Border Body { get; } = new() { ClipToBounds = true };
+        internal Grid? Footer;
         internal Thumb Move { get; } = new();
         internal Thumb Resize { get; } = new();
         internal Button Pin { get; } = new();
