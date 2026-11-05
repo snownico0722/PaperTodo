@@ -74,20 +74,22 @@ internal static class NativeFreeQueuePolicyChecks
         Require(EdgeCapsuleFreeQueuePolicy.Place([], 500, 1, 900, pitch, gap).TopDip == 500,
             "empty space never changes the requested anchor");
         Require(!EdgeCapsuleFreeQueuePolicy.ShouldFloat(0, false) && !EdgeCapsuleFreeQueuePolicy.ShouldFloat(55, false) &&
-                EdgeCapsuleFreeQueuePolicy.ShouldFloat(56, false) && EdgeCapsuleFreeQueuePolicy.ShouldFloat(0, true) &&
-                !EdgeCapsuleFreeQueuePolicy.ShouldFloat(60, false, freeQueues: true) &&
-                EdgeCapsuleFreeQueuePolicy.ShouldFloat(68, false, freeQueues: true),
-            "leaving a free queue requires slightly more pull; ordinary cross-edge gestures stay unchanged");
+                EdgeCapsuleFreeQueuePolicy.ShouldFloat(56, false) && EdgeCapsuleFreeQueuePolicy.ShouldFloat(0, true),
+            "free and ordinary queues unlock without additional sticky distance");
         Require(!EdgeCapsuleFreeQueuePolicy.ShouldDetachSingle(false, 400, 400, 2, pitch) &&
                 EdgeCapsuleFreeQueuePolicy.ShouldDetachSingle(false, 300, 400, 2, pitch), "sorting and explicit detachment remain distinct");
         Require(EdgeCapsuleFreeQueuePolicy.FindInsertion([target], 325, 46, 10, pitch, gap) == null &&
                 EdgeCapsuleFreeQueuePolicy.FindInsertion([target], 325, 46, 10, pitch, gap, target.Key) is { Key: "|right#b" } &&
                 EdgeCapsuleFreeQueuePolicy.FindInsertion([target], 310, 46, 10, pitch, gap, target.Key) == null,
             "held target survives pointer jitter but releases after the larger exit threshold");
-        Require(EdgeCapsuleFreeQueuePolicy.NudgeToward(100, 120, 6) == 106 &&
-                EdgeCapsuleFreeQueuePolicy.ResistLeavingSource(395, 400, 450) > 395 &&
-                EdgeCapsuleFreeQueuePolicy.ResistLeavingSource(320, 400, 450) == 320,
-            "join has a small nudge; leaving is sticky without a release jump");
+        Require(EdgeCapsuleFreeQueuePolicy.NudgeToward(100, 120, EdgeCapsuleFreeQueuePolicy.JoinNudge) == 106 &&
+                EdgeCapsuleFreeQueuePolicy.NudgeToward(100, 120, EdgeCapsuleFreeQueuePolicy.SourceJoinNudge) == 109,
+            "a confirmed join nudges gently; returning to the original queue nudges a little more");
+        var narrowTarget = target with { WidthDip = 60 };
+        Require(EdgeCapsuleFreeQueuePolicy.FindInsertion([narrowTarget], 410, 46, 90, pitch, gap) == null &&
+                EdgeCapsuleFreeQueuePolicy.FindInsertion([narrowTarget], 410, 46,
+                    EdgeCapsuleFreeQueuePolicy.FloatingWallGap(90, 80), pitch, gap) is { Key: "|right#b" },
+            "a floating capsule can join from afar when its silhouette touches before its pointer does");
         Require(EdgeCapsuleLayout.FreeQueueTopForIndex(0, -40, new System.Windows.Rect(0, 0, 100, 900), gap) == -40,
             "free queues do not clamp anchors back into the work area");
         Require(PaperWindow.NativeQueueControlPressed(8, ModifierKeys.None, false) &&
