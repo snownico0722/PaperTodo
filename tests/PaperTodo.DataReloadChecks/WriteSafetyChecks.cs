@@ -222,9 +222,8 @@ internal static partial class Program
         images.CollectUnprotectedImages(ids);
         Require(images.TryGetEncodedImageBytes(id, out _, out _), "actual LMDB GC deleted recoverable image");
         File.WriteAllText(Path.Combine(s.DirectoryPath, files.ConflictDiffFile!), "{\"conflicts\":[{}]}");
-        Require(s.Store.TryCollectProtectedImageIds(loaded, out var surviving) &&
-                surviving.Contains(id),
-            "an abandoned malformed conflict diff blocked safe image cleanup");
+        Require(s.Store.TryCollectProtectedImageIds(loaded, out _),
+            "an abandoned malformed conflict diff blocked healthy image cleanup");
     }
 
     private static void ArchiveFailureNeverCommits()

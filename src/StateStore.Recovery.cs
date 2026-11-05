@@ -12,7 +12,7 @@ public sealed partial class StateStore
         internal string SourcePath { get; set; }
         internal byte[] SourceHash { get; }
         internal byte[]? ExpectedPrimaryHash { get; }
-        internal bool FromTemporary { get; }
+        internal bool IsTemporary { get; }
         internal List<string> EquivalentTempPaths { get; }
 
         private PendingStartupRecovery(
@@ -22,7 +22,7 @@ public sealed partial class StateStore
             SourcePath = sourcePath;
             SourceHash = SHA256.HashData(sourceBytes);
             ExpectedPrimaryHash = originalPrimary == null ? null : SHA256.HashData(originalPrimary);
-            FromTemporary = fromTemporary;
+            IsTemporary = fromTemporary;
             EquivalentTempPaths = equivalentTempPaths.ToList();
         }
 
@@ -102,7 +102,7 @@ public sealed partial class StateStore
     private void PreparePendingStartupRecoveryForSave(Action validateWrite)
     {
         var pending = _pendingStartupRecovery;
-        if (pending == null || !pending.FromTemporary) return;
+        if (pending == null || !pending.IsTemporary) return;
         var primaryTemp = FilePath + ".tmp";
         if (!string.Equals(pending.SourcePath, primaryTemp, StringComparison.OrdinalIgnoreCase))
             return;
@@ -129,7 +129,7 @@ public sealed partial class StateStore
             throw new IOException("Recovery commit could not be verified; the source was retained.");
 
         _pendingStartupRecovery = null;
-        if (!pending.FromTemporary) return; // A fixed backup remains the normal backup.
+        if (!pending.IsTemporary) return; // A fixed backup remains the normal backup.
 
         foreach (var path in pending.EquivalentTempPaths.Distinct(StringComparer.OrdinalIgnoreCase))
         {
