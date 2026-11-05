@@ -60,7 +60,9 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: note-image-export-samples
-          path: ${{ runner.temp }}/note-image-export/*.png
+          path: |
+            ${{ runner.temp }}/note-image-export/*.png
+            ${{ runner.temp }}/note-image-export/*.jpg
           if-no-files-found: ignore
 
       - name: Material and skin behavior checks
