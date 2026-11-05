@@ -125,32 +125,53 @@ internal static class NativeFreeQueueChecks
             "committed prepend exactly reproduces the old target's visible position");
         Require(!c.State.DeepCapsuleQueueStartTopMargins.ContainsKey("|right#qa"), "vacated independent anchor is removed");
 
-        // This queue has four paper slots now (a, aPeer, b, bPeer). The third may move
-        // into the fourth slot freely, but moving beyond the fourth resists detachment.
+        // Four member slots: a, aPeer, b, bPeer. Snap is to the fixed outer slot,
+        // not a continuous damping function. Both directions can snap repeatedly.
         var fourthTop = Top(bPeer);
         Require(c.BeginNativeEdgeQueueDrag(b, false, Point(Top(b)), false),
             "begin moving the third capsule in a four-member queue");
-        Require(Math.Abs(c.NativeEdgeQueueMagnetizedOwnerTop(b.Id, fourthTop) - fourthTop) < .01,
-            "moving the third capsule to the fourth slot does not magnetize it");
-        var beyondFourth = fourthTop + EdgeCapsuleLayout.CrossQueueDragUnlockDistance / 2;
-        Require(Math.Abs(c.NativeEdgeQueueMagnetizedOwnerTop(b.Id, beyondFourth) -
-                (beyondFourth - 18)) < .01,
-            "only after passing the fourth slot does a single capsule get 18 DIP of inward pull");
+        Require(c.NativeEdgeQueueMagnetizedOwnerTop(b.Id, fourthTop) == fourthTop &&
+                c.NativeEdgeQueueMagnetizedOwnerTop(b.Id, fourthTop + 7) == fourthTop &&
+                c.NativeEdgeQueueMagnetizedOwnerTop(b.Id, fourthTop + 14) == fourthTop,
+            "third to fourth is free, then a fixed bottom-slot snap starts outside the queue");
+        Require(c.NativeEdgeQueueMagnetizedOwnerTop(b.Id, fourthTop + 20) == fourthTop + 20 &&
+                c.NativeEdgeQueueMagnetizedOwnerTop(b.Id, fourthTop + 9) == fourthTop + 9 &&
+                c.NativeEdgeQueueMagnetizedOwnerTop(b.Id, fourthTop) == fourthTop &&
+                c.NativeEdgeQueueMagnetizedOwnerTop(b.Id, fourthTop + 8) == fourthTop,
+            "after 18-DIP release, inward travel is free and the next outward pull snaps again");
         c.PreviewNativeEdgeQueueDrag(b, Point(fourthTop + EdgeCapsuleLayout.CrossQueueDragUnlockDistance),
             fourthTop + EdgeCapsuleLayout.CrossQueueDragUnlockDistance, false);
+        Require(((NativeEdgeQueueDrag)Part(c, "_nativeEdgeQueueDrag")).Detached,
+            "the single-member drag transitions to detached without ending the gesture");
         Require(c.NativeEdgeQueueMagnetizedOwnerTop(b.Id,
                 fourthTop + EdgeCapsuleLayout.CrossQueueDragUnlockDistance) ==
-                fourthTop + EdgeCapsuleLayout.CrossQueueDragUnlockDistance,
-            "a detached member is no longer magnetically held and may join other queues freely");
+                fourthTop + EdgeCapsuleLayout.CrossQueueDragUnlockDistance &&
+                c.NativeEdgeQueueMagnetizedOwnerTop(b.Id, fourthTop) == fourthTop &&
+                c.NativeEdgeQueueMagnetizedOwnerTop(b.Id, fourthTop + 6) == fourthTop,
+            "even a detached drag can be rearmed by returning to the source and pulling out again");
         c.EndNativeEdgeQueueDrag(b.Id);
         await Idle();
+
         Require(c.BeginNativeEdgeQueueDrag(bPeer, false, Point(Top(bPeer)), false),
-            "begin dragging the final capsule outside a four-member queue");
+            "begin dragging the final capsule beyond the last slot");
         fourthTop = Top(bPeer);
         Require(c.NativeEdgeQueueMagnetizedOwnerTop(bPeer.Id, fourthTop) == fourthTop &&
-                c.NativeEdgeQueueMagnetizedOwnerTop(bPeer.Id, fourthTop + 16) < fourthTop + 16,
-            "the fourth capsule starts feeling inward attraction immediately after its own slot");
+                c.NativeEdgeQueueMagnetizedOwnerTop(bPeer.Id, fourthTop + 11) == fourthTop &&
+                c.NativeEdgeQueueMagnetizedOwnerTop(bPeer.Id, fourthTop + 19) == fourthTop + 19,
+            "fourth capsule snaps to the final slot and releases sharply after 18 DIP");
         c.EndNativeEdgeQueueDrag(bPeer.Id);
+        await Idle();
+
+        var firstTop = Top(a);
+        Require(c.BeginNativeEdgeQueueDrag(a, false, Point(firstTop), false),
+            "begin upward exit from the first slot");
+        Require(c.NativeEdgeQueueMagnetizedOwnerTop(a.Id, firstTop) == firstTop &&
+                c.NativeEdgeQueueMagnetizedOwnerTop(a.Id, firstTop - 9) == firstTop &&
+                c.NativeEdgeQueueMagnetizedOwnerTop(a.Id, firstTop - 19) == firstTop - 19 &&
+                c.NativeEdgeQueueMagnetizedOwnerTop(a.Id, firstTop) == firstTop &&
+                c.NativeEdgeQueueMagnetizedOwnerTop(a.Id, firstTop - 7) == firstTop,
+            "upward exit and repeated upward exit snap to the first slot, without viscous motion");
+        c.EndNativeEdgeQueueDrag(a.Id);
         await Idle();
 
         Require(c.BeginNativeEdgeQueueDrag(a, false, Point(Top(a)), false), "begin single detach");
