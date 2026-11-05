@@ -231,7 +231,8 @@ internal static class TodoVisibilityChecks
 
     private static void RequireNoteImagesSuspended(PaperWindow window, bool expected, string stage)
     {
-        var noteBox = OptionalField(window, "_noteBox");
+        var session = OptionalField(window, "_markdownBodySession");
+        var noteBox = session == null ? null : OptionalField(session, "_noteBox");
         Require(noteBox != null && (bool)Field(noteBox, "_imageRenderingSuspended") == expected,
             "Linked Note image rendering state was not restored " + stage);
     }
