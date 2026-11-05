@@ -11,6 +11,7 @@ internal sealed record WorkbenchWorkspaceSnapshot(
     IReadOnlyList<WorkbenchLayoutEdge> Edges, string? Error = null, WorkbenchState? Layout = null)
 {
     internal WorkbenchLayoutNode[] Nodes => Papers.Select(p => new WorkbenchLayoutNode(
-        p.Id, p.Width, p.Height, p.Placement?.Bounds, p.Placement?.Pinned ?? false,
+        p.Id, p.Width, p.Placement?.Collapsed == true ? WorkbenchCardState.CollapsedHeight : p.Height,
+        p.Placement?.LayoutBounds, p.Placement?.Pinned ?? false,
         p.Placement?.Preferred ?? false, p.Affinity, p.Kind)).ToArray();
 }
