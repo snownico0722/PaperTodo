@@ -84,7 +84,7 @@ internal static class Program
         Papers = [
             new() { Id = "note-a", Type = PaperTypes.Note, Title = "Research", Content = "# Workbench\nA real editable paper, not a screenshot.\n\n- Strong automatic layout\n- Stable positions\n- Shared editor", X = 100, Y = 80, Width = 360, Height = 400, IsVisible = true, IsCollapsed = false },
             new() { Id = "note-b", Type = PaperTypes.Note, Title = "Ideas", Content = "## Connections\nBuild a continuous desk without a project center.", X = 520, Y = 100, Width = 320, Height = 300, IsVisible = true, IsCollapsed = true },
-            new() { Id = "todo-a", Type = PaperTypes.Todo, Title = "Next", X = 900, Y = 100, Width = 280, Height = 340, IsVisible = false,
+            new() { Id = "todo-a", Type = PaperTypes.Todo, Title = "Next", X = 700, Y = 100, Width = 280, Height = 340, IsVisible = false,
                 Items = [new() { Id = "task-1", Text = "Test editor reuse" }, new() { Id = "task-2", Text = "Keep desktop geometry unchanged" }] }
         ]
     };
