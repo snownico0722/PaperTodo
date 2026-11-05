@@ -862,21 +862,6 @@ public sealed class NoteImageStore : IDisposable
         }
     }
 
-    // Only used when a newly imported MCP image has not been referenced by a committed note.
-    // Reserve its ID until restart so a stale reference can never resolve to a different image.
-    internal void DiscardImportedImage(string noteId, string imageId)
-    {
-        lock (_gate)
-        {
-            if (!_images.TryGetValue(imageId, out var image) ||
-                !string.Equals(image.NoteId, noteId, StringComparison.Ordinal))
-                return;
-
-            RequireDatabaseLocked().DeleteImages([imageId]);
-            RemoveImageLocked(imageId, reserveIdUntilRestart: true);
-        }
-    }
-
     /// <summary>
     /// Builds the free-id pool for this session. Pass the same protected set used for startup GC.
     /// When <paramref name="protectedImageIds"/> is null (protection scan failed or skipped),
