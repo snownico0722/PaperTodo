@@ -31,12 +31,37 @@ public sealed partial class AppController
     [System.Diagnostics.CodeAnalysis.MemberNotNull(nameof(State), nameof(_store), nameof(_imageStore))]
     private void InitializeWorkspaceState()
     {
-        _workspaceCatalog = new WorkspaceCatalog(AppContext.BaseDirectory, DurableAtomicFileWriter.Shared);
+        _workspaceCatalog = new WorkspaceCatalog(AppContext.BaseDirectory,
+            DurableAtomicFileWriter.Shared, ConfirmWorkspaceRecovery);
         _workspace = _workspaceCatalog.OpenInitial();
         _workspace.BindPersistence();
         _store = _workspace.Store;
         State = _workspace.State;
         _imageStore = new NoteImageStore(_workspace.Paths.Images);
+    }
+
+    private WorkspaceRecoveryChoice ConfirmWorkspaceRecovery(StateStore store, DateTime? timestampUtc)
+    {
+        // Startup may not have any windows or a fully constructed controller yet.
+        // Fence this store even if Windows ends the session inside the modal loop.
+        var app = Application.Current;
+        SessionEndingCancelEventHandler stopWrites = (_, _) => store.StopWritesForTermination();
+        app.SessionEnding += stopWrites;
+        try
+        {
+            var owner = _settingsWindow is { IsVisible: true } ? _settingsWindow :
+                app.Windows.OfType<Window>().FirstOrDefault(window => window.IsActive);
+            if (timestampUtc is { } timestamp)
+                return PaperNoticeDialog.ShowHistoryRecovery(owner, store.WorkspaceNumber,
+                    timestamp.ToLocalTime().ToString("g", System.Globalization.CultureInfo.CurrentCulture));
+
+            // During a switch the original session is still live. During startup,
+            // a secondary is only opened after main has loaded and committed.
+            int? fallback = _workspace != null ? _workspace.Paths.Number :
+                store.WorkspaceNumber > 1 ? 1 : null;
+            return PaperNoticeDialog.ShowUnavailableWorkspace(owner, fallback);
+        }
+        finally { app.SessionEnding -= stopWrites; }
     }
 
     private void InitializeWorkspacePluginData()
@@ -176,7 +201,7 @@ public sealed partial class AppController
         }
         catch (Exception ex)
         {
-            ReportWorkspaceError(ex.GetBaseException().Message);
+            ReportWorkspaceError(WorkspaceFailureMessage.For(ex));
         }
         finally
         {
@@ -230,6 +255,58 @@ public sealed partial class AppController
 
     private async Task<bool> SwitchWorkspaceCoreAsync(int number, WorkspaceConfiguration requested)
     {
+        while (!IsExiting)
+        {
+            try { return await SwitchWorkspaceAttemptAsync(number, requested); }
+            catch (WorkspaceRecoveryExitException)
+            {
+                // The attempted switch has rolled back and released its gates.
+                // Save and close the original workspace through normal exit.
+                Exit();
+                return false;
+            }
+            catch (OperationCanceledException) { return false; }
+            catch (Exception ex)
+            {
+                if (IsExiting) return false;
+                Trace.TraceWarning("Workspace switch failed: {0}", ex);
+                // The attempt has restored the previous owner and finished its
+                // cleanup. Keep other transitions and autosave out of the modal
+                // choice; retry begins a fresh attempt after releasing this gate.
+                _workspaceSwitching = true;
+                _saveTimer.Stop();
+                _forceSaveTimer.Stop();
+                bool? retry;
+                try
+                {
+                    RefreshWorkspaceButtons();
+                    var owner = _settingsWindow is { IsVisible: true } ? _settingsWindow :
+                        Application.Current.Windows.OfType<Window>().FirstOrDefault(window => window.IsActive);
+                    retry = PaperNoticeDialog.ShowDecision(owner,
+                        Strings.Get("WorkspaceSwitchFailed"), WorkspaceFailureMessage.For(ex),
+                        Strings.Get("WorkspaceFailureExit"), Strings.Get("WorkspaceFailureRetry"));
+                }
+                finally
+                {
+                    _workspaceSwitching = false;
+                    if (!IsExiting)
+                    {
+                        RefreshWorkspaceButtons();
+                        if (_hasPendingDirty) ArmSaveRetryIfNeeded(null);
+                    }
+                }
+                ResumeExitAfterDataReload();
+                if (IsExiting) return false;
+                if (retry == true) continue;
+                if (retry == false) Exit();
+                return false; // Escape/window close dismisses; it never implies exit.
+            }
+        }
+        return false;
+    }
+
+    private async Task<bool> SwitchWorkspaceAttemptAsync(int number, WorkspaceConfiguration requested)
+    {
         Application.Current.Dispatcher.VerifyAccess();
         var nextOptions = requested.Normalized();
         if ((number != 1 && (!nextOptions.Enabled || !nextOptions.ContainsSlot(number))) || number is < 1 or > 5) return false;
@@ -257,7 +334,7 @@ public sealed partial class AppController
         {
             // Complete/fence the source writer first. Candidate validation never overwrites it.
             CommitWorkspaceEditors();
-            if (!TrySaveNow(sync: true, workspaceBoundary: true)) return false;
+            if (!TrySaveNow(sync: true, workspaceBoundary: true, throwOnFailure: true)) return false;
             candidate = _workspaceCatalog.Open(number, nextOptions,
                 main: previous.Paths.Number == 1 ? previous.State : null);
             var needsInitialSave = candidate.Store.NeedsStartupRecoverySave;
@@ -296,7 +373,7 @@ public sealed partial class AppController
             // initializing/recovering the document or rescuing off-screen geometry.
             var targetChanged = needsInitialSave || candidate.Store.NormalizedCollapsedStateOnLoad || relocated ||
                 candidate.State.HidePapersFromTaskbar != originalHideFromTaskbar;
-            if (targetChanged && !TrySaveNow(sync: true, workspaceBoundary: true))
+            if (targetChanged && !TrySaveNow(sync: true, workspaceBoundary: true, throwOnFailure: true))
                 throw new IOException(Strings.Get("WorkspaceSaveFailed"));
             // The active slot always belongs to the main catalog. Returning to a
             // healthy main workspace updates that node alone, without resaving papers.
@@ -339,8 +416,12 @@ public sealed partial class AppController
                     Trace.TraceError("Workspace UI restoration failed: {0}", restoreError);
                 }
             }
-            ReportWorkspaceError(ex.GetBaseException().Message);
-            return committed;
+            if (committed)
+            {
+                Trace.TraceWarning("Committed workspace switch cleanup failed: {0}", ex);
+                return true;
+            }
+            throw;
         }
         finally
         {
