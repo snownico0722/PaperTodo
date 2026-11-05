@@ -2382,15 +2382,14 @@ public sealed partial class PaperWindow : Window
         _closeButton.Margin = new Thickness(AppTypography.Scale(1), -AppTypography.Scale(0.6), AppTypography.Scale(1), AppTypography.Scale(0.6));
         _closeButton.Click += (_, _) =>
         {
-            if (_isExpandedEditorMode) _expandedEditorHostWindow?.ReturnToPaper();
-            if (CanDisplayAsCapsule())
+            if (_expandedEditorHostWindow is { } host)
             {
-                SetCollapsedState(true);
+                if (CanDisplayAsCapsule()) host.CollapseCurrentPaper();
+                else host.CloseCurrentPaper();
+                return;
             }
-            else
-            {
-                _controller.HidePaper(_paper);
-            }
+            if (CanDisplayAsCapsule()) SetCollapsedState(true);
+            else _controller.HidePaper(_paper);
         };
         RefreshCloseButton();
 
@@ -2398,8 +2397,9 @@ public sealed partial class PaperWindow : Window
         actionButtons.Children.Add(_newNoteButton);
         buttons.Children.Add(_moreActionsButton);
         buttons.Children.Add(CreateWorkspaceCycleButton());
+        BuildExpandedEditorTopBarControls(buttons, actionButtons);
+        // The original close action is the only far-right close/capsule action.
         buttons.Children.Add(_closeButton);
-        BuildExpandedEditorTopBarControls(buttons);
         UpdateTopBarNewPaperButtons();
 
         Grid.SetColumn(buttons, 1);
@@ -2418,6 +2418,10 @@ public sealed partial class PaperWindow : Window
         _paperChrome.SetBinding(SkinBorder.HeaderHeightProperty,
             new System.Windows.Data.Binding(nameof(ActualHeight)) { Source = topHost });
         topHost.SetResourceReference(Border.BorderBrushProperty, "TitleBarDividerBrushKey");
+        // The borrowed shell leaves _paperChrome behind in the hidden PaperWindow.
+        // Keep its original context menu on the actual visual top bar as well.
+        topHost.ContextMenu = BuildPaperContextMenu();
+        topHost.ContextMenuOpening += OnPaperChromeContextMenuOpening;
         topHost.MouseLeftButtonDown += (_, e) => BeginTitleBarDragGesture(topHost, e);
         topHost.PreviewMouseMove += (_, e) => UpdateTitleBarDragGesture(topHost, e);
         topHost.PreviewMouseLeftButtonUp += (_, _) => EndTitleBarDragGesture(topHost);
@@ -2451,11 +2455,9 @@ public sealed partial class PaperWindow : Window
             // New editor chrome must never displace the user's existing pinned controls.
             // On a small paper the editor entry may overflow into the existing more menu.
             var editorChromeWidth = _isExpandedEditorMode
-                ? (_editorModeButton == null ? 0 : TopBarOuterWidth(_editorModeButton)) +
-                    (_editorSidebarButton == null ? 0 : TopBarOuterWidth(_editorSidebarButton)) +
+                ? (_editorSidebarButton == null ? 0 : TopBarOuterWidth(_editorSidebarButton)) +
                     (_editorMinimizeButton == null ? 0 : TopBarOuterWidth(_editorMinimizeButton)) +
-                    (_editorMaximizeButton == null ? 0 : TopBarOuterWidth(_editorMaximizeButton)) +
-                    (_editorCloseButton == null ? 0 : TopBarOuterWidth(_editorCloseButton))
+                    (_editorMaximizeButton == null ? 0 : TopBarOuterWidth(_editorMaximizeButton))
                 : 0;
             var fixedWidth = TopBarOuterWidth(_paperIconButton) +
                 TopBarOuterWidth(_moreActionsButton) +
@@ -2495,17 +2497,6 @@ public sealed partial class PaperWindow : Window
                     _pluginTopBarLabelsHost.Children.Count > 0 &&
                     groupFits &&
                     TopBarOuterWidth(_pluginTopBarLabelsHost) <= remaining
-                        ? Visibility.Visible : Visibility.Collapsed;
-
-            // The optional editor entry gets only genuine spare width, after the
-            // existing pinned shortcuts and plugin contributions have been fitted.
-            if (_editorModeButton != null)
-                _editorModeButton.Visibility = _isExpandedEditorMode ||
-                    (groupFits &&
-                     TopBarOuterWidth(_editorModeButton) <=
-                         remaining - (_pluginTopBarLabelsHost?.Visibility == Visibility.Visible
-                             ? TopBarOuterWidth(_pluginTopBarLabelsHost)
-                             : 0))
                         ? Visibility.Visible : Visibility.Collapsed;
 
             var hideTitle = availableWidth < fixedWidth + titleMinWidth;
@@ -2719,10 +2710,6 @@ public sealed partial class PaperWindow : Window
     {
         menu.Items.Clear();
         menu.Items.Add(MenuHeader(Strings.Get("MenuQuick")));
-        if (!_isExpandedEditorMode && _editorModeButton?.Visibility != Visibility.Visible)
-            menu.Items.Add(MenuItem(Strings.Get("EditorOpen"),
-                (_, _) => _controller.OpenExpandedEditorFor(this)));
-
         // Follow one global order for both the top bar and its dynamic overflow.
         // The menu lists only the commands not currently shown as title-bar buttons.
         foreach (var action in PaperTopBarShortcuts.NormalizeOrder(_controller.State.TopBarShortcutOrder))
@@ -2746,6 +2733,17 @@ public sealed partial class PaperWindow : Window
                     !IsTopBarCommandVisible(_openMarkdownButton):
                     menu.Items.Add(MenuItem(OpenMarkdownEditorToolTip(),
                         (_, _) => OpenMarkdownInDefaultEditor()));
+                    break;
+                case PaperTopBarShortcuts.ExpandedEditor when
+                    !IsTopBarCommandVisible(_editorModeButton):
+                    menu.Items.Add(MenuItem(
+                        _isExpandedEditorMode ? Strings.Get("EditorReturn") : Strings.Get("EditorOpen"),
+                        (_, _) =>
+                        {
+                            if (_expandedEditorHostWindow != null)
+                                _expandedEditorHostWindow.ReturnToPaper();
+                            else _controller.OpenExpandedEditorFor(this);
+                        }));
                     break;
             }
         }
@@ -2817,6 +2815,8 @@ public sealed partial class PaperWindow : Window
 
     internal void RefreshEffectiveTopmost()
     {
+        if (_expandedEditorHostWindow is { } editor)
+            editor.SetPaperTopmost(_paper.AlwaysOnTop);
         var shouldBeTopmost = !IsExperimentalPassive && !_isExpandedEditorMode &&
             (_paper.AlwaysOnTop ||
              (_controller.State.UseCapsuleMode &&
