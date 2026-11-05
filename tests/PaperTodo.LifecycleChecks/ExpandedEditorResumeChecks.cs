@@ -58,7 +58,8 @@ internal static class ExpandedEditorResumeChecks
             "Editor did not restore its saved window bounds from disk");
         Check(a.IsExpandedEditorSidebarOpen && box.CaretOffset == 320 &&
               box.SelectionStart == 314 && box.SelectionLength == 6 && Near(box.VerticalOffset, 500),
-            "Editor did not restore saved sidebar, caret, selection or viewport");
+            $"Editor restore mismatch: sidebar={a.IsExpandedEditorSidebarOpen}, caret={box.CaretOffset}, " +
+            $"selection={box.SelectionStart}+{box.SelectionLength}, scroll={box.VerticalOffset}");
 
         // Saving while open covers automatic save, workspace switching and orderly exit.
         box.Select(610, 5);
@@ -114,7 +115,8 @@ internal static class ExpandedEditorResumeChecks
     private static bool Near(double a, double b) => Math.Abs(a - b) < 2;
     private static object Member(object owner, string name) =>
         owner.GetType().GetField(name, Private)?.GetValue(owner) ??
-        throw new InvalidOperationException("Missing field: " + name);
+        owner.GetType().GetProperty(name, Private)?.GetValue(owner) ??
+        throw new InvalidOperationException("Missing member: " + name);
     private static void Check(bool condition, string message)
     {
         if (!condition) throw new InvalidOperationException(message);
