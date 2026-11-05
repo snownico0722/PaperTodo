@@ -628,15 +628,22 @@ internal static partial class Program
             var count = requests.Count;
             Throws<McpException>(() => tools.UpdateTodo("paper", "todo", linked_paper_id: "note", clear_linked_paper: true));
             Check(requests.Count == count, "Conflicting link arguments cause no request or mutation.");
-            await tools.InsertNoteImage("paper", image_path: @"C:\fixture\picture.png");
+            var imageTool = ModelContextProtocol.Server.McpServerTool.Create(
+                typeof(McpTools).GetMethod(nameof(McpTools.InsertNoteImage))!,
+                tools);
+            var imageSchema = imageTool.ProtocolTool.InputSchema;
+            Check(imageSchema.GetProperty("properties").TryGetProperty("image_base64", out _) &&
+                  !imageSchema.GetProperty("properties").TryGetProperty("image_path", out _) &&
+                  imageSchema.GetProperty("required").EnumerateArray()
+                    .Any(value => value.GetString() == "image_base64"),
+                "MCP image schema requires bytes and does not expose a local file path.");
+
+            await tools.InsertNoteImage("paper", "AQID", image_name: "picture.png");
             Check(requests[^1].GetProperty("method").GetString() == "insert_note_image" &&
-                  requests[^1].GetProperty("params").GetProperty("image_path").GetString() ==
-                      @"C:\fixture\picture.png",
-                "MCP image path reaches the real pipe as a local path.");
-            await tools.InsertNoteImage("paper", image_base64: "AQID", image_name: "picture.png");
-            Check(requests[^1].GetProperty("params").GetProperty("image_base64").GetString() == "AQID" &&
-                  requests[^1].GetProperty("params").GetProperty("image_name").GetString() == "picture.png",
-                "MCP Base64 image and its name survive pipe serialization.");
+                  requests[^1].GetProperty("params").GetProperty("image_base64").GetString() == "AQID" &&
+                  requests[^1].GetProperty("params").GetProperty("image_name").GetString() == "picture.png" &&
+                  !requests[^1].GetProperty("params").TryGetProperty("image_path", out _),
+                "MCP image transport passes encoded bytes without a source path.");
             var imageBlocks = await tools.ReadNoteImage("paper", "001");
             Check(requests[^1].GetProperty("method").GetString() == "read_note_image" &&
                   imageBlocks is [ModelContextProtocol.Protocol.TextContentBlock,
