@@ -23,7 +23,7 @@ internal static partial class Program
 
         var root = (string)typeof(WorkbenchWindow).GetMethod("AddNode", Private)!
             .Invoke(desk, [new WorkbenchPoint(1700, 120), null])!;
-        await Until(() => ActiveCards(desk).Contains(root), "New graph node did not appear");
+        await Until(() => CardReady(desk, root), "New graph node did not appear");
         var rootEditor = (TextBox)Member(ActiveCards(desk)[root]!, "MaterialEditor");
         await Until(() => rootEditor.IsKeyboardFocusWithin, "New node was not ready for continuous typing");
         rootEditor.Text = "Root idea";
@@ -36,7 +36,7 @@ internal static partial class Program
         await Until(() => WorkspaceMaterials.FindOwner(controller.State)!.WorkspaceMaterials!.Items.Count == known.Count + 1,
             "Tab in a node did not create a child");
         var child = WorkspaceMaterials.FindOwner(controller.State)!.WorkspaceMaterials!.Items.Keys.Except(known).Single();
-        await Until(() => ActiveCards(desk).Contains(child) &&
+        await Until(() => CardReady(desk, child) &&
                           ((TextBox)Member(ActiveCards(desk)[child]!, "MaterialEditor")).IsKeyboardFocusWithin,
             "Child node did not receive typing focus");
         var childEditor = (TextBox)Member(ActiveCards(desk)[child]!, "MaterialEditor");
@@ -46,7 +46,7 @@ internal static partial class Program
         await Until(() => WorkspaceMaterials.FindOwner(controller.State)!.WorkspaceMaterials!.Items.Count == known.Count + 1,
             "Enter in a node did not create a sibling");
         var sibling = WorkspaceMaterials.FindOwner(controller.State)!.WorkspaceMaterials!.Items.Keys.Except(known).Single();
-        await Until(() => ActiveCards(desk).Contains(sibling), "Sibling node did not appear");
+        await Until(() => CardReady(desk, sibling), "Sibling node did not appear");
         Assert(controller.WorkbenchLayout.Connections.Count(e => e.IsBranch && e.From == root &&
                    (e.To == child || e.To == sibling)) == 2,
             "Continuous child and sibling creation built the wrong branch parentage");
@@ -54,7 +54,7 @@ internal static partial class Program
         known.Add(sibling);
         InvokeWorkbench(desk, "AddBranch", child, false);
         var leaf = WorkspaceMaterials.FindOwner(controller.State)!.WorkspaceMaterials!.Items.Keys.Except(known).Single();
-        await Until(() => ActiveCards(desk).Contains(leaf), "Nested graph branch did not appear");
+        await Until(() => CardReady(desk, leaf), "Nested graph branch did not appear");
         Assert(controller.WorkbenchLayout.Connections.Any(e => e.IsBranch && e.From == child && e.To == leaf),
             "Adding a nested branch lost its parent");
         Assert(new[] { root, child, sibling, leaf }.All(id =>

@@ -84,7 +84,7 @@ internal static partial class Program
 
         var nodeId = controller.CreateWorkbenchMaterial(WorkspaceMaterialKinds.Node,
             "A compact idea", "A compact idea", "", new WorkbenchPoint(2500, 700));
-        await Until(() => ActiveCards(desk).Contains(textId) && ActiveCards(desk).Contains(nodeId),
+        await Until(() => CardReady(desk, textId) && CardReady(desk, nodeId),
             "New material cards were not added to the live canvas");
         Assert(desk.HostedPaperCount == 3,
             "Material cards created extra ordinary PaperWindow editor sessions");
@@ -187,6 +187,9 @@ internal static partial class Program
 
     private static IDictionary ActiveCards(WorkbenchWindow desk) =>
         (IDictionary)Member(Member(desk, "ActiveScene"), "Cards");
+
+    private static bool CardReady(WorkbenchWindow desk, string id) =>
+        ActiveCards(desk).Contains(id) && ((WorkbenchRect)Member(ActiveCards(desk)[id]!, "Bounds")).Width > 0;
 
     private static IEnumerable<T> VisualDescendants<T>(DependencyObject root) where T : DependencyObject
     {

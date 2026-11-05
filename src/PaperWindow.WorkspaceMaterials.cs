@@ -117,7 +117,7 @@ public sealed partial class PaperWindow
     }
 
     private bool CanEditWorkspaceMaterials() =>
-        !IsClosed && !_controller.IsExiting && !_controller.IsDataReloading &&
+        !IsClosed && _controller.IsRunning && !_controller.IsDataReloading &&
         _paper.WorkspaceMaterials != null && _controller.State.Papers.Contains(_paper);
 
     private static Button WorkspaceMaterialsButton(string textKey)

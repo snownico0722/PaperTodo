@@ -22,7 +22,7 @@ internal static partial class Program
         await Until(() => desk.HostedPaperCount == 3, "Group fixture did not mount its source papers");
         var nodeId = controller.CreateWorkbenchMaterial(WorkspaceMaterialKinds.Node,
             "Grouped idea", "Grouped idea", "", new WorkbenchPoint(1600, 100));
-        await Until(() => ActiveCards(desk).Contains(nodeId) && controller.WorkbenchLayout.Cards.ContainsKey(nodeId),
+        await Until(() => CardReady(desk, nodeId) && controller.WorkbenchLayout.Cards.ContainsKey(nodeId),
             "Node was not ready for grouping");
 
         var scene = Member(desk, "ActiveScene");
@@ -32,6 +32,17 @@ internal static partial class Program
         var selected = (HashSet<string>)Member(desk, "_selectedCards");
         Assert(selected.SetEquals(["note-a", nodeId]),
             "Canvas rectangle selection did not select the intended paper and material");
+
+        var selectedBefore = selected.ToDictionary(id => id, id => controller.WorkbenchLayout.Cards[id].Bounds);
+        var moveSelection = (Thumb)Member(ActiveCards(desk)["note-a"]!, "Move");
+        moveSelection.RaiseEvent(new DragStartedEventArgs(0, 0) { RoutedEvent = Thumb.DragStartedEvent });
+        moveSelection.RaiseEvent(new DragDeltaEventArgs(60, 35) { RoutedEvent = Thumb.DragDeltaEvent });
+        moveSelection.RaiseEvent(new DragCompletedEventArgs(60, 35, false) { RoutedEvent = Thumb.DragCompletedEvent });
+        await Until(() => controller.WorkbenchLayout.Cards["note-a"].X != selectedBefore["note-a"].X,
+            "Dragging a multiselection did not store its new position");
+        Assert(selected.All(id => Math.Abs(controller.WorkbenchLayout.Cards[id].X - selectedBefore[id].X - 60) < .001 &&
+                                  Math.Abs(controller.WorkbenchLayout.Cards[id].Y - selectedBefore[id].Y - 35) < .001),
+            "Dragging ungrouped selected cards changed their relative positions");
         InvokeWorkbench(desk, "CreateGroupFromSelection");
         var group = controller.WorkbenchLayout.Groups.Values.Single();
         var groupId = group.Id;
@@ -95,7 +106,7 @@ internal static partial class Program
         controller.ToggleWorkbench();
         controller.ToggleWorkbench();
         desk = (WorkbenchWindow)Member(controller, "_workbenchWindow");
-        await Until(() => desk.HostedPaperCount == 3 && ActiveCards(desk).Contains(nodeId),
+        await Until(() => desk.HostedPaperCount == 3 && CardReady(desk, nodeId),
             "Reopening the workspace did not restore group members");
         Assert(CardFrame(desk, "note-a").Visibility == Visibility.Collapsed &&
                CardFrame(desk, nodeId).Visibility == Visibility.Collapsed,
