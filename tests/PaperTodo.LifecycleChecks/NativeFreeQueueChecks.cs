@@ -137,7 +137,12 @@ internal static class NativeFreeQueueChecks
         await Idle();
 
         Require(c.BeginNativeEdgeQueueDrag(a, true, Point(100), false), "begin prepend");
-        var headTop = originalTargetTop - (2 * pitch - c.DeepCapsuleGap);
+        var approachTop = originalTargetTop - (2 * pitch - c.DeepCapsuleGap);
+        Require(c.PreviewNativeEdgeQueueDrag(a, Point(approachTop), approachTop, false), "approach preview handled");
+        Require(((NativeEdgeQueueDrag)Part(c, "_nativeEdgeQueueDrag")).Drop?.Decision.Kind == EdgeFreeQueueDropKind.Move &&
+                Math.Abs(Top(b) - originalTargetTop) < .1 && Math.Abs(Top(bPeer) - originalNextTargetTop) < .1,
+            "the carried tail touching the target keeps an independent ghost without pushing its members");
+        var headTop = originalTargetTop - PaperLayoutDefaults.CapsuleHeight;
         Require(c.PreviewNativeEdgeQueueDrag(a, Point(headTop), headTop, false), "prepend preview handled");
         Require(Math.Abs(Top(b) - originalTargetTop - 2 * pitch) < .1 && Math.Abs(Top(bPeer) - originalNextTargetTop - 2 * pitch) < .1,
             "prepending moves existing members down by the whole carried block");
