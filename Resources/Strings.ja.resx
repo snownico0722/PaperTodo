@@ -13,7 +13,10 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="AppStartupFailureMessage" xml:space="preserve">
-    <value>起動に失敗しました: データファイルを読み込めません。ファイルが使用中、または破損している可能性があります。&#x0A;既存データの上書きを避けるため、アプリは起動を停止しました。&#x0A;&#x0A;エラー: {0}</value>
+    <value>起動に失敗しました：データファイルを読み込めません（{0}）。
+既存データの上書きを防ぐため、起動を停止しました。
+
+エラー情報：{1}</value>
   </data>
   <data name="ResourceTextVersion" xml:space="preserve">
     <value>3.1</value>
@@ -1669,6 +1672,78 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="TodoExportCurrent" xml:space="preserve"><value>この ToDo をエクスポート</value></data>
   <data name="SettingsCapsuleFreeQueues" xml:space="preserve"><value>エッジカプセルの自由なキュー</value></data>
   <data name="TipCapsuleFreeQueues" xml:space="preserve"><value>カプセルを離して独立したキューを作成します。Ctrl を押しながらキュー全体を移動し、横に引き出して別の端や画面へ移動できます。メインカプセルで同じ端のキューをまとめて収納できます。</value></data>
+  <data name="HistoryRecoveryTitle" xml:space="preserve">
+    <value>ワークスペースを復元</value>
+  </data>
+  <data name="HistoryRecoveryMessage" xml:space="preserve">
+    <value>ワークスペース {0} の現在のデータを読み込めません。
+利用可能な最新のバックアップ：{1}。
+
+復元すると、その時点の状態に戻り、それ以降の変更は失われます。このワークスペースのノート、タスク、設定のみを復元します。画像やプラグインデータは含まれません。</value>
+  </data>
+  <data name="HistoryRecoveryRestore" xml:space="preserve">
+    <value>バックアップからの復元を試す</value>
+  </data>
+  <data name="WorkspaceFailureRetry" xml:space="preserve">
+    <value>再試行</value>
+  </data>
+  <data name="WorkspaceFailureExit" xml:space="preserve">
+    <value>PaperTodo を終了</value>
+  </data>
+  <data name="WorkspaceFailureHistoryChoiceRequired" xml:space="preserve">
+    <value>利用可能な履歴バックアップがあります。このワークスペースを開き、復元または再作成を選択してください。</value>
+  </data>
+  <data name="WorkspaceFailureAccessDenied" xml:space="preserve">
+    <value>ワークスペースのファイルにアクセスする権限がありません。フォルダーの権限を確認して再試行してください。</value>
+  </data>
+  <data name="WorkspaceFailureMissing" xml:space="preserve">
+    <value>必要なワークスペースのファイルまたはフォルダーが見つかりません。移動や削除がないか確認して再試行してください。</value>
+  </data>
+  <data name="WorkspaceFailureInvalidData" xml:space="preserve">
+    <value>ワークスペースのデータ形式が無効なため、切り替えできませんでした。データファイルを確認して再試行してください。</value>
+  </data>
+  <data name="WorkspaceFailureBusy" xml:space="preserve">
+    <value>ワークスペースのファイルが使用中です。アクセスしているプログラムを閉じて再試行してください。</value>
+  </data>
+  <data name="WorkspaceFailureDiskFull" xml:space="preserve">
+    <value>ディスクの空き容量が不足しているため、ワークスペースのデータを保存できません。空き容量を確保して再試行してください。</value>
+  </data>
+  <data name="WorkspaceFailureIo" xml:space="preserve">
+    <value>ワークスペースのファイルを読み書きできません。ディスクや記憶装置を確認して再試行してください。</value>
+  </data>
+  <data name="WorkspaceFailureUnknown" xml:space="preserve">
+    <value>ワークスペースの切り替えを完了できませんでした。再試行しても失敗する場合は、PaperTodo を終了して開き直してください。</value>
+  </data>
+  <data name="WorkspaceFailurePrimaryChanged" xml:space="preserve">
+    <value>復元中にデータファイルが別の操作で更新されました。新しい内容の上書きを防ぐため復元を中止しました。再試行してください。</value>
+  </data>
+  <data name="WorkspaceFailureRecoveryChanged" xml:space="preserve">
+    <value>復元元のファイルが変更されました。復元元を選び直すため再試行してください。</value>
+  </data>
+  <data name="WorkspaceFailureRecoveryUnverified" xml:space="preserve">
+    <value>復元データの保存後にファイルを正常に読み込めることを確認できませんでした。復元元は保持しています。再試行してください。</value>
+  </data>
+  <data name="HistoryRecoveryCreate" xml:space="preserve">
+    <value>ワークスペースを再作成</value>
+  </data>
+  <data name="AppStartupFailureBusy" xml:space="preserve">
+    <value>ファイルが使用中です</value>
+  </data>
+  <data name="AppStartupFailureCorrupt" xml:space="preserve">
+    <value>データファイルが破損しているか、形式が無効です</value>
+  </data>
+  <data name="AppStartupFailureUnknown" xml:space="preserve">
+    <value>原因不明</value>
+  </data>
+  <data name="WorkspaceFailureMainRecoveryRequired" xml:space="preserve">
+    <value>メインワークスペースのデータを読み込めません。先にメインワークスペースを開いて復元または再作成し、もう一度お試しください。</value>
+  </data>
+  <data name="WorkspaceRecoveryUnavailable" xml:space="preserve">
+    <value>現在のワークスペースのデータとバックアップはすべて破損しています。</value>
+  </data>
+  <data name="WorkspaceRecoveryFallback" xml:space="preserve">
+    <value>ワークスペース {0} に戻る</value>
+  </data>
   <data name="WorkbenchTitle" xml:space="preserve"><value>無限ワークベンチ</value></data>
   <data name="WorkbenchOverview" xml:space="preserve"><value>全ワークスペース</value></data>
   <data name="WorkbenchCurrent" xml:space="preserve"><value>現在のワークスペース</value></data>

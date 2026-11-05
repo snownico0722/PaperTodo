@@ -13,7 +13,7 @@
 
 | ID | 主题 | Status | 领域 |
 | --- | --- | --- | --- |
-| D-001 | “桌面纸片”作为主要交互和对象边界 | Extended by D-070 / D-071 | 产品边界 |
+| D-001 | “桌面纸片”作为主要交互和对象边界 | Extended by D-072 / D-073 | 产品边界 |
 | D-002 | `data.json` 与 LMDB 分域 | Accepted | 持久化 |
 | D-003 | Crash boundary 不做强制最终保存 | Accepted | 持久化 / 恢复 |
 | D-004 | Paper body 通过 session 边界接入 | Accepted | 插件 |
@@ -77,8 +77,11 @@
 | D-066 | Free queues extend existing direct manipulation | Accepted | Edge queues / gestures |
 | D-067 | Free-queue masters follow queue identity | Accepted | Edge master ownership |
 | D-068 | Free-queue drops preview independent placement and prefer downward insertion | Accepted | Edge queues / gestures |
-| D-070 | 可编辑无限工作台与单正文租借 | Superseded by D-071（内容归属与关系范围） | 工作台 / 布局 / 生命周期 |
-| D-071 | 工作空间素材 Note、手动分组与跨纸内容搬运 | Accepted | 工作台 / 内容 / 持久化 |
+| D-069 | Independent landing ghosts consume adjacent gaps | Accepted | Edge queues / gestures |
+| D-070 | 完整快照按来源顺序恢复，损坏时须用户确认重建 | Accepted | 核心持久化 / 恢复 |
+| D-071 | 有界冲突归档与健康主文件后清理孤立临时文件 | Accepted | 核心持久化 / 归档 |
+| D-072 | 可编辑无限工作台与单正文租借 | Superseded by D-073（内容归属与关系范围） | 工作台 / 布局 / 生命周期 |
+| D-073 | 工作空间素材 Note、手动分组与跨纸内容搬运 | Accepted | 工作台 / 内容 / 持久化 |
 
 ## 维护规则
 
@@ -105,7 +108,7 @@ Decisions 的核心问题是：**“为什么今天会这样设计，以及哪�
 
 ## D-001 — 保持“桌面纸片”作为主要交互和对象边界
 
-**Status:** Extended by D-070 / D-071（保留 paper 对象边界，增加可选全屏工作台及归属于素材 Note 的画布内容）
+**Status:** Extended by D-072 / D-073（保留 paper 对象边界，增加可选全屏工作台及归属于素材 Note 的画布内容）
 
 ### Decision
 
@@ -2115,9 +2118,41 @@ The preview should show an available landing rather than make a target continuou
 - `NativeFreeQueuePolicyChecks` and `NativeFreeQueueReviewChecks`: continuous approach, enough/insufficient top space, below/merge/return, actual ghost widths, cancellation, release and persisted anchor reconstruction.
 
 
-## D-070 — 可编辑无限工作台与单正文租借
+## D-070 — 完整快照恢复顺序与显式重建 (2026-11-05)
 
-**Status:** Superseded by D-071（内容归属与关系范围）；单正文租借和 paper/session ownership 继续有效。
+**Status:** Accepted
+
+### Context
+
+原先主文件及固定备份损坏后可能在未获得明确同意时初始化空工作区，用户也无法直接选择已有历史备份；临时写入可能保存了比固定备份更新的完整数据。
+
+### Decision
+
+健康主文件优先于健康固定备份；只有二者不可用时才检查完整的写入临时文件与孤立临时文件，按修改时间选最新完整来源，不拼接不同版本。所有自动来源不可用时寻找当前工作区最近的有效历史 ZIP；恢复历史或清空当前编号必须由用户明确选择，关闭提示不表示同意。真正全新、没有旧核心文件的工作区仍自动创建。读取占用、权限等故障不能当作损坏。恢复仍使用现有原子写入、提交前来源验证及提交复读；恢复范围限核心 JSON，不恢复图片或插件数据。设置跟随只读已提交的健康主文件，不隐式触发主区恢复。
+
+### Why
+
+让日常启动尽可能自动恢复完整数据，同时把不可逆的数据损失决定留给用户；不引入第二套文件数据库、碎片拼接或无限重试。
+
+## D-071 — 有界冲突归档与孤立临时文件生命周期 (2026-11-05)
+
+**Status:** Accepted
+
+### Context
+
+三方合并留下成对的原件与差异记录；长期无限保留没有用户价值。临时文件若在正式文件损坏时被抢先清理，可能失去最后一份完整快照。
+
+### Decision
+
+只对通过校验的完整冲突记录计数，按时间保留最近五组；不再叠加保留天数门槛，不自动生成新的永久救援副本。健康主文件且没有待完成恢复时，才清理本工作区的孤立主数据及备份临时文件；失败不推翻正常保存。固定临时路径要复用时，先移动保存仍不同于已提交数据的完整候选，移动失败不得直接截断。主文件损坏或缺失时不执行孤立临时清理。
+
+### Why
+
+只为可恢复的数据支付存储与代码成本，保留真实的未提交快照而不积累无界防御文件。
+
+## D-072 — 可编辑无限工作台与单正文租借
+
+**Status:** Superseded by D-073（内容归属与关系范围）；单正文租借和 paper/session ownership 继续有效。
 
 ### Context
 
@@ -2138,9 +2173,9 @@ The preview should show an available landing rather than make a target continuou
 - `tests/PaperTodo.WorkbenchLayoutChecks` 与 `tests/PaperTodo.WorkbenchChecks`：几何约束、单正文身份、桌面还原和工作区切换隔离。
 - 算法来源：https://github.com/microsoft/automatic-graph-layout；备选评估：https://eclipse.dev/elk/reference/algorithms/org-eclipse-elk-layered.html。
 
-## D-071 — 工作空间素材 Note、手动分组与跨纸内容搬运
+## D-073 — 工作空间素材 Note、手动分组与跨纸内容搬运
 
-**Status:** Accepted；扩展 D-070 的工作台内容与关系范围，保留普通纸片的单正文 ownership。
+**Status:** Accepted；扩展 D-072 的工作台内容与关系范围，保留普通纸片的单正文 ownership。
 
 ### Context
 

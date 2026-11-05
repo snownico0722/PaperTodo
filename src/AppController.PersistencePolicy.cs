@@ -87,6 +87,9 @@ public sealed partial class AppController
         try
         {
             _store.TryRefreshBackupFromPrimary();
+            // Reuse the existing maintenance timer; do not install another
+            // background loop just to prune excess conflict recovery records.
+            _store.TryPruneConflictArchives();
         }
         catch
         {

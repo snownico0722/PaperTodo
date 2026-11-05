@@ -119,11 +119,20 @@ public partial class App : Application
         {
             _controller = new AppController();
         }
+        catch (OperationCanceledException)
+        {
+            // Declining historical recovery stops startup without creating blank
+            // data or presenting the user's choice as an application crash.
+            _singleInstance?.Dispose();
+            _singleInstance = null;
+            Shutdown();
+            return;
+        }
         catch (Exception ex)
         {
             WriteCrashLog(ex);
             MessageBox.Show(
-                Strings.Format("AppStartupFailureMessage", ex.Message),
+                WorkspaceFailureMessage.ForStartup(ex),
                 Strings.Get("AppStartupFailureTitle"),
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);

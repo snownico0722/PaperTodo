@@ -62,9 +62,8 @@ public sealed partial class StateStore
             ValidateExternalDocument(document);
             document["workspaces"] = JsonSerializer.SerializeToNode(options.Normalized(), JsonOptions);
             var sourceHash = System.Security.Cryptography.SHA256.HashData(bytes);
-            WriteJsonInternal(document.ToJsonString(JsonOptions),
+            WriteJsonInternal(document.ToJsonString(JsonOptions), version,
                 beforeReplace: () => ValidatePrimaryHash(sourceHash));
-            _latestWrittenVersion = version;
         }
         finally { _writeLock.Release(); }
     }
