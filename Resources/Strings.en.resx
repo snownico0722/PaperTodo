@@ -1677,7 +1677,14 @@ The original note is kept.</value></data>
   <data name="WorkbenchSearch" xml:space="preserve"><value>Search all workspaces; press Enter to navigate</value></data>
   <data name="WorkbenchRefresh" xml:space="preserve"><value>Refresh overview</value></data>
   <data name="WorkbenchClose" xml:space="preserve"><value>Back to desktop</value></data>
-  <data name="WorkbenchHint" xml:space="preserve"><value>Drag empty canvas to select; Ctrl+click titles to multi-select; Ctrl+G to group. Right-drag to pan; Alt+wheel to zoom. Drag a card's link icon to connect it.</value></data>
+  <data name="WorkbenchHint" xml:space="preserve"><value>Drag empty canvas to select; Ctrl+click to multi-select; Ctrl+G to group. Right-click a card for its full menu; right-drag to pan. Alt+wheel to zoom; drag a header link icon to connect.</value></data>
+  <data name="WorkbenchHelp" xml:space="preserve"><value>Workbench help</value></data>
+  <data name="WorkbenchImportMaterials" xml:space="preserve"><value>Import materials</value></data>
+  <data name="WorkbenchImportDialogFilter" xml:space="preserve"><value>All files (*.*)|*.*|Images (*.png;*.jpg;*.jpeg;*.gif;*.webp;*.bmp)|*.png;*.jpg;*.jpeg;*.gif;*.webp;*.bmp</value></data>
+  <data name="WorkbenchCollapseCard" xml:space="preserve"><value>Collapse card</value></data>
+  <data name="WorkbenchExpandCard" xml:space="preserve"><value>Expand card</value></data>
+  <data name="WorkbenchLockCard" xml:space="preserve"><value>Lock position</value></data>
+  <data name="WorkbenchUnlockCard" xml:space="preserve"><value>Unlock position</value></data>
   <data name="WorkbenchError" xml:space="preserve"><value>Workbench operation failed: {0}</value></data>
   <data name="WorkbenchPinConflict" xml:space="preserve"><value>Pinned papers overlap. Their positions were kept; move or unpin one to resolve the conflict.</value></data>
   <data name="WorkbenchDelete" xml:space="preserve"><value>Delete paper</value></data>
