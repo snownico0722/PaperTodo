@@ -37,8 +37,10 @@ internal static class NativeFreeQueuePolicyChecks
             "prepend may extend above the work area without moving the target's existing head");
         Require(EdgeCapsuleFreeQueuePolicy.FindInsertion([target], 304, 96, 10, pitch, gap) is { Index: 0 },
             "a whole visible block can attach from above without its first member crossing the target");
-        Require(EdgeCapsuleFreeQueuePolicy.FindInsertion([target], 304, 96, 500, pitch, gap) == null,
-            "vertical alignment in the middle of the screen is not a magnetic hit");
+        Require(EdgeCapsuleFreeQueuePolicy.FindInsertion([target], 304, 96, 500, pitch, gap) == null &&
+                EdgeCapsuleFreeQueuePolicy.FindInsertion([target], 304, 96, 500, pitch, gap,
+                    floating: true) is { Index: 0 },
+            "docked drags use the wall gate; floating drags can preview the same slot anywhere in the half-screen");
         var folded = new EdgeFreeQueueBox("|right#folded", 400, 5, true, 55, Collapsed: true);
         Require(folded.Height(pitch, gap) == PaperLayoutDefaults.CapsuleHeight,
             "a collapsed queue occupies only the visible master, not its old expanded slots");
@@ -51,8 +53,10 @@ internal static class NativeFreeQueuePolicyChecks
                     pointerTopDip: 280) == null,
             "the expanded-but-hidden member area is not a collapsed target even when the carried block overlaps it");
         Require(EdgeCapsuleFreeQueuePolicy.FindInsertion([folded], 390, 300, 90, pitch, gap,
-                    pointerTopDip: 415) == null,
-            "collapsed merge also requires horizontal proximity to the visible master");
+                    pointerTopDip: 415) == null &&
+                EdgeCapsuleFreeQueuePolicy.FindInsertion([folded], 390, 46, 500, pitch, gap,
+                    pointerTopDip: 415, floating: true) is { Index: 5 },
+            "a distant floating master can join at the visible collapsed master, never its hidden members");
         var belowFolded = target with { Key = "|right#below", TopDip = 470, MemberCount = 1 };
         var foldedMerge = EdgeCapsuleFreeQueuePolicy.Insert([folded, belowFolded], folded.Key, 0, 2,
             900, pitch, gap);
@@ -82,14 +86,20 @@ internal static class NativeFreeQueuePolicyChecks
                 EdgeCapsuleFreeQueuePolicy.FindInsertion([target], 325, 46, 10, pitch, gap, target.Key) is { Key: "|right#b" } &&
                 EdgeCapsuleFreeQueuePolicy.FindInsertion([target], 310, 46, 10, pitch, gap, target.Key) == null,
             "held target survives pointer jitter but releases after the larger exit threshold");
-        Require(EdgeCapsuleFreeQueuePolicy.NudgeToward(100, 120, EdgeCapsuleFreeQueuePolicy.JoinNudge) == 106 &&
-                EdgeCapsuleFreeQueuePolicy.NudgeToward(100, 120, EdgeCapsuleFreeQueuePolicy.SourceJoinNudge) == 109,
-            "a confirmed join nudges gently; returning to the original queue nudges a little more");
+        Require(EdgeCapsuleFreeQueuePolicy.JoinNudge == 12 &&
+                EdgeCapsuleFreeQueuePolicy.ExitNudge == 18 &&
+                EdgeCapsuleFreeQueuePolicy.NudgeToward(100, 140, EdgeCapsuleFreeQueuePolicy.JoinNudge) == 112,
+            "joining snaps at most 12 DIP");
+        Require(EdgeCapsuleFreeQueuePolicy.SnapOutward(344, 400, 450) == 326 &&
+                EdgeCapsuleFreeQueuePolicy.SnapOutward(330, 400, 450) == 319 &&
+                EdgeCapsuleFreeQueuePolicy.SnapOutward(400, 400, 450) == 400 &&
+                EdgeCapsuleFreeQueuePolicy.SnapOutward(300, 400, 450) == 300,
+            "leaving briefly leads the pointer by up to 18 DIP near release, without a sticky pause");
         var narrowTarget = target with { WidthDip = 60 };
-        Require(EdgeCapsuleFreeQueuePolicy.FindInsertion([narrowTarget], 410, 46, 90, pitch, gap) == null &&
-                EdgeCapsuleFreeQueuePolicy.FindInsertion([narrowTarget], 410, 46,
-                    EdgeCapsuleFreeQueuePolicy.FloatingWallGap(90, 80), pitch, gap) is { Key: "|right#b" },
-            "a floating capsule can join from afar when its silhouette touches before its pointer does");
+        Require(EdgeCapsuleFreeQueuePolicy.FindInsertion([narrowTarget], 410, 46, 500, pitch, gap) == null &&
+                EdgeCapsuleFreeQueuePolicy.FindInsertion([narrowTarget], 410, 46, 500,
+                    pitch, gap, floating: true) is { Key: "|right#b" },
+            "a floating capsule may join from any horizontal distance while its vertical target is valid");
         Require(EdgeCapsuleLayout.FreeQueueTopForIndex(0, -40, new System.Windows.Rect(0, 0, 100, 900), gap) == -40,
             "free queues do not clamp anchors back into the work area");
         Require(PaperWindow.NativeQueueControlPressed(8, ModifierKeys.None, false) &&

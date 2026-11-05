@@ -95,13 +95,15 @@ internal static class NativeFreeQueueChecks
         var ghost = (EdgeCapsuleQueueDropGhost)Part(c, "_nativeQueueDropGhost");
         var ghostWindow = (Window)Part(ghost, "_window");
         var ghostBody = (Border)Part(ghost, "_silhouette");
+        var ghostStack = (StackPanel)Part(ghost, "_stack");
         Require(ghostWindow.IsVisible && ghostWindow.Opacity > 0 &&
-                Math.Abs(ghostWindow.Height - PaperLayoutDefaults.CapsuleHeight) < .1 &&
+                ghostStack.Children.Count == 2 &&
+                Math.Abs(ghostWindow.Height - (2 * PaperLayoutDefaults.CapsuleHeight + c.DeepCapsuleGap)) < .1 &&
                 Math.Abs(ghostWindow.Width - ownerWindow.DeepCapsuleRestingVisibleWidth) < .1 &&
                 Math.Abs(ghostBody.Height - (PaperLayoutDefaults.CapsuleHeight -
                     2 * EdgeCapsuleLayout.WindowChromeMargin)) < .1 &&
                 Math.Abs(ghostBody.Margin.Top - EdgeCapsuleLayout.WindowChromeMargin) < .1,
-            "the landing marker is exactly one ordinary docked capsule, not a tall queue silhouette");
+            "Ctrl carrying two papers previews exactly two theme-colored ordinary capsule silhouettes");
         c.EndNativeEdgeQueueDrag(a.Id);
         await Idle();
         Require(Math.Abs(Top(bPeer) - originalNextTargetTop) < .1,
@@ -131,24 +133,19 @@ internal static class NativeFreeQueueChecks
         Require(a.CapsuleQueueId != "qb" && Math.Abs(Top(a) - 100) < .1, "a single capsule forms a queue at the requested height");
         var beforeMove = c.State.Papers.Select(p => (p.Id, p.CapsuleQueueId)).ToArray();
         Require(c.BeginNativeEdgeQueueDrag(a, true, Point(100), false), "begin independent drop near another queue");
-        c.PreviewNativeEdgeQueueDrag(a, Point(300, distant: true), 300, true);
+        c.PreviewNativeEdgeQueueDrag(a, Point(160, distant: true), 160, true);
         var independentGhost = (EdgeCapsuleQueueDropGhost)Part(c, "_nativeQueueDropGhost");
         Require(((Window)Part(independentGhost, "_window")).Opacity == 0,
-            "independent placement must never show an insertion ghost");
-        c.CommitNativeEdgeQueueDrag(a, Point(300, distant: true), 300, true);
+            "vertically unaligned independent placement must not show a merge ghost");
+        c.CommitNativeEdgeQueueDrag(a, Point(160, distant: true), 160, true);
         c.EndNativeEdgeQueueDrag(a.Id);
         await Idle();
         Require(c.State.Papers.Select(p => (p.Id, p.CapsuleQueueId)).SequenceEqual(beforeMove) &&
-                Math.Abs(Top(a) - 300) < .1, "no free-space search or space-based refusal; the requested independent anchor wins");
+                Math.Abs(Top(a) - 160) < .1, "no free-space search or space-based refusal; the requested independent anchor wins");
 
-        // The visible floating shell can reach a queue while its pointer is still
-        // outside the narrow docked hit region. Both preview and release must allow it.
-        var targetWidth = new[] { aPeer, b, bPeer }.Max(p => windows[p.Id].DeepCapsuleRestingVisibleWidth);
-        var floatingWidth = ownerWindow.DeepCapsuleRestingVisibleWidth;
-        var wallDip = targetWidth + EdgeCapsuleFreeQueuePolicy.SnapDistance + 8;
-        Require(EdgeCapsuleFreeQueuePolicy.FloatingWallGap(wallDip, floatingWidth) <=
-                    targetWidth + EdgeCapsuleFreeQueuePolicy.SnapDistance,
-            "floating contact fixture starts outside the cursor-only snap range");
+        // A floating drag previews a confirmed vertical target even from the middle of
+        // the screen; the mouse does not first have to touch the edge or ghost window.
+        var wallDip = monitor.LocalWorkAreaDip.Width * .35;
         var distantFloatingPoint = new DeviceScreenPoint(
             monitor.WorkArea.Right - wallDip * monitor.DpiScaleX,
             monitor.WorkArea.Top + (Top(b) + PaperLayoutDefaults.CapsuleHeight / 2) * monitor.DpiScaleY);
@@ -157,8 +154,9 @@ internal static class NativeFreeQueueChecks
         c.PreviewNativeEdgeQueueDrag(a, distantFloatingPoint, Top(a), true);
         var distantDrop = ((NativeEdgeQueueDrag)Part(c, "_nativeEdgeQueueDrag")).Drop;
         Require(distantDrop?.Decision.Kind == EdgeFreeQueueDropKind.Insert &&
-                distantDrop.DestinationKey == "|right#qb",
-            "a visibly touching floating capsule joins even when its pointer is outside the old hit area");
+                distantDrop.DestinationKey == "|right#qb" &&
+                ((Window)Part(Part(c, "_nativeQueueDropGhost"), "_window")).Opacity > 0,
+            "far-from-edge floating preview displays an actual merge ghost at the chosen target slot");
         c.EndNativeEdgeQueueDrag(a.Id);
         await Idle();
 
@@ -187,6 +185,21 @@ internal static class NativeFreeQueueChecks
         Require(masters.Count == 3 && masters.ContainsKey(aKey) &&
                 masters.ContainsKey("|right#qb") && masters.ContainsKey("|right#qc"),
             "every independent group has its own master on the same edge");
+        var masterLayout = c.CaptureFreeMasterDragLayout("", EdgeCapsuleEdge.Right, aKey)!;
+        Require(c.TryBeginMasterCapsuleQueueTransfer("", EdgeCapsuleEdge.Right,
+                masterLayout.MasterTopDip, out var masterPreviewSnapshot,
+                freeLayout: masterLayout, sourceQueueKey: aKey),
+            "begin a direct master-capsule transfer preview");
+        c.PreviewFreeMasterQueueDropGhost(masterPreviewSnapshot, Point(Top(b), distant: true));
+        var masterGhost = (EdgeCapsuleQueueDropGhost)Part(c, "_nativeQueueDropGhost");
+        Require(((Window)Part(masterGhost, "_window")).Opacity > 0 &&
+                ((StackPanel)Part(masterGhost, "_stack")).Children.Count == masterLayout.Groups[0].PaperIds.Length,
+            "dragging the master shows one merged landing ghost per carried member even far from the edge");
+        c.EndFreeMasterQueueDropGhost();
+        c.CancelMasterCapsuleQueueTransfer(masterPreviewSnapshot);
+        await Idle();
+        Require(masters.ContainsKey(aKey) && masters[aKey].IsVisible,
+            "cancelling master preview restores its source without leaving a ghost");
         // With independent masters, only the actually affected suffix moves in
         // the preview; the target master and unrelated queues stay anchored.
         var untouchedPeerTop = Top(bPeer);
@@ -390,8 +403,12 @@ internal static class NativeFreeQueueChecks
         Require(c.TryBeginMasterCapsuleQueueTransfer("", EdgeCapsuleEdge.Right,
             masters["|right#qm"].AnchorTop, out var mergeTransfer, sourceQueueKey: "|right#qm"),
             "begin one-master merge into another master");
-        Require(c.CommitMasterCapsuleQueueTransfer(mergeTransfer, Point(mergeMasterTop)),
-            "independent masters merge into the existing target");
+        c.PreviewFreeMasterQueueDropGhost(mergeTransfer, Point(mergeMasterTop, distant: true));
+        Require(((Window)Part(Part(c, "_nativeQueueDropGhost"), "_window")).Opacity > 0,
+            "a distant master can preview merging into the visible collapsed target");
+        c.EndFreeMasterQueueDropGhost();
+        Require(c.CommitMasterCapsuleQueueTransfer(mergeTransfer, Point(mergeMasterTop, distant: true)),
+            "independent masters merge into the existing target from the screen interior");
         await Idle();
         Require(c.State.Papers.All(p => p.CapsuleQueueId == "qn") &&
                 masters.Count == 1 && masters.ContainsKey("|right#qn"),
