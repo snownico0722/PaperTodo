@@ -49,7 +49,7 @@ internal sealed partial class McpCommandService
         return new
         {
             paper_id = paperId,
-            image_id = image.Id,
+            image_id = image.ImageId,
             mime = image.Mime,
             image_base64 = Convert.ToBase64String(image.Bytes)
         };
