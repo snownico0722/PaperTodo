@@ -59,7 +59,6 @@ internal sealed partial class WorkbenchWindow : Window
     private static Brush DeskBrush => Theme.WorkbenchDeskBrush;
     private static Brush CanvasBrush => Theme.WorkbenchCanvasBrush;
     private static Brush FrameBrush => Theme.WorkbenchFrameBrush;
-    private static Brush RegionBrush => Theme.WorkbenchRegionBrush;
     private static Brush RegionFill => Theme.WorkbenchRegionFillBrush;
     private static Brush CardBrush => Theme.PaperBrush;
     private static Brush Outline => Theme.PaperBorderBrush;
@@ -284,9 +283,8 @@ internal sealed partial class WorkbenchWindow : Window
                 if (card.PreviewText != null) card.PreviewText.Foreground = Ink;
                 if (card.MaterialEditor != null)
                 { card.MaterialEditor.Foreground = Ink; card.MaterialEditor.CaretBrush = Ink; }
-                if (card.MaterialOpen != null)
-                { card.MaterialOpen.Background = CardBrush; card.MaterialOpen.Foreground = Ink; card.MaterialOpen.BorderBrush = Outline; }
             }
+            scene.DecorationSignature = null;
             DrawDecorations(scene);
         }
     }
@@ -539,7 +537,8 @@ internal sealed partial class WorkbenchWindow : Window
     }
 
     private static string ModelSignature(WorkbenchWorkspaceSnapshot snapshot) =>
-        string.Join("|", snapshot.Nodes.Select(n => $"{n.Id}:{n.Width}:{n.Height}:{n.Affinity}:{n.Kind}:{n.Pinned}:{n.Previous}"))
+        string.Join("|", snapshot.Nodes.Select(n => $"{n.Id}:{n.Width}:{n.Height}:{n.Affinity}:{n.Pinned}:{n.Previous}"))
+        + string.Join("|", snapshot.Papers.Select(p => $"{p.Id}:{p.Kind}"))
         + string.Join("|", snapshot.Edges.Select(e => $"{e.From}>{e.To}"));
 
     private Scene GetScene(int number)
@@ -561,7 +560,7 @@ internal sealed partial class WorkbenchWindow : Window
             foreach (var snapshot in snapshots)
             {
                 var layout = await Task.Run(() => WorkbenchLayoutEngine.Calculate(NodesForLayout(snapshot), snapshot.Edges,
-                    cancellationToken: token), token);
+                    cancellationToken: token, directConnections: snapshot.DirectConnections), token);
                 if (_closed || IsSuspended || token.IsCancellationRequested || generation != _controller.WorkspaceGeneration) return;
                 var scene = GetScene(snapshot.Number);
                 scene.Snapshot = snapshot; scene.Layout = layout;
@@ -628,7 +627,7 @@ internal sealed partial class WorkbenchWindow : Window
             if (fixedIds != null) nodes = nodes.Select(n => fixedIds.Contains(n.Id) && n.Previous != null ? n with { Pinned = true } : n).ToArray();
             if (scope != null) nodes = nodes.Select(n => !scope.Contains(n.Id) && n.Previous != null ? n with { Pinned = true } : n).ToArray();
             var result = await Task.Run(() => WorkbenchLayoutEngine.Calculate(nodes, snapshot.Edges, arrange,
-                preferredId, token), token);
+                preferredId, token, snapshot.DirectConnections), token);
             if (_closed || IsSuspended || _dragging || revision != _layoutRevision || generation != _controller.WorkspaceGeneration || token.IsCancellationRequested) return;
             var scene = ActiveScene;
             if (scene == null || !result.Cards.Keys.ToHashSet(StringComparer.Ordinal).SetEquals(scene.Cards.Keys)) return;
@@ -679,10 +678,6 @@ internal sealed partial class WorkbenchWindow : Window
         }
         _undo.Push(new(_controller.CaptureWorkbenchHistoryLayout()));
         _redo.Clear();
-    }
-    private void UndoLayout()
-    {
-        UndoWorkspaceAction();
     }
 
     internal void CreatePaperFromMenu(string type) => CreatePaper(type, ActivePoint(ViewportCenter));
@@ -1249,8 +1244,39 @@ internal sealed partial class WorkbenchWindow : Window
         _ = LayoutActiveAsync(fixedIds: before.Keys.ToHashSet(StringComparer.Ordinal));
     }
 
+    private int DecorationFingerprint(Scene scene)
+    {
+        var hash = new HashCode();
+        hash.Add(scene.Layout);
+        hash.Add(scene.Snapshot?.Error);
+        hash.Add(scene.Number == _controller.WorkspaceNumber);
+        hash.Add(_controller.WorkbenchWorkspaceName(scene.Number));
+        hash.Add(_focusedGroupId);
+        foreach (var pair in scene.Cards.OrderBy(p => p.Key, StringComparer.Ordinal))
+        {
+            hash.Add(pair.Key);
+            hash.Add(pair.Value.Bounds);
+            hash.Add(pair.Value.Frame.Visibility);
+        }
+        var state = SceneState(scene);
+        foreach (var group in state.Groups.Values.OrderBy(g => g.Id, StringComparer.Ordinal))
+        {
+            hash.Add(group.Id); hash.Add(group.Title); hash.Add(group.Collapsed);
+            foreach (var member in group.Members) hash.Add(member);
+        }
+        foreach (var connection in state.Connections)
+        {
+            hash.Add(connection.Id); hash.Add(connection.From); hash.Add(connection.To);
+            hash.Add(connection.Label); hash.Add(connection.IsBranch);
+        }
+        return hash.ToHashCode();
+    }
+
     private void DrawDecorations(Scene scene, bool dragging = false)
     {
+        var fingerprint = dragging ? (int?)null : DecorationFingerprint(scene);
+        if (fingerprint.HasValue && scene.DecorationSignature == fingerprint) return;
+        scene.DecorationSignature = fingerprint;
         // Keep the workspace background/title mounted. Recreating them on every model
         // notification caused the entire desk to briefly repaint when locking or folding.
         foreach (var element in scene.Decorations.Where(e =>
@@ -1376,6 +1402,7 @@ internal sealed partial class WorkbenchWindow : Window
         internal Canvas Canvas { get; } = new();
         internal Dictionary<string, Card> Cards { get; } = new(StringComparer.Ordinal);
         internal List<UIElement> Decorations { get; } = new();
+        internal int? DecorationSignature;
         internal Rectangle? BackgroundFrame;
         internal Button? TitleButton;
         internal WorkbenchWorkspaceSnapshot? Snapshot;
@@ -1393,7 +1420,6 @@ internal sealed partial class WorkbenchWindow : Window
         internal TextBlock? PreviewText;
         internal TextBox? MaterialEditor;
         internal Image? MaterialImage;
-        internal Button? MaterialOpen;
         internal string MaterialVersion = "";
         internal Border Body { get; } = new() { ClipToBounds = true };
         internal Grid? Footer;

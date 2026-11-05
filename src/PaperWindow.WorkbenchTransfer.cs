@@ -17,6 +17,7 @@ public sealed partial class PaperWindow
 {
     private object _workbenchNoteHistoryPosition = new();
     private object? _workbenchNoteRedoPosition;
+    private bool _workbenchTransferApplying;
     private WorkbenchContentTransferPayload? _workbenchNoteSelection;
     private readonly Dictionary<List<PaperItem>, Guid> _workbenchTodoHistory = new();
 
@@ -60,6 +61,7 @@ public sealed partial class PaperWindow
         box.TextArea.SelectionChanged += (_, _) =>
         {
             if (!ReferenceEquals(_noteBox, box)) return;
+            if (!IsWorkbenchHosted) { _workbenchNoteSelection = null; return; }
             if (box.SelectionLength > 0 && TryCreateWorkbenchContentTransfer(out var selection))
                 _workbenchNoteSelection = selection;
             else if (box.IsKeyboardFocusWithin) _workbenchNoteSelection = null;
@@ -69,7 +71,8 @@ public sealed partial class PaperWindow
         // identify a shared transaction boundary without replacing or clearing either stack.
         box.Document.Changing += (_, _) =>
         {
-            if (!box.Document.UndoStack.AcceptChanges) return;
+            if (!box.Document.UndoStack.AcceptChanges ||
+                !IsWorkbenchHosted && !_workbenchTransferApplying && !_controller.HasWorkbenchContentHistory(_paper.Id)) return;
             var before = _workbenchNoteHistoryPosition;
             var after = new object();
             object? followingRedo = null;
@@ -147,9 +150,14 @@ public sealed partial class PaperWindow
         {
             boundary.NoteBefore = _workbenchNoteHistoryPosition;
             var document = _noteBox.Document;
-            document.UndoStack.StartUndoGroup(boundary);
-            try { document.Replace(0, document.TextLength, after.Content); }
-            finally { document.UndoStack.EndUndoGroup(); }
+            _workbenchTransferApplying = true;
+            try
+            {
+                document.UndoStack.StartUndoGroup(boundary);
+                try { document.Replace(0, document.TextLength, after.Content); }
+                finally { document.UndoStack.EndUndoGroup(); }
+            }
+            finally { _workbenchTransferApplying = false; }
             boundary.NoteAfter = _workbenchNoteHistoryPosition;
             CommitPendingMarkdownContentForSave();
             _workbenchNoteSelection = null;

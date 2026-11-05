@@ -10,6 +10,9 @@ public sealed partial class AppController
     internal event Action? WorkbenchContentTransferBlocked;
     internal event Action<IReadOnlySet<Guid>>? WorkbenchContentTransfersRetired;
 
+    internal bool HasWorkbenchContentHistory(string paperId) => _workbenchContentTransfers.Any(entry =>
+        IsCurrentWorkbenchTransfer(entry) && (entry.Source.Id == paperId || entry.Target.Id == paperId));
+
     internal bool CanTransferWorkbenchContent(WorkbenchContentTransferPayload payload, string? targetPaperId)
     {
         if (IsExiting || IsDataReloading || payload.WorkspaceGeneration != WorkspaceGeneration ||
@@ -17,8 +20,9 @@ public sealed partial class AppController
         var source = FindPaper(payload.SourcePaperId);
         if (source == null || targetPaperId == source.Id || (targetPaperId == null && State.Papers.Count >= 200)) return false;
         var target = targetPaperId == null ? new PaperData { Type = source.Type } : FindPaper(targetPaperId);
-        return target != null && WorkbenchContentTransfer.TryPlan(source, target, payload,
-            CurrentMarkdownContentForExternalRead(source), CurrentMarkdownContentForExternalRead(target), out _, out _);
+        // Hover only decides whether the types and selected items can move. The exact
+        // text, images and final target state are validated once at drop/commit.
+        return target != null && WorkbenchContentTransfer.CanPlanFast(source, target, payload);
     }
 
     internal bool TransferWorkbenchContent(WorkbenchContentTransferPayload payload, string? targetPaperId, WorkbenchPoint? at = null)

@@ -23,10 +23,14 @@ internal static partial class Program
         var sourceBox = (MarkdownTextBox)Member(source, "_noteBox");
         var targetBox = (MarkdownTextBox)Member(target, "_noteBox");
 
+        var ordinaryHistoryPosition = Member(source, "_workbenchNoteHistoryPosition");
         sourceBox.Document.Insert(sourceBox.Document.TextLength, "!");
+        Assert(ReferenceEquals(ordinaryHistoryPosition, Member(source, "_workbenchNoteHistoryPosition")),
+            "Ordinary Markdown typing created workbench-only history markers");
         targetBox.Document.Insert(targetBox.Document.TextLength, "?");
         sourceBox.Select(6, 5);
         Assert(source.TryCreateWorkbenchContentTransfer(out var selected), "Note selection did not produce drag payload");
+        Assert(controller.CanTransferWorkbenchContent(selected, "note-b"), "Lightweight hover rejected a valid note selection");
         Assert(controller.TransferWorkbenchContent(selected, "note-b"), "Note selection was not moved");
         var moveId = controller.LastWorkbenchContentTransferId;
         Assert(sourceBox.Text == "alpha\ngamma!" && targetBox.Text == "target?\nbeta\n", "Note move duplicated or lost text");
@@ -70,6 +74,7 @@ internal static partial class Program
         var todoWindow = controller.WorkbenchPaperWindow(todoSource.Id);
         todoWindow.RefreshTodoRowsForExternalMutation();
         Assert(todoWindow.TryCreateWorkbenchContentTransfer(out var todoPayload, wholePaper: true), "Whole todo paper did not produce payload");
+        Assert(controller.CanTransferWorkbenchContent(todoPayload, todoTarget.Id), "Lightweight hover rejected a valid Todo group");
         Assert(controller.TransferWorkbenchContent(todoPayload, todoTarget.Id), "Todo group did not move");
         var todoMove = controller.LastWorkbenchContentTransferId;
         Assert(todoSource.Items.Count == 1 && TodoRules.IsPlaceholder(todoSource.Items[0]), "Empty todo source did not keep its input row");

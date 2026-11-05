@@ -50,6 +50,28 @@ internal sealed class WorkbenchContentSnapshot
 /// <summary>Pure planning: no source is changed until both sides have passed validation.</summary>
 internal static class WorkbenchContentTransfer
 {
+    // Lightweight hover check: do not clone full note/Todo snapshots on every
+    // drag-over event. TryPlan performs all content and persistence checks at drop.
+    internal static bool CanPlanFast(PaperData source, PaperData target, WorkbenchContentTransferPayload payload)
+    {
+        if (source.Id == target.Id || source.Type != target.Type ||
+            source.WorkspaceMaterials != null || target.WorkspaceMaterials != null ||
+            payload.SourcePaperId != source.Id) return false;
+        if (source.Type == PaperTypes.Todo)
+        {
+            var ids = payload.TodoIds.ToHashSet(StringComparer.Ordinal);
+            if (ids.Count == 0 || ids.Count != payload.TodoIds.Count) return false;
+            return source.Items.Count(item => ids.Contains(item.Id)) == ids.Count &&
+                !source.Items.Any(item => ids.Contains(item.Id) && item.LinkedPaperId == target.Id) &&
+                !target.Items.Any(item => ids.Contains(item.Id));
+        }
+        return source.Type == PaperTypes.Note &&
+            source.BodyProviderId == PaperBodyProviderIds.Markdown &&
+            target.BodyProviderId == PaperBodyProviderIds.Markdown &&
+            payload.NoteLength > 0 && payload.NoteStart >= 0 &&
+            payload.ExpectedText.Length == payload.NoteLength;
+    }
+
     internal static bool TryPlan(
         PaperData source, PaperData target, WorkbenchContentTransferPayload payload,
         string sourceContent, string targetContent,

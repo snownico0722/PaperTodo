@@ -281,13 +281,6 @@ internal sealed partial class WorkbenchWindow
         }
         else
         {
-            if (item?.Kind is WorkspaceMaterialKinds.Link or WorkspaceMaterialKinds.File)
-            {
-                var open = card.MaterialOpen = NewButton(Strings.Get("WorkbenchOpenMaterial"));
-                DockPanel.SetDock(open, Dock.Bottom);
-                open.Click += (_, _) => OpenMaterial(paper.Id);
-                body.Children.Add(open);
-            }
             var editor = new TextBox
             {
                 Text = item?.Content ?? paper.Summary, MaxLength = PaperWindow.NoteTextMaxLength,
@@ -690,6 +683,7 @@ internal sealed partial class WorkbenchWindow
                 if (target != null) target.Label = editor.Text.Trim();
                 StoreLayout(state);
             }
+            scene.DecorationSignature = null; // Remove the transient label editor even on Escape.
             DrawDecorations(scene);
         }
         editor.LostKeyboardFocus += (_, _) => Finish(true);
