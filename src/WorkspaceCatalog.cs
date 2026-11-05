@@ -3,8 +3,8 @@ using System.IO;
 namespace PaperTodo;
 
 /// <summary>
-/// Resolves fixed slots and their immutable stores. No watcher, directory discovery, rename,
-/// mirrored catalog or inactive-workspace runtime is created.
+/// Resolves numbered workspace storage and the main-owned catalog. Display names never rename
+/// the on-disk documents, and inactive workspaces have no live presentation or plugin session.
 /// </summary>
 internal sealed class WorkspaceCatalog
 {
@@ -29,6 +29,39 @@ internal sealed class WorkspaceCatalog
     internal void SetStartupError(string message) => StartupError = message;
     internal StateStore MainStore => StoreFor(1);
     internal WorkspacePaths PathsFor(int number) => new(_directory, number);
+
+    // Purge inactive secondary data after removing the slot from the main catalog.
+    // A failed file cleanup is reported but does not restore catalog membership.
+    internal void DeleteInactiveSlotFiles(int number)
+    {
+        if (number is < 2 or > 5 || Options.Active == number)
+            throw new InvalidOperationException("Only inactive secondary workspaces may be deleted.");
+        var paths = PathsFor(number);
+        var stem = "data" + number.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var primary = stem + ".json";
+        var backup = stem + ".backup.json";
+        foreach (var file in System.IO.Directory.EnumerateFiles(_directory))
+        {
+            var name = Path.GetFileName(file);
+            // Include atomic-write temps and copies created by StateStore recovery.
+            // Match the complete numbered stem: deleting data2 must not touch data20.
+            if (name.Equals(primary, StringComparison.OrdinalIgnoreCase) ||
+                name.Equals(primary + ".tmp", StringComparison.OrdinalIgnoreCase) ||
+                name.Equals(backup, StringComparison.OrdinalIgnoreCase) ||
+                name.Equals(backup + ".tmp", StringComparison.OrdinalIgnoreCase) ||
+                name.StartsWith(stem + "conflict-", StringComparison.OrdinalIgnoreCase) ||
+                name.StartsWith(stem + ".failed_load.", StringComparison.OrdinalIgnoreCase) ||
+                name.StartsWith(stem + ".backup.used_for_recovery.", StringComparison.OrdinalIgnoreCase) ||
+                name.StartsWith(primary + ".orphaned.", StringComparison.OrdinalIgnoreCase) ||
+                name.StartsWith(backup + ".orphaned.", StringComparison.OrdinalIgnoreCase) ||
+                name.StartsWith(stem + ".recovered", StringComparison.OrdinalIgnoreCase))
+                File.Delete(file);
+        }
+        File.Delete(paths.Images);
+        File.Delete(paths.Images + "-lock");
+        if (System.IO.Directory.Exists(paths.PluginData))
+            System.IO.Directory.Delete(paths.PluginData, recursive: true);
+    }
 
     internal StateStore StoreFor(int number)
     {

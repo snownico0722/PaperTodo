@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Text.Json.Nodes;
 using PaperTodo;
@@ -32,6 +33,7 @@ internal static partial class Program
                 ("unchanged external snapshot retains local edits", MergeUneditedExternal),
                 ("conflicts group by paper and archive input", MergePaperConflict),
                 ("delete/edit conflicts honor both choices for notes and todos", MergePaperDeletionConflicts),
+                ("merge preserves links to a paper chosen to survive", MergeDeletedPaperRetainsChosenLinks),
                 ("stale external source cannot overwrite a newer edit", MergeRejectChangedSource),
                 ("source changed after flush is rejected before replacement", MergeRejectDuringReplace),
                 ("source changed during replace retry is also rejected", MergeRejectDuringRetry),
@@ -69,7 +71,7 @@ internal static partial class Program
     }
 
     private static JsonObject J(string json) => JsonNode.Parse(json)!.AsObject();
-    private static void Require(bool condition, string message)
+    private static void Require([DoesNotReturnIf(false)] bool condition, string message)
     {
         if (!condition) throw new InvalidOperationException(message);
     }

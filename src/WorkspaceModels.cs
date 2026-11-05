@@ -9,20 +9,45 @@ namespace PaperTodo;
 public sealed class WorkspaceConfiguration
 {
     public bool Enabled { get; set; }
-    public int Count { get; set; } = 2;
     public int Active { get; set; } = 1;
     public Dictionary<int, bool> FollowMainSettings { get; set; } = new();
+    public List<int> Slots { get; set; } = [1];
+    public Dictionary<int, string> Names { get; set; } = new();
+    public bool TopBarNamePicker { get; set; }
 
     public bool FollowsMain(int number) => number > 1 &&
         (FollowMainSettings == null || !FollowMainSettings.TryGetValue(number, out var follow) || follow);
 
-    internal WorkspaceConfiguration Normalized() => new()
+    internal IReadOnlyList<int> SlotNumbers =>
+        (Slots ?? []).Append(1).Where(number => number is >= 1 and <= 5)
+            .Distinct().OrderBy(number => number).ToArray();
+
+    internal bool ContainsSlot(int number) => SlotNumbers.Contains(number);
+
+    internal int NextSlot(int number)
     {
-        Enabled = Enabled,
-        Count = Math.Clamp(Count, 2, 5),
-        Active = Enabled ? Math.Clamp(Active, 1, Math.Clamp(Count, 2, 5)) : 1,
-        FollowMainSettings = Enumerable.Range(2, 4).ToDictionary(n => n, FollowsMain)
-    };
+        var slots = SlotNumbers;
+        return slots.FirstOrDefault(slot => slot > number, slots[0]);
+    }
+
+    internal string DisplayName(int number) =>
+        Names != null && Names.TryGetValue(number, out var value) && !string.IsNullOrWhiteSpace(value)
+            ? value : Strings.Format("WorkspaceSlotLabel", number);
+
+    internal WorkspaceConfiguration Normalized()
+    {
+        var slots = SlotNumbers;
+        return new WorkspaceConfiguration
+        {
+            Enabled = Enabled,
+            Active = Enabled && slots.Contains(Active) ? Active : 1,
+            Slots = slots.ToList(),
+            Names = (Names ?? new()).Where(pair => slots.Contains(pair.Key) && !string.IsNullOrWhiteSpace(pair.Value))
+                .ToDictionary(pair => pair.Key, pair => pair.Value.Trim()[..Math.Min(64, pair.Value.Trim().Length)]),
+            TopBarNamePicker = TopBarNamePicker,
+            FollowMainSettings = Enumerable.Range(2, 4).ToDictionary(n => n, FollowsMain)
+        };
+    }
 }
 
 internal sealed class WorkspacePaths

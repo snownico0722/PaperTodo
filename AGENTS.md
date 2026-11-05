@@ -124,7 +124,7 @@ Markdown 当前保持轻量。若要扩展到网络图片、表格、附件、�
 
 ## 单实例与托盘
 
-- **正常 GUI 模式**下只有主 GUI 实例拥有并释放 single-instance Mutex；后续 GUI 启动只转发命令并退出。`--mcp` bridge 在 GUI 单实例协议之前分流，不受该 Mutex 规则约束。
+- **正常 GUI 模式**下只有主 GUI 实例拥有并释放 single-instance Mutex；后续 GUI 启动只转发命令并退出。`--mcp` bridge 与 `--import-note-image` 单次导入在 GUI 单实例协议之前分流，不受该 Mutex 规则约束，也不创建第二份 GUI 状态。
 - `exit` / `quit` 在没有现成 GUI 主实例时也不能为了执行命令恢复窗口或创建默认纸片。
 - 托盘当前技术路线见 Architecture「OS 与全局集成」，历史原因见 D-017。不要把 Hardcodet `TaskbarIcon.IconSource` 改回 `System.Drawing.Icon`，也不要用手动 popup、预热菜单或全局鼠标轮询重新修同一首次菜单问题。
 
@@ -177,7 +177,7 @@ Architecture / Decisions 按「项目知识入口」中的 Edge 影响范围路�
 - 不重新引入已删除的 `scripts/edge-refinement-tests/` 或依赖源码字符串/文件路径/方法排列的 source-shape test；若新增 Edge 自动化，应验证可执行 reducer/geometry/policy/transaction 行为，而不是源码排布。真实集成回归仍依赖编译、诊断日志和真机验证。
 - 普通编译：`dotnet build PaperTodo.csproj -c Release`。
 - `vendor/wpf-notifyicon` 使用父仓库记录的固定 submodule commit；更新 fork 时显式更新 gitlink，并完成构建和真实托盘手测。构建过程不自动拉取最新分支。
-- 用户在 chat 中要求“打包”时，默认使用 GitHub Actions `Package`（`.github/workflows/debug.yml`）打包指定分支，配置为 `Release`（正式版）、Windows x64、`single_file=true`（单文件）、`include_dotnet=false`（不内置 .NET）；明确指定的选项只覆盖对应默认值。允许 `Release`/`Debug`、单文件/多文件、内置/不内置 .NET 三项独立组合；每次只生成所选组合的一个产物，非单文件以 ZIP 提供，不默认同时打包其他组合；单文件内部压缩保持关闭。普通聊天打包不创建 GitHub Release；主线 push 的自动打包也使用上述默认组合。PR `[debug]` 测试包触发规则保持不变。
+- 用户在 chat 中要求“打包”时，默认使用 GitHub Actions `Package`（`.github/workflows/debug.yml`）打包指定分支，配置为 `Release`（正式版）、Windows x64、`single_file=true`（单文件）、`include_dotnet=false`（不内置 .NET）；明确指定的选项只覆盖对应默认值。允许 `Release`/`Debug`、单文件/多文件、内置/不内置 .NET 三项独立组合；每次只生成所选组合的一个产物，非单文件以 ZIP 提供，不默认同时打包其他组合；单文件内部压缩保持关闭。普通聊天打包不创建 GitHub Release；主线 push 的自动打包也使用上述默认组合。对仓库内 PR 的默认包，可通过移除后重新添加 `package` 标签触发 `Package`，无需制造提交；工作流固定签出的 PR head SHA，不打外部 fork，不赋予写权限或 Secrets。其他打包选项仍通过手动 `workflow_dispatch` 选择。PR `[debug]` 测试包触发规则保持不变。
 - 云端 Release 发布 Windows x64 self-contained 与 no-runtime 两个单文件。WPF 版本不启用 `PublishTrimmed` 或 Native AOT。
 - 普通 build/publish 使用仓库内默认 `papertodo_lmdb.dll`；GitHub Release 必须先从仓库内 LMDB 源码 `-ForceRebuild`，不能把默认 DLL 冒充云端编译产物。
 - 稳定正式版只通过完成真实多屏/混合 DPI 等发布前手测后的 `workflow_dispatch` 发布；稳定 tag push 不是发布步骤。`rc` / `alpha` / `beta` / `preview` tag 可以发布预发行版。

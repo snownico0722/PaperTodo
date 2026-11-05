@@ -580,8 +580,16 @@ internal static class ReviewArchiveStore
         {
             _ = Prune(settings);
         }
-        Changed?.Invoke();
+        // Persistence belongs to the mutation, not to successful UI notifications.
         ScheduleSave();
+        foreach (Action handler in Changed?.GetInvocationList() ?? [])
+        {
+            try { handler(); }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Trace.TraceWarning("Review archive observer failed: {0}", ex.GetType().Name);
+            }
+        }
     }
 
     private static void ScheduleSave()
@@ -687,3 +695,4 @@ internal static class ReviewArchiveStore
         });
     }
 }
+
