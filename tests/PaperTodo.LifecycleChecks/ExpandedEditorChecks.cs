@@ -5,6 +5,8 @@ using System.Linq;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Media;
 using System.Windows.Interop;
 using System.Windows.Threading;
 using PaperTodo;
@@ -52,6 +54,13 @@ internal static class ExpandedEditorChecks
         var before = controller.State.Papers.ToDictionary(
             paper => paper.Id, paper => (paper.X, paper.Y, paper.Width, paper.Height));
 
+        var modeButton = (Button)Member(a, "_editorModeButton");
+        var originalIcons = (StackPanel)Member(a, "_topBarActionButtonsHost");
+        Check(originalIcons.Children.Contains(modeButton) &&
+              PaperTopBarShortcuts.IsPinned(controller.State, PaperTopBarShortcuts.ExpandedEditor),
+            "Editor mode does not participate in the regular saved shortcuts");
+        var originalGeometry = ModeGeometry(modeButton);
+
         controller.OpenExpandedEditorFor(a);
         var host = a.ExpandedEditorHostWindow
             ?? throw new InvalidOperationException("Editor host did not open");
@@ -61,13 +70,39 @@ internal static class ExpandedEditorChecks
         Check(hwnd != IntPtr.Zero && host.IsVisible, "No visible taskbar editor window");
         Check(a.IsExpandedEditorHosted && !a.IsVisible, "The original paper remained visible alongside the editor");
         Check(ReferenceEquals(firstEditor, Member(a, "_noteBox")), "The first Markdown control was duplicated");
+        Check(!string.Equals(originalGeometry, ModeGeometry(modeButton), StringComparison.Ordinal),
+            "Entering editor did not change the centered vector shortcut icon");
+        var topBar = (Border)Member(a, "_topBarHost");
+        Check(topBar.ContextMenu != null, "Borrowed PaperTodo titlebar lost its right-click menu");
+        var windowButtons = (StackPanel)Member(a, "_topBarButtonsHost");
+        Check(ReferenceEquals(windowButtons.Children[windowButtons.Children.Count - 1],
+            Member(a, "_closeButton")), "Close/capsule button is no longer rightmost");
+        var frame = (Border)Member(host, "_frame");
+        Check(frame.BorderThickness.Left == 0 && frame.CornerRadius.TopLeft == 12 &&
+              frame.Clip is RectangleGeometry, "Expanded editor has a square or extra bordered shell");
+        var sidebar = (Border)Member(a, "_editorPaperSidebar");
         a.SetExpandedEditorSidebarOpen(true);
+        Check(sidebar.Margin.Top == 0, "Paper list leaves an empty strip for the Markdown toolbar");
+        var paperItems = (StackPanel)Member(a, "_editorPaperList");
+        var firstItem = (Button)paperItems.Children[0];
+        firstItem.ApplyTemplate();
+        var selectionBorder = firstItem.Template.FindName("ItemSurface", firstItem) as Border;
+        Check(selectionBorder?.CornerRadius.TopLeft == 7,
+            "Sidebar selected-row background does not have rounded corners");
+        controller.State.Papers.Single(p => p.Id == "editor-a").AlwaysOnTop = true;
+        a.RefreshEffectiveTopmost();
+        Check(host.Topmost, "Pin button only modified the hidden PaperWindow");
+        controller.State.Papers.Single(p => p.Id == "editor-a").AlwaysOnTop = false;
+        a.RefreshEffectiveTopmost();
+        Check(!host.Topmost, "Unpin did not update the visible editor host");
 
         controller.SwitchExpandedEditorPaper(a, "editor-b");
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
         Check(ReferenceEquals(host, b.ExpandedEditorHostWindow), "Sidebar replaced the editor host");
         Check(new WindowInteropHelper(host).Handle == hwnd, "Switching papers changed the editor HWND");
         Check(host.CurrentPaperId == "editor-b", "Sidebar did not select the second paper");
+        Check(host.IsActive && !a.IsActive,
+            "Sidebar switch incorrectly activated the previous desktop paper");
         Check(b.IsExpandedEditorSidebarOpen && !controller.State.Papers.Single(p => p.Id == "editor-b").IsCollapsed,
             "Switch did not preserve sidebar presentation or expand the borrowed capsule");
         Check(ReferenceEquals(secondEditor, Member(b, "_noteBox")) &&
@@ -91,17 +126,23 @@ internal static class ExpandedEditorChecks
               ReferenceEquals(secondSession, Member(b, "_markdownBodySession")),
               "Leaving B disposed its original editor session");
 
-        host.ReturnToPaper();
+        // The editor's ordered shortcut itself performs return, independently of ×.
+        var todoModeButton = (Button)Member(todo, "_editorModeButton");
+        todoModeButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
         Check(!todo.IsExpandedEditorHosted && controller.State.Papers.Single(p => p.Id == "editor-todo").IsVisible,
             "Return did not restore the selected paper as an ordinary paper");
 
-        controller.OpenExpandedEditorFor(b);
-        var secondHost = b.ExpandedEditorHostWindow!;
-        secondHost.CloseCurrentPaper();
+        controller.OpenExpandedEditorFor(a);
+        var secondHost = a.ExpandedEditorHostWindow!;
+        var close = (Button)Member(a, "_closeButton");
+        Check(Equals(close.ToolTip, Strings.Get("ToolTipCollapseToCapsule")) &&
+              close.Content is not string, "Editor × is not the collapse-to-capsule action");
+        close.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
-        Check(!controller.State.Papers.Single(p => p.Id == "editor-b").IsVisible &&
-              !b.IsExpandedEditorHosted, "Closing editor did not close the paper presentation");
+        var collapsedPaper = controller.State.Papers.Single(p => p.Id == "editor-a");
+        Check(collapsedPaper.IsVisible && collapsedPaper.IsCollapsed &&
+              !a.IsExpandedEditorHosted, "Far-right editor × did not collapse the paper to a capsule");
 
         foreach (var p in controller.State.Papers)
             Check(before[p.Id] == (p.X, p.Y, p.Width, p.Height),
@@ -109,6 +150,14 @@ internal static class ExpandedEditorChecks
         Check(ReferenceEquals(firstSession, Member(a, "_markdownBodySession")),
             "Switching or closing replaced the initial editor session");
         controller.Exit();
+    }
+
+    private static string ModeGeometry(Button button)
+    {
+        var icon = (Viewbox)button.Content;
+        var canvas = (Canvas)icon.Child;
+        var path = (System.Windows.Shapes.Path)canvas.Children[0];
+        return path.Data.ToString();
     }
 
     private static object Member(object owner, string name) =>
