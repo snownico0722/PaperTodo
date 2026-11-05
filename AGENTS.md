@@ -124,7 +124,7 @@ Markdown 当前保持轻量。若要扩展到网络图片、表格、附件、�
 
 ## 单实例与托盘
 
-- **正常 GUI 模式**下只有主 GUI 实例拥有并释放 single-instance Mutex；后续 GUI 启动只转发命令并退出。`--mcp` bridge 在 GUI 单实例协议之前分流，不受该 Mutex 规则约束。
+- **正常 GUI 模式**下只有主 GUI 实例拥有并释放 single-instance Mutex；后续 GUI 启动只转发命令并退出。`--mcp` bridge 与 `--import-note-image` 单次导入在 GUI 单实例协议之前分流，不受该 Mutex 规则约束，也不创建第二份 GUI 状态。
 - `exit` / `quit` 在没有现成 GUI 主实例时也不能为了执行命令恢复窗口或创建默认纸片。
 - 托盘当前技术路线见 Architecture「OS 与全局集成」，历史原因见 D-017。不要把 Hardcodet `TaskbarIcon.IconSource` 改回 `System.Drawing.Icon`，也不要用手动 popup、预热菜单或全局鼠标轮询重新修同一首次菜单问题。
 

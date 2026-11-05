@@ -77,6 +77,7 @@ internal static partial class Program
             SettingsEditorBehavior();
             PostCommitFailureDoesNotReplay();
             Pump(PipeAndUnlinkBehavior());
+            Pump(ImageImportCommandBehavior());
             WebBridges();
             IsolatedPresentationBehavior();
             Console.WriteLine($"Settings API: {_checks} behavior checks passed.");
@@ -602,6 +603,11 @@ internal static partial class Program
             var method = request.GetProperty("method").GetString();
             if (method == "get_workspace_binding")
                 return new { token = "fixture-workspace" };
+            if (method == "read_note_image")
+            {
+                requests.Add(request.Clone());
+                return new { paper_id = "paper", image_id = "001", mime = "image/png", image_base64 = "AQID" };
+            }
             requests.Add(request.Clone());
             if (method == "set_setting") host!.StopAfterResponse();
             return new { received = true };
@@ -623,6 +629,29 @@ internal static partial class Program
             var count = requests.Count;
             Throws<McpException>(() => tools.UpdateTodo("paper", "todo", linked_paper_id: "note", clear_linked_paper: true));
             Check(requests.Count == count, "Conflicting link arguments cause no request or mutation.");
+            var imageTool = ModelContextProtocol.Server.McpServerTool.Create(
+                typeof(McpTools).GetMethod(nameof(McpTools.InsertNoteImage))!,
+                tools);
+            var imageSchema = imageTool.ProtocolTool.InputSchema;
+            Check(imageSchema.GetProperty("properties").TryGetProperty("image_base64", out _) &&
+                  !imageSchema.GetProperty("properties").TryGetProperty("image_path", out _) &&
+                  imageSchema.GetProperty("required").EnumerateArray()
+                    .Any(value => value.GetString() == "image_base64"),
+                "MCP image schema requires bytes and does not expose a local file path.");
+
+            await tools.InsertNoteImage("paper", "AQID", image_name: "picture.png");
+            Check(requests[^1].GetProperty("method").GetString() == "insert_note_image" &&
+                  requests[^1].GetProperty("params").GetProperty("image_base64").GetString() == "AQID" &&
+                  requests[^1].GetProperty("params").GetProperty("image_name").GetString() == "picture.png" &&
+                  !requests[^1].GetProperty("params").TryGetProperty("image_path", out _),
+                "MCP image transport passes encoded bytes without a source path.");
+            var imageBlocks = await tools.ReadNoteImage("paper", "001");
+            Check(requests[^1].GetProperty("method").GetString() == "read_note_image" &&
+                  imageBlocks is [ModelContextProtocol.Protocol.TextContentBlock,
+                      ModelContextProtocol.Protocol.ImageContentBlock image] &&
+                  image.MimeType == "image/png" &&
+                  image.DecodedData.ToArray().SequenceEqual(new byte[] { 1, 2, 3 }),
+                "The MCP tool returns actual image content, not Base64 displayed as text.");
             await tools.ListSettings("todo");
             Check(requests[^1].GetProperty("params").GetProperty("category").GetString() == "todo", "MCP list category forwarded.");
             await tools.GetSetting("todo.paper_links");
@@ -670,3 +699,4 @@ internal static partial class Program
         finally { Directory.Delete(root, true); }
     }
 }
+

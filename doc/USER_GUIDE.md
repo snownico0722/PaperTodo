@@ -305,6 +305,33 @@ PaperTodo 没有中心主窗口，每张纸片都是独立的桌面窗口，系�
 
 正文中会插入 Markdown 图片引用，图片数据保存在当前工作区的图片库：主工作区为 `note-assets.lmdb`，副工作区 2～5 为 `note-assets2.lmdb`～`note-assets5.lmdb`。右键已渲染图片可复制图片或删除引用。备份与迁移时应将同一工作区的文字数据和图片库一并保留。
 
+**MCP 图片操作**：启用 MCP 并允许新增/追加写入后，可将图片**追加到现有内置 Markdown 笔记末尾**。图片仍按现有格式、压缩、尺寸与图片库容量限制保存；返回图片 ID 和 Markdown 引用。
+
+- **本地 Codex 等可执行程序的客户端**：运行 `PaperTodo.exe --import-note-image --paper-id <笔记ID> [--image-name <名称>]`，由调用端程序将原始图片字节写入子进程的二进制标准输入，完成后关闭输入。最多 4 MiB；命令不接受图片文件路径、网址、Base64 文本或 data URI。程序会自行编码并调用既有写入通道，模型只接收简短结果。
+- **能直接用代码调用 MCP 的客户端**：由程序构造 `insert_note_image(paper_id, image_base64=图片数据)`，使用纯 Base64（解码后最多 4 MiB，可选 `image_name`）。不要先把编码打印进对话，再让模型复制到工具参数。
+- **只支持普通工具调用的聊天客户端**：须由客户端提供附件字节转交能力；仅把图片展示给模型，不代表能转交原图。
+
+调用示例（Python 标准库；原图已在内存时直接使用已有的 `image_bytes`）：
+
+```python
+from pathlib import Path
+import subprocess
+
+image_bytes = Path(r"C:\Pictures\screenshot.png").read_bytes()  # 调用端读取
+result = subprocess.run(
+    [r"C:\PaperTodo\PaperTodo.exe", "--import-note-image",
+     "--paper-id", "替换为已有笔记ID", "--image-name", "screenshot.png"],
+    input=image_bytes, capture_output=True, check=False,
+)
+print(result.stdout.decode("utf-8"))  # 只有简短 JSON，不含图片数据
+if result.returncode:
+    raise RuntimeError(result.stderr.decode("utf-8", errors="replace"))
+```
+
+PowerShell 调用时请使用 `Process.StandardInput.BaseStream` 写入字节，不要用文本管道传图片。退出码 `0` 表示成功，`1` 表示导入失败，`2` 表示参数或输入方式错误；失败信息写入标准错误。命令不会自行打开主界面或启用 MCP 权限；主程序须已经运行。接收图片期间若切换工作区，导入会被拒绝；写入结果不明时先查询笔记，避免重复追加。
+
+读取时，先用 `get_paper` 找到 `i:图片ID`，再用 `read_note_image(paper_id, image_id)` 获取支持视觉的 MCP 客户端可直接查看的图片；不可跨笔记读取别的笔记的图片。读取仅允许当前笔记正文仍有效引用的图片；删除引用后，即使为撤销恢复保留了图片字节，MCP 也不能再读取。追加图片前会检查当前 Markdown 排版；例如末尾有未闭合的代码块时会拒绝写入，以免出现导入成功却只显示图片代码的情况。读取不需要写入权限；实际能否显示图片，取决于 MCP 客户端是否支持图片内容块。
+
 ### 4.4 用外部程序临时打开
 
 从笔记纸 `···` 菜单（或顶栏快捷按钮）选择**外部编辑**。程序会将当前内置 Markdown 笔记和引用图片导出到临时文件，并用系统关联程序打开。“设置 → 笔记”可修改导出文件后缀；该后缀无关联程序时自动使用记事本打开。
@@ -562,8 +589,9 @@ PaperTodo **没有后台文件监控或自动同步**。直接修改运行中的
 | `PaperTodo.exe --new-note` | `PaperTodo.exe note` | 新建笔记纸 |
 | `PaperTodo.exe --exit` | `PaperTodo.exe quit` | 保存并退出 |
 | `PaperTodo.exe --mcp` | 无 | 启动供 MCP 客户端使用的连接进程（见 [8.5 实验室功能](#85-实验室功能)） |
+| `PaperTodo.exe --import-note-image --paper-id <笔记ID>` | 无 | 从二进制标准输入导入图片；主程序须已运行并允许 MCP 新增/追加写入 |
 
-普通界面启动为单实例模式：程序已运行时，后续启动会转发指令后退出，不会重复创建窗口。`--mcp` 是独立连接模式，不按普通界面启动参数处理。
+普通界面启动为单实例模式：程序已运行时，后续启动会转发指令后退出，不会重复创建窗口。`--mcp` 与 `--import-note-image` 是独立连接模式，不按普通界面启动参数处理。
 
 ---
 
