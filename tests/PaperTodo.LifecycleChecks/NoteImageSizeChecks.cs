@@ -10,6 +10,7 @@ internal static class NoteImageSizeChecks
 {
     internal static void Run()
     {
+        CheckHeaderHints();
         CheckStatisticsCost();
         var cases = new List<(string Name, NoteImageArtifact Artifact)>();
         var errors = new List<string>();
@@ -52,6 +53,12 @@ internal static class NoteImageSizeChecks
             var text = string.Concat(Enumerable.Repeat("## 分享\n\n![image](i:123){width=25%}\n\n随手记下今天的事情。\n\n", 5));
             cases.Add(($"jpeg95-{kind}-25-heldout", NoteImageExport.Compose("记录", text, _ => source, "缺图", CancellationToken.None)));
         }
+        foreach (var kind in new[] { "gradient", "texture", "noise" })
+        {
+            var source = Source(kind, jpeg: true, quality: 65);
+            var text = string.Concat(Enumerable.Repeat("## 低画质原图\n\n![image](i:123){width=75%}\n\n新的缩放与压缩参数。\n\n", 4));
+            cases.Add(($"jpeg65-{kind}-75-heldout", NoteImageExport.Compose("图片笔记", text, _ => source, "缺图", CancellationToken.None)));
+        }
         foreach (var (name, artifact) in cases)
         {
             var estimate = artifact.SizeEstimate;
@@ -83,15 +90,60 @@ internal static class NoteImageSizeChecks
         if (errors.Count > 0) throw new InvalidOperationException(string.Join("\n", errors));
     }
 
+    private static byte[] HeaderFixture()
+    {
+        // A non-zero table ID and an APP segment before the tables exercise marker parsing.
+        var bytes = new List<byte> { 0xff, 0xd8, 0xff, 0xe1, 0, 6, 1, 2, 3, 4, 0xff, 0xdb, 0, 67, 2 };
+        bytes.AddRange(Enumerable.Repeat((byte)20, 64));
+        bytes.AddRange(new byte[] { 0xff, 0xc0, 0, 17, 8, 3, 32, 4, 176, 3,
+            1, 0x22, 2, 2, 0x11, 2, 3, 0x11, 2, 0xff, 0xda, 0, 12,
+            3, 1, 0, 2, 0, 3, 0, 0, 63, 0 });
+        bytes.AddRange(new byte[250000]);
+        return bytes.ToArray();
+    }
+
+    private static void CheckHeaderHints()
+    {
+        var bytes = HeaderFixture();
+        var info = NoteImageJpegInfo.Read(bytes);
+        if (info.Quantization != 20 || info.Sampling != 4 || info.PayloadBytes != 250012)
+            throw new InvalidOperationException("JPEG header hints did not follow the frame's quantization table");
+        // Corrupt or incomplete metadata must never turn a size hint into an export failure.
+        for (var n = 0; n < 100; n++) _ = NoteImageJpegInfo.Read(bytes.AsSpan(0, n));
+        var invalid = (byte[])bytes.Clone();
+        invalid[14] = 0xf2;
+        if (NoteImageJpegInfo.Read(invalid) != default)
+            throw new InvalidOperationException("Invalid quantization precision was accepted");
+        invalid = (byte[])bytes.Clone();
+        invalid[4] = 0;
+        invalid[5] = 1;
+        if (NoteImageJpegInfo.Read(invalid) != default)
+            throw new InvalidOperationException("Invalid JPEG segment length was accepted");
+        var withMetadata = new List<byte>(bytes.Take(2));
+        withMetadata.AddRange(new byte[] { 0xff, 0xe2, 0xff, 0xff });
+        withMetadata.AddRange(new byte[65533]);
+        withMetadata.AddRange(bytes.Skip(2));
+        if (NoteImageJpegInfo.Read(withMetadata.ToArray()) != info)
+            throw new InvalidOperationException("APP metadata changed the predicted image payload");
+        var original = new NoteImageSizeEstimate();
+        var padded = new NoteImageSizeEstimate();
+        original.AddImage(bytes.Length, "image/jpeg", 1200, 800, 1008, 672, info);
+        padded.AddImage(withMetadata.Count, "image/jpeg", 1200, 800, 1008, 672, info);
+        if (original.Finish(1200, 1000) != padded.Finish(1200, 1000))
+            throw new InvalidOperationException("APP metadata changed the file size hint");
+    }
+
     private static void CheckStatisticsCost()
     {
         var text = string.Concat(Enumerable.Repeat("记录今天的想法，保留文字与图片。A useful note keeps the original wording. ", 1000));
+        var header = HeaderFixture();
         double RunOnce()
         {
             var watch = Stopwatch.StartNew();
             var estimate = new NoteImageSizeEstimate();
             estimate.AddText(text, 18);
-            for (var i = 0; i < 100; i++) estimate.AddImage(250000, "image/jpeg", 1200, 800, 1008, 672);
+            for (var i = 0; i < 100; i++)
+                estimate.AddImage(header.Length, "image/jpeg", 1200, 800, 1008, 672, NoteImageJpegInfo.Read(header));
             var result = estimate.Finish(1200, 60000);
             if (result.JpegBytes <= 0 || result.PngBytes <= 0) throw new InvalidOperationException("Missing size hints");
             return watch.Elapsed.TotalMilliseconds;
@@ -139,6 +191,7 @@ internal static class NoteImageSizeChecks
         encoded.Position = 0;
         var decoded = BitmapFrame.Create(encoded, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
         decoded.Freeze();
-        return new NoteImageSource(decoded, width, encoded.Length, jpeg ? "image/jpeg" : "image/png", height);
+        return new NoteImageSource(decoded, width, encoded.Length, jpeg ? "image/jpeg" : "image/png", height,
+            jpeg ? NoteImageJpegInfo.Read(encoded.GetBuffer().AsSpan(0, (int)encoded.Length)) : default);
     }
 }

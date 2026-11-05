@@ -23,3 +23,20 @@ python tools/analysis/note-image-size/calibrate.py
 `tests/PaperTodo.LifecycleChecks/NoteImageSizeChecks.cs` 用真正的 WPF 排版和两个实际编码器验证整篇结果。统计开销单独用 58,000 字符和 100 次图片元数据计算计时，包含字符遍历、图片公式与最终求和；不把读取 artifact 两个数字的时间冒充估算总成本。此计时不包含预览排版，也不与旧版含光栅化计时计算严格机器加速比。
 
 修改字体、输出比例、JPG 质量或 PNG 过滤/编码方式时，应重新检查系数。已有失败路线与取舍见 Decisions D-066。
+
+## JPEG 文件头校准
+
+`NoteImageJpegInfo` 按 JPEG T.81 的 DQT/SOF/SOS 标记读取首分量使用的量化表均值、亮度/色度采样比例和首个扫描头之后的字节数。仅检查最多 128 个头标记，APP/ICC 段按长度直接跳过；遇到扫描数据立即停止，不读取图像像素或熵编码正文。缺失或不能使用的头信息继续走原有粗估，不阻止导出。没有新增持久化字段或运行时依赖。
+
+新增回归按源数据密度、量化均值、采样比例和缩放比例计算 JPG/PNG；文字与 PNG 原图沿用现有系数。只在已校准的量化/采样范围内启用；接近纯色编码下限的 JPEG→PNG 保留原粗估。PNG 拟合按实际体积加权，降低几 KB 小图在相对误差目标中的权重，仍报告未经显示取整的真实误差。
+
+```sh
+python tools/analysis/note-image-size/jpeg_calibrate.py
+# 可用 --data 复用上次生成的 jpeg-corpus.json；--photo-dir 可重新编码独立照片。
+```
+
+训练：种子 17/23 的 14 个合成场景与 china/flower 两张照片；调参检查：种子 37 的 7 个合成场景，照片不重复进入此组。独立照片为 OpenCV 的 baboon/building/fruits 和 Pillow 的 hopper，源文件路径与 blob SHA、192 组编码测量在 `jpeg-validation.json`；这四张图不参与拟合。每张图有多种压缩/缩放变体，因此 192 组测量不等于 192 张独立照片，且 Pillow 的图像校准不能替代 WPF/WIC 整篇导出验收。
+
+本轮独立照片 JPG 中位相对误差由约 35.1% 降至 18.2%，PNG 中位数约 18.7%→19.0%，PNG 第 90 百分位由约 43.7% 降至 31.1%。改善侧重 JPG 与 PNG 的较大偏差，不表示每张图都会更准。Windows 检查另外覆盖真实图片编码、完整文章、不同量化参数、无效/截断头及附加元数据不影响预测；计时包括 100 次文件头解析及两种体积计算。
+
+格式依据：[ITU-T T.81 B.2](https://www.w3.org/Graphics/JPEG/itu-t81.pdf)。
