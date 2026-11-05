@@ -109,6 +109,13 @@ internal static class NoteImageExport
         jpeg.Complete();
     }
 
+    internal static NoteImageSizeEstimate MeasureSize(NoteImageArtifact artifact, CancellationToken cancellation)
+    {
+        var estimate = new NoteImageSizeEstimate(artifact.PixelWidth);
+        RenderBands(artifact, cancellation, estimate.AddBgrRows);
+        return estimate;
+    }
+
     private static void RenderBands(NoteImageArtifact artifact, CancellationToken cancellation,
         Action<byte[], int> writeRows)
     {
@@ -456,3 +463,4 @@ internal static class NoteImageExport
 
     }
 }
+

@@ -22,6 +22,7 @@ internal static class NoteImageExportChecks
     {
         var token = CancellationToken.None;
         CheckContentCompatibility();
+        NoteImageSizeChecks.Run();
         var sample = NoteImageExport.Compose("把想法，写成自己的样子", """
             # 把想法，写成自己的样子
 
@@ -380,3 +381,4 @@ internal static class NoteImageExportChecks
     private static object Member(object value, string name) => MemberOrNull(value, name) ?? throw new MissingMemberException(name);
     private static void Check(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }
 }
+
