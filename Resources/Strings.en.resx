@@ -1677,7 +1677,7 @@ The original note is kept.</value></data>
   <data name="WorkbenchSearch" xml:space="preserve"><value>Search all workspaces; press Enter to navigate</value></data>
   <data name="WorkbenchRefresh" xml:space="preserve"><value>Refresh overview</value></data>
   <data name="WorkbenchClose" xml:space="preserve"><value>Back to desktop</value></data>
-  <data name="WorkbenchHint" xml:space="preserve"><value>Drag on empty canvas to select; Ctrl+click titles to multi-select; Ctrl+G to group. Middle-drag to pan; Alt+wheel to zoom. In nodes, Tab adds a child and Enter adds a sibling.</value></data>
+  <data name="WorkbenchHint" xml:space="preserve"><value>Drag empty canvas to select; Ctrl+click titles to multi-select; Ctrl+G to group. Right-drag to pan; Alt+wheel to zoom. Drag a card's link icon to connect it.</value></data>
   <data name="WorkbenchError" xml:space="preserve"><value>Workbench operation failed: {0}</value></data>
   <data name="WorkbenchPinConflict" xml:space="preserve"><value>Pinned papers overlap. Their positions were kept; move or unpin one to resolve the conflict.</value></data>
   <data name="WorkbenchDelete" xml:space="preserve"><value>Delete paper</value></data>
@@ -1703,7 +1703,7 @@ The original note is kept.</value></data>
   <data name="WorkbenchFocusGroup" xml:space="preserve"><value>Focus this group</value></data>
   <data name="WorkbenchLeaveGroup" xml:space="preserve"><value>Show all content</value></data>
   <data name="WorkbenchRenameGroup" xml:space="preserve"><value>Rename group</value></data>
-  <data name="WorkbenchConnect" xml:space="preserve"><value>Connect to…</value></data>
+  <data name="WorkbenchConnect" xml:space="preserve"><value>Drag to connect</value></data>
   <data name="WorkbenchConnectHint" xml:space="preserve"><value>Click a card to connect; Esc to cancel</value></data>
   <data name="WorkbenchConnectionLabel" xml:space="preserve"><value>Connection label</value></data>
   <data name="WorkbenchRemoveConnection" xml:space="preserve"><value>Remove connection</value></data>
