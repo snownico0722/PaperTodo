@@ -566,6 +566,7 @@ public sealed partial class AppController : IDisposable
         }
 
         RefreshTrayMenu();
+        RefreshExpandedEditorPaperLists();
         MarkDirty();
         return paper;
     }
@@ -1251,6 +1252,13 @@ public sealed partial class AppController : IDisposable
         bool animate,
         bool saveGeometry)
     {
+        // The borrowed PaperWindow is invisible; folding it directly would replace the
+        // editor's current visual without releasing its host. Fold via the visible owner.
+        if (collapsed && _expandedEditors.FirstOrDefault(e => e.CurrentPaperId == paper.Id) is { } editor)
+        {
+            editor.CollapseCurrentPaper();
+            return;
+        }
         // Hidden windows are still live presentation owners. Let them consume the complete form
         // transition before falling back to the persisted source for papers with no live window.
         if (_windows.TryGetValue(paper.Id, out var window) && !window.IsClosed)
@@ -1271,7 +1279,7 @@ public sealed partial class AppController : IDisposable
         var hostedEditor = _expandedEditors.FirstOrDefault(e => e.CurrentPaperId == paper.Id);
         if (hostedEditor != null)
         {
-            if (activate) hostedEditor.Activate();
+            if (activate) hostedEditor.ActivateEditor();
             return;
         }
 
@@ -1467,6 +1475,12 @@ public sealed partial class AppController : IDisposable
 
     public void BringPaperToFront(PaperData paper)
     {
+        // A borrowed paper is presented by the editor HWND, not its hidden PaperWindow.
+        if (_expandedEditors.FirstOrDefault(e => e.CurrentPaperId == paper.Id) is { } editor)
+        {
+            editor.ActivateEditor();
+            return;
+        }
         if (!_windows.TryGetValue(paper.Id, out var window) || !window.IsVisible)
         {
             if (paper.IsVisible &&
@@ -2049,6 +2063,7 @@ public sealed partial class AppController : IDisposable
 
         ArrangeDeepCapsules();
         RefreshTrayMenu();
+        RefreshExpandedEditorPaperLists();
         SaveNow();
     }
 
