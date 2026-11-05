@@ -105,8 +105,10 @@ internal static partial class Program
         {
             using var scope = new Scope();
             var store = new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared, number);
+            var oldState = NewState();
+            if (number == 1) oldState.Workspaces = new() { Enabled = true, Slots = [1, 2, 3], Active = 2 };
             var archive = WriteHistoryFixture(scope.DirectoryPath, stamp,
-                (Path.GetFileName(store.FilePath), store.SerializeState(NewState())));
+                (Path.GetFileName(store.FilePath), store.SerializeState(oldState)));
             var archiveBytes = File.ReadAllBytes(archive);
             File.WriteAllText(store.FilePath, "{old unavailable data");
             var fail = true;
@@ -119,6 +121,8 @@ internal static partial class Program
             Require(empty && blank.Papers.Count == 0 && restarting.NeedsStartupRecoverySave &&
                     File.ReadAllText(store.FilePath) == "{old unavailable data",
                 "new workspace was not staged as an explicit blank choice");
+            Require(number != 1 || blank.Workspaces is { Active: 1 } catalog && catalog.ContainsSlot(3),
+                "restarting main hid other workspace entries or selected another workspace");
             Throws<IOException>(() => restarting.SaveJsonSync(restarting.SerializeState(blank), 2));
             Require(File.ReadAllText(store.FilePath) == "{old unavailable data", "failed restart overwrote old data");
             fail = false;

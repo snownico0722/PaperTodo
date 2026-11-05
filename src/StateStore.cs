@@ -119,7 +119,7 @@ public sealed partial class StateStore
                 var history = new CoreHistoryBackup(Path.GetDirectoryName(FilePath)!);
                 foreach (var snapshot in history.ReadWorkspaceSnapshots(WorkspaceNumber))
                 {
-                    if (!TryReadCompleteDocument(snapshot.Bytes, out _, out _)) continue;
+                    if (!TryReadCompleteDocument(snapshot.Bytes, out _, out var historicalState)) continue;
                     WriteLifetime.ThrowIfStopped();
                     var choice = confirmHistoryRecovery(snapshot.TimestampUtc);
                     if (choice == WorkspaceRecoveryChoice.Exit)
@@ -134,7 +134,11 @@ public sealed partial class StateStore
                     if (choice == WorkspaceRecoveryChoice.CreateEmpty)
                     {
                         initializedEmpty = true;
-                        return new AppState();
+                        // The main document also owns other workspace entries.
+                        // Starting this workspace blank must not hide those slots.
+                        var catalog = WorkspaceNumber == 1 ? historicalState!.Workspaces?.Normalized() : null;
+                        if (catalog != null) catalog.Active = 1;
+                        return new AppState { Workspaces = catalog };
                     }
                     return ReadLoadDocument(snapshot.Bytes);
                 }
