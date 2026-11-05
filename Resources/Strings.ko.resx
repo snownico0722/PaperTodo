@@ -1677,7 +1677,7 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="WorkbenchSearch" xml:space="preserve"><value>모든 작업 공간 검색. Enter를 눌러 결과로 이동</value></data>
   <data name="WorkbenchRefresh" xml:space="preserve"><value>개요 새로 고침</value></data>
   <data name="WorkbenchClose" xml:space="preserve"><value>바탕 화면으로 돌아가기</value></data>
-  <data name="WorkbenchHint" xml:space="preserve"><value>빈 공간 드래그로 범위 선택, Ctrl+클릭으로 다중 선택, Ctrl+G로 그룹화. 카드를 오른쪽 클릭하면 전체 메뉴, 오른쪽 드래그로 화면 이동. Alt+휠로 확대·축소, 제목줄 연결 아이콘을 드래그해 연결합니다.</value></data>
+  <data name="WorkbenchHint" xml:space="preserve"><value>빈 공간 드래그: 카드 범위 선택&#10;Ctrl + 클릭: 다중 선택, Ctrl + G: 그룹&#10;카드 오른쪽 클릭: 전체 작업 메뉴&#10;오른쪽 드래그: 화면 이동&#10;Alt + 휠: 확대·축소&#10;제목줄 연결 아이콘 드래그: 카드 연결</value></data>
   <data name="WorkbenchHelp" xml:space="preserve"><value>작업대 도움말</value></data>
   <data name="WorkbenchImportMaterials" xml:space="preserve"><value>자료 가져오기</value></data>
   <data name="WorkbenchImportDialogFilter" xml:space="preserve"><value>모든 파일 (*.*)|*.*|이미지 (*.png;*.jpg;*.jpeg;*.gif;*.webp;*.bmp)|*.png;*.jpg;*.jpeg;*.gif;*.webp;*.bmp</value></data>
