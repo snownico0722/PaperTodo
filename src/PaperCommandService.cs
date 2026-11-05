@@ -92,7 +92,7 @@ internal sealed partial class PaperCommandService
     {
         ArgumentNullException.ThrowIfNull(request);
         EnsureRunning();
-        _controller.PrepareExternalPaperOperation();
+        PrepareExternalMutation();
         EnsurePaperCapacity();
 
         var type = request.Type?.Trim().ToLowerInvariant();
@@ -172,7 +172,7 @@ internal sealed partial class PaperCommandService
         var paper = RequirePaper(
             RequiredId(request.PaperId, "paperId"),
             PaperTypes.Todo);
-        _controller.PrepareExternalPaperOperation(paper);
+        PrepareExternalMutation(paper);
         var inputs = request.Todos?.ToArray() ?? [];
         ValidateTodoInputs(
             inputs,
@@ -227,7 +227,7 @@ internal sealed partial class PaperCommandService
         var paper = RequirePaper(
             RequiredId(request.PaperId, "paperId"),
             PaperTypes.Todo);
-        _controller.PrepareExternalPaperOperation(paper);
+        PrepareExternalMutation(paper);
         var item = RequireTodo(
             paper,
             RequiredId(request.TodoId, "todoId"));
@@ -363,7 +363,7 @@ internal sealed partial class PaperCommandService
         var paper = RequirePaper(
             RequiredId(request.PaperId, "paperId"),
             PaperTypes.Todo);
-        _controller.PrepareExternalPaperOperation(paper);
+        PrepareExternalMutation(paper);
         var item = RequireTodo(
             paper,
             RequiredId(request.TodoId, "todoId"));
@@ -426,7 +426,7 @@ internal sealed partial class PaperCommandService
 
         // Only a request that is already valid may settle pending user text and establish
         // user-before-external ordering for this same Markdown paper.
-        _controller.PrepareExternalPaperOperation(paper);
+        PrepareExternalMutation(paper);
 
         var original = paper.Content ?? "";
         var result = BuildNoteWriteResult(original, content, request.Mode);
@@ -463,7 +463,7 @@ internal sealed partial class PaperCommandService
         var paper = RequirePaper(
             RequiredId(request.PaperId, "paperId"),
             PaperTypes.Todo);
-        _controller.PrepareExternalPaperOperation(paper);
+        PrepareExternalMutation(paper);
         var item = RequireTodo(
             paper,
             RequiredId(request.TodoId, "todoId"));
@@ -508,7 +508,7 @@ internal sealed partial class PaperCommandService
     {
         EnsureRunning();
         var paper = RequirePaper(RequiredId(paperId, "paperId"));
-        _controller.PrepareExternalPaperOperation(paper);
+        PrepareExternalMutation(paper);
         var papers = _controller.State.Papers;
         var originalIndex = papers.IndexOf(paper);
         var affectedLinks = papers
@@ -585,7 +585,7 @@ internal sealed partial class PaperCommandService
                 throw SaveFailed();
             }
 
-            _controller.QueuePluginPaperStateDeletion(paper.Id);
+            _controller.NotifyPaperRemoved(paper.Id);
             _controller.TryFlushPendingPluginPaperStateDeletes();
             _controller.RunExternalPostCommitUi(() =>
             {
@@ -852,6 +852,16 @@ internal sealed partial class PaperCommandService
         }
     }
 
+    private void PrepareExternalMutation(PaperData? targetPaper = null)
+    {
+        // Flushing pending user events can synchronously run plugin commands, including
+        // deleting/replacing this target. Never mutate a detached pre-callback object.
+        _controller.PrepareExternalPaperOperation(targetPaper);
+        EnsureRunning();
+        if (targetPaper != null && !ReferenceEquals(FindPaper(targetPaper.Id), targetPaper))
+            throw Error("paper_not_found", "The requested paper no longer exists.");
+    }
+
     private void EnsureRunning()
     {
         if (_controller.IsDataReloading)
@@ -998,3 +1008,4 @@ internal sealed partial class PaperCommandService
         }
     }
 }
+

@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Text.Json.Nodes;
 using PaperTodo;
@@ -70,7 +71,7 @@ internal static partial class Program
     }
 
     private static JsonObject J(string json) => JsonNode.Parse(json)!.AsObject();
-    private static void Require(bool condition, string message)
+    private static void Require([DoesNotReturnIf(false)] bool condition, string message)
     {
         if (!condition) throw new InvalidOperationException(message);
     }
