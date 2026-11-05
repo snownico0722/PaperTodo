@@ -35,9 +35,9 @@ internal sealed class NoteImagePngWriter : IDisposable
         _zlib = new ZLibStream(_idat, CompressionLevel.Optimal, leaveOpen: true);
     }
 
-    internal void WriteBgraRows(byte[] pixels, int count)
+    internal void WriteBgrRows(byte[] pixels, int count)
     {
-        if (_completed || count < 0 || _rows + count > _height || pixels.Length < (long)_width * 4 * count)
+        if (_completed || count < 0 || _rows + count > _height || pixels.Length < (long)_width * 3 * count)
             throw new InvalidOperationException("Invalid PNG scanline count.");
         for (var row = 0; row < count; row++)
         {
@@ -45,7 +45,7 @@ internal sealed class NoteImagePngWriter : IDisposable
             byte red = 0, green = 0, blue = 0;
             for (var x = 0; x < _width; x++)
             {
-                var input = (row * _width + x) * 4;
+                var input = (row * _width + x) * 3;
                 var output = x * 3 + 1;
                 _row[output] = unchecked((byte)(pixels[input + 2] - red));
                 _row[output + 1] = unchecked((byte)(pixels[input + 1] - green));

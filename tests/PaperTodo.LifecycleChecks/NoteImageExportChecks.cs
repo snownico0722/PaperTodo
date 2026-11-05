@@ -81,12 +81,13 @@ internal static class NoteImageExportChecks
         }
         var reference = new RenderTargetBitmap(sample.PixelWidth, sample.PixelHeight, 96, 96, PixelFormats.Pbgra32);
         reference.Render(visual);
-        var decoded = new FormatConvertedBitmap(frame, PixelFormats.Pbgra32, null, 0);
+        var expectedRgb = new FormatConvertedBitmap(reference, PixelFormats.Bgr24, null, 0);
+        var decoded = new FormatConvertedBitmap(frame, PixelFormats.Bgr24, null, 0);
         foreach (var row in new[] { 0, 511, 512, 1023, 1024, sample.PixelHeight - 1 })
         {
-            var expected = new byte[sample.PixelWidth * 4]; var actual = new byte[expected.Length];
+            var expected = new byte[sample.PixelWidth * 3]; var actual = new byte[expected.Length];
             var bounds = new Int32Rect(0, row, sample.PixelWidth, 1);
-            reference.CopyPixels(bounds, expected, expected.Length, 0);
+            expectedRgb.CopyPixels(bounds, expected, expected.Length, 0);
             decoded.CopyPixels(bounds, actual, actual.Length, 0);
             if (!expected.SequenceEqual(actual))
             {
