@@ -16,15 +16,19 @@ internal static partial class Program
         TerminationRejectsQueuedWrites();
         ConflictImagesRemainRecoverable();
         ArchiveFailureNeverCommits();
-        CorruptLoadsRecoverOrRebuild();
-        OrphanedTempsArePreservedWhenRebuilding();
+        PostCommitRetentionCancellationCannotRejectMerge();
+        CorruptLoadsRequireExplicitRebuild();
+        InterruptedWriteSelectionChecks();
         OrphanedTempImageAndWriteChecks();
-        RecoveredLoadPreservesSourcesBeforeSaving();
+        OrphanCleanupRequiresHealthyPrimary();
+        RecoveredBackupDoesNotOverwriteRepairedPrimary();
+        RecoveryReadbackFailureCanRetry();
+        RecoveryReloadSupersedesPendingSource();
         PluginExitFailureRetainsDirtyData();
         Console.WriteLine("PASS write safety: legacy ordinary saves, explicit transaction validation, shutdown, recovery images and archive failures");
     }
 
-    private static void OrphanedTempsArePreservedWhenRebuilding()
+    private static void InterruptedWriteSelectionChecks()
     {
         foreach (var backup in new[] { false, true })
         {
@@ -34,38 +38,105 @@ internal static partial class Program
             var tempPath = (backup ? scope.Store.BackupPath : scope.Store.FilePath) + ".tmp";
             File.WriteAllBytes(tempPath, bytes);
             var store = new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared);
-            var blank = store.Load(out var initializedEmpty);
-            Require(initializedEmpty && blank.Papers.Count == 0 &&
+            var restored = store.Load(out var empty);
+            Require(!empty && store.NeedsStartupRecoverySave &&
+                    restored.Papers.Single(p => p.Id == "note-a").Content == "original" &&
                     File.ReadAllBytes(tempPath).SequenceEqual(bytes),
-                "an orphaned temp prevented new-workspace loading or was overwritten during reading");
-
-            store.SaveJsonSync(store.SerializeState(blank), 2);
-            var archived = Path.GetFileNameWithoutExtension(tempPath) + ".orphaned.*.tmp";
-            Require(File.Exists(store.FilePath) &&
-                    Directory.GetFiles(scope.DirectoryPath, archived).Any(path =>
-                        File.ReadAllBytes(path).SequenceEqual(bytes)),
-                "the atomic writer destroyed the sole interrupted-write evidence");
+                "a unique complete temp did not automatically restore the original papers");
+            store.SaveJsonSync(store.SerializeState(restored), 2);
+            Require(File.Exists(store.FilePath) && !File.Exists(tempPath) &&
+                    !Directory.GetFiles(scope.DirectoryPath, "*.orphaned.*.tmp").Any() &&
+                    store.Load().Papers.Single(p => p.Id == "note-a").Content == "original",
+                "successful interrupted-write recovery did not retire its temporary source");
         }
-        // A locked historical backup temp must not prevent creating a valid
-        // primary, since it is not the data or backup selected for loading.
+
         using (var scope = new Scope())
         {
+            var bytes = File.ReadAllBytes(scope.Store.FilePath);
             File.Delete(scope.Store.FilePath);
-            var history = scope.Store.BackupPath + ".tmp";
-            File.WriteAllText(history, "{incomplete previous backup");
-            using (var busy = new FileStream(history,
-                FileMode.Open, FileAccess.ReadWrite, FileShare.None))
-            {
-                var store = new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared);
-                var blank = store.Load(out var initializedEmpty);
-                Require(initializedEmpty, "locked historical backup temp blocked loading");
-                store.SaveJsonSync(store.SerializeState(blank), 2);
-                Require(File.Exists(store.FilePath), "locked historical backup temp blocked normal save");
-            }
-            Require(File.ReadAllText(history) == "{incomplete previous backup",
-                "locked historical backup temp was overwritten");
+            var orphan = Path.Combine(scope.DirectoryPath, "data.json.orphaned.20261001-000000-000.tmp");
+            File.WriteAllBytes(orphan, bytes);
+            var recovered = new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared);
+            var state = recovered.Load(out var empty);
+            Require(!empty && state.Papers.Count == 2 && File.ReadAllBytes(orphan).SequenceEqual(bytes),
+                "valid legacy orphan was not retained until recovery committed");
+            recovered.SaveJsonSync(recovered.SerializeState(state), 2);
+            Require(!File.Exists(orphan), "consumed orphan was left behind");
         }
-        Console.WriteLine("PASS orphaned temps never block initialization and preserve recoverable files when possible");
+
+        // Selection follows the snapshot modification time, including moved
+        // orphans, rather than filenames or the order directory entries arrive.
+        foreach (var newestKind in new[] { "primary", "backup", "orphan" })
+        foreach (var number in new[] { 1, 2 })
+        {
+            using var scope = new Scope();
+            var store = new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared, number);
+            var paths = new[] { store.FilePath + ".tmp", store.BackupPath + ".tmp",
+                store.FilePath + ".orphaned.20990101-000000-000.tmp" };
+            var kinds = new[] { "primary", "backup", "orphan" };
+            File.WriteAllText(store.FilePath, "{broken primary");
+            var old = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            for (var index = 0; index < paths.Length; index++)
+            {
+                var alternate = NewState();
+                alternate.Papers[0].Content = kinds[index];
+                File.WriteAllText(paths[index], store.SerializeState(alternate));
+                File.SetLastWriteTimeUtc(paths[index], old.AddHours(kinds[index] == newestKind ? 2 : 1));
+            }
+            var broken = store.BackupPath + ".orphaned.20990102-000000-000.tmp";
+            File.WriteAllText(broken, "{}");
+            File.SetLastWriteTimeUtc(broken, old.AddHours(3));
+            var restored = store.Load(out var empty);
+            Require(!empty && restored.Papers[0].Content == newestKind && paths.All(File.Exists),
+                "newest complete temporary snapshot was not selected without modifying sources");
+            store.SaveJsonSync(store.SerializeState(restored), 2);
+            Require(store.Load().Papers[0].Content == newestKind && !File.Exists(paths[2]) && !File.Exists(broken),
+                "latest snapshot did not commit before orphan cleanup");
+        }
+        // Complete documents may differ only in whitespace or property layout.
+        // That is ONE full snapshot, not two conflicting revisions, and neither
+        // a per-field merge nor a loss of the compact candidate is acceptable.
+        using (var scope = new Scope())
+        {
+            var pretty = File.ReadAllBytes(scope.Store.FilePath);
+            var compact = Encoding.UTF8.GetBytes(
+                JsonNode.Parse(Encoding.UTF8.GetString(pretty))!.ToJsonString());
+            Require(!pretty.SequenceEqual(compact), "semantic equality fixture lost formatting distinction");
+            File.Delete(scope.Store.FilePath);
+            File.WriteAllBytes(scope.Store.FilePath + ".tmp", pretty);
+            File.WriteAllBytes(scope.Store.BackupPath + ".tmp", compact);
+            var recovered = new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared);
+            var state = recovered.Load(out var empty);
+            Require(!empty && state.Papers[0].Content == "original",
+                "two complete but differently formatted documents were treated as competing versions");
+            recovered.SaveJsonSync(recovered.SerializeState(state), 2);
+            Require(File.Exists(recovered.FilePath) &&
+                    !File.Exists(scope.Store.FilePath + ".tmp") &&
+                    !File.Exists(scope.Store.BackupPath + ".tmp") &&
+                    !Directory.GetFiles(scope.DirectoryPath, "*.orphaned.*.tmp").Any(),
+                "semantically equivalent temporary documents were not both retired after full restore");
+        }
+
+        // Different unknown fields do not veto selection. Equal timestamps use
+        // deterministic path order, without inventing another recovery prompt.
+        using (var scope = new Scope())
+        {
+            var first = scope.Read();
+            var second = scope.Read();
+            first["futureExtension"] = "revision-one";
+            second["futureExtension"] = "revision-two";
+            second["papers"]![0]!["content"] = "tie winner";
+            File.Delete(scope.Store.FilePath);
+            File.WriteAllText(scope.Store.FilePath + ".tmp", first.ToJsonString());
+            File.WriteAllText(scope.Store.BackupPath + ".tmp", second.ToJsonString());
+            var stamp = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            File.SetLastWriteTimeUtc(scope.Store.FilePath + ".tmp", stamp);
+            File.SetLastWriteTimeUtc(scope.Store.BackupPath + ".tmp", stamp);
+            var recovered = new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared);
+            Require(recovered.Load().Papers[0].Content == "tie winner" && !File.Exists(recovered.FilePath),
+                "timestamp tie was inconsistent or different unknown fields blocked selection");
+        }
+        Console.WriteLine("PASS newest complete interrupted writes, invalid candidates and timestamp ties");
     }
 
     private static void ExternalEditsDoNotBlockOrdinarySaves()
@@ -212,7 +283,8 @@ internal static partial class Program
         images.CollectUnprotectedImages(ids);
         Require(images.TryGetEncodedImageBytes(id, out _, out _), "actual LMDB GC deleted recoverable image");
         File.WriteAllText(Path.Combine(s.DirectoryPath, files.ConflictDiffFile!), "{\"conflicts\":[{}]}");
-        Require(!s.Store.TryCollectProtectedImageIds(loaded, out _), "incomplete conflict archive permitted destructive GC");
+        Require(s.Store.TryCollectProtectedImageIds(loaded, out _),
+            "an abandoned malformed conflict diff blocked healthy image cleanup");
     }
 
     private static void ArchiveFailureNeverCommits()
@@ -232,6 +304,35 @@ internal static partial class Program
         store.SaveJsonSync(store.SerializeState(memory), 3);
         Require(Str(s.Read()["papers"]![0]!["content"]) == "local recovery value",
             "failed explicit archive blocked an unrelated ordinary save");
+    }
+
+    private static void PostCommitRetentionCancellationCannotRejectMerge()
+    {
+        using var scope = new Scope();
+        var lifetime = new PersistenceWriteLifetime();
+        var writer = new DurableAtomicFileWriter((stage, target) =>
+        {
+            // Simulate system termination exactly AFTER the main atomic replace,
+            // but BEFORE the optional conflict archive retention scan.
+            if (stage == DurableAtomicWriteStage.AfterReplace &&
+                string.Equals(target, scope.Store.FilePath, StringComparison.Ordinal))
+                lifetime.Stop();
+        });
+        var store = new StateStore(scope.DirectoryPath, writer) { WriteLifetime = lifetime };
+        var memory = store.Load();
+        memory.Papers[0].Content = "committed local selection";
+        var external = scope.Read();
+        external["papers"]![0]!["content"] = "rejected incoming selection";
+        scope.Write(external);
+        var preview = store.PreviewExternalMerge(memory, 2, scope.BaselineJson);
+        Require(preview.State != null && preview.Conflicts is { Count: 1 },
+            "postcommit termination fixture never reached a real merge conflict");
+        var files = store.CommitExternalMerge(
+            ResolvePreview(preview, ConflictChoice.KeepMemory), preview.ObservedDiskJson!, 2);
+        Require(Str(scope.Read()["papers"]![0]!["content"]) == "committed local selection" &&
+                files.ConflictFile != null && files.ConflictDiffFile != null,
+            "shutdown cancellation after commit caused a false merge failure or data rollback");
+        Console.WriteLine("PASS committed merge survives shutdown during optional archive cleanup");
     }
 
     private static void PluginExitFailureRetainsDirtyData()
@@ -259,76 +360,101 @@ internal static partial class Program
         Require(!File.ReadAllBytes(path).SequenceEqual(before), "plugin retry did not save the retained value");
     }
 
-    private static void RecoveredLoadPreservesSourcesBeforeSaving()
+    private static void RecoveredBackupDoesNotOverwriteRepairedPrimary()
     {
-        using var s = new Scope();
-        Require(s.Store.TryRefreshBackupFromPrimary(), "recovery seed backup");
-        var backup = File.ReadAllBytes(s.Store.BackupPath);
-        File.WriteAllText(s.Store.FilePath, "{broken before load");
-        var recovered = new StateStore(s.DirectoryPath, DurableAtomicFileWriter.Shared);
+        using var scope = new Scope();
+        Require(scope.Store.TryRefreshBackupFromPrimary(), "fixed backup fixture failed");
+        var backup = File.ReadAllBytes(scope.Store.BackupPath);
+        File.WriteAllText(scope.Store.FilePath, "{corrupt before recovery");
+        var recovered = new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared);
         var state = recovered.Load();
-        s.Memory.Papers[0].Content = "external repaired the primary";
-        File.WriteAllText(s.Store.FilePath, s.Store.SerializeState(s.Memory));
-        var repaired = File.ReadAllBytes(s.Store.FilePath);
-        state.Papers[0].Content = "recovered local memory";
-        recovered.SaveJsonSync(recovered.SerializeState(state), 2);
-        Require(Str(s.Read()["papers"]![0]!["content"]) == "recovered local memory" &&
-                Directory.GetFiles(s.DirectoryPath, "data.failed_load.*.json").Any(p =>
-                    File.ReadAllBytes(p).SequenceEqual(repaired)) &&
-                Directory.GetFiles(s.DirectoryPath, "data.backup.used_for_recovery.*.json").Any(p =>
-                    File.ReadAllBytes(p).SequenceEqual(backup)),
-            "recovered startup state did not preserve its original data sources before saving");
-        recovered.StopWritesForTermination();
-        Throws<OperationCanceledException>(() => recovered.SaveJsonSync(recovered.SerializeState(state), 3));
+        state.Papers[0].Content = "recovered memory";
+        scope.Memory.Papers[0].Content = "external repaired";
+        var repairedBytes = Encoding.UTF8.GetBytes(scope.Store.SerializeState(scope.Memory));
+        File.WriteAllBytes(scope.Store.FilePath, repairedBytes);
+        Throws<IOException>(() => recovered.SaveJsonSync(recovered.SerializeState(state), 2));
+        Require(File.ReadAllBytes(scope.Store.FilePath).SequenceEqual(repairedBytes) &&
+                File.ReadAllBytes(scope.Store.BackupPath).SequenceEqual(backup),
+            "an external repair was overwritten by a stale startup recovery");
+        var retry = new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared);
+        Require(retry.Load().Papers[0].Content == "external repaired",
+            "a failed recovery could not reopen the newer healthy primary");
+
+        File.WriteAllText(scope.Store.FilePath, "{corrupt before second recovery");
+        var fresh = new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared);
+        var valid = fresh.Load();
+        fresh.SaveJsonSync(fresh.SerializeState(valid), 2);
+        Require(fresh.Load().Papers[0].Content == "original" &&
+                Directory.GetFiles(scope.DirectoryPath, "data.failed_load.*.json").Length == 0 &&
+                Directory.GetFiles(scope.DirectoryPath, "data.backup.used_for_recovery.*.json").Length == 0,
+            "backup recovery did not persist or created abandoned duplicate copies");
+        Console.WriteLine("PASS fixed backup recovery rejects external repairs and creates no extra copies");
     }
 
-    private static void CorruptLoadsRecoverOrRebuild()
+    private static void CorruptLoadsRequireExplicitRebuild()
     {
         foreach (var invalid in new[] { "{}", "{\"papers\":null}", "{\"papers\":[null]}", "not-json" })
         {
             using var scope = new Scope();
             File.WriteAllText(scope.Store.FilePath, invalid);
             var reader = new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared);
-            var state = reader.Load(out var initializedEmpty);
-            Require(initializedEmpty && reader.NeedsStartupRecoverySave &&
-                    state.Papers.Count == 0 && File.ReadAllText(reader.FilePath) == invalid,
-                "confirmed corrupt JSON was not rebuilt in memory or was overwritten during reading");
-            reader.SaveJsonSync(reader.SerializeState(state), 2);
-            Require(Directory.GetFiles(scope.DirectoryPath, "data.failed_load.*.json")
-                    .Any(path => File.ReadAllText(path) == invalid) &&
-                    J(File.ReadAllText(reader.FilePath))["papers"] is JsonArray,
-                "rebuilding discarded the corrupt original or failed to persist empty state");
+            Throws<StateRecoveryException>(() => reader.Load());
+            var blank = reader.Load(out var empty, timestamp =>
+            {
+                Require(timestamp == null, "corrupt sources incorrectly offered history");
+                return WorkspaceRecoveryChoice.CreateEmpty;
+            });
+            Require(empty && blank.Papers.Count == 0 && reader.NeedsStartupRecoverySave &&
+                    File.ReadAllText(reader.FilePath) == invalid &&
+                    !Directory.GetFiles(scope.DirectoryPath, "data.failed_load.*.json").Any(),
+                "unrecoverable corruption did not stage blank data without premature writes");
+            reader.SaveJsonSync(reader.SerializeState(blank), 2);
+            Require(reader.Load().Papers.Count == 0, "blank replacement did not commit");
         }
 
         using (var scope = new Scope())
         {
-            Require(scope.Store.TryRefreshBackupFromPrimary(), "missing-primary test needs a backup");
+            Require(scope.Store.TryRefreshBackupFromPrimary(), "missing-primary test needs backup");
             var original = File.ReadAllBytes(scope.Store.BackupPath);
             File.Delete(scope.Store.FilePath);
             var reader = new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared);
-            var restored = reader.Load(out var initializedEmpty);
-            Require(!initializedEmpty && reader.NeedsStartupRecoverySave &&
+            var restored = reader.Load(out var empty);
+            Require(!empty && reader.NeedsStartupRecoverySave &&
                     restored.Papers.Count == scope.Memory.Papers.Count,
-                "valid backup did not recover a missing primary");
+                "valid fixed backup was not loaded automatically");
             reader.SaveJsonSync(reader.SerializeState(restored), 2);
-            Require(File.Exists(reader.FilePath) && File.ReadAllBytes(reader.BackupPath).SequenceEqual(original),
-                "restoring the missing primary damaged its backup");
+            Require(File.Exists(reader.FilePath) &&
+                    File.ReadAllBytes(reader.BackupPath).SequenceEqual(original),
+                "restoring a missing primary destroyed the fixed backup");
         }
 
         using (var scope = new Scope())
         {
-            // Neither damaged copy can be used, so both survive in recovery archives.
             File.WriteAllText(scope.Store.FilePath, "{broken-primary");
             File.WriteAllText(scope.Store.BackupPath, "{broken-backup");
             var reader = new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared);
-            var state = reader.Load(out var initializedEmpty);
-            Require(initializedEmpty, "two corrupt copies were not rebuilt");
-            reader.SaveJsonSync(reader.SerializeState(state), 2);
-            Require(Directory.GetFiles(scope.DirectoryPath, "data.failed_load.*.json")
-                    .Any(path => File.ReadAllText(path) == "{broken-primary") &&
-                    Directory.GetFiles(scope.DirectoryPath, "data.backup.used_for_recovery.*.json")
-                    .Any(path => File.ReadAllText(path) == "{broken-backup"),
-                "rebuilding overwrote a damaged original without archiving it");
+            Throws<StateRecoveryException>(() => reader.Load());
+            var blank = reader.Load(out var empty, timestamp =>
+            {
+                Require(timestamp == null, "corrupt sources incorrectly offered history");
+                return WorkspaceRecoveryChoice.CreateEmpty;
+            });
+            Require(empty && blank.Papers.Count == 0 &&
+                    File.ReadAllText(reader.FilePath) == "{broken-primary" &&
+                    File.ReadAllText(reader.BackupPath) == "{broken-backup",
+                "blank rebuild changed old files before the normal writer committed");
+            File.WriteAllText(reader.FilePath, scope.BaselineJson);
+            Throws<IOException>(() => reader.SaveJsonSync(reader.SerializeState(blank), 2));
+            Require(File.ReadAllText(reader.FilePath) == scope.BaselineJson,
+                "explicit rebuild overwrote an intervening primary repair");
+        }
+
+        using (var scope = new Scope())
+        {
+            File.Delete(scope.Store.FilePath);
+            var reader = new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared);
+            var blank = reader.Load(out var empty);
+            Require(empty && blank.Papers.Count == 0, "genuinely new workspace cannot initialize");
         }
 
         using (var scope = new Scope())
