@@ -530,8 +530,8 @@ internal static partial class Program
 
         File.WriteAllText(path, "{broken");
         var catalog = new WorkspaceCatalog(scope.DirectoryPath, DurableAtomicFileWriter.Shared);
-        var fallback = catalog.OpenInitial();
-        Require(fallback.Paths.Number == 1 && catalog.StartupError != null &&
+        var rejected = catalog.OpenInitial();
+        Require(rejected.Paths.Number == 1 && catalog.StartupError != null &&
                 catalog.Options.Active == 2 && File.ReadAllText(path) == "{broken" &&
                 !Directory.GetFiles(scope.DirectoryPath, "data2.failed_load.*.json").Any(),
             "unrecoverable secondary data was silently rebuilt or changed on disk");
