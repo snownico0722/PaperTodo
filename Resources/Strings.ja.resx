@@ -1673,7 +1673,6 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="EditorSidebarHide" xml:space="preserve"><value>紙片一覧を閉じる</value></data>
   <data name="EditorMinimize" xml:space="preserve"><value>最小化</value></data>
   <data name="EditorMaximizeRestore" xml:space="preserve"><value>最大化 / 元に戻す</value></data>
-  <data name="EditorClosePaper" xml:space="preserve"><value>紙片を閉じる</value></data>
   <data name="EditorUndo" xml:space="preserve"><value>元に戻す</value></data>
   <data name="EditorRedo" xml:space="preserve"><value>やり直す</value></data>
   <data name="EditorHeading" xml:space="preserve"><value>見出し</value></data>
