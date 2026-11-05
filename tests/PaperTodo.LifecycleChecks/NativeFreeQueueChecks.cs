@@ -74,10 +74,10 @@ internal static class NativeFreeQueueChecks
         var originalTargetTop = Top(b);
         var originalNextTargetTop = Top(bPeer);
 
-        // Merely hovering the landing marker over an interior insertion slot
-        // must not shove the target around before the user releases the mouse.
+        // A confirmed slot previews only its affected suffix; it never pushes the
+        // same queue again just because the pointer moved within that slot.
         Require(c.BeginNativeEdgeQueueDrag(a, true, Point(100), false),
-            "begin single-slot ghost and deferred-neighbour preview");
+            "begin single-slot ghost and stable local insertion preview");
         var interiorTop = originalTargetTop + pitch;
         Require(c.PreviewNativeEdgeQueueDrag(a, Point(interiorTop), interiorTop, false),
             "whole-queue interior ghost preview handled");
@@ -87,8 +87,11 @@ internal static class NativeFreeQueueChecks
                 interiorDrop.Decision.Index == 1,
             "the ghost selects the actual interior target without committing it");
         Require(Math.Abs(Top(b) - originalTargetTop) < .1 &&
-                Math.Abs(Top(bPeer) - originalNextTargetTop) < .1,
-            "a ghost must not push untouched members of the target while dragging");
+                Math.Abs(Top(bPeer) - originalNextTargetTop - 2 * pitch) < .1,
+            "the target prefix stays fixed while the suffix makes one exact carried-block gap");
+        c.PreviewNativeEdgeQueueDrag(a, Point(interiorTop + 2), interiorTop + 2, false);
+        Require(Math.Abs(Top(bPeer) - originalNextTargetTop - 2 * pitch) < .1,
+            "pointer motion within the same confirmed slot cannot progressively move the target");
         var ghost = (EdgeCapsuleQueueDropGhost)Part(c, "_nativeQueueDropGhost");
         var ghostWindow = (Window)Part(ghost, "_window");
         var ghostBody = (Border)Part(ghost, "_silhouette");
@@ -102,7 +105,7 @@ internal static class NativeFreeQueueChecks
         c.EndNativeEdgeQueueDrag(a.Id);
         await Idle();
         Require(Math.Abs(Top(bPeer) - originalNextTargetTop) < .1,
-            "cancelled ghost preview does not leave target members displaced");
+            "cancelling a local insertion preview restores the original layout");
 
         Require(c.BeginNativeEdgeQueueDrag(a, true, Point(100), false), "begin prepend");
         var headTop = originalTargetTop - (2 * pitch - c.DeepCapsuleGap);
@@ -129,11 +132,35 @@ internal static class NativeFreeQueueChecks
         var beforeMove = c.State.Papers.Select(p => (p.Id, p.CapsuleQueueId)).ToArray();
         Require(c.BeginNativeEdgeQueueDrag(a, true, Point(100), false), "begin independent drop near another queue");
         c.PreviewNativeEdgeQueueDrag(a, Point(300, distant: true), 300, true);
+        var independentGhost = (EdgeCapsuleQueueDropGhost)Part(c, "_nativeQueueDropGhost");
+        Require(((Window)Part(independentGhost, "_window")).Opacity == 0,
+            "independent placement must never show an insertion ghost");
         c.CommitNativeEdgeQueueDrag(a, Point(300, distant: true), 300, true);
         c.EndNativeEdgeQueueDrag(a.Id);
         await Idle();
         Require(c.State.Papers.Select(p => (p.Id, p.CapsuleQueueId)).SequenceEqual(beforeMove) &&
                 Math.Abs(Top(a) - 300) < .1, "no free-space search or space-based refusal; the requested independent anchor wins");
+
+        // The visible floating shell can reach a queue while its pointer is still
+        // outside the narrow docked hit region. Both preview and release must allow it.
+        var targetWidth = new[] { aPeer, b, bPeer }.Max(p => windows[p.Id].DeepCapsuleRestingVisibleWidth);
+        var floatingWidth = ownerWindow.DeepCapsuleRestingVisibleWidth;
+        var wallDip = targetWidth + EdgeCapsuleFreeQueuePolicy.SnapDistance + 8;
+        Require(EdgeCapsuleFreeQueuePolicy.FloatingWallGap(wallDip, floatingWidth) <=
+                    targetWidth + EdgeCapsuleFreeQueuePolicy.SnapDistance,
+            "floating contact fixture starts outside the cursor-only snap range");
+        var distantFloatingPoint = new DeviceScreenPoint(
+            monitor.WorkArea.Right - wallDip * monitor.DpiScaleX,
+            monitor.WorkArea.Top + (Top(b) + PaperLayoutDefaults.CapsuleHeight / 2) * monitor.DpiScaleY);
+        Require(c.BeginNativeEdgeQueueDrag(a, true, Point(Top(a)), false),
+            "begin approach from far from the wall");
+        c.PreviewNativeEdgeQueueDrag(a, distantFloatingPoint, Top(a), true);
+        var distantDrop = ((NativeEdgeQueueDrag)Part(c, "_nativeEdgeQueueDrag")).Drop;
+        Require(distantDrop?.Decision.Kind == EdgeFreeQueueDropKind.Insert &&
+                distantDrop.DestinationKey == "|right#qb",
+            "a visibly touching floating capsule joins even when its pointer is outside the old hit area");
+        c.EndNativeEdgeQueueDrag(a.Id);
+        await Idle();
 
         c.State.UseCapsuleFreeQueues = false;
         c.ArrangeDeepCapsules(false);
@@ -160,8 +187,8 @@ internal static class NativeFreeQueueChecks
         Require(masters.Count == 3 && masters.ContainsKey(aKey) &&
                 masters.ContainsKey("|right#qb") && masters.ContainsKey("|right#qc"),
             "every independent group has its own master on the same edge");
-        // With independent masters enabled, hovering over B must not preview
-        // its members or move B's master; only the dragged A group can follow.
+        // With independent masters, only the actually affected suffix moves in
+        // the preview; the target master and unrelated queues stay anchored.
         var untouchedPeerTop = Top(bPeer);
         var untouchedMasterTop = masters["|right#qb"].AnchorTop;
         Require(c.BeginNativeEdgeQueueDrag(a, true, Point(Top(a)), false),
@@ -173,11 +200,23 @@ internal static class NativeFreeQueueChecks
         Require(hoverDrop?.Decision.Kind == EdgeFreeQueueDropKind.Insert &&
                 hoverDrop.DestinationKey == "|right#qb",
             "master-enabled ghost identifies the existing target queue");
-        Require(Math.Abs(Top(bPeer) - untouchedPeerTop) < .1 &&
+        Require(Math.Abs(Top(bPeer) - untouchedPeerTop - pitch) < .1 &&
                 Math.Abs(masters["|right#qb"].AnchorTop - untouchedMasterTop) < .1,
-            "the target's actual capsules and master stay fixed until drop");
+            "a slot insertion creates one local space without moving the master");
         c.EndNativeEdgeQueueDrag(a.Id);
         await Idle();
+        Require(Math.Abs(Top(bPeer) - untouchedPeerTop) < .1,
+            "cancelled master-enabled preview returns the target suffix");
+        Require(c.BeginNativeEdgeQueueDrag(a, true, Point(Top(a)), false) &&
+                c.NativeEdgeQueueCarriesMaster(a.Id),
+            "Ctrl includes the master even for a one-paper queue");
+        c.PrepareNativeEdgeQueueFloating(a.Id);
+        Require(!masters[aKey].IsVisible,
+            "source master withdraws together with its members during floating Ctrl drag");
+        c.EndNativeEdgeQueueDrag(a.Id);
+        await Idle();
+        Require(masters[aKey].IsVisible,
+            "cancelling floating Ctrl drag restores the source master");
 
         var idsBeforeCollection = c.State.Papers.Select(p => p.CapsuleQueueId).ToArray();
         margins = new(c.State.DeepCapsuleQueueStartTopMargins);
