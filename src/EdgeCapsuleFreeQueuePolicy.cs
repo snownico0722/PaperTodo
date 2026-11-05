@@ -30,8 +30,7 @@ internal static class EdgeCapsuleFreeQueuePolicy
 {
     internal const double SnapDistance = 18;
     internal const double ReleaseDistance = 30; // A held target must be pulled further away to release.
-    internal const double JoinNudge = 12;
-    internal const double ExitNudge = 18; // Brief outward snap around release, never drag resistance.
+    internal const double ExitMagnetMaxDip = 18; // Maximum inward pull across the source boundary.
     private const double TakeoverAdvantage = 6;
     private const double Epsilon = 0.1;
 
@@ -51,19 +50,20 @@ internal static class EdgeCapsuleFreeQueuePolicy
             ? drop.TopDip + (targetHasMaster ? pitch : 0) + drop.Index * pitch
             : drop.TopDip;
 
-    internal static double NudgeToward(double actualTop, double targetTop, double maximumDip) =>
-        actualTop + Math.Clamp(targetTop - actualTop, -maximumDip, maximumDip);
-
-    // At the source's release boundary, briefly lead the pointer outward rather than
-    // pulling back against it. The lead rises and falls continuously over a wide zone;
-    // the capsule always keeps moving in the same direction as the pointer.
-    internal static double SnapOutward(double top, double first, double last)
+    // No resistance within the original member slots: a third capsule can move to the
+    // fourth slot normally. Pull back only after crossing the first or last member.
+    // The correction peaks at 18 DIP and returns to zero at the existing detach
+    // threshold, so floating handoff never causes a positional jump.
+    internal static double ResistLeavingSource(double top, double first, double last)
     {
         var displacement = top < first ? top - first : top > last ? top - last : 0;
-        if (displacement == 0) return top;
         var distance = Math.Abs(displacement);
-        var lead = ExitNudge - Math.Abs(distance - EdgeCapsuleLayout.CrossQueueDragUnlockDistance) / 2;
-        return lead > 0 ? top + Math.Sign(displacement) * lead : top;
+        var releaseDistance = EdgeCapsuleLayout.CrossQueueDragUnlockDistance;
+        if (distance <= 0 || distance >= releaseDistance) return top;
+
+        var phase = Math.Sin(Math.PI * distance / releaseDistance);
+        var pull = ExitMagnetMaxDip * phase * phase;
+        return top - Math.Sign(displacement) * pull;
     }
 
     internal static (string Key, int Index)? FindInsertion(

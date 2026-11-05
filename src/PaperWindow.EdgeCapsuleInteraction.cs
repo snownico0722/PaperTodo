@@ -506,11 +506,11 @@ public sealed partial class PaperWindow
         }
 
         var logicalTop = NativeQueueLogicalOwnerTop(currentScreenPos, session, floating: false);
-        // Only the dragged docked capsule receives a tiny positional nudge; hit testing,
-        // queue choice and final commit continue to use the unmodified physical pointer.
+        // Only crossing the original queue's first/last slot can pull a single
+        // dragged capsule back; internal sorting and joins have no magnetic motion.
         var nativePreview = _controller.PreviewNativeEdgeQueueDrag(_paper,
             currentScreenPos, logicalTop, floating: false);
-        // Use the target confirmed in THIS pointer sample; stale feedback is a one-frame lag.
+        // Visual pull never modifies hit testing or the eventual drop point.
         var visualTop = _controller.NativeEdgeQueueMagnetizedOwnerTop(_paper.Id, logicalTop);
         if (!MoveEdgeCapsuleDockedReorder(currentScreenPos, visualTop))
         {

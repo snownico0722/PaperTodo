@@ -30,25 +30,16 @@ public sealed partial class AppController
             drag.CarriedIds.Length, DeepCapsuleGap);
     }
 
-    // Visual-only adhesion. The solver and final release always use the physical pointer,
-    // so a nudge cannot silently select an adjacent slot or move a persisted anchor.
+    // Only a single capsule crossing its ORIGINAL queue boundary has magnetic
+    // resistance. Internal reordering, Ctrl movement and joining another queue
+    // remain pointer-driven. Hit testing and release use the unmodified pointer.
     internal double NativeEdgeQueueMagnetizedOwnerTop(string ownerId, double requestedTop)
     {
         var drag = _nativeEdgeQueueDrag;
-        if (drag == null || !drag.FreeQueues || drag.OwnerId != ownerId) return requestedTop;
+        if (drag == null || !drag.FreeQueues || drag.OwnerId != ownerId ||
+            drag.WholeQueue || drag.Detached) return requestedTop;
         var pitch = EdgeCapsuleLayout.SlotHeight(DeepCapsuleGap);
-        if (drag.Drop is not { Decision.Kind: EdgeFreeQueueDropKind.Insert } drop)
-            return !drag.WholeQueue
-                ? EdgeCapsuleFreeQueuePolicy.SnapOutward(requestedTop, drag.SourceTopDip,
-                    drag.SourceTopDip + Math.Max(0, drag.SourceIds.Length - 1) * pitch)
-                : requestedTop;
-        var target = NativeQueueGroups().FirstOrDefault(g => g.Key == drop.DestinationKey);
-        var slotTop = EdgeCapsuleFreeQueuePolicy.GhostSlotTop(drop.Decision,
-            target?.Box.HasMaster == true, pitch, target?.Box.Collapsed == true);
-        var offset = drag.WholeQueue
-            ? drag.OwnerOffsetDip - (State.UseCapsuleCollapseAll ? pitch : 0) : 0;
-        var ownerTop = slotTop + offset;
-        return EdgeCapsuleFreeQueuePolicy.NudgeToward(requestedTop, ownerTop,
-            EdgeCapsuleFreeQueuePolicy.JoinNudge);
+        return EdgeCapsuleFreeQueuePolicy.ResistLeavingSource(requestedTop, drag.SourceTopDip,
+            drag.SourceTopDip + Math.Max(0, drag.SourceIds.Length - 1) * pitch);
     }
 }

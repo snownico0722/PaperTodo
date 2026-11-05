@@ -80,8 +80,6 @@ public sealed class MasterCapsuleWindow : Window
     private bool _active;
     private MasterGestureState _gestureState;
     private double _currentTopDip = double.NaN;
-    private MonitorGeometry? _animatedMonitorGeometry;
-    private double _animatedWidthDip;
     private int _moveGeneration;
     private bool _isClosingForReal;
     // Small vertical movement keeps adjusting the queue anchor. Pulling horizontally beyond the
@@ -92,19 +90,6 @@ public sealed class MasterCapsuleWindow : Window
     private IntPtr _floatingFullscreenAvoidanceWindow;
     private MasterCapsuleQueueTransferSnapshot? _queueTransferSnapshot;
     private bool _queueTransferCanceled;
-
-    private static readonly DependencyProperty AnimatedTopProperty =
-        DependencyProperty.Register(
-            nameof(AnimatedTop),
-            typeof(double),
-            typeof(MasterCapsuleWindow),
-            new PropertyMetadata(double.NaN, OnAnimatedTopChanged));
-
-    private double AnimatedTop
-    {
-        get => (double)GetValue(AnimatedTopProperty);
-        set => SetValue(AnimatedTopProperty, value);
-    }
 
     public MasterCapsuleWindow(AppController controller, EdgeCapsuleEdge queueEdge, string queueMonitorDeviceName,
         string? queueKey = null)
@@ -377,8 +362,6 @@ public sealed class MasterCapsuleWindow : Window
         {
             _gestureState = MasterGestureState.Dragging;
             ++_moveGeneration;
-            _animatedMonitorGeometry = null;
-            BeginAnimation(AnimatedTopProperty, null);
         }
 
         var targetMargin = (session.FreeLayout?.MasterTopDip ?? session.StartTopMargin) + deltaY;
@@ -627,8 +610,6 @@ public sealed class MasterCapsuleWindow : Window
             _queueTransferCanceled = false;
             _gestureState = MasterGestureState.QueueTransfer;
             ++_moveGeneration;
-            _animatedMonitorGeometry = null;
-            BeginAnimation(AnimatedTopProperty, null);
 
             if (_pill.IsMouseCaptured)
             {
@@ -944,62 +925,20 @@ public sealed class MasterCapsuleWindow : Window
 
     private void MoveToTarget(bool animate)
     {
-        if (_isClosingForReal)
-        {
-            return;
-        }
-
+        if (_isClosingForReal) return;
+        // Every master position update is immediate, even when the caller requested
+        // animation. Opacity/expand/collapse have separate animation paths.
         var moveGeneration = ++_moveGeneration;
         if (!WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(
-                _queueMonitorDeviceName,
-                this,
-                out var geometry))
+                _queueMonitorDeviceName, this, out var geometry))
         {
             ScheduleMasterSettle(moveGeneration);
             return;
         }
 
-        animate = animate && _controller.State.EnableAnimations;
-        var localArea = geometry.LocalWorkAreaDip;
-        var requestedWidth = MasterDockedWidth(geometry.DpiScaleY);
-        var targetTop = QueueTopForArea(localArea);
-        var currentTop = double.IsNaN(_currentTopDip) ? targetTop : _currentTopDip;
-
-        ApplyMasterDeviceBounds(currentTop, requestedWidth, geometry);
-        if (!animate || Math.Abs(currentTop - targetTop) < 0.5)
-        {
-            _animatedMonitorGeometry = null;
-            BeginAnimation(AnimatedTopProperty, null);
-            ApplyMasterDeviceBounds(targetTop, requestedWidth, geometry);
-            ScheduleMasterSettle(moveGeneration);
-            return;
-        }
-
-        // One animation is one monitor-space transaction. A display/DPI refresh starts a new
-        // generation; individual frames never re-enumerate screens or switch scale mid-flight.
-        _animatedMonitorGeometry = geometry;
-        _animatedWidthDip = requestedWidth;
-        var topAnim = new DoubleAnimation
-        {
-            From = currentTop,
-            To = targetTop,
-            Duration = TimeSpan.FromMilliseconds(
-                AnimationTiming.ScaleMilliseconds(EdgeCapsuleLayout.SlotMoveMilliseconds)),
-            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
-        };
-        topAnim.Completed += (_, _) =>
-        {
-            if (moveGeneration != _moveGeneration)
-            {
-                return;
-            }
-
-            _animatedMonitorGeometry = null;
-            BeginAnimation(AnimatedTopProperty, null);
-            ApplyMasterDeviceBounds(targetTop, requestedWidth, geometry);
-            ScheduleMasterSettle(moveGeneration);
-        };
-        BeginAnimation(AnimatedTopProperty, topAnim, HandoffBehavior.SnapshotAndReplace);
+        ApplyMasterDeviceBounds(QueueTopForArea(geometry.LocalWorkAreaDip),
+            MasterDockedWidth(geometry.DpiScaleY), geometry);
+        ScheduleMasterSettle(moveGeneration);
     }
 
     private void ScheduleMasterSettle(int moveGeneration, int pass = 0)
@@ -1073,24 +1012,6 @@ public sealed class MasterCapsuleWindow : Window
     // Local target-monitor DIP. Real capsule hosts use the same coordinate space.
     public double AnchorTop => QueueTopForArea(EdgeCapsuleLayout.LocalWorkAreaForQueue(_queueMonitorDeviceName));
 
-    private static void OnAnimatedTopChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
-    {
-        if (d is MasterCapsuleWindow w &&
-            !w._isClosingForReal &&
-            e.NewValue is double top &&
-            !double.IsNaN(top) &&
-            !double.IsInfinity(top))
-        {
-            if (w._animatedMonitorGeometry is MonitorGeometry geometry)
-            {
-                w.ApplyMasterDeviceBounds(top, w._animatedWidthDip, geometry);
-            }
-            else
-            {
-                w.ApplyMasterDeviceBounds(top);
-            }
-        }
-    }
     // First-time show: position at the final edge-aligned spot BEFORE becoming visible,
     // then fade in. This avoids both the top-left flash and the slide-in from the wrong place.
     internal void PrepareQueueTransferTarget(int count, bool active)
@@ -1272,8 +1193,6 @@ public sealed class MasterCapsuleWindow : Window
         FinishMasterGesture(commit: false, clearFocus: false);
         _contextMenuSession.Dispose();
         ++_moveGeneration;
-        _animatedMonitorGeometry = null;
-        BeginAnimation(AnimatedTopProperty, null);
         Close();
     }
 
