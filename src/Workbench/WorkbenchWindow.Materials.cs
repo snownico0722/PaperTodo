@@ -51,6 +51,20 @@ internal sealed partial class WorkbenchWindow
             { UndoWorkspaceAction(); e.Handled = true; }
             else if (mods == ModifierKeys.Control && e.Key == Key.Y)
             { RedoWorkspaceAction(); e.Handled = true; }
+            else if (mods == ModifierKeys.None && e.Key == Key.Delete && _selectedCards.Count == 1)
+            {
+                var id = _selectedCards.Single();
+                if (_controller.FindWorkbenchMaterial(id) != null)
+                {
+                    if (MessageBox.Show(this, Strings.Get("WorkbenchDeleteMaterialConfirm"), Title,
+                        MessageBoxButton.OKCancel, MessageBoxImage.Question) == MessageBoxResult.OK)
+                    {
+                        _controller.DeleteWorkbenchMaterial(id);
+                        _selectedCards.Clear(); SyncActiveScene();
+                    }
+                    e.Handled = true;
+                }
+            }
         };
     }
 
@@ -441,6 +455,7 @@ internal sealed partial class WorkbenchWindow
             };
             hit.MouseLeftButtonDown += (_, e) =>
             {
+                _selectedCards.Clear(); ApplySelectionStyle();
                 hit.Focus();
                 if (e.ClickCount == 2) EditConnectionLabel(scene, connection.Id, middle);
                 e.Handled = true;
