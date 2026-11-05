@@ -2494,6 +2494,7 @@ public sealed partial class AppController
         border.SetValue(Border.BorderBrushProperty, new TemplateBindingExtension(Control.BorderBrushProperty));
         border.SetValue(Border.BorderThicknessProperty, new TemplateBindingExtension(Control.BorderThicknessProperty));
         border.SetValue(Border.CornerRadiusProperty, new CornerRadius(6));
+        border.SetValue(Border.PaddingProperty, new TemplateBindingExtension(Control.PaddingProperty));
         border.SetValue(UIElement.SnapsToDevicePixelsProperty, true);
 
         var content = new FrameworkElementFactory(typeof(ContentPresenter));
