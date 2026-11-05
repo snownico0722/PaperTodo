@@ -488,12 +488,13 @@ public sealed class MasterCapsuleWindow : Window
 
     private void OnFloatingDragHostLocationChanged(object? sender, EventArgs e)
     {
-        if (ReferenceEquals(sender, _floatingDragHost) &&
-            _floatingFullscreenAvoidanceWindow !=
-                _controller.FullscreenAvoidanceWindowFor(_floatingDragHost))
-        {
+        if (!ReferenceEquals(sender, _floatingDragHost)) return;
+        if (_queueTransferSnapshot is { FreeLayout: not null } snapshot &&
+            WindowNative.TryGetCursorScreenPosition(out var pointer))
+            _controller.PreviewFreeMasterQueueDropGhost(snapshot, pointer);
+        if (_floatingFullscreenAvoidanceWindow !=
+            _controller.FullscreenAvoidanceWindowFor(_floatingDragHost))
             RefreshFloatingDragTopmost();
-        }
     }
 
     private void OnFloatingDragHostUnexpectedlyClosed(object? sender, EventArgs e)
@@ -655,7 +656,7 @@ public sealed class MasterCapsuleWindow : Window
             {
                 Hide();
             }
-
+            _controller.PreviewFreeMasterQueueDropGhost(snapshot, currentScreenPos);
 
             var outcome = floatingHost.PrepareAndRunNativeDrag(
                 currentScreenPos,
@@ -668,6 +669,7 @@ public sealed class MasterCapsuleWindow : Window
                 ReferenceEquals(floatingHost, _floatingDragHost) &&
                 outcome.Result == EdgeCapsuleNativeDragResult.Completed)
             {
+                _controller.PreviewFreeMasterQueueDropGhost(snapshot, outcome.DropPosition);
                 committed = _controller.CommitMasterCapsuleQueueTransfer(
                     snapshot,
                     outcome.DropPosition,
@@ -685,6 +687,7 @@ public sealed class MasterCapsuleWindow : Window
         }
         finally
         {
+            _controller.EndFreeMasterQueueDropGhost();
             _queueTransferSnapshot = null;
             _gestureState = MasterGestureState.Idle;
             _dragSession = null;

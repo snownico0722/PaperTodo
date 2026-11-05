@@ -53,6 +53,69 @@ public sealed partial class AppController
             layout.MemberKeys.TryGetValue(p.Id, out var key) && InstanceQueueKey(p) == key);
     }
 
+    // Master dragging uses the same target-slot policy as an ordinary floating paper.
+    // The master is the visible drag shell; hidden member height is not a hit-testing area.
+    private static (string Key, int Index)? FindFreeMasterTarget(
+        IReadOnlyList<EdgeFreeQueueBox> boxes, double topDip, double pointerTopDip,
+        double pitch, double gap) =>
+        EdgeCapsuleFreeQueuePolicy.FindInsertion(boxes, topDip,
+            PaperLayoutDefaults.CapsuleHeight, 0, pitch, gap,
+            pointerTopDip: pointerTopDip, floating: true);
+
+    internal void PreviewFreeMasterQueueDropGhost(
+        MasterCapsuleQueueTransferSnapshot snapshot, DeviceScreenPoint pointer)
+    {
+        if (snapshot.FreeLayout is not { } layout ||
+            _masterCapsuleQueueTransfer != snapshot || !EdgeCapsuleFreeQueuesEnabled ||
+            !FreeMasterMembersMatch(layout) ||
+            !WindowWorkAreaHelper.TryGetMonitorGeometryAtDeviceScreenPoint(pointer, out var geometry))
+        {
+            _nativeQueueDropGhost?.Hide();
+            return;
+        }
+
+        var monitor = WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(geometry.DeviceName);
+        var side = pointer.X < geometry.WorkArea.Left + geometry.WorkArea.Width / 2.0
+            ? DeepCapsuleSides.Left : DeepCapsuleSides.Right;
+        var edge = EdgeKey(monitor, side);
+        var pitch = EdgeCapsuleLayout.SlotHeight(DeepCapsuleGap);
+        var boxes = NativeQueueGroups()
+            .Where(g => g.Key != layout.QueueKey && LiveEdgeOfQueueKey(g.Key) == edge)
+            .Select(g => g.Box).ToList();
+        var pointerTop = geometry.DeviceYToLocalDip(pointer.Y);
+        var target = FindFreeMasterTarget(boxes,
+            pointerTop - PaperLayoutDefaults.CapsuleHeight / 2, pointerTop,
+            pitch, DeepCapsuleGap);
+        if (target is not { } insert)
+        {
+            _nativeQueueDropGhost?.Hide();
+            return;
+        }
+
+        var decision = EdgeCapsuleFreeQueuePolicy.Insert(boxes,
+            insert.Key, insert.Index, layout.Groups[0].PaperIds.Length,
+            geometry.LocalWorkAreaDip.Height, pitch, DeepCapsuleGap);
+        if (!decision.Accepted)
+        {
+            _nativeQueueDropGhost?.Hide();
+            return;
+        }
+
+        var targetBox = boxes.First(b => b.Key == insert.Key);
+        var top = EdgeCapsuleFreeQueuePolicy.GhostSlotTop(
+            decision, targetBox.HasMaster, pitch, targetBox.Collapsed);
+        _nativeQueueDropGhost ??= new EdgeCapsuleQueueDropGhost();
+        _nativeQueueDropGhost.ShowAt(geometry, side, top,
+            Math.Max(PaperLayoutDefaults.CapsuleWidth, targetBox.WidthDip),
+            layout.Groups[0].PaperIds.Length, DeepCapsuleGap);
+    }
+
+    internal void EndFreeMasterQueueDropGhost()
+    {
+        _nativeQueueDropGhost?.Dispose();
+        _nativeQueueDropGhost = null;
+    }
+
     private bool CommitFreeMasterQueueTransfer(MasterCapsuleQueueTransferSnapshot snapshot,
         DeviceScreenPoint pointer, out MasterCapsuleWindow? handoffTarget)
     {
@@ -82,12 +145,10 @@ public sealed partial class AppController
             .Where(g => g.Key != layout.QueueKey && LiveEdgeOfQueueKey(g.Key) == edge)
             .Select(g => g.Box).ToList();
         var requestedTop = geometry.DeviceYToLocalDip(pointer.Y) - PaperLayoutDefaults.CapsuleHeight / 2;
-        var wallDistance = (side == DeepCapsuleSides.Left
-            ? pointer.X - geometry.WorkArea.Left : geometry.WorkArea.Right - pointer.X) / geometry.DpiScaleX;
-        // A master remains a valid merge target even when its queue is collapsed.
-        var target = EdgeCapsuleFreeQueuePolicy.FindInsertion(
-            boxes, requestedTop + pitch, count * pitch - gap, wallDistance, pitch, gap,
-            pointerTopDip: geometry.DeviceYToLocalDip(pointer.Y));
+        // Preview and commit must agree even when the master is dragged from far
+        // inside the screen. Only its visible floating shell selects a target slot.
+        var target = FindFreeMasterTarget(boxes, requestedTop,
+            geometry.DeviceYToLocalDip(pointer.Y), pitch, gap);
         var decision = target is { } insert
             ? EdgeCapsuleFreeQueuePolicy.Insert(boxes, insert.Key, insert.Index, count,
                 geometry.LocalWorkAreaDip.Height, pitch, gap)
