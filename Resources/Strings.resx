@@ -13,10 +13,10 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="AppStartupFailureMessage" xml:space="preserve">
-    <value>启动失败：无法加载数据文件（文件可能被占用或损坏）。
+    <value>启动失败：无法加载数据文件（{0}）。
 为避免覆盖现有数据，程序已停止启动。
 
-错误信息：{0}</value>
+错误信息：{1}</value>
   </data>
   <data name="ResourceTextVersion" xml:space="preserve">
     <value>3.1</value>
@@ -1718,4 +1718,76 @@
   <data name="TodoExportCurrent" xml:space="preserve"><value>导出当前待办</value></data>
   <data name="SettingsCapsuleFreeQueues" xml:space="preserve"><value>边缘胶囊自由队列</value></data>
   <data name="TipCapsuleFreeQueues" xml:space="preserve"><value>拖远单个胶囊可独立成队；Ctrl 拖动整队，横向拉出后可换边或换屏。主胶囊仍可收纳整侧队列。</value></data>
+  <data name="HistoryRecoveryTitle" xml:space="preserve">
+    <value>恢复工作区</value>
+  </data>
+  <data name="HistoryRecoveryMessage" xml:space="preserve">
+    <value>工作区 {0} 当前数据无法读取。
+最近可用的备份：{1}。
+
+恢复后将回到该时间的状态，此后的修改将丢失。仅恢复此工作区的便签、待办和设置，不包含图片或插件数据。</value>
+  </data>
+  <data name="HistoryRecoveryRestore" xml:space="preserve">
+    <value>尝试从备份恢复</value>
+  </data>
+  <data name="WorkspaceFailureRetry" xml:space="preserve">
+    <value>重试</value>
+  </data>
+  <data name="WorkspaceFailureExit" xml:space="preserve">
+    <value>退出软件</value>
+  </data>
+  <data name="WorkspaceFailureHistoryChoiceRequired" xml:space="preserve">
+    <value>有可用的历史备份，请打开此工作区选择恢复或重建。</value>
+  </data>
+  <data name="WorkspaceFailureAccessDenied" xml:space="preserve">
+    <value>没有权限访问工作区文件。请检查文件夹权限后重试。</value>
+  </data>
+  <data name="WorkspaceFailureMissing" xml:space="preserve">
+    <value>找不到所需的工作区文件或文件夹。请确认文件未被移动或删除后重试。</value>
+  </data>
+  <data name="WorkspaceFailureInvalidData" xml:space="preserve">
+    <value>工作区数据格式无效，无法完成切换。请检查数据文件后重试。</value>
+  </data>
+  <data name="WorkspaceFailureBusy" xml:space="preserve">
+    <value>工作区文件正在被占用。请关闭正在访问它的程序后重试。</value>
+  </data>
+  <data name="WorkspaceFailureDiskFull" xml:space="preserve">
+    <value>磁盘空间不足，无法保存工作区数据。请释放空间后重试。</value>
+  </data>
+  <data name="WorkspaceFailureIo" xml:space="preserve">
+    <value>无法读写工作区文件。请检查磁盘或存储设备后重试。</value>
+  </data>
+  <data name="WorkspaceFailureUnknown" xml:space="preserve">
+    <value>暂时无法完成工作区切换。请重试；如果仍然失败，请退出软件后重新打开。</value>
+  </data>
+  <data name="WorkspaceFailurePrimaryChanged" xml:space="preserve">
+    <value>恢复期间，数据文件被其他操作更新。为避免覆盖新内容，已停止恢复。请重试。</value>
+  </data>
+  <data name="WorkspaceFailureRecoveryChanged" xml:space="preserve">
+    <value>用于恢复的文件已经发生变化。请重试以重新选择恢复来源。</value>
+  </data>
+  <data name="WorkspaceFailureRecoveryUnverified" xml:space="preserve">
+    <value>恢复写入后未能确认文件可正常读取，恢复来源仍保留。请重试。</value>
+  </data>
+  <data name="HistoryRecoveryCreate" xml:space="preserve">
+    <value>重建工作区</value>
+  </data>
+  <data name="AppStartupFailureBusy" xml:space="preserve">
+    <value>文件被占用</value>
+  </data>
+  <data name="AppStartupFailureCorrupt" xml:space="preserve">
+    <value>数据文件损坏或格式无效</value>
+  </data>
+  <data name="AppStartupFailureUnknown" xml:space="preserve">
+    <value>原因未知</value>
+  </data>
+  <data name="WorkspaceFailureMainRecoveryRequired" xml:space="preserve">
+    <value>主工作区数据无法读取。请先切换至主工作区，完成恢复或重建后再试。</value>
+  </data>
+  <data name="WorkspaceRecoveryUnavailable" xml:space="preserve">
+    <value>当前工作区数据和备份均已损坏。</value>
+  </data>
+  <data name="WorkspaceRecoveryFallback" xml:space="preserve">
+    <value>回退到工作区 {0}</value>
+  </data>
 </root>

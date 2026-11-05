@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.IO.Compression;
+using System.Security.Cryptography;
 using System.Threading;
 
 namespace PaperTodo;
@@ -33,6 +34,46 @@ internal sealed class CoreHistoryBackup
     }
 
     internal string BackupDirectory => Path.Combine(_dataDirectory, "backups");
+
+    internal sealed record WorkspaceSnapshot(
+        string ArchivePath, DateTime TimestampUtc, byte[] ArchiveHash, byte[] Bytes);
+
+    // Read only the requested workspace, newest first. ZIP integrity and JSON
+    // validity are separate: StateStore owns the latter. Never extract other slots.
+    internal IEnumerable<WorkspaceSnapshot> ReadWorkspaceSnapshots(int workspaceNumber,
+        Action<Exception>? reportReadFailure = null)
+    {
+        var name = Path.GetFileName(new WorkspacePaths(_dataDirectory, workspaceNumber).Data);
+        foreach (var archive in ListArchives(DateTime.UtcNow))
+        {
+            WorkspaceSnapshot snapshot;
+            try
+            {
+                var archiveBytes = File.ReadAllBytes(archive.Path);
+                using var stream = new MemoryStream(archiveBytes, writable: false);
+                using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+                var entries = zip.Entries.Where(entry => entry.FullName == name).ToArray();
+                if (entries.Length != 1) continue;
+                var entry = entries[0];
+                using var input = entry.Open();
+                using var output = new MemoryStream();
+                input.CopyTo(output);
+                var bytes = output.ToArray();
+                if (bytes.LongLength != entry.Length ||
+                    ~UpdateCrc32(uint.MaxValue, bytes) != entry.Crc32) continue;
+                snapshot = new WorkspaceSnapshot(archive.Path, archive.Timestamp,
+                    SHA256.HashData(archiveBytes), bytes);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
+            {
+                if (ex is not (InvalidDataException or FileNotFoundException or DirectoryNotFoundException))
+                    reportReadFailure?.Invoke(ex);
+                Trace.TraceWarning("Skipping unavailable core history recovery candidate: {0}", ex);
+                continue;
+            }
+            yield return snapshot;
+        }
+    }
 
     internal bool TryCreateIfDue(DateTimeOffset now) => TryCreateIfDue(now, out _);
 
