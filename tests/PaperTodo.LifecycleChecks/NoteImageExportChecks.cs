@@ -73,6 +73,23 @@ internal static class NoteImageExportChecks
         Check(frame.PixelWidth == sample.PixelWidth && frame.PixelHeight == sample.PixelHeight,
             "PNG did not round-trip through the native decoder");
 
+        var jpgPath = Path.Combine(AppContext.BaseDirectory, "note-share-sample.jpg");
+        try
+        {
+            NoteImageExport.Save(jpgPath, sample, token);
+            var bytes = File.ReadAllBytes(jpgPath);
+            Check(bytes.Length > 4 && bytes[0] == 0xFF && bytes[1] == 0xD8,
+                "Default export did not write a JPEG file");
+            using var jpg = new MemoryStream(bytes);
+            var jpeg = BitmapDecoder.Create(jpg,
+                BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad).Frames[0];
+            Check(jpeg.PixelWidth == sample.PixelWidth && jpeg.PixelHeight == sample.PixelHeight &&
+                  NoteImageJpegWriter.Quality == 90, "Default JPEG quality or image dimensions changed");
+            if (!string.IsNullOrWhiteSpace(artifacts))
+                File.WriteAllBytes(Path.Combine(artifacts, "note-share-sample.jpg"), bytes);
+        }
+        finally { File.Delete(jpgPath); }
+
         // Compare several rows around stripe seams to the same immutable Drawing rendered
         // in one operation. This is independent of live AvalonEdit repaint timing.
         var visual = new DrawingVisual();
@@ -115,15 +132,36 @@ internal static class NoteImageExportChecks
         using var longPng = new MemoryStream();
         NoteImageExport.Write(longPng, longNote, token);
         CheckScanlines(longPng.ToArray(), longNote.PixelWidth, longNote.PixelHeight);
+        var longJpgPath = Path.Combine(AppContext.BaseDirectory, "note-share-long.jpg");
+        try
+        {
+            NoteImageExport.Save(longJpgPath, longNote, token);
+            using var stream = File.OpenRead(longJpgPath);
+            var longJpg = BitmapDecoder.Create(stream,
+                BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad).Frames[0];
+            Check(longJpg.PixelWidth == longNote.PixelWidth &&
+                  longJpg.PixelHeight == longNote.PixelHeight,
+                "Long JPEG was truncated or unreadable");
+        }
+        finally { File.Delete(longJpgPath); }
 
         var destination = Path.Combine(AppContext.BaseDirectory, "export-cancel.png");
         File.WriteAllText(destination, "previous image");
         using var cancelled = new CancellationTokenSource(); cancelled.Cancel();
-        try { NoteImageExport.Save(destination, sample, cancelled.Token); throw new Exception("Cancellation ignored"); }
+        try { NoteImageExport.Save(destination, sample, cancelled.Token, NoteImageFormat.Png); throw new Exception("Cancellation ignored"); }
         catch (OperationCanceledException) { }
         Check(File.ReadAllText(destination) == "previous image" &&
               !Directory.EnumerateFiles(AppContext.BaseDirectory, ".export-cancel.png.*.tmp").Any(),
             "Cancelled export replaced destination or left an intermediate file");
+
+        var jpegDestination = Path.Combine(AppContext.BaseDirectory, "export-cancel.jpg");
+        File.WriteAllText(jpegDestination, "previous image");
+        try { NoteImageExport.Save(jpegDestination, sample, cancelled.Token); throw new Exception("JPEG cancellation ignored"); }
+        catch (OperationCanceledException) { }
+        Check(File.ReadAllText(jpegDestination) == "previous image" &&
+              !Directory.EnumerateFiles(AppContext.BaseDirectory, ".export-cancel.jpg.*.tmp").Any(),
+            "Cancelled JPEG replaced the destination or left a temporary file");
+        File.Delete(jpegDestination);
 
         Console.WriteLine($"PASS note image: {sample.PixelWidth}x{sample.PixelHeight}; long note {longNote.PixelHeight}px; native decode, stripe seams, complete scanlines and atomic cancellation");
     }
