@@ -153,8 +153,13 @@ internal static class EdgeCapsuleFreeQueuePolicy
                 heldDistance = distance;
                 continue;
             }
-            var centre = Math.Abs((masterOnly ? pointerTopDip!.Value : (draggedTop + draggedBottom) / 2) -
-                (top + bottom) / 2);
+            // A carried block may overlap several queues. The pointer indicates which
+            // visible queue the user is aiming at; the block bounds only establish
+            // reachability. Otherwise a multi-paper drag can pick the queue BELOW
+            // the pointer and never preview the intended neighbour's slot.
+            var probeTop = pointerTopDip is { } y && double.IsFinite(y)
+                ? y : (draggedTop + draggedBottom) / 2;
+            var centre = Math.Abs(probeTop - (top + bottom) / 2);
             if (distance > bestDistance || distance == bestDistance &&
                 (centre > bestCentre || centre == bestCentre && best.HasValue &&
                  string.CompareOrdinal(queue.Key, best.Value.Key) >= 0)) continue;

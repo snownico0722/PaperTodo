@@ -40,6 +40,12 @@ internal static class NativeFreeQueuePolicyChecks
             "an expanded merge is lifted just enough to keep its full block inside the display");
         Require(EdgeCapsuleFreeQueuePolicy.FindInsertion([target], 304, 96, 10, pitch, gap) is { Index: 0 },
             "a whole visible block can attach from above without its first member crossing the target");
+        var aimedQueue = target with { TopDip = 350 };
+        var lowerNeighbour = target with { Key = "|right#neighbour", TopDip = 470, MemberCount = 1 };
+        Require(EdgeCapsuleFreeQueuePolicy.FindInsertion(
+                [aimedQueue, lowerNeighbour], 400, 96, 10, pitch, gap,
+                pointerTopDip: 423) is { Key: "|right#b" },
+            "when a long carried block overlaps two queues, the queue under the pointer wins");
         Require(EdgeCapsuleFreeQueuePolicy.FindInsertion([target], 304, 96, 500, pitch, gap) == null &&
                 EdgeCapsuleFreeQueuePolicy.FindInsertion([target], 304, 96, 500, pitch, gap,
                     floating: true) is { Index: 0 },

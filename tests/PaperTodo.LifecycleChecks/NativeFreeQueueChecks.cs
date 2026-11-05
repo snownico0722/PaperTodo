@@ -124,7 +124,10 @@ internal static class NativeFreeQueueChecks
         var displacedNeighbourTop = Top(neighbour);
         Require(displacedNeighbourTop > neighbourBefore + 2 &&
                 Math.Abs(Top(bPeer) - originalNextTargetTop - 2 * pitch) < .1,
-            "the target suffix AND the intersected neighbouring queue make room for two capsules");
+            $"two-capsule preview must open the target suffix and neighbour: " +
+            $"neighbour={neighbourBefore:F1}->{displacedNeighbourTop:F1}, " +
+            $"suffix={originalNextTargetTop:F1}->{Top(bPeer):F1}, " +
+            $"expectedSuffix={originalNextTargetTop + 2 * pitch:F1}");
         c.PreviewNativeEdgeQueueDrag(a, Point(interiorTop + 2), interiorTop + 2, false);
         Require(Math.Abs(Top(neighbour) - displacedNeighbourTop) < .1,
             "the same insertion slot cannot push the neighbouring queue a second time");
