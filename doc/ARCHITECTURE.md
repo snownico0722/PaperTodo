@@ -223,6 +223,8 @@ Markdown 中的 Note 图片只通过 PaperTodo 内部 `i:` asset URI 引用宿�
 
 扩展编辑器是临时的单窗口 presentation：`ExpandedEditorWindow` 提供可在任务栏/Alt+Tab 出现的标准 WPF HWND、外框和单一正文插槽，不负责另一份 Paper 数据或编辑会话。选中纸片时，`PaperWindow.ExpandedEditorVisualLease` 将原有 `PaperWindow` 的 `_shell`（包含该纸片的原生顶栏、内置 Note/Todo 或插件 Body）临时借入插槽，并隐藏原 PaperWindow；纸片自身仍拥有 MarkdownTextBox、待办输入与插件会话。右侧列表切换仅归还上一份 visual、借入下一份，编辑器 HWND 不变；原有输入坐标、焦点、弹窗与插件可见回调使用当前承载窗口。归还时提交当前编辑并恢复原 PaperWindow/胶囊形态，编辑器 HWND 的尺寸不能写入 PaperData 普通窗口几何。工作区结束、删除纸片、关闭或退出前必须解除借用。编辑器外壳使用不透明 `PaperBrushKey`，不继承普通 Mica HWND 才能合成的透明底色；原 WPF 顶栏和用户快捷键顺序保留，不增加第二条原生标题栏。
 
+扩展编辑器与普通纸片共用全局 `PaperTopBarShortcuts` 排序及溢出菜单：编辑器入口只是可排序快捷键，退出状态使用不同的居中矢量图标；原有关闭按钮仍在最右侧，编辑器中显示 × 并遵循折叠成胶囊的交互（胶囊功能关闭时退回隐藏）。编辑器宿主继承当前纸片的置顶偏好，正文切换不改变宿主 HWND 和 Alt+Tab 入口。借出正文后，顶栏本身显式拥有纸片右键菜单，避免菜单仍只挂在未借走的 `PaperChrome` 上。侧栏覆盖正文行完整高度，Markdown 工具栏仅占左侧正文宽度；选中项与悬停采用圆角。切换时原窗口以非激活方式恢复到编辑器后方，不允许恢复过程抢占焦点或覆盖编辑器。编辑器外框去掉第二条描边，WPF 内容和实际 HWND 都执行圆角约束，最大化时去掉装饰圆角。
+
 窗口交接的同步 Render 等待和正文回调允许同一 Dispatcher 上的外部命令重入。`AppController` 的批量隐藏与浮层 z-order 更新只遍历本次入口的窗口集合；隐藏复用既有逐纸片 visibility version，后到的显示／删除命令使旧目标失效，旧淡出回调也不能再修改新显示的 opacity 或图像资源。关闭过程由 `PaperWindow.CloseForReal` 的调用范围防重入，但在 compositor 交接完成前仍保持 Alive、接受精确端点；交接或正文回调返回后复核生命周期，Closed 不得回退到 Closing。
 
 Edge Capsule 启用后，一张纸的可见 surface 不再等价于一个 `PaperWindow` HWND：docked capsule 由 `EdgeCapsuleHost` 提供，跨队列/脱墙拖拽可以临时使用 `EdgeCapsuleDragWindow`；这些 surface 仍引用同一 `PaperData`，不复制业务对象。
