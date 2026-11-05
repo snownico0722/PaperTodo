@@ -88,6 +88,25 @@ internal static partial class Program
         finally { try { Directory.Delete(root, true); } catch (IOException) { } }
     }
 
+    // A real sharing violation now presents a modal Retry/Exit dialog. Dismissing
+    // it must preserve the previous workspace so the test can switch after unlock.
+    private static async Task<bool> DismissExpectedWorkspaceFailure(AppController controller, int number)
+    {
+        var dismiss = DismissDialogAsync();
+        var result = await controller.SwitchWorkspaceAsync(number);
+        await dismiss;
+        return result;
+
+        async Task DismissDialogAsync()
+        {
+            Window? dialog = null;
+            await Until(() => (dialog = Application.Current.Windows.OfType<Window>().FirstOrDefault(
+                window => window.IsVisible && window.Title == Strings.Get("WorkspaceSwitchFailed"))) != null,
+                "Expected workspace failure decision was not displayed");
+            dialog!.Close();
+        }
+    }
+
     private static AppState FixtureState() => new()
     {
         UiLanguage = "en", TelemetryEnabled = false, EnableAnimations = false, UseCapsuleMode = true, UseDeepCapsuleMode = true, EnableTodoPaperLinks = true,
@@ -373,7 +392,7 @@ internal static partial class Program
                 "First workspace material did not appear before switching");
             var secondPath = Path.Combine(AppContext.BaseDirectory, "data3.json");
             using (new FileStream(secondPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
-                Assert(!await controller.SwitchWorkspaceAsync(3), "Occupied workspace switch succeeded");
+                Assert(!await DismissExpectedWorkspaceFailure(controller, 3), "Occupied workspace switch succeeded");
             Assert(controller.WorkspaceNumber == 1 && workbench.HostedPaperCount == 3, "Failed switch lost the current desk");
             Assert(await controller.SwitchWorkspaceAsync(3), "Workspace switch failed");
             Assert(masters.Values.All(master => !master.IsVisible), "Workspace switch exposed master capsules over the workbench");

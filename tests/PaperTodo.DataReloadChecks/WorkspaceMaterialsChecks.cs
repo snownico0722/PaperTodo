@@ -123,8 +123,11 @@ internal static partial class Program
         var invalidArchive = J(File.ReadAllText(archivePath));
         invalidArchive["papers"]!.AsArray().Single(p => p!["workspaceMaterials"] != null)!["workspaceMaterials"]!["items"]!["material:image"] = null;
         File.WriteAllText(archivePath, invalidArchive.ToJsonString());
-        Require(!s.Store.TryCollectProtectedImageIds(s.Memory, out var incomplete) && incomplete.Count == 0,
-            "malformed archived material content allowed destructive image collection");
+        // #415 excludes damaged historical files from recovery. Image retirement
+        // still protects live, primary, backup and readable archive references.
+        Require(s.Store.TryCollectProtectedImageIds(s.Memory, out var protectedIds) &&
+                protectedIds.IsSupersetOf(["101", "202", "404"]) && !protectedIds.Contains("303"),
+            "malformed historical material entry blocked scanning valid snapshots or protected an unreadable reference");
     }
 
     private static void WorkspaceMaterialsInvalidImport()
