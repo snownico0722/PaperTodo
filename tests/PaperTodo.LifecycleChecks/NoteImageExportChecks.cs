@@ -23,7 +23,6 @@ internal static class NoteImageExportChecks
     {
         var token = CancellationToken.None;
         CheckContentCompatibility();
-        NoteImageSizeChecks.Run();
         var sample = NoteImageExport.Compose("把想法，写成自己的样子", """
             # 把想法，写成自己的样子
 

@@ -99,7 +99,7 @@ internal sealed class NoteImageSizeEstimate
         _imagePng += area * Math.Clamp(pngRate, .001, 3);
     }
 
-    // Offline fits; coefficient order matches HeaderRate and jpeg_calibrate.py.
+    // Offline fits; coefficient order follows HeaderRate. Calibration history: Decisions D-066.
     private static ReadOnlySpan<double> JpegCoefficients =>
         [-1.60994119, 0.88556676, 0.09386431, -0.38267748, -0.07381068, 0.44077617, 0.35345300, 0.00161109, -0.01643236, 0.24064990, 0.15136109, -0.06327877, 0.07220036, 0.00811685, 0.09241747, -0.04516633, -0.01710289, 0.06072375, 0.01422516];
     private static ReadOnlySpan<double> PngCoefficients =>

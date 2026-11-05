@@ -68,8 +68,7 @@ internal static class Program
             using var child = Process.Start(start)!;
             var output = child.StandardOutput.ReadToEndAsync();
             var error = child.StandardError.ReadToEndAsync();
-            // Image export now validates a larger encoding corpus; keep other lifecycle timeouts unchanged.
-            if (!child.WaitForExit(name == "image-export" ? 90_000 : 30_000))
+            if (!child.WaitForExit(30_000))
             {
                 child.Kill(entireProcessTree: true); child.WaitForExit();
                 throw new TimeoutException("Lifecycle fixture timed out: " + name);

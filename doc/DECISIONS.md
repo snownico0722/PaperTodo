@@ -2039,4 +2039,13 @@ PR #319 的初版把主胶囊完整材质收展后的卡死解释为终点迟到
 
 **Consequences**：元数据不能唯一决定压缩体积，跨格式图片、特殊纹理和大幅缩放仍可能超过目标误差；测试应同时报告原始误差与显示取整，不能把固定样例通过宣称为通用保证。
 
-**Evidence**：`NoteImageSizeEstimate`、`NoteImageExport.Composer`、`NoteImageSizeChecks`；旧实现在 `b187a149d50fe486590edb7bed6c08b7a0f06df0`，原性能数据见 [Windows CI](https://github.com/snownico0722/PaperTodo/actions/runs/42098466208)。
+**校准经验**：
+
+- 文字按汉字、假名、韩文与窄字符分组；正文和等宽代码按实际字号分别计数。引用框、复选框有少量固定开销，单纯按字符数会漏掉这部分。
+- 图片原文件大小要排除附加元数据；JPEG 的量化表/采样比例、PNG 的颜色类型/位深/调色板信息有用。普通 RGB 的新拟合没有稳定收益，应保留已有公式；抖动黑白图与普通阈值黑白图的 JPG 体积规律不同。
+- 有透明通道不等于大面积透明，文件头无法补齐纹理与透明覆盖率。不要为少数小图的高百分比误差不断增加分支，也不要把同一照片的多组缩放/压缩组合当成多张独立照片。
+- 这些系数服务于固定导出字体、比例、JPG 质量及 PNG 编码方式；上述条件变化，或真实笔记反复出现明显偏差时，再做针对性对照。统计耗时不包含原有排版/图片解码，历史样例的误差也不是通用保证。
+
+**验证取舍**：完整精度语料、计时基准和离线拟合属于开发实验。保留运行算法及既有导出/预览行为检查，删除实验脚本、数字样本和专用测算测试，撤销为整套编码实验延长的测试时限；不把粗略提示的参数校准变成常驻验收体系。
+
+**Evidence**：当前入口为 `NoteImageSizeEstimate`、`NoteImageJpegInfo`、`NoteImagePngInfo` 与 `NoteImageExport.Composer`；已删除的实验、数据与来源可从 [bd94266 历史目录](https://github.com/snownico0722/PaperTodo/tree/bd94266cb99d72913335eafefbe55d20669835af/tools/analysis/note-image-size)及同提交的测算测试追溯，[Windows 校准记录](https://github.com/snownico0722/PaperTodo/actions/runs/42120463501)仅作历史证据。旧像素方案在 `b187a149d50fe486590edb7bed6c08b7a0f06df0`，原性能数据见 [Windows CI](https://github.com/snownico0722/PaperTodo/actions/runs/42098466208)。
