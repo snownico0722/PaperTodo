@@ -1,0 +1,149 @@
+using System.IO;
+using System.Reflection;
+using System.Text.Json;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using PaperTodo;
+
+internal static partial class Program
+{
+    // Runs inside the isolated real-AppController WPF fixture, so all storage/persistence
+    // boundaries here are production code, not a mock image database.
+    private static void McpImageLiveChecks(AppController controller)
+    {
+        var note = controller.State.Papers.Single(p => p.Id == "note-b");
+        var originalEnabled = controller.State.McpEnabled;
+        var originalAdditive = controller.State.McpAllowBlankWrites;
+        var originalFull = controller.State.McpAllowFullWrites;
+        var bitmap = BitmapSource.Create(2, 2, 96, 96, PixelFormats.Bgra32, null,
+            new byte[] { 0, 0, 255, 255, 0, 255, 0, 255, 255, 0, 0, 255, 0, 0, 0, 255 }, 8);
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        using var buffer = new MemoryStream();
+        encoder.Save(buffer);
+        var png = buffer.ToArray();
+        var base64 = Convert.ToBase64String(png);
+        var command = new McpCommandService(controller, controller.PaperCommands);
+        var imageAssets = Field<Dictionary<string, NoteImageAsset>>(controller.ImageStore, "_images");
+
+        JsonElement Invoke(string method, object parameters) =>
+            JsonSerializer.SerializeToElement(command.Execute(
+                JsonSerializer.SerializeToElement(new { method, @params = parameters }))!);
+        void Rejected(string code, Action action)
+        {
+            try { action(); }
+            catch (McpApiException ex)
+            {
+                Require(ex.Code == code, $"Expected {code}, got {ex.Code}.");
+                return;
+            }
+            throw new InvalidOperationException("Expected MCP error: " + code);
+        }
+
+        var file = Path.Combine(AppContext.BaseDirectory, "mcp-image-fixture.png");
+        try
+        {
+            controller.State.McpEnabled = true;
+            controller.State.McpAllowBlankWrites = false;
+            controller.State.McpAllowFullWrites = false;
+            var originalText = note.Content;
+            var originalCount = imageAssets.Count;
+            Rejected("blank_writes_disabled",
+                () => Invoke("insert_note_image", new { paper_id = note.Id, image_base64 = base64 }));
+            Require(note.Content == originalText && imageAssets.Count == originalCount,
+                "Denied MCP image import changed note or image store.");
+
+            controller.State.McpAllowBlankWrites = true;
+            var added = Invoke("insert_note_image",
+                new { paper_id = note.Id, image_base64 = base64, image_name = "fixture.png" });
+            var imageId = added.GetProperty("image_id").GetString()!;
+            var reference = added.GetProperty("markdown_reference").GetString()!;
+            Require(reference == MarkdownImageReferences.CreateReference(imageId) &&
+                    note.Content.EndsWith(reference, StringComparison.Ordinal) &&
+                    File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "data.json"))
+                        .Contains(reference, StringComparison.Ordinal),
+                "Base64 import did not persist the Markdown reference alongside the LMDB image.");
+            var read = Invoke("read_note_image", new { paper_id = note.Id, image_id = imageId });
+            Require(read.GetProperty("mime").GetString() == "image/png" &&
+                    Convert.FromBase64String(read.GetProperty("image_base64").GetString()!)
+                        .SequenceEqual(png),
+                "MCP read did not return the same encoded image bytes.");
+            var otherNote = new PaperData { Id = "fixture-other-note", Type = PaperTypes.Note };
+            controller.State.Papers.Add(otherNote);
+            try
+            {
+                Rejected("asset_not_found",
+                    () => Invoke("read_note_image",
+                        new { paper_id = otherNote.Id, image_id = imageId }));
+            }
+            finally { controller.State.Papers.Remove(otherNote); }
+
+            File.WriteAllBytes(file, png);
+            var fromPath = Invoke("insert_note_image",
+                new { paper_id = note.Id, image_path = file });
+            Require(fromPath.GetProperty("image_id").GetString() != imageId &&
+                    note.Content.EndsWith(
+                        fromPath.GetProperty("markdown_reference").GetString()!,
+                        StringComparison.Ordinal),
+                "Absolute path import did not append a fresh local image.");
+            controller.State.McpAllowBlankWrites = false;
+            Rejected("blank_writes_disabled", () => Invoke("insert_note_image",
+                new { paper_id = note.Id, image_path = file }));
+            // Image reads are not gated by modification permissions.
+            Require(Invoke("read_note_image", new { paper_id = note.Id, image_id = imageId })
+                        .GetProperty("mime").GetString() == "image/png",
+                "Disabling writes prevented authorized image reads.");
+
+            controller.State.McpAllowBlankWrites = true;
+            var contentBeforeBad = note.Content;
+            var countBeforeBad = imageAssets.Count;
+            Rejected("invalid_params", () => Invoke("insert_note_image",
+                new { paper_id = note.Id, image_base64 = "not base64!" }));
+            Rejected("invalid_params", () => Invoke("insert_note_image",
+                new { paper_id = note.Id, image_base64 = base64, image_path = file }));
+            Rejected("invalid_params", () => Invoke("insert_note_image",
+                new { paper_id = note.Id, image_path = "relative.png" }));
+            Rejected("image_import_failed", () => Invoke("insert_note_image",
+                new { paper_id = note.Id, image_base64 = Convert.ToBase64String(new byte[] { 1, 2, 3 }) }));
+            Require(note.Content == contentBeforeBad && imageAssets.Count == countBeforeBad,
+                "Invalid images or conflicting inputs modified the note/image store.");
+
+            // The LMDB blob commits before core JSON; a failed core save must discard that
+            // newly imported image and restore the original note text.
+            var store = Field<StateStore>(controller, "_store");
+            var writer = typeof(StateStore).GetField("_atomicWriter", Private)!;
+            var priorWriter = writer.GetValue(store);
+            var ignore = typeof(AppController).GetField("_ignoreSaveFailures", Private)!;
+            var priorIgnore = ignore.GetValue(controller);
+            var beforeFailedText = note.Content;
+            var beforeFailedAssets = imageAssets.Count;
+            try
+            {
+                ignore.SetValue(controller, true);
+                writer.SetValue(store, new DurableAtomicFileWriter((stage, _) =>
+                {
+                    if (stage == DurableAtomicWriteStage.BeforeTempOpen)
+                        throw new IOException("Injected MCP image save failure.");
+                }));
+                Rejected("save_failed", () => Invoke("insert_note_image",
+                    new { paper_id = note.Id, image_base64 = base64 }));
+            }
+            finally
+            {
+                writer.SetValue(store, priorWriter);
+                ignore.SetValue(controller, priorIgnore);
+            }
+            Require(note.Content == beforeFailedText && imageAssets.Count == beforeFailedAssets,
+                "Failed core save left an orphaned image or a partially appended reference.");
+            controller.SaveNow(sync: true);
+            Console.WriteLine("PASS MCP image Base64/path import, image-content read, permissions, ownership and rollback");
+        }
+        finally
+        {
+            controller.State.McpEnabled = originalEnabled;
+            controller.State.McpAllowBlankWrites = originalAdditive;
+            controller.State.McpAllowFullWrites = originalFull;
+            try { File.Delete(file); } catch { }
+        }
+    }
+}
