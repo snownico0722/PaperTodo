@@ -30,11 +30,32 @@ internal static class NativeFreeQueuePolicyChecks
             Require(bounded.TopDip == 504,
                 "every insertion slot lifts only by the missing space below (96 DIP)");
         }
-        var independentGroup = EdgeCapsuleFreeQueuePolicy.Place([masterTarget], 100, 4, 900, pitch, gap);
-        Require(independentGroup.Kind == EdgeFreeQueueDropKind.Move && independentGroup.TopDip == 100 &&
-                independentGroup.Tops[target.Key] == 300 &&
-                EdgeCapsuleFreeQueuePolicy.GhostSlotTop(independentGroup, true, pitch) == 100,
-            "independent B keeps its master and previews A's downward displacement before release");
+        foreach (var requested in new[] { 100d, 120d, 150d, 180d })
+        {
+            var independentGroup = EdgeCapsuleFreeQueuePolicy.Place([masterTarget], requested, 4, 900, pitch, gap);
+            Require(independentGroup.Kind == EdgeFreeQueueDropKind.Move && independentGroup.TopDip == 0 &&
+                    independentGroup.Tops.Count == 0 &&
+                    EdgeCapsuleFreeQueuePolicy.GhostSlotTop(independentGroup, true, pitch) == 0,
+                "B's complete ghost fits above A without moving A as the pointer approaches");
+        }
+        var crampedTarget = masterTarget with { TopDip = 120 };
+        foreach (var requested in new[] { 0d, 20d, 60d, 100d })
+        {
+            var cramped = EdgeCapsuleFreeQueuePolicy.Place([crampedTarget], requested, 4, 900, pitch, gap);
+            Require(cramped.TopDip == 0 && cramped.Tops[target.Key] == 200,
+                "insufficient top space moves A down only by the same 80-DIP deficit");
+        }
+        var restored = EdgeCapsuleFreeQueuePolicy.Place([crampedTarget], 380, 4, 900, pitch, gap);
+        Require(restored.Tops.Count == 0 && restored.TopDip == 380,
+            "moving below A uses its original position, not the prior displaced preview");
+        var upperGap = new EdgeFreeQueueBox("|right#upper", 0, 2, false, 100);
+        var lowerGap = target with { TopDip = 120, MemberCount = 1 };
+        foreach (var requested in new[] { 100d, 110d })
+        {
+            var between = EdgeCapsuleFreeQueuePolicy.Place([upperGap, lowerGap], requested, 1, 900, pitch, gap);
+            Require(between.TopDip == 100 && between.Tops.Count == 1 && between.Tops[target.Key] == 150,
+                "a short adjacent gap moves only its lower neighbour by the fixed deficit");
+        }
         var append = EdgeCapsuleFreeQueuePolicy.Insert([target], target.Key, 2, 2, 900, pitch, gap);
         Require(append.Accepted && append.TopDip == target.TopDip, "append does not move the old head");
         var interior = EdgeCapsuleFreeQueuePolicy.Insert([target], target.Key, 1, 2, 900, pitch, gap);
@@ -95,12 +116,15 @@ internal static class NativeFreeQueuePolicyChecks
             "collapsed-target feedback points to the visible master instead of an invisible insertion slot");
 
         var overlap = EdgeCapsuleFreeQueuePolicy.Place([target], 420, 1, 900, pitch, gap);
-        Require(overlap.Accepted && overlap.TopDip == 420 && overlap.Tops[target.Key] == 320,
-            "an independent drop keeps its exact anchor and moves only the intersecting neighbour");
+        Require(overlap.Accepted && overlap.TopDip == 500 && overlap.Tops.Count == 0,
+            "an independent ghost below A clears its tail instead of pushing A upward");
         var lower = target with { TopDip = 146, MemberCount = 1 };
         var crowded = EdgeCapsuleFreeQueuePolicy.Place([lower], 100, 1, 200, pitch, gap);
-        Require(crowded.Accepted && crowded.Tops[lower.Key] == 150,
-            "a full edge allows the drop and pushes the neighbour instead of rejecting it");
+        Require(crowded.Accepted && crowded.TopDip == 96 && crowded.Tops.Count == 0,
+            "the ghost consumes available space above before moving its neighbour");
+        var legacy = EdgeCapsuleFreeQueuePolicy.Place([target], 420, 1, 900, pitch, gap, stableNeighbours: false);
+        Require(legacy.TopDip == 420 && legacy.Tops[target.Key] == 320,
+            "legacy Ctrl placement retains its existing exact-anchor behavior");
         var exact = EdgeCapsuleFreeQueuePolicy.Place([lower], 96, 1, 200, pitch, gap);
         Require(exact.Accepted && exact.TopDip == 96, "a legal exact position stays exact");
         Require(EdgeCapsuleFreeQueuePolicy.Place([], 500, 1, 900, pitch, gap).TopDip == 500,

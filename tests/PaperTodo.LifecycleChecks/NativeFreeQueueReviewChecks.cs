@@ -41,6 +41,7 @@ internal static class NativeFreeQueueReviewChecks
     {
         CheckAnchorReconstruction();
         Require(WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(null, out var monitor), "review monitor");
+        CheckDropGhostShapes(monitor);
         var originalContents = c.State.Papers.ToDictionary(p => p.Id, p => p.Content);
         await CheckDisplacedInsertion(c, windows, store, monitor);
         await CheckDragPreviewUpdates(c, windows, monitor);
@@ -54,6 +55,40 @@ internal static class NativeFreeQueueReviewChecks
                 c.State.Papers.All(p => originalContents[p.Id] == p.Content),
             "queue operations changed paper identities or note contents");
         Console.WriteLine("PASS free-queue review: displaced insertion, anchor roundtrip, folded drops, shortcut geometry, post-disconnect gestures and merge identity");
+    }
+
+    private static void CheckDropGhostShapes(MonitorGeometry monitor)
+    {
+        using var ghost = new EdgeCapsuleQueueDropGhost();
+        var window = Field<Window>(ghost, "_window");
+        var stack = Field<StackPanel>(ghost, "_stack");
+        const double memberWidth = 180, gap = 4;
+        var margin = EdgeCapsuleLayout.WindowChromeMargin;
+        foreach (var side in new[] { DeepCapsuleSides.Left, DeepCapsuleSides.Right })
+        foreach (var masterWidth in new[] { 50d, 24d })
+        {
+            ghost.ShowAt(monitor, side, 30, memberWidth, 4, gap, masterWidth);
+            window.UpdateLayout();
+            var header = (Border)stack.Children[0];
+            var member = (Border)stack.Children[1];
+            Near(masterWidth - margin, header.ActualWidth, "master ghost retains normal/compact master width");
+            Near(memberWidth - margin, member.ActualWidth, "member ghost retains ordinary width");
+            Near(side == DeepCapsuleSides.Left ? 0 : memberWidth - masterWidth + margin,
+                header.TranslatePoint(new Point(), stack).X, "short master is aligned to the screen edge");
+            Near(PaperLayoutDefaults.CapsuleHeight + gap,
+                member.TranslatePoint(new Point(), stack).Y - header.TranslatePoint(new Point(), stack).Y,
+                "short master still occupies one full vertical slot");
+
+            // Same count and side, different role: a merge must reset the short header.
+            ghost.ShowAt(monitor, side, 30, memberWidth, 4, gap);
+            window.UpdateLayout();
+            Near(memberWidth - margin, header.ActualWidth, "merge has no retained short source master");
+            ghost.ShowAt(monitor, side, 30, memberWidth, 1, gap, masterWidth);
+            window.UpdateLayout();
+            Near(masterWidth, window.Width, "folded independent ghost uses only the short master width");
+            Near(masterWidth - margin, ((Border)stack.Children[0]).ActualWidth, "folded master outline is short");
+        }
+        Console.WriteLine("PASS ghost geometry: short master, members, both edges, compact mode, merge reset and folded source");
     }
 
     private static async Task CheckDisplacedInsertion(AppController c,
@@ -396,17 +431,18 @@ internal static class NativeFreeQueueReviewChecks
         IReadOnlyDictionary<string, PaperWindow> windows, StateStore store, MonitorGeometry monitor)
     {
         var pitch = EdgeCapsuleLayout.SlotHeight(c.DeepCapsuleGap);
-        var aTop = 4 * pitch;
-        var bTop = aTop + 6 * pitch;
         var proxies = Field<Dictionary<string, EdgeCapsuleQueueCompositionProxy>>(
             c, "_edgeCapsuleQueueCompositionProxies");
         // A = master + four members, B = master + three members. Cover both
         // input owners and both drag phases, with cancellation and real commit.
         foreach (var animated in new[] { false, true })
         foreach (var route in new[] { "ctrl-docked", "ctrl-floating", "master-docked", "master-floating" })
+        foreach (var cramped in new[] { false, true })
         foreach (var commit in new[] { false, true })
         {
             c.State.EnableAnimations = false;
+            var aTop = (cramped ? 2 : 4) * pitch;
+            var bTop = aTop + 6 * pitch;
             foreach (var paper in c.State.Papers)
             {
                 var i = int.Parse(paper.Id["review-".Length..]);
@@ -428,9 +464,10 @@ internal static class NativeFreeQueueReviewChecks
             var owner = c.State.Papers.Single(p => p.Id == "review-4");
             var ctrl = route.StartsWith("ctrl", StringComparison.Ordinal);
             var floating = route.EndsWith("floating", StringComparison.Ordinal);
-            // The docked Ctrl block touches only A's master region, stopping
-            // short of its first-member merge range. Floating selects by shell.
-            var top = ctrl && !floating ? aTop - 4 * pitch + 25 : aTop - 2 * pitch;
+            // The carried tail overlaps A, but the held capsule remains above
+            // the merge entrance. Only the landing ghost consumes that overlap.
+            var top = aTop - 2 * pitch;
+            var landingTop = Math.Max(0, aTop - 4 * pitch);
             var ownerTop = top + pitch;
             var point = Point(monitor, ctrl && !floating ? ownerTop : top);
             FreeMasterDragLayout? layout = null;
@@ -466,12 +503,12 @@ internal static class NativeFreeQueueReviewChecks
                     "master preview keeps the two groups separate");
             }
             await Dispatcher.CurrentDispatcher.InvokeAsync(static () => { }, DispatcherPriority.Send);
-            var expectedA = top + 4 * pitch;
+            var expectedA = Math.Max(aTop, 4 * pitch);
             var masters = Masters(c);
             EdgeCapsuleQueueCompositionProxy? yielding = null;
-            if (animated)
+            if (animated && cramped)
             {
-                var context = $"{route}, commit={commit}, proxies=" + string.Join(";", proxies.Select(pair =>
+                var context = $"{route}, cramped={cramped}, commit={commit}, proxies=" + string.Join(";", proxies.Select(pair =>
                     pair.Key + ":" + string.Join(",", pair.Value.Members.Select(m => m.Plan.PaperId))));
                 Require(proxies.TryGetValue(A, out yielding), "independent target owns an animation: " + context);
                 Require(yielding!.Members.Any(m => ReferenceEquals(m.Window, masters[A])),
@@ -484,7 +521,8 @@ internal static class NativeFreeQueueReviewChecks
                 Require(WindowNative.IsWindowBehind(yielding.OutputHandle, interactionHandle),
                     "independent yield remains behind the actual drag HWND: " + context);
             }
-            Near(expectedA, masters[A].AnchorTop, route + " previews A master displacement before release");
+            else Require(!proxies.ContainsKey(A), "sufficient upper space or disabled animations needs no target animation");
+            Near(expectedA, masters[A].AnchorTop, route + " moves A only by missing space above");
             foreach (var paper in targetPapers)
                 Near(memberTops[paper.Id] + expectedA - aTop, MemberTop(c, windows[paper.Id], paper),
                     route + " previews A as one rigid group");
@@ -492,6 +530,10 @@ internal static class NativeFreeQueueReviewChecks
             Require(Field<Window>(ghost, "_window").Opacity > 0 &&
                     Field<StackPanel>(ghost, "_stack").Children.Count == 4,
                 "independent B ghost includes its own master plus three members");
+            Field<Window>(ghost, "_window").UpdateLayout();
+            Near(masters[B].DesiredDockedWidth - EdgeCapsuleLayout.WindowChromeMargin,
+                ((Border)Field<StackPanel>(ghost, "_stack").Children[0]).ActualWidth,
+                route + " passes the actual source master width to the first silhouette");
             Require(saved.All(pair => c.State.DeepCapsuleQueueStartTopMargins[pair.Key] == pair.Value),
                 "independent preview must not write saved positions");
 
@@ -503,8 +545,48 @@ internal static class NativeFreeQueueReviewChecks
             Require(targetPapers.All(p => ReconcileGeneration(windows[p.Id]) == work[p.Id]),
                 "same independent drop does not requeue unchanged target geometry");
             Near(expectedA, masters[A].AnchorTop, "independent preview does not accumulate displacement");
-            if (animated)
+            if (animated && cramped)
                 Require(ReferenceEquals(proxies[A], yielding), "same independent landing retains its live animation");
+
+            EdgeFreeQueueDrop Decision() => ctrl
+                ? Field<NativeEdgeQueueDrag>(c, "_nativeEdgeQueueDrag").Drop!.Decision
+                : Field<FreeQueueSlotPreviewState>(c, "_freeMasterSlotPreview").Decision!;
+            void Sample(double requested)
+            {
+                var samplePoint = Point(monitor, ctrl && !floating ? requested + pitch : requested);
+                if (ctrl) c.PreviewNativeEdgeQueueDrag(owner, samplePoint, requested + pitch, floating);
+                else if (floating) c.PreviewFreeMasterQueueDropGhost(transfer, samplePoint);
+                else c.PreviewFreeMasterQueueTop(layout!, requested, samplePoint);
+            }
+            // Actual pointer movement, rather than just identical samples, must
+            // keep one landing position and one neighbour displacement.
+            foreach (var delta in new[] { 4d, 8d, 12d, 4d, 0d })
+            {
+                Sample(top + delta);
+                Require(Decision().Kind == EdgeFreeQueueDropKind.Move, "approaching above remains independent");
+                Near(landingTop, Decision().TopDip, "upper landing ghost is stable while approaching");
+                Near(expectedA, masters[A].AnchorTop, "approaching cannot progressively push A");
+            }
+
+            Sample(aTop + 5 * pitch + 40);
+            await Dispatcher.CurrentDispatcher.InvokeAsync(static () => { }, DispatcherPriority.Send);
+            Require(Decision().Kind == EdgeFreeQueueDropKind.Move, "moving below selects an independent landing");
+            Near(aTop, masters[A].AnchorTop, "moving below immediately withdraws the earlier top-space displacement");
+            foreach (var paper in targetPapers)
+                Near(memberTops[paper.Id], MemberTop(c, windows[paper.Id], paper), "moving below restores every A member");
+
+            Sample(aTop + (ctrl && !floating ? pitch : 2 * pitch));
+            await Dispatcher.CurrentDispatcher.InvokeAsync(static () => { }, DispatcherPriority.Send);
+            Require(Decision().Kind == EdgeFreeQueueDropKind.Insert && Decision().TargetKey == A,
+                "the held capsule entering A selects a merge");
+            Near(aTop, masters[A].AnchorTop, "merge uses A's original head, not its previous independent displacement");
+            Require(Field<StackPanel>(ghost, "_stack").Children.Count == 3 &&
+                    double.IsNaN(((Border)Field<StackPanel>(ghost, "_stack").Children[0]).Width),
+                "merge replaces the short source master with member-only ghosts");
+            Sample(top);
+            await Dispatcher.CurrentDispatcher.InvokeAsync(static () => { }, DispatcherPriority.Send);
+            Near(landingTop, Decision().TopDip, "returning above recovers the same independent landing");
+            Near(expectedA, masters[A].AnchorTop, "returning above applies the deficit once again");
 
             if (ctrl)
             {
@@ -525,7 +607,7 @@ internal static class NativeFreeQueueReviewChecks
             Require(proxies.Count == 0 && masters[A].VerifyQueueProxyEndpoint(masters[A].QueueProxyTarget),
                 "independent landing or cancel hands the master back at its final position");
             Near(commit ? expectedA : aTop, masters[A].AnchorTop, route + " A release result matches preview or cancel");
-            Near(commit ? top : bTop, masters[B].AnchorTop, route + " B release result matches preview or cancel");
+            Near(commit ? landingTop : bTop, masters[B].AnchorTop, route + " B release result matches preview or cancel");
             Require(c.State.Papers.Count(p => p.CapsuleQueueId == "qa") == 4 &&
                     c.State.Papers.Count(p => p.CapsuleQueueId == "qb") == 3,
                 "independent placement never merges membership");
@@ -536,17 +618,17 @@ internal static class NativeFreeQueueReviewChecks
             {
                 c.SaveNow(sync: true);
                 var loaded = store.Load();
-                Near(top, loaded.DeepCapsuleQueueStartTopMargins[B], "independent landing anchor survives reload");
+                Near(landingTop, loaded.DeepCapsuleQueueStartTopMargins[B], "independent landing anchor survives reload");
                 foreach (var pair in loaded.DeepCapsuleQueueStartTopMargins)
                     c.State.DeepCapsuleQueueStartTopMargins[pair.Key] = pair.Value;
                 c.ArrangeDeepCapsules(false);
                 await Idle();
                 Near(expectedA, masters[A].AnchorTop, "saved independent order reproduces A's preview");
-                Near(top, masters[B].AnchorTop, "saved independent order reproduces B's preview");
+                Near(landingTop, masters[B].AnchorTop, "saved independent order reproduces B's preview");
             }
         }
         c.State.EnableAnimations = false;
-        Console.WriteLine("PASS independent group preview: animations on/off, Ctrl/master, docked/floating, ghost slots, cancel, commit and reload");
+        Console.WriteLine("PASS independent group preview: animations on/off, Ctrl/master, docked/floating, stable approach, top deficit, below/merge/return, short master, native stacking, cancel, commit and reload");
     }
 
     private static async Task CheckYieldAnimations(AppController c,
@@ -808,6 +890,8 @@ internal static class NativeFreeQueueReviewChecks
             Require(Field<Window>(ghost, "_window").Opacity > 0 &&
                     Field<StackPanel>(ghost, "_stack").Children.Count == 1,
                 "an actually folded source previews only its retained master slot");
+            Near(Masters(c)[currentKey].DesiredDockedWidth, Field<Window>(ghost, "_window").Width,
+                "folded transfer passes the actual master width to its ghost");
             Near(bottom, Field<FreeQueueSlotPreviewState>(c, "_freeMasterSlotPreview").Top,
                 "folded preview uses the same visible height as commit");
             Require(c.CommitMasterCapsuleQueueTransfer(transfer, Point(monitor, bottom, left)),

@@ -28,9 +28,11 @@ public sealed partial class AppController
         var width = collapsedTarget ? target!.Box.WidthDip : ownerWidth;
         // An independent group retains (or creates) its own master. A merge
         // contributes only members to the destination's existing master.
-        var slots = drag.CarriedIds.Length +
-            (drop.Decision.Kind == EdgeFreeQueueDropKind.Move && State.UseCapsuleCollapseAll ? 1 : 0);
-        _nativeQueueDropGhost?.ShowAt(geometry, side, top, width, slots, DeepCapsuleGap);
+        var hasMaster = drop.Decision.Kind == EdgeFreeQueueDropKind.Move && State.UseCapsuleCollapseAll;
+        var slots = drag.CarriedIds.Length + (hasMaster ? 1 : 0);
+        double? masterWidth = hasMaster && _masterCapsules.TryGetValue(drag.SourceKey, out var master)
+            ? master.DesiredDockedWidth : null;
+        _nativeQueueDropGhost?.ShowAt(geometry, side, top, width, slots, DeepCapsuleGap, masterWidth);
     }
 
     // The only magnetic movement is a repeatable snap to the source's OUTER

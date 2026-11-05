@@ -56,7 +56,7 @@ internal sealed class EdgeCapsuleQueueDropGhost : IDisposable
     }
 
     internal void ShowAt(MonitorGeometry geometry, string side, double topDip, double widthDip,
-        int count = 1, double gapDip = 0)
+        int count = 1, double gapDip = 0, double? masterWidthDip = null)
     {
         if (!double.IsFinite(topDip) || !double.IsFinite(widthDip) || widthDip <= 0)
         {
@@ -106,7 +106,17 @@ internal sealed class EdgeCapsuleQueueDropGhost : IDisposable
             _side = side;
         }
 
-        var width = Math.Min(geometry.LocalWorkAreaDip.Width, Math.Max(34, widthDip));
+        // An independent stack starts with its own short master. Its slot height
+        // stays unchanged, but its outline must not stretch to the member width.
+        var width = Math.Min(geometry.LocalWorkAreaDip.Width,
+            count == 1 && masterWidthDip is { } onlyMaster
+                ? Math.Max(1, onlyMaster) : Math.Max(Math.Max(34, widthDip), masterWidthDip ?? 0));
+        _silhouette.Width = masterWidthDip is { } masterWidth
+            ? Math.Max(1, Math.Min(width, masterWidth) - EdgeCapsuleLayout.WindowChromeMargin)
+            : double.NaN;
+        _silhouette.HorizontalAlignment = masterWidthDip.HasValue
+            ? side == DeepCapsuleSides.Left ? HorizontalAlignment.Left : HorizontalAlignment.Right
+            : HorizontalAlignment.Stretch;
         var height = count * PaperLayoutDefaults.CapsuleHeight + (count - 1) * gapDip;
         _window.Width = width;
         _window.Height = height;
@@ -142,3 +152,4 @@ internal sealed class EdgeCapsuleQueueDropGhost : IDisposable
         _window.Close();
     }
 }
+
