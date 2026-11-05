@@ -34,7 +34,8 @@ internal sealed class NoteImageExportWindow : Window
         Title = Strings.Get("EditorImageExport");
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         Width = 760;
-        Height = Math.Min(860, SystemParameters.WorkArea.Height * .88);
+        var ownerArea = WindowWorkAreaHelper.WorkAreaFor(owner);
+        Height = Math.Min(860, Math.Max(360, ownerArea.Height * .88));
         MinWidth = 440;
         MinHeight = 360;
         WindowStyle = WindowStyle.None;

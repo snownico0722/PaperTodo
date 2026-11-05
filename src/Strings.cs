@@ -73,6 +73,7 @@ public static class Strings
             ["TodoPasteTruncatedTitle"] = ["粘贴内容已截断", "Paste was truncated", "貼り付け内容を切り詰めました", "붙여넣기 내용이 잘렸습니다"],
             ["TodoPasteItemLimitMessage"] = ["本次最多插入前 {0} 条待办，其余未插入。", "Only the first {0} todos were inserted; the rest were not inserted.", "先頭の {0} 件だけを挿入し、残りは挿入しませんでした。", "앞의 {0}개 할 일만 삽입했고 나머지는 삽입하지 않았습니다."],
             ["TodoPasteTextLimitMessage"] = ["待办最多支持 {0} 个字符，超出部分未插入。", "A todo can contain at most {0} characters; excess text was not inserted.", "ToDo は最大 {0} 文字です。超えた部分は挿入しませんでした。", "할 일은 최대 {0}자까지 지원하며 초과한 텍스트는 삽입하지 않았습니다."],
+            ["EditorImageExportMemoryLimit"] = ["本次导出的图片解码内存将超过 1 GiB，已停止导出。请减少图片或缩小图片后重试。", "Decoded images for this export would exceed 1 GiB. Remove or shrink some images and try again.", "書き出し用画像のデコード容量が 1 GiB を超えるため、中止しました。画像を減らすか縮小して再試行してください。", "내보내기 이미지의 디코딩 메모리가 1 GiB를 초과하여 중단했습니다. 이미지를 줄이거나 축소한 후 다시 시도하세요."],
             ["NoteInputLimitTitle"] = ["笔记已达上限", "Note limit reached", "ノートの上限に達しました", "메모 한도에 도달했습니다"],
             ["NoteInputLimitMessage"] = ["笔记最多支持 {0} 个字符。请删除部分内容后再继续输入。", "A note can contain at most {0} characters. Delete some content before typing more.", "ノートは最大 {0} 文字です。続けて入力するには一部の内容を削除してください。", "메모는 최대 {0}자까지 입력할 수 있습니다. 계속 입력하려면 일부 내용을 삭제해 주세요."]
         };

@@ -60,6 +60,11 @@ internal static class NoteImageExport
 
     internal static NoteImageArtifact Compose(string title, string markdown,
         Func<string, NoteImageSource?> resolveImage, string missingLabel, CancellationToken cancellation)
+        => Compose(title, markdown, (id, width, options) => resolveImage(id), missingLabel, cancellation);
+
+    internal static NoteImageArtifact Compose(string title, string markdown,
+        Func<string, double, MarkdownImageDisplayOptions, NoteImageSource?> resolveImage,
+        string missingLabel, CancellationToken cancellation)
     {
         cancellation.ThrowIfCancellationRequested();
         var source = NoteHtmlExport.PrepareMarkdownForExport(markdown, out var imageWidths);
@@ -68,7 +73,8 @@ internal static class NoteImageExport
         return new Composer(resolveImage, missingLabel, imageWidths, html, cancellation).Compose(title, document);
     }
 
-    internal static NoteImageSource? ReadImage(NoteImageStore store, string noteId, string imageId)
+    internal static NoteImageSource? ReadImage(NoteImageStore store, string noteId, string imageId,
+        int decodePixelWidth)
     {
         if (!store.TryGetEncodedImageBytes(imageId, out var asset, out var bytes) ||
             !string.Equals(asset.NoteId, noteId, StringComparison.Ordinal)) return null;
@@ -76,13 +82,59 @@ internal static class NoteImageExport
         var bitmap = new BitmapImage();
         bitmap.BeginInit();
         bitmap.CacheOption = BitmapCacheOption.OnLoad;
-        bitmap.DecodePixelWidth = Math.Min(1200, Math.Max(1, asset.Width));
+        bitmap.DecodePixelWidth = Math.Clamp(decodePixelWidth, 1, Math.Max(1, asset.Width));
         bitmap.StreamSource = stream;
         bitmap.EndInit();
         bitmap.Freeze();
         return new NoteImageSource(bitmap, asset.Width, bytes.LongLength, asset.Mime, asset.Height,
             asset.Mime == "image/jpeg" ? NoteImageJpegInfo.Read(bytes) : default,
             asset.Mime == "image/png" ? NoteImagePngInfo.Read(bytes) : default);
+    }
+
+    // One cache per export; bitmaps remain owned by the immutable DrawingGroup after Compose.
+    // A later larger occurrence may need an upgraded bitmap, so both decoded surfaces count.
+    internal sealed class ImageSourceCache(NoteImageStore store, string noteId)
+    {
+        private const long MaxDecodedBytes = 1024L * 1024 * 1024;
+        private readonly Dictionary<string, NoteImageSource?> _images = new(StringComparer.Ordinal);
+        private long _decodedBytes;
+
+        internal NoteImageSource? Resolve(string id, double availableWidth, MarkdownImageDisplayOptions options)
+        {
+            if (_images.TryGetValue(id, out var cached) && cached == null) return null;
+            if (!store.TryGetAsset(id, out var asset) || asset.NoteId != noteId ||
+                asset.Width <= 0 || asset.Height <= 0)
+            {
+                _images[id] = null;
+                return null;
+            }
+
+            var displayWidth = Math.Min(availableWidth, options.ResolveWidth(asset.Width, availableWidth));
+            var pixelWidth = Math.Clamp((int)Math.Ceiling(displayWidth * NoteImageArtifact.Scale),
+                1, asset.Width);
+            if (cached != null && cached.Bitmap.PixelWidth >= pixelWidth) return cached;
+
+            // Reserve the decoded pixel surface before decoding; this is an export-local
+            // image budget, not a limit on unrelated PaperTodo process allocations.
+            var pixelHeight = (int)Math.Ceiling((double)asset.Height * pixelWidth / asset.Width);
+            var predictedBytes = 4L * pixelWidth * pixelHeight;
+            if (_decodedBytes > MaxDecodedBytes - predictedBytes)
+                throw new InvalidOperationException(Strings.Get("EditorImageExportMemoryLimit"));
+
+            var image = ReadImage(store, noteId, id, pixelWidth);
+            if (image == null)
+            {
+                _images[id] = null;
+                return null;
+            }
+            var actualBytes = 4L * image.Bitmap.PixelWidth * image.Bitmap.PixelHeight;
+            if (_decodedBytes > MaxDecodedBytes - actualBytes)
+                throw new InvalidOperationException(Strings.Get("EditorImageExportMemoryLimit"));
+
+            _decodedBytes += actualBytes;
+            _images[id] = image;
+            return image;
+        }
     }
 
     internal static void Save(string path, NoteImageArtifact artifact, CancellationToken cancellation,
@@ -145,7 +197,7 @@ internal static class NoteImageExport
     private enum Style { Normal = 0, Bold = 1, Italic = 2, Strike = 4, Code = 8, Link = 16, Underline = 32 }
     private sealed record RunStyle(int Start, int Length, Style Style);
 
-    private sealed class Composer(Func<string, NoteImageSource?> resolveImage, string missingLabel,
+    private sealed class Composer(Func<string, double, MarkdownImageDisplayOptions, NoteImageSource?> resolveImage, string missingLabel,
         IReadOnlyDictionary<int, MarkdownImageDisplayOptions> widths,
         MarkdownSemanticSnapshot? html, CancellationToken token)
     {
@@ -419,8 +471,9 @@ internal static class NoteImageExport
         {
             var url = link.Url ?? "";
             var id = url.StartsWith("i:", StringComparison.Ordinal) ? url[2..] : url;
+            widths.TryGetValue(link.Span.Start, out var options);
             NoteImageSource? image = null;
-            if (url.StartsWith("i:", StringComparison.Ordinal)) image = resolveImage(id);
+            if (url.StartsWith("i:", StringComparison.Ordinal)) image = resolveImage(id, width, options);
             if (image == null)
             {
                 _missing.Add(id);
@@ -428,10 +481,12 @@ internal static class NoteImageExport
                 _y += 12;
                 return;
             }
-            widths.TryGetValue(link.Span.Start, out var options);
             var bitmap = image.Bitmap;
             var imageWidth = Math.Min(width, options.ResolveWidth(image.NaturalWidth, width));
-            var imageHeight = imageWidth * bitmap.PixelHeight / bitmap.PixelWidth;
+            var aspect = image.NaturalHeight > 0
+                ? image.NaturalHeight / (double)image.NaturalWidth
+                : bitmap.PixelHeight / (double)bitmap.PixelWidth;
+            var imageHeight = imageWidth * aspect;
             _sizeEstimate.AddImage(image.EncodedBytes, image.Mime, image.NaturalWidth,
                 image.NaturalHeight > 0 ? image.NaturalHeight : image.NaturalWidth * bitmap.PixelHeight / (double)bitmap.PixelWidth,
                 imageWidth * NoteImageArtifact.Scale, imageHeight * NoteImageArtifact.Scale, image.JpegInfo, image.PngInfo);

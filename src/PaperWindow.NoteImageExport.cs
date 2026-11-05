@@ -13,8 +13,10 @@ public sealed partial class PaperWindow
         var images = _controller.ImageStore;
         var missing = Strings.Get("NoteExportMissingImageText");
         var preview = new NoteImageExportWindow(InteractionWindow, title, cancellation =>
-            NoteImageExport.Compose(title, markdown,
-                id => NoteImageExport.ReadImage(images, noteId, id), missing, cancellation));
+        {
+            var cache = new NoteImageExport.ImageSourceCache(images, noteId);
+            return NoteImageExport.Compose(title, markdown, cache.Resolve, missing, cancellation);
+        });
         preview.ShowDialog();
     }
 }
