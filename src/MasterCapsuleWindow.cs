@@ -325,11 +325,10 @@ public sealed class MasterCapsuleWindow : Window
         // A display change can invalidate the pressed queue before the delayed layout refresh
         // retires its master. Never apply that gesture's source margin to the fallback queue.
         if (!string.Equals(session.SourceQueueKey, _queueKey, StringComparison.Ordinal) ||
-            // The window can still hold its old key after its monitor disconnects.
-            // Compare the *captured physical edge* with the currently resolved edge,
-            // not just two copies of the cached key. Otherwise the stale gesture
-            // can write its vertical margin into the primary monitor's queue.
-            !string.Equals(EdgeCapsuleQueueIds.StripInstance(session.SourceQueueKey),
+            // FreeLayout captured the LIVE edge at pointer-down, which may already
+            // be the primary fallback. Keep the persistent identity separate so a
+            // new post-disconnect gesture works, while an older gesture is revoked.
+            !string.Equals(session.FreeLayout?.EdgeKey ?? EdgeCapsuleQueueIds.StripInstance(session.SourceQueueKey),
                 _controller.MasterCapsuleQueueKey(_queueMonitorDeviceName, _queueEdge),
                 StringComparison.Ordinal))
         {
@@ -1223,5 +1222,4 @@ public sealed class MasterCapsuleWindow : Window
         return IntPtr.Zero;
     }
 }
-
 

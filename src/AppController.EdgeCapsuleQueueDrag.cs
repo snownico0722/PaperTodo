@@ -175,11 +175,17 @@ public sealed partial class AppController
         var anchors = new Dictionary<string, double>(StringComparer.Ordinal);
         if (decision.Accepted)
         {
-            foreach (var pair in decision.Tops) anchors[pair.Key] = pair.Value;
-            anchors[destination] = decision.TopDip;
+            if (drag.FreeQueues && decision.Kind == EdgeFreeQueueDropKind.Insert)
+                anchors = BuildFreeQueueDropAnchors(boxes, decision, destination,
+                    carried.Length, State.UseCapsuleCollapseAll);
+            else
+            {
+                foreach (var pair in decision.Tops) anchors[pair.Key] = pair.Value;
+                anchors[destination] = decision.TopDip;
+            }
         }
-        // Prospective membership uses the same coordinator and passive spacing as committed layout.
-        // Unchanged queues keep their stored preferences; no transient display offset is copied back.
+        // Rebased preferences reproduce the complete chosen layout, including
+        // unchanged neighbours whose saved tops differ from their displayed tops.
         var virtualMembers = new List<EdgeCapsuleQueueMember>();
         foreach (var group in groups)
         {

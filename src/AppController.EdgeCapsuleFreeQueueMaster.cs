@@ -225,7 +225,8 @@ public sealed partial class AppController
         var decision = target is { } insert
             ? EdgeCapsuleFreeQueuePolicy.Insert(boxes, insert.Key, insert.Index, count,
                 geometry.LocalWorkAreaDip.Height, pitch, gap)
-            : EdgeCapsuleFreeQueuePolicy.Place(boxes, requestedTop, count + 1,
+            : EdgeCapsuleFreeQueuePolicy.Place(boxes, requestedTop,
+                snapshot.SourceWasCollapsed ? 1 : count + 1,
                 geometry.LocalWorkAreaDip.Height, pitch, gap);
         if (!decision.Accepted)
         {
@@ -246,6 +247,11 @@ public sealed partial class AppController
         var targetMembers = target is { } merge
             ? NativeQueueGroups().First(g => g.Key == merge.Key).Papers.ToList() : [];
         var targetWasCollapsed = target.HasValue && IsCapsuleCollapseAllActiveForQueue(destination);
+        // Insertions share the normal drag's saved/screen conversion. A plain
+        // master move still changes only its own anchor, not passive neighbours.
+        var anchors = decision.Kind == EdgeFreeQueueDropKind.Insert
+            ? BuildFreeQueueDropAnchors(boxes, decision, destination, count, hasMaster: true)
+            : new Dictionary<string, double>(StringComparer.Ordinal) { [destination] = decision.TopDip };
         var oldOrder = State.Papers.ToList();
         var oldMargins = new Dictionary<string, double>(State.DeepCapsuleQueueStartTopMargins, StringComparer.Ordinal);
         var oldCollapsed = new Dictionary<string, bool>(State.CapsuleCollapseAllActiveQueues, StringComparer.Ordinal);
@@ -253,22 +259,22 @@ public sealed partial class AppController
             Side: p.CapsuleSide, Id: p.CapsuleQueueId)).ToArray();
         try
         {
+            // The destination can retain a disconnected monitor identity while
+            // being displayed on the primary. Copy its WHOLE identity, as the
+            // ordinary capsule path does; pointer geometry is not membership.
+            EdgeCapsuleQueueIds.TryGetEdge(destination, out var destinationMonitor, out var destinationSide);
             EdgeCapsuleQueueIds.TrySplit(destination, out _, out var queueId);
             foreach (var paper in carried)
             {
-                paper.CapsuleMonitorDeviceName = monitor;
-                paper.CapsuleSide = side;
+                paper.CapsuleMonitorDeviceName = destinationMonitor;
+                paper.CapsuleSide = destinationSide;
                 paper.CapsuleQueueId = queueId;
             }
             if (target is { } t)
                 InsertNativeQueueBlock(carried, targetMembers, t.Index);
 
-            // A simple master move changes only its own preference. Neighbours may
-            // yield visually, but passive spacing must not become permanent layout memory.
-            if (decision.Kind == EdgeFreeQueueDropKind.Insert)
-                foreach (var (key, top) in decision.Tops)
-                    State.DeepCapsuleQueueStartTopMargins[key] = top;
-            State.DeepCapsuleQueueStartTopMargins[destination] = decision.TopDip;
+            foreach (var (key, top) in anchors)
+                State.DeepCapsuleQueueStartTopMargins[key] = top;
             if (destination != layout.QueueKey &&
                 !State.Papers.Any(p => InstanceQueueKey(p) == layout.QueueKey))
             {

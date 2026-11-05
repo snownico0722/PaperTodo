@@ -1385,18 +1385,15 @@ public sealed partial class AppController
             return null;
         }
 
+        // Use the same base geometry as the actual queue. Legacy fit-to-screen
+        // normalization would lift a folded free queue by its hidden full height.
+        var margin = DeepCapsuleStartTopMarginForQueueKey(queue.Key);
+        var top = EdgeCapsuleFreeQueuesEnabled
+            ? EdgeCapsuleLayout.FreeQueueTopForIndex(0, margin, geometry.LocalWorkAreaDip, DeepCapsuleGap)
+            : EdgeCapsuleLayout.TopForIndex(0, margin, geometry.LocalWorkAreaDip,
+                queue.Papers.Count + (queue.HasMaster ? 1 : 0), DeepCapsuleGap);
         return new EdgeCapsuleShortcutQueue(
-            queue.Key,
-            EdgeCapsuleLayout.TopForIndex(
-                0,
-                // 必须走 helper：断连队列有 legacy live-key margin 回退，
-                // 直接读 State 字典会与布局/静止避让使用的起点不一致。
-                DeepCapsuleStartTopMarginForQueueKey(queue.Key),
-                geometry.LocalWorkAreaDip,
-                queue.Papers.Count + (queue.HasMaster ? 1 : 0),
-                DeepCapsuleGap) +
-                restingDeltas.GetValueOrDefault(queue.Key),
-            queue.Papers);
+            queue.Key, top + restingDeltas.GetValueOrDefault(queue.Key), queue.Papers);
     }
 
     private static IReadOnlyList<string> EdgeShortcutMonitorSearchOrder()
