@@ -274,12 +274,38 @@ public sealed partial class AppController
             value => State.UseCapsuleCollapseAll = value,
             SettingEffects.CapsuleMode,
             title: Strings.Get("SettingsCapsuleCollapseAll"));
+        yield return DefineSetting<bool>("capsule.free_queues",
+            () => State.UseCapsuleFreeQueues,
+            value => State.UseCapsuleFreeQueues = value,
+            SettingEffects.CapsuleMode,
+            title: Strings.Get("SettingsCapsuleFreeQueues"),
+            description: Strings.Get("TipCapsuleFreeQueues"),
+            isNoOp: value => State.UseCapsuleFreeQueues == value &&
+                (!value || State.UseCapsuleMode && State.UseDeepCapsuleMode));
         yield return DefineSetting<bool>("capsule.master_compact",
             () => State.CompactMasterCapsule,
             value => State.CompactMasterCapsule = value,
             SettingEffects.Arrange,
             title: Strings.Get("SettingsCompactMasterCapsule"),
             description: "Show only the arrow in the master capsule and hide its queue count.");
+        yield return DefineSetting<int>("capsule.master_size",
+            () => State.MasterCapsuleSize,
+            value => State.MasterCapsuleSize = MasterCapsuleSizes.Normalize(value),
+            SettingEffects.Arrange,
+            title: Strings.Get("SettingsMasterCapsuleSize"),
+            minimum: MasterCapsuleSizes.Minimum,
+            maximum: MasterCapsuleSizes.Maximum,
+            step: 1,
+            description: "External master artwork size. 10 = 1x (default), 50 = 5x. The original master pill is unchanged.");
+        yield return DefineSetting<int>("capsule.master_animation_fps",
+            () => State.MasterCapsuleAnimationFps,
+            value => State.MasterCapsuleAnimationFps = MasterCapsuleAnimationRates.Normalize(value),
+            SettingEffects.Arrange,
+            title: Strings.Get("SettingsMasterCapsuleAnimationSpeed"),
+            minimum: MasterCapsuleAnimationRates.Minimum,
+            maximum: MasterCapsuleAnimationRates.Maximum,
+            step: 1,
+            description: "Frames per second for normal and drag artwork (1–30, default 12). Overrides GIF timing.");
         yield return DefineSetting<bool>("capsule.show_while_expanded",
             () => State.ShowDeepCapsuleWhileExpanded,
             value => State.ShowDeepCapsuleWhileExpanded = value,

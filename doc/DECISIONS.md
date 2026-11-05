@@ -74,6 +74,9 @@
 | D-063 | 仅显式热重载和有基线三方合并，普通保存不检测外部修改 | Accepted | 持久化 / 产品边界 |
 | D-064 | 固定编号工作区共用代码，不共用运行数据 | Accepted | 工作区 / 持久化 |
 | D-065 | DComp 视觉与 Win32 输入提交的非原子边界 | Accepted (historical findings; native-owner candidate deferred) | Edge input / composition |
+| D-066 | Free queues extend existing direct manipulation | Accepted | Edge queues / gestures |
+| D-067 | Free-queue masters follow queue identity | Accepted | Edge master ownership |
+| D-068 | Free-queue drops preview independent placement and prefer downward insertion | Accepted | Edge queues / gestures |
 
 ## 维护规则
 
@@ -2027,3 +2030,84 @@ PR #319 的初版把主胶囊完整材质收展后的卡死解释为终点迟到
 - [固定实验源码](https://github.com/snownico0722/PaperTodo/blob/5aa796befa944b53bd0e1191ded2bd4fe89b0246/src/EdgeCapsuleQueueDedicatedInputOwner.cs)；[归档时主线的命中入口](https://github.com/snownico0722/PaperTodo/blob/f6041ca6b5ebd787a02aa8158c6e67660b421be0/src/EdgeCapsuleQueueProxyWindow.cs)。
 - [E-019 详细归档](experiments/edge-retained-proxy-archive-20261104.md)：固定版本、原始数值、纠正顺序、未完成项与过期日志的证据边界。
 
+
+
+## D-066 - Free queues extend existing direct manipulation
+
+**Status:** Accepted
+
+The optional queue instance id extends `(monitor, edge)` and reuses the existing start-margin dictionary. This selectively incorporates Just1ceCATT's PR #354 (`b77ffdba`): identity encoding, persistent key normalization, passive spacing, numeric shortcut ordering, UI registration, native Ctrl state and physical cursor sampling. It does not adopt that PR's magnet engine, global insertion solver, marker window or master/free exclusivity.
+
+Ctrl selects the payload, never the floating phase. Whole queues first slide along the edge; only the existing horizontal threshold or crossing a monitor enters the pooled floating host. Single-member sorting remains unchanged until the capsule is detached beyond the queue threshold. Prepending preserves existing target positions by growing upward, appending retains the head, and interior insertion moves the suffix and only intersected neighbours. An invalid independent drop returns to its origin rather than searching for another free position.
+
+The controller owns one queue-level input snapshot and a prospective membership/anchor plan, not another per-paper state machine. All placements use the existing coordinator and typed reducer/presenter. Release reevaluates the same policy as preview. No member identity is written while dragging. Cancellation clears transient feedback rather than restoring stale identities over external operations. The selected destination and explicitly displaced anchors are persisted, not passive hover/display offsets.
+
+Free queues and the master are independent settings. A single master per live edge collects/restores all groups while preserving their identities and anchors. Its docked movement previews an edge-wide rigid translation without writing intermediate positions; its floating transfer preserves grouping rather than flattening the destination. Ctrl works without a master and also when free queues are disabled. Existing overflow remains unpaged.
+
+The native drop feedback is driven by the existing drag callbacks and pooled host movement, not an additional polling timer. The transparent landing marker draws exactly one normal capsule silhouette regardless of how many members Ctrl carries, using the visible target master's width only when the destination is collapsed. In free-queue mode the marker alone previews the prospective destination: unaffected queues and their masters do not shift with pointer movement. The actual local insertion and collision displacement happen on release. The final release samples the physical pointer before committing. The floating cover is established before peers retract; peers return via the existing placement/retraction transitions.
+
+
+## D-067 - Free-queue masters follow queue identity (2026-11-04)
+
+**Status:** Accepted
+
+### Decision
+
+When free queues are enabled, every non-empty independent queue owns its own master capsule. Clicking a master retracts only its members; moving it adjusts only its queue anchor; floating it transfers only its queue. Merging into another queue retains the destination master's identity, position and collapse choice, and retires the empty source master. Disabling free queues keeps the legacy one-master-per-physical-edge behavior.
+
+### Why
+
+Free queue identities already exist, so a side-wide master made independent groups behave as one for collapse and movement. The existing `MasterCapsuleWindow`, coordinator slots, identity keys, drag host and insertion policy suffice; no additional window type or master hierarchy is needed.
+
+### Consequences
+
+Collapse state and master lookup are keyed by the same queue instance identity as papers and saved anchors. Temporarily disabling free queues retains each instance's collapse choice, just as it retains its grouping and position. Each queue reserves its own master slot; when collapsed, only its visible master occupies space and accepts a merge. The invisible area where expanded members used to appear is never a hit target. This applies equally to master dragging and Ctrl whole-queue dragging. A collapsed-target merge appends members, keeps the target master and collapse choice, and previews over that one visible slot. Passive collision spacing still remains display-only. Previous side-wide collection semantics in D-066 are superseded by this decision; its direct-manipulation and no-global-solver rules remain accepted.
+
+### Evidence
+
+- `src/AppController.cs`, `src/AppController.EdgeCapsuleFreeQueueMaster.cs`, `src/AppController.EdgeCapsuleFreeQueues.cs` and `src/MasterCapsuleWindow.cs`.
+- PR #400 (superseding the master-ownership choice in D-066).
+
+
+
+## D-068 - Free-queue drops preview independent placement and prefer downward insertion (2026-11-05)
+
+**Status:** Accepted for downward insertion and shared preview/commit. Independent positioning is superseded by D-069. Supersedes D-066's upward prepend and insertion-only feedback choices; D-067's per-queue master ownership remains unchanged.
+
+### Context
+
+Dropping an independent group above another group already displaced the lower group on release, but omitted that displacement and the independent landing marker during dragging. Inserting into the first member slot also lifted the head while the other slots pushed their suffix down, so adjacent slots behaved inconsistently despite enough space below.
+
+### Decision
+
+All accepted free-queue placements preview the same local displacement used on release. An independent landing stack includes its own master; a merge previews only the carried members under the destination master. All insertion slots prefer downward displacement, lifting the merged queue only by the space missing below it. Oversized queues retain the existing unpaged, first-slot-visible rule. Ctrl and direct master dragging share this behavior in docked and floating phases. The preview cache compares the drop kind and displaced queue positions as well as the slot, so changing edges or independent positions restores the previous preview without accumulating movement.
+
+The existing anchor conversion also covers independent drops, preserving the chosen spatial order when saved preferences differ from displayed positions. No new persistence format, window type, timer or global free-space search is introduced. Cancellation still restores the resting layout without writing anchors.
+
+### Evidence
+
+- `EdgeCapsuleFreeQueuePolicy.Insert`, `PreviewFreeQueueDropSlot`, `BuildFreeQueueDropAnchors` and the native/master drag paths.
+- `NativeFreeQueuePolicyChecks` and `NativeFreeQueueReviewChecks`: first/interior slots with room below and near the bottom, independent-group ghosts, cancellation, release and saved-position reconstruction.
+
+## D-069 - Independent landing ghosts consume the adjacent gap before moving neighbours (2026-11-05)
+
+**Status:** Accepted. Supersedes D-068's pointer-following independent collision displacement; its downward insertion and shared preview/commit remain accepted.
+
+### Context
+
+Reserving the entire carried block at every pointer height pushed a prospective target away before the held capsule reached its merge entrance. The neighbouring queue then returned when insertion replaced independent placement. Keeping the full block as the docked Ctrl hit probe also let its tail trigger a merge ahead of the held capsule.
+
+### Decision
+
+The held capsule selects a merge in both docked and floating free-queue drags. For independent placement, the existing drop policy fits the landing stack into the immediately selected gap: above a neighbour the ghost moves upward first, and below one it clears that neighbour's tail. Only a gap's missing space displaces neighbours, by one fixed amount calculated from resting geometry. Leaving that gap restores its previewed displacement. Work-area clamping and unpaged oversized queues remain unchanged; legacy Ctrl placement is unchanged. The selected landing, not the raw pointer height, is committed through the existing anchor conversion.
+
+The same passive ghost window distinguishes an independent stack's short master from its ordinary members, including compact masters and either screen edge. A folded source shows only its short master; merging shows members only. No timer, extra preview state machine, global free-space search or persistence format is added.
+
+### Why
+
+The preview should show an available landing rather than make a target continuously retreat. Using the adjacent resting gap gives stable feedback without feeding last frame's temporary displacement into the next calculation.
+
+### Evidence
+
+- `EdgeCapsuleFreeQueuePolicy.Place`, `EvaluateNativeEdgeQueueDrop`, `PreviewFreeQueueDropSlot` and `EdgeCapsuleQueueDropGhost.ShowAt`.
+- `NativeFreeQueuePolicyChecks` and `NativeFreeQueueReviewChecks`: continuous approach, enough/insufficient top space, below/merge/return, actual ghost widths, cancellation, release and persisted anchor reconstruction.

@@ -8,7 +8,8 @@ internal readonly record struct MasterCapsuleQueueTransferSnapshot(
     string[] SourceMonitorAliases,
     bool SourceWasCollapsed,
     bool SourceHadStartTopMargin,
-    double SourceStartTopMargin);
+    double SourceStartTopMargin,
+    FreeMasterDragLayout? FreeLayout = null);
 
 internal readonly record struct MasterCapsuleQueueTransferTarget(
     string MonitorDeviceName,
@@ -23,7 +24,8 @@ internal static class MasterCapsuleQueueTransferPolicy
         EdgeCapsuleEdge fallbackEdge,
         int slotCount,
         double gap,
-        out MasterCapsuleQueueTransferTarget target)
+        out MasterCapsuleQueueTransferTarget target,
+        double masterHeightDip = PaperLayoutDefaults.CapsuleHeight)
     {
         target = default;
         MonitorGeometry geometry;
@@ -49,12 +51,13 @@ internal static class MasterCapsuleQueueTransferPolicy
         var area = geometry.LocalWorkAreaDip;
         var dropY = geometry.DeviceYToLocalDip(dropPoint.Y);
         var desiredStartTopMargin =
-            dropY - area.Top - PaperLayoutDefaults.CapsuleHeight / 2.0;
+            dropY - area.Top - masterHeightDip / 2.0;
         var startTopMargin = EdgeCapsuleLayout.NormalizeStartTopMargin(
             desiredStartTopMargin,
             area,
             Math.Max(1, slotCount),
-            gap);
+            gap,
+            Math.Max(0, masterHeightDip - PaperLayoutDefaults.CapsuleHeight));
 
         target = new MasterCapsuleQueueTransferTarget(
             WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(geometry.DeviceName),

@@ -415,7 +415,7 @@ internal static partial class WindowNative
         return false;
     }
 
-    private static bool IsWindowBehind(IntPtr handle, IntPtr reference)
+    internal static bool IsWindowBehind(IntPtr handle, IntPtr reference)
     {
         if (handle == IntPtr.Zero ||
             reference == IntPtr.Zero ||
@@ -467,6 +467,18 @@ internal static partial class WindowNative
         return (GetWindowLong(handle, GwlExStyle) & WsExTopmost) != 0;
     }
 
+    internal static IntPtr LowestVisibleTopmostWindow(IEnumerable<IntPtr> handles)
+    {
+        var lowest = IntPtr.Zero;
+        foreach (var handle in handles.Distinct())
+        {
+            if (handle == IntPtr.Zero || !IsWindow(handle) || !IsWindowVisible(handle) ||
+                (GetWindowLong(handle, GwlExStyle) & WsExTopmost) == 0) continue;
+            if (lowest == IntPtr.Zero || IsWindowBehind(handle, lowest)) lowest = handle;
+        }
+        return lowest;
+    }
+
     public static void BringToFrontNoActivate(Window window)
     {
         var handle = new WindowInteropHelper(window).Handle;
@@ -507,6 +519,24 @@ internal static partial class WindowNative
     public static IntPtr ActiveWindow => GetActiveWindow();
     public static IntPtr KeyboardFocusWindow => GetFocus();
 
+    /// <summary>
+    /// OS 级 Ctrl 状态，不受当前窗口焦点/激活状态影响。
+    ///
+    /// 边缘胶囊 host 是 NOACTIVATE 的，永远不持有键盘焦点；展开纸片持有焦点后
+    /// Keyboard.Modifiers 可能退化。这里读取异步键状态，保证 pointer-down 时仍能锁存
+    /// Ctrl 整队意图。
+    /// </summary>
+    public static bool IsControlKeyDown =>
+        IsAsyncKeyDown(GetAsyncKeyState(VkControl)) ||
+        IsAsyncKeyDown(GetAsyncKeyState(VkLeftControl)) ||
+        IsAsyncKeyDown(GetAsyncKeyState(VkRightControl));
+
+    /// <summary>
+    /// GetAsyncKeyState 的高位表示当前是否按下。short → int 的符号扩展不影响
+    /// `&amp; 0x8000` 判定；低位 0x0001 会被其它调用消费，不能使用。
+    /// </summary>
+    internal static bool IsAsyncKeyDown(short state) => (state & KeyDownMask) != 0;
+
     public static void ClearCurrentThreadInputActivation(IntPtr externalForegroundWindow)
     {
         _ = SetFocus(IntPtr.Zero);
@@ -514,9 +544,14 @@ internal static partial class WindowNative
         _ = SetActiveWindow(externalForegroundWindow);
     }
 
+    /// <summary>
+    /// 取光标的物理屏幕像素。无论当前线程处于哪个 DPI 感知上下文都返回物理坐标；
+    /// 失败时绝不回退 <c>GetCursorPos</c>，避免把 System Aware 上下文里的逻辑坐标
+    /// 当成 <see cref="DeviceScreenPoint"/> 使用。
+    /// </summary>
     public static bool TryGetCursorScreenPosition(out DeviceScreenPoint point)
     {
-        if (GetCursorPos(out var nativePoint))
+        if (GetPhysicalCursorPos(out var nativePoint))
         {
             point = new DeviceScreenPoint(nativePoint.X, nativePoint.Y);
             return true;
@@ -1573,6 +1608,18 @@ internal static partial class WindowNative
 
     [DllImport("user32.dll")]
     private static extern bool GetCursorPos(out CursorPoint lpPoint);
+
+    // 不受线程 DPI 虚拟化影响，始终返回物理屏幕像素。
+    [DllImport("user32.dll")]
+    private static extern bool GetPhysicalCursorPos(out CursorPoint lpPoint);
+
+    private const int VkControl = 0x11;
+    private const int VkLeftControl = 0xA2;
+    private const int VkRightControl = 0xA3;
+    private const int KeyDownMask = 0x8000;
+
+    [DllImport("user32.dll")]
+    private static extern short GetAsyncKeyState(int vKey);
 
     [DllImport("user32.dll")]
     private static extern IntPtr SetThreadDpiAwarenessContext(IntPtr dpiContext);

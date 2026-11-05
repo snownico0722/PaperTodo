@@ -64,6 +64,7 @@ public sealed partial class AppController
         _settingsRememberDeepCapsuleExpandedPositionCheckBox = null;
         _settingsCollapseExpandedDeepCapsuleOnClickCheckBox = null;
         _settingsCapsuleCollapseAllCheckBox = null;
+        _settingsCapsuleFreeQueuesCheckBox = null;
 
         window.Title = Strings.Get("TraySettings");
         window.SizeToContent = SizeToContent.Manual;
@@ -85,7 +86,8 @@ public sealed partial class AppController
             return;
         }
         if (id is "capsule.enabled" or "capsule.edge_enabled" or "capsule.master_enabled" or
-            "capsule.show_while_expanded" or "capsule.remember_expanded_position" or "capsule.click_to_collapse")
+            "capsule.free_queues" or "capsule.show_while_expanded" or
+            "capsule.remember_expanded_position" or "capsule.click_to_collapse")
         {
             RefreshSettingsCapsuleToggleStates();
             return;
@@ -103,6 +105,8 @@ public sealed partial class AppController
                 "window.fullscreen_mode" => "general.options",
             "title.max_length" or "capsule.title_measure_limit" or "capsule.hide_close_button" or
                 "capsule.master_compact" => "general.capsuleAppearance",
+            "capsule.master_size" => "general.masterSize",
+            "capsule.master_animation_fps" => "general.masterAnimation",
             "capsule.gap" or "window.resize_grip" or "note.image_reference_text" => "visual.options",
             "edge.non_topmost" => "general.edgeTopmost",
             "scripts.run_linked_on_click" => "general.todos",

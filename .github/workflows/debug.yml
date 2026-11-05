@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - codex/package-master-capsule-size-1019
     paths-ignore:
       - "docs/**"
       - "**/*.md"
