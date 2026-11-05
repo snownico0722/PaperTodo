@@ -5,22 +5,24 @@ using System.Text.Json.Nodes;
 
 namespace PaperTodo;
 
-internal enum WorkspaceRecoveryChoice { Cancel, CreateEmpty, Restore, Exit }
+internal enum WorkspaceRecoveryChoice { Cancel, CreateEmpty, Restore, Exit, Fallback }
 
 internal sealed class WorkspaceRecoveryExitException : OperationCanceledException { }
+
+internal sealed class WorkspaceRecoveryFallbackException : OperationCanceledException { }
 
 public sealed partial class StateStore
 {
     private sealed class PendingStartupRecovery
     {
-        internal string SourcePath { get; set; }
+        internal string? SourcePath { get; set; }
         internal byte[] SourceHash { get; }
         internal byte[]? ExpectedPrimaryHash { get; set; }
         internal bool IsTemporary { get; }
         internal List<(string Path, byte[] Hash)> EquivalentTempPaths { get; }
 
         private PendingStartupRecovery(
-            string sourcePath, byte[] sourceHash, byte[]? originalPrimary,
+            string? sourcePath, byte[] sourceHash, byte[]? originalPrimary,
             bool fromTemporary, IEnumerable<(string Path, byte[] Hash)> equivalentTempPaths)
         {
             SourcePath = sourcePath;
@@ -37,6 +39,9 @@ public sealed partial class StateStore
         internal static PendingStartupRecovery FromHistory(
             CoreHistoryBackup.WorkspaceSnapshot snapshot, byte[]? originalPrimary) =>
             new(snapshot.ArchivePath, snapshot.ArchiveHash, originalPrimary, false, []);
+
+        internal static PendingStartupRecovery ForEmptyWorkspace(byte[]? originalPrimary) =>
+            new(null, [], originalPrimary, false, []);
 
         internal static PendingStartupRecovery FromTemporary(
             string path, byte[] tempBytes, byte[]? originalPrimary,
@@ -113,16 +118,24 @@ public sealed partial class StateStore
         }
     }
 
-    private List<CompleteInterruptedWrite> FindValidInterruptedWrites()
+    private List<CompleteInterruptedWrite> FindValidInterruptedWrites(out Exception? readFailure)
     {
+        readFailure = null;
         var valid = new List<CompleteInterruptedWrite>();
         foreach (var path in InterruptedWritePaths())
         {
-            // A read error is not evidence of corruption. Do not guess around
-            // a locked or inaccessible candidate when the authority is missing.
-            var bytes = File.ReadAllBytes(path);
-            if (TryReadCompleteDocument(bytes, out var document, out _))
-                valid.Add(new CompleteInterruptedWrite(path, bytes, document!, File.GetLastWriteTimeUtc(path)));
+            try
+            {
+                var bytes = File.ReadAllBytes(path);
+                if (TryReadCompleteDocument(bytes, out var document, out _))
+                    valid.Add(new CompleteInterruptedWrite(path, bytes, document!, File.GetLastWriteTimeUtc(path)));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // A failed candidate must not veto another complete snapshot.
+                // Retain access errors only to prevent an unverified blank rebuild.
+                if (ex is not (FileNotFoundException or DirectoryNotFoundException)) readFailure ??= ex;
+            }
         }
         return valid;
     }
@@ -187,7 +200,8 @@ public sealed partial class StateStore
               !pending.ExpectedPrimaryHash.AsSpan().SequenceEqual(actualPrimary))
             throw new StateRecoveryException("WorkspaceFailurePrimaryChanged");
 
-        if (!pending.SourceHash.AsSpan().SequenceEqual(ReadFileHash(pending.SourcePath)))
+        if (pending.SourcePath is { } source &&
+            !pending.SourceHash.AsSpan().SequenceEqual(ReadFileHash(source)))
             throw new StateRecoveryException("WorkspaceFailureRecoveryChanged");
     }
 

@@ -1734,8 +1734,8 @@
   <data name="WorkspaceFailureExit" xml:space="preserve">
     <value>退出软件</value>
   </data>
-  <data name="WorkspaceFailureNoRecovery" xml:space="preserve">
-    <value>工作区数据无法读取，也未找到可用的备份或临时文件。原文件未被覆盖。</value>
+  <data name="WorkspaceFailureHistoryChoiceRequired" xml:space="preserve">
+    <value>有可用的历史备份，请打开此工作区选择恢复或重建。</value>
   </data>
   <data name="WorkspaceFailureAccessDenied" xml:space="preserve">
     <value>没有权限访问工作区文件。请检查文件夹权限后重试。</value>
@@ -1778,5 +1778,14 @@
   </data>
   <data name="AppStartupFailureUnknown" xml:space="preserve">
     <value>原因未知</value>
+  </data>
+  <data name="WorkspaceFailureMainRecoveryRequired" xml:space="preserve">
+    <value>主工作区数据无法读取。请先切换至主工作区，完成恢复或重建后再试。</value>
+  </data>
+  <data name="WorkspaceRecoveryUnavailable" xml:space="preserve">
+    <value>当前工作区数据和备份均已损坏。</value>
+  </data>
+  <data name="WorkspaceRecoveryFallback" xml:space="preserve">
+    <value>回退到工作区 {0}</value>
   </data>
 </root>

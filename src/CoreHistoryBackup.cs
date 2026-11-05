@@ -40,7 +40,8 @@ internal sealed class CoreHistoryBackup
 
     // Read only the requested workspace, newest first. ZIP integrity and JSON
     // validity are separate: StateStore owns the latter. Never extract other slots.
-    internal IEnumerable<WorkspaceSnapshot> ReadWorkspaceSnapshots(int workspaceNumber)
+    internal IEnumerable<WorkspaceSnapshot> ReadWorkspaceSnapshots(int workspaceNumber,
+        Action<Exception>? reportReadFailure = null)
     {
         var name = Path.GetFileName(new WorkspacePaths(_dataDirectory, workspaceNumber).Data);
         foreach (var archive in ListArchives(DateTime.UtcNow))
@@ -65,6 +66,8 @@ internal sealed class CoreHistoryBackup
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
             {
+                if (ex is not (InvalidDataException or FileNotFoundException or DirectoryNotFoundException))
+                    reportReadFailure?.Invoke(ex);
                 Trace.TraceWarning("Skipping unavailable core history recovery candidate: {0}", ex);
                 continue;
             }

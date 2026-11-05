@@ -54,7 +54,7 @@ internal static partial class Program
                     (new IOException("raw", unchecked((int)0x80070070)), "WorkspaceFailureDiskFull"),
                     (new IOException("raw"), "WorkspaceFailureIo"),
                     (new InvalidOperationException("raw"), "WorkspaceFailureUnknown"),
-                    (new StateRecoveryException("WorkspaceFailureNoRecovery"), "WorkspaceFailureNoRecovery"),
+                    (new StateRecoveryException("WorkspaceFailureHistoryChoiceRequired"), "WorkspaceFailureHistoryChoiceRequired"),
                     (new StateRecoveryException("WorkspaceFailureRecoveryChanged"), "WorkspaceFailureRecoveryChanged")
                 };
                 foreach (var (error, key) in cases)
@@ -69,7 +69,7 @@ internal static partial class Program
                 {
                     (new IOException("busy detail", unchecked((int)0x80070020)), "AppStartupFailureBusy"),
                     (new IOException("locked detail", unchecked((int)0x80070021)), "AppStartupFailureBusy"),
-                    (new StateRecoveryException("WorkspaceFailureNoRecovery",
+                    (new StateRecoveryException("WorkspaceFailureHistoryChoiceRequired",
                         new System.Text.Json.JsonException("JSON detail")), "AppStartupFailureCorrupt"),
                     (new InvalidOperationException("unknown detail"), "AppStartupFailureUnknown"),
                     (new InvalidDataException("directory at file path"), "AppStartupFailureUnknown")
@@ -81,8 +81,8 @@ internal static partial class Program
                                 error.GetBaseException().Message) && !message.Contains(key),
                         "startup failure lost its cause category, details or translation: " + language);
                 }
-                Require(WorkspaceFailureMessage.For(new StateRecoveryException("WorkspaceFailureNoRecovery",
-                            new System.Text.Json.JsonException("raw"))) == Strings.Get("WorkspaceFailureNoRecovery"),
+                Require(WorkspaceFailureMessage.For(new StateRecoveryException("WorkspaceFailureHistoryChoiceRequired",
+                            new System.Text.Json.JsonException("raw"))) == Strings.Get("WorkspaceFailureHistoryChoiceRequired"),
                     "parser details replaced the localized recovery explanation");
             }
             UiLanguages.ApplyWorkspacePreference("en-US");
@@ -161,18 +161,22 @@ internal static partial class Program
                 }), "failed recovery save could not be retried");
                 Require(await controller.SwitchWorkspaceAsync(1), "return before dismissal fixture failed");
 
-                File.WriteAllText(second.FilePath, "{broken");
+                var blockedTarget = second.SerializeState(NewState());
+                File.WriteAllText(second.FilePath, blockedTarget);
                 File.Delete(second.BackupPath);
-                Require(!await WithWorkspaceFailureDialog(() => controller.SwitchWorkspaceAsync(2), dialog => dialog.Close()) &&
-                        controller.IsRunning && controller.WorkspaceNumber == 1 && !controller.IsWorkspaceSwitching,
-                    "closing a failure dialog implicitly exited or switched the workspace");
-                controller.State.Papers[0].Content = "edit retained on normal exit";
-                controller.MarkDirty();
-                Require(!await WithWorkspaceFailureDialog(() => controller.SwitchWorkspaceAsync(2), dialog =>
-                    ClickFailureAction(dialog, "WorkspaceFailureExit")) && !controller.IsRunning,
-                    "exit action did not use the normal exit path");
+                using (var held = new FileStream(second.FilePath, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+                {
+                    Require(!await WithWorkspaceFailureDialog(() => controller.SwitchWorkspaceAsync(2), dialog => dialog.Close()) &&
+                            controller.IsRunning && controller.WorkspaceNumber == 1 && !controller.IsWorkspaceSwitching,
+                        "closing a failure dialog implicitly exited or switched the workspace");
+                    controller.State.Papers[0].Content = "edit retained on normal exit";
+                    controller.MarkDirty();
+                    Require(!await WithWorkspaceFailureDialog(() => controller.SwitchWorkspaceAsync(2), dialog =>
+                        ClickFailureAction(dialog, "WorkspaceFailureExit")) && !controller.IsRunning,
+                        "exit action did not use the normal exit path");
+                }
                 Require(new StateStore().Load().Papers[0].Content == "edit retained on normal exit" &&
-                        File.ReadAllText(second.FilePath) == "{broken",
+                        File.ReadAllText(second.FilePath) == blockedTarget,
                     "exit lost current edits or overwrote the failed target");
                 Console.WriteLine("PASS workspace failure dialog: actual retry, one save prompt, dismissal and normal exit");
                 result = 0;

@@ -17,7 +17,7 @@ internal static partial class Program
         ConflictImagesRemainRecoverable();
         ArchiveFailureNeverCommits();
         PostCommitRetentionCancellationCannotRejectMerge();
-        CorruptLoadsRejectBlankReplacement();
+        CorruptLoadsRequireExplicitRebuild();
         InterruptedWriteSelectionChecks();
         OrphanedTempImageAndWriteChecks();
         OrphanCleanupRequiresHealthyPrimary();
@@ -391,7 +391,7 @@ internal static partial class Program
         Console.WriteLine("PASS fixed backup recovery rejects external repairs and creates no extra copies");
     }
 
-    private static void CorruptLoadsRejectBlankReplacement()
+    private static void CorruptLoadsRequireExplicitRebuild()
     {
         foreach (var invalid in new[] { "{}", "{\"papers\":null}", "{\"papers\":[null]}", "not-json" })
         {
@@ -399,9 +399,17 @@ internal static partial class Program
             File.WriteAllText(scope.Store.FilePath, invalid);
             var reader = new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared);
             Throws<StateRecoveryException>(() => reader.Load());
-            Require(File.ReadAllText(reader.FilePath) == invalid &&
+            var blank = reader.Load(out var empty, timestamp =>
+            {
+                Require(timestamp == null, "corrupt sources incorrectly offered history");
+                return WorkspaceRecoveryChoice.CreateEmpty;
+            });
+            Require(empty && blank.Papers.Count == 0 && reader.NeedsStartupRecoverySave &&
+                    File.ReadAllText(reader.FilePath) == invalid &&
                     !Directory.GetFiles(scope.DirectoryPath, "data.failed_load.*.json").Any(),
-                "unrecoverable corruption generated blank state or duplicate recovery files");
+                "unrecoverable corruption did not stage blank data without premature writes");
+            reader.SaveJsonSync(reader.SerializeState(blank), 2);
+            Require(reader.Load().Papers.Count == 0, "blank replacement did not commit");
         }
 
         using (var scope = new Scope())
@@ -426,9 +434,19 @@ internal static partial class Program
             File.WriteAllText(scope.Store.BackupPath, "{broken-backup");
             var reader = new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared);
             Throws<StateRecoveryException>(() => reader.Load());
-            Require(File.ReadAllText(reader.FilePath) == "{broken-primary" &&
+            var blank = reader.Load(out var empty, timestamp =>
+            {
+                Require(timestamp == null, "corrupt sources incorrectly offered history");
+                return WorkspaceRecoveryChoice.CreateEmpty;
+            });
+            Require(empty && blank.Papers.Count == 0 &&
+                    File.ReadAllText(reader.FilePath) == "{broken-primary" &&
                     File.ReadAllText(reader.BackupPath) == "{broken-backup",
-                "two corrupt sources were silently replaced with empty data");
+                "blank rebuild changed old files before the normal writer committed");
+            File.WriteAllText(reader.FilePath, scope.BaselineJson);
+            Throws<IOException>(() => reader.SaveJsonSync(reader.SerializeState(blank), 2));
+            Require(File.ReadAllText(reader.FilePath) == scope.BaselineJson,
+                "explicit rebuild overwrote an intervening primary repair");
         }
 
         using (var scope = new Scope())

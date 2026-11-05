@@ -49,12 +49,15 @@ public sealed partial class StateStore
 
     public AppState Load() => Load(out _);
 
+    // Settings inheritance reads the committed main document only. It must not
+    // open recovery UI, stage a recovery write or initialize a blank workspace.
+    internal AppState ReadCommittedWorkspaceState() => ReadLoadDocument(File.ReadAllBytes(FilePath));
+
     // A healthy committed primary is authoritative. A healthy fixed backup is next.
     // Only if both are unavailable do we select the newest complete interrupted write.
-    // Corrupt input is never silently rebuilt into blank data, and an uncommitted temp never
-    // silently replaces an otherwise healthy primary or fixed backup.
+    // Existing data is never replaced by a blank workspace without an explicit choice.
     internal AppState Load(out bool initializedEmpty,
-        Func<DateTime, WorkspaceRecoveryChoice>? confirmHistoryRecovery = null)
+        Func<DateTime?, WorkspaceRecoveryChoice>? confirmRecovery = null)
     {
         initializedEmpty = false;
         NeedsStartupRecoverySave = false;
@@ -64,7 +67,6 @@ public sealed partial class StateStore
 
         var primaryExists = FileExistsForCollection(FilePath);
         var primaryBytes = primaryExists ? File.ReadAllBytes(FilePath) : null;
-        JsonException? invalidData = null;
         if (primaryBytes != null)
         {
             try
@@ -75,7 +77,7 @@ public sealed partial class StateStore
                 finally { _writeLock.Release(); }
                 return state;
             }
-            catch (JsonException ex) { invalidData = ex; }
+            catch (JsonException) { /* Try the fixed backup. */ }
         }
 
         var backupExists = FileExistsForCollection(BackupPath);
@@ -90,10 +92,10 @@ public sealed partial class StateStore
                 NeedsStartupRecoverySave = true;
                 return state;
             }
-            catch (JsonException ex) { invalidData ??= ex; }
+            catch (JsonException) { /* Try complete interrupted snapshots. */ }
         }
 
-        var candidates = FindValidInterruptedWrites();
+        var candidates = FindValidInterruptedWrites(out var readFailure);
         if (candidates.Count > 0)
         {
             // Last-write time describes the snapshot; the orphan filename only
@@ -110,45 +112,55 @@ public sealed partial class StateStore
             return ReadLoadDocument(first.Bytes);
         }
 
-        // Existing data needs an explicit choice. A blank document is allowed only
-        // when the user selects CreateEmpty, with a valid history backup retained.
+        // Existing data requires a choice, whether history is available or not.
         if (primaryExists || backupExists || HasInterruptedWriteFiles())
         {
-            if (confirmHistoryRecovery != null)
+            var history = new CoreHistoryBackup(Path.GetDirectoryName(FilePath)!);
+            foreach (var snapshot in history.ReadWorkspaceSnapshots(WorkspaceNumber, ex => readFailure ??= ex))
             {
-                var history = new CoreHistoryBackup(Path.GetDirectoryName(FilePath)!);
-                foreach (var snapshot in history.ReadWorkspaceSnapshots(WorkspaceNumber))
+                if (!TryReadCompleteDocument(snapshot.Bytes, out _, out var historicalState)) continue;
+                var choice = ChooseWorkspaceRecovery(confirmRecovery, snapshot.TimestampUtc);
+                NeedsStartupRecoverySave = true;
+                if (choice == WorkspaceRecoveryChoice.CreateEmpty)
                 {
-                    if (!TryReadCompleteDocument(snapshot.Bytes, out _, out var historicalState)) continue;
-                    WriteLifetime.ThrowIfStopped();
-                    var choice = confirmHistoryRecovery(snapshot.TimestampUtc);
-                    if (choice == WorkspaceRecoveryChoice.Exit)
-                        throw new WorkspaceRecoveryExitException();
-                    if (choice is not (WorkspaceRecoveryChoice.Restore or WorkspaceRecoveryChoice.CreateEmpty))
-                        throw new OperationCanceledException("Historical workspace recovery was canceled.");
-                    // The modal choice may allow shutdown or external edits. The
-                    // ordinary recovery writer rechecks both source and primary.
-                    WriteLifetime.ThrowIfStopped();
-                    _pendingStartupRecovery = PendingStartupRecovery.FromHistory(snapshot, primaryBytes);
-                    NeedsStartupRecoverySave = true;
-                    if (choice == WorkspaceRecoveryChoice.CreateEmpty)
-                    {
-                        initializedEmpty = true;
-                        // The main document also owns other workspace entries.
-                        // Starting this workspace blank must not hide those slots.
-                        var catalog = WorkspaceNumber == 1 ? historicalState!.Workspaces?.Normalized() : null;
-                        if (catalog != null) catalog.Active = 1;
-                        return new AppState { Workspaces = catalog };
-                    }
-                    return ReadLoadDocument(snapshot.Bytes);
+                    _pendingStartupRecovery = PendingStartupRecovery.ForEmptyWorkspace(primaryBytes);
+                    initializedEmpty = true;
+                    // Keep other workspace entries when a valid catalog is available.
+                    var catalog = WorkspaceNumber == 1 ? historicalState!.Workspaces?.Normalized() : null;
+                    if (catalog != null) catalog.Active = 1;
+                    return new AppState { Workspaces = catalog };
                 }
+                _pendingStartupRecovery = PendingStartupRecovery.FromHistory(snapshot, primaryBytes);
+                return ReadLoadDocument(snapshot.Bytes);
             }
-            throw new StateRecoveryException("WorkspaceFailureNoRecovery", invalidData);
+
+            if (readFailure != null)
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(readFailure).Throw();
+            ChooseWorkspaceRecovery(confirmRecovery, null);
+            _pendingStartupRecovery = PendingStartupRecovery.ForEmptyWorkspace(primaryBytes);
         }
 
         initializedEmpty = true;
         NeedsStartupRecoverySave = true;
         return new AppState();
+    }
+
+    private WorkspaceRecoveryChoice ChooseWorkspaceRecovery(
+        Func<DateTime?, WorkspaceRecoveryChoice>? confirmRecovery, DateTime? timestamp)
+    {
+        if (confirmRecovery == null)
+            throw new StateRecoveryException(timestamp.HasValue
+                ? "WorkspaceFailureHistoryChoiceRequired" : "WorkspaceRecoveryUnavailable");
+        WriteLifetime.ThrowIfStopped();
+        var choice = confirmRecovery(timestamp);
+        // Recheck after the modal loop before staging any recovery or fallback.
+        WriteLifetime.ThrowIfStopped();
+        if (choice == WorkspaceRecoveryChoice.Exit) throw new WorkspaceRecoveryExitException();
+        if (choice == WorkspaceRecoveryChoice.Fallback) throw new WorkspaceRecoveryFallbackException();
+        if (choice != WorkspaceRecoveryChoice.CreateEmpty &&
+            !(choice == WorkspaceRecoveryChoice.Restore && timestamp.HasValue))
+            throw new OperationCanceledException("Workspace recovery was canceled.");
+        return choice;
     }
 
     private AppState ReadLoadDocument(byte[] bytes)

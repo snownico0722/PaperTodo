@@ -139,7 +139,7 @@ internal static partial class Program
             var archive = WriteHistoryFixture(scope.DirectoryPath, stamp, ("data.json", json));
             File.WriteAllText(scope.Store.FilePath, "{broken");
             var store = new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared);
-            WorkspaceRecoveryChoice Confirm(DateTime _)
+            WorkspaceRecoveryChoice Confirm(DateTime? _)
             {
                 if (changed == "primary") File.WriteAllText(store.FilePath, json);
                 if (changed == "archive") File.AppendAllText(archive, "changed during prompt");
@@ -154,6 +154,12 @@ internal static partial class Program
             else
             {
                 var state = store.Load(out _, Confirm);
+                if (choice == WorkspaceRecoveryChoice.CreateEmpty && changed == "archive")
+                {
+                    store.SaveJsonSync(store.SerializeState(state), 2);
+                    Require(store.Load().Papers.Count == 0, "blank rebuild unnecessarily depended on historical bytes");
+                    continue;
+                }
                 Throws<IOException>(() => store.SaveJsonSync(store.SerializeState(state), 2));
             }
             Require(File.ReadAllText(store.FilePath) == (changed == "primary" ? json : "{broken"),
@@ -171,11 +177,78 @@ internal static partial class Program
             if (source == "fresh") File.Delete(scope.Store.FilePath);
             using var held = source == "busy"
                 ? new FileStream(scope.Store.FilePath, FileMode.Open, FileAccess.ReadWrite, FileShare.None) : null;
-            WorkspaceRecoveryChoice UnexpectedPrompt(DateTime _) => throw new InvalidOperationException("Unexpected history offer: " + source);
+            WorkspaceRecoveryChoice UnexpectedPrompt(DateTime? _) => throw new InvalidOperationException("Unexpected history offer: " + source);
             var store = new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared);
-            if (source == "none") Throws<StateRecoveryException>(() => store.Load(out _, UnexpectedPrompt));
+            if (source == "none")
+            {
+                Throws<StateRecoveryException>(() => store.Load());
+                foreach (var choice in new[] { WorkspaceRecoveryChoice.Cancel, WorkspaceRecoveryChoice.Exit,
+                             WorkspaceRecoveryChoice.Fallback })
+                {
+                    Throws<OperationCanceledException>(() => store.Load(out _, time =>
+                    {
+                        Require(time == null, "unavailable sources offered a historical timestamp");
+                        return choice;
+                    }));
+                    Require(!store.NeedsStartupRecoverySave && File.ReadAllText(store.FilePath) == "{broken",
+                        "dismissal, exit or fallback changed the corrupt workspace");
+                }
+                var blank = store.Load(out var empty, time =>
+                {
+                    Require(time == null, "unavailable sources offered a historical timestamp");
+                    return WorkspaceRecoveryChoice.CreateEmpty;
+                });
+                Require(empty && blank.Papers.Count == 0 && store.NeedsStartupRecoverySave,
+                    "explicit rebuild did not stage blank content");
+            }
             else if (source == "busy") Throws<IOException>(() => store.Load(out _, UnexpectedPrompt));
             else store.Load(out _, UnexpectedPrompt);
+        }
+
+        // One locked old candidate must not veto another complete temp or history.
+        foreach (var source in new[] { "temp", "history", "none" })
+        {
+            using var scope = new Scope();
+            var json = scope.BaselineJson;
+            File.WriteAllText(scope.Store.FilePath, "{broken");
+            var orphan = scope.Store.FilePath + ".orphaned.old.tmp";
+            File.WriteAllText(orphan, json);
+            if (source == "temp") File.WriteAllText(scope.Store.FilePath + ".tmp", json);
+            if (source == "history") WriteHistoryFixture(scope.DirectoryPath, stamp, ("data.json", json));
+            using var held = new FileStream(orphan, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+            var store = new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared);
+            if (source == "none")
+            {
+                Throws<IOException>(() => store.Load(out _, _ =>
+                    throw new InvalidOperationException("Locked data was reported as corrupt.")));
+                continue;
+            }
+            var loaded = store.Load(out var empty, time =>
+            {
+                Require(source == "history" && time == stamp, "temp recovery unexpectedly prompted");
+                return WorkspaceRecoveryChoice.Restore;
+            });
+            Require(!empty && loaded.Papers[0].Content == "original", "locked orphan vetoed usable recovery");
+            store.SaveJsonSync(store.SerializeState(loaded), 2);
+            Require(File.ReadAllText(store.FilePath).Contains("original"), "locked orphan vetoed recovery commit");
+        }
+
+        // A locked newer history ZIP still permits an older readable snapshot.
+        using (var scope = new Scope())
+        {
+            File.WriteAllText(scope.Store.FilePath, "{broken");
+            var older = WriteHistoryFixture(scope.DirectoryPath, stamp, ("data.json", scope.BaselineJson));
+            var newer = WriteHistoryFixture(scope.DirectoryPath, stamp.AddHours(1), ("data.json", scope.BaselineJson));
+            using var held = new FileStream(newer, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+            var store = new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared);
+            store.Load(out _, time =>
+            {
+                Require(time == stamp, "locked history prevented selection of older usable ZIP");
+                return WorkspaceRecoveryChoice.Restore;
+            });
+            File.Delete(older);
+            Throws<IOException>(() => store.Load(out _, _ =>
+                throw new InvalidOperationException("Locked history was reported as corrupt.")));
         }
 
         // The same callback is used for main startup and numbered workspace entry.
@@ -233,18 +306,30 @@ internal static partial class Program
                     Require(File.ReadAllBytes(archive).SequenceEqual(archiveBytes), "history action changed its source ZIP");
                     Require(await controller.SwitchWorkspaceAsync(1), "return from historical workspace failed");
                 }
+                foreach (var zip in Directory.GetFiles(Path.Combine(AppContext.BaseDirectory, "backups"), "*.zip"))
+                    File.Delete(zip);
                 File.WriteAllText(target.FilePath, "{broken target");
                 File.Delete(target.BackupPath);
                 Require(!await WithWorkspaceFailureDialog(() => controller.SwitchWorkspaceAsync(2), dialog =>
                 {
-                    controller.State.Papers[0].Content = "edit saved on history exit";
+                    var button = FailureDialogNodes(dialog).OfType<System.Windows.Controls.Button>().Single(candidate =>
+                        Equals(candidate.Content, Strings.Format("WorkspaceRecoveryFallback", 1)));
+                    button.RaiseEvent(new System.Windows.RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+                }, "HistoryRecoveryTitle") && controller.WorkspaceNumber == 1 && controller.IsRunning &&
+                        File.ReadAllText(target.FilePath) == "{broken target",
+                    "explicit fallback did not retain the live workspace and corrupt target");
+                File.WriteAllText(target.FilePath, "{broken target");
+                File.Delete(target.BackupPath);
+                Require(!await WithWorkspaceFailureDialog(() => controller.SwitchWorkspaceAsync(2), dialog =>
+                {
+                    controller.State.Papers[0].Content = "edit saved on unavailable exit";
                     controller.MarkDirty();
                     ClickFailureAction(dialog, "WorkspaceFailureExit");
                 }, "HistoryRecoveryTitle") && !controller.IsRunning,
-                    "history Exit did not leave through normal application exit");
-                Require(new StateStore().Load().Papers[0].Content == "edit saved on history exit" &&
+                    "unavailable Exit did not leave through normal application exit");
+                Require(new StateStore().Load().Papers[0].Content == "edit saved on unavailable exit" &&
                         File.ReadAllText(target.FilePath) == "{broken target",
-                    "history exit lost active edits or replaced the unavailable target");
+                    "unavailable exit lost active edits or replaced the unavailable target");
                 Console.WriteLine("PASS live history choices: restore, restart current number, retain ZIP and normal exit");
                 result = 0;
             }
@@ -263,7 +348,8 @@ internal static partial class Program
             // Startup has no owning window. Exercise the real themed dialog and
             // all three buttons and dismissal through its modal Dispatcher loop.
             foreach (var language in new[] { "zh-CN", "en-US", "ja-JP", "ko-KR" })
-            foreach (var choice in Enum.GetValues<WorkspaceRecoveryChoice>())
+            foreach (var choice in new[] { WorkspaceRecoveryChoice.Cancel, WorkspaceRecoveryChoice.CreateEmpty,
+                         WorkspaceRecoveryChoice.Restore, WorkspaceRecoveryChoice.Exit })
             {
                 UiLanguages.ApplyWorkspacePreference(language);
                 Exception? failure = null;
@@ -297,6 +383,48 @@ internal static partial class Program
                 var result = PaperNoticeDialog.ShowHistoryRecovery(null, 2, "2026-01-01 12:00");
                 if (failure != null) throw failure;
                 Require(result == choice, "recovery dialog did not honor the selected action");
+            }
+            foreach (var language in new[] { "zh-CN", "en-US", "ja-JP", "ko-KR" })
+            foreach (int? fallback in new int?[] { null, 3 })
+            foreach (var choice in new[] { WorkspaceRecoveryChoice.Cancel, WorkspaceRecoveryChoice.CreateEmpty,
+                         WorkspaceRecoveryChoice.Exit, WorkspaceRecoveryChoice.Fallback })
+            {
+                if (choice == WorkspaceRecoveryChoice.Fallback && !fallback.HasValue) continue;
+                UiLanguages.ApplyWorkspacePreference(language);
+                Exception? failure = null;
+                app.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ContextIdle, new Action(() =>
+                {
+                    var dialog = app.Windows.OfType<System.Windows.Window>().Single();
+                    try
+                    {
+                        var nodes = Descendants(dialog).ToArray();
+                        Require(nodes.OfType<System.Windows.Controls.TextBlock>().Any(block =>
+                                block.Text == Strings.Get("WorkspaceRecoveryUnavailable")),
+                            "no-source dialog omitted corruption explanation");
+                        var buttons = nodes.OfType<System.Windows.Controls.Button>().ToArray();
+                        var labels = new List<string> { Strings.Get("HistoryRecoveryCreate") };
+                        if (fallback.HasValue) labels.Add(Strings.Format("WorkspaceRecoveryFallback", fallback.Value));
+                        labels.Add(Strings.Get("WorkspaceFailureExit"));
+                        Require(buttons.Select(button => button.Content).SequenceEqual(labels) &&
+                                buttons[1].IsDefault && !buttons[0].IsDefault,
+                            "unavailable choices changed or made rebuilding the default");
+                        foreach (var button in buttons)
+                        {
+                            var position = button.TranslatePoint(new System.Windows.Point(), dialog);
+                            Require(position.X >= 0 && position.X + button.ActualWidth <= dialog.ActualWidth &&
+                                    position.Y + button.ActualHeight <= dialog.ActualHeight,
+                                "translated unavailable action is outside the dialog: " + language);
+                        }
+                        if (choice == WorkspaceRecoveryChoice.Cancel) dialog.Close();
+                        else buttons[choice == WorkspaceRecoveryChoice.CreateEmpty ? 0 :
+                            choice == WorkspaceRecoveryChoice.Fallback ? 1 : buttons.Length - 1].RaiseEvent(
+                            new System.Windows.RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+                    }
+                    catch (Exception ex) { failure = ex; dialog.Close(); }
+                }));
+                var result = PaperNoticeDialog.ShowUnavailableWorkspace(null, fallback);
+                if (failure != null) throw failure;
+                Require(result == choice, "unavailable dialog did not honor selected action");
             }
             Console.WriteLine("PASS ownerless historical recovery dialog: new, restore, exit, dismissal and four-language layout");
             return 0;

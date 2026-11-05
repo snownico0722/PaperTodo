@@ -32,7 +32,7 @@ public sealed partial class AppController
     private void InitializeWorkspaceState()
     {
         _workspaceCatalog = new WorkspaceCatalog(AppContext.BaseDirectory,
-            DurableAtomicFileWriter.Shared, ConfirmHistoryRecovery);
+            DurableAtomicFileWriter.Shared, ConfirmWorkspaceRecovery);
         _workspace = _workspaceCatalog.OpenInitial();
         _workspace.BindPersistence();
         _store = _workspace.Store;
@@ -40,7 +40,7 @@ public sealed partial class AppController
         _imageStore = new NoteImageStore(_workspace.Paths.Images);
     }
 
-    private WorkspaceRecoveryChoice ConfirmHistoryRecovery(StateStore store, DateTime timestampUtc)
+    private WorkspaceRecoveryChoice ConfirmWorkspaceRecovery(StateStore store, DateTime? timestampUtc)
     {
         // Startup may not have any windows or a fully constructed controller yet.
         // Fence this store even if Windows ends the session inside the modal loop.
@@ -51,8 +51,15 @@ public sealed partial class AppController
         {
             var owner = _settingsWindow is { IsVisible: true } ? _settingsWindow :
                 app.Windows.OfType<Window>().FirstOrDefault(window => window.IsActive);
-            return PaperNoticeDialog.ShowHistoryRecovery(owner, store.WorkspaceNumber,
-                timestampUtc.ToLocalTime().ToString("g", System.Globalization.CultureInfo.CurrentCulture));
+            if (timestampUtc is { } timestamp)
+                return PaperNoticeDialog.ShowHistoryRecovery(owner, store.WorkspaceNumber,
+                    timestamp.ToLocalTime().ToString("g", System.Globalization.CultureInfo.CurrentCulture));
+
+            // During a switch the original session is still live. During startup,
+            // a secondary is only opened after main has loaded and committed.
+            int? fallback = _workspace != null ? _workspace.Paths.Number :
+                store.WorkspaceNumber > 1 ? 1 : null;
+            return PaperNoticeDialog.ShowUnavailableWorkspace(owner, fallback);
         }
         finally { app.SessionEnding -= stopWrites; }
     }
@@ -147,7 +154,6 @@ public sealed partial class AppController
         _workspaceSwitching = true;
         RefreshWorkspaceButtons();
         var catalogCommitted = false;
-        var exitRequested = false;
         try
         {
             var (session, effectiveSettings) = _workspaceCatalog.PreviewSettingsChange(_workspace, options);
@@ -181,11 +187,9 @@ public sealed partial class AppController
                 ReportWorkspaceError(ex.GetBaseException().Message);
             }
         }
-        catch (WorkspaceRecoveryExitException) { exitRequested = true; }
-        catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            ReportWorkspaceError(ex.GetBaseException().Message);
+            ReportWorkspaceError(WorkspaceFailureMessage.For(ex));
         }
         finally
         {
@@ -194,8 +198,7 @@ public sealed partial class AppController
             ResumeExitAfterDataReload();
         }
 
-        if (exitRequested) Exit();
-        else if (catalogCommitted) OfferWorkspaceSettingsRestart();
+        if (catalogCommitted) OfferWorkspaceSettingsRestart();
         return catalogCommitted;
     }
 

@@ -12,15 +12,15 @@ internal sealed class WorkspaceCatalog
     private readonly IDurableAtomicFileWriter _writer;
     private readonly Dictionary<int, StateStore> _stores = new();
     private readonly PersistenceWriteLifetime _writeLifetime = new();
-    private readonly Func<StateStore, DateTime, WorkspaceRecoveryChoice>? _confirmHistoryRecovery;
+    private readonly Func<StateStore, DateTime?, WorkspaceRecoveryChoice>? _confirmRecovery;
     private AppState? _initialMain;
 
     internal WorkspaceCatalog(string directory, IDurableAtomicFileWriter writer,
-        Func<StateStore, DateTime, WorkspaceRecoveryChoice>? confirmHistoryRecovery = null)
+        Func<StateStore, DateTime?, WorkspaceRecoveryChoice>? confirmRecovery = null)
     {
         _directory = Path.GetFullPath(directory);
         _writer = writer;
-        _confirmHistoryRecovery = confirmHistoryRecovery;
+        _confirmRecovery = confirmRecovery;
         _initialMain = LoadWorkspace(StoreFor(1), out _);
         HasConfiguration = _initialMain.Workspaces != null;
         Options = (_initialMain.Workspaces ?? new()).Normalized();
@@ -34,8 +34,17 @@ internal sealed class WorkspaceCatalog
     internal WorkspacePaths PathsFor(int number) => new(_directory, number);
 
     private AppState LoadWorkspace(StateStore store, out bool initializedEmpty) =>
-        store.Load(out initializedEmpty, _confirmHistoryRecovery == null ? null :
-            timestamp => _confirmHistoryRecovery(store, timestamp));
+        store.Load(out initializedEmpty, _confirmRecovery == null ? null :
+            timestamp => _confirmRecovery(store, timestamp));
+
+    private AppState ReadMainForSettings()
+    {
+        try { return MainStore.ReadCommittedWorkspaceState(); }
+        catch (Exception ex) when (ex is System.Text.Json.JsonException or FileNotFoundException or DirectoryNotFoundException)
+        {
+            throw new StateRecoveryException("WorkspaceFailureMainRecoveryRequired");
+        }
+    }
 
     // Purge inactive secondary data after removing the slot from the main catalog.
     // A failed file cleanup is reported but does not restore catalog membership.
@@ -92,6 +101,12 @@ internal sealed class WorkspaceCatalog
         if (Options.Enabled && Options.Active > 1)
         {
             try { return Open(Options.Active, Options, main); }
+            catch (WorkspaceRecoveryFallbackException)
+            {
+                // Explicit fallback uses the already loaded, committed main workspace.
+                Options.Active = 1;
+                SaveOptions(1);
+            }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 // An inaccessible slot can be retried later; do not reset the
@@ -111,7 +126,7 @@ internal sealed class WorkspaceCatalog
         WorkspaceSettingsSnapshot? inherited = null;
         if (number > 1 && follows)
         {
-            main ??= LoadWorkspace(MainStore, out _);
+            main ??= ReadMainForSettings();
             inherited = WorkspaceSettingsSnapshot.Capture(main);
         }
         // Normalize papers against effective settings, not dormant local preferences.
@@ -124,7 +139,7 @@ internal sealed class WorkspaceCatalog
             // Every new slot begins with main-workspace settings. Unfollowing later
             // keeps this initial copy as its independent preference, regardless of
             // which workspace was active when the slot was first opened.
-            main ??= LoadWorkspace(MainStore, out _);
+            main ??= ReadMainForSettings();
             inherited ??= WorkspaceSettingsSnapshot.Capture(main);
             inherited.ApplyTo(state);
             state.Papers.Add(new PaperData());
@@ -156,7 +171,7 @@ internal sealed class WorkspaceCatalog
         var independent = current.FollowsMain
             ? current.IndependentSettings!
             : WorkspaceSettingsSnapshot.Capture(current.State);
-        var inherited = follows ? WorkspaceSettingsSnapshot.Capture(LoadWorkspace(MainStore, out _)) : null;
+        var inherited = follows ? WorkspaceSettingsSnapshot.Capture(ReadMainForSettings()) : null;
         var session = new WorkspaceSession(current.Paths, current.Store, current.State, follows, independent)
         {
             InheritedSettings = inherited

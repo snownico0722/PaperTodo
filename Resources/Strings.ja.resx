@@ -1688,8 +1688,8 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="WorkspaceFailureExit" xml:space="preserve">
     <value>PaperTodo を終了</value>
   </data>
-  <data name="WorkspaceFailureNoRecovery" xml:space="preserve">
-    <value>ワークスペースのデータを読み込めず、利用可能なバックアップや一時ファイルも見つかりませんでした。元のファイルは上書きしていません。</value>
+  <data name="WorkspaceFailureHistoryChoiceRequired" xml:space="preserve">
+    <value>利用可能な履歴バックアップがあります。このワークスペースを開き、復元または再作成を選択してください。</value>
   </data>
   <data name="WorkspaceFailureAccessDenied" xml:space="preserve">
     <value>ワークスペースのファイルにアクセスする権限がありません。フォルダーの権限を確認して再試行してください。</value>
@@ -1732,5 +1732,14 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   </data>
   <data name="AppStartupFailureUnknown" xml:space="preserve">
     <value>原因不明</value>
+  </data>
+  <data name="WorkspaceFailureMainRecoveryRequired" xml:space="preserve">
+    <value>メインワークスペースのデータを読み込めません。先にメインワークスペースを開いて復元または再作成し、もう一度お試しください。</value>
+  </data>
+  <data name="WorkspaceRecoveryUnavailable" xml:space="preserve">
+    <value>現在のワークスペースのデータとバックアップはすべて破損しています。</value>
+  </data>
+  <data name="WorkspaceRecoveryFallback" xml:space="preserve">
+    <value>ワークスペース {0} に戻る</value>
   </data>
 </root>

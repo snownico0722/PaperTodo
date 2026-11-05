@@ -1688,8 +1688,8 @@ Restoring will return this workspace to that point in time. Changes made since t
   <data name="WorkspaceFailureExit" xml:space="preserve">
     <value>Exit PaperTodo</value>
   </data>
-  <data name="WorkspaceFailureNoRecovery" xml:space="preserve">
-    <value>The workspace data cannot be read, and no usable backup or temporary file was found. The original files were not overwritten.</value>
+  <data name="WorkspaceFailureHistoryChoiceRequired" xml:space="preserve">
+    <value>A historical backup is available. Open this workspace to choose Restore or Rebuild.</value>
   </data>
   <data name="WorkspaceFailureAccessDenied" xml:space="preserve">
     <value>Permission to access the workspace files was denied. Check folder permissions and retry.</value>
@@ -1732,5 +1732,14 @@ Restoring will return this workspace to that point in time. Changes made since t
   </data>
   <data name="AppStartupFailureUnknown" xml:space="preserve">
     <value>unknown cause</value>
+  </data>
+  <data name="WorkspaceFailureMainRecoveryRequired" xml:space="preserve">
+    <value>The main workspace data could not be read. Open the main workspace to restore or rebuild it, then try again.</value>
+  </data>
+  <data name="WorkspaceRecoveryUnavailable" xml:space="preserve">
+    <value>The current workspace data and backups are corrupted.</value>
+  </data>
+  <data name="WorkspaceRecoveryFallback" xml:space="preserve">
+    <value>Return to workspace {0}</value>
   </data>
 </root>

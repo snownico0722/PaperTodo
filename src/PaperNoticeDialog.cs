@@ -54,6 +54,22 @@ internal static class PaperNoticeDialog
             _ => WorkspaceRecoveryChoice.Cancel
         };
 
+    public static WorkspaceRecoveryChoice ShowUnavailableWorkspace(Window? owner, int? fallbackNumber)
+    {
+        var actions = new List<string> { Strings.Get("HistoryRecoveryCreate") };
+        if (fallbackNumber is { } number)
+            actions.Add(Strings.Format("WorkspaceRecoveryFallback", number));
+        actions.Add(Strings.Get("WorkspaceFailureExit"));
+        return ShowCore(owner, Strings.Get("HistoryRecoveryTitle"),
+            Strings.Get("WorkspaceRecoveryUnavailable"), actions.ToArray(), primaryIndex: 1, width: 560) switch
+        {
+            0 => WorkspaceRecoveryChoice.CreateEmpty,
+            1 when fallbackNumber.HasValue => WorkspaceRecoveryChoice.Fallback,
+            null => WorkspaceRecoveryChoice.Cancel,
+            _ => WorkspaceRecoveryChoice.Exit
+        };
+    }
+
     private static int? ShowCore(
         Window? owner,
         string titleText,
