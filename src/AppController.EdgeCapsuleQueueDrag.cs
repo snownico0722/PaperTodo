@@ -17,6 +17,7 @@ internal sealed class NativeEdgeQueueDrag
     internal required bool PreviewOrigin { get; init; }
     internal string NewQueueId { get; } = EdgeCapsuleQueueIds.New();
     internal bool Detached { get; set; }
+    internal EdgeQueueExitSnapState ExitSnap { get; } = new();
     internal required bool CarriesMaster { get; init; }
     internal bool FloatingMasterHidden { get; set; }
     internal string HeldTargetKey { get; set; } = "";

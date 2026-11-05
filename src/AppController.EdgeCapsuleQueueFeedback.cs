@@ -30,16 +30,18 @@ public sealed partial class AppController
             drag.CarriedIds.Length, DeepCapsuleGap);
     }
 
-    // Only a single capsule crossing its ORIGINAL queue boundary has magnetic
-    // resistance. Internal reordering, Ctrl movement and joining another queue
-    // remain pointer-driven. Hit testing and release use the unmodified pointer.
+    // The only magnetic movement is a repeatable snap to the source's OUTER
+    // slot when dragging one paper away. There is no join magnet or dampening.
+    // Snap state deliberately survives drag.Detached: the user may return to the
+    // source and pull out again within the same continuous pointer gesture.
     internal double NativeEdgeQueueMagnetizedOwnerTop(string ownerId, double requestedTop)
     {
         var drag = _nativeEdgeQueueDrag;
         if (drag == null || !drag.FreeQueues || drag.OwnerId != ownerId ||
-            drag.WholeQueue || drag.Detached) return requestedTop;
+            drag.WholeQueue) return requestedTop;
         var pitch = EdgeCapsuleLayout.SlotHeight(DeepCapsuleGap);
-        return EdgeCapsuleFreeQueuePolicy.ResistLeavingSource(requestedTop, drag.SourceTopDip,
-            drag.SourceTopDip + Math.Max(0, drag.SourceIds.Length - 1) * pitch);
+        return EdgeCapsuleFreeQueuePolicy.SnapLeavingSource(requestedTop, drag.SourceTopDip,
+            drag.SourceTopDip + Math.Max(0, drag.SourceIds.Length - 1) * pitch,
+            drag.ExitSnap);
     }
 }

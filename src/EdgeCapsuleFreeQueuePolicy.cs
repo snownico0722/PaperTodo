@@ -26,11 +26,20 @@ internal sealed record EdgeFreeQueueDrop(
 /// requested height. A prepend grows above existing members; an interior insertion moves
 /// the suffix. Only neighbours actually intersected by that expansion need to move.
 /// </summary>
+// Gesture-local: a snap is a short-lived attachment to an exact slot, never a
+// continuously varying drag resistance. Moving back into the source rearms it.
+internal sealed class EdgeQueueExitSnapState
+{
+    internal int HeldDirection; // -1 first slot/up, +1 last slot/down, 0 not held.
+    internal bool Released;
+    internal double LastPointerTop = double.NaN;
+}
+
 internal static class EdgeCapsuleFreeQueuePolicy
 {
     internal const double SnapDistance = 18;
     internal const double ReleaseDistance = 30; // A held target must be pulled further away to release.
-    internal const double ExitMagnetMaxDip = 18; // Maximum inward pull across the source boundary.
+    internal const double ExitSnapDistance = 18; // Pointer distance needed to break an outer-slot snap.
     private const double TakeoverAdvantage = 6;
     private const double Epsilon = 0.1;
 
@@ -50,20 +59,46 @@ internal static class EdgeCapsuleFreeQueuePolicy
             ? drop.TopDip + (targetHasMaster ? pitch : 0) + drop.Index * pitch
             : drop.TopDip;
 
-    // No resistance within the original member slots: a third capsule can move to the
-    // fourth slot normally. Pull back only after crossing the first or last member.
-    // The correction peaks at 18 DIP and returns to zero at the existing detach
-    // threshold, so floating handoff never causes a positional jump.
-    internal static double ResistLeavingSource(double top, double first, double last)
+    // Only crossing beyond the first or last ORIGINAL member slot can attach
+    // the dragged capsule to that exact boundary. While attached it does not
+    // ease/lag behind the pointer. Once pulled more than 18 DIP, it releases to
+    // full pointer motion. Coming back inward never attracts; entering the queue
+    // rearms the next outward snap, even after a previous detach.
+    internal static double SnapLeavingSource(double pointerTop, double first, double last,
+        EdgeQueueExitSnapState state)
     {
-        var displacement = top < first ? top - first : top > last ? top - last : 0;
-        var distance = Math.Abs(displacement);
-        var releaseDistance = EdgeCapsuleLayout.CrossQueueDragUnlockDistance;
-        if (distance <= 0 || distance >= releaseDistance) return top;
+        var direction = pointerTop < first ? -1 : pointerTop > last ? 1 : 0;
+        var previous = state.LastPointerTop;
+        state.LastPointerTop = pointerTop;
 
-        var phase = Math.Sin(Math.PI * distance / releaseDistance);
-        var pull = ExitMagnetMaxDip * phase * phase;
-        return top - Math.Sign(displacement) * pull;
+        if (direction == 0)
+        {
+            state.HeldDirection = 0;
+            state.Released = false;
+            return pointerTop;
+        }
+        if (state.Released) return pointerTop;
+
+        // Moving towards the source while outside is a drag-IN, not a drag-OUT.
+        // It must follow the pointer without a second capture or sticky reversal.
+        if (state.HeldDirection == direction && double.IsFinite(previous) &&
+            (pointerTop - previous) * direction < 0)
+        {
+            state.HeldDirection = 0;
+            state.Released = true;
+            return pointerTop;
+        }
+
+        var edgeTop = direction < 0 ? first : last;
+        if (Math.Abs(pointerTop - edgeTop) > ExitSnapDistance)
+        {
+            state.HeldDirection = 0;
+            state.Released = true;
+            return pointerTop;
+        }
+
+        state.HeldDirection = direction;
+        return edgeTop;
     }
 
     internal static (string Key, int Index)? FindInsertion(

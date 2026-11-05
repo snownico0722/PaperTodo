@@ -86,28 +86,34 @@ internal static class NativeFreeQueuePolicyChecks
                 EdgeCapsuleFreeQueuePolicy.FindInsertion([target], 325, 46, 10, pitch, gap, target.Key) is { Key: "|right#b" } &&
                 EdgeCapsuleFreeQueuePolicy.FindInsertion([target], 310, 46, 10, pitch, gap, target.Key) == null,
             "held target survives pointer jitter but releases after the larger exit threshold");
-        // Four members: sorting the third into the fourth slot must not feel magnetic.
+        // Four members: free sorting within the entire original queue, including
+        // moving the third onto the fourth. The two outer slots behave symmetrically.
         var firstMemberTop = 400d;
         var lastMemberTop = firstMemberTop + 3 * pitch;
-        var halfRelease = EdgeCapsuleLayout.CrossQueueDragUnlockDistance / 2;
-        Require(EdgeCapsuleFreeQueuePolicy.ExitMagnetMaxDip == 18 &&
-                EdgeCapsuleFreeQueuePolicy.ResistLeavingSource(firstMemberTop + 2 * pitch,
-                    firstMemberTop, lastMemberTop) == firstMemberTop + 2 * pitch &&
-                EdgeCapsuleFreeQueuePolicy.ResistLeavingSource(lastMemberTop,
-                    firstMemberTop, lastMemberTop) == lastMemberTop,
-            "every slot inside a four-member queue remains completely pointer-driven");
-        Require(Math.Abs(EdgeCapsuleFreeQueuePolicy.ResistLeavingSource(lastMemberTop + halfRelease,
-                    firstMemberTop, lastMemberTop) - (lastMemberTop + halfRelease - 18)) < 0.01 &&
-                Math.Abs(EdgeCapsuleFreeQueuePolicy.ResistLeavingSource(firstMemberTop - halfRelease,
-                    firstMemberTop, lastMemberTop) - (firstMemberTop - halfRelease + 18)) < 0.01,
-            "leaving either outer member produces at most 18 DIP of inward magnetic attraction");
-        Require(EdgeCapsuleFreeQueuePolicy.ResistLeavingSource(lastMemberTop +
-                    EdgeCapsuleLayout.CrossQueueDragUnlockDistance, firstMemberTop, lastMemberTop) ==
-                lastMemberTop + EdgeCapsuleLayout.CrossQueueDragUnlockDistance &&
-                EdgeCapsuleFreeQueuePolicy.ResistLeavingSource(firstMemberTop -
-                    EdgeCapsuleLayout.CrossQueueDragUnlockDistance, firstMemberTop, lastMemberTop) ==
-                firstMemberTop - EdgeCapsuleLayout.CrossQueueDragUnlockDistance,
-            "dragging beyond the actual release point is again fully pointer-driven without a jump");
+        var snap = new EdgeQueueExitSnapState();
+        double Visual(double top) =>
+            EdgeCapsuleFreeQueuePolicy.SnapLeavingSource(top, firstMemberTop, lastMemberTop, snap);
+        Require(EdgeCapsuleFreeQueuePolicy.ExitSnapDistance == 18 &&
+                Visual(firstMemberTop + 2 * pitch) == firstMemberTop + 2 * pitch &&
+                Visual(lastMemberTop) == lastMemberTop,
+            "dragging the third into the fourth slot has no magnetic effect");
+        Require(Visual(lastMemberTop + 5) == lastMemberTop &&
+                Visual(lastMemberTop + 15) == lastMemberTop &&
+                Visual(lastMemberTop + 19) == lastMemberTop + 19,
+            "crossing the bottom edge snaps directly to the last slot, then releases at 18 DIP");
+        Require(Visual(lastMemberTop + 9) == lastMemberTop + 9 &&
+                Visual(lastMemberTop) == lastMemberTop &&
+                Visual(lastMemberTop + 7) == lastMemberTop,
+            "dragging inward is free; returning into the queue rearms the next outward snap");
+        Require(Visual(firstMemberTop + pitch) == firstMemberTop + pitch &&
+                Visual(firstMemberTop - 6) == firstMemberTop &&
+                Visual(firstMemberTop - 17) == firstMemberTop &&
+                Visual(firstMemberTop - 20) == firstMemberTop - 20,
+            "upward dragging snaps to the first slot and releases at the same 18-DIP threshold");
+        Require(Visual(firstMemberTop - 10) == firstMemberTop - 10 &&
+                Visual(firstMemberTop) == firstMemberTop &&
+                Visual(firstMemberTop - 8) == firstMemberTop,
+            "upward reentry is free and upward outward snapping retriggers on every crossing");
         var narrowTarget = target with { WidthDip = 60 };
         Require(EdgeCapsuleFreeQueuePolicy.FindInsertion([narrowTarget], 410, 46, 500, pitch, gap) == null &&
                 EdgeCapsuleFreeQueuePolicy.FindInsertion([narrowTarget], 410, 46, 500,
