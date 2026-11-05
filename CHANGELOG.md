@@ -1,5 +1,7 @@
 # PaperTodo Changelog
 
+- **Startup recovery and temporary files**: Restore a complete, unambiguous interrupted-write snapshot when the primary and fixed backup are unavailable; refuse blank replacement of unreadable old data. Orphaned temporary files are cleared once the workspace's primary is healthy and recovery has completed; an invalid, missing or inaccessible primary leaves them untouched.
+
 [简体中文](CHANGELOG.zh.md)
 
 > **Related Links**: [Back to Home](README.md) · [User Manual](doc/USER_GUIDE.en.md)

@@ -148,21 +148,25 @@ internal static partial class Program
             Require(accepted.Result.Applied && accepted.State != null &&
                     !store.NeedsStartupRecoverySave &&
                     File.ReadAllText(store.FilePath) == externalJson &&
-                    RecoverySourcePaths(store, sourceKind)
-                        .Any(path => File.ReadAllBytes(path).SequenceEqual(sourceBytes)) &&
+                    (sourceKind == "primary-temp" && afterCommit
+                        ? RecoverySourcePaths(store, sourceKind).Length == 0
+                        : RecoverySourcePaths(store, sourceKind)
+                            .Any(path => File.ReadAllBytes(path).SequenceEqual(sourceBytes))) &&
                     store.TryCollectProtectedImageIds(accepted.State!, out _),
-                "accepted reload retained the stale recovery guard or consumed its old source");
+                "accepted reload did not retire only orphaned sources beside its healthy primary");
 
             accepted.State!.Papers[0].Content = "normal edit after explicit reload";
             var editedJson = store.SerializeState(accepted.State!);
             store.SaveJsonSync(editedJson, 14);
             store.SaveJsonAsync(pendingJson, 12).GetAwaiter().GetResult();
             Require(File.ReadAllText(store.FilePath) == editedJson &&
-                    RecoverySourcePaths(store, sourceKind)
-                        .Any(path => File.ReadAllBytes(path).SequenceEqual(sourceBytes)),
-                "accepted reload could not save normally or destroyed the unconsumed old source");
+                    (sourceKind == "primary-temp"
+                        ? RecoverySourcePaths(store, sourceKind).Length == 0
+                        : RecoverySourcePaths(store, sourceKind)
+                            .Any(path => File.ReadAllBytes(path).SequenceEqual(sourceBytes))),
+                "accepted reload could not save normally or cleaned a non-orphaned backup source");
         }
-        Console.WriteLine("PASS only accepted reload ends pending recovery and keeps unconsumed sources");
+        Console.WriteLine("PASS only accepted reload ends pending recovery and retires orphaned sources");
     }
 
     private static string[] RecoverySourcePaths(StateStore store, string sourceKind)

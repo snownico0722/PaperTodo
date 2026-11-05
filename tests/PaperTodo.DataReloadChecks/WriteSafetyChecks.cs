@@ -20,6 +20,7 @@ internal static partial class Program
         CorruptLoadsRejectBlankReplacement();
         InterruptedWriteSelectionChecks();
         OrphanedTempImageAndWriteChecks();
+        OrphanCleanupRequiresHealthyPrimary();
         RecoveredBackupDoesNotOverwriteRepairedPrimary();
         RecoveryReadbackFailureCanRetry();
         RecoveryReloadSupersedesPendingSource();
@@ -57,7 +58,8 @@ internal static partial class Program
             File.WriteAllBytes(orphan, bytes);
             var recovered = new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared);
             var state = recovered.Load(out var empty);
-            Require(!empty && state.Papers.Count == 2, "valid legacy orphan was not considered");
+            Require(!empty && state.Papers.Count == 2 && File.ReadAllBytes(orphan).SequenceEqual(bytes),
+                "valid legacy orphan was not retained until recovery committed");
             recovered.SaveJsonSync(recovered.SerializeState(state), 2);
             Require(!File.Exists(orphan), "consumed orphan was left behind");
         }

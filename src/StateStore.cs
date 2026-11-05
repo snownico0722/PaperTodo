@@ -65,7 +65,14 @@ public sealed partial class StateStore
         var primaryBytes = primaryExists ? File.ReadAllBytes(FilePath) : null;
         if (primaryBytes != null)
         {
-            try { return ReadLoadDocument(primaryBytes); }
+            try
+            {
+                var state = ReadLoadDocument(primaryBytes);
+                _writeLock.Wait();
+                try { TryCleanupOrphanedTempsCore(); }
+                finally { _writeLock.Release(); }
+                return state;
+            }
             catch (JsonException) { /* Invalid committed primary: fixed backup is next. */ }
         }
 
@@ -326,6 +333,9 @@ public sealed partial class StateStore
                 !TryReadValidatedStateBytes(FilePath, out var primaryBytes))
                 return false;
 
+            // Existing maintenance also retries cleanup after a temporary file lock.
+            TryCleanupOrphanedTempsCore();
+
             if (TryReadValidatedStateBytes(BackupPath, out var backupBytes) &&
                 primaryBytes.AsSpan().SequenceEqual(backupBytes))
                 return true;
@@ -333,7 +343,7 @@ public sealed partial class StateStore
             // A complete interrupted backup snapshot can be different from the
             // committed primary. Preserve that full alternative before the fixed
             // temporary name is reused; incomplete fragments are not salvaged.
-            PreserveDistinctTemporarySource(
+            var preservedTemporarySource = PreserveDistinctTemporarySource(
                 BackupPath + ".tmp", DecodeStateBytes(primaryBytes),
                 WriteLifetime.ThrowIfStopped);
             _atomicWriter.Write(
@@ -343,6 +353,7 @@ public sealed partial class StateStore
                     TryReadValidatedStateBytes(tempPath, out var writtenBytes) &&
                     primaryBytes.AsSpan().SequenceEqual(writtenBytes),
                 beforeReplace: WriteLifetime.ThrowIfStopped);
+            if (preservedTemporarySource) TryCleanupOrphanedTempsCore();
             return true;
         }
         catch { return false; }
@@ -358,10 +369,11 @@ public sealed partial class StateStore
             beforeReplace?.Invoke();
         }
         ValidateWrite();
+        var completingRecovery = _pendingStartupRecovery != null;
         PreparePendingStartupRecoveryForSave(ValidateWrite);
         // Backup recovery or a healthy primary may coexist with a complete,
         // uncommitted primary temp. Never truncate a DISTINCT full snapshot.
-        PreserveDistinctTemporarySource(FilePath + ".tmp", json, ValidateWrite);
+        var preservedTemporarySource = PreserveDistinctTemporarySource(FilePath + ".tmp", json, ValidateWrite);
         var bytes = Encoding.UTF8.GetBytes(json);
         _atomicWriter.Write(FilePath, bytes, beforeReplace: ValidateWrite);
         // Replacement is already durable even if recovery readback fails.
@@ -369,6 +381,8 @@ public sealed partial class StateStore
         _latestWrittenVersion = version;
         CompletePendingStartupRecovery(bytes);
         NeedsStartupRecoverySave = false;
+        // Ordinary saves with no displaced source do not scan recovery files.
+        if (completingRecovery || preservedTemporarySource) TryCleanupOrphanedTempsCore();
     }
 
     private static bool TryReadValidatedStateBytes(string path, out byte[] bytes)

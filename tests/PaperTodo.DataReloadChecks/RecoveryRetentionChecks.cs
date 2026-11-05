@@ -47,8 +47,7 @@ internal static partial class Program
         }
 
         // A healthy fixed backup is the full restoration authority, but a
-        // different complete primary temp may be newer. Do not quietly truncate
-        // this alternative when the recovered backup is persisted.
+        // different complete primary temp stays intact until recovery commits.
         foreach (var number in new[] { 1, 2 })
         {
             using var scope = new Scope();
@@ -62,26 +61,36 @@ internal static partial class Program
             File.WriteAllText(seeded.FilePath, "{corrupt committed document");
             File.WriteAllBytes(seeded.FilePath + ".tmp", originalTempBytes);
 
-            var store = new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared, number);
+            var rejectCommit = true;
+            var atomic = new DurableAtomicFileWriter((stage, target) =>
+            {
+                if (rejectCommit && stage == DurableAtomicWriteStage.BeforeReplace &&
+                    string.Equals(target, seeded.FilePath, StringComparison.Ordinal))
+                    throw new IOException("Injected failure before recovery replacement.");
+            });
+            var store = new StateStore(scope.DirectoryPath, atomic, number);
             var restored = store.Load(out var empty);
             Require(!empty && restored.Papers[0].Content == "original",
                 "the fixed backup did not take precedence over an uncommitted temp");
-            store.SaveJsonSync(store.SerializeState(restored), 2);
+            Throws<IOException>(() => store.SaveJsonSync(store.SerializeState(restored), 2));
             var preserved = Directory.GetFiles(scope.DirectoryPath,
                 Path.GetFileNameWithoutExtension(seeded.FilePath + ".tmp") +
                 ".orphaned.*.tmp");
             Require(preserved.Length == 1 &&
                     File.ReadAllBytes(preserved[0]).SequenceEqual(originalTempBytes) &&
-                    !File.Exists(seeded.FilePath + ".tmp") &&
-                    store.Load().Papers[0].Content == "original",
-                "restoring a fixed backup destroyed a distinct, complete primary temp");
+                    File.ReadAllText(seeded.FilePath) == "{corrupt committed document",
+                "failed recovery deleted the complete displaced temporary source");
+            rejectCommit = false;
+            store.SaveJsonSync(store.SerializeState(restored), 3);
+            Require(preserved.All(path => !File.Exists(path)) &&
+                    !File.Exists(seeded.FilePath + ".tmp"),
+                "healthy recovered primary did not retire displaced temporary sources");
             Require(store.TryCollectProtectedImageIds(restored, out var images) &&
-                    images.Contains("987"),
-                "the preserved distinct full version lost its picture-reference protection");
+                    !images.Contains("987"),
+                "retired orphan still protected images absent from the recovered primary and backup");
         }
 
-        // Even a healthy primary must not silently truncate a different valid
-        // interrupted write when the ordinary save reuses data.json.tmp.
+        // A successful ordinary save can retire the complete temp it displaced.
         using (var scope = new Scope())
         {
             var alternative = scope.Store.Load();
@@ -93,14 +102,13 @@ internal static partial class Program
             Require(healthy.Papers[0].Content == "original",
                 "an uncommitted temporary snapshot replaced a healthy primary");
             store.SaveJsonSync(store.SerializeState(healthy), 2);
-            Require(Directory.GetFiles(scope.DirectoryPath, "data.json.orphaned.*.tmp")
-                    .Any(path => File.ReadAllBytes(path).SequenceEqual(bytes)) &&
+            Require(!Directory.GetFiles(scope.DirectoryPath, "data.json.orphaned.*.tmp").Any() &&
                     store.Load().Papers[0].Content == "original",
-                "ordinary save overwrote a distinct complete interrupted write");
+                "ordinary save retained an orphan after committing a healthy primary");
         }
 
         // A backup refresh also owns its own fixed .tmp filename. It must not
-        // truncate a different complete backup temp that survived a prior crash.
+        // discard a source before preservation; the healthy primary permits cleanup afterwards.
         using (var scope = new Scope())
         {
             var alternative = scope.Store.Load();
@@ -116,10 +124,9 @@ internal static partial class Program
             Require(scope.Store.Load().Papers[0].Content == "latest committed primary" &&
                     File.Exists(scope.Store.BackupPath) &&
                     !File.Exists(scope.Store.BackupPath + ".tmp") &&
-                    Directory.GetFiles(scope.DirectoryPath,
-                        "data.backup.json.orphaned.*.tmp")
-                        .Any(path => File.ReadAllBytes(path).SequenceEqual(bytes)),
-                "backup refresh destroyed a distinct complete backup temp");
+                    !Directory.GetFiles(scope.DirectoryPath,
+                        "data.backup.json.orphaned.*.tmp").Any(),
+                "backup refresh retained a displaced orphan beside a healthy primary");
         }
 
         // Access failures after Load are not permission to write over the sole
@@ -179,5 +186,88 @@ internal static partial class Program
                 "abandoned broken fixed backup blocked GC after successful temp recovery");
         }
         Console.WriteLine("PASS actual images, complete temp recovery, failure/retry and damaged-source retirement");
+    }
+
+    private static void OrphanCleanupRequiresHealthyPrimary()
+    {
+        foreach (var number in new[] { 1, 2 })
+        {
+            using var scope = new Scope();
+            var store = new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared, number);
+            store.SaveJsonSync(store.SerializeState(NewState()), 1);
+            Require(store.TryRefreshBackupFromPrimary(), "cleanup backup fixture failed");
+            var original = File.ReadAllBytes(store.FilePath);
+            var alternate = NewState();
+            alternate.Papers[0].Content = MarkdownImageReferences.CreateReference("987");
+            var orphan = store.FilePath + ".orphaned.20260101-000000-000.tmp";
+            var broken = store.BackupPath + ".orphaned.20261105-000000-000.tmp";
+            File.WriteAllText(orphan, store.SerializeState(alternate));
+            File.WriteAllText(broken, "{broken orphan");
+            var other = new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared, number == 1 ? 2 : 1);
+            var unrelated = other.FilePath + ".orphaned.20260101-000000-000.tmp";
+            File.WriteAllBytes(unrelated, original);
+            File.WriteAllBytes(store.FilePath + ".tmp", original);
+            File.WriteAllBytes(store.BackupPath + ".tmp", original);
+
+            var state = store.Load();
+            Require(!File.Exists(orphan) && !File.Exists(broken) && File.Exists(unrelated) &&
+                    File.ReadAllBytes(store.FilePath).SequenceEqual(original) &&
+                    File.ReadAllBytes(store.BackupPath).SequenceEqual(original) &&
+                    File.ReadAllBytes(store.FilePath + ".tmp").SequenceEqual(original) &&
+                    File.ReadAllBytes(store.BackupPath + ".tmp").SequenceEqual(original),
+                "healthy startup did not clean only its workspace's orphaned temporary files");
+            Require(store.TryCollectProtectedImageIds(state, out var ids) && !ids.Contains("987"),
+                "cleaned orphan still held an otherwise unreferenced image");
+        }
+
+        foreach (var primaryKind in new[] { "missing", "corrupt", "locked" })
+        {
+            using var scope = new Scope();
+            Require(scope.Store.TryRefreshBackupFromPrimary(), "unhealthy-primary backup fixture failed");
+            var original = File.ReadAllBytes(scope.Store.FilePath);
+            var orphan = scope.Store.FilePath + ".orphaned.20260101-000000-000.tmp";
+            var broken = scope.Store.BackupPath + ".orphaned.20260101-000000-000.tmp";
+            File.WriteAllBytes(orphan, original);
+            File.WriteAllText(broken, "{broken orphan");
+            FileStream? held = null;
+            try
+            {
+                if (primaryKind == "missing") File.Delete(scope.Store.FilePath);
+                else if (primaryKind == "corrupt") File.WriteAllText(scope.Store.FilePath, "{}");
+                else held = new FileStream(scope.Store.FilePath, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+                Require(!scope.Store.TryRefreshBackupFromPrimary() &&
+                        File.ReadAllBytes(orphan).SequenceEqual(original) && File.Exists(broken),
+                    "a healthy backup permitted cleanup without a readable healthy primary");
+                var reader = new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared);
+                if (primaryKind == "locked") Throws<IOException>(() => reader.Load());
+                else
+                {
+                    var restored = reader.Load();
+                    Require(File.Exists(orphan) && File.Exists(broken),
+                        "loading a backup retired orphans before recovery committed");
+                    reader.SaveJsonSync(reader.SerializeState(restored), 2);
+                    Require(!File.Exists(orphan) && !File.Exists(broken),
+                        "verified recovery did not enable orphan cleanup");
+                }
+            }
+            finally { held?.Dispose(); }
+        }
+
+        using (var scope = new Scope())
+        {
+            var orphan = scope.Store.FilePath + ".orphaned.20260101-000000-000.tmp";
+            File.WriteAllBytes(orphan, File.ReadAllBytes(scope.Store.FilePath));
+            using (var held = new FileStream(orphan, FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                var state = scope.Store.Load();
+                state.Papers[0].Content = "save succeeds despite locked cleanup";
+                scope.Store.SaveJsonSync(scope.Store.SerializeState(state), 2);
+                Require(scope.Store.TryRefreshBackupFromPrimary() && File.Exists(orphan),
+                    "cleanup failure rejected a healthy load, save or backup refresh");
+            }
+            Require(scope.Store.TryRefreshBackupFromPrimary() && !File.Exists(orphan),
+                "existing backup maintenance did not retry cleanup after the lock ended");
+        }
+        Console.WriteLine("PASS orphan cleanup requires a healthy primary; recovery, isolation and retry remain intact");
     }
 }

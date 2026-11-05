@@ -53,6 +53,32 @@ public sealed partial class StateStore
 
     private bool HasInterruptedWriteFiles() => InterruptedWritePaths().Length != 0;
 
+    // Caller holds the write lock. Orphans are only a fallback while the primary
+    // is unavailable, not another history tier. Never retire a pending recovery
+    // source before its commit/readback completes. Maintenance cannot reject a save.
+    private void TryCleanupOrphanedTempsCore()
+    {
+        if (WriteLifetime.IsStopped || _pendingStartupRecovery != null) return;
+        try
+        {
+            var directory = Path.GetDirectoryName(FilePath)!;
+            var paths = new[] { FilePath, BackupPath }
+                .SelectMany(path => Directory.EnumerateFiles(
+                    directory, Path.GetFileName(path) + ".orphaned.*.tmp")).ToArray();
+            if (paths.Length == 0 || !TryReadValidatedStateBytes(FilePath, out _)) return;
+
+            foreach (var path in paths)
+            {
+                WriteLifetime.ThrowIfStopped();
+                File.Delete(path);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or OperationCanceledException)
+        {
+            System.Diagnostics.Trace.TraceWarning("Orphaned temporary cleanup skipped: {0}", ex);
+        }
+    }
+
     private sealed record CompleteInterruptedWrite(
         string Path, byte[] Bytes, JsonObject Document, AppState State);
 
@@ -95,20 +121,20 @@ public sealed partial class StateStore
 
     // Normal saves and backup refresh use fixed .tmp names, even when the last
     // run left an uncommitted, fully valid snapshot at that path. A differing
-    // *complete* document is recovery evidence, never disposable scratch data.
+    // *complete* document stays intact until the new primary is healthy.
     // Moving it within the same directory does not allocate a second backup.
-    private void PreserveDistinctTemporarySource(
+    private bool PreserveDistinctTemporarySource(
         string tempPath, string committingJson, Action validateWrite)
     {
-        if (!FileExistsForCollection(tempPath)) return;
+        if (!FileExistsForCollection(tempPath)) return false;
         var bytes = File.ReadAllBytes(tempPath);
         if (!TryReadCompleteDocument(bytes, out var document, out _))
-            return; // Broken temp is explicitly outside the recovery contract.
+            return false; // Broken temp is explicitly outside the recovery contract.
 
         var intended = JsonNode.Parse(
             committingJson, documentOptions: StateJsonReadPolicy.DocumentOptions);
         if (JsonNode.DeepEquals(document, intended))
-            return; // Complete duplicate; no need to retain another generation.
+            return false; // Complete duplicate; no need to retain another generation.
 
         validateWrite();
         // Validate the read source a second time so a racing writer cannot turn
@@ -132,6 +158,7 @@ public sealed partial class StateStore
         System.Diagnostics.Trace.TraceInformation(
             "Preserved a distinct complete interrupted-write snapshot: {0}",
             Path.GetFileName(archived));
+        return true;
     }
 
     private static byte[] ReadFileHash(string path)

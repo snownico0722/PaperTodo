@@ -74,8 +74,9 @@
 | D-063 | 仅显式热重载和有基线三方合并，普通保存不检测外部修改 | Accepted | 持久化 / 产品边界 |
 | D-064 | 固定编号工作区共用代码，不共用运行数据 | Accepted | 工作区 / 持久化 |
 | D-065 | DComp 视觉与 Win32 输入提交的非原子边界 | Accepted (historical findings; native-owner candidate deferred) | Edge input / composition |
-| D-066 | 异常恢复只接受完整数据，不保留重复救援文件；冲突归档双条件清理 | Accepted；归档保留部分 Superseded by D-067 | 核心持久化 / 恢复 |
+| D-066 | 异常恢复只接受完整数据，不保留重复救援文件；冲突归档双条件清理 | Accepted；归档保留部分 Superseded by D-067，孤立临时文件保留部分 Superseded by D-068 | 核心持久化 / 恢复 |
 | D-067 | 冲突归档仅保留最近五组完整记录 | Accepted | 核心持久化 / 归档 |
+| D-068 | 主文件健康时清理孤立临时文件 | Accepted | 核心持久化 / 恢复 |
 
 ## 维护规则
 
@@ -2035,7 +2036,7 @@ PR #319 的初版把主胶囊完整材质收展后的卡死解释为终点迟到
 
 ## D-066 — 异常恢复只接受完整数据，取消重复救援副本
 
-**Status:** Accepted；冲突归档双条件保留部分 Superseded by D-067，完整恢复等其他决定保持有效
+**Status:** Accepted；冲突归档双条件保留部分 Superseded by D-067，孤立临时文件保留部分 Superseded by D-068，完整恢复等其他决定保持有效
 
 ### Context
 
@@ -2080,3 +2081,22 @@ D-066 曾同时按三天和五组保护冲突归档，短时间产生大量冲�
 
 - `src/StateStore.ConflictRetention.cs`、`src/StateStore.Merge.cs`。
 - `tests/PaperTodo.DataReloadChecks/ConflictRetentionChecks.cs`。
+
+---
+
+## D-068 — 主文件健康时清理孤立临时文件
+
+**Status:** Accepted
+
+### Context / Decision
+
+D-066 保护了未采用的完整临时文件，但健康主文件旁的孤立文件可能无限积累，并长期保留图片引用。孤立临时文件不再充当额外历史备份：本工作区主文件可读取并通过状态校验、且恢复已经结束时，清理主数据及固定备份的 `.orphaned.*.tmp`，完整和损坏文件均适用；主文件损坏、缺失或暂时不可读时不碰。只有健康固定备份不足以授权清理。
+
+启动加载、成功显式重载、恢复或移走临时来源后的成功保存，以及现有备份维护执行此策略；不新增定时器、数量或天数设置，普通保存没有移走来源时不扫描目录。恢复写入或复读失败继续保留来源；删除失败不改变加载/提交结果，后续现有维护可重试。固定 `.tmp`、其他工作区、冲突归档和历史备份不属于这次清理范围。
+
+接受主文件健康后丢弃孤立文件中的不同内容，更早恢复依靠既有历史备份。
+
+### Evidence
+
+- `src/StateStore.Recovery.cs`、`src/StateStore.cs`、`src/StateStore.Reload.cs`。
+- `tests/PaperTodo.DataReloadChecks/RecoveryRetentionChecks.cs`、`RecoveryCompletionChecks.cs`。

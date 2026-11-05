@@ -42,9 +42,10 @@ public sealed partial class StateStore
             // An invalid or failed reload must leave previously queued saves eligible.
             BeginExternalRead(version);
             // Explicitly accepting this validated primary supersedes startup
-            // recovery. Its old source is retained, not consumed by the reload.
+            // recovery; orphaned sources can now retire under the healthy-primary policy.
             _pendingStartupRecovery = null;
             NeedsStartupRecoverySave = false;
+            TryCleanupOrphanedTempsCore();
             return new(state, new() { Outcome = "applied", Applied = true });
         }
         catch (Exception ex) when (ex is JsonException or ArgumentException)
