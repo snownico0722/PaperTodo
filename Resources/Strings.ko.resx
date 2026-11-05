@@ -1677,7 +1677,7 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="WorkbenchSearch" xml:space="preserve"><value>모든 작업 공간 검색. Enter를 눌러 결과로 이동</value></data>
   <data name="WorkbenchRefresh" xml:space="preserve"><value>개요 새로 고침</value></data>
   <data name="WorkbenchClose" xml:space="preserve"><value>바탕 화면으로 돌아가기</value></data>
-  <data name="WorkbenchHint" xml:space="preserve"><value>빈 공간을 드래그해 선택하고, Ctrl+제목 클릭으로 다중 선택, Ctrl+G로 그룹을 만듭니다. 가운데 버튼 드래그로 이동, Alt+휠로 확대·축소합니다. 노드에서 Tab은 하위, Enter는 같은 수준의 노드를 추가합니다.</value></data>
+  <data name="WorkbenchHint" xml:space="preserve"><value>빈 공간 드래그로 범위 선택, Ctrl+제목 클릭으로 다중 선택, Ctrl+G로 그룹을 만듭니다. 마우스 오른쪽 드래그로 이동, Alt+휠로 확대·축소합니다. 카드의 연결 아이콘을 드래그해 연결합니다.</value></data>
   <data name="WorkbenchError" xml:space="preserve"><value>작업대 작업 실패: {0}</value></data>
   <data name="WorkbenchPinConflict" xml:space="preserve"><value>고정된 메모가 겹칩니다. 위치는 유지됩니다. 하나를 이동하거나 고정을 해제하세요.</value></data>
   <data name="WorkbenchDelete" xml:space="preserve"><value>메모 삭제</value></data>
@@ -1703,7 +1703,7 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="WorkbenchFocusGroup" xml:space="preserve"><value>이 그룹만 보기</value></data>
   <data name="WorkbenchLeaveGroup" xml:space="preserve"><value>모든 내용 보기</value></data>
   <data name="WorkbenchRenameGroup" xml:space="preserve"><value>그룹 이름 변경</value></data>
-  <data name="WorkbenchConnect" xml:space="preserve"><value>연결 대상 선택…</value></data>
+  <data name="WorkbenchConnect" xml:space="preserve"><value>드래그하여 연결</value></data>
   <data name="WorkbenchConnectHint" xml:space="preserve"><value>연결할 카드를 클릭하세요. Esc로 취소합니다</value></data>
   <data name="WorkbenchConnectionLabel" xml:space="preserve"><value>연결 설명</value></data>
   <data name="WorkbenchRemoveConnection" xml:space="preserve"><value>연결선 삭제</value></data>
