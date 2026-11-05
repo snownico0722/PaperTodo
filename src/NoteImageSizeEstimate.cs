@@ -42,20 +42,28 @@ internal sealed class NoteImageSizeEstimate
         var scale = Math.Log(Math.Clamp(Math.Sqrt(area / (sourceWidth * sourceHeight)), .01, 100));
         var jpegSource = mime == "image/jpeg";
         var jpegRate = jpegSource
-            ? Rate(density, scale, -.835228, .396450, -.098479, .030032, .178976)
-            : Rate(density, scale, -1.526397, .320193, -.008417, -.119611, .121336);
+            ? Rate(density, scale, -.835228, .396450, -.098479, 0, 0, .030032, 0, .178976)
+            : Rate(density, scale, -2.062611, .555156, .658371, .088997, -.005942, -.176980, -.057669, .121336);
         var pngRate = jpegSource
-            ? Rate(density, scale, .609807, -.381840, -.418132, .039313, .162505)
-            : Rate(density, scale, .076086, .747182, -.033117, -.148506, .168795);
+            ? Rate(density, scale, .609807, -.381840, -.418132, 0, 0, .039313, 0, .162505)
+            : Rate(density, scale, -.044796, 1.046804, .022870, -.133692, -.026168, -.038347, .110734, .168795);
         // Almost incompressible RGB PNGs contain information the broad log fit underestimates.
         if (!jpegSource && density > Math.Log(2.8) && scale >= 0)
             jpegRate = Math.Max(jpegRate, .8 / Math.Exp(scale));
+        // JPEG quantization can leave small color variations even in very smooth images.
+        // A source-size-only fit otherwise severely underestimates their lossless PNG size.
+        if (jpegSource && density > Math.Log(.025))
+            pngRate = Math.Max(pngRate, Math.Min(.4, 8 * Math.Exp(density)));
+        if (jpegSource && density > Math.Log(.5))
+            jpegRate = Math.Max(jpegRate, .85 * Math.Exp(density) * Math.Min(1, Math.Exp(scale)));
         _imageJpeg += area * Math.Clamp(jpegRate, .015, 2);
         _imagePng += area * Math.Clamp(pngRate, .001, 3);
     }
 
-    private static double Rate(double density, double scale, double a, double b, double c, double d, double e) =>
-        Math.Exp(a + b * density + c * density * density + d * scale + e * density * scale);
+    private static double Rate(double density, double scale,
+        double a, double b, double c, double d, double e, double f, double g, double h) =>
+        Math.Exp(a + density * (b + density * (c + density * (d + density * e))) +
+            f * scale + g * scale * scale + h * density * scale);
 
     internal NoteImageSizePrediction Finish(int width, int height)
     {

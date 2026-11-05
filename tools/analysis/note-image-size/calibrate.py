@@ -47,17 +47,35 @@ def main():
                     y=labels(out); density=len(data)/(im.width*im.height)
                     records.append(dict(seed=seed,kind=kind,fmt=fmt,q=q,density=density,scale=scale,area=out.width*out.height,y=y))
     Path(__file__).with_name('metadata-images.json').write_text(json.dumps(records))
-    for fmt in ('PNG','JPEG'):
-        rr=[r for r in records if r['fmt']==fmt]; a=np.array([r['area'] for r in rr]); train=np.array([r['seed']!=37 for r in rr]);
-        x=np.array([[1,math.log(r['density']),math.log(r['density'])**2,math.log(r['scale']),math.log(r['density'])*math.log(r['scale'])] for r in rr])
-        for j,name in enumerate(('jpg','png')):
-            y=np.array([r['y'][j] for r in rr]); c=np.linalg.lstsq(x[train],np.log(y[train]/a[train]),rcond=None)[0]; rate=np.exp(x@c)
-            if fmt=='PNG' and j==0:
-                rate=np.array([max(v,.8/r['scale']) if r['density']>2.8 and r['scale']>=1 else v for v,r in zip(rate,rr)])
-            pred=np.clip(rate,.015 if j==0 else .001,2 if j==0 else 3)*a; err=np.abs(pred/y-1)
-            print(fmt,name,c.tolist(),'within50',np.mean(err[~train]<=.5),'median',np.median(err[~train]),'max',err[~train].max())
-            for kind in ('flat','gradient','texture','noise','china','flower','screenshot','shapes'):
-                ix=[i for i,r in enumerate(rr) if r['kind']==kind and r['seed']==37 and r['scale']==1 and r['q'] in (0,90)]
-                print(kind,[(round(rr[i]['density'],3),round(y[i]/a[i],3),round(pred[i]/a[i],3)) for i in ix])
+    fit(records)
 
-if __name__=='__main__':main()
+
+def fit(records):
+    for fmt in ('PNG', 'JPEG'):
+        rows = [r for r in records if r['fmt'] == fmt]
+        area = np.array([r['area'] for r in rows])
+        train = np.array([r['seed'] != 37 for r in rows])
+        density = np.log([r['density'] for r in rows])
+        scale = np.log([r['scale'] for r in rows])
+        degree = 4 if fmt == 'PNG' else 2
+        features = [density ** i for i in range(degree + 1)]
+        features += [scale, scale * scale, density * scale] if degree == 4 else [scale, density * scale]
+        x = np.column_stack(features)
+        for target, name in enumerate(('jpg', 'png')):
+            actual = np.array([r['y'][target] for r in rows])
+            coefficients = np.linalg.lstsq(x[train], np.log(actual[train] / area[train]), rcond=None)[0]
+            rate = np.exp(x @ coefficients)
+            if fmt == 'PNG' and target == 0:
+                rate = np.where((density > math.log(2.8)) & (scale >= 0), np.maximum(rate, .8 / np.exp(scale)), rate)
+            if fmt == 'JPEG' and target == 1:
+                rate = np.where(density > math.log(.025), np.maximum(rate, np.minimum(.4, 8 * np.exp(density))), rate)
+            if fmt == 'JPEG' and target == 0:
+                rate = np.where(density > math.log(.5), np.maximum(rate, .85 * np.exp(density) * np.minimum(1, np.exp(scale))), rate)
+            predicted = np.clip(rate, .015 if target == 0 else .001, 2 if target == 0 else 3) * area
+            error = np.abs(predicted / actual - 1)
+            print(fmt, name, coefficients.tolist(), 'within50', np.mean(error[~train] <= .5),
+                  'median', np.median(error[~train]), 'max', error[~train].max())
+
+
+if __name__ == '__main__':
+    main()

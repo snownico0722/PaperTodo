@@ -36,11 +36,21 @@ internal static class NoteImageSizeChecks
         foreach (var kind in new[] { "gradient", "texture", "noise" })
         {
             var source = Source(kind, jpeg: true);
+            var previousHeight = 0;
             foreach (var percent in new[] { 50, 100 })
             {
-                var text = string.Concat(Enumerable.Repeat($"## 图片记录\n\n![image|{percent}%](i:1)\n\n保留图片和文字。\n\n", 4));
-                cases.Add(($"jpeg-{kind}-{percent}-heldout", NoteImageExport.Compose("测试", text, _ => source, "缺图", CancellationToken.None)));
+                var text = string.Concat(Enumerable.Repeat($"## 图片记录\n\n![image](i:1){{width={percent}%}}\n\n保留图片和文字。\n\n", 4));
+                var artifact = NoteImageExport.Compose("测试", text, _ => source, "缺图", CancellationToken.None);
+                if (artifact.PixelHeight <= previousHeight) throw new InvalidOperationException("Image scale fixture did not change the output size");
+                previousHeight = artifact.PixelHeight;
+                cases.Add(($"jpeg-{kind}-{percent}-validation", artifact));
             }
+        }
+        foreach (var kind in new[] { "gradient", "texture" })
+        {
+            var source = Source(kind, jpeg: true, quality: 95);
+            var text = string.Concat(Enumerable.Repeat("## 分享\n\n![image](i:1){width=25%}\n\n随手记下今天的事情。\n\n", 5));
+            cases.Add(($"jpeg95-{kind}-25-heldout", NoteImageExport.Compose("记录", text, _ => source, "缺图", CancellationToken.None)));
         }
         foreach (var (name, artifact) in cases)
         {
@@ -101,7 +111,7 @@ internal static class NoteImageSizeChecks
             errors.Add($"{name}: estimated {estimate}, actual {actual}, relative error {Math.Abs(estimate / (double)actual - 1):P1}");
     }
 
-    private static NoteImageSource Source(string kind, bool jpeg = false)
+    private static NoteImageSource Source(string kind, bool jpeg = false, int quality = 82)
     {
         const int width = 1008, height = 640;
         var bytes = new byte[width * height * 3];
@@ -122,7 +132,7 @@ internal static class NoteImageSizeChecks
         var bitmap = BitmapSource.Create(width, height, 96, 96, PixelFormats.Bgr24, null, bytes, width * 3);
         bitmap.Freeze();
         // Fixture setup encodes once to represent a stored asset. Prediction never encodes.
-        BitmapEncoder encoder = jpeg ? new JpegBitmapEncoder { QualityLevel = 82 } : new PngBitmapEncoder();
+        BitmapEncoder encoder = jpeg ? new JpegBitmapEncoder { QualityLevel = quality } : new PngBitmapEncoder();
         encoder.Frames.Add(BitmapFrame.Create(bitmap));
         using var encoded = new MemoryStream();
         encoder.Save(encoded);
