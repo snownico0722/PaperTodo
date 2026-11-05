@@ -56,8 +56,6 @@ public sealed partial class PaperWindow
             {
                 previous.TextChanged -= OnEditorStatisticsTextChanged;
                 previous.TextArea.SelectionChanged -= OnEditorStatisticsSelectionChanged;
-                previous.TextArea.Caret.PositionChanged -= OnEditorPositionChanged;
-                previous.TextArea.TextView.ScrollOffsetChanged -= OnEditorPositionChanged;
             }
             _editorStatisticsTimer?.Stop();
             _editorStatisticsSource = source;
@@ -66,8 +64,6 @@ public sealed partial class PaperWindow
             {
                 source.TextChanged += OnEditorStatisticsTextChanged;
                 source.TextArea.SelectionChanged += OnEditorStatisticsSelectionChanged;
-                source.TextArea.Caret.PositionChanged += OnEditorPositionChanged;
-                source.TextArea.TextView.ScrollOffsetChanged += OnEditorPositionChanged;
             }
         }
         if (visible) UpdateExpandedEditorStatistics();
@@ -82,10 +78,7 @@ public sealed partial class PaperWindow
     private void OnEditorStatisticsSelectionChanged(object? sender, EventArgs e)
     {
         QueueExpandedEditorStatistics();
-        MarkExpandedEditorViewDirty();
     }
-
-    private void OnEditorPositionChanged(object? sender, EventArgs e) => MarkExpandedEditorViewDirty();
 
     private void QueueExpandedEditorStatistics()
     {

@@ -429,18 +429,35 @@ public sealed partial class MarkdownTextBox : TextEditor
 
     public void InsertLinePrefix(string prefix)
     {
-        if (Document == null)
+        if (Document == null) return;
+
+        var start = Math.Clamp(SelectionStart, 0, Document.TextLength);
+        var end = Math.Clamp(start + SelectionLength, start, Document.TextLength);
+        if (start == end)
         {
+            Select(Document.GetLineByOffset(start).Offset, 0);
+            SelectedText = prefix;
+            Focus();
+            Select(start + prefix.Length, 0);
             return;
         }
 
-        var start = Math.Clamp(SelectionStart, 0, Document.TextLength);
-        var lineStart = Document.GetLineByOffset(start).Offset;
-        Select(lineStart, 0);
-        SelectedText = prefix;
+        // A selection ending at the next line's start does not include that line.
+        var firstLine = Document.GetLineByOffset(start).LineNumber;
+        var lastLine = Document.GetLineByOffset(end - 1).LineNumber;
+        using (Document.RunUpdate())
+        {
+            for (var lineNumber = lastLine; lineNumber >= firstLine; lineNumber--)
+            {
+                var linePrefix = prefix == "1. " ? $"{lineNumber - firstLine + 1}. " : prefix;
+                Document.Insert(Document.GetLineByNumber(lineNumber).Offset, linePrefix);
+            }
+        }
 
         Focus();
-        Select(start + prefix.Length, 0);
+        var selectionStart = Document.GetLineByNumber(firstLine).Offset;
+        var selectionEnd = Document.GetLineByNumber(lastLine).EndOffset;
+        Select(selectionStart, selectionEnd - selectionStart);
     }
 
     public int GetFirstVisibleLineIndex()

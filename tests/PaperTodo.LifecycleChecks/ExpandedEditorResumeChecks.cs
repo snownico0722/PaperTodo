@@ -14,6 +14,9 @@ internal static class ExpandedEditorResumeChecks
             "Statistics counted Markdown syntax, image URI or link destination");
         Check(NoteTextStatistics.Count("中文 abc😀\n\t") == 6,
             "Statistics counted whitespace or counted a surrogate pair twice");
+        Check(NoteTextStatistics.Count("![image|100%](i:123)") == 5 &&
+              NoteTextStatistics.Count("![image|50%](i:123){width=75%}") == 5,
+            "Changing only image display size changed the character count");
 
         var area = SystemParameters.WorkArea;
         var saved = new ExpandedEditorState
@@ -85,6 +88,25 @@ internal static class ExpandedEditorResumeChecks
         await Task.Delay(180);
         Check(statistics.Text == Strings.Format("EditorCharacterCount", 7),
             "Total count did not update or retained the cleared selection");
+
+        bBox.Text = "苹果\n香蕉\n梨";
+        bBox.Select(0, bBox.Text.Length);
+        bBox.InsertLinePrefix("- ");
+        Check(bBox.Text == "- 苹果\n- 香蕉\n- 梨" &&
+              bBox.SelectionLength == bBox.Text.Length,
+            "Multi-line bullet command did not prefix and retain all selected lines");
+        bBox.Document.UndoStack.Undo();
+        Check(bBox.Text == "苹果\n香蕉\n梨",
+            "Multi-line bullet command did not undo in one step");
+        bBox.Text = "甲\n乙\n丙";
+        bBox.Select(0, "甲\n乙\n".Length);
+        bBox.InsertLinePrefix("1. ");
+        Check(bBox.Text == "1. 甲\n2. 乙\n丙",
+            "Numbering included the line after a trailing selection newline");
+        bBox.Select(0, bBox.Text.Length);
+        bBox.InsertLinePrefix("> ");
+        Check(bBox.Text == "> 1. 甲\n> 2. 乙\n> 丙",
+            "Multi-line quote command did not cover all selected lines");
 
         controller.SwitchExpandedEditorPaper(b, "resume-a");
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
