@@ -42,12 +42,23 @@ internal static partial class Program
             });
             app.Run(); return result;
         }
-        try
+        var failed = new List<string>();
+        foreach (var fixtureName in Cases)
         {
-            foreach (var fixtureName in Cases) RunIsolated(fixtureName);
-            Console.WriteLine($"PASS {Cases.Length} isolated workbench lifecycle fixtures"); return 0;
+            try { RunIsolated(fixtureName); }
+            catch (Exception ex)
+            {
+                failed.Add(fixtureName);
+                Console.Error.WriteLine($"FAIL {fixtureName}: {ex}");
+            }
         }
-        catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
+        if (failed.Count > 0)
+        {
+            Console.Error.WriteLine($"FAIL {failed.Count}/{Cases.Length} isolated workbench lifecycle fixtures: {string.Join(", ", failed)}");
+            return 1;
+        }
+        Console.WriteLine($"PASS {Cases.Length} isolated workbench lifecycle fixtures");
+        return 0;
     }
 
     private static void RunIsolated(string name)
@@ -186,12 +197,12 @@ internal static partial class Program
                 "Workbench search shortcuts have the wrong modifiers");
             search.Clear();
 
-            var left = (StackPanel)Member(workbench, "_layoutCommands");
-            var right = (StackPanel)Member(workbench, "_rightCommands");
-            Assert(Grid.GetColumn(search) == 1 && Grid.GetColumn(left) == 0 && Grid.GetColumn(right) == 2 &&
-                left.Children.OfType<Button>().Any(b => Equals(b.Content, Strings.Get("WorkbenchArrange"))) &&
+            var left = (Panel)Member(workbench, "_layoutCommands");
+            var right = (Panel)Member(workbench, "_rightCommands");
+            Assert(left.Children.OfType<Button>().Any(b => Equals(b.Content, Strings.Get("WorkbenchArrange"))) &&
                 right.Children.OfType<Button>().Any(b => Equals(b.Content, Strings.Get("WorkbenchClose"))),
-                "Workbench toolbar groups are misplaced or missing their primary commands");
+                "Workbench toolbar is missing its primary commands");
+            await CheckToolbarBounds(workbench);
 
             // A large document and a Todo item after the twelfth preview entry are searchable.
             const string needle = "deep-search-target";

@@ -21,9 +21,9 @@ internal sealed partial class WorkbenchWindow : Window
     private readonly TextBox _search = new() { Width = 220, Margin = new Thickness(8, 4, 8, 4), Padding = new Thickness(8, 4, 8, 4) };
     private readonly TextBlock _status = new() { Margin = new Thickness(20, 6, 20, 8), TextWrapping = TextWrapping.Wrap };
     private readonly TextBlock _zoom = new() { VerticalAlignment = VerticalAlignment.Center, MinWidth = 48, TextAlignment = TextAlignment.Center };
-    private readonly Grid _toolbar = new();
-    private readonly StackPanel _layoutCommands = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Left };
-    private readonly StackPanel _rightCommands = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+    private readonly WorkbenchToolbarPanel _toolbar = new();
+    private readonly WrapPanel _layoutCommands = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Left };
+    private readonly WrapPanel _rightCommands = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
     private readonly Border _toolbarHost = new();
     private readonly List<Button> _chromeButtons = new();
     private readonly Dictionary<int, Scene> _scenes = new();
@@ -77,20 +77,17 @@ internal sealed partial class WorkbenchWindow : Window
         _world.RenderTransform = transform;
         _viewport.Children.Add(_world);
 
-        // Left: layout. Center: search. Right: create and zoom. Equal side columns
-        // keep the search centered in the workbench, not beside the last toolbar button.
+        // Keep search centered on wide windows. The toolbar measures localized commands
+        // before choosing additional rows, so narrow windows never cover their buttons.
         _toolbarHost.CornerRadius = new CornerRadius(10);
         _toolbarHost.BorderThickness = new Thickness(1);
         _toolbarHost.Padding = new Thickness(8, 4, 8, 4);
         _toolbarHost.Margin = new Thickness(16, 14, 16, 0);
         _toolbarHost.HorizontalAlignment = HorizontalAlignment.Stretch;
         _toolbarHost.VerticalAlignment = VerticalAlignment.Top;
-        _toolbar.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
-        _toolbar.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
-        _toolbar.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
-        Grid.SetColumn(_layoutCommands, 0); _toolbar.Children.Add(_layoutCommands);
-        Grid.SetColumn(_search, 1); _toolbar.Children.Add(_search);
-        Grid.SetColumn(_rightCommands, 2); _toolbar.Children.Add(_rightCommands);
+        _toolbar.Children.Add(_layoutCommands);
+        _toolbar.Children.Add(_search);
+        _toolbar.Children.Add(_rightCommands);
         _toolbarHost.Child = _toolbar;
         Panel.SetZIndex(_toolbarHost, 10);
         root.Children.Add(_toolbarHost);
@@ -109,11 +106,11 @@ internal sealed partial class WorkbenchWindow : Window
         _search.KeyDown += (_, e) => { if (e.Key == Key.Enter) { SearchNext(); e.Handled = true; } };
         AddButton("WorkbenchNewNote", () => CreatePaper(PaperTypes.Note), _rightCommands);
         AddButton("WorkbenchNewTodo", () => CreatePaper(PaperTypes.Todo), _rightCommands);
+        InitializeWorkspaceTools();
         AddSymbolButton("-", () => ZoomAt(_scale.ScaleX / 1.2, ViewportCenter), _rightCommands);
         _rightCommands.Children.Add(_zoom);
         AddSymbolButton("+", () => ZoomAt(_scale.ScaleX * 1.2, ViewportCenter), _rightCommands);
         AddButton("WorkbenchClose", Close, _rightCommands);
-        InitializeWorkspaceTools();
         RefreshTheme();
         _viewport.PreviewMouseDown += BeginPan;
         _viewport.PreviewMouseMove += MovePan;

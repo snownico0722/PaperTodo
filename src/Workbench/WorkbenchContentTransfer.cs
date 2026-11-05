@@ -81,8 +81,13 @@ internal static class WorkbenchContentTransfer
             !sourceContent.AsSpan(payload.NoteStart, payload.NoteLength).SequenceEqual(payload.ExpectedText)) return false;
         var separator = targetContent.Length > 0 && !targetContent.EndsWith('\n') ? "\n" : "";
         if ((long)targetContent.Length + separator.Length + payload.NoteLength > PaperWindow.NoteTextMaxLength) return false;
-        sourceAfter = new(sourceContent.Remove(payload.NoteStart, payload.NoteLength), source.Items);
-        targetAfter = new(targetContent + separator + payload.ExpectedText, target.Items);
+        var sourceResult = MarkdownImageReferences.EnsureTrailingImageAnchorLine(
+            sourceContent.Remove(payload.NoteStart, payload.NoteLength));
+        var targetResult = MarkdownImageReferences.EnsureTrailingImageAnchorLine(
+            targetContent + separator + payload.ExpectedText);
+        if (sourceResult.Length > PaperWindow.NoteTextMaxLength || targetResult.Length > PaperWindow.NoteTextMaxLength) return false;
+        sourceAfter = new(sourceResult, source.Items);
+        targetAfter = new(targetResult, target.Items);
         return true;
     }
 }

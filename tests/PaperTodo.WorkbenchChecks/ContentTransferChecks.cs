@@ -94,16 +94,62 @@ internal static partial class Program
             BitmapSource.Create(1, 1, 96, 96, PixelFormats.Bgra32, null, new byte[] { 10, 20, 30, 255 }, 4));
         var reference = MarkdownImageReferences.CreateReference(image.Id);
         sourceBox.Document.Insert(sourceBox.Document.TextLength, "\n" + reference + "\n");
+        var imageSourceBefore = sourceBox.Text;
+        var imageTargetBefore = targetBox.Text;
         sourceBox.Select(sourceBox.Text.IndexOf(reference, StringComparison.Ordinal), reference.Length);
-        Assert(source.TryCreateWorkbenchContentTransfer(out var imagePayload) && controller.TransferWorkbenchContent(imagePayload, "note-b"),
-            "Image paragraph did not move");
+        Assert(source.TryCreateWorkbenchContentTransfer(out var imagePayload), "Image selection did not produce payload");
+        Assert(controller.TransferWorkbenchContent(imagePayload, "note-b"), "Image paragraph did not move");
+        var imageMove = controller.LastWorkbenchContentTransferId;
+        var imageSourceAfter = sourceBox.Text;
+        var imageTargetAfter = targetBox.Text;
         var movedImageId = MarkdownImageReferences.CollectImageIds(targetBox.Text).Single();
         Assert(movedImageId != image.Id && controller.ImageStore.TryGetAsset(movedImageId, out var movedImage) && movedImage.NoteId == "note-b",
             "Moved note image retained the source's asset ownership");
-        Assert(controller.TryUndoWorkbenchContentTransfer(controller.LastWorkbenchContentTransferId) && sourceBox.Text.Contains(reference) &&
-            !targetBox.Text.Contains(movedImageId), "Image move undo lost its original reference");
-        controller.SaveNow(sync: true);
-        var reloaded = StateStore.ReadWorkbenchOverview(store.FilePath)!;
-        Assert(reloaded.Papers.Single(p => p.Id == "note-a").Content == sourceBox.Text, "Cross-paper result did not persist");
+        Assert(imageTargetAfter.EndsWith(Environment.NewLine), "Moved final image is missing its structural caret line");
+        AssertTransferNotesPersisted(controller, store, sourceBox, targetBox, "image move");
+        Assert(controller.TryUndoWorkbenchContentTransfer(imageMove), "Image move undo was rejected at its native boundary");
+        Assert(sourceBox.Text == imageSourceBefore, "Image move undo did not restore the original source text/reference");
+        Assert(targetBox.Text == imageTargetBefore, "Image move undo did not restore the original target text");
+        AssertTransferNotesPersisted(controller, store, sourceBox, targetBox, "image undo");
+        Assert(controller.TryRedoWorkbenchContentTransfer(imageMove), "Image move redo was rejected at its native boundary");
+        Assert(sourceBox.Text == imageSourceAfter && targetBox.Text == imageTargetAfter, "Image move redo changed the normalized text/reference");
+        AssertTransferNotesPersisted(controller, store, sourceBox, targetBox, "image redo");
+
+        // Removing trailing prose can expose an image as the source's final line as well.
+        Assert(controller.TryUndoWorkbenchContentTransfer(imageMove), "Image move second undo failed");
+        sourceBox.Document.Insert(sourceBox.Document.TextLength, "tail");
+        var exposedSourceBefore = sourceBox.Text;
+        var exposedTargetBefore = targetBox.Text;
+        var tailStart = sourceBox.Text.IndexOf(reference, StringComparison.Ordinal) + reference.Length;
+        sourceBox.Select(tailStart, sourceBox.Text.Length - tailStart);
+        Assert(source.TryCreateWorkbenchContentTransfer(out var tailPayload), "Trailing prose did not produce payload");
+        Assert(controller.TransferWorkbenchContent(tailPayload, "note-b"), "Trailing prose did not move");
+        var tailMove = controller.LastWorkbenchContentTransferId;
+        var exposedSourceAfter = exposedSourceBefore[..tailStart] + Environment.NewLine;
+        var exposedTargetAfter = targetBox.Text;
+        Assert(sourceBox.Text == exposedSourceAfter, "Exposed final source image was not normalized before commit");
+        AssertTransferNotesPersisted(controller, store, sourceBox, targetBox, "source image exposure");
+        Assert(controller.TryUndoWorkbenchContentTransfer(tailMove), "Exposed source image undo was rejected");
+        Assert(sourceBox.Text == exposedSourceBefore && targetBox.Text == exposedTargetBefore, "Source image exposure undo did not restore both documents");
+        AssertTransferNotesPersisted(controller, store, sourceBox, targetBox, "source image exposure undo");
+        Assert(controller.TryRedoWorkbenchContentTransfer(tailMove), "Exposed source image redo was rejected");
+        Assert(sourceBox.Text == exposedSourceAfter && targetBox.Text == exposedTargetAfter, "Source image exposure redo changed document text");
+        AssertTransferNotesPersisted(controller, store, sourceBox, targetBox, "source image exposure redo");
+    }
+
+    private static void AssertTransferNotesPersisted(AppController controller, StateStore store,
+        MarkdownTextBox sourceBox, MarkdownTextBox targetBox, string operation)
+    {
+        // Read the synchronous transaction commit directly, without an extra SaveNow that could
+        // conceal a discrepancy between the committed plan and editor normalization.
+        var persisted = StateStore.ReadWorkbenchOverview(store.FilePath)!;
+        Assert(controller.State.Papers.Single(p => p.Id == "note-a").Content == sourceBox.Text,
+            operation + ": source model and editor differ");
+        Assert(controller.State.Papers.Single(p => p.Id == "note-b").Content == targetBox.Text,
+            operation + ": target model and editor differ");
+        Assert(persisted.Papers.Single(p => p.Id == "note-a").Content == sourceBox.Text,
+            operation + ": source disk and editor differ");
+        Assert(persisted.Papers.Single(p => p.Id == "note-b").Content == targetBox.Text,
+            operation + ": target disk and editor differ");
     }
 }

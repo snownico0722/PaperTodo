@@ -1741,7 +1741,8 @@ public sealed partial class MarkdownTextBox : TextEditor
         }
 
         var lastLine = Document.GetLineByOffset(Document.TextLength);
-        if (!MarkdownImageReferences.TryParseReferenceLine(Document.GetText(lastLine), out _))
+        var delimiter = MarkdownImageReferences.TrailingImageAnchorDelimiter(Document.GetText(lastLine));
+        if (delimiter.Length == 0)
         {
             return false;
         }
@@ -1749,7 +1750,7 @@ public sealed partial class MarkdownTextBox : TextEditor
         try
         {
             _isEnsuringImageAnchorLine = true;
-            Document.Insert(Document.TextLength, NewLineTextFor(lastLine));
+            Document.Insert(Document.TextLength, delimiter);
             return true;
         }
         finally

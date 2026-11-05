@@ -76,6 +76,9 @@ internal static partial class Program
             "Redo did not restore the free connection with its original identity");
         Assert(controller.FindPaper("todo-a")!.Items.First().LinkedPaperId == "note-a",
             "Editing free graph links changed an existing Todo business association");
+        InvokeWorkbench(desk, "FitActive");
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        SaveImage(desk, "workbench-graph.png");
 
         controller.SetWorkbenchMaterialCollapsed(root, true);
         controller.SetWorkbenchMaterialCollapsed(child, true);

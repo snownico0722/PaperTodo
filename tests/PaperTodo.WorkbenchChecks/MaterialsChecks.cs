@@ -35,8 +35,9 @@ internal static partial class Program
         Assert(controller.FindWorkbenchMaterial(textId)?.Content == excerpt,
             "Imported excerpt lost its content or line breaks");
 
-        var owner = WorkspaceMaterials.FindOwner(controller.State)!;
-        Assert(owner != null && owner.Type == PaperTypes.Note && !owner.IsVisible,
+        var owner = WorkspaceMaterials.FindOwner(controller.State)
+            ?? throw new InvalidOperationException("Material import did not create its collection note");
+        Assert(owner.Type == PaperTypes.Note && !owner.IsVisible,
             "Materials owner is not a hidden note");
         Assert(controller.State.Papers.Count(p => p.WorkspaceMaterials != null) == 1,
             "Import created more than one materials owner");
@@ -165,6 +166,8 @@ internal static partial class Program
         Assert(controller.FindWorkbenchMaterial(textId)?.Content == fromNote &&
                WorkspaceMaterials.RenderMarkdown(owner.WorkspaceMaterials!).Contains(fromNote),
             "Editing the collection note did not update the material and export projection");
+        ownerWindow.UpdateLayout();
+        SaveImage(ownerWindow, "workspace-materials-note.png");
         var ownerGeometry = Geometry(owner);
         controller.ToggleWorkbench();
         desk = (WorkbenchWindow)Member(controller, "_workbenchWindow");
