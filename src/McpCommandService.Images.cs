@@ -9,6 +9,7 @@ internal sealed partial class McpCommandService
     internal const int MaxBase64ImageBytes = 4 * 1024 * 1024;
     internal const int MaxBase64ImageCharacters = ((MaxBase64ImageBytes + 2) / 3) * 4;
 
+    // Internal named-pipe operation used by --import-note-image; not a public MCP tool.
     private object InsertNoteImage(JsonElement parameters)
     {
         RequireAdditiveWrites();
