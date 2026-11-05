@@ -844,6 +844,14 @@ internal sealed partial class WorkbenchWindow : Window
         var open = NewButton(Strings.Get("WorkbenchOpenWorkspace"));
         open.Click += async (_, _) => await ActivateWorkspaceAsync(workspace, paper.Id);
         preview.Children.Add(open); card.Body.Child = preview;
+        // When an inactive workspace card is folded, its body/open button is hidden.
+        // The remaining title strip must still let the user enter that workspace.
+        card.Frame.MouseLeftButtonUp += async (_, e) =>
+        {
+            if (paper.Placement?.Collapsed != true) return;
+            e.Handled = true;
+            await ActivateWorkspaceAsync(workspace, paper.Id);
+        };
         return card;
     }
 
