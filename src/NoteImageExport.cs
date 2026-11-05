@@ -25,6 +25,8 @@ internal sealed record NoteImageArtifact(DrawingGroup Drawing, double Height, in
 
 internal sealed record NoteImageSource(BitmapSource Bitmap, int NaturalWidth);
 
+internal enum NoteImageFormat { Jpeg, Png }
+
 internal static class NoteImageExport
 {
     private static readonly MarkdownPipeline Pipeline = CreatePipeline();
@@ -80,13 +82,37 @@ internal static class NoteImageExport
         return new NoteImageSource(bitmap, asset.Width);
     }
 
-    internal static void Save(string path, NoteImageArtifact artifact, CancellationToken cancellation) =>
-        NotePortableExport.SaveAtomic(path, stream => Write(stream, artifact, cancellation));
+    internal static void Save(string path, NoteImageArtifact artifact, CancellationToken cancellation,
+        NoteImageFormat format = NoteImageFormat.Jpeg)
+    {
+        if (format == NoteImageFormat.Png)
+            NotePortableExport.SaveAtomic(path, stream => Write(stream, artifact, cancellation));
+        else
+            NotePortableExport.SaveAtomicFile(path, tempPath => WriteJpeg(tempPath, artifact, cancellation));
+    }
 
     internal static void Write(Stream stream, NoteImageArtifact artifact, CancellationToken cancellation)
     {
-        // One PNG, streamed in narrow bands: no full-height bitmap, no cropping or silent cap.
+        // Preserve the lossless PNG path.
         using var png = new NoteImagePngWriter(stream, artifact.PixelWidth, artifact.PixelHeight);
+        RenderBands(artifact, cancellation, png.WriteBgrRows);
+        cancellation.ThrowIfCancellationRequested();
+        png.Complete();
+    }
+
+    internal static void WriteJpeg(string path, NoteImageArtifact artifact, CancellationToken cancellation)
+    {
+        cancellation.ThrowIfCancellationRequested();
+        using var jpeg = new NoteImageJpegWriter(path, artifact.PixelWidth, artifact.PixelHeight);
+        RenderBands(artifact, cancellation, jpeg.WriteBgrRows);
+        cancellation.ThrowIfCancellationRequested();
+        jpeg.Complete();
+    }
+
+    private static void RenderBands(NoteImageArtifact artifact, CancellationToken cancellation,
+        Action<byte[], int> writeRows)
+    {
+        // Both formats use bounded strips, never a whole-document bitmap.
         const int bandHeight = 512;
         var stride = checked(artifact.PixelWidth * 3);
         var pixels = new byte[stride * bandHeight];
@@ -108,10 +134,8 @@ internal static class NoteImageExport
             // simply discarding alpha would slightly darken those edge pixels.
             var opaque = new FormatConvertedBitmap(bitmap, PixelFormats.Bgr24, null, 0);
             opaque.CopyPixels(pixels, stride, 0);
-            png.WriteBgrRows(pixels, height);
+            writeRows(pixels, height);
         }
-        cancellation.ThrowIfCancellationRequested();
-        png.Complete();
     }
 
     [Flags]
