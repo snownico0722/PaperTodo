@@ -55,16 +55,27 @@ internal sealed class EdgeCapsuleQueueDropGhost : IDisposable
         };
     }
 
-    internal void ShowAt(MonitorGeometry geometry, string side, double topDip, double widthDip,
-        int count = 1, double gapDip = 0, double? masterWidthDip = null)
+    internal void ShowAt(MonitorGeometry geometry, string side, double topDip,
+        IReadOnlyList<double> slotWidthsDip, double gapDip = 0)
     {
-        if (!double.IsFinite(topDip) || !double.IsFinite(widthDip) || widthDip <= 0)
+        if (!double.IsFinite(topDip) || slotWidthsDip.Count == 0)
         {
             Hide();
             return;
         }
 
-        count = Math.Max(1, count);
+        var requiredWidth = 0d;
+        foreach (var slotWidth in slotWidthsDip)
+        {
+            if (!double.IsFinite(slotWidth) || slotWidth <= 0)
+            {
+                Hide();
+                return;
+            }
+            requiredWidth = Math.Max(requiredWidth, slotWidth);
+        }
+
+        var count = slotWidthsDip.Count;
         gapDip = Math.Max(0, gapDip);
         if (count != _count || Math.Abs(gapDip - _gap) > 0.01)
         {
@@ -106,17 +117,18 @@ internal sealed class EdgeCapsuleQueueDropGhost : IDisposable
             _side = side;
         }
 
-        // An independent stack starts with its own short master. Its slot height
-        // stays unchanged, but its outline must not stretch to the member width.
-        var width = Math.Min(geometry.LocalWorkAreaDip.Width,
-            count == 1 && masterWidthDip is { } onlyMaster
-                ? Math.Max(1, onlyMaster) : Math.Max(Math.Max(34, widthDip), masterWidthDip ?? 0));
-        _silhouette.Width = masterWidthDip is { } masterWidth
-            ? Math.Max(1, Math.Min(width, masterWidth) - EdgeCapsuleLayout.WindowChromeMargin)
-            : double.NaN;
-        _silhouette.HorizontalAlignment = masterWidthDip.HasValue
-            ? side == DeepCapsuleSides.Left ? HorizontalAlignment.Left : HorizontalAlignment.Right
-            : HorizontalAlignment.Stretch;
+        // Widths are those of the real docked capsules. Each outline hugs its
+        // respective screen edge; the shared window is only as wide as the longest.
+        var width = Math.Min(geometry.LocalWorkAreaDip.Width, requiredWidth);
+        var chrome = EdgeCapsuleLayout.WindowChromeMargin;
+        var leftAligned = side == DeepCapsuleSides.Left;
+        for (var i = 0; i < count; i++)
+        {
+            var pill = (Border)_stack.Children[i];
+            pill.Width = Math.Max(1, Math.Min(width, slotWidthsDip[i]) - chrome);
+            pill.HorizontalAlignment = leftAligned ? HorizontalAlignment.Left : HorizontalAlignment.Right;
+        }
+
         var height = count * PaperLayoutDefaults.CapsuleHeight + (count - 1) * gapDip;
         _window.Width = width;
         _window.Height = height;

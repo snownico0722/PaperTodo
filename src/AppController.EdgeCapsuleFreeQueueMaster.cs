@@ -186,13 +186,16 @@ public sealed partial class AppController
         var top = EdgeCapsuleFreeQueuePolicy.GhostSlotTop(
             decision, targetBox.HasMaster, pitch, targetBox.Collapsed);
         _nativeQueueDropGhost ??= new EdgeCapsuleQueueDropGhost();
-        _nativeQueueDropGhost.ShowAt(geometry, side, top,
-            Math.Max(PaperLayoutDefaults.CapsuleWidth, targetBox.WidthDip),
-            decision.Kind == EdgeFreeQueueDropKind.Move
-                ? targetBox.Collapsed ? 1 : layout.Groups[0].PaperIds.Length + 1
-                : layout.Groups[0].PaperIds.Length, DeepCapsuleGap,
-            decision.Kind == EdgeFreeQueueDropKind.Move
-                ? targetBox.WidthDip : null);
+        // The independent ghost includes its master; a merged ghost includes
+        // only the members, each with the width it will have on this edge.
+        var widths = new List<double>(layout.Groups[0].PaperIds.Length + 1);
+        if (decision.Kind == EdgeFreeQueueDropKind.Move)
+            widths.Add(_masterCapsules.TryGetValue(layout.QueueKey, out var master)
+                ? master.DesiredDockedWidth : targetBox.WidthDip);
+        if (decision.Kind != EdgeFreeQueueDropKind.Move || !targetBox.Collapsed)
+            foreach (var id in layout.Groups[0].PaperIds)
+                widths.Add(NativeDropGhostMemberWidth(id, geometry));
+        _nativeQueueDropGhost.ShowAt(geometry, side, top, widths, DeepCapsuleGap);
     }
 
     internal void PreviewFreeMasterQueueDropGhost(

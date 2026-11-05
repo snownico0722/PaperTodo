@@ -4,6 +4,11 @@ public sealed partial class AppController
 {
     private EdgeCapsuleQueueDropGhost? _nativeQueueDropGhost;
 
+    private double NativeDropGhostMemberWidth(string paperId, MonitorGeometry geometry) =>
+        _windows.TryGetValue(paperId, out var window)
+            ? window.DeepCapsuleRestingVisibleWidthFor(geometry)
+            : PaperLayoutDefaults.CapsuleWidth;
+
     private void UpdateNativeQueueDropGhost(NativeEdgeQueueDrag drag, DeviceScreenPoint pointer,
         IReadOnlyList<NativeQueueGroup> groups)
     {
@@ -21,18 +26,16 @@ public sealed partial class AppController
         var collapsedTarget = target?.Box.Collapsed == true;
         var top = EdgeCapsuleFreeQueuePolicy.GhostSlotTop(drop.Decision,
             target?.Box.HasMaster == true, pitch, collapsedTarget);
-        // Each carried member gets a normal-sized marker. Use the actual dragged
-        // capsule width; for folded queues the visible target is the master itself.
-        var ownerWidth = _windows.TryGetValue(drag.OwnerId, out var ownerWindow)
-            ? ownerWindow.DeepCapsuleRestingVisibleWidth : PaperLayoutDefaults.CapsuleWidth;
-        var width = collapsedTarget ? target!.Box.WidthDip : ownerWidth;
-        // An independent group retains (or creates) its own master. A merge
-        // contributes only members to the destination's existing master.
+        // Preview every carried member at its own docked width. Independent
+        // placements prepend their short master; merges only carry members.
         var hasMaster = drop.Decision.Kind == EdgeFreeQueueDropKind.Move && State.UseCapsuleCollapseAll;
-        var slots = drag.CarriedIds.Length + (hasMaster ? 1 : 0);
-        double? masterWidth = hasMaster && _masterCapsules.TryGetValue(drag.SourceKey, out var master)
-            ? master.DesiredDockedWidth : null;
-        _nativeQueueDropGhost?.ShowAt(geometry, side, top, width, slots, DeepCapsuleGap, masterWidth);
+        var widths = new List<double>(drag.CarriedIds.Length + (hasMaster ? 1 : 0));
+        if (hasMaster)
+            widths.Add(_masterCapsules.TryGetValue(drag.SourceKey, out var master)
+                ? master.DesiredDockedWidth : PaperLayoutDefaults.CapsuleWidth);
+        foreach (var id in drag.CarriedIds)
+            widths.Add(NativeDropGhostMemberWidth(id, geometry));
+        _nativeQueueDropGhost?.ShowAt(geometry, side, top, widths, DeepCapsuleGap);
     }
 
     // The only magnetic movement is a repeatable snap to the source's OUTER
