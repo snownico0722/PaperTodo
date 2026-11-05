@@ -16,6 +16,7 @@ internal static partial class Program
         TerminationRejectsQueuedWrites();
         ConflictImagesRemainRecoverable();
         ArchiveFailureNeverCommits();
+        PostCommitRetentionCancellationCannotRejectMerge();
         CorruptLoadsRejectBlankReplacement();
         InterruptedWriteSelectionChecks();
         OrphanedTempImageAndWriteChecks();
@@ -74,6 +75,46 @@ internal static partial class Program
                     File.ReadAllBytes(scope.Store.FilePath + ".tmp").SequenceEqual(aBytes) &&
                     File.ReadAllBytes(scope.Store.BackupPath + ".tmp").SequenceEqual(bBytes),
                 "ambiguous temporary versions were silently chosen or overwritten");
+        }
+        // Complete documents may differ only in whitespace or property layout.
+        // That is ONE full snapshot, not two conflicting revisions, and neither
+        // a per-field merge nor a loss of the compact candidate is acceptable.
+        using (var scope = new Scope())
+        {
+            var pretty = File.ReadAllBytes(scope.Store.FilePath);
+            var compact = Encoding.UTF8.GetBytes(
+                JsonNode.Parse(Encoding.UTF8.GetString(pretty))!.ToJsonString());
+            Require(!pretty.SequenceEqual(compact), "semantic equality fixture lost formatting distinction");
+            File.Delete(scope.Store.FilePath);
+            File.WriteAllBytes(scope.Store.FilePath + ".tmp", pretty);
+            File.WriteAllBytes(scope.Store.BackupPath + ".tmp", compact);
+            var recovered = new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared);
+            var state = recovered.Load(out var empty);
+            Require(!empty && state.Papers[0].Content == "original",
+                "two complete but differently formatted documents were treated as competing versions");
+            recovered.SaveJsonSync(recovered.SerializeState(state), 2);
+            Require(File.Exists(recovered.FilePath) &&
+                    !File.Exists(scope.Store.FilePath + ".tmp") &&
+                    !File.Exists(scope.Store.BackupPath + ".tmp") &&
+                    !Directory.GetFiles(scope.DirectoryPath, "*.orphaned.*.tmp").Any(),
+                "semantically equivalent temporary documents were not both retired after full restore");
+        }
+
+        // Unknown properties still belong to the complete JSON document.
+        // A difference there cannot be ignored by comparing only AppState fields.
+        using (var scope = new Scope())
+        {
+            var first = scope.Read();
+            var second = scope.Read();
+            first["futureExtension"] = "revision-one";
+            second["futureExtension"] = "revision-two";
+            File.Delete(scope.Store.FilePath);
+            File.WriteAllText(scope.Store.FilePath + ".tmp", first.ToJsonString());
+            File.WriteAllText(scope.Store.BackupPath + ".tmp", second.ToJsonString());
+            var recovered = new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared);
+            Throws<InvalidDataException>(() => recovered.Load());
+            Require(!File.Exists(recovered.FilePath),
+                "two full documents with different unknown properties were silently merged");
         }
         Console.WriteLine("PASS unique interrupted writes auto-restore, ambiguous versions stop safely");
     }
@@ -243,6 +284,35 @@ internal static partial class Program
         store.SaveJsonSync(store.SerializeState(memory), 3);
         Require(Str(s.Read()["papers"]![0]!["content"]) == "local recovery value",
             "failed explicit archive blocked an unrelated ordinary save");
+    }
+
+    private static void PostCommitRetentionCancellationCannotRejectMerge()
+    {
+        using var scope = new Scope();
+        var lifetime = new PersistenceWriteLifetime();
+        var writer = new DurableAtomicFileWriter((stage, target) =>
+        {
+            // Simulate system termination exactly AFTER the main atomic replace,
+            // but BEFORE the optional conflict archive retention scan.
+            if (stage == DurableAtomicWriteStage.AfterReplace &&
+                string.Equals(target, scope.Store.FilePath, StringComparison.Ordinal))
+                lifetime.Stop();
+        });
+        var store = new StateStore(scope.DirectoryPath, writer) { WriteLifetime = lifetime };
+        var memory = store.Load();
+        memory.Papers[0].Content = "committed local selection";
+        var external = scope.Read();
+        external["papers"]![0]!["content"] = "rejected incoming selection";
+        scope.Write(external);
+        var preview = store.PreviewExternalMerge(memory, 2, scope.BaselineJson);
+        Require(preview.State != null && preview.Conflicts is { Count: 1 },
+            "postcommit termination fixture never reached a real merge conflict");
+        var files = store.CommitExternalMerge(
+            ResolvePreview(preview, ConflictChoice.KeepMemory), preview.ObservedDiskJson!, 2);
+        Require(Str(scope.Read()["papers"]![0]!["content"]) == "committed local selection" &&
+                files.ConflictFile != null && files.ConflictDiffFile != null,
+            "shutdown cancellation after commit caused a false merge failure or data rollback");
+        Console.WriteLine("PASS committed merge survives shutdown during optional archive cleanup");
     }
 
     private static void PluginExitFailureRetainsDirtyData()

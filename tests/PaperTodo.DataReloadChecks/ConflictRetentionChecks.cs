@@ -67,6 +67,72 @@ internal static partial class Program
                 "aged excess groups were not pruned as whole original/diff pairs");
         }
 
+        // A crashed write may leave just one half of a conflict pair or
+        // a temporary file. Neither counts toward the five COMPLETE records.
+        using (var scope = new Scope())
+        {
+            var old = Enumerable.Range(0, 5)
+                .Select(i => Group(scope.DirectoryPath, now, 15 - i, i + 1)).ToArray();
+            var partial = Group(scope.DirectoryPath, now, 20, 19);
+            File.Delete(partial.Diff);
+            var interrupted = Path.Combine(scope.DirectoryPath,
+                $"dataconflict-{now.AddDays(-22):yyyyMMddHHmmssfff}-00000020.diff.json.tmp");
+            File.WriteAllText(interrupted, "{unfinished");
+            scope.Store.TryPruneConflictArchives(now);
+            Require(old.All(pair => File.Exists(pair.Original) && File.Exists(pair.Diff)) &&
+                    File.Exists(partial.Original) && File.Exists(interrupted),
+                "incomplete records consumed full-group retention slots or were treated as completed data");
+        }
+
+        // Even with excess complete pairs, an additional incomplete record must
+        // not change the age-ordered number of whole pairs that survive.
+        using (var scope = new Scope())
+        {
+            var old = Enumerable.Range(0, 6)
+                .Select(i => Group(scope.DirectoryPath, now, 15 - i, i + 1)).ToArray();
+            var orphan = Group(scope.DirectoryPath, now, 22, 19);
+            File.Delete(orphan.Diff);
+            scope.Store.TryPruneConflictArchives(now);
+            Require(!File.Exists(old[0].Original) && !File.Exists(old[0].Diff) &&
+                    old.Skip(1).All(pair => File.Exists(pair.Original) && File.Exists(pair.Diff)) &&
+                    File.Exists(orphan.Original),
+                "an incomplete group caused too many complete recovery records to be deleted");
+        }
+
+        // Two files do not automatically make a usable *complete* archive.
+        // An unreadable original or malformed diff cannot evict good pairs.
+        using (var scope = new Scope())
+        {
+            var old = Enumerable.Range(0, 5)
+                .Select(i => Group(scope.DirectoryPath, now, 15 - i, i + 1)).ToArray();
+            var invalid = Group(scope.DirectoryPath, now, 20, 19);
+            File.WriteAllText(invalid.Diff, "{incomplete diff");
+            scope.Store.TryPruneConflictArchives(now);
+            Require(old.All(pair => File.Exists(pair.Original) && File.Exists(pair.Diff)) &&
+                    File.Exists(invalid.Original) && File.Exists(invalid.Diff),
+                "an invalid conflict pair incorrectly displaced one of five usable whole records");
+        }
+
+        // A locked archive cannot be verified as a complete recovery pair.
+        // Do not delete other healthy records just to satisfy the count.
+        using (var scope = new Scope())
+        {
+            var old = Enumerable.Range(0, 6)
+                .Select(i => Group(scope.DirectoryPath, now, 20 - i, i + 1)).ToArray();
+            using (var locked = new FileStream(old[0].Original,
+                FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+            {
+                scope.Store.TryPruneConflictArchives(now);
+                Require(old.All(pair => File.Exists(pair.Original) && File.Exists(pair.Diff)),
+                    "an inaccessible archive caused deletion of another complete record");
+            }
+            // When access returns, exactly one eligible complete pair is retired.
+            scope.Store.TryPruneConflictArchives(now);
+            Require(!File.Exists(old[0].Original) && !File.Exists(old[0].Diff) &&
+                    old.Skip(1).All(pair => File.Exists(pair.Original) && File.Exists(pair.Diff)),
+                "retention failed to prune precisely one group after the lock was released");
+        }
+
         Console.WriteLine("PASS conflict retention requires both age and count; pairs and workspaces stay isolated");
     }
 }

@@ -1,16 +1,23 @@
 using System.Globalization;
 using System.IO;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace PaperTodo;
 
 public sealed partial class StateStore
 {
-    private sealed record ConflictArchiveGroup(
-        string Key, DateTime CreatedUtc, List<string> Files);
+    private sealed class ConflictArchiveGroup(string key, DateTime createdUtc)
+    {
+        internal string Key { get; } = key;
+        internal DateTime CreatedUtc { get; } = createdUtc;
+        internal string? OriginalPath { get; set; }
+        internal string? DiffPath { get; set; }
+        internal bool IsComplete => OriginalPath != null && DiffPath != null;
+    }
 
-    // One conflict means one *group*: original JSON + diff JSON. The product
-    // policy is an intersection, not two independent upper bounds. Young records
-    // are never removed just because there are more than five.
+    // An archive is ONE completed (original,diff) pair. Incomplete fragments
+    // must never force eviction of a complete, still-recoverable pair.
     internal void TryPruneConflictArchives(DateTime utcNow)
     {
         try
@@ -21,7 +28,7 @@ public sealed partial class StateStore
         }
         catch (OperationCanceledException)
         {
-            // Shutdown has already stopped persistence maintenance.
+            // Shutdown has already stopped maintenance.
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -30,75 +37,117 @@ public sealed partial class StateStore
         }
     }
 
-    // The merge caller already holds _writeLock.
+    // Caller may already hold the StateStore write lock (explicit merge).
     private void PruneConflictArchivesCore(DateTime utcNow)
     {
         WriteLifetime.ThrowIfStopped();
         var directory = Path.GetDirectoryName(FilePath)!;
         if (!Directory.Exists(directory)) return;
+
         var groups = new Dictionary<string, ConflictArchiveGroup>(StringComparer.Ordinal);
         foreach (var path in Directory.EnumerateFiles(directory, ConflictFilePrefix + "*"))
         {
-            if (!TryParseConflictArchiveName(Path.GetFileName(path), out var key, out var created))
+            if (!TryParseConflictArchiveName(Path.GetFileName(path),
+                    out var key, out var created, out var isDiff))
                 continue;
             if (!groups.TryGetValue(key, out var group))
-            {
-                group = new ConflictArchiveGroup(key, created, []);
-                groups.Add(key, group);
-            }
-            group.Files.Add(path);
+                groups.Add(key, group = new ConflictArchiveGroup(key, created));
+            if (isDiff) group.DiffPath = path;
+            else group.OriginalPath = path;
         }
 
-        var remaining = groups.Count;
+        // A pair of filenames with damaged contents is not a complete recovery
+        // record. Do not allow such a pair to evict five genuinely usable ones.
+        var paired = groups.Values.Where(group => group.IsComplete).ToArray();
+        if (paired.Length <= 5 ||
+            paired.All(group => utcNow - group.CreatedUtc <= TimeSpan.FromDays(3)))
+            return; // No deletions possible: do not parse large young archives at startup.
+        var complete = paired.Where(IsUsableCompleteConflictGroup)
+            .OrderBy(group => group.CreatedUtc)
+            .ThenBy(group => group.Key, StringComparer.Ordinal).ToArray();
+        var remaining = complete.Length;
         if (remaining <= 5) return;
-        foreach (var group in groups.Values
-                     .OrderBy(group => group.CreatedUtc)
-                     .ThenBy(group => group.Key, StringComparer.Ordinal))
+
+        // The policy is AND: older than 3 days AND more than 5 complete groups.
+        foreach (var group in complete)
         {
             if (remaining <= 5 || utcNow - group.CreatedUtc <= TimeSpan.FromDays(3))
                 break;
             try
             {
-                foreach (var path in group.Files)
-                {
-                    WriteLifetime.ThrowIfStopped();
-                    File.Delete(path);
-                }
+                WriteLifetime.ThrowIfStopped();
+                // Remove the diff first. If the second deletion fails, the full
+                // original document remains readable instead of a diff-only stub.
+                File.Delete(group.DiffPath!);
+                WriteLifetime.ThrowIfStopped();
+                File.Delete(group.OriginalPath!);
                 remaining--;
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 System.Diagnostics.Trace.TraceWarning(
-                    "Could not retire conflict group {0}: {1}", group.Key, ex);
-                // A partially deleted pair is still one group until next maintenance.
+                    "Could not retire complete conflict group {0}: {1}", group.Key, ex);
+                // A partially removed pair is no longer a complete group.
+                // Stop instead of evicting another valid recovery point.
+                break;
             }
         }
     }
 
+    private bool IsUsableCompleteConflictGroup(ConflictArchiveGroup group)
+    {
+        if (!group.IsComplete) return false;
+        try
+        {
+            var originalJson = DecodeStateBytes(File.ReadAllBytes(group.OriginalPath!));
+            var original = JsonNode.Parse(
+                originalJson, documentOptions: StateJsonReadPolicy.DocumentOptions)
+                as JsonObject ?? throw new JsonException("Incomplete conflict original.");
+            ValidateExternalDocument(original);
+            _ = ReadCoreState(originalJson)
+                ?? throw new JsonException("Conflict original is not a complete state.");
+            return TryAddConflictImageReferences(
+                File.ReadAllText(group.DiffPath!), new HashSet<string>(StringComparer.Ordinal));
+        }
+        catch (Exception ex) when (ex is JsonException or ArgumentException)
+        {
+            return false; // Broken record: never count it as a recoverable whole.
+        }
+    }
+
     private bool TryParseConflictArchiveName(
-        string filename, out string key, out DateTime createdUtc)
+        string filename, out string key, out DateTime createdUtc, out bool isDiff)
     {
         key = "";
         createdUtc = default;
+        isDiff = false;
         if (!filename.StartsWith(ConflictFilePrefix, StringComparison.Ordinal))
             return false;
+
         var remainder = filename[ConflictFilePrefix.Length..];
-        foreach (var extension in new[] { ".diff.json.tmp", ".diff.json", ".json.tmp", ".json" })
+        // .tmp files are uncommitted writes, not finished conflict records.
+        string candidate;
+        if (remainder.EndsWith(".diff.json", StringComparison.Ordinal))
         {
-            if (!remainder.EndsWith(extension, StringComparison.Ordinal)) continue;
-            var candidate = remainder[..^extension.Length];
-            // Current archive suffix: 17 UTC digits, hyphen, 8 hex characters.
-            if (candidate.Length != 26 || candidate[17] != '-' ||
-                !candidate.AsSpan(18).ToString().All(Uri.IsHexDigit))
-                return false;
-            if (!DateTime.TryParseExact(candidate[..17], "yyyyMMddHHmmssfff",
-                    CultureInfo.InvariantCulture,
-                    DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
-                    out createdUtc))
-                return false;
-            key = candidate;
-            return true;
+            candidate = remainder[..^".diff.json".Length];
+            isDiff = true;
         }
-        return false;
+        else if (remainder.EndsWith(".json", StringComparison.Ordinal))
+        {
+            candidate = remainder[..^".json".Length];
+        }
+        else return false;
+
+        // Current archive suffix: 17 UTC digits, hyphen, eight hexadecimal chars.
+        if (candidate.Length != 26 || candidate[17] != '-' ||
+            !candidate.AsSpan(18).ToString().All(Uri.IsHexDigit))
+            return false;
+        if (!DateTime.TryParseExact(candidate[..17], "yyyyMMddHHmmssfff",
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                out createdUtc))
+            return false;
+        key = candidate;
+        return true;
     }
 }

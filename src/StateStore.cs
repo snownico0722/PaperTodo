@@ -89,14 +89,15 @@ public sealed partial class StateStore
         {
             var first = candidates[0];
             if (candidates.Any(candidate =>
-                    !first.Bytes.AsSpan().SequenceEqual(candidate.Bytes)))
+                    !System.Text.Json.Nodes.JsonNode.DeepEquals(first.Document, candidate.Document)))
                 throw new InvalidDataException(
                     "Several different complete interrupted-write files exist for this workspace. " +
                     "Automatic recovery cannot safely select one; no files were overwritten.");
 
             _pendingStartupRecovery = PendingStartupRecovery.FromTemporary(
                 first.Path, first.Bytes, primaryBytes,
-                candidates.Select(candidate => candidate.Path).ToArray());
+                candidates.Select(candidate => (candidate.Path,
+                    SHA256.HashData(candidate.Bytes))).ToArray());
             NeedsStartupRecoverySave = true;
             return first.State;
         }
@@ -331,8 +332,12 @@ public sealed partial class StateStore
                 primaryBytes.AsSpan().SequenceEqual(backupBytes))
                 return true;
 
-            // The verified committed primary supersedes any abandoned backup .tmp.
-            // No extra long-lived archive is needed before refreshing this backup.
+            // A complete interrupted backup snapshot can be different from the
+            // committed primary. Preserve that full alternative before the fixed
+            // temporary name is reused; incomplete fragments are not salvaged.
+            PreserveDistinctTemporarySource(
+                BackupPath + ".tmp", DecodeStateBytes(primaryBytes),
+                WriteLifetime.ThrowIfStopped);
             _atomicWriter.Write(
                 BackupPath,
                 primaryBytes,
@@ -356,6 +361,9 @@ public sealed partial class StateStore
         }
         ValidateWrite();
         PreparePendingStartupRecoveryForSave(ValidateWrite);
+        // Backup recovery or a healthy primary may coexist with a complete,
+        // uncommitted primary temp. Never truncate a DISTINCT full snapshot.
+        PreserveDistinctTemporarySource(FilePath + ".tmp", json, ValidateWrite);
         var bytes = Encoding.UTF8.GetBytes(json);
         _atomicWriter.Write(FilePath, bytes, beforeReplace: ValidateWrite);
         CompletePendingStartupRecovery(bytes);

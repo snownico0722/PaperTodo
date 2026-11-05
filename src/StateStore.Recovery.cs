@@ -13,11 +13,11 @@ public sealed partial class StateStore
         internal byte[] SourceHash { get; }
         internal byte[]? ExpectedPrimaryHash { get; }
         internal bool IsTemporary { get; }
-        internal List<string> EquivalentTempPaths { get; }
+        internal List<(string Path, byte[] Hash)> EquivalentTempPaths { get; }
 
         private PendingStartupRecovery(
             string sourcePath, byte[] sourceBytes, byte[]? originalPrimary,
-            bool fromTemporary, IEnumerable<string> equivalentTempPaths)
+            bool fromTemporary, IEnumerable<(string Path, byte[] Hash)> equivalentTempPaths)
         {
             SourcePath = sourcePath;
             SourceHash = SHA256.HashData(sourceBytes);
@@ -31,7 +31,8 @@ public sealed partial class StateStore
             new(path, backupBytes, originalPrimary, false, []);
 
         internal static PendingStartupRecovery FromTemporary(
-            string path, byte[] tempBytes, byte[]? originalPrimary, string[] equivalentPaths) =>
+            string path, byte[] tempBytes, byte[]? originalPrimary,
+            (string Path, byte[] Hash)[] equivalentPaths) =>
             new(path, tempBytes, originalPrimary, true, equivalentPaths);
     }
 
@@ -52,29 +53,85 @@ public sealed partial class StateStore
 
     private bool HasInterruptedWriteFiles() => InterruptedWritePaths().Length != 0;
 
-    private List<(string Path, byte[] Bytes, AppState State)> FindValidInterruptedWrites()
+    private sealed record CompleteInterruptedWrite(
+        string Path, byte[] Bytes, JsonObject Document, AppState State);
+
+    // This is full-snapshot validation, not extraction or merging. Unknown JSON
+    // properties stay in Document and participate in equality comparisons.
+    private bool TryReadCompleteDocument(
+        byte[] bytes, out JsonObject? document, out AppState? state)
     {
-        var valid = new List<(string, byte[], AppState)>();
+        document = null;
+        state = null;
+        try
+        {
+            var json = DecodeStateBytes(bytes);
+            var root = JsonNode.Parse(json, documentOptions: StateJsonReadPolicy.DocumentOptions)
+                as JsonObject ?? throw new JsonException("Recovery input must be an object.");
+            ValidateExternalDocument(root);
+            state = ReadLoadDocument(bytes);
+            document = root;
+            return true;
+        }
+        catch (Exception ex) when (ex is JsonException or ArgumentException)
+        {
+            return false; // Invalid whole document: never try to salvage fragments.
+        }
+    }
+
+    private List<CompleteInterruptedWrite> FindValidInterruptedWrites()
+    {
+        var valid = new List<CompleteInterruptedWrite>();
         foreach (var path in InterruptedWritePaths())
         {
-            // Read errors are not corruption. An in-use file must not authorize
-            // an empty replacement or be silently skipped as an obsolete snapshot.
+            // A read error is not evidence of corruption. Do not guess around
+            // a locked or inaccessible candidate when the authority is missing.
             var bytes = File.ReadAllBytes(path);
-            try
-            {
-                var json = DecodeStateBytes(bytes);
-                var root = JsonNode.Parse(json, documentOptions: StateJsonReadPolicy.DocumentOptions)
-                    as JsonObject ?? throw new JsonException("Recovery input must be a JSON object.");
-                ValidateExternalDocument(root); // reject duplicate IDs / malformed array entries
-                var state = ReadLoadDocument(bytes);
-                valid.Add((path, bytes, state));
-            }
-            catch (Exception ex) when (ex is JsonException or ArgumentException)
-            {
-                // Damaged fragments are deliberately not salvaged.
-            }
+            if (TryReadCompleteDocument(bytes, out var document, out var state))
+                valid.Add(new CompleteInterruptedWrite(path, bytes, document!, state!));
         }
         return valid;
+    }
+
+    // Normal saves and backup refresh use fixed .tmp names, even when the last
+    // run left an uncommitted, fully valid snapshot at that path. A differing
+    // *complete* document is recovery evidence, never disposable scratch data.
+    // Moving it within the same directory does not allocate a second backup.
+    private void PreserveDistinctTemporarySource(
+        string tempPath, string committingJson, Action validateWrite)
+    {
+        if (!FileExistsForCollection(tempPath)) return;
+        var bytes = File.ReadAllBytes(tempPath);
+        if (!TryReadCompleteDocument(bytes, out var document, out _))
+            return; // Broken temp is explicitly outside the recovery contract.
+
+        var intended = JsonNode.Parse(
+            committingJson, documentOptions: StateJsonReadPolicy.DocumentOptions);
+        if (JsonNode.DeepEquals(document, intended))
+            return; // Complete duplicate; no need to retain another generation.
+
+        validateWrite();
+        // Validate the read source a second time so a racing writer cannot turn
+        // the selected snapshot into an unchecked replacement.
+        var originalHash = SHA256.HashData(bytes);
+        if (!originalHash.AsSpan().SequenceEqual(ReadFileHash(tempPath)))
+            throw new IOException("The interrupted-write file changed during preservation.");
+        var archived = MoveRecoverySource(tempPath, "orphaned", validateWrite);
+        // Another equivalent temp may be selected as the recovery authority.
+        // Keep the path fingerprint aligned so a successful full restore also
+        // retires this byte-distinct but semantically equivalent source.
+        if (_pendingStartupRecovery is { IsTemporary: true } pending)
+        {
+            for (var i = 0; i < pending.EquivalentTempPaths.Count; i++)
+            {
+                var item = pending.EquivalentTempPaths[i];
+                if (string.Equals(item.Path, tempPath, StringComparison.OrdinalIgnoreCase))
+                    pending.EquivalentTempPaths[i] = (archived, item.Hash);
+            }
+        }
+        System.Diagnostics.Trace.TraceInformation(
+            "Preserved a distinct complete interrupted-write snapshot: {0}",
+            Path.GetFileName(archived));
     }
 
     private static byte[] ReadFileHash(string path)
@@ -112,9 +169,12 @@ public sealed partial class StateStore
         validateWrite();
         var moved = MoveRecoverySource(primaryTemp, "orphaned", validateWrite);
         for (var index = 0; index < pending.EquivalentTempPaths.Count; index++)
-            if (string.Equals(pending.EquivalentTempPaths[index], primaryTemp,
+        {
+            var fingerprint = pending.EquivalentTempPaths[index];
+            if (string.Equals(fingerprint.Path, primaryTemp,
                 StringComparison.OrdinalIgnoreCase))
-                pending.EquivalentTempPaths[index] = moved;
+                pending.EquivalentTempPaths[index] = (moved, fingerprint.Hash);
+        }
         pending.SourcePath = moved;
     }
 
@@ -131,12 +191,11 @@ public sealed partial class StateStore
         _pendingStartupRecovery = null;
         if (!pending.IsTemporary) return; // A fixed backup remains the normal backup.
 
-        foreach (var path in pending.EquivalentTempPaths.Distinct(StringComparer.OrdinalIgnoreCase))
+        foreach (var (path, hash) in pending.EquivalentTempPaths)
         {
             try
             {
-                if (File.Exists(path) &&
-                    pending.SourceHash.AsSpan().SequenceEqual(ReadFileHash(path)))
+                if (File.Exists(path) && hash.AsSpan().SequenceEqual(ReadFileHash(path)))
                     File.Delete(path);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

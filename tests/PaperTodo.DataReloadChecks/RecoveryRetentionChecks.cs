@@ -46,6 +46,82 @@ internal static partial class Program
                 "real LMDB cleanup deleted an automatically restored image");
         }
 
+        // A healthy fixed backup is the full restoration authority, but a
+        // different complete primary temp may be newer. Do not quietly truncate
+        // this alternative when the recovered backup is persisted.
+        foreach (var number in new[] { 1, 2 })
+        {
+            using var scope = new Scope();
+            var seeded = new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared, number);
+            seeded.SaveJsonSync(seeded.SerializeState(NewState()), 1);
+            Require(seeded.TryRefreshBackupFromPrimary(), "fixed backup fixture failed");
+            var alternative = seeded.Load();
+            alternative.Papers[0].Content =
+                "different complete temp " + MarkdownImageReferences.CreateReference("987");
+            var originalTempBytes = Encoding.UTF8.GetBytes(seeded.SerializeState(alternative));
+            File.WriteAllText(seeded.FilePath, "{corrupt committed document");
+            File.WriteAllBytes(seeded.FilePath + ".tmp", originalTempBytes);
+
+            var store = new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared, number);
+            var restored = store.Load(out var empty);
+            Require(!empty && restored.Papers[0].Content == "original",
+                "the fixed backup did not take precedence over an uncommitted temp");
+            store.SaveJsonSync(store.SerializeState(restored), 2);
+            var preserved = Directory.GetFiles(scope.DirectoryPath,
+                Path.GetFileNameWithoutExtension(seeded.FilePath + ".tmp") +
+                ".orphaned.*.tmp");
+            Require(preserved.Length == 1 &&
+                    File.ReadAllBytes(preserved[0]).SequenceEqual(originalTempBytes) &&
+                    !File.Exists(seeded.FilePath + ".tmp") &&
+                    store.Load().Papers[0].Content == "original",
+                "restoring a fixed backup destroyed a distinct, complete primary temp");
+            Require(store.TryCollectProtectedImageIds(restored, out var images) &&
+                    images.Contains("987"),
+                "the preserved distinct full version lost its picture-reference protection");
+        }
+
+        // Even a healthy primary must not silently truncate a different valid
+        // interrupted write when the ordinary save reuses data.json.tmp.
+        using (var scope = new Scope())
+        {
+            var alternative = scope.Store.Load();
+            alternative.Papers[0].Content = "complete but uncommitted local edit";
+            var bytes = Encoding.UTF8.GetBytes(scope.Store.SerializeState(alternative));
+            File.WriteAllBytes(scope.Store.FilePath + ".tmp", bytes);
+            var store = new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared);
+            var healthy = store.Load();
+            Require(healthy.Papers[0].Content == "original",
+                "an uncommitted temporary snapshot replaced a healthy primary");
+            store.SaveJsonSync(store.SerializeState(healthy), 2);
+            Require(Directory.GetFiles(scope.DirectoryPath, "data.json.orphaned.*.tmp")
+                    .Any(path => File.ReadAllBytes(path).SequenceEqual(bytes)) &&
+                    store.Load().Papers[0].Content == "original",
+                "ordinary save overwrote a distinct complete interrupted write");
+        }
+
+        // A backup refresh also owns its own fixed .tmp filename. It must not
+        // truncate a different complete backup temp that survived a prior crash.
+        using (var scope = new Scope())
+        {
+            var alternative = scope.Store.Load();
+            alternative.Papers[0].Content = "older complete interrupted backup";
+            var bytes = Encoding.UTF8.GetBytes(scope.Store.SerializeState(alternative));
+            File.WriteAllBytes(scope.Store.BackupPath + ".tmp", bytes);
+
+            var changed = scope.Store.Load();
+            changed.Papers[0].Content = "latest committed primary";
+            scope.Store.SaveJsonSync(scope.Store.SerializeState(changed), 2);
+            Require(scope.Store.TryRefreshBackupFromPrimary(),
+                "periodic fixed backup refresh did not complete");
+            Require(scope.Store.Load().Papers[0].Content == "latest committed primary" &&
+                    File.Exists(scope.Store.BackupPath) &&
+                    !File.Exists(scope.Store.BackupPath + ".tmp") &&
+                    Directory.GetFiles(scope.DirectoryPath,
+                        "data.backup.json.orphaned.*.tmp")
+                        .Any(path => File.ReadAllBytes(path).SequenceEqual(bytes)),
+                "backup refresh destroyed a distinct complete backup temp");
+        }
+
         // Access failures after Load are not permission to write over the sole
         // complete recovery source. Once the lock releases, retry works in-place.
         foreach (var backupTemp in new[] { false, true })
