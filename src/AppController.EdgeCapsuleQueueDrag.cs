@@ -103,6 +103,13 @@ public sealed partial class AppController
         var groups = NativeQueueGroups(resting);
         drag.Drop = EvaluateNativeEdgeQueueDrop(drag, owner, pointer, ownerTopDip, floating, resting, groups);
         ApplyNativeEdgeQueuePreview(drag, ownerTopDip, floating, resting, groups);
+        if (!drag.WholeQueue && drag.SourceIds.Length == 1 &&
+            _masterCapsules.TryGetValue(drag.SourceKey, out var sourceMaster) && sourceMaster.IsVisible)
+        {
+            CompleteEdgeCapsuleQueueCompositionProxyFor(sourceMaster);
+            sourceMaster.Hide();
+            drag.FloatingMasterHidden = true;
+        }
         UpdateNativeQueueDropGhost(drag, pointer, groups);
         return true;
     }
