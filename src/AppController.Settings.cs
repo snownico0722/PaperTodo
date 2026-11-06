@@ -971,7 +971,7 @@ public sealed partial class AppController
                 enabled,
                 ToggleExperimentalCapsuleMagnetism),
             "TipLabsCapsuleMagnetism"));
-        if (State.UseDeepCapsuleMode)
+        if (State.UseCapsuleMode && State.UseDeepCapsuleMode)
         {
             content.Children.Add(new TextBlock
             {
@@ -2578,7 +2578,7 @@ public sealed partial class AppController
                 !_windows.TryGetValue(paper.Id, out var window) ||
                 window.WindowState == WindowState.Minimized ||
                 window.IsExperimentalTetherPresentationSuppressed ||
-                (State.UseDeepCapsuleMode &&
+                (State.UseCapsuleMode && State.UseDeepCapsuleMode &&
                  window.OccupiesDeepCapsuleSlot) ||
                 window.HasVisibleSurface)
             {
