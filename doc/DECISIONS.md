@@ -81,6 +81,7 @@
 | D-070 | 完整快照按来源顺序恢复，损坏时须用户确认重建 | Accepted | 核心持久化 / 恢复 |
 | D-071 | 有界冲突归档与健康主文件后清理孤立临时文件 | Accepted | 核心持久化 / 归档 |
 | D-072 | 长图体积提示使用排版元数据粗估 | Accepted | Note / 导出性能 |
+| D-073 | Ctrl 整队拖拽归属胶囊自由队列 | Accepted | Edge / 队列 |
 
 ## 维护规则
 
@@ -2046,7 +2047,7 @@ Ctrl selects the payload, never the floating phase. Whole queues first slide alo
 
 The controller owns one queue-level input snapshot and a prospective membership/anchor plan, not another per-paper state machine. All placements use the existing coordinator and typed reducer/presenter. Release reevaluates the same policy as preview. No member identity is written while dragging. Cancellation clears transient feedback rather than restoring stale identities over external operations. The selected destination and explicitly displaced anchors are persisted, not passive hover/display offsets.
 
-Free queues and the master are independent settings. A single master per live edge collects/restores all groups while preserving their identities and anchors. Its docked movement previews an edge-wide rigid translation without writing intermediate positions; its floating transfer preserves grouping rather than flattening the destination. Ctrl works without a master and also when free queues are disabled. Existing overflow remains unpaged.
+Free queues and the master are independent settings. A single master per live edge collects/restores all groups while preserving their identities and anchors. Its docked movement previews an edge-wide rigid translation without writing intermediate positions; its floating transfer preserves grouping rather than flattening the destination. Ctrl works without a master and also when free queues are disabled (the disabled-mode choice is superseded by D-073). Existing overflow remains unpaged.
 
 The native drop feedback is driven by the existing drag callbacks and pooled host movement, not an additional polling timer. The transparent landing marker draws exactly one normal capsule silhouette regardless of how many members Ctrl carries, using the visible target master's width only when the destination is collapsed. In free-queue mode the marker alone previews the prospective destination: unaffected queues and their masters do not shift with pointer movement. The actual local insertion and collision displacement happen on release. The final release samples the physical pointer before committing. The floating cover is established before peers retract; peers return via the existing placement/retraction transitions.
 
@@ -2127,7 +2128,7 @@ The preview should show an available landing rather than make a target continuou
 
 ### Decision
 
-健康主文件优先于健康固定备份；只有二者不可用时才检查完整的写入临时文件与孤立临时文件，按修改时间选最新完整来源，不拼接不同版本。所有自动来源不可用时寻找当前工作区最近的有效历史 ZIP；恢复历史或清空当前编号必须由用户明确选择，关闭提示不表示同意。真正全新、没有旧核心文件的工作区仍自动创建。读取占用、权限等故障不能当作损坏。恢复仍使用现有原子写入、提交前来源验证及提交复读；恢复范围限核心 JSON，不恢复图片或插件数据。设置跟随只读已提交的健康主文件，不隐式触发主区恢复。
+健康主文件优先于健康固定备份；只有二者不可用时才检查完整的写入临时文件与孤立临时文件，按修改时间选最新完整来源，不拼接不同版本。所有自动来源不可用时寻找当前工作区最近的有效历史 ZIP；恢复历史或清空当前编号必须由用户明确选择，关闭提示不表示同意。真正全新、没有旧核心文件的工作区仍自动创建。读取占用、权限等故障不能当作损坏；固定备份读不到时仅由用户选择重试或明确重建，不自动绕过故障搜索更深来源。历史恢复确认前暂停本进程的历史备份计时器并等待已运行的一轮结束，提交或放弃后恢复，不引入长期固定归档。恢复仍使用现有原子写入、提交前来源验证及提交复读；恢复范围限核心 JSON，不恢复图片或插件数据。设置跟随只读已提交的健康主文件，不隐式触发主区恢复。
 
 ### Why
 
@@ -2169,3 +2170,13 @@ The preview should show an available landing rather than make a target continuou
 **验证取舍**：完整精度语料、计时基准和离线拟合属于开发实验。保留运行算法及既有导出/预览行为检查，删除实验脚本、数字样本和专用测算测试，撤销为整套编码实验延长的测试时限；不把粗略提示的参数校准变成常驻验收体系。
 
 **Evidence**：当前入口为 `NoteImageSizeEstimate`、`NoteImageJpegInfo`、`NoteImagePngInfo` 与 `NoteImageExport.Composer`；已删除的实验、数据与来源可从 [bd94266 历史目录](https://github.com/snownico0722/PaperTodo/tree/bd94266cb99d72913335eafefbe55d20669835af/tools/analysis/note-image-size)及同提交的测算测试追溯，[Windows 校准记录](https://github.com/snownico0722/PaperTodo/actions/runs/42120463501)仅作历史证据。旧像素方案在 `b187a149d50fe486590edb7bed6c08b7a0f06df0`，原性能数据见 [Windows CI](https://github.com/snownico0722/PaperTodo/actions/runs/42098466208)。
+
+## D-073 — Ctrl 整队拖拽归属胶囊自由队列
+
+**Status:** Accepted; supersedes D-066 only for Ctrl while free queues are disabled.
+
+**Context / Decision:** Ctrl 整队搬运属于可选的胶囊自由队列功能。关闭后，普通胶囊上的 Ctrl 与普通单颗拖动相同；整侧队列仍由主胶囊搬运。主胶囊保留独立的队列迁移事务，所有模式的浮动移动均刷新同一投影窗口。
+
+**Why:** 功能关闭时不留下另一条隐含整队操作；保留主胶囊和真实纸片各自的状态归属，不为统一手势重建呈现或落位系统。
+
+**Evidence:** `PaperWindow.NativeQueueInteraction.LatchNativeQueueControl`、`AppController.BeginNativeEdgeQueueDrag`、`MasterCapsuleWindow.OnFloatingDragHostLocationChanged`。

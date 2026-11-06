@@ -619,7 +619,7 @@ About 5 full-width characters on one line, 10 on multiline.</value>
     <value>Edge capsules still extend on hover; the extra area acts like the main capsule without a close button. Use Hide in the context menu to close it.</value>
   </data>
   <data name="TipMaxTitleLength" xml:space="preserve">
-    <value>Title length is measured in full-width characters; two half-width letters or digits count as one. Lowering the limit shortens existing titles.</value>
+    <value>CJK and full-width characters count as one; Latin letters, digits and other half-width characters count as half. Lowering the limit only hides the excess of existing titles; raising it reveals them again. Renaming truncates the new title to the current limit.</value>
   </data>
   <data name="TipStartup" xml:space="preserve">
     <value>Start PaperTodo when Windows signs in.</value>
@@ -1670,16 +1670,17 @@ The original note is kept.</value></data>
   <data name="NoteExportNoNotes" xml:space="preserve"><value>There are no Markdown notes or todo papers to export.</value></data>
   <data name="NoteExportProgress" xml:space="preserve"><value>Exporting {0}/{1} papers</value></data>
   <data name="TodoExportCurrent" xml:space="preserve"><value>Export this todo paper</value></data>
-  <data name="SettingsCapsuleFreeQueues" xml:space="preserve"><value>Free edge capsule queues</value></data>
-  <data name="TipCapsuleFreeQueues" xml:space="preserve"><value>Pull a capsule away to form a separate queue. Hold Ctrl to move a queue along the edge; pull sideways to move it across edges or displays. The master can still collect all queues on its edge.</value></data>
+  <data name="SettingsCapsuleFreeQueues" xml:space="preserve"><value>Capsule free queues</value></data>
+  <data name="TipCapsuleFreeQueues" xml:space="preserve"><value>When enabled, pull a capsule away to create a queue; Ctrl or each queue’s master moves the whole queue. Pull sideways to move between edges or monitors. When disabled, Ctrl drags only one capsule; the master can still move the entire edge queue.</value></data>
   <data name="HistoryRecoveryTitle" xml:space="preserve">
     <value>Restore workspace</value>
   </data>
   <data name="HistoryRecoveryMessage" xml:space="preserve">
-    <value>The current data for workspace {0} could not be read.
+    <value>Workspace {0} data cannot be read.
 Latest available backup: {1}.
 
-Restoring will return this workspace to that point in time. Changes made since then will be lost. Only notes, to-dos, and settings in this workspace will be restored. Images and plugin data are not included.</value>
+Restoring returns this workspace to that time; later changes will be lost. Only its notes, tasks and settings are restored, not images or plugin data.
+Choosing “Rebuild workspace” starts the notes, tasks and settings of workspace {0} from scratch.</value>
   </data>
   <data name="HistoryRecoveryRestore" xml:space="preserve">
     <value>Try restoring from backup</value>
@@ -1800,4 +1801,18 @@ Restoring will return this workspace to that point in time. Changes made since t
   <data name="EditorImageExportPng" xml:space="preserve"><value>PNG</value></data>
   <data name="EditorImageExportSaving" xml:space="preserve"><value>Saving…</value></data>
   <data name="EditorImageExportSaved" xml:space="preserve"><value>Image saved</value></data>
+  <data name="WorkspaceRecoveryUnavailableMessage" xml:space="preserve">
+    <value>The data and backups for workspace {0} cannot be restored.
+
+Choosing “Rebuild workspace” starts the notes, tasks and settings of workspace {0} from scratch.</value>
+  </data>
+  <data name="WorkspaceBackupReadFailedMessage" xml:space="preserve">
+    <value>The fixed backup for workspace {0} cannot currently be read.
+{1}
+
+Resolve the file access problem and retry, or choose “Rebuild workspace” to start its notes, tasks and settings from scratch.</value>
+  </data>
+  <data name="SettingsNotesAndTodos" xml:space="preserve"><value>Notes &amp; Todos</value></data>
+  <data name="WorkspaceSingleMessage" xml:space="preserve"><value>There is only one workspace.</value></data>
+  <data name="WorkspaceCreate" xml:space="preserve"><value>New</value></data>
 </root>

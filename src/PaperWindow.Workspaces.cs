@@ -22,7 +22,7 @@ public sealed partial class PaperWindow
         var button = _workspaceButton = IconButton("", "");
         button.Width = 25;
         AutomationProperties.SetAutomationId(button, "WorkspaceCycle");
-        var icon = new Grid { Width = 20, Height = 19, IsHitTestVisible = false };
+        var icon = new Grid { Width = 20, Height = 20, IsHitTestVisible = false };
         var loop = new Path
         {
             Data = Geometry.Parse(WorkspaceCycleIcon.PathData),
@@ -37,19 +37,28 @@ public sealed partial class PaperWindow
         icon.Children.Add(loop);
         _workspaceNumberBadge = new TextBlock
         {
-            FontSize = 8,
+            FontSize = 9,
             FontWeight = FontWeights.SemiBold,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            VerticalAlignment = VerticalAlignment.Bottom,
-            Margin = new Thickness(0, 0, 0, -1)
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
         };
         _workspaceNumberBadge.SetBinding(TextBlock.ForegroundProperty,
             new Binding(nameof(Control.Foreground)) { Source = button });
         icon.Children.Add(_workspaceNumberBadge);
-        button.Content = icon;
+        button.Content = new Viewbox
+        {
+            Width = Math.Round(18 * TopBarIconScale(), 1),
+            Height = Math.Round(18 * TopBarIconScale(), 1),
+            Child = icon
+        };
         button.Click += async (_, _) =>
         {
             if (_controller.IsWorkspaceSwitching) return;
+            if (_controller.WorkspaceOptions.SlotNumbers.Count == 1)
+            {
+                await OfferCreateWorkspaceAsync();
+                return;
+            }
             if (_controller.WorkspaceOptions.TopBarNamePicker)
             {
                 ShowNamedWorkspaceSelector(button);
@@ -68,7 +77,7 @@ public sealed partial class PaperWindow
         if (_workspaceButton == null || IsClosed) return;
         var options = _controller.WorkspaceOptions;
         var number = _controller.WorkspaceNumber;
-        _workspaceButton.Visibility = options.Enabled && options.SlotNumbers.Count > 1 &&
+        _workspaceButton.Visibility = options.Enabled &&
             PaperTopBarShortcuts.Contains(_controller.State, _paper.Type, PaperTopBarShortcuts.Workspace)
                 ? Visibility.Visible : Visibility.Collapsed;
         _workspaceButton.IsEnabled = !_controller.IsWorkspaceSwitching;
@@ -79,7 +88,8 @@ public sealed partial class PaperWindow
             _workspaceNumberBadge.FontFamily = AppTypography.UiFontFamily;
         }
         var next = options.NextSlot(number);
-        _workspaceButton.ToolTip = options.TopBarNamePicker
+        _workspaceButton.ToolTip = options.SlotNumbers.Count == 1
+            ? Strings.Get("WorkspaceSingleMessage") : options.TopBarNamePicker
             ? options.DisplayName(number)
             : Strings.Format("WorkspaceCycleTooltip", number, next);
         AutomationProperties.SetName(_workspaceButton, Strings.Format("WorkspaceCurrent", number));
@@ -97,6 +107,12 @@ public sealed partial class PaperWindow
 
     private MenuItem BuildWorkspaceShortcutMenuItem(ContextMenu menu)
     {
+        if (_controller.WorkspaceOptions.SlotNumbers.Count == 1)
+            return MenuItem(Strings.Get("WorkspaceSettingsTitle"), async (_, _) =>
+            {
+                menu.IsOpen = false;
+                await OfferCreateWorkspaceAsync();
+            });
         if (!_controller.WorkspaceOptions.TopBarNamePicker)
         {
             var next = _controller.WorkspaceOptions.NextSlot(_controller.WorkspaceNumber);
@@ -121,6 +137,19 @@ public sealed partial class PaperWindow
         };
         PopulateNamedWorkspaceChoices(selector, menu);
         return selector;
+    }
+
+    private async System.Threading.Tasks.Task OfferCreateWorkspaceAsync()
+    {
+        // Leave the menu/button input turn before opening a modal dialog.
+        await Dispatcher.Yield(DispatcherPriority.Background);
+        if (IsClosed || _controller.IsWorkspaceSwitching || !_controller.WorkspaceOptions.Enabled ||
+            _controller.WorkspaceOptions.SlotNumbers.Count != 1) return;
+        var owner = IsVisible && PresentationSource.FromVisual(this) != null ? this : null;
+        if (PaperNoticeDialog.ShowChoice(owner, Strings.Get("WorkspaceSettingsTitle"),
+                Strings.Get("WorkspaceSingleMessage"), Strings.Get("CommonCancel"),
+                Strings.Get("WorkspaceCreate")))
+            await _controller.CreateWorkspaceAsync();
     }
 
     // Both top-bar and overflow use the same named-choice handler. Only the placement

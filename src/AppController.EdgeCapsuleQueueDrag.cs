@@ -38,7 +38,7 @@ public sealed partial class AppController
     internal bool BeginNativeEdgeQueueDrag(PaperData owner, bool wholeQueue,
         DeviceScreenPoint pointerDown, bool previewOrigin)
     {
-        if ((!EdgeCapsuleFreeQueuesEnabled && !wholeQueue) || !State.UseCapsuleMode ||
+        if (!EdgeCapsuleFreeQueuesEnabled || !State.UseCapsuleMode ||
             !State.UseDeepCapsuleMode || _nativeEdgeQueueDrag != null) return false;
         var source = NativeQueueGroups().FirstOrDefault(g => g.Key == QueueKey(owner));
         if (source == null) return false;
@@ -58,7 +58,7 @@ public sealed partial class AppController
             OwnerOffsetDip = (ownerIndex + (carriesMaster ? 1 : 0)) * pitch,
             SourceDpiY = source.Geometry.DpiScaleY, PreviewOrigin = previewOrigin
         };
-        if (EdgeCapsuleFreeQueuesEnabled) _nativeQueueDropGhost ??= new EdgeCapsuleQueueDropGhost();
+        _nativeQueueDropGhost ??= new EdgeCapsuleQueueDropGhost();
         return true;
     }
 
@@ -423,4 +423,3 @@ public sealed partial class AppController
         }
     }
 }
-

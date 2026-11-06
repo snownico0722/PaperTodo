@@ -2754,7 +2754,6 @@ public sealed partial class PaperWindow : Window
             {
                 case PaperTopBarShortcuts.Workspace when
                     _controller.WorkspaceOptions.Enabled &&
-                    _controller.WorkspaceOptions.SlotNumbers.Count > 1 &&
                     !IsTopBarCommandVisible(_workspaceButton):
                     menu.Items.Add(BuildWorkspaceShortcutMenuItem(menu));
                     break;
@@ -3897,4 +3896,3 @@ public sealed partial class PaperWindow : Window
     }
 
 }
-

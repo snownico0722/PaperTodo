@@ -92,7 +92,7 @@ public sealed partial class PaperWindow
     {
         var state = _controller.State;
         if (ReferenceEquals(button, _workspaceButton))
-            return _controller.WorkspaceOptions.Enabled && _controller.WorkspaceOptions.SlotNumbers.Count > 1 &&
+            return _controller.WorkspaceOptions.Enabled &&
                 PaperTopBarShortcuts.Contains(state, _paper.Type, PaperTopBarShortcuts.Workspace);
         if (ReferenceEquals(button, _editorModeButton))
             return PaperTopBarShortcuts.Contains(state, _paper.Type, PaperTopBarShortcuts.ExpandedEditor);

@@ -501,8 +501,10 @@ public sealed partial class PaperWindow
         if (IsDeepCapsuleFloatingReordering)
         {
             UpdateEdgeCapsuleDragPointer(currentScreenPos);
-            _controller.PreviewNativeEdgeQueueDrag(_paper, currentScreenPos,
-                NativeQueueLogicalOwnerTop(currentScreenPos, session, floating: true), floating: true);
+            if (!_controller.PreviewNativeEdgeQueueDrag(_paper, currentScreenPos,
+                    NativeQueueLogicalOwnerTop(currentScreenPos, session, floating: true), floating: true))
+                _controller.PreviewSingleCapsuleDropGhost(_paper,
+                    DeepCapsuleDropIndexForCurrentPosition(), currentScreenPos, floating: true);
             return;
         }
 
@@ -532,6 +534,8 @@ public sealed partial class PaperWindow
             return;
         }
         var dropIndex = DeepCapsuleDropIndexForCurrentPosition();
+        _controller.PreviewSingleCapsuleDropGhost(_paper, dropIndex,
+            session.LastScreenPosition, floating: false);
         if (dropIndex == session.PreviewIndex)
         {
             return;
@@ -803,6 +807,7 @@ public sealed partial class PaperWindow
             // it before completing the controller gate, allowing the destination placement to be
             // measured and committed while the floating HWND is still visible.
             _previewOriginReorderBaseline = null;
+            _controller.EndSingleCapsuleDropGhost(_paper.Id);
             _controller.EndNativeEdgeQueueDrag(_paper.Id);
             _nativeQueueWholeRequested = false;
             _nativeQueueClickRevoked = false;
@@ -828,6 +833,7 @@ public sealed partial class PaperWindow
 
     private void CancelDeepCapsuleReorderDrag(bool restoreLayout = false)
     {
+        _controller.EndSingleCapsuleDropGhost(_paper.Id);
         _controller.EndNativeEdgeQueueDrag(_paper.Id);
         _nativeQueueWholeRequested = false;
         var wasReordering = IsDeepCapsuleReordering;
@@ -926,4 +932,3 @@ public sealed partial class PaperWindow
         return Math.Clamp(index, 0, count - 1);
     }
 }
-

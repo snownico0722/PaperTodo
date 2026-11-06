@@ -345,6 +345,8 @@ internal static partial class Program
         next.BindPersistence();
         Require(next.State.Theme == "light" && !next.State.McpEnabled && !next.FollowsMain,
             "unfollow did not restore independent settings");
+        Require(next.State.MaxTitleLength == 2 && next.State.Papers[0].Title == "long title",
+            "reopening with a smaller independent display limit truncated the persisted title");
         var newSlot = catalog.Open(3, catalog.Options);
         Require(newSlot.State.Papers.Count == 1 && newSlot.State.Papers[0].Content.Length == 0 &&
             newSlot.State.Papers[0].Id != main.Papers[0].Id, "new workspace copied main content");
@@ -1042,8 +1044,8 @@ internal static partial class Program
             Require(await controller.CycleWorkspaceAsync() && controller.WorkspaceNumber == 3, "cycle to3 failed");
             Require(await controller.CycleWorkspaceAsync() && controller.WorkspaceNumber == 1, "cycle did not wrap at the last active slot");
 
-            // The tray keeps five fixed positions. Only the first vacant position
-            // shows a vector create action; creating a slot never switches away.
+            // Only existing workspaces and one create action occupy the row.
+            // Creating a slot never switches away and reuses the first missing number.
             ContentPresenter TraySegmentHost(MenuItem item) =>
                 LogicalDescendants((DependencyObject)item.Header).OfType<ContentPresenter>().Single();
             Border[] SegmentTiles(ContentPresenter host) =>
@@ -1071,14 +1073,13 @@ internal static partial class Program
             var originalWorkspaceState = controller.State;
             var threeSlotMenu = TrayForCreate();
             var threeTiles = TraySlots(threeSlotMenu);
-            Require(threeTiles.Length == 5 &&
+            Require(threeTiles.Length == 4 &&
                     ((TextBlock)threeTiles[0].Child).Text == "1" &&
                     ((TextBlock)threeTiles[1].Child).Text == "2" &&
                     ((TextBlock)threeTiles[2].Child).Text == "3" &&
                     threeTiles[3].Child is System.Windows.Shapes.Path { Data: not null } &&
-                    AutomationProperties.GetAutomationId(threeTiles[3]) == "TrayCreateWorkspace" &&
-                    threeTiles[4].Child == null && !threeTiles[4].IsHitTestVisible,
-                "tray did not put a vector create action in the first free slot and leave the rest inert");
+                    AutomationProperties.GetAutomationId(threeTiles[3]) == "TrayCreateWorkspace",
+                "tray must show existing workspaces and one create action without empty slots");
             ClickTraySlot(threeTiles[3]);
             await Until(() => controller.WorkspaceOptions.ContainsSlot(4) && !controller.IsWorkspaceSwitching,
                 "tray plus did not create workspace 4");
@@ -1101,10 +1102,10 @@ internal static partial class Program
             Require(await controller.ChangeWorkspaceConfigurationAsync(withGap),
                 "could not remove an intermediate slot for tray gap test");
             var gapTiles = TraySlots(TrayForCreate());
-            Require(gapTiles[1].Child is System.Windows.Shapes.Path &&
-                    ((TextBlock)gapTiles[2].Child).Text == "3",
+            Require(gapTiles[^1].Child is System.Windows.Shapes.Path &&
+                    ((TextBlock)gapTiles[1].Child).Text == "3",
                 "tray did not offer to reuse the first missing workspace number");
-            ClickTraySlot(gapTiles[1]);
+            ClickTraySlot(gapTiles[^1]);
             await Until(() => controller.WorkspaceOptions.ContainsSlot(2) && !controller.IsWorkspaceSwitching,
                 "tray plus did not reuse the missing workspace number");
             Require(controller.WorkspaceNumber == 1 && ReferenceEquals(controller.State, originalWorkspaceState),
@@ -1115,9 +1116,9 @@ internal static partial class Program
                 AutomationProperties.GetAutomationId(item) == "TrayWorkspaceSelector");
             var segmentHost = TraySegmentHost(selector);
             ClickTraySlot(TraySlots(cancelMenu)[1]);
-            Require(controller.WorkspaceNumber == 1 && segmentHost.Content is StackPanel,
+            Require(controller.WorkspaceNumber == 1,
                 "tray workspace choice switched without confirmation");
-            var cancelActions = ((StackPanel)segmentHost.Content).Children.OfType<Button>().ToArray();
+            var cancelActions = LogicalDescendants((DependencyObject)segmentHost.Content).OfType<Button>().ToArray();
             Require(cancelActions.Length == 2, "tray did not offer switch and cancel actions");
             cancelActions[1].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Require(controller.WorkspaceNumber == 1 && segmentHost.Content is Border,

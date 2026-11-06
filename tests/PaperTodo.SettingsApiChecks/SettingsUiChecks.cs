@@ -78,7 +78,8 @@ internal static partial class Program
         title.State.Papers.Add(new PaperData { Title = "abcdef" });
         SettingsFor(title, () => true, _ => { });
         Invoke(title, "SetMaxTitleLength", 2);
-        Check(title.State.MaxTitleLength == 2 && title.State.Papers[0].Title == "abcd", "UI title changes reuse weighted catalog clamping.");
+        Check(title.State.MaxTitleLength == 2 && title.State.Papers[0].Title == "abcdef" &&
+              title.PaperDisplayTitle(title.State.Papers[0]) == "abcd", "UI title limits only change displayed text.");
         var failed = Controller();
         SettingsFor(failed, () => false, _ => throw new Exception("Failed writes must not publish."));
         Invoke(failed, "ToggleTodoPaperLinks");
@@ -106,8 +107,8 @@ internal static partial class Program
             field.SetValue(c, Activator.CreateInstance(field.FieldType));
         }
         var page = typeof(AppController).GetNestedType("SettingsPage", BindingFlags.NonPublic)!;
-        Field(c, "_settingsPage", Enum.Parse(page, "Note"));
-        var root = (UIElement)Invoke(c, "BuildSettingsSidebarNotePage")!;
+        Field(c, "_settingsPage", Enum.Parse(page, "NotesAndTodos"));
+        var root = (UIElement)Invoke(c, "BuildSettingsSidebarNotesAndTodosPage")!;
         var editor = ReadField<TextBox>(c, "_settingsExternalMarkdownTextBox");
         var window = new Window { Content = root, Width = 900, Height = 640 };
         Field(c, "_settingsWindow", window);

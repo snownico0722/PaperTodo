@@ -6,6 +6,30 @@ namespace PaperTodo;
 
 public sealed partial class AppController
 {
+    private UIElement BuildSettingsSidebarNotesAndTodosPage()
+    {
+        var columns = new Grid { Margin = new Thickness(2, 4, 6, 0) };
+        columns.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        columns.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        columns.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        var note = new StackPanel { Margin = new Thickness(0, 0, 12, 0) };
+        note.Children.Add(SettingsSectionLabel(Strings.Get("PaperKindNote")));
+        note.Children.Add(BuildSettingsSidebarNotePage());
+        columns.Children.Add(note);
+        var divider = new Border
+        {
+            Width = 1, Background = TrayBorderBrush, Opacity = 0.4,
+            Margin = new Thickness(0, 5, 0, 5)
+        };
+        Grid.SetColumn(divider, 1);
+        columns.Children.Add(divider);
+        var todo = BuildSettingsSidebarTodoPage();
+        ((FrameworkElement)todo).Margin = new Thickness(12, 0, 0, 0);
+        Grid.SetColumn(todo, 2);
+        columns.Children.Add(todo);
+        return columns;
+    }
+
     private UIElement BuildSettingsSidebarNotePage()
     {
         var content = new StackPanel

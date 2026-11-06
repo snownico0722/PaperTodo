@@ -584,6 +584,17 @@ public sealed partial class AppController
         }
     }
 
+    // This row fills the menu width established by the other items; neither the
+    // workspace count nor the inline confirmation may widen the popup.
+    private sealed class TrayWorkspaceRow : Grid
+    {
+        protected override Size MeasureOverride(Size constraint)
+        {
+            var desired = base.MeasureOverride(constraint);
+            return new Size(0, desired.Height);
+        }
+    }
+
     private MenuItem TrayWorkspaceSelector(ContextMenu menu)
     {
         var item = new MenuItem
@@ -595,9 +606,8 @@ public sealed partial class AppController
         AutomationProperties.SetAutomationId(item, "TrayWorkspaceSelector");
 
         // One compact row, matching the settings page's rounded numeric segments.
-        var row = new Grid
+        var row = new TrayWorkspaceRow
         {
-            MinWidth = 168,
             Height = 26,
             Margin = new Thickness(3, 0, 3, 0)
         };
@@ -622,11 +632,13 @@ public sealed partial class AppController
 
         void ShowConfirmation(int target)
         {
-            var actions = new StackPanel
+            var actions = new Grid
             {
-                Orientation = Orientation.Horizontal,
                 VerticalAlignment = VerticalAlignment.Center
             };
+            actions.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            actions.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            actions.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             actions.Children.Add(new TextBlock
             {
                 Text = SettingsSidebarLocalized(
@@ -637,6 +649,7 @@ public sealed partial class AppController
                 Foreground = TrayTextBrush,
                 VerticalAlignment = VerticalAlignment.Center,
                 FontSize = AppTypography.Scale(11),
+                TextTrimming = TextTrimming.CharacterEllipsis,
                 Margin = new Thickness(0, 0, 6, 0)
             });
             var confirm = PluginPageButton(SettingsSidebarLocalized(
@@ -659,6 +672,8 @@ public sealed partial class AppController
                 e.Handled = true;
                 ShowChoices();
             };
+            Grid.SetColumn(confirm, 1);
+            Grid.SetColumn(cancel, 2);
             actions.Children.Add(confirm);
             actions.Children.Add(cancel);
             choices.Content = actions;
@@ -668,7 +683,9 @@ public sealed partial class AppController
         {
             var existing = WorkspaceOptions.SlotNumbers.ToHashSet();
             var firstEmpty = Enumerable.Range(2, 4).FirstOrDefault(number => !existing.Contains(number));
-            var segments = Enumerable.Range(1, 5).Select(number => (
+            var numbers = WorkspaceOptions.SlotNumbers.ToList();
+            if (firstEmpty != 0) numbers.Add(firstEmpty);
+            var segments = numbers.Select(number => (
                 Key: number.ToString(System.Globalization.CultureInfo.InvariantCulture),
                 Label: existing.Contains(number) ? number.ToString(UiLanguages.EffectiveCulture) : string.Empty
             )).ToArray();
@@ -683,30 +700,19 @@ public sealed partial class AppController
                         ShowConfirmation(target);
                 });
             var tiles = ((Grid)selector.Child).Children.OfType<Border>().ToArray();
-            for (var number = 1; number <= 5; number++)
+            if (firstEmpty != 0)
             {
-                if (existing.Contains(number)) continue;
-                var tile = tiles[number - 1];
-                if (number == firstEmpty)
-                {
-                    var tooltip = SettingsSidebarLocalized(
-                        "新建工作区", "Create workspace", "ワークスペースを作成", "작업 공간 만들기");
-                    tile.Child = CreateTrayWorkspacePlusIcon();
-                    tile.ToolTip = tooltip;
-                    ToolTipService.SetInitialShowDelay(tile, 300);
-                    AutomationProperties.SetName(tile, tooltip);
-                    AutomationProperties.SetAutomationId(tile, "TrayCreateWorkspace");
-                }
-                else
-                {
-                    tile.Child = null;
-                    tile.IsHitTestVisible = false;
-                    tile.Cursor = Cursors.Arrow;
-                }
+                var tile = tiles[^1];
+                var tooltip = SettingsSidebarLocalized(
+                    "新建工作区", "Create workspace", "ワークスペースを作成", "작업 공간 만들기");
+                tile.Child = CreateTrayWorkspacePlusIcon();
+                tile.ToolTip = tooltip;
+                ToolTipService.SetInitialShowDelay(tile, 300);
+                AutomationProperties.SetName(tile, tooltip);
+                AutomationProperties.SetAutomationId(tile, "TrayCreateWorkspace");
             }
             selector.Margin = new Thickness(0);
             selector.Height = 24;
-            selector.MinWidth = 128;
             choices.Content = selector;
         }
 
@@ -1001,12 +1007,12 @@ public sealed partial class AppController
 
     private FrameworkElement CreateTrayWorkspacePlusIcon() => new System.Windows.Shapes.Path
     {
-        Width = 14,
-        Height = 14,
+        Width = 10,
+        Height = 10,
         Stretch = Stretch.Uniform,
         Data = Geometry.Parse("M 7,1.75 L 7,12.25 M 1.75,7 L 12.25,7"),
         Stroke = TrayTextBrush,
-        StrokeThickness = 1.7,
+        StrokeThickness = 1.2,
         StrokeStartLineCap = PenLineCap.Round,
         StrokeEndLineCap = PenLineCap.Round,
         HorizontalAlignment = HorizontalAlignment.Center,

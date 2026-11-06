@@ -16,18 +16,18 @@
     <!-- .NET 9+ marks Windows apphost/single-file hosts CET-compatible by default. Disable that
          opt-in for PaperTodo to avoid User Shadow Stack startup failures on affected legacy Windows builds. -->
     <CETCompat>false</CETCompat>
-    <Version>4.0.0-beta1</Version>
+    <Version>4.0.0-beta2</Version>
     <AssemblyVersion>4.0.0.0</AssemblyVersion>
     <FileVersion>4.0.0.0</FileVersion>
-    <InformationalVersion>4.0.0-beta1</InformationalVersion>
-    <!-- Keep tray header "PaperTodo v4.0.0-beta1" free of +commit suffixes from SourceLink. -->
+    <InformationalVersion>4.0.0-beta2</InformationalVersion>
+    <!-- Keep tray header "PaperTodo v4.0.0-beta2" free of +commit suffixes from SourceLink. -->
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <ApplicationIcon>assets\PaperTodo.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <PaperTodoLmdbLibrary>$(MSBuildProjectDirectory)\native\lmdb\bin\win-x64\papertodo_lmdb.dll</PaperTodoLmdbLibrary>
     <OutputPath>$(MSBuildProjectDirectory)\输出\PaperTodo-v$(Version)\</OutputPath>
     <SatelliteResourceLanguages>en;ja;ko</SatelliteResourceLanguages>
-    <DefaultItemExcludes>$(DefaultItemExcludes);对比_StickyMD\**;输出\**;PaperTodo_v*\**;.codex_decompile_debug\**;PaperTodo.Plugin.Abstractions\**;plugin-samples\**;plugins\**\.runtime\**;plugins\data\**;plugins\data2\**;plugins\data3\**;plugins\data4\**;plugins\data5\**;tests\**;tools\**;vendor\**;backups\**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);对比_StickyMD\**;输出\**;PaperTodo_v*\**;.codex_decompile_debug\**;PaperTodo.Plugin.Abstractions\**;plugin-samples\**;plugins\**\.runtime\**;plugins\data\**;plugins\data2\**;plugins\data3\**;plugins\data4\**;plugins\data5\**;tests\**;tools\**;vendor\**;PaperTodo-backups\**</DefaultItemExcludes>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(PaperTodoDefaultEnglish)' == 'true'">

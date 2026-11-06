@@ -14,6 +14,11 @@ public sealed partial class PaperWindow
         return DeepCapsuleVisibleWidth(DeepCapsuleSlotDpi().PixelsPerDip);
     }
 
+    internal double DeepCapsuleRestingVisibleWidthFor(MonitorGeometry geometry) =>
+        HoldsDeepCapsuleSlotWhileExpanded
+            ? DeepCapsuleExpandedBodyWidth(geometry) + CapsuleCloseWidth
+            : DeepCapsuleVisibleWidth(geometry.DpiScaleY);
+
     private double DeepCapsuleVisibleWidth(double pixelsPerDip, bool limitTitle = true)
     {
         var pluginContentWidth = PluginCapsuleRequestedContentWidth(pixelsPerDip);

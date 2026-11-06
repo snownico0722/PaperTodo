@@ -240,7 +240,7 @@ public sealed partial class AppController
         State.FullscreenTopmostMode = FullscreenTopmostModes.Avoid;
         State.ShowTopBarNewTodoButton = true;
         State.ShowTopBarNewNoteButton = true;
-        State.ShowTopBarExternalOpenButton = true;
+        State.ShowTopBarExternalOpenButton = false;
         State.TopBarShortcutOrder = PaperTopBarShortcuts.NormalizeOrder(null);
         State.TopBarPinnedCount = 2;
         State.TodoTopBarShortcuts = null;
@@ -264,7 +264,6 @@ public sealed partial class AppController
         State.DeepCapsuleTitleMeasureCharacterLimit = 0;
 
         NormalizePaperSystemVisibilitySettings();
-        ClampPaperTitlesToMaxLength(State.MaxTitleLength);
         SaveNow();
         ApplyGeneralSettingsAfterRestore();
         RefreshEdgeCapsuleHoverIntentRuntime();

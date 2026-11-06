@@ -21,8 +21,7 @@ public sealed partial class AppController
     {
         General,
         Workspaces,
-        Todo,
-        Note,
+        NotesAndTodos,
         Visual,
         Shortcuts,
         Plugins,
@@ -525,14 +524,6 @@ public sealed partial class AppController
 
     private void SetMaxTitleLength(int value) =>
         SetSettingFromUi("title.max_length", PaperTitles.NormalizeMaxTitleLength(value));
-
-    private void ClampPaperTitlesToMaxLength(int maxLength)
-    {
-        foreach (var paper in State.Papers)
-        {
-            paper.Title = PaperTitles.CleanCustomTitle(paper.Title, maxLength);
-        }
-    }
 
     internal void OpenSettingsWindow()
     {
@@ -2812,4 +2803,3 @@ public sealed partial class AppController
     }
 
 }
-
