@@ -794,9 +794,12 @@ internal static class NativeFreeQueueReviewChecks
             Require(Decision().Kind == EdgeFreeQueueDropKind.Insert && Decision().TargetKey == A,
                 "the held capsule entering A selects a merge");
             Near(aTop, masters[A].AnchorTop, "merge uses A's original head, not its previous independent displacement");
-            Require(Field<StackPanel>(ghost, "_stack").Children.Count == 3 &&
-                    double.IsNaN(((Border)Field<StackPanel>(ghost, "_stack").Children[0]).Width),
-                "merge replaces the short source master with member-only ghosts");
+            var mergeGhostStack = Field<StackPanel>(ghost, "_stack");
+            Require(mergeGhostStack.Children.Count == 3 &&
+                    Math.Abs(((Border)mergeGhostStack.Children[0]).Width -
+                        (windows[owner.Id].DeepCapsuleRestingVisibleWidthFor(monitor) -
+                         EdgeCapsuleLayout.WindowChromeMargin)) < .1,
+                "merge replaces the short master with a correctly sized ordinary member ghost");
             Sample(top);
             await Dispatcher.CurrentDispatcher.InvokeAsync(static () => { }, DispatcherPriority.Send);
             Near(landingTop, Decision().TopDip, "returning above recovers the same independent landing");
