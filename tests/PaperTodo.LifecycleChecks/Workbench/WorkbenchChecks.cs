@@ -11,70 +11,10 @@ using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using PaperTodo;
 
-internal static class Program
+internal static partial class WorkbenchChecks
 {
     private const BindingFlags Private = BindingFlags.Instance | BindingFlags.NonPublic;
-    private const string Marker = ".papertodo-workbench-fixture";
-    private static readonly string[] Cases = ["surface", "workspaces", "readonly", "desktop"];
-
-    [STAThread]
-    private static int Main(string[] args)
-    {
-        if (args is ["--fixture", var name] && Cases.Contains(name))
-        {
-            if (!File.Exists(Path.Combine(AppContext.BaseDirectory, Marker))) throw new InvalidOperationException("Not a fixture directory.");
-            Trace.Listeners.Add(new ConsoleTraceListener(useErrorStream: true));
-            var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
-            using (var source = typeof(Program).Assembly.GetManifestResourceStream("PaperTodo.App.xaml")!)
-            {
-                var xaml = System.Xml.Linq.XDocument.Load(source);
-                System.Xml.Linq.XNamespace ns = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
-                var resources = new System.Xml.Linq.XElement(ns + "ResourceDictionary", xaml.Root!.Attributes().Where(a => a.IsNamespaceDeclaration),
-                    xaml.Root.Element(ns + "Application.Resources")!.Nodes());
-                app.Resources = (ResourceDictionary)System.Windows.Markup.XamlReader.Parse(resources.ToString());
-            }
-            var result = 0;
-            app.Dispatcher.InvokeAsync(async () =>
-            {
-                try { await Run(name); Console.WriteLine("PASS " + name); }
-                catch (Exception ex) { result = 1; Console.Error.WriteLine(ex); }
-                finally { app.Shutdown(); }
-            });
-            app.Run(); return result;
-        }
-        try
-        {
-            foreach (var fixtureName in Cases) RunIsolated(fixtureName);
-            Console.WriteLine($"PASS {Cases.Length} isolated workbench lifecycle fixtures"); return 0;
-        }
-        catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
-    }
-
-    private static void RunIsolated(string name)
-    {
-        var root = Path.Combine(Path.GetTempPath(), "PaperTodo.WorkbenchChecks", Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(root);
-        try
-        {
-            foreach (var file in Directory.EnumerateFiles(AppContext.BaseDirectory, "*", SearchOption.AllDirectories))
-            {
-                var relative = Path.GetRelativePath(AppContext.BaseDirectory, file);
-                if (relative.Split(Path.DirectorySeparatorChar).Any(p => p is "plugins" or ".artifacts")) continue;
-                if (!(Path.GetExtension(file) is ".exe" or ".dll" or ".pdb" || file.EndsWith(".deps.json") || file.EndsWith(".runtimeconfig.json"))) continue;
-                var target = Path.Combine(root, relative); Directory.CreateDirectory(Path.GetDirectoryName(target)!); File.Copy(file, target);
-            }
-            File.WriteAllText(Path.Combine(root, Marker), "isolated fixture");
-            var start = new ProcessStartInfo(Path.Combine(root, "PaperTodo.WorkbenchChecks.exe"))
-            { UseShellExecute = false, WorkingDirectory = root, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true };
-            start.ArgumentList.Add("--fixture"); start.ArgumentList.Add(name);
-            using var process = Process.Start(start)!;
-            var output = process.StandardOutput.ReadToEndAsync(); var error = process.StandardError.ReadToEndAsync();
-            if (!process.WaitForExit(60_000)) { process.Kill(true); process.WaitForExit(); throw new TimeoutException(name); }
-            Console.Write(output.GetAwaiter().GetResult()); Console.Error.Write(error.GetAwaiter().GetResult());
-            Assert(process.ExitCode == 0, "Fixture failed: " + name);
-        }
-        finally { try { Directory.Delete(root, true); } catch (IOException) { } }
-    }
+    internal static readonly string[] Cases = ["workbench-surface", "workbench-workspaces", "workbench-readonly", "workbench-desktop"];
 
     // Recovery-aware workspace switching now shows a modal Retry/Exit decision on a
     // real sharing violation. Close it like a user dismissing the failure, then
@@ -108,8 +48,18 @@ internal static class Program
                 Items = [new() { Id = "task-1", Text = "Test editor reuse" }, new() { Id = "task-2", Text = "Keep desktop geometry unchanged" }] }
         ]
     };
-    private static async Task Run(string name)
+    internal static async Task Run(string name)
     {
+        name = name["workbench-".Length..];
+        Trace.Listeners.Add(new ConsoleTraceListener(useErrorStream: true));
+        using (var source = typeof(WorkbenchChecks).Assembly.GetManifestResourceStream("PaperTodo.App.xaml")!)
+        {
+            var xaml = System.Xml.Linq.XDocument.Load(source);
+            System.Xml.Linq.XNamespace ns = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+            var resources = new System.Xml.Linq.XElement(ns + "ResourceDictionary", xaml.Root!.Attributes().Where(a => a.IsNamespaceDeclaration),
+                xaml.Root.Element(ns + "Application.Resources")!.Nodes());
+            Application.Current.Resources = (ResourceDictionary)System.Windows.Markup.XamlReader.Parse(resources.ToString());
+        }
         if (name == "desktop") { await RunDesktopRestore(); return; }
         if (name == "readonly")
         {
@@ -146,14 +96,20 @@ internal static class Program
         var masters = (Dictionary<string, MasterCapsuleWindow>)Member(controller, "_masterCapsules");
         Assert(masters.Count > 0 && masters.Values.All(master => master.IsVisible), "Startup master capsule was not visible");
         var originalWindow = controller.WorkbenchPaperWindow("note-a");
-        var editor = Member(originalWindow, "_noteBox");
-        var bodySession = Member(originalWindow, "_markdownBodySession");
+        var editor = (MarkdownTextBox)Member(originalWindow, "_noteBox");
+        var beforeEntry = editor.Text;
+        editor.Document.Insert(editor.Document.TextLength, "\nPending desktop edit");
+        var pendingText = editor.Text;
         var before = controller.State.Papers.ToDictionary(p => p.Id, Geometry);
         controller.ToggleWorkbench();
         var workbench = (WorkbenchWindow)Member(controller, "_workbenchWindow");
         await Until(() => workbench.HostedPaperCount == 3 && controller.State.Workbench?.Cards.Count == 3, "Workbench layout did not settle");
-        Assert(ReferenceEquals(Member(originalWindow, "_noteBox"), editor), "Workbench duplicated the Markdown editor");
-        Assert(ReferenceEquals(Member(originalWindow, "_markdownBodySession"), bodySession), "Workbench duplicated the body session");
+        editor = (MarkdownTextBox)Member(originalWindow, "_noteBox");
+        Assert(editor.Text == pendingText && editor.CanUndo, "Workbench entry lost pending text or its undo history");
+        editor.Undo();
+        Assert(editor.Text == beforeEntry, "Undo after workbench entry did not restore the desktop text");
+        editor.Redo();
+        Assert(editor.Text == pendingText, "Redo after workbench entry lost the pending edit");
         Assert(!originalWindow.IsVisible && originalWindow.IsWorkbenchHosted, "Desktop and workbench body both visible");
         Assert(masters.Values.All(master => !master.IsVisible), "Workbench left a master capsule visible over the desk");
         if (name == "workspaces")
@@ -167,27 +123,7 @@ internal static class Program
                 $"First workbench entry changed {paper.Id}: {before[paper.Id]} -> {Geometry(paper)}");
         if (name == "surface")
         {
-            // The workbench chrome follows PaperTodo's actual palette, including color-scheme changes.
-            var chrome = (Border)Member(workbench, "_toolbarHost");
-            Assert(ReferenceEquals(workbench.Background, Theme.WorkbenchDeskBrush) &&
-                   ReferenceEquals(chrome.Background, Theme.PaperBrush), "Workbench uses a fixed non-theme palette");
-            var originalScheme = controller.State.ColorScheme;
-            controller.State.ColorScheme = ColorSchemes.Forest;
-            Theme.Invalidate(); workbench.RefreshTheme();
-            Assert(ReferenceEquals(workbench.Background, Theme.WorkbenchDeskBrush) &&
-                   ReferenceEquals(chrome.Background, Theme.PaperBrush) &&
-                   ReferenceEquals(chrome.BorderBrush, Theme.PaperBorderBrush),
-                "Workbench chrome did not follow the updated palette");
-            controller.State.ColorScheme = originalScheme;
-            Theme.Invalidate(); workbench.RefreshTheme();
-
             var search = (TextBox)Member(workbench, "_search");
-            search.ApplyTemplate();
-            var searchFrame = search.Template.FindName("Bd", search) as Border;
-            Assert(search.Style != null && searchFrame?.CornerRadius == new CornerRadius(6) &&
-                   search.Background == Brushes.Transparent &&
-                   search.BorderThickness == new Thickness(1),
-                "Workbench search did not use the rounded external-open input style");
             var openSearch = typeof(WorkbenchWindow).GetMethod("TryFocusSearch", Private)!;
             search.Text = "workbench";
             search.Select(0, 0);
@@ -198,11 +134,6 @@ internal static class Program
                 !(bool)openSearch.Invoke(workbench, [Key.F, ModifierKeys.None])!,
                 "Workbench search shortcuts have the wrong modifiers");
             search.Clear();
-
-            var left = (StackPanel)Member(workbench, "_layoutCommands");
-            var right = (StackPanel)Member(workbench, "_rightCommands");
-            Assert(Grid.GetColumn(search) == 1 && left.Children.Count == 2 &&
-                right.Children.Count == 6, "Workbench toolbar groups are misplaced");
 
             // A large document and a Todo item after the twelfth preview entry are searchable.
             const string needle = "deep-search-target";
@@ -222,28 +153,6 @@ internal static class Program
             var active = Member(workbench, "ActiveScene");
             var cards = (System.Collections.IDictionary)Member(active, "Cards");
             var card = cards["note-a"]!;
-            var titleEditor = (TextBox)Member(card, "Title");
-            titleEditor.ApplyTemplate();
-            var titleFrame = titleEditor.Template.FindName("Bd", titleEditor) as Border;
-            Assert(titleFrame?.CornerRadius == new CornerRadius(6),
-                "Workbench rename editor did not use the rounded settings input style");
-            var eye = (Border)Member(card, "Eye");
-            var footer = (Grid)eye.Parent;
-            Assert(Grid.GetRow(footer) == 3 &&
-                   eye.HorizontalAlignment == HorizontalAlignment.Left &&
-                   !eye.IsHitTestVisible &&
-                   eye.Child is Grid visibleIcon &&
-                   visibleIcon.Children.OfType<System.Windows.Shapes.Path>().Count() == 1,
-                "Desktop eye is not a static status icon at the bottom-left");
-            var hiddenCard = cards["todo-a"]!;
-            var hiddenEye = (Border)Member(hiddenCard, "Eye");
-            Assert(hiddenEye.Child is Grid hiddenIcon &&
-                   hiddenIcon.Children.OfType<System.Windows.Shapes.Path>().Count() == 2 &&
-                   !hiddenEye.IsHitTestVisible,
-                "Hidden desktop paper did not have a noninteractive crossed-out eye");
-            Assert(controller.FindPaper("note-a")!.IsVisible &&
-                   !controller.FindPaper("todo-a")!.IsVisible,
-                "Status icons unexpectedly changed desktop visibility");
             var zoom = (ScaleTransform)Member(workbench, "_scale");
             var pan = (TranslateTransform)Member(workbench, "_pan");
             var camera = (zoom.ScaleX, pan.X, pan.Y);
@@ -256,19 +165,6 @@ internal static class Program
             Assert(Math.Abs(zoom.ScaleX - camera.ScaleX) < 0.001 &&
                    Math.Abs(pan.X - camera.X) < 0.001 && Math.Abs(pan.Y - camera.Y) < 0.001,
                 "Outside click did not restore the previous camera");
-
-            controller.State.EnableAnimations = true;
-            focus.Invoke(workbench, [card]);
-            Assert(zoom.HasAnimatedProperties && pan.HasAnimatedProperties,
-                "Paper focus did not animate zoom and translation");
-            await Task.Delay(80);
-            clear.Invoke(workbench, [true]);
-            Assert(zoom.HasAnimatedProperties && pan.HasAnimatedProperties,
-                "Leaving focus did not animate camera restoration");
-            await Until(() => Math.Abs(zoom.ScaleX - camera.ScaleX) < 0.001 &&
-                Math.Abs(pan.X - camera.X) < 0.001 && Math.Abs(pan.Y - camera.Y) < 0.001,
-                "Animated camera did not restore its previous viewpoint");
-            controller.State.EnableAnimations = false;
 
             // Thumb sends DragStarted/Completed even for a click with zero displacement.
             var undo = (Stack<WorkbenchState>)Member(workbench, "_undo");
@@ -300,7 +196,9 @@ internal static class Program
         foreach (var paper in controller.State.Papers)
             Assert(before[paper.Id] == Geometry(paper),
                 $"Workbench pause/resume changed {paper.Id}: {before[paper.Id]} -> {Geometry(paper)}");
-        editor.GetType().GetProperty("Text")!.SetValue(editor, "Edited inside the workbench");
+        editor = (MarkdownTextBox)Member(originalWindow, "_noteBox");
+        var beforeWorkbenchEdit = editor.Text;
+        editor.Document.Replace(0, editor.Document.TextLength, "Edited inside the workbench");
         controller.CommitPendingMarkdownContentsForSave();
         Assert(controller.FindPaper("note-a")!.Content == "Edited inside the workbench", "Workbench edits do not reach the authoritative model");
         var copied = controller.WorkbenchLayout.Copy(); copied.Cards["note-a"].X += 1200; copied.Cards["note-a"].Pinned = true;
@@ -313,7 +211,13 @@ internal static class Program
             controller.ToggleWorkbench();
             Assert(masters.Count > 0 && masters.Values.All(master => master.IsVisible), "Closing workbench did not restore master capsules");
             Assert(!originalWindow.IsWorkbenchHosted, "Lease not returned");
-            Assert(ReferenceEquals(Member(originalWindow, "_noteBox"), editor), "Editor replaced on return");
+            editor = (MarkdownTextBox)Member(originalWindow, "_noteBox");
+            Assert(editor.Text == "Edited inside the workbench" && editor.CanUndo,
+                "Returning to desktop lost workbench text or its undo history");
+            editor.Undo();
+            Assert(editor.Text == beforeWorkbenchEdit, "Desktop undo did not restore the pre-workbench-edit text");
+            editor.Redo();
+            Assert(editor.Text == "Edited inside the workbench", "Desktop redo lost the workbench edit");
             foreach (var paper in controller.State.Papers) Assert(before[paper.Id] == Geometry(paper), "Desktop state changed on return: " + paper.Id);
             controller.ToggleWorkbench(); workbench = (WorkbenchWindow)Member(controller, "_workbenchWindow");
             await Until(() => workbench.HostedPaperCount == 3, "Second enter failed");

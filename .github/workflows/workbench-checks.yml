@@ -22,7 +22,10 @@ jobs:
         shell: pwsh
         env:
           WORKBENCH_ARTIFACT_DIR: ${{ github.workspace }}/.artifacts/workbench
-        run: ./tools/testing/Run-Checks.ps1 -Group regression -Project WorkbenchLayoutChecks,WorkbenchChecks
+        run: |
+          ./tools/testing/Run-Checks.ps1 -Group regression -Project WorkbenchLayoutChecks
+          dotnet run --project tests/PaperTodo.LifecycleChecks -c Release -- --case 'workbench-*'
+          if ($LASTEXITCODE -ne 0) { throw "Workbench lifecycle checks failed with exit code $LASTEXITCODE" }
       - uses: actions/upload-artifact@v4
         if: always()
         with:
