@@ -13,14 +13,17 @@ internal sealed class WorkspaceCatalog
     private readonly Dictionary<int, StateStore> _stores = new();
     private readonly PersistenceWriteLifetime _writeLifetime = new();
     private readonly Func<StateStore, DateTime?, WorkspaceRecoveryChoice>? _confirmRecovery;
+    private readonly Func<StateStore, Exception, WorkspaceRecoveryChoice>? _confirmBackupReadFailure;
     private AppState? _initialMain;
 
     internal WorkspaceCatalog(string directory, IDurableAtomicFileWriter writer,
-        Func<StateStore, DateTime?, WorkspaceRecoveryChoice>? confirmRecovery = null)
+        Func<StateStore, DateTime?, WorkspaceRecoveryChoice>? confirmRecovery = null,
+        Func<StateStore, Exception, WorkspaceRecoveryChoice>? confirmBackupReadFailure = null)
     {
         _directory = Path.GetFullPath(directory);
         _writer = writer;
         _confirmRecovery = confirmRecovery;
+        _confirmBackupReadFailure = confirmBackupReadFailure;
         _initialMain = LoadWorkspace(StoreFor(1), out _);
         HasConfiguration = _initialMain.Workspaces != null;
         Options = (_initialMain.Workspaces ?? new()).Normalized();
@@ -35,7 +38,8 @@ internal sealed class WorkspaceCatalog
 
     private AppState LoadWorkspace(StateStore store, out bool initializedEmpty) =>
         store.Load(out initializedEmpty, _confirmRecovery == null ? null :
-            timestamp => _confirmRecovery(store, timestamp));
+            timestamp => _confirmRecovery(store, timestamp), _confirmBackupReadFailure == null ? null :
+            error => _confirmBackupReadFailure(store, error));
 
     private AppState ReadMainForSettings()
     {

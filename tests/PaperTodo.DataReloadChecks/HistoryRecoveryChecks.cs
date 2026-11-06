@@ -9,7 +9,7 @@ internal static partial class Program
     private static string WriteHistoryFixture(string directory, DateTime stamp,
         params (string Name, string Json)[] documents)
     {
-        var backups = Path.Combine(directory, "backups");
+        var backups = Path.Combine(directory, "PaperTodo-backups");
         Directory.CreateDirectory(backups);
         var path = Path.Combine(backups,
             "PaperTodo-core-" + stamp.ToString("yyyyMMdd-HHmmss-fffffff", CultureInfo.InvariantCulture) + ".zip");
@@ -288,16 +288,50 @@ internal static partial class Program
                 var target = new StateStore(AppContext.BaseDirectory, DurableAtomicFileWriter.Shared, 2);
                 var archive = WriteHistoryFixture(AppContext.BaseDirectory, DateTime.UtcNow,
                     ("data2.json", target.SerializeState(NewState())));
-                var archiveBytes = File.ReadAllBytes(archive);
                 controller = new AppController();
                 await controller.StartAsync(createDefaultPaper: false);
+                controller.StartCoreHistoryBackupPolicy();
+                var runningBackup = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                typeof(AppController).GetField("_coreHistoryBackupTask", Private)!.SetValue(controller, runningBackup.Task);
+                File.WriteAllText(target.FilePath, "{broken target");
+                var responded = false;
+                Require(await WithWorkspaceFailureDialog(async () =>
+                {
+                    var switching = controller.SwitchWorkspaceAsync(2);
+                    Require(!responded, "recovery selected a source before the running backup finished");
+                    // Model the publication/pruning at the end of the in-flight round.
+                    File.Delete(archive);
+                    archive = WriteHistoryFixture(AppContext.BaseDirectory, DateTime.UtcNow.AddSeconds(-1),
+                        ("data2.json", target.SerializeState(NewState())));
+                    runningBackup.SetResult();
+                    return await switching;
+                }, dialog =>
+                {
+                    responded = true;
+                    ClickFailureAction(dialog, "HistoryRecoveryRestore");
+                }, "HistoryRecoveryTitle"), "recovery did not wait for the in-flight history round");
+                Require(await controller.SwitchWorkspaceAsync(1), "return from in-flight recovery failed");
+
+                // A due history round would evict the selected recent source.
+                foreach (var age in new[] { TimeSpan.FromDays(30), TimeSpan.FromDays(3), TimeSpan.FromHours(6) })
+                    WriteHistoryFixture(AppContext.BaseDirectory, DateTime.UtcNow - age,
+                        ("data2.json", target.SerializeState(NewState())));
+                File.Delete(archive);
+                archive = WriteHistoryFixture(AppContext.BaseDirectory, DateTime.UtcNow.AddMinutes(-20),
+                    ("data2.json", target.SerializeState(NewState())));
+                var archiveBytes = File.ReadAllBytes(archive);
                 foreach (var choice in new[] { WorkspaceRecoveryChoice.Restore, WorkspaceRecoveryChoice.CreateEmpty })
                 {
                     File.WriteAllText(target.FilePath, "{broken target");
                     File.Delete(target.BackupPath);
                     Require(await WithWorkspaceFailureDialog(() => controller.SwitchWorkspaceAsync(2), dialog =>
+                    {
+                        typeof(AppController).GetMethod("OnCoreHistoryTimerTick", Private)!.Invoke(controller, [null, EventArgs.Empty]);
+                        Field<Task>(controller, "_coreHistoryBackupTask").GetAwaiter().GetResult();
+                        Require(File.ReadAllBytes(archive).SequenceEqual(archiveBytes), "history maintenance changed the offered source");
                         ClickFailureAction(dialog, choice == WorkspaceRecoveryChoice.Restore
-                            ? "HistoryRecoveryRestore" : "HistoryRecoveryCreate"), "HistoryRecoveryTitle"),
+                            ? "HistoryRecoveryRestore" : "HistoryRecoveryCreate");
+                    }, "HistoryRecoveryTitle"),
                         "history action failed to enter its target workspace");
                     Require(controller.WorkspaceNumber == 2 && (choice == WorkspaceRecoveryChoice.Restore
                             ? controller.State.Papers[0].Content == "original"
@@ -306,7 +340,55 @@ internal static partial class Program
                     Require(File.ReadAllBytes(archive).SequenceEqual(archiveBytes), "history action changed its source ZIP");
                     Require(await controller.SwitchWorkspaceAsync(1), "return from historical workspace failed");
                 }
-                foreach (var zip in Directory.GetFiles(Path.Combine(AppContext.BaseDirectory, "backups"), "*.zip"))
+
+                // A blocked fixed backup offers user actions, never an automatic fallback.
+                foreach (var choice in new[] { WorkspaceRecoveryChoice.Cancel, WorkspaceRecoveryChoice.Retry,
+                             WorkspaceRecoveryChoice.CreateEmpty })
+                {
+                    File.WriteAllText(target.FilePath, "{broken target");
+                    File.WriteAllText(target.BackupPath, target.SerializeState(NewState()));
+                    using var held = new FileStream(target.BackupPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+                    var entered = await WithWorkspaceFailureDialog(() => controller.SwitchWorkspaceAsync(2), dialog =>
+                    {
+                        var buttons = FailureDialogNodes(dialog).OfType<System.Windows.Controls.Button>();
+                        Require(Equals(buttons.Single(button => button.IsDefault).Content, Strings.Get("WorkspaceFailureRetry")),
+                            "backup read failure did not default to retry");
+                        if (choice == WorkspaceRecoveryChoice.Cancel) dialog.Close();
+                        else
+                        {
+                            if (choice == WorkspaceRecoveryChoice.Retry) held.Dispose();
+                            ClickFailureAction(dialog, choice == WorkspaceRecoveryChoice.Retry ? "WorkspaceFailureRetry" : "HistoryRecoveryCreate");
+                        }
+                    }, "HistoryRecoveryTitle");
+                    Require(entered == (choice != WorkspaceRecoveryChoice.Cancel) &&
+                            (entered ? controller.WorkspaceNumber == 2 : File.ReadAllText(target.FilePath) == "{broken target"),
+                        "backup failure ignored the selected action");
+                    if (entered)
+                    {
+                        Require(choice == WorkspaceRecoveryChoice.Retry
+                                ? controller.State.Papers[0].Content == "original"
+                                : controller.State.Papers.Count == 1 && controller.State.Papers[0].Content != "original",
+                            "retry/rebuild used the wrong contents");
+                        held.Dispose();
+                        Require(await controller.SwitchWorkspaceAsync(1), "return from backup failure action failed");
+                    }
+                }
+                var historyDirectory = Path.Combine(AppContext.BaseDirectory, "PaperTodo-backups");
+                var previousArchives = Directory.GetFiles(historyDirectory, "*.zip").ToHashSet();
+                // Simulate the due time passing while paused, then observe a real ZIP.
+                typeof(AppController).GetField("_coreHistoryBackupDueAt", Private)!
+                    .SetValue(controller, Environment.TickCount64 - 1);
+                Require(await controller.SwitchWorkspaceAsync(2), "overdue history switch failed");
+                var expectedSnapshot = File.ReadAllBytes(target.FilePath);
+                await Until(() => Directory.GetFiles(historyDirectory, "*.zip").Any(path => !previousArchives.Contains(path)),
+                    "overdue history check did not publish a new backup after resuming");
+                await Field<Task>(controller, "_coreHistoryBackupTask");
+                var published = new CoreHistoryBackup(AppContext.BaseDirectory).ReadWorkspaceSnapshots(2)
+                    .Single(snapshot => !previousArchives.Contains(snapshot.ArchivePath));
+                Require(published.Bytes.SequenceEqual(expectedSnapshot),
+                    "resumed history check did not preserve the active workspace snapshot");
+                Require(await controller.SwitchWorkspaceAsync(1), "return after overdue history check failed");
+                foreach (var zip in Directory.GetFiles(historyDirectory, "*.zip"))
                     File.Delete(zip);
                 File.WriteAllText(target.FilePath, "{broken target");
                 File.Delete(target.BackupPath);
@@ -354,8 +436,8 @@ internal static partial class Program
             {
                 (() => PaperNoticeDialog.ShowHistoryRecovery(null, 2, "2026-01-01 12:00"),
                     [create, (WorkspaceRecoveryChoice.Restore, Strings.Get("HistoryRecoveryRestore")), exit]),
-                (() => PaperNoticeDialog.ShowUnavailableWorkspace(null, null), [create, exit]),
-                (() => PaperNoticeDialog.ShowUnavailableWorkspace(null, 3),
+                (() => PaperNoticeDialog.ShowUnavailableWorkspace(null, 2, null), [create, exit]),
+                (() => PaperNoticeDialog.ShowUnavailableWorkspace(null, 2, 3),
                     [create, (WorkspaceRecoveryChoice.Fallback, Strings.Format("WorkspaceRecoveryFallback", 3)), exit])
             };
             foreach (var scenario in dialogs)

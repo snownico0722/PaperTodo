@@ -199,7 +199,7 @@ public sealed partial class StateStore
     private (string ConflictFile, string ConflictDiffFile) ArchiveConflicts(
         StateMergeResolution resolution, byte[] sourceBytes, Action validateSource)
     {
-        var suffix = DateTime.UtcNow.ToString("yyyyMMddHHmmssfff") + "-" +
+        var suffix = DateTime.UtcNow.ToString("yyyyMMddHHmmssfff", System.Globalization.CultureInfo.InvariantCulture) + "-" +
                      Guid.NewGuid().ToString("N")[..8];
         var mainName = ConflictFilePrefix + suffix + ".json";
         var diffName = ConflictFilePrefix + suffix + ".diff.json";
