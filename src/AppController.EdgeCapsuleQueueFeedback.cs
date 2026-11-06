@@ -326,7 +326,8 @@ public sealed partial class AppController
         var side = Side(target.Edge);
         var targetKey = EdgeKey(target.MonitorDeviceName, side);
         var sourceMaster = _masterCapsules.GetValueOrDefault(snapshot.SourceQueueKey);
-        var raiseDrag = sourceMaster?.BringDragWindowAboveGhost;
+        Action? raiseDrag = sourceMaster is { } draggingMaster
+            ? draggingMaster.BringDragWindowAboveGhost : null;
         var topmost = sourceMaster?.DragWindowIsTopmost ?? true;
         _nativeQueueDropGhost ??= new EdgeCapsuleQueueDropGhost();
         if (others.Count > 0 && IsCapsuleCollapseAllActiveForQueue(targetKey) &&
