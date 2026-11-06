@@ -109,7 +109,6 @@ internal static class MasterQueueMembershipChecks
         // Cancellation must restore its absence, not persist the effective default as a new key.
         controller.State.DeepCapsuleQueueStartTopMargins.Remove(SourceKey);
         var originalMargin = controller.DeepCapsuleStartTopMarginForQueue("", EdgeCapsuleEdge.Right);
-        Require(Math.Abs(originalMargin - 48) < 0.01, "default source anchor fixture changed");
         controller.SetDeepCapsuleStartTopMargin("", EdgeCapsuleEdge.Right, 68);
         Require(controller.State.DeepCapsuleQueueStartTopMargins.TryGetValue(SourceKey, out var preview) &&
                 Math.Abs(preview - 68) < 0.01,

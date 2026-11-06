@@ -20,13 +20,16 @@ internal static class Program
         var root = Path.Combine(Path.GetTempPath(), "papertodo-journal-" + Guid.NewGuid().ToString("N"));
         try
         {
-            MemoryAndExport(Path.Combine(root, "export"));
-            LimitsAndDrops(Path.Combine(root, "limits"));
-            ConcurrentOrdering(Path.Combine(root, "parallel"));
-            CompletionContention(Path.Combine(root, "contention"));
-            FailedFlushCanRetry(Path.Combine(root, "failure"));
+            if (CollectionEnabledInBuild)
+            {
+                MemoryAndExport(Path.Combine(root, "export"));
+                LimitsAndDrops(Path.Combine(root, "limits"));
+                ConcurrentOrdering(Path.Combine(root, "parallel"));
+                CompletionContention(Path.Combine(root, "contention"));
+                FailedFlushCanRetry(Path.Combine(root, "failure"));
+            }
             ChildExitScenarios(Path.Combine(root, "child"));
-            Console.WriteLine($"Edge diagnostic journal checks: 6/6 groups, {_assertions} assertions passed.");
+            Console.WriteLine($"Edge diagnostic journal checks: {_assertions} assertions passed ({(CollectionEnabledInBuild ? "Debug buffer and exit" : "Release disabled entry points")}).");
             return 0;
         }
         catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
@@ -193,7 +196,9 @@ internal static class Program
 
     private static void ChildExitScenarios(string directory)
     {
-        foreach (var mode in new[] { "disabled", "uninitialized", "normal", "process-exit" })
+        foreach (var mode in CollectionEnabledInBuild
+                     ? new[] { "disabled", "uninitialized", "normal", "process-exit" }
+                     : new[] { "process-exit" })
         {
             var target = Path.Combine(directory, mode);
             var processPath = Environment.ProcessPath!;

@@ -115,12 +115,12 @@ internal static partial class Program
                 presenter.AppliedPresentation == staleFrame,
                 "Reproduction holds detached model plus unchanged old applied frame without reflection");
             resolveStale = resolveStaleCoverAfterHide;
-            // Match the captured heap's dirty=5: pending Pointer survives a Presentation Flush.
+            // Pending pointer work must survive a presentation-only flush.
             presenter.Invalidate(EdgeCapsuleDirty.Pointer, dispatcher, Reconcile);
             presenter.RequestPresentation(EdgeCapsuleMotion.Snap(EdgeCapsuleTransitionReason.Retraction));
             presenter.Flush(EdgeCapsuleDirty.Presentation, dispatcher, Reconcile);
-            Check(receivedDirty == (EdgeCapsuleDirty.Presentation | EdgeCapsuleDirty.Pointer) &&
-                (int)receivedDirty == 5, "Flush executes the captured Presentation|Pointer dirty combination");
+            Check(receivedDirty == (EdgeCapsuleDirty.Presentation | EdgeCapsuleDirty.Pointer),
+                "Flush processes presentation and pending pointer work together");
             Check(presenter.State.Slot == EdgeCapsuleSlotState.None && !presenter.Placement.IsPlaced &&
                 !presenter.PointerOverSurface && presenter.LastPointerSample == pointer,
                 "Stale hits are physically sampled but cannot contaminate the detached model");

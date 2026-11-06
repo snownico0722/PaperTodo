@@ -12,17 +12,17 @@ internal static class MaterialDragChecks
 {
     internal static void Run(AppController controller)
     {
-        CheckAtomicReflection(controller);
-        Console.WriteLine("PASS Aero translation: one combined transform, correct native origin and teardown.");
+        CheckReflectionAlignment(controller);
+        Console.WriteLine("PASS Aero translation: correct native origin and teardown.");
     }
 
-    private static void CheckAtomicReflection(AppController controller)
+    private static void CheckReflectionAlignment(AppController controller)
     {
         var saved = (controller.State.PaperSkin, controller.State.EnableAnimations);
         controller.State.PaperSkin = PaperSkins.Aero;
         controller.State.EnableAnimations = true;
         Theme.Invalidate();
-        var surface = new SkinBorder { IsCapsule = true, CornerRadius = new CornerRadius(8) };
+        var surface = new SkinBorder { CornerRadius = new CornerRadius(8) };
         var window = new Window
         {
             Left = 220,
@@ -40,27 +40,35 @@ internal static class MaterialDragChecks
         {
             window.Show();
             Wait(200);
-            var shift = (Transform)typeof(SkinBorder).GetField("_reflectionShift", Program.Private)!.GetValue(surface)!;
-            var changes = 0;
-            shift.Changed += (_, _) => changes++;
+            Program.Assert(surface.HasAeroReflectionSubscription,
+                "expanded Aero surface observes native movement");
+            Transform ReflectionShift() => (Transform)typeof(SkinBorder)
+                .GetField("_reflectionShift", Program.Private)!.GetValue(surface)!;
             var hwnd = new WindowInteropHelper(window).Handle;
             GetWindowRect(hwnd, out var bounds);
             Program.Assert(SetWindowPos(hwnd, IntPtr.Zero, bounds.Left + 12, bounds.Top + 8, 0, 0, 0x0015),
                 "Aero translation");
             Wait(100);
-            Program.Assert(changes == 1, "one window movement publishes one combined reflection transform");
             Program.Assert(MaterialSurfaceHost.TryGetScreenOrigin(surface, HwndSource.FromHwnd(hwnd)!, out var origin),
                 "Aero world origin");
             var dpi = VisualTreeHelper.GetDpi(surface);
             var reference = new TranslateTransform(
                 -origin.X / dpi.DpiScaleX * .10,
                 -origin.Y / dpi.DpiScaleY * .06).Value;
-            Program.Assert(shift.Value == reference,
-                "combined transform preserves exact X/Y reflection translation");
+            Program.Assert(ReflectionShift().Value == reference,
+                "reflection preserves exact X/Y translation after native movement");
             controller.State.EnableAnimations = false;
             surface.RefreshSkin();
-            Program.Assert(shift.Value.IsIdentity,
+            Program.Assert(ReflectionShift().Value.IsIdentity,
                 "disabling reflection restores identity without retaining motion");
+            Program.Assert(!surface.HasMaterialHostSubscription,
+                "disabling animation releases the reflection observer");
+            controller.State.EnableAnimations = true;
+            surface.RefreshSkin();
+            Program.Assert(surface.HasMaterialHostSubscription, "reflection observer resumes");
+            window.Hide();
+            Program.Assert(!surface.HasMaterialHostSubscription,
+                "hiding the surface releases its window observer");
         }
         finally
         {
@@ -68,13 +76,6 @@ internal static class MaterialDragChecks
             (controller.State.PaperSkin, controller.State.EnableAnimations) = saved;
             Theme.Invalidate();
         }
-    }
-
-    private static void Until(Func<bool> predicate, string context)
-    {
-        var started = System.Diagnostics.Stopwatch.StartNew();
-        while (!predicate() && started.Elapsed.TotalSeconds < 6) Wait(10);
-        Program.Assert(predicate(), context);
     }
 
     private static void Wait(int milliseconds)

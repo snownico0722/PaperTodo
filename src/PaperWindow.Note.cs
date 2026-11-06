@@ -672,10 +672,12 @@ public sealed partial class PaperWindow
             }
         };
 
+#if DEBUG
         box.GotKeyboardFocus += (_, _) =>
         {
             TraceNoteRender($"GotKeyboardFocus isPreviewing={isPreviewing} boxPreview={box.IsPreviewMode}");
         };
+#endif
 
         box.LostKeyboardFocus += (_, _) =>
         {

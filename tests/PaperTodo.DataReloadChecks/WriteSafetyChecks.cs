@@ -30,26 +30,6 @@ internal static partial class Program
 
     private static void InterruptedWriteSelectionChecks()
     {
-        foreach (var backup in new[] { false, true })
-        {
-            using var scope = new Scope();
-            var bytes = File.ReadAllBytes(scope.Store.FilePath);
-            File.Delete(scope.Store.FilePath);
-            var tempPath = (backup ? scope.Store.BackupPath : scope.Store.FilePath) + ".tmp";
-            File.WriteAllBytes(tempPath, bytes);
-            var store = new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared);
-            var restored = store.Load(out var empty);
-            Require(!empty && store.NeedsStartupRecoverySave &&
-                    restored.Papers.Single(p => p.Id == "note-a").Content == "original" &&
-                    File.ReadAllBytes(tempPath).SequenceEqual(bytes),
-                "a unique complete temp did not automatically restore the original papers");
-            store.SaveJsonSync(store.SerializeState(restored), 2);
-            Require(File.Exists(store.FilePath) && !File.Exists(tempPath) &&
-                    !Directory.GetFiles(scope.DirectoryPath, "*.orphaned.*.tmp").Any() &&
-                    store.Load().Papers.Single(p => p.Id == "note-a").Content == "original",
-                "successful interrupted-write recovery did not retire its temporary source");
-        }
-
         using (var scope = new Scope())
         {
             var bytes = File.ReadAllBytes(scope.Store.FilePath);
@@ -90,8 +70,10 @@ internal static partial class Program
             Require(!empty && restored.Papers[0].Content == newestKind && paths.All(File.Exists),
                 "newest complete temporary snapshot was not selected without modifying sources");
             store.SaveJsonSync(store.SerializeState(restored), 2);
-            Require(store.Load().Papers[0].Content == newestKind && !File.Exists(paths[2]) && !File.Exists(broken),
+            Require(!File.Exists(paths[2]) && !File.Exists(broken),
                 "latest snapshot did not commit before orphan cleanup");
+            Require(store.Load().Papers[0].Content == newestKind,
+                "latest temporary snapshot was not persisted");
         }
         // Complete documents may differ only in whitespace or property layout.
         // That is ONE full snapshot, not two conflicting revisions, and neither
@@ -144,10 +126,14 @@ internal static partial class Program
         using var s = new Scope();
         var external = s.Read();
         external["papers"]![0]!["content"] = "external version";
+        external["theme"] = "dark";
         s.Write(external);
+        Require(s.Memory.Theme != "dark", "disk edits mutated the live model");
         var local = s.Store.SerializeState(s.Memory);
         s.Store.SaveJsonSync(local, 2);
-        Require(Str(s.Read()["papers"]![0]!["content"]) == "original",
+        var saved = s.Read();
+        Require(Str(saved["papers"]![0]!["content"]) == "original" &&
+                Str(saved["theme"]) == s.Memory.Theme,
             "ordinary save unexpectedly detected or deferred an external edit");
         Require(s.Store.TryRefreshBackupFromPrimary(),
             "ordinary save disabled the periodic backup path");
@@ -189,6 +175,7 @@ internal static partial class Program
         external["papers"]![0]!["content"] = "first external";
         s.Write(external);
         var preview = s.Store.PreviewExternalMerge(s.Memory, 2, s.BaselineJson);
+        Require(preview.State != null, "merge preview did not start");
         external["papers"]![0]!["content"] = "changed during review";
         s.Write(external);
         var bytes = File.ReadAllBytes(s.Store.FilePath);

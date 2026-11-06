@@ -22,7 +22,28 @@ internal static class QuoteEnterChecks
         CheckEmpty("- > - ", "- > ", "empty nested list exits only inner marker");
         CheckEmpty("- > - [ ] ", "- > ", "empty nested task exits inner marker and task cell");
 
-        Console.WriteLine("PASS quote/list Enter continuation ownership");
+        Check(
+            "- outer\n  1. inner",
+            "  2. ",
+            "multiline unordered parent with ordered child");
+        Check(
+            "1. outer\n   - inner",
+            "   - ",
+            "multiline ordered parent with unordered child");
+        Check(
+            "1. outer\n   - [ ] inner",
+            "   - [ ] ",
+            "multiline ordered parent with task-list child");
+        Check(
+            "- outer\n  - inner",
+            "  - ",
+            "multiline unordered parent with unordered child");
+        Check(
+            "1. outer\n   1. inner",
+            "   2. ",
+            "multiline ordered parent with ordered child");
+
+        Console.WriteLine("PASS quote/list and multiline nested list Enter continuation ownership");
     }
 
     private static void Check(string source, string continuation, string message)

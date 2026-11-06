@@ -305,7 +305,6 @@ internal static class ExpandedEditorChecks
               Math.Abs(scroll.VerticalOffset - offset) < 1,
             "Switching a paper recreated the sidebar or reset its scroll position");
         Check(otherHost.CurrentPaperId == "editor-b", "One editor's navigation changed another editor");
-        controller.Exit();
     }
 
     private static void SetGlobalPaperLock(AppController controller, bool locked)

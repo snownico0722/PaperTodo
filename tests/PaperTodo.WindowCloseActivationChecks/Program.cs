@@ -94,11 +94,11 @@ internal static class Program
         });
         Check("a changing or cyclic native list cannot hang close", () =>
         {
-            var inspections = 0;
-            Require(!WindowCloseActivationPolicy.TryHandoff(
+            var handoff = Task.Run(() => WindowCloseActivationPolicy.TryHandoff(
                 1, () => 1, w => w == 2 ? 3 : 2,
-                _ => { inspections++; return false; }, _ => true) && inspections == 4096,
-                "Traversal was not bounded.");
+                _ => false, _ => throw new Exception("Activated an ineligible window")));
+            Require(handoff.Wait(TimeSpan.FromSeconds(5)), "Traversal did not finish.");
+            Require(!handoff.Result, "Cyclic traversal invented a target.");
         });
     }
 

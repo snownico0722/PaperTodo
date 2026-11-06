@@ -58,8 +58,8 @@ internal static class SynchronousDocumentChecks
                 $"FAIL batched synchronous semantic publication count={publications}.");
         }
 
-        AssertEquivalentToFullParse(
-            document.Text,
+        MarkdownEditBehavior.AssertEquivalent(
+            MarkdownSemanticSnapshot.Parse(document.Text),
             snapshot,
             "batched synchronous semantics");
         Console.WriteLine("PASS batched synchronous semantic publication matches final source");
@@ -91,37 +91,11 @@ internal static class SynchronousDocumentChecks
                 $"FAIL synchronous full-fallback publication count={publications}.");
         }
 
-        AssertEquivalentToFullParse(
-            document.Text,
+        MarkdownEditBehavior.AssertEquivalent(
+            MarkdownSemanticSnapshot.Parse(document.Text),
             snapshot,
             "synchronous full fallback");
         Console.WriteLine("PASS synchronous full fallback publishes exact semantics before return");
-    }
-
-
-    private static void AssertEquivalentToFullParse(
-        string source,
-        MarkdownSemanticSnapshot actual,
-        string name)
-    {
-        var expected = MarkdownSemanticSnapshot.Parse(source);
-        if (expected.LineCount != actual.LineCount ||
-            !expected.Spans.SequenceEqual(actual.Spans) ||
-            !expected.Links.SequenceEqual(actual.Links))
-        {
-            throw new InvalidOperationException($"FAIL {name} does not match a full parse.");
-        }
-
-        for (var line = 0; line < expected.LineCount; line++)
-        {
-            if (!expected.GetLine(line).Equals(actual.GetLine(line)) ||
-                !expected.SpansForLine(line).SequenceEqual(actual.SpansForLine(line)) ||
-                !expected.LinksForLine(line).SequenceEqual(actual.LinksForLine(line)))
-            {
-                throw new InvalidOperationException(
-                    $"FAIL {name} line semantics differ at {line}.");
-            }
-        }
     }
 
     private static string BuildOrdinary98k()

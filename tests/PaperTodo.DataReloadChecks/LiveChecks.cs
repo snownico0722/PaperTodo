@@ -53,11 +53,11 @@ internal static partial class Program
     {
         if (!File.Exists(Path.Combine(AppContext.BaseDirectory, LiveMarker)))
             throw new InvalidOperationException("Refusing to use a non-fixture data directory.");
-        var result = 0;
+        var result = 1;
         var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
         app.Dispatcher.InvokeAsync(async () =>
         {
-            try { await LiveChecks(); }
+            try { await LiveChecks(); result = 0; }
             catch (Exception ex) { result = 1; Console.Error.WriteLine(ex); }
             finally { app.Shutdown(); }
         });

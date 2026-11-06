@@ -6,7 +6,7 @@ using PaperTodo.Plugin;
 
 internal static partial class Program
 {
-    private static int RunShutdownMergeFixture(bool unknownBaseline)
+    private static int RunShutdownMergeFixture()
     {
         if (!File.Exists(Path.Combine(AppContext.BaseDirectory, LiveMarker))) return 2;
         var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
@@ -43,7 +43,7 @@ internal static partial class Program
                         _ => throw new InvalidOperationException("unexpected fixture group")
                     };
                 };
-                Require(controller.PaperCommands.MergeData(PaperOperationContext.Mcp(), unknownBaseline ? null : baseline).Outcome == "pending",
+                Require(controller.PaperCommands.MergeData(PaperOperationContext.Mcp(), baseline).Outcome == "pending",
                     "shutdown merge did not start");
             }
             catch (Exception ex) { Console.Error.WriteLine(ex); app.Shutdown(); }
@@ -62,7 +62,7 @@ internal static partial class Program
             Require(!File.Exists(Path.Combine(AppContext.BaseDirectory, "data.json.tmp")),
                 "shutdown started a core temp write");
             result = 0;
-            Console.WriteLine($"PASS real modal shutdown: unknownBaseline={unknownBaseline}; no main/archive/temp write");
+            Console.WriteLine("PASS real modal shutdown: no main/archive/temp write");
         }
         catch (Exception ex) { Console.Error.WriteLine(ex); }
         return result;

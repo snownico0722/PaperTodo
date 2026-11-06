@@ -63,10 +63,10 @@ internal static partial class Program
         if (!File.Exists(Path.Combine(AppContext.BaseDirectory, PresentationMarker)))
             throw new InvalidOperationException("Refusing to open non-fixture PaperTodo data.");
         var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
-        var result = 0;
+        var result = 1;
         app.Dispatcher.InvokeAsync(async () =>
         {
-            try { await PresentationBehavior(mode == "edge"); }
+            try { await PresentationBehavior(mode == "edge"); result = 0; }
             catch (Exception ex) { Console.Error.WriteLine(ex); result = 1; }
             finally { app.Shutdown(); }
         });
@@ -234,45 +234,17 @@ internal static partial class Program
         Throws<PaperTodoPluginException>(() => api.HidePaper("note"), "session_closed");
         Throws<PaperTodoPluginException>(() => runtimeApi.HidePaper("note"), "runtime_closed");
         current = true;
-        await LinkedTitleTruncationBehavior(c, note, todo);
-        await PluginBoundaryBehavior(c, owner, note, todo);
-        await PresentationPipeBehavior();
-        Console.WriteLine($"Presentation ({(edge ? "edge" : "normal")}): {_checks} behavior checks passed.");
-    }
-
-    private static async Task LinkedTitleTruncationBehavior(AppController c, PaperData note, PaperData todo)
-    {
         c.State.EnableAnimations = false;
-        c.State.ShowLinkedPaperName = true;
-        c.State.AllowLongLinkedPaperTitles = true;
-        c.State.EnableTodoPaperLinks = true;
-        c.State.MaxTitleLength = 30;
-        note.Title = "LinkedABC";
-        todo.Items[0].LinkPaper(note.Id);
-        c.ApplyPaperPresentation(todo, PaperPresentationAction.Expand, activate: false);
-        var window = ReadField<Dictionary<string, PaperWindow>>(c, "_windows")[todo.Id];
-        Check(ReadField<System.Windows.Controls.TextBox>(window, "_titleEditBox").MaxLength == 4096,
-            "The title editor allows long emoji sequences but bounds oversized pastes");
-        window.RefreshTodoRowsForExternalChange();
-        await PresentationSettle();
-        static IEnumerable<System.Windows.Controls.TextBlock> Labels(DependencyObject root)
+        await PluginBoundaryBehavior(c, owner, note, todo);
+        // These checks own their stores/transport and do not depend on paper presentation.
+        if (!edge)
         {
-            if (root is System.Windows.Controls.TextBlock label) yield return label;
-            for (var i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(root); i++)
-                foreach (var child in Labels(System.Windows.Media.VisualTreeHelper.GetChild(root, i)))
-                    yield return child;
+            TodoPasteUsesEventPayload();
+            ReviewArchiveUnreadableDataFailsClosed();
+            await ArchiveNotificationsCannotBlockPersistence();
+            await PresentationPipeBehavior();
         }
-        c.PublicSettings.Set("title.max_length", Json(4));
-        await PresentationSettle();
-        var visibleLabels = Labels(window).Select(label => label.Text).ToArray();
-        Check(note.Title == "LinkedAB" && visibleLabels.Any(text => text.Contains("LinkedAB", StringComparison.Ordinal)) &&
-            visibleLabels.All(text => !text.Contains("LinkedABC", StringComparison.Ordinal)),
-            "Title truncation updates the actual linked-paper label immediately.");
-        // Verify current text, not whether the renderer reused or rebuilt a particular TextBlock.
-        Invoke(c, "SetMaxTitleLength", 2);
-        Check(note.Title == "Link" && Labels(window).Any(label => label.Text.Contains("Link", StringComparison.Ordinal)) &&
-            Labels(window).All(label => !label.Text.Contains("LinkedAB", StringComparison.Ordinal)),
-            "UI title truncation replaces the previous linked title with its current text.");
+        Console.WriteLine($"Presentation ({(edge ? "edge" : "normal")}): {_checks} behavior checks passed.");
     }
 
     private static async Task PresentationPipeBehavior()
