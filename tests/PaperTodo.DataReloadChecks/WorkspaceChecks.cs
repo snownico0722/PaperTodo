@@ -690,6 +690,55 @@ internal static partial class Program
         2, 2, 96, 96, PixelFormats.Bgra32, null,
         new byte[] { blue, 0, red, 255, blue, 0, red, 255, blue, 0, red, 255, blue, 0, red, 255 }, 8);
 
+    private static async Task WorkspaceSettingsInteractionChecks(AppController controller)
+    {
+        const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
+        var build = typeof(AppController).GetMethod("BuildWorkspaceSettingsPage", flags)!;
+        var cancelRename = typeof(AppController).GetMethod("CancelWorkspaceRenameOnPointer", flags)!;
+        StackPanel Page() => (StackPanel)build.Invoke(controller, null)!;
+        StackPanel Options(StackPanel page) => page.Children.OfType<StackPanel>().Single();
+        Border Slot(StackPanel page) => Options(page).Children.OfType<Border>().Single(card =>
+            AutomationProperties.GetAutomationId(card) == "WorkspaceSlot2");
+
+        var original = controller.WorkspaceOptions.Normalized();
+        var originalName = original.DisplayName(2);
+        var nameRow = ((Grid)Slot(Page()).Child).Children.OfType<StackPanel>().First();
+        var rename = nameRow.Children.OfType<Button>().Single(button =>
+            AutomationProperties.GetAutomationId(button) == "WorkspaceRename2");
+        var editor = nameRow.Children.OfType<TextBox>().Single();
+        rename.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        editor.Text = "Unconfirmed workspace name";
+        cancelRename.Invoke(controller, [new Border()]);
+        Require(editor.Visibility == Visibility.Collapsed &&
+                controller.WorkspaceOptions.DisplayName(2) == originalName,
+            "clicking outside a workspace name editor saved its draft");
+
+        rename.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        editor.Text = "Confirmed workspace name";
+        rename.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        await Until(() => controller.WorkspaceOptions.DisplayName(2) == "Confirmed workspace name",
+            "workspace rename confirmation did not save");
+        Require(controller.WorkspaceNumber == 1, "renaming a workspace unexpectedly switched it");
+
+        var card = Slot(Page());
+        card.RaiseEvent(new System.Windows.Input.MouseButtonEventArgs(
+            System.Windows.Input.Mouse.PrimaryDevice, 0, System.Windows.Input.MouseButton.Left)
+        {
+            RoutedEvent = UIElement.MouseLeftButtonUpEvent
+        });
+        Require(controller.WorkspaceNumber == 1, "selecting a workspace card switched without confirmation");
+        var confirm = Options(Page()).Children.OfType<Button>().Single();
+        Require(confirm.IsEnabled, "selecting a workspace card did not enable switch confirmation");
+        confirm.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        await Until(() => controller.WorkspaceNumber == 2 && !controller.IsWorkspaceSwitching,
+            "confirmed settings switch did not reach the selected workspace");
+        Require(await controller.SwitchWorkspaceAsync(1), "return after settings switch failed");
+        Require(await controller.ChangeWorkspaceConfigurationAsync(original) &&
+                controller.WorkspaceOptions.DisplayName(2) == originalName,
+            "workspace settings test did not restore the previous name");
+        Console.WriteLine("PASS workspace settings: rename cancel/confirm and explicit card switch confirmation");
+    }
+
     private static async Task WorkspaceLiveChecks()
     {
         var directory = AppContext.BaseDirectory;
@@ -902,6 +951,7 @@ internal static partial class Program
             cycleButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             await Until(() => controller.WorkspaceNumber == 2 && !controller.IsWorkspaceSwitching, "top-bar click did not switch");
             Require(await controller.SwitchWorkspaceAsync(1), "return after actual button event failed");
+            await WorkspaceSettingsInteractionChecks(controller);
 
             await WorkspaceMainCatalogSingleWriteChecks(controller);
             await WorkspaceRollbackChecks(controller, directory);
@@ -1059,6 +1109,19 @@ internal static partial class Program
                 "tray plus did not reuse the missing workspace number");
             Require(controller.WorkspaceNumber == 1 && ReferenceEquals(controller.State, originalWorkspaceState),
                 "recreating an intermediate workspace unexpectedly switched workspace");
+
+            var cancelMenu = TrayForCreate();
+            var selector = cancelMenu.Items.OfType<MenuItem>().Single(item =>
+                AutomationProperties.GetAutomationId(item) == "TrayWorkspaceSelector");
+            var segmentHost = TraySegmentHost(selector);
+            ClickTraySlot(TraySlots(cancelMenu)[1]);
+            Require(controller.WorkspaceNumber == 1 && segmentHost.Content is StackPanel,
+                "tray workspace choice switched without confirmation");
+            var cancelActions = ((StackPanel)segmentHost.Content).Children.OfType<Button>().ToArray();
+            Require(cancelActions.Length == 2, "tray did not offer switch and cancel actions");
+            cancelActions[1].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Require(controller.WorkspaceNumber == 1 && segmentHost.Content is Border,
+                "cancelling the tray workspace choice switched or retained the confirmation");
 
             Console.WriteLine("PASS workspace WPF: cycle, editor flush, ID collision, inheritance, language, plugin data, failures and slot retention");
         }
