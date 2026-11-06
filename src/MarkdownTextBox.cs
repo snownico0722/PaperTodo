@@ -1576,8 +1576,14 @@ public sealed partial class MarkdownTextBox : TextEditor
             return;
         }
 
+        // A copied PaperTodo image offers both bitmap bytes and its internal i: source.
+        // File documents import that single image's bytes without consulting the main image store.
+        var copiedPaperImage = _imageStore?.UsesFilePaths == true && !e.IsDragDrop &&
+            !string.IsNullOrWhiteSpace(clipboardText) &&
+            MarkdownImageReferences.TryParseReferenceLine(clipboardText, out _) &&
+            HasBitmapDataFormat(e.DataObject);
         if (!IsReadOnly &&
-            string.IsNullOrEmpty(clipboardText) &&
+            (string.IsNullOrEmpty(clipboardText) || copiedPaperImage) &&
             TryInsertImageFromClipboard(e.DataObject))
         {
             e.CancelCommand();

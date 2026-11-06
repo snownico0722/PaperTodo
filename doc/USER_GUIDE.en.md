@@ -24,6 +24,7 @@ This manual is for everyday users of PaperTodo. Start with [1. Quick Start](#1-q
   - [2.5 Full-Text Search](#25-full-text-search)
   - [2.6 Exporting Todos and Notes](#26-exporting-todos-and-notes)
   - [2.7 Studio](#27-studio)
+  - [2.8 Standalone Studio](#28-standalone-studio)
 - [3. Todo Papers](#3-todo-papers)
   - [3.1 Adding and Editing Items](#31-adding-and-editing-items)
   - [3.2 Reordering, Deleting, and Batch Actions](#32-reordering-deleting-and-batch-actions)
@@ -185,6 +186,16 @@ Choose **Open in Studio** from a paper's title bar or menu. Multiple Studio wind
 The tray Studio icon and `PaperTodo.exe --studio` open a blank Studio with the left paper list and New Note / New Todo actions, without creating a placeholder paper. If a Studio already exists, the most recently used window is activated and restored from minimization. Normal cold startup still displays desktop papers normally before activating Studio, without forcing always-on-top.
 
 Built-in notes offer consistent vector formatting tools, line numbers and statistics updated at most every half second, reusing results until the text changes. Click the bottom-right count for document and selection statistics, or preview and export the full note as a JPG or PNG image.
+
+### 2.8 Standalone Studio
+
+Run `PaperTodo.exe --studio --standalone` to open a separate file editor, or add `--file "D:\Documents\Note.md"` to open a file. It can run alongside normal PaperTodo and keeps one window with one document. Repeated launches activate that window and pass any file request to it. Closing the window exits the standalone instance.
+
+Open or drag in `.md`, `.txt`, `.html`, or `.htm` files. Markdown uses the existing editing and rendering tools; TXT is plain text, and HTML is edited and saved as source. <kbd>Ctrl</kbd> + <kbd>S</kbd> saves to the original path; a new document asks for a location on its first save. Replacing or closing a modified document offers Save, Discard, and Cancel. Saves retain recognizable encoding and line endings; a failed save preserves the original file and your edits.
+
+Local Markdown images resolve relative to the document's directory. An image on its own line can be previewed, including paths with parentheses, angle-bracket-wrapped paths, and image titles. Paste clipboard images, copied local image files, or a single image copied from a normal PaperTodo paper. Dragging an image over the document body shows its insertion position; releasing inserts it there. Dropping a document file still opens it. New images are kept temporarily, then saved in an asset folder beside the document. Keep that folder and existing images at their relative paths when sharing the document.
+
+Standalone Studio does not load the paper list, default image library, plugins, or other workspace features. Applicable settings start from the main workspace's saved preferences and last for this run only. Recovery after an unexpected exit includes unsaved text and temporary images.
 
 ---
 

@@ -20,6 +20,7 @@ internal sealed class StandaloneStudioWindow : Window
     private readonly StandaloneStudioImages _images;
     private readonly MarkdownTextBox _editor;
     private readonly Border _frame;
+    private readonly Border _imageDropCaret;
     private readonly TextBlock _title = new() { VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
     private readonly TextBlock _status = new() { Margin = new Thickness(14, 4, 14, 7), TextTrimming = TextTrimming.CharacterEllipsis };
     private readonly StackPanel _markdownTools;
@@ -94,8 +95,17 @@ internal sealed class StandaloneStudioWindow : Window
         _editor.LostMouseCapture += (_, _) => _editor.EndCaretRevealGesture();
         _editor.ContextMenu = CreateEditorMenu();
         SearchPanel.Install(_editor.TextArea);
-        Grid.SetRow(_editor, 2);
-        root.Children.Add(_editor);
+        var editorHost = new Grid { ClipToBounds = true };
+        editorHost.Children.Add(_editor);
+        _imageDropCaret = new Border
+        {
+            Width = 1.5, CornerRadius = new CornerRadius(0.75), IsHitTestVisible = false,
+            HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top,
+            Visibility = Visibility.Collapsed
+        };
+        editorHost.Children.Add(_imageDropCaret);
+        Grid.SetRow(editorHost, 2);
+        root.Children.Add(editorHost);
         _markdownTools = StudioMarkdownToolbar.Create(() => _editor, EnterEdit, ChooseImage);
         var toolsHost = new ScrollViewer
         {
@@ -111,7 +121,9 @@ internal sealed class StandaloneStudioWindow : Window
         _recoveryTimer.Stop();
         PreviewKeyDown += OnKeyDown;
         PreviewDragOver += OnDragOver;
+        PreviewDragLeave += (_, _) => HideImageDropCaret();
         PreviewDrop += OnDrop;
+        Deactivated += (_, _) => HideImageDropCaret();
         AllowDrop = true;
         Closing += OnClosing;
         Closed += (_, _) =>
@@ -237,6 +249,7 @@ internal sealed class StandaloneStudioWindow : Window
 
     private void InstallDocument(StandaloneStudioDocument document)
     {
+        HideImageDropCaret();
         _recoveryTimer?.Stop();
         _loading = true;
         try
@@ -392,11 +405,15 @@ internal sealed class StandaloneStudioWindow : Window
                 case Key.S: e.Handled = true; RunDocumentAction(() => SaveDocument()); return;
                 case Key.O: e.Handled = true; RunDocumentAction(ChooseDocument); return;
                 case Key.N: e.Handled = true; RunDocumentAction(() => { if (ConfirmReplace(false)) { InstallDocument(StandaloneStudioDocument.New()); SaveRecovery(); } }); return;
-                case Key.B when _document.IsMarkdown: _editor.WrapSelection("**", "**"); e.Handled = true; return;
-                case Key.I when _document.IsMarkdown: _editor.WrapSelection("*", "*"); e.Handled = true; return;
+                case Key.B when _document.IsMarkdown && _editor.TextArea.IsKeyboardFocused:
+                    _editor.WrapSelection("**", "**"); e.Handled = true; return;
+                case Key.I when _document.IsMarkdown && _editor.TextArea.IsKeyboardFocused:
+                    _editor.WrapSelection("*", "*"); e.Handled = true; return;
             }
         }
-        if (_document.IsMarkdown && Keyboard.Modifiers == ModifierKeys.None)
+        // SearchPanel is inside the editor too: only its actual text input surface
+        // owns body editing keys. File commands above remain available window-wide.
+        if (_document.IsMarkdown && _editor.TextArea.IsKeyboardFocused && Keyboard.Modifiers == ModifierKeys.None)
         {
             if (e.Key == Key.Enter) e.Handled = _editor.TryHandleSemanticEnter();
             else if (e.Key == Key.Back) e.Handled = _editor.TryHandleSemanticBackspace();
@@ -405,24 +422,80 @@ internal sealed class StandaloneStudioWindow : Window
 
     private void OnDragOver(object sender, DragEventArgs e)
     {
+        HideImageDropCaret();
         if (!e.Data.GetDataPresent(DataFormats.FileDrop)) return;
         var files = e.Data.GetData(DataFormats.FileDrop) as string[] ?? [];
         var canOpen = files.Any(StandaloneStudioDocument.IsSupportedPath);
-        e.Effects = !_busy && (canOpen || _document.IsMarkdown && _editor.CanInsertImagesFromDataObject(e.Data))
-            ? DragDropEffects.Copy : DragDropEffects.None;
+        e.Effects = DragDropEffects.None;
+        if (!_busy && canOpen) e.Effects = DragDropEffects.Copy;
+        else if (!_busy && _document.IsMarkdown && _editor.CanInsertImagesFromDataObject(e.Data) &&
+                 TryGetImageDropTarget(e.GetPosition(_editor), out _, out var caret))
+        {
+            ShowImageDropCaret(caret);
+            e.Effects = DragDropEffects.Copy;
+        }
         e.Handled = true;
     }
 
     private void OnDrop(object sender, DragEventArgs e)
     {
+        HideImageDropCaret();
         if (!e.Data.GetDataPresent(DataFormats.FileDrop)) return;
         e.Handled = true;
         var files = e.Data.GetData(DataFormats.FileDrop) as string[] ?? [];
         var document = files.FirstOrDefault(StandaloneStudioDocument.IsSupportedPath);
         if (document != null) { ActivateDocument(document); return; }
-        if (!_busy && _document.IsMarkdown)
-            RunDocumentAction(() => _editor.TryInsertImagesFromDataObject(e.Data));
+        DropImageData(e.Data, e.GetPosition(_editor));
     }
+
+    private void DropImageData(IDataObject data, Point point)
+    {
+        if (_busy || !_document.IsMarkdown || !_editor.CanInsertImagesFromDataObject(data) ||
+            !TryGetImageDropTarget(point, out var offset, out _)) return;
+        RunDocumentAction(() =>
+        {
+            EnterEdit();
+            _editor.ClearImageSelection();
+            _editor.Select(offset, 0);
+            _editor.CaretOffset = offset;
+            _editor.TryInsertImagesFromDataObject(data);
+        });
+    }
+
+    private bool TryGetImageDropTarget(Point point, out int offset, out Rect caret)
+    {
+        offset = 0;
+        caret = Rect.Empty;
+        var view = _editor.TextArea.TextView;
+        var viewPoint = _editor.TranslatePoint(point, view);
+        if (!new Rect(view.RenderSize).Contains(viewPoint)) return false;
+        var afterImage = _editor.TryGetImageCaretFromPoint(point, out offset);
+        if (!afterImage && !_editor.TryGetCharacterIndexFromPoint(point, out offset))
+        {
+            // Empty space below the final line means append, never the old caret.
+            if (viewPoint.Y + view.VerticalOffset < view.DocumentHeight) return false;
+            offset = _editor.Document.TextLength;
+        }
+        caret = _editor.GetRectFromCharacterIndex(offset, false);
+        if (caret.IsEmpty) return false;
+        var height = Math.Min(caret.Height, view.DefaultLineHeight);
+        if (offset == _editor.Document.TextLength && (afterImage || viewPoint.Y >= caret.Bottom))
+            caret = new Rect(caret.X, caret.Bottom - height, caret.Width, height);
+        else caret.Height = height;
+        return true;
+    }
+
+    private void ShowImageDropCaret(Rect caret)
+    {
+        // A visual hint only: moving the real caret here would change selection and
+        // Markdown reveal layout while the user is still deciding where to drop.
+        var origin = _editor.TextArea.TextView.TranslatePoint(caret.TopLeft, (UIElement)_imageDropCaret.Parent);
+        _imageDropCaret.Margin = new Thickness(origin.X, origin.Y, 0, 0);
+        _imageDropCaret.Height = caret.Height;
+        _imageDropCaret.Visibility = Visibility.Visible;
+    }
+
+    private void HideImageDropCaret() => _imageDropCaret.Visibility = Visibility.Collapsed;
 
     private ContextMenu CreateEditorMenu()
     {
@@ -501,6 +574,7 @@ internal sealed class StandaloneStudioWindow : Window
         _frame.BorderBrush = Theme.PaperBorderBrush;
         _title.Foreground = Theme.TextBrush;
         _status.Foreground = Theme.WeakTextBrush;
+        _imageDropCaret.Background = Theme.LinkBrush;
         _editor.Foreground = Theme.TextBrush;
         _editor.CaretBrush = Theme.TextBrush;
         _editor.LineNumbersForeground = Theme.WeakTextBrush;

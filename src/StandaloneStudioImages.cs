@@ -1,6 +1,8 @@
 using System.IO;
 using System.Text;
 using System.Windows.Media.Imaging;
+using Markdig.Syntax;
+using Markdig.Syntax.Inlines;
 
 namespace PaperTodo;
 
@@ -25,9 +27,18 @@ internal sealed class StandaloneStudioImages(string assetsDirectory) : IMarkdown
     {
         reference = default;
         var trimmed = line.Trim();
-        if (!trimmed.StartsWith("![", StringComparison.Ordinal) ||
-            !MarkdownImageReferences.TrySplitMarkdownImage(trimmed, out var label, out var url, out var attributes) ||
-            !TryResolvePath(url, out var path)) return false;
+        if (!trimmed.StartsWith("![", StringComparison.Ordinal)) return false;
+
+        // Parse only the candidate image line with the shared Markdown pipeline. Markdig
+        // owns escaped/balanced destinations and optional titles; neither is a file path suffix.
+        var syntax = MarkdownSemanticSnapshot.ParseDocument(trimmed);
+        var image = syntax.Descendants<LinkInline>().FirstOrDefault(link => link.IsImage && link.Span.Start == 0);
+        if (image == null || string.IsNullOrEmpty(image.Url)) return false;
+        var attributes = trimmed[(image.Span.End + 1)..].Trim();
+        if (attributes.Length > 0 && !(attributes.StartsWith("{", StringComparison.Ordinal) &&
+                                     attributes.EndsWith("}", StringComparison.Ordinal))) return false;
+        if (!TryResolvePath(image.Url, out var path)) return false;
+        var label = image.LabelSpan.IsEmpty ? "" : trimmed.Substring(image.LabelSpan.Start, image.LabelSpan.Length);
         reference = new MarkdownImageReference(path, 0, line.Length, label, attributes,
             MarkdownImageReferences.ParseDisplayOptions(label, attributes));
         return true;

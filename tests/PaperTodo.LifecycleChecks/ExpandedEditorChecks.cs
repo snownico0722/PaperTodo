@@ -10,7 +10,9 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Interop;
+using System.Windows.Input;
 using System.Windows.Threading;
+using ICSharpCode.AvalonEdit.Search;
 using PaperTodo;
 
 internal static class ExpandedEditorChecks
@@ -40,7 +42,22 @@ internal static class ExpandedEditorChecks
         Check(window.Editor.Text == original && !window.Document.IsDirty, "Opening changed file text");
         window.Editor.CaretOffset = window.Editor.Text.Length;
         window.Editor.Select(window.Editor.Text.Length, 0);
-        Check(window.Editor.TryHandleSemanticEnter() && window.Editor.Text == original + "\n- ",
+        window.Editor.TextArea.Focus();
+        ApplicationCommands.Find.Execute(null, window.Editor.TextArea);
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        var search = Descendants<SearchPanel>(window).Single();
+        var searchBox = Descendants<TextBox>(search).First();
+        searchBox.Text = "no matching text";
+        searchBox.Focus();
+        Check(searchBox.IsKeyboardFocused, "Search box did not receive keyboard focus");
+        RaiseKey(searchBox, Key.Enter);
+        RaiseKey(searchBox, Key.Back);
+        Check(window.Editor.Text == original && !window.Document.IsDirty,
+            "Search input modified the Markdown document");
+        search.Close();
+        window.Editor.TextArea.Focus();
+        RaiseKey(window.Editor.TextArea, Key.Enter);
+        Check(window.Editor.Text == original + "\n- ",
             "Markdown continuation changed the file's LF line endings");
         window.Editor.Undo();
         window.Editor.Document.Insert(window.Editor.Text.Length, "\nnew content");
@@ -55,6 +72,39 @@ internal static class ExpandedEditorChecks
         encoder.Frames.Add(BitmapFrame.Create(BitmapSource.Create(2, 2, 96, 96, PixelFormats.Bgra32,
             null, new byte[] { 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 255 }, 8)));
         using (var stream = File.Create(imagePath)) encoder.Save(stream);
+        window.Editor.Select(2, 3);
+        var dropTarget = typeof(StandaloneStudioWindow).GetMethod("TryGetImageDropTarget", Private)!;
+        var startRect = window.Editor.GetRectFromCharacterIndex(0, false);
+        var dropPoint = window.Editor.TextArea.TextView.TranslatePoint(
+            new Point(startRect.X + 0.1, startRect.Y + startRect.Height / 2), window.Editor);
+        object[] targetArgs = [dropPoint, 0, Rect.Empty];
+        Check((bool)dropTarget.Invoke(window, targetArgs)! && (int)targetArgs[1] == 0,
+            "Image drop hit testing did not resolve the pointer's document position");
+        typeof(StandaloneStudioWindow).GetMethod("ShowImageDropCaret", Private)!.Invoke(window, [targetArgs[2]]);
+        Check(window.Editor.Text == changed && window.Editor.SelectionStart == 2 && window.Editor.SelectionLength == 3,
+            "Image drag preview changed the document or its selection");
+        typeof(StandaloneStudioWindow).GetMethod("HideImageDropCaret", Private)!.Invoke(window, null);
+        var drop = typeof(StandaloneStudioWindow).GetMethod("DropImageData", Private)!;
+        var droppedImage = new DataObject(DataFormats.FileDrop, new[] { imagePath });
+        drop.Invoke(window, [droppedImage, new Point(-1, -1)]);
+        Check(window.Editor.Text == changed, "An image dropped outside the body was inserted");
+        drop.Invoke(window, [droppedImage, dropPoint]);
+        Check(window.Editor.Text.StartsWith("![", StringComparison.Ordinal) && window.Editor.Text.EndsWith(changed, StringComparison.Ordinal),
+            "Image drop used the old caret or replaced the existing selection");
+        window.Editor.Undo();
+        Check(window.Editor.Text == changed, "Image drop did not undo as one edit");
+
+        var copiedImage = new DataObject(DataFormats.UnicodeText, "![image|100%](i:123)");
+        ClipboardHelper.AddImageFormats(copiedImage, encoder.Frames[0]);
+        window.Editor.Select(window.Editor.Text.Length, 0);
+        var imagePaste = new DataObjectPastingEventArgs(copiedImage, false, DataFormats.UnicodeText)
+            { RoutedEvent = DataObject.PastingEvent };
+        window.Editor.RaiseEvent(imagePaste);
+        Check(imagePaste.CommandCancelled && window.Editor.Text.Contains("file:", StringComparison.Ordinal) &&
+              !window.Editor.Text.Contains("i:123", StringComparison.Ordinal) && Directory.GetFiles(recovery.AssetsDirectory).Length > 0,
+            "Copied PaperTodo image was pasted as an unusable database reference");
+        window.Editor.Undo();
+        Check(window.Editor.Text == changed, "Copied image paste did not undo as one edit");
         window.Editor.CaretOffset = window.Editor.Text.Length;
         window.Editor.Select(window.Editor.Text.Length, 0);
         Check(window.Editor.InsertImagesFromFiles([imagePath]) == 1, "Temporary image import failed");
@@ -76,6 +126,10 @@ internal static class ExpandedEditorChecks
         // Reference-style images store their URL in a later definition. Mixed inline
         // and reference syntax must publish every temporary image, in source URL order.
         var source = new StandaloneStudioImages(recovery.AssetsDirectory) { DocumentPath = note };
+        foreach (var markdown in new[] { "![x](pics/a(1).png)", "![x](pics/a(1).png \"caption\")" })
+            Check(source.TryParseReference(markdown, out var reference) &&
+                  reference.ImageId == Path.Combine(root, "pics", "a(1).png"),
+                "Local image syntax included a title in its path or lost balanced parentheses");
         var imported = source.ImportImageFiles(StandaloneStudioImages.OwnerId, [imagePath, imagePath]);
         var first = new Uri(imported[0].Id).AbsoluteUri;
         var second = new Uri(imported[1].Id).AbsoluteUri;
@@ -96,23 +150,31 @@ internal static class ExpandedEditorChecks
         window.Close();
         Check(!recovery.HasSnapshot, "Normal close retained a stale recovery scene");
 
-        var textPath = Path.Combine(root, "source.txt");
-        const string literal = "![literal](i:123)";
-        File.WriteAllText(textPath, literal, new UTF8Encoding(false));
-        var textWindow = new StandaloneStudioWindow(settings, recovery);
-        textWindow.Show();
-        textWindow.Initialize(textPath);
-        Check(textWindow.Editor.Text == literal && !textWindow.Document.IsDirty,
-            "Plain text acquired a Markdown image anchor newline");
-        textWindow.Editor.Text = "prefixsuffix";
-        textWindow.Editor.Select(6, 0);
-        var data = new DataObject(DataFormats.UnicodeText, literal);
-        var paste = new DataObjectPastingEventArgs(data, false, DataFormats.UnicodeText) { RoutedEvent = DataObject.PastingEvent };
-        textWindow.Editor.RaiseEvent(paste);
-        Check(!paste.CommandCancelled && (string)paste.DataObject.GetData(DataFormats.UnicodeText) == literal,
-            "Plain-text paste rewrote an internal image-looking sequence");
-        Check((bool)save.Invoke(textWindow, null)!, "Plain text save failed");
-        textWindow.Close();
+        foreach (var extension in new[] { ".txt", ".html" })
+        {
+            var textPath = Path.Combine(root, "source" + extension);
+            const string literal = "![literal](i:123)";
+            File.WriteAllText(textPath, literal, new UTF8Encoding(false));
+            var textWindow = new StandaloneStudioWindow(settings, recovery);
+            textWindow.Show();
+            textWindow.Initialize(textPath);
+            Check(textWindow.Editor.Text == literal && !textWindow.Document.IsDirty,
+                "Plain text acquired a Markdown image anchor newline");
+            textWindow.Editor.Text = "prefixsuffix";
+            textWindow.Editor.Select(6, 0);
+            var data = new DataObject(DataFormats.UnicodeText, literal);
+            var paste = new DataObjectPastingEventArgs(data, false, DataFormats.UnicodeText) { RoutedEvent = DataObject.PastingEvent };
+            textWindow.Editor.RaiseEvent(paste);
+            Check(!paste.CommandCancelled && (string)paste.DataObject.GetData(DataFormats.UnicodeText) == literal,
+                "Plain-text paste rewrote an internal image-looking sequence");
+            var plainImagePaste = new DataObjectPastingEventArgs(copiedImage, false, DataFormats.UnicodeText)
+                { RoutedEvent = DataObject.PastingEvent };
+            textWindow.Editor.RaiseEvent(plainImagePaste);
+            Check(!plainImagePaste.CommandCancelled && textWindow.Editor.Text == "prefixsuffix",
+                "Plain text imported a bitmap instead of retaining its clipboard text");
+            Check((bool)save.Invoke(textWindow, null)!, "Plain text save failed");
+            textWindow.Close();
+        }
 
         var recovered = StandaloneStudioDocument.New();
         recovered.Text = "recover this";
@@ -139,6 +201,10 @@ internal static class ExpandedEditorChecks
             var button = Descendants<Button>(dialog).Single(button => Equals(button.Content, action));
             button.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
         }), DispatcherPriority.Background);
+
+        void RaiseKey(UIElement target, Key key) => target.RaiseEvent(new KeyEventArgs(
+            Keyboard.PrimaryDevice, PresentationSource.FromVisual(window), Environment.TickCount, key)
+            { RoutedEvent = Keyboard.PreviewKeyDownEvent });
     }
 
     internal static async Task Run()
