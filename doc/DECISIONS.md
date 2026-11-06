@@ -80,6 +80,7 @@
 | D-069 | Independent landing ghosts consume adjacent gaps | Accepted | Edge queues / gestures |
 | D-070 | 完整快照按来源顺序恢复，损坏时须用户确认重建 | Accepted | 核心持久化 / 恢复 |
 | D-071 | 有界冲突归档与健康主文件后清理孤立临时文件 | Accepted | 核心持久化 / 归档 |
+| D-072 | Ctrl 整队拖拽归属胶囊自由队列 | Accepted | Edge / 队列 |
 
 ## 维护规则
 

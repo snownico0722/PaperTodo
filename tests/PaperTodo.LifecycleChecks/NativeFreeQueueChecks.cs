@@ -255,12 +255,12 @@ internal static class NativeFreeQueueChecks
         await Idle();
         var rememberedIds = c.State.Papers.Select(p => p.CapsuleQueueId).ToArray();
         var legacyTop = Top(a);
-        Require(c.BeginNativeEdgeQueueDrag(a, true, Point(legacyTop), false), "Ctrl is independent of the free-queue switch");
+        Require(!c.BeginNativeEdgeQueueDrag(a, true, Point(legacyTop), false), "Ctrl cannot start an ordinary queue drag when free queues are disabled");
         c.PreviewNativeEdgeQueueDrag(a, Point(legacyTop + 60), legacyTop + 60, false);
         c.CommitNativeEdgeQueueDrag(a, Point(legacyTop + 60), legacyTop + 60, false);
         c.EndNativeEdgeQueueDrag(a.Id);
         await Idle();
-        Require(Math.Abs(Top(a) - legacyTop - 60) < .1, "Ctrl moves an ordinary queue without a master");
+        Require(Math.Abs(Top(a) - legacyTop) < .1, "a rejected Ctrl queue drag cannot move the ordinary queue");
         Require(c.State.Papers.Select(p => p.CapsuleQueueId).SequenceEqual(rememberedIds), "legacy mode preserves free grouping memory");
         c.State.UseCapsuleFreeQueues = true;
         c.State.DeepCapsuleQueueStartTopMargins["|right"] = 48;
@@ -578,4 +578,3 @@ internal static class NativeFreeQueueChecks
 
     private static object? PartOrNull(object o, string name) => o.GetType().GetField(name, Private)!.GetValue(o);
 }
-
