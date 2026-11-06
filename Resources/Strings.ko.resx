@@ -1832,4 +1832,16 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="TopBarScriptHint" xml:space="preserve">
     <value>접두사가 없으면 !p로 실행합니다. 지원 접두사: !p / !power, !pwsh / !ps7, !ps5 / !winps, !pf / !powerf. 첫 줄에는 접두사만 입력하고 다음 줄부터 스크립트를 작성하세요. 반각 !만 지원합니다. 저장해도 실행되지 않습니다.</value>
   </data>
+  <data name="WorkspaceScriptsStoppedTitle" xml:space="preserve">
+    <value>작업 공간 전환 완료</value>
+  </data>
+  <data name="WorkspaceScriptsStoppedMessage" xml:space="preserve">
+    <value>이전 작업 공간의 스크립트 프로세스가 종료되었습니다.</value>
+  </data>
+  <data name="WorkspaceSessionsClosedMessage" xml:space="preserve">
+    <value>이전 작업 공간의 상주 PowerShell 세션이 종료되었습니다.</value>
+  </data>
+  <data name="WorkspaceScriptsAndSessionsStoppedMessage" xml:space="preserve">
+    <value>이전 작업 공간의 스크립트 프로세스와 상주 PowerShell 세션이 종료되었습니다.</value>
+  </data>
 </root>

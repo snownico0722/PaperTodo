@@ -1878,4 +1878,16 @@
   <data name="TopBarScriptHint" xml:space="preserve">
     <value>不写前缀时按 !p 执行。可用前缀：!p / !power、!pwsh / !ps7、!ps5 / !winps、!pf / !powerf。前缀须单独占第一行，脚本从下一行开始，只支持半角 !。保存不会执行脚本。</value>
   </data>
+  <data name="WorkspaceScriptsStoppedTitle" xml:space="preserve">
+    <value>工作区已切换</value>
+  </data>
+  <data name="WorkspaceScriptsStoppedMessage" xml:space="preserve">
+    <value>上一工作区的脚本进程已结束。</value>
+  </data>
+  <data name="WorkspaceSessionsClosedMessage" xml:space="preserve">
+    <value>上一工作区的常驻 PowerShell 会话已关闭。</value>
+  </data>
+  <data name="WorkspaceScriptsAndSessionsStoppedMessage" xml:space="preserve">
+    <value>上一工作区的脚本进程已结束，常驻 PowerShell 会话已关闭。</value>
+  </data>
 </root>

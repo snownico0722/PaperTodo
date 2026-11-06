@@ -1832,4 +1832,16 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="TopBarScriptHint" xml:space="preserve">
     <value>接頭辞を省略すると !p として実行します。使用可能：!p / !power、!pwsh / !ps7、!ps5 / !winps、!pf / !powerf。接頭辞だけを1行目に記入し、次の行からスクリプトを書きます。半角 ! のみ対応。保存しても実行されません。</value>
   </data>
+  <data name="WorkspaceScriptsStoppedTitle" xml:space="preserve">
+    <value>ワークスペースを切り替えました</value>
+  </data>
+  <data name="WorkspaceScriptsStoppedMessage" xml:space="preserve">
+    <value>前のワークスペースのスクリプトプロセスを終了しました。</value>
+  </data>
+  <data name="WorkspaceSessionsClosedMessage" xml:space="preserve">
+    <value>前のワークスペースの常駐 PowerShell セッションを終了しました。</value>
+  </data>
+  <data name="WorkspaceScriptsAndSessionsStoppedMessage" xml:space="preserve">
+    <value>前のワークスペースのスクリプトプロセスと常駐 PowerShell セッションを終了しました。</value>
+  </data>
 </root>
