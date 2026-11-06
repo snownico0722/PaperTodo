@@ -1,10 +1,10 @@
 {
   "kind": "web",
   "id": "sample.topbar.web",
-  "name": "Top Bar 2.1 示例",
-  "description": "演示 Plugin Runtime Global 顶栏、Paper 顶栏、插件快捷键、自身纸片控制与 Workspace。",
-  "version": "1.0.0",
-  "apiVersion": "2.2",
+  "name": "Top Bar 2.3 示例",
+  "description": "演示仅菜单显示的 Global 操作、Paper 顶栏、插件快捷键、自身纸片控制与 Workspace。",
+  "version": "1.1.0",
+  "apiVersion": "2.3",
   "stateVersion": 1,
   "entry": "web/index.html",
   "capabilities": [
@@ -41,8 +41,8 @@
   ],
   "locales": {
     "en-US": {
-      "name": "Top Bar 2.1 Sample",
-      "description": "Demonstrates global and paper top-bar actions, plugin shortcuts, own-paper controls, and Workspace access.",
+      "name": "Top Bar 2.3 Sample",
+      "description": "Demonstrates menu-only global actions, paper top-bar actions, plugin shortcuts, own-paper controls, and Workspace access.",
       "settings": {
         "togglePaperShortcut": {
           "name": "Show / hide paper",
@@ -59,8 +59,8 @@
       }
     },
     "ja-JP": {
-      "name": "トップバー 2.1 サンプル",
-      "description": "グローバルと紙ごとのトップバー、プラグインショートカット、紙の操作、Workspace を実演します。",
+      "name": "トップバー 2.3 サンプル",
+      "description": "メニュー専用グローバル操作、紙ごとのトップバー、プラグインショートカット、紙の操作、Workspace を実演します。",
       "settings": {
         "togglePaperShortcut": {
           "name": "紙を表示 / 非表示",
@@ -77,8 +77,8 @@
       }
     },
     "ko-KR": {
-      "name": "Top Bar 2.1 예제",
-      "description": "전역 및 메모별 상단 바, 플러그인 단축키, 메모 제어, Workspace 접근을 보여 줍니다.",
+      "name": "Top Bar 2.3 예제",
+      "description": "메뉴 전용 전역 작업, 메모별 상단 바, 플러그인 단축키, 메모 제어, Workspace 접근을 보여 줍니다.",
       "settings": {
         "togglePaperShortcut": {
           "name": "메모 표시 / 숨기기",

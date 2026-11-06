@@ -346,6 +346,42 @@ internal static class MaterialPresentationChecks
                 Has(more.ContextMenu!, Strings.Get("MenuNewNotePaper")),
                 "Unhide restores each original title-bar or menu location");
             more.ContextMenu!.IsOpen = false;
+
+            // Menu-only descriptors remain reachable at any width without creating title-bar
+            // buttons. They use the same Paper/Runtime callbacks and teardown as normal actions.
+            var menuInvocations = new List<PaperTopBarActionInvocation>();
+            controller.SetPluginPaperTopBarActions(paperOwner, "topbar-fixture", paper.Id,
+                [new() { Id = "paper-menu", ToolTip = "Paper menu", MenuOnly = true }],
+                PaperHostTopBarActions.None, () => true, menuInvocations.Add);
+            controller.SetPluginGlobalTopBarActions(globalOwner, "topbar-fixture",
+                [new() { Id = "global-menu", ToolTip = "Global menu", MenuOnly = true }],
+                () => true, menuInvocations.Add);
+            LayoutAt(600);
+            Program.Assert(plugins.Children.Count == 0 && plugins.Visibility == Visibility.Collapsed,
+                "menu-only actions neither materialize title-bar buttons nor reserve title-bar space");
+            OpenMenu();
+            var menuOnly = more.ContextMenu!;
+            var menuActions = menuOnly.Items.OfType<MenuItem>().Single(item =>
+                Equals(item.Header, Strings.Get("MenuTopBarPluginActions")))
+                .Items.OfType<MenuItem>().ToArray();
+            Program.Assert(menuActions.Select(item => item.Header as string)
+                    .SequenceEqual(new[] { "Paper menu", "Global menu" }),
+                "menu-only actions preserve scope ordering and use their text labels");
+            foreach (var item in menuActions) item.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            Program.Assert(menuInvocations.Count == 2 &&
+                menuInvocations[0].Scope == PaperTopBarActionScope.Paper &&
+                menuInvocations[1].Scope == PaperTopBarActionScope.Global &&
+                menuInvocations.All(invocation => invocation.TargetPaperId == paper.Id),
+                "menu-only callbacks retain the correct target paper and scope");
+            menuOnly.IsOpen = false;
+            controller.RemovePluginPaperTopBarSession(paperOwner);
+            controller.RemovePluginGlobalTopBarRuntime(globalOwner, "topbar-fixture");
+            foreach (var item in menuActions) item.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            Program.Assert(menuInvocations.Count == 2, "revoked menu-only actions must not invoke old callbacks");
+            OpenMenu();
+            Program.Assert(!Has(more.ContextMenu!, Strings.Get("MenuTopBarPluginActions")),
+                "removed owners leave no plugin menu actions");
+            more.ContextMenu!.IsOpen = false;
         }
         finally
         {
