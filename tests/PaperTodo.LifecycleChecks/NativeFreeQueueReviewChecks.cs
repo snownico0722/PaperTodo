@@ -162,11 +162,12 @@ internal static class NativeFreeQueueReviewChecks
             await Idle();
             c.PreviewSingleCapsuleDropGhost(ghostOwner, 0, targetPointer, floating: true);
             var foldedGhost = Field<EdgeCapsuleQueueDropGhost>(c, "_nativeQueueDropGhost");
-            Require(Field<StackPanel>(foldedGhost, "_stack").Children.Count == 1,
-                "folded legacy destination previews its short master, not a hidden member");
-            Near(c.MasterCapsuleForQueue(targetKey)!.DesiredDockedWidthFor(targetGeometry),
+            Require(Field<StackPanel>(foldedGhost, "_stack").Children.Count == 1 &&
+                    Field<bool>(foldedGhost, "_mergeHalo"),
+                "folded legacy destination displays one merge outline, not hidden members");
+            Near(c.MasterCapsuleForQueue(targetKey)!.DesiredDockedWidthFor(targetGeometry) + 4,
                 Field<Window>(foldedGhost, "_window").Width,
-                "folded target preview uses the target monitor's master width");
+                "folded target outline expands toward the monitor interior");
             c.EndSingleCapsuleDropGhost(ghostOwner.Id);
             c.State.CapsuleCollapseAllActiveQueues.Clear();
             c.ArrangeDeepCapsules(false);
@@ -192,8 +193,23 @@ internal static class NativeFreeQueueReviewChecks
             c.ArrangeDeepCapsules(false);
             await Idle();
 
-            // The legacy master itself also gets the landing stack. Unlike
-            // independent queues it must stay at its already-normalized anchor.
+            // Leaving the last source member removes the now-empty source
+            // master immediately; hovering home or canceling restores it.
+            var leftMaster = c.MasterCapsuleForQueue(c.QueueKeyForPaper(targetPaper))!;
+            Require(leftMaster.IsVisible, "one-member source master initially visible");
+            c.PreviewSingleCapsuleDropGhost(targetPaper, 0,
+                Point(geometry, 80), floating: true);
+            Require(!leftMaster.IsVisible, "leaving a one-member legacy queue hides its master");
+            c.PreviewSingleCapsuleDropGhost(targetPaper, 0,
+                Point(targetGeometry, 80, left: true), floating: true);
+            Require(leftMaster.IsVisible, "floating home restores the real source master");
+            c.PreviewSingleCapsuleDropGhost(targetPaper, 0,
+                Point(geometry, 80), floating: true);
+            c.EndSingleCapsuleDropGhost(targetPaper.Id);
+            Require(leftMaster.IsVisible, "canceling a floating move also restores the master");
+
+            // Legacy vertical master movement already renders the real entire
+            // queue. Ghosts are reserved for merge or horizontal unlock.
             var (pill, session, masterDown) = PressMaster(sourceMaster);
             try
             {
@@ -201,30 +217,38 @@ internal static class NativeFreeQueueReviewChecks
                     masterDown.Y + 24 * geometry.DpiScaleY);
                 Require((bool)Call(sourceMaster, "ContinueMasterDrag", move, session)!,
                     "ordinary master drag enters the existing vertical movement path");
-                var masterGhost = Field<EdgeCapsuleQueueDropGhost>(c, "_nativeQueueDropGhost");
-                var masterGhostWindow = Field<Window>(masterGhost, "_window");
-                Require(Field<StackPanel>(masterGhost, "_stack").Children.Count == count + 1 &&
-                        masterGhostWindow.Opacity > 0,
-                    "ordinary expanded master previews a short master and its members");
-                Near(sourceMaster.AnchorTop * geometry.DpiScaleY + geometry.WorkArea.Top,
-                    WindowNative.TryGetWindowDeviceBounds(masterGhostWindow, out var masterGhostBounds)
-                        ? masterGhostBounds.Top : double.NaN,
-                    "ordinary master ghost follows exactly the displayed clamped queue anchor");
-                var cachedWidths = Field<double[]>(masterGhost, "_lastWidths");
+                Require(Field<object?>(c, "_nativeQueueDropGhost") == null,
+                    "ordinary vertical master movement needs no overlapping landing ghost");
                 Call(sourceMaster, "ContinueMasterDrag", move, session);
-                Require(ReferenceEquals(cachedWidths, Field<double[]>(masterGhost, "_lastWidths")),
-                    "repeat pointer samples at the same placement reuse the existing ghost geometry");
-                var ghostHwnd = new System.Windows.Interop.WindowInteropHelper(masterGhostWindow).Handle;
-                var masterHwnd = new System.Windows.Interop.WindowInteropHelper(sourceMaster).Handle;
-                Require(WindowNative.IsWindowBehind(ghostHwnd, masterHwnd),
-                    "destination ghost stays behind the actively dragged master");
             }
             finally
             {
                 Call(sourceMaster, "FinishMasterGesture", false, true, null);
             }
             Require(Field<object?>(c, "_nativeQueueDropGhost") == null,
-                "ending an ordinary master gesture releases its ghost");
+                "ending the docked master gesture leaves no ghost");
+
+            // Once that master actually unlocks from its wall, the shared
+            // floating transfer uses its target's real landing geometry.
+            var masterKey = c.QueueKeyForPaper(ghostOwner);
+            Require(c.TryBeginMasterCapsuleQueueTransfer(
+                    ghostOwner.CapsuleMonitorDeviceName, EdgeCapsuleEdge.Right,
+                    c.MasterCapsuleStartTopMargin(masterKey), out var floatingTransfer),
+                "legacy master transfer begins after horizontal unlock");
+            try
+            {
+                c.PreviewFreeMasterQueueDropGhost(floatingTransfer, targetPointer);
+                var floatingGhost = Field<EdgeCapsuleQueueDropGhost>(c, "_nativeQueueDropGhost");
+                Require(Field<Window>(floatingGhost, "_window").Opacity > 0,
+                    "detached legacy master shows its landing target");
+            }
+            finally
+            {
+                c.EndFreeMasterQueueDropGhost();
+                c.CancelMasterCapsuleQueueTransfer(floatingTransfer);
+            }
+            c.ArrangeDeepCapsules(false);
+            await Idle();
 
             c.State.UseCapsuleCollapseAll = false;
             c.ArrangeDeepCapsules(false);
@@ -301,6 +325,24 @@ internal static class NativeFreeQueueReviewChecks
             window.UpdateLayout();
             Near(masterWidth, window.Width, "folded independent ghost uses only the short master width");
             Near(masterWidth - margin, ((Border)stack.Children[0]).ActualWidth, "folded master outline is short");
+
+            ghost.ShowMergeHaloAt(monitor, side, 30, masterWidth, topmost: false);
+            window.UpdateLayout();
+            Near(masterWidth + 4, window.Width, "merge outline adds width only inside the wall");
+            Require(!window.Topmost && Field<bool>(ghost, "_mergeHalo") &&
+                    ReferenceEquals(((Border)stack.Children[0]).Background,
+                        System.Windows.Media.Brushes.Transparent),
+                "merge outline is hollow and respects non-topmost capsules");
+            Require(WindowNative.TryGetWindowDeviceBounds(window, out var haloBounds),
+                "merge outline has physical bounds");
+            Near(monitor.WorkArea.Top + Math.Round(26 * monitor.DpiScaleY),
+                haloBounds.Top, "merge outline extends four DIPs above the target");
+            ghost.ShowAt(monitor, side, 30, new[] { masterWidth }, gap);
+            window.UpdateLayout();
+            Require(window.Topmost && !Field<bool>(ghost, "_mergeHalo") &&
+                    !ReferenceEquals(((Border)stack.Children[0]).Background,
+                        System.Windows.Media.Brushes.Transparent),
+                "regular landing resets shape and window Z band after a merge");
         }
         Console.WriteLine("PASS ghost geometry: per-member widths, both edges, compact master, merge reset and folded source");
     }
@@ -740,14 +782,20 @@ internal static class NativeFreeQueueReviewChecks
             foreach (var paper in targetPapers)
                 Near(memberTops[paper.Id] + expectedA - aTop, MemberTop(c, windows[paper.Id], paper),
                     route + " previews A as one rigid group");
-            var ghost = Field<EdgeCapsuleQueueDropGhost>(c, "_nativeQueueDropGhost");
-            Require(Field<Window>(ghost, "_window").Opacity > 0 &&
-                    Field<StackPanel>(ghost, "_stack").Children.Count == 4,
-                "independent B ghost includes its own master plus three members");
-            Field<Window>(ghost, "_window").UpdateLayout();
-            Near(masters[B].DesiredDockedWidth - EdgeCapsuleLayout.WindowChromeMargin,
-                ((Border)Field<StackPanel>(ghost, "_stack").Children[0]).ActualWidth,
-                route + " passes the actual source master width to the first silhouette");
+            var ghost = Field<EdgeCapsuleQueueDropGhost?>(c, "_nativeQueueDropGhost");
+            if (!ctrl && !floating)
+                Require(ghost == null || Field<Window>(ghost, "_window").Opacity == 0,
+                    "unmerged docked master follows the real queue without a second ghost");
+            else
+            {
+                Require(ghost != null && Field<Window>(ghost, "_window").Opacity > 0 &&
+                        Field<StackPanel>(ghost, "_stack").Children.Count == 4,
+                    "detached/whole-queue independent drop previews its landing stack");
+                Field<Window>(ghost, "_window").UpdateLayout();
+                Near(masters[B].DesiredDockedWidth - EdgeCapsuleLayout.WindowChromeMargin,
+                    ((Border)Field<StackPanel>(ghost, "_stack").Children[0]).ActualWidth,
+                    route + " passes the source master width to its first silhouette");
+            }
             Require(saved.All(pair => c.State.DeepCapsuleQueueStartTopMargins[pair.Key] == pair.Value),
                 "independent preview must not write saved positions");
 
@@ -794,7 +842,8 @@ internal static class NativeFreeQueueReviewChecks
             Require(Decision().Kind == EdgeFreeQueueDropKind.Insert && Decision().TargetKey == A,
                 "the held capsule entering A selects a merge");
             Near(aTop, masters[A].AnchorTop, "merge uses A's original head, not its previous independent displacement");
-            var mergeGhostStack = Field<StackPanel>(ghost, "_stack");
+            var mergeGhostStack = Field<StackPanel>(
+                Field<EdgeCapsuleQueueDropGhost>(c, "_nativeQueueDropGhost"), "_stack");
             Require(mergeGhostStack.Children.Count == 3 &&
                     Math.Abs(((Border)mergeGhostStack.Children[0]).Width -
                         (windows[owner.Id].DeepCapsuleRestingVisibleWidthFor(monitor) -
@@ -802,6 +851,10 @@ internal static class NativeFreeQueueReviewChecks
                 "merge replaces the short master with a correctly sized ordinary member ghost");
             Sample(top);
             await Dispatcher.CurrentDispatcher.InvokeAsync(static () => { }, DispatcherPriority.Send);
+            if (!ctrl && !floating)
+                Require(Field<Window>(Field<EdgeCapsuleQueueDropGhost>(
+                        c, "_nativeQueueDropGhost"), "_window").Opacity == 0,
+                    "leaving merge hides the unused docked master ghost immediately");
             Near(landingTop, Decision().TopDip, "returning above recovers the same independent landing");
             Near(expectedA, masters[A].AnchorTop, "returning above applies the deficit once again");
 
