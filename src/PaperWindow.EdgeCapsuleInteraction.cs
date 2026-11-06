@@ -120,7 +120,8 @@ public sealed partial class PaperWindow
         }
         finally
         {
-            ClearCapsuleInteractionKeyboardFocus();
+            // A retained capsule activates the editor, which must keep native input focus.
+            if (!IsExpandedEditorHosted) ClearCapsuleInteractionKeyboardFocus();
         }
         return true;
     }

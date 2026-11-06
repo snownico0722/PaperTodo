@@ -91,6 +91,7 @@ public sealed partial class PaperWindow
         if (_expandedEditorHostWindow is { } editor)
         {
             editor.ActivateEditor();
+            QueueExpandedEditorFocus();
             return;
         }
         if (TryRunScriptCapsule())
@@ -162,6 +163,7 @@ public sealed partial class PaperWindow
         if (_expandedEditorHostWindow is { } editor)
         {
             editor.ActivateEditor();
+            QueueExpandedEditorFocus();
             return;
         }
         if (TryRunScriptCapsule())

@@ -225,9 +225,14 @@ internal static class ExpandedEditorChecks
         Check(a.IsDeepCapsuleSlotVisible && !a.IsVisible,
             "Opening or rearranging the editor removed its edge capsule");
         edgeHost.WindowState = WindowState.Minimized;
-        typeof(PaperWindow).GetMethod("ActivateFromDeepCapsuleSlot", Private)!.Invoke(a, null);
-        Check(edgeHost.WindowState != WindowState.Minimized && edgeHost.IsActive && !a.IsVisible,
-            "Clicking the retained capsule did not restore the editor");
+        var capsulePoint = new DeviceScreenPoint(1, 100);
+        typeof(PaperWindow).GetMethod("OnEdgeCapsulePointerPressed", Private)!.Invoke(a, [capsulePoint]);
+        typeof(PaperWindow).GetMethod("OnEdgeCapsulePointerReleased", Private)!.Invoke(a, [capsulePoint]);
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(edgeHost.WindowState != WindowState.Minimized && edgeHost.IsActive && !a.IsVisible &&
+              ((MarkdownTextBox)Member(a, "_noteBox")).IsKeyboardFocusWithin &&
+              WindowNative.KeyboardFocusWindow == new WindowInteropHelper(edgeHost).Handle,
+            "Clicking the retained capsule did not restore editor input focus");
         edgeHost.WindowState = WindowState.Minimized;
         a.ActivateFromEdgeShortcut();
         Check(edgeHost.WindowState != WindowState.Minimized && !a.IsVisible,
