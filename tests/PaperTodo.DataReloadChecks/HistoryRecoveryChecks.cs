@@ -9,7 +9,7 @@ internal static partial class Program
     private static string WriteHistoryFixture(string directory, DateTime stamp,
         params (string Name, string Json)[] documents)
     {
-        var backups = Path.Combine(directory, "backups");
+        var backups = Path.Combine(directory, "PaperTodo-backups");
         Directory.CreateDirectory(backups);
         var path = Path.Combine(backups,
             "PaperTodo-core-" + stamp.ToString("yyyyMMdd-HHmmss-fffffff", CultureInfo.InvariantCulture) + ".zip");
@@ -373,7 +373,7 @@ internal static partial class Program
                         Require(await controller.SwitchWorkspaceAsync(1), "return from backup failure action failed");
                     }
                 }
-                var historyDirectory = Path.Combine(AppContext.BaseDirectory, "backups");
+                var historyDirectory = Path.Combine(AppContext.BaseDirectory, "PaperTodo-backups");
                 var previousArchives = Directory.GetFiles(historyDirectory, "*.zip").ToHashSet();
                 // Simulate the due time passing while paused, then observe a real ZIP.
                 typeof(AppController).GetField("_coreHistoryBackupDueAt", Private)!
