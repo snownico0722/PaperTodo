@@ -1789,4 +1789,6 @@ Resolve the file access problem and retry, or choose “Rebuild workspace” to 
   <data name="MenuExportAllPapers" xml:space="preserve"><value>All notes and todos</value></data>
   <data name="MenuTopBarAssociationDragTodo" xml:space="preserve"><value>Drag to a todo to associate</value></data>
   <data name="MenuTopBarAssociationDragWindow" xml:space="preserve"><value>Drag to a window to associate</value></data>
+  <data name="WorkspaceDataSettingsTitle" xml:space="preserve"><value>Workspaces &amp; Data</value></data>
+  <data name="SettingsDataProcessing" xml:space="preserve"><value>Data handling</value></data>
 </root>

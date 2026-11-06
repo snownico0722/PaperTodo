@@ -1835,4 +1835,6 @@
   <data name="MenuExportAllPapers" xml:space="preserve"><value>全部笔记与待办</value></data>
   <data name="MenuTopBarAssociationDragTodo" xml:space="preserve"><value>拖到待办以关联</value></data>
   <data name="MenuTopBarAssociationDragWindow" xml:space="preserve"><value>拖到窗口以关联</value></data>
+  <data name="WorkspaceDataSettingsTitle" xml:space="preserve"><value>工作区与数据</value></data>
+  <data name="SettingsDataProcessing" xml:space="preserve"><value>数据处理</value></data>
 </root>

@@ -1789,4 +1789,6 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="MenuExportAllPapers" xml:space="preserve"><value>모든 노트 및 할 일</value></data>
   <data name="MenuTopBarAssociationDragTodo" xml:space="preserve"><value>할 일로 끌어서 연결</value></data>
   <data name="MenuTopBarAssociationDragWindow" xml:space="preserve"><value>창으로 끌어서 연결</value></data>
+  <data name="WorkspaceDataSettingsTitle" xml:space="preserve"><value>작업 공간 및 데이터</value></data>
+  <data name="SettingsDataProcessing" xml:space="preserve"><value>데이터 처리</value></data>
 </root>

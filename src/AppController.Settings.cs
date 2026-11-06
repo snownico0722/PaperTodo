@@ -714,10 +714,6 @@ public sealed partial class AppController
 
         AddLabsMajorSection(
             rightColumn,
-            Strings.Get("LabsMcp"),
-            BuildSettingsLiveRegion("labs.mcp", BuildLabsMcpSettings));
-        AddLabsMajorSection(
-            rightColumn,
             Strings.Get("LabsAdvancedShortcuts"),
             BuildSettingsLiveRegion("labs.passive", BuildLabsPassiveModeSettings));
 
@@ -1444,99 +1440,6 @@ public sealed partial class AppController
         return combo;
     }
 
-    private UIElement BuildLabsMcpSettings()
-    {
-        var card = new Border
-        {
-            Background = Brushes.Transparent,
-            Padding = new Thickness(0, 3, 0, 5),
-            Margin = new Thickness(0, 1, 0, 3)
-        };
-        var content = new StackPanel();
-        content.Children.Add(WrapWithHint(
-            SettingsToggle(
-                Strings.Get("LabsMcpEnable"),
-                State.McpEnabled,
-                ToggleMcpEnabled),
-            "TipLabsMcpEnable"));
-        var blankWrites = SettingsToggle(
-            Strings.Get("LabsMcpBlankWrites"),
-            State.McpAllowBlankWrites || State.McpAllowFullWrites,
-            ToggleMcpBlankWrites);
-        blankWrites.IsEnabled = !State.McpAllowFullWrites;
-        content.Children.Add(WrapWithHint(
-            blankWrites,
-            "TipLabsMcpBlankWrites"));
-        content.Children.Add(WrapWithHint(
-            SettingsToggle(
-                Strings.Get("LabsMcpFullWrites"),
-                State.McpAllowFullWrites,
-                ToggleMcpFullWrites),
-            "TipLabsMcpFullWrites"));
-        var directDeletes = SettingsToggle(
-            Strings.Get("LabsMcpDeletes"),
-            State.McpAllowDeletes,
-            ToggleMcpDeletes);
-        if (State.McpAllowDeletes)
-        {
-            directDeletes.Foreground = Theme.DangerBrush;
-        }
-        content.Children.Add(WrapWithHint(
-            directDeletes,
-            "TipLabsMcpDeletes"));
-
-        var status = new TextBlock
-        {
-            Text = State.McpEnabled
-                ? Strings.Get("LabsMcpStatusReady")
-                : Strings.Get("LabsMcpStatusDisabled"),
-            Foreground = State.McpEnabled
-                ? Theme.ActiveBrush
-                : TrayWeakTextBrush,
-            FontSize = AppTypography.Scale(11.5),
-            Margin = new Thickness(2, 8, 2, 0)
-        };
-        content.Children.Add(status);
-
-        var actions = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Margin = new Thickness(0, 9, 0, 0)
-        };
-        var copyJson = SettingsTextButton(
-            Strings.Get("LabsMcpCopyJson"));
-        var copySkill = SettingsTextButton(
-            Strings.Get("LabsMcpCopyAiSkill"));
-        copySkill.Margin = new Thickness(8, 0, 0, 0);
-        var feedback = new TextBlock
-        {
-            Foreground = TrayWeakTextBrush,
-            FontSize = AppTypography.Scale(11),
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(9, 0, 0, 0)
-        };
-        copyJson.Click += (_, _) =>
-        {
-            feedback.Text = ClipboardHelper.TrySetText(
-                BuildJsonMcpConfiguration())
-                ? Strings.Get("LabsMcpCopied")
-                : Strings.Get("LabsMcpCopyFailed");
-        };
-        copySkill.Click += (_, _) =>
-        {
-            feedback.Text = ClipboardHelper.TrySetText(
-                BuildAiMcpSkill())
-                ? Strings.Get("LabsMcpCopied")
-                : Strings.Get("LabsMcpCopyFailed");
-        };
-        actions.Children.Add(copyJson);
-        actions.Children.Add(copySkill);
-        actions.Children.Add(feedback);
-        content.Children.Add(actions);
-        card.Child = content;
-        return card;
-    }
-
     private UIElement CreateLabsPercentageStepper(
         Func<double> getValue,
         Action<double> setValue,
@@ -1623,10 +1526,6 @@ public sealed partial class AppController
         State.ExperimentalAllowLockIconUnlock = true;
         State.ExperimentalShortcutOpacityLevel = 0.35;
         ClearAdvancedShortcutRuntimeState();
-        State.McpEnabled = false;
-        State.McpAllowBlankWrites = false;
-        State.McpAllowFullWrites = false;
-        State.McpAllowDeletes = false;
         State.ExperimentalCapsuleMagnetism = false;
         State.ExperimentalCapsuleMagnetScreenEdges = true;
         State.ExperimentalCapsuleMagnetWindowEdges = true;
@@ -1649,7 +1548,6 @@ public sealed partial class AppController
             window.DisableExperimentalWindowTether();
         }
         RefreshExperimentalWindowRuntime();
-        RefreshMcpRuntime();
         SaveNow();
         RefreshExperimentalOpacitySurfaces(animate: false);
         RefreshExperimentalFocusPresentationSurfaces();
@@ -1708,14 +1606,6 @@ public sealed partial class AppController
             editorWidth: 132,
             tipKey: "TipOverallFontScale",
             topMargin: 7));
-        if (State.AdvancedSettingsMode)
-        {
-            leftColumn.Children.Add(AdvancedSettingsBlock(
-                WrapWithHint(
-                    SettingsFieldLabel(Strings.Get("SettingsImageReferenceText"), topMargin: 8),
-                    "TipImageReferenceText"),
-                CreateImageReferenceTextModeSelector()));
-        }
 
         void AddTextStyleEditor(
             StackPanel column,
@@ -1839,7 +1729,6 @@ public sealed partial class AppController
         State.TextRenderingProfile = TextRenderingProfiles.Standard;
         State.CustomFontEnhancedBold = false;
         State.Zoom = 1.0;
-        State.ImageReferenceTextMode = ImageReferenceTextModes.Always;
         State.NoteTextSize = VisualTextSizes.Medium;
         State.NoteTextBold = false;
         State.TodoVisualSize = TodoVisualSizes.Medium;
@@ -1857,7 +1746,6 @@ public sealed partial class AppController
             State.CustomFontEnhancedBold,
             State.TextRenderingProfile);
         NoteTypography.Configure(State.NoteTextSize, State.NoteTextBold);
-        PublishSettingEffects(SettingEffects.ImageReferences);
 
         SaveNow();
         // Typography was configured above; the theme refresh rebuilds settings once.

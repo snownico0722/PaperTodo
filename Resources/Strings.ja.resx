@@ -1789,4 +1789,6 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="MenuExportAllPapers" xml:space="preserve"><value>すべてのノートとToDo</value></data>
   <data name="MenuTopBarAssociationDragTodo" xml:space="preserve"><value>ToDoへドラッグして関連付け</value></data>
   <data name="MenuTopBarAssociationDragWindow" xml:space="preserve"><value>ウィンドウへドラッグして関連付け</value></data>
+  <data name="WorkspaceDataSettingsTitle" xml:space="preserve"><value>ワークスペースとデータ</value></data>
+  <data name="SettingsDataProcessing" xml:space="preserve"><value>データ処理</value></data>
 </root>
