@@ -1744,7 +1744,7 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="WorkspaceRecoveryFallback" xml:space="preserve">
     <value>ワークスペース {0} に戻る</value>
   </data>
-  <data name="WorkbenchTitle" xml:space="preserve"><value>無限ワークベンチ</value></data>
+  <data name="WorkbenchTitle" xml:space="preserve"><value>キャンバス</value></data>
   <data name="WorkbenchOverview" xml:space="preserve"><value>全ワークスペース</value></data>
   <data name="WorkbenchCurrent" xml:space="preserve"><value>現在のワークスペース</value></data>
   <data name="WorkbenchNewNote" xml:space="preserve"><value>新規ノート</value></data>
@@ -1755,14 +1755,14 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="WorkbenchRefresh" xml:space="preserve"><value>一覧を更新</value></data>
   <data name="WorkbenchClose" xml:space="preserve"><value>デスクトップへ戻る</value></data>
   <data name="WorkbenchHint" xml:space="preserve"><value>空白をドラッグ：範囲選択&#10;Ctrl + クリック：複数選択、Ctrl + G：グループ化&#10;カードを右クリック：すべての操作&#10;右ドラッグ：キャンバス移動&#10;Alt + ホイール：拡大縮小&#10;接続アイコンをドラッグ：カードを接続</value></data>
-  <data name="WorkbenchHelp" xml:space="preserve"><value>ワークベンチのヘルプ</value></data>
+  <data name="WorkbenchHelp" xml:space="preserve"><value>キャンバスのヘルプ</value></data>
   <data name="WorkbenchImportMaterials" xml:space="preserve"><value>素材を読み込む</value></data>
   <data name="WorkbenchImportDialogFilter" xml:space="preserve"><value>すべてのファイル (*.*)|*.*|画像 (*.png;*.jpg;*.jpeg;*.gif;*.webp;*.bmp)|*.png;*.jpg;*.jpeg;*.gif;*.webp;*.bmp</value></data>
   <data name="WorkbenchCollapseCard" xml:space="preserve"><value>カードを折りたたむ</value></data>
   <data name="WorkbenchExpandCard" xml:space="preserve"><value>カードを展開</value></data>
   <data name="WorkbenchLockCard" xml:space="preserve"><value>位置を固定</value></data>
   <data name="WorkbenchUnlockCard" xml:space="preserve"><value>位置の固定を解除</value></data>
-  <data name="WorkbenchError" xml:space="preserve"><value>ワークベンチの操作に失敗しました：{0}</value></data>
+  <data name="WorkbenchError" xml:space="preserve"><value>キャンバスの操作に失敗しました：{0}</value></data>
   <data name="WorkbenchPinConflict" xml:space="preserve"><value>固定した紙片が重なっています。位置は維持されます。移動または固定解除してください。</value></data>
   <data name="WorkbenchDelete" xml:space="preserve"><value>紙片を削除</value></data>
   <data name="WorkbenchDeleteConfirm" xml:space="preserve"><value>この紙片と内容を削除しますか？</value></data>
@@ -1802,7 +1802,7 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="WorkbenchMergePaperTo" xml:space="preserve"><value>ペーパー全体の結合先…</value></data>
   <data name="WorkbenchNoSelection" xml:space="preserve"><value>移動する本文を先に選択してください。</value></data>
   <data name="WorkbenchTransferRejected" xml:space="preserve"><value>この内容は移動できません。</value></data>
-  <data name="WorkbenchMaterialNote" xml:space="preserve"><value>ワークスペースの素材</value></data>
+  <data name="WorkbenchMaterialNote" xml:space="preserve"><value>キャンバスの素材</value></data>
   <data name="WorkbenchViewMaterials" xml:space="preserve"><value>素材ノートを開く</value></data>
   <data name="WorkbenchImageMaterial" xml:space="preserve"><value>画像</value></data>
   <data name="WorkbenchAddText" xml:space="preserve"><value>テキスト素材を追加</value></data>
@@ -1810,7 +1810,7 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="WorkbenchMaterialTitle" xml:space="preserve"><value>タイトル</value></data>
   <data name="WorkbenchMaterialContent" xml:space="preserve"><value>内容</value></data>
   <data name="WorkbenchMaterialSource" xml:space="preserve"><value>URL またはファイルの場所</value></data>
-  <data name="WorkbenchMaterialsEmpty" xml:space="preserve"><value>ワークベンチにドロップした素材や新しいノードは、ここに保存されます。</value></data>
+  <data name="WorkbenchMaterialsEmpty" xml:space="preserve"><value>キャンバスにドロップした素材や新しいノードは、ここに保存されます。</value></data>
   <data name="WorkbenchDeleteMaterial" xml:space="preserve"><value>素材を削除</value></data>
   <data name="WorkbenchDeleteMaterialConfirm" xml:space="preserve"><value>この素材を削除しますか？元のファイルやフォルダーは保持されます。</value></data>
   <data name="WorkbenchTransferHistoryBlocked" xml:space="preserve"><value>この移動を元に戻すには、先に関連するペーパーの後続の編集、グループ化、接続を元に戻してください。</value></data>

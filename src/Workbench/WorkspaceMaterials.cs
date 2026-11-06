@@ -5,7 +5,7 @@ namespace PaperTodo;
 /// <summary>Ownership and migration rules shared by the live workspace and read-only snapshots.</summary>
 internal static class WorkspaceMaterials
 {
-    internal const string DefaultTitle = "工作空间素材";
+    internal const string DefaultTitle = "灵感空间素材";
 
     internal static PaperData? FindOwner(AppState state) =>
         state.Papers.FirstOrDefault(p => p.WorkspaceMaterials != null);

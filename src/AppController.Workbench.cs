@@ -16,7 +16,23 @@ public sealed partial class AppController
     {
         Application.Current.Dispatcher.VerifyAccess();
         if (_workbenchWindow is { } open) { open.Close(); return; }
-        if (IsExiting || IsDataReloading || Mouse.Captured != null) return;
+        OpenCanvas();
+    }
+
+    // Command activation is deliberately idempotent; tray and hotkey toggles keep
+    // their existing close behavior without making repeated --canvas close it.
+    internal void OpenCanvas()
+    {
+        Application.Current.Dispatcher.VerifyAccess();
+        if (IsExiting || IsDataReloading) return;
+        if (_workbenchWindow is { } open)
+        {
+            if (open.WindowState == WindowState.Minimized) open.WindowState = WindowState.Maximized;
+            if (!open.IsVisible) open.Show();
+            open.Activate();
+            return;
+        }
+        if (Mouse.Captured != null) return;
         EnsureWorkspaceMaterialsOwner();
         var window = new WorkbenchWindow(this);
         _workbenchWindow = window;

@@ -1790,7 +1790,7 @@
   <data name="WorkspaceRecoveryFallback" xml:space="preserve">
     <value>回退到工作区 {0}</value>
   </data>
-  <data name="WorkbenchTitle" xml:space="preserve"><value>无限工作台</value></data>
+  <data name="WorkbenchTitle" xml:space="preserve"><value>灵感空间</value></data>
   <data name="WorkbenchOverview" xml:space="preserve"><value>全部工作区</value></data>
   <data name="WorkbenchCurrent" xml:space="preserve"><value>当前工作区</value></data>
   <data name="WorkbenchNewNote" xml:space="preserve"><value>新笔记</value></data>
@@ -1800,7 +1800,7 @@
   <data name="WorkbenchSearch" xml:space="preserve"><value>全局搜索，按 Enter 定位结果</value></data>
   <data name="WorkbenchRefresh" xml:space="preserve"><value>刷新概览</value></data>
   <data name="WorkbenchClose" xml:space="preserve"><value>返回桌面</value></data>
-  <data name="WorkbenchHint" xml:space="preserve"><value>左键拖动空白：框选纸片&#10;Ctrl + 点击：多选纸片，Ctrl + G：成组&#10;右键单击纸片：打开完整操作菜单&#10;右键拖动：平移画布&#10;Alt + 滚轮：缩放画布&#10;拖动顶栏连接图标：连接卡片</value></data>
+  <data name="WorkbenchHint" xml:space="preserve"><value>左键拖动空白：框选纸片&#10;Ctrl + 点击：多选纸片，Ctrl + G：成组&#10;右键单击纸片：打开完整操作菜单&#10;右键拖动：平移灵感空间&#10;Alt + 滚轮：缩放灵感空间&#10;拖动顶栏连接图标：连接卡片</value></data>
   <data name="WorkbenchHelp" xml:space="preserve"><value>操作说明</value></data>
   <data name="WorkbenchImportMaterials" xml:space="preserve"><value>导入素材</value></data>
   <data name="WorkbenchImportDialogFilter" xml:space="preserve"><value>所有文件 (*.*)|*.*|图片文件 (*.png;*.jpg;*.jpeg;*.gif;*.webp;*.bmp)|*.png;*.jpg;*.jpeg;*.gif;*.webp;*.bmp</value></data>
@@ -1808,7 +1808,7 @@
   <data name="WorkbenchExpandCard" xml:space="preserve"><value>展开纸片</value></data>
   <data name="WorkbenchLockCard" xml:space="preserve"><value>锁定位置</value></data>
   <data name="WorkbenchUnlockCard" xml:space="preserve"><value>解锁位置</value></data>
-  <data name="WorkbenchError" xml:space="preserve"><value>工作台操作失败：{0}</value></data>
+  <data name="WorkbenchError" xml:space="preserve"><value>灵感空间操作失败：{0}</value></data>
   <data name="WorkbenchPinConflict" xml:space="preserve"><value>有锁定纸片互相重叠；系统保留锁定位置，请移动或解锁其中一张。</value></data>
   <data name="WorkbenchDelete" xml:space="preserve"><value>删除纸片</value></data>
   <data name="WorkbenchDeleteConfirm" xml:space="preserve"><value>确定删除这张纸片及其内容？</value></data>
@@ -1848,7 +1848,7 @@
   <data name="WorkbenchMergePaperTo" xml:space="preserve"><value>合并整张纸到…</value></data>
   <data name="WorkbenchNoSelection" xml:space="preserve"><value>请先在正文中选择要移动的内容</value></data>
   <data name="WorkbenchTransferRejected" xml:space="preserve"><value>无法移动这些内容</value></data>
-  <data name="WorkbenchMaterialNote" xml:space="preserve"><value>工作空间素材</value></data>
+  <data name="WorkbenchMaterialNote" xml:space="preserve"><value>灵感空间素材</value></data>
   <data name="WorkbenchViewMaterials" xml:space="preserve"><value>打开素材笔记</value></data>
   <data name="WorkbenchImageMaterial" xml:space="preserve"><value>图片</value></data>
   <data name="WorkbenchAddText" xml:space="preserve"><value>添加文字素材</value></data>
@@ -1856,7 +1856,7 @@
   <data name="WorkbenchMaterialTitle" xml:space="preserve"><value>标题</value></data>
   <data name="WorkbenchMaterialContent" xml:space="preserve"><value>内容</value></data>
   <data name="WorkbenchMaterialSource" xml:space="preserve"><value>网址或文件位置</value></data>
-  <data name="WorkbenchMaterialsEmpty" xml:space="preserve"><value>拖入工作台的素材和新建节点会保存在这里。</value></data>
+  <data name="WorkbenchMaterialsEmpty" xml:space="preserve"><value>拖入灵感空间的素材和新建节点会保存在这里。</value></data>
   <data name="WorkbenchDeleteMaterial" xml:space="preserve"><value>删除素材</value></data>
   <data name="WorkbenchDeleteMaterialConfirm" xml:space="preserve"><value>确定删除这项素材？文件和文件夹的原文件会保留。</value></data>
   <data name="WorkbenchTransferHistoryBlocked" xml:space="preserve"><value>请先撤销相关纸片的后续修改、分组或连接，再撤销这次搬运。</value></data>
