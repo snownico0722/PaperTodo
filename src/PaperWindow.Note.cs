@@ -193,7 +193,7 @@ public sealed partial class PaperWindow
         editorMenu.Items.Add(MenuItem(Strings.Get("MenuHeading"), (_, _) => box.InsertLinePrefix("# ")));
         editorMenu.Items.Add(MenuItem(Strings.Get("MenuQuote"), (_, _) => box.InsertLinePrefix("> ")));
         editorMenu.Items.Add(MenuItem(Strings.Get("MenuList"), (_, _) => box.InsertLinePrefix("- ")));
-        editorMenu.Items.Add(MenuItem(Strings.Get("MenuCodeBlock"), (_, _) => box.WrapSelection("```\n", "\n```")));
+        editorMenu.Items.Add(MenuItem(Strings.Get("MenuCodeBlock"), (_, _) => box.InsertCodeBlock()));
         editorMenu.Items.Add(MenuItem(Strings.Get("MenuInsertLink"), (_, _) => box.InsertMarkdownLink()));
         editorMenu.Items.Add(MenuItem(Strings.Get("MenuInsertImage"), (_, _) =>
         {
@@ -292,7 +292,7 @@ public sealed partial class PaperWindow
 
             TraceNoteRender($"ShowEditor before focus={focus} isPreviewing={isPreviewing} boxPreview={box.IsPreviewMode}");
 
-            box.SetPreviewMode(false);
+            if (box.IsPreviewMode) box.SetPreviewMode(false);
             box.ContextMenu = editorMenu;
             isPreviewing = false;
 

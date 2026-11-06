@@ -222,6 +222,13 @@ internal sealed class NoteImageExportWindow : Window
             _save.IsEnabled = true;
             // Composition already produced both hints; no second STA or rasterization pass.
             _sizeEstimate = artifact.SizeEstimate;
+            if (!CanSaveJpeg)
+            {
+                _preferredFormat = NoteImageFormat.Png;
+                _formatToggle.Content = "PNG";
+                _formatToggle.IsEnabled = false;
+                _status.Text = Strings.Get("EditorImageExportJpegHeightLimit");
+            }
             UpdateEstimatedSize();
         }
         catch (OperationCanceledException) { }
@@ -233,8 +240,7 @@ internal sealed class NoteImageExportWindow : Window
 
     private void UpdateEstimatedSize()
     {
-        _estimatedSize.Text = _sizeEstimate is not { } estimate ||
-            (_preferredFormat == NoteImageFormat.Jpeg && _artifact?.PixelHeight > ushort.MaxValue)
+        _estimatedSize.Text = _sizeEstimate is not { } estimate
             ? Strings.Format("EditorImageExportEstimatedSize", "x")
             : FormatEstimatedSize(_preferredFormat == NoteImageFormat.Jpeg ? estimate.JpegBytes : estimate.PngBytes);
     }
@@ -243,24 +249,31 @@ internal sealed class NoteImageExportWindow : Window
         ? Strings.Get("EditorImageExportEstimatedSizeSmall")
         : Strings.Format("EditorImageExportEstimatedSize", Math.Round(bytes / (1024d * 1024), MidpointRounding.AwayFromZero));
 
-    private async Task SaveAsync()
+    private bool CanSaveJpeg => _artifact is { PixelHeight: <= ushort.MaxValue };
+
+    private SaveFileDialog CreateSaveDialog()
     {
-        if (_artifact is not { } artifact || !_save.IsEnabled) return;
-        var preferredPng = _preferredFormat == NoteImageFormat.Png;
-        var dialog = new SaveFileDialog
+        var preferredPng = !CanSaveJpeg || _preferredFormat == NoteImageFormat.Png;
+        var pngFilter = Strings.Get("EditorImageExportPng") + " (*.png)|*.png";
+        return new SaveFileDialog
         {
             Title = Title,
-            Filter = Strings.Get("EditorImageExportJpeg") + " (*.jpg)|*.jpg|" +
-                Strings.Get("EditorImageExportPng") + " (*.png)|*.png",
-            FilterIndex = preferredPng ? 2 : 1,
+            Filter = CanSaveJpeg ? Strings.Get("EditorImageExportJpeg") + " (*.jpg)|*.jpg|" + pngFilter : pngFilter,
+            FilterIndex = preferredPng && CanSaveJpeg ? 2 : 1,
             DefaultExt = preferredPng ? ".png" : ".jpg",
             AddExtension = true,
             OverwritePrompt = true,
             FileName = NotePortableExport.SafeName(_noteTitle)
         };
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_artifact is not { } artifact || !_save.IsEnabled) return;
+        var dialog = CreateSaveDialog();
         if (dialog.ShowDialog(this) != true || _closed) return;
         // The preview is only the initial choice; Windows' file dialog decides.
-        var format = dialog.FilterIndex == 2 ? NoteImageFormat.Png : NoteImageFormat.Jpeg;
+        var format = !CanSaveJpeg || dialog.FilterIndex == 2 ? NoteImageFormat.Png : NoteImageFormat.Jpeg;
         _save.IsEnabled = false;
         _status.Text = Strings.Get("EditorImageExportSaving");
         var cancellation = _lifetime.Token;

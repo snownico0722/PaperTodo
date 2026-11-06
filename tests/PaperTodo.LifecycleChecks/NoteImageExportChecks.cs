@@ -17,6 +17,42 @@ internal static class NoteImageExportChecks
     {
         await NoteImageExport.OnStaAsync(() => { CheckRendering(); return true; });
         await CheckEditorSnapshot();
+        await CheckLongImageFormat();
+    }
+
+    private static async Task CheckLongImageFormat()
+    {
+        var owner = new Window();
+        owner.Show();
+        try
+        {
+            var drawing = new DrawingGroup();
+            drawing.Freeze();
+            var artifact = new NoteImageArtifact(drawing, 32768, 0, new(100000, 200000));
+            var preview = new NoteImageExportWindow(owner, "Long note", _ => artifact);
+            preview.Show();
+            try
+            {
+                var timeout = System.Diagnostics.Stopwatch.StartNew();
+                while (MemberOrNull(preview, "_sizeEstimate") == null)
+                {
+                    if (timeout.Elapsed.TotalSeconds > 5) throw new TimeoutException("Long preview did not finish");
+                    await Task.Delay(10);
+                }
+                var toggle = (Button)Member(preview, "_formatToggle");
+                Check(!toggle.IsEnabled && Equals(toggle.Content, "PNG") &&
+                      ((TextBlock)Member(preview, "_status")).Text == Strings.Get("EditorImageExportJpegHeightLimit") &&
+                      ((Button)Member(preview, "_save")).IsEnabled,
+                    "Long image was not explained and switched to PNG before saving");
+                var dialog = (Microsoft.Win32.SaveFileDialog)typeof(NoteImageExportWindow)
+                    .GetMethod("CreateSaveDialog", Private)!.Invoke(preview, null)!;
+                Check(dialog.Filter == Strings.Get("EditorImageExportPng") + " (*.png)|*.png" &&
+                      dialog.DefaultExt == ".png" && dialog.FilterIndex == 1,
+                    "Save dialog still offered an unsupported JPG");
+            }
+            finally { preview.Close(); }
+        }
+        finally { owner.Close(); }
     }
 
     private static void CheckRendering()

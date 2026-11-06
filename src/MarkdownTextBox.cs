@@ -368,6 +368,35 @@ public sealed partial class MarkdownTextBox : TextEditor
         }
     }
 
+    public void InsertCodeBlock()
+    {
+        var start = SelectionStart;
+        var length = SelectionLength;
+        var end = start + length;
+        var selected = SelectedText;
+        var firstLine = Document.GetLineByNumber(1);
+        var newline = firstLine.DelimiterLength > 0
+            ? Document.GetText(firstLine.EndOffset, firstLine.DelimiterLength) : "\n";
+        // A fence must occupy its own line, including when only part of a sentence
+        // is selected. Longer fences keep literal backticks inside the code intact.
+        var fenceLength = 3;
+        var run = 0;
+        foreach (var character in selected)
+        {
+            run = character == '`' ? run + 1 : 0;
+            fenceLength = Math.Max(fenceLength, run + 1);
+        }
+        var fence = new string('`', fenceLength);
+        var prefix = (start > Document.GetLineByOffset(start).Offset ? newline : "") + fence + newline;
+        var suffix = (selected.EndsWith('\n') || selected.EndsWith('\r') ? "" : newline) + fence;
+        if (end < Document.TextLength && Document.GetCharAt(end) is not ('\r' or '\n'))
+            suffix += newline;
+        using (Document.RunUpdate())
+            Document.Replace(start, length, prefix + selected + suffix);
+        Select(start + prefix.Length, length);
+        Focus();
+    }
+
     private static bool HasLineBreak(string text)
     {
         return text.IndexOfAny(['\r', '\n']) >= 0;
