@@ -78,6 +78,14 @@ internal static class ScriptExecutionService
         string? path = null;
         var executionId = Guid.NewGuid();
         var registeredProcess = false;
+        // Shutdown withdraws this registration before stopping the process. Its
+        // late exit must remain silent even after a failed workspace switch rolls back.
+        bool WasStopped()
+        {
+            if (!registeredProcess) return false;
+            lock (ActiveScriptProcessLock)
+                return !ActiveScriptProcesses.ContainsKey(executionId);
+        }
         try
         {
             path = WriteScriptCapsuleFile(spec.Script);
@@ -117,7 +125,7 @@ internal static class ScriptExecutionService
             await process.WaitForExitAsync();
             var output = await outputTask;
             var error = await errorTask;
-            if (process.ExitCode != 0)
+            if (process.ExitCode != 0 && !WasStopped())
             {
                 var detail = CompactScriptCapsuleOutput(output, error);
                 showFailure(Strings.Format("ScriptCapsuleExitFailureMessage", process.ExitCode, detail));
@@ -125,7 +133,7 @@ internal static class ScriptExecutionService
         }
         catch (Exception ex)
         {
-            showFailure(ex.Message);
+            if (!WasStopped()) showFailure(ex.Message);
         }
         finally
         {
@@ -434,7 +442,7 @@ internal static class ScriptExecutionService
     internal static void StopPersistentScriptProcesses() =>
         StopPersistentScriptProcessesAsync().GetAwaiter().GetResult();
 
-    private static Task StopPersistentScriptProcessesAsync()
+    private static async Task<bool> StopPersistentScriptProcessesAsync()
     {
         Process[] processes;
         lock (PersistentScriptProcessLock)
@@ -442,10 +450,12 @@ internal static class ScriptExecutionService
             processes = PersistentScriptProcesses.Values.Distinct().ToArray();
             PersistentScriptProcesses.Clear();
         }
-        return Task.WhenAll(processes.Select(process => StopScriptProcessAsync(process, persistent: true)));
+        var stopped = await Task.WhenAll(processes.Select(process => StopScriptProcessAsync(process, persistent: true)))
+            .ConfigureAwait(false);
+        return stopped.Any(value => value);
     }
 
-    internal static Task StopAllScriptProcessesAsync()
+    internal static async Task<(bool ScriptsStopped, bool SessionsClosed)> StopAllScriptProcessesAsync()
     {
         var persistent = StopPersistentScriptProcessesAsync();
         Process[] active;
@@ -454,25 +464,32 @@ internal static class ScriptExecutionService
             active = ActiveScriptProcesses.Values.Distinct().ToArray();
             ActiveScriptProcesses.Clear();
         }
-        return Task.WhenAll(active.Select(process => StopScriptProcessAsync(process, persistent: false)).Append(persistent));
+        var stopped = await Task.WhenAll(active.Select(process => StopScriptProcessAsync(process, persistent: false)))
+            .ConfigureAwait(false);
+        return (stopped.Any(value => value), await persistent.ConfigureAwait(false));
     }
 
-    private static Task StopScriptProcessAsync(Process process, bool persistent) => Task.Run(async () =>
+    private static Task<bool> StopScriptProcessAsync(Process process, bool persistent) => Task.Run(async () =>
     {
         try
         {
-            if (process.HasExited) return;
+            if (process.HasExited) return false;
             if (persistent)
             {
                 try { if (process.StartInfo.RedirectStandardInput) process.StandardInput.Close(); }
                 catch { /* A broken pipe/already-exiting process needs no graceful request. */ }
                 using var grace = new System.Threading.CancellationTokenSource(250);
-                try { await process.WaitForExitAsync(grace.Token).ConfigureAwait(false); return; }
+                try { await process.WaitForExitAsync(grace.Token).ConfigureAwait(false); return true; }
                 catch (OperationCanceledException) when (grace.IsCancellationRequested) { }
             }
-            if (!process.HasExited) process.Kill(entireProcessTree: true);
+            if (process.HasExited) return false;
             using var deadline = new System.Threading.CancellationTokenSource(1000);
-            await process.WaitForExitAsync(deadline.Token).ConfigureAwait(false);
+            // Subscribe before killing: RunAsync owns active-process disposal and
+            // may finish as soon as the same exit event reaches its awaiter.
+            var exited = process.WaitForExitAsync(deadline.Token);
+            process.Kill(entireProcessTree: true);
+            await exited.ConfigureAwait(false);
+            return true;
         }
         catch { /* Process exit/disposal can race the execution task. Other processes still stop. */ }
         finally
@@ -480,5 +497,6 @@ internal static class ScriptExecutionService
             // Active execution owns its process disposal and temporary-file cleanup.
             if (persistent) process.Dispose();
         }
+        return false;
     });
 }

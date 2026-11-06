@@ -334,6 +334,7 @@ public sealed partial class AppController
         var presentationStopped = false;
         var installed = false;
         var committed = false;
+        var stoppedScripts = (ScriptsStopped: false, SessionsClosed: false);
         _workspaceSwitching = true;
         RefreshWorkspaceButtons();
         try
@@ -370,7 +371,7 @@ public sealed partial class AppController
             presentationStopped = true;
             StopWorkspacePresentation();
             previousPluginData.DetachForWorkspaceSwitch();
-            await scriptShutdown;
+            stoppedScripts = await scriptShutdown;
             if (IsExiting) return false;
 
             _workspaceCatalog.AdoptOptions(nextOptions);
@@ -459,6 +460,15 @@ public sealed partial class AppController
                 if (reopenSettings && _settingsWindow == null) ShowSettingsWindow(settingsPage);
             }
             ResumeExitAfterDataReload();
+            if (committed && !IsExiting && (stoppedScripts.ScriptsStopped || stoppedScripts.SessionsClosed))
+            {
+                var owner = _settingsWindow is { IsVisible: true } ? _settingsWindow :
+                    Application.Current.Windows.OfType<Window>().FirstOrDefault(window => window.IsActive);
+                var message = stoppedScripts.ScriptsStopped
+                    ? stoppedScripts.SessionsClosed ? "WorkspaceScriptsAndSessionsStoppedMessage" : "WorkspaceScriptsStoppedMessage"
+                    : "WorkspaceSessionsClosedMessage";
+                PaperNoticeDialog.Show(owner, Strings.Get("WorkspaceScriptsStoppedTitle"), Strings.Get(message));
+            }
         }
     }
 

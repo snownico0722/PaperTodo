@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Runtime.CompilerServices;
@@ -811,10 +812,39 @@ internal static partial class Program
             boundPipe.Start();
             var oldBridge = new McpPipeClient(boundPipeName);
             _ = await oldBridge.InvokeAsync("get_data_reload_status", new { }, CancellationToken.None);
+            var originalScript = controller.State.TopBarScript;
+            controller.State.TopBarScript = "!ps5\nStart-Sleep -Seconds 60";
+            try { controller.RunTopBarScript(oldWindow); }
+            finally { controller.State.TopBarScript = originalScript; }
+            // Create a real idle session without making all later fixture switches inherit it.
+            ScriptExecutionService.EnsurePersistentScriptProcessForSettings(new AppState
+            {
+                UsePersistentPowerShellProcess = true, PreferPowerShell7 = false, HideScriptRunWindow = true
+            });
+            var activeScripts = (Dictionary<Guid, Process>)typeof(ScriptExecutionService)
+                .GetField("ActiveScriptProcesses", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!;
+            var persistentScripts = (Dictionary<string, Process>)typeof(ScriptExecutionService)
+                .GetField("PersistentScriptProcesses", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!;
+            using var runningScript = Process.GetProcessById(activeScripts.Values.Single().Id);
+            using var idleSession = Process.GetProcessById(persistentScripts.Values.Single().Id);
             controller.SaveNow(); // deliberately leave an asynchronous ordinary write queued
             Require(controller.State.Papers.Single(p => p.Id == "note-a").Content == expectedDraft,
                 "ordinary save did not commit the fixture editor");
-            Require(await controller.CycleWorkspaceAsync(), "first cycle failed");
+            var stopNotices = 0;
+            Require(await WithWorkspaceFailureDialog(() => controller.CycleWorkspaceAsync(), dialog =>
+            {
+                stopNotices++;
+                Require(controller.WorkspaceNumber == 2 && runningScript.HasExited && idleSession.HasExited,
+                    "script stop notice appeared before target activation or source process termination");
+                Require(FailureDialogNodes(dialog).OfType<TextBlock>().Any(block =>
+                    block.Text == Strings.Get("WorkspaceScriptsAndSessionsStoppedMessage")),
+                    "workspace notice did not distinguish stopped scripts and closed idle sessions");
+                ClickFailureAction(dialog, "CommonOk");
+            }, "WorkspaceScriptsStoppedTitle"), "first cycle failed");
+            await Dispatcher.Yield(DispatcherPriority.Background);
+            Require(stopNotices == 1 && !Application.Current.Windows.OfType<Window>().Any(window =>
+                    window.IsVisible && window.Title == Strings.Get("WorkspaceScriptsStoppedTitle")),
+                "successful workspace switch repeated its script stop notice");
             Require(controller.WorkspaceNumber == 2 && oldWindow.IsClosed && !ReferenceEquals(oldWindow, windows["note-a"]),
                 "workspace switch reused the old paper window");
             Require(controller.State.Theme == "dark" && controller.State.McpEnabled &&

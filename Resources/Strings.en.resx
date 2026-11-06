@@ -1774,4 +1774,16 @@ Resolve the file access problem and retry, or choose “Rebuild workspace” to 
   <data name="TopBarScriptHint" xml:space="preserve">
     <value>Without a prefix, use !p. Supported prefixes: !p / !power, !pwsh / !ps7, !ps5 / !winps, !pf / !powerf. Put the prefix alone on the first line and start the script on the next line. Only ASCII ! is supported. Saving does not run the script.</value>
   </data>
+  <data name="WorkspaceScriptsStoppedTitle" xml:space="preserve">
+    <value>Workspace switched</value>
+  </data>
+  <data name="WorkspaceScriptsStoppedMessage" xml:space="preserve">
+    <value>Script processes from the previous workspace have ended.</value>
+  </data>
+  <data name="WorkspaceSessionsClosedMessage" xml:space="preserve">
+    <value>Persistent PowerShell sessions from the previous workspace have closed.</value>
+  </data>
+  <data name="WorkspaceScriptsAndSessionsStoppedMessage" xml:space="preserve">
+    <value>Script processes from the previous workspace have ended, and its persistent PowerShell sessions have closed.</value>
+  </data>
 </root>
