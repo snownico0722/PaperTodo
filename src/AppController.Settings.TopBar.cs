@@ -205,7 +205,11 @@ public sealed partial class AppController
             };
             if (action == PaperTopBarShortcuts.RunScript)
             {
-                var edit = SettingsTextButton(Strings.Get("TopBarEditScript"));
+                var edit = SettingsTextButton(SettingsSidebarLocalized(
+                    "编辑", "Edit", "編集", "편집"));
+                edit.ToolTip = Strings.Get("TopBarEditScript");
+                System.Windows.Automation.AutomationProperties.SetName(edit,
+                    Strings.Get("TopBarEditScript"));
                 edit.MinWidth = 0;
                 edit.Height = AppTypography.FitChrome(26);
                 edit.Padding = new Thickness(8, 0, 8, 0);
