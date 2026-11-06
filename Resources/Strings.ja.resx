@@ -1868,4 +1868,16 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="StudioClose" xml:space="preserve"><value>閉じる</value></data>
   <data name="StudioMaximize" xml:space="preserve"><value>最大化／元に戻す</value></data>
   <data name="StudioCut" xml:space="preserve"><value>切り取り</value></data>
+  <data name="WorkspaceScriptsStoppedTitle" xml:space="preserve">
+    <value>ワークスペースを切り替えました</value>
+  </data>
+  <data name="WorkspaceScriptsStoppedMessage" xml:space="preserve">
+    <value>前のワークスペースのスクリプトプロセスを終了しました。</value>
+  </data>
+  <data name="WorkspaceSessionsClosedMessage" xml:space="preserve">
+    <value>前のワークスペースの常駐 PowerShell セッションを終了しました。</value>
+  </data>
+  <data name="WorkspaceScriptsAndSessionsStoppedMessage" xml:space="preserve">
+    <value>前のワークスペースのスクリプトプロセスと常駐 PowerShell セッションを終了しました。</value>
+  </data>
 </root>

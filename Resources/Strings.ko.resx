@@ -1868,4 +1868,16 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="StudioClose" xml:space="preserve"><value>닫기</value></data>
   <data name="StudioMaximize" xml:space="preserve"><value>최대화 / 복원</value></data>
   <data name="StudioCut" xml:space="preserve"><value>잘라내기</value></data>
+  <data name="WorkspaceScriptsStoppedTitle" xml:space="preserve">
+    <value>작업 공간 전환 완료</value>
+  </data>
+  <data name="WorkspaceScriptsStoppedMessage" xml:space="preserve">
+    <value>이전 작업 공간의 스크립트 프로세스가 종료되었습니다.</value>
+  </data>
+  <data name="WorkspaceSessionsClosedMessage" xml:space="preserve">
+    <value>이전 작업 공간의 상주 PowerShell 세션이 종료되었습니다.</value>
+  </data>
+  <data name="WorkspaceScriptsAndSessionsStoppedMessage" xml:space="preserve">
+    <value>이전 작업 공간의 스크립트 프로세스와 상주 PowerShell 세션이 종료되었습니다.</value>
+  </data>
 </root>

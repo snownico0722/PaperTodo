@@ -1914,4 +1914,16 @@
   <data name="StudioClose" xml:space="preserve"><value>关闭</value></data>
   <data name="StudioMaximize" xml:space="preserve"><value>最大化／还原</value></data>
   <data name="StudioCut" xml:space="preserve"><value>剪切</value></data>
+  <data name="WorkspaceScriptsStoppedTitle" xml:space="preserve">
+    <value>工作区已切换</value>
+  </data>
+  <data name="WorkspaceScriptsStoppedMessage" xml:space="preserve">
+    <value>上一工作区的脚本进程已结束。</value>
+  </data>
+  <data name="WorkspaceSessionsClosedMessage" xml:space="preserve">
+    <value>上一工作区的常驻 PowerShell 会话已关闭。</value>
+  </data>
+  <data name="WorkspaceScriptsAndSessionsStoppedMessage" xml:space="preserve">
+    <value>上一工作区的脚本进程已结束，常驻 PowerShell 会话已关闭。</value>
+  </data>
 </root>
