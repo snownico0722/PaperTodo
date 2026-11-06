@@ -590,8 +590,17 @@ public sealed partial class AppController
     {
         protected override Size MeasureOverride(Size constraint)
         {
-            var desired = base.MeasureOverride(constraint);
+            // Popup initially measures with infinite width. Use the width assigned
+            // by the other rows so star columns really share the remaining space.
+            var width = double.IsPositiveInfinity(constraint.Width) ? ActualWidth : constraint.Width;
+            var desired = base.MeasureOverride(new Size(width, constraint.Height));
             return new Size(0, desired.Height);
+        }
+
+        protected override void OnRenderSizeChanged(SizeChangedInfo sizeInfo)
+        {
+            base.OnRenderSizeChanged(sizeInfo);
+            if (sizeInfo.WidthChanged) InvalidateMeasure();
         }
     }
 
@@ -613,7 +622,7 @@ public sealed partial class AppController
         };
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        row.Children.Add(new TextBlock
+        var heading = new TextBlock
         {
             Text = Strings.Get("WorkspaceSettingsTitle"),
             Foreground = TrayWeakTextBrush,
@@ -621,7 +630,8 @@ public sealed partial class AppController
             FontWeight = FontWeights.SemiBold,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(1, 0, 9, 0)
-        });
+        };
+        row.Children.Add(heading);
         var choices = new ContentPresenter
         {
             VerticalAlignment = VerticalAlignment.Center,
@@ -632,6 +642,9 @@ public sealed partial class AppController
 
         void ShowConfirmation(int target)
         {
+            heading.Visibility = Visibility.Collapsed;
+            Grid.SetColumn(choices, 0);
+            Grid.SetColumnSpan(choices, 2);
             var actions = new Grid
             {
                 VerticalAlignment = VerticalAlignment.Center
@@ -642,10 +655,10 @@ public sealed partial class AppController
             actions.Children.Add(new TextBlock
             {
                 Text = SettingsSidebarLocalized(
-                    "确定切换为工作区" + target + "？",
-                    "Switch to workspace " + target + "?",
-                    "ワークスペース" + target + "に切り替えますか？",
-                    "작업 공간 " + target + "(으)로 전환할까요?"),
+                    "切换工作区" + target,
+                    "Switch to " + target,
+                    target + "に切替",
+                    target + "로 전환"),
                 Foreground = TrayTextBrush,
                 VerticalAlignment = VerticalAlignment.Center,
                 FontSize = AppTypography.Scale(11),
@@ -653,8 +666,8 @@ public sealed partial class AppController
                 Margin = new Thickness(0, 0, 6, 0)
             });
             var confirm = PluginPageButton(SettingsSidebarLocalized(
-                "确定", "OK", "確定", "확인"));
-            confirm.MinWidth = 39;
+                "是", "Yes", "はい", "예"));
+            confirm.MinWidth = 28;
             confirm.Height = 24;
             confirm.Padding = new Thickness(4, 1, 4, 1);
             confirm.Margin = new Thickness(0, 0, 3, 0);
@@ -663,8 +676,9 @@ public sealed partial class AppController
                 e.Handled = true;
                 InvokeTrayAction(menu, () => { _ = SwitchWorkspaceAsync(target); });
             };
-            var cancel = PluginPageButton(Strings.Get("CommonCancel"));
-            cancel.MinWidth = 39;
+            var cancel = PluginPageButton(SettingsSidebarLocalized(
+                "否", "No", "いいえ", "아니요"));
+            cancel.MinWidth = 28;
             cancel.Height = 24;
             cancel.Padding = new Thickness(4, 1, 4, 1);
             cancel.Click += (_, e) =>
@@ -681,6 +695,9 @@ public sealed partial class AppController
 
         void ShowChoices()
         {
+            heading.Visibility = Visibility.Visible;
+            Grid.SetColumn(choices, 1);
+            Grid.SetColumnSpan(choices, 1);
             var existing = WorkspaceOptions.SlotNumbers.ToHashSet();
             var firstEmpty = Enumerable.Range(2, 4).FirstOrDefault(number => !existing.Contains(number));
             var numbers = WorkspaceOptions.SlotNumbers.ToList();

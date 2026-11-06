@@ -51,7 +51,7 @@ public sealed partial class AppController
                 SettingsSectionLabel(
                     SettingsSidebarLocalized("图片", "Images", "画像", "이미지")),
                 WrapWithHint(
-                    SettingsToggle(
+                    WrappingSettingsToggle(
                         Strings.Get("SettingsAutoCompressLargeImages"),
                         State.AutoCompressLargeImages,
                         ToggleAutoCompressLargeImages),
@@ -60,19 +60,19 @@ public sealed partial class AppController
             content.Children.Add(BuildSettingsLiveRegion("note.scripts", () => AdvancedSettingsBlock(
                 SettingsSectionLabel(Strings.Get("SettingsScriptCapsule")),
                 WrapWithHint(
-                    SettingsToggle(
+                    WrappingSettingsToggle(
                         Strings.Get("SettingsPersistentPowerShellProcess"),
                         State.UsePersistentPowerShellProcess,
                         TogglePersistentPowerShellProcess),
                     "TipPersistentPowerShellProcess"),
                 WrapWithHint(
-                    SettingsToggle(
+                    WrappingSettingsToggle(
                         Strings.Get("SettingsPreferPowerShell7"),
                         State.PreferPowerShell7,
                         TogglePreferPowerShell7),
                     "TipPreferPowerShell7"),
                 WrapWithHint(
-                    SettingsToggle(
+                    WrappingSettingsToggle(
                         Strings.Get("SettingsHideScriptRunWindow"),
                         State.HideScriptRunWindow,
                         ToggleHideScriptRunWindow),
@@ -105,7 +105,7 @@ public sealed partial class AppController
         }));
 
         markdownAnimationRow = WrapWithHint(
-            SettingsToggle(
+            WrappingSettingsToggle(
                 Strings.Get("SettingsMarkdownEditAnimation"),
                 State.MarkdownEditAnimationEnabled,
                 ToggleMarkdownEditAnimation),
