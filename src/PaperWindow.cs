@@ -2368,7 +2368,7 @@ public sealed partial class PaperWindow : Window
 
         _runScriptButton = IconButton("", Strings.Get("TopBarRunScript"));
         _runScriptButton.Content = CreateTopBarRunScriptIcon(_runScriptButton);
-        _runScriptButton.Click += (_, _) => _controller.RunTopBarScript(this);
+        _runScriptButton.Click += (_, _) => _controller.RunTopBarScript(InteractionWindow);
         actionButtons.Children.Add(_runScriptButton);
 
         var windowBindingButton = IconButton(
@@ -2719,7 +2719,7 @@ public sealed partial class PaperWindow : Window
                 case PaperTopBarShortcuts.RunScript when
                     forDeepCapsuleSlot || !IsTopBarCommandVisible(_runScriptButton):
                     menu.Items.Add(MenuItem(Strings.Get("TopBarRunScript"),
-                        (_, _) => _controller.RunTopBarScript(this)));
+                        (_, _) => _controller.RunTopBarScript(InteractionWindow)));
                     break;
                 case PaperTopBarShortcuts.Workspace when
                     _controller.WorkspaceOptions.Enabled &&

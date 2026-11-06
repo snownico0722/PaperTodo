@@ -35,6 +35,36 @@ internal static partial class WorkbenchChecks
         Assert(!HasAction("MenuHide") && !HasAction("MenuCollapseToCapsule") && HasAction("MenuDelete"),
             "Borrowed papers must keep normal actions without exposing desktop form transitions");
 
+        controller.SetTopBarShortcutHidden(PaperTopBarShortcuts.NewNote, true);
+        controller.SetTopBarShortcutHidden(PaperTopBarShortcuts.RunScript, true);
+        contextMenu.RaiseEvent(new RoutedEventArgs(ContextMenu.OpenedEvent));
+        Assert(!HasAction("MenuNewNotePaper") && !HasAction("TopBarRunScript") && HasAction("TraySettings"),
+            "Canvas paper menu ignored hidden shortcuts or lost fixed Settings");
+        controller.SetTopBarShortcutHidden(PaperTopBarShortcuts.NewNote, false);
+        controller.SetTopBarShortcutHidden(PaperTopBarShortcuts.RunScript, false);
+        contextMenu.RaiseEvent(new RoutedEventArgs(ContextMenu.OpenedEvent));
+        Assert(HasAction("MenuNewNotePaper") && HasAction("TopBarRunScript"),
+            "Unhiding shortcuts did not restore Canvas paper actions");
+
+        // The paper HWND is hidden while its editor is leased. The unconfigured
+        // script action must open its editor as a child of the visible Canvas.
+        var scriptDialogCheck = CheckScriptDialogOwnerAsync();
+        contextMenu.Items.OfType<MenuItem>().Single(item => Equals(item.Header, Strings.Get("TopBarRunScript")))
+            .RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+        await scriptDialogCheck;
+        Assert(string.IsNullOrEmpty(controller.State.TopBarScript), "Canceling the script editor changed its configuration");
+
+        async Task CheckScriptDialogOwnerAsync()
+        {
+            Window? dialog = null;
+            await Until(() => (dialog = Application.Current.Windows.OfType<Window>().FirstOrDefault(
+                window => window.IsVisible && window.Title == Strings.Get("TopBarEditScript"))) != null,
+                "Canvas script action did not open its editor");
+            var correctOwner = dialog!.Owner == desk;
+            dialog.Close();
+            Assert(correctOwner, "Canvas script editor was owned by the hidden desktop paper");
+        }
+
         var cardBefore = ActiveCards(desk)["note-a"]!;
         var pin = (Button)Member(cardBefore, "Pin");
         var fold = (Button)Member(cardBefore, "Fold");

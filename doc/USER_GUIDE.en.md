@@ -567,8 +567,11 @@ Use these arguments in shortcuts, scripts, or launchers (visibility and creation
 | `PaperTodo.exe --toggle` | None | Toggle overall visibility |
 | `PaperTodo.exe --new-todo` | `PaperTodo.exe todo` | Create a todo paper |
 | `PaperTodo.exe --new-note` | `PaperTodo.exe note` | Create a note paper |
+| `PaperTodo.exe --canvas` | None | Open Canvas for the current workspace; restore and activate an existing window without closing or duplicating it |
 | `PaperTodo.exe --exit` | `PaperTodo.exe quit` | Save and exit |
 | `PaperTodo.exe --mcp` | None | Start the connection process for an MCP client (see [8.5 Labs Features](#85-labs-features)) |
+
+Canvas follows its normal opening flow. The first opening arranges and saves the cards; later openings reuse that layout, and new papers fill available space. Paper context menus follow shared shortcut visibility and plugin menu-only placement.
 
 Normal GUI launches use a single instance: if PaperTodo is already running, subsequent launches forward commands and exit without creating duplicate windows. `--mcp` is a separate connection mode rather than a normal GUI launch command.
 
