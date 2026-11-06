@@ -1,6 +1,10 @@
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using PaperTodo;
 
@@ -10,13 +14,7 @@ internal static class ExpandedEditorResumeChecks
 
     internal static async Task Run()
     {
-        Check(NoteTextStatistics.Count("# 标题\n**中文** [abc](https://example.com)\n![](i:1)") == 7,
-            "Statistics counted Markdown syntax, image URI or link destination");
-        Check(NoteTextStatistics.Count("中文 abc😀\n\t") == 6,
-            "Statistics counted whitespace or counted a surrogate pair twice");
-        Check(NoteTextStatistics.Count("![image|100%](i:123)") == 5 &&
-              NoteTextStatistics.Count("![image|50%](i:123){width=75%}") == 5,
-            "Changing only image display size changed the character count");
+        NoteTextStatisticsChecks.Run();
 
         var area = SystemParameters.WorkArea;
         var saved = new ExpandedEditorState
@@ -79,6 +77,49 @@ internal static class ExpandedEditorResumeChecks
         bBox.AppendText("!");
         await WaitForCount(statistics, Strings.Format("EditorCharacterCount", 7));
 
+        // The statistics UI must not become a second input owner or consume selection.
+        bBox.Text = "**中文** [abc](https://example.com)\n\n末尾";
+        bBox.Select(bBox.Text.IndexOf("https://", StringComparison.Ordinal), "https://example.com".Length);
+        await WaitForCount(statistics, Strings.Format("EditorSelectionCount", 7, 0));
+        host.Activate();
+        bBox.Focus();
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        var focus = Keyboard.FocusedElement;
+        Check(bBox.IsKeyboardFocusWithin, "Statistics scenario did not begin with editor focus");
+        var selection = (bBox.SelectionStart, bBox.SelectionLength);
+        var trigger = (Button)Member(b, "_editorStatisticsButton");
+        trigger.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        var popup = (Popup)Member(b, "_editorStatisticsPopup");
+        Check(popup.IsOpen && ReferenceEquals(focus, Keyboard.FocusedElement) &&
+              selection == (bBox.SelectionStart, bBox.SelectionLength),
+            "Opening statistics stole editor focus or changed its selection");
+        var totals = (TextBlock[])Member(b, "_editorStatisticsTotals");
+        var selected = (TextBlock[])Member(b, "_editorStatisticsSelected");
+        Check(totals[0].Text == "3" && totals[1].Text == "7" && selected[1].Text == "0" &&
+              selected[2].Text == "19" && selected.All(label => label.Visibility == Visibility.Visible),
+            "Popup did not show document/selection statistics with shared Markdown semantics");
+        CapturePopup(popup, "editor-statistics-selection.png");
+        var shell = (UIElement)Member(b, "_shell");
+        var escape = new KeyEventArgs(Keyboard.PrimaryDevice, PresentationSource.FromVisual(host),
+            Environment.TickCount, Key.Escape) { RoutedEvent = Keyboard.PreviewKeyDownEvent };
+        shell.RaiseEvent(escape);
+        Check(escape.Handled && !popup.IsOpen && selection == (bBox.SelectionStart, bBox.SelectionLength) &&
+              ReferenceEquals(focus, Keyboard.FocusedElement), "Escape did not dismiss statistics without moving input");
+        trigger.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        trigger.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Check(!popup.IsOpen, "Second statistics click did not toggle the popup closed");
+        trigger.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        shell.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, Environment.TickCount, MouseButton.Left)
+            { RoutedEvent = Mouse.PreviewMouseDownEvent });
+        Check(!popup.IsOpen, "Clicking outside statistics did not close it");
+        trigger.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        bBox.Select(0, 0);
+        await WaitForCount(statistics, Strings.Format("EditorCharacterCount", 7));
+        Check(selected.All(label => label.Visibility == Visibility.Collapsed),
+            "Clearing selection left the selection column visible");
+        CapturePopup(popup, "editor-statistics-document.png");
+
         bBox.Text = "苹果\n香蕉\n梨";
         bBox.Select(0, bBox.Text.Length);
         bBox.InsertLinePrefix("- ");
@@ -115,6 +156,7 @@ internal static class ExpandedEditorResumeChecks
         }
 
         controller.SwitchExpandedEditorPaper(b, "resume-a");
+        Check(!popup.IsOpen, "Switching papers left the old statistics popup open");
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
         Check(ReferenceEquals(host, a.ExpandedEditorHostWindow), "Switching replaced the editor host");
         box.Text = "甲乙丙丁";
@@ -146,6 +188,22 @@ internal static class ExpandedEditorResumeChecks
             Check(desktop[paper.Id] == (paper.X, paper.Y, paper.Width, paper.Height),
                 "Editor presentation overwrote desktop paper geometry");
         controller.Exit();
+    }
+
+    private static void CapturePopup(Popup popup, string name)
+    {
+        var directory = Environment.GetEnvironmentVariable("PAPERTODO_IMAGE_EXPORT_ARTIFACTS");
+        if (string.IsNullOrWhiteSpace(directory)) return;
+        var content = (FrameworkElement)popup.Child;
+        content.UpdateLayout();
+        var bitmap = new RenderTargetBitmap((int)Math.Ceiling(content.ActualWidth),
+            (int)Math.Ceiling(content.ActualHeight), 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(content);
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        System.IO.Directory.CreateDirectory(directory);
+        using var stream = System.IO.File.Create(System.IO.Path.Combine(directory, name));
+        encoder.Save(stream);
     }
 
     private static async Task WaitForCount(TextBlock label, string expected)

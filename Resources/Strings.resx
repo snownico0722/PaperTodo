@@ -1812,6 +1812,24 @@
   <data name="EditorTodo" xml:space="preserve"><value>待办</value></data>
   <data name="EditorNote" xml:space="preserve"><value>笔记</value></data>
   <data name="EditorPaper" xml:space="preserve"><value>纸片</value></data>
+  <data name="EditorStatistics" xml:space="preserve">
+    <value>文字统计</value>
+  </data>
+  <data name="EditorStatisticsDocument" xml:space="preserve">
+    <value>全文</value>
+  </data>
+  <data name="EditorStatisticsSelection" xml:space="preserve">
+    <value>选中</value>
+  </data>
+  <data name="EditorStatisticsLines" xml:space="preserve">
+    <value>行数</value>
+  </data>
+  <data name="EditorStatisticsBody" xml:space="preserve">
+    <value>正文字数</value>
+  </data>
+  <data name="EditorStatisticsSource" xml:space="preserve">
+    <value>原文字符数</value>
+  </data>
   <data name="EditorCharacterCount" xml:space="preserve"><value>{0:N0} 字</value></data>
   <data name="EditorSelectionCount" xml:space="preserve"><value>{0:N0} 字 · 选中 {1:N0} 字</value></data>
   <data name="EditorImageExport" xml:space="preserve"><value>导出图片</value></data>

@@ -154,13 +154,20 @@ public sealed partial class PaperWindow
         => NotifyCurrentPaperBodyActivated();
 
     private void OnExpandedEditorHostLocationChanged(object? sender, EventArgs e)
-        => RepositionBuiltInFindPopup();
+    {
+        CloseEditorStatisticsPopup();
+        RepositionBuiltInFindPopup();
+    }
 
     private void OnExpandedEditorHostSizeChanged(object? sender, SizeChangedEventArgs e)
-        => RepositionBuiltInFindPopup();
+    {
+        CloseEditorStatisticsPopup();
+        RepositionBuiltInFindPopup();
+    }
 
     private void OnExpandedEditorHostDeactivated(object? sender, EventArgs e)
     {
+        CloseEditorStatisticsPopup();
         NotifyCurrentPaperBodyDeactivated();
         AbortAllInteractions(InteractionAbortReason.Deactivated);
     }
