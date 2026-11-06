@@ -354,8 +354,7 @@ public sealed partial class AppController
     {
         yield return SettingsPage.General;
         yield return SettingsPage.Workspaces;
-        yield return SettingsPage.Todo;
-        yield return SettingsPage.Note;
+        yield return SettingsPage.NotesAndTodos;
         yield return SettingsPage.Visual;
         yield return SettingsPage.Shortcuts;
         yield return SettingsPage.Plugins;
@@ -478,8 +477,7 @@ public sealed partial class AppController
     {
         SettingsPage.General => BuildSettingsSidebarGeneralPage(),
         SettingsPage.Workspaces => BuildWorkspaceSettingsPage(),
-        SettingsPage.Todo => BuildSettingsSidebarTodoPage(),
-        SettingsPage.Note => BuildSettingsSidebarNotePage(),
+        SettingsPage.NotesAndTodos => BuildSettingsSidebarNotesAndTodosPage(),
         SettingsPage.Visual => BuildSettingsLiveRegion("visual.options", BuildVisualSettingsPage),
         SettingsPage.Shortcuts => BuildSettingsLiveRegion("shortcuts.bindings", BuildShortcutSettingsPage),
         SettingsPage.Plugins => BuildPluginsSettingsPage(),
@@ -492,8 +490,7 @@ public sealed partial class AppController
         SettingsPage.General => SettingsSidebarLocalized(
             "常规", "General", "一般", "일반"),
         SettingsPage.Workspaces => Strings.Get("WorkspaceSettingsTitle"),
-        SettingsPage.Todo => Strings.Get("MenuTodo"),
-        SettingsPage.Note => Strings.Get("PaperKindNote"),
+        SettingsPage.NotesAndTodos => Strings.Get("SettingsNotesAndTodos"),
         SettingsPage.Visual => Strings.Get("SettingsVisual"),
         SettingsPage.Shortcuts => Strings.Get("SettingsShortcuts"),
         SettingsPage.Plugins => Strings.Get("SettingsPlugins"),
@@ -566,4 +563,3 @@ public sealed partial class AppController
             DispatcherPriority.Background);
     }
 }
-

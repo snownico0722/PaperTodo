@@ -2045,7 +2045,7 @@ Ctrl selects the payload, never the floating phase. Whole queues first slide alo
 
 The controller owns one queue-level input snapshot and a prospective membership/anchor plan, not another per-paper state machine. All placements use the existing coordinator and typed reducer/presenter. Release reevaluates the same policy as preview. No member identity is written while dragging. Cancellation clears transient feedback rather than restoring stale identities over external operations. The selected destination and explicitly displaced anchors are persisted, not passive hover/display offsets.
 
-Free queues and the master are independent settings. A single master per live edge collects/restores all groups while preserving their identities and anchors. Its docked movement previews an edge-wide rigid translation without writing intermediate positions; its floating transfer preserves grouping rather than flattening the destination. Ctrl works without a master and also when free queues are disabled. Existing overflow remains unpaged.
+Free queues and the master are independent settings. A single master per live edge collects/restores all groups while preserving their identities and anchors. Its docked movement previews an edge-wide rigid translation without writing intermediate positions; its floating transfer preserves grouping rather than flattening the destination. Ctrl works without a master and also when free queues are disabled (the disabled-mode choice is superseded by D-072). Existing overflow remains unpaged.
 
 The native drop feedback is driven by the existing drag callbacks and pooled host movement, not an additional polling timer. The transparent landing marker draws exactly one normal capsule silhouette regardless of how many members Ctrl carries, using the visible target master's width only when the destination is collapsed. In free-queue mode the marker alone previews the prospective destination: unaffected queues and their masters do not shift with pointer movement. The actual local insertion and collision displacement happen on release. The final release samples the physical pointer before committing. The floating cover is established before peers retract; peers return via the existing placement/retraction transitions.
 
@@ -2147,3 +2147,14 @@ The preview should show an available landing rather than make a target continuou
 ### Why
 
 只为可恢复的数据支付存储与代码成本，保留真实的未提交快照而不积累无界防御文件。
+
+
+## D-072 — Ctrl 整队拖拽归属胶囊自由队列
+
+**Status:** Accepted; supersedes D-066 only for Ctrl while free queues are disabled.
+
+**Context / Decision:** Ctrl 整队搬运属于可选的胶囊自由队列功能。关闭后，普通胶囊上的 Ctrl 与普通单颗拖动相同；整侧队列仍由主胶囊搬运。主胶囊保留独立的队列迁移事务，所有模式的浮动移动均刷新同一投影窗口。
+
+**Why:** 功能关闭时不留下另一条隐含整队操作；保留主胶囊和真实纸片各自的状态归属，不为统一手势重建呈现或落位系统。
+
+**Evidence:** `PaperWindow.NativeQueueInteraction.LatchNativeQueueControl`、`AppController.BeginNativeEdgeQueueDrag`、`MasterCapsuleWindow.OnFloatingDragHostLocationChanged`。

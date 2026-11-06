@@ -5,6 +5,6 @@ namespace PaperTodo;
 internal static class WorkspaceCycleIcon
 {
     internal const string PathData =
-        "M5.5 3.5H12.5A2 2 0 0 1 14.5 5.5V11.5 M5 5.75H10.5A2 2 0 0 1 12.5 7.75V13.5A2 2 0 0 1 10.5 15.5H5A2 2 0 0 1 3 13.5V7.75A2 2 0 0 1 5 5.75Z M5.7 10.6H10 M8.2 8.8L10 10.6L8.2 12.4";
-    internal const double StrokeThickness = 1.5;
+        "M7 2H16A2 2 0 0 1 18 4V13 M6 4H14A2 2 0 0 1 16 6V14A2 2 0 0 1 14 16H6A2 2 0 0 1 4 14V6A2 2 0 0 1 6 4Z";
+    internal const double StrokeThickness = 1.2;
 }

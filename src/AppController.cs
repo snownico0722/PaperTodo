@@ -723,7 +723,7 @@ public sealed partial class AppController : IDisposable
             }
         }
 
-        return PaperTitleText(paper);
+        return PaperTitles.DisplayTitle(paper, TitleNumberFor(paper), State.MaxTitleLength);
     }
 
     public string PaperCapsuleTitle(PaperData paper)
@@ -744,11 +744,13 @@ public sealed partial class AppController : IDisposable
             return paper.BodyCapsuleText;
         }
 
-        return PaperTitleText(paper);
+        return PaperTitles.DisplayTitle(paper, TitleNumberFor(paper), State.MaxTitleLength);
     }
 
     public void UpdatePaperTitle(PaperData paper, string title)
     {
+        // Opening and leaving an unchanged editor must preserve an older long title.
+        if (title == PaperTitleText(paper)) return;
         var cleaned = PaperTitles.CleanCustomTitle(title, State.MaxTitleLength);
         if (paper.Title == cleaned)
         {
@@ -4323,7 +4325,3 @@ public sealed partial class AppController : IDisposable
         TryExitCleanup(() => scriptShutdown.GetAwaiter().GetResult());
     }
 }
-
-
-
-

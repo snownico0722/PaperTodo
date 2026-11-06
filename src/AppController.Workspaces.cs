@@ -88,7 +88,7 @@ public sealed partial class AppController
 
     // Shared by the settings page and the tray. Creating a slot only updates the
     // catalog; its document and presentation are initialized on first switch.
-    private async Task<int> CreateWorkspaceAsync()
+    internal async Task<int> CreateWorkspaceAsync()
     {
         var options = WorkspaceOptions.Normalized();
         if (!options.Enabled) return 0;

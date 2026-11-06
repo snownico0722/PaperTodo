@@ -291,7 +291,12 @@ internal static partial class Program
         service.Set("todo.move_completed_to_bottom", Json(true));
         Check(!paper.Items[0].Done && paper.Items[0].Order == 0 && paper.Items[1].Order == 1, "Completed group is reordered just like Settings UI.");
         service.Set("title.max_length", Json(2));
-        Check(paper.Title == "abcd", "Successful max length counts two half-width characters as one.");
+        Check(paper.Title == "abcdef" && c.PaperDisplayTitle(paper) == "abcd",
+            "The display limit hides excess half-width characters without changing the stored title.");
+        c.UpdatePaperTitle(paper, "abcdef");
+        Check(paper.Title == "abcdef", "Leaving an unchanged title editor preserves the full title.");
+        service.Set("title.max_length", Json(6));
+        Check(c.PaperDisplayTitle(paper) == "abcdef", "Raising the display limit reveals the original title.");
     }
 
     private static void TodoMoveBehavior()
@@ -579,4 +584,3 @@ internal static partial class Program
         finally { Directory.Delete(root, true); }
     }
 }
-
