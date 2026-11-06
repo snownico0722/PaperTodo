@@ -14,7 +14,7 @@ internal enum StudioIcon
 {
     Studio, ReturnToPaper, Sidebar, Minimize, Maximize, Restore, Close,
     NewNote, NewTodo, Open, Save, Settings, Pin, More, Association, ExternalOpen, Workspace,
-    Undo, Redo, Heading, Bold, Italic, Strike, Bullets, Numbers, Quote, Code, Link, Image, ExportImage
+    RunScript, Undo, Redo, Heading, Bold, Italic, Strike, Bullets, Numbers, Quote, Code, Link, Image, ExportImage
 }
 
 // One 24-unit, rounded 1.8-unit stroke family for both Studio hosts. Paths do not
@@ -94,6 +94,7 @@ internal static class StudioIcons
         StudioIcon.Association => "M9 8 L6 5 L3 8 L6 11 Z M18 13 L21 16 L18 19 L15 16 Z M9 8 H14 A4 4 0 0 1 18 12 V13 M6 11 V15 A3 3 0 0 0 9 18 H13",
         StudioIcon.ExternalOpen => "M13 3 H21 V11 M21 3 L11 13 M10 5 H5 A2 2 0 0 0 3 7 V19 A2 2 0 0 0 5 21 H17 A2 2 0 0 0 19 19 V14",
         StudioIcon.Workspace => "M3 4 H10 V11 H3 Z M14 4 H21 V11 H14 Z M3 15 H10 V22 H3 Z M14 15 H21 V22 H14 Z",
+        StudioIcon.RunScript => "M5 4 H19 A2 2 0 0 1 21 6 V18 A2 2 0 0 1 19 20 H5 A2 2 0 0 1 3 18 V6 A2 2 0 0 1 5 4 Z M7 9 L10 12 L7 15 M13 15 H17",
         StudioIcon.Undo => "M8 5 L3 10 L8 15 M3 10 H14 A6 6 0 0 1 14 22",
         StudioIcon.Redo => "M16 5 L21 10 L16 15 M21 10 H10 A6 6 0 0 0 10 22",
         StudioIcon.Heading => "M5 5 V19 M18 5 V19 M5 12 H18",

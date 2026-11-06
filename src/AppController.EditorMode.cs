@@ -8,6 +8,40 @@ public sealed partial class AppController
 {
     private readonly List<ExpandedEditorWindow> _expandedEditors = [];
 
+    internal void OpenStudio()
+    {
+        if (IsExiting) return;
+        if (_expandedEditors.LastOrDefault() is { } recent)
+        {
+            recent.ActivateEditor();
+            return;
+        }
+        ShowExpandedEditor(new ExpandedEditorWindow(this));
+    }
+
+    private void ShowExpandedEditor(ExpandedEditorWindow editor)
+    {
+        _expandedEditors.Add(editor);
+        editor.Show();
+        editor.ActivateEditor();
+    }
+
+    internal void OnStudioActivated(ExpandedEditorWindow editor)
+    {
+        if (!_expandedEditors.Remove(editor)) return;
+        _expandedEditors.Add(editor);
+    }
+
+    internal void CreateStudioPaper(ExpandedEditorWindow host, string type)
+    {
+        if (IsExiting) return;
+        var paper = CreatePaper(type, show: false);
+        if (paper == null) return;
+        paper.IsVisible = true;
+        host.SwitchTo(GetOrCreatePaperWindow(paper));
+        RefreshTrayMenu();
+    }
+
     internal void OpenExpandedEditorFor(PaperWindow source)
     {
         if (IsExiting || !State.Papers.Any(p => p.Id == source.PaperId)) return;
@@ -17,17 +51,18 @@ public sealed partial class AppController
             return;
         }
 
-        var editor = new ExpandedEditorWindow(this, source);
-        _expandedEditors.Add(editor);
-        editor.Show();
-        editor.Activate();
+        ShowExpandedEditor(new ExpandedEditorWindow(this, source));
     }
 
     internal void SwitchExpandedEditorPaper(PaperWindow source, string paperId)
     {
-        var host = source.ExpandedEditorHostWindow;
-        if (IsExiting || host == null || source.PaperId == paperId) return;
+        if (source.ExpandedEditorHostWindow is { } host)
+            SwitchStudioPaper(host, paperId);
+    }
 
+    internal void SwitchStudioPaper(ExpandedEditorWindow host, string paperId)
+    {
+        if (IsExiting || host.CurrentPaperId == paperId) return;
         var paper = State.Papers.FirstOrDefault(p => p.Id == paperId);
         if (paper == null) return;
 
@@ -75,7 +110,10 @@ public sealed partial class AppController
     internal void RefreshExpandedEditorPaperLists()
     {
         foreach (var editor in _expandedEditors.ToArray())
+        {
+            editor.RefreshEmptyStudio();
             editor.RefreshPaperList();
+        }
     }
 
     internal void CloseExpandedEditorForPaper(string id)

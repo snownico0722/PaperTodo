@@ -1516,7 +1516,7 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
     <value>上部バーのショートカット</value>
   </data>
   <data name="TipTopBarShortcutSettings" xml:space="preserve">
-    <value>ドラッグで並べ替え、区切り線を越えると上部バーとメニューの表示先を切り替えられます。幅が足りない場合、固定した標準ショートカットはまとめて一時的にメニューへ移動します。</value>
+    <value>ドラッグで順序や表示場所を変更します。「非表示」は位置を保持したまま上部バーと各ペーパーメニューの入口だけを隠し、機能は無効にしません。幅が足りない場合、固定した内蔵ショートカットはまとめてメニューに移ります。</value>
   </data>
   <data name="TopBarShownHeading" xml:space="preserve">
     <value>上部バーに表示</value>
@@ -1745,7 +1745,7 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="WorkspaceRecoveryFallback" xml:space="preserve">
     <value>ワークスペース {0} に戻る</value>
   </data>
-  <data name="EditorOpen" xml:space="preserve"><value>エディターで開く</value></data>
+  <data name="EditorOpen" xml:space="preserve"><value>スタジオで開く</value></data>
   <data name="EditorReturn" xml:space="preserve"><value>紙片に戻る</value></data>
   <data name="EditorSidebarShow" xml:space="preserve"><value>紙片一覧を表示</value></data>
   <data name="EditorSidebarHide" xml:space="preserve"><value>紙片一覧を閉じる</value></data>
@@ -1815,6 +1815,23 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="SettingsNotesAndTodos" xml:space="preserve"><value>ノートとToDo</value></data>
   <data name="WorkspaceSingleMessage" xml:space="preserve"><value>ワークスペースは現在1つだけです。</value></data>
   <data name="WorkspaceCreate" xml:space="preserve"><value>新規</value></data>
+  <data name="StudioTitle" xml:space="preserve"><value>スタジオ</value></data>
+  <data name="EditorClose" xml:space="preserve"><value>スタジオを閉じる</value></data>
+  <data name="TopBarHideShortcut" xml:space="preserve">
+    <value>非表示</value>
+  </data>
+  <data name="TopBarRunScript" xml:space="preserve">
+    <value>スクリプトを実行</value>
+  </data>
+  <data name="TopBarEditScript" xml:space="preserve">
+    <value>スクリプトを編集</value>
+  </data>
+  <data name="TopBarScriptSave" xml:space="preserve">
+    <value>保存</value>
+  </data>
+  <data name="TopBarScriptHint" xml:space="preserve">
+    <value>接頭辞を省略すると !p として実行します。使用可能：!p / !power、!pwsh / !ps7、!ps5 / !winps、!pf / !powerf。接頭辞だけを1行目に記入し、次の行からスクリプトを書きます。半角 ! のみ対応。保存しても実行されません。</value>
+  </data>
   <data name="StudioStandaloneTitle" xml:space="preserve"><value>独立スタジオ</value></data>
   <data name="StudioNew" xml:space="preserve"><value>新規文書</value></data>
   <data name="StudioOpen" xml:space="preserve"><value>ファイルを開く</value></data>

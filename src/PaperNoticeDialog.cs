@@ -197,7 +197,7 @@ internal static class PaperNoticeDialog
         return selected;
     }
 
-    private static Button CreateButton(string text, bool primary)
+    internal static Button CreateButton(string text, bool primary)
     {
         var style = new Style(typeof(Button));
         style.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(16, 7, 16, 7)));

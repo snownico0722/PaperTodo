@@ -13,12 +13,7 @@
     await papertodo.globalTopBar.setActions([
       {
         id: 'inspect-current',
-        icon: {
-          kind: 'svgPath',
-          value: 'M3,3 L13,3 13,13 3,13 Z M6,8 L10,8',
-          renderMode: 'stroke',
-          strokeWidth: 1.5
-        },
+        menuOnly: true,
         toolTip: '读取当前纸片信息'
       }
     ]);
@@ -26,14 +21,14 @@
 
   function publishPaper(paperId) {
     if (!paperId) return;
-    void papertodo.papers.setHeaderText(paperId, `Top Bar 2.1 · ${pingCount}`);
+    void papertodo.papers.setHeaderText(paperId, `Top Bar 2.3 · ${pingCount}`);
     void papertodo.papers.setCapsulePresentation(paperId, {
       preferredWidth: 0,
-      plainText: 'Top Bar 2.1',
-      toolTip: 'Protocol 2.1 Top Bar 示例',
+      plainText: 'Top Bar 2.3',
+      toolTip: 'Protocol 2.3 Top Bar 示例',
       components: [
         { kind: 'glyph', text: 'T' },
-        { kind: 'text', text: 'Top Bar 2.1', fill: true }
+        { kind: 'text', text: 'Top Bar 2.3', fill: true }
       ]
     });
   }

@@ -53,7 +53,7 @@ internal static partial class Program
         var mainStore = catalog.MainStore;
         var writerField = typeof(StateStore).GetField("_atomicWriter", BindingFlags.Instance | BindingFlags.NonPublic)!;
         var originalWriter = (IDurableAtomicFileWriter)writerField.GetValue(mainStore)!;
-        var processField = typeof(PaperWindow).GetField("PersistentScriptProcesses", BindingFlags.Static | BindingFlags.NonPublic)!;
+        var processField = typeof(ScriptExecutionService).GetField("PersistentScriptProcesses", BindingFlags.Static | BindingFlags.NonPublic)!;
         var processes = (Dictionary<string, Process>)processField.GetValue(null)!;
         var originalPersistent = controller.State.UsePersistentPowerShellProcess;
         var originalOptions = controller.WorkspaceOptions.Normalized();

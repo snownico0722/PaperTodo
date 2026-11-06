@@ -244,6 +244,7 @@ public sealed partial class AppController
         State.TopBarShortcutOrder = PaperTopBarShortcuts.NormalizeOrder(null);
         State.TopBarPinnedCount = 3;
         State.TopBarDefaultsVersion = PaperTopBarShortcuts.CurrentDefaultsVersion;
+        State.HiddenTopBarShortcuts = [];
         State.TodoTopBarShortcuts = null;
         State.NoteTopBarShortcuts = null;
         State.UseCapsuleMode = true;

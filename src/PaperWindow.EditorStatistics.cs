@@ -73,8 +73,8 @@ public sealed partial class PaperWindow
     {
         if (_editorStatisticsBar == null || _editorStatisticsText == null) return;
         _editorStatisticsBar.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
-        _editorStatisticsBar.Margin = new Thickness(0, 0,
-            IsExpandedEditorSidebarOpen ? ExpandedEditorSidebarWidth : 0, 0);
+        _editorStatisticsBar.Margin = new Thickness(
+            IsExpandedEditorSidebarOpen ? ExpandedEditorSidebarWidth : 0, 0, 0, 0);
         _editorStatisticsText.FontSize = AppTypography.Scale(10.5);
         _editorStatisticsText.FontFamily = AppTypography.UiFontFamily;
         System.Windows.Automation.AutomationProperties.SetName(_editorStatisticsButton!, Strings.Get("EditorStatistics"));

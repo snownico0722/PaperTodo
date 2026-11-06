@@ -176,6 +176,24 @@ internal static class ExpandedEditorChecks
         var before = controller.State.Papers.ToDictionary(
             paper => paper.Id, paper => (paper.X, paper.Y, paper.Width, paper.Height));
 
+        var initialVisibility = controller.State.Papers.ToDictionary(p => p.Id, p => p.IsVisible);
+        controller.OpenStudio();
+        var empty = Application.Current.Windows.OfType<ExpandedEditorWindow>().Single();
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(empty.CurrentPaperId == null && empty.IsSidebarOpen && controller.State.Papers.Count == 3,
+            "Opening Studio created a placeholder or did not offer its paper list");
+        Check(controller.State.Papers.All(p => p.IsVisible == initialVisibility[p.Id]) && !empty.Topmost,
+            "Opening empty Studio changed desktop paper visibility or pinned the window");
+        empty.WindowState = WindowState.Minimized;
+        controller.OpenStudio();
+        Check(Application.Current.Windows.OfType<ExpandedEditorWindow>().Count() == 1 &&
+              empty.WindowState != WindowState.Minimized,
+            "Repeated Studio command created another window or failed to restore it");
+        empty.UpdateLayout();
+        var initialList = (ListBox)Member(empty, "_editorPaperList");
+        var firstItem = Descendants<Button>(initialList).First(item =>
+            Descendants<TextBlock>(item).Any(label => label.Text == "First"));
+        firstItem.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
         controller.OpenExpandedEditorFor(a);
         var host = a.ExpandedEditorHostWindow
             ?? throw new InvalidOperationException("Editor host did not open");
@@ -401,6 +419,24 @@ internal static class ExpandedEditorChecks
         Check(listHost.CurrentPaperId!.StartsWith("list-") && Math.Abs(scroll.VerticalOffset - offset) < 1,
             "Switching a paper reset the sidebar scroll position");
         Check(otherHost.CurrentPaperId == "editor-b", "One editor's navigation changed another editor");
+        listHost.ActivateEditor();
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        controller.OpenStudio();
+        Check(listHost.IsActive &&
+              Application.Current.Windows.OfType<ExpandedEditorWindow>().Count() == 2,
+            "Studio command did not restore the most recently used window");
+        listHost.CloseWithoutPaperAction();
+        otherHost.CloseWithoutPaperAction();
+        controller.State.Papers.RemoveAll(p => p.Id.StartsWith("list-"));
+        controller.OpenStudio();
+        var newDocumentHost = Application.Current.Windows.OfType<ExpandedEditorWindow>().Single();
+        newDocumentHost.UpdateLayout();
+        var newNote = Descendants<Button>(newDocumentHost).First(button =>
+            Descendants<TextBlock>(button).Any(label => label.Text == Strings.Get("TrayNewNote")));
+        newNote.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+        Check(controller.State.Papers.Count == 4 && newDocumentHost.CurrentPaper is { IsExpandedEditorHosted: true } &&
+              controller.State.Papers.Last().Type == PaperTypes.Note,
+            "New Note in empty Studio did not create and select exactly one real paper");
     }
 
     private static void SetGlobalPaperLock(AppController controller, bool locked)

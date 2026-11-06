@@ -278,8 +278,8 @@ public sealed partial class AppController
         if (previousPersistentPowerShell != State.UsePersistentPowerShellProcess ||
             previousPreferPowerShell7 != State.PreferPowerShell7)
         {
-            PaperWindow.StopPersistentScriptProcesses();
-            PaperWindow.EnsurePersistentScriptProcessForSettings(State);
+            ScriptExecutionService.StopPersistentScriptProcesses();
+            ScriptExecutionService.EnsurePersistentScriptProcessForSettings(State);
         }
         // Delay host transport changes until the originating request has returned.
         Application.Current.Dispatcher.BeginInvoke(new Action(() =>

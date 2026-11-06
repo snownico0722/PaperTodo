@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -181,7 +182,38 @@ public sealed partial class AppController
                 FontSize = AppTypography.Scale(11.5),
                 VerticalAlignment = VerticalAlignment.Center
             });
-            border.Child = row;
+            var content = new DockPanel { LastChildFill = true };
+            var controls = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                VerticalAlignment = VerticalAlignment.Center,
+                Cursor = Cursors.Arrow
+            };
+            if (action == PaperTopBarShortcuts.RunScript)
+            {
+                var edit = SettingsIconButton("", Strings.Get("TopBarEditScript"));
+                edit.Content = new System.Windows.Shapes.Path
+                {
+                    Data = Geometry.Parse("M 4 15 L 3 21 L 9 20 L 21 8 L 16 3 Z M 13 6 L 18 11"),
+                    Stroke = TrayTextBrush, StrokeThickness = 1.8,
+                    StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round,
+                    StrokeLineJoin = PenLineJoin.Round, Stretch = Stretch.Uniform,
+                    Width = 14, Height = 14, IsHitTestVisible = false
+                };
+                edit.Margin = new Thickness(6, 0, 4, 0);
+                edit.Click += (_, _) => EditTopBarScript();
+                controls.Children.Add(edit);
+            }
+            var hide = SettingsToggle(Strings.Get("TopBarHideShortcut"),
+                PaperTopBarShortcuts.IsHidden(State, action),
+                () => SetTopBarShortcutHidden(action, !PaperTopBarShortcuts.IsHidden(State, action)));
+            hide.Margin = new Thickness(8, 0, 0, 0);
+            hide.FontSize = AppTypography.Scale(11.5);
+            controls.Children.Add(hide);
+            DockPanel.SetDock(controls, Dock.Right);
+            content.Children.Add(controls);
+            content.Children.Add(row);
+            border.Child = content;
             frame.Children.Add(border);
 
             // This overlay marks the exact insertion edge without affecting row height.
@@ -198,7 +230,8 @@ public sealed partial class AppController
             Point? start = null;
             frame.PreviewMouseLeftButtonDown += (_, e) =>
             {
-                start = e.GetPosition(frame);
+                start = IsTopBarShortcutControl(e.OriginalSource as DependencyObject)
+                    ? null : e.GetPosition(frame);
             };
             frame.PreviewMouseLeftButtonUp += (_, _) => start = null;
             frame.PreviewMouseRightButtonDown += (_, _) => start = null;
@@ -264,6 +297,14 @@ public sealed partial class AppController
         return panel;
     }
 
+    private static bool IsTopBarShortcutControl(DependencyObject? source)
+    {
+        for (var current = source; current != null; current = current is Visual
+                 ? VisualTreeHelper.GetParent(current) : LogicalTreeHelper.GetParent(current))
+            if (current is ButtonBase) return true;
+        return false;
+    }
+
     private static string? GetTopBarDraggedAction(DragEventArgs e)
     {
         if (!e.Data.GetDataPresent(TopBarShortcutDragFormat)) return null;
@@ -276,6 +317,7 @@ public sealed partial class AppController
         PaperTopBarShortcuts.NewTodo => Strings.Get("ShortcutNewTodo"),
         PaperTopBarShortcuts.NewNote => Strings.Get("ShortcutNewNote"),
         PaperTopBarShortcuts.Workspace => Strings.Get("WorkspaceSettingsTitle"),
+        PaperTopBarShortcuts.RunScript => Strings.Get("TopBarRunScript"),
         PaperTopBarShortcuts.Association => Strings.Get("TopBarAssociation"),
         PaperTopBarShortcuts.ExternalEditor => Strings.Get("TopBarExternalEditor"),
         PaperTopBarShortcuts.ExpandedEditor => Strings.Get("EditorOpen"),
@@ -286,6 +328,9 @@ public sealed partial class AppController
     // strokes (24-unit Lucide-style outlines) rather than font-dependent symbols.
     private static FrameworkElement CreateTopBarShortcutIcon(string action)
     {
+        if (action == PaperTopBarShortcuts.ExpandedEditor)
+            return StudioIcons.Create(new Control { Foreground = TrayWeakTextBrush }, StudioIcon.Studio,
+                AppTypography.Scale(16));
         string? pathData = action switch
         {
             PaperTopBarShortcuts.Association =>
@@ -293,13 +338,12 @@ public sealed partial class AppController
                 "A 5 5 0 0 0 13.47 3.47 L 11.75 5.18 " +
                 "M 14 11 A 5 5 0 0 0 6.46 10.46 L 3.46 13.46 " +
                 "A 5 5 0 0 0 10.53 20.53 L 12.24 18.82",
-            PaperTopBarShortcuts.ExpandedEditor =>
-                "M 8 3 H 3 V 8 M 3 3 L 9 9 M 16 21 H 21 V 16 M 21 21 L 15 15",
             PaperTopBarShortcuts.ExternalEditor =>
                 "M 15 3 H 21 V 9 M 10 14 L 21 3 " +
                 "M 21 13 V 19 A 2 2 0 0 1 19 21 H 5 " +
                 "A 2 2 0 0 1 3 19 V 5 A 2 2 0 0 1 5 3 H 11",
             PaperTopBarShortcuts.Workspace => WorkspaceCycleIcon.PathData,
+            PaperTopBarShortcuts.RunScript => "M 5 5 H 19 V 19 H 5 Z M 8 9 L 11 12 L 8 15 M 13 15 H 16",
             _ => null
         };
         // Both font glyphs and vector paths live in the same centered slot.

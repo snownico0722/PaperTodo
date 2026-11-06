@@ -23,6 +23,7 @@ This manual is for everyday users of PaperTodo. Start with [1. Quick Start](#1-q
   - [2.4 Collapse, Hide, Delete, and Exit](#24-collapse-hide-delete-and-exit)
   - [2.5 Full-Text Search](#25-full-text-search)
   - [2.6 Exporting Todos and Notes](#26-exporting-todos-and-notes)
+  - [2.7 Studio](#27-studio)
 - [3. Todo Papers](#3-todo-papers)
   - [3.1 Adding and Editing Items](#31-adding-and-editing-items)
   - [3.2 Reordering, Deleting, and Batch Actions](#32-reordering-deleting-and-batch-actions)
@@ -42,7 +43,8 @@ This manual is for everyday users of PaperTodo. Start with [1. Quick Start](#1-q
 - [6. Script Capsules (PowerShell)](#6-script-capsules-powershell)
   - [6.1 Script Directives](#61-script-directives)
   - [6.2 Running Scripts and Persistent Processes](#62-running-scripts-and-persistent-processes)
-  - [6.3 Security Notes](#63-security-notes)
+  - [6.3 Run script shortcut](#63-run-script-shortcut)
+  - [6.4 Security Notes](#64-security-notes)
 - [7. Keyboard Shortcuts](#7-keyboard-shortcuts)
   - [7.1 Built-in Paper Shortcuts](#71-built-in-paper-shortcuts)
   - [7.2 Global Shortcuts](#72-global-shortcuts)
@@ -131,11 +133,12 @@ The top bar contains fixed window controls and configurable built-in shortcuts:
 | **Drag to Associate** | Built-in shortcut | Drag onto a todo to link this paper; with window binding enabled, drag onto another app's window to bind to it |
 | **Switch Workspace** | Built-in shortcut | Available when multiple workspaces are enabled; cycles to the next workspace, or selects by name when configured |
 | **New Note / New Todo** | Built-in shortcut | Create another paper |
+| **Studio** | Built-in shortcut | Open the current paper in a resizable, maximizable Studio window with its existing document and undo history |
 | **Open externally** | Built-in shortcut | Temporarily export a built-in Markdown note and open it in an external app; see [4.4](#44-opening-in-an-external-editor) |
 
-In "Settings → General → Top-bar shortcuts", drag the five built-in shortcuts to reorder them or move them between **Show in title bar** and **Show in menu**. Todo and note papers share one layout, and actions that do not apply to the current paper are omitted.
+In "Settings → General → Top-bar shortcuts", drag the built-in shortcuts to reorder them or move them between **Show in title bar** and **Show in menu**. Todo and note papers share one layout, and actions that do not apply to the current paper are omitted. Each row has a Hide checkbox that removes its shortcut from title bars, overflow and paper/capsule context menus while preserving its position and keeping the feature enabled.
 
-New installations pin **Drag to Associate** and **Switch Workspace** to the top bar and keep **New Note**, **New Todo**, and **Open externally** in the menu; upgrades preserve existing choices. When the top bar is too narrow, pinned built-in shortcuts move into the `···` menu together. You can hold and drag the association item directly out of the menu as well. Plugins may also add top-bar buttons (such as Codex's `>_`).
+New installations pin **Drag to Associate**, **Switch Workspace**, and **Studio**. This upgrade moves Studio to the title bar and Open externally to the menu once; later customizations are preserved. When the top bar is too narrow, pinned built-in shortcuts move into the `···` menu together. You can hold and drag the association item directly out of the menu as well. Plugins may also add top-bar buttons (such as Codex's `>_`).
 
 ### 2.3 Moving, Resizing, and Windows Snap
 
@@ -174,6 +177,14 @@ Open the `···` menu (or paper context menu) on a todo paper or built-in Markd
 Todo exports preserve item order, completion states, and multiline text while omitting empty placeholder rows. Plugin bodies are excluded. Export runs in the background without blocking editing; check the completion summary for missing-image placeholders or warnings.
 
 Export is for reading, sharing, or moving text to another editor—it is not a full data backup. To back up or migrate workspaces, settings, and plugin data, follow [Chapter 10](#10-data-backup-migration-and-recovery).
+
+### 2.7 Studio
+
+Choose **Open in Studio** from a paper's title bar or menu. Multiple Studio windows can stay open, each with its own paper list. Selecting a paper already open in another Studio activates that window. Switching papers collapses the previous paper to its capsule, or hides it when capsules are unavailable. Window bounds, maximized state and sidebar visibility are remembered separately from desktop paper geometry; editing keeps the existing document and undo history.
+
+The tray Studio icon and `PaperTodo.exe --studio` open a blank Studio with the left paper list and New Note / New Todo actions, without creating a placeholder paper. If a Studio already exists, the most recently used window is activated and restored from minimization. Normal cold startup still displays desktop papers normally before activating Studio, without forcing always-on-top.
+
+Built-in notes offer consistent vector formatting tools, line numbers and statistics updated at most every half second, reusing results until the text changes. Click the bottom-right count for document and selection statistics, or preview and export the full note as a JPG or PNG image.
 
 ---
 
@@ -387,7 +398,13 @@ Get-Service | Where-Object Status -eq 'Running' | Select-Object -First 5
 - To edit the script, right-click the capsule and choose **Expand to paper**.
 - Enable **Advanced** in Settings and go to "Settings → Note → Script capsule" to configure **Persistent PowerShell process**, **Prefer PowerShell 7**, and **Hide script window**.
 
-### 6.3 Security Notes
+### 6.3 Run script shortcut
+
+In the top-bar shortcut settings, choose **Edit script** on the **Run script** row to configure one shared multiline script. Pin the entry, keep it in the menu or hide it. Running an unconfigured shortcut opens the editor. Saving configuration does not execute the script.
+
+Without a prefix it uses `!p`, without inserting a prefix into your text. Supported prefixes must occupy the first line, with the script starting on the next line; only ASCII `!` is supported. Engine selection, window visibility and persistent sessions share the script capsule settings. The configuration follows the existing workspace settings inheritance.
+
+### 6.4 Security Notes
 
 > [!CAUTION]
 > Scripts run with the permissions of the PaperTodo process and have no security sandbox. Never run unknown or uninspected scripts.
@@ -477,7 +494,7 @@ Click a command's shortcut field and press a key combination; the page checks fo
 
 ### 8.4 Installing and Configuring Plugins
 
-Plugins can turn notes into clocks, Pomodoro timers, or review panels, and add todo actions, top-bar buttons, menu items, global shortcuts, and custom capsule / Mini views. The current host supports **Plugin API 2.1–2.2** (existing 2.1 plugins remain compatible). `apiVersion` in `plugin.json` specifies the **minimum required host API**; a plugin requiring `2.2` cannot load on an older host.
+Plugins can turn notes into clocks, Pomodoro timers, or review panels, and add todo actions, top-bar buttons, menu items, global shortcuts, and custom capsule / Mini views. The current host supports **Plugin API 2.1–2.3** (existing 2.1 and 2.2 plugins remain compatible). `apiVersion` in `plugin.json` specifies the **minimum required host API**; a plugin requiring `2.3` cannot load on an older host. Plugin actions may appear only in the menu without occupying title-bar space.
 
 - **Web & Native plugins**: Web plugins run HTML/CSS/JS via WebView2; Native plugins are compiled with .NET 10 + WPF.
 - **Plugin data**: Configured in "Settings → Plugins". Host-managed data is separated by workspace under `plugins/data/` (main workspace 1) and `plugins/data2/`–`plugins/data5/` (workspaces 2–5). Separate folders do not isolate system permissions; back up any files a plugin stores elsewhere according to its instructions.
@@ -560,6 +577,7 @@ Use these arguments in shortcuts, scripts, or launchers (visibility and creation
 | `PaperTodo.exe --toggle` | None | Toggle overall visibility |
 | `PaperTodo.exe --new-todo` | `PaperTodo.exe todo` | Create a todo paper |
 | `PaperTodo.exe --new-note` | `PaperTodo.exe note` | Create a note paper |
+| `PaperTodo.exe --studio` | None | Open or activate the most recently used Studio without creating duplicate windows |
 | `PaperTodo.exe --exit` | `PaperTodo.exe quit` | Save and exit |
 | `PaperTodo.exe --mcp` | None | Start the connection process for an MCP client (see [8.5 Labs Features](#85-labs-features)) |
 

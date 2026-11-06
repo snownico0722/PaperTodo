@@ -10,10 +10,10 @@
 新插件使用：
 
 ```json
-"apiVersion": "2.2"
+"apiVersion": "2.3"
 ```
 
-当前宿主最新协议为 `2.2`，并继续兼容 `2.1`。实验性 `2.0` 及更早 manifest 不再兼容加载。新插件应以 `2.2` 为目标；已有 `2.1` 插件只要不声明 2.2-only 能力仍可继续运行。
+当前宿主最新协议为 `2.3`，并继续兼容 `2.1` 和 `2.2`。实验性 `2.0` 及更早 manifest 不再兼容加载。新插件应以 `2.3` 为目标；已有插件只要不使用其声明版本之后新增的能力仍可继续运行。
 
 ### 插件 API 版本历史
 
@@ -23,14 +23,15 @@
 MinimumSupportedApiVersion <= plugin.apiVersion <= CurrentApiVersion
 ```
 
-因此新宿主可以继续加载仍在兼容范围内的旧插件；旧宿主遇到依赖更高 API 的新插件则必须拒绝加载。当前 PaperTodo 支持 **2.1～2.2**。
+因此新宿主可以继续加载仍在兼容范围内的旧插件；旧宿主遇到依赖更高 API 的新插件则必须拒绝加载。当前 PaperTodo 支持 **2.1～2.3**。
 
 | API | 状态 | 主要合同里程碑 |
 | --- | --- | --- |
 | 1.x | 旧版 / 不再兼容 | 早期 paper-body 合同。已确认的里程碑包括：1.2 将插件 settings/state 移入独立插件数据域；1.8 加入由宿主持有窗口/队列/输入 authority 的 Edge Mini。 |
 | 2.0 | 实验过渡 / 不再兼容 | 引入宿主绘制 Top Bar 等方向，但仍同时存在 provider app Runtime 与 per-Paper Web Runtime；后续被 2.1 收敛路线替代，没有保留加载兼容。 |
 | 2.1 | 当前最低兼容 | 后台统一为单 provider Runtime，Body/Mini 只做前端；包括 Workspace 的 Paper/Todo/Note、Runtime state/Papers、宿主绘制 Top Bar/Todo contribution、全局快捷键与自定义 shortcut action、纸片菜单、笔记图片读取和临时弹窗。 |
-| 2.2 | 当前最新 | 新增跨纸片显示控制、公共软件 Settings API（`settings.read/update`）、settings `type: "action"` 命令按钮、`startupPaper.presentation: "hidden"`、提醒触发状态/事件及 Web Runtime 宿主事件订阅。新插件默认面向 2.2。 |
+| 2.2 | 继续支持 | 新增跨纸片显示控制、公共软件 Settings API（`settings.read/update`）、settings `type: "action"` 命令按钮、`startupPaper.presentation: "hidden"`、提醒触发状态/事件及 Web Runtime 宿主事件订阅。 |
+| 2.3 | 当前最新 | 顶栏操作新增 `MenuOnly` / `menuOnly`，可仅显示在插件操作菜单、不创建顶栏按钮。新插件默认面向 2.3。 |
 
 **升版规则：**当前 minor 正式发布后，只要新增向后兼容、插件可观察的新合同（manifest 字段/类型、permission、事件、公开 API surface 或新语义），下一批就升 minor；纯宿主内部实现、性能优化和 bugfix 不升。破坏已有插件合同才升 major。同一个尚未发布的 minor 可以一起收纳多项兼容新增，不需要每加一个字段就连续制造多个版本号。
 
@@ -74,7 +75,7 @@ plugins/com.example.hello/
   "id": "com.example.hello",
   "name": "Hello",
   "version": "1.0.0",
-  "apiVersion": "2.2",
+  "apiVersion": "2.3",
   "stateVersion": 1,
   "entry": "web/index.html"
 }
@@ -178,7 +179,7 @@ Native `plugin.json`：
   "id": "com.example.hello-native",
   "name": "Hello Native",
   "version": "1.0.0",
-  "apiVersion": "2.2",
+  "apiVersion": "2.3",
   "stateVersion": 1,
   "entry": "HelloPlugin.dll"
 }
@@ -249,7 +250,7 @@ Native 最终目录只保留运行所需内容。不要分发无必要的 PDB/XM
 | `name` | 显示名称；为空时回退到 ID |
 | `description` | 插件说明 |
 | `version` | 插件版本，必须能解析为 `Version` |
-| `apiVersion` | 新插件使用 `"2.2"`；`"2.1"` 继续兼容加载 |
+| `apiVersion` | 新插件使用 `"2.3"`；`"2.1"`、`"2.2"` 继续兼容加载 |
 | `stateVersion` | 宿主代管 JSON 的目标版本；同时用于 per-paper frontend state 和 provider Runtime state，至少为 1 |
 | `maxPaperInstances` | 可选；同一 Provider 最多允许存在的真实 Paper 数。省略默认 `1`，`0` 表示不限制；隐藏/折叠 Paper 仍计数 |
 | `entry` | Web 主页面或 Native 入口 DLL，必须位于插件目录内 |
@@ -279,7 +280,7 @@ Native 最终目录只保留运行所需内容。不要分发无必要的 PDB/XM
   "id": "com.example.weather",
   "name": "天气",
   "version": "1.0.0",
-  "apiVersion": "2.2",
+  "apiVersion": "2.3",
   "stateVersion": 1,
   "entry": "web/index.html",
   "miniEntry": "web/mini.html",
@@ -831,7 +832,7 @@ manifest：
 
 ```json
 {
-  "apiVersion": "2.2",
+  "apiVersion": "2.3",
   "entry": "web/index.html",
   "runtime": "web/background.html",
   "capabilities": ["runtime"]
@@ -888,6 +889,24 @@ papertodo.onEvent(async message => {
 Runtime 是独立 backend surface，不获得 `paper`、`body`、`mini` presentation API。runtime document 导航、renderer failure、最后一张实体插件 paper 消失或 Runtime Dispose 都会撤掉 Global action。Web Mini 也不能注册 Global Top Bar。
 
 完整可运行示例见 `PaperTodo.Plugin.TopBarWeb`。
+
+### 仅菜单操作（API 2.3）
+
+`TopBar.SetPaperActions(...)` 与 `GlobalTopBar.SetActions(...)` 都可以在操作描述上设置 `MenuOnly = true`；Web 对应 `menuOnly: true`。默认是 `false`，保留已有顶栏与空间不足时移入菜单的行为。使用该字段的插件声明 `apiVersion: "2.3"`。
+
+```csharp
+context.GlobalTopBar.SetActions([
+    new PaperTopBarAction { Id = "inspect", ToolTip = "查看纸片信息", MenuOnly = true }
+]);
+```
+
+```js
+await papertodo.globalTopBar.setActions([
+  { id: 'inspect', toolTip: '查看纸片信息', menuOnly: true }
+]);
+```
+
+仅菜单操作不需要图标、不创建顶栏按钮、不占顶栏空间；`ToolTip` 用作菜单文字，为空时显示 `Id`。`Visible`、`Enabled`、排序、数量限制、点击事件及 owner 失效清理沿用原来的规则。它们仍在现有插件操作菜单中，未加入内置快捷的排序／隐藏设置。指定纸片的纯文字 `PaperActions.SetActions(paperId, ...)` 接口保持不变。
 
 ### 7.6 Protocol 2.1 Todo 与顶栏展示扩展
 
@@ -1227,7 +1246,7 @@ Native 插件是 fully trusted / unsandboxed .NET/WPF 代码，与 PaperTodo 当
 | 示例 | 重点 |
 | --- | --- |
 | `PaperTodo.Plugin.Protocol21Web` | **Protocol 2.1 contribution 专项示例**：Todo 行操作、顶栏标签、最新 TodoSnapshot |
-| `PaperTodo.Plugin.TopBarWeb` | **Protocol 2.2 Top Bar/action 专项示例**：body Paper action + Web Runtime Global action、字符/Stroke SVG、目标 Paper context、Workspace 复用 |
+| `PaperTodo.Plugin.TopBarWeb` | **Protocol 2.3 Top Bar/action 专项示例**：body Paper action + 仅菜单 Web Runtime Global action、目标 Paper context、Workspace 复用 |
 | `PaperTodo.Plugin.SampleClock` | Native 主示例：settings、background updates、标准 capsule、自定义 WPF capsule、dedicated WPF mini |
 | `PaperTodo.Plugin.OfficialClockWeb` | Web 主示例：body/mini 双页面、`miniEntry`、state/settings 同步、startup paper、background updates |
 | `PaperTodo.Plugin.FocusTimer` | Native 有状态交互：正文与 dedicated mini 共享计时 model，mini 内直接开始/暂停/继续 |
@@ -1240,7 +1259,7 @@ Native 插件是 fully trusted / unsandboxed .NET/WPF 代码，与 PaperTodo 当
 
 ### Manifest / Runtime
 
-- 新插件仍以 `apiVersion: "2.0"` 或更早版本为目标；新开发应使用 `2.2`，已有 `2.1` 插件继续兼容；
+- 新插件仍以 `apiVersion: "2.0"` 或更早版本为目标；新开发应使用 `2.3`，已有 `2.1`、`2.2` 插件继续兼容；
 - 插件目录名和 `id` 不一致；
 - `id` 使用非法字符或宿主保留 ID `data` / `builtin.markdown`；
 - Web 声明 `runtime`，但默认 `runtime.html` 不存在，或显式 `runtime` 路径不存在/跑出 Web `entry` 静态目录；
@@ -1307,7 +1326,7 @@ Native 插件是 fully trusted / unsandboxed .NET/WPF 代码，与 PaperTodo 当
 
 ## 14. 提交插件前
 
-- 新 `plugin.json` 使用当前目标 `apiVersion: "2.2"`；只有刻意停留在 2.1 合同时才继续写 `2.1`；
+- 新 `plugin.json` 使用当前目标 `apiVersion: "2.3"`；只有刻意停留在旧合同时才继续写 `2.1` 或 `2.2`；
 - 所有 metadata 只在 `plugin.json` 中声明，Native 入口 DLL 只提供行为实现；
 - 声明 `runtime` 时：Native 实现 `IPaperPluginRuntimeProvider`；Web 默认提供 `entry` 同目录 `runtime.html`，或用 `runtime` 指定同一 Web 静态目录内的其他入口；
 - Runtime 需要插件设置时使用自己的 `context.Settings.Json` + `Settings.Subscribe(...)` / `papertodo.settings.get()` + `settingsChanged`，不借用隐藏 paper session；

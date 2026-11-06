@@ -1562,7 +1562,7 @@
     <value>顶栏快捷</value>
   </data>
   <data name="TipTopBarShortcutSettings" xml:space="preserve">
-    <value>拖动操作可调整顺序，跨过分割线可切换显示位置。顶栏空间不足时，已固定的内置快捷会整组临时收纳到菜单。</value>
+    <value>拖动操作可调整顺序，跨过分割线可切换显示位置。勾选“隐藏”会移除顶栏和各处纸片菜单入口，但保留位置，不关闭功能。顶栏空间不足时，已固定的内置快捷会整组临时收纳到菜单。</value>
   </data>
   <data name="TopBarShownHeading" xml:space="preserve">
     <value>显示在顶栏</value>
@@ -1791,7 +1791,7 @@
   <data name="WorkspaceRecoveryFallback" xml:space="preserve">
     <value>回退到工作区 {0}</value>
   </data>
-  <data name="EditorOpen" xml:space="preserve"><value>在编辑器中打开</value></data>
+  <data name="EditorOpen" xml:space="preserve"><value>在工作台中打开</value></data>
   <data name="EditorReturn" xml:space="preserve"><value>返回纸片</value></data>
   <data name="EditorSidebarShow" xml:space="preserve"><value>显示纸片列表</value></data>
   <data name="EditorSidebarHide" xml:space="preserve"><value>收起纸片列表</value></data>
@@ -1861,6 +1861,23 @@
   <data name="SettingsNotesAndTodos" xml:space="preserve"><value>笔记与待办</value></data>
   <data name="WorkspaceSingleMessage" xml:space="preserve"><value>当前只有一个工作区。</value></data>
   <data name="WorkspaceCreate" xml:space="preserve"><value>新建</value></data>
+  <data name="StudioTitle" xml:space="preserve"><value>工作台</value></data>
+  <data name="EditorClose" xml:space="preserve"><value>关闭工作台</value></data>
+  <data name="TopBarHideShortcut" xml:space="preserve">
+    <value>隐藏</value>
+  </data>
+  <data name="TopBarRunScript" xml:space="preserve">
+    <value>运行脚本</value>
+  </data>
+  <data name="TopBarEditScript" xml:space="preserve">
+    <value>编辑脚本</value>
+  </data>
+  <data name="TopBarScriptSave" xml:space="preserve">
+    <value>保存</value>
+  </data>
+  <data name="TopBarScriptHint" xml:space="preserve">
+    <value>不写前缀时按 !p 执行。可用前缀：!p / !power、!pwsh / !ps7、!ps5 / !winps、!pf / !powerf。前缀须单独占第一行，脚本从下一行开始，只支持半角 !。保存不会执行脚本。</value>
+  </data>
   <data name="StudioStandaloneTitle" xml:space="preserve"><value>独立工作台</value></data>
   <data name="StudioNew" xml:space="preserve"><value>新建文档</value></data>
   <data name="StudioOpen" xml:space="preserve"><value>打开文件</value></data>

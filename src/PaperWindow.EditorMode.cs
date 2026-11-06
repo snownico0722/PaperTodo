@@ -45,20 +45,17 @@ public sealed partial class PaperWindow
         userShortcuts.Children.Add(_editorModeButton);
 
         _editorSidebarButton = IconButton("", Strings.Get("EditorSidebarShow"));
-        _editorSidebarButton.Content = CreateEditorVectorIcon(_editorSidebarButton,
-            "M 5 4 H 19 A 2 2 0 0 1 21 6 V 18 A 2 2 0 0 1 19 20 H 5 " +
-            "A 2 2 0 0 1 3 18 V 6 A 2 2 0 0 1 5 4 Z " +
-            "M 15 4 V 20 M 7 9 H 11 M 7 12 H 11 M 7 15 H 11");
+        _editorSidebarButton.Content = StudioIcons.Create(_editorSidebarButton, StudioIcon.Sidebar);
         _editorSidebarButton.Click += (_, _) =>
             SetExpandedEditorSidebarOpen(!IsExpandedEditorSidebarOpen);
 
-        _editorMinimizeButton = IconButton("−", Strings.Get("EditorMinimize"));
+        _editorMinimizeButton = StudioIcons.Button(StudioIcon.Minimize, Strings.Get("EditorMinimize"));
         _editorMinimizeButton.Click += (_, _) =>
         {
             if (_expandedEditorHostWindow != null)
                 _expandedEditorHostWindow.WindowState = WindowState.Minimized;
         };
-        _editorMaximizeButton = IconButton("□", Strings.Get("EditorMaximizeRestore"));
+        _editorMaximizeButton = StudioIcons.Button(StudioIcon.Maximize, Strings.Get("EditorMaximizeRestore"));
         _editorMaximizeButton.Click += (_, _) => ToggleExpandedEditorMaximized();
 
         windowButtons.Children.Add(_editorSidebarButton);
@@ -68,51 +65,25 @@ public sealed partial class PaperWindow
     }
 
     private static FrameworkElement CreateExpandedEditorModeIcon(Button owner, bool expanded) =>
-        CreateEditorVectorIcon(owner, expanded
-            // Two arrows face toward the center when returning to a paper.
-            ? "M 4 10 H 10 V 4 M 10 10 L 4 4 M 20 14 H 14 V 20 M 14 14 L 20 20"
-            // Two arrows open toward opposite corners in paper mode.
-            : "M 8 3 H 3 V 8 M 3 3 L 9 9 M 16 21 H 21 V 16 M 21 21 L 15 15");
-
-    // WPF Paths use SVG-compatible geometry commands: centered in the same 24-unit
-    // canvas used by PaperTodo's native top-bar vectors, independent of font metrics.
-    private static FrameworkElement CreateEditorVectorIcon(Button owner, string geometry)
-    {
-        var iconCanvas = new Canvas
-        {
-            Width = 24,
-            Height = 24,
-            SnapsToDevicePixels = true,
-            IsHitTestVisible = false
-        };
-        var outline = new System.Windows.Shapes.Path
-        {
-            Data = Geometry.Parse(geometry),
-            StrokeThickness = 1.9,
-            StrokeStartLineCap = PenLineCap.Round,
-            StrokeEndLineCap = PenLineCap.Round,
-            StrokeLineJoin = PenLineJoin.Round,
-            Fill = Brushes.Transparent,
-            SnapsToDevicePixels = true
-        };
-        outline.SetBinding(
-            System.Windows.Shapes.Shape.StrokeProperty, CreateForegroundBinding(owner));
-        iconCanvas.Children.Add(outline);
-        return new Viewbox
-        {
-            Width = Math.Round(16 * TopBarIconScale(), 1),
-            Height = Math.Round(16 * TopBarIconScale(), 1),
-            Stretch = Stretch.Uniform,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-            IsHitTestVisible = false,
-            Child = iconCanvas
-        };
-    }
+        StudioIcons.Create(owner, expanded ? StudioIcon.ReturnToPaper : StudioIcon.Studio,
+            16 * TopBarIconScale());
 
     private void RefreshExpandedEditorTopBarControls()
     {
         if (_editorModeButton == null) return;
+        RefreshPaperIconButton();
+        if (_runScriptButton != null) _runScriptButton.Content = CreateTopBarRunScriptIcon(_runScriptButton);
+        if (_newTodoButton != null) _newTodoButton.Content = CreateTopBarNewTodoIcon(_newTodoButton);
+        if (_newNoteButton != null) _newNoteButton.Content = CreateTopBarNewNoteIcon(_newNoteButton);
+        if (_windowBindingButton != null)
+            _windowBindingButton.Content = CreateTopBarAssociationIcon(_windowBindingButton,
+                HasExperimentalWindowTether || (_controller.State.EnableTodoPaperLinks && _controller.IsPaperLinkedToAnyTodo(_paper)));
+        if (_moreActionsButton != null)
+            _moreActionsButton.Content = _isExpandedEditorMode
+                ? StudioIcons.Create(_moreActionsButton, StudioIcon.More) : "⋯";
+        if (_openMarkdownButton != null)
+            _openMarkdownButton.Content = _isExpandedEditorMode
+                ? StudioIcons.Create(_openMarkdownButton, StudioIcon.ExternalOpen) : ExternalOpenButtonLabel();
         _editorModeButton.Content =
             CreateExpandedEditorModeIcon(_editorModeButton, _isExpandedEditorMode);
         _editorModeButton.ToolTip = _isExpandedEditorMode
@@ -134,7 +105,8 @@ public sealed partial class PaperWindow
         {
             _editorMaximizeButton.Visibility = _isExpandedEditorMode
                 ? Visibility.Visible : Visibility.Collapsed;
-            _editorMaximizeButton.Content = IsExpandedEditorMaximized ? "❐" : "□";
+            _editorMaximizeButton.Content = StudioIcons.Create(_editorMaximizeButton,
+                IsExpandedEditorMaximized ? StudioIcon.Restore : StudioIcon.Maximize);
         }
     }
 
@@ -148,50 +120,11 @@ public sealed partial class PaperWindow
     // can replace its body at runtime without acquiring a second editor or visual tree.
     private void BuildExpandedEditorChrome()
     {
-        var tools = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(10, 0, 6, 0)
-        };
-
-        void AddTool(string name, string hint, Action action)
-        {
-            var button = IconButton(name, hint);
-            button.FontSize = AppTypography.Scale(12);
-            button.Click += (_, _) =>
-            {
-                if (!_isExpandedEditorMode || !IsCurrentBodyProviderMarkdown || _noteBox == null)
-                    return;
-                _enterCurrentNoteEditor?.Invoke();
-                action();
-                _noteBox?.Focus();
-            };
-            tools.Children.Add(button);
-        }
-
-        AddTool("↶", Strings.Get("EditorUndo"), () => _noteBox?.Undo());
-        AddTool("↷", Strings.Get("EditorRedo"), () => _noteBox?.Redo());
-        AddTool("H", Strings.Get("EditorHeading"), () => _noteBox?.InsertLinePrefix("# "));
-        AddTool("B", Strings.Get("EditorBold"), () => _noteBox?.WrapSelection("**", "**"));
-        AddTool("I", Strings.Get("EditorItalic"), () => _noteBox?.WrapSelection("*", "*"));
-        AddTool("S", Strings.Get("EditorStrike"), () => _noteBox?.WrapSelection("~~", "~~"));
-        AddTool("•", Strings.Get("EditorBullets"), () => _noteBox?.InsertLinePrefix("- "));
-        AddTool("1.", Strings.Get("EditorNumbers"), () => _noteBox?.InsertLinePrefix("1. "));
-        AddTool("❝", Strings.Get("EditorQuote"), () => _noteBox?.InsertLinePrefix("> "));
-        AddTool("</>", Strings.Get("EditorCode"), () => _noteBox?.InsertCodeBlock());
-        AddTool("↗", Strings.Get("EditorLink"), () => _noteBox?.InsertMarkdownLink());
-        AddTool("▧", Strings.Get("EditorImage"), () => _noteEditorImageAction?.Invoke());
-
-        // Separate from source-editing tools: opening export must not enter edit mode,
-        // refocus the document or replace its selection.
-        var export = IconButton("", Strings.Get("EditorImageExport"));
-        export.Content = CreateEditorVectorIcon(export,
-            "M 5 3 H 15 L 20 8 V 20 H 5 Z M 15 3 V 8 H 20 " +
-            "M 8 16 L 11 12 L 14 15 L 16 13 L 18 17");
-        System.Windows.Automation.AutomationProperties.SetName(export, Strings.Get("EditorImageExport"));
-        export.Click += (_, _) => ExportNoteAsImage();
-        tools.Children.Add(export);
+        var tools = StudioMarkdownToolbar.Create(
+            () => _isExpandedEditorMode && IsCurrentBodyProviderMarkdown ? _noteBox : null,
+            () => _enterCurrentNoteEditor?.Invoke(),
+            () => _noteEditorImageAction?.Invoke(),
+            ExportNoteAsImage);
 
         _editorMarkdownToolbar = new Border
         {
@@ -229,7 +162,7 @@ public sealed partial class PaperWindow
         RefreshExpandedEditorStatistics(showMarkdownTools);
         _editorMarkdownToolbar.Visibility = showMarkdownTools ? Visibility.Visible : Visibility.Collapsed;
         _editorMarkdownToolbar.Margin = new Thickness(
-            0, 0, _isExpandedEditorMode && IsExpandedEditorSidebarOpen ? ExpandedEditorSidebarWidth : 0, 0);
+            _isExpandedEditorMode && IsExpandedEditorSidebarOpen ? ExpandedEditorSidebarWidth : 0, 0, 0, 0);
         // A plugin provider can swap out _bodyElement after the shell was constructed.
         var body = (_paper.Type == PaperTypes.Note ? _bodyElement : null) as FrameworkElement
             ?? _editorContentElement;
@@ -244,14 +177,14 @@ public sealed partial class PaperWindow
         {
             var m = _editorContentOriginalMargin;
             _editorContentElement.Margin = new Thickness(
-                m.Left,
+                m.Left + (_isExpandedEditorMode && IsExpandedEditorSidebarOpen ? ExpandedEditorSidebarWidth : 0),
                 m.Top + (showMarkdownTools ? ExpandedEditorToolbarHeight : 0),
-                m.Right + (_isExpandedEditorMode && IsExpandedEditorSidebarOpen ? ExpandedEditorSidebarWidth : 0),
+                m.Right,
                 m.Bottom + (showMarkdownTools ? ExpandedEditorStatusHeight : 0));
         }
         if (_textZoomIndicator?.Parent is Border zoomHost)
             zoomHost.Margin = new Thickness(0, 0,
-                12 + (_isExpandedEditorMode && IsExpandedEditorSidebarOpen ? ExpandedEditorSidebarWidth : 0),
+                12,
                 7 + (showMarkdownTools ? ExpandedEditorStatusHeight : 0));
         RefreshExpandedEditorTopBarControls();
         UpdateTopBarResponsiveLayout();
