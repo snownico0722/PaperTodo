@@ -223,7 +223,7 @@ internal static class NativeFreeQueueReviewChecks
             c.ArrangeDeepCapsules(false);
             await Idle();
 
-            // Ctrl whole-queue transfer uses the same window when free queues are off.
+            // With free queues off, only the master may move the whole edge queue.
             var ctrlOwner = c.State.Papers.First(p => p.IsVisible &&
                 p.CapsuleSide == DeepCapsuleSides.Left && windows.ContainsKey(p.Id));
             Require(WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(
@@ -236,14 +236,8 @@ internal static class NativeFreeQueueReviewChecks
                 c.DeepCapsuleStartTopMarginFor(ctrlOwner),
                 ctrlGeometry.LocalWorkAreaDip, ctrlCount, c.DeepCapsuleGap);
             var pointer = Point(ctrlGeometry, ctrlTop, left: true);
-            Require(c.BeginNativeEdgeQueueDrag(ctrlOwner, true, pointer, false),
-                "Ctrl whole-queue starts with free queues off");
-            Require(c.PreviewNativeEdgeQueueDrag(ctrlOwner, pointer, ctrlTop, false),
-                "Ctrl ordinary-mode preview processes its drop");
-            Require(Field<Window>(Field<EdgeCapsuleQueueDropGhost>(c,
-                "_nativeQueueDropGhost"), "_window").Opacity > 0,
-                "Ctrl ordinary-mode preview shows the shared landing ghost");
-            c.EndNativeEdgeQueueDrag(ctrlOwner.Id);
+            Require(!c.BeginNativeEdgeQueueDrag(ctrlOwner, true, pointer, false),
+                "Ctrl must not start whole-queue movement while free queues are off");
             await Idle();
             Console.WriteLine("PASS ordinary landing ghost: cross-edge return, folded/empty target, source master recovery and Ctrl/master transfer");
         }
@@ -1249,4 +1243,3 @@ internal static class NativeFreeQueueReviewChecks
         return (pill, session!, (DeviceScreenPoint)session!.GetType().GetProperty("StartScreenPosition")!.GetValue(session)!);
     }
 }
-
