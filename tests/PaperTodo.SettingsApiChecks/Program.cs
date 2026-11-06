@@ -44,6 +44,7 @@ internal static partial class Program
         Field(controller, "_workspace", new WorkspaceSession(paths,
             new StateStore(paths.Directory, DurableAtomicFileWriter.Shared), controller.State, false, null));
         Field(controller, "_windows", new Dictionary<string, PaperWindow>());
+        Field(controller, "_expandedEditors", new List<ExpandedEditorWindow>());
         Field(controller, "_masterCapsules", new Dictionary<string, MasterCapsuleWindow>());
         return controller;
     }
