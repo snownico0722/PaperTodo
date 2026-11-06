@@ -2170,7 +2170,7 @@ The preview should show an available landing rather than make a target continuou
 
 - `src/Workbench/WorkbenchLayoutEngine.cs`、`WorkbenchState.cs`、`WorkbenchWindow.cs`。
 - `src/PaperWindow.Workbench.cs`、`src/AppController.Workbench.cs`、`src/StateStore.Workbench.cs`。
-- `tests/PaperTodo.WorkbenchLayoutChecks` 与 `tests/PaperTodo.WorkbenchChecks`：几何约束、单正文身份、桌面还原和工作区切换隔离。
+- `tests/PaperTodo.WorkbenchLayoutChecks` 与 `tests/PaperTodo.LifecycleChecks/Workbench`：几何约束、单正文身份、桌面还原和工作区切换隔离。
 - 算法来源：https://github.com/microsoft/automatic-graph-layout；备选评估：https://eclipse.dev/elk/reference/algorithms/org-eclipse-elk-layered.html。
 
 ## D-073 — 工作空间素材 Note、手动分组与跨纸内容搬运
@@ -2199,4 +2199,4 @@ The preview should show an available landing rather than make a target continuou
 - `src/AppController.WorkspaceMaterials.cs`、`src/PaperWindow.WorkspaceMaterials.cs`：导入、素材编辑与笔记入口。
 - `src/Workbench/WorkbenchWindow.Selection.cs`、`WorkbenchWindow.Materials.cs`：手动组、节点与自由连线。
 - `src/Workbench/WorkbenchContentTransfer.cs`、`src/AppController.WorkbenchTransfer.cs`、`src/PaperWindow.WorkbenchTransfer.cs`：两侧校验、提交与撤销边界。
-- `tests/PaperTodo.WorkbenchLayoutChecks`、`tests/PaperTodo.WorkbenchChecks`、`tests/PaperTodo.DataReloadChecks/WorkspaceMaterialsChecks.cs`：模型、交互与持久化回归。
+- `tests/PaperTodo.WorkbenchLayoutChecks`、`tests/PaperTodo.LifecycleChecks/Workbench`、`tests/PaperTodo.DataReloadChecks/WorkspaceMaterialsChecks.cs`：模型、交互与持久化回归。
