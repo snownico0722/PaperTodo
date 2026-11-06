@@ -1149,6 +1149,37 @@ internal static class NativeFreeQueueReviewChecks
         }
         finally { c.State.UseCapsuleFreeQueues = true; }
 
+        // The folded destination is represented by its master alone. A
+        // hovering master-to-master merge gets an OUTSIDE outline instead of
+        // drawing invisible members; ordinary same-edge motion gets no ghost.
+        var sourceLayout = c.CaptureFreeMasterDragLayout(
+            "", EdgeCapsuleEdge.Right, shortKey)!;
+        c.PreviewFreeMasterQueueTop(sourceLayout, upper,
+            Point(monitor, upper));
+        Require(Field<object?>(c, "_nativeQueueDropGhost") == null ||
+                Field<Window>(Field<EdgeCapsuleQueueDropGhost>(c,
+                    "_nativeQueueDropGhost"), "_window").Opacity == 0,
+            "independent docked master movement has no ghost");
+        c.PreviewFreeMasterQueueTop(sourceLayout, upper,
+            Point(monitor, bottom));
+        var foldedDecision = Field<FreeQueueSlotPreviewState>(c,
+            "_freeMasterSlotPreview").Decision!;
+        Require(foldedDecision.Kind == EdgeFreeQueueDropKind.Insert &&
+                foldedDecision.TargetKey == longKey,
+            "hovering the collapsed destination master selects a real merge");
+        var foldedHalo = Field<EdgeCapsuleQueueDropGhost>(c, "_nativeQueueDropGhost");
+        Require(Field<bool>(foldedHalo, "_mergeHalo") &&
+                Field<StackPanel>(foldedHalo, "_stack").Children.Count == 1 &&
+                ReferenceEquals(((Border)Field<StackPanel>(foldedHalo,
+                    "_stack").Children[0]).Background,
+                    System.Windows.Media.Brushes.Transparent),
+            "folded target uses one hollow enlarged master outline");
+        Near(Masters(c)[longKey].DesiredDockedWidthFor(monitor) + 4,
+            Field<Window>(foldedHalo, "_window").Width,
+            "folded merge halo follows destination master width");
+        c.FinishFreeMasterQueueDrag(sourceLayout, commit: false);
+        await Idle();
+
         var currentKey = longKey;
         foreach (var left in new[] { false, true })
         {
