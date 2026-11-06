@@ -321,9 +321,9 @@ public sealed partial class AppController
                 break;
             case SettingEffects.Scripts:
                 if (State.UsePersistentPowerShellProcess)
-                    PaperWindow.EnsurePersistentScriptProcessForSettings(State);
+                    ScriptExecutionService.EnsurePersistentScriptProcessForSettings(State);
                 else
-                    PaperWindow.StopPersistentScriptProcesses();
+                    ScriptExecutionService.StopPersistentScriptProcesses();
                 break;
             case SettingEffects.VisibilitySnapshot: ClearVisibilityShortcutRestoreSnapshot(); break;
             case SettingEffects.Mcp: RefreshMcpRuntime(); break;

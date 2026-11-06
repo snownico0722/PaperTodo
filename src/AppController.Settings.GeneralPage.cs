@@ -243,6 +243,7 @@ public sealed partial class AppController
         State.ShowTopBarExternalOpenButton = false;
         State.TopBarShortcutOrder = PaperTopBarShortcuts.NormalizeOrder(null);
         State.TopBarPinnedCount = 2;
+        State.HiddenTopBarShortcuts = [];
         State.TodoTopBarShortcuts = null;
         State.NoteTopBarShortcuts = null;
         State.UseCapsuleMode = true;

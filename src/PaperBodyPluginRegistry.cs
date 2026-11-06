@@ -89,7 +89,7 @@ internal sealed class PaperBodyPluginMiniSizeManifest
 internal sealed partial class PaperBodyPluginRegistry : IDisposable
 {
     internal const string MinimumPluginApiVersion = "2.1";
-    internal const string SupportedPluginApiVersion = "2.2";
+    internal const string SupportedPluginApiVersion = "2.3";
     private static readonly Regex PluginIdPattern = PluginIdRegex();
     private static readonly StringComparer UiDisplayNameComparer =
         StringComparer.Create(UiLanguages.EffectiveUiCulture, ignoreCase: true);

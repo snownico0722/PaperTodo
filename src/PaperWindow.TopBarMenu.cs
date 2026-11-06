@@ -63,6 +63,7 @@ public sealed partial class PaperWindow
         PaperTopBarShortcuts.NewTodo => _newTodoButton,
         PaperTopBarShortcuts.NewNote => _newNoteButton,
         PaperTopBarShortcuts.Workspace => _workspaceButton,
+        PaperTopBarShortcuts.RunScript => _runScriptButton,
         _ => null
     };
 
@@ -90,6 +91,8 @@ public sealed partial class PaperWindow
     private bool ShouldShowPinnedHostButton(Button button)
     {
         var state = _controller.State;
+        if (ReferenceEquals(button, _runScriptButton))
+            return PaperTopBarShortcuts.Contains(state, _paper.Type, PaperTopBarShortcuts.RunScript);
         if (ReferenceEquals(button, _workspaceButton))
             return _controller.WorkspaceOptions.Enabled &&
                 PaperTopBarShortcuts.Contains(state, _paper.Type, PaperTopBarShortcuts.Workspace);

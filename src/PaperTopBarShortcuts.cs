@@ -13,11 +13,12 @@ internal static class PaperTopBarShortcuts
     internal const string NewTodo = "new-todo";
     internal const string NewNote = "new-note";
     internal const string Workspace = "workspace";
+    internal const string RunScript = "run-script";
 
     // Kept only for deserializing layouts saved by the former per-paper model.
     internal const string PluginActions = "plugin-actions";
 
-    private static readonly string[] Defaults = [Association, Workspace, NewNote, NewTodo, ExternalEditor];
+    private static readonly string[] Defaults = [Association, Workspace, NewNote, NewTodo, ExternalEditor, RunScript];
 
     internal static IReadOnlyList<string> All => Defaults;
 
@@ -35,6 +36,10 @@ internal static class PaperTopBarShortcuts
     internal static void Normalize(AppState state)
     {
         state.TopBarShortcutOrder = NormalizeOrder(state.TopBarShortcutOrder);
+        state.HiddenTopBarShortcuts = (state.HiddenTopBarShortcuts ?? [])
+            .Where(action => Defaults.Contains(action, StringComparer.Ordinal))
+            .Distinct(StringComparer.Ordinal).ToList();
+        state.TopBarScript ??= string.Empty;
         state.TopBarPinnedCount = Math.Clamp(state.TopBarPinnedCount, 0, Defaults.Length);
         state.TodoTopBarShortcuts = null;
         state.NoteTopBarShortcuts = null;
@@ -90,7 +95,10 @@ internal static class PaperTopBarShortcuts
         Pinned(state).Contains(action, StringComparer.Ordinal);
 
     internal static bool Contains(AppState state, string paperType, string action) =>
-        IsApplicable(paperType, action) && IsPinned(state, action);
+        IsApplicable(paperType, action) && !IsHidden(state, action) && IsPinned(state, action);
+
+    internal static bool IsHidden(AppState state, string action) =>
+        state.HiddenTopBarShortcuts?.Contains(action, StringComparer.Ordinal) == true;
 
     // Preserve old public settings API IDs as compatibility aliases for one global divider.
     internal static bool SetPinned(AppState state, string action, bool pinned)

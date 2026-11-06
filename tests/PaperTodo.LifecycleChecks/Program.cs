@@ -553,7 +553,7 @@ internal static class Program
                     "startup did not restore the requested visible papers");
             if (name == "real-exit-scripts")
             {
-                var registry = (IDictionary)typeof(PaperWindow).GetField("PersistentScriptProcesses", Private)!.GetValue(null)!;
+                var registry = (IDictionary)typeof(ScriptExecutionService).GetField("PersistentScriptProcesses", Private)!.GetValue(null)!;
                 for (var i = 0; i < 3; i++)
                 {
                     var start = ChildStart(AppContext.BaseDirectory);

@@ -1516,7 +1516,7 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
     <value>상단 바 바로가기</value>
   </data>
   <data name="TipTopBarShortcutSettings" xml:space="preserve">
-    <value>항목을 드래그하여 순서를 바꾸거나 구분선을 넘어 이동하면 상단 바와 메뉴 사이에서 표시 위치를 변경할 수 있습니다. 공간이 부족하면 고정한 기본 바로가기가 한꺼번에 메뉴로 이동합니다.</value>
+    <value>항목을 끌어 순서를 바꾸거나 구분선을 넘어 표시 위치를 변경하세요. 숨기기는 위치를 유지하고 기능을 끄지 않은 채 상단 표시줄과 종이 메뉴의 바로가기만 숨깁니다. 공간이 부족하면 고정된 기본 바로가기가 함께 메뉴로 이동합니다.</value>
   </data>
   <data name="TopBarShownHeading" xml:space="preserve">
     <value>상단 바에 표시</value>
@@ -1829,4 +1829,19 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="SettingsNotesAndTodos" xml:space="preserve"><value>노트 및 할 일</value></data>
   <data name="WorkspaceSingleMessage" xml:space="preserve"><value>현재 작업 공간이 하나뿐입니다.</value></data>
   <data name="WorkspaceCreate" xml:space="preserve"><value>새로 만들기</value></data>
+  <data name="TopBarHideShortcut" xml:space="preserve">
+    <value>숨기기</value>
+  </data>
+  <data name="TopBarRunScript" xml:space="preserve">
+    <value>스크립트 실행</value>
+  </data>
+  <data name="TopBarEditScript" xml:space="preserve">
+    <value>스크립트 편집</value>
+  </data>
+  <data name="TopBarScriptSave" xml:space="preserve">
+    <value>저장</value>
+  </data>
+  <data name="TopBarScriptHint" xml:space="preserve">
+    <value>접두사가 없으면 !p로 실행합니다. 지원 접두사: !p / !power, !pwsh / !ps7, !ps5 / !winps, !pf / !powerf. 첫 줄에는 접두사만 입력하고 다음 줄부터 스크립트를 작성하세요. 반각 !만 지원합니다. 저장해도 실행되지 않습니다.</value>
+  </data>
 </root>

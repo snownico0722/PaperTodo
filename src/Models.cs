@@ -512,6 +512,9 @@ public sealed class AppState
     public List<string> TopBarShortcutOrder { get; set; } =
         PaperTopBarShortcuts.NormalizeOrder(null);
     public int TopBarPinnedCount { get; set; } = 2;
+    // Hiding an entry does not remove its saved position or disable its feature.
+    public List<string> HiddenTopBarShortcuts { get; set; } = [];
+    public string TopBarScript { get; set; } = string.Empty;
     // Read-only legacy migration inputs from older data.json versions. Do not write
     // obsolete per-type lists back once converted to the single global layout.
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

@@ -247,9 +247,9 @@ public sealed partial class AppController : IDisposable
         if (_store.NeedsStartupRecoverySave)
             SaveNow(sync: true);
         InitializeGlobalHotkeys();
-        _ = Task.Run(PaperWindow.CleanupOldScriptCapsuleTempFiles);
+        _ = Task.Run(ScriptExecutionService.CleanupOldScriptCapsuleTempFiles);
         _ = Application.Current.Dispatcher.BeginInvoke(
-            () => { if (!IsExiting) PaperWindow.EnsurePersistentScriptProcessForSettings(State); },
+            () => { if (!IsExiting) ScriptExecutionService.EnsurePersistentScriptProcessForSettings(State); },
             DispatcherPriority.SystemIdle);
         RefreshFullscreenAvoidanceRuntime();
         RefreshTodoReminderSchedule();
@@ -4305,7 +4305,7 @@ public sealed partial class AppController : IDisposable
         MarkdownEdgePreviewPreload.For(Application.Current.Dispatcher).Clear();
         // Stop all child processes together; their grace periods overlap each other and WPF
         // teardown. Only non-UI process work runs in the pool, not Window/Host disposal.
-        var scriptShutdown = PaperWindow.StopAllScriptProcessesAsync();
+        var scriptShutdown = ScriptExecutionService.StopAllScriptProcessesAsync();
         _paperSurfaceRestoreGeneration++;
         _startupShellPrewarmGeneration++;
         SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
