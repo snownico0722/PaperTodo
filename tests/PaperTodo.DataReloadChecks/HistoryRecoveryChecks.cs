@@ -293,6 +293,8 @@ internal static partial class Program
                 await controller.StartAsync(createDefaultPaper: false);
                 controller.StartCoreHistoryBackupPolicy();
                 var historyTimer = Field<System.Windows.Threading.DispatcherTimer>(controller, "_coreHistoryTimer");
+                var initialBackupDelay = historyTimer.Interval;
+                await Task.Delay(50);
                 var runningBackup = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                 typeof(AppController).GetField("_coreHistoryBackupTask", Private)!.SetValue(controller, runningBackup.Task);
                 File.WriteAllText(target.FilePath, "{broken target");
@@ -316,6 +318,12 @@ internal static partial class Program
                 }, "HistoryRecoveryTitle"), "recovery did not wait for the in-flight history round");
                 Require(historyTimer.IsEnabled && await controller.SwitchWorkspaceAsync(1),
                     "history timer did not resume after recovery");
+                Require(historyTimer.Interval < initialBackupDelay,
+                    "recovery restarted the whole history countdown");
+                var remainingBackupDelay = historyTimer.Interval;
+                Require(await controller.SwitchWorkspaceAsync(2) && await controller.SwitchWorkspaceAsync(1) &&
+                        historyTimer.Interval <= remainingBackupDelay,
+                    "healthy workspace switches postponed the scheduled history check");
 
                 // A due history round would evict the selected recent source.
                 foreach (var age in new[] { TimeSpan.FromDays(30), TimeSpan.FromDays(3), TimeSpan.FromHours(6) })
@@ -383,7 +391,19 @@ internal static partial class Program
                         Require(await controller.SwitchWorkspaceAsync(1), "return from backup failure action failed");
                     }
                 }
-                foreach (var zip in Directory.GetFiles(Path.Combine(AppContext.BaseDirectory, "backups"), "*.zip"))
+                var historyDirectory = Path.Combine(AppContext.BaseDirectory, "backups");
+                var previousArchives = Directory.GetFiles(historyDirectory, "*.zip").ToHashSet();
+                // Simulate the due time passing while paused, then observe a real ZIP.
+                typeof(AppController).GetField("_coreHistoryBackupDueAt", Private)!
+                    .SetValue(controller, Environment.TickCount64 - 1);
+                Require(await controller.SwitchWorkspaceAsync(2), "overdue history switch failed");
+                await Until(() => Directory.GetFiles(historyDirectory, "*.zip").Any(path => !previousArchives.Contains(path)),
+                    "overdue history check did not publish a new backup after resuming");
+                await Field<Task>(controller, "_coreHistoryBackupTask");
+                Require(historyTimer.Interval == CoreHistoryBackup.MinimumInterval,
+                    "overdue history check did not return to the normal interval");
+                Require(await controller.SwitchWorkspaceAsync(1), "return after overdue history check failed");
+                foreach (var zip in Directory.GetFiles(historyDirectory, "*.zip"))
                     File.Delete(zip);
                 File.WriteAllText(target.FilePath, "{broken target");
                 File.Delete(target.BackupPath);

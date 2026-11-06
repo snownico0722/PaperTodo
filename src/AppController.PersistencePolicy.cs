@@ -11,6 +11,7 @@ public sealed partial class AppController
     private DispatcherTimer? _stateBackupTimer;
     private DispatcherTimer? _coreHistoryTimer;
     private Task _coreHistoryBackupTask = Task.CompletedTask;
+    private long _coreHistoryBackupDueAt;
 
     // The core JSON history is independent of the active workspace and the normal
     // autosave flow. Delay the first check so startup can settle, then scan every
@@ -20,6 +21,17 @@ public sealed partial class AppController
         if (IsExiting || _coreHistoryTimer != null) return;
         _coreHistoryTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(1) };
         _coreHistoryTimer.Tick += OnCoreHistoryTimerTick;
+        _coreHistoryBackupDueAt = Environment.TickCount64 + (long)_coreHistoryTimer.Interval.TotalMilliseconds;
+        _coreHistoryTimer.Start();
+    }
+
+    private void ResumeCoreHistoryBackupTimer()
+    {
+        if (IsExiting || _coreHistoryTimer == null) return;
+        // Stop/Start resets DispatcherTimer's interval. Retain the original due
+        // time across workspace entry; an overdue check runs on the next turn.
+        _coreHistoryTimer.Interval = TimeSpan.FromMilliseconds(
+            Math.Max(0, _coreHistoryBackupDueAt - Environment.TickCount64));
         _coreHistoryTimer.Start();
     }
 
@@ -35,6 +47,7 @@ public sealed partial class AppController
         if (_workspaceSwitching) return;
 
         // This also changes the first-start delay into the steady ten-minute cycle.
+        _coreHistoryBackupDueAt = Environment.TickCount64 + (long)CoreHistoryBackup.MinimumInterval.TotalMilliseconds;
         if (_coreHistoryTimer != null)
             _coreHistoryTimer.Interval = CoreHistoryBackup.MinimumInterval;
 

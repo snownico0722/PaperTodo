@@ -450,7 +450,7 @@ public sealed partial class AppController
             _workspaceSwitching = false;
             if (!IsExiting)
             {
-                _coreHistoryTimer?.Start();
+                ResumeCoreHistoryBackupTimer();
                 // No old-workspace request can re-enable a transport or mutate the new store
                 // during the handoff. The active workspace now owns these services.
                 RefreshMcpRuntime();
