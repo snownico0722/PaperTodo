@@ -58,6 +58,7 @@ public sealed partial class PaperWindow
             if (_topBarHost != null) _topBarHost.Visibility = Visibility.Visible;
             HookExpandedEditorInput(true);
             destination.Child = _shell;
+            host.AttachPaperSidebar(_shell);
             // Reapply visuals after handoff: the desktop shield remains on the hidden owner,
             // while the editor toolbar and native plugin body must stay interactive.
             UpdateAdvancedInteractionLockVisuals();
@@ -206,6 +207,7 @@ public sealed partial class PaperWindow
             _host.SizeChanged -= owner.OnExpandedEditorHostSizeChanged;
             owner.IsVisibleChanged -= owner.OnExpandedEditorOwnerVisibilityChanged;
             owner.HookExpandedEditorInput(false);
+            _host.DetachPaperSidebar(owner._shell);
             if (ReferenceEquals(_destination.Child, owner._shell))
                 _destination.Child = null;
             owner._shell.Resources.MergedDictionaries.Remove(owner.Resources);

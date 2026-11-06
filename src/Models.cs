@@ -696,16 +696,6 @@ public sealed record ExpandedEditorState
     public double Height { get; init; }
     public bool Maximized { get; init; }
     public bool SidebarOpen { get; init; }
-    public NoteEditorPosition? NotePosition { get; init; }
-}
-
-public sealed record NoteEditorPosition
-{
-    public int Caret { get; init; }
-    public int SelectionStart { get; init; }
-    public int SelectionLength { get; init; }
-    public double HorizontalOffset { get; init; }
-    public double VerticalOffset { get; init; }
 }
 
 public sealed class PaperItem

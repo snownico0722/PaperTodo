@@ -527,15 +527,6 @@ public sealed partial class StateStore
                 if (!IsFinite(editor.X) || !IsFinite(editor.Y) ||
                     !IsFinite(editor.Width) || !IsFinite(editor.Height))
                     paper.ExpandedEditor = null;
-                else if (editor.NotePosition is { } position)
-                    paper.ExpandedEditor = editor with
-                    {
-                        NotePosition = position with
-                        {
-                            HorizontalOffset = IsFinite(position.HorizontalOffset) ? position.HorizontalOffset : 0,
-                            VerticalOffset = IsFinite(position.VerticalOffset) ? position.VerticalOffset : 0
-                        }
-                    };
             }
             paper.X = NormalizeCoordinate(paper.X, 120);
             paper.Y = NormalizeCoordinate(paper.Y, 120);

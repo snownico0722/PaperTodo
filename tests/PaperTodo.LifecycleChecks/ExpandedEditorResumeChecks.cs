@@ -23,11 +23,7 @@ internal static class ExpandedEditorResumeChecks
         {
             X = area.Left + 20, Y = area.Top + 20,
             Width = Math.Min(800, area.Width - 40), Height = Math.Min(600, area.Height - 40),
-            SidebarOpen = true,
-            NotePosition = new NoteEditorPosition
-            {
-                Caret = 320, SelectionStart = 314, SelectionLength = 6, VerticalOffset = 500
-            }
+            SidebarOpen = true
         };
         var state = new AppState
         {
@@ -59,35 +55,29 @@ internal static class ExpandedEditorResumeChecks
         Check(Near(host.Left, saved.X) && Near(host.Top, saved.Y) &&
               Near(host.Width, saved.Width) && Near(host.Height, saved.Height),
             "Editor did not restore its saved window bounds from disk");
-        Check(a.IsExpandedEditorSidebarOpen && box.CaretOffset == 320 &&
-              box.SelectionStart == 314 && box.SelectionLength == 6 && Near(box.VerticalOffset, 500),
-            $"Editor restore mismatch: sidebar={a.IsExpandedEditorSidebarOpen}, caret={box.CaretOffset}, " +
-            $"selection={box.SelectionStart}+{box.SelectionLength}, scroll={box.VerticalOffset}");
+        Check(a.IsExpandedEditorSidebarOpen, "Saved sidebar visibility was lost");
 
-        // Saving while open covers automatic save, workspace switching and orderly exit.
+        // Reading alone never dirties the workspace, and saves contain no document offsets.
+        controller.SaveNow(sync: true);
+        var dirtyBefore = Member(controller, "_hasPendingDirty");
         box.Select(610, 5);
-        box.CaretOffset = 615;
         box.ScrollToVerticalOffset(720);
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(Equals(dirtyBefore, Member(controller, "_hasPendingDirty")), "Reading dirtied the workspace");
         controller.SaveNow(sync: true);
-        var persisted = new StateStore().Load().Papers.Single(p => p.Id == "resume-a").ExpandedEditor!;
-        Check(persisted.NotePosition is { Caret: 615, SelectionStart: 610, SelectionLength: 5 } &&
-              Near(persisted.NotePosition.VerticalOffset, box.VerticalOffset),
-            "Saving an open editor did not persist its current document position");
+        Check(!store.SerializeState(controller.State).Contains("notePosition", StringComparison.OrdinalIgnoreCase),
+            "Saving retained retired document position state");
 
         controller.SwitchExpandedEditorPaper(a, "resume-b");
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
         var bBox = (MarkdownTextBox)Member(b, "_noteBox");
         var statistics = (TextBlock)Member(b, "_editorStatisticsText");
-        Check(statistics.Text == Strings.Format("EditorCharacterCount", 6), "Wrong total character count");
+        await WaitForCount(statistics, Strings.Format("EditorCharacterCount", 6));
         bBox.Select(0, 2);
-        await Task.Delay(180);
-        Check(statistics.Text == Strings.Format("EditorSelectionCount", 6, 2), "Selection count did not update");
+        await WaitForCount(statistics, Strings.Format("EditorSelectionCount", 6, 2));
         bBox.Select(0, 0);
         bBox.AppendText("!");
-        await Task.Delay(180);
-        Check(statistics.Text == Strings.Format("EditorCharacterCount", 7),
-            "Total count did not update or retained the cleared selection");
+        await WaitForCount(statistics, Strings.Format("EditorCharacterCount", 7));
 
         bBox.Text = "苹果\n香蕉\n梨";
         bBox.Select(0, bBox.Text.Length);
@@ -108,11 +98,35 @@ internal static class ExpandedEditorResumeChecks
         Check(bBox.Text == "> 1. 甲\n> 2. 乙\n> 丙",
             "Multi-line quote command did not cover all selected lines");
 
+        foreach (var (text, start, length, expected) in new[]
+        {
+            ("前文示例后文", 2, 2, "前文\n```\n示例\n```\n后文"),
+            ("甲\r\n乙\r\n丙", 3, 3, "甲\r\n```\r\n乙\r\n```\r\n丙"),
+            ("前后", 1, 0, "前\n```\n\n```\n后"),
+            ("```", 0, 3, "````\n```\n````")
+        })
+        {
+            bBox.Text = text;
+            bBox.Select(start, length);
+            bBox.InsertCodeBlock();
+            Check(bBox.Text == expected, "Code fence was not placed on complete lines");
+            bBox.Document.UndoStack.Undo();
+            Check(bBox.Text == text, "Code block did not undo in one step");
+        }
+
         controller.SwitchExpandedEditorPaper(b, "resume-a");
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
-        Check(ReferenceEquals(host, a.ExpandedEditorHostWindow) && box.SelectionStart == 610 &&
-              box.SelectionLength == 5 && Near(box.VerticalOffset, persisted.NotePosition!.VerticalOffset),
-            "Switching papers lost the previous editing position or replaced the host");
+        Check(ReferenceEquals(host, a.ExpandedEditorHostWindow), "Switching replaced the editor host");
+        box.Text = "甲乙丙丁";
+        box.Select(1, 1);
+        host.ReturnToPaper();
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        box.Document.Insert(0, "新");
+        box.Select(0, 0);
+        controller.OpenExpandedEditorFor(a);
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        host = a.ExpandedEditorHostWindow!;
+        Check(box.SelectionLength == 0, "Reopening restored a stale document selection");
         a.SetExpandedEditorSidebarOpen(false);
         host.WindowState = WindowState.Maximized;
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
@@ -132,6 +146,17 @@ internal static class ExpandedEditorResumeChecks
             Check(desktop[paper.Id] == (paper.X, paper.Y, paper.Width, paper.Height),
                 "Editor presentation overwrote desktop paper geometry");
         controller.Exit();
+    }
+
+    private static async Task WaitForCount(TextBlock label, string expected)
+    {
+        var timeout = System.Diagnostics.Stopwatch.StartNew();
+        while (label.Text != expected)
+        {
+            if (timeout.Elapsed.TotalSeconds > 5)
+                throw new InvalidOperationException($"Statistics did not update: {label.Text}; expected {expected}");
+            await Task.Delay(25);
+        }
     }
 
     private static bool Near(double a, double b) => Math.Abs(a - b) < 2;

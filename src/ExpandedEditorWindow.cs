@@ -13,7 +13,7 @@ namespace PaperTodo;
 /// existing PaperWindow shell for whichever paper is selected; no second document/editor.
 /// The borrowed shell already includes the user's ordered PaperTodo top bar.
 /// </summary>
-internal sealed class ExpandedEditorWindow : Window
+internal sealed partial class ExpandedEditorWindow : Window
 {
     private readonly AppController _controller;
     private readonly Border _frame;
@@ -105,6 +105,8 @@ internal sealed class ExpandedEditorWindow : Window
             catch (EntryPointNotFoundException) { }
         };
 
+        BuildPaperSidebar();
+        IsSidebarOpen = initial.SavedExpandedEditorState?.SidebarOpen ?? false;
         SwitchTo(initial);
     }
 
@@ -125,16 +127,13 @@ internal sealed class ExpandedEditorWindow : Window
             target.ExpandedEditorHostWindow?.Activate();
             return;
         }
-        var keepSidebarOpen = _current?.IsExpandedEditorSidebarOpen ??
-            target.SavedExpandedEditorState?.SidebarOpen ?? false;
         var former = _lease;
         _lease = null;
         _current = null;
         former?.Return(restoreDesktop: true, keepBehind: this);
         _lease = target.BorrowExpandedEditorVisual(this, _body);
         _current = target;
-        target.SetExpandedEditorSidebarOpen(keepSidebarOpen);
-        target.RestoreExpandedEditorPosition();
+        RefreshPaperList();
         Title = target.ExpandedEditorTitle;
         SetFrameTheme(target);
         SetPaperTopmost(target.ExpandedEditorShouldTopmost);
@@ -143,7 +142,11 @@ internal sealed class ExpandedEditorWindow : Window
 
     internal void RefreshEditorTheme(PaperWindow paper)
     {
-        if (ReferenceEquals(_current, paper)) SetFrameTheme(paper);
+        if (ReferenceEquals(_current, paper))
+        {
+            SetFrameTheme(paper);
+            RefreshPaperList();
+        }
     }
 
     internal void RefreshPaperTitle(PaperWindow paper)
@@ -172,7 +175,7 @@ internal sealed class ExpandedEditorWindow : Window
         {
             X = bounds.Left, Y = bounds.Top, Width = bounds.Width, Height = bounds.Height,
             Maximized = _lastNonMinimizedMaximized,
-            SidebarOpen = _current?.IsExpandedEditorSidebarOpen ?? false
+            SidebarOpen = IsSidebarOpen
         };
     }
 

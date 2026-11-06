@@ -80,27 +80,26 @@ internal static class ExpandedEditorChecks
         var frame = (Border)Member(host, "_frame");
         Check(frame.BorderThickness.Left == 0 && frame.CornerRadius.TopLeft == 12 &&
               frame.Clip is RectangleGeometry, "Expanded editor has a square or extra bordered shell");
-        var sidebar = (Border)Member(a, "_editorPaperSidebar");
+        var sidebar = (Border)Member(host, "_editorPaperSidebar");
         a.SetExpandedEditorSidebarOpen(true);
         Check(sidebar.Margin.Top == 0, "Paper list leaves an empty strip for the Markdown toolbar");
-        var livePaperList = (StackPanel)Member(a, "_editorPaperList");
-        Check(livePaperList.Children.Count == 3, "Initial editor sidebar did not list all papers");
+        var livePaperList = (ListBox)Member(host, "_editorPaperList");
+        Check(livePaperList.Items.Count == 3, "Initial editor sidebar did not list all papers");
         var createdPaper = controller.CreatePaper(PaperTypes.Note, show: false)
             ?? throw new InvalidOperationException("Could not create an additional note");
-        Check(livePaperList.Children.Count == 4,
+        Check(livePaperList.Items.Count == 4,
             "Open editor sidebar did not update after creating another paper");
         var paperB = controller.State.Papers.Single(p => p.Id == "editor-b");
         paperB.Title = "Renamed second paper";
         b.RefreshPaperTitle();
-        Check(livePaperList.Children.OfType<Button>().Any(item =>
-                ((StackPanel)item.Content).Children.OfType<TextBlock>().First().Text ==
-                    "Renamed second paper"),
+        host.UpdateLayout();
+        Check(Descendants<TextBlock>(livePaperList).Any(item => item.Text == "Renamed second paper"),
             "Open editor sidebar did not update after renaming a paper");
         controller.DeletePaper(createdPaper);
-        Check(livePaperList.Children.Count == 3,
+        Check(livePaperList.Items.Count == 3,
             "Open editor sidebar did not update after deleting another paper");
-        var paperItems = (StackPanel)Member(a, "_editorPaperList");
-        var firstItem = (Button)paperItems.Children[0];
+        host.UpdateLayout();
+        var firstItem = Descendants<Button>(livePaperList).First();
         firstItem.ApplyTemplate();
         var selectionBorder = firstItem.Template.FindName("ItemSurface", firstItem) as Border;
         Check(selectionBorder?.CornerRadius.TopLeft == 7,
@@ -114,8 +113,31 @@ internal static class ExpandedEditorChecks
         controller.State.Papers.Single(p => p.Id == "editor-a").AlwaysOnTop = true;
         a.RefreshEffectiveTopmost();
 
-        controller.SwitchExpandedEditorPaper(a, "editor-b");
+        // Route the same sidebar button click a user makes, starting with keyboard
+        // focus on that button; activation alone is not proof of text input ownership.
+        var secondItem = Descendants<Button>(livePaperList).First(item =>
+            Descendants<TextBlock>(item).Any(label => label.Text == "Renamed second paper"));
+        secondItem.Focus();
+        secondItem.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(ReferenceEquals(sidebar, Member(host, "_editorPaperSidebar")) &&
+              ReferenceEquals(livePaperList, Member(host, "_editorPaperList")),
+            "Paper switch replaced the window-owned sidebar");
+        Check(((MarkdownTextBox)secondEditor).IsKeyboardFocusWithin,
+            "Sidebar switch did not transfer keyboard focus to the new document");
+        var focused = System.Windows.Input.Keyboard.FocusedElement as UIElement
+            ?? throw new InvalidOperationException("Sidebar switch left no keyboard target");
+        var beforeInput = ((MarkdownTextBox)secondEditor).Text;
+        var input = new System.Windows.Input.TextCompositionEventArgs(
+            System.Windows.Input.Keyboard.PrimaryDevice,
+            new System.Windows.Input.TextComposition(System.Windows.Input.InputManager.Current, focused, "A中文"))
+        { RoutedEvent = System.Windows.Input.TextCompositionManager.TextInputEvent };
+        focused.RaiseEvent(input);
+        Check(((MarkdownTextBox)secondEditor).Text.Contains("A中文") &&
+              ((MarkdownTextBox)firstEditor).Text == "# First\nOriginal editor content",
+            "Text input after sidebar switch did not reach only the new document");
+        ((MarkdownTextBox)secondEditor).Undo();
+        Check(((MarkdownTextBox)secondEditor).Text == beforeInput, "Undo after switching targeted the wrong document");
         Check(ReferenceEquals(host, b.ExpandedEditorHostWindow), "Sidebar replaced the editor host");
         Check(new WindowInteropHelper(host).Handle == hwnd, "Switching papers changed the editor HWND");
         Check(host.CurrentPaperId == "editor-b", "Sidebar did not select the second paper");
@@ -253,6 +275,36 @@ internal static class ExpandedEditorChecks
                 "Editor switch wrote temporary dimensions into the desktop paper: " + p.Id);
         Check(ReferenceEquals(firstSession, Member(a, "_markdownBodySession")),
             "Switching or closing replaced the initial editor session");
+
+        for (var i = 0; i < 200; i++)
+            controller.State.Papers.Add(new PaperData
+            {
+                Id = "list-" + i, Type = PaperTypes.Note, Title = "List note " + i, IsVisible = false
+            });
+        controller.OpenExpandedEditorFor(a);
+        controller.OpenExpandedEditorFor(b);
+        var listHost = a.ExpandedEditorHostWindow!;
+        var otherHost = b.ExpandedEditorHostWindow!;
+        a.SetExpandedEditorSidebarOpen(true);
+        b.SetExpandedEditorSidebarOpen(true);
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        var list = (ListBox)Member(listHost, "_editorPaperList");
+        Check(!ReferenceEquals(list, Member(otherHost, "_editorPaperList")),
+            "Independent editor windows shared the same sidebar");
+        list.ScrollIntoView(list.Items[150]);
+        listHost.UpdateLayout();
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        var scroll = Descendants<ScrollViewer>(list).First();
+        var offset = scroll.VerticalOffset;
+        Check(offset > 0 && Descendants<Button>(list).Count() < 100,
+            "Long paper list created every row instead of virtualizing the viewport");
+        var visibleRow = Descendants<Button>(list).First(item => item.IsVisible);
+        visibleRow.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(listHost.CurrentPaperId!.StartsWith("list-") && ReferenceEquals(list, Member(listHost, "_editorPaperList")) &&
+              Math.Abs(scroll.VerticalOffset - offset) < 1,
+            "Switching a paper recreated the sidebar or reset its scroll position");
+        Check(otherHost.CurrentPaperId == "editor-b", "One editor's navigation changed another editor");
         controller.Exit();
     }
 
@@ -275,6 +327,16 @@ internal static class ExpandedEditorChecks
         owner.GetType().GetField(name, Private)?.GetValue(owner)
         ?? owner.GetType().GetProperty(name, Private)?.GetValue(owner)
         ?? throw new InvalidOperationException("Missing field/property: " + name);
+
+    private static IEnumerable<T> Descendants<T>(DependencyObject parent) where T : DependencyObject
+    {
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, i);
+            if (child is T match) yield return match;
+            foreach (var nested in Descendants<T>(child)) yield return nested;
+        }
+    }
 
     private static void Check(bool condition, string message)
     {

@@ -75,7 +75,7 @@ public sealed partial class AppController
     internal void RefreshExpandedEditorPaperLists()
     {
         foreach (var editor in _expandedEditors.ToArray())
-            editor.CurrentPaper?.RefreshExpandedEditorPaperList();
+            editor.RefreshPaperList();
     }
 
     internal void CloseExpandedEditorForPaper(string id)

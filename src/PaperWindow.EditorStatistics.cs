@@ -12,7 +12,11 @@ public sealed partial class PaperWindow
     private TextBlock? _editorStatisticsText;
     private MarkdownTextBox? _editorStatisticsSource;
     private DispatcherTimer? _editorStatisticsTimer;
-    private bool _editorTotalCountDirty = true;
+    private int _editorTextRevision;
+    private int _editorTotalCountRevision = -1;
+    private bool _editorStatisticsRunning;
+    private string? _editorCountedSelection;
+    private int _editorSelectionCount;
     private int _editorTotalCount;
 
     private void BuildExpandedEditorStatistics()
@@ -37,7 +41,7 @@ public sealed partial class PaperWindow
         _shell.Children.Add(_editorStatisticsBar);
         _editorStatisticsTimer = new DispatcherTimer(DispatcherPriority.Background, Dispatcher)
         {
-            Interval = TimeSpan.FromMilliseconds(120)
+            Interval = TimeSpan.FromMilliseconds(500)
         };
         _editorStatisticsTimer.Tick += (_, _) => UpdateExpandedEditorStatistics();
     }
@@ -47,7 +51,7 @@ public sealed partial class PaperWindow
         if (_editorStatisticsBar == null || _editorStatisticsText == null) return;
         _editorStatisticsBar.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
         _editorStatisticsBar.Margin = new Thickness(0, 0,
-            _isExpandedEditorSidebarOpen ? ExpandedEditorSidebarWidth : 0, 0);
+            IsExpandedEditorSidebarOpen ? ExpandedEditorSidebarWidth : 0, 0);
         _editorStatisticsText.FontSize = AppTypography.Scale(10.5);
         var source = visible ? _noteBox : null;
         if (!ReferenceEquals(source, _editorStatisticsSource))
@@ -59,19 +63,20 @@ public sealed partial class PaperWindow
             }
             _editorStatisticsTimer?.Stop();
             _editorStatisticsSource = source;
-            _editorTotalCountDirty = true;
+            _editorTextRevision++;
+            _editorCountedSelection = null;
             if (source != null)
             {
                 source.TextChanged += OnEditorStatisticsTextChanged;
                 source.TextArea.SelectionChanged += OnEditorStatisticsSelectionChanged;
             }
         }
-        if (visible) UpdateExpandedEditorStatistics();
+        if (visible) QueueExpandedEditorStatistics();
     }
 
     private void OnEditorStatisticsTextChanged(object? sender, EventArgs e)
     {
-        _editorTotalCountDirty = true;
+        _editorTextRevision++;
         QueueExpandedEditorStatistics();
     }
 
@@ -87,17 +92,53 @@ public sealed partial class PaperWindow
             _editorStatisticsTimer.Start();
     }
 
-    private void UpdateExpandedEditorStatistics()
+    private async void UpdateExpandedEditorStatistics()
     {
         _editorStatisticsTimer?.Stop();
-        if (_editorStatisticsSource is not { } box || _editorStatisticsText == null) return;
-        if (_editorTotalCountDirty)
+        if (_editorStatisticsRunning || _editorStatisticsSource is not { } box ||
+            _editorStatisticsText == null) return;
+
+        var revision = _editorTextRevision;
+        var text = _editorTotalCountRevision != revision ? box.Text : null;
+        var selection = box.SelectedText;
+        var selectAll = box.SelectionLength == box.Document.TextLength;
+        var countSelection = !string.Equals(selection, _editorCountedSelection, StringComparison.Ordinal);
+        var total = _editorTotalCount;
+        var selected = _editorSelectionCount;
+        _editorStatisticsRunning = true;
+        try
         {
-            _editorTotalCount = NoteTextStatistics.Count(box.Text);
-            _editorTotalCountDirty = false;
+            if (text != null || countSelection)
+            {
+                // Only immutable strings cross threads. There is at most one count in
+                // flight per editor, and no second parse for a whole-document selection.
+                (total, selected) = await System.Threading.Tasks.Task.Run(() =>
+                {
+                    var full = text != null ? NoteTextStatistics.Count(text) : total;
+                    var part = selection.Length == 0 ? 0 :
+                        selectAll ? full :
+                        countSelection ? NoteTextStatistics.Count(selection) : selected;
+                    return (full, part);
+                });
+            }
+            if (!ReferenceEquals(box, _editorStatisticsSource) || revision != _editorTextRevision)
+                return;
+            _editorTotalCount = total;
+            _editorTotalCountRevision = revision;
+            _editorCountedSelection = selection;
+            _editorSelectionCount = selected;
+            if (selection != box.SelectedText) return;
+            _editorStatisticsText.Text = selection.Length == 0
+                ? Strings.Format("EditorCharacterCount", total)
+                : Strings.Format("EditorSelectionCount", total, selected);
         }
-        _editorStatisticsText.Text = box.SelectionLength == 0
-            ? Strings.Format("EditorCharacterCount", _editorTotalCount)
-            : Strings.Format("EditorSelectionCount", _editorTotalCount, NoteTextStatistics.Count(box.SelectedText));
+        finally
+        {
+            _editorStatisticsRunning = false;
+            if (_editorStatisticsSource is { } current &&
+                (_editorTotalCountRevision != _editorTextRevision ||
+                 _editorCountedSelection != current.SelectedText))
+                QueueExpandedEditorStatistics();
+        }
     }
 }

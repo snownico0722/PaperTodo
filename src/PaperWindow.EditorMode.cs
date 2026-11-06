@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -13,30 +12,22 @@ public sealed partial class PaperWindow
     // Keep its window geometry separate from PaperData's ordinary/capsule geometry.
     private const double ExpandedEditorCornerRadius = 12;
     private const double ExpandedEditorToolbarHeight = 36;
-    private const double ExpandedEditorSidebarWidth = 228;
+    private const double ExpandedEditorSidebarWidth = ExpandedEditorWindow.SidebarWidth;
 
     private bool _isExpandedEditorMode;
-    private bool _isExpandedEditorSidebarOpen;
     private Button? _editorModeButton;
     private Button? _editorSidebarButton;
     private Button? _editorMinimizeButton;
     private Button? _editorMaximizeButton;
     private Border? _editorMarkdownToolbar;
-    private Border? _editorPaperSidebar;
-    private StackPanel? _editorPaperList;
     private FrameworkElement? _editorContentElement;
     private Thickness _editorContentOriginalMargin;
     private Action? _enterCurrentNoteEditor;
     private Action? _noteEditorImageAction;
 
     internal bool IsExpandedEditorMode => _isExpandedEditorMode;
-    internal bool IsExpandedEditorSidebarOpen => _isExpandedEditorSidebarOpen;
-    internal void SetExpandedEditorSidebarOpen(bool open)
-    {
-        _isExpandedEditorSidebarOpen = open;
-        RefreshExpandedEditorPresentation();
-        MarkExpandedEditorViewDirty();
-    }
+    internal bool IsExpandedEditorSidebarOpen => _expandedEditorHostWindow?.IsSidebarOpen ?? false;
+    internal void SetExpandedEditorSidebarOpen(bool open) => _expandedEditorHostWindow?.SetSidebarOpen(open);
     internal bool IsExpandedEditorMaximized => _expandedEditorHostWindow?.WindowState == WindowState.Maximized;
 
     // The mode action participates in PaperTopBarShortcuts' saved order like any other
@@ -59,7 +50,7 @@ public sealed partial class PaperWindow
             "A 2 2 0 0 1 3 18 V 6 A 2 2 0 0 1 5 4 Z " +
             "M 15 4 V 20 M 7 9 H 11 M 7 12 H 11 M 7 15 H 11");
         _editorSidebarButton.Click += (_, _) =>
-            SetExpandedEditorSidebarOpen(!_isExpandedEditorSidebarOpen);
+            SetExpandedEditorSidebarOpen(!IsExpandedEditorSidebarOpen);
 
         _editorMinimizeButton = IconButton("−", Strings.Get("EditorMinimize"));
         _editorMinimizeButton.Click += (_, _) =>
@@ -131,9 +122,9 @@ public sealed partial class PaperWindow
         {
             _editorSidebarButton.Visibility = _isExpandedEditorMode
                 ? Visibility.Visible : Visibility.Collapsed;
-            _editorSidebarButton.ToolTip = _isExpandedEditorSidebarOpen
+            _editorSidebarButton.ToolTip = IsExpandedEditorSidebarOpen
                 ? Strings.Get("EditorSidebarHide") : Strings.Get("EditorSidebarShow");
-            _editorSidebarButton.Foreground = _isExpandedEditorSidebarOpen
+            _editorSidebarButton.Foreground = IsExpandedEditorSidebarOpen
                 ? Theme.ActiveBrush : WeakTextBrush;
         }
         if (_editorMinimizeButton != null)
@@ -188,7 +179,7 @@ public sealed partial class PaperWindow
         AddTool("•", Strings.Get("EditorBullets"), () => _noteBox?.InsertLinePrefix("- "));
         AddTool("1.", Strings.Get("EditorNumbers"), () => _noteBox?.InsertLinePrefix("1. "));
         AddTool("❝", Strings.Get("EditorQuote"), () => _noteBox?.InsertLinePrefix("> "));
-        AddTool("</>", Strings.Get("EditorCode"), () => _noteBox?.WrapSelection("```\n", "\n```"));
+        AddTool("</>", Strings.Get("EditorCode"), () => _noteBox?.InsertCodeBlock());
         AddTool("↗", Strings.Get("EditorLink"), () => _noteBox?.InsertMarkdownLink());
         AddTool("▧", Strings.Get("EditorImage"), () => _noteEditorImageAction?.Invoke());
 
@@ -222,131 +213,18 @@ public sealed partial class PaperWindow
         Panel.SetZIndex(_editorMarkdownToolbar, 80);
         _shell.Children.Add(_editorMarkdownToolbar);
 
-        _editorPaperList = new StackPanel { Orientation = Orientation.Vertical };
-        var listHeader = new TextBlock
-        {
-            Text = Strings.Get("EditorAllPapers"),
-            FontWeight = FontWeights.SemiBold,
-            FontSize = AppTypography.Scale(12),
-            Margin = new Thickness(12, 12, 8, 8),
-            Foreground = TextBrush
-        };
-        var sidebarContents = new DockPanel();
-        DockPanel.SetDock(listHeader, Dock.Top);
-        sidebarContents.Children.Add(listHeader);
-        sidebarContents.Children.Add(new ScrollViewer
-        {
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            Content = _editorPaperList
-        });
-        _editorPaperSidebar = new Border
-        {
-            Width = ExpandedEditorSidebarWidth,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            VerticalAlignment = VerticalAlignment.Stretch,
-            BorderThickness = new Thickness(1, 0, 0, 0),
-            Visibility = Visibility.Collapsed,
-            Child = sidebarContents
-        };
-        _editorPaperSidebar.SetResourceReference(Border.BackgroundProperty, "PaperSurfaceBrushKey");
-        _editorPaperSidebar.SetResourceReference(Border.BorderBrushProperty, "TitleBarDividerBrushKey");
-        Grid.SetRow(_editorPaperSidebar, 1);
-        Panel.SetZIndex(_editorPaperSidebar, 90);
-        _shell.Children.Add(_editorPaperSidebar);
         BuildExpandedEditorStatistics();
     }
 
-    private Style BuildEditorPaperListButtonStyle()
+    internal void RefreshExpandedEditorPresentation()
     {
-        var style = new Style(typeof(Button));
-        style.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(9, 7, 9, 7)));
-        style.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(0)));
-        style.Setters.Add(new Setter(Control.CursorProperty, Cursors.Hand));
-        var surface = new FrameworkElementFactory(typeof(Border));
-        surface.Name = "ItemSurface";
-        surface.SetValue(Border.CornerRadiusProperty, new CornerRadius(7));
-        surface.SetValue(Border.BackgroundProperty,
-            new TemplateBindingExtension(Control.BackgroundProperty));
-        surface.SetValue(Border.PaddingProperty,
-            new TemplateBindingExtension(Control.PaddingProperty));
-        var presenter = new FrameworkElementFactory(typeof(ContentPresenter));
-        presenter.SetValue(ContentPresenter.ContentProperty,
-            new TemplateBindingExtension(ContentControl.ContentProperty));
-        presenter.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Stretch);
-        surface.AppendChild(presenter);
-        var template = new ControlTemplate(typeof(Button)) { VisualTree = surface };
-        var hovering = new Trigger
-        {
-            Property = UIElement.IsMouseOverProperty,
-            Value = true
-        };
-        hovering.Setters.Add(new Setter(Border.BackgroundProperty, HoverBrush, "ItemSurface"));
-        template.Triggers.Add(hovering);
-        style.Setters.Add(new Setter(Control.TemplateProperty, template));
-        return style;
-    }
-
-    internal void RefreshExpandedEditorPaperList()
-    {
-        if (_editorPaperList == null || !_isExpandedEditorMode || !_isExpandedEditorSidebarOpen)
-            return;
-        _editorPaperList.Children.Clear();
-        var itemStyle = BuildEditorPaperListButtonStyle();
-        foreach (var paper in _controller.State.Papers.ToArray())
-        {
-            var current = paper.Id == _paper.Id;
-            var title = _controller.PaperDisplayTitle(paper);
-            var kind = paper.Type == PaperTypes.Todo ? Strings.Get("EditorTodo") :
-                paper.Type == PaperTypes.Note ? Strings.Get("EditorNote") : Strings.Get("EditorPaper");
-            var line = new StackPanel
-            {
-                Orientation = Orientation.Vertical,
-                Margin = new Thickness(4, 1, 4, 1)
-            };
-            line.Children.Add(new TextBlock
-            {
-                Text = title,
-                TextTrimming = TextTrimming.CharacterEllipsis,
-                FontWeight = current ? FontWeights.SemiBold : FontWeights.Normal,
-                Foreground = TextBrush
-            });
-            line.Children.Add(new TextBlock
-            {
-                Text = kind,
-                FontSize = AppTypography.Scale(10),
-                Foreground = WeakTextBrush
-            });
-            var button = new Button
-            {
-                Content = line,
-                ToolTip = _controller.PaperTitleText(paper),
-                HorizontalContentAlignment = HorizontalAlignment.Stretch,
-                Padding = new Thickness(9, 7, 9, 7),
-                Margin = new Thickness(4, 1, 4, 1),
-                BorderThickness = new Thickness(0),
-                Background = current ? HoverBrush : Brushes.Transparent,
-                Style = itemStyle
-            };
-            button.Click += (_, _) => _controller.SwitchExpandedEditorPaper(this, paper.Id);
-            _editorPaperList.Children.Add(button);
-        }
-    }
-
-    private void RefreshExpandedEditorPresentation()
-    {
-        if (_editorMarkdownToolbar == null || _editorPaperSidebar == null) return;
+        if (_editorMarkdownToolbar == null) return;
         var showMarkdownTools = _isExpandedEditorMode &&
             _paper.Type == PaperTypes.Note && IsCurrentBodyProviderMarkdown && _noteBox != null;
         RefreshExpandedEditorStatistics(showMarkdownTools);
         _editorMarkdownToolbar.Visibility = showMarkdownTools ? Visibility.Visible : Visibility.Collapsed;
         _editorMarkdownToolbar.Margin = new Thickness(
-            0, 0, _isExpandedEditorMode && _isExpandedEditorSidebarOpen ? ExpandedEditorSidebarWidth : 0, 0);
-        _editorPaperSidebar.Visibility = _isExpandedEditorMode && _isExpandedEditorSidebarOpen
-            ? Visibility.Visible : Visibility.Collapsed;
-        // The sidebar spans the whole body area, independently of Markdown's toolbar.
-        _editorPaperSidebar.Margin = new Thickness(0);
-
+            0, 0, _isExpandedEditorMode && IsExpandedEditorSidebarOpen ? ExpandedEditorSidebarWidth : 0, 0);
         // A plugin provider can swap out _bodyElement after the shell was constructed.
         var body = (_paper.Type == PaperTypes.Note ? _bodyElement : null) as FrameworkElement
             ?? _editorContentElement;
@@ -363,15 +241,13 @@ public sealed partial class PaperWindow
             _editorContentElement.Margin = new Thickness(
                 m.Left,
                 m.Top + (showMarkdownTools ? ExpandedEditorToolbarHeight : 0),
-                m.Right + (_isExpandedEditorMode && _isExpandedEditorSidebarOpen ? ExpandedEditorSidebarWidth : 0),
+                m.Right + (_isExpandedEditorMode && IsExpandedEditorSidebarOpen ? ExpandedEditorSidebarWidth : 0),
                 m.Bottom + (showMarkdownTools ? ExpandedEditorStatusHeight : 0));
         }
         if (_textZoomIndicator?.Parent is Border zoomHost)
             zoomHost.Margin = new Thickness(0, 0,
-                12 + (_isExpandedEditorMode && _isExpandedEditorSidebarOpen ? ExpandedEditorSidebarWidth : 0),
+                12 + (_isExpandedEditorMode && IsExpandedEditorSidebarOpen ? ExpandedEditorSidebarWidth : 0),
                 7 + (showMarkdownTools ? ExpandedEditorStatusHeight : 0));
-        if (_isExpandedEditorSidebarOpen)
-            RefreshExpandedEditorPaperList();
         RefreshExpandedEditorTopBarControls();
         UpdateTopBarResponsiveLayout();
     }
