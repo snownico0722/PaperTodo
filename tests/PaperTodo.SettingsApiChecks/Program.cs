@@ -101,14 +101,14 @@ internal static partial class Program
               PaperTopBarShortcuts.Pinned(state).SequenceEqual(
                   [PaperTopBarShortcuts.Association, PaperTopBarShortcuts.NewNote, PaperTopBarShortcuts.Workspace]) &&
               PaperTopBarShortcuts.Menu(state).SequenceEqual(
-                  [PaperTopBarShortcuts.NewTodo, PaperTopBarShortcuts.ExternalEditor]),
+                  [PaperTopBarShortcuts.NewTodo, PaperTopBarShortcuts.ExternalEditor, PaperTopBarShortcuts.RunScript]),
             "Dragging a menu command above the divider pins it at the insertion slot.");
         Check(PaperTopBarShortcuts.MoveTo(state, PaperTopBarShortcuts.Association, false, 0) &&
               PaperTopBarShortcuts.Pinned(state).SequenceEqual(
                   [PaperTopBarShortcuts.NewNote, PaperTopBarShortcuts.Workspace]) &&
               PaperTopBarShortcuts.Menu(state).SequenceEqual(
                   [PaperTopBarShortcuts.Association, PaperTopBarShortcuts.NewTodo,
-                   PaperTopBarShortcuts.ExternalEditor]),
+                   PaperTopBarShortcuts.ExternalEditor, PaperTopBarShortcuts.RunScript]),
             "Dragging to the lower group moves only one action without changing other ordering.");
         Check(!PaperTopBarShortcuts.MoveTo(state, PaperTopBarShortcuts.Association, false, 0),
             "Dropping in the same slot is a true no-op.");
@@ -123,6 +123,35 @@ internal static partial class Program
               !PaperTopBarShortcuts.IsApplicable(PaperTypes.Todo,
                   PaperTopBarShortcuts.ExternalEditor),
             "One global selection filters commands unavailable on the current paper.");
+        var savedOrder = state.TopBarShortcutOrder.ToArray();
+        state.HiddenTopBarShortcuts.Add(PaperTopBarShortcuts.NewNote);
+        state.TopBarScript = "Write-Output 'shared'";
+        var restored = JsonSerializer.Deserialize<AppState>(JsonSerializer.Serialize(state))!;
+        Check(!PaperTopBarShortcuts.Contains(restored, PaperTypes.Note, PaperTopBarShortcuts.NewNote) &&
+              PaperTopBarShortcuts.IsPinned(restored, PaperTopBarShortcuts.NewNote) &&
+              restored.TopBarShortcutOrder.SequenceEqual(savedOrder) && restored.TopBarScript == state.TopBarScript,
+            "Saving a hidden shortcut preserves its position and the shared script without exposing the entry.");
+        restored.HiddenTopBarShortcuts.Clear();
+        Check(PaperTopBarShortcuts.Contains(restored, PaperTypes.Note, PaperTopBarShortcuts.NewNote),
+            "Unhiding restores the original pinned placement.");
+        Check(ScriptExecutionService.TryParse("Write-Output 'shared'", true, out var plain) &&
+              plain.Engine == "auto" && plain.Script == "Write-Output 'shared'" && !plain.UsePersistentProcess,
+            "Unprefixed shortcut scripts use the default engine without changing stored input.");
+        foreach (var (prefix, engine, persistent) in new[]
+        {
+            ("!p", "auto", false), ("!power", "auto", false),
+            ("!pwsh", "pwsh", false), ("!ps7", "pwsh", false),
+            ("!ps5", "powershell", false), ("!winps", "powershell", false),
+            ("!pf", "auto", true), ("!powerf", "auto", true)
+        })
+            Check(ScriptExecutionService.TryParse(prefix + "\r\nWrite-Output 'shared'", false, out var script) &&
+                  script.Engine == engine && script.UsePersistentProcess == persistent &&
+                  script.Script == plain.Script,
+                "Capsules and shortcuts interpret the same prefix: " + prefix);
+        Check(!ScriptExecutionService.HasMarker("！p\nWrite-Output 'shared'") &&
+              !ScriptExecutionService.HasMarker("!p Write-Output 'shared'") &&
+              !ScriptExecutionService.TryParse("Write-Output 'shared'", false, out _),
+            "Capsules require a supported ASCII marker alone on the first line.");
         var controller = Controller();
         controller.State.TopBarShortcutOrder =
             [PaperTopBarShortcuts.Association, PaperTopBarShortcuts.NewTodo,

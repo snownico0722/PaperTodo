@@ -104,6 +104,7 @@ internal static class MaterialPresentationChecks
         var state = controller.State;
         var oldOrder = state.TopBarShortcutOrder.ToList();
         var oldDivider = state.TopBarPinnedCount;
+        var oldHidden = state.HiddenTopBarShortcuts.ToList();
         var oldSkin = state.PaperSkin;
         var oldLinks = state.EnableTodoPaperLinks;
         var paper = new PaperData
@@ -119,6 +120,7 @@ internal static class MaterialPresentationChecks
         try
         {
             state.PaperSkin = PaperSkins.Paper;
+            state.HiddenTopBarShortcuts = [];
             state.EnableTodoPaperLinks = true;
             // Preserve an explicit two-creation-button fixture for width and overflow tests.
             state.TopBarShortcutOrder =
@@ -312,6 +314,38 @@ internal static class MaterialPresentationChecks
                 createNote.Visibility != Visibility.Visible,
                 "moving a shortcut into the menu immediately removes the live title-bar icon");
             overflow.IsOpen = false;
+
+            var orderBeforeHide = state.TopBarShortcutOrder.ToArray();
+            controller.SetTopBarShortcutHidden(PaperTopBarShortcuts.NewTodo, true);
+            controller.SetTopBarShortcutHidden(PaperTopBarShortcuts.NewNote, true);
+            Program.Pump();
+            OpenMenu();
+            var hiddenMenu = more.ContextMenu!;
+            Program.Assert(createTodo.Visibility != Visibility.Visible &&
+                createNote.Visibility != Visibility.Visible &&
+                !Has(hiddenMenu, Strings.Get("MenuNewTodoPaper")) &&
+                !Has(hiddenMenu, Strings.Get("MenuNewNotePaper")),
+                "Hide removes both pinned and menu shortcuts without falling back to overflow");
+            hiddenMenu.IsOpen = false;
+            var hiddenCapsuleMenu = (ContextMenu)buildCapsuleMenu.Invoke(window, null)!;
+            rightClick.IsOpen = true;
+            Program.Pump();
+            Program.Assert(!Has(hiddenCapsuleMenu, Strings.Get("MenuNewTodoPaper")) &&
+                !Has(hiddenCapsuleMenu, Strings.Get("MenuNewNotePaper")) &&
+                !Has(rightClick, Strings.Get("MenuNewTodoPaper")) &&
+                !Has(rightClick, Strings.Get("MenuNewNotePaper")) &&
+                Has(rightClick, Strings.Get("TraySettings")),
+                "Hide applies to edge and cached paper context menus while fixed Settings remains reachable");
+            rightClick.IsOpen = false;
+            controller.SetTopBarShortcutHidden(PaperTopBarShortcuts.NewTodo, false);
+            controller.SetTopBarShortcutHidden(PaperTopBarShortcuts.NewNote, false);
+            LayoutAt(430);
+            OpenMenu();
+            Program.Assert(state.TopBarShortcutOrder.SequenceEqual(orderBeforeHide) &&
+                createTodo.Visibility == Visibility.Visible &&
+                Has(more.ContextMenu!, Strings.Get("MenuNewNotePaper")),
+                "Unhide restores each original title-bar or menu location");
+            more.ContextMenu!.IsOpen = false;
         }
         finally
         {
@@ -321,6 +355,7 @@ internal static class MaterialPresentationChecks
             state.Papers.Remove(paper);
             state.TopBarShortcutOrder = oldOrder;
             state.TopBarPinnedCount = oldDivider;
+            state.HiddenTopBarShortcuts = oldHidden;
             state.EnableTodoPaperLinks = oldLinks;
             state.PaperSkin = oldSkin;
             SetCursorPos(previousCursor.X, previousCursor.Y);
@@ -335,6 +370,7 @@ internal static class MaterialPresentationChecks
         var state = controller.State;
         var originalOrder = state.TopBarShortcutOrder.ToArray();
         var originalCount = state.TopBarPinnedCount;
+        var originalHidden = state.HiddenTopBarShortcuts.ToList();
         GetCursorPos(out var savedCursor);
         Window? surface = null;
         try
@@ -362,6 +398,18 @@ internal static class MaterialPresentationChecks
             var upperGroup = (StackPanel)dropArea.Children[1];
             var menuHeading = (TextBlock)dropArea.Children[3];
             var sourceRow = (Grid)upperGroup.Children[0]; // New Todo
+            var hide = Descendants(sourceRow).OfType<CheckBox>().Single();
+            var hideAt = hide.PointToScreen(new Point(hide.ActualWidth / 2, hide.ActualHeight / 2));
+            SetCursorPos((int)hideAt.X, (int)hideAt.Y);
+            Wait(30);
+            mouse_event(0x0002, 0, 0, 0, UIntPtr.Zero);
+            SetCursorPos((int)hideAt.X + 9, (int)hideAt.Y);
+            Wait(40);
+            mouse_event(0x0004, 0, 0, 0, UIntPtr.Zero);
+            Program.Pump();
+            Program.Assert(PaperTopBarShortcuts.IsHidden(state, PaperTopBarShortcuts.NewTodo) &&
+                state.TopBarPinnedCount == 2 && state.TopBarShortcutOrder[0] == PaperTopBarShortcuts.NewTodo,
+                "moving a checkbox press past the drag threshold only toggles visibility");
             var from = sourceRow.PointToScreen(new Point(
                 sourceRow.ActualWidth / 2, sourceRow.ActualHeight / 2));
             var to = menuHeading.PointToScreen(new Point(
@@ -407,6 +455,7 @@ internal static class MaterialPresentationChecks
             SetCursorPos(savedCursor.X, savedCursor.Y);
             state.TopBarShortcutOrder = originalOrder.ToList();
             state.TopBarPinnedCount = originalCount;
+            state.HiddenTopBarShortcuts = originalHidden;
         }
     }
 
