@@ -5,7 +5,7 @@ public sealed partial class AppController
     private EdgeCapsuleQueueDropGhost? _nativeQueueDropGhost;
     private string? _singleCapsuleGhostOwnerId;
     private (string OwnerId, string TargetKey, int Index)? _legacyLandingPreview;
-    private string? _legacyMasterGhostKey;
+    private (string OwnerId, string QueueKey)? _vacatedLegacyMaster;
 
     private double NativeDropGhostMasterWidth(string queueKey, MonitorGeometry geometry) =>
         _masterCapsules.TryGetValue(queueKey, out var master)
@@ -44,7 +44,14 @@ public sealed partial class AppController
             widths.Add(NativeDropGhostMemberWidth(id, geometry));
         Action? raiseDrag = _windows.TryGetValue(drag.OwnerId, out var dragWindow)
             ? dragWindow.BringEdgeCapsuleDragAboveGhost : null;
-        _nativeQueueDropGhost?.ShowAt(geometry, side, top, widths, DeepCapsuleGap, raiseDrag);
+        var topmost = dragWindow?.EdgeCapsuleDragIsTopmost ?? true;
+        if (collapsedTarget && drop.Decision.Kind == EdgeFreeQueueDropKind.Insert &&
+            target != null)
+            _nativeQueueDropGhost?.ShowMergeHaloAt(geometry, side, drop.Decision.TopDip,
+                NativeDropGhostMasterWidth(target.Key, geometry), raiseDrag, topmost);
+        else
+            _nativeQueueDropGhost?.ShowAt(geometry, side, top, widths,
+                DeepCapsuleGap, raiseDrag, topmost);
     }
 
     // Same projection as the ordinary cross-edge commit: the preview is never
@@ -62,6 +69,32 @@ public sealed partial class AppController
             (geometry.DeviceYToLocalDip(pointer.Y) - firstTop) /
             EdgeCapsuleLayout.SlotHeight(DeepCapsuleGap) + .5), 0, existingMembers);
         return (index, firstTop);
+    }
+
+    private void PreviewVacatedLegacyMaster(PaperData owner)
+    {
+        if (!State.UseCapsuleCollapseAll || _vacatedLegacyMaster != null) return;
+        var sourceKey = QueueKey(owner);
+        if (DeepCapsulePapersInOrder().Count(p => QueueKey(p) == sourceKey) != 1 ||
+            !_masterCapsules.TryGetValue(sourceKey, out var master) || !master.IsVisible)
+            return;
+        _vacatedLegacyMaster = (owner.Id, sourceKey);
+        CompleteEdgeCapsuleQueueCompositionProxyFor(master);
+        master.Hide();
+    }
+
+    private void RestoreVacatedLegacyMaster(string ownerId)
+    {
+        if (_vacatedLegacyMaster is not { } previous || previous.OwnerId != ownerId) return;
+        _vacatedLegacyMaster = null;
+        if (_masterCapsules.TryGetValue(previous.QueueKey, out var master))
+        {
+            var remaining = DeepCapsulePapersInOrder()
+                .Count(p => QueueKey(p) == previous.QueueKey);
+            if (remaining > 0 && !master.IsVisible)
+                master.ShowPlaced(remaining, IsCapsuleCollapseAllActiveForQueue(previous.QueueKey),
+                    animate: State.EnableAnimations);
+        }
     }
 
     // Project ordinary cross-edge membership without mutating State.Papers.
@@ -115,6 +148,7 @@ public sealed partial class AppController
         if (_masterCapsules.TryGetValue(previous.TargetKey, out var master))
             master.PreviewQueueTop(DeepCapsuleStartTopMarginForQueueKey(previous.TargetKey),
                 animate: true);
+        RestoreVacatedLegacyMaster(ownerId);
     }
 
     // Ordinary sorting keeps its existing index and commit paths, while
@@ -195,7 +229,10 @@ public sealed partial class AppController
                 widths.Add(NativeDropGhostMemberWidth(owner.Id, geometry));
             }
             if (!EdgeCapsuleFreeQueuesEnabled)
+            {
                 PreviewLegacyCrossEdgeLanding(owner, targetKey, projection.Index);
+                PreviewVacatedLegacyMaster(owner);
+            }
         }
         else
         {
@@ -227,15 +264,25 @@ public sealed partial class AppController
 
         _nativeQueueDropGhost ??= new EdgeCapsuleQueueDropGhost();
         _singleCapsuleGhostOwnerId = owner.Id;
-        _nativeQueueDropGhost.ShowAt(geometry, side, top, widths,
-            DeepCapsuleGap, _windows[owner.Id].BringEdgeCapsuleDragAboveGhost);
+        var dragWindow = _windows[owner.Id];
+        var raiseDrag = dragWindow.BringEdgeCapsuleDragAboveGhost;
+        if (foldedTarget && floating && targetKey != sourceKey &&
+            _masterCapsules.TryGetValue(targetKey, out var foldedMaster))
+            _nativeQueueDropGhost.ShowMergeHaloAt(geometry, side, foldedMaster.AnchorTop,
+                foldedMaster.DesiredDockedWidthFor(geometry),
+                raiseDrag, dragWindow.EdgeCapsuleDragIsTopmost);
+        else
+            _nativeQueueDropGhost.ShowAt(geometry, side, top, widths,
+                DeepCapsuleGap, raiseDrag, dragWindow.EdgeCapsuleDragIsTopmost);
     }
 
     internal void EndSingleCapsuleDropGhost(string ownerId)
     {
         if (_singleCapsuleGhostOwnerId != ownerId) return;
         _singleCapsuleGhostOwnerId = null;
-        // The final existing arrange restores or commits the projected peer slots.
+        // Committed empty queues have already retired their master; canceled
+        // drags still own their original source and restore its visible master.
+        RestoreVacatedLegacyMaster(ownerId);
         _legacyLandingPreview = null;
         if (_nativeEdgeQueueDrag != null)
             _nativeQueueDropGhost?.Hide();
@@ -244,45 +291,6 @@ public sealed partial class AppController
             _nativeQueueDropGhost?.Dispose();
             _nativeQueueDropGhost = null;
         }
-    }
-
-    // In ordinary mode the master already moves the queue as one rigid stack.
-    // Its landing indicator follows the same clamped anchor, not a second solver.
-    internal void PreviewLegacyMasterDropGhost(MasterCapsuleWindow master,
-        string queueKey, string monitor, string side)
-    {
-        if (EdgeCapsuleFreeQueuesEnabled || !State.UseCapsuleCollapseAll ||
-            !State.UseCapsuleMode || !State.UseDeepCapsuleMode ||
-            !WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(monitor, out var geometry))
-        {
-            EndLegacyMasterDropGhost(queueKey);
-            return;
-        }
-
-        var members = DeepCapsulePapersInOrder().Where(p => QueueKey(p) == queueKey).ToList();
-        if (members.Count == 0)
-        {
-            EndLegacyMasterDropGhost(queueKey);
-            return;
-        }
-        var widths = new List<double>(members.Count + 1)
-            { master.DesiredDockedWidthFor(geometry) };
-        if (!IsCapsuleCollapseAllActiveForQueue(queueKey))
-            foreach (var member in members)
-                widths.Add(NativeDropGhostMemberWidth(member.Id, geometry));
-
-        _nativeQueueDropGhost ??= new EdgeCapsuleQueueDropGhost();
-        _legacyMasterGhostKey = queueKey;
-        _nativeQueueDropGhost.ShowAt(geometry, side, master.AnchorTop,
-            widths, DeepCapsuleGap, master.BringDragWindowAboveGhost);
-    }
-
-    internal void EndLegacyMasterDropGhost(string queueKey)
-    {
-        if (_legacyMasterGhostKey != queueKey) return;
-        _legacyMasterGhostKey = null;
-        _nativeQueueDropGhost?.Dispose();
-        _nativeQueueDropGhost = null;
     }
 
     // The only magnetic movement is a repeatable snap to the source's OUTER

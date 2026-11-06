@@ -353,7 +353,6 @@ public sealed partial class MasterCapsuleWindow : Window
 
         if (Math.Abs(deltaX) >= MasterQueueTransferUnlockDistance)
         {
-            _controller.EndLegacyMasterDropGhost(_queueKey);
             if (TryRunQueueTransfer(currentScreenPos, session))
             {
                 return true;
@@ -376,8 +375,6 @@ public sealed partial class MasterCapsuleWindow : Window
             _queueMonitorDeviceName,
             _queueEdge,
             targetMargin);
-        _controller.PreviewLegacyMasterDropGhost(this, _queueKey, _queueMonitorDeviceName,
-            _queueEdge == EdgeCapsuleEdge.Left ? DeepCapsuleSides.Left : DeepCapsuleSides.Right);
         return true;
     }
 
@@ -743,7 +740,6 @@ public sealed partial class MasterCapsuleWindow : Window
         var wasDragging = _gestureState == MasterGestureState.Dragging && session != null;
         _gestureState = MasterGestureState.Idle;
         _dragSession = null;
-        _controller.EndLegacyMasterDropGhost(_queueKey);
         var hadCapture = _pill.IsMouseCaptured;
         if (_pill.IsMouseCaptured)
         {
@@ -833,6 +829,8 @@ public sealed partial class MasterCapsuleWindow : Window
 
     internal double DesiredDockedWidthFor(MonitorGeometry geometry) =>
         MasterDockedWidth(geometry.DpiScaleY, updateLabel: false);
+
+    internal bool DragWindowIsTopmost => _floatingDragHost?.Topmost ?? Topmost;
 
     internal void BringDragWindowAboveGhost() =>
         WindowNative.BringToFrontNoActivate((Window?)_floatingDragHost ?? this);

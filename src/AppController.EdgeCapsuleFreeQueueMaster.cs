@@ -182,6 +182,12 @@ public sealed partial class AppController
 
         PreviewFreeQueueDropSlot(_freeMasterSlotPreview, decision,
             layout.Groups[0].PaperIds, resting, groups, includeResting: docked);
+        if (docked && decision.Kind != EdgeFreeQueueDropKind.Insert)
+        {
+            // The real master and its members already follow the pointer.
+            _nativeQueueDropGhost?.Hide();
+            return;
+        }
         var pitch = EdgeCapsuleLayout.SlotHeight(DeepCapsuleGap);
         var top = EdgeCapsuleFreeQueuePolicy.GhostSlotTop(
             decision, targetBox.HasMaster, pitch, targetBox.Collapsed);
@@ -197,14 +203,25 @@ public sealed partial class AppController
                 widths.Add(NativeDropGhostMemberWidth(id, geometry));
         Action? raiseDrag = _masterCapsules.TryGetValue(layout.QueueKey, out var draggingMaster)
             ? draggingMaster.BringDragWindowAboveGhost : null;
-        _nativeQueueDropGhost.ShowAt(geometry, side, top, widths, DeepCapsuleGap, raiseDrag);
+        var topmost = draggingMaster?.DragWindowIsTopmost ?? true;
+        if (decision.Kind == EdgeFreeQueueDropKind.Insert && targetBox.Collapsed &&
+            _masterCapsules.TryGetValue(decision.TargetKey, out var targetMaster))
+            _nativeQueueDropGhost.ShowMergeHaloAt(geometry, side, targetMaster.AnchorTop,
+                targetMaster.DesiredDockedWidthFor(geometry), raiseDrag, topmost);
+        else
+            _nativeQueueDropGhost.ShowAt(geometry, side, top, widths, DeepCapsuleGap,
+                raiseDrag, topmost);
     }
 
     internal void PreviewFreeMasterQueueDropGhost(
         MasterCapsuleQueueTransferSnapshot snapshot, DeviceScreenPoint pointer)
     {
-        if (snapshot.FreeLayout is not { } layout ||
-            _masterCapsuleQueueTransfer != snapshot || !EdgeCapsuleFreeQueuesEnabled ||
+        if (snapshot.FreeLayout is not { } layout)
+        {
+            PreviewLegacyMasterTransferDropGhost(snapshot, pointer);
+            return;
+        }
+        if (_masterCapsuleQueueTransfer != snapshot || !EdgeCapsuleFreeQueuesEnabled ||
             !FreeMasterMembersMatch(layout))
         {
             _nativeQueueDropGhost?.Hide();

@@ -9,6 +9,9 @@ public sealed partial class PaperWindow
     private bool _nativeQueueClickRevoked;
     private bool _nativeQueueFeedbackSampling;
 
+    internal bool EdgeCapsuleDragIsTopmost =>
+        _deepCapsuleFloatingDragHost?.Topmost ?? _edgeCapsuleHost?.IsTopmost ?? false;
+
     internal void BringEdgeCapsuleDragAboveGhost()
     {
         if (_deepCapsuleFloatingDragHost?.IsVisible == true)
