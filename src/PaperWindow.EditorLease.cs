@@ -17,6 +17,20 @@ public sealed partial class PaperWindow
     private FrameworkElement InteractionRoot => IsExpandedEditorHosted ? _shell : this;
     private Window InteractionWindow => (_expandedEditorHostWindow as Window) ?? this;
 
+    internal void QueueExpandedEditorFocus()
+    {
+        if (!IsCurrentBodyProviderMarkdown || _noteBox is not { } box ||
+            _expandedEditorHostWindow is not { } host) return;
+        // The sidebar's click finishes before the new body receives keyboard input.
+        // Do not steal focus if another window or provider wins in the meantime.
+        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Input, new Action(() =>
+        {
+            if (ReferenceEquals(_expandedEditorHostWindow, host) &&
+                ReferenceEquals(_noteBox, box) && host.IsActive)
+                box.Focus();
+        }));
+    }
+
     // Same visual-lease boundary as the directly editable workspace canvas (#399).
     // The original PaperWindow retains its document, Undo stack, Markdown session and plugin
     // callbacks; only its existing WPF shell is temporarily hosted by the editor HWND.

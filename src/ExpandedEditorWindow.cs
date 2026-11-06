@@ -138,6 +138,7 @@ internal sealed partial class ExpandedEditorWindow : Window
         SetFrameTheme(target);
         SetPaperTopmost(target.ExpandedEditorShouldTopmost);
         if (IsVisible) Activate();
+        target.QueueExpandedEditorFocus();
     }
 
     internal void RefreshEditorTheme(PaperWindow paper)
