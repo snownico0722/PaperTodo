@@ -2169,5 +2169,5 @@ The preview should show an available landing rather than make a target continuou
 
 - `src/Workbench/WorkbenchLayoutEngine.cs`、`WorkbenchState.cs`、`WorkbenchWindow.cs`。
 - `src/PaperWindow.Workbench.cs`、`src/AppController.Workbench.cs`、`src/StateStore.Workbench.cs`。
-- `tests/PaperTodo.WorkbenchLayoutChecks` 与 `tests/PaperTodo.WorkbenchChecks`：几何约束、单正文身份、桌面还原和工作区切换隔离。
+- `tests/PaperTodo.WorkbenchLayoutChecks` 与 `tests/PaperTodo.LifecycleChecks/Workbench`：几何约束、单正文身份、桌面还原和工作区切换隔离。
 - 算法来源：https://github.com/microsoft/automatic-graph-layout；备选评估：https://eclipse.dev/elk/reference/algorithms/org-eclipse-elk-layered.html。
