@@ -95,25 +95,19 @@ public sealed partial class StateStore
             catch (JsonException) { /* Try complete interrupted snapshots. */ }
         }
 
-        var candidates = FindValidInterruptedWrites(out var readFailure);
-        if (candidates.Count > 0)
+        var interruptedPaths = InterruptedWritePaths();
+        var latest = FindLatestInterruptedWrite(interruptedPaths, out var equivalentPaths, out var readFailure);
+        if (latest != null)
         {
-            // Last-write time describes the snapshot; the orphan filename only
-            // describes when it was moved aside. Path order breaks timestamp ties.
-            var first = candidates.OrderByDescending(candidate => candidate.LastWriteTimeUtc)
-                .ThenBy(candidate => candidate.Path, StringComparer.OrdinalIgnoreCase).First();
-
             _pendingStartupRecovery = PendingStartupRecovery.FromTemporary(
-                first.Path, first.Bytes, primaryBytes,
-                candidates.Where(candidate => System.Text.Json.Nodes.JsonNode.DeepEquals(
-                    first.Document, candidate.Document)).Select(candidate => (candidate.Path,
-                    SHA256.HashData(candidate.Bytes))).ToArray());
+                latest.Path, latest.Bytes, primaryBytes, equivalentPaths.ToArray());
             NeedsStartupRecoverySave = true;
-            return ReadLoadDocument(first.Bytes);
+            NormalizedCollapsedStateOnLoad = latest.NormalizedCollapsedState;
+            return latest.State;
         }
 
         // Existing data requires a choice, whether history is available or not.
-        if (primaryExists || backupExists || HasInterruptedWriteFiles())
+        if (primaryExists || backupExists || interruptedPaths.Length != 0)
         {
             var history = new CoreHistoryBackup(Path.GetDirectoryName(FilePath)!);
             foreach (var snapshot in history.ReadWorkspaceSnapshots(WorkspaceNumber, ex => readFailure ??= ex))
@@ -131,7 +125,7 @@ public sealed partial class StateStore
                     return new AppState { Workspaces = catalog };
                 }
                 _pendingStartupRecovery = PendingStartupRecovery.FromHistory(snapshot, primaryBytes);
-                return ReadLoadDocument(snapshot.Bytes);
+                return historicalState!;
             }
 
             if (readFailure != null)
