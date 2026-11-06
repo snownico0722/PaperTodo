@@ -21,6 +21,7 @@
     <Compile Include="..\..\src\MarkdownSemanticSnapshot.PlainText.cs" Link="MarkdownSemanticSnapshot.PlainText.cs" />
     <Compile Include="..\..\src\MarkdownMathScanner.cs" Link="MarkdownMathScanner.cs" />
     <Compile Include="..\..\src\MarkdownMathIncremental.cs" Link="MarkdownMathIncremental.cs" />
+    <Compile Include="..\..\src\MarkdownMathSource.cs" Link="MarkdownMathSource.cs" />
     <Compile Include="..\..\src\MarkdownSemanticReveal.cs" Link="MarkdownSemanticReveal.cs" />
     <Compile Include="..\..\src\MarkdownSemanticCollapseLayout.cs" Link="MarkdownSemanticCollapseLayout.cs" />
     <Compile Include="..\..\src\MarkdownFencedCodeScanner.cs" Link="MarkdownFencedCodeScanner.cs" />

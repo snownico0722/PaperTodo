@@ -262,6 +262,7 @@ internal static partial class Program
             WalkCaret(changed, next, table!, prefix.Length - 1, prefix.Length + syntax.Length + 3);
         });
 
+        RunMathLayoutChecks(Check);
         RunLocalRedrawChecks(Check);
 
         Console.WriteLine($"Markdown editing checks: {failures} failure(s).");
@@ -381,6 +382,13 @@ internal static partial class Program
 
     private static double FirstLineWidth(MarkdownTextBox box)
     {
+        Layout(box);
+        var line = box.TextArea.TextView.GetOrConstructVisualLine(box.Document.GetLineByNumber(1));
+        return line.TextLines.Sum(text => text.WidthIncludingTrailingWhitespace);
+    }
+
+    private static void Layout(MarkdownTextBox box)
+    {
         box.ApplyTemplate();
         box.Measure(new Size(800, 600));
         box.Arrange(new Rect(0, 0, 800, 600));
@@ -389,8 +397,6 @@ internal static partial class Program
         view.Measure(new Size(800, 600));
         view.Arrange(new Rect(0, 0, 800, 600));
         view.EnsureVisualLines();
-        var line = view.GetOrConstructVisualLine(box.Document.GetLineByNumber(1));
-        return line.TextLines.Sum(text => text.WidthIncludingTrailingWhitespace);
     }
 
     private static void Pump()
@@ -418,16 +424,16 @@ internal static partial class Program
         private readonly MarkdownSemanticPresentation _presentation;
         public MarkdownSemanticPresentation Presentation => _presentation;
 
-        public Editor(string source, bool fullBeforeSemantics = false)
+        public Editor(string source, bool fullBeforeSemantics = false, string renderMode = MarkdownRenderModes.Full)
         {
             Box = new MarkdownTextBox { Text = source };
             Box.Document.UndoStack.ClearAll();
             Box.SetMarkdownEditAnimationEnabled(false);
-            if (fullBeforeSemantics) Box.SetMarkdownRenderMode(MarkdownRenderModes.Full);
+            if (fullBeforeSemantics) Box.SetMarkdownRenderMode(renderMode);
             _document = new MarkdownSemanticDocument(Box.Document);
             Box.SetSemanticDocument(_document);
             _presentation = new MarkdownSemanticPresentation(Box, _document);
-            if (!fullBeforeSemantics) Box.SetMarkdownRenderMode(MarkdownRenderModes.Full);
+            if (!fullBeforeSemantics) Box.SetMarkdownRenderMode(renderMode);
         }
 
         public void Dispose()

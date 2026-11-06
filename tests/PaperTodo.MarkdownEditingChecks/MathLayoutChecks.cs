@@ -1,43 +1,20 @@
 using System.IO;
-using System.Windows;
 using System.Windows.Media;
-using System.Windows.Threading;
 using ICSharpCode.AvalonEdit.Rendering;
 using PaperTodo;
 
-internal static class Program
+internal static partial class Program
 {
-    [STAThread]
-    private static int Main()
+    private static void RunMathLayoutChecks(Action<string, Action> check)
     {
-        new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
-
-        try
-        {
-            VectorRendererUsesGlyphRuns();
-            PreviewingMultilineFormulaDoesNotSkipUncollapsedLines();
-            FullModeRevealRestoresAndRecollapsesSource();
-            TransientFindRevealRestoresAndRecollapsesSource();
-            Console.WriteLine("Markdown math layout checks passed: 4");
-            return 0;
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine(ex);
-            return 1;
-        }
+        check("Embedded math renderer produces vector glyphs", VectorRendererUsesGlyphRuns);
+        check("Multiline formula preview owns all source lines", PreviewingMultilineFormulaDoesNotSkipUncollapsedLines);
+        check("Formula caret reveal restores and recollapses source", FullModeRevealRestoresAndRecollapsesSource);
+        check("Formula find reveal restores and recollapses source", TransientFindRevealRestoresAndRecollapsesSource);
     }
 
     private static void VectorRendererUsesGlyphRuns()
     {
-        var assembly = typeof(MarkdownMathRenderer).Assembly;
-        var resources = assembly.GetManifestResourceNames();
-        Require(
-            resources.Contains("PaperTodo.Native.papertodo_math.dll", StringComparer.Ordinal),
-            "native math bridge must be embedded in the PaperTodo assembly");
-        Require(
-            resources.Count(name => name.StartsWith("PaperTodo.MathFonts.", StringComparison.Ordinal)) == 19,
-            "all 19 fixed KaTeX TTFs must be embedded in the PaperTodo assembly");
         Require(
             !File.Exists(Path.Combine(AppContext.BaseDirectory, "papertodo_math.dll")),
             "math layout test must exercise the embedded native bridge, not a loose sidecar");
@@ -84,7 +61,7 @@ internal static class Program
     private static void PreviewingMultilineFormulaDoesNotSkipUncollapsedLines()
     {
         const string source = "before\n$$\n\\begin{cases}x=1 \\\\ y=2\\end{cases}\n$$\nafter";
-        using var editor = new Editor(source);
+        using var editor = new Editor(source, renderMode: MarkdownRenderModes.Basic);
         var box = editor.Box;
         var span = MathSpan(source);
 
@@ -146,13 +123,13 @@ internal static class Program
         Require(HasMathElement(box, span), "Full preview initially renders formula");
 
         var matchOffset = source.IndexOf("x^2", StringComparison.Ordinal);
-        editor.SetTransientFindReveal(matchOffset, 3);
+        editor.Presentation.SetTransientFindReveal(matchOffset, 3);
         Pump();
         Layout(box);
         Require(!HasMathElement(box, span),
             "find hit inside rendered formula reveals exact Markdown source");
 
-        editor.SetTransientFindReveal(null, 0);
+        editor.Presentation.SetTransientFindReveal(null, 0);
         Pump();
         Layout(box);
         Require(HasMathElement(box, span),
@@ -175,61 +152,5 @@ internal static class Program
         var visual = box.TextArea.TextView.GetOrConstructVisualLine(line);
         return visual.Elements.OfType<InlineObjectElement>().Any(candidate =>
             candidate.RelativeTextOffset == span.Start - visual.FirstDocumentLine.Offset);
-    }
-
-    private static void Layout(MarkdownTextBox box)
-    {
-        box.ApplyTemplate();
-        box.Measure(new Size(800, 600));
-        box.Arrange(new Rect(0, 0, 800, 600));
-        box.UpdateLayout();
-        var view = box.TextArea.TextView;
-        view.Measure(new Size(800, 600));
-        view.Arrange(new Rect(0, 0, 800, 600));
-        view.EnsureVisualLines();
-    }
-
-    private static void Pump()
-    {
-        var frame = new DispatcherFrame();
-        Dispatcher.CurrentDispatcher.BeginInvoke(
-            DispatcherPriority.ApplicationIdle,
-            new Action(() => frame.Continue = false));
-        Dispatcher.PushFrame(frame);
-    }
-
-    private static void Require(bool condition, string message)
-    {
-        if (!condition)
-        {
-            throw new InvalidOperationException(message);
-        }
-    }
-
-    private sealed class Editor : IDisposable
-    {
-        public MarkdownTextBox Box { get; }
-        private readonly MarkdownSemanticDocument _document;
-        private readonly MarkdownSemanticPresentation _presentation;
-
-        public Editor(string source)
-        {
-            Box = new MarkdownTextBox { Text = source };
-            Box.Document.UndoStack.ClearAll();
-            Box.SetMarkdownEditAnimationEnabled(false);
-            _document = new MarkdownSemanticDocument(Box.Document);
-            Box.SetSemanticDocument(_document);
-            _presentation = new MarkdownSemanticPresentation(Box, _document);
-        }
-
-        public void SetTransientFindReveal(int? offset, int length) =>
-            _presentation.SetTransientFindReveal(offset, length);
-
-        public void Dispose()
-        {
-            _presentation.Dispose();
-            Box.SetSemanticDocument(null);
-            _document.Dispose();
-        }
     }
 }

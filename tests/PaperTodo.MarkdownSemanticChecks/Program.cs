@@ -1,3 +1,4 @@
+using ICSharpCode.AvalonEdit.Document;
 using PaperTodo;
 
 Run("ATX heading", () =>
@@ -327,6 +328,17 @@ Run("Large document semantic smoke", () =>
     True(snapshot.Spans.Count > 1000, "large document semantic spans");
 });
 
+Run("Math: inline math", InlineMath);
+Run("Math: single-line display math", SingleLineDisplayMath);
+Run("Math: multiline display math", MultilineDisplayMath);
+Run("Math: code regions exclude math", CodeRegionsExcludeMath);
+Run("Math: escaped and currency dollars stay text", DollarTextBoundaries);
+Run("Math: backslash aliases preserve Markdown escapes", BackslashAliasBoundaries);
+Run("Math: Markdown links exclude math", MarkdownLinksExcludeMath);
+Run("Math: CRLF display math", CrLfDisplayMath);
+Run("Math: unclosed display math stays source", UnclosedDisplayMath);
+Run("Math: formula semantics follow document edits", FormulaSemanticsFollowDocumentEdits);
+
 Console.WriteLine("Markdown semantic checks passed.");
 return;
 
@@ -377,3 +389,154 @@ static void Equal<T>(T expected, T actual, string message)
             $"{message}: expected {expected}, actual {actual}");
     }
 }
+
+static void InlineMath()
+{
+    const string source = "Energy is $E=mc^2$.";
+    var span = SingleSpan(MarkdownSemanticSnapshot.Parse(source), MarkdownSemanticSpanKind.InlineMath);
+    True(span.MarkerLength == 1, "Inline formula marker length must be one dollar.");
+    True(
+        source.Substring(span.Start, span.Length) == "$E=mc^2$",
+        "Inline formula source range drifted.");
+    True(
+        MarkdownMathSource.TryExtract(source, span, out var formula, out var display) &&
+        formula == "E=mc^2" &&
+        !display,
+        "Inline formula extraction failed.");
+}
+
+static void SingleLineDisplayMath()
+{
+    const string source = "$$\\frac{a+b}{c}$$";
+    var span = SingleSpan(MarkdownSemanticSnapshot.Parse(source), MarkdownSemanticSpanKind.BlockMath);
+    True(span.MarkerLength == 2, "Display formula marker length must be two dollars.");
+    True(
+        MarkdownMathSource.TryExtract(source, span, out var formula, out var display) &&
+        formula == "\\frac{a+b}{c}" &&
+        display,
+        "Single-line display formula extraction failed.");
+}
+
+static void MultilineDisplayMath()
+{
+    const string source = """
+$$
+\begin{aligned}
+a &= b + c \\
+d &= e + f
+\end{aligned}
+$$
+""";
+    var span = SingleSpan(MarkdownSemanticSnapshot.Parse(source), MarkdownSemanticSpanKind.BlockMath);
+    True(
+        MarkdownMathSource.TryExtract(source, span, out var formula, out var display),
+        "Multiline display formula extraction failed.");
+    True(display, "Multiline formula must use display layout.");
+    True(formula.Contains("\\begin{aligned}", StringComparison.Ordinal),
+        "Aligned environment was lost.");
+    True(formula.Contains('\n'), "Multiline formula was flattened.");
+    True(formula.EndsWith("\\end{aligned}", StringComparison.Ordinal),
+        "Closing aligned environment was lost.");
+}
+
+static void CodeRegionsExcludeMath()
+{
+    const string source = """
+```latex
+$x$
+$$
+y
+$$
+```
+
+`$z$`
+""";
+    var snapshot = MarkdownSemanticSnapshot.Parse(source);
+    True(
+        !snapshot.Spans.Any(IsMath),
+        "Math semantics must not escape fenced or inline code.");
+}
+
+static void DollarTextBoundaries()
+{
+    const string source = "Escaped \\$x\\$ and price $100 remain ordinary text.";
+    var snapshot = MarkdownSemanticSnapshot.Parse(source);
+    True(!snapshot.Spans.Any(IsMath), "Escaped/currency dollars were misread as math.");
+}
+
+static void BackslashAliasBoundaries()
+{
+    True(
+        !MarkdownSemanticSnapshot.Parse(@"\[not link\]").Spans.Any(IsMath),
+        "Ordinary escaped brackets were claimed as display math.");
+    True(
+        !MarkdownSemanticSnapshot.Parse(@"\(literal\)").Spans.Any(IsMath),
+        "Plain escaped parentheses were claimed as inline math.");
+    True(
+        MarkdownSemanticSnapshot.Parse(@"\(x+y\)").Spans.Count(IsMath) == 1,
+        "Math-shaped parenthesis alias was not recognized.");
+    True(
+        MarkdownSemanticSnapshot.Parse("\\[\n\\frac{a}{b}\n\\]").Spans.Count(IsMath) == 1,
+        "Multiline bracket display alias was not recognized.");
+}
+
+static void MarkdownLinksExcludeMath()
+{
+    const string source = "[$x$](https://example.com)";
+    var snapshot = MarkdownSemanticSnapshot.Parse(source);
+    True(!snapshot.Spans.Any(IsMath), "Math escaped a Markdown-owned link range.");
+    True(snapshot.Links.Count == 1, "The surrounding Markdown link was lost.");
+}
+
+static void CrLfDisplayMath()
+{
+    const string source = "$$\r\n\\begin{matrix}\r\n1 & 2 \\\\ 3 & 4\r\n\\end{matrix}\r\n$$";
+    var span = SingleSpan(MarkdownSemanticSnapshot.Parse(source), MarkdownSemanticSpanKind.BlockMath);
+    True(
+        MarkdownMathSource.TryExtract(source, span, out var formula, out var display) && display,
+        "CRLF display formula extraction failed.");
+    True(!formula.Contains('\r'), "CRLF formula was not normalized.");
+    True(formula.Contains("\\begin{matrix}", StringComparison.Ordinal),
+        "Matrix environment was lost.");
+}
+
+static void UnclosedDisplayMath()
+{
+    const string source = "$$\n\\frac{a}{b}";
+    var snapshot = MarkdownSemanticSnapshot.Parse(source);
+    True(!snapshot.Spans.Any(IsMath), "An unclosed display formula became semantic math.");
+}
+
+static void FormulaSemanticsFollowDocumentEdits()
+{
+    var prefix = new string('a', MarkdownSemanticDocument.FullParseThresholdChars + 200) + "\n";
+    var document = new TextDocument(prefix + "$\nx^2\n$$\nafter");
+    using var semantics = new MarkdownSemanticDocument(document);
+
+    document.Insert(prefix.Length, "$");
+    CheckCurrent("x^2");
+    document.Insert(document.TextLength, " ordinary edit");
+    CheckCurrent("x^2");
+    document.Remove(prefix.Length, 1);
+    CheckCurrent(null);
+
+    void CheckCurrent(string? expectedFormula)
+    {
+        True(semantics.TryGetCurrent(out var snapshot), "Current semantic snapshot is unavailable.");
+        var math = snapshot.Spans.Where(IsMath).ToArray();
+        var exact = MarkdownSemanticSnapshot.Parse(document.Text).Spans.Where(IsMath);
+        True(math.SequenceEqual(exact), "Edited formula ranges differ from a full parse.");
+        if (expectedFormula == null)
+        {
+            True(math.Length == 0, "Deleting a block delimiter left stale formula semantics.");
+            return;
+        }
+        True(math.Length == 1 && math[0].Kind == MarkdownSemanticSpanKind.BlockMath,
+            "Completing the block delimiter did not publish one display formula.");
+        True(MarkdownMathSource.TryExtract(document.Text, math[0], out var formula, out var display) &&
+            display && formula == expectedFormula, "Edited formula content was not preserved.");
+    }
+}
+
+static bool IsMath(MarkdownSemanticSpan span) =>
+    span.Kind is MarkdownSemanticSpanKind.InlineMath or MarkdownSemanticSpanKind.BlockMath;
