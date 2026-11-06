@@ -75,9 +75,15 @@ static void StudioFileSavePreservesEncodingAndFailedEdit()
         Assert(File.ReadAllBytes(path).SequenceEqual(original), "studio changed encoding, BOM or line endings");
 
         document.Text += "unsaved";
+        var pendingText = document.Text;
+        var rejected = false;
         using (var locked = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.None))
-            AssertThrows<IOException>(() => document.Save(path), "studio save ignored a locked destination");
-        Assert(document.IsDirty && document.Text.EndsWith("unsaved", StringComparison.Ordinal) &&
+        {
+            try { document.Save(path); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { rejected = true; }
+        }
+        Assert(rejected, "studio save ignored a locked destination");
+        Assert(document.IsDirty && document.Text == pendingText && document.SavedText == content &&
                File.ReadAllBytes(path).SequenceEqual(original), "failed studio save lost content or changed original");
         AssertThrows<FileNotFoundException>(() => StandaloneStudioDocument.Load(
             Path.Combine(scope.Path, "missing.txt")), "missing document did not fail");
