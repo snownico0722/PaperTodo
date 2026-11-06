@@ -39,13 +39,6 @@ public sealed partial class AppController
     private TextBox? _settingsExternalMarkdownTextBox;
     private CheckBox? _settingsHidePapersFromTaskbarCheckBox;
     private CheckBox? _settingsHidePapersFromWindowSwitcherCheckBox;
-    private CheckBox? _settingsCapsuleModeCheckBox;
-    private CheckBox? _settingsDeepCapsuleModeCheckBox;
-    private CheckBox? _settingsDeepCapsuleExpandedSlotCheckBox;
-    private CheckBox? _settingsRememberDeepCapsuleExpandedPositionCheckBox;
-    private CheckBox? _settingsCollapseExpandedDeepCapsuleOnClickCheckBox;
-    private CheckBox? _settingsCapsuleCollapseAllCheckBox;
-    private CheckBox? _settingsCapsuleFreeQueuesCheckBox;
     private readonly Dictionary<string, Action> _settingsRegionRefreshers =
         new(StringComparer.Ordinal);
 
@@ -620,13 +613,6 @@ public sealed partial class AppController
             _settingsExternalMarkdownTextBox = null;
             _settingsHidePapersFromTaskbarCheckBox = null;
             _settingsHidePapersFromWindowSwitcherCheckBox = null;
-            _settingsCapsuleModeCheckBox = null;
-            _settingsDeepCapsuleModeCheckBox = null;
-            _settingsDeepCapsuleExpandedSlotCheckBox = null;
-            _settingsRememberDeepCapsuleExpandedPositionCheckBox = null;
-            _settingsCollapseExpandedDeepCapsuleOnClickCheckBox = null;
-            _settingsCapsuleCollapseAllCheckBox = null;
-            _settingsCapsuleFreeQueuesCheckBox = null;
             _settingsPageScrollViewer = null;
             _settingsPageScrollViewerPage = null;
             _settingsPageScrollOffsets.Clear();
@@ -851,12 +837,7 @@ public sealed partial class AppController
 
     private UIElement BuildLabsEdgeCapsuleHoverIntentSettings()
     {
-        var edgePreviewAvailable =
-            State.UseCapsuleMode && State.UseDeepCapsuleMode;
-        var previewEnabled =
-            State.ExperimentalEdgeCapsuleHoverPreview;
-        var intentEnabled =
-            State.ExperimentalEdgeCapsuleHoverIntent;
+        if (!State.UseCapsuleMode || !State.UseDeepCapsuleMode) return new StackPanel();
         var card = new Border
         {
             Background = Brushes.Transparent,
@@ -864,45 +845,27 @@ public sealed partial class AppController
             Margin = new Thickness(0, 1, 0, 3)
         };
         var content = new StackPanel();
-
-        var previewToggle = SettingsToggle(
-            Strings.Get("LabsEnableEdgeCapsuleHoverPreview"),
-            previewEnabled,
-            ToggleExperimentalEdgeCapsuleHoverPreview);
-        previewToggle.IsEnabled = edgePreviewAvailable;
-        previewToggle.Opacity = edgePreviewAvailable ? 1.0 : 0.55;
+        content.Children.Add(SettingsSectionLabel(SettingsSidebarLocalized(
+            "边缘浏览", "Edge browsing", "エッジ閲覧", "가장자리 탐색")));
         content.Children.Add(WrapWithHint(
-            previewToggle,
+            SettingsToggle(Strings.Get("LabsEnableEdgeCapsuleHoverPreview"),
+                State.ExperimentalEdgeCapsuleHoverPreview, ToggleExperimentalEdgeCapsuleHoverPreview),
             "TipLabsEdgeCapsuleHoverPreview"));
-
-        var toggle = SettingsToggle(
-            Strings.Get("LabsEnableEdgeCapsuleHoverIntent"),
-            intentEnabled,
-            ToggleExperimentalEdgeCapsuleHoverIntent);
-        var intentToggleEnabled =
-            edgePreviewAvailable && previewEnabled;
-        toggle.IsEnabled = intentToggleEnabled;
-        toggle.Opacity = intentToggleEnabled ? 1.0 : 0.55;
-        content.Children.Add(WrapWithHint(
-            toggle,
-            "TipLabsEdgeCapsuleHoverIntent"));
-
-        var optionsEnabled =
-            edgePreviewAvailable && previewEnabled && intentEnabled;
-        var options = new StackPanel
+        if (!State.ExperimentalEdgeCapsuleHoverPreview)
         {
-            IsEnabled = optionsEnabled,
-            Opacity = optionsEnabled ? 1.0 : 0.55
-        };
-        options.Children.Add(CompactSettingsField(
-            Strings.Get("LabsEdgeCapsuleHoverIntentSensitivity"),
-            CreateEdgeCapsuleHoverIntentSensitivitySelector(),
-            editorWidth: 132,
-            tipKey: "TipLabsEdgeCapsuleHoverIntentSensitivity",
-            topMargin: 4));
-        content.Children.Add(options);
+            card.Child = content;
+            return card;
+        }
+        content.Children.Add(WrapWithHint(
+            SettingsToggle(Strings.Get("LabsEnableEdgeCapsuleHoverIntent"),
+                State.ExperimentalEdgeCapsuleHoverIntent, ToggleExperimentalEdgeCapsuleHoverIntent),
+            "TipLabsEdgeCapsuleHoverIntent"));
+        if (State.ExperimentalEdgeCapsuleHoverIntent)
+            content.Children.Add(CompactSettingsField(
+                Strings.Get("LabsEdgeCapsuleHoverIntentSensitivity"),
+                CreateEdgeCapsuleHoverIntentSensitivitySelector(), editorWidth: 132,
+                tipKey: "TipLabsEdgeCapsuleHoverIntentSensitivity", topMargin: 4));
 
-        var preferDownwardEnabled = edgePreviewAvailable && previewEnabled;
         var preferDownwardToggle = SettingsToggle(
             SettingsSidebarLocalized(
                 "浏览时优先向下展开",
@@ -911,8 +874,6 @@ public sealed partial class AppController
                 "탐색 중 아래로 펼치기 우선"),
             State.EdgeCapsulePreviewPreferDownward,
             ToggleEdgeCapsulePreviewPreferDownward);
-        preferDownwardToggle.IsEnabled = preferDownwardEnabled;
-        preferDownwardToggle.Opacity = preferDownwardEnabled ? 1.0 : 0.55;
         content.Children.Add(WrapWithHint(
             preferDownwardToggle,
             BuildSettingsHintTooltip(SettingsSidebarLocalized(
@@ -2157,53 +2118,9 @@ public sealed partial class AppController
         };
     }
 
-    private void RefreshSettingsCapsuleToggleStates()
-    {
-        RefreshSettingsSystemVisibilityToggleStates();
-
-        if (_settingsCapsuleModeCheckBox != null)
-        {
-            _settingsCapsuleModeCheckBox.IsChecked = State.UseCapsuleMode;
-        }
-        if (_settingsDeepCapsuleModeCheckBox != null)
-        {
-            _settingsDeepCapsuleModeCheckBox.IsChecked = State.UseDeepCapsuleMode;
-            _settingsDeepCapsuleModeCheckBox.IsEnabled = State.UseCapsuleMode;
-        }
-        if (_settingsDeepCapsuleExpandedSlotCheckBox != null)
-        {
-            _settingsDeepCapsuleExpandedSlotCheckBox.IsChecked = State.ShowDeepCapsuleWhileExpanded;
-            _settingsDeepCapsuleExpandedSlotCheckBox.IsEnabled = State.UseCapsuleMode && State.UseDeepCapsuleMode;
-        }
-        if (_settingsRememberDeepCapsuleExpandedPositionCheckBox != null)
-        {
-            _settingsRememberDeepCapsuleExpandedPositionCheckBox.IsChecked = State.RememberDeepCapsuleExpandedPosition;
-            _settingsRememberDeepCapsuleExpandedPositionCheckBox.IsEnabled = State.UseCapsuleMode && State.UseDeepCapsuleMode;
-        }
-        if (_settingsCollapseExpandedDeepCapsuleOnClickCheckBox != null)
-        {
-            _settingsCollapseExpandedDeepCapsuleOnClickCheckBox.IsChecked = State.CollapseExpandedDeepCapsuleOnClick;
-            var canRetractExpandedEdgePaper = State.UseCapsuleMode &&
-                State.UseDeepCapsuleMode &&
-                State.ShowDeepCapsuleWhileExpanded;
-            var canHideExcludedLinkedPaper = State.UseCapsuleMode &&
-                State.EnableTodoPaperLinks &&
-                State.HideLinkedPapersFromCapsules;
-            _settingsCollapseExpandedDeepCapsuleOnClickCheckBox.IsEnabled =
-                canRetractExpandedEdgePaper || canHideExcludedLinkedPaper;
-        }
-        if (_settingsCapsuleCollapseAllCheckBox != null)
-        {
-            _settingsCapsuleCollapseAllCheckBox.IsChecked = State.UseCapsuleCollapseAll;
-            _settingsCapsuleCollapseAllCheckBox.IsEnabled = State.UseCapsuleMode && State.UseDeepCapsuleMode;
-        }
-        if (_settingsCapsuleFreeQueuesCheckBox != null)
-        {
-            _settingsCapsuleFreeQueuesCheckBox.IsChecked = State.UseCapsuleFreeQueues;
-            _settingsCapsuleFreeQueuesCheckBox.IsEnabled = State.UseCapsuleMode && State.UseDeepCapsuleMode;
-        }
-        RefreshSettingsRegions("general.edgeBrowsing");
-    }
+    private void RefreshSettingsCapsuleToggleStates() =>
+        RefreshSettingsRegions("general.capsules", "general.edgeBrowsing",
+            "general.edgeTopmost", "general.capsuleAppearance");
 
     private void RefreshSettingsSystemVisibilityToggleStates()
     {

@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 
@@ -21,100 +24,18 @@ public sealed partial class AppController
             Margin = new Thickness(14, 0, 0, 0)
         };
 
-        rightColumn.Children.Add(SettingsSectionLabel(Strings.Get("SettingsCapsule")));
-        _settingsCapsuleModeCheckBox = SettingsToggle(
-            Strings.Get("TrayCapsuleMode"),
-            State.UseCapsuleMode,
-            ToggleCapsuleMode);
-        _settingsDeepCapsuleModeCheckBox = SettingsToggle(
-            Strings.Get("TrayDeepCapsuleMode"),
-            State.UseDeepCapsuleMode,
-            ToggleDeepCapsuleMode);
-        _settingsDeepCapsuleExpandedSlotCheckBox = SettingsToggle(
-            Strings.Get("SettingsShowDeepCapsuleWhileExpanded"),
-            State.ShowDeepCapsuleWhileExpanded,
-            ToggleDeepCapsuleExpandedSlot);
-        _settingsRememberDeepCapsuleExpandedPositionCheckBox = SettingsToggle(
-            Strings.Get("SettingsRememberDeepCapsuleExpandedPosition"),
-            State.RememberDeepCapsuleExpandedPosition,
-            ToggleRememberDeepCapsuleExpandedPosition);
-        _settingsCapsuleCollapseAllCheckBox = SettingsToggle(
-            Strings.Get("SettingsCapsuleCollapseAll"),
-            State.UseCapsuleCollapseAll,
-            ToggleCapsuleCollapseAll);
-        _settingsCapsuleFreeQueuesCheckBox = SettingsToggle(
-            Strings.Get("SettingsCapsuleFreeQueues"),
-            State.UseCapsuleFreeQueues,
-            ToggleCapsuleFreeQueues);
-        _settingsCollapseExpandedDeepCapsuleOnClickCheckBox = SettingsToggle(
-            Strings.Get("SettingsCollapseExpandedDeepCapsuleOnClick"),
-            State.CollapseExpandedDeepCapsuleOnClick,
-            ToggleCollapseExpandedDeepCapsuleOnClick);
-
-        rightColumn.Children.Add(WrapWithHint(_settingsCapsuleModeCheckBox, "TipCapsuleMode"));
-        rightColumn.Children.Add(WrapWithHint(_settingsDeepCapsuleModeCheckBox, "TipDeepCapsuleMode"));
-        rightColumn.Children.Add(WrapWithHint(
-            _settingsDeepCapsuleExpandedSlotCheckBox,
-            "TipShowDeepCapsuleWhileExpanded"));
-        rightColumn.Children.Add(WrapWithHint(
-            _settingsRememberDeepCapsuleExpandedPositionCheckBox,
-            "TipRememberDeepCapsuleExpandedPosition"));
-        rightColumn.Children.Add(WrapWithHint(
-            _settingsCapsuleCollapseAllCheckBox,
-            "TipCapsuleCollapseAll"));
-        rightColumn.Children.Add(WrapWithHint(
-            _settingsCapsuleFreeQueuesCheckBox,
-            "TipCapsuleFreeQueues"));
-        rightColumn.Children.Add(WrapWithHint(
-            _settingsCollapseExpandedDeepCapsuleOnClickCheckBox,
-            "TipCollapseExpandedDeepCapsuleOnClick"));
-
-        rightColumn.Children.Add(SettingsSectionLabel(
-            SettingsSidebarLocalized(
-                "边缘浏览",
-                "Edge browsing",
-                "エッジ閲覧",
-                "가장자리 탐색")));
+        rightColumn.Children.Add(BuildSettingsLiveRegion("general.capsules", BuildSettingsCapsuleOptions));
         rightColumn.Children.Add(BuildSettingsLiveRegion(
-            "general.edgeBrowsing",
-            BuildLabsEdgeCapsuleHoverIntentSettings));
-        rightColumn.Children.Add(BuildSettingsLiveRegion("general.edgeTopmost", () => WrapWithHint(
-            SettingsToggle(
-                Strings.Get("LabsDockedCapsulesNonTopmost"),
-                State.ExperimentalDockedCapsulesNonTopmost,
-                ToggleExperimentalDockedCapsulesNonTopmost),
-            "TipLabsDockedCapsulesNonTopmost")));
-
+            "general.edgeBrowsing", BuildLabsEdgeCapsuleHoverIntentSettings));
+        rightColumn.Children.Add(BuildSettingsLiveRegion("general.edgeTopmost", () =>
+            State.UseCapsuleMode && State.UseDeepCapsuleMode
+                ? WrapWithHint(SettingsToggle(Strings.Get("LabsDockedCapsulesNonTopmost"),
+                    State.ExperimentalDockedCapsulesNonTopmost, ToggleExperimentalDockedCapsulesNonTopmost),
+                    "TipLabsDockedCapsulesNonTopmost")
+                : new StackPanel()));
         if (State.AdvancedSettingsMode)
-        {
-            rightColumn.Children.Add(BuildSettingsLiveRegion("general.capsuleAppearance", () => AdvancedSettingsBlock(
-                WrapWithHint(
-                    SettingsToggle(
-                        Strings.Get("SettingsHideEdgeCapsuleCloseButtonOnHover"),
-                        State.HideEdgeCapsuleCloseButtonOnHover,
-                        ToggleHideEdgeCapsuleCloseButtonOnHover),
-                    BuildSettingsHintTooltip(HideEdgeCapsuleCloseButtonOnHoverTip())),
-                CompactSettingsField(
-                    Strings.Get("SettingsMaxTitleLength"),
-                    CreateMaxTitleLengthStepper(),
-                    editorWidth: 132,
-                    tipKey: "TipMaxTitleLength",
-                    topMargin: 8),
-                CompactSettingsField(
-                    Strings.Get("SettingsDeepCapsuleTitleMeasureLimit"),
-                    CreateDeepCapsuleTitleMeasureLimitStepper(),
-                    editorWidth: 132,
-                    tipKey: "TipDeepCapsuleTitleMeasureLimit",
-                    topMargin: 8),
-                WrapWithHint(
-                    SettingsToggle(
-                        Strings.Get("SettingsCompactMasterCapsule"),
-                        State.CompactMasterCapsule,
-                        ToggleCompactMasterCapsule),
-                    "TipCompactMasterCapsule"))));
-        }
-
-        RefreshSettingsCapsuleToggleStates();
+            rightColumn.Children.Add(BuildSettingsLiveRegion(
+                "general.capsuleAppearance", BuildSettingsCapsuleAppearanceOptions));
 
         var separator = new Border
         {
@@ -133,6 +54,60 @@ public sealed partial class AppController
         return WithSettingsPageRestoreFooter(
             columns,
             RestoreSettingsSidebarGeneralDefaults);
+    }
+
+    private UIElement BuildSettingsCapsuleOptions()
+    {
+        var content = new StackPanel();
+        void Add(string key, bool value, Action toggle, string hint) =>
+            content.Children.Add(WrapWithHint(SettingsToggle(Strings.Get(key), value, toggle), hint));
+
+        content.Children.Add(SettingsSectionLabel(Strings.Get("SettingsCapsule")));
+        Add("TrayCapsuleMode", State.UseCapsuleMode, ToggleCapsuleMode, "TipCapsuleMode");
+        if (!State.UseCapsuleMode) return content;
+
+        Add("TrayDeepCapsuleMode", State.UseDeepCapsuleMode, ToggleDeepCapsuleMode, "TipDeepCapsuleMode");
+        if (State.UseDeepCapsuleMode)
+        {
+            Add("SettingsShowDeepCapsuleWhileExpanded", State.ShowDeepCapsuleWhileExpanded,
+                ToggleDeepCapsuleExpandedSlot, "TipShowDeepCapsuleWhileExpanded");
+            Add("SettingsRememberDeepCapsuleExpandedPosition", State.RememberDeepCapsuleExpandedPosition,
+                ToggleRememberDeepCapsuleExpandedPosition, "TipRememberDeepCapsuleExpandedPosition");
+            Add("SettingsCapsuleCollapseAll", State.UseCapsuleCollapseAll,
+                ToggleCapsuleCollapseAll, "TipCapsuleCollapseAll");
+            Add("SettingsCapsuleFreeQueues", State.UseCapsuleFreeQueues,
+                ToggleCapsuleFreeQueues, "TipCapsuleFreeQueues");
+        }
+        // Linked papers excluded from capsules can still use the same second-click action.
+        if ((State.UseDeepCapsuleMode && State.ShowDeepCapsuleWhileExpanded) ||
+            (State.EnableTodoPaperLinks && State.HideLinkedPapersFromCapsules))
+            Add("SettingsCollapseExpandedDeepCapsuleOnClick", State.CollapseExpandedDeepCapsuleOnClick,
+                ToggleCollapseExpandedDeepCapsuleOnClick, "TipCollapseExpandedDeepCapsuleOnClick");
+        return content;
+    }
+
+    private UIElement BuildSettingsCapsuleAppearanceOptions()
+    {
+        // The ordinary paper title limit is useful even when capsule mode is disabled.
+        var options = new List<UIElement>
+        {
+            CompactSettingsField(Strings.Get("SettingsMaxTitleLength"), CreateMaxTitleLengthStepper(),
+                editorWidth: 132, tipKey: "TipMaxTitleLength", topMargin: 8)
+        };
+        if (State.UseCapsuleMode && State.UseDeepCapsuleMode)
+        {
+            options.Add(WrapWithHint(
+                SettingsToggle(Strings.Get("SettingsHideEdgeCapsuleCloseButtonOnHover"),
+                    State.HideEdgeCapsuleCloseButtonOnHover, ToggleHideEdgeCapsuleCloseButtonOnHover),
+                BuildSettingsHintTooltip(HideEdgeCapsuleCloseButtonOnHoverTip())));
+            options.Add(CompactSettingsField(Strings.Get("SettingsDeepCapsuleTitleMeasureLimit"),
+                CreateDeepCapsuleTitleMeasureLimitStepper(), editorWidth: 132,
+                tipKey: "TipDeepCapsuleTitleMeasureLimit", topMargin: 8));
+            if (State.UseCapsuleCollapseAll)
+                options.Add(WrapWithHint(SettingsToggle(Strings.Get("SettingsCompactMasterCapsule"),
+                    State.CompactMasterCapsule, ToggleCompactMasterCapsule), "TipCompactMasterCapsule"));
+        }
+        return AdvancedSettingsBlock(options.ToArray());
     }
 
     private UIElement BuildSettingsGeneralOptions()

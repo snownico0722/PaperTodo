@@ -58,13 +58,6 @@ public sealed partial class AppController
         _settingsExternalMarkdownTextBox = null;
         _settingsHidePapersFromTaskbarCheckBox = null;
         _settingsHidePapersFromWindowSwitcherCheckBox = null;
-        _settingsCapsuleModeCheckBox = null;
-        _settingsDeepCapsuleModeCheckBox = null;
-        _settingsDeepCapsuleExpandedSlotCheckBox = null;
-        _settingsRememberDeepCapsuleExpandedPositionCheckBox = null;
-        _settingsCollapseExpandedDeepCapsuleOnClickCheckBox = null;
-        _settingsCapsuleCollapseAllCheckBox = null;
-        _settingsCapsuleFreeQueuesCheckBox = null;
 
         window.Title = Strings.Get("TraySettings");
         window.SizeToContent = SizeToContent.Manual;
