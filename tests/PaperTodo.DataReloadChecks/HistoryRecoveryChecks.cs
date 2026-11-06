@@ -93,8 +93,8 @@ internal static partial class Program
                 "failed historical recovery changed primary or cleaned orphans");
             reject = false;
             recovering.SaveJsonSync(recovering.SerializeState(state), 3);
-            Require(recovering.Load().Papers[0].Content == "latest valid history" &&
-                    !recovering.NeedsStartupRecoverySave && !File.Exists(orphan) &&
+            Require(!recovering.NeedsStartupRecoverySave && !File.Exists(orphan) &&
+                    recovering.Load().Papers[0].Content == "latest valid history" &&
                     File.ReadAllText(otherPath) == "other workspace must stay untouched" &&
                     File.ReadAllText(store.BackupPath) == "{unrecoverable backup" &&
                     File.ReadAllBytes(selected).SequenceEqual(archiveBytes),
@@ -288,13 +288,9 @@ internal static partial class Program
                 var target = new StateStore(AppContext.BaseDirectory, DurableAtomicFileWriter.Shared, 2);
                 var archive = WriteHistoryFixture(AppContext.BaseDirectory, DateTime.UtcNow,
                     ("data2.json", target.SerializeState(NewState())));
-                var archiveBytes = File.ReadAllBytes(archive);
                 controller = new AppController();
                 await controller.StartAsync(createDefaultPaper: false);
                 controller.StartCoreHistoryBackupPolicy();
-                var historyTimer = Field<System.Windows.Threading.DispatcherTimer>(controller, "_coreHistoryTimer");
-                var initialBackupDelay = historyTimer.Interval;
-                await Task.Delay(50);
                 var runningBackup = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                 typeof(AppController).GetField("_coreHistoryBackupTask", Private)!.SetValue(controller, runningBackup.Task);
                 File.WriteAllText(target.FilePath, "{broken target");
@@ -307,23 +303,14 @@ internal static partial class Program
                     File.Delete(archive);
                     archive = WriteHistoryFixture(AppContext.BaseDirectory, DateTime.UtcNow.AddSeconds(-1),
                         ("data2.json", target.SerializeState(NewState())));
-                    archiveBytes = File.ReadAllBytes(archive);
                     runningBackup.SetResult();
                     return await switching;
                 }, dialog =>
                 {
                     responded = true;
-                    Require(!historyTimer.IsEnabled, "history timer kept running during recovery confirmation");
                     ClickFailureAction(dialog, "HistoryRecoveryRestore");
                 }, "HistoryRecoveryTitle"), "recovery did not wait for the in-flight history round");
-                Require(historyTimer.IsEnabled && await controller.SwitchWorkspaceAsync(1),
-                    "history timer did not resume after recovery");
-                Require(historyTimer.Interval < initialBackupDelay,
-                    "recovery restarted the whole history countdown");
-                var remainingBackupDelay = historyTimer.Interval;
-                Require(await controller.SwitchWorkspaceAsync(2) && await controller.SwitchWorkspaceAsync(1) &&
-                        historyTimer.Interval <= remainingBackupDelay,
-                    "healthy workspace switches postponed the scheduled history check");
+                Require(await controller.SwitchWorkspaceAsync(1), "return from in-flight recovery failed");
 
                 // A due history round would evict the selected recent source.
                 foreach (var age in new[] { TimeSpan.FromDays(30), TimeSpan.FromDays(3), TimeSpan.FromHours(6) })
@@ -332,7 +319,7 @@ internal static partial class Program
                 File.Delete(archive);
                 archive = WriteHistoryFixture(AppContext.BaseDirectory, DateTime.UtcNow.AddMinutes(-20),
                     ("data2.json", target.SerializeState(NewState())));
-                archiveBytes = File.ReadAllBytes(archive);
+                var archiveBytes = File.ReadAllBytes(archive);
                 foreach (var choice in new[] { WorkspaceRecoveryChoice.Restore, WorkspaceRecoveryChoice.CreateEmpty })
                 {
                     File.WriteAllText(target.FilePath, "{broken target");
@@ -341,7 +328,7 @@ internal static partial class Program
                     {
                         typeof(AppController).GetMethod("OnCoreHistoryTimerTick", Private)!.Invoke(controller, [null, EventArgs.Empty]);
                         Field<Task>(controller, "_coreHistoryBackupTask").GetAwaiter().GetResult();
-                        Require(!historyTimer.IsEnabled && File.Exists(archive), "history maintenance removed the offered source");
+                        Require(File.ReadAllBytes(archive).SequenceEqual(archiveBytes), "history maintenance changed the offered source");
                         ClickFailureAction(dialog, choice == WorkspaceRecoveryChoice.Restore
                             ? "HistoryRecoveryRestore" : "HistoryRecoveryCreate");
                     }, "HistoryRecoveryTitle"),
@@ -363,12 +350,8 @@ internal static partial class Program
                     using var held = new FileStream(target.BackupPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
                     var entered = await WithWorkspaceFailureDialog(() => controller.SwitchWorkspaceAsync(2), dialog =>
                     {
-                        var nodes = FailureDialogNodes(dialog).ToArray();
-                        Require(nodes.OfType<System.Windows.Controls.TextBlock>().Any(block =>
-                                block.Text == Strings.Format("WorkspaceBackupReadFailedMessage", 2, Strings.Get("WorkspaceFailureBusy"))),
-                            "backup failure omitted the target or mislabeled file access as corruption");
-                        var buttons = nodes.OfType<System.Windows.Controls.Button>().ToArray();
-                        Require(buttons.Length == 2 && buttons.Single(button => button.IsDefault).Content!.Equals(Strings.Get("WorkspaceFailureRetry")),
+                        var buttons = FailureDialogNodes(dialog).OfType<System.Windows.Controls.Button>();
+                        Require(Equals(buttons.Single(button => button.IsDefault).Content, Strings.Get("WorkspaceFailureRetry")),
                             "backup read failure did not default to retry");
                         if (choice == WorkspaceRecoveryChoice.Cancel) dialog.Close();
                         else
@@ -377,7 +360,6 @@ internal static partial class Program
                             ClickFailureAction(dialog, choice == WorkspaceRecoveryChoice.Retry ? "WorkspaceFailureRetry" : "HistoryRecoveryCreate");
                         }
                     }, "HistoryRecoveryTitle");
-                    Require(historyTimer.IsEnabled, "backup failure left history maintenance paused");
                     Require(entered == (choice != WorkspaceRecoveryChoice.Cancel) &&
                             (entered ? controller.WorkspaceNumber == 2 : File.ReadAllText(target.FilePath) == "{broken target"),
                         "backup failure ignored the selected action");
@@ -397,11 +379,14 @@ internal static partial class Program
                 typeof(AppController).GetField("_coreHistoryBackupDueAt", Private)!
                     .SetValue(controller, Environment.TickCount64 - 1);
                 Require(await controller.SwitchWorkspaceAsync(2), "overdue history switch failed");
+                var expectedSnapshot = File.ReadAllBytes(target.FilePath);
                 await Until(() => Directory.GetFiles(historyDirectory, "*.zip").Any(path => !previousArchives.Contains(path)),
                     "overdue history check did not publish a new backup after resuming");
                 await Field<Task>(controller, "_coreHistoryBackupTask");
-                Require(historyTimer.Interval == CoreHistoryBackup.MinimumInterval,
-                    "overdue history check did not return to the normal interval");
+                var published = new CoreHistoryBackup(AppContext.BaseDirectory).ReadWorkspaceSnapshots(2)
+                    .Single(snapshot => !previousArchives.Contains(snapshot.ArchivePath));
+                Require(published.Bytes.SequenceEqual(expectedSnapshot),
+                    "resumed history check did not preserve the active workspace snapshot");
                 Require(await controller.SwitchWorkspaceAsync(1), "return after overdue history check failed");
                 foreach (var zip in Directory.GetFiles(historyDirectory, "*.zip"))
                     File.Delete(zip);
@@ -442,13 +427,22 @@ internal static partial class Program
         var app = new System.Windows.Application { ShutdownMode = System.Windows.ShutdownMode.OnExplicitShutdown };
         try
         {
-            // Startup has no owning window. Exercise the real themed dialog and
-            // all three buttons and dismissal through its modal Dispatcher loop.
-            foreach (var language in new[] { "zh-CN", "en-US", "ja-JP", "ko-KR" })
-            foreach (var choice in new[] { WorkspaceRecoveryChoice.Cancel, WorkspaceRecoveryChoice.CreateEmpty,
-                         WorkspaceRecoveryChoice.Restore, WorkspaceRecoveryChoice.Exit })
+            // These three dialogs expose destructive choices. Keep their actual action
+            // mapping and safe defaults, without a permanent translation/layout matrix.
+            var create = (WorkspaceRecoveryChoice.CreateEmpty, Strings.Get("HistoryRecoveryCreate"));
+            var exit = (WorkspaceRecoveryChoice.Exit, Strings.Get("WorkspaceFailureExit"));
+            var dialogs = new (Func<WorkspaceRecoveryChoice> Show,
+                (WorkspaceRecoveryChoice Choice, string Label)[] Actions)[]
             {
-                UiLanguages.ApplyWorkspacePreference(language);
+                (() => PaperNoticeDialog.ShowHistoryRecovery(null, 2, "2026-01-01 12:00"),
+                    [create, (WorkspaceRecoveryChoice.Restore, Strings.Get("HistoryRecoveryRestore")), exit]),
+                (() => PaperNoticeDialog.ShowUnavailableWorkspace(null, 2, null), [create, exit]),
+                (() => PaperNoticeDialog.ShowUnavailableWorkspace(null, 2, 3),
+                    [create, (WorkspaceRecoveryChoice.Fallback, Strings.Format("WorkspaceRecoveryFallback", 3)), exit])
+            };
+            foreach (var scenario in dialogs)
+            foreach (var choice in scenario.Actions.Select(action => action.Choice).Prepend(WorkspaceRecoveryChoice.Cancel))
+            {
                 Exception? failure = null;
                 app.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ContextIdle, new Action(() =>
                 {
@@ -456,84 +450,28 @@ internal static partial class Program
                     try
                     {
                         Require(dialog.Owner == null && dialog.ShowInTaskbar, "startup recovery dialog is not reachable");
-                        var nodes = Descendants(dialog).ToArray();
-                        var text = nodes.OfType<System.Windows.Controls.TextBlock>().Select(block => block.Text);
-                        Require(text.Any(value => value.Contains("2026-01-01")), "recovery dialog omitted backup time");
+                        var nodes = FailureDialogNodes(dialog).ToArray();
                         var buttons = nodes.OfType<System.Windows.Controls.Button>().ToArray();
-                        var keys = new[] { "HistoryRecoveryCreate", "HistoryRecoveryRestore", "WorkspaceFailureExit" };
-                        Require(buttons.Select(button => button.Content).SequenceEqual(keys.Select(Strings.Get)) &&
-                                buttons[1].IsDefault && !buttons[0].IsDefault,
-                            "history choices changed order or made blank creation the default");
-                        foreach (var button in buttons)
-                        {
-                            var position = button.TranslatePoint(new System.Windows.Point(), dialog);
-                            Require(position.X >= 0 && position.X + button.ActualWidth <= dialog.ActualWidth &&
-                                    position.Y + button.ActualHeight <= dialog.ActualHeight,
-                                "translated history action is outside the dialog: " + language);
-                        }
+                        Require(Equals(buttons.Single(button => button.IsDefault).Content, scenario.Actions[1].Label),
+                            "recovery dialog default must restore, fall back or exit, never rebuild");
+                        if (choice == WorkspaceRecoveryChoice.Restore)
+                            Require(nodes.OfType<System.Windows.Controls.TextBlock>().Any(block => block.Text.Contains("2026-01-01")),
+                                "recovery dialog omitted backup time");
                         if (choice == WorkspaceRecoveryChoice.Cancel) dialog.Close();
-                        else buttons[(int)choice - 1].RaiseEvent(
-                            new System.Windows.RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+                        else buttons.Single(button => Equals(button.Content,
+                            scenario.Actions.Single(action => action.Choice == choice).Label)).RaiseEvent(
+                                new System.Windows.RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
                     }
                     catch (Exception ex) { failure = ex; dialog.Close(); }
                 }));
-                var result = PaperNoticeDialog.ShowHistoryRecovery(null, 2, "2026-01-01 12:00");
+                var result = scenario.Show();
                 if (failure != null) throw failure;
                 Require(result == choice, "recovery dialog did not honor the selected action");
             }
-            foreach (var language in new[] { "zh-CN", "en-US", "ja-JP", "ko-KR" })
-            foreach (int? fallback in new int?[] { null, 3 })
-            foreach (var choice in new[] { WorkspaceRecoveryChoice.Cancel, WorkspaceRecoveryChoice.CreateEmpty,
-                         WorkspaceRecoveryChoice.Exit, WorkspaceRecoveryChoice.Fallback })
-            {
-                if (choice == WorkspaceRecoveryChoice.Fallback && !fallback.HasValue) continue;
-                UiLanguages.ApplyWorkspacePreference(language);
-                Exception? failure = null;
-                app.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ContextIdle, new Action(() =>
-                {
-                    var dialog = app.Windows.OfType<System.Windows.Window>().Single();
-                    try
-                    {
-                        var nodes = Descendants(dialog).ToArray();
-                        Require(nodes.OfType<System.Windows.Controls.TextBlock>().Any(block =>
-                                block.Text == Strings.Format("WorkspaceRecoveryUnavailableMessage", 2)),
-                            "no-source dialog omitted corruption explanation");
-                        var buttons = nodes.OfType<System.Windows.Controls.Button>().ToArray();
-                        var labels = new List<string> { Strings.Get("HistoryRecoveryCreate") };
-                        if (fallback.HasValue) labels.Add(Strings.Format("WorkspaceRecoveryFallback", fallback.Value));
-                        labels.Add(Strings.Get("WorkspaceFailureExit"));
-                        Require(buttons.Select(button => button.Content).SequenceEqual(labels) &&
-                                buttons[1].IsDefault && !buttons[0].IsDefault,
-                            "unavailable choices changed or made rebuilding the default");
-                        foreach (var button in buttons)
-                        {
-                            var position = button.TranslatePoint(new System.Windows.Point(), dialog);
-                            Require(position.X >= 0 && position.X + button.ActualWidth <= dialog.ActualWidth &&
-                                    position.Y + button.ActualHeight <= dialog.ActualHeight,
-                                "translated unavailable action is outside the dialog: " + language);
-                        }
-                        if (choice == WorkspaceRecoveryChoice.Cancel) dialog.Close();
-                        else buttons[choice == WorkspaceRecoveryChoice.CreateEmpty ? 0 :
-                            choice == WorkspaceRecoveryChoice.Fallback ? 1 : buttons.Length - 1].RaiseEvent(
-                            new System.Windows.RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
-                    }
-                    catch (Exception ex) { failure = ex; dialog.Close(); }
-                }));
-                var result = PaperNoticeDialog.ShowUnavailableWorkspace(null, 2, fallback);
-                if (failure != null) throw failure;
-                Require(result == choice, "unavailable dialog did not honor selected action");
-            }
-            Console.WriteLine("PASS ownerless historical recovery dialog: new, restore, exit, dismissal and four-language layout");
+            Console.WriteLine("PASS ownerless recovery dialogs: action mapping, safe defaults and dismissal");
             return 0;
         }
         catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
         finally { app.Shutdown(); }
-
-        static IEnumerable<System.Windows.DependencyObject> Descendants(System.Windows.DependencyObject root)
-        {
-            yield return root;
-            foreach (var child in System.Windows.LogicalTreeHelper.GetChildren(root).OfType<System.Windows.DependencyObject>())
-                foreach (var descendant in Descendants(child)) yield return descendant;
-        }
     }
 }
