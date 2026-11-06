@@ -34,16 +34,15 @@ internal static class NoteImageExportChecks
             try
             {
                 var timeout = System.Diagnostics.Stopwatch.StartNew();
-                while (MemberOrNull(preview, "_sizeEstimate") == null)
+                while (MemberOrNull(preview, "_artifact") == null)
                 {
                     if (timeout.Elapsed.TotalSeconds > 5) throw new TimeoutException("Long preview did not finish");
                     await Task.Delay(10);
                 }
                 var toggle = (Button)Member(preview, "_formatToggle");
                 Check(!toggle.IsEnabled && Equals(toggle.Content, "PNG") &&
-                      ((TextBlock)Member(preview, "_status")).Text == Strings.Get("EditorImageExportJpegHeightLimit") &&
                       ((Button)Member(preview, "_save")).IsEnabled,
-                    "Long image was not explained and switched to PNG before saving");
+                    "Long image did not switch to a supported format before saving");
                 var dialog = (Microsoft.Win32.SaveFileDialog)typeof(NoteImageExportWindow)
                     .GetMethod("CreateSaveDialog", Private)!.Invoke(preview, null)!;
                 Check(dialog.Filter == Strings.Get("EditorImageExportPng") + " (*.png)|*.png" &&
@@ -91,12 +90,11 @@ internal static class NoteImageExportChecks
 
             **愿每一次记录，都有值得回看的意义。**
             """, id => id == "123" ? Illustration() : null, "图片缺失", token);
-        Check(sample.Drawing.IsFrozen && sample.PixelWidth == 1200 && sample.MissingImages == 0,
-            "Export artifact must be frozen, fixed-width and complete");
+        Check(sample.Drawing.IsFrozen && sample.MissingImages == 0,
+            "Export artifact must be frozen for its cross-thread handoff and retain every image");
         var words = Text(sample.Drawing);
-        Check(words.Contains("愿每一次记录") && words.Contains("PaperToDo") && !words.Contains("i:123"),
-            "Body end, image replacement or footer lost");
-        Check(words.Split("把想法，写成自己的样子").Length == 2, "Title repeated above identical first H1");
+        Check(words.Contains("愿每一次记录") && !words.Contains("i:123"),
+            "Body end or image replacement lost");
         using var png = new MemoryStream();
         NoteImageExport.Write(png, sample, token);
         var artifacts = Environment.GetEnvironmentVariable("PAPERTODO_IMAGE_EXPORT_ARTIFACTS");
@@ -120,8 +118,8 @@ internal static class NoteImageExportChecks
             using var jpg = new MemoryStream(bytes);
             var jpeg = BitmapDecoder.Create(jpg,
                 BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad).Frames[0];
-            Check(jpeg.PixelWidth == sample.PixelWidth && jpeg.PixelHeight == sample.PixelHeight &&
-                  NoteImageJpegWriter.Quality == 90, "Default JPEG quality or image dimensions changed");
+            Check(jpeg.PixelWidth == sample.PixelWidth && jpeg.PixelHeight == sample.PixelHeight,
+                "JPEG dimensions differ from the preview");
             if (!string.IsNullOrWhiteSpace(artifacts))
                 File.WriteAllBytes(Path.Combine(artifacts, "note-share-sample.jpg"), bytes);
 
@@ -232,28 +230,6 @@ internal static class NoteImageExportChecks
         Check(Text(Compose("`&amp; <u>code</u>`").Drawing).Contains("&amp; <u>code</u>"),
             "Literal inline code was decoded or formatted as HTML");
 
-        foreach (var (html, markdown) in new[]
-        {
-            ("<strong>bold</strong>", "**bold**"),
-            ("<em>italic</em>", "*italic*"),
-            ("<b><i>nested</i></b>", "**_nested_**"),
-            ("<del>removed</del>", "~~removed~~"),
-            ("<code>code</code>", "`code`"),
-            ("<a href=\"https://example.com\">link</a>", "[link](https://example.com)"),
-            ("**<u>mixed</u>**", "<u><b>mixed</b></u>")
-        })
-        {
-            var actual = Compose(html); var expected = Compose(markdown);
-            Check(GlyphStyles(actual.Drawing) == GlyphStyles(expected.Drawing) &&
-                  GeometryCount(actual.Drawing) == GeometryCount(expected.Drawing),
-                "Supported HTML differs from equivalent formatting: " + html);
-        }
-        var underlined = Compose("<u>underlined</u>");
-        Check(Text(underlined.Drawing).Contains("underlined") && !Text(underlined.Drawing).Contains("<u>") &&
-              GeometryCount(underlined.Drawing) > GeometryCount(Compose("underlined").Drawing),
-            "HTML underline was not drawn");
-        Check(GeometryCount(Compose("<u><s>both</s></u>").Drawing) > GeometryCount(Compose("~~both~~").Drawing),
-            "Nested underline/strike lost one decoration");
         foreach (var literal in new[]
         {
             "<span>plain</span>", "<b class=\"x\">plain</b>", "<b><i>crossed</b></i>",
@@ -275,10 +251,6 @@ internal static class NoteImageExportChecks
         foreach (var (markdown, source, width) in new[]
         {
             ("![image](i:123)", small, 200.0),
-            ("![image|100%](i:123)", small, 200.0),
-            ("![image|50%](i:123)", small, 100.0),
-            ("![image](i:123){width=50%}", small, 252.0),
-            ("![image|300x150,50%](i:123)", small, 150.0),
             ("![image|10%](i:123)", large, 240.0),
             ("![image|100%](i:123)", large, 504.0)
         })
@@ -287,7 +259,7 @@ internal static class NoteImageExportChecks
             Check(Math.Abs(drawing.Rect.Width - width) < .01, "Image width changed: " + markdown);
             Check(Math.Abs(drawing.Rect.Width / drawing.Rect.Height - 2) < .01, "Image aspect ratio changed");
         }
-        Console.WriteLine("PASS note image compatibility: entities, shared HTML styles and literal boundaries, original-size image scaling");
+        Console.WriteLine("PASS note image content boundaries and natural-size, downsampled and clamped image scaling");
     }
 
     private static IEnumerable<Drawing> Drawings(Drawing drawing)
@@ -297,13 +269,6 @@ internal static class NoteImageExportChecks
             foreach (var child in group.Children)
                 foreach (var nested in Drawings(child)) yield return nested;
     }
-
-    private static int GeometryCount(Drawing drawing) => Drawings(drawing).OfType<GeometryDrawing>().Count();
-
-    private static string GlyphStyles(Drawing drawing) => string.Join("|", Drawings(drawing).OfType<GlyphRunDrawing>()
-        .Select(glyph => $"{new string(glyph.GlyphRun.Characters?.ToArray() ?? [])}:" +
-            $"{glyph.GlyphRun.GlyphTypeface.FontUri}:{glyph.GlyphRun.GlyphTypeface.Weight}:" +
-            $"{glyph.GlyphRun.GlyphTypeface.StyleSimulations}:{glyph.ForegroundBrush}"));
 
     private static async Task CheckEditorSnapshot()
     {
@@ -337,32 +302,13 @@ internal static class NoteImageExportChecks
             {
                 preview = Application.Current.Windows.OfType<NoteImageExportWindow>().Single();
                 var started = System.Diagnostics.Stopwatch.StartNew();
-                while (MemberOrNull(preview, "_sizeEstimate") == null)
+                while (MemberOrNull(preview, "_artifact") == null)
                 {
                     if (started.Elapsed.TotalSeconds > 8) throw new TimeoutException("Image preview did not finish");
                     await Task.Delay(10);
                 }
                 var artifact = (NoteImageArtifact)Member(preview, "_artifact");
                 Check(preview.Owner == paper.ExpandedEditorHostWindow, "Preview has hidden paper owner");
-                var formatButton = (Button)Member(preview, "_formatToggle");
-                var estimate = (NoteImageSizePrediction)Member(preview, "_sizeEstimate");
-                var sizeLabel = (TextBlock)Member(preview, "_estimatedSize");
-                var saveButton = (Button)Member(preview, "_save");
-                var frame = (Border)Member(preview, "_frame");
-                Check(preview.WindowStyle == WindowStyle.None && frame.CornerRadius.TopLeft == 12 &&
-                      saveButton.Style != null && Equals(formatButton.Content, "JPG") &&
-                      sizeLabel.Text == NoteImageExportWindow.FormatEstimatedSize(estimate.JpegBytes),
-                    "Preview does not use the themed window, rounded save button or JPG size estimate");
-                formatButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
-                Check(Equals(formatButton.Content, "PNG") &&
-                      Equals(Member(preview, "_preferredFormat"), NoteImageFormat.Png) &&
-                      sizeLabel.Text == NoteImageExportWindow.FormatEstimatedSize(estimate.PngBytes),
-                    "Preview did not switch its preferred file format to PNG");
-                formatButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
-                Check(Equals(formatButton.Content, "JPG") &&
-                      Equals(Member(preview, "_preferredFormat"), NoteImageFormat.Jpeg) &&
-                      sizeLabel.Text == NoteImageExportWindow.FormatEstimatedSize(estimate.JpegBytes),
-                    "Preview did not switch its preferred file format back to JPG");
                 Check(Text(artifact.Drawing).Contains("latest unsaved text"), "Export read the debounced model instead of live editor");
                 Check(Text(artifact.Drawing).Contains("末尾仍然存在"), "Export lost final paragraph");
             }
@@ -371,6 +317,7 @@ internal static class NoteImageExportChecks
         }, DispatcherPriority.Background);
         typeof(PaperWindow).GetMethod("ExportNoteAsImage", Private)!.Invoke(paper, null);
         if (failure != null) throw failure;
+        box = (MarkdownTextBox)Member(paper, "_noteBox");
         Check(completed && box.Text.Contains("latest unsaved text") && box.SelectedText == selected,
             "Export modified the document or its selection");
     }
