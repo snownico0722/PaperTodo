@@ -54,7 +54,7 @@ public sealed partial class MarkdownTextBox
 
     private static void OnImageAwarePasting(object sender, DataObjectPastingEventArgs e)
     {
-        if (sender is not MarkdownTextBox editor || editor.IsReadOnly)
+        if (sender is not MarkdownTextBox editor || editor.IsReadOnly || editor._preserveFileDocumentText)
         {
             return;
         }

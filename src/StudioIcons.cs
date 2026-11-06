@@ -23,7 +23,7 @@ internal static class StudioIcons
 {
     internal static FrameworkElement Create(Control owner, StudioIcon icon, double size = 16)
     {
-        var path = new Path
+        var path = new System.Windows.Shapes.Path
         {
             Data = Geometry.Parse(GeometryFor(icon)),
             StrokeThickness = 1.8,

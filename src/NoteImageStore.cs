@@ -1280,7 +1280,7 @@ public sealed class NoteImageStore : IDisposable
     /// left at 0. If every pixel is fully transparent but RGB is present, treat alpha as absent
     /// and force the image opaque before PNG encode.
     /// </summary>
-    private static BitmapSource NormalizeVacuousAlpha(BitmapSource source)
+    internal static BitmapSource NormalizeVacuousAlpha(BitmapSource source)
     {
         if (!HasAlphaChannel(source) || source.PixelWidth <= 0 || source.PixelHeight <= 0)
         {

@@ -40,7 +40,8 @@ public sealed partial class MarkdownTextBox : TextEditor
     private string? _selectedImageId;
     private double _textZoom = 1.0;
     private string _noteId = "";
-    private NoteImageStore? _imageStore;
+    private IMarkdownImageSource? _imageStore;
+    private bool _preserveFileDocumentText;
 
     public event Action<Exception>? ImageImportFailed;
 
@@ -84,6 +85,7 @@ public sealed partial class MarkdownTextBox : TextEditor
     }
 
     public int MaxLength { get; set; }
+    internal string PreferredNewLine { get; set; } = Environment.NewLine;
 
     public bool AcceptsReturn
     {
@@ -120,6 +122,9 @@ public sealed partial class MarkdownTextBox : TextEditor
     public string PersistentText => Text;
 
     public void ConfigureNoteImages(string noteId, NoteImageStore imageStore)
+        => ConfigureImageSource(noteId, new NoteMarkdownImageSource(imageStore), ensureAnchor: true);
+
+    internal void ConfigureImageSource(string noteId, IMarkdownImageSource? imageStore, bool ensureAnchor = false, bool preserveFileDocumentText = false)
     {
         if (_imageStore != null &&
             !string.IsNullOrWhiteSpace(_noteId) &&
@@ -130,8 +135,9 @@ public sealed partial class MarkdownTextBox : TextEditor
 
         _noteId = noteId ?? "";
         _imageStore = imageStore;
-        EnsureTrailingImageAnchorLine();
-        _hadInternalImageReferences = HasInternalImageReference(Document.Text);
+        _preserveFileDocumentText = preserveFileDocumentText;
+        if (ensureAnchor) EnsureTrailingImageAnchorLine();
+        _hadInternalImageReferences = imageStore?.UsesFilePaths == true || HasInternalImageReference(Document.Text);
         RefreshTextView();
         QueueRefreshViewportProtectedBitmaps();
     }
@@ -376,7 +382,7 @@ public sealed partial class MarkdownTextBox : TextEditor
         var selected = SelectedText;
         var firstLine = Document.GetLineByNumber(1);
         var newline = firstLine.DelimiterLength > 0
-            ? Document.GetText(firstLine.EndOffset, firstLine.DelimiterLength) : "\n";
+            ? Document.GetText(firstLine.EndOffset, firstLine.DelimiterLength) : _preserveFileDocumentText ? PreferredNewLine : "\n";
         // A fence must occupy its own line, including when only part of a sentence
         // is selected. Longer fences keep literal backticks inside the code intact.
         var fenceLength = 3;
@@ -723,7 +729,7 @@ public sealed partial class MarkdownTextBox : TextEditor
             return false;
         }
 
-        if (!MarkdownImageReferences.TryParseLine(Document.GetText(line), out var parsedId) ||
+        if (!TryParseImageReferenceId(Document.GetText(line), out var parsedId) ||
             !string.Equals(parsedId, imageId, StringComparison.Ordinal))
         {
             return false;
@@ -1143,7 +1149,7 @@ public sealed partial class MarkdownTextBox : TextEditor
     }
 
     private void InsertImportedImages(
-        NoteImageStore imageStore,
+        IMarkdownImageSource imageStore,
         string noteId,
         IReadOnlyList<NoteImageAsset> assets,
         ImageInsertionPlan insertionPlan)
@@ -1173,7 +1179,7 @@ public sealed partial class MarkdownTextBox : TextEditor
 
         var referenceBlock = BuildImageReferenceBlock(
             assets.Count,
-            index => MarkdownImageReferences.CreateReference(assets[index].Id));
+            index => _imageStore!.CreateReference(assets[index].Id));
         var insertion = BuildBlockInsertion(
             insertionPlan.Target.OriginalText,
             insertionPlan.Target.Start,
@@ -1240,7 +1246,7 @@ public sealed partial class MarkdownTextBox : TextEditor
             $"Cannot insert {imageCount} image reference(s): the note's {MaxLength:N0}-character limit would be exceeded.");
     }
 
-    private static string BuildImageReferenceBlock(
+    private string BuildImageReferenceBlock(
         int imageCount,
         Func<int, string> createReference)
     {
@@ -1249,7 +1255,7 @@ public sealed partial class MarkdownTextBox : TextEditor
         {
             if (index > 0)
             {
-                builder.Append(Environment.NewLine);
+                builder.Append(PreferredNewLine);
             }
 
             builder.Append(createReference(index));
@@ -1258,7 +1264,7 @@ public sealed partial class MarkdownTextBox : TextEditor
         return builder.ToString();
     }
 
-    private static string BuildBlockInsertion(
+    private string BuildBlockInsertion(
         string documentText,
         int start,
         string blockText)
@@ -1267,11 +1273,11 @@ public sealed partial class MarkdownTextBox : TextEditor
 
         if (start > 0 && documentText[start - 1] is not '\n' and not '\r')
         {
-            builder.Append(Environment.NewLine);
+            builder.Append(PreferredNewLine);
         }
 
         builder.Append(blockText);
-        builder.Append(Environment.NewLine);
+        builder.Append(PreferredNewLine);
 
         return builder.ToString();
     }
@@ -1462,7 +1468,7 @@ public sealed partial class MarkdownTextBox : TextEditor
     {
         if (Document == null || Document.TextLength == 0)
         {
-            return Environment.NewLine;
+            return PreferredNewLine;
         }
 
         try
@@ -1472,7 +1478,7 @@ public sealed partial class MarkdownTextBox : TextEditor
         }
         catch
         {
-            return Environment.NewLine;
+            return PreferredNewLine;
         }
     }
 
@@ -1498,7 +1504,7 @@ public sealed partial class MarkdownTextBox : TextEditor
         }
 
         var imageId = _selectedImageId;
-        if (!MarkdownImageReferences.TryParseLine(Document.GetText(line), out var parsedId) ||
+        if (!TryParseImageReferenceId(Document.GetText(line), out var parsedId) ||
             !string.Equals(parsedId, imageId, StringComparison.Ordinal))
         {
             ClearImageSelection();
@@ -1539,7 +1545,7 @@ public sealed partial class MarkdownTextBox : TextEditor
             return Document.GetText(line.EndOffset, line.DelimiterLength);
         }
 
-        return Environment.NewLine;
+        return PreferredNewLine;
     }
 
     private static bool IsLineContentEmpty(string text, int contentStart)
@@ -1591,8 +1597,8 @@ public sealed partial class MarkdownTextBox : TextEditor
         var text = clipboardText;
         var replacementTarget = CaptureDocumentReplacementTarget();
         var selectedLength = replacementTarget.SelectionLength;
-        var containsImageReference = MarkdownImageReferences.Enumerate(text).Any();
-        var blockPasteText = EnsureImageReferencePasteIsBlock(text, replacementTarget);
+        var containsImageReference = !_preserveFileDocumentText && MarkdownImageReferences.Enumerate(text).Any();
+        var blockPasteText = _preserveFileDocumentText ? text : EnsureImageReferencePasteIsBlock(text, replacementTarget);
         string pasteText;
         if (containsImageReference)
         {
@@ -1781,13 +1787,13 @@ public sealed partial class MarkdownTextBox : TextEditor
 
     private bool EnsureTrailingImageAnchorLine()
     {
-        if (Document == null || Document.TextLength <= 0 || _isEnsuringImageAnchorLine)
+        if (Document == null || Document.TextLength <= 0 || _isEnsuringImageAnchorLine || _preserveFileDocumentText)
         {
             return false;
         }
 
         var lastLine = Document.GetLineByOffset(Document.TextLength);
-        if (!MarkdownImageReferences.TryParseReferenceLine(Document.GetText(lastLine), out _))
+        if (!TryParseImageReference(Document.GetText(lastLine), out _))
         {
             return false;
         }
@@ -1802,6 +1808,19 @@ public sealed partial class MarkdownTextBox : TextEditor
         {
             _isEnsuringImageAnchorLine = false;
         }
+    }
+
+    private bool TryParseImageReference(string line, out MarkdownImageReference reference)
+    {
+        if (_imageStore != null) return _imageStore.TryParseReference(line, out reference);
+        return MarkdownImageReferences.TryParseReferenceLine(line, out reference);
+    }
+
+    private bool TryParseImageReferenceId(string line, out string imageId)
+    {
+        var parsed = TryParseImageReference(line, out var reference);
+        imageId = parsed ? reference.ImageId : "";
+        return parsed;
     }
 
     private static bool HasInternalImageReference(string? text)
@@ -2062,7 +2081,7 @@ public sealed partial class MarkdownTextBox : TextEditor
         }
 
         return anchor.Offset == referenceLine.Offset &&
-            MarkdownImageReferences.TryParseLine(Document!.GetText(referenceLine), out var imageId) &&
+            TryParseImageReferenceId(Document!.GetText(referenceLine), out var imageId) &&
             string.Equals(imageId, _selectedImageId, StringComparison.Ordinal);
     }
 
@@ -2146,7 +2165,7 @@ public sealed partial class MarkdownTextBox : TextEditor
         }
 
         var text = Document.GetText(line);
-        if (!MarkdownImageReferences.TryParseLine(text, out var parsedId) ||
+        if (!TryParseImageReferenceId(text, out var parsedId) ||
             !string.Equals(parsedId, imageId, StringComparison.Ordinal))
         {
             return;

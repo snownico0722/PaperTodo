@@ -235,7 +235,7 @@ public static class MarkdownImageReferences
         return true;
     }
 
-    private static MarkdownImageDisplayOptions ParseDisplayOptions(string label, string attributeText)
+    internal static MarkdownImageDisplayOptions ParseDisplayOptions(string label, string attributeText)
     {
         var labelWidth = (double?)null;
         var labelScalePercent = (double?)null;

@@ -1815,4 +1815,40 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="SettingsNotesAndTodos" xml:space="preserve"><value>노트 및 할 일</value></data>
   <data name="WorkspaceSingleMessage" xml:space="preserve"><value>현재 작업 공간이 하나뿐입니다.</value></data>
   <data name="WorkspaceCreate" xml:space="preserve"><value>새로 만들기</value></data>
+  <data name="StudioStandaloneTitle" xml:space="preserve"><value>독립 스튜디오</value></data>
+  <data name="StudioNew" xml:space="preserve"><value>새 문서</value></data>
+  <data name="StudioOpen" xml:space="preserve"><value>파일 열기</value></data>
+  <data name="StudioSave" xml:space="preserve"><value>저장</value></data>
+  <data name="StudioUntitled" xml:space="preserve"><value>제목 없음</value></data>
+  <data name="StudioSaved" xml:space="preserve"><value>저장됨</value></data>
+  <data name="StudioReplaceTitle" xml:space="preserve"><value>현재 문서 바꾸기</value></data>
+  <data name="StudioReplaceMessage" xml:space="preserve"><value>현재 문서를 바꿀까요? 저장된 원본 파일은 삭제되지 않습니다.</value></data>
+  <data name="StudioUnsavedTitle" xml:space="preserve"><value>변경 내용 저장</value></data>
+  <data name="StudioUnsavedMessage" xml:space="preserve"><value>저장하지 않은 변경 내용이 사라집니다. 먼저 저장할까요?</value></data>
+  <data name="StudioSaveAndOpen" xml:space="preserve"><value>저장 후 열기</value></data>
+  <data name="StudioDiscardAndOpen" xml:space="preserve"><value>저장하지 않고 열기</value></data>
+  <data name="StudioSaveAndNew" xml:space="preserve"><value>저장 후 새로 만들기</value></data>
+  <data name="StudioDiscardAndNew" xml:space="preserve"><value>저장하지 않고 새로 만들기</value></data>
+  <data name="StudioDiscard" xml:space="preserve"><value>저장 안 함</value></data>
+  <data name="StudioRecover" xml:space="preserve"><value>복구</value></data>
+  <data name="StudioRecoveryTitle" xml:space="preserve"><value>이전 문서 복구</value></data>
+  <data name="StudioRecoveryMessage" xml:space="preserve"><value>이전에 스튜디오가 정상 종료되지 않았습니다. 문서와 임시 이미지를 복구할까요?</value></data>
+  <data name="StudioRecoveryFailed" xml:space="preserve"><value>복구 사본을 저장하지 못했습니다: {0}</value></data>
+  <data name="StudioFileErrorTitle" xml:space="preserve"><value>문서 작업 실패</value></data>
+  <data name="StudioFileError" xml:space="preserve"><value>작업을 완료하지 못했습니다. 현재 문서는 보존됩니다.
+{0}</value></data>
+  <data name="StudioSupportedFiles" xml:space="preserve"><value>지원 문서 형식: .md, .txt, .html, .htm.</value></data>
+  <data name="StudioFileFilter" xml:space="preserve"><value>문서|*.md;*.txt;*.html;*.htm|Markdown|*.md|일반 텍스트|*.txt|HTML 소스|*.html;*.htm</value></data>
+  <data name="StudioImageFilter" xml:space="preserve"><value>이미지|*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.webp;*.tif;*.tiff</value></data>
+  <data name="StudioTemporary" xml:space="preserve"><value>임시</value></data>
+  <data name="StudioTemporarySettingsTip" xml:space="preserve"><value>설정 변경은 이번 실행에만 적용되며 종료 후 저장되지 않습니다.</value></data>
+  <data name="StudioTextSize" xml:space="preserve"><value>본문 크기</value></data>
+  <data name="StudioSizeSmall" xml:space="preserve"><value>작게</value></data>
+  <data name="StudioSizeMedium" xml:space="preserve"><value>보통</value></data>
+  <data name="StudioSizeLarge" xml:space="preserve"><value>크게</value></data>
+  <data name="StudioBoldText" xml:space="preserve"><value>본문 굵게</value></data>
+  <data name="StudioTheme" xml:space="preserve"><value>테마</value></data>
+  <data name="StudioClose" xml:space="preserve"><value>닫기</value></data>
+  <data name="StudioMaximize" xml:space="preserve"><value>최대화 / 복원</value></data>
+  <data name="StudioCut" xml:space="preserve"><value>잘라내기</value></data>
 </root>
