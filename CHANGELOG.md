@@ -57,7 +57,7 @@ This log is written for general and power users alike. It focuses on user-facing
 
 #### Todos & Notes
 
-- **Combined settings**: Notes and Todos share one settings page with two columns and separate restore-defaults actions. External Editor consistently follows its title-bar/menu placement, including after its file extension is refreshed.
+- **Combined settings**: Notes and Todos share one settings page with two columns and separate restore-defaults actions. Long option labels wrap within their column at the selected font size. External Editor consistently follows its title-bar/menu placement, including after its file extension is refreshed.
 
 - **Todo bottom-bar toggle**: The bottom quick-add bar is visible by default but can be turned off. Hiding it also disables deleting todos by dragging them into the trash.
 - **Reorder selected todos as a group**: Move multiple selected todos together while preserving their relative order. Dragging near the top or bottom of the list scrolls smoothly, even while the trash preview is visible. Todos are deleted only when the pointer is released over the trash.

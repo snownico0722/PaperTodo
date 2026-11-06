@@ -29,19 +29,19 @@ public sealed partial class AppController
     {
         var content = new StackPanel();
         content.Children.Add(WrapWithHint(
-            SettingsToggle(
+            WrappingSettingsToggle(
                 Strings.Get("SettingsShowTodoBottomBar"),
                 State.ShowTodoBottomBar,
                 ToggleTodoBottomBar),
             "TipShowTodoBottomBar"));
         content.Children.Add(WrapWithHint(
-            SettingsToggle(
+            WrappingSettingsToggle(
                 Strings.Get("SettingsAutoClearCompletedTodos"),
                 State.AutoClearCompletedTodos,
                 ToggleAutoClearCompletedTodos),
             "TipAutoClearCompletedTodos"));
 
-        var autoMoveCompletedToggle = SettingsToggle(
+        var autoMoveCompletedToggle = WrappingSettingsToggle(
             Strings.Get("SettingsAutoMoveCompletedTodosToBottom"),
             State.AutoMoveCompletedTodosToBottom,
             ToggleAutoMoveCompletedTodosToBottom);
@@ -55,13 +55,13 @@ public sealed partial class AppController
         content.Children.Add(SettingsSectionLabel(
             SettingsSidebarLocalized("纸片关联", "Paper links", "紙片リンク", "종이 연결")));
         content.Children.Add(WrapWithHint(
-            SettingsToggle(
+            WrappingSettingsToggle(
                 Strings.Get("SettingsEnableTodoPaperLinks"),
                 State.EnableTodoPaperLinks,
                 ToggleTodoPaperLinks),
             "TipEnableTodoPaperLinks"));
 
-        var showLinkedPaperNameToggle = SettingsToggle(
+        var showLinkedPaperNameToggle = WrappingSettingsToggle(
             Strings.Get("SettingsShowLinkedPaperName"),
             State.ShowLinkedPaperName,
             ToggleLinkedPaperNameDisplay);
@@ -71,7 +71,7 @@ public sealed partial class AppController
             showLinkedPaperNameToggle,
             "TipShowLinkedPaperName"));
 
-        var allowLongLinkedPaperTitlesToggle = SettingsToggle(
+        var allowLongLinkedPaperTitlesToggle = WrappingSettingsToggle(
             Strings.Get("SettingsAllowLongLinkedPaperTitles"),
             State.AllowLongLinkedPaperTitles,
             ToggleLongLinkedPaperTitles);
@@ -83,7 +83,7 @@ public sealed partial class AppController
             allowLongLinkedPaperTitlesToggle,
             "TipAllowLongLinkedPaperTitles"));
 
-        var linkedPathExtensionOnlyToggle = SettingsToggle(
+        var linkedPathExtensionOnlyToggle = WrappingSettingsToggle(
             Strings.Get("SettingsShowLinkedPathExtensionOnly"),
             State.ShowLinkedPathExtensionOnly,
             ToggleLinkedPathExtensionOnly);
@@ -97,7 +97,7 @@ public sealed partial class AppController
             linkedPathExtensionOnlyToggle,
             "TipShowLinkedPathExtensionOnly"));
 
-        var hideLinkedPapersFromCapsulesToggle = SettingsToggle(
+        var hideLinkedPapersFromCapsulesToggle = WrappingSettingsToggle(
             Strings.Get("SettingsHideLinkedPapersFromCapsules"),
             State.HideLinkedPapersFromCapsules,
             ToggleHideLinkedPapersFromCapsules);
@@ -108,7 +108,7 @@ public sealed partial class AppController
             hideLinkedPapersFromCapsulesToggle,
             "TipHideLinkedPapersFromCapsules"));
 
-        var runLinkedScriptCapsulesToggle = SettingsToggle(
+        var runLinkedScriptCapsulesToggle = WrappingSettingsToggle(
             Strings.Get("SettingsRunLinkedScriptCapsulesOnClick"),
             State.RunLinkedScriptCapsulesOnClick,
             ToggleRunLinkedScriptCapsulesOnClick);
