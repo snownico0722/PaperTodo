@@ -182,24 +182,46 @@ public sealed partial class AppController
 
         PreviewFreeQueueDropSlot(_freeMasterSlotPreview, decision,
             layout.Groups[0].PaperIds, resting, groups, includeResting: docked);
+        if (docked && decision.Kind != EdgeFreeQueueDropKind.Insert)
+        {
+            // The real master and its members already follow the pointer.
+            _nativeQueueDropGhost?.Hide();
+            return;
+        }
         var pitch = EdgeCapsuleLayout.SlotHeight(DeepCapsuleGap);
         var top = EdgeCapsuleFreeQueuePolicy.GhostSlotTop(
             decision, targetBox.HasMaster, pitch, targetBox.Collapsed);
         _nativeQueueDropGhost ??= new EdgeCapsuleQueueDropGhost();
-        _nativeQueueDropGhost.ShowAt(geometry, side, top,
-            Math.Max(PaperLayoutDefaults.CapsuleWidth, targetBox.WidthDip),
-            decision.Kind == EdgeFreeQueueDropKind.Move
-                ? targetBox.Collapsed ? 1 : layout.Groups[0].PaperIds.Length + 1
-                : layout.Groups[0].PaperIds.Length, DeepCapsuleGap,
-            decision.Kind == EdgeFreeQueueDropKind.Move
-                ? targetBox.WidthDip : null);
+        // The independent ghost includes its master; a merged ghost includes
+        // only the members, each with the width it will have on this edge.
+        var widths = new List<double>(layout.Groups[0].PaperIds.Length + 1);
+        if (decision.Kind == EdgeFreeQueueDropKind.Move)
+            widths.Add(_masterCapsules.TryGetValue(layout.QueueKey, out var master)
+                ? master.DesiredDockedWidthFor(geometry) : targetBox.WidthDip);
+        if (decision.Kind != EdgeFreeQueueDropKind.Move || !targetBox.Collapsed)
+            foreach (var id in layout.Groups[0].PaperIds)
+                widths.Add(NativeDropGhostMemberWidth(id, geometry));
+        Action? raiseDrag = _masterCapsules.TryGetValue(layout.QueueKey, out var draggingMaster)
+            ? draggingMaster.BringDragWindowAboveGhost : null;
+        var topmost = draggingMaster?.DragWindowIsTopmost ?? true;
+        if (decision.Kind == EdgeFreeQueueDropKind.Insert && targetBox.Collapsed &&
+            _masterCapsules.TryGetValue(decision.TargetKey, out var targetMaster))
+            _nativeQueueDropGhost.ShowMergeHaloAt(geometry, side, targetMaster.AnchorTop,
+                targetMaster.DesiredDockedWidthFor(geometry), raiseDrag, topmost);
+        else
+            _nativeQueueDropGhost.ShowAt(geometry, side, top, widths, DeepCapsuleGap,
+                raiseDrag, topmost);
     }
 
     internal void PreviewFreeMasterQueueDropGhost(
         MasterCapsuleQueueTransferSnapshot snapshot, DeviceScreenPoint pointer)
     {
-        if (snapshot.FreeLayout is not { } layout ||
-            _masterCapsuleQueueTransfer != snapshot || !EdgeCapsuleFreeQueuesEnabled ||
+        if (snapshot.FreeLayout is not { } layout)
+        {
+            PreviewLegacyMasterTransferDropGhost(snapshot, pointer);
+            return;
+        }
+        if (_masterCapsuleQueueTransfer != snapshot || !EdgeCapsuleFreeQueuesEnabled ||
             !FreeMasterMembersMatch(layout))
         {
             _nativeQueueDropGhost?.Hide();

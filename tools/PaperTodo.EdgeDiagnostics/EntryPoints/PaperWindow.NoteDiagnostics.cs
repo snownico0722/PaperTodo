@@ -2,8 +2,11 @@ namespace PaperTodo;
 
 public sealed partial class PaperWindow
 {
+#if DEBUG
     private static readonly object NoteRenderTraceLock = new();
+#endif
 
+    [System.Diagnostics.Conditional("DEBUG")]
     private void TraceNoteRender(string message)
     {
 #if DEBUG

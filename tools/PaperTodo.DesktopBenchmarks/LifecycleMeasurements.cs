@@ -75,7 +75,7 @@ internal static partial class Program
         if (!File.Exists(Path.Combine(AppContext.BaseDirectory, LifecycleMarker)))
             throw new InvalidOperationException("Refusing to measure against non-fixture user data.");
         var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
-        var result = 0;
+        var result = 1;
         app.Dispatcher.InvokeAsync(async () =>
         {
             try
@@ -119,6 +119,7 @@ internal static partial class Program
                     readyMs = Stopwatch.GetElapsedTime(constructed, ready).TotalMilliseconds,
                     disposeMs = Stopwatch.GetElapsedTime(disposal).TotalMilliseconds
                 }));
+                result = 0;
             }
             catch (Exception error) { result = 1; Console.Error.WriteLine(error); }
             finally { app.Shutdown(); }

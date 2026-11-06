@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-v4.0.0--beta1-3b82f6" alt="version">
+  <img src="https://img.shields.io/badge/version-v4.0.0--beta2-3b82f6" alt="version">
   <img src="https://img.shields.io/badge/platform-Windows%20x64-555" alt="platform">
   <img src="https://img.shields.io/badge/.NET-10-512bd4" alt=".NET">
   <img src="https://img.shields.io/badge/UI-WPF-0078d4" alt="UI">

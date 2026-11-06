@@ -11,6 +11,11 @@ public sealed partial class AppController
 
     private void ExecuteGlobalShortcutCommand(GlobalShortcutDefinition definition)
     {
+        if (definition.Id == GlobalShortcutCatalog.Workbench)
+        {
+            ToggleWorkbench();
+            return;
+        }
         var commandKind = definition.StartupCommandKind;
         if (commandKind is not (
                 StartupCommandKind.Show or

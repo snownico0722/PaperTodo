@@ -723,7 +723,7 @@ public sealed partial class AppController : IDisposable
             }
         }
 
-        return PaperTitleText(paper);
+        return PaperTitles.DisplayTitle(paper, TitleNumberFor(paper), State.MaxTitleLength);
     }
 
     public string PaperCapsuleTitle(PaperData paper)
@@ -744,11 +744,13 @@ public sealed partial class AppController : IDisposable
             return paper.BodyCapsuleText;
         }
 
-        return PaperTitleText(paper);
+        return PaperTitles.DisplayTitle(paper, TitleNumberFor(paper), State.MaxTitleLength);
     }
 
     public void UpdatePaperTitle(PaperData paper, string title)
     {
+        // Opening and leaving an unchanged editor must preserve an older long title.
+        if (title == PaperTitleText(paper)) return;
         var cleaned = PaperTitles.CleanCustomTitle(title, State.MaxTitleLength);
         if (paper.Title == cleaned)
         {
@@ -1159,7 +1161,8 @@ public sealed partial class AppController : IDisposable
         if (command.Kind is StartupCommandKind.Show or
             StartupCommandKind.Toggle or
             StartupCommandKind.NewTodo or
-            StartupCommandKind.NewNote)
+            StartupCommandKind.NewNote or
+            StartupCommandKind.Canvas)
         {
             // Startup and secondary-instance commands arrive before PaperTodo intentionally takes focus.
             // Refresh here so a recent desktop/taskbar switch cannot leave stale fullscreen avoidance.
@@ -1168,8 +1171,8 @@ public sealed partial class AppController : IDisposable
 
         switch (command.Kind)
         {
-            case StartupCommandKind.Workbench:
-                ToggleWorkbench();
+            case StartupCommandKind.Canvas:
+                OpenCanvas();
                 break;
             case StartupCommandKind.Show:
                 ShowAllPapers();
@@ -2808,26 +2811,9 @@ public sealed partial class AppController : IDisposable
             }
         }
 
-        // Insertion index by drop height against the target queue's monitor work area.
-        var area = monitorGeometry.LocalWorkAreaDip;
-        var dropY = monitorGeometry.DeviceYToLocalDip(dropPoint.Y);
-        var targetRealCount = targetMembers.Count + 1;
-        var visualOffset = State.UseCapsuleCollapseAll && targetRealCount > 0 ? 1 : 0;
-        var startTop = EdgeCapsuleLayout.NormalizeStartTopMargin(
-            DeepCapsuleStartTopMarginForQueue(normalizedMonitor,
-                normalizedSide == DeepCapsuleSides.Left ? EdgeCapsuleEdge.Left : EdgeCapsuleEdge.Right),
-            area,
-            targetRealCount + visualOffset,
-            DeepCapsuleGap);
-        var slotHeight = EdgeCapsuleLayout.SlotHeight(DeepCapsuleGap);
-        var firstTop = EdgeCapsuleLayout.TopForIndex(
-            visualOffset,
-            startTop,
-            area,
-            targetRealCount + visualOffset,
-            DeepCapsuleGap);
-        var rawIndex = (int)Math.Floor((dropY - firstTop) / slotHeight + 0.5);
-        var insertAt = Math.Clamp(rawIndex, 0, targetMembers.Count);
+        // The cross-edge landing ghost and final drop share the same slot calculation.
+        var insertAt = LegacyCrossEdgeDrop(monitorGeometry, normalizedMonitor,
+            normalizedSide, dropPoint, targetMembers.Count).Index;
 
         // Rebuild State.Papers: drop the dragged paper, then re-insert it right before the target
         // queue member currently at insertAt (or at the end of that queue's run).
@@ -4361,7 +4347,3 @@ public sealed partial class AppController : IDisposable
         TryExitCleanup(() => scriptShutdown.GetAwaiter().GetResult());
     }
 }
-
-
-
-

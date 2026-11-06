@@ -23,6 +23,8 @@ internal static partial class Program
         File.WriteAllText(scope.Store.BackupPath, File.ReadAllText(scope.Store.FilePath));
 
         Require(backup.TryCreateIfDue(start), "first raw-data history snapshot was not created");
+        Require(Directory.Exists(Path.Combine(scope.DirectoryPath, "PaperTodo-backups")),
+            "core history ZIPs were not written to the PaperTodo-backups directory");
         var first = Directory.GetFiles(backup.BackupDirectory, "PaperTodo-core-*.zip").Single();
         using (var zip = ZipFile.OpenRead(first))
         {

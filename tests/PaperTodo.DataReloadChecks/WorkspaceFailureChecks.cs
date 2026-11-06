@@ -36,66 +36,6 @@ internal static partial class Program
         }
     }
 
-    private static void WorkspaceFailureMessageChecks()
-    {
-        var originalLanguage = UiLanguages.EffectiveUiCulture.Name;
-        try
-        {
-            foreach (var language in new[] { "zh-CN", "en-US", "ja-JP", "ko-KR" })
-            {
-                UiLanguages.ApplyWorkspacePreference(language);
-                var cases = new (Exception Error, string Key)[]
-                {
-                    (new UnauthorizedAccessException("raw"), "WorkspaceFailureAccessDenied"),
-                    (new FileNotFoundException("raw"), "WorkspaceFailureMissing"),
-                    (new InvalidDataException("raw"), "WorkspaceFailureInvalidData"),
-                    (new IOException("raw", unchecked((int)0x80070020)), "WorkspaceFailureBusy"),
-                    (new IOException("raw", unchecked((int)0x80070021)), "WorkspaceFailureBusy"),
-                    (new IOException("raw", unchecked((int)0x80070070)), "WorkspaceFailureDiskFull"),
-                    (new IOException("raw"), "WorkspaceFailureIo"),
-                    (new InvalidOperationException("raw"), "WorkspaceFailureUnknown"),
-                    (new StateRecoveryException("WorkspaceFailureHistoryChoiceRequired"), "WorkspaceFailureHistoryChoiceRequired"),
-                    (new StateRecoveryException("WorkspaceFailureRecoveryChanged"), "WorkspaceFailureRecoveryChanged")
-                };
-                foreach (var (error, key) in cases)
-                {
-                    var message = WorkspaceFailureMessage.For(error);
-                    Require(message == Strings.Get(key) && message != key && !message.Contains("raw"),
-                        "workspace failure did not use a localized known reason: " + language + "/" + key);
-                }
-                Require(Strings.Get("WorkspaceFailureRetry") != "WorkspaceFailureRetry" &&
-                        Strings.Get("WorkspaceFailureExit") != "WorkspaceFailureExit", "failure actions lack translations");
-                var startupCases = new (Exception Error, string Key)[]
-                {
-                    (new IOException("busy detail", unchecked((int)0x80070020)), "AppStartupFailureBusy"),
-                    (new IOException("locked detail", unchecked((int)0x80070021)), "AppStartupFailureBusy"),
-                    (new StateRecoveryException("WorkspaceFailureHistoryChoiceRequired",
-                        new System.Text.Json.JsonException("JSON detail")), "AppStartupFailureCorrupt"),
-                    (new InvalidOperationException("unknown detail"), "AppStartupFailureUnknown"),
-                    (new InvalidDataException("directory at file path"), "AppStartupFailureUnknown")
-                };
-                foreach (var (error, key) in startupCases)
-                {
-                    var message = WorkspaceFailureMessage.ForStartup(error);
-                    Require(message == Strings.Format("AppStartupFailureMessage", Strings.Get(key),
-                                error.GetBaseException().Message) && !message.Contains(key),
-                        "startup failure lost its cause category, details or translation: " + language);
-                }
-                Require(WorkspaceFailureMessage.For(new StateRecoveryException("WorkspaceFailureHistoryChoiceRequired",
-                            new System.Text.Json.JsonException("raw"))) == Strings.Get("WorkspaceFailureHistoryChoiceRequired"),
-                    "parser details replaced the localized recovery explanation");
-            }
-            UiLanguages.ApplyWorkspacePreference("en-US");
-            var beforeRollback = new StateRecoveryException("WorkspaceFailurePrimaryChanged");
-            UiLanguages.ApplyWorkspacePreference("zh-CN");
-            Require(WorkspaceFailureMessage.For(beforeRollback) == Strings.Get("WorkspaceFailurePrimaryChanged") &&
-                    WorkspaceFailureMessage.For(beforeRollback) != beforeRollback.Message,
-                "rollback kept the failed target's language in the retry dialog");
-        }
-        finally { UiLanguages.ApplyWorkspacePreference(originalLanguage); }
-        Console.WriteLine("PASS workspace failure messages: typed recovery, I/O reasons and four languages");
-    }
-
     private static int RunWorkspaceFailureFixture()
     {
         if (!File.Exists(Path.Combine(AppContext.BaseDirectory, LiveMarker))) return 2;

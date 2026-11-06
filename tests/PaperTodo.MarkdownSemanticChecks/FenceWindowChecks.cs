@@ -141,37 +141,16 @@ internal static class FenceWindowChecks
         var oldSource = builder.ToString();
         var marker = oldSource.IndexOf("`` inline", StringComparison.Ordinal);
         var newSource = oldSource.Insert(marker, "`");
-        AssertEquivalent(MarkdownSemanticSnapshot.Parse(newSource),
+        MarkdownEditBehavior.AssertEquivalent(MarkdownSemanticSnapshot.Parse(newSource),
             MarkdownEditBehavior.ReadAfterEdit(oldSource, newSource), "inline backticks");
         Console.WriteLine("PASS inline triple backticks preserve literal text");
     }
 
-
     private static void AssertEditMatchesFull(string oldSource, string newSource, string name)
     {
-        AssertEquivalent(MarkdownSemanticSnapshot.Parse(newSource),
+        MarkdownEditBehavior.AssertEquivalent(MarkdownSemanticSnapshot.Parse(newSource),
             MarkdownEditBehavior.ReadAfterEdit(oldSource, newSource), name);
         Console.WriteLine($"PASS {name}");
-    }
-
-    private static void AssertEquivalent(
-        MarkdownSemanticSnapshot expected,
-        MarkdownSemanticSnapshot actual,
-        string name)
-    {
-        if (expected.LineCount != actual.LineCount ||
-            !expected.Spans.SequenceEqual(actual.Spans) ||
-            !expected.Links.SequenceEqual(actual.Links))
-        {
-            throw new InvalidOperationException($"FAIL {name}: snapshot mismatch");
-        }
-        for (var line = 0; line < expected.LineCount; line++)
-        {
-            if (!expected.GetLine(line).Equals(actual.GetLine(line)))
-            {
-                throw new InvalidOperationException($"FAIL {name}: line mismatch at {line}");
-            }
-        }
     }
 
     private static void AppendPlain(StringBuilder builder, string label, int count)
@@ -182,5 +161,4 @@ internal static class FenceWindowChecks
                 .Append(" ordinary words for local Markdown editing\n\n");
         }
     }
-
 }

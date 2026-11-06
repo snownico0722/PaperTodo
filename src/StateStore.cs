@@ -57,7 +57,8 @@ public sealed partial class StateStore
     // Only if both are unavailable do we select the newest complete interrupted write.
     // Existing data is never replaced by a blank workspace without an explicit choice.
     internal AppState Load(out bool initializedEmpty,
-        Func<DateTime?, WorkspaceRecoveryChoice>? confirmRecovery = null)
+        Func<DateTime?, WorkspaceRecoveryChoice>? confirmRecovery = null,
+        Func<Exception, WorkspaceRecoveryChoice>? confirmBackupReadFailure = null)
     {
         initializedEmpty = false;
         NeedsStartupRecoverySave = false;
@@ -80,8 +81,34 @@ public sealed partial class StateStore
             catch (JsonException) { /* Try the fixed backup. */ }
         }
 
-        var backupExists = FileExistsForCollection(BackupPath);
-        var backupBytes = backupExists ? File.ReadAllBytes(BackupPath) : null;
+        bool backupExists;
+        byte[]? backupBytes;
+        while (true)
+        {
+            try
+            {
+                backupExists = FileExistsForCollection(BackupPath);
+                backupBytes = backupExists ? File.ReadAllBytes(BackupPath) : null;
+                break;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                if (confirmBackupReadFailure == null) throw;
+                WriteLifetime.ThrowIfStopped();
+                var choice = confirmBackupReadFailure(ex);
+                WriteLifetime.ThrowIfStopped();
+                if (choice == WorkspaceRecoveryChoice.Retry) continue;
+                if (choice != WorkspaceRecoveryChoice.CreateEmpty)
+                    throw new OperationCanceledException("Workspace recovery was canceled.");
+
+                // The user explicitly chose to rebuild, not to try more sources.
+                // Keep the unreadable backup intact and use the normal commit checks.
+                _pendingStartupRecovery = PendingStartupRecovery.ForEmptyWorkspace(primaryBytes);
+                initializedEmpty = true;
+                NeedsStartupRecoverySave = true;
+                return new AppState();
+            }
+        }
         if (backupBytes != null)
         {
             try
@@ -95,25 +122,19 @@ public sealed partial class StateStore
             catch (JsonException) { /* Try complete interrupted snapshots. */ }
         }
 
-        var candidates = FindValidInterruptedWrites(out var readFailure);
-        if (candidates.Count > 0)
+        var interruptedPaths = InterruptedWritePaths();
+        var latest = FindLatestInterruptedWrite(interruptedPaths, out var equivalentPaths, out var readFailure);
+        if (latest != null)
         {
-            // Last-write time describes the snapshot; the orphan filename only
-            // describes when it was moved aside. Path order breaks timestamp ties.
-            var first = candidates.OrderByDescending(candidate => candidate.LastWriteTimeUtc)
-                .ThenBy(candidate => candidate.Path, StringComparer.OrdinalIgnoreCase).First();
-
             _pendingStartupRecovery = PendingStartupRecovery.FromTemporary(
-                first.Path, first.Bytes, primaryBytes,
-                candidates.Where(candidate => System.Text.Json.Nodes.JsonNode.DeepEquals(
-                    first.Document, candidate.Document)).Select(candidate => (candidate.Path,
-                    SHA256.HashData(candidate.Bytes))).ToArray());
+                latest.Path, latest.Bytes, primaryBytes, equivalentPaths.ToArray());
             NeedsStartupRecoverySave = true;
-            return ReadLoadDocument(first.Bytes);
+            NormalizedCollapsedStateOnLoad = latest.NormalizedCollapsedState;
+            return latest.State;
         }
 
         // Existing data requires a choice, whether history is available or not.
-        if (primaryExists || backupExists || HasInterruptedWriteFiles())
+        if (primaryExists || backupExists || interruptedPaths.Length != 0)
         {
             var history = new CoreHistoryBackup(Path.GetDirectoryName(FilePath)!);
             foreach (var snapshot in history.ReadWorkspaceSnapshots(WorkspaceNumber, ex => readFailure ??= ex))
@@ -131,7 +152,7 @@ public sealed partial class StateStore
                     return new AppState { Workspaces = catalog };
                 }
                 _pendingStartupRecovery = PendingStartupRecovery.FromHistory(snapshot, primaryBytes);
-                return ReadLoadDocument(snapshot.Bytes);
+                return historicalState!;
             }
 
             if (readFailure != null)
@@ -789,7 +810,7 @@ public sealed partial class StateStore
             paper.CapsuleQueueId = EdgeCapsuleQueueIds.Normalize(paper.CapsuleQueueId);
             NormalizeDeepCapsuleExpandedGeometry(paper);
 
-            paper.Title = PaperTitles.CleanCustomTitle(paper.Title, state.MaxTitleLength);
+            paper.Title = PaperTitles.CleanCustomTitle(paper.Title);
             paper.X = NormalizeCoordinate(paper.X, 120);
             paper.Y = NormalizeCoordinate(paper.Y, 120);
             if (double.IsNaN(paper.TextZoom) || double.IsInfinity(paper.TextZoom) || paper.TextZoom <= 0)

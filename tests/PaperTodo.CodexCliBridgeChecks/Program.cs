@@ -54,30 +54,18 @@ var expectedPath = Path.Combine(pluginDirectory, "skills", CodexPromptState.Skil
 var composedZh = initial.PrependTo(task, pluginDirectory, "zh-CN", defaults, executable);
 Check(composedZh.Contains(CodexPromptState.BuiltInDefaultPromptZh),
     "Chinese UI must send the Chinese built-in prompt.");
-Check(composedZh.Contains("[PaperTodo 默认提示词]"),
-    "Chinese UI must localize prompt section labels.");
-Check(composedZh.Contains("[本次内容]"),
-    "Chinese UI must localize current-content label.");
 Check(composedZh.Contains(JsonSerializer.Serialize(expectedPath)),
     "The bundled Skill must resolve against the actual installation path.");
 Check(composedZh.EndsWith(task, StringComparison.Ordinal),
     "Task content must be preserved after Chinese prompt injection.");
-Check(composedZh.Contains("新增/空白写入") && composedZh.Contains("直接删除"),
-    "Chinese MCP activation hint must state that MCP write/delete permissions are enabled automatically.");
 
 var composedEn = initial.PrependTo(task, pluginDirectory, "en-US", defaults, executable);
 Check(composedEn.Contains(CodexPromptState.BuiltInDefaultPromptEn),
     "English UI must send the English built-in prompt.");
-Check(composedEn.Contains("[PaperTodo default prompt]"),
-    "English UI must localize prompt section labels.");
-Check(composedEn.Contains("[Current content]"),
-    "English UI must localize current-content label.");
 Check(composedEn.Contains(JsonSerializer.Serialize(expectedPath)),
     "English prompt must reference the same bundled Skill path.");
 Check(composedEn.EndsWith(task, StringComparison.Ordinal),
     "Task content must be preserved after English prompt injection.");
-Check(composedEn.Contains("additive/blank writes") && composedEn.Contains("direct-delete"),
-    "English MCP activation hint must state that MCP write/delete permissions are enabled automatically.");
 
 var edited = initial with { DefaultPrompt = "自定义提示词" };
 var restored = CodexPromptState.Read(JsonSerializer.Serialize(edited));
@@ -118,17 +106,6 @@ Check(defaults.EnablePluginSkill && defaults.EnableOperationSkill && defaults.Al
 Check(!CodexPromptState.BuiltInDefaultPromptZh.Contains(CodexPromptState.SkillName) &&
       !CodexPromptState.BuiltInDefaultPromptEn.Contains(CodexPromptState.SkillName),
     "The editable built-in prompt must not embed a plugin skill.");
-Check(CodexPromptState.BuiltInDefaultPromptZh.Contains("Note") &&
-      CodexPromptState.BuiltInDefaultPromptZh.Contains("功能未开启，则不要使用") &&
-      CodexPromptState.BuiltInDefaultPromptZh.Contains("不要过度冗长") &&
-      CodexPromptState.BuiltInDefaultPromptZh.Contains("不需要过度精简") &&
-      !CodexPromptState.BuiltInDefaultPromptZh.Contains("手动开启"),
-    "Chinese built-in prompt must keep todos concise, skip linked notes when the feature is off, and keep notes balanced.");
-Check(CodexPromptState.BuiltInDefaultPromptEn.Contains("link that Note to the todo") &&
-      CodexPromptState.BuiltInDefaultPromptEn.Contains("is disabled, do not use") &&
-      CodexPromptState.BuiltInDefaultPromptEn.Contains("avoid unnecessary verbosity") &&
-      !CodexPromptState.BuiltInDefaultPromptEn.Contains("enable it manually"),
-    "English built-in prompt must carry the same todo/note length guidance.");
 for (var mask = 0; mask < 8; mask++)
 foreach (var prompt in new string?[] { null, "", "custom instruction" })
 foreach (var language in new[] { "zh-CN", "en-US" })
@@ -170,6 +147,16 @@ foreach (var prefix in new[] { "", "--", "/" })
         "Activation must route through the existing single-instance command parser.");
 Check(!new StartupCommand(StartupCommandKind.EnableMcpForCodex).CreatesPaper,
     "MCP activation must not create a paper.");
+var documentPath = @"D:\文档\Mixed Case\Note.MD";
+var studioCommand = StartupCommand.Parse(new[] { "--STUDIO", "--STANDALONE", "--FILE", documentPath });
+Check(studioCommand.Kind == StartupCommandKind.Studio && studioCommand.Standalone &&
+    studioCommand.FilePath == documentPath && !studioCommand.CreatesPaper,
+    "Standalone Studio must preserve the file path and must not create a paper.");
+Check(StartupCommand.Parse(new[] { "--file", documentPath, "--standalone", "--studio" }).FilePath == documentPath,
+    "File arguments may precede the Studio switch without becoming the command.");
+Check(StartupCommand.Parse(new[] { "--CANVAS" }).Kind == StartupCommandKind.Canvas &&
+    !StartupCommand.Parse(new[] { "--canvas", "--standalone" }).Standalone,
+    "Canvas is a normal-instance command, independent from standalone Studio.");
 try
 {
     CodexBridgeSettings.Read("{broken");

@@ -21,8 +21,7 @@ public sealed partial class AppController
     {
         General,
         Workspaces,
-        Todo,
-        Note,
+        NotesAndTodos,
         Visual,
         Shortcuts,
         Plugins,
@@ -526,14 +525,6 @@ public sealed partial class AppController
 
     private void SetMaxTitleLength(int value) =>
         SetSettingFromUi("title.max_length", PaperTitles.NormalizeMaxTitleLength(value));
-
-    private void ClampPaperTitlesToMaxLength(int maxLength)
-    {
-        foreach (var paper in State.Papers)
-        {
-            paper.Title = PaperTitles.CleanCustomTitle(paper.Title, maxLength);
-        }
-    }
 
     internal void OpenSettingsWindow()
     {
@@ -1272,14 +1263,14 @@ public sealed partial class AppController
         };
         var content = new StackPanel();
         content.Children.Add(WrapWithHint(
-            SettingsToggle(
+            WrappingSettingsToggle(
                 Strings.Get("LabsEnableTodoReminders"),
                 State.ExperimentalTodoReminders,
                 ToggleExperimentalTodoReminders),
             "TipLabsTodoReminders"));
 
         var showButtonToggle = WrapWithHint(
-            SettingsToggle(
+            WrappingSettingsToggle(
                 Strings.Get("LabsTodoReminderShowButton"),
                 State.ExperimentalTodoReminderShowButton,
                 ToggleExperimentalTodoReminderShowButton),
@@ -1290,7 +1281,7 @@ public sealed partial class AppController
         content.Children.Add(showButtonToggle);
 
         var soundToggle = WrapWithHint(
-            SettingsToggle(
+            WrappingSettingsToggle(
                 Strings.Get("LabsTodoReminderSoundEnabled"),
                 State.ExperimentalTodoReminderSoundEnabled,
                 ToggleExperimentalTodoReminderSoundEnabled),
@@ -1304,7 +1295,8 @@ public sealed partial class AppController
             Strings.Get("LabsTodoReminderQuickMinutes"),
             CreateLabsTodoReminderMinutesStepper(),
             editorWidth: 132,
-            topMargin: 7));
+            topMargin: 7,
+            wrapLabel: true));
 
         var soundSelector = CreateTodoReminderSoundSelector();
         soundSelector.IsEnabled =
@@ -1316,7 +1308,8 @@ public sealed partial class AppController
             soundSelector,
             editorWidth: 156,
             tipKey: "TipLabsTodoReminderSound",
-            topMargin: 7));
+            topMargin: 7,
+            wrapLabel: true));
 
         card.Child = content;
         return card;
@@ -2026,7 +2019,8 @@ public sealed partial class AppController
         UIElement editor,
         double editorWidth = 136,
         string? tipKey = null,
-        double topMargin = 7)
+        double topMargin = 7,
+        bool wrapLabel = false)
     {
         var row = new Grid
         {
@@ -2041,24 +2035,32 @@ public sealed partial class AppController
             Width = GridLength.Auto
         });
 
-        var labelHost = new StackPanel
+        Panel labelHost = wrapLabel ? new DockPanel() : new StackPanel
         {
-            Orientation = Orientation.Horizontal,
-            VerticalAlignment = VerticalAlignment.Center
+            Orientation = Orientation.Horizontal
         };
+        labelHost.VerticalAlignment = wrapLabel ? VerticalAlignment.Top : VerticalAlignment.Center;
         labelHost.Children.Add(new TextBlock
         {
             Text = labelText,
             Foreground = TrayWeakTextBrush,
             FontSize = AppTypography.Scale(11),
             FontWeight = FontWeights.Medium,
+            TextWrapping = wrapLabel ? TextWrapping.Wrap : TextWrapping.NoWrap,
             VerticalAlignment = VerticalAlignment.Center
         });
         if (!string.IsNullOrWhiteSpace(tipKey))
         {
-            labelHost.Children.Add(CreateSettingsHintGlyph(
+            var hint = CreateSettingsHintGlyph(
                 tipKey,
-                new Thickness(4, 0, 0, 0)));
+                new Thickness(4, 0, 0, 0));
+            if (wrapLabel)
+            {
+                hint.VerticalAlignment = VerticalAlignment.Top;
+                DockPanel.SetDock(hint, Dock.Right);
+                labelHost.Children.Insert(0, hint);
+            }
+            else labelHost.Children.Add(hint);
         }
         Grid.SetColumn(labelHost, 0);
         row.Children.Add(labelHost);
@@ -2120,7 +2122,7 @@ public sealed partial class AppController
         return row;
     }
 
-    private CheckBox SettingsToggle(string text, bool isChecked, Action onToggle)
+    private CheckBox SettingsToggle(string text, bool isChecked, Action onToggle, bool wrapText = false)
     {
         var checkBox = new CheckBox
         {
@@ -2131,12 +2133,16 @@ public sealed partial class AppController
             Margin = new Thickness(0, 4, 0, 0),
             Cursor = System.Windows.Input.Cursors.Hand,
             Focusable = false,
-            Style = BuildSettingsCheckBoxStyle()
+            VerticalContentAlignment = wrapText ? VerticalAlignment.Top : VerticalAlignment.Center,
+            Style = BuildSettingsCheckBoxStyle(wrapText)
         };
 
         checkBox.Click += (_, _) => onToggle();
         return checkBox;
     }
+
+    private CheckBox WrappingSettingsToggle(string text, bool isChecked, Action onToggle) =>
+        SettingsToggle(text, isChecked, onToggle, wrapText: true);
 
     private UIElement BuildSettingsLiveRegion(
         string key,
@@ -2195,11 +2201,14 @@ public sealed partial class AppController
 
         // The option keeps its own top margin via its style; reset it here so the row controls spacing.
         option.Margin = new Thickness(0);
-        option.VerticalAlignment = VerticalAlignment.Center;
+        var alignment = option is CheckBox { VerticalContentAlignment: VerticalAlignment.Top }
+            ? VerticalAlignment.Top : VerticalAlignment.Center;
+        option.VerticalAlignment = alignment;
         Grid.SetColumn(option, 0);
         grid.Children.Add(option);
 
         var hint = CreateSettingsHintGlyph(tooltip, margin: new Thickness(6, 0, 0, 0));
+        hint.VerticalAlignment = alignment;
         Grid.SetColumn(hint, 1);
         grid.Children.Add(hint);
 
@@ -2407,7 +2416,7 @@ public sealed partial class AppController
         }
     }
 
-    private Style BuildSettingsCheckBoxStyle()
+    private Style BuildSettingsCheckBoxStyle(bool wrapText = false)
     {
         var style = new Style(typeof(CheckBox));
         style.Setters.Add(new Setter(Control.ForegroundProperty, TrayTextBrush));
@@ -2418,15 +2427,17 @@ public sealed partial class AppController
         style.Setters.Add(new Setter(UIElement.SnapsToDevicePixelsProperty, true));
         style.Setters.Add(new Setter(FrameworkElement.UseLayoutRoundingProperty, true));
 
-        var root = new FrameworkElementFactory(typeof(StackPanel));
-        root.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
+        var root = new FrameworkElementFactory(wrapText ? typeof(DockPanel) : typeof(StackPanel));
+        if (!wrapText) root.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
         root.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
 
         var markHost = new FrameworkElementFactory(typeof(Grid));
         markHost.SetValue(FrameworkElement.WidthProperty, 16.0);
         markHost.SetValue(FrameworkElement.HeightProperty, 16.0);
         markHost.SetValue(FrameworkElement.MarginProperty, new Thickness(0, 0, 8, 0));
-        markHost.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+        markHost.SetValue(FrameworkElement.VerticalAlignmentProperty,
+            wrapText ? VerticalAlignment.Top : VerticalAlignment.Center);
+        if (wrapText) markHost.SetValue(FrameworkElement.MarginProperty, new Thickness(0, 2, 8, 0));
 
         var border = new FrameworkElementFactory(typeof(Border));
         border.Name = "CheckBorder";
@@ -2457,9 +2468,17 @@ public sealed partial class AppController
 
         root.AppendChild(markHost);
 
-        var content = new FrameworkElementFactory(typeof(ContentPresenter));
-        content.SetValue(ContentPresenter.ContentProperty, new TemplateBindingExtension(ContentControl.ContentProperty));
-        content.SetValue(ContentPresenter.RecognizesAccessKeyProperty, false);
+        var content = new FrameworkElementFactory(wrapText ? typeof(TextBlock) : typeof(ContentPresenter));
+        if (wrapText)
+        {
+            content.SetValue(TextBlock.TextProperty, new TemplateBindingExtension(ContentControl.ContentProperty));
+            content.SetValue(TextBlock.TextWrappingProperty, TextWrapping.Wrap);
+        }
+        else
+        {
+            content.SetValue(ContentPresenter.ContentProperty, new TemplateBindingExtension(ContentControl.ContentProperty));
+            content.SetValue(ContentPresenter.RecognizesAccessKeyProperty, false);
+        }
         content.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
         content.SetValue(System.Windows.Documents.TextElement.ForegroundProperty, new TemplateBindingExtension(Control.ForegroundProperty));
         root.AppendChild(content);
@@ -2813,4 +2832,3 @@ public sealed partial class AppController
     }
 
 }
-

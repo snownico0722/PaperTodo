@@ -30,6 +30,8 @@ try {
 
 正常退出后再读取日志。内存模式接管 edge performance、interaction 和 `PaperWindow.TraceNoteRender` 的 Markdown 日志；未启用 memory 时保留原有行为。内存采集有界保存，正常退出落盘，不通过诊断回调推进动画。更深的 native/Dispatcher 观察仍使用已有独立开关，默认不额外打开。上述说明仅针对 Journal 接管的诊断通道，不表示用户数据保存或其他日志被禁用。
 
+输入唤醒专项探针默认关闭，需要时在启动 Debug 进程前设置 `PAPERTODO_EDGE_INPUT_DIAGNOSTICS=1`，采集结束后恢复原环境变量。它会安装输入 hook 并每约 24 ms 扫描窗口；普通 Debug 运行与行为检查不承担这项持续采样。Release 不编译该探针，Note 诊断调用及其参数求值也在编译时移除。
+
 ## 行为检查
 
 ```powershell
@@ -41,4 +43,4 @@ dotnet run --project tests/PaperTodo.EdgeLatencyObservationChecks -c Debug
 if ($LASTEXITCODE -ne 0) { throw 'Latency observer 检查失败' }
 ```
 
-Journal 的缓冲、边界和并发检查运行两个配置；子进程检查在 Debug 验证采集与退出，在 Release 验证即使设置 memory 也不启用采集或创建目录。Latency 检查需要 Windows/WPF 桌面。执行入口不等于实机验收结果。
+Journal 的缓冲、边界和并发检查在 Debug 运行；Release 只检查即使设置 memory 也不启用采集或创建目录。Latency 检查需要 Windows/WPF 桌面，保留消息原样转发、调度顺序和卸载等宿主不受影响的边界；数值读取器类型矩阵、诊断关联字段及实时 DWM 时钟校准已退出永久回归。执行入口不等于实机验收结果。

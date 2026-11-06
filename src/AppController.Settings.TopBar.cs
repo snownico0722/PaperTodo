@@ -161,7 +161,9 @@ public sealed partial class AppController
             var row = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
-                IsHitTestVisible = false
+                IsHitTestVisible = false,
+                // The feature is inactive, but its placement remains editable.
+                Opacity = action == PaperTopBarShortcuts.Workspace && !WorkspaceOptions.Enabled ? 0.5 : 1
             };
             row.Children.Add(new TextBlock
             {
@@ -327,7 +329,7 @@ public sealed partial class AppController
         }
 
         var isWorkspace = action == PaperTopBarShortcuts.Workspace;
-        var canvas = new Canvas { Width = isWorkspace ? 20 : 24, Height = isWorkspace ? 19 : 24 };
+        var canvas = new Canvas { Width = isWorkspace ? 20 : 24, Height = isWorkspace ? 20 : 24 };
         canvas.Children.Add(new System.Windows.Shapes.Path
         {
             Data = Geometry.Parse(pathData),
@@ -337,6 +339,23 @@ public sealed partial class AppController
             StrokeEndLineCap = PenLineCap.Round,
             StrokeLineJoin = PenLineJoin.Round
         });
+        if (isWorkspace)
+        {
+            var number = new Border
+            {
+                Width = 12, Height = 12,
+                Child = new TextBlock
+                {
+                    Text = "1", FontSize = 9, FontWeight = FontWeights.SemiBold,
+                    FontFamily = AppTypography.UiFontFamily, Foreground = TrayWeakTextBrush,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center
+                }
+            };
+            Canvas.SetLeft(number, 4);
+            Canvas.SetTop(number, 4);
+            canvas.Children.Add(number);
+        }
         slot.Children.Add(new Viewbox
         {
             Width = AppTypography.Scale(16),

@@ -475,7 +475,7 @@ public sealed partial class MasterCapsuleWindow : Window
     private void OnFloatingDragHostLocationChanged(object? sender, EventArgs e)
     {
         if (!ReferenceEquals(sender, _floatingDragHost)) return;
-        if (_queueTransferSnapshot is { FreeLayout: not null } snapshot &&
+        if (_queueTransferSnapshot is { } snapshot &&
             WindowNative.TryGetCursorScreenPosition(out var pointer))
             _controller.PreviewFreeMasterQueueDropGhost(snapshot, pointer);
         if (_floatingFullscreenAvoidanceWindow !=
@@ -792,7 +792,7 @@ public sealed partial class MasterCapsuleWindow : Window
     private void ClearCapsuleInteractionKeyboardFocus() =>
         WindowNative.ClearCurrentThreadKeyboardFocus();
 
-    private double MasterDockedWidth(double pixelsPerDip)
+    private double MasterDockedWidth(double pixelsPerDip, bool updateLabel = true)
     {
         // The arrow slot stays stable in both modes. Normal mode also reserves a stable
         // two-digit count slot; compact mode removes that slot entirely.
@@ -803,7 +803,7 @@ public sealed partial class MasterCapsuleWindow : Window
         var countGap = 0d;
         if (_controller.State.CompactMasterCapsule)
         {
-            _label.Width = double.NaN;
+            if (updateLabel) _label.Width = double.NaN;
         }
         else
         {
@@ -814,7 +814,7 @@ public sealed partial class MasterCapsuleWindow : Window
                 MasterLabelFontFamily,
                 pixelsPerDip);
             countGap = MasterGlyphGap;
-            _label.Width = countWidth;
+            if (updateLabel) _label.Width = countWidth;
         }
 
         var bodyWidth = Math.Ceiling(
@@ -826,6 +826,14 @@ public sealed partial class MasterCapsuleWindow : Window
             MasterInteriorBorderThickness);
         return Math.Max(1, bodyWidth + WindowChromeMargin);
     }
+
+    internal double DesiredDockedWidthFor(MonitorGeometry geometry) =>
+        MasterDockedWidth(geometry.DpiScaleY, updateLabel: false);
+
+    internal bool DragWindowIsTopmost => _floatingDragHost?.Topmost ?? Topmost;
+
+    internal void BringDragWindowAboveGhost() =>
+        WindowNative.BringToFrontNoActivate((Window?)_floatingDragHost ?? this);
 
     internal double DesiredDockedWidth
     {
@@ -1236,5 +1244,3 @@ public sealed partial class MasterCapsuleWindow : Window
         return IntPtr.Zero;
     }
 }
-
-

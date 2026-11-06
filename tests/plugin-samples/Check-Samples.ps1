@@ -98,6 +98,12 @@ try {
     if ($LASTEXITCODE -ne 0) {
       throw "Committed native plugin outputs do not match their source projects."
     }
+    $untrackedOutputs = @(git ls-files --others --exclude-standard -- plugins)
+    if ($LASTEXITCODE -ne 0) { throw "Could not inspect untracked plugin outputs." }
+    if ($untrackedOutputs.Count -gt 0) {
+      $untrackedOutputs | Write-Host
+      throw "Rebuilding native plugins produced uncommitted runtime files."
+    }
 }
 finally {
     Pop-Location

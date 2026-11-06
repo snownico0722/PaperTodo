@@ -109,9 +109,21 @@ internal static partial class WorkbenchChecks
         editor.Document.Insert(editor.Document.TextLength, "\nPending desktop edit");
         var pendingText = editor.Text;
         var before = controller.State.Papers.ToDictionary(p => p.Id, Geometry);
-        controller.ToggleWorkbench();
+        controller.ExecuteStartupCommand(StartupCommand.Parse(["--canvas"]));
         var workbench = (WorkbenchWindow)Member(controller, "_workbenchWindow");
         await Until(() => workbench.HostedPaperCount == 3 && controller.WorkbenchLayout.Cards.Count == 3, "Workbench layout did not settle");
+        if (name == "surface")
+        {
+            controller.ExecuteStartupCommand(StartupCommand.Parse(["--canvas"]));
+            Assert(controller.HasWorkbench && Application.Current.Windows.OfType<WorkbenchWindow>().Count() == 1,
+                "Repeated Canvas command closed the window or opened another window");
+            workbench.WindowState = WindowState.Minimized;
+            controller.ExecuteStartupCommand(StartupCommand.Parse(["--canvas"]));
+            Assert(workbench.WindowState == WindowState.Maximized && workbench.HostedPaperCount == 3,
+                "Canvas command did not restore the minimized window with its editors");
+            foreach (var paper in controller.State.Papers.Where(p => p.WorkspaceMaterials == null))
+                Assert(before[paper.Id] == Geometry(paper), "Canvas command changed desktop state: " + paper.Id);
+        }
         editor = (MarkdownTextBox)Member(originalWindow, "_noteBox");
         Assert(editor.Text == pendingText && editor.CanUndo, "Workbench entry lost pending text or its undo history");
         editor.Undo();
@@ -253,8 +265,15 @@ internal static partial class WorkbenchChecks
             Assert(editor.Text == "Edited inside the workbench", "Desktop redo lost the workbench edit");
             foreach (var paper in controller.State.Papers.Where(p => p.WorkspaceMaterials == null))
                 Assert(before[paper.Id] == Geometry(paper), "Desktop state changed on return: " + paper.Id);
-            controller.ToggleWorkbench(); workbench = (WorkbenchWindow)Member(controller, "_workbenchWindow");
-            await Until(() => workbench.HostedPaperCount == 3, "Second enter failed");
+            var savedLayout = controller.WorkbenchLayout.Copy();
+            controller.ExecuteStartupCommand(StartupCommand.Parse(["--canvas"]));
+            workbench = (WorkbenchWindow)Member(controller, "_workbenchWindow");
+            await Until(() => workbench.HostedPaperCount == 3 &&
+                Member(workbench, "ActiveScene").GetType().GetField("Layout", Private)?.GetValue(Member(workbench, "ActiveScene")) != null,
+                "Second enter failed");
+            foreach (var (id, placement) in savedLayout.Cards)
+                Assert(controller.WorkbenchLayout.Cards[id].Bounds == placement.Bounds,
+                    "Reopening Canvas changed saved card placement: " + id);
             controller.DeletePaper(controller.FindPaper("note-b")!);
             await Until(() => workbench.HostedPaperCount == 2, "Deleted paper retained a leased editor");
             Assert(!controller.WorkbenchLayout.Cards.ContainsKey("note-b"), "Deleted paper retained spatial metadata");

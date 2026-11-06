@@ -657,10 +657,12 @@ public sealed partial class PaperWindow
             }
         };
 
+#if DEBUG
         box.GotKeyboardFocus += (_, _) =>
         {
             TraceNoteRender($"GotKeyboardFocus isPreviewing={isPreviewing} boxPreview={box.IsPreviewMode}");
         };
+#endif
 
         box.LostKeyboardFocus += (_, _) =>
         {
@@ -1057,11 +1059,7 @@ public sealed partial class PaperWindow
         {
             _openMarkdownButton.Content = ExternalOpenButtonLabel();
             _openMarkdownButton.ToolTip = OpenMarkdownEditorToolTip();
-            _openMarkdownButton.Visibility =
-                _controller.State.ShowTopBarExternalOpenButton &&
-                IsCurrentBodyProviderMarkdown
-                    ? Visibility.Visible
-                    : Visibility.Collapsed;
+            UpdateTopBarNewPaperButtons();
         }
     }
 
