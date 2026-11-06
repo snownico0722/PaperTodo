@@ -726,7 +726,8 @@ public sealed partial class AppController
                         await CreateWorkspaceAsync();
                         if (menu.IsOpen)
                         {
-                            RebuildTrayMenu(menu);
+                            // Workspace controls already refreshed the primary tray menu.
+                            if (!ReferenceEquals(menu, _trayMenu)) RebuildTrayMenu(menu);
                             menu.Focus();
                         }
                     }
