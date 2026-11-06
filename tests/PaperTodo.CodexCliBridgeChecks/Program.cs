@@ -147,6 +147,16 @@ foreach (var prefix in new[] { "", "--", "/" })
         "Activation must route through the existing single-instance command parser.");
 Check(!new StartupCommand(StartupCommandKind.EnableMcpForCodex).CreatesPaper,
     "MCP activation must not create a paper.");
+var documentPath = @"D:\文档\Mixed Case\Note.MD";
+var studioCommand = StartupCommand.Parse(new[] { "--STUDIO", "--STANDALONE", "--FILE", documentPath });
+Check(studioCommand.Kind == StartupCommandKind.Studio && studioCommand.Standalone &&
+    studioCommand.FilePath == documentPath && !studioCommand.CreatesPaper,
+    "Standalone Studio must preserve the file path and must not create a paper.");
+Check(StartupCommand.Parse(new[] { "--file", documentPath, "--standalone", "--studio" }).FilePath == documentPath,
+    "File arguments may precede the Studio switch without becoming the command.");
+Check(StartupCommand.Parse(new[] { "--CANVAS" }).Kind == StartupCommandKind.Canvas &&
+    !StartupCommand.Parse(new[] { "--canvas", "--standalone" }).Standalone,
+    "Canvas is a normal-instance command, independent from standalone Studio.");
 try
 {
     CodexBridgeSettings.Read("{broken");
