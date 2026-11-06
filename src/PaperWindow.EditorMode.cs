@@ -72,6 +72,7 @@ public sealed partial class PaperWindow
     {
         if (_editorModeButton == null) return;
         RefreshPaperIconButton();
+        if (_runScriptButton != null) _runScriptButton.Content = CreateTopBarRunScriptIcon(_runScriptButton);
         if (_newTodoButton != null) _newTodoButton.Content = CreateTopBarNewTodoIcon(_newTodoButton);
         if (_newNoteButton != null) _newNoteButton.Content = CreateTopBarNewNoteIcon(_newNoteButton);
         if (_windowBindingButton != null)

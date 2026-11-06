@@ -306,6 +306,11 @@ internal static partial class Program
         var (id, scope, paper, type, provider) = old;
         Assert(id == "a" && paper == "p" && old.Position == null, "Old invocation contract changed.");
         Assert((old with { Position = new(1, 2) }).Position == new PaperPopupPosition(1, 2), "New position not carried.");
+        Assert(!new PaperTopBarAction().MenuOnly, "Existing actions must retain top-bar placement by default.");
+        var json = JsonSerializer.Deserialize<PaperTopBarAction>(
+            """{"id":"menu-action","toolTip":"Menu action","menuOnly":true}""",
+            WebPluginRuntimeInfrastructure.JsonOptions)!;
+        Assert(json.MenuOnly && json.Id == "menu-action", "Web menuOnly descriptor was not preserved.");
     }
 
     private static void WebEntry()

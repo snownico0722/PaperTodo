@@ -118,6 +118,11 @@ public sealed record PaperTopBarAction
     public int Priority { get; init; }
     public bool Enabled { get; init; } = true;
     public bool Visible { get; init; } = true;
+    /// <summary>
+    /// API 2.3: expose this action only in the host's plugin action menu. The default keeps the
+    /// existing top-bar/overflow behavior. Menu-only actions do not require an icon.
+    /// </summary>
+    public bool MenuOnly { get; init; }
 }
 
 /// <summary>

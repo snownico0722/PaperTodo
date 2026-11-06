@@ -371,7 +371,7 @@ public sealed partial class AppController
             _suppressDirty = true;
             _workspaceClosingSurfaces = true;
             StopStateBackupPolicy();
-            var scriptShutdown = PaperWindow.StopAllScriptProcessesAsync();
+            var scriptShutdown = ScriptExecutionService.StopAllScriptProcessesAsync();
             presentationStopped = true;
             StopWorkspacePresentation();
             previousPluginData.DetachForWorkspaceSwitch();
@@ -413,7 +413,7 @@ public sealed partial class AppController
                     if (installed)
                     {
                         _workspaceClosingSurfaces = true;
-                        var targetScriptShutdown = PaperWindow.StopAllScriptProcessesAsync();
+                        var targetScriptShutdown = ScriptExecutionService.StopAllScriptProcessesAsync();
                         StopWorkspacePresentation();
                         await targetScriptShutdown;
                     }
@@ -553,7 +553,7 @@ public sealed partial class AppController
         RefreshReloadedSettings(before);
         // Every workspace handoff stopped the old processes, even when both slots use
         // identical preferences. Recreate the target's optional warm process once.
-        PaperWindow.EnsurePersistentScriptProcessForSettings(State);
+        ScriptExecutionService.EnsurePersistentScriptProcessForSettings(State);
         EnablePluginRuntimeReconciliation();
         var relocated = EnsurePapersOnScreen();
         await RestorePaperSurfacesAsync(State.Papers.Where(p => p.IsVisible).ToArray());

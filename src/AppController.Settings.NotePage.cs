@@ -154,7 +154,7 @@ public sealed partial class AppController
         State.HideScriptRunWindow = true;
         _imageStore.AutoCompressLargeImages = true;
 
-        PaperWindow.StopPersistentScriptProcesses();
+        ScriptExecutionService.StopPersistentScriptProcesses();
         foreach (var window in _windows.Values)
         {
             window.UpdateMarkdownRenderMode();
