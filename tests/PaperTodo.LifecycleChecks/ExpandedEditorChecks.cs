@@ -1,7 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -13,6 +17,157 @@ using PaperTodo;
 internal static class ExpandedEditorChecks
 {
     private const BindingFlags Private = BindingFlags.Instance | BindingFlags.NonPublic;
+
+    internal static async Task<bool> RunCrossProcessForeground()
+    {
+        var state = new AppState { TelemetryEnabled = false, EnableAnimations = false,
+            McpEnabled = false, UsePersistentPowerShellProcess = false };
+        var store = new StateStore();
+        store.SaveJsonSync(store.SerializeState(state), 1);
+        using var controller = new AppController();
+        await controller.StartAsync(createDefaultPaper: false);
+        controller.OpenStudio();
+        var studio = Application.Current.Windows.OfType<ExpandedEditorWindow>().Single();
+        var studioHwnd = new WindowInteropHelper(studio).Handle;
+        var name = "PaperTodo-studio-foreground-" + Guid.NewGuid().ToString("N");
+        using var primary = new SingleInstanceHelper(name, name);
+        Check(primary.TryAcquire(), "Foreground fixture could not own its isolated mutex");
+        var received = 0;
+        // Same dispatch boundary as App: the pipe callback reaches the real UI thread
+        // and product startup command. Random names cannot target an installed instance.
+        primary.StartListener(args => Application.Current.Dispatcher.Invoke(() =>
+        {
+            var before = WindowNative.ForegroundWindow;
+            var result = controller.ExecuteStartupCommand(StartupCommand.Parse(args));
+            received++;
+            Console.WriteLine($"FOREGROUND receive={received} before=0x{before:X} after=0x{WindowNative.ForegroundWindow:X}");
+            return result;
+        }));
+        var start = Program.ChildStart(AppContext.BaseDirectory);
+        start.ArgumentList.Add("--studio-foreground-launcher");
+        start.ArgumentList.Add(name); start.ArgumentList.Add(name);
+        using var launcher = Process.Start(start) ?? throw new InvalidOperationException("No foreground launcher");
+        var errors = launcher.StandardError.ReadToEndAsync();
+        var cursorSaved = WindowNative.TryGetCursorScreenPosition(out var cursor);
+        var policyRead = SystemParametersInfo(0x2000, 0, out var foregroundLockTimeout, 0);
+        Console.WriteLine($"FOREGROUND environment OS={Environment.OSVersion} interactive={Environment.UserInteractive} " +
+            $"session={Process.GetCurrentProcess().SessionId} primary={Environment.ProcessId} launcher={launcher.Id} " +
+            $"target=0x{studioHwnd:X} lockTimeout={(policyRead ? foregroundLockTimeout.ToString() : "unknown")} " +
+            $"debugger={Debugger.IsAttached}");
+        try
+        {
+            var ready = (await launcher.StandardOutput.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(5)))?.Split(' ');
+            Check(ready is { Length: 4 } && ready[0] == "READY", "Launcher did not publish its native HWND and input point");
+            var launcherHwnd = new IntPtr(long.Parse(ready![1], CultureInfo.InvariantCulture));
+            var point = new Point(double.Parse(ready[2], CultureInfo.InvariantCulture), double.Parse(ready[3], CultureInfo.InvariantCulture));
+            foreach (var minimized in new[] { false, true })
+            {
+                if (minimized) studio.WindowState = WindowState.Minimized;
+                // Real input must belong to another process before it starts the secondary.
+                // Do not grant foreground permission or force the target's Z order in this test.
+                try
+                {
+                    LifecycleInput.MoveCursor(point);
+                    if (!LifecycleInput.IsMouseTarget(launcherHwnd, point))
+                    {
+                        Console.WriteLine("SKIP studio cross-process foreground: launcher is not a real desktop mouse target (not validated)");
+                        return false;
+                    }
+                    LifecycleInput.LeftClick();
+                }
+                catch (InvalidOperationException ex)
+                {
+                    Console.WriteLine("SKIP studio cross-process foreground: native input unavailable (not validated): " + ex.Message);
+                    return false;
+                }
+                if (!await WaitForForeground(() => WindowNative.ForegroundWindow == launcherHwnd))
+                {
+                    Console.WriteLine($"SKIP studio cross-process foreground: launcher never acquired native foreground " +
+                        $"(actual=0x{WindowNative.ForegroundWindow:X}, launcher=0x{launcherHwnd:X}; not validated)");
+                    return false;
+                }
+                var expected = received + 1;
+                LifecycleInput.KeyChord(0x77); // F8; the foreground process starts the secondary in its native key handler.
+                var launched = await launcher.StandardOutput.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(5));
+                Check(launched == "LAUNCH_FOREGROUND", "Launcher lost foreground before starting the secondary: " + launched);
+                var delivered = await launcher.StandardOutput.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(5));
+                Console.WriteLine("FOREGROUND " + delivered);
+                Check(delivered?.EndsWith(" exit=0", StringComparison.Ordinal) == true, "Secondary did not deliver the command");
+                Check(await WaitForForeground(() => received == expected), "The primary did not execute the forwarded command");
+                var activated = await WaitForForeground(() => WindowNative.ForegroundWindow == studioHwnd);
+                Console.WriteLine($"FOREGROUND result minimized={minimized} target=0x{studioHwnd:X} " +
+                    $"actual=0x{WindowNative.ForegroundWindow:X} state={studio.WindowState} received={received}");
+                Check(activated && studio.WindowState != WindowState.Minimized &&
+                      Application.Current.Windows.OfType<ExpandedEditorWindow>().Count() == 1,
+                    "Forwarded --studio did not foreground the existing window" + (minimized ? " after minimization" : ""));
+            }
+            Console.WriteLine("PASS studio real cross-process foreground: existing and minimized window");
+            return true;
+        }
+        finally
+        {
+            if (!launcher.HasExited)
+            {
+                await launcher.StandardInput.WriteLineAsync("exit");
+                try { await launcher.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(2)); }
+                catch (TimeoutException) { launcher.Kill(entireProcessTree: true); await launcher.WaitForExitAsync(); }
+            }
+            Console.Error.Write(await errors);
+            if (cursorSaved)
+                try { LifecycleInput.MoveCursor(new Point(cursor.X, cursor.Y)); } catch (InvalidOperationException) { }
+        }
+    }
+
+    internal static int RunForegroundLauncher(string mutex, string pipe)
+    {
+        var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+        var area = SystemParameters.WorkArea;
+        var window = new Window { Title = "PaperTodo foreground launcher", Left = area.Left + 8, Top = area.Top + 8,
+            Width = 240, Height = 150, Content = new Border { Background = Brushes.DimGray,
+                Child = new TextBlock { Text = "F8: launch --studio", Margin = new Thickness(12) } } };
+        var busy = false;
+        window.PreviewKeyDown += async (_, e) =>
+        {
+            if (e.Key != System.Windows.Input.Key.F8 || busy) return;
+            e.Handled = true; busy = true;
+            try
+            {
+                if (WindowNative.ForegroundWindow != new WindowInteropHelper(window).Handle)
+                { Console.WriteLine("LAUNCH_NOT_FOREGROUND"); return; }
+                Console.WriteLine("LAUNCH_FOREGROUND"); Console.Out.Flush();
+                var start = Program.ChildStart(AppContext.BaseDirectory);
+                start.ArgumentList.Add("--studio-foreground-signal");
+                start.ArgumentList.Add(mutex); start.ArgumentList.Add(pipe);
+                using var secondary = Process.Start(start) ?? throw new InvalidOperationException("No secondary process");
+                var errors = secondary.StandardError.ReadToEndAsync();
+                await secondary.WaitForExitAsync();
+                Console.Error.Write(await errors);
+                Console.WriteLine($"SIGNAL pid={secondary.Id} exit={secondary.ExitCode}"); Console.Out.Flush();
+            }
+            catch (Exception ex) { Console.WriteLine("LAUNCH_FAILED " + ex.Message); Console.Out.Flush(); }
+            finally { busy = false; }
+        };
+        window.Show();
+        app.Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(() =>
+        {
+            var point = window.PointToScreen(new Point(20, 20));
+            Console.WriteLine(FormattableString.Invariant($"READY {new WindowInteropHelper(window).Handle.ToInt64()} {point.X} {point.Y}"));
+            Console.Out.Flush();
+        }));
+        _ = Task.Run(async () => { await Console.In.ReadLineAsync(); await app.Dispatcher.InvokeAsync(app.Shutdown); });
+        app.Run();
+        return 0;
+    }
+
+    private static async Task<bool> WaitForForeground(Func<bool> condition)
+    {
+        var until = Stopwatch.StartNew();
+        while (!condition() && until.Elapsed < TimeSpan.FromSeconds(3)) await Task.Delay(20);
+        return condition();
+    }
+
+    [DllImport("user32.dll")]
+    private static extern bool SystemParametersInfo(uint action, uint parameter, out uint value, uint flags);
 
     internal static async Task Run()
     {

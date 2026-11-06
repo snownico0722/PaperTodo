@@ -11,11 +11,23 @@ internal static class Program
 {
     private const BindingFlags Private = BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic;
     private const string FixtureMarker = ".papertodo-lifecycle-fixture";
-    private static readonly string[] Cases = ["native-free-queue-review", "native-free-queues", "startup", "missing-monitor", "master-queue-transfer", "master-queue-cancel", "master-queue-drag-preparation", "master-queue-drop-handoff", "master-queue-membership", "master-queue-mutations", "master-queue-hide", "master-queue-hidden-retains-collapse", "master-queue-disconnect", "master-queue-merge", "master-queue-merge-collapsed", "master-queue-lightweight-handoff", "controller-hide-create-reentry", "controller-hide-show-reentry", "controller-zorder-create-reentry", "controller-close-delete-reentry", "todo-visibility", "real-exit", "early-expand", "edge-expand-foreground", "expanded-paper-display-recovery", "cancel-prewarm", "real-exit-scripts", "early-exit", "todo-context-menu", "todo-history", "editor-switch", "editor-resume", "image-export"];
+    private const string FixtureSkipped = "LIFECYCLE_FIXTURE_SKIPPED";
+    private static readonly string[] Cases = ["native-free-queue-review", "native-free-queues", "startup", "missing-monitor", "master-queue-transfer", "master-queue-cancel", "master-queue-drag-preparation", "master-queue-drop-handoff", "master-queue-membership", "master-queue-mutations", "master-queue-hide", "master-queue-hidden-retains-collapse", "master-queue-disconnect", "master-queue-merge", "master-queue-merge-collapsed", "master-queue-lightweight-handoff", "controller-hide-create-reentry", "controller-hide-show-reentry", "controller-zorder-create-reentry", "controller-close-delete-reentry", "todo-visibility", "real-exit", "early-expand", "edge-expand-foreground", "expanded-paper-display-recovery", "cancel-prewarm", "real-exit-scripts", "early-exit", "todo-context-menu", "todo-history", "editor-switch", "studio-foreground", "editor-resume", "image-export"];
 
     [STAThread]
     private static int Main(string[] args)
     {
+        if (args.Length == 3 && args[0] is "--studio-foreground-launcher" or "--studio-foreground-signal")
+        {
+            var mutex = args[1]; var pipe = args[2];
+            if (!File.Exists(Path.Combine(AppContext.BaseDirectory, FixtureMarker)))
+                throw new InvalidOperationException("Refusing to use a non-fixture data directory.");
+            if (args[0] == "--studio-foreground-launcher")
+                return ExpandedEditorChecks.RunForegroundLauncher(mutex, pipe);
+            using var instance = new SingleInstanceHelper(mutex, pipe);
+            if (instance.TryAcquire()) throw new InvalidOperationException("Foreground fixture primary is absent.");
+            return instance.SignalPrimaryInstance(["--studio"]);
+        }
         if (args is ["--sleep-child"])
         {
             Console.WriteLine("ready");
@@ -51,14 +63,15 @@ internal static class Program
                 ? [caseName]
                 : args.Length == 0 ? Cases
                 : throw new ArgumentException("Use --case with a lifecycle fixture name; measurements moved to tools/PaperTodo.DesktopBenchmarks.");
-            foreach (var name in cases) RunIsolated(name);
-            Console.WriteLine($"PASS {cases.Length} lifecycle fixtures (isolated data)");
+            var passed = 0;
+            foreach (var name in cases) if (RunIsolated(name)) passed++;
+            Console.WriteLine($"PASS {passed} lifecycle fixtures (isolated data); SKIP {cases.Length - passed}");
             return 0;
         }
         catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
     }
 
-    private static void RunIsolated(string name)
+    private static bool RunIsolated(string name)
     {
         var fixture = Path.Combine(Path.GetTempPath(), "PaperTodo.LifecycleChecks", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(fixture);
@@ -81,6 +94,11 @@ internal static class Program
             var text = output.GetAwaiter().GetResult();
             Console.Write(text); Console.Error.Write(error.GetAwaiter().GetResult());
             Require(child.ExitCode == 0, name + " failed");
+            if (text.Split('\n').Any(line => line.Trim() == FixtureSkipped))
+            {
+                Console.WriteLine("SKIP lifecycle " + name + " (not validated)");
+                return false;
+            }
             if (name.StartsWith("real-exit") || name == "early-exit")
             {
                 using var saved = JsonDocument.Parse(File.ReadAllText(Path.Combine(fixture, "data.json")));
@@ -95,11 +113,12 @@ internal static class Program
                 }
             }
             Console.WriteLine("PASS lifecycle " + name);
+            return true;
         }
         finally { try { Directory.Delete(fixture, recursive: true); } catch { } }
     }
 
-    private static ProcessStartInfo ChildStart(string directory)
+    internal static ProcessStartInfo ChildStart(string directory)
     {
         var executable = Path.Combine(directory, "PaperTodo.LifecycleChecks.exe");
         return new ProcessStartInfo(executable)
@@ -133,6 +152,11 @@ internal static class Program
 
     private static async Task RunFixture(string name, Action completeExpectedExit)
     {
+        if (name == "studio-foreground")
+        {
+            if (!await ExpandedEditorChecks.RunCrossProcessForeground()) Console.WriteLine(FixtureSkipped);
+            return;
+        }
         if (name == "image-export")
         {
             await NoteImageExportChecks.Run();

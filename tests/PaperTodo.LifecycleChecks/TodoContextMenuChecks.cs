@@ -329,8 +329,17 @@ internal static class LifecycleInput
     }
 
     internal static bool IsMouseTarget(PaperWindow window, Point point) =>
+        IsMouseTarget(new WindowInteropHelper(window).Handle, point);
+
+    internal static bool IsMouseTarget(IntPtr handle, Point point) =>
         WindowFromPoint(new NativePoint { X = (int)Math.Round(point.X), Y = (int)Math.Round(point.Y) }) ==
-        new WindowInteropHelper(window).Handle;
+        handle;
+
+    internal static void LeftClick()
+    {
+        Send([new Input { Type = 0, Data = new InputData { Mouse = new MouseInput { Flags = 0x0002 } } },
+            new Input { Type = 0, Data = new InputData { Mouse = new MouseInput { Flags = 0x0004 } } }]);
+    }
 
     internal static void RightClick()
     {
