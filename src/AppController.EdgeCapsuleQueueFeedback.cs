@@ -91,9 +91,10 @@ public sealed partial class AppController
         {
             var remaining = DeepCapsulePapersInOrder()
                 .Count(p => QueueKey(p) == previous.QueueKey);
+            // The withdrawn master already exists; restoring it is not a new entrance.
             if (remaining > 0 && !master.IsVisible)
                 master.ShowPlaced(remaining, IsCapsuleCollapseAllActiveForQueue(previous.QueueKey),
-                    animate: State.EnableAnimations);
+                    animate: false);
         }
     }
 
