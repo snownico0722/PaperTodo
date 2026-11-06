@@ -168,7 +168,8 @@ internal static partial class Program
             ?? throw new InvalidOperationException("ValidateManifestApiVersion was not found.");
         validateApi.Invoke(null, new object[] { "2.1" });
         validateApi.Invoke(null, new object[] { "2.2" });
-        foreach (var rejected in new[] { "2.0", "2.3", "3.0" })
+        validateApi.Invoke(null, new object[] { "2.3" });
+        foreach (var rejected in new[] { "2.0", "2.4", "3.0" })
         {
             try
             {

@@ -10,10 +10,10 @@ This is the **current PaperTodo plugin development manual**. It documents the cu
 New plugins use:
 
 ```json
-"apiVersion": "2.2"
+"apiVersion": "2.3"
 ```
 
-The current host exposes Protocol `2.2` and remains backward-compatible with `2.1`. Protocol `2.0` and earlier are no longer load-compatible. New plugins should target `2.2`; existing `2.1` plugins can keep running as long as they do not declare 2.2-only features.
+The current host exposes Protocol `2.3` and remains backward-compatible with `2.1` and `2.2`. Protocol `2.0` and earlier are no longer load-compatible. New plugins should target `2.3`; existing plugins can keep running within their declared contract.
 
 ### Plugin API version history
 
@@ -23,14 +23,15 @@ The current host exposes Protocol `2.2` and remains backward-compatible with `2.
 MinimumSupportedApiVersion <= plugin.apiVersion <= CurrentApiVersion
 ```
 
-A newer host may load an older compatible plugin. An older host must reject a plugin that requires a newer API. PaperTodo currently supports **2.1 through 2.2**.
+A newer host may load an older compatible plugin. An older host must reject a plugin that requires a newer API. PaperTodo currently supports **2.1 through 2.3**.
 
 | API | Status | Main contract milestones |
 | --- | --- | --- |
 | 1.x | Legacy / unsupported | Early paper-body contracts. Known milestones include 1.2 moving plugin settings/state into the independent plugin data store, and 1.8 adding host-owned Edge Mini views. |
 | 2.0 | Experimental / unsupported | Transitional generation that introduced host-rendered Top Bar concepts while still carrying separate provider app Runtime and per-Paper Web Runtime paths. It was superseded rather than kept load-compatible. |
 | 2.1 | Supported minimum | Consolidated background work into one provider Runtime; Body/Mini are frontend surfaces. Includes Workspace Paper/Todo/Note access, Runtime state/Papers, host-rendered Top Bar and Todo contributions, global shortcuts/custom shortcut actions, paper menus, note-image reads and temporary popups. |
-| 2.2 | Current | Adds cross-paper presentation, public application Settings API (`settings.read/update`), settings `type: "action"` command buttons, `startupPaper.presentation: "hidden"`, reminder trigger state/events, and Web Runtime host-event subscriptions. New plugins should target 2.2. |
+| 2.2 | Supported | Adds cross-paper presentation, public application Settings API (`settings.read/update`), settings `type: "action"` command buttons, `startupPaper.presentation: "hidden"`, reminder trigger state/events, and Web Runtime host-event subscriptions. |
+| 2.3 | Current | Adds `MenuOnly` / `menuOnly` to top-bar action descriptors, showing an action only in the plugin action menu without creating a title-bar button. New plugins should target 2.3. |
 
 **Versioning rule:** a backward-compatible new plugin-visible contract (manifest field/type, permission, event, public API surface, or new observable semantics) advances the minor version after the current minor is published. Host-only implementation changes and bug fixes do not. Breaking an existing plugin contract advances the major version. Multiple compatible additions developed before one minor is released may ship together in that minor.
 
@@ -74,7 +75,7 @@ plugins/com.example.hello/
   "id": "com.example.hello",
   "name": "Hello",
   "version": "1.0.0",
-  "apiVersion": "2.2",
+  "apiVersion": "2.3",
   "stateVersion": 1,
   "entry": "web/index.html"
 }
@@ -178,7 +179,7 @@ Native `plugin.json`:
   "id": "com.example.hello-native",
   "name": "Hello Native",
   "version": "1.0.0",
-  "apiVersion": "2.2",
+  "apiVersion": "2.3",
   "stateVersion": 1,
   "entry": "HelloPlugin.dll"
 }
@@ -249,7 +250,7 @@ The current manifest supports:
 | `name` | Display name; falls back to the ID when empty |
 | `description` | Plugin description |
 | `version` | Plugin version; must parse as `Version` |
-| `apiVersion` | Use `"2.2"` for new plugins; `"2.1"` remains load-compatible |
+| `apiVersion` | Use `"2.3"` for new plugins; `"2.1"` and `"2.2"` remain load-compatible |
 | `stateVersion` | Target version for host-managed JSON; used by both per-paper frontend state and provider Runtime state; at least 1 |
 | `maxPaperInstances` | Optional; maximum number of real Papers for the same provider. Defaults to `1`; `0` means unlimited. Hidden/collapsed Papers still count |
 | `entry` | Web main page or Native entry DLL; must stay inside the plugin directory |
@@ -279,7 +280,7 @@ Both `entry` and `miniEntry` must remain inside the plugin directory. `miniEntry
   "id": "com.example.weather",
   "name": "Weather",
   "version": "1.0.0",
-  "apiVersion": "2.2",
+  "apiVersion": "2.3",
   "stateVersion": 1,
   "entry": "web/index.html",
   "miniEntry": "web/mini.html",
@@ -829,7 +830,7 @@ Manifest:
 
 ```json
 {
-  "apiVersion": "2.2",
+  "apiVersion": "2.3",
   "entry": "web/index.html",
   "runtime": "web/background.html",
   "capabilities": ["runtime"]
@@ -886,6 +887,24 @@ papertodo.onEvent(async message => {
 Runtime is an independent backend surface and does not receive `paper`, `body`, or `mini` presentation APIs. Runtime-document navigation, renderer failure, disappearance of the final real plugin Paper, or Runtime disposal all remove Global actions. Web Mini cannot register Global Top Bar actions either.
 
 See `PaperTodo.Plugin.TopBarWeb` for a complete runnable example.
+
+### Menu-only actions (API 2.3)
+
+Both `TopBar.SetPaperActions(...)` and `GlobalTopBar.SetActions(...)` accept `MenuOnly = true` on an action descriptor; Web uses `menuOnly: true`. The default is `false`, preserving existing title-bar and responsive overflow behavior. Plugins using this field declare `apiVersion: "2.3"`.
+
+```csharp
+context.GlobalTopBar.SetActions([
+    new PaperTopBarAction { Id = "inspect", ToolTip = "Inspect paper", MenuOnly = true }
+]);
+```
+
+```js
+await papertodo.globalTopBar.setActions([
+  { id: 'inspect', toolTip: 'Inspect paper', menuOnly: true }
+]);
+```
+
+Menu-only actions require no icon, create no title-bar button, and reserve no title-bar space. `ToolTip` supplies the menu label, falling back to `Id` when empty. Existing `Visible`, `Enabled`, ordering, count limits, callbacks and owner cleanup still apply. These actions use the existing plugin action menu and do not join the built-in shortcut ordering/hiding settings. The targeted plain-text `PaperActions.SetActions(paperId, ...)` API is unchanged.
 
 ### 7.6 Protocol 2.1 Todo and Top Bar presentation extensions
 
@@ -1225,7 +1244,7 @@ For select controls that need host-consistent visuals, use `PaperBodyContext.Bod
 | Sample | Focus |
 | --- | --- |
 | `PaperTodo.Plugin.Protocol21Web` | **Protocol 2.1 contribution-focused sample**: Todo row actions, Top Bar labels, latest `TodoSnapshot` |
-| `PaperTodo.Plugin.TopBarWeb` | **Protocol 2.2 Top Bar/action-focused sample**: body Paper action + Web Runtime Global action, character/Stroke SVG icons, target Paper context, Workspace reuse |
+| `PaperTodo.Plugin.TopBarWeb` | **Protocol 2.3 Top Bar/action-focused sample**: body Paper action + menu-only Web Runtime Global action, target Paper context, Workspace reuse |
 | `PaperTodo.Plugin.SampleClock` | Main Native sample: settings, background updates, standard capsule, custom WPF capsule, dedicated WPF mini |
 | `PaperTodo.Plugin.OfficialClockWeb` | Main Web sample: body/mini pages, `miniEntry`, state/settings synchronization, startup Paper, background updates |
 | `PaperTodo.Plugin.FocusTimer` | Stateful Native interaction: body and dedicated mini share a timer model; start/pause/resume directly from Mini |
@@ -1238,7 +1257,7 @@ When starting a new plugin, copy the smallest structure from the sample closest 
 
 ### Manifest / Runtime
 
-- targeting `apiVersion: "2.0"` or earlier for a new plugin; the current host supports `2.1`–`2.2`, and new plugins should target `2.2`;
+- targeting `apiVersion: "2.0"` or earlier for a new plugin; the current host supports `2.1`–`2.3`, and new plugins should target `2.3`;
 - plugin directory name does not match `id`;
 - `id` uses invalid characters or the reserved host IDs `data` / `builtin.markdown`;
 - Web declares `runtime`, but the default `runtime.html` is missing, or an explicit `runtime` path is missing/outside the Web `entry` static directory;
@@ -1305,7 +1324,7 @@ When starting a new plugin, copy the smallest structure from the sample closest 
 
 ## 14. Before Submitting a Plugin
 
-- new `plugin.json` targets the current `apiVersion: "2.2"`; use `2.1` only when intentionally staying within the 2.1 contract;
+- new `plugin.json` targets the current `apiVersion: "2.3"`; use `2.1` or `2.2` only when intentionally staying within an older contract;
 - all metadata lives only in `plugin.json`; the Native entry DLL provides behavior only;
 - when declaring `runtime`: Native implements `IPaperPluginRuntimeProvider`; Web provides `runtime.html` next to `entry` by default, or uses `runtime` to select another entry inside the same Web static directory;
 - when Runtime needs plugin settings, use its own `context.Settings.Json` + `Settings.Subscribe(...)` / `papertodo.settings.get()` + `settingsChanged`; do not borrow a hidden paper session;
