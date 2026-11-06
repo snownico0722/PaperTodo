@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
@@ -34,9 +33,16 @@ internal static partial class Program
 
     // A deterministic test gate on the worker Dispatcher, not a production pause/scheduling API.
     // It allows checking demand priority, duplicate requests and UI animation while formatting is pending.
-    private static IDisposable HoldWorker(MarkdownLayoutWorker worker)
+    private static WorkerGate HoldWorker(MarkdownLayoutWorker worker)
     {
         AwaitWorkerCheck(worker.PrepareAsync(WorkerRequest("initialize"), false, default));
+        var gate = QueueWorkerGate(worker, DispatcherPriority.Send);
+        try { gate.WaitUntilEntered(); return gate; }
+        catch { gate.Dispose(); throw; }
+    }
+
+    private static WorkerGate QueueWorkerGate(MarkdownLayoutWorker worker, DispatcherPriority priority)
+    {
         var ready = (TaskCompletionSource<Dispatcher>)typeof(MarkdownLayoutWorker)
             .GetField("_ready", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(worker)!;
         var dispatcher = ready.Task.GetAwaiter().GetResult();
@@ -46,17 +52,18 @@ internal static partial class Program
         {
             entered.Set();
             if (!release.Wait(TimeSpan.FromSeconds(10))) throw new TimeoutException("test gate not released");
-        }, DispatcherPriority.Send);
-        UntilReview(() => entered.IsSet, "test gate enters worker");
-        return new WorkerGate(() =>
+        }, priority);
+        return new WorkerGate(() => UntilReview(() => entered.IsSet, "test gate enters worker"), () =>
         {
             release.Set(); UntilReview(() => operation.Task.IsCompleted, "worker gate releases");
-            operation.Task.GetAwaiter().GetResult(); entered.Dispose(); release.Dispose();
+            try { operation.Task.GetAwaiter().GetResult(); }
+            finally { entered.Dispose(); release.Dispose(); }
         });
     }
-    private sealed class WorkerGate(Action release) : IDisposable
+    private sealed class WorkerGate(Action waitUntilEntered, Action release) : IDisposable
     {
         private Action? _release = release;
+        internal void WaitUntilEntered() => waitUntilEntered();
         public void Dispose() => Interlocked.Exchange(ref _release, null)?.Invoke();
     }
 
@@ -100,14 +107,20 @@ internal static partial class Program
         Require(firstResult.Size == secondResult.Size && firstResult.VisibleText == secondResult.VisibleText &&
             firstResult.Truncated == secondResult.Truncated && DrawingPixels(firstResult).SequenceEqual(DrawingPixels(secondResult)),
             "equal queued requests produce equivalent visible results, whether reused or rebuilt");
-        using (HoldWorker(worker))
+        using (var queued = HoldWorker(worker))
         {
-            speculative = Enumerable.Range(0, 16).Select(i => worker.PrepareAsync(
-                WorkerRequest(i + new string('文', 5000), height: 2000), true, default)).ToArray();
+            speculative = Enumerable.Range(0, 2).Select(i => worker.PrepareAsync(
+                WorkerRequest("queued preload " + i), true, default)).ToArray();
             demand = worker.PrepareAsync(WorkerRequest("current demand"), false, default);
+            // Normal demand completes before this Background gate. Speculative enqueue
+            // callbacks schedule their formatting behind it, so observation cannot race
+            // with the worker finishing the entire preload queue while the UI is delayed.
+            using var observation = QueueWorkerGate(worker, DispatcherPriority.Background);
+            queued.Dispose();
+            observation.WaitUntilEntered();
+            AwaitWorkerCheck(demand);
+            Require(speculative.Any(task => !task.IsCompleted), "current demand is not queued behind all preloads");
         }
-        AwaitWorkerCheck(demand);
-        Require(speculative.Any(task => !task.IsCompleted), "current demand is not queued behind all preloads");
         foreach (var task in speculative) AwaitWorkerCheck(task);
         using (var cancellation = new CancellationTokenSource())
         {

@@ -26,15 +26,20 @@ internal static class Program
         {
             if (!File.Exists(Path.Combine(AppContext.BaseDirectory, FixtureMarker)))
                 throw new InvalidOperationException("Refusing to use a non-fixture data directory.");
-            // Explicit shutdown can stop the Dispatcher before the awaiting caller resumes.
-            // Failures set the exit code directly; success does not depend on that continuation.
-            var result = 0;
+            // Ordinary fixtures must finish their assertions. Expected application exits
+            // acknowledge completion inside the fixture, before its awaiter may be stopped.
+            var result = 1;
+            var expectsProductExit = fixtureName.StartsWith("real-exit") || fixtureName == "early-exit";
             var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
             app.Dispatcher.InvokeAsync(async () =>
             {
-                try { await RunFixture(fixtureName); result = 0; }
+                try { await RunFixture(fixtureName, () => result = 0); result = 0; }
                 catch (Exception ex) { result = 1; Console.Error.WriteLine(ex); }
-                finally { app.Shutdown(); }
+                finally
+                {
+                    // Successful exit fixtures must be shut down by the product itself.
+                    if (result != 0 || !expectsProductExit) app.Shutdown();
+                }
             });
             app.Exit += (_, _) => Console.WriteLine("WPF_EXIT_COMPLETED");
             app.Run();
@@ -86,10 +91,7 @@ internal static class Program
                 foreach (var childLine in text.Split('\n').Where(value => value.StartsWith("SCRIPT_CHILD ")))
                 {
                     var id = int.Parse(childLine["SCRIPT_CHILD ".Length..]);
-                    Process? script;
-                    try { script = Process.GetProcessById(id); }
-                    catch (ArgumentException) { continue; }
-                    using (script) Require(script.HasExited, "script survived real application exit");
+                    Require(ProcessHasExited(id), "script survived real application exit");
                 }
             }
             Console.WriteLine("PASS lifecycle " + name);
@@ -129,7 +131,7 @@ internal static class Program
         }
     }
 
-    private static async Task RunFixture(string name)
+    private static async Task RunFixture(string name, Action completeExpectedExit)
     {
         if (name == "todo-visibility")
         {
@@ -195,7 +197,7 @@ internal static class Program
         var controller = new AppController();
         var windows = (Dictionary<string, PaperWindow>)Field(controller, "_windows");
         var cache = MarkdownEdgePreviewPreload.For(Dispatcher.CurrentDispatcher);
-        var children = new List<Process>();
+        var children = new List<(Process Process, int Id)>();
         try
         {
             await controller.StartAsync(createDefaultPaper: false);
@@ -501,6 +503,8 @@ internal static class Program
             if (name == "early-exit")
             {
                 controller.Exit();
+                Require(!controller.IsRunning, "early application exit did not complete");
+                completeExpectedExit();
                 return;
             }
             if (name == "cancel-prewarm")
@@ -543,7 +547,7 @@ internal static class Program
                     var start = ChildStart(AppContext.BaseDirectory);
                     start.ArgumentList.Add("--sleep-child");
                     var process = Process.Start(start)!;
-                    children.Add(process);
+                    children.Add((process, process.Id));
                     Console.WriteLine("SCRIPT_CHILD " + process.Id);
                     Require(await process.StandardOutput.ReadLineAsync() == "ready", "script fixture did not start");
                     registry.Add("fixture-script-" + i, process);
@@ -554,6 +558,10 @@ internal static class Program
                 var editor = Field(windows["fixture-0"], "_noteBox");
                 editor.GetType().GetProperty("Text")!.SetValue(editor, "pending editor text at exit");
                 controller.Exit();
+                Require(!controller.IsRunning, "application exit did not complete");
+                Require(children.All(child => ProcessHasExited(child.Id)),
+                    "script survived product exit before fixture cleanup");
+                completeExpectedExit();
                 return;
             }
             var surfaces = Application.Current.Windows.Cast<Window>().ToArray();
@@ -563,9 +571,23 @@ internal static class Program
         finally
         {
             controller.Dispose();
-            foreach (var process in children)
-                try { if (!process.HasExited) process.Kill(entireProcessTree: true); process.Dispose(); } catch { }
+            foreach (var (process, id) in children)
+            {
+                try
+                {
+                    using var remaining = Process.GetProcessById(id);
+                    if (!remaining.HasExited) remaining.Kill(entireProcessTree: true);
+                }
+                catch { }
+                finally { process.Dispose(); }
+            }
         }
+    }
+
+    private static bool ProcessHasExited(int id)
+    {
+        try { using var process = Process.GetProcessById(id); return process.HasExited; }
+        catch (ArgumentException) { return true; }
     }
 
     private static object Field(object target, string name) =>

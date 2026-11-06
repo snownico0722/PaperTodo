@@ -31,7 +31,8 @@ internal static partial class Program
             var store = new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared, number);
             var restored = store.Load(out var empty);
             Require(!empty && restored.Papers[0].Content.Contains("i:" + id) &&
-                    store.NeedsStartupRecoverySave, "valid temp image note was not restored");
+                    store.NeedsStartupRecoverySave && File.ReadAllBytes(tempPath).SequenceEqual(bytes),
+                "valid temp image note was not restored without changing its source");
             Require(!store.TryCollectProtectedImageIds(restored, out _),
                 "startup GC ran before the temporary recovery was committed");
             store.SaveJsonSync(store.SerializeState(restored), 2);
@@ -39,6 +40,8 @@ internal static partial class Program
                     !Directory.GetFiles(scope.DirectoryPath,
                         Path.GetFileNameWithoutExtension(tempPath) + ".orphaned.*.tmp").Any(),
                 "successfully recovered temp remained as an unnecessary orphan");
+            Require(Str(J(File.ReadAllText(store.FilePath))["papers"]![0]!["content"]) == state.Papers[0].Content,
+                "committed primary lost the recovered image note");
             Require(store.TryCollectProtectedImageIds(restored, out var protectedIds) &&
                     protectedIds.Contains(id), "recovered primary did not protect its image");
             images.CollectUnprotectedImages(protectedIds);
@@ -121,12 +124,13 @@ internal static partial class Program
             scope.Store.SaveJsonSync(scope.Store.SerializeState(changed), 2);
             Require(scope.Store.TryRefreshBackupFromPrimary(),
                 "periodic fixed backup refresh did not complete");
-            Require(scope.Store.Load().Papers[0].Content == "latest committed primary" &&
-                    File.Exists(scope.Store.BackupPath) &&
+            Require(File.Exists(scope.Store.BackupPath) &&
                     !File.Exists(scope.Store.BackupPath + ".tmp") &&
                     !Directory.GetFiles(scope.DirectoryPath,
                         "data.backup.json.orphaned.*.tmp").Any(),
                 "backup refresh retained a displaced orphan beside a healthy primary");
+            Require(Str(scope.Read()["papers"]![0]!["content"]) == "latest committed primary",
+                "backup refresh changed the committed primary");
         }
 
         // Access failures after Load are not permission to write over the sole

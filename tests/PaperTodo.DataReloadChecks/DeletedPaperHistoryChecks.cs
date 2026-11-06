@@ -41,6 +41,9 @@ internal static partial class Program
                     {
                         PaperId = todoId, TodoId = itemId, Text = "history edited"
                     }, origin);
+                    controller.SaveNow(sync: true);
+                    Require(LivePaper(ReadLive(), todoId)["items"]![0]!["linkedNoteId"]?.GetValue<string>() == targetId,
+                        "Deletion fixture did not persist its link to the target paper.");
                     History("Undo");
                     History("Undo");
                     var undo = Field<List<List<PaperItem>>>(window, "_undoStack");
@@ -73,7 +76,7 @@ internal static partial class Program
                     }
                     controller.SaveNow(sync: true);
                     Require(LivePaper(ReadLive(), todoId)["items"]!.AsArray().All(item =>
-                        item!["linkedPaperId"]?.GetValue<string>() != targetId),
+                        item!["linkedNoteId"]?.GetValue<string>() != targetId),
                         "Undo/redo persisted an externally deleted paper link.");
                     Console.WriteLine($"PASS {(merge ? "merge" : "reload")} deletion prunes undo and redo links while preserving history");
                 }

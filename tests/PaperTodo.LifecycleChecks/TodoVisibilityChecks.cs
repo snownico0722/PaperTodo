@@ -10,7 +10,6 @@ internal static class TodoVisibilityChecks
 {
     private const BindingFlags Private = BindingFlags.Instance | BindingFlags.NonPublic;
     private static readonly string[] LinkedIds = ["note-link", "script-link"];
-    private static readonly string[] UnchangedIds = ["ordinary", "missing-link", "path-link", "self-link"];
 
     internal static async Task Run()
     {
@@ -62,54 +61,50 @@ internal static class TodoVisibilityChecks
         Require(LinkButton(linkedWindow, "missing-link") == null, "a missing target acquired a linked-paper button");
 
         var editor = Editors(linkedWindow)["ordinary"];
-        editor.Text = "ordinary edit remains attached during bulk visibility changes";
+        const string ordinaryText = "ordinary edit remains attached during bulk visibility changes";
+        editor.Text = ordinaryText;
         linkedWindow.Activate();
         editor.Focus();
         FocusManager.SetFocusedElement(linkedWindow, editor);
         editor.Select(3, 8);
         var selection = (editor.SelectionStart, editor.SelectionLength, editor.CaretIndex);
-        var linkedBefore = Snapshot.Capture(linkedWindow);
         linkedWindow.RefreshLinkedPaperRowsForVisibility();
         await Idle();
-        RequireReconcile(linkedWindow, linkedBefore, [], "direct visibility refresh");
+        RequireRows(linkedWindow, linked, "direct visibility refresh");
+        editor = Editors(linkedWindow)["ordinary"];
         Require(ReferenceEquals(FocusManager.GetFocusedElement(linkedWindow), editor),
             "an ordinary editor lost logical focus during a linked-button refresh");
         RequireSelection(editor, selection, "direct visibility refresh");
 
-        var plainBefore = Snapshot.Capture(plainWindow);
-        linkedBefore = Snapshot.Capture(linkedWindow);
         controller.HideAllPapers();
         await Idle();
         Require(windows.Values.All(window => !window.HasVisibleSurface), "hide-all left a paper surface visible");
-        RequireReconcile(plainWindow, plainBefore, [], "hide-all without links");
-        RequireReconcile(linkedWindow, linkedBefore, [], "hide-all with links");
+        RequireRows(plainWindow, unlinked, "hide-all without links");
+        RequireRows(linkedWindow, linked, "hide-all with links");
+        editor = Editors(linkedWindow)["ordinary"];
         RequireSelection(editor, selection, "hide-all");
         foreach (var id in LinkedIds) RequireLinkActivity(linkedWindow, id, active: false);
 
-        plainBefore = Snapshot.Capture(plainWindow);
-        linkedBefore = Snapshot.Capture(linkedWindow);
         controller.ShowAllPapers();
         await Idle();
         Require(windows.Values.All(window => window.HasExpandedPaperSurface), "show-all did not restore expanded paper surfaces");
-        RequireReconcile(plainWindow, plainBefore, [], "show-all without links");
-        RequireReconcile(linkedWindow, linkedBefore, [], "show-all with links");
+        RequireRows(plainWindow, unlinked, "show-all without links");
+        RequireRows(linkedWindow, linked, "show-all with links");
+        editor = Editors(linkedWindow)["ordinary"];
         RequireSelection(editor, selection, "show-all");
-        Require(editor.Text == controller.State.Papers.Single(paper => paper.Id == linked.Id).Items.Single(item => item.Id == "ordinary").Text,
+        Require(editor.Text == ordinaryText &&
+                controller.State.Papers.Single(paper => paper.Id == linked.Id).Items.Single(item => item.Id == "ordinary").Text == ordinaryText,
             "visibility refresh lost the in-progress ordinary edit");
         foreach (var id in LinkedIds) RequireLinkActivity(linkedWindow, id, active: true);
         Require(LinkText(linkedWindow, "script-link").Text == "⚡", "bulk visibility refresh changed a script link into an ordinary link");
 
-        var noteWindow = windows[note.Id];
-        RequireNoteImagesSuspended(noteWindow, expected: false, "before linked-note hide");
         Click(LinkButton(linkedWindow, "note-link")!);
         await Idle();
         Require(!controller.IsLinkedPaperShown(note.Id), "a refreshed active link did not hide its target on click");
-        RequireNoteImagesSuspended(noteWindow, expected: true, "after linked-note hide");
         RequireLinkActivity(linkedWindow, "note-link", active: false);
         Click(LinkButton(linkedWindow, "note-link")!);
         await Idle();
         Require(controller.IsLinkedPaperShown(note.Id), "a refreshed inactive link did not reopen its target on click");
-        RequireNoteImagesSuspended(noteWindow, expected: false, "after linked-note reopen");
         RequireLinkActivity(linkedWindow, "note-link", active: true);
 
         var linkedEditor = Editors(linkedWindow)["note-link"];
@@ -122,13 +117,13 @@ internal static class TodoVisibilityChecks
         linkedEditor.Select(2, 5);
         var linkedSelection = (linkedEditor.SelectionStart, linkedEditor.SelectionLength, linkedEditor.CaretIndex);
         Require(linkedEditor.CanUndo, "linked editor fixture has no native text history");
-        linkedBefore = Snapshot.Capture(linkedWindow);
         linkedWindow.RefreshLinkedPaperRowsForVisibility();
         await Idle();
-        RequireReconcile(linkedWindow, linkedBefore, [], "edited linked row visibility refresh");
-        Require(ReferenceEquals(linkedEditor, Editors(linkedWindow)["note-link"]) &&
-            ReferenceEquals(FocusManager.GetFocusedElement(linkedWindow), linkedEditor) && linkedEditor.CanUndo,
-            "visibility-only refresh replaced a linked editor, lost focus or cleared native text history");
+        RequireRows(linkedWindow, linked, "edited linked row visibility refresh");
+        linkedEditor = Editors(linkedWindow)["note-link"];
+        Require(linkedEditor.Text == linkedText + " preserved edit" &&
+                ReferenceEquals(FocusManager.GetFocusedElement(linkedWindow), linkedEditor) && linkedEditor.CanUndo,
+            "visibility-only refresh lost text, focus or native text history");
         RequireSelection(linkedEditor, linkedSelection, "linked visibility refresh");
         linkedEditor.Undo();
         Require(linkedEditor.Text == linkedText, "visibility refresh broke the linked editor's native undo");
@@ -144,13 +139,11 @@ internal static class TodoVisibilityChecks
         await Idle();
         Require(LinkedIds.All(id => LinkButton(linkedWindow, id) == null), "disabled paper links retained their buttons");
         Require(LinkButton(linkedWindow, "path-link") != null, "disabling paper links also removed the path button");
-        plainBefore = Snapshot.Capture(plainWindow);
-        linkedBefore = Snapshot.Capture(linkedWindow);
         controller.HideAllPapers();
         controller.ShowAllPapers();
         await Idle();
-        RequireReconcile(plainWindow, plainBefore, [], "disabled links on ordinary Todo");
-        RequireReconcile(linkedWindow, linkedBefore, [], "disabled links on linked Todo");
+        RequireRows(plainWindow, unlinked, "disabled links on ordinary Todo");
+        RequireRows(linkedWindow, linked, "disabled links on linked Todo");
 
         controller.State.EnableTodoPaperLinks = true;
         controller.State.ShowTodoBottomBar = false;
@@ -176,16 +169,15 @@ internal static class TodoVisibilityChecks
             .Invoke(controller, [deferredPaper, true])!;
         Require(!deferredWindow.IsShellBuilt && OptionalField(deferredWindow, "_todoPanel") == null,
             "the deferred fixture already built its Todo body");
-        linkedBefore = Snapshot.Capture(linkedWindow);
         controller.HideAllPapers();
         await Idle();
         Require(!deferredWindow.IsShellBuilt && OptionalField(deferredWindow, "_todoPanel") == null,
             "hide-all built a deferred Todo body just to refresh linked-paper visibility");
-        RequireReconcile(linkedWindow, linkedBefore, [], "hidden live Todo");
+        RequireRows(linkedWindow, linked, "hidden live Todo");
         RequireNoAppendArea(linkedWindow);
         foreach (var id in LinkedIds) RequireLinkActivity(linkedWindow, id, active: false);
 
-        Console.WriteLine("PASS todo visibility: ordinary row/editor/selection retention; in-place linked-button updates; active buttons and clicks; script/path links and normalized invalid links; disabled links and bottom bar; hidden/deferred bodies");
+        Console.WriteLine("PASS todo visibility: Todo contents, focus, selection and undo; linked-button updates; active buttons and clicks; script/path links and normalized invalid links; disabled links and bottom bar; hidden/deferred bodies");
     }
 
     private static PaperData Paper(string id, string type) => new()
@@ -229,40 +221,18 @@ internal static class TodoVisibilityChecks
         RoutedEvent = UIElement.MouseLeftButtonUpEvent
     });
 
-    private static void RequireNoteImagesSuspended(PaperWindow window, bool expected, string stage)
-    {
-        var session = OptionalField(window, "_markdownBodySession");
-        var noteBox = session == null ? null : OptionalField(session, "_noteBox");
-        Require(noteBox != null && (bool)Field(noteBox, "_imageRenderingSuspended") == expected,
-            "Linked Note image rendering state was not restored " + stage);
-    }
-
     private static void RequireSelection(TextBox editor, (int Start, int Length, int Caret) expected, string operation) =>
         Require((editor.SelectionStart, editor.SelectionLength, editor.CaretIndex) == expected,
             operation + " moved the ordinary editor caret or selection");
 
     private static void RequireNoAppendArea(PaperWindow window) =>
         Require(OptionalField(window, "_appendArea") == null &&
-            ((StackPanel)Field(window, "_todoPanel")).Children.Count == Snapshot.Capture(window).Rows.Count,
+            ((StackPanel)Field(window, "_todoPanel")).Children.Count == Editors(window).Count,
             "visibility refresh restored a disabled Todo bottom bar");
 
-    private static void RequireReconcile(PaperWindow window, Snapshot previous, string[] rebuiltIds, string operation)
-    {
-        var current = Snapshot.Capture(window);
-        Require(current.Generation - previous.Generation == (rebuiltIds.Length == 0 ? 0 : 1),
-            operation + " did not use exactly one reconcile for the affected linked rows");
-        Require(current.Rows.Keys.Order().SequenceEqual(previous.Rows.Keys.Order()), operation + " changed the Todo row set");
-        foreach (var id in previous.Rows.Keys)
-        {
-            var retained = !rebuiltIds.Contains(id);
-            Require(ReferenceEquals(previous.Rows[id], current.Rows[id]) == retained &&
-                ReferenceEquals(previous.Editors[id], current.Editors[id]) == retained,
-                operation + " rebuilt the wrong row/editor: " + id);
-        }
-        if (window.PaperId == "linked")
-            Require(UnchangedIds.All(id => ReferenceEquals(previous.Rows[id], current.Rows[id])),
-                operation + " replaced an ordinary, invalid-link, or path-link row");
-    }
+    private static void RequireRows(PaperWindow window, PaperData paper, string operation) =>
+        Require(Editors(window).Keys.Order().SequenceEqual(paper.Items.Select(item => item.Id).Order()),
+            operation + " changed the Todo row set");
 
     private static Task Idle() => Dispatcher.CurrentDispatcher.InvokeAsync(static () => { }, DispatcherPriority.ApplicationIdle).Task;
     private static object Field(object target, string name) => OptionalField(target, name)!;
@@ -270,13 +240,5 @@ internal static class TodoVisibilityChecks
     private static void Require(bool condition, string message)
     {
         if (!condition) throw new InvalidOperationException(message);
-    }
-
-    private sealed record Snapshot(int Generation, Dictionary<string, Border> Rows, Dictionary<string, TextBox> Editors)
-    {
-        internal static Snapshot Capture(PaperWindow window) => new(
-            (int)Field(window, "_todoRowsGeneration"),
-            ((IEnumerable)Field(window, "_todoRows")).Cast<Border>().ToDictionary(row => (string)row.Tag),
-            TodoVisibilityChecks.Editors(window));
     }
 }

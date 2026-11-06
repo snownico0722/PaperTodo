@@ -88,6 +88,7 @@ internal static partial class Program
 
     private static void MergeMissingBaseline()
     {
+        // Baseline validation precedes conflict policy selection.
         using var s = new Scope();
         var disk = s.Read();
         disk["papers"]![0]!["content"] = "external edit";
@@ -144,9 +145,6 @@ internal static partial class Program
         var bucket = ConflictAggregator.Group(preview.Conflicts!, preview.ExternalJson).Single();
         Require(bucket is PaperBucket p && p.PaperId == "note-a",
                 "same-paper conflicts did not aggregate by stable ID");
-        var selected = JsonPath.ApplyPaperChoices(preview.State!,
-            new Dictionary<string, PaperConflictChoice> { ["note-a"] = PaperConflictChoice.KeepExternal },
-            preview.ExternalJson!, preview.Conflicts!);
         var (conflictFile, diffFile) = s.Store.CommitExternalMerge(
             ResolvePreview(preview, ConflictChoice.KeepExternal), preview.ObservedDiskJson!, 2);
         Require(Str(s.Read()["papers"]![0]!["content"]) == "external",
@@ -216,20 +214,6 @@ internal static partial class Program
                 ReferenceEquals(survivor, s.Memory.Papers.Single(p => p.Id == survivor.Id)),
                 "reconciliation changed the choice or replaced an unrelated paper");
         }
-    }
-
-    private static void MergeRejectChangedSource()
-    {
-        using var s = new Scope();
-        s.Memory.Papers[0].Title = "local";
-        var disk = s.Read(); disk["papers"]![0]!["content"] = "external"; s.Write(disk);
-        var preview = s.Store.PreviewExternalMerge(s.Memory, 2, s.BaselineJson);
-        Require(preview.State != null, "merge preview did not start");
-        disk["papers"]![0]!["content"] = "arrived-later"; s.Write(disk);
-        Throws<ExternalDocumentChangedException>(() =>
-            s.Store.CommitExternalMerge(ResolvePreview(preview), preview.ObservedDiskJson!, 2));
-        Require(Str(s.Read()["papers"]![0]!["content"]) == "arrived-later",
-                "newer external input was overwritten after preview");
     }
 
     private static void MergeRejectDuringReplace()

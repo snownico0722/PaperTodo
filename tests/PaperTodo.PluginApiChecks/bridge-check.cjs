@@ -1,4 +1,13 @@
 const vm = require('node:vm'), fs = require('node:fs'), assert = require('node:assert/strict');
+// An unresolved Promise alone does not keep Node alive. Report an incomplete run
+// as failure instead of allowing the C# parent to accept a zero exit code.
+let completed = false;
+process.once('beforeExit', () => {
+  if (!completed) {
+    console.error('Bridge checks exited before the asynchronous checks completed.');
+    process.exitCode = 1;
+  }
+});
 (async () => {
   const posted = [], listeners = [], styles = new Map();
   const scope = {
@@ -35,4 +44,4 @@ const vm = require('node:vm'), fs = require('node:fs'), assert = require('node:a
   delete foreign.papertodo; foreign.window = foreign; foreign.top = foreign;
   vm.runInNewContext(fs.readFileSync(process.argv[2], 'utf8'), foreign);
   assert.equal(foreign.papertodo, undefined);
-})().catch(e => { console.error(e); process.exitCode = 1; });
+})().then(() => { completed = true; }, error => { completed = true; console.error(error); process.exitCode = 1; });

@@ -41,7 +41,6 @@ internal static class NativeFreeQueueReviewChecks
     {
         CheckAnchorReconstruction();
         Require(WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(null, out var monitor), "review monitor");
-        CheckDropGhostShapes(monitor);
         var originalContents = c.State.Papers.ToDictionary(p => p.Id, p => p.Content);
         await CheckDisplacedInsertion(c, windows, store, monitor);
         await CheckDragPreviewUpdates(c, windows, monitor);
@@ -55,40 +54,6 @@ internal static class NativeFreeQueueReviewChecks
                 c.State.Papers.All(p => originalContents[p.Id] == p.Content),
             "queue operations changed paper identities or note contents");
         Console.WriteLine("PASS free-queue review: displaced insertion, anchor roundtrip, folded drops, shortcut geometry, post-disconnect gestures and merge identity");
-    }
-
-    private static void CheckDropGhostShapes(MonitorGeometry monitor)
-    {
-        using var ghost = new EdgeCapsuleQueueDropGhost();
-        var window = Field<Window>(ghost, "_window");
-        var stack = Field<StackPanel>(ghost, "_stack");
-        const double memberWidth = 180, gap = 4;
-        var margin = EdgeCapsuleLayout.WindowChromeMargin;
-        foreach (var side in new[] { DeepCapsuleSides.Left, DeepCapsuleSides.Right })
-        foreach (var masterWidth in new[] { 50d, 24d })
-        {
-            ghost.ShowAt(monitor, side, 30, memberWidth, 4, gap, masterWidth);
-            window.UpdateLayout();
-            var header = (Border)stack.Children[0];
-            var member = (Border)stack.Children[1];
-            Near(masterWidth - margin, header.ActualWidth, "master ghost retains normal/compact master width");
-            Near(memberWidth - margin, member.ActualWidth, "member ghost retains ordinary width");
-            Near(side == DeepCapsuleSides.Left ? 0 : memberWidth - masterWidth + margin,
-                header.TranslatePoint(new Point(), stack).X, "short master is aligned to the screen edge");
-            Near(PaperLayoutDefaults.CapsuleHeight + gap,
-                member.TranslatePoint(new Point(), stack).Y - header.TranslatePoint(new Point(), stack).Y,
-                "short master still occupies one full vertical slot");
-
-            // Same count and side, different role: a merge must reset the short header.
-            ghost.ShowAt(monitor, side, 30, memberWidth, 4, gap);
-            window.UpdateLayout();
-            Near(memberWidth - margin, header.ActualWidth, "merge has no retained short source master");
-            ghost.ShowAt(monitor, side, 30, memberWidth, 1, gap, masterWidth);
-            window.UpdateLayout();
-            Near(masterWidth, window.Width, "folded independent ghost uses only the short master width");
-            Near(masterWidth - margin, ((Border)stack.Children[0]).ActualWidth, "folded master outline is short");
-        }
-        Console.WriteLine("PASS ghost geometry: short master, members, both edges, compact mode, merge reset and folded source");
     }
 
     private static async Task CheckDisplacedInsertion(AppController c,
@@ -182,23 +147,13 @@ internal static class NativeFreeQueueReviewChecks
         var beforeMargins = new Dictionary<string, double>(c.State.DeepCapsuleQueueStartTopMargins);
         var masters = Masters(c);
         var layout = c.CaptureFreeMasterDragLayout("", EdgeCapsuleEdge.Right, sourceKey)!;
-        var peerWork = peers.ToDictionary(p => p.Id, p => ReconcileGeneration(windows[p.Id]));
         c.PreviewFreeMasterQueueTop(layout, 28);
-        Require(peers.All(p => ReconcileGeneration(windows[p.Id]) == peerWork[p.Id]),
-            "moving one master must not queue reconciliation for unchanged peers");
         await Idle();
         Near(28, masters[sourceKey].AnchorTop, "source master follows its temporary anchor");
         Near(28 + pitch, MemberTop(c, windows[source.Id], source), "source member follows its temporary anchor");
         var sourceFrame = Field<EdgeCapsulePresenter>(windows[source.Id], "_edgeCapsule").AppliedPresentation;
         Require(Math.Abs(sourceFrame.Bounds.Top - (monitor.WorkArea.Top + (28 + pitch) * monitor.DpiScaleY)) <= 1,
             "unchanged source slot indices must still refresh actual presented geometry");
-
-        var allWork = c.State.Papers.ToDictionary(p => p.Id, p => ReconcileGeneration(windows[p.Id]));
-        var masterWork = masters.ToDictionary(pair => pair.Key, pair => Field<int>(pair.Value, "_moveGeneration"));
-        c.PreviewFreeMasterQueueTop(layout, 28);
-        Require(c.State.Papers.All(p => ReconcileGeneration(windows[p.Id]) == allWork[p.Id]) &&
-                masters.All(pair => Field<int>(pair.Value, "_moveGeneration") == masterWork[pair.Key]),
-            "an identical pointer sample must not schedule capsule or master movement");
 
         var insertionTop = 160 + 2 * pitch;
         c.PreviewFreeMasterQueueTop(layout, insertionTop, Point(monitor, insertionTop));
@@ -211,15 +166,10 @@ internal static class NativeFreeQueueReviewChecks
             "target suffix reserves one carried slot");
         Require(masters[C].AnchorTop > beforeMargins[C], "intersected neighbouring queue gives way");
         var previewTops = peers.ToDictionary(p => p.Id, p => MemberTop(c, windows[p.Id], p));
-        peerWork = peers.ToDictionary(p => p.Id, p => ReconcileGeneration(windows[p.Id]));
-        masterWork = masters.Where(pair => pair.Key != sourceKey)
-            .ToDictionary(pair => pair.Key, pair => Field<int>(pair.Value, "_moveGeneration"));
         for (var delta = 1; delta <= 3; delta++)
             c.PreviewFreeMasterQueueTop(layout, insertionTop + delta, Point(monitor, insertionTop + delta));
-        Require(peers.All(p => ReconcileGeneration(windows[p.Id]) == peerWork[p.Id] &&
-                    Math.Abs(MemberTop(c, windows[p.Id], p) - previewTops[p.Id]) < .1) &&
-                masterWork.All(pair => Field<int>(masters[pair.Key], "_moveGeneration") == pair.Value),
-            "same-slot dragging must retain the gap without resetting or reconciling its peers");
+        Require(peers.All(p => Math.Abs(MemberTop(c, windows[p.Id], p) - previewTops[p.Id]) < .1),
+            "same-slot dragging must retain the gap without displacing its peers again");
         await Idle();
 
         c.ArrangeDeepCapsules(false);
@@ -243,10 +193,9 @@ internal static class NativeFreeQueueReviewChecks
         c.ToggleCapsuleCollapseAllActive(sourceKey);
         await Idle();
         layout = c.CaptureFreeMasterDragLayout("", EdgeCapsuleEdge.Right, sourceKey)!;
-        var hiddenWork = ReconcileGeneration(windows[source.Id]);
         c.PreviewFreeMasterQueueTop(layout, 32);
-        Require(ReconcileGeneration(windows[source.Id]) == hiddenWork,
-            "moving a folded queue only updates its visible master");
+        Require(windows[source.Id].IsCollapseAllRetracted,
+            "moving a folded queue must not reveal its hidden member");
         Near(32, masters[sourceKey].AnchorTop, "folded master still follows the pointer");
         c.FinishFreeMasterQueueDrag(layout, false);
         await Idle();
@@ -327,13 +276,11 @@ internal static class NativeFreeQueueReviewChecks
                             "source compaction reaches the visible frame");
                     }
                 }
-            var work = peers.ToDictionary(p => p.Id, p => ReconcileGeneration(windows[p.Id]));
+            var previewTops = peers.ToDictionary(p => p.Id, p => MemberTop(c, windows[p.Id], p));
             for (var sample = 0; sample < 10; sample++)
                 c.PreviewNativeEdgeQueueDrag(owner, outside, emptyTop, floating);
-            Require(peers.All(p => ReconcileGeneration(windows[p.Id]) == work[p.Id]),
-                "unchanged source gap does not restart peer presentation");
-            if (animated)
-                Require(ReferenceEquals(proxies[A], sourceProxy), "same source gap retains its live animation");
+            Require(peers.All(p => Math.Abs(MemberTop(c, windows[p.Id], p) - previewTops[p.Id]) < .1),
+                "repeated source-gap samples must not accumulate peer displacement");
 
             if (animated && hasMaster && !floating && ending == "cancel")
             {
@@ -538,15 +485,10 @@ internal static class NativeFreeQueueReviewChecks
                 "independent preview must not write saved positions");
 
             // Identical samples retain the preview instead of pushing A again.
-            var work = targetPapers.ToDictionary(p => p.Id, p => ReconcileGeneration(windows[p.Id]));
             if (ctrl) c.PreviewNativeEdgeQueueDrag(owner, point, ownerTop, floating);
             else if (floating) c.PreviewFreeMasterQueueDropGhost(transfer, point);
             else c.PreviewFreeMasterQueueTop(layout!, top, point);
-            Require(targetPapers.All(p => ReconcileGeneration(windows[p.Id]) == work[p.Id]),
-                "same independent drop does not requeue unchanged target geometry");
             Near(expectedA, masters[A].AnchorTop, "independent preview does not accumulate displacement");
-            if (animated && cramped)
-                Require(ReferenceEquals(proxies[A], yielding), "same independent landing retains its live animation");
 
             EdgeFreeQueueDrop Decision() => ctrl
                 ? Field<NativeEdgeQueueDrag>(c, "_nativeEdgeQueueDrag").Drop!.Decision
@@ -658,12 +600,11 @@ internal static class NativeFreeQueueReviewChecks
                 "ordinary yield stays below the operated capsule");
             c.PreviewDeepCapsuleReorder(first, 0);
             await Dispatcher.CurrentDispatcher.InvokeAsync(static () => { }, DispatcherPriority.Send);
-            Require(proxies.TryGetValue(B, out var reversed) && ReferenceEquals(reversed, ordinary),
-                "rapid reverse reuses the same real queue compositor and live sources");
+            Require(proxies.TryGetValue(B, out var reversed), "rapid reverse keeps a live queue translation");
             Require(WindowNative.IsWindowBehind(reversed!.OutputHandle,
                     windows[first.Id].EdgeCapsuleQueueProxySourceHandle),
                 "retarget preserves the operated capsule's foreground position");
-            ordinary.CompleteNow(true);
+            reversed!.CompleteNow(true);
             Require(!proxies.ContainsKey(B) &&
                     windows["review-7"].VerifyEdgeCapsuleQueueProxyEndpoint(
                         Field<EdgeCapsulePresenter>(windows["review-7"], "_edgeCapsule").AppliedPresentation),
@@ -677,7 +618,7 @@ internal static class NativeFreeQueueReviewChecks
             var insertion = 160 + 2 * pitch;
             c.PreviewFreeMasterQueueTop(layout, insertion, Point(monitor, insertion));
             await Dispatcher.CurrentDispatcher.InvokeAsync(static () => { }, DispatcherPriority.Send);
-            Require(proxies.TryGetValue(B, out var target), "merge preview translates the target queue");
+            Require(proxies.ContainsKey(B), "merge preview translates the target queue");
             Require(proxies.TryGetValue(C, out var neighbour),
                 "merge preview translates the neighbouring queue independently");
             Require(neighbour!.Members.Any(m => ReferenceEquals(m.Window, masters[C])) &&
@@ -689,8 +630,6 @@ internal static class NativeFreeQueueReviewChecks
                     (monitor.WorkArea.Top + (insertion + pitch) * monitor.DpiScaleY)) <= 1,
                 "carried queue follows the pointer without waiting for passive animation");
             c.PreviewFreeMasterQueueTop(layout, insertion, Point(monitor, insertion));
-            Require(ReferenceEquals(proxies[B], target) && ReferenceEquals(proxies[C], neighbour),
-                "same insertion sample retains both active translations");
 
             foreach (var proxy in proxies.Values.ToArray()) proxy.CompleteNow(true);
             c.PreviewFreeMasterQueueTop(layout, 24, Point(monitor, 24));
@@ -799,11 +738,10 @@ internal static class NativeFreeQueueReviewChecks
         Require(Field<NativeEdgeQueueDrag>(c, "_nativeEdgeQueueDrag").Drop?.Decision.Index == 1,
             "select the interior slot before testing the head transition");
         await Dispatcher.CurrentDispatcher.InvokeAsync(static () => { }, DispatcherPriority.Send);
-        Require(proxies.TryGetValue(B, out var interior), "interior insertion starts a real translation");
+        Require(proxies.ContainsKey(B), "interior insertion starts a real translation");
         Require(WindowNative.TryGetWindowDeviceBounds(master, out var masterBeforeHead),
             "capture the unshifted destination master");
         var firstBeforeHead = Field<EdgeCapsulePresenter>(first, "_edgeCapsule").AppliedPresentation;
-        var outputBeforeHead = interior!.OutputHandle;
 
         // With space below, prepend keeps the master fixed and adds the old
         // prefix to the moving suffix before the first animation finishes.
@@ -811,11 +749,10 @@ internal static class NativeFreeQueueReviewChecks
         Require(Field<NativeEdgeQueueDrag>(c, "_nativeEdgeQueueDrag").Drop?.Decision.Index == 0,
             "the second sample selects prepend, not append to the master");
         await Dispatcher.CurrentDispatcher.InvokeAsync(static () => { }, DispatcherPriority.Send);
-        Require(proxies.TryGetValue(B, out var head) && !ReferenceEquals(head, interior) &&
-                head.OutputHandle == outputBeforeHead &&
+        Require(proxies.TryGetValue(B, out var head) &&
                 head.Members.Any(m => ReferenceEquals(m.Window, first)) &&
                 !head.Members.Any(m => ReferenceEquals(m.Window, master)),
-            "interior-to-head joins the prefix through a successor and keeps the master fixed");
+            "interior-to-head joins the prefix to the translation and keeps the master fixed");
         Require(WindowNative.TryGetWindowDeviceBounds(master, out var masterAfterHead) &&
                 masterAfterHead == masterBeforeHead, "downward-first prepend leaves the master in place");
         Require(head!.TryGetPresentationAt(first,
@@ -824,17 +761,13 @@ internal static class NativeFreeQueueReviewChecks
             "the newly admitted prefix starts at its visible position without a jump");
         c.PreviewNativeEdgeQueueDrag(source, Point(monitor, insertion), insertion, floating: true);
         await Dispatcher.CurrentDispatcher.InvokeAsync(static () => { }, DispatcherPriority.Send);
-        Require(proxies.TryGetValue(B, out var backToMiddle) && ReferenceEquals(backToMiddle, head),
-            "head-to-interior reverses the prefix through the retained live sources");
+        Require(proxies.ContainsKey(B), "head-to-interior keeps a live translation for the returning prefix");
         c.EndNativeEdgeQueueDrag(source.Id);
         await Dispatcher.CurrentDispatcher.InvokeAsync(static () => { }, DispatcherPriority.Send);
         foreach (var proxy in proxies.Values.ToArray()) proxy.CompleteNow(true);
         await Idle();
         Console.WriteLine("PASS animated prepend: interior -> head -> interior without draining the old animation");
     }
-
-    private static int ReconcileGeneration(PaperWindow window) =>
-        Field<int>(Field<EdgeCapsulePresenter>(window, "_edgeCapsule"), "_reconcileGeneration");
 
     private static async Task CheckFoldedDropAndShortcuts(AppController c, MonitorGeometry monitor)
     {

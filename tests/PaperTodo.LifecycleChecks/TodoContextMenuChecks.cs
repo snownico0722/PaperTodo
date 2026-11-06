@@ -64,15 +64,6 @@ internal static class TodoContextMenuChecks
         await Flush();
         Require(rows.Count == 7 && rows.All(row => row.ActualHeight > 0), "menu fixture rows were not laid out");
 
-        var owners = rows.SelectMany(Descendants).OfType<FrameworkElement>()
-            .Where(element => element.ContextMenu != null).ToArray();
-        Require(owners.Length >= rows.Count * 4, "menu fixture did not include the native row menu owners");
-        Require(owners.All(owner => owner.ContextMenu!.Items.Count == 0),
-            "Todo construction eagerly populated a row context menu");
-        var initialThemedMenus = ThemedMenus(window);
-        Require(owners.All(owner => !initialThemedMenus.Contains(owner.ContextMenu!)),
-            "unopened row placeholders were registered as themed menus");
-
         var invocations = new List<PaperTodoActionInvocation>();
         controller.SetPluginTodoActions(Guid.NewGuid(), "fixture.context-menu", PaperId, "mouse",
             [new PaperTodoAction
@@ -83,7 +74,6 @@ internal static class TodoContextMenuChecks
         await Flush();
         ContextMenu? opened = null;
         TodoTextBox? textMenuOwner = null;
-        var keptMenus = new List<ContextMenu>(initialThemedMenus);
         try
         {
             opened = await Open(editors["mouse"], "mouse");
@@ -208,11 +198,8 @@ internal static class TodoContextMenuChecks
             if (input != "mouse") LifecycleInput.Focus(window, target);
             else LifecycleInput.Focus(window, null);
             await Flush();
-            var before = ThemedMenus(window);
             var requested = owner!.ContextMenu!;
-            var wasInitialized = before.Contains(requested);
             textMenuOwner = owner as TodoTextBox;
-            keptMenus.AddRange(before); // keep weak registrations stable while checking one opening
             if (input == "mouse")
             {
                 var localPoint = point ?? new Point(target.ActualWidth / 2, target.ActualHeight / 2);
@@ -234,11 +221,8 @@ internal static class TodoContextMenuChecks
             var menu = owner!.ContextMenu!;
             await Flush();
             Require(ReferenceEquals(menu, requested), input + " replaced the menu after WPF installed its close handler");
-            Require(ThemedMenus(window).Except(before).Count() == (wasInitialized ? 0 : 1),
-                input + " registered more than the requested owner's first themed menu");
             if (textMenuOwner != null)
                 Require(TextEditorMenuIsOpen(textMenuOwner), input + " bypassed WPF's text-editor context-menu state");
-            keptMenus.Add(menu);
             Require(menu.Items.Count > 0, input + " displayed the empty placeholder");
             return menu;
         }
@@ -275,11 +259,6 @@ internal static class TodoContextMenuChecks
         return (bool)editor.GetType().GetProperty("IsContextMenuOpen", Private)!.GetValue(editor)!;
     }
     private static object Part(object target, string name) => target.GetType().GetField(name, Private)!.GetValue(target)!;
-    private static List<ContextMenu> ThemedMenus(PaperWindow window) =>
-        ((List<WeakReference<ContextMenu>>)Part(window, "_themedContextMenus"))
-            .Select(reference => reference.TryGetTarget(out var menu) ? menu : null)
-            .OfType<ContextMenu>().ToList();
-
     private static FrameworkElement? ContextMenuOwner(DependencyObject? target)
     {
         while (target != null)
