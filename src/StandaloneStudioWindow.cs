@@ -250,24 +250,30 @@ internal sealed class StandaloneStudioWindow : Window
                 document.IsMarkdown ? _images : null, preserveFileDocumentText: true);
             _editor.Text = document.Text;
             _editor.Document.UndoStack.ClearAll();
-            if (document.IsMarkdown)
-            {
-                _semantics = new MarkdownSemanticDocument(_editor.Document);
-                _editor.SetSemanticDocument(_semantics);
-                _presentation = new MarkdownSemanticPresentation(_editor, _semantics);
-            }
-            _editor.SetPreviewMode(false);
-            _editor.SetMarkdownRenderMode(document.IsMarkdown ? _settings.MarkdownRenderMode : MarkdownRenderModes.Off);
-            // Undo and redo remain available for source/text documents; Markdown-only
-            // formatting commands are hidden, never applied to HTML or TXT.
-            for (var index = 2; index < _markdownTools.Children.Count; index++)
-                _markdownTools.Children[index].Visibility = document.IsMarkdown ? Visibility.Visible : Visibility.Collapsed;
+            ConfigureDocumentPresentation();
             _editor.CaretOffset = 0;
             _editor.ScrollToHome();
             _status.Text = "";
             UpdateTitle();
         }
         finally { _loading = false; }
+    }
+
+    private void ConfigureDocumentPresentation()
+    {
+        DisposePresentation();
+        _editor.ConfigureImageSource(StandaloneStudioImages.OwnerId,
+            _document.IsMarkdown ? _images : null, preserveFileDocumentText: true);
+        if (_document.IsMarkdown)
+        {
+            _semantics = new MarkdownSemanticDocument(_editor.Document);
+            _editor.SetSemanticDocument(_semantics);
+            _presentation = new MarkdownSemanticPresentation(_editor, _semantics);
+        }
+        _editor.SetPreviewMode(false);
+        _editor.SetMarkdownRenderMode(_document.IsMarkdown ? _settings.MarkdownRenderMode : MarkdownRenderModes.Off);
+        for (var index = 2; index < _markdownTools.Children.Count; index++)
+            _markdownTools.Children[index].Visibility = _document.IsMarkdown ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void DisposePresentation()
@@ -353,7 +359,7 @@ internal sealed class StandaloneStudioWindow : Window
                     _editor.CaretOffset = Math.Min(caret, _editor.Document.TextLength);
                 }
                 _images.DocumentPath = _document.FilePath;
-                if (wasMarkdown != _document.IsMarkdown) InstallDocument(_document);
+                if (wasMarkdown != _document.IsMarkdown) ConfigureDocumentPresentation();
                 else _editor.RefreshVisualStyle();
             }
             finally { _loading = false; }

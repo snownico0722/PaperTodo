@@ -56,6 +56,7 @@ internal static class StandaloneStudioSettings
             FontFamily = AppTypography.UiFontFamily, FontSize = AppTypography.Scale(13)
         };
         var body = new StackPanel { Margin = new Thickness(22) };
+        var themedControls = new List<Control>();
         var title = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 20) };
         title.Children.Add(new TextBlock { Text = Strings.Get("TraySettings"), FontSize = 19, FontWeight = FontWeights.SemiBold });
         var temporary = new StackPanel
@@ -77,12 +78,23 @@ internal static class StandaloneStudioSettings
             apply();
             dialog.Background = Theme.PaperBrush;
             dialog.Foreground = Theme.TextBrush;
+            foreach (var control in themedControls)
+            {
+                control.Foreground = Theme.TextBrush;
+                control.Background = Theme.PaperBrush;
+                control.BorderBrush = Theme.PaperBorderBrush;
+            }
+            ((TextBlock)temporary.Children[0]).Foreground = Theme.WeakTextBrush;
+            ((Ellipse)notice.Children[0]).Stroke = Theme.WeakTextBrush;
+            ((TextBlock)notice.Children[1]).Foreground = Theme.WeakTextBrush;
         }
         void Choice(string resource, (string Id, string Label)[] choices, string selected, Action<string> change)
         {
             body.Children.Add(new TextBlock { Text = Strings.Get(resource), Margin = new Thickness(0, 0, 0, 5) });
             var combo = new ComboBox { Margin = new Thickness(0, 0, 0, 14), MinHeight = 28,
                 ItemsSource = choices.Select(choice => new ComboBoxItem { Content = Strings.Get(choice.Label), Tag = choice.Id }).ToArray() };
+            themedControls.Add(combo);
+            foreach (var item in combo.Items.Cast<ComboBoxItem>()) themedControls.Add(item);
             combo.SelectedIndex = Math.Max(0, Array.FindIndex(choices, choice => choice.Id == selected));
             combo.SelectionChanged += (_, _) => { if (combo.SelectedItem is ComboBoxItem item) { change((string)item.Tag); Changed(); } };
             body.Children.Add(combo);
@@ -102,7 +114,9 @@ internal static class StandaloneStudioSettings
         var done = new Button { Content = Strings.Get("CommonOk"), MinWidth = 86, Padding = new Thickness(12, 6, 12, 6), HorizontalAlignment = HorizontalAlignment.Right };
         done.Click += (_, _) => dialog.Close();
         body.Children.Add(done);
+        themedControls.Add(done);
         dialog.Content = body;
+        Changed();
         AppTypography.ApplyTextRendering(dialog);
         dialog.ShowDialog();
     }
