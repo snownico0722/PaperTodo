@@ -38,7 +38,7 @@ internal static class MaterialPresentationChecks
         }
 
         var saved = (controller.State.PaperSkin, controller.State.Theme, controller.State.EnableAnimations,
-            controller.State.MatchAuxiliaryMaterialStrength);
+            controller.State.MatchAuxiliaryMaterialStrength, controller.State.MicaAlwaysActive);
         Window? settings = null;
         var owner = new Window { Width = 200, Height = 100, Left = 40, Top = 40, ShowInTaskbar = false, Content = new Border() };
         ContextMenu? menu = null, aeroMenu = null;
@@ -47,6 +47,7 @@ internal static class MaterialPresentationChecks
             controller.State.PaperSkin = PaperSkins.Acrylic; controller.State.Theme = "light";
             controller.State.EnableAnimations = false;
             controller.State.MatchAuxiliaryMaterialStrength = true;
+            controller.State.MicaAlwaysActive = false;
             Theme.Invalidate();
             owner.Show();
             menu = controller.CreateTrayMenu(); menu.Items.Add(new MenuItem { Header = "Cancel before background is ready" });
@@ -76,6 +77,7 @@ internal static class MaterialPresentationChecks
             controller.State.PaperSkin = PaperSkins.Acrylic; Theme.Invalidate();
 
             CheckRealRightClicks(controller);
+            CheckPaperAnimations(controller);
             CheckMasterRightClicks(controller);
             controller.State.PaperSkin = PaperSkins.Acrylic; controller.State.Theme = "light";
             controller.State.EnableAnimations = false; Theme.Invalidate();
@@ -96,6 +98,14 @@ internal static class MaterialPresentationChecks
             settings.Width += 12; settings.UpdateLayout(); shell.RefreshBackground();
             Program.Assert(!shell.IsBackgroundActive && !shell.HasBackgroundCapture && settings.Opacity == 1,
                 "resizing Settings keeps the native material path capture-free and fully visible");
+
+            // Keep this real settings interaction after retiring the desktop screenshot fixture.
+            var alwaysActive = Descendants(settings).OfType<CheckBox>().Single(box =>
+                Equals(box.Content, Strings.Get("SettingsMicaAlwaysActive")));
+            alwaysActive.IsChecked = true;
+            alwaysActive.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            Program.Assert(controller.State.MicaAlwaysActive,
+                "clicking the native material appearance setting publishes the preference");
         }
         finally
         {
@@ -103,10 +113,75 @@ internal static class MaterialPresentationChecks
             if (aeroMenu != null) aeroMenu.IsOpen = false;
             settings?.Close(); owner.Close();
             (controller.State.PaperSkin, controller.State.Theme, controller.State.EnableAnimations,
-                controller.State.MatchAuxiliaryMaterialStrength) = saved;
+                controller.State.MatchAuxiliaryMaterialStrength, controller.State.MicaAlwaysActive) = saved;
             Theme.Invalidate();
         }
     }
+    private static void CheckPaperAnimations(AppController controller)
+    {
+        var state = controller.State;
+        var oldAnimations = state.EnableAnimations;
+        var paper = new PaperData { Type = PaperTypes.Todo,
+            Title = "Startup opacity", Width = 300, Height = 220, X = 80, Y = 80 };
+        PaperWindow? window = null;
+        state.Papers.Add(paper);
+        try
+        {
+            state.EnableAnimations = true;
+            controller.ShowPaper(paper);
+            Wait(700);
+            var windows = (Dictionary<string, PaperWindow>)typeof(AppController)
+                .GetField("_windows", Program.Private)!.GetValue(controller)!;
+            Program.Assert(windows.TryGetValue(paper.Id, out window) &&
+                window.IsVisible && window.Opacity == 1 && !window.HasAnimatedProperties,
+                "startup fade leaves the paper visible and releases its opacity clock");
+            var chrome = (SkinBorder)typeof(PaperWindow)
+                .GetField("_paperChrome", Program.Private)!.GetValue(window)!;
+            Program.Assert(chrome.Opacity == 1,
+                "startup fade leaves the paper content fully opaque");
+
+            var expandedWidth = window!.Width;
+            var expandedHeight = window.Height;
+            window.SetCollapsedState(true, animate: true, saveGeometry: false);
+            window.BeginAnimation(PaperWindow.TransitionProgressProperty, null);
+            window.TransitionProgress = 0.5;
+            window.UpdateLayout();
+            Program.Assert(!window.IsNativeMicaEffective && window.ResizeMode == ResizeMode.NoResize,
+                "a half-collapsed paper suspends the native material and resize frame");
+            var width = window.Width;
+            var height = window.Height;
+            var margin = chrome.Margin;
+            window.SetCollapsedState(false, animate: true, saveGeometry: false);
+            window.BeginAnimation(PaperWindow.TransitionProgressProperty, null);
+            Program.Assert(Math.Abs(window.Width - width) < 0.01 &&
+                Math.Abs(window.Height - height) < 0.01 && chrome.Margin == margin,
+                "reversing a native transition starts from its presented bounds and margin");
+            window.TransitionProgress = 0.5;
+            state.EnableAnimations = false;
+            window.SettleAnimationsForDisabledSetting();
+            window.UpdateLayout();
+            Program.Assert(window.Width == expandedWidth && window.Height == expandedHeight &&
+                window.ResizeMode == ResizeMode.CanResizeWithGrip,
+                "disabling animations during reversed expansion restores full paper bounds and resizing");
+        }
+        finally
+        {
+            window?.CloseForReal();
+            state.Papers.Remove(paper);
+            state.EnableAnimations = oldAnimations;
+        }
+    }
+
+    private static IEnumerable<DependencyObject> Descendants(DependencyObject root)
+    {
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            yield return child;
+            foreach (var descendant in Descendants(child)) yield return descendant;
+        }
+    }
+
     private static void CheckRealRightClicks(AppController controller)
     {
         var paper = new PaperData { Type = PaperTypes.Todo, Title = "Right-click regression",

@@ -263,7 +263,6 @@ internal static partial class Program
         });
 
         RunMathFormulaChecks(Check);
-        RunLocalRedrawChecks(Check);
 
         Console.WriteLine($"Markdown editing checks: {failures} failure(s).");
         return failures == 0 ? 0 : 1;

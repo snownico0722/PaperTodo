@@ -54,17 +54,8 @@ jobs:
       - name: Restore native material and skin checks
         run: dotnet restore .\tests\PaperTodo.MicaChecks\PaperTodo.MicaChecks.csproj --configfile .\NuGet.Config
 
-      - name: Native material and skin checks
-        env:
-          PAPER_MICA_CAPTURE: ${{ runner.temp }}/material-pixels/native
-          PAPER_SKIN_CAPTURE: ${{ runner.temp }}/material-pixels/skins
+      - name: Material and skin behavior checks
+        # D-057: final DWM desktop screenshots cannot provide a stable correctness gate.
+        # Keep native state, window lifecycle, WPF offscreen pixels and Aero parallax.
+        timeout-minutes: 2
         run: dotnet run --project .\tests\PaperTodo.MicaChecks\PaperTodo.MicaChecks.csproj -c Release --no-restore
-
-      - name: Upload material visual evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: material-visual-${{ github.sha }}
-          path: ${{ runner.temp }}/material-pixels
-          if-no-files-found: warn
-          retention-days: 7
