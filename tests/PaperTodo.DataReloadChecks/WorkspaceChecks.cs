@@ -1115,14 +1115,26 @@ internal static partial class Program
             var selector = cancelMenu.Items.OfType<MenuItem>().Single(item =>
                 AutomationProperties.GetAutomationId(item) == "TrayWorkspaceSelector");
             var segmentHost = TraySegmentHost(selector);
+            cancelMenu.IsOpen = true;
+            await Until(() => cancelMenu.ActualWidth > 0 && selector.ActualWidth > 0,
+                "tray workspace menu did not finish layout");
+            var menuWidth = cancelMenu.ActualWidth;
             ClickTraySlot(TraySlots(cancelMenu)[1]);
             Require(controller.WorkspaceNumber == 1,
                 "tray workspace choice switched without confirmation");
             var cancelActions = LogicalDescendants((DependencyObject)segmentHost.Content).OfType<Button>().ToArray();
             Require(cancelActions.Length == 2, "tray did not offer switch and cancel actions");
+            cancelMenu.UpdateLayout();
+            Require(Math.Abs(cancelMenu.ActualWidth - menuWidth) < 1 && cancelActions.All(button =>
+            {
+                var bounds = button.TransformToAncestor(cancelMenu).TransformBounds(new Rect(button.RenderSize));
+                return button.IsVisible && bounds.Left >= 0 && bounds.Right <= cancelMenu.ActualWidth &&
+                    bounds.Top >= 0 && bounds.Bottom <= cancelMenu.ActualHeight;
+            }), "workspace confirmation widened the menu or clipped an action button");
             cancelActions[1].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Require(controller.WorkspaceNumber == 1 && segmentHost.Content is Border,
                 "cancelling the tray workspace choice switched or retained the confirmation");
+            cancelMenu.IsOpen = false;
 
             Console.WriteLine("PASS workspace WPF: cycle, editor flush, ID collision, inheritance, language, plugin data, failures and slot retention");
         }
