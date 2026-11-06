@@ -148,7 +148,6 @@ public sealed partial class AppController
         if (_masterCapsules.TryGetValue(previous.TargetKey, out var master))
             master.PreviewQueueTop(DeepCapsuleStartTopMarginForQueueKey(previous.TargetKey),
                 animate: true);
-        RestoreVacatedLegacyMaster(ownerId);
     }
 
     // Ordinary sorting keeps its existing index and commit paths, while
@@ -193,8 +192,11 @@ public sealed partial class AppController
             side = DeepCapsuleSides.Normalize(owner.CapsuleSide);
         }
 
+        var vacatesSource = floating && State.UseCapsuleCollapseAll &&
+            DeepCapsulePapersInOrder().Count(p => QueueKey(p) == sourceKey) == 1;
+        if (!floating) RestoreVacatedLegacyMaster(owner.Id);
         var foldedTarget = IsCapsuleCollapseAllActiveForQueue(targetKey);
-        if (foldedTarget && (!floating || targetKey == sourceKey))
+        if (foldedTarget && (!floating || targetKey == sourceKey) && !vacatesSource)
         {
             // A folded source does not expose any editable member slots. A
             // cross-edge destination can still accept the member on release.
@@ -231,7 +233,6 @@ public sealed partial class AppController
             if (!EdgeCapsuleFreeQueuesEnabled)
             {
                 PreviewLegacyCrossEdgeLanding(owner, targetKey, projection.Index);
-                PreviewVacatedLegacyMaster(owner);
             }
         }
         else
@@ -259,9 +260,19 @@ public sealed partial class AppController
                 : EdgeCapsuleLayout.TopForIndex(
                     visualIndex, margin, geometry.LocalWorkAreaDip,
                     placement.SlotCount, DeepCapsuleGap)) + placement.TopOffsetDip;
-            widths.Add(NativeDropGhostMemberWidth(owner.Id, geometry));
+            if (vacatesSource)
+            {
+                top -= pitch;
+                widths.Add(NativeDropGhostMasterWidth(sourceKey, geometry));
+            }
+            if (!vacatesSource || !foldedTarget)
+                widths.Add(NativeDropGhostMemberWidth(owner.Id, geometry));
         }
 
+        // A lifted last member leaves no real source queue, even while its
+        // landing remains on the same edge. Keep only the projected stack.
+        if (vacatesSource && !EdgeCapsuleFreeQueuesEnabled)
+            PreviewVacatedLegacyMaster(owner);
         _nativeQueueDropGhost ??= new EdgeCapsuleQueueDropGhost();
         _singleCapsuleGhostOwnerId = owner.Id;
         var dragWindow = _windows[owner.Id];
@@ -370,4 +381,3 @@ public sealed partial class AppController
             drag.ExitSnap);
     }
 }
-

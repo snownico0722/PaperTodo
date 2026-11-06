@@ -655,22 +655,22 @@ public sealed partial class AppController
             actions.Children.Add(new TextBlock
             {
                 Text = SettingsSidebarLocalized(
-                    "切换工作区" + target,
+                    "切换到工作区" + target,
                     "Switch to " + target,
                     target + "に切替",
                     target + "로 전환"),
                 Foreground = TrayTextBrush,
                 VerticalAlignment = VerticalAlignment.Center,
                 FontSize = AppTypography.Scale(11),
+                FontWeight = FontWeights.SemiBold,
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 Margin = new Thickness(0, 0, 6, 0)
             });
             var confirm = PluginPageButton(SettingsSidebarLocalized(
                 "是", "Yes", "はい", "예"));
             confirm.MinWidth = 28;
-            confirm.Height = 24;
+            confirm.Height = 22;
             confirm.Padding = new Thickness(4, 1, 4, 1);
-            confirm.Margin = new Thickness(0, 0, 3, 0);
             confirm.Click += (_, e) =>
             {
                 e.Handled = true;
@@ -679,17 +679,27 @@ public sealed partial class AppController
             var cancel = PluginPageButton(SettingsSidebarLocalized(
                 "否", "No", "いいえ", "아니요"));
             cancel.MinWidth = 28;
-            cancel.Height = 24;
+            cancel.Height = 22;
             cancel.Padding = new Thickness(4, 1, 4, 1);
             cancel.Click += (_, e) =>
             {
                 e.Handled = true;
                 ShowChoices();
             };
-            Grid.SetColumn(confirm, 1);
-            Grid.SetColumn(cancel, 2);
-            actions.Children.Add(confirm);
-            actions.Children.Add(cancel);
+            Border Frame(Button button) => new()
+            {
+                BorderBrush = TrayBorderBrush,
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(6),
+                Child = button
+            };
+            var confirmFrame = Frame(confirm);
+            confirmFrame.Margin = new Thickness(0, 0, 3, 0);
+            var cancelFrame = Frame(cancel);
+            Grid.SetColumn(confirmFrame, 1);
+            Grid.SetColumn(cancelFrame, 2);
+            actions.Children.Add(confirmFrame);
+            actions.Children.Add(cancelFrame);
             choices.Content = actions;
         }
 
@@ -708,11 +718,18 @@ public sealed partial class AppController
             )).ToArray();
             var selector = (Border)CreateSegmentSelector(segments,
                 WorkspaceNumber.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                key =>
+                async key =>
                 {
                     var target = int.Parse(key, System.Globalization.CultureInfo.InvariantCulture);
                     if (target == firstEmpty)
-                        InvokeTrayAction(menu, () => { _ = CreateWorkspaceAsync(); });
+                    {
+                        await CreateWorkspaceAsync();
+                        if (menu.IsOpen)
+                        {
+                            RebuildTrayMenu(menu);
+                            menu.Focus();
+                        }
+                    }
                     else if (existing.Contains(target) && target != WorkspaceNumber)
                         ShowConfirmation(target);
                 });
