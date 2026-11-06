@@ -47,7 +47,7 @@ internal static class NoteImageExportChecks
                 var dialog = (Microsoft.Win32.SaveFileDialog)typeof(NoteImageExportWindow)
                     .GetMethod("CreateSaveDialog", Private)!.Invoke(preview, null)!;
                 Check(dialog.Filter == Strings.Get("EditorImageExportPng") + " (*.png)|*.png" &&
-                      dialog.DefaultExt == ".png" && dialog.FilterIndex == 1,
+                      dialog.DefaultExt == "png" && dialog.FilterIndex == 1,
                     "Save dialog still offered an unsupported JPG");
             }
             finally { preview.Close(); }
