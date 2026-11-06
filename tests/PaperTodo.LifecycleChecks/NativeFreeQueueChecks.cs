@@ -20,6 +20,8 @@ internal static class NativeFreeQueueChecks
         state.UseCapsuleCollapseAll = false;
         state.EnableAnimations = false;
         state.ExperimentalEdgeCapsuleHoverPreview = false;
+        state.Papers[0].Title = "A";
+        state.Papers[1].Title = "Longer";
         for (var i = 0; i < state.Papers.Count; i++) state.Papers[i].CapsuleQueueId = i < 2 ? "qa" : i < 4 ? "qb" : "qc";
         state.DeepCapsuleQueueStartTopMargins["|right#qa"] = 100;
         state.DeepCapsuleQueueStartTopMargins["|right#qb"] = 350;
@@ -94,16 +96,22 @@ internal static class NativeFreeQueueChecks
             "pointer motion within the same confirmed slot cannot progressively move the target");
         var ghost = (EdgeCapsuleQueueDropGhost)Part(c, "_nativeQueueDropGhost");
         var ghostWindow = (Window)Part(ghost, "_window");
-        var ghostBody = (Border)Part(ghost, "_silhouette");
         var ghostStack = (StackPanel)Part(ghost, "_stack");
+        var ghostWidths = new[]
+        {
+            windows[a.Id].DeepCapsuleRestingVisibleWidthFor(monitor),
+            windows[aPeer.Id].DeepCapsuleRestingVisibleWidthFor(monitor)
+        };
+        ghostWindow.UpdateLayout();
         Require(ghostWindow.IsVisible && ghostWindow.Opacity > 0 &&
                 ghostStack.Children.Count == 2 &&
-                Math.Abs(ghostWindow.Height - (2 * PaperLayoutDefaults.CapsuleHeight + c.DeepCapsuleGap)) < .1 &&
-                Math.Abs(ghostWindow.Width - ownerWindow.DeepCapsuleRestingVisibleWidth) < .1 &&
-                Math.Abs(ghostBody.Height - (PaperLayoutDefaults.CapsuleHeight -
-                    2 * EdgeCapsuleLayout.WindowChromeMargin)) < .1 &&
-                Math.Abs(ghostBody.Margin.Top - EdgeCapsuleLayout.WindowChromeMargin) < .1,
-            "Ctrl carrying two papers previews exactly two theme-colored ordinary capsule silhouettes");
+                Math.Abs(ghostWidths[0] - ghostWidths[1]) > 1 &&
+                Math.Abs(ghostWindow.Width - ghostWidths.Max()) < .1 &&
+                Math.Abs(((Border)ghostStack.Children[0]).ActualWidth -
+                    (ghostWidths[0] - EdgeCapsuleLayout.WindowChromeMargin)) < .1 &&
+                Math.Abs(((Border)ghostStack.Children[1]).ActualWidth -
+                    (ghostWidths[1] - EdgeCapsuleLayout.WindowChromeMargin)) < .1,
+            "Ctrl carrying two papers previews each docked capsule at its own width");
         c.EndNativeEdgeQueueDrag(a.Id);
         await Idle();
         Require(Math.Abs(Top(bPeer) - originalNextTargetTop) < .1,

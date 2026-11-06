@@ -58,7 +58,7 @@ public sealed partial class AppController
             OwnerOffsetDip = (ownerIndex + (carriesMaster ? 1 : 0)) * pitch,
             SourceDpiY = source.Geometry.DpiScaleY, PreviewOrigin = previewOrigin
         };
-        if (EdgeCapsuleFreeQueuesEnabled) _nativeQueueDropGhost ??= new EdgeCapsuleQueueDropGhost();
+        _nativeQueueDropGhost ??= new EdgeCapsuleQueueDropGhost();
         return true;
     }
 
