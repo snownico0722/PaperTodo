@@ -1516,7 +1516,7 @@ When off, open at the docked edge or remembered position.</value>
     <value>Top-bar shortcuts</value>
   </data>
   <data name="TipTopBarShortcutSettings" xml:space="preserve">
-    <value>Drag actions to reorder them or move them across the divider to switch between the title bar and menu. If space is limited, pinned built-in shortcuts move to the menu together.</value>
+    <value>Drag actions to reorder them or cross the divider to change their location. Hide removes the shortcut from title bars and paper menus without changing its position or disabling the feature. If space is limited, pinned built-in shortcuts move into the menu as a group.</value>
   </data>
   <data name="TopBarShownHeading" xml:space="preserve">
     <value>Show in title bar</value>
@@ -1759,4 +1759,31 @@ Resolve the file access problem and retry, or choose “Rebuild workspace” to 
   <data name="SettingsNotesAndTodos" xml:space="preserve"><value>Notes &amp; Todos</value></data>
   <data name="WorkspaceSingleMessage" xml:space="preserve"><value>There is only one workspace.</value></data>
   <data name="WorkspaceCreate" xml:space="preserve"><value>New</value></data>
+  <data name="TopBarHideShortcut" xml:space="preserve">
+    <value>Hide</value>
+  </data>
+  <data name="TopBarRunScript" xml:space="preserve">
+    <value>Run script</value>
+  </data>
+  <data name="TopBarEditScript" xml:space="preserve">
+    <value>Edit script</value>
+  </data>
+  <data name="TopBarScriptSave" xml:space="preserve">
+    <value>Save</value>
+  </data>
+  <data name="TopBarScriptHint" xml:space="preserve">
+    <value>Without a prefix, use !p. Supported prefixes: !p / !power, !pwsh / !ps7, !ps5 / !winps, !pf / !powerf. Put the prefix alone on the first line and start the script on the next line. Only ASCII ! is supported. Saving does not run the script.</value>
+  </data>
+  <data name="WorkspaceScriptsStoppedTitle" xml:space="preserve">
+    <value>Workspace switched</value>
+  </data>
+  <data name="WorkspaceScriptsStoppedMessage" xml:space="preserve">
+    <value>Script processes from the previous workspace have ended.</value>
+  </data>
+  <data name="WorkspaceSessionsClosedMessage" xml:space="preserve">
+    <value>Persistent PowerShell sessions from the previous workspace have closed.</value>
+  </data>
+  <data name="WorkspaceScriptsAndSessionsStoppedMessage" xml:space="preserve">
+    <value>Script processes from the previous workspace have ended, and its persistent PowerShell sessions have closed.</value>
+  </data>
 </root>

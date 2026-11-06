@@ -8,6 +8,24 @@ namespace PaperTodo;
 
 public sealed partial class PaperWindow
 {
+    private static FrameworkElement CreateTopBarRunScriptIcon(Button owner)
+    {
+        var icon = new System.Windows.Shapes.Path
+        {
+            Data = Geometry.Parse("M 5 5 H 19 V 19 H 5 Z M 8 9 L 11 12 L 8 15 M 13 15 H 16"),
+            StrokeThickness = 1.7,
+            StrokeStartLineCap = PenLineCap.Round,
+            StrokeEndLineCap = PenLineCap.Round,
+            StrokeLineJoin = PenLineJoin.Round,
+            Stretch = Stretch.Uniform,
+            Width = Math.Round(15 * TopBarIconScale(), 1),
+            Height = Math.Round(15 * TopBarIconScale(), 1),
+            IsHitTestVisible = false
+        };
+        icon.SetBinding(System.Windows.Shapes.Shape.StrokeProperty, CreateForegroundBinding(owner));
+        return icon;
+    }
+
     private static FrameworkElement CreateTopBarAssociationIcon(
         Button owner,
         bool active)

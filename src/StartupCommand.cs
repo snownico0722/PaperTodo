@@ -9,17 +9,23 @@ public enum StartupCommandKind
     NewTodo,
     NewNote,
     Exit,
-    EnableMcpForCodex
+    EnableMcpForCodex,
+    Studio,
+    Canvas
 }
 
 public sealed class StartupCommand
 {
-    public StartupCommand(StartupCommandKind kind)
+    public StartupCommand(StartupCommandKind kind, bool standalone = false, string? filePath = null)
     {
         Kind = kind;
+        Standalone = kind == StartupCommandKind.Studio && standalone;
+        FilePath = filePath;
     }
 
     public StartupCommandKind Kind { get; }
+    public bool Standalone { get; }
+    public string? FilePath { get; }
 
     public bool CreatesPaper => Kind is StartupCommandKind.NewTodo or StartupCommandKind.NewNote;
 
@@ -27,13 +33,31 @@ public sealed class StartupCommand
         IReadOnlyList<string> args,
         StartupCommandKind defaultWhenEmpty = StartupCommandKind.None)
     {
-        var command = args
-            .Select(Normalize)
-            .FirstOrDefault(arg => !string.IsNullOrWhiteSpace(arg));
+        string? command = null;
+        string? filePath = null;
+        var standalone = false;
+        for (var index = 0; index < args.Count; index++)
+        {
+            var option = Normalize(args[index]);
+            if (string.IsNullOrWhiteSpace(option)) continue;
+            if (option == "standalone")
+            {
+                standalone = true;
+                continue;
+            }
+            if (option == "file")
+            {
+                // Only switches are normalized. The following argument is an opaque
+                // path, including its case, spaces and any leading punctuation.
+                if (index + 1 < args.Count) filePath = args[++index];
+                continue;
+            }
+            command ??= option;
+        }
 
         if (string.IsNullOrWhiteSpace(command))
         {
-            return new StartupCommand(defaultWhenEmpty);
+            return new StartupCommand(args.Count == 0 ? defaultWhenEmpty : StartupCommandKind.None);
         }
 
         return new StartupCommand(command switch
@@ -45,8 +69,10 @@ public sealed class StartupCommand
             "new-note" or "note" or "paper" => StartupCommandKind.NewNote,
             "exit" or "quit" => StartupCommandKind.Exit,
             "enable-mcp-for-codex" => StartupCommandKind.EnableMcpForCodex,
+            "studio" => StartupCommandKind.Studio,
+            "canvas" => StartupCommandKind.Canvas,
             _ => StartupCommandKind.None
-        });
+        }, standalone, filePath);
     }
 
     private static string Normalize(string arg)
