@@ -293,6 +293,67 @@ public sealed partial class AppController
         }
     }
 
+    // Legacy master transfer is floating only: its anchored queue already owns
+    // all the visible pixels before unlocking from the wall.
+    private void PreviewLegacyMasterTransferDropGhost(
+        MasterCapsuleQueueTransferSnapshot snapshot, DeviceScreenPoint pointer)
+    {
+        if (_masterCapsuleQueueTransfer != snapshot ||
+            !State.UseCapsuleMode || !State.UseDeepCapsuleMode ||
+            !WindowWorkAreaHelper.TryGetMonitorGeometryAtDeviceScreenPoint(pointer, out var geometry) ||
+            !MasterCapsuleQueueTransferPolicy.TryResolveTarget(pointer,
+                snapshot.SourceMonitorDeviceName, snapshot.SourceEdge,
+                snapshot.PaperIds.Length + 1, DeepCapsuleGap, out var initialTarget))
+        {
+            _nativeQueueDropGhost?.Hide();
+            return;
+        }
+
+        var sourceIds = snapshot.PaperIds.ToHashSet(StringComparer.Ordinal);
+        string Side(EdgeCapsuleEdge edge) => edge == EdgeCapsuleEdge.Left
+            ? DeepCapsuleSides.Left : DeepCapsuleSides.Right;
+        var initialKey = EdgeKey(initialTarget.MonitorDeviceName, Side(initialTarget.Edge));
+        var others = DeepCapsulePapersInOrder()
+            .Where(p => !sourceIds.Contains(p.Id) && QueueKey(p) == initialKey).ToList();
+        if (!MasterCapsuleQueueTransferPolicy.TryResolveTarget(pointer,
+                snapshot.SourceMonitorDeviceName, snapshot.SourceEdge,
+                snapshot.PaperIds.Length + others.Count + 1, DeepCapsuleGap, out var target))
+        {
+            _nativeQueueDropGhost?.Hide();
+            return;
+        }
+
+        var side = Side(target.Edge);
+        var targetKey = EdgeKey(target.MonitorDeviceName, side);
+        var sourceMaster = _masterCapsules.GetValueOrDefault(snapshot.SourceQueueKey);
+        var raiseDrag = sourceMaster?.BringDragWindowAboveGhost;
+        var topmost = sourceMaster?.DragWindowIsTopmost ?? true;
+        _nativeQueueDropGhost ??= new EdgeCapsuleQueueDropGhost();
+        if (others.Count > 0 && IsCapsuleCollapseAllActiveForQueue(targetKey) &&
+            _masterCapsules.TryGetValue(targetKey, out var foldedMaster))
+        {
+            _nativeQueueDropGhost.ShowMergeHaloAt(geometry, side,
+                foldedMaster.AnchorTop, foldedMaster.DesiredDockedWidthFor(geometry),
+                raiseDrag, topmost);
+            return;
+        }
+
+        var hasDestinationMaster = others.Count > 0;
+        var widths = new List<double>(snapshot.PaperIds.Length + 1);
+        if (!hasDestinationMaster)
+            widths.Add(NativeDropGhostMasterWidth(snapshot.SourceQueueKey, geometry));
+        if (hasDestinationMaster || !snapshot.SourceWasCollapsed)
+            foreach (var id in snapshot.PaperIds)
+                widths.Add(NativeDropGhostMemberWidth(id, geometry));
+
+        var visualIndex = hasDestinationMaster ? others.Count + 1 : 0;
+        var totalSlots = snapshot.PaperIds.Length + others.Count + 1;
+        var top = EdgeCapsuleLayout.TopForIndex(visualIndex, target.StartTopMargin,
+            geometry.LocalWorkAreaDip, totalSlots, DeepCapsuleGap);
+        _nativeQueueDropGhost.ShowAt(geometry, side, top, widths, DeepCapsuleGap,
+            raiseDrag, topmost);
+    }
+
     // The only magnetic movement is a repeatable snap to the source's OUTER
     // slot when dragging one paper away. There is no join magnet or dampening.
     // Snap state deliberately survives drag.Detached: the user may return to the
