@@ -632,7 +632,7 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
     <value>ホバー時も通常どおり伸びますが、追加領域は閉じるボタンのない通常のカプセル領域として動作します。閉じる場合は右クリックメニューの「隠す」を使います。</value>
   </data>
   <data name="TipMaxTitleLength" xml:space="preserve">
-    <value>タイトルは全角文字換算で数えます。全角1文字、英数字などの半角2文字を同じ長さとして扱います。上限を下げると既存のタイトルも短縮されます。</value>
+    <value>全角文字は1文字、英数字などの半角文字は半文字として数えます。上限を下げても既存の名前は削除せず、超過分を非表示にします。上限を戻すと再表示されます。名前を変更した場合は現在の上限で切り詰めます。</value>
   </data>
   <data name="TipStartup" xml:space="preserve">
     <value>Windows 起動時に PaperTodo を自動起動します。</value>
@@ -1670,8 +1670,8 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="NoteExportNoNotes" xml:space="preserve"><value>エクスポートできるメモまたは ToDo がありません。</value></data>
   <data name="NoteExportProgress" xml:space="preserve"><value>エクスポート中 {0}/{1} 件</value></data>
   <data name="TodoExportCurrent" xml:space="preserve"><value>この ToDo をエクスポート</value></data>
-  <data name="SettingsCapsuleFreeQueues" xml:space="preserve"><value>エッジカプセルの自由なキュー</value></data>
-  <data name="TipCapsuleFreeQueues" xml:space="preserve"><value>カプセルを離して独立したキューを作成します。Ctrl を押しながらキュー全体を移動し、横に引き出して別の端や画面へ移動できます。メインカプセルで同じ端のキューをまとめて収納できます。</value></data>
+  <data name="SettingsCapsuleFreeQueues" xml:space="preserve"><value>カプセルの自由キュー</value></data>
+  <data name="TipCapsuleFreeQueues" xml:space="preserve"><value>有効にすると、カプセルを離して独立したキューを作成できます。Ctrlまたは各キューのマスターで全体を移動し、横に引き出すと別の端や画面へ移動できます。無効時のCtrlドラッグは単体移動となり、マスターでは引き続き端のキュー全体を移動できます。</value></data>
   <data name="HistoryRecoveryTitle" xml:space="preserve">
     <value>ワークスペースを復元</value>
   </data>
@@ -1756,4 +1756,7 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
 
 ファイルへのアクセスの問題を解決して再試行するか、「ワークスペースを再作成」を選んでメモ、タスク、設定を空の状態から開始できます。</value>
   </data>
+  <data name="SettingsNotesAndTodos" xml:space="preserve"><value>ノートとToDo</value></data>
+  <data name="WorkspaceSingleMessage" xml:space="preserve"><value>ワークスペースは現在1つだけです。</value></data>
+  <data name="WorkspaceCreate" xml:space="preserve"><value>新規</value></data>
 </root>

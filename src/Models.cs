@@ -502,7 +502,7 @@ public sealed class AppState
     public string DeepCapsuleGapSize { get; set; } = DeepCapsuleGapSizes.Standard;
     public bool ShowTopBarNewTodoButton { get; set; } = true;
     public bool ShowTopBarNewNoteButton { get; set; } = true;
-    public bool ShowTopBarExternalOpenButton { get; set; } = true;
+    public bool ShowTopBarExternalOpenButton { get; set; }
     // One global ordered list. The first TopBarPinnedCount commands live in the bar;
     // the remaining commands live in the menu. The per-paper types have no separate layout.
     public List<string> TopBarShortcutOrder { get; set; } =

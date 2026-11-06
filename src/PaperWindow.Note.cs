@@ -1023,11 +1023,7 @@ public sealed partial class PaperWindow
         {
             _openMarkdownButton.Content = ExternalOpenButtonLabel();
             _openMarkdownButton.ToolTip = OpenMarkdownEditorToolTip();
-            _openMarkdownButton.Visibility =
-                _controller.State.ShowTopBarExternalOpenButton &&
-                IsCurrentBodyProviderMarkdown
-                    ? Visibility.Visible
-                    : Visibility.Collapsed;
+            UpdateTopBarNewPaperButtons();
         }
     }
 

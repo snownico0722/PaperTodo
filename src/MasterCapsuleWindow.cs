@@ -475,7 +475,7 @@ public sealed partial class MasterCapsuleWindow : Window
     private void OnFloatingDragHostLocationChanged(object? sender, EventArgs e)
     {
         if (!ReferenceEquals(sender, _floatingDragHost)) return;
-        if (_queueTransferSnapshot is { FreeLayout: not null } snapshot &&
+        if (_queueTransferSnapshot is { } snapshot &&
             WindowNative.TryGetCursorScreenPosition(out var pointer))
             _controller.PreviewFreeMasterQueueDropGhost(snapshot, pointer);
         if (_floatingFullscreenAvoidanceWindow !=
@@ -1244,5 +1244,3 @@ public sealed partial class MasterCapsuleWindow : Window
         return IntPtr.Zero;
     }
 }
-
-

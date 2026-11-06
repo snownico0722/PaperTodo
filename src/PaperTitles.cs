@@ -67,6 +67,11 @@ public static class PaperTitles
         return EffectiveTitle(paper, fallbackNumber);
     }
 
+    // Display limits never rewrite the persisted title. Editing and external reads
+    // still use EffectiveTitle; only compact UI labels use this projection.
+    public static string DisplayTitle(PaperData paper, int fallbackNumber, int maxLength) =>
+        CleanCustomTitle(EffectiveTitle(paper, fallbackNumber), maxLength);
+
     private static string NormalizeCustomTitle(string? title)
     {
         var cleaned = (title ?? "").Trim();

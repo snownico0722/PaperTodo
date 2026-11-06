@@ -805,7 +805,7 @@ public sealed partial class StateStore
             paper.CapsuleQueueId = EdgeCapsuleQueueIds.Normalize(paper.CapsuleQueueId);
             NormalizeDeepCapsuleExpandedGeometry(paper);
 
-            paper.Title = PaperTitles.CleanCustomTitle(paper.Title, state.MaxTitleLength);
+            paper.Title = PaperTitles.CleanCustomTitle(paper.Title);
             paper.X = NormalizeCoordinate(paper.X, 120);
             paper.Y = NormalizeCoordinate(paper.Y, 120);
             if (double.IsNaN(paper.TextZoom) || double.IsInfinity(paper.TextZoom) || paper.TextZoom <= 0)

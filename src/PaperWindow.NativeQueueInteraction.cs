@@ -25,7 +25,7 @@ public sealed partial class PaperWindow
 
     private void LatchNativeQueueControl()
     {
-        _nativeQueueWholeRequested = NativeQueueControlPressed(
+        _nativeQueueWholeRequested = _controller.EdgeCapsuleFreeQueuesEnabled && NativeQueueControlPressed(
             _nativeQueuePointerDownKeys, Keyboard.Modifiers, WindowNative.IsControlKeyDown);
         _nativeQueuePointerDownKeys = 0;
         _nativeQueueClickRevoked = false;

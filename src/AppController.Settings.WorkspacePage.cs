@@ -33,7 +33,6 @@ public sealed partial class AppController
         root.IsEnabled = !_workspaceSwitching;
         var enabled = WorkspaceOptions.Enabled;
         var title = SettingsSectionLabel(Strings.Get("WorkspaceSettingsTitle"));
-        title.Opacity = enabled ? 1 : 0.5;
         root.Children.Add(title);
         // Keep only this toggle active when workspaces are disabled.
         root.Children.Add(SettingsToggle(Strings.Get("WorkspaceEnabled"), enabled, async () =>
@@ -48,6 +47,17 @@ public sealed partial class AppController
             Opacity = enabled ? 1 : 0.5
         };
         root.Children.Add(optionsPanel);
+
+        optionsPanel.Children.Add(SettingsToggle(WorkspaceUi(
+                "顶栏快捷切换显示具体名称", "Choose workspaces by name in the top bar",
+                "上部バーで名前を表示して選択", "상단 표시줄에서 이름으로 선택"),
+            WorkspaceOptions.TopBarNamePicker, async () =>
+            {
+                var next = WorkspaceOptions.Normalized();
+                next.TopBarNamePicker = !next.TopBarNamePicker;
+                await ChangeWorkspaceConfigurationAsync(next);
+                RefreshSettingsWindowContent();
+            }));
 
         var heading = new DockPanel { Margin = new Thickness(0, 12, 0, 5) };
         var create = SettingsTextButton(WorkspaceUi("新建", "New", "新規", "새로 만들기"));
@@ -84,19 +94,6 @@ public sealed partial class AppController
             if (!await SwitchWorkspaceAsync(selected)) RefreshSettingsWindowContent();
         };
         optionsPanel.Children.Add(confirm);
-
-        optionsPanel.Children.Add(SettingsSectionLabel(WorkspaceUi(
-            "顶栏快捷", "Top-bar shortcut", "上部バーのショートカット", "상단 표시줄 바로 가기")));
-        optionsPanel.Children.Add(SettingsToggle(WorkspaceUi(
-                "顶栏快捷切换显示具体名称", "Choose workspaces by name in the top bar",
-                "上部バーで名前を表示して選択", "상단 표시줄에서 이름으로 선택"),
-            WorkspaceOptions.TopBarNamePicker, async () =>
-            {
-                var next = WorkspaceOptions.Normalized();
-                next.TopBarNamePicker = !next.TopBarNamePicker;
-                await ChangeWorkspaceConfigurationAsync(next);
-                RefreshSettingsWindowContent();
-            }));
 
         return root;
     }
