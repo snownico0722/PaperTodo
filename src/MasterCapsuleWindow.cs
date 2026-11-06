@@ -835,7 +835,7 @@ public sealed partial class MasterCapsuleWindow : Window
         MasterDockedWidth(geometry.DpiScaleY, updateLabel: false);
 
     internal void BringDragWindowAboveGhost() =>
-        WindowNative.BringToFrontNoActivate(_floatingDragHost ?? this);
+        WindowNative.BringToFrontNoActivate((Window?)_floatingDragHost ?? this);
 
     internal double DesiredDockedWidth
     {

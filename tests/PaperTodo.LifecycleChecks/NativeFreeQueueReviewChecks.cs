@@ -179,6 +179,7 @@ internal static class NativeFreeQueueReviewChecks
             await Idle();
             c.PreviewSingleCapsuleDropGhost(ghostOwner, 0, targetPointer, floating: true);
             var emptyGhost = Field<EdgeCapsuleQueueDropGhost>(c, "_nativeQueueDropGhost");
+            Field<Window>(emptyGhost, "_window").UpdateLayout();
             Require(Field<StackPanel>(emptyGhost, "_stack").Children.Count == 2,
                 "empty target edge previews its new master and incoming member");
             var sourceMaster = c.MasterCapsuleForQueue(c.QueueKeyForPaper(ghostOwner))!;
