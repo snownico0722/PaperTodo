@@ -100,8 +100,8 @@ public sealed partial class PaperWindow
             label.FontSize = AppTypography.Scale(12);
         }
         _editorStatisticsPopup!.CornerRadius = new CornerRadius(Theme.IsPixelSkin ? 0 : RadiusBlock);
-        _editorStatisticsPopup.Margin = new Thickness(8, 8,
-            8 + (IsExpandedEditorSidebarOpen ? ExpandedEditorSidebarWidth : 0),
+        _editorStatisticsPopup.Margin = new Thickness(
+            8 + (IsExpandedEditorSidebarOpen ? ExpandedEditorSidebarWidth : 0), 8, 8,
             ExpandedEditorStatusHeight + 8);
     }
 

@@ -286,6 +286,9 @@ public sealed partial class AppController
     // strokes (24-unit Lucide-style outlines) rather than font-dependent symbols.
     private static FrameworkElement CreateTopBarShortcutIcon(string action)
     {
+        if (action == PaperTopBarShortcuts.ExpandedEditor)
+            return StudioIcons.Create(new Control { Foreground = TrayWeakTextBrush }, StudioIcon.Studio,
+                AppTypography.Scale(16));
         string? pathData = action switch
         {
             PaperTopBarShortcuts.Association =>
@@ -293,8 +296,6 @@ public sealed partial class AppController
                 "A 5 5 0 0 0 13.47 3.47 L 11.75 5.18 " +
                 "M 14 11 A 5 5 0 0 0 6.46 10.46 L 3.46 13.46 " +
                 "A 5 5 0 0 0 10.53 20.53 L 12.24 18.82",
-            PaperTopBarShortcuts.ExpandedEditor =>
-                "M 8 3 H 3 V 8 M 3 3 L 9 9 M 16 21 H 21 V 16 M 21 21 L 15 15",
             PaperTopBarShortcuts.ExternalEditor =>
                 "M 15 3 H 21 V 9 M 10 14 L 21 3 " +
                 "M 21 13 V 19 A 2 2 0 0 1 19 21 H 5 " +

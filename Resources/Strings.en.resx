@@ -1745,7 +1745,7 @@ Choosing “Rebuild workspace” starts the notes, tasks and settings of workspa
   <data name="WorkspaceRecoveryFallback" xml:space="preserve">
     <value>Return to workspace {0}</value>
   </data>
-  <data name="EditorOpen" xml:space="preserve"><value>Open in editor</value></data>
+  <data name="EditorOpen" xml:space="preserve"><value>Open in Studio</value></data>
   <data name="EditorReturn" xml:space="preserve"><value>Return to paper</value></data>
   <data name="EditorSidebarShow" xml:space="preserve"><value>Show paper list</value></data>
   <data name="EditorSidebarHide" xml:space="preserve"><value>Hide paper list</value></data>
@@ -1815,4 +1815,6 @@ Resolve the file access problem and retry, or choose “Rebuild workspace” to 
   <data name="SettingsNotesAndTodos" xml:space="preserve"><value>Notes &amp; Todos</value></data>
   <data name="WorkspaceSingleMessage" xml:space="preserve"><value>There is only one workspace.</value></data>
   <data name="WorkspaceCreate" xml:space="preserve"><value>New</value></data>
+  <data name="StudioTitle" xml:space="preserve"><value>Studio</value></data>
+  <data name="EditorClose" xml:space="preserve"><value>Close Studio</value></data>
 </root>

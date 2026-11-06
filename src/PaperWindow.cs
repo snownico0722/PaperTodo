@@ -3357,8 +3357,9 @@ public sealed partial class PaperWindow : Window
         };
     }
 
-    private static FrameworkElement CreateTopmostPinIcon(Button owner, bool pinned)
+    private FrameworkElement CreateTopmostPinIcon(Button owner, bool pinned)
     {
+        if (_isExpandedEditorMode) return StudioIcons.Create(owner, StudioIcon.Pin, 16 * TopBarIconScale());
         if (Theme.IsPixelSkin) return pinned
             ? CreatePixelIcon(owner, "..####..", "...##...", "..####..", ".######.", "...##...", "...##...", "...#....")
             : CreatePixelIcon(owner, "..####..", "..#..#..", "..#..#..", ".######.", "...##...", "...##...", "...#....");

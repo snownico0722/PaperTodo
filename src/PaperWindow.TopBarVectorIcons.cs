@@ -8,10 +8,11 @@ namespace PaperTodo;
 
 public sealed partial class PaperWindow
 {
-    private static FrameworkElement CreateTopBarAssociationIcon(
+    private FrameworkElement CreateTopBarAssociationIcon(
         Button owner,
         bool active)
     {
+        if (_isExpandedEditorMode) return StudioIcons.Create(owner, StudioIcon.Association, 16 * TopBarIconScale());
         if (Theme.IsPixelSkin) return CreatePixelIcon(owner,
             "....#....", "..#####..", ".##.#.##.", ".#..#..#.", "#########", ".#..#..#.", ".##.#.##.", "..#####..", "....#....");
         var scale = TopBarIconScale();
@@ -31,8 +32,9 @@ public sealed partial class PaperWindow
         return icon;
     }
 
-    private static FrameworkElement CreateTopBarNewTodoIcon(Button owner)
+    private FrameworkElement CreateTopBarNewTodoIcon(Button owner)
     {
+        if (_isExpandedEditorMode) return StudioIcons.Create(owner, StudioIcon.NewTodo, 16 * TopBarIconScale());
         if (Theme.IsPixelSkin) return CreatePixelIcon(owner,
             ".........", "#######..", "#.....#.#", "#....#..#", "#.#.#...#", "#..#....#", "#.......#", "#########", ".........");
         return CreateTopBarNewPaperIcon(
@@ -41,8 +43,9 @@ public sealed partial class PaperWindow
             width: 21);
     }
 
-    private static FrameworkElement CreateTopBarNewNoteIcon(Button owner)
+    private FrameworkElement CreateTopBarNewNoteIcon(Button owner)
     {
+        if (_isExpandedEditorMode) return StudioIcons.Create(owner, StudioIcon.NewNote, 16 * TopBarIconScale());
         if (Theme.IsPixelSkin) return CreatePixelIcon(owner,
             "......##.", ".....####", "....####.", "...####..", "..####...", ".####....", ".###.....", ".#.......", ".........");
         return CreateTopBarNewPaperIcon(
@@ -95,10 +98,11 @@ public sealed partial class PaperWindow
         return icon;
     }
 
-    private static FrameworkElement CreateTopBarCloseIcon(
+    private FrameworkElement CreateTopBarCloseIcon(
         Button owner,
         bool collapse)
     {
+        if (_isExpandedEditorMode) return StudioIcons.Create(owner, StudioIcon.Close, 16 * TopBarIconScale());
         if (Theme.IsPixelSkin) return collapse
             ? CreatePixelIcon(owner, "########")
             : CreatePixelIcon(owner, "##....##", ".##..##.", "..####..", "...##...", "..####..", ".##..##.", "##....##");

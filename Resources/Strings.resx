@@ -1791,7 +1791,7 @@
   <data name="WorkspaceRecoveryFallback" xml:space="preserve">
     <value>回退到工作区 {0}</value>
   </data>
-  <data name="EditorOpen" xml:space="preserve"><value>在编辑器中打开</value></data>
+  <data name="EditorOpen" xml:space="preserve"><value>在工作台中打开</value></data>
   <data name="EditorReturn" xml:space="preserve"><value>返回纸片</value></data>
   <data name="EditorSidebarShow" xml:space="preserve"><value>显示纸片列表</value></data>
   <data name="EditorSidebarHide" xml:space="preserve"><value>收起纸片列表</value></data>
@@ -1861,4 +1861,6 @@
   <data name="SettingsNotesAndTodos" xml:space="preserve"><value>笔记与待办</value></data>
   <data name="WorkspaceSingleMessage" xml:space="preserve"><value>当前只有一个工作区。</value></data>
   <data name="WorkspaceCreate" xml:space="preserve"><value>新建</value></data>
+  <data name="StudioTitle" xml:space="preserve"><value>工作台</value></data>
+  <data name="EditorClose" xml:space="preserve"><value>关闭工作台</value></data>
 </root>

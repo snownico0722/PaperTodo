@@ -1745,7 +1745,7 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="WorkspaceRecoveryFallback" xml:space="preserve">
     <value>ワークスペース {0} に戻る</value>
   </data>
-  <data name="EditorOpen" xml:space="preserve"><value>エディターで開く</value></data>
+  <data name="EditorOpen" xml:space="preserve"><value>スタジオで開く</value></data>
   <data name="EditorReturn" xml:space="preserve"><value>紙片に戻る</value></data>
   <data name="EditorSidebarShow" xml:space="preserve"><value>紙片一覧を表示</value></data>
   <data name="EditorSidebarHide" xml:space="preserve"><value>紙片一覧を閉じる</value></data>
@@ -1815,4 +1815,6 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="SettingsNotesAndTodos" xml:space="preserve"><value>ノートとToDo</value></data>
   <data name="WorkspaceSingleMessage" xml:space="preserve"><value>ワークスペースは現在1つだけです。</value></data>
   <data name="WorkspaceCreate" xml:space="preserve"><value>新規</value></data>
+  <data name="StudioTitle" xml:space="preserve"><value>スタジオ</value></data>
+  <data name="EditorClose" xml:space="preserve"><value>スタジオを閉じる</value></data>
 </root>

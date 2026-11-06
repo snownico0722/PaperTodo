@@ -1166,7 +1166,8 @@ public sealed partial class AppController : IDisposable
         if (command.Kind is StartupCommandKind.Show or
             StartupCommandKind.Toggle or
             StartupCommandKind.NewTodo or
-            StartupCommandKind.NewNote)
+            StartupCommandKind.NewNote or
+            StartupCommandKind.Studio)
         {
             // Startup and secondary-instance commands arrive before PaperTodo intentionally takes focus.
             // Refresh here so a recent desktop/taskbar switch cannot leave stale fullscreen avoidance.
@@ -1196,6 +1197,9 @@ public sealed partial class AppController : IDisposable
                 break;
             case StartupCommandKind.NewNote:
                 CreatePaper(PaperTypes.Note, show: true);
+                break;
+            case StartupCommandKind.Studio:
+                OpenStudio();
                 break;
             case StartupCommandKind.Exit:
                 Exit();

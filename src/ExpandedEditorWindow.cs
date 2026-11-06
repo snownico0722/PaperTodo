@@ -28,10 +28,10 @@ internal sealed partial class ExpandedEditorWindow : Window
     internal PaperWindow? CurrentPaper => _current;
     internal string? CurrentPaperId => _current?.PaperId;
 
-    internal ExpandedEditorWindow(AppController controller, PaperWindow initial)
+    internal ExpandedEditorWindow(AppController controller, PaperWindow? initial = null)
     {
         _controller = controller;
-        Title = initial.ExpandedEditorTitle;
+        Title = StudioTitle(initial);
         WindowStartupLocation = WindowStartupLocation.Manual;
         WindowStyle = WindowStyle.None;
         ResizeMode = ResizeMode.CanResize;
@@ -58,7 +58,8 @@ internal sealed partial class ExpandedEditorWindow : Window
             Child = _body
         };
         Content = _frame;
-        SetFrameTheme(initial);
+        if (initial != null) SetFrameTheme(initial);
+        else _frame.Background = Background;
 
         var area = WindowWorkAreaHelper.WorkAreaFor(initial);
         Width = Math.Min(area.Width, Math.Max(600, Math.Min(1320, area.Width * 0.84)));
@@ -66,7 +67,7 @@ internal sealed partial class ExpandedEditorWindow : Window
         Left = area.Left + (area.Width - Width) / 2;
         Top = area.Top + (area.Height - Height) / 2;
 
-        if (initial.SavedExpandedEditorState is { } saved &&
+        if (initial?.SavedExpandedEditorState is { } saved &&
             double.IsFinite(saved.X) && double.IsFinite(saved.Y) &&
             double.IsFinite(saved.Width) && double.IsFinite(saved.Height) &&
             saved.Width > 0 && saved.Height > 0)
@@ -105,10 +106,16 @@ internal sealed partial class ExpandedEditorWindow : Window
             catch (EntryPointNotFoundException) { }
         };
 
+        Activated += (_, _) => _controller.OnStudioActivated(this);
         BuildPaperSidebar();
-        IsSidebarOpen = initial.SavedExpandedEditorState?.SidebarOpen ?? false;
-        SwitchTo(initial);
+        IsSidebarOpen = initial == null || (initial.SavedExpandedEditorState?.SidebarOpen ?? false);
+        if (initial != null) SwitchTo(initial);
+        else ShowEmptyStudio();
     }
+
+    private static string StudioTitle(PaperWindow? paper) => paper == null
+        ? $"{Strings.Get("StudioTitle")} — PaperTodo"
+        : $"{paper.ExpandedEditorTitle} — {Strings.Get("StudioTitle")}";
 
     private void SetFrameTheme(PaperWindow source)
     {
@@ -124,9 +131,10 @@ internal sealed partial class ExpandedEditorWindow : Window
             return;
         if (target.IsExpandedEditorHosted)
         {
-            target.ExpandedEditorHostWindow?.Activate();
+            target.ExpandedEditorHostWindow?.ActivateEditor();
             return;
         }
+        DetachEmptyStudio();
         var former = _lease;
         var formerPaperId = _current?.PaperId;
         _lease = null;
@@ -136,7 +144,7 @@ internal sealed partial class ExpandedEditorWindow : Window
         _lease = target.BorrowExpandedEditorVisual(this, _body);
         _current = target;
         RefreshPaperList();
-        Title = target.ExpandedEditorTitle;
+        Title = StudioTitle(target);
         SetFrameTheme(target);
         SetPaperTopmost(target.ExpandedEditorShouldTopmost);
         if (IsVisible) Activate();
@@ -155,7 +163,7 @@ internal sealed partial class ExpandedEditorWindow : Window
     internal void RefreshPaperTitle(PaperWindow paper)
     {
         if (ReferenceEquals(_current, paper))
-            Title = paper.ExpandedEditorTitle;
+            Title = StudioTitle(paper);
     }
 
     internal void SetPaperTopmost(bool topmost)

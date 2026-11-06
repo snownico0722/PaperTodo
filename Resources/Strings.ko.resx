@@ -1745,7 +1745,7 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="WorkspaceRecoveryFallback" xml:space="preserve">
     <value>작업 공간 {0}(으)로 돌아가기</value>
   </data>
-  <data name="EditorOpen" xml:space="preserve"><value>편집기로 열기</value></data>
+  <data name="EditorOpen" xml:space="preserve"><value>스튜디오에서 열기</value></data>
   <data name="EditorReturn" xml:space="preserve"><value>종이로 돌아가기</value></data>
   <data name="EditorSidebarShow" xml:space="preserve"><value>종이 목록 표시</value></data>
   <data name="EditorSidebarHide" xml:space="preserve"><value>종이 목록 닫기</value></data>
@@ -1815,4 +1815,6 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="SettingsNotesAndTodos" xml:space="preserve"><value>노트 및 할 일</value></data>
   <data name="WorkspaceSingleMessage" xml:space="preserve"><value>현재 작업 공간이 하나뿐입니다.</value></data>
   <data name="WorkspaceCreate" xml:space="preserve"><value>새로 만들기</value></data>
+  <data name="StudioTitle" xml:space="preserve"><value>스튜디오</value></data>
+  <data name="EditorClose" xml:space="preserve"><value>스튜디오 닫기</value></data>
 </root>

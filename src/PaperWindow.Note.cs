@@ -1041,7 +1041,8 @@ public sealed partial class PaperWindow
     {
         if (_openMarkdownButton != null)
         {
-            _openMarkdownButton.Content = ExternalOpenButtonLabel();
+            _openMarkdownButton.Content = _isExpandedEditorMode
+                ? StudioIcons.Create(_openMarkdownButton, StudioIcon.ExternalOpen) : ExternalOpenButtonLabel();
             _openMarkdownButton.ToolTip = OpenMarkdownEditorToolTip();
             UpdateTopBarNewPaperButtons();
         }

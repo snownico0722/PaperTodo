@@ -23,6 +23,7 @@ This manual is for everyday users of PaperTodo. Start with [1. Quick Start](#1-q
   - [2.4 Collapse, Hide, Delete, and Exit](#24-collapse-hide-delete-and-exit)
   - [2.5 Full-Text Search](#25-full-text-search)
   - [2.6 Exporting Todos and Notes](#26-exporting-todos-and-notes)
+  - [2.7 Studio](#27-studio)
 - [3. Todo Papers](#3-todo-papers)
   - [3.1 Adding and Editing Items](#31-adding-and-editing-items)
   - [3.2 Reordering, Deleting, and Batch Actions](#32-reordering-deleting-and-batch-actions)
@@ -131,11 +132,12 @@ The top bar contains fixed window controls and configurable built-in shortcuts:
 | **Drag to Associate** | Built-in shortcut | Drag onto a todo to link this paper; with window binding enabled, drag onto another app's window to bind to it |
 | **Switch Workspace** | Built-in shortcut | Available when multiple workspaces are enabled; cycles to the next workspace, or selects by name when configured |
 | **New Note / New Todo** | Built-in shortcut | Create another paper |
+| **Studio** | Built-in shortcut | Open the current paper in a resizable, maximizable Studio window with its existing document and undo history |
 | **Open externally** | Built-in shortcut | Temporarily export a built-in Markdown note and open it in an external app; see [4.4](#44-opening-in-an-external-editor) |
 
-In "Settings → General → Top-bar shortcuts", drag the five built-in shortcuts to reorder them or move them between **Show in title bar** and **Show in menu**. Todo and note papers share one layout, and actions that do not apply to the current paper are omitted.
+In "Settings → General → Top-bar shortcuts", drag the built-in shortcuts to reorder them or move them between **Show in title bar** and **Show in menu**. Todo and note papers share one layout, and actions that do not apply to the current paper are omitted.
 
-New installations pin **Drag to Associate** and **Switch Workspace** to the top bar and keep **New Note**, **New Todo**, and **Open externally** in the menu; upgrades preserve existing choices. When the top bar is too narrow, pinned built-in shortcuts move into the `···` menu together. You can hold and drag the association item directly out of the menu as well. Plugins may also add top-bar buttons (such as Codex's `>_`).
+New installations pin **Drag to Associate**, **Switch Workspace**, and **Studio**. This upgrade moves Studio to the title bar and Open externally to the menu once; later customizations are preserved. When the top bar is too narrow, pinned built-in shortcuts move into the `···` menu together. You can hold and drag the association item directly out of the menu as well. Plugins may also add top-bar buttons (such as Codex's `>_`).
 
 ### 2.3 Moving, Resizing, and Windows Snap
 
@@ -174,6 +176,14 @@ Open the `···` menu (or paper context menu) on a todo paper or built-in Markd
 Todo exports preserve item order, completion states, and multiline text while omitting empty placeholder rows. Plugin bodies are excluded. Export runs in the background without blocking editing; check the completion summary for missing-image placeholders or warnings.
 
 Export is for reading, sharing, or moving text to another editor—it is not a full data backup. To back up or migrate workspaces, settings, and plugin data, follow [Chapter 10](#10-data-backup-migration-and-recovery).
+
+### 2.7 Studio
+
+Choose **Open in Studio** from a paper's title bar or menu. Multiple Studio windows can stay open, each with its own paper list. Selecting a paper already open in another Studio activates that window. Switching papers collapses the previous paper to its capsule, or hides it when capsules are unavailable. Window bounds, maximized state and sidebar visibility are remembered separately from desktop paper geometry; editing keeps the existing document and undo history.
+
+The tray Studio icon and `PaperTodo.exe --studio` open a blank Studio with the left paper list and New Note / New Todo actions, without creating a placeholder paper. If a Studio already exists, the most recently used window is activated and restored from minimization. Normal cold startup still displays desktop papers normally before activating Studio, without forcing always-on-top.
+
+Built-in notes offer consistent vector formatting tools, line numbers and statistics updated at most every half second, reusing results until the text changes. Click the bottom-right count for document and selection statistics, or preview and export the full note as a JPG or PNG image.
 
 ---
 
@@ -560,6 +570,7 @@ Use these arguments in shortcuts, scripts, or launchers (visibility and creation
 | `PaperTodo.exe --toggle` | None | Toggle overall visibility |
 | `PaperTodo.exe --new-todo` | `PaperTodo.exe todo` | Create a todo paper |
 | `PaperTodo.exe --new-note` | `PaperTodo.exe note` | Create a note paper |
+| `PaperTodo.exe --studio` | None | Open or activate the most recently used Studio without creating duplicate windows |
 | `PaperTodo.exe --exit` | `PaperTodo.exe quit` | Save and exit |
 | `PaperTodo.exe --mcp` | None | Start the connection process for an MCP client (see [8.5 Labs Features](#85-labs-features)) |
 

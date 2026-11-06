@@ -47,8 +47,8 @@ internal sealed partial class ExpandedEditorWindow
         button.SetBinding(FrameworkElement.ToolTipProperty, new Binding(nameof(PaperListEntry.ToolTip)));
         button.AddHandler(Button.ClickEvent, new RoutedEventHandler((sender, _) =>
         {
-            if (sender is FrameworkElement { DataContext: PaperListEntry entry } && _current is { } paper)
-                _controller.SwitchExpandedEditorPaper(paper, entry.Id);
+            if (sender is FrameworkElement { DataContext: PaperListEntry entry })
+                _controller.SwitchStudioPaper(this, entry.Id);
         }));
         var labels = new FrameworkElementFactory(typeof(StackPanel));
         var title = new FrameworkElementFactory(typeof(TextBlock));
@@ -102,8 +102,8 @@ internal sealed partial class ExpandedEditorWindow
         _editorPaperSidebar = new Border
         {
             Width = SidebarWidth,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            BorderThickness = new Thickness(1, 0, 0, 0),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            BorderThickness = new Thickness(0, 0, 1, 0),
             Child = contents
         };
         _editorPaperSidebar.SetResourceReference(Border.BackgroundProperty, "PaperSurfaceBrushKey");
@@ -128,6 +128,7 @@ internal sealed partial class ExpandedEditorWindow
         IsSidebarOpen = open;
         _editorPaperSidebar.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
         if (open) RefreshPaperList();
+        RefreshEmptyStudioLayout();
         _current?.RefreshExpandedEditorPresentation();
         _current?.MarkExpandedEditorViewDirty();
     }
