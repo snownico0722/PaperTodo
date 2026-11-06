@@ -1083,6 +1083,8 @@ internal static partial class Program
             threeSlotMenu.IsOpen = true;
             await Until(() => threeSlotMenu.ActualWidth > 0, "tray create menu did not finish layout");
             threeSlotMenu.Focus();
+            Require(!await controller.SwitchWorkspaceAsync(2) && controller.WorkspaceNumber == 1,
+                "an open menu must still block a workspace window handoff");
             ClickTraySlot(threeTiles[3]);
             await Until(() => controller.WorkspaceOptions.ContainsSlot(4) && !controller.IsWorkspaceSwitching,
                 "tray plus did not create workspace 4");

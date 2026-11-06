@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Threading;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Threading;
 using Hardcodet.Wpf.TaskbarNotification;
@@ -112,11 +113,14 @@ public sealed partial class AppController
     internal async Task<bool> ChangeWorkspaceConfigurationAsync(WorkspaceConfiguration requested)
     {
         Application.Current.Dispatcher.VerifyAccess();
-        if (!CanBeginWorkspaceChange()) return false;
         var next = requested.Normalized();
         next.Active = !next.Enabled || !next.ContainsSlot(WorkspaceNumber) ? 1 : WorkspaceNumber;
         var followsChanged = WorkspaceNumber > 1 &&
             next.FollowsMain(WorkspaceNumber) != _workspace.FollowsMain;
+        // Catalog-only changes do not hand off windows or editors. A tray menu
+        // may keep its mouse capture while adding a slot in place.
+        if (!CanBeginWorkspaceChange(allowMenuCapture:
+                next.Active == WorkspaceNumber && !followsChanged)) return false;
         if (next.Active != WorkspaceNumber)
             return await SwitchWorkspaceCoreAsync(next.Active, next);
         if (followsChanged)
@@ -243,9 +247,10 @@ public sealed partial class AppController
         Exit();
     }
 
-    private bool CanBeginWorkspaceChange()
+    private bool CanBeginWorkspaceChange(bool allowMenuCapture = false)
     {
-        if (IsExiting || IsDataReloading || _publicSettings?.IsChanging == true || Mouse.Captured != null ||
+        if (IsExiting || IsDataReloading || _publicSettings?.IsChanging == true ||
+            Mouse.Captured != null && !(allowMenuCapture && Mouse.Captured is ContextMenu) ||
             HasDeepCapsuleReorderDragInProgress()) return false;
         return true;
     }
