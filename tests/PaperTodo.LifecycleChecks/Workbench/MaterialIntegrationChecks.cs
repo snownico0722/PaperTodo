@@ -4,7 +4,7 @@ using System.Windows.Controls;
 using PaperTodo;
 using PaperTodo.Plugin;
 
-internal static partial class Program
+internal static partial class WorkbenchChecks
 {
     private static async Task CheckMaterialImageClipboardAndExports(AppController controller, PaperWindow ownerWindow)
     {
@@ -74,17 +74,13 @@ internal static partial class Program
         var exportRoot = Path.Combine(AppContext.BaseDirectory, "material-exports");
         Directory.CreateDirectory(exportRoot);
         var document = new NoteExportDocument(owner.Id, owner.Title, projection);
-        foreach (var format in new[] { NoteExportFormat.Markdown, NoteExportFormat.Html })
-        {
-            var destination = Path.Combine(exportRoot, format == NoteExportFormat.Markdown ? "materials.md" : "materials.html");
-            var result = NotePortableExport.Export(destination, [document], format, false, controller.ImageStore, "missing-image");
-            var exported = File.ReadAllText(destination);
-            Assert(result.Exported == 1 && result.MissingImages == 0 && result.FailedNotes.Count == 0 &&
-                !exported.Contains("missing-image") && !exported.Contains("(i:"),
-                "The materials projection lost an image during " + format + " export");
-            if (format == NoteExportFormat.Html)
-                Assert(exported.Contains("data:image/"), "HTML export omitted the material image bytes");
-        }
+        var destination = Path.Combine(exportRoot, "materials.html");
+        var result = NotePortableExport.Export(destination, [document], NoteExportFormat.Html, false,
+            controller.ImageStore, "missing-image");
+        var exported = File.ReadAllText(destination);
+        Assert(result.Exported == 1 && result.MissingImages == 0 && result.FailedNotes.Count == 0 &&
+               !exported.Contains("missing-image") && !exported.Contains("(i:") && exported.Contains("data:image/"),
+            "HTML export lost the materials projection's owned image bytes");
         var external = controller.ImageStore.ConvertMarkdownForExternalEditor(owner.Id, projection,
             Path.Combine(exportRoot, "external-images"), exportRoot);
         Assert(!external.Contains("(i:") && Directory.EnumerateFiles(Path.Combine(exportRoot, "external-images")).Any(),

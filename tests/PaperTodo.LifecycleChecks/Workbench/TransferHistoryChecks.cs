@@ -4,7 +4,7 @@ using System.Windows.Threading;
 using PaperTodo;
 using PaperTodo.Plugin;
 
-internal static partial class Program
+internal static partial class WorkbenchChecks
 {
     private static async Task RunTransferHistory()
     {

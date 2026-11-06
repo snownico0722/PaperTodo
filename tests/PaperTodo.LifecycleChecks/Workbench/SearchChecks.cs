@@ -7,7 +7,7 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using PaperTodo;
 
-internal static partial class Program
+internal static partial class WorkbenchChecks
 {
     private static async Task RunSearch()
     {

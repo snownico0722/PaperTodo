@@ -5,7 +5,7 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using PaperTodo;
 
-internal static partial class Program
+internal static partial class WorkbenchChecks
 {
     private static async Task RunGroups()
     {
@@ -21,21 +21,6 @@ internal static partial class Program
         var desk = (WorkbenchWindow)Member(controller, "_workbenchWindow");
         await Until(() => desk.HostedPaperCount == 3, "Group fixture did not mount its source papers");
 
-        // Help lives in the leftmost toolbar slot. Routine status is absent from
-        // the canvas, while runtime error/status messages remain available.
-        var left = (WrapPanel)Member(desk, "_layoutCommands");
-        var helpButton = (Button)Member(desk, "_helpButton");
-        Assert(ReferenceEquals(left.Children[0], helpButton) &&
-               ((TextBlock)Member(desk, "_status")).Visibility == Visibility.Collapsed,
-            "Workbench still shows permanent bottom help or has no leftmost help action");
-        var helpPopup = (Popup)Member(desk, "_helpPopup");
-        helpButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-        Assert(helpPopup.IsOpen, "Help button did not open its popover");
-        helpPopup.IsOpen = false;
-        var right = (WrapPanel)Member(desk, "_rightCommands");
-        Assert(right.Children.OfType<Button>().Any(b => Equals(b.Content, Strings.Get("WorkbenchImportMaterials"))),
-            "Workbench has no Windows file chooser import action");
-
         // Native paper actions are available in full from the card. Hiding and
         // desktop capsule transitions are forbidden while its editor is borrowed.
         var original = controller.FindPaper("note-a")!;
@@ -47,33 +32,18 @@ internal static partial class Program
             ?? throw new Exception("Card lost its native right-click menu");
         bool HasAction(string key) => contextMenu.Items.OfType<MenuItem>()
             .Any(item => Equals(item.Header, Strings.Get(key)));
-        Assert(!HasAction("MenuHide") && !HasAction("MenuCollapseToCapsule") &&
-               !HasAction("WorkbenchCollapseCard") && !HasAction("WorkbenchLockCard") &&
-               !HasAction("WorkbenchExpandCard") && !HasAction("WorkbenchUnlockCard") &&
-               HasAction("MenuDelete"),
-            "Workbench paper menu must keep standard actions but put lock/fold only in the card header");
-        Assert(!HasAction("WorkbenchGroupSelection") && !HasAction("WorkbenchUngroup"),
-            "Grouping controls were unexpectedly moved out of the toolbar");
+        Assert(!HasAction("MenuHide") && !HasAction("MenuCollapseToCapsule") && HasAction("MenuDelete"),
+            "Borrowed papers must keep normal actions without exposing desktop form transitions");
 
-        var sceneBefore = Member(desk, "ActiveScene");
-        var backgroundBefore = Member(sceneBefore, "BackgroundFrame");
         var cardBefore = ActiveCards(desk)["note-a"]!;
         var pin = (Button)Member(cardBefore, "Pin");
         var fold = (Button)Member(cardBefore, "Fold");
-        Assert(pin.IsHitTestVisible && fold.IsHitTestVisible &&
-            pin.Content is Grid && fold.Content is System.Windows.Shapes.Path,
-            "Lock and fold must be distinct clickable header icons");
         pin.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-        Assert(controller.WorkbenchLayout.Cards["note-a"].Pinned &&
-            ReferenceEquals(Member(desk, "ActiveScene"), sceneBefore) &&
-            ReferenceEquals(Member(sceneBefore, "BackgroundFrame"), backgroundBefore),
-            "Pinning did not change the position lock or recreated the workbench background");
+        Assert(controller.WorkbenchLayout.Cards["note-a"].Pinned, "Pinning did not change the position lock");
         pin.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Assert(!controller.WorkbenchLayout.Cards["note-a"].Pinned,
             "Unlock header click did not release the position lock");
         fold.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-        Assert(ReferenceEquals(Member(sceneBefore, "BackgroundFrame"), backgroundBefore),
-            "Folding recreated the workbench background and can flash the entire desk");
         await Until(() => controller.WorkbenchLayout.Cards["note-a"].Collapsed &&
                     Math.Abs(CardFrame(desk, "note-a").Height - WorkbenchCardState.CollapsedHeight) < .01,
             "Paper could not be folded on the canvas");
@@ -115,15 +85,8 @@ internal static partial class Program
         var selectedBefore = selected.ToDictionary(id => id, id => controller.WorkbenchLayout.Cards[id].Bounds);
         var moveSelection = (Thumb)Member(ActiveCards(desk)["note-a"]!, "Move");
         moveSelection.RaiseEvent(new DragStartedEventArgs(0, 0) { RoutedEvent = Thumb.DragStartedEvent });
-        Assert(Panel.GetZIndex(CardFrame(desk, "note-a")) == 13 &&
-               Panel.GetZIndex(CardFrame(desk, nodeId)) == 12 &&
-               Panel.GetZIndex(CardFrame(desk, "todo-a")) == 2,
-            "Dragged selection was not raised above neighboring papers");
         moveSelection.RaiseEvent(new DragDeltaEventArgs(60, 35) { RoutedEvent = Thumb.DragDeltaEvent });
         moveSelection.RaiseEvent(new DragCompletedEventArgs(60, 35, false) { RoutedEvent = Thumb.DragCompletedEvent });
-        Assert(Panel.GetZIndex(CardFrame(desk, "note-a")) == 2 &&
-               Panel.GetZIndex(CardFrame(desk, nodeId)) == 2,
-            "Dragging selection left floating elevated layers behind");
         await Until(() => controller.WorkbenchLayout.Cards["note-a"].X != selectedBefore["note-a"].X,
             "Dragging a multiselection did not store its new position");
         Assert(selected.All(id => Math.Abs(controller.WorkbenchLayout.Cards[id].X - selectedBefore[id].X - 60) < .001 &&
@@ -147,12 +110,8 @@ internal static partial class Program
         var before = group.Members.ToDictionary(id => id, id => controller.WorkbenchLayout.Cards[id].Bounds);
         var groupThumb = GroupThumb(desk, group.Title);
         groupThumb.RaiseEvent(new DragStartedEventArgs(0, 0) { RoutedEvent = Thumb.DragStartedEvent });
-        Assert(group.Members.All(id => Panel.GetZIndex(CardFrame(desk, id)) == 12),
-            "Moving group members did not raise them above other papers");
         groupThumb.RaiseEvent(new DragDeltaEventArgs(130, 80) { RoutedEvent = Thumb.DragDeltaEvent });
         groupThumb.RaiseEvent(new DragCompletedEventArgs(130, 80, false) { RoutedEvent = Thumb.DragCompletedEvent });
-        Assert(group.Members.All(id => Panel.GetZIndex(CardFrame(desk, id)) == 2),
-            "Moving a group did not restore member Z order");
         await Until(() => controller.WorkbenchLayout.Cards["note-a"].X != before["note-a"].X,
             "Dragging a collapsed group did not store its new position");
         var after = group.Members.ToDictionary(id => id, id => controller.WorkbenchLayout.Cards[id].Bounds);

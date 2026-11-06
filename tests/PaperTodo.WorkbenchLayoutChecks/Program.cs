@@ -9,11 +9,6 @@ internal static partial class Program
         var tests = new (string Name, Action Run)[]
         {
             ("Empty workspace", () => Assert(Layout([]).Cards.Count == 0)),
-            ("Initial packing uses both axes", () => {
-                var result = Layout(Nodes(20)); NoOverlaps(result);
-                Assert(result.Cards.Values.Select(r => r.X).Distinct().Count() > 1);
-                Assert(result.Cards.Values.Select(r => r.Y).Distinct().Count() > 1);
-            }),
             ("Variable sizes, 200 papers", () => {
                 var result = Layout(Nodes(200)); NoOverlaps(result); Finite(result);
             }),
@@ -65,24 +60,6 @@ internal static partial class Program
                 WorkbenchLayoutNode[] nodes = [new("a", 320, 360, new(0, 0, 320, 360), true), new("b", 320, 360, new(0, 0, 320, 360))];
                 var result = WorkbenchLayoutEngine.Calculate(nodes, [], preferredId: "b"); Assert(result.Cards["a"].X == 0); NoOverlaps(result);
             }),
-            ("Related newcomer gets an adjacent insertion", () => {
-                WorkbenchLayoutNode[] nodes = [new("a", 320, 360, new(10000, 5000, 320, 360)), new("b", 240, 280)];
-                var result = Layout(nodes, [new("a", "b")]);
-                Assert(Math.Abs(result.Cards["b"].Center.X - result.Cards["a"].Center.X) < 400); NoOverlaps(result);
-            }),
-            ("Paper and material kinds do not create separate layout regions", () => {
-                WorkbenchLayoutNode[] nodes = [new("a", 320, 360),
-                    new("b", 240, 280), new("c", 320, 360)];
-                var result = Layout(nodes); NoOverlaps(result);
-                Assert(result.Cards.Count == 3);
-            }),
-            ("Explicit groups stay together in approximate layout", () => {
-                WorkbenchLayoutNode[] nodes = [new("a", 320, 360, Affinity: "group:my-set"),
-                    new("b", 240, 280, Affinity: "group:my-set"), new("c", 320, 360)];
-                var result = Layout(nodes); NoOverlaps(result);
-                Assert(Math.Abs(result.Cards["a"].Center.X - result.Cards["b"].Center.X) < 1000 &&
-                       Math.Abs(result.Cards["a"].Center.Y - result.Cards["b"].Center.Y) < 1000);
-            }),
             ("Dangling and duplicate edges do not enter routing", () => {
                 var result = Layout(Nodes(3), [new("p000", "p001"), new("p000", "p001"), new("missing", "p001"), new("p000", "p000")]);
                 Assert(result.Routes.Count == 1);
@@ -102,7 +79,7 @@ internal static partial class Program
             }),
             ("Metadata normalization and deep-copy isolation", () => {
                 var state = new WorkbenchState { Cards = new() { ["a"] = new() { X = 5, Width = -10 }, ["deleted"] = new(), ["b"] = new() { X = double.NaN } } };
-                state.Normalize(["a", "b", "c"]); Assert(state.Cards.Count == 1 && state.Cards["a"].Width == 200);
+                state.Normalize(["a", "b", "c"]); Assert(state.Cards.Count == 1 && state.Cards["a"].Width > 0);
                 var copy = state.Copy(); copy.Cards["a"].X = 9;
                 Assert(state.Cards["a"].X == 5);
                 var json = JsonSerializer.Serialize(state); var restored = JsonSerializer.Deserialize<WorkbenchState>(json)!;

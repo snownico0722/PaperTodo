@@ -3,7 +3,7 @@ using System.Windows.Input;
 using System.Windows.Threading;
 using PaperTodo;
 
-internal static partial class Program
+internal static partial class WorkbenchChecks
 {
     private static async Task RunMixedHistory()
     {

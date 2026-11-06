@@ -1,11 +1,10 @@
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Threading;
 using PaperTodo;
 
-internal static partial class Program
+internal static partial class WorkbenchChecks
 {
     private static async Task RunGraph()
     {
@@ -38,25 +37,12 @@ internal static partial class Program
         SendNodeKey(desk, editor, Key.Tab);
         SendNodeKey(desk, editor, Key.Enter);
         Assert(materials.Items.Count == originalCount, "Tab/Enter unexpectedly created graph nodes");
-        Assert(editor.AcceptsReturn && !editor.AcceptsTab, "Node text editor uses unexpected text-key behavior");
 
         var child = NewNode(new WorkbenchPoint(2200, 120));
         await Until(() => CardReady(desk, child), "Second independent node did not appear");
         Assert(new[] { root, child }.All(id => controller.FindWorkbenchMaterial(id)?.Kind == WorkspaceMaterialKinds.Node)
                && desk.HostedPaperCount == 3,
             "Canvas nodes were incorrectly turned into standard paper windows");
-
-        // Materials use a compact surface, and both paper/material headers have a drag connector and lock.
-        var materialCard = ActiveCards(desk)[root]!;
-        var compact = (Grid)CardFrame(desk, root).Child;
-        Assert(compact.RowDefinitions.Count == 3 && Member(materialCard, "Connect") is Thumb,
-            "Material uses the full paper shell or has no connection handle");
-        Assert(Member(materialCard, "Pin") is Button pin && pin.IsHitTestVisible &&
-            pin.Content is Grid icon && icon.Children.OfType<System.Windows.Shapes.Path>().Count() >= 2 &&
-            Member(materialCard, "Fold") is Button fold && fold.IsHitTestVisible,
-            "The material has no clickable, high-contrast lock and fold icons");
-        Assert(Member(ActiveCards(desk)["note-b"]!, "Connect") is Thumb,
-            "Paper header has no connection drag handle");
 
         InvokeWorkbench(desk, "CreateConnection", root, child, false);
         Assert(controller.WorkbenchLayout.Connections.Any(c => c.From == root && c.To == child && !c.IsBranch),

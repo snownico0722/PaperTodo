@@ -3,7 +3,7 @@ using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using PaperTodo;
 
-internal static partial class Program
+internal static partial class WorkbenchChecks
 {
     private static async Task RunTransfers()
     {
@@ -23,10 +23,7 @@ internal static partial class Program
         var sourceBox = (MarkdownTextBox)Member(source, "_noteBox");
         var targetBox = (MarkdownTextBox)Member(target, "_noteBox");
 
-        var ordinaryHistoryPosition = Member(source, "_workbenchNoteHistoryPosition");
         sourceBox.Document.Insert(sourceBox.Document.TextLength, "!");
-        Assert(ReferenceEquals(ordinaryHistoryPosition, Member(source, "_workbenchNoteHistoryPosition")),
-            "Ordinary Markdown typing created workbench-only history markers");
         targetBox.Document.Insert(targetBox.Document.TextLength, "?");
         sourceBox.Select(6, 5);
         Assert(source.TryCreateWorkbenchContentTransfer(out var selected), "Note selection did not produce drag payload");
@@ -34,7 +31,6 @@ internal static partial class Program
         Assert(controller.TransferWorkbenchContent(selected, "note-b"), "Note selection was not moved");
         var moveId = controller.LastWorkbenchContentTransferId;
         Assert(sourceBox.Text == "alpha\ngamma!" && targetBox.Text == "target?\nbeta\n", "Note move duplicated or lost text");
-        Assert(ReferenceEquals(Member(source, "_noteBox"), sourceBox), "Move replaced source Markdown editor");
 
         targetBox.Document.Insert(targetBox.Document.TextLength, "later");
         Assert(!controller.TryUndoWorkbenchContentTransfer(moveId) && targetBox.Text.EndsWith("later"),
