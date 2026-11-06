@@ -287,6 +287,9 @@
   <data name="MenuRenameTitle" xml:space="preserve">
     <value>重命名标题</value>
   </data>
+  <data name="TitleEditTooLong" xml:space="preserve">
+    <value>标题超出上限，请缩短后保存（最多 {0} 个汉字等效字）。</value>
+  </data>
   <data name="MenuRestoreWindow" xml:space="preserve">
     <value>展开为纸片</value>
   </data>

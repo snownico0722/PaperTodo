@@ -280,6 +280,9 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
   <data name="MenuRenameTitle" xml:space="preserve">
     <value>タイトルを変更</value>
   </data>
+  <data name="TitleEditTooLong" xml:space="preserve">
+    <value>タイトルが長すぎます。短くしてから保存してください（全角 {0} 文字相当まで）。</value>
+  </data>
   <data name="MenuRestoreWindow" xml:space="preserve">
     <value>紙片として展開</value>
   </data>

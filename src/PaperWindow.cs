@@ -2287,6 +2287,10 @@ public sealed partial class PaperWindow : Window
             VerticalContentAlignment = VerticalAlignment.Center,
             FocusVisualStyle = null
         };
+        // Keep the editor text intact while the IME composes or the user pastes.
+        // The configured weighted limit is checked live, and invalid drafts are
+        // never silently trimmed when Enter or focus loss commits the rename.
+        _titleEditBox.TextChanged += (_, _) => RefreshTitleEditLengthValidation();
         _titleEditBox.PreviewKeyDown += (_, e) =>
         {
             if (e.Key == Key.Enter)
@@ -2914,6 +2918,19 @@ public sealed partial class PaperWindow : Window
         RefreshPaperContextMenus();
     }
 
+    private bool RefreshTitleEditLengthValidation()
+    {
+        if (_titleEditBox == null) return true;
+        var exceeds = PaperTitles.ExceedsTitleLengthLimit(
+            _titleEditBox.Text, _controller.State.MaxTitleLength);
+        _titleEditBox.BorderThickness = new Thickness(exceeds ? 1 : 0);
+        _titleEditBox.BorderBrush = exceeds ? Brushes.IndianRed : Brushes.Transparent;
+        _titleEditBox.ToolTip = exceeds
+            ? Strings.Format("TitleEditTooLong", _controller.State.MaxTitleLength)
+            : null;
+        return !exceeds;
+    }
+
     private void BeginTitleEdit()
     {
         if (_windowLifecycle != PaperWindowLifecycleState.Alive ||
@@ -2968,6 +2985,12 @@ public sealed partial class PaperWindow : Window
         }
 
         var editedTitle = _titleEditBox.Text;
+        if (commit && !RefreshTitleEditLengthValidation())
+        {
+            // Keep the full draft editable; UpdatePaperTitle would otherwise
+            // truncate it to the configured limit without warning.
+            return;
+        }
         _isEditingTitle = false;
         _titleEditBox.Visibility = Visibility.Collapsed;
         _titleText.Visibility = Visibility.Visible;

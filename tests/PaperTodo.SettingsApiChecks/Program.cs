@@ -75,6 +75,7 @@ internal static partial class Program
             TodoMoveBehavior();
             AdapterBehavior();
             SharedUiSettingBehavior();
+            TitleRenameRejectsOverflow();
             SettingsEditorBehavior();
             PostCommitFailureDoesNotReplay();
             Pump(PipeAndUnlinkBehavior());

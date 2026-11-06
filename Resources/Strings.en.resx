@@ -280,6 +280,9 @@ Error: {0}</value>
   <data name="MenuRenameTitle" xml:space="preserve">
     <value>Rename title</value>
   </data>
+  <data name="TitleEditTooLong" xml:space="preserve">
+    <value>Title is too long. Shorten it before saving (up to {0} full-width characters).</value>
+  </data>
   <data name="MenuRestoreWindow" xml:space="preserve">
     <value>Expand to paper</value>
   </data>

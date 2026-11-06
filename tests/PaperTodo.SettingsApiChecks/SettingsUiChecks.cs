@@ -22,6 +22,19 @@ internal static partial class Program
         return service;
     }
 
+    private static void TitleRenameRejectsOverflow()
+    {
+        var controller = Controller();
+        controller.State.MaxTitleLength = 2;
+        var paper = new PaperData { Title = "原名" };
+        controller.State.Papers.Add(paper);
+
+        Throws<ArgumentException>(() => controller.UpdatePaperTitle(paper, "中文A"));
+        Throws<ArgumentException>(() => controller.UpdatePaperTitle(paper, "abcde"));
+        Check(paper.Title == "原名",
+            "An overlong paper rename must keep the previous title instead of truncating it.");
+    }
+
     private static void SharedUiSettingBehavior()
     {
         // Representative entry points cover each value kind plus mutations with side effects.

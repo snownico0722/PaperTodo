@@ -749,6 +749,9 @@ public sealed partial class AppController : IDisposable
 
     public void UpdatePaperTitle(PaperData paper, string title)
     {
+        if (PaperTitles.ExceedsTitleLengthLimit(title, State.MaxTitleLength))
+            throw new ArgumentException("Title exceeds the configured length limit.", nameof(title));
+
         var cleaned = PaperTitles.CleanCustomTitle(title, State.MaxTitleLength);
         if (paper.Title == cleaned)
         {

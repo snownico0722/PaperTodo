@@ -280,6 +280,9 @@ PaperTodo를 수동으로 다시 여세요. 문제가 반복되면 PC를 다시 
   <data name="MenuRenameTitle" xml:space="preserve">
     <value>제목 이름 바꾸기</value>
   </data>
+  <data name="TitleEditTooLong" xml:space="preserve">
+    <value>제목이 너무 깁니다. 줄인 뒤 저장하세요(전각 {0}자 상당까지).</value>
+  </data>
   <data name="MenuRestoreWindow" xml:space="preserve">
     <value>종이로 펼치기</value>
   </data>

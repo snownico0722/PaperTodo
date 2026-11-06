@@ -191,10 +191,13 @@ public sealed partial class AppController
         string title,
         string providerId)
     {
-        PrepareExternalPaperOperation(paper);
         if (!ReferenceEquals(FindPluginRuntimePaper(providerId, paper.Id), paper))
             throw new PaperTodoPluginException("paper_not_owned",
                 "The requested Paper is not an instance of this plugin Runtime.");
+        if (PaperTitles.ExceedsTitleLengthLimit(title, State.MaxTitleLength))
+            throw new PaperTodoPluginException("invalid_params",
+                "Title exceeds the configured length limit.");
+        PrepareExternalPaperOperation(paper);
         using (SuppressPaperPluginEventScans())
         {
             UpdatePaperTitle(paper, title);
