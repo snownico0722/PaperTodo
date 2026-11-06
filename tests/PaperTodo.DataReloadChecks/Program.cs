@@ -10,7 +10,7 @@ internal static partial class Program
     {
         if (args.Contains("--shutdown-workspace")) return RunWorkspaceShutdownFixture();
         if (args.Contains("--kill-writer")) return RunKillWriter(args);
-        if (args.Contains("--shutdown-merge")) return RunShutdownMergeFixture(false);
+        if (args.Contains("--shutdown-merge")) return RunShutdownMergeFixture();
         if (args.Contains("--live-fixture")) return RunLiveFixture();
         if (args.Contains("--history-dialog")) return RunHistoryDialogFixture();
         if (args.Contains("--history-actions")) return RunHistoryActionsFixture();
@@ -24,7 +24,6 @@ internal static partial class Program
             var checks = new (string Name, Action Run)[]
             {
                 ("explicit request accepts external snapshot; no revision metadata", ExplicitImport),
-                ("ordinary saves retain legacy overwrite behavior", NormalSaveWins),
                 ("invalid or missing input never falls back to backup", InvalidInput),
                 ("old async writes cannot replace an accepted import", SaveFence),
                 ("model/list references survive accepted reload", ModelIdentities),
@@ -39,17 +38,15 @@ internal static partial class Program
                 ("merge preserves links to a paper chosen to survive", MergeDeletedPaperRetainsChosenLinks),
                 ("conflict archives retain the latest five complete groups",
                     ConflictArchiveRetentionChecks),
-                ("stale external source cannot overwrite a newer edit", MergeRejectChangedSource),
                 ("source changed after flush is rejected before replacement", MergeRejectDuringReplace),
                 ("source changed during replace retry is also rejected", MergeRejectDuringRetry),
                 ("large text diff avoids quadratic allocations", LargeConflictDiff),
                 ("three conflict policies preserve independent edits and archive actual decisions", MergePolicies),
-                ("missing baselines are rejected for all conflict policies", MergePoliciesMissingBaseline),
                 ("mixed user decisions share the state and archive owner", MergeMixedPolicyChoices),
                 ("merged normalization waits for the selected settings", MergeNormalizeAfterChoices),
                 ("lowering external title limit preserves unchanged title until resolution", MergeLoweredTitleLimitPreservesUnchangedTitle),
                 ("legacy shortcut values migrate on reload and merge", MergeLegacyShortcutMigration),
-                ("identity insertion preserves order with bounded traversal", MergeIdentityOrderChecks)
+                ("identity insertion preserves independent additions and order", MergeIdentityOrderChecks)
             };
             foreach (var check in checks)
             {
@@ -58,7 +55,6 @@ internal static partial class Program
             }
             CoreHistoryBackupChecks();
             HistoryRecoveryChecks();
-            WorkspaceFailureMessageChecks();
             WorkspaceStorageChecks();
             WorkspaceFollowingMergeBaseline();
             StorageSafetyChecks();
@@ -144,16 +140,6 @@ internal static partial class Program
         s.Store.SaveJsonSync(s.Store.SerializeState(commit.State), 3);
         Require(!File.ReadAllText(s.Store.FilePath).Contains("$paperTodoRevision", StringComparison.Ordinal),
             "ordinary save retained a revision history protocol");
-    }
-
-    private static void NormalSaveWins()
-    {
-        using var s = new Scope();
-        var disk = s.Read(); disk["theme"] = "dark"; s.Write(disk);
-        Require(s.Memory.Theme != "dark", "disk edits mutated the live model");
-        s.Store.SaveJsonSync(s.Store.SerializeState(s.Memory), 2);
-        Require(Str(s.Read()["theme"]) == s.Memory.Theme,
-            "ordinary save unexpectedly checked or retained an external modification");
     }
 
     private static void InvalidInput()

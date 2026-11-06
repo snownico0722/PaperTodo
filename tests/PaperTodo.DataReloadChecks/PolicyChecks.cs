@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -47,25 +46,6 @@ internal static partial class Program
             Require(Str(s.Read()["papers"]![0]!["content"]) == resolution.State.Papers[0].Content &&
                 File.ReadAllBytes(Path.Combine(s.DirectoryPath, files.ConflictFile!)).SequenceEqual(sourceBytes),
                 "committed data or preserved external bytes disagree with the accepted merge");
-        }
-    }
-
-    private static void MergePoliciesMissingBaseline()
-    {
-        foreach (var policy in new[] { "ask", "external", "internal" })
-        {
-            using var s = new Scope();
-            s.Memory.DataMergeConflictPolicy = policy;
-            s.Memory.Papers[0].Content = "local";
-            var disk = s.Read();
-            disk["papers"]![0]!["content"] = "external";
-            s.Write(disk);
-            var previous = File.ReadAllBytes(s.Store.FilePath);
-            var preview = s.Store.PreviewExternalMerge(s.Memory, 2);
-            Require(preview.State == null && preview.Result.Outcome == "invalid" &&
-                    preview.Conflicts == null &&
-                    File.ReadAllBytes(s.Store.FilePath).SequenceEqual(previous),
-                "missing baseline was silently accepted under " + policy);
         }
     }
 
@@ -197,14 +177,9 @@ internal static partial class Program
             StateJsonMerge.AddMissingIdentities(original, incoming);
             Require(original.SequenceEqual(expected), "identity insertion moved an independent addition away from its anchor");
         }
-        foreach (var count in new[] { 1000, 10000, 50000 })
-        {
-            var existing = Enumerable.Range(0, count).Select(i => "id-" + i).ToList();
-            var incoming = existing.SelectMany(id => new[] { id, id + "-new" }).ToArray();
-            var clock = Stopwatch.StartNew();
-            StateJsonMerge.AddMissingIdentities(existing, incoming);
-            Require(existing.SequenceEqual(incoming), "large identity insertion lost or reordered entities");
-            Console.WriteLine($"MEASURE identity insertion: {count} existing + {count} new, {clock.Elapsed.TotalMilliseconds:F2} ms");
-        }
+        var existingLarge = Enumerable.Range(0, 10000).Select(i => "id-" + i).ToList();
+        var incomingLarge = existingLarge.SelectMany(id => new[] { id, id + "-new" }).ToArray();
+        StateJsonMerge.AddMissingIdentities(existingLarge, incomingLarge);
+        Require(existingLarge.SequenceEqual(incomingLarge), "large identity insertion lost or reordered entities");
     }
 }

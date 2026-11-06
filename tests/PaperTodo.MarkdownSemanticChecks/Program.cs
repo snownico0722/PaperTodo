@@ -307,20 +307,7 @@ Run("HTTP image destination is not navigation link", () =>
 
 Run("Large document semantic smoke", () =>
 {
-    var builder = new System.Text.StringBuilder(100_000);
-    var index = 0;
-    while (builder.Length < 98_000)
-    {
-        builder.Append("# Heading ").Append(index).Append('\n');
-        builder.Append("- [ ] item **bold** https://example.com/").Append(index).Append('\n');
-        builder.Append("> quote `code` ~~gone~~\n");
-        if ((index++ % 20) == 0)
-        {
-            builder.Append("```csharp\nvar x = 1;\n```\n");
-        }
-    }
-
-    var source = builder.ToString();
+    var source = MarkdownEditBehavior.BuildDenseSource();
     var snapshot = MarkdownSemanticSnapshot.Parse(source);
 
     True(snapshot.LineCount > 1000, "large document line count");

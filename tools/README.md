@@ -38,5 +38,4 @@ if ($LASTEXITCODE -ne 0) { throw 'Markdown benchmark failed' }
 ```powershell
 dotnet run --project tools/PaperTodo.MaterialBenchmarks -c Release -- --benchmark .\material-benchmark.json
 dotnet run --project tools/PaperTodo.MaterialBenchmarks -c Release -- --drag-benchmark .\material-drag.json
-dotnet run --project tools/PaperTodo.MaterialBenchmarks -c Release -- --drag-snapshot-timing .\material-drag-snapshot.json
 ```
