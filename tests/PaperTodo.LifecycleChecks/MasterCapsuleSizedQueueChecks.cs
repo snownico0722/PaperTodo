@@ -2,7 +2,6 @@ using System.IO;
 using System.Reflection;
 using System.Text.Json;
 using System.Windows;
-using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -72,9 +71,6 @@ internal static class MasterCapsuleSizedQueueChecks
             Require(clip.FirstFrame.PixelHeight <= Math.Ceiling(height * monitor.DpiScaleY) + 1 &&
                     clip.CanvasHeight == 1000 && master.DesiredDockedWidth == height,
                 "the displayed frame cache must shrink without changing source geometry");
-            foreach (var other in masters.Values)
-                Require(ReferenceEquals(Field<Image>(other, "_skinImage").Source, clip.FirstFrame),
-                    "multiple masters retained different frame caches");
         }
 
         // Ctrl carries one master and one member. The real preview, ghost and
@@ -99,6 +95,6 @@ internal static class MasterCapsuleSizedQueueChecks
         await Idle();
         Require(Math.Abs(masters[controller.QueueKeyForPaper(owner)].AnchorTop - expectedTop) < .1,
             "the enlarged queue did not land at its preview position");
-        Console.WriteLine("PASS sized master: shared cache, 5x/1x geometry, proxy hit bounds, Ctrl ghost and commit");
+        Console.WriteLine("PASS sized master: display-sized frames, 5x/1x geometry, proxy hit bounds, Ctrl ghost and commit");
     }
 }

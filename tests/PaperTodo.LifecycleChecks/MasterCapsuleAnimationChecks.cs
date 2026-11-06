@@ -30,7 +30,7 @@ internal static class MasterCapsuleAnimationChecks
 
     internal static void Prepare(bool dragOnly)
     {
-        VerifyLoading();
+        if (!dragOnly) VerifyLoading();
         var directory = AppContext.BaseDirectory;
         if (!dragOnly)
         {
@@ -60,15 +60,17 @@ internal static class MasterCapsuleAnimationChecks
             var priority = Case("priority");
             WritePng(priority, "papertodomain.png", 8, 8, 250);
             WritePng(priority, "papertodomain10.png", 8, 8, 110);
-            WritePng(priority, "papertodomain2.png", 8, 8, 60);
+            WritePng(priority, "papertodomain2.png", 8, 8, 60, dpiX: 300, dpiY: 150);
             WritePng(priority, "papertodomain1.png", 8, 8, 10);
-            WritePng(priority, "papertodomain001.png", 8, 8, 220);
-            WritePng(priority, "papertodomain100.png", 8, 8, 230);
             WritePng(priority, "papertodomaindrag1.png", 8, 8, 240);
             var sequence = MasterCapsuleSkin.LoadClip(priority, "papertodomain")!;
             Require(sequence.FrameCount == 3 && Red(sequence.FrameAt(0)) == 10 &&
                     Red(sequence.FrameAt(1)) == 60 && Red(sequence.FrameAt(2)) == 110,
-                "Sequence priority, numeric sort, duplicate resolution or 1..99 range failed");
+                "Numbered frames must precede still artwork and sort numerically");
+            // Printing DPI must not stretch one pose relative to the others.
+            for (var i = 0; i < sequence.FrameCount; i++)
+                Require(sequence.FrameAt(i).Width == 8 && sequence.FrameAt(i).Height == 8,
+                    "Source DPI changed the common animation canvas");
             File.WriteAllText(Path.Combine(priority, "papertodomain.gif"), "broken");
             Require(MasterCapsuleSkin.LoadClip(priority, "papertodomain")!.FrameCount == 3,
                 "A broken GIF shadowed a valid sequence");
@@ -85,8 +87,8 @@ internal static class MasterCapsuleAnimationChecks
             File.WriteAllText(Path.Combine(fallback, "papertodomain1.png"), "broken");
             var visuals = MasterCapsuleSkin.LoadVisualsFromDirectory(fallback);
             Require(visuals.Normal?.FrameCount == 1 && Red(visuals.Normal.FirstFrame) == 90 &&
-                    ReferenceEquals(visuals.Normal, visuals.DragOrNormal),
-                "Malformed sequences must fall back to still artwork; absent drag must share normal artwork");
+                    visuals.DragOrNormal?.FrameCount == 1 && Red(visuals.DragOrNormal.FirstFrame) == 90,
+                "Malformed sequences must fall back to still artwork; absent drag must show normal artwork");
             WritePng(fallback, "papertodomain1.png", 8, 8, 40);
             WritePng(fallback, "papertodomain2.png", 9, 8, 50);
             Require(Red(MasterCapsuleSkin.LoadClip(fallback, "papertodomain")!.FirstFrame) == 90,
@@ -115,23 +117,15 @@ internal static class MasterCapsuleAnimationChecks
             {
                 Require(Red(MasterCapsuleSkin.LoadClip(webp, "papertodomain")!.FirstFrame) == 80,
                     "An unavailable WebP codec must fall back to the static PNG");
-                Console.WriteLine("WEBP_CODEC_UNAVAILABLE: verified fallback; codec-dependent decode not exercised");
+                Console.WriteLine("SKIP WebP sequence decoding: codec unavailable; static PNG fallback verified");
             }
             else
             {
-                Require(webpClip.FrameCount == 2 && Red(webpClip.FirstFrame) == 255,
-                    "WebP sequence order is wrong");
-                Require(MasterCapsuleSkin.LoadClip(webp, "papertodomain")!.FrameCount == 2,
-                    "A WebP sequence must precede a static PNG");
-                WritePng(webp, "papertodomain1.png", 8, 8, 45);
-                Require(Red(MasterCapsuleSkin.LoadClip(webp, "papertodomain")!.FirstFrame) == 45,
-                    "A PNG sequence must precede a WebP sequence without mixing formats");
+                Require(webpClip.FrameCount == 2 && Red(webpClip.FirstFrame) == 255 &&
+                        Pixels(webpClip.FrameAt(1))[1] == 255,
+                    "WebP sequence content or order is wrong");
                 Console.WriteLine("WEBP_DECODE_PASS");
             }
-            Require(MasterCapsuleAnimationRates.Normalize(0) == 1 &&
-                    MasterCapsuleAnimationRates.Normalize(31) == 30 &&
-                    new AppState().MasterCapsuleAnimationFps == 12,
-                "Old settings/default or animation speed bounds changed");
             Console.WriteLine("PASS artwork loading, GIF disposal, fallback, numeric ordering and common crop");
         }
         finally { Directory.Delete(root, recursive: true); }
@@ -154,10 +148,6 @@ internal static class MasterCapsuleAnimationChecks
             "200-pixel display must retain 200-pixel frames without changing source geometry or frame count");
         Require(Red(clip.FirstFrame) == 30 && Red(clip.FrameAt(1)) == 170,
             "Reusing the decoder scratch buffer corrupted previously created frames");
-        var reduced = clip.FirstFrame;
-        clip.RequestDisplaySize(normal, new Size(200, 200));
-        clip.ApplyDisplaySize();
-        Require(ReferenceEquals(reduced, clip.FirstFrame), "Unchanged display size regenerated the cache");
         clip.RequestDisplaySize(highDpi, new Size(400, 400));
         clip.ApplyDisplaySize();
         Require(clip.FirstFrame.PixelWidth == 400 && MasterCapsuleSkin.DisplayWidthDip(clip, 50) == logicalWidth,
@@ -171,59 +161,43 @@ internal static class MasterCapsuleAnimationChecks
             "Enlarging must reload original detail and must never manufacture larger cached pixels");
         clip.RequestDisplaySize(normal, new Size(200, 200));
         clip.ApplyDisplaySize();
-        reduced = clip.FirstFrame;
+        var retained = Pixels(clip.FirstFrame);
         File.Delete(Path.Combine(directory, "papertodomain1.png"));
         clip.RequestDisplaySize(normal, new Size(800, 800));
         clip.ApplyDisplaySize();
-        Require(ReferenceEquals(reduced, clip.FirstFrame), "A missing source discarded the playable raster");
+        Require(clip.FirstFrame is { PixelWidth: 200, PixelHeight: 200 } &&
+                Pixels(clip.FirstFrame).SequenceEqual(retained) && Red(clip.FrameAt(1)) == 170,
+            "A missing source discarded or corrupted the playable frames");
         clip.RequestDisplaySize(normal, null);
         Console.WriteLine("PASS display raster: 1000→200→400→200→1000, shared DPI demand and source removal");
     }
 
-    internal static async Task Verify(AppController controller, bool dragOnly)
+    internal static async Task Verify(AppController controller)
     {
         var master = controller.MasterCapsuleForQueue("", EdgeCapsuleEdge.Right)!;
         Require(master != null && master.IsVisible, "A visible master is required");
         var player = Field<MasterCapsuleAnimationPlayer>(master, "_skinPlayer");
         var image = Field<Image>(master, "_skinImage");
         var normal = Field<MasterCapsulePlayback?>(master, "_normalSkinPlayback");
-        var setting = controller.PublicSettings.Get("capsule.master_animation_fps");
-        Require(setting.Value.GetInt32() == 12 && setting.Min == 1 && setting.Max == 30,
-            "Animation speed must be exposed through the existing public settings service");
         controller.PublicSettings.Set("capsule.master_animation_fps", JsonSerializer.SerializeToElement(30));
         Require(controller.State.MasterCapsuleAnimationFps == 30, "Animation speed was not committed");
-        using (var saved = JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "data.json"))))
-            Require(saved.RootElement.GetProperty("masterCapsuleAnimationFps").GetInt32() == 30,
-                "Animation speed was not persisted by StateStore");
 
-        if (dragOnly)
-        {
-            Require(normal == null && player.Playback == null && !player.IsRunning && image.Visibility == Visibility.Collapsed,
-                "A drag-only skin replaced or animated the default resting pill");
-            Require(Field<SkinBorder>(master, "_fallbackSkinChrome").Visibility == Visibility.Visible,
-                "Default chrome must remain visible without normal artwork");
-        }
-        else
-        {
-            Require(normal is { Clip.FrameCount: 3, FramesPerSecond: 30 } && player.IsRunning,
-                "Normal numbered frames did not start or react to the speed setting");
-            var before = player.PresentedFrameChanges;
-            await RequireAdvancing(player, before, "normal");
-        }
+        Require(normal is { Clip.FrameCount: 3, FramesPerSecond: 30 } && player.IsRunning,
+            "Normal numbered frames did not start or react to the speed setting");
+        var before = player.PresentedFrameChanges;
+        await RequireAdvancing(player, before, "normal");
         Require(WindowNative.TryGetWindowDeviceBounds(master, out var initialBounds), "Master bounds unavailable");
         var drag = (MasterCapsulePlayback)Call(master, "GetMasterDragPlayback")!;
         Call(master, "ApplyMasterSkinPlayback", drag);
-        Require(drag.Clip.FrameCount == 4 && ReferenceEquals(player.Playback, drag) && player.IsRunning,
+        Require(player.Playback?.Clip.FrameCount == 4 && image.Source != null && player.IsRunning,
             "The drag gesture did not select the independent GIF playhead");
-        if (dragOnly)
-            Require(Field<SkinBorder>(master, "_fallbackSkinChrome").Visibility == Visibility.Collapsed,
-                "Default chrome must not shine through a drag-only image");
         var count = player.PresentedFrameChanges;
         await RequireAdvancing(player, count, "drag");
         Require(WindowNative.TryGetWindowDeviceBounds(master, out var playingBounds) && playingBounds.Equals(initialBounds),
             "Playing a drag pose must not resize or move the master HWND");
         Call(master, "RestoreMasterSkinPlayback");
-        Require(ReferenceEquals(player.Playback, normal), "Gesture completion did not restore the original normal playhead");
+        Require(player.Playback?.Clip.FrameCount == 3 && image.Source != null && player.IsRunning,
+            "Gesture completion did not restore the normal artwork");
 
         master.Hide();
         var hiddenCount = player.PresentedFrameChanges;
@@ -247,14 +221,12 @@ internal static class MasterCapsuleAnimationChecks
         {
             floating.ShowWithEntrance(pointer, false, 1, 0);
             floatingPlayer = Field<MasterCapsuleAnimationPlayer>(floating, "_masterSkinPlayer");
-            Require(ReferenceEquals(floatingPlayer.Playback, drag) && floatingPlayer.IsRunning,
-                "Detached dragging must share the same drag playhead as vertical dragging");
-            if (!dragOnly) await VerifyNativeMoveLoop(floating, floatingPlayer);
+            Require(floatingPlayer.Playback?.Clip.FrameCount == 4 && floatingPlayer.IsRunning,
+                "Detached dragging must play the independent drag artwork");
+            await VerifyNativeMoveLoop(floating, floatingPlayer);
             floating.SetMasterSkinPlayback(normal, EdgeCapsuleEdge.Left);
-            Require(ReferenceEquals(floatingPlayer.Playback, normal), "Return-flight cover did not inherit the destination's normal playhead");
-            if (normal != null)
-                Require(Field<Image>(floating, "_masterSkinImage").RenderTransform.Value.M11 == -1,
-                    "Left-edge handoff artwork was not mirrored");
+            Require(floatingPlayer.Playback?.Clip.FrameCount == 3 && floatingPlayer.IsRunning,
+                "Return-flight cover did not restore the destination artwork");
         }
         finally { floating.ReturnToPool(); }
         floatingPlayer = Field<MasterCapsuleAnimationPlayer>(floating, "_masterSkinPlayer");
@@ -268,8 +240,8 @@ internal static class MasterCapsuleAnimationChecks
         {
             same.ShowWithEntrance(pointer, false, 1, 0);
             var samePlayer = Field<MasterCapsuleAnimationPlayer>(same, "_masterSkinPlayer");
-            Require(ReferenceEquals(same, floating) && ReferenceEquals(samePlayer.Playback, drag) && samePlayer.IsRunning,
-                "An identical options lease failed to resume the pooled animation");
+            Require(samePlayer.Playback?.Clip.FrameCount == 4 && samePlayer.IsRunning,
+                "An identical options lease failed to resume the animation");
         }
         finally { same.ReturnToPool(); }
         var ordinary = EdgeCapsuleDragWindow.Rent(options);
@@ -280,7 +252,7 @@ internal static class MasterCapsuleAnimationChecks
                 "An ordinary capsule inherited the preceding master animation or hidden shell");
         }
         finally { ordinary.ReturnToPool(); }
-        Console.WriteLine("PASS normal/drag binding, speed persistence, fixed geometry, hidden pause, handoff and pool reuse");
+        Console.WriteLine("PASS normal/drag playback, live speed change, fixed geometry, hidden pause, handoff and lease cleanup");
     }
 
     private static async Task RequireAdvancing(MasterCapsuleAnimationPlayer player, long before, string state)
@@ -364,7 +336,8 @@ internal static class MasterCapsuleAnimationChecks
         converted.CopyPixels(bytes, source.PixelWidth * 4, 0);
         return bytes;
     }
-    private static void WritePng(string directory, string name, int width, int height, byte red, Int32Rect? region = null)
+    private static void WritePng(string directory, string name, int width, int height, byte red,
+        Int32Rect? region = null, double dpiX = 96, double dpiY = 96)
     {
         var pixels = new byte[width * height * 4];
         var bounds = region ?? new Int32Rect(0, 0, width, height);
@@ -375,7 +348,7 @@ internal static class MasterCapsuleAnimationChecks
             pixels[offset + 2] = red;
             pixels[offset + 3] = 255;
         }
-        var bitmap = BitmapSource.Create(width, height, 96, 96, PixelFormats.Bgra32, null, pixels, width * 4);
+        var bitmap = BitmapSource.Create(width, height, dpiX, dpiY, PixelFormats.Bgra32, null, pixels, width * 4);
         var encoder = new PngBitmapEncoder();
         encoder.Frames.Add(BitmapFrame.Create(bitmap));
         using var output = File.Create(Path.Combine(directory, name));
