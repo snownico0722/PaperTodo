@@ -353,6 +353,7 @@ public sealed partial class MasterCapsuleWindow : Window
 
         if (Math.Abs(deltaX) >= MasterQueueTransferUnlockDistance)
         {
+            _controller.EndLegacyMasterDropGhost(_queueKey);
             if (TryRunQueueTransfer(currentScreenPos, session))
             {
                 return true;
@@ -375,6 +376,8 @@ public sealed partial class MasterCapsuleWindow : Window
             _queueMonitorDeviceName,
             _queueEdge,
             targetMargin);
+        _controller.PreviewLegacyMasterDropGhost(this, _queueKey, _queueMonitorDeviceName,
+            _queueEdge == EdgeCapsuleEdge.Left ? DeepCapsuleSides.Left : DeepCapsuleSides.Right);
         return true;
     }
 
@@ -740,6 +743,7 @@ public sealed partial class MasterCapsuleWindow : Window
         var wasDragging = _gestureState == MasterGestureState.Dragging && session != null;
         _gestureState = MasterGestureState.Idle;
         _dragSession = null;
+        _controller.EndLegacyMasterDropGhost(_queueKey);
         var hadCapture = _pill.IsMouseCaptured;
         if (_pill.IsMouseCaptured)
         {
@@ -792,7 +796,7 @@ public sealed partial class MasterCapsuleWindow : Window
     private void ClearCapsuleInteractionKeyboardFocus() =>
         WindowNative.ClearCurrentThreadKeyboardFocus();
 
-    private double MasterDockedWidth(double pixelsPerDip)
+    private double MasterDockedWidth(double pixelsPerDip, bool updateLabel = true)
     {
         // The arrow slot stays stable in both modes. Normal mode also reserves a stable
         // two-digit count slot; compact mode removes that slot entirely.
@@ -803,7 +807,7 @@ public sealed partial class MasterCapsuleWindow : Window
         var countGap = 0d;
         if (_controller.State.CompactMasterCapsule)
         {
-            _label.Width = double.NaN;
+            if (updateLabel) _label.Width = double.NaN;
         }
         else
         {
@@ -814,7 +818,7 @@ public sealed partial class MasterCapsuleWindow : Window
                 MasterLabelFontFamily,
                 pixelsPerDip);
             countGap = MasterGlyphGap;
-            _label.Width = countWidth;
+            if (updateLabel) _label.Width = countWidth;
         }
 
         var bodyWidth = Math.Ceiling(
@@ -826,6 +830,12 @@ public sealed partial class MasterCapsuleWindow : Window
             MasterInteriorBorderThickness);
         return Math.Max(1, bodyWidth + WindowChromeMargin);
     }
+
+    internal double DesiredDockedWidthFor(MonitorGeometry geometry) =>
+        MasterDockedWidth(geometry.DpiScaleY, updateLabel: false);
+
+    internal void BringDragWindowAboveGhost() =>
+        WindowNative.BringToFrontNoActivate(_floatingDragHost ?? this);
 
     internal double DesiredDockedWidth
     {

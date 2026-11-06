@@ -191,11 +191,13 @@ public sealed partial class AppController
         var widths = new List<double>(layout.Groups[0].PaperIds.Length + 1);
         if (decision.Kind == EdgeFreeQueueDropKind.Move)
             widths.Add(_masterCapsules.TryGetValue(layout.QueueKey, out var master)
-                ? master.DesiredDockedWidth : targetBox.WidthDip);
+                ? master.DesiredDockedWidthFor(geometry) : targetBox.WidthDip);
         if (decision.Kind != EdgeFreeQueueDropKind.Move || !targetBox.Collapsed)
             foreach (var id in layout.Groups[0].PaperIds)
                 widths.Add(NativeDropGhostMemberWidth(id, geometry));
-        _nativeQueueDropGhost.ShowAt(geometry, side, top, widths, DeepCapsuleGap);
+        Action? raiseDrag = _masterCapsules.TryGetValue(layout.QueueKey, out var draggingMaster)
+            ? draggingMaster.BringDragWindowAboveGhost : null;
+        _nativeQueueDropGhost.ShowAt(geometry, side, top, widths, DeepCapsuleGap, raiseDrag);
     }
 
     internal void PreviewFreeMasterQueueDropGhost(

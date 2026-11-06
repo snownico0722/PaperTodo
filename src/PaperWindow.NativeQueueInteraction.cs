@@ -9,6 +9,14 @@ public sealed partial class PaperWindow
     private bool _nativeQueueClickRevoked;
     private bool _nativeQueueFeedbackSampling;
 
+    internal void BringEdgeCapsuleDragAboveGhost()
+    {
+        if (_deepCapsuleFloatingDragHost?.IsVisible == true)
+            WindowNative.BringToFrontNoActivate(_deepCapsuleFloatingDragHost);
+        else
+            _edgeCapsuleHost?.BringToFrontNoActivate();
+    }
+
     internal static bool NativeQueueControlPressed(int nativeKeys, ModifierKeys modifiers, bool osControl) =>
         (nativeKeys & 0x0008) != 0 || (modifiers & ModifierKeys.Control) != 0 || osControl;
 

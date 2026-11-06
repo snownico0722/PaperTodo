@@ -15,6 +15,8 @@ internal sealed class EdgeCapsuleQueueDropGhost : IDisposable
     private int _count = 1;
     private double _gap;
     private bool _shown;
+    private DeviceScreenRect? _lastBounds;
+    private double[]? _lastWidths;
 
     internal EdgeCapsuleQueueDropGhost()
     {
@@ -56,7 +58,7 @@ internal sealed class EdgeCapsuleQueueDropGhost : IDisposable
     }
 
     internal void ShowAt(MonitorGeometry geometry, string side, double topDip,
-        IReadOnlyList<double> slotWidthsDip, double gapDip = 0)
+        IReadOnlyList<double> slotWidthsDip, double gapDip = 0, Action? raiseDraggedWindow = null)
     {
         if (!double.IsFinite(topDip) || slotWidthsDip.Count == 0)
         {
@@ -77,6 +79,21 @@ internal sealed class EdgeCapsuleQueueDropGhost : IDisposable
 
         var count = slotWidthsDip.Count;
         gapDip = Math.Max(0, gapDip);
+        var width = Math.Min(geometry.LocalWorkAreaDip.Width, requiredWidth);
+        var height = count * PaperLayoutDefaults.CapsuleHeight + (count - 1) * gapDip;
+        var deviceWidth = Math.Max(1, (int)Math.Round(width * geometry.DpiScaleX));
+        var deviceHeight = Math.Max(1, (int)Math.Round(height * geometry.DpiScaleY));
+        var leftDevice = side == DeepCapsuleSides.Left ? geometry.WorkArea.Left
+            : geometry.WorkArea.Right - deviceWidth;
+        var topDevice = (int)Math.Round(geometry.WorkArea.Top + topDip * geometry.DpiScaleY);
+        var bounds = new DeviceScreenRect(leftDevice, topDevice,
+            leftDevice + deviceWidth, topDevice + deviceHeight);
+        var wasHidden = !_shown || _window.Opacity <= 0;
+        if (!wasHidden && _lastBounds == bounds && _count == count &&
+            _side == side && Math.Abs(_gap - gapDip) <= 0.01 &&
+            _lastWidths != null && _lastWidths.SequenceEqual(slotWidthsDip))
+            return;
+
         if (count != _count || Math.Abs(gapDip - _gap) > 0.01)
         {
             _stack.Children.Clear();
@@ -119,7 +136,6 @@ internal sealed class EdgeCapsuleQueueDropGhost : IDisposable
 
         // Widths are those of the real docked capsules. Each outline hugs its
         // respective screen edge; the shared window is only as wide as the longest.
-        var width = Math.Min(geometry.LocalWorkAreaDip.Width, requiredWidth);
         var chrome = EdgeCapsuleLayout.WindowChromeMargin;
         var leftAligned = side == DeepCapsuleSides.Left;
         for (var i = 0; i < count; i++)
@@ -129,16 +145,8 @@ internal sealed class EdgeCapsuleQueueDropGhost : IDisposable
             pill.HorizontalAlignment = leftAligned ? HorizontalAlignment.Left : HorizontalAlignment.Right;
         }
 
-        var height = count * PaperLayoutDefaults.CapsuleHeight + (count - 1) * gapDip;
         _window.Width = width;
         _window.Height = height;
-        var deviceWidth = Math.Max(1, (int)Math.Round(width * geometry.DpiScaleX));
-        var deviceHeight = Math.Max(1, (int)Math.Round(height * geometry.DpiScaleY));
-        var leftDevice = side == DeepCapsuleSides.Left ? geometry.WorkArea.Left
-            : geometry.WorkArea.Right - deviceWidth;
-        var topDevice = (int)Math.Round(geometry.WorkArea.Top + topDip * geometry.DpiScaleY);
-        var bounds = new DeviceScreenRect(leftDevice, topDevice,
-            leftDevice + deviceWidth, topDevice + deviceHeight);
         if (!_shown)
         {
             // Position before the first visible frame; no entrance animation.
@@ -151,7 +159,12 @@ internal sealed class EdgeCapsuleQueueDropGhost : IDisposable
             Hide();
             return;
         }
+        _lastBounds = bounds;
+        _lastWidths = slotWidthsDip.ToArray();
         _window.Opacity = 1;
+        // The ghost is a destination marker, never a foreground drag surface.
+        // Reassert only when it becomes visible, not on every pointer sample.
+        if (wasHidden) raiseDraggedWindow?.Invoke();
     }
 
     internal void Hide()
