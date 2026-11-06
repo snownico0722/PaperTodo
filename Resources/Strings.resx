@@ -1553,7 +1553,7 @@
     <value>向右移动</value>
   </data>
   <data name="MenuTopBarAssociationDrag" xml:space="preserve">
-    <value>按住此项拖动以关联</value>
+    <value>拖到待办或窗口以关联</value>
   </data>
   <data name="MenuTopBarPluginActions" xml:space="preserve">
     <value>插件操作</value>
@@ -1704,7 +1704,7 @@
   <data name="NoteHtmlSaved" xml:space="preserve"><value>已保存到：{0}
 原笔记仍保留。</value></data>
   <data name="NoteExportCurrent" xml:space="preserve"><value>导出当前笔记</value></data>
-  <data name="NoteExportAll" xml:space="preserve"><value>导出全部纸片</value></data>
+  <data name="NoteExportAll" xml:space="preserve"><value>导出全部笔记与待办</value></data>
   <data name="NoteExportMarkdownType" xml:space="preserve"><value>Markdown 文档</value></data>
   <data name="NoteExportHtmlType" xml:space="preserve"><value>HTML 网页</value></data>
   <data name="NoteExportMarkdownZipType" xml:space="preserve"><value>Markdown 压缩包</value></data>
@@ -1817,9 +1817,6 @@
   <data name="TopBarScriptSave" xml:space="preserve">
     <value>保存</value>
   </data>
-  <data name="TopBarScriptHint" xml:space="preserve">
-    <value>不写前缀时按 !p 执行。可用前缀：!p / !power、!pwsh / !ps7、!ps5 / !winps、!pf / !powerf。前缀须单独占第一行，脚本从下一行开始，只支持半角 !。保存不会执行脚本。</value>
-  </data>
   <data name="WorkspaceScriptsStoppedTitle" xml:space="preserve">
     <value>工作区已切换</value>
   </data>
@@ -1832,4 +1829,10 @@
   <data name="WorkspaceScriptsAndSessionsStoppedMessage" xml:space="preserve">
     <value>上一工作区的脚本进程已结束，常驻 PowerShell 会话已关闭。</value>
   </data>
+  <data name="MenuExport" xml:space="preserve"><value>导出</value></data>
+  <data name="MenuExportCurrentNote" xml:space="preserve"><value>当前笔记</value></data>
+  <data name="MenuExportCurrentTodo" xml:space="preserve"><value>当前待办</value></data>
+  <data name="MenuExportAllPapers" xml:space="preserve"><value>全部笔记与待办</value></data>
+  <data name="MenuTopBarAssociationDragTodo" xml:space="preserve"><value>拖到待办以关联</value></data>
+  <data name="MenuTopBarAssociationDragWindow" xml:space="preserve"><value>拖到窗口以关联</value></data>
 </root>

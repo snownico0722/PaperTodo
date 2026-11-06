@@ -1507,7 +1507,7 @@ When off, open at the docked edge or remembered position.</value>
     <value>Move right</value>
   </data>
   <data name="MenuTopBarAssociationDrag" xml:space="preserve">
-    <value>Hold and drag to associate</value>
+    <value>Drag to a todo or window to associate</value>
   </data>
   <data name="MenuTopBarPluginActions" xml:space="preserve">
     <value>Plugin actions</value>
@@ -1658,7 +1658,7 @@ Click to switch to workspace {1}</value>
   <data name="NoteHtmlSaved" xml:space="preserve"><value>Saved to: {0}
 The original note is kept.</value></data>
   <data name="NoteExportCurrent" xml:space="preserve"><value>Export this note</value></data>
-  <data name="NoteExportAll" xml:space="preserve"><value>Export all papers</value></data>
+  <data name="NoteExportAll" xml:space="preserve"><value>Export all notes and todos</value></data>
   <data name="NoteExportMarkdownType" xml:space="preserve"><value>Markdown document</value></data>
   <data name="NoteExportHtmlType" xml:space="preserve"><value>HTML document</value></data>
   <data name="NoteExportMarkdownZipType" xml:space="preserve"><value>Markdown ZIP</value></data>
@@ -1771,9 +1771,6 @@ Resolve the file access problem and retry, or choose “Rebuild workspace” to 
   <data name="TopBarScriptSave" xml:space="preserve">
     <value>Save</value>
   </data>
-  <data name="TopBarScriptHint" xml:space="preserve">
-    <value>Without a prefix, use !p. Supported prefixes: !p / !power, !pwsh / !ps7, !ps5 / !winps, !pf / !powerf. Put the prefix alone on the first line and start the script on the next line. Only ASCII ! is supported. Saving does not run the script.</value>
-  </data>
   <data name="WorkspaceScriptsStoppedTitle" xml:space="preserve">
     <value>Workspace switched</value>
   </data>
@@ -1786,4 +1783,10 @@ Resolve the file access problem and retry, or choose “Rebuild workspace” to 
   <data name="WorkspaceScriptsAndSessionsStoppedMessage" xml:space="preserve">
     <value>Script processes from the previous workspace have ended, and its persistent PowerShell sessions have closed.</value>
   </data>
+  <data name="MenuExport" xml:space="preserve"><value>Export</value></data>
+  <data name="MenuExportCurrentNote" xml:space="preserve"><value>Current note</value></data>
+  <data name="MenuExportCurrentTodo" xml:space="preserve"><value>Current todo</value></data>
+  <data name="MenuExportAllPapers" xml:space="preserve"><value>All notes and todos</value></data>
+  <data name="MenuTopBarAssociationDragTodo" xml:space="preserve"><value>Drag to a todo to associate</value></data>
+  <data name="MenuTopBarAssociationDragWindow" xml:space="preserve"><value>Drag to a window to associate</value></data>
 </root>

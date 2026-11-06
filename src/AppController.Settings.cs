@@ -2415,7 +2415,7 @@ public sealed partial class AppController
         }
     }
 
-    private Style BuildSettingsCheckBoxStyle(bool wrapText = false)
+    private Style BuildSettingsCheckBoxStyle(bool wrapText = false, bool markOnly = false)
     {
         var style = new Style(typeof(CheckBox));
         style.Setters.Add(new Setter(Control.ForegroundProperty, TrayTextBrush));
@@ -2426,14 +2426,18 @@ public sealed partial class AppController
         style.Setters.Add(new Setter(UIElement.SnapsToDevicePixelsProperty, true));
         style.Setters.Add(new Setter(FrameworkElement.UseLayoutRoundingProperty, true));
 
-        var root = new FrameworkElementFactory(wrapText ? typeof(DockPanel) : typeof(StackPanel));
-        if (!wrapText) root.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
+        var root = new FrameworkElementFactory(markOnly ? typeof(Grid) :
+            wrapText ? typeof(DockPanel) : typeof(StackPanel));
+        if (!wrapText && !markOnly) root.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
+        if (markOnly) root.SetValue(Panel.BackgroundProperty, Brushes.Transparent);
         root.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
 
         var markHost = new FrameworkElementFactory(typeof(Grid));
         markHost.SetValue(FrameworkElement.WidthProperty, 16.0);
         markHost.SetValue(FrameworkElement.HeightProperty, 16.0);
-        markHost.SetValue(FrameworkElement.MarginProperty, new Thickness(0, 0, 8, 0));
+        markHost.SetValue(FrameworkElement.MarginProperty,
+            markOnly ? new Thickness(0) : new Thickness(0, 0, 8, 0));
+        if (markOnly) markHost.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
         markHost.SetValue(FrameworkElement.VerticalAlignmentProperty,
             wrapText ? VerticalAlignment.Top : VerticalAlignment.Center);
         if (wrapText) markHost.SetValue(FrameworkElement.MarginProperty, new Thickness(0, 2, 8, 0));
@@ -2467,20 +2471,23 @@ public sealed partial class AppController
 
         root.AppendChild(markHost);
 
-        var content = new FrameworkElementFactory(wrapText ? typeof(TextBlock) : typeof(ContentPresenter));
-        if (wrapText)
+        if (!markOnly)
         {
-            content.SetValue(TextBlock.TextProperty, new TemplateBindingExtension(ContentControl.ContentProperty));
-            content.SetValue(TextBlock.TextWrappingProperty, TextWrapping.Wrap);
+            var content = new FrameworkElementFactory(wrapText ? typeof(TextBlock) : typeof(ContentPresenter));
+            if (wrapText)
+            {
+                content.SetValue(TextBlock.TextProperty, new TemplateBindingExtension(ContentControl.ContentProperty));
+                content.SetValue(TextBlock.TextWrappingProperty, TextWrapping.Wrap);
+            }
+            else
+            {
+                content.SetValue(ContentPresenter.ContentProperty, new TemplateBindingExtension(ContentControl.ContentProperty));
+                content.SetValue(ContentPresenter.RecognizesAccessKeyProperty, false);
+            }
+            content.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+            content.SetValue(System.Windows.Documents.TextElement.ForegroundProperty, new TemplateBindingExtension(Control.ForegroundProperty));
+            root.AppendChild(content);
         }
-        else
-        {
-            content.SetValue(ContentPresenter.ContentProperty, new TemplateBindingExtension(ContentControl.ContentProperty));
-            content.SetValue(ContentPresenter.RecognizesAccessKeyProperty, false);
-        }
-        content.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
-        content.SetValue(System.Windows.Documents.TextElement.ForegroundProperty, new TemplateBindingExtension(Control.ForegroundProperty));
-        root.AppendChild(content);
 
         var template = new ControlTemplate(typeof(CheckBox))
         {

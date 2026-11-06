@@ -25,7 +25,7 @@ public sealed partial class AppController
             Strings.Get("TopBarSettingsTitle"), "TipTopBarShortcutSettings"));
 
         var actions = new StackPanel { Background = Brushes.Transparent };
-        actions.Children.Add(SettingsFieldLabel(Strings.Get("TopBarShownHeading")));
+        actions.Children.Add(BuildTopBarShortcutHeading("TopBarShownHeading"));
         var shownGroup = BuildTopBarShortcutDropGroup(
             PaperTopBarShortcuts.Pinned(State), pinned: true);
         actions.Children.Add(shownGroup);
@@ -40,7 +40,7 @@ public sealed partial class AppController
             SnapsToDevicePixels = true
         };
         actions.Children.Add(divider);
-        actions.Children.Add(SettingsFieldLabel(Strings.Get("TopBarMenuHeading")));
+        actions.Children.Add(BuildTopBarShortcutHeading("TopBarMenuHeading"));
         actions.Children.Add(BuildTopBarShortcutDropGroup(
             PaperTopBarShortcuts.Menu(State), pinned: false));
         root.Children.Add(new Border
@@ -90,6 +90,20 @@ public sealed partial class AppController
             e.Handled = true;
         };
         return root;
+    }
+
+    private static double TopBarHideColumnWidth => AppTypography.Scale(44);
+
+    private static UIElement BuildTopBarShortcutHeading(string titleKey)
+    {
+        var heading = new DockPanel { Margin = new Thickness(7, 0, 7, 0) };
+        var hide = SettingsFieldLabel(Strings.Get("TopBarHideShortcut"));
+        hide.Width = TopBarHideColumnWidth;
+        hide.TextAlignment = TextAlignment.Center;
+        DockPanel.SetDock(hide, Dock.Right);
+        heading.Children.Add(hide);
+        heading.Children.Add(SettingsFieldLabel(Strings.Get(titleKey)));
+        return heading;
     }
 
     private UIElement BuildTopBarShortcutDropGroup(
@@ -191,24 +205,25 @@ public sealed partial class AppController
             };
             if (action == PaperTopBarShortcuts.RunScript)
             {
-                var edit = SettingsIconButton("", Strings.Get("TopBarEditScript"));
-                edit.Content = new System.Windows.Shapes.Path
-                {
-                    Data = Geometry.Parse("M 4 15 L 3 21 L 9 20 L 21 8 L 16 3 Z M 13 6 L 18 11"),
-                    Stroke = TrayTextBrush, StrokeThickness = 1.8,
-                    StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round,
-                    StrokeLineJoin = PenLineJoin.Round, Stretch = Stretch.Uniform,
-                    Width = 14, Height = 14, IsHitTestVisible = false
-                };
+                var edit = SettingsTextButton(Strings.Get("TopBarEditScript"));
+                edit.MinWidth = 0;
+                edit.Height = AppTypography.FitChrome(26);
+                edit.Padding = new Thickness(8, 0, 8, 0);
+                edit.BorderBrush = TrayBorderBrush;
+                edit.BorderThickness = new Thickness(1);
+                edit.FontSize = AppTypography.Scale(11.5);
                 edit.Margin = new Thickness(6, 0, 4, 0);
                 edit.Click += (_, _) => EditTopBarScript();
                 controls.Children.Add(edit);
             }
-            var hide = SettingsToggle(Strings.Get("TopBarHideShortcut"),
+            var hide = SettingsToggle(string.Empty,
                 PaperTopBarShortcuts.IsHidden(State, action),
                 () => SetTopBarShortcutHidden(action, !PaperTopBarShortcuts.IsHidden(State, action)));
-            hide.Margin = new Thickness(8, 0, 0, 0);
-            hide.FontSize = AppTypography.Scale(11.5);
+            hide.Style = BuildSettingsCheckBoxStyle(markOnly: true);
+            hide.Width = TopBarHideColumnWidth;
+            hide.Margin = new Thickness(0);
+            System.Windows.Automation.AutomationProperties.SetName(hide,
+                Strings.Get("TopBarHideShortcut") + ": " + TopBarShortcutName(action));
             controls.Children.Add(hide);
             DockPanel.SetDock(controls, Dock.Right);
             content.Children.Add(controls);
