@@ -5,7 +5,7 @@ using System.Text.Json.Nodes;
 
 namespace PaperTodo;
 
-internal enum WorkspaceRecoveryChoice { Cancel, CreateEmpty, Restore, Exit, Fallback }
+internal enum WorkspaceRecoveryChoice { Cancel, CreateEmpty, Restore, Exit, Fallback, Retry }
 
 internal sealed class WorkspaceRecoveryExitException : OperationCanceledException { }
 

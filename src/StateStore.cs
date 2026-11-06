@@ -57,7 +57,8 @@ public sealed partial class StateStore
     // Only if both are unavailable do we select the newest complete interrupted write.
     // Existing data is never replaced by a blank workspace without an explicit choice.
     internal AppState Load(out bool initializedEmpty,
-        Func<DateTime?, WorkspaceRecoveryChoice>? confirmRecovery = null)
+        Func<DateTime?, WorkspaceRecoveryChoice>? confirmRecovery = null,
+        Func<Exception, WorkspaceRecoveryChoice>? confirmBackupReadFailure = null)
     {
         initializedEmpty = false;
         NeedsStartupRecoverySave = false;
@@ -80,8 +81,34 @@ public sealed partial class StateStore
             catch (JsonException) { /* Try the fixed backup. */ }
         }
 
-        var backupExists = FileExistsForCollection(BackupPath);
-        var backupBytes = backupExists ? File.ReadAllBytes(BackupPath) : null;
+        bool backupExists;
+        byte[]? backupBytes;
+        while (true)
+        {
+            try
+            {
+                backupExists = FileExistsForCollection(BackupPath);
+                backupBytes = backupExists ? File.ReadAllBytes(BackupPath) : null;
+                break;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                if (confirmBackupReadFailure == null) throw;
+                WriteLifetime.ThrowIfStopped();
+                var choice = confirmBackupReadFailure(ex);
+                WriteLifetime.ThrowIfStopped();
+                if (choice == WorkspaceRecoveryChoice.Retry) continue;
+                if (choice != WorkspaceRecoveryChoice.CreateEmpty)
+                    throw new OperationCanceledException("Workspace recovery was canceled.");
+
+                // The user explicitly chose to rebuild, not to try more sources.
+                // Keep the unreadable backup intact and use the normal commit checks.
+                _pendingStartupRecovery = PendingStartupRecovery.ForEmptyWorkspace(primaryBytes);
+                initializedEmpty = true;
+                NeedsStartupRecoverySave = true;
+                return new AppState();
+            }
+        }
         if (backupBytes != null)
         {
             try

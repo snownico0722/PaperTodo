@@ -1676,10 +1676,11 @@ The original note is kept.</value></data>
     <value>Restore workspace</value>
   </data>
   <data name="HistoryRecoveryMessage" xml:space="preserve">
-    <value>The current data for workspace {0} could not be read.
+    <value>Workspace {0} data cannot be read.
 Latest available backup: {1}.
 
-Restoring will return this workspace to that point in time. Changes made since then will be lost. Only notes, to-dos, and settings in this workspace will be restored. Images and plugin data are not included.</value>
+Restoring returns this workspace to that time; later changes will be lost. Only its notes, tasks and settings are restored, not images or plugin data.
+Choosing “Rebuild workspace” starts the notes, tasks and settings of workspace {0} from scratch.</value>
   </data>
   <data name="HistoryRecoveryRestore" xml:space="preserve">
     <value>Try restoring from backup</value>
@@ -1743,5 +1744,16 @@ Restoring will return this workspace to that point in time. Changes made since t
   </data>
   <data name="WorkspaceRecoveryFallback" xml:space="preserve">
     <value>Return to workspace {0}</value>
+  </data>
+  <data name="WorkspaceRecoveryUnavailableMessage" xml:space="preserve">
+    <value>The data and backups for workspace {0} cannot be restored.
+
+Choosing “Rebuild workspace” starts the notes, tasks and settings of workspace {0} from scratch.</value>
+  </data>
+  <data name="WorkspaceBackupReadFailedMessage" xml:space="preserve">
+    <value>The fixed backup for workspace {0} cannot currently be read.
+{1}
+
+Resolve the file access problem and retry, or choose “Rebuild workspace” to start its notes, tasks and settings from scratch.</value>
   </data>
 </root>

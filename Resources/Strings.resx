@@ -1725,7 +1725,8 @@
     <value>工作区 {0} 当前数据无法读取。
 最近可用的备份：{1}。
 
-恢复后将回到该时间的状态，此后的修改将丢失。仅恢复此工作区的便签、待办和设置，不包含图片或插件数据。</value>
+恢复后将回到该时间的状态，此后的修改将丢失。仅恢复此工作区的便签、待办和设置，不包含图片或插件数据。
+选择“重建工作区”将让工作区 {0} 的便签、待办和设置从空白开始。</value>
   </data>
   <data name="HistoryRecoveryRestore" xml:space="preserve">
     <value>尝试从备份恢复</value>
@@ -1789,5 +1790,16 @@
   </data>
   <data name="WorkspaceRecoveryFallback" xml:space="preserve">
     <value>回退到工作区 {0}</value>
+  </data>
+  <data name="WorkspaceRecoveryUnavailableMessage" xml:space="preserve">
+    <value>工作区 {0} 的数据和备份均无法恢复。
+
+选择“重建工作区”将让工作区 {0} 的便签、待办和设置从空白开始。</value>
+  </data>
+  <data name="WorkspaceBackupReadFailedMessage" xml:space="preserve">
+    <value>工作区 {0} 的固定备份暂时无法读取。
+{1}
+
+可以解除占用或访问问题后重试。选择“重建工作区”将让工作区 {0} 的便签、待办和设置从空白开始。</value>
   </data>
 </root>

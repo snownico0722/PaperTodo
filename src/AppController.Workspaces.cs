@@ -32,7 +32,9 @@ public sealed partial class AppController
     private void InitializeWorkspaceState()
     {
         _workspaceCatalog = new WorkspaceCatalog(AppContext.BaseDirectory,
-            DurableAtomicFileWriter.Shared, ConfirmWorkspaceRecovery);
+            DurableAtomicFileWriter.Shared,
+            (store, timestamp) => ConfirmWorkspaceRecovery(store, timestamp),
+            (store, error) => ConfirmWorkspaceRecovery(store, null, error));
         _workspace = _workspaceCatalog.OpenInitial();
         _workspace.BindPersistence();
         _store = _workspace.Store;
@@ -40,7 +42,8 @@ public sealed partial class AppController
         _imageStore = new NoteImageStore(_workspace.Paths.Images);
     }
 
-    private WorkspaceRecoveryChoice ConfirmWorkspaceRecovery(StateStore store, DateTime? timestampUtc)
+    private WorkspaceRecoveryChoice ConfirmWorkspaceRecovery(StateStore store, DateTime? timestampUtc,
+        Exception? backupReadFailure = null)
     {
         // Startup may not have any windows or a fully constructed controller yet.
         // Fence this store even if Windows ends the session inside the modal loop.
@@ -51,6 +54,9 @@ public sealed partial class AppController
         {
             var owner = _settingsWindow is { IsVisible: true } ? _settingsWindow :
                 app.Windows.OfType<Window>().FirstOrDefault(window => window.IsActive);
+            if (backupReadFailure != null)
+                return PaperNoticeDialog.ShowBackupReadFailure(owner, store.WorkspaceNumber,
+                    WorkspaceFailureMessage.For(backupReadFailure));
             if (timestampUtc is { } timestamp)
                 return PaperNoticeDialog.ShowHistoryRecovery(owner, store.WorkspaceNumber,
                     timestamp.ToLocalTime().ToString("g", System.Globalization.CultureInfo.CurrentCulture));
@@ -59,7 +65,7 @@ public sealed partial class AppController
             // a secondary is only opened after main has loaded and committed.
             int? fallback = _workspace != null ? _workspace.Paths.Number :
                 store.WorkspaceNumber > 1 ? 1 : null;
-            return PaperNoticeDialog.ShowUnavailableWorkspace(owner, fallback);
+            return PaperNoticeDialog.ShowUnavailableWorkspace(owner, store.WorkspaceNumber, fallback);
         }
         finally { app.SessionEnding -= stopWrites; }
     }
@@ -332,6 +338,12 @@ public sealed partial class AppController
         RefreshWorkspaceButtons();
         try
         {
+            // Pause before selecting any source, including an already running
+            // backup round. Keep the timer stopped through confirmation and commit.
+            _coreHistoryTimer?.Stop();
+            await _coreHistoryBackupTask;
+            if (IsExiting) return false;
+
             // Complete/fence the source writer first. Candidate validation never overwrites it.
             CommitWorkspaceEditors();
             if (!TrySaveNow(sync: true, workspaceBoundary: true, throwOnFailure: true)) return false;
@@ -438,6 +450,7 @@ public sealed partial class AppController
             _workspaceSwitching = false;
             if (!IsExiting)
             {
+                _coreHistoryTimer?.Start();
                 // No old-workspace request can re-enable a transport or mutate the new store
                 // during the handoff. The active workspace now owns these services.
                 RefreshMcpRuntime();

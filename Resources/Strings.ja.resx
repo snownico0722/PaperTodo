@@ -1676,10 +1676,11 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
     <value>ワークスペースを復元</value>
   </data>
   <data name="HistoryRecoveryMessage" xml:space="preserve">
-    <value>ワークスペース {0} の現在のデータを読み込めません。
-利用可能な最新のバックアップ：{1}。
+    <value>ワークスペース {0} のデータを読み取れません。
+利用できる最新のバックアップ：{1}。
 
-復元すると、その時点の状態に戻り、それ以降の変更は失われます。このワークスペースのノート、タスク、設定のみを復元します。画像やプラグインデータは含まれません。</value>
+復元すると、この時点以降の変更は失われます。このワークスペースのメモ、タスク、設定のみを復元します。画像とプラグインデータは含まれません。
+「ワークスペースを再作成」を選ぶと、ワークスペース {0} のメモ、タスク、設定を空の状態から開始します。</value>
   </data>
   <data name="HistoryRecoveryRestore" xml:space="preserve">
     <value>バックアップからの復元を試す</value>
@@ -1743,5 +1744,16 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   </data>
   <data name="WorkspaceRecoveryFallback" xml:space="preserve">
     <value>ワークスペース {0} に戻る</value>
+  </data>
+  <data name="WorkspaceRecoveryUnavailableMessage" xml:space="preserve">
+    <value>ワークスペース {0} のデータとバックアップを復元できません。
+
+「ワークスペースを再作成」を選ぶと、ワークスペース {0} のメモ、タスク、設定を空の状態から開始します。</value>
+  </data>
+  <data name="WorkspaceBackupReadFailedMessage" xml:space="preserve">
+    <value>ワークスペース {0} の固定バックアップを現在読み取れません。
+{1}
+
+ファイルへのアクセスの問題を解決して再試行するか、「ワークスペースを再作成」を選んでメモ、タスク、設定を空の状態から開始できます。</value>
   </data>
 </root>

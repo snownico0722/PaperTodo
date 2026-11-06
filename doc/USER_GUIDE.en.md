@@ -595,7 +595,7 @@ The portable edition keeps core data beside `PaperTodo.exe`. Each workspace uses
 
 #### Automatic Core-Data History Archives (`backups/`)
 
-The app keeps up to **4** `PaperTodo-core-*.zip` files in `backups/`, targeting ages near the **latest saved state (about 10 minutes), 6 hours, 3 days, and 1 month**. Rather than running four separate timers, it checks about 1 minute after startup and every **10 minutes** thereafter independently of saves and workspace switches. Unchanged files are not re-archived, and actual ages may shift when history is short or when long-term archives rotate.
+The app keeps up to **4** `PaperTodo-core-*.zip` files in `backups/`, targeting ages near the **latest saved state (about 10 minutes), 6 hours, 3 days, and 1 month**. Rather than running four separate timers, it checks about 1 minute after startup and every **10 minutes** thereafter without being triggered by saves or workspace switches. Workspace entry pauses the timer and waits for an in-flight round; history rotation remains paused through recovery confirmation and commit. Unchanged files are not re-archived, and actual ages may shift when history is short or when long-term archives rotate.
 
 These archives store the original contents of existing `data.json` and `data2.json`–`data5.json` files. **They exclude image databases (`.lmdb`), plugin data, and short-term backups**, and do not validate whether JSON is damaged. If a workspace file is temporarily unreadable, PaperTodo retries briefly; **if it still fails, only that workspace file is skipped for the current scan while other readable workspaces are archived normally, and the next scan tries again**. No empty archive is created when all workspaces are unreadable. Old archives are rotated only after a complete new ZIP is written; check which workspace files an archive contains before restoring it.
 
@@ -612,6 +612,10 @@ These archives store the original contents of existing `data.json` and `data2.js
 4. Launch PaperTodo and switch through every workspace you use to verify text, images, plugins, and settings. Keep the old backup until everything is verified.
 
 #### Recovering from Damaged or Unwanted Changes
+
+**Automatic recovery on startup and workspace switches:** PaperTodo loads a healthy primary file, then a healthy fixed backup, then the latest complete temporary snapshot if both are missing or damaged. If the fixed backup cannot be read, the prompt explains the error and offers Retry or Rebuild without automatically searching other sources. When old data remains but no automatic source is usable, PaperTodo offers the latest valid historical backup with its time and target workspace number. Rebuilding explicitly resets that workspace's notes, todos and settings; dismissing the prompt does not authorize replacement. Recovery only covers core data, not images or plugin data, and changes after the backup may be lost.
+
+To choose an older backup manually or restore images and plugins as well:
 
 1. **Exit PaperTodo from the tray** and copy the entire current folder to another location as a recovery snapshot, keeping the original files intact.
 2. Restore by workspace number: for the main workspace (1), **copy** a usable `data.backup.json` to `data.json`; for Workspace 2, copy `data2.backup.json` to `data2.json` (and likewise for Workspaces 3–5). **Never overwrite the main `data.json` with a secondary workspace's file.**

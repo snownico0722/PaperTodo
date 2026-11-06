@@ -10,7 +10,7 @@ public sealed partial class AppController
 {
     private DispatcherTimer? _stateBackupTimer;
     private DispatcherTimer? _coreHistoryTimer;
-    private int _coreHistoryBackupRunning;
+    private Task _coreHistoryBackupTask = Task.CompletedTask;
 
     // The core JSON history is independent of the active workspace and the normal
     // autosave flow. Delay the first check so startup can settle, then scan every
@@ -31,17 +31,20 @@ public sealed partial class AppController
             return;
         }
 
+        // A queued tick must also respect the workspace load/recovery pause.
+        if (_workspaceSwitching) return;
+
         // This also changes the first-start delay into the steady ten-minute cycle.
         if (_coreHistoryTimer != null)
             _coreHistoryTimer.Interval = CoreHistoryBackup.MinimumInterval;
 
-        if (Interlocked.CompareExchange(ref _coreHistoryBackupRunning, 1, 0) != 0)
+        if (!_coreHistoryBackupTask.IsCompleted)
             return;
 
-        // The shared write-lifetime is the only link to persistence: it prevents
-        // publishing files after shutdown. No workspace UI or save hooks participate.
+        // Keep the running task so workspace entry can finish this round before
+        // selecting a recovery source. The worker never waits for the UI thread.
         var lifetime = _workspaceCatalog.MainStore.WriteLifetime;
-        _ = Task.Run(() =>
+        _coreHistoryBackupTask = Task.Run(() =>
         {
             try
             {
@@ -49,7 +52,6 @@ public sealed partial class AppController
                     .TryCreateIfDue(DateTimeOffset.UtcNow);
             }
             catch (Exception ex) { Trace.TraceWarning("Core history backup failed: {0}", ex); }
-            finally { Interlocked.Exchange(ref _coreHistoryBackupRunning, 0); }
         });
     }
 

@@ -54,14 +54,25 @@ internal static class PaperNoticeDialog
             _ => WorkspaceRecoveryChoice.Cancel
         };
 
-    public static WorkspaceRecoveryChoice ShowUnavailableWorkspace(Window? owner, int? fallbackNumber)
+    public static WorkspaceRecoveryChoice ShowBackupReadFailure(Window? owner, int number, string reason) =>
+        ShowCore(owner, Strings.Get("HistoryRecoveryTitle"),
+            Strings.Format("WorkspaceBackupReadFailedMessage", number, reason),
+            [Strings.Get("HistoryRecoveryCreate"), Strings.Get("WorkspaceFailureRetry")],
+            primaryIndex: 1, width: 560) switch
+        {
+            0 => WorkspaceRecoveryChoice.CreateEmpty,
+            1 => WorkspaceRecoveryChoice.Retry,
+            _ => WorkspaceRecoveryChoice.Cancel
+        };
+
+    public static WorkspaceRecoveryChoice ShowUnavailableWorkspace(Window? owner, int number, int? fallbackNumber)
     {
         var actions = new List<string> { Strings.Get("HistoryRecoveryCreate") };
-        if (fallbackNumber is { } number)
-            actions.Add(Strings.Format("WorkspaceRecoveryFallback", number));
+        if (fallbackNumber is { } fallback)
+            actions.Add(Strings.Format("WorkspaceRecoveryFallback", fallback));
         actions.Add(Strings.Get("WorkspaceFailureExit"));
         return ShowCore(owner, Strings.Get("HistoryRecoveryTitle"),
-            Strings.Get("WorkspaceRecoveryUnavailable"), actions.ToArray(), primaryIndex: 1, width: 560) switch
+            Strings.Format("WorkspaceRecoveryUnavailableMessage", number), actions.ToArray(), primaryIndex: 1, width: 560) switch
         {
             0 => WorkspaceRecoveryChoice.CreateEmpty,
             1 when fallbackNumber.HasValue => WorkspaceRecoveryChoice.Fallback,
