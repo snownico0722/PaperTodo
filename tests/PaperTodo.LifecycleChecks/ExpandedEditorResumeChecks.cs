@@ -1,7 +1,6 @@
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Threading;
 using PaperTodo;
@@ -85,10 +84,13 @@ internal static class ExpandedEditorResumeChecks
         var trigger = (Button)Member(b, "_editorStatisticsButton");
         trigger.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
-        var popup = (Popup)Member(b, "_editorStatisticsPopup");
-        Check(popup.IsOpen && bBox.IsKeyboardFocusWithin &&
+        var popup = (Border)Member(b, "_editorStatisticsPopup");
+        Check(popup.Visibility == Visibility.Visible && bBox.IsKeyboardFocusWithin &&
               selection == (bBox.SelectionStart, bBox.SelectionLength),
             "Opening statistics stole editor focus or changed its selection");
+        var popupBounds = popup.TransformToAncestor(host).TransformBounds(new Rect(popup.RenderSize));
+        Check(popupBounds.Width > 0 && popupBounds.Height > 0 && new Rect(host.RenderSize).Contains(popupBounds),
+            "Statistics overflowed the editor window");
         var totals = (TextBlock[])Member(b, "_editorStatisticsTotals");
         var selected = (TextBlock[])Member(b, "_editorStatisticsSelected");
         Check(totals[0].Text == "3" && totals[1].Text == "7" && selected[1].Text == "0" &&
@@ -98,7 +100,7 @@ internal static class ExpandedEditorResumeChecks
         var escape = new KeyEventArgs(Keyboard.PrimaryDevice, PresentationSource.FromVisual(host),
             Environment.TickCount, Key.Escape) { RoutedEvent = Keyboard.PreviewKeyDownEvent };
         shell.RaiseEvent(escape);
-        Check(escape.Handled && !popup.IsOpen && selection == (bBox.SelectionStart, bBox.SelectionLength) &&
+        Check(escape.Handled && popup.Visibility == Visibility.Collapsed && selection == (bBox.SelectionStart, bBox.SelectionLength) &&
               bBox.IsKeyboardFocusWithin, "Escape did not dismiss statistics without moving input");
         trigger.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         bBox.Select(0, 0);
@@ -142,7 +144,7 @@ internal static class ExpandedEditorResumeChecks
         }
 
         controller.SwitchExpandedEditorPaper(b, "resume-a");
-        Check(!popup.IsOpen, "Switching papers left the old statistics popup open");
+        Check(popup.Visibility == Visibility.Collapsed, "Switching papers left the old statistics popup open");
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
         host = a.ExpandedEditorHostWindow!;
         box = (MarkdownTextBox)Member(a, "_noteBox");

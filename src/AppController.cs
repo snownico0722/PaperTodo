@@ -3409,8 +3409,8 @@ public sealed partial class AppController : IDisposable
         }
 
         return State.UseDeepCapsuleMode &&
-            State.ShowDeepCapsuleWhileExpanded &&
-            (window.HasVisibleSurface || _isPreparingStartupEdgeCapsules);
+            window.KeepDeepCapsuleWhileExpanded &&
+            (window.IsExpandedEditorHosted || window.HasVisibleSurface || _isPreparingStartupEdgeCapsules);
     }
 
     public void MarkDirty()

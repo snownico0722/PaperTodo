@@ -96,7 +96,11 @@ internal static class ExpandedEditorChecks
         Check(ReferenceEquals(host, b.ExpandedEditorHostWindow), "Sidebar replaced the editor host");
         Check(new WindowInteropHelper(host).Handle == hwnd, "Switching papers changed the editor HWND");
         Check(host.CurrentPaperId == "editor-b", "Sidebar did not select the second paper");
-        Check(a.Topmost, "Returning the prior desktop paper lost its pin state");
+        Check(a.Topmost, "Collapsing the prior paper lost its pin state");
+        Check(controller.State.Papers.Single(p => p.Id == "editor-a").IsCollapsed && a.IsVisible,
+            "Switching away from an expanded paper did not collapse its desktop surface");
+        Check(secondEditor.ShowLineNumbers && !((MarkdownTextBox)Member(a, "_noteBox")).ShowLineNumbers,
+            "Line numbers did not follow the active editor presentation");
         controller.State.Papers.Single(p => p.Id == "editor-a").AlwaysOnTop = false;
         a.RefreshEffectiveTopmost();
         host.WindowState = WindowState.Minimized;
@@ -207,6 +211,33 @@ internal static class ExpandedEditorChecks
         foreach (var p in controller.State.Papers)
             Check(before[p.Id] == (p.X, p.Y, p.Width, p.Height),
                 "Editor switch wrote temporary dimensions into the desktop paper: " + p.Id);
+
+        // The editor keeps edge access even when ordinary expanded desktop papers hide it.
+        controller.State.UseDeepCapsuleMode = true;
+        controller.State.ShowDeepCapsuleWhileExpanded = false;
+        controller.ArrangeDeepCapsules(animate: false);
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(a.IsDeepCapsuleSlotVisible, "Edge capsule scenario did not start with a visible capsule");
+        controller.OpenExpandedEditorFor(a);
+        var edgeHost = a.ExpandedEditorHostWindow!;
+        controller.ArrangeDeepCapsules(animate: false);
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(a.IsDeepCapsuleSlotVisible && !a.IsVisible,
+            "Opening or rearranging the editor removed its edge capsule");
+        edgeHost.WindowState = WindowState.Minimized;
+        typeof(PaperWindow).GetMethod("ActivateFromDeepCapsuleSlot", Private)!.Invoke(a, null);
+        Check(edgeHost.WindowState != WindowState.Minimized && edgeHost.IsActive && !a.IsVisible,
+            "Clicking the retained capsule did not restore the editor");
+        edgeHost.WindowState = WindowState.Minimized;
+        a.ActivateFromEdgeShortcut();
+        Check(edgeHost.WindowState != WindowState.Minimized && !a.IsVisible,
+            "Edge shortcut exposed the hidden desktop owner");
+        controller.SwitchExpandedEditorPaper(a, "editor-b");
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(collapsedPaper.IsCollapsed && a.IsDeepCapsuleSlotVisible && b.IsDeepCapsuleSlotVisible,
+            "Switching the editor lost the previous or current edge capsule");
+        edgeHost.Close();
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
 
         for (var i = 0; i < 200; i++)
             controller.State.Papers.Add(new PaperData

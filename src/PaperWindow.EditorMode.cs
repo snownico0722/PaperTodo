@@ -221,6 +221,11 @@ public sealed partial class PaperWindow
         if (_editorMarkdownToolbar == null) return;
         var showMarkdownTools = _isExpandedEditorMode &&
             _paper.Type == PaperTypes.Note && IsCurrentBodyProviderMarkdown && _noteBox != null;
+        if (_noteBox != null)
+        {
+            _noteBox.ShowLineNumbers = showMarkdownTools;
+            _noteBox.SetResourceReference(MarkdownTextBox.LineNumbersForegroundProperty, "WeakTextBrushKey");
+        }
         RefreshExpandedEditorStatistics(showMarkdownTools);
         _editorMarkdownToolbar.Visibility = showMarkdownTools ? Visibility.Visible : Visibility.Collapsed;
         _editorMarkdownToolbar.Margin = new Thickness(

@@ -689,12 +689,12 @@ public sealed partial class PaperWindow
         var keepDeepCapsuleSlotReservation = !collapsed
             && expandingFromDeepCapsuleEdge
             && usesDeepCapsuleMode
-            && _controller.State.ShowDeepCapsuleWhileExpanded
+            && KeepDeepCapsuleWhileExpanded
             && CanDisplayAsCapsule();
         var returningToHiddenDeepCapsuleSlot = collapsed
             && usesDeepCapsuleMode
             && ExpandedFromDeepCapsuleEdge
-            && !_controller.State.ShowDeepCapsuleWhileExpanded;
+            && !KeepDeepCapsuleWhileExpanded;
         PaperRestoreGeometry? rememberedDeepCapsuleExpandedGeometry = null;
         // An explicit open origin outranks edge history; edge-driven expansion still restores it.
         if (programmaticOrigin == null &&
@@ -785,7 +785,7 @@ var expandedHeight = collapsed
             ChangeEdgeCapsulePaperForm(
                 EdgeCapsulePaperForm.Expanded,
                 keepDeepCapsuleSlotReservation);
-            if (_controller.State.ShowDeepCapsuleWhileExpanded &&
+            if (KeepDeepCapsuleWhileExpanded &&
                 _controller.CanPaperDisplayAsCapsule(_paper) &&
                 (expandingFromDeepCapsuleEdge || _controller.State.UseDeepCapsuleMode))
             {

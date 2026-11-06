@@ -50,12 +50,13 @@ public sealed partial class PaperWindow
         _shell.PreviewMouseDown += (_, e) =>
         {
             if (e.OriginalSource is System.Windows.Media.Visual visual &&
-                (ReferenceEquals(visual, _editorStatisticsButton) || _editorStatisticsButton.IsAncestorOf(visual))) return;
+                (ReferenceEquals(visual, _editorStatisticsButton) || _editorStatisticsButton.IsAncestorOf(visual) ||
+                 ReferenceEquals(visual, _editorStatisticsPopup) || _editorStatisticsPopup?.IsAncestorOf(visual) == true)) return;
             CloseEditorStatisticsPopup();
         };
         _shell.PreviewKeyDown += (_, e) =>
         {
-            if (e.Key == System.Windows.Input.Key.Escape && _editorStatisticsPopup?.IsOpen == true)
+            if (e.Key == System.Windows.Input.Key.Escape && _editorStatisticsPopup?.Visibility == Visibility.Visible)
             {
                 CloseEditorStatisticsPopup();
                 e.Handled = true;

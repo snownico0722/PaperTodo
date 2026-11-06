@@ -205,18 +205,6 @@ internal static partial class WindowNative
             SwpNoMove | SwpNoSize | SwpNoActivate | SwpNoOwnerZOrder);
     }
 
-    // Restore a borrowed desktop Paper below the editor HWND without foreground
-    // activation. Ordinary Show() raises it in the Z-order even with ShowActivated=false.
-    public static bool TryPlaceWindowBehindWithoutActivation(Window window, Window above)
-    {
-        var handle = new WindowInteropHelper(window).Handle;
-        var reference = new WindowInteropHelper(above).Handle;
-        if (handle == IntPtr.Zero || reference == IntPtr.Zero || handle == reference)
-            return false;
-        return SetWindowPos(handle, reference, 0, 0, 0, 0,
-            SwpNoMove | SwpNoSize | SwpNoActivate | SwpNoOwnerZOrder);
-    }
-
     public static void ApplyWindowSwitcherVisibility(
         Window window,
         bool visible,

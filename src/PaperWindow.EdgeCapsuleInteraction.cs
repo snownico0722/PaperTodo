@@ -870,7 +870,7 @@ public sealed partial class PaperWindow
     {
         return HasDeepCapsuleSlotPlacement &&
             _edgeCapsuleHost?.IsVisible == true &&
-            (_paper.IsCollapsed || (_controller.State.ShowDeepCapsuleWhileExpanded && IsDeepCapsuleSlotActive));
+            (_paper.IsCollapsed || (KeepDeepCapsuleWhileExpanded && IsDeepCapsuleSlotActive));
     }
 
     private int DeepCapsuleDropIndexForCurrentPosition()

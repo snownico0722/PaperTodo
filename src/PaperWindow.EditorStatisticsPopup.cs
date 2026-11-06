@@ -1,14 +1,11 @@
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Controls.Primitives;
-using System.Windows.Media.Effects;
 
 namespace PaperTodo;
 
 public sealed partial class PaperWindow
 {
-    private Popup? _editorStatisticsPopup;
-    private Border? _editorStatisticsPopupBorder;
+    private Border? _editorStatisticsPopup;
     private Grid? _editorStatisticsGrid;
     private TextBlock[]? _editorStatisticsLabels;
     private TextBlock[]? _editorStatisticsTotals;
@@ -17,7 +14,7 @@ public sealed partial class PaperWindow
     private void ToggleEditorStatisticsPopup()
     {
         if (_editorStatisticsSource == null) return;
-        if (_editorStatisticsPopup?.IsOpen == true)
+        if (_editorStatisticsPopup?.Visibility == Visibility.Visible)
         {
             CloseEditorStatisticsPopup();
             return;
@@ -25,14 +22,14 @@ public sealed partial class PaperWindow
         if (_editorStatisticsPopup == null) BuildEditorStatisticsPopup();
         RefreshEditorStatisticsPopupStyle();
         DisplayEditorStatistics();
-        _editorStatisticsPopup!.IsOpen = true;
+        _editorStatisticsPopup!.Visibility = Visibility.Visible;
         // Cached results appear immediately. New text still uses the coalesced worker.
         QueueExpandedEditorStatistics();
     }
 
     private void CloseEditorStatisticsPopup()
     {
-        if (_editorStatisticsPopup != null) _editorStatisticsPopup.IsOpen = false;
+        if (_editorStatisticsPopup != null) _editorStatisticsPopup.Visibility = Visibility.Collapsed;
     }
 
     private void BuildEditorStatisticsPopup()
@@ -55,31 +52,25 @@ public sealed partial class PaperWindow
         foreach (var label in _editorStatisticsTotals) label.Text = "—";
         foreach (var label in _editorStatisticsSelected) label.Visibility = Visibility.Collapsed;
         _editorStatisticsLabels[2].Visibility = Visibility.Collapsed;
-        _editorStatisticsPopupBorder = new Border
+        _editorStatisticsPopup = new Border
         {
             Padding = new Thickness(16, 14, 16, 14),
-            Margin = new Thickness(8),
-            BorderThickness = new Thickness(1),
-            Child = grid,
-            Effect = new DropShadowEffect { BlurRadius = 14, ShadowDepth = 2, Opacity = 0.18 }
-        };
-        // Popup has its own presentation source; explicitly share the owner's live theme.
-        _editorStatisticsPopupBorder.Resources.MergedDictionaries.Add(Resources);
-        _editorStatisticsPopupBorder.SetResourceReference(Border.BackgroundProperty, "PaperBrushKey");
-        _editorStatisticsPopupBorder.SetResourceReference(Border.BorderBrushProperty, "PaperBorderBrushKey");
-        _editorStatisticsPopup = new Popup
-        {
-            Child = _editorStatisticsPopupBorder,
-            PlacementTarget = _editorStatisticsButton,
-            Placement = PlacementMode.Custom,
-            AllowsTransparency = true,
-            Focusable = false,
-            StaysOpen = true,
-            CustomPopupPlacementCallback = (popup, target, _) => new[]
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Bottom,
+            Visibility = Visibility.Collapsed,
+            Child = new ScrollViewer
             {
-                new CustomPopupPlacement(new Point(target.Width - popup.Width + 8, -popup.Height), PopupPrimaryAxis.Horizontal)
+                Content = grid,
+                Focusable = false,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto
             }
         };
+        // Stay in the borrowed shell so layout, clipping and theme belong to the editor.
+        _editorStatisticsPopup.SetResourceReference(Border.BackgroundProperty, "PaperBrushKey");
+        Grid.SetRow(_editorStatisticsPopup, 1);
+        Panel.SetZIndex(_editorStatisticsPopup, 90);
+        _shell.Children.Add(_editorStatisticsPopup);
 
         TextBlock Label(int row, int column)
         {
@@ -108,7 +99,10 @@ public sealed partial class PaperWindow
             label.FontFamily = AppTypography.UiFontFamily;
             label.FontSize = AppTypography.Scale(12);
         }
-        _editorStatisticsPopupBorder!.CornerRadius = new CornerRadius(Theme.IsPixelSkin ? 0 : RadiusBlock);
+        _editorStatisticsPopup!.CornerRadius = new CornerRadius(Theme.IsPixelSkin ? 0 : RadiusBlock);
+        _editorStatisticsPopup.Margin = new Thickness(8, 8,
+            8 + (IsExpandedEditorSidebarOpen ? ExpandedEditorSidebarWidth : 0),
+            ExpandedEditorStatusHeight + 8);
     }
 
     private void DisplayEditorStatisticsPopup(NoteTextCounts total, NoteTextCounts selected, bool hasSelection)

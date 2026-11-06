@@ -13,6 +13,7 @@ public sealed partial class PaperWindow
     internal ExpandedEditorWindow? ExpandedEditorHostWindow => _expandedEditorHostWindow;
     internal string ExpandedEditorTitle => _controller.PaperTitleText(_paper);
     internal bool IsExpandedEditorHosted => _expandedEditorVisualLease != null;
+    internal bool KeepDeepCapsuleWhileExpanded => IsExpandedEditorHosted || _controller.State.ShowDeepCapsuleWhileExpanded;
     internal bool ExpandedEditorShouldTopmost => _paper.AlwaysOnTop;
     private FrameworkElement InteractionRoot => IsExpandedEditorHosted ? _shell : this;
     private Window InteractionWindow => (_expandedEditorHostWindow as Window) ?? this;
@@ -48,9 +49,6 @@ public sealed partial class PaperWindow
         ResetTransitionVisuals();
 
         var wasCollapsed = _paper.IsCollapsed;
-        if (wasCollapsed)
-            SetCollapsedState(false, animate: false, saveGeometry: false);
-
         var lease = new ExpandedEditorVisualLease(this, host, destination, wasCollapsed);
         _expandedEditorVisualLease = lease;
         _expandedEditorHostWindow = host;
@@ -60,9 +58,10 @@ public sealed partial class PaperWindow
         ApplyPaperChromePresentation();
         try
         {
+            if (wasCollapsed)
+                SetCollapsedState(false, animate: false, saveGeometry: false);
             HideWithoutGeometrySave();
             ApplySystemVisibility(reapplyTaskbarShellState: true);
-            HideExpandedDeepCapsuleSlotHost(animate: false);
             _containerGrid.Children.Remove(_shell);
             _shell.Resources.MergedDictionaries.Add(Resources);
             _shell.Width = double.NaN;
@@ -85,6 +84,7 @@ public sealed partial class PaperWindow
             RefreshExpandedEditorPresentation();
             _enterCurrentNoteEditor?.Invoke();
             RefreshExpandedEditorTopBarControls();
+            _controller.ArrangeDeepCapsules(animate: false);
             return lease;
         }
         catch
@@ -212,7 +212,7 @@ public sealed partial class PaperWindow
             _topBarVisibility = owner._topBarHost?.Visibility ?? Visibility.Visible;
         }
 
-        internal void Return(bool restoreDesktop, Window? keepBehind = null)
+        internal void Return(bool restoreDesktop)
         {
             var owner = _owner;
             if (owner == null) return;
@@ -262,8 +262,6 @@ public sealed partial class PaperWindow
                 try
                 {
                     owner.MoveWindowWithoutGeometrySave(owner.Show);
-                    if (keepBehind != null)
-                        WindowNative.TryPlaceWindowBehindWithoutActivation(owner, keepBehind);
                 }
                 finally { owner.ShowActivated = activated; }
             }

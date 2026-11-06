@@ -128,9 +128,11 @@ internal sealed partial class ExpandedEditorWindow : Window
             return;
         }
         var former = _lease;
+        var formerPaperId = _current?.PaperId;
         _lease = null;
         _current = null;
-        former?.Return(restoreDesktop: true, keepBehind: this);
+        former?.Return(restoreDesktop: false);
+        if (formerPaperId != null) _controller.CollapseExpandedEditorPaper(formerPaperId);
         _lease = target.BorrowExpandedEditorVisual(this, _body);
         _current = target;
         RefreshPaperList();
