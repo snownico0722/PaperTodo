@@ -9,7 +9,7 @@ namespace PaperTodo;
 
 internal static class PaperNoticeDialog
 {
-    public static void Show(Window owner, string titleText, string messageText)
+    public static void Show(Window? owner, string titleText, string messageText)
     {
         _ = ShowCore(
             owner,

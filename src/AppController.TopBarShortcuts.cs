@@ -56,7 +56,7 @@ public sealed partial class AppController
         ScriptExecutionService.TryParse(state.TopBarScript, allowDefaultEngine: true, out var spec);
         _ = ScriptExecutionService.RunAsync(spec, state, message =>
         {
-            if (IsExiting || !ReferenceEquals(state, State)) return;
+            if (IsExiting || _workspaceClosingSurfaces || !ReferenceEquals(state, State)) return;
             MessageBox.Show(message, Strings.Get("ScriptCapsuleFailureTitle"),
                 MessageBoxButton.OK, MessageBoxImage.Warning);
         });
