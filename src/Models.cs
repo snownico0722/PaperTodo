@@ -508,6 +508,8 @@ public sealed class AppState
     public List<string> TopBarShortcutOrder { get; set; } =
         PaperTopBarShortcuts.NormalizeOrder(null);
     public int TopBarPinnedCount { get; set; } = 3;
+    // Persisted with the layout so upgrade defaults run once per workspace.
+    public int TopBarDefaultsVersion { get; set; }
     // Read-only legacy migration inputs from older data.json versions. Do not write
     // obsolete per-type lists back once converted to the single global layout.
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

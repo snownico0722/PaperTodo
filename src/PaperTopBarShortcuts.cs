@@ -14,6 +14,7 @@ internal static class PaperTopBarShortcuts
     internal const string NewNote = "new-note";
     internal const string Workspace = "workspace";
     internal const string ExpandedEditor = "expanded-editor";
+    internal const int CurrentDefaultsVersion = 1;
 
     // Kept only for deserializing layouts saved by the former per-paper model.
     internal const string PluginActions = "plugin-actions";
@@ -35,20 +36,17 @@ internal static class PaperTopBarShortcuts
 
     internal static void Normalize(AppState state)
     {
-        // The new action is a normal, user-orderable shortcut. On an old saved layout,
-        // pin it at the old divider once; preserve the relative order of all old actions.
-        var old = state.TopBarShortcutOrder ?? [];
-        var hadEditor = old.Contains(ExpandedEditor, StringComparer.Ordinal);
-        var oldPinned = Math.Clamp(state.TopBarPinnedCount, 0, old.Count);
-        var order = NormalizeOrder(old);
-        if (!hadEditor)
-        {
-            order.Remove(ExpandedEditor);
-            order.Insert(oldPinned, ExpandedEditor);
-            state.TopBarPinnedCount = oldPinned + 1;
-        }
-        state.TopBarShortcutOrder = order;
+        state.TopBarShortcutOrder = NormalizeOrder(state.TopBarShortcutOrder);
         state.TopBarPinnedCount = Math.Clamp(state.TopBarPinnedCount, 0, Defaults.Length);
+        // This release deliberately updates both choices once, including saved
+        // beta layouts that already contain the editor. Later user moves persist.
+        if (state.TopBarDefaultsVersion < CurrentDefaultsVersion)
+        {
+            SetPinned(state, ExpandedEditor, true);
+            SetPinned(state, ExternalEditor, false);
+            state.ShowTopBarExternalOpenButton = false;
+            state.TopBarDefaultsVersion = CurrentDefaultsVersion;
+        }
         state.TodoTopBarShortcuts = null;
         state.NoteTopBarShortcuts = null;
     }

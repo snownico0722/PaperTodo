@@ -123,6 +123,7 @@ internal static class WorkspaceFieldScopes
             nameof(AppState.CapsuleTextBold), nameof(AppState.UseCapsuleMode), nameof(AppState.UseDeepCapsuleMode),
             nameof(AppState.DeepCapsuleGapSize), nameof(AppState.ShowTopBarNewTodoButton), nameof(AppState.ShowTopBarNewNoteButton),
             nameof(AppState.ShowTopBarExternalOpenButton), nameof(AppState.TopBarShortcutOrder), nameof(AppState.TopBarPinnedCount),
+            nameof(AppState.TopBarDefaultsVersion),
             nameof(AppState.HidePapersFromTaskbar), nameof(AppState.HidePapersFromWindowSwitcher), nameof(AppState.EnableTodoPaperLinks),
             nameof(AppState.ShowLinkedPaperName), nameof(AppState.AllowLongLinkedPaperTitles), nameof(AppState.ShowLinkedPathExtensionOnly),
             nameof(AppState.HideLinkedPapersFromCapsules), nameof(AppState.RunLinkedScriptCapsulesOnClick), nameof(AppState.MaxTitleLength),
