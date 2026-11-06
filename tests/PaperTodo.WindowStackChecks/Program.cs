@@ -21,10 +21,10 @@ internal static class Program
             if (!File.Exists(Path.Combine(AppContext.BaseDirectory, Marker)))
                 throw new InvalidOperationException("Refusing to open non-fixture PaperTodo data.");
             var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
-            var result = 0;
+            var result = 1;
             app.Dispatcher.InvokeAsync(async () =>
             {
-                try { await RunFixture(args[1], args[2]); }
+                try { await RunFixture(args[1], args[2]); result = 0; }
                 catch (Exception ex) { Console.Error.WriteLine(ex); result = 1; }
                 finally { app.Shutdown(); }
             });
@@ -38,9 +38,12 @@ internal static class Program
         foreach (var operation in new[] { "delete", "close-hide", "button-hide", "background-delete", "background-hide",
             "animated-hide", "focus-change-during-fade", "hide-all", "peer-next", "animated-reopen" })
         {
-            // Every operation still runs unowned and with the hidden native owner. The
-            // intermediate taskbar-only mode needs representatives, not another full product.
-            if (visibility == "taskbar-hidden" && operation is not ("delete" or "animated-hide")) continue;
+            // Run every close route with the hidden native owner, where owner activation
+            // can disturb the external window stack. Unowned and taskbar-only windows
+            // retain destructive-close, cancelled-close and animated-close representatives;
+            // the common target-selection policy is covered by WindowCloseActivationChecks.
+            if (visibility == "normal" && operation is not ("delete" or "animated-reopen")) continue;
+            if (visibility == "taskbar-hidden" && operation != "animated-hide") continue;
             total++;
             try { RunIsolated(visibility, operation); }
             catch (Exception ex) { failed++; Console.Error.WriteLine(ex); }

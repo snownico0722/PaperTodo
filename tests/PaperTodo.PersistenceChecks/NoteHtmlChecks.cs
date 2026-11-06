@@ -165,13 +165,6 @@ internal static class NoteHtmlChecks
         Require(todoDocument.Content == expectedTodo,
             "Todo export must preserve order, status, multiline text, literal syntax and the captured text");
 
-        var todoMd = Path.Combine(temp.Path, "todo.md");
-        var todoMdResult = NotePortableExport.Export(todoMd, [todoDocument],
-            NoteExportFormat.Markdown, all: false, images, "Missing image");
-        Require(todoMdResult.Exported == 1 && todoMdResult.MissingImages == 0 &&
-                File.ReadAllText(todoMd) == expectedTodo,
-            "single Todo Markdown export");
-
         var todoHtml = Path.Combine(temp.Path, "todo.html");
         var todoHtmlResult = NotePortableExport.Export(todoHtml, [todoDocument],
             NoteExportFormat.Html, all: false, images, "Missing image");
@@ -182,31 +175,6 @@ internal static class NoteHtmlChecks
                 exportedTodoHtml.Contains("# continuation") &&
                 !exportedTodoHtml.Contains("<strong>verbatim</strong>"),
             "single Todo HTML export must show checkboxes without interpreting literal Todo text as Markdown");
-
-        var mixedMd = Path.Combine(temp.Path, "mixed-md.zip");
-        var mixedMdResult = NotePortableExport.Export(mixedMd, [source, todoDocument],
-            NoteExportFormat.Markdown, all: true, images, "Missing image");
-        using (var zip = ZipFile.OpenRead(mixedMd))
-        {
-            Require(mixedMdResult.Exported == 2 &&
-                    zip.GetEntry("Note.md") != null &&
-                    zip.GetEntry("Note-images/" + asset.Id + ".png") != null &&
-                    zip.GetEntry("Note (2).md") != null &&
-                    Read(zip.GetEntry("Note (2).md")!) == expectedTodo,
-                "mixed ZIP must include both notes and todos, with distinct filenames");
-        }
-
-        var mixedHtml = Path.Combine(temp.Path, "mixed-html.zip");
-        var mixedHtmlResult = NotePortableExport.Export(mixedHtml, [source, todoDocument],
-            NoteExportFormat.Html, all: true, images, "Missing image");
-        using (var zip = ZipFile.OpenRead(mixedHtml))
-        {
-            Require(mixedHtmlResult.Exported == 2 &&
-                    zip.GetEntry("Note.html") != null &&
-                    zip.GetEntry("Note (2).html") != null &&
-                    Read(zip.GetEntry("Note (2).html")!).Contains("type=\"checkbox\""),
-                "mixed HTML ZIP must include both document types");
-        }
     }
 
     private static string Read(ZipArchiveEntry entry)

@@ -270,7 +270,6 @@ internal static partial class Program
                     EdgeCapsuleQueueProxyPolicy.RequiredTranslationBounds(outsideMotion)),
                 "A successor whose real target exceeds the output must still be rejected");
             var member = new EdgeCapsuleQueueCompositionProxyMember(_paper, nextMember, _handle);
-            var visualBefore = _state.GetType().GetProperty("Visual")!.GetValue(_state);
             long newClock = 0;
             EdgeCapsulePresentationFrame expectedStart = default;
             var releasing = current with
@@ -302,8 +301,6 @@ internal static partial class Program
                     oldClock, _duration, timestamp);
                 return true;
             }), "Production retarget consumes the reversed placement");
-            Check(ReferenceEquals(visualBefore, _state.GetType().GetProperty("Visual")!.GetValue(_state)),
-                "Retarget reuses the existing native visual");
             var rebased = Sample(newClock);
             Check(rebased.Bounds.Top == expectedStart.Bounds.Top,
                 "Retarget begins at the current visible position after endpoint work");

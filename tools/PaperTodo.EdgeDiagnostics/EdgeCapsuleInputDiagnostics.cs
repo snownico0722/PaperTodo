@@ -23,6 +23,8 @@ internal static class EdgeCapsuleInputDiagnosticBootstrap
     [ModuleInitializer]
     internal static void Initialize()
     {
+        if (Environment.GetEnvironmentVariable("PAPERTODO_EDGE_INPUT_DIAGNOSTICS") != "1")
+            return;
         try
         {
             _bootstrapTimer = new System.Threading.Timer(

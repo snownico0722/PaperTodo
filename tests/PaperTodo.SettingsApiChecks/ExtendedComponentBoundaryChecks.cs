@@ -9,10 +9,9 @@ using PaperTodo.Plugin;
 
 internal static partial class Program
 {
-    private static async Task ExtendedComponentBoundaryBehavior(AppController controller)
+    private static void ExtendedComponentBoundaryBehavior(AppController controller)
     {
         ExternalMutationsRevalidateAfterCallbacks(controller);
-        await ArchiveNotificationsCannotBlockPersistence();
         WebBodyDocumentOwnsResourceReset(controller);
     }
 

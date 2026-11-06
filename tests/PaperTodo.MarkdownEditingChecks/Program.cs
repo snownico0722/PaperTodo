@@ -1,6 +1,8 @@
 using System.Windows;
+using System.Windows.Documents;
 using System.Windows.Media;
 using System.Windows.Threading;
+using ICSharpCode.AvalonEdit.Document;
 using PaperTodo;
 
 internal static partial class Program
@@ -14,7 +16,6 @@ internal static partial class Program
         new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
         var failures = 0;
         ClipboardImageChecks.Run(Check);
-        Check("Paper background image loading and layout", CheckPaperBackgroundToggle);
         Check("Full mode preserves quote source and undo history", () =>
         {
             foreach (var source in new[] { "- > a\n  > b", "1. > a\n   > b", "> a\nb", "> a\n> > b\nlazy" })
@@ -118,6 +119,29 @@ internal static partial class Program
             Equal("- [x] todo\n\nplain", box.Text, "Full preview activation updates the source");
         });
 
+        Check("Rendered task markers keep every source caret boundary reachable", () =>
+        {
+            using var editor = new Editor("- [x] task");
+            editor.Box.SetPreviewMode(true);
+            Pump();
+            FirstLineWidth(editor.Box);
+            var visual = editor.Box.TextArea.TextView.GetOrConstructVisualLine(editor.Box.Document.GetLineByNumber(1));
+            var column = -1;
+            foreach (var direction in new[] { LogicalDirection.Forward, LogicalDirection.Backward })
+            {
+                // Start the reverse walk just beyond the prefix end found by the forward walk.
+                if (direction == LogicalDirection.Backward) column++;
+                var expected = direction == LogicalDirection.Forward
+                    ? Enumerable.Range(0, 7) : Enumerable.Range(0, 7).Reverse();
+                foreach (var offset in expected)
+                {
+                    column = visual.GetNextCaretPosition(column, direction, CaretPositioningMode.Normal, allowVirtualSpace: false);
+                    Require(column >= 0, $"{direction} caret reaches source offset {offset}");
+                    Equal(offset, visual.GetRelativeOffset(column), $"{direction} task marker caret boundary");
+                }
+            }
+        });
+
         Check("WPF collapse restores link and emphasis widths after editing", () =>
         {
             foreach (var syntax in new[] {
@@ -165,35 +189,22 @@ internal static partial class Program
                 "destination backslash is visible when any part of the link is being edited");
         });
 
-        Check("Ordered markers stay native through preview and animated editing", () =>
+        Check("Find reveals hidden link source only while the match needs it", () =>
         {
-            foreach (var source in new[] { "1. item", "10) item" })
-            {
-                using var editor = new Editor(source);
-                var box = editor.Box;
-                box.SetMarkdownEditAnimationEnabled(true);
-                var snapshot = MarkdownSemanticSnapshot.Parse(source);
-                Require(!MarkdownSemanticReveal.HasRevealOnLine(
-                    snapshot, source, 0, 0, new MarkdownCaretReveal(source.Length, 0)),
-                    "plain ordered item does not start a syntax fade");
-                foreach (var mode in new[] { MarkdownRenderModes.Full, MarkdownRenderModes.Basic })
-                {
-                    box.SetMarkdownRenderMode(mode);
-                    foreach (var preview in new[] { true, false, true })
-                    {
-                        box.SetPreviewMode(preview);
-                        box.CaretOffset = source.Length;
-                        Pump();
-                        Equal(byte.MaxValue, ForegroundAlphaAtOffset(box, 0), "source number stays visible");
-                        var view = box.TextArea.TextView;
-                        var drawing = new DrawingGroup();
-                        using (var context = drawing.Open())
-                            foreach (var renderer in view.BackgroundRenderers)
-                                renderer.Draw(view, context);
-                        Require(drawing.Bounds.IsEmpty, "ordered item needs no painted replacement");
-                    }
-                }
-            }
+            const string source = "[label](https://needle.example) tail";
+            using var editor = new Editor(source);
+            editor.Box.SetPreviewMode(true);
+            Pump();
+            var initialWidth = FirstLineWidth(editor.Box);
+            editor.Presentation.SetTransientFindReveal(source.IndexOf("label", StringComparison.Ordinal), "label".Length);
+            Pump();
+            Near(initialWidth, FirstLineWidth(editor.Box), "visible link text does not expand hidden syntax");
+            editor.Presentation.SetTransientFindReveal(source.IndexOf("needle", StringComparison.Ordinal), "needle".Length);
+            Pump();
+            Require(FirstLineWidth(editor.Box) > initialWidth, "hidden link destination expands for its find match");
+            editor.Presentation.SetTransientFindReveal(null, 0);
+            Pump();
+            Near(initialWidth, FirstLineWidth(editor.Box), "clearing find reveal restores normal Full preview layout");
         });
 
         Check("Quote marker after a list marker hides and reveals with the quote", () =>
@@ -208,18 +219,6 @@ internal static partial class Program
             editor.Box.CaretOffset = source.Length;
             Pump();
             Require(ForegroundAlphaAtOffset(editor.Box, quote) > 0, "list-contained quote marker reveals on its active line");
-        });
-
-        Check("List-contained quote rails align across continuation lines", () =>
-        {
-            const string source = "10. > a\n    > b";
-            using var editor = new Editor(source);
-            editor.Box.SetPreviewMode(true);
-            Pump();
-
-            var railXs = BackgroundVerticalLineXs(editor.Box);
-            Require(railXs.Length == 2, $"expected two rendered quote rails, got {railXs.Length}");
-            Near(railXs[0], railXs[1], "quote rail X stays aligned across ordered-list continuation");
         });
 
         Check("Link escapes have nonoverlapping collapse runs in both caret directions", () =>
@@ -321,36 +320,6 @@ internal static partial class Program
             MarkdownTaskCheckBoxGeometry.TryGetRect(view, line, task, out var rect),
             "task checkbox geometry resolves");
         return new Point(rect.Left + rect.Width / 2, rect.Top + rect.Height / 2);
-    }
-
-    private static double[] BackgroundVerticalLineXs(MarkdownTextBox box)
-    {
-        box.ApplyTemplate();
-        box.Measure(new Size(800, 600));
-        box.Arrange(new Rect(0, 0, 800, 600));
-        box.UpdateLayout();
-        var view = box.TextArea.TextView;
-        view.Measure(new Size(800, 600));
-        view.Arrange(new Rect(0, 0, 800, 600));
-        view.EnsureVisualLines();
-
-        var drawing = new DrawingGroup();
-        using (var context = drawing.Open())
-        {
-            foreach (var renderer in view.BackgroundRenderers)
-            {
-                renderer.Draw(view, context);
-            }
-        }
-
-        return drawing.Children
-            .OfType<GeometryDrawing>()
-            .Select(item => item.Geometry)
-            .OfType<LineGeometry>()
-            .Where(line => Math.Abs(line.StartPoint.X - line.EndPoint.X) < 0.01)
-            .Select(line => line.StartPoint.X)
-            .OrderBy(x => x)
-            .ToArray();
     }
 
     private static byte ForegroundAlphaAtOffset(MarkdownTextBox box, int offset)

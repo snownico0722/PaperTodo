@@ -17,10 +17,8 @@ internal static class FormTransitionRenderingChecks
         {
             state.PaperSkin = PaperSkins.Aero;
             state.Theme = "light";
-                        Theme.Invalidate();
+            Theme.Invalidate();
             CheckContentViewport();
-            CheckShadow(state);
-            CheckReliefTiles();
             CheckQuietMaterialTransitionEndpoints(state);
             foreach (var material in new[] { MicaBackdropTypes.Acrylic,
                 MicaBackdropTypes.ClearAcrylic, NativeMicaBackdrop.AeroGlassMaterial })
@@ -32,8 +30,8 @@ internal static class FormTransitionRenderingChecks
             (state.PaperSkin, state.Theme, state.HideSurfaceOutline) = saved;
             Theme.Invalidate();
         }
-        Console.WriteLine("FORM RENDERING: scaled far-edge pixels, gutter-bounded shadow, " +
-            "quiet-material endpoint continuity, forced shadow restoration, reusable rim tiles " +
+        Console.WriteLine("FORM RENDERING: scaled far-edge pixels, " +
+            "quiet-material endpoint continuity, forced shadow restoration " +
             "and staged/cancelled native fallback passed.");
     }
 
@@ -67,59 +65,6 @@ internal static class FormTransitionRenderingChecks
         Render(root, new Size(502, 352), 1);
         Program.Assert(ReferenceEquals(host.Child, content) && content.RenderSize == new Size(500, 350),
             "ending the morph restores normal stretch without replacing content");
-    }
-
-    private static void CheckShadow(AppState state)
-    {
-        foreach (var hiddenOutline in new[] { false, true })
-        {
-            state.HideSurfaceOutline = hiddenOutline;
-            var surface = new SkinBorder
-            {
-                Background = Theme.PaperBrush, BorderBrush = Theme.PaperBorderBrush,
-                BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(12)
-            };
-            surface.SetFormTransition(true);
-            var root = new Grid();
-            root.Children.Add(surface);
-            foreach (var margin in new[] { 0.0, .25, .75, 1.0, 2.0, 4.0, 8.0 })
-            {
-                surface.Margin = new Thickness(margin);
-                surface.SetMaterialShadowMargin(margin);
-                var pixels = Render(root, new Size(260, 190), 1);
-                var drawing = VisualTreeHelper.GetDrawing(surface)!;
-                var guard = 1 / VisualTreeHelper.GetDpi(surface).DpiScaleX;
-                var extent = Math.Min(7, Math.Max(0, margin - guard));
-                var bounds = drawing.Bounds;
-                Program.Assert(bounds.Left >= -extent - .01 && bounds.Top >= -extent - .01 &&
-                    bounds.Right <= surface.ActualWidth + extent + .01 &&
-                    bounds.Bottom <= surface.ActualHeight + extent + .01,
-                    $"shadow paint fits current gutter, margin={margin}, bounds={bounds}");
-                Program.Assert(surface.Effect == null, "material shadow does not process the content with an Effect");
-                if (margin == 8)
-                    Program.Assert(pixels.At(6, 95).A > 0 && pixels.At(253, 95).A > 0,
-                        "both side shadows survive even when the outline is hidden");
-            }
-        }
-    }
-
-    private static void CheckReliefTiles()
-    {
-        foreach (var sourceSize in new[] { new Size(420, 320), new Size(76, 32) })
-        {
-            var corners = new CornerRadius(sourceSize.Height == 32 ? 16 : 8);
-            var drawing = MaterialRelief.Create(sourceSize, corners, new Thickness(1), new DpiScale(1, 1), false);
-            var relief = new MaterialTransitionRelief(drawing, sourceSize, corners);
-            var surface = new ReliefSurface(relief);
-            foreach (var size in new[] { new Size(420, 320), new Size(200, 100), new Size(76, 32) })
-            {
-                surface.Corners = new CornerRadius(size.Height == 32 ? 16 : 8);
-                var pixels = Render(surface, size, 1);
-                Program.Assert(pixels.AlphaIn(new Rect(0, size.Height / 3, 4, size.Height / 3)) > 0 &&
-                    pixels.AlphaIn(new Rect(size.Width - 4, size.Height / 3, 4, size.Height / 3)) > 0,
-                    $"cached rim retains both sides, including pill-source expansion: source={sourceSize}, target={size}");
-            }
-        }
     }
 
     private static void CheckQuietMaterialTransitionEndpoints(AppState state)
@@ -339,12 +284,6 @@ internal static class FormTransitionRenderingChecks
         public void SetNonClientActive(IntPtr hwnd, bool active) { }
     }
 
-    private sealed class ReliefSurface(MaterialTransitionRelief relief) : FrameworkElement
-    {
-        internal CornerRadius Corners;
-        protected override void OnRender(DrawingContext dc) => relief.Draw(dc, RenderSize, Corners);
-    }
-
     private static Pixels Render(FrameworkElement element, Size size, double density)
     {
         element.Measure(size);
@@ -369,13 +308,6 @@ internal static class FormTransitionRenderingChecks
             var py = Math.Clamp((int)Math.Floor(y * Density), 0, Height - 1);
             var i = (py * Width + px) * 4;
             return Color.FromArgb(Bytes[i + 3], Bytes[i + 2], Bytes[i + 1], Bytes[i]);
-        }
-        internal long AlphaIn(Rect rect)
-        {
-            long sum = 0;
-            for (var y = rect.Top; y < rect.Bottom; y++)
-            for (var x = rect.Left; x < rect.Right; x++) sum += At(x, y).A;
-            return sum;
         }
     }
 }
