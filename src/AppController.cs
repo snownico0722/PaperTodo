@@ -897,26 +897,36 @@ public sealed partial class AppController : IDisposable
         }
     }
 
-    public bool IsPaperLinkedToAnyTodo(PaperData paper)
+    public bool IsPaperLinkedToAnyTodo(PaperData paper) =>
+        FindTodoPapersLinkingTo(paper).Count > 0;
+
+    internal IReadOnlyList<PaperData> FindTodoPapersLinkingTo(PaperData paper) =>
+        State.Papers.Where(candidate =>
+            candidate.Type == PaperTypes.Todo &&
+            candidate.Items.Any(item =>
+                string.Equals(item.LinkedPaperId, paper.Id, StringComparison.Ordinal)))
+            .ToList();
+
+    internal void UnlinkPaperFromAllTodos(PaperData linkedPaper)
     {
-        var paperId = paper.Id;
-        foreach (var sourcePaper in State.Papers)
+        var changed = false;
+        foreach (var todo in FindTodoPapersLinkingTo(linkedPaper))
         {
-            if (sourcePaper.Type != PaperTypes.Todo)
+            if (_windows.TryGetValue(todo.Id, out var window))
             {
+                changed |= window.UnlinkPaperReferences(linkedPaper.Id);
                 continue;
             }
 
-            foreach (var item in sourcePaper.Items)
-            {
-                if (string.Equals(item.LinkedPaperId, paperId, StringComparison.Ordinal))
-                {
-                    return true;
-                }
-            }
+            foreach (var item in todo.Items.Where(item =>
+                string.Equals(item.LinkedPaperId, linkedPaper.Id, StringComparison.Ordinal)))
+                item.ClearQuickLaunch();
+            changed = true;
         }
 
-        return false;
+        if (!changed) return;
+        MarkDirty();
+        RefreshCapsuleEligibilityForLinkedPapers([linkedPaper.Id]);
     }
 
     public bool CanPaperDisplayAsCapsule(PaperData paper)
