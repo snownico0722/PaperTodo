@@ -121,7 +121,11 @@ internal static class NativeFreeQueueReviewChecks
                 }
                 else
                 {
-                    var down = Hit(source);
+                    var center = Hit(source);
+                    // The 46-DIP host has only 30 DIP of interactive height. Starting at its
+                    // center and releasing 16 DIP lower lands in the shadow after a legacy drop.
+                    // Keep both ends inside the real capsule while still crossing the drag threshold.
+                    var down = new DeviceScreenPoint(center.X, center.Y - 8 * monitor.DpiScaleY);
                     var release = new DeviceScreenPoint(down.X, down.Y + 16 * monitor.DpiScaleY);
                     Move(down);
                     source.GetType().GetField("_nativeQueuePointerDownKeys", Private)!
@@ -135,6 +139,9 @@ internal static class NativeFreeQueueReviewChecks
                     Call(source, "OnEdgeCapsulePointerReleased", release);
                 }
                 await Dispatcher.CurrentDispatcher.InvokeAsync(static () => { }, DispatcherPriority.Send);
+                Require(WindowNative.TryGetCursorScreenPosition(out var releasedPointer) &&
+                        source.IsEdgeCapsuleInteractiveAt(releasedPointer),
+                    outcome + " fixture must leave the physical cursor inside the landed capsule");
                 Require(!source.IsEdgeCapsulePreviewOpen,
                     outcome + " release must not immediately reopen its preview");
 
@@ -159,7 +166,14 @@ internal static class NativeFreeQueueReviewChecks
                     Require(outcome != "other" || !source.IsEdgeCapsulePreviewOpen,
                         "moving to another capsule must never reopen the dragged source");
                     if (watch.Elapsed > TimeSpan.FromSeconds(5))
-                        throw new TimeoutException(outcome + " preview did not open after pointer residence");
+                    {
+                        var hasCursor = WindowNative.TryGetCursorScreenPosition(out var currentPointer);
+                        var hasGeometry = target.TryGetEdgeCapsuleInteractiveGeometry(out var currentGeometry);
+                        throw new TimeoutException(outcome + " preview did not open after pointer residence; " +
+                            $"cursor={hasCursor}:{currentPointer}; interactive={hasGeometry}:{currentGeometry.Bounds}; " +
+                            $"intent={Field<object?>(c, "_edgeCapsulePreviewActivationIntent")}; " +
+                            $"eligibility={target.EdgeCapsulePreviewEligibilityTrace()}");
+                    }
                     await Task.Delay(10);
                 }
                 Require(outcome != "other" || !source.IsEdgeCapsulePreviewOpen,
