@@ -41,8 +41,7 @@ internal static class RapidResizeBenchmarks
         var cases = new List<Case>();
         foreach (var type in new[] { PaperTypes.Todo, PaperTypes.Note })
         {
-            cases.Add(new Case(type, "normal", "sweep"));
-            foreach (var mode in new[] { "normal", "no-shadow", "no-geometry", "no-topbar", "no-both", "no-body" })
+            foreach (var mode in new[] { "normal", "body-hidden", "body-collapsed", "no-body" })
                 cases.Add(new Case(type, mode, "reverse"));
         }
         cases.Add(new Case("plain-wpf", "bare-layered", "reverse"));
@@ -111,10 +110,17 @@ internal static class RapidResizeBenchmarks
                             typeof(PaperWindow).GetField("_suppressGeometrySave", Private)!.SetValue(pw, true);
                         if (c.Mode is "no-topbar" or "no-both")
                             typeof(PaperWindow).GetField("_updatingTopBarResponsiveLayout", Private)!.SetValue(pw, true);
-                        if (c.Mode == "no-body")
+                        if (c.Mode is "no-body" or "body-hidden" or "body-collapsed")
                         {
                             var shell = (Grid)typeof(PaperWindow).GetField("_shell", Private)!.GetValue(pw)!;
-                            shell.Visibility = Visibility.Collapsed;
+                            if (c.Mode == "no-body") shell.Visibility = Visibility.Collapsed;
+                            else
+                            {
+                                var body = shell.Children.OfType<UIElement>()
+                                    .First(element => Grid.GetRow(element) == 1);
+                                body.Visibility = c.Mode == "body-hidden"
+                                    ? Visibility.Hidden : Visibility.Collapsed;
+                            }
                         }
                         pw.UpdateLayout();
                     }
