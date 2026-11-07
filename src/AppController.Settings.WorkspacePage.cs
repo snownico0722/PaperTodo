@@ -240,20 +240,22 @@ public sealed partial class AppController
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(9, 0, 0, 0)
         };
-        copyJson.Click += (_, _) =>
+        async Task CopyAsync(string text)
         {
-            feedback.Text = ClipboardHelper.TrySetText(
-                BuildJsonMcpConfiguration())
-                ? Strings.Get("LabsMcpCopied")
-                : Strings.Get("LabsMcpCopyFailed");
-        };
-        copySkill.Click += (_, _) =>
-        {
-            feedback.Text = ClipboardHelper.TrySetText(
-                BuildAiMcpSkill())
-                ? Strings.Get("LabsMcpCopied")
-                : Strings.Get("LabsMcpCopyFailed");
-        };
+            copySkill.IsEnabled = copyJson.IsEnabled = false;
+            feedback.Text = string.Empty;
+            try
+            {
+                var copied = await ClipboardHelper.TrySetTextAsync(text);
+                feedback.Text = Strings.Get(copied ? "LabsMcpCopied" : "LabsMcpCopyFailed");
+            }
+            finally
+            {
+                copySkill.IsEnabled = copyJson.IsEnabled = true;
+            }
+        }
+        copyJson.Click += async (_, _) => await CopyAsync(BuildJsonMcpConfiguration());
+        copySkill.Click += async (_, _) => await CopyAsync(BuildAiMcpSkill());
         actions.Children.Add(copyJson);
         actions.Children.Add(copySkill);
         actions.Children.Add(feedback);
