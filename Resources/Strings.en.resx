@@ -536,25 +536,19 @@ Error: {0}</value>
     <value>Paper colors: background, accents, and muted text.</value>
   </data>
   <data name="TipUiFont" xml:space="preserve">
-    <value>Language default picks system fonts for UI and note body separately.
-YaHei or DengXian unifies UI, tray, capsules, todos, and notes.
-If papertodo.ttf / .otf is in the app folder, that font is preferred.</value>
+    <value>By default, system fonts are chosen for the interface language; the interface and note text may use different fonts. Choosing Microsoft YaHei or DengXian applies that font across the interface, tray, capsules, todos, and notes. If papertodo.ttf or papertodo.otf is in the app folder, that custom font takes priority.</value>
   </data>
   <data name="TipTextRenderingProfile" xml:space="preserve">
-    <value>Standard: Windows/WPF default path; best compatibility.
-Soft: two-axis grayscale smoothing; may look softer at some scales.
-Sharp: stronger pixel alignment; clearer outlines; a few fonts may change width slightly.</value>
+    <value>Standard uses Windows' default text rendering for the best compatibility. Soft smooths letter edges but may look slightly blurry at some display scales. Sharp makes outlines clearer but can slightly change the width or spacing of some fonts. These modes affect only appearance, not text content.</value>
   </data>
   <data name="SettingsCustomFontEnhancedBold" xml:space="preserve">
     <value>Enhanced custom bold</value>
   </data>
   <data name="TipCustomFontEnhancedBold" xml:space="preserve">
-    <value>Bold text uses the bold font file from the app folder.
-Place both papertodo and PaperTodo_Bold (.ttf/.otf).</value>
+    <value>When enabled, bold text uses a separate bold font file instead of artificially thickening the regular font. Place both papertodo (regular) and PaperTodo_Bold (bold) in the app folder, using .ttf or .otf files.</value>
   </data>
   <data name="TipMarkdownRender" xml:space="preserve">
-    <value>Basic: keeps Markdown markers, fades syntax, and shows lightweight layout such as list bullets and dividers.
-Full Render: while editing, headings, lists, quotes, code and other blocks use their final layout with most Markdown markers hidden; the block under the caret reveals its markers for editing. Blur switches to read-only whole-note rendering.</value>
+    <value>Basic rendering keeps Markdown syntax marks but dims them, while showing simple formatting such as list bullets and dividers. Full rendering makes headings, lists, quotes, and code blocks look closer to the final result and hides most syntax marks. While editing, the block containing the cursor shows its marks again for easy changes.</value>
   </data>
   <data name="SettingsMarkdownEditAnimation" xml:space="preserve">
     <value>Markdown rendering animation</value>
@@ -619,7 +613,7 @@ About 5 full-width characters on one line, 10 on multiline.</value>
     <value>Edge capsules still extend on hover; the extra area acts like the main capsule without a close button. Use Hide in the context menu to close it.</value>
   </data>
   <data name="TipMaxTitleLength" xml:space="preserve">
-    <value>CJK and full-width characters count as one; Latin letters, digits and other half-width characters count as half. Lowering the limit only hides the excess of existing titles; raising it reveals them again. Renaming truncates the new title to the current limit.</value>
+    <value>Set the maximum displayed length of a paper title. Chinese and other full-width characters count as 1; Latin letters, numbers, and other half-width characters count as 0.5.</value>
   </data>
   <data name="TipStartup" xml:space="preserve">
     <value>Start PaperTodo when Windows signs in.</value>
@@ -639,8 +633,7 @@ Also forced on when “Hide papers from window switching” is on.</value>
     <value>Hide papers from window switching</value>
   </data>
   <data name="TipHidePapersFromWindowSwitcher" xml:space="preserve">
-    <value>Hide expanded papers from Alt+Tab and Task View, and hide taskbar icons too.
-They remain reachable via the tray, desktop papers, and capsules. In this mode papers appear on every virtual desktop, so the Labs current-desktop wake feature is unavailable.</value>
+    <value>Expanded papers will not appear in Alt+Tab, Task View, or the taskbar. You can still access them from the tray, desktop papers, or capsules. Papers will appear on every virtual desktop, and the Labs feature to wake papers on the current desktop will be unavailable.</value>
   </data>
   <data name="TipEnableToolTips" xml:space="preserve">
     <value>Brief hints when the pointer rests on buttons or interactive areas.
@@ -679,8 +672,7 @@ Dot color keeps Windows light/dark contrast with a slight scheme tint. Shape is 
 Turning this off ends that process.</value>
   </data>
   <data name="TipPreferPowerShell7" xml:space="preserve">
-    <value>Prefer pwsh.exe (PowerShell 7); fall back to Windows PowerShell if missing.
-Scripts can also use !pwsh / !ps5.</value>
+    <value>Prefer PowerShell 7 (pwsh.exe) when running scripts. If it is not installed, use the PowerShell included with Windows. Specify a particular version in the script with !pwsh or !ps5.</value>
   </data>
   <data name="TipHideScriptRunWindow" xml:space="preserve">
     <value>Hide the script run window.
@@ -726,7 +718,7 @@ Either way, any side over 4096 px is rejected.</value>
     <value>Show linked paper title</value>
   </data>
   <data name="SettingsAllowLongLinkedPaperTitles" xml:space="preserve">
-    <value>Long linked paper titles</value>
+    <value>Show more of linked titles</value>
   </data>
   <data name="SettingsHideLinkedPapersFromCapsules" xml:space="preserve">
     <value>Linked papers not shown as capsules</value>
@@ -787,13 +779,13 @@ When off, only hides those items; selected values stay unchanged.</value>
     <value>Enable pointer-intent prediction</value>
   </data>
   <data name="TipLabsEdgeCapsuleHoverIntent" xml:space="preserve">
-    <value>Uses pointer speed, direction, and braking to delay or suppress previews during a fast pass. Once open, empty space inside the capsule queue's bounding rectangle stays open only while the trajectory clearly heads toward a browsable capsule; otherwise it closes after about 0.2–0.8 seconds according to sensitivity. Leaving that rectangle closes immediately. When off, the first preview opens immediately, later transfers use a fixed 50 ms stability wait, and empty space is retained for a fixed 1 second without direction analysis.</value>
+    <value>When enabled, mouse speed and direction help distinguish intentional previews from quick passes. After opening, a preview can stay visible while you cross a gap toward another capsule; without a clear target it closes after about 0.2–0.8 seconds, or immediately when you leave the queue. When disabled, the first hover opens instantly, switching waits about 50 ms, and crossing a gap keeps the preview for 1 second.</value>
   </data>
   <data name="LabsEdgeCapsuleHoverIntentSensitivity" xml:space="preserve">
-    <value>Intent sensitivity</value>
+    <value>Hover sensitivity</value>
   </data>
   <data name="TipLabsEdgeCapsuleHoverIntentSensitivity" xml:space="preserve">
-    <value>Five levels from Very low to Very high. Lower levels require a clearer stop and retain empty corridor space longer; higher levels open more readily and release no-target space sooner. Medium remains the recommended balance.</value>
+    <value>Adjust how hover previews respond to mouse movement, with five levels. Lower sensitivity requires a clearer approach to a capsule and keeps previews longer in gaps. Higher sensitivity opens previews more readily and closes them sooner when no target is apparent.</value>
   </data>
   <data name="EdgeCapsuleHoverIntentSensitivityVeryLow" xml:space="preserve">
     <value>Very low</value>
@@ -823,7 +815,7 @@ When off, only hides those items; selected values stay unchanged.</value>
     <value>Paper opacity</value>
   </data>
   <data name="LabsEnableInactivePaperOpacity" xml:space="preserve">
-    <value>Fade inactive papers</value>
+    <value>Make inactive papers translucent</value>
   </data>
   <data name="TipLabsInactivePaperOpacity" xml:space="preserve">
     <value>Only affects expanded, inactive papers. Activating a paper restores full opacity immediately.</value>
@@ -847,7 +839,7 @@ When off, only hides those items; selected values stay unchanged.</value>
     <value>Enable edge snap</value>
   </data>
   <data name="TipLabsCapsuleMagnetism" xml:space="preserve">
-    <value>Dragging an ordinary capsule shows its snap destination. Release near a screen or application-window edge to attach and follow it. With window binding also enabled, opening a window-attached capsule keeps it bound to that window. This only affects capsules outside edge queues; dragging again, losing the target, or turning the feature off detaches it.</value>
+    <value>Dragging an ordinary capsule shows possible snap positions. Release it near a screen edge or another app window to snap there. With window binding enabled, an expanded paper also follows the window it was attached to. This works only for ordinary capsules outside edge queues. Dragging again, losing the target, or turning off the feature removes the snap.</value>
   </data>
   <data name="LabsCapsuleMagnetEdgeModeNotice" xml:space="preserve">
     <value>Edge capsules are currently enabled, so collapsed papers enter an edge queue instead of ordinary capsule magnetism. Turn off edge capsules in General settings to use this feature.</value>
@@ -940,7 +932,7 @@ When off, only hides those items; selected values stay unchanged.</value>
     <value>Enable todo reminders</value>
   </data>
   <data name="TipLabsTodoReminders" xml:space="preserve">
-    <value>Set a time from a todo-row button or its context menu. The compact countdown can be clicked to change or clear the reminder, and a tray notification appears when due. Turning the feature off stops timing and hides its entry points while preserving saved times.</value>
+    <value>Set a reminder using the button beside a todo or its context menu. A countdown appears next to the todo; click it to change or cancel the reminder. A system notification appears at the scheduled time. Turning off todo reminders stops the countdown and hides reminder controls, but keeps saved times.</value>
   </data>
   <data name="LabsTodoReminderShowButton" xml:space="preserve">
     <value>Show inline reminder buttons</value>
@@ -1112,10 +1104,10 @@ Per-note percentage zoom stacks on top.</value>
     <value>Normal, edge, drag, and master capsule text: one size and bold setting.</value>
   </data>
   <data name="SettingsDeepCapsuleTitleMeasureLimit" xml:space="preserve">
-    <value>Edge title max length</value>
+    <value>Visible edge capsule title length</value>
   </data>
   <data name="TipDeepCapsuleTitleMeasureLimit" xml:space="preserve">
-    <value>Limit the title shown by resting edge capsules. 0 hides the title but keeps the icon and stored title. Plus/minus cycle through Unlimited, 0, 1…20. With hover preview off, hovering reveals a shortened title; leaving restores the limit.</value>
+    <value>Set how many title characters a docked capsule shows while idle. Choose Unlimited or 0–20; setting 0 shows only the icon and hides the title text.</value>
   </data>
   <data name="SettingsCompactMasterCapsule" xml:space="preserve">
     <value>Shorten main capsule</value>
@@ -1234,11 +1226,11 @@ When off, open at the docked edge or remembered position.</value>
     <value>Exit</value>
   </data>
   <data name="LabsMcp" xml:space="preserve"><value>Local MCP interface</value></data>
-  <data name="LabsMcpEnable" xml:space="preserve"><value>Enable MCP (read access is always allowed)</value></data>
+  <data name="LabsMcpEnable" xml:space="preserve"><value>Enable MCP connection</value></data>
   <data name="TipLabsMcpEnable" xml:space="preserve"><value>Lets local AI clients read papers through the same PaperTodo.exe in --mcp mode. Turning this off stops the named-pipe interface immediately.</value></data>
-  <data name="LabsMcpBlankWrites" xml:space="preserve"><value>Allow blank and additive writes</value></data>
+  <data name="LabsMcpBlankWrites" xml:space="preserve"><value>Allow creating and appending content</value></data>
   <data name="TipLabsMcpBlankWrites" xml:space="preserve"><value>Allows creating papers, adding todos to an existing paper, filling blank content, and appending notes without overwriting existing text.</value></data>
-  <data name="LabsMcpFullWrites" xml:space="preserve"><value>Allow full writes</value></data>
+  <data name="LabsMcpFullWrites" xml:space="preserve"><value>Allow editing existing content</value></data>
   <data name="TipLabsMcpFullWrites" xml:space="preserve"><value>Allows changing existing todo text, replacing notes, and changing completion or reminder state. This also grants blank and additive writes.</value></data>
   <data name="LabsMcpDeletes" xml:space="preserve"><value>Allow direct MCP deletion</value></data>
   <data name="TipLabsMcpDeletes" xml:space="preserve"><value>Enabling this pre-authorizes AI to delete papers or todos without per-operation prompts. Deletion cannot be undone automatically; enable with care.</value></data>
@@ -1368,7 +1360,7 @@ When off, open at the docked edge or remembered position.</value>
   <data name="LinkedPathOpenFailureMessage" xml:space="preserve"><value>Windows could not open this path:&#xA;{0}</value></data>
   <data name="LinkedPathMissingMessage" xml:space="preserve"><value>The linked file or folder was moved or deleted:&#xA;{0}</value></data>
   <data name="SettingsShowLinkedPathExtensionOnly" xml:space="preserve">
-    <value>Show only file extension when long titles are off</value>
+    <value>Show only linked file extensions</value>
   </data>
   <data name="TipShowLinkedPathExtensionOnly" xml:space="preserve">
     <value>When enabled, file quick links show only the extension while long linked-paper titles are off. Folders and extensionless files keep a compact name.</value>
@@ -1516,7 +1508,7 @@ When off, open at the docked edge or remembered position.</value>
     <value>Top-bar shortcuts</value>
   </data>
   <data name="TipTopBarShortcutSettings" xml:space="preserve">
-    <value>Drag actions to reorder them or cross the divider to change their location. Hide removes the shortcut from title bars and paper menus without changing its position or disabling the feature. If space is limited, pinned built-in shortcuts move into the menu as a group.</value>
+    <value>Drag shortcuts to reorder them, or move them across the divider to place them in the top bar or menu. Checking Hide removes the action from both the top bar and paper menus. If the top bar runs out of space, its shortcuts temporarily move into the menu.</value>
   </data>
   <data name="TopBarShownHeading" xml:space="preserve">
     <value>Show in title bar</value>
@@ -1582,7 +1574,7 @@ When off, open at the docked edge or remembered position.</value>
     <value>Workspaces</value>
   </data>
   <data name="WorkspaceSettingsDescription" xml:space="preserve">
-    <value>Enable the cycle button in paper top bars. Each workspace keeps its own papers, images and plugin data.</value>
+    <value>When enabled, you can create separate workspaces. Each keeps its own papers, images, layout, and plugin data. Switch from the paper top bar or Settings. Turning off workspaces does not delete saved data, so you can resume using them later.</value>
   </data>
   <data name="WorkspaceEnabled" xml:space="preserve">
     <value>Enable workspaces</value>
@@ -1609,7 +1601,7 @@ When off, open at the docked edge or remembered position.</value>
     <value>Follow main workspace settings</value>
   </data>
   <data name="WorkspaceFollowHint" xml:space="preserve">
-    <value>Use the main software settings without sharing papers, images, layout or plugin-private data. Turning this off restores this workspace’s independent settings.</value>
+    <value>When enabled, this workspace uses the main workspace's app settings, while its papers, images, layout, and plugin data remain separate. Turning off this option restores this workspace's previous independent settings.</value>
   </data>
   <data name="WorkspaceMainHint" xml:space="preserve">
     <value>This is the main workspace. Other workspaces that follow it use these software settings when opened.</value>
@@ -1649,11 +1641,11 @@ Click to switch to workspace {1}</value>
     <value>The last workspace could not be opened. The main workspace was opened instead; the original files were not replaced.
 {0}</value>
   </data>
-  <data name="SettingsDataMergeConflicts" xml:space="preserve"><value>Data merge conflicts</value></data>
+  <data name="SettingsDataMergeConflicts" xml:space="preserve"><value>Conflicts during data merge</value></data>
   <data name="DataMergeConflictAsk" xml:space="preserve"><value>Ask on conflict (default)</value></data>
   <data name="DataMergeConflictExternal" xml:space="preserve"><value>Prefer external</value></data>
   <data name="DataMergeConflictInternal" xml:space="preserve"><value>Prefer internal</value></data>
-  <data name="TipDataMergeConflicts" xml:space="preserve"><value>An explicit merge preserves nonconflicting changes from both sides. This setting affects conflicts only: internal means current PaperTodo data; external means the incoming file. Without the original version, always ask. Does not enable background watching or automatic sync.</value></data>
+  <data name="TipDataMergeConflicts" xml:space="preserve"><value>When merging, changes that do not conflict are preserved from both sets of data. If the same item conflicts, the selected rule determines which version to keep. Current data is what PaperTodo currently stores; imported data comes from the external file. If no original version is available for comparison, you will still be asked to decide.</value></data>
   <data name="DataReloadConflictEmpty" xml:space="preserve"><value>(empty)</value></data>
   <data name="NoteHtmlSaved" xml:space="preserve"><value>Saved to: {0}
 The original note is kept.</value></data>
@@ -1671,7 +1663,7 @@ The original note is kept.</value></data>
   <data name="NoteExportProgress" xml:space="preserve"><value>Exporting {0}/{1} papers</value></data>
   <data name="TodoExportCurrent" xml:space="preserve"><value>Export this todo paper</value></data>
   <data name="SettingsCapsuleFreeQueues" xml:space="preserve"><value>Capsule free queues</value></data>
-  <data name="TipCapsuleFreeQueues" xml:space="preserve"><value>When enabled, pull a capsule away to create a queue; Ctrl or each queue’s master moves the whole queue. Pull sideways to move between edges or monitors. When disabled, Ctrl drags only one capsule; the master can still move the entire edge queue.</value></data>
+  <data name="TipCapsuleFreeQueues" xml:space="preserve"><value>When enabled, drag a capsule away from its queue to form a separate queue. Hold Ctrl while dragging, or drag a queue's main capsule, to move the whole group.</value></data>
   <data name="HistoryRecoveryTitle" xml:space="preserve">
     <value>Restore workspace</value>
   </data>
