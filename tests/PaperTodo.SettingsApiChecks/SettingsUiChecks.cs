@@ -239,6 +239,12 @@ internal static partial class Program
             Check(Toggle("WorkspaceEnabled").IsEnabled && !Toggle("LabsMcpEnable").IsEnabled &&
                   !SettingsControls<ComboBox>(window).Single().IsEnabled,
                 "workspace management stays editable while inherited data and MCP settings are read-only");
+            var disabledHints = SettingsControls<Border>(window)
+                .Where(border => border.Cursor == Cursors.Help && border.ToolTip is ToolTip)
+                .ToArray();
+            Check(disabledHints.Length >= 2 &&
+                  disabledHints.All(ToolTipService.GetShowOnDisabled),
+                "workspace and disabled settings retain hover explanations");
             Check(SettingsControls<Button>(window).Where(button =>
                     Equals(button.Content, Strings.Get("LabsMcpCopyJson")) ||
                     Equals(button.Content, Strings.Get("LabsMcpCopyAiSkill"))).Count(button => button.IsEnabled) == 2,
