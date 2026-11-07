@@ -47,9 +47,11 @@ internal static class Program
         }
         try
         {
-            var cases = args is ["--case", var caseName] && Cases.Contains(caseName)
-                ? [caseName]
-                : args.Length == 0 ? Cases
+            var cases = args is ["--case", "workbench-*"]
+                ? WorkbenchChecks.Cases
+                : args is ["--case", var caseName] && Cases.Contains(caseName)
+                    ? [caseName]
+                    : args.Length == 0 ? Cases
                 : throw new ArgumentException("Use --case with a lifecycle fixture name; measurements moved to tools/PaperTodo.DesktopBenchmarks.");
             foreach (var name in cases) RunIsolated(name);
             Console.WriteLine($"PASS {cases.Length} lifecycle fixtures (isolated data)");
