@@ -1,0 +1,43 @@
+name: One-time real resize shadow comparison
+
+on:
+  push:
+    branches:
+      - bench/paper-resize-shadow-20261106
+
+permissions:
+  contents: read
+
+jobs:
+  resize-shadow:
+    name: Actual Win32 resize grip A-B
+    runs-on: windows-latest
+    timeout-minutes: 12
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "true"
+    steps:
+      - name: Checkout benchmark branch
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - name: Set up dotnet
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+      - name: Measure real bottom-right native window resizing
+        run: |
+          dotnet run --project tools/PaperTodo.MaterialBenchmarks -c Release -- --resize-benchmark "$env:RUNNER_TEMP\resize-shadow.json"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Upload per-arm measurements
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: temporary-resize-shadow-results
+          path: ${{ runner.temp }}/resize-shadow.json
+          if-no-files-found: warn
+          retention-days: 3
