@@ -1507,7 +1507,7 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
     <value>오른쪽으로 이동</value>
   </data>
   <data name="MenuTopBarAssociationDrag" xml:space="preserve">
-    <value>누른 채 끌어서 연결</value>
+    <value>할 일 또는 창으로 끌어서 연결</value>
   </data>
   <data name="MenuTopBarPluginActions" xml:space="preserve">
     <value>플러그인 작업</value>
@@ -1658,7 +1658,7 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="NoteHtmlSaved" xml:space="preserve"><value>저장 위치: {0}
 원본 노트는 유지됩니다.</value></data>
   <data name="NoteExportCurrent" xml:space="preserve"><value>현재 노트 내보내기</value></data>
-  <data name="NoteExportAll" xml:space="preserve"><value>모든 메모 및 할 일 내보내기</value></data>
+  <data name="NoteExportAll" xml:space="preserve"><value>모든 노트 및 할 일 내보내기</value></data>
   <data name="NoteExportMarkdownType" xml:space="preserve"><value>Markdown 문서</value></data>
   <data name="NoteExportHtmlType" xml:space="preserve"><value>HTML 문서</value></data>
   <data name="NoteExportMarkdownZipType" xml:space="preserve"><value>Markdown ZIP</value></data>
@@ -1745,6 +1745,52 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="WorkspaceRecoveryFallback" xml:space="preserve">
     <value>작업 공간 {0}(으)로 돌아가기</value>
   </data>
+  <data name="WorkspaceRecoveryUnavailableMessage" xml:space="preserve">
+    <value>작업 공간 {0}의 데이터와 백업을 복원할 수 없습니다.
+
+“작업 공간 다시 만들기”을 선택하면 작업 공간 {0}의 메모, 할 일, 설정을 빈 상태에서 시작합니다.</value>
+  </data>
+  <data name="WorkspaceBackupReadFailedMessage" xml:space="preserve">
+    <value>작업 공간 {0}의 고정 백업을 현재 읽을 수 없습니다.
+{1}
+
+파일 접근 문제를 해결한 후 다시 시도하거나, “작업 공간 다시 만들기”을 선택하여 메모, 할 일, 설정을 빈 상태에서 시작할 수 있습니다.</value>
+  </data>
+  <data name="SettingsNotesAndTodos" xml:space="preserve"><value>노트 및 할 일</value></data>
+  <data name="WorkspaceSingleMessage" xml:space="preserve"><value>현재 작업 공간이 하나뿐입니다.</value></data>
+  <data name="WorkspaceCreate" xml:space="preserve"><value>새로 만들기</value></data>
+  <data name="TopBarHideShortcut" xml:space="preserve">
+    <value>숨기기</value>
+  </data>
+  <data name="TopBarRunScript" xml:space="preserve">
+    <value>스크립트 실행</value>
+  </data>
+  <data name="TopBarEditScript" xml:space="preserve">
+    <value>스크립트 편집</value>
+  </data>
+  <data name="TopBarScriptSave" xml:space="preserve">
+    <value>저장</value>
+  </data>
+  <data name="WorkspaceScriptsStoppedTitle" xml:space="preserve">
+    <value>작업 공간 전환 완료</value>
+  </data>
+  <data name="WorkspaceScriptsStoppedMessage" xml:space="preserve">
+    <value>이전 작업 공간의 스크립트 프로세스가 종료되었습니다.</value>
+  </data>
+  <data name="WorkspaceSessionsClosedMessage" xml:space="preserve">
+    <value>이전 작업 공간의 상주 PowerShell 세션이 종료되었습니다.</value>
+  </data>
+  <data name="WorkspaceScriptsAndSessionsStoppedMessage" xml:space="preserve">
+    <value>이전 작업 공간의 스크립트 프로세스와 상주 PowerShell 세션이 종료되었습니다.</value>
+  </data>
+  <data name="MenuExport" xml:space="preserve"><value>내보내기</value></data>
+  <data name="MenuExportCurrentNote" xml:space="preserve"><value>현재 노트</value></data>
+  <data name="MenuExportCurrentTodo" xml:space="preserve"><value>현재 할 일</value></data>
+  <data name="MenuExportAllPapers" xml:space="preserve"><value>모든 노트 및 할 일</value></data>
+  <data name="MenuTopBarAssociationDragTodo" xml:space="preserve"><value>할 일로 끌어서 연결</value></data>
+  <data name="MenuTopBarAssociationDragWindow" xml:space="preserve"><value>창으로 끌어서 연결</value></data>
+  <data name="WorkspaceDataSettingsTitle" xml:space="preserve"><value>작업 공간 및 데이터</value></data>
+  <data name="SettingsDataProcessing" xml:space="preserve"><value>데이터 처리</value></data>
   <data name="EditorOpen" xml:space="preserve"><value>스튜디오에서 열기</value></data>
   <data name="EditorReturn" xml:space="preserve"><value>종이로 돌아가기</value></data>
   <data name="EditorSidebarShow" xml:space="preserve"><value>종이 목록 표시</value></data>
@@ -1801,37 +1847,8 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="EditorImageExportPng" xml:space="preserve"><value>PNG</value></data>
   <data name="EditorImageExportSaving" xml:space="preserve"><value>저장 중…</value></data>
   <data name="EditorImageExportSaved" xml:space="preserve"><value>이미지를 저장했습니다</value></data>
-  <data name="WorkspaceRecoveryUnavailableMessage" xml:space="preserve">
-    <value>작업 공간 {0}의 데이터와 백업을 복원할 수 없습니다.
-
-“작업 공간 다시 만들기”을 선택하면 작업 공간 {0}의 메모, 할 일, 설정을 빈 상태에서 시작합니다.</value>
-  </data>
-  <data name="WorkspaceBackupReadFailedMessage" xml:space="preserve">
-    <value>작업 공간 {0}의 고정 백업을 현재 읽을 수 없습니다.
-{1}
-
-파일 접근 문제를 해결한 후 다시 시도하거나, “작업 공간 다시 만들기”을 선택하여 메모, 할 일, 설정을 빈 상태에서 시작할 수 있습니다.</value>
-  </data>
-  <data name="SettingsNotesAndTodos" xml:space="preserve"><value>노트 및 할 일</value></data>
-  <data name="WorkspaceSingleMessage" xml:space="preserve"><value>현재 작업 공간이 하나뿐입니다.</value></data>
-  <data name="WorkspaceCreate" xml:space="preserve"><value>새로 만들기</value></data>
   <data name="StudioTitle" xml:space="preserve"><value>스튜디오</value></data>
   <data name="EditorClose" xml:space="preserve"><value>스튜디오 닫기</value></data>
-  <data name="TopBarHideShortcut" xml:space="preserve">
-    <value>숨기기</value>
-  </data>
-  <data name="TopBarRunScript" xml:space="preserve">
-    <value>스크립트 실행</value>
-  </data>
-  <data name="TopBarEditScript" xml:space="preserve">
-    <value>스크립트 편집</value>
-  </data>
-  <data name="TopBarScriptSave" xml:space="preserve">
-    <value>저장</value>
-  </data>
-  <data name="TopBarScriptHint" xml:space="preserve">
-    <value>접두사가 없으면 !p로 실행합니다. 지원 접두사: !p / !power, !pwsh / !ps7, !ps5 / !winps, !pf / !powerf. 첫 줄에는 접두사만 입력하고 다음 줄부터 스크립트를 작성하세요. 반각 !만 지원합니다. 저장해도 실행되지 않습니다.</value>
-  </data>
   <data name="StudioStandaloneTitle" xml:space="preserve"><value>독립 스튜디오</value></data>
   <data name="StudioNew" xml:space="preserve"><value>새 문서</value></data>
   <data name="StudioOpen" xml:space="preserve"><value>파일 열기</value></data>
@@ -1868,16 +1885,4 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="StudioClose" xml:space="preserve"><value>닫기</value></data>
   <data name="StudioMaximize" xml:space="preserve"><value>최대화 / 복원</value></data>
   <data name="StudioCut" xml:space="preserve"><value>잘라내기</value></data>
-  <data name="WorkspaceScriptsStoppedTitle" xml:space="preserve">
-    <value>작업 공간 전환 완료</value>
-  </data>
-  <data name="WorkspaceScriptsStoppedMessage" xml:space="preserve">
-    <value>이전 작업 공간의 스크립트 프로세스가 종료되었습니다.</value>
-  </data>
-  <data name="WorkspaceSessionsClosedMessage" xml:space="preserve">
-    <value>이전 작업 공간의 상주 PowerShell 세션이 종료되었습니다.</value>
-  </data>
-  <data name="WorkspaceScriptsAndSessionsStoppedMessage" xml:space="preserve">
-    <value>이전 작업 공간의 스크립트 프로세스와 상주 PowerShell 세션이 종료되었습니다.</value>
-  </data>
 </root>

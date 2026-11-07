@@ -45,14 +45,17 @@ internal static class ScriptShortcutDialog
             if (e.LeftButton == MouseButtonState.Pressed) dialog.DragMove();
         };
         layout.Children.Add(title);
-        var hint = new TextBlock
+        if (readOnly)
         {
-            Text = Strings.Get(readOnly ? "WorkspaceSettingsReadOnly" : "TopBarScriptHint"), Foreground = Theme.WeakTextBrush,
-            FontSize = AppTypography.Scale(12), TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 0, 0, 12)
-        };
-        Grid.SetRow(hint, 1);
-        layout.Children.Add(hint);
+            var hint = new TextBlock
+            {
+                Text = Strings.Get("WorkspaceSettingsReadOnly"), Foreground = Theme.WeakTextBrush,
+                FontSize = AppTypography.Scale(12), TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, 12)
+            };
+            Grid.SetRow(hint, 1);
+            layout.Children.Add(hint);
+        }
         var editor = new TextBox
         {
             Text = text, IsReadOnly = readOnly, AcceptsReturn = true, AcceptsTab = true,

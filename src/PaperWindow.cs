@@ -2819,18 +2819,12 @@ public sealed partial class PaperWindow : Window
         if (IsExportablePaper(_paper))
         {
             var currentLabel = _paper.Type == PaperTypes.Todo
-                ? "TodoExportCurrent" : "NoteExportCurrent";
-            var current = MenuItem(Strings.Get(currentLabel),
-                (_, _) => ExportPapers(all: false));
-            current.IsEnabled = !_paperExportRunning;
-            menu.Items.Add(current);
-
-            var allLabel = _paperExportRunning
-                ? Strings.Format("NoteExportProgress", _paperExportCompleted, _paperExportTotal)
-                : Strings.Get("NoteExportAll");
-            var exportAll = MenuItem(allLabel, (_, _) => ExportPapers(all: true));
-            exportAll.IsEnabled = !_paperExportRunning;
-            menu.Items.Add(exportAll);
+                ? "MenuExportCurrentTodo" : "MenuExportCurrentNote";
+            export.Items.Add(MenuItem(Strings.Get(currentLabel),
+                (_, _) => ExportPapers(all: false)));
+            export.Items.Add(MenuItem(Strings.Get("MenuExportAllPapers"),
+                (_, _) => ExportPapers(all: true)));
+            menu.Items.Add(export);
         }
 
         AttachPluginPaperMenuActions(menu);

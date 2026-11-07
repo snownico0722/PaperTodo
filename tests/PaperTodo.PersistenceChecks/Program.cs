@@ -1,13 +1,13 @@
-using System.IO;
 using System.Text;
+using System.IO;
 using System.Text.Json;
 using PaperTodo;
 
 var checks = new (string Name, Action Run)[]
 {
-    ("note-html-embeds-images-and-rejects-missing-assets", NoteHtmlChecks.Run),
     ("studio-file-save-preserves-encoding-and-failed-edit", StudioFileSavePreservesEncodingAndFailedEdit),
     ("studio-recovery-keeps-document-and-pending-images", StudioRecoveryKeepsDocumentAndPendingImages),
+    ("note-html-embeds-images-and-rejects-missing-assets", NoteHtmlChecks.Run),
     ("primary-save-faults-keep-a-loadable-generation", PrimarySaveFaultsKeepALoadableGeneration),
     ("backup-refresh-fault-keeps-old-backup", BackupRefreshFaultKeepsOldBackup),
     ("corrupt-primary-never-refreshes-backup", CorruptPrimaryNeverRefreshesBackup),
@@ -105,6 +105,7 @@ static void StudioFileSavePreservesEncodingAndFailedEdit()
     Assert(htmlDocument.IsDirty && File.ReadAllBytes(htmlPath).SequenceEqual(htmlBytes),
         "encoding failure lost pending HTML or changed the original file");
 }
+
 
 static void StudioRecoveryKeepsDocumentAndPendingImages()
 {
@@ -235,8 +236,10 @@ static void DisabledCapsuleModeKeepsQueueLayoutMemory()
     using var scope = new TempDirectory();
     var state = NewState("light");
     state.UseCapsuleMode = false;
-    state.UseDeepCapsuleMode = false;
-    state.UseCapsuleCollapseAll = false;
+    state.UseDeepCapsuleMode = true;
+    state.UseCapsuleCollapseAll = true;
+    state.UseCapsuleFreeQueues = true;
+    state.CapsuleCollapseAllActiveQueues["DISPLAY1|left"] = true;
     state.DeepCapsuleQueueStartTopMargins["DISPLAY1|left"] = 37.5;
 
     var store = NewStore(scope.Path, DurableAtomicFileWriter.Shared);
@@ -246,6 +249,10 @@ static void DisabledCapsuleModeKeepsQueueLayoutMemory()
     Assert(loaded.DeepCapsuleQueueStartTopMargins.TryGetValue("DISPLAY1|left", out var margin) &&
            Math.Abs(margin - 37.5) < 0.001,
         "disabled capsule mode discarded remembered queue layout");
+    Assert(!loaded.UseCapsuleMode && loaded.UseDeepCapsuleMode &&
+           loaded.UseCapsuleCollapseAll && loaded.UseCapsuleFreeQueues &&
+           loaded.CapsuleCollapseAllActiveQueues.GetValueOrDefault("DISPLAY1|left"),
+        "loading a disabled parent discarded selected edge/master/free modes or folded groups");
 }
 
 static void PluginDataUsesOneNormalFile()

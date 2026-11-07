@@ -1507,7 +1507,7 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
     <value>右へ移動</value>
   </data>
   <data name="MenuTopBarAssociationDrag" xml:space="preserve">
-    <value>押したままドラッグして関連付け</value>
+    <value>ToDoまたはウィンドウへドラッグして関連付け</value>
   </data>
   <data name="MenuTopBarPluginActions" xml:space="preserve">
     <value>プラグイン操作</value>
@@ -1658,7 +1658,7 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="NoteHtmlSaved" xml:space="preserve"><value>保存先：{0}
 元のノートは保持されます。</value></data>
   <data name="NoteExportCurrent" xml:space="preserve"><value>このメモをエクスポート</value></data>
-  <data name="NoteExportAll" xml:space="preserve"><value>すべてのメモと ToDo をエクスポート</value></data>
+  <data name="NoteExportAll" xml:space="preserve"><value>すべてのノートとToDoをエクスポート</value></data>
   <data name="NoteExportMarkdownType" xml:space="preserve"><value>Markdown 文書</value></data>
   <data name="NoteExportHtmlType" xml:space="preserve"><value>HTML 文書</value></data>
   <data name="NoteExportMarkdownZipType" xml:space="preserve"><value>Markdown ZIP</value></data>
@@ -1745,6 +1745,52 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="WorkspaceRecoveryFallback" xml:space="preserve">
     <value>ワークスペース {0} に戻る</value>
   </data>
+  <data name="WorkspaceRecoveryUnavailableMessage" xml:space="preserve">
+    <value>ワークスペース {0} のデータとバックアップを復元できません。
+
+「ワークスペースを再作成」を選ぶと、ワークスペース {0} のメモ、タスク、設定を空の状態から開始します。</value>
+  </data>
+  <data name="WorkspaceBackupReadFailedMessage" xml:space="preserve">
+    <value>ワークスペース {0} の固定バックアップを現在読み取れません。
+{1}
+
+ファイルへのアクセスの問題を解決して再試行するか、「ワークスペースを再作成」を選んでメモ、タスク、設定を空の状態から開始できます。</value>
+  </data>
+  <data name="SettingsNotesAndTodos" xml:space="preserve"><value>ノートとToDo</value></data>
+  <data name="WorkspaceSingleMessage" xml:space="preserve"><value>ワークスペースは現在1つだけです。</value></data>
+  <data name="WorkspaceCreate" xml:space="preserve"><value>新規</value></data>
+  <data name="TopBarHideShortcut" xml:space="preserve">
+    <value>非表示</value>
+  </data>
+  <data name="TopBarRunScript" xml:space="preserve">
+    <value>スクリプトを実行</value>
+  </data>
+  <data name="TopBarEditScript" xml:space="preserve">
+    <value>スクリプトを編集</value>
+  </data>
+  <data name="TopBarScriptSave" xml:space="preserve">
+    <value>保存</value>
+  </data>
+  <data name="WorkspaceScriptsStoppedTitle" xml:space="preserve">
+    <value>ワークスペースを切り替えました</value>
+  </data>
+  <data name="WorkspaceScriptsStoppedMessage" xml:space="preserve">
+    <value>前のワークスペースのスクリプトプロセスを終了しました。</value>
+  </data>
+  <data name="WorkspaceSessionsClosedMessage" xml:space="preserve">
+    <value>前のワークスペースの常駐 PowerShell セッションを終了しました。</value>
+  </data>
+  <data name="WorkspaceScriptsAndSessionsStoppedMessage" xml:space="preserve">
+    <value>前のワークスペースのスクリプトプロセスと常駐 PowerShell セッションを終了しました。</value>
+  </data>
+  <data name="MenuExport" xml:space="preserve"><value>エクスポート</value></data>
+  <data name="MenuExportCurrentNote" xml:space="preserve"><value>現在のノート</value></data>
+  <data name="MenuExportCurrentTodo" xml:space="preserve"><value>現在のToDo</value></data>
+  <data name="MenuExportAllPapers" xml:space="preserve"><value>すべてのノートとToDo</value></data>
+  <data name="MenuTopBarAssociationDragTodo" xml:space="preserve"><value>ToDoへドラッグして関連付け</value></data>
+  <data name="MenuTopBarAssociationDragWindow" xml:space="preserve"><value>ウィンドウへドラッグして関連付け</value></data>
+  <data name="WorkspaceDataSettingsTitle" xml:space="preserve"><value>ワークスペースとデータ</value></data>
+  <data name="SettingsDataProcessing" xml:space="preserve"><value>データ処理</value></data>
   <data name="EditorOpen" xml:space="preserve"><value>スタジオで開く</value></data>
   <data name="EditorReturn" xml:space="preserve"><value>紙片に戻る</value></data>
   <data name="EditorSidebarShow" xml:space="preserve"><value>紙片一覧を表示</value></data>
@@ -1801,37 +1847,8 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="EditorImageExportPng" xml:space="preserve"><value>PNG</value></data>
   <data name="EditorImageExportSaving" xml:space="preserve"><value>保存中…</value></data>
   <data name="EditorImageExportSaved" xml:space="preserve"><value>画像を保存しました</value></data>
-  <data name="WorkspaceRecoveryUnavailableMessage" xml:space="preserve">
-    <value>ワークスペース {0} のデータとバックアップを復元できません。
-
-「ワークスペースを再作成」を選ぶと、ワークスペース {0} のメモ、タスク、設定を空の状態から開始します。</value>
-  </data>
-  <data name="WorkspaceBackupReadFailedMessage" xml:space="preserve">
-    <value>ワークスペース {0} の固定バックアップを現在読み取れません。
-{1}
-
-ファイルへのアクセスの問題を解決して再試行するか、「ワークスペースを再作成」を選んでメモ、タスク、設定を空の状態から開始できます。</value>
-  </data>
-  <data name="SettingsNotesAndTodos" xml:space="preserve"><value>ノートとToDo</value></data>
-  <data name="WorkspaceSingleMessage" xml:space="preserve"><value>ワークスペースは現在1つだけです。</value></data>
-  <data name="WorkspaceCreate" xml:space="preserve"><value>新規</value></data>
   <data name="StudioTitle" xml:space="preserve"><value>スタジオ</value></data>
   <data name="EditorClose" xml:space="preserve"><value>スタジオを閉じる</value></data>
-  <data name="TopBarHideShortcut" xml:space="preserve">
-    <value>非表示</value>
-  </data>
-  <data name="TopBarRunScript" xml:space="preserve">
-    <value>スクリプトを実行</value>
-  </data>
-  <data name="TopBarEditScript" xml:space="preserve">
-    <value>スクリプトを編集</value>
-  </data>
-  <data name="TopBarScriptSave" xml:space="preserve">
-    <value>保存</value>
-  </data>
-  <data name="TopBarScriptHint" xml:space="preserve">
-    <value>接頭辞を省略すると !p として実行します。使用可能：!p / !power、!pwsh / !ps7、!ps5 / !winps、!pf / !powerf。接頭辞だけを1行目に記入し、次の行からスクリプトを書きます。半角 ! のみ対応。保存しても実行されません。</value>
-  </data>
   <data name="StudioStandaloneTitle" xml:space="preserve"><value>独立スタジオ</value></data>
   <data name="StudioNew" xml:space="preserve"><value>新規文書</value></data>
   <data name="StudioOpen" xml:space="preserve"><value>ファイルを開く</value></data>
@@ -1868,16 +1885,4 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="StudioClose" xml:space="preserve"><value>閉じる</value></data>
   <data name="StudioMaximize" xml:space="preserve"><value>最大化／元に戻す</value></data>
   <data name="StudioCut" xml:space="preserve"><value>切り取り</value></data>
-  <data name="WorkspaceScriptsStoppedTitle" xml:space="preserve">
-    <value>ワークスペースを切り替えました</value>
-  </data>
-  <data name="WorkspaceScriptsStoppedMessage" xml:space="preserve">
-    <value>前のワークスペースのスクリプトプロセスを終了しました。</value>
-  </data>
-  <data name="WorkspaceSessionsClosedMessage" xml:space="preserve">
-    <value>前のワークスペースの常駐 PowerShell セッションを終了しました。</value>
-  </data>
-  <data name="WorkspaceScriptsAndSessionsStoppedMessage" xml:space="preserve">
-    <value>前のワークスペースのスクリプトプロセスと常駐 PowerShell セッションを終了しました。</value>
-  </data>
 </root>

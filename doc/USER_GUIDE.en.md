@@ -137,7 +137,7 @@ The top bar contains fixed window controls and configurable built-in shortcuts:
 | **Studio** | Built-in shortcut | Open the current paper in a resizable, maximizable Studio window with its existing document and undo history |
 | **Open externally** | Built-in shortcut | Temporarily export a built-in Markdown note and open it in an external app; see [4.4](#44-opening-in-an-external-editor) |
 
-In "Settings → General → Top-bar shortcuts", drag the built-in shortcuts to reorder them or move them between **Show in title bar** and **Show in menu**. Todo and note papers share one layout, and actions that do not apply to the current paper are omitted. Each row has a Hide checkbox that removes its shortcut from title bars, overflow and paper/capsule context menus while preserving its position and keeping the feature enabled.
+In "Settings → General → Top-bar shortcuts", drag built-in shortcuts to reorder them or move them between **Show in title bar** and **Show in menu**. Todo and note papers share one layout, and actions that do not apply to the current paper are omitted. Each row has a Hide checkbox that removes its shortcut from title bars, overflow and paper/capsule context menus while preserving its position and keeping the feature enabled.
 
 New installations pin **Drag to Associate**, **Switch Workspace**, and **Studio**. This upgrade moves Studio to the title bar and Open externally to the menu once; later customizations are preserved. When the top bar is too narrow, pinned built-in shortcuts move into the `···` menu together. You can hold and drag the association item directly out of the menu as well. Plugins may also add top-bar buttons (such as Codex's `>_`).
 
@@ -179,6 +179,8 @@ Todo exports preserve item order, completion states, and multiline text while om
 
 Export is for reading, sharing, or moving text to another editor—it is not a full data backup. To back up or migrate workspaces, settings, and plugin data, follow [Chapter 10](#10-data-backup-migration-and-recovery).
 
+---
+
 ### 2.7 Studio
 
 Choose **Open in Studio** from a paper's title bar or menu. Multiple Studio windows can stay open, each with its own paper list. Selecting a paper already open in another Studio activates that window. Switching papers collapses the previous paper to its capsule, or hides it when capsules are unavailable. Window bounds, maximized state and sidebar visibility are remembered separately from desktop paper geometry; editing keeps the existing document and undo history.
@@ -186,6 +188,8 @@ Choose **Open in Studio** from a paper's title bar or menu. Multiple Studio wind
 The tray Studio icon and `PaperTodo.exe --studio` open a blank Studio with the left paper list and New Note / New Todo actions, without creating a placeholder paper. If a Studio already exists, the most recently used window is activated and restored from minimization. Normal cold startup still displays desktop papers normally before activating Studio, without forcing always-on-top.
 
 Built-in notes offer consistent vector formatting tools, line numbers and statistics updated at most every half second, reusing results until the text changes. Click the bottom-right count for document and selection statistics, or preview and export the full note as a JPG or PNG image.
+
+---
 
 ### 2.8 Standalone Studio
 

@@ -1507,7 +1507,7 @@ When off, open at the docked edge or remembered position.</value>
     <value>Move right</value>
   </data>
   <data name="MenuTopBarAssociationDrag" xml:space="preserve">
-    <value>Hold and drag to associate</value>
+    <value>Drag to a todo or window to associate</value>
   </data>
   <data name="MenuTopBarPluginActions" xml:space="preserve">
     <value>Plugin actions</value>
@@ -1658,7 +1658,7 @@ Click to switch to workspace {1}</value>
   <data name="NoteHtmlSaved" xml:space="preserve"><value>Saved to: {0}
 The original note is kept.</value></data>
   <data name="NoteExportCurrent" xml:space="preserve"><value>Export this note</value></data>
-  <data name="NoteExportAll" xml:space="preserve"><value>Export all papers</value></data>
+  <data name="NoteExportAll" xml:space="preserve"><value>Export all notes and todos</value></data>
   <data name="NoteExportMarkdownType" xml:space="preserve"><value>Markdown document</value></data>
   <data name="NoteExportHtmlType" xml:space="preserve"><value>HTML document</value></data>
   <data name="NoteExportMarkdownZipType" xml:space="preserve"><value>Markdown ZIP</value></data>
@@ -1745,6 +1745,52 @@ Choosing “Rebuild workspace” starts the notes, tasks and settings of workspa
   <data name="WorkspaceRecoveryFallback" xml:space="preserve">
     <value>Return to workspace {0}</value>
   </data>
+  <data name="WorkspaceRecoveryUnavailableMessage" xml:space="preserve">
+    <value>The data and backups for workspace {0} cannot be restored.
+
+Choosing “Rebuild workspace” starts the notes, tasks and settings of workspace {0} from scratch.</value>
+  </data>
+  <data name="WorkspaceBackupReadFailedMessage" xml:space="preserve">
+    <value>The fixed backup for workspace {0} cannot currently be read.
+{1}
+
+Resolve the file access problem and retry, or choose “Rebuild workspace” to start its notes, tasks and settings from scratch.</value>
+  </data>
+  <data name="SettingsNotesAndTodos" xml:space="preserve"><value>Notes &amp; Todos</value></data>
+  <data name="WorkspaceSingleMessage" xml:space="preserve"><value>There is only one workspace.</value></data>
+  <data name="WorkspaceCreate" xml:space="preserve"><value>New</value></data>
+  <data name="TopBarHideShortcut" xml:space="preserve">
+    <value>Hide</value>
+  </data>
+  <data name="TopBarRunScript" xml:space="preserve">
+    <value>Run script</value>
+  </data>
+  <data name="TopBarEditScript" xml:space="preserve">
+    <value>Edit script</value>
+  </data>
+  <data name="TopBarScriptSave" xml:space="preserve">
+    <value>Save</value>
+  </data>
+  <data name="WorkspaceScriptsStoppedTitle" xml:space="preserve">
+    <value>Workspace switched</value>
+  </data>
+  <data name="WorkspaceScriptsStoppedMessage" xml:space="preserve">
+    <value>Script processes from the previous workspace have ended.</value>
+  </data>
+  <data name="WorkspaceSessionsClosedMessage" xml:space="preserve">
+    <value>Persistent PowerShell sessions from the previous workspace have closed.</value>
+  </data>
+  <data name="WorkspaceScriptsAndSessionsStoppedMessage" xml:space="preserve">
+    <value>Script processes from the previous workspace have ended, and its persistent PowerShell sessions have closed.</value>
+  </data>
+  <data name="MenuExport" xml:space="preserve"><value>Export</value></data>
+  <data name="MenuExportCurrentNote" xml:space="preserve"><value>Current note</value></data>
+  <data name="MenuExportCurrentTodo" xml:space="preserve"><value>Current todo</value></data>
+  <data name="MenuExportAllPapers" xml:space="preserve"><value>All notes and todos</value></data>
+  <data name="MenuTopBarAssociationDragTodo" xml:space="preserve"><value>Drag to a todo to associate</value></data>
+  <data name="MenuTopBarAssociationDragWindow" xml:space="preserve"><value>Drag to a window to associate</value></data>
+  <data name="WorkspaceDataSettingsTitle" xml:space="preserve"><value>Workspaces &amp; Data</value></data>
+  <data name="SettingsDataProcessing" xml:space="preserve"><value>Data handling</value></data>
   <data name="EditorOpen" xml:space="preserve"><value>Open in Studio</value></data>
   <data name="EditorReturn" xml:space="preserve"><value>Return to paper</value></data>
   <data name="EditorSidebarShow" xml:space="preserve"><value>Show paper list</value></data>
@@ -1801,37 +1847,8 @@ Choosing “Rebuild workspace” starts the notes, tasks and settings of workspa
   <data name="EditorImageExportPng" xml:space="preserve"><value>PNG</value></data>
   <data name="EditorImageExportSaving" xml:space="preserve"><value>Saving…</value></data>
   <data name="EditorImageExportSaved" xml:space="preserve"><value>Image saved</value></data>
-  <data name="WorkspaceRecoveryUnavailableMessage" xml:space="preserve">
-    <value>The data and backups for workspace {0} cannot be restored.
-
-Choosing “Rebuild workspace” starts the notes, tasks and settings of workspace {0} from scratch.</value>
-  </data>
-  <data name="WorkspaceBackupReadFailedMessage" xml:space="preserve">
-    <value>The fixed backup for workspace {0} cannot currently be read.
-{1}
-
-Resolve the file access problem and retry, or choose “Rebuild workspace” to start its notes, tasks and settings from scratch.</value>
-  </data>
-  <data name="SettingsNotesAndTodos" xml:space="preserve"><value>Notes &amp; Todos</value></data>
-  <data name="WorkspaceSingleMessage" xml:space="preserve"><value>There is only one workspace.</value></data>
-  <data name="WorkspaceCreate" xml:space="preserve"><value>New</value></data>
   <data name="StudioTitle" xml:space="preserve"><value>Studio</value></data>
   <data name="EditorClose" xml:space="preserve"><value>Close Studio</value></data>
-  <data name="TopBarHideShortcut" xml:space="preserve">
-    <value>Hide</value>
-  </data>
-  <data name="TopBarRunScript" xml:space="preserve">
-    <value>Run script</value>
-  </data>
-  <data name="TopBarEditScript" xml:space="preserve">
-    <value>Edit script</value>
-  </data>
-  <data name="TopBarScriptSave" xml:space="preserve">
-    <value>Save</value>
-  </data>
-  <data name="TopBarScriptHint" xml:space="preserve">
-    <value>Without a prefix, use !p. Supported prefixes: !p / !power, !pwsh / !ps7, !ps5 / !winps, !pf / !powerf. Put the prefix alone on the first line and start the script on the next line. Only ASCII ! is supported. Saving does not run the script.</value>
-  </data>
   <data name="StudioStandaloneTitle" xml:space="preserve"><value>studio</value></data>
   <data name="StudioNew" xml:space="preserve"><value>New document</value></data>
   <data name="StudioOpen" xml:space="preserve"><value>Open file</value></data>
@@ -1868,16 +1885,4 @@ Resolve the file access problem and retry, or choose “Rebuild workspace” to 
   <data name="StudioClose" xml:space="preserve"><value>Close</value></data>
   <data name="StudioMaximize" xml:space="preserve"><value>Maximize / restore</value></data>
   <data name="StudioCut" xml:space="preserve"><value>Cut</value></data>
-  <data name="WorkspaceScriptsStoppedTitle" xml:space="preserve">
-    <value>Workspace switched</value>
-  </data>
-  <data name="WorkspaceScriptsStoppedMessage" xml:space="preserve">
-    <value>Script processes from the previous workspace have ended.</value>
-  </data>
-  <data name="WorkspaceSessionsClosedMessage" xml:space="preserve">
-    <value>Persistent PowerShell sessions from the previous workspace have closed.</value>
-  </data>
-  <data name="WorkspaceScriptsAndSessionsStoppedMessage" xml:space="preserve">
-    <value>Script processes from the previous workspace have ended, and its persistent PowerShell sessions have closed.</value>
-  </data>
 </root>

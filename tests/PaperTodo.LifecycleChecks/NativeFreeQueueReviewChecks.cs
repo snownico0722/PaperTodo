@@ -180,8 +180,19 @@ internal static class NativeFreeQueueReviewChecks
             c.PreviewSingleCapsuleDropGhost(targetPaper, 0,
                 Point(geometry, 80), floating: true);
             Require(!leftMaster.IsVisible, "leaving again hides the source master before cancel");
-            c.EndSingleCapsuleDropGhost(targetPaper.Id);
-            Require(leftMaster.IsVisible, "canceling a floating move also restores the master");
+            var animationsEnabled = c.State.EnableAnimations;
+            try
+            {
+                c.State.EnableAnimations = true;
+                c.EndSingleCapsuleDropGhost(targetPaper.Id);
+                Require(leftMaster.IsVisible &&
+                        !DependencyPropertyHelper.GetValueSource(leftMaster, UIElement.OpacityProperty).IsAnimated,
+                    "restoring the sole source master does not replay its entrance fade");
+            }
+            finally
+            {
+                c.State.EnableAnimations = animationsEnabled;
+            }
 
             // Legacy vertical master movement already renders the real entire
             // queue. Ghosts are reserved for merge or horizontal unlock.
