@@ -186,6 +186,23 @@ public sealed partial class PaperWindow
             };
             choices.Items.Add(item);
         }
+
+        choices.Items.Add(new Separator());
+        var create = new MenuItem
+        {
+            Header = WorkspaceMenuText("创建新工作区", "Create new workspace",
+                "新しいワークスペースを作成", "새 작업 공간 만들기"),
+            IsEnabled = !_controller.IsWorkspaceSwitching &&
+                _controller.WorkspaceOptions.SlotNumbers.Count < 5
+        };
+        create.Click += async (_, _) =>
+        {
+            ownerMenu.IsOpen = false;
+            await Dispatcher.Yield(DispatcherPriority.Background);
+            if (!IsClosed && !_controller.IsWorkspaceSwitching)
+                await _controller.CreateWorkspaceAsync();
+        };
+        choices.Items.Add(create);
     }
 
     private static string WorkspaceMenuText(string zh, string en, string ja, string ko) =>
