@@ -1876,6 +1876,20 @@ public sealed partial class PaperWindow
         return true;
     }
 
+    internal bool UnlinkPaperReferences(string linkedPaperId)
+    {
+        var linkedItems = _paper.Items.Where(item =>
+            string.Equals(item.LinkedPaperId, linkedPaperId, StringComparison.Ordinal)).ToList();
+        if (linkedItems.Count == 0) return false;
+
+        var focusedId = CurrentFocusedTodoItemId();
+        PushUndoSnapshot();
+        foreach (var item in linkedItems) item.ClearQuickLaunch();
+        _controller.MarkDirty();
+        ReconcileTodoRows(linkedItems.Select(item => item.Id), focusedId);
+        return true;
+    }
+
     private void UnlinkPaperFromTodoItem(PaperItem item)
     {
         if (string.IsNullOrWhiteSpace(item.LinkedPaperId))
