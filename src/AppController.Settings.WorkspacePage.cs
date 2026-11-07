@@ -284,7 +284,11 @@ public sealed partial class AppController
 
         // Keep each set of controls together, wrapping only when the two groups do not fit.
         var line = new WrapPanel();
-        var nameRow = new Grid { VerticalAlignment = VerticalAlignment.Center };
+        var nameRow = new Grid
+        {
+            MinHeight = AppTypography.FitChrome(28),
+            VerticalAlignment = VerticalAlignment.Center
+        };
         nameRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         nameRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         nameRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -295,6 +299,7 @@ public sealed partial class AppController
             FontWeight = isSelected ? FontWeights.SemiBold : FontWeights.Normal,
             Foreground = TrayTextBrush,
             VerticalAlignment = VerticalAlignment.Center,
+            MinWidth = AppTypography.Scale(44),
             MaxWidth = AppTypography.Scale(132),
             HorizontalAlignment = HorizontalAlignment.Left,
             TextTrimming = TextTrimming.CharacterEllipsis
@@ -302,17 +307,16 @@ public sealed partial class AppController
         var editor = new TextBox
         {
             Text = label,
-            Width = AppTypography.Scale(112),
             HorizontalAlignment = HorizontalAlignment.Left,
             MaxLength = 64,
-            Height = AppTypography.FitChrome(28),
+            Height = nameRow.MinHeight,
             FontSize = AppTypography.Scale(12),
             Foreground = TrayTextBrush,
             CaretBrush = TrayTextBrush,
             Background = Brushes.Transparent,
             BorderBrush = TrayBorderBrush,
             BorderThickness = new Thickness(1),
-            Padding = new Thickness(8, 4, 8, 4),
+            Padding = new Thickness(2, 1, 2, 1),
             VerticalContentAlignment = VerticalAlignment.Center,
             Style = BuildSettingsTextBoxStyle(),
             Visibility = Visibility.Collapsed
@@ -387,6 +391,8 @@ public sealed partial class AppController
             // A second editor replaces the first draft rather than saving it.
             CancelWorkspaceRenameOnPointer(null);
             editing = true;
+            // Match the displayed name so the save button stays under the pointer.
+            editor.Width = Math.Max(name.MinWidth, name.ActualWidth);
             editor.Text = WorkspaceOptions.DisplayName(slot);
             name.Visibility = Visibility.Collapsed;
             editor.Visibility = Visibility.Visible;

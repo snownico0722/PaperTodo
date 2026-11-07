@@ -706,12 +706,25 @@ internal static partial class Program
 
         var original = controller.WorkspaceOptions.Normalized();
         var originalName = original.DisplayName(2);
-        var cardControls = LogicalDescendants(Slot(Page())).ToArray();
+        var editingCard = Slot(Page());
+        var cardControls = LogicalDescendants(editingCard).ToArray();
         var rename = cardControls.OfType<Button>().Single(button =>
             AutomationProperties.GetAutomationId(button) == "WorkspaceRename2");
         var editor = cardControls.OfType<TextBox>().Single();
+        Rect RenameButtonBounds()
+        {
+            const double cardWidth = 292;
+            editingCard.Measure(new Size(cardWidth, double.PositiveInfinity));
+            editingCard.Arrange(new Rect(0, 0, cardWidth, editingCard.DesiredSize.Height));
+            return rename.TransformToAncestor(editingCard).TransformBounds(new Rect(rename.RenderSize));
+        }
+
+        var pencil = RenameButtonBounds();
         rename.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Require(pencil.Width > 0 && pencil.Height > 0 && RenameButtonBounds() == pencil,
+            "the save button moved when entering rename");
         editor.Text = "Unconfirmed workspace name";
+        Require(RenameButtonBounds() == pencil, "typing moved the save button");
         cancelRename.Invoke(controller, [new Border()]);
         Require(editor.Visibility == Visibility.Collapsed &&
                 controller.WorkspaceOptions.DisplayName(2) == originalName,
@@ -750,7 +763,7 @@ internal static partial class Program
         var main = NewState();
         main.Theme = "dark"; main.UiLanguage = "en-US";
         main.McpEnabled = main.McpAllowFullWrites = true;
-        main.Workspaces = new() { Enabled = true, Slots = [1, 2, 3, 4, 5] };
+        main.Workspaces = new() { Enabled = true, Slots = [1, 2, 3, 4, 5], Names = new() { [2] = "11" } };
         var second = NewState();
         second.Theme = "light"; second.UiLanguage = "ja-JP";
         second.McpEnabled = second.McpAllowFullWrites = false;
