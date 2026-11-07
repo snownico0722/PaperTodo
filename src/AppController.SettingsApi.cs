@@ -137,16 +137,11 @@ public sealed partial class AppController
                 if (id == "window.hide_from_switcher" && value is true) State.HidePapersFromTaskbar = true;
                 if (effects == SettingEffects.CapsuleMode)
                 {
-                    if (id == "capsule.enabled" && value is false) State.UseDeepCapsuleMode = false;
+                    // Parent switches suspend presentation; they do not overwrite saved child choices.
                     if (id == "capsule.edge_enabled" && value is true) State.UseCapsuleMode = true;
                     if ((id == "capsule.master_enabled" || id == "capsule.free_queues") && value is true)
                         State.UseCapsuleMode = State.UseDeepCapsuleMode = true;
-                    if (!State.UseCapsuleMode || !State.UseDeepCapsuleMode)
-                    {
-                        State.UseCapsuleFreeQueues = false;
-                        State.UseCapsuleCollapseAll = false;
-                    }
-                    if (!State.UseDeepCapsuleMode || !State.UseCapsuleCollapseAll)
+                    if (!State.UseCapsuleCollapseAll)
                     {
                         State.CapsuleCollapseAllActiveQueues.Clear();
                     }

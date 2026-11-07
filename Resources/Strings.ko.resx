@@ -1507,7 +1507,7 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
     <value>오른쪽으로 이동</value>
   </data>
   <data name="MenuTopBarAssociationDrag" xml:space="preserve">
-    <value>누른 채 끌어서 연결</value>
+    <value>할 일 또는 창으로 끌어서 연결</value>
   </data>
   <data name="MenuTopBarPluginActions" xml:space="preserve">
     <value>플러그인 작업</value>
@@ -1658,7 +1658,7 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="NoteHtmlSaved" xml:space="preserve"><value>저장 위치: {0}
 원본 노트는 유지됩니다.</value></data>
   <data name="NoteExportCurrent" xml:space="preserve"><value>현재 노트 내보내기</value></data>
-  <data name="NoteExportAll" xml:space="preserve"><value>모든 메모 및 할 일 내보내기</value></data>
+  <data name="NoteExportAll" xml:space="preserve"><value>모든 노트 및 할 일 내보내기</value></data>
   <data name="NoteExportMarkdownType" xml:space="preserve"><value>Markdown 문서</value></data>
   <data name="NoteExportHtmlType" xml:space="preserve"><value>HTML 문서</value></data>
   <data name="NoteExportMarkdownZipType" xml:space="preserve"><value>Markdown ZIP</value></data>
@@ -1771,9 +1771,6 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="TopBarScriptSave" xml:space="preserve">
     <value>저장</value>
   </data>
-  <data name="TopBarScriptHint" xml:space="preserve">
-    <value>접두사가 없으면 !p로 실행합니다. 지원 접두사: !p / !power, !pwsh / !ps7, !ps5 / !winps, !pf / !powerf. 첫 줄에는 접두사만 입력하고 다음 줄부터 스크립트를 작성하세요. 반각 !만 지원합니다. 저장해도 실행되지 않습니다.</value>
-  </data>
   <data name="WorkspaceScriptsStoppedTitle" xml:space="preserve">
     <value>작업 공간 전환 완료</value>
   </data>
@@ -1786,4 +1783,12 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="WorkspaceScriptsAndSessionsStoppedMessage" xml:space="preserve">
     <value>이전 작업 공간의 스크립트 프로세스와 상주 PowerShell 세션이 종료되었습니다.</value>
   </data>
+  <data name="MenuExport" xml:space="preserve"><value>내보내기</value></data>
+  <data name="MenuExportCurrentNote" xml:space="preserve"><value>현재 노트</value></data>
+  <data name="MenuExportCurrentTodo" xml:space="preserve"><value>현재 할 일</value></data>
+  <data name="MenuExportAllPapers" xml:space="preserve"><value>모든 노트 및 할 일</value></data>
+  <data name="MenuTopBarAssociationDragTodo" xml:space="preserve"><value>할 일로 끌어서 연결</value></data>
+  <data name="MenuTopBarAssociationDragWindow" xml:space="preserve"><value>창으로 끌어서 연결</value></data>
+  <data name="WorkspaceDataSettingsTitle" xml:space="preserve"><value>작업 공간 및 데이터</value></data>
+  <data name="SettingsDataProcessing" xml:space="preserve"><value>데이터 처리</value></data>
 </root>

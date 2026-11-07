@@ -58,13 +58,6 @@ public sealed partial class AppController
         _settingsExternalMarkdownTextBox = null;
         _settingsHidePapersFromTaskbarCheckBox = null;
         _settingsHidePapersFromWindowSwitcherCheckBox = null;
-        _settingsCapsuleModeCheckBox = null;
-        _settingsDeepCapsuleModeCheckBox = null;
-        _settingsDeepCapsuleExpandedSlotCheckBox = null;
-        _settingsRememberDeepCapsuleExpandedPositionCheckBox = null;
-        _settingsCollapseExpandedDeepCapsuleOnClickCheckBox = null;
-        _settingsCapsuleCollapseAllCheckBox = null;
-        _settingsCapsuleFreeQueuesCheckBox = null;
 
         window.Title = Strings.Get("TraySettings");
         window.SizeToContent = SizeToContent.Manual;
@@ -101,14 +94,15 @@ public sealed partial class AppController
         if (id == "note.external_extension") return; // The live editor is synchronized by its effect.
         var region = id switch
         {
+            "general.data_merge_conflicts" => "workspace.data",
             "appearance.animations" or "appearance.fast_animations" or
                 "window.fullscreen_mode" => "general.options",
             "title.max_length" or "capsule.title_measure_limit" or "capsule.hide_close_button" or
                 "capsule.master_compact" => "general.capsuleAppearance",
-            "capsule.gap" or "window.resize_grip" or "note.image_reference_text" => "visual.options",
+            "capsule.gap" or "window.resize_grip" => "visual.options",
             "edge.non_topmost" => "general.edgeTopmost",
             "scripts.run_linked_on_click" => "general.todos",
-            "note.markdown_mode" or "note.edit_animations" => "note.markdown",
+            "note.markdown_mode" or "note.edit_animations" or "note.image_reference_text" => "note.markdown",
             "note.compress_large_images" => "note.images",
             _ when id.StartsWith("todo.reminder", StringComparison.Ordinal) => "labs.reminders",
             _ => id.Split('.')[0] switch
@@ -124,7 +118,7 @@ public sealed partial class AppController
                 "window" => "labs.window",
                 "scripts" => "note.scripts",
                 "shortcuts" => "shortcuts.bindings",
-                "mcp" => "labs.mcp",
+                "mcp" => "workspace.mcp",
                 _ => ""
             }
         };
@@ -337,6 +331,15 @@ public sealed partial class AppController
         };
         foreach (var page in SettingsPages())
         {
+            if (page == SettingsPage.Plugins)
+                navigationItems.Children.Add(new Border
+                {
+                    Height = 1,
+                    Margin = new Thickness(12, 8, 12, 8),
+                    Background = TrayBorderBrush,
+                    Opacity = 0.3,
+                    SnapsToDevicePixels = true
+                });
             navigationItems.Children.Add(BuildSettingsSidebarNavigationItem(page));
         }
         root.Children.Add(new ScrollViewer
@@ -353,11 +356,11 @@ public sealed partial class AppController
     private IEnumerable<SettingsPage> SettingsPages()
     {
         yield return SettingsPage.General;
-        yield return SettingsPage.Workspaces;
         yield return SettingsPage.NotesAndTodos;
         yield return SettingsPage.Visual;
         yield return SettingsPage.Shortcuts;
         yield return SettingsPage.Plugins;
+        yield return SettingsPage.Workspaces;
         if (State.AdvancedSettingsMode)
         {
             yield return SettingsPage.Labs;
@@ -489,7 +492,7 @@ public sealed partial class AppController
     {
         SettingsPage.General => SettingsSidebarLocalized(
             "常规", "General", "一般", "일반"),
-        SettingsPage.Workspaces => Strings.Get("WorkspaceSettingsTitle"),
+        SettingsPage.Workspaces => Strings.Get("WorkspaceDataSettingsTitle"),
         SettingsPage.NotesAndTodos => Strings.Get("SettingsNotesAndTodos"),
         SettingsPage.Visual => Strings.Get("SettingsVisual"),
         SettingsPage.Shortcuts => Strings.Get("SettingsShortcuts"),

@@ -107,6 +107,7 @@ internal static class MaterialPresentationChecks
         var oldHidden = state.HiddenTopBarShortcuts.ToList();
         var oldSkin = state.PaperSkin;
         var oldLinks = state.EnableTodoPaperLinks;
+        var oldTether = state.ExperimentalWindowTethering;
         var paper = new PaperData
         {
             Type = PaperTypes.Todo, Title = "Top bar commands",
@@ -122,6 +123,7 @@ internal static class MaterialPresentationChecks
             state.PaperSkin = PaperSkins.Paper;
             state.HiddenTopBarShortcuts = [];
             state.EnableTodoPaperLinks = true;
+            state.ExperimentalWindowTethering = false;
             // Preserve an explicit two-creation-button fixture for width and overflow tests.
             state.TopBarShortcutOrder =
                 [PaperTopBarShortcuts.NewTodo, PaperTopBarShortcuts.NewNote,
@@ -197,11 +199,20 @@ internal static class MaterialPresentationChecks
             Program.Assert(Has(narrowMenu, Strings.Get("MenuQuick")) &&
                 Has(narrowMenu, Strings.Get("MenuNewTodoPaper")) &&
                 Has(narrowMenu, Strings.Get("MenuNewNotePaper")) &&
-                Has(narrowMenu, Strings.Get("MenuTopBarAssociationDrag")) &&
+                Has(narrowMenu, Strings.Get("MenuTopBarAssociationDragTodo")) &&
                 Has(narrowMenu, Strings.Get("TraySettings")) &&
                 Has(narrowMenu, controller.PaperCapsuleTitle(paper)) &&
                 !Has(narrowMenu, Strings.Get("MenuCustomizeTopBar")),
                 "overflow restores Quick, paper title and Settings, without title-bar customization");
+            var exportMenu = narrowMenu.Items.OfType<MenuItem>().Single(item =>
+                Equals(item.Header, Strings.Get("MenuExport")));
+            exportMenu.IsSubmenuOpen = true;
+            Program.Pump();
+            Program.Assert(exportMenu.IsSubmenuOpen && exportMenu.Items.OfType<MenuItem>()
+                    .Select(item => item.Header as string).SequenceEqual(new[] {
+                        Strings.Get("MenuExportCurrentTodo"), Strings.Get("MenuExportAllPapers") }),
+                "export scopes remain reachable inside one real submenu");
+            exportMenu.IsSubmenuOpen = false;
             var narrowPlugins = narrowMenu.Items.OfType<MenuItem>().Single(item =>
                 Equals(item.Header, Strings.Get("MenuTopBarPluginActions")));
             Program.Assert(narrowPlugins.Items.Count == 4,
@@ -245,7 +256,7 @@ internal static class MaterialPresentationChecks
             OpenMenu();
             var dragMenu = more.ContextMenu!;
             var dragEntry = dragMenu.Items.OfType<MenuItem>().Single(item =>
-                Equals(item.Header, Strings.Get("MenuTopBarAssociationDrag")));
+                Equals(item.Header, Strings.Get("MenuTopBarAssociationDragTodo")));
             Program.Assert(dragEntry.StaysOpenOnClick,
                 "association remains a draggable menu command when the whole group overflows");
             try
@@ -278,7 +289,7 @@ internal static class MaterialPresentationChecks
             var wideMenu = more.ContextMenu!;
             Program.Assert(!Has(wideMenu, Strings.Get("MenuNewTodoPaper")) &&
                 !Has(wideMenu, Strings.Get("MenuNewNotePaper")) &&
-                !Has(wideMenu, Strings.Get("MenuTopBarAssociationDrag")) &&
+                !Has(wideMenu, Strings.Get("MenuTopBarAssociationDragTodo")) &&
                 !Has(wideMenu, Strings.Get("MenuTopBarPluginActions")) &&
                 Has(wideMenu, Strings.Get("MenuQuick")) &&
                 Has(wideMenu, Strings.Get("TraySettings")),
@@ -393,6 +404,7 @@ internal static class MaterialPresentationChecks
             state.TopBarPinnedCount = oldDivider;
             state.HiddenTopBarShortcuts = oldHidden;
             state.EnableTodoPaperLinks = oldLinks;
+            state.ExperimentalWindowTethering = oldTether;
             state.PaperSkin = oldSkin;
             SetCursorPos(previousCursor.X, previousCursor.Y);
             Theme.Invalidate();
@@ -432,7 +444,7 @@ internal static class MaterialPresentationChecks
             Program.Pump();
             var dropArea = (StackPanel)((Border)root.Children[1]).Child;
             var upperGroup = (StackPanel)dropArea.Children[1];
-            var menuHeading = (TextBlock)dropArea.Children[3];
+            var menuHeading = (FrameworkElement)dropArea.Children[3];
             var sourceRow = (Grid)upperGroup.Children[0]; // New Todo
             var hide = Descendants(sourceRow).OfType<CheckBox>().Single();
             var hideAt = hide.PointToScreen(new Point(hide.ActualWidth / 2, hide.ActualHeight / 2));
