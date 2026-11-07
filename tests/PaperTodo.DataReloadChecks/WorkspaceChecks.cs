@@ -706,25 +706,30 @@ internal static partial class Program
 
         var original = controller.WorkspaceOptions.Normalized();
         var originalName = original.DisplayName(2);
-        var editingCard = Slot(Page());
+        var page = Page();
+        var window = new Window { Content = page, Width = 630, Height = 400, ShowInTaskbar = false };
+        window.Show();
+        var editingCard = Slot(page);
         var cardControls = LogicalDescendants(editingCard).ToArray();
         var rename = cardControls.OfType<Button>().Single(button =>
             AutomationProperties.GetAutomationId(button) == "WorkspaceRename2");
         var editor = cardControls.OfType<TextBox>().Single();
-        Rect RenameButtonBounds()
+        async Task<Rect> RenameButtonBoundsAsync()
         {
-            const double cardWidth = 292;
-            editingCard.Measure(new Size(cardWidth, double.PositiveInfinity));
-            editingCard.Arrange(new Rect(0, 0, cardWidth, editingCard.DesiredSize.Height));
+            await window.Dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.ApplicationIdle);
             return rename.TransformToAncestor(editingCard).TransformBounds(new Rect(rename.RenderSize));
         }
 
         rename.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-        var shortNameButton = RenameButtonBounds();
+        var shortNameButton = await RenameButtonBoundsAsync();
         editor.Text = "Weekly plans";
-        Require(RenameButtonBounds().Left > shortNameButton.Left, "a longer name did not move the save button");
+        var mediumNameButton = await RenameButtonBoundsAsync();
+        Require(mediumNameButton.Left > shortNameButton.Left,
+            $"the save button did not follow the name: {shortNameButton} -> {mediumNameButton}");
         editor.Text = new string('W', 48);
-        Require(RenameButtonBounds().Top >= shortNameButton.Bottom, "the save button did not wrap after a long name");
+        var longNameButton = await RenameButtonBoundsAsync();
+        Require(longNameButton.Top >= shortNameButton.Bottom,
+            $"the save button did not wrap: {shortNameButton} -> {longNameButton}");
         cancelRename.Invoke(controller, [new Border()]);
         Require(editor.Visibility == Visibility.Collapsed &&
                 controller.WorkspaceOptions.DisplayName(2) == originalName,
@@ -736,6 +741,7 @@ internal static partial class Program
         await Until(() => controller.WorkspaceOptions.DisplayName(2) == "Confirmed workspace name",
             "workspace rename confirmation did not save");
         Require(controller.WorkspaceNumber == 1, "renaming a workspace unexpectedly switched it");
+        window.Close();
 
         var card = Slot(Page());
         card.RaiseEvent(new System.Windows.Input.MouseButtonEventArgs(
