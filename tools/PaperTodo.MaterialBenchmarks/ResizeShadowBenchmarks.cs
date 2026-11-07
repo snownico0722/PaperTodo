@@ -100,7 +100,8 @@ internal static class ResizeShadowBenchmarks
                             window.Left = 85;
                             window.Top = 80;
                             window.UpdateLayout();
-                            Wait(110);
+                            window.Activate();
+                            Wait(180);
                             var result = DragResize(window, arm, paperType, pass);
                             all.Add(result);
                             Program.Assert(ReferenceEquals(originalChild, window.Content) &&
@@ -155,6 +156,8 @@ internal static class ResizeShadowBenchmarks
 
     private static Result DragResize(PaperWindow window, Arm arm, string paperType, int pass)
     {
+        window.Activate();
+        Wait(70);
         var hwnd = new WindowInteropHelper(window).Handle;
         var source = HwndSource.FromHwnd(hwnd)!;
         var grip = Descendants(window).OfType<ResizeGrip>().Single(g =>
@@ -199,7 +202,9 @@ internal static class ResizeShadowBenchmarks
         try
         {
             Program.Assert(SetCursorPos(x0, y0), "position cursor on real resize grip");
-            Wait(35);
+            Wait(90);
+            Program.Assert(WindowFromPoint(new NativePoint { X = x0, Y = y0 }) == hwnd,
+                "the real visible window must own the grip pointer before mouse-down");
             samples.Clear();
             renderTimes.Clear();
             layouts = 0;
@@ -213,7 +218,7 @@ internal static class ResizeShadowBenchmarks
                 try
                 {
                     mouse_event(0x0002, 0, 0, 0, UIntPtr.Zero);
-                    Thread.Sleep(65);
+                    Thread.Sleep(105);
                     for (var i = 1; i <= 110; i++)
                     {
                         // Mostly increasing dimensions; small oscillation exercises responsive layout.
@@ -232,12 +237,15 @@ internal static class ResizeShadowBenchmarks
                 Wait(8);
             Program.Assert(driver.IsCompleted, "real resize gesture completed");
             driver.GetAwaiter().GetResult();
-            Wait(45);
+            Wait(135);
             var elapsed = watch.Elapsed.TotalMilliseconds;
             var cpu = (Process.GetCurrentProcess().TotalProcessorTime - cpu0).TotalMilliseconds;
             var dwm1 = DwmCpu();
             var allocated = GC.GetAllocatedBytesForCurrentThread() - allocated0;
             Program.Assert(GetWindowRect(hwnd, out var final), "final HWND bounds");
+            Console.WriteLine($"RESIZE-END {paperType}/{arm.Shadow}: " +
+                $"{width0}x{height0} -> {final.Right-final.Left}x{final.Bottom-final.Top}, " +
+                $"sizing={sizingCount}, updates={samples.Count}, hwnd={hwnd}");
             Program.Assert(final.Right - final.Left >= width0 + 45 &&
                 final.Bottom - final.Top >= height0 + 35,
                 $"real resize must change BOTH dimensions: {width0}x{height0} -> " +
@@ -300,6 +308,7 @@ internal static class ResizeShadowBenchmarks
     private static extern bool SetDragFullWindows(uint action, uint value, IntPtr unused, uint flags);
     [DllImport("user32.dll", EntryPoint="SystemParametersInfoW", SetLastError=true)]
     private static extern bool GetDragFullWindows(uint action, uint unused, out int enabled, uint flags);
+    [DllImport("user32.dll")] private static extern IntPtr WindowFromPoint(NativePoint value);
     [DllImport("user32.dll")] private static extern bool GetCursorPos(out NativePoint value);
     [DllImport("user32.dll")] private static extern bool SetCursorPos(int x, int y);
     [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hwnd, out NativeRect rect);
