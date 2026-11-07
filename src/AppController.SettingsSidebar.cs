@@ -322,6 +322,7 @@ public sealed partial class AppController
         advancedModeToggle.IsEnabled = !FollowsMainWorkspaceSettings;
         advancedModeToggle.ToolTip = BuildSettingsHintTooltip(Strings.Get("TipAdvancedSettingsMode"));
         ToolTipService.SetShowOnDisabled(advancedModeToggle, true);
+        ToolTipPreferences.SetAlwaysEnabled(advancedModeToggle, true);
         footer.Children.Add(advancedModeToggle);
 
         footer.Children.Add(BuildSettingsSignature());
