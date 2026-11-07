@@ -698,14 +698,15 @@ internal static partial class Program
         const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
         var build = typeof(AppController).GetMethod("BuildWorkspaceSettingsPage", flags)!;
         var cancelRename = typeof(AppController).GetMethod("CancelWorkspaceRenameOnPointer", flags)!;
-        StackPanel Page() => (StackPanel)build.Invoke(controller, null)!;
-        StackPanel Options(StackPanel page) => page.Children.OfType<StackPanel>().Single();
-        Border Slot(StackPanel page) => Options(page).Children.OfType<Border>().Single(card =>
+        Grid Page() => (Grid)build.Invoke(controller, null)!;
+        StackPanel Options(Grid page) => page.Children.OfType<StackPanel>()
+            .Single(column => Grid.GetColumn(column) == 0).Children.OfType<StackPanel>().Single();
+        Border Slot(Grid page) => Options(page).Children.OfType<Border>().Single(card =>
             AutomationProperties.GetAutomationId(card) == "WorkspaceSlot2");
 
         var original = controller.WorkspaceOptions.Normalized();
         var originalName = original.DisplayName(2);
-        var nameRow = ((Grid)Slot(Page()).Child).Children.OfType<StackPanel>().First();
+        var nameRow = ((StackPanel)Slot(Page()).Child).Children.OfType<Grid>().First();
         var rename = nameRow.Children.OfType<Button>().Single(button =>
             AutomationProperties.GetAutomationId(button) == "WorkspaceRename2");
         var editor = nameRow.Children.OfType<TextBox>().Single();
