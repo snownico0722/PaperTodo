@@ -1868,6 +1868,7 @@ public sealed partial class AppController
             Foreground = TrayWeakTextBrush,
             FontSize = AppTypography.Scale(11),
             FontWeight = FontWeights.Medium,
+            VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, topMargin, 0, 0)
         };
     }
@@ -1897,7 +1898,7 @@ public sealed partial class AppController
         {
             Orientation = Orientation.Horizontal
         };
-        labelHost.VerticalAlignment = wrapLabel ? VerticalAlignment.Top : VerticalAlignment.Center;
+        labelHost.VerticalAlignment = VerticalAlignment.Center;
         labelHost.Children.Add(new TextBlock
         {
             Text = labelText,
@@ -1914,7 +1915,6 @@ public sealed partial class AppController
                 new Thickness(4, 0, 0, 0));
             if (wrapLabel)
             {
-                hint.VerticalAlignment = VerticalAlignment.Top;
                 DockPanel.SetDock(hint, Dock.Right);
                 labelHost.Children.Insert(0, hint);
             }
@@ -1991,7 +1991,7 @@ public sealed partial class AppController
             Margin = new Thickness(0, 4, 0, 0),
             Cursor = System.Windows.Input.Cursors.Hand,
             Focusable = false,
-            VerticalContentAlignment = wrapText ? VerticalAlignment.Top : VerticalAlignment.Center,
+            VerticalContentAlignment = VerticalAlignment.Center,
             Style = BuildSettingsCheckBoxStyle(wrapText)
         };
 
@@ -2075,14 +2075,11 @@ public sealed partial class AppController
 
         // The option keeps its own top margin via its style; reset it here so the row controls spacing.
         option.Margin = new Thickness(0);
-        var alignment = option is CheckBox { VerticalContentAlignment: VerticalAlignment.Top }
-            ? VerticalAlignment.Top : VerticalAlignment.Center;
-        option.VerticalAlignment = alignment;
+        option.VerticalAlignment = VerticalAlignment.Center;
         Grid.SetColumn(option, 0);
         grid.Children.Add(option);
 
         var hint = CreateSettingsHintGlyph(tooltip, margin: new Thickness(6, 0, 0, 0));
-        hint.VerticalAlignment = alignment;
         Grid.SetColumn(hint, 1);
         grid.Children.Add(hint);
 
@@ -2094,12 +2091,16 @@ public sealed partial class AppController
 
     private Border CreateSettingsHintGlyph(ToolTip tooltip, Thickness margin)
     {
-        var hintGlyph = new TextBlock
+        var hintGlyph = new System.Windows.Shapes.Path
         {
-            Text = "ⓘ",
-            Foreground = TrayWeakTextBrush,
-            FontFamily = AppTypography.SymbolFontFamily,
-            FontSize = AppTypography.Scale(12),
+            Data = Geometry.Parse("M6 1 A5 5 0 1 1 6 11 A5 5 0 1 1 6 1 Z M6 5.5 V8.5 M6 3.5 V3.6"),
+            Width = AppTypography.Scale(10),
+            Height = AppTypography.Scale(10),
+            Stretch = Stretch.Uniform,
+            Stroke = TrayWeakTextBrush,
+            StrokeThickness = 1,
+            StrokeStartLineCap = PenLineCap.Round,
+            StrokeEndLineCap = PenLineCap.Round,
             VerticalAlignment = VerticalAlignment.Center,
             HorizontalAlignment = HorizontalAlignment.Center
         };
@@ -2120,8 +2121,8 @@ public sealed partial class AppController
         ToolTipService.SetInitialShowDelay(hint, 200);
         ToolTipService.SetShowDuration(hint, 20000);
         ToolTipService.SetBetweenShowDelay(hint, 0);
-        hint.MouseEnter += (_, _) => hintGlyph.Foreground = TrayTextBrush;
-        hint.MouseLeave += (_, _) => hintGlyph.Foreground = TrayWeakTextBrush;
+        hint.MouseEnter += (_, _) => hintGlyph.Stroke = TrayTextBrush;
+        hint.MouseLeave += (_, _) => hintGlyph.Stroke = TrayWeakTextBrush;
         return hint;
     }
 
@@ -2270,9 +2271,7 @@ public sealed partial class AppController
         markHost.SetValue(FrameworkElement.MarginProperty,
             markOnly ? new Thickness(0) : new Thickness(0, 0, 8, 0));
         if (markOnly) markHost.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
-        markHost.SetValue(FrameworkElement.VerticalAlignmentProperty,
-            wrapText ? VerticalAlignment.Top : VerticalAlignment.Center);
-        if (wrapText) markHost.SetValue(FrameworkElement.MarginProperty, new Thickness(0, 2, 8, 0));
+        markHost.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
 
         var border = new FrameworkElementFactory(typeof(Border));
         border.Name = "CheckBorder";

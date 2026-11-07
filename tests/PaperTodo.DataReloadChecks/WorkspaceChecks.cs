@@ -706,10 +706,10 @@ internal static partial class Program
 
         var original = controller.WorkspaceOptions.Normalized();
         var originalName = original.DisplayName(2);
-        var nameRow = ((StackPanel)Slot(Page()).Child).Children.OfType<Grid>().First();
-        var rename = nameRow.Children.OfType<Button>().Single(button =>
+        var cardControls = LogicalDescendants(Slot(Page())).ToArray();
+        var rename = cardControls.OfType<Button>().Single(button =>
             AutomationProperties.GetAutomationId(button) == "WorkspaceRename2");
-        var editor = nameRow.Children.OfType<TextBox>().Single();
+        var editor = cardControls.OfType<TextBox>().Single();
         rename.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         editor.Text = "Unconfirmed workspace name";
         cancelRename.Invoke(controller, [new Border()]);
