@@ -176,7 +176,7 @@ public sealed partial class AppController
             var row = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
-                IsHitTestVisible = false,
+                VerticalAlignment = VerticalAlignment.Center,
                 // The feature is inactive, but its placement remains editable.
                 Opacity = (action == PaperTopBarShortcuts.Workspace && !WorkspaceOptions.Enabled) ||
                           (action == PaperTopBarShortcuts.Association &&
@@ -208,6 +208,7 @@ public sealed partial class AppController
             };
             if (action == PaperTopBarShortcuts.RunScript)
             {
+                row.Children.Add(CreateSettingsHintGlyph("TipTopBarRunScript", new Thickness(3, 0, 0, 0)));
                 var edit = SettingsTextButton(SettingsSidebarLocalized(
                     "编辑", "Edit", "編集", "편집"));
                 edit.ToolTip = Strings.Get("TopBarEditScript");
@@ -324,7 +325,7 @@ public sealed partial class AppController
     {
         for (var current = source; current != null; current = current is Visual
                  ? VisualTreeHelper.GetParent(current) : LogicalTreeHelper.GetParent(current))
-            if (current is ButtonBase) return true;
+            if (current is ButtonBase || current is Border hint && hint.Cursor == Cursors.Help) return true;
         return false;
     }
 

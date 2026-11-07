@@ -352,6 +352,7 @@ Error: {0}</value>
   <data name="SettingsColorScheme" xml:space="preserve">
     <value>Color scheme</value>
   </data>
+  <data name="SettingsFontGroup" xml:space="preserve"><value>Font settings</value></data>
   <data name="SettingsUiFont" xml:space="preserve">
     <value>Font</value>
   </data>
@@ -797,7 +798,7 @@ When off, only hides those items; selected values stay unchanged.</value>
     <value>Paper opacity</value>
   </data>
   <data name="LabsEnableInactivePaperOpacity" xml:space="preserve">
-    <value>Make inactive papers translucent</value>
+    <value>Fade on focus loss</value>
   </data>
   <data name="TipLabsInactivePaperOpacity" xml:space="preserve">
     <value>An expanded paper becomes translucent when it loses focus, so it obstructs less of the desktop. Click or activate it again to restore its original opacity.</value>
@@ -1739,6 +1740,7 @@ Resolve the file access problem and retry, or choose “Rebuild workspace” to 
   <data name="TopBarRunScript" xml:space="preserve">
     <value>Run script</value>
   </data>
+  <data name="TipTopBarRunScript" xml:space="preserve"><value>Enter and save a PowerShell script in Edit, then choose Run script to execute it. Papers in this workspace share the script. It uses the PowerShell version in Settings unless you put !pwsh or !ps5 on its own on the first line.</value></data>
   <data name="TopBarEditScript" xml:space="preserve">
     <value>Edit script</value>
   </data>

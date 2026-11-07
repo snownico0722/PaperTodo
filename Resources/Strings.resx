@@ -359,6 +359,7 @@
   <data name="SettingsColorScheme" xml:space="preserve">
     <value>配色方案</value>
   </data>
+  <data name="SettingsFontGroup" xml:space="preserve"><value>字体设置</value></data>
   <data name="SettingsUiFont" xml:space="preserve">
     <value>字体</value>
   </data>
@@ -820,7 +821,7 @@
     <value>纸片透明度</value>
   </data>
   <data name="LabsEnableInactivePaperOpacity" xml:space="preserve">
-    <value>未激活的纸片自动半透明</value>
+    <value>失焦自动半透明</value>
   </data>
   <data name="TipLabsInactivePaperOpacity" xml:space="preserve">
     <value>展开的纸片在失去焦点后会自动变得半透明，减少对桌面内容的遮挡。
@@ -1818,6 +1819,7 @@
   <data name="TopBarRunScript" xml:space="preserve">
     <value>运行脚本</value>
   </data>
+  <data name="TipTopBarRunScript" xml:space="preserve"><value>在「编辑」中填写并保存 PowerShell 脚本，点击「运行脚本」即可执行。当前工作区的纸片共用此脚本。默认使用设置中的 PowerShell 版本，也可在首行单独写 !pwsh 或 !ps5 指定版本。</value></data>
   <data name="TopBarEditScript" xml:space="preserve">
     <value>编辑脚本</value>
   </data>

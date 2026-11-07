@@ -1557,10 +1557,11 @@ public sealed partial class AppController
         leftColumn.Children.Add(CreateSkinSettings());
         leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsDeepCapsuleGap")), "TipDeepCapsuleGap"));
         leftColumn.Children.Add(CreateDeepCapsuleGapSegmentSelector());
-        leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsUiFont")), "TipUiFont"));
-        leftColumn.Children.Add(CreateUiFontPresetSegmentSelector());
-        leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsTextRenderingProfile")), "TipTextRenderingProfile"));
-        leftColumn.Children.Add(CreateTextRenderingProfileSegmentSelector());
+        rightColumn.Children.Add(SettingsSectionLabel(Strings.Get("SettingsFontGroup")));
+        rightColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsUiFont")), "TipUiFont"));
+        rightColumn.Children.Add(CreateUiFontPresetSegmentSelector());
+        rightColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsTextRenderingProfile")), "TipTextRenderingProfile"));
+        rightColumn.Children.Add(CreateTextRenderingProfileSegmentSelector());
         var customBoldToggle = SettingsToggle(
             Strings.Get("SettingsCustomFontEnhancedBold"),
             State.CustomFontEnhancedBold,
@@ -1571,29 +1572,23 @@ public sealed partial class AppController
         customBoldToggle.IsEnabled =
             (AppTypography.HasCustomFont && AppTypography.HasCustomBoldFont) ||
             State.CustomFontEnhancedBold;
-        leftColumn.Children.Add(WrapWithHint(customBoldToggle, "TipCustomFontEnhancedBold"));
-        leftColumn.Children.Add(CompactSettingsField(
+        rightColumn.Children.Add(WrapWithHint(customBoldToggle, "TipCustomFontEnhancedBold"));
+        rightColumn.Children.Add(CompactSettingsField(
             Strings.Get("SettingsOverallFontScale"),
             CreateOverallFontScaleStepper(),
             editorWidth: 132,
             tipKey: "TipOverallFontScale",
             topMargin: 7));
 
+        rightColumn.Children.Add(SettingsSoftDivider());
         void AddTextStyleEditor(
-            StackPanel column,
             string sectionKey,
             string tipKey,
             UIElement sizeSelector,
             bool isBold,
-            Action toggleBold,
-            bool leadingDivider)
+            Action toggleBold)
         {
-            if (leadingDivider)
-            {
-                column.Children.Add(SettingsSoftDivider());
-            }
-
-            column.Children.Add(CreateTextStyleRow(
+            rightColumn.Children.Add(CreateTextStyleRow(
                 Strings.Get(sectionKey),
                 tipKey,
                 sizeSelector,
@@ -1602,39 +1597,31 @@ public sealed partial class AppController
         }
 
         AddTextStyleEditor(
-            rightColumn,
             "SettingsNoteBodyText",
             "TipNoteBodyTextStyle",
             CreateVisualTextSizeSelector(State.NoteTextSize, SetNoteTextSize),
             State.NoteTextBold,
-            ToggleNoteTextBold,
-            leadingDivider: false);
+            ToggleNoteTextBold);
 
         AddTextStyleEditor(
-            rightColumn,
             "SettingsTodoBodyText",
             "TipTodoBodyTextStyle",
             CreateTodoVisualSizeSelector(),
             State.TodoTextBold,
-            ToggleTodoTextBold,
-            leadingDivider: true);
+            ToggleTodoTextBold);
 
         AddTextStyleEditor(
-            rightColumn,
             "SettingsTitleText",
             "TipTitleTextStyle",
             CreateVisualTextSizeSelector(State.TitleTextSize, SetTitleTextSize),
             State.TitleTextBold,
-            ToggleTitleTextBold,
-            leadingDivider: true);
+            ToggleTitleTextBold);
         AddTextStyleEditor(
-            rightColumn,
             "SettingsCapsuleText",
             "TipCapsuleTextStyle",
             CreateVisualTextSizeSelector(State.CapsuleTextSize, SetCapsuleTextSize),
             State.CapsuleTextBold,
-            ToggleCapsuleTextBold,
-            leadingDivider: true);
+            ToggleCapsuleTextBold);
 
         if (PaperBackground.IsAvailable)
         {
@@ -2086,10 +2073,10 @@ public sealed partial class AppController
         return grid;
     }
 
-    private Border CreateSettingsHintGlyph(string tipKey, Thickness margin) =>
+    internal static Border CreateSettingsHintGlyph(string tipKey, Thickness margin) =>
         CreateSettingsHintGlyph(BuildSettingsHintTooltip(Strings.Get(tipKey)), margin);
 
-    private Border CreateSettingsHintGlyph(ToolTip tooltip, Thickness margin)
+    private static Border CreateSettingsHintGlyph(ToolTip tooltip, Thickness margin)
     {
         var hintGlyph = new System.Windows.Shapes.Path
         {
@@ -2126,7 +2113,7 @@ public sealed partial class AppController
         return hint;
     }
 
-    private ToolTip BuildSettingsHintTooltip(string text)
+    private static ToolTip BuildSettingsHintTooltip(string text)
     {
         return new ToolTip
         {

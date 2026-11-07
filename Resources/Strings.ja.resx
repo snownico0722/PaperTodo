@@ -352,6 +352,7 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
   <data name="SettingsColorScheme" xml:space="preserve">
     <value>配色</value>
   </data>
+  <data name="SettingsFontGroup" xml:space="preserve"><value>フォント設定</value></data>
   <data name="SettingsUiFont" xml:space="preserve">
     <value>フォント</value>
   </data>
@@ -797,7 +798,7 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
     <value>付箋の透明度</value>
   </data>
   <data name="LabsEnableInactivePaperOpacity" xml:space="preserve">
-    <value>非アクティブな紙片を半透明にする</value>
+    <value>フォーカスを失うと半透明に</value>
   </data>
   <data name="TipLabsInactivePaperOpacity" xml:space="preserve">
     <value>展開中の紙片はフォーカスを失うと自動的に半透明になり、デスクトップを隠しにくくなります。再びクリックまたはアクティブにすると、元の不透明度に戻ります。</value>
@@ -1739,6 +1740,7 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
   <data name="TopBarRunScript" xml:space="preserve">
     <value>スクリプトを実行</value>
   </data>
+  <data name="TipTopBarRunScript" xml:space="preserve"><value>「編集」で PowerShell スクリプトを入力して保存し、「スクリプトを実行」を選ぶと実行できます。同じワークスペースの用紙で共有されます。通常は設定の PowerShell を使い、1 行目に !pwsh または !ps5 だけを書くとバージョンを指定できます。</value></data>
   <data name="TopBarEditScript" xml:space="preserve">
     <value>スクリプトを編集</value>
   </data>

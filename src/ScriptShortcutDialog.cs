@@ -42,17 +42,26 @@ internal static class ScriptShortcutDialog
         layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         layout.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        var titleRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Margin = new Thickness(0, 0, 0, 8),
+            Background = Brushes.Transparent
+        };
         var title = new TextBlock
         {
             Text = Strings.Get("TopBarEditScript"), Foreground = Theme.TextBrush,
             FontSize = AppTypography.Scale(16), FontWeight = FontWeights.SemiBold,
-            Margin = new Thickness(0, 0, 0, 8)
+            VerticalAlignment = VerticalAlignment.Center
         };
-        title.MouseLeftButtonDown += (_, e) =>
+        var help = AppController.CreateSettingsHintGlyph("TipTopBarRunScript", new Thickness(5, 0, 0, 0));
+        titleRow.Children.Add(title);
+        titleRow.Children.Add(help);
+        titleRow.MouseLeftButtonDown += (_, e) =>
         {
-            if (e.LeftButton == MouseButtonState.Pressed) dialog.DragMove();
+            if (!help.IsMouseOver && e.LeftButton == MouseButtonState.Pressed) dialog.DragMove();
         };
-        layout.Children.Add(title);
+        layout.Children.Add(titleRow);
         if (readOnly)
         {
             var hint = new TextBlock
