@@ -2818,6 +2818,13 @@ public sealed partial class PaperWindow : Window
 
         if (IsExportablePaper(_paper))
         {
+            var export = new MenuItem
+            {
+                Header = _paperExportRunning
+                    ? Strings.Format("NoteExportProgress", _paperExportCompleted, _paperExportTotal)
+                    : Strings.Get("MenuExport"),
+                IsEnabled = !_paperExportRunning
+            };
             var currentLabel = _paper.Type == PaperTypes.Todo
                 ? "MenuExportCurrentTodo" : "MenuExportCurrentNote";
             export.Items.Add(MenuItem(Strings.Get(currentLabel),
