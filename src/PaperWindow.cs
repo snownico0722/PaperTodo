@@ -947,21 +947,19 @@ public sealed partial class PaperWindow : Window
         var nearTop = pointerY < bounds.Top + resizeBorder;
         var nearBottom = pointerY >= bounds.Bottom - resizeBorder;
 
-        if (nearTop && nearLeft)
+        // Measure corner squares from the painted edge, preserving the narrower straight edges.
+        var topCorner = (chromeMargin + 7) * dpiScale;
+        var bottomCorner = (chromeMargin + 9) * dpiScale;
+        var inTopCorner = pointerY < bounds.Top + topCorner;
+        var inBottomCorner = pointerY >= bounds.Bottom - bottomCorner;
+        var cornerWidth = inTopCorner ? topCorner : bottomCorner;
+        if ((inTopCorner || inBottomCorner) && pointerX < bounds.Left + cornerWidth)
         {
-            hitTest = HtTopLeft;
+            hitTest = inTopCorner ? HtTopLeft : HtBottomLeft;
         }
-        else if (nearTop && nearRight)
+        else if ((inTopCorner || inBottomCorner) && pointerX >= bounds.Right - cornerWidth)
         {
-            hitTest = HtTopRight;
-        }
-        else if (nearBottom && nearLeft)
-        {
-            hitTest = HtBottomLeft;
-        }
-        else if (nearBottom && nearRight)
-        {
-            hitTest = HtBottomRight;
+            hitTest = inTopCorner ? HtTopRight : HtBottomRight;
         }
         else if (nearLeft)
         {
