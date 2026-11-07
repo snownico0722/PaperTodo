@@ -369,7 +369,12 @@ public sealed partial class AppController
             PaperTopBarShortcuts.RunScript => PaperWindow.CreateTopBarRunScriptIcon(slot),
             PaperTopBarShortcuts.Association => PaperWindow.CreateTopBarAssociationIcon(slot, active: false),
             PaperTopBarShortcuts.Workspace => PaperWindow.CreateWorkspaceCycleIcon(slot, WorkspaceNumber, out _),
-            PaperTopBarShortcuts.ExternalEditor => PaperWindow.ExternalOpenButtonLabel(State.ExternalMarkdownExtension),
+            PaperTopBarShortcuts.ExternalEditor => new TextBlock
+            {
+                Text = PaperWindow.ExternalOpenButtonLabel(State.ExternalMarkdownExtension),
+                TextAlignment = TextAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            },
             _ => null
         };
         return slot;

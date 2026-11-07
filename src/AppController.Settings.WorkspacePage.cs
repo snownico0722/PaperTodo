@@ -318,14 +318,26 @@ public sealed partial class AppController
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(4, 0, 1, 0)
         };
-        var rename = PluginPageButton("✎");
+        var pencil = Geometry.Parse("M1 11 L2 7.5 L8.8 0.7 Q9.3 0.2 9.8 0.7 L11.3 2.2 Q11.8 2.7 11.3 3.2 L4.5 10 Z M7.4 2.1 L9.9 4.6");
+        var check = Geometry.Parse("M0.8 6 L4.5 9.7 L11.2 2.3");
+        var rename = PluginPageButton(string.Empty);
+        var renameIcon = new System.Windows.Shapes.Path
+        {
+            Width = 12, Height = 12, Data = pencil, Stretch = Stretch.None,
+            LayoutTransform = new ScaleTransform(AppTypography.ScaleFactor, AppTypography.ScaleFactor),
+            StrokeThickness = 1.4, StrokeLineJoin = PenLineJoin.Round,
+            StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round,
+            IsHitTestVisible = false
+        };
+        renameIcon.SetBinding(System.Windows.Shapes.Shape.StrokeProperty,
+            new System.Windows.Data.Binding(nameof(Control.Foreground)) { Source = rename });
+        rename.Content = renameIcon;
         rename.VerticalContentAlignment = VerticalAlignment.Center;
         rename.HorizontalContentAlignment = HorizontalAlignment.Center;
         rename.MinWidth = 22;
         rename.Width = 22;
         rename.Height = 25;
         rename.Padding = new Thickness(3, 1, 3, 1);
-        rename.FontFamily = AppTypography.SymbolFontFamily;
         rename.VerticalAlignment = VerticalAlignment.Center;
         rename.ToolTip = WorkspaceUi("编辑名称", "Edit name", "名前を編集", "이름 편집");
         AutomationProperties.SetAutomationId(rename, "WorkspaceRename" + slot);
@@ -349,7 +361,7 @@ public sealed partial class AppController
             editing = false;
             name.Visibility = Visibility.Visible;
             editor.Visibility = Visibility.Collapsed;
-            rename.Content = "✎";
+            renameIcon.Data = pencil;
             rename.ToolTip = WorkspaceUi("编辑名称", "Edit name", "名前を編集", "이름 편집");
             rename.IsEnabled = true;
             if (ReferenceEquals(_workspaceRenameOutsideClick, outsideClick))
@@ -386,7 +398,7 @@ public sealed partial class AppController
             editor.Text = WorkspaceOptions.DisplayName(slot);
             name.Visibility = Visibility.Collapsed;
             editor.Visibility = Visibility.Visible;
-            rename.Content = "✓";
+            renameIcon.Data = check;
             rename.ToolTip = WorkspaceUi("保存名称", "Save name", "名前を保存", "이름 저장");
             _workspaceRenameOutsideClick = outsideClick;
             editor.SelectAll();
