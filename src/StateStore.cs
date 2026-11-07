@@ -673,7 +673,6 @@ public sealed partial class StateStore
 
         state.ExternalMarkdownExtension = ExternalMarkdownFileExtensions.Normalize(state.ExternalMarkdownExtension);
         state.FullscreenTopmostMode = FullscreenTopmostModes.Normalize(state.FullscreenTopmostMode);
-        state.ResizeGripMode = ResizeGripModes.Normalize(state.ResizeGripMode);
         state.DeepCapsuleSide = DeepCapsuleSides.Normalize(state.DeepCapsuleSide);
         state.DeepCapsuleGapSize = DeepCapsuleGapSizes.Normalize(state.DeepCapsuleGapSize);
         state.DeepCapsuleMonitorDeviceName = WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(state.DeepCapsuleMonitorDeviceName);
