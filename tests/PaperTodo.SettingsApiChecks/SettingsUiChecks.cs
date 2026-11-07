@@ -229,9 +229,19 @@ internal static partial class Program
             Render();
             window.Show();
             window.UpdateLayout();
+            Check(window.Content is Grid { ColumnDefinitions.Count: 3 },
+                "workspaces and data share a two-column layout");
             Check(Toggle("LabsMcpEnable").IsEnabled &&
                   SettingsControls<ComboBox>(window).Single().IsEnabled,
                 "disabling workspaces does not disable data handling or MCP");
+            Grid HintRow(string key) => SettingsControls<Grid>(window).Single(row =>
+                row.Children.OfType<CheckBox>().Any(box => Equals(box.Content, Strings.Get(key))));
+            Check(HintRow("LabsMcpEnable").ToolTip == null,
+                "enabled setting rows show descriptions only from the info icon");
+            Check(!Toggle("LabsMcpBlankWrites").IsEnabled &&
+                  HintRow("LabsMcpBlankWrites").ToolTip is ToolTip &&
+                  ToolTipService.GetShowOnDisabled(HintRow("LabsMcpBlankWrites")),
+                "a disabled option has an explanation without becoming clickable");
             options.Enabled = true;
             Field(c, "_workspace", new WorkspaceSession(
                 new WorkspacePaths(session.Paths.Directory, 2), session.Store, c.State, true, null));
@@ -239,12 +249,15 @@ internal static partial class Program
             Check(Toggle("WorkspaceEnabled").IsEnabled && !Toggle("LabsMcpEnable").IsEnabled &&
                   !SettingsControls<ComboBox>(window).Single().IsEnabled,
                 "workspace management stays editable while inherited data and MCP settings are read-only");
+            Check(!HintRow("LabsMcpEnable").IsEnabled &&
+                  HintRow("LabsMcpEnable").ToolTip is ToolTip &&
+                  ToolTipService.GetShowOnDisabled(HintRow("LabsMcpEnable")),
+                "inherited disabled setting rows show explanations");
             var disabledHints = SettingsControls<Border>(window)
                 .Where(border => border.Cursor == Cursors.Help && border.ToolTip is ToolTip)
                 .ToArray();
-            Check(disabledHints.Length >= 2 &&
-                  disabledHints.All(ToolTipService.GetShowOnDisabled),
-                "workspace and disabled settings retain hover explanations");
+            Check(disabledHints.Length >= 2 && disabledHints.All(ToolTipService.GetShowOnDisabled),
+                "disabled settings keep their info icons accessible");
             Check(SettingsControls<Button>(window).Where(button =>
                     Equals(button.Content, Strings.Get("LabsMcpCopyJson")) ||
                     Equals(button.Content, Strings.Get("LabsMcpCopyAiSkill"))).Count(button => button.IsEnabled) == 2,
@@ -258,9 +271,19 @@ internal static partial class Program
             Field(c, "_workspace", session);
             c.State.McpEnabled = false;
             Render();
-            Check(!SettingsControls<CheckBox>(window).Any(box =>
-                    Equals(box.Content, Strings.Get("LabsMcpFullWrites"))) && c.State.McpAllowFullWrites,
-                "MCP off hides permission controls without erasing saved grants");
+            Check(SettingsControls<CheckBox>(window).Any(box =>
+                    Equals(box.Content, Strings.Get("LabsMcpFullWrites")) &&
+                    box.IsVisible && !box.IsEnabled) && c.State.McpAllowFullWrites,
+                "MCP off greys out permissions rather than hiding or resetting them");
+            c.State.UseCapsuleMode = false;
+            c.State.UseDeepCapsuleMode = false;
+            window.Content = Invoke(c, "BuildLabsEdgeCapsuleHoverIntentSettings");
+            window.UpdateLayout();
+            Check(Toggle("LabsEnableEdgeCapsuleHoverPreview").IsVisible &&
+                  !Toggle("LabsEnableEdgeCapsuleHoverPreview").IsEnabled &&
+                  Toggle("LabsEnableEdgeCapsuleHoverIntent").IsVisible,
+                "edge browsing keeps its dependent settings visible but disabled");
+
             c.State.UseCapsuleMode = true;
             c.State.UseDeepCapsuleMode = false;
             c.State.EnableTodoPaperLinks = c.State.HideLinkedPapersFromCapsules = true;
@@ -270,6 +293,37 @@ internal static partial class Program
                   !SettingsControls<CheckBox>(window).Any(box =>
                     Equals(box.Content, Strings.Get("SettingsCapsuleCollapseAll"))),
                 "linked-paper second-click behavior remains available without exposing disabled edge options");
+
+            c.State.EnableTodoPaperLinks = false;
+            c.State.ExperimentalWindowTethering = false;
+            window.Content = Invoke(c, "BuildTopBarShortcutSettings");
+            window.UpdateLayout();
+            var inactiveAssociation = SettingsControls<TextBlock>(window).Single(label =>
+                Equals(label.Text, Strings.Get("TopBarAssociation")));
+            Check(((FrameworkElement)System.Windows.Media.VisualTreeHelper.GetParent(inactiveAssociation)).Opacity == 0.5,
+                "the association shortcut is dimmed when neither linking nor window binding is available");
+            c.State.ExperimentalWindowTethering = true;
+            window.Content = Invoke(c, "BuildTopBarShortcutSettings");
+            window.UpdateLayout();
+            var activeAssociation = SettingsControls<TextBlock>(window).Single(label =>
+                Equals(label.Text, Strings.Get("TopBarAssociation")));
+            Check(((FrameworkElement)System.Windows.Media.VisualTreeHelper.GetParent(activeAssociation)).Opacity == 1,
+                "the association shortcut becomes active with window binding alone");
+            Grid ActionFrame(string key)
+            {
+                var label = SettingsControls<TextBlock>(window).Single(text =>
+                    Equals(text.Text, Strings.Get(key)));
+                DependencyObject? current = label;
+                while (current != null)
+                {
+                    if (current is Grid { AllowDrop: true } frame) return frame;
+                    current = System.Windows.Media.VisualTreeHelper.GetParent(current);
+                }
+                throw new InvalidOperationException("Action frame was not found: " + key);
+            }
+            Check(Math.Abs(ActionFrame("TopBarRunScript").ActualHeight -
+                           ActionFrame("ShortcutNewTodo").ActualHeight) < 1.0,
+                "the compact script Edit button must not increase the shortcut row height");
         }
         finally
         {
