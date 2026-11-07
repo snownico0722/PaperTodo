@@ -1491,7 +1491,7 @@ PaperTodo를 수동으로 다시 여세요. 문제가 반복되면 PC를 다시 
     <value>상단 바 빠른 작업</value>
   </data>
   <data name="TipTopBarShortcutSettings" xml:space="preserve">
-    <value>단축 동작을 드래그해 순서를 바꾸거나 구분선을 넘어 상단 표시줄과 메뉴 사이로 이동할 수 있습니다. '숨김'을 선택하면 해당 동작이 상단 표시줄과 메모 메뉴에서 숨겨집니다. 상단 공간이 부족하면 단축 동작들이 임시로 메뉴에 모입니다.</value>
+    <value>단축 동작을 드래그해 순서를 바꾸거나 구분선을 넘어 상단 표시줄과 확장 메뉴 사이로 이동할 수 있습니다. '숨김'을 선택하면 해당 동작이 상단 표시줄과 메모 메뉴에서 숨겨집니다. 상단 공간이 부족하면 단축 동작들이 임시로 확장 메뉴에 모입니다.</value>
   </data>
   <data name="TopBarShownHeading" xml:space="preserve">
     <value>상단 바에 표시</value>

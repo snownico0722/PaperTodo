@@ -1491,7 +1491,7 @@ When off, open at the docked edge or remembered position.</value>
     <value>Title-bar actions</value>
   </data>
   <data name="TipTopBarShortcutSettings" xml:space="preserve">
-    <value>Drag shortcuts to reorder them, or move them across the divider to place them in the top bar or menu. Checking Hide removes the action from both the top bar and paper menus. If the top bar runs out of space, its shortcuts temporarily move into the menu.</value>
+    <value>Drag shortcuts to reorder them, or move them across the divider to place them in the top bar or overflow menu. Checking Hide removes the action from both the top bar and paper menus. If the top bar runs out of space, its shortcuts temporarily move into the overflow menu.</value>
   </data>
   <data name="TopBarShownHeading" xml:space="preserve">
     <value>Show in title bar</value>

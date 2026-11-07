@@ -1563,9 +1563,9 @@
     <value>顶栏快捷操作</value>
   </data>
   <data name="TipTopBarShortcutSettings" xml:space="preserve">
-    <value>可以拖动快捷操作调整顺序，也可以拖过分割线，将它们放到顶栏或菜单中。
+    <value>可以拖动快捷操作调整顺序，也可以拖过分割线，将它们放到顶栏或扩展菜单中。
 勾选「隐藏」后，对应操作会从顶栏和纸片菜单中隐藏。
-如果顶栏空间不足，会暂时统一收进菜单。</value>
+如果顶栏空间不足，会暂时统一收进扩展菜单。</value>
   </data>
   <data name="TopBarShownHeading" xml:space="preserve">
     <value>显示在顶栏</value>
