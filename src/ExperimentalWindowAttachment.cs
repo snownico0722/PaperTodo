@@ -32,7 +32,12 @@ internal sealed record ExperimentalWindowAttachmentSession(
     string TargetTitle,
     double PerpendicularOffsetDevice,
     double GapDip,
-    DeviceScreenRect LastTargetBounds);
+    DeviceScreenRect LastTargetBounds)
+{
+    // A closed target releases its HWND identity, while the same tether session
+    // retains the executable needed to reconnect or explicitly reopen it.
+    public string TargetExecutablePath { get; init; } = "";
+}
 
 internal readonly record struct ExperimentalAttachmentPlan(
     ExperimentalWindowAttachmentSession Session,
@@ -776,6 +781,11 @@ public sealed partial class PaperWindow
             {
                 SuppressExperimentalTetherPresentation(snapshot);
             }
+            else
+            {
+                changed = !session.ExternalWindow.IsEmpty;
+                RetainUnavailableWindowTether();
+            }
             return _experimentalWindowAttachment != null;
         }
 
@@ -807,6 +817,12 @@ public sealed partial class PaperWindow
 
     private void DetachExperimentalAttachmentBeforeUserDrag()
     {
+        if (HasExperimentalWindowTether &&
+            !ExternalWindowNative.IsIdentityValid(_experimentalWindowAttachment!.ExternalWindow))
+        {
+            RetainUnavailableWindowTether();
+            return;
+        }
         if (_experimentalWindowAttachment != null)
         {
             DetachExperimentalWindowAttachment(savePosition: false);
@@ -1033,7 +1049,10 @@ public sealed partial class PaperWindow
         }
 
         DetachExperimentalWindowAttachment(savePosition: false);
-        SetExperimentalWindowAttachment(plan.Session);
+        SetExperimentalWindowAttachment(plan.Session with
+        {
+            TargetExecutablePath = ExternalWindowNative.GetExecutablePath(identity.ProcessId)
+        });
         _experimentalTetherReplanPending = false;
         // A tethered expanded paper owns its external-window edge instead of an
         // expanded edge-queue reservation. Reconcile through the existing queue
@@ -1136,11 +1155,19 @@ public sealed partial class PaperWindow
         var source = continuation.Session;
         if (!_controller.State.ExperimentalWindowTethering ||
             source.TargetKind !=
-                ExperimentalAttachmentTargetKind.ExternalWindow ||
-            !ExternalWindowNative.TryGetSnapshot(
-                source.ExternalWindow,
-                out var target))
+                ExperimentalAttachmentTargetKind.ExternalWindow)
         {
+            return;
+        }
+
+        if (!ExternalWindowNative.TryGetSnapshot(source.ExternalWindow, out var target))
+        {
+            if (source.Owner == ExperimentalAttachmentOwner.WindowTether)
+            {
+                SetExperimentalWindowAttachment(source);
+                RetainUnavailableWindowTether();
+                RefreshExperimentalAttachmentMenus();
+            }
             return;
         }
 
@@ -1175,11 +1202,16 @@ public sealed partial class PaperWindow
                 ExperimentalAttachmentTargetKind.ExternalWindow ||
             !_paper.IsCollapsed ||
             IsPaperFormTransitioning ||
-            !IsVisible ||
-            !ExternalWindowNative.TryGetSnapshot(
-                source.ExternalWindow,
-                out var target))
+            !IsVisible)
         {
+            return;
+        }
+
+        if (!ExternalWindowNative.TryGetSnapshot(source.ExternalWindow, out var target))
+        {
+            SetExperimentalWindowAttachment(source);
+            RetainUnavailableWindowTether();
+            RefreshExperimentalAttachmentMenus();
             return;
         }
 
@@ -1251,6 +1283,26 @@ public sealed partial class PaperWindow
         var isWindowTether =
             session.Owner == ExperimentalAttachmentOwner.WindowTether;
         if (isWindowTether &&
+            !ExternalWindowNative.IsIdentityValid(session.ExternalWindow))
+        {
+            RetainUnavailableWindowTether();
+            session = _experimentalWindowAttachment!;
+            if ((windowEvent.Kind & (ExternalWindowEventKind.Foreground |
+                    ExternalWindowEventKind.Shown | ExternalWindowEventKind.Uncloaked |
+                    ExternalWindowEventKind.MinimizeEnded)) == 0 ||
+                (windowEvent.Kind & ExternalWindowEventKind.Destroyed) != 0 ||
+                !ExternalWindowNative.TryGetProgramWindow(
+                    windowEvent.Handle, session.TargetExecutablePath, out var reopened))
+            {
+                return;
+            }
+
+            session = session with { ExternalWindow = reopened.Identity };
+            SetExperimentalWindowAttachment(session);
+            RefreshWindowBindingButton();
+            _controller.RequestExperimentalWindowFrames();
+        }
+        if (isWindowTether &&
             (windowEvent.Kind & ExternalWindowEventKind.Foreground) != 0 &&
             ExternalWindowNative.IsSameProcess(
                 session.ExternalWindow,
@@ -1281,7 +1333,14 @@ public sealed partial class PaperWindow
                 session.ExternalWindow,
                 out var snapshot))
         {
-            DetachExperimentalWindowAttachment(savePosition: true);
+            if (isWindowTether)
+            {
+                RetainUnavailableWindowTether();
+            }
+            else
+            {
+                DetachExperimentalWindowAttachment(savePosition: true);
+            }
             return;
         }
 
@@ -1445,7 +1504,10 @@ public sealed partial class PaperWindow
             return;
         }
 
-        SetExperimentalWindowAttachment(plan.Session);
+        SetExperimentalWindowAttachment(plan.Session with
+        {
+            TargetExecutablePath = session.TargetExecutablePath
+        });
         _experimentalTetherReplanPending = false;
         ApplyExperimentalAttachmentBounds(plan.WindowBounds);
         SaveGeometryForCurrentPresentation();
@@ -1506,14 +1568,39 @@ public sealed partial class PaperWindow
 
     internal void RestoreExperimentalTetherPresentationForExplicitShow()
     {
+        if (HasExperimentalWindowTether &&
+            !ExternalWindowNative.IsIdentityValid(_experimentalWindowAttachment!.ExternalWindow))
+        {
+            RetainUnavailableWindowTether();
+            return;
+        }
         if (!_experimentalTetherPresentationSuppressed)
         {
             return;
         }
 
-        // Explicit user show requests break a temporarily hidden binding instead
-        // of reviving the paper while its target is still unavailable.
+        // Explicit show still detaches from a live but minimized/hidden target.
+        // A closed app instead keeps its binding and exposes the reopen action.
         DetachExperimentalWindowAttachment(savePosition: true);
+    }
+
+    private void RetainUnavailableWindowTether()
+    {
+        var session = _experimentalWindowAttachment;
+        if (session?.Owner != ExperimentalAttachmentOwner.WindowTether)
+        {
+            return;
+        }
+
+        if (!session.ExternalWindow.IsEmpty)
+        {
+            PrepareExperimentalCapsuleFollowForDetach();
+            SetExperimentalWindowAttachment(session with { ExternalWindow = default });
+            ClearExperimentalCapsuleFollowPresentation();
+            RefreshExperimentalAttachmentMenus();
+        }
+        // The paper must remain reachable so its binding menu can reopen the app.
+        RestoreExperimentalTetherPresentation();
     }
 
     private void ReconcileExperimentalWindowAttachment(
@@ -1578,7 +1665,10 @@ public sealed partial class PaperWindow
                     ExperimentalTetherDragRegionHeightDip,
                     out var replanned))
             {
-                session = replanned.Session;
+                session = replanned.Session with
+                {
+                    TargetExecutablePath = session.TargetExecutablePath
+                };
                 desired = replanned.WindowBounds;
                 _experimentalTetherReplanPending = false;
             }
@@ -1724,14 +1814,7 @@ public sealed partial class PaperWindow
             return;
         }
 
-        if (!ExternalWindowNative.RestoreAndActivate(
-                session.ExternalWindow))
-        {
-            DetachExperimentalWindowAttachment(savePosition: true);
-            return;
-        }
-
-        RestoreExperimentalTetherPresentation();
+        OpenWindowBindingTarget();
     }
 
     private void RestoreExperimentalTetherPresentation()

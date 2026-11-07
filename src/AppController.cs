@@ -919,6 +919,23 @@ public sealed partial class AppController : IDisposable
         return false;
     }
 
+    internal IReadOnlyList<PaperData> GetPaperLinkTargets(PaperData paper) =>
+        State.Papers.Where(source => source.Type == PaperTypes.Todo &&
+            source.Items.Any(item => string.Equals(
+                item.LinkedPaperId, paper.Id, StringComparison.Ordinal)))
+            .ToArray();
+
+    internal void UnlinkPaperFromTodos(PaperData paper)
+    {
+        foreach (var target in GetPaperLinkTargets(paper))
+        {
+            // Keep one undo step per affected Todo, including a currently hidden
+            // paper whose editor has not been constructed yet.
+            GetOrCreatePaperWindow(target, deferShellConstruction: true)
+                .UnlinkPaperFromTodoItems(paper.Id);
+        }
+    }
+
     public bool CanPaperDisplayAsCapsule(PaperData paper)
     {
         if (!State.UseCapsuleMode)

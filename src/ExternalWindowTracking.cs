@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows.Threading;
+using Microsoft.Win32.SafeHandles;
 
 namespace PaperTodo;
 
@@ -18,7 +19,8 @@ internal enum ExternalWindowEventKind
     Uncloaked = 64,
     DesktopSwitched = 128,
     MoveSizeStarted = 256,
-    MoveSizeEnded = 512
+    MoveSizeEnded = 512,
+    Shown = 1024
 }
 
 internal readonly record struct ExternalWindowIdentity(
@@ -58,6 +60,7 @@ internal sealed class ExternalWindowTracker : IDisposable
     private const uint EventSystemMinimizeEnd = 0x0017;
     private const uint EventSystemDesktopSwitch = 0x0020;
     private const uint EventObjectDestroy = 0x8001;
+    private const uint EventObjectShow = 0x8002;
     private const uint EventObjectLocationChange = 0x800B;
     private const uint EventObjectCloaked = 0x8017;
     private const uint EventObjectUncloaked = 0x8018;
@@ -83,7 +86,7 @@ internal sealed class ExternalWindowTracker : IDisposable
         AddHook(EventSystemMoveSizeStart, EventSystemMoveSizeEnd);
         AddHook(EventSystemMinimizeStart, EventSystemMinimizeEnd);
         AddHook(EventSystemDesktopSwitch, EventSystemDesktopSwitch);
-        AddHook(EventObjectDestroy, EventObjectDestroy);
+        AddHook(EventObjectDestroy, EventObjectShow);
         AddHook(EventObjectLocationChange, EventObjectLocationChange);
         AddHook(EventObjectCloaked, EventObjectUncloaked);
     }
@@ -152,6 +155,7 @@ internal sealed class ExternalWindowTracker : IDisposable
             EventSystemMinimizeEnd => ExternalWindowEventKind.MinimizeEnded,
             EventSystemDesktopSwitch => ExternalWindowEventKind.DesktopSwitched,
             EventObjectDestroy => ExternalWindowEventKind.Destroyed,
+            EventObjectShow => ExternalWindowEventKind.Shown,
             EventObjectLocationChange => ExternalWindowEventKind.Location,
             EventObjectCloaked => ExternalWindowEventKind.Cloaked,
             EventObjectUncloaked => ExternalWindowEventKind.Uncloaked,
@@ -529,12 +533,69 @@ internal static class ExternalWindowNative
             return false;
         }
 
-        if (IsIconic(identity.Handle))
+        if (IsIconic(identity.Handle) || !IsWindowVisible(identity.Handle))
         {
             _ = ShowWindow(identity.Handle, SwRestore);
         }
 
         return SetForegroundWindow(identity.Handle);
+    }
+
+    public static string GetExecutablePath(uint processId)
+    {
+        using var process = OpenProcess(0x1000, false, processId); // PROCESS_QUERY_LIMITED_INFORMATION
+        if (process.IsInvalid)
+        {
+            return "";
+        }
+
+        var path = new StringBuilder(32768);
+        var length = path.Capacity;
+        return QueryFullProcessImageName(process, 0, path, ref length)
+            ? path.ToString() : "";
+    }
+
+    public static bool TryGetProgramWindow(
+        IntPtr handle,
+        string executablePath,
+        out ExternalWindowSnapshot snapshot)
+    {
+        snapshot = default;
+        return !string.IsNullOrWhiteSpace(executablePath) &&
+            TryGetSnapshot(handle, out snapshot) &&
+            snapshot.IsVisible && snapshot.Title.Length > 0 &&
+            HasApplicationWindowStyle(snapshot.Identity.Handle) &&
+            string.Equals(executablePath, GetExecutablePath(snapshot.Identity.ProcessId),
+                StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static bool TryFindProgramWindow(
+        string executablePath,
+        string previousTitle,
+        out ExternalWindowSnapshot snapshot)
+    {
+        snapshot = default;
+        if (string.IsNullOrWhiteSpace(executablePath))
+        {
+            return false;
+        }
+
+        ExternalWindowSnapshot? match = null;
+        _ = EnumWindows((handle, _) =>
+        {
+            if (TryGetProgramWindow(handle, executablePath, out var candidate))
+            {
+                if (string.Equals(candidate.Title, previousTitle, StringComparison.Ordinal))
+                {
+                    match = candidate;
+                    return false;
+                }
+                match ??= candidate;
+            }
+            return true;
+        }, IntPtr.Zero);
+        snapshot = match.GetValueOrDefault();
+        return match.HasValue;
     }
 
     private static bool IsSelectableTarget(
@@ -569,6 +630,11 @@ internal static class ExternalWindowNative
             return false;
         }
 
+        return HasApplicationWindowStyle(hwnd);
+    }
+
+    private static bool HasApplicationWindowStyle(IntPtr hwnd)
+    {
         var style = GetWindowLong(hwnd, GwlStyle);
         var exStyle = GetWindowLong(hwnd, GwlExStyle);
         if ((style & (WsChild | WsDisabled)) != 0 ||
@@ -789,6 +855,14 @@ internal static class ExternalWindowNative
 
     [DllImport("user32.dll")]
     private static extern bool SetForegroundWindow(IntPtr hwnd);
+
+    [DllImport("kernel32.dll")]
+    private static extern SafeProcessHandle OpenProcess(
+        uint desiredAccess, bool inheritHandle, uint processId);
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+    private static extern bool QueryFullProcessImageName(
+        SafeProcessHandle process, uint flags, StringBuilder path, ref int size);
 
     [DllImport("dwmapi.dll")]
     private static extern int DwmGetWindowAttribute(

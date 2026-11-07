@@ -1892,6 +1892,27 @@ public sealed partial class PaperWindow
         RefreshCapsuleEligibilityForLinkedPaperChanges(previousItems);
     }
 
+    internal void UnlinkPaperFromTodoItems(string linkedPaperId)
+    {
+        var items = _paper.Items.Where(item => string.Equals(
+            item.LinkedPaperId, linkedPaperId, StringComparison.Ordinal)).ToArray();
+        if (_paper.Type != PaperTypes.Todo || items.Length == 0)
+        {
+            return;
+        }
+
+        var focusedId = CurrentFocusedTodoItemId();
+        var previousItems = CloneItems(_paper.Items);
+        PushUndoSnapshot();
+        foreach (var item in items)
+        {
+            item.ClearQuickLaunch();
+        }
+        _controller.MarkDirty();
+        ReconcileTodoRows(items.Select(item => item.Id), focusedId);
+        RefreshCapsuleEligibilityForLinkedPaperChanges(previousItems);
+    }
+
     private void ClearPaperLinkDropTargetVisual()
     {
         var row = _linkedPaperDropRow;

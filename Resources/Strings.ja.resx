@@ -846,7 +846,7 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
     <value>ウィンドウ連携を有効にする</value>
   </data>
   <data name="TipLabsWindowTethering" xml:space="preserve">
-    <value>展開した付箋のタイトルバーにある連携ボタンを、別のアプリのウィンドウへドラッグします。Todo とノートの両方を連携でき、解除後は予約されていた端カプセルの位置も復元されます。</value>
+    <value>上部の連携アイコンを別アプリのウィンドウへドラッグすると連携します。折りたたみ・展開やアプリ終了後も連携を保持し、アイコンの右クリックからアプリを再起動できます。起動中の対象が最小化・非表示になると紙も一時的に隠れ、この状態で紙を手動表示すると連携を解除します。</value>
   </data>
   <data name="LabsWindowTetherPreferredEdge" xml:space="preserve">
     <value>連携位置</value>
@@ -885,7 +885,7 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
     <value>別のアプリのウィンドウへドラッグして連携</value>
   </data>
   <data name="ToolTipWindowBindingActiveFormat" xml:space="preserve">
-    <value>「{0}」と連携中。ドラッグで変更、右クリックで連携解除</value>
+    <value>「{0}」と連携中。ドラッグで変更、ダブルクリックで解除、右クリックで連携先を開くか解除</value>
   </data>
   <data name="WindowBindingDragHint" xml:space="preserve">
     <value>連携するアプリのウィンドウへドラッグ</value>
@@ -1776,4 +1776,25 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
   <data name="SettingsDataProcessing" xml:space="preserve"><value>データ処理</value></data>
   <data name="TipHideSurfaceOutline" xml:space="preserve"><value>紙片、カプセル、メニューの外枠線のみを隠します。大きさは変わらず、高コントラスト表示では枠線を維持します。</value></data>
   <data name="TipScriptCapsule" xml:space="preserve"><value>ノートの先頭行に !p などを記入し、2行目から PowerShell を記述します。折りたたんだカプセルをクリックすると実行できます。下の設定は上部バーのスクリプト実行にも適用されます。</value></data>
+  <data name="MenuCancelBinding" xml:space="preserve">
+    <value>連携を解除</value>
+  </data>
+  <data name="MenuOpenBindingTarget" xml:space="preserve">
+    <value>連携先を開く</value>
+  </data>
+  <data name="MenuOpenBindingNote" xml:space="preserve">
+    <value>連携先のノートを開く</value>
+  </data>
+  <data name="MenuOpenBindingTodo" xml:space="preserve">
+    <value>連携先のタスクを開く</value>
+  </data>
+  <data name="MenuOpenBindingProgram" xml:space="preserve">
+    <value>連携先のアプリを開く</value>
+  </data>
+  <data name="WindowBindingOpenFailureTitle" xml:space="preserve">
+    <value>連携先のアプリを開けません</value>
+  </data>
+  <data name="WindowBindingProgramUnavailable" xml:space="preserve">
+    <value>アプリの場所を取得できませんでした。起動中のウィンドウにもう一度連携してください。</value>
+  </data>
 </root>

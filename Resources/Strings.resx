@@ -872,7 +872,7 @@
     <value>启用窗口绑定</value>
   </data>
   <data name="TipLabsWindowTethering" xml:space="preserve">
-    <value>展开纸片后，把顶栏的窗口绑定按钮拖到其他软件窗口并松手，纸片会贴边并跟随移动。待办纸和笔记纸均可绑定；解除后会恢复原有贴边胶囊槽位。</value>
+    <value>把顶栏关联图标拖到其他软件窗口即可绑定；折叠与展开保留绑定。程序退出后绑定仍保留，可右键关联图标重新打开。目标窗口最小化或隐藏时纸片暂时隐藏；此时手动显示纸片会解除绑定。</value>
   </data>
   <data name="LabsWindowTetherPreferredEdge" xml:space="preserve">
     <value>绑定位置</value>
@@ -911,7 +911,7 @@
     <value>拖动到其他软件窗口以绑定</value>
   </data>
   <data name="ToolTipWindowBindingActiveFormat" xml:space="preserve">
-    <value>已绑定到「{0}」；拖动可改绑，右键可解除绑定</value>
+    <value>已绑定到「{0}」；拖动可改绑，双击取消绑定，右键打开目标或取消绑定</value>
   </data>
   <data name="WindowBindingDragHint" xml:space="preserve">
     <value>拖到要绑定的软件窗口</value>
@@ -1855,4 +1855,25 @@
   <data name="SettingsDataProcessing" xml:space="preserve"><value>数据处理</value></data>
   <data name="TipHideSurfaceOutline" xml:space="preserve"><value>隐藏纸片、胶囊和菜单边缘的细描边，不改变大小；高对比度模式仍保留轮廓。</value></data>
   <data name="TipScriptCapsule" xml:space="preserve"><value>在笔记第一行写 !p 等指令，从第二行写 PowerShell；折叠后点击胶囊即可运行。下方设置也适用于顶栏「运行脚本」。</value></data>
+  <data name="MenuCancelBinding" xml:space="preserve">
+    <value>取消绑定</value>
+  </data>
+  <data name="MenuOpenBindingTarget" xml:space="preserve">
+    <value>打开绑定目标</value>
+  </data>
+  <data name="MenuOpenBindingNote" xml:space="preserve">
+    <value>打开目标笔记</value>
+  </data>
+  <data name="MenuOpenBindingTodo" xml:space="preserve">
+    <value>打开目标待办</value>
+  </data>
+  <data name="MenuOpenBindingProgram" xml:space="preserve">
+    <value>打开目标程序</value>
+  </data>
+  <data name="WindowBindingOpenFailureTitle" xml:space="preserve">
+    <value>无法打开目标程序</value>
+  </data>
+  <data name="WindowBindingProgramUnavailable" xml:space="preserve">
+    <value>未能读取目标程序的位置，请重新绑定正在运行的程序。</value>
+  </data>
 </root>
