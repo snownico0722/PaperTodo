@@ -185,10 +185,10 @@ public sealed partial class AppController
 
     private string HideEdgeCapsuleCloseButtonOnHoverTip() =>
         SettingsSidebarLocalized(
-            "开启后，普通边缘胶囊在悬停或激活时不显示关闭按钮，也不保留关闭区域；需要关闭时可在右键菜单中选择「隐藏」。",
-            "When enabled, ordinary edge capsules remove both the close button and its reserved strip while hovered or active. Use Hide in the context menu to close one.",
-            "有効にすると、通常のエッジカプセルはホバー／アクティブ時に閉じるボタンとその予約領域を表示しません。閉じる場合は右クリックメニューの「隠す」を使います。",
-            "켜면 일반 가장자리 캡슐은 호버/활성 상태에서 닫기 버튼과 그 예약 영역을 함께 제거합니다. 닫으려면 오른쪽 클릭 메뉴에서 '숨기기'를 사용하세요.");
+            "开启后，普通边缘胶囊在悬停或激活时不显示关闭按钮，也不保留关闭区域；需要隐藏时可在右键菜单中选择「隐藏」。",
+            "When enabled, ordinary edge capsules show neither the close button nor its reserved area while hovered or active. To hide one, choose Hide in its context menu.",
+            "有効にすると、通常の端のカプセルはホバー中やアクティブ時に閉じるボタンもその領域も表示しません。隠すには右クリックメニューから「非表示」を選びます。",
+            "켜면 일반 가장자리 캡슐은 마우스 오버나 활성 상태에서 닫기 버튼과 그 영역을 표시하지 않습니다. 숨기려면 오른쪽 클릭 메뉴에서 '숨김'을 선택하세요.");
 
     private void RestoreSettingsSidebarGeneralDefaults()
     {
