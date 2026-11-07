@@ -81,6 +81,19 @@ public sealed partial class PaperWindow
 
     private void OnTodoSelectionWindowPreviewKeyDown(object sender, KeyEventArgs e)
     {
+        if (e.Key == Key.Back &&
+            Keyboard.Modifiers == ModifierKeys.None &&
+            _selectedTodoItemIds.Count > 1 &&
+            FocusManager.GetFocusedElement(this) is not TodoTextBox { SelectionLength: > 0 })
+        {
+            // Whole-row sweep selection has no native TextBox range. Reuse the existing
+            // batch delete so Backspace is one undoable operation.
+            CancelTodoSweepSelection(clearSelection: false);
+            DeleteSelectedTodoItems();
+            e.Handled = true;
+            return;
+        }
+
         if (e.Key == Key.C &&
             Keyboard.Modifiers == ModifierKeys.Control &&
             TryCopySelectedTodoItems())
