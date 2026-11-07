@@ -253,12 +253,6 @@ public sealed partial class AppController
             SettingEffects.Fullscreen,
             title: Strings.Get("SettingsFullscreenTopmostMode"),
             options: ["avoid", "stayOnTop"]);
-        yield return DefineSetting<string>("window.resize_grip",
-            () => State.ResizeGripMode,
-            value => State.ResizeGripMode = value,
-            SettingEffects.Resize,
-            title: Strings.Get("SettingsResizeGripMode"),
-            options: ["standard", "soft", "hidden"]);
         yield return DefineSetting<bool>("capsule.enabled",
             () => State.UseCapsuleMode,
             value => State.UseCapsuleMode = value,
