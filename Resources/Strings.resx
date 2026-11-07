@@ -658,7 +658,7 @@
     <value>开机时自动启动 PaperTodo。</value>
   </data>
   <data name="SettingsEnableToolTips" xml:space="preserve">
-    <value>显示悬停提示</value>
+    <value>开启悬停提示</value>
   </data>
   <data name="SettingsHidePapersFromTaskbar" xml:space="preserve">
     <value>从任务栏隐藏图标</value>
@@ -680,16 +680,16 @@
 设置页的说明图标始终可用。</value>
   </data>
   <data name="SettingsEnableAnimations" xml:space="preserve">
-    <value>启用动画效果</value>
+    <value>开启过渡动画</value>
   </data>
   <data name="TipEnableAnimations" xml:space="preserve">
     <value>常见操作使用过渡动画；关闭后响应更直接。</value>
   </data>
   <data name="SettingsFastAnimations" xml:space="preserve">
-    <value>快速动画</value>
+    <value>开启快速动画</value>
   </data>
   <data name="TipFastAnimations" xml:space="preserve">
-    <value>将界面动画时长缩短至约 60%，保留过渡效果但让操作响应更快。关闭“启用动画效果”时此设置不生效。</value>
+    <value>将界面动画时长缩短至约 60%，保留过渡效果但让操作响应更快。关闭“开启过渡动画”时此设置不生效。</value>
   </data>
   <data name="TipPersistentPowerShellProcess" xml:space="preserve">
     <value>!pf / !powerf 使用常驻进程，启动更快，但变量与状态可能跨脚本保留。
@@ -1560,7 +1560,7 @@
     <value>插件操作</value>
   </data>
   <data name="TopBarSettingsTitle" xml:space="preserve">
-    <value>顶栏快捷</value>
+    <value>顶栏快捷操作</value>
   </data>
   <data name="TipTopBarShortcutSettings" xml:space="preserve">
     <value>可以拖动快捷操作调整顺序，也可以拖过分割线，将它们放到顶栏或菜单中。
@@ -1571,7 +1571,7 @@
     <value>显示在顶栏</value>
   </data>
   <data name="TopBarMenuHeading" xml:space="preserve">
-    <value>显示在菜单</value>
+    <value>显示在扩展菜单</value>
   </data>
   <data name="TopBarEmptyDropArea" xml:space="preserve">
     <value>拖动快捷项到这里</value>
@@ -1853,4 +1853,6 @@
   <data name="MenuTopBarAssociationDragWindow" xml:space="preserve"><value>拖到窗口以关联</value></data>
   <data name="WorkspaceDataSettingsTitle" xml:space="preserve"><value>工作区与数据</value></data>
   <data name="SettingsDataProcessing" xml:space="preserve"><value>数据处理</value></data>
+  <data name="TipHideSurfaceOutline" xml:space="preserve"><value>隐藏纸片、胶囊和菜单边缘的细描边，不改变大小；高对比度模式仍保留轮廓。</value></data>
+  <data name="TipScriptCapsule" xml:space="preserve"><value>在笔记第一行写 !p 等指令，从第二行写 PowerShell；折叠后点击胶囊即可运行。下方设置也适用于顶栏「运行脚本」。</value></data>
 </root>

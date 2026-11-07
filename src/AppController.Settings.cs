@@ -1555,22 +1555,15 @@ public sealed partial class AppController
         leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsColorScheme")), "TipColorScheme"));
         leftColumn.Children.Add(CreateColorSchemeSegmentSelector());
         leftColumn.Children.Add(CreateSkinSettings());
-        void AddVisualToggle(string labelKey, string tipKey, bool value, Action toggle)
-        {
-            var option = SettingsToggle(Strings.Get(labelKey), value, toggle);
-            option.ToolTip = BuildSettingsHintTooltip(Strings.Get(tipKey));
-            ToolTipPreferences.SetAlwaysEnabled(option, true);
-            ToolTipService.SetShowOnDisabled(option, true);
-            leftColumn.Children.Add(WrapWithHint(option, tipKey));
-        }
-        AddVisualToggle("SettingsEnableAnimations", "TipEnableAnimations",
-            State.EnableAnimations, ToggleAnimations);
-        AddVisualToggle("SettingsFastAnimations", "TipFastAnimations",
-            State.FastAnimations, ToggleFastAnimations);
-        AddVisualToggle("SettingsEnableToolTips", "TipEnableToolTips",
-            State.EnableToolTips, ToggleToolTips);
         leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsDeepCapsuleGap")), "TipDeepCapsuleGap"));
         leftColumn.Children.Add(CreateDeepCapsuleGapSegmentSelector());
+        leftColumn.Children.Add(SettingsSoftDivider());
+        leftColumn.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("SettingsEnableToolTips"),
+            State.EnableToolTips, ToggleToolTips), "TipEnableToolTips"));
+        leftColumn.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("SettingsEnableAnimations"),
+            State.EnableAnimations, ToggleAnimations), "TipEnableAnimations"));
+        leftColumn.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("SettingsFastAnimations"),
+            State.FastAnimations, ToggleFastAnimations), "TipFastAnimations"));
         rightColumn.Children.Add(SettingsSectionLabel(Strings.Get("SettingsFontGroup")));
         rightColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsUiFont")), "TipUiFont"));
         rightColumn.Children.Add(CreateUiFontPresetSegmentSelector());
@@ -2061,22 +2054,6 @@ public sealed partial class AppController
     private UIElement WrapWithHint(FrameworkElement option, ToolTip tooltip)
     {
         var grid = new Grid { Margin = new Thickness(0, 4, 0, 0) };
-        if (tooltip.Content is TextBlock description)
-        {
-            var disabledTooltip = BuildSettingsHintTooltip(description.Text);
-            ToolTipService.SetShowOnDisabled(grid, true);
-            ToolTipPreferences.SetAlwaysEnabled(grid, true);
-            ToolTipService.SetInitialShowDelay(grid, 200);
-            ToolTipService.SetShowDuration(grid, 20000);
-            ToolTipService.SetBetweenShowDelay(grid, 0);
-
-            void RefreshDisabledHint() =>
-                grid.ToolTip = !grid.IsEnabled || !option.IsEnabled ? disabledTooltip : null;
-
-            grid.IsEnabledChanged += (_, _) => RefreshDisabledHint();
-            option.IsEnabledChanged += (_, _) => RefreshDisabledHint();
-            RefreshDisabledHint();
-        }
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
@@ -2155,7 +2132,7 @@ public sealed partial class AppController
 
     private void RefreshSettingsCapsuleToggleStates() =>
         RefreshSettingsRegions("general.capsules", "general.edgeBrowsing",
-            "general.edgeTopmost", "general.capsuleAppearance");
+            "general.capsuleAppearance");
 
     private void RefreshSettingsSystemVisibilityToggleStates()
     {

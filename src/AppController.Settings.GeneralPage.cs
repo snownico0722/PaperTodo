@@ -27,12 +27,6 @@ public sealed partial class AppController
         rightColumn.Children.Add(BuildSettingsLiveRegion("general.capsules", BuildSettingsCapsuleOptions));
         rightColumn.Children.Add(BuildSettingsLiveRegion(
             "general.edgeBrowsing", BuildLabsEdgeCapsuleHoverIntentSettings));
-        rightColumn.Children.Add(BuildSettingsLiveRegion("general.edgeTopmost", () =>
-            State.UseCapsuleMode && State.UseDeepCapsuleMode
-                ? WrapWithHint(SettingsToggle(Strings.Get("LabsDockedCapsulesNonTopmost"),
-                    State.ExperimentalDockedCapsulesNonTopmost, ToggleExperimentalDockedCapsulesNonTopmost),
-                    "TipLabsDockedCapsulesNonTopmost")
-                : new StackPanel()));
         if (State.AdvancedSettingsMode)
             rightColumn.Children.Add(BuildSettingsLiveRegion(
                 "general.capsuleAppearance", BuildSettingsCapsuleAppearanceOptions));
@@ -69,6 +63,8 @@ public sealed partial class AppController
         Add("TrayDeepCapsuleMode", State.UseDeepCapsuleMode, ToggleDeepCapsuleMode, "TipDeepCapsuleMode");
         if (State.UseDeepCapsuleMode)
         {
+            Add("LabsDockedCapsulesNonTopmost", State.ExperimentalDockedCapsulesNonTopmost,
+                ToggleExperimentalDockedCapsulesNonTopmost, "TipLabsDockedCapsulesNonTopmost");
             Add("SettingsShowDeepCapsuleWhileExpanded", State.ShowDeepCapsuleWhileExpanded,
                 ToggleDeepCapsuleExpandedSlot, "TipShowDeepCapsuleWhileExpanded");
             Add("SettingsRememberDeepCapsuleExpandedPosition", State.RememberDeepCapsuleExpandedPosition,
@@ -127,9 +123,6 @@ public sealed partial class AppController
             "general.telemetry",
             CreateAnonymousUsageStatisticsSettingsRow));
 
-        leftColumn.Children.Add(BuildSettingsLiveRegion(
-            "general.topbar", BuildTopBarShortcutSettings));
-
         if (State.AdvancedSettingsMode)
         {
             leftColumn.Children.Add(SettingsSectionLabel(
@@ -156,6 +149,10 @@ public sealed partial class AppController
                     tipKey: "TipFullscreenTopmostMode",
                     topMargin: 8)));
         }
+
+        leftColumn.Children.Add(SettingsSoftDivider());
+        leftColumn.Children.Add(BuildSettingsLiveRegion(
+            "general.topbar", BuildTopBarShortcutSettings));
 
         RefreshSettingsSystemVisibilityToggleStates();
         return leftColumn;

@@ -632,7 +632,7 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
     <value>Windows 起動時に PaperTodo を自動起動します。</value>
   </data>
   <data name="SettingsEnableToolTips" xml:space="preserve">
-    <value>ホバー時のヒントを表示</value>
+    <value>ホバー時のヒントを有効化</value>
   </data>
   <data name="SettingsHidePapersFromTaskbar" xml:space="preserve">
     <value>タスクバーからアイコンを隠す</value>
@@ -653,13 +653,13 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
 設定の説明アイコンは常に使えます。</value>
   </data>
   <data name="SettingsEnableAnimations" xml:space="preserve">
-    <value>アニメーションを有効化</value>
+    <value>画面遷移のアニメを有効化</value>
   </data>
   <data name="TipEnableAnimations" xml:space="preserve">
     <value>よく使う操作に遷移アニメーションを付けます。オフにすると反応がより直接的になります。</value>
   </data>
   <data name="SettingsFastAnimations" xml:space="preserve">
-    <value>高速アニメーション</value>
+    <value>高速アニメを有効化</value>
   </data>
   <data name="TipFastAnimations" xml:space="preserve">
     <value>画面アニメーションの時間を通常の約 60% に短縮し、遷移効果を残したまま操作を素早くします。「アニメーションを有効化」がオフの場合は適用されません。</value>
@@ -1488,7 +1488,7 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
     <value>プラグイン操作</value>
   </data>
   <data name="TopBarSettingsTitle" xml:space="preserve">
-    <value>上部バーのショートカット</value>
+    <value>上部バーの操作</value>
   </data>
   <data name="TipTopBarShortcutSettings" xml:space="preserve">
     <value>ショートカットをドラッグして並べ替え、区切り線を越えて上部バーとメニューの間を移動できます。「非表示」を選ぶと、上部バーと紙片メニューからその操作が隠れます。上部バーに空きがなくなると、ショートカットは一時的にまとめてメニューへ移動します。</value>
@@ -1497,7 +1497,7 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
     <value>上部バーに表示</value>
   </data>
   <data name="TopBarMenuHeading" xml:space="preserve">
-    <value>メニューに表示</value>
+    <value>拡張メニューに表示</value>
   </data>
   <data name="TopBarEmptyDropArea" xml:space="preserve">
     <value>ここにドラッグ</value>
@@ -1774,4 +1774,6 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
   <data name="MenuTopBarAssociationDragWindow" xml:space="preserve"><value>ウィンドウへドラッグして関連付け</value></data>
   <data name="WorkspaceDataSettingsTitle" xml:space="preserve"><value>ワークスペースとデータ</value></data>
   <data name="SettingsDataProcessing" xml:space="preserve"><value>データ処理</value></data>
+  <data name="TipHideSurfaceOutline" xml:space="preserve"><value>紙片、カプセル、メニューの外枠線のみを隠します。大きさは変わらず、高コントラスト表示では枠線を維持します。</value></data>
+  <data name="TipScriptCapsule" xml:space="preserve"><value>ノートの先頭行に !p などを記入し、2行目から PowerShell を記述します。折りたたんだカプセルをクリックすると実行できます。下の設定は上部バーのスクリプト実行にも適用されます。</value></data>
 </root>

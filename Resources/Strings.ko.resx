@@ -632,7 +632,7 @@ PaperTodo를 수동으로 다시 여세요. 문제가 반복되면 PC를 다시 
     <value>Windows 시작 시 PaperTodo를 자동 실행합니다.</value>
   </data>
   <data name="SettingsEnableToolTips" xml:space="preserve">
-    <value>호버 도움말 표시</value>
+    <value>호버 도움말 켜기</value>
   </data>
   <data name="SettingsHidePapersFromTaskbar" xml:space="preserve">
     <value>작업 표시줄에서 아이콘 숨기기</value>
@@ -653,13 +653,13 @@ PaperTodo를 수동으로 다시 여세요. 문제가 반복되면 PC를 다시 
 설정 설명 아이콘은 항상 사용할 수 있습니다.</value>
   </data>
   <data name="SettingsEnableAnimations" xml:space="preserve">
-    <value>애니메이션 효과 사용</value>
+    <value>전환 애니메이션 켜기</value>
   </data>
   <data name="TipEnableAnimations" xml:space="preserve">
     <value>자주 쓰는 작업에 전환 애니메이션을 적용합니다. 끄면 반응이 더 직접적입니다.</value>
   </data>
   <data name="SettingsFastAnimations" xml:space="preserve">
-    <value>빠른 애니메이션</value>
+    <value>빠른 애니메이션 켜기</value>
   </data>
   <data name="TipFastAnimations" xml:space="preserve">
     <value>화면 애니메이션 시간을 기본의 약 60%로 줄여 전환 효과는 유지하면서 더 빠르게 반응합니다. “애니메이션 효과 사용”이 꺼져 있으면 적용되지 않습니다.</value>
@@ -1488,7 +1488,7 @@ PaperTodo를 수동으로 다시 여세요. 문제가 반복되면 PC를 다시 
     <value>플러그인 작업</value>
   </data>
   <data name="TopBarSettingsTitle" xml:space="preserve">
-    <value>상단 바 바로가기</value>
+    <value>상단 바 빠른 작업</value>
   </data>
   <data name="TipTopBarShortcutSettings" xml:space="preserve">
     <value>단축 동작을 드래그해 순서를 바꾸거나 구분선을 넘어 상단 표시줄과 메뉴 사이로 이동할 수 있습니다. '숨김'을 선택하면 해당 동작이 상단 표시줄과 메모 메뉴에서 숨겨집니다. 상단 공간이 부족하면 단축 동작들이 임시로 메뉴에 모입니다.</value>
@@ -1497,7 +1497,7 @@ PaperTodo를 수동으로 다시 여세요. 문제가 반복되면 PC를 다시 
     <value>상단 바에 표시</value>
   </data>
   <data name="TopBarMenuHeading" xml:space="preserve">
-    <value>메뉴에 표시</value>
+    <value>확장 메뉴에 표시</value>
   </data>
   <data name="TopBarEmptyDropArea" xml:space="preserve">
     <value>항목을 여기로 끌기</value>
@@ -1774,4 +1774,6 @@ PaperTodo를 수동으로 다시 여세요. 문제가 반복되면 PC를 다시 
   <data name="MenuTopBarAssociationDragWindow" xml:space="preserve"><value>창으로 끌어서 연결</value></data>
   <data name="WorkspaceDataSettingsTitle" xml:space="preserve"><value>작업 공간·데이터</value></data>
   <data name="SettingsDataProcessing" xml:space="preserve"><value>데이터 처리</value></data>
+  <data name="TipHideSurfaceOutline" xml:space="preserve"><value>메모, 캡슐, 메뉴의 바깥 테두리만 숨깁니다. 크기는 변하지 않으며 고대비 모드에서는 테두리를 유지합니다.</value></data>
+  <data name="TipScriptCapsule" xml:space="preserve"><value>메모 첫 줄에 !p 등의 명령을 쓰고 다음 줄부터 PowerShell을 작성하세요. 접힌 캡슐을 클릭해 실행할 수 있습니다. 아래 설정은 상단 바의 스크립트 실행에도 적용됩니다.</value></data>
 </root>

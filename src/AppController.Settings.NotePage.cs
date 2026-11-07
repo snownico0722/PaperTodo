@@ -58,7 +58,7 @@ public sealed partial class AppController
                     "TipAutoCompressLargeImages"))));
 
             content.Children.Add(BuildSettingsLiveRegion("note.scripts", () => AdvancedSettingsBlock(
-                SettingsSectionLabel(Strings.Get("SettingsScriptCapsule")),
+                SettingsSectionLabelWithHint(Strings.Get("SettingsScriptCapsule"), "TipScriptCapsule"),
                 WrapWithHint(
                     WrappingSettingsToggle(
                         Strings.Get("SettingsPersistentPowerShellProcess"),

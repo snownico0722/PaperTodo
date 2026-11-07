@@ -619,7 +619,7 @@ Error: {0}</value>
     <value>Start PaperTodo when Windows signs in.</value>
   </data>
   <data name="SettingsEnableToolTips" xml:space="preserve">
-    <value>Show hover hints</value>
+    <value>Enable hover hints</value>
   </data>
   <data name="SettingsHidePapersFromTaskbar" xml:space="preserve">
     <value>Hide icons from taskbar</value>
@@ -640,13 +640,13 @@ Also forced on when “Hide papers in task switcher” is on.</value>
 Settings info icons always stay available.</value>
   </data>
   <data name="SettingsEnableAnimations" xml:space="preserve">
-    <value>Enable animations</value>
+    <value>Enable transition animations</value>
   </data>
   <data name="TipEnableAnimations" xml:space="preserve">
     <value>Transition animations for common actions; off feels more immediate.</value>
   </data>
   <data name="SettingsFastAnimations" xml:space="preserve">
-    <value>Fast animations</value>
+    <value>Enable fast animations</value>
   </data>
   <data name="TipFastAnimations" xml:space="preserve">
     <value>Shorten interface animations to about 60% of their normal duration for faster responses while keeping transitions. This has no effect when animations are disabled.</value>
@@ -1488,7 +1488,7 @@ When off, open at the docked edge or remembered position.</value>
     <value>Plugin actions</value>
   </data>
   <data name="TopBarSettingsTitle" xml:space="preserve">
-    <value>Top-bar shortcuts</value>
+    <value>Title-bar actions</value>
   </data>
   <data name="TipTopBarShortcutSettings" xml:space="preserve">
     <value>Drag shortcuts to reorder them, or move them across the divider to place them in the top bar or menu. Checking Hide removes the action from both the top bar and paper menus. If the top bar runs out of space, its shortcuts temporarily move into the menu.</value>
@@ -1497,7 +1497,7 @@ When off, open at the docked edge or remembered position.</value>
     <value>Show in title bar</value>
   </data>
   <data name="TopBarMenuHeading" xml:space="preserve">
-    <value>Show in menu</value>
+    <value>Show in overflow menu</value>
   </data>
   <data name="TopBarEmptyDropArea" xml:space="preserve">
     <value>Drag an action here</value>
@@ -1774,4 +1774,6 @@ Resolve the file access problem and retry, or choose “Rebuild workspace” to 
   <data name="MenuTopBarAssociationDragWindow" xml:space="preserve"><value>Drag to a window to associate</value></data>
   <data name="WorkspaceDataSettingsTitle" xml:space="preserve"><value>Spaces &amp; Data</value></data>
   <data name="SettingsDataProcessing" xml:space="preserve"><value>Data handling</value></data>
+  <data name="TipHideSurfaceOutline" xml:space="preserve"><value>Hide the thin outer border on papers, capsules and menus without changing their size. Borders stay visible in high-contrast mode.</value></data>
+  <data name="TipScriptCapsule" xml:space="preserve"><value>Start a note with !p or another script prefix, then write PowerShell below. Click the collapsed capsule to run it. These settings also apply to the title-bar Run Script action.</value></data>
 </root>
