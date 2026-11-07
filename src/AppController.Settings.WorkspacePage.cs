@@ -173,7 +173,7 @@ public sealed partial class AppController
         };
         content.Children.Add(permissions);
         permissions.Children.Add(WrapWithHint(
-            SettingsToggle(
+            WrappingSettingsToggle(
                 Strings.Get("LabsMcpEnable"),
                 State.McpEnabled,
                 ToggleMcpEnabled),
@@ -184,7 +184,7 @@ public sealed partial class AppController
             Opacity = State.McpEnabled ? 1.0 : 0.55
         };
         permissions.Children.Add(permissionChoices);
-        var blankWrites = SettingsToggle(
+        var blankWrites = WrappingSettingsToggle(
             Strings.Get("LabsMcpBlankWrites"),
             State.McpAllowBlankWrites || State.McpAllowFullWrites,
             ToggleMcpBlankWrites);
@@ -193,12 +193,12 @@ public sealed partial class AppController
             blankWrites,
             "TipLabsMcpBlankWrites"));
         permissionChoices.Children.Add(WrapWithHint(
-            SettingsToggle(
+            WrappingSettingsToggle(
                 Strings.Get("LabsMcpFullWrites"),
                 State.McpAllowFullWrites,
                 ToggleMcpFullWrites),
             "TipLabsMcpFullWrites"));
-        var directDeletes = SettingsToggle(
+        var directDeletes = WrappingSettingsToggle(
             Strings.Get("LabsMcpDeletes"),
             State.McpAllowDeletes,
             ToggleMcpDeletes);
@@ -400,23 +400,22 @@ public sealed partial class AppController
             else if (e.Key == Key.Escape) { ExitEditing(); e.Handled = true; }
         };
 
-        var controls = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            VerticalAlignment = VerticalAlignment.Center
-        };
+        var controls = new Grid { VerticalAlignment = VerticalAlignment.Center };
+        controls.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        controls.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         if (slot > 1)
         {
-            var follow = SettingsToggle(Strings.Get("WorkspaceFollowMain"),
+            var follow = WrappingSettingsToggle(Strings.Get("WorkspaceFollowMain"),
                 WorkspaceOptions.FollowsMain(slot), async () =>
                 {
                     var next = WorkspaceOptions.Normalized();
                     next.FollowMainSettings[slot] = !next.FollowsMain(slot);
                     await ChangeWorkspaceConfigurationAsync(next);
                 });
-            follow.Margin = new Thickness(9, 0, 7, 0);
+            follow.Margin = new Thickness(0, 0, 7, 0);
             follow.FontSize = AppTypography.Scale(11.5);
             follow.VerticalAlignment = VerticalAlignment.Center;
+            Grid.SetColumn(follow, 0);
             controls.Children.Add(follow);
 
             var delete = PluginPageButton(WorkspaceUi("删除", "Delete", "削除", "삭제"));
@@ -425,12 +424,12 @@ public sealed partial class AppController
             delete.Padding = new Thickness(5, 1, 5, 1);
             delete.VerticalAlignment = VerticalAlignment.Center;
             delete.Click += async (_, _) => await DeleteWorkspaceFromSettingsAsync(slot);
+            Grid.SetColumn(delete, 1);
             controls.Children.Add(delete);
         }
         if (slot > 1)
         {
             controls.Margin = new Thickness(0, 4, 0, 0);
-            controls.HorizontalAlignment = HorizontalAlignment.Right;
             line.Children.Add(controls);
         }
         card.Child = line;
