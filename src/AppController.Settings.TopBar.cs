@@ -362,7 +362,7 @@ public sealed partial class AppController
                 "M 21 13 V 19 A 2 2 0 0 1 19 21 H 5 " +
                 "A 2 2 0 0 1 3 19 V 5 A 2 2 0 0 1 5 3 H 11",
             PaperTopBarShortcuts.Workspace => WorkspaceCycleIcon.PathData,
-            PaperTopBarShortcuts.RunScript => "M 5 5 H 19 V 19 H 5 Z M 8 9 L 11 12 L 8 15 M 13 15 H 16",
+            PaperTopBarShortcuts.RunScript => PaperWindow.RunScriptIconPath,
             _ => null
         };
         // Both font glyphs and vector paths live in the same centered slot.

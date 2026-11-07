@@ -240,20 +240,22 @@ public sealed partial class AppController
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(9, 0, 0, 0)
         };
-        copyJson.Click += (_, _) =>
+        async Task CopyAsync(string text)
         {
-            feedback.Text = ClipboardHelper.TrySetText(
-                BuildJsonMcpConfiguration())
-                ? Strings.Get("LabsMcpCopied")
-                : Strings.Get("LabsMcpCopyFailed");
-        };
-        copySkill.Click += (_, _) =>
-        {
-            feedback.Text = ClipboardHelper.TrySetText(
-                BuildAiMcpSkill())
-                ? Strings.Get("LabsMcpCopied")
-                : Strings.Get("LabsMcpCopyFailed");
-        };
+            copySkill.IsEnabled = copyJson.IsEnabled = false;
+            feedback.Text = string.Empty;
+            try
+            {
+                var copied = await ClipboardHelper.TrySetTextAsync(text);
+                feedback.Text = Strings.Get(copied ? "LabsMcpCopied" : "LabsMcpCopyFailed");
+            }
+            finally
+            {
+                copySkill.IsEnabled = copyJson.IsEnabled = true;
+            }
+        }
+        copyJson.Click += async (_, _) => await CopyAsync(BuildJsonMcpConfiguration());
+        copySkill.Click += async (_, _) => await CopyAsync(BuildAiMcpSkill());
         actions.Children.Add(copyJson);
         actions.Children.Add(copySkill);
         actions.Children.Add(feedback);
@@ -280,13 +282,7 @@ public sealed partial class AppController
         AutomationProperties.SetAutomationId(card, "WorkspaceSlot" + slot);
         AutomationProperties.SetName(card, label + " #" + slot);
 
-        var line = new StackPanel();
-
-        // Keep the name/editor inside the available column width at larger font scales.
-        var nameRow = new Grid { VerticalAlignment = VerticalAlignment.Center };
-        nameRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        nameRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        nameRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var line = new WrapPanel();
         var name = new TextBlock
         {
             Text = label,
@@ -294,14 +290,13 @@ public sealed partial class AppController
             FontWeight = isSelected ? FontWeights.SemiBold : FontWeights.Normal,
             Foreground = TrayTextBrush,
             VerticalAlignment = VerticalAlignment.Center,
-            MaxWidth = AppTypography.Scale(132),
+            HorizontalAlignment = HorizontalAlignment.Left,
             TextTrimming = TextTrimming.CharacterEllipsis
         };
         var editor = new TextBox
         {
             Text = label,
-            MaxWidth = AppTypography.Scale(132),
-            HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalAlignment = HorizontalAlignment.Left,
             MaxLength = 64,
             Height = AppTypography.FitChrome(28),
             FontSize = AppTypography.Scale(12),
@@ -310,7 +305,7 @@ public sealed partial class AppController
             Background = Brushes.Transparent,
             BorderBrush = TrayBorderBrush,
             BorderThickness = new Thickness(1),
-            Padding = new Thickness(8, 4, 8, 4),
+            Padding = new Thickness(2, 1, 2, 1),
             VerticalContentAlignment = VerticalAlignment.Center,
             Style = BuildSettingsTextBoxStyle(),
             Visibility = Visibility.Collapsed
@@ -321,11 +316,11 @@ public sealed partial class AppController
             Foreground = TrayWeakTextBrush,
             FontSize = AppTypography.Scale(11.5),
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(7, 0, 3, 0)
+            Margin = new Thickness(4, 0, 1, 0)
         };
         var rename = PluginPageButton("✎");
-        rename.MinWidth = 27;
-        rename.Width = 27;
+        rename.MinWidth = 22;
+        rename.Width = 22;
         rename.Height = 25;
         rename.Padding = new Thickness(3, 1, 3, 1);
         rename.FontFamily = AppTypography.SymbolFontFamily;
@@ -334,15 +329,16 @@ public sealed partial class AppController
         AutomationProperties.SetAutomationId(rename, "WorkspaceRename" + slot);
         AutomationProperties.SetName(rename, WorkspaceUi("编辑工作区名称", "Edit workspace name",
             "ワークスペース名を編集", "작업 공간 이름 편집"));
-        Grid.SetColumn(name, 0);
-        Grid.SetColumn(editor, 0);
-        Grid.SetColumn(numberLabel, 1);
-        Grid.SetColumn(rename, 2);
-        nameRow.Children.Add(name);
-        nameRow.Children.Add(editor);
-        nameRow.Children.Add(numberLabel);
-        nameRow.Children.Add(rename);
-        line.Children.Add(nameRow);
+        var renameActions = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        renameActions.Children.Add(numberLabel);
+        renameActions.Children.Add(rename);
+        line.Children.Add(name);
+        line.Children.Add(editor);
+        line.Children.Add(renameActions);
 
         var editing = false;
         Action<DependencyObject?>? outsideClick = null;
@@ -400,11 +396,12 @@ public sealed partial class AppController
             else if (e.Key == Key.Escape) { ExitEditing(); e.Handled = true; }
         };
 
-        var controls = new Grid { VerticalAlignment = VerticalAlignment.Center };
-        controls.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        controls.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         if (slot > 1)
         {
+            renameActions.Margin = new Thickness(0, 0, 6, 0);
+            var controls = new Grid { VerticalAlignment = VerticalAlignment.Center };
+            controls.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            controls.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             var follow = WrappingSettingsToggle(Strings.Get("WorkspaceFollowMain"),
                 WorkspaceOptions.FollowsMain(slot), async () =>
                 {
@@ -416,22 +413,18 @@ public sealed partial class AppController
             follow.VerticalAlignment = VerticalAlignment.Center;
             var followWithHint = WrapWithHint(follow, "WorkspaceFollowHint");
             if (followWithHint is FrameworkElement followRow)
-                followRow.Margin = new Thickness(0, 0, 7, 0);
+                followRow.Margin = new Thickness(0, 0, 3, 0);
             Grid.SetColumn(followWithHint, 0);
             controls.Children.Add(followWithHint);
 
             var delete = PluginPageButton(WorkspaceUi("删除", "Delete", "削除", "삭제"));
-            delete.MinWidth = 48;
+            delete.MinWidth = 28;
             delete.Height = 25;
-            delete.Padding = new Thickness(5, 1, 5, 1);
+            delete.Padding = new Thickness(3, 1, 3, 1);
             delete.VerticalAlignment = VerticalAlignment.Center;
             delete.Click += async (_, _) => await DeleteWorkspaceFromSettingsAsync(slot);
             Grid.SetColumn(delete, 1);
             controls.Children.Add(delete);
-        }
-        if (slot > 1)
-        {
-            controls.Margin = new Thickness(0, 4, 0, 0);
             line.Children.Add(controls);
         }
         card.Child = line;
