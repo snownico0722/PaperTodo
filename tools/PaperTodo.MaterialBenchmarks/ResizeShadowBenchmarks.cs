@@ -61,7 +61,7 @@ internal static class ResizeShadowBenchmarks
                 var paper = new PaperData
                 {
                     Type = paperType, X = 85, Y = 80, Width = 400, Height = 320,
-                    Title = "Temporary resize benchmark",
+                    Title = "Temporary resize benchmark", AlwaysOnTop = true,
                     Content = paperType == PaperTypes.Note
                         ? "# Resize\n\n**Text** with several wrapped lines, to exercise the real editor.\n" +
                           string.Join("\n", Enumerable.Repeat("A sample paragraph containing enough words to wrap at differing widths.", 24))
@@ -203,7 +203,10 @@ internal static class ResizeShadowBenchmarks
         {
             Program.Assert(SetCursorPos(x0, y0), "position cursor on real resize grip");
             Wait(90);
-            Program.Assert(WindowFromPoint(new NativePoint { X = x0, Y = y0 }) == hwnd,
+            var hitWindow = WindowFromPoint(new NativePoint { X = x0, Y = y0 });
+            Console.WriteLine($"HIT {paperType}/{arm.Shadow} expected={hwnd}, actual={hitWindow}, " +
+                $"point={x0},{y0}, active={window.IsActive}, topmost={window.Topmost}");
+            Program.Assert(hitWindow == hwnd,
                 "the real visible window must own the grip pointer before mouse-down");
             samples.Clear();
             renderTimes.Clear();
