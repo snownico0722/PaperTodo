@@ -123,25 +123,6 @@ public sealed partial class AppController
                 SystemSettingsHelper.IsStartupEnabled(),
                 ToggleStartup),
             "TipStartup"));
-        leftColumn.Children.Add(WrapWithHint(
-            SettingsToggle(
-                Strings.Get("SettingsEnableToolTips"),
-                State.EnableToolTips,
-                ToggleToolTips),
-            "TipEnableToolTips"));
-        leftColumn.Children.Add(WrapWithHint(
-            SettingsToggle(
-                Strings.Get("SettingsEnableAnimations"),
-                State.EnableAnimations,
-                ToggleAnimations),
-            "TipEnableAnimations"));
-        leftColumn.Children.Add(WrapWithHint(
-            SettingsToggle(
-                Strings.Get("SettingsFastAnimations"),
-                State.FastAnimations,
-                ToggleFastAnimations),
-            "TipFastAnimations"));
-
         leftColumn.Children.Add(BuildSettingsLiveRegion(
             "general.telemetry",
             CreateAnonymousUsageStatisticsSettingsRow));
@@ -192,9 +173,6 @@ public sealed partial class AppController
 
     private void RestoreSettingsSidebarGeneralDefaults()
     {
-        State.EnableToolTips = true;
-        State.EnableAnimations = true;
-        State.FastAnimations = false;
         State.UiLanguage = UiLanguages.Default;
         State.HidePapersFromTaskbar = true;
         State.HidePapersFromWindowSwitcher = true;

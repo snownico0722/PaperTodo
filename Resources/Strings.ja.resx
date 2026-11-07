@@ -435,7 +435,7 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
     <value>展開位置を記憶</value>
   </data>
   <data name="SettingsCollapseExpandedDeepCapsuleOnClick" xml:space="preserve">
-    <value>カプセルを再クリックして紙片を戻す</value>
+    <value>カプセルの再クリックで戻す</value>
   </data>
   <data name="SettingsHideEdgeCapsuleCloseButtonOnHover" xml:space="preserve">
     <value>閉じるボタンを隠す</value>
@@ -565,7 +565,7 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
     <value>基本レンダリング：Markdown の記号を薄く残し、箇条書きの点や区切り線など簡単な書式を表示します。完全レンダリング：見出し・リスト・引用・コードブロックを完成形に近い見た目にし、多くの記号を隠します。編集時はカーソルのあるブロックの記号を再表示します。</value>
   </data>
   <data name="SettingsMarkdownEditAnimation" xml:space="preserve">
-    <value>Markdown レンダリング アニメーション</value>
+    <value>Markdown 編集アニメーション</value>
   </data>
   <data name="TipMarkdownEditAnimation" xml:space="preserve">
     <value>Markdown の編集中、再表示される構文記号がフェードインし、編集状態の切り替えが自然になります。</value>
@@ -640,10 +640,10 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
   <data name="TipHidePapersFromTaskbar" xml:space="preserve">
     <value>展開中の紙片をタスクバーに出しません。
 トレイ、デスクトップ上の紙片、カプセルからは引き続き開けます。
-「ウィンドウ切り替えから隠す」をオンにすると同時に有効になります。</value>
+「ウィンドウ切替で紙片を隠す」をオンにすると同時に有効になります。</value>
   </data>
   <data name="SettingsHidePapersFromWindowSwitcher" xml:space="preserve">
-    <value>ウィンドウ切り替えから紙片を隠す</value>
+    <value>ウィンドウ切替で紙片を隠す</value>
   </data>
   <data name="TipHidePapersFromWindowSwitcher" xml:space="preserve">
     <value>展開中の紙片は Alt+Tab・タスクビュー・タスクバーに表示されませんが、トレイ、デスクトップ上の紙片、カプセルからアクセスできます。ただし、すべての仮想デスクトップに表示され、ラボの「現在のデスクトップで呼び出す」機能は使えなくなります。</value>
@@ -717,7 +717,7 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
     <value>関連タイトルを長めに表示</value>
   </data>
   <data name="SettingsHideLinkedPapersFromCapsules" xml:space="preserve">
-    <value>関連紙片をカプセルに表示しない</value>
+    <value>関連紙片のカプセルを隠す</value>
   </data>
   <data name="SettingsResetNoteZoom" xml:space="preserve">
     <value>ノートのズームを戻す</value>
@@ -738,7 +738,7 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
     <value>ショートカット</value>
   </data>
   <data name="SettingsVisual" xml:space="preserve">
-    <value>表示</value>
+    <value>表示と文字</value>
   </data>
   <data name="SettingsLabs" xml:space="preserve">
     <value>ラボ</value>
@@ -1085,7 +1085,7 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
     <value>通常・エッジ・ドラッグ・マスターのカプセル文字：共通の小／中／大と太字。</value>
   </data>
   <data name="SettingsDeepCapsuleTitleMeasureLimit" xml:space="preserve">
-    <value>端のカプセルのタイトル表示文字数</value>
+    <value>端のカプセルのタイトル字数</value>
   </data>
   <data name="TipDeepCapsuleTitleMeasureLimit" xml:space="preserve">
     <value>端に固定したカプセルが静止中に表示するタイトルの文字数を設定します。「無制限」または 0～20 を選べます。0 にするとアイコンだけを表示し、タイトル文字を隠します。</value>
@@ -1213,7 +1213,7 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
   <data name="TipLabsMcpBlankWrites" xml:space="preserve"><value>接続中の AI に紙片の作成、ToDo の追加、空欄への入力、既存ノート末尾への追記を許可します。書かれた内容の置き換えや上書きは許可しません。</value></data>
   <data name="LabsMcpFullWrites" xml:space="preserve"><value>既存の内容の変更を許可</value></data>
   <data name="TipLabsMcpFullWrites" xml:space="preserve"><value>接続中の AI に既存の ToDo の変更、ノート本文の置換、完了状態や通知時刻の変更を許可します。紙片の作成、ToDo の追加、追記の権限も含まれます。</value></data>
-  <data name="LabsMcpDeletes" xml:space="preserve"><value>MCP による直接削除を許可</value></data>
+  <data name="LabsMcpDeletes" xml:space="preserve"><value>内容の削除を許可</value></data>
   <data name="TipLabsMcpDeletes" xml:space="preserve"><value>有効にすると、接続中の AI が確認画面なしで紙片や ToDo を直接削除できます。削除は自動では元に戻せません。信頼できる AI ツールにのみ許可してください。</value></data>
   <data name="LabsMcpStatusReady" xml:space="preserve"><value>ローカル MCP は準備完了</value></data>
   <data name="LabsMcpStatusDisabled" xml:space="preserve"><value>ローカル MCP は無効</value></data>
@@ -1555,6 +1555,12 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
   </data>
   <data name="WorkspaceSettingsTitle" xml:space="preserve">
     <value>ワークスペース</value>
+  </data>
+  <data name="WorkspaceTopBarNamePicker" xml:space="preserve">
+    <value>名前で選択</value>
+  </data>
+  <data name="TipWorkspaceTopBarNamePicker" xml:space="preserve">
+    <value>オンにすると、上部バーのワークスペースボタンから名前の一覧を開いて選択できます。オフのときは、クリックするたびにワークスペースを順に切り替えます。</value>
   </data>
   <data name="WorkspaceSettingsDescription" xml:space="preserve">
     <value>有効にすると、独立したワークスペースを複数作成できます。紙片・画像・配置・プラグインデータはそれぞれ別に保存され、紙片の上部バーや設定画面から切り替えられます。無効にしても既存データは削除されず、再度有効にすれば利用できます。</value>

@@ -435,7 +435,7 @@ PaperTodo를 수동으로 다시 여세요. 문제가 반복되면 PC를 다시 
     <value>펼침 위치 기억</value>
   </data>
   <data name="SettingsCollapseExpandedDeepCapsuleOnClick" xml:space="preserve">
-    <value>캡슐을 다시 클릭해 종이 접기</value>
+    <value>캡슐 재클릭으로 접기</value>
   </data>
   <data name="SettingsHideEdgeCapsuleCloseButtonOnHover" xml:space="preserve">
     <value>닫기 버튼 숨기기</value>
@@ -565,7 +565,7 @@ PaperTodo를 수동으로 다시 여세요. 문제가 반복되면 PC를 다시 
     <value>기본 렌더링은 Markdown 문법 기호를 연하게 남기면서 목록 기호와 구분선 같은 간단한 서식을 표시합니다. 완전 렌더링은 제목, 목록, 인용문, 코드 블록을 최종 형태에 가깝게 보여주고 대부분의 기호를 숨깁니다. 편집 중에는 커서가 있는 블록의 기호가 다시 나타납니다.</value>
   </data>
   <data name="SettingsMarkdownEditAnimation" xml:space="preserve">
-    <value>Markdown 렌더링 애니메이션</value>
+    <value>Markdown 편집 애니메이션</value>
   </data>
   <data name="TipMarkdownEditAnimation" xml:space="preserve">
     <value>Markdown을 편집할 때 다시 나타나는 문법 기호가 서서히 표시되어 편집 상태가 자연스럽게 전환됩니다.</value>
@@ -717,7 +717,7 @@ PaperTodo를 수동으로 다시 여세요. 문제가 반복되면 PC를 다시 
     <value>연결된 제목 더 길게 표시</value>
   </data>
   <data name="SettingsHideLinkedPapersFromCapsules" xml:space="preserve">
-    <value>연결된 종이를 캡슐로 표시하지 않음</value>
+    <value>연결된 종이 캡슐 숨기기</value>
   </data>
   <data name="SettingsResetNoteZoom" xml:space="preserve">
     <value>노트 확대/축소 복원</value>
@@ -735,10 +735,10 @@ PaperTodo를 수동으로 다시 여세요. 문제가 반복되면 PC를 다시 
     <value>고정 해제</value>
   </data>
   <data name="SettingsShortcuts" xml:space="preserve">
-    <value>바로 가기 키</value>
+    <value>단축키</value>
   </data>
   <data name="SettingsVisual" xml:space="preserve">
-    <value>시각</value>
+    <value>화면·텍스트</value>
   </data>
   <data name="SettingsLabs" xml:space="preserve">
     <value>실험실</value>
@@ -1085,7 +1085,7 @@ PaperTodo를 수동으로 다시 여세요. 문제가 반복되면 PC를 다시 
     <value>일반, 가장자리, 드래그, 마스터 캡슐 글자: 동일한 소/중/대와 굵게.</value>
   </data>
   <data name="SettingsDeepCapsuleTitleMeasureLimit" xml:space="preserve">
-    <value>가장자리 캡슐 제목 표시 글자 수</value>
+    <value>가장자리 캡슐 제목 길이</value>
   </data>
   <data name="TipDeepCapsuleTitleMeasureLimit" xml:space="preserve">
     <value>가장자리에 고정된 캡슐이 가만히 있을 때 표시할 제목 글자 수를 설정합니다. 무제한 또는 0~20을 선택할 수 있으며 0이면 아이콘만 표시합니다.</value>
@@ -1213,7 +1213,7 @@ PaperTodo를 수동으로 다시 여세요. 문제가 반복되면 PC를 다시 
   <data name="TipLabsMcpBlankWrites" xml:space="preserve"><value>연결된 AI가 메모를 만들고 할 일을 추가하고 빈 내용을 채우거나 기존 메모 끝에 글을 덧붙일 수 있습니다. 이미 작성된 내용을 바꾸거나 덮어쓸 수는 없습니다.</value></data>
   <data name="LabsMcpFullWrites" xml:space="preserve"><value>기존 콘텐츠 수정 허용</value></data>
   <data name="TipLabsMcpFullWrites" xml:space="preserve"><value>연결된 AI가 기존 할 일을 수정하고 메모 내용을 교체하며 할 일의 완료 상태와 알림 시간을 바꿀 수 있습니다. 메모 만들기, 할 일 추가, 내용 덧붙이기 권한도 포함됩니다.</value></data>
-  <data name="LabsMcpDeletes" xml:space="preserve"><value>MCP 직접 삭제 허용</value></data>
+  <data name="LabsMcpDeletes" xml:space="preserve"><value>콘텐츠 삭제 허용</value></data>
   <data name="TipLabsMcpDeletes" xml:space="preserve"><value>켜면 연결된 AI가 매번 확인하지 않고 메모나 할 일을 바로 삭제할 수 있습니다. 삭제는 자동으로 되돌릴 수 없으므로 신뢰하는 AI 도구에만 허용하세요.</value></data>
   <data name="LabsMcpStatusReady" xml:space="preserve"><value>로컬 MCP 인터페이스 준비됨</value></data>
   <data name="LabsMcpStatusDisabled" xml:space="preserve"><value>로컬 MCP 인터페이스 꺼짐</value></data>
@@ -1556,6 +1556,12 @@ PaperTodo를 수동으로 다시 여세요. 문제가 반복되면 PC를 다시 
   <data name="WorkspaceSettingsTitle" xml:space="preserve">
     <value>작업 공간</value>
   </data>
+  <data name="WorkspaceTopBarNamePicker" xml:space="preserve">
+    <value>이름으로 선택</value>
+  </data>
+  <data name="TipWorkspaceTopBarNamePicker" xml:space="preserve">
+    <value>켜면 상단 작업 공간 버튼을 눌러 이름 목록에서 선택할 수 있습니다. 끄면 버튼을 누를 때마다 다음 작업 공간으로 전환합니다.</value>
+  </data>
   <data name="WorkspaceSettingsDescription" xml:space="preserve">
     <value>켜면 서로 독립적인 작업 공간을 여러 개 만들 수 있습니다. 메모, 이미지, 배치, 플러그인 데이터는 작업 공간별로 저장하며 메모 상단 표시줄이나 설정에서 전환할 수 있습니다. 작업 공간을 꺼도 기존 데이터는 삭제되지 않으며 다시 켜서 사용할 수 있습니다.</value>
   </data>
@@ -1766,6 +1772,6 @@ PaperTodo를 수동으로 다시 여세요. 문제가 반복되면 PC를 다시 
   <data name="MenuExportAllPapers" xml:space="preserve"><value>모든 노트 및 할 일</value></data>
   <data name="MenuTopBarAssociationDragTodo" xml:space="preserve"><value>할 일로 끌어서 연결</value></data>
   <data name="MenuTopBarAssociationDragWindow" xml:space="preserve"><value>창으로 끌어서 연결</value></data>
-  <data name="WorkspaceDataSettingsTitle" xml:space="preserve"><value>작업 공간 및 데이터</value></data>
+  <data name="WorkspaceDataSettingsTitle" xml:space="preserve"><value>작업 공간·데이터</value></data>
   <data name="SettingsDataProcessing" xml:space="preserve"><value>데이터 처리</value></data>
 </root>

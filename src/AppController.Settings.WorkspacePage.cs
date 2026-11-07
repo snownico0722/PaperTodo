@@ -68,16 +68,14 @@ public sealed partial class AppController
         };
         workspaceColumn.Children.Add(optionsPanel);
 
-        optionsPanel.Children.Add(WrappingSettingsToggle(WorkspaceUi(
-                "顶栏快捷切换显示具体名称", "Choose workspaces by name in the top bar",
-                "上部バーで名前を表示して選択", "상단 표시줄에서 이름으로 선택"),
-            WorkspaceOptions.TopBarNamePicker, async () =>
+        optionsPanel.Children.Add(WrapWithHint(WrappingSettingsToggle(
+            Strings.Get("WorkspaceTopBarNamePicker"), WorkspaceOptions.TopBarNamePicker, async () =>
             {
                 var next = WorkspaceOptions.Normalized();
                 next.TopBarNamePicker = !next.TopBarNamePicker;
                 await ChangeWorkspaceConfigurationAsync(next);
                 RefreshSettingsWindowContent();
-            }));
+            }), "TipWorkspaceTopBarNamePicker"));
 
         var heading = new DockPanel { Margin = new Thickness(0, 12, 0, 5) };
         var create = SettingsTextButton(WorkspaceUi("新建", "New", "新規", "새로 만들기"));
@@ -299,7 +297,9 @@ public sealed partial class AppController
         AutomationProperties.SetAutomationId(card, "WorkspaceSlot" + slot);
         AutomationProperties.SetName(card, label + " #" + slot);
 
+        var content = new StackPanel();
         var line = new WrapPanel { VerticalAlignment = VerticalAlignment.Center };
+        content.Children.Add(line);
         var name = new TextBlock
         {
             Text = label,
@@ -469,8 +469,14 @@ public sealed partial class AppController
 
         if (slot > 1)
         {
-            renameActions.Margin = new Thickness(0, 0, 6, 0);
-            var controls = new Grid { VerticalAlignment = VerticalAlignment.Center };
+            // Keep these actions at the trailing edge of their own row. The name
+            // and its inline rename/save button retain the full card width above.
+            var controls = new Grid
+            {
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 3, 0, 0)
+            };
             controls.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             controls.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             var follow = WrappingSettingsToggle(Strings.Get("WorkspaceFollowMain"),
@@ -497,9 +503,9 @@ public sealed partial class AppController
             delete.Click += async (_, _) => await DeleteWorkspaceFromSettingsAsync(slot);
             Grid.SetColumn(delete, 1);
             controls.Children.Add(delete);
-            line.Children.Add(controls);
+            content.Children.Add(controls);
         }
-        card.Child = line;
+        card.Child = content;
 
         // The whole card selects its workspace, except its independent controls.
         // Inspect the routed hit to avoid selection on rename, delete or follow clicks.

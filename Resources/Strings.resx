@@ -582,7 +582,7 @@
 完全渲染：标题、列表、引用和代码块会更接近最终排版效果，大部分语法标记会自动隐藏。编辑时，光标所在的内容块会重新显示相关标记，方便修改。</value>
   </data>
   <data name="SettingsMarkdownEditAnimation" xml:space="preserve">
-    <value>Markdown 渲染动画</value>
+    <value>Markdown 编辑动画</value>
   </data>
   <data name="TipMarkdownEditAnimation" xml:space="preserve">
     <value>编辑 Markdown 时，需要重新显示的语法标记会以淡入动画出现，让编辑状态的切换更加自然。</value>
@@ -737,7 +737,7 @@
     <value>关联标题显示更多文字</value>
   </data>
   <data name="SettingsHideLinkedPapersFromCapsules" xml:space="preserve">
-    <value>关联纸片不显示为胶囊</value>
+    <value>隐藏关联纸片胶囊</value>
   </data>
   <data name="SettingsResetNoteZoom" xml:space="preserve">
     <value>恢复笔记缩放</value>
@@ -758,7 +758,7 @@
     <value>快捷键</value>
   </data>
   <data name="SettingsVisual" xml:space="preserve">
-    <value>视觉</value>
+    <value>视觉与文字</value>
   </data>
   <data name="SettingsLabs" xml:space="preserve">
     <value>实验室</value>
@@ -1115,7 +1115,7 @@
     <value>普通、贴边、拖动与主胶囊文字：统一小 / 中 / 大与加粗。</value>
   </data>
   <data name="SettingsDeepCapsuleTitleMeasureLimit" xml:space="preserve">
-    <value>边缘胶囊标题显示字数</value>
+    <value>边缘胶囊标题字数</value>
   </data>
   <data name="TipDeepCapsuleTitleMeasureLimit" xml:space="preserve">
     <value>设置贴边胶囊在静止时最多显示多少个标题字符。
@@ -1247,7 +1247,7 @@
   <data name="LabsMcpFullWrites" xml:space="preserve"><value>允许修改已有内容</value></data>
   <data name="TipLabsMcpFullWrites" xml:space="preserve"><value>允许连接的 AI 修改已有待办、替换笔记内容，以及调整待办的完成状态和提醒时间。
 开启后也会自动包含新增纸片、添加待办和追加内容的权限。</value></data>
-  <data name="LabsMcpDeletes" xml:space="preserve"><value>允许 MCP 直接删除</value></data>
+  <data name="LabsMcpDeletes" xml:space="preserve"><value>允许删除内容</value></data>
   <data name="TipLabsMcpDeletes" xml:space="preserve"><value>开启后，连接的 AI 可以直接删除纸片或待办，不再每次弹出确认窗口。
 删除操作无法自动撤销。请只在信任所使用的 AI 工具时开启。</value></data>
   <data name="LabsMcpStatusReady" xml:space="preserve"><value>本地 MCP 接口已就绪</value></data>
@@ -1631,6 +1631,12 @@
   </data>
   <data name="WorkspaceSettingsTitle" xml:space="preserve">
     <value>工作区</value>
+  </data>
+  <data name="WorkspaceTopBarNamePicker" xml:space="preserve">
+    <value>按名称切换</value>
+  </data>
+  <data name="TipWorkspaceTopBarNamePicker" xml:space="preserve">
+    <value>开启后，点击顶栏工作区按钮会展开名称列表供选择；关闭后，点击按钮会循环切换工作区。</value>
   </data>
   <data name="WorkspaceSettingsDescription" xml:space="preserve">
     <value>开启后，可以创建多个相互独立的工作区。每个工作区分别保存纸片、图片、布局和插件数据，也可以通过纸片顶栏或设置页面切换。关闭工作区不会删除已有数据，重新开启后仍可继续使用。</value>

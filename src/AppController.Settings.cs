@@ -1555,6 +1555,20 @@ public sealed partial class AppController
         leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsColorScheme")), "TipColorScheme"));
         leftColumn.Children.Add(CreateColorSchemeSegmentSelector());
         leftColumn.Children.Add(CreateSkinSettings());
+        void AddVisualToggle(string labelKey, string tipKey, bool value, Action toggle)
+        {
+            var option = SettingsToggle(Strings.Get(labelKey), value, toggle);
+            option.ToolTip = BuildSettingsHintTooltip(Strings.Get(tipKey));
+            ToolTipPreferences.SetAlwaysEnabled(option, true);
+            ToolTipService.SetShowOnDisabled(option, true);
+            leftColumn.Children.Add(WrapWithHint(option, tipKey));
+        }
+        AddVisualToggle("SettingsEnableAnimations", "TipEnableAnimations",
+            State.EnableAnimations, ToggleAnimations);
+        AddVisualToggle("SettingsFastAnimations", "TipFastAnimations",
+            State.FastAnimations, ToggleFastAnimations);
+        AddVisualToggle("SettingsEnableToolTips", "TipEnableToolTips",
+            State.EnableToolTips, ToggleToolTips);
         leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsDeepCapsuleGap")), "TipDeepCapsuleGap"));
         leftColumn.Children.Add(CreateDeepCapsuleGapSegmentSelector());
         rightColumn.Children.Add(SettingsSectionLabel(Strings.Get("SettingsFontGroup")));
@@ -1684,6 +1698,9 @@ public sealed partial class AppController
         State.MicaAlwaysActive = false;
         State.MaterialTransparency = MaterialTransparencyLevels.Medium;
         State.HideSurfaceOutline = false;
+        State.EnableToolTips = true;
+        State.EnableAnimations = true;
+        State.FastAnimations = false;
         State.UiFontPreset = UiFontPresets.Default;
         State.TextRenderingProfile = TextRenderingProfiles.Standard;
         State.CustomFontEnhancedBold = false;
@@ -1804,6 +1821,7 @@ public sealed partial class AppController
             Foreground = TrayWeakTextBrush,
             FontSize = AppTypography.Scale(12),
             FontWeight = FontWeights.SemiBold,
+            TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 10, 0, 2)
         };
     }
@@ -1824,6 +1842,7 @@ public sealed partial class AppController
             Foreground = TrayWeakTextBrush,
             FontSize = AppTypography.Scale(12),
             FontWeight = FontWeights.SemiBold,
+            TextWrapping = TextWrapping.Wrap,
             VerticalAlignment = VerticalAlignment.Center
         };
         Grid.SetColumn(label, 0);
@@ -1855,6 +1874,7 @@ public sealed partial class AppController
             Foreground = TrayWeakTextBrush,
             FontSize = AppTypography.Scale(11),
             FontWeight = FontWeights.Medium,
+            TextWrapping = TextWrapping.Wrap,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, topMargin, 0, 0)
         };
@@ -1866,7 +1886,7 @@ public sealed partial class AppController
         double editorWidth = 136,
         string? tipKey = null,
         double topMargin = 7,
-        bool wrapLabel = false)
+        bool wrapLabel = true)
     {
         var row = new Grid
         {
@@ -1967,7 +1987,7 @@ public sealed partial class AppController
         return row;
     }
 
-    private CheckBox SettingsToggle(string text, bool isChecked, Action onToggle, bool wrapText = false)
+    private CheckBox SettingsToggle(string text, bool isChecked, Action onToggle, bool wrapText = true)
     {
         var checkBox = new CheckBox
         {
@@ -2376,6 +2396,11 @@ public sealed partial class AppController
 
         template.Triggers.Add(hoverTrigger);
         template.Triggers.Add(pressedTrigger);
+
+        var disabledTrigger = new Trigger { Property = UIElement.IsEnabledProperty, Value = false };
+        disabledTrigger.Setters.Add(new Setter(UIElement.OpacityProperty, 0.45, "Bd"));
+        disabledTrigger.Setters.Add(new Setter(FrameworkElement.CursorProperty, Cursors.Arrow, "Bd"));
+        template.Triggers.Add(disabledTrigger);
 
         style.Setters.Add(new Setter(Control.TemplateProperty, template));
         return style;

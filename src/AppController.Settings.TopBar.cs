@@ -173,9 +173,9 @@ public sealed partial class AppController
                 Background = Brushes.Transparent,
                 Padding = new Thickness(7, 6, 7, 6)
             };
-            var row = new StackPanel
+            var row = new Grid
             {
-                Orientation = Orientation.Horizontal,
+                MinHeight = AppTypography.FitChrome(20),
                 VerticalAlignment = VerticalAlignment.Center,
                 // The feature is inactive, but its placement remains editable.
                 Opacity = (action == PaperTopBarShortcuts.Workspace && !WorkspaceOptions.Enabled) ||
@@ -183,6 +183,10 @@ public sealed partial class AppController
                            !State.EnableTodoPaperLinks && !State.ExperimentalWindowTethering)
                     ? 0.5 : 1
             };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             var grip = new Grid { Width = AppTypography.Scale(22), IsHitTestVisible = false };
             grip.Children.Add(new System.Windows.Shapes.Path
             {
@@ -195,14 +199,19 @@ public sealed partial class AppController
                 HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center
             });
             row.Children.Add(grip);
-            row.Children.Add(CreateTopBarShortcutIcon(action));
-            row.Children.Add(new TextBlock
+            var icon = CreateTopBarShortcutIcon(action);
+            Grid.SetColumn(icon, 1);
+            row.Children.Add(icon);
+            var name = new TextBlock
             {
                 Text = TopBarShortcutName(action),
                 Foreground = TrayTextBrush,
                 FontSize = AppTypography.Scale(11.5),
+                TextWrapping = TextWrapping.Wrap,
                 VerticalAlignment = VerticalAlignment.Center
-            });
+            };
+            Grid.SetColumn(name, 2);
+            row.Children.Add(name);
             var content = new DockPanel { LastChildFill = true };
             var controls = new StackPanel
             {
@@ -212,7 +221,9 @@ public sealed partial class AppController
             };
             if (action == PaperTopBarShortcuts.RunScript)
             {
-                row.Children.Add(CreateSettingsHintGlyph("TipTopBarRunScript", new Thickness(3, 0, 0, 0)));
+                var hint = CreateSettingsHintGlyph("TipTopBarRunScript", new Thickness(3, 0, 0, 0));
+                Grid.SetColumn(hint, 3);
+                row.Children.Add(hint);
                 var edit = SettingsTextButton(SettingsSidebarLocalized(
                     "编辑", "Edit", "編集", "편집"));
                 edit.ToolTip = Strings.Get("TopBarEditScript");
@@ -353,6 +364,11 @@ public sealed partial class AppController
 
     private FrameworkElement CreateTopBarShortcutIcon(string action)
     {
+        var presenter = new FrameworkElementFactory(typeof(ContentPresenter));
+        presenter.SetValue(ContentPresenter.ContentProperty,
+            new TemplateBindingExtension(ContentControl.ContentProperty));
+        presenter.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+        presenter.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
         var slot = new ContentControl
         {
             Width = AppTypography.Scale(26), Height = AppTypography.FitChrome(20),
@@ -360,7 +376,8 @@ public sealed partial class AppController
             FontSize = AppTypography.Scale(10.5), Focusable = false, IsHitTestVisible = false,
             HorizontalContentAlignment = HorizontalAlignment.Center,
             VerticalContentAlignment = VerticalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center
+            VerticalAlignment = VerticalAlignment.Center,
+            Template = new ControlTemplate(typeof(ContentControl)) { VisualTree = presenter }
         };
         slot.Content = action switch
         {
