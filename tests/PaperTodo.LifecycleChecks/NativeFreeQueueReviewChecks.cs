@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Controls;
@@ -44,6 +46,7 @@ internal static class NativeFreeQueueReviewChecks
         Require(WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(null, out var monitor), "review monitor");
         CheckDropGhostReset(monitor);
         var originalContents = c.State.Papers.ToDictionary(p => p.Id, p => p.Content);
+        await CheckPostDragPreview(c, windows, monitor);
         await CheckSingleQueueGhost(c, windows);
         await CheckDisplacedInsertion(c, windows, store, monitor);
         await CheckDragPreviewUpdates(c, windows, monitor);
@@ -58,6 +61,129 @@ internal static class NativeFreeQueueReviewChecks
             "queue operations changed paper identities or note contents");
         Console.WriteLine("PASS free-queue review: displaced insertion, anchor roundtrip, folded drops, shortcut geometry, post-disconnect gestures and merge identity");
     }
+
+    private static async Task CheckPostDragPreview(AppController c,
+        IReadOnlyDictionary<string, PaperWindow> windows, MonitorGeometry monitor)
+    {
+        var free = c.State.UseCapsuleFreeQueues;
+        var master = c.State.UseCapsuleCollapseAll;
+        var preview = c.State.ExperimentalEdgeCapsuleHoverPreview;
+        var prediction = c.State.ExperimentalEdgeCapsuleHoverIntent;
+        var margins = new Dictionary<string, double>(c.State.DeepCapsuleQueueStartTopMargins);
+        var order = c.State.Papers.ToList();
+        var cursorSaved = WindowNative.TryGetCursorScreenPosition(out var savedCursor);
+        var source = windows["review-6"];
+        var other = windows["review-10"];
+        var outside = new DeviceScreenPoint(
+            monitor.WorkArea.Left + monitor.WorkArea.Width / 2,
+            monitor.WorkArea.Top + monitor.WorkArea.Height / 2);
+
+        static DeviceScreenPoint Hit(PaperWindow window)
+        {
+            Require(window.TryGetEdgeCapsuleInteractiveGeometry(out var geometry),
+                "preview fixture needs a real interactive capsule");
+            return new(geometry.Bounds.Left + geometry.Bounds.Width / 2,
+                geometry.Bounds.Top + geometry.Bounds.Height / 2);
+        }
+        static void Move(DeviceScreenPoint point) =>
+            Require(SetPreviewCursorPos((int)point.X, (int)point.Y), "move native preview pointer");
+
+        try
+        {
+            // The release debounce is required even when optional motion prediction is disabled.
+            c.State.ExperimentalEdgeCapsuleHoverIntent = false;
+            foreach (var outcome in new[] { "stay", "other", "leave", "master" })
+            {
+                c.State.ExperimentalEdgeCapsuleHoverPreview = false;
+                c.CloseEdgeCapsulePreviewForDrag(source);
+                Move(outside);
+                c.State.UseCapsuleCollapseAll = outcome == "master";
+                c.State.UseCapsuleFreeQueues = outcome != "stay";
+                c.ArrangeDeepCapsules(false);
+                await Idle();
+                if (outcome == "master")
+                {
+                    var queueMaster = c.MasterCapsuleForQueue(c.QueueKeyForPaper(source.EdgeCapsulePreviewPaper))!;
+                    Require(WindowNative.TryGetWindowDeviceBounds(queueMaster, out var bounds),
+                        "master preview fixture needs a real window");
+                    Move(new(bounds.Right - 10, bounds.Top + bounds.Height / 2));
+                    var (_, session, down) = PressMaster(queueMaster);
+                    var release = new DeviceScreenPoint(down.X, down.Y + 24 * monitor.DpiScaleY);
+                    Require((bool)Call(queueMaster, "ContinueMasterDrag", release, session)!,
+                        "master preview fixture entered a real queue drag");
+                    Move(release);
+                    c.State.ExperimentalEdgeCapsuleHoverPreview = true;
+                    Call(queueMaster, "FinishMasterGesture", true, true, release);
+                    await Dispatcher.CurrentDispatcher.InvokeAsync(static () => { }, DispatcherPriority.Send);
+                    var hit = Hit(source);
+                    Move(hit);
+                    c.NotifyEdgeCapsulePreviewPhysicalPointer(source, hit);
+                }
+                else
+                {
+                    var down = Hit(source);
+                    var release = new DeviceScreenPoint(down.X, down.Y + 16 * monitor.DpiScaleY);
+                    Move(down);
+                    source.GetType().GetField("_nativeQueuePointerDownKeys", Private)!
+                        .SetValue(source, outcome == "other" ? 8 : 0);
+                    Call(source, "OnEdgeCapsulePointerPressed", down);
+                    c.State.ExperimentalEdgeCapsuleHoverPreview = true;
+                    Move(release);
+                    Call(source, "OnEdgeCapsulePointerMoved", release, true);
+                    Require(source.IsDeepCapsuleReorderDragInProgress,
+                        outcome + " fixture entered a real capsule drag");
+                    Call(source, "OnEdgeCapsulePointerReleased", release);
+                }
+                await Dispatcher.CurrentDispatcher.InvokeAsync(static () => { }, DispatcherPriority.Send);
+                Require(!source.IsEdgeCapsulePreviewOpen,
+                    outcome + " release must not immediately reopen its preview");
+
+                var target = outcome == "other" ? other : source;
+                if (outcome is "other" or "leave")
+                {
+                    var point = outcome == "other" ? Hit(other) : outside;
+                    Move(point);
+                    c.NotifyEdgeCapsulePreviewPhysicalPointer(target, point);
+                }
+                if (outcome == "leave")
+                {
+                    await Task.Delay(250);
+                    Require(windows.Values.All(window => !window.IsEdgeCapsulePreviewOpen),
+                        "leaving the queue cancels the delayed preview");
+                    continue;
+                }
+
+                var watch = Stopwatch.StartNew();
+                while (!target.IsEdgeCapsulePreviewOpen)
+                {
+                    Require(outcome != "other" || !source.IsEdgeCapsulePreviewOpen,
+                        "moving to another capsule must never reopen the dragged source");
+                    if (watch.Elapsed > TimeSpan.FromSeconds(5))
+                        throw new TimeoutException(outcome + " preview did not open after pointer residence");
+                    await Task.Delay(10);
+                }
+                Require(outcome != "other" || !source.IsEdgeCapsulePreviewOpen,
+                    "the new physical target owns the preview after a Ctrl queue drag");
+            }
+            Console.WriteLine("PASS drag-release preview: legacy stay, Ctrl transfer, free-queue leave cancellation and master queue release");
+        }
+        finally
+        {
+            c.State.ExperimentalEdgeCapsuleHoverPreview = false;
+            c.CloseEdgeCapsulePreviewForDrag(source);
+            c.State.UseCapsuleFreeQueues = free;
+            c.State.UseCapsuleCollapseAll = master;
+            c.State.ExperimentalEdgeCapsuleHoverIntent = prediction;
+            c.State.DeepCapsuleQueueStartTopMargins = margins;
+            c.State.Papers = order;
+            c.ArrangeDeepCapsules(false);
+            c.State.ExperimentalEdgeCapsuleHoverPreview = preview;
+            if (cursorSaved) Move(savedCursor);
+        }
+    }
+
+    [DllImport("user32.dll", EntryPoint = "SetCursorPos")]
+    private static extern bool SetPreviewCursorPos(int x, int y);
 
     private static async Task CheckSingleQueueGhost(AppController c,
         IReadOnlyDictionary<string, PaperWindow> windows)
@@ -727,9 +853,9 @@ internal static class NativeFreeQueueReviewChecks
                 Require(ghost != null && Field<Window>(ghost, "_window").Opacity > 0 &&
                         Field<StackPanel>(ghost, "_stack").Children.Count == 4,
                     "detached/whole-queue independent drop previews its landing stack");
-                Field<Window>(ghost, "_window").UpdateLayout();
+                Field<Window>(ghost!, "_window").UpdateLayout();
                 Near(masters[B].DesiredDockedWidth - EdgeCapsuleLayout.WindowChromeMargin,
-                    ((Border)Field<StackPanel>(ghost, "_stack").Children[0]).ActualWidth,
+                    ((Border)Field<StackPanel>(ghost!, "_stack").Children[0]).ActualWidth,
                     route + " passes the source master width to its first silhouette");
             }
             Require(saved.All(pair => c.State.DeepCapsuleQueueStartTopMargins[pair.Key] == pair.Value),

@@ -2738,6 +2738,7 @@ public sealed partial class AppController : IDisposable
 
     private bool EndMasterCapsuleQueueTransferGate()
     {
+        DeferEdgeCapsulePreviewAfterDrag();
         _masterCapsuleQueueTransfer = null;
         if (_displayMetricsRefreshState !=
             DisplayMetricsRefreshState.DeferredForCapsuleDrag)

@@ -14,8 +14,8 @@ public sealed partial class AppController
     /// <summary>
     /// Physical pointer authority for edge-preview input. Host/native input may prove that the
     /// pointer is inside a real applied rectangle even while the Presenter's cosmetic hover bit is
-    /// stale. The first card may therefore open from a verified physical hit; an existing session
-    /// still uses the normal 32 ms target-residence / 2-DIP stability contract.
+    /// stale. A normal first card may open immediately from that hit. A just-finished drag and an
+    /// existing session use the shared target-residence / stability gate.
     /// </summary>
     internal void NotifyEdgeCapsulePreviewPhysicalPointer(
         PaperWindow inputWindow,
@@ -80,9 +80,8 @@ public sealed partial class AppController
             return;
         }
 
-        // The first eligible card opens immediately from this verified physical hit. Do not insert
-        // a redundant Resting→Hovered proxy immediately before the larger preview proxy; that would
-        // add startup work and a visual phase the historical first-hit contract never had.
+        // A normal first hit can open immediately; the activation gate handles the short post-drag
+        // exception. Neither path needs a redundant Resting→Hovered proxy before the preview proxy.
         if (!inputWindow.IsEdgeCapsulePointerOver)
         {
             TraceEdgeCapsulePreview(
