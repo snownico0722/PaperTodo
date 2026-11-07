@@ -71,60 +71,65 @@ internal static class ResizeShadowBenchmarks
                     for (var n = 0; n < 16; n++)
                         paper.Items.Add(new PaperItem { Text = "Resize item with some variable width text " + n });
                 state.Papers.Add(paper);
-                var window = new PaperWindow(paper, controller);
                 try
                 {
-                    window.Show();
-                    window.Activate();
-                    Wait(140);
-                    Program.Assert(window.AllowsTransparency && !window.IsNativeMicaEffective,
-                        "paper must be a real layered WPF window");
-                    var chrome = (PaperChromeBorder)typeof(PaperWindow)
-                        .GetField("_paperChrome", Private)!.GetValue(window)!;
-                    var hwnd = new WindowInteropHelper(window).Handle;
-                    var originalChild = window.Content;
+                    // One fresh HWND for each arm: native resize leaves WPF-owned topmost
+                    // popups/input surfaces behind on hosted CI, and can cover the next grip.
                     for (var pass = 0; pass < 2; pass++)
                     {
                         var order = pass == 0 ? arms : arms.Reverse();
                         foreach (var arm in order)
                         {
-                            window.ResizePerformanceSkipTopBarUpdates = arm.SkipTopbar;
-                            chrome.ClearNineSliceShadow();
-                            chrome.Effect = null;
-                            if (arm.Shadow == "nine-slice")
-                                chrome.SetNineSliceShadow(14, 2, .22, capsuleShape: false);
-                            else if (arm.Shadow == "legacy-effect")
-                                chrome.Effect = new DropShadowEffect { BlurRadius = 14, ShadowDepth = 2, Opacity = .22 };
-                            window.Width = 400;
-                            window.Height = 320;
-                            window.Left = 85;
-                            window.Top = 80;
-                            window.UpdateLayout();
-                            window.Activate();
-                            Wait(180);
-                            var result = DragResize(window, arm, paperType, pass);
-                            all.Add(result);
-                            Program.Assert(ReferenceEquals(originalChild, window.Content) &&
-                                new WindowInteropHelper(window).Handle == hwnd,
-                                "same real PaperWindow and editor for every arm");
-                            Program.Assert(arm.Shadow == "nine-slice" ? chrome.HasNineSliceShadow
-                                : arm.Shadow == "none" ? !chrome.HasNineSliceShadow && chrome.Effect == null
-                                : chrome.Effect is DropShadowEffect,
-                                "shadow test arm must not be overridden during resizing");
-                            Console.WriteLine($"RESIZE {result.PaperType}/{result.Shadow}/topbar={(result.SkipTopbar ? "skipped" : "normal")}/pass={result.Pass}: " +
-                                $"cpu={result.CpuMs:F1}ms, native={result.NativeSizeUpdates}, size-p95={result.NativeIntervalP95Ms:F2}ms, " +
-                                $"render={result.RenderCallbacks}, render-p95={result.RenderIntervalP95Ms:F2}ms, " +
-                                $"cursor-gap-p95={result.CursorGapP95Pixels:F1}px, layouts={result.LayoutUpdated}");
+                            paper.Width = 400;
+                            paper.Height = 320;
+                            paper.X = 85;
+                            paper.Y = 80;
+                            var window = new PaperWindow(paper, controller);
+                            try
+                            {
+                                window.Show();
+                                window.Topmost = true;
+                                window.Activate();
+                                Wait(150);
+                                Program.Assert(window.AllowsTransparency && !window.IsNativeMicaEffective,
+                                    "paper must be a real layered WPF window");
+                                var chrome = (PaperChromeBorder)typeof(PaperWindow)
+                                    .GetField("_paperChrome", Private)!.GetValue(window)!;
+                                var hwnd = new WindowInteropHelper(window).Handle;
+                                var originalChild = window.Content;
+                                window.ResizePerformanceSkipTopBarUpdates = arm.SkipTopbar;
+                                chrome.ClearNineSliceShadow();
+                                chrome.Effect = null;
+                                if (arm.Shadow == "nine-slice")
+                                    chrome.SetNineSliceShadow(14, 2, .22, capsuleShape: false);
+                                else if (arm.Shadow == "legacy-effect")
+                                    chrome.Effect = new DropShadowEffect { BlurRadius = 14, ShadowDepth = 2, Opacity = .22 };
+                                window.UpdateLayout();
+                                Wait(170);
+                                var result = DragResize(window, arm, paperType, pass);
+                                all.Add(result);
+                                Program.Assert(ReferenceEquals(originalChild, window.Content) &&
+                                    new WindowInteropHelper(window).Handle == hwnd,
+                                    "real PaperWindow and editor survive native dragging");
+                                Program.Assert(arm.Shadow == "nine-slice" ? chrome.HasNineSliceShadow
+                                    : arm.Shadow == "none" ? !chrome.HasNineSliceShadow && chrome.Effect == null
+                                    : chrome.Effect is DropShadowEffect,
+                                    "shadow test arm must not be overridden during resizing");
+                                Console.WriteLine($"RESIZE {result.PaperType}/{result.Shadow}/topbar={(result.SkipTopbar ? "skipped" : "normal")}/pass={result.Pass}: " +
+                                    $"cpu={result.CpuMs:F1}ms, native={result.NativeSizeUpdates}, size-p95={result.NativeIntervalP95Ms:F2}ms, " +
+                                    $"render={result.RenderCallbacks}, render-p95={result.RenderIntervalP95Ms:F2}ms, " +
+                                    $"cursor-gap-p95={result.CursorGapP95Pixels:F1}px, layouts={result.LayoutUpdated}");
+                            }
+                            finally
+                            {
+                                window.ResizePerformanceSkipTopBarUpdates = false;
+                                window.CloseForReal();
+                                Wait(90);
+                            }
                         }
                     }
                 }
-                finally
-                {
-                    window.ResizePerformanceSkipTopBarUpdates = false;
-                    window.CloseForReal();
-                    state.Papers.Remove(paper);
-                    Wait(65);
-                }
+                finally { state.Papers.Remove(paper); }
             }
         }
         finally
@@ -140,7 +145,7 @@ internal static class ResizeShadowBenchmarks
                 OS = RuntimeInformation.OSDescription,
                 Runtime = RuntimeInformation.FrameworkDescription,
                 RenderTier = RenderCapability.Tier >> 16,
-                Scope = "Actual native bottom-right mouse resizing of the same real layered PaperWindow. UI callbacks/rect changes, NOT displayed frames or 240-Hz scanout. Two alternating passes.",
+                Scope = "Actual native bottom-right mouse resizing on freshly created real PaperWindow HWNDs; same paper data and pointer path for every arm. UI callbacks/rect changes, NOT displayed frames or 240-Hz scanout. Two alternating passes.",
                 Results = all
             }, new JsonSerializerOptions { WriteIndented = true }));
             Console.WriteLine($"RESIZE SUMMARY: {all.Count} measurements written to {output}");
