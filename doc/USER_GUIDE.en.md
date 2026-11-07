@@ -136,7 +136,7 @@ The top bar contains fixed window controls and configurable built-in shortcuts:
 | **Studio** | Built-in shortcut | Open the current paper in a resizable, maximizable Studio window with its existing document and undo history |
 | **Open externally** | Built-in shortcut | Temporarily export a built-in Markdown note and open it in an external app; see [4.4](#44-opening-in-an-external-editor) |
 
-In "Settings → General → Top-bar shortcuts", drag the built-in shortcuts to reorder them or move them between **Show in title bar** and **Show in menu**. Todo and note papers share one layout, and actions that do not apply to the current paper are omitted. Each row has a Hide checkbox that removes its shortcut from title bars, overflow and paper/capsule context menus while preserving its position and keeping the feature enabled.
+In "Settings → General → Top-bar shortcuts", drag built-in shortcuts to reorder them or move them between **Show in title bar** and **Show in menu**. Todo and note papers share one layout, and actions that do not apply to the current paper are omitted. Each row has a Hide checkbox that removes its shortcut from title bars, overflow and paper/capsule context menus while preserving its position and keeping the feature enabled.
 
 New installations pin **Drag to Associate**, **Switch Workspace**, and **Studio**. This upgrade moves Studio to the title bar and Open externally to the menu once; later customizations are preserved. When the top bar is too narrow, pinned built-in shortcuts move into the `···` menu together. You can hold and drag the association item directly out of the menu as well. Plugins may also add top-bar buttons (such as Codex's `>_`).
 
@@ -177,6 +177,8 @@ Open the `···` menu (or paper context menu) on a todo paper or built-in Markd
 Todo exports preserve item order, completion states, and multiline text while omitting empty placeholder rows. Plugin bodies are excluded. Export runs in the background without blocking editing; check the completion summary for missing-image placeholders or warnings.
 
 Export is for reading, sharing, or moving text to another editor—it is not a full data backup. To back up or migrate workspaces, settings, and plugin data, follow [Chapter 10](#10-data-backup-migration-and-recovery).
+
+---
 
 ### 2.7 Studio
 

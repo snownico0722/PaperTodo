@@ -787,7 +787,8 @@ var expandedHeight = collapsed
                 keepDeepCapsuleSlotReservation);
             if (KeepDeepCapsuleWhileExpanded &&
                 _controller.CanPaperDisplayAsCapsule(_paper) &&
-                (expandingFromDeepCapsuleEdge || _controller.State.UseDeepCapsuleMode))
+                (expandingFromDeepCapsuleEdge ||
+                 (_controller.State.UseCapsuleMode && _controller.State.UseDeepCapsuleMode)))
             {
                 MarkEdgeCapsuleOpenedFromEdge();
             }

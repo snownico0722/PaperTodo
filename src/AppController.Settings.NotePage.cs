@@ -116,6 +116,15 @@ public sealed partial class AppController
                 : Visibility.Collapsed;
         content.Children.Add(markdownAnimationRow);
 
+        if (State.AdvancedSettingsMode)
+        {
+            content.Children.Add(AdvancedSettingsBlock(
+                WrapWithHint(
+                    SettingsFieldLabel(Strings.Get("SettingsImageReferenceText"), topMargin: 8),
+                    "TipImageReferenceText"),
+                CreateImageReferenceTextModeSelector()));
+        }
+
         return content;
     }
 
@@ -146,6 +155,7 @@ public sealed partial class AppController
     private void RestoreSettingsSidebarNoteDefaults()
     {
         State.MarkdownRenderMode = MarkdownRenderModes.Basic;
+        State.ImageReferenceTextMode = ImageReferenceTextModes.Always;
         State.MarkdownEditAnimationEnabled = true;
         State.ExternalMarkdownExtension = ExternalMarkdownFileExtensions.Default;
         State.AutoCompressLargeImages = true;
@@ -158,6 +168,7 @@ public sealed partial class AppController
         foreach (var window in _windows.Values)
         {
             window.UpdateMarkdownRenderMode();
+            window.UpdateImageReferenceTextMode();
             window.UpdateMarkdownEditAnimation();
             window.UpdateExternalMarkdownExtension();
         }

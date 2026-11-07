@@ -43,7 +43,7 @@ internal static partial class Program
         var metadata = settings.Get(settingId);
         Require(metadata.Value.GetString() == "ask" && metadata.Options!.SequenceEqual(new[] { "ask", "external", "internal" }),
             "public setting default or allowed values are incorrect");
-        var page = (UIElement)typeof(AppController).GetMethod("BuildSettingsGeneralOptions", Private)!.Invoke(controller, null)!;
+        var page = (UIElement)typeof(AppController).GetMethod("BuildWorkspaceDataSettings", Private)!.Invoke(controller, null)!;
         var selector = LogicalDescendants(page).OfType<ComboBox>().Single(combo =>
             combo.Items.OfType<ComboBoxItem>().Select(item => item.Tag as string)
                 .SequenceEqual(new[] { "ask", "external", "internal" }));

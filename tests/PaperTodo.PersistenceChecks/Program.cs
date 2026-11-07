@@ -152,8 +152,10 @@ static void DisabledCapsuleModeKeepsQueueLayoutMemory()
     using var scope = new TempDirectory();
     var state = NewState("light");
     state.UseCapsuleMode = false;
-    state.UseDeepCapsuleMode = false;
-    state.UseCapsuleCollapseAll = false;
+    state.UseDeepCapsuleMode = true;
+    state.UseCapsuleCollapseAll = true;
+    state.UseCapsuleFreeQueues = true;
+    state.CapsuleCollapseAllActiveQueues["DISPLAY1|left"] = true;
     state.DeepCapsuleQueueStartTopMargins["DISPLAY1|left"] = 37.5;
 
     var store = NewStore(scope.Path, DurableAtomicFileWriter.Shared);
@@ -163,6 +165,10 @@ static void DisabledCapsuleModeKeepsQueueLayoutMemory()
     Assert(loaded.DeepCapsuleQueueStartTopMargins.TryGetValue("DISPLAY1|left", out var margin) &&
            Math.Abs(margin - 37.5) < 0.001,
         "disabled capsule mode discarded remembered queue layout");
+    Assert(!loaded.UseCapsuleMode && loaded.UseDeepCapsuleMode &&
+           loaded.UseCapsuleCollapseAll && loaded.UseCapsuleFreeQueues &&
+           loaded.CapsuleCollapseAllActiveQueues.GetValueOrDefault("DISPLAY1|left"),
+        "loading a disabled parent discarded selected edge/master/free modes or folded groups");
 }
 
 static void PluginDataUsesOneNormalFile()

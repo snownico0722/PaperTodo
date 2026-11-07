@@ -722,11 +722,6 @@ public sealed partial class StateStore
                 state.ExperimentalTetherMinimizedBehavior);
         state.Zoom = OverallFontScales.Normalize(state.Zoom);
 
-        if (!state.UseCapsuleMode)
-        {
-            state.UseDeepCapsuleMode = false;
-        }
-
         state.MaxTitleLength = PaperTitles.NormalizeMaxTitleLength(state.MaxTitleLength);
         state.DeepCapsuleTitleMeasureCharacterLimit = EdgeCapsuleTitleLimit.Normalize(state.DeepCapsuleTitleMeasureCharacterLimit);
         state.GlobalHotkeys = GlobalShortcutCatalog.NormalizeBindings(state.GlobalHotkeys);
@@ -734,12 +729,7 @@ public sealed partial class StateStore
         state.DisabledPluginIds ??= new List<string>();
         state.DisabledPluginIds = NormalizeDisabledPluginIds(state.DisabledPluginIds);
 
-        if (!state.UseCapsuleMode || !state.UseDeepCapsuleMode)
-        {
-            state.UseCapsuleCollapseAll = false;
-            state.UseCapsuleFreeQueues = false;
-        }
-
+        // Child preferences remain saved when their parent presentation is disabled.
         state.CapsuleCollapseAllActiveQueues ??= new Dictionary<string, bool>();
         state.CapsuleCollapseAllActiveQueues = NormalizeCollapseAllActiveQueues(state.CapsuleCollapseAllActiveQueues);
         if (!state.UseCapsuleCollapseAll)

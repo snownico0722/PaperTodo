@@ -1553,7 +1553,7 @@
     <value>向右移动</value>
   </data>
   <data name="MenuTopBarAssociationDrag" xml:space="preserve">
-    <value>按住此项拖动以关联</value>
+    <value>拖到待办或窗口以关联</value>
   </data>
   <data name="MenuTopBarPluginActions" xml:space="preserve">
     <value>插件操作</value>
@@ -1704,7 +1704,7 @@
   <data name="NoteHtmlSaved" xml:space="preserve"><value>已保存到：{0}
 原笔记仍保留。</value></data>
   <data name="NoteExportCurrent" xml:space="preserve"><value>导出当前笔记</value></data>
-  <data name="NoteExportAll" xml:space="preserve"><value>导出全部纸片</value></data>
+  <data name="NoteExportAll" xml:space="preserve"><value>导出全部笔记与待办</value></data>
   <data name="NoteExportMarkdownType" xml:space="preserve"><value>Markdown 文档</value></data>
   <data name="NoteExportHtmlType" xml:space="preserve"><value>HTML 网页</value></data>
   <data name="NoteExportMarkdownZipType" xml:space="preserve"><value>Markdown 压缩包</value></data>
@@ -1791,6 +1791,52 @@
   <data name="WorkspaceRecoveryFallback" xml:space="preserve">
     <value>回退到工作区 {0}</value>
   </data>
+  <data name="WorkspaceRecoveryUnavailableMessage" xml:space="preserve">
+    <value>工作区 {0} 的数据和备份均无法恢复。
+
+选择“重建工作区”将让工作区 {0} 的便签、待办和设置从空白开始。</value>
+  </data>
+  <data name="WorkspaceBackupReadFailedMessage" xml:space="preserve">
+    <value>工作区 {0} 的固定备份暂时无法读取。
+{1}
+
+可以解除占用或访问问题后重试。选择“重建工作区”将让工作区 {0} 的便签、待办和设置从空白开始。</value>
+  </data>
+  <data name="SettingsNotesAndTodos" xml:space="preserve"><value>笔记与待办</value></data>
+  <data name="WorkspaceSingleMessage" xml:space="preserve"><value>当前只有一个工作区。</value></data>
+  <data name="WorkspaceCreate" xml:space="preserve"><value>新建</value></data>
+  <data name="TopBarHideShortcut" xml:space="preserve">
+    <value>隐藏</value>
+  </data>
+  <data name="TopBarRunScript" xml:space="preserve">
+    <value>运行脚本</value>
+  </data>
+  <data name="TopBarEditScript" xml:space="preserve">
+    <value>编辑脚本</value>
+  </data>
+  <data name="TopBarScriptSave" xml:space="preserve">
+    <value>保存</value>
+  </data>
+  <data name="WorkspaceScriptsStoppedTitle" xml:space="preserve">
+    <value>工作区已切换</value>
+  </data>
+  <data name="WorkspaceScriptsStoppedMessage" xml:space="preserve">
+    <value>上一工作区的脚本进程已结束。</value>
+  </data>
+  <data name="WorkspaceSessionsClosedMessage" xml:space="preserve">
+    <value>上一工作区的常驻 PowerShell 会话已关闭。</value>
+  </data>
+  <data name="WorkspaceScriptsAndSessionsStoppedMessage" xml:space="preserve">
+    <value>上一工作区的脚本进程已结束，常驻 PowerShell 会话已关闭。</value>
+  </data>
+  <data name="MenuExport" xml:space="preserve"><value>导出</value></data>
+  <data name="MenuExportCurrentNote" xml:space="preserve"><value>当前笔记</value></data>
+  <data name="MenuExportCurrentTodo" xml:space="preserve"><value>当前待办</value></data>
+  <data name="MenuExportAllPapers" xml:space="preserve"><value>全部笔记与待办</value></data>
+  <data name="MenuTopBarAssociationDragTodo" xml:space="preserve"><value>拖到待办以关联</value></data>
+  <data name="MenuTopBarAssociationDragWindow" xml:space="preserve"><value>拖到窗口以关联</value></data>
+  <data name="WorkspaceDataSettingsTitle" xml:space="preserve"><value>工作区与数据</value></data>
+  <data name="SettingsDataProcessing" xml:space="preserve"><value>数据处理</value></data>
   <data name="EditorOpen" xml:space="preserve"><value>在工作台中打开</value></data>
   <data name="EditorReturn" xml:space="preserve"><value>返回纸片</value></data>
   <data name="EditorSidebarShow" xml:space="preserve"><value>显示纸片列表</value></data>
@@ -1847,47 +1893,6 @@
   <data name="EditorImageExportPng" xml:space="preserve"><value>PNG</value></data>
   <data name="EditorImageExportSaving" xml:space="preserve"><value>正在保存…</value></data>
   <data name="EditorImageExportSaved" xml:space="preserve"><value>图片已保存</value></data>
-  <data name="WorkspaceRecoveryUnavailableMessage" xml:space="preserve">
-    <value>工作区 {0} 的数据和备份均无法恢复。
-
-选择“重建工作区”将让工作区 {0} 的便签、待办和设置从空白开始。</value>
-  </data>
-  <data name="WorkspaceBackupReadFailedMessage" xml:space="preserve">
-    <value>工作区 {0} 的固定备份暂时无法读取。
-{1}
-
-可以解除占用或访问问题后重试。选择“重建工作区”将让工作区 {0} 的便签、待办和设置从空白开始。</value>
-  </data>
-  <data name="SettingsNotesAndTodos" xml:space="preserve"><value>笔记与待办</value></data>
-  <data name="WorkspaceSingleMessage" xml:space="preserve"><value>当前只有一个工作区。</value></data>
-  <data name="WorkspaceCreate" xml:space="preserve"><value>新建</value></data>
   <data name="StudioTitle" xml:space="preserve"><value>工作台</value></data>
   <data name="EditorClose" xml:space="preserve"><value>关闭工作台</value></data>
-  <data name="TopBarHideShortcut" xml:space="preserve">
-    <value>隐藏</value>
-  </data>
-  <data name="TopBarRunScript" xml:space="preserve">
-    <value>运行脚本</value>
-  </data>
-  <data name="TopBarEditScript" xml:space="preserve">
-    <value>编辑脚本</value>
-  </data>
-  <data name="TopBarScriptSave" xml:space="preserve">
-    <value>保存</value>
-  </data>
-  <data name="TopBarScriptHint" xml:space="preserve">
-    <value>不写前缀时按 !p 执行。可用前缀：!p / !power、!pwsh / !ps7、!ps5 / !winps、!pf / !powerf。前缀须单独占第一行，脚本从下一行开始，只支持半角 !。保存不会执行脚本。</value>
-  </data>
-  <data name="WorkspaceScriptsStoppedTitle" xml:space="preserve">
-    <value>工作区已切换</value>
-  </data>
-  <data name="WorkspaceScriptsStoppedMessage" xml:space="preserve">
-    <value>上一工作区的脚本进程已结束。</value>
-  </data>
-  <data name="WorkspaceSessionsClosedMessage" xml:space="preserve">
-    <value>上一工作区的常驻 PowerShell 会话已关闭。</value>
-  </data>
-  <data name="WorkspaceScriptsAndSessionsStoppedMessage" xml:space="preserve">
-    <value>上一工作区的脚本进程已结束，常驻 PowerShell 会话已关闭。</value>
-  </data>
 </root>
