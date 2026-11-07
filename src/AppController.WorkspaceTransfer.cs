@@ -158,6 +158,9 @@ public sealed partial class AppController
         }
         finally
         {
+            // Persistence/rollback is finished. A restored plugin may read the
+            // current workspace during Create, which must no longer be gated.
+            _workspaceSwitching = false;
             if (!committed && !IsExiting && State.Papers.Contains(paper) &&
                 detachedBodyWindow != null && _windows.TryGetValue(paper.Id, out var liveWindow) &&
                 ReferenceEquals(liveWindow, detachedBodyWindow))
@@ -168,7 +171,6 @@ public sealed partial class AppController
                     Trace.TraceWarning("Workspace paper move body restore failed: {0}", restoreError);
                 }
             }
-            _workspaceSwitching = false;
             if (!IsExiting)
             {
                 ResumeCoreHistoryBackupTimer();

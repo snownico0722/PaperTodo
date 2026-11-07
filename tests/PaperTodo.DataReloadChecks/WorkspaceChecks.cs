@@ -1408,11 +1408,12 @@ internal static partial class Program
         var manifest = new PaperBodyPluginManifest
         {
             Id = id, Kind = "native", ApiVersion = "2.3", StateVersion = 3,
-            DirectoryPath = path, MaxPaperInstances = 0
+            DirectoryPath = path, MaxPaperInstances = 0, Permissions = [PaperTodoPermissionNames.PapersRead]
         };
         var descriptor = new PaperBodyPluginDescriptor(id, "Workspace body move", "", new Version(1, 0),
             "2.3", 3, PaperBodyPluginKind.Native, PaperBodyCapabilities.None,
-            PaperTodoPermissionNames.None, path, path, "fixture", typeof(WorkspaceMoveBodyProbe), manifest);
+            new HashSet<string> { PaperTodoPermissionNames.PapersRead },
+            path, path, "fixture", typeof(WorkspaceMoveBodyProbe), manifest);
         var loadedType = typeof(PaperBodyPluginRegistry).GetNestedType("LoadedNativePlugin", BindingFlags.NonPublic)!;
         loaded[path] = Activator.CreateInstance(loadedType, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
             null, [path, descriptor, null], null)!;
@@ -1518,7 +1519,12 @@ internal static partial class Program
 
 public sealed class WorkspaceMoveBodyProbe : IPaperBodyPlugin
 {
-    public IPaperBodySession Create(PaperBodyContext context) => new Session(context);
+    public IPaperBodySession Create(PaperBodyContext context)
+    {
+        if (context.Workspace.GetPaper(context.PaperId) == null)
+            throw new InvalidOperationException("A restored body could not read its source paper.");
+        return new Session(context);
+    }
 
     public sealed class Session(PaperBodyContext context) : IPaperBodySession
     {
