@@ -20,10 +20,9 @@ internal static class MaterialDragBenchmarks
     private sealed record Counters(long Layouts);
 
     internal const string FixtureMarker = ".papertodo-drag-fixture";
-    internal static int RunIsolated(string output) => RunIsolatedCore(output, "--drag-fixture");
-    internal static int RunIsolatedHotpath(string output) => RunIsolatedCore(output, "--hotpath-fixture");
+    internal static int RunIsolated(string output) => RunIsolatedCore(output);
 
-    private static int RunIsolatedCore(string output, string fixtureCommand)
+    private static int RunIsolatedCore(string output)
     {
         var directory = Path.Combine(Path.GetTempPath(), "PaperTodo.DragChecks", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
@@ -46,7 +45,7 @@ internal static class MaterialDragBenchmarks
                 WorkingDirectory = directory, UseShellExecute = false,
                 RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true
             };
-            start.ArgumentList.Add(fixtureCommand); start.ArgumentList.Add(Path.GetFullPath(output));
+            start.ArgumentList.Add("--drag-fixture"); start.ArgumentList.Add(Path.GetFullPath(output));
             using var child = Process.Start(start)!;
             var stdout = child.StandardOutput.ReadToEndAsync(); var stderr = child.StandardError.ReadToEndAsync();
             if (!child.WaitForExit(240_000))
