@@ -99,8 +99,6 @@ public sealed partial class PaperWindow : Window
     private readonly Dictionary<string, Dictionary<string, Action>> _linkedPaperTitleRefreshers =
         new(StringComparer.Ordinal);
     private bool _updatingTopBarResponsiveLayout;
-    // Temporary isolated benchmark switch. Never merge this test-only knob into main.
-    internal bool ResizePerformanceSkipTopBarUpdates { get; set; }
     private readonly List<List<PaperItem>> _redoStack = new();
     private const int MaxUndoDepth = 100;
     private string? _activeOriginalItemId;
@@ -2446,7 +2444,7 @@ public sealed partial class PaperWindow : Window
 
     private void UpdateTopBarResponsiveLayout()
     {
-        if (ResizePerformanceSkipTopBarUpdates || _updatingTopBarResponsiveLayout ||
+        if (_updatingTopBarResponsiveLayout ||
             _topBar == null || _topBarTitleHost == null ||
             _topBarActionButtonsHost == null || _paperIconButton == null ||
             _moreActionsButton == null || _closeButton == null || _paper.IsCollapsed)
