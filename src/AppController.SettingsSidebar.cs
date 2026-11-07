@@ -99,7 +99,7 @@ public sealed partial class AppController
                 "window.fullscreen_mode" => "general.options",
             "title.max_length" or "capsule.title_measure_limit" or "capsule.hide_close_button" or
                 "capsule.master_compact" => "general.capsuleAppearance",
-            "capsule.gap" or "window.resize_grip" => "visual.options",
+            "capsule.gap" => "visual.options",
             "edge.non_topmost" => "general.edgeTopmost",
             "scripts.run_linked_on_click" => "general.todos",
             "note.markdown_mode" or "note.edit_animations" or "note.image_reference_text" => "note.markdown",
@@ -319,6 +319,7 @@ public sealed partial class AppController
         advancedModeToggle.Margin = new Thickness(2, 2, 0, 0);
         advancedModeToggle.IsEnabled = !FollowsMainWorkspaceSettings;
         advancedModeToggle.ToolTip = BuildSettingsHintTooltip(Strings.Get("TipAdvancedSettingsMode"));
+        ToolTipService.SetShowOnDisabled(advancedModeToggle, true);
         footer.Children.Add(advancedModeToggle);
 
         footer.Children.Add(BuildSettingsSignature());
