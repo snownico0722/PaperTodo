@@ -1222,24 +1222,22 @@ public sealed partial class AppController
                 ToggleExperimentalTodoReminders),
             "TipLabsTodoReminders"));
 
-        var showButtonToggle = WrapWithHint(
-            WrappingSettingsToggle(
-                Strings.Get("LabsTodoReminderShowButton"),
-                State.ExperimentalTodoReminderShowButton,
-                ToggleExperimentalTodoReminderShowButton),
-            "TipLabsTodoReminderShowButton");
-        showButtonToggle.IsEnabled = State.ExperimentalTodoReminders;
+        var showButtonOption = WrappingSettingsToggle(
+            Strings.Get("LabsTodoReminderShowButton"),
+            State.ExperimentalTodoReminderShowButton,
+            ToggleExperimentalTodoReminderShowButton);
+        showButtonOption.IsEnabled = State.ExperimentalTodoReminders;
+        var showButtonToggle = WrapWithHint(showButtonOption, "TipLabsTodoReminderShowButton");
         showButtonToggle.Opacity =
             State.ExperimentalTodoReminders ? 1.0 : 0.55;
         content.Children.Add(showButtonToggle);
 
-        var soundToggle = WrapWithHint(
-            WrappingSettingsToggle(
-                Strings.Get("LabsTodoReminderSoundEnabled"),
-                State.ExperimentalTodoReminderSoundEnabled,
-                ToggleExperimentalTodoReminderSoundEnabled),
-            "TipLabsTodoReminderSoundEnabled");
-        soundToggle.IsEnabled = State.ExperimentalTodoReminders;
+        var soundOption = WrappingSettingsToggle(
+            Strings.Get("LabsTodoReminderSoundEnabled"),
+            State.ExperimentalTodoReminderSoundEnabled,
+            ToggleExperimentalTodoReminderSoundEnabled);
+        soundOption.IsEnabled = State.ExperimentalTodoReminders;
+        var soundToggle = WrapWithHint(soundOption, "TipLabsTodoReminderSoundEnabled");
         soundToggle.Opacity =
             State.ExperimentalTodoReminders ? 1.0 : 0.55;
         content.Children.Add(soundToggle);
