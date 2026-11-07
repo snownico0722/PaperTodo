@@ -68,16 +68,14 @@ public sealed partial class AppController
         };
         workspaceColumn.Children.Add(optionsPanel);
 
-        optionsPanel.Children.Add(WrappingSettingsToggle(WorkspaceUi(
-                "顶栏快捷切换显示具体名称", "Choose workspaces by name in the top bar",
-                "上部バーで名前を表示して選択", "상단 표시줄에서 이름으로 선택"),
-            WorkspaceOptions.TopBarNamePicker, async () =>
+        optionsPanel.Children.Add(WrapWithHint(WrappingSettingsToggle(
+            Strings.Get("WorkspaceTopBarNamePicker"), WorkspaceOptions.TopBarNamePicker, async () =>
             {
                 var next = WorkspaceOptions.Normalized();
                 next.TopBarNamePicker = !next.TopBarNamePicker;
                 await ChangeWorkspaceConfigurationAsync(next);
                 RefreshSettingsWindowContent();
-            }));
+            }), "TipWorkspaceTopBarNamePicker"));
 
         var heading = new DockPanel { Margin = new Thickness(0, 12, 0, 5) };
         var create = SettingsTextButton(WorkspaceUi("新建", "New", "新規", "새로 만들기"));
@@ -299,7 +297,15 @@ public sealed partial class AppController
         AutomationProperties.SetAutomationId(card, "WorkspaceSlot" + slot);
         AutomationProperties.SetName(card, label + " #" + slot);
 
+        Grid? trailingActions = null;
+        var content = new Grid();
+        content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        content.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         var line = new WrapPanel { VerticalAlignment = VerticalAlignment.Center };
+        Grid.SetColumnSpan(line, 2);
+        content.Children.Add(line);
         var name = new TextBlock
         {
             Text = label,
@@ -372,15 +378,6 @@ public sealed partial class AppController
         line.Children.Add(name);
         line.Children.Add(editor);
         line.Children.Add(renameActions);
-        // WrapPanel wraps its children, but a single unbounded name cannot wrap.
-        card.SizeChanged += (_, _) =>
-        {
-            var width = Math.Max(1, card.ActualWidth - card.Padding.Left - card.Padding.Right
-                - card.BorderThickness.Left - card.BorderThickness.Right);
-            name.MaxWidth = width;
-            editor.MaxWidth = width;
-        };
-
         var editing = false;
         var previousDraft = label;
         var correctingDraft = false;
@@ -419,6 +416,7 @@ public sealed partial class AppController
             renameIcon.Data = pencil;
             rename.ToolTip = WorkspaceUi("编辑名称", "Edit name", "名前を編集", "이름 편집");
             rename.IsEnabled = true;
+            UpdateCardLayout();
             if (ReferenceEquals(_workspaceRenameOutsideClick, outsideClick))
                 _workspaceRenameOutsideClick = null;
         }
@@ -460,6 +458,7 @@ public sealed partial class AppController
             _workspaceRenameOutsideClick = outsideClick;
             editor.SelectAll();
             editor.Focus();
+            UpdateCardLayout();
         };
         editor.KeyDown += (_, e) =>
         {
@@ -469,8 +468,14 @@ public sealed partial class AppController
 
         if (slot > 1)
         {
-            renameActions.Margin = new Thickness(0, 0, 6, 0);
-            var controls = new Grid { VerticalAlignment = VerticalAlignment.Center };
+            // Keep actions right-aligned: share the name row when there is room,
+            // and only wrap to the next row when the content does not fit.
+            var controls = new Grid
+            {
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 3, 0, 0)
+            };
             controls.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             controls.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             var follow = WrappingSettingsToggle(Strings.Get("WorkspaceFollowMain"),
@@ -497,9 +502,36 @@ public sealed partial class AppController
             delete.Click += async (_, _) => await DeleteWorkspaceFromSettingsAsync(slot);
             Grid.SetColumn(delete, 1);
             controls.Children.Add(delete);
-            line.Children.Add(controls);
+            Grid.SetRow(controls, 1);
+            Grid.SetColumnSpan(controls, 2);
+            trailingActions = controls;
+            content.Children.Add(controls);
         }
-        card.Child = line;
+        card.Child = content;
+
+        void UpdateCardLayout()
+        {
+            var available = Math.Max(1, card.ActualWidth - card.Padding.Left - card.Padding.Right
+                - card.BorderThickness.Left - card.BorderThickness.Right);
+            name.MaxWidth = available;
+            editor.MaxWidth = available;
+            if (trailingActions == null || card.ActualWidth <= 0) return;
+
+            // Evaluate natural content width, not the current wrapped line.
+            line.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            trailingActions.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            var inline = line.DesiredSize.Width + trailingActions.DesiredSize.Width <= available;
+            var targetRow = inline ? 0 : 1;
+            if (Grid.GetRow(trailingActions) == targetRow) return;
+            Grid.SetRow(trailingActions, targetRow);
+            Grid.SetColumn(trailingActions, inline ? 1 : 0);
+            Grid.SetColumnSpan(trailingActions, inline ? 1 : 2);
+            Grid.SetColumnSpan(line, inline ? 1 : 2);
+            trailingActions.Margin = inline ? new Thickness(0) : new Thickness(0, 3, 0, 0);
+        }
+
+        card.SizeChanged += (_, _) => UpdateCardLayout();
+        editor.TextChanged += (_, _) => UpdateCardLayout();
 
         // The whole card selects its workspace, except its independent controls.
         // Inspect the routed hit to avoid selection on rename, delete or follow clicks.

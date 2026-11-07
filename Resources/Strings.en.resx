@@ -429,13 +429,13 @@ Error: {0}</value>
     <value>Show main capsule</value>
   </data>
   <data name="SettingsShowDeepCapsuleWhileExpanded" xml:space="preserve">
-    <value>Keep edge capsule when expanded</value>
+    <value>Keep capsule while expanded</value>
   </data>
   <data name="SettingsRememberDeepCapsuleExpandedPosition" xml:space="preserve">
     <value>Remember open position</value>
   </data>
   <data name="SettingsCollapseExpandedDeepCapsuleOnClick" xml:space="preserve">
-    <value>Click capsule again to retract paper</value>
+    <value>Click capsule again to retract</value>
   </data>
   <data name="SettingsHideEdgeCapsuleCloseButtonOnHover" xml:space="preserve">
     <value>Hide edge close button</value>
@@ -552,7 +552,7 @@ Error: {0}</value>
     <value>Basic rendering keeps Markdown syntax marks but dims them, while showing simple formatting such as list bullets and dividers. Full rendering makes headings, lists, quotes, and code blocks look closer to the final result and hides most syntax marks. While editing, the block containing the cursor shows its marks again for easy changes.</value>
   </data>
   <data name="SettingsMarkdownEditAnimation" xml:space="preserve">
-    <value>Markdown rendering animation</value>
+    <value>Markdown edit animation</value>
   </data>
   <data name="TipMarkdownEditAnimation" xml:space="preserve">
     <value>When editing Markdown, syntax marks that reappear fade in smoothly as the editor changes state.</value>
@@ -619,7 +619,7 @@ Error: {0}</value>
     <value>Start PaperTodo when Windows signs in.</value>
   </data>
   <data name="SettingsEnableToolTips" xml:space="preserve">
-    <value>Show hover hints</value>
+    <value>Enable hover hints</value>
   </data>
   <data name="SettingsHidePapersFromTaskbar" xml:space="preserve">
     <value>Hide icons from taskbar</value>
@@ -627,10 +627,10 @@ Error: {0}</value>
   <data name="TipHidePapersFromTaskbar" xml:space="preserve">
     <value>Expanded papers do not appear on the taskbar.
 Still reachable via tray, desktop papers, and capsules.
-Also forced on when “Hide papers from window switching” is on.</value>
+Also forced on when “Hide papers in task switcher” is on.</value>
   </data>
   <data name="SettingsHidePapersFromWindowSwitcher" xml:space="preserve">
-    <value>Hide papers from window switching</value>
+    <value>Hide papers in task switcher</value>
   </data>
   <data name="TipHidePapersFromWindowSwitcher" xml:space="preserve">
     <value>Expanded papers will not appear in Alt+Tab, Task View, or the taskbar. You can still access them from the tray, desktop papers, or capsules. Papers will appear on every virtual desktop, and the Labs feature to wake papers on the current desktop will be unavailable.</value>
@@ -640,13 +640,13 @@ Also forced on when “Hide papers from window switching” is on.</value>
 Settings info icons always stay available.</value>
   </data>
   <data name="SettingsEnableAnimations" xml:space="preserve">
-    <value>Enable animations</value>
+    <value>Enable transition animations</value>
   </data>
   <data name="TipEnableAnimations" xml:space="preserve">
     <value>Transition animations for common actions; off feels more immediate.</value>
   </data>
   <data name="SettingsFastAnimations" xml:space="preserve">
-    <value>Fast animations</value>
+    <value>Enable fast animations</value>
   </data>
   <data name="TipFastAnimations" xml:space="preserve">
     <value>Shorten interface animations to about 60% of their normal duration for faster responses while keeping transitions. This has no effect when animations are disabled.</value>
@@ -677,7 +677,7 @@ Either way, any side over 4096 px is rejected.</value>
     <value>Auto-clear completed todos</value>
   </data>
   <data name="SettingsAutoCompressLargeImages" xml:space="preserve">
-    <value>Automatically compress large images</value>
+    <value>Auto-compress large images</value>
   </data>
   <data name="SettingsPersistentPowerShellProcess" xml:space="preserve">
     <value>Persistent PowerShell process</value>
@@ -704,7 +704,7 @@ Either way, any side over 4096 px is rejected.</value>
     <value>Show more of linked titles</value>
   </data>
   <data name="SettingsHideLinkedPapersFromCapsules" xml:space="preserve">
-    <value>Linked papers not shown as capsules</value>
+    <value>Hide linked paper capsules</value>
   </data>
   <data name="SettingsResetNoteZoom" xml:space="preserve">
     <value>Restore note zoom</value>
@@ -722,7 +722,7 @@ Either way, any side over 4096 px is rejected.</value>
     <value>Unpin</value>
   </data>
   <data name="SettingsShortcuts" xml:space="preserve">
-    <value>Keyboard shortcuts</value>
+    <value>Shortcuts</value>
   </data>
   <data name="SettingsBehavior" xml:space="preserve">
     <value>Behavior</value>
@@ -738,7 +738,7 @@ Either way, any side over 4096 px is rejected.</value>
 When off, only hides those items; selected values stay unchanged.</value>
   </data>
   <data name="SettingsVisual" xml:space="preserve">
-    <value>Visual</value>
+    <value>Style &amp; Text</value>
   </data>
   <data name="SettingsLabs" xml:space="preserve">
     <value>Labs</value>
@@ -1085,7 +1085,7 @@ Per-note percentage zoom stacks on top.</value>
     <value>Normal, edge, drag, and master capsule text: one size and bold setting.</value>
   </data>
   <data name="SettingsDeepCapsuleTitleMeasureLimit" xml:space="preserve">
-    <value>Visible edge capsule title length</value>
+    <value>Edge capsule title length</value>
   </data>
   <data name="TipDeepCapsuleTitleMeasureLimit" xml:space="preserve">
     <value>Set how many title characters a docked capsule shows while idle. Choose Unlimited or 0–20; setting 0 shows only the icon and hides the title text.</value>
@@ -1213,7 +1213,7 @@ When off, open at the docked edge or remembered position.</value>
   <data name="TipLabsMcpBlankWrites" xml:space="preserve"><value>Allow connected AI tools to create papers, add todos, fill empty content, and append text to existing notes. This permission does not allow replacing or overwriting existing text.</value></data>
   <data name="LabsMcpFullWrites" xml:space="preserve"><value>Allow editing existing content</value></data>
   <data name="TipLabsMcpFullWrites" xml:space="preserve"><value>Allow connected AI tools to edit existing todos, replace note text, and change todo completion states and reminder times. This also includes permission to create papers, add todos, and append content.</value></data>
-  <data name="LabsMcpDeletes" xml:space="preserve"><value>Allow direct MCP deletion</value></data>
+  <data name="LabsMcpDeletes" xml:space="preserve"><value>Allow deleting content</value></data>
   <data name="TipLabsMcpDeletes" xml:space="preserve"><value>Allow connected AI tools to delete papers or todos directly, without asking each time. Deletion cannot be automatically undone; enable this only for AI tools you trust.</value></data>
   <data name="LabsMcpStatusReady" xml:space="preserve"><value>Local MCP interface is ready</value></data>
   <data name="LabsMcpStatusDisabled" xml:space="preserve"><value>Local MCP interface is off</value></data>
@@ -1488,16 +1488,16 @@ When off, open at the docked edge or remembered position.</value>
     <value>Plugin actions</value>
   </data>
   <data name="TopBarSettingsTitle" xml:space="preserve">
-    <value>Top-bar shortcuts</value>
+    <value>Title-bar actions</value>
   </data>
   <data name="TipTopBarShortcutSettings" xml:space="preserve">
-    <value>Drag shortcuts to reorder them, or move them across the divider to place them in the top bar or menu. Checking Hide removes the action from both the top bar and paper menus. If the top bar runs out of space, its shortcuts temporarily move into the menu.</value>
+    <value>Drag shortcuts to reorder them, or move them across the divider to place them in the top bar or overflow menu. Checking Hide removes the action from both the top bar and paper menus. If the top bar runs out of space, its shortcuts temporarily move into the overflow menu.</value>
   </data>
   <data name="TopBarShownHeading" xml:space="preserve">
     <value>Show in title bar</value>
   </data>
   <data name="TopBarMenuHeading" xml:space="preserve">
-    <value>Show in menu</value>
+    <value>Show in overflow menu</value>
   </data>
   <data name="TopBarEmptyDropArea" xml:space="preserve">
     <value>Drag an action here</value>
@@ -1555,6 +1555,12 @@ When off, open at the docked edge or remembered position.</value>
   </data>
   <data name="WorkspaceSettingsTitle" xml:space="preserve">
     <value>Workspaces</value>
+  </data>
+  <data name="WorkspaceTopBarNamePicker" xml:space="preserve">
+    <value>Choose by name</value>
+  </data>
+  <data name="TipWorkspaceTopBarNamePicker" xml:space="preserve">
+    <value>When on, the top-bar workspace button opens a list of workspace names. When off, clicking it cycles through workspaces.</value>
   </data>
   <data name="WorkspaceSettingsDescription" xml:space="preserve">
     <value>When enabled, you can create separate workspaces. Each keeps its own papers, images, layout, and plugin data. Switch from the paper top bar or Settings. Turning off workspaces does not delete saved data, so you can resume using them later.</value>
@@ -1766,6 +1772,8 @@ Resolve the file access problem and retry, or choose “Rebuild workspace” to 
   <data name="MenuExportAllPapers" xml:space="preserve"><value>All notes and todos</value></data>
   <data name="MenuTopBarAssociationDragTodo" xml:space="preserve"><value>Drag to a todo to associate</value></data>
   <data name="MenuTopBarAssociationDragWindow" xml:space="preserve"><value>Drag to a window to associate</value></data>
-  <data name="WorkspaceDataSettingsTitle" xml:space="preserve"><value>Workspaces &amp; Data</value></data>
+  <data name="WorkspaceDataSettingsTitle" xml:space="preserve"><value>Spaces &amp; Data</value></data>
   <data name="SettingsDataProcessing" xml:space="preserve"><value>Data handling</value></data>
+  <data name="TipHideSurfaceOutline" xml:space="preserve"><value>Hide the thin outer border on papers, capsules and menus without changing their size. Borders stay visible in high-contrast mode.</value></data>
+  <data name="TipScriptCapsule" xml:space="preserve"><value>Start a note with !p or another script prefix, then write PowerShell below. Click the collapsed capsule to run it. These settings also apply to the title-bar Run Script action.</value></data>
 </root>

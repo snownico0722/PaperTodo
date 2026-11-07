@@ -400,25 +400,8 @@ public sealed partial class AppController
             Strings.Get("SettingsDistinguishNumpadShortcutDigits"),
             State.DistinguishNumpadShortcutDigits,
             ToggleDistinguishNumpadShortcutDigits);
-        distinguishNumpadToggle.Content = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            VerticalAlignment = VerticalAlignment.Center,
-            Children =
-            {
-                new TextBlock
-                {
-                    Text = Strings.Get("SettingsDistinguishNumpadShortcutDigits"),
-                    Foreground = TrayTextBrush,
-                    FontSize = AppTypography.Scale(13),
-                    VerticalAlignment = VerticalAlignment.Center
-                },
-                CreateSettingsHintGlyph(
-                    "TipSettingsDistinguishNumpadShortcutDigits",
-                    new Thickness(4, 0, 0, 0))
-            }
-        };
-        rows.Children.Add(distinguishNumpadToggle);
+        rows.Children.Add(WrapWithHint(
+            distinguishNumpadToggle, "TipSettingsDistinguishNumpadShortcutDigits"));
 
         var edgeQueueTipLabelWidth = MeasureShortcutTipLabelMinWidth(
             (Strings.Get("ShortcutEdgeLeftSequence"), AppTypography.Scale(12.5), FontWeights.Normal),
@@ -439,23 +422,8 @@ public sealed partial class AppController
             Strings.Get("SettingsOpenEdgeCapsuleShortcutAtCursor"),
             State.OpenEdgeCapsuleShortcutAtCursor,
             ToggleOpenEdgeCapsuleShortcutAtCursor);
-        openAtCursorToggle.Content = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            VerticalAlignment = VerticalAlignment.Center,
-            Children =
-            {
-                new TextBlock
-                {
-                    Text = Strings.Get("SettingsOpenEdgeCapsuleShortcutAtCursor"),
-                    Foreground = TrayTextBrush,
-                    FontSize = AppTypography.Scale(13),
-                    VerticalAlignment = VerticalAlignment.Center
-                },
-                CreateSettingsHintGlyph("TipOpenEdgeCapsuleShortcutAtCursor", new Thickness(4, 0, 0, 0))
-            }
-        };
-        rows.Children.Add(openAtCursorToggle);
+        rows.Children.Add(WrapWithHint(
+            openAtCursorToggle, "TipOpenEdgeCapsuleShortcutAtCursor"));
 
         root.Children.Add(rows);
 
@@ -915,6 +883,9 @@ public sealed partial class AppController
             Background = Brushes.Transparent,
             Foreground = TrayTextBrush,
             FontSize = AppTypography.Scale(12),
+            VerticalAlignment = VerticalAlignment.Center,
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+            VerticalContentAlignment = VerticalAlignment.Center,
             Cursor = Cursors.Hand,
             Focusable = false,
             Style = BuildSettingsCloseButtonStyle()

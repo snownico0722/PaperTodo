@@ -895,12 +895,12 @@ public sealed partial class AppController
 
         var newTodoButton = TrayToolbarAction(
             menu,
-            CreateTrayAddIcon("✓"),
+            CreateTrayAddIcon(PaperTypes.Todo),
             Strings.Get("TrayNewTodo"),
             () => CreatePaper(PaperTypes.Todo, show: true));
         var newNoteButton = TrayToolbarAction(
             menu,
-            CreateTrayAddIcon("✎"),
+            CreateTrayAddIcon(PaperTypes.Note),
             Strings.Get("TrayNewNote"),
             () => CreatePaper(PaperTypes.Note, show: true));
 
@@ -1099,9 +1099,9 @@ public sealed partial class AppController
         return icon;
     }
 
-    private FrameworkElement CreateTrayAddIcon(string glyph)
+    private FrameworkElement CreateTrayAddIcon(string paperType)
     {
-        return CreateTrayAddVectorIcon(glyph);
+        return CreateTrayAddVectorIcon(paperType);
     }
 
     private MenuItem TrayPaperItem(ContextMenu menu, PaperData paper)

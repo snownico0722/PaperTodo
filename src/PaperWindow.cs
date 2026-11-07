@@ -2693,7 +2693,7 @@ public sealed partial class PaperWindow : Window
             switch (action)
             {
                 case PaperTopBarShortcuts.RunScript when
-                    forDeepCapsuleSlot || !IsTopBarCommandVisible(_runScriptButton):
+                    !forDeepCapsuleSlot && !_paper.IsCollapsed && !IsTopBarCommandVisible(_runScriptButton):
                     menu.Items.Add(MenuItem(Strings.Get("TopBarRunScript"),
                         (_, _) => _controller.RunTopBarScript(this)));
                     break;

@@ -27,12 +27,6 @@ public sealed partial class AppController
         rightColumn.Children.Add(BuildSettingsLiveRegion("general.capsules", BuildSettingsCapsuleOptions));
         rightColumn.Children.Add(BuildSettingsLiveRegion(
             "general.edgeBrowsing", BuildLabsEdgeCapsuleHoverIntentSettings));
-        rightColumn.Children.Add(BuildSettingsLiveRegion("general.edgeTopmost", () =>
-            State.UseCapsuleMode && State.UseDeepCapsuleMode
-                ? WrapWithHint(SettingsToggle(Strings.Get("LabsDockedCapsulesNonTopmost"),
-                    State.ExperimentalDockedCapsulesNonTopmost, ToggleExperimentalDockedCapsulesNonTopmost),
-                    "TipLabsDockedCapsulesNonTopmost")
-                : new StackPanel()));
         if (State.AdvancedSettingsMode)
             rightColumn.Children.Add(BuildSettingsLiveRegion(
                 "general.capsuleAppearance", BuildSettingsCapsuleAppearanceOptions));
@@ -69,6 +63,8 @@ public sealed partial class AppController
         Add("TrayDeepCapsuleMode", State.UseDeepCapsuleMode, ToggleDeepCapsuleMode, "TipDeepCapsuleMode");
         if (State.UseDeepCapsuleMode)
         {
+            Add("LabsDockedCapsulesNonTopmost", State.ExperimentalDockedCapsulesNonTopmost,
+                ToggleExperimentalDockedCapsulesNonTopmost, "TipLabsDockedCapsulesNonTopmost");
             Add("SettingsShowDeepCapsuleWhileExpanded", State.ShowDeepCapsuleWhileExpanded,
                 ToggleDeepCapsuleExpandedSlot, "TipShowDeepCapsuleWhileExpanded");
             Add("SettingsRememberDeepCapsuleExpandedPosition", State.RememberDeepCapsuleExpandedPosition,
@@ -123,31 +119,9 @@ public sealed partial class AppController
                 SystemSettingsHelper.IsStartupEnabled(),
                 ToggleStartup),
             "TipStartup"));
-        leftColumn.Children.Add(WrapWithHint(
-            SettingsToggle(
-                Strings.Get("SettingsEnableToolTips"),
-                State.EnableToolTips,
-                ToggleToolTips),
-            "TipEnableToolTips"));
-        leftColumn.Children.Add(WrapWithHint(
-            SettingsToggle(
-                Strings.Get("SettingsEnableAnimations"),
-                State.EnableAnimations,
-                ToggleAnimations),
-            "TipEnableAnimations"));
-        leftColumn.Children.Add(WrapWithHint(
-            SettingsToggle(
-                Strings.Get("SettingsFastAnimations"),
-                State.FastAnimations,
-                ToggleFastAnimations),
-            "TipFastAnimations"));
-
         leftColumn.Children.Add(BuildSettingsLiveRegion(
             "general.telemetry",
             CreateAnonymousUsageStatisticsSettingsRow));
-
-        leftColumn.Children.Add(BuildSettingsLiveRegion(
-            "general.topbar", BuildTopBarShortcutSettings));
 
         if (State.AdvancedSettingsMode)
         {
@@ -176,6 +150,10 @@ public sealed partial class AppController
                     topMargin: 8)));
         }
 
+        leftColumn.Children.Add(SettingsSoftDivider());
+        leftColumn.Children.Add(BuildSettingsLiveRegion(
+            "general.topbar", BuildTopBarShortcutSettings));
+
         RefreshSettingsSystemVisibilityToggleStates();
         return leftColumn;
     }
@@ -192,9 +170,6 @@ public sealed partial class AppController
 
     private void RestoreSettingsSidebarGeneralDefaults()
     {
-        State.EnableToolTips = true;
-        State.EnableAnimations = true;
-        State.FastAnimations = false;
         State.UiLanguage = UiLanguages.Default;
         State.HidePapersFromTaskbar = true;
         State.HidePapersFromWindowSwitcher = true;

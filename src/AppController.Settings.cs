@@ -1557,6 +1557,13 @@ public sealed partial class AppController
         leftColumn.Children.Add(CreateSkinSettings());
         leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsDeepCapsuleGap")), "TipDeepCapsuleGap"));
         leftColumn.Children.Add(CreateDeepCapsuleGapSegmentSelector());
+        leftColumn.Children.Add(SettingsSoftDivider());
+        leftColumn.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("SettingsEnableToolTips"),
+            State.EnableToolTips, ToggleToolTips), "TipEnableToolTips"));
+        leftColumn.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("SettingsEnableAnimations"),
+            State.EnableAnimations, ToggleAnimations), "TipEnableAnimations"));
+        leftColumn.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("SettingsFastAnimations"),
+            State.FastAnimations, ToggleFastAnimations), "TipFastAnimations"));
         rightColumn.Children.Add(SettingsSectionLabel(Strings.Get("SettingsFontGroup")));
         rightColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsUiFont")), "TipUiFont"));
         rightColumn.Children.Add(CreateUiFontPresetSegmentSelector());
@@ -1684,6 +1691,9 @@ public sealed partial class AppController
         State.MicaAlwaysActive = false;
         State.MaterialTransparency = MaterialTransparencyLevels.Medium;
         State.HideSurfaceOutline = false;
+        State.EnableToolTips = true;
+        State.EnableAnimations = true;
+        State.FastAnimations = false;
         State.UiFontPreset = UiFontPresets.Default;
         State.TextRenderingProfile = TextRenderingProfiles.Standard;
         State.CustomFontEnhancedBold = false;
@@ -1804,6 +1814,7 @@ public sealed partial class AppController
             Foreground = TrayWeakTextBrush,
             FontSize = AppTypography.Scale(12),
             FontWeight = FontWeights.SemiBold,
+            TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 10, 0, 2)
         };
     }
@@ -1824,6 +1835,7 @@ public sealed partial class AppController
             Foreground = TrayWeakTextBrush,
             FontSize = AppTypography.Scale(12),
             FontWeight = FontWeights.SemiBold,
+            TextWrapping = TextWrapping.Wrap,
             VerticalAlignment = VerticalAlignment.Center
         };
         Grid.SetColumn(label, 0);
@@ -1855,6 +1867,7 @@ public sealed partial class AppController
             Foreground = TrayWeakTextBrush,
             FontSize = AppTypography.Scale(11),
             FontWeight = FontWeights.Medium,
+            TextWrapping = TextWrapping.Wrap,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, topMargin, 0, 0)
         };
@@ -1866,7 +1879,7 @@ public sealed partial class AppController
         double editorWidth = 136,
         string? tipKey = null,
         double topMargin = 7,
-        bool wrapLabel = false)
+        bool wrapLabel = true)
     {
         var row = new Grid
         {
@@ -1967,7 +1980,7 @@ public sealed partial class AppController
         return row;
     }
 
-    private CheckBox SettingsToggle(string text, bool isChecked, Action onToggle, bool wrapText = false)
+    private CheckBox SettingsToggle(string text, bool isChecked, Action onToggle, bool wrapText = true)
     {
         var checkBox = new CheckBox
         {
@@ -2041,22 +2054,6 @@ public sealed partial class AppController
     private UIElement WrapWithHint(FrameworkElement option, ToolTip tooltip)
     {
         var grid = new Grid { Margin = new Thickness(0, 4, 0, 0) };
-        if (tooltip.Content is TextBlock description)
-        {
-            var disabledTooltip = BuildSettingsHintTooltip(description.Text);
-            ToolTipService.SetShowOnDisabled(grid, true);
-            ToolTipPreferences.SetAlwaysEnabled(grid, true);
-            ToolTipService.SetInitialShowDelay(grid, 200);
-            ToolTipService.SetShowDuration(grid, 20000);
-            ToolTipService.SetBetweenShowDelay(grid, 0);
-
-            void RefreshDisabledHint() =>
-                grid.ToolTip = !grid.IsEnabled || !option.IsEnabled ? disabledTooltip : null;
-
-            grid.IsEnabledChanged += (_, _) => RefreshDisabledHint();
-            option.IsEnabledChanged += (_, _) => RefreshDisabledHint();
-            RefreshDisabledHint();
-        }
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
@@ -2135,7 +2132,7 @@ public sealed partial class AppController
 
     private void RefreshSettingsCapsuleToggleStates() =>
         RefreshSettingsRegions("general.capsules", "general.edgeBrowsing",
-            "general.edgeTopmost", "general.capsuleAppearance");
+            "general.capsuleAppearance");
 
     private void RefreshSettingsSystemVisibilityToggleStates()
     {
@@ -2376,6 +2373,11 @@ public sealed partial class AppController
 
         template.Triggers.Add(hoverTrigger);
         template.Triggers.Add(pressedTrigger);
+
+        var disabledTrigger = new Trigger { Property = UIElement.IsEnabledProperty, Value = false };
+        disabledTrigger.Setters.Add(new Setter(UIElement.OpacityProperty, 0.45, "Bd"));
+        disabledTrigger.Setters.Add(new Setter(FrameworkElement.CursorProperty, Cursors.Arrow, "Bd"));
+        template.Triggers.Add(disabledTrigger);
 
         style.Setters.Add(new Setter(Control.TemplateProperty, template));
         return style;

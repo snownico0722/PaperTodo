@@ -11,10 +11,10 @@ namespace PaperTodo;
 public sealed partial class PaperWindow
 {
     private const string RunScriptIconPath =
-        "M5 4.5 H19 Q22 4.5 22 7.5 V16.5 Q22 19.5 19 19.5 H5 Q2 19.5 2 16.5 V7.5 Q2 4.5 5 4.5 Z " +
-        "M6.5 9 L10 12 L6.5 15 M13 15 H17.5";
+        "M6 4.5 H18 Q21 4.5 21 7.5 V16.5 Q21 19.5 18 19.5 H6 Q3 19.5 3 16.5 V7.5 Q3 4.5 6 4.5 Z " +
+        "M7 9 L10.25 12 L7 15 M13 15 H17";
 
-    private const string NewPaperPlusPath = "M2 12 H10 M6 8 V16 ";
+    private const string NewPaperPlusPath = "M2 12 H8 M5 9 V15 ";
 
     // Keep the drawing's margins when centering it. Stretching to its ink bounds
     // would give a horizontal stroke and a full terminal window the same height.
@@ -92,7 +92,7 @@ public sealed partial class PaperWindow
     {
         if (Theme.IsPixelSkin) return CreatePixelIcon(owner,
             ".........", "#######..", "#.....#.#", "#....#..#", "#.#.#...#", "#..#....#", "#.......#", "#########", ".........");
-        return TopBarPath(owner, NewPaperPlusPath + "M15 12 L20 17 L30 7", width: 32);
+        return TopBarPath(owner, NewPaperPlusPath + "M12 12 L16.5 16.5 L26 7.5", width: 28);
     }
 
     internal static FrameworkElement CreateTopBarNewNoteIcon(Control owner)
@@ -100,8 +100,8 @@ public sealed partial class PaperWindow
         if (Theme.IsPixelSkin) return CreatePixelIcon(owner,
             "......##.", ".....####", "....####.", "...####..", "..####...", ".####....", ".###.....", ".#.......", ".........");
         return TopBarPath(owner, NewPaperPlusPath +
-            "M15 19 L16 14.5 L25.5 5 Q26.5 4 27.5 5 L29 6.5 Q30 7.5 29 8.5 L19.5 18 Z M24 6.5 L27.5 10",
-            width: 32);
+            "M12 19 L13 14.5 L22.5 5 Q23.5 4 24.5 5 L26 6.5 Q27 7.5 26 8.5 L16.5 18 Z M21 6.5 L24.5 10",
+            width: 28);
     }
 
     private static FrameworkElement CreateTopBarCloseIcon(

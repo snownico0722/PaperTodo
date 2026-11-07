@@ -73,12 +73,12 @@ public sealed partial class AppController
                 MaterialTransparencyLevels.Normalize(State.MaterialTransparency),
                 value => SetSettingFromUi("appearance.material_transparency", value)));
         }
-        panel.Children.Add(SettingsToggle(
+        panel.Children.Add(WrapWithHint(SettingsToggle(
             SettingsSidebarLocalized("隐藏外轮廓", "Hide outer border", "外枠を隠す", "외곽선 숨기기"),
             State.HideSurfaceOutline, () =>
             {
                 SetSettingFromUi("appearance.hide_surface_outline", !State.HideSurfaceOutline);
-            }));
+            }), "TipHideSurfaceOutline"));
         if (PaperSkins.UsesNativeBackdrop(skin))
         {
             if (!NativeMicaBackdrop.IsSupported || !UsesNativeMicaWindows)
