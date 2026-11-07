@@ -2059,6 +2059,9 @@ public sealed partial class AppController
             var disabledTooltip = BuildSettingsHintTooltip(description.Text);
             ToolTipService.SetShowOnDisabled(grid, true);
             ToolTipPreferences.SetAlwaysEnabled(grid, true);
+            ToolTipService.SetInitialShowDelay(grid, 200);
+            ToolTipService.SetShowDuration(grid, 20000);
+            ToolTipService.SetBetweenShowDelay(grid, 0);
 
             void RefreshDisabledHint() =>
                 grid.ToolTip = !grid.IsEnabled || !option.IsEnabled ? disabledTooltip : null;
