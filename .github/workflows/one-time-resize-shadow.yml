@@ -1,4 +1,4 @@
-name: One-time real resize shadow comparison
+name: One-time native HWND resize shadow comparison
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   resize-shadow:
-    name: Actual Win32 resize grip A-B
+    name: Win32 SetWindowPos shadow A-B
     runs-on: windows-latest
     timeout-minutes: 12
     defaults:
@@ -29,7 +29,7 @@ jobs:
         uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "10.0.x"
-      - name: Measure real bottom-right native window resizing
+      - name: Measure pointer-independent native HWND resizing
         run: |
           dotnet run --project tools/PaperTodo.MaterialBenchmarks -c Release -- --resize-benchmark "$env:RUNNER_TEMP\resize-shadow.json"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
