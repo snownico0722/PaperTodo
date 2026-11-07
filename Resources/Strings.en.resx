@@ -554,7 +554,7 @@ Error: {0}</value>
     <value>Markdown rendering animation</value>
   </data>
   <data name="TipMarkdownEditAnimation" xml:space="preserve">
-    <value>When the caret enters a block edit state and its Markdown markers appear, reveal the source markers with a fade-in animation.</value>
+    <value>When editing Markdown, syntax marks that reappear fade in smoothly as the editor changes state.</value>
   </data>
   <data name="TipFullscreenTopmostMode" xml:space="preserve">
     <value>When video, games, or other fullscreen apps are detected, papers and edge capsules can step aside.
@@ -570,8 +570,7 @@ Error: {0}</value>
     <value>Show the linked paper title after the todo.</value>
   </data>
   <data name="TipAllowLongLinkedPaperTitles" xml:space="preserve">
-    <value>Off: compact. On: wider to fit content.
-About 5 full-width characters on one line, 10 on multiline.</value>
+    <value>Allow more room for linked titles shown after todos, so less text is cut off. Approximately five full-width characters fit on one line, or ten across multiple lines.</value>
   </data>
   <data name="TipHideLinkedPapersFromCapsules" xml:space="preserve">
     <value>Papers linked to todos leave the capsule list, avoiding duplicate entries.</value>
@@ -610,7 +609,7 @@ About 5 full-width characters on one line, 10 on multiline.</value>
     <value>Show a master capsule at the top of the queue to collapse or expand it.</value>
   </data>
   <data name="TipHideEdgeCapsuleCloseButtonOnHover" xml:space="preserve">
-    <value>Edge capsules still extend on hover; the extra area acts like the main capsule without a close button. Use Hide in the context menu to close it.</value>
+    <value>When enabled, ordinary edge capsules do not show or reserve space for a close button while hovered or active. To hide one, choose Hide in its context menu.</value>
   </data>
   <data name="TipMaxTitleLength" xml:space="preserve">
     <value>Set the maximum displayed length of a paper title. Chinese and other full-width characters count as 1; Latin letters, numbers, and other half-width characters count as 0.5.</value>
@@ -651,22 +650,6 @@ Settings info icons always stay available.</value>
   <data name="TipFastAnimations" xml:space="preserve">
     <value>Shorten interface animations to about 60% of their normal duration for faster responses while keeping transitions. This has no effect when animations are disabled.</value>
   </data>
-  <data name="SettingsResizeGripMode" xml:space="preserve">
-    <value>Resize grip</value>
-  </data>
-  <data name="TipResizeGripMode" xml:space="preserve">
-    <value>Paper resizing: Standard shows opaque bottom-right dots; Soft makes them about 50% transparent; Hidden removes the dots and lets you resize from any edge or corner.
-Dot color keeps Windows light/dark contrast with a slight scheme tint. Shape is unchanged.</value>
-  </data>
-  <data name="ResizeGripModeStandard" xml:space="preserve">
-    <value>Standard</value>
-  </data>
-  <data name="ResizeGripModeSoft" xml:space="preserve">
-    <value>Soft</value>
-  </data>
-  <data name="ResizeGripModeHidden" xml:space="preserve">
-    <value>Hidden</value>
-  </data>
   <data name="TipPersistentPowerShellProcess" xml:space="preserve">
     <value>!pf / !powerf use a persistent process for faster starts; variables and state may carry across scripts.
 Turning this off ends that process.</value>
@@ -675,8 +658,7 @@ Turning this off ends that process.</value>
     <value>Prefer PowerShell 7 (pwsh.exe) when running scripts. If it is not installed, use the PowerShell included with Windows. Specify a particular version in the script with !pwsh or !ps5.</value>
   </data>
   <data name="TipHideScriptRunWindow" xml:space="preserve">
-    <value>Hide the script run window.
-!p / !power wait for exit and capture errors; !pf / !powerf only submit to the persistent process.</value>
+    <value>Hide the PowerShell window when scripts run. !p or !power waits for completion and captures errors; !pf or !powerf passes the script to the persistent process.</value>
   </data>
   <data name="TipAutoClearCompletedTodos" xml:space="preserve">
     <value>Checking a todo as done removes it from the paper; Undo can restore it.</value>
@@ -818,7 +800,7 @@ When off, only hides those items; selected values stay unchanged.</value>
     <value>Make inactive papers translucent</value>
   </data>
   <data name="TipLabsInactivePaperOpacity" xml:space="preserve">
-    <value>Only affects expanded, inactive papers. Activating a paper restores full opacity immediately.</value>
+    <value>An expanded paper becomes translucent when it loses focus, so it obstructs less of the desktop. Click or activate it again to restore its original opacity.</value>
   </data>
   <data name="LabsInactivePaperOpacityLevel" xml:space="preserve">
     <value>Inactive opacity</value>
@@ -842,7 +824,7 @@ When off, only hides those items; selected values stay unchanged.</value>
     <value>Dragging an ordinary capsule shows possible snap positions. Release it near a screen edge or another app window to snap there. With window binding enabled, an expanded paper also follows the window it was attached to. This works only for ordinary capsules outside edge queues. Dragging again, losing the target, or turning off the feature removes the snap.</value>
   </data>
   <data name="LabsCapsuleMagnetEdgeModeNotice" xml:space="preserve">
-    <value>Edge capsules are currently enabled, so collapsed papers enter an edge queue instead of ordinary capsule magnetism. Turn off edge capsules in General settings to use this feature.</value>
+    <value>Edge capsule mode is enabled, so folded papers join an edge queue directly. Magnetic snapping for ordinary capsules is currently unavailable.</value>
   </data>
   <data name="LabsMagnetScreenEdges" xml:space="preserve">
     <value>Screen edges</value>
@@ -1062,9 +1044,7 @@ Per-note percentage zoom stacks on top.</value>
     <value>Image markup visibility</value>
   </data>
   <data name="TipImageReferenceText" xml:space="preserve">
-    <value>Controls Markdown image markup visibility.
-“Editing only”: hidden while viewing.
-“Always hide”: text is transparent but still selectable.</value>
+    <value>Choose how Markdown syntax for images appears in notes. Editing only shows the image mark while editing but hides it in preview. Always hidden keeps the mark invisible even while editing, though its text can still be selected.</value>
   </data>
   <data name="ImageReferenceTextAlways" xml:space="preserve">
     <value>Always show</value>
@@ -1227,13 +1207,13 @@ When off, open at the docked edge or remembered position.</value>
   </data>
   <data name="LabsMcp" xml:space="preserve"><value>Local MCP interface</value></data>
   <data name="LabsMcpEnable" xml:space="preserve"><value>Enable MCP connection</value></data>
-  <data name="TipLabsMcpEnable" xml:space="preserve"><value>Lets local AI clients read papers through the same PaperTodo.exe in --mcp mode. Turning this off stops the named-pipe interface immediately.</value></data>
+  <data name="TipLabsMcpEnable" xml:space="preserve"><value>Allow MCP-capable AI tools on this computer to connect to PaperTodo and read paper content. Editing or deleting requires separate permissions below. Disabling MCP stops the connection immediately.</value></data>
   <data name="LabsMcpBlankWrites" xml:space="preserve"><value>Allow creating and appending content</value></data>
-  <data name="TipLabsMcpBlankWrites" xml:space="preserve"><value>Allows creating papers, adding todos to an existing paper, filling blank content, and appending notes without overwriting existing text.</value></data>
+  <data name="TipLabsMcpBlankWrites" xml:space="preserve"><value>Allow connected AI tools to create papers, add todos, fill empty content, and append text to existing notes. This permission does not allow replacing or overwriting existing text.</value></data>
   <data name="LabsMcpFullWrites" xml:space="preserve"><value>Allow editing existing content</value></data>
-  <data name="TipLabsMcpFullWrites" xml:space="preserve"><value>Allows changing existing todo text, replacing notes, and changing completion or reminder state. This also grants blank and additive writes.</value></data>
+  <data name="TipLabsMcpFullWrites" xml:space="preserve"><value>Allow connected AI tools to edit existing todos, replace note text, and change todo completion states and reminder times. This also includes permission to create papers, add todos, and append content.</value></data>
   <data name="LabsMcpDeletes" xml:space="preserve"><value>Allow direct MCP deletion</value></data>
-  <data name="TipLabsMcpDeletes" xml:space="preserve"><value>Enabling this pre-authorizes AI to delete papers or todos without per-operation prompts. Deletion cannot be undone automatically; enable with care.</value></data>
+  <data name="TipLabsMcpDeletes" xml:space="preserve"><value>Allow connected AI tools to delete papers or todos directly, without asking each time. Deletion cannot be automatically undone; enable this only for AI tools you trust.</value></data>
   <data name="LabsMcpStatusReady" xml:space="preserve"><value>Local MCP interface is ready</value></data>
   <data name="LabsMcpStatusDisabled" xml:space="preserve"><value>Local MCP interface is off</value></data>
   <data name="LabsMcpCopyCodex" xml:space="preserve"><value>Copy Codex config</value></data>
@@ -1357,13 +1337,14 @@ When off, open at the docked edge or remembered position.</value>
   <data name="LinkedPathDropFailureTitle" xml:space="preserve"><value>Cannot link path</value></data>
   <data name="LinkedPathDropFailureMessage" xml:space="preserve"><value>Could not link this file or folder:&#xA;{0}</value></data>
   <data name="LinkedPathOpenFailureTitle" xml:space="preserve"><value>Cannot open linked path</value></data>
-  <data name="LinkedPathOpenFailureMessage" xml:space="preserve"><value>Windows could not open this path:&#xA;{0}</value></data>
+  <data name="LinkedPathOpenFailureMessage" xml:space="preserve"><value>Could not open the linked file or folder:
+{0}</value></data>
   <data name="LinkedPathMissingMessage" xml:space="preserve"><value>The linked file or folder was moved or deleted:&#xA;{0}</value></data>
   <data name="SettingsShowLinkedPathExtensionOnly" xml:space="preserve">
     <value>Show only linked file extensions</value>
   </data>
   <data name="TipShowLinkedPathExtensionOnly" xml:space="preserve">
-    <value>When enabled, file quick links show only the extension while long linked-paper titles are off. Folders and extensionless files keep a compact name.</value>
+    <value>Linked files show only their extensions, such as .pdf or .png, instead of full filenames. Folders and files without extensions continue to show their names.</value>
   </data>
   <data name="SettingsDeepCapsuleGap" xml:space="preserve">
     <value>Edge capsule spacing</value>
@@ -1526,49 +1507,49 @@ When off, open at the docked edge or remembered position.</value>
     <value>Open externally</value>
   </data>
   <data name="DataReloadConflictTitle" xml:space="preserve">
-    <value>PaperTodo data conflict</value>
+    <value>Data conflict found</value>
   </data>
   <data name="DataReloadConflictPath" xml:space="preserve">
     <value>Path: {0}</value>
   </data>
   <data name="DataReloadConflictMemoryHeader" xml:space="preserve">
-    <value>Current (PaperTodo)</value>
+    <value>Current data</value>
   </data>
   <data name="DataReloadConflictExternalHeader" xml:space="preserve">
-    <value>External (incoming file)</value>
+    <value>Imported data</value>
   </data>
   <data name="DataReloadConflictKeepMemory" xml:space="preserve">
     <value>Keep current</value>
   </data>
   <data name="DataReloadConflictKeepExternal" xml:space="preserve">
-    <value>Keep external</value>
+    <value>Keep imported</value>
   </data>
   <data name="DataReloadConflictValueMissing" xml:space="preserve">
-    <value>(missing)</value>
+    <value>(Not present)</value>
   </data>
   <data name="DataReloadConflictMemoryOnlyTooltip" xml:space="preserve">
-    <value>Present in PaperTodo but not in the external file. Kept by "Keep current"; discarded by "Keep external".</value>
+    <value>This item exists only in PaperTodo's current data, not in the imported file. Keep current preserves it; Keep imported removes it from the current data.</value>
   </data>
   <data name="DataReloadConflictExternalOnlyTooltip" xml:space="preserve">
-    <value>Present in the external file but not in PaperTodo. Adopted by "Keep external"; discarded by "Keep current".</value>
+    <value>This item exists only in the imported file, not in PaperTodo's current data. Keep imported adds it; Keep current leaves it out.</value>
   </data>
   <data name="DataReloadPaperConflictTitle" xml:space="preserve">
-    <value>Paper data conflict</value>
+    <value>Paper content conflict</value>
   </data>
   <data name="DataReloadPaperConflictHeader" xml:space="preserve">
-    <value>Paper ID:{0}  Type:{1}</value>
+    <value>Paper ID: {0} · Type: {1}</value>
   </data>
   <data name="DataReloadPaperConflictField" xml:space="preserve">
-    <value>Field:{0}</value>
+    <value>Conflicting item: {0}</value>
   </data>
   <data name="DataReloadPaperConflictKeepAllMemory" xml:space="preserve">
     <value>Keep current for all</value>
   </data>
   <data name="DataReloadPaperConflictKeepAllExternal" xml:space="preserve">
-    <value>Use external for all</value>
+    <value>Keep all imported</value>
   </data>
   <data name="DataReloadPaperConflictWholePaper" xml:space="preserve">
-    <value>(whole paper)</value>
+    <value>(Entire paper)</value>
   </data>
   <data name="WorkspaceSettingsTitle" xml:space="preserve">
     <value>Workspaces</value>
@@ -1643,8 +1624,8 @@ Click to switch to workspace {1}</value>
   </data>
   <data name="SettingsDataMergeConflicts" xml:space="preserve"><value>Conflicts during data merge</value></data>
   <data name="DataMergeConflictAsk" xml:space="preserve"><value>Ask on conflict (default)</value></data>
-  <data name="DataMergeConflictExternal" xml:space="preserve"><value>Prefer external</value></data>
-  <data name="DataMergeConflictInternal" xml:space="preserve"><value>Prefer internal</value></data>
+  <data name="DataMergeConflictExternal" xml:space="preserve"><value>Prefer imported data</value></data>
+  <data name="DataMergeConflictInternal" xml:space="preserve"><value>Prefer current data</value></data>
   <data name="TipDataMergeConflicts" xml:space="preserve"><value>When merging, changes that do not conflict are preserved from both sets of data. If the same item conflicts, the selected rule determines which version to keep. Current data is what PaperTodo currently stores; imported data comes from the external file. If no original version is available for comparison, you will still be asked to decide.</value></data>
   <data name="DataReloadConflictEmpty" xml:space="preserve"><value>(empty)</value></data>
   <data name="NoteHtmlSaved" xml:space="preserve"><value>Saved to: {0}
