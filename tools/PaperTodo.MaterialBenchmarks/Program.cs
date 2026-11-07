@@ -27,15 +27,6 @@ internal static class Program
             }
             if (args is ["--drag-benchmark", var dragOutput])
                 return MaterialDragBenchmarks.RunIsolated(dragOutput);
-            if (args is ["--hotpath-benchmark", var hotpathOutput])
-                return MaterialDragBenchmarks.RunIsolatedHotpath(hotpathOutput);
-            if (args is ["--hotpath-fixture", var hotpathFixtureOutput])
-            {
-                RequireFixture();
-                using var controller = new AppController();
-                RapidResizeBenchmarks.Run(controller, hotpathFixtureOutput);
-                return 0;
-            }
             if (args is ["--drag-fixture", var fixtureOutput])
             {
                 RequireFixture();
