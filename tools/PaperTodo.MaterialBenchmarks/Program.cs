@@ -33,7 +33,7 @@ internal static class Program
             {
                 RequireFixture();
                 using var controller = new AppController();
-                ResizeShadowBenchmarks.Run(controller, resizeFixtureOutput);
+                ResizeNativeBenchmarks.Run(controller, resizeFixtureOutput);
                 return 0;
             }
             if (args is ["--drag-fixture", var fixtureOutput])
