@@ -1551,6 +1551,7 @@
   <data name="MenuTopBarMoveRight" xml:space="preserve">
     <value>向右移动</value>
   </data>
+  <data name="MenuAssociationTarget" xml:space="preserve"><value>关联目标</value></data>
   <data name="MenuTopBarAssociationDrag" xml:space="preserve">
     <value>拖到待办或窗口以关联</value>
   </data>

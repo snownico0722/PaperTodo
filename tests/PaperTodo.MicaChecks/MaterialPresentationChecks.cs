@@ -199,7 +199,7 @@ internal static class MaterialPresentationChecks
             Program.Assert(Has(narrowMenu, Strings.Get("MenuQuick")) &&
                 Has(narrowMenu, Strings.Get("MenuNewTodoPaper")) &&
                 Has(narrowMenu, Strings.Get("MenuNewNotePaper")) &&
-                Has(narrowMenu, Strings.Get("MenuTopBarAssociationDragTodo")) &&
+                Has(narrowMenu, Strings.Get("MenuAssociationTarget")) &&
                 Has(narrowMenu, Strings.Get("TraySettings")) &&
                 Has(narrowMenu, controller.PaperCapsuleTitle(paper)) &&
                 !Has(narrowMenu, Strings.Get("MenuCustomizeTopBar")),
@@ -256,8 +256,9 @@ internal static class MaterialPresentationChecks
             OpenMenu();
             var dragMenu = more.ContextMenu!;
             var dragEntry = dragMenu.Items.OfType<MenuItem>().Single(item =>
-                Equals(item.Header, Strings.Get("MenuTopBarAssociationDragTodo")));
-            Program.Assert(dragEntry.StaysOpenOnClick,
+                Equals(item.Header, Strings.Get("MenuAssociationTarget")));
+            Program.Assert(dragEntry.StaysOpenOnClick &&
+                Equals(dragEntry.ToolTip, Strings.Get("MenuTopBarAssociationDragTodo")),
                 "association remains a draggable menu command when the whole group overflows");
             try
             {
@@ -289,7 +290,7 @@ internal static class MaterialPresentationChecks
             var wideMenu = more.ContextMenu!;
             Program.Assert(!Has(wideMenu, Strings.Get("MenuNewTodoPaper")) &&
                 !Has(wideMenu, Strings.Get("MenuNewNotePaper")) &&
-                !Has(wideMenu, Strings.Get("MenuTopBarAssociationDragTodo")) &&
+                !Has(wideMenu, Strings.Get("MenuAssociationTarget")) &&
                 !Has(wideMenu, Strings.Get("MenuTopBarPluginActions")) &&
                 Has(wideMenu, Strings.Get("MenuQuick")) &&
                 Has(wideMenu, Strings.Get("TraySettings")),

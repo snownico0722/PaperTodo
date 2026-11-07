@@ -1479,6 +1479,7 @@ When off, open at the docked edge or remembered position.</value>
   <data name="MenuTopBarMoveRight" xml:space="preserve">
     <value>Move right</value>
   </data>
+  <data name="MenuAssociationTarget" xml:space="preserve"><value>Link target</value></data>
   <data name="MenuTopBarAssociationDrag" xml:space="preserve">
     <value>Drag to a todo or window to associate</value>
   </data>

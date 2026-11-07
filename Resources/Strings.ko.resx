@@ -1479,6 +1479,7 @@ PaperTodo를 수동으로 다시 여세요. 문제가 반복되면 PC를 다시 
   <data name="MenuTopBarMoveRight" xml:space="preserve">
     <value>오른쪽으로 이동</value>
   </data>
+  <data name="MenuAssociationTarget" xml:space="preserve"><value>연결 대상</value></data>
   <data name="MenuTopBarAssociationDrag" xml:space="preserve">
     <value>할 일 또는 창으로 끌어서 연결</value>
   </data>

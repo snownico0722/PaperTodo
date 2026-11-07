@@ -1479,6 +1479,7 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
   <data name="MenuTopBarMoveRight" xml:space="preserve">
     <value>右へ移動</value>
   </data>
+  <data name="MenuAssociationTarget" xml:space="preserve"><value>関連付け先</value></data>
   <data name="MenuTopBarAssociationDrag" xml:space="preserve">
     <value>ToDoまたはウィンドウへドラッグして関連付け</value>
   </data>
