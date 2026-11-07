@@ -70,7 +70,10 @@ internal static class NativeFreeQueueReviewChecks
         var preview = c.State.ExperimentalEdgeCapsuleHoverPreview;
         var prediction = c.State.ExperimentalEdgeCapsuleHoverIntent;
         var margins = new Dictionary<string, double>(c.State.DeepCapsuleQueueStartTopMargins);
+        var folded = new Dictionary<string, bool>(c.State.CapsuleCollapseAllActiveQueues);
         var order = c.State.Papers.ToList();
+        var identities = order.Select(paper => (Paper: paper, Monitor: paper.CapsuleMonitorDeviceName,
+            Side: paper.CapsuleSide, QueueId: paper.CapsuleQueueId)).ToArray();
         var cursorSaved = WindowNative.TryGetCursorScreenPosition(out var savedCursor);
         var source = windows["review-6"];
         var other = windows["review-10"];
@@ -87,6 +90,18 @@ internal static class NativeFreeQueueReviewChecks
         }
         static void Move(DeviceScreenPoint point) =>
             Require(SetPreviewCursorPos((int)point.X, (int)point.Y), "move native preview pointer");
+        void RestoreQueues()
+        {
+            c.State.DeepCapsuleQueueStartTopMargins = new(margins, StringComparer.Ordinal);
+            c.State.CapsuleCollapseAllActiveQueues = new(folded, StringComparer.Ordinal);
+            c.State.Papers = order.ToList();
+            foreach (var row in identities)
+            {
+                row.Paper.CapsuleMonitorDeviceName = row.Monitor;
+                row.Paper.CapsuleSide = row.Side;
+                row.Paper.CapsuleQueueId = row.QueueId;
+            }
+        }
 
         try
         {
@@ -97,13 +112,17 @@ internal static class NativeFreeQueueReviewChecks
                 c.State.ExperimentalEdgeCapsuleHoverPreview = false;
                 c.CloseEdgeCapsulePreviewForDrag(source);
                 Move(outside);
+                // A real queue drop may merge/reorder, and switching legacy mode prunes fold keys.
+                // Start every scenario from the same layout and restore that complete state below.
+                RestoreQueues();
                 c.State.UseCapsuleCollapseAll = outcome == "master";
                 c.State.UseCapsuleFreeQueues = outcome != "stay";
                 c.ArrangeDeepCapsules(false);
                 await Idle();
                 if (outcome == "master")
                 {
-                    var queueMaster = c.MasterCapsuleForQueue(c.QueueKeyForPaper(source.EdgeCapsulePreviewPaper))!;
+                    var sourceQueue = c.QueueKeyForPaper(source.EdgeCapsulePreviewPaper);
+                    var queueMaster = c.MasterCapsuleForQueue(sourceQueue)!;
                     Require(WindowNative.TryGetWindowDeviceBounds(queueMaster, out var bounds),
                         "master preview fixture needs a real window");
                     Move(new(bounds.Right - 10, bounds.Top + bounds.Height / 2));
@@ -114,7 +133,11 @@ internal static class NativeFreeQueueReviewChecks
                     Move(release);
                     c.State.ExperimentalEdgeCapsuleHoverPreview = true;
                     Call(queueMaster, "FinishMasterGesture", true, true, release);
-                    await Dispatcher.CurrentDispatcher.InvokeAsync(static () => { }, DispatcherPriority.Send);
+                    Require(c.QueueKeyForPaper(source.EdgeCapsulePreviewPaper) == sourceQueue,
+                        "master preview fixture moves the independent queue without merging");
+                    // Placement reconciliation runs at Render; Send still sees the drag preview.
+                    // Drain the real layout work before selecting the landed interactive rectangle.
+                    await Idle();
                     var hit = Hit(source);
                     Move(hit);
                     c.NotifyEdgeCapsulePreviewPhysicalPointer(source, hit);
@@ -188,8 +211,7 @@ internal static class NativeFreeQueueReviewChecks
             c.State.UseCapsuleFreeQueues = free;
             c.State.UseCapsuleCollapseAll = master;
             c.State.ExperimentalEdgeCapsuleHoverIntent = prediction;
-            c.State.DeepCapsuleQueueStartTopMargins = margins;
-            c.State.Papers = order;
+            RestoreQueues();
             c.ArrangeDeepCapsules(false);
             c.State.ExperimentalEdgeCapsuleHoverPreview = preview;
             if (cursorSaved) Move(savedCursor);
