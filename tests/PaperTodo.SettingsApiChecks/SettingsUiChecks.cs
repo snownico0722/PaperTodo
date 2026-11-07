@@ -234,6 +234,14 @@ internal static partial class Program
             Check(Toggle("LabsMcpEnable").IsEnabled &&
                   SettingsControls<ComboBox>(window).Single().IsEnabled,
                 "disabling workspaces does not disable data handling or MCP");
+            Grid HintRow(string key) => SettingsControls<Grid>(window).Single(row =>
+                row.Children.OfType<CheckBox>().Any(box => Equals(box.Content, Strings.Get(key))));
+            Check(HintRow("LabsMcpEnable").ToolTip == null,
+                "enabled setting rows show descriptions only from the info icon");
+            Check(!Toggle("LabsMcpBlankWrites").IsEnabled &&
+                  HintRow("LabsMcpBlankWrites").ToolTip is ToolTip &&
+                  ToolTipService.GetShowOnDisabled(HintRow("LabsMcpBlankWrites")),
+                "a disabled option has an explanation without becoming clickable");
             options.Enabled = true;
             Field(c, "_workspace", new WorkspaceSession(
                 new WorkspacePaths(session.Paths.Directory, 2), session.Store, c.State, true, null));
@@ -241,6 +249,15 @@ internal static partial class Program
             Check(Toggle("WorkspaceEnabled").IsEnabled && !Toggle("LabsMcpEnable").IsEnabled &&
                   !SettingsControls<ComboBox>(window).Single().IsEnabled,
                 "workspace management stays editable while inherited data and MCP settings are read-only");
+            Check(!HintRow("LabsMcpEnable").IsEnabled &&
+                  HintRow("LabsMcpEnable").ToolTip is ToolTip &&
+                  ToolTipService.GetShowOnDisabled(HintRow("LabsMcpEnable")),
+                "inherited disabled setting rows show explanations");
+            var disabledHints = SettingsControls<Border>(window)
+                .Where(border => border.Cursor == Cursors.Help && border.ToolTip is ToolTip)
+                .ToArray();
+            Check(disabledHints.Length >= 2 && disabledHints.All(ToolTipService.GetShowOnDisabled),
+                "disabled settings keep their info icons accessible");
             Check(SettingsControls<Button>(window).Where(button =>
                     Equals(button.Content, Strings.Get("LabsMcpCopyJson")) ||
                     Equals(button.Content, Strings.Get("LabsMcpCopyAiSkill"))).Count(button => button.IsEnabled) == 2,

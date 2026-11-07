@@ -118,9 +118,6 @@ public sealed partial class AppController
 
         resources["PaperScrollThumbBrush"] = Theme.ScrollThumbBrush;
         resources["PaperScrollThumbHoverBrush"] = Theme.ScrollThumbHoverBrush;
-        var gripDots = Theme.ResizeGripBrush(State.ResizeGripMode);
-        resources["PaperResizeGripBrush"] = gripDots;
-        resources["PaperResizeGripTileBrush"] = Theme.ResizeGripTileBrush(gripDots);
     }
 
     private UIElement CreateColorSchemeSegmentSelector()
@@ -1245,24 +1242,22 @@ public sealed partial class AppController
                 ToggleExperimentalTodoReminders),
             "TipLabsTodoReminders"));
 
-        var showButtonToggle = WrapWithHint(
-            WrappingSettingsToggle(
-                Strings.Get("LabsTodoReminderShowButton"),
-                State.ExperimentalTodoReminderShowButton,
-                ToggleExperimentalTodoReminderShowButton),
-            "TipLabsTodoReminderShowButton");
-        showButtonToggle.IsEnabled = State.ExperimentalTodoReminders;
+        var showButtonOption = WrappingSettingsToggle(
+            Strings.Get("LabsTodoReminderShowButton"),
+            State.ExperimentalTodoReminderShowButton,
+            ToggleExperimentalTodoReminderShowButton);
+        showButtonOption.IsEnabled = State.ExperimentalTodoReminders;
+        var showButtonToggle = WrapWithHint(showButtonOption, "TipLabsTodoReminderShowButton");
         showButtonToggle.Opacity =
             State.ExperimentalTodoReminders ? 1.0 : 0.55;
         content.Children.Add(showButtonToggle);
 
-        var soundToggle = WrapWithHint(
-            WrappingSettingsToggle(
-                Strings.Get("LabsTodoReminderSoundEnabled"),
-                State.ExperimentalTodoReminderSoundEnabled,
-                ToggleExperimentalTodoReminderSoundEnabled),
-            "TipLabsTodoReminderSoundEnabled");
-        soundToggle.IsEnabled = State.ExperimentalTodoReminders;
+        var soundOption = WrappingSettingsToggle(
+            Strings.Get("LabsTodoReminderSoundEnabled"),
+            State.ExperimentalTodoReminderSoundEnabled,
+            ToggleExperimentalTodoReminderSoundEnabled);
+        soundOption.IsEnabled = State.ExperimentalTodoReminders;
+        var soundToggle = WrapWithHint(soundOption, "TipLabsTodoReminderSoundEnabled");
         soundToggle.Opacity =
             State.ExperimentalTodoReminders ? 1.0 : 0.55;
         content.Children.Add(soundToggle);
@@ -1560,10 +1555,6 @@ public sealed partial class AppController
         leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsColorScheme")), "TipColorScheme"));
         leftColumn.Children.Add(CreateColorSchemeSegmentSelector());
         leftColumn.Children.Add(CreateSkinSettings());
-        leftColumn.Children.Add(WrapWithHint(
-            SettingsFieldLabel(Strings.Get("SettingsResizeGripMode")),
-            "TipResizeGripMode"));
-        leftColumn.Children.Add(CreateResizeGripModeSegmentSelector());
         leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsDeepCapsuleGap")), "TipDeepCapsuleGap"));
         leftColumn.Children.Add(CreateDeepCapsuleGapSegmentSelector());
         leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsUiFont")), "TipUiFont"));
@@ -1718,7 +1709,6 @@ public sealed partial class AppController
         State.TitleTextBold = true;
         State.CapsuleTextSize = VisualTextSizes.Medium;
         State.CapsuleTextBold = false;
-        State.ResizeGripMode = ResizeGripModes.Soft;
         State.DeepCapsuleGapSize = DeepCapsuleGapSizes.Standard;
 
         AppTypography.Configure(
@@ -2064,6 +2054,22 @@ public sealed partial class AppController
     private UIElement WrapWithHint(FrameworkElement option, ToolTip tooltip)
     {
         var grid = new Grid { Margin = new Thickness(0, 4, 0, 0) };
+        if (tooltip.Content is TextBlock description)
+        {
+            var disabledTooltip = BuildSettingsHintTooltip(description.Text);
+            ToolTipService.SetShowOnDisabled(grid, true);
+            ToolTipPreferences.SetAlwaysEnabled(grid, true);
+            ToolTipService.SetInitialShowDelay(grid, 200);
+            ToolTipService.SetShowDuration(grid, 20000);
+            ToolTipService.SetBetweenShowDelay(grid, 0);
+
+            void RefreshDisabledHint() =>
+                grid.ToolTip = !grid.IsEnabled || !option.IsEnabled ? disabledTooltip : null;
+
+            grid.IsEnabledChanged += (_, _) => RefreshDisabledHint();
+            option.IsEnabledChanged += (_, _) => RefreshDisabledHint();
+            RefreshDisabledHint();
+        }
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
@@ -2110,6 +2116,7 @@ public sealed partial class AppController
             ToolTip = tooltip
         };
         ToolTipPreferences.SetAlwaysEnabled(hint, true);
+        ToolTipService.SetShowOnDisabled(hint, true);
         ToolTipService.SetInitialShowDelay(hint, 200);
         ToolTipService.SetShowDuration(hint, 20000);
         ToolTipService.SetBetweenShowDelay(hint, 0);
@@ -2458,24 +2465,6 @@ public sealed partial class AppController
 
     private void ToggleFastAnimations() =>
         SetSettingFromUi("appearance.fast_animations", !State.FastAnimations);
-
-    private void SetResizeGripMode(string mode) =>
-        SetSettingFromUi("window.resize_grip", ResizeGripModes.Normalize(mode));
-
-    private UIElement CreateResizeGripModeSegmentSelector()
-    {
-        var segments = new[]
-        {
-            (ResizeGripModes.Standard, Strings.Get("ResizeGripModeStandard")),
-            (ResizeGripModes.Soft, Strings.Get("ResizeGripModeSoft")),
-            (ResizeGripModes.Hidden, Strings.Get("ResizeGripModeHidden"))
-        };
-
-        return CreateSegmentSelector(
-            segments,
-            ResizeGripModes.Normalize(State.ResizeGripMode),
-            SetResizeGripMode);
-    }
 
     private void ToggleTodoBottomBar() =>
         SetSettingFromUi("todo.bottom_bar", !State.ShowTodoBottomBar);

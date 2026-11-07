@@ -100,23 +100,6 @@ public static class FullscreenTopmostModes
     }
 }
 
-/// <summary>
-/// Paper ResizeGrip presentation: system-contrast corner dots, or hidden dots with edge resizing.
-/// </summary>
-public static class ResizeGripModes
-{
-    public const string Standard = "standard";
-    public const string Soft = "soft";
-    public const string Hidden = "hidden";
-
-    public static string Normalize(string? mode) => mode switch
-    {
-        Standard => Standard,
-        Hidden => Hidden,
-        _ => Soft
-    };
-}
-
 public static class DeepCapsuleSides
 {
     public const string Left = "left";
@@ -583,11 +566,6 @@ public sealed class AppState
     public bool ExperimentalTetherVisibilityLink { get; set; }
     public string ExperimentalTetherMinimizedBehavior { get; set; } =
         ExperimentalTetherVisibilityModes.Hide;
-    /// <summary>
-    /// Paper ResizeGrip: standard / soft (50% transparent) / hidden (no dots; all edges resize).
-    /// Dot color is Windows ControlDark with a light scheme tint.
-    /// </summary>
-    public string ResizeGripMode { get; set; } = ResizeGripModes.Soft;
     public string FullscreenTopmostMode { get; set; } = FullscreenTopmostModes.Avoid;
     public bool UsePersistentPowerShellProcess { get; set; }
     public bool PreferPowerShell7 { get; set; } = true;

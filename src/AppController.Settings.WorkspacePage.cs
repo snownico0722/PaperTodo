@@ -52,7 +52,7 @@ public sealed partial class AppController
         root.Children.Add(dataColumn);
 
         var enabled = WorkspaceOptions.Enabled;
-        workspaceColumn.Children.Add(SettingsSectionLabel(Strings.Get("WorkspaceSettingsTitle")));
+        workspaceColumn.Children.Add(SettingsSectionLabelWithHint(Strings.Get("WorkspaceSettingsTitle"), "WorkspaceSettingsDescription"));
         // Only workspace controls depend on this switch, not the adjacent data column.
         workspaceColumn.Children.Add(SettingsToggle(Strings.Get("WorkspaceEnabled"), enabled, async () =>
         {
@@ -412,11 +412,13 @@ public sealed partial class AppController
                     next.FollowMainSettings[slot] = !next.FollowsMain(slot);
                     await ChangeWorkspaceConfigurationAsync(next);
                 });
-            follow.Margin = new Thickness(0, 0, 7, 0);
             follow.FontSize = AppTypography.Scale(11.5);
             follow.VerticalAlignment = VerticalAlignment.Center;
-            Grid.SetColumn(follow, 0);
-            controls.Children.Add(follow);
+            var followWithHint = WrapWithHint(follow, "WorkspaceFollowHint");
+            if (followWithHint is FrameworkElement followRow)
+                followRow.Margin = new Thickness(0, 0, 7, 0);
+            Grid.SetColumn(followWithHint, 0);
+            controls.Children.Add(followWithHint);
 
             var delete = PluginPageButton(WorkspaceUi("删除", "Delete", "削除", "삭제"));
             delete.MinWidth = 48;
@@ -443,6 +445,7 @@ public sealed partial class AppController
             while (hit != null && !ReferenceEquals(hit, card))
             {
                 if (hit is System.Windows.Controls.Primitives.ButtonBase or TextBox) return;
+                if (hit is Border help && help.Cursor == Cursors.Help) return;
                 hit = GetElementParent(hit);
             }
             if (!ReferenceEquals(hit, card)) return;

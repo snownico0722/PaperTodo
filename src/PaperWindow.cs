@@ -911,7 +911,7 @@ public sealed partial class PaperWindow : Window
             _advancedInteractionLocked ||
             IsPaperFormTransitioning ||
             WindowState != WindowState.Normal ||
-            (ResizeMode != ResizeMode.CanResize && ResizeMode != ResizeMode.CanResizeWithGrip) ||
+            ResizeMode != ResizeMode.CanResize ||
             !GetWindowRect(hwnd, out var bounds))
         {
             return false;
@@ -940,7 +940,6 @@ public sealed partial class PaperWindow : Window
         {
             return false;
         }
-        // All grip modes share the same resize hit test; the setting only changes the dots.
         // Layered windows can pass mouse input through their transparent shadow gutter,
         // so reach a few DIPs into the painted paper edge instead of relying on the gutter.
         // Snapped and native papers have no gutter and keep a 5-DIP interior band.
@@ -951,19 +950,7 @@ public sealed partial class PaperWindow : Window
         var nearTop = pointerY < bounds.Top + resizeBorder;
         var nearBottom = pointerY >= bounds.Bottom - resizeBorder;
 
-        // The stock Window-template ResizeGrip is anchored to the HWND corner, not to
-        // the paper's inset chrome. Adding chromeMargin again steals clicks beside the
-        // grip in layered skins; the separate narrow edge band already covers paper edges.
-        var gripRightBand = SystemParameters.VerticalScrollBarWidth * dpiScale;
-        var gripBottomBand = SystemParameters.HorizontalScrollBarHeight * dpiScale;
-        var overGrip = pointerX >= bounds.Right - gripRightBand &&
-            pointerY >= bounds.Bottom - gripBottomBand;
-
-        if (overGrip)
-        {
-            hitTest = HtBottomRight;
-        }
-        else if (nearTop && nearLeft)
+        if (nearTop && nearLeft)
         {
             hitTest = HtTopLeft;
         }
@@ -1583,7 +1570,7 @@ public sealed partial class PaperWindow : Window
             Height = _paper.Height;
             MinWidth = PaperLayoutDefaults.MinWidth;
             MinHeight = PaperLayoutDefaults.MinHeight;
-            ResizeMode = ResizeMode.CanResizeWithGrip;
+            ResizeMode = ResizeMode.CanResize;
         }
 
         RefreshEffectiveTopmost();

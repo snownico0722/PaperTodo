@@ -17,17 +17,17 @@ public sealed partial class AppController
         section.Children.Add(WrapWithHint(
             SettingsToggle(
                 SettingsSidebarLocalized(
-                    "启用和配色混合",
-                    "Blend with paper colors",
-                    "紙面カラーと混合する",
-                    "종이 색상과 혼합"),
+                    "启用背景色混合",
+                    "Enable background color blending",
+                    "背景色のブレンドを有効化",
+                    "배경색 혼합 사용"),
                 PaperBackground.BlendWithTheme,
                 TogglePaperBackgroundBlend),
             BuildSettingsHintTooltip(SettingsSidebarLocalized(
-                "已检测到 PaperTodo.exe 同目录下的 papertodo.png（也支持 .jpg/.jpeg）。图片会同时用于笔记和待办；关闭此项显示原图，开启后与当前纸片配色混合。替换图片后切换此项、切换拉伸、切换位置或重启 PaperTodo 即可刷新。",
-                "Detected papertodo.png beside PaperTodo.exe (.jpg/.jpeg are also supported). The image is shared by note and todo papers. Turn this off to show the original image, or on to blend it with the current paper colors. After replacing the image, toggle this option, toggle stretching, change its position, or restart PaperTodo to refresh it.",
-                "PaperTodo.exe と同じフォルダーの papertodo.png を検出しました（.jpg/.jpeg も対応）。画像はノートと ToDo の両方で共有されます。オフでは元画像をそのまま表示し、オンでは現在の紙面カラーと混合します。画像を差し替えた後は、この設定、ストレッチ、位置のいずれかを切り替えるか PaperTodo を再起動すると更新されます。",
-                "PaperTodo.exe와 같은 폴더의 papertodo.png을 감지했습니다(.jpg/.jpeg도 지원). 이미지는 노트와 할 일 종이에 함께 사용됩니다. 끄면 원본 이미지를 표시하고, 켜면 현재 종이 색상과 혼합합니다. 이미지를 교체한 뒤 이 옵션, 늘이기, 위치 중 하나를 바꾸거나 PaperTodo를 다시 시작하면 새로 고쳐집니다."))));
+                "已检测到 PaperTodo.exe 同目录下的 papertodo.png（也支持 .jpg/.jpeg）。图片会同时用于笔记和待办；关闭此项显示原图，开启后与当前纸片配色混合。",
+                "Detected papertodo.png beside PaperTodo.exe (.jpg/.jpeg are also supported). The image is shared by notes and todos; turn this off to show the original image, or on to blend it with the current paper colors.",
+                "PaperTodo.exe と同じフォルダーの papertodo.png を検出しました（.jpg/.jpeg も対応）。画像はノートと ToDo で共通です。オフでは元画像を表示し、オンでは現在の紙面カラーと混合します。",
+                "PaperTodo.exe와 같은 폴더에서 papertodo.png을 감지했습니다(.jpg/.jpeg도 지원). 이미지는 메모와 할 일에 공통으로 사용됩니다. 끄면 원본을 표시하고 켜면 현재 메모 색상과 혼합합니다."))));
         section.Children.Add(SettingsToggle(
             SettingsSidebarLocalized(
                 "拉伸", "Stretch", "ストレッチ", "늘이기"),

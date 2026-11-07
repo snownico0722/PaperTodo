@@ -1,7 +1,9 @@
 using System;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
 
 namespace PaperTodo;
@@ -19,7 +21,7 @@ internal static class ScriptShortcutDialog
             Width = 620, Height = 420, MinWidth = 380, MinHeight = 270,
             WindowStartupLocation = owner == null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner,
             WindowStyle = WindowStyle.None,
-            ResizeMode = ResizeMode.CanResizeWithGrip,
+            ResizeMode = ResizeMode.CanResize,
             AllowsTransparency = true,
             Background = Brushes.Transparent,
             ShowInTaskbar = owner == null,
@@ -27,6 +29,12 @@ internal static class ScriptShortcutDialog
             FontFamily = AppTypography.UiFontFamily,
             Language = AppTypography.Language,
             UseLayoutRounding = true
+        };
+        // Without a visible resize grip, this borderless window handles its own edge hits.
+        dialog.SourceInitialized += (_, _) =>
+        {
+            if (PresentationSource.FromVisual(dialog) is HwndSource source)
+                source.AddHook(ResizeHitTest);
         };
         AppTypography.ApplyTextRendering(dialog);
         var layout = new Grid();
@@ -102,4 +110,51 @@ internal static class ScriptShortcutDialog
         };
         return dialog.ShowDialog() == true ? editor.Text : null;
     }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct WindowRect
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetWindowRect(IntPtr hwnd, out WindowRect rect);
+
+    private static IntPtr ResizeHitTest(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (message != 0x0084 || !GetWindowRect(hwnd, out var bounds))
+            return IntPtr.Zero;
+
+        var position = lParam.ToInt64();
+        var x = unchecked((short)(position & 0xFFFF));
+        var y = unchecked((short)((position >> 16) & 0xFFFF));
+        if (x < bounds.Left || x >= bounds.Right || y < bounds.Top || y >= bounds.Bottom)
+            return IntPtr.Zero;
+
+        var scale = HwndSource.FromHwnd(hwnd)?.CompositionTarget?.TransformToDevice.M11 ?? 1.0;
+        var edge = (int)Math.Ceiling(6 * Math.Max(1.0, scale));
+        var left = x < bounds.Left + edge;
+        var right = x >= bounds.Right - edge;
+        var top = y < bounds.Top + edge;
+        var bottom = y >= bounds.Bottom - edge;
+        var hit = top && left ? 13
+            : top && right ? 14
+            : bottom && left ? 16
+            : bottom && right ? 17
+            : left ? 10
+            : right ? 11
+            : top ? 12
+            : bottom ? 15
+            : 0;
+        if (hit == 0)
+            return IntPtr.Zero;
+
+        handled = true;
+        return new IntPtr(hit);
+    }
+
 }

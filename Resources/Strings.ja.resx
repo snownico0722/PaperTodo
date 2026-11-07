@@ -549,31 +549,25 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
     <value>紙片の配色：背景、アクセント、弱い文字色。</value>
   </data>
   <data name="TipUiFont" xml:space="preserve">
-    <value>言語既定では、UI とノート本文にそれぞれ適したシステムフォントを使います。
-YaHei または DengXian を選ぶと、UI・トレイ・カプセル・ToDo・ノートをそのフォントに統一します。
-アプリフォルダーに papertodo.ttf / .otf がある場合はそれを優先します。</value>
+    <value>既定では表示言語に応じてシステムフォントを選び、画面とノート本文で異なる場合があります。Microsoft YaHei または DengXian を選ぶと、画面・トレイ・カプセル・ToDo・ノートで同じフォントを使用します。アプリのフォルダーに papertodo.ttf または papertodo.otf があれば、そちらを優先します。</value>
   </data>
   <data name="TipTextRenderingProfile" xml:space="preserve">
-    <value>標準：Windows/WPF 既定経路。互換性重視。
-ソフト：縦横グレースケール平滑化。表示倍率によっては柔らかく見えることがあります。
-シャープ：ピクセル位置合わせを強化。輪郭は明瞭ですが、一部フォントで文字幅がわずかに変わる場合があります。</value>
+    <value>標準：Windows 既定の文字表示方式で、互換性を重視します。柔和：輪郭を滑らかにしますが、表示倍率によって少しぼやけることがあります。鮮明：輪郭がくっきりしますが、一部のフォントで字幅や間隔が少し変わることがあります。いずれも文字内容は変更しません。</value>
   </data>
   <data name="SettingsCustomFontEnhancedBold" xml:space="preserve">
     <value>カスタムフォントの太字強化</value>
   </data>
   <data name="TipCustomFontEnhancedBold" xml:space="preserve">
-    <value>「太字」にした文字は、アプリフォルダーの太字ファイルを使います。
-papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。</value>
+    <value>有効にすると、太字に設定した文字は通常フォントを擬似的に太くする代わりに、専用の太字ファイルを使います。アプリのフォルダーに通常用 papertodo と太字用 PaperTodo_Bold を両方置いてください（.ttf／.otf 対応）。</value>
   </data>
   <data name="TipMarkdownRender" xml:space="preserve">
-    <value>基本：Markdown 記号を残しつつ構文記号を薄くし、リストの丸印や区切り線などの軽い整形を表示します。
-フル レンダリング：編集中も見出し・リスト・引用・コードなどを最終レイアウトで表示し、大半の Markdown 記号を隠します。カーソルのあるブロックでは編集用に記号を表示し、フォーカスが外れると全体を読み取り専用で表示します。</value>
+    <value>基本レンダリング：Markdown の記号を薄く残し、箇条書きの点や区切り線など簡単な書式を表示します。完全レンダリング：見出し・リスト・引用・コードブロックを完成形に近い見た目にし、多くの記号を隠します。編集時はカーソルのあるブロックの記号を再表示します。</value>
   </data>
   <data name="SettingsMarkdownEditAnimation" xml:space="preserve">
     <value>Markdown レンダリング アニメーション</value>
   </data>
   <data name="TipMarkdownEditAnimation" xml:space="preserve">
-    <value>カーソルがブロックの編集状態に入り、その Markdown 記号が現れるとき、フェードイン アニメーションでソース記号を表示します。</value>
+    <value>Markdown の編集中、再表示される構文記号がフェードインし、編集状態の切り替えが自然になります。</value>
   </data>
   <data name="TipFullscreenTopmostMode" xml:space="preserve">
     <value>動画やゲームなどの全画面を検出したとき、紙片と端のカプセルを一時的に避けられます。
@@ -589,8 +583,7 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
     <value>ToDo の後ろに関連紙片のタイトルを表示します。</value>
   </data>
   <data name="TipAllowLongLinkedPaperTitles" xml:space="preserve">
-    <value>オフ：コンパクト。オン：内容に合わせて広げます。
-1 行は全角約 5 文字、複数行は約 10 文字。</value>
+    <value>有効にすると、ToDo の後ろに表示する関連タイトルの幅が広がり、文字が途中で省略されにくくなります。1 行なら全角約 5 文字、複数行なら約 10 文字まで表示できます。</value>
   </data>
   <data name="TipHideLinkedPapersFromCapsules" xml:space="preserve">
     <value>ToDo に関連付けた紙片はカプセル一覧に出さず、入口の重複を避けます。</value>
@@ -629,10 +622,10 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
     <value>列の先頭にメインカプセルを表示し、現在の列を一括で折りたたみ／展開します。</value>
   </data>
   <data name="TipHideEdgeCapsuleCloseButtonOnHover" xml:space="preserve">
-    <value>ホバー時も通常どおり伸びますが、追加領域は閉じるボタンのない通常のカプセル領域として動作します。閉じる場合は右クリックメニューの「隠す」を使います。</value>
+    <value>有効にすると、通常の端のカプセルはホバー中やアクティブ時に閉じるボタンもその領域も表示しません。隠すには右クリックメニューから「非表示」を選びます。</value>
   </data>
   <data name="TipMaxTitleLength" xml:space="preserve">
-    <value>全角文字は1文字、英数字などの半角文字は半文字として数えます。上限を下げても既存の名前は削除せず、超過分を非表示にします。上限を戻すと再表示されます。名前を変更した場合は現在の上限で切り詰めます。</value>
+    <value>紙片タイトルの最大表示文字数を設定します。中国語や全角文字は 1 文字、英数字などの半角文字は 0.5 文字として数えます。</value>
   </data>
   <data name="TipStartup" xml:space="preserve">
     <value>Windows 起動時に PaperTodo を自動起動します。</value>
@@ -652,8 +645,7 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
     <value>ウィンドウ切り替えから紙片を隠す</value>
   </data>
   <data name="TipHidePapersFromWindowSwitcher" xml:space="preserve">
-    <value>展開中の紙片を Alt+Tab とタスクビューから隠し、タスクバーアイコンも同時に隠します。
-トレイ、デスクトップ上の紙片、カプセルからは引き続き開けます。このモードでは紙片がすべての仮想デスクトップに表示されるため、ラボの現在のデスクトップでの呼び出しは利用できません。</value>
+    <value>展開中の紙片は Alt+Tab・タスクビュー・タスクバーに表示されませんが、トレイ、デスクトップ上の紙片、カプセルからアクセスできます。ただし、すべての仮想デスクトップに表示され、ラボの「現在のデスクトップで呼び出す」機能は使えなくなります。</value>
   </data>
   <data name="TipEnableToolTips" xml:space="preserve">
     <value>ボタンや操作できる領域にポインターを置いたとき短い説明を表示します。
@@ -671,33 +663,15 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="TipFastAnimations" xml:space="preserve">
     <value>画面アニメーションの時間を通常の約 60% に短縮し、遷移効果を残したまま操作を素早くします。「アニメーションを有効化」がオフの場合は適用されません。</value>
   </data>
-  <data name="SettingsResizeGripMode" xml:space="preserve">
-    <value>リサイズグリップ</value>
-  </data>
-  <data name="TipResizeGripMode" xml:space="preserve">
-    <value>紙のサイズ変更：標準は右下に不透明のドットを表示し、柔和は約 50% 透明にします。非表示はドットを消し、紙の四辺または四隅をドラッグしてサイズ変更できます。
-色は Windows の明暗を主に、配色をごく薄く乗せます。形はそのままです。</value>
-  </data>
-  <data name="ResizeGripModeStandard" xml:space="preserve">
-    <value>標準</value>
-  </data>
-  <data name="ResizeGripModeSoft" xml:space="preserve">
-    <value>柔和</value>
-  </data>
-  <data name="ResizeGripModeHidden" xml:space="preserve">
-    <value>非表示</value>
-  </data>
   <data name="TipPersistentPowerShellProcess" xml:space="preserve">
     <value>!pf / !powerf は常駐プロセスを使い起動を速くしますが、変数や状態がスクリプト間に残ることがあります。
 オフにするとそのプロセスを終了します。</value>
   </data>
   <data name="TipPreferPowerShell7" xml:space="preserve">
-    <value>pwsh.exe（PowerShell 7）を優先し、なければ Windows PowerShell に戻ります。
-スクリプト内で !pwsh / !ps5 も指定できます。</value>
+    <value>スクリプト実行時は PowerShell 7（pwsh.exe）を優先します。未インストールの場合は Windows 標準の PowerShell を使用します。スクリプト内の !pwsh または !ps5 でバージョンを指定できます。</value>
   </data>
   <data name="TipHideScriptRunWindow" xml:space="preserve">
-    <value>スクリプト実行ウィンドウを隠します。
-!p / !power は終了を待ってエラーを取得し、!pf / !powerf は常駐プロセスへ投入するだけです。</value>
+    <value>有効にすると、スクリプト実行時に PowerShell ウィンドウを表示しません。!p／!power は終了まで待機してエラーを取得し、!pf／!powerf は常駐プロセスに実行を任せます。</value>
   </data>
   <data name="TipAutoClearCompletedTodos" xml:space="preserve">
     <value>完了にした直後、現在の紙片から削除します。元に戻すで復元できます。</value>
@@ -739,7 +713,7 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
     <value>関連紙片のタイトルを表示</value>
   </data>
   <data name="SettingsAllowLongLinkedPaperTitles" xml:space="preserve">
-    <value>関連タイトルを長く表示</value>
+    <value>関連タイトルを長めに表示</value>
   </data>
   <data name="SettingsHideLinkedPapersFromCapsules" xml:space="preserve">
     <value>関連紙片をカプセルに表示しない</value>
@@ -787,13 +761,13 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
     <value>ポインター意図予測を有効にする</value>
   </data>
   <data name="TipLabsEdgeCapsuleHoverIntent" xml:space="preserve">
-    <value>ポインターの速度、方向、減速傾向に基づき、素早く通過するときのプレビュー展開を遅延または抑制します。展開後、カプセル列の外接矩形内にある空白領域では、閲覧可能なカプセルへ明確に向かう軌跡だけを保持し、それ以外は感度に応じて約 0.2～0.8 秒後に閉じます。外接矩形を出ると即座に閉じます。オフにすると最初のプレビューは即座に開き、その後の切り替えには固定 50 ms の安定待ちを使用し、空白領域は方向を判定せず固定 1 秒だけ保持します。</value>
+    <value>有効にすると、マウスの速度と方向からプレビューの意図を判断し、通り過ぎただけで展開するのを防ぎます。展開後、列内の空白を横切る場合は次の対象へ向かっているかを判断し、対象がなければ通常 0.2～0.8 秒後に閉じます。列の外へ出るとすぐに閉じます。無効時は最初のホバーですぐ展開し、切り替え前に約 50 ミリ秒待機、空白では約 1 秒保持します。</value>
   </data>
   <data name="LabsEdgeCapsuleHoverIntentSensitivity" xml:space="preserve">
-    <value>意図判定の感度</value>
+    <value>ホバーの感度</value>
   </data>
   <data name="TipLabsEdgeCapsuleHoverIntentSensitivity" xml:space="preserve">
-    <value>「最低」から「最高」までの 5 段階です。低いほど対象上での明確な停止が必要になり、空白領域も長く保持します。高いほど開きやすく、対象のない空白領域も早く解放します。「中」は推奨バランスです。</value>
+    <value>ホバープレビューがマウスの動きに反応する度合いを 5 段階で調整します。低いほど対象へ明確に近づいたときだけ開き、空白でも長く保持します。高いほど開きやすくなりますが、対象が不明な場合は早く閉じます。</value>
   </data>
   <data name="EdgeCapsuleHoverIntentSensitivityVeryLow" xml:space="preserve">
     <value>最低</value>
@@ -823,10 +797,10 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
     <value>付箋の透明度</value>
   </data>
   <data name="LabsEnableInactivePaperOpacity" xml:space="preserve">
-    <value>非アクティブ時に半透明にする</value>
+    <value>非アクティブな紙片を半透明にする</value>
   </data>
   <data name="TipLabsInactivePaperOpacity" xml:space="preserve">
-    <value>展開中で非アクティブな付箋だけに適用されます。アクティブにするとすぐ不透明に戻ります。</value>
+    <value>展開中の紙片はフォーカスを失うと自動的に半透明になり、デスクトップを隠しにくくなります。再びクリックまたはアクティブにすると、元の不透明度に戻ります。</value>
   </data>
   <data name="LabsInactivePaperOpacityLevel" xml:space="preserve">
     <value>非アクティブ時の不透明度</value>
@@ -847,10 +821,10 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
     <value>通常カプセルのスナップを有効にする</value>
   </data>
   <data name="TipLabsCapsuleMagnetism" xml:space="preserve">
-    <value>通常カプセルをドラッグすると吸着先が表示されます。画面または他のアプリのウィンドウ端付近で離すと吸着して追従します。ウィンドウ連携も有効な場合、ウィンドウに吸着したカプセルを開いても同じウィンドウへの連携を維持します。端のキュー外のカプセルだけが対象で、再ドラッグ、対象の消失、または機能のオフで解除されます。</value>
+    <value>通常のカプセルをドラッグすると吸着位置が表示されます。画面端や別のアプリのウィンドウ付近で離すと吸着します。ウィンドウ連動も有効な場合、そのカプセルから開いた紙片も対象ウィンドウに追従します。端の列に入っていない通常のカプセルのみが対象です。再ドラッグ、対象の消失、機能の無効化で吸着は解除されます。</value>
   </data>
   <data name="LabsCapsuleMagnetEdgeModeNotice" xml:space="preserve">
-    <value>現在は端カプセルが有効なため、折りたたんだ付箋は端のキューに入り、通常カプセルの吸着対象にはなりません。この機能を使うには一般設定で端カプセルをオフにしてください。</value>
+    <value>端のカプセルモードが有効なため、折りたたんだ紙片は直接端の列に入ります。通常のカプセルの磁気吸着は現在利用できません。</value>
   </data>
   <data name="LabsMagnetScreenEdges" xml:space="preserve">
     <value>画面の端</value>
@@ -940,7 +914,7 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
     <value>ToDo リマインダーを有効にする</value>
   </data>
   <data name="TipLabsTodoReminders" xml:space="preserve">
-    <value>ToDo 行のボタンまたは右クリックメニューから時刻を設定できます。簡潔なカウントダウンをクリックしていつでも変更または解除でき、期限になるとトレイで通知します。機能をオフにすると計時と入口を停止しますが、保存済みの時刻は保持されます。</value>
+    <value>ToDo の横の通知ボタンか右クリックメニューから時刻を設定できます。設定後はカウントダウンが表示され、クリックして変更や解除ができます。指定時刻になるとシステム通知が届きます。ToDo 通知を無効にするとカウントダウンと操作入口は消えますが、設定時刻は保存されたままです。</value>
   </data>
   <data name="LabsTodoReminderShowButton" xml:space="preserve">
     <value>行内リマインダーボタンを表示</value>
@@ -1070,9 +1044,7 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
     <value>画像マークアップ表示</value>
   </data>
   <data name="TipImageReferenceText" xml:space="preserve">
-    <value>画像の Markdown マークアップ表示を制御します。
-「編集時のみ」：閲覧中は隠す。
-「常に非表示」：文字は透明のまま選択できます。</value>
+    <value>ノート内の画像に対応する Markdown 記号の表示方法を選びます。「編集中のみ」は編集中に表示し、閲覧時には隠します。「常に非表示」は編集中も見せませんが、文字の選択は可能です。</value>
   </data>
   <data name="ImageReferenceTextAlways" xml:space="preserve">
     <value>常に表示</value>
@@ -1112,10 +1084,10 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
     <value>通常・エッジ・ドラッグ・マスターのカプセル文字：共通の小／中／大と太字。</value>
   </data>
   <data name="SettingsDeepCapsuleTitleMeasureLimit" xml:space="preserve">
-    <value>エッジタイトルの最大長</value>
+    <value>端のカプセルのタイトル表示文字数</value>
   </data>
   <data name="TipDeepCapsuleTitleMeasureLimit" xml:space="preserve">
-    <value>静止時のエッジカプセルのタイトル長を制限します。0 は文字のみ非表示にし、アイコンと保存済みタイトルは保持します。＋／−で「無制限、0、1…20」を循環します。ホバープレビューがオフの場合、ホバーで省略されたタイトルを広げ、離れると戻します。</value>
+    <value>端に固定したカプセルが静止中に表示するタイトルの文字数を設定します。「無制限」または 0～20 を選べます。0 にするとアイコンだけを表示し、タイトル文字を隠します。</value>
   </data>
   <data name="SettingsCompactMasterCapsule" xml:space="preserve">
     <value>メインカプセルを短縮</value>
@@ -1234,14 +1206,14 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
     <value>終了</value>
   </data>
   <data name="LabsMcp" xml:space="preserve"><value>ローカル MCP インターフェース</value></data>
-  <data name="LabsMcpEnable" xml:space="preserve"><value>MCP を有効化（読み取りは常に許可）</value></data>
-  <data name="TipLabsMcpEnable" xml:space="preserve"><value>同じ PaperTodo.exe の --mcp モードから、ローカル AI クライアントによる紙片の読み取りを許可します。無効にすると名前付きパイプを直ちに停止します。</value></data>
-  <data name="LabsMcpBlankWrites" xml:space="preserve"><value>空欄・追加書き込みを許可</value></data>
-  <data name="TipLabsMcpBlankWrites" xml:space="preserve"><value>紙片の新規作成、既存の ToDo 紙への項目追加、空欄への入力、ノートへの追記を許可します。既存の文字は上書きしません。</value></data>
-  <data name="LabsMcpFullWrites" xml:space="preserve"><value>完全な書き込みを許可</value></data>
-  <data name="TipLabsMcpFullWrites" xml:space="preserve"><value>既存 ToDo の文字、ノート本文、完了状態、リマインダーの変更を許可します。空欄・追加書き込み権限も含みます。</value></data>
+  <data name="LabsMcpEnable" xml:space="preserve"><value>MCP 接続を有効化</value></data>
+  <data name="TipLabsMcpEnable" xml:space="preserve"><value>有効にすると、この PC の MCP 対応 AI ツールが PaperTodo に接続し、紙片の内容を読み取れます。変更や削除には下の権限を別途有効にする必要があります。MCP を無効にすると接続はすぐに停止します。</value></data>
+  <data name="LabsMcpBlankWrites" xml:space="preserve"><value>新規作成と追記を許可</value></data>
+  <data name="TipLabsMcpBlankWrites" xml:space="preserve"><value>接続中の AI に紙片の作成、ToDo の追加、空欄への入力、既存ノート末尾への追記を許可します。書かれた内容の置き換えや上書きは許可しません。</value></data>
+  <data name="LabsMcpFullWrites" xml:space="preserve"><value>既存の内容の変更を許可</value></data>
+  <data name="TipLabsMcpFullWrites" xml:space="preserve"><value>接続中の AI に既存の ToDo の変更、ノート本文の置換、完了状態や通知時刻の変更を許可します。紙片の作成、ToDo の追加、追記の権限も含まれます。</value></data>
   <data name="LabsMcpDeletes" xml:space="preserve"><value>MCP による直接削除を許可</value></data>
-  <data name="TipLabsMcpDeletes" xml:space="preserve"><value>有効にすると、AI が紙片や ToDo を確認ダイアログなしで直接削除することを事前承認します。自動的には元に戻せないため、注意して有効にしてください。</value></data>
+  <data name="TipLabsMcpDeletes" xml:space="preserve"><value>有効にすると、接続中の AI が確認画面なしで紙片や ToDo を直接削除できます。削除は自動では元に戻せません。信頼できる AI ツールにのみ許可してください。</value></data>
   <data name="LabsMcpStatusReady" xml:space="preserve"><value>ローカル MCP は準備完了</value></data>
   <data name="LabsMcpStatusDisabled" xml:space="preserve"><value>ローカル MCP は無効</value></data>
   <data name="LabsMcpCopyCodex" xml:space="preserve"><value>Codex 設定をコピー</value></data>
@@ -1365,13 +1337,14 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="LinkedPathDropFailureTitle" xml:space="preserve"><value>パスを関連付けできません</value></data>
   <data name="LinkedPathDropFailureMessage" xml:space="preserve"><value>このファイルまたはフォルダーを関連付けできません：&#xA;{0}</value></data>
   <data name="LinkedPathOpenFailureTitle" xml:space="preserve"><value>関連パスを開けません</value></data>
-  <data name="LinkedPathOpenFailureMessage" xml:space="preserve"><value>システムでこのパスを開けません：&#xA;{0}</value></data>
+  <data name="LinkedPathOpenFailureMessage" xml:space="preserve"><value>関連付けたファイルまたはフォルダーを開けません：
+{0}</value></data>
   <data name="LinkedPathMissingMessage" xml:space="preserve"><value>関連付けたファイルまたはフォルダーは移動または削除されています：&#xA;{0}</value></data>
   <data name="SettingsShowLinkedPathExtensionOnly" xml:space="preserve">
-    <value>長いタイトルがオフのとき拡張子のみ表示</value>
+    <value>関連ファイルは拡張子のみ表示</value>
   </data>
   <data name="TipShowLinkedPathExtensionOnly" xml:space="preserve">
-    <value>有効にすると、関連紙片の長いタイトルがオフのとき、ファイルのクイック起動は拡張子のみ表示します。フォルダーと拡張子のないファイルは短い名前を表示します。</value>
+    <value>有効にすると、関連付けたファイルは .pdf や .png などの拡張子だけを表示し、ファイル名全体は表示しません。フォルダーと拡張子のないファイルは、引き続き名前を表示します。</value>
   </data>
   <data name="SettingsDeepCapsuleGap" xml:space="preserve">
     <value>エッジカプセルの間隔</value>
@@ -1516,7 +1489,7 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
     <value>上部バーのショートカット</value>
   </data>
   <data name="TipTopBarShortcutSettings" xml:space="preserve">
-    <value>ドラッグで順序や表示場所を変更します。「非表示」は位置を保持したまま上部バーと各ペーパーメニューの入口だけを隠し、機能は無効にしません。幅が足りない場合、固定した内蔵ショートカットはまとめてメニューに移ります。</value>
+    <value>ショートカットをドラッグして並べ替え、区切り線を越えて上部バーとメニューの間を移動できます。「非表示」を選ぶと、上部バーと紙片メニューからその操作が隠れます。上部バーに空きがなくなると、ショートカットは一時的にまとめてメニューへ移動します。</value>
   </data>
   <data name="TopBarShownHeading" xml:space="preserve">
     <value>上部バーに表示</value>
@@ -1534,55 +1507,55 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
     <value>外部エディターで開く</value>
   </data>
   <data name="DataReloadConflictTitle" xml:space="preserve">
-    <value>PaperTodo データの競合</value>
+    <value>データの競合が見つかりました</value>
   </data>
   <data name="DataReloadConflictPath" xml:space="preserve">
-    <value>パス:{0}</value>
+    <value>パス：{0}</value>
   </data>
   <data name="DataReloadConflictMemoryHeader" xml:space="preserve">
-    <value>現在 (PaperTodo)</value>
+    <value>現在のデータ</value>
   </data>
   <data name="DataReloadConflictExternalHeader" xml:space="preserve">
-    <value>外部ファイル</value>
+    <value>取り込みデータ</value>
   </data>
   <data name="DataReloadConflictKeepMemory" xml:space="preserve">
     <value>現在を保持</value>
   </data>
   <data name="DataReloadConflictKeepExternal" xml:space="preserve">
-    <value>外部を採用</value>
+    <value>取り込み側を残す</value>
   </data>
   <data name="DataReloadConflictValueMissing" xml:space="preserve">
-    <value>(なし)</value>
+    <value>（この項目なし）</value>
   </data>
   <data name="DataReloadConflictMemoryOnlyTooltip" xml:space="preserve">
-    <value>PaperTodo には存在するが外部ファイルにない行です。「現在を保持」で採用、「外部を採用」で破棄されます。</value>
+    <value>この項目は PaperTodo の現在のデータにだけ存在し、取り込みファイルにはありません。「現在を残す」を選ぶと保持し、「取り込み側を残す」を選ぶと現在のデータから削除します。</value>
   </data>
   <data name="DataReloadConflictExternalOnlyTooltip" xml:space="preserve">
-    <value>外部ファイルには存在するが PaperTodo にない行です。「外部を採用」で採用、「現在を保持」で破棄されます。</value>
+    <value>この項目は取り込みファイルにだけ存在し、PaperTodo の現在のデータにはありません。「取り込み側を残す」を選ぶと追加され、「現在を残す」を選ぶと取り込みません。</value>
   </data>
   <data name="DataReloadPaperConflictTitle" xml:space="preserve">
-    <value>Paper データの競合</value>
+    <value>紙片の内容が競合しています</value>
   </data>
   <data name="DataReloadPaperConflictHeader" xml:space="preserve">
-    <value>Paper ID:{0}  種類:{1}</value>
+    <value>紙片番号：{0} · 種類：{1}</value>
   </data>
   <data name="DataReloadPaperConflictField" xml:space="preserve">
-    <value>フィールド:{0}</value>
+    <value>競合項目：{0}</value>
   </data>
   <data name="DataReloadPaperConflictKeepAllMemory" xml:space="preserve">
     <value>すべて現在を保持</value>
   </data>
   <data name="DataReloadPaperConflictKeepAllExternal" xml:space="preserve">
-    <value>すべて外部を採用</value>
+    <value>取り込み側をすべて残す</value>
   </data>
   <data name="DataReloadPaperConflictWholePaper" xml:space="preserve">
-    <value>(Paper 全体)</value>
+    <value>（紙片全体）</value>
   </data>
   <data name="WorkspaceSettingsTitle" xml:space="preserve">
     <value>ワークスペース</value>
   </data>
   <data name="WorkspaceSettingsDescription" xml:space="preserve">
-    <value>有効にすると紙片の上部ボタンで切り替えられます。紙片・画像・プラグインデータはワークスペースごとに保存されます。</value>
+    <value>有効にすると、独立したワークスペースを複数作成できます。紙片・画像・配置・プラグインデータはそれぞれ別に保存され、紙片の上部バーや設定画面から切り替えられます。無効にしても既存データは削除されず、再度有効にすれば利用できます。</value>
   </data>
   <data name="WorkspaceEnabled" xml:space="preserve">
     <value>ワークスペースを有効にする</value>
@@ -1609,7 +1582,7 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
     <value>メインの設定を使用する</value>
   </data>
   <data name="WorkspaceFollowHint" xml:space="preserve">
-    <value>ソフトウェア設定のみメインに従います。紙片・画像・配置・プラグイン独自データは独立したままです。解除すると以前の独自設定に戻ります。</value>
+    <value>有効にすると、このワークスペースはメインのアプリ設定を使用しますが、紙片・画像・配置・プラグインデータは独立したままです。無効にすると、以前の個別設定に戻ります。</value>
   </data>
   <data name="WorkspaceMainHint" xml:space="preserve">
     <value>メインのワークスペースです。設定を共有する他のワークスペースは、開くときにここの設定を使用します。</value>
@@ -1651,9 +1624,9 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   </data>
   <data name="SettingsDataMergeConflicts" xml:space="preserve"><value>データ統合時の競合</value></data>
   <data name="DataMergeConflictAsk" xml:space="preserve"><value>競合時に確認（既定）</value></data>
-  <data name="DataMergeConflictExternal" xml:space="preserve"><value>外部を優先</value></data>
-  <data name="DataMergeConflictInternal" xml:space="preserve"><value>内部を優先</value></data>
-  <data name="TipDataMergeConflicts" xml:space="preserve"><value>明示的な統合では、双方の競合しない変更を保持します。この設定は競合部分にのみ適用されます。内部は現在の PaperTodo データ、外部は取り込むファイルです。元のバージョンがない場合は必ず確認します。バックグラウンド監視や自動同期は有効になりません。</value></data>
+  <data name="DataMergeConflictExternal" xml:space="preserve"><value>取り込みデータを優先</value></data>
+  <data name="DataMergeConflictInternal" xml:space="preserve"><value>現在のデータを優先</value></data>
+  <data name="TipDataMergeConflicts" xml:space="preserve"><value>データ統合時、競合しない変更は両方とも残ります。同じ項目に競合がある場合は、選んだ方法でどちらを残すか決めます。「現在のデータ」は PaperTodo に保存されている内容、「取り込みデータ」は今回の外部ファイルの内容です。比較元の版がない場合は、引き続き確認を求めます。</value></data>
   <data name="DataReloadConflictEmpty" xml:space="preserve"><value>（空）</value></data>
   <data name="NoteHtmlSaved" xml:space="preserve"><value>保存先：{0}
 元のノートは保持されます。</value></data>
@@ -1671,7 +1644,7 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="NoteExportProgress" xml:space="preserve"><value>エクスポート中 {0}/{1} 件</value></data>
   <data name="TodoExportCurrent" xml:space="preserve"><value>この ToDo をエクスポート</value></data>
   <data name="SettingsCapsuleFreeQueues" xml:space="preserve"><value>カプセルの自由キュー</value></data>
-  <data name="TipCapsuleFreeQueues" xml:space="preserve"><value>有効にすると、カプセルを離して独立したキューを作成できます。Ctrlまたは各キューのマスターで全体を移動し、横に引き出すと別の端や画面へ移動できます。無効時のCtrlドラッグは単体移動となり、マスターでは引き続き端のキュー全体を移動できます。</value></data>
+  <data name="TipCapsuleFreeQueues" xml:space="preserve"><value>有効にすると、カプセルを元の列から引き離して独立した列を作れます。Ctrl を押しながらドラッグするか、その列のメインカプセルをドラッグすると、列全体を移動できます。</value></data>
   <data name="HistoryRecoveryTitle" xml:space="preserve">
     <value>ワークスペースを復元</value>
   </data>

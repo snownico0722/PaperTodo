@@ -383,7 +383,7 @@ public sealed partial class PaperWindow
             _capsuleShell.Opacity = 0;
             MinWidth = PaperLayoutDefaults.MinWidth;
             MinHeight = PaperLayoutDefaults.MinHeight;
-            ResizeMode = ResizeMode.CanResizeWithGrip;
+            ResizeMode = ResizeMode.CanResize;
             if (_controller.UsesNativeMicaWindows)
             {
                 Width = Math.Max(_targetTransitionWidth, PaperLayoutDefaults.MinWidth);
