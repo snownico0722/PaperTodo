@@ -1,7 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
-using Button = System.Windows.Controls.Button;
 
 namespace PaperTodo;
 
@@ -25,7 +24,7 @@ public sealed partial class PaperWindow
         if (_moreActionsButton != null) _moreActionsButton.Content = CreateTopBarMoreIcon(_moreActionsButton);
         if (_closeButton != null) RefreshCloseButton();
     }
-    private static FrameworkElement CreatePixelIcon(Button owner, params string[] rows)
+    private static FrameworkElement CreatePixelIcon(Control owner, params string[] rows)
     {
         var icon = new PixelIconElement(rows)
         {

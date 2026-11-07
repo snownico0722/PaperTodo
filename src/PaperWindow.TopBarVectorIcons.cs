@@ -10,7 +10,7 @@ namespace PaperTodo;
 
 public sealed partial class PaperWindow
 {
-    internal const string RunScriptIconPath =
+    private const string RunScriptIconPath =
         "M5 4.5 H19 Q22 4.5 22 7.5 V16.5 Q22 19.5 19 19.5 H5 Q2 19.5 2 16.5 V7.5 Q2 4.5 5 4.5 Z " +
         "M6.5 9 L10 12 L6.5 15 M13 15 H17.5";
 
@@ -18,7 +18,7 @@ public sealed partial class PaperWindow
 
     // Keep the drawing's margins when centering it. Stretching to its ink bounds
     // would give a horizontal stroke and a full terminal window the same height.
-    private static Path TopBarPath(Button owner, string data, double width = 24,
+    private static Path TopBarPath(Control owner, string data, double width = 24,
         double stroke = 1.8, bool filled = false)
     {
         var scale = 16.0 / 24 * TopBarIconScale();
@@ -50,7 +50,7 @@ public sealed partial class PaperWindow
             filled: pinned);
     }
 
-    private static FrameworkElement CreateTopBarRunScriptIcon(Button owner)
+    internal static FrameworkElement CreateTopBarRunScriptIcon(Control owner)
     {
         if (Theme.IsPixelSkin) return CreatePixelIcon(owner,
             ".#######.", "#.......#", "#.#.....#", "#..#....#", "#.#..##.#", "#.......#", ".#######.");
@@ -63,37 +63,32 @@ public sealed partial class PaperWindow
         return TopBarPath(owner, "M4.5 12 h0.25 M11.875 12 h0.25 M19.25 12 h0.25", stroke: 3);
     }
 
-    private static FrameworkElement CreateTopBarAssociationIcon(
-        Button owner,
-        bool active)
+    internal static FrameworkElement CreateTopBarAssociationIcon(Control owner, bool active)
     {
-        if (Theme.IsPixelSkin) return CreatePixelIcon(owner,
-            "....#....", "..#####..", ".##.#.##.", ".#..#..#.", "#########", ".#..#..#.", ".##.#.##.", "..#####..", "....#....");
-        var scale = TopBarIconScale();
-        var icon = new VectorPrimitiveIconElement(
-            active
-                ? VectorPrimitiveIconKind.AssociationActive
-                : VectorPrimitiveIconKind.AssociationIdle)
-        {
-            Width = Math.Round(18 * scale, 1),
-            Height = Math.Round(18 * scale, 1),
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center
-        };
-        icon.SetBinding(
-            VectorPrimitiveIconElement.ForegroundProperty,
-            CreateForegroundBinding(owner));
+        if (!active)
+            return TopBarPath(owner,
+                "M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07L11.75 5.18 " +
+                "M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71", stroke: 2);
+
+        var icon = new Grid { IsHitTestVisible = false };
+        icon.Children.Add(TopBarPath(owner,
+            "M10.6 5.15l1.76-1.76a4.55 4.55 0 0 1 7.63 4.35 " +
+            "M8.6 18.95a4.32 4.32 0 0 1-5.5-6.55l3-3a4.3 4.3 0 0 1 5.95-.14", stroke: 2));
+        // The check is cut out so the actual surface shows through on every skin.
+        icon.Children.Add(TopBarPath(owner,
+            "F0 M17 10a7 7 0 1 1 0 14 7 7 0 1 1 0-14Z " +
+            "M12.5 17.35l1.44-1.48 2.28 2.13 4.08-4.36 1.51 1.41-5.49 5.86Z", stroke: 0, filled: true));
         return icon;
     }
 
-    private static FrameworkElement CreateTopBarNewTodoIcon(Button owner)
+    internal static FrameworkElement CreateTopBarNewTodoIcon(Control owner)
     {
         if (Theme.IsPixelSkin) return CreatePixelIcon(owner,
             ".........", "#######..", "#.....#.#", "#....#..#", "#.#.#...#", "#..#....#", "#.......#", "#########", ".........");
         return TopBarPath(owner, NewPaperPlusPath + "M15 12 L20 17 L30 7", width: 32);
     }
 
-    private static FrameworkElement CreateTopBarNewNoteIcon(Button owner)
+    internal static FrameworkElement CreateTopBarNewNoteIcon(Control owner)
     {
         if (Theme.IsPixelSkin) return CreatePixelIcon(owner,
             "......##.", ".....####", "....####.", "...####..", "..####...", ".####....", ".###.....", ".#.......", ".........");

@@ -282,7 +282,7 @@ public sealed partial class AppController
         AutomationProperties.SetAutomationId(card, "WorkspaceSlot" + slot);
         AutomationProperties.SetName(card, label + " #" + slot);
 
-        var line = new WrapPanel();
+        var line = new WrapPanel { VerticalAlignment = VerticalAlignment.Center };
         var name = new TextBlock
         {
             Text = label,
@@ -319,6 +319,8 @@ public sealed partial class AppController
             Margin = new Thickness(4, 0, 1, 0)
         };
         var rename = PluginPageButton("✎");
+        rename.VerticalContentAlignment = VerticalAlignment.Center;
+        rename.HorizontalContentAlignment = HorizontalAlignment.Center;
         rename.MinWidth = 22;
         rename.Width = 22;
         rename.Height = 25;
@@ -418,6 +420,7 @@ public sealed partial class AppController
             controls.Children.Add(followWithHint);
 
             var delete = PluginPageButton(WorkspaceUi("删除", "Delete", "削除", "삭제"));
+            delete.VerticalContentAlignment = VerticalAlignment.Center;
             delete.MinWidth = 28;
             delete.Height = 25;
             delete.Padding = new Thickness(3, 1, 3, 1);

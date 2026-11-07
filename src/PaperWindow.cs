@@ -2357,7 +2357,7 @@ public sealed partial class PaperWindow : Window
 
         if (_paper.Type == PaperTypes.Note)
         {
-            _openMarkdownButton = IconButton(ExternalOpenButtonLabel(), OpenMarkdownEditorToolTip());
+            _openMarkdownButton = IconButton(ExternalOpenButtonLabel(_controller.State.ExternalMarkdownExtension), OpenMarkdownEditorToolTip());
             _openMarkdownButton.FontFamily = AppTypography.UiFontFamily;
             _openMarkdownButton.FontSize = AppTypography.Scale(10.5);
             _openMarkdownButton.Padding = new Thickness(0, AppTypography.Scale(1.4), 0, 0);
@@ -3285,7 +3285,7 @@ public sealed partial class PaperWindow : Window
         };
     }
 
-    private static System.Windows.Data.Binding CreateForegroundBinding(Button owner)
+    private static System.Windows.Data.Binding CreateForegroundBinding(Control owner)
     {
         return new System.Windows.Data.Binding(nameof(Control.Foreground))
         {
