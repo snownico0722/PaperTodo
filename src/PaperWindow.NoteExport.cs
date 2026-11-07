@@ -15,19 +15,34 @@ public sealed partial class PaperWindow
     private int _paperExportCompleted;
     private int _paperExportTotal;
 
-    private async void ExportPapers(bool all)
+    private enum ExportScope { Current, Notes, Todos, All }
+
+    private async void ExportPapers(ExportScope scope)
     {
         if (_paperExportRunning || !IsExportablePaper(_paper))
             return;
 
-        var caption = Strings.Get(all ? "NoteExportAll" :
-            _paper.Type == PaperTypes.Todo ? "TodoExportCurrent" : "NoteExportCurrent");
+        var all = scope != ExportScope.Current;
+        var caption = Strings.Get(scope switch
+        {
+            ExportScope.Current => _paper.Type == PaperTypes.Todo ? "TodoExportCurrent" : "NoteExportCurrent",
+            ExportScope.Notes => "MenuExportAllNotes",
+            ExportScope.Todos => "MenuExportAllTodos",
+            _ => "NoteExportAll"
+        });
 
         try
         {
             // Capture live text and detached Todo items on the UI thread.
             // Sort and render Todo Markdown only after the worker starts.
-            var snapshots = (all ? _controller.State.Papers.Where(IsExportablePaper) : new[] { _paper })
+            IEnumerable<PaperData> selected = scope switch
+            {
+                ExportScope.Current => [_paper],
+                ExportScope.Notes => _controller.State.Papers.Where(p => p.Type == PaperTypes.Note),
+                ExportScope.Todos => _controller.State.Papers.Where(p => p.Type == PaperTypes.Todo),
+                _ => _controller.State.Papers
+            };
+            var snapshots = selected.Where(IsExportablePaper)
                 .Select(paper => (
                     paper.Id,
                     Title: _controller.PaperTitleText(paper),

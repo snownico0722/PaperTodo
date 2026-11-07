@@ -352,6 +352,7 @@ PaperTodo를 수동으로 다시 여세요. 문제가 반복되면 PC를 다시 
   <data name="SettingsColorScheme" xml:space="preserve">
     <value>색 구성</value>
   </data>
+  <data name="SettingsFontGroup" xml:space="preserve"><value>글꼴 설정</value></data>
   <data name="SettingsUiFont" xml:space="preserve">
     <value>글꼴</value>
   </data>
@@ -797,7 +798,7 @@ PaperTodo를 수동으로 다시 여세요. 문제가 반복되면 PC를 다시 
     <value>메모 투명도</value>
   </data>
   <data name="LabsEnableInactivePaperOpacity" xml:space="preserve">
-    <value>비활성 메모 자동 반투명</value>
+    <value>포커스 해제 시 반투명</value>
   </data>
   <data name="TipLabsInactivePaperOpacity" xml:space="preserve">
     <value>펼친 메모는 포커스를 잃으면 자동으로 반투명해져 바탕 화면을 덜 가립니다. 다시 클릭하거나 활성화하면 원래 불투명도로 돌아옵니다.</value>
@@ -1479,6 +1480,7 @@ PaperTodo를 수동으로 다시 여세요. 문제가 반복되면 PC를 다시 
   <data name="MenuTopBarMoveRight" xml:space="preserve">
     <value>오른쪽으로 이동</value>
   </data>
+  <data name="MenuAssociationTarget" xml:space="preserve"><value>연결 대상</value></data>
   <data name="MenuTopBarAssociationDrag" xml:space="preserve">
     <value>할 일 또는 창으로 끌어서 연결</value>
   </data>
@@ -1640,7 +1642,7 @@ PaperTodo를 수동으로 다시 여세요. 문제가 반복되면 PC를 다시 
   <data name="NoteExportSummary" xml:space="preserve"><value>메모/할 일 {0}/{1}개를 내보냈습니다.&#xA;누락된 이미지: {2}개 (항목 {3}개).&#xA;저장 위치: {4}</value></data>
   <data name="NoteExportFailedNotes" xml:space="preserve"><value>내보내기에 실패한 항목:&#xA;{0}</value></data>
   <data name="NoteExportFailure" xml:space="preserve"><value>내보내기 실패: {0}</value></data>
-  <data name="NoteExportNoNotes" xml:space="preserve"><value>내보낼 수 있는 메모 또는 할 일이 없습니다.</value></data>
+  <data name="NoteExportNoNotes" xml:space="preserve"><value>선택한 범위에 내보낼 종이가 없습니다.</value></data>
   <data name="NoteExportProgress" xml:space="preserve"><value>내보내는 중 {0}/{1}개</value></data>
   <data name="TodoExportCurrent" xml:space="preserve"><value>현재 할 일 내보내기</value></data>
   <data name="SettingsCapsuleFreeQueues" xml:space="preserve"><value>캡슐 자유 대기열</value></data>
@@ -1738,6 +1740,7 @@ PaperTodo를 수동으로 다시 여세요. 문제가 반복되면 PC를 다시 
   <data name="TopBarRunScript" xml:space="preserve">
     <value>스크립트 실행</value>
   </data>
+  <data name="TipTopBarRunScript" xml:space="preserve"><value>편집에서 PowerShell 스크립트를 입력하고 저장한 뒤 스크립트 실행을 누르세요. 현재 작업 공간의 모든 종이가 이 스크립트를 공유합니다. 기본값은 설정에 지정된 PowerShell이며 첫 줄에 !pwsh 또는 !ps5만 적어 버전을 지정할 수 있습니다.</value></data>
   <data name="TopBarEditScript" xml:space="preserve">
     <value>스크립트 편집</value>
   </data>
@@ -1757,8 +1760,9 @@ PaperTodo를 수동으로 다시 여세요. 문제가 반복되면 PC를 다시 
     <value>이전 작업 공간의 스크립트 프로세스와 상주 PowerShell 세션이 종료되었습니다.</value>
   </data>
   <data name="MenuExport" xml:space="preserve"><value>내보내기</value></data>
-  <data name="MenuExportCurrentNote" xml:space="preserve"><value>현재 노트</value></data>
-  <data name="MenuExportCurrentTodo" xml:space="preserve"><value>현재 할 일</value></data>
+  <data name="MenuExportCurrent" xml:space="preserve"><value>현재 항목</value></data>
+  <data name="MenuExportAllNotes" xml:space="preserve"><value>모든 노트</value></data>
+  <data name="MenuExportAllTodos" xml:space="preserve"><value>모든 할 일</value></data>
   <data name="MenuExportAllPapers" xml:space="preserve"><value>모든 노트 및 할 일</value></data>
   <data name="MenuTopBarAssociationDragTodo" xml:space="preserve"><value>할 일로 끌어서 연결</value></data>
   <data name="MenuTopBarAssociationDragWindow" xml:space="preserve"><value>창으로 끌어서 연결</value></data>

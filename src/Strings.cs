@@ -26,7 +26,7 @@ public static class Strings
             ["LabsFocusInactiveGroup"] = ["失焦", "Inactive", "非アクティブ", "비활성"],
             ["LabsFocusRestingGroup"] = ["静置", "Resting", "静置", "유휴"],
             ["LabsDockedCapsuleBehavior"] = ["贴边胶囊", "Docked capsules", "端のカプセル", "가장자리 캡슐"],
-            ["LabsFocusRestingOpacity"] = ["静置时自动半透明", "Fade while resting", "静置時に自動で半透明", "유휴 시 자동 반투명"],
+            ["LabsFocusRestingOpacity"] = ["胶囊自动半透明", "Fade capsules automatically", "カプセルを自動で半透明に", "캡슐 자동 반투명"],
             ["TipLabsFocusRestingOpacity"] = ["仅影响普通胶囊和贴边胶囊的静置状态；悬停、激活或拖动时恢复为不透明。默认不影响主胶囊，可在下方选择同时应用。", "Affects ordinary and docked capsules while resting; hover, activation, or dragging restores full opacity. The master capsule is excluded by default and can be included below.", "通常カプセルと端のカプセルの静置時だけ半透明にし、ホバー・アクティブ化・ドラッグで不透明に戻します。マスターカプセルは既定では対象外で、下の項目から含められます。", "일반 캡슐과 가장자리 캡슐의 유휴 상태에만 적용되며, 호버·활성화·드래그 시 불투명하게 돌아옵니다. 마스터 캡슐은 기본적으로 제외되며 아래에서 포함할 수 있습니다."],
             ["LabsFocusRestingIncludeMaster"] = ["主胶囊也透明", "Include master capsule", "マスターカプセルにも適用", "마스터 캡슐도 투명"],
             ["LabsFocusRestingAlways"] = ["激活时也保持透明", "Keep transparent while active", "操作中も透明を維持", "활성 상태에서도 투명 유지"],

@@ -1557,10 +1557,11 @@ public sealed partial class AppController
         leftColumn.Children.Add(CreateSkinSettings());
         leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsDeepCapsuleGap")), "TipDeepCapsuleGap"));
         leftColumn.Children.Add(CreateDeepCapsuleGapSegmentSelector());
-        leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsUiFont")), "TipUiFont"));
-        leftColumn.Children.Add(CreateUiFontPresetSegmentSelector());
-        leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsTextRenderingProfile")), "TipTextRenderingProfile"));
-        leftColumn.Children.Add(CreateTextRenderingProfileSegmentSelector());
+        rightColumn.Children.Add(SettingsSectionLabel(Strings.Get("SettingsFontGroup")));
+        rightColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsUiFont")), "TipUiFont"));
+        rightColumn.Children.Add(CreateUiFontPresetSegmentSelector());
+        rightColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsTextRenderingProfile")), "TipTextRenderingProfile"));
+        rightColumn.Children.Add(CreateTextRenderingProfileSegmentSelector());
         var customBoldToggle = SettingsToggle(
             Strings.Get("SettingsCustomFontEnhancedBold"),
             State.CustomFontEnhancedBold,
@@ -1571,29 +1572,23 @@ public sealed partial class AppController
         customBoldToggle.IsEnabled =
             (AppTypography.HasCustomFont && AppTypography.HasCustomBoldFont) ||
             State.CustomFontEnhancedBold;
-        leftColumn.Children.Add(WrapWithHint(customBoldToggle, "TipCustomFontEnhancedBold"));
-        leftColumn.Children.Add(CompactSettingsField(
+        rightColumn.Children.Add(WrapWithHint(customBoldToggle, "TipCustomFontEnhancedBold"));
+        rightColumn.Children.Add(CompactSettingsField(
             Strings.Get("SettingsOverallFontScale"),
             CreateOverallFontScaleStepper(),
             editorWidth: 132,
             tipKey: "TipOverallFontScale",
             topMargin: 7));
 
+        rightColumn.Children.Add(SettingsSoftDivider());
         void AddTextStyleEditor(
-            StackPanel column,
             string sectionKey,
             string tipKey,
             UIElement sizeSelector,
             bool isBold,
-            Action toggleBold,
-            bool leadingDivider)
+            Action toggleBold)
         {
-            if (leadingDivider)
-            {
-                column.Children.Add(SettingsSoftDivider());
-            }
-
-            column.Children.Add(CreateTextStyleRow(
+            rightColumn.Children.Add(CreateTextStyleRow(
                 Strings.Get(sectionKey),
                 tipKey,
                 sizeSelector,
@@ -1602,39 +1597,31 @@ public sealed partial class AppController
         }
 
         AddTextStyleEditor(
-            rightColumn,
             "SettingsNoteBodyText",
             "TipNoteBodyTextStyle",
             CreateVisualTextSizeSelector(State.NoteTextSize, SetNoteTextSize),
             State.NoteTextBold,
-            ToggleNoteTextBold,
-            leadingDivider: false);
+            ToggleNoteTextBold);
 
         AddTextStyleEditor(
-            rightColumn,
             "SettingsTodoBodyText",
             "TipTodoBodyTextStyle",
             CreateTodoVisualSizeSelector(),
             State.TodoTextBold,
-            ToggleTodoTextBold,
-            leadingDivider: true);
+            ToggleTodoTextBold);
 
         AddTextStyleEditor(
-            rightColumn,
             "SettingsTitleText",
             "TipTitleTextStyle",
             CreateVisualTextSizeSelector(State.TitleTextSize, SetTitleTextSize),
             State.TitleTextBold,
-            ToggleTitleTextBold,
-            leadingDivider: true);
+            ToggleTitleTextBold);
         AddTextStyleEditor(
-            rightColumn,
             "SettingsCapsuleText",
             "TipCapsuleTextStyle",
             CreateVisualTextSizeSelector(State.CapsuleTextSize, SetCapsuleTextSize),
             State.CapsuleTextBold,
-            ToggleCapsuleTextBold,
-            leadingDivider: true);
+            ToggleCapsuleTextBold);
 
         if (PaperBackground.IsAvailable)
         {
@@ -1868,6 +1855,7 @@ public sealed partial class AppController
             Foreground = TrayWeakTextBrush,
             FontSize = AppTypography.Scale(11),
             FontWeight = FontWeights.Medium,
+            VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, topMargin, 0, 0)
         };
     }
@@ -1897,7 +1885,7 @@ public sealed partial class AppController
         {
             Orientation = Orientation.Horizontal
         };
-        labelHost.VerticalAlignment = wrapLabel ? VerticalAlignment.Top : VerticalAlignment.Center;
+        labelHost.VerticalAlignment = VerticalAlignment.Center;
         labelHost.Children.Add(new TextBlock
         {
             Text = labelText,
@@ -1914,7 +1902,6 @@ public sealed partial class AppController
                 new Thickness(4, 0, 0, 0));
             if (wrapLabel)
             {
-                hint.VerticalAlignment = VerticalAlignment.Top;
                 DockPanel.SetDock(hint, Dock.Right);
                 labelHost.Children.Insert(0, hint);
             }
@@ -1991,7 +1978,7 @@ public sealed partial class AppController
             Margin = new Thickness(0, 4, 0, 0),
             Cursor = System.Windows.Input.Cursors.Hand,
             Focusable = false,
-            VerticalContentAlignment = wrapText ? VerticalAlignment.Top : VerticalAlignment.Center,
+            VerticalContentAlignment = VerticalAlignment.Center,
             Style = BuildSettingsCheckBoxStyle(wrapText)
         };
 
@@ -2075,31 +2062,32 @@ public sealed partial class AppController
 
         // The option keeps its own top margin via its style; reset it here so the row controls spacing.
         option.Margin = new Thickness(0);
-        var alignment = option is CheckBox { VerticalContentAlignment: VerticalAlignment.Top }
-            ? VerticalAlignment.Top : VerticalAlignment.Center;
-        option.VerticalAlignment = alignment;
+        option.VerticalAlignment = VerticalAlignment.Center;
         Grid.SetColumn(option, 0);
         grid.Children.Add(option);
 
         var hint = CreateSettingsHintGlyph(tooltip, margin: new Thickness(6, 0, 0, 0));
-        hint.VerticalAlignment = alignment;
         Grid.SetColumn(hint, 1);
         grid.Children.Add(hint);
 
         return grid;
     }
 
-    private Border CreateSettingsHintGlyph(string tipKey, Thickness margin) =>
+    internal static Border CreateSettingsHintGlyph(string tipKey, Thickness margin) =>
         CreateSettingsHintGlyph(BuildSettingsHintTooltip(Strings.Get(tipKey)), margin);
 
-    private Border CreateSettingsHintGlyph(ToolTip tooltip, Thickness margin)
+    private static Border CreateSettingsHintGlyph(ToolTip tooltip, Thickness margin)
     {
-        var hintGlyph = new TextBlock
+        var hintGlyph = new System.Windows.Shapes.Path
         {
-            Text = "ⓘ",
-            Foreground = TrayWeakTextBrush,
-            FontFamily = AppTypography.SymbolFontFamily,
-            FontSize = AppTypography.Scale(12),
+            Data = Geometry.Parse("M6 1 A5 5 0 1 1 6 11 A5 5 0 1 1 6 1 Z M6 5.5 V8.5 M6 3.5 V3.6"),
+            Width = AppTypography.Scale(10),
+            Height = AppTypography.Scale(10),
+            Stretch = Stretch.Uniform,
+            Stroke = TrayWeakTextBrush,
+            StrokeThickness = 1,
+            StrokeStartLineCap = PenLineCap.Round,
+            StrokeEndLineCap = PenLineCap.Round,
             VerticalAlignment = VerticalAlignment.Center,
             HorizontalAlignment = HorizontalAlignment.Center
         };
@@ -2120,12 +2108,12 @@ public sealed partial class AppController
         ToolTipService.SetInitialShowDelay(hint, 200);
         ToolTipService.SetShowDuration(hint, 20000);
         ToolTipService.SetBetweenShowDelay(hint, 0);
-        hint.MouseEnter += (_, _) => hintGlyph.Foreground = TrayTextBrush;
-        hint.MouseLeave += (_, _) => hintGlyph.Foreground = TrayWeakTextBrush;
+        hint.MouseEnter += (_, _) => hintGlyph.Stroke = TrayTextBrush;
+        hint.MouseLeave += (_, _) => hintGlyph.Stroke = TrayWeakTextBrush;
         return hint;
     }
 
-    private ToolTip BuildSettingsHintTooltip(string text)
+    private static ToolTip BuildSettingsHintTooltip(string text)
     {
         return new ToolTip
         {
@@ -2270,9 +2258,7 @@ public sealed partial class AppController
         markHost.SetValue(FrameworkElement.MarginProperty,
             markOnly ? new Thickness(0) : new Thickness(0, 0, 8, 0));
         if (markOnly) markHost.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
-        markHost.SetValue(FrameworkElement.VerticalAlignmentProperty,
-            wrapText ? VerticalAlignment.Top : VerticalAlignment.Center);
-        if (wrapText) markHost.SetValue(FrameworkElement.MarginProperty, new Thickness(0, 2, 8, 0));
+        markHost.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
 
         var border = new FrameworkElementFactory(typeof(Border));
         border.Name = "CheckBorder";

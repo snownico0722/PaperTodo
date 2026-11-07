@@ -10,8 +10,6 @@ internal enum VectorPrimitiveIconKind
 {
     Plus,
     Minus,
-    AssociationIdle,
-    AssociationActive,
     Settings
 }
 
@@ -74,28 +72,6 @@ internal sealed class VectorPrimitiveIconElement : FrameworkElement
                 break;
             case VectorPrimitiveIconKind.Minus:
                 DrawMinus(drawingContext, centerX, centerY, pixelX, pixelY, deviceOrigin.X, deviceOrigin.Y);
-                break;
-            case VectorPrimitiveIconKind.AssociationIdle:
-                DrawAssociation(
-                    drawingContext,
-                    centerX,
-                    centerY,
-                    pixelX,
-                    pixelY,
-                    deviceOrigin.X,
-                    deviceOrigin.Y,
-                    active: false);
-                break;
-            case VectorPrimitiveIconKind.AssociationActive:
-                DrawAssociation(
-                    drawingContext,
-                    centerX,
-                    centerY,
-                    pixelX,
-                    pixelY,
-                    deviceOrigin.X,
-                    deviceOrigin.Y,
-                    active: true);
                 break;
             case VectorPrimitiveIconKind.Settings:
                 DrawSettings(
@@ -164,71 +140,6 @@ internal sealed class VectorPrimitiveIconElement : FrameworkElement
             centerLineY,
             halfWidth * 2,
             thickness,
-            pixelX,
-            pixelY,
-            originPixelX,
-            originPixelY);
-    }
-
-    private void DrawAssociation(
-        DrawingContext drawingContext,
-        double centerX,
-        double centerY,
-        double pixelX,
-        double pixelY,
-        double originPixelX,
-        double originPixelY,
-        bool active)
-    {
-        var minimum = Math.Min(ActualWidth, ActualHeight);
-        var radius = Math.Max(
-            Math.Min(pixelX, pixelY) * 2,
-            minimum * 0.198);
-        var thicknessX = AxisThickness(pixelX);
-        var thicknessY = AxisThickness(pixelY);
-        var circleStroke = Math.Min(thicknessX, thicknessY);
-        var centerLineX = AxisCenter(centerX, pixelX, thicknessX, originPixelX);
-        var centerLineY = AxisCenter(centerY, pixelY, thicknessY, originPixelY);
-        var circlePen = CreateRoundPen(circleStroke);
-        drawingContext.DrawEllipse(
-            null,
-            circlePen,
-            new Point(centerLineX, centerLineY),
-            radius,
-            radius);
-
-        if (active)
-        {
-            var innerRadius = Math.Max(
-                Math.Min(pixelX, pixelY),
-                radius - (circleStroke / 2.0));
-            var dotRadius = innerRadius * 0.50;
-            drawingContext.DrawEllipse(
-                Foreground,
-                null,
-                new Point(centerLineX, centerLineY),
-                dotRadius,
-                dotRadius);
-            return;
-        }
-
-        var arm = radius + (circleStroke / 2.0) + (Math.Min(pixelX, pixelY) * 1.25);
-        DrawCenteredRectangle(
-            drawingContext,
-            centerLineX,
-            centerLineY,
-            arm * 2,
-            thicknessY,
-            pixelX,
-            pixelY,
-            originPixelX,
-            originPixelY);
-        DrawCenteredRectangle(
-            drawingContext,
-            centerLineX,
-            centerLineY,
-            thicknessX,
-            arm * 2,
             pixelX,
             pixelY,
             originPixelX,

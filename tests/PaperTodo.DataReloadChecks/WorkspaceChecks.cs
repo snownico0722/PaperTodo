@@ -706,12 +706,42 @@ internal static partial class Program
 
         var original = controller.WorkspaceOptions.Normalized();
         var originalName = original.DisplayName(2);
-        var nameRow = ((StackPanel)Slot(Page()).Child).Children.OfType<Grid>().First();
-        var rename = nameRow.Children.OfType<Button>().Single(button =>
+        var page = Page();
+        var window = new Window { Content = page, Width = 630, Height = 400, ShowInTaskbar = false };
+        window.Show();
+        var editingCard = Slot(page);
+        var cardControls = LogicalDescendants(editingCard).ToArray();
+        var rename = cardControls.OfType<Button>().Single(button =>
             AutomationProperties.GetAutomationId(button) == "WorkspaceRename2");
-        var editor = nameRow.Children.OfType<TextBox>().Single();
+        var editor = cardControls.OfType<TextBox>().Single();
+        async Task<Rect> RenameButtonBoundsAsync()
+        {
+            await window.Dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.ApplicationIdle);
+            return rename.TransformToAncestor(editingCard).TransformBounds(new Rect(rename.RenderSize));
+        }
+
         rename.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-        editor.Text = "Unconfirmed workspace name";
+        var shortNameButton = await RenameButtonBoundsAsync();
+        editor.Text = "Weekly plans";
+        var mediumNameButton = await RenameButtonBoundsAsync();
+        Require(mediumNameButton.Left > shortNameButton.Left,
+            $"the save button did not follow the name: {shortNameButton} -> {mediumNameButton}");
+        editor.Text = new string('中', 16);
+        Require(editor.Text == new string('中', 15), "fullwidth workspace names stop at 15 characters");
+        editor.Text = new string('A', 31);
+        Require(editor.Text == new string('A', 30), "ASCII workspace names stop at 30 halfwidth characters");
+        editor.Text = new string('中', 10) + new string('a', 11);
+        Require(editor.Text == new string('中', 10) + new string('a', 10),
+            "workspace names enforce the combined halfwidth/fullwidth limit");
+        editor.Text = new string('W', 48);
+        Require(editor.Text == new string('W', 30), "long paste was not limited to 15 fullwidth units");
+        editor.CaretIndex = 0;
+        editor.SelectedText = "X";
+        Require(editor.Text == new string('W', 30),
+            "adding text to a full name must not delete the original suffix");
+        var longNameButton = await RenameButtonBoundsAsync();
+        Require(longNameButton.Top >= shortNameButton.Bottom,
+            $"the save button did not wrap: {shortNameButton} -> {longNameButton}");
         cancelRename.Invoke(controller, [new Border()]);
         Require(editor.Visibility == Visibility.Collapsed &&
                 controller.WorkspaceOptions.DisplayName(2) == originalName,
@@ -723,6 +753,7 @@ internal static partial class Program
         await Until(() => controller.WorkspaceOptions.DisplayName(2) == "Confirmed workspace name",
             "workspace rename confirmation did not save");
         Require(controller.WorkspaceNumber == 1, "renaming a workspace unexpectedly switched it");
+        window.Close();
 
         var card = Slot(Page());
         card.RaiseEvent(new System.Windows.Input.MouseButtonEventArgs(
@@ -750,7 +781,7 @@ internal static partial class Program
         var main = NewState();
         main.Theme = "dark"; main.UiLanguage = "en-US";
         main.McpEnabled = main.McpAllowFullWrites = true;
-        main.Workspaces = new() { Enabled = true, Slots = [1, 2, 3, 4, 5] };
+        main.Workspaces = new() { Enabled = true, Slots = [1, 2, 3, 4, 5], Names = new() { [2] = "11" } };
         var second = NewState();
         second.Theme = "light"; second.UiLanguage = "ja-JP";
         second.McpEnabled = second.McpAllowFullWrites = false;

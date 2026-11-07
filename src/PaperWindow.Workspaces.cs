@@ -22,35 +22,7 @@ public sealed partial class PaperWindow
         var button = _workspaceButton = IconButton("", "");
         button.Width = 25;
         AutomationProperties.SetAutomationId(button, "WorkspaceCycle");
-        var icon = new Grid { Width = 20, Height = 20, IsHitTestVisible = false };
-        var loop = new Path
-        {
-            Data = Geometry.Parse(WorkspaceCycleIcon.PathData),
-            StrokeThickness = WorkspaceCycleIcon.StrokeThickness,
-            StrokeStartLineCap = PenLineCap.Round,
-            StrokeEndLineCap = PenLineCap.Round,
-            StrokeLineJoin = PenLineJoin.Round,
-            HorizontalAlignment = HorizontalAlignment.Left,
-            VerticalAlignment = VerticalAlignment.Top
-        };
-        loop.SetBinding(Shape.StrokeProperty, new Binding(nameof(Control.Foreground)) { Source = button });
-        icon.Children.Add(loop);
-        _workspaceNumberBadge = new TextBlock
-        {
-            FontSize = 9,
-            FontWeight = FontWeights.SemiBold,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center
-        };
-        _workspaceNumberBadge.SetBinding(TextBlock.ForegroundProperty,
-            new Binding(nameof(Control.Foreground)) { Source = button });
-        icon.Children.Add(_workspaceNumberBadge);
-        button.Content = new Viewbox
-        {
-            Width = Math.Round(18 * TopBarIconScale(), 1),
-            Height = Math.Round(18 * TopBarIconScale(), 1),
-            Child = icon
-        };
+        button.Content = CreateWorkspaceCycleIcon(button, _controller.WorkspaceNumber, out _workspaceNumberBadge);
         button.Click += async (_, _) =>
         {
             if (_controller.IsWorkspaceSwitching) return;
@@ -72,6 +44,43 @@ public sealed partial class PaperWindow
         return button;
     }
 
+    internal static Viewbox CreateWorkspaceCycleIcon(Control owner, int number, out TextBlock numberBadge)
+    {
+        // The stacked outline spans x=4..18, y=2..16 in this 20-unit drawing.
+        // Move both layers together so the number stays centered on the front page.
+        var icon = new Grid
+        {
+            Width = 20, Height = 20, IsHitTestVisible = false,
+            RenderTransform = new TranslateTransform(-1, 1)
+        };
+        var loop = new Path
+        {
+            Data = Geometry.Parse(WorkspaceCycleIcon.PathData),
+            StrokeThickness = WorkspaceCycleIcon.StrokeThickness,
+            StrokeStartLineCap = PenLineCap.Round,
+            StrokeEndLineCap = PenLineCap.Round,
+            StrokeLineJoin = PenLineJoin.Round,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Top
+        };
+        loop.SetBinding(Shape.StrokeProperty, new Binding(nameof(Control.Foreground)) { Source = owner });
+        icon.Children.Add(loop);
+        numberBadge = new TextBlock
+        {
+            Text = number.ToString(UiLanguages.EffectiveCulture),
+            FontFamily = AppTypography.UiFontFamily,
+            FontSize = 9,
+            FontWeight = FontWeights.SemiBold,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        numberBadge.SetBinding(TextBlock.ForegroundProperty,
+            new Binding(nameof(Control.Foreground)) { Source = owner });
+        icon.Children.Add(numberBadge);
+        var size = Math.Round(18 * TopBarIconScale(), 1);
+        return new Viewbox { Width = size, Height = size, Child = icon };
+    }
+
     internal void RefreshWorkspaceButton()
     {
         if (_workspaceButton == null || IsClosed) return;
@@ -81,7 +90,8 @@ public sealed partial class PaperWindow
             PaperTopBarShortcuts.Contains(_controller.State, _paper.Type, PaperTopBarShortcuts.Workspace)
                 ? Visibility.Visible : Visibility.Collapsed;
         _workspaceButton.IsEnabled = !_controller.IsWorkspaceSwitching;
-        _workspaceButton.Foreground = TextBrush;
+        if (_workspaceButton.Content is Viewbox icon)
+            icon.Width = icon.Height = Math.Round(18 * TopBarIconScale(), 1);
         if (_workspaceNumberBadge != null)
         {
             _workspaceNumberBadge.Text = number.ToString(UiLanguages.EffectiveCulture);

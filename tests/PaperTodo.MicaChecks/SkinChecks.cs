@@ -134,8 +134,22 @@ internal static class SkinChecks
             $"{scenario}: painted right edge must resize");
         Program.Assert(ResizeHit(hwnd, centerX, rect.Bottom - bottomInset) == 15,
             $"{scenario}: painted bottom edge must resize");
-        Program.Assert(ResizeHit(hwnd, rect.Right - rightInset, rect.Bottom - bottomInset) == 17,
-            $"{scenario}: painted bottom-right corner must resize");
+        int CornerX(bool left, double inset) => left
+            ? rect.Left + (int)Math.Floor((chrome.Margin.Left + inset) * dpi.DpiScaleX)
+            : rect.Right - (int)Math.Round((chrome.Margin.Right + inset) * dpi.DpiScaleX);
+        int CornerY(bool top, double inset) => top
+            ? rect.Top + (int)Math.Floor((chrome.Margin.Top + inset) * dpi.DpiScaleY)
+            : rect.Bottom - (int)Math.Round((chrome.Margin.Bottom + inset) * dpi.DpiScaleY);
+        foreach (var left in new[] { true, false })
+        {
+            Program.Assert(ResizeHit(hwnd, CornerX(left, 8), CornerY(false, 8)) == (left ? 16 : 17),
+                $"{scenario}: both lower corners allow diagonal resizing 8 DIPs inside the paper");
+            if (chrome.HeaderOpacity != 0)
+                Program.Assert(ResizeHit(hwnd, CornerX(left, 6), CornerY(true, 6)) == (left ? 13 : 14),
+                    $"{scenario}: both upper corners allow diagonal resizing 6 DIPs inside the paper");
+        }
+        Program.Assert(ResizeHit(hwnd, centerX, CornerY(false, 8)) == 1,
+            $"{scenario}: the wider corner does not extend along the bottom edge");
         // Ensure body content near the corner still receives normal clicks.
         Program.Assert(ResizeHit(hwnd, rect.Right - rightInset - 15, rect.Bottom - bottomInset - 15) == 1,
             $"{scenario}: body beside resize edge remains interactive");
@@ -152,8 +166,8 @@ internal static class SkinChecks
             .GetField("_paperChrome", Program.Private)!.GetValue(window)!;
         var dpi = VisualTreeHelper.GetDpi(window);
         var origin = new NativePoint(
-            before.Right - (int)Math.Round((chrome.Margin.Right + 4) * dpi.DpiScaleX),
-            before.Bottom - (int)Math.Round((chrome.Margin.Bottom + 4) * dpi.DpiScaleY));
+            before.Right - (int)Math.Round((chrome.Margin.Right + 8) * dpi.DpiScaleX),
+            before.Bottom - (int)Math.Round((chrome.Margin.Bottom + 8) * dpi.DpiScaleY));
         Program.Assert(ResizeHit(hwnd, origin.X, origin.Y) == 17,
             $"{scenario}: bottom-right painted edge enables diagonal resize");
         Program.Assert(GetCursorPos(out var priorCursor), $"{scenario}: original cursor");

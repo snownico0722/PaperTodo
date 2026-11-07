@@ -30,7 +30,6 @@ using SolidColorBrush = System.Windows.Media.SolidColorBrush;
 using TextBox = System.Windows.Controls.TextBox;
 using VerticalAlignment = System.Windows.VerticalAlignment;
 using WpfMenuItem = System.Windows.Controls.MenuItem;
-using WpfPath = System.Windows.Shapes.Path;
 using PaperTodo.Plugin;
 
 namespace PaperTodo;
@@ -321,8 +320,6 @@ public sealed partial class PaperWindow : Window
     // still explicitly owned by DwmMicaApi; a second opaque header is not needed.
     private Brush TitleBarBrush => HasMaterialHeader ? Brushes.Transparent : Theme.TitleBarBrush(_controller.UsesNativeMicaWindows);
     private static Brush TitleBarDividerBrush => Theme.Tint((byte)(Theme.IsDark ? 34 : 28));
-    private const string PinOutlineHeadPathData = "M 7.5,4.25 H 16.5 V 5.75 H 15.5 V 12.05 L 17.6,14.15 V 15.35 H 6.4 V 14.15 L 8.5,12.05 V 5.75 H 7.5 Z";
-    private const string PinNeedlePathData = "M 10.85,15.35 H 13.15 V 22.1 L 12,23.25 L 10.85,22.1 Z";
     private const int TodoMoveAnimationMilliseconds = 150;
 
     // Static helpers can initialize PaperWindow on a worker thread during startup.
@@ -950,21 +947,19 @@ public sealed partial class PaperWindow : Window
         var nearTop = pointerY < bounds.Top + resizeBorder;
         var nearBottom = pointerY >= bounds.Bottom - resizeBorder;
 
-        if (nearTop && nearLeft)
+        // Measure corner squares from the painted edge, preserving the narrower straight edges.
+        var topCorner = (chromeMargin + 7) * dpiScale;
+        var bottomCorner = (chromeMargin + 9) * dpiScale;
+        var inTopCorner = pointerY < bounds.Top + topCorner;
+        var inBottomCorner = pointerY >= bounds.Bottom - bottomCorner;
+        var cornerWidth = inTopCorner ? topCorner : bottomCorner;
+        if ((inTopCorner || inBottomCorner) && pointerX < bounds.Left + cornerWidth)
         {
-            hitTest = HtTopLeft;
+            hitTest = inTopCorner ? HtTopLeft : HtBottomLeft;
         }
-        else if (nearTop && nearRight)
+        else if ((inTopCorner || inBottomCorner) && pointerX >= bounds.Right - cornerWidth)
         {
-            hitTest = HtTopRight;
-        }
-        else if (nearBottom && nearLeft)
-        {
-            hitTest = HtBottomLeft;
-        }
-        else if (nearBottom && nearRight)
-        {
-            hitTest = HtBottomRight;
+            hitTest = inTopCorner ? HtTopRight : HtBottomRight;
         }
         else if (nearLeft)
         {
@@ -1752,12 +1747,10 @@ public sealed partial class PaperWindow : Window
             _newNoteButton.Content = CreateTopBarNewNoteIcon(_newNoteButton);
         }
 
-        if (_closeButton != null)
-        {
-            _closeButton.FontSize = AppTypography.Scale(16);
-            _closeButton.Margin = new Thickness(AppTypography.Scale(1), -AppTypography.Scale(0.6), AppTypography.Scale(1), AppTypography.Scale(0.6));
-            RefreshCloseButton();
-        }
+        RefreshPaperIconButton();
+        if (_moreActionsButton != null)
+            _moreActionsButton.Content = CreateTopBarMoreIcon(_moreActionsButton);
+        RefreshCloseButton();
 
         if (_textZoomIndicator != null)
         {
@@ -2364,7 +2357,7 @@ public sealed partial class PaperWindow : Window
 
         if (_paper.Type == PaperTypes.Note)
         {
-            _openMarkdownButton = IconButton(ExternalOpenButtonLabel(), OpenMarkdownEditorToolTip());
+            _openMarkdownButton = IconButton(ExternalOpenButtonLabel(_controller.State.ExternalMarkdownExtension), OpenMarkdownEditorToolTip());
             _openMarkdownButton.FontFamily = AppTypography.UiFontFamily;
             _openMarkdownButton.FontSize = AppTypography.Scale(10.5);
             _openMarkdownButton.Padding = new Thickness(0, AppTypography.Scale(1.4), 0, 0);
@@ -2372,15 +2365,13 @@ public sealed partial class PaperWindow : Window
             actionButtons.Children.Add(_openMarkdownButton);
         }
 
-        _moreActionsButton = IconButton("⋯", Strings.Get("MenuPaperActions"));
+        _moreActionsButton = IconButton("", Strings.Get("MenuPaperActions"));
+        System.Windows.Automation.AutomationProperties.SetName(_moreActionsButton, Strings.Get("MenuPaperActions"));
         _moreActionsButton.Width = 23;
-        _moreActionsButton.FontSize = AppTypography.Scale(16);
-        _moreActionsButton.FontWeight = FontWeights.SemiBold;
+        _moreActionsButton.Content = CreateTopBarMoreIcon(_moreActionsButton);
         _moreActionsButton.Click += (_, _) => OpenPaperActionsMenu();
 
         _closeButton = IconButton("", Strings.Get("ToolTipHideThisPaper"));
-        _closeButton.FontSize = AppTypography.Scale(16);
-        _closeButton.Margin = new Thickness(AppTypography.Scale(1), -AppTypography.Scale(0.6), AppTypography.Scale(1), AppTypography.Scale(0.6));
         _closeButton.Click += (_, _) =>
         {
             if (CanDisplayAsCapsule())
@@ -2753,12 +2744,10 @@ public sealed partial class PaperWindow : Window
                     : Strings.Get("MenuExport"),
                 IsEnabled = !_paperExportRunning
             };
-            var currentLabel = _paper.Type == PaperTypes.Todo
-                ? "MenuExportCurrentTodo" : "MenuExportCurrentNote";
-            export.Items.Add(MenuItem(Strings.Get(currentLabel),
-                (_, _) => ExportPapers(all: false)));
-            export.Items.Add(MenuItem(Strings.Get("MenuExportAllPapers"),
-                (_, _) => ExportPapers(all: true)));
+            export.Items.Add(MenuItem(Strings.Get("MenuExportCurrent"), (_, _) => ExportPapers(ExportScope.Current)));
+            export.Items.Add(MenuItem(Strings.Get("MenuExportAllNotes"), (_, _) => ExportPapers(ExportScope.Notes)));
+            export.Items.Add(MenuItem(Strings.Get("MenuExportAllTodos"), (_, _) => ExportPapers(ExportScope.Todos)));
+            export.Items.Add(MenuItem(Strings.Get("MenuExportAllPapers"), (_, _) => ExportPapers(ExportScope.All)));
             menu.Items.Add(export);
         }
 
@@ -3296,74 +3285,7 @@ public sealed partial class PaperWindow : Window
         };
     }
 
-    private static FrameworkElement CreateTopmostPinIcon(Button owner, bool pinned)
-    {
-        if (Theme.IsPixelSkin) return pinned
-            ? CreatePixelIcon(owner, "..####..", "...##...", "..####..", ".######.", "...##...", "...##...", "...#....")
-            : CreatePixelIcon(owner, "..####..", "..#..#..", "..#..#..", ".######.", "...##...", "...##...", "...#....");
-        var canvas = new Canvas
-        {
-            Width = 24,
-            Height = 24,
-            SnapsToDevicePixels = true
-        };
-
-        if (pinned)
-        {
-            var head = new WpfPath
-            {
-                Data = Geometry.Parse(PinOutlineHeadPathData),
-                StrokeThickness = 2.15,
-                StrokeLineJoin = PenLineJoin.Round,
-                StrokeStartLineCap = PenLineCap.Round,
-                StrokeEndLineCap = PenLineCap.Round,
-                SnapsToDevicePixels = true
-            };
-            head.SetBinding(System.Windows.Shapes.Shape.FillProperty, CreateForegroundBinding(owner));
-            head.SetBinding(System.Windows.Shapes.Shape.StrokeProperty, CreateForegroundBinding(owner));
-            canvas.Children.Add(head);
-
-            var needle = new WpfPath
-            {
-                Data = Geometry.Parse(PinNeedlePathData),
-                SnapsToDevicePixels = true
-            };
-            needle.SetBinding(System.Windows.Shapes.Shape.FillProperty, CreateForegroundBinding(owner));
-            canvas.Children.Add(needle);
-        }
-        else
-        {
-            var head = new WpfPath
-            {
-                Data = Geometry.Parse(PinOutlineHeadPathData),
-                StrokeThickness = 2.15,
-                StrokeLineJoin = PenLineJoin.Round,
-                StrokeStartLineCap = PenLineCap.Round,
-                StrokeEndLineCap = PenLineCap.Round,
-                SnapsToDevicePixels = true
-            };
-            head.SetBinding(System.Windows.Shapes.Shape.StrokeProperty, CreateForegroundBinding(owner));
-            canvas.Children.Add(head);
-
-            var needle = new WpfPath
-            {
-                Data = Geometry.Parse(PinNeedlePathData),
-                SnapsToDevicePixels = true
-            };
-            needle.SetBinding(System.Windows.Shapes.Shape.FillProperty, CreateForegroundBinding(owner));
-            canvas.Children.Add(needle);
-        }
-
-        return new Viewbox
-        {
-            Width = 14,
-            Height = 14,
-            Stretch = Stretch.Uniform,
-            Child = canvas
-        };
-    }
-
-    private static System.Windows.Data.Binding CreateForegroundBinding(Button owner)
+    private static System.Windows.Data.Binding CreateForegroundBinding(Control owner)
     {
         return new System.Windows.Data.Binding(nameof(Control.Foreground))
         {
