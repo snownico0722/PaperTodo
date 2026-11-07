@@ -843,12 +843,6 @@ public sealed partial class AppController
             State.ExperimentalEdgeCapsuleHoverPreview;
         var intentEnabled =
             State.ExperimentalEdgeCapsuleHoverIntent;
-        var card = new Border
-        {
-            Background = Brushes.Transparent,
-            Padding = new Thickness(0, 3, 0, 5),
-            Margin = new Thickness(0, 1, 0, 3)
-        };
         var content = new StackPanel();
         content.Children.Add(SettingsSectionLabel(SettingsSidebarLocalized(
             "边缘浏览", "Edge browsing", "エッジ閲覧", "가장자리 탐색")));
@@ -908,8 +902,7 @@ public sealed partial class AppController
                 "Disabled by default. When enabled, browsing edge capsules downward keeps the hovered card in place and expands downward when it fits; otherwise the original placement is used. When disabled, the upper space released by the previous card is preferred.",
                 "初期設定はオフです。有効にすると、エッジカプセルを下方向に閲覧する際、カードが収まる場合はマウス位置を保って下に展開し、収まらない場合は従来の配置を使います。オフでは前のカードが空けた上側の空間を優先します。",
                 "기본값은 꺼짐입니다. 켜면 가장자리 캡슐을 아래로 탐색할 때 공간이 충분하면 마우스 위치를 유지하며 아래로 펼치고, 부족하면 기존 배치를 사용합니다. 끄면 이전 카드가 비운 위쪽 공간을 우선 사용합니다."))));
-        card.Child = content;
-        return card;
+        return content;
     }
 
     private UIElement BuildLabsPassiveModeSettings()
