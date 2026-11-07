@@ -1,7 +1,7 @@
 using System;
+using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Text;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -267,28 +267,18 @@ public sealed partial class AppController
 
     // 15 fullwidth characters or 30 ASCII/halfwidth characters for new names.
     // Existing persisted names are never shortened merely by opening Settings.
-    private static int WorkspaceNameRuneUnits(Rune rune) =>
-        rune.Value <= 0x7F || rune.Value is >= 0xFF61 and <= 0xFF9F ? 1 : 2;
-
-    private static int WorkspaceNameUnits(string value)
-    {
-        var total = 0;
-        foreach (var rune in value.EnumerateRunes()) total += WorkspaceNameRuneUnits(rune);
-        return total;
-    }
+    private static int WorkspaceNameUnits(string value) => EdgeCapsuleLayout.DisplayWidth(value);
 
     private static string LimitWorkspaceName(string value, int maxHalfWidthUnits = 30)
     {
         var width = 0;
-        var end = 0;
-        foreach (var rune in value.EnumerateRunes())
+        var elements = StringInfo.GetTextElementEnumerator(value);
+        while (elements.MoveNext())
         {
-            var units = WorkspaceNameRuneUnits(rune);
-            if (width + units > maxHalfWidthUnits) break;
-            width += units;
-            end += rune.Utf16SequenceLength;
+            width += EdgeCapsuleLayout.DisplayWidth((string)elements.Current);
+            if (width > maxHalfWidthUnits) return value[..elements.ElementIndex];
         }
-        return value[..end];
+        return value;
     }
 
     private Border BuildWorkspaceSlotCard(int slot, bool isSelected)
@@ -411,11 +401,12 @@ public sealed partial class AppController
             var tail = current[(current.Length - suffix)..];
             var inserted = current[prefix..(current.Length - suffix)];
             var remaining = Math.Max(0, 30 - WorkspaceNameUnits(start + tail));
-            var limited = start + LimitWorkspaceName(inserted, remaining) + tail;
+            var allowed = LimitWorkspaceName(inserted, remaining);
+            var limited = start + allowed + tail;
             if (limited == current) { previousDraft = current; return; }
             correctingDraft = true;
             editor.Text = limited;
-            editor.CaretIndex = Math.Min(prefix + inserted.Length, limited.Length);
+            editor.CaretIndex = prefix + allowed.Length;
             correctingDraft = false;
             previousDraft = limited;
         };
