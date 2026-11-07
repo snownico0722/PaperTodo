@@ -33,7 +33,7 @@ internal sealed class CoreHistoryBackup
         _ensureWritesAllowed = ensureWritesAllowed;
     }
 
-    internal string BackupDirectory => Path.Combine(_dataDirectory, "backups");
+    internal string BackupDirectory => Path.Combine(_dataDirectory, "PaperTodo-backups");
 
     internal sealed record WorkspaceSnapshot(
         string ArchivePath, DateTime TimestampUtc, byte[] ArchiveHash, byte[] Bytes);

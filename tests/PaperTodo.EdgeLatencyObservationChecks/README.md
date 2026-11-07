@@ -6,8 +6,10 @@ Run on Windows x64 with the .NET 10 desktop runtime:
 dotnet run --project tests/PaperTodo.EdgeLatencyObservationChecks -c Debug -- --output <artifact-directory>
 ```
 
-This independent executable links the two production Debug observers and `EdgeDiagnosticJournal`. Its minimal event facade forwards observations into the real bounded journal. It creates only its own hidden `HwndSource`, then destroys it; it does not start PaperTodo, restore papers, replay input, subscribe Rendering, or install a timer.
+This independent executable links the production Debug observers and `EdgeDiagnosticJournal`. Its minimal event facade forwards observations into the real bounded journal. It creates only its own hidden `HwndSource`, then destroys it; it does not start PaperTodo, restore papers, replay input, subscribe Rendering, or install a timer.
 
-The checks exercise native message forwarding exactly once with full-width arguments and results, reentrant messages and nested batch restoration, scope exit, Remove/reinstall, and HWND destruction. Dispatcher checks compare known priority/FIFO/inline execution with and without observation, verify operation lifecycle and cancellation records, and check Remove/reinstall. They do not assert machine timings, WPF private field names, physical frame rates, or absence of measurement overhead. The journal is sealed to the requested directory when the check exits.
+The retained checks protect the host while probes are enabled: native messages retain their full-width arguments and results and are forwarded exactly once, including reentrancy, removal/reinstallation and HWND destruction. Dispatcher priority, FIFO, inline execution and cancellation are compared with observation disabled, enabled and removed. Thread-message hooks must preserve the original message and handled flag. The journal is sealed to the requested directory when the check exits.
+
+The former numeric-reader type matrix, diagnostic correlation-field golden checks and live DWM clock calibration have retired from permanent regression coverage. Those detailed measurements belong to the diagnostic investigation that needs them; this suite does not claim to validate every captured metric or a physical frame rate.
 
 Release builds return an explicit nonzero message because the production observers only exist in Debug. This is a behavior check for the probes, not an application performance benchmark.

@@ -273,7 +273,9 @@ public sealed partial class AppController
             () => State.UseCapsuleCollapseAll,
             value => State.UseCapsuleCollapseAll = value,
             SettingEffects.CapsuleMode,
-            title: Strings.Get("SettingsCapsuleCollapseAll"));
+            title: Strings.Get("SettingsCapsuleCollapseAll"),
+            isNoOp: value => State.UseCapsuleCollapseAll == value &&
+                (!value || State.UseCapsuleMode && State.UseDeepCapsuleMode));
         yield return DefineSetting<bool>("capsule.free_queues",
             () => State.UseCapsuleFreeQueues,
             value => State.UseCapsuleFreeQueues = value,
@@ -322,7 +324,7 @@ public sealed partial class AppController
             minimum: 2,
             maximum: 20,
             step: 1,
-            description: "Full-width character limit; two half-width characters count as one. Lowering it shortens existing custom titles.");
+            description: "Full-width character limit; two half-width characters count as one. Lowering it hides excess title text without changing stored titles; renaming uses the current limit.");
         yield return DefineSetting<int>("capsule.title_measure_limit",
             () => State.DeepCapsuleTitleMeasureCharacterLimit,
             value => State.DeepCapsuleTitleMeasureCharacterLimit = value,

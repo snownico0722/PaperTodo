@@ -632,7 +632,7 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
     <value>마우스를 올리면 기존처럼 늘어나지만 추가 영역은 닫기 버튼 없이 일반 캡슐 영역으로 동작합니다. 닫으려면 오른쪽 클릭 메뉴에서 '숨기기'를 사용하세요.</value>
   </data>
   <data name="TipMaxTitleLength" xml:space="preserve">
-    <value>제목 길이는 전각 글자 기준입니다. 전각 1글자와 영문·숫자 등 반각 2글자를 같은 길이로 계산합니다. 제한을 낮추면 기존 제목도 잘립니다.</value>
+    <value>전각 문자는 한 글자, 영문·숫자 등의 반각 문자는 반 글자로 계산합니다. 제한을 낮추면 기존 이름의 초과 부분만 숨기며, 높이면 다시 표시합니다. 이름을 직접 변경할 때는 현재 제한에 맞춰 자릅니다.</value>
   </data>
   <data name="TipStartup" xml:space="preserve">
     <value>Windows 시작 시 PaperTodo를 자동 실행합니다.</value>
@@ -1507,7 +1507,7 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
     <value>오른쪽으로 이동</value>
   </data>
   <data name="MenuTopBarAssociationDrag" xml:space="preserve">
-    <value>누른 채 끌어서 연결</value>
+    <value>할 일 또는 창으로 끌어서 연결</value>
   </data>
   <data name="MenuTopBarPluginActions" xml:space="preserve">
     <value>플러그인 작업</value>
@@ -1516,7 +1516,7 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
     <value>상단 바 바로가기</value>
   </data>
   <data name="TipTopBarShortcutSettings" xml:space="preserve">
-    <value>항목을 드래그하여 순서를 바꾸거나 구분선을 넘어 이동하면 상단 바와 메뉴 사이에서 표시 위치를 변경할 수 있습니다. 공간이 부족하면 고정한 기본 바로가기가 한꺼번에 메뉴로 이동합니다.</value>
+    <value>항목을 끌어 순서를 바꾸거나 구분선을 넘어 표시 위치를 변경하세요. 숨기기는 위치를 유지하고 기능을 끄지 않은 채 상단 표시줄과 종이 메뉴의 바로가기만 숨깁니다. 공간이 부족하면 고정된 기본 바로가기가 함께 메뉴로 이동합니다.</value>
   </data>
   <data name="TopBarShownHeading" xml:space="preserve">
     <value>상단 바에 표시</value>
@@ -1658,7 +1658,7 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="NoteHtmlSaved" xml:space="preserve"><value>저장 위치: {0}
 원본 노트는 유지됩니다.</value></data>
   <data name="NoteExportCurrent" xml:space="preserve"><value>현재 노트 내보내기</value></data>
-  <data name="NoteExportAll" xml:space="preserve"><value>모든 메모 및 할 일 내보내기</value></data>
+  <data name="NoteExportAll" xml:space="preserve"><value>모든 노트 및 할 일 내보내기</value></data>
   <data name="NoteExportMarkdownType" xml:space="preserve"><value>Markdown 문서</value></data>
   <data name="NoteExportHtmlType" xml:space="preserve"><value>HTML 문서</value></data>
   <data name="NoteExportMarkdownZipType" xml:space="preserve"><value>Markdown ZIP</value></data>
@@ -1670,16 +1670,17 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="NoteExportNoNotes" xml:space="preserve"><value>내보낼 수 있는 메모 또는 할 일이 없습니다.</value></data>
   <data name="NoteExportProgress" xml:space="preserve"><value>내보내는 중 {0}/{1}개</value></data>
   <data name="TodoExportCurrent" xml:space="preserve"><value>현재 할 일 내보내기</value></data>
-  <data name="SettingsCapsuleFreeQueues" xml:space="preserve"><value>자유로운 가장자리 캡슐 대기열</value></data>
-  <data name="TipCapsuleFreeQueues" xml:space="preserve"><value>캡슐을 멀리 드래그하면 독립된 대기열이 됩니다. Ctrl을 누른 채 대기열 전체를 옮기고, 옆으로 끌어 다른 가장자리나 화면으로 이동하세요. 메인 캡슐로 같은 쪽의 모든 대기열을 접을 수 있습니다.</value></data>
+  <data name="SettingsCapsuleFreeQueues" xml:space="preserve"><value>캡슐 자유 대기열</value></data>
+  <data name="TipCapsuleFreeQueues" xml:space="preserve"><value>켜면 캡슐을 멀리 끌어 독립된 대기열을 만들 수 있습니다. Ctrl 또는 각 대기열의 마스터로 전체를 옮기고, 옆으로 끌어 다른 가장자리나 화면으로 이동합니다. 끄면 Ctrl을 눌러도 캡슐 하나만 이동하며, 마스터로는 가장자리 대기열 전체를 계속 옮길 수 있습니다.</value></data>
   <data name="HistoryRecoveryTitle" xml:space="preserve">
     <value>작업 공간 복원</value>
   </data>
   <data name="HistoryRecoveryMessage" xml:space="preserve">
-    <value>작업 공간 {0}의 현재 데이터를 읽을 수 없습니다.
+    <value>작업 공간 {0}의 데이터를 읽을 수 없습니다.
 사용 가능한 최신 백업: {1}.
 
-복원하면 해당 시점의 상태로 돌아가며, 그 이후의 변경 사항은 사라집니다. 이 작업 공간의 메모, 할 일, 설정만 복원되며 이미지와 플러그인 데이터는 포함되지 않습니다.</value>
+복원하면 해당 시점 이후의 변경 사항이 사라집니다. 이 작업 공간의 메모, 할 일, 설정만 복원하며 이미지와 플러그인 데이터는 포함하지 않습니다.
+“작업 공간 다시 만들기”을 선택하면 작업 공간 {0}의 메모, 할 일, 설정을 빈 상태에서 시작합니다.</value>
   </data>
   <data name="HistoryRecoveryRestore" xml:space="preserve">
     <value>백업에서 복원 시도</value>
@@ -1744,6 +1745,52 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="WorkspaceRecoveryFallback" xml:space="preserve">
     <value>작업 공간 {0}(으)로 돌아가기</value>
   </data>
+  <data name="WorkspaceRecoveryUnavailableMessage" xml:space="preserve">
+    <value>작업 공간 {0}의 데이터와 백업을 복원할 수 없습니다.
+
+“작업 공간 다시 만들기”을 선택하면 작업 공간 {0}의 메모, 할 일, 설정을 빈 상태에서 시작합니다.</value>
+  </data>
+  <data name="WorkspaceBackupReadFailedMessage" xml:space="preserve">
+    <value>작업 공간 {0}의 고정 백업을 현재 읽을 수 없습니다.
+{1}
+
+파일 접근 문제를 해결한 후 다시 시도하거나, “작업 공간 다시 만들기”을 선택하여 메모, 할 일, 설정을 빈 상태에서 시작할 수 있습니다.</value>
+  </data>
+  <data name="SettingsNotesAndTodos" xml:space="preserve"><value>노트 및 할 일</value></data>
+  <data name="WorkspaceSingleMessage" xml:space="preserve"><value>현재 작업 공간이 하나뿐입니다.</value></data>
+  <data name="WorkspaceCreate" xml:space="preserve"><value>새로 만들기</value></data>
+  <data name="TopBarHideShortcut" xml:space="preserve">
+    <value>숨기기</value>
+  </data>
+  <data name="TopBarRunScript" xml:space="preserve">
+    <value>스크립트 실행</value>
+  </data>
+  <data name="TopBarEditScript" xml:space="preserve">
+    <value>스크립트 편집</value>
+  </data>
+  <data name="TopBarScriptSave" xml:space="preserve">
+    <value>저장</value>
+  </data>
+  <data name="WorkspaceScriptsStoppedTitle" xml:space="preserve">
+    <value>작업 공간 전환 완료</value>
+  </data>
+  <data name="WorkspaceScriptsStoppedMessage" xml:space="preserve">
+    <value>이전 작업 공간의 스크립트 프로세스가 종료되었습니다.</value>
+  </data>
+  <data name="WorkspaceSessionsClosedMessage" xml:space="preserve">
+    <value>이전 작업 공간의 상주 PowerShell 세션이 종료되었습니다.</value>
+  </data>
+  <data name="WorkspaceScriptsAndSessionsStoppedMessage" xml:space="preserve">
+    <value>이전 작업 공간의 스크립트 프로세스와 상주 PowerShell 세션이 종료되었습니다.</value>
+  </data>
+  <data name="MenuExport" xml:space="preserve"><value>내보내기</value></data>
+  <data name="MenuExportCurrentNote" xml:space="preserve"><value>현재 노트</value></data>
+  <data name="MenuExportCurrentTodo" xml:space="preserve"><value>현재 할 일</value></data>
+  <data name="MenuExportAllPapers" xml:space="preserve"><value>모든 노트 및 할 일</value></data>
+  <data name="MenuTopBarAssociationDragTodo" xml:space="preserve"><value>할 일로 끌어서 연결</value></data>
+  <data name="MenuTopBarAssociationDragWindow" xml:space="preserve"><value>창으로 끌어서 연결</value></data>
+  <data name="WorkspaceDataSettingsTitle" xml:space="preserve"><value>작업 공간 및 데이터</value></data>
+  <data name="SettingsDataProcessing" xml:space="preserve"><value>데이터 처리</value></data>
   <data name="WorkbenchTitle" xml:space="preserve"><value>무한 작업대</value></data>
   <data name="WorkbenchOverview" xml:space="preserve"><value>모든 작업 공간</value></data>
   <data name="WorkbenchCurrent" xml:space="preserve"><value>현재 작업 공간</value></data>

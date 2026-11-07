@@ -33,7 +33,6 @@ public sealed partial class AppController
         root.IsEnabled = !_workspaceSwitching;
         var enabled = WorkspaceOptions.Enabled;
         var title = SettingsSectionLabel(Strings.Get("WorkspaceSettingsTitle"));
-        title.Opacity = enabled ? 1 : 0.5;
         root.Children.Add(title);
         // Keep only this toggle active when workspaces are disabled.
         root.Children.Add(SettingsToggle(Strings.Get("WorkspaceEnabled"), enabled, async () =>
@@ -48,6 +47,17 @@ public sealed partial class AppController
             Opacity = enabled ? 1 : 0.5
         };
         root.Children.Add(optionsPanel);
+
+        optionsPanel.Children.Add(SettingsToggle(WorkspaceUi(
+                "顶栏快捷切换显示具体名称", "Choose workspaces by name in the top bar",
+                "上部バーで名前を表示して選択", "상단 표시줄에서 이름으로 선택"),
+            WorkspaceOptions.TopBarNamePicker, async () =>
+            {
+                var next = WorkspaceOptions.Normalized();
+                next.TopBarNamePicker = !next.TopBarNamePicker;
+                await ChangeWorkspaceConfigurationAsync(next);
+                RefreshSettingsWindowContent();
+            }));
 
         var heading = new DockPanel { Margin = new Thickness(0, 12, 0, 5) };
         var create = SettingsTextButton(WorkspaceUi("新建", "New", "新規", "새로 만들기"));
@@ -85,20 +95,147 @@ public sealed partial class AppController
         };
         optionsPanel.Children.Add(confirm);
 
-        optionsPanel.Children.Add(SettingsSectionLabel(WorkspaceUi(
-            "顶栏快捷", "Top-bar shortcut", "上部バーのショートカット", "상단 표시줄 바로 가기")));
-        optionsPanel.Children.Add(SettingsToggle(WorkspaceUi(
-                "顶栏快捷切换显示具体名称", "Choose workspaces by name in the top bar",
-                "上部バーで名前を表示して選択", "상단 표시줄에서 이름으로 선택"),
-            WorkspaceOptions.TopBarNamePicker, async () =>
+        // Workspaces may be disabled while data handling and external access remain available.
+        root.Children.Add(SettingsSoftDivider());
+        if (FollowsMainWorkspaceSettings)
+            root.Children.Add(new TextBlock
             {
-                var next = WorkspaceOptions.Normalized();
-                next.TopBarNamePicker = !next.TopBarNamePicker;
-                await ChangeWorkspaceConfigurationAsync(next);
-                RefreshSettingsWindowContent();
-            }));
-
+                Text = Strings.Get("WorkspaceSettingsReadOnly"),
+                Foreground = TrayWeakTextBrush,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, 8)
+            });
+        root.Children.Add(BuildSettingsLiveRegion("workspace.data", BuildWorkspaceDataSettings));
+        root.Children.Add(BuildSettingsLiveRegion("workspace.mcp", BuildMcpSettings));
         return root;
+    }
+
+    private UIElement BuildWorkspaceDataSettings()
+    {
+        var content = new StackPanel
+        {
+            IsEnabled = !FollowsMainWorkspaceSettings,
+            Opacity = FollowsMainWorkspaceSettings ? 0.55 : 1
+        };
+        content.Children.Add(SettingsSectionLabel(Strings.Get("SettingsDataProcessing")));
+        content.Children.Add(CompactSettingsField(
+            Strings.Get("SettingsDataMergeConflicts"),
+            CreateSettingsSelect(
+                [
+                    (DataMergeConflictPolicies.Ask, Strings.Get("DataMergeConflictAsk")),
+                    (DataMergeConflictPolicies.External, Strings.Get("DataMergeConflictExternal")),
+                    (DataMergeConflictPolicies.Internal, Strings.Get("DataMergeConflictInternal"))
+                ],
+                DataMergeConflictPolicies.Normalize(State.DataMergeConflictPolicy),
+                value => SetSettingFromUi("general.data_merge_conflicts", value)),
+            editorWidth: 156,
+            tipKey: "TipDataMergeConflicts",
+            topMargin: 8));
+        return content;
+    }
+
+    private UIElement BuildMcpSettings()
+    {
+        var card = new Border
+        {
+            Background = Brushes.Transparent,
+            Padding = new Thickness(0, 3, 0, 5),
+            Margin = new Thickness(0, 1, 0, 3)
+        };
+        var content = new StackPanel();
+        content.Children.Add(SettingsSectionLabel(Strings.Get("LabsMcp")));
+        // Inherited settings are read-only; status and copy actions stay usable.
+        var permissions = new StackPanel
+        {
+            IsEnabled = !FollowsMainWorkspaceSettings,
+            Opacity = FollowsMainWorkspaceSettings ? 0.55 : 1
+        };
+        content.Children.Add(permissions);
+        permissions.Children.Add(WrapWithHint(
+            SettingsToggle(
+                Strings.Get("LabsMcpEnable"),
+                State.McpEnabled,
+                ToggleMcpEnabled),
+            "TipLabsMcpEnable"));
+        if (State.McpEnabled)
+        {
+            var blankWrites = SettingsToggle(
+                Strings.Get("LabsMcpBlankWrites"),
+                State.McpAllowBlankWrites || State.McpAllowFullWrites,
+                ToggleMcpBlankWrites);
+            blankWrites.IsEnabled = !State.McpAllowFullWrites;
+            permissions.Children.Add(WrapWithHint(
+                blankWrites,
+                "TipLabsMcpBlankWrites"));
+            permissions.Children.Add(WrapWithHint(
+                SettingsToggle(
+                    Strings.Get("LabsMcpFullWrites"),
+                    State.McpAllowFullWrites,
+                    ToggleMcpFullWrites),
+                "TipLabsMcpFullWrites"));
+            var directDeletes = SettingsToggle(
+                Strings.Get("LabsMcpDeletes"),
+                State.McpAllowDeletes,
+                ToggleMcpDeletes);
+            if (State.McpAllowDeletes)
+            {
+                directDeletes.Foreground = Theme.DangerBrush;
+            }
+            permissions.Children.Add(WrapWithHint(
+                directDeletes,
+                "TipLabsMcpDeletes"));
+        }
+
+        var status = new TextBlock
+        {
+            Text = State.McpEnabled
+                ? Strings.Get("LabsMcpStatusReady")
+                : Strings.Get("LabsMcpStatusDisabled"),
+            Foreground = State.McpEnabled
+                ? Theme.ActiveBrush
+                : TrayWeakTextBrush,
+            FontSize = AppTypography.Scale(11.5),
+            Margin = new Thickness(2, 8, 2, 0)
+        };
+        content.Children.Add(status);
+
+        var actions = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Margin = new Thickness(0, 9, 0, 0)
+        };
+        var copyJson = SettingsTextButton(
+            Strings.Get("LabsMcpCopyJson"));
+        var copySkill = SettingsTextButton(
+            Strings.Get("LabsMcpCopyAiSkill"));
+        copySkill.Margin = new Thickness(8, 0, 0, 0);
+        var feedback = new TextBlock
+        {
+            Foreground = TrayWeakTextBrush,
+            FontSize = AppTypography.Scale(11),
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(9, 0, 0, 0)
+        };
+        copyJson.Click += (_, _) =>
+        {
+            feedback.Text = ClipboardHelper.TrySetText(
+                BuildJsonMcpConfiguration())
+                ? Strings.Get("LabsMcpCopied")
+                : Strings.Get("LabsMcpCopyFailed");
+        };
+        copySkill.Click += (_, _) =>
+        {
+            feedback.Text = ClipboardHelper.TrySetText(
+                BuildAiMcpSkill())
+                ? Strings.Get("LabsMcpCopied")
+                : Strings.Get("LabsMcpCopyFailed");
+        };
+        actions.Children.Add(copyJson);
+        actions.Children.Add(copySkill);
+        actions.Children.Add(feedback);
+        content.Children.Add(actions);
+        card.Child = content;
+        return card;
     }
 
     private Border BuildWorkspaceSlotCard(int slot, bool isSelected)

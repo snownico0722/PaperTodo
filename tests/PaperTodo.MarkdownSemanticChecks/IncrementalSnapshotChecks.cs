@@ -32,7 +32,7 @@ internal static class IncrementalSnapshotChecks
         {
             throw new InvalidOperationException("FAIL small-document policy: no current snapshot");
         }
-        AssertEquivalent(MarkdownSemanticSnapshot.Parse(document.Text), actual, "small document full parse");
+        MarkdownEditBehavior.AssertEquivalent(MarkdownSemanticSnapshot.Parse(document.Text), actual, "small document full parse");
         Console.WriteLine("PASS small document edit preserves full semantics");
     }
 
@@ -48,7 +48,7 @@ internal static class IncrementalSnapshotChecks
         var editAt = oldSource.IndexOf("plain row 450", StringComparison.Ordinal) + 10;
         var newSource = oldSource.Insert(editAt, "Z");
         var incremental = MarkdownEditBehavior.ReadAfterEdit(oldSource, newSource);
-        AssertEquivalent(MarkdownSemanticSnapshot.Parse(newSource), incremental, "large plain edit");
+        MarkdownEditBehavior.AssertEquivalent(MarkdownSemanticSnapshot.Parse(newSource), incremental, "large plain edit");
         Console.WriteLine("PASS large plain edit preserves semantics");
     }
 
@@ -58,7 +58,7 @@ internal static class IncrementalSnapshotChecks
         var editAt = oldSource.IndexOf(new string('x', 20), StringComparison.Ordinal) + 2_000;
         var newSource = oldSource.Insert(editAt, "Z");
         var incremental = MarkdownEditBehavior.ReadAfterEdit(oldSource, newSource);
-        AssertEquivalent(MarkdownSemanticSnapshot.Parse(newSource), incremental, "existing long fence");
+        MarkdownEditBehavior.AssertEquivalent(MarkdownSemanticSnapshot.Parse(newSource), incremental, "existing long fence");
         Console.WriteLine("PASS existing long fence edit preserves semantics");
     }
 
@@ -145,7 +145,7 @@ internal static class IncrementalSnapshotChecks
         var newSource = oldSource.Insert(insertAt, "```text\n");
         var local = MarkdownEditBehavior.ReadAfterEdit(oldSource, newSource);
 
-        AssertEquivalent(MarkdownSemanticSnapshot.Parse(newSource), local, "new long fence state scan");
+        MarkdownEditBehavior.AssertEquivalent(MarkdownSemanticSnapshot.Parse(newSource), local, "new long fence state scan");
         Console.WriteLine(
             "PASS new long fence edit preserves semantics");
     }
@@ -164,7 +164,7 @@ internal static class IncrementalSnapshotChecks
 
     private static void AssertEdit(string oldSource, string newSource, string name)
     {
-        AssertEquivalent(MarkdownSemanticSnapshot.Parse(newSource),
+        MarkdownEditBehavior.AssertEquivalent(MarkdownSemanticSnapshot.Parse(newSource),
             MarkdownEditBehavior.ReadAfterEdit(oldSource, newSource), name);
         Console.WriteLine($"PASS {name} publishes current reference semantics");
     }
@@ -188,41 +188,9 @@ internal static class IncrementalSnapshotChecks
         var incremental = MarkdownEditBehavior.ReadAfterEdit(oldSource, newSource);
 
         var expected = MarkdownSemanticSnapshot.Parse(newSource);
-        AssertEquivalent(expected, incremental, "large edit preserves quote level");
+        MarkdownEditBehavior.AssertEquivalent(expected, incremental, "large edit preserves quote level");
 
         // 全量语义里关键行必须带正确层级（若局部路径丢了 QuoteLevel，等价断言会先于此处暴露）。
         Console.WriteLine("PASS large edit preserves quote level locally");
-    }
-
-    private static void AssertEquivalent(
-        MarkdownSemanticSnapshot expected,
-        MarkdownSemanticSnapshot actual,
-        string name)
-    {
-        if (!SnapshotsEquivalent(expected, actual))
-        {
-            throw new InvalidOperationException($"FAIL incremental {name}: snapshot mismatch");
-        }
-    }
-
-    private static bool SnapshotsEquivalent(
-        MarkdownSemanticSnapshot expected,
-        MarkdownSemanticSnapshot actual)
-    {
-        if (expected.LineCount != actual.LineCount ||
-            !expected.Spans.SequenceEqual(actual.Spans) ||
-            !expected.Links.SequenceEqual(actual.Links))
-        {
-            return false;
-        }
-
-        for (var line = 0; line < expected.LineCount; line++)
-        {
-            if (!expected.GetLine(line).Equals(actual.GetLine(line)))
-            {
-                return false;
-            }
-        }
-        return true;
     }
 }

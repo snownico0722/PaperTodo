@@ -321,6 +321,14 @@ public sealed partial class AppController
                     $"Top-bar tooltips cannot exceed {MaximumTopBarToolTipLength} characters.");
             }
 
+            // A menu-only action renders plain text through the existing plugin menu. Its unused
+            // icon must not force callers to supply a dummy glyph or parse SVG geometry.
+            if (source.MenuOnly)
+            {
+                result.Add(source with { Id = id, ToolTip = tooltip });
+                continue;
+            }
+
             var icon = source.Icon ?? new PaperTopBarIcon();
             var value = icon.Value?.Trim() ?? "";
             switch (icon.Kind)

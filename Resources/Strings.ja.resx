@@ -632,7 +632,7 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
     <value>ホバー時も通常どおり伸びますが、追加領域は閉じるボタンのない通常のカプセル領域として動作します。閉じる場合は右クリックメニューの「隠す」を使います。</value>
   </data>
   <data name="TipMaxTitleLength" xml:space="preserve">
-    <value>タイトルは全角文字換算で数えます。全角1文字、英数字などの半角2文字を同じ長さとして扱います。上限を下げると既存のタイトルも短縮されます。</value>
+    <value>全角文字は1文字、英数字などの半角文字は半文字として数えます。上限を下げても既存の名前は削除せず、超過分を非表示にします。上限を戻すと再表示されます。名前を変更した場合は現在の上限で切り詰めます。</value>
   </data>
   <data name="TipStartup" xml:space="preserve">
     <value>Windows 起動時に PaperTodo を自動起動します。</value>
@@ -1507,7 +1507,7 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
     <value>右へ移動</value>
   </data>
   <data name="MenuTopBarAssociationDrag" xml:space="preserve">
-    <value>押したままドラッグして関連付け</value>
+    <value>ToDoまたはウィンドウへドラッグして関連付け</value>
   </data>
   <data name="MenuTopBarPluginActions" xml:space="preserve">
     <value>プラグイン操作</value>
@@ -1516,7 +1516,7 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
     <value>上部バーのショートカット</value>
   </data>
   <data name="TipTopBarShortcutSettings" xml:space="preserve">
-    <value>ドラッグで並べ替え、区切り線を越えると上部バーとメニューの表示先を切り替えられます。幅が足りない場合、固定した標準ショートカットはまとめて一時的にメニューへ移動します。</value>
+    <value>ドラッグで順序や表示場所を変更します。「非表示」は位置を保持したまま上部バーと各ペーパーメニューの入口だけを隠し、機能は無効にしません。幅が足りない場合、固定した内蔵ショートカットはまとめてメニューに移ります。</value>
   </data>
   <data name="TopBarShownHeading" xml:space="preserve">
     <value>上部バーに表示</value>
@@ -1658,7 +1658,7 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="NoteHtmlSaved" xml:space="preserve"><value>保存先：{0}
 元のノートは保持されます。</value></data>
   <data name="NoteExportCurrent" xml:space="preserve"><value>このメモをエクスポート</value></data>
-  <data name="NoteExportAll" xml:space="preserve"><value>すべてのメモと ToDo をエクスポート</value></data>
+  <data name="NoteExportAll" xml:space="preserve"><value>すべてのノートとToDoをエクスポート</value></data>
   <data name="NoteExportMarkdownType" xml:space="preserve"><value>Markdown 文書</value></data>
   <data name="NoteExportHtmlType" xml:space="preserve"><value>HTML 文書</value></data>
   <data name="NoteExportMarkdownZipType" xml:space="preserve"><value>Markdown ZIP</value></data>
@@ -1670,16 +1670,17 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="NoteExportNoNotes" xml:space="preserve"><value>エクスポートできるメモまたは ToDo がありません。</value></data>
   <data name="NoteExportProgress" xml:space="preserve"><value>エクスポート中 {0}/{1} 件</value></data>
   <data name="TodoExportCurrent" xml:space="preserve"><value>この ToDo をエクスポート</value></data>
-  <data name="SettingsCapsuleFreeQueues" xml:space="preserve"><value>エッジカプセルの自由なキュー</value></data>
-  <data name="TipCapsuleFreeQueues" xml:space="preserve"><value>カプセルを離して独立したキューを作成します。Ctrl を押しながらキュー全体を移動し、横に引き出して別の端や画面へ移動できます。メインカプセルで同じ端のキューをまとめて収納できます。</value></data>
+  <data name="SettingsCapsuleFreeQueues" xml:space="preserve"><value>カプセルの自由キュー</value></data>
+  <data name="TipCapsuleFreeQueues" xml:space="preserve"><value>有効にすると、カプセルを離して独立したキューを作成できます。Ctrlまたは各キューのマスターで全体を移動し、横に引き出すと別の端や画面へ移動できます。無効時のCtrlドラッグは単体移動となり、マスターでは引き続き端のキュー全体を移動できます。</value></data>
   <data name="HistoryRecoveryTitle" xml:space="preserve">
     <value>ワークスペースを復元</value>
   </data>
   <data name="HistoryRecoveryMessage" xml:space="preserve">
-    <value>ワークスペース {0} の現在のデータを読み込めません。
-利用可能な最新のバックアップ：{1}。
+    <value>ワークスペース {0} のデータを読み取れません。
+利用できる最新のバックアップ：{1}。
 
-復元すると、その時点の状態に戻り、それ以降の変更は失われます。このワークスペースのノート、タスク、設定のみを復元します。画像やプラグインデータは含まれません。</value>
+復元すると、この時点以降の変更は失われます。このワークスペースのメモ、タスク、設定のみを復元します。画像とプラグインデータは含まれません。
+「ワークスペースを再作成」を選ぶと、ワークスペース {0} のメモ、タスク、設定を空の状態から開始します。</value>
   </data>
   <data name="HistoryRecoveryRestore" xml:space="preserve">
     <value>バックアップからの復元を試す</value>
@@ -1744,6 +1745,52 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="WorkspaceRecoveryFallback" xml:space="preserve">
     <value>ワークスペース {0} に戻る</value>
   </data>
+  <data name="WorkspaceRecoveryUnavailableMessage" xml:space="preserve">
+    <value>ワークスペース {0} のデータとバックアップを復元できません。
+
+「ワークスペースを再作成」を選ぶと、ワークスペース {0} のメモ、タスク、設定を空の状態から開始します。</value>
+  </data>
+  <data name="WorkspaceBackupReadFailedMessage" xml:space="preserve">
+    <value>ワークスペース {0} の固定バックアップを現在読み取れません。
+{1}
+
+ファイルへのアクセスの問題を解決して再試行するか、「ワークスペースを再作成」を選んでメモ、タスク、設定を空の状態から開始できます。</value>
+  </data>
+  <data name="SettingsNotesAndTodos" xml:space="preserve"><value>ノートとToDo</value></data>
+  <data name="WorkspaceSingleMessage" xml:space="preserve"><value>ワークスペースは現在1つだけです。</value></data>
+  <data name="WorkspaceCreate" xml:space="preserve"><value>新規</value></data>
+  <data name="TopBarHideShortcut" xml:space="preserve">
+    <value>非表示</value>
+  </data>
+  <data name="TopBarRunScript" xml:space="preserve">
+    <value>スクリプトを実行</value>
+  </data>
+  <data name="TopBarEditScript" xml:space="preserve">
+    <value>スクリプトを編集</value>
+  </data>
+  <data name="TopBarScriptSave" xml:space="preserve">
+    <value>保存</value>
+  </data>
+  <data name="WorkspaceScriptsStoppedTitle" xml:space="preserve">
+    <value>ワークスペースを切り替えました</value>
+  </data>
+  <data name="WorkspaceScriptsStoppedMessage" xml:space="preserve">
+    <value>前のワークスペースのスクリプトプロセスを終了しました。</value>
+  </data>
+  <data name="WorkspaceSessionsClosedMessage" xml:space="preserve">
+    <value>前のワークスペースの常駐 PowerShell セッションを終了しました。</value>
+  </data>
+  <data name="WorkspaceScriptsAndSessionsStoppedMessage" xml:space="preserve">
+    <value>前のワークスペースのスクリプトプロセスと常駐 PowerShell セッションを終了しました。</value>
+  </data>
+  <data name="MenuExport" xml:space="preserve"><value>エクスポート</value></data>
+  <data name="MenuExportCurrentNote" xml:space="preserve"><value>現在のノート</value></data>
+  <data name="MenuExportCurrentTodo" xml:space="preserve"><value>現在のToDo</value></data>
+  <data name="MenuExportAllPapers" xml:space="preserve"><value>すべてのノートとToDo</value></data>
+  <data name="MenuTopBarAssociationDragTodo" xml:space="preserve"><value>ToDoへドラッグして関連付け</value></data>
+  <data name="MenuTopBarAssociationDragWindow" xml:space="preserve"><value>ウィンドウへドラッグして関連付け</value></data>
+  <data name="WorkspaceDataSettingsTitle" xml:space="preserve"><value>ワークスペースとデータ</value></data>
+  <data name="SettingsDataProcessing" xml:space="preserve"><value>データ処理</value></data>
   <data name="WorkbenchTitle" xml:space="preserve"><value>無限ワークベンチ</value></data>
   <data name="WorkbenchOverview" xml:space="preserve"><value>全ワークスペース</value></data>
   <data name="WorkbenchCurrent" xml:space="preserve"><value>現在のワークスペース</value></data>

@@ -16,8 +16,8 @@ try {
       Write-Host "Validating $($manifest.FullName)"
       $document = Get-Content $manifest.FullName -Raw -Encoding UTF8 |
         ConvertFrom-Json -Depth 100
-      if ($document.apiVersion -notin @("2.1", "2.2")) {
-        throw "$($manifest.FullName) must target a supported apiVersion (2.1 or 2.2)."
+      if ($document.apiVersion -notin @("2.1", "2.2", "2.3")) {
+        throw "$($manifest.FullName) must target a supported apiVersion (2.1 through 2.3)."
       }
     }
 
@@ -97,6 +97,12 @@ try {
     git diff --exit-code -- plugins
     if ($LASTEXITCODE -ne 0) {
       throw "Committed native plugin outputs do not match their source projects."
+    }
+    $untrackedOutputs = @(git ls-files --others --exclude-standard -- plugins)
+    if ($LASTEXITCODE -ne 0) { throw "Could not inspect untracked plugin outputs." }
+    if ($untrackedOutputs.Count -gt 0) {
+      $untrackedOutputs | Write-Host
+      throw "Rebuilding native plugins produced uncommitted runtime files."
     }
 }
 finally {

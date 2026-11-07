@@ -42,7 +42,8 @@ This manual is for everyday users of PaperTodo. Start with [1. Quick Start](#1-q
 - [6. Script Capsules (PowerShell)](#6-script-capsules-powershell)
   - [6.1 Script Directives](#61-script-directives)
   - [6.2 Running Scripts and Persistent Processes](#62-running-scripts-and-persistent-processes)
-  - [6.3 Security Notes](#63-security-notes)
+  - [6.3 Run script shortcut](#63-run-script-shortcut)
+  - [6.4 Security Notes](#64-security-notes)
 - [7. Keyboard Shortcuts](#7-keyboard-shortcuts)
   - [7.1 Built-in Paper Shortcuts](#71-built-in-paper-shortcuts)
   - [7.2 Global Shortcuts](#72-global-shortcuts)
@@ -133,9 +134,9 @@ The top bar contains fixed window controls and configurable built-in shortcuts:
 | **New Note / New Todo** | Built-in shortcut | Create another paper |
 | **Open externally** | Built-in shortcut | Temporarily export a built-in Markdown note and open it in an external app; see [4.4](#44-opening-in-an-external-editor) |
 
-In "Settings → General → Top-bar shortcuts", drag the five built-in shortcuts to reorder them or move them between **Show in title bar** and **Show in menu**. Todo and note papers share one layout, and actions that do not apply to the current paper are omitted.
+In "Settings → General → Top-bar shortcuts", drag built-in shortcuts to reorder them or move them between **Show in title bar** and **Show in menu**. Todo and note papers share one layout, and actions that do not apply to the current paper are omitted. Each row has a Hide checkbox that removes its shortcut from title bars, overflow and paper/capsule context menus while preserving its position and keeping the feature enabled.
 
-New installations pin **Drag to Associate** and **Switch Workspace** to the top bar and keep **New Note**, **New Todo**, and **Open externally** in the menu; upgrades preserve existing choices. When the top bar is too narrow, pinned built-in shortcuts move into the `···` menu together. You can hold and drag the association item directly out of the menu as well. Plugins may also add top-bar buttons (such as Codex's `>_`).
+New installations pin **Drag to Associate** and **Switch Workspace** to the top bar and keep **New Note**, **New Todo**, **Open externally**, and **Run script** in the menu; upgrades preserve existing choices. When the top bar is too narrow, pinned built-in shortcuts move into the `···` menu together. You can hold and drag the association item directly out of the menu as well. Plugins may also add top-bar buttons (such as Codex's `>_`).
 
 ### 2.3 Moving, Resizing, and Windows Snap
 
@@ -387,7 +388,13 @@ Get-Service | Where-Object Status -eq 'Running' | Select-Object -First 5
 - To edit the script, right-click the capsule and choose **Expand to paper**.
 - Enable **Advanced** in Settings and go to "Settings → Note → Script capsule" to configure **Persistent PowerShell process**, **Prefer PowerShell 7**, and **Hide script window**.
 
-### 6.3 Security Notes
+### 6.3 Run script shortcut
+
+In the top-bar shortcut settings, choose **Edit script** on the **Run script** row to configure one shared multiline script. Pin the entry, keep it in the menu or hide it. Running an unconfigured shortcut opens the editor. Saving configuration does not execute the script.
+
+Without a prefix it uses `!p`, without inserting a prefix into your text. Supported prefixes must occupy the first line, with the script starting on the next line; only ASCII `!` is supported. Engine selection, window visibility and persistent sessions share the script capsule settings. The configuration follows the existing workspace settings inheritance.
+
+### 6.4 Security Notes
 
 > [!CAUTION]
 > Scripts run with the permissions of the PaperTodo process and have no security sandbox. Never run unknown or uninspected scripts.
@@ -477,7 +484,7 @@ Click a command's shortcut field and press a key combination; the page checks fo
 
 ### 8.4 Installing and Configuring Plugins
 
-Plugins can turn notes into clocks, Pomodoro timers, or review panels, and add todo actions, top-bar buttons, menu items, global shortcuts, and custom capsule / Mini views. The current host supports **Plugin API 2.1–2.2** (existing 2.1 plugins remain compatible). `apiVersion` in `plugin.json` specifies the **minimum required host API**; a plugin requiring `2.2` cannot load on an older host.
+Plugins can turn notes into clocks, Pomodoro timers, or review panels, and add todo actions, top-bar buttons, menu items, global shortcuts, and custom capsule / Mini views. The current host supports **Plugin API 2.1–2.3** (existing 2.1 and 2.2 plugins remain compatible). `apiVersion` in `plugin.json` specifies the **minimum required host API**; a plugin requiring `2.3` cannot load on an older host. Plugin actions may appear only in the menu without occupying title-bar space.
 
 - **Web & Native plugins**: Web plugins run HTML/CSS/JS via WebView2; Native plugins are compiled with .NET 10 + WPF.
 - **Plugin data**: Configured in "Settings → Plugins". Host-managed data is separated by workspace under `plugins/data/` (main workspace 1) and `plugins/data2/`–`plugins/data5/` (workspaces 2–5). Separate folders do not isolate system permissions; back up any files a plugin stores elsewhere according to its instructions.
@@ -582,7 +589,7 @@ The portable edition keeps core data beside `PaperTodo.exe`. Each workspace uses
 
 - `N` stands for the workspace number (for example, Workspace 2 uses `data2.json`, not a file literally named `dataN.json`).
 - **The main `data.json` also stores the workspace list, custom names, and follow-main settings**, so always retain it when migrating or restoring secondary workspaces.
-- Installed plugins in `plugins/<plugin-id>/` are shared by all workspaces; historical core-JSON archives are stored in `backups/`.
+- Installed plugins in `plugins/<plugin-id>/` are shared by all workspaces; historical core-JSON archives are stored in `PaperTodo-backups/`.
 - Custom backgrounds, fonts, tray icons (`PaperTodo.ico`), and reminder sounds (`papertodo.wav`) sit beside `PaperTodo.exe`; background blending, stretching, and position preferences are stored separately at `%LOCALAPPDATA%\PaperTodo\paper-background.json`.
 - `data.backup.json` and `data2.backup.json`–`data5.backup.json` do not update on every save and are not guaranteed to match the state immediately before your last edit.
 
@@ -590,12 +597,12 @@ The portable edition keeps core data beside `PaperTodo.exe`. Each workspace uses
 
 1. **Choose "Exit" from the tray and wait for `PaperTodo.exe` to finish before copying.** If saving fails, resolve that first; a running app has not completed a safe exit.
 2. **Full directory copy (recommended)**: Copy the **entire application directory** to your backup location to preserve all workspaces, image databases, plugins, historical backups, and custom files at once.
-3. **Selective backup**: If copying individual items, include every used workspace's JSON, short-term backup, and image database, the complete `plugins/` folder, and the main `data.json` (plus `backups/` if you want historical restore points). **The three unnumbered files cover only the main workspace (1).**
+3. **Selective backup**: If copying individual items, include every used workspace's JSON, short-term backup, and image database, the complete `plugins/` folder, and the main `data.json` (plus `PaperTodo-backups/` if you want historical restore points). **The three unnumbered files cover only the main workspace (1).**
 4. **External files**: Save `%LOCALAPPDATA%\PaperTodo\paper-background.json` separately (or reconfigure the background after migration). Follow plugin instructions for data stored outside the app folder; files linked from todos are not bundled automatically either.
 
-#### Automatic Core-Data History Archives (`backups/`)
+#### Automatic Core-Data History Archives (`PaperTodo-backups/`)
 
-The app keeps up to **4** `PaperTodo-core-*.zip` files in `backups/`, targeting ages near the **latest saved state (about 10 minutes), 6 hours, 3 days, and 1 month**. Rather than running four separate timers, it checks about 1 minute after startup and every **10 minutes** thereafter independently of saves and workspace switches. Unchanged files are not re-archived, and actual ages may shift when history is short or when long-term archives rotate.
+The app keeps up to **4** `PaperTodo-core-*.zip` files in `PaperTodo-backups/`, targeting ages near the **latest saved state (about 10 minutes), 6 hours, 3 days, and 1 month**. Rather than running four separate timers, it checks about 1 minute after startup and every **10 minutes** thereafter without being triggered by saves or workspace switches. Workspace entry pauses the timer and waits for an in-flight round; history rotation remains paused through recovery confirmation and commit. Unchanged files are not re-archived, and actual ages may shift when history is short or when long-term archives rotate.
 
 These archives store the original contents of existing `data.json` and `data2.json`–`data5.json` files. **They exclude image databases (`.lmdb`), plugin data, and short-term backups**, and do not validate whether JSON is damaged. If a workspace file is temporarily unreadable, PaperTodo retries briefly; **if it still fails, only that workspace file is skipped for the current scan while other readable workspaces are archived normally, and the next scan tries again**. No empty archive is created when all workspaces are unreadable. Old archives are rotated only after a complete new ZIP is written; check which workspace files an archive contains before restoring it.
 
@@ -613,9 +620,13 @@ These archives store the original contents of existing `data.json` and `data2.js
 
 #### Recovering from Damaged or Unwanted Changes
 
+**Automatic recovery on startup and workspace switches:** PaperTodo loads a healthy primary file, then a healthy fixed backup, then the latest complete temporary snapshot if both are missing or damaged. If the fixed backup cannot be read, the prompt explains the error and offers Retry or Rebuild without automatically searching other sources. When old data remains but no automatic source is usable, PaperTodo offers the latest valid historical backup with its time and target workspace number. Rebuilding explicitly resets that workspace's notes, todos and settings; dismissing the prompt does not authorize replacement. Recovery only covers core data, not images or plugin data, and changes after the backup may be lost.
+
+To choose an older backup manually or restore images and plugins as well:
+
 1. **Exit PaperTodo from the tray** and copy the entire current folder to another location as a recovery snapshot, keeping the original files intact.
 2. Restore by workspace number: for the main workspace (1), **copy** a usable `data.backup.json` to `data.json`; for Workspace 2, copy `data2.backup.json` to `data2.json` (and likewise for Workspaces 3–5). **Never overwrite the main `data.json` with a secondary workspace's file.**
-3. Alternatively, extract the matching JSON from a `backups/PaperTodo-core-*.zip` archive. To recover images, plugin state, or the full workspace set as well, restore the matching image database, plugin data, and main `data.json` from a complete backup taken at the same time.
+3. Alternatively, extract the matching JSON from a `PaperTodo-backups/PaperTodo-core-*.zip` archive. To recover images, plugin state, or the full workspace set as well, restore the matching image database, plugin data, and main `data.json` from a complete backup taken at the same time.
 4. Restart and inspect each workspace. Short-term backups and historical ZIPs may predate recent edits or contain damaged data, so they cannot guarantee recovery of every change.
 
 ---

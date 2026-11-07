@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -24,7 +25,7 @@ public sealed partial class AppController
             Strings.Get("TopBarSettingsTitle"), "TipTopBarShortcutSettings"));
 
         var actions = new StackPanel { Background = Brushes.Transparent };
-        actions.Children.Add(SettingsFieldLabel(Strings.Get("TopBarShownHeading")));
+        actions.Children.Add(BuildTopBarShortcutHeading("TopBarShownHeading"));
         var shownGroup = BuildTopBarShortcutDropGroup(
             PaperTopBarShortcuts.Pinned(State), pinned: true);
         actions.Children.Add(shownGroup);
@@ -39,7 +40,7 @@ public sealed partial class AppController
             SnapsToDevicePixels = true
         };
         actions.Children.Add(divider);
-        actions.Children.Add(SettingsFieldLabel(Strings.Get("TopBarMenuHeading")));
+        actions.Children.Add(BuildTopBarShortcutHeading("TopBarMenuHeading"));
         actions.Children.Add(BuildTopBarShortcutDropGroup(
             PaperTopBarShortcuts.Menu(State), pinned: false));
         root.Children.Add(new Border
@@ -89,6 +90,20 @@ public sealed partial class AppController
             e.Handled = true;
         };
         return root;
+    }
+
+    private static double TopBarHideColumnWidth => AppTypography.Scale(44);
+
+    private static UIElement BuildTopBarShortcutHeading(string titleKey)
+    {
+        var heading = new DockPanel { Margin = new Thickness(7, 0, 7, 0) };
+        var hide = SettingsFieldLabel(Strings.Get("TopBarHideShortcut"));
+        hide.Width = TopBarHideColumnWidth;
+        hide.TextAlignment = TextAlignment.Center;
+        DockPanel.SetDock(hide, Dock.Right);
+        heading.Children.Add(hide);
+        heading.Children.Add(SettingsFieldLabel(Strings.Get(titleKey)));
+        return heading;
     }
 
     private UIElement BuildTopBarShortcutDropGroup(
@@ -161,7 +176,9 @@ public sealed partial class AppController
             var row = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
-                IsHitTestVisible = false
+                IsHitTestVisible = false,
+                // The feature is inactive, but its placement remains editable.
+                Opacity = action == PaperTopBarShortcuts.Workspace && !WorkspaceOptions.Enabled ? 0.5 : 1
             };
             row.Children.Add(new TextBlock
             {
@@ -179,7 +196,43 @@ public sealed partial class AppController
                 FontSize = AppTypography.Scale(11.5),
                 VerticalAlignment = VerticalAlignment.Center
             });
-            border.Child = row;
+            var content = new DockPanel { LastChildFill = true };
+            var controls = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                VerticalAlignment = VerticalAlignment.Center,
+                Cursor = Cursors.Arrow
+            };
+            if (action == PaperTopBarShortcuts.RunScript)
+            {
+                var edit = SettingsTextButton(SettingsSidebarLocalized(
+                    "编辑", "Edit", "編集", "편집"));
+                edit.ToolTip = Strings.Get("TopBarEditScript");
+                System.Windows.Automation.AutomationProperties.SetName(edit,
+                    Strings.Get("TopBarEditScript"));
+                edit.MinWidth = 0;
+                edit.Height = AppTypography.FitChrome(26);
+                edit.Padding = new Thickness(8, 0, 8, 0);
+                edit.BorderBrush = TrayBorderBrush;
+                edit.BorderThickness = new Thickness(1);
+                edit.FontSize = AppTypography.Scale(11.5);
+                edit.Margin = new Thickness(6, 0, 4, 0);
+                edit.Click += (_, _) => EditTopBarScript();
+                controls.Children.Add(edit);
+            }
+            var hide = SettingsToggle(string.Empty,
+                PaperTopBarShortcuts.IsHidden(State, action),
+                () => SetTopBarShortcutHidden(action, !PaperTopBarShortcuts.IsHidden(State, action)));
+            hide.Style = BuildSettingsCheckBoxStyle(markOnly: true);
+            hide.Width = TopBarHideColumnWidth;
+            hide.Margin = new Thickness(0);
+            System.Windows.Automation.AutomationProperties.SetName(hide,
+                Strings.Get("TopBarHideShortcut") + ": " + TopBarShortcutName(action));
+            controls.Children.Add(hide);
+            DockPanel.SetDock(controls, Dock.Right);
+            content.Children.Add(controls);
+            content.Children.Add(row);
+            border.Child = content;
             frame.Children.Add(border);
 
             // This overlay marks the exact insertion edge without affecting row height.
@@ -196,7 +249,8 @@ public sealed partial class AppController
             Point? start = null;
             frame.PreviewMouseLeftButtonDown += (_, e) =>
             {
-                start = e.GetPosition(frame);
+                start = IsTopBarShortcutControl(e.OriginalSource as DependencyObject)
+                    ? null : e.GetPosition(frame);
             };
             frame.PreviewMouseLeftButtonUp += (_, _) => start = null;
             frame.PreviewMouseRightButtonDown += (_, _) => start = null;
@@ -262,6 +316,14 @@ public sealed partial class AppController
         return panel;
     }
 
+    private static bool IsTopBarShortcutControl(DependencyObject? source)
+    {
+        for (var current = source; current != null; current = current is Visual
+                 ? VisualTreeHelper.GetParent(current) : LogicalTreeHelper.GetParent(current))
+            if (current is ButtonBase) return true;
+        return false;
+    }
+
     private static string? GetTopBarDraggedAction(DragEventArgs e)
     {
         if (!e.Data.GetDataPresent(TopBarShortcutDragFormat)) return null;
@@ -274,6 +336,7 @@ public sealed partial class AppController
         PaperTopBarShortcuts.NewTodo => Strings.Get("ShortcutNewTodo"),
         PaperTopBarShortcuts.NewNote => Strings.Get("ShortcutNewNote"),
         PaperTopBarShortcuts.Workspace => Strings.Get("WorkspaceSettingsTitle"),
+        PaperTopBarShortcuts.RunScript => Strings.Get("TopBarRunScript"),
         PaperTopBarShortcuts.Association => Strings.Get("TopBarAssociation"),
         PaperTopBarShortcuts.ExternalEditor => Strings.Get("TopBarExternalEditor"),
         _ => action
@@ -295,6 +358,7 @@ public sealed partial class AppController
                 "M 21 13 V 19 A 2 2 0 0 1 19 21 H 5 " +
                 "A 2 2 0 0 1 3 19 V 5 A 2 2 0 0 1 5 3 H 11",
             PaperTopBarShortcuts.Workspace => WorkspaceCycleIcon.PathData,
+            PaperTopBarShortcuts.RunScript => "M 5 5 H 19 V 19 H 5 Z M 8 9 L 11 12 L 8 15 M 13 15 H 16",
             _ => null
         };
         // Both font glyphs and vector paths live in the same centered slot.
@@ -327,7 +391,7 @@ public sealed partial class AppController
         }
 
         var isWorkspace = action == PaperTopBarShortcuts.Workspace;
-        var canvas = new Canvas { Width = isWorkspace ? 20 : 24, Height = isWorkspace ? 19 : 24 };
+        var canvas = new Canvas { Width = isWorkspace ? 20 : 24, Height = isWorkspace ? 20 : 24 };
         canvas.Children.Add(new System.Windows.Shapes.Path
         {
             Data = Geometry.Parse(pathData),
@@ -337,6 +401,23 @@ public sealed partial class AppController
             StrokeEndLineCap = PenLineCap.Round,
             StrokeLineJoin = PenLineJoin.Round
         });
+        if (isWorkspace)
+        {
+            var number = new Border
+            {
+                Width = 12, Height = 12,
+                Child = new TextBlock
+                {
+                    Text = "1", FontSize = 9, FontWeight = FontWeights.SemiBold,
+                    FontFamily = AppTypography.UiFontFamily, Foreground = TrayWeakTextBrush,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center
+                }
+            };
+            Canvas.SetLeft(number, 4);
+            Canvas.SetTop(number, 4);
+            canvas.Children.Add(number);
+        }
         slot.Children.Add(new Viewbox
         {
             Width = AppTypography.Scale(16),

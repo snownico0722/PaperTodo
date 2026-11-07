@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Threading;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Threading;
 using Hardcodet.Wpf.TaskbarNotification;
@@ -32,7 +33,9 @@ public sealed partial class AppController
     private void InitializeWorkspaceState()
     {
         _workspaceCatalog = new WorkspaceCatalog(AppContext.BaseDirectory,
-            DurableAtomicFileWriter.Shared, ConfirmWorkspaceRecovery);
+            DurableAtomicFileWriter.Shared,
+            (store, timestamp) => ConfirmWorkspaceRecovery(store, timestamp),
+            (store, error) => ConfirmWorkspaceRecovery(store, null, error));
         _workspace = _workspaceCatalog.OpenInitial();
         _workspace.BindPersistence();
         _store = _workspace.Store;
@@ -40,7 +43,8 @@ public sealed partial class AppController
         _imageStore = new NoteImageStore(_workspace.Paths.Images);
     }
 
-    private WorkspaceRecoveryChoice ConfirmWorkspaceRecovery(StateStore store, DateTime? timestampUtc)
+    private WorkspaceRecoveryChoice ConfirmWorkspaceRecovery(StateStore store, DateTime? timestampUtc,
+        Exception? backupReadFailure = null)
     {
         // Startup may not have any windows or a fully constructed controller yet.
         // Fence this store even if Windows ends the session inside the modal loop.
@@ -51,6 +55,9 @@ public sealed partial class AppController
         {
             var owner = _settingsWindow is { IsVisible: true } ? _settingsWindow :
                 app.Windows.OfType<Window>().FirstOrDefault(window => window.IsActive);
+            if (backupReadFailure != null)
+                return PaperNoticeDialog.ShowBackupReadFailure(owner, store.WorkspaceNumber,
+                    WorkspaceFailureMessage.For(backupReadFailure));
             if (timestampUtc is { } timestamp)
                 return PaperNoticeDialog.ShowHistoryRecovery(owner, store.WorkspaceNumber,
                     timestamp.ToLocalTime().ToString("g", System.Globalization.CultureInfo.CurrentCulture));
@@ -59,7 +66,7 @@ public sealed partial class AppController
             // a secondary is only opened after main has loaded and committed.
             int? fallback = _workspace != null ? _workspace.Paths.Number :
                 store.WorkspaceNumber > 1 ? 1 : null;
-            return PaperNoticeDialog.ShowUnavailableWorkspace(owner, fallback);
+            return PaperNoticeDialog.ShowUnavailableWorkspace(owner, store.WorkspaceNumber, fallback);
         }
         finally { app.SessionEnding -= stopWrites; }
     }
@@ -82,7 +89,7 @@ public sealed partial class AppController
 
     // Shared by the settings page and the tray. Creating a slot only updates the
     // catalog; its document and presentation are initialized on first switch.
-    private async Task<int> CreateWorkspaceAsync()
+    internal async Task<int> CreateWorkspaceAsync()
     {
         var options = WorkspaceOptions.Normalized();
         if (!options.Enabled) return 0;
@@ -106,11 +113,14 @@ public sealed partial class AppController
     internal async Task<bool> ChangeWorkspaceConfigurationAsync(WorkspaceConfiguration requested)
     {
         Application.Current.Dispatcher.VerifyAccess();
-        if (!CanBeginWorkspaceChange()) return false;
         var next = requested.Normalized();
         next.Active = !next.Enabled || !next.ContainsSlot(WorkspaceNumber) ? 1 : WorkspaceNumber;
         var followsChanged = WorkspaceNumber > 1 &&
             next.FollowsMain(WorkspaceNumber) != _workspace.FollowsMain;
+        // Catalog-only changes do not hand off windows or editors. A tray menu
+        // may keep its mouse capture while adding a slot in place.
+        if (!CanBeginWorkspaceChange(allowMenuCapture:
+                next.Active == WorkspaceNumber && !followsChanged)) return false;
         if (next.Active != WorkspaceNumber)
             return await SwitchWorkspaceCoreAsync(next.Active, next);
         if (followsChanged)
@@ -237,9 +247,10 @@ public sealed partial class AppController
         Exit();
     }
 
-    private bool CanBeginWorkspaceChange()
+    private bool CanBeginWorkspaceChange(bool allowMenuCapture = false)
     {
-        if (IsExiting || IsDataReloading || _publicSettings?.IsChanging == true || Mouse.Captured != null ||
+        if (IsExiting || IsDataReloading || _publicSettings?.IsChanging == true ||
+            Mouse.Captured != null && !(allowMenuCapture && Mouse.Captured is ContextMenu) ||
             HasDeepCapsuleReorderDragInProgress()) return false;
         return true;
     }
@@ -329,10 +340,17 @@ public sealed partial class AppController
         var presentationStopped = false;
         var installed = false;
         var committed = false;
+        var stoppedScripts = (ScriptsStopped: false, SessionsClosed: false);
         _workspaceSwitching = true;
         RefreshWorkspaceButtons();
         try
         {
+            // Pause before selecting any source, including an already running
+            // backup round. Keep the timer stopped through confirmation and commit.
+            _coreHistoryTimer?.Stop();
+            await _coreHistoryBackupTask;
+            if (IsExiting) return false;
+
             // Complete/fence the source writer first. Candidate validation never overwrites it.
             CommitWorkspaceEditors();
             if (!TrySaveNow(sync: true, workspaceBoundary: true, throwOnFailure: true)) return false;
@@ -355,11 +373,11 @@ public sealed partial class AppController
             _suppressDirty = true;
             _workspaceClosingSurfaces = true;
             StopStateBackupPolicy();
-            var scriptShutdown = PaperWindow.StopAllScriptProcessesAsync();
+            var scriptShutdown = ScriptExecutionService.StopAllScriptProcessesAsync();
             presentationStopped = true;
             StopWorkspacePresentation();
             previousPluginData.DetachForWorkspaceSwitch();
-            await scriptShutdown;
+            stoppedScripts = await scriptShutdown;
             if (IsExiting) return false;
 
             _workspaceCatalog.AdoptOptions(nextOptions);
@@ -397,7 +415,7 @@ public sealed partial class AppController
                     if (installed)
                     {
                         _workspaceClosingSurfaces = true;
-                        var targetScriptShutdown = PaperWindow.StopAllScriptProcessesAsync();
+                        var targetScriptShutdown = ScriptExecutionService.StopAllScriptProcessesAsync();
                         StopWorkspacePresentation();
                         await targetScriptShutdown;
                     }
@@ -439,6 +457,7 @@ public sealed partial class AppController
             _workspaceSwitching = false;
             if (!IsExiting)
             {
+                ResumeCoreHistoryBackupTimer();
                 // No old-workspace request can re-enable a transport or mutate the new store
                 // during the handoff. The active workspace now owns these services.
                 RefreshMcpRuntime();
@@ -448,6 +467,15 @@ public sealed partial class AppController
                 if (reopenSettings && _settingsWindow == null) ShowSettingsWindow(settingsPage);
             }
             ResumeExitAfterDataReload();
+            if (committed && !IsExiting && (stoppedScripts.ScriptsStopped || stoppedScripts.SessionsClosed))
+            {
+                var owner = _settingsWindow is { IsVisible: true } ? _settingsWindow :
+                    Application.Current.Windows.OfType<Window>().FirstOrDefault(window => window.IsActive);
+                var message = stoppedScripts.ScriptsStopped
+                    ? stoppedScripts.SessionsClosed ? "WorkspaceScriptsAndSessionsStoppedMessage" : "WorkspaceScriptsStoppedMessage"
+                    : "WorkspaceSessionsClosedMessage";
+                PaperNoticeDialog.Show(owner, Strings.Get("WorkspaceScriptsStoppedTitle"), Strings.Get(message));
+            }
         }
     }
 
@@ -537,7 +565,7 @@ public sealed partial class AppController
         RefreshReloadedSettings(before);
         // Every workspace handoff stopped the old processes, even when both slots use
         // identical preferences. Recreate the target's optional warm process once.
-        PaperWindow.EnsurePersistentScriptProcessForSettings(State);
+        ScriptExecutionService.EnsurePersistentScriptProcessForSettings(State);
         EnablePluginRuntimeReconciliation();
         var relocated = EnsurePapersOnScreen();
         await RestorePaperSurfacesAsync(State.Papers.Where(p => p.IsVisible).ToArray());

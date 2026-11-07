@@ -20,6 +20,8 @@ internal static class NativeFreeQueueChecks
         state.UseCapsuleCollapseAll = false;
         state.EnableAnimations = false;
         state.ExperimentalEdgeCapsuleHoverPreview = false;
+        state.Papers[0].Title = "A";
+        state.Papers[1].Title = "Longer";
         for (var i = 0; i < state.Papers.Count; i++) state.Papers[i].CapsuleQueueId = i < 2 ? "qa" : i < 4 ? "qb" : "qc";
         state.DeepCapsuleQueueStartTopMargins["|right#qa"] = 100;
         state.DeepCapsuleQueueStartTopMargins["|right#qb"] = 350;
@@ -94,16 +96,22 @@ internal static class NativeFreeQueueChecks
             "pointer motion within the same confirmed slot cannot progressively move the target");
         var ghost = (EdgeCapsuleQueueDropGhost)Part(c, "_nativeQueueDropGhost");
         var ghostWindow = (Window)Part(ghost, "_window");
-        var ghostBody = (Border)Part(ghost, "_silhouette");
         var ghostStack = (StackPanel)Part(ghost, "_stack");
+        var ghostWidths = new[]
+        {
+            windows[a.Id].DeepCapsuleRestingVisibleWidthFor(monitor),
+            windows[aPeer.Id].DeepCapsuleRestingVisibleWidthFor(monitor)
+        };
+        ghostWindow.UpdateLayout();
         Require(ghostWindow.IsVisible && ghostWindow.Opacity > 0 &&
                 ghostStack.Children.Count == 2 &&
-                Math.Abs(ghostWindow.Height - (2 * PaperLayoutDefaults.CapsuleHeight + c.DeepCapsuleGap)) < .1 &&
-                Math.Abs(ghostWindow.Width - ownerWindow.DeepCapsuleRestingVisibleWidth) < .1 &&
-                Math.Abs(ghostBody.Height - (PaperLayoutDefaults.CapsuleHeight -
-                    2 * EdgeCapsuleLayout.WindowChromeMargin)) < .1 &&
-                Math.Abs(ghostBody.Margin.Top - EdgeCapsuleLayout.WindowChromeMargin) < .1,
-            "Ctrl carrying two papers previews exactly two theme-colored ordinary capsule silhouettes");
+                Math.Abs(ghostWidths[0] - ghostWidths[1]) > 1 &&
+                Math.Abs(ghostWindow.Width - ghostWidths.Max()) < .1 &&
+                Math.Abs(((Border)ghostStack.Children[0]).ActualWidth -
+                    (ghostWidths[0] - EdgeCapsuleLayout.WindowChromeMargin)) < .1 &&
+                Math.Abs(((Border)ghostStack.Children[1]).ActualWidth -
+                    (ghostWidths[1] - EdgeCapsuleLayout.WindowChromeMargin)) < .1,
+            "Ctrl carrying two papers previews each docked capsule at its own width");
         c.EndNativeEdgeQueueDrag(a.Id);
         await Idle();
         Require(Math.Abs(Top(bPeer) - originalNextTargetTop) < .1,
@@ -247,12 +255,12 @@ internal static class NativeFreeQueueChecks
         await Idle();
         var rememberedIds = c.State.Papers.Select(p => p.CapsuleQueueId).ToArray();
         var legacyTop = Top(a);
-        Require(c.BeginNativeEdgeQueueDrag(a, true, Point(legacyTop), false), "Ctrl is independent of the free-queue switch");
+        Require(!c.BeginNativeEdgeQueueDrag(a, true, Point(legacyTop), false), "Ctrl cannot start an ordinary queue drag when free queues are disabled");
         c.PreviewNativeEdgeQueueDrag(a, Point(legacyTop + 60), legacyTop + 60, false);
         c.CommitNativeEdgeQueueDrag(a, Point(legacyTop + 60), legacyTop + 60, false);
         c.EndNativeEdgeQueueDrag(a.Id);
         await Idle();
-        Require(Math.Abs(Top(a) - legacyTop - 60) < .1, "Ctrl moves an ordinary queue without a master");
+        Require(Math.Abs(Top(a) - legacyTop) < .1, "a rejected Ctrl queue drag cannot move the ordinary queue");
         Require(c.State.Papers.Select(p => p.CapsuleQueueId).SequenceEqual(rememberedIds), "legacy mode preserves free grouping memory");
         c.State.UseCapsuleFreeQueues = true;
         c.State.DeepCapsuleQueueStartTopMargins["|right"] = 48;
@@ -344,16 +352,24 @@ internal static class NativeFreeQueueChecks
         await Idle();
         Require(Math.Abs(Top(bPeer) - untouchedPeerTop) < .1,
             "cancelled master-enabled preview returns the target suffix");
-        Require(c.BeginNativeEdgeQueueDrag(a, true, Point(Top(a)), false) &&
-                c.NativeEdgeQueueCarriesMaster(a.Id),
-            "Ctrl includes the master even for a one-paper queue");
-        c.PrepareNativeEdgeQueueFloating(a.Id);
-        Require(!masters[aKey].IsVisible,
-            "source master withdraws together with its members during floating Ctrl drag");
-        c.EndNativeEdgeQueueDrag(a.Id);
-        await Idle();
-        Require(masters[aKey].IsVisible,
-            "cancelling floating Ctrl drag restores the source master");
+        foreach (var wholeQueue in new[] { false, true })
+        {
+            Require(c.BeginNativeEdgeQueueDrag(a, wholeQueue, Point(Top(a)), false),
+                "begin floating drag of the last queue member");
+            if (wholeQueue)
+            {
+                Require(c.NativeEdgeQueueCarriesMaster(a.Id), "Ctrl includes the queue master");
+                c.PrepareNativeEdgeQueueFloating(a.Id);
+            }
+            c.PreviewNativeEdgeQueueDrag(a, Point(100, distant: true), 100, floating: true);
+            Require(!masters[aKey].IsVisible &&
+                    ((Window)Part(Part(c, "_nativeQueueDropGhost"), "_window")).IsVisible,
+                "lifting the last member must withdraw its master and show a landing projection");
+            c.EndNativeEdgeQueueDrag(a.Id);
+            await Idle();
+            Require(masters[aKey].IsVisible,
+                "cancelling the last-member drag restores the source master");
+        }
 
         var idsBeforeCollection = c.State.Papers.Select(p => p.CapsuleQueueId).ToArray();
         margins = new(c.State.DeepCapsuleQueueStartTopMargins);
@@ -570,4 +586,3 @@ internal static class NativeFreeQueueChecks
 
     private static object? PartOrNull(object o, string name) => o.GetType().GetField(name, Private)!.GetValue(o);
 }
-

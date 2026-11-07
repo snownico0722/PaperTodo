@@ -112,7 +112,7 @@ MCP 的 transport、权限策略和 bridge 生命周期不拥有 Paper/Todo/Note
 
 Web 插件使用 WebView2；Native 插件可以自行创建线程、Worker、子进程或第三方运行环境。这些实现细节属于插件内部，不成为 PaperTodo 的第二套 `AppState` authority。
 
-插件协议当前最新为 **2.2**，最低兼容 **2.1**；2.0 及更早版本不再加载，高于当前实现的未来版本也拒绝加载。`apiVersion` 表示插件最低依赖的宿主 API：2.1 插件可继续运行，使用 2.2-only 能力的插件必须声明 2.2。需要在可见 Body/Mini 不存在时仍持续工作的插件声明 `runtime`：PaperTodo 对每个 provider **最多只创建一个 Runtime 后端**。`startupPaper` 先处理真实 Paper；之后只要最终至少有一张 `Note` Paper 的 `BodyProviderId` 指向该 provider，Runtime 就存在。0→1 启动，1→0 释放；隐藏、折叠、Body 重建、Mini 回收和当前没有 `PaperWindow` 都不改变 Runtime lifetime。
+插件协议当前最新为 **2.3**，最低兼容 **2.1**；2.0 及更早版本不再加载，高于当前实现的未来版本也拒绝加载。`apiVersion` 表示插件最低依赖的宿主 API：2.1／2.2 插件可继续运行，使用新能力的插件必须声明提供该能力的最低版本。需要在可见 Body/Mini 不存在时仍持续工作的插件声明 `runtime`：PaperTodo 对每个 provider **最多只创建一个 Runtime 后端**。`startupPaper` 先处理真实 Paper；之后只要最终至少有一张 `Note` Paper 的 `BodyProviderId` 指向该 provider，Runtime 就存在。0→1 启动，1→0 释放；隐藏、折叠、Body 重建、Mini 回收和当前没有 `PaperWindow` 都不改变 Runtime lifetime。
 
 一张 Paper 不再对应一个后台 Runtime。多开插件仍然只有一个 provider Runtime，Runtime 通过 `PaperId` 管理 N 个逻辑实例；需要额外线程、Web Worker、子进程或隔离域时，由插件在自己的 Runtime 内部创建和回收，宿主不提供第二种“每 Paper 后台”协议。
 
@@ -181,7 +181,7 @@ Edge 展开记忆保留原有窗口 DIP 字段，并用可选 `DeepCapsuleExpand
 
 系统关机、崩溃与被动 Dispose 共用 `PersistenceWriteLifetime` 的单向停止信号。先封闭所有核心/宿主管理插件存储（工作区之间共享），再允许窗口清理或崩溃提示框；排队任务、打开临时文件、替换重试与模态返回后重新核对。不等待 UI 来决定是否还能写，不增加终止阶段最后保存。已经进入 OS 的单次替换可能完成；不宣称可取消任意时刻已经执行的文件系统调用。普通用户 Exit 与该终止路径分开，OnExit/Dispose 不重新执行一遍保存。
 
-保护范围是显式数据操作的版本边界、原子写入、恢复来源、图片引用和系统终止写入准入；普通保存不主动检测外部编辑。强杀前尚未落盘的 RAM 编辑、未合作外部进程与普通保存的写入竞争、硬件断电持久性和跨 JSON/LMDB/插件文件事务不作绝对保证。普通保存的短期 backup 仍遵循原有六小时策略，不增加 journal 或 pending 副本。独立的核心 JSON 梯度历史 ZIP 在应用启动约一分钟后第一次扫描，之后每十分钟由单独的计时器检查磁盘上已落盘的 data.json～data5.json；它不参与工作区切换、保存事件、同步恢复或编辑器生命周期。只复制原始字节，不解析 JSON；单个文件读取失败会在后台短暂重试，仍失败则本轮跳过该文件，下轮继续尝试；如果所有工作区都不可读或不存在则不创建空 ZIP。最多四份恢复点，目标接近最新、6 小时、3 天、1 个月；更新长期档时允许中间档暂时偏离。ZIP 完整生成、落盘及字节核对成功后才发布；轮换时校验旧 ZIP CRC，不包含图片或插件数据。
+保护范围是显式数据操作的版本边界、原子写入、恢复来源、图片引用和系统终止写入准入；普通保存不主动检测外部编辑。强杀前尚未落盘的 RAM 编辑、未合作外部进程与普通保存的写入竞争、硬件断电持久性和跨 JSON/LMDB/插件文件事务不作绝对保证。普通保存的短期 backup 仍遵循原有六小时策略，不增加 journal 或 pending 副本。独立的核心 JSON 梯度历史 ZIP 在应用启动约一分钟后第一次扫描，之后每十分钟由单独的计时器检查磁盘上已落盘的 data.json～data5.json；归档不由保存事件或工作区切换触发；工作区进入前暂停计时器并等待已运行的一轮结束，直到加载、恢复确认与提交完成（或取消、失败）后再恢复，避免弹窗提供的来源被本进程轮换删除。暂停保留单调时钟记录的原定到期时间，恢复只等待剩余时间，已到期则立即安排检查，不因普通切换重置整个间隔。只复制原始字节，不解析 JSON；单个文件读取失败会在后台短暂重试，仍失败则本轮跳过该文件，下轮继续尝试；如果所有工作区都不可读或不存在则不创建空 ZIP。最多四份恢复点，目标接近最新、6 小时、3 天、1 个月；更新长期档时允许中间档暂时偏离。ZIP 完整生成、落盘及字节核对成功后才发布；轮换时校验旧 ZIP CRC，不包含图片或插件数据。
 
 #### data.json 按需显式重载
 
@@ -213,11 +213,11 @@ Markdown 中的 Note 图片只通过 PaperTodo 内部 `i:` asset URI 引用宿�
 
 每个固定编号拥有不可变的 `WorkspacePaths` 与复用的 `StateStore` writer：1 使用 `data.json` / `data.backup.json` / `note-assets.lmdb` / `plugins/data`；2～5 使用 `data2.json` / `data2.backup.json` / `note-assets2.lmdb` / `plugins/data2` 等。备份、失败恢复源及冲突归档的图片引用扫描只保护对应工作区；未激活工作区不维持窗口、LMDB 连接或插件 Runtime。图片缺失或读取损坏不阻止工作区启动和切换，也不额外弹出预检查提示；图片读取按原有局部失败处理。图片库加载失败时禁止危险写入，缺失库如有历史引用则不创建新库覆盖其恢复位置，缺失的引用编号不得重新分配；只有图片写入受到必要限制，不影响纸片和工作区的正常使用。插件代码发现与 Native assembly 缓存仍属于进程，不随切换重新发现。
 
-`AppController.Workspaces` 协调显式切换：先提交原编辑器并同步保存以淘汰旧异步快照，再加载目标核心数据与图片库，结束旧窗口、胶囊与插件 session/runtime。设置跟随只读取已提交的健康主区数据，不自行恢复或初始化主区。核心数据按健康主文件、健康固定备份、最新完整临时快照依次恢复；旧核心文件仍存在但所有来源不可用时，寻找当前工作区最近的有效历史 ZIP，由用户明确选择历史恢复、重建、回退到可用工作区或退出，绝不隐式创建空白内容。真正没有旧核心文件的新工作区正常初始化。占用、权限或 I/O 读取异常不等同于损坏，绝不据此覆盖。恢复与重建沿用原子写入器，写入前校验来源，提交成功后复读；复用固定 `.tmp` 前保护不同版本的完整快照，不拼接片段，不另建重复损坏副本。只有主文件健康且没有未完成恢复时才清理该工作区的孤立临时文件；冲突归档仅保留最近五组完整记录。临时文件、冲突归档及其图片引用按工作区保护，无法可靠扫描时不进行破坏性图片清理；图片、插件目录及历史归档不参与创建准入。启动时目标副工作区不可用时，可回退到已加载的健康主区；切换失败统一提供本地化原因与重试/退出，取消时保持原工作区，不重复弹普通保存失败。插件 datastore 的严格 detach 会等待当前写入、保存最新状态并报告失败；切换失败可恢复原缓存。切换不是删除，不发送永久纸片删除清理。目标使用新窗口及对应图片缓存，目标保存成功后才提交主文件中的活动编号。副工作区运行时更新主 catalog，必须通过主 `StateStore` 的锁与版本序号只替换 `workspaces` 节点，不能将当前副工作区 AppState 写入主文件。普通异步保存捕获具体 store 和界面代次，晚到的回调不能操作另一个工作区。成功切换清空旧工作区的重载结果；切换失败回滚则保留旧结果。目标已安装后失败时，先结束目标脚本进程，再按目标到原工作区的设置差异恢复运行时。MCP adapter 也绑定工作区代次：旧请求可完成已提交响应，但不得在新工作区执行；状态查询返回当前编号、数据文件名及设置跟随状态。缓存 writer 的保存投影只持有设置快照，不持有整份未激活 AppState。
+`AppController.Workspaces` 协调显式切换：先提交原编辑器并同步保存以淘汰旧异步快照，再加载目标核心数据与图片库，结束旧窗口、胶囊与插件 session/runtime。设置跟随只读取已提交的健康主区数据，不自行恢复或初始化主区。核心数据按健康主文件、健康固定备份、最新完整临时快照依次恢复；旧核心文件仍存在但所有来源不可用时，寻找当前工作区最近的有效历史 ZIP，由用户明确选择历史恢复、重建、回退到可用工作区或退出，绝不隐式创建空白内容。真正没有旧核心文件的新工作区正常初始化。占用、权限或 I/O 读取异常不等同于损坏，不自动覆盖；固定备份读取失败时明确提供重试或重建，重试仅重新读取该备份，显式重建沿用正常提交检查，不自动继续搜索其他来源。恢复与重建沿用原子写入器，写入前校验来源，提交成功后复读；复用固定 `.tmp` 前保护不同版本的完整快照，不拼接片段，不另建重复损坏副本。只有主文件健康且没有未完成恢复时才清理该工作区的孤立临时文件；冲突归档仅保留最近五组完整记录。临时文件、冲突归档及其图片引用按工作区保护，无法可靠扫描时不进行破坏性图片清理；图片、插件目录及历史归档不参与创建准入。启动时目标副工作区不可用时，可回退到已加载的健康主区；切换失败统一提供本地化原因与重试/退出，取消时保持原工作区，不重复弹普通保存失败。插件 datastore 的严格 detach 会等待当前写入、保存最新状态并报告失败；切换失败可恢复原缓存。切换不是删除，不发送永久纸片删除清理。目标使用新窗口及对应图片缓存，目标保存成功后才提交主文件中的活动编号。副工作区运行时更新主 catalog，必须通过主 `StateStore` 的锁与版本序号只替换 `workspaces` 节点，不能将当前副工作区 AppState 写入主文件。普通异步保存捕获具体 store 和界面代次，晚到的回调不能操作另一个工作区。成功切换清空旧工作区的重载结果；切换失败回滚则保留旧结果。目标已安装后失败时，先结束目标脚本进程，再按目标到原工作区的设置差异恢复运行时。MCP adapter 也绑定工作区代次：旧请求可完成已提交响应，但不得在新工作区执行；状态查询返回当前编号、数据文件名及设置跟随状态。缓存 writer 的保存投影只持有设置快照，不持有整份未激活 AppState。
 
-副工作区默认继承主工作区 AppState 的软件设置。`WorkspaceFieldScopes` 对每个 `AppState` 可写字段显式声明归属（主设置、独立内容、独立布局、主区专属或旧版迁移）；只有列入主设置及保留兼容语义的旧版迁移字段才参与 `WorkspaceSettingsSnapshot`。新增字段未登记时默认不继承，工作区持久化 CI 必须检查全部字段均已分类，不能靠排除少数属性而隐式共享。MCP 权限、全局快捷键、插件启用状态等仍按原有主设置继承语义处理。`WorkspaceSettingsSnapshot` 不继承 Papers、胶囊位置、队列折叠记忆与布局；副工作区自己的设置保留在自身 JSON。加载时先按有效设置规范化纸片，再保留独立设置，避免用休眠偏好提前截短标题或改变折叠状态。保存时投影独立设置而不回写继承值；正常单工作区不启用投影。设置 UI / Native / Web / MCP 的公共设置目录在继承期间为只读；设置页面（包括插件页）整体禁用并降低亮度，只保留跳转工作区管理的入口，插件私有数据仍按工作区独立。关闭继承恢复自己的设置，再开启时读取当前主设置。不进行持续文件监听或后台同步。
+副工作区默认继承主工作区 AppState 的软件设置。`WorkspaceFieldScopes` 对每个 `AppState` 可写字段显式声明归属（主设置、独立内容、独立布局、主区专属或旧版迁移）；只有列入主设置及保留兼容语义的旧版迁移字段才参与 `WorkspaceSettingsSnapshot`。新增字段未登记时默认不继承，工作区持久化 CI 必须检查全部字段均已分类，不能靠排除少数属性而隐式共享。MCP 权限、全局快捷键、插件启用状态等仍按原有主设置继承语义处理。`WorkspaceSettingsSnapshot` 不继承 Papers、胶囊位置、队列折叠记忆与布局；副工作区自己的设置保留在自身 JSON。加载时先按有效设置规范化纸片，再保留独立设置，避免用休眠偏好提前截短标题或改变折叠状态。保存时投影独立设置而不回写继承值；正常单工作区不启用投影。设置 UI / Native / Web / MCP 的公共设置目录在继承期间为只读；普通设置页面（包括插件页）禁用并降低亮度；「工作区与数据」页的工作区管理仍可用，数据处理与 MCP 设置单独只读，MCP 状态和复制连接信息仍可用，插件私有数据仍按工作区独立。关闭继承恢复自己的设置，再开启时读取当前主设置。不进行持续文件监听或后台同步。
 
-普通设置修改仍沿用既有重启约定；完整工作区交接已销毁旧 HWND，因此可以在新窗口构造前应用目标语言和原生窗口类型。已发现插件的文字从原始标签重新本地化，不热重载代码。设置页按实际编号新建和删除；点击整张卡片（非控件区域）选择目标，名称旁的铅笔可在原行切换为文本框和对号保存，副工作区「设置跟随主工作区」也与名称同列单行，底部只保留「确认切换」。重命名不触碰固定数据文件名；删除副工作区先完成当前工作区交接并更新主目录，然后清理对应的核心文件、图片库和宿主管理的插件数据，主工作区不可删除。关闭总开关不删除数据。顶栏循环入口归入可拖拽的快捷管理；无论按钮在顶栏还是被移动到纸片菜单，默认都切换到下一工作区。开启具名选择模式后，顶栏按钮弹出名称菜单，纸片菜单显示“切换工作区”子菜单，选择指定名称后直接切换。托盘把“工作区”标题与设置同款的紧凑横向数字分段选择排在同一行，选中编号时仍在此行用确认或取消替换数字选择块。删除操作先更新主目录，成功后立即从工作区列表移除，再清理对应文件；文件清理失败仅报告错误，不为外部占用建立额外恢复流程。
+普通设置修改仍沿用既有重启约定；完整工作区交接已销毁旧 HWND，因此可以在新窗口构造前应用目标语言和原生窗口类型。已发现插件的文字从原始标签重新本地化，不热重载代码。设置页按实际编号新建和删除；点击整张卡片（非控件区域）选择目标，名称旁的铅笔可在原行切换为文本框和对号保存，副工作区「设置跟随主工作区」也与名称同列单行，底部只保留「确认切换」。重命名不触碰固定数据文件名；删除副工作区先完成当前工作区交接并更新主目录，然后清理对应的核心文件、图片库和宿主管理的插件数据，主工作区不可删除。关闭总开关不删除数据。顶栏循环入口归入可拖拽的快捷管理；无论按钮在顶栏还是被移动到纸片菜单，默认都切换到下一工作区。开启具名选择模式后，顶栏按钮弹出名称菜单，纸片菜单显示“切换工作区”子菜单，选择指定名称后直接切换。工作区开启时，只有一个工作区也保留已配置的顶栏或菜单入口，点击提供新建或取消；新建不自动切换。托盘把“工作区”标题与实际存在的编号及一个新建按钮排在同一行，不补空位，也不参与撑大菜单宽度；右侧按钮均分剩余空间，选中编号时整行替换为简短切换提示与「是／否」，取消后恢复标题与编号。删除操作先更新主目录，成功后立即从工作区列表移除，再清理对应文件；文件清理失败仅报告错误，不为外部占用建立额外恢复流程。
 
 宿主管理之外、由第三方插件自行决定路径的文件不由工作区系统重定向；这种插件需自行定义跨工作区数据策略。Windows 启动项、独立背景文件等不属于 AppState 的既有外部 owner，不因本功能建立第二套存储。
 
@@ -293,10 +293,11 @@ transport 权限、Web/Native surface 生命周期、Top Bar presentation 和 MC
 
 ### 5.4 Plugin Protocol 2.x
 
-当前最新插件协议是 **2.2**，宿主继续加载 **2.1** 插件。2.1 已发布能力保持原语义；2.2 新增的 manifest/API 契约必须由插件显式声明 `apiVersion: "2.2"`。宿主不接受 2.0 及更早版本，也不接受高于当前实现的未来版本。
+当前最新插件协议是 **2.3**，宿主继续加载 **2.1** 和 **2.2** 插件。已有能力保持原语义；使用新增 manifest/API 契约时，插件需声明首次提供该能力的 API 版本或更高版本。宿主不接受 2.0 及更早版本，也不接受高于当前实现的未来版本。
 
 - 2.1 保留 Top Bar、provider Runtime、快捷键、自定义 shortcut action、Mini / Workspace 等既有合同。
 - 2.2 新增 `startupPaper.presentation: hidden`、settings `type: action`、公共 Application Settings API 及 `settings.read/update` 权限、提醒已触发状态/事件和 Web Runtime 宿主事件订阅。
+- 2.3 为 Paper／Global Top Bar action 增加 `MenuOnly`（Web `menuOnly`）：只进入既有插件操作菜单，不创建顶栏按钮或占据其空间，默认 false 保持原行为；沿用原 scope 的 callback、replace 和生命周期清理。
 - 新增宿主内部行为、bugfix 或复用既有通用协议原语时不升版本；新增插件可观察的字段、类型、权限、事件、API surface 或新语义时升 minor。破坏既有插件合同才升 major。
 
 #### Protocol 2.1 Top Bar
@@ -412,7 +413,7 @@ Presentation contract 区分：
 
 透明 capacity 不属于交互区域。
 
-Free queues extend the existing queue identity with an optional persisted instance id. Ctrl chooses a whole queue but does not change its drag phase: it slides along the edge until the normal sideways threshold or monitor crossing. The held capsule, rather than the full carried block, selects the merge entrance. All insertion slots, including the first member slot, retain the target head and move the suffix down; the merged queue moves upward only as far as needed to fit above the work-area bottom. Independent placement and insertion both preview a landing stack; independent stacks distinguish their short master from ordinary members. An independent drop fits into its selected adjacent gap before moving neighbours. A short gap previews only the fixed space deficit, based on resting positions; moving below or away withdraws that displacement. It never searches a different queue gap. Passive monitor/mini-preview spacing is derived and is not persisted. Preview and commit share the same prospective membership/anchor plan and the existing coordinator, reducer and presenter. That plan also closes a detached member's source gap; returning to the source reopens its selected slot through the same preview cache and cancellation lifecycle. In free-queue mode each instance owns its own master: clicking collapses only that queue, dragging its master moves only that group, and merging keeps the destination master. A collapsed queue's hit-test and collision footprint is only its visible master; its hidden expanded slots cannot accept a drop. Switching to legacy mode retains the instance identities, anchors and collapse memory; legacy mode itself uses one master per physical edge. See D-066 through D-069.
+Free queues extend the existing queue identity with an optional persisted instance id. While free queues are enabled, Ctrl chooses a whole queue but does not change its drag phase: it slides along the edge until the normal sideways threshold or monitor crossing. The held capsule, rather than the full carried block, selects the merge entrance. All insertion slots, including the first member slot, retain the target head and move the suffix down; the merged queue moves upward only as far as needed to fit above the work-area bottom. Independent placement and insertion both preview a landing stack; independent stacks distinguish their short master from ordinary members. An independent drop fits into its selected adjacent gap before moving neighbours. A short gap previews only the fixed space deficit, based on resting positions; moving below or away withdraws that displacement. It never searches a different queue gap. Passive monitor/mini-preview spacing is derived and is not persisted. Preview and commit share the same prospective membership/anchor plan and the existing coordinator, reducer and presenter. That plan also closes a detached member's source gap; returning to the source reopens its selected slot through the same preview cache and cancellation lifecycle. In free-queue mode each instance owns its own master: clicking collapses only that queue, dragging its master moves only that group, and merging keeps the destination master. A collapsed queue's hit-test and collision footprint is only its visible master; its hidden expanded slots cannot accept a drop. Switching to legacy mode retains the instance identities, anchors and collapse memory; legacy mode itself uses one master per physical edge. Ctrl then follows ordinary single-capsule dragging; the master remains the whole-edge transfer entry. Both free and legacy master transfers refresh the landing ghost from the shared floating host movement callback. See D-066 through D-069.
 
 ### 6.3 Surface 切分
 
@@ -503,13 +504,17 @@ Debug 包可显式启用内存诊断：`EdgeDiagnosticObservation` 观察既有�
 
 托盘当前基于仓库固定的 `vendor/wpf-notifyicon` 和 WPF `IconSource`；选择该路线的历史原因见 D-017。
 
+纸片名称的输入限制与显示投影分开：`PaperTitleText` 保留完整有效名称供编辑、导出和外部读取，`PaperDisplayTitle` / `PaperCapsuleTitle` 按当前长度限制显示内置标题。调整限制、恢复默认和读取持久化数据不按用户显示上限改写已有名称；未修改的改名提交也不截断原名。
+
 ### 7.1 单纸片菜单与顶栏快捷操作
 
 展开纸片的 `···` 入口与外框右键共享 `PaperWindow.BuildPaperContextMenu` 的实时菜单。菜单恢复「快捷」与当前纸片名称分组、「设置」入口；纸片正文、图片及插件仍可提供自己的上下文菜单，纸片菜单内不再提供自定义顶栏设置。
 
-顶栏的固定控件始终是置顶、标题、`···` 和关闭／折叠。可选内置操作是「新建待办」「新建笔记」「关联拖拽」「外部编辑」「切换工作区」。`AppState.TopBarShortcutOrder` 保存全局唯一的五项顺序，`TopBarPinnedCount` 表示位于「显示在顶栏」与「显示在菜单」两区域之间的分界。设置 → 常规中的可拖拽列表可在两区内排序或跨区移动；无复选框、无插件配置、无待办／笔记切换。对当前纸片不适用的操作只在渲染时跳过，不修改全局配置。既有 per-type 列表与布尔快捷配置的原有迁移机制不变；本次新增工作区快捷不为测试版固定按钮增加特殊迁移。现有公共设置 API ID 仍可将对应项跨越分界线。
+顶栏的固定控件始终是置顶、标题、`···` 和关闭／折叠。可选内置操作是「新建待办」「新建笔记」「关联拖拽」「外部编辑」「切换工作区」「运行脚本」。`AppState.TopBarShortcutOrder` 保存全局唯一的操作顺序，`TopBarPinnedCount` 表示位于「显示在顶栏」与「显示在菜单」两区域之间的分界。设置 → 常规中的可拖拽列表可在两区内排序或跨区移动；每项的「隐藏」独立保存到 `HiddenTopBarShortcuts`，只过滤顶栏及共享纸片／胶囊菜单，不删除顺序或关闭功能。列表保留隐藏项，复选框和编辑按钮不触发拖拽；插件不进入内置列表，待办／笔记共用配置。对当前纸片不适用的操作只在渲染时跳过，不修改全局配置。既有 per-type 列表与布尔快捷配置的原有迁移机制不变；本次新增工作区快捷不为测试版固定按钮增加特殊迁移。现有公共设置 API ID 仍可将对应项跨越分界线。
 
 用户选入顶栏的适用内置按钮**整组显示或整组临时收纳**；窗口缩小时不会只留下其中一部分，收纳不会改变分界位置。插件操作不参与用户设置，自动使用内置快捷组之后的剩余空间，Paper-scope 动作原子显示、Global-scope 按优先级缩减，插件状态文字最后使用剩余宽度。共享菜单按全局配置顺序列出未在顶栏显示的内置操作、未展示的插件动作，不重复当前顶栏按钮；其中关联拖拽在菜单里仍使用原来的 drag handler。菜单在打开时刷新，即使右键菜单实例已经缓存，也会与 `···` 一致；插件只提供 descriptor，不持有顶栏或菜单生命周期。
+
+「运行脚本」使用工作区级 `TopBarScript` 配置，和快捷显隐一起按既有设置跟随主工作区规则继承。编辑窗口只保存配置；未配置时运行入口打开编辑窗口，有内容时才执行。`ScriptExecutionService` 由脚本胶囊与快捷入口共用，统一首行前缀解析、引擎选择、窗口显示、常驻／单次进程、临时脚本文件及退出清理；调用方只提供正文和失败提示，不创建临时纸片。无前缀的快捷脚本按默认引擎解释，不改写输入；脚本胶囊仍要求独立首行前缀。主动停止沿用现有进程登记撤销执行归属，迟到的非零退出不再报告执行失败；工作区成功交接后才按实际停止的单次进程／常驻会话类别汇总告知，退出与回滚不告知。
 
 ### 7.2 单窗口交互手势
 
@@ -576,4 +581,3 @@ same AvalonEdit TextView
 - Full 固定槽位对应的引用竖线直接读取 TextView 的实际坐标；有序列表的续行对齐及 Basic/Enhanced 定位保持原行为。省略 `>` 的惰性续行由 `QuoteIndentElement` 占位，并与真实引用共用“引用槽宽 + 原生空格宽”；该元素仍可合并消费同偏移的塌缩语法，保持一份源码和光标边界。
 - 图片 `i:` 协议、URL 打开白名单、原生保存仍属于 PaperTodo host concern；图片是否位于 code/container 等 Markdown 语义由同一 Markdig snapshot 决定。启动图片 GC 额外采用保守保护扫描，允许多保留但不因 parser 分歧误删 blob。
 - `MarkdownFencedCodeScanner` 只保留在“边界发现/受限预览”角色：Edge Mini 的有限导航近似以及大 Note incremental fence-window discovery 可以使用；它不是正文、持久化或数据回收的 Markdown authority，也不扩展成第二套 container-aware Markdown parser。
-

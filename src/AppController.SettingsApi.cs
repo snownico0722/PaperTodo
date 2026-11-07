@@ -111,8 +111,6 @@ public sealed partial class AppController
         var oldTopBarCount = State.TopBarPinnedCount;
         var oldQueues = effects == SettingEffects.CapsuleMode
             ? new Dictionary<string, bool>(State.CapsuleCollapseAllActiveQueues) : null;
-        var titles = id == "title.max_length"
-            ? State.Papers.Select(p => (Paper: p, Title: p.Title)).ToArray() : null;
         var todoOrder = id == "todo.move_completed_to_bottom"
             ? State.Papers.Where(p => p.Type == PaperTypes.Todo)
                 .Select(p => (Paper: p, Items: p.Items.ToList(), Orders: p.Items.Select(i => (Item: i, i.Order)).ToArray())).ToArray()
@@ -139,21 +137,15 @@ public sealed partial class AppController
                 if (id == "window.hide_from_switcher" && value is true) State.HidePapersFromTaskbar = true;
                 if (effects == SettingEffects.CapsuleMode)
                 {
-                    if (id == "capsule.enabled" && value is false) State.UseDeepCapsuleMode = false;
+                    // Parent switches suspend presentation; they do not overwrite saved child choices.
                     if (id == "capsule.edge_enabled" && value is true) State.UseCapsuleMode = true;
                     if ((id == "capsule.master_enabled" || id == "capsule.free_queues") && value is true)
                         State.UseCapsuleMode = State.UseDeepCapsuleMode = true;
-                    if (!State.UseCapsuleMode || !State.UseDeepCapsuleMode)
-                    {
-                        State.UseCapsuleFreeQueues = false;
-                        State.UseCapsuleCollapseAll = false;
-                    }
-                    if (!State.UseDeepCapsuleMode || !State.UseCapsuleCollapseAll)
+                    if (!State.UseCapsuleCollapseAll)
                     {
                         State.CapsuleCollapseAllActiveQueues.Clear();
                     }
                 }
-                if (titles != null) ClampPaperTitlesToMaxLength(State.MaxTitleLength);
                 if (todoOrder != null && State.AutoMoveCompletedTodosToBottom)
                 {
                     foreach (var row in todoOrder)
@@ -188,7 +180,6 @@ public sealed partial class AppController
                     State.UseCapsuleCollapseAll = oldMaster;
                     State.CapsuleCollapseAllActiveQueues = oldQueues;
                 }
-                if (titles != null) foreach (var row in titles) row.Paper.Title = row.Title;
                 if (todoOrder != null) foreach (var row in todoOrder)
                 {
                     row.Paper.Items = row.Items;
@@ -197,10 +188,9 @@ public sealed partial class AppController
             },
             Publish: () =>
             {
-                if (titles != null)
-                    foreach (var row in titles)
-                        if (!string.Equals(row.Title, row.Paper.Title, StringComparison.Ordinal))
-                            NotifyPaperDisplayTitleChanged(row.Paper.Id);
+                if (effects == SettingEffects.Titles)
+                    foreach (var paper in State.Papers)
+                        NotifyPaperDisplayTitleChanged(paper.Id);
                 if (effects == SettingEffects.CapsuleMode)
                 {
                     foreach (var window in _windows.Values.ToArray())
@@ -326,9 +316,9 @@ public sealed partial class AppController
                 break;
             case SettingEffects.Scripts:
                 if (State.UsePersistentPowerShellProcess)
-                    PaperWindow.EnsurePersistentScriptProcessForSettings(State);
+                    ScriptExecutionService.EnsurePersistentScriptProcessForSettings(State);
                 else
-                    PaperWindow.StopPersistentScriptProcesses();
+                    ScriptExecutionService.StopPersistentScriptProcesses();
                 break;
             case SettingEffects.VisibilitySnapshot: ClearVisibilityShortcutRestoreSnapshot(); break;
             case SettingEffects.Mcp: RefreshMcpRuntime(); break;
@@ -383,4 +373,3 @@ public sealed partial class AppController
         return setting;
     }
 }
-

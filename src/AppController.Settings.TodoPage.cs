@@ -29,19 +29,19 @@ public sealed partial class AppController
     {
         var content = new StackPanel();
         content.Children.Add(WrapWithHint(
-            SettingsToggle(
+            WrappingSettingsToggle(
                 Strings.Get("SettingsShowTodoBottomBar"),
                 State.ShowTodoBottomBar,
                 ToggleTodoBottomBar),
             "TipShowTodoBottomBar"));
         content.Children.Add(WrapWithHint(
-            SettingsToggle(
+            WrappingSettingsToggle(
                 Strings.Get("SettingsAutoClearCompletedTodos"),
                 State.AutoClearCompletedTodos,
                 ToggleAutoClearCompletedTodos),
             "TipAutoClearCompletedTodos"));
 
-        var autoMoveCompletedToggle = SettingsToggle(
+        var autoMoveCompletedToggle = WrappingSettingsToggle(
             Strings.Get("SettingsAutoMoveCompletedTodosToBottom"),
             State.AutoMoveCompletedTodosToBottom,
             ToggleAutoMoveCompletedTodosToBottom);
@@ -55,69 +55,39 @@ public sealed partial class AppController
         content.Children.Add(SettingsSectionLabel(
             SettingsSidebarLocalized("纸片关联", "Paper links", "紙片リンク", "종이 연결")));
         content.Children.Add(WrapWithHint(
-            SettingsToggle(
+            WrappingSettingsToggle(
                 Strings.Get("SettingsEnableTodoPaperLinks"),
                 State.EnableTodoPaperLinks,
                 ToggleTodoPaperLinks),
             "TipEnableTodoPaperLinks"));
 
-        var showLinkedPaperNameToggle = SettingsToggle(
-            Strings.Get("SettingsShowLinkedPaperName"),
-            State.ShowLinkedPaperName,
-            ToggleLinkedPaperNameDisplay);
-        showLinkedPaperNameToggle.IsEnabled = State.EnableTodoPaperLinks;
-        showLinkedPaperNameToggle.Opacity = showLinkedPaperNameToggle.IsEnabled ? 1.0 : 0.55;
-        content.Children.Add(WrapWithHint(
-            showLinkedPaperNameToggle,
-            "TipShowLinkedPaperName"));
-
-        var allowLongLinkedPaperTitlesToggle = SettingsToggle(
-            Strings.Get("SettingsAllowLongLinkedPaperTitles"),
-            State.AllowLongLinkedPaperTitles,
-            ToggleLongLinkedPaperTitles);
-        allowLongLinkedPaperTitlesToggle.IsEnabled =
-            State.EnableTodoPaperLinks && State.ShowLinkedPaperName;
-        allowLongLinkedPaperTitlesToggle.Opacity =
-            allowLongLinkedPaperTitlesToggle.IsEnabled ? 1.0 : 0.55;
-        content.Children.Add(WrapWithHint(
-            allowLongLinkedPaperTitlesToggle,
-            "TipAllowLongLinkedPaperTitles"));
-
-        var linkedPathExtensionOnlyToggle = SettingsToggle(
-            Strings.Get("SettingsShowLinkedPathExtensionOnly"),
-            State.ShowLinkedPathExtensionOnly,
-            ToggleLinkedPathExtensionOnly);
-        linkedPathExtensionOnlyToggle.IsEnabled =
-            State.EnableTodoPaperLinks &&
-            State.ShowLinkedPaperName &&
-            !State.AllowLongLinkedPaperTitles;
-        linkedPathExtensionOnlyToggle.Opacity =
-            linkedPathExtensionOnlyToggle.IsEnabled ? 1.0 : 0.55;
-        content.Children.Add(WrapWithHint(
-            linkedPathExtensionOnlyToggle,
-            "TipShowLinkedPathExtensionOnly"));
-
-        var hideLinkedPapersFromCapsulesToggle = SettingsToggle(
-            Strings.Get("SettingsHideLinkedPapersFromCapsules"),
-            State.HideLinkedPapersFromCapsules,
-            ToggleHideLinkedPapersFromCapsules);
-        hideLinkedPapersFromCapsulesToggle.IsEnabled = State.EnableTodoPaperLinks;
-        hideLinkedPapersFromCapsulesToggle.Opacity =
-            hideLinkedPapersFromCapsulesToggle.IsEnabled ? 1.0 : 0.55;
-        content.Children.Add(WrapWithHint(
-            hideLinkedPapersFromCapsulesToggle,
-            "TipHideLinkedPapersFromCapsules"));
-
-        var runLinkedScriptCapsulesToggle = SettingsToggle(
-            Strings.Get("SettingsRunLinkedScriptCapsulesOnClick"),
-            State.RunLinkedScriptCapsulesOnClick,
-            ToggleRunLinkedScriptCapsulesOnClick);
-        runLinkedScriptCapsulesToggle.IsEnabled = State.EnableTodoPaperLinks;
-        runLinkedScriptCapsulesToggle.Opacity =
-            runLinkedScriptCapsulesToggle.IsEnabled ? 1.0 : 0.55;
-        content.Children.Add(WrapWithHint(
-            runLinkedScriptCapsulesToggle,
-            "TipRunLinkedScriptCapsulesOnClick"));
+        if (State.EnableTodoPaperLinks)
+        {
+            content.Children.Add(WrapWithHint(
+                WrappingSettingsToggle(Strings.Get("SettingsShowLinkedPaperName"),
+                    State.ShowLinkedPaperName, ToggleLinkedPaperNameDisplay),
+                "TipShowLinkedPaperName"));
+            if (State.ShowLinkedPaperName)
+            {
+                content.Children.Add(WrapWithHint(
+                    WrappingSettingsToggle(Strings.Get("SettingsAllowLongLinkedPaperTitles"),
+                        State.AllowLongLinkedPaperTitles, ToggleLongLinkedPaperTitles),
+                    "TipAllowLongLinkedPaperTitles"));
+                if (!State.AllowLongLinkedPaperTitles)
+                    content.Children.Add(WrapWithHint(
+                        WrappingSettingsToggle(Strings.Get("SettingsShowLinkedPathExtensionOnly"),
+                            State.ShowLinkedPathExtensionOnly, ToggleLinkedPathExtensionOnly),
+                        "TipShowLinkedPathExtensionOnly"));
+            }
+            content.Children.Add(WrapWithHint(
+                WrappingSettingsToggle(Strings.Get("SettingsHideLinkedPapersFromCapsules"),
+                    State.HideLinkedPapersFromCapsules, ToggleHideLinkedPapersFromCapsules),
+                "TipHideLinkedPapersFromCapsules"));
+            content.Children.Add(WrapWithHint(
+                WrappingSettingsToggle(Strings.Get("SettingsRunLinkedScriptCapsulesOnClick"),
+                    State.RunLinkedScriptCapsulesOnClick, ToggleRunLinkedScriptCapsulesOnClick),
+                "TipRunLinkedScriptCapsulesOnClick"));
+        }
         return content;
     }
 

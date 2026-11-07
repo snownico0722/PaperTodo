@@ -21,8 +21,7 @@ public sealed partial class AppController
     {
         General,
         Workspaces,
-        Todo,
-        Note,
+        NotesAndTodos,
         Visual,
         Shortcuts,
         Plugins,
@@ -40,13 +39,6 @@ public sealed partial class AppController
     private TextBox? _settingsExternalMarkdownTextBox;
     private CheckBox? _settingsHidePapersFromTaskbarCheckBox;
     private CheckBox? _settingsHidePapersFromWindowSwitcherCheckBox;
-    private CheckBox? _settingsCapsuleModeCheckBox;
-    private CheckBox? _settingsDeepCapsuleModeCheckBox;
-    private CheckBox? _settingsDeepCapsuleExpandedSlotCheckBox;
-    private CheckBox? _settingsRememberDeepCapsuleExpandedPositionCheckBox;
-    private CheckBox? _settingsCollapseExpandedDeepCapsuleOnClickCheckBox;
-    private CheckBox? _settingsCapsuleCollapseAllCheckBox;
-    private CheckBox? _settingsCapsuleFreeQueuesCheckBox;
     private readonly Dictionary<string, Action> _settingsRegionRefreshers =
         new(StringComparer.Ordinal);
 
@@ -527,14 +519,6 @@ public sealed partial class AppController
     private void SetMaxTitleLength(int value) =>
         SetSettingFromUi("title.max_length", PaperTitles.NormalizeMaxTitleLength(value));
 
-    private void ClampPaperTitlesToMaxLength(int maxLength)
-    {
-        foreach (var paper in State.Papers)
-        {
-            paper.Title = PaperTitles.CleanCustomTitle(paper.Title, maxLength);
-        }
-    }
-
     internal void OpenSettingsWindow()
     {
         ShowSettingsWindow();
@@ -630,13 +614,6 @@ public sealed partial class AppController
             _settingsExternalMarkdownTextBox = null;
             _settingsHidePapersFromTaskbarCheckBox = null;
             _settingsHidePapersFromWindowSwitcherCheckBox = null;
-            _settingsCapsuleModeCheckBox = null;
-            _settingsDeepCapsuleModeCheckBox = null;
-            _settingsDeepCapsuleExpandedSlotCheckBox = null;
-            _settingsRememberDeepCapsuleExpandedPositionCheckBox = null;
-            _settingsCollapseExpandedDeepCapsuleOnClickCheckBox = null;
-            _settingsCapsuleCollapseAllCheckBox = null;
-            _settingsCapsuleFreeQueuesCheckBox = null;
             _settingsPageScrollViewer = null;
             _settingsPageScrollViewerPage = null;
             _settingsPageScrollOffsets.Clear();
@@ -722,10 +699,6 @@ public sealed partial class AppController
             Strings.Get("LabsWindowCoordination"),
             BuildSettingsLiveRegion("labs.window", BuildLabsWindowCoordinationSettings));
 
-        AddLabsMajorSection(
-            rightColumn,
-            Strings.Get("LabsMcp"),
-            BuildSettingsLiveRegion("labs.mcp", BuildLabsMcpSettings));
         AddLabsMajorSection(
             rightColumn,
             Strings.Get("LabsAdvancedShortcuts"),
@@ -865,12 +838,7 @@ public sealed partial class AppController
 
     private UIElement BuildLabsEdgeCapsuleHoverIntentSettings()
     {
-        var edgePreviewAvailable =
-            State.UseCapsuleMode && State.UseDeepCapsuleMode;
-        var previewEnabled =
-            State.ExperimentalEdgeCapsuleHoverPreview;
-        var intentEnabled =
-            State.ExperimentalEdgeCapsuleHoverIntent;
+        if (!State.UseCapsuleMode || !State.UseDeepCapsuleMode) return new StackPanel();
         var card = new Border
         {
             Background = Brushes.Transparent,
@@ -878,45 +846,27 @@ public sealed partial class AppController
             Margin = new Thickness(0, 1, 0, 3)
         };
         var content = new StackPanel();
-
-        var previewToggle = SettingsToggle(
-            Strings.Get("LabsEnableEdgeCapsuleHoverPreview"),
-            previewEnabled,
-            ToggleExperimentalEdgeCapsuleHoverPreview);
-        previewToggle.IsEnabled = edgePreviewAvailable;
-        previewToggle.Opacity = edgePreviewAvailable ? 1.0 : 0.55;
+        content.Children.Add(SettingsSectionLabel(SettingsSidebarLocalized(
+            "边缘浏览", "Edge browsing", "エッジ閲覧", "가장자리 탐색")));
         content.Children.Add(WrapWithHint(
-            previewToggle,
+            SettingsToggle(Strings.Get("LabsEnableEdgeCapsuleHoverPreview"),
+                State.ExperimentalEdgeCapsuleHoverPreview, ToggleExperimentalEdgeCapsuleHoverPreview),
             "TipLabsEdgeCapsuleHoverPreview"));
-
-        var toggle = SettingsToggle(
-            Strings.Get("LabsEnableEdgeCapsuleHoverIntent"),
-            intentEnabled,
-            ToggleExperimentalEdgeCapsuleHoverIntent);
-        var intentToggleEnabled =
-            edgePreviewAvailable && previewEnabled;
-        toggle.IsEnabled = intentToggleEnabled;
-        toggle.Opacity = intentToggleEnabled ? 1.0 : 0.55;
-        content.Children.Add(WrapWithHint(
-            toggle,
-            "TipLabsEdgeCapsuleHoverIntent"));
-
-        var optionsEnabled =
-            edgePreviewAvailable && previewEnabled && intentEnabled;
-        var options = new StackPanel
+        if (!State.ExperimentalEdgeCapsuleHoverPreview)
         {
-            IsEnabled = optionsEnabled,
-            Opacity = optionsEnabled ? 1.0 : 0.55
-        };
-        options.Children.Add(CompactSettingsField(
-            Strings.Get("LabsEdgeCapsuleHoverIntentSensitivity"),
-            CreateEdgeCapsuleHoverIntentSensitivitySelector(),
-            editorWidth: 132,
-            tipKey: "TipLabsEdgeCapsuleHoverIntentSensitivity",
-            topMargin: 4));
-        content.Children.Add(options);
+            card.Child = content;
+            return card;
+        }
+        content.Children.Add(WrapWithHint(
+            SettingsToggle(Strings.Get("LabsEnableEdgeCapsuleHoverIntent"),
+                State.ExperimentalEdgeCapsuleHoverIntent, ToggleExperimentalEdgeCapsuleHoverIntent),
+            "TipLabsEdgeCapsuleHoverIntent"));
+        if (State.ExperimentalEdgeCapsuleHoverIntent)
+            content.Children.Add(CompactSettingsField(
+                Strings.Get("LabsEdgeCapsuleHoverIntentSensitivity"),
+                CreateEdgeCapsuleHoverIntentSensitivitySelector(), editorWidth: 132,
+                tipKey: "TipLabsEdgeCapsuleHoverIntentSensitivity", topMargin: 4));
 
-        var preferDownwardEnabled = edgePreviewAvailable && previewEnabled;
         var preferDownwardToggle = SettingsToggle(
             SettingsSidebarLocalized(
                 "浏览时优先向下展开",
@@ -925,8 +875,6 @@ public sealed partial class AppController
                 "탐색 중 아래로 펼치기 우선"),
             State.EdgeCapsulePreviewPreferDownward,
             ToggleEdgeCapsulePreviewPreferDownward);
-        preferDownwardToggle.IsEnabled = preferDownwardEnabled;
-        preferDownwardToggle.Opacity = preferDownwardEnabled ? 1.0 : 0.55;
         content.Children.Add(WrapWithHint(
             preferDownwardToggle,
             BuildSettingsHintTooltip(SettingsSidebarLocalized(
@@ -1024,7 +972,7 @@ public sealed partial class AppController
                 enabled,
                 ToggleExperimentalCapsuleMagnetism),
             "TipLabsCapsuleMagnetism"));
-        if (State.UseDeepCapsuleMode)
+        if (State.UseCapsuleMode && State.UseDeepCapsuleMode)
         {
             content.Children.Add(new TextBlock
             {
@@ -1272,14 +1220,14 @@ public sealed partial class AppController
         };
         var content = new StackPanel();
         content.Children.Add(WrapWithHint(
-            SettingsToggle(
+            WrappingSettingsToggle(
                 Strings.Get("LabsEnableTodoReminders"),
                 State.ExperimentalTodoReminders,
                 ToggleExperimentalTodoReminders),
             "TipLabsTodoReminders"));
 
         var showButtonToggle = WrapWithHint(
-            SettingsToggle(
+            WrappingSettingsToggle(
                 Strings.Get("LabsTodoReminderShowButton"),
                 State.ExperimentalTodoReminderShowButton,
                 ToggleExperimentalTodoReminderShowButton),
@@ -1290,7 +1238,7 @@ public sealed partial class AppController
         content.Children.Add(showButtonToggle);
 
         var soundToggle = WrapWithHint(
-            SettingsToggle(
+            WrappingSettingsToggle(
                 Strings.Get("LabsTodoReminderSoundEnabled"),
                 State.ExperimentalTodoReminderSoundEnabled,
                 ToggleExperimentalTodoReminderSoundEnabled),
@@ -1304,7 +1252,8 @@ public sealed partial class AppController
             Strings.Get("LabsTodoReminderQuickMinutes"),
             CreateLabsTodoReminderMinutesStepper(),
             editorWidth: 132,
-            topMargin: 7));
+            topMargin: 7,
+            wrapLabel: true));
 
         var soundSelector = CreateTodoReminderSoundSelector();
         soundSelector.IsEnabled =
@@ -1316,7 +1265,8 @@ public sealed partial class AppController
             soundSelector,
             editorWidth: 156,
             tipKey: "TipLabsTodoReminderSound",
-            topMargin: 7));
+            topMargin: 7,
+            wrapLabel: true));
 
         card.Child = content;
         return card;
@@ -1452,99 +1402,6 @@ public sealed partial class AppController
         return combo;
     }
 
-    private UIElement BuildLabsMcpSettings()
-    {
-        var card = new Border
-        {
-            Background = Brushes.Transparent,
-            Padding = new Thickness(0, 3, 0, 5),
-            Margin = new Thickness(0, 1, 0, 3)
-        };
-        var content = new StackPanel();
-        content.Children.Add(WrapWithHint(
-            SettingsToggle(
-                Strings.Get("LabsMcpEnable"),
-                State.McpEnabled,
-                ToggleMcpEnabled),
-            "TipLabsMcpEnable"));
-        var blankWrites = SettingsToggle(
-            Strings.Get("LabsMcpBlankWrites"),
-            State.McpAllowBlankWrites || State.McpAllowFullWrites,
-            ToggleMcpBlankWrites);
-        blankWrites.IsEnabled = !State.McpAllowFullWrites;
-        content.Children.Add(WrapWithHint(
-            blankWrites,
-            "TipLabsMcpBlankWrites"));
-        content.Children.Add(WrapWithHint(
-            SettingsToggle(
-                Strings.Get("LabsMcpFullWrites"),
-                State.McpAllowFullWrites,
-                ToggleMcpFullWrites),
-            "TipLabsMcpFullWrites"));
-        var directDeletes = SettingsToggle(
-            Strings.Get("LabsMcpDeletes"),
-            State.McpAllowDeletes,
-            ToggleMcpDeletes);
-        if (State.McpAllowDeletes)
-        {
-            directDeletes.Foreground = Theme.DangerBrush;
-        }
-        content.Children.Add(WrapWithHint(
-            directDeletes,
-            "TipLabsMcpDeletes"));
-
-        var status = new TextBlock
-        {
-            Text = State.McpEnabled
-                ? Strings.Get("LabsMcpStatusReady")
-                : Strings.Get("LabsMcpStatusDisabled"),
-            Foreground = State.McpEnabled
-                ? Theme.ActiveBrush
-                : TrayWeakTextBrush,
-            FontSize = AppTypography.Scale(11.5),
-            Margin = new Thickness(2, 8, 2, 0)
-        };
-        content.Children.Add(status);
-
-        var actions = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Margin = new Thickness(0, 9, 0, 0)
-        };
-        var copyJson = SettingsTextButton(
-            Strings.Get("LabsMcpCopyJson"));
-        var copySkill = SettingsTextButton(
-            Strings.Get("LabsMcpCopyAiSkill"));
-        copySkill.Margin = new Thickness(8, 0, 0, 0);
-        var feedback = new TextBlock
-        {
-            Foreground = TrayWeakTextBrush,
-            FontSize = AppTypography.Scale(11),
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(9, 0, 0, 0)
-        };
-        copyJson.Click += (_, _) =>
-        {
-            feedback.Text = ClipboardHelper.TrySetText(
-                BuildJsonMcpConfiguration())
-                ? Strings.Get("LabsMcpCopied")
-                : Strings.Get("LabsMcpCopyFailed");
-        };
-        copySkill.Click += (_, _) =>
-        {
-            feedback.Text = ClipboardHelper.TrySetText(
-                BuildAiMcpSkill())
-                ? Strings.Get("LabsMcpCopied")
-                : Strings.Get("LabsMcpCopyFailed");
-        };
-        actions.Children.Add(copyJson);
-        actions.Children.Add(copySkill);
-        actions.Children.Add(feedback);
-        content.Children.Add(actions);
-        card.Child = content;
-        return card;
-    }
-
     private UIElement CreateLabsPercentageStepper(
         Func<double> getValue,
         Action<double> setValue,
@@ -1631,10 +1488,6 @@ public sealed partial class AppController
         State.ExperimentalAllowLockIconUnlock = true;
         State.ExperimentalShortcutOpacityLevel = 0.35;
         ClearAdvancedShortcutRuntimeState();
-        State.McpEnabled = false;
-        State.McpAllowBlankWrites = false;
-        State.McpAllowFullWrites = false;
-        State.McpAllowDeletes = false;
         State.ExperimentalCapsuleMagnetism = false;
         State.ExperimentalCapsuleMagnetScreenEdges = true;
         State.ExperimentalCapsuleMagnetWindowEdges = true;
@@ -1657,7 +1510,6 @@ public sealed partial class AppController
             window.DisableExperimentalWindowTether();
         }
         RefreshExperimentalWindowRuntime();
-        RefreshMcpRuntime();
         SaveNow();
         RefreshExperimentalOpacitySurfaces(animate: false);
         RefreshExperimentalFocusPresentationSurfaces();
@@ -1716,14 +1568,6 @@ public sealed partial class AppController
             editorWidth: 132,
             tipKey: "TipOverallFontScale",
             topMargin: 7));
-        if (State.AdvancedSettingsMode)
-        {
-            leftColumn.Children.Add(AdvancedSettingsBlock(
-                WrapWithHint(
-                    SettingsFieldLabel(Strings.Get("SettingsImageReferenceText"), topMargin: 8),
-                    "TipImageReferenceText"),
-                CreateImageReferenceTextModeSelector()));
-        }
 
         void AddTextStyleEditor(
             StackPanel column,
@@ -1847,7 +1691,6 @@ public sealed partial class AppController
         State.TextRenderingProfile = TextRenderingProfiles.Standard;
         State.CustomFontEnhancedBold = false;
         State.Zoom = 1.0;
-        State.ImageReferenceTextMode = ImageReferenceTextModes.Always;
         State.NoteTextSize = VisualTextSizes.Medium;
         State.NoteTextBold = false;
         State.TodoVisualSize = TodoVisualSizes.Medium;
@@ -1865,7 +1708,6 @@ public sealed partial class AppController
             State.CustomFontEnhancedBold,
             State.TextRenderingProfile);
         NoteTypography.Configure(State.NoteTextSize, State.NoteTextBold);
-        PublishSettingEffects(SettingEffects.ImageReferences);
 
         SaveNow();
         // Typography was configured above; the theme refresh rebuilds settings once.
@@ -2026,7 +1868,8 @@ public sealed partial class AppController
         UIElement editor,
         double editorWidth = 136,
         string? tipKey = null,
-        double topMargin = 7)
+        double topMargin = 7,
+        bool wrapLabel = false)
     {
         var row = new Grid
         {
@@ -2041,24 +1884,32 @@ public sealed partial class AppController
             Width = GridLength.Auto
         });
 
-        var labelHost = new StackPanel
+        Panel labelHost = wrapLabel ? new DockPanel() : new StackPanel
         {
-            Orientation = Orientation.Horizontal,
-            VerticalAlignment = VerticalAlignment.Center
+            Orientation = Orientation.Horizontal
         };
+        labelHost.VerticalAlignment = wrapLabel ? VerticalAlignment.Top : VerticalAlignment.Center;
         labelHost.Children.Add(new TextBlock
         {
             Text = labelText,
             Foreground = TrayWeakTextBrush,
             FontSize = AppTypography.Scale(11),
             FontWeight = FontWeights.Medium,
+            TextWrapping = wrapLabel ? TextWrapping.Wrap : TextWrapping.NoWrap,
             VerticalAlignment = VerticalAlignment.Center
         });
         if (!string.IsNullOrWhiteSpace(tipKey))
         {
-            labelHost.Children.Add(CreateSettingsHintGlyph(
+            var hint = CreateSettingsHintGlyph(
                 tipKey,
-                new Thickness(4, 0, 0, 0)));
+                new Thickness(4, 0, 0, 0));
+            if (wrapLabel)
+            {
+                hint.VerticalAlignment = VerticalAlignment.Top;
+                DockPanel.SetDock(hint, Dock.Right);
+                labelHost.Children.Insert(0, hint);
+            }
+            else labelHost.Children.Add(hint);
         }
         Grid.SetColumn(labelHost, 0);
         row.Children.Add(labelHost);
@@ -2120,7 +1971,7 @@ public sealed partial class AppController
         return row;
     }
 
-    private CheckBox SettingsToggle(string text, bool isChecked, Action onToggle)
+    private CheckBox SettingsToggle(string text, bool isChecked, Action onToggle, bool wrapText = false)
     {
         var checkBox = new CheckBox
         {
@@ -2131,12 +1982,16 @@ public sealed partial class AppController
             Margin = new Thickness(0, 4, 0, 0),
             Cursor = System.Windows.Input.Cursors.Hand,
             Focusable = false,
-            Style = BuildSettingsCheckBoxStyle()
+            VerticalContentAlignment = wrapText ? VerticalAlignment.Top : VerticalAlignment.Center,
+            Style = BuildSettingsCheckBoxStyle(wrapText)
         };
 
         checkBox.Click += (_, _) => onToggle();
         return checkBox;
     }
+
+    private CheckBox WrappingSettingsToggle(string text, bool isChecked, Action onToggle) =>
+        SettingsToggle(text, isChecked, onToggle, wrapText: true);
 
     private UIElement BuildSettingsLiveRegion(
         string key,
@@ -2195,11 +2050,14 @@ public sealed partial class AppController
 
         // The option keeps its own top margin via its style; reset it here so the row controls spacing.
         option.Margin = new Thickness(0);
-        option.VerticalAlignment = VerticalAlignment.Center;
+        var alignment = option is CheckBox { VerticalContentAlignment: VerticalAlignment.Top }
+            ? VerticalAlignment.Top : VerticalAlignment.Center;
+        option.VerticalAlignment = alignment;
         Grid.SetColumn(option, 0);
         grid.Children.Add(option);
 
         var hint = CreateSettingsHintGlyph(tooltip, margin: new Thickness(6, 0, 0, 0));
+        hint.VerticalAlignment = alignment;
         Grid.SetColumn(hint, 1);
         grid.Children.Add(hint);
 
@@ -2261,53 +2119,9 @@ public sealed partial class AppController
         };
     }
 
-    private void RefreshSettingsCapsuleToggleStates()
-    {
-        RefreshSettingsSystemVisibilityToggleStates();
-
-        if (_settingsCapsuleModeCheckBox != null)
-        {
-            _settingsCapsuleModeCheckBox.IsChecked = State.UseCapsuleMode;
-        }
-        if (_settingsDeepCapsuleModeCheckBox != null)
-        {
-            _settingsDeepCapsuleModeCheckBox.IsChecked = State.UseDeepCapsuleMode;
-            _settingsDeepCapsuleModeCheckBox.IsEnabled = State.UseCapsuleMode;
-        }
-        if (_settingsDeepCapsuleExpandedSlotCheckBox != null)
-        {
-            _settingsDeepCapsuleExpandedSlotCheckBox.IsChecked = State.ShowDeepCapsuleWhileExpanded;
-            _settingsDeepCapsuleExpandedSlotCheckBox.IsEnabled = State.UseCapsuleMode && State.UseDeepCapsuleMode;
-        }
-        if (_settingsRememberDeepCapsuleExpandedPositionCheckBox != null)
-        {
-            _settingsRememberDeepCapsuleExpandedPositionCheckBox.IsChecked = State.RememberDeepCapsuleExpandedPosition;
-            _settingsRememberDeepCapsuleExpandedPositionCheckBox.IsEnabled = State.UseCapsuleMode && State.UseDeepCapsuleMode;
-        }
-        if (_settingsCollapseExpandedDeepCapsuleOnClickCheckBox != null)
-        {
-            _settingsCollapseExpandedDeepCapsuleOnClickCheckBox.IsChecked = State.CollapseExpandedDeepCapsuleOnClick;
-            var canRetractExpandedEdgePaper = State.UseCapsuleMode &&
-                State.UseDeepCapsuleMode &&
-                State.ShowDeepCapsuleWhileExpanded;
-            var canHideExcludedLinkedPaper = State.UseCapsuleMode &&
-                State.EnableTodoPaperLinks &&
-                State.HideLinkedPapersFromCapsules;
-            _settingsCollapseExpandedDeepCapsuleOnClickCheckBox.IsEnabled =
-                canRetractExpandedEdgePaper || canHideExcludedLinkedPaper;
-        }
-        if (_settingsCapsuleCollapseAllCheckBox != null)
-        {
-            _settingsCapsuleCollapseAllCheckBox.IsChecked = State.UseCapsuleCollapseAll;
-            _settingsCapsuleCollapseAllCheckBox.IsEnabled = State.UseCapsuleMode && State.UseDeepCapsuleMode;
-        }
-        if (_settingsCapsuleFreeQueuesCheckBox != null)
-        {
-            _settingsCapsuleFreeQueuesCheckBox.IsChecked = State.UseCapsuleFreeQueues;
-            _settingsCapsuleFreeQueuesCheckBox.IsEnabled = State.UseCapsuleMode && State.UseDeepCapsuleMode;
-        }
-        RefreshSettingsRegions("general.edgeBrowsing");
-    }
+    private void RefreshSettingsCapsuleToggleStates() =>
+        RefreshSettingsRegions("general.capsules", "general.edgeBrowsing",
+            "general.edgeTopmost", "general.capsuleAppearance");
 
     private void RefreshSettingsSystemVisibilityToggleStates()
     {
@@ -2407,7 +2221,7 @@ public sealed partial class AppController
         }
     }
 
-    private Style BuildSettingsCheckBoxStyle()
+    private Style BuildSettingsCheckBoxStyle(bool wrapText = false, bool markOnly = false)
     {
         var style = new Style(typeof(CheckBox));
         style.Setters.Add(new Setter(Control.ForegroundProperty, TrayTextBrush));
@@ -2418,15 +2232,21 @@ public sealed partial class AppController
         style.Setters.Add(new Setter(UIElement.SnapsToDevicePixelsProperty, true));
         style.Setters.Add(new Setter(FrameworkElement.UseLayoutRoundingProperty, true));
 
-        var root = new FrameworkElementFactory(typeof(StackPanel));
-        root.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
+        var root = new FrameworkElementFactory(markOnly ? typeof(Grid) :
+            wrapText ? typeof(DockPanel) : typeof(StackPanel));
+        if (!wrapText && !markOnly) root.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
+        if (markOnly) root.SetValue(Panel.BackgroundProperty, Brushes.Transparent);
         root.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
 
         var markHost = new FrameworkElementFactory(typeof(Grid));
         markHost.SetValue(FrameworkElement.WidthProperty, 16.0);
         markHost.SetValue(FrameworkElement.HeightProperty, 16.0);
-        markHost.SetValue(FrameworkElement.MarginProperty, new Thickness(0, 0, 8, 0));
-        markHost.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+        markHost.SetValue(FrameworkElement.MarginProperty,
+            markOnly ? new Thickness(0) : new Thickness(0, 0, 8, 0));
+        if (markOnly) markHost.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+        markHost.SetValue(FrameworkElement.VerticalAlignmentProperty,
+            wrapText ? VerticalAlignment.Top : VerticalAlignment.Center);
+        if (wrapText) markHost.SetValue(FrameworkElement.MarginProperty, new Thickness(0, 2, 8, 0));
 
         var border = new FrameworkElementFactory(typeof(Border));
         border.Name = "CheckBorder";
@@ -2457,12 +2277,23 @@ public sealed partial class AppController
 
         root.AppendChild(markHost);
 
-        var content = new FrameworkElementFactory(typeof(ContentPresenter));
-        content.SetValue(ContentPresenter.ContentProperty, new TemplateBindingExtension(ContentControl.ContentProperty));
-        content.SetValue(ContentPresenter.RecognizesAccessKeyProperty, false);
-        content.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
-        content.SetValue(System.Windows.Documents.TextElement.ForegroundProperty, new TemplateBindingExtension(Control.ForegroundProperty));
-        root.AppendChild(content);
+        if (!markOnly)
+        {
+            var content = new FrameworkElementFactory(wrapText ? typeof(TextBlock) : typeof(ContentPresenter));
+            if (wrapText)
+            {
+                content.SetValue(TextBlock.TextProperty, new TemplateBindingExtension(ContentControl.ContentProperty));
+                content.SetValue(TextBlock.TextWrappingProperty, TextWrapping.Wrap);
+            }
+            else
+            {
+                content.SetValue(ContentPresenter.ContentProperty, new TemplateBindingExtension(ContentControl.ContentProperty));
+                content.SetValue(ContentPresenter.RecognizesAccessKeyProperty, false);
+            }
+            content.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+            content.SetValue(System.Windows.Documents.TextElement.ForegroundProperty, new TemplateBindingExtension(Control.ForegroundProperty));
+            root.AppendChild(content);
+        }
 
         var template = new ControlTemplate(typeof(CheckBox))
         {
@@ -2748,7 +2579,7 @@ public sealed partial class AppController
                 !_windows.TryGetValue(paper.Id, out var window) ||
                 window.WindowState == WindowState.Minimized ||
                 window.IsExperimentalTetherPresentationSuppressed ||
-                (State.UseDeepCapsuleMode &&
+                (State.UseCapsuleMode && State.UseDeepCapsuleMode &&
                  window.OccupiesDeepCapsuleSlot) ||
                 window.HasVisibleSurface)
             {
@@ -2813,4 +2644,3 @@ public sealed partial class AppController
     }
 
 }
-

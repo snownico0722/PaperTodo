@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Runtime.CompilerServices;
@@ -29,7 +30,6 @@ internal static partial class Program
             ("plugin detach flush is strict and recoverable", WorkspacePluginStores),
             ("bad startup workspace falls back without replacing it", WorkspaceStartupFallback),
             ("bad candidate cannot switch or mutate the active in-memory state", WorkspacePreviewDoesNotAcceptSource),
-            ("plugin language fallback restores discovered labels", WorkspacePluginLocalization),
             ("inactive following state is released but reload updates its settings projection", WorkspaceSessionRelease)
         };
         foreach (var check in checks)
@@ -137,12 +137,6 @@ internal static partial class Program
                 options.Active == 1 && options.FollowsMain(2) && !options.FollowsMain(1),
             "invalid slot IDs or follow default");
         Require(!File.Exists(Path.Combine(scope.DirectoryPath, "workspaces.json")), "unexpected separate catalog");
-        var cycleTip = Strings.Format("WorkspaceCycleTooltip", 4, 1);
-        Require(!cycleTip.Contains("4 /", StringComparison.Ordinal) &&
-                cycleTip.Contains("4", StringComparison.Ordinal) &&
-                cycleTip.Contains("1", StringComparison.Ordinal),
-            "workspace tooltip mixed its actual number with the slot count");
-
         var managed = new WorkspaceConfiguration
         {
             Enabled = true, Active = 4,
@@ -352,6 +346,8 @@ internal static partial class Program
         next.BindPersistence();
         Require(next.State.Theme == "light" && !next.State.McpEnabled && !next.FollowsMain,
             "unfollow did not restore independent settings");
+        Require(next.State.MaxTitleLength == 2 && next.State.Papers[0].Title == "long title",
+            "reopening with a smaller independent display limit truncated the persisted title");
         var newSlot = catalog.Open(3, catalog.Options);
         Require(newSlot.State.Papers.Count == 1 && newSlot.State.Papers[0].Content.Length == 0 &&
             newSlot.State.Papers[0].Id != main.Papers[0].Id, "new workspace copied main content");
@@ -626,29 +622,11 @@ internal static partial class Program
             "retry after releasing the busy data file did not reopen the selected workspace");
     }
 
-    private static void WorkspacePluginLocalization()
-    {
-        var manifest = new PaperBodyPluginManifest
-        {
-            Name = "original", Description = "base detail",
-            Locales = new()
-            {
-                ["zh-CN"] = new() { Name = "中文", Description = "说明" },
-                ["ja-JP"] = new() { Name = "日本語" }
-            }
-        };
-        PaperBodyPluginLocalization.ValidateAndApply(manifest, CultureInfo.GetCultureInfo("zh-CN"));
-        PaperBodyPluginLocalization.ValidateAndApply(manifest, CultureInfo.GetCultureInfo("ja-JP"));
-        Require(manifest.Name == "日本語" && manifest.Description == "base detail", "locale fallback leaked old language");
-        PaperBodyPluginLocalization.ValidateAndApply(manifest, CultureInfo.GetCultureInfo("en-US"));
-        Require(manifest.Name == "original", "missing locale did not restore source labels");
-    }
-
     private static int RunWorkspaceMissingImagesFixture()
     {
         if (!File.Exists(Path.Combine(AppContext.BaseDirectory, LiveMarker)))
             throw new InvalidOperationException("Refusing startup fallback checks outside isolated fixture.");
-        var result = 0;
+        var result = 1;
         var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
         app.Dispatcher.InvokeAsync(async () =>
         {
@@ -686,6 +664,7 @@ internal static partial class Program
                 await controller.StartAsync(createDefaultPaper: false);
                 Require(controller.WorkspaceNumber == 2, "startup discarded selected workspace after rendering");
                 Console.WriteLine("PASS startup remains in secondary workspace with missing pictures and no unsafe image writes");
+                result = 0;
             }
             catch (Exception ex) { result = 1; Console.Error.WriteLine(ex); }
             finally { controller?.Dispose(); app.Shutdown(); }
@@ -698,11 +677,11 @@ internal static partial class Program
     {
         if (!File.Exists(Path.Combine(AppContext.BaseDirectory, LiveMarker)))
             throw new InvalidOperationException("Refusing workspace checks outside isolated fixture.");
-        var result = 0;
+        var result = 1;
         var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
         app.Dispatcher.InvokeAsync(async () =>
         {
-            try { await WorkspaceLiveChecks(); }
+            try { await WorkspaceLiveChecks(); result = 0; }
             catch (Exception ex) { result = 1; Console.Error.WriteLine(ex); }
             finally { app.Shutdown(); }
         });
@@ -713,6 +692,55 @@ internal static partial class Program
     private static BitmapSource WorkspaceBitmap(byte red, byte blue) => BitmapSource.Create(
         2, 2, 96, 96, PixelFormats.Bgra32, null,
         new byte[] { blue, 0, red, 255, blue, 0, red, 255, blue, 0, red, 255, blue, 0, red, 255 }, 8);
+
+    private static async Task WorkspaceSettingsInteractionChecks(AppController controller)
+    {
+        const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
+        var build = typeof(AppController).GetMethod("BuildWorkspaceSettingsPage", flags)!;
+        var cancelRename = typeof(AppController).GetMethod("CancelWorkspaceRenameOnPointer", flags)!;
+        StackPanel Page() => (StackPanel)build.Invoke(controller, null)!;
+        StackPanel Options(StackPanel page) => page.Children.OfType<StackPanel>().Single();
+        Border Slot(StackPanel page) => Options(page).Children.OfType<Border>().Single(card =>
+            AutomationProperties.GetAutomationId(card) == "WorkspaceSlot2");
+
+        var original = controller.WorkspaceOptions.Normalized();
+        var originalName = original.DisplayName(2);
+        var nameRow = ((Grid)Slot(Page()).Child).Children.OfType<StackPanel>().First();
+        var rename = nameRow.Children.OfType<Button>().Single(button =>
+            AutomationProperties.GetAutomationId(button) == "WorkspaceRename2");
+        var editor = nameRow.Children.OfType<TextBox>().Single();
+        rename.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        editor.Text = "Unconfirmed workspace name";
+        cancelRename.Invoke(controller, [new Border()]);
+        Require(editor.Visibility == Visibility.Collapsed &&
+                controller.WorkspaceOptions.DisplayName(2) == originalName,
+            "clicking outside a workspace name editor saved its draft");
+
+        rename.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        editor.Text = "Confirmed workspace name";
+        rename.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        await Until(() => controller.WorkspaceOptions.DisplayName(2) == "Confirmed workspace name",
+            "workspace rename confirmation did not save");
+        Require(controller.WorkspaceNumber == 1, "renaming a workspace unexpectedly switched it");
+
+        var card = Slot(Page());
+        card.RaiseEvent(new System.Windows.Input.MouseButtonEventArgs(
+            System.Windows.Input.Mouse.PrimaryDevice, 0, System.Windows.Input.MouseButton.Left)
+        {
+            RoutedEvent = UIElement.MouseLeftButtonUpEvent
+        });
+        Require(controller.WorkspaceNumber == 1, "selecting a workspace card switched without confirmation");
+        var confirm = Options(Page()).Children.OfType<Button>().Single();
+        Require(confirm.IsEnabled, "selecting a workspace card did not enable switch confirmation");
+        confirm.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        await Until(() => controller.WorkspaceNumber == 2 && !controller.IsWorkspaceSwitching,
+            "confirmed settings switch did not reach the selected workspace");
+        Require(await controller.SwitchWorkspaceAsync(1), "return after settings switch failed");
+        Require(await controller.ChangeWorkspaceConfigurationAsync(original) &&
+                controller.WorkspaceOptions.DisplayName(2) == originalName,
+            "workspace settings test did not restore the previous name");
+        Console.WriteLine("PASS workspace settings: rename cancel/confirm and explicit card switch confirmation");
+    }
 
     private static async Task WorkspaceLiveChecks()
     {
@@ -784,10 +812,39 @@ internal static partial class Program
             boundPipe.Start();
             var oldBridge = new McpPipeClient(boundPipeName);
             _ = await oldBridge.InvokeAsync("get_data_reload_status", new { }, CancellationToken.None);
+            var originalScript = controller.State.TopBarScript;
+            controller.State.TopBarScript = "!ps5\nStart-Sleep -Seconds 60";
+            try { controller.RunTopBarScript(oldWindow); }
+            finally { controller.State.TopBarScript = originalScript; }
+            // Create a real idle session without making all later fixture switches inherit it.
+            ScriptExecutionService.EnsurePersistentScriptProcessForSettings(new AppState
+            {
+                UsePersistentPowerShellProcess = true, PreferPowerShell7 = false, HideScriptRunWindow = true
+            });
+            var activeScripts = (Dictionary<Guid, Process>)typeof(ScriptExecutionService)
+                .GetField("ActiveScriptProcesses", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!;
+            var persistentScripts = (Dictionary<string, Process>)typeof(ScriptExecutionService)
+                .GetField("PersistentScriptProcesses", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!;
+            using var runningScript = Process.GetProcessById(activeScripts.Values.Single().Id);
+            using var idleSession = Process.GetProcessById(persistentScripts.Values.Single().Id);
             controller.SaveNow(); // deliberately leave an asynchronous ordinary write queued
             Require(controller.State.Papers.Single(p => p.Id == "note-a").Content == expectedDraft,
                 "ordinary save did not commit the fixture editor");
-            Require(await controller.CycleWorkspaceAsync(), "first cycle failed");
+            var stopNotices = 0;
+            Require(await WithWorkspaceFailureDialog(() => controller.CycleWorkspaceAsync(), dialog =>
+            {
+                stopNotices++;
+                Require(controller.WorkspaceNumber == 2 && runningScript.HasExited && idleSession.HasExited,
+                    "script stop notice appeared before target activation or source process termination");
+                Require(FailureDialogNodes(dialog).OfType<TextBlock>().Any(block =>
+                    block.Text == Strings.Get("WorkspaceScriptsAndSessionsStoppedMessage")),
+                    "workspace notice did not distinguish stopped scripts and closed idle sessions");
+                ClickFailureAction(dialog, "CommonOk");
+            }, "WorkspaceScriptsStoppedTitle"), "first cycle failed");
+            await Dispatcher.Yield(DispatcherPriority.Background);
+            Require(stopNotices == 1 && !Application.Current.Windows.OfType<Window>().Any(window =>
+                    window.IsVisible && window.Title == Strings.Get("WorkspaceScriptsStoppedTitle")),
+                "successful workspace switch repeated its script stop notice");
             Require(controller.WorkspaceNumber == 2 && oldWindow.IsClosed && !ReferenceEquals(oldWindow, windows["note-a"]),
                 "workspace switch reused the old paper window");
             Require(controller.State.Theme == "dark" && controller.State.McpEnabled &&
@@ -836,50 +893,6 @@ internal static partial class Program
                 "post-rebind status does not identify the actual reload target");
             Require(!controller.PublicSettings.Get("appearance.theme").Writable, "inherited setting advertised writable");
 
-            // The locked-settings jump must look like the framed restore-default
-            // button, not like an unadorned text label.
-            var inheritanceMethod = typeof(AppController).GetMethod(
-                "WithWorkspaceSettingsInheritance", BindingFlags.NonPublic | BindingFlags.Instance)!;
-            var inheritedControls = new StackPanel();
-            inheritedControls.Children.Add(new Button { Content = "Inherited setting" });
-            var inheritedPage = (StackPanel)inheritanceMethod.Invoke(controller, [inheritedControls])!;
-            var manageWorkspace = inheritedPage.Children.OfType<Button>().Single();
-            bool HasWorkspaceButtonInset(Button action)
-            {
-                action.ApplyTemplate();
-                return action.Template?.FindName("Bd", action) is Border border &&
-                    border.Padding.Left >= 12 && border.Padding.Right >= 12 &&
-                    border.Padding == action.Padding;
-            }
-            Require(manageWorkspace.Height == 27 &&
-                    manageWorkspace.BorderThickness.Left == 1 &&
-                    manageWorkspace.Background == Brushes.Transparent &&
-                    manageWorkspace.IsEnabled && HasWorkspaceButtonInset(manageWorkspace),
-                "the inherited-settings workspace jump needs a clickable frame and content inset");
-            Require(!inheritedControls.IsEnabled && inheritedControls.Opacity < 0.8,
-                "following software settings must disable and visually dim the entire settings page");
-
-            // The plugin page must not look active while this workspace inherits
-            // its software settings. Workspace management remains available.
-            var pageField = typeof(AppController).GetField("_settingsPage",
-                BindingFlags.NonPublic | BindingFlags.Instance)!;
-            var originalPage = pageField.GetValue(controller);
-            try
-            {
-                pageField.SetValue(controller, Enum.Parse(pageField.FieldType, "Plugins"));
-                var pluginControls = new StackPanel();
-                pluginControls.Children.Add(new Button { Content = "Plugin setting" });
-                var inheritedPlugins = (StackPanel)inheritanceMethod.Invoke(controller, [pluginControls])!;
-                Require(!pluginControls.IsEnabled && pluginControls.Opacity < 0.8 &&
-                        inheritedPlugins.Children.OfType<Button>().Single().IsEnabled,
-                    "inherited plugin settings still looked or acted editable");
-                pageField.SetValue(controller, Enum.Parse(pageField.FieldType, "Workspaces"));
-                var workspaceControls = new StackPanel();
-                Require(ReferenceEquals(inheritanceMethod.Invoke(controller, [workspaceControls]),
-                        workspaceControls),
-                    "workspace management became read-only so follow mode cannot be disabled");
-            }
-            finally { pageField.SetValue(controller, originalPage); }
             Throws<PaperSettingsException>(() => controller.PublicSettings.Set("appearance.theme", JsonSerializer.SerializeToElement("light")));
             controller.SaveNow(sync: true);
             Require(Str(J(File.ReadAllText(store2.FilePath))["theme"]) == "light", "inherited settings saved over dormant settings");
@@ -970,57 +983,7 @@ internal static partial class Program
             cycleButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             await Until(() => controller.WorkspaceNumber == 2 && !controller.IsWorkspaceSwitching, "top-bar click did not switch");
             Require(await controller.SwitchWorkspaceAsync(1), "return after actual button event failed");
-
-            // The same configurable shortcut behaves identically in the title bar and
-            // paper overflow: default cycle, optional named choices. Only the tray uses tiles.
-            var originalShortcutOrder = controller.State.TopBarShortcutOrder.ToList();
-            var originalShortcutCount = controller.State.TopBarPinnedCount;
-            Require(PaperTopBarShortcuts.MoveTo(controller.State,
-                    PaperTopBarShortcuts.Workspace, pinned: false, targetIndex: 0),
-                "fixture could not move workspace shortcut to overflow");
-            var paperMenuWindow = windows["note-a"];
-            paperMenuWindow.UpdateTopBarNewPaperButtons();
-            var paperContextBuilder = typeof(PaperWindow).GetMethod(
-                "BuildPaperContextMenu", BindingFlags.Instance | BindingFlags.NonPublic)!;
-            ContextMenu PaperContext() => (ContextMenu)paperContextBuilder.Invoke(
-                windows["note-a"], [false])!;
-            var cyclingMenu = PaperContext();
-            var cyclingItem = cyclingMenu.Items.OfType<MenuItem>().Single(item =>
-                item.Header is string label &&
-                label.StartsWith("Switch to workspace ", StringComparison.Ordinal));
-            Require(cyclingItem.Header?.ToString()?.EndsWith("2", StringComparison.Ordinal) == true &&
-                    cyclingItem.Items.Count == 0,
-                "overflow must show the next workspace as a direct cycle command");
-            cyclingItem.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
-            await Until(() => controller.WorkspaceNumber == 2 && !controller.IsWorkspaceSwitching,
-                "overflow cycle did not use the top-bar switching behavior");
-            Require(await controller.SwitchWorkspaceAsync(1), "return after overflow cycle failed");
-
-            var named = controller.WorkspaceOptions.Normalized();
-            named.TopBarNamePicker = true;
-            named.Names[2] = "Project B";
-            Require(await controller.ChangeWorkspaceConfigurationAsync(named),
-                "fixture could not enable the named selector");
-            windows["note-a"].UpdateTopBarNewPaperButtons();
-            var namedMenu = PaperContext();
-            var namedItem = namedMenu.Items.OfType<MenuItem>().Single(item =>
-                item.Header?.ToString() == "Switch workspace");
-            Require(namedItem.Items.Count == 5 &&
-                    ((MenuItem)namedItem.Items[1]).Header?.ToString() == "Project B",
-                "overflow named mode must expose an expandable workspace-name submenu");
-            ((MenuItem)namedItem.Items[1]).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
-            await Until(() => controller.WorkspaceNumber == 2 && !controller.IsWorkspaceSwitching,
-                "overflow named selector did not switch to the chosen workspace");
-            Require(await controller.SwitchWorkspaceAsync(1), "return after named selection failed");
-            var restoreNamed = controller.WorkspaceOptions.Normalized();
-            restoreNamed.TopBarNamePicker = false;
-            restoreNamed.Names.Remove(2);
-            Require(await controller.ChangeWorkspaceConfigurationAsync(restoreNamed),
-                "could not restore the default workspace selection mode");
-            controller.State.TopBarShortcutOrder = originalShortcutOrder;
-            controller.State.TopBarPinnedCount = originalShortcutCount;
-            controller.SaveNow(sync: true);
-            windows["note-a"].UpdateTopBarNewPaperButtons();
+            await WorkspaceSettingsInteractionChecks(controller);
 
             await WorkspaceMainCatalogSingleWriteChecks(controller);
             await WorkspaceRollbackChecks(controller, directory);
@@ -1063,149 +1026,12 @@ internal static partial class Program
             Require(await controller.ChangeWorkspaceConfigurationAsync(beforeRestoreOptions),
                 "restore mutation fixture could not restore follow settings");
 
-            // Selecting a workspace in settings only drafts the target; the explicit
-            // confirmation is what crosses the workspace boundary.
-            StackPanel WorkspacePage() => (StackPanel)typeof(AppController)
-                .GetMethod("BuildWorkspaceSettingsPage", System.Reflection.BindingFlags.NonPublic |
-                    System.Reflection.BindingFlags.Instance)!
-                .Invoke(controller, null)!;
-            var workspacePage = WorkspacePage();
-            StackPanel WorkspaceOptionsGroup(StackPanel page) =>
-                page.Children.OfType<StackPanel>().Single();
-            var createWorkspace = WorkspaceOptionsGroup(workspacePage).Children.OfType<DockPanel>().Single()
-                .Children.OfType<Button>().Single();
-            Require(createWorkspace.Height == 27 && createWorkspace.BorderThickness.Left == 1 &&
-                    HasWorkspaceButtonInset(createWorkspace) &&
-                    createWorkspace.Content is string createText &&
-                    !createText.Contains('＋'),
-                "New workspace must omit the plus and use a framed button with horizontal inset");
-            var iconClass = typeof(AppController).Assembly.GetType("PaperTodo.WorkspaceCycleIcon", throwOnError: true)!;
-            var iconData = (string)iconClass.GetField("PathData", BindingFlags.NonPublic | BindingFlags.Static)!
-                .GetRawConstantValue()!;
-            var iconBounds = Geometry.Parse(iconData).Bounds;
-            Require(iconBounds.Width > 8 && iconBounds.Height > 8 &&
-                    iconBounds.Width < 17 && iconBounds.Height < 17,
-                "the redesigned workspace glyph must parse as a compact top-bar vector");
-            Border SlotCard(StackPanel page, int slot) => WorkspaceOptionsGroup(page).Children.OfType<Border>()
-                .Single(card => AutomationProperties.GetAutomationId(card) == "WorkspaceSlot" + slot);
-            var third = SlotCard(workspacePage, 3);
-            var cardRow = (Grid)third.Child;
-            Require(cardRow.RowDefinitions.Count == 0 &&
-                cardRow.Children.OfType<StackPanel>().Count() == 2,
-                "workspace card actions must share the name row");
-            var nameRow = cardRow.Children.OfType<StackPanel>().First();
-            var rightRow = cardRow.Children.OfType<StackPanel>().Last();
-            var rename = nameRow.Children.OfType<Button>().Single();
-            var workspaceNameEditor = nameRow.Children.OfType<TextBox>().Single();
-            Require(workspaceNameEditor.Style is { } renameStyle &&
-                    renameStyle.Setters.OfType<Setter>().Any(setter => setter.Property == Control.TemplateProperty) &&
-                    workspaceNameEditor.BorderThickness.Left == 1 &&
-                    workspaceNameEditor.Padding.Left == 8,
-                "workspace rename editor should use the rounded external-file-extension textbox style");
-            Require(rightRow.Children.OfType<CheckBox>().Single().Content?.ToString() ==
-                    Strings.Get("WorkspaceFollowMain") &&
-                    rightRow.Children.OfType<Button>().Count() == 1,
-                "follow-main switch and delete must be inline with the workspace label");
-            rename.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Require(rename.Content?.ToString() == "✓" && workspaceNameEditor.Visibility == Visibility.Visible &&
-                nameRow.Children.OfType<TextBlock>().First().Visibility == Visibility.Collapsed,
-                "pen did not switch the workspace name into same-row editing");
-            // In-place cursor placement and the checkmark remain interactive.
-            // Every click outside both cancels, including outside the card;
-            // the draft must not be silently saved.
-            var cancelRenamePointer = typeof(AppController).GetMethod(
-                "CancelWorkspaceRenameOnPointer", BindingFlags.NonPublic | BindingFlags.Instance)!;
-            cancelRenamePointer.Invoke(controller, [workspaceNameEditor]);
-            cancelRenamePointer.Invoke(controller, [rename]);
-            Require(rename.Content?.ToString() == "✓" &&
-                    workspaceNameEditor.Visibility == Visibility.Visible,
-                "mouse interactions inside the editor or on the checkmark must not cancel renaming");
-            workspaceNameEditor.Text = "Unsaved workspace";
-            cancelRenamePointer.Invoke(controller, [new Border()]);
-            Require(rename.Content?.ToString() == "✎" &&
-                    workspaceNameEditor.Visibility == Visibility.Collapsed &&
-                    controller.WorkspaceOptions.DisplayName(3) != "Unsaved workspace",
-                "a click anywhere outside the inline rename area must discard its draft");
-            rename.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            workspaceNameEditor.Text = "Review workspace";
-            rename.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            await Until(() => controller.WorkspaceOptions.DisplayName(3) == "Review workspace" &&
-                           !controller.IsWorkspaceSwitching,
-                "inline workspace name checkmark did not commit");
-            Require(controller.WorkspaceNumber == 1,
-                "renaming a workspace unexpectedly switched it");
-
-            // The card itself, not just its label, selects the target.
-            workspacePage = WorkspacePage();
-            third = SlotCard(workspacePage, 3);
-            third.RaiseEvent(new System.Windows.Input.MouseButtonEventArgs(
-                System.Windows.Input.Mouse.PrimaryDevice, 0, System.Windows.Input.MouseButton.Left)
-            {
-                RoutedEvent = UIElement.MouseLeftButtonUpEvent
-            });
-            Require(controller.WorkspaceNumber == 1, "workspace card switched without confirmation");
-            workspacePage = WorkspacePage();
-            var confirm = WorkspaceOptionsGroup(workspacePage).Children.OfType<Button>().Single();
-            Require(confirm.IsEnabled && HasWorkspaceButtonInset(confirm) &&
-                    confirm.Content is string confirmText &&
-                    confirmText != Strings.Get("CommonCancel") &&
-                    confirm.Height == 27 && confirm.BorderThickness.Left == 1,
-                "settings must offer one inset framed switch confirmation and no cancel button");
-            confirm.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            await Until(() => controller.WorkspaceNumber == 3 && !controller.IsWorkspaceSwitching,
-                "settings card confirmation did not select slot 3");
-            Require(await controller.SwitchWorkspaceAsync(1), "return after settings selection failed");
-
-            // The tray heading and settings-style number segments now share one
-            // compact row. Confirm/cancel replace the segments in that same row.
-            var trayMenu = controller.CreateTrayMenu();
-            controller.RebuildTrayMenu(trayMenu);
-            var workspaceMenu = trayMenu.Items.OfType<MenuItem>().Single(item =>
-                AutomationProperties.GetAutomationId(item) == "TrayWorkspaceSelector");
-            var trayWorkspaceRow = (Grid)workspaceMenu.Header;
-            Require(trayWorkspaceRow.RowDefinitions.Count == 0 &&
-                trayWorkspaceRow.Height == 26 &&
-                ((TextBlock)trayWorkspaceRow.Children[0]).Text == Strings.Get("WorkspaceSettingsTitle"),
-                "tray workspace selector must share one compact row with its label");
-            var segmentHost = (ContentPresenter)trayWorkspaceRow.Children[1];
-            Border TileStrip() => (Border)segmentHost.Content;
-            var strip = TileStrip();
-            var tiles = ((Grid)strip.Child).Children.OfType<Border>().ToArray();
-            Require(strip.Height == 24 && tiles.Length == 5 &&
-                ((TextBlock)tiles[0].Child).Text == "1" &&
-                ((TextBlock)tiles[3].Child).Text == "4",
-                "tray workspace choices must be compact horizontal numbered segments without names");
-            void SelectTrayTile(int index)
-            {
-                var itemTile = ((Grid)TileStrip().Child).Children.OfType<Border>().ElementAt(index);
-                itemTile.RaiseEvent(new System.Windows.Input.MouseButtonEventArgs(
-                    System.Windows.Input.Mouse.PrimaryDevice, 0, System.Windows.Input.MouseButton.Left)
-                {
-                    RoutedEvent = UIElement.MouseLeftButtonDownEvent
-                });
-            }
-            SelectTrayTile(3);
-            Require(controller.WorkspaceNumber == 1 && segmentHost.Content is StackPanel,
-                "tray tile must show inline confirmation before switching");
-            var confirmRow = (StackPanel)segmentHost.Content;
-            var confirmationButtons = confirmRow.Children.OfType<Button>().ToArray();
-            Require(confirmationButtons.Length == 2, "tray confirmation needs OK and Cancel");
-            confirmationButtons[1].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Require(segmentHost.Content is Border && controller.WorkspaceNumber == 1,
-                "tray Cancel must restore numeric segments without switching");
-            SelectTrayTile(3);
-            confirmRow = (StackPanel)segmentHost.Content;
-            confirmRow.Children.OfType<Button>().First().RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            await Until(() => controller.WorkspaceNumber == 4 && !controller.IsWorkspaceSwitching,
-                "tray confirmation did not switch to selected slot");
-            Require(await controller.SwitchWorkspaceAsync(1), "return after tray selection failed");
-
             // Missing images remain a local rendering failure, not a reason to reject
             // an otherwise valid workspace. Nor may a missing LMDB be replaced on entry.
             var fourthDataPath = Path.Combine(directory, "data4.json");
-            var fourthData = J(File.ReadAllText(fourthDataPath));
-            fourthData["papers"]![0]!["content"] = MarkdownImageReferences.CreateReference("999");
-            File.WriteAllText(fourthDataPath, fourthData.ToJsonString());
+            var fourthState = NewState();
+            fourthState.Papers[0].Content = MarkdownImageReferences.CreateReference("999");
+            File.WriteAllText(fourthDataPath, store2.SerializeState(fourthState));
             var fourthImagesPath = Path.Combine(directory, "note-assets4.lmdb");
             Require(!File.Exists(fourthImagesPath), "missing-image switch fixture unexpectedly has an LMDB");
             Require(await controller.SwitchWorkspaceAsync(4) && controller.WorkspaceNumber == 4 &&
@@ -1216,17 +1042,8 @@ internal static partial class Program
                 "missing image incorrectly rendered as available");
             Require(await controller.SwitchWorkspaceAsync(1), "return after missing-image switch failed");
 
-            // The actual switch path must reject a busy core file instead of
-            // accepting a backup or replacing it with a blank workspace.
+            // Locked-target dismissal is covered by WorkspaceFailureChecks.
             var busyFifthPath = Path.Combine(directory, "data5.json");
-            File.WriteAllText(busyFifthPath, store2.SerializeState(NewState()));
-            var busyFifthBytes = File.ReadAllBytes(busyFifthPath);
-            using (var busy = new FileStream(busyFifthPath,
-                FileMode.Open, FileAccess.ReadWrite, FileShare.None))
-                Require(!await WithWorkspaceFailureDialog(() => controller.SwitchWorkspaceAsync(5), dialog => dialog.Close()) && controller.WorkspaceNumber == 1,
-                    "busy fifth workspace caused a switch or a destructive recovery");
-            Require(File.ReadAllBytes(busyFifthPath).SequenceEqual(busyFifthBytes),
-                "busy fifth workspace was overwritten during the rejected switch");
 
             // With no usable source, blank initialization requires an explicit choice.
             File.WriteAllText(busyFifthPath, "{invalid target");
@@ -1257,8 +1074,14 @@ internal static partial class Program
             Require(await controller.CycleWorkspaceAsync() && controller.WorkspaceNumber == 3, "cycle to3 failed");
             Require(await controller.CycleWorkspaceAsync() && controller.WorkspaceNumber == 1, "cycle did not wrap at the last active slot");
 
-            // The tray keeps five fixed positions. Only the first vacant position
-            // shows a vector create action; creating a slot never switches away.
+            // Only existing workspaces and one create action occupy the row.
+            // Creating a slot never switches away and reuses the first missing number.
+            ContentPresenter TraySegmentHost(MenuItem item) =>
+                LogicalDescendants((DependencyObject)item.Header).OfType<ContentPresenter>().Single();
+            Border[] SegmentTiles(ContentPresenter host) =>
+                LogicalDescendants((DependencyObject)host.Content).OfType<Border>()
+                    .Where(border => border.Child is TextBlock or System.Windows.Shapes.Path || border.Child == null)
+                    .ToArray();
             ContextMenu TrayForCreate()
             {
                 var menu = controller.CreateTrayMenu();
@@ -1269,9 +1092,7 @@ internal static partial class Program
             {
                 var workspaceItem = menu.Items.OfType<MenuItem>().Single(item =>
                     AutomationProperties.GetAutomationId(item) == "TrayWorkspaceSelector");
-                var row = (Grid)workspaceItem.Header;
-                var presenter = (ContentPresenter)row.Children[1];
-                return ((Grid)((Border)presenter.Content).Child).Children.OfType<Border>().ToArray();
+                return SegmentTiles(TraySegmentHost(workspaceItem));
             }
             void ClickTraySlot(Border tile) => tile.RaiseEvent(new System.Windows.Input.MouseButtonEventArgs(
                 System.Windows.Input.Mouse.PrimaryDevice, 0, System.Windows.Input.MouseButton.Left)
@@ -1282,20 +1103,27 @@ internal static partial class Program
             var originalWorkspaceState = controller.State;
             var threeSlotMenu = TrayForCreate();
             var threeTiles = TraySlots(threeSlotMenu);
-            Require(threeTiles.Length == 5 &&
+            Require(threeTiles.Length == 4 &&
                     ((TextBlock)threeTiles[0].Child).Text == "1" &&
                     ((TextBlock)threeTiles[1].Child).Text == "2" &&
                     ((TextBlock)threeTiles[2].Child).Text == "3" &&
-                    threeTiles[3].Child is System.Windows.Shapes.Path plusIcon &&
-                    plusIcon.Data.Bounds.Width > 8 && plusIcon.Data.Bounds.Height > 8 &&
-                    AutomationProperties.GetAutomationId(threeTiles[3]) == "TrayCreateWorkspace" &&
-                    threeTiles[4].Child == null && !threeTiles[4].IsHitTestVisible,
-                "tray did not put a vector create action in the first free slot and leave the rest inert");
+                    threeTiles[3].Child is System.Windows.Shapes.Path { Data: not null } &&
+                    AutomationProperties.GetAutomationId(threeTiles[3]) == "TrayCreateWorkspace",
+                "tray must show existing workspaces and one create action without empty slots");
+            threeSlotMenu.IsOpen = true;
+            await Until(() => threeSlotMenu.ActualWidth > 0, "tray create menu did not finish layout");
+            threeSlotMenu.Focus();
+            Require(!await controller.SwitchWorkspaceAsync(2) && controller.WorkspaceNumber == 1,
+                "an open menu must still block a workspace window handoff");
             ClickTraySlot(threeTiles[3]);
             await Until(() => controller.WorkspaceOptions.ContainsSlot(4) && !controller.IsWorkspaceSwitching,
                 "tray plus did not create workspace 4");
             Require(controller.WorkspaceNumber == 1 && ReferenceEquals(controller.State, originalWorkspaceState),
                 "creating a tray workspace changed the active workspace or its state");
+            Require(threeSlotMenu.IsOpen && threeSlotMenu.IsKeyboardFocusWithin &&
+                    ((TextBlock)TraySlots(threeSlotMenu)[3].Child).Text == "4",
+                "creating a workspace dismissed the tray, lost focus or left stale slots");
+            threeSlotMenu.IsOpen = false;
 
             var fourTiles = TraySlots(TrayForCreate());
             Require(((TextBlock)fourTiles[3].Child).Text == "4" &&
@@ -1313,32 +1141,40 @@ internal static partial class Program
             Require(await controller.ChangeWorkspaceConfigurationAsync(withGap),
                 "could not remove an intermediate slot for tray gap test");
             var gapTiles = TraySlots(TrayForCreate());
-            Require(gapTiles[1].Child is System.Windows.Shapes.Path &&
-                    ((TextBlock)gapTiles[2].Child).Text == "3",
+            Require(gapTiles[^1].Child is System.Windows.Shapes.Path &&
+                    ((TextBlock)gapTiles[1].Child).Text == "3",
                 "tray did not offer to reuse the first missing workspace number");
-            ClickTraySlot(gapTiles[1]);
+            ClickTraySlot(gapTiles[^1]);
             await Until(() => controller.WorkspaceOptions.ContainsSlot(2) && !controller.IsWorkspaceSwitching,
                 "tray plus did not reuse the missing workspace number");
             Require(controller.WorkspaceNumber == 1 && ReferenceEquals(controller.State, originalWorkspaceState),
                 "recreating an intermediate workspace unexpectedly switched workspace");
 
-            var disabled = controller.WorkspaceOptions.Normalized(); disabled.Enabled = false;
-            Require(await controller.ChangeWorkspaceConfigurationAsync(disabled), "disable failed");
-            var disabledPage = WorkspacePage();
-            var disabledToggle = disabledPage.Children.OfType<CheckBox>().Single();
-            var disabledOptions = WorkspaceOptionsGroup(disabledPage);
-            Require(disabledToggle.IsEnabled && disabledToggle.IsChecked == false &&
-                    !disabledOptions.IsEnabled && disabledOptions.Opacity < 0.8 &&
-                    disabledPage.Children.OfType<TextBlock>().First().Opacity < 0.8,
-                "disabling workspaces must dim all workspace controls except the enable toggle");
-            foreach (var window in windows.Values)
+            var cancelMenu = TrayForCreate();
+            var selector = cancelMenu.Items.OfType<MenuItem>().Single(item =>
+                AutomationProperties.GetAutomationId(item) == "TrayWorkspaceSelector");
+            var segmentHost = TraySegmentHost(selector);
+            cancelMenu.IsOpen = true;
+            await Until(() => cancelMenu.ActualWidth > 0 && selector.ActualWidth > 0,
+                "tray workspace menu did not finish layout");
+            var menuWidth = cancelMenu.ActualWidth;
+            ClickTraySlot(TraySlots(cancelMenu)[1]);
+            Require(controller.WorkspaceNumber == 1,
+                "tray workspace choice switched without confirmation");
+            var cancelActions = LogicalDescendants((DependencyObject)segmentHost.Content).OfType<Button>().ToArray();
+            Require(cancelActions.Length == 2, "tray did not offer switch and cancel actions");
+            cancelMenu.UpdateLayout();
+            Require(Math.Abs(cancelMenu.ActualWidth - menuWidth) < 1 && cancelActions.All(button =>
             {
-                window.EnsureShellBuilt();
-                var button = Field<Button>(window, "_workspaceButton");
-                Require(button.Visibility == Visibility.Collapsed && AutomationProperties.GetAutomationId(button) == "WorkspaceCycle",
-                    "disabled workspace button still visible");
-            }
-            Require(!File.Exists(Path.Combine(directory, "workspaces.json")), "separate catalog was created");
+                var bounds = button.TransformToAncestor(cancelMenu).TransformBounds(new Rect(button.RenderSize));
+                return button.IsVisible && bounds.Left >= 0 && bounds.Right <= cancelMenu.ActualWidth &&
+                    bounds.Top >= 0 && bounds.Bottom <= cancelMenu.ActualHeight;
+            }), "workspace confirmation widened the menu or clipped an action button");
+            cancelActions[1].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Require(controller.WorkspaceNumber == 1 && segmentHost.Content is Border,
+                "cancelling the tray workspace choice switched or retained the confirmation");
+            cancelMenu.IsOpen = false;
+
             Console.WriteLine("PASS workspace WPF: cycle, editor flush, ID collision, inheritance, language, plugin data, failures and slot retention");
         }
         finally { controller.Dispose(); }

@@ -619,7 +619,7 @@ About 5 full-width characters on one line, 10 on multiline.</value>
     <value>Edge capsules still extend on hover; the extra area acts like the main capsule without a close button. Use Hide in the context menu to close it.</value>
   </data>
   <data name="TipMaxTitleLength" xml:space="preserve">
-    <value>Title length is measured in full-width characters; two half-width letters or digits count as one. Lowering the limit shortens existing titles.</value>
+    <value>CJK and full-width characters count as one; Latin letters, digits and other half-width characters count as half. Lowering the limit only hides the excess of existing titles; raising it reveals them again. Renaming truncates the new title to the current limit.</value>
   </data>
   <data name="TipStartup" xml:space="preserve">
     <value>Start PaperTodo when Windows signs in.</value>
@@ -1507,7 +1507,7 @@ When off, open at the docked edge or remembered position.</value>
     <value>Move right</value>
   </data>
   <data name="MenuTopBarAssociationDrag" xml:space="preserve">
-    <value>Hold and drag to associate</value>
+    <value>Drag to a todo or window to associate</value>
   </data>
   <data name="MenuTopBarPluginActions" xml:space="preserve">
     <value>Plugin actions</value>
@@ -1516,7 +1516,7 @@ When off, open at the docked edge or remembered position.</value>
     <value>Top-bar shortcuts</value>
   </data>
   <data name="TipTopBarShortcutSettings" xml:space="preserve">
-    <value>Drag actions to reorder them or move them across the divider to switch between the title bar and menu. If space is limited, pinned built-in shortcuts move to the menu together.</value>
+    <value>Drag actions to reorder them or cross the divider to change their location. Hide removes the shortcut from title bars and paper menus without changing its position or disabling the feature. If space is limited, pinned built-in shortcuts move into the menu as a group.</value>
   </data>
   <data name="TopBarShownHeading" xml:space="preserve">
     <value>Show in title bar</value>
@@ -1658,7 +1658,7 @@ Click to switch to workspace {1}</value>
   <data name="NoteHtmlSaved" xml:space="preserve"><value>Saved to: {0}
 The original note is kept.</value></data>
   <data name="NoteExportCurrent" xml:space="preserve"><value>Export this note</value></data>
-  <data name="NoteExportAll" xml:space="preserve"><value>Export all papers</value></data>
+  <data name="NoteExportAll" xml:space="preserve"><value>Export all notes and todos</value></data>
   <data name="NoteExportMarkdownType" xml:space="preserve"><value>Markdown document</value></data>
   <data name="NoteExportHtmlType" xml:space="preserve"><value>HTML document</value></data>
   <data name="NoteExportMarkdownZipType" xml:space="preserve"><value>Markdown ZIP</value></data>
@@ -1670,16 +1670,17 @@ The original note is kept.</value></data>
   <data name="NoteExportNoNotes" xml:space="preserve"><value>There are no Markdown notes or todo papers to export.</value></data>
   <data name="NoteExportProgress" xml:space="preserve"><value>Exporting {0}/{1} papers</value></data>
   <data name="TodoExportCurrent" xml:space="preserve"><value>Export this todo paper</value></data>
-  <data name="SettingsCapsuleFreeQueues" xml:space="preserve"><value>Free edge capsule queues</value></data>
-  <data name="TipCapsuleFreeQueues" xml:space="preserve"><value>Pull a capsule away to form a separate queue. Hold Ctrl to move a queue along the edge; pull sideways to move it across edges or displays. The master can still collect all queues on its edge.</value></data>
+  <data name="SettingsCapsuleFreeQueues" xml:space="preserve"><value>Capsule free queues</value></data>
+  <data name="TipCapsuleFreeQueues" xml:space="preserve"><value>When enabled, pull a capsule away to create a queue; Ctrl or each queue’s master moves the whole queue. Pull sideways to move between edges or monitors. When disabled, Ctrl drags only one capsule; the master can still move the entire edge queue.</value></data>
   <data name="HistoryRecoveryTitle" xml:space="preserve">
     <value>Restore workspace</value>
   </data>
   <data name="HistoryRecoveryMessage" xml:space="preserve">
-    <value>The current data for workspace {0} could not be read.
+    <value>Workspace {0} data cannot be read.
 Latest available backup: {1}.
 
-Restoring will return this workspace to that point in time. Changes made since then will be lost. Only notes, to-dos, and settings in this workspace will be restored. Images and plugin data are not included.</value>
+Restoring returns this workspace to that time; later changes will be lost. Only its notes, tasks and settings are restored, not images or plugin data.
+Choosing “Rebuild workspace” starts the notes, tasks and settings of workspace {0} from scratch.</value>
   </data>
   <data name="HistoryRecoveryRestore" xml:space="preserve">
     <value>Try restoring from backup</value>
@@ -1744,6 +1745,52 @@ Restoring will return this workspace to that point in time. Changes made since t
   <data name="WorkspaceRecoveryFallback" xml:space="preserve">
     <value>Return to workspace {0}</value>
   </data>
+  <data name="WorkspaceRecoveryUnavailableMessage" xml:space="preserve">
+    <value>The data and backups for workspace {0} cannot be restored.
+
+Choosing “Rebuild workspace” starts the notes, tasks and settings of workspace {0} from scratch.</value>
+  </data>
+  <data name="WorkspaceBackupReadFailedMessage" xml:space="preserve">
+    <value>The fixed backup for workspace {0} cannot currently be read.
+{1}
+
+Resolve the file access problem and retry, or choose “Rebuild workspace” to start its notes, tasks and settings from scratch.</value>
+  </data>
+  <data name="SettingsNotesAndTodos" xml:space="preserve"><value>Notes &amp; Todos</value></data>
+  <data name="WorkspaceSingleMessage" xml:space="preserve"><value>There is only one workspace.</value></data>
+  <data name="WorkspaceCreate" xml:space="preserve"><value>New</value></data>
+  <data name="TopBarHideShortcut" xml:space="preserve">
+    <value>Hide</value>
+  </data>
+  <data name="TopBarRunScript" xml:space="preserve">
+    <value>Run script</value>
+  </data>
+  <data name="TopBarEditScript" xml:space="preserve">
+    <value>Edit script</value>
+  </data>
+  <data name="TopBarScriptSave" xml:space="preserve">
+    <value>Save</value>
+  </data>
+  <data name="WorkspaceScriptsStoppedTitle" xml:space="preserve">
+    <value>Workspace switched</value>
+  </data>
+  <data name="WorkspaceScriptsStoppedMessage" xml:space="preserve">
+    <value>Script processes from the previous workspace have ended.</value>
+  </data>
+  <data name="WorkspaceSessionsClosedMessage" xml:space="preserve">
+    <value>Persistent PowerShell sessions from the previous workspace have closed.</value>
+  </data>
+  <data name="WorkspaceScriptsAndSessionsStoppedMessage" xml:space="preserve">
+    <value>Script processes from the previous workspace have ended, and its persistent PowerShell sessions have closed.</value>
+  </data>
+  <data name="MenuExport" xml:space="preserve"><value>Export</value></data>
+  <data name="MenuExportCurrentNote" xml:space="preserve"><value>Current note</value></data>
+  <data name="MenuExportCurrentTodo" xml:space="preserve"><value>Current todo</value></data>
+  <data name="MenuExportAllPapers" xml:space="preserve"><value>All notes and todos</value></data>
+  <data name="MenuTopBarAssociationDragTodo" xml:space="preserve"><value>Drag to a todo to associate</value></data>
+  <data name="MenuTopBarAssociationDragWindow" xml:space="preserve"><value>Drag to a window to associate</value></data>
+  <data name="WorkspaceDataSettingsTitle" xml:space="preserve"><value>Workspaces &amp; Data</value></data>
+  <data name="SettingsDataProcessing" xml:space="preserve"><value>Data handling</value></data>
   <data name="WorkbenchTitle" xml:space="preserve"><value>Infinite workbench</value></data>
   <data name="WorkbenchOverview" xml:space="preserve"><value>All workspaces</value></data>
   <data name="WorkbenchCurrent" xml:space="preserve"><value>Current workspace</value></data>

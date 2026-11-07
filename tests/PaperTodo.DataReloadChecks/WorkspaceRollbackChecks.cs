@@ -2,6 +2,8 @@ using System.Diagnostics;
 using System.IO;
 using System.Reflection;
 using System.Text.Json;
+using System.Windows;
+using System.Windows.Threading;
 using PaperTodo;
 
 internal static partial class Program
@@ -53,7 +55,7 @@ internal static partial class Program
         var mainStore = catalog.MainStore;
         var writerField = typeof(StateStore).GetField("_atomicWriter", BindingFlags.Instance | BindingFlags.NonPublic)!;
         var originalWriter = (IDurableAtomicFileWriter)writerField.GetValue(mainStore)!;
-        var processField = typeof(PaperWindow).GetField("PersistentScriptProcesses", BindingFlags.Static | BindingFlags.NonPublic)!;
+        var processField = typeof(ScriptExecutionService).GetField("PersistentScriptProcesses", BindingFlags.Static | BindingFlags.NonPublic)!;
         var processes = (Dictionary<string, Process>)processField.GetValue(null)!;
         var originalPersistent = controller.State.UsePersistentPowerShellProcess;
         var originalOptions = controller.WorkspaceOptions.Normalized();
@@ -85,7 +87,17 @@ internal static partial class Program
                         throw new IOException("Injected main-catalog failure after target installation.");
                     }
                 }));
-                var switched = await WithWorkspaceFailureDialog(() => controller.SwitchWorkspaceAsync(3), dialog => dialog.Close());
+                var switched = await WithWorkspaceFailureDialog(() => controller.SwitchWorkspaceAsync(3), dialog =>
+                {
+                    Require(!Application.Current.Windows.OfType<Window>().Any(window =>
+                            window.IsVisible && window.Title == Strings.Get("WorkspaceScriptsStoppedTitle")),
+                        "failed workspace switch showed a successful script stop notice");
+                    dialog.Close();
+                });
+                await Dispatcher.Yield(DispatcherPriority.Background);
+                Require(!Application.Current.Windows.OfType<Window>().Any(window =>
+                        window.IsVisible && window.Title == Strings.Get("WorkspaceScriptsStoppedTitle")),
+                    "workspace rollback queued a successful script stop notice");
                 writerField.SetValue(mainStore, originalWriter);
                 Require(!switched && reached && targetHadExpectedRuntime,
                     "rollback fixture did not fail after installing the target runtime");

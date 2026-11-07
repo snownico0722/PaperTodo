@@ -651,7 +651,7 @@
     <value>开启后仍会正常伸长；延长区域作为普通胶囊区域使用，不显示关闭按钮。需要关闭时可在右键菜单中选择「隐藏」。</value>
   </data>
   <data name="TipMaxTitleLength" xml:space="preserve">
-    <value>标题按汉字长度计算：中文、全角字符算 1 字，英文、数字等半角字符算半字。调低上限会截短已有标题。</value>
+    <value>标题按汉字长度计算：中文、全角字符算 1 字，英文、数字等半角字符算半字。调低上限只隐藏已有标题超出的部分，调大后重新显示；主动改名时按当前上限截断。</value>
   </data>
   <data name="TipStartup" xml:space="preserve">
     <value>开机时自动启动 PaperTodo。</value>
@@ -1553,7 +1553,7 @@
     <value>向右移动</value>
   </data>
   <data name="MenuTopBarAssociationDrag" xml:space="preserve">
-    <value>按住此项拖动以关联</value>
+    <value>拖到待办或窗口以关联</value>
   </data>
   <data name="MenuTopBarPluginActions" xml:space="preserve">
     <value>插件操作</value>
@@ -1562,7 +1562,7 @@
     <value>顶栏快捷</value>
   </data>
   <data name="TipTopBarShortcutSettings" xml:space="preserve">
-    <value>拖动操作可调整顺序，跨过分割线可切换显示位置。顶栏空间不足时，已固定的内置快捷会整组临时收纳到菜单。</value>
+    <value>拖动操作可调整顺序，跨过分割线可切换显示位置。勾选“隐藏”会移除顶栏和各处纸片菜单入口，但保留位置，不关闭功能。顶栏空间不足时，已固定的内置快捷会整组临时收纳到菜单。</value>
   </data>
   <data name="TopBarShownHeading" xml:space="preserve">
     <value>显示在顶栏</value>
@@ -1704,7 +1704,7 @@
   <data name="NoteHtmlSaved" xml:space="preserve"><value>已保存到：{0}
 原笔记仍保留。</value></data>
   <data name="NoteExportCurrent" xml:space="preserve"><value>导出当前笔记</value></data>
-  <data name="NoteExportAll" xml:space="preserve"><value>导出全部纸片</value></data>
+  <data name="NoteExportAll" xml:space="preserve"><value>导出全部笔记与待办</value></data>
   <data name="NoteExportMarkdownType" xml:space="preserve"><value>Markdown 文档</value></data>
   <data name="NoteExportHtmlType" xml:space="preserve"><value>HTML 网页</value></data>
   <data name="NoteExportMarkdownZipType" xml:space="preserve"><value>Markdown 压缩包</value></data>
@@ -1716,8 +1716,8 @@
   <data name="NoteExportNoNotes" xml:space="preserve"><value>没有可导出的笔记或待办。</value></data>
   <data name="NoteExportProgress" xml:space="preserve"><value>正在导出 {0}/{1} 张纸片</value></data>
   <data name="TodoExportCurrent" xml:space="preserve"><value>导出当前待办</value></data>
-  <data name="SettingsCapsuleFreeQueues" xml:space="preserve"><value>边缘胶囊自由队列</value></data>
-  <data name="TipCapsuleFreeQueues" xml:space="preserve"><value>拖远单个胶囊可独立成队；Ctrl 拖动整队，横向拉出后可换边或换屏。主胶囊仍可收纳整侧队列。</value></data>
+  <data name="SettingsCapsuleFreeQueues" xml:space="preserve"><value>胶囊自由队列</value></data>
+  <data name="TipCapsuleFreeQueues" xml:space="preserve"><value>开启后，拖远单个胶囊可独立成队；Ctrl 或各组主胶囊可搬移整队，横向拉出后可换边或换屏。关闭后 Ctrl 按普通单个拖动处理，仍可通过主胶囊搬移整侧队列。</value></data>
   <data name="HistoryRecoveryTitle" xml:space="preserve">
     <value>恢复工作区</value>
   </data>
@@ -1725,7 +1725,8 @@
     <value>工作区 {0} 当前数据无法读取。
 最近可用的备份：{1}。
 
-恢复后将回到该时间的状态，此后的修改将丢失。仅恢复此工作区的便签、待办和设置，不包含图片或插件数据。</value>
+恢复后将回到该时间的状态，此后的修改将丢失。仅恢复此工作区的便签、待办和设置，不包含图片或插件数据。
+选择“重建工作区”将让工作区 {0} 的便签、待办和设置从空白开始。</value>
   </data>
   <data name="HistoryRecoveryRestore" xml:space="preserve">
     <value>尝试从备份恢复</value>
@@ -1790,6 +1791,52 @@
   <data name="WorkspaceRecoveryFallback" xml:space="preserve">
     <value>回退到工作区 {0}</value>
   </data>
+  <data name="WorkspaceRecoveryUnavailableMessage" xml:space="preserve">
+    <value>工作区 {0} 的数据和备份均无法恢复。
+
+选择“重建工作区”将让工作区 {0} 的便签、待办和设置从空白开始。</value>
+  </data>
+  <data name="WorkspaceBackupReadFailedMessage" xml:space="preserve">
+    <value>工作区 {0} 的固定备份暂时无法读取。
+{1}
+
+可以解除占用或访问问题后重试。选择“重建工作区”将让工作区 {0} 的便签、待办和设置从空白开始。</value>
+  </data>
+  <data name="SettingsNotesAndTodos" xml:space="preserve"><value>笔记与待办</value></data>
+  <data name="WorkspaceSingleMessage" xml:space="preserve"><value>当前只有一个工作区。</value></data>
+  <data name="WorkspaceCreate" xml:space="preserve"><value>新建</value></data>
+  <data name="TopBarHideShortcut" xml:space="preserve">
+    <value>隐藏</value>
+  </data>
+  <data name="TopBarRunScript" xml:space="preserve">
+    <value>运行脚本</value>
+  </data>
+  <data name="TopBarEditScript" xml:space="preserve">
+    <value>编辑脚本</value>
+  </data>
+  <data name="TopBarScriptSave" xml:space="preserve">
+    <value>保存</value>
+  </data>
+  <data name="WorkspaceScriptsStoppedTitle" xml:space="preserve">
+    <value>工作区已切换</value>
+  </data>
+  <data name="WorkspaceScriptsStoppedMessage" xml:space="preserve">
+    <value>上一工作区的脚本进程已结束。</value>
+  </data>
+  <data name="WorkspaceSessionsClosedMessage" xml:space="preserve">
+    <value>上一工作区的常驻 PowerShell 会话已关闭。</value>
+  </data>
+  <data name="WorkspaceScriptsAndSessionsStoppedMessage" xml:space="preserve">
+    <value>上一工作区的脚本进程已结束，常驻 PowerShell 会话已关闭。</value>
+  </data>
+  <data name="MenuExport" xml:space="preserve"><value>导出</value></data>
+  <data name="MenuExportCurrentNote" xml:space="preserve"><value>当前笔记</value></data>
+  <data name="MenuExportCurrentTodo" xml:space="preserve"><value>当前待办</value></data>
+  <data name="MenuExportAllPapers" xml:space="preserve"><value>全部笔记与待办</value></data>
+  <data name="MenuTopBarAssociationDragTodo" xml:space="preserve"><value>拖到待办以关联</value></data>
+  <data name="MenuTopBarAssociationDragWindow" xml:space="preserve"><value>拖到窗口以关联</value></data>
+  <data name="WorkspaceDataSettingsTitle" xml:space="preserve"><value>工作区与数据</value></data>
+  <data name="SettingsDataProcessing" xml:space="preserve"><value>数据处理</value></data>
   <data name="WorkbenchTitle" xml:space="preserve"><value>无限工作台</value></data>
   <data name="WorkbenchOverview" xml:space="preserve"><value>全部工作区</value></data>
   <data name="WorkbenchCurrent" xml:space="preserve"><value>当前工作区</value></data>

@@ -5,7 +5,7 @@ using System.Text.Json.Nodes;
 
 namespace PaperTodo;
 
-internal enum WorkspaceRecoveryChoice { Cancel, CreateEmpty, Restore, Exit, Fallback }
+internal enum WorkspaceRecoveryChoice { Cancel, CreateEmpty, Restore, Exit, Fallback, Retry }
 
 internal sealed class WorkspaceRecoveryExitException : OperationCanceledException { }
 
@@ -64,8 +64,6 @@ public sealed partial class StateStore
         return result.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
     }
 
-    private bool HasInterruptedWriteFiles() => InterruptedWritePaths().Length != 0;
-
     // Caller holds the write lock. Orphans are only a fallback while the primary
     // is unavailable, not another history tier. Never retire a pending recovery
     // source before its commit/readback completes. Maintenance cannot reject a save.
@@ -93,7 +91,7 @@ public sealed partial class StateStore
     }
 
     private sealed record CompleteInterruptedWrite(
-        string Path, byte[] Bytes, JsonObject Document, DateTime LastWriteTimeUtc);
+        string Path, byte[] Bytes, JsonObject Document, AppState State, bool NormalizedCollapsedState);
 
     // This is full-snapshot validation, not extraction or merging. Unknown JSON
     // properties stay in Document and participate in equality comparisons.
@@ -118,17 +116,35 @@ public sealed partial class StateStore
         }
     }
 
-    private List<CompleteInterruptedWrite> FindValidInterruptedWrites(out Exception? readFailure)
+    private CompleteInterruptedWrite? FindLatestInterruptedWrite(string[] paths,
+        out List<(string Path, byte[] Hash)> equivalentPaths, out Exception? readFailure)
     {
         readFailure = null;
-        var valid = new List<CompleteInterruptedWrite>();
-        foreach (var path in InterruptedWritePaths())
+        equivalentPaths = [];
+        var ordered = new List<(string Path, DateTime LastWriteTimeUtc)>();
+        foreach (var path in paths)
+        {
+            try { ordered.Add((path, File.GetLastWriteTimeUtc(path))); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                if (ex is not (FileNotFoundException or DirectoryNotFoundException)) readFailure ??= ex;
+            }
+        }
+
+        // Sort metadata first. Retain only the chosen full snapshot and hashes of
+        // equivalent sources, instead of every candidate's bytes and parsed tree.
+        CompleteInterruptedWrite? latest = null;
+        foreach (var item in ordered.OrderByDescending(item => item.LastWriteTimeUtc)
+                     .ThenBy(item => item.Path, StringComparer.OrdinalIgnoreCase))
         {
             try
             {
-                var bytes = File.ReadAllBytes(path);
-                if (TryReadCompleteDocument(bytes, out var document, out _))
-                    valid.Add(new CompleteInterruptedWrite(path, bytes, document!, File.GetLastWriteTimeUtc(path)));
+                var bytes = File.ReadAllBytes(item.Path);
+                if (!TryReadCompleteDocument(bytes, out var document, out var state)) continue;
+                latest ??= new CompleteInterruptedWrite(item.Path, bytes, document!, state!,
+                    NormalizedCollapsedStateOnLoad);
+                if (JsonNode.DeepEquals(latest.Document, document))
+                    equivalentPaths.Add((item.Path, SHA256.HashData(bytes)));
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
@@ -137,7 +153,7 @@ public sealed partial class StateStore
                 if (ex is not (FileNotFoundException or DirectoryNotFoundException)) readFailure ??= ex;
             }
         }
-        return valid;
+        return latest;
     }
 
     // Normal saves and backup refresh use fixed .tmp names, even when the last

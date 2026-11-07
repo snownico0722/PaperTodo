@@ -68,6 +68,7 @@ public sealed partial class PaperWindow : Window
     private Button? _paperIconButton;
     private Button? _newTodoButton;
     private Button? _newNoteButton;
+    private Button? _runScriptButton;
     private Button? _openMarkdownButton;
     private Grid? _topBar;
     private Border? _topBarHost;
@@ -1750,6 +1751,9 @@ public sealed partial class PaperWindow : Window
             RefreshAssociationButton();
         }
 
+        if (_runScriptButton != null)
+            _runScriptButton.Content = CreateTopBarRunScriptIcon(_runScriptButton);
+
         if (_newTodoButton != null)
         {
             _newTodoButton.FontSize = AppTypography.Scale(13);
@@ -2361,6 +2365,11 @@ public sealed partial class PaperWindow : Window
         _newNoteButton.Content = CreateTopBarNewNoteIcon(_newNoteButton);
         _newNoteButton.Click += (_, _) => _controller.CreatePaper(PaperTypes.Note, show: true, _paper);
 
+        _runScriptButton = IconButton("", Strings.Get("TopBarRunScript"));
+        _runScriptButton.Content = CreateTopBarRunScriptIcon(_runScriptButton);
+        _runScriptButton.Click += (_, _) => _controller.RunTopBarScript(this);
+        actionButtons.Children.Add(_runScriptButton);
+
         var windowBindingButton = IconButton(
             "",
             AssociationDragHint());
@@ -2703,11 +2712,16 @@ public sealed partial class PaperWindow : Window
         // separate surface and must retain both creation actions.
         foreach (var action in PaperTopBarShortcuts.NormalizeOrder(_controller.State.TopBarShortcutOrder))
         {
+            if (PaperTopBarShortcuts.IsHidden(_controller.State, action)) continue;
             switch (action)
             {
+                case PaperTopBarShortcuts.RunScript when
+                    forDeepCapsuleSlot || !IsTopBarCommandVisible(_runScriptButton):
+                    menu.Items.Add(MenuItem(Strings.Get("TopBarRunScript"),
+                        (_, _) => _controller.RunTopBarScript(this)));
+                    break;
                 case PaperTopBarShortcuts.Workspace when
                     _controller.WorkspaceOptions.Enabled &&
-                    _controller.WorkspaceOptions.SlotNumbers.Count > 1 &&
                     !IsTopBarCommandVisible(_workspaceButton):
                     menu.Items.Add(BuildWorkspaceShortcutMenuItem(menu));
                     break;
@@ -2746,19 +2760,20 @@ public sealed partial class PaperWindow : Window
 
         if (IsExportablePaper(_paper))
         {
+            var export = new MenuItem
+            {
+                Header = _paperExportRunning
+                    ? Strings.Format("NoteExportProgress", _paperExportCompleted, _paperExportTotal)
+                    : Strings.Get("MenuExport"),
+                IsEnabled = !_paperExportRunning
+            };
             var currentLabel = _paper.Type == PaperTypes.Todo
-                ? "TodoExportCurrent" : "NoteExportCurrent";
-            var current = MenuItem(Strings.Get(currentLabel),
-                (_, _) => ExportPapers(all: false));
-            current.IsEnabled = !_paperExportRunning;
-            menu.Items.Add(current);
-
-            var allLabel = _paperExportRunning
-                ? Strings.Format("NoteExportProgress", _paperExportCompleted, _paperExportTotal)
-                : Strings.Get("NoteExportAll");
-            var exportAll = MenuItem(allLabel, (_, _) => ExportPapers(all: true));
-            exportAll.IsEnabled = !_paperExportRunning;
-            menu.Items.Add(exportAll);
+                ? "MenuExportCurrentTodo" : "MenuExportCurrentNote";
+            export.Items.Add(MenuItem(Strings.Get(currentLabel),
+                (_, _) => ExportPapers(all: false)));
+            export.Items.Add(MenuItem(Strings.Get("MenuExportAllPapers"),
+                (_, _) => ExportPapers(all: true)));
+            menu.Items.Add(export);
         }
 
         AttachPluginPaperMenuActions(menu);

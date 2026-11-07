@@ -16,13 +16,6 @@ internal static class PaperFormMaterialChecks
 
     internal static void Run(AppController controller)
     {
-        if (!NativeMicaBackdrop.IsSupported || !DwmMicaApi.Instance.EffectsEnabled ||
-            SystemParameters.HighContrast)
-        {
-            Console.WriteLine("SKIP animated paper material: native composition and transparency required.");
-            return;
-        }
-
         var nativeMode = typeof(AppController).GetProperty("UsesNativeMicaWindows", Program.Private)!;
         var savedNative = controller.UsesNativeMicaWindows;
         var state = controller.State;
