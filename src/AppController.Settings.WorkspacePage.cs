@@ -267,14 +267,23 @@ public sealed partial class AppController
 
     // 15 fullwidth characters or 30 ASCII/halfwidth characters for new names.
     // Existing persisted names are never shortened merely by opening Settings.
-    private static string LimitWorkspaceName(string value)
+    private static int WorkspaceNameRuneUnits(Rune rune) =>
+        rune.Value <= 0x7F || rune.Value is >= 0xFF61 and <= 0xFF9F ? 1 : 2;
+
+    private static int WorkspaceNameUnits(string value)
     {
-        const int maxHalfWidthUnits = 30;
+        var total = 0;
+        foreach (var rune in value.EnumerateRunes()) total += WorkspaceNameRuneUnits(rune);
+        return total;
+    }
+
+    private static string LimitWorkspaceName(string value, int maxHalfWidthUnits = 30)
+    {
         var width = 0;
         var end = 0;
         foreach (var rune in value.EnumerateRunes())
         {
-            var units = rune.Value <= 0x7F || rune.Value is >= 0xFF61 and <= 0xFF9F ? 1 : 2;
+            var units = WorkspaceNameRuneUnits(rune);
             if (width + units > maxHalfWidthUnits) break;
             width += units;
             end += rune.Utf16SequenceLength;
@@ -383,14 +392,32 @@ public sealed partial class AppController
         };
 
         var editing = false;
+        var previousDraft = label;
+        var correctingDraft = false;
         editor.TextChanged += (_, _) =>
         {
-            if (!editing) return;
-            var limited = LimitWorkspaceName(editor.Text);
-            if (limited.Length == editor.Text.Length) return;
-            var caret = editor.CaretIndex;
+            if (!editing || correctingDraft) return;
+            var current = editor.Text;
+            if (WorkspaceNameUnits(current) <= 30) { previousDraft = current; return; }
+            // Limit the inserted text, not the old suffix: typing at the beginning of
+            // a full name must never silently delete characters at the end.
+            var prefix = 0;
+            while (prefix < current.Length && prefix < previousDraft.Length &&
+                   current[prefix] == previousDraft[prefix]) prefix++;
+            var suffix = 0;
+            while (suffix < current.Length - prefix && suffix < previousDraft.Length - prefix &&
+                   current[^(suffix + 1)] == previousDraft[^(suffix + 1)]) suffix++;
+            var start = current[..prefix];
+            var tail = current[(current.Length - suffix)..];
+            var inserted = current[prefix..(current.Length - suffix)];
+            var remaining = Math.Max(0, 30 - WorkspaceNameUnits(start + tail));
+            var limited = start + LimitWorkspaceName(inserted, remaining) + tail;
+            if (limited == current) { previousDraft = current; return; }
+            correctingDraft = true;
             editor.Text = limited;
-            editor.CaretIndex = Math.Min(caret, limited.Length);
+            editor.CaretIndex = Math.Min(prefix + inserted.Length, limited.Length);
+            correctingDraft = false;
+            previousDraft = limited;
         };
         Action<DependencyObject?>? outsideClick = null;
         void ExitEditing()
@@ -433,6 +460,7 @@ public sealed partial class AppController
             // A second editor replaces the first draft rather than saving it.
             CancelWorkspaceRenameOnPointer(null);
             editor.Text = WorkspaceOptions.DisplayName(slot);
+            previousDraft = editor.Text;
             editing = true;
             name.Visibility = Visibility.Collapsed;
             editor.Visibility = Visibility.Visible;

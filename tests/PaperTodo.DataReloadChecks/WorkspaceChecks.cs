@@ -735,6 +735,10 @@ internal static partial class Program
             "workspace names enforce the combined halfwidth/fullwidth limit");
         editor.Text = new string('W', 48);
         Require(editor.Text == new string('W', 30), "long paste was not limited to 15 fullwidth units");
+        editor.CaretIndex = 0;
+        editor.SelectedText = "X";
+        Require(editor.Text == new string('W', 30),
+            "adding text to a full name must not delete the original suffix");
         var longNameButton = await RenameButtonBoundsAsync();
         Require(longNameButton.Top >= shortNameButton.Bottom,
             $"the save button did not wrap: {shortNameButton} -> {longNameButton}");
