@@ -282,16 +282,7 @@ public sealed partial class AppController
         AutomationProperties.SetAutomationId(card, "WorkspaceSlot" + slot);
         AutomationProperties.SetName(card, label + " #" + slot);
 
-        // Keep each set of controls together, wrapping only when the two groups do not fit.
         var line = new WrapPanel();
-        var nameRow = new Grid
-        {
-            MinHeight = AppTypography.FitChrome(28),
-            VerticalAlignment = VerticalAlignment.Center
-        };
-        nameRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        nameRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        nameRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var name = new TextBlock
         {
             Text = label,
@@ -299,8 +290,6 @@ public sealed partial class AppController
             FontWeight = isSelected ? FontWeights.SemiBold : FontWeights.Normal,
             Foreground = TrayTextBrush,
             VerticalAlignment = VerticalAlignment.Center,
-            MinWidth = AppTypography.Scale(44),
-            MaxWidth = AppTypography.Scale(132),
             HorizontalAlignment = HorizontalAlignment.Left,
             TextTrimming = TextTrimming.CharacterEllipsis
         };
@@ -309,7 +298,7 @@ public sealed partial class AppController
             Text = label,
             HorizontalAlignment = HorizontalAlignment.Left,
             MaxLength = 64,
-            Height = nameRow.MinHeight,
+            Height = AppTypography.FitChrome(28),
             FontSize = AppTypography.Scale(12),
             Foreground = TrayTextBrush,
             CaretBrush = TrayTextBrush,
@@ -340,15 +329,16 @@ public sealed partial class AppController
         AutomationProperties.SetAutomationId(rename, "WorkspaceRename" + slot);
         AutomationProperties.SetName(rename, WorkspaceUi("编辑工作区名称", "Edit workspace name",
             "ワークスペース名を編集", "작업 공간 이름 편집"));
-        Grid.SetColumn(name, 0);
-        Grid.SetColumn(editor, 0);
-        Grid.SetColumn(numberLabel, 1);
-        Grid.SetColumn(rename, 2);
-        nameRow.Children.Add(name);
-        nameRow.Children.Add(editor);
-        nameRow.Children.Add(numberLabel);
-        nameRow.Children.Add(rename);
-        line.Children.Add(nameRow);
+        var renameActions = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        renameActions.Children.Add(numberLabel);
+        renameActions.Children.Add(rename);
+        line.Children.Add(name);
+        line.Children.Add(editor);
+        line.Children.Add(renameActions);
 
         var editing = false;
         Action<DependencyObject?>? outsideClick = null;
@@ -391,8 +381,6 @@ public sealed partial class AppController
             // A second editor replaces the first draft rather than saving it.
             CancelWorkspaceRenameOnPointer(null);
             editing = true;
-            // Match the displayed name so the save button stays under the pointer.
-            editor.Width = Math.Max(name.MinWidth, name.ActualWidth);
             editor.Text = WorkspaceOptions.DisplayName(slot);
             name.Visibility = Visibility.Collapsed;
             editor.Visibility = Visibility.Visible;
@@ -410,7 +398,7 @@ public sealed partial class AppController
 
         if (slot > 1)
         {
-            nameRow.Margin = new Thickness(0, 0, 6, 0);
+            renameActions.Margin = new Thickness(0, 0, 6, 0);
             var controls = new Grid { VerticalAlignment = VerticalAlignment.Center };
             controls.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             controls.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });

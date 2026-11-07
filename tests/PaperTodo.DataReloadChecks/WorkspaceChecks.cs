@@ -719,12 +719,12 @@ internal static partial class Program
             return rename.TransformToAncestor(editingCard).TransformBounds(new Rect(rename.RenderSize));
         }
 
-        var pencil = RenameButtonBounds();
         rename.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-        Require(pencil.Width > 0 && pencil.Height > 0 && RenameButtonBounds() == pencil,
-            "the save button moved when entering rename");
-        editor.Text = "Unconfirmed workspace name";
-        Require(RenameButtonBounds() == pencil, "typing moved the save button");
+        var shortNameButton = RenameButtonBounds();
+        editor.Text = "Weekly plans";
+        Require(RenameButtonBounds().Left > shortNameButton.Left, "a longer name did not move the save button");
+        editor.Text = new string('W', 48);
+        Require(RenameButtonBounds().Top >= shortNameButton.Bottom, "the save button did not wrap after a long name");
         cancelRename.Invoke(controller, [new Border()]);
         Require(editor.Visibility == Visibility.Collapsed &&
                 controller.WorkspaceOptions.DisplayName(2) == originalName,
