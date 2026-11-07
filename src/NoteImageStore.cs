@@ -106,7 +106,7 @@ public sealed class NoteImageStore : IDisposable
     {
         var referenced = state.Papers
             .Where(paper => paper.Type == PaperTypes.Note)
-            .SelectMany(paper => MarkdownImageReferences.CollectImageIds(paper.Content))
+            .SelectMany(paper => MarkdownImageReferences.CollectImageIds(WorkspaceMaterials.GetReadableContent(paper)))
             .ToHashSet(StringComparer.Ordinal);
         if (protectedImageIds != null) referenced.UnionWith(protectedImageIds);
 
@@ -819,7 +819,7 @@ public sealed class NoteImageStore : IDisposable
 
         var referencedImageIds = state.Papers
             .Where(paper => paper.Type == PaperTypes.Note)
-            .SelectMany(paper => MarkdownImageReferences.CollectImageIds(paper.Content))
+            .SelectMany(paper => MarkdownImageReferences.CollectImageIds(WorkspaceMaterials.GetReadableContent(paper)))
             .ToHashSet(StringComparer.Ordinal);
 
         lock (_gate)

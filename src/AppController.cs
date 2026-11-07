@@ -1161,7 +1161,8 @@ public sealed partial class AppController : IDisposable
         if (command.Kind is StartupCommandKind.Show or
             StartupCommandKind.Toggle or
             StartupCommandKind.NewTodo or
-            StartupCommandKind.NewNote)
+            StartupCommandKind.NewNote or
+            StartupCommandKind.Canvas)
         {
             // Startup and secondary-instance commands arrive before PaperTodo intentionally takes focus.
             // Refresh here so a recent desktop/taskbar switch cannot leave stale fullscreen avoidance.
@@ -1170,8 +1171,8 @@ public sealed partial class AppController : IDisposable
 
         switch (command.Kind)
         {
-            case StartupCommandKind.Workbench:
-                ToggleWorkbench();
+            case StartupCommandKind.Canvas:
+                OpenCanvas();
                 break;
             case StartupCommandKind.Show:
                 ShowAllPapers();
@@ -2033,7 +2034,8 @@ public sealed partial class AppController : IDisposable
         }
 
         State.Papers.RemoveAll(p => p.Id == paper.Id);
-        State.Workbench?.Normalize(State.Papers.Select(p => p.Id));
+        WorkspaceMaterials.FindOwner(State)?.WorkspaceMaterials?.Normalize(
+            State.Papers.Where(p => p.WorkspaceMaterials == null).Select(p => p.Id));
         WorkbenchModelChanged?.Invoke();
         NotifyPaperRemoved(paper.Id);
         _visibilityAnimationVersions.Remove(paper.Id);
@@ -2162,6 +2164,10 @@ public sealed partial class AppController : IDisposable
 
     public bool IsPaperEmpty(PaperData paper)
     {
+        if (paper.WorkspaceMaterials is { } materials)
+            return materials.Items.Count == 0 && materials.Layout.Cards.Count == 0 &&
+                materials.Layout.Groups.Count == 0 && materials.Layout.Connections.Count == 0 &&
+                string.IsNullOrWhiteSpace(paper.Content);
         if (paper.Type == PaperTypes.Note)
         {
             if (!string.Equals(

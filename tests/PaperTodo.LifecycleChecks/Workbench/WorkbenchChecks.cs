@@ -14,11 +14,10 @@ using PaperTodo;
 internal static partial class WorkbenchChecks
 {
     private const BindingFlags Private = BindingFlags.Instance | BindingFlags.NonPublic;
-    internal static readonly string[] Cases = ["workbench-surface", "workbench-workspaces", "workbench-readonly", "workbench-desktop"];
+    internal static readonly string[] Cases = ["workbench-surface", "workbench-workspaces", "workbench-readonly", "workbench-desktop", "workbench-materials", "workbench-groups", "workbench-graph", "workbench-search", "workbench-transfers", "workbench-history", "workbench-mixed-history"];
 
-    // Recovery-aware workspace switching now shows a modal Retry/Exit decision on a
-    // real sharing violation. Close it like a user dismissing the failure, then
-    // verify that the existing desk survived and a later retry can succeed.
+    // A real sharing violation now presents a modal Retry/Exit dialog. Dismissing
+    // it must preserve the previous workspace so the test can switch after unlock.
     private static async Task<bool> DismissExpectedWorkspaceFailure(AppController controller, int number)
     {
         var dismiss = DismissDialogAsync();
@@ -32,7 +31,7 @@ internal static partial class WorkbenchChecks
             await Until(() => (dialog = Application.Current.Windows.OfType<Window>().FirstOrDefault(
                 window => window.IsVisible && window.Title == Strings.Get("WorkspaceSwitchFailed"))) != null,
                 "Expected workspace failure decision was not displayed");
-            dialog!.Close(); // Dismissal is neither Retry nor Exit.
+            dialog!.Close();
         }
     }
 
@@ -60,6 +59,13 @@ internal static partial class WorkbenchChecks
                 xaml.Root.Element(ns + "Application.Resources")!.Nodes());
             Application.Current.Resources = (ResourceDictionary)System.Windows.Markup.XamlReader.Parse(resources.ToString());
         }
+        if (name == "materials") { await RunMaterials(); return; }
+        if (name == "groups") { await RunGroups(); return; }
+        if (name == "graph") { await RunGraph(); return; }
+        if (name == "search") { await RunSearch(); return; }
+        if (name == "transfers") { await RunTransfers(); return; }
+        if (name == "history") { await RunTransferHistory(); return; }
+        if (name == "mixed-history") { await RunMixedHistory(); return; }
         if (name == "desktop") { await RunDesktopRestore(); return; }
         if (name == "readonly")
         {
@@ -76,7 +82,9 @@ internal static partial class WorkbenchChecks
             var state = FixtureState(); state.Workbench = new() { Cards = new() { ["note-a"] = new() { X = 12, Y = 34, Pinned = true } } };
             var store = new StateStore(); store.SaveJsonSync(store.SerializeState(state), 1);
             var read = StateStore.ReadWorkbenchOverview(store.FilePath)!;
-            Assert(read.Workbench!.Cards["note-a"].Pinned && read.Papers[0].X == 100, "Spatial metadata did not round-trip independently");
+            Assert(WorkspaceMaterials.FindOwner(read)?.WorkspaceMaterials?.Layout.Cards["note-a"].Pinned == true &&
+                   read.Papers.First(p => p.Id == "note-a").X == 100,
+                "Legacy spatial metadata did not migrate and round-trip independently");
             Assert(!WorkspaceFieldScopes.Inherits(nameof(AppState.Workbench)), "Layout inherits across workspaces");
             return;
         }
@@ -101,9 +109,21 @@ internal static partial class WorkbenchChecks
         editor.Document.Insert(editor.Document.TextLength, "\nPending desktop edit");
         var pendingText = editor.Text;
         var before = controller.State.Papers.ToDictionary(p => p.Id, Geometry);
-        controller.ToggleWorkbench();
+        controller.ExecuteStartupCommand(StartupCommand.Parse(["--canvas"]));
         var workbench = (WorkbenchWindow)Member(controller, "_workbenchWindow");
-        await Until(() => workbench.HostedPaperCount == 3 && controller.State.Workbench?.Cards.Count == 3, "Workbench layout did not settle");
+        await Until(() => workbench.HostedPaperCount == 3 && controller.WorkbenchLayout.Cards.Count == 3, "Workbench layout did not settle");
+        if (name == "surface")
+        {
+            controller.ExecuteStartupCommand(StartupCommand.Parse(["--canvas"]));
+            Assert(controller.HasWorkbench && Application.Current.Windows.OfType<WorkbenchWindow>().Count() == 1,
+                "Repeated Canvas command closed the window or opened another window");
+            workbench.WindowState = WindowState.Minimized;
+            controller.ExecuteStartupCommand(StartupCommand.Parse(["--canvas"]));
+            Assert(workbench.WindowState == WindowState.Maximized && workbench.HostedPaperCount == 3,
+                "Canvas command did not restore the minimized window with its editors");
+            foreach (var paper in controller.State.Papers.Where(p => p.WorkspaceMaterials == null))
+                Assert(before[paper.Id] == Geometry(paper), "Canvas command changed desktop state: " + paper.Id);
+        }
         editor = (MarkdownTextBox)Member(originalWindow, "_noteBox");
         Assert(editor.Text == pendingText && editor.CanUndo, "Workbench entry lost pending text or its undo history");
         editor.Undo();
@@ -117,8 +137,33 @@ internal static partial class WorkbenchChecks
             var scenes = (System.Collections.IDictionary)Member(workbench, "_scenes");
             await Until(() => scenes.Contains(3), "Sparse workspace 3 is missing from the overview");
             Assert(!scenes.Contains(2), "Removed workspace 2 was incorrectly shown in the overview");
+            var active = Member(workbench, "ActiveScene");
+            var preview = scenes[3]!;
+            var previewOrigin = (WorkbenchPoint)Member(preview, "Origin");
+            var previewBounds = ((WorkbenchRect)Member(preview, "Bounds")).Offset(previewOrigin);
+            var activeBounds = ((WorkbenchRect)Member(active, "Bounds")).Offset((WorkbenchPoint)Member(active, "Origin"));
+            var previewCards = (System.Collections.IDictionary)Member(preview, "Cards");
+            var previewCard = ((WorkbenchRect)Member(previewCards["other"]!, "Bounds")).Offset(previewOrigin);
+            var scale = (ScaleTransform)Member(workbench, "_scale");
+            var pan = (TranslateTransform)Member(workbench, "_pan");
+            bool IsReadOnly(WorkbenchPoint world) => (bool)typeof(WorkbenchWindow)
+                .GetMethod("IsReadOnlyWorkspacePoint", Private)!.Invoke(workbench,
+                    [new Point(world.X * scale.ScaleX + pan.X, world.Y * scale.ScaleY + pan.Y)])!;
+            Assert(IsReadOnly(previewCard.Center) && IsReadOnly(new(previewBounds.X + 1, previewBounds.Y + 1)),
+                "A drop over a read-only workspace card or its blank frame would target the active workspace");
+            Assert(!IsReadOnly(activeBounds.Center), "The active workspace was incorrectly treated as a read-only drop region");
+            Assert(!IsReadOnly(new((activeBounds.Right + previewBounds.X) / 2, activeBounds.Y + 1)),
+                "Unassigned space between workspaces was incorrectly treated as a read-only drop region");
+            var previewCanvas = (Canvas)Member(preview, "Canvas");
+            var previewVisibility = previewCanvas.Visibility;
+            try
+            {
+                previewCanvas.Visibility = Visibility.Collapsed;
+                Assert(!IsReadOnly(previewCard.Center), "A hidden workspace continued to block drops on its old canvas region");
+            }
+            finally { previewCanvas.Visibility = previewVisibility; }
         }
-        foreach (var paper in controller.State.Papers)
+        foreach (var paper in controller.State.Papers.Where(p => p.WorkspaceMaterials == null))
             Assert(before[paper.Id] == Geometry(paper),
                 $"First workbench entry changed {paper.Id}: {before[paper.Id]} -> {Geometry(paper)}");
         if (name == "surface")
@@ -167,7 +212,7 @@ internal static partial class WorkbenchChecks
                 "Outside click did not restore the previous camera");
 
             // Thumb sends DragStarted/Completed even for a click with zero displacement.
-            var undo = (Stack<WorkbenchState>)Member(workbench, "_undo");
+            var undo = (System.Collections.ICollection)Member(workbench, "_undo");
             var originalUndoCount = undo.Count;
             var move = (Thumb)Member(card, "Move");
             move.RaiseEvent(new DragStartedEventArgs(0, 0) { RoutedEvent = Thumb.DragStartedEvent });
@@ -193,7 +238,7 @@ internal static partial class WorkbenchChecks
             workbench.ResumeWorkspace();
             await Until(() => workbench.HostedPaperCount == 3, "Workbench failed to resume after reload");
         }
-        foreach (var paper in controller.State.Papers)
+        foreach (var paper in controller.State.Papers.Where(p => p.WorkspaceMaterials == null))
             Assert(before[paper.Id] == Geometry(paper),
                 $"Workbench pause/resume changed {paper.Id}: {before[paper.Id]} -> {Geometry(paper)}");
         editor = (MarkdownTextBox)Member(originalWindow, "_noteBox");
@@ -218,13 +263,22 @@ internal static partial class WorkbenchChecks
             Assert(editor.Text == beforeWorkbenchEdit, "Desktop undo did not restore the pre-workbench-edit text");
             editor.Redo();
             Assert(editor.Text == "Edited inside the workbench", "Desktop redo lost the workbench edit");
-            foreach (var paper in controller.State.Papers) Assert(before[paper.Id] == Geometry(paper), "Desktop state changed on return: " + paper.Id);
-            controller.ToggleWorkbench(); workbench = (WorkbenchWindow)Member(controller, "_workbenchWindow");
-            await Until(() => workbench.HostedPaperCount == 3, "Second enter failed");
+            foreach (var paper in controller.State.Papers.Where(p => p.WorkspaceMaterials == null))
+                Assert(before[paper.Id] == Geometry(paper), "Desktop state changed on return: " + paper.Id);
+            var savedLayout = controller.WorkbenchLayout.Copy();
+            controller.ExecuteStartupCommand(StartupCommand.Parse(["--canvas"]));
+            workbench = (WorkbenchWindow)Member(controller, "_workbenchWindow");
+            await Until(() => workbench.HostedPaperCount == 3 &&
+                Member(workbench, "ActiveScene").GetType().GetField("Layout", Private)?.GetValue(Member(workbench, "ActiveScene")) != null,
+                "Second enter failed");
+            foreach (var (id, placement) in savedLayout.Cards)
+                Assert(controller.WorkbenchLayout.Cards[id].Bounds == placement.Bounds,
+                    "Reopening Canvas changed saved card placement: " + id);
             controller.DeletePaper(controller.FindPaper("note-b")!);
             await Until(() => workbench.HostedPaperCount == 2, "Deleted paper retained a leased editor");
             Assert(!controller.WorkbenchLayout.Cards.ContainsKey("note-b"), "Deleted paper retained spatial metadata");
-            // Reuse the native Todo-row association, never a generic paper-to-paper edge.
+            // Native Todo-row associations remain on their exact Todo item; free canvas
+            // connections must not replace or mutate this existing business relationship.
             Assert(controller.WorkbenchPaperWindow("todo-a").LinkPaperToTodo("task-1", "note-a"),
                 "Native Todo-item binding was unavailable in the workbench");
             Assert(controller.FindPaper("todo-a")!.Items.First(i => i.Id == "task-1").LinkedPaperId == "note-a",
@@ -241,18 +295,36 @@ internal static partial class WorkbenchChecks
         }
         else
         {
+            var workspaceOneMaterial = controller.CreateWorkbenchMaterial(WorkspaceMaterialKinds.Text,
+                "Workspace one", "Only in workspace one", "", new WorkbenchPoint(1800, 120));
+            await Until(() => ActiveCards(workbench).Contains(workspaceOneMaterial),
+                "First workspace material did not appear before switching");
             var secondPath = Path.Combine(AppContext.BaseDirectory, "data3.json");
             using (new FileStream(secondPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
                 Assert(!await DismissExpectedWorkspaceFailure(controller, 3), "Occupied workspace switch succeeded");
             Assert(controller.WorkspaceNumber == 1 && workbench.HostedPaperCount == 3, "Failed switch lost the current desk");
             Assert(await controller.SwitchWorkspaceAsync(3), "Workspace switch failed");
             Assert(masters.Values.All(master => !master.IsVisible), "Workspace switch exposed master capsules over the workbench");
-            await Until(() => workbench.HostedPaperCount == 1 && controller.State.Workbench?.Cards.Count == 1, "New workspace editor not mounted");
+            await Until(() => workbench.HostedPaperCount == 1 && controller.WorkbenchLayout.Cards.Count == 1, "New workspace editor not mounted");
             Assert(originalWindow.IsClosed && !originalWindow.IsWorkbenchHosted, "Old workspace lease survived teardown");
             Assert(StateStore.ReadWorkbenchOverview(Path.Combine(AppContext.BaseDirectory, "data.json"))!.Papers.First(p => p.Id == "note-a").Content == "Edited inside the workbench", "Switch lost pending edits");
+            Assert(controller.FindWorkbenchMaterial(workspaceOneMaterial) == null &&
+                   controller.State.Papers.Count(p => p.WorkspaceMaterials != null) == 1,
+                "A material collection leaked from the previous workspace");
+            var workspaceThreeMaterial = controller.CreateWorkbenchMaterial(WorkspaceMaterialKinds.Text,
+                "Workspace three", "Only in workspace three", "", new WorkbenchPoint(800, 120));
+            await Until(() => ActiveCards(workbench).Contains(workspaceThreeMaterial),
+                "Second workspace material did not appear");
             Assert(await controller.SwitchWorkspaceAsync(1), "Switch back failed");
             await Until(() => workbench.HostedPaperCount == 3, "Original workspace not restored");
             Assert(controller.WorkbenchLayout.Cards["note-a"].Pinned, "Workspace layout was not persisted");
+            Assert(controller.FindWorkbenchMaterial(workspaceOneMaterial)?.Content == "Only in workspace one" &&
+                   controller.FindWorkbenchMaterial(workspaceThreeMaterial) == null &&
+                   controller.State.Papers.Count(p => p.WorkspaceMaterials != null) == 1,
+                "Switching back mixed or lost workspace-specific materials");
+            Assert(WorkspaceMaterials.FindOwner(StateStore.ReadWorkbenchOverview(secondPath)!)!
+                       .WorkspaceMaterials!.Items[workspaceThreeMaterial].Content == "Only in workspace three",
+                "Leaving the second workspace did not save its own collection");
             controller.ToggleWorkbench();
             Assert(masters.Count > 0 && masters.Values.All(master => master.IsVisible), "Leaving switched workbench did not restore master capsules");
         }
@@ -267,6 +339,7 @@ internal static partial class WorkbenchChecks
         using var controller = new AppController();
         await controller.StartAsync(createDefaultPaper: false);
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+
         var desktopWindow = controller.WorkbenchPaperWindow("note-a");
         Assert(desktopWindow.IsVisible, "Ordinary desktop paper was not visible before entering the workbench");
         var before = controller.State.Papers.ToDictionary(p => p.Id, Geometry);
@@ -284,7 +357,7 @@ internal static partial class WorkbenchChecks
         // desk without unfolding it, closing the desk or modifying desktop XY.
         controller.OpenLinkedPaper("note-b", desk, toggleIfExcludedFromCapsules: true);
         Assert(controller.HasWorkbench, "Linked paper navigation closed the workbench");
-        foreach (var paper in controller.State.Papers)
+        foreach (var paper in controller.State.Papers.Where(p => p.WorkspaceMaterials == null))
             Assert(Geometry(paper) == before[paper.Id], "Linked navigation changed desktop paper geometry");
 
         // The desktop lock is intentionally not a lock on the workbench editor.
@@ -299,7 +372,7 @@ internal static partial class WorkbenchChecks
         Assert(desktopWindow.IsVisible, "Normal desktop paper stayed hidden after reload and workbench exit");
         Assert(((Border)Member(desktopWindow, "_advancedLockShield")).Visibility == Visibility.Visible,
             "Desktop lock did not resume when leaving the workbench");
-        foreach (var paper in controller.State.Papers)
+        foreach (var paper in controller.State.Papers.Where(p => p.WorkspaceMaterials == null))
             Assert(Geometry(paper) == before[paper.Id], "Workbench exit modified desktop paper geometry");
     }
 

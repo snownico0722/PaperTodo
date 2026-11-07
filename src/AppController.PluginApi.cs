@@ -67,7 +67,7 @@ public sealed partial class AppController
             PaperTitleText(paper),
             paper.BodyProviderId,
             contentAvailable,
-            contentAvailable ? paper.Content ?? "" : "");
+            contentAvailable ? WorkspaceMaterials.GetReadableContent(paper) : "");
     }
 
     internal void PrepareExternalPaperOperation(PaperData? targetPaper = null)
@@ -87,6 +87,8 @@ public sealed partial class AppController
 
     internal string CurrentMarkdownContentForExternalRead(PaperData paper)
     {
+        if (paper.WorkspaceMaterials != null)
+            return WorkspaceMaterials.GetReadableContent(paper);
         if (paper.Type == PaperTypes.Note &&
             string.Equals(
                 paper.BodyProviderId,

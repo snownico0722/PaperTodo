@@ -132,6 +132,7 @@ public sealed partial class PaperWindow
             FocusVisualStyle = null
         };
         var box = _noteBox;
+        AttachWorkbenchNoteTransfer(box);
         box.ImageContextMenuFactory = CreateContextMenu;
         box.SetMarkdownRenderMode(_controller.State.MarkdownRenderMode);
         box.SetImageReferenceTextMode(_controller.State.ImageReferenceTextMode);
@@ -152,6 +153,7 @@ public sealed partial class PaperWindow
         var isOpeningImagePicker = false;
         int? pendingImageReferenceOffset = null;
         string? pendingImageId = null;
+        Point? imageDragOrigin = null;
         var editorEntryGeneration = 0;
         var imageInteractionGeneration = 0;
         int previewSelectionStart = 0;
@@ -176,6 +178,7 @@ public sealed partial class PaperWindow
             isInteractingWithImage = false;
             pendingImageReferenceOffset = null;
             pendingImageId = null;
+            imageDragOrigin = null;
         };
 
         var editorMenu = CreateContextMenu();
@@ -352,6 +355,7 @@ public sealed partial class PaperWindow
 
             if (hasImageSelection)
             {
+                if (IsWorkbenchHosted && fromMouseClick) imageDragOrigin = previewPoint;
                 MarkImageInteraction();
                 pendingImageReferenceOffset = imageReferenceOffset;
                 pendingImageId = imageId;
@@ -487,6 +491,7 @@ public sealed partial class PaperWindow
             MarkImageInteraction();
             pendingImageReferenceOffset = referenceOffset;
             pendingImageId = imageId;
+            if (IsWorkbenchHosted) imageDragOrigin = point;
             if (!box.IsKeyboardFocusWithin)
             {
                 box.Focus();
@@ -742,6 +747,7 @@ public sealed partial class PaperWindow
             imageInteractionGeneration++;
             pendingImageReferenceOffset = null;
             pendingImageId = null;
+            imageDragOrigin = null;
             isInteractingWithImage = false;
             TraceNoteRender($"PreviewMouseLeftButtonDown isPreviewing={isPreviewing} boxPreview={box.IsPreviewMode} handled={e.Handled}");
             if (!isPreviewing)
@@ -790,6 +796,7 @@ public sealed partial class PaperWindow
             {
                 // 手势结束（bubble 阶段晚于 AvalonEdit 内部 TextArea 的 up 处理），恢复显灵跟随光标。
                 box.EndCaretRevealGesture();
+                imageDragOrigin = null;
 
                 if (!pendingImageReferenceOffset.HasValue ||
                     string.IsNullOrWhiteSpace(pendingImageId))
@@ -816,6 +823,35 @@ public sealed partial class PaperWindow
                 }
             }),
             true);
+
+        // AvalonEdit may handle internal pointer events, so listen in the preview
+        // phase and opt in to handled events for rendered images.
+        box.AddHandler(UIElement.PreviewMouseMoveEvent, new MouseEventHandler((_, e) =>
+        {
+            // A rendered note image can be dragged onto the workbench (or another
+            // note) as a bitmap. Keep a normal click selecting the image; only a
+            // real drag starts an external data transfer, leaving the note intact.
+            if (IsWorkbenchHosted && imageDragOrigin is { } origin &&
+                pendingImageId is { Length: > 0 } imageId &&
+                e.LeftButton == MouseButtonState.Pressed &&
+                (e.GetPosition(box) - origin).LengthSquared >=
+                SystemParameters.MinimumHorizontalDragDistance * SystemParameters.MinimumHorizontalDragDistance)
+            {
+                imageDragOrigin = null;
+                var bitmap = _controller.ImageStore.GetBitmapSourceForClipboard(imageId);
+                if (bitmap != null)
+                {
+                    box.EndCaretRevealGesture();
+                    pendingImageReferenceOffset = null;
+                    pendingImageId = null;
+                    isInteractingWithImage = false;
+                    DragDrop.DoDragDrop(box, new DataObject(DataFormats.Bitmap, bitmap), DragDropEffects.Copy);
+                    e.Handled = true;
+                    return;
+                }
+            }
+            if (e.LeftButton != MouseButtonState.Pressed) imageDragOrigin = null;
+        }), true);
 
         box.MouseMove += (sender, e) =>
         {
@@ -1054,7 +1090,7 @@ public sealed partial class PaperWindow
 
         var fileStem = ExternalMarkdownFileStem();
         var path = Path.Combine(directory, fileStem + CurrentExternalMarkdownExtension());
-        var text = _paper.Content ?? "";
+        var text = CurrentMarkdownContentForExternalRead();
         text = _controller.ImageStore.ConvertMarkdownForExternalEditor(
             _paper.Id,
             text,
@@ -1105,6 +1141,10 @@ public sealed partial class PaperWindow
 
     internal bool IsCurrentNoteEmpty()
     {
+        if (_paper.WorkspaceMaterials is { } materials)
+            return materials.Items.Count == 0 && materials.Layout.Cards.Count == 0 &&
+                materials.Layout.Groups.Count == 0 && materials.Layout.Connections.Count == 0 &&
+                string.IsNullOrWhiteSpace(_paper.Content);
         if (_paper.Type != PaperTypes.Note ||
             !IsCurrentBodyProviderMarkdown)
         {

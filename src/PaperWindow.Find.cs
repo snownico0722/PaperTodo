@@ -74,7 +74,7 @@ public sealed partial class PaperWindow
         return _paper.Type == PaperTypes.Todo ||
                (_paper.Type == PaperTypes.Note &&
                 IsCurrentBodyProviderMarkdown &&
-                _noteBox != null);
+                (_noteBox != null || _paper.WorkspaceMaterials != null));
     }
 
     private void ShowBuiltInFind()
@@ -121,6 +121,17 @@ public sealed partial class PaperWindow
         out string seed,
         out PaperFindMatch match)
     {
+        if (_paper.WorkspaceMaterials != null &&
+            Keyboard.FocusedElement is TextBox { SelectionLength: > 0 } materialEditor)
+        {
+            foreach (var pair in _workspaceMaterialEditors)
+            {
+                if (!ReferenceEquals(pair.Value, materialEditor)) continue;
+                seed = materialEditor.SelectedText;
+                match = new PaperFindMatch(pair.Key, materialEditor.SelectionStart, materialEditor.SelectionLength);
+                return seed.Length > 0;
+            }
+        }
         if (_paper.Type == PaperTypes.Note &&
             _noteBox is { IsKeyboardFocusWithin: true, SelectionLength: > 0 } note)
         {
@@ -702,6 +713,8 @@ public sealed partial class PaperWindow
 
     private bool IsBuiltInFindBodyKeyboardFocusWithin()
     {
+        if (_paper.WorkspaceMaterials != null)
+            return _workspaceMaterialEditors.Values.Any(editor => editor.IsKeyboardFocusWithin);
         if (_paper.Type == PaperTypes.Note)
         {
             return _noteBox?.IsKeyboardFocusWithin == true;
@@ -773,6 +786,16 @@ public sealed partial class PaperWindow
             return matches;
         }
 
+        if (_paper.WorkspaceMaterials != null)
+        {
+            foreach (var field in GetWorkspaceMaterialsFindFields(_paper))
+            {
+                var text = _workspaceMaterialEditors.TryGetValue(field.Key, out var editor)
+                    ? editor.Text : field.Text;
+                AddFindMatches(matches, field.Key, text, query);
+            }
+            return matches;
+        }
         if (_paper.Type == PaperTypes.Note && _noteBox != null)
         {
             AddFindMatches(matches, null, _noteBox.Text ?? string.Empty, query);
@@ -842,6 +865,19 @@ public sealed partial class PaperWindow
             ClearFindSelection(previous);
         }
 
+        if (_paper.WorkspaceMaterials != null)
+        {
+            if (match.TodoItemId != null &&
+                _workspaceMaterialEditors.TryGetValue(match.TodoItemId, out var materialEditor) &&
+                match.Offset >= 0 && match.Offset + match.Length <= materialEditor.Text.Length)
+            {
+                materialEditor.Select(match.Offset, match.Length);
+                materialEditor.BringIntoView();
+                _findAppliedMatch = match;
+            }
+            else _findAppliedMatch = null;
+            return;
+        }
         if (match.IsNote)
         {
             ReleaseTodoInactiveFindSelection();
@@ -903,6 +939,14 @@ public sealed partial class PaperWindow
 
     private void ClearFindSelection(PaperFindMatch match)
     {
+        if (_paper.WorkspaceMaterials != null)
+        {
+            if (match.TodoItemId != null &&
+                _workspaceMaterialEditors.TryGetValue(match.TodoItemId, out var materialEditor) &&
+                materialEditor.SelectionStart == match.Offset && materialEditor.SelectionLength == match.Length)
+                materialEditor.SelectionLength = 0;
+            return;
+        }
         if (match.IsNote)
         {
             if (_noteBox != null &&
@@ -1010,6 +1054,12 @@ public sealed partial class PaperWindow
             Activate();
         }
 
+        if (_paper.WorkspaceMaterials != null && hasMatch && match.TodoItemId != null &&
+            _workspaceMaterialEditors.TryGetValue(match.TodoItemId, out var materialEditor))
+        {
+            materialEditor.Focus();
+            return;
+        }
         if (hasMatch && match.IsNote)
         {
             if (_noteBox is { IsPreviewMode: false } note)
