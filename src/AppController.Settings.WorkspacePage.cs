@@ -297,6 +297,7 @@ public sealed partial class AppController
         AutomationProperties.SetAutomationId(card, "WorkspaceSlot" + slot);
         AutomationProperties.SetName(card, label + " #" + slot);
 
+        Grid? trailingActions = null;
         var content = new Grid();
         content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         content.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -465,7 +466,6 @@ public sealed partial class AppController
             else if (e.Key == Key.Escape) { ExitEditing(); e.Handled = true; }
         };
 
-        Grid? trailingActions = null;
         if (slot > 1)
         {
             // Keep actions right-aligned: share the name row when there is room,
