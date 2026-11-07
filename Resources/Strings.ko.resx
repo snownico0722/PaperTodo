@@ -1776,6 +1776,21 @@ PaperTodo를 수동으로 다시 여세요. 문제가 반복되면 PC를 다시 
   <data name="SettingsDataProcessing" xml:space="preserve"><value>데이터 처리</value></data>
   <data name="TipHideSurfaceOutline" xml:space="preserve"><value>메모, 캡슐, 메뉴의 바깥 테두리만 숨깁니다. 크기는 변하지 않으며 고대비 모드에서는 테두리를 유지합니다.</value></data>
   <data name="TipScriptCapsule" xml:space="preserve"><value>메모 첫 줄에 !p 등의 명령을 쓰고 다음 줄부터 PowerShell을 작성하세요. 접힌 캡슐을 클릭해 실행할 수 있습니다. 아래 설정은 상단 바의 스크립트 실행에도 적용됩니다.</value></data>
+  <data name="WorkspaceSwitchGroup" xml:space="preserve">
+    <value>전환</value>
+  </data>
+  <data name="WorkspaceMoveGroup" xml:space="preserve">
+    <value>이동 대상</value>
+  </data>
+  <data name="WorkspaceCreateNew" xml:space="preserve">
+    <value>새 작업 공간 만들기</value>
+  </data>
+  <data name="WorkspaceMoveFailed" xml:space="preserve">
+    <value>이동 실패</value>
+  </data>
+  <data name="WorkspaceMoveRollbackFailed" xml:space="preserve">
+    <value>원래 작업 공간의 메모는 유지되었지만 대상 작업 공간의 복사본을 제거하지 못했습니다.</value>
+  </data>
   <data name="MenuCancelBinding" xml:space="preserve">
     <value>연결 해제</value>
   </data>

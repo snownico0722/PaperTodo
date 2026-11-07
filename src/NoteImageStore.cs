@@ -672,6 +672,28 @@ public sealed class NoteImageStore : IDisposable
             });
     }
 
+    internal string CopyImageReferencesTo(NoteImageStore destination, string noteId, string markdown)
+    {
+        var ids = MarkdownImageReferences.Enumerate(markdown)
+            .Select(reference => reference.ImageId).Distinct(StringComparer.Ordinal).ToArray();
+        if (ids.Length == 0) return markdown;
+
+        var prepared = new List<PreparedImage>(ids.Length);
+        foreach (var id in ids)
+        {
+            if (!TryGetEncodedImageBytes(id, out var asset, out var bytes))
+                throw new InvalidDataException(Strings.Get("ImageStoreUnavailable"));
+            prepared.Add(new PreparedImage(bytes, asset.Mime, asset.OriginalName ?? "",
+                asset.Width, asset.Height));
+        }
+        // Copy encoded bytes, without decoding/recompression or reusing IDs from
+        // another workspace. The destination owns allocation and the LMDB write.
+        var copies = destination.AddEncodedImages(noteId, prepared);
+        var replacements = ids.Select((id, index) => (id, copies[index].Id))
+            .ToDictionary(entry => entry.id, entry => entry.Id, StringComparer.Ordinal);
+        return ReplaceImageReferenceIds(markdown, replacements);
+    }
+
     public string CloneForeignImageReferencesForNote(string noteId, string markdown)
     {
         if (string.IsNullOrWhiteSpace(noteId) || string.IsNullOrEmpty(markdown))

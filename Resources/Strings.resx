@@ -1855,6 +1855,21 @@
   <data name="SettingsDataProcessing" xml:space="preserve"><value>数据处理</value></data>
   <data name="TipHideSurfaceOutline" xml:space="preserve"><value>隐藏纸片、胶囊和菜单边缘的细描边，不改变大小；高对比度模式仍保留轮廓。</value></data>
   <data name="TipScriptCapsule" xml:space="preserve"><value>在笔记第一行写 !p 等指令，从第二行写 PowerShell；折叠后点击胶囊即可运行。下方设置也适用于顶栏「运行脚本」。</value></data>
+  <data name="WorkspaceSwitchGroup" xml:space="preserve">
+    <value>切换</value>
+  </data>
+  <data name="WorkspaceMoveGroup" xml:space="preserve">
+    <value>移动到</value>
+  </data>
+  <data name="WorkspaceCreateNew" xml:space="preserve">
+    <value>创建新工作区</value>
+  </data>
+  <data name="WorkspaceMoveFailed" xml:space="preserve">
+    <value>移动失败</value>
+  </data>
+  <data name="WorkspaceMoveRollbackFailed" xml:space="preserve">
+    <value>原工作区中的纸片已保留，但未能撤回目标工作区中的副本。</value>
+  </data>
   <data name="MenuCancelBinding" xml:space="preserve">
     <value>取消绑定</value>
   </data>
