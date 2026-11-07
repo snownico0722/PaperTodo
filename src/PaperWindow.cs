@@ -911,7 +911,7 @@ public sealed partial class PaperWindow : Window
             _advancedInteractionLocked ||
             IsPaperFormTransitioning ||
             WindowState != WindowState.Normal ||
-            (ResizeMode != ResizeMode.CanResize && ResizeMode != ResizeMode.CanResizeWithGrip) ||
+            ResizeMode != ResizeMode.CanResize ||
             !GetWindowRect(hwnd, out var bounds))
         {
             return false;
