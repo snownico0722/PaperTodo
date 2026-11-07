@@ -27,15 +27,6 @@ internal static class Program
             }
             if (args is ["--drag-benchmark", var dragOutput])
                 return MaterialDragBenchmarks.RunIsolated(dragOutput);
-            if (args is ["--resize-benchmark", var resizeOutput])
-                return MaterialDragBenchmarks.RunIsolatedResize(resizeOutput);
-            if (args is ["--resize-fixture", var resizeFixtureOutput])
-            {
-                RequireFixture();
-                using var controller = new AppController();
-                ResizeNativeBenchmarks.Run(controller, resizeFixtureOutput);
-                return 0;
-            }
             if (args is ["--drag-fixture", var fixtureOutput])
             {
                 RequireFixture();
