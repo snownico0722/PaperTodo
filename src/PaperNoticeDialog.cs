@@ -81,6 +81,10 @@ internal static class PaperNoticeDialog
         };
     }
 
+    internal static int? ShowOptions(Window? owner, string title, string message,
+        string[] actions, int primaryIndex = 0) =>
+        ShowCore(owner, title, message, actions, primaryIndex, width: 540);
+
     private static int? ShowCore(
         Window? owner,
         string titleText,

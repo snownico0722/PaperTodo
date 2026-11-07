@@ -89,7 +89,7 @@ public sealed partial class MarkdownTextBox
             return true;
         }
 
-        TextArea.PerformTextInput("\n");
+        TextArea.PerformTextInput(_preserveFileDocumentText ? NewLineTextAtCaret() : "\n");
         return true;
     }
 

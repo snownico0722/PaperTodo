@@ -1,9 +1,12 @@
+using System.Text;
 using System.IO;
 using System.Text.Json;
 using PaperTodo;
 
 var checks = new (string Name, Action Run)[]
 {
+    ("studio-file-save-preserves-encoding-and-failed-edit", StudioFileSavePreservesEncodingAndFailedEdit),
+    ("studio-recovery-keeps-document-and-pending-images", StudioRecoveryKeepsDocumentAndPendingImages),
     ("note-html-embeds-images-and-rejects-missing-assets", NoteHtmlChecks.Run),
     ("primary-save-faults-keep-a-loadable-generation", PrimarySaveFaultsKeepALoadableGeneration),
     ("backup-refresh-fault-keeps-old-backup", BackupRefreshFaultKeepsOldBackup),
@@ -50,6 +53,87 @@ if (failed != 0)
 
 Console.WriteLine($"Persistence checks passed: {checks.Length}/{checks.Length}");
 return 0;
+
+static void StudioFileSavePreservesEncodingAndFailedEdit()
+{
+    using var scope = new TempDirectory();
+    const string content = "# 文档\r\nfirst\nlast\r";
+    Encoding[] encodings =
+    [
+        new UTF8Encoding(false, true), new UTF8Encoding(true, true),
+        new UnicodeEncoding(false, true, true), new UnicodeEncoding(true, true, true),
+        new UTF32Encoding(false, true, true), new UTF32Encoding(true, true, true)
+    ];
+    foreach (var encoding in encodings)
+    {
+        var path = Path.Combine(scope.Path, "document.md");
+        File.WriteAllText(path, content, encoding);
+        var original = File.ReadAllBytes(path);
+        var document = StandaloneStudioDocument.Load(path);
+        Assert(document.Text == content && !document.IsDirty, "studio load altered text");
+        document.Save(path);
+        Assert(File.ReadAllBytes(path).SequenceEqual(original), "studio changed encoding, BOM or line endings");
+
+        document.Text += "unsaved";
+        var pendingText = document.Text;
+        var rejected = false;
+        using (var locked = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            try { document.Save(path); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { rejected = true; }
+        }
+        Assert(rejected, "studio save ignored a locked destination");
+        Assert(document.IsDirty && document.Text == pendingText && document.SavedText == content &&
+               File.ReadAllBytes(path).SequenceEqual(original), "failed studio save lost content or changed original");
+        AssertThrows<FileNotFoundException>(() => StandaloneStudioDocument.Load(
+            Path.Combine(scope.Path, "missing.txt")), "missing document did not fail");
+        Assert(document.IsDirty, "candidate read failure changed current document");
+    }
+
+    Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+    var htmlEncoding = Encoding.GetEncoding(1252);
+    var htmlPath = Path.Combine(scope.Path, "source.html");
+    const string html = "<meta charset=\"windows-1252\"><p>Café **source**</p>\r\n";
+    File.WriteAllText(htmlPath, html, htmlEncoding);
+    var htmlBytes = File.ReadAllBytes(htmlPath);
+    var htmlDocument = StandaloneStudioDocument.Load(htmlPath);
+    Assert(!htmlDocument.IsMarkdown && htmlDocument.Text == html, "HTML was not opened as source");
+    htmlDocument.Save(htmlPath);
+    Assert(File.ReadAllBytes(htmlPath).SequenceEqual(htmlBytes), "HTML source was converted or re-encoded");
+    htmlDocument.Text += "你";
+    AssertThrows<EncoderFallbackException>(() => htmlDocument.Save(htmlPath), "unrepresentable text was silently replaced");
+    Assert(htmlDocument.IsDirty && File.ReadAllBytes(htmlPath).SequenceEqual(htmlBytes),
+        "encoding failure lost pending HTML or changed the original file");
+}
+
+
+static void StudioRecoveryKeepsDocumentAndPendingImages()
+{
+    using var scope = new TempDirectory();
+    var recovery = new StandaloneStudioRecovery(Path.Combine(scope.Path, "recovery"));
+    Directory.CreateDirectory(recovery.AssetsDirectory);
+    var image = Path.Combine(recovery.AssetsDirectory, "pasted.png");
+    File.WriteAllBytes(image, [1, 2, 3, 4]);
+    var document = StandaloneStudioDocument.New();
+    document.Text = "pending\n![image](" + new Uri(image).AbsoluteUri + ")";
+    recovery.Save(document);
+    var restored = recovery.Load();
+    Assert(restored != null && restored.FilePath == null && restored.IsDirty &&
+           restored.Text == document.Text && restored.SavedText == "" &&
+           File.ReadAllBytes(image).SequenceEqual(new byte[] { 1, 2, 3, 4 }),
+        "recovery lost unsaved text, baseline or temporary images");
+    recovery.Discard();
+    Assert(!recovery.HasSnapshot && !File.Exists(image), "clean close left a stale recovery session");
+
+    // Once the recovery manifest has been discarded, a temporary image lock must
+    // not turn closing into a canceled operation with partly deleted editor assets.
+    Directory.CreateDirectory(recovery.AssetsDirectory);
+    File.WriteAllBytes(image, [1, 2, 3, 4]);
+    recovery.Save(document);
+    using (var locked = new FileStream(image, FileMode.Open, FileAccess.Read, FileShare.None))
+        recovery.Discard();
+    Assert(!recovery.HasSnapshot, "image cleanup failure kept a discarded recovery scene active");
+}
 
 static void PrimarySaveFaultsKeepALoadableGeneration()
 {

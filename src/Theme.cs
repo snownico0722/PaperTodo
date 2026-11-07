@@ -81,6 +81,11 @@ public static class Theme
         _paletteCache = null;
     }
 
+    // Only standalone Studio sets this process-local copy. Normal GUI ownership remains
+    // with AppController; no temporary preference is ever sent to StateStore.
+    internal static AppState? SettingsOverride { get; set; }
+    private static AppState? EffectiveState => SettingsOverride ?? AppController.Current?.State;
+
     public static bool IsDark
     {
         get
@@ -90,7 +95,7 @@ public static class Theme
                 return cached;
             }
 
-            var theme = AppController.Current?.State?.Theme;
+            var theme = EffectiveState?.Theme;
             bool dark = theme == "system" ? IsSystemDark() : theme == "dark";
             _isDarkCache = dark;
             return dark;
@@ -98,7 +103,7 @@ public static class Theme
     }
 
     private static string CurrentScheme => _schemeCache ??=
-        ColorSchemes.Normalize(AppController.Current?.State?.ColorScheme);
+        ColorSchemes.Normalize(EffectiveState?.ColorScheme);
 
     // Neutral leaves the system recipe untouched. Color is a light wash on the shell,
     // never a transparent semantic brush passed to editors or plugins.
@@ -109,7 +114,7 @@ public static class Theme
         get
         {
             var key = (Skin, CurrentScheme, IsDark, Current.Paper,
-                MaterialTransparencyLevels.Normalize(AppController.Current?.State.MaterialTransparency));
+                MaterialTransparencyLevels.Normalize(EffectiveState?.MaterialTransparency));
             if (_materialKey != key)
             {
                 _materialKey = key;
@@ -165,7 +170,7 @@ public static class Theme
         return false;
     }
 
-    public static string Skin => PaperSkins.Resolve(AppController.Current?.State);
+    public static string Skin => PaperSkins.Resolve(EffectiveState);
     public static bool UsesNativeBackdrop => PaperSkins.UsesNativeBackdrop(Skin);
     public static bool IsPixelSkin => Skin == PaperSkins.Pixel && !SystemParameters.HighContrast;
 

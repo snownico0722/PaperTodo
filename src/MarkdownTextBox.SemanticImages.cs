@@ -15,7 +15,7 @@ public sealed partial class MarkdownTextBox
     {
         return Document != null &&
             !line.IsDeleted &&
-            MarkdownImageReferences.TryParseReferenceLine(Document.GetText(line), out _);
+            TryParseImageReference(Document.GetText(line), out _);
     }
 
     private void EnableSemanticImagePresentation()
@@ -95,7 +95,7 @@ public sealed partial class MarkdownTextBox
 
         var semantic = snapshot.GetLine(Math.Max(0, line.LineNumber - 1));
         if (semantic.IsCode ||
-            !MarkdownImageReferences.TryParseReferenceLine(Document.GetText(line), out reference))
+            !TryParseImageReference(Document.GetText(line), out reference))
         {
             return false;
         }
