@@ -21,6 +21,8 @@ public sealed partial class PaperWindow
         if (_topBarTitleHost != null) _topBarTitleHost.CornerRadius = new CornerRadius(Theme.IsPixelSkin ? 0 : RadiusControl);
         if (_newTodoButton != null) _newTodoButton.Content = CreateTopBarNewTodoIcon(_newTodoButton);
         if (_newNoteButton != null) _newNoteButton.Content = CreateTopBarNewNoteIcon(_newNoteButton);
+        if (_runScriptButton != null) _runScriptButton.Content = CreateTopBarRunScriptIcon(_runScriptButton);
+        if (_moreActionsButton != null) _moreActionsButton.Content = CreateTopBarMoreIcon(_moreActionsButton);
         if (_closeButton != null) RefreshCloseButton();
     }
     private static FrameworkElement CreatePixelIcon(Button owner, params string[] rows)

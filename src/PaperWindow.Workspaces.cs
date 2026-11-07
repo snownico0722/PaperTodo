@@ -22,7 +22,13 @@ public sealed partial class PaperWindow
         var button = _workspaceButton = IconButton("", "");
         button.Width = 25;
         AutomationProperties.SetAutomationId(button, "WorkspaceCycle");
-        var icon = new Grid { Width = 20, Height = 20, IsHitTestVisible = false };
+        // The stacked outline spans x=4..18, y=2..16 in this 20-unit drawing.
+        // Move both layers together so the number stays centered on the front page.
+        var icon = new Grid
+        {
+            Width = 20, Height = 20, IsHitTestVisible = false,
+            RenderTransform = new TranslateTransform(-1, 1)
+        };
         var loop = new Path
         {
             Data = Geometry.Parse(WorkspaceCycleIcon.PathData),
@@ -45,12 +51,7 @@ public sealed partial class PaperWindow
         _workspaceNumberBadge.SetBinding(TextBlock.ForegroundProperty,
             new Binding(nameof(Control.Foreground)) { Source = button });
         icon.Children.Add(_workspaceNumberBadge);
-        button.Content = new Viewbox
-        {
-            Width = Math.Round(18 * TopBarIconScale(), 1),
-            Height = Math.Round(18 * TopBarIconScale(), 1),
-            Child = icon
-        };
+        button.Content = new Viewbox { Child = icon };
         button.Click += async (_, _) =>
         {
             if (_controller.IsWorkspaceSwitching) return;
@@ -81,7 +82,8 @@ public sealed partial class PaperWindow
             PaperTopBarShortcuts.Contains(_controller.State, _paper.Type, PaperTopBarShortcuts.Workspace)
                 ? Visibility.Visible : Visibility.Collapsed;
         _workspaceButton.IsEnabled = !_controller.IsWorkspaceSwitching;
-        _workspaceButton.Foreground = TextBrush;
+        if (_workspaceButton.Content is Viewbox icon)
+            icon.Width = icon.Height = Math.Round(18 * TopBarIconScale(), 1);
         if (_workspaceNumberBadge != null)
         {
             _workspaceNumberBadge.Text = number.ToString(UiLanguages.EffectiveCulture);
