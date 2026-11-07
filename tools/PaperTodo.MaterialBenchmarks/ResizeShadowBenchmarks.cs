@@ -48,6 +48,11 @@ internal static class ResizeShadowBenchmarks
         };
         var all = new List<Result>();
         GetCursorPos(out var originalCursor);
+        var originalDragFullWindowsAvailable = GetDragFullWindows(0x0026, 0, out var originalDragFullWindows, 0);
+        Console.WriteLine($"ENV drag-full-windows BEFORE={originalDragFullWindowsAvailable}:{originalDragFullWindows}");
+        var enabledDragFullWindows = SetDragFullWindows(0x0025, 1, IntPtr.Zero, 0);
+        var readAfter = GetDragFullWindows(0x0026, 0, out var afterDragFullWindows, 0);
+        Console.WriteLine($"ENV drag-full-windows SET={enabledDragFullWindows}, AFTER={readAfter}:{afterDragFullWindows}");
         var timerChanged = timeBeginPeriod(1) == 0;
         try
         {
@@ -126,6 +131,8 @@ internal static class ResizeShadowBenchmarks
             mouse_event(0x0004, 0, 0, 0, UIntPtr.Zero);
             SetCursorPos(originalCursor.X, originalCursor.Y);
             if (timerChanged) timeEndPeriod(1);
+            if (originalDragFullWindowsAvailable)
+                SetDragFullWindows(0x0025, (uint)originalDragFullWindows, IntPtr.Zero, 0);
             Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(output))!);
             File.WriteAllText(output, JsonSerializer.Serialize(new {
                 Revision = Environment.GetEnvironmentVariable("GITHUB_SHA"),
@@ -235,7 +242,10 @@ internal static class ResizeShadowBenchmarks
                 final.Bottom - final.Top >= height0 + 35,
                 $"real resize must change BOTH dimensions: {width0}x{height0} -> " +
                 $"{final.Right - final.Left}x{final.Bottom - final.Top} ({arm.Shadow})");
-            Program.Assert(samples.Count >= 20, $"native resize not progressing: {samples.Count} updates");
+            Console.WriteLine($"DIAG {paperType}/{arm.Shadow}: updates={samples.Count}, WM_SIZING={sizingCount}, " +
+                $"renders={renderTimes.Count}, layouts={layouts}, final delta={final.Right-final.Left-width0}x{final.Bottom-final.Top-height0}");
+            Program.Assert(samples.Count >= 20,
+                $"native resize not progressing: {samples.Count} updates; confirm drag-full-windows system option");
             var intervals = samples.Zip(samples.Skip(1), (a, b) => b.TimeMs - a.TimeMs).ToArray();
             var frameIntervals = renderTimes.Zip(renderTimes.Skip(1), (a, b) => b - a).ToArray();
             var gaps = samples.Select(s => Math.Max(0,
@@ -286,6 +296,10 @@ internal static class ResizeShadowBenchmarks
     private struct NativePoint { public int X, Y; }
     [StructLayout(LayoutKind.Sequential)]
     private struct NativeRect { public int Left, Top, Right, Bottom; }
+    [DllImport("user32.dll", EntryPoint="SystemParametersInfoW", SetLastError=true)]
+    private static extern bool SetDragFullWindows(uint action, uint value, IntPtr unused, uint flags);
+    [DllImport("user32.dll", EntryPoint="SystemParametersInfoW", SetLastError=true)]
+    private static extern bool GetDragFullWindows(uint action, uint unused, out int enabled, uint flags);
     [DllImport("user32.dll")] private static extern bool GetCursorPos(out NativePoint value);
     [DllImport("user32.dll")] private static extern bool SetCursorPos(int x, int y);
     [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hwnd, out NativeRect rect);
