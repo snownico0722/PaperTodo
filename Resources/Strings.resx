@@ -584,7 +584,7 @@
     <value>Markdown 渲染动画</value>
   </data>
   <data name="TipMarkdownEditAnimation" xml:space="preserve">
-    <value>光标进入块级编辑态、控制符时，用淡入动画呈现源码标记。</value>
+    <value>编辑 Markdown 时，需要重新显示的语法标记会以淡入动画出现，让编辑状态的切换更加自然。</value>
   </data>
   <data name="TipFullscreenTopmostMode" xml:space="preserve">
     <value>检测到视频、游戏等全屏时，纸片与边缘胶囊可暂时避让；
@@ -600,8 +600,7 @@
     <value>在待办项后显示已关联纸片的标题。</value>
   </data>
   <data name="TipAllowLongLinkedPaperTitles" xml:space="preserve">
-    <value>关闭时紧凑显示；开启后按内容加宽。
-单行约 5 个全角字，多行约 10 个。</value>
+    <value>开启后，会为待办后面的关联标题留出更多显示空间，减少文字被截断的情况。单行约 5 个汉字，多行约 10 个汉字。</value>
   </data>
   <data name="TipHideLinkedPapersFromCapsules" xml:space="preserve">
     <value>已关联到待办的纸片不再出现在胶囊列表，避免重复入口。</value>
@@ -649,7 +648,7 @@
     <value>队列顶部显示主胶囊，一键收起或展开当前队列。</value>
   </data>
   <data name="TipHideEdgeCapsuleCloseButtonOnHover" xml:space="preserve">
-    <value>开启后仍会正常伸长；延长区域作为普通胶囊区域使用，不显示关闭按钮。需要关闭时可在右键菜单中选择「隐藏」。</value>
+    <value>开启后，普通边缘胶囊在悬停或激活时不显示关闭按钮，也不保留关闭区域；需要隐藏时可在右键菜单中选择「隐藏」。</value>
   </data>
   <data name="TipMaxTitleLength" xml:space="preserve">
     <value>设置纸片标题最多显示的字数。中文和全角字符记作 1 字，英文、数字等半角字符记作 0.5 字。</value>
@@ -691,22 +690,6 @@
   <data name="TipFastAnimations" xml:space="preserve">
     <value>将界面动画时长缩短至约 60%，保留过渡效果但让操作响应更快。关闭“启用动画效果”时此设置不生效。</value>
   </data>
-  <data name="SettingsResizeGripMode" xml:space="preserve">
-    <value>缩放把手</value>
-  </data>
-  <data name="TipResizeGripMode" xml:space="preserve">
-    <value>纸片调整大小方式：标准为右下角不透明点阵；柔和为约 50% 透明点阵；隐藏不显示点阵，可拖动纸片四边或四角缩放。
-点色以 Windows 系统深浅反色为主，并略微带上当前配色；点阵样式不变。</value>
-  </data>
-  <data name="ResizeGripModeStandard" xml:space="preserve">
-    <value>标准</value>
-  </data>
-  <data name="ResizeGripModeSoft" xml:space="preserve">
-    <value>柔和</value>
-  </data>
-  <data name="ResizeGripModeHidden" xml:space="preserve">
-    <value>隐藏</value>
-  </data>
   <data name="TipPersistentPowerShellProcess" xml:space="preserve">
     <value>!pf / !powerf 使用常驻进程，启动更快，但变量与状态可能跨脚本保留。
 关闭后结束该进程。</value>
@@ -716,8 +699,8 @@
 在脚本中通过 !pwsh 或 !ps5 指定具体版本。</value>
   </data>
   <data name="TipHideScriptRunWindow" xml:space="preserve">
-    <value>隐藏脚本运行窗口。
-!p / !power 会等待结束并捕获错误；!pf / !powerf 只投递到常驻进程。</value>
+    <value>开启后，运行脚本时不会显示 PowerShell 窗口。
+使用 !p 或 !power 时，会等待脚本运行结束，并捕获执行错误；使用 !pf 或 !powerf 时，则会将脚本交给常驻进程运行。</value>
   </data>
   <data name="SettingsEnableTodoPaperLinks" xml:space="preserve">
     <value>启用待办关联纸片</value>
@@ -840,7 +823,8 @@
     <value>未激活的纸片自动半透明</value>
   </data>
   <data name="TipLabsInactivePaperOpacity" xml:space="preserve">
-    <value>仅影响展开且未激活的纸片；重新激活时立即恢复实体。</value>
+    <value>展开的纸片在失去焦点后会自动变得半透明，减少对桌面内容的遮挡。
+再次点击或激活这张纸片时，会恢复原来的不透明度。</value>
   </data>
   <data name="LabsInactivePaperOpacityLevel" xml:space="preserve">
     <value>失焦后的不透明度</value>
@@ -866,7 +850,7 @@
 此功能只对没有加入贴边队列的普通胶囊生效。再次拖动胶囊、吸附目标失效或关闭功能时，会自动解除吸附。</value>
   </data>
   <data name="LabsCapsuleMagnetEdgeModeNotice" xml:space="preserve">
-    <value>当前已开启贴边胶囊；折叠纸片会进入贴边队列，不由普通胶囊磁吸接管。可在常规设置中关闭贴边胶囊后使用。</value>
+    <value>当前已开启贴边胶囊模式，折叠后的纸片会直接加入侧边队列，普通胶囊磁吸暂时无法使用。</value>
   </data>
   <data name="LabsMagnetScreenEdges" xml:space="preserve">
     <value>屏幕边缘</value>
@@ -1088,9 +1072,9 @@
     <value>图片标记显示</value>
   </data>
   <data name="TipImageReferenceText" xml:space="preserve">
-    <value>控制图片对应 Markdown 标记的显示。
-「仅编辑时」：浏览态隐藏；
-「始终隐藏」：文字透明显示，可被选中。</value>
+    <value>控制笔记中图片对应的 Markdown 语法标记如何显示。
+「仅编辑时」：编辑时显示图片标记，浏览时隐藏。
+「始终隐藏」：即使正在编辑，也不显示图片标记，但这部分文字仍然可以被选中。</value>
   </data>
   <data name="ImageReferenceTextAlways" xml:space="preserve">
     <value>始终显示</value>
@@ -1254,13 +1238,17 @@
   </data>
   <data name="LabsMcp" xml:space="preserve"><value>MCP 本地接口</value></data>
   <data name="LabsMcpEnable" xml:space="preserve"><value>启用 MCP 连接</value></data>
-  <data name="TipLabsMcpEnable" xml:space="preserve"><value>允许本机 AI 客户端通过同一个 PaperTodo.exe 的 --mcp 模式读取纸片。关闭后命名管道立即停止。</value></data>
+  <data name="TipLabsMcpEnable" xml:space="preserve"><value>开启后，本机支持 MCP 的 AI 工具可以连接 PaperTodo，并读取纸片中的内容。
+修改或删除内容需要另外开启下方的对应权限。关闭 MCP 后，连接会立即停止。</value></data>
   <data name="LabsMcpBlankWrites" xml:space="preserve"><value>允许新增和追加内容</value></data>
-  <data name="TipLabsMcpBlankWrites" xml:space="preserve"><value>允许新建纸片、向已有待办纸添加新待办、填写空白内容以及追加笔记；不会覆盖已有文字。</value></data>
+  <data name="TipLabsMcpBlankWrites" xml:space="preserve"><value>允许连接的 AI 新建纸片、添加待办、填写空白内容，以及在现有笔记末尾追加文字。
+这项权限不会允许 AI 替换或覆盖已经写好的内容。</value></data>
   <data name="LabsMcpFullWrites" xml:space="preserve"><value>允许修改已有内容</value></data>
-  <data name="TipLabsMcpFullWrites" xml:space="preserve"><value>允许修改已有待办文字、替换笔记、修改完成状态和提醒；同时包含空白与追加写入权限。</value></data>
+  <data name="TipLabsMcpFullWrites" xml:space="preserve"><value>允许连接的 AI 修改已有待办、替换笔记内容，以及调整待办的完成状态和提醒时间。
+开启后也会自动包含新增纸片、添加待办和追加内容的权限。</value></data>
   <data name="LabsMcpDeletes" xml:space="preserve"><value>允许 MCP 直接删除</value></data>
-  <data name="TipLabsMcpDeletes" xml:space="preserve"><value>开启即预授权 AI 直接删除纸片或待办，不再逐次弹窗确认；操作无法自动撤销，请谨慎启用。</value></data>
+  <data name="TipLabsMcpDeletes" xml:space="preserve"><value>开启后，连接的 AI 可以直接删除纸片或待办，不再每次弹出确认窗口。
+删除操作无法自动撤销。请只在信任所使用的 AI 工具时开启。</value></data>
   <data name="LabsMcpStatusReady" xml:space="preserve"><value>本地 MCP 接口已就绪</value></data>
   <data name="LabsMcpStatusDisabled" xml:space="preserve"><value>本地 MCP 接口已关闭</value></data>
   <data name="LabsMcpCopyCodex" xml:space="preserve"><value>复制 Codex 配置</value></data>
@@ -1417,7 +1405,8 @@
     <value>无法打开关联路径</value>
   </data>
   <data name="LinkedPathOpenFailureMessage" xml:space="preserve">
-    <value>无法调用系统打开该路径：&#xA;{0}</value>
+    <value>无法打开关联的文件或文件夹：
+{0}</value>
   </data>
   <data name="LinkedPathMissingMessage" xml:space="preserve">
     <value>关联的文件或文件夹已移动或删除：&#xA;{0}</value>
@@ -1426,7 +1415,8 @@
     <value>关联文件只显示扩展名</value>
   </data>
   <data name="TipShowLinkedPathExtensionOnly" xml:space="preserve">
-    <value>开启后，文件快启在关闭关联纸片长标题时只显示扩展名；文件夹和无扩展名文件仍显示短名称。</value>
+    <value>开启后，关联的文件只显示扩展名，例如 .pdf、.png，不再显示完整文件名。
+文件夹和没有扩展名的文件仍会显示名称。</value>
   </data>
   <data name="SettingsDeepCapsuleGap" xml:space="preserve">
     <value>边缘胶囊间距</value>
@@ -1591,49 +1581,51 @@
     <value>外部编辑</value>
   </data>
   <data name="DataReloadConflictTitle" xml:space="preserve">
-    <value>PaperTodo 数据冲突</value>
+    <value>发现数据冲突</value>
   </data>
   <data name="DataReloadConflictPath" xml:space="preserve">
-    <value>路径:{0}</value>
+    <value>路径：{0}</value>
   </data>
   <data name="DataReloadConflictMemoryHeader" xml:space="preserve">
-    <value>当前(PaperTodo)</value>
+    <value>当前数据</value>
   </data>
   <data name="DataReloadConflictExternalHeader" xml:space="preserve">
-    <value>传入(外部文件)</value>
+    <value>导入数据</value>
   </data>
   <data name="DataReloadConflictKeepMemory" xml:space="preserve">
     <value>保留当前</value>
   </data>
   <data name="DataReloadConflictKeepExternal" xml:space="preserve">
-    <value>保留传入</value>
+    <value>保留导入</value>
   </data>
   <data name="DataReloadConflictValueMissing" xml:space="preserve">
-    <value>(缺失)</value>
+    <value>（无此项）</value>
   </data>
   <data name="DataReloadConflictMemoryOnlyTooltip" xml:space="preserve">
-    <value>当前 PaperTodo 内存中有,外部文件中没有。"保留当前" 会保留;"保留传入" 会丢弃。</value>
+    <value>这项内容只存在于 PaperTodo 当前的数据中，导入文件里没有。
+选择「保留当前」会保留这项内容；选择「保留导入」则会将它从当前数据中删除。</value>
   </data>
   <data name="DataReloadConflictExternalOnlyTooltip" xml:space="preserve">
-    <value>外部文件中有,当前 PaperTodo 内存中没有。"保留传入" 会采用;"保留当前" 会丢弃。</value>
+    <value>这项内容只存在于导入文件中，PaperTodo 当前的数据里没有。
+选择「保留导入」会将它加入当前数据；选择「保留当前」则不会导入这项内容。</value>
   </data>
   <data name="DataReloadPaperConflictTitle" xml:space="preserve">
-    <value>Paper 数据冲突</value>
+    <value>纸片内容有冲突</value>
   </data>
   <data name="DataReloadPaperConflictHeader" xml:space="preserve">
-    <value>Paper ID:{0}  类型:{1}</value>
+    <value>纸片编号：{0} · 类型：{1}</value>
   </data>
   <data name="DataReloadPaperConflictField" xml:space="preserve">
-    <value>字段:{0}</value>
+    <value>冲突项：{0}</value>
   </data>
   <data name="DataReloadPaperConflictKeepAllMemory" xml:space="preserve">
     <value>全部保留当前</value>
   </data>
   <data name="DataReloadPaperConflictKeepAllExternal" xml:space="preserve">
-    <value>全部保留传入</value>
+    <value>全部保留导入</value>
   </data>
   <data name="DataReloadPaperConflictWholePaper" xml:space="preserve">
-    <value>(整张 paper)</value>
+    <value>（整张纸片）</value>
   </data>
   <data name="WorkspaceSettingsTitle" xml:space="preserve">
     <value>工作区</value>
@@ -1708,8 +1700,8 @@
   </data>
   <data name="SettingsDataMergeConflicts" xml:space="preserve"><value>合并数据时遇到冲突</value></data>
   <data name="DataMergeConflictAsk" xml:space="preserve"><value>冲突时询问（默认）</value></data>
-  <data name="DataMergeConflictExternal" xml:space="preserve"><value>外部优先</value></data>
-  <data name="DataMergeConflictInternal" xml:space="preserve"><value>内部优先</value></data>
+  <data name="DataMergeConflictExternal" xml:space="preserve"><value>导入数据优先</value></data>
+  <data name="DataMergeConflictInternal" xml:space="preserve"><value>当前数据优先</value></data>
   <data name="TipDataMergeConflicts" xml:space="preserve"><value>合并数据时，两份数据中没有冲突的修改都会保留。同一项内容发生冲突时，按照选择的方式决定保留哪一份。
 「当前数据」指 PaperTodo 目前保存的内容，「导入数据」指这次从外部文件读取的内容。
 如果缺少原始版本，仍会询问如何处理。</value></data>
