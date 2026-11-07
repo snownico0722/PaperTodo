@@ -1641,7 +1641,7 @@ PaperTodo를 수동으로 다시 여세요. 문제가 반복되면 PC를 다시 
   <data name="NoteExportSummary" xml:space="preserve"><value>메모/할 일 {0}/{1}개를 내보냈습니다.&#xA;누락된 이미지: {2}개 (항목 {3}개).&#xA;저장 위치: {4}</value></data>
   <data name="NoteExportFailedNotes" xml:space="preserve"><value>내보내기에 실패한 항목:&#xA;{0}</value></data>
   <data name="NoteExportFailure" xml:space="preserve"><value>내보내기 실패: {0}</value></data>
-  <data name="NoteExportNoNotes" xml:space="preserve"><value>내보낼 수 있는 메모 또는 할 일이 없습니다.</value></data>
+  <data name="NoteExportNoNotes" xml:space="preserve"><value>선택한 범위에 내보낼 종이가 없습니다.</value></data>
   <data name="NoteExportProgress" xml:space="preserve"><value>내보내는 중 {0}/{1}개</value></data>
   <data name="TodoExportCurrent" xml:space="preserve"><value>현재 할 일 내보내기</value></data>
   <data name="SettingsCapsuleFreeQueues" xml:space="preserve"><value>캡슐 자유 대기열</value></data>
@@ -1758,8 +1758,9 @@ PaperTodo를 수동으로 다시 여세요. 문제가 반복되면 PC를 다시 
     <value>이전 작업 공간의 스크립트 프로세스와 상주 PowerShell 세션이 종료되었습니다.</value>
   </data>
   <data name="MenuExport" xml:space="preserve"><value>내보내기</value></data>
-  <data name="MenuExportCurrentNote" xml:space="preserve"><value>현재 노트</value></data>
-  <data name="MenuExportCurrentTodo" xml:space="preserve"><value>현재 할 일</value></data>
+  <data name="MenuExportCurrent" xml:space="preserve"><value>현재 항목</value></data>
+  <data name="MenuExportAllNotes" xml:space="preserve"><value>모든 노트</value></data>
+  <data name="MenuExportAllTodos" xml:space="preserve"><value>모든 할 일</value></data>
   <data name="MenuExportAllPapers" xml:space="preserve"><value>모든 노트 및 할 일</value></data>
   <data name="MenuTopBarAssociationDragTodo" xml:space="preserve"><value>할 일로 끌어서 연결</value></data>
   <data name="MenuTopBarAssociationDragWindow" xml:space="preserve"><value>창으로 끌어서 연결</value></data>

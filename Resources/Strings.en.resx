@@ -1641,7 +1641,7 @@ The original note is kept.</value></data>
   <data name="NoteExportSummary" xml:space="preserve"><value>Exported {0}/{1} papers.&#xA;Missing images: {2} across {3} papers.&#xA;Saved to: {4}</value></data>
   <data name="NoteExportFailedNotes" xml:space="preserve"><value>Failed papers:&#xA;{0}</value></data>
   <data name="NoteExportFailure" xml:space="preserve"><value>Export failed: {0}</value></data>
-  <data name="NoteExportNoNotes" xml:space="preserve"><value>There are no Markdown notes or todo papers to export.</value></data>
+  <data name="NoteExportNoNotes" xml:space="preserve"><value>There are no papers to export in this selection.</value></data>
   <data name="NoteExportProgress" xml:space="preserve"><value>Exporting {0}/{1} papers</value></data>
   <data name="TodoExportCurrent" xml:space="preserve"><value>Export this todo paper</value></data>
   <data name="SettingsCapsuleFreeQueues" xml:space="preserve"><value>Capsule free queues</value></data>
@@ -1758,8 +1758,9 @@ Resolve the file access problem and retry, or choose “Rebuild workspace” to 
     <value>Script processes from the previous workspace have ended, and its persistent PowerShell sessions have closed.</value>
   </data>
   <data name="MenuExport" xml:space="preserve"><value>Export</value></data>
-  <data name="MenuExportCurrentNote" xml:space="preserve"><value>Current note</value></data>
-  <data name="MenuExportCurrentTodo" xml:space="preserve"><value>Current todo</value></data>
+  <data name="MenuExportCurrent" xml:space="preserve"><value>Current</value></data>
+  <data name="MenuExportAllNotes" xml:space="preserve"><value>All notes</value></data>
+  <data name="MenuExportAllTodos" xml:space="preserve"><value>All todos</value></data>
   <data name="MenuExportAllPapers" xml:space="preserve"><value>All notes and todos</value></data>
   <data name="MenuTopBarAssociationDragTodo" xml:space="preserve"><value>Drag to a todo to associate</value></data>
   <data name="MenuTopBarAssociationDragWindow" xml:space="preserve"><value>Drag to a window to associate</value></data>

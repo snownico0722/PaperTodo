@@ -1719,7 +1719,7 @@
   <data name="NoteExportSummary" xml:space="preserve"><value>已导出 {0}/{1} 张纸片。&#xA;缺失图片：{2} 张（涉及 {3} 张纸片）。&#xA;保存到：{4}</value></data>
   <data name="NoteExportFailedNotes" xml:space="preserve"><value>导出失败的纸片：&#xA;{0}</value></data>
   <data name="NoteExportFailure" xml:space="preserve"><value>导出失败：{0}</value></data>
-  <data name="NoteExportNoNotes" xml:space="preserve"><value>没有可导出的笔记或待办。</value></data>
+  <data name="NoteExportNoNotes" xml:space="preserve"><value>此范围内没有可导出的纸片。</value></data>
   <data name="NoteExportProgress" xml:space="preserve"><value>正在导出 {0}/{1} 张纸片</value></data>
   <data name="TodoExportCurrent" xml:space="preserve"><value>导出当前待办</value></data>
   <data name="SettingsCapsuleFreeQueues" xml:space="preserve"><value>胶囊自由队列</value></data>
@@ -1837,8 +1837,9 @@
     <value>上一工作区的脚本进程已结束，常驻 PowerShell 会话已关闭。</value>
   </data>
   <data name="MenuExport" xml:space="preserve"><value>导出</value></data>
-  <data name="MenuExportCurrentNote" xml:space="preserve"><value>当前笔记</value></data>
-  <data name="MenuExportCurrentTodo" xml:space="preserve"><value>当前待办</value></data>
+  <data name="MenuExportCurrent" xml:space="preserve"><value>当前</value></data>
+  <data name="MenuExportAllNotes" xml:space="preserve"><value>全部笔记</value></data>
+  <data name="MenuExportAllTodos" xml:space="preserve"><value>全部待办</value></data>
   <data name="MenuExportAllPapers" xml:space="preserve"><value>全部笔记与待办</value></data>
   <data name="MenuTopBarAssociationDragTodo" xml:space="preserve"><value>拖到待办以关联</value></data>
   <data name="MenuTopBarAssociationDragWindow" xml:space="preserve"><value>拖到窗口以关联</value></data>

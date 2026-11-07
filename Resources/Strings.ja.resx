@@ -1641,7 +1641,7 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
   <data name="NoteExportSummary" xml:space="preserve"><value>{0}/{1} 件をエクスポートしました。&#xA;不足画像：{2} 件（{3} 件に影響）。&#xA;保存先：{4}</value></data>
   <data name="NoteExportFailedNotes" xml:space="preserve"><value>エクスポートに失敗した項目：&#xA;{0}</value></data>
   <data name="NoteExportFailure" xml:space="preserve"><value>エクスポートに失敗しました：{0}</value></data>
-  <data name="NoteExportNoNotes" xml:space="preserve"><value>エクスポートできるメモまたは ToDo がありません。</value></data>
+  <data name="NoteExportNoNotes" xml:space="preserve"><value>選択した範囲にエクスポートできる用紙がありません。</value></data>
   <data name="NoteExportProgress" xml:space="preserve"><value>エクスポート中 {0}/{1} 件</value></data>
   <data name="TodoExportCurrent" xml:space="preserve"><value>この ToDo をエクスポート</value></data>
   <data name="SettingsCapsuleFreeQueues" xml:space="preserve"><value>カプセルの自由キュー</value></data>
@@ -1758,8 +1758,9 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
     <value>前のワークスペースのスクリプトプロセスと常駐 PowerShell セッションを終了しました。</value>
   </data>
   <data name="MenuExport" xml:space="preserve"><value>エクスポート</value></data>
-  <data name="MenuExportCurrentNote" xml:space="preserve"><value>現在のノート</value></data>
-  <data name="MenuExportCurrentTodo" xml:space="preserve"><value>現在のToDo</value></data>
+  <data name="MenuExportCurrent" xml:space="preserve"><value>現在の用紙</value></data>
+  <data name="MenuExportAllNotes" xml:space="preserve"><value>すべてのノート</value></data>
+  <data name="MenuExportAllTodos" xml:space="preserve"><value>すべてのタスク</value></data>
   <data name="MenuExportAllPapers" xml:space="preserve"><value>すべてのノートとToDo</value></data>
   <data name="MenuTopBarAssociationDragTodo" xml:space="preserve"><value>ToDoへドラッグして関連付け</value></data>
   <data name="MenuTopBarAssociationDragWindow" xml:space="preserve"><value>ウィンドウへドラッグして関連付け</value></data>

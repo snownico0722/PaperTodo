@@ -2746,12 +2746,10 @@ public sealed partial class PaperWindow : Window
                     : Strings.Get("MenuExport"),
                 IsEnabled = !_paperExportRunning
             };
-            var currentLabel = _paper.Type == PaperTypes.Todo
-                ? "MenuExportCurrentTodo" : "MenuExportCurrentNote";
-            export.Items.Add(MenuItem(Strings.Get(currentLabel),
-                (_, _) => ExportPapers(all: false)));
-            export.Items.Add(MenuItem(Strings.Get("MenuExportAllPapers"),
-                (_, _) => ExportPapers(all: true)));
+            export.Items.Add(MenuItem(Strings.Get("MenuExportCurrent"), (_, _) => ExportPapers(ExportScope.Current)));
+            export.Items.Add(MenuItem(Strings.Get("MenuExportAllNotes"), (_, _) => ExportPapers(ExportScope.Notes)));
+            export.Items.Add(MenuItem(Strings.Get("MenuExportAllTodos"), (_, _) => ExportPapers(ExportScope.Todos)));
+            export.Items.Add(MenuItem(Strings.Get("MenuExportAllPapers"), (_, _) => ExportPapers(ExportScope.All)));
             menu.Items.Add(export);
         }
 

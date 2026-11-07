@@ -210,7 +210,8 @@ internal static class MaterialPresentationChecks
             Program.Pump();
             Program.Assert(exportMenu.IsSubmenuOpen && exportMenu.Items.OfType<MenuItem>()
                     .Select(item => item.Header as string).SequenceEqual(new[] {
-                        Strings.Get("MenuExportCurrentTodo"), Strings.Get("MenuExportAllPapers") }),
+                        Strings.Get("MenuExportCurrent"), Strings.Get("MenuExportAllNotes"),
+                        Strings.Get("MenuExportAllTodos"), Strings.Get("MenuExportAllPapers") }),
                 "export scopes remain reachable inside one real submenu");
             exportMenu.IsSubmenuOpen = false;
             var narrowPlugins = narrowMenu.Items.OfType<MenuItem>().Single(item =>
