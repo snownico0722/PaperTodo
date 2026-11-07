@@ -1507,7 +1507,7 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
     <value>오른쪽으로 이동</value>
   </data>
   <data name="MenuTopBarAssociationDrag" xml:space="preserve">
-    <value>누른 채 끌어서 연결</value>
+    <value>할 일 또는 창으로 끌어서 연결</value>
   </data>
   <data name="MenuTopBarPluginActions" xml:space="preserve">
     <value>플러그인 작업</value>
@@ -1658,7 +1658,7 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="NoteHtmlSaved" xml:space="preserve"><value>저장 위치: {0}
 원본 노트는 유지됩니다.</value></data>
   <data name="NoteExportCurrent" xml:space="preserve"><value>현재 노트 내보내기</value></data>
-  <data name="NoteExportAll" xml:space="preserve"><value>모든 메모 및 할 일 내보내기</value></data>
+  <data name="NoteExportAll" xml:space="preserve"><value>모든 노트 및 할 일 내보내기</value></data>
   <data name="NoteExportMarkdownType" xml:space="preserve"><value>Markdown 문서</value></data>
   <data name="NoteExportHtmlType" xml:space="preserve"><value>HTML 문서</value></data>
   <data name="NoteExportMarkdownZipType" xml:space="preserve"><value>Markdown ZIP</value></data>
@@ -1745,25 +1745,64 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="WorkspaceRecoveryFallback" xml:space="preserve">
     <value>작업 공간 {0}(으)로 돌아가기</value>
   </data>
-  <data name="WorkbenchTitle" xml:space="preserve"><value>캔버스</value></data>
+  <data name="WorkspaceRecoveryUnavailableMessage" xml:space="preserve">
+    <value>작업 공간 {0}의 데이터와 백업을 복원할 수 없습니다.
+
+“작업 공간 다시 만들기”을 선택하면 작업 공간 {0}의 메모, 할 일, 설정을 빈 상태에서 시작합니다.</value>
+  </data>
+  <data name="WorkspaceBackupReadFailedMessage" xml:space="preserve">
+    <value>작업 공간 {0}의 고정 백업을 현재 읽을 수 없습니다.
+{1}
+
+파일 접근 문제를 해결한 후 다시 시도하거나, “작업 공간 다시 만들기”을 선택하여 메모, 할 일, 설정을 빈 상태에서 시작할 수 있습니다.</value>
+  </data>
+  <data name="SettingsNotesAndTodos" xml:space="preserve"><value>노트 및 할 일</value></data>
+  <data name="WorkspaceSingleMessage" xml:space="preserve"><value>현재 작업 공간이 하나뿐입니다.</value></data>
+  <data name="WorkspaceCreate" xml:space="preserve"><value>새로 만들기</value></data>
+  <data name="TopBarHideShortcut" xml:space="preserve">
+    <value>숨기기</value>
+  </data>
+  <data name="TopBarRunScript" xml:space="preserve">
+    <value>스크립트 실행</value>
+  </data>
+  <data name="TopBarEditScript" xml:space="preserve">
+    <value>스크립트 편집</value>
+  </data>
+  <data name="TopBarScriptSave" xml:space="preserve">
+    <value>저장</value>
+  </data>
+  <data name="WorkspaceScriptsStoppedTitle" xml:space="preserve">
+    <value>작업 공간 전환 완료</value>
+  </data>
+  <data name="WorkspaceScriptsStoppedMessage" xml:space="preserve">
+    <value>이전 작업 공간의 스크립트 프로세스가 종료되었습니다.</value>
+  </data>
+  <data name="WorkspaceSessionsClosedMessage" xml:space="preserve">
+    <value>이전 작업 공간의 상주 PowerShell 세션이 종료되었습니다.</value>
+  </data>
+  <data name="WorkspaceScriptsAndSessionsStoppedMessage" xml:space="preserve">
+    <value>이전 작업 공간의 스크립트 프로세스와 상주 PowerShell 세션이 종료되었습니다.</value>
+  </data>
+  <data name="MenuExport" xml:space="preserve"><value>내보내기</value></data>
+  <data name="MenuExportCurrentNote" xml:space="preserve"><value>현재 노트</value></data>
+  <data name="MenuExportCurrentTodo" xml:space="preserve"><value>현재 할 일</value></data>
+  <data name="MenuExportAllPapers" xml:space="preserve"><value>모든 노트 및 할 일</value></data>
+  <data name="MenuTopBarAssociationDragTodo" xml:space="preserve"><value>할 일로 끌어서 연결</value></data>
+  <data name="MenuTopBarAssociationDragWindow" xml:space="preserve"><value>창으로 끌어서 연결</value></data>
+  <data name="WorkspaceDataSettingsTitle" xml:space="preserve"><value>작업 공간 및 데이터</value></data>
+  <data name="SettingsDataProcessing" xml:space="preserve"><value>데이터 처리</value></data>
+  <data name="WorkbenchTitle" xml:space="preserve"><value>무한 작업대</value></data>
   <data name="WorkbenchOverview" xml:space="preserve"><value>모든 작업 공간</value></data>
   <data name="WorkbenchCurrent" xml:space="preserve"><value>현재 작업 공간</value></data>
   <data name="WorkbenchNewNote" xml:space="preserve"><value>새 노트</value></data>
   <data name="WorkbenchNewTodo" xml:space="preserve"><value>새 할 일</value></data>
   <data name="WorkbenchArrange" xml:space="preserve"><value>레이아웃 정리</value></data>
-  <data name="WorkbenchUndo" xml:space="preserve"><value>작업 실행 취소</value></data>
+  <data name="WorkbenchUndo" xml:space="preserve"><value>배치 실행 취소</value></data>
   <data name="WorkbenchSearch" xml:space="preserve"><value>모든 작업 공간 검색. Enter를 눌러 결과로 이동</value></data>
   <data name="WorkbenchRefresh" xml:space="preserve"><value>개요 새로 고침</value></data>
   <data name="WorkbenchClose" xml:space="preserve"><value>바탕 화면으로 돌아가기</value></data>
-  <data name="WorkbenchHint" xml:space="preserve"><value>빈 공간 드래그: 카드 범위 선택&#10;Ctrl + 클릭: 다중 선택, Ctrl + G: 그룹&#10;카드 오른쪽 클릭: 전체 작업 메뉴&#10;오른쪽 드래그: 화면 이동&#10;Alt + 휠: 확대·축소&#10;제목줄 연결 아이콘 드래그: 카드 연결</value></data>
-  <data name="WorkbenchHelp" xml:space="preserve"><value>캔버스 도움말</value></data>
-  <data name="WorkbenchImportMaterials" xml:space="preserve"><value>자료 가져오기</value></data>
-  <data name="WorkbenchImportDialogFilter" xml:space="preserve"><value>모든 파일 (*.*)|*.*|이미지 (*.png;*.jpg;*.jpeg;*.gif;*.webp;*.bmp)|*.png;*.jpg;*.jpeg;*.gif;*.webp;*.bmp</value></data>
-  <data name="WorkbenchCollapseCard" xml:space="preserve"><value>카드 접기</value></data>
-  <data name="WorkbenchExpandCard" xml:space="preserve"><value>카드 펼치기</value></data>
-  <data name="WorkbenchLockCard" xml:space="preserve"><value>위치 잠금</value></data>
-  <data name="WorkbenchUnlockCard" xml:space="preserve"><value>위치 잠금 해제</value></data>
-  <data name="WorkbenchError" xml:space="preserve"><value>캔버스 작업 실패: {0}</value></data>
+  <data name="WorkbenchHint" xml:space="preserve"><value>제목 표시줄을 드래그하여 이동하고 두 번 클릭하여 이름을 바꿉니다. 오른쪽 아래에서 크기를 조절합니다. 가운데 버튼으로 이동, Alt+휠로 확대/축소합니다. 다른 앱으로 전환해도 작업대는 유지됩니다.</value></data>
+  <data name="WorkbenchError" xml:space="preserve"><value>작업대 작업 실패: {0}</value></data>
   <data name="WorkbenchPinConflict" xml:space="preserve"><value>고정된 메모가 겹칩니다. 위치는 유지됩니다. 하나를 이동하거나 고정을 해제하세요.</value></data>
   <data name="WorkbenchDelete" xml:space="preserve"><value>메모 삭제</value></data>
   <data name="WorkbenchDeleteConfirm" xml:space="preserve"><value>이 메모와 내용을 삭제할까요?</value></data>
@@ -1779,6 +1818,13 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="WorkbenchBindToTodo" xml:space="preserve"><value>할 일 항목에 연결</value></data>
   <data name="WorkbenchUnnamedTodo" xml:space="preserve"><value>제목 없는 할 일</value></data>
   <data name="WorkbenchBindTodoFailed" xml:space="preserve"><value>해당 할 일에 연결할 수 없습니다.</value></data>
+  <data name="WorkbenchHelp" xml:space="preserve"><value>캔버스 도움말</value></data>
+  <data name="WorkbenchImportMaterials" xml:space="preserve"><value>자료 가져오기</value></data>
+  <data name="WorkbenchImportDialogFilter" xml:space="preserve"><value>모든 파일 (*.*)|*.*|이미지 (*.png;*.jpg;*.jpeg;*.gif;*.webp;*.bmp)|*.png;*.jpg;*.jpeg;*.gif;*.webp;*.bmp</value></data>
+  <data name="WorkbenchCollapseCard" xml:space="preserve"><value>카드 접기</value></data>
+  <data name="WorkbenchExpandCard" xml:space="preserve"><value>카드 펼치기</value></data>
+  <data name="WorkbenchLockCard" xml:space="preserve"><value>위치 잠금</value></data>
+  <data name="WorkbenchUnlockCard" xml:space="preserve"><value>위치 잠금 해제</value></data>
   <data name="WorkbenchNewNode" xml:space="preserve"><value>새 노드</value></data>
   <data name="WorkbenchGroupSelection" xml:space="preserve"><value>그룹으로 묶기</value></data>
   <data name="WorkbenchUngroup" xml:space="preserve"><value>그룹 해제</value></data>
@@ -1815,45 +1861,4 @@ papertodo와 PaperTodo_Bold(.ttf/.otf)를 함께 두세요.</value>
   <data name="WorkbenchDeleteMaterial" xml:space="preserve"><value>자료 삭제</value></data>
   <data name="WorkbenchDeleteMaterialConfirm" xml:space="preserve"><value>이 자료를 삭제할까요? 원본 파일과 폴더는 유지됩니다.</value></data>
   <data name="WorkbenchTransferHistoryBlocked" xml:space="preserve"><value>이 이동을 취소하려면 먼저 관련 페이퍼의 이후 편집, 그룹 또는 연결을 실행 취소하세요.</value></data>
-  <data name="WorkspaceRecoveryUnavailableMessage" xml:space="preserve">
-    <value>작업 공간 {0}의 데이터와 백업을 복원할 수 없습니다.
-
-“작업 공간 다시 만들기”을 선택하면 작업 공간 {0}의 메모, 할 일, 설정을 빈 상태에서 시작합니다.</value>
-  </data>
-  <data name="WorkspaceBackupReadFailedMessage" xml:space="preserve">
-    <value>작업 공간 {0}의 고정 백업을 현재 읽을 수 없습니다.
-{1}
-
-파일 접근 문제를 해결한 후 다시 시도하거나, “작업 공간 다시 만들기”을 선택하여 메모, 할 일, 설정을 빈 상태에서 시작할 수 있습니다.</value>
-  </data>
-  <data name="SettingsNotesAndTodos" xml:space="preserve"><value>노트 및 할 일</value></data>
-  <data name="WorkspaceSingleMessage" xml:space="preserve"><value>현재 작업 공간이 하나뿐입니다.</value></data>
-  <data name="WorkspaceCreate" xml:space="preserve"><value>새로 만들기</value></data>
-  <data name="TopBarHideShortcut" xml:space="preserve">
-    <value>숨기기</value>
-  </data>
-  <data name="TopBarRunScript" xml:space="preserve">
-    <value>스크립트 실행</value>
-  </data>
-  <data name="TopBarEditScript" xml:space="preserve">
-    <value>스크립트 편집</value>
-  </data>
-  <data name="TopBarScriptSave" xml:space="preserve">
-    <value>저장</value>
-  </data>
-  <data name="TopBarScriptHint" xml:space="preserve">
-    <value>접두사가 없으면 !p로 실행합니다. 지원 접두사: !p / !power, !pwsh / !ps7, !ps5 / !winps, !pf / !powerf. 첫 줄에는 접두사만 입력하고 다음 줄부터 스크립트를 작성하세요. 반각 !만 지원합니다. 저장해도 실행되지 않습니다.</value>
-  </data>
-  <data name="WorkspaceScriptsStoppedTitle" xml:space="preserve">
-    <value>작업 공간 전환 완료</value>
-  </data>
-  <data name="WorkspaceScriptsStoppedMessage" xml:space="preserve">
-    <value>이전 작업 공간의 스크립트 프로세스가 종료되었습니다.</value>
-  </data>
-  <data name="WorkspaceSessionsClosedMessage" xml:space="preserve">
-    <value>이전 작업 공간의 상주 PowerShell 세션이 종료되었습니다.</value>
-  </data>
-  <data name="WorkspaceScriptsAndSessionsStoppedMessage" xml:space="preserve">
-    <value>이전 작업 공간의 스크립트 프로세스와 상주 PowerShell 세션이 종료되었습니다.</value>
-  </data>
 </root>

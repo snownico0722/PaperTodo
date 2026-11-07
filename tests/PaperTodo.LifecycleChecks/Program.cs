@@ -47,15 +47,10 @@ internal static class Program
         }
         try
         {
-            var cases = args switch
-            {
-                [] => Cases,
-                ["--case", var selector] => Cases.Where(name => selector.EndsWith('*')
-                    ? name.StartsWith(selector[..^1], StringComparison.Ordinal)
-                    : name == selector).ToArray(),
-                _ => throw new ArgumentException("Use --case with a lifecycle fixture name or a prefix ending in *.")
-            };
-            if (cases.Length == 0) throw new ArgumentException("No lifecycle fixtures match: " + args[1]);
+            var cases = args is ["--case", var caseName] && Cases.Contains(caseName)
+                ? [caseName]
+                : args.Length == 0 ? Cases
+                : throw new ArgumentException("Use --case with a lifecycle fixture name; measurements moved to tools/PaperTodo.DesktopBenchmarks.");
             foreach (var name in cases) RunIsolated(name);
             Console.WriteLine($"PASS {cases.Length} lifecycle fixtures (isolated data)");
             return 0;
@@ -144,7 +139,6 @@ internal static class Program
             await WorkbenchChecks.Run(name);
             return;
         }
-
         if (name == "todo-visibility")
         {
             await TodoVisibilityChecks.Run();

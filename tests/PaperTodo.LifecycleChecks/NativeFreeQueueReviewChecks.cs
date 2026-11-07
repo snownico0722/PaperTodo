@@ -161,21 +161,38 @@ internal static class NativeFreeQueueReviewChecks
             c.ArrangeDeepCapsules(false);
             await Idle();
 
-            // Leaving the last source member removes the now-empty source
-            // master immediately; hovering home or canceling restores it.
+            // Lifting the last source member withdraws its real master even
+            // over its original edge; only ending the gesture restores it.
             var leftMaster = c.MasterCapsuleForQueue(c.QueueKeyForPaper(targetPaper))!;
             Require(leftMaster.IsVisible, "one-member source master initially visible");
+            c.PreviewSingleCapsuleDropGhost(targetPaper, 0,
+                Point(targetGeometry, 80, left: true), floating: true);
+            var lastMemberGhost = Field<EdgeCapsuleQueueDropGhost>(c, "_nativeQueueDropGhost");
+            Require(!leftMaster.IsVisible && Field<Window>(lastMemberGhost, "_window").IsVisible &&
+                    Field<StackPanel>(lastMemberGhost, "_stack").Children.Count == 2,
+                "lifting the last member must replace its source master with a projected landing stack");
             c.PreviewSingleCapsuleDropGhost(targetPaper, 0,
                 Point(geometry, 80), floating: true);
             Require(!leftMaster.IsVisible, "leaving a one-member legacy queue hides its master");
             c.PreviewSingleCapsuleDropGhost(targetPaper, 0,
                 Point(targetGeometry, 80, left: true), floating: true);
-            Require(leftMaster.IsVisible, "floating home restores the real source master");
+            Require(!leftMaster.IsVisible, "floating home must keep the source master withdrawn");
             c.PreviewSingleCapsuleDropGhost(targetPaper, 0,
                 Point(geometry, 80), floating: true);
             Require(!leftMaster.IsVisible, "leaving again hides the source master before cancel");
-            c.EndSingleCapsuleDropGhost(targetPaper.Id);
-            Require(leftMaster.IsVisible, "canceling a floating move also restores the master");
+            var animationsEnabled = c.State.EnableAnimations;
+            try
+            {
+                c.State.EnableAnimations = true;
+                c.EndSingleCapsuleDropGhost(targetPaper.Id);
+                Require(leftMaster.IsVisible &&
+                        !DependencyPropertyHelper.GetValueSource(leftMaster, UIElement.OpacityProperty).IsAnimated,
+                    "restoring the sole source master does not replay its entrance fade");
+            }
+            finally
+            {
+                c.State.EnableAnimations = animationsEnabled;
+            }
 
             // Legacy vertical master movement already renders the real entire
             // queue. Ghosts are reserved for merge or horizontal unlock.

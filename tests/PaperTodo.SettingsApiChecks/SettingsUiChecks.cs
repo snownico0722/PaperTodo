@@ -135,6 +135,19 @@ internal static partial class Program
                 "External write updates live editor without writing its old value back.");
             Check(editor.IsKeyboardFocusWithin, "External extension update preserves keyboard focus.");
             editor.Text = ".draft";
+            c.State.ShowLinkedPaperName = true;
+            c.State.EnableTodoPaperLinks = false;
+            Invoke(c, "RefreshSettingsForChange", "todo.paper_links");
+            DrainSettingsUi();
+            Check(c.State.ShowLinkedPaperName && !SettingsControls<CheckBox>(window).Any(box =>
+                    Equals(box.Content, Strings.Get("SettingsShowLinkedPaperName"))),
+                "disabling links hides dependent controls without resetting their saved values");
+            c.State.EnableTodoPaperLinks = true;
+            Invoke(c, "RefreshSettingsForChange", "todo.paper_links");
+            DrainSettingsUi();
+            Check(SettingsControls<CheckBox>(window).Any(box => box.IsVisible && box.IsChecked == true &&
+                    Equals(box.Content, Strings.Get("SettingsShowLinkedPaperName"))),
+                "reenabling links restores the saved child choice immediately");
             service.Set("todo.auto_clear_completed", Json(!c.State.AutoClearCompletedTodos));
             service.Set("note.edit_animations", Json(!c.State.MarkdownEditAnimationEnabled));
             DrainSettingsUi();
@@ -168,6 +181,89 @@ internal static partial class Program
                     { RoutedEvent = Keyboard.LostKeyboardFocusEvent });
                 Check(c.State.ExternalMarkdownExtension == ".rst" && replacement.Text == ".rst", "Late focus event from a detached editor is ignored.");
             }
+        }
+        finally
+        {
+            Field(c, "_settingsWindow", null!);
+            window.Close();
+            DrainSettingsUi();
+        }
+    }
+
+    private static IEnumerable<T> SettingsControls<T>(DependencyObject root) where T : DependencyObject
+    {
+        for (var i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            var child = System.Windows.Media.VisualTreeHelper.GetChild(root, i);
+            if (child is T match) yield return match;
+            foreach (var nested in SettingsControls<T>(child)) yield return nested;
+        }
+    }
+
+    private static void WorkspaceDataSettingsBehavior()
+    {
+        var c = Controller();
+        Field(c, "_settingsRegionRefreshers", new Dictionary<string, Action>());
+        var catalog = (WorkspaceCatalog)System.Runtime.CompilerServices.RuntimeHelpers
+            .GetUninitializedObject(typeof(WorkspaceCatalog));
+        var options = new WorkspaceConfiguration { Enabled = false, Slots = [1, 2] };
+        Field(catalog, "<Options>k__BackingField", options);
+        Field(c, "_workspaceCatalog", catalog);
+        c.State.McpEnabled = true;
+        c.State.McpAllowFullWrites = true;
+        var saves = 0;
+        SettingsFor(c, () => { saves++; return true; }, _ => { });
+        var session = ReadField<WorkspaceSession>(c, "_workspace");
+        var window = new Window { Width = 820, Height = 820 };
+        Field(c, "_settingsWindow", window);
+        void Render()
+        {
+            window.Content = Invoke(c, "BuildWorkspaceSettingsPage");
+            window.UpdateLayout();
+            DrainSettingsUi();
+        }
+        CheckBox Toggle(string key) => SettingsControls<CheckBox>(window)
+            .Single(box => Equals(box.Content, Strings.Get(key)));
+        try
+        {
+            Render();
+            window.Show();
+            window.UpdateLayout();
+            Check(Toggle("LabsMcpEnable").IsEnabled &&
+                  SettingsControls<ComboBox>(window).Single().IsEnabled,
+                "disabling workspaces does not disable data handling or MCP");
+            options.Enabled = true;
+            Field(c, "_workspace", new WorkspaceSession(
+                new WorkspacePaths(session.Paths.Directory, 2), session.Store, c.State, true, null));
+            Render();
+            Check(Toggle("WorkspaceEnabled").IsEnabled && !Toggle("LabsMcpEnable").IsEnabled &&
+                  !SettingsControls<ComboBox>(window).Single().IsEnabled,
+                "workspace management stays editable while inherited data and MCP settings are read-only");
+            Check(SettingsControls<Button>(window).Where(button =>
+                    Equals(button.Content, Strings.Get("LabsMcpCopyJson")) ||
+                    Equals(button.Content, Strings.Get("LabsMcpCopyAiSkill"))).Count(button => button.IsEnabled) == 2,
+                "read-only inherited MCP settings still allow copying connection information");
+            var policy = c.State.DataMergeConflictPolicy;
+            SettingsControls<ComboBox>(window).Single().SelectedIndex = 2;
+            Invoke(c, "ToggleMcpEnabled");
+            DrainSettingsUi();
+            Check(saves == 0 && c.State.McpEnabled && c.State.DataMergeConflictPolicy == policy,
+                "stale control events cannot mutate or save inherited preferences");
+            Field(c, "_workspace", session);
+            c.State.McpEnabled = false;
+            Render();
+            Check(!SettingsControls<CheckBox>(window).Any(box =>
+                    Equals(box.Content, Strings.Get("LabsMcpFullWrites"))) && c.State.McpAllowFullWrites,
+                "MCP off hides permission controls without erasing saved grants");
+            c.State.UseCapsuleMode = true;
+            c.State.UseDeepCapsuleMode = false;
+            c.State.EnableTodoPaperLinks = c.State.HideLinkedPapersFromCapsules = true;
+            window.Content = Invoke(c, "BuildSettingsCapsuleOptions");
+            window.UpdateLayout();
+            Check(Toggle("SettingsCollapseExpandedDeepCapsuleOnClick").IsVisible &&
+                  !SettingsControls<CheckBox>(window).Any(box =>
+                    Equals(box.Content, Strings.Get("SettingsCapsuleCollapseAll"))),
+                "linked-paper second-click behavior remains available without exposing disabled edge options");
         }
         finally
         {

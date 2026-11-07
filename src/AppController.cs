@@ -3126,7 +3126,7 @@ public sealed partial class AppController : IDisposable
             {
                 window.DetachFromDeepCapsuleStack();
             }
-            State.CapsuleCollapseAllActiveQueues.Clear();
+            // Suspending the edge view must not erase remembered queue-fold choices.
             DestroyAllMasterCapsules();
             return;
         }

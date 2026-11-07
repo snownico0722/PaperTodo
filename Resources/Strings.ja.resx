@@ -1507,7 +1507,7 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
     <value>右へ移動</value>
   </data>
   <data name="MenuTopBarAssociationDrag" xml:space="preserve">
-    <value>押したままドラッグして関連付け</value>
+    <value>ToDoまたはウィンドウへドラッグして関連付け</value>
   </data>
   <data name="MenuTopBarPluginActions" xml:space="preserve">
     <value>プラグイン操作</value>
@@ -1658,7 +1658,7 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="NoteHtmlSaved" xml:space="preserve"><value>保存先：{0}
 元のノートは保持されます。</value></data>
   <data name="NoteExportCurrent" xml:space="preserve"><value>このメモをエクスポート</value></data>
-  <data name="NoteExportAll" xml:space="preserve"><value>すべてのメモと ToDo をエクスポート</value></data>
+  <data name="NoteExportAll" xml:space="preserve"><value>すべてのノートとToDoをエクスポート</value></data>
   <data name="NoteExportMarkdownType" xml:space="preserve"><value>Markdown 文書</value></data>
   <data name="NoteExportHtmlType" xml:space="preserve"><value>HTML 文書</value></data>
   <data name="NoteExportMarkdownZipType" xml:space="preserve"><value>Markdown ZIP</value></data>
@@ -1745,25 +1745,64 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="WorkspaceRecoveryFallback" xml:space="preserve">
     <value>ワークスペース {0} に戻る</value>
   </data>
-  <data name="WorkbenchTitle" xml:space="preserve"><value>キャンバス</value></data>
+  <data name="WorkspaceRecoveryUnavailableMessage" xml:space="preserve">
+    <value>ワークスペース {0} のデータとバックアップを復元できません。
+
+「ワークスペースを再作成」を選ぶと、ワークスペース {0} のメモ、タスク、設定を空の状態から開始します。</value>
+  </data>
+  <data name="WorkspaceBackupReadFailedMessage" xml:space="preserve">
+    <value>ワークスペース {0} の固定バックアップを現在読み取れません。
+{1}
+
+ファイルへのアクセスの問題を解決して再試行するか、「ワークスペースを再作成」を選んでメモ、タスク、設定を空の状態から開始できます。</value>
+  </data>
+  <data name="SettingsNotesAndTodos" xml:space="preserve"><value>ノートとToDo</value></data>
+  <data name="WorkspaceSingleMessage" xml:space="preserve"><value>ワークスペースは現在1つだけです。</value></data>
+  <data name="WorkspaceCreate" xml:space="preserve"><value>新規</value></data>
+  <data name="TopBarHideShortcut" xml:space="preserve">
+    <value>非表示</value>
+  </data>
+  <data name="TopBarRunScript" xml:space="preserve">
+    <value>スクリプトを実行</value>
+  </data>
+  <data name="TopBarEditScript" xml:space="preserve">
+    <value>スクリプトを編集</value>
+  </data>
+  <data name="TopBarScriptSave" xml:space="preserve">
+    <value>保存</value>
+  </data>
+  <data name="WorkspaceScriptsStoppedTitle" xml:space="preserve">
+    <value>ワークスペースを切り替えました</value>
+  </data>
+  <data name="WorkspaceScriptsStoppedMessage" xml:space="preserve">
+    <value>前のワークスペースのスクリプトプロセスを終了しました。</value>
+  </data>
+  <data name="WorkspaceSessionsClosedMessage" xml:space="preserve">
+    <value>前のワークスペースの常駐 PowerShell セッションを終了しました。</value>
+  </data>
+  <data name="WorkspaceScriptsAndSessionsStoppedMessage" xml:space="preserve">
+    <value>前のワークスペースのスクリプトプロセスと常駐 PowerShell セッションを終了しました。</value>
+  </data>
+  <data name="MenuExport" xml:space="preserve"><value>エクスポート</value></data>
+  <data name="MenuExportCurrentNote" xml:space="preserve"><value>現在のノート</value></data>
+  <data name="MenuExportCurrentTodo" xml:space="preserve"><value>現在のToDo</value></data>
+  <data name="MenuExportAllPapers" xml:space="preserve"><value>すべてのノートとToDo</value></data>
+  <data name="MenuTopBarAssociationDragTodo" xml:space="preserve"><value>ToDoへドラッグして関連付け</value></data>
+  <data name="MenuTopBarAssociationDragWindow" xml:space="preserve"><value>ウィンドウへドラッグして関連付け</value></data>
+  <data name="WorkspaceDataSettingsTitle" xml:space="preserve"><value>ワークスペースとデータ</value></data>
+  <data name="SettingsDataProcessing" xml:space="preserve"><value>データ処理</value></data>
+  <data name="WorkbenchTitle" xml:space="preserve"><value>無限ワークベンチ</value></data>
   <data name="WorkbenchOverview" xml:space="preserve"><value>全ワークスペース</value></data>
   <data name="WorkbenchCurrent" xml:space="preserve"><value>現在のワークスペース</value></data>
   <data name="WorkbenchNewNote" xml:space="preserve"><value>新規ノート</value></data>
   <data name="WorkbenchNewTodo" xml:space="preserve"><value>新規タスク</value></data>
   <data name="WorkbenchArrange" xml:space="preserve"><value>レイアウト整理</value></data>
-  <data name="WorkbenchUndo" xml:space="preserve"><value>操作を元に戻す</value></data>
+  <data name="WorkbenchUndo" xml:space="preserve"><value>配置を元に戻す</value></data>
   <data name="WorkbenchSearch" xml:space="preserve"><value>すべてのワークスペースを検索。Enter で結果へ移動</value></data>
   <data name="WorkbenchRefresh" xml:space="preserve"><value>一覧を更新</value></data>
   <data name="WorkbenchClose" xml:space="preserve"><value>デスクトップへ戻る</value></data>
-  <data name="WorkbenchHint" xml:space="preserve"><value>空白をドラッグ：範囲選択&#10;Ctrl + クリック：複数選択、Ctrl + G：グループ化&#10;カードを右クリック：すべての操作&#10;右ドラッグ：キャンバス移動&#10;Alt + ホイール：拡大縮小&#10;接続アイコンをドラッグ：カードを接続</value></data>
-  <data name="WorkbenchHelp" xml:space="preserve"><value>キャンバスのヘルプ</value></data>
-  <data name="WorkbenchImportMaterials" xml:space="preserve"><value>素材を読み込む</value></data>
-  <data name="WorkbenchImportDialogFilter" xml:space="preserve"><value>すべてのファイル (*.*)|*.*|画像 (*.png;*.jpg;*.jpeg;*.gif;*.webp;*.bmp)|*.png;*.jpg;*.jpeg;*.gif;*.webp;*.bmp</value></data>
-  <data name="WorkbenchCollapseCard" xml:space="preserve"><value>カードを折りたたむ</value></data>
-  <data name="WorkbenchExpandCard" xml:space="preserve"><value>カードを展開</value></data>
-  <data name="WorkbenchLockCard" xml:space="preserve"><value>位置を固定</value></data>
-  <data name="WorkbenchUnlockCard" xml:space="preserve"><value>位置の固定を解除</value></data>
-  <data name="WorkbenchError" xml:space="preserve"><value>キャンバスの操作に失敗しました：{0}</value></data>
+  <data name="WorkbenchHint" xml:space="preserve"><value>タイトルバーをドラッグして移動、ダブルクリックで名前変更。右下でサイズ変更。中ボタンドラッグで移動、Alt＋ホイールでズーム。他のアプリに切り替えても閉じません。</value></data>
+  <data name="WorkbenchError" xml:space="preserve"><value>ワークベンチの操作に失敗しました：{0}</value></data>
   <data name="WorkbenchPinConflict" xml:space="preserve"><value>固定した紙片が重なっています。位置は維持されます。移動または固定解除してください。</value></data>
   <data name="WorkbenchDelete" xml:space="preserve"><value>紙片を削除</value></data>
   <data name="WorkbenchDeleteConfirm" xml:space="preserve"><value>この紙片と内容を削除しますか？</value></data>
@@ -1779,6 +1818,13 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="WorkbenchBindToTodo" xml:space="preserve"><value>タスク項目に関連付ける</value></data>
   <data name="WorkbenchUnnamedTodo" xml:space="preserve"><value>無題のタスク</value></data>
   <data name="WorkbenchBindTodoFailed" xml:space="preserve"><value>そのタスクに関連付けできません。</value></data>
+  <data name="WorkbenchHelp" xml:space="preserve"><value>キャンバスのヘルプ</value></data>
+  <data name="WorkbenchImportMaterials" xml:space="preserve"><value>素材を読み込む</value></data>
+  <data name="WorkbenchImportDialogFilter" xml:space="preserve"><value>すべてのファイル (*.*)|*.*|画像 (*.png;*.jpg;*.jpeg;*.gif;*.webp;*.bmp)|*.png;*.jpg;*.jpeg;*.gif;*.webp;*.bmp</value></data>
+  <data name="WorkbenchCollapseCard" xml:space="preserve"><value>カードを折りたたむ</value></data>
+  <data name="WorkbenchExpandCard" xml:space="preserve"><value>カードを展開</value></data>
+  <data name="WorkbenchLockCard" xml:space="preserve"><value>位置を固定</value></data>
+  <data name="WorkbenchUnlockCard" xml:space="preserve"><value>位置の固定を解除</value></data>
   <data name="WorkbenchNewNode" xml:space="preserve"><value>ノードを追加</value></data>
   <data name="WorkbenchGroupSelection" xml:space="preserve"><value>グループ化</value></data>
   <data name="WorkbenchUngroup" xml:space="preserve"><value>グループ解除</value></data>
@@ -1815,45 +1861,4 @@ papertodo と PaperTodo_Bold（.ttf/.otf）の両方を置いてください。<
   <data name="WorkbenchDeleteMaterial" xml:space="preserve"><value>素材を削除</value></data>
   <data name="WorkbenchDeleteMaterialConfirm" xml:space="preserve"><value>この素材を削除しますか？元のファイルやフォルダーは保持されます。</value></data>
   <data name="WorkbenchTransferHistoryBlocked" xml:space="preserve"><value>この移動を元に戻すには、先に関連するペーパーの後続の編集、グループ化、接続を元に戻してください。</value></data>
-  <data name="WorkspaceRecoveryUnavailableMessage" xml:space="preserve">
-    <value>ワークスペース {0} のデータとバックアップを復元できません。
-
-「ワークスペースを再作成」を選ぶと、ワークスペース {0} のメモ、タスク、設定を空の状態から開始します。</value>
-  </data>
-  <data name="WorkspaceBackupReadFailedMessage" xml:space="preserve">
-    <value>ワークスペース {0} の固定バックアップを現在読み取れません。
-{1}
-
-ファイルへのアクセスの問題を解決して再試行するか、「ワークスペースを再作成」を選んでメモ、タスク、設定を空の状態から開始できます。</value>
-  </data>
-  <data name="SettingsNotesAndTodos" xml:space="preserve"><value>ノートとToDo</value></data>
-  <data name="WorkspaceSingleMessage" xml:space="preserve"><value>ワークスペースは現在1つだけです。</value></data>
-  <data name="WorkspaceCreate" xml:space="preserve"><value>新規</value></data>
-  <data name="TopBarHideShortcut" xml:space="preserve">
-    <value>非表示</value>
-  </data>
-  <data name="TopBarRunScript" xml:space="preserve">
-    <value>スクリプトを実行</value>
-  </data>
-  <data name="TopBarEditScript" xml:space="preserve">
-    <value>スクリプトを編集</value>
-  </data>
-  <data name="TopBarScriptSave" xml:space="preserve">
-    <value>保存</value>
-  </data>
-  <data name="TopBarScriptHint" xml:space="preserve">
-    <value>接頭辞を省略すると !p として実行します。使用可能：!p / !power、!pwsh / !ps7、!ps5 / !winps、!pf / !powerf。接頭辞だけを1行目に記入し、次の行からスクリプトを書きます。半角 ! のみ対応。保存しても実行されません。</value>
-  </data>
-  <data name="WorkspaceScriptsStoppedTitle" xml:space="preserve">
-    <value>ワークスペースを切り替えました</value>
-  </data>
-  <data name="WorkspaceScriptsStoppedMessage" xml:space="preserve">
-    <value>前のワークスペースのスクリプトプロセスを終了しました。</value>
-  </data>
-  <data name="WorkspaceSessionsClosedMessage" xml:space="preserve">
-    <value>前のワークスペースの常駐 PowerShell セッションを終了しました。</value>
-  </data>
-  <data name="WorkspaceScriptsAndSessionsStoppedMessage" xml:space="preserve">
-    <value>前のワークスペースのスクリプトプロセスと常駐 PowerShell セッションを終了しました。</value>
-  </data>
 </root>

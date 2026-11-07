@@ -79,7 +79,7 @@ public sealed partial class AppController
             }
 
             RefreshMcpRuntime();
-            RefreshSettingsRegions("labs.mcp");
+            RefreshSettingsRegions("workspace.mcp");
             return true;
         }
         catch (Exception ex)

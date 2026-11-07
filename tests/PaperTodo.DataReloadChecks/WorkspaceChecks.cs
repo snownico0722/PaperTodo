@@ -1110,11 +1110,20 @@ internal static partial class Program
                     threeTiles[3].Child is System.Windows.Shapes.Path { Data: not null } &&
                     AutomationProperties.GetAutomationId(threeTiles[3]) == "TrayCreateWorkspace",
                 "tray must show existing workspaces and one create action without empty slots");
+            threeSlotMenu.IsOpen = true;
+            await Until(() => threeSlotMenu.ActualWidth > 0, "tray create menu did not finish layout");
+            threeSlotMenu.Focus();
+            Require(!await controller.SwitchWorkspaceAsync(2) && controller.WorkspaceNumber == 1,
+                "an open menu must still block a workspace window handoff");
             ClickTraySlot(threeTiles[3]);
             await Until(() => controller.WorkspaceOptions.ContainsSlot(4) && !controller.IsWorkspaceSwitching,
                 "tray plus did not create workspace 4");
             Require(controller.WorkspaceNumber == 1 && ReferenceEquals(controller.State, originalWorkspaceState),
                 "creating a tray workspace changed the active workspace or its state");
+            Require(threeSlotMenu.IsOpen && threeSlotMenu.IsKeyboardFocusWithin &&
+                    ((TextBlock)TraySlots(threeSlotMenu)[3].Child).Text == "4",
+                "creating a workspace dismissed the tray, lost focus or left stale slots");
+            threeSlotMenu.IsOpen = false;
 
             var fourTiles = TraySlots(TrayForCreate());
             Require(((TextBlock)fourTiles[3].Child).Text == "4" &&
