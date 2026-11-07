@@ -185,7 +185,7 @@ public sealed partial class PaperWindow
             return false;
         }
 
-        if (FocusManager.GetFocusedElement(this) is TodoTextBox { SelectionLength: > 0 })
+        if (FocusManager.GetFocusedElement(InteractionWindow) is TodoTextBox { SelectionLength: > 0 })
         {
             return false;
         }

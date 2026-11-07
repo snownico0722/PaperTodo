@@ -902,7 +902,7 @@ public sealed partial class PaperWindow
             if (!_controller.CanAssignPluginProvider(_paper, targetDescriptor))
             {
                 MessageBox.Show(
-                this,
+                InteractionWindow,
                 Strings.Format(
                     "PluginInstanceLimitMessage",
                     targetDescriptor.DisplayName,
@@ -1105,6 +1105,7 @@ public sealed partial class PaperWindow
 
     internal void NotifyCurrentPaperBodyVisibility(bool visible)
     {
+        visible = IsWorkbenchHosted || visible;
         if (_bodyDisabled)
         {
             _bodyRuntimeVisible = false;
@@ -1123,7 +1124,7 @@ public sealed partial class PaperWindow
             return;
         }
 
-        var runtimeVisible = _paper.IsVisible && visible;
+        var runtimeVisible = (IsWorkbenchHosted || _paper.IsVisible) && visible;
         if (visible)
         {
             // Expansion can come from a hotkey, tray action or another paper. Settle any active

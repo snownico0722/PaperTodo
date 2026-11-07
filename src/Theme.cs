@@ -231,6 +231,18 @@ public static class Theme
     public static Brush HoverBrush => Tint((byte)(IsDark ? 48 : 32));
     public static Brush CapsuleFocusBorderBrush => Solid(Mix(Current.Active, Current.Text, IsDark ? 0.38 : 0.08));
 
+    // Reuse the Workbench palette from #398. Each surface is derived from the selected
+    // PaperTodo color scheme rather than a fixed blue/gray or a separate color setting.
+    public static Brush WorkbenchDeskBrush => Solid(IsDark
+        ? Darken(Current.Paper, 0.38)
+        : Mix(Current.Paper, Current.Text, 0.10));
+    public static Brush WorkbenchCanvasBrush => Solid(IsDark
+        ? Darken(Current.Paper, 0.16)
+        : Mix(Current.Paper, Color.FromRgb(255, 255, 255), 0.35));
+    public static Brush WorkbenchFrameBrush => Solid(Mix(Current.PaperBorder, Current.Text, IsDark ? 0.30 : 0.22));
+    public static Brush WorkbenchRegionBrush => Solid(WithAlpha(Mix(Current.Text, Current.Paper, 0.35), (byte)(IsDark ? 150 : 130)));
+    public static Brush WorkbenchRegionFillBrush => Tint((byte)(IsDark ? 14 : 10));
+
     // ---- 派生画刷 ----
     /// <summary>在当前主题的暖色叠加基上按 alpha 取一层半透明画刷。</summary>
     public static Brush Tint(byte alpha) => Solid(WithAlpha(Current.Tint, alpha));

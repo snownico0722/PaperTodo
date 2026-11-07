@@ -11,7 +11,7 @@ internal static class Program
 {
     private const BindingFlags Private = BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic;
     private const string FixtureMarker = ".papertodo-lifecycle-fixture";
-    private static readonly string[] Cases = ["native-free-queue-review", "native-free-queues", "startup", "missing-monitor", "master-queue-transfer", "master-queue-cancel", "master-queue-drag-preparation", "master-queue-drop-handoff", "master-queue-membership", "master-queue-mutations", "master-queue-hide", "master-queue-hidden-retains-collapse", "master-queue-disconnect", "master-queue-merge", "master-queue-merge-collapsed", "master-queue-lightweight-handoff", "controller-hide-create-reentry", "controller-hide-show-reentry", "controller-zorder-create-reentry", "controller-close-delete-reentry", "todo-visibility", "real-exit", "early-expand", "edge-expand-foreground", "expanded-paper-display-recovery", "cancel-prewarm", "real-exit-scripts", "early-exit", "todo-context-menu", "todo-history"];
+    private static readonly string[] Cases = ["native-free-queue-review", "native-free-queues", "startup", "missing-monitor", "master-queue-transfer", "master-queue-cancel", "master-queue-drag-preparation", "master-queue-drop-handoff", "master-queue-membership", "master-queue-mutations", "master-queue-hide", "master-queue-hidden-retains-collapse", "master-queue-disconnect", "master-queue-merge", "master-queue-merge-collapsed", "master-queue-lightweight-handoff", "controller-hide-create-reentry", "controller-hide-show-reentry", "controller-zorder-create-reentry", "controller-close-delete-reentry", "todo-visibility", "real-exit", "early-expand", "edge-expand-foreground", "expanded-paper-display-recovery", "cancel-prewarm", "real-exit-scripts", "early-exit", "todo-context-menu", "todo-history", ..WorkbenchChecks.Cases];
 
     [STAThread]
     private static int Main(string[] args)
@@ -47,9 +47,11 @@ internal static class Program
         }
         try
         {
-            var cases = args is ["--case", var caseName] && Cases.Contains(caseName)
-                ? [caseName]
-                : args.Length == 0 ? Cases
+            var cases = args is ["--case", "workbench-*"]
+                ? WorkbenchChecks.Cases
+                : args is ["--case", var caseName] && Cases.Contains(caseName)
+                    ? [caseName]
+                    : args.Length == 0 ? Cases
                 : throw new ArgumentException("Use --case with a lifecycle fixture name; measurements moved to tools/PaperTodo.DesktopBenchmarks.");
             foreach (var name in cases) RunIsolated(name);
             Console.WriteLine($"PASS {cases.Length} lifecycle fixtures (isolated data)");
@@ -73,7 +75,8 @@ internal static class Program
             using var child = Process.Start(start)!;
             var output = child.StandardOutput.ReadToEndAsync();
             var error = child.StandardError.ReadToEndAsync();
-            if (!child.WaitForExit(30_000))
+            var timeout = WorkbenchChecks.Cases.Contains(name) ? 60_000 : 30_000;
+            if (!child.WaitForExit(timeout))
             {
                 child.Kill(entireProcessTree: true); child.WaitForExit();
                 throw new TimeoutException("Lifecycle fixture timed out: " + name);
@@ -133,6 +136,11 @@ internal static class Program
 
     private static async Task RunFixture(string name, Action completeExpectedExit)
     {
+        if (WorkbenchChecks.Cases.Contains(name))
+        {
+            await WorkbenchChecks.Run(name);
+            return;
+        }
         if (name == "todo-visibility")
         {
             await TodoVisibilityChecks.Run();

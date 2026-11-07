@@ -1791,4 +1791,31 @@ Resolve the file access problem and retry, or choose “Rebuild workspace” to 
   <data name="MenuTopBarAssociationDragWindow" xml:space="preserve"><value>Drag to a window to associate</value></data>
   <data name="WorkspaceDataSettingsTitle" xml:space="preserve"><value>Workspaces &amp; Data</value></data>
   <data name="SettingsDataProcessing" xml:space="preserve"><value>Data handling</value></data>
+  <data name="WorkbenchTitle" xml:space="preserve"><value>Infinite workbench</value></data>
+  <data name="WorkbenchOverview" xml:space="preserve"><value>All workspaces</value></data>
+  <data name="WorkbenchCurrent" xml:space="preserve"><value>Current workspace</value></data>
+  <data name="WorkbenchNewNote" xml:space="preserve"><value>New note</value></data>
+  <data name="WorkbenchNewTodo" xml:space="preserve"><value>New to-do</value></data>
+  <data name="WorkbenchArrange" xml:space="preserve"><value>Arrange</value></data>
+  <data name="WorkbenchUndo" xml:space="preserve"><value>Undo layout</value></data>
+  <data name="WorkbenchSearch" xml:space="preserve"><value>Search all workspaces; press Enter to navigate</value></data>
+  <data name="WorkbenchRefresh" xml:space="preserve"><value>Refresh overview</value></data>
+  <data name="WorkbenchClose" xml:space="preserve"><value>Back to desktop</value></data>
+  <data name="WorkbenchHint" xml:space="preserve"><value>Drag the title bar to move, double-click it to rename, and resize from the lower right. Middle-drag to pan and Alt+wheel to zoom. Switching apps keeps the workbench open.</value></data>
+  <data name="WorkbenchError" xml:space="preserve"><value>Workbench operation failed: {0}</value></data>
+  <data name="WorkbenchPinConflict" xml:space="preserve"><value>Pinned papers overlap. Their positions were kept; move or unpin one to resolve the conflict.</value></data>
+  <data name="WorkbenchDelete" xml:space="preserve"><value>Delete paper</value></data>
+  <data name="WorkbenchDeleteConfirm" xml:space="preserve"><value>Delete this paper and its contents?</value></data>
+  <data name="WorkbenchOpenWorkspace" xml:space="preserve"><value>Work in this workspace</value></data>
+  <data name="WorkbenchPin" xml:space="preserve"><value>Pin or unpin position</value></data>
+  <data name="WorkbenchWorkspace" xml:space="preserve"><value>Workspace {0}</value></data>
+  <data name="WorkbenchReadError" xml:space="preserve"><value>Cannot read this workspace: {0}</value></data>
+  <data name="WorkbenchEmpty" xml:space="preserve"><value>No papers here yet.</value></data>
+  <data name="WorkbenchSearchNoResults" xml:space="preserve"><value>No matching papers.</value></data>
+  <data name="WorkbenchSearchResult" xml:space="preserve"><value>Result {0}/{1}</value></data>
+  <data name="WorkbenchShowOnDesktop" xml:space="preserve"><value>Show on desktop</value></data>
+  <data name="WorkbenchHideOnDesktop" xml:space="preserve"><value>Hide from desktop</value></data>
+  <data name="WorkbenchBindToTodo" xml:space="preserve"><value>Link to a to-do item</value></data>
+  <data name="WorkbenchUnnamedTodo" xml:space="preserve"><value>Untitled to-do</value></data>
+  <data name="WorkbenchBindTodoFailed" xml:space="preserve"><value>Could not link to that to-do item.</value></data>
 </root>

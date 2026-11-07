@@ -570,6 +570,7 @@ public sealed partial class PaperWindow
         bool activateOnExpand,
         ProgrammaticPaperExpansionOrigin? programmaticOrigin)
     {
+        if (IsWorkbenchHosted) _controller.CloseWorkbenchForDesktopAction();
         EnsureShellBuilt();
         animate = animate && _controller.State.EnableAnimations;
 

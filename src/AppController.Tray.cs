@@ -528,6 +528,7 @@ public sealed partial class AppController
         menu.Items.Add(TrayTitleBar(menu));
         menu.Items.Add(TraySeparator());
 
+        menu.Items.Add(TrayItem(menu, Strings.Get("WorkbenchTitle"), ToggleWorkbench));
         menu.Items.Add(TrayPaperToolbar(menu));
         if (WorkspaceOptions.Enabled)
             menu.Items.Add(TrayWorkspaceSelector(menu));

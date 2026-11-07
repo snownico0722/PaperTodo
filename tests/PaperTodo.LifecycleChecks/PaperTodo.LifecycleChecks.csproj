@@ -9,5 +9,6 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../../PaperTodo.csproj" />
+    <EmbeddedResource Include="../../App.xaml" LogicalName="PaperTodo.App.xaml" />
   </ItemGroup>
 </Project>
