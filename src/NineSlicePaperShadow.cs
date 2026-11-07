@@ -179,8 +179,12 @@ internal sealed class NineSlicePaperShadow
                     if (y + k >= 0 && y + k < height)
                         sum += temp[(y + k) * width + x] * verticalKernel[k + yRadius];
                 // Premultiplied black has zero RGB regardless of alpha.
+                // Layered HWND hit-testing ignores fully transparent pixels. Keep the
+                // floating paper's shadow gutter barely nontransparent so the native
+                // resize hit-test still receives clicks right on every visible edge.
+                var alpha = (byte)Math.Clamp(Math.Round(sum * key.Opacity * 255), 0, 255);
                 pixels[(y * width + x) * 4 + 3] =
-                    (byte)Math.Clamp(Math.Round(sum * key.Opacity * 255), 0, 255);
+                    !key.CapsuleShape && alpha == 0 ? (byte)1 : alpha;
             }
         }
 
