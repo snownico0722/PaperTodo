@@ -837,35 +837,54 @@ public sealed partial class AppController
 
     private UIElement BuildLabsEdgeCapsuleHoverIntentSettings()
     {
-        if (!State.UseCapsuleMode || !State.UseDeepCapsuleMode) return new StackPanel();
-        var card = new Border
-        {
-            Background = Brushes.Transparent,
-            Padding = new Thickness(0, 3, 0, 5),
-            Margin = new Thickness(0, 1, 0, 3)
-        };
+        var edgePreviewAvailable =
+            State.UseCapsuleMode && State.UseDeepCapsuleMode;
+        var previewEnabled =
+            State.ExperimentalEdgeCapsuleHoverPreview;
+        var intentEnabled =
+            State.ExperimentalEdgeCapsuleHoverIntent;
         var content = new StackPanel();
         content.Children.Add(SettingsSectionLabel(SettingsSidebarLocalized(
             "边缘浏览", "Edge browsing", "エッジ閲覧", "가장자리 탐색")));
-        content.Children.Add(WrapWithHint(
-            SettingsToggle(Strings.Get("LabsEnableEdgeCapsuleHoverPreview"),
-                State.ExperimentalEdgeCapsuleHoverPreview, ToggleExperimentalEdgeCapsuleHoverPreview),
-            "TipLabsEdgeCapsuleHoverPreview"));
-        if (!State.ExperimentalEdgeCapsuleHoverPreview)
-        {
-            card.Child = content;
-            return card;
-        }
-        content.Children.Add(WrapWithHint(
-            SettingsToggle(Strings.Get("LabsEnableEdgeCapsuleHoverIntent"),
-                State.ExperimentalEdgeCapsuleHoverIntent, ToggleExperimentalEdgeCapsuleHoverIntent),
-            "TipLabsEdgeCapsuleHoverIntent"));
-        if (State.ExperimentalEdgeCapsuleHoverIntent)
-            content.Children.Add(CompactSettingsField(
-                Strings.Get("LabsEdgeCapsuleHoverIntentSensitivity"),
-                CreateEdgeCapsuleHoverIntentSensitivitySelector(), editorWidth: 132,
-                tipKey: "TipLabsEdgeCapsuleHoverIntentSensitivity", topMargin: 4));
 
+        var previewToggle = SettingsToggle(
+            Strings.Get("LabsEnableEdgeCapsuleHoverPreview"),
+            previewEnabled,
+            ToggleExperimentalEdgeCapsuleHoverPreview);
+        previewToggle.IsEnabled = edgePreviewAvailable;
+        previewToggle.Opacity = edgePreviewAvailable ? 1.0 : 0.55;
+        content.Children.Add(WrapWithHint(
+            previewToggle,
+            "TipLabsEdgeCapsuleHoverPreview"));
+
+        var toggle = SettingsToggle(
+            Strings.Get("LabsEnableEdgeCapsuleHoverIntent"),
+            intentEnabled,
+            ToggleExperimentalEdgeCapsuleHoverIntent);
+        var intentToggleEnabled =
+            edgePreviewAvailable && previewEnabled;
+        toggle.IsEnabled = intentToggleEnabled;
+        toggle.Opacity = intentToggleEnabled ? 1.0 : 0.55;
+        content.Children.Add(WrapWithHint(
+            toggle,
+            "TipLabsEdgeCapsuleHoverIntent"));
+
+        var optionsEnabled =
+            edgePreviewAvailable && previewEnabled && intentEnabled;
+        var options = new StackPanel
+        {
+            IsEnabled = optionsEnabled,
+            Opacity = optionsEnabled ? 1.0 : 0.55
+        };
+        options.Children.Add(CompactSettingsField(
+            Strings.Get("LabsEdgeCapsuleHoverIntentSensitivity"),
+            CreateEdgeCapsuleHoverIntentSensitivitySelector(),
+            editorWidth: 132,
+            tipKey: "TipLabsEdgeCapsuleHoverIntentSensitivity",
+            topMargin: 4));
+        content.Children.Add(options);
+
+        var preferDownwardEnabled = edgePreviewAvailable && previewEnabled;
         var preferDownwardToggle = SettingsToggle(
             SettingsSidebarLocalized(
                 "浏览时优先向下展开",
@@ -874,6 +893,8 @@ public sealed partial class AppController
                 "탐색 중 아래로 펼치기 우선"),
             State.EdgeCapsulePreviewPreferDownward,
             ToggleEdgeCapsulePreviewPreferDownward);
+        preferDownwardToggle.IsEnabled = preferDownwardEnabled;
+        preferDownwardToggle.Opacity = preferDownwardEnabled ? 1.0 : 0.55;
         content.Children.Add(WrapWithHint(
             preferDownwardToggle,
             BuildSettingsHintTooltip(SettingsSidebarLocalized(
@@ -881,8 +902,7 @@ public sealed partial class AppController
                 "Disabled by default. When enabled, browsing edge capsules downward keeps the hovered card in place and expands downward when it fits; otherwise the original placement is used. When disabled, the upper space released by the previous card is preferred.",
                 "初期設定はオフです。有効にすると、エッジカプセルを下方向に閲覧する際、カードが収まる場合はマウス位置を保って下に展開し、収まらない場合は従来の配置を使います。オフでは前のカードが空けた上側の空間を優先します。",
                 "기본값은 꺼짐입니다. 켜면 가장자리 캡슐을 아래로 탐색할 때 공간이 충분하면 마우스 위치를 유지하며 아래로 펼치고, 부족하면 기존 배치를 사용합니다. 끄면 이전 카드가 비운 위쪽 공간을 우선 사용합니다."))));
-        card.Child = content;
-        return card;
+        return content;
     }
 
     private UIElement BuildLabsPassiveModeSettings()

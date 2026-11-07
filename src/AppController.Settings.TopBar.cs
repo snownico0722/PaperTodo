@@ -178,7 +178,10 @@ public sealed partial class AppController
                 Orientation = Orientation.Horizontal,
                 IsHitTestVisible = false,
                 // The feature is inactive, but its placement remains editable.
-                Opacity = action == PaperTopBarShortcuts.Workspace && !WorkspaceOptions.Enabled ? 0.5 : 1
+                Opacity = (action == PaperTopBarShortcuts.Workspace && !WorkspaceOptions.Enabled) ||
+                          (action == PaperTopBarShortcuts.Association &&
+                           !State.EnableTodoPaperLinks && !State.ExperimentalWindowTethering)
+                    ? 0.5 : 1
             };
             row.Children.Add(new TextBlock
             {
@@ -211,12 +214,13 @@ public sealed partial class AppController
                 System.Windows.Automation.AutomationProperties.SetName(edit,
                     Strings.Get("TopBarEditScript"));
                 edit.MinWidth = 0;
-                edit.Height = AppTypography.FitChrome(26);
-                edit.Padding = new Thickness(8, 0, 8, 0);
+                // Smaller than the row icon: the script action must not increase row height.
+                edit.Height = AppTypography.FitChrome(18);
+                edit.Padding = new Thickness(5, 0, 5, 0);
                 edit.BorderBrush = TrayBorderBrush;
                 edit.BorderThickness = new Thickness(1);
-                edit.FontSize = AppTypography.Scale(11.5);
-                edit.Margin = new Thickness(6, 0, 4, 0);
+                edit.FontSize = AppTypography.Scale(10.5);
+                edit.Margin = new Thickness(3, 0, 2, 0);
                 edit.Click += (_, _) => EditTopBarScript();
                 controls.Children.Add(edit);
             }
