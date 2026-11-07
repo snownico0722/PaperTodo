@@ -726,7 +726,15 @@ internal static partial class Program
         var mediumNameButton = await RenameButtonBoundsAsync();
         Require(mediumNameButton.Left > shortNameButton.Left,
             $"the save button did not follow the name: {shortNameButton} -> {mediumNameButton}");
+        editor.Text = new string('中', 16);
+        Require(editor.Text == new string('中', 15), "fullwidth workspace names stop at 15 characters");
+        editor.Text = new string('A', 31);
+        Require(editor.Text == new string('A', 30), "ASCII workspace names stop at 30 halfwidth characters");
+        editor.Text = new string('中', 10) + new string('a', 11);
+        Require(editor.Text == new string('中', 10) + new string('a', 10),
+            "workspace names enforce the combined halfwidth/fullwidth limit");
         editor.Text = new string('W', 48);
+        Require(editor.Text == new string('W', 30), "long paste was not limited to 15 fullwidth units");
         var longNameButton = await RenameButtonBoundsAsync();
         Require(longNameButton.Top >= shortNameButton.Bottom,
             $"the save button did not wrap: {shortNameButton} -> {longNameButton}");

@@ -65,6 +65,13 @@ public sealed partial class PaperWindow
 
     internal static FrameworkElement CreateTopBarAssociationIcon(Control owner, bool active)
     {
+        if (Theme.IsPixelSkin) return active
+            ? CreatePixelIcon(owner,
+                "....###..", "...#...#.", "..#.....#", "..#..###.", ".###.#...",
+                "#...#.###", "#...##..#", ".###..#.#", ".....###.")
+            : CreatePixelIcon(owner,
+                "....###..", "...#...#.", "..#.....#", "..#..###.", ".###.#...",
+                "#...#....", "#...#....", ".###.....", ".........");
         if (!active)
             return TopBarPath(owner,
                 "M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07L11.75 5.18 " +

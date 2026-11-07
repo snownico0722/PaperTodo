@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -264,6 +265,23 @@ public sealed partial class AppController
         return card;
     }
 
+    // 15 fullwidth characters or 30 ASCII/halfwidth characters for new names.
+    // Existing persisted names are never shortened merely by opening Settings.
+    private static string LimitWorkspaceName(string value)
+    {
+        const int maxHalfWidthUnits = 30;
+        var width = 0;
+        var end = 0;
+        foreach (var rune in value.EnumerateRunes())
+        {
+            var units = rune.Value <= 0x7F || rune.Value is >= 0xFF61 and <= 0xFF9F ? 1 : 2;
+            if (width + units > maxHalfWidthUnits) break;
+            width += units;
+            end += rune.Utf16SequenceLength;
+        }
+        return value[..end];
+    }
+
     private Border BuildWorkspaceSlotCard(int slot, bool isSelected)
     {
         var label = WorkspaceOptions.DisplayName(slot);
@@ -291,14 +309,16 @@ public sealed partial class AppController
             Foreground = TrayTextBrush,
             VerticalAlignment = VerticalAlignment.Center,
             HorizontalAlignment = HorizontalAlignment.Left,
-            TextTrimming = TextTrimming.CharacterEllipsis
+            TextWrapping = TextWrapping.Wrap,
+            TextTrimming = TextTrimming.None
         };
         var editor = new TextBox
         {
             Text = label,
             HorizontalAlignment = HorizontalAlignment.Left,
             MaxLength = 64,
-            Height = AppTypography.FitChrome(28),
+            TextWrapping = TextWrapping.Wrap,
+            MinHeight = AppTypography.FitChrome(28),
             FontSize = AppTypography.Scale(12),
             Foreground = TrayTextBrush,
             CaretBrush = TrayTextBrush,
@@ -353,8 +373,25 @@ public sealed partial class AppController
         line.Children.Add(name);
         line.Children.Add(editor);
         line.Children.Add(renameActions);
+        // WrapPanel wraps its children, but a single unbounded name cannot wrap.
+        card.SizeChanged += (_, _) =>
+        {
+            var width = Math.Max(1, card.ActualWidth - card.Padding.Left - card.Padding.Right
+                - card.BorderThickness.Left - card.BorderThickness.Right);
+            name.MaxWidth = width;
+            editor.MaxWidth = width;
+        };
 
         var editing = false;
+        editor.TextChanged += (_, _) =>
+        {
+            if (!editing) return;
+            var limited = LimitWorkspaceName(editor.Text);
+            if (limited.Length == editor.Text.Length) return;
+            var caret = editor.CaretIndex;
+            editor.Text = limited;
+            editor.CaretIndex = Math.Min(caret, limited.Length);
+        };
         Action<DependencyObject?>? outsideClick = null;
         void ExitEditing()
         {
@@ -372,6 +409,7 @@ public sealed partial class AppController
             var value = editor.Text.Trim();
             if (value.Length == 0) { editor.Focus(); return; }
             if (value == WorkspaceOptions.DisplayName(slot)) { ExitEditing(); return; }
+            value = LimitWorkspaceName(value);
             rename.IsEnabled = false;
             var next = WorkspaceOptions.Normalized();
             next.Names[slot] = value;
@@ -394,8 +432,8 @@ public sealed partial class AppController
             if (editing) { SaveName(); return; }
             // A second editor replaces the first draft rather than saving it.
             CancelWorkspaceRenameOnPointer(null);
-            editing = true;
             editor.Text = WorkspaceOptions.DisplayName(slot);
+            editing = true;
             name.Visibility = Visibility.Collapsed;
             editor.Visibility = Visibility.Visible;
             renameIcon.Data = check;
