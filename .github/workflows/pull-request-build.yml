@@ -49,9 +49,21 @@ jobs:
         run: dotnet build .\PaperTodo.csproj -c Release --no-restore
 
       - name: Run regression checks
+        env:
+          PAPERTODO_IMAGE_EXPORT_ARTIFACTS: ${{ runner.temp }}/note-image-export
         run: |
           ./tools/testing/Run-Checks.ps1 -Group all -List
           ./tools/testing/Run-Checks.ps1 -Group regression
+
+      - name: Upload note image export samples
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: note-image-export-samples
+          path: |
+            ${{ runner.temp }}/note-image-export/*.png
+            ${{ runner.temp }}/note-image-export/*.jpg
+          if-no-files-found: ignore
 
       - name: Material and skin behavior checks
         # DWM desktop screenshot acceptance was retired on main (see its D-057).
@@ -80,3 +92,4 @@ jobs:
           dotnet-version: "10.0.x"
       - name: Persistence and data reload checks
         run: ./tools/testing/Run-Checks.ps1 -Group persistence
+

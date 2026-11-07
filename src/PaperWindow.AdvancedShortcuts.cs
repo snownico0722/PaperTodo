@@ -33,6 +33,9 @@ public sealed partial class PaperWindow
 
     private readonly HashSet<IntPtr> _advancedDisabledChildWindows = [];
     private bool _advancedInteractionLocked;
+    // The shortcut locks desktop paper surfaces; a borrowed editor stays editable.
+    private bool IsAdvancedDesktopInteractionLocked =>
+        _advancedInteractionLocked && !IsExpandedEditorHosted;
     private Border? _advancedLockShield;
     private Button? _advancedLockButton;
 
@@ -121,11 +124,11 @@ public sealed partial class PaperWindow
             return;
         }
 
-        _advancedLockShield.Visibility = _advancedInteractionLocked
+        _advancedLockShield.Visibility = IsAdvancedDesktopInteractionLocked
             ? Visibility.Visible
             : Visibility.Collapsed;
         _advancedLockButton.Visibility =
-            _advancedInteractionLocked && !_paper.IsCollapsed
+            IsAdvancedDesktopInteractionLocked && !_paper.IsCollapsed
                 ? Visibility.Visible
                 : Visibility.Collapsed;
         _advancedLockButton.IsHitTestVisible =
@@ -143,13 +146,13 @@ public sealed partial class PaperWindow
         {
             // Keep the pin slot in layout while the lock glyph visually replaces it.
             // Collapsing this element would let the title slide under the floating lock button.
-            _paperIconButton.Visibility = _advancedInteractionLocked
+            _paperIconButton.Visibility = IsAdvancedDesktopInteractionLocked
                 ? Visibility.Hidden
                 : Visibility.Visible;
         }
 
         ApplyAdvancedNativeChildLock();
-        if (_advancedInteractionLocked)
+        if (IsAdvancedDesktopInteractionLocked && IsActive)
         {
             Keyboard.ClearFocus();
             _advancedLockShield.Focus();
@@ -164,7 +167,7 @@ public sealed partial class PaperWindow
             return;
         }
 
-        if (_advancedInteractionLocked)
+        if (IsAdvancedDesktopInteractionLocked)
         {
             EnumChildWindows(
                 root,

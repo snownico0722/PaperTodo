@@ -61,7 +61,15 @@ public sealed partial class PaperWindow
             return;
         }
 
-        if (CanDisplayAsCapsule())
+        if (_isExpandedEditorMode)
+        {
+            _closeButton.Content = CreateTopBarCloseIcon(_closeButton, collapse: false);
+            _closeButton.ToolTip = CanDisplayAsCapsule()
+                ? Strings.Get("ToolTipCollapseToCapsule")
+                : Strings.Get("ToolTipHideThisPaper");
+            _closeButton.Cursor = Cursors.Hand;
+        }
+        else if (CanDisplayAsCapsule())
         {
             _closeButton.Content = CreateTopBarCloseIcon(_closeButton, collapse: true);
             _closeButton.ToolTip = Strings.Get("ToolTipCollapseToCapsule");
@@ -94,6 +102,8 @@ public sealed partial class PaperWindow
         // ContextMenu instance for each owner. Rebuild all live instances together so
         // state-dependent entries never lag behind the paper's current form.
         _paperChrome.ContextMenu = BuildPaperContextMenu();
+        if (_topBarHost != null)
+            _topBarHost.ContextMenu = BuildPaperContextMenu();
 
         if (_capsuleLeftArea != null)
         {
@@ -679,12 +689,12 @@ public sealed partial class PaperWindow
         var keepDeepCapsuleSlotReservation = !collapsed
             && expandingFromDeepCapsuleEdge
             && usesDeepCapsuleMode
-            && _controller.State.ShowDeepCapsuleWhileExpanded
+            && KeepDeepCapsuleWhileExpanded
             && CanDisplayAsCapsule();
         var returningToHiddenDeepCapsuleSlot = collapsed
             && usesDeepCapsuleMode
             && ExpandedFromDeepCapsuleEdge
-            && !_controller.State.ShowDeepCapsuleWhileExpanded;
+            && !KeepDeepCapsuleWhileExpanded;
         PaperRestoreGeometry? rememberedDeepCapsuleExpandedGeometry = null;
         // An explicit open origin outranks edge history; edge-driven expansion still restores it.
         if (programmaticOrigin == null &&
@@ -775,7 +785,7 @@ var expandedHeight = collapsed
             ChangeEdgeCapsulePaperForm(
                 EdgeCapsulePaperForm.Expanded,
                 keepDeepCapsuleSlotReservation);
-            if (_controller.State.ShowDeepCapsuleWhileExpanded &&
+            if (KeepDeepCapsuleWhileExpanded &&
                 _controller.CanPaperDisplayAsCapsule(_paper) &&
                 (expandingFromDeepCapsuleEdge ||
                  (_controller.State.UseCapsuleMode && _controller.State.UseDeepCapsuleMode)))

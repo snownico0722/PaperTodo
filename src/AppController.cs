@@ -566,6 +566,7 @@ public sealed partial class AppController : IDisposable
         }
 
         RefreshTrayMenu();
+        RefreshExpandedEditorPaperLists();
         MarkDirty();
         return paper;
     }
@@ -759,9 +760,9 @@ public sealed partial class AppController : IDisposable
 
         paper.Title = cleaned;
         if (_windows.TryGetValue(paper.Id, out var window))
-        {
             window.RefreshPaperTitle();
-        }
+        else
+            RefreshExpandedEditorPaperLists();
         NotifyPaperDisplayTitleChanged(paper.Id);
         RefreshTrayMenu();
         MarkDirty();
@@ -829,7 +830,7 @@ public sealed partial class AppController : IDisposable
         return paper != null &&
             _windows.TryGetValue(paper.Id, out var window) &&
             paper.IsVisible &&
-            window.HasExpandedPaperSurface;
+            (window.HasExpandedPaperSurface || window.IsExpandedEditorHosted);
     }
 
     public bool ShouldRunLinkedScriptCapsule(string? noteId)
@@ -939,6 +940,14 @@ public sealed partial class AppController : IDisposable
         var paper = FindPaper(paperId);
         if (paper == null)
         {
+            return;
+        }
+
+        if (_windows.TryGetValue(paper.Id, out var hostedWindow) &&
+            hostedWindow.ExpandedEditorHostWindow is { } editor)
+        {
+            editor.ActivateEditor();
+            RefreshTodoRowsForLinkedPaper(paper.Id);
             return;
         }
 
@@ -1157,7 +1166,8 @@ public sealed partial class AppController : IDisposable
         if (command.Kind is StartupCommandKind.Show or
             StartupCommandKind.Toggle or
             StartupCommandKind.NewTodo or
-            StartupCommandKind.NewNote)
+            StartupCommandKind.NewNote or
+            StartupCommandKind.Studio)
         {
             // Startup and secondary-instance commands arrive before PaperTodo intentionally takes focus.
             // Refresh here so a recent desktop/taskbar switch cannot leave stale fullscreen avoidance.
@@ -1187,6 +1197,9 @@ public sealed partial class AppController : IDisposable
                 break;
             case StartupCommandKind.NewNote:
                 CreatePaper(PaperTypes.Note, show: true);
+                break;
+            case StartupCommandKind.Studio:
+                OpenStudio();
                 break;
             case StartupCommandKind.Exit:
                 Exit();
@@ -1253,6 +1266,13 @@ public sealed partial class AppController : IDisposable
         bool animate,
         bool saveGeometry)
     {
+        // The borrowed PaperWindow is invisible; folding it directly would replace the
+        // editor's current visual without releasing its host. Fold via the visible owner.
+        if (collapsed && _expandedEditors.FirstOrDefault(e => e.CurrentPaperId == paper.Id) is { } editor)
+        {
+            editor.CollapseCurrentPaper();
+            return;
+        }
         // Hidden windows are still live presentation owners. Let them consume the complete form
         // transition before falling back to the persisted source for papers with no live window.
         if (_windows.TryGetValue(paper.Id, out var window) && !window.IsClosed)
@@ -1268,6 +1288,12 @@ public sealed partial class AppController : IDisposable
     {
         if (IsExiting)
         {
+            return;
+        }
+        var hostedEditor = _expandedEditors.FirstOrDefault(e => e.CurrentPaperId == paper.Id);
+        if (hostedEditor != null)
+        {
+            if (activate) hostedEditor.ActivateEditor();
             return;
         }
 
@@ -1463,6 +1489,12 @@ public sealed partial class AppController : IDisposable
 
     public void BringPaperToFront(PaperData paper)
     {
+        // A borrowed paper is presented by the editor HWND, not its hidden PaperWindow.
+        if (_expandedEditors.FirstOrDefault(e => e.CurrentPaperId == paper.Id) is { } editor)
+        {
+            editor.ActivateEditor();
+            return;
+        }
         if (!_windows.TryGetValue(paper.Id, out var window) || !window.IsVisible)
         {
             if (paper.IsVisible &&
@@ -1837,6 +1869,7 @@ public sealed partial class AppController : IDisposable
 
     public void HidePaper(PaperData paper)
     {
+        CloseExpandedEditorForPaper(paper.Id);
         InvalidateVisibilityShortcutSnapshotForExternalCommand();
         var visibilityVersion = NextVisibilityAnimationVersion(paper.Id);
         _windows.TryGetValue(paper.Id, out var window);
@@ -1919,6 +1952,12 @@ public sealed partial class AppController : IDisposable
         _isPreparingStartupEdgeCapsules = false;
         EnsurePapersOnScreen();
 
+        // The taskbar editor is independent of desktop-wide show/hide and visibility shortcuts.
+        var desktopPapersToShow = papersToShow
+            .Where(paper => !_windows.TryGetValue(paper.Id, out var window) ||
+                            !window.IsExpandedEditorHosted)
+            .ToList();
+
         // Runtime show-all and shortcut restore deliberately share this path so remembered expanded
         // geometry wins before edge placement. Shortcut restore only filters which papers enter it.
         var wasSuppressingDirty = _suppressDirty;
@@ -1928,9 +1967,9 @@ public sealed partial class AppController : IDisposable
         _isRestoringRuntimePaperBatch = true;
         try
         {
-            var activationPaper = papersToShow.LastOrDefault(paper =>
+            var activationPaper = desktopPapersToShow.LastOrDefault(paper =>
                 !(State.UseCapsuleMode && State.UseDeepCapsuleMode && paper.IsCollapsed && CanPaperDisplayAsCapsule(paper)));
-            foreach (var paper in papersToShow)
+            foreach (var paper in desktopPapersToShow)
             {
                 ShowPaper(paper, activate: ReferenceEquals(paper, activationPaper));
             }
@@ -1943,7 +1982,7 @@ public sealed partial class AppController : IDisposable
         }
 
         ArrangeDeepCapsules(animate: State.EnableAnimations);
-        ScheduleStartupShellPrewarm(papersToShow);
+        ScheduleStartupShellPrewarm(desktopPapersToShow);
         RefreshAllTodoRowsForPaperVisibility();
         RefreshTrayMenu();
         MarkDirty();
@@ -1964,8 +2003,13 @@ public sealed partial class AppController : IDisposable
     {
         // Proxy handoff and body callbacks can run another UI command synchronously. Keep this
         // hide scoped to its original targets; each later show/delete supersedes that target.
-        var papersToHide = State.Papers.ToArray();
-        var windowsToHide = _windows.Values.ToArray();
+        var papersToHide = State.Papers
+            .Where(paper => !_windows.TryGetValue(paper.Id, out var window) ||
+                            !window.IsExpandedEditorHosted)
+            .ToArray();
+        var windowsToHide = _windows.Values
+            .Where(window => !window.IsExpandedEditorHosted)
+            .ToArray();
         var visibilityVersions = papersToHide.Select(paper => paper.Id)
             .Concat(windowsToHide.Select(window => window.PaperId))
             .Distinct(StringComparer.Ordinal)
@@ -2044,6 +2088,7 @@ public sealed partial class AppController : IDisposable
 
         ArrangeDeepCapsules();
         RefreshTrayMenu();
+        RefreshExpandedEditorPaperLists();
         SaveNow();
     }
 
@@ -3353,8 +3398,8 @@ public sealed partial class AppController : IDisposable
         }
 
         return State.UseDeepCapsuleMode &&
-            State.ShowDeepCapsuleWhileExpanded &&
-            (window.HasVisibleSurface || _isPreparingStartupEdgeCapsules);
+            window.KeepDeepCapsuleWhileExpanded &&
+            (window.IsExpandedEditorHosted || window.HasVisibleSurface || _isPreparingStartupEdgeCapsules);
     }
 
     public void MarkDirty()
@@ -3393,6 +3438,7 @@ public sealed partial class AppController : IDisposable
             _forceSaveTimer.Stop();
             _hasPendingDirty = false;
             CommitPendingMarkdownContentsForSave();
+            CaptureExpandedEditorStates();
             var version = Interlocked.Increment(ref _saveVersion);
             NotifyPluginEventMutationStampChanged();
             attemptedVersion = version;
@@ -3729,7 +3775,8 @@ public sealed partial class AppController : IDisposable
 
     private bool IsPaperShown(PaperData paper)
     {
-        return paper.IsVisible && _windows.TryGetValue(paper.Id, out var window) && window.HasVisibleSurface;
+        return paper.IsVisible && _windows.TryGetValue(paper.Id, out var window) &&
+            !window.IsExpandedEditorHosted && window.HasVisibleSurface;
     }
 
     private HashSet<string> StartupPaperIdsAwaitingMonitor()

@@ -543,6 +543,12 @@ public sealed partial class StateStore
             RemoveNullEntriesInPlace(paper.Items);
 
             paper.Content ??= "";
+            if (paper.ExpandedEditor is { } editor)
+            {
+                if (!IsFinite(editor.X) || !IsFinite(editor.Y) ||
+                    !IsFinite(editor.Width) || !IsFinite(editor.Height))
+                    paper.ExpandedEditor = null;
+            }
             paper.X = NormalizeCoordinate(paper.X, 120);
             paper.Y = NormalizeCoordinate(paper.Y, 120);
             if (!IsFinite(paper.TextZoom))

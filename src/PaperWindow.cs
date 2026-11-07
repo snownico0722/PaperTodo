@@ -234,7 +234,7 @@ public sealed partial class PaperWindow : Window
     // Ordinary collapsed capsules are the main PaperWindow and should still save X/Y.
     // Deep capsules use the slot-host window for docked geometry, so the hidden/parked
     // main window must not overwrite ordinary paper geometry.
-    public bool UsesNonPaperGeometry => _paper.IsCollapsed && HasDeepCapsuleSlotPlacement;
+    public bool UsesNonPaperGeometry => _isExpandedEditorMode || (_paper.IsCollapsed && HasDeepCapsuleSlotPlacement);
     public bool ShouldSaveDeepCapsuleExpandedGeometry => ExpandedFromDeepCapsuleEdge && !_paper.IsCollapsed && _paper.IsVisible;
     public double DesiredCapsuleWindowWidth => CapsuleWindowWidth();
     public double DeepCapsuleRestingVisibleWidth => HoldsDeepCapsuleSlotWhileExpanded
@@ -728,6 +728,7 @@ public sealed partial class PaperWindow : Window
         StateChanged += (_, _) =>
         {
             RefreshSnappedPresentation(forceApply: true);
+            RefreshExpandedEditorTopBarControls();
             if (_paper.Type == PaperTypes.Note)
             {
                 NotifyCurrentPaperBodyVisibility(
@@ -765,6 +766,7 @@ public sealed partial class PaperWindow : Window
         };
         Deactivated += (_, _) =>
         {
+            if (IsExpandedEditorHosted) return;
             var suppressAutoCollapse = HasExperimentalAutoCollapseBlocker();
             NotifyCurrentPaperBodyDeactivated();
             AbortAllInteractions(InteractionAbortReason.Deactivated);
@@ -841,7 +843,7 @@ public sealed partial class PaperWindow : Window
 
     public void UpdateWindowSwitcherVisibility()
     {
-        if (_controller.State.HidePapersFromWindowSwitcher)
+        if (_controller.State.HidePapersFromWindowSwitcher || IsExpandedEditorHosted)
         {
             WindowNative.ApplyWindowSwitcherVisibility(
                 this,
@@ -863,7 +865,7 @@ public sealed partial class PaperWindow : Window
 
     public void UpdateTaskbarVisibility(bool reapplyShellState = false)
     {
-        var shouldShow = ShouldShowInTaskbar();
+        var shouldShow = ShouldShowInTaskbar() && !IsExpandedEditorHosted;
         if (reapplyShellState && !shouldShow && !ShowInTaskbar)
         {
             ShowInTaskbar = true;
@@ -874,7 +876,7 @@ public sealed partial class PaperWindow : Window
 
     public void ApplySystemVisibility(bool reapplyTaskbarShellState = false)
     {
-        if (_controller.State.HidePapersFromWindowSwitcher)
+        if (_controller.State.HidePapersFromWindowSwitcher || IsExpandedEditorHosted)
         {
             UpdateTaskbarVisibility(reapplyTaskbarShellState);
             UpdateWindowSwitcherVisibility();
@@ -1171,9 +1173,14 @@ public sealed partial class PaperWindow : Window
         var isCapsule = _paper.IsCollapsed && _controller.State.UseCapsuleMode;
         if (_paperChrome is SkinBorder skin) skin.IsCapsule = isCapsule;
         var snappedExpanded = _isSnappedPresentation && !_paper.IsCollapsed;
-        if (_controller.UsesNativeMicaWindows && _topBarHost != null)
+        if (_topBarHost != null)
         {
-            var innerRadius = snappedExpanded ? 0 : Math.Max(0, NativeMicaBackdrop.CornerRadius - _paperChrome.BorderThickness.Left);
+            var innerRadius = _isExpandedEditorMode
+                ? ExpandedEditorCornerRadius
+                : _controller.UsesNativeMicaWindows
+                    ? (snappedExpanded ? 0 : Math.Max(0,
+                        NativeMicaBackdrop.CornerRadius - _paperChrome.BorderThickness.Left))
+                    : RadiusShell;
             _topBarHost.CornerRadius = new CornerRadius(innerRadius, innerRadius, 0, 0);
         }
 
@@ -1196,6 +1203,12 @@ public sealed partial class PaperWindow : Window
         _paperChrome.BeginAnimation(Border.MarginProperty, null);
         _paperChrome.Margin = new Thickness(UsesNativePaperChrome ? 0 : WindowChromeMargin);
         _paperChrome.CornerRadius = targetCorner;
+        if (_topBarHost != null && !_controller.UsesNativeMicaWindows)
+        {
+            var headerRadius = _isExpandedEditorMode ? ExpandedEditorCornerRadius : RadiusShell;
+            _topBarHost.CornerRadius = new CornerRadius(headerRadius, headerRadius, 0, 0);
+        }
+
         ApplyPaperChromeShadowPresentation(isCapsule, suppressShadow: false);
         RefreshPluginBodyClip();
         RefreshNativeMica();
@@ -1691,6 +1704,7 @@ public sealed partial class PaperWindow : Window
         }
 
         RefreshNativeMica(force: true);
+        _expandedEditorHostWindow?.RefreshEditorTheme(this);
         if (!IsPaperFormTransitioning) ApplyPaperChromePresentation();
         RefreshPaperTitle();
         RefreshPaperIconButton();
@@ -1775,6 +1789,10 @@ public sealed partial class PaperWindow : Window
         if (_textZoomIndicator != null)
         {
             _textZoomIndicator.FontSize = AppTypography.Scale(10.5);
+        }
+        if (_editorStatisticsText != null)
+        {
+            _editorStatisticsText.FontSize = AppTypography.Scale(10.5);
         }
 
         if (_paper.Type == PaperTypes.Note)
@@ -1957,6 +1975,7 @@ public sealed partial class PaperWindow : Window
 
         BuildTopBar();
         BuildBody();
+        BuildExpandedEditorChrome();
         BuildDragLayer();
 
         BuildCapsuleShell();
@@ -2061,6 +2080,16 @@ public sealed partial class PaperWindow : Window
 
     private void BeginTitleBarDragGesture(FrameworkElement dragSource, MouseButtonEventArgs e)
     {
+        if (_expandedEditorHostWindow is { } editor)
+        {
+            if (e.ChangedButton == MouseButton.Left)
+            {
+                if (e.ClickCount == 2) editor.ToggleMaximized();
+                else editor.DragMove();
+                e.Handled = true;
+            }
+            return;
+        }
         if (e.ChangedButton != MouseButton.Left)
         {
             return;
@@ -2089,6 +2118,7 @@ public sealed partial class PaperWindow : Window
 
     private void UpdateTitleBarDragGesture(FrameworkElement dragSource, MouseEventArgs e)
     {
+        if (IsExpandedEditorHosted) return;
         var session = _titleBarDragSession;
         if (session == null || !ReferenceEquals(session.Source, dragSource))
         {
@@ -2178,6 +2208,7 @@ public sealed partial class PaperWindow : Window
             Margin = new Thickness(3, 3, 6, 0),
             Background = Brushes.Transparent
         };
+        top.SizeChanged += (_, _) => UpdateTopBarResponsiveLayout();
 
         top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -2366,7 +2397,7 @@ public sealed partial class PaperWindow : Window
 
         _runScriptButton = IconButton("", Strings.Get("TopBarRunScript"));
         _runScriptButton.Content = CreateTopBarRunScriptIcon(_runScriptButton);
-        _runScriptButton.Click += (_, _) => _controller.RunTopBarScript(this);
+        _runScriptButton.Click += (_, _) => _controller.RunTopBarScript(InteractionWindow);
         actionButtons.Children.Add(_runScriptButton);
 
         var windowBindingButton = IconButton(
@@ -2396,14 +2427,14 @@ public sealed partial class PaperWindow : Window
         _closeButton.Margin = new Thickness(AppTypography.Scale(1), -AppTypography.Scale(0.6), AppTypography.Scale(1), AppTypography.Scale(0.6));
         _closeButton.Click += (_, _) =>
         {
-            if (CanDisplayAsCapsule())
+            if (_expandedEditorHostWindow is { } host)
             {
-                SetCollapsedState(true);
+                if (CanDisplayAsCapsule()) host.CollapseCurrentPaper();
+                else host.CloseCurrentPaper();
+                return;
             }
-            else
-            {
-                _controller.HidePaper(_paper);
-            }
+            if (CanDisplayAsCapsule()) SetCollapsedState(true);
+            else _controller.HidePaper(_paper);
         };
         RefreshCloseButton();
 
@@ -2411,6 +2442,8 @@ public sealed partial class PaperWindow : Window
         actionButtons.Children.Add(_newNoteButton);
         buttons.Children.Add(_moreActionsButton);
         actionButtons.Children.Add(CreateWorkspaceCycleButton());
+        BuildExpandedEditorTopBarControls(buttons, actionButtons);
+        // The original close action is the only far-right close/capsule action.
         buttons.Children.Add(_closeButton);
         UpdateTopBarNewPaperButtons();
 
@@ -2430,6 +2463,10 @@ public sealed partial class PaperWindow : Window
         _paperChrome.SetBinding(SkinBorder.HeaderHeightProperty,
             new System.Windows.Data.Binding(nameof(ActualHeight)) { Source = topHost });
         topHost.SetResourceReference(Border.BorderBrushProperty, "TitleBarDividerBrushKey");
+        // The borrowed shell leaves _paperChrome behind in the hidden PaperWindow.
+        // Keep its original context menu on the actual visual top bar as well.
+        topHost.ContextMenu = BuildPaperContextMenu();
+        topHost.ContextMenuOpening += OnPaperChromeContextMenuOpening;
         topHost.MouseLeftButtonDown += (_, e) => BeginTitleBarDragGesture(topHost, e);
         topHost.PreviewMouseMove += (_, e) => UpdateTitleBarDragGesture(topHost, e);
         topHost.PreviewMouseLeftButtonUp += (_, _) => EndTitleBarDragGesture(topHost);
@@ -2460,9 +2497,16 @@ public sealed partial class PaperWindow : Window
             var titleMinWidth = Math.Max(_topBarTitleHost.MinWidth,
                 titleChildMin + _topBarTitleHost.Padding.Left + _topBarTitleHost.Padding.Right) +
                 _topBarTitleHost.Margin.Left + _topBarTitleHost.Margin.Right;
+            // New editor chrome must never displace the user's existing pinned controls.
+            // On a small paper the editor entry may overflow into the existing more menu.
+            var editorChromeWidth = _isExpandedEditorMode
+                ? (_editorSidebarButton == null ? 0 : TopBarOuterWidth(_editorSidebarButton)) +
+                    (_editorMinimizeButton == null ? 0 : TopBarOuterWidth(_editorMinimizeButton)) +
+                    (_editorMaximizeButton == null ? 0 : TopBarOuterWidth(_editorMaximizeButton))
+                : 0;
             var fixedWidth = TopBarOuterWidth(_paperIconButton) +
                 TopBarOuterWidth(_moreActionsButton) +
-                TopBarOuterWidth(_closeButton) + TopBarCollisionGap;
+                TopBarOuterWidth(_closeButton) + editorChromeWidth + TopBarCollisionGap;
             var remaining = Math.Max(0, availableWidth - fixedWidth - titleMinWidth);
 
             // Built-in user shortcuts are atomic. Saved order affects placement,
@@ -2630,6 +2674,11 @@ public sealed partial class PaperWindow : Window
         UIElement body = _paper.Type == PaperTypes.Note
             ? CreateAndAttachInitialPaperBody()
             : BuildTodoBody();
+        if (body is FrameworkElement editorBody)
+        {
+            _editorContentElement = editorBody;
+            _editorContentOriginalMargin = editorBody.Margin;
+        }
         Grid.SetRow(body, 1);
         _shell.Children.Add(body);
 
@@ -2705,7 +2754,6 @@ public sealed partial class PaperWindow : Window
     {
         menu.Items.Clear();
         menu.Items.Add(MenuHeader(Strings.Get("MenuQuick")));
-
         // Keep the same command order in both menus. Only the expanded paper's own
         // menu skips commands already visible in its top bar; the edge capsule is a
         // separate surface and must retain both creation actions.
@@ -2717,7 +2765,7 @@ public sealed partial class PaperWindow : Window
                 case PaperTopBarShortcuts.RunScript when
                     forDeepCapsuleSlot || !IsTopBarCommandVisible(_runScriptButton):
                     menu.Items.Add(MenuItem(Strings.Get("TopBarRunScript"),
-                        (_, _) => _controller.RunTopBarScript(this)));
+                        (_, _) => _controller.RunTopBarScript(InteractionWindow)));
                     break;
                 case PaperTopBarShortcuts.Workspace when
                     _controller.WorkspaceOptions.Enabled &&
@@ -2743,6 +2791,17 @@ public sealed partial class PaperWindow : Window
                     !IsTopBarCommandVisible(_openMarkdownButton):
                     menu.Items.Add(MenuItem(OpenMarkdownEditorToolTip(),
                         (_, _) => OpenMarkdownInDefaultEditor()));
+                    break;
+                case PaperTopBarShortcuts.ExpandedEditor when
+                    !IsTopBarCommandVisible(_editorModeButton):
+                    menu.Items.Add(MenuItem(
+                        _isExpandedEditorMode ? Strings.Get("EditorReturn") : Strings.Get("EditorOpen"),
+                        (_, _) =>
+                        {
+                            if (_expandedEditorHostWindow != null)
+                                _expandedEditorHostWindow.ReturnToPaper();
+                            else _controller.OpenExpandedEditorFor(this);
+                        }));
                     break;
             }
         }
@@ -2815,7 +2874,9 @@ public sealed partial class PaperWindow : Window
 
     internal void RefreshEffectiveTopmost()
     {
-        var shouldBeTopmost = !IsExperimentalPassive &&
+        if (_expandedEditorHostWindow is { } editor)
+            editor.SetPaperTopmost(_paper.AlwaysOnTop);
+        var shouldBeTopmost = !IsExperimentalPassive && !_isExpandedEditorMode &&
             (_paper.AlwaysOnTop ||
              (_controller.State.UseCapsuleMode &&
               _paper.IsCollapsed &&
@@ -2911,6 +2972,7 @@ public sealed partial class PaperWindow : Window
     {
         var title = _controller.PaperDisplayTitle(_paper);
         Title = title;
+        _expandedEditorHostWindow?.RefreshPaperTitle(this);
 
         if (_titleText != null)
         {
@@ -2927,12 +2989,13 @@ public sealed partial class PaperWindow : Window
 
         RefreshCapsuleLabel(invalidatePreview);
         RefreshPaperContextMenus();
+        _controller.RefreshExpandedEditorPaperLists();
     }
 
     private void BeginTitleEdit()
     {
         if (_windowLifecycle != PaperWindowLifecycleState.Alive ||
-            !_paper.IsVisible ||
+            (!_paper.IsVisible && !IsExpandedEditorHosted) ||
             _titleText == null ||
             _titleEditBox == null)
         {
@@ -2999,6 +3062,7 @@ public sealed partial class PaperWindow : Window
 
     private bool CanBeginTitleEditNow()
     {
+        if (IsExpandedEditorHosted) return true;
         return IsVisible &&
             !_paper.IsCollapsed &&
             !IsPaperFormTransitioning &&
@@ -3309,8 +3373,9 @@ public sealed partial class PaperWindow : Window
         };
     }
 
-    private static FrameworkElement CreateTopmostPinIcon(Button owner, bool pinned)
+    private FrameworkElement CreateTopmostPinIcon(Button owner, bool pinned)
     {
+        if (_isExpandedEditorMode) return StudioIcons.Create(owner, StudioIcon.Pin, 16 * TopBarIconScale());
         if (Theme.IsPixelSkin) return pinned
             ? CreatePixelIcon(owner, "..####..", "...##...", "..####..", ".######.", "...##...", "...##...", "...#....")
             : CreatePixelIcon(owner, "..####..", "..#..#..", "..#..#..", ".######.", "...##...", "...##...", "...#....");
@@ -3665,7 +3730,8 @@ public sealed partial class PaperWindow : Window
     private CornerRadius PaperChromeCornerRadiusForState(bool collapsed)
     {
         return new CornerRadius(collapsed ? CapsuleChromeCornerRadius :
-            _controller.UsesNativeMicaWindows ? NativeMicaBackdrop.CornerRadius : ExpandedChromeCornerRadius);
+            _controller.UsesNativeMicaWindows ? NativeMicaBackdrop.CornerRadius :
+            _isExpandedEditorMode ? ExpandedEditorCornerRadius : ExpandedChromeCornerRadius);
     }
 
     private double CapsuleWindowWidth()
@@ -3785,7 +3851,7 @@ public sealed partial class PaperWindow : Window
 
     private void SaveGeometryIfAllowed()
     {
-        if (IsPaperFormTransitioning || SuppressGeometrySave)
+        if (IsPaperFormTransitioning || SuppressGeometrySave || _isExpandedEditorMode)
         {
             return;
         }

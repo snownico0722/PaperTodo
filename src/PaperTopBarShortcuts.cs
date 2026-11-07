@@ -13,12 +13,14 @@ internal static class PaperTopBarShortcuts
     internal const string NewTodo = "new-todo";
     internal const string NewNote = "new-note";
     internal const string Workspace = "workspace";
+    internal const string ExpandedEditor = "expanded-editor";
+    internal const int CurrentDefaultsVersion = 1;
     internal const string RunScript = "run-script";
 
     // Kept only for deserializing layouts saved by the former per-paper model.
     internal const string PluginActions = "plugin-actions";
 
-    private static readonly string[] Defaults = [Association, Workspace, NewNote, NewTodo, ExternalEditor, RunScript];
+    private static readonly string[] Defaults = [Association, Workspace, ExpandedEditor, NewNote, NewTodo, ExternalEditor, RunScript];
 
     internal static IReadOnlyList<string> All => Defaults;
 
@@ -41,6 +43,15 @@ internal static class PaperTopBarShortcuts
             .Distinct(StringComparer.Ordinal).ToList();
         state.TopBarScript ??= string.Empty;
         state.TopBarPinnedCount = Math.Clamp(state.TopBarPinnedCount, 0, Defaults.Length);
+        // This release deliberately updates both choices once, including saved
+        // beta layouts that already contain the editor. Later user moves persist.
+        if (state.TopBarDefaultsVersion < CurrentDefaultsVersion)
+        {
+            SetPinned(state, ExpandedEditor, true);
+            SetPinned(state, ExternalEditor, false);
+            state.ShowTopBarExternalOpenButton = false;
+            state.TopBarDefaultsVersion = CurrentDefaultsVersion;
+        }
         state.TodoTopBarShortcuts = null;
         state.NoteTopBarShortcuts = null;
     }
@@ -54,6 +65,7 @@ internal static class PaperTopBarShortcuts
             .Concat(state.NoteTopBarShortcuts ?? [])
             .Where(action => Defaults.Contains(action, StringComparer.Ordinal))
             .Distinct(StringComparer.Ordinal).ToList();
+        pinned.Add(ExpandedEditor);
         state.TopBarShortcutOrder = NormalizeOrder(pinned);
         state.TopBarPinnedCount = pinned.Count;
         Normalize(state);

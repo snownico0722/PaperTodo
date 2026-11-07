@@ -186,7 +186,7 @@ public sealed partial class PaperWindow
         bool animate = false,
         bool deferInitialPresentation = false)
     {
-        var shouldReserveWhileExpanded = _controller.State.ShowDeepCapsuleWhileExpanded &&
+        var shouldReserveWhileExpanded = KeepDeepCapsuleWhileExpanded &&
             _controller.CanPaperDisplayAsCapsule(_paper);
         if (_paper.IsCollapsed ||
             !shouldReserveWhileExpanded ||
@@ -372,7 +372,7 @@ public sealed partial class PaperWindow
             return;
         }
 
-        if (_controller.State.ShowDeepCapsuleWhileExpanded && _controller.CanPaperDisplayAsCapsule(_paper))
+        if (KeepDeepCapsuleWhileExpanded && _controller.CanPaperDisplayAsCapsule(_paper))
         {
             if (!ChangeEdgeCapsulePaperForm(
                     EdgeCapsulePaperForm.Expanded,
@@ -388,7 +388,7 @@ public sealed partial class PaperWindow
             return;
         }
 
-        if (!_controller.State.ShowDeepCapsuleWhileExpanded && HoldsDeepCapsuleSlotWhileExpanded)
+        if (!KeepDeepCapsuleWhileExpanded && HoldsDeepCapsuleSlotWhileExpanded)
         {
             ClearDeepCapsulePlacement(animate: _controller.State.EnableAnimations);
         }

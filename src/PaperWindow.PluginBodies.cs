@@ -902,7 +902,7 @@ public sealed partial class PaperWindow
             if (!_controller.CanAssignPluginProvider(_paper, targetDescriptor))
             {
                 MessageBox.Show(
-                this,
+                InteractionWindow,
                 Strings.Format(
                     "PluginInstanceLimitMessage",
                     targetDescriptor.DisplayName,
@@ -1020,6 +1020,7 @@ public sealed partial class PaperWindow
             UpdateTextZoom();
         }
         RefreshPaperContextMenus();
+        RefreshExpandedEditorPresentation();
     }
 
     private void RemoveTextZoomOverlay()
@@ -1105,6 +1106,8 @@ public sealed partial class PaperWindow
 
     internal void NotifyCurrentPaperBodyVisibility(bool visible)
     {
+        visible = visible || (IsExpandedEditorHosted &&
+            _expandedEditorHostWindow?.WindowState != WindowState.Minimized);
         if (_bodyDisabled)
         {
             _bodyRuntimeVisible = false;
@@ -1123,7 +1126,7 @@ public sealed partial class PaperWindow
             return;
         }
 
-        var runtimeVisible = _paper.IsVisible && visible;
+        var runtimeVisible = (_paper.IsVisible || IsExpandedEditorHosted) && visible;
         if (visible)
         {
             // Expansion can come from a hotkey, tray action or another paper. Settle any active

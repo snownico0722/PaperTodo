@@ -144,9 +144,9 @@ public sealed partial class PaperWindow
         {
             if (!IsBuiltInFindOpen ||
                 !string.Equals(_findInput.Text, query, StringComparison.Ordinal) ||
-                (!IsActive &&
+                (!InteractionWindow.IsActive &&
                  _findHost?.IsKeyboardFocusWithin != true &&
-                 !targetWindow.IsActive))
+                 !targetWindow.InteractionWindow.IsActive))
             {
                 return;
             }
@@ -160,7 +160,7 @@ public sealed partial class PaperWindow
 
             ClearAppliedFindSelection();
             HideBuiltInFind(restoreFocus: false);
-            if (!IsActive)
+            if (!InteractionWindow.IsActive)
             {
                 ScheduleExperimentalAutoCollapse(blockedAtDeactivation: false);
             }
@@ -171,23 +171,26 @@ public sealed partial class PaperWindow
         string query,
         GlobalFindMatch target)
     {
+        var visibleWindow = InteractionWindow;
         if (IsClosed ||
-            !IsVisible ||
-            WindowState == WindowState.Minimized ||
+            !visibleWindow.IsVisible ||
+            visibleWindow.WindowState == WindowState.Minimized ||
             _paper.IsCollapsed ||
             !CanUseBuiltInFind() ||
-            IsExperimentalPassive ||
-            _controller.FullscreenAvoidanceWindowFor(this) != IntPtr.Zero)
+            (!IsExpandedEditorHosted &&
+             (IsExperimentalPassive ||
+              _controller.FullscreenAvoidanceWindowFor(this) != IntPtr.Zero)))
         {
             return false;
         }
 
         EnsureBuiltInFindPopup();
-        if (_findPopup == null || _findInput == null || !Activate())
+        if (_findPopup == null || _findInput == null || !visibleWindow.Activate())
         {
             return false;
         }
 
+        _findPopup.PlacementTarget = IsExpandedEditorHosted ? _shell : _paperChrome;
         SetBuiltInFindQuery(query, target.Match);
         UpdateBuiltInFindVisuals();
         _findPopup.IsOpen = true;

@@ -63,23 +63,20 @@ public sealed partial class PaperWindow
         PaperTopBarShortcuts.NewTodo => _newTodoButton,
         PaperTopBarShortcuts.NewNote => _newNoteButton,
         PaperTopBarShortcuts.Workspace => _workspaceButton,
+        PaperTopBarShortcuts.ExpandedEditor => _editorModeButton,
         PaperTopBarShortcuts.RunScript => _runScriptButton,
         _ => null
     };
 
     private bool IsTopBarCommandVisible(Button? button) =>
-        !_paper.IsCollapsed && IsVisible && _topBarActionButtonsHost?.Visibility == Visibility.Visible &&
+        !_paper.IsCollapsed && (IsVisible || IsExpandedEditorHosted) && _topBarActionButtonsHost?.Visibility == Visibility.Visible &&
         button?.Visibility == Visibility.Visible;
 
     private MenuItem BuildAssociationDragMenuItem(ContextMenu menu)
     {
-        var todo = CanBeginPaperLinkDrag();
-        var window = CanBeginWindowBindingDrag();
-        var label = todo && window ? "MenuTopBarAssociationDrag" :
-            todo ? "MenuTopBarAssociationDragTodo" : "MenuTopBarAssociationDragWindow";
         var item = new MenuItem
         {
-            Header = Strings.Get(label),
+            Header = Strings.Get("MenuTopBarAssociationDrag"),
             ToolTip = AssociationDragHint(),
             Padding = new Thickness(8, 4, 10, 4),
             StaysOpenOnClick = true
@@ -100,6 +97,8 @@ public sealed partial class PaperWindow
         if (ReferenceEquals(button, _workspaceButton))
             return _controller.WorkspaceOptions.Enabled &&
                 PaperTopBarShortcuts.Contains(state, _paper.Type, PaperTopBarShortcuts.Workspace);
+        if (ReferenceEquals(button, _editorModeButton))
+            return PaperTopBarShortcuts.Contains(state, _paper.Type, PaperTopBarShortcuts.ExpandedEditor);
         if (ReferenceEquals(button, _windowBindingButton))
             return PaperTopBarShortcuts.Contains(state, _paper.Type, PaperTopBarShortcuts.Association) &&
                 (state.EnableTodoPaperLinks || state.ExperimentalWindowTethering);
@@ -123,7 +122,7 @@ public sealed partial class PaperWindow
             .Where(binding => binding.Action.Visible &&
                 !(_pluginTopBarActionElements.Any(entry =>
                     Equals(entry.Binding, binding)) &&
-                  !_paper.IsCollapsed && IsVisible &&
+                  !_paper.IsCollapsed && (IsVisible || IsExpandedEditorHosted) &&
                   _topBarActionButtonsHost?.Visibility == Visibility.Visible &&
                   _pluginTopBarButtonsHost?.Visibility == Visibility.Visible))
             .ToArray();

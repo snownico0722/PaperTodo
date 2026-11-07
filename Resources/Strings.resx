@@ -1837,4 +1837,62 @@
   <data name="MenuTopBarAssociationDragWindow" xml:space="preserve"><value>拖到窗口以关联</value></data>
   <data name="WorkspaceDataSettingsTitle" xml:space="preserve"><value>工作区与数据</value></data>
   <data name="SettingsDataProcessing" xml:space="preserve"><value>数据处理</value></data>
+  <data name="EditorOpen" xml:space="preserve"><value>在工作台中打开</value></data>
+  <data name="EditorReturn" xml:space="preserve"><value>返回纸片</value></data>
+  <data name="EditorSidebarShow" xml:space="preserve"><value>显示纸片列表</value></data>
+  <data name="EditorSidebarHide" xml:space="preserve"><value>收起纸片列表</value></data>
+  <data name="EditorMinimize" xml:space="preserve"><value>最小化</value></data>
+  <data name="EditorMaximizeRestore" xml:space="preserve"><value>最大化 / 还原</value></data>
+  <data name="EditorUndo" xml:space="preserve"><value>撤销</value></data>
+  <data name="EditorRedo" xml:space="preserve"><value>重做</value></data>
+  <data name="EditorHeading" xml:space="preserve"><value>标题</value></data>
+  <data name="EditorBold" xml:space="preserve"><value>加粗</value></data>
+  <data name="EditorItalic" xml:space="preserve"><value>斜体</value></data>
+  <data name="EditorStrike" xml:space="preserve"><value>删除线</value></data>
+  <data name="EditorBullets" xml:space="preserve"><value>无序列表</value></data>
+  <data name="EditorNumbers" xml:space="preserve"><value>有序列表</value></data>
+  <data name="EditorQuote" xml:space="preserve"><value>引用</value></data>
+  <data name="EditorCode" xml:space="preserve"><value>代码块</value></data>
+  <data name="EditorLink" xml:space="preserve"><value>插入链接</value></data>
+  <data name="EditorImage" xml:space="preserve"><value>插入图片</value></data>
+  <data name="EditorAllPapers" xml:space="preserve"><value>所有纸片</value></data>
+  <data name="EditorTodo" xml:space="preserve"><value>待办</value></data>
+  <data name="EditorNote" xml:space="preserve"><value>笔记</value></data>
+  <data name="EditorPaper" xml:space="preserve"><value>纸片</value></data>
+  <data name="EditorStatistics" xml:space="preserve">
+    <value>文字统计</value>
+  </data>
+  <data name="EditorStatisticsDocument" xml:space="preserve">
+    <value>全文</value>
+  </data>
+  <data name="EditorStatisticsSelection" xml:space="preserve">
+    <value>选中</value>
+  </data>
+  <data name="EditorStatisticsLines" xml:space="preserve">
+    <value>行数</value>
+  </data>
+  <data name="EditorStatisticsBody" xml:space="preserve">
+    <value>正文字数</value>
+  </data>
+  <data name="EditorStatisticsSource" xml:space="preserve">
+    <value>原文字符数</value>
+  </data>
+  <data name="EditorCharacterCount" xml:space="preserve"><value>{0:N0} 字</value></data>
+  <data name="EditorSelectionCount" xml:space="preserve"><value>{0:N0} 字 · 选中 {1:N0} 字</value></data>
+  <data name="EditorImageExport" xml:space="preserve"><value>导出图片</value></data>
+  <data name="EditorImageExportSave" xml:space="preserve"><value>保存图片</value></data>
+  <data name="EditorImageExportPreparing" xml:space="preserve"><value>正在排版…</value></data>
+  <data name="EditorImageExportPreview" xml:space="preserve"><value>整篇长图预览</value></data>
+  <data name="EditorImageExportSize" xml:space="preserve"><value>{0} × {1} 像素</value></data>
+  <data name="EditorImageExportMissing" xml:space="preserve"><value>有 {0} 张图片无法读取，已在对应位置标注。</value></data>
+  <data name="EditorImageExportJpeg" xml:space="preserve"><value>JPG</value></data>
+  <data name="EditorImageExportJpegHeightLimit" xml:space="preserve"><value>JPG 长图最高支持 65535 像素高度。请改选 PNG 导出。</value></data>
+  <data name="EditorImageExportSwitchFormat" xml:space="preserve"><value>切换图片格式</value></data>
+  <data name="EditorImageExportEstimatedSize" xml:space="preserve"><value>体积：约{0}m</value></data>
+  <data name="EditorImageExportEstimatedSizeSmall" xml:space="preserve"><value>体积：小于1m</value></data>
+  <data name="EditorImageExportPng" xml:space="preserve"><value>PNG</value></data>
+  <data name="EditorImageExportSaving" xml:space="preserve"><value>正在保存…</value></data>
+  <data name="EditorImageExportSaved" xml:space="preserve"><value>图片已保存</value></data>
+  <data name="StudioTitle" xml:space="preserve"><value>工作台</value></data>
+  <data name="EditorClose" xml:space="preserve"><value>关闭工作台</value></data>
 </root>

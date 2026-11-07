@@ -336,6 +336,7 @@ public sealed partial class AppController
         PaperTopBarShortcuts.NewTodo => Strings.Get("ShortcutNewTodo"),
         PaperTopBarShortcuts.NewNote => Strings.Get("ShortcutNewNote"),
         PaperTopBarShortcuts.Workspace => Strings.Get("WorkspaceSettingsTitle"),
+        PaperTopBarShortcuts.ExpandedEditor => Strings.Get("EditorOpen"),
         PaperTopBarShortcuts.RunScript => Strings.Get("TopBarRunScript"),
         PaperTopBarShortcuts.Association => Strings.Get("TopBarAssociation"),
         PaperTopBarShortcuts.ExternalEditor => Strings.Get("TopBarExternalEditor"),
@@ -346,6 +347,9 @@ public sealed partial class AppController
     // strokes (24-unit Lucide-style outlines) rather than font-dependent symbols.
     private static FrameworkElement CreateTopBarShortcutIcon(string action)
     {
+        if (action == PaperTopBarShortcuts.ExpandedEditor)
+            return StudioIcons.Create(new Control { Foreground = TrayWeakTextBrush }, StudioIcon.Studio,
+                AppTypography.Scale(16));
         string? pathData = action switch
         {
             PaperTopBarShortcuts.Association =>

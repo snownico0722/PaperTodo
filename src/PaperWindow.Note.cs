@@ -31,6 +31,8 @@ public sealed partial class PaperWindow
         CancelNotePresenterDeferredWork();
         _cancelNotePresenterInteractions = null;
         _showNotePreview = null;
+        _enterCurrentNoteEditor = null;
+        _noteEditorImageAction = null;
         _notePreviewContextMenu = null;
         return ++_notePresenterGeneration;
     }
@@ -90,7 +92,7 @@ public sealed partial class PaperWindow
 
     private void ExitNoteEditor()
     {
-        if (_paper.Type != PaperTypes.Note || _noteBox == null)
+        if (_paper.Type != PaperTypes.Note || _noteBox == null || _isExpandedEditorMode)
         {
             return;
         }
@@ -186,7 +188,7 @@ public sealed partial class PaperWindow
         editorMenu.Items.Add(MenuItem(Strings.Get("MenuHeading"), (_, _) => box.InsertLinePrefix("# ")));
         editorMenu.Items.Add(MenuItem(Strings.Get("MenuQuote"), (_, _) => box.InsertLinePrefix("> ")));
         editorMenu.Items.Add(MenuItem(Strings.Get("MenuList"), (_, _) => box.InsertLinePrefix("- ")));
-        editorMenu.Items.Add(MenuItem(Strings.Get("MenuCodeBlock"), (_, _) => box.WrapSelection("```\n", "\n```")));
+        editorMenu.Items.Add(MenuItem(Strings.Get("MenuCodeBlock"), (_, _) => box.InsertCodeBlock()));
         editorMenu.Items.Add(MenuItem(Strings.Get("MenuInsertLink"), (_, _) => box.InsertMarkdownLink()));
         editorMenu.Items.Add(MenuItem(Strings.Get("MenuInsertImage"), (_, _) =>
         {
@@ -220,7 +222,7 @@ public sealed partial class PaperWindow
         _notePreviewContextMenu = BuildPaperContextMenu();
         void ShowPreview()
         {
-            if (!IsCurrentPresenter())
+            if (_isExpandedEditorMode || !IsCurrentPresenter())
             {
                 return;
             }
@@ -261,7 +263,7 @@ public sealed partial class PaperWindow
                         }
 
                         if (isPreviewing &&
-                            IsActive &&
+                            InteractionWindow.IsActive &&
                             !IsKeyboardFocusWithin &&
                             _findHost?.IsKeyboardFocusWithin != true &&
                             !IsPaperContextMenuInteractionActive)
@@ -285,7 +287,7 @@ public sealed partial class PaperWindow
 
             TraceNoteRender($"ShowEditor before focus={focus} isPreviewing={isPreviewing} boxPreview={box.IsPreviewMode}");
 
-            box.SetPreviewMode(false);
+            if (box.IsPreviewMode) box.SetPreviewMode(false);
             box.ContextMenu = editorMenu;
             isPreviewing = false;
 
@@ -295,6 +297,24 @@ public sealed partial class PaperWindow
             }
             TraceNoteRender($"ShowEditor after focus={focus} isPreviewing={isPreviewing} boxPreview={box.IsPreviewMode} focused={box.IsKeyboardFocusWithin}");
         }
+
+        _enterCurrentNoteEditor = () => ShowEditor(focus: false);
+        _noteEditorImageAction = () =>
+        {
+            isOpeningImagePicker = true;
+            try
+            {
+                ShowEditor(focus: false);
+                var paths = SelectImagesFromFilePicker();
+                if (paths.Length > 0 && IsCurrentPresenter())
+                    InsertImageFiles(box, paths);
+            }
+            finally
+            {
+                isOpeningImagePicker = false;
+                ShowEditor();
+            }
+        };
 
         void ShowEditorAtPreviewPoint(
             Point previewPoint,
@@ -708,7 +728,7 @@ public sealed partial class PaperWindow
                     {
                         return;
                     }
-                    if (IsActive)
+                    if (InteractionWindow.IsActive)
                     {
                         TraceNoteRender("ImageContextMenuClosed: refocus editor");
                         box.Focus();
@@ -846,7 +866,7 @@ public sealed partial class PaperWindow
 
         editorMenu.Closed += (_, _) =>
         {
-            if (!isOpeningImagePicker &&
+            if (!isOpeningImagePicker && !_isExpandedEditorMode &&
                 !isPreviewing &&
                 !box.IsFocused &&
                 !box.IsKeyboardFocusWithin)
@@ -855,7 +875,7 @@ public sealed partial class PaperWindow
             }
         };
 
-        if (box.IsFocused || string.IsNullOrEmpty(box.Text))
+        if (_isExpandedEditorMode || box.IsFocused || string.IsNullOrEmpty(box.Text))
         {
             ShowEditor();
         }
@@ -876,7 +896,7 @@ public sealed partial class PaperWindow
             CheckFileExists = true
         };
 
-        if (dialog.ShowDialog(this) != true)
+        if (dialog.ShowDialog((_expandedEditorHostWindow as Window) ?? this) != true)
         {
             return Array.Empty<string>();
         }
@@ -899,7 +919,7 @@ public sealed partial class PaperWindow
     private void ShowNoteImageImportFailure(Exception ex)
     {
         PaperNoticeDialog.Show(
-            this,
+            InteractionWindow,
             Strings.Get("ImageImportFailureTitle"),
             Strings.Format("ImageImportFailureMessage", ex.Message));
     }
@@ -907,7 +927,7 @@ public sealed partial class PaperWindow
     private void ShowNotePasteRejected()
     {
         PaperNoticeDialog.Show(
-            this,
+            InteractionWindow,
             Strings.Get("NotePasteRejectedTitle"),
             Strings.Get("NotePasteRejectedMessage"));
     }
@@ -1016,7 +1036,8 @@ public sealed partial class PaperWindow
     {
         if (_openMarkdownButton != null)
         {
-            _openMarkdownButton.Content = ExternalOpenButtonLabel();
+            _openMarkdownButton.Content = _isExpandedEditorMode
+                ? StudioIcons.Create(_openMarkdownButton, StudioIcon.ExternalOpen) : ExternalOpenButtonLabel();
             _openMarkdownButton.ToolTip = OpenMarkdownEditorToolTip();
             UpdateTopBarNewPaperButtons();
         }

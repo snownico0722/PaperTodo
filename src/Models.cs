@@ -507,7 +507,9 @@ public sealed class AppState
     // the remaining commands live in the menu. The per-paper types have no separate layout.
     public List<string> TopBarShortcutOrder { get; set; } =
         PaperTopBarShortcuts.NormalizeOrder(null);
-    public int TopBarPinnedCount { get; set; } = 2;
+    public int TopBarPinnedCount { get; set; } = 3;
+    // Persisted with the layout so upgrade defaults run once per workspace.
+    public int TopBarDefaultsVersion { get; set; }
     // Hiding an entry does not remove its saved position or disable its feature.
     public List<string> HiddenTopBarShortcuts { get; set; } = [];
     public string TopBarScript { get; set; } = string.Empty;
@@ -635,6 +637,10 @@ public sealed class PaperData
     public bool IsCollapsed { get; set; } = false;
     public double TextZoom { get; set; } = 1.0;
 
+    // Editor presentation is independent of desktop/capsule geometry and document content.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ExpandedEditorState? ExpandedEditor { get; set; }
+
     // Note body provider.
     public string BodyProviderId { get; set; } = PaperBodyProviderIds.Markdown;
     // Expanded runtime header and folded capsule fallback are independent lightweight caches.
@@ -685,6 +691,16 @@ public sealed class PaperData
 
     public List<PaperItem> Items { get; set; } = new();
     public string Content { get; set; } = "";
+}
+
+public sealed record ExpandedEditorState
+{
+    public double X { get; init; }
+    public double Y { get; init; }
+    public double Width { get; init; }
+    public double Height { get; init; }
+    public bool Maximized { get; init; }
+    public bool SidebarOpen { get; init; }
 }
 
 public sealed class PaperItem

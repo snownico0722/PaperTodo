@@ -99,6 +99,7 @@ public sealed partial class PaperWindow
         }
 
         UpdateBuiltInFindVisuals();
+        _findPopup.PlacementTarget = IsExpandedEditorHosted ? _shell : _paperChrome;
         _findPopup.IsOpen = true;
         SynchronizeBuiltInFindOwnerState(refreshMatches: false);
         _findInput.Focus();
@@ -587,8 +588,9 @@ public sealed partial class PaperWindow
             return;
         }
 
-        if (!IsVisible ||
-            WindowState == WindowState.Minimized ||
+        var owner = (_expandedEditorHostWindow as Window) ?? this;
+        if (!owner.IsVisible ||
+            owner.WindowState == WindowState.Minimized ||
             _paper.IsCollapsed ||
             !CanUseBuiltInFind())
         {
@@ -997,17 +999,18 @@ public sealed partial class PaperWindow
         _findPopup.IsOpen = false;
         RefreshTodoFindCues();
 
+        var owner = (_expandedEditorHostWindow as Window) ?? this;
         if (!restoreFocus ||
-            !IsVisible ||
+            !owner.IsVisible ||
             _paper.IsCollapsed ||
-            WindowState == WindowState.Minimized)
+            owner.WindowState == WindowState.Minimized)
         {
             return;
         }
 
-        if (!IsActive)
+        if (!owner.IsActive)
         {
-            Activate();
+            owner.Activate();
         }
 
         if (hasMatch && match.IsNote)
@@ -1063,7 +1066,7 @@ public sealed partial class PaperWindow
         {
             if (!IsBuiltInFindOpen ||
                 _findHost?.IsKeyboardFocusWithin == true ||
-                IsActive)
+                ((_expandedEditorHostWindow as Window) ?? this).IsActive)
             {
                 return;
             }

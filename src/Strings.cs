@@ -32,11 +32,11 @@ public static class Strings
             ["LabsFocusRestingAlways"] = ["激活时也保持透明", "Keep transparent while active", "操作中も透明を維持", "활성 상태에서도 투명 유지"],
             ["TipLabsWindowTetheringFixed"] = ["展开纸片后，把顶栏的窗口绑定按钮拖到其他软件窗口并松手，纸片会贴边并跟随移动；折叠与重新展开会保持同一绑定。目标窗口最小化或隐藏时纸片会暂时隐藏并等待恢复；等待期间手动显示纸片会解除绑定。", "After expanding a paper, drag its top-bar window-binding button onto another app window and release to attach and follow it. Folding and expanding keep the same binding. If the target is minimized or hidden, the paper waits hidden and returns with the target; explicitly showing it while waiting detaches the binding.", "紙を展開した後、上部バーのウィンドウ連携ボタンを別アプリのウィンドウへドラッグして離すと、そのウィンドウに沿って追従します。折りたたみと再展開でも同じ連携を維持します。対象が最小化または非表示になると紙も一時的に隠れて復帰を待ち、待機中に手動で表示すると連携を解除します。", "메모를 펼친 뒤 상단 바의 창 연결 버튼을 다른 앱 창으로 드래그해 놓으면 해당 창 가장자리에 붙어 따라갑니다. 접고 다시 펼쳐도 같은 연결을 유지합니다. 대상 창이 최소화되거나 숨겨지면 메모도 임시로 숨은 채 복원을 기다리며, 대기 중 수동으로 표시하면 연결을 해제합니다."],
             ["LabsInteractionLock"] = ["交互锁定", "Interaction lock", "操作ロック", "상호 작용 잠금"],
-            ["LabsLockAllPapers"] = ["锁定全部便签", "Lock all papers", "すべての紙をロック", "모든 메모 잠금"],
-            ["TipLabsLockAllPapers"] = ["切换全部普通与插件便签的交互锁定。", "Toggle interaction lock for all regular and plugin papers.", "通常およびプラグインの紙をすべてロックします。", "일반 및 플러그인 메모를 모두 잠급니다."],
+            ["LabsLockAllPapers"] = ["锁定桌面纸片", "Lock desktop papers", "デスクトップの紙をロック", "바탕화면 메모 잠금"],
+            ["TipLabsLockAllPapers"] = ["锁定桌面上的普通与插件纸片，编辑器仍可正常编辑。", "Lock regular and plugin papers on the desktop; expanded editors remain editable.", "デスクトップ上の通常・プラグインの紙をロックします。編集ウィンドウでは通常どおり編集できます。", "바탕화면의 일반 및 플러그인 메모를 잠급니다. 편집기에서는 계속 편집할 수 있습니다."],
             ["LabsAllowLockIconUnlock"] = ["允许点击锁头解锁", "Allow lock icon to unlock", "ロックアイコンで解除を許可", "잠금 아이콘으로 해제 허용"],
             ["TipLabsAllowLockIconUnlock"] = ["关闭后锁头仅作提示，只能通过快捷键解锁。", "When off, the lock is only an indicator and the shortcut is required to unlock.", "オフの場合、ロックは表示のみで解除にはショートカットが必要です。", "끄면 잠금은 표시만 하며 단축키로만 해제할 수 있습니다."],
-            ["LabsUnlockAllPapers"] = ["解锁全部便签", "Unlock all papers", "すべての紙のロックを解除", "모든 메모 잠금 해제"],
+            ["LabsUnlockAllPapers"] = ["解锁桌面纸片", "Unlock desktop papers", "デスクトップの紙のロックを解除", "바탕화면 메모 잠금 해제"],
             ["LabsShortcutTransparency"] = ["快捷透明度", "Shortcut transparency", "ショートカット透明度", "단축키 투명도"],
             ["LabsShortcutOpacityLevel"] = ["透明度值", "Opacity level", "透明度", "투명도 값"],
             ["LabsAllPapersTransparent"] = ["切换全部纸片透明", "Toggle all papers transparent", "すべての紙の透明を切替", "모든 메모 투명 전환"],
@@ -73,6 +73,7 @@ public static class Strings
             ["TodoPasteTruncatedTitle"] = ["粘贴内容已截断", "Paste was truncated", "貼り付け内容を切り詰めました", "붙여넣기 내용이 잘렸습니다"],
             ["TodoPasteItemLimitMessage"] = ["本次最多插入前 {0} 条待办，其余未插入。", "Only the first {0} todos were inserted; the rest were not inserted.", "先頭の {0} 件だけを挿入し、残りは挿入しませんでした。", "앞의 {0}개 할 일만 삽입했고 나머지는 삽입하지 않았습니다."],
             ["TodoPasteTextLimitMessage"] = ["待办最多支持 {0} 个字符，超出部分未插入。", "A todo can contain at most {0} characters; excess text was not inserted.", "ToDo は最大 {0} 文字です。超えた部分は挿入しませんでした。", "할 일은 최대 {0}자까지 지원하며 초과한 텍스트는 삽입하지 않았습니다."],
+            ["EditorImageExportMemoryLimit"] = ["本次导出的图片解码内存将超过 1 GiB，已停止导出。请减少图片或缩小图片后重试。", "Decoded images for this export would exceed 1 GiB. Remove or shrink some images and try again.", "書き出し用画像のデコード容量が 1 GiB を超えるため、中止しました。画像を減らすか縮小して再試行してください。", "내보내기 이미지의 디코딩 메모리가 1 GiB를 초과하여 중단했습니다. 이미지를 줄이거나 축소한 후 다시 시도하세요."],
             ["NoteInputLimitTitle"] = ["笔记已达上限", "Note limit reached", "ノートの上限に達しました", "메모 한도에 도달했습니다"],
             ["NoteInputLimitMessage"] = ["笔记最多支持 {0} 个字符。请删除部分内容后再继续输入。", "A note can contain at most {0} characters. Delete some content before typing more.", "ノートは最大 {0} 文字です。続けて入力するには一部の内容を削除してください。", "메모는 최대 {0}자까지 입력할 수 있습니다. 계속 입력하려면 일부 내용을 삭제해 주세요."]
         };

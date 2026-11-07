@@ -1,0 +1,496 @@
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Globalization;
+using System.IO;
+using System.Linq;
+using System.Reflection;
+using System.Runtime.InteropServices;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Media;
+using System.Windows.Interop;
+using System.Windows.Threading;
+using PaperTodo;
+
+internal static class ExpandedEditorChecks
+{
+    private const BindingFlags Private = BindingFlags.Instance | BindingFlags.NonPublic;
+
+    internal static async Task<bool> RunCrossProcessForeground()
+    {
+        var state = new AppState { TelemetryEnabled = false, EnableAnimations = false,
+            McpEnabled = false, UsePersistentPowerShellProcess = false };
+        var store = new StateStore();
+        store.SaveJsonSync(store.SerializeState(state), 1);
+        using var controller = new AppController();
+        await controller.StartAsync(createDefaultPaper: false);
+        controller.OpenStudio();
+        var studio = Application.Current.Windows.OfType<ExpandedEditorWindow>().Single();
+        var studioHwnd = new WindowInteropHelper(studio).Handle;
+        var name = "PaperTodo-studio-foreground-" + Guid.NewGuid().ToString("N");
+        using var primary = new SingleInstanceHelper(name, name);
+        Check(primary.TryAcquire(), "Foreground fixture could not own its isolated mutex");
+        var received = 0;
+        // Same dispatch boundary as App: the pipe callback reaches the real UI thread
+        // and product startup command. Random names cannot target an installed instance.
+        primary.StartListener(args => Application.Current.Dispatcher.Invoke(() =>
+        {
+            var before = WindowNative.ForegroundWindow;
+            var result = controller.ExecuteStartupCommand(StartupCommand.Parse(args));
+            received++;
+            Console.WriteLine($"FOREGROUND receive={received} before=0x{before:X} after=0x{WindowNative.ForegroundWindow:X}");
+            return result;
+        }));
+        var start = Program.ChildStart(AppContext.BaseDirectory);
+        start.ArgumentList.Add("--studio-foreground-launcher");
+        start.ArgumentList.Add(name); start.ArgumentList.Add(name);
+        using var launcher = Process.Start(start) ?? throw new InvalidOperationException("No foreground launcher");
+        var errors = launcher.StandardError.ReadToEndAsync();
+        var cursorSaved = WindowNative.TryGetCursorScreenPosition(out var cursor);
+        var policyRead = SystemParametersInfo(0x2000, 0, out var foregroundLockTimeout, 0);
+        Console.WriteLine($"FOREGROUND environment OS={Environment.OSVersion} interactive={Environment.UserInteractive} " +
+            $"session={Process.GetCurrentProcess().SessionId} primary={Environment.ProcessId} launcher={launcher.Id} " +
+            $"target=0x{studioHwnd:X} lockTimeout={(policyRead ? foregroundLockTimeout.ToString() : "unknown")} " +
+            $"debugger={Debugger.IsAttached}");
+        try
+        {
+            var ready = (await launcher.StandardOutput.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(5)))?.Split(' ');
+            Check(ready is { Length: 4 } && ready[0] == "READY", "Launcher did not publish its native HWND and input point");
+            var launcherHwnd = new IntPtr(long.Parse(ready![1], CultureInfo.InvariantCulture));
+            var point = new Point(double.Parse(ready[2], CultureInfo.InvariantCulture), double.Parse(ready[3], CultureInfo.InvariantCulture));
+            foreach (var minimized in new[] { false, true })
+            {
+                if (minimized) studio.WindowState = WindowState.Minimized;
+                // Real input must belong to another process before it starts the secondary.
+                // Do not grant foreground permission or force the target's Z order in this test.
+                try
+                {
+                    LifecycleInput.MoveCursor(point);
+                    if (!LifecycleInput.IsMouseTarget(launcherHwnd, point))
+                    {
+                        Console.WriteLine("SKIP studio cross-process foreground: launcher is not a real desktop mouse target (not validated)");
+                        return false;
+                    }
+                    LifecycleInput.LeftClick();
+                }
+                catch (InvalidOperationException ex)
+                {
+                    Console.WriteLine("SKIP studio cross-process foreground: native input unavailable (not validated): " + ex.Message);
+                    return false;
+                }
+                if (!await WaitForForeground(() => WindowNative.ForegroundWindow == launcherHwnd))
+                {
+                    Console.WriteLine($"SKIP studio cross-process foreground: launcher never acquired native foreground " +
+                        $"(actual=0x{WindowNative.ForegroundWindow:X}, launcher=0x{launcherHwnd:X}; not validated)");
+                    return false;
+                }
+                var expected = received + 1;
+                LifecycleInput.KeyChord(0x77); // F8; the foreground process starts the secondary in its native key handler.
+                var launched = await launcher.StandardOutput.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(5));
+                Check(launched == "LAUNCH_FOREGROUND", "Launcher lost foreground before starting the secondary: " + launched);
+                var delivered = await launcher.StandardOutput.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(5));
+                Console.WriteLine("FOREGROUND " + delivered);
+                Check(delivered?.EndsWith(" exit=0", StringComparison.Ordinal) == true, "Secondary did not deliver the command");
+                Check(await WaitForForeground(() => received == expected), "The primary did not execute the forwarded command");
+                var activated = await WaitForForeground(() => WindowNative.ForegroundWindow == studioHwnd);
+                Console.WriteLine($"FOREGROUND result minimized={minimized} target=0x{studioHwnd:X} " +
+                    $"actual=0x{WindowNative.ForegroundWindow:X} state={studio.WindowState} received={received}");
+                Check(activated && studio.WindowState != WindowState.Minimized &&
+                      Application.Current.Windows.OfType<ExpandedEditorWindow>().Count() == 1,
+                    "Forwarded --studio did not foreground the existing window" + (minimized ? " after minimization" : ""));
+            }
+            Console.WriteLine("PASS studio real cross-process foreground: existing and minimized window");
+            return true;
+        }
+        finally
+        {
+            if (!launcher.HasExited)
+            {
+                await launcher.StandardInput.WriteLineAsync("exit");
+                try { await launcher.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(2)); }
+                catch (TimeoutException) { launcher.Kill(entireProcessTree: true); await launcher.WaitForExitAsync(); }
+            }
+            Console.Error.Write(await errors);
+            if (cursorSaved)
+                try { LifecycleInput.MoveCursor(new Point(cursor.X, cursor.Y)); } catch (InvalidOperationException) { }
+        }
+    }
+
+    internal static int RunForegroundLauncher(string mutex, string pipe)
+    {
+        var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+        var area = SystemParameters.WorkArea;
+        var window = new Window { Title = "PaperTodo foreground launcher", Left = area.Left + 8, Top = area.Top + 8,
+            Width = 240, Height = 150, Content = new Border { Background = Brushes.DimGray,
+                Child = new TextBlock { Text = "F8: launch --studio", Margin = new Thickness(12) } } };
+        var busy = false;
+        window.PreviewKeyDown += async (_, e) =>
+        {
+            if (e.Key != System.Windows.Input.Key.F8 || busy) return;
+            e.Handled = true; busy = true;
+            try
+            {
+                if (WindowNative.ForegroundWindow != new WindowInteropHelper(window).Handle)
+                { Console.WriteLine("LAUNCH_NOT_FOREGROUND"); return; }
+                Console.WriteLine("LAUNCH_FOREGROUND"); Console.Out.Flush();
+                var start = Program.ChildStart(AppContext.BaseDirectory);
+                start.ArgumentList.Add("--studio-foreground-signal");
+                start.ArgumentList.Add(mutex); start.ArgumentList.Add(pipe);
+                using var secondary = Process.Start(start) ?? throw new InvalidOperationException("No secondary process");
+                var errors = secondary.StandardError.ReadToEndAsync();
+                await secondary.WaitForExitAsync();
+                Console.Error.Write(await errors);
+                Console.WriteLine($"SIGNAL pid={secondary.Id} exit={secondary.ExitCode}"); Console.Out.Flush();
+            }
+            catch (Exception ex) { Console.WriteLine("LAUNCH_FAILED " + ex.Message); Console.Out.Flush(); }
+            finally { busy = false; }
+        };
+        window.Show();
+        app.Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(() =>
+        {
+            var point = window.PointToScreen(new Point(20, 20));
+            Console.WriteLine(FormattableString.Invariant($"READY {new WindowInteropHelper(window).Handle.ToInt64()} {point.X} {point.Y}"));
+            Console.Out.Flush();
+        }));
+        _ = Task.Run(async () => { await Console.In.ReadLineAsync(); await app.Dispatcher.InvokeAsync(app.Shutdown); });
+        app.Run();
+        return 0;
+    }
+
+    private static async Task<bool> WaitForForeground(Func<bool> condition)
+    {
+        var until = Stopwatch.StartNew();
+        while (!condition() && until.Elapsed < TimeSpan.FromSeconds(3)) await Task.Delay(20);
+        return condition();
+    }
+
+    [DllImport("user32.dll")]
+    private static extern bool SystemParametersInfo(uint action, uint parameter, out uint value, uint flags);
+
+    internal static async Task Run()
+    {
+        var state = new AppState
+        {
+            TelemetryEnabled = false,
+            EnableAnimations = false,
+            UseCapsuleMode = true,
+            UseDeepCapsuleMode = false,
+            McpEnabled = false,
+            UsePersistentPowerShellProcess = false,
+            Papers =
+            [
+                new() { Id = "editor-a", Type = PaperTypes.Note, Title = "First",
+                    Content = "# First\nOriginal editor content", IsVisible = true,
+                    X = 120, Y = 90, Width = 330, Height = 280 },
+                new() { Id = "editor-b", Type = PaperTypes.Note, Title = "Second",
+                    Content = "# Second\nDifferent editor", IsVisible = true,
+                    IsCollapsed = true, X = 470, Y = 95, Width = 370, Height = 310 },
+                new() { Id = "editor-todo", Type = PaperTypes.Todo, Title = "Tasks",
+                    IsVisible = false, X = 250, Y = 460, Width = 320, Height = 290,
+                    Items = [new() { Id = "task-a", Text = "Keep the same HWND" }] }
+            ]
+        };
+        var store = new StateStore();
+        store.SaveJsonSync(store.SerializeState(state), 1);
+        using var controller = new AppController();
+        await controller.StartAsync(createDefaultPaper: false);
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+
+        var windows = (Dictionary<string, PaperWindow>)Member(controller, "_windows");
+        var a = windows["editor-a"];
+        var b = windows["editor-b"];
+        var before = controller.State.Papers.ToDictionary(
+            paper => paper.Id, paper => (paper.X, paper.Y, paper.Width, paper.Height));
+
+        var initialVisibility = controller.State.Papers.ToDictionary(p => p.Id, p => p.IsVisible);
+        controller.OpenStudio();
+        var empty = Application.Current.Windows.OfType<ExpandedEditorWindow>().Single();
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(empty.CurrentPaperId == null && empty.IsSidebarOpen && controller.State.Papers.Count == 3,
+            "Opening Studio created a placeholder or did not offer its paper list");
+        Check(controller.State.Papers.All(p => p.IsVisible == initialVisibility[p.Id]) && !empty.Topmost,
+            "Opening empty Studio changed desktop paper visibility or pinned the window");
+        empty.WindowState = WindowState.Minimized;
+        controller.OpenStudio();
+        Check(Application.Current.Windows.OfType<ExpandedEditorWindow>().Count() == 1 &&
+              empty.WindowState != WindowState.Minimized,
+            "Repeated Studio command created another window or failed to restore it");
+        empty.UpdateLayout();
+        var initialList = (ListBox)Member(empty, "_editorPaperList");
+        var firstItem = Descendants<Button>(initialList).First(item =>
+            Descendants<TextBlock>(item).Any(label => label.Text == "First"));
+        firstItem.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+        controller.OpenExpandedEditorFor(a);
+        var host = a.ExpandedEditorHostWindow
+            ?? throw new InvalidOperationException("Editor host did not open");
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+
+        var hwnd = new WindowInteropHelper(host).Handle;
+        Check(hwnd != IntPtr.Zero && host.IsVisible, "No visible taskbar editor window");
+        Check(a.IsExpandedEditorHosted && !a.IsVisible, "The original paper remained visible alongside the editor");
+        a.SetExpandedEditorSidebarOpen(true);
+        host.UpdateLayout();
+        var livePaperList = (ListBox)Member(host, "_editorPaperList");
+        var paperB = controller.State.Papers.Single(p => p.Id == "editor-b");
+        controller.State.Papers.Single(p => p.Id == "editor-a").AlwaysOnTop = true;
+        a.RefreshEffectiveTopmost();
+        Check(host.Topmost, "Pin button only modified the hidden PaperWindow");
+        controller.State.Papers.Single(p => p.Id == "editor-a").AlwaysOnTop = false;
+        a.RefreshEffectiveTopmost();
+        Check(!host.Topmost, "Unpin did not update the visible editor host");
+        controller.State.Papers.Single(p => p.Id == "editor-a").AlwaysOnTop = true;
+        a.RefreshEffectiveTopmost();
+
+        // Route the same sidebar button click a user makes, starting with keyboard
+        // focus on that button; activation alone is not proof of text input ownership.
+        var secondItem = Descendants<Button>(livePaperList).First(item =>
+            Descendants<TextBlock>(item).Any(label => label.Text == "Second"));
+        secondItem.Focus();
+        secondItem.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        var secondEditor = (MarkdownTextBox)Member(b, "_noteBox");
+        Check(secondEditor.IsKeyboardFocusWithin,
+            "Sidebar switch did not transfer keyboard focus to the new document");
+        var focused = System.Windows.Input.Keyboard.FocusedElement as UIElement
+            ?? throw new InvalidOperationException("Sidebar switch left no keyboard target");
+        var beforeInput = secondEditor.Text;
+        var input = new System.Windows.Input.TextCompositionEventArgs(
+            System.Windows.Input.Keyboard.PrimaryDevice,
+            new System.Windows.Input.TextComposition(System.Windows.Input.InputManager.Current, focused, "A中文"))
+        { RoutedEvent = System.Windows.Input.TextCompositionManager.TextInputEvent };
+        focused.RaiseEvent(input);
+        Check(secondEditor.Text.Contains("A中文") &&
+              ((MarkdownTextBox)Member(a, "_noteBox")).Text == "# First\nOriginal editor content",
+            "Text input after sidebar switch did not reach only the new document");
+        secondEditor.Undo();
+        Check(secondEditor.Text == beforeInput, "Undo after switching targeted the wrong document");
+        Check(ReferenceEquals(host, b.ExpandedEditorHostWindow), "Sidebar replaced the editor host");
+        Check(new WindowInteropHelper(host).Handle == hwnd, "Switching papers changed the editor HWND");
+        Check(host.CurrentPaperId == "editor-b", "Sidebar did not select the second paper");
+        Check(a.Topmost, "Collapsing the prior paper lost its pin state");
+        Check(controller.State.Papers.Single(p => p.Id == "editor-a").IsCollapsed && a.IsVisible,
+            "Switching away from an expanded paper did not collapse its desktop surface");
+        Check(secondEditor.ShowLineNumbers && !((MarkdownTextBox)Member(a, "_noteBox")).ShowLineNumbers,
+            "Line numbers did not follow the active editor presentation");
+        controller.State.Papers.Single(p => p.Id == "editor-a").AlwaysOnTop = false;
+        a.RefreshEffectiveTopmost();
+        host.WindowState = WindowState.Minimized;
+        Check(controller.ApplyPaperPresentation(paperB, PaperPresentationAction.Activate, true) &&
+              host.WindowState != WindowState.Minimized &&
+              ReferenceEquals(b.ExpandedEditorHostWindow, host),
+            "Plugin Activate did not restore and focus the editor's real window");
+        Check(host.IsActive && !a.IsActive,
+            "Sidebar switch incorrectly activated the previous desktop paper");
+
+        controller.HideAllPapers();
+        Check(host.IsVisible && b.IsExpandedEditorHosted && paperB.IsVisible && !a.IsVisible,
+            "Hide All hid the editor or its authoritative paper");
+        controller.ExecuteStartupCommand(new StartupCommand(StartupCommandKind.Toggle));
+        Check(host.IsVisible && b.IsExpandedEditorHosted && a.IsVisible,
+            "Global toggle failed to restore desktop papers independently of the editor");
+        controller.ExecuteStartupCommand(new StartupCommand(StartupCommandKind.Toggle));
+        Check(host.IsVisible && b.IsExpandedEditorHosted && !a.IsVisible,
+            "Global toggle incorrectly included the editor in desktop visibility");
+        controller.ShowAllPapers();
+
+        host.WindowState = WindowState.Minimized;
+        controller.OpenLinkedPaper("editor-b");
+        Check(host.WindowState != WindowState.Minimized && b.IsExpandedEditorHosted,
+            "Linked paper navigation targeted the hidden desktop window");
+        host.WindowState = WindowState.Minimized;
+        Check(ReferenceEquals(controller.OpenBuiltInFindTarget("editor-b"), b) &&
+              host.WindowState != WindowState.Minimized,
+            "Global find target navigation failed to restore the editor host");
+
+        // Global interaction lock protects desktop papers, never the currently borrowed editor.
+        SetGlobalPaperLock(controller, locked: true);
+        var desktopShield = (Border)Member(a, "_advancedLockShield");
+        var hostedShield = (Border)Member(b, "_advancedLockShield");
+        Check(desktopShield.Visibility == Visibility.Visible &&
+              hostedShield.Visibility == Visibility.Collapsed,
+            "Desktop lock hid editor controls or failed to protect a desktop paper");
+        var editorKey = new System.Windows.Input.KeyEventArgs(
+            System.Windows.Input.Keyboard.PrimaryDevice,
+            PresentationSource.FromVisual(host),
+            Environment.TickCount,
+            System.Windows.Input.Key.G)
+        {
+            RoutedEvent = System.Windows.Input.Keyboard.PreviewKeyDownEvent
+        };
+        ((UIElement)Member(b, "_shell")).RaiseEvent(editorKey);
+        Check(!editorKey.Handled, "Desktop lock intercepted a normal key in the editor");
+
+        Check(b.IsExpandedEditorSidebarOpen && !controller.State.Papers.Single(p => p.Id == "editor-b").IsCollapsed,
+            "Switch did not preserve sidebar presentation or expand the borrowed capsule");
+        // A normal Ctrl+F, context-menu command, or keyboard input must still be owned
+        // by B's original PaperWindow even though its visual now lives in the editor host.
+        secondEditor.Text = "# Changed from the shared editor";
+        controller.CommitPendingMarkdownContentsForSave();
+        Check(controller.State.Papers.Single(p => p.Id == "editor-b").Content ==
+              "# Changed from the shared editor", "Editor changes did not reach the authoritative paper");
+
+        controller.SwitchExpandedEditorPaper(b, "editor-todo");
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        var todo = windows["editor-todo"];
+        Check(host.CurrentPaperId == "editor-todo" && todo.IsExpandedEditorHosted,
+            "Todo visual did not replace the Markdown visual");
+        Check(new WindowInteropHelper(host).Handle == hwnd, "Todo switch changed the WPF HWND");
+        var todoShield = (Border)Member(todo, "_advancedLockShield");
+        Check(hostedShield.Visibility == Visibility.Visible &&
+              desktopShield.Visibility == Visibility.Visible &&
+              todoShield.Visibility == Visibility.Collapsed,
+            "Switching papers under global lock did not restore desktop protection and free the editor");
+        Check(!b.IsExpandedEditorHosted && controller.State.Papers.Single(p => p.Id == "editor-b").IsCollapsed,
+            "Leaving B did not restore its desktop capsule state");
+
+        // The editor's ordered shortcut itself performs return, independently of ×.
+        var todoModeButton = (Button)Member(todo, "_editorModeButton");
+        todoModeButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(!todo.IsExpandedEditorHosted && controller.State.Papers.Single(p => p.Id == "editor-todo").IsVisible,
+            "Return did not restore the selected paper as an ordinary paper");
+        Check(todoShield.Visibility == Visibility.Visible && desktopShield.Visibility == Visibility.Visible,
+            "Returning from editor did not reapply global desktop lock");
+        SetGlobalPaperLock(controller, locked: false);
+        Check(todoShield.Visibility == Visibility.Collapsed &&
+              hostedShield.Visibility == Visibility.Collapsed &&
+              desktopShield.Visibility == Visibility.Collapsed,
+            "Unlocking desktop papers failed after an editor handoff");
+
+        controller.OpenExpandedEditorFor(b);
+        var pluginHost = b.ExpandedEditorHostWindow!;
+        Check(controller.ApplyPaperPresentation(paperB, PaperPresentationAction.Collapse, true) &&
+              !b.IsExpandedEditorHosted && !pluginHost.IsVisible && paperB.IsCollapsed,
+            "Plugin Collapse left a borrowed body inside the editor HWND");
+
+        controller.OpenExpandedEditorFor(a);
+        var close = (Button)Member(a, "_closeButton");
+        close.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        var collapsedPaper = controller.State.Papers.Single(p => p.Id == "editor-a");
+        Check(collapsedPaper.IsVisible && collapsedPaper.IsCollapsed &&
+              !a.IsExpandedEditorHosted, "Far-right editor × did not collapse the paper to a capsule");
+
+        controller.OpenExpandedEditorFor(todo);
+        var systemCloseHost = todo.ExpandedEditorHostWindow!;
+        systemCloseHost.Close(); // WPF OnClosing: Alt+F4 / taskbar close
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(!todo.IsExpandedEditorHosted && !systemCloseHost.IsVisible &&
+              controller.State.Papers.Single(p => p.Id == "editor-todo").IsCollapsed,
+            "System Close must complete once and collapse the selected paper");
+
+        foreach (var p in controller.State.Papers)
+            Check(before[p.Id] == (p.X, p.Y, p.Width, p.Height),
+                "Editor switch wrote temporary dimensions into the desktop paper: " + p.Id);
+
+        // The editor keeps edge access even when ordinary expanded desktop papers hide it.
+        controller.State.UseDeepCapsuleMode = true;
+        controller.State.ShowDeepCapsuleWhileExpanded = false;
+        controller.ArrangeDeepCapsules(animate: false);
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(a.IsDeepCapsuleSlotVisible, "Edge capsule scenario did not start with a visible capsule");
+        controller.OpenExpandedEditorFor(a);
+        var edgeHost = a.ExpandedEditorHostWindow!;
+        controller.ArrangeDeepCapsules(animate: false);
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(a.IsDeepCapsuleSlotVisible && !a.IsVisible,
+            "Opening or rearranging the editor removed its edge capsule");
+        edgeHost.WindowState = WindowState.Minimized;
+        var capsulePoint = new DeviceScreenPoint(1, 100);
+        typeof(PaperWindow).GetMethod("OnEdgeCapsulePointerPressed", Private)!.Invoke(a, [capsulePoint]);
+        typeof(PaperWindow).GetMethod("OnEdgeCapsulePointerReleased", Private)!.Invoke(a, [capsulePoint]);
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(edgeHost.WindowState != WindowState.Minimized && edgeHost.IsActive && !a.IsVisible &&
+              ((MarkdownTextBox)Member(a, "_noteBox")).IsKeyboardFocusWithin &&
+              WindowNative.KeyboardFocusWindow == new WindowInteropHelper(edgeHost).Handle,
+            "Clicking the retained capsule did not restore editor input focus");
+        edgeHost.WindowState = WindowState.Minimized;
+        a.ActivateFromEdgeShortcut();
+        Check(edgeHost.WindowState != WindowState.Minimized && !a.IsVisible,
+            "Edge shortcut exposed the hidden desktop owner");
+        controller.SwitchExpandedEditorPaper(a, "editor-b");
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(collapsedPaper.IsCollapsed && a.IsDeepCapsuleSlotVisible && b.IsDeepCapsuleSlotVisible,
+            "Switching the editor lost the previous or current edge capsule");
+        edgeHost.Close();
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+
+        for (var i = 0; i < 200; i++)
+            controller.State.Papers.Add(new PaperData
+            {
+                Id = "list-" + i, Type = PaperTypes.Note, Title = "List note " + i, IsVisible = false
+            });
+        controller.OpenExpandedEditorFor(a);
+        controller.OpenExpandedEditorFor(b);
+        var listHost = a.ExpandedEditorHostWindow!;
+        var otherHost = b.ExpandedEditorHostWindow!;
+        a.SetExpandedEditorSidebarOpen(true);
+        b.SetExpandedEditorSidebarOpen(true);
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        var list = (ListBox)Member(listHost, "_editorPaperList");
+        Check(!ReferenceEquals(list, Member(otherHost, "_editorPaperList")),
+            "Independent editor windows shared the same sidebar");
+        list.ScrollIntoView(list.Items[150]);
+        listHost.UpdateLayout();
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        var scroll = Descendants<ScrollViewer>(list).First();
+        var offset = scroll.VerticalOffset;
+        Check(offset > 0 && Descendants<Button>(list).Count() < 100,
+            "Long paper list created every row instead of virtualizing the viewport");
+        var visibleRow = Descendants<Button>(list).First(item => item.IsVisible);
+        visibleRow.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        list = (ListBox)Member(listHost, "_editorPaperList");
+        scroll = Descendants<ScrollViewer>(list).First();
+        Check(listHost.CurrentPaperId!.StartsWith("list-") && Math.Abs(scroll.VerticalOffset - offset) < 1,
+            "Switching a paper reset the sidebar scroll position");
+        Check(otherHost.CurrentPaperId == "editor-b", "One editor's navigation changed another editor");
+        listHost.ActivateEditor();
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        controller.OpenStudio();
+        Check(listHost.IsActive &&
+              Application.Current.Windows.OfType<ExpandedEditorWindow>().Count() == 2,
+            "Studio command did not restore the most recently used window");
+        listHost.CloseWithoutPaperAction();
+        otherHost.CloseWithoutPaperAction();
+        controller.State.Papers.RemoveAll(p => p.Id.StartsWith("list-"));
+        controller.OpenStudio();
+        var newDocumentHost = Application.Current.Windows.OfType<ExpandedEditorWindow>().Single();
+        newDocumentHost.UpdateLayout();
+        var newNote = Descendants<Button>(newDocumentHost).First(button =>
+            Descendants<TextBlock>(button).Any(label => label.Text == Strings.Get("TrayNewNote")));
+        newNote.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+        Check(controller.State.Papers.Count == 4 && newDocumentHost.CurrentPaper is { IsExpandedEditorHosted: true } &&
+              controller.State.Papers.Last().Type == PaperTypes.Note,
+            "New Note in empty Studio did not create and select exactly one real paper");
+    }
+
+    private static void SetGlobalPaperLock(AppController controller, bool locked)
+    {
+        var method = typeof(AppController).GetMethod("SetAdvancedAllPapersLocked", Private)
+            ?? throw new InvalidOperationException("Global paper lock handler missing");
+        method.Invoke(controller, [locked]);
+    }
+
+    private static object Member(object owner, string name) =>
+        owner.GetType().GetField(name, Private)?.GetValue(owner)
+        ?? owner.GetType().GetProperty(name, Private)?.GetValue(owner)
+        ?? throw new InvalidOperationException("Missing field/property: " + name);
+
+    private static IEnumerable<T> Descendants<T>(DependencyObject parent) where T : DependencyObject
+    {
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, i);
+            if (child is T match) yield return match;
+            foreach (var nested in Descendants<T>(child)) yield return nested;
+        }
+    }
+
+    private static void Check(bool condition, string message)
+    {
+        if (!condition) throw new InvalidOperationException(message);
+    }
+}

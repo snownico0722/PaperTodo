@@ -138,7 +138,7 @@ internal static class NoteHtmlExport
 
     // PaperTodo's standalone image lines carry size syntax that standard Markdown
     // would otherwise render as trailing text.
-    private static string PrepareMarkdownForExport(
+    internal static string PrepareMarkdownForExport(
         string markdown, out Dictionary<int, MarkdownImageDisplayOptions> widths)
     {
         widths = new Dictionary<int, MarkdownImageDisplayOptions>();
@@ -193,3 +193,4 @@ internal static class NoteHtmlExport
     internal static void Save(string path, string html) =>
         NotePortableExport.SaveAtomic(path, Encoding.UTF8.GetBytes(html));
 }
+

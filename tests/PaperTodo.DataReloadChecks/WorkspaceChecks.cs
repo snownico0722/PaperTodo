@@ -117,6 +117,28 @@ internal static partial class Program
             "legacy workspace changed behavior");
         Require(!J(main.Store.SerializeState(main.State)).ContainsKey("workspaces"),
             "disabled legacy save added a catalog");
+        using (var upgrade = new Scope())
+        {
+            var old = new AppState
+            {
+                TopBarShortcutOrder = [PaperTopBarShortcuts.ExternalEditor, PaperTopBarShortcuts.Association,
+                    PaperTopBarShortcuts.Workspace, PaperTopBarShortcuts.ExpandedEditor,
+                    PaperTopBarShortcuts.NewNote, PaperTopBarShortcuts.NewTodo],
+                TopBarPinnedCount = 2
+            };
+            upgrade.Store.SaveJsonSync(upgrade.Store.SerializeState(old), 1);
+            var migrated = upgrade.Store.Load();
+            Require(PaperTopBarShortcuts.IsPinned(migrated, PaperTopBarShortcuts.ExpandedEditor) &&
+                    !PaperTopBarShortcuts.IsPinned(migrated, PaperTopBarShortcuts.ExternalEditor),
+                "upgrade must pin the editor and move external editing into the menu");
+            PaperTopBarShortcuts.SetPinned(migrated, PaperTopBarShortcuts.ExpandedEditor, false);
+            PaperTopBarShortcuts.SetPinned(migrated, PaperTopBarShortcuts.ExternalEditor, true);
+            upgrade.Store.SaveJsonSync(upgrade.Store.SerializeState(migrated), 2);
+            var reopened = upgrade.Store.Load();
+            Require(!PaperTopBarShortcuts.IsPinned(reopened, PaperTopBarShortcuts.ExpandedEditor) &&
+                    PaperTopBarShortcuts.IsPinned(reopened, PaperTopBarShortcuts.ExternalEditor),
+                "the upgrade must not overwrite later user choices after saving and restarting");
+        }
         for (var n = 1; n <= 5; n++)
         {
             var suffix = n == 1 ? "" : n.ToString(CultureInfo.InvariantCulture);

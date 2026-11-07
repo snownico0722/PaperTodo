@@ -479,6 +479,7 @@ public sealed partial class AppController
 
     private void StopWorkspacePresentation()
     {
+        CloseAllExpandedEditors();
         _paperSurfaceRestoreGeneration++;
         _startupShellPrewarmGeneration++;
         _pluginStartupPaperGeneration++;

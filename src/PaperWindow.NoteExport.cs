@@ -39,7 +39,7 @@ public sealed partial class PaperWindow
 
             if (snapshots.Length == 0)
             {
-                MessageBox.Show(this, Strings.Get("NoteExportNoNotes"), caption,
+                MessageBox.Show(InteractionWindow, Strings.Get("NoteExportNoNotes"), caption,
                     MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
@@ -59,7 +59,7 @@ public sealed partial class PaperWindow
                 FileName = all ? DateTime.Now.ToString("yyyy-MM-dd") + "_PaperTodo"
                     : NotePortableExport.SafeName(snapshots[0].Title)
             };
-            if (dialog.ShowDialog(this) != true) return;
+            if (dialog.ShowDialog(InteractionWindow) != true) return;
 
             var format = dialog.FilterIndex == 2 ? NoteExportFormat.Html : NoteExportFormat.Markdown;
             var destination = dialog.FileName;
@@ -85,14 +85,14 @@ public sealed partial class PaperWindow
                     Strings.Format("NoteExportFailedNotes",
                         string.Join(Environment.NewLine, result.FailedNotes.Take(5)));
             if (!IsClosed)
-                MessageBox.Show(this, message, caption, MessageBoxButton.OK,
+                MessageBox.Show(InteractionWindow, message, caption, MessageBoxButton.OK,
                     result.MissingImages > 0 || result.FailedNotes.Count > 0
                         ? MessageBoxImage.Warning : MessageBoxImage.Information);
         }
         catch (Exception ex)
         {
             if (!IsClosed)
-                MessageBox.Show(this, Strings.Format("NoteExportFailure", ex.Message),
+                MessageBox.Show(InteractionWindow, Strings.Format("NoteExportFailure", ex.Message),
                     caption, MessageBoxButton.OK, MessageBoxImage.Warning);
         }
         finally

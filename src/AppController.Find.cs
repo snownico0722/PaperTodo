@@ -58,6 +58,12 @@ public sealed partial class AppController
         // but do not move the target beside the source paper or toggle it on repeated opens.
         if (_windows.TryGetValue(paper.Id, out var window) && !window.IsClosed)
         {
+            if (window.ExpandedEditorHostWindow is { } editor)
+            {
+                editor.ActivateEditor();
+                return window;
+            }
+
             window.RestoreExperimentalTetherPresentationForExplicitShow();
             paper.IsVisible = true;
             RescuePaperIfOffScreen(paper, State.Papers.IndexOf(paper));
