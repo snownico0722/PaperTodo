@@ -292,6 +292,21 @@ internal static partial class Program
                 Equals(label.Text, Strings.Get("TopBarAssociation")));
             Check(((FrameworkElement)System.Windows.Media.VisualTreeHelper.GetParent(activeAssociation)).Opacity == 1,
                 "the association shortcut becomes active with window binding alone");
+            Grid ActionFrame(string key)
+            {
+                var label = SettingsControls<TextBlock>(window).Single(text =>
+                    Equals(text.Text, Strings.Get(key)));
+                DependencyObject? current = label;
+                while (current != null)
+                {
+                    if (current is Grid { AllowDrop: true } frame) return frame;
+                    current = System.Windows.Media.VisualTreeHelper.GetParent(current);
+                }
+                throw new InvalidOperationException("Action frame was not found: " + key);
+            }
+            Check(Math.Abs(ActionFrame("TopBarRunScript").ActualHeight -
+                           ActionFrame("ShortcutNewTodo").ActualHeight) < 1.0,
+                "the compact script Edit button must not increase the shortcut row height");
         }
         finally
         {

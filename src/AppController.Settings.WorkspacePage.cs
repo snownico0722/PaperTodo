@@ -184,33 +184,31 @@ public sealed partial class AppController
             Opacity = State.McpEnabled ? 1.0 : 0.55
         };
         permissions.Children.Add(permissionChoices);
+        var blankWrites = SettingsToggle(
+            Strings.Get("LabsMcpBlankWrites"),
+            State.McpAllowBlankWrites || State.McpAllowFullWrites,
+            ToggleMcpBlankWrites);
+        blankWrites.IsEnabled = !State.McpAllowFullWrites;
+        permissionChoices.Children.Add(WrapWithHint(
+            blankWrites,
+            "TipLabsMcpBlankWrites"));
+        permissionChoices.Children.Add(WrapWithHint(
+            SettingsToggle(
+                Strings.Get("LabsMcpFullWrites"),
+                State.McpAllowFullWrites,
+                ToggleMcpFullWrites),
+            "TipLabsMcpFullWrites"));
+        var directDeletes = SettingsToggle(
+            Strings.Get("LabsMcpDeletes"),
+            State.McpAllowDeletes,
+            ToggleMcpDeletes);
+        if (State.McpAllowDeletes)
         {
-            var blankWrites = SettingsToggle(
-                Strings.Get("LabsMcpBlankWrites"),
-                State.McpAllowBlankWrites || State.McpAllowFullWrites,
-                ToggleMcpBlankWrites);
-            blankWrites.IsEnabled = !State.McpAllowFullWrites;
-            permissionChoices.Children.Add(WrapWithHint(
-                blankWrites,
-                "TipLabsMcpBlankWrites"));
-            permissionChoices.Children.Add(WrapWithHint(
-                SettingsToggle(
-                    Strings.Get("LabsMcpFullWrites"),
-                    State.McpAllowFullWrites,
-                    ToggleMcpFullWrites),
-                "TipLabsMcpFullWrites"));
-            var directDeletes = SettingsToggle(
-                Strings.Get("LabsMcpDeletes"),
-                State.McpAllowDeletes,
-                ToggleMcpDeletes);
-            if (State.McpAllowDeletes)
-            {
-                directDeletes.Foreground = Theme.DangerBrush;
-            }
-            permissionChoices.Children.Add(WrapWithHint(
-                directDeletes,
-                "TipLabsMcpDeletes"));
+            directDeletes.Foreground = Theme.DangerBrush;
         }
+        permissionChoices.Children.Add(WrapWithHint(
+            directDeletes,
+            "TipLabsMcpDeletes"));
 
         var status = new TextBlock
         {
@@ -284,11 +282,11 @@ public sealed partial class AppController
 
         var line = new StackPanel();
 
-        var nameRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            VerticalAlignment = VerticalAlignment.Center
-        };
+        // Keep the name/editor inside the available column width at larger font scales.
+        var nameRow = new Grid { VerticalAlignment = VerticalAlignment.Center };
+        nameRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        nameRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        nameRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var name = new TextBlock
         {
             Text = label,
@@ -302,7 +300,8 @@ public sealed partial class AppController
         var editor = new TextBox
         {
             Text = label,
-            Width = AppTypography.Scale(132),
+            MaxWidth = AppTypography.Scale(132),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
             MaxLength = 64,
             Height = AppTypography.FitChrome(28),
             FontSize = AppTypography.Scale(12),
@@ -335,6 +334,10 @@ public sealed partial class AppController
         AutomationProperties.SetAutomationId(rename, "WorkspaceRename" + slot);
         AutomationProperties.SetName(rename, WorkspaceUi("编辑工作区名称", "Edit workspace name",
             "ワークスペース名を編集", "작업 공간 이름 편집"));
+        Grid.SetColumn(name, 0);
+        Grid.SetColumn(editor, 0);
+        Grid.SetColumn(numberLabel, 1);
+        Grid.SetColumn(rename, 2);
         nameRow.Children.Add(name);
         nameRow.Children.Add(editor);
         nameRow.Children.Add(numberLabel);
