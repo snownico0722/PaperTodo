@@ -229,6 +229,8 @@ internal static partial class Program
             Render();
             window.Show();
             window.UpdateLayout();
+            Check(window.Content is Grid { ColumnDefinitions.Count: 3 },
+                "workspaces and data share a two-column layout");
             Check(Toggle("LabsMcpEnable").IsEnabled &&
                   SettingsControls<ComboBox>(window).Single().IsEnabled,
                 "disabling workspaces does not disable data handling or MCP");
@@ -252,9 +254,10 @@ internal static partial class Program
             Field(c, "_workspace", session);
             c.State.McpEnabled = false;
             Render();
-            Check(!SettingsControls<CheckBox>(window).Any(box =>
-                    Equals(box.Content, Strings.Get("LabsMcpFullWrites"))) && c.State.McpAllowFullWrites,
-                "MCP off hides permission controls without erasing saved grants");
+            Check(SettingsControls<CheckBox>(window).Any(box =>
+                    Equals(box.Content, Strings.Get("LabsMcpFullWrites")) &&
+                    box.IsVisible && !box.IsEnabled) && c.State.McpAllowFullWrites,
+                "MCP off greys out permissions rather than hiding or resetting them");
             c.State.UseCapsuleMode = true;
             c.State.UseDeepCapsuleMode = false;
             c.State.EnableTodoPaperLinks = c.State.HideLinkedPapersFromCapsules = true;

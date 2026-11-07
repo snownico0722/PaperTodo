@@ -331,7 +331,7 @@ public sealed partial class AppController
         };
         foreach (var page in SettingsPages())
         {
-            if (page == SettingsPage.Plugins)
+            if (page == SettingsPage.Workspaces)
                 navigationItems.Children.Add(new Border
                 {
                     Height = 1,
@@ -359,8 +359,8 @@ public sealed partial class AppController
         yield return SettingsPage.NotesAndTodos;
         yield return SettingsPage.Visual;
         yield return SettingsPage.Shortcuts;
-        yield return SettingsPage.Plugins;
         yield return SettingsPage.Workspaces;
+        yield return SettingsPage.Plugins;
         if (State.AdvancedSettingsMode)
         {
             yield return SettingsPage.Labs;
