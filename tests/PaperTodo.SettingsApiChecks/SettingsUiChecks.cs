@@ -258,6 +258,15 @@ internal static partial class Program
                     Equals(box.Content, Strings.Get("LabsMcpFullWrites")) &&
                     box.IsVisible && !box.IsEnabled) && c.State.McpAllowFullWrites,
                 "MCP off greys out permissions rather than hiding or resetting them");
+            c.State.UseCapsuleMode = false;
+            c.State.UseDeepCapsuleMode = false;
+            window.Content = Invoke(c, "BuildLabsEdgeCapsuleHoverIntentSettings");
+            window.UpdateLayout();
+            Check(Toggle("LabsEnableEdgeCapsuleHoverPreview").IsVisible &&
+                  !Toggle("LabsEnableEdgeCapsuleHoverPreview").IsEnabled &&
+                  Toggle("LabsEnableEdgeCapsuleHoverIntent").IsVisible,
+                "edge browsing keeps its dependent settings visible but disabled");
+
             c.State.UseCapsuleMode = true;
             c.State.UseDeepCapsuleMode = false;
             c.State.EnableTodoPaperLinks = c.State.HideLinkedPapersFromCapsules = true;
@@ -267,6 +276,22 @@ internal static partial class Program
                   !SettingsControls<CheckBox>(window).Any(box =>
                     Equals(box.Content, Strings.Get("SettingsCapsuleCollapseAll"))),
                 "linked-paper second-click behavior remains available without exposing disabled edge options");
+
+            c.State.EnableTodoPaperLinks = false;
+            c.State.ExperimentalWindowTethering = false;
+            window.Content = Invoke(c, "BuildTopBarShortcutSettings");
+            window.UpdateLayout();
+            var inactiveAssociation = SettingsControls<TextBlock>(window).Single(label =>
+                Equals(label.Text, Strings.Get("TopBarAssociation")));
+            Check(((FrameworkElement)System.Windows.Media.VisualTreeHelper.GetParent(inactiveAssociation)).Opacity == 0.5,
+                "the association shortcut is dimmed when neither linking nor window binding is available");
+            c.State.ExperimentalWindowTethering = true;
+            window.Content = Invoke(c, "BuildTopBarShortcutSettings");
+            window.UpdateLayout();
+            var activeAssociation = SettingsControls<TextBlock>(window).Single(label =>
+                Equals(label.Text, Strings.Get("TopBarAssociation")));
+            Check(((FrameworkElement)System.Windows.Media.VisualTreeHelper.GetParent(activeAssociation)).Opacity == 1,
+                "the association shortcut becomes active with window binding alone");
         }
         finally
         {

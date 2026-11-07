@@ -837,7 +837,12 @@ public sealed partial class AppController
 
     private UIElement BuildLabsEdgeCapsuleHoverIntentSettings()
     {
-        if (!State.UseCapsuleMode || !State.UseDeepCapsuleMode) return new StackPanel();
+        var edgePreviewAvailable =
+            State.UseCapsuleMode && State.UseDeepCapsuleMode;
+        var previewEnabled =
+            State.ExperimentalEdgeCapsuleHoverPreview;
+        var intentEnabled =
+            State.ExperimentalEdgeCapsuleHoverIntent;
         var card = new Border
         {
             Background = Brushes.Transparent,
@@ -847,25 +852,45 @@ public sealed partial class AppController
         var content = new StackPanel();
         content.Children.Add(SettingsSectionLabel(SettingsSidebarLocalized(
             "边缘浏览", "Edge browsing", "エッジ閲覧", "가장자리 탐색")));
-        content.Children.Add(WrapWithHint(
-            SettingsToggle(Strings.Get("LabsEnableEdgeCapsuleHoverPreview"),
-                State.ExperimentalEdgeCapsuleHoverPreview, ToggleExperimentalEdgeCapsuleHoverPreview),
-            "TipLabsEdgeCapsuleHoverPreview"));
-        if (!State.ExperimentalEdgeCapsuleHoverPreview)
-        {
-            card.Child = content;
-            return card;
-        }
-        content.Children.Add(WrapWithHint(
-            SettingsToggle(Strings.Get("LabsEnableEdgeCapsuleHoverIntent"),
-                State.ExperimentalEdgeCapsuleHoverIntent, ToggleExperimentalEdgeCapsuleHoverIntent),
-            "TipLabsEdgeCapsuleHoverIntent"));
-        if (State.ExperimentalEdgeCapsuleHoverIntent)
-            content.Children.Add(CompactSettingsField(
-                Strings.Get("LabsEdgeCapsuleHoverIntentSensitivity"),
-                CreateEdgeCapsuleHoverIntentSensitivitySelector(), editorWidth: 132,
-                tipKey: "TipLabsEdgeCapsuleHoverIntentSensitivity", topMargin: 4));
 
+        var previewToggle = SettingsToggle(
+            Strings.Get("LabsEnableEdgeCapsuleHoverPreview"),
+            previewEnabled,
+            ToggleExperimentalEdgeCapsuleHoverPreview);
+        previewToggle.IsEnabled = edgePreviewAvailable;
+        previewToggle.Opacity = edgePreviewAvailable ? 1.0 : 0.55;
+        content.Children.Add(WrapWithHint(
+            previewToggle,
+            "TipLabsEdgeCapsuleHoverPreview"));
+
+        var toggle = SettingsToggle(
+            Strings.Get("LabsEnableEdgeCapsuleHoverIntent"),
+            intentEnabled,
+            ToggleExperimentalEdgeCapsuleHoverIntent);
+        var intentToggleEnabled =
+            edgePreviewAvailable && previewEnabled;
+        toggle.IsEnabled = intentToggleEnabled;
+        toggle.Opacity = intentToggleEnabled ? 1.0 : 0.55;
+        content.Children.Add(WrapWithHint(
+            toggle,
+            "TipLabsEdgeCapsuleHoverIntent"));
+
+        var optionsEnabled =
+            edgePreviewAvailable && previewEnabled && intentEnabled;
+        var options = new StackPanel
+        {
+            IsEnabled = optionsEnabled,
+            Opacity = optionsEnabled ? 1.0 : 0.55
+        };
+        options.Children.Add(CompactSettingsField(
+            Strings.Get("LabsEdgeCapsuleHoverIntentSensitivity"),
+            CreateEdgeCapsuleHoverIntentSensitivitySelector(),
+            editorWidth: 132,
+            tipKey: "TipLabsEdgeCapsuleHoverIntentSensitivity",
+            topMargin: 4));
+        content.Children.Add(options);
+
+        var preferDownwardEnabled = edgePreviewAvailable && previewEnabled;
         var preferDownwardToggle = SettingsToggle(
             SettingsSidebarLocalized(
                 "浏览时优先向下展开",
@@ -874,6 +899,8 @@ public sealed partial class AppController
                 "탐색 중 아래로 펼치기 우선"),
             State.EdgeCapsulePreviewPreferDownward,
             ToggleEdgeCapsulePreviewPreferDownward);
+        preferDownwardToggle.IsEnabled = preferDownwardEnabled;
+        preferDownwardToggle.Opacity = preferDownwardEnabled ? 1.0 : 0.55;
         content.Children.Add(WrapWithHint(
             preferDownwardToggle,
             BuildSettingsHintTooltip(SettingsSidebarLocalized(

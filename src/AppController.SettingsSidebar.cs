@@ -89,6 +89,7 @@ public sealed partial class AppController
         {
             RefreshSettingsCapsuleToggleStates();
             RefreshSettingsRegions("general.todos");
+            if (id == "todo.paper_links") RefreshSettingsRegions("general.topbar");
             return;
         }
         if (id == "note.external_extension") return; // The live editor is synchronized by its effect.
@@ -123,6 +124,7 @@ public sealed partial class AppController
             }
         };
         RefreshSettingsRegions(region);
+        if (id == "window.tether_enabled") RefreshSettingsRegions("general.topbar");
         if (region == "shortcuts.bindings") RefreshSettingsRegions("labs.passive");
     }
 
