@@ -176,6 +176,43 @@ internal static class TodoHistoryChecks
         RequirePresentation(window, paper, "mixed redo", appendArea: true);
         RequireHistoryIsolation(window, paper);
 
+        // Backspace deletes the whole row selection in one undoable edit, including
+        // linked rows. Keep focus on the selection host so Ctrl+Z works immediately.
+        await Reset(4, item => item.LinkPaper("link-target"));
+        Invoke(window, "FocusTodoSweepSelectionHost");
+        Invoke(window, "SelectTodoRange", "row-0", "row-1");
+        await SendKey(window, Key.Back, control: false);
+        Require(paper.Items.Select(item => item.Id).SequenceEqual(new[] { "row-2", "row-3" }) &&
+                History(window, "_undoStack").Count == 1,
+            "Backspace did not delete the selected rows as one history step");
+        RequirePresentation(window, paper, "selected rows Backspace");
+        await SendKey(window, Key.Z);
+        Require(paper.Items.Select(item => item.Id).SequenceEqual(Items(4).Select(item => item.Id)) &&
+                paper.Items[0].LinkedPaperId == "link-target",
+            "one undo did not restore the deleted rows and their paper link");
+        await SendKey(window, Key.Y);
+        Require(paper.Items.Select(item => item.Id).SequenceEqual(new[] { "row-2", "row-3" }),
+            "redo did not delete the same selected rows");
+
+        await Reset(2);
+        Invoke(window, "FocusTodoSweepSelectionHost");
+        Invoke(window, "SelectTodoRange", "row-0", "row-1");
+        await SendKey(window, Key.Back, control: false);
+        Require(paper.Items.Count == 1 && TodoRules.IsPlaceholder(paper.Items[0]),
+            "deleting all selected rows did not retain an editable placeholder");
+        await SendKey(window, Key.Z);
+        Require(paper.Items.Select(item => item.Id).SequenceEqual(Items(2).Select(item => item.Id)),
+            "one undo did not restore all selected rows");
+
+        await Reset(4);
+        Invoke(window, "SelectTodoRange", "row-0", "row-1");
+        editor = Editors(window)["row-0"];
+        var textBeforeBackspace = editor.Text;
+        editor.Select(0, 4);
+        await SendKey(window, Key.Back, expectPaperHistory: false, control: false);
+        Require(paper.Items.Count == 4 && editor.Text == textBeforeBackspace[4..],
+            "a text selection was mistaken for whole-row Backspace deletion");
+
         // Native text undo has priority before list history. A list history boundary then
         // clears native history so old editor changes cannot be replayed against a new model.
         await Reset(4);
@@ -430,7 +467,7 @@ internal static class TodoHistoryChecks
             await Idle();
             Require(observed, "native keyboard input was not received by the PaperWindow");
             if (expectPaperHistory)
-                Require(handledAtWindow, "native Ctrl+Z/Y did not enter the paper-level history handler");
+                Require(handledAtWindow, "native keyboard command did not enter the paper-level handler");
         }
         finally
         {
