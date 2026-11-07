@@ -141,7 +141,7 @@ internal static class WorkspaceFieldScopes
             nameof(AppState.ExperimentalCapsuleMagnetism), nameof(AppState.ExperimentalCapsuleMagnetScreenEdges), nameof(AppState.ExperimentalCapsuleMagnetWindowEdges),
             nameof(AppState.ExperimentalCapsuleMagnetDistance), nameof(AppState.ExperimentalWindowTethering), nameof(AppState.ExperimentalWindowTetherPreferredEdge),
             nameof(AppState.ExperimentalWindowTetherGap), nameof(AppState.ExperimentalTetherVisibilityLink), nameof(AppState.ExperimentalTetherMinimizedBehavior),
-            nameof(AppState.ResizeGripMode), nameof(AppState.FullscreenTopmostMode), nameof(AppState.UsePersistentPowerShellProcess),
+            nameof(AppState.FullscreenTopmostMode), nameof(AppState.UsePersistentPowerShellProcess),
             nameof(AppState.PreferPowerShell7), nameof(AppState.HideScriptRunWindow), nameof(AppState.DeepCapsuleTitleMeasureCharacterLimit),
             nameof(AppState.GlobalHotkeys), nameof(AppState.GlobalHotkeyEnabled), nameof(AppState.DisabledPluginIds),
             nameof(AppState.DistinguishNumpadShortcutDigits), nameof(AppState.PreserveLinkedPaperHiddenStateInVisibilityShortcuts), nameof(AppState.OpenEdgeCapsuleShortcutAtCursor),
