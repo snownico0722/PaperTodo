@@ -2033,15 +2033,17 @@ public sealed partial class AppController
 
     private UIElement WrapWithHint(FrameworkElement option, ToolTip tooltip)
     {
-        var grid = new Grid { Margin = new Thickness(0, 4, 0, 0), ToolTip = tooltip };
-        ToolTipService.SetShowOnDisabled(grid, true);
+        var grid = new Grid { Margin = new Thickness(0, 4, 0, 0) };
+        if (tooltip.Content is TextBlock description)
+        {
+            grid.ToolTip = BuildSettingsHintTooltip(description.Text);
+            ToolTipService.SetShowOnDisabled(grid, true);
+        }
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
         // The option keeps its own top margin via its style; reset it here so the row controls spacing.
         option.Margin = new Thickness(0);
-        ToolTipService.SetShowOnDisabled(option, true);
-        option.ToolTip ??= tooltip;
         var alignment = option is CheckBox { VerticalContentAlignment: VerticalAlignment.Top }
             ? VerticalAlignment.Top : VerticalAlignment.Center;
         option.VerticalAlignment = alignment;
