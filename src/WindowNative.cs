@@ -770,23 +770,47 @@ internal static partial class WindowNative
             out _,
             "show-center");
 
-    // Keep the cursor anchor private to this class: GetCursorPos is intentionally sampled while
+    // The input epoch must remain identical across WPF's render barrier, which may
+    // dequeue newer mouse moves. This value belongs exclusively to the System Aware
+    // floating HWND; never interpret it as a PMv2 physical screen position.
+    internal readonly record struct SystemAwareCaptionAnchor(int X, int Y);
+
+    public static bool TryCenterSystemAwareWindowAtMessagePosition(
+        Window window,
+        double widthDip,
+        double heightDip,
+        out SystemAwareCaptionAnchor anchor)
+    {
+        var centered = TryCenterSystemAwareWindowAtCursor(
+            window, widthDip, heightDip, out var position, "show-message-center",
+            useMessagePosition: true);
+        anchor = centered ? new SystemAwareCaptionAnchor(position.X, position.Y) : default;
+        return centered;
+    }
+
+    // Keep the cursor anchor private to this class: cursor/message coordinates are sampled while
     // the thread is System Aware, so these coordinates must never escape as a DeviceScreenPoint
     // or be reused for monitor selection / the final drop position in the PMv2 application.
     public static bool TryBeginSystemAwareWindowCaptionDragFromCursor(
         Window window,
         double widthDip,
-        double heightDip)
+        double heightDip,
+        SystemAwareCaptionAnchor? initialAnchor = null)
     {
 #if DEBUG
         var callStartedAt = EdgeCapsulePerformanceDiagnostics.Timestamp();
 #endif
+        // Use the anchor captured before the floating HWND was first made visible.
+        // A nested WPF render turn can dequeue a later mouse position between show and
+        // caption handoff; resampling here would cause a visible B -> A -> B jump.
         var centered = TryCenterSystemAwareWindowAtCursor(
                 window,
                 widthDip,
                 heightDip,
                 out var cursorAnchor,
-                "pre-loop-center");
+                "pre-loop-center",
+                useMessagePosition: initialAnchor is null,
+                initialAnchor: initialAnchor);
 #if DEBUG
         var centerMs = EdgeCapsulePerformanceDiagnostics.ElapsedMilliseconds(callStartedAt);
 #endif
@@ -817,45 +841,14 @@ internal static partial class WindowNative
         return started;
     }
 
-    // WM_MOVING provides the rectangle Windows is about to apply. Its native caption loop
-    // sometimes carries the initial grab offset into later, faster mouse moves. Correct the
-    // proposed rectangle in this System Aware HWND's own coordinate space, preserving its size.
-    public static bool TryCenterSystemAwareMovingRectAtCursor(IntPtr movingRect)
-    {
-        if (movingRect == IntPtr.Zero) return false;
-        var previousContext = SetThreadDpiAwarenessContext(DpiAwarenessContextSystemAware);
-        if (previousContext == IntPtr.Zero) return false;
-
-        try
-        {
-            if (!GetCursorPos(out var cursor)) return false;
-            var rect = Marshal.PtrToStructure<NativeRect>(movingRect);
-            var width = rect.Right - rect.Left;
-            var height = rect.Bottom - rect.Top;
-            if (width <= 0 || height <= 0) return false;
-
-            var left = cursor.X - width / 2;
-            var top = cursor.Y - height / 2;
-            if (rect.Left == left && rect.Top == top) return true;
-            rect.Left = left;
-            rect.Top = top;
-            rect.Right = left + width;
-            rect.Bottom = top + height;
-            Marshal.StructureToPtr(rect, movingRect, false);
-            return true;
-        }
-        finally
-        {
-            _ = SetThreadDpiAwarenessContext(previousContext);
-        }
-    }
-
     private static bool TryCenterSystemAwareWindowAtCursor(
         Window window,
         double widthDip,
         double heightDip,
         out CursorPoint cursorPosition,
-        string diagnosticPhase)
+        string diagnosticPhase,
+        bool useMessagePosition = false,
+        SystemAwareCaptionAnchor? initialAnchor = null)
     {
 #if DEBUG
         var callStartedAt = EdgeCapsulePerformanceDiagnostics.Timestamp();
@@ -879,7 +872,20 @@ internal static partial class WindowNative
         {
             var dpi = GetDpiForWindow(handle);
             var scale = dpi > 0 ? dpi / 96.0 : 1.0;
-            if (!GetCursorPos(out cursorPosition))
+            if (initialAnchor is { } captured)
+            {
+                cursorPosition = new CursorPoint { X = captured.X, Y = captured.Y };
+            }
+            else if (useMessagePosition)
+            {
+                var packed = GetMessagePos();
+                cursorPosition = new CursorPoint
+                {
+                    X = unchecked((short)packed),
+                    Y = unchecked((short)(packed >> 16))
+                };
+            }
+            else if (!GetCursorPos(out cursorPosition))
             {
                 return false;
             }
@@ -1638,6 +1644,9 @@ internal static partial class WindowNative
 
     [DllImport("user32.dll")]
     private static extern IntPtr SetFocus(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern uint GetMessagePos();
 
     [DllImport("user32.dll")]
     private static extern bool GetCursorPos(out CursorPoint lpPoint);
