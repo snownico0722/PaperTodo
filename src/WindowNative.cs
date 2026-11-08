@@ -820,28 +820,29 @@ internal static partial class WindowNative
     // WM_MOVING provides the rectangle Windows is about to apply. Its native caption loop
     // sometimes carries the initial grab offset into later, faster mouse moves. Correct the
     // proposed rectangle in this System Aware HWND's own coordinate space, preserving its size.
-    public static void CenterSystemAwareMovingRectAtCursor(IntPtr movingRect)
+    public static bool TryCenterSystemAwareMovingRectAtCursor(IntPtr movingRect)
     {
-        if (movingRect == IntPtr.Zero) return;
+        if (movingRect == IntPtr.Zero) return false;
         var previousContext = SetThreadDpiAwarenessContext(DpiAwarenessContextSystemAware);
-        if (previousContext == IntPtr.Zero) return;
+        if (previousContext == IntPtr.Zero) return false;
 
         try
         {
-            if (!GetCursorPos(out var cursor)) return;
+            if (!GetCursorPos(out var cursor)) return false;
             var rect = Marshal.PtrToStructure<NativeRect>(movingRect);
             var width = rect.Right - rect.Left;
             var height = rect.Bottom - rect.Top;
-            if (width <= 0 || height <= 0) return;
+            if (width <= 0 || height <= 0) return false;
 
             var left = cursor.X - width / 2;
             var top = cursor.Y - height / 2;
-            if (rect.Left == left && rect.Top == top) return;
+            if (rect.Left == left && rect.Top == top) return true;
             rect.Left = left;
             rect.Top = top;
             rect.Right = left + width;
             rect.Bottom = top + height;
             Marshal.StructureToPtr(rect, movingRect, false);
+            return true;
         }
         finally
         {

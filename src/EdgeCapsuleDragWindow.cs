@@ -517,9 +517,11 @@ internal sealed partial class EdgeCapsuleDragWindow : Window
     private IntPtr OnNativeDraggingMessage(
         IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
-        if (message == 0x0216 && _nativeDragAttemptActive) // WM_MOVING
+        if (message == 0x0216 && _nativeDragAttemptActive && // WM_MOVING
+            WindowNative.TryCenterSystemAwareMovingRectAtCursor(lParam))
         {
-            WindowNative.CenterSystemAwareMovingRectAtCursor(lParam);
+            handled = true;
+            return new IntPtr(1);
         }
         return IntPtr.Zero;
     }
