@@ -12,155 +12,33 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          fetch-depth: 0
           submodules: recursive
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
-      - name: Prepare focused repair and existing-fixture regression
+      - name: Prepare the previously specified patch and existing-fixture regression
         shell: python
         run: |
+          import subprocess, re, textwrap
           from pathlib import Path
-          import os
-          def once(text, old, new):
-              if text.count(old) != 1:
-                  raise RuntimeError('Expected exactly one patch target: ' + old[:100])
-              return text.replace(old, new, 1)
-          native = Path('src/WindowNative.cs').read_text(encoding='utf-8-sig')
-          native = once(native, '                "pre-loop-center");', '                "pre-loop-center",\n                useMessagePosition: true);')
-          native = once(native, '        var centered = TryCenterSystemAwareWindowAtCursor(', '        // The native move loop anchors to the last dequeued input, not the live cursor.\n        // Centering at a newer position makes Windows apply the handoff movement twice.\n        var centered = TryCenterSystemAwareWindowAtCursor(')
-          native = once(native, '        string diagnosticPhase)\n', '        string diagnosticPhase,\n        bool useMessagePosition = false)\n')
-          native = once(native, '            if (!GetCursorPos(out cursorPosition))\n', '''            if (useMessagePosition)
-                      {
-                          var packed = GetMessagePos();
-                          cursorPosition = new CursorPoint
-                          {
-                              X = unchecked((short)packed),
-                              Y = unchecked((short)(packed >> 16))
-                          };
-                      }
-                      else if (!GetCursorPos(out cursorPosition))
-          '''.replace('          ', '', 1)) if False else native
-          old = '            if (!GetCursorPos(out cursorPosition))\n'
-          new = '\n'.join([
-              '            if (useMessagePosition)',
-              '            {',
-              '                var packed = GetMessagePos();',
-              '                cursorPosition = new CursorPoint',
-              '                {',
-              '                    X = unchecked((short)packed),',
-              '                    Y = unchecked((short)(packed >> 16))',
-              '                };',
-              '            }',
-              '            else if (!GetCursorPos(out cursorPosition))', ''])
-          native = once(native, old, new)
-          native = once(native, '    [DllImport("user32.dll")]\n    private static extern bool GetCursorPos(out CursorPoint lpPoint);', '    [DllImport("user32.dll")]\n    private static extern uint GetMessagePos();\n\n    [DllImport("user32.dll")]\n    private static extern bool GetCursorPos(out CursorPoint lpPoint);')
-          Path(os.environ['RUNNER_TEMP'], 'WindowNative.fixed.cs').write_text(native, encoding='utf-8')
+          original = subprocess.check_output(['git', 'show', 'f0be4ec901b4be9d9bd4f101c0932021c48abaee:.github/workflows/drag-anchor-probe.yml'], text=True, encoding='utf-8')
+          match = re.search(r'(?ms)^      - name: Prepare focused repair and existing-fixture regression\n        shell: python\n        run: \|\n(.*?)(?=^      - name:)', original)
+          if not match:
+              raise RuntimeError('Missing exact repair preparation step')
+          exec(compile(textwrap.dedent(match.group(1)), 'prepare-caption-anchor.py', 'exec'))
           path = Path('tests/PaperTodo.LifecycleChecks/MasterQueueDragPreparationChecks.cs')
-          test = path.read_text(encoding='utf-8-sig')
-          test = once(test, 'using System.Reflection;\n', 'using System.Reflection;\nusing System.Runtime.InteropServices;\n')
-          test = once(test, '            source.RemoveHook(NativeHook);\n        }\n    }', '            source.RemoveHook(NativeHook);\n        }\n\n        CheckNativeCaptionAnchor(options);\n    }')
-          addition = '''
-              private static void CheckNativeCaptionAnchor(EdgeCapsuleDragWindowOptions options)
-              {
-                  const int probeMessage = 0x8000 + 73;
-                  Require(WindowNative.TryGetCursorScreenPosition(out var saved), "save drag-check cursor");
-                  Require(WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(null, out var monitor),
-                      "caption anchor fixture needs a monitor");
-                  var x = (monitor.WorkArea.Left + monitor.WorkArea.Right) / 2;
-                  var y = (monitor.WorkArea.Top + monitor.WorkArea.Bottom) / 2;
-                  var host = EdgeCapsuleDragWindow.Rent(options);
-                  try
-                  {
-                      foreach (var advance in new[] { 0, 120, -120 })
-                      {
-                          Require(SetPhysicalCursorPos(x, y), "position caption anchor fixture");
-                          host.ShowWithEntrance(new DeviceScreenPoint(x, y), false, 1, 0);
-                          host.Dispatcher.Invoke(static () => { }, DispatcherPriority.Render);
-                          var hwnd = new WindowInteropHelper(host).Handle;
-                          var source = HwndSource.FromHwnd(hwnd)!;
-                          var frame = new DispatcherFrame();
-                          var timeout = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
-                          timeout.Tick += (_, _) => frame.Continue = false;
-                          var received = false;
-                          var started = false;
-                          var hasBounds = false;
-                          var queued = default(NativePoint);
-                          var live = default(NativePoint);
-                          var caption = default(NativePoint);
-                          var bounds = default(NativeRect);
-                          IntPtr Hook(IntPtr h, int message, IntPtr w, IntPtr l, ref bool handled)
-                          {
-                              if (message == probeMessage)
-                              {
-                                  queued = Unpack(GetMessagePos());
-                                  GetCursorPos(out live);
-                                  started = WindowNative.TryBeginSystemAwareWindowCaptionDragFromCursor(
-                                      host, options.Shape.WindowWidthDip, options.Shape.WindowHeightDip);
-                                  handled = true;
-                                  frame.Continue = false;
-                              }
-                              else if (message == 0x00A1)
-                              {
-                                  // Observe the real HWND handoff without entering a modal move loop.
-                                  // The queued point, synthetic caption press and shown rectangle must agree.
-                                  received = true;
-                                  caption = Unpack(unchecked((uint)l.ToInt64()));
-                                  hasBounds = GetWindowRect(h, out bounds);
-                                  handled = true;
-                              }
-                              return IntPtr.Zero;
-                          }
-                          source.AddHook(Hook);
-                          try
-                          {
-                              Require(PostMessage(hwnd, probeMessage, IntPtr.Zero, IntPtr.Zero), "queue caption input epoch");
-                              Require(SetPhysicalCursorPos(x + advance, y), "advance physical pointer before input dispatch");
-                              timeout.Start();
-                              Dispatcher.PushFrame(frame);
-                              Require(started && received && hasBounds, "caption anchor handoff was not observed");
-                              Require(advance == 0 || Math.Abs(live.X - queued.X) > 20,
-                                  "caption fixture did not separate queued and live cursor positions");
-                              Require(caption.X == queued.X && caption.Y == queued.Y,
-                                  "native caption anchor followed the live cursor instead of the queued message");
-                              Require(Math.Abs((bounds.Left + bounds.Right) / 2.0 - queued.X) <= 1 &&
-                                      Math.Abs((bounds.Top + bounds.Bottom) / 2.0 - queued.Y) <= 1,
-                                  "floating HWND and native caption anchor described different input epochs");
-                              Console.WriteLine($"PASS caption anchor: physical advance={advance}, queued={queued.X},{queued.Y}, live={live.X},{live.Y}");
-                          }
-                          finally
-                          {
-                              timeout.Stop();
-                              source.RemoveHook(Hook);
-                          }
-                      }
-                  }
-                  finally
-                  {
-                      host.ReturnToPool();
-                      SetPhysicalCursorPos((int)saved.X, (int)saved.Y);
-                  }
-              }
-
-              private static NativePoint Unpack(uint packed) => new()
-              {
-                  X = unchecked((short)packed), Y = unchecked((short)(packed >> 16))
-              };
-              [StructLayout(LayoutKind.Sequential)] private struct NativePoint { public int X, Y; }
-              [StructLayout(LayoutKind.Sequential)] private struct NativeRect { public int Left, Top, Right, Bottom; }
-              [DllImport("user32.dll")] private static extern uint GetMessagePos();
-              [DllImport("user32.dll")] private static extern bool GetCursorPos(out NativePoint point);
-              [DllImport("user32.dll")] private static extern bool SetPhysicalCursorPos(int x, int y);
-              [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hwnd, out NativeRect rect);
-              [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-              private static extern bool PostMessage(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam);
-
-          '''
-          import textwrap
-          addition = textwrap.dedent(addition)
-          addition = '\n'.join('    ' + line if line else '' for line in addition.split('\n'))
-          test = once(test, '    private static void Require(bool value, string message)', addition + '    private static void Require(bool value, string message)')
-          path.write_text(test, encoding='utf-8')
+          text = path.read_text(encoding='utf-8')
+          old = '                        queued = Unpack(GetMessagePos());\n                        GetCursorPos(out live);'
+          new = '                        queued = Unpack(GetMessagePos());\n                        Require(SetPhysicalCursorPos(x + advance, y), "advance physical pointer during handoff");\n                        GetCursorPos(out live);'
+          if text.count(old) != 1:
+              raise RuntimeError('Missing input-epoch test hook')
+          text = text.replace(old, new)
+          old = '                    Require(SetPhysicalCursorPos(x + advance, y), "advance physical pointer before input dispatch");\n'
+          if text.count(old) != 1:
+              raise RuntimeError('Missing old fixture pointer advance')
+          text = text.replace(old, '')
+          path.write_text(text, encoding='utf-8')
       - name: Require the pre-fix implementation to fail the new boundary check
         shell: pwsh
         run: |
