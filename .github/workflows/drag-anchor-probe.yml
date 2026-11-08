@@ -19,6 +19,7 @@ jobs:
           $original = git show 6a0f5a1d8abc3508f3be2602537a9df940c0eb08:.github/workflows/drag-anchor-probe.yml | Out-String
           if ($original -notmatch "(?s)Add-Type -TypeDefinition @'\r?\n(.*?)\r?\n\s*'@") { throw 'Missing probe source' }
           $source = $Matches[1]
+          $source = $source.Replace('0x80000000, x - 50', '0x80080000, x - 50')
           $source = $source.Replace('static Point MessagePoint()', '[DllImport("user32.dll", EntryPoint = "SystemParametersInfoW")] static extern bool SetDragFullWindows(uint action, uint value, IntPtr data, uint flags); static Point MessagePoint()')
           $source = $source.Replace('GetCursorPos(out var saved);', 'GetCursorPos(out var saved); Console.WriteLine("fullWindowDragging=" + SetDragFullWindows(37, 1, IntPtr.Zero, 0));')
           $source = $source.Replace('if (m == Start)', 'if (m == 0x0112 || m == 0x0231 || m == 0x0232) Console.WriteLine("native message=" + m.ToString("x") + " w=" + w); if (m == Start)')
