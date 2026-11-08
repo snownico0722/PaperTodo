@@ -4,31 +4,192 @@ on:
     branches: [fix/master-drag-message-anchor-20261108]
     paths: [.github/workflows/drag-anchor-probe.yml]
 permissions:
-  contents: read
+  contents: write
 jobs:
   probe:
     runs-on: windows-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
-      - name: Compare real native move loops
+          fetch-depth: 1
+          submodules: recursive
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Prepare focused repair and existing-fixture regression
+        shell: python
+        run: |
+          from pathlib import Path
+          import os
+          def once(text, old, new):
+              if text.count(old) != 1:
+                  raise RuntimeError('Expected exactly one patch target: ' + old[:100])
+              return text.replace(old, new, 1)
+          native = Path('src/WindowNative.cs').read_text(encoding='utf-8-sig')
+          native = once(native, '                "pre-loop-center");', '                "pre-loop-center",\n                useMessagePosition: true);')
+          native = once(native, '        var centered = TryCenterSystemAwareWindowAtCursor(', '        // The native move loop anchors to the last dequeued input, not the live cursor.\n        // Centering at a newer position makes Windows apply the handoff movement twice.\n        var centered = TryCenterSystemAwareWindowAtCursor(')
+          native = once(native, '        string diagnosticPhase)\n', '        string diagnosticPhase,\n        bool useMessagePosition = false)\n')
+          native = once(native, '            if (!GetCursorPos(out cursorPosition))\n', '''            if (useMessagePosition)
+                      {
+                          var packed = GetMessagePos();
+                          cursorPosition = new CursorPoint
+                          {
+                              X = unchecked((short)packed),
+                              Y = unchecked((short)(packed >> 16))
+                          };
+                      }
+                      else if (!GetCursorPos(out cursorPosition))
+          '''.replace('          ', '', 1)) if False else native
+          old = '            if (!GetCursorPos(out cursorPosition))\n'
+          new = '\n'.join([
+              '            if (useMessagePosition)',
+              '            {',
+              '                var packed = GetMessagePos();',
+              '                cursorPosition = new CursorPoint',
+              '                {',
+              '                    X = unchecked((short)packed),',
+              '                    Y = unchecked((short)(packed >> 16))',
+              '                };',
+              '            }',
+              '            else if (!GetCursorPos(out cursorPosition))', ''])
+          native = once(native, old, new)
+          native = once(native, '    [DllImport("user32.dll")]\n    private static extern bool GetCursorPos(out CursorPoint lpPoint);', '    [DllImport("user32.dll")]\n    private static extern uint GetMessagePos();\n\n    [DllImport("user32.dll")]\n    private static extern bool GetCursorPos(out CursorPoint lpPoint);')
+          Path(os.environ['RUNNER_TEMP'], 'WindowNative.fixed.cs').write_text(native, encoding='utf-8')
+          path = Path('tests/PaperTodo.LifecycleChecks/MasterQueueDragPreparationChecks.cs')
+          test = path.read_text(encoding='utf-8-sig')
+          test = once(test, 'using System.Reflection;\n', 'using System.Reflection;\nusing System.Runtime.InteropServices;\n')
+          test = once(test, '            source.RemoveHook(NativeHook);\n        }\n    }', '            source.RemoveHook(NativeHook);\n        }\n\n        CheckNativeCaptionAnchor(options);\n    }')
+          addition = '''
+              private static void CheckNativeCaptionAnchor(EdgeCapsuleDragWindowOptions options)
+              {
+                  const int probeMessage = 0x8000 + 73;
+                  Require(WindowNative.TryGetCursorScreenPosition(out var saved), "save drag-check cursor");
+                  Require(WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(null, out var monitor),
+                      "caption anchor fixture needs a monitor");
+                  var x = (monitor.WorkArea.Left + monitor.WorkArea.Right) / 2;
+                  var y = (monitor.WorkArea.Top + monitor.WorkArea.Bottom) / 2;
+                  var host = EdgeCapsuleDragWindow.Rent(options);
+                  try
+                  {
+                      foreach (var advance in new[] { 0, 120, -120 })
+                      {
+                          Require(SetPhysicalCursorPos(x, y), "position caption anchor fixture");
+                          host.ShowWithEntrance(new DeviceScreenPoint(x, y), false, 1, 0);
+                          host.Dispatcher.Invoke(static () => { }, DispatcherPriority.Render);
+                          var hwnd = new WindowInteropHelper(host).Handle;
+                          var source = HwndSource.FromHwnd(hwnd)!;
+                          var frame = new DispatcherFrame();
+                          var timeout = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+                          timeout.Tick += (_, _) => frame.Continue = false;
+                          var received = false;
+                          var started = false;
+                          var hasBounds = false;
+                          var queued = default(NativePoint);
+                          var live = default(NativePoint);
+                          var caption = default(NativePoint);
+                          var bounds = default(NativeRect);
+                          IntPtr Hook(IntPtr h, int message, IntPtr w, IntPtr l, ref bool handled)
+                          {
+                              if (message == probeMessage)
+                              {
+                                  queued = Unpack(GetMessagePos());
+                                  GetCursorPos(out live);
+                                  started = WindowNative.TryBeginSystemAwareWindowCaptionDragFromCursor(
+                                      host, options.Shape.WindowWidthDip, options.Shape.WindowHeightDip);
+                                  handled = true;
+                                  frame.Continue = false;
+                              }
+                              else if (message == 0x00A1)
+                              {
+                                  // Observe the real HWND handoff without entering a modal move loop.
+                                  // The queued point, synthetic caption press and shown rectangle must agree.
+                                  received = true;
+                                  caption = Unpack(unchecked((uint)l.ToInt64()));
+                                  hasBounds = GetWindowRect(h, out bounds);
+                                  handled = true;
+                              }
+                              return IntPtr.Zero;
+                          }
+                          source.AddHook(Hook);
+                          try
+                          {
+                              Require(PostMessage(hwnd, probeMessage, IntPtr.Zero, IntPtr.Zero), "queue caption input epoch");
+                              Require(SetPhysicalCursorPos(x + advance, y), "advance physical pointer before input dispatch");
+                              timeout.Start();
+                              Dispatcher.PushFrame(frame);
+                              Require(started && received && hasBounds, "caption anchor handoff was not observed");
+                              Require(advance == 0 || Math.Abs(live.X - queued.X) > 20,
+                                  "caption fixture did not separate queued and live cursor positions");
+                              Require(caption.X == queued.X && caption.Y == queued.Y,
+                                  "native caption anchor followed the live cursor instead of the queued message");
+                              Require(Math.Abs((bounds.Left + bounds.Right) / 2.0 - queued.X) <= 1 &&
+                                      Math.Abs((bounds.Top + bounds.Bottom) / 2.0 - queued.Y) <= 1,
+                                  "floating HWND and native caption anchor described different input epochs");
+                              Console.WriteLine($"PASS caption anchor: physical advance={advance}, queued={queued.X},{queued.Y}, live={live.X},{live.Y}");
+                          }
+                          finally
+                          {
+                              timeout.Stop();
+                              source.RemoveHook(Hook);
+                          }
+                      }
+                  }
+                  finally
+                  {
+                      host.ReturnToPool();
+                      SetPhysicalCursorPos((int)saved.X, (int)saved.Y);
+                  }
+              }
+
+              private static NativePoint Unpack(uint packed) => new()
+              {
+                  X = unchecked((short)packed), Y = unchecked((short)(packed >> 16))
+              };
+              [StructLayout(LayoutKind.Sequential)] private struct NativePoint { public int X, Y; }
+              [StructLayout(LayoutKind.Sequential)] private struct NativeRect { public int Left, Top, Right, Bottom; }
+              [DllImport("user32.dll")] private static extern uint GetMessagePos();
+              [DllImport("user32.dll")] private static extern bool GetCursorPos(out NativePoint point);
+              [DllImport("user32.dll")] private static extern bool SetPhysicalCursorPos(int x, int y);
+              [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hwnd, out NativeRect rect);
+              [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+              private static extern bool PostMessage(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam);
+
+          '''
+          import textwrap
+          addition = textwrap.dedent(addition)
+          addition = '\n'.join('    ' + line if line else '' for line in addition.split('\n'))
+          test = once(test, '    private static void Require(bool value, string message)', addition + '    private static void Require(bool value, string message)')
+          path.write_text(test, encoding='utf-8')
+      - name: Require the pre-fix implementation to fail the new boundary check
         shell: pwsh
         run: |
-          $original = git show 6a0f5a1d8abc3508f3be2602537a9df940c0eb08:.github/workflows/drag-anchor-probe.yml | Out-String
-          if ($original -notmatch "(?s)Add-Type -TypeDefinition @'\r?\n(.*?)\r?\n\s*'@") { throw 'Missing probe source' }
-          $source = $Matches[1]
-          $source = $source.Replace('0x80000000, x - 50', '0x80080000, x - 50')
-          $source = $source.Replace('Proc = Proc, ClassName', 'Proc = Proc, Brush = new IntPtr(6), ClassName')
-          $source = $source.Replace('static Point MessagePoint()', '[DllImport("user32.dll", EntryPoint = "SystemParametersInfoW")] static extern bool SetDragFullWindows(uint action, uint value, IntPtr data, uint flags); [DllImport("user32.dll")] static extern short GetKeyState(int key); static Point MessagePoint()')
-          $source = $source.Replace('GetCursorPos(out var saved);', 'GetCursorPos(out var saved); Console.WriteLine("fullWindowDragging=" + SetDragFullWindows(37, 1, IntPtr.Zero, 0));')
-          $source = $source.Replace('if (m == Start)', 'if (m == 0x0084) return new IntPtr(1); if (m == 0x0021) return new IntPtr(3); if (m == 0x0112 || m == 0x0231 || m == 0x0232) Console.WriteLine("native message=" + m.ToString("x") + " w=" + w); if (m == 0x0201 && !done)')
-          $source = $source.Replace('messageAnchor = MessagePoint();', 'Console.WriteLine("pressed=" + GetKeyState(1)); messageAnchor = MessagePoint();')
-          $source = $source.Replace('moving = true;', 'moving = true; GetCursorPos(out var live); var queued = MessagePoint(); Console.WriteLine("moving mode=" + mode + " msg=" + queued.X + "," + queued.Y + " live=" + live.X + "," + live.Y);')
-          $source = $source.Replace('observed.Wait(3000);', 'observed.Wait(500); GetWindowRect(hwnd, out var held); Console.WriteLine("held mode=" + mode + " gap=" + gap + " direction=" + direction + " error=" + ((held.Left + held.Right) / 2 - finalX) + "," + ((held.Top + held.Bottom) / 2 - finalY));')
-          $source = $source.Replace('PostMessage(hwnd, Start, IntPtr.Zero, IntPtr.Zero);', '')
-          $source = $source.Replace('PostMessage(hwnd, 0x001F, IntPtr.Zero, IntPtr.Zero);', 'PostMessage(hwnd, 0x001F, IntPtr.Zero, IntPtr.Zero); done = true; PostMessage(hwnd, Start, IntPtr.Zero, IntPtr.Zero);')
-          $source = $source.Replace('if (!sampled) throw new Exception("Native loop did not produce a final-pointer window position");', 'if (!moving) throw new Exception("Native move loop did not process movement");')
-          Add-Type -TypeDefinition $source
-          [DragAnchorProbe]::Run()
+          $log = Join-Path $env:RUNNER_TEMP 'old-anchor.log'
+          dotnet run --project tests/PaperTodo.LifecycleChecks -c Release -- --case master-queue-drag-preparation 2>&1 | Tee-Object $log
+          $result = $LASTEXITCODE
+          if ($result -eq 0 -or !(Select-String -Path $log -SimpleMatch 'native caption anchor followed the live cursor instead of the queued message')) {
+            throw "Expected original anchor regression was not reproduced (exit=$result)"
+          }
+          $global:LASTEXITCODE = 0
+      - name: Apply repair and check the existing WPF fixture
+        shell: pwsh
+        run: |
+          Copy-Item (Join-Path $env:RUNNER_TEMP 'WindowNative.fixed.cs') src/WindowNative.cs -Force
+          dotnet run --project tests/PaperTodo.LifecycleChecks -c Release -- --case master-queue-drag-preparation
+          if ($LASTEXITCODE -ne 0) { throw 'Repaired caption anchor check failed' }
+          dotnet run --project tests/PaperTodo.LifecycleChecks -c Debug -- --case master-queue-drag-preparation
+          if ($LASTEXITCODE -ne 0) { throw 'Debug caption anchor check failed' }
+      - name: Commit only the tested repair to this dedicated branch
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF -ne 'refs/heads/fix/master-drag-message-anchor-20261108') { throw 'Unexpected repair branch' }
+          git diff --check
+          if ($LASTEXITCODE -ne 0) { throw 'Whitespace error' }
+          git diff --stat
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- src/WindowNative.cs tests/PaperTodo.LifecycleChecks/MasterQueueDragPreparationChecks.cs
+          git commit -m 'fix(edge): align floating caption handoff with the queued input position'
+          if ($LASTEXITCODE -ne 0) { throw 'Repair commit failed' }
+          git push origin HEAD:refs/heads/fix/master-drag-message-anchor-20261108
+          if ($LASTEXITCODE -ne 0) { throw 'Repair branch changed or push denied; no force push attempted' }
