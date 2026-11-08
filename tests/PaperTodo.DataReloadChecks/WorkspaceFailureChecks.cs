@@ -127,4 +127,58 @@ internal static partial class Program
         app.Run();
         return result;
     }
+
+    private static int RunWorkspaceMoveRecoveryExitFixture()
+    {
+        if (!File.Exists(Path.Combine(AppContext.BaseDirectory, LiveMarker))) return 2;
+        var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+        AppController? controller = null;
+        var result = 1;
+        app.Dispatcher.InvokeAsync(async () =>
+        {
+            try
+            {
+                var source = NewState();
+                source.UiLanguage = "en-US";
+                source.Workspaces = new() { Enabled = true, Slots = [1, 2], Active = 1 };
+                var main = new StateStore();
+                main.SaveJsonSync(main.SerializeState(source), 1);
+                var target = new StateStore(AppContext.BaseDirectory, DurableAtomicFileWriter.Shared, 2);
+                const string damaged = "{unrecoverable target";
+                File.WriteAllText(target.FilePath, damaged);
+                controller = new AppController();
+                await controller.StartAsync(createDefaultPaper: false);
+                var paper = controller.State.Papers.Single(item => item.Id == "note-a");
+                Require(!await WithWorkspaceFailureDialog(
+                    () => controller.MovePaperToWorkspaceAsync(paper, 2),
+                    dialog => dialog.Close(), "HistoryRecoveryTitle") &&
+                    controller.IsRunning && controller.WorkspaceNumber == 1 &&
+                    !controller.IsWorkspaceSwitching && controller.State.Papers.Contains(paper),
+                    "dismissing a move recovery prompt incorrectly exited or modified the source");
+
+                paper.Content = "source edit retained on move recovery exit";
+                controller.MarkDirty();
+                Require(!await WithWorkspaceFailureDialog(
+                    () => controller.MovePaperToWorkspaceAsync(paper, 2),
+                    dialog =>
+                    {
+                        Require(controller.WorkspaceNumber == 1 && controller.IsWorkspaceSwitching,
+                            "move recovery prompt released its source before confirmation");
+                        ClickFailureAction(dialog, "WorkspaceFailureExit");
+                    }, "HistoryRecoveryTitle") &&
+                    !controller.IsRunning && !controller.IsWorkspaceSwitching,
+                    "recovery exit from a paper move did not use normal application exit");
+                Require(new StateStore().Load().Papers.Single(item => item.Id == "note-a").Content ==
+                        "source edit retained on move recovery exit" &&
+                        File.ReadAllText(target.FilePath) == damaged,
+                    "move recovery exit failed to save source or overwrote the damaged target");
+                Console.WriteLine("PASS move recovery: dismissed dialog stays active, Exit saves and closes source");
+                result = 0;
+            }
+            catch (Exception ex) { Console.Error.WriteLine(ex); }
+            finally { if (controller?.IsRunning == true) controller.Dispose(); app.Shutdown(); }
+        });
+        app.Run();
+        return result;
+    }
 }

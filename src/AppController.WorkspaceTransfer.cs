@@ -11,6 +11,18 @@ public sealed partial class AppController
 {
     internal async Task<bool> MovePaperToWorkspaceAsync(PaperData paper, int number)
     {
+        try { return await MovePaperToWorkspaceAttemptAsync(paper, number); }
+        catch (WorkspaceRecoveryExitException)
+        {
+            // The move has finished rollback and released its gate and plugin-event
+            // suppression before the existing normal exit path runs.
+            Exit();
+            return false;
+        }
+    }
+
+    private async Task<bool> MovePaperToWorkspaceAttemptAsync(PaperData paper, int number)
+    {
         Application.Current.Dispatcher.VerifyAccess();
         if (!WorkspaceOptions.Enabled || number == WorkspaceNumber ||
             !WorkspaceOptions.ContainsSlot(number) || !State.Papers.Contains(paper) ||
@@ -154,6 +166,7 @@ public sealed partial class AppController
                 Trace.TraceWarning("Workspace paper move failed: {0}", ex);
                 _trayIcon?.ShowBalloonTip(Strings.Get("WorkspaceMoveFailed"), message, BalloonIcon.Warning);
             }
+            if (ex is WorkspaceRecoveryExitException) throw;
             return false;
         }
         finally
