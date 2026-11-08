@@ -112,14 +112,7 @@ internal sealed partial class EdgeCapsuleDragWindow : Window
         BuildContent();
         ConfigureForReuse(options);
 
-        SourceInitialized += (_, _) =>
-        {
-            WindowNative.ApplyNoActivateStyle(this);
-            if (PresentationSource.FromVisual(this) is HwndSource source)
-            {
-                source.AddHook(OnNativeDraggingMessage);
-            }
-        };
+        SourceInitialized += (_, _) => WindowNative.ApplyNoActivateStyle(this);
         Dispatcher.ShutdownStarted += OnDispatcherShutdownStarted;
     }
 
@@ -509,21 +502,6 @@ internal sealed partial class EdgeCapsuleDragWindow : Window
         // Target layout, animation, recovery and transaction state remain with that owner.
         WindowNative.FlushDesktopComposition();
         releaseCover();
-    }
-
-    // The caption move loop can keep a stale grab offset if the cursor advances while the
-    // floating HWND is handed off. Keep each proposed native move centered on the live cursor.
-    // This only applies during the pooled host's modal drag, not its return animation.
-    private IntPtr OnNativeDraggingMessage(
-        IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam, ref bool handled)
-    {
-        if (message == 0x0216 && _nativeDragAttemptActive && // WM_MOVING
-            WindowNative.TryCenterSystemAwareMovingRectAtCursor(lParam))
-        {
-            handled = true;
-            return new IntPtr(1);
-        }
-        return IntPtr.Zero;
     }
 
     public EdgeCapsuleNativeDragOutcome RunNativeDragFromCursor()
