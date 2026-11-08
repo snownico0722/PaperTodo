@@ -20,11 +20,15 @@ jobs:
           if ($original -notmatch "(?s)Add-Type -TypeDefinition @'\r?\n(.*?)\r?\n\s*'@") { throw 'Missing probe source' }
           $source = $Matches[1]
           $source = $source.Replace('0x80000000, x - 50', '0x80080000, x - 50')
-          $source = $source.Replace('static Point MessagePoint()', '[DllImport("user32.dll", EntryPoint = "SystemParametersInfoW")] static extern bool SetDragFullWindows(uint action, uint value, IntPtr data, uint flags); static Point MessagePoint()')
+          $source = $source.Replace('Proc = Proc, ClassName', 'Proc = Proc, Brush = new IntPtr(6), ClassName')
+          $source = $source.Replace('static Point MessagePoint()', '[DllImport("user32.dll", EntryPoint = "SystemParametersInfoW")] static extern bool SetDragFullWindows(uint action, uint value, IntPtr data, uint flags); [DllImport("user32.dll")] static extern short GetKeyState(int key); static Point MessagePoint()')
           $source = $source.Replace('GetCursorPos(out var saved);', 'GetCursorPos(out var saved); Console.WriteLine("fullWindowDragging=" + SetDragFullWindows(37, 1, IntPtr.Zero, 0));')
-          $source = $source.Replace('if (m == Start)', 'if (m == 0x0112 || m == 0x0231 || m == 0x0232) Console.WriteLine("native message=" + m.ToString("x") + " w=" + w); if (m == Start)')
+          $source = $source.Replace('if (m == Start)', 'if (m == 0x0084) return new IntPtr(1); if (m == 0x0021) return new IntPtr(3); if (m == 0x0112 || m == 0x0231 || m == 0x0232) Console.WriteLine("native message=" + m.ToString("x") + " w=" + w); if (m == 0x0201 && !done)')
+          $source = $source.Replace('messageAnchor = MessagePoint();', 'Console.WriteLine("pressed=" + GetKeyState(1)); messageAnchor = MessagePoint();')
           $source = $source.Replace('moving = true;', 'moving = true; GetCursorPos(out var live); var queued = MessagePoint(); Console.WriteLine("moving mode=" + mode + " msg=" + queued.X + "," + queued.Y + " live=" + live.X + "," + live.Y);')
           $source = $source.Replace('observed.Wait(3000);', 'observed.Wait(500); GetWindowRect(hwnd, out var held); Console.WriteLine("held mode=" + mode + " gap=" + gap + " direction=" + direction + " error=" + ((held.Left + held.Right) / 2 - finalX) + "," + ((held.Top + held.Bottom) / 2 - finalY));')
+          $source = $source.Replace('PostMessage(hwnd, Start, IntPtr.Zero, IntPtr.Zero);', '')
+          $source = $source.Replace('PostMessage(hwnd, 0x001F, IntPtr.Zero, IntPtr.Zero);', 'PostMessage(hwnd, 0x001F, IntPtr.Zero, IntPtr.Zero); done = true; PostMessage(hwnd, Start, IntPtr.Zero, IntPtr.Zero);')
           $source = $source.Replace('if (!sampled) throw new Exception("Native loop did not produce a final-pointer window position");', 'if (!moving) throw new Exception("Native move loop did not process movement");')
           Add-Type -TypeDefinition $source
           [DragAnchorProbe]::Run()
