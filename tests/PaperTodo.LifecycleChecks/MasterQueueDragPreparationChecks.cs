@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Threading;
@@ -88,7 +89,105 @@ internal static class MasterQueueDragPreparationChecks
             host.IsVisibleChanged -= OnVisibleChanged;
             source.RemoveHook(NativeHook);
         }
+
+        CheckNativeCaptionAnchor(options);
     }
+
+
+    private static void CheckNativeCaptionAnchor(EdgeCapsuleDragWindowOptions options)
+    {
+        const int probeMessage = 0x8000 + 73;
+        Require(WindowNative.TryGetCursorScreenPosition(out var saved), "save drag-check cursor");
+        Require(WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(null, out var monitor),
+            "caption anchor fixture needs a monitor");
+        var x = (monitor.WorkArea.Left + monitor.WorkArea.Right) / 2;
+        var y = (monitor.WorkArea.Top + monitor.WorkArea.Bottom) / 2;
+        var host = EdgeCapsuleDragWindow.Rent(options);
+        try
+        {
+            foreach (var advance in new[] { 0, 120, -120 })
+            {
+                Require(SetPhysicalCursorPos(x, y), "position caption anchor fixture");
+                host.ShowWithEntrance(new DeviceScreenPoint(x, y), false, 1, 0);
+                host.Dispatcher.Invoke(static () => { }, DispatcherPriority.Render);
+                var hwnd = new WindowInteropHelper(host).Handle;
+                var source = HwndSource.FromHwnd(hwnd)!;
+                var frame = new DispatcherFrame();
+                var timeout = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+                timeout.Tick += (_, _) => frame.Continue = false;
+                var received = false;
+                var started = false;
+                var hasBounds = false;
+                var queued = default(NativePoint);
+                var live = default(NativePoint);
+                var caption = default(NativePoint);
+                var bounds = default(NativeRect);
+                IntPtr Hook(IntPtr h, int message, IntPtr w, IntPtr l, ref bool handled)
+                {
+                    if (message == probeMessage)
+                    {
+                        queued = Unpack(GetMessagePos());
+                        Require(SetPhysicalCursorPos(x + advance, y), "advance physical pointer during handoff");
+                        GetCursorPos(out live);
+                        started = WindowNative.TryBeginSystemAwareWindowCaptionDragFromCursor(
+                            host, options.Shape.WindowWidthDip, options.Shape.WindowHeightDip);
+                        handled = true;
+                        frame.Continue = false;
+                    }
+                    else if (message == 0x00A1)
+                    {
+                        // Observe the real HWND handoff without entering a modal move loop.
+                        // The queued point, synthetic caption press and shown rectangle must agree.
+                        received = true;
+                        caption = Unpack(unchecked((uint)l.ToInt64()));
+                        hasBounds = GetWindowRect(h, out bounds);
+                        handled = true;
+                    }
+                    return IntPtr.Zero;
+                }
+                source.AddHook(Hook);
+                try
+                {
+                    Require(PostMessage(hwnd, probeMessage, IntPtr.Zero, IntPtr.Zero), "queue caption input epoch");
+                    timeout.Start();
+                    Dispatcher.PushFrame(frame);
+                    Require(started && received && hasBounds, "caption anchor handoff was not observed");
+                    Require(advance == 0 || Math.Abs(live.X - queued.X) > 20,
+                        "caption fixture did not separate queued and live cursor positions");
+                    Console.WriteLine($"caption handoff: advance={advance}, queued={queued.X},{queued.Y}, live={live.X},{live.Y}, caption={caption.X},{caption.Y}, center={(bounds.Left + bounds.Right) / 2.0},{(bounds.Top + bounds.Bottom) / 2.0}");
+                    Require(caption.X == queued.X && caption.Y == queued.Y,
+                        "native caption anchor followed the live cursor instead of the queued message");
+                    Require(Math.Abs((bounds.Left + bounds.Right) / 2.0 - queued.X) <= 1 &&
+                            Math.Abs((bounds.Top + bounds.Bottom) / 2.0 - queued.Y) <= 1,
+                        "floating HWND and native caption anchor described different input epochs");
+                    Console.WriteLine($"PASS caption anchor: physical advance={advance}, queued={queued.X},{queued.Y}, live={live.X},{live.Y}");
+                }
+                finally
+                {
+                    timeout.Stop();
+                    source.RemoveHook(Hook);
+                }
+            }
+        }
+        finally
+        {
+            host.ReturnToPool();
+            SetPhysicalCursorPos((int)saved.X, (int)saved.Y);
+        }
+    }
+
+    private static NativePoint Unpack(uint packed) => new()
+    {
+        X = unchecked((short)packed), Y = unchecked((short)(packed >> 16))
+    };
+    [StructLayout(LayoutKind.Sequential)] private struct NativePoint { public int X, Y; }
+    [StructLayout(LayoutKind.Sequential)] private struct NativeRect { public int Left, Top, Right, Bottom; }
+    [DllImport("user32.dll")] private static extern uint GetMessagePos();
+    [DllImport("user32.dll")] private static extern bool GetCursorPos(out NativePoint point);
+    [DllImport("user32.dll")] private static extern bool SetPhysicalCursorPos(int x, int y);
+    [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hwnd, out NativeRect rect);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern bool PostMessage(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam);
 
     private static void Require(bool value, string message)
     {

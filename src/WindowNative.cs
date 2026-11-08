@@ -770,7 +770,7 @@ internal static partial class WindowNative
             out _,
             "show-center");
 
-    // Keep the cursor anchor private to this class: GetCursorPos is intentionally sampled while
+    // Keep the cursor anchor private to this class: cursor/message coordinates are sampled while
     // the thread is System Aware, so these coordinates must never escape as a DeviceScreenPoint
     // or be reused for monitor selection / the final drop position in the PMv2 application.
     public static bool TryBeginSystemAwareWindowCaptionDragFromCursor(
@@ -781,12 +781,15 @@ internal static partial class WindowNative
 #if DEBUG
         var callStartedAt = EdgeCapsulePerformanceDiagnostics.Timestamp();
 #endif
+        // The native move loop anchors to the last dequeued input, not the live cursor.
+        // Centering at a newer position makes Windows apply the handoff movement twice.
         var centered = TryCenterSystemAwareWindowAtCursor(
                 window,
                 widthDip,
                 heightDip,
                 out var cursorAnchor,
-                "pre-loop-center");
+                "pre-loop-center",
+                useMessagePosition: true);
 #if DEBUG
         var centerMs = EdgeCapsulePerformanceDiagnostics.ElapsedMilliseconds(callStartedAt);
 #endif
@@ -822,7 +825,8 @@ internal static partial class WindowNative
         double widthDip,
         double heightDip,
         out CursorPoint cursorPosition,
-        string diagnosticPhase)
+        string diagnosticPhase,
+        bool useMessagePosition = false)
     {
 #if DEBUG
         var callStartedAt = EdgeCapsulePerformanceDiagnostics.Timestamp();
@@ -846,7 +850,16 @@ internal static partial class WindowNative
         {
             var dpi = GetDpiForWindow(handle);
             var scale = dpi > 0 ? dpi / 96.0 : 1.0;
-            if (!GetCursorPos(out cursorPosition))
+            if (useMessagePosition)
+            {
+                var packed = GetMessagePos();
+                cursorPosition = new CursorPoint
+                {
+                    X = unchecked((short)packed),
+                    Y = unchecked((short)(packed >> 16))
+                };
+            }
+            else if (!GetCursorPos(out cursorPosition))
             {
                 return false;
             }
@@ -1605,6 +1618,9 @@ internal static partial class WindowNative
 
     [DllImport("user32.dll")]
     private static extern IntPtr SetFocus(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern uint GetMessagePos();
 
     [DllImport("user32.dll")]
     private static extern bool GetCursorPos(out CursorPoint lpPoint);
