@@ -17,10 +17,10 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
-      - name: Prepare the previously specified patch and existing-fixture regression
+      - name: Prepare the specified patch and existing-fixture regression
         shell: python
         run: |
-          import subprocess, re, textwrap
+          import subprocess, re, textwrap, os
           from pathlib import Path
           original = subprocess.check_output(['git', 'show', 'f0be4ec901b4be9d9bd4f101c0932021c48abaee:.github/workflows/drag-anchor-probe.yml'], text=True, encoding='utf-8')
           match = re.search(r'(?ms)^      - name: Prepare focused repair and existing-fixture regression\n        shell: python\n        run: \|\n(.*?)(?=^      - name:)', original)
@@ -38,7 +38,16 @@ jobs:
           if text.count(old) != 1:
               raise RuntimeError('Missing old fixture pointer advance')
           text = text.replace(old, '')
+          old = '                    Require(caption.X == queued.X && caption.Y == queued.Y,'
+          new = '                    Console.WriteLine($"caption handoff: advance={advance}, queued={queued.X},{queued.Y}, live={live.X},{live.Y}, caption={caption.X},{caption.Y}, center={(bounds.Left + bounds.Right) / 2.0},{(bounds.Top + bounds.Bottom) / 2.0}");\n' + old
+          if text.count(old) != 1:
+              raise RuntimeError('Missing caption assertion')
+          text = text.replace(old, new)
           path.write_text(text, encoding='utf-8')
+          candidate = Path(os.environ['RUNNER_TEMP'], 'WindowNative.fixed.cs')
+          native = candidate.read_text(encoding='utf-8')
+          native = native.replace('Keep the cursor anchor private to this class: GetCursorPos is intentionally sampled while', 'Keep the cursor anchor private to this class: cursor/message coordinates are sampled while')
+          candidate.write_text(native, encoding='utf-8')
       - name: Require the pre-fix implementation to fail the new boundary check
         shell: pwsh
         run: |
@@ -52,7 +61,9 @@ jobs:
       - name: Apply repair and check the existing WPF fixture
         shell: pwsh
         run: |
-          Copy-Item (Join-Path $env:RUNNER_TEMP 'WindowNative.fixed.cs') src/WindowNative.cs -Force
+          $candidate = [IO.File]::ReadAllText((Join-Path $env:RUNNER_TEMP 'WindowNative.fixed.cs'))
+          [IO.File]::WriteAllText((Join-Path $pwd 'src/WindowNative.cs'), $candidate)
+          git diff -- src/WindowNative.cs
           dotnet run --project tests/PaperTodo.LifecycleChecks -c Release -- --case master-queue-drag-preparation
           if ($LASTEXITCODE -ne 0) { throw 'Repaired caption anchor check failed' }
           dotnet run --project tests/PaperTodo.LifecycleChecks -c Debug -- --case master-queue-drag-preparation
