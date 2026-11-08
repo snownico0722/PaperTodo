@@ -770,6 +770,17 @@ internal static partial class WindowNative
             out _,
             "show-center");
 
+    // The shown floating window and native caption loop must start from the same
+    // dequeued mouse-message position, even when the live cursor has already moved.
+    // Non-drag displays still use the live cursor.
+    public static bool TryCenterSystemAwareWindowAtMessagePosition(
+        Window window,
+        double widthDip,
+        double heightDip) =>
+        TryCenterSystemAwareWindowAtCursor(
+            window, widthDip, heightDip, out _, "show-message-center",
+            useMessagePosition: true);
+
     // Keep the cursor anchor private to this class: cursor/message coordinates are sampled while
     // the thread is System Aware, so these coordinates must never escape as a DeviceScreenPoint
     // or be reused for monitor selection / the final drop position in the PMv2 application.

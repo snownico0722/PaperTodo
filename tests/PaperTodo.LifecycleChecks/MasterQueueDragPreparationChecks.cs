@@ -93,7 +93,6 @@ internal static class MasterQueueDragPreparationChecks
         CheckNativeCaptionAnchor(options);
     }
 
-
     private static void CheckNativeCaptionAnchor(EdgeCapsuleDragWindowOptions options)
     {
         const int probeMessage = 0x8000 + 73;
@@ -108,8 +107,6 @@ internal static class MasterQueueDragPreparationChecks
             foreach (var advance in new[] { 0, 120, -120 })
             {
                 Require(SetPhysicalCursorPos(x, y), "position caption anchor fixture");
-                host.ShowWithEntrance(new DeviceScreenPoint(x, y), false, 1, 0);
-                host.Dispatcher.Invoke(static () => { }, DispatcherPriority.Render);
                 var hwnd = new WindowInteropHelper(host).Handle;
                 var source = HwndSource.FromHwnd(hwnd)!;
                 var frame = new DispatcherFrame();
@@ -118,6 +115,8 @@ internal static class MasterQueueDragPreparationChecks
                 var received = false;
                 var started = false;
                 var hasBounds = false;
+                var hasShownBounds = false;
+                var shownBounds = default(NativeRect);
                 var queued = default(NativePoint);
                 var live = default(NativePoint);
                 var caption = default(NativePoint);
@@ -129,6 +128,11 @@ internal static class MasterQueueDragPreparationChecks
                         queued = Unpack(GetMessagePos());
                         Require(SetPhysicalCursorPos(x + advance, y), "advance physical pointer during handoff");
                         GetCursorPos(out live);
+                        host.ShowWithEntrance(
+                            new DeviceScreenPoint(x, y), false, 1, 0,
+                            alignToDragMessage: true);
+                        hasShownBounds = GetWindowRect(h, out shownBounds);
+                        host.Dispatcher.Invoke(static () => { }, DispatcherPriority.Render);
                         started = WindowNative.TryBeginSystemAwareWindowCaptionDragFromCursor(
                             host, options.Shape.WindowWidthDip, options.Shape.WindowHeightDip);
                         handled = true;
@@ -151,10 +155,14 @@ internal static class MasterQueueDragPreparationChecks
                     Require(PostMessage(hwnd, probeMessage, IntPtr.Zero, IntPtr.Zero), "queue caption input epoch");
                     timeout.Start();
                     Dispatcher.PushFrame(frame);
-                    Require(started && received && hasBounds, "caption anchor handoff was not observed");
+                    Require(started && received && hasBounds && hasShownBounds,
+                        "floating show or caption anchor handoff was not observed");
                     Require(advance == 0 || Math.Abs(live.X - queued.X) > 20,
                         "caption fixture did not separate queued and live cursor positions");
-                    Console.WriteLine($"caption handoff: advance={advance}, queued={queued.X},{queued.Y}, live={live.X},{live.Y}, caption={caption.X},{caption.Y}, center={(bounds.Left + bounds.Right) / 2.0},{(bounds.Top + bounds.Bottom) / 2.0}");
+                    Require(Math.Abs((shownBounds.Left + shownBounds.Right) / 2.0 - queued.X) <= 1 &&
+                            Math.Abs((shownBounds.Top + shownBounds.Bottom) / 2.0 - queued.Y) <= 1,
+                        "floating capsule became visible at the newer live cursor before native dragging");
+                    Console.WriteLine($"caption handoff: advance={advance}, queued={queued.X},{queued.Y}, live={live.X},{live.Y}, shownCenter={(shownBounds.Left + shownBounds.Right) / 2.0},{(shownBounds.Top + shownBounds.Bottom) / 2.0}, caption={caption.X},{caption.Y}, center={(bounds.Left + bounds.Right) / 2.0},{(bounds.Top + bounds.Bottom) / 2.0}");
                     Require(caption.X == queued.X && caption.Y == queued.Y,
                         "native caption anchor followed the live cursor instead of the queued message");
                     Require(Math.Abs((bounds.Left + bounds.Right) / 2.0 - queued.X) <= 1 &&
@@ -166,6 +174,8 @@ internal static class MasterQueueDragPreparationChecks
                 {
                     timeout.Stop();
                     source.RemoveHook(Hook);
+                    host.Opacity = 0;
+                    host.Hide();
                 }
             }
         }

@@ -627,7 +627,8 @@ public sealed partial class MasterCapsuleWindow : Window
                 currentScreenPos,
                 animate: false,
                 scaleFrom: 1,
-                durationMilliseconds: 0);
+                durationMilliseconds: 0,
+                alignToDragMessage: true);
             RefreshFloatingDragTopmost();
             if (_queueTransferCanceled || _isClosingForReal)
             {

@@ -301,7 +301,8 @@ public sealed partial class PaperWindow
                 pointer,
                 animate: false,
                 DeepCapsuleCrossQueueDragScaleFrom,
-                DeepCapsuleCrossQueueDragMorphMilliseconds);
+                DeepCapsuleCrossQueueDragMorphMilliseconds,
+                alignToDragMessage: true);
             RefreshDeepCapsuleSlotTopmost();
             return host;
         }
