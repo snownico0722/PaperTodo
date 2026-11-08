@@ -10,165 +10,20 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 5
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Compare real native move loops
         shell: pwsh
         run: |
-          Add-Type -TypeDefinition @'
-          using System;
-          using System.Runtime.InteropServices;
-          using System.Threading;
-          public static class DragAnchorProbe
-          {
-              const uint Start = 0x8001;
-              static readonly WndProc Proc = WindowProc;
-              static IntPtr hwnd;
-              static int mode, gap, direction, finalX, finalY;
-              static bool done, moving, sampled;
-              static int errorX, errorY;
-              static Point messageAnchor, liveAnchor;
-              static readonly ManualResetEventSlim entered = new ManualResetEventSlim();
-              static readonly ManualResetEventSlim observed = new ManualResetEventSlim();
-              [StructLayout(LayoutKind.Sequential)] struct Point { public int X, Y; }
-              [StructLayout(LayoutKind.Sequential)] struct Rect { public int Left, Top, Right, Bottom; }
-              [StructLayout(LayoutKind.Sequential)] struct Msg { public IntPtr Hwnd; public uint Message; public UIntPtr WParam; public IntPtr LParam; public uint Time; public Point Pt; public uint Private; }
-              [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)] struct WndClass
-              {
-                  public uint Size, Style; public WndProc Proc; public int ClassExtra, WindowExtra;
-                  public IntPtr Instance, Icon, Cursor, Brush;
-                  public string MenuName, ClassName; public IntPtr SmallIcon;
-              }
-              delegate IntPtr WndProc(IntPtr h, uint m, IntPtr w, IntPtr l);
-              [DllImport("user32.dll")] static extern IntPtr SetThreadDpiAwarenessContext(IntPtr c);
-              [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern ushort RegisterClassEx(ref WndClass c);
-              [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr CreateWindowEx(uint ex, string cls, string text, uint style, int x, int y, int width, int height, IntPtr parent, IntPtr menu, IntPtr instance, IntPtr param);
-              [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr h, int cmd);
-              [DllImport("user32.dll")] static extern bool DestroyWindow(IntPtr h);
-              [DllImport("user32.dll")] static extern bool SetLayeredWindowAttributes(IntPtr h, uint key, byte alpha, uint flags);
-              [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int width, int height, uint flags);
-              [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr h, out Rect r);
-              [DllImport("user32.dll")] static extern bool GetCursorPos(out Point p);
-              [DllImport("user32.dll")] static extern bool SetCursorPos(int x, int y);
-              [DllImport("user32.dll")] static extern uint GetMessagePos();
-              [DllImport("user32.dll")] static extern bool ReleaseCapture();
-              [DllImport("user32.dll")] static extern void mouse_event(uint flags, uint x, uint y, uint data, UIntPtr extra);
-              [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr SendMessage(IntPtr h, uint m, IntPtr w, IntPtr l);
-              [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l);
-              [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr DefWindowProc(IntPtr h, uint m, IntPtr w, IntPtr l);
-              [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetMessage(out Msg msg, IntPtr h, uint min, uint max);
-              [DllImport("user32.dll")] static extern bool TranslateMessage(ref Msg msg);
-              [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr DispatchMessage(ref Msg msg);
-              [DllImport("user32.dll")] static extern bool SystemParametersInfo(uint action, uint param, out Rect value, uint flags);
-              static Point MessagePoint()
-              {
-                  uint packed = GetMessagePos();
-                  return new Point { X = unchecked((short)packed), Y = unchecked((short)(packed >> 16)) };
-              }
-              static IntPtr Pack(Point p) { return new IntPtr(unchecked((int)((uint)(ushort)p.X | ((uint)(ushort)p.Y << 16)))); }
-              static IntPtr WindowProc(IntPtr h, uint m, IntPtr w, IntPtr l)
-              {
-                  if (m == Start)
-                  {
-                      messageAnchor = MessagePoint();
-                      SetCursorPos(messageAnchor.X + direction * gap, messageAnchor.Y);
-                      GetCursorPos(out liveAnchor);
-                      var anchor = mode == 2 ? messageAnchor : liveAnchor;
-                      SetWindowPos(h, IntPtr.Zero, anchor.X - 50, anchor.Y - 20, 100, 40, 0x214);
-                      ReleaseCapture();
-                      SendMessage(h, 0x00A1, new IntPtr(2), Pack(anchor));
-                      done = true;
-                      return IntPtr.Zero;
-                  }
-                  if (m == 0x0112 && ((long)w & 0xfff0) == 0xf010) entered.Set();
-                  if (m == 0x0231) entered.Set();
-                  if (m == 0x0216)
-                  {
-                      moving = true;
-                      Thread.Sleep(20); // Deliberately let the physical cursor outrun this input message.
-                      if (mode == 1 || mode == 3)
-                      {
-                          Point p;
-                          if (mode == 1) GetCursorPos(out p); else p = MessagePoint();
-                          var r = Marshal.PtrToStructure<Rect>(l);
-                          int width = r.Right - r.Left, height = r.Bottom - r.Top;
-                          r.Left = p.X - width / 2; r.Top = p.Y - height / 2;
-                          r.Right = r.Left + width; r.Bottom = r.Top + height;
-                          Marshal.StructureToPtr(r, l, false);
-                          return new IntPtr(1);
-                      }
-                  }
-                  if (m == 0x0047 && moving)
-                  {
-                      var p = MessagePoint();
-                      if (p.X == finalX && p.Y == finalY && GetWindowRect(h, out var r))
-                      {
-                          errorX = (r.Left + r.Right) / 2 - finalX;
-                          errorY = (r.Top + r.Bottom) / 2 - finalY;
-                          sampled = true;
-                          observed.Set();
-                      }
-                  }
-                  return DefWindowProc(h, m, w, l);
-              }
-              public static void Run()
-              {
-                  var previous = SetThreadDpiAwarenessContext(new IntPtr(-2));
-                  GetCursorPos(out var saved);
-                  var cls = new WndClass { Size = (uint)Marshal.SizeOf<WndClass>(), Proc = Proc, ClassName = "PaperTodoNativeAnchorProbe" };
-                  if (RegisterClassEx(ref cls) == 0) throw new Exception("RegisterClassEx failed");
-                  if (!SystemParametersInfo(48, 0, out var area, 0)) throw new Exception("No work area");
-                  try
-                  {
-                      foreach (int d in new[] { 1, -1 })
-                      foreach (int lag in new[] { 0, 120 })
-                      foreach (int strategy in new[] { 0, 1, 2, 3 })
-                      {
-                          direction = d; gap = lag; mode = strategy;
-                          done = moving = sampled = false; entered.Reset(); observed.Reset();
-                          int x = (area.Left + area.Right) / 2 - direction * 220;
-                          int y = (area.Top + area.Bottom) / 2;
-                          finalX = x + direction * (gap + 120); finalY = y;
-                          hwnd = CreateWindowEx(0x08080088, cls.ClassName, "drag probe", 0x80000000, x - 50, y - 20, 100, 40, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
-                          if (hwnd == IntPtr.Zero) throw new Exception("CreateWindowEx failed");
-                          SetLayeredWindowAttributes(hwnd, 0, 255, 2); ShowWindow(hwnd, 8);
-                          SetCursorPos(x, y); mouse_event(2, 0, 0, 0, UIntPtr.Zero);
-                          var driver = new Thread(() =>
-                          {
-                              SetThreadDpiAwarenessContext(new IntPtr(-2));
-                              try
-                              {
-                                  if (entered.Wait(3000))
-                                  {
-                                      for (int step = 1; step <= 6; step++)
-                                      {
-                                          SetCursorPos(x + direction * (gap + step * 20), y);
-                                          Thread.Sleep(12);
-                                      }
-                                      observed.Wait(3000);
-                                  }
-                              }
-                              finally
-                              {
-                                  mouse_event(4, 0, 0, 0, UIntPtr.Zero);
-                                  PostMessage(hwnd, 0x0202, IntPtr.Zero, IntPtr.Zero);
-                                  PostMessage(hwnd, 0x001F, IntPtr.Zero, IntPtr.Zero);
-                              }
-                          });
-                          driver.IsBackground = true; driver.Start();
-                          PostMessage(hwnd, Start, IntPtr.Zero, IntPtr.Zero);
-                          while (!done && GetMessage(out var msg, IntPtr.Zero, 0, 0) > 0) { TranslateMessage(ref msg); DispatchMessage(ref msg); }
-                          if (!driver.Join(5000)) throw new Exception("Input driver did not finish");
-                          Console.WriteLine("mode={0} gap={1} direction={2} message={3},{4} live={5},{6} sampled={7} finalError={8},{9}", mode, gap, direction, messageAnchor.X, messageAnchor.Y, liveAnchor.X, liveAnchor.Y, sampled, errorX, errorY);
-                          DestroyWindow(hwnd); hwnd = IntPtr.Zero;
-                          if (!sampled) throw new Exception("Native loop did not produce a final-pointer window position");
-                      }
-                  }
-                  finally
-                  {
-                      mouse_event(4, 0, 0, 0, UIntPtr.Zero);
-                      if (hwnd != IntPtr.Zero) DestroyWindow(hwnd);
-                      SetCursorPos(saved.X, saved.Y); SetThreadDpiAwarenessContext(previous);
-                  }
-              }
-          }
-          '@
+          $original = git show 6a0f5a1d8abc3508f3be2602537a9df940c0eb08:.github/workflows/drag-anchor-probe.yml | Out-String
+          if ($original -notmatch "(?s)Add-Type -TypeDefinition @'\r?\n(.*?)\r?\n\s*'@") { throw 'Missing probe source' }
+          $source = $Matches[1]
+          $source = $source.Replace('static Point MessagePoint()', '[DllImport("user32.dll", EntryPoint = "SystemParametersInfoW")] static extern bool SetDragFullWindows(uint action, uint value, IntPtr data, uint flags); static Point MessagePoint()')
+          $source = $source.Replace('GetCursorPos(out var saved);', 'GetCursorPos(out var saved); Console.WriteLine("fullWindowDragging=" + SetDragFullWindows(37, 1, IntPtr.Zero, 0));')
+          $source = $source.Replace('if (m == Start)', 'if (m == 0x0112 || m == 0x0231 || m == 0x0232) Console.WriteLine("native message=" + m.ToString("x") + " w=" + w); if (m == Start)')
+          $source = $source.Replace('moving = true;', 'moving = true; GetCursorPos(out var live); var queued = MessagePoint(); Console.WriteLine("moving mode=" + mode + " msg=" + queued.X + "," + queued.Y + " live=" + live.X + "," + live.Y);')
+          $source = $source.Replace('observed.Wait(3000);', 'observed.Wait(500); GetWindowRect(hwnd, out var held); Console.WriteLine("held mode=" + mode + " gap=" + gap + " direction=" + direction + " error=" + ((held.Left + held.Right) / 2 - finalX) + "," + ((held.Top + held.Bottom) / 2 - finalY));')
+          $source = $source.Replace('if (!sampled) throw new Exception("Native loop did not produce a final-pointer window position");', 'if (!moving) throw new Exception("Native move loop did not process movement");')
+          Add-Type -TypeDefinition $source
           [DragAnchorProbe]::Run()
