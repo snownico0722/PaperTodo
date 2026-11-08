@@ -26,14 +26,14 @@ public sealed partial class PaperWindow
         button.Click += async (_, _) =>
         {
             if (_controller.IsWorkspaceSwitching) return;
-            if (_controller.WorkspaceOptions.SlotNumbers.Count == 1)
-            {
-                await OfferCreateWorkspaceAsync();
-                return;
-            }
             if (_controller.WorkspaceOptions.TopBarNamePicker)
             {
                 ShowNamedWorkspaceSelector(button);
+                return;
+            }
+            if (_controller.WorkspaceOptions.SlotNumbers.Count == 1)
+            {
+                await OfferCreateWorkspaceAsync();
                 return;
             }
             // Leave the Button mouse-capture/input turn before ending its owning workspace.
@@ -117,35 +117,13 @@ public sealed partial class PaperWindow
 
     private MenuItem BuildWorkspaceShortcutMenuItem(ContextMenu menu)
     {
-        if (_controller.WorkspaceOptions.SlotNumbers.Count == 1)
-            return MenuItem(Strings.Get("WorkspaceSettingsTitle"), async (_, _) =>
-            {
-                menu.IsOpen = false;
-                await OfferCreateWorkspaceAsync();
-            });
-        if (!_controller.WorkspaceOptions.TopBarNamePicker)
-        {
-            var next = _controller.WorkspaceOptions.NextSlot(_controller.WorkspaceNumber);
-            return MenuItem(WorkspaceMenuText(
-                "切换到工作区" + next,
-                "Switch to workspace " + next,
-                "ワークスペース" + next + "に切り替える",
-                "작업 공간 " + next + "(으)로 전환"),
-                (_, _) =>
-                {
-                    menu.IsOpen = false;
-                    _ = Dispatcher.InvokeAsync(
-                        () => { if (!IsClosed) _ = _controller.CycleWorkspaceAsync(); },
-                        DispatcherPriority.Background);
-                });
-        }
-
-        var selector = new MenuItem
-        {
-            Header = WorkspaceMenuText("切换工作区", "Switch workspace",
-                "ワークスペースを切り替える", "작업 공간 전환")
-        };
-        PopulateNamedWorkspaceChoices(selector, menu);
+        var selector = new MenuItem { Header = Strings.Get("WorkspaceSettingsTitle") };
+        AutomationProperties.SetAutomationId(selector, "PaperWorkspace");
+        selector.Items.Add(MenuHeader(Strings.Get("WorkspaceSwitchGroup")));
+        PopulateWorkspaceChoices(selector, menu, movePaper: false);
+        selector.Items.Add(MenuSeparator());
+        selector.Items.Add(MenuHeader(Strings.Get("WorkspaceMoveGroup")));
+        PopulateWorkspaceChoices(selector, menu, movePaper: true);
         return selector;
     }
 
@@ -162,9 +140,26 @@ public sealed partial class PaperWindow
             await _controller.CreateWorkspaceAsync();
     }
 
-    // Both top-bar and overflow use the same named-choice handler. Only the placement
-    // differs: a popup below the button versus a submenu beside the overflow item.
     private void PopulateNamedWorkspaceChoices(ItemsControl choices, ContextMenu ownerMenu)
+    {
+        choices.Items.Clear();
+        PopulateWorkspaceChoices(choices, ownerMenu, movePaper: false);
+        choices.Items.Add(MenuSeparator());
+        var create = MenuItem(Strings.Get("WorkspaceCreateNew"), async (_, _) =>
+        {
+            await _controller.CreateWorkspaceAsync();
+            if (IsClosed || !ownerMenu.IsOpen) return;
+            PopulateNamedWorkspaceChoices(choices, ownerMenu);
+            ownerMenu.Focus();
+        });
+        create.IsEnabled = !_controller.IsWorkspaceSwitching &&
+            _controller.WorkspaceOptions.SlotNumbers.Count < 5;
+        create.StaysOpenOnClick = true;
+        AutomationProperties.SetAutomationId(create, "CreateWorkspace");
+        choices.Items.Add(create);
+    }
+
+    private void PopulateWorkspaceChoices(ItemsControl choices, ContextMenu ownerMenu, bool movePaper)
     {
         foreach (var slot in _controller.WorkspaceOptions.SlotNumbers)
         {
@@ -173,27 +168,42 @@ public sealed partial class PaperWindow
             var item = new MenuItem
             {
                 Header = _controller.WorkspaceOptions.DisplayName(slot),
-                IsCheckable = true,
-                IsChecked = current,
+                IsCheckable = !movePaper,
+                IsChecked = !movePaper && current,
                 IsEnabled = !current && !_controller.IsWorkspaceSwitching
             };
+            AutomationProperties.SetAutomationId(item, (movePaper ? "MoveToWorkspace" : "SwitchWorkspace") + slot);
             item.Click += (_, _) =>
             {
                 ownerMenu.IsOpen = false;
                 _ = Dispatcher.InvokeAsync(
-                    () => { if (!IsClosed) _ = _controller.SwitchWorkspaceAsync(target); },
+                    () =>
+                    {
+                        if (IsClosed) return;
+                        if (movePaper) _ = _controller.MovePaperToWorkspaceAsync(_paper, target);
+                        else _ = _controller.SwitchWorkspaceAsync(target);
+                    },
                     DispatcherPriority.Background);
             };
             choices.Items.Add(item);
         }
     }
 
-    private static string WorkspaceMenuText(string zh, string en, string ja, string ko) =>
-        UiLanguages.EffectiveUiCulture.TwoLetterISOLanguageName switch
-        {
-            "en" => en,
-            "ja" => ja,
-            "ko" => ko,
-            _ => zh
-        };
+    internal bool HasLivePluginBodyForWorkspaceMove =>
+        _paper.Type == PaperTypes.Note && !IsCurrentBodyProviderMarkdown && _paperBodyHost.HasCurrent;
+
+    internal void DetachPluginBodyForWorkspaceMove()
+    {
+        // Commit/Dispose may save once more. The existing detach boundary drains
+        // those writes and invalidates the old context before its state is copied.
+        RemoveCurrentPaperBody();
+    }
+
+    internal void RestorePluginBodyAfterFailedWorkspaceMove()
+    {
+        if (_windowLifecycle == PaperWindowLifecycleState.Alive &&
+            _isShellBuilt && !_paperBodyHost.HasCurrent)
+            ReloadCurrentPaperBody();
+    }
+
 }

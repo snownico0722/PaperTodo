@@ -160,7 +160,11 @@ public sealed partial class PaperWindow
         _controller.CompleteEdgeCapsuleQueueCompositionProxyFor(this);
         CommitPendingEditsForSave();
         CancelExperimentalTetherPresentation(showMain: false);
-        DetachExperimentalWindowAttachment(savePosition: false);
+        if (!HasExperimentalWindowTether ||
+            ExternalWindowNative.IsIdentityValid(_experimentalWindowAttachment!.ExternalWindow))
+        {
+            DetachExperimentalWindowAttachment(savePosition: false);
+        }
         SettlePaperFormPresentation();
         AbortAllInteractions(InteractionAbortReason.Hiding);
     }

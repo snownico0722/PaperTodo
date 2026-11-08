@@ -81,6 +81,22 @@ public sealed partial class PaperWindow
 
     private void OnTodoSelectionWindowPreviewKeyDown(object sender, KeyEventArgs e)
     {
+        if (e.Key == Key.Back &&
+            Keyboard.Modifiers == ModifierKeys.None &&
+            _selectedTodoItemIds.Count > 1 &&
+            (ReferenceEquals(Keyboard.FocusedElement, _paperChrome) ||
+             Keyboard.FocusedElement is TodoTextBox { SelectionLength: 0 }))
+        {
+            // Whole-row selection is one list edit; text selection and other input
+            // fields retain their native Backspace behavior.
+            CancelTodoSweepSelection(clearSelection: false);
+            FocusTodoSweepSelectionHost();
+            _suppressTodoBackspaceUntilKeyUp = true;
+            DeleteSelectedTodoItems();
+            e.Handled = true;
+            return;
+        }
+
         if (e.Key == Key.C &&
             Keyboard.Modifiers == ModifierKeys.Control &&
             TryCopySelectedTodoItems())

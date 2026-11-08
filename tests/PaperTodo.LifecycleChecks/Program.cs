@@ -11,11 +11,23 @@ internal static class Program
 {
     private const BindingFlags Private = BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic;
     private const string FixtureMarker = ".papertodo-lifecycle-fixture";
-    private static readonly string[] Cases = ["native-free-queue-review", "native-free-queues", "startup", "missing-monitor", "master-queue-transfer", "master-queue-cancel", "master-queue-drag-preparation", "master-queue-drop-handoff", "master-queue-membership", "master-queue-mutations", "master-queue-hide", "master-queue-hidden-retains-collapse", "master-queue-disconnect", "master-queue-merge", "master-queue-merge-collapsed", "master-queue-lightweight-handoff", "controller-hide-create-reentry", "controller-hide-show-reentry", "controller-zorder-create-reentry", "controller-close-delete-reentry", "todo-visibility", "real-exit", "early-expand", "edge-expand-foreground", "expanded-paper-display-recovery", "cancel-prewarm", "real-exit-scripts", "early-exit", "todo-context-menu", "todo-history"];
+    private static readonly string[] Cases = ["native-free-queue-review", "native-free-queues", "startup", "missing-monitor", "master-queue-transfer", "master-queue-cancel", "master-queue-drag-preparation", "master-queue-drop-handoff", "master-queue-membership", "master-queue-mutations", "master-queue-hide", "master-queue-hidden-retains-collapse", "master-queue-disconnect", "master-queue-merge", "master-queue-merge-collapsed", "master-queue-lightweight-handoff", "controller-hide-create-reentry", "controller-hide-show-reentry", "controller-zorder-create-reentry", "controller-close-delete-reentry", "todo-visibility", "real-exit", "early-expand", "edge-expand-foreground", "expanded-paper-display-recovery", "cancel-prewarm", "real-exit-scripts", "early-exit", "todo-context-menu", "todo-history", "paper-bindings"];
 
     [STAThread]
     private static int Main(string[] args)
     {
+        // A renamed apphost launches this same fixture assembly as a plain app.
+        // Production can then reopen its captured executable without test arguments.
+        if (Path.GetFileNameWithoutExtension(Environment.ProcessPath) == "PaperTodo.BindingTarget")
+        {
+            var targetApp = new Application();
+            return targetApp.Run(new Window
+            {
+                Title = "PaperTodo binding fixture", Width = 360, Height = 260,
+                Left = SystemParameters.WorkArea.Left + 80,
+                Top = SystemParameters.WorkArea.Top + 100
+            });
+        }
         if (args is ["--sleep-child"])
         {
             Console.WriteLine("ready");
@@ -184,8 +196,13 @@ internal static class Program
         }
         if (name.StartsWith("controller-"))
             state.CapsuleCollapseAllActiveQueues["|" + DeepCapsuleSides.Right] = true;
-        if (name == "todo-context-menu")
+        if (name is "todo-context-menu" or "paper-bindings")
             TodoContextMenuChecks.Prepare(state);
+        if (name == "paper-bindings")
+        {
+            state.ExperimentalWindowTethering = true;
+            state.TopBarPinnedCount = 1;
+        }
         if (name == "edge-expand-foreground")
             EdgeExpandForegroundChecks.Prepare(state);
         if (name == "expanded-paper-display-recovery")
@@ -226,6 +243,11 @@ internal static class Program
             if (name == "todo-context-menu")
             {
                 await TodoContextMenuChecks.Run(controller, windows);
+                return;
+            }
+            if (name == "paper-bindings")
+            {
+                await TodoContextMenuChecks.RunBindings(controller, windows);
                 return;
             }
             if (name == "missing-monitor")

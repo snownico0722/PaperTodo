@@ -846,7 +846,7 @@ PaperTodo를 수동으로 다시 여세요. 문제가 반복되면 PC를 다시 
     <value>창 바인딩 사용</value>
   </data>
   <data name="TipLabsWindowTethering" xml:space="preserve">
-    <value>펼친 메모의 제목 표시줄에 있는 창 바인딩 버튼을 다른 앱 창으로 드래그하세요. 할 일과 노트 모두 바인딩할 수 있으며 해제하면 예약되어 있던 가장자리 캡슐 위치도 복원됩니다.</value>
+    <value>상단 연결 아이콘을 다른 앱 창으로 드래그하면 연결됩니다. 접기와 펼치기 또는 앱 종료 후에도 연결을 유지하며, 아이콘을 오른쪽 클릭해 앱을 다시 열 수 있습니다. 실행 중인 대상 창을 최소화하거나 숨기면 메모도 임시로 숨겨지고, 이때 메모를 수동으로 표시하면 연결이 해제됩니다.</value>
   </data>
   <data name="LabsWindowTetherPreferredEdge" xml:space="preserve">
     <value>바인딩 위치</value>
@@ -885,7 +885,7 @@ PaperTodo를 수동으로 다시 여세요. 문제가 반복되면 PC를 다시 
     <value>다른 앱 창으로 드래그해 바인딩</value>
   </data>
   <data name="ToolTipWindowBindingActiveFormat" xml:space="preserve">
-    <value>“{0}”에 바인딩됨. 드래그로 변경하거나 오른쪽 클릭으로 바인딩 해제</value>
+    <value>“{0}”에 연결됨. 드래그로 변경, 두 번 클릭으로 해제, 오른쪽 클릭으로 대상 열기 또는 해제</value>
   </data>
   <data name="WindowBindingDragHint" xml:space="preserve">
     <value>바인딩할 앱 창으로 드래그</value>
@@ -1776,4 +1776,40 @@ PaperTodo를 수동으로 다시 여세요. 문제가 반복되면 PC를 다시 
   <data name="SettingsDataProcessing" xml:space="preserve"><value>데이터 처리</value></data>
   <data name="TipHideSurfaceOutline" xml:space="preserve"><value>메모, 캡슐, 메뉴의 바깥 테두리만 숨깁니다. 크기는 변하지 않으며 고대비 모드에서는 테두리를 유지합니다.</value></data>
   <data name="TipScriptCapsule" xml:space="preserve"><value>메모 첫 줄에 !p 등의 명령을 쓰고 다음 줄부터 PowerShell을 작성하세요. 접힌 캡슐을 클릭해 실행할 수 있습니다. 아래 설정은 상단 바의 스크립트 실행에도 적용됩니다.</value></data>
+  <data name="WorkspaceSwitchGroup" xml:space="preserve">
+    <value>전환</value>
+  </data>
+  <data name="WorkspaceMoveGroup" xml:space="preserve">
+    <value>이동 대상</value>
+  </data>
+  <data name="WorkspaceCreateNew" xml:space="preserve">
+    <value>새 작업 공간 만들기</value>
+  </data>
+  <data name="WorkspaceMoveFailed" xml:space="preserve">
+    <value>이동 실패</value>
+  </data>
+  <data name="WorkspaceMoveRollbackFailed" xml:space="preserve">
+    <value>원래 작업 공간의 메모는 유지되었지만 대상 작업 공간의 복사본을 제거하지 못했습니다.</value>
+  </data>
+  <data name="MenuCancelBinding" xml:space="preserve">
+    <value>연결 해제</value>
+  </data>
+  <data name="MenuOpenBindingTarget" xml:space="preserve">
+    <value>연결 대상 열기</value>
+  </data>
+  <data name="MenuOpenBindingNote" xml:space="preserve">
+    <value>대상 노트 열기</value>
+  </data>
+  <data name="MenuOpenBindingTodo" xml:space="preserve">
+    <value>대상 할 일 열기</value>
+  </data>
+  <data name="MenuOpenBindingProgram" xml:space="preserve">
+    <value>대상 앱 열기</value>
+  </data>
+  <data name="WindowBindingOpenFailureTitle" xml:space="preserve">
+    <value>대상 앱을 열 수 없습니다</value>
+  </data>
+  <data name="WindowBindingProgramUnavailable" xml:space="preserve">
+    <value>앱 위치를 확인하지 못했습니다. 실행 중인 창에 다시 연결하세요.</value>
+  </data>
 </root>

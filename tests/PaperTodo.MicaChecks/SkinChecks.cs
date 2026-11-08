@@ -101,7 +101,8 @@ internal static class SkinChecks
                 window.UpdateTheme();
                 Program.Pump();
                 CheckResizeHitTests(window, $"layered {skin}");
-                DragFromPaperCorner(window, $"layered {skin} after skin change");
+                DragFromPaperCorner(window, $"layered {skin} after skin change",
+                    useShadowGutter: skin == PaperSkins.Paper);
             }
         }
         finally
@@ -158,7 +159,8 @@ internal static class SkinChecks
                 $"{scenario}: painted top edge must resize");
     }
 
-    private static void DragFromPaperCorner(PaperWindow window, string scenario)
+    private static void DragFromPaperCorner(
+        PaperWindow window, string scenario, bool useShadowGutter = false)
     {
         var hwnd = new WindowInteropHelper(window).Handle;
         Program.Assert(GetWindowRect(hwnd, out var before), $"{scenario}: original bounds");
@@ -166,13 +168,29 @@ internal static class SkinChecks
             .GetField("_paperChrome", Program.Private)!.GetValue(window)!;
         var dpi = VisualTreeHelper.GetDpi(window);
         var origin = new NativePoint(
-            before.Right - (int)Math.Round((chrome.Margin.Right + 8) * dpi.DpiScaleX),
-            before.Bottom - (int)Math.Round((chrome.Margin.Bottom + 8) * dpi.DpiScaleY));
+            before.Right - (int)Math.Round((chrome.Margin.Right + (useShadowGutter ? -2 : 8)) * dpi.DpiScaleX),
+            before.Bottom - (int)Math.Round((chrome.Margin.Bottom + (useShadowGutter ? -2 : 8)) * dpi.DpiScaleY));
         Program.Assert(ResizeHit(hwnd, origin.X, origin.Y) == 17,
             $"{scenario}: bottom-right painted edge enables diagonal resize");
         Program.Assert(GetCursorPos(out var priorCursor), $"{scenario}: original cursor");
         window.Activate();
         Program.Pump();
+        if (useShadowGutter)
+        {
+            var left = before.Left + before.Right - origin.X;
+            var top = before.Top + before.Bottom - origin.Y;
+            var middleX = (before.Left + before.Right) / 2;
+            var middleY = (before.Top + before.Bottom) / 2;
+            foreach (var point in new[]
+            {
+                new NativePoint(left, middleY), new NativePoint(origin.X, middleY),
+                new NativePoint(middleX, top), new NativePoint(middleX, origin.Y),
+                new NativePoint(left, top), new NativePoint(origin.X, top),
+                new NativePoint(left, origin.Y), origin
+            })
+                Program.Assert(WindowFromPoint(point) == hwnd,
+                    $"{scenario}: all four shadow edges and corners must receive native input ({point.X},{point.Y})");
+        }
         var nativeTarget = WindowFromPoint(origin);
         Program.Assert(nativeTarget == hwnd,
             $"{scenario}: painted edge must receive native input " +

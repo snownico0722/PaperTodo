@@ -846,7 +846,7 @@ When off, only hides those items; selected values stay unchanged.</value>
     <value>Enable window binding</value>
   </data>
   <data name="TipLabsWindowTethering" xml:space="preserve">
-    <value>On an expanded paper, drag the window-binding button in the title bar onto another application window. Todo and note papers can both bind, follow the target, and restore any reserved edge-capsule slot after unbinding.</value>
+    <value>Drag the title-bar link icon onto another app window to bind it; collapsing and expanding preserve the binding. The binding remains after the app exits, and its menu can reopen the app. Minimizing or hiding a running target temporarily hides the paper; manually showing the paper at that point detaches it.</value>
   </data>
   <data name="LabsWindowTetherPreferredEdge" xml:space="preserve">
     <value>Binding position</value>
@@ -885,7 +885,7 @@ When off, only hides those items; selected values stay unchanged.</value>
     <value>Drag onto another application window to bind</value>
   </data>
   <data name="ToolTipWindowBindingActiveFormat" xml:space="preserve">
-    <value>Bound to “{0}”; drag to rebind or right-click to unbind</value>
+    <value>Bound to “{0}”; drag to rebind, double-click to unbind, or right-click to open the target or unbind</value>
   </data>
   <data name="WindowBindingDragHint" xml:space="preserve">
     <value>Drag onto the application window to bind</value>
@@ -1776,4 +1776,40 @@ Resolve the file access problem and retry, or choose “Rebuild workspace” to 
   <data name="SettingsDataProcessing" xml:space="preserve"><value>Data handling</value></data>
   <data name="TipHideSurfaceOutline" xml:space="preserve"><value>Hide the thin outer border on papers, capsules and menus without changing their size. Borders stay visible in high-contrast mode.</value></data>
   <data name="TipScriptCapsule" xml:space="preserve"><value>Start a note with !p or another script prefix, then write PowerShell below. Click the collapsed capsule to run it. These settings also apply to the title-bar Run Script action.</value></data>
+  <data name="WorkspaceSwitchGroup" xml:space="preserve">
+    <value>Switch</value>
+  </data>
+  <data name="WorkspaceMoveGroup" xml:space="preserve">
+    <value>Move to</value>
+  </data>
+  <data name="WorkspaceCreateNew" xml:space="preserve">
+    <value>Create new workspace</value>
+  </data>
+  <data name="WorkspaceMoveFailed" xml:space="preserve">
+    <value>Move failed</value>
+  </data>
+  <data name="WorkspaceMoveRollbackFailed" xml:space="preserve">
+    <value>The paper was kept in its original workspace, but the copy in the destination workspace could not be removed.</value>
+  </data>
+  <data name="MenuCancelBinding" xml:space="preserve">
+    <value>Unbind</value>
+  </data>
+  <data name="MenuOpenBindingTarget" xml:space="preserve">
+    <value>Open linked target</value>
+  </data>
+  <data name="MenuOpenBindingNote" xml:space="preserve">
+    <value>Open target note</value>
+  </data>
+  <data name="MenuOpenBindingTodo" xml:space="preserve">
+    <value>Open target to-do</value>
+  </data>
+  <data name="MenuOpenBindingProgram" xml:space="preserve">
+    <value>Open target app</value>
+  </data>
+  <data name="WindowBindingOpenFailureTitle" xml:space="preserve">
+    <value>Unable to open target app</value>
+  </data>
+  <data name="WindowBindingProgramUnavailable" xml:space="preserve">
+    <value>The app location could not be read. Bind its running window again.</value>
+  </data>
 </root>

@@ -2698,8 +2698,7 @@ public sealed partial class PaperWindow : Window
                         (_, _) => _controller.RunTopBarScript(this)));
                     break;
                 case PaperTopBarShortcuts.Workspace when
-                    _controller.WorkspaceOptions.Enabled &&
-                    !IsTopBarCommandVisible(_workspaceButton):
+                    _controller.WorkspaceOptions.Enabled:
                     menu.Items.Add(BuildWorkspaceShortcutMenuItem(menu));
                     break;
                 case PaperTopBarShortcuts.NewTodo when
