@@ -133,8 +133,7 @@ internal static class MasterQueueDragPreparationChecks
                             alignToDragMessage: true);
                         hasShownBounds = GetWindowRect(h, out shownBounds);
                         host.Dispatcher.Invoke(static () => { }, DispatcherPriority.Render);
-                        started = WindowNative.TryBeginSystemAwareWindowCaptionDragFromCursor(
-                            host, options.Shape.WindowWidthDip, options.Shape.WindowHeightDip);
+                        started = host.RunNativeDragFromCursor().Result == EdgeCapsuleNativeDragResult.Completed;
                         handled = true;
                         frame.Continue = false;
                     }

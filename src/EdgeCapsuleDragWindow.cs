@@ -88,6 +88,7 @@ internal sealed partial class EdgeCapsuleDragWindow : Window
     private bool _closingByOwner;
     private bool _hasBeenShown;
     private bool _nativeDragAttemptActive;
+    private WindowNative.SystemAwareCaptionAnchor? _pendingCaptionAnchor;
     private bool _isClosed;
 
     public EdgeCapsuleDragWindow(EdgeCapsuleDragWindowOptions options)
@@ -455,12 +456,18 @@ internal sealed partial class EdgeCapsuleDragWindow : Window
         DeviceScreenPoint fallbackPointer,
         bool alignToDragMessage)
     {
-        // Dragging starts from the last dequeued mouse message, not the newer live cursor.
-        // Position before Opacity becomes visible to avoid a B -> A -> B handoff jump.
-        var centered = alignToDragMessage
-            ? WindowNative.TryCenterSystemAwareWindowAtMessagePosition(this, _widthDip, _heightDip)
-            : WindowNative.TryCenterSystemAwareWindowAtCursor(this, _widthDip, _heightDip);
-        if (!centered)
+        // Capture the last dequeued mouse message while the HWND is still invisible.
+        // WPF can dequeue a newer move later; reuse this exact anchor when caption drag starts.
+        _pendingCaptionAnchor = null;
+        if (alignToDragMessage &&
+            WindowNative.TryCenterSystemAwareWindowAtMessagePosition(
+                this, _widthDip, _heightDip, out var captured))
+        {
+            _pendingCaptionAnchor = captured;
+            return;
+        }
+
+        if (!WindowNative.TryCenterSystemAwareWindowAtCursor(this, _widthDip, _heightDip))
         {
             PlaceCenteredAtForShow(fallbackPointer);
         }
@@ -544,7 +551,8 @@ internal sealed partial class EdgeCapsuleDragWindow : Window
             if (!WindowNative.TryBeginSystemAwareWindowCaptionDragFromCursor(
                     this,
                     _widthDip,
-                    _heightDip))
+                    _heightDip,
+                    _pendingCaptionAnchor))
             {
                 return new EdgeCapsuleNativeDragOutcome(
                     EdgeCapsuleNativeDragResult.NotStarted,
@@ -574,6 +582,7 @@ internal sealed partial class EdgeCapsuleDragWindow : Window
             CompleteNativeDragDiagnostics(diagnosticResult);
 #endif
             _nativeDragAttemptActive = false;
+            _pendingCaptionAnchor = null;
         }
     }
 
@@ -765,6 +774,7 @@ internal sealed partial class EdgeCapsuleDragWindow : Window
         _lastDockingEdge = null;
         _dockingPresentationActive = false;
         _nativeDragAttemptActive = false;
+        _pendingCaptionAnchor = null;
     }
 
     private bool EnsureSystemAwareHandle()

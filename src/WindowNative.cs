@@ -770,16 +770,23 @@ internal static partial class WindowNative
             out _,
             "show-center");
 
-    // The shown floating window and native caption loop must start from the same
-    // dequeued mouse-message position, even when the live cursor has already moved.
-    // Non-drag displays still use the live cursor.
+    // The input epoch must remain identical across WPF's render barrier, which may
+    // dequeue newer mouse moves. This value belongs exclusively to the System Aware
+    // floating HWND; never interpret it as a PMv2 physical screen position.
+    internal readonly record struct SystemAwareCaptionAnchor(int X, int Y);
+
     public static bool TryCenterSystemAwareWindowAtMessagePosition(
         Window window,
         double widthDip,
-        double heightDip) =>
-        TryCenterSystemAwareWindowAtCursor(
-            window, widthDip, heightDip, out _, "show-message-center",
+        double heightDip,
+        out SystemAwareCaptionAnchor anchor)
+    {
+        var centered = TryCenterSystemAwareWindowAtCursor(
+            window, widthDip, heightDip, out var position, "show-message-center",
             useMessagePosition: true);
+        anchor = centered ? new SystemAwareCaptionAnchor(position.X, position.Y) : default;
+        return centered;
+    }
 
     // Keep the cursor anchor private to this class: cursor/message coordinates are sampled while
     // the thread is System Aware, so these coordinates must never escape as a DeviceScreenPoint
@@ -787,20 +794,23 @@ internal static partial class WindowNative
     public static bool TryBeginSystemAwareWindowCaptionDragFromCursor(
         Window window,
         double widthDip,
-        double heightDip)
+        double heightDip,
+        SystemAwareCaptionAnchor? initialAnchor = null)
     {
 #if DEBUG
         var callStartedAt = EdgeCapsulePerformanceDiagnostics.Timestamp();
 #endif
-        // The native move loop anchors to the last dequeued input, not the live cursor.
-        // Centering at a newer position makes Windows apply the handoff movement twice.
+        // Use the anchor captured before the floating HWND was first made visible.
+        // A nested WPF render turn can dequeue a later mouse position between show and
+        // caption handoff; resampling here would cause a visible B -> A -> B jump.
         var centered = TryCenterSystemAwareWindowAtCursor(
                 window,
                 widthDip,
                 heightDip,
                 out var cursorAnchor,
                 "pre-loop-center",
-                useMessagePosition: true);
+                useMessagePosition: initialAnchor is null,
+                initialAnchor: initialAnchor);
 #if DEBUG
         var centerMs = EdgeCapsulePerformanceDiagnostics.ElapsedMilliseconds(callStartedAt);
 #endif
@@ -837,7 +847,8 @@ internal static partial class WindowNative
         double heightDip,
         out CursorPoint cursorPosition,
         string diagnosticPhase,
-        bool useMessagePosition = false)
+        bool useMessagePosition = false,
+        SystemAwareCaptionAnchor? initialAnchor = null)
     {
 #if DEBUG
         var callStartedAt = EdgeCapsulePerformanceDiagnostics.Timestamp();
@@ -861,7 +872,11 @@ internal static partial class WindowNative
         {
             var dpi = GetDpiForWindow(handle);
             var scale = dpi > 0 ? dpi / 96.0 : 1.0;
-            if (useMessagePosition)
+            if (initialAnchor is { } captured)
+            {
+                cursorPosition = new CursorPoint { X = captured.X, Y = captured.Y };
+            }
+            else if (useMessagePosition)
             {
                 var packed = GetMessagePos();
                 cursorPosition = new CursorPoint
