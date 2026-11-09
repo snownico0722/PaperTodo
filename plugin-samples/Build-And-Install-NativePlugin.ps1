@@ -57,6 +57,10 @@ if ([string]::IsNullOrWhiteSpace($pluginId) -or
     $pluginId -notmatch '^[A-Za-z0-9._-]{3,120}$') {
     throw "plugin.json contains an invalid native plugin id: '$pluginId'"
 }
+# Windows directory lookup can ignore trailing dots. Check before staging or replacing any files.
+if ($pluginId.TrimEnd('.') -imatch '^data[1-5]?$' -or $pluginId -ceq 'builtin.markdown') {
+    throw "plugin.json contains a reserved native plugin id: '$pluginId'"
+}
 if ([string]::IsNullOrWhiteSpace($entryName) -or
     [System.IO.Path]::GetFileName($entryName) -ne $entryName -or
     [System.IO.Path]::GetExtension($entryName) -ine ".dll") {

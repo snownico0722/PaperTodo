@@ -235,7 +235,7 @@ plugins/
    └─ .runtime/
 ```
 
-`data` and `builtin.markdown` are reserved host IDs. A plugin ID must contain 3–120 ASCII letters, digits, `.`, `_`, or `-`. Directories beginning with `.` or `_` are not discovered.
+The host reserves `builtin.markdown` and the directory names `data`, `data1` through `data5` (case-insensitive). A plugin ID must contain 3–120 ASCII letters, digits, `.`, `_`, or `-`. Directories beginning with `.` or `_` are not discovered.
 
 A final Native plugin directory should contain only what is required at runtime. Do not ship unnecessary PDB/XML files, and do not duplicate host-provided shared assemblies such as `PaperTodo.Plugin.Abstractions`, Windows SDK / WinRT, or WebView2 shared assemblies.
 
@@ -1259,7 +1259,7 @@ When starting a new plugin, copy the smallest structure from the sample closest 
 
 - targeting `apiVersion: "2.0"` or earlier for a new plugin; the current host supports `2.1`–`2.3`, and new plugins should target `2.3`;
 - plugin directory name does not match `id`;
-- `id` uses invalid characters or the reserved host IDs `data` / `builtin.markdown`;
+- `id` uses invalid characters or the reserved host IDs `data` / `data1`–`data5` / `builtin.markdown`;
 - Web declares `runtime`, but the default `runtime.html` is missing, or an explicit `runtime` path is missing/outside the Web `entry` static directory;
 - Native declares `runtime` but does not implement `IPaperPluginRuntimeProvider`;
 - assuming a Runtime starts just because a plugin is installed while it has zero real plugin Papers;

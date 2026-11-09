@@ -93,6 +93,8 @@ internal sealed partial class PaperBodyPluginRegistry : IDisposable
     private PaperBodyPluginDataStore _dataStore =
         new(Path.Combine(AppContext.BaseDirectory, "plugins"));
 
+    private static readonly HashSet<string> ReservedDataDirectoryNames = new(StringComparer.OrdinalIgnoreCase)
+        { "data", "data1", "data2", "data3", "data4", "data5" };
     private static readonly Regex PluginIdPattern = PluginIdRegex();
     private static readonly StringComparer UiDisplayNameComparer =
         StringComparer.Create(UiLanguages.EffectiveUiCulture, ignoreCase: true);
@@ -234,7 +236,7 @@ internal sealed partial class PaperBodyPluginRegistry : IDisposable
                 var name = Path.GetFileName(directory);
                 return !string.IsNullOrEmpty(name) &&
                     name[0] is not '.' and not '_' &&
-                    !string.Equals(name, "data", StringComparison.OrdinalIgnoreCase);
+                    !ReservedDataDirectoryNames.Contains(name);
             })
             .OrderBy(directory => directory, StringComparer.OrdinalIgnoreCase);
     }
@@ -555,7 +557,7 @@ internal sealed partial class PaperBodyPluginRegistry : IDisposable
                 "Plugin id must contain 3-120 ASCII letters, digits, '.', '_' or '-'.");
         }
         if (string.Equals(id.Trim(), PaperBodyProviderIds.Markdown, StringComparison.Ordinal) ||
-            string.Equals(id.Trim(), "data", StringComparison.OrdinalIgnoreCase))
+            ReservedDataDirectoryNames.Contains(id.Trim().TrimEnd('.')))
         {
             throw new InvalidDataException("The plugin id is reserved by PaperTodo.");
         }
