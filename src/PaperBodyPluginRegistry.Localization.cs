@@ -187,3 +187,23 @@ internal static class PaperBodyPluginLocalization
         }
     }
 }
+
+internal sealed partial class PaperBodyPluginRegistry
+{
+    internal void RefreshWorkspaceLocalization()
+    {
+        foreach (var (id, descriptor) in _descriptors.ToArray())
+        {
+            if (descriptor.Manifest is not { } manifest) continue;
+            PaperBodyPluginLocalization.ValidateAndApply(manifest, UiLanguages.EffectiveUiCulture);
+            var next = descriptor with
+            {
+                DisplayName = string.IsNullOrWhiteSpace(manifest.Name) ? id : manifest.Name.Trim(),
+                Description = manifest.Description?.Trim() ?? ""
+            };
+            _descriptors[id] = next;
+            if (_loadedNativeByDirectory.TryGetValue(descriptor.PluginDirectory, out var loaded))
+                _loadedNativeByDirectory[descriptor.PluginDirectory] = loaded with { Descriptor = next };
+        }
+    }
+}
