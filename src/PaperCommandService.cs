@@ -189,7 +189,7 @@ internal sealed partial class PaperCommandService
             allowEmpty: false,
             sourcePaperId: paper.Id);
 
-        var snapshot = TodoPaperSnapshot.Capture(paper);
+        var snapshot = new TodoPaperSnapshot(paper);
         var addedIds = new List<string>(inputs.Length);
         using (_controller.SuppressPaperPluginEventScans())
         {
@@ -209,7 +209,7 @@ internal sealed partial class PaperCommandService
                 throw SaveFailed();
             }
 
-            _controller.RecordExternalTodoMutationUndoStep(paper, snapshot.ToItems());
+            _controller.RecordExternalTodoMutationUndoStep(paper, snapshot.Before);
             _controller.RunExternalPostCommitUi(
                 () => _controller.RefreshExternalTodoPaper(paper));
         }
@@ -278,7 +278,7 @@ internal sealed partial class PaperCommandService
             return new TodoMutationResult(paper.Id, item.Id);
         }
 
-        var snapshot = TodoPaperSnapshot.Capture(paper);
+        var snapshot = new TodoPaperSnapshot(paper);
 
         using (_controller.SuppressPaperPluginEventScans())
         {
@@ -323,7 +323,7 @@ internal sealed partial class PaperCommandService
                 throw SaveFailed();
             }
 
-            _controller.RecordExternalTodoMutationUndoStep(paper, snapshot.ToItems());
+            _controller.RecordExternalTodoMutationUndoStep(paper, snapshot.Before);
             _controller.RunExternalPostCommitUi(() =>
             {
                 _controller.RefreshExternalTodoPaper(paper);
@@ -373,7 +373,7 @@ internal sealed partial class PaperCommandService
             return new TodoMutationResult(paper.Id, item.Id);
         }
 
-        var snapshot = TodoPaperSnapshot.Capture(paper);
+        var snapshot = new TodoPaperSnapshot(paper);
         using (_controller.SuppressPaperPluginEventScans())
         {
             item.ReminderAt = request.ReminderAt;
@@ -385,7 +385,7 @@ internal sealed partial class PaperCommandService
                 throw SaveFailed();
             }
 
-            _controller.RecordExternalTodoMutationUndoStep(paper, snapshot.ToItems());
+            _controller.RecordExternalTodoMutationUndoStep(paper, snapshot.Before);
             _controller.RunExternalPostCommitUi(
                 () => _controller.RefreshExternalTodoPaper(paper));
         }
@@ -460,7 +460,7 @@ internal sealed partial class PaperCommandService
             paper,
             RequiredId(request.TodoId, "todoId"));
         var originalLinkedPaperId = item.LinkedPaperId;
-        var snapshot = TodoPaperSnapshot.Capture(paper);
+        var snapshot = new TodoPaperSnapshot(paper);
 
         using (_controller.SuppressPaperPluginEventScans())
         {
@@ -478,7 +478,7 @@ internal sealed partial class PaperCommandService
                 throw SaveFailed();
             }
 
-            _controller.RecordExternalTodoMutationUndoStep(paper, snapshot.ToItems());
+            _controller.RecordExternalTodoMutationUndoStep(paper, snapshot.Before);
             _controller.RunExternalPostCommitUi(() =>
             {
                 _controller.RefreshExternalTodoPaper(paper);
@@ -835,83 +835,24 @@ internal sealed partial class PaperCommandService
 
     private sealed class TodoPaperSnapshot
     {
-        private readonly List<PaperItemSnapshot> _items;
+        private readonly PaperItem[] _originalRows;
+        public List<PaperItem> Before { get; }
 
-        private TodoPaperSnapshot(List<PaperItemSnapshot> items)
+        public TodoPaperSnapshot(PaperData paper)
         {
-            _items = items;
+            _originalRows = paper.Items.ToArray();
+            Before = TodoRules.CloneAll(_originalRows);
         }
-
-        public static TodoPaperSnapshot Capture(PaperData paper) =>
-            new(paper.Items.Select(PaperItemSnapshot.Capture).ToList());
-
-        public IReadOnlyList<PaperItem> ToItems() =>
-            _items.Select(item => item.ToItem()).ToArray();
 
         public void Restore(PaperData paper)
         {
             paper.Items.Clear();
-            foreach (var snapshot in _items)
+            for (var i = 0; i < _originalRows.Length; i++)
             {
-                snapshot.Restore();
-                paper.Items.Add(snapshot.Item);
+                var row = _originalRows[i];
+                TodoRules.CopyValues(Before[i], row);
+                paper.Items.Add(row);
             }
         }
     }
-
-    private sealed record PaperItemSnapshot(
-        PaperItem Item,
-        string Text,
-        bool Done,
-        int Order,
-        string? LinkedPaperId,
-        string? LinkedPath,
-        bool? LinkedPathIsDirectory,
-        DateTimeOffset? ReminderAt,
-        bool ReminderTriggered)
-    {
-        public static PaperItemSnapshot Capture(PaperItem item) =>
-            new(
-                item,
-                item.Text,
-                item.Done,
-                item.Order,
-                item.LinkedPaperId,
-                item.LinkedPath,
-                item.LinkedPathIsDirectory,
-                item.ReminderAt,
-                item.ReminderTriggered);
-
-        public PaperItem ToItem()
-        {
-            var copy = new PaperItem
-            {
-                Id = Item.Id,
-                Text = Text,
-                Done = Done,
-                Order = Order,
-                ReminderAt = ReminderAt,
-                ReminderTriggered = ReminderTriggered
-            };
-            copy.RestoreQuickLaunch(
-                LinkedPaperId,
-                LinkedPath,
-                LinkedPathIsDirectory);
-            return copy;
-        }
-
-        public void Restore()
-        {
-            Item.Text = Text;
-            Item.Done = Done;
-            Item.Order = Order;
-            Item.RestoreQuickLaunch(
-                LinkedPaperId,
-                LinkedPath,
-                LinkedPathIsDirectory);
-            Item.ReminderAt = ReminderAt;
-            Item.ReminderTriggered = ReminderTriggered;
-        }
-    }
 }
-
