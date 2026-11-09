@@ -1649,6 +1649,7 @@ The original note is kept.</value></data>
   <data name="NoteExportFailedNotes" xml:space="preserve"><value>Failed papers:&#xA;{0}</value></data>
   <data name="NoteExportFailure" xml:space="preserve"><value>Export failed: {0}</value></data>
   <data name="NoteExportNoNotes" xml:space="preserve"><value>There are no papers to export in this selection.</value></data>
+  <data name="NoteExportCancelling" xml:space="preserve"><value>Cancelling export…</value></data>
   <data name="NoteExportProgress" xml:space="preserve"><value>Exporting {0}/{1} papers</value></data>
   <data name="TodoExportCurrent" xml:space="preserve"><value>Export this todo paper</value></data>
   <data name="SettingsCapsuleFreeQueues" xml:space="preserve"><value>Capsule free queues</value></data>

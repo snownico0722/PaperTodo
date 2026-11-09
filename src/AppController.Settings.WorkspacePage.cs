@@ -14,6 +14,7 @@ namespace PaperTodo;
 public sealed partial class AppController
 {
     private FrameworkElement? _workspaceSettingsPanel;
+    private Button? _workspaceSwitchConfirmation;
     private int _workspaceSelectionDraft;
     // One active inline rename per settings window. The same window-wide pointer
     // handler cancels it whether the user clicks another card, the sidebar, or
@@ -25,6 +26,13 @@ public sealed partial class AppController
 
     private string WorkspaceUi(string zh, string en, string ja, string ko) =>
         SettingsSidebarLocalized(zh, en, ja, ko);
+
+    private void RefreshWorkspaceSwitchConfirmation()
+    {
+        if (_workspaceSwitchConfirmation is { } button)
+            button.IsEnabled = !IsPaperExportActive && WorkspaceOptions.Enabled &&
+                WorkspaceOptions.ContainsSlot(_workspaceSelectionDraft) && _workspaceSelectionDraft != WorkspaceNumber;
+    }
 
     private UIElement BuildWorkspaceSettingsPage()
     {
@@ -104,7 +112,8 @@ public sealed partial class AppController
         confirm.Padding = new Thickness(14, 0, 14, 0);
         confirm.HorizontalAlignment = HorizontalAlignment.Right;
         confirm.Margin = new Thickness(0, 8, 0, 2);
-        confirm.IsEnabled = WorkspaceOptions.Enabled && selected != WorkspaceNumber;
+        _workspaceSwitchConfirmation = confirm;
+        RefreshWorkspaceSwitchConfirmation();
         confirm.Click += async (_, _) =>
         {
             if (selected == WorkspaceNumber) return;

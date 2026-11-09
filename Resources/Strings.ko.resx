@@ -1649,6 +1649,7 @@ PaperTodo를 수동으로 다시 여세요. 문제가 반복되면 PC를 다시 
   <data name="NoteExportFailedNotes" xml:space="preserve"><value>내보내기에 실패한 항목:&#xA;{0}</value></data>
   <data name="NoteExportFailure" xml:space="preserve"><value>내보내기 실패: {0}</value></data>
   <data name="NoteExportNoNotes" xml:space="preserve"><value>선택한 범위에 내보낼 종이가 없습니다.</value></data>
+  <data name="NoteExportCancelling" xml:space="preserve"><value>내보내기를 취소하는 중…</value></data>
   <data name="NoteExportProgress" xml:space="preserve"><value>내보내는 중 {0}/{1}개</value></data>
   <data name="TodoExportCurrent" xml:space="preserve"><value>현재 할 일 내보내기</value></data>
   <data name="SettingsCapsuleFreeQueues" xml:space="preserve"><value>캡슐 자유 대기열</value></data>
