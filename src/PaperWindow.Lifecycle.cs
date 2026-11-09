@@ -145,7 +145,8 @@ public sealed partial class PaperWindow
         _markdownBodySession?.ContentDirty == true;
 
     internal string CurrentMarkdownContentForExternalRead() =>
-        _markdownBodySession?.NoteBox?.PersistentText ?? _paper.Content ?? "";
+        _markdownBodySession is { ContentDirty: true, NoteBox: { } editor }
+            ? editor.PersistentText : _paper.Content ?? "";
 
     private void CommitPendingNoteContent()
     {
