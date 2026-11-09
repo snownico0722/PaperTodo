@@ -46,7 +46,8 @@ internal static partial class MaterialDragBenchmarks
                 controller.State.McpEnabled = false;
                 controller.State.TelemetryEnabled = false;
                 controller.State.UsePersistentPowerShellProcess = false;
-                var startup = controller.StartAsync(createDefaultPaper: false);
+                var dispatcher = Application.Current.Dispatcher;
+                var startup = dispatcher.InvokeAsync((Func<Task>)(() => controller.StartAsync(createDefaultPaper: false))).Task.Unwrap();
                 while (!startup.IsCompleted) Wait(16);
                 startup.GetAwaiter().GetResult();
                 shared = Application.Current.Windows.OfType<PaperWindow>().Single(x => x.PaperId == paper.Id);
