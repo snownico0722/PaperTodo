@@ -1812,6 +1812,42 @@ Resolve the file access problem and retry, or choose “Rebuild workspace” to 
   <data name="EditorImageExportSaved" xml:space="preserve"><value>Image saved</value></data>
   <data name="StudioTitle" xml:space="preserve"><value>Studio</value></data>
   <data name="EditorClose" xml:space="preserve"><value>Close Studio</value></data>
+  <data name="StudioStandaloneTitle" xml:space="preserve"><value>studio</value></data>
+  <data name="StudioNew" xml:space="preserve"><value>New document</value></data>
+  <data name="StudioOpen" xml:space="preserve"><value>Open file</value></data>
+  <data name="StudioSave" xml:space="preserve"><value>Save</value></data>
+  <data name="StudioUntitled" xml:space="preserve"><value>Untitled</value></data>
+  <data name="StudioSaved" xml:space="preserve"><value>Saved</value></data>
+  <data name="StudioReplaceTitle" xml:space="preserve"><value>Replace current document</value></data>
+  <data name="StudioReplaceMessage" xml:space="preserve"><value>Replace the current document? The saved file will remain on disk.</value></data>
+  <data name="StudioUnsavedTitle" xml:space="preserve"><value>Save changes</value></data>
+  <data name="StudioUnsavedMessage" xml:space="preserve"><value>Unsaved changes will be lost. Save them first?</value></data>
+  <data name="StudioSaveAndOpen" xml:space="preserve"><value>Save and open</value></data>
+  <data name="StudioDiscardAndOpen" xml:space="preserve"><value>Open without saving</value></data>
+  <data name="StudioSaveAndNew" xml:space="preserve"><value>Save and create</value></data>
+  <data name="StudioDiscardAndNew" xml:space="preserve"><value>Create without saving</value></data>
+  <data name="StudioDiscard" xml:space="preserve"><value>Don’t save</value></data>
+  <data name="StudioRecover" xml:space="preserve"><value>Recover</value></data>
+  <data name="StudioRecoveryTitle" xml:space="preserve"><value>Recover previous document</value></data>
+  <data name="StudioRecoveryMessage" xml:space="preserve"><value>studio did not close normally last time. Recover the document and its temporary images?</value></data>
+  <data name="StudioRecoveryFailed" xml:space="preserve"><value>Could not save the recovery copy: {0}</value></data>
+  <data name="StudioFileErrorTitle" xml:space="preserve"><value>Document operation failed</value></data>
+  <data name="StudioFileError" xml:space="preserve"><value>The operation could not be completed. Your current document is retained.
+{0}</value></data>
+  <data name="StudioSupportedFiles" xml:space="preserve"><value>Supported document formats: .md, .txt, .html, .htm.</value></data>
+  <data name="StudioFileFilter" xml:space="preserve"><value>Documents|*.md;*.txt;*.html;*.htm|Markdown|*.md|Plain text|*.txt|HTML source|*.html;*.htm</value></data>
+  <data name="StudioImageFilter" xml:space="preserve"><value>Images|*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.webp;*.tif;*.tiff</value></data>
+  <data name="StudioTemporary" xml:space="preserve"><value>Temporary</value></data>
+  <data name="StudioTemporarySettingsTip" xml:space="preserve"><value>Setting changes apply only to this run and are not saved after closing.</value></data>
+  <data name="StudioTextSize" xml:space="preserve"><value>Text size</value></data>
+  <data name="StudioSizeSmall" xml:space="preserve"><value>Small</value></data>
+  <data name="StudioSizeMedium" xml:space="preserve"><value>Medium</value></data>
+  <data name="StudioSizeLarge" xml:space="preserve"><value>Large</value></data>
+  <data name="StudioBoldText" xml:space="preserve"><value>Bold text</value></data>
+  <data name="StudioTheme" xml:space="preserve"><value>Theme</value></data>
+  <data name="StudioClose" xml:space="preserve"><value>Close</value></data>
+  <data name="StudioMaximize" xml:space="preserve"><value>Maximize / restore</value></data>
+  <data name="StudioCut" xml:space="preserve"><value>Cut</value></data>
   <data name="TipHideSurfaceOutline" xml:space="preserve"><value>Hide the thin outer border on papers, capsules and menus without changing their size. Borders stay visible in high-contrast mode.</value></data>
   <data name="TipScriptCapsule" xml:space="preserve"><value>Start a note with !p or another script prefix, then write PowerShell below. Click the collapsed capsule to run it. These settings also apply to the title-bar Run Script action.</value></data>
   <data name="WorkspaceSwitchGroup" xml:space="preserve">

@@ -12,7 +12,7 @@ internal static class Program
     private const BindingFlags Private = BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic;
     private const string FixtureMarker = ".papertodo-lifecycle-fixture";
     private const string FixtureSkipped = "LIFECYCLE_FIXTURE_SKIPPED";
-    private static readonly string[] Cases = ["native-free-queue-review", "native-free-queues", "startup", "missing-monitor", "master-queue-transfer", "master-queue-cancel", "master-queue-drag-preparation", "master-queue-drop-handoff", "master-queue-membership", "master-queue-mutations", "master-queue-hide", "master-queue-hidden-retains-collapse", "master-queue-disconnect", "master-queue-merge", "master-queue-merge-collapsed", "master-queue-lightweight-handoff", "controller-hide-create-reentry", "controller-hide-show-reentry", "controller-zorder-create-reentry", "controller-close-delete-reentry", "todo-visibility", "real-exit", "early-expand", "edge-expand-foreground", "expanded-paper-display-recovery", "cancel-prewarm", "real-exit-scripts", "early-exit", "todo-context-menu", "todo-history", "editor-switch", "studio-foreground", "editor-resume", "image-export", "paper-bindings"];
+    private static readonly string[] Cases = ["native-free-queue-review", "native-free-queues", "startup", "missing-monitor", "master-queue-transfer", "master-queue-cancel", "master-queue-drag-preparation", "master-queue-drop-handoff", "master-queue-membership", "master-queue-mutations", "master-queue-hide", "master-queue-hidden-retains-collapse", "master-queue-disconnect", "master-queue-merge", "master-queue-merge-collapsed", "master-queue-lightweight-handoff", "controller-hide-create-reentry", "controller-hide-show-reentry", "controller-zorder-create-reentry", "controller-close-delete-reentry", "todo-visibility", "real-exit", "early-expand", "edge-expand-foreground", "expanded-paper-display-recovery", "cancel-prewarm", "real-exit-scripts", "early-exit", "todo-context-menu", "todo-history", "editor-switch", "standalone-studio", "studio-foreground", "editor-resume", "image-export", "paper-bindings"];
 
     [STAThread]
     private static int Main(string[] args)
@@ -164,6 +164,11 @@ internal static class Program
 
     private static async Task RunFixture(string name, Action completeExpectedExit)
     {
+        if (name == "standalone-studio")
+        {
+            await ExpandedEditorChecks.RunStandalone();
+            return;
+        }
         if (name == "studio-foreground")
         {
             if (!await ExpandedEditorChecks.RunCrossProcessForeground()) Console.WriteLine(FixtureSkipped);

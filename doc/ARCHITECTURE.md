@@ -94,6 +94,16 @@ PaperTodo.exe
 
 用户主动退出先提交当前编辑、完成同步核心保存并确认当前脏插件数据已落盘；失败则取消退出并保留可编辑运行态，成功后才撤下可见 surface；撤下界面不改变持久化 IsVisible。WPF/插件 UI 仍由原 Dispatcher 释放，脚本进程的停止请求和限时等待在非 UI 任务中并发执行，与界面清理重叠，最终统一等待完成。退出不为即将销毁的图片缓存执行额外回收，也不重复提交已由 controller 保存的编辑内容。普通主实例退出在已停止 owned work 后调用 `Application.Shutdown` 并让 Dispatcher 完成 `App.OnExit`、单实例监听和应用资源清理，不再紧接着调用 `Environment.Exit` 截断 WPF 生命周期；崩溃边界和次实例转发退出保持独立。
 
+### 独立文件工作台
+
+`--studio --standalone [--file <path>]` 在正常 GUI 的 Mutex 和 `AppController` 创建之前分流，使用独立的 Mutex/命名管道，允许与正常 PaperTodo 同时运行。进程只有一个 `StandaloneStudioWindow` 和一个 `StandaloneStudioDocument`；重复启动只唤醒窗口并排队处理文件请求，窗口关闭即退出。文件路径在发起进程中转为绝对路径，模态打开/保存期间不会阻塞后续管道接收。
+
+普通工作台与独立工作台共享 `MarkdownTextBox`、`StudioMarkdownToolbar` 和 `StudioIcons`，分别拥有外围生命周期。独立文档不是 `PaperData`，不创建隐藏纸片、工作区、提醒、插件、MCP 或后台备份。`.md` 使用现有语义编辑/渲染；`.txt` 和 `.html` / `.htm` 使用同一控件编辑原始文字，不运行 Markdown 转 HTML 导出。文件来源保留可识别的编码、BOM 与原有换行；新文件默认 UTF-8。打开候选先读取，替换确认后安装；保存使用现有通用原子文件写入，失败保留原文件和当前修改。
+
+`IMarkdownImageSource` 只描述编辑器需要的图片解析、导入和读取。普通纸片用 `NoteMarkdownImageSource` 适配既有 `NoteImageStore`；独立文件用 `StandaloneStudioImages` 解析文档目录下的本地相对路径，将新图片暂存于自己的恢复目录，明确保存时复制到文档旁的资源目录并更新相对引用。独立模式不打开默认 LMDB。`StandaloneStudioRecovery` 以一份原子快照保存文档、路径、编码和清洁基线，图片留在同一临时目录；异常后的启动提供恢复选择，正常关闭在用户完成保存/丢弃决定后清理。
+
+`StandaloneStudioSettings` 只读取主区已提交 JSON 的软件设置字段，不反序列化纸片或执行状态恢复。设置进入独立进程的内存副本；`Theme.SettingsOverride` 与现有字体配置读取该副本，界面仅开放本次运行可生效的适用选项，关闭后不写回。
+
 ### 3.2 MCP
 
 `--mcp` 是同一可执行文件的独立 bridge 模式。它在 GUI Mutex 之前分流，通过 stdio 暴露 MCP server；GUI 主宿主内部的 MCP runtime 由 `AppController` 管理。

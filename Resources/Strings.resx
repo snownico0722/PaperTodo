@@ -1891,6 +1891,42 @@
   <data name="EditorImageExportSaved" xml:space="preserve"><value>图片已保存</value></data>
   <data name="StudioTitle" xml:space="preserve"><value>工作台</value></data>
   <data name="EditorClose" xml:space="preserve"><value>关闭工作台</value></data>
+  <data name="StudioStandaloneTitle" xml:space="preserve"><value>独立工作台</value></data>
+  <data name="StudioNew" xml:space="preserve"><value>新建文档</value></data>
+  <data name="StudioOpen" xml:space="preserve"><value>打开文件</value></data>
+  <data name="StudioSave" xml:space="preserve"><value>保存</value></data>
+  <data name="StudioUntitled" xml:space="preserve"><value>未命名</value></data>
+  <data name="StudioSaved" xml:space="preserve"><value>已保存</value></data>
+  <data name="StudioReplaceTitle" xml:space="preserve"><value>替换当前文档</value></data>
+  <data name="StudioReplaceMessage" xml:space="preserve"><value>是否替换当前文档？已保存的原文件不会被删除。</value></data>
+  <data name="StudioUnsavedTitle" xml:space="preserve"><value>保存更改</value></data>
+  <data name="StudioUnsavedMessage" xml:space="preserve"><value>未保存的更改将丢失。是否先保存？</value></data>
+  <data name="StudioSaveAndOpen" xml:space="preserve"><value>保存并打开</value></data>
+  <data name="StudioDiscardAndOpen" xml:space="preserve"><value>不保存并打开</value></data>
+  <data name="StudioSaveAndNew" xml:space="preserve"><value>保存并新建</value></data>
+  <data name="StudioDiscardAndNew" xml:space="preserve"><value>不保存并新建</value></data>
+  <data name="StudioDiscard" xml:space="preserve"><value>不保存</value></data>
+  <data name="StudioRecover" xml:space="preserve"><value>恢复</value></data>
+  <data name="StudioRecoveryTitle" xml:space="preserve"><value>恢复上次文档</value></data>
+  <data name="StudioRecoveryMessage" xml:space="preserve"><value>上次独立工作台未正常关闭。是否恢复当时的文档和临时图片？</value></data>
+  <data name="StudioRecoveryFailed" xml:space="preserve"><value>临时恢复副本未能保存：{0}</value></data>
+  <data name="StudioFileErrorTitle" xml:space="preserve"><value>文档操作失败</value></data>
+  <data name="StudioFileError" xml:space="preserve"><value>未能完成操作，当前文档已保留。
+{0}</value></data>
+  <data name="StudioSupportedFiles" xml:space="preserve"><value>支持的文档格式：.md、.txt、.html、.htm。</value></data>
+  <data name="StudioFileFilter" xml:space="preserve"><value>文档|*.md;*.txt;*.html;*.htm|Markdown|*.md|纯文本|*.txt|HTML 源码|*.html;*.htm</value></data>
+  <data name="StudioImageFilter" xml:space="preserve"><value>图片|*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.webp;*.tif;*.tiff</value></data>
+  <data name="StudioTemporary" xml:space="preserve"><value>临时</value></data>
+  <data name="StudioTemporarySettingsTip" xml:space="preserve"><value>设置更改仅对本次运行生效，关闭后不保存。</value></data>
+  <data name="StudioTextSize" xml:space="preserve"><value>正文字号</value></data>
+  <data name="StudioSizeSmall" xml:space="preserve"><value>小</value></data>
+  <data name="StudioSizeMedium" xml:space="preserve"><value>中</value></data>
+  <data name="StudioSizeLarge" xml:space="preserve"><value>大</value></data>
+  <data name="StudioBoldText" xml:space="preserve"><value>正文加粗</value></data>
+  <data name="StudioTheme" xml:space="preserve"><value>主题</value></data>
+  <data name="StudioClose" xml:space="preserve"><value>关闭</value></data>
+  <data name="StudioMaximize" xml:space="preserve"><value>最大化／还原</value></data>
+  <data name="StudioCut" xml:space="preserve"><value>剪切</value></data>
   <data name="TipHideSurfaceOutline" xml:space="preserve"><value>隐藏纸片、胶囊和菜单边缘的细描边，不改变大小；高对比度模式仍保留轮廓。</value></data>
   <data name="TipScriptCapsule" xml:space="preserve"><value>在笔记第一行写 !p 等指令，从第二行写 PowerShell；折叠后点击胶囊即可运行。下方设置也适用于顶栏「运行脚本」。</value></data>
   <data name="WorkspaceSwitchGroup" xml:space="preserve">

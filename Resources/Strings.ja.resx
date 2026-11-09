@@ -1812,6 +1812,42 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
   <data name="EditorImageExportSaved" xml:space="preserve"><value>画像を保存しました</value></data>
   <data name="StudioTitle" xml:space="preserve"><value>スタジオ</value></data>
   <data name="EditorClose" xml:space="preserve"><value>スタジオを閉じる</value></data>
+  <data name="StudioStandaloneTitle" xml:space="preserve"><value>独立スタジオ</value></data>
+  <data name="StudioNew" xml:space="preserve"><value>新規文書</value></data>
+  <data name="StudioOpen" xml:space="preserve"><value>ファイルを開く</value></data>
+  <data name="StudioSave" xml:space="preserve"><value>保存</value></data>
+  <data name="StudioUntitled" xml:space="preserve"><value>無題</value></data>
+  <data name="StudioSaved" xml:space="preserve"><value>保存しました</value></data>
+  <data name="StudioReplaceTitle" xml:space="preserve"><value>現在の文書を置き換える</value></data>
+  <data name="StudioReplaceMessage" xml:space="preserve"><value>現在の文書を置き換えますか？保存済みのファイルは削除されません。</value></data>
+  <data name="StudioUnsavedTitle" xml:space="preserve"><value>変更を保存</value></data>
+  <data name="StudioUnsavedMessage" xml:space="preserve"><value>未保存の変更は失われます。先に保存しますか？</value></data>
+  <data name="StudioSaveAndOpen" xml:space="preserve"><value>保存して開く</value></data>
+  <data name="StudioDiscardAndOpen" xml:space="preserve"><value>保存せずに開く</value></data>
+  <data name="StudioSaveAndNew" xml:space="preserve"><value>保存して新規作成</value></data>
+  <data name="StudioDiscardAndNew" xml:space="preserve"><value>保存せずに新規作成</value></data>
+  <data name="StudioDiscard" xml:space="preserve"><value>保存しない</value></data>
+  <data name="StudioRecover" xml:space="preserve"><value>復元</value></data>
+  <data name="StudioRecoveryTitle" xml:space="preserve"><value>前回の文書を復元</value></data>
+  <data name="StudioRecoveryMessage" xml:space="preserve"><value>前回スタジオが正常に終了しませんでした。文書と一時画像を復元しますか？</value></data>
+  <data name="StudioRecoveryFailed" xml:space="preserve"><value>復元用コピーを保存できませんでした：{0}</value></data>
+  <data name="StudioFileErrorTitle" xml:space="preserve"><value>文書の操作に失敗しました</value></data>
+  <data name="StudioFileError" xml:space="preserve"><value>操作を完了できませんでした。現在の文書は保持されています。
+{0}</value></data>
+  <data name="StudioSupportedFiles" xml:space="preserve"><value>対応文書形式：.md、.txt、.html、.htm。</value></data>
+  <data name="StudioFileFilter" xml:space="preserve"><value>文書|*.md;*.txt;*.html;*.htm|Markdown|*.md|プレーンテキスト|*.txt|HTML ソース|*.html;*.htm</value></data>
+  <data name="StudioImageFilter" xml:space="preserve"><value>画像|*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.webp;*.tif;*.tiff</value></data>
+  <data name="StudioTemporary" xml:space="preserve"><value>一時</value></data>
+  <data name="StudioTemporarySettingsTip" xml:space="preserve"><value>設定の変更は今回の実行中のみ有効です。終了後は保存されません。</value></data>
+  <data name="StudioTextSize" xml:space="preserve"><value>本文の文字サイズ</value></data>
+  <data name="StudioSizeSmall" xml:space="preserve"><value>小</value></data>
+  <data name="StudioSizeMedium" xml:space="preserve"><value>中</value></data>
+  <data name="StudioSizeLarge" xml:space="preserve"><value>大</value></data>
+  <data name="StudioBoldText" xml:space="preserve"><value>本文を太字にする</value></data>
+  <data name="StudioTheme" xml:space="preserve"><value>テーマ</value></data>
+  <data name="StudioClose" xml:space="preserve"><value>閉じる</value></data>
+  <data name="StudioMaximize" xml:space="preserve"><value>最大化／元に戻す</value></data>
+  <data name="StudioCut" xml:space="preserve"><value>切り取り</value></data>
   <data name="TipHideSurfaceOutline" xml:space="preserve"><value>紙片、カプセル、メニューの外枠線のみを隠します。大きさは変わらず、高コントラスト表示では枠線を維持します。</value></data>
   <data name="TipScriptCapsule" xml:space="preserve"><value>ノートの先頭行に !p などを記入し、2行目から PowerShell を記述します。折りたたんだカプセルをクリックすると実行できます。下の設定は上部バーのスクリプト実行にも適用されます。</value></data>
   <data name="WorkspaceSwitchGroup" xml:space="preserve">

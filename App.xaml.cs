@@ -34,6 +34,7 @@ public partial class App : Application
     private readonly object _singleInstanceCommandGate = new();
     private readonly Queue<IReadOnlyList<string>> _pendingSingleInstanceCommands = new();
     private AppController? _controller;
+    private StandaloneStudioWindow? _standaloneStudio;
     private bool _singleInstanceCommandsReady;
     private SingleInstanceHelper? _singleInstance;
     private int _handlingGlobalException;
@@ -116,6 +117,12 @@ public partial class App : Application
         // Register global unhandled exception handlers
         DispatcherUnhandledException += OnDispatcherUnhandledException;
         AppDomain.CurrentDomain.UnhandledException += OnUnhandledException;
+
+        if (startupCommand.Standalone)
+        {
+            StartStandaloneStudio(e, startupCommand);
+            return;
+        }
 
         _singleInstance = new SingleInstanceHelper("PaperTodo-SingleInstance-Mutex", "PaperTodo-SingleInstance-Activate");
         if (!_singleInstance.TryAcquire())
@@ -211,6 +218,57 @@ public partial class App : Application
         CompleteSingleInstanceStartup();
     }
 
+    private void StartStandaloneStudio(StartupEventArgs e, StartupCommand command)
+    {
+        // Separate identity: a normal PaperTodo instance and this file editor can coexist.
+        // Resolve relative paths in the launching process, before forwarding to another CWD.
+        string? file;
+        try { file = command.FilePath == null ? null : Path.GetFullPath(command.FilePath); }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            MessageBox.Show(ex.Message, Strings.Get("StudioFileErrorTitle"), MessageBoxButton.OK, MessageBoxImage.Error);
+            Shutdown(1);
+            return;
+        }
+        var forwarded = file == null ? new[] { "--studio", "--standalone" }
+            : new[] { "--studio", "--standalone", "--file", file };
+        _singleInstance = new SingleInstanceHelper("PaperTodo-Studio-Mutex", "PaperTodo-Studio-Activate");
+        if (!_singleInstance.TryAcquire())
+        {
+            var result = _singleInstance.SignalPrimaryInstance(forwarded);
+            _singleInstance.Dispose();
+            _singleInstance = null;
+            Shutdown(result);
+            return;
+        }
+        _singleInstance.StartListener(HandleSingleInstanceCommand);
+        base.OnStartup(e);
+        ShutdownMode = ShutdownMode.OnExplicitShutdown;
+        try
+        {
+            var settings = StandaloneStudioSettings.Load();
+            UiLanguages.ApplyWorkspacePreference(settings.UiLanguage);
+            _standaloneStudio = new StandaloneStudioWindow(settings);
+            MainWindow = _standaloneStudio;
+            _standaloneStudio.Closed += (_, _) => Shutdown();
+            _standaloneStudio.Loaded += (_, _) =>
+            {
+                _standaloneStudio.Initialize(file);
+                // Until recovery is accepted or discarded, the editor still holds its
+                // initial blank document. Session ending must leave that old scene intact.
+                SessionEnding += (_, _) => _standaloneStudio.PreserveForSessionEnding();
+                CompleteSingleInstanceStartup();
+            };
+            _standaloneStudio.Show();
+        }
+        catch (Exception ex)
+        {
+            WriteCrashLog(ex);
+            MessageBox.Show(ex.Message, Strings.Get("StudioFileErrorTitle"), MessageBoxButton.OK, MessageBoxImage.Error);
+            Shutdown(1);
+        }
+    }
+
     private bool HandleSingleInstanceCommand(IReadOnlyList<string> args)
     {
         lock (_singleInstanceCommandGate)
@@ -263,6 +321,13 @@ public partial class App : Application
     private bool ExecuteSingleInstanceCommand(IReadOnlyList<string> args)
     {
         var command = StartupCommand.Parse(args, StartupCommandKind.Show);
+        if (_standaloneStudio != null)
+        {
+            // Release the pipe listener before a file request can open a modal
+            // replacement dialog. The window queues requests while a dialog is active.
+            _ = Dispatcher.BeginInvoke((Action)(() => _standaloneStudio.ActivateDocument(command.FilePath)));
+            return true;
+        }
         return _controller?.ExecuteStartupCommand(command) == true;
     }
 
@@ -306,6 +371,7 @@ public partial class App : Application
         // A crash dialog pumps messages too. Stop queued persistence BEFORE displaying it,
         // not merely by omitting an explicit final SaveNow call at the bottom of this handler.
         _controller?.AbortPersistenceForTermination();
+        _standaloneStudio?.StopRecovery();
 
         // Classification must never prevent the crash log from being written.
         var isDesktopRuntimeLoadFailure = false;
@@ -451,6 +517,7 @@ public partial class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         _singleInstance?.Dispose();
+        _standaloneStudio?.StopRecovery();
         _controller?.Dispose();
         base.OnExit(e);
 #if DEBUG
