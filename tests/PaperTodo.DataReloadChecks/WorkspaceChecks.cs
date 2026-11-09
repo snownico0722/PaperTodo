@@ -868,7 +868,12 @@ internal static partial class Program
         Require(controller.ImageStore.TryGetEncodedImageBytes(image.Id, out _, out var expectedImage),
             "move fixture image was not saved");
         var editor = Field<MarkdownTextBox>(noteWindow, "_noteBox");
+        const string findQuery = "pending move draft";
+        Require(!controller.GetBuiltInFindMatches(findQuery).Any(hit => hit.PaperId == note.Id),
+            "Move fixture already contains the draft search text.");
         editor.Text = $"pending move draft\n![first|65%](i:{image.Id})\n![second](i:{image.Id})";
+        Require(controller.GetBuiltInFindMatches(findQuery).Any(hit => hit.PaperId == note.Id && hit.Match.Offset == 0),
+            "Workspace search missed a live Markdown edit before the move committed it.");
         var expectedContent = editor.PersistentText;
         var linked = controller.State.Papers.Single(paper => paper.Id == "todo").Items[0];
         linked.LinkPaper(note.Id);

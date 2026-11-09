@@ -455,6 +455,33 @@ public sealed partial class AppController : IDisposable
             return null;
         }
 
+        var paper = CreatePaperModel(type, show, sourcePaper);
+        State.Papers.Add(paper);
+
+        if (show)
+        {
+            _trayRefreshSuppressionDepth++;
+            try
+            {
+                ShowPaper(paper);
+                if (sourcePaper != null && _windows.TryGetValue(paper.Id, out var window))
+                {
+                    ForceWindowToFront(window);
+                }
+            }
+            finally
+            {
+                _trayRefreshSuppressionDepth--;
+            }
+        }
+
+        RefreshTrayMenu();
+        MarkDirty();
+        return paper;
+    }
+
+    private PaperData CreatePaperModel(string type, bool show, PaperData? sourcePaper = null)
+    {
         (string DeviceName, Rect WorkArea)? cursorMonitor = null;
         if (sourcePaper == null && WindowNative.TryGetCursorScreenPosition(out var cursorPosition))
         {
@@ -546,27 +573,6 @@ public sealed partial class AppController : IDisposable
             });
         }
 
-        State.Papers.Add(paper);
-
-        if (show)
-        {
-            _trayRefreshSuppressionDepth++;
-            try
-            {
-                ShowPaper(paper);
-                if (sourcePaper != null && _windows.TryGetValue(paper.Id, out var window))
-                {
-                    ForceWindowToFront(window);
-                }
-            }
-            finally
-            {
-                _trayRefreshSuppressionDepth--;
-            }
-        }
-
-        RefreshTrayMenu();
-        MarkDirty();
         return paper;
     }
 
@@ -2039,24 +2045,24 @@ public sealed partial class AppController : IDisposable
             _windows.Remove(paper.Id);
         }
 
-        State.Papers.RemoveAll(p => p.Id == paper.Id);
+        // Closing a provider can call back into the host and remove this paper.
+        if (!State.Papers.Contains(paper)) return;
+        var removed = RemovePaperFromWorkspace(paper);
         NotifyPaperRemoved(paper.Id);
         _visibilityAnimationVersions.Remove(paper.Id);
         NotifyTodoReminderCollectionChanged();
+        foreach (var id in removed.AffectedTodoPaperIds)
+        {
+            if (_windows.TryGetValue(id, out var todoWindow))
+                todoWindow.RefreshTodoRowsForExternalChange();
+        }
+        RefreshCapsuleEligibilityForLinkedPapers();
 
-        ClearTodoLinksToPaper(paper.Id);
-
-        if (State.Papers.Count == 0)
+        if (removed.Replacement is { } replacement)
         {
             _trayRefreshSuppressionDepth++;
-            try
-            {
-                CreatePaper(PaperTypes.Todo, show: true);
-            }
-            finally
-            {
-                _trayRefreshSuppressionDepth--;
-            }
+            try { ShowPaper(replacement); }
+            finally { _trayRefreshSuppressionDepth--; }
         }
 
         ArrangeDeepCapsules();
@@ -2073,33 +2079,46 @@ public sealed partial class AppController : IDisposable
         QueuePluginPaperStateDeletion(paperId);
     }
 
-    private void ClearTodoLinksToPaper(string linkedPaperId)
+    internal sealed record RemovedPaper(
+        PaperData Paper, int Index, (string PaperId, PaperItem Item)[] Links, PaperData? Replacement)
     {
-        var affectedPaperIds = new HashSet<string>();
+        internal string[] AffectedTodoPaperIds =>
+            Links.Select(link => link.PaperId).Distinct(StringComparer.Ordinal).ToArray();
+    }
 
-        foreach (var paper in State.Papers.Where(p => p.Type == PaperTypes.Todo))
+    // Only mutate the source model. Each caller owns its save and the point at which
+    // windows, undo history and plugin resources can observe a successful removal.
+    internal RemovedPaper RemovePaperFromWorkspace(PaperData paper)
+    {
+        var papers = State.Papers;
+        var index = papers.IndexOf(paper);
+        var links = papers.Where(other => other != paper && other.Type == PaperTypes.Todo)
+            .SelectMany(other => other.Items.Where(item => item.LinkedPaperId == paper.Id)
+                .Select(item => (PaperId: other.Id, Item: item))).ToArray();
+        papers.RemoveAt(index);
+        PaperData? replacement = null;
+        if (papers.Count == 0)
         {
-            foreach (var item in paper.Items)
+            try
             {
-                if (!string.Equals(item.LinkedPaperId, linkedPaperId, StringComparison.Ordinal))
-                {
-                    continue;
-                }
-
-                item.ClearQuickLaunch();
-                affectedPaperIds.Add(paper.Id);
+                replacement = CreatePaperModel(PaperTypes.Todo, show: true);
+                papers.Add(replacement);
+            }
+            catch
+            {
+                papers.Insert(index, paper);
+                throw;
             }
         }
+        foreach (var link in links) link.Item.ClearQuickLaunch();
+        return new RemovedPaper(paper, index, links, replacement);
+    }
 
-        foreach (var paperId in affectedPaperIds)
-        {
-            if (_windows.TryGetValue(paperId, out var todoWindow))
-            {
-                todoWindow.RefreshTodoRowsForExternalChange();
-            }
-        }
-
-        RefreshCapsuleEligibilityForLinkedPapers();
+    internal void RestoreRemovedPaper(RemovedPaper removed)
+    {
+        if (removed.Replacement != null) State.Papers.Remove(removed.Replacement);
+        State.Papers.Insert(Math.Min(removed.Index, State.Papers.Count), removed.Paper);
+        foreach (var link in removed.Links) link.Item.LinkPaper(removed.Paper.Id);
     }
 
     public void RefreshCapsuleEligibilityForLinkedPapers()

@@ -1227,7 +1227,7 @@ public sealed partial class PaperWindow
         return $"#{color.R:X2}{color.G:X2}{color.B:X2}";
     }
 
-    private static string NormalizeBodyProviderId(string? providerId)
+    internal static string NormalizeBodyProviderId(string? providerId)
     {
         return string.IsNullOrWhiteSpace(providerId)
             ? PaperBodyProviderIds.Markdown

@@ -10,11 +10,6 @@ namespace PaperTodo;
 
 public sealed partial class PaperWindow
 {
-    private readonly record struct PaperFindMatch(string? TodoItemId, int Offset, int Length)
-    {
-        public bool IsNote => TodoItemId == null;
-    }
-
     private readonly List<PaperFindMatch> _findMatches = [];
     private int _findMatchIndex = -1;
     private PaperFindMatch? _findAppliedMatch;
@@ -326,15 +321,14 @@ public sealed partial class PaperWindow
             : (PaperFindMatch?)null;
 
         var query = _findInput.Text ?? string.Empty;
-        _findMatches.Clear();
-        _findMatches.AddRange(ScanFindMatches(query));
+        SetFindMatches(_controller.GetBuiltInFindMatches(query));
 
         if (_findMatches.Count == 0)
         {
             _findMatchIndex = -1;
             ClearAppliedFindSelection();
             RefreshTodoFindCues();
-            SynchronizeGlobalFindState(query);
+            _globalFindIndex = -1;
             UpdateFindCount();
             return;
         }
@@ -361,59 +355,22 @@ public sealed partial class PaperWindow
             ReleaseTodoInactiveFindSelection();
         }
         RefreshTodoFindCues();
-        SynchronizeGlobalFindState(query);
+        _globalFindIndex = ResolveCurrentGlobalFindIndex();
         UpdateFindCount();
     }
 
-    private List<PaperFindMatch> ScanFindMatches(string query)
+    private void SetFindMatches(List<GlobalFindMatch> matches)
     {
-        var matches = new List<PaperFindMatch>();
-        if (string.IsNullOrEmpty(query))
-        {
-            return matches;
-        }
+        _globalFindMatches = matches;
+        _findMatches.Clear();
 
-        if (_paper.Type == PaperTypes.Note && _noteBox != null)
+        // The local counter only includes rows with a live editor. Global results
+        // also contain persisted rows from windows that have not built their UI.
+        foreach (var hit in _globalFindMatches)
         {
-            AddFindMatches(matches, null, _noteBox.Text ?? string.Empty, query);
-            return matches;
-        }
-
-        if (_paper.Type != PaperTypes.Todo)
-        {
-            return matches;
-        }
-
-        foreach (var item in OrderedItems())
-        {
-            if (_todoEditors.TryGetValue(item.Id, out var editor))
-            {
-                AddFindMatches(matches, item.Id, editor.Text ?? string.Empty, query);
-            }
-        }
-        return matches;
-    }
-
-    private static void AddFindMatches(
-        List<PaperFindMatch> destination,
-        string? todoItemId,
-        string text,
-        string query)
-    {
-        var searchFrom = 0;
-        while (searchFrom <= text.Length - query.Length)
-        {
-            var offset = text.IndexOf(
-                query,
-                searchFrom,
-                StringComparison.OrdinalIgnoreCase);
-            if (offset < 0)
-            {
-                break;
-            }
-
-            destination.Add(new PaperFindMatch(todoItemId, offset, query.Length));
-            searchFrom = offset + query.Length;
+            if (hit.PaperId == _paper.Id && (hit.Match.TodoItemId is { } itemId
+                    ? _todoEditors.ContainsKey(itemId) : _noteBox != null))
+                _findMatches.Add(hit.Match);
         }
     }
 

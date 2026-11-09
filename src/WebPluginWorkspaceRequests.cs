@@ -8,7 +8,8 @@ internal static class WebPluginWorkspaceRequests
     public static object? Execute(
         IPaperTodoHostApi host,
         string method,
-        JsonElement parameters) => method switch
+        JsonElement parameters,
+        JsonSerializerOptions? jsonOptions = null) => method switch
     {
         "appSettings.list" or "appSettings.get" or "appSettings.set" =>
             WebPluginSettingsRequests.Execute(host, method, parameters),
@@ -31,15 +32,15 @@ internal static class WebPluginWorkspaceRequests
         "noteAssets.readImage" => (host as IPaperNoteAssetsApi
             ?? throw new PaperTodoPluginException("note_assets_unavailable", "NoteAssets is unavailable."))
             .ReadImage(RequiredString(parameters, "paperId"), RequiredString(parameters, "imageId")),
-        "papers.create" => host.CreatePaper(Deserialize<CreatePaperRequest>(parameters)),
-        "todos.append" => host.AppendTodos(Deserialize<AppendTodosRequest>(parameters)),
-        "todos.update" => host.UpdateTodo(Deserialize<UpdateTodoRequest>(parameters)),
+        "papers.create" => host.CreatePaper(Deserialize<CreatePaperRequest>(parameters, jsonOptions)),
+        "todos.append" => host.AppendTodos(Deserialize<AppendTodosRequest>(parameters, jsonOptions)),
+        "todos.update" => host.UpdateTodo(Deserialize<UpdateTodoRequest>(parameters, jsonOptions)),
         "todos.setReminder" => host.SetTodoReminder(
-            Deserialize<SetTodoReminderRequest>(parameters)),
+            Deserialize<SetTodoReminderRequest>(parameters, jsonOptions)),
         "reminders.suppressDefault" => ReminderControl(host).SuppressDefaultReminderNotification(
             RequiredGuid(parameters, "notificationId")),
-        "notes.write" => host.WriteNote(Deserialize<WriteNoteRequest>(parameters)),
-        "todos.delete" => host.DeleteTodo(Deserialize<DeleteTodoRequest>(parameters)),
+        "notes.write" => host.WriteNote(Deserialize<WriteNoteRequest>(parameters, jsonOptions)),
+        "todos.delete" => host.DeleteTodo(Deserialize<DeleteTodoRequest>(parameters, jsonOptions)),
         "papers.delete" => host.DeletePaper(RequiredString(parameters, "paperId")),
         _ => throw new PaperTodoPluginException(
             "method_not_found",
@@ -61,11 +62,11 @@ internal static class WebPluginWorkspaceRequests
         host as IPaperWorkspacePresentationApi
         ?? throw new PaperTodoPluginException("presentation_unavailable", "Cross-paper presentation is unavailable.");
 
-    private static T Deserialize<T>(JsonElement payload)
+    private static T Deserialize<T>(JsonElement payload, JsonSerializerOptions? options)
     {
         try
         {
-            return payload.Deserialize<T>(WebPluginRuntimeInfrastructure.JsonOptions)
+            return payload.Deserialize<T>(options ?? WebPluginRuntimeInfrastructure.JsonOptions)
                 ?? throw new JsonException("Payload deserialized to null.");
         }
         catch (Exception ex) when (ex is JsonException or NotSupportedException)

@@ -42,13 +42,11 @@ public sealed partial class PaperWindow
 
         var focusedId = CurrentFocusedTodoItemId();
         PushUndoSnapshot();
-        item.Done = done;
+        var clearedReminder = TodoRules.SetDone(item, done);
         InvalidateEdgeCapsulePreviewContent();
 
-        if (done && (item.ReminderAt.HasValue || item.ReminderTriggered))
+        if (clearedReminder)
         {
-            item.ReminderAt = null;
-            item.ReminderTriggered = false;
             _controller.NotifyTodoReminderChanged(saveImmediately: false);
         }
         else if (!done && item.ReminderAt.HasValue)

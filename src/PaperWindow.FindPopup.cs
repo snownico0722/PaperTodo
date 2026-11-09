@@ -24,7 +24,7 @@ public sealed partial class PaperWindow
     private Point? _findDragStart;
     private Point _findDragPopupStart;
 
-    private bool IsBuiltInFindOpen => _findPopup?.IsOpen == true;
+    internal bool IsBuiltInFindOpen => _findPopup?.IsOpen == true;
 
     private void EnsureBuiltInFindPopup()
     {
@@ -194,6 +194,9 @@ public sealed partial class PaperWindow
         popup.Closed += (_, _) =>
         {
             EndBuiltInFindDrag();
+            _globalFindMatches = [];
+            _globalFindIndex = -1;
+            _controller.ReleaseBuiltInFindResultsIfClosed();
             UnhookBuiltInFindContentChanges();
             ReleaseTodoInactiveFindSelection();
             RefreshTodoFindCues();
