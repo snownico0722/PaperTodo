@@ -1012,7 +1012,7 @@ Markdig 已经提供成熟的 CommonMark parser、AST 和 source span。PaperTod
 
 - `src/MarkdownSemanticDocument.cs`。
 - `src/MarkdownSemanticSnapshot*.cs`。
-- `src/MarkdownSemanticSnapshot.Compatibility.cs`、`src/MarkdownSemanticSnapshot.Escapes.cs` 与 `src/MarkdownSemanticSnapshot.Links.cs`。
+- `src/MarkdownSemanticSnapshot.Html.cs`、`src/MarkdownSemanticSnapshot.Inlines.cs` 与 `src/MarkdownSemanticSnapshot.Links.cs`。
 - `src/MarkdownSemanticPresentation*.cs`。
 - `src/MarkdownListEditing.cs`。
 - `src/MarkdownPaperBodySession.cs`。
@@ -1324,7 +1324,7 @@ D-033 移走了单个重段落的排版，但先前完整预热仍在 UI 构建�
 
 - `src/EdgeCapsulePreview.Markdown.Artifact.cs`：有界计划、冻结绘制结果与原生链接挂载。
 - `src/EdgeCapsulePreview.Preload.cs`：来源缓存、延迟队列、UI 发布及取消边界。
-- `src/EdgeCapsulePreview.Markdown.cs` / `src/MarkdownPreviewLinkHit.cs`：单一 viewport 发布与共享原生交互。
+- `src/EdgeCapsulePreview.Markdown.cs` / `src/EdgeCapsulePreview.Markdown.Artifact.cs`：单一 viewport 发布与共享原生交互。
 - `tests/PaperTodo.EdgePreviewChecks`：显式链接行为检查、冷/热像素矩阵、真实 host 首次命中、资源/DPI/版本失效、取消与 worker/动画检查；运行方法和历史数据见 `PRELOAD.md`。
 
 
