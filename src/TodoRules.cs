@@ -25,17 +25,19 @@ internal static class TodoRules
 
     public static PaperItem Clone(PaperItem item)
     {
-        var clone = new PaperItem
-        {
-            Id = item.Id,
-            Text = item.Text,
-            Done = item.Done,
-            Order = item.Order,
-            ReminderAt = item.ReminderAt,
-            ReminderTriggered = item.ReminderTriggered
-        };
-        clone.RestoreQuickLaunch(item.LinkedPaperId, item.LinkedPath, item.LinkedPathIsDirectory);
+        var clone = new PaperItem { Id = item.Id };
+        CopyValues(item, clone);
         return clone;
+    }
+
+    public static void CopyValues(PaperItem source, PaperItem target)
+    {
+        target.Text = source.Text;
+        target.Done = source.Done;
+        target.Order = source.Order;
+        target.ReminderAt = source.ReminderAt;
+        target.ReminderTriggered = source.ReminderTriggered;
+        target.RestoreQuickLaunch(source.LinkedPaperId, source.LinkedPath, source.LinkedPathIsDirectory);
     }
 
     public static List<PaperItem> CloneAll(IEnumerable<PaperItem> items) =>
@@ -124,6 +126,16 @@ internal static class TodoRules
         items.Clear();
         items.AddRange(reordered);
         NormalizeOrders(items);
+        return true;
+    }
+
+    // Return whether completing this item removed a reminder from the schedule.
+    public static bool SetDone(PaperItem item, bool done)
+    {
+        item.Done = done;
+        if (!done || (!item.ReminderAt.HasValue && !item.ReminderTriggered)) return false;
+        item.ReminderAt = null;
+        item.ReminderTriggered = false;
         return true;
     }
 

@@ -278,6 +278,15 @@ internal static class TodoHistoryChecks
             RequireHistoryIsolation(window, paper);
         }
 
+        // A rejected write must restore the same bound rows, including removed rows.
+        await Reset(4, item =>
+        {
+            item.LinkPath(AppContext.BaseDirectory, true);
+            item.ReminderAt = reminder;
+            item.ReminderTriggered = true;
+        });
+        CheckFailedExternalUpdate(controller, paper, window);
+
         // A successful external mutation orders a pending human edit before the external step.
         await Reset(4);
         editor = Editors(window)["row-0"];
@@ -291,6 +300,7 @@ internal static class TodoHistoryChecks
             PaperId = paper.Id, TodoId = "row-1", Text = "external change"
         }, PaperOperationContext.Mcp());
         await Idle();
+        RequireHistoryIsolation(window, paper);
         Require(History(window, "_undoStack").Count == 2, "external write did not separate the pending human edit");
         await SendKey(window, Key.Z);
         Require(paper.Items[1].Text == externalOriginal && paper.Items[0].Text == originalText + " pending human",
@@ -432,6 +442,48 @@ internal static class TodoHistoryChecks
             await Focus(window, Editors(window)["row-0"]);
             RequireNoAppendArea(window);
         }
+    }
+
+    private static void CheckFailedExternalUpdate(AppController controller, PaperData paper, PaperWindow window)
+    {
+        var list = paper.Items;
+        var rows = list.ToArray();
+        var before = System.Text.Json.JsonSerializer.Serialize(list);
+        var store = (StateStore)Field(controller, "_store");
+        var writer = Field(store, "_atomicWriter");
+        var ignoreFailures = Field(controller, "_ignoreSaveFailures");
+        var autoClear = controller.State.AutoClearCompletedTodos;
+        try
+        {
+            controller.State.AutoClearCompletedTodos = true;
+            SetField(controller, "_ignoreSaveFailures", true);
+            SetField(store, "_atomicWriter", new DurableAtomicFileWriter((stage, path) =>
+            {
+                if (stage == DurableAtomicWriteStage.BeforeTempOpen &&
+                    string.Equals(path, store.FilePath, StringComparison.OrdinalIgnoreCase))
+                    throw new System.IO.IOException("Injected todo save failure");
+            }));
+            controller.PaperCommands.UpdateTodo(new UpdateTodoRequest
+            {
+                PaperId = paper.Id, TodoId = rows[0].Id, Text = "failed change",
+                Done = true, Order = 2, UpdateLinkedPaper = true, LinkedPaperId = "link-target"
+            }, PaperOperationContext.Mcp());
+            throw new InvalidOperationException("The injected save failure was ignored");
+        }
+        catch (PaperCommandException ex) when (ex.Code == "save_failed") { }
+        finally
+        {
+            SetField(store, "_atomicWriter", writer);
+            SetField(controller, "_ignoreSaveFailures", ignoreFailures);
+            controller.State.AutoClearCompletedTodos = autoClear;
+        }
+
+        Require(ReferenceEquals(paper.Items, list) && list.SequenceEqual(rows),
+            "rollback replaced or reordered a bound row");
+        Require(System.Text.Json.JsonSerializer.Serialize(list) == before,
+            "rollback lost persisted row fields");
+        Require(History(window, "_undoStack").Count == 0 && History(window, "_redoStack").Count == 0,
+            "a failed command changed the window history");
     }
 
     private static List<PaperItem> Items(int count) => Enumerable.Range(0, count)

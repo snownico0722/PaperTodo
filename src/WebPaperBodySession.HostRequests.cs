@@ -10,41 +10,8 @@ internal sealed partial class WebPaperBodySession
         return method switch
         {
             "runtime.post" => PostRuntimeMessage(parameters),
-            "appSettings.list" or
-            "appSettings.get" or
-            "appSettings.set" =>
-                WebPluginWorkspaceRequests.Execute(_context.Host, method, parameters),
-            "papers.show" or
-            "papers.hide" or
-            "papers.toggle" or
-            "papers.expand" or
-            "papers.collapse" or
-            "papers.toggleCollapsed" or
-            "papers.activate" =>
-                WebPluginWorkspaceRequests.Execute(_context.Host, method, parameters),
-            "papers.list" => _context.Host.ListPapers(OptionalPayloadString(parameters, "type")),
-            "papers.get" => _context.Host.GetPaper(PayloadString(parameters, "paperId")),
-            "todos.list" => _context.Host.ListTodos(
-                OptionalPayloadString(parameters, "paperId"),
-                OptionalPayloadBoolean(parameters, "includeBlank") ?? false),
-            "notes.get" => _context.Host.GetNote(PayloadString(parameters, "paperId")),
-            "noteAssets.readImage" => WebPluginWorkspaceRequests.Execute(_context.Host, method, parameters),
             "popups.open" or "popups.close" => WebPluginPopupRequests.Execute(
                 _context.Popups, _context.Host, _manifest, method, parameters, message => Send(message)),
-            "papers.create" => _context.Host.CreatePaper(
-                DeserializePayload<CreatePaperRequest>(parameters)),
-            "todos.append" => _context.Host.AppendTodos(
-                DeserializePayload<AppendTodosRequest>(parameters)),
-            "todos.update" => _context.Host.UpdateTodo(
-                DeserializePayload<UpdateTodoRequest>(parameters)),
-            "todos.setReminder" => _context.Host.SetTodoReminder(
-                DeserializePayload<SetTodoReminderRequest>(parameters)),
-            "notes.write" => _context.Host.WriteNote(
-                DeserializePayload<WriteNoteRequest>(parameters)),
-            "todos.delete" => _context.Host.DeleteTodo(
-                DeserializePayload<DeleteTodoRequest>(parameters)),
-            "papers.delete" => _context.Host.DeletePaper(
-                PayloadString(parameters, "paperId")),
             "paper.show" or
             "paper.hide" or
             "paper.toggle" or
@@ -54,9 +21,7 @@ internal sealed partial class WebPaperBodySession
             "paper.activate" => ExecutePaperPresentationHostRequest(method, parameters),
             "topbar.paper.set" => SetPaperTopBarActionsFromWeb(parameters),
             "topbar.global.set" => SetGlobalTopBarActionsFromWeb(parameters),
-            _ => throw new PaperTodoPluginException(
-                "method_not_found",
-                $"Unknown PaperTodo plugin host method: {method}")
+            _ => WebPluginWorkspaceRequests.Execute(_context.Host, method, parameters, BridgeJsonOptions)
         };
     }
 

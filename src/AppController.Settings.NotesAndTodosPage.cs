@@ -154,17 +154,17 @@ public sealed partial class AppController
 
     private void RestoreSettingsSidebarNoteDefaults()
     {
-        State.MarkdownRenderMode = MarkdownRenderModes.Basic;
-        State.ImageReferenceTextMode = ImageReferenceTextModes.Always;
-        State.MarkdownEditAnimationEnabled = true;
-        State.ExternalMarkdownExtension = ExternalMarkdownFileExtensions.Default;
-        State.AutoCompressLargeImages = true;
-        State.UsePersistentPowerShellProcess = false;
-        State.PreferPowerShell7 = true;
-        State.HideScriptRunWindow = true;
-        _imageStore.AutoCompressLargeImages = true;
-
-        ScriptExecutionService.StopPersistentScriptProcesses();
+        var defaults = new AppState();
+        State.MarkdownRenderMode = defaults.MarkdownRenderMode;
+        State.ImageReferenceTextMode = defaults.ImageReferenceTextMode;
+        State.MarkdownEditAnimationEnabled = defaults.MarkdownEditAnimationEnabled;
+        State.ExternalMarkdownExtension = defaults.ExternalMarkdownExtension;
+        State.AutoCompressLargeImages = defaults.AutoCompressLargeImages;
+        State.UsePersistentPowerShellProcess = defaults.UsePersistentPowerShellProcess;
+        State.PreferPowerShell7 = defaults.PreferPowerShell7;
+        State.HideScriptRunWindow = defaults.HideScriptRunWindow;
+        PublishSettingEffects(SettingEffects.Compress);
+        PublishSettingEffects(SettingEffects.Scripts);
         foreach (var window in _windows.Values)
         {
             window.UpdateMarkdownRenderMode();
@@ -269,22 +269,21 @@ public sealed partial class AppController
 
     private void RestoreSettingsSidebarTodoDefaults()
     {
-        State.ShowTodoBottomBar = true;
-        State.AutoClearCompletedTodos = false;
-        State.AutoMoveCompletedTodosToBottom = false;
-        State.EnableTodoPaperLinks = true;
-        State.ShowLinkedPaperName = false;
-        State.AllowLongLinkedPaperTitles = false;
-        State.ShowLinkedPathExtensionOnly = false;
-        State.HideLinkedPapersFromCapsules = false;
-        State.RunLinkedScriptCapsulesOnClick = false;
-        State.ExperimentalTodoReminders = false;
-        State.ExperimentalTodoReminderShowButton = true;
-        State.ExperimentalTodoReminderQuickMinutes =
-            ExperimentalTodoReminderOptions.DefaultQuickMinutes;
-        State.ExperimentalTodoReminderSoundEnabled = false;
-        State.ExperimentalTodoReminderSound =
-            TodoReminderSoundOptions.Asterisk;
+        var defaults = new AppState();
+        State.ShowTodoBottomBar = defaults.ShowTodoBottomBar;
+        State.AutoClearCompletedTodos = defaults.AutoClearCompletedTodos;
+        State.AutoMoveCompletedTodosToBottom = defaults.AutoMoveCompletedTodosToBottom;
+        State.EnableTodoPaperLinks = defaults.EnableTodoPaperLinks;
+        State.ShowLinkedPaperName = defaults.ShowLinkedPaperName;
+        State.AllowLongLinkedPaperTitles = defaults.AllowLongLinkedPaperTitles;
+        State.ShowLinkedPathExtensionOnly = defaults.ShowLinkedPathExtensionOnly;
+        State.HideLinkedPapersFromCapsules = defaults.HideLinkedPapersFromCapsules;
+        State.RunLinkedScriptCapsulesOnClick = defaults.RunLinkedScriptCapsulesOnClick;
+        State.ExperimentalTodoReminders = defaults.ExperimentalTodoReminders;
+        State.ExperimentalTodoReminderShowButton = defaults.ExperimentalTodoReminderShowButton;
+        State.ExperimentalTodoReminderQuickMinutes = defaults.ExperimentalTodoReminderQuickMinutes;
+        State.ExperimentalTodoReminderSoundEnabled = defaults.ExperimentalTodoReminderSoundEnabled;
+        State.ExperimentalTodoReminderSound = defaults.ExperimentalTodoReminderSound;
 
         foreach (var window in _windows.Values)
         {

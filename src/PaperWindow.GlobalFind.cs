@@ -7,11 +7,7 @@ namespace PaperTodo;
 
 public sealed partial class PaperWindow
 {
-    private readonly record struct GlobalFindMatch(
-        string PaperId,
-        PaperFindMatch Match);
-
-    private readonly List<GlobalFindMatch> _globalFindMatches = [];
+    private List<GlobalFindMatch> _globalFindMatches = [];
     private int _globalFindIndex = -1;
 
     internal bool TryGetBuiltInFindText(string? todoItemId, out string text)
@@ -38,38 +34,15 @@ public sealed partial class PaperWindow
 
     private void SynchronizeGlobalFindState(string query)
     {
-        if (!CanUseBuiltInFind())
+        var matches = _controller.GetBuiltInFindMatches(query);
+        if (!ReferenceEquals(matches, _globalFindMatches) || _findBodyRefreshQueued ||
+            (_paper.Type == PaperTypes.Todo && _findObservedTodoRowsGeneration != _todoRowsGeneration))
         {
-            _globalFindMatches.Clear();
-            _globalFindIndex = -1;
-            return;
+            var previous = TryGetCurrentFindMatch(out var match) ? match : (PaperFindMatch?)null;
+            SetFindMatches(matches);
+            _findMatchIndex = previous.HasValue ? _findMatches.IndexOf(previous.Value) : -1;
         }
-
-        _globalFindMatches.Clear();
-        _globalFindMatches.AddRange(ScanGlobalFindMatches(query));
         _globalFindIndex = ResolveCurrentGlobalFindIndex();
-    }
-
-    private List<GlobalFindMatch> ScanGlobalFindMatches(string query)
-    {
-        var matches = new List<GlobalFindMatch>();
-        if (string.IsNullOrEmpty(query))
-        {
-            return matches;
-        }
-
-        var localMatches = new List<PaperFindMatch>();
-        foreach (var source in _controller.GetBuiltInFindSources())
-        {
-            localMatches.Clear();
-            AddFindMatches(localMatches, source.TodoItemId, source.Text, query);
-            foreach (var match in localMatches)
-            {
-                matches.Add(new GlobalFindMatch(source.PaperId, match));
-            }
-        }
-
-        return matches;
     }
 
     private int ResolveCurrentGlobalFindIndex()
@@ -78,6 +51,10 @@ public sealed partial class PaperWindow
         {
             return -1;
         }
+
+        if (_globalFindIndex >= 0 && _globalFindIndex < _globalFindMatches.Count &&
+            _globalFindMatches[_globalFindIndex] == new GlobalFindMatch(_paper.Id, local))
+            return _globalFindIndex;
 
         return _globalFindMatches.FindIndex(match =>
             string.Equals(match.PaperId, _paper.Id, StringComparison.Ordinal) &&
@@ -113,8 +90,6 @@ public sealed partial class PaperWindow
 
         if (string.Equals(target.PaperId, _paper.Id, StringComparison.Ordinal))
         {
-            _findMatches.Clear();
-            _findMatches.AddRange(ScanFindMatches(query));
             _findMatchIndex = _findMatches.IndexOf(target.Match);
             _globalFindIndex = targetIndex;
 
@@ -206,7 +181,7 @@ public sealed partial class PaperWindow
                 return;
             }
             ApplyCurrentFindMatch();
-            SynchronizeGlobalFindState(query);
+            SynchronizeGlobalFindState(_findInput.Text);
             UpdateFindCount();
             RepositionBuiltInFindPopup();
         }), DispatcherPriority.Background);

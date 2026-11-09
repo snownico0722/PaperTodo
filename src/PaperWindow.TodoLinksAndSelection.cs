@@ -734,29 +734,14 @@ public sealed partial class PaperWindow
 
         foreach (var item in selected)
         {
-            item.Done = done;
-            if (done)
-            {
-                item.ReminderAt = null;
-                item.ReminderTriggered = false;
-            }
+            TodoRules.SetDone(item, done);
         }
 
+        // Apply ordering to the entire selection once to keep its relative order.
+        TodoRules.ApplyCompletionPolicy(_paper.Items, selected.Select(item => item.Id).ToArray(),
+            done, _controller.State.AutoClearCompletedTodos, _controller.State.AutoMoveCompletedTodosToBottom);
         if (done && _controller.State.AutoClearCompletedTodos)
-        {
-            var selectedIds = selected.Select(item => item.Id).ToHashSet(StringComparer.Ordinal);
-            _paper.Items.RemoveAll(item => selectedIds.Contains(item.Id));
-            if (_paper.Items.Count == 0)
-            {
-                _paper.Items.Add(new PaperItem());
-            }
             _selectedTodoItemIds.Clear();
-        }
-        else
-        {
-            // Move the whole changed block once so batch completion keeps its relative order.
-            MoveTodoItemsAfterDoneChange(selected, done);
-        }
 
         NormalizeTodoItems();
         NormalizeOrders();

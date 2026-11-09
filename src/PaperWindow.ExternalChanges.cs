@@ -10,7 +10,7 @@ public sealed partial class PaperWindow
             RefreshNoteForExternalChange();
         if (_paper.Type == PaperTypes.Todo && !StateReloadModels.Equivalent(before.Items, _paper.Items))
         {
-            RecordExternalTodoMutationAsUndoStep(before.Items);
+            RecordExternalTodoMutationAsUndoStep(TodoRules.CloneAll(before.Items));
             RefreshTodoRowsForExternalChange();
         }
         if (before.Title != _paper.Title || before.BodyHeaderText != _paper.BodyHeaderText ||
@@ -44,27 +44,28 @@ public sealed partial class PaperWindow
         }
     }
 
+    // Takes ownership of a detached snapshot of the rows before the change.
     internal void RecordExternalTodoMutationAsUndoStep(
-        IReadOnlyList<PaperItem> before)
+        List<PaperItem> snapshot)
     {
         if (_paper.Type != PaperTypes.Todo)
         {
             return;
         }
 
-        var editing = before.FirstOrDefault(item => item.Id == _activeOriginalItemId);
+        var editing = snapshot.FirstOrDefault(item => item.Id == _activeOriginalItemId);
         if (editing != null &&
             _activeOriginalText != null &&
             editing.Text != _activeOriginalText)
         {
             // A focused human edit has not reached the paper-level history yet. Record it
             // before the external snapshot so undo order stays human edit -> external write.
-            var original = TodoRules.CloneAll(before);
+            var original = TodoRules.CloneAll(snapshot);
             original.First(item => item.Id == editing.Id).Text = _activeOriginalText;
             _undoStack.Add(original);
         }
 
-        _undoStack.Add(TodoRules.CloneAll(before));
+        _undoStack.Add(snapshot);
         while (_undoStack.Count > MaxUndoDepth)
         {
             _undoStack.RemoveAt(0);

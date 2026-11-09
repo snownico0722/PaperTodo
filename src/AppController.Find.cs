@@ -4,11 +4,75 @@ using System.Linq;
 
 namespace PaperTodo;
 
+internal readonly record struct PaperFindMatch(string? TodoItemId, int Offset, int Length)
+{
+    public bool IsNote => TodoItemId == null;
+}
+
+internal readonly record struct GlobalFindMatch(
+    string PaperId,
+    PaperFindMatch Match);
+
 public sealed partial class AppController
 {
     internal readonly record struct PaperFindSource(string PaperId, string? TodoItemId, string Text);
 
-    internal IReadOnlyList<PaperFindSource> GetBuiltInFindSources()
+    private IReadOnlyList<PaperFindSource> _lastFindSources = [];
+    private string? _lastFindQuery;
+    private List<GlobalFindMatch> _lastFindMatches = [];
+
+    internal List<GlobalFindMatch> GetBuiltInFindMatches(string query)
+    {
+        if (query.Length == 0) return [];
+        var sources = GetBuiltInFindSources();
+        // A save revision misses uncommitted text in other open editors. Compare the
+        // ordered live inputs before reusing offsets, including on cross-paper navigation.
+        if (query == _lastFindQuery && sources.SequenceEqual(_lastFindSources))
+            return _lastFindMatches;
+
+        var matches = new List<GlobalFindMatch>();
+        foreach (var source in sources)
+        {
+            AddFindMatches(matches, source, query);
+        }
+        _lastFindQuery = query;
+        _lastFindSources = sources;
+        _lastFindMatches = matches;
+        return matches;
+    }
+
+    private static void AddFindMatches(
+        List<GlobalFindMatch> destination,
+        PaperFindSource source,
+        string query)
+    {
+        var text = source.Text;
+        var searchFrom = 0;
+        while (searchFrom <= text.Length - query.Length)
+        {
+            var offset = text.IndexOf(
+                query,
+                searchFrom,
+                StringComparison.OrdinalIgnoreCase);
+            if (offset < 0)
+            {
+                break;
+            }
+
+            destination.Add(new GlobalFindMatch(source.PaperId, new PaperFindMatch(source.TodoItemId, offset, query.Length)));
+            searchFrom = offset + query.Length;
+        }
+    }
+
+    internal void ReleaseBuiltInFindResultsIfClosed()
+    {
+        if (_windows.Values.Any(window => window.IsBuiltInFindOpen)) return;
+        _lastFindSources = [];
+        _lastFindQuery = null;
+        _lastFindMatches = [];
+    }
+
+    private IReadOnlyList<PaperFindSource> GetBuiltInFindSources()
     {
         var sources = new List<PaperFindSource>();
         foreach (var paper in State.Papers)
@@ -97,9 +161,5 @@ public sealed partial class AppController
     private static bool IsBuiltInFindPaper(PaperData paper) =>
         paper.Type == PaperTypes.Todo ||
         (paper.Type == PaperTypes.Note &&
-         (string.IsNullOrWhiteSpace(paper.BodyProviderId) ||
-          string.Equals(
-              paper.BodyProviderId,
-              PaperBodyProviderIds.Markdown,
-              StringComparison.Ordinal)));
+         PaperWindow.NormalizeBodyProviderId(paper.BodyProviderId) == PaperBodyProviderIds.Markdown);
 }
