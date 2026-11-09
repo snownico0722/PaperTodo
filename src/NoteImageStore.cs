@@ -834,9 +834,10 @@ public sealed class NoteImageStore : IDisposable
 
     public void ReleaseUnreferencedBitmapCache(AppState state)
     {
-        if (_writeDisabled)
+        lock (_gate)
         {
-            return;
+            if (_writeDisabled || _bitmapCache.Count == 0)
+                return;
         }
 
         var referencedImageIds = state.Papers
@@ -846,14 +847,10 @@ public sealed class NoteImageStore : IDisposable
 
         lock (_gate)
         {
-            foreach (var asset in _images.Values)
+            // Keep original bytes for undo. Only cached decoded pixels can be released here.
+            foreach (var id in _bitmapCache.Keys.Where(id => !referencedImageIds.Contains(id)).ToArray())
             {
-                if (!referencedImageIds.Contains(asset.Id))
-                {
-                    // Keep the original bytes for undo; only decoded pixels are disposable
-                    // while the image is absent from the current document.
-                    RemoveCachedBitmapsFor(asset.Id);
-                }
+                RemoveCachedBitmapsFor(id);
             }
         }
     }
