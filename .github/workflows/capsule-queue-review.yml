@@ -1,0 +1,33 @@
+name: Capsule queue review
+on:
+  push:
+    branches: [bench/capsule-queue-review-20261109]
+permissions:
+  contents: read
+jobs:
+  measure:
+    runs-on: windows-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+      - name: Run isolated production-path probes
+        shell: pwsh
+        env:
+          CAPSULE_AUDIT: "1"
+        run: |
+          python tools/InstrumentCapsuleQueue.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet run -c Release --project tests/PaperTodo.LifecycleChecks -- --case native-free-queue-review
+      - name: Run existing queue and handoff tests
+        shell: pwsh
+        run: |
+          foreach ($case in @("native-free-queue-review","native-free-queues","master-queue-drop-handoff")) {
+            dotnet run --no-build -c Release --project tests/PaperTodo.LifecycleChecks -- --case $case
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
