@@ -31,11 +31,8 @@ public sealed partial class AppController
         WorkspaceSession? target = null;
         string? targetBefore = null;
         var targetWritten = false;
-        var sourceChanged = false;
         var committed = false;
-        var sourceIndex = -1;
-        PaperItem[] affectedLinks = [];
-        PaperData? replacement = null;
+        RemovedPaper? removed = null;
         PaperWindow? detachedBodyWindow = null;
         _workspaceSwitching = true;
         RefreshWorkspaceButtons();
@@ -74,10 +71,6 @@ public sealed partial class AppController
             // Dispose can also call into the host. Never resurrect a paper it
             // deleted, and only snapshot links after the final plugin callback.
             if (IsExiting || !State.Papers.Contains(paper)) return false;
-            sourceIndex = State.Papers.IndexOf(paper);
-            affectedLinks = State.Papers.Where(candidate => candidate.Type == PaperTypes.Todo)
-                .SelectMany(candidate => candidate.Items)
-                .Where(item => item.LinkedPaperId == paper.Id).ToArray();
             target.BindPersistence();
             targetBefore = target.Store.SerializeState(target.State);
             var moved = JsonSerializer.Deserialize<PaperData>(
@@ -113,15 +106,7 @@ public sealed partial class AppController
             target.State.Papers.Add(moved);
             target.Store.SaveJsonSync(target.Store.SerializeState(target.State), NextWorkspaceSaveVersion());
             targetWritten = true;
-            State.Papers.Remove(paper);
-            sourceChanged = true;
-            foreach (var item in affectedLinks) item.ClearQuickLaunch();
-            if (State.Papers.Count == 0)
-            {
-                replacement = CreatePaper(PaperTypes.Todo, show: false);
-                if (replacement == null) throw new InvalidOperationException(Strings.Get("WorkspaceSaveFailed"));
-                replacement.IsVisible = true;
-            }
+            removed = RemovePaperFromWorkspace(paper);
             MarkDirty();
             if (!TrySaveNow(sync: true, workspaceBoundary: true, throwOnFailure: true))
                 throw new IOException(Strings.Get("WorkspaceSaveFailed"));
@@ -131,7 +116,7 @@ public sealed partial class AppController
             // saved transfer into a failure or delete data in the target workspace.
             NotifyPaperRemoved(paper.Id);
             RunExternalPostCommitUi(() => FinalizeExternalPaperDeletion(
-                paper, replacement, refreshLinkedTodos: true));
+                paper, removed.Replacement, refreshLinkedTodos: true));
             RunExternalPostCommitUi(TryFlushPendingPluginPaperStateDeletes);
             return true;
         }
@@ -142,11 +127,9 @@ public sealed partial class AppController
                 Trace.TraceWarning("Committed workspace paper move cleanup failed: {0}", ex);
                 return true;
             }
-            if (sourceChanged)
+            if (removed != null)
             {
-                if (replacement != null) RollbackExternalCreatedPaper(replacement);
-                State.Papers.Insert(Math.Clamp(sourceIndex, 0, State.Papers.Count), paper);
-                foreach (var item in affectedLinks) item.LinkPaper(paper.Id);
+                RestoreRemovedPaper(removed);
                 ResetPaperPluginEventBaseline();
             }
 

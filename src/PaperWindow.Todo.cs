@@ -715,12 +715,10 @@ public sealed partial class PaperWindow
         check.Checked += (_, _) =>
         {
             PushUndoSnapshot();
-            item.Done = true;
+            var clearedReminder = TodoRules.SetDone(item, true);
             InvalidateEdgeCapsulePreviewContent();
-            if (item.ReminderAt.HasValue || item.ReminderTriggered)
+            if (clearedReminder)
             {
-                item.ReminderAt = null;
-                item.ReminderTriggered = false;
                 _controller.NotifyTodoReminderChanged(saveImmediately: false);
             }
             if (reminderButton != null)
@@ -758,7 +756,7 @@ public sealed partial class PaperWindow
         check.Unchecked += (_, _) =>
         {
             PushUndoSnapshot();
-            item.Done = false;
+            TodoRules.SetDone(item, false);
             InvalidateEdgeCapsulePreviewContent();
             if (reminderButton != null)
             {
