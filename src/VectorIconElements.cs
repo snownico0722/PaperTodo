@@ -6,37 +6,20 @@ using Brush = System.Windows.Media.Brush;
 
 namespace PaperTodo;
 
-internal enum VectorPrimitiveIconKind
-{
-    Plus,
-    Minus,
-    Settings
-}
-
-/// <summary>
-/// Small vector primitives whose horizontal and vertical strokes are snapped to the
-/// current device-pixel grid. Curved and diagonal segments keep normal antialiasing.
-/// </summary>
-internal sealed class VectorPrimitiveIconElement : FrameworkElement
+// A one-stroke collapse icon aligned to physical pixels at the current DPI.
+internal sealed class CollapseMinusIconElement : FrameworkElement
 {
     public static readonly DependencyProperty ForegroundProperty =
         DependencyProperty.Register(
             nameof(Foreground),
             typeof(Brush),
-            typeof(VectorPrimitiveIconElement),
+            typeof(CollapseMinusIconElement),
             new FrameworkPropertyMetadata(
                 Brushes.Black,
                 FrameworkPropertyMetadataOptions.AffectsRender));
 
-    private readonly VectorPrimitiveIconKind _kind;
-    private readonly double _verticalOffset;
-
-    public VectorPrimitiveIconElement(
-        VectorPrimitiveIconKind kind,
-        double verticalOffset = 0)
+    public CollapseMinusIconElement()
     {
-        _kind = kind;
-        _verticalOffset = verticalOffset;
         IsHitTestVisible = false;
         SnapsToDevicePixels = true;
         UseLayoutRounding = true;
@@ -62,64 +45,10 @@ internal sealed class VectorPrimitiveIconElement : FrameworkElement
         var pixelX = 1.0 / Math.Max(0.01, dpi.DpiScaleX);
         var pixelY = 1.0 / Math.Max(0.01, dpi.DpiScaleY);
         var centerX = ActualWidth / 2;
-        var centerY = (ActualHeight / 2) + _verticalOffset;
+        var centerY = ActualHeight / 2;
         var deviceOrigin = DevicePixelOrigin();
 
-        switch (_kind)
-        {
-            case VectorPrimitiveIconKind.Plus:
-                DrawPlus(drawingContext, centerX, centerY, pixelX, pixelY, deviceOrigin.X, deviceOrigin.Y);
-                break;
-            case VectorPrimitiveIconKind.Minus:
-                DrawMinus(drawingContext, centerX, centerY, pixelX, pixelY, deviceOrigin.X, deviceOrigin.Y);
-                break;
-            case VectorPrimitiveIconKind.Settings:
-                DrawSettings(
-                    drawingContext,
-                    centerX,
-                    centerY,
-                    pixelX,
-                    pixelY,
-                    deviceOrigin.X,
-                    deviceOrigin.Y);
-                break;
-        }
-    }
-
-    private void DrawPlus(
-        DrawingContext drawingContext,
-        double centerX,
-        double centerY,
-        double pixelX,
-        double pixelY,
-        double originPixelX,
-        double originPixelY)
-    {
-        var extent = Math.Min(ActualWidth, ActualHeight) * 0.31;
-        var thicknessX = AxisThickness(pixelX);
-        var thicknessY = AxisThickness(pixelY);
-        var centerLineX = AxisCenter(centerX, pixelX, thicknessX, originPixelX);
-        var centerLineY = AxisCenter(centerY, pixelY, thicknessY, originPixelY);
-        DrawCenteredRectangle(
-            drawingContext,
-            centerLineX,
-            centerLineY,
-            extent * 2,
-            thicknessY,
-            pixelX,
-            pixelY,
-            originPixelX,
-            originPixelY);
-        DrawCenteredRectangle(
-            drawingContext,
-            centerLineX,
-            centerLineY,
-            thicknessX,
-            extent * 2,
-            pixelX,
-            pixelY,
-            originPixelX,
-            originPixelY);
+        DrawMinus(drawingContext, centerX, centerY, pixelX, pixelY, deviceOrigin.X, deviceOrigin.Y);
     }
 
     private void DrawMinus(
@@ -144,67 +73,6 @@ internal sealed class VectorPrimitiveIconElement : FrameworkElement
             pixelY,
             originPixelX,
             originPixelY);
-    }
-
-    private void DrawSettings(
-        DrawingContext drawingContext,
-        double centerX,
-        double centerY,
-        double pixelX,
-        double pixelY,
-        double originPixelX,
-        double originPixelY)
-    {
-        var minimum = Math.Min(ActualWidth, ActualHeight);
-        var thicknessX = AxisThickness(pixelX);
-        var thicknessY = AxisThickness(pixelY);
-        var stroke = Math.Min(thicknessX, thicknessY);
-        var centerLineX = AxisCenter(centerX, pixelX, thicknessX, originPixelX);
-        var centerLineY = AxisCenter(centerY, pixelY, thicknessY, originPixelY);
-        var ringRadius = Math.Max(minimum * 0.255, stroke * 2.4);
-        var toothLength = Math.Max(stroke * 1.6, minimum * 0.09);
-
-        for (var i = 0; i < 6; i++)
-        {
-            var angle = (Math.PI / 3.0) * i;
-            var toothCenterRadius = ringRadius + (toothLength / 2.0) - (stroke * 0.15);
-            var toothCenterX = centerLineX + (Math.Cos(angle) * toothCenterRadius);
-            var toothCenterY = centerLineY + (Math.Sin(angle) * toothCenterRadius);
-
-            drawingContext.PushTransform(
-                new RotateTransform(
-                    angle * 180.0 / Math.PI,
-                    toothCenterX,
-                    toothCenterY));
-            DrawCenteredRectangle(
-                drawingContext,
-                toothCenterX,
-                toothCenterY,
-                toothLength,
-                stroke,
-                pixelX,
-                pixelY,
-                originPixelX,
-                originPixelY);
-            drawingContext.Pop();
-        }
-
-        drawingContext.DrawEllipse(
-            null,
-            CreateRoundPen(stroke),
-            new Point(centerLineX, centerLineY),
-            ringRadius,
-            ringRadius);
-    }
-
-    private Pen CreateRoundPen(double thickness)
-    {
-        return new Pen(Foreground, thickness)
-        {
-            StartLineCap = PenLineCap.Round,
-            EndLineCap = PenLineCap.Round,
-            LineJoin = PenLineJoin.Round
-        };
     }
 
     private void DrawCenteredRectangle(

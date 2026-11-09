@@ -90,6 +90,9 @@ internal sealed partial class PaperBodyPluginRegistry : IDisposable
 {
     internal const string MinimumPluginApiVersion = "2.1";
     internal const string SupportedPluginApiVersion = "2.3";
+    private PaperBodyPluginDataStore _dataStore =
+        new(Path.Combine(AppContext.BaseDirectory, "plugins"));
+
     private static readonly Regex PluginIdPattern = PluginIdRegex();
     private static readonly StringComparer UiDisplayNameComparer =
         StringComparer.Create(UiLanguages.EffectiveUiCulture, ignoreCase: true);
@@ -649,6 +652,19 @@ internal sealed partial class PaperBodyPluginRegistry : IDisposable
             value += $":{runtime.Length}:{runtime.LastWriteTimeUtc.Ticks}";
         }
         return value;
+    }
+
+    internal PaperBodyPluginDataStore DataStore => _dataStore;
+
+    // Installed code/descriptors remain process-wide. Only a fully stopped workspace's data
+    // store is replaced; Native assemblies are neither rediscovered nor repeatedly loaded.
+    internal PaperBodyPluginDataStore ExchangeWorkspaceDataStore(PaperBodyPluginDataStore next)
+    {
+        ArgumentNullException.ThrowIfNull(next);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        var old = _dataStore;
+        _dataStore = next;
+        return old;
     }
 
     public void Dispose()

@@ -506,15 +506,6 @@ public sealed partial class AppController
         return container;
     }
 
-    private UIElement CreateMaxTitleLengthStepper() =>
-        CreateSettingsStepper(
-            () => State.MaxTitleLength.ToString(CultureInfo.InvariantCulture),
-            () => SetMaxTitleLength(State.MaxTitleLength - 1),
-            () => SetMaxTitleLength(State.MaxTitleLength + 1));
-
-    private void SetMaxTitleLength(int value) =>
-        SetSettingFromUi("title.max_length", PaperTitles.NormalizeMaxTitleLength(value));
-
     internal void OpenSettingsWindow()
     {
         ShowSettingsWindow();
@@ -1528,6 +1519,24 @@ public sealed partial class AppController
         RefreshExperimentalOpacitySurfaces(animate: false);
         RefreshExperimentalFocusPresentationSurfaces();
         RefreshSettingsWindowContent();
+    }
+
+    private void SetDeepCapsuleGapSize(string size) =>
+        SetSettingFromUi("capsule.gap", DeepCapsuleGapSizes.Normalize(size));
+
+    private UIElement CreateDeepCapsuleGapSegmentSelector()
+    {
+        var segments = new[]
+        {
+            (DeepCapsuleGapSizes.Narrow, Strings.Get("DeepCapsuleGapNarrow")),
+            (DeepCapsuleGapSizes.Standard, Strings.Get("DeepCapsuleGapStandard")),
+            (DeepCapsuleGapSizes.Wide, Strings.Get("DeepCapsuleGapWide"))
+        };
+
+        return CreateSegmentSelector(
+            segments,
+            DeepCapsuleGapSizes.Normalize(State.DeepCapsuleGapSize),
+            SetDeepCapsuleGapSize);
     }
 
     private UIElement BuildVisualSettingsPage()

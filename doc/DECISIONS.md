@@ -826,7 +826,7 @@ Global 的关键不是“某张纸片 session 是否正活着”，也不是“�
 - `PaperTodo.Plugin.Abstractions/PaperPluginRuntimeContracts.cs`：`IPaperGlobalTopBarApi`、`PaperPluginRuntimeContext`、`IPaperPluginRuntimeProvider`。
 - `src/AppController.PluginStartup.cs`：`startupPaper` 先于 Runtime ownership reconcile。
 - `src/AppController.PluginRuntime.cs`：实体 Paper 0↔1 reconcile、provider Runtime lifetime 与失败隔离。
-- `src/PaperPluginRuntimeHostApi.cs`：Runtime Workspace / GlobalTopBar facade 与 UI Dispatcher 边界。
+- `src/PaperPluginRuntimeWorkspaceApi.cs`、`src/PaperPluginRuntimeHostApi.cs`：Runtime Workspace / GlobalTopBar facade 与 UI Dispatcher 边界。
 - `src/AppController.PluginTopBar.cs`：Paper session 与 Global Runtime 注册分域、输入校验与统一渲染状态。
 - `src/PaperWindow.PluginTopBar.cs`：宿主绘制、主题/字体/响应式与 suppression reconcile。
 - `src/WebPaperBodySession.TopBar.cs`：Web body 的 Paper document-generation ownership。
@@ -858,7 +858,7 @@ V3 Lite 收敛后，`EdgeCapsuleQueueCompositionProxy.PrewarmLightweight` 仍会
 
 ### Evidence
 
-- `src/App.EdgeCapsuleComposition.cs`：启动 idle 条件与预热调度。
+- `App.xaml.cs`：启动 idle 条件与预热调度。
 - `src/EdgeCapsuleQueueCompositionProxy.LightPrewarm.cs`：Lightweight Prewarm 本体。
 - D-007～D-010：bounded live host、WPF owns shape、DComp translation-only 与 handoff authority 的长期架构边界。
 - PR #137：4.0 slim-down review 再次暴露了该实测结论此前没有进入长期知识 owner。
@@ -1012,7 +1012,7 @@ Markdig 已经提供成熟的 CommonMark parser、AST 和 source span。PaperTod
 
 - `src/MarkdownSemanticDocument.cs`。
 - `src/MarkdownSemanticSnapshot*.cs`。
-- `src/MarkdownSemanticSnapshot.Compatibility.cs`、`src/MarkdownSemanticSnapshot.Escapes.cs` 与 `src/MarkdownSemanticSnapshot.Links.cs`。
+- `src/MarkdownSemanticSnapshot.Html.cs`、`src/MarkdownSemanticSnapshot.Inlines.cs` 与 `src/MarkdownSemanticSnapshot.Links.cs`。
 - `src/MarkdownSemanticPresentation*.cs`。
 - `src/MarkdownListEditing.cs`。
 - `src/MarkdownPaperBodySession.cs`。
@@ -1061,7 +1061,7 @@ D-026 把内置 Note 的 Markdown 语义统一到 Markdig 后，第一版为了�
 
 - `src/MarkdownSemanticDocument.cs`。
 - `src/MarkdownSemanticSnapshot.Incremental.cs`。
-- `src/MarkdownTextBox.Semantics.cs`、`src/MarkdownTextBox.SemanticEditing.cs`、`src/MarkdownTextBox.SemanticImages.cs`。
+- `src/MarkdownTextBox.Semantics.cs`、`src/MarkdownTextBox.SemanticEditing.cs`。
 - `tests/PaperTodo.MarkdownSemanticChecks/SynchronousDocumentChecks.cs`。
 - `d624873`：移除 permanent worker 与 segmented production path。
 - `2b4b5a9`：移除 stale/current semantic compatibility path。
@@ -1186,7 +1186,7 @@ PaperTodo 的产品需求更接近：打开 Note 时建立全文正确基线；�
 - **决定**：删除 `ShouldHideImageReferenceText` 上的 `RenderModeIsFull ||` 短路。Full 档下图片引用文本是否隐藏由 `ImageReferenceTextMode` 决定：`Always` 始终显示、`Editing` 仅编辑态显示、`Hidden` 始终隐藏，与 Off/Basic/Enhanced 三档行为对齐。
 - **影响**：Full 档默认 `ImageReferenceTextMode = Always`（`ImageReferenceTextModes.Normalize` 兜底值），因此用户从其他档切到 Full 后默认会看到图片引用文字。仍希望紧凑观感的用户可在设置面板改为 `Hidden` 或 `Editing`，不需要改代码。
 - **不冲突**：与控制符显灵（`MarkdownSemanticReveal`）解耦——后者只决定 `#`/`**`/链接等语法控制符在活动块内是否显灵，与图片引用文本显隐无关。
-- **证据**：`src/MarkdownTextBox.cs` 的 `ShouldHideImageReferenceText` 现仅读 `_imageReferenceTextMode`；`src/MarkdownTextBox.SemanticImages.cs` 与 `src/MarkdownSemanticPresentation.Colorizer.cs` 自动跟随。
+- **证据**：`src/MarkdownTextBox.cs` 的 `ShouldHideImageReferenceText` 现仅读 `_imageReferenceTextMode`；`src/MarkdownTextBox.Semantics.cs` 与 `src/MarkdownSemanticPresentation.Colorizer.cs` 自动跟随。
 
 ### Follow-up：塌缩占位 run 由 U+200B 改用 WPF `TextHidden`（2026-09）
 
@@ -1215,7 +1215,7 @@ PaperTodo 的产品需求更接近：打开 Note 时建立全文正确基线；�
 ### Evidence
 
 - `src/PluginPopupHost.cs`。
-- `src/PluginPaperActionRegistry.cs`。
+- `src/AppController.PluginPaperActions.cs`。
 - `src/PaperCommandService.NoteAssets.cs`。
 - `src/WebPluginPopupContent.cs`。
 - 历史范围更大的方案见 PR #198；当前最小能力实现见 PR #202。
@@ -1324,7 +1324,7 @@ D-033 移走了单个重段落的排版，但先前完整预热仍在 UI 构建�
 
 - `src/EdgeCapsulePreview.Markdown.Artifact.cs`：有界计划、冻结绘制结果与原生链接挂载。
 - `src/EdgeCapsulePreview.Preload.cs`：来源缓存、延迟队列、UI 发布及取消边界。
-- `src/EdgeCapsulePreview.Markdown.cs` / `src/MarkdownPreviewLinkHit.cs`：单一 viewport 发布与共享原生交互。
+- `src/EdgeCapsulePreview.Markdown.cs` / `src/EdgeCapsulePreview.Markdown.Artifact.cs`：单一 viewport 发布与共享原生交互。
 - `tests/PaperTodo.EdgePreviewChecks`：显式链接行为检查、冷/热像素矩阵、真实 host 首次命中、资源/DPI/版本失效、取消与 worker/动画检查；运行方法和历史数据见 `PRELOAD.md`。
 
 
@@ -1575,7 +1575,7 @@ PR #191 最初在现有透明 WPF 窗口上采样静态壁纸，生成类似云�
 ### Evidence
 
 - `src/NativeMicaBackdrop.cs`、`src/DwmMicaApi.cs`。
-- `src/AppController.Mica.cs`、`src/AppController.Settings.cs`。
+- `src/AppController.Settings.Skins.cs`、`src/AppController.Settings.cs`。
 - `src/PaperWindow.cs`、`src/PaperWindow.Lifecycle.cs`。
 - `tests/PaperTodo.MicaChecks/Program.cs`。
 - PR #191 的原生替换提交；原始壁纸模拟仅保留在 git 历史中。
@@ -1886,7 +1886,7 @@ PR #319 的初版把主胶囊完整材质收展后的卡死解释为终点迟到
 
 ### Evidence
 
-`src/StateStore.Reload.cs`、`src/AppController.DataReload.cs`、`src/StateReloadModels.cs`、`src/PaperCommandService.DataReload.cs` 和 `tests/PaperTodo.DataReloadChecks`。
+`src/StateStore.Reload.cs`、`src/AppController.DataReload.cs`、`src/StateReloadModels.cs`、`src/PaperCommandService.cs` 和 `tests/PaperTodo.DataReloadChecks`。
 
 
 ---
@@ -1914,7 +1914,7 @@ PR #319 的初版把主胶囊完整材质收展后的卡死解释为终点迟到
 
 ### Evidence
 
-`src/StateStore.Merge.cs`、`src/McpTools.cs`、`src/PaperBodyPluginHostApi.DataReload.cs`、`src/WebPaperBodySession.HostRequests.cs`；`tests/PaperTodo.DataReloadChecks` 覆盖读取旧版本后同步/异步保存、同字段冲突、缺失/非法基线，以及 MCP/Native/Web 和窗口生命周期。
+`src/StateStore.Merge.cs`、`src/McpTools.cs`、`src/PaperBodyPluginHostApi.cs`、`src/WebPluginWorkspaceRequests.cs`；`tests/PaperTodo.DataReloadChecks` 覆盖读取旧版本后同步/异步保存、同字段冲突、缺失/非法基线，以及 MCP/Native/Web 和窗口生命周期。
 
 
 ---
@@ -1943,7 +1943,7 @@ PR #319 的初版把主胶囊完整材质收展后的卡死解释为终点迟到
 
 ### Evidence
 
-`StateStore.WriteSafety`、`PersistenceWriteLifetime`、`AppController.PersistencePolicy`、`AppController.DataReload`、`StateStore.ConflictImages`；`WriteSafetyChecks`、`KillSafetyChecks`、`ShutdownSafetyChecks` 通过实际 IO/进程/控件边界约束行为。
+`StateStore.WriteSafety`、`PersistenceWriteLifetime`、`AppController.PersistencePolicy`、`AppController.DataReload`、`StateStore.ConflictRetention`；`WriteSafetyChecks`、`KillSafetyChecks`、`ShutdownSafetyChecks` 通过实际 IO/进程/控件边界约束行为。
 
 
 ---

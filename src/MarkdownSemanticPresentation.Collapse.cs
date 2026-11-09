@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Documents;
 using System.Windows.Media;
 using System.Windows.Media.TextFormatting;
+using System.Windows.Threading;
 using ICSharpCode.AvalonEdit.Document;
 using ICSharpCode.AvalonEdit.Rendering;
 
@@ -9,6 +10,11 @@ namespace PaperTodo;
 
 internal sealed partial class MarkdownSemanticPresentation
 {
+    private const int MaxQueuedLocalRedrawRanges = 8;
+
+    private readonly List<(int Start, int End)> _queuedLocalRedrawRanges = new();
+    private bool _localRedrawQueued;
+
     private SyntaxCollapseElementGenerator? _collapseGenerator;
 
     /// <summary>增量折叠表：静态候选随 snapshot 重建，光标只做局部摘除/插入。</summary>
@@ -107,6 +113,84 @@ internal sealed partial class MarkdownSemanticPresentation
         {
             ScheduleLocalRedraw(newLine.Offset, newLine.TotalLength);
         }
+    }
+
+    /// <summary>
+    /// Coalesces only overlapping or adjacent line ranges. Distant caret jumps remain two redraws
+    /// instead of invalidating every visual line between the old and new caret positions.
+    /// </summary>
+    private void ScheduleLocalRedraw(int start, int length)
+    {
+        if (_disposed || length <= 0)
+        {
+            return;
+        }
+
+        var end = start + length;
+        var index = 0;
+        while (index < _queuedLocalRedrawRanges.Count &&
+               _queuedLocalRedrawRanges[index].End < start)
+        {
+            index++;
+        }
+
+        while (index < _queuedLocalRedrawRanges.Count &&
+               _queuedLocalRedrawRanges[index].Start <= end)
+        {
+            start = Math.Min(start, _queuedLocalRedrawRanges[index].Start);
+            end = Math.Max(end, _queuedLocalRedrawRanges[index].End);
+            _queuedLocalRedrawRanges.RemoveAt(index);
+        }
+
+        _queuedLocalRedrawRanges.Insert(index, (start, end));
+        if (_queuedLocalRedrawRanges.Count > MaxQueuedLocalRedrawRanges)
+        {
+            _queuedLocalRedrawRanges.Clear();
+            ScheduleRedraw();
+            return;
+        }
+
+        if (_localRedrawQueued)
+        {
+            return;
+        }
+
+        _localRedrawQueued = true;
+        _editor.Dispatcher.BeginInvoke(
+            (Action)(() =>
+            {
+                _localRedrawQueued = false;
+                var ranges = _queuedLocalRedrawRanges.ToArray();
+                _queuedLocalRedrawRanges.Clear();
+                if (_disposed || ranges.Length == 0)
+                {
+                    return;
+                }
+
+                var document = _editor.Document;
+                if (document == null)
+                {
+                    return;
+                }
+
+                var textLength = document.TextLength;
+                var textView = _editor.TextArea.TextView;
+                foreach (var range in ranges)
+                {
+                    // A synchronous text edit may supersede a queued caret redraw. The snapshot
+                    // path also queues a full redraw; clamping here merely keeps the stale callback safe.
+                    var redrawStart = Math.Clamp(range.Start, 0, textLength);
+                    var redrawEnd = Math.Clamp(range.End, redrawStart, textLength);
+                    if (redrawEnd > redrawStart)
+                    {
+                        textView.Redraw(
+                            redrawStart,
+                            redrawEnd - redrawStart,
+                            DispatcherPriority.Render);
+                    }
+                }
+            }),
+            DispatcherPriority.Render);
     }
 
     /// <summary>单行显灵可局部刷新；任一活动范围越过该行时交给全量兜底。</summary>

@@ -3,116 +3,120 @@ using PaperTodo.Plugin;
 
 namespace PaperTodo;
 
-internal static class WebPluginWorkspaceRequests
+internal sealed partial class WebPaperBodySession
 {
-    public static object? Execute(
-        IPaperTodoHostApi host,
-        string method,
-        JsonElement parameters) => method switch
+    private object? ExecuteHostRequest(string method, JsonElement parameters)
     {
-        "appSettings.list" or "appSettings.get" or "appSettings.set" =>
-            WebPluginSettingsRequests.Execute(host, method, parameters),
-        "papers.show" => WorkspacePresentation(host).ShowPaper(RequiredString(parameters, "paperId"), OptionalBoolean(parameters, "activate") ?? true),
-        "papers.hide" => WorkspacePresentation(host).HidePaper(RequiredString(parameters, "paperId")),
-        "papers.toggle" => WorkspacePresentation(host).TogglePaperVisibility(RequiredString(parameters, "paperId"), OptionalBoolean(parameters, "activate") ?? true),
-        "papers.expand" => WorkspacePresentation(host).ExpandPaper(RequiredString(parameters, "paperId"), OptionalBoolean(parameters, "activate") ?? true),
-        "papers.collapse" => WorkspacePresentation(host).CollapsePaper(RequiredString(parameters, "paperId")),
-        "papers.toggleCollapsed" => WorkspacePresentation(host).TogglePaperCollapsed(RequiredString(parameters, "paperId"), OptionalBoolean(parameters, "activate") ?? true),
-        "papers.activate" => WorkspacePresentation(host).ActivatePaper(RequiredString(parameters, "paperId")),
-        "data.reload" => host.ReloadData(),
-        "data.merge" => host.MergeData(RequiredString(parameters, "baselineJson")),
-        "data.status" => host.GetDataReloadStatus(),
-        "papers.list" => host.ListPapers(OptionalString(parameters, "type")),
-        "papers.get" => host.GetPaper(RequiredString(parameters, "paperId")),
-        "todos.list" => host.ListTodos(
-            OptionalString(parameters, "paperId"),
-            OptionalBoolean(parameters, "includeBlank") ?? false),
-        "notes.get" => host.GetNote(RequiredString(parameters, "paperId")),
-        "noteAssets.readImage" => (host as IPaperNoteAssetsApi
-            ?? throw new PaperTodoPluginException("note_assets_unavailable", "NoteAssets is unavailable."))
-            .ReadImage(RequiredString(parameters, "paperId"), RequiredString(parameters, "imageId")),
-        "papers.create" => host.CreatePaper(Deserialize<CreatePaperRequest>(parameters)),
-        "todos.append" => host.AppendTodos(Deserialize<AppendTodosRequest>(parameters)),
-        "todos.update" => host.UpdateTodo(Deserialize<UpdateTodoRequest>(parameters)),
-        "todos.setReminder" => host.SetTodoReminder(
-            Deserialize<SetTodoReminderRequest>(parameters)),
-        "reminders.suppressDefault" => ReminderControl(host).SuppressDefaultReminderNotification(
-            RequiredGuid(parameters, "notificationId")),
-        "notes.write" => host.WriteNote(Deserialize<WriteNoteRequest>(parameters)),
-        "todos.delete" => host.DeleteTodo(Deserialize<DeleteTodoRequest>(parameters)),
-        "papers.delete" => host.DeletePaper(RequiredString(parameters, "paperId")),
-        _ => throw new PaperTodoPluginException(
-            "method_not_found",
-            $"Unknown PaperTodo workspace method: {method}")
-    };
-
-    private static IPaperReminderNotificationControl ReminderControl(IPaperTodoHostApi host) =>
-        host as IPaperReminderNotificationControl
-        ?? throw new PaperTodoPluginException("reminder_control_unavailable", "Reminder notification controls are unavailable.");
-
-    private static Guid RequiredGuid(JsonElement parameters, string name)
-    {
-        if (!Guid.TryParse(RequiredString(parameters, name), out var value) || value == Guid.Empty)
-            throw new PaperTodoPluginException("invalid_params", $"{name} must be a non-empty UUID.");
-        return value;
+        return method switch
+        {
+            "runtime.post" => PostRuntimeMessage(parameters),
+            "appSettings.list" or
+            "appSettings.get" or
+            "appSettings.set" =>
+                WebPluginWorkspaceRequests.Execute(_context.Host, method, parameters),
+            "papers.show" or
+            "papers.hide" or
+            "papers.toggle" or
+            "papers.expand" or
+            "papers.collapse" or
+            "papers.toggleCollapsed" or
+            "papers.activate" =>
+                WebPluginWorkspaceRequests.Execute(_context.Host, method, parameters),
+            "papers.list" => _context.Host.ListPapers(OptionalPayloadString(parameters, "type")),
+            "papers.get" => _context.Host.GetPaper(PayloadString(parameters, "paperId")),
+            "todos.list" => _context.Host.ListTodos(
+                OptionalPayloadString(parameters, "paperId"),
+                OptionalPayloadBoolean(parameters, "includeBlank") ?? false),
+            "notes.get" => _context.Host.GetNote(PayloadString(parameters, "paperId")),
+            "noteAssets.readImage" => WebPluginWorkspaceRequests.Execute(_context.Host, method, parameters),
+            "popups.open" or "popups.close" => WebPluginPopupRequests.Execute(
+                _context.Popups, _context.Host, _manifest, method, parameters, message => Send(message)),
+            "papers.create" => _context.Host.CreatePaper(
+                DeserializePayload<CreatePaperRequest>(parameters)),
+            "todos.append" => _context.Host.AppendTodos(
+                DeserializePayload<AppendTodosRequest>(parameters)),
+            "todos.update" => _context.Host.UpdateTodo(
+                DeserializePayload<UpdateTodoRequest>(parameters)),
+            "todos.setReminder" => _context.Host.SetTodoReminder(
+                DeserializePayload<SetTodoReminderRequest>(parameters)),
+            "notes.write" => _context.Host.WriteNote(
+                DeserializePayload<WriteNoteRequest>(parameters)),
+            "todos.delete" => _context.Host.DeleteTodo(
+                DeserializePayload<DeleteTodoRequest>(parameters)),
+            "papers.delete" => _context.Host.DeletePaper(
+                PayloadString(parameters, "paperId")),
+            "paper.show" or
+            "paper.hide" or
+            "paper.toggle" or
+            "paper.expand" or
+            "paper.collapse" or
+            "paper.toggleCollapsed" or
+            "paper.activate" => ExecutePaperPresentationHostRequest(method, parameters),
+            "topbar.paper.set" => SetPaperTopBarActionsFromWeb(parameters),
+            "topbar.global.set" => SetGlobalTopBarActionsFromWeb(parameters),
+            _ => throw new PaperTodoPluginException(
+                "method_not_found",
+                $"Unknown PaperTodo plugin host method: {method}")
+        };
     }
 
-    private static IPaperWorkspacePresentationApi WorkspacePresentation(IPaperTodoHostApi host) =>
-        host as IPaperWorkspacePresentationApi
-        ?? throw new PaperTodoPluginException("presentation_unavailable", "Cross-paper presentation is unavailable.");
+    private object? ExecuteMiniHostRequest(string method, JsonElement parameters) =>
+        method == "runtime.post"
+            ? PostRuntimeMessage(parameters)
+            : WebPluginWorkspaceRequests.Execute(_context.Host, method, parameters);
 
-    private static T Deserialize<T>(JsonElement payload)
+    private object? PostRuntimeMessage(JsonElement parameters)
     {
-        try
-        {
-            return payload.Deserialize<T>(WebPluginRuntimeInfrastructure.JsonOptions)
-                ?? throw new JsonException("Payload deserialized to null.");
-        }
-        catch (Exception ex) when (ex is JsonException or NotSupportedException)
+        var message = parameters.ValueKind == JsonValueKind.Object &&
+                      parameters.TryGetProperty("message", out var messageValue)
+            ? messageValue
+            : default;
+        if (!_context.Runtime.Post(
+                message.ValueKind == JsonValueKind.Undefined
+                    ? JsonSerializer.SerializeToElement<object?>(null)
+                    : message.Clone()))
         {
             throw new PaperTodoPluginException(
-                "invalid_params",
-                ex.GetBaseException().Message);
+                "runtime_unavailable",
+                "The plugin Runtime is not ready to accept this message.");
         }
+        return null;
     }
 
-    private static string RequiredString(JsonElement payload, string name)
+    private object? ExecutePaperPresentationHostRequest(
+        string method,
+        JsonElement parameters)
     {
-        var value = OptionalString(payload, name);
-        if (string.IsNullOrWhiteSpace(value))
+        var activate = OptionalPayloadBoolean(parameters, "activate") ?? true;
+        switch (method)
         {
-            throw new PaperTodoPluginException("invalid_params", $"{name} is required.");
+            case "paper.show":
+                _context.Presentation.Show(activate);
+                break;
+            case "paper.hide":
+                _context.Presentation.Hide();
+                break;
+            case "paper.toggle":
+                _context.Presentation.ToggleVisibility(activate);
+                break;
+            case "paper.expand":
+                _context.Presentation.Expand(activate);
+                break;
+            case "paper.collapse":
+                _context.Presentation.Collapse();
+                break;
+            case "paper.toggleCollapsed":
+                _context.Presentation.ToggleCollapsed(activate);
+                break;
+            case "paper.activate":
+                _context.Presentation.Activate();
+                break;
+            default:
+                throw new PaperTodo.Plugin.PaperTodoPluginException(
+                    "method_not_found",
+                    $"Unknown PaperTodo paper presentation method: {method}");
         }
-        return value;
-    }
 
-    private static string? OptionalString(JsonElement payload, string name)
-    {
-        if (payload.ValueKind != JsonValueKind.Object ||
-            !payload.TryGetProperty(name, out var value) ||
-            value.ValueKind == JsonValueKind.Null)
-        {
-            return null;
-        }
-        if (value.ValueKind != JsonValueKind.String)
-        {
-            throw new PaperTodoPluginException("invalid_params", $"{name} must be a string.");
-        }
-        return value.GetString();
-    }
-
-    private static bool? OptionalBoolean(JsonElement payload, string name)
-    {
-        if (payload.ValueKind != JsonValueKind.Object ||
-            !payload.TryGetProperty(name, out var value) ||
-            value.ValueKind == JsonValueKind.Null)
-        {
-            return null;
-        }
-        if (value.ValueKind is not JsonValueKind.True and not JsonValueKind.False)
-        {
-            throw new PaperTodoPluginException("invalid_params", $"{name} must be a boolean.");
-        }
-        return value.GetBoolean();
+        return null;
     }
 }

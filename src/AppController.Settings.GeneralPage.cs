@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -106,6 +107,34 @@ public sealed partial class AppController
         return AdvancedSettingsBlock(options.ToArray());
     }
 
+    private UIElement CreateMaxTitleLengthStepper() =>
+        CreateSettingsStepper(
+            () => State.MaxTitleLength.ToString(CultureInfo.InvariantCulture),
+            () => SetMaxTitleLength(State.MaxTitleLength - 1),
+            () => SetMaxTitleLength(State.MaxTitleLength + 1));
+
+    private void SetMaxTitleLength(int value) =>
+        SetSettingFromUi("title.max_length", PaperTitles.NormalizeMaxTitleLength(value));
+
+    private UIElement CreateDeepCapsuleTitleMeasureLimitStepper() =>
+        CreateSettingsStepper(
+            DeepCapsuleTitleMeasureLimitText,
+            () => SetDeepCapsuleTitleMeasureCharacterLimit(EdgeCapsuleTitleLimit.Step(
+                State.DeepCapsuleTitleMeasureCharacterLimit, increase: false)),
+            () => SetDeepCapsuleTitleMeasureCharacterLimit(EdgeCapsuleTitleLimit.Step(
+                State.DeepCapsuleTitleMeasureCharacterLimit, increase: true)));
+
+    private string DeepCapsuleTitleMeasureLimitText()
+    {
+        var limit = State.DeepCapsuleTitleMeasureCharacterLimit;
+        return limit == EdgeCapsuleTitleLimit.Unlimited
+            ? Strings.Get("SettingsAllCharacters")
+            : (limit == EdgeCapsuleTitleLimit.Hidden ? 0 : limit).ToString(CultureInfo.InvariantCulture);
+    }
+
+    private void SetDeepCapsuleTitleMeasureCharacterLimit(int value) =>
+        SetSettingFromUi("capsule.title_measure_limit", EdgeCapsuleTitleLimit.Normalize(value));
+
     private UIElement BuildSettingsGeneralOptions()
     {
         var leftColumn = new StackPanel
@@ -156,6 +185,68 @@ public sealed partial class AppController
 
         RefreshSettingsSystemVisibilityToggleStates();
         return leftColumn;
+    }
+
+    private void SetUiLanguage(string language)
+    {
+        var normalized = UiLanguages.Normalize(language);
+        if (string.Equals(State.UiLanguage, normalized, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        if (!SetSettingFromUi("general.language", normalized)) return;
+
+        if (_settingsWindow == null ||
+            !PaperNoticeDialog.ShowChoice(
+                _settingsWindow,
+                SettingsSidebarLocalized(
+                    "重启 PaperTodo",
+                    "Restart PaperTodo",
+                    "PaperTodo を再起動",
+                    "PaperTodo 다시 시작"),
+                SettingsSidebarLocalized(
+                    "界面语言将在重启 PaperTodo 后生效。要现在立即重启吗？",
+                    "The interface language will take effect after restarting PaperTodo. Restart now?",
+                    "表示言語は PaperTodo の再起動後に反映されます。今すぐ再起動しますか？",
+                    "인터페이스 언어는 PaperTodo를 다시 시작한 후 적용됩니다. 지금 다시 시작할까요?"),
+                SettingsSidebarLocalized("稍后", "Later", "後で", "나중에"),
+                SettingsSidebarLocalized(
+                    "立即重启",
+                    "Restart now",
+                    "今すぐ再起動",
+                    "지금 다시 시작")))
+        {
+            return;
+        }
+
+        if (Application.Current is App app)
+        {
+            app.RequestRestartAfterExit();
+        }
+        Exit();
+    }
+
+    private UIElement CreateUiLanguageSettingsRow() =>
+        CompactSettingsField(
+            Strings.Get("SettingsUiLanguage"),
+            CreateUiLanguageSelector(),
+            editorWidth: 156,
+            tipKey: "TipSettingsUiLanguage",
+            topMargin: 4);
+
+    private UIElement CreateUiLanguageSelector()
+    {
+        return CreateSettingsSelect(
+            [
+                (UiLanguages.System, Strings.Get("UiLanguageSystem")),
+                (UiLanguages.ChineseSimplified, Strings.Get("UiLanguageZhHans")),
+                (UiLanguages.English, Strings.Get("UiLanguageEnglish")),
+                (UiLanguages.Japanese, Strings.Get("UiLanguageJapanese")),
+                (UiLanguages.Korean, Strings.Get("UiLanguageKorean"))
+            ],
+            UiLanguages.Normalize(State.UiLanguage),
+            SetUiLanguage);
     }
 
     private void ToggleEdgeCapsulePreviewPreferDownward() =>
