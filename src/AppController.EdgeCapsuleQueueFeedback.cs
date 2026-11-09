@@ -346,7 +346,7 @@ public sealed partial class AppController
             _masterCapsules.TryGetValue(targetKey, out var foldedMaster))
         {
             _nativeQueueDropGhost.ShowMergeHaloAt(geometry, side,
-                foldedMaster.AnchorTop, foldedMaster.DesiredDockedWidthFor(geometry),
+                target.StartTopMargin, foldedMaster.DesiredDockedWidthFor(geometry),
                 raiseDrag, topmost);
             return;
         }
