@@ -241,7 +241,9 @@ public sealed partial class AppController
                 RefreshMicaSettings();
                 break;
             case SettingEffects.NativeMaterial: RefreshMicaSettings(); break;
-            case SettingEffects.Typography: RefreshPublicSettingsTypography(); break;
+            case SettingEffects.Typography:
+                ConfigureSettingsTypography();
+                RefreshTypography(); break;
             case SettingEffects.Animations:
                 if (!State.EnableAnimations)
                 {
@@ -251,12 +253,11 @@ public sealed partial class AppController
                 RefreshSkinSurfaces();
                 break;
             case SettingEffects.Markdown:
-                foreach (var w in _windows.Values.ToArray()) w.UpdateMarkdownRenderMode();
+                RefreshWindowSettingEffects(effects);
                 RebuildTrayMenu(); break;
             case SettingEffects.MarkdownAnimations:
-                foreach (var w in _windows.Values.ToArray()) w.UpdateMarkdownEditAnimation(); break;
             case SettingEffects.ImageReferences:
-                foreach (var w in _windows.Values.ToArray()) w.UpdateImageReferenceTextMode(); break;
+                RefreshWindowSettingEffects(effects); break;
             case SettingEffects.ExternalExtension:
                 // Update the existing editor before any later focus-loss commit can read it.
                 if (_settingsExternalMarkdownTextBox is { } editor)
@@ -265,14 +266,14 @@ public sealed partial class AppController
                     editor.Text = ExternalMarkdownFileExtensions.Normalize(State.ExternalMarkdownExtension);
                     editor.CaretIndex = Math.Min(caret, editor.Text.Length);
                 }
-                foreach (var w in _windows.Values.ToArray()) w.UpdateExternalMarkdownExtension(); break;
+                RefreshWindowSettingEffects(effects); break;
             case SettingEffects.Compress: _imageStore.AutoCompressLargeImages = State.AutoCompressLargeImages; break;
             case SettingEffects.TodoRows:
             case SettingEffects.TodoOrder:
                 foreach (var w in _windows.Values.ToArray()) w.RefreshTodoRowsForExternalChange(); break;
             case SettingEffects.TodoLinks:
                 ClearPaperLinkDropTarget();
-                foreach (var w in _windows.Values.ToArray()) w.UpdateTodoLinkFeature();
+                RefreshWindowSettingEffects(effects);
                 RefreshCapsuleEligibilityForLinkedPapers(); break;
             case SettingEffects.LinkedCapsules: RefreshCapsuleEligibilityForLinkedPapers(); break;
             case SettingEffects.TopBar:
@@ -283,7 +284,7 @@ public sealed partial class AppController
             case SettingEffects.CapsuleClose:
                 foreach (var w in _windows.Values.ToArray()) w.UpdateEdgeCapsuleCloseButtonMode(); break;
             case SettingEffects.Titles:
-                foreach (var w in _windows.Values.ToArray()) w.RefreshPaperTitle();
+                RefreshWindowSettingEffects(effects);
                 ArrangeDeepCapsules(animate: State.EnableAnimations); RebuildTrayMenu(); break;
             case SettingEffects.Preview:
                 if (!State.ExperimentalEdgeCapsuleHoverPreview) CloseEdgeCapsulePreview(animate: false, arrange: false);
@@ -291,7 +292,7 @@ public sealed partial class AppController
                 RefreshEdgeCapsuleHoverIntentRuntime(); break;
             case SettingEffects.HoverIntent: RefreshEdgeCapsuleHoverIntentRuntime(); break;
             case SettingEffects.EdgeTopmost:
-                foreach (var w in _windows.Values.ToArray()) w.RefreshDeepCapsuleSlotTopmost();
+                RefreshWindowSettingEffects(effects);
                 foreach (var w in _masterCapsules.Values.ToArray()) w.RefreshEffectiveTopmost(); break;
             case SettingEffects.Opacity: RefreshExperimentalOpacitySurfaces(); break;
             case SettingEffects.Focus: RefreshExperimentalFocusPresentationSurfaces(); break;
@@ -317,11 +318,35 @@ public sealed partial class AppController
         }
     }
 
-    private void RefreshPublicSettingsTypography()
+    private void ConfigureSettingsTypography()
     {
         AppTypography.Configure(State.UiFontPreset, State.Zoom, State.CustomFontEnhancedBold, State.TextRenderingProfile);
         NoteTypography.Configure(State.NoteTextSize, State.NoteTextBold);
-        RefreshTypography();
+    }
+
+    // Keep page restores in their existing per-window order; callers own saving,
+    // settings editors, tray refresh and runtime handoffs.
+    private void RefreshWindowSettingEffects(params SettingEffects[] effects)
+    {
+        foreach (var window in _windows.Values.ToArray())
+            ApplyWindowSettingEffects(window, effects);
+    }
+
+    private static void ApplyWindowSettingEffects(PaperWindow window, ReadOnlySpan<SettingEffects> effects)
+    {
+        foreach (var effect in effects)
+        {
+            switch (effect)
+            {
+                case SettingEffects.Markdown: window.UpdateMarkdownRenderMode(); break;
+                case SettingEffects.MarkdownAnimations: window.UpdateMarkdownEditAnimation(); break;
+                case SettingEffects.ImageReferences: window.UpdateImageReferenceTextMode(); break;
+                case SettingEffects.ExternalExtension: window.UpdateExternalMarkdownExtension(); break;
+                case SettingEffects.TodoLinks: window.UpdateTodoLinkFeature(); break;
+                case SettingEffects.Titles: window.RefreshPaperTitle(); break;
+                case SettingEffects.EdgeTopmost: window.RefreshDeepCapsuleSlotTopmost(); break;
+            }
+        }
     }
 
     private IEnumerable<PaperSettingDefinition> CreateExternalSettingsCatalog()

@@ -261,48 +261,42 @@ public sealed partial class AppController
 
     private void RestoreSettingsSidebarGeneralDefaults()
     {
-        State.UiLanguage = UiLanguages.Default;
-        State.HidePapersFromTaskbar = true;
-        State.HidePapersFromWindowSwitcher = true;
-        State.FullscreenTopmostMode = FullscreenTopmostModes.Avoid;
-        State.ShowTopBarNewTodoButton = true;
-        State.ShowTopBarNewNoteButton = true;
-        State.ShowTopBarExternalOpenButton = false;
-        State.TopBarShortcutOrder = PaperTopBarShortcuts.NormalizeOrder(null);
-        State.TopBarPinnedCount = 2;
-        State.HiddenTopBarShortcuts = [];
-        State.TodoTopBarShortcuts = null;
-        State.NoteTopBarShortcuts = null;
-        State.UseCapsuleMode = true;
-        State.UseDeepCapsuleMode = true;
-        State.ShowDeepCapsuleWhileExpanded = true;
-        State.HideEdgeCapsuleCloseButtonOnHover = false;
-        State.RememberDeepCapsuleExpandedPosition = true;
-        State.UseCapsuleCollapseAll = true;
-        State.UseCapsuleFreeQueues = false;
-        State.CompactMasterCapsule = false;
-        State.CollapseExpandedDeepCapsuleOnClick = false;
-        State.EdgeCapsulePreviewPreferDownward = false;
-        State.ExperimentalEdgeCapsuleHoverPreview = true;
-        State.ExperimentalEdgeCapsuleHoverIntent = true;
+        var defaults = new AppState();
+        State.UiLanguage = defaults.UiLanguage;
+        State.HidePapersFromTaskbar = defaults.HidePapersFromTaskbar;
+        State.HidePapersFromWindowSwitcher = defaults.HidePapersFromWindowSwitcher;
+        State.FullscreenTopmostMode = defaults.FullscreenTopmostMode;
+        State.ShowTopBarNewTodoButton = defaults.ShowTopBarNewTodoButton;
+        State.ShowTopBarNewNoteButton = defaults.ShowTopBarNewNoteButton;
+        State.ShowTopBarExternalOpenButton = defaults.ShowTopBarExternalOpenButton;
+        State.TopBarShortcutOrder = defaults.TopBarShortcutOrder;
+        State.TopBarPinnedCount = defaults.TopBarPinnedCount;
+        State.HiddenTopBarShortcuts = defaults.HiddenTopBarShortcuts;
+        State.TodoTopBarShortcuts = defaults.TodoTopBarShortcuts;
+        State.NoteTopBarShortcuts = defaults.NoteTopBarShortcuts;
+        State.UseCapsuleMode = defaults.UseCapsuleMode;
+        State.UseDeepCapsuleMode = defaults.UseDeepCapsuleMode;
+        State.ShowDeepCapsuleWhileExpanded = defaults.ShowDeepCapsuleWhileExpanded;
+        State.HideEdgeCapsuleCloseButtonOnHover = defaults.HideEdgeCapsuleCloseButtonOnHover;
+        State.RememberDeepCapsuleExpandedPosition = defaults.RememberDeepCapsuleExpandedPosition;
+        State.UseCapsuleCollapseAll = defaults.UseCapsuleCollapseAll;
+        State.UseCapsuleFreeQueues = defaults.UseCapsuleFreeQueues;
+        State.CompactMasterCapsule = defaults.CompactMasterCapsule;
+        State.CollapseExpandedDeepCapsuleOnClick = defaults.CollapseExpandedDeepCapsuleOnClick;
+        State.EdgeCapsulePreviewPreferDownward = defaults.EdgeCapsulePreviewPreferDownward;
+        State.ExperimentalEdgeCapsuleHoverPreview = defaults.ExperimentalEdgeCapsuleHoverPreview;
+        State.ExperimentalEdgeCapsuleHoverIntent = defaults.ExperimentalEdgeCapsuleHoverIntent;
         State.ExperimentalEdgeCapsuleHoverIntentSensitivity =
-            EdgeCapsuleHoverIntentSensitivities.Medium;
-        State.ExperimentalDockedCapsulesNonTopmost = false;
-        State.MaxTitleLength = PaperTitles.DefaultMaxTitleLength;
-        State.DeepCapsuleTitleMeasureCharacterLimit = 0;
+            defaults.ExperimentalEdgeCapsuleHoverIntentSensitivity;
+        State.ExperimentalDockedCapsulesNonTopmost = defaults.ExperimentalDockedCapsulesNonTopmost;
+        State.MaxTitleLength = defaults.MaxTitleLength;
+        State.DeepCapsuleTitleMeasureCharacterLimit = defaults.DeepCapsuleTitleMeasureCharacterLimit;
 
         NormalizePaperSystemVisibilitySettings();
         SaveNow();
         ApplyGeneralSettingsAfterRestore();
-        RefreshEdgeCapsuleHoverIntentRuntime();
-        foreach (var window in _windows.Values)
-        {
-            window.RefreshDeepCapsuleSlotTopmost();
-        }
-        foreach (var master in _masterCapsules.Values)
-        {
-            master.RefreshEffectiveTopmost();
-        }
+        PublishSettingEffects(SettingEffects.HoverIntent);
+        PublishSettingEffects(SettingEffects.EdgeTopmost);
         RefreshSettingsWindowContent();
     }
 

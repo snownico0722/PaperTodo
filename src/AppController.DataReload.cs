@@ -243,9 +243,8 @@ public sealed partial class AppController
 
     private void RefreshReloadedSettings(bool previousPersistentPowerShell, bool previousPreferPowerShell7)
     {
-        _imageStore.AutoCompressLargeImages = State.AutoCompressLargeImages;
-        AppTypography.Configure(State.UiFontPreset, State.Zoom, State.CustomFontEnhancedBold, State.TextRenderingProfile);
-        NoteTypography.Configure(State.NoteTextSize, State.NoteTextBold);
+        PublishSettingEffects(SettingEffects.Compress);
+        ConfigureSettingsTypography();
         ApplyGeneralSettingsAfterRestore();
         foreach (var window in _windows.Values.ToArray())
         {
