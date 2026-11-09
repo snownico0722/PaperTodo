@@ -1,24 +1,17 @@
 # PaperTodo Agent 备忘
 
-本文件是 **Agent 的项目入口、任务路由和执行规则**。PaperTodo 已验证有价值的详细操作规则、隐藏硬约束和容易误改的禁区应继续保留；当前架构的完整解释和历史取舍不在这里重复，除非某个结论本身是 Agent 修改时必须直接遵守的 Do / Don't。
-
-当前代码描述“现在实际怎么跑”，但不天然代表正确设计；代码、文档、决策或注释冲突时，先结合当前实现、提交历史和可观察行为核对，再统一修正。
+本文件记录项目专用的执行规则和修改禁区。
 
 ## 项目知识入口
 
-- [`ARCHITECTURE.md`](doc/ARCHITECTURE.md)：**当前有效的技术选型、架构结构、ownership 和已确立技术方向**。回答“现在应该按什么原则设计”。
-- [`DECISIONS.md`](doc/DECISIONS.md)：**历史取舍、失败路线、踩坑、trade-off 和 why**。回答“为什么会走到今天这条路”。
-- `AGENTS.md`：**任务路由 + Agent 执行规则**。规定项目专用工作方式、禁区、提交/CI/发布等执行要求。
-- 当前代码与关键注释：**具体实现事实和局部 why**。真正修改前仍必须读代码，不能把任何文档当源码替代品。
-
-常见任务先按下面的路由进入，再读相关当前代码：
+从下表选取任务入口，再读相关代码。当前架构见 [ARCHITECTURE.md](doc/ARCHITECTURE.md)，历史取舍见 [DECISIONS.md](doc/DECISIONS.md)。资料有冲突时，核对实现、可观察行为和 git/PR 历史后再修正。
 
 | 任务 | 优先读取 |
 | --- | --- |
 | Edge Capsule / 胶囊流畅性 | 本文件「Edge Capsule 硬约束」→ 按下述影响范围读取 Architecture / Decisions → 相关当前代码 |
-| 持久化 / 恢复 / 图片 | Architecture「状态与持久化架构」→ D-002、D-003；审查空工作区初始化和启动图片清理时，遵循 [D-070 已接受的主工作区缺失边界](doc/DECISIONS.md#主工作区缺少全部核心文件)；插件状态再读 D-020 |
-| paper-body 插件 | `plugin-samples/README.md`（当前插件 API / 示例）→ Architecture「Paper 与 paper-body 插件」→ D-004；Edge mini 看 D-018，插件数据看 D-020 |
-| MCP / 插件外部写入 | Architecture「进程与运行时边界」「外部读写」→ D-021 → `PaperCommandService` / transport adapter 当前代码 |
+| 持久化 / 恢复 / 图片 | Architecture「状态与持久化架构」→ D-002、D-003；审查空工作区初始化和启动图片清理时，遵循 [D-070 已接受的主工作区缺失边界](doc/DECISIONS.md#主工作区缺少全部核心文件)；插件状态再读 D-020、D-040 |
+| paper-body 插件 | `plugin-samples/README.md`（当前插件 API / 示例）→ Architecture「Paper 与 paper-body 插件」→ D-004；Edge mini 看 D-018，插件数据看 D-020、D-040 |
+| MCP / 插件外部写入 | Architecture「进程与运行时边界」「外部读写」→ D-021、D-040 → `PaperCommandService` / transport adapter 当前代码 |
 | 托盘 / Hardcodet | Architecture「OS 与全局集成」→ D-017 → 当前 tray / vendored fork 代码 |
 | Note / Markdown | Architecture 的 Paper/Note 边界；涉及单正文 surface 看 D-019，再读当前 Markdown 代码 |
 | 架构重构 / 恢复旧方案 | Architecture + 相关 Decisions + 相关 git/PR 历史，全部核对后再改 |
@@ -30,43 +23,32 @@ Edge 任务先阅读本文件的硬约束，再按实际影响范围选择资料
 
 - 文案、颜色或不改变布局/交互边界的普通参数调整：读取相关当前代码及局部规则，不默认加载完整 Edge 历史。
 - 状态、布局、命中、拖拽、窗口交接或动画调整：读取 Architecture「Edge Capsule V3 Lite」的对应小节和相关 Decisions。状态看 D-005，队列/几何看 D-006，命中看 D-014，拖拽看 D-011，surface/composition/交接看 D-007～D-010、D-013，当前帧节拍看 D-038，历史取舍看 D-012、D-032；涉及插件 mini 再读 D-018。跨多个边界时合并读取。
+- 自由队列与主胶囊：[D-066](doc/DECISIONS.md#d-066---free-queues-extend-existing-direct-manipulation) 记录最初的拖动设计，主胶囊归属看 [D-067](doc/DECISIONS.md#d-067---free-queue-masters-follow-queue-identity-2026-11-04)，插入与独立落点看 [D-068](doc/DECISIONS.md#d-068---free-queue-drops-preview-independent-placement-and-prefer-downward-insertion-2026-11-05)、[D-069](doc/DECISIONS.md#d-069---independent-landing-ghosts-consume-the-adjacent-gap-before-moving-neighbours-2026-11-05)，关闭自由队列后的 Ctrl 拖动看 [D-072](doc/DECISIONS.md#d-072--ctrl-整队拖拽归属胶囊自由队列)。
 - 整体呈现路线重构、Edge 全局审查或恢复旧方案：读取完整 Edge 架构、D-005～D-014，以及涉及插件 mini 时的 D-018，并核对相关 git/PR 历史。
 
-阅读中发现影响超出初始判断时，先补读受影响边界再修改；按需读取不豁免任何既有硬约束。
-
-不要只依赖当前对话、PR 描述或旧 Agent 记忆。判断**当前技术方向**先看 Architecture；判断**旧方案为什么被否决、能否恢复**先看 Decisions；决定**这次具体怎么改**必须回到当前代码。
+发现改动跨越其他边界时，先补读对应资料和硬约束。
 
 ## 文档与代码同步
 
-每次代码变更在提交前做一次**知识影响判断**。按下面的 owner 更新；没有影响时可以明确不改对应文档，不为了“同步过”制造痕迹。
+提交前按实际变化更新对应位置。
 
 | 变化 | 知识 owner |
 | --- | --- |
 | 当前技术选型、ownership、数据域、关键结构或已确立方向变化 | `ARCHITECTURE.md` |
 | 形成/推翻历史取舍、确认失败路线或可复用踩坑 | `DECISIONS.md` |
-| Agent 工作方式、执行规则、禁区、CI/发布规则变化 | `AGENTS.md` |
+| Agent 任务路由、执行规则、产品边界、数据安全约束或 CI/发布规则变化 | `AGENTS.md` |
+| 用户操作入口、选项位置或操作步骤变化 | 对照实际界面，同步[中文用户指南](doc/USER_GUIDE.md)和[英文用户指南](doc/USER_GUIDE.en.md)中的相关说明 |
 | 局部隐藏不变量或危险边界变化 | 附近代码注释 |
 
-涉及架构、ownership、历史方案或文档整理时，先检查现有文档，再读相关代码和 git/PR 历史；事实核对完成后再统一修订，不要边发现边写出随后又被推翻的说明。
-
-不要新增并行描述“当前完整架构”的专题文档。专题材料只能补充根文档没有承载的局部信息，并明确指回 Source of Truth。一次性验证、PR 过程和临时手工场景不升级成长期验收矩阵；长期可证明的正确性优先进入编译、行为测试、诊断日志和可执行检查。
+架构或决策变更先核对现有条目、当前代码和相关 git/PR 历史。专题文档只补充局部信息，并链接回对应主文档。一次性验证留在 PR，长期需要保护的行为优先用行为测试、诊断日志或可执行检查验证。
 
 ### `ARCHITECTURE.md` 写入规则
 
-- 只记录**当前有效**的技术选型、结构、ownership 和已经确立的技术方向；不是历史日志，也不是未来 roadmap。
-- ownership、主要数据流/数据域、持久化协议、paper/window/plugin 生命周期边界、关键 runtime 职责、重要 OS/进程集成和仓库主结构变化通常需要更新；颜色、文案、普通常量、普通算法细节和不改变职责边界的局部实现通常不写。
-- 写入前重新核对当前代码入口、owner 和调用链；无法从当前代码和已确认选择中证明的猜测、候选方案不写。
-- 可以简短说明当前方向的核心理由；历史试错、完整 trade-off、失败路线和“为什么不能回去”放到 Decisions。普通毫秒数、重试次数、尺寸、诊断阈值等易变参数留在代码，除非数值本身就是协议/兼容边界。
-- 被替代的当前机制直接从 Architecture 正文移除；历史由 Decisions + git/PR 保留。若只是纠正文档与既有代码的偏差，按事实校准处理，不伪装成架构变更。
+记录已核实的职责、数据流、持久化协议、生命周期和集成边界。机制被替代时直接更新正文，历史留在 Decisions 和 git/PR。普通参数留在代码，构成协议或兼容边界的数值才写入架构。若只是文档落后于实现，按现状纠正即可。
 
 ### `DECISIONS.md` 写入规则
 
-- Decisions 是**历史技术记忆**，记录以后仍需要知道的 context / why / trade-off / rejected route / pitfall。普通 bugfix、参数微调、UI 调整、测试结果和临时诊断不自动新增 decision；只有最终形成可复用选择或教训时才提炼。
-- 写新条目前先搜索现有 D-xxx。既有 Accepted 条目可以修正事实错误、补证据或澄清原意；如果技术选择本身已经改变，优先新增下一条 D-xxx，并把旧条目标为 `Superseded by D-xxx`，不要把历史改写成“从来没走过旧路”。
-- 新条目优先包含 `Status`、`Context`、`Decision`、`Why`、`Evidence`；确有危险旧路线时再写 `Rejected / Do not reintroduce`，需要时加 `Consequences`。
-- `Rejected` 只记录已有证据证明危险、复杂或不符合当前路线的方案，不把“没选中”自动升级成永久禁令。
-- `Evidence` 优先指向当前代码中的文件/类型/关键入口；历史因果重要时补关键 commit/PR。聊天记录不作为长期证据。
-- Decisions 不是 changelog。把大量试错压缩成背景、选择、关键失败原因和以后不能忘的边界；完整过程留在 git/PR。检查后确认没有新的历史取舍或必要补充时，不修改 Decisions。
+新增决策前先搜索现有 D-xxx。事实澄清可补入原条目。选择改变时新增决策，并在旧条目和索引中注明被替代的范围。条目格式、证据和退役路线的记录标准见 [Decisions 维护规则](doc/DECISIONS.md#维护规则)。
 
 ## 工作方式
 
@@ -100,12 +82,9 @@ Edge 任务先阅读本文件的硬约束，再按实际影响范围选择资料
 
 ### 测试增补与退出
 
-- **修复不自动要求新增永久测试。** 根据重复发生的机制、失败后果和现有覆盖缺口判断；低风险样式、文案和普通配置修正，可以只做当次验证。
-- **优先补进已有流程。** 能在现有行为用例中增加有效断言，就不另建测试文件、项目或专用脚手架。一次性排障工具验证后删除，证据留在 PR。
-- **测试保护实际结果。** 重点保护数据、编辑、撤销、真实输入、状态交接和资源释放，避免锁死内部写法及低价值外观细节；公开 API 兼容等明确合同仍须保护。
-- **允许主动退出低价值测试。** 清理时说明放弃了哪些覆盖，不为维持“覆盖完全不变”保留冗余，也不按删行指标硬砍；必要行为的保留与验证仍按实际风险判断。
+按失败后果和现有覆盖缺口决定是否补测试，优先扩充已有行为用例。清理测试时在 PR 说明舍弃的覆盖。具体标准见[保留、增补与退出](tests/README.md#保留增补与退出)，命令见[运行入口](tests/README.md#运行入口)。
 
-增补或清理测试时，先读 [测试细则](tests/README.md)；运行入口、完成判定和具体保留标准由该文档维护。
+Markdown/AvalonEdit 的局部重绘与强制全量重绘缺少稳定的完成时序，禁止恢复两次离屏位图的逐字节对照，也不要用等待、重跑或放宽容差使其通过。
 
 ## 产品边界
 
@@ -185,7 +164,6 @@ Architecture / Decisions 按「项目知识入口」中的 Edge 影响范围路�
 - 版本号显式维护在 `PaperTodo.csproj`；不要恢复自动递增。
 - `plugin-samples/` 保存插件源码/说明，`plugins/` 保存可直接加载的最终产物；主程序 publish/Release 不捆绑插件。最终插件目录不保留无必要的 PDB/XML/重复 native/shared assemblies。
 - PR 分支 Windows CI 由 HEAD commit marker 控制：`[debug]` → Debug 测试包，`[ci]` → Release build，`[debug-ci]` → 两者。标记必须在本次 push 的最后一个 HEAD；不要为了触发制造空提交。
-- 已确认 Markdown/AvalonEdit 的 WPF 离屏局部重绘与强制全重绘两次 `RenderTargetBitmap` 逐字节对照，在同一测试及产品源码下出现相反 CI 结果，不得再次作为正确性门槛；不通过加等待、重复运行、放宽容差或改成长期可选 fixture 掩盖该不确定性。保留语义、编辑、撤销、可观察布局等有明确行为边界的回归，只有找到可证明稳定的渲染同步机制后才能重新设计局部像素验收。
 - 不重新引入已删除的 `scripts/edge-refinement-tests/` 或依赖源码字符串/文件路径/方法排列的 source-shape test；若新增 Edge 自动化，应验证可执行 reducer/geometry/policy/transaction 行为，而不是源码排布。真实集成回归仍依赖编译、诊断日志和真机验证。
 - 普通编译：`dotnet build PaperTodo.csproj -c Release`。
 - `vendor/wpf-notifyicon` 使用父仓库记录的固定 submodule commit；更新 fork 时显式更新 gitlink，并完成构建和真实托盘手测。构建过程不自动拉取最新分支。
@@ -193,7 +171,3 @@ Architecture / Decisions 按「项目知识入口」中的 Edge 影响范围路�
 - 云端 Release 发布 Windows x64 self-contained 与 no-runtime 两个单文件。WPF 版本不启用 `PublishTrimmed` 或 Native AOT。
 - 普通 build/publish 使用仓库内默认 `papertodo_lmdb.dll`；GitHub Release 必须先从仓库内 LMDB 源码 `-ForceRebuild`，不能把默认 DLL 冒充云端编译产物。
 - 稳定正式版只通过完成真实多屏/混合 DPI 等发布前手测后的 `workflow_dispatch` 发布；稳定 tag push 不是发布步骤。`rc` / `alpha` / `beta` / `preview` tag 可以发布预发行版。
-
-## 更新本文
-
-只有 Agent 路由、执行方式、产品默认边界、数据安全禁令、关键不可破坏 invariant、CHANGELOG/CI/发布规则等发生变化时才修改 `AGENTS.md`。已经验证有价值的详细执行规则可以长期保留；当前技术选型/方向更新 Architecture，历史取舍/踩坑更新 Decisions，普通 UI/参数变化不为了制造同步痕迹修改本文件。
