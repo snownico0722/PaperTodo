@@ -79,7 +79,7 @@ public static class MarkdownImageReferences
     public static HashSet<string> CollectImageIds(string? markdown)
     {
         var ids = new HashSet<string>(StringComparer.Ordinal);
-        if (string.IsNullOrEmpty(markdown))
+        if (markdown == null || !markdown.Contains(UriPrefix, StringComparison.Ordinal))
         {
             return ids;
         }
