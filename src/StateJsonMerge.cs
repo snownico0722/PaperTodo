@@ -36,18 +36,32 @@ internal static class StateJsonMerge
     private static Value Member(JsonObject value, string key) =>
         new(value.TryGetPropertyValue(key, out var node), node);
 
+    private static readonly string[] QuickLaunchFields = ["linkedNoteId", "linkedPath", "linkedPathIsDirectory"];
+
+    private static bool SameQuickLaunch(JsonObject left, JsonObject right) =>
+        QuickLaunchFields.All(key => Same(Member(left, key), Member(right, key)));
+
     private static Value MergeValue(Value baseline, Value memory, Value external, string path,
-        List<string> applied, List<StateMergeConflict> conflicts)
+        List<string> applied, List<StateMergeConflict> conflicts, bool todoItem = false)
     {
         if (Same(memory, external) || Same(baseline, external)) return memory.Copy();
 
         if (baseline.Node is JsonObject b && memory.Node is JsonObject m && external.Node is JsonObject e)
         {
+            // One Todo has one quick-launch target. Record all differing target fields in
+            // the paper's single conflict choice, including fields changed on only one side.
+            var targetConflict = todoItem && !SameQuickLaunch(b, m) && !SameQuickLaunch(b, e) &&
+                !SameQuickLaunch(m, e);
             var result = new JsonObject();
             foreach (var key in b.Select(x => x.Key).Concat(m.Select(x => x.Key)).Concat(e.Select(x => x.Key)).Distinct(StringComparer.Ordinal))
             {
-                var value = MergeValue(Member(b, key), Member(m, key), Member(e, key),
-                    JsonPath.FieldPath(path, key), applied, conflicts);
+                var original = Member(b, key);
+                var local = Member(m, key);
+                var incoming = Member(e, key);
+                var field = JsonPath.FieldPath(path, key);
+                var value = targetConflict && QuickLaunchFields.Contains(key) && !Same(local, incoming)
+                    ? RecordConflict(original, local, incoming, field, conflicts)
+                    : MergeValue(original, local, incoming, field, applied, conflicts);
                 if (value.Exists) result[key] = value.Node;
             }
             return new(true, result);
@@ -65,6 +79,12 @@ internal static class StateJsonMerge
             return external.Copy();
         }
 
+        return RecordConflict(baseline, memory, external, path, conflicts);
+    }
+
+    private static Value RecordConflict(Value baseline, Value memory, Value external, string path,
+        List<StateMergeConflict> conflicts)
+    {
         conflicts.Add(new(path, baseline.Exists, baseline.Node?.DeepClone(),
             memory.Exists, memory.Node?.DeepClone(), external.Exists, external.Node?.DeepClone()));
         return memory.Copy();
@@ -103,7 +123,7 @@ internal static class StateJsonMerge
                 externalValue = WithoutDerivedTodoOrder(externalValue);
             }
             var value = MergeValue(baseValue, memoryValue, externalValue,
-                JsonPath.EntityPath(path, id), applied, conflicts);
+                JsonPath.EntityPath(path, id), applied, conflicts, todoItem: todoItems);
             if (value.Exists) values[id] = value.Node;
         }
 
