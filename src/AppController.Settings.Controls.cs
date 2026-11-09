@@ -1,71 +1,33 @@
 using System;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Media;
 
 namespace PaperTodo;
 
 public sealed partial class AppController
 {
-    private void SetUiLanguage(string language)
+    private UIElement AdvancedSettingsBlock(params UIElement[] items)
     {
-        var normalized = UiLanguages.Normalize(language);
-        if (string.Equals(State.UiLanguage, normalized, StringComparison.Ordinal))
+        var content = new StackPanel();
+        foreach (var item in items)
         {
-            return;
+            content.Children.Add(item);
         }
 
-        if (!SetSettingFromUi("general.language", normalized)) return;
-
-        if (_settingsWindow == null ||
-            !PaperNoticeDialog.ShowChoice(
-                _settingsWindow,
-                SettingsSidebarLocalized(
-                    "重启 PaperTodo",
-                    "Restart PaperTodo",
-                    "PaperTodo を再起動",
-                    "PaperTodo 다시 시작"),
-                SettingsSidebarLocalized(
-                    "界面语言将在重启 PaperTodo 后生效。要现在立即重启吗？",
-                    "The interface language will take effect after restarting PaperTodo. Restart now?",
-                    "表示言語は PaperTodo の再起動後に反映されます。今すぐ再起動しますか？",
-                    "인터페이스 언어는 PaperTodo를 다시 시작한 후 적용됩니다. 지금 다시 시작할까요?"),
-                SettingsSidebarLocalized("稍后", "Later", "後で", "나중에"),
-                SettingsSidebarLocalized(
-                    "立即重启",
-                    "Restart now",
-                    "今すぐ再起動",
-                    "지금 다시 시작")))
+        return new Border
         {
-            return;
-        }
-
-        if (Application.Current is App app)
-        {
-            app.RequestRestartAfterExit();
-        }
-        Exit();
-    }
-
-    private UIElement CreateUiLanguageSettingsRow() =>
-        CompactSettingsField(
-            Strings.Get("SettingsUiLanguage"),
-            CreateUiLanguageSelector(),
-            editorWidth: 156,
-            tipKey: "TipSettingsUiLanguage",
-            topMargin: 4);
-
-    private UIElement CreateUiLanguageSelector()
-    {
-        return CreateSettingsSelect(
-            [
-                (UiLanguages.System, Strings.Get("UiLanguageSystem")),
-                (UiLanguages.ChineseSimplified, Strings.Get("UiLanguageZhHans")),
-                (UiLanguages.English, Strings.Get("UiLanguageEnglish")),
-                (UiLanguages.Japanese, Strings.Get("UiLanguageJapanese")),
-                (UiLanguages.Korean, Strings.Get("UiLanguageKorean"))
-            ],
-            UiLanguages.Normalize(State.UiLanguage),
-            SetUiLanguage);
+            Background = Theme.Tint((byte)(Theme.IsDark ? 24 : 14)),
+            BorderBrush = Theme.Tint((byte)(Theme.IsDark ? 42 : 28)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(8),
+            // The negative horizontal margin grows only the background. Matching padding keeps
+            // every control aligned with the ordinary settings above and below this block.
+            Padding = new Thickness(8, 5, 8, 8),
+            Margin = new Thickness(-8, 5, -8, 7),
+            Child = content
+        };
     }
 
     private UIElement CreateSettingsSelect(
@@ -251,5 +213,73 @@ public sealed partial class AppController
         Grid.SetColumn(sizeSelector, 2);
         row.Children.Add(sizeSelector);
         return row;
+    }
+
+    private UIElement CreateSettingsStepper(
+        Func<string> valueText,
+        Action decrement,
+        Action increment)
+    {
+        var container = new Border
+        {
+            BorderBrush = TrayBorderBrush,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(6),
+            Background = Brushes.Transparent,
+            Margin = new Thickness(0, 4, 0, 10),
+            Height = 28,
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
+
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var value = new TextBlock
+        {
+            Text = valueText(),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            FontSize = AppTypography.Scale(13),
+            FontWeight = FontWeights.SemiBold,
+            Foreground = TrayTextBrush
+        };
+        Grid.SetColumn(value, 1);
+
+        Border StepButton(string glyph, int column, Action onClick)
+        {
+            var button = new Border
+            {
+                Width = 34,
+                Background = Brushes.Transparent,
+                Cursor = Cursors.Hand,
+                Child = new TextBlock
+                {
+                    Text = glyph,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    FontFamily = AppTypography.SymbolFontFamily,
+                    FontSize = AppTypography.Scale(15),
+                    Foreground = TrayTextBrush
+                }
+            };
+            button.MouseEnter += (_, _) => button.Background = TrayHoverBrush;
+            button.MouseLeave += (_, _) => button.Background = Brushes.Transparent;
+            button.MouseLeftButtonDown += (_, e) =>
+            {
+                onClick();
+                value.Text = valueText();
+                e.Handled = true;
+            };
+            Grid.SetColumn(button, column);
+            return button;
+        }
+
+        grid.Children.Add(StepButton("−", 0, decrement));
+        grid.Children.Add(value);
+        grid.Children.Add(StepButton("＋", 2, increment));
+        container.Child = grid;
+        return container;
     }
 }

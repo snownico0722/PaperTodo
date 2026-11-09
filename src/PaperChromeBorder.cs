@@ -8,8 +8,12 @@ namespace PaperTodo;
 
 // The outer Border still owns the shell's original layout and shadow. Only the
 // empty background Border is arranged shorter; the editor never changes size.
-internal partial class PaperChromeBorder : Border
+internal class PaperChromeBorder : Border
 {
+    private static readonly Pen[] MaterialShadowPens = CreateMaterialShadowPens();
+    private readonly ScaleTransform _materialShadowScale = new();
+    private double _materialShadowMargin;
+
     private readonly Border _surface = new() { IsHitTestVisible = false, Visibility = Visibility.Collapsed };
     private Geometry? _contentClip;
     private int _animationGeneration;
@@ -146,5 +150,102 @@ internal partial class PaperChromeBorder : Border
                 if (generation == _animationGeneration) completed();
             };
         BeginAnimation(HeaderOpacityProperty, animation);
+    }
+
+    internal void SetMaterialShadowMargin(double margin)
+    {
+        margin = Math.Max(0, margin);
+        if (_materialShadowMargin == margin) return;
+        _materialShadowMargin = margin;
+        InvalidateVisual();
+    }
+
+    protected void DrawMaterialShadow(DrawingContext dc)
+    {
+        if (_materialShadowMargin <= 0 || RenderSize.Width <= 0 || RenderSize.Height <= 0) return;
+        var dpi = VisualTreeHelper.GetDpi(this);
+        // Leave one physical pixel for antialiasing/layout rounding. In particular,
+        // the zero-gutter native start frame must not grow a clipped capsule shadow.
+        var guard = 1 / Math.Min(dpi.DpiScaleX, dpi.DpiScaleY);
+        var extent = Math.Min(7, Math.Max(0, _materialShadowMargin - guard));
+        if (extent <= 0) return;
+        var scale = extent / 7;
+        _materialShadowScale.ScaleX = _materialShadowScale.ScaleY = scale;
+        dc.PushTransform(_materialShadowScale);
+        var radius = CornerRadius.TopLeft / scale;
+        for (var i = 0; i < MaterialShadowPens.Length; i++)
+        {
+            var expansion = (i + .5) * 1.4;
+            var rect = new Rect(0, 0, RenderSize.Width / scale, RenderSize.Height / scale);
+            rect.Inflate(expansion, expansion);
+            dc.DrawRoundedRectangle(null, MaterialShadowPens[i], rect,
+                radius + expansion, radius + expansion);
+        }
+        dc.Pop();
+    }
+
+    private static Pen[] CreateMaterialShadowPens()
+    {
+        var alpha = new byte[] { 27, 17, 9, 4, 1 };
+        var pens = new Pen[alpha.Length];
+        for (var i = 0; i < alpha.Length; i++)
+        {
+            var brush = new SolidColorBrush(Color.FromArgb(alpha[i], 0, 0, 0));
+            brush.Freeze();
+            pens[i] = new Pen(brush, 1.4);
+            pens[i].Freeze();
+        }
+        return pens;
+    }
+
+    // Ordinary Paper uses a cached silhouette separate from the native material shadow.
+    private bool _hasNineSliceShadow;
+    private double _shadowBlur;
+    private double _shadowDepth;
+    private double _shadowOpacity;
+    private bool _shadowCapsuleShape;
+
+    internal bool HasNineSliceShadow => _hasNineSliceShadow;
+
+    protected void DrawNineSliceShadow(DrawingContext dc)
+    {
+        if (!_hasNineSliceShadow || RenderSize.Width <= 0 ||
+            RenderSize.Height - _surfaceInset <= 0)
+            return;
+        var dpi = VisualTreeHelper.GetDpi(this);
+        var radius = Math.Max(0, CornerRadius.TopLeft);
+        NineSlicePaperShadow.Get(
+            _shadowBlur, _shadowDepth, _shadowOpacity, radius, dpi, _shadowCapsuleShape)
+            .Draw(dc, new Rect(0, _surfaceInset, RenderSize.Width, RenderSize.Height - _surfaceInset));
+    }
+
+    internal void SetNineSliceShadow(double blurRadius, double depth, double opacity, bool capsuleShape)
+    {
+        blurRadius = Math.Clamp(blurRadius, 0, 32);
+        depth = Math.Clamp(depth, 0, 16);
+        opacity = Math.Clamp(opacity, 0, 1);
+        if (blurRadius <= 0 || opacity <= 0)
+        {
+            ClearNineSliceShadow();
+            return;
+        }
+        if (_hasNineSliceShadow && _shadowBlur == blurRadius &&
+            _shadowDepth == depth && _shadowOpacity == opacity &&
+            _shadowCapsuleShape == capsuleShape)
+            return;
+
+        _hasNineSliceShadow = true;
+        _shadowBlur = blurRadius;
+        _shadowDepth = depth;
+        _shadowOpacity = opacity;
+        _shadowCapsuleShape = capsuleShape;
+        InvalidateVisual();
+    }
+
+    internal void ClearNineSliceShadow()
+    {
+        if (!_hasNineSliceShadow) return;
+        _hasNineSliceShadow = false;
+        InvalidateVisual();
     }
 }
