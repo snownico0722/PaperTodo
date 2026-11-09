@@ -2133,6 +2133,10 @@ The preview should show an available landing rather than make a target continuou
 
 让日常启动尽可能自动恢复完整数据，同时把不可逆的数据损失决定留给用户；不引入第二套文件数据库、碎片拼接或无限重试。
 
+### 主工作区缺少全部核心文件
+
+主工作区的 `data.json`、`data.backup.json` 和写入临时文件（含孤立临时文件）均不存在时，按新工作区启动。即使历史 ZIP 或 `note-assets.lmdb` 仍在，也沿用空工作区初始化和常规图片清理。若图片没有其他受保护的引用，启动清理可能删除库中全部图片，之后即使从 ZIP 手动还原正文也找不回这些图片。项目接受这一后果，不为此场景增加恢复提示或暂停清理。
+
 ## D-071 — 有界冲突归档与孤立临时文件生命周期 (2026-11-05)
 
 **Status:** Accepted
