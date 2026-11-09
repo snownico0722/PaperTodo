@@ -558,7 +558,7 @@ Right-click the PaperTodo icon in the Windows notification area:
 
 - The top row shows the version, with a gear icon on the right to open **Settings**.
 - On the **Papers** row, the left eye icon shows or hides all papers in the **current workspace**, and the right icons create a todo or note paper.
-- When workspaces are enabled, the **Workspaces** row sits above the paper-creation row. Click its heading to open **Settings → Workspaces & Data**; its same-row number buttons and plus button still confirm switching and create a workspace.
+- When workspaces are enabled, the **Workspaces** row sits above the paper-creation row. Click its heading to open **Settings → Spaces & Data**; its same-row number buttons and plus button still confirm switching and create a workspace.
 - The paper list shows titles and states for the current workspace; click an item to toggle visibility, or click `×` and **Confirm** to delete it.
 - **Restore paper and capsule interaction** appears when click-through is active; **Exit** saves data and closes the app.
 
