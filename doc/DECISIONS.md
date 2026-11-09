@@ -1575,7 +1575,7 @@ PR #191 最初在现有透明 WPF 窗口上采样静态壁纸，生成类似云�
 ### Evidence
 
 - `src/NativeMicaBackdrop.cs`、`src/DwmMicaApi.cs`。
-- `src/AppController.Mica.cs`、`src/AppController.Settings.cs`。
+- `src/AppController.Settings.Skins.cs`、`src/AppController.Settings.cs`。
 - `src/PaperWindow.cs`、`src/PaperWindow.Lifecycle.cs`。
 - `tests/PaperTodo.MicaChecks/Program.cs`。
 - PR #191 的原生替换提交；原始壁纸模拟仅保留在 git 历史中。

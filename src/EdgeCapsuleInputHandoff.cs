@@ -2,6 +2,11 @@ using System.Diagnostics;
 
 namespace PaperTodo;
 
+// The position and modifier state belong to the original native message, not to the later
+// handoff callback. ScreenPoint is converted once, while the output HWND is still unchanged.
+internal readonly record struct EdgeCapsulePointerDown(
+    DeviceScreenPoint ScreenPoint, int Message, IntPtr KeyState);
+
 // One native press may wait only for the synchronous authority-release attempt that it triggered.
 // If that attempt schedules any retry, the press is dropped; old input is never replayed later.
 internal sealed class EdgeCapsuleInputHandoff
