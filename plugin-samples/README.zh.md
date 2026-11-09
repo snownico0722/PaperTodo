@@ -235,7 +235,7 @@ plugins/
    └─ .runtime/
 ```
 
-`data` 和 `builtin.markdown` 是宿主保留 ID。插件 ID 必须由 3～120 个 ASCII 字母、数字、`.`、`_`、`-` 组成；以 `.` 或 `_` 开头的目录不会被 discovery。
+宿主保留插件 ID `builtin.markdown`，以及不区分大小写的目录名 `data`、`data1` 至 `data5`。插件 ID 必须由 3～120 个 ASCII 字母、数字、`.`、`_`、`-` 组成；以 `.` 或 `_` 开头的目录不会被 discovery。
 
 Native 最终目录只保留运行所需内容。不要分发无必要的 PDB/XML，也不要重复携带宿主共享的 `PaperTodo.Plugin.Abstractions`、Windows SDK / WinRT 或 WebView2 共享程序集。
 
@@ -1261,7 +1261,7 @@ Native 插件是 fully trusted / unsandboxed .NET/WPF 代码，与 PaperTodo 当
 
 - 新插件仍以 `apiVersion: "2.0"` 或更早版本为目标；新开发应使用 `2.3`，已有 `2.1`、`2.2` 插件继续兼容；
 - 插件目录名和 `id` 不一致；
-- `id` 使用非法字符或宿主保留 ID `data` / `builtin.markdown`；
+- `id` 使用非法字符或宿主保留 ID `data` / `data1`–`data5` / `builtin.markdown`；
 - Web 声明 `runtime`，但默认 `runtime.html` 不存在，或显式 `runtime` 路径不存在/跑出 Web `entry` 静态目录；
 - Native 声明 `runtime` 却没有实现 `IPaperPluginRuntimeProvider`；
 - 以为只安装插件、零实体插件 paper 时也会启动 Runtime；

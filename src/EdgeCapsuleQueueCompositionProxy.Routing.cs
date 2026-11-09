@@ -98,10 +98,11 @@ internal sealed partial class EdgeCapsuleQueueCompositionProxy
         {
             return;
         }
+        DeviceScreenPoint? pointer = WindowNative.TryGetCursorScreenPosition(out var current) ? current : null;
         foreach (var member in _members)
         {
             if (member.Window is PaperWindow paper)
-                paper.InvalidateEdgeCapsuleQueueProxyPointer();
+                paper.InvalidateEdgeCapsuleQueueProxyPointer(pointer);
         }
     }
 

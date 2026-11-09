@@ -96,7 +96,8 @@ public sealed partial class PaperWindow
         _workspaceButton.Visibility = options.Enabled &&
             PaperTopBarShortcuts.Contains(_controller.State, _paper.Type, PaperTopBarShortcuts.Workspace)
                 ? Visibility.Visible : Visibility.Collapsed;
-        _workspaceButton.IsEnabled = !_controller.IsWorkspaceSwitching;
+        _workspaceButton.IsEnabled = !_controller.IsWorkspaceSwitching &&
+            (!_controller.IsPaperExportActive || options.TopBarNamePicker || options.SlotNumbers.Count == 1);
         if (_workspaceButton.Content is Viewbox icon)
             icon.Width = icon.Height = Math.Round(18 * TopBarIconScale(), 1);
         if (_workspaceNumberBadge != null)
@@ -177,7 +178,8 @@ public sealed partial class PaperWindow
                 Header = _controller.WorkspaceOptions.DisplayName(slot),
                 IsCheckable = !movePaper,
                 IsChecked = !movePaper && current,
-                IsEnabled = !current && !_controller.IsWorkspaceSwitching
+                IsEnabled = !current && !_controller.IsWorkspaceSwitching &&
+                    (movePaper || !_controller.IsPaperExportActive)
             };
             AutomationProperties.SetAutomationId(item, (movePaper ? "MoveToWorkspace" : "SwitchWorkspace") + slot);
             item.Click += (_, _) =>

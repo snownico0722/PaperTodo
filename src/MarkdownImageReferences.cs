@@ -11,8 +11,18 @@ public readonly record struct MarkdownImageReference(
     string AttributeText,
     MarkdownImageDisplayOptions DisplayOptions)
 {
+    internal string? OriginalLine { get; init; }
+
     public string WithUrl(string url)
-        => $"![{Label}]({url}){AttributeText}";
+    {
+        if (OriginalLine is not { } line) return $"![{Label}]({url}){AttributeText}";
+        var start = line.IndexOf("](", StringComparison.Ordinal) + 2;
+        var end = line.IndexOf(')', start);
+        var field = line.AsSpan(start, end - start);
+        start += field.Length - field.TrimStart().Length;
+        end -= field.Length - field.TrimEnd().Length;
+        return string.Concat(line.AsSpan(0, start), url.AsSpan(), line.AsSpan(end));
+    }
 }
 
 public readonly record struct MarkdownImageDisplayOptions(
@@ -72,14 +82,14 @@ public static class MarkdownImageReferences
             line.Length,
             label,
             attributeText,
-            ParseDisplayOptions(label, attributeText));
+            ParseDisplayOptions(label, attributeText)) { OriginalLine = line };
         return true;
     }
 
     public static HashSet<string> CollectImageIds(string? markdown)
     {
         var ids = new HashSet<string>(StringComparer.Ordinal);
-        if (string.IsNullOrEmpty(markdown))
+        if (markdown == null || !markdown.Contains(UriPrefix, StringComparison.Ordinal))
         {
             return ids;
         }

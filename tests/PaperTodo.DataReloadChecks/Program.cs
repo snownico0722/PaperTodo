@@ -37,6 +37,7 @@ internal static partial class Program
                 ("conflicts group by paper and archive input", MergePaperConflict),
                 ("delete/edit conflicts honor both choices for notes and todos", MergePaperDeletionConflicts),
                 ("merge preserves links to a paper chosen to survive", MergeDeletedPaperRetainsChosenLinks),
+                ("merge resolves the complete Todo link target", MergeQuickLaunchTarget),
                 ("conflict archives retain the latest five complete groups",
                     ConflictArchiveRetentionChecks),
                 ("source changed after flush is rejected before replacement", MergeRejectDuringReplace),

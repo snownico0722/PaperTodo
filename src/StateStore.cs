@@ -1,6 +1,8 @@
 using System.IO;
 using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.Unicode;
 using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
@@ -19,6 +21,11 @@ public sealed partial class StateStore
         // retired deepCapsuleDock* fields) still load instead of crashing on startup. The Strict
         // preset otherwise sets Disallow, which makes any removed/renamed field fatal.
         UnmappedMemberHandling = System.Text.Json.Serialization.JsonUnmappedMemberHandling.Skip
+    };
+
+    private static readonly JsonSerializerOptions CoreFileWriteOptions = new(JsonOptions)
+    {
+        Encoder = JavaScriptEncoder.Create(UnicodeRanges.All)
     };
 
     private readonly IDurableAtomicFileWriter _atomicWriter;

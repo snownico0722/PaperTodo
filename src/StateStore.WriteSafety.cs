@@ -12,11 +12,29 @@ public sealed partial class StateStore
 
     internal void StopWritesForTermination() => WriteLifetime.Stop();
 
+    private static readonly Encoding StrictUtf8 = new UTF8Encoding(true, true);
+    // Test UTF-32 first because its little-endian BOM starts with the UTF-16 LE BOM.
+    private static readonly Encoding[] StateEncodings =
+    [
+        new UTF32Encoding(false, true, true), new UTF32Encoding(true, true, true),
+        new UnicodeEncoding(false, true, true), new UnicodeEncoding(true, true, true),
+        StrictUtf8
+    ];
+
     private static string DecodeStateBytes(byte[] bytes)
     {
-        using var stream = new MemoryStream(bytes, writable: false);
-        using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
-        return reader.ReadToEnd();
+        ReadOnlySpan<byte> data = bytes;
+        try
+        {
+            foreach (var encoding in StateEncodings)
+                if (data.StartsWith(encoding.Preamble))
+                    return encoding.GetString(data[encoding.Preamble.Length..]);
+            return StrictUtf8.GetString(data);
+        }
+        catch (DecoderFallbackException ex)
+        {
+            throw new JsonException("The state file contains an invalid text encoding.", ex);
+        }
     }
 
     private static AppState? ReadCoreState(string json)
@@ -63,8 +81,12 @@ public sealed partial class StateStore
     private void ValidateExplicitSource(string observed, byte[] source)
     {
         WriteLifetime.ThrowIfStopped();
-        if (!string.Equals(DecodeStateBytes(source), observed, StringComparison.Ordinal))
-            throw new ExternalDocumentChangedException();
+        try
+        {
+            if (string.Equals(DecodeStateBytes(source), observed, StringComparison.Ordinal)) return;
+        }
+        catch (JsonException) { /* The previously valid source changed. */ }
+        throw new ExternalDocumentChangedException();
     }
 }
 

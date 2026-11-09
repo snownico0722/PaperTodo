@@ -397,8 +397,24 @@ internal static class Program
                 Require(WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(null, out var monitor),
                     "merge monitor geometry");
                 var drop = new DeviceScreenPoint(monitor.WorkArea.Left + 10, monitor.WorkArea.Top + 100);
+                double? haloCenterY = null;
+                if (targetCollapsed)
+                {
+                    controller.PreviewFreeMasterQueueDropGhost(transfer, drop);
+                    var ghost = typeof(AppController).GetField("_nativeQueueDropGhost", Private)!.GetValue(controller);
+                    var haloWindow = (Window)typeof(EdgeCapsuleQueueDropGhost).GetField("_window", Private)!.GetValue(ghost)!;
+                    Require(WindowNative.TryGetWindowDeviceBounds(haloWindow, out var bounds), "folded merge halo bounds");
+                    haloCenterY = monitor.DeviceYToLocalDip(bounds.Top + bounds.Height / 2.0);
+                }
                 Require(controller.CommitMasterCapsuleQueueTransfer(transfer, drop),
                     "master transfer into existing queue did not commit");
+                controller.EndFreeMasterQueueDropGhost();
+                if (haloCenterY is { } previewY)
+                {
+                    var targetMaster = controller.MasterCapsuleForQueue("", EdgeCapsuleEdge.Left)!;
+                    Require(Math.Abs(previewY - targetMaster.AnchorTop - PaperLayoutDefaults.CapsuleHeight / 2) <= 1 / monitor.DpiScaleY,
+                        "folded merge halo must be centered on the actual master landing");
+                }
                 var expectedOrder = new[] { "fixture-2", "fixture-3", "fixture-0", "fixture-1", "fixture-4" };
                 Require(controller.State.Papers.Select(paper => paper.Id).SequenceEqual(expectedOrder),
                     "merge did not append source members in their original order");

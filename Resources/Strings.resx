@@ -1706,6 +1706,7 @@
   <data name="NoteExportFailedNotes" xml:space="preserve"><value>导出失败的纸片：&#xA;{0}</value></data>
   <data name="NoteExportFailure" xml:space="preserve"><value>导出失败：{0}</value></data>
   <data name="NoteExportNoNotes" xml:space="preserve"><value>此范围内没有可导出的纸片。</value></data>
+  <data name="NoteExportCancelling" xml:space="preserve"><value>正在取消导出…</value></data>
   <data name="NoteExportProgress" xml:space="preserve"><value>正在导出 {0}/{1} 张纸片</value></data>
   <data name="TodoExportCurrent" xml:space="preserve"><value>导出当前待办</value></data>
   <data name="SettingsCapsuleFreeQueues" xml:space="preserve"><value>胶囊自由队列</value></data>

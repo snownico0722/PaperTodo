@@ -113,11 +113,11 @@ internal sealed partial class PaperBodyPluginHostApi :
         return Invoke(() => _commands.ListTodos(paperId, includeBlank));
     }
 
-    public NoteSnapshot? GetNote(string paperId)
+    public NoteSnapshot? GetNote(string paperId) => PopupOnUi(() =>
     {
         Require(PaperTodoPermissionNames.NotesRead);
         return Invoke(() => _commands.GetNote(RequiredId(paperId, "paperId")));
-    }
+    });
 
     public PaperNoteImage ReadImage(string paperId, string imageId) => PopupOnUi(() =>
     {
