@@ -11,7 +11,8 @@ public enum StartupCommandKind
     Exit,
     EnableMcpForCodex,
     Studio,
-    Canvas
+    Canvas,
+    Workbench
 }
 
 public sealed class StartupCommand
@@ -71,6 +72,7 @@ public sealed class StartupCommand
             "enable-mcp-for-codex" => StartupCommandKind.EnableMcpForCodex,
             "studio" => StartupCommandKind.Studio,
             "canvas" => StartupCommandKind.Canvas,
+            "workbench" => StartupCommandKind.Workbench,
             _ => StartupCommandKind.None
         }, standalone, filePath);
     }

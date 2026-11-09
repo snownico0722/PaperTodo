@@ -82,6 +82,7 @@
 | D-070 | 完整快照按来源顺序恢复，损坏时须用户确认重建 | Accepted | 核心持久化 / 恢复 |
 | D-071 | 有界冲突归档与健康主文件后清理孤立临时文件 | Accepted | 核心持久化 / 归档 |
 | D-072 | Ctrl 整队拖拽归属胶囊自由队列 | Accepted | Edge / 队列 |
+| D-073 | 可编辑无限工作台与单正文租借 | Accepted | 工作台 / 布局 / 生命周期 |
 
 ## 维护规则
 
@@ -2164,3 +2165,26 @@ The preview should show an available landing rather than make a target continuou
 **Why:** 功能关闭时不留下另一条隐含整队操作；保留主胶囊和真实纸片各自的状态归属，不为统一手势重建呈现或落位系统。
 
 **Evidence:** `PaperWindow.NativeQueueInteraction.LatchNativeQueueControl`、`AppController.BeginNativeEdgeQueueDrag`、`MasterCapsuleWindow.OnFloatingDragHostLocationChanged`。
+
+## D-073 — 可编辑无限工作台与单正文租借
+
+**Status:** Accepted；扩展 D-001 的呈现方式，不改变 paper 和 session 的 ownership。
+
+### Context
+
+新的交互目标是在同一空间内俯瞰多个工作区，并在当前工作区长期直接工作；强自动整理代替用户手工维护大量位置，不增加项目中心或另一套内容管理制度。
+
+### Decision / Why
+
+使用普通全屏 WPF 工作台，继续保留原桌面纸片模式。当前工作区租借原有正文 visual，而不是复制可写 ViewModel 或插件会话；其他工作区只读预览。这样正文、撤销和插件生命周期保持唯一 owner，代价是必须明确迁移输入根、焦点和关闭时的交接。
+
+选择 .NET MSAGL 的关系布局与路由算法，不引入 Java/JavaScript 布局运行时。产品所需的增量稳定性、用户位置偏好和硬锁定由独立几何层处理，不把第三方算法的交互参数当作这些承诺。通常新增纸片保留无冲突旧位置；整体整理才主动重排，硬锁定冲突明确反馈。
+
+虚线区域表达自动布局的关系邻域，而非内容归属；跨工作区查看不迁移纸片。关联仅采用既有待办条目到纸片的绑定，直接从纸片菜单选择具体待办条目并调用原生绑定逻辑，不引入任意纸片之间的新关联模型。采用标题栏直接拖动（无位移不生成撤销或重排）、双击改名；纸片左下角眼睛仅作为桌面可见状态指示，不具有命中区域或点击行为。搜索框与双击改名输入使用设置页「外部打开后缀」的圆角透明输入框样式。浮动顶栏左侧布局、中央搜索、右侧新建与缩放，不提供冗余的当前/全部工作区取景按钮。单击正文临时聚焦放大，点击空白画布返回进入聚焦前的视角；全部使用原相机变换，不写入纸片位置。工作台 UI 采用 `Theme` 语义画刷并支持热更新；全局搜索遍历核心笔记和待办的完整文本，预览仅用于卡片摘要。工作台坐标属于本地空间元数据，与原窗口坐标分离。切换到其他应用不会关闭工作台；主动退出时归还正文并恢复主胶囊。模式无需绑定系统壁纸层；没有建立第二套全局写入或插件运行时。
+
+### Evidence
+
+- `src/Workbench/WorkbenchLayoutEngine.cs`、`WorkbenchState.cs`、`WorkbenchWindow.cs`。
+- `src/PaperWindow.Workbench.cs`、`src/AppController.Workbench.cs`、`src/StateStore.Workbench.cs`。
+- `tests/PaperTodo.WorkbenchLayoutChecks` 与 `tests/PaperTodo.LifecycleChecks/Workbench`：几何约束、单正文身份、桌面还原和工作区切换隔离。
+- 算法来源：https://github.com/microsoft/automatic-graph-layout；备选评估：https://eclipse.dev/elk/reference/algorithms/org-eclipse-elk-layered.html。

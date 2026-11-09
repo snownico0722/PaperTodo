@@ -114,6 +114,7 @@ public sealed partial class AppController
     {
         var pending = _pendingDataReload;
         if (pending == null || _applyingDataReload || IsExiting) return;
+        SuspendWorkbench();
         _applyingDataReload = true;
         var suppressDirty = _suppressDirty;
         var storageAccepted = !pending.IsMerge; // ordinary #340 reload is already committed by StateStore.
@@ -222,6 +223,7 @@ public sealed partial class AppController
             _suppressDirty = suppressDirty;
             _pendingDataReload = null;
             _applyingDataReload = false;
+            ResumeWorkbench();
             events.Dispose();
             ResumeExitAfterDataReload();
         }

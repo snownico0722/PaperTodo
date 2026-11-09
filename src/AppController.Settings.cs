@@ -92,6 +92,7 @@ public sealed partial class AppController
             if (!window.IsClosed) window.UpdateTheme();
         }
         foreach (var m in _masterCapsules.Values) m.UpdateTheme();
+        _workbenchWindow?.RefreshTheme();
         SkinBorder.RefreshLoadedSurfaces();
         PluginPopupThemeChanged?.Invoke();
 

@@ -260,6 +260,7 @@ public sealed partial class AppController
 
     private void CommitWorkspaceEditors()
     {
+        _workbenchWindow?.CommitPendingTitles();
         CommitSettingsExternalMarkdownEditor(saveImmediately: false);
         // A workspace boundary ends these sessions, unlike an ordinary background core save.
         foreach (var window in _windows.Values.ToArray()) window.CommitPendingEditsForSave();
@@ -464,6 +465,7 @@ public sealed partial class AppController
                 RefreshMcpRuntime();
                 StartStateBackupPolicy();
                 RefreshWorkspaceControls();
+                ResumeWorkbench();
                 if (reopenSettings && _settingsWindow == null) ShowSettingsWindow(settingsPage);
             }
             ResumeExitAfterDataReload();
@@ -481,6 +483,7 @@ public sealed partial class AppController
 
     private void StopWorkspacePresentation()
     {
+        SuspendWorkbench();
         _paperSurfaceRestoreGeneration++;
         _startupShellPrewarmGeneration++;
         _pluginStartupPaperGeneration++;

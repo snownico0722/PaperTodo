@@ -110,6 +110,9 @@ public sealed partial class PaperWindow
     internal void UpdateAdvancedInteractionLockVisuals()
     {
         _edgeCapsuleHost?.SetInteractionLocked(_advancedInteractionLocked);
+        // The workbench is an explicit edit mode. Its borrowed body must not
+        // inherit the desktop shield or have its keyboard focus cleared.
+        if (IsWorkbenchHosted) return;
         if (!_isShellBuilt)
         {
             return;

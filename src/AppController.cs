@@ -964,6 +964,10 @@ public sealed partial class AppController : IDisposable
             return;
         }
 
+        // An associated paper is already on the desk, even when its original HWND
+        // is hidden or the desktop paper is collapsed. Do not mutate desktop state.
+        if (FocusWorkbenchPaper(paper, activate: true)) return;
+
         if (_windows.TryGetValue(paper.Id, out var window))
         {
             if (IsLinkedPaperShown(paper.Id))
@@ -1158,7 +1162,7 @@ public sealed partial class AppController : IDisposable
         _paperLinkTargetItemId = null;
     }
 
-    private PaperData? FindPaper(string? paperId)
+    internal PaperData? FindPaper(string? paperId)
     {
         if (string.IsNullOrWhiteSpace(paperId))
         {
@@ -1188,6 +1192,9 @@ public sealed partial class AppController : IDisposable
 
         switch (command.Kind)
         {
+            case StartupCommandKind.Workbench:
+                ToggleWorkbench();
+                break;
             case StartupCommandKind.Show:
                 ShowAllPapers();
                 break;
@@ -1288,6 +1295,7 @@ public sealed partial class AppController : IDisposable
 
     public void ShowPaper(PaperData paper, bool activate = true)
     {
+        if (!IsExiting && FocusWorkbenchPaper(paper, activate)) return;
         if (IsExiting)
         {
             return;
@@ -1859,6 +1867,7 @@ public sealed partial class AppController : IDisposable
 
     public void HidePaper(PaperData paper)
     {
+        CloseWorkbenchForDesktopAction();
         InvalidateVisibilityShortcutSnapshotForExternalCommand();
         var visibilityVersion = NextVisibilityAnimationVersion(paper.Id);
         _windows.TryGetValue(paper.Id, out var window);
@@ -1984,6 +1993,7 @@ public sealed partial class AppController : IDisposable
 
     public void HideAllPapers()
     {
+        CloseWorkbenchForDesktopAction();
         // Proxy handoff and body callbacks can run another UI command synchronously. Keep this
         // hide scoped to its original targets; each later show/delete supersedes that target.
         var papersToHide = State.Papers.ToArray();
@@ -2073,13 +2083,15 @@ public sealed partial class AppController : IDisposable
     // Cross-paper history belongs to entity removal, not plugin-state persistence.
     internal void NotifyPaperRemoved(string paperId)
     {
+        WorkbenchModelChanged?.Invoke();
         foreach (var window in _windows.Values)
             window.PruneDeletedLinkedPaperFromTodoHistory(paperId);
         QueuePluginPaperStateDeletion(paperId);
     }
 
     internal sealed record RemovedPaper(
-        PaperData Paper, int Index, (string PaperId, PaperItem Item)[] Links, PaperData? Replacement)
+        PaperData Paper, int Index, (string PaperId, PaperItem Item)[] Links, PaperData? Replacement,
+        WorkbenchState? WorkbenchLayout)
     {
         internal string[] AffectedTodoPaperIds =>
             Links.Select(link => link.PaperId).Distinct(StringComparer.Ordinal).ToArray();
@@ -2109,8 +2121,10 @@ public sealed partial class AppController : IDisposable
                 throw;
             }
         }
+        var layoutBefore = State.Workbench?.Copy();
+        State.Workbench?.Normalize(papers.Select(item => item.Id));
         foreach (var link in links) link.Item.ClearQuickLaunch();
-        return new RemovedPaper(paper, index, links, replacement);
+        return new RemovedPaper(paper, index, links, replacement, layoutBefore);
     }
 
     internal void RestoreRemovedPaper(RemovedPaper removed)
@@ -2118,6 +2132,7 @@ public sealed partial class AppController : IDisposable
         if (removed.Replacement != null) State.Papers.Remove(removed.Replacement);
         State.Papers.Insert(Math.Min(removed.Index, State.Papers.Count), removed.Paper);
         foreach (var link in removed.Links) link.Item.LinkPaper(removed.Paper.Id);
+        State.Workbench = removed.WorkbenchLayout;
     }
 
     public void RefreshCapsuleEligibilityForLinkedPapers()
@@ -3122,6 +3137,7 @@ public sealed partial class AppController : IDisposable
         bool animate = false,
         bool flushInitialPresentations = false)
     {
+        if (_workbenchWindow is { IsSuspended: false }) return;
         if (HasDeepCapsuleReorderDragInProgress())
         {
             _deepCapsuleArrangeGate.Defer(animate);
@@ -3401,6 +3417,7 @@ public sealed partial class AppController : IDisposable
         }
 
         Interlocked.Increment(ref _stateRevision);
+        WorkbenchModelChanged?.Invoke();
         NotifyPluginEventMutationStampChanged();
         if (!_hasPendingDirty)
         {
@@ -4067,6 +4084,7 @@ public sealed partial class AppController : IDisposable
         try
         {
             CommitSettingsExternalMarkdownEditor(saveImmediately: false);
+            _workbenchWindow?.CommitPendingTitles();
             foreach (var window in _windows.Values.ToList()) window.CommitPendingEditsForSave();
             // Ordinary exit owns the final coherent save. Failure leaves the editor alive;
             // Dispose/OnExit must never retry a rejected save after tearing down the UI.
@@ -4148,6 +4166,7 @@ public sealed partial class AppController : IDisposable
 
     private void DisposeRuntimeResources()
     {
+        TryExitCleanup(CloseWorkbenchForShutdown);
         TryExitCleanup(CancelMasterCapsuleQueueTransfers);
         _pluginStartupPaperGeneration++;
         StopStateBackupPolicy();

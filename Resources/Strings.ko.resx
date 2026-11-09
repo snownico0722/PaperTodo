@@ -1754,6 +1754,32 @@ PaperTodo를 수동으로 다시 여세요. 문제가 반복되면 PC를 다시 
   <data name="MenuTopBarAssociationDragWindow" xml:space="preserve"><value>창으로 끌어서 연결</value></data>
   <data name="WorkspaceDataSettingsTitle" xml:space="preserve"><value>작업 공간·데이터</value></data>
   <data name="SettingsDataProcessing" xml:space="preserve"><value>데이터 처리</value></data>
+  <data name="WorkbenchTitle" xml:space="preserve"><value>무한 작업대</value></data>
+  <data name="WorkbenchOverview" xml:space="preserve"><value>모든 작업 공간</value></data>
+  <data name="WorkbenchCurrent" xml:space="preserve"><value>현재 작업 공간</value></data>
+  <data name="WorkbenchNewNote" xml:space="preserve"><value>새 노트</value></data>
+  <data name="WorkbenchNewTodo" xml:space="preserve"><value>새 할 일</value></data>
+  <data name="WorkbenchArrange" xml:space="preserve"><value>레이아웃 정리</value></data>
+  <data name="WorkbenchUndo" xml:space="preserve"><value>배치 실행 취소</value></data>
+  <data name="WorkbenchSearch" xml:space="preserve"><value>모든 작업 공간 검색. Enter를 눌러 결과로 이동</value></data>
+  <data name="WorkbenchRefresh" xml:space="preserve"><value>개요 새로 고침</value></data>
+  <data name="WorkbenchClose" xml:space="preserve"><value>바탕 화면으로 돌아가기</value></data>
+  <data name="WorkbenchHint" xml:space="preserve"><value>제목 표시줄을 드래그하여 이동하고 두 번 클릭하여 이름을 바꿉니다. 오른쪽 아래에서 크기를 조절합니다. 가운데 버튼으로 이동, Alt+휠로 확대/축소합니다. 다른 앱으로 전환해도 작업대는 유지됩니다.</value></data>
+  <data name="WorkbenchError" xml:space="preserve"><value>작업대 작업 실패: {0}</value></data>
+  <data name="WorkbenchPinConflict" xml:space="preserve"><value>고정된 메모가 겹칩니다. 위치는 유지됩니다. 하나를 이동하거나 고정을 해제하세요.</value></data>
+  <data name="WorkbenchDelete" xml:space="preserve"><value>메모 삭제</value></data>
+  <data name="WorkbenchOpenWorkspace" xml:space="preserve"><value>이 작업 공간에서 작업</value></data>
+  <data name="WorkbenchPin" xml:space="preserve"><value>위치 고정 또는 해제</value></data>
+  <data name="WorkbenchWorkspace" xml:space="preserve"><value>작업 공간 {0}</value></data>
+  <data name="WorkbenchReadError" xml:space="preserve"><value>이 작업 공간을 읽을 수 없습니다: {0}</value></data>
+  <data name="WorkbenchEmpty" xml:space="preserve"><value>아직 메모가 없습니다.</value></data>
+  <data name="WorkbenchSearchNoResults" xml:space="preserve"><value>일치하는 메모가 없습니다.</value></data>
+  <data name="WorkbenchSearchResult" xml:space="preserve"><value>검색 결과 {0}/{1}</value></data>
+  <data name="WorkbenchShowOnDesktop" xml:space="preserve"><value>바탕 화면에 표시</value></data>
+  <data name="WorkbenchHideOnDesktop" xml:space="preserve"><value>바탕 화면에서 숨기기</value></data>
+  <data name="WorkbenchBindToTodo" xml:space="preserve"><value>할 일 항목에 연결</value></data>
+  <data name="WorkbenchUnnamedTodo" xml:space="preserve"><value>제목 없는 할 일</value></data>
+  <data name="WorkbenchBindTodoFailed" xml:space="preserve"><value>해당 할 일에 연결할 수 없습니다.</value></data>
   <data name="TipHideSurfaceOutline" xml:space="preserve"><value>메모, 캡슐, 메뉴의 바깥 테두리만 숨깁니다. 크기는 변하지 않으며 고대비 모드에서는 테두리를 유지합니다.</value></data>
   <data name="TipScriptCapsule" xml:space="preserve"><value>메모 첫 줄에 !p 등의 명령을 쓰고 다음 줄부터 PowerShell을 작성하세요. 접힌 캡슐을 클릭해 실행할 수 있습니다. 아래 설정은 상단 바의 스크립트 실행에도 적용됩니다.</value></data>
   <data name="WorkspaceSwitchGroup" xml:space="preserve">

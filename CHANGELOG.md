@@ -20,6 +20,10 @@ This log is written for general and power users alike. It focuses on user-facing
 
 ### Unreleased
 
+#### Infinite workbench
+
+- Open a full-screen working desk from the tray or the configurable Workbench shortcut (suggested Ctrl+Alt+W; initially disabled). Edit the existing notes, to-dos and plugin papers in place, pan and zoom between workspace overviews, search across workspaces and navigate matches, drag cards by their title bars, see desktop visibility in a noninteractive bottom-left eye indicator, and pin positions. The search and rename inputs match the rounded settings text-field style. Existing per-to-do paper associations remain visible and can be created through the native to-do-item binding flow; arbitrary paper-to-paper links are not introduced. Automatic layout combines relationship-based arrangement, soft dashed neighborhoods, overlap avoidance and stable incremental placement; explicit arrangement can be undone without undoing content. Workbench positions are stored separately from desktop window geometry. Other workspaces remain read-only previews until activated through the normal workspace switch. Switching to another application leaves the workbench open; leaving the workbench restores the master capsule queues. The floating toolbar groups layout actions on the left, full-text search in the center and create/zoom actions on the right; the chrome now follows PaperTodo's selected color scheme. Clicking a paper's editor focuses the camera, while clicking the empty canvas restores the previous view. Mere title clicks do not create layout revisions, and data reloads preserve the workbench. Opening a linked paper on the desk focuses it without changing desktop visibility or geometry. Both Ctrl+F and Ctrl+Shift+F open the workbench search, with existing copy-conversion actions preserved. Desktop paper locks do not restrict editing on the workbench, but resume on exit; reloads and concurrent model changes during dragging preserve desktop presentation and live cards.
+
 #### Data Reliability
 
 - Workspace data files now store Chinese text directly in UTF-8, reducing file size and save time for Chinese notes.

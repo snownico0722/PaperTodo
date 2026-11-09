@@ -52,7 +52,7 @@ internal static class StateReloadModels
     }
 
     internal static bool SettingsChanged(AppState before, AppState after) =>
-        AppProperties.Any(p => !Equivalent(p.GetValue(before), p.GetValue(after)));
+        AppProperties.Any(p => p.Name != nameof(AppState.Workbench) && !Equivalent(p.GetValue(before), p.GetValue(after)));
 
     internal static bool Equivalent<T>(T before, T after) =>
         JsonNode.DeepEquals(JsonSerializer.SerializeToNode(before), JsonSerializer.SerializeToNode(after));

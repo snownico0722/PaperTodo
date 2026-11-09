@@ -425,6 +425,8 @@ public readonly record struct TodoVisualMetrics(
 
 public sealed class AppState
 {
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WorkbenchState? Workbench { get; set; }
     // The unnumbered data.json is the sole owner; absent in legacy and numbered documents.
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public WorkspaceConfiguration? Workspaces { get; set; }

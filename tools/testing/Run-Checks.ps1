@@ -23,6 +23,7 @@ $checks = @(
     @{ Group = 'regression'; Project = 'EdgePreviewChecks'; Configuration = 'Release'; Runtime = '' }
     @{ Group = 'regression'; Project = 'ThreadingChecks'; Configuration = 'Release'; Runtime = '' }
     @{ Group = 'regression'; Project = 'LifecycleChecks'; Configuration = 'Release'; Runtime = '' }
+    @{ Group = 'regression'; Project = 'WorkbenchLayoutChecks'; Configuration = 'Release'; Runtime = '' }
     @{ Group = 'regression'; Project = 'WindowCloseActivationChecks'; Configuration = 'Release'; Runtime = '' }
     @{ Group = 'plugins'; Project = 'ProtocolPolicyChecks'; Configuration = 'Release'; Runtime = '' }
     @{ Group = 'plugins'; Project = 'PluginApiChecks'; Configuration = 'Release'; Runtime = '' }

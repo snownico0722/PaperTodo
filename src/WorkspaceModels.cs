@@ -149,6 +149,7 @@ internal static class WorkspaceFieldScopes
         Add(WorkspaceStateFieldScope.LocalContent,
             nameof(AppState.Papers));
         Add(WorkspaceStateFieldScope.LocalLayout,
+            nameof(AppState.Workbench),
             nameof(AppState.CapsuleCollapseAllActiveQueues), nameof(AppState.DeepCapsuleQueueStartTopMargins), nameof(AppState.DeepCapsuleSide),
             nameof(AppState.DeepCapsuleMonitorDeviceName));
         Add(WorkspaceStateFieldScope.MainCatalog,

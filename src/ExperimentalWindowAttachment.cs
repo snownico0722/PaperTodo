@@ -1572,6 +1572,7 @@ public sealed partial class PaperWindow
         ExternalWindowSnapshot snapshot,
         bool animateCapsulePresentation = false)
     {
+        if (IsWorkbenchHosted) return;
         var session = _experimentalWindowAttachment;
         if (session == null ||
             !WindowNative.TryGetWindowDeviceBounds(this, out var currentBounds))

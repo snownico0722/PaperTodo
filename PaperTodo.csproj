@@ -76,6 +76,7 @@
   <ItemGroup>
     <ProjectReference Include="PaperTodo.Plugin.Abstractions\PaperTodo.Plugin.Abstractions.csproj" />
     <ProjectReference Include="vendor\wpf-notifyicon\src\NotifyIconWpf\NotifyIconWpf.csproj" />
+    <PackageReference Include="Msagl" Version="1.2.1" />
     <PackageReference Include="AvalonEdit" Version="6.3.1.120" />
     <!-- Markdig is the semantic parser only; AvalonEdit remains the source document and renderer. -->
     <PackageReference Include="Markdig" Version="1.5.1" />

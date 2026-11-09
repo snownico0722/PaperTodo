@@ -1754,6 +1754,32 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
   <data name="MenuTopBarAssociationDragWindow" xml:space="preserve"><value>ウィンドウへドラッグして関連付け</value></data>
   <data name="WorkspaceDataSettingsTitle" xml:space="preserve"><value>ワークスペースとデータ</value></data>
   <data name="SettingsDataProcessing" xml:space="preserve"><value>データ処理</value></data>
+  <data name="WorkbenchTitle" xml:space="preserve"><value>無限ワークベンチ</value></data>
+  <data name="WorkbenchOverview" xml:space="preserve"><value>全ワークスペース</value></data>
+  <data name="WorkbenchCurrent" xml:space="preserve"><value>現在のワークスペース</value></data>
+  <data name="WorkbenchNewNote" xml:space="preserve"><value>新規ノート</value></data>
+  <data name="WorkbenchNewTodo" xml:space="preserve"><value>新規タスク</value></data>
+  <data name="WorkbenchArrange" xml:space="preserve"><value>レイアウト整理</value></data>
+  <data name="WorkbenchUndo" xml:space="preserve"><value>配置を元に戻す</value></data>
+  <data name="WorkbenchSearch" xml:space="preserve"><value>すべてのワークスペースを検索。Enter で結果へ移動</value></data>
+  <data name="WorkbenchRefresh" xml:space="preserve"><value>一覧を更新</value></data>
+  <data name="WorkbenchClose" xml:space="preserve"><value>デスクトップへ戻る</value></data>
+  <data name="WorkbenchHint" xml:space="preserve"><value>タイトルバーをドラッグして移動、ダブルクリックで名前変更。右下でサイズ変更。中ボタンドラッグで移動、Alt＋ホイールでズーム。他のアプリに切り替えても閉じません。</value></data>
+  <data name="WorkbenchError" xml:space="preserve"><value>ワークベンチの操作に失敗しました：{0}</value></data>
+  <data name="WorkbenchPinConflict" xml:space="preserve"><value>固定した紙片が重なっています。位置は維持されます。移動または固定解除してください。</value></data>
+  <data name="WorkbenchDelete" xml:space="preserve"><value>紙片を削除</value></data>
+  <data name="WorkbenchOpenWorkspace" xml:space="preserve"><value>このワークスペースで作業</value></data>
+  <data name="WorkbenchPin" xml:space="preserve"><value>位置を固定・解除</value></data>
+  <data name="WorkbenchWorkspace" xml:space="preserve"><value>ワークスペース {0}</value></data>
+  <data name="WorkbenchReadError" xml:space="preserve"><value>ワークスペースを読み取れません：{0}</value></data>
+  <data name="WorkbenchEmpty" xml:space="preserve"><value>まだ紙片がありません。</value></data>
+  <data name="WorkbenchSearchNoResults" xml:space="preserve"><value>一致する紙片がありません。</value></data>
+  <data name="WorkbenchSearchResult" xml:space="preserve"><value>検索結果 {0}/{1}</value></data>
+  <data name="WorkbenchShowOnDesktop" xml:space="preserve"><value>デスクトップに表示</value></data>
+  <data name="WorkbenchHideOnDesktop" xml:space="preserve"><value>デスクトップから非表示</value></data>
+  <data name="WorkbenchBindToTodo" xml:space="preserve"><value>タスク項目に関連付ける</value></data>
+  <data name="WorkbenchUnnamedTodo" xml:space="preserve"><value>無題のタスク</value></data>
+  <data name="WorkbenchBindTodoFailed" xml:space="preserve"><value>そのタスクに関連付けできません。</value></data>
   <data name="TipHideSurfaceOutline" xml:space="preserve"><value>紙片、カプセル、メニューの外枠線のみを隠します。大きさは変わらず、高コントラスト表示では枠線を維持します。</value></data>
   <data name="TipScriptCapsule" xml:space="preserve"><value>ノートの先頭行に !p などを記入し、2行目から PowerShell を記述します。折りたたんだカプセルをクリックすると実行できます。下の設定は上部バーのスクリプト実行にも適用されます。</value></data>
   <data name="WorkspaceSwitchGroup" xml:space="preserve">
