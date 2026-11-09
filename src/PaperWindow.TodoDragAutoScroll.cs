@@ -39,7 +39,7 @@ public sealed partial class PaperWindow
     {
         if (_todoDrag?.IsDragging != true ||
             Mouse.LeftButton != MouseButtonState.Pressed ||
-            !ReferenceEquals(Mouse.Captured, this))
+            !ReferenceEquals(Mouse.Captured, InteractionRoot))
         {
             if (_todoDrag != null) EndTodoMouseDrag(commit: false);
             else StopTodoDragEdgeScroll();
@@ -108,12 +108,12 @@ public sealed partial class PaperWindow
             e.VerticalChange == 0 || !ReferenceEquals(e.OriginalSource, sender))
             return;
 
-        UpdateTodoMouseDrag(Mouse.GetPosition(_todoPanel), Mouse.GetPosition(this));
+        UpdateTodoMouseDrag(Mouse.GetPosition(_todoPanel), Mouse.GetPosition(InteractionRoot));
     }
 
     private void OnTodoDragLostMouseCapture(object sender, MouseEventArgs e)
     {
-        if (_todoDrag != null && !ReferenceEquals(Mouse.Captured, this))
+        if (_todoDrag != null && !ReferenceEquals(Mouse.Captured, InteractionRoot))
             EndTodoMouseDrag(commit: false);
     }
 

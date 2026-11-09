@@ -44,6 +44,7 @@ internal static partial class Program
         Field(controller, "_workspace", new WorkspaceSession(paths,
             new StateStore(paths.Directory, DurableAtomicFileWriter.Shared), controller.State, false, null));
         Field(controller, "_windows", new Dictionary<string, PaperWindow>());
+        Field(controller, "_expandedEditors", new List<ExpandedEditorWindow>());
         Field(controller, "_masterCapsules", new Dictionary<string, MasterCapsuleWindow>());
         return controller;
     }
@@ -93,20 +94,22 @@ internal static partial class Program
         var state = new AppState
         {
             TopBarShortcutOrder =
-                [PaperTopBarShortcuts.Association, PaperTopBarShortcuts.Workspace,
+                [PaperTopBarShortcuts.Association, PaperTopBarShortcuts.Workspace, PaperTopBarShortcuts.ExpandedEditor,
                  PaperTopBarShortcuts.NewNote, PaperTopBarShortcuts.NewTodo,
                  PaperTopBarShortcuts.ExternalEditor],
-            TopBarPinnedCount = 2
+            TopBarPinnedCount = 3
         };
         Check(PaperTopBarShortcuts.MoveTo(state, PaperTopBarShortcuts.NewNote, true, 1) &&
               PaperTopBarShortcuts.Pinned(state).SequenceEqual(
-                  [PaperTopBarShortcuts.Association, PaperTopBarShortcuts.NewNote, PaperTopBarShortcuts.Workspace]) &&
+                  [PaperTopBarShortcuts.Association, PaperTopBarShortcuts.NewNote, PaperTopBarShortcuts.Workspace,
+                   PaperTopBarShortcuts.ExpandedEditor]) &&
               PaperTopBarShortcuts.Menu(state).SequenceEqual(
                   [PaperTopBarShortcuts.NewTodo, PaperTopBarShortcuts.ExternalEditor, PaperTopBarShortcuts.RunScript]),
             "Dragging a menu command above the divider pins it at the insertion slot.");
         Check(PaperTopBarShortcuts.MoveTo(state, PaperTopBarShortcuts.Association, false, 0) &&
               PaperTopBarShortcuts.Pinned(state).SequenceEqual(
-                  [PaperTopBarShortcuts.NewNote, PaperTopBarShortcuts.Workspace]) &&
+                  [PaperTopBarShortcuts.NewNote, PaperTopBarShortcuts.Workspace,
+                   PaperTopBarShortcuts.ExpandedEditor]) &&
               PaperTopBarShortcuts.Menu(state).SequenceEqual(
                   [PaperTopBarShortcuts.Association, PaperTopBarShortcuts.NewTodo,
                    PaperTopBarShortcuts.ExternalEditor, PaperTopBarShortcuts.RunScript]),
@@ -115,7 +118,8 @@ internal static partial class Program
             "Dropping in the same slot is a true no-op.");
         Check(PaperTopBarShortcuts.MoveTo(state, PaperTopBarShortcuts.NewTodo, true, 0) &&
               PaperTopBarShortcuts.Pinned(state).SequenceEqual(
-                  [PaperTopBarShortcuts.NewTodo, PaperTopBarShortcuts.NewNote, PaperTopBarShortcuts.Workspace]),
+                  [PaperTopBarShortcuts.NewTodo, PaperTopBarShortcuts.NewNote,
+                   PaperTopBarShortcuts.Workspace, PaperTopBarShortcuts.ExpandedEditor]),
             "Reordering within one group preserves divider membership.");
         Check(PaperTopBarShortcuts.Contains(state, PaperTypes.Note,
                   PaperTopBarShortcuts.NewNote) &&

@@ -356,6 +356,7 @@ public sealed partial class AppController
         PaperTopBarShortcuts.NewTodo => Strings.Get("ShortcutNewTodo"),
         PaperTopBarShortcuts.NewNote => Strings.Get("ShortcutNewNote"),
         PaperTopBarShortcuts.Workspace => Strings.Get("WorkspaceSettingsTitle"),
+        PaperTopBarShortcuts.ExpandedEditor => Strings.Get("EditorOpen"),
         PaperTopBarShortcuts.RunScript => Strings.Get("TopBarRunScript"),
         PaperTopBarShortcuts.Association => Strings.Get("TopBarAssociation"),
         PaperTopBarShortcuts.ExternalEditor => Strings.Get("TopBarExternalEditor"),
@@ -384,6 +385,7 @@ public sealed partial class AppController
             PaperTopBarShortcuts.NewTodo => PaperWindow.CreateTopBarNewTodoIcon(slot),
             PaperTopBarShortcuts.NewNote => PaperWindow.CreateTopBarNewNoteIcon(slot),
             PaperTopBarShortcuts.RunScript => PaperWindow.CreateTopBarRunScriptIcon(slot),
+            PaperTopBarShortcuts.ExpandedEditor => StudioIcons.Create(slot, StudioIcon.Studio, AppTypography.Scale(16)),
             PaperTopBarShortcuts.Association => PaperWindow.CreateTopBarAssociationIcon(slot, active: false),
             PaperTopBarShortcuts.Workspace => PaperWindow.CreateWorkspaceCycleIcon(slot, WorkspaceNumber, out _),
             PaperTopBarShortcuts.ExternalEditor => new TextBlock

@@ -1754,6 +1754,64 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
   <data name="MenuTopBarAssociationDragWindow" xml:space="preserve"><value>ウィンドウへドラッグして関連付け</value></data>
   <data name="WorkspaceDataSettingsTitle" xml:space="preserve"><value>ワークスペースとデータ</value></data>
   <data name="SettingsDataProcessing" xml:space="preserve"><value>データ処理</value></data>
+  <data name="EditorOpen" xml:space="preserve"><value>スタジオで開く</value></data>
+  <data name="EditorReturn" xml:space="preserve"><value>紙片に戻る</value></data>
+  <data name="EditorSidebarShow" xml:space="preserve"><value>紙片一覧を表示</value></data>
+  <data name="EditorSidebarHide" xml:space="preserve"><value>紙片一覧を閉じる</value></data>
+  <data name="EditorMinimize" xml:space="preserve"><value>最小化</value></data>
+  <data name="EditorMaximizeRestore" xml:space="preserve"><value>最大化 / 元に戻す</value></data>
+  <data name="EditorUndo" xml:space="preserve"><value>元に戻す</value></data>
+  <data name="EditorRedo" xml:space="preserve"><value>やり直す</value></data>
+  <data name="EditorHeading" xml:space="preserve"><value>見出し</value></data>
+  <data name="EditorBold" xml:space="preserve"><value>太字</value></data>
+  <data name="EditorItalic" xml:space="preserve"><value>斜体</value></data>
+  <data name="EditorStrike" xml:space="preserve"><value>取り消し線</value></data>
+  <data name="EditorBullets" xml:space="preserve"><value>箇条書き</value></data>
+  <data name="EditorNumbers" xml:space="preserve"><value>番号付きリスト</value></data>
+  <data name="EditorQuote" xml:space="preserve"><value>引用</value></data>
+  <data name="EditorCode" xml:space="preserve"><value>コードブロック</value></data>
+  <data name="EditorLink" xml:space="preserve"><value>リンクを挿入</value></data>
+  <data name="EditorImage" xml:space="preserve"><value>画像を挿入</value></data>
+  <data name="EditorAllPapers" xml:space="preserve"><value>すべての紙片</value></data>
+  <data name="EditorTodo" xml:space="preserve"><value>ToDo</value></data>
+  <data name="EditorNote" xml:space="preserve"><value>ノート</value></data>
+  <data name="EditorPaper" xml:space="preserve"><value>紙片</value></data>
+  <data name="EditorStatistics" xml:space="preserve">
+    <value>テキスト統計</value>
+  </data>
+  <data name="EditorStatisticsDocument" xml:space="preserve">
+    <value>全文</value>
+  </data>
+  <data name="EditorStatisticsSelection" xml:space="preserve">
+    <value>選択範囲</value>
+  </data>
+  <data name="EditorStatisticsLines" xml:space="preserve">
+    <value>行数</value>
+  </data>
+  <data name="EditorStatisticsBody" xml:space="preserve">
+    <value>本文文字数</value>
+  </data>
+  <data name="EditorStatisticsSource" xml:space="preserve">
+    <value>原文文字数</value>
+  </data>
+  <data name="EditorCharacterCount" xml:space="preserve"><value>{0:N0} 文字</value></data>
+  <data name="EditorSelectionCount" xml:space="preserve"><value>{0:N0} 文字 · 選択 {1:N0} 文字</value></data>
+  <data name="EditorImageExport" xml:space="preserve"><value>画像として書き出す</value></data>
+  <data name="EditorImageExportSave" xml:space="preserve"><value>画像を保存</value></data>
+  <data name="EditorImageExportPreparing" xml:space="preserve"><value>レイアウトを作成中…</value></data>
+  <data name="EditorImageExportPreview" xml:space="preserve"><value>ノート全体のプレビュー</value></data>
+  <data name="EditorImageExportSize" xml:space="preserve"><value>{0} × {1} ピクセル</value></data>
+  <data name="EditorImageExportMissing" xml:space="preserve"><value>{0} 枚の画像を読み込めませんでした。該当箇所に表示しています。</value></data>
+  <data name="EditorImageExportJpeg" xml:space="preserve"><value>JPG</value></data>
+  <data name="EditorImageExportJpegHeightLimit" xml:space="preserve"><value>JPG の高さは最大 65535 ピクセルです。さらに長い画像は PNG を選択してください。</value></data>
+  <data name="EditorImageExportSwitchFormat" xml:space="preserve"><value>画像形式を切り替え</value></data>
+  <data name="EditorImageExportEstimatedSize" xml:space="preserve"><value>容量：約{0}MB</value></data>
+  <data name="EditorImageExportEstimatedSizeSmall" xml:space="preserve"><value>容量：1MB未満</value></data>
+  <data name="EditorImageExportPng" xml:space="preserve"><value>PNG</value></data>
+  <data name="EditorImageExportSaving" xml:space="preserve"><value>保存中…</value></data>
+  <data name="EditorImageExportSaved" xml:space="preserve"><value>画像を保存しました</value></data>
+  <data name="StudioTitle" xml:space="preserve"><value>スタジオ</value></data>
+  <data name="EditorClose" xml:space="preserve"><value>スタジオを閉じる</value></data>
   <data name="TipHideSurfaceOutline" xml:space="preserve"><value>紙片、カプセル、メニューの外枠線のみを隠します。大きさは変わらず、高コントラスト表示では枠線を維持します。</value></data>
   <data name="TipScriptCapsule" xml:space="preserve"><value>ノートの先頭行に !p などを記入し、2行目から PowerShell を記述します。折りたたんだカプセルをクリックすると実行できます。下の設定は上部バーのスクリプト実行にも適用されます。</value></data>
   <data name="WorkspaceSwitchGroup" xml:space="preserve">

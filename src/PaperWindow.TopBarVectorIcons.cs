@@ -40,8 +40,9 @@ public sealed partial class PaperWindow
         return path;
     }
 
-    private static FrameworkElement CreateTopmostPinIcon(Button owner, bool pinned)
+    private FrameworkElement CreateTopmostPinIcon(Button owner, bool pinned)
     {
+        if (_isExpandedEditorMode) return StudioIcons.Create(owner, StudioIcon.Pin, 16 * TopBarIconScale());
         if (Theme.IsPixelSkin) return pinned
             ? CreatePixelIcon(owner, "..####..", "...##...", "..####..", ".######.", "...##...", "...##...", "...#....")
             : CreatePixelIcon(owner, "..####..", "..#..#..", "..#..#..", ".######.", "...##...", "...##...", "...#....");
@@ -50,8 +51,9 @@ public sealed partial class PaperWindow
             filled: pinned);
     }
 
-    internal static FrameworkElement CreateTopBarRunScriptIcon(Control owner)
+    internal static FrameworkElement CreateTopBarRunScriptIcon(Control owner, bool studio = false)
     {
+        if (studio) return StudioIcons.Create(owner, StudioIcon.RunScript, 16 * TopBarIconScale());
         if (Theme.IsPixelSkin) return CreatePixelIcon(owner,
             ".#######.", "#.......#", "#.#.....#", "#..#....#", "#.#..##.#", "#.......#", ".#######.");
         return TopBarPath(owner, RunScriptIconPath);
@@ -63,8 +65,9 @@ public sealed partial class PaperWindow
         return TopBarPath(owner, "M4.5 12 h0.25 M11.875 12 h0.25 M19.25 12 h0.25", stroke: 3);
     }
 
-    internal static FrameworkElement CreateTopBarAssociationIcon(Control owner, bool active)
+    internal static FrameworkElement CreateTopBarAssociationIcon(Control owner, bool active, bool studio = false)
     {
+        if (studio) return StudioIcons.Create(owner, StudioIcon.Association, 16 * TopBarIconScale());
         if (Theme.IsPixelSkin) return active
             ? CreatePixelIcon(owner,
                 "....###..", "...#...#.", "..#.....#", "..#..###.", ".###.#...",
@@ -88,15 +91,17 @@ public sealed partial class PaperWindow
         return icon;
     }
 
-    internal static FrameworkElement CreateTopBarNewTodoIcon(Control owner)
+    internal static FrameworkElement CreateTopBarNewTodoIcon(Control owner, bool studio = false)
     {
+        if (studio) return StudioIcons.Create(owner, StudioIcon.NewTodo, 16 * TopBarIconScale());
         if (Theme.IsPixelSkin) return CreatePixelIcon(owner,
             ".........", "#######..", "#.....#.#", "#....#..#", "#.#.#...#", "#..#....#", "#.......#", "#########", ".........");
         return TopBarPath(owner, NewPaperPlusPath + "M12 12 L16.5 16.5 L26 7.5", width: 28);
     }
 
-    internal static FrameworkElement CreateTopBarNewNoteIcon(Control owner)
+    internal static FrameworkElement CreateTopBarNewNoteIcon(Control owner, bool studio = false)
     {
+        if (studio) return StudioIcons.Create(owner, StudioIcon.NewNote, 16 * TopBarIconScale());
         if (Theme.IsPixelSkin) return CreatePixelIcon(owner,
             "......##.", ".....####", "....####.", "...####..", "..####...", ".####....", ".###.....", ".#.......", ".........");
         return TopBarPath(owner, NewPaperPlusPath +
@@ -104,10 +109,11 @@ public sealed partial class PaperWindow
             width: 28);
     }
 
-    private static FrameworkElement CreateTopBarCloseIcon(
+    private FrameworkElement CreateTopBarCloseIcon(
         Button owner,
         bool collapse)
     {
+        if (_isExpandedEditorMode) return StudioIcons.Create(owner, StudioIcon.Close, 16 * TopBarIconScale());
         if (Theme.IsPixelSkin) return collapse
             ? CreatePixelIcon(owner, "########")
             : CreatePixelIcon(owner, "##....##", ".##..##.", "..####..", "...##...", "..####..", ".##..##.", "##....##");

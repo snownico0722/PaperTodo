@@ -120,12 +120,14 @@ public sealed partial class AppController
         TryExitCleanup(NotifyTodoReminderCollectionChanged);
         TryExitCleanup(() => ArrangeDeepCapsules(animate: false));
         TryExitCleanup(RefreshTrayMenu);
+        TryExitCleanup(RefreshExpandedEditorPaperLists);
     }
 
     internal void FinalizeMcpPaperCreated(PaperData paper, bool show)
     {
         paper.IsVisible = show;
         RefreshTrayMenu();
+        RefreshExpandedEditorPaperLists();
         if (show) ShowPaper(paper);
         else ArrangeDeepCapsules(animate: false);
 
@@ -211,12 +213,14 @@ public sealed partial class AppController
         }
         ArrangeDeepCapsules(animate: false);
         RefreshTrayMenu();
+        RefreshExpandedEditorPaperLists();
     }
 
     internal void RefreshMcpAfterRollback()
     {
         TryExitCleanup(() => ArrangeDeepCapsules(animate: false));
         TryExitCleanup(RefreshTrayMenu);
+        TryExitCleanup(RefreshExpandedEditorPaperLists);
     }
 
     private static string BuildAiMcpSkill() =>

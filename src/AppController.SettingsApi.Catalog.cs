@@ -237,6 +237,11 @@ public sealed partial class AppController
             value => PaperTopBarShortcuts.SetPinned(State, PaperTopBarShortcuts.ExternalEditor, value),
             SettingEffects.TopBar,
             title: Strings.Get("SettingsShowTopBarExternalOpenButton"));
+        yield return DefineSetting<bool>("topbar.expanded_editor",
+            () => PaperTopBarShortcuts.IsPinned(State, PaperTopBarShortcuts.ExpandedEditor),
+            value => PaperTopBarShortcuts.SetPinned(State, PaperTopBarShortcuts.ExpandedEditor, value),
+            SettingEffects.TopBar,
+            title: Strings.Get("EditorOpen"));
         yield return DefineSetting<bool>("window.hide_from_taskbar",
             () => State.HidePapersFromTaskbar,
             value => State.HidePapersFromTaskbar = value,

@@ -35,7 +35,7 @@ public sealed partial class PaperWindow
                 case PaperTopBarShortcuts.RunScript when
                     !forDeepCapsuleSlot && !_paper.IsCollapsed && !IsTopBarCommandVisible(_runScriptButton):
                     menu.Items.Add(MenuItem(Strings.Get("TopBarRunScript"),
-                        (_, _) => _controller.RunTopBarScript(this)));
+                        (_, _) => _controller.RunTopBarScript(InteractionWindow)));
                     break;
                 case PaperTopBarShortcuts.Workspace when
                     _controller.WorkspaceOptions.Enabled:
@@ -54,6 +54,17 @@ public sealed partial class PaperWindow
                 case PaperTopBarShortcuts.Association when
                     CanBeginAssociationDrag() && !IsTopBarCommandVisible(_windowBindingButton):
                     menu.Items.Add(BuildAssociationDragMenuItem(menu));
+                    break;
+                case PaperTopBarShortcuts.ExpandedEditor when
+                    !IsTopBarCommandVisible(_editorModeButton):
+                    menu.Items.Add(MenuItem(
+                        _isExpandedEditorMode ? Strings.Get("EditorReturn") : Strings.Get("EditorOpen"),
+                        (_, _) =>
+                        {
+                            if (_expandedEditorHostWindow != null)
+                                _expandedEditorHostWindow.ReturnToPaper();
+                            else _controller.OpenExpandedEditorFor(this);
+                        }));
                     break;
                 case PaperTopBarShortcuts.ExternalEditor when
                     _paper.Type == PaperTypes.Note && IsCurrentBodyProviderMarkdown &&

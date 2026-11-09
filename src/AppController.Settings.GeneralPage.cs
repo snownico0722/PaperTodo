@@ -271,6 +271,7 @@ public sealed partial class AppController
         State.ShowTopBarExternalOpenButton = defaults.ShowTopBarExternalOpenButton;
         State.TopBarShortcutOrder = defaults.TopBarShortcutOrder;
         State.TopBarPinnedCount = defaults.TopBarPinnedCount;
+        State.TopBarDefaultsVersion = PaperTopBarShortcuts.CurrentDefaultsVersion;
         State.HiddenTopBarShortcuts = defaults.HiddenTopBarShortcuts;
         State.TodoTopBarShortcuts = defaults.TodoTopBarShortcuts;
         State.NoteTopBarShortcuts = defaults.NoteTopBarShortcuts;

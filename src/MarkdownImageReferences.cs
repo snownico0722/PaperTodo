@@ -28,7 +28,26 @@ public readonly record struct MarkdownImageReference(
 public readonly record struct MarkdownImageDisplayOptions(
     double? LabelWidth,
     double? LabelScalePercent,
-    MarkdownImageWidthAttribute? WidthAttribute);
+    MarkdownImageWidthAttribute? WidthAttribute)
+{
+    // Shared by the editor and image export. Label percentages scale the original
+    // image; a width attribute percentage instead scales the available column.
+    internal double ResolveWidth(double naturalWidth, double targetWidth)
+    {
+        targetWidth = Math.Max(80, targetWidth);
+        naturalWidth = Math.Max(1, naturalWidth);
+        var width = Math.Min(targetWidth, naturalWidth);
+        if (WidthAttribute is { } attribute)
+            width = attribute.IsPercent
+                ? targetWidth * Math.Clamp(attribute.Value, 1, 1000) / 100.0
+                : attribute.Value;
+        else if (LabelWidth is { } labelWidth)
+            width = labelWidth * Math.Clamp(LabelScalePercent ?? 100, 1, 1000) / 100.0;
+        else if (LabelScalePercent is { } percent)
+            width = naturalWidth * Math.Clamp(percent, 1, 1000) / 100.0;
+        return Math.Round(Math.Clamp(width, 24, targetWidth), 1);
+    }
+}
 
 public readonly record struct MarkdownImageWidthAttribute(double Value, bool IsPercent);
 

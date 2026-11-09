@@ -106,7 +106,7 @@ public sealed partial class PaperWindow
             enabled && PaperTopBarShortcuts.Contains(
                 _controller.State, _paper.Type, PaperTopBarShortcuts.Association)
                 ? Visibility.Visible : Visibility.Collapsed;
-        _windowBindingButton.Content = CreateTopBarAssociationIcon(_windowBindingButton, isAssociated);
+        _windowBindingButton.Content = CreateTopBarAssociationIcon(_windowBindingButton, isAssociated, studio: _isExpandedEditorMode);
         _windowBindingButton.Cursor =
             isAssociated ? Cursors.Hand : Cursors.Cross;
         _windowBindingButton.FontWeight =

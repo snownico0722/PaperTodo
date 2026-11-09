@@ -281,7 +281,7 @@ public sealed partial class MarkdownTextBox
         // The clipboard feature can live beside the Markdig refactor without modifying
         // PaperWindow.Note.cs. Keep the existing event contract, but provide the same user-facing
         // notice when no host subscriber has been wired yet.
-        if (Window.GetWindow(this) is PaperWindow owner)
+        if (Window.GetWindow(this) is Window owner)
         {
             PaperNoticeDialog.Show(
                 owner,

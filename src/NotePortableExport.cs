@@ -273,6 +273,19 @@ internal static class NotePortableExport
         Path.Combine(Path.GetDirectoryName(Path.GetFullPath(path))!,
             "." + Path.GetFileName(path) + "." + Guid.NewGuid().ToString("N") + ".tmp");
 
+    internal static void SaveAtomicFile(string path, Action<string> writeTemporaryFile,
+        CancellationToken cancellationToken = default)
+    {
+        var tempPath = TempPath(path);
+        try
+        {
+            writeTemporaryFile(tempPath);
+            cancellationToken.ThrowIfCancellationRequested();
+            File.Move(tempPath, path, overwrite: true);
+        }
+        finally { TryDelete(tempPath); }
+    }
+
     internal static void SaveAtomic(string path, byte[] bytes) =>
         SaveAtomic(path, stream => stream.Write(bytes));
 

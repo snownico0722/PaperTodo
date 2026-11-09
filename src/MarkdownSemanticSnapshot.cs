@@ -247,6 +247,8 @@ internal sealed partial class MarkdownSemanticSnapshot
         return false;
     }
 
+    internal static MarkdownDocument ParseDocument(string source) => Markdown.Parse(source, Pipeline);
+
     internal static string ToPlainText(string? markdown)
     {
         var source = markdown ?? string.Empty;
@@ -280,7 +282,7 @@ internal sealed partial class MarkdownSemanticSnapshot
         var lineStarts = BuildLineStarts(source);
         var spans = new List<MarkdownSemanticSpan>();
         var links = new List<MarkdownSemanticLink>();
-        var document = Markdown.Parse(source, Pipeline);
+        var document = ParseDocument(source);
         var hasReferenceDefinitions =
             document.GetLinkReferenceDefinitions(false).Links.Count != 0;
 

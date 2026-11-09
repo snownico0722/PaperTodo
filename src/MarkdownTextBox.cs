@@ -376,6 +376,35 @@ public sealed partial class MarkdownTextBox : TextEditor
         }
     }
 
+    public void InsertCodeBlock()
+    {
+        var start = SelectionStart;
+        var length = SelectionLength;
+        var end = start + length;
+        var selected = SelectedText;
+        var firstLine = Document.GetLineByNumber(1);
+        var newline = firstLine.DelimiterLength > 0
+            ? Document.GetText(firstLine.EndOffset, firstLine.DelimiterLength) : "\n";
+        // A fence must occupy its own line, including when only part of a sentence
+        // is selected. Longer fences keep literal backticks inside the code intact.
+        var fenceLength = 3;
+        var run = 0;
+        foreach (var character in selected)
+        {
+            run = character == '`' ? run + 1 : 0;
+            fenceLength = Math.Max(fenceLength, run + 1);
+        }
+        var fence = new string('`', fenceLength);
+        var prefix = (start > Document.GetLineByOffset(start).Offset ? newline : "") + fence + newline;
+        var suffix = (selected.EndsWith('\n') || selected.EndsWith('\r') ? "" : newline) + fence;
+        if (end < Document.TextLength && Document.GetCharAt(end) is not ('\r' or '\n'))
+            suffix += newline;
+        using (Document.RunUpdate())
+            Document.Replace(start, length, prefix + selected + suffix);
+        Select(start + prefix.Length, length);
+        Focus();
+    }
+
     private static bool HasLineBreak(string text)
     {
         return text.IndexOfAny(['\r', '\n']) >= 0;
@@ -437,18 +466,35 @@ public sealed partial class MarkdownTextBox : TextEditor
 
     public void InsertLinePrefix(string prefix)
     {
-        if (Document == null)
+        if (Document == null) return;
+
+        var start = Math.Clamp(SelectionStart, 0, Document.TextLength);
+        var end = Math.Clamp(start + SelectionLength, start, Document.TextLength);
+        if (start == end)
         {
+            Select(Document.GetLineByOffset(start).Offset, 0);
+            SelectedText = prefix;
+            Focus();
+            Select(start + prefix.Length, 0);
             return;
         }
 
-        var start = Math.Clamp(SelectionStart, 0, Document.TextLength);
-        var lineStart = Document.GetLineByOffset(start).Offset;
-        Select(lineStart, 0);
-        SelectedText = prefix;
+        // A selection ending at the next line's start does not include that line.
+        var firstLine = Document.GetLineByOffset(start).LineNumber;
+        var lastLine = Document.GetLineByOffset(end - 1).LineNumber;
+        using (Document.RunUpdate())
+        {
+            for (var lineNumber = lastLine; lineNumber >= firstLine; lineNumber--)
+            {
+                var linePrefix = prefix == "1. " ? $"{lineNumber - firstLine + 1}. " : prefix;
+                Document.Insert(Document.GetLineByNumber(lineNumber).Offset, linePrefix);
+            }
+        }
 
         Focus();
-        Select(start + prefix.Length, 0);
+        var selectionStart = Document.GetLineByNumber(firstLine).Offset;
+        var selectionEnd = Document.GetLineByNumber(lastLine).EndOffset;
+        Select(selectionStart, selectionEnd - selectionStart);
     }
 
     public int GetLineIndexFromCharacterIndex(int charIndex)
@@ -1796,32 +1842,7 @@ public sealed partial class MarkdownTextBox : TextEditor
         MarkdownImageDisplayOptions options,
         double naturalWidth,
         double targetWidth)
-    {
-        targetWidth = Math.Max(80, targetWidth);
-        naturalWidth = Math.Max(1, naturalWidth);
-        var width = Math.Min(targetWidth, naturalWidth);
-
-        if (options.WidthAttribute is { } widthAttribute)
-        {
-            width = widthAttribute.IsPercent
-                ? targetWidth * Math.Clamp(widthAttribute.Value, 1, 1000) / 100.0
-                : widthAttribute.Value;
-        }
-        else if (options.LabelWidth.HasValue)
-        {
-            width = options.LabelWidth.Value;
-            if (options.LabelScalePercent.HasValue)
-            {
-                width *= Math.Clamp(options.LabelScalePercent.Value, 1, 1000) / 100.0;
-            }
-        }
-        else if (options.LabelScalePercent.HasValue)
-        {
-            width = naturalWidth * Math.Clamp(options.LabelScalePercent.Value, 1, 1000) / 100.0;
-        }
-
-        return Math.Round(Math.Clamp(width, 24, targetWidth), 1);
-    }
+        => options.ResolveWidth(naturalWidth, targetWidth);
 
     private int ImageDecodePixelWidth(double displayWidth)
     {

@@ -408,6 +408,18 @@ public sealed partial class PaperWindow
         _findPopup.HorizontalOffset = offset;
     }
 
+    private void UpdateBuiltInFindPlacementTarget()
+    {
+        if (_findPopup == null) return;
+        var target = IsExpandedEditorHosted ? (UIElement)_shell : _paperChrome;
+        if (ReferenceEquals(_findPopup.PlacementTarget, target)) return;
+
+        // A dragged rectangle belongs to its placement surface, not to the paper's
+        // document. Restore default placement when that surface changes windows.
+        _findPopup.PlacementRectangle = Rect.Empty;
+        _findPopup.PlacementTarget = target;
+    }
+
     private void OnBuiltInFindDragStart(object sender, MouseButtonEventArgs e)
     {
         if (!IsBuiltInFindOpen || _findHost == null || _findPopup == null)
@@ -427,8 +439,9 @@ public sealed partial class PaperWindow
             }
         }
 
-        var start = e.GetPosition(_paperChrome);
-        var popupStart = _paperChrome.PointFromScreen(_findHost.PointToScreen(new Point()));
+        var target = _findPopup.PlacementTarget;
+        var start = e.GetPosition(target);
+        var popupStart = target.PointFromScreen(_findHost.PointToScreen(new Point()));
         if (!_findHost.CaptureMouse())
         {
             return;
@@ -452,10 +465,10 @@ public sealed partial class PaperWindow
             return;
         }
 
-        // Use the stationary paper's coordinates, starting at the popup's actual on-screen
+        // Use the current placement surface, starting at the popup's actual on-screen
         // position after WPF clamping. Moving the placement rectangle also lets WPF choose
         // the monitor at the dragged position, instead of pinning it to the owner's monitor.
-        var delta = e.GetPosition(_paperChrome) - start;
+        var delta = e.GetPosition(_findPopup.PlacementTarget) - start;
         _findPopup.PlacementRectangle = new Rect(_findDragPopupStart + delta, new Size());
         e.Handled = true;
     }
@@ -523,7 +536,7 @@ public sealed partial class PaperWindow
         {
             if (!IsBuiltInFindOpen ||
                 _findHost?.IsKeyboardFocusWithin == true ||
-                IsActive)
+                InteractionWindow.IsActive)
             {
                 return;
             }

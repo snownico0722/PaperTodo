@@ -1754,6 +1754,64 @@ Resolve the file access problem and retry, or choose “Rebuild workspace” to 
   <data name="MenuTopBarAssociationDragWindow" xml:space="preserve"><value>Drag to a window to associate</value></data>
   <data name="WorkspaceDataSettingsTitle" xml:space="preserve"><value>Spaces &amp; Data</value></data>
   <data name="SettingsDataProcessing" xml:space="preserve"><value>Data handling</value></data>
+  <data name="EditorOpen" xml:space="preserve"><value>Open in Studio</value></data>
+  <data name="EditorReturn" xml:space="preserve"><value>Return to paper</value></data>
+  <data name="EditorSidebarShow" xml:space="preserve"><value>Show paper list</value></data>
+  <data name="EditorSidebarHide" xml:space="preserve"><value>Hide paper list</value></data>
+  <data name="EditorMinimize" xml:space="preserve"><value>Minimize</value></data>
+  <data name="EditorMaximizeRestore" xml:space="preserve"><value>Maximize / Restore</value></data>
+  <data name="EditorUndo" xml:space="preserve"><value>Undo</value></data>
+  <data name="EditorRedo" xml:space="preserve"><value>Redo</value></data>
+  <data name="EditorHeading" xml:space="preserve"><value>Heading</value></data>
+  <data name="EditorBold" xml:space="preserve"><value>Bold</value></data>
+  <data name="EditorItalic" xml:space="preserve"><value>Italic</value></data>
+  <data name="EditorStrike" xml:space="preserve"><value>Strikethrough</value></data>
+  <data name="EditorBullets" xml:space="preserve"><value>Bullet list</value></data>
+  <data name="EditorNumbers" xml:space="preserve"><value>Numbered list</value></data>
+  <data name="EditorQuote" xml:space="preserve"><value>Quote</value></data>
+  <data name="EditorCode" xml:space="preserve"><value>Code block</value></data>
+  <data name="EditorLink" xml:space="preserve"><value>Insert link</value></data>
+  <data name="EditorImage" xml:space="preserve"><value>Insert image</value></data>
+  <data name="EditorAllPapers" xml:space="preserve"><value>All papers</value></data>
+  <data name="EditorTodo" xml:space="preserve"><value>Todo</value></data>
+  <data name="EditorNote" xml:space="preserve"><value>Note</value></data>
+  <data name="EditorPaper" xml:space="preserve"><value>Paper</value></data>
+  <data name="EditorStatistics" xml:space="preserve">
+    <value>Text statistics</value>
+  </data>
+  <data name="EditorStatisticsDocument" xml:space="preserve">
+    <value>Document</value>
+  </data>
+  <data name="EditorStatisticsSelection" xml:space="preserve">
+    <value>Selection</value>
+  </data>
+  <data name="EditorStatisticsLines" xml:space="preserve">
+    <value>Lines</value>
+  </data>
+  <data name="EditorStatisticsBody" xml:space="preserve">
+    <value>Body characters</value>
+  </data>
+  <data name="EditorStatisticsSource" xml:space="preserve">
+    <value>Source characters</value>
+  </data>
+  <data name="EditorCharacterCount" xml:space="preserve"><value>{0:N0} characters</value></data>
+  <data name="EditorSelectionCount" xml:space="preserve"><value>{0:N0} characters · {1:N0} selected</value></data>
+  <data name="EditorImageExport" xml:space="preserve"><value>Export as image</value></data>
+  <data name="EditorImageExportSave" xml:space="preserve"><value>Save image</value></data>
+  <data name="EditorImageExportPreparing" xml:space="preserve"><value>Preparing layout…</value></data>
+  <data name="EditorImageExportPreview" xml:space="preserve"><value>Full note preview</value></data>
+  <data name="EditorImageExportSize" xml:space="preserve"><value>{0} × {1} pixels</value></data>
+  <data name="EditorImageExportMissing" xml:space="preserve"><value>{0} image(s) could not be loaded; their positions are marked.</value></data>
+  <data name="EditorImageExportJpeg" xml:space="preserve"><value>JPG</value></data>
+  <data name="EditorImageExportJpegHeightLimit" xml:space="preserve"><value>JPG supports a maximum height of 65535 pixels. Choose PNG for longer images.</value></data>
+  <data name="EditorImageExportSwitchFormat" xml:space="preserve"><value>Switch image format</value></data>
+  <data name="EditorImageExportEstimatedSize" xml:space="preserve"><value>Size: approx. {0} MB</value></data>
+  <data name="EditorImageExportEstimatedSizeSmall" xml:space="preserve"><value>Size: less than 1 MB</value></data>
+  <data name="EditorImageExportPng" xml:space="preserve"><value>PNG</value></data>
+  <data name="EditorImageExportSaving" xml:space="preserve"><value>Saving…</value></data>
+  <data name="EditorImageExportSaved" xml:space="preserve"><value>Image saved</value></data>
+  <data name="StudioTitle" xml:space="preserve"><value>Studio</value></data>
+  <data name="EditorClose" xml:space="preserve"><value>Close Studio</value></data>
   <data name="TipHideSurfaceOutline" xml:space="preserve"><value>Hide the thin outer border on papers, capsules and menus without changing their size. Borders stay visible in high-contrast mode.</value></data>
   <data name="TipScriptCapsule" xml:space="preserve"><value>Start a note with !p or another script prefix, then write PowerShell below. Click the collapsed capsule to run it. These settings also apply to the title-bar Run Script action.</value></data>
   <data name="WorkspaceSwitchGroup" xml:space="preserve">

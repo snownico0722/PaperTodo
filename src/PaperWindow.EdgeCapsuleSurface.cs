@@ -88,6 +88,12 @@ public sealed partial class PaperWindow
     internal void ActivateFromEdgeShortcut()
     {
         CloseDeepCapsuleSlotContextMenu();
+        if (_expandedEditorHostWindow is { } editor)
+        {
+            editor.ActivateEditor();
+            QueueExpandedEditorFocus();
+            return;
+        }
         if (TryRunScriptCapsule())
         {
             return;
@@ -154,6 +160,12 @@ public sealed partial class PaperWindow
     private void ActivateFromDeepCapsuleSlot()
     {
         CloseDeepCapsuleSlotContextMenu();
+        if (_expandedEditorHostWindow is { } editor)
+        {
+            editor.ActivateEditor();
+            QueueExpandedEditorFocus();
+            return;
+        }
         if (TryRunScriptCapsule())
         {
             return;

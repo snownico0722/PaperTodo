@@ -82,6 +82,7 @@
 | D-070 | 完整快照按来源顺序恢复，损坏时须用户确认重建 | Accepted | 核心持久化 / 恢复 |
 | D-071 | 有界冲突归档与健康主文件后清理孤立临时文件 | Accepted | 核心持久化 / 归档 |
 | D-072 | Ctrl 整队拖拽归属胶囊自由队列 | Accepted | Edge / 队列 |
+| D-076 | 长图体积提示使用排版元数据粗估 | Accepted | Note / 导出性能 |
 
 ## 维护规则
 
@@ -2154,7 +2155,6 @@ The preview should show an available landing rather than make a target continuou
 
 只为可恢复的数据支付存储与代码成本，保留真实的未提交快照而不积累无界防御文件。
 
-
 ## D-072 — Ctrl 整队拖拽归属胶囊自由队列
 
 **Status:** Accepted; supersedes D-066 only for Ctrl while free queues are disabled.
@@ -2164,3 +2164,24 @@ The preview should show an available landing rather than make a target continuou
 **Why:** 功能关闭时不留下另一条隐含整队操作；保留主胶囊和真实纸片各自的状态归属，不为统一手势重建呈现或落位系统。
 
 **Evidence:** `PaperWindow.NativeQueueInteraction.LatchNativeQueueControl`、`AppController.BeginNativeEdgeQueueDrag`、`MasterCapsuleWindow.OnFloatingDragHostLocationChanged`。
+
+## D-076 — 长图体积提示使用排版元数据粗估
+
+**Status**：Accepted。
+
+**Context**：最初为避免预压缩，使用全输出像素统计模型。它仍需额外光栅化，Windows 实测长中文笔记预估约 2.62 秒，单次 JPG 导出约 1.09 秒、PNG 约 1.91 秒；后台执行不等于低计算成本。
+
+**Decision / Why**：在接受约 50% 粗估误差后，复用 Composer 已有文字及图片编码元数据，随排版累计两个体积数字；取消第二次全图渲染和预测任务。不在生产路径增加抽样、试压缩或为了精度而回退至像素扫描。格式、画质和保存选择仍由原导出路径负责。
+
+**Consequences**：元数据不能唯一决定压缩体积，跨格式图片、特殊纹理和大幅缩放仍可能超过目标误差；测试应同时报告原始误差与显示取整，不能把固定样例通过宣称为通用保证。
+
+**校准经验**：
+
+- 文字按汉字、假名、韩文与窄字符分组；正文和等宽代码按实际字号分别计数。引用框、复选框有少量固定开销，单纯按字符数会漏掉这部分。
+- 图片原文件大小要排除附加元数据；JPEG 的量化表/采样比例、PNG 的颜色类型/位深/调色板信息有用。普通 RGB 的新拟合没有稳定收益，应保留已有公式；抖动黑白图与普通阈值黑白图的 JPG 体积规律不同。
+- 有透明通道不等于大面积透明，文件头无法补齐纹理与透明覆盖率。不要为少数小图的高百分比误差不断增加分支，也不要把同一照片的多组缩放/压缩组合当成多张独立照片。
+- 这些系数服务于固定导出字体、比例、JPG 质量及 PNG 编码方式；上述条件变化，或真实笔记反复出现明显偏差时，再做针对性对照。统计耗时不包含原有排版/图片解码，历史样例的误差也不是通用保证。
+
+**验证取舍**：完整精度语料、计时基准和离线拟合属于开发实验。保留运行算法及既有导出/预览行为检查，删除实验脚本、数字样本和专用测算测试，撤销为整套编码实验延长的测试时限；不把粗略提示的参数校准变成常驻验收体系。
+
+**Evidence**：当前入口为 `NoteImageSizeEstimate`、`NoteImageJpegInfo`、`NoteImagePngInfo` 与 `NoteImageExport.Composer`；已删除的实验、数据与来源可从 [bd94266 历史目录](https://github.com/snownico0722/PaperTodo/tree/bd94266cb99d72913335eafefbe55d20669835af/tools/analysis/note-image-size)及同提交的测算测试追溯，[Windows 校准记录](https://github.com/snownico0722/PaperTodo/actions/runs/42120463501)仅作历史证据。旧像素方案在 `b187a149d50fe486590edb7bed6c08b7a0f06df0`，原性能数据见 [Windows CI](https://github.com/snownico0722/PaperTodo/actions/runs/42098466208)。

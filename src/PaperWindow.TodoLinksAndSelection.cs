@@ -84,7 +84,7 @@ public sealed partial class PaperWindow
         if (e.Key == Key.Back &&
             Keyboard.Modifiers == ModifierKeys.None &&
             _selectedTodoItemIds.Count > 1 &&
-            (ReferenceEquals(Keyboard.FocusedElement, _paperChrome) ||
+            (ReferenceEquals(Keyboard.FocusedElement, TodoSelectionFocusHost) ||
              Keyboard.FocusedElement is TodoTextBox { SelectionLength: 0 }))
         {
             // Whole-row selection is one list edit; text selection and other input
@@ -216,7 +216,7 @@ public sealed partial class PaperWindow
         // Transfer capture while the gesture is still only armed. The TextBox capture-loss event
         // bubbles through PaperWindow; marking the sweep promoted before this transfer could clear
         // the state while leaving the window itself captured.
-        if (!CaptureMouse())
+        if (!InteractionRoot.CaptureMouse())
         {
             return false;
         }
@@ -236,16 +236,20 @@ public sealed partial class PaperWindow
         return true;
     }
 
+    private FrameworkElement TodoSelectionFocusHost =>
+        IsExpandedEditorHosted ? _shell : _paperChrome;
+
     private void FocusTodoSweepSelectionHost()
     {
+        var host = TodoSelectionFocusHost;
         // Keep keyboard focus inside the paper without leaving any TodoTextBox active. Sweep
         // highlighting is drawn independently, so no editor retains a caret or real text range.
-        _paperChrome.Focusable = true;
-        _paperChrome.FocusVisualStyle = null;
-        KeyboardNavigation.SetIsTabStop(_paperChrome, false);
-        FocusManager.SetFocusedElement(this, _paperChrome);
-        Keyboard.Focus(_paperChrome);
-        if (!ReferenceEquals(Keyboard.FocusedElement, _paperChrome))
+        host.Focusable = true;
+        host.FocusVisualStyle = null;
+        KeyboardNavigation.SetIsTabStop(host, false);
+        FocusManager.SetFocusedElement(InteractionWindow, host);
+        Keyboard.Focus(host);
+        if (!ReferenceEquals(Keyboard.FocusedElement, host))
         {
             Keyboard.ClearFocus();
         }
@@ -265,7 +269,7 @@ public sealed partial class PaperWindow
             return;
         }
 
-        var point = e.GetPosition(this);
+        var point = e.GetPosition(InteractionRoot);
         if (!state.IsPromoted)
         {
             var firstTargetItemId = FindTodoSweepPromotionTargetItemId(state, point);
@@ -337,7 +341,7 @@ public sealed partial class PaperWindow
             return;
         }
 
-        var point = Mouse.GetPosition(this);
+        var point = Mouse.GetPosition(InteractionRoot);
         if (!state.IsPromoted)
         {
             var firstTargetItemId = FindTodoSweepPromotionTargetItemId(state, point);
@@ -400,15 +404,15 @@ public sealed partial class PaperWindow
         }
 
         _todoSweepOwnsMouseCapture = false;
-        if (IsMouseCaptured && _todoDrag == null)
+        if (InteractionRoot.IsMouseCaptured && _todoDrag == null)
         {
-            ReleaseMouseCapture();
+            InteractionRoot.ReleaseMouseCapture();
         }
     }
 
     private void OnTodoSweepLostMouseCapture(object sender, MouseEventArgs e)
     {
-        if (!_todoSweepOwnsMouseCapture || ReferenceEquals(Mouse.Captured, this))
+        if (!_todoSweepOwnsMouseCapture || ReferenceEquals(Mouse.Captured, InteractionRoot))
         {
             // Ignore a descendant TextBox losing capture while ownership transfers to the window.
             return;
@@ -438,7 +442,7 @@ public sealed partial class PaperWindow
             return;
         }
 
-        var point = TranslatePoint(pointOnWindow, scrollViewer);
+        var point = InteractionRoot.TranslatePoint(pointOnWindow, scrollViewer);
         var edge = Math.Min(AppTypography.Scale(28), scrollViewer.ActualHeight / 4);
         var direction = 0;
         var overflow = 0d;
@@ -500,7 +504,7 @@ public sealed partial class PaperWindow
                 continue;
             }
 
-            var origin = row.TranslatePoint(new Point(0, 0), this);
+            var origin = row.TranslatePoint(new Point(0, 0), InteractionRoot);
             if (pointOnWindow.X >= origin.X &&
                 pointOnWindow.X <= origin.X + row.ActualWidth &&
                 pointOnWindow.Y >= origin.Y &&
@@ -519,7 +523,7 @@ public sealed partial class PaperWindow
         var viewportBottom = double.PositiveInfinity;
         if (scrollViewer != null && scrollViewer.ActualHeight > 0)
         {
-            var viewportOrigin = scrollViewer.TranslatePoint(new Point(0, 0), this);
+            var viewportOrigin = scrollViewer.TranslatePoint(new Point(0, 0), InteractionRoot);
             viewportTop = viewportOrigin.Y;
             viewportBottom = viewportOrigin.Y + scrollViewer.ActualHeight;
         }
@@ -533,7 +537,7 @@ public sealed partial class PaperWindow
                 continue;
             }
 
-            var origin = row.TranslatePoint(new Point(0, 0), this);
+            var origin = row.TranslatePoint(new Point(0, 0), InteractionRoot);
             var top = origin.Y;
             var bottom = origin.Y + row.ActualHeight;
             if (bottom < viewportTop || top > viewportBottom)
@@ -577,7 +581,7 @@ public sealed partial class PaperWindow
             return null;
         }
 
-        var viewportOrigin = scrollViewer.TranslatePoint(new Point(0, 0), this);
+        var viewportOrigin = scrollViewer.TranslatePoint(new Point(0, 0), InteractionRoot);
         var direction = pointOnWindow.Y < viewportOrigin.Y
             ? -1
             : pointOnWindow.Y > viewportOrigin.Y + scrollViewer.ActualHeight
@@ -687,7 +691,7 @@ public sealed partial class PaperWindow
             return false;
         }
 
-        if (FocusManager.GetFocusedElement(this) is TodoTextBox box &&
+        if (FocusManager.GetFocusedElement(InteractionWindow) is TodoTextBox box &&
             box.SelectionLength > 0)
         {
             return false;
@@ -928,7 +932,7 @@ public sealed partial class PaperWindow
                     if (paths.Length != 1)
                     {
                         MessageBox.Show(
-                            this,
+                            InteractionWindow,
                             Strings.Get("LinkedPathSingleDropMessage"),
                             Strings.Get("LinkedPathDropFailureTitle"),
                             MessageBoxButton.OK,
@@ -942,7 +946,7 @@ public sealed partial class PaperWindow
                     if (!isFile && !isDirectory)
                     {
                         MessageBox.Show(
-                            this,
+                            InteractionWindow,
                             Strings.Format("LinkedPathMissingMessage", path),
                             Strings.Get("LinkedPathOpenFailureTitle"),
                             MessageBoxButton.OK,
@@ -956,7 +960,7 @@ public sealed partial class PaperWindow
                 catch (Exception ex)
                 {
                     MessageBox.Show(
-                        this,
+                        InteractionWindow,
                         Strings.Format("LinkedPathDropFailureMessage", ex.Message),
                         Strings.Get("LinkedPathDropFailureTitle"),
                         MessageBoxButton.OK,
@@ -1261,7 +1265,7 @@ public sealed partial class PaperWindow
         if (!File.Exists(path) && !Directory.Exists(path))
         {
             MessageBox.Show(
-                this,
+                InteractionWindow,
                 Strings.Format("LinkedPathMissingMessage", path),
                 Strings.Get("LinkedPathOpenFailureTitle"),
                 MessageBoxButton.OK,
@@ -1298,7 +1302,7 @@ public sealed partial class PaperWindow
         if (string.IsNullOrWhiteSpace(location) || !Directory.Exists(location))
         {
             MessageBox.Show(
-                this,
+                InteractionWindow,
                 Strings.Format("LinkedPathMissingMessage", path),
                 Strings.Get("LinkedPathOpenFailureTitle"),
                 MessageBoxButton.OK,
@@ -1322,7 +1326,7 @@ public sealed partial class PaperWindow
         catch (Exception ex)
         {
             MessageBox.Show(
-                this,
+                InteractionWindow,
                 Strings.Format("LinkedPathOpenFailureMessage", ex.Message),
                 Strings.Get("LinkedPathOpenFailureTitle"),
                 MessageBoxButton.OK,

@@ -194,7 +194,7 @@ public partial class App : Application
         var handlesInitialVisibility = startupCommand.Kind is
             StartupCommandKind.Hide or StartupCommandKind.Toggle;
         await _controller.StartAsync(
-            createDefaultPaper: !startupCommand.CreatesPaper,
+            createDefaultPaper: !startupCommand.CreatesPaper && startupCommand.Kind != StartupCommandKind.Studio,
             initialVisibilityCommand: handlesInitialVisibility
                 ? startupCommand.Kind
                 : StartupCommandKind.None);

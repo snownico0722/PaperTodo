@@ -141,7 +141,8 @@ public sealed partial class PaperWindow
         await Dispatcher.Yield(DispatcherPriority.Background);
         if (IsClosed || _controller.IsWorkspaceSwitching || !_controller.WorkspaceOptions.Enabled ||
             _controller.WorkspaceOptions.SlotNumbers.Count != 1) return;
-        var owner = IsVisible && PresentationSource.FromVisual(this) != null ? this : null;
+        var host = (_expandedEditorHostWindow as Window) ?? this;
+        var owner = host.IsVisible && PresentationSource.FromVisual(host) != null ? host : null;
         if (PaperNoticeDialog.ShowChoice(owner, Strings.Get("WorkspaceSettingsTitle"),
                 Strings.Get("WorkspaceSingleMessage"), Strings.Get("CommonCancel"),
                 Strings.Get("WorkspaceCreate")))

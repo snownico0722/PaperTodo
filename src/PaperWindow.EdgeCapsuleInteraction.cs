@@ -120,7 +120,8 @@ public sealed partial class PaperWindow
         }
         finally
         {
-            ClearCapsuleInteractionKeyboardFocus();
+            // A retained capsule activates the editor, which must keep native input focus.
+            if (!IsExpandedEditorHosted) ClearCapsuleInteractionKeyboardFocus();
         }
         return true;
     }
@@ -877,7 +878,7 @@ public sealed partial class PaperWindow
     {
         return HasDeepCapsuleSlotPlacement &&
             _edgeCapsuleHost?.IsVisible == true &&
-            (_paper.IsCollapsed || (_controller.State.ShowDeepCapsuleWhileExpanded && IsDeepCapsuleSlotActive));
+            (_paper.IsCollapsed || (KeepDeepCapsuleWhileExpanded && IsDeepCapsuleSlotActive));
     }
 
     private int DeepCapsuleDropIndexForCurrentPosition()
@@ -932,4 +933,3 @@ public sealed partial class PaperWindow
         return Math.Clamp(index, 0, count - 1);
     }
 }
-
