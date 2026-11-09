@@ -1215,7 +1215,7 @@ PaperTodo 的产品需求更接近：打开 Note 时建立全文正确基线；�
 ### Evidence
 
 - `src/PluginPopupHost.cs`。
-- `src/PluginPaperActionRegistry.cs`。
+- `src/AppController.PluginPaperActions.cs`。
 - `src/PaperCommandService.NoteAssets.cs`。
 - `src/WebPluginPopupContent.cs`。
 - 历史范围更大的方案见 PR #198；当前最小能力实现见 PR #202。
@@ -1914,7 +1914,7 @@ PR #319 的初版把主胶囊完整材质收展后的卡死解释为终点迟到
 
 ### Evidence
 
-`src/StateStore.Merge.cs`、`src/McpTools.cs`、`src/PaperBodyPluginHostApi.cs`、`src/WebPaperBodySession.HostRequests.cs`；`tests/PaperTodo.DataReloadChecks` 覆盖读取旧版本后同步/异步保存、同字段冲突、缺失/非法基线，以及 MCP/Native/Web 和窗口生命周期。
+`src/StateStore.Merge.cs`、`src/McpTools.cs`、`src/PaperBodyPluginHostApi.cs`、`src/WebPluginWorkspaceRequests.cs`；`tests/PaperTodo.DataReloadChecks` 覆盖读取旧版本后同步/异步保存、同字段冲突、缺失/非法基线，以及 MCP/Native/Web 和窗口生命周期。
 
 
 ---
