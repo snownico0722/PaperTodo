@@ -1566,7 +1566,7 @@ When off, open at the docked edge or remembered position.</value>
     <value>Current workspace: {0}</value>
   </data>
   <data name="WorkspaceFollowMain" xml:space="preserve">
-    <value>Follow main workspace settings</value>
+    <value>Follow main settings</value>
   </data>
   <data name="WorkspaceFollowHint" xml:space="preserve">
     <value>When enabled, this workspace uses the main workspace's app settings, while its papers, images, layout, and plugin data remain separate. Turning off this option restores this workspace's previous independent settings.</value>

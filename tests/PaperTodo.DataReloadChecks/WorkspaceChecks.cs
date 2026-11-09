@@ -778,9 +778,9 @@ internal static partial class Program
         (ContextMenu)typeof(PaperWindow).GetMethod("BuildPaperContextMenu",
             BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(paper, [edge])!;
 
-    private static MenuItem WorkspaceMenuAction(ContextMenu menu, string id) =>
-        menu.Items.OfType<MenuItem>().Single(item =>
-                AutomationProperties.GetAutomationId(item) == "PaperWorkspace")
+    private static MenuItem WorkspaceMenuAction(ItemsControl menu, string id) =>
+        ((ItemsControl?)menu.Items.OfType<MenuItem>().SingleOrDefault(item =>
+                AutomationProperties.GetAutomationId(item) == "PaperWorkspace") ?? menu)
             .Items.OfType<MenuItem>().Single(item => AutomationProperties.GetAutomationId(item) == id);
 
     private static async Task WorkspacePaperMenuChecks(AppController controller)
@@ -791,64 +791,126 @@ internal static partial class Program
         named.TopBarNamePicker = true;
         Require(await controller.ChangeWorkspaceConfigurationAsync(named), "could not enable the named selector");
         var state = controller.State;
+        var savedShortcuts = (state.TopBarShortcutOrder.ToList(), state.TopBarPinnedCount,
+            state.HiddenTopBarShortcuts.ToList());
         var windows = Field<Dictionary<string, PaperWindow>>(controller, "_windows");
         var paper = windows["note-a"];
         paper.EnsureShellBuilt();
-        Field<Button>(paper, "_workspaceButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        var savedWidth = paper.Width;
+        controller.SetTopBarShortcutHidden(PaperTopBarShortcuts.Workspace, false);
+        controller.MoveTopBarShortcut(PaperTopBarShortcuts.Workspace, pinned: true, destinationIndex: 0);
+        paper.Width = Math.Max(savedWidth, 520);
+        paper.Show();
+        paper.UpdateLayout();
+        await Dispatcher.Yield(DispatcherPriority.Background);
+        var button = Field<Button>(paper, "_workspaceButton");
+
+        MenuItem WorkspaceEntry(ContextMenu menu) => menu.Items.OfType<MenuItem>().Single(item =>
+            AutomationProperties.GetAutomationId(item) == "PaperWorkspace");
+        bool HasWorkspace(ContextMenu menu) => menu.Items.OfType<MenuItem>().Any(item =>
+            AutomationProperties.GetAutomationId(item) == "PaperWorkspace");
+        void RequireComplete(ItemsControl choices)
+        {
+            var slots = controller.WorkspaceOptions.SlotNumbers;
+            var expected = slots.Select(n => "SwitchWorkspace" + n)
+                .Concat(slots.Select(n => "MoveToWorkspace" + n)).Append("CreateWorkspace");
+            Require(choices.Items.OfType<MenuItem>()
+                    .Select(AutomationProperties.GetAutomationId).Where(id => !string.IsNullOrEmpty(id))
+                    .SequenceEqual(expected),
+                "workspace menu must expose switch, move and creation exactly once in every container");
+            foreach (var slot in slots)
+            {
+                var current = slot == controller.WorkspaceNumber;
+                foreach (var prefix in new[] { "SwitchWorkspace", "MoveToWorkspace" })
+                {
+                    var item = WorkspaceMenuAction(choices, prefix + slot);
+                    Require(item.IsEnabled == !current &&
+                            AutomationProperties.GetName(item) == controller.WorkspaceOptions.DisplayName(slot),
+                        "workspace targets lost their full names or current-workspace disabled state");
+                }
+            }
+            Require(WorkspaceMenuAction(choices, "CreateWorkspace").IsEnabled == (slots.Count < 5),
+                "workspace creation did not respect the five-workspace limit");
+        }
+
+        Require(button.IsVisible && !HasWorkspace(PaperWorkspaceMenu(paper)),
+            "expanded paper duplicated its visible title-bar workspace shortcut");
+        RequireComplete(WorkspaceEntry(PaperWorkspaceMenu(paper, edge: true)));
+        button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         var selector = Field<List<WeakReference<ContextMenu>>>(paper, "_themedContextMenus")
             .Select(reference => reference.TryGetTarget(out var menu) ? menu : null)
             .OfType<ContextMenu>().Last(menu => menu.IsOpen);
         await Until(() => selector.ActualWidth > 0, "named selector did not open");
-        var create = selector.Items.OfType<MenuItem>().Last();
-        Require(create.IsEnabled && Equals(create.Header, Strings.Get("WorkspaceCreateNew")) &&
-                selector.Items.OfType<MenuItem>().First().IsEnabled == false,
-            "one-workspace named selector must retain the current entry and offer creation last");
-        create.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+        RequireComplete(selector);
+        WorkspaceMenuAction(selector, "CreateWorkspace").RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
         await Until(() => controller.WorkspaceOptions.ContainsSlot(2) && !controller.IsWorkspaceSwitching,
             "named create action did not add a workspace");
         Require(controller.WorkspaceNumber == 1 && ReferenceEquals(controller.State, state) &&
                 selector.IsOpen && selector.IsKeyboardFocusWithin,
             "named creation switched workspace, closed the selector or lost its focus");
+        RequireComplete(selector);
         selector.IsOpen = false;
+        await Dispatcher.Yield(DispatcherPriority.Background);
+
+        controller.MoveTopBarShortcut(PaperTopBarShortcuts.Workspace, pinned: false, destinationIndex: 0);
+        Require(!button.IsVisible, "menu placement left the workspace button visible");
+        var overflow = PaperWorkspaceMenu(paper);
+        var workspace = WorkspaceEntry(overflow);
+        RequireComplete(workspace);
+        overflow.PlacementTarget = paper;
+        overflow.IsOpen = true;
+        await Until(() => overflow.ActualWidth > 0, "workspace submenu did not open");
+        workspace = WorkspaceEntry(overflow);
+        workspace.IsSubmenuOpen = true;
+        WorkspaceMenuAction(workspace, "CreateWorkspace").RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+        await Until(() => controller.WorkspaceOptions.ContainsSlot(3) && !controller.IsWorkspaceSwitching,
+            "submenu create action did not add a workspace");
+        Require(controller.WorkspaceNumber == 1 && overflow.IsOpen && workspace.IsSubmenuOpen,
+            "submenu creation switched workspaces or dismissed the menu");
+        RequireComplete(workspace);
+        overflow.IsOpen = false;
         await Dispatcher.Yield(DispatcherPriority.Background);
 
         var full = controller.WorkspaceOptions.Normalized();
         full.Slots = [1, 2, 3, 4, 5];
+        full.Names[2] = "完整工作区名称";
         Require(await controller.ChangeWorkspaceConfigurationAsync(full), "could not fill the named selector");
-        Field<Button>(paper, "_workspaceButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        RequireComplete(WorkspaceEntry(PaperWorkspaceMenu(paper)));
+        RequireComplete(WorkspaceEntry(PaperWorkspaceMenu(paper, edge: true)));
+        controller.MoveTopBarShortcut(PaperTopBarShortcuts.Workspace, pinned: true, destinationIndex: 0);
+        button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         selector = Field<List<WeakReference<ContextMenu>>>(paper, "_themedContextMenus")
             .Select(reference => reference.TryGetTarget(out var menu) ? menu : null)
             .OfType<ContextMenu>().Last(menu => menu.IsOpen);
-        Require(!selector.Items.OfType<MenuItem>().Last().IsEnabled,
-            "named selector allowed creating a sixth workspace");
+        RequireComplete(selector);
         selector.IsOpen = false;
         await Dispatcher.Yield(DispatcherPriority.Background);
 
-        foreach (var edge in new[] { false, true })
-        {
-            var menu = PaperWorkspaceMenu(paper, edge);
-            var workspace = menu.Items.OfType<MenuItem>().Single(item =>
-                AutomationProperties.GetAutomationId(item) == "PaperWorkspace");
-            var labels = workspace.Items.OfType<MenuItem>().Where(item =>
-                string.IsNullOrEmpty(AutomationProperties.GetAutomationId(item))).ToArray();
-            Require(Equals(workspace.Header, Strings.Get("WorkspaceSettingsTitle")) &&
-                    labels.Select(item => item.Header).SequenceEqual(new object[]
-                        { Strings.Get("WorkspaceSwitchGroup"), Strings.Get("WorkspaceMoveGroup") }),
-                "paper/capsule workspace menu must show Switch above Move to");
-            Require(workspace.Items.OfType<Separator>().Count() == 1 &&
-                    !WorkspaceMenuAction(menu, "SwitchWorkspace1").IsEnabled &&
-                    !WorkspaceMenuAction(menu, "MoveToWorkspace1").IsEnabled &&
-                    WorkspaceMenuAction(menu, "MoveToWorkspace2").IsEnabled,
-                "workspace menu omitted/allowed the current workspace or disabled a valid move target");
-        }
-        WorkspaceMenuAction(PaperWorkspaceMenu(paper), "SwitchWorkspace2")
+        // Actual overflow, not the saved pin setting, determines menu availability.
+        state.TopBarPinnedCount = PaperTopBarShortcuts.All.Count;
+        paper.UpdateTopBarNewPaperButtons();
+        paper.Width = Math.Max(paper.MinWidth, 160);
+        paper.UpdateLayout();
+        await Dispatcher.Yield(DispatcherPriority.Background);
+        Require(!button.IsVisible && HasWorkspace(PaperWorkspaceMenu(paper)),
+            "a narrow paper lost its pinned workspace action instead of moving it into the menu");
+        controller.SetTopBarShortcutHidden(PaperTopBarShortcuts.Workspace, true);
+        Require(!HasWorkspace(PaperWorkspaceMenu(paper, edge: true)),
+            "edge workspace fallback ignored the explicit Hide preference");
+
+        state.TopBarShortcutOrder = savedShortcuts.Item1;
+        state.TopBarPinnedCount = savedShortcuts.Item2;
+        state.HiddenTopBarShortcuts = savedShortcuts.Item3;
+        paper.Width = savedWidth;
+        paper.UpdateTopBarNewPaperButtons();
+        WorkspaceMenuAction(PaperWorkspaceMenu(paper, edge: true), "SwitchWorkspace2")
             .RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
         await Until(() => controller.WorkspaceNumber == 2 && !controller.IsWorkspaceSwitching,
             "workspace submenu switch action did not switch the full workspace");
         Require(await controller.SwitchWorkspaceAsync(1) &&
                 await controller.ChangeWorkspaceConfigurationAsync(original),
             "workspace menu test could not restore its original workspace");
-        Console.WriteLine("PASS workspace menus: named create, capacity, grouped actions and full switch");
+        Console.WriteLine("PASS workspace menus: visible-entry deduplication, edge fallback, shared actions and creation");
     }
 
     private static async Task WorkspacePaperMoveChecks(AppController controller)
@@ -921,7 +983,7 @@ internal static partial class Program
         var staleVersion = Field<long>(controller, "_saveVersion");
         var staleSource = source.SerializeState(controller.State);
         var staleTarget = target.SerializeState(target.ReadCommittedWorkspaceState());
-        WorkspaceMenuAction(PaperWorkspaceMenu(noteWindow), "MoveToWorkspace2")
+        WorkspaceMenuAction(PaperWorkspaceMenu(noteWindow, edge: true), "MoveToWorkspace2")
             .RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
         await Until(() => !controller.State.Papers.Contains(note) && !controller.IsWorkspaceSwitching,
             "move submenu did not transfer the paper");
@@ -1345,6 +1407,12 @@ internal static partial class Program
             var originalWorkspaceState = controller.State;
             var threeSlotMenu = TrayForCreate();
             var threeTiles = TraySlots(threeSlotMenu);
+            var workspaceRow = threeSlotMenu.Items.OfType<MenuItem>().Single(item =>
+                AutomationProperties.GetAutomationId(item) == "TrayWorkspaceSelector");
+            var paperRow = threeSlotMenu.Items.OfType<MenuItem>().Single(item =>
+                AutomationProperties.GetAutomationId(item) == "TrayPaperToolbar");
+            Require(threeSlotMenu.Items.IndexOf(workspaceRow) < threeSlotMenu.Items.IndexOf(paperRow),
+                "tray workspace selector must precede the paper-creation row");
             Require(threeTiles.Length == 4 &&
                     ((TextBlock)threeTiles[0].Child).Text == "1" &&
                     ((TextBlock)threeTiles[1].Child).Text == "2" &&
@@ -1417,6 +1485,25 @@ internal static partial class Program
                 "cancelling the tray workspace choice switched or retained the confirmation");
             cancelMenu.IsOpen = false;
 
+            var settingsMenu = TrayForCreate();
+            settingsMenu.IsOpen = true;
+            await Until(() => settingsMenu.ActualWidth > 0, "workspace settings menu did not open");
+            var settingsRow = settingsMenu.Items.OfType<MenuItem>().Single(item =>
+                AutomationProperties.GetAutomationId(item) == "TrayWorkspaceSelector");
+            var settingsLink = LogicalDescendants((DependencyObject)settingsRow.Header).OfType<Border>().Single(item =>
+                AutomationProperties.GetAutomationId(item) == "TrayWorkspaceSettings");
+            settingsLink.RaiseEvent(new System.Windows.Input.KeyEventArgs(
+                System.Windows.Input.Keyboard.PrimaryDevice, PresentationSource.FromVisual(settingsLink)!,
+                0, System.Windows.Input.Key.Enter)
+            {
+                RoutedEvent = System.Windows.Input.Keyboard.KeyDownEvent
+            });
+            await Until(() => !settingsMenu.IsOpen &&
+                    Field<Window?>(controller, "_settingsWindow") is { IsVisible: true },
+                "tray workspace heading did not open settings and dismiss the menu");
+            Require(Field<object>(controller, "_settingsPage").ToString() == "Workspaces",
+                "tray workspace heading opened the wrong settings page");
+            Field<Window>(controller, "_settingsWindow").Close();
             await Dispatcher.Yield(DispatcherPriority.Background);
             await WorkspacePaperMenuChecks(controller);
             await WorkspacePaperMoveChecks(controller);

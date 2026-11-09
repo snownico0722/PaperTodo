@@ -119,7 +119,7 @@ public sealed partial class PaperWindow
         var menu = CreateContextMenu();
         menu.PlacementTarget = button;
         menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
-        PopulateNamedWorkspaceChoices(menu, menu);
+        PopulateWorkspaceMenu(menu, menu);
         menu.IsOpen = true;
     }
 
@@ -127,11 +127,7 @@ public sealed partial class PaperWindow
     {
         var selector = new MenuItem { Header = Strings.Get("WorkspaceSettingsTitle") };
         AutomationProperties.SetAutomationId(selector, "PaperWorkspace");
-        selector.Items.Add(MenuHeader(Strings.Get("WorkspaceSwitchGroup")));
-        PopulateWorkspaceChoices(selector, menu, movePaper: false);
-        selector.Items.Add(MenuSeparator());
-        selector.Items.Add(MenuHeader(Strings.Get("WorkspaceMoveGroup")));
-        PopulateWorkspaceChoices(selector, menu, movePaper: true);
+        PopulateWorkspaceMenu(selector, menu);
         return selector;
     }
 
@@ -148,20 +144,26 @@ public sealed partial class PaperWindow
             await _controller.CreateWorkspaceAsync();
     }
 
-    private void PopulateNamedWorkspaceChoices(ItemsControl choices, ContextMenu ownerMenu)
+    // Only the container differs between the top-bar popup and a paper/capsule submenu.
+    private void PopulateWorkspaceMenu(ItemsControl choices, ContextMenu ownerMenu)
     {
         choices.Items.Clear();
+        choices.Items.Add(MenuHeader(Strings.Get("WorkspaceSwitchGroup")));
         PopulateWorkspaceChoices(choices, ownerMenu, movePaper: false);
+        choices.Items.Add(MenuSeparator());
+        choices.Items.Add(MenuHeader(Strings.Get("WorkspaceMoveGroup")));
+        PopulateWorkspaceChoices(choices, ownerMenu, movePaper: true);
         choices.Items.Add(MenuSeparator());
         var create = MenuItem(Strings.Get("WorkspaceCreateNew"), async (_, _) =>
         {
             await _controller.CreateWorkspaceAsync();
             if (IsClosed || !ownerMenu.IsOpen) return;
-            PopulateNamedWorkspaceChoices(choices, ownerMenu);
+            PopulateWorkspaceMenu(choices, ownerMenu);
             ownerMenu.Focus();
         });
         create.IsEnabled = !_controller.IsWorkspaceSwitching &&
             _controller.WorkspaceOptions.SlotNumbers.Count < 5;
+        create.Opacity = create.IsEnabled ? 1 : 0.45;
         create.StaysOpenOnClick = true;
         AutomationProperties.SetAutomationId(create, "CreateWorkspace");
         choices.Items.Add(create);
@@ -173,14 +175,30 @@ public sealed partial class PaperWindow
         {
             var target = slot;
             var current = slot == _controller.WorkspaceNumber;
+            var name = _controller.WorkspaceOptions.DisplayName(slot);
             var item = new MenuItem
             {
-                Header = _controller.WorkspaceOptions.DisplayName(slot),
-                IsCheckable = !movePaper,
-                IsChecked = !movePaper && current,
                 IsEnabled = !current && !_controller.IsWorkspaceSwitching &&
                     (movePaper || !_controller.IsPaperExportActive)
             };
+            // Workspace navigation is not a checkbox: keep a small, aligned dot slot
+            // without changing the shared style used by real checkable menu items.
+            var dot = new Ellipse
+            {
+                Width = AppTypography.Scale(5),
+                Height = AppTypography.Scale(5),
+                Margin = new Thickness(0, 0, AppTypography.Scale(5), 0),
+                VerticalAlignment = VerticalAlignment.Center,
+                Visibility = !movePaper && current ? Visibility.Visible : Visibility.Hidden
+            };
+            dot.SetBinding(Shape.FillProperty,
+                new Binding(nameof(Control.Foreground)) { Source = item });
+            var header = new DockPanel { IsHitTestVisible = false };
+            header.Children.Add(dot);
+            header.Children.Add(new TextBlock { Text = name, VerticalAlignment = VerticalAlignment.Center });
+            item.Header = header;
+            item.Opacity = item.IsEnabled ? 1 : 0.45;
+            AutomationProperties.SetName(item, name);
             AutomationProperties.SetAutomationId(item, (movePaper ? "MoveToWorkspace" : "SwitchWorkspace") + slot);
             item.Click += (_, _) =>
             {

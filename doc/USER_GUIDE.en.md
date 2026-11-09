@@ -533,8 +533,8 @@ Enable **Advanced** in the bottom-left of Settings to access the **Labs** page:
 Enable workspaces in "Settings → Spaces & Data". By default only the **Main workspace (1)** exists; you can create up to **5 workspaces** (secondary workspaces are numbered `2`–`5`), each storing its own papers, layout, images, and plugin data.
 
 - **Manage and switch**: Click a workspace card to select it, then click **Confirm switch**. Use the pencil (`✎`) beside a name to rename it and the checkmark (`✓`) to save. Renaming never changes numbered data filenames.
-- **Quick switching**: The top-bar or paper-menu **Switch Workspace** action cycles to the next workspace by default; enable **Choose workspaces by name in the top bar** for named selection. You can also click a workspace number and confirm in the tray menu.
-- **Follow main settings**: Secondary workspaces have **Follow main workspace settings** enabled by default. Other pages, including **Plugins**, are read-only. On **Spaces & Data**, you can still manage workspaces, view MCP status, and copy its configuration. The merge policy and MCP permissions are also read-only. Change them in the main workspace or turn off following for this workspace. Papers, layouts, images, and private plugin data stay separate.
+- **Quick switching**: The title-bar workspace button cycles to the next workspace by default. Enable **Choose by name** to open the full-name menu. The same **Switch, Move to, and Create new workspace** actions appear in the overflow and ordinary/edge-capsule workspace menus. A dot marks the current workspace; switching or moving to it is disabled. Moving a paper and creating a workspace do not switch the active workspace. An expanded paper's menu does not duplicate a visible title-bar button; overflowed buttons and capsules without a title bar retain the menu entry. The explicit Hide option still hides the corresponding shortcut.
+- **Follow main settings**: Secondary workspaces have **Follow main settings** enabled by default. Other pages, including **Plugins**, are read-only. On **Spaces & Data**, you can still manage workspaces, view MCP status, and copy its configuration. The merge policy and MCP permissions are also read-only. Change them in the main workspace or turn off following for this workspace. Papers, layouts, images, and private plugin data stay separate.
 - **Disable or delete**: Disabling workspaces preserves all data files; clicking **Delete** on a secondary workspace permanently deletes its data after confirmation (the main workspace cannot be deleted). Back up before deleting.
 - **Active scope**: Search, Show/Hide all, Export all, and ordinary MCP content operations apply only to the **current workspace**. Inactive workspaces do not keep paper windows, plugin background instances, or todo reminders running.
 
@@ -558,7 +558,7 @@ Right-click the PaperTodo icon in the Windows notification area:
 
 - The top row shows the version, with a gear icon on the right to open **Settings**.
 - On the **Papers** row, the left eye icon shows or hides all papers in the **current workspace**, and the right icons create a todo or note paper.
-- With workspaces enabled, click a number on the **Workspaces** row and confirm or cancel in place.
+- When workspaces are enabled, the **Workspaces** row sits above the paper-creation row. Click its heading to open **Settings → Workspaces & Data**; its same-row number buttons and plus button still confirm switching and create a workspace.
 - The paper list shows titles and states for the current workspace; click an item to toggle visibility, or click `×` and **Confirm** to delete it.
 - **Restore paper and capsule interaction** appears when click-through is active; **Exit** saves data and closes the app.
 
@@ -667,7 +667,7 @@ To choose an older backup manually or restore images and plugins as well:
 **A**: Check that you copied a built plugin folder (not a Native source folder from `plugin-samples/`), its folder name matches `id` in `plugin.json`, `plugin.json` is directly inside that folder (not nested an extra level), its `apiVersion` is within `2.1`–`2.2`, and you restarted PaperTodo from the tray.
 
 #### Q10: Why are other Settings pages dimmed in a secondary workspace?
-**A**: The workspace is following the main workspace's settings. Change settings in the main workspace (1), or open "Settings → Spaces & Data" and turn off **Follow main workspace settings** for that workspace.
+**A**: The workspace is following the main workspace's settings. Change settings in the main workspace (1), or open "Settings → Spaces & Data" and turn off **Follow main settings** for that workspace.
 
 #### Q11: Why is the Codex prompt paper missing while its buttons remain?
 **A**: The prompt paper is hidden on startup by default. Open it via "Settings → Plugins → Codex CLI Bridge → More settings → Edit prompt"—there is no need to delete and recreate it.

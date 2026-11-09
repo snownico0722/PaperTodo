@@ -528,9 +528,9 @@ public sealed partial class AppController
         menu.Items.Add(TrayTitleBar(menu));
         menu.Items.Add(TraySeparator());
 
-        menu.Items.Add(TrayPaperToolbar(menu));
         if (WorkspaceOptions.Enabled)
             menu.Items.Add(TrayWorkspaceSelector(menu));
+        menu.Items.Add(TrayPaperToolbar(menu));
 
         if (State.Papers.Count > 0)
         {
@@ -622,7 +622,7 @@ public sealed partial class AppController
         };
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        var heading = new TextBlock
+        var headingText = new TextBlock
         {
             Text = Strings.Get("WorkspaceSettingsTitle"),
             Foreground = TrayWeakTextBrush,
@@ -631,6 +631,13 @@ public sealed partial class AppController
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(1, 0, 9, 0)
         };
+        var heading = TrayToolbarAction(menu, headingText,
+            SettingsSidebarLocalized("打开工作区设置", "Open workspace settings",
+                "ワークスペース設定を開く", "작업 공간 설정 열기"),
+            () => ShowSettingsWindow(SettingsPage.Workspaces));
+        heading.Width = double.NaN;
+        heading.VerticalAlignment = VerticalAlignment.Center;
+        AutomationProperties.SetAutomationId(heading, "TrayWorkspaceSettings");
         row.Children.Add(heading);
         var choices = new ContentPresenter
         {
@@ -915,6 +922,7 @@ public sealed partial class AppController
         grid.Children.Add(newTodoButton);
         grid.Children.Add(newNoteButton);
 
+        AutomationProperties.SetAutomationId(item, "TrayPaperToolbar");
         item.Header = grid;
         item.Click += (_, e) => e.Handled = true;
         item.PreviewKeyDown += (_, e) =>
