@@ -35,7 +35,7 @@ public sealed partial class MarkdownTextBox
             _semanticDocument.TryGetCurrent(out snapshot);
     }
 
-    private SemanticMarkdownImageElementGenerator? _semanticImageElementGenerator;
+    private MarkdownImageElementGenerator? _semanticImageElementGenerator;
     private bool _semanticTrackingEnabled;
 
     internal bool ShouldHideImageReferenceTextForSemanticPresentation =>
@@ -51,7 +51,7 @@ public sealed partial class MarkdownTextBox
     private void EnableSemanticImagePresentation()
     {
         var generators = TextArea.TextView.ElementGenerators;
-        _semanticImageElementGenerator ??= new SemanticMarkdownImageElementGenerator(this);
+        _semanticImageElementGenerator ??= new MarkdownImageElementGenerator(this, reuseBlocks: false);
         var reuseIsActive = _reusingImageElementGenerator != null &&
             generators.Contains(_reusingImageElementGenerator);
         if (!reuseIsActive && !generators.Contains(_semanticImageElementGenerator))
@@ -139,26 +139,13 @@ public sealed partial class MarkdownTextBox
         return true;
     }
 
-    private bool TryGetImageReferenceForStableEditingLine(
-        DocumentLine line,
-        out MarkdownImageReference reference,
-        out NoteImageAsset? asset)
+    private sealed class MarkdownImageElementGenerator(MarkdownTextBox owner, bool reuseBlocks)
+        : VisualLineElementGenerator
     {
-        return TryGetImageReferenceForLine(line, out reference, out asset);
-    }
-
-    private sealed class SemanticMarkdownImageElementGenerator : VisualLineElementGenerator
-    {
-        private readonly MarkdownTextBox _owner;
-
-        public SemanticMarkdownImageElementGenerator(MarkdownTextBox owner)
-        {
-            _owner = owner;
-        }
 
         public override int GetFirstInterestedOffset(int startOffset)
         {
-            if (!_owner.ShouldRenderImages)
+            if (!owner.ShouldRenderImages)
             {
                 return -1;
             }
@@ -171,14 +158,14 @@ public sealed partial class MarkdownTextBox
 
             var referenceLine = CurrentContext.VisualLine.FirstDocumentLine;
             return referenceLine.EndOffset >= startOffset &&
-                _owner.TryGetImageReferenceForLine(referenceLine, out _, out _)
+                owner.TryGetImageReferenceForLine(referenceLine, out _, out _)
                 ? referenceLine.EndOffset
                 : -1;
         }
 
         public override VisualLineElement ConstructElement(int offset)
         {
-            if (!_owner.ShouldRenderImages)
+            if (!owner.ShouldRenderImages)
             {
                 return null!;
             }
@@ -191,7 +178,7 @@ public sealed partial class MarkdownTextBox
 
             var referenceLine = CurrentContext.VisualLine.FirstDocumentLine;
             if (referenceLine.EndOffset != offset ||
-                !_owner.TryGetImageReferenceForLine(
+                !owner.TryGetImageReferenceForLine(
                     referenceLine,
                     out var reference,
                     out var asset))
@@ -199,7 +186,9 @@ public sealed partial class MarkdownTextBox
                 return null!;
             }
 
-            var element = _owner.CreateImageBlock(reference, asset, referenceLine);
+            var element = reuseBlocks
+                ? owner.GetOrCreateReusableImageBlock(reference, asset, referenceLine)
+                : owner.CreateImageBlock(reference, asset, referenceLine);
             return new BlockImageElement(element);
         }
     }
