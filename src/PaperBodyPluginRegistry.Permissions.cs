@@ -1,7 +1,5 @@
 using System.Collections.Frozen;
 using System.IO;
-using System.Text.Json;
-using System.Windows.Input;
 using PaperTodo.Plugin;
 
 namespace PaperTodo;
@@ -79,72 +77,5 @@ internal sealed partial class PaperBodyPluginRegistry
             throw new InvalidDataException(
                 "maxPaperInstances must be 0 (unlimited) or a positive integer.");
         }
-    }
-
-    private static void ValidateDeclaredDefault(
-        PaperBodyPluginSettingManifest setting)
-    {
-        var value = setting.Default;
-        switch (setting.Type)
-        {
-            case "boolean" when value.ValueKind is JsonValueKind.True or JsonValueKind.False:
-                return;
-
-            case "string" when value.ValueKind == JsonValueKind.String:
-                var text = value.GetString() ?? "";
-                if (setting.MaxLength is > 0 && text.Length > setting.MaxLength.Value)
-                {
-                    throw new InvalidDataException(
-                        $"Plugin setting '{setting.Id}' default exceeds maxLength.");
-                }
-                return;
-
-            case "number" when value.ValueKind == JsonValueKind.Number &&
-                               value.TryGetDouble(out var number) &&
-                               double.IsFinite(number):
-                if (setting.Min.HasValue && number < setting.Min.Value ||
-                    setting.Max.HasValue && number > setting.Max.Value)
-                {
-                    throw new InvalidDataException(
-                        $"Plugin setting '{setting.Id}' default is outside its range.");
-                }
-                if (setting.Step is > 0)
-                {
-                    var origin = setting.Min ?? 0;
-                    var steps = (number - origin) / setting.Step.Value;
-                    if (Math.Abs(steps - Math.Round(steps)) > 1e-9)
-                    {
-                        throw new InvalidDataException(
-                            $"Plugin setting '{setting.Id}' default is not aligned to step.");
-                    }
-                }
-                return;
-
-            case "select" when value.ValueKind == JsonValueKind.String:
-                var selected = value.GetString() ?? "";
-                if (!setting.Options.Any(option =>
-                        string.Equals(option.Value, selected, StringComparison.Ordinal)))
-                {
-                    throw new InvalidDataException(
-                        $"Plugin setting '{setting.Id}' default is not a declared option.");
-                }
-                return;
-
-            case "shortcut" when value.ValueKind == JsonValueKind.String:
-                var shortcut = value.GetString() ?? "";
-                if (string.IsNullOrWhiteSpace(shortcut))
-                {
-                    return;
-                }
-                if (!ShortcutGesture.TryParse(shortcut, out var gesture) || gesture.Key == Key.None)
-                {
-                    throw new InvalidDataException(
-                        $"Plugin setting '{setting.Id}' default is not a valid shortcut gesture.");
-                }
-                return;
-        }
-
-        throw new InvalidDataException(
-            $"Plugin setting '{setting.Id}' default does not match type '{setting.Type}'.");
     }
 }

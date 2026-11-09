@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -1432,23 +1431,4 @@ public sealed partial class AppController
         ordered.AddRange(vertical.Select(candidate => candidate.Name));
         return ordered;
     }
-
-    private UIElement CreateDeepCapsuleTitleMeasureLimitStepper() =>
-        CreateSettingsStepper(
-            DeepCapsuleTitleMeasureLimitText,
-            () => SetDeepCapsuleTitleMeasureCharacterLimit(EdgeCapsuleTitleLimit.Step(
-                State.DeepCapsuleTitleMeasureCharacterLimit, increase: false)),
-            () => SetDeepCapsuleTitleMeasureCharacterLimit(EdgeCapsuleTitleLimit.Step(
-                State.DeepCapsuleTitleMeasureCharacterLimit, increase: true)));
-
-    private string DeepCapsuleTitleMeasureLimitText()
-    {
-        var limit = State.DeepCapsuleTitleMeasureCharacterLimit;
-        return limit == EdgeCapsuleTitleLimit.Unlimited
-            ? Strings.Get("SettingsAllCharacters")
-            : (limit == EdgeCapsuleTitleLimit.Hidden ? 0 : limit).ToString(CultureInfo.InvariantCulture);
-    }
-
-    private void SetDeepCapsuleTitleMeasureCharacterLimit(int value) =>
-        SetSettingFromUi("capsule.title_measure_limit", EdgeCapsuleTitleLimit.Normalize(value));
 }

@@ -506,15 +506,6 @@ public sealed partial class AppController
         return container;
     }
 
-    private UIElement CreateMaxTitleLengthStepper() =>
-        CreateSettingsStepper(
-            () => State.MaxTitleLength.ToString(CultureInfo.InvariantCulture),
-            () => SetMaxTitleLength(State.MaxTitleLength - 1),
-            () => SetMaxTitleLength(State.MaxTitleLength + 1));
-
-    private void SetMaxTitleLength(int value) =>
-        SetSettingFromUi("title.max_length", PaperTitles.NormalizeMaxTitleLength(value));
-
     internal void OpenSettingsWindow()
     {
         ShowSettingsWindow();

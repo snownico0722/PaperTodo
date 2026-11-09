@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -105,6 +106,34 @@ public sealed partial class AppController
         }
         return AdvancedSettingsBlock(options.ToArray());
     }
+
+    private UIElement CreateMaxTitleLengthStepper() =>
+        CreateSettingsStepper(
+            () => State.MaxTitleLength.ToString(CultureInfo.InvariantCulture),
+            () => SetMaxTitleLength(State.MaxTitleLength - 1),
+            () => SetMaxTitleLength(State.MaxTitleLength + 1));
+
+    private void SetMaxTitleLength(int value) =>
+        SetSettingFromUi("title.max_length", PaperTitles.NormalizeMaxTitleLength(value));
+
+    private UIElement CreateDeepCapsuleTitleMeasureLimitStepper() =>
+        CreateSettingsStepper(
+            DeepCapsuleTitleMeasureLimitText,
+            () => SetDeepCapsuleTitleMeasureCharacterLimit(EdgeCapsuleTitleLimit.Step(
+                State.DeepCapsuleTitleMeasureCharacterLimit, increase: false)),
+            () => SetDeepCapsuleTitleMeasureCharacterLimit(EdgeCapsuleTitleLimit.Step(
+                State.DeepCapsuleTitleMeasureCharacterLimit, increase: true)));
+
+    private string DeepCapsuleTitleMeasureLimitText()
+    {
+        var limit = State.DeepCapsuleTitleMeasureCharacterLimit;
+        return limit == EdgeCapsuleTitleLimit.Unlimited
+            ? Strings.Get("SettingsAllCharacters")
+            : (limit == EdgeCapsuleTitleLimit.Hidden ? 0 : limit).ToString(CultureInfo.InvariantCulture);
+    }
+
+    private void SetDeepCapsuleTitleMeasureCharacterLimit(int value) =>
+        SetSettingFromUi("capsule.title_measure_limit", EdgeCapsuleTitleLimit.Normalize(value));
 
     private UIElement BuildSettingsGeneralOptions()
     {
