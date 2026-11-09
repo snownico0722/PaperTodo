@@ -26,65 +26,90 @@ internal static partial class MaterialDragBenchmarks
         Console.WriteLine($"ENV OS={RuntimeInformation.OSDescription} .NET={Environment.Version} tier={renderTier} screen={SystemParameters.PrimaryScreenWidth}x{SystemParameters.PrimaryScreenHeight} cpu={Environment.ProcessorCount}");
         controller.State.PaperSkin = PaperSkins.Paper;
         Theme.Invalidate();
-        var notes = new[] { "", "整理本周要交付的内容，先把需要确认的事项记下来，明天开会时逐条过一遍。\n预览窗口改动，也看一下几个常用按钮。\n检查文字在不同宽度下如何换行，再把结论发给同事。\n周三下午预留时间整理反馈。\n最后确认下周的安排。" };
         GetCursorPos(out var oldCursor);
-        var couldRead = ReadFullWindowDrag(38,0,out var initialDrag,0);
-        var enabled = couldRead && SetFullWindowDrag(37,1,IntPtr.Zero,2);
-        ReadFullWindowDrag(38,0,out var activeDrag,0);
-        Console.WriteLine($"DRAG SETTING initial={initialDrag} enabled={enabled} current={activeDrag}");
+        var canRestore = ReadFullWindowDrag(38,0,out var initialDrag,0);
+        Program.Assert(canRestore && SetFullWindowDrag(37,1,IntPtr.Zero,2), "enable live sizing");
         var hiRes = timeBeginPeriod(1) == 0;
         var samples = new List<object>();
+        var paper = new PaperData { Type = PaperTypes.Note, Title = "Empty note", Content = "",
+            X = 110, Y = 80, Width = 365, Height = 240, AlwaysOnTop = true };
+        controller.State.Papers.Add(paper);
         try
         {
-            foreach (var mode in new[] { "mouse", "replay" })
+            // Match the application's actual window settings on this runner.
+            var transparent = !controller.UsesNativeMicaWindows;
+            var kinds = new[] { "paper", "plain", "matched" };
+            var axes = new[] { "idle", "bottom", "right", "corner" };
+            for (var round = -1; round < 5; round++)
             {
-                var valid = true;
-                var sampleCount = samples.Count;
-                foreach (var note in notes)
+                for (var k = 0; k < kinds.Length; k++)
                 {
-                    var paper = new PaperData { Type = PaperTypes.Note, Title = "Resize measurement", Content = note,
-                        X = 110, Y = 80, Width = 365, Height = 240, AlwaysOnTop = true };
-                    controller.State.Papers.Add(paper);
-                    var window = new PaperWindow(paper, controller);
+                    var kind = kinds[(round + 1 + k) % kinds.Length];
+                    Window w = kind == "paper" ? new PaperWindow(paper, controller) : new Window();
                     try
                     {
-                        window.Show(); window.Activate(); Wait(500);
-                        var editors = Descendants(window).OfType<MarkdownTextBox>().ToArray();
-                        Program.Assert(editors.Any(editor => editor.Text.Replace("\r", "").TrimEnd('\n') == note),
-                            $"note editor loaded with expected text ({editors.Length} editors, {note.Length} chars)");
-                        // One warm-up per direction. Rotate order over measured rounds, alternating bottom A/B order.
-                        for (var round = -1; round < 3 && valid; round++)
+                        w.WindowStartupLocation = WindowStartupLocation.Manual;
+                        w.Left = 110; w.Top = 80; w.Width = 365; w.Height = 240;
+                        if (kind != "paper")
                         {
-                            var seq = round switch { 0 => new[] { 0, 1, 2, 3 }, 1 => new[] { 3, 2, 1, 0 },
-                                2 => new[] { 1, 2, 0, 3 }, _ => new[] { 2, 1, 0, 3 } };
-                            foreach (var index in seq)
+                            w.Title = "Empty WPF control"; w.Topmost = true; w.ShowInTaskbar = false;
+                            if (kind == "matched")
                             {
-                                var axis = new[] { "bottom", "right", "corner", "bottom" }[index];
-                                PaperWindow.ProbeWidthOnly = index == 3;
-                                window.Width = 365; window.Height = 240; Wait(130);
-                                var sample = ResizeOnce(window, mode, axis, note.Length == 0 ? "empty" : "text", index == 3, round);
-                                if (sample == null)
-                                {
-                                    valid = false;
-                                    Console.WriteLine($"INVALID mode={mode} axis={axis} round={round}");
-                                    break;
-                                }
-                                if (round >= 0) { samples.Add(sample); Console.WriteLine("RESIZE " + JsonSerializer.Serialize(sample)); }
+                                w.WindowStyle = WindowStyle.None; w.AllowsTransparency = transparent;
+                                w.Background = Brushes.Transparent;
+                                w.Content = new System.Windows.Controls.Border { Background = Brushes.White, Margin = new Thickness(8) };
+                                w.SourceInitialized += (_, _) => InstallHitTest(w);
+                            }
+                            else w.Background = Brushes.White;
+                        }
+                        w.Show(); w.Activate(); Wait(340);
+                        if (kind == "paper")
+                            Program.Assert(Descendants(w).OfType<MarkdownTextBox>().Any(e => string.IsNullOrEmpty(e.Text.TrimEnd('\r','\n'))), "empty editor visible");
+                        if (round < 0) Console.WriteLine($"CONTROL {kind} layered={w.AllowsTransparency} style={w.WindowStyle} dpi={VisualTreeHelper.GetDpi(w).DpiScaleX}");
+                        for (var axisIndex=0; axisIndex<4; axisIndex++)
+                        {
+                            var axis = axes[(axisIndex + round + 1) % 4];
+                            w.Width=365; w.Height=240; Wait(140);
+                            if (axis == "idle") { SetCursorPos(65,55); Wait(50); }
+                            var row = ResizeOnce(w, axis == "idle" ? "idle" : "mouse", axis, kind, false, round);
+                            if (row == null) throw new Exception($"Invalid real input: {kind}/{axis}/{round}");
+                            if (round >= 0)
+                            {
+                                samples.Add(row);
+                                Console.WriteLine("RESIZE " + JsonSerializer.Serialize(row));
                             }
                         }
                     }
-                    finally { window.CloseForReal(); controller.State.Papers.Remove(paper); Wait(80); }
-                    if (!valid) break;
+                    finally
+                    {
+                        if (w is PaperWindow p) p.CloseForReal(); else w.Close();
+                        Wait(60);
+                    }
                 }
-                if (valid) { File.WriteAllText(file, JsonSerializer.Serialize(samples)); return; }
-                samples.RemoveRange(sampleCount, samples.Count - sampleCount);
-                if (mode == "replay") throw new InvalidOperationException("Could not resize the live PaperWindow.");
             }
+            File.WriteAllText(file, JsonSerializer.Serialize(samples));
         }
-        finally { mouse_event(4, 0, 0, 0, UIntPtr.Zero); SetCursorPos(oldCursor.X, oldCursor.Y); if (hiRes) timeEndPeriod(1); if (enabled) SetFullWindowDrag(37,(uint)initialDrag,IntPtr.Zero,2); }
+        finally
+        {
+            controller.State.Papers.Remove(paper); mouse_event(4,0,0,0,UIntPtr.Zero);
+            SetCursorPos(oldCursor.X,oldCursor.Y); if (hiRes) timeEndPeriod(1);
+            SetFullWindowDrag(37,(uint)initialDrag,IntPtr.Zero,2);
+        }
     }
 
-    private static object? ResizeOnce(PaperWindow w, string mode, string axis, string note, bool gate, int round)
+    private static void InstallHitTest(Window w)
+    {
+        var src = HwndSource.FromHwnd(new WindowInteropHelper(w).Handle)!;
+        src.AddHook((IntPtr h, int msg, IntPtr wp, IntPtr lp, ref bool handled) => {
+            if (msg != 0x84 || !GetWindowRect(h, out var r)) return IntPtr.Zero;
+            int x=(short)(lp.ToInt64() & 0xffff), y=(short)((lp.ToInt64() >> 16) & 0xffff);
+            bool right=x>=r.Right-14 && x<r.Right, bottom=y>=r.Bottom-14 && y<r.Bottom;
+            if (!right && !bottom) return IntPtr.Zero;
+            handled=true; return new IntPtr(right && bottom ? 17 : right ? 11 : 15);
+        });
+    }
+
+    private static object? ResizeOnce(Window w, string mode, string axis, string note, bool gate, int round)
     {
         var hwnd = new WindowInteropHelper(w).Handle;
         var source = HwndSource.FromHwnd(hwnd)!;
@@ -110,6 +135,7 @@ internal static partial class MaterialDragBenchmarks
         var sizes = new List<double>(160);
         var renders = new List<double>(160);
         var inputs = new List<double>(160);
+        var trackingError = new List<double>(160);
         var sizingMessages = 0; var mouseX = 0; var mouseY = 0; var held = 0; var enter = 0; var leave = 0; var layout = 0; var excursionX = 0; var excursionY = 0;
         var clock = Stopwatch.StartNew();
         var previousRender = TimeSpan.MinValue;
@@ -155,9 +181,11 @@ internal static partial class MaterialDragBenchmarks
                                 mouseY = Math.Max(mouseY, Math.Abs(actual.Y-point.Y));
                             }
                         }
-                        else if (!SetWindowPos(hwnd, IntPtr.Zero, 0, 0, width + (horizontal ? d : 0),
-                            height + (vertical ? d : 0), 0x4016)) throw new InvalidOperationException("SetWindowPos failed");
+
                         Thread.Sleep(8);
+                        if (mode == "mouse" && GetWindowRect(hwnd, out var observed))
+                            trackingError.Add(Math.Max(horizontal ? Math.Abs(observed.Right-start.Right-d) : 0,
+                                vertical ? Math.Abs(observed.Bottom-start.Bottom-d) : 0));
                     }
                 }
                 finally { if (mode == "mouse") mouse_event(4, 0, 0, 0, UIntPtr.Zero); }
@@ -167,7 +195,7 @@ internal static partial class MaterialDragBenchmarks
             worker.GetAwaiter().GetResult(); Wait(40);
             var cpuMs = (Process.GetCurrentProcess().TotalProcessorTime - cpu).TotalMilliseconds;
             bool moved = (horizontal ? excursionX >= 90 : excursionX <= 2) && (vertical ? excursionY >= 90 : excursionY <= 2);
-            if (!moved || sizes.Count < 15 || mode == "mouse" && (enter == 0 || leave == 0))
+            if (mode == "mouse" ? (!moved || sizes.Count < 15 || enter == 0 || leave == 0 || held < 120) : (sizes.Count != 0 || enter != 0 || leave != 0))
             {
                 Console.WriteLine($"CHECK mode={mode} axis={axis} changes={sizes.Count} excursion={excursionX},{excursionY} enter={enter} leave={leave} sizing={sizingMessages} button={held} cursor={mouseX},{mouseY}");
                 return null;
@@ -179,7 +207,8 @@ internal static partial class MaterialDragBenchmarks
             double Q(double[] a, double q) => Math.Round(Percentile(a,q), 2);
             return new { mode, note, axis, gate, round, nSize=sizes.Count, nRender=r.Length, enter, leave, sizingMessages, held, mouseX, mouseY, layout,
                 inputP50=Q(inputGaps,.5), sizeP95=Q(sizeGaps,.95), frameP50=Q(frameGaps,.5), frameP95=Q(frameGaps,.95),
-                slow25=frameGaps.Count(t=>t>25), topCalls=PaperWindow.ProbeCalls,
+                slow25=frameGaps.Count(t=>t>25), slowPercent=Math.Round(100d * frameGaps.Count(t=>t>25)/Math.Max(frameGaps.Length,1),1),
+                trackP95=Q(trackingError.ToArray(),.95), duration=inputs[^1]-inputs[0], topCalls=PaperWindow.ProbeCalls,
                 topMs=Math.Round(PaperWindow.ProbeTicks*1000d/Stopwatch.Frequency,3), cpuMs=Math.Round(cpuMs,2) };
         }
         finally { source.RemoveHook(hook); w.LayoutUpdated -= updated; CompositionTarget.Rendering -= rendering; }
