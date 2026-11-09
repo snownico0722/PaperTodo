@@ -136,15 +136,24 @@ static void BackupRecoveryIsPreservedUntilNormalSave()
 {
     using var scope = new TempDirectory();
     var seed = NewStore(scope.Path, DurableAtomicFileWriter.Shared);
-    seed.SaveJsonSync(seed.SerializeState(NewState("light")), version: 1);
+    const string legacyJson = """{"theme":"light","papers":[{"id":"legacy-note","type":"note","content":"\u4e2d\u6587\n\"<&>\""}]}""";
+    const string content = "中文\n\"<&>\"";
+    seed.SaveJsonSync(legacyJson, version: 1);
     Assert(seed.TryRefreshBackupFromPrimary(), "initial backup refresh failed");
 
     File.WriteAllText(seed.FilePath, "not-json");
     var recoveredStore = NewStore(scope.Path, DurableAtomicFileWriter.Shared);
-    Assert(recoveredStore.Load().Theme == "light", "backup recovery did not load");
+    var recovered = recoveredStore.Load();
+    Assert(recovered.Theme == "light" && recovered.Papers.Single().Content == content,
+        "escaped note text did not survive backup recovery");
     Assert(!recoveredStore.TryRefreshBackupFromPrimary(),
         "backup used for recovery was allowed to refresh immediately");
     Assert(ReadTheme(recoveredStore.BackupPath) == "light", "recovery backup was changed");
+
+    recoveredStore.SaveJsonSync(recoveredStore.SerializeState(recovered), version: 2);
+    Assert(File.ReadAllText(seed.FilePath).Contains("中文", StringComparison.Ordinal) &&
+        NewStore(scope.Path, DurableAtomicFileWriter.Shared).Load().Papers.Single().Content == content,
+        "the next save did not round-trip readable Chinese and JSON delimiters");
 }
 
 static void DisabledCapsuleModeKeepsQueueLayoutMemory()
