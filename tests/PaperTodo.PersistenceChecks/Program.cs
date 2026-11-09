@@ -319,8 +319,12 @@ static void ReplaceRetriesTransientSharingFailures()
         ReplaceFailuresRemaining = 2
     };
     var writer = new DurableAtomicFileWriter(fileOperations: operations);
-    writer.Write(target, "new"u8.ToArray());
-
+    var guardedChecks = 0;
+    writer.Write(target, "new"u8.ToArray(), beforeReplace: () =>
+    {
+        if (Monitor.IsEntered(DurableAtomicFileWriter.SnapshotReadReplaceGate)) guardedChecks++;
+    });
+    Assert(guardedChecks == operations.ReplaceCalls, "a replacement was not revalidated inside the snapshot gate");
     Assert(File.ReadAllText(target) == "new", "transient replace failures did not eventually commit");
     Assert(operations.ReplaceCalls == 3, $"expected 3 replace attempts, got {operations.ReplaceCalls}");
     Assert(operations.DelayCalls == 2, $"expected 2 retry delays, got {operations.DelayCalls}");
