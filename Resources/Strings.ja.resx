@@ -1566,7 +1566,7 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
     <value>現在のワークスペース：{0}</value>
   </data>
   <data name="WorkspaceFollowMain" xml:space="preserve">
-    <value>メインの設定を使用する</value>
+    <value>メイン設定に追従</value>
   </data>
   <data name="WorkspaceFollowHint" xml:space="preserve">
     <value>有効にすると、このワークスペースはメインのアプリ設定を使用しますが、紙片・画像・配置・プラグインデータは独立したままです。無効にすると、以前の個別設定に戻ります。</value>
