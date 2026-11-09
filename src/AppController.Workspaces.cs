@@ -484,6 +484,9 @@ public sealed partial class AppController
     private void StopWorkspacePresentation()
     {
         SuspendWorkbench();
+        // The old editor windows are about to be destroyed. Release their shared
+        // cross-paper snapshots now instead of retaining them in the next workspace.
+        RetireWorkbenchContentHistory();
         _paperSurfaceRestoreGeneration++;
         _startupShellPrewarmGeneration++;
         _pluginStartupPaperGeneration++;

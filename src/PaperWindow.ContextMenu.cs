@@ -33,31 +33,42 @@ public sealed partial class PaperWindow
             switch (action)
             {
                 case PaperTopBarShortcuts.RunScript when
-                    !forDeepCapsuleSlot && !_paper.IsCollapsed && !IsTopBarCommandVisible(_runScriptButton):
+                    !forDeepCapsuleSlot && (IsWorkbenchHosted ||
+                        !_paper.IsCollapsed && !IsTopBarCommandVisible(_runScriptButton)):
                     menu.Items.Add(MenuItem(Strings.Get("TopBarRunScript"),
-                        (_, _) => _controller.RunTopBarScript(this)));
+                        (_, _) => _controller.RunTopBarScript(InteractionWindow)));
                     break;
                 case PaperTopBarShortcuts.Workspace when
                     _controller.WorkspaceOptions.Enabled:
                     menu.Items.Add(BuildWorkspaceShortcutMenuItem(menu));
                     break;
                 case PaperTopBarShortcuts.NewTodo when
-                    forDeepCapsuleSlot || !IsTopBarCommandVisible(_newTodoButton):
+                    forDeepCapsuleSlot || IsWorkbenchHosted || !IsTopBarCommandVisible(_newTodoButton):
                     menu.Items.Add(MenuItem(Strings.Get("MenuNewTodoPaper"),
-                        (_, _) => _controller.CreatePaper(PaperTypes.Todo, show: true, _paper)));
+                        (_, _) =>
+                        {
+                            if (_workbenchBody?.Window is WorkbenchWindow desk)
+                                desk.CreatePaperFromMenu(PaperTypes.Todo);
+                            else _controller.CreatePaper(PaperTypes.Todo, show: true, _paper);
+                        }));
                     break;
                 case PaperTopBarShortcuts.NewNote when
-                    forDeepCapsuleSlot || !IsTopBarCommandVisible(_newNoteButton):
+                    forDeepCapsuleSlot || IsWorkbenchHosted || !IsTopBarCommandVisible(_newNoteButton):
                     menu.Items.Add(MenuItem(Strings.Get("MenuNewNotePaper"),
-                        (_, _) => _controller.CreatePaper(PaperTypes.Note, show: true, _paper)));
+                        (_, _) =>
+                        {
+                            if (_workbenchBody?.Window is WorkbenchWindow desk)
+                                desk.CreatePaperFromMenu(PaperTypes.Note);
+                            else _controller.CreatePaper(PaperTypes.Note, show: true, _paper);
+                        }));
                     break;
                 case PaperTopBarShortcuts.Association when
-                    CanBeginAssociationDrag() && !IsTopBarCommandVisible(_windowBindingButton):
+                    CanBeginAssociationDrag() && (IsWorkbenchHosted || !IsTopBarCommandVisible(_windowBindingButton)):
                     menu.Items.Add(BuildAssociationDragMenuItem(menu));
                     break;
                 case PaperTopBarShortcuts.ExternalEditor when
                     _paper.Type == PaperTypes.Note && IsCurrentBodyProviderMarkdown &&
-                    !IsTopBarCommandVisible(_openMarkdownButton):
+                    !IsWorkbenchHosted && !IsTopBarCommandVisible(_openMarkdownButton):
                     menu.Items.Add(MenuItem(OpenMarkdownEditorToolTip(),
                         (_, _) => OpenMarkdownInDefaultEditor()));
                     break;
@@ -90,7 +101,7 @@ public sealed partial class PaperWindow
 
         AttachPluginPaperMenuActions(menu);
 
-        if (CanDisplayAsCapsule())
+        if (!IsWorkbenchHosted && CanDisplayAsCapsule())
         {
             menu.Items.Add(_paper.IsCollapsed
                 ? MenuItem(Strings.Get("MenuRestoreWindow"), (_, _) => OpenCapsuleForEditing())
@@ -111,7 +122,8 @@ public sealed partial class PaperWindow
                 (_, _) => DetachExperimentalWindowAttachment(savePosition: true)));
         }
 
-        menu.Items.Add(MenuItem(Strings.Get("MenuHide"), (_, _) => _controller.HidePaper(_paper)));
+        if (!IsWorkbenchHosted)
+            menu.Items.Add(MenuItem(Strings.Get("MenuHide"), (_, _) => _controller.HidePaper(_paper)));
         menu.Items.Add(MenuItem(
             Strings.Get("MenuDelete"),
             (_, _) => DeletePaperFromPaperMenu(),

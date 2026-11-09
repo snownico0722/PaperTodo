@@ -10,18 +10,15 @@ namespace PaperTodo;
 
 internal sealed record WorkbenchLayoutNode(
     string Id, double Width, double Height, WorkbenchRect? Previous = null,
-    bool Pinned = false, bool Preferred = false, string Affinity = "", string Kind = "note");
+    bool Pinned = false, bool Preferred = false, string Affinity = "");
 internal sealed record WorkbenchLayoutEdge(string From, string To);
-internal sealed record WorkbenchSection(string Key, IReadOnlyList<string> Members, WorkbenchRect Bounds);
 internal sealed record WorkbenchRoute(string From, string To, IReadOnlyList<WorkbenchPoint> Points);
 internal sealed record WorkbenchLayoutResult(
     IReadOnlyDictionary<string, WorkbenchRect> Cards,
-    IReadOnlyList<WorkbenchSection> Sections,
     IReadOnlyList<WorkbenchRoute> Routes,
     IReadOnlyList<(string First, string Second)> LockedOverlaps)
 {
-    internal WorkbenchRect Bounds => WorkbenchRect.Union(Sections.Select(s => s.Bounds)
-        .Concat(Cards.Values)).Inflate(56);
+    internal WorkbenchRect Bounds => WorkbenchRect.Union(Cards.Values).Inflate(Cards.Count == 0 ? 56 : 88);
 }
 
 /// <summary>
@@ -39,7 +36,8 @@ internal static class WorkbenchLayoutEngine
         IReadOnlyList<WorkbenchLayoutNode> input,
         IReadOnlyList<WorkbenchLayoutEdge> connections,
         bool arrangeAll = false, string? preferredId = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IReadOnlySet<WorkbenchLayoutEdge>? directConnections = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var nodes = input.OrderBy(n => n.Id, StringComparer.Ordinal).ToArray();
@@ -50,7 +48,7 @@ internal static class WorkbenchLayoutEngine
         var byId = nodes.ToDictionary(n => n.Id, StringComparer.Ordinal);
         var edges = connections.Where(e => e.From != e.To && byId.ContainsKey(e.From) && byId.ContainsKey(e.To))
             .Distinct().OrderBy(e => e.From, StringComparer.Ordinal).ThenBy(e => e.To, StringComparer.Ordinal).ToArray();
-        if (nodes.Length == 0) return new(new Dictionary<string, WorkbenchRect>(), [], [], []);
+        if (nodes.Length == 0) return new(new Dictionary<string, WorkbenchRect>(), [], []);
         var groups = Group(nodes, edges);
         var ideal = arrangeAll || nodes.Any(n => n.Previous is null)
             ? InitialArrangement(groups, edges, cancellationToken)
@@ -106,10 +104,11 @@ internal static class WorkbenchLayoutEngine
             var result = FindSpace(target, index, cancellationToken);
             placed.Add(node.Id, result); index.Add(node.Id, result);
         }
-        var sections = groups.Select(g => new WorkbenchSection(g.Key, g.Nodes.Select(n => n.Id).ToArray(),
-            WorkbenchRect.Union(g.Nodes.Select(n => placed[n.Id])).Inflate(SectionPadding))).ToArray();
-        var routes = Route(placed, edges, lockedOverlaps.Count > 0, cancellationToken);
-        return new(placed, sections, routes, lockedOverlaps);
+        // Free workbench connections use their own straight-line visuals. They still
+        // influence clustering but never need the expensive spline router.
+        var routedEdges = directConnections == null ? edges : edges.Where(e => !directConnections.Contains(e)).ToArray();
+        var routes = Route(placed, routedEdges, lockedOverlaps.Count > 0, cancellationToken);
+        return new(placed, routes, lockedOverlaps);
     }
 
     private sealed record GroupInfo(string Key, WorkbenchLayoutNode[] Nodes);
@@ -141,10 +140,11 @@ internal static class WorkbenchLayoutEngine
             var sameAffinity = component[0].Affinity.Length > 0 && component.All(n => n.Affinity == component[0].Affinity);
             groups.Add(new(sameAffinity ? component[0].Affinity : "related:" + component[0].Id, component));
         }
-        // Unrelated papers get loose visual neighborhoods, not a new user-maintained taxonomy.
-        foreach (var loose in components.Where(g => g.Length == 1 && g[0].Affinity.Length == 0)
-                     .Select(g => g[0]).GroupBy(n => n.Kind, StringComparer.Ordinal))
-            groups.Add(new("loose:" + loose.Key, loose.ToArray()));
+        // Ungrouped papers share one loose layout pool, regardless of paper/material type.
+        // Only explicit groups (passed as Affinity) and actual connections cluster cards.
+        var loose = components.Where(g => g.Length == 1 && g[0].Affinity.Length == 0)
+            .Select(g => g[0]).ToArray();
+        if (loose.Length > 0) groups.Add(new("ungrouped", loose));
         return groups.OrderBy(g => g.Key, StringComparer.Ordinal).ToArray();
     }
 

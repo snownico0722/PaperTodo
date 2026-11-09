@@ -345,6 +345,17 @@ public sealed partial class StateStore
             {
                 imageIds.Add(imageId);
             }
+            if (paper.WorkspaceMaterials is { } materials)
+            {
+                // Do not normalize away malformed entries before this destructive-use scan.
+                // Current documents and recovery snapshots both protect material-owned images.
+                if (materials.Items == null) return false;
+                foreach (var item in materials.Items.Values)
+                {
+                    if (item == null) return false;
+                }
+                imageIds.UnionWith(MarkdownImageReferences.CollectImageIds(WorkspaceMaterials.RenderMarkdown(materials)));
+            }
         }
 
         return true;
@@ -542,6 +553,7 @@ public sealed partial class StateStore
             RemoveNullEntriesInPlace(paper.Items);
 
             paper.Content ??= "";
+            paper.WorkspaceMaterials?.Layout?.PrepareForSave();
             paper.X = NormalizeCoordinate(paper.X, 120);
             paper.Y = NormalizeCoordinate(paper.Y, 120);
             if (!IsFinite(paper.TextZoom))
@@ -634,7 +646,7 @@ public sealed partial class StateStore
         // paper as user edits. The final merged state is normalized after choices.
         if (!deferLinkNormalization)
             NormalizeLinks(state);
-        state.Workbench?.Normalize(state.Papers.Select(p => p.Id));
+        WorkspaceMaterials.Normalize(state);
     }
 
     private static void MigrateLegacyTopBarSettings(AppState state, string json)

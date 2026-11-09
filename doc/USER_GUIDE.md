@@ -178,6 +178,8 @@ PaperTodo 没有中心主窗口，每张纸片都是独立的桌面窗口，系�
 
 ---
 
+灵感空间按正常打开流程启动；首次没有布局时自动排布并保存，后续沿用布局，新增纸片补充位置。纸片右键菜单遵循内置快捷的隐藏设置和插件“仅菜单显示”规则。素材与布局由当前工作区的「灵感空间素材」笔记持有，可集中编辑、搜索和导出；该笔记不提供整张跨工作区移动，普通笔记和待办仍可从工作区菜单移动。
+
 ## 3. 待办纸
 
 待办纸用于日常清单、日程安排与零碎任务。
@@ -599,6 +601,7 @@ PaperTodo **没有后台文件监控或自动同步**。直接修改运行中的
 | `PaperTodo.exe --toggle` | 无 | 切换全部纸片显隐状态 |
 | `PaperTodo.exe --new-todo` | `PaperTodo.exe todo` | 新建待办纸 |
 | `PaperTodo.exe --new-note` | `PaperTodo.exe note` | 新建笔记纸 |
+| `PaperTodo.exe --canvas` | 无 | 打开当前工作区的灵感空间；已打开时恢复并唤醒，不重复新建或关闭 |
 | `PaperTodo.exe --exit` | `PaperTodo.exe quit` | 保存并退出 |
 | `PaperTodo.exe --mcp` | 无 | 启动供 MCP 客户端使用的连接进程（见 [MCP 本地接口](#mcp-本地接口)） |
 | `PaperTodo.exe --import-note-image --paper-id <笔记ID>` | 无 | 从二进制标准输入导入图片；主程序须已运行并允许 MCP 新增/追加写入 |

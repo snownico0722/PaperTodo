@@ -130,8 +130,13 @@ public sealed partial class PaperWindow
         selector.Items.Add(MenuHeader(Strings.Get("WorkspaceSwitchGroup")));
         PopulateWorkspaceChoices(selector, menu, movePaper: false);
         selector.Items.Add(MenuSeparator());
-        selector.Items.Add(MenuHeader(Strings.Get("WorkspaceMoveGroup")));
-        PopulateWorkspaceChoices(selector, menu, movePaper: true);
+        if (_paper.WorkspaceMaterials != null)
+            selector.Items.Add(MenuHeader(Strings.Get("WorkspaceMaterialsMoveUnavailable")));
+        else
+        {
+            selector.Items.Add(MenuHeader(Strings.Get("WorkspaceMoveGroup")));
+            PopulateWorkspaceChoices(selector, menu, movePaper: true);
+        }
         return selector;
     }
 
@@ -141,7 +146,9 @@ public sealed partial class PaperWindow
         await Dispatcher.Yield(DispatcherPriority.Background);
         if (IsClosed || _controller.IsWorkspaceSwitching || !_controller.WorkspaceOptions.Enabled ||
             _controller.WorkspaceOptions.SlotNumbers.Count != 1) return;
-        var owner = IsVisible && PresentationSource.FromVisual(this) != null ? this : null;
+        var interactionWindow = InteractionWindow;
+        var owner = interactionWindow.IsVisible && PresentationSource.FromVisual(interactionWindow) != null
+            ? interactionWindow : null;
         if (PaperNoticeDialog.ShowChoice(owner, Strings.Get("WorkspaceSettingsTitle"),
                 Strings.Get("WorkspaceSingleMessage"), Strings.Get("CommonCancel"),
                 Strings.Get("WorkspaceCreate")))

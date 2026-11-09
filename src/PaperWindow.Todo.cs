@@ -2014,6 +2014,12 @@ public sealed partial class PaperWindow
             BeginTodoMouseDrag();
         }
 
+        if (TryStartWorkbenchTodoDrag(current))
+        {
+            e.Handled = true;
+            return;
+        }
+
         var panelPoint = _todoPanel != null ? e.GetPosition(_todoPanel) : current;
         UpdateTodoMouseDrag(panelPoint, current);
         e.Handled = true;
@@ -2501,6 +2507,7 @@ public sealed partial class PaperWindow
 
     private void Undo()
     {
+        if (TryHandleWorkbenchTodoHistory(redo: false)) return;
         if (_undoStack.Count == 0)
         {
             return;
@@ -2520,6 +2527,7 @@ public sealed partial class PaperWindow
 
     private void Redo()
     {
+        if (TryHandleWorkbenchTodoHistory(redo: true)) return;
         if (_redoStack.Count == 0)
         {
             return;

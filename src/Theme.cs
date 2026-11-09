@@ -204,7 +204,6 @@ public static class Theme
         ? Darken(Current.Paper, 0.16)
         : Mix(Current.Paper, Color.FromRgb(255, 255, 255), 0.35));
     public static Brush WorkbenchFrameBrush => Solid(Mix(Current.PaperBorder, Current.Text, IsDark ? 0.30 : 0.22));
-    public static Brush WorkbenchRegionBrush => Solid(WithAlpha(Mix(Current.Text, Current.Paper, 0.35), (byte)(IsDark ? 150 : 130)));
     public static Brush WorkbenchRegionFillBrush => Tint((byte)(IsDark ? 14 : 10));
 
     // ---- 派生画刷 ----

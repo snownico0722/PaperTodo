@@ -55,7 +55,7 @@ public sealed partial class PaperWindow
 
             if (snapshots.Length == 0)
             {
-                MessageBox.Show(this, Strings.Get("NoteExportNoNotes"), caption,
+                MessageBox.Show(InteractionWindow, Strings.Get("NoteExportNoNotes"), caption,
                     MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
@@ -75,7 +75,7 @@ public sealed partial class PaperWindow
                 FileName = all ? DateTime.Now.ToString("yyyy-MM-dd") + "_PaperTodo"
                     : NotePortableExport.SafeName(snapshots[0].Title)
             };
-            if (dialog.ShowDialog(this) != true || IsClosed || _controller.IsDataReloading ||
+            if (dialog.ShowDialog(InteractionWindow) != true || IsClosed || _controller.IsDataReloading ||
                 !ReferenceEquals(images, _controller.ImageStore)) return;
 
             var format = dialog.FilterIndex == 2 ? NoteExportFormat.Html : NoteExportFormat.Markdown;
@@ -103,14 +103,14 @@ public sealed partial class PaperWindow
                     Strings.Format("NoteExportFailedNotes",
                         string.Join(Environment.NewLine, result.FailedNotes.Take(5)));
             if (!IsClosed)
-                MessageBox.Show(this, message, caption, MessageBoxButton.OK,
+                MessageBox.Show(InteractionWindow, message, caption, MessageBoxButton.OK,
                     result.MissingImages > 0 || result.FailedNotes.Count > 0
                         ? MessageBoxImage.Warning : MessageBoxImage.Information);
         }
         catch (Exception ex)
         {
             if (!IsClosed)
-                MessageBox.Show(this, Strings.Format("NoteExportFailure", ex.Message),
+                MessageBox.Show(InteractionWindow, Strings.Format("NoteExportFailure", ex.Message),
                     caption, MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
@@ -119,7 +119,7 @@ public sealed partial class PaperWindow
         Func<IProgress<int>, CancellationToken, NoteExportResult> export)
     {
         using var cancellation = new CancellationTokenSource();
-        var dialog = new PaperExportProgressWindow(this, caption, total, cancellation);
+        var dialog = new PaperExportProgressWindow(InteractionWindow, caption, total, cancellation);
         var progress = new Progress<int>(dialog.Report);
         _paperExportRunning = true;
         try

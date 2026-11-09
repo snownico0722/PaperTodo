@@ -403,6 +403,12 @@ internal sealed partial class PaperCommandService
         var paper = RequirePaper(
             RequiredId(request.PaperId, "paperId"),
             PaperTypes.Note);
+        if (paper.WorkspaceMaterials != null)
+        {
+            throw Error(
+                "workspace_materials_structured_body",
+                "Workspace materials must be edited as individual items in Canvas or the materials note; the Markdown projection is read-only.");
+        }
         if (!string.Equals(
                 paper.BodyProviderId,
                 PaperBodyProviderIds.Markdown,

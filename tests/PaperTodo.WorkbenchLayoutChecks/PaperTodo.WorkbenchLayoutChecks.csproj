@@ -7,6 +7,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../src/Workbench/WorkbenchState.cs" Link="WorkbenchState.cs" />
+    <Compile Include="../../src/Workbench/WorkspaceMaterialsDocument.cs" Link="WorkspaceMaterialsDocument.cs" />
     <Compile Include="../../src/Workbench/WorkbenchLayoutEngine.cs" Link="WorkbenchLayoutEngine.cs" />
     <PackageReference Include="Msagl" Version="1.2.1" />
   </ItemGroup>

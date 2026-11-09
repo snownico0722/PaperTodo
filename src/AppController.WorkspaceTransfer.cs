@@ -26,6 +26,7 @@ public sealed partial class AppController
         Application.Current.Dispatcher.VerifyAccess();
         if (!WorkspaceOptions.Enabled || number == WorkspaceNumber ||
             !WorkspaceOptions.ContainsSlot(number) || !State.Papers.Contains(paper) ||
+            paper.WorkspaceMaterials != null ||
             !CanBeginWorkspaceChange()) return false;
 
         WorkspaceSession? target = null;

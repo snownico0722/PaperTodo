@@ -138,8 +138,11 @@ internal sealed class MarkdownPaperBodySession : IPaperBodySession
         NoteBox?.RefreshVisualStyle();
     }
 
-    public void OnTypographyChanged(PaperBodyTheme theme) =>
+    public void OnTypographyChanged(PaperBodyTheme theme)
+    {
         NoteBox?.RefreshTypography();
+        _owner.RefreshWorkspaceMaterialsTypography();
+    }
 
     public void OnDpiChanged() =>
         NoteBox?.RefreshImageDecodeForCurrentDpi();
@@ -147,6 +150,7 @@ internal sealed class MarkdownPaperBodySession : IPaperBodySession
     public void OnVisibilityChanged(bool visible)
     {
         NoteBox?.SetImageRenderingSuspended(!visible);
+        _owner.SetWorkspaceMaterialsVisibility(visible);
         if (!visible)
         {
             _imageStore.ReleaseNoteBitmapCache(_paper.Id);
