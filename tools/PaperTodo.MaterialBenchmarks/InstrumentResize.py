@@ -35,3 +35,27 @@ replace(paper, '''        SizeChanged += (_, _) =>
             if (!ProbeWidthOnly || e.WidthChanged) UpdateTopBarResponsiveLayout();''')
 replace(bar, "        _topBar.SizeChanged += (_, _) => UpdateTopBarResponsiveLayout();",
         "        _topBar.SizeChanged += (_, e) => { if (!ProbeWidthOnly || e.WidthChanged) UpdateTopBarResponsiveLayout(); };")
+replace(paper, "    internal static bool ProbeWidthOnly;", """    internal static bool ProbeWidthOnly, ProbeSkipShadow, ProbeSkipGeometry;
+    internal static long ProbeShadowCalls, ProbeGeometryTicks, ProbeSnapTicks;""")
+replace(paper, """    private void HandleWindowGeometryChanged()
+    {""", """    private void HandleWindowGeometryChanged()
+    {
+        if (ProbeSkipGeometry) return;
+        var start = System.Diagnostics.Stopwatch.GetTimestamp();
+        try { HandleWindowGeometryChangedMeasured(); }
+        finally { ProbeGeometryTicks += System.Diagnostics.Stopwatch.GetTimestamp()-start; }
+    }
+    private void HandleWindowGeometryChangedMeasured()
+    {""")
+replace(paper, """        if (msg == WmWindowPosChanged)
+        {
+            RefreshSnappedPresentation();
+        }""", """        if (msg == WmWindowPosChanged && !ProbeSkipGeometry)
+        {
+            var startSnap = System.Diagnostics.Stopwatch.GetTimestamp();
+            try { RefreshSnappedPresentation(); }
+            finally { ProbeSnapTicks += System.Diagnostics.Stopwatch.GetTimestamp()-startSnap; }
+        }""")
+replace("src/PaperChromeBorder.cs", """        NineSlicePaperShadow.Get(""", """        if (PaperWindow.ProbeSkipShadow) return;
+        PaperWindow.ProbeShadowCalls++;
+        NineSlicePaperShadow.Get(""")

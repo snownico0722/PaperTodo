@@ -36,57 +36,81 @@ internal static partial class MaterialDragBenchmarks
         controller.State.Papers.Add(paper);
         try
         {
-            // Match the application's actual window settings on this runner.
-            var transparent = !controller.UsesNativeMicaWindows;
-            var kinds = new[] { "paper", "plain", "matched" };
-            var axes = new[] { "idle", "bottom", "right", "corner" };
-            for (var round = -1; round < 5; round++)
+            bool platform = Environment.GetEnvironmentVariable("PAPER_RESIZE_SUITE") == "platform";
+            var kinds = platform ? new[] { "win32","wpf","matched","paper" } :
+                new[] { "paper","noEditor","noShadow","noEditorShadow","flat","noGeometry" };
+            var axes = platform ? new[] { "corner","fastCorner" } : new[] { "bottom","corner" };
+            PaperWindow? shared = null;
+            if (!platform)
             {
-                for (var k = 0; k < kinds.Length; k++)
+                shared = new PaperWindow(paper,controller);
+                shared.Show(); shared.Activate(); Wait(400);
+            }
+            try
+            {
+                for (var round = -1; round<5; round++)
+                for (var j=0; j<kinds.Length; j++)
                 {
-                    var kind = kinds[(round + 1 + k) % kinds.Length];
-                    Window w = kind == "paper" ? new PaperWindow(paper, controller) : new Window();
+                    var kind=kinds[(round+1+j)%kinds.Length];
+                    Window? w = null;
+                    IntPtr hwnd=IntPtr.Zero;
+                    Action? restore=null;
                     try
                     {
-                        w.WindowStartupLocation = WindowStartupLocation.Manual;
-                        w.Left = 110; w.Top = 80; w.Width = 365; w.Height = 240;
-                        if (kind != "paper")
+                        if (!platform)
                         {
-                            w.Title = "Empty WPF control"; w.Topmost = true; w.ShowInTaskbar = false;
-                            if (kind == "matched")
-                            {
-                                w.WindowStyle = WindowStyle.None; w.AllowsTransparency = transparent;
-                                w.Background = Brushes.Transparent;
-                                w.Content = new System.Windows.Controls.Border { Background = Brushes.White, Margin = new Thickness(8) };
-                                w.SourceInitialized += (_, _) => InstallHitTest(w);
-                            }
-                            else w.Background = Brushes.White;
+                            w=shared!;
+                            restore=ConfigurePaper(shared!,kind);
                         }
-                        w.Show(); w.Activate(); Wait(340);
-                        if (kind == "paper")
-                            Program.Assert(Descendants(w).OfType<MarkdownTextBox>().Any(e => string.IsNullOrEmpty(e.Text.TrimEnd('\r','\n'))), "empty editor visible");
-                        if (round < 0) Console.WriteLine($"CONTROL {kind} layered={w.AllowsTransparency} style={w.WindowStyle} dpi={VisualTreeHelper.GetDpi(w).DpiScaleX}");
-                        for (var axisIndex=0; axisIndex<4; axisIndex++)
+                        else if (kind=="win32") hwnd=OpenNative();
+                        else
                         {
-                            var axis = axes[(axisIndex + round + 1) % 4];
-                            w.Width=365; w.Height=240; Wait(140);
-                            if (axis == "idle") { SetCursorPos(65,55); Wait(50); }
-                            var row = ResizeOnce(w, axis == "idle" ? "idle" : "mouse", axis, kind, false, round);
-                            if (row == null) throw new Exception($"Invalid real input: {kind}/{axis}/{round}");
-                            if (round >= 0)
+                            w=kind=="paper" ? new PaperWindow(paper,controller) : new Window();
+                            w.WindowStartupLocation=WindowStartupLocation.Manual;
+                            w.Left=110; w.Top=80; w.Width=365; w.Height=240;
+                            if (kind!="paper")
+                            {
+                                w.Title="Empty WPF"; w.Topmost=true; w.ShowInTaskbar=false;
+                                if (kind=="matched")
+                                {
+                                    w.WindowStyle=WindowStyle.None; w.AllowsTransparency=!controller.UsesNativeMicaWindows;
+                                    w.Background=Brushes.Transparent; w.Content=EmptySurface();
+                                    w.SourceInitialized+=(_,_)=>InstallHitTest(w);
+                                }
+                                else w.Background=Brushes.White;
+                            }
+                            w.Show(); w.Activate();
+                        }
+                        if (w!=null) hwnd=new WindowInteropHelper(w).Handle;
+                        Wait(250);
+                        for (var a=0;a<axes.Length;a++)
+                        {
+                            var axis=axes[(a+round+1)%axes.Length];
+                            Program.Assert(SetWindowPos(hwnd,IntPtr.Zero,110,80,365,240,0x14),"reset HWND");
+                            Wait(140);
+                            var row=ResizeOnce(hwnd,w,platform,axis,kind,round);
+                            if (row==null) throw new Exception($"Invalid native drag: {kind}/{axis}/{round}");
+                            if (round>=0)
                             {
                                 samples.Add(row);
-                                Console.WriteLine("RESIZE " + JsonSerializer.Serialize(row));
+                                Console.WriteLine("RESIZE "+JsonSerializer.Serialize(row));
                             }
                         }
                     }
                     finally
                     {
-                        if (w is PaperWindow p) p.CloseForReal(); else w.Close();
+                        restore?.Invoke();
+                        if (platform)
+                        {
+                            if (w is PaperWindow pw) pw.CloseForReal();
+                            else if(w!=null) w.Close();
+                            else if(hwnd!=IntPtr.Zero) DestroyWindow(hwnd);
+                        }
                         Wait(60);
                     }
                 }
             }
+            finally { shared?.CloseForReal(); }
             File.WriteAllText(file, JsonSerializer.Serialize(samples));
         }
         finally
@@ -95,6 +119,79 @@ internal static partial class MaterialDragBenchmarks
             SetCursorPos(oldCursor.X,oldCursor.Y); if (hiRes) timeEndPeriod(1);
             SetFullWindowDrag(37,(uint)initialDrag,IntPtr.Zero,2);
         }
+    }
+
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
+    private delegate IntPtr WindowCallback(IntPtr h, uint msg, IntPtr wp, IntPtr lp);
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
+    private delegate IntPtr SubclassCallback(IntPtr h, uint msg, IntPtr wp, IntPtr lp, UIntPtr id, UIntPtr data);
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct WindowClass
+    {
+        public uint style;
+        public IntPtr procedure;
+        public int classBytes, windowBytes;
+        public IntPtr instance,icon,cursor,background;
+        public string? menu,name;
+    }
+    [DllImport("user32.dll", CharSet=CharSet.Unicode, SetLastError=true)]
+    private static extern ushort RegisterClassW(ref WindowClass wc);
+    [DllImport("user32.dll", CharSet=CharSet.Unicode, SetLastError=true)]
+    private static extern IntPtr CreateWindowExW(uint exStyle, string className, string name, uint style, int x,int y,int width,int height,
+        IntPtr parent,IntPtr menu,IntPtr instance,IntPtr param);
+    [DllImport("kernel32.dll", CharSet=CharSet.Unicode)] private static extern IntPtr GetModuleHandleW(string? name);
+    [DllImport("user32.dll")] private static extern IntPtr DefWindowProcW(IntPtr h,uint msg,IntPtr wp,IntPtr lp);
+    [DllImport("user32.dll")] private static extern bool DestroyWindow(IntPtr h);
+    [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr h);
+    [DllImport("user32.dll")] private static extern IntPtr LoadCursorW(IntPtr h,IntPtr id);
+    [DllImport("comctl32.dll")] private static extern bool SetWindowSubclass(IntPtr h,SubclassCallback cb, UIntPtr id, UIntPtr data);
+    [DllImport("comctl32.dll")] private static extern bool RemoveWindowSubclass(IntPtr h,SubclassCallback cb, UIntPtr id);
+    [DllImport("comctl32.dll")] private static extern IntPtr DefSubclassProc(IntPtr h,uint msg,IntPtr wp,IntPtr lp);
+    [DllImport("kernel32.dll")] private static extern IntPtr GetCurrentThread();
+    [DllImport("kernel32.dll")] private static extern bool GetThreadTimes(IntPtr h, out long creation,out long exit,out long kernel,out long user);
+    private static readonly WindowCallback NativeProcedure = (h,m,wp,lp) => DefWindowProcW(h,m,wp,lp);
+    private static bool classReady;
+    private static long UiTime() => GetThreadTimes(GetCurrentThread(),out _,out _,out var k,out var u) ? k+u : 0;
+
+    private static IntPtr OpenNative()
+    {
+        const string name = "PaperTodoResizeNativeControl";
+        var module = GetModuleHandleW(null);
+        if (!classReady)
+        {
+            var wc = new WindowClass {name=name, procedure=Marshal.GetFunctionPointerForDelegate(NativeProcedure),
+                cursor=LoadCursorW(IntPtr.Zero,new IntPtr(32512)), instance=module,background=new IntPtr(6)};
+            Program.Assert(RegisterClassW(ref wc)!=0,"register native HWND class");
+            classReady=true;
+        }
+        var hwnd=CreateWindowExW(8,name,"Native empty",0x10cf0000,110,80,365,240,IntPtr.Zero,IntPtr.Zero,module,IntPtr.Zero);
+        Program.Assert(hwnd!=IntPtr.Zero,"create native HWND");
+        SetForegroundWindow(hwnd);
+        return hwnd;
+    }
+
+    private static System.Windows.Controls.Border EmptySurface() => new()
+        { Background=Brushes.White, Margin=new Thickness(8) };
+    private static Action ConfigurePaper(PaperWindow w,string kind)
+    {
+        var editor=Descendants(w).OfType<MarkdownTextBox>().Single();
+        var chrome=Descendants(w).OfType<PaperChromeBorder>().First();
+        Program.Assert(editor.IsVisible && editor.Text.Trim().Length==0 && chrome.HasNineSliceShadow,"verify empty paper, editor and shadow");
+        var parent=(System.Windows.Controls.Panel)editor.Parent;
+        var index=parent.Children.IndexOf(editor);
+        var body=w.Content;
+        var detach=kind is "noEditor" or "noEditorShadow";
+        if(detach) parent.Children.RemoveAt(index);
+        PaperWindow.ProbeSkipShadow=kind is "noShadow" or "noEditorShadow";
+        PaperWindow.ProbeSkipGeometry=kind=="noGeometry";
+        if(kind=="flat") w.Content=EmptySurface();
+        chrome.InvalidateVisual();
+        return () => {
+            PaperWindow.ProbeSkipShadow=false; PaperWindow.ProbeSkipGeometry=false;
+            if(kind=="flat") w.Content=body;
+            if(detach) parent.Children.Insert(index,editor);
+            chrome.InvalidateVisual();
+        };
     }
 
     private static void InstallHitTest(Window w)
@@ -109,10 +206,9 @@ internal static partial class MaterialDragBenchmarks
         });
     }
 
-    private static object? ResizeOnce(Window w, string mode, string axis, string note, bool gate, int round)
+    private static object? ResizeOnce(IntPtr hwnd, Window? w, bool platform, string axis, string note, int round)
     {
-        var hwnd = new WindowInteropHelper(w).Handle;
-        var source = HwndSource.FromHwnd(hwnd)!;
+        const string mode = "mouse";
         GetWindowRect(hwnd, out var start);
         int width = start.Right - start.Left, height = start.Bottom - start.Top;
         bool horizontal = axis != "bottom", vertical = axis != "right";
@@ -145,7 +241,7 @@ internal static partial class MaterialDragBenchmarks
             previousRender = time;
         };
         EventHandler updated = (_, _) => layout++;
-        HwndSourceHook hook = (IntPtr h, int msg, IntPtr wp, IntPtr lp, ref bool handled) => {
+        SubclassCallback hook = (h, msg, wp, lp, id, data) => {
             if (msg == 0x214) sizingMessages++;
             if (msg == 0x231) enter++;
             if (msg == 0x232) leave++;
@@ -155,11 +251,14 @@ internal static partial class MaterialDragBenchmarks
                 excursionX = Math.Max(excursionX, Math.Abs(r.Right-r.Left-width));
                 excursionY = Math.Max(excursionY, Math.Abs(r.Bottom-r.Top-height));
             }
-            return IntPtr.Zero;
+            return DefSubclassProc(h,msg,wp,lp);
         };
-        source.AddHook(hook); w.LayoutUpdated += updated; CompositionTarget.Rendering += rendering;
+        Program.Assert(SetWindowSubclass(hwnd,hook,(UIntPtr)41,UIntPtr.Zero),"observe window messages");
+        if (!platform) { w!.LayoutUpdated += updated; CompositionTarget.Rendering += rendering; }
         PaperWindow.ProbeCalls = PaperWindow.ProbeTicks = 0;
         var cpu = Process.GetCurrentProcess().TotalProcessorTime;
+        var uiBefore=UiTime();
+        PaperWindow.ProbeGeometryTicks=PaperWindow.ProbeSnapTicks=PaperWindow.ProbeShadowCalls=0;
         try
         {
             var worker = Task.Run(() => {
@@ -169,6 +268,7 @@ internal static partial class MaterialDragBenchmarks
                     for (var i = 1; i <= 128; i++)
                     {
                         var d = (i <= 64 ? i * 2 : 128 - (i - 64));
+                        if(axis=="fastCorner") { int k=i%64; d=6*(k<=32 ? k : 64-k); }
                         inputs.Add(clock.Elapsed.TotalMilliseconds);
                         if (mode == "mouse")
                         {
@@ -205,12 +305,12 @@ internal static partial class MaterialDragBenchmarks
             var sizeGaps = sizes.Zip(sizes.Skip(1), (a,b) => b-a).ToArray();
             var inputGaps = inputs.Zip(inputs.Skip(1), (a,b) => b-a).ToArray();
             double Q(double[] a, double q) => Math.Round(Percentile(a,q), 2);
-            return new { mode, note, axis, gate, round, nSize=sizes.Count, nRender=r.Length, enter, leave, sizingMessages, held, mouseX, mouseY, layout,
+            return new { mode, note, axis, platform, round, nSize=sizes.Count, nRender=r.Length, enter, leave, sizingMessages, held, mouseX, mouseY, layout,
                 inputP50=Q(inputGaps,.5), sizeP95=Q(sizeGaps,.95), frameP50=Q(frameGaps,.5), frameP95=Q(frameGaps,.95),
                 slow25=frameGaps.Count(t=>t>25), slowPercent=Math.Round(100d * frameGaps.Count(t=>t>25)/Math.Max(frameGaps.Length,1),1),
                 trackP95=Q(trackingError.ToArray(),.95), duration=inputs[^1]-inputs[0], topCalls=PaperWindow.ProbeCalls,
-                topMs=Math.Round(PaperWindow.ProbeTicks*1000d/Stopwatch.Frequency,3), cpuMs=Math.Round(cpuMs,2) };
+                uiMs=(UiTime()-uiBefore)/10000d, geomMs=PaperWindow.ProbeGeometryTicks*1000d/Stopwatch.Frequency, snapMs=PaperWindow.ProbeSnapTicks*1000d/Stopwatch.Frequency, shadowDraws=PaperWindow.ProbeShadowCalls, topMs=Math.Round(PaperWindow.ProbeTicks*1000d/Stopwatch.Frequency,3), cpuMs=Math.Round(cpuMs,2) };
         }
-        finally { source.RemoveHook(hook); w.LayoutUpdated -= updated; CompositionTarget.Rendering -= rendering; }
+        finally { RemoveWindowSubclass(hwnd,hook,(UIntPtr)41); if (!platform) { w!.LayoutUpdated -= updated; CompositionTarget.Rendering -= rendering; } GC.KeepAlive(hook); }
     }
 }

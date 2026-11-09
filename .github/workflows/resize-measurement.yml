@@ -25,4 +25,10 @@ jobs:
         run: |
           python tools/PaperTodo.MaterialBenchmarks/InstrumentResize.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          dotnet run -c Release --project tools/PaperTodo.MaterialBenchmarks -- --drag-benchmark "$env:RUNNER_TEMP/resize.json"
+          dotnet build -c Release tools/PaperTodo.MaterialBenchmarks
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          foreach ($suite in @("platform", "components")) {
+            $env:PAPER_RESIZE_SUITE = $suite
+            dotnet run --no-build -c Release --project tools/PaperTodo.MaterialBenchmarks -- --drag-benchmark "$env:RUNNER_TEMP/resize-$suite.json"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
