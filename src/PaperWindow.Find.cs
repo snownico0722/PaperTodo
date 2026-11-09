@@ -80,7 +80,7 @@ public sealed partial class PaperWindow
         }
 
         UpdateBuiltInFindVisuals();
-        _findPopup.PlacementTarget = IsExpandedEditorHosted ? _shell : _paperChrome;
+        UpdateBuiltInFindPlacementTarget();
         _findPopup.IsOpen = true;
         SynchronizeBuiltInFindOwnerState(refreshMatches: false);
         _findInput.Focus();

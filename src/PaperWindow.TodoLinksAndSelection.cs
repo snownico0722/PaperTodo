@@ -84,7 +84,7 @@ public sealed partial class PaperWindow
         if (e.Key == Key.Back &&
             Keyboard.Modifiers == ModifierKeys.None &&
             _selectedTodoItemIds.Count > 1 &&
-            (ReferenceEquals(Keyboard.FocusedElement, _paperChrome) ||
+            (ReferenceEquals(Keyboard.FocusedElement, TodoSelectionFocusHost) ||
              Keyboard.FocusedElement is TodoTextBox { SelectionLength: 0 }))
         {
             // Whole-row selection is one list edit; text selection and other input
@@ -236,9 +236,12 @@ public sealed partial class PaperWindow
         return true;
     }
 
+    private FrameworkElement TodoSelectionFocusHost =>
+        IsExpandedEditorHosted ? _shell : _paperChrome;
+
     private void FocusTodoSweepSelectionHost()
     {
-        var host = IsExpandedEditorHosted ? (FrameworkElement)_shell : _paperChrome;
+        var host = TodoSelectionFocusHost;
         // Keep keyboard focus inside the paper without leaving any TodoTextBox active. Sweep
         // highlighting is drawn independently, so no editor retains a caret or real text range.
         host.Focusable = true;

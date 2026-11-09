@@ -165,7 +165,7 @@ public sealed partial class PaperWindow
             return false;
         }
 
-        _findPopup.PlacementTarget = IsExpandedEditorHosted ? _shell : _paperChrome;
+        UpdateBuiltInFindPlacementTarget();
         SetBuiltInFindQuery(query, target.Match);
         UpdateBuiltInFindVisuals();
         _findPopup.IsOpen = true;

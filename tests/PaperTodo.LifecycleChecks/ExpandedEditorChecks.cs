@@ -9,6 +9,7 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Interop;
 using System.Windows.Threading;
@@ -189,7 +190,9 @@ internal static class ExpandedEditorChecks
                     IsCollapsed = true, X = 470, Y = 95, Width = 370, Height = 310 },
                 new() { Id = "editor-todo", Type = PaperTypes.Todo, Title = "Tasks",
                     IsVisible = false, X = 250, Y = 460, Width = 320, Height = 290,
-                    Items = [new() { Id = "task-a", Text = "Keep the same HWND" }] }
+                    Items = [new() { Id = "task-a", Text = "Keep the same HWND" },
+                        new() { Id = "task-b", Text = "Delete the selected rows", Order = 1 },
+                        new() { Id = "task-c", Text = "Keep the unselected row", Order = 2 }] }
             ]
         };
         var store = new StateStore();
@@ -345,6 +348,28 @@ internal static class ExpandedEditorChecks
         Check(!b.IsExpandedEditorHosted && controller.State.Papers.Single(p => p.Id == "editor-b").IsCollapsed,
             "Leaving B did not restore its desktop capsule state");
 
+        // Sweep selection focuses the borrowed shell. Backspace must delete rows
+        // through that input route and still form one undoable list edit.
+        var todoData = controller.State.Papers.Single(p => p.Id == "editor-todo");
+        var todoShell = (Grid)Member(todo, "_shell");
+        typeof(PaperWindow).GetMethod("SelectTodoRange", Private)!.Invoke(todo, ["task-a", "task-b"]);
+        typeof(PaperWindow).GetMethod("FocusTodoSweepSelectionHost", Private)!.Invoke(todo, null);
+        Check(ReferenceEquals(Keyboard.FocusedElement, todoShell),
+            "Studio row selection did not focus its visible shell");
+        var undo = (List<List<PaperItem>>)Member(todo, "_undoStack");
+        var historyBefore = undo.Count;
+        var backspace = new KeyEventArgs(Keyboard.PrimaryDevice, PresentationSource.FromVisual(host),
+            Environment.TickCount, Key.Back) { RoutedEvent = Keyboard.PreviewKeyDownEvent };
+        todoShell.RaiseEvent(backspace);
+        todoShell.RaiseEvent(new KeyEventArgs(Keyboard.PrimaryDevice, PresentationSource.FromVisual(host),
+            Environment.TickCount, Key.Back) { RoutedEvent = Keyboard.PreviewKeyUpEvent });
+        Check(backspace.Handled && todoData.Items.Select(item => item.Id).SequenceEqual(["task-c"]) &&
+              undo.Count == historyBefore + 1,
+            "Studio Backspace did not delete the selected rows as one history step");
+        typeof(PaperWindow).GetMethod("Undo", Private)!.Invoke(todo, null);
+        Check(todoData.Items.Select(item => item.Id).SequenceEqual(["task-a", "task-b", "task-c"]),
+            "One undo did not restore the Studio row selection deletion");
+
         // The editor's ordered shortcut itself performs return, independently of ×.
         var todoModeButton = (Button)Member(todo, "_editorModeButton");
         todoModeButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
@@ -456,6 +481,8 @@ internal static class ExpandedEditorChecks
         listHost.CloseWithoutPaperAction();
         otherHost.CloseWithoutPaperAction();
         controller.State.Papers.RemoveAll(p => p.Id.StartsWith("list-"));
+        controller.State.UseCapsuleMode = false;
+        controller.State.EnableTodoPaperLinks = true;
         controller.OpenStudio();
         var newDocumentHost = Application.Current.Windows.OfType<ExpandedEditorWindow>().Single();
         newDocumentHost.UpdateLayout();
@@ -465,6 +492,54 @@ internal static class ExpandedEditorChecks
         Check(controller.State.Papers.Count == 4 && newDocumentHost.CurrentPaper is { IsExpandedEditorHosted: true } &&
               controller.State.Papers.Last().Type == PaperTypes.Note,
             "New Note in empty Studio did not create and select exactly one real paper");
+        await CheckBorrowedInputCoordinates(controller, newDocumentHost);
+    }
+
+    private static async Task CheckBorrowedInputCoordinates(AppController controller, ExpandedEditorWindow host)
+    {
+        var paper = host.CurrentPaper!;
+        var shell = (Grid)Member(paper, "_shell");
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(new WindowInteropHelper(paper).Handle == IntPtr.Zero,
+            "New Studio note unexpectedly created the hidden desktop HWND");
+
+        typeof(PaperWindow).GetMethod("ShowBuiltInFind", Private)!.Invoke(paper, null);
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        var popup = (Popup)Member(paper, "_findPopup");
+        var find = (Border)Member(paper, "_findHost");
+        var screenOrigin = find.PointToScreen(new Point());
+        var down = new MouseButtonEventArgs(Mouse.PrimaryDevice, Environment.TickCount, MouseButton.Left)
+            { RoutedEvent = UIElement.PreviewMouseLeftButtonDownEvent };
+        find.RaiseEvent(down);
+        var anchor = (Point)Member(paper, "_findDragPopupStart");
+        Check(down.Handled && (shell.PointToScreen(anchor) - screenOrigin).Length < 1,
+            "Find drag did not anchor the popup in its visible Studio surface");
+        find.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, Environment.TickCount, MouseButton.Left)
+            { RoutedEvent = UIElement.PreviewMouseLeftButtonUpEvent });
+        typeof(PaperWindow).GetMethod("HideBuiltInFind", Private)!.Invoke(paper, [false]);
+
+        var association = (Button)Member(paper, "_windowBindingButton");
+        down = new MouseButtonEventArgs(Mouse.PrimaryDevice, Environment.TickCount, MouseButton.Left)
+            { RoutedEvent = UIElement.PreviewMouseLeftButtonDownEvent };
+        association.RaiseEvent(down);
+        Check(down.Handled && new WindowInteropHelper(paper).Handle == IntPtr.Zero,
+            "Association drag required the hidden desktop window instead of its visible handle");
+        typeof(PaperWindow).GetMethod("EndTopBarDragGesture", Private)!.Invoke(paper, [false]);
+
+        // A user-dragged rectangle is relative to its old target. Reopening in
+        // either presentation must start from that presentation's default position.
+        popup.PlacementRectangle = new Rect(80, 60, 0, 0);
+        host.ReturnToPaper();
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        typeof(PaperWindow).GetMethod("ShowBuiltInFind", Private)!.Invoke(paper, null);
+        Check(popup.PlacementRectangle.IsEmpty && ReferenceEquals(popup.PlacementTarget, Member(paper, "_paperChrome")),
+            "Find retained a Studio drag rectangle after returning to the desktop");
+        popup.PlacementRectangle = new Rect(40, 30, 0, 0);
+        controller.OpenExpandedEditorFor(paper);
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        typeof(PaperWindow).GetMethod("ShowBuiltInFind", Private)!.Invoke(paper, null);
+        Check(popup.PlacementRectangle.IsEmpty && ReferenceEquals(popup.PlacementTarget, shell),
+            "Find retained a desktop drag rectangle after opening Studio");
     }
 
     private static void SetGlobalPaperLock(AppController controller, bool locked)
