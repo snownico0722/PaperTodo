@@ -165,7 +165,7 @@ public sealed partial class AppController
 
     private sealed record NativeQueueGroup(string Key, List<PaperData> Papers, EdgeFreeQueueBox Box, MonitorGeometry Geometry);
 
-    private List<NativeQueueGroup> NativeQueueGroups(EdgeCapsuleQueuePlan? plan = null)
+    private List<NativeQueueGroup> NativeQueueGroups(EdgeCapsuleQueuePlan? plan = null, bool measureWidths = true)
     {
         plan ??= BuildRestingEdgeQueuePlan();
         var groups = new List<NativeQueueGroup>();
@@ -180,11 +180,17 @@ public sealed partial class AppController
                 : EdgeCapsuleLayout.TopForIndex(0, DeepCapsuleStartTopMarginForQueueKey(queue.Key),
                     geometry.LocalWorkAreaDip, placement.SlotCount, DeepCapsuleGap) + placement.TopOffsetDip;
             var collapsed = queue.HasMaster && IsCapsuleCollapseAllActiveForQueue(queue.Key);
-            var width = collapsed
-                ? _masterCapsules.TryGetValue(queue.Key, out var master)
-                    ? master.DesiredDockedWidth : PaperLayoutDefaults.CapsuleWidth
-                : queue.Papers.Max(p => _windows.TryGetValue(p.Id, out var w)
-                    ? w.DeepCapsuleRestingVisibleWidth : 0);
+            // Floating hit testing uses monitor half and vertical slots. Only a
+            // docked pointer needs the widths of the target queues.
+            var width = 0.0;
+            if (measureWidths)
+            {
+                width = collapsed
+                    ? _masterCapsules.TryGetValue(queue.Key, out var master)
+                        ? master.DesiredDockedWidth : PaperLayoutDefaults.CapsuleWidth
+                    : queue.Papers.Max(p => _windows.TryGetValue(p.Id, out var w)
+                        ? w.DeepCapsuleRestingVisibleWidth : 0);
+            }
             groups.Add(new(queue.Key, queue.Papers.ToList(),
                 new(queue.Key, top, queue.Papers.Count, queue.HasMaster, width, collapsed), geometry));
         }
