@@ -27,7 +27,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           dotnet build -c Release tools/PaperTodo.MaterialBenchmarks
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          foreach ($suite in @("platform", "components")) {
+          foreach ($suite in @("live")) {
             $env:PAPER_RESIZE_SUITE = $suite
             dotnet run --no-build -c Release --project tools/PaperTodo.MaterialBenchmarks -- --drag-benchmark "$env:RUNNER_TEMP/resize-$suite.json"
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

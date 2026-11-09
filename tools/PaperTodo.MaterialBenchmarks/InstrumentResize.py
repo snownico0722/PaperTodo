@@ -59,3 +59,22 @@ replace(paper, """        if (msg == WmWindowPosChanged)
 replace("src/PaperChromeBorder.cs", """        NineSlicePaperShadow.Get(""", """        if (PaperWindow.ProbeSkipShadow) return;
         PaperWindow.ProbeShadowCalls++;
         NineSlicePaperShadow.Get(""")
+replace(paper, "    internal static bool ProbeWidthOnly,", """    internal static bool ProbeTopDiff;
+    internal System.Windows.Controls.Border? ProbeHeader => _topBarHost;
+    internal static bool ProbeWidthOnly,""")
+replace(paper, """            foreach (var button in _topBarActionButtonsHost.Children.OfType<Button>())
+                button.Visibility = Visibility.Collapsed;""", """            if (!ProbeTopDiff)
+                foreach (var button in _topBarActionButtonsHost.Children.OfType<Button>())
+                    button.Visibility = Visibility.Collapsed;""")
+replace(paper, """                foreach (var button in pinnedButtons)
+                    button.Visibility = Visibility.Visible;""", """                if (!ProbeTopDiff)
+                    foreach (var button in pinnedButtons)
+                        button.Visibility = Visibility.Visible;""")
+replace(paper, """            // Plugins cannot displace any built-in shortcut.""","""            if (ProbeTopDiff)
+                foreach (var candidate in _topBarActionButtonsHost.Children.OfType<Button>())
+                {
+                    var expected = groupFits && pinnedButtons.Contains(candidate)
+                        ? Visibility.Visible : Visibility.Collapsed;
+                    if (candidate.Visibility != expected) candidate.Visibility = expected;
+                }
+            // Plugins cannot displace any built-in shortcut.""")

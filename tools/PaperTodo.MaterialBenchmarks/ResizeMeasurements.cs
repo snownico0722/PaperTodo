@@ -38,13 +38,20 @@ internal static partial class MaterialDragBenchmarks
         {
             bool platform = Environment.GetEnvironmentVariable("PAPER_RESIZE_SUITE") == "platform";
             var kinds = platform ? new[] { "win32","wpf","matched","paper" } :
-                new[] { "paper","noEditor","noShadow","noEditorShadow","flat","noGeometry" };
+                new[] { "paper","observed","topDiff","noHeader","chromeOnly","flat" };
             var axes = platform ? new[] { "corner","fastCorner" } : new[] { "bottom","corner" };
             PaperWindow? shared = null;
             if (!platform)
             {
-                shared = new PaperWindow(paper,controller);
-                shared.Show(); shared.Activate(); Wait(400);
+                controller.State.McpEnabled = false;
+                controller.State.TelemetryEnabled = false;
+                controller.State.UsePersistentPowerShellProcess = false;
+                var startup = controller.StartAsync(createDefaultPaper: false);
+                while (!startup.IsCompleted) Wait(16);
+                startup.GetAwaiter().GetResult();
+                shared = Application.Current.Windows.OfType<PaperWindow>().Single(x => x.PaperId == paper.Id);
+                shared.Activate(); Wait(500);
+                Console.WriteLine($"BOOTED actual={shared.IsVisible} layered={shared.AllowsTransparency}");
             }
             try
             {
@@ -180,6 +187,12 @@ internal static partial class MaterialDragBenchmarks
         var parent=(System.Windows.Controls.Panel)editor.Parent;
         var index=parent.Children.IndexOf(editor);
         var body=w.Content;
+        var child=chrome.Child;
+        var header=w.ProbeHeader!;
+        var originalHeader=header.Visibility;
+        PaperWindow.ProbeTopDiff=kind=="topDiff";
+        if(kind=="noHeader") header.Visibility=Visibility.Collapsed;
+        if(kind=="chromeOnly") chrome.Child=null;
         var detach=kind is "noEditor" or "noEditorShadow";
         if(detach) parent.Children.RemoveAt(index);
         PaperWindow.ProbeSkipShadow=kind is "noShadow" or "noEditorShadow";
@@ -187,6 +200,9 @@ internal static partial class MaterialDragBenchmarks
         if(kind=="flat") w.Content=EmptySurface();
         chrome.InvalidateVisual();
         return () => {
+            PaperWindow.ProbeTopDiff=false;
+            if(kind=="noHeader") header.Visibility=originalHeader;
+            if(kind=="chromeOnly") chrome.Child=child;
             PaperWindow.ProbeSkipShadow=false; PaperWindow.ProbeSkipGeometry=false;
             if(kind=="flat") w.Content=body;
             if(detach) parent.Children.Insert(index,editor);
@@ -241,6 +257,9 @@ internal static partial class MaterialDragBenchmarks
             previousRender = time;
         };
         EventHandler updated = (_, _) => layout++;
+        double nativeWorkMs=0;
+        var nativeSamples=0;
+        int nest=0;
         SubclassCallback hook = (h, msg, wp, lp, id, data) => {
             if (msg == 0x214) sizingMessages++;
             if (msg == 0x231) enter++;
@@ -251,10 +270,14 @@ internal static partial class MaterialDragBenchmarks
                 excursionX = Math.Max(excursionX, Math.Abs(r.Right-r.Left-width));
                 excursionY = Math.Max(excursionY, Math.Abs(r.Bottom-r.Top-height));
             }
-            return DefSubclassProc(h,msg,wp,lp);
+            if (msg != 0x47 && msg != 5) return DefSubclassProc(h,msg,wp,lp);
+            var stamp = Stopwatch.GetTimestamp();
+            nest++;
+            try { return DefSubclassProc(h,msg,wp,lp); }
+            finally { if (--nest==0) { nativeWorkMs += Stopwatch.GetElapsedTime(stamp).TotalMilliseconds; nativeSamples++; } }
         };
         Program.Assert(SetWindowSubclass(hwnd,hook,(UIntPtr)41,UIntPtr.Zero),"observe window messages");
-        if (!platform) { w!.LayoutUpdated += updated; CompositionTarget.Rendering += rendering; }
+        if (note == "observed") { w!.LayoutUpdated += updated; CompositionTarget.Rendering += rendering; }
         PaperWindow.ProbeCalls = PaperWindow.ProbeTicks = 0;
         var cpu = Process.GetCurrentProcess().TotalProcessorTime;
         var uiBefore=UiTime();
@@ -305,12 +328,12 @@ internal static partial class MaterialDragBenchmarks
             var sizeGaps = sizes.Zip(sizes.Skip(1), (a,b) => b-a).ToArray();
             var inputGaps = inputs.Zip(inputs.Skip(1), (a,b) => b-a).ToArray();
             double Q(double[] a, double q) => Math.Round(Percentile(a,q), 2);
-            return new { mode, note, axis, platform, round, nSize=sizes.Count, nRender=r.Length, enter, leave, sizingMessages, held, mouseX, mouseY, layout,
+            return new { mode, note, axis, platform, round, nativeWorkMs, nativeSamples, nSize=sizes.Count, nRender=r.Length, enter, leave, sizingMessages, held, mouseX, mouseY, layout,
                 inputP50=Q(inputGaps,.5), sizeP95=Q(sizeGaps,.95), frameP50=Q(frameGaps,.5), frameP95=Q(frameGaps,.95),
                 slow25=frameGaps.Count(t=>t>25), slowPercent=Math.Round(100d * frameGaps.Count(t=>t>25)/Math.Max(frameGaps.Length,1),1),
                 trackP95=Q(trackingError.ToArray(),.95), duration=inputs[^1]-inputs[0], topCalls=PaperWindow.ProbeCalls,
                 uiMs=(UiTime()-uiBefore)/10000d, geomMs=PaperWindow.ProbeGeometryTicks*1000d/Stopwatch.Frequency, snapMs=PaperWindow.ProbeSnapTicks*1000d/Stopwatch.Frequency, shadowDraws=PaperWindow.ProbeShadowCalls, topMs=Math.Round(PaperWindow.ProbeTicks*1000d/Stopwatch.Frequency,3), cpuMs=Math.Round(cpuMs,2) };
         }
-        finally { RemoveWindowSubclass(hwnd,hook,(UIntPtr)41); if (!platform) { w!.LayoutUpdated -= updated; CompositionTarget.Rendering -= rendering; } GC.KeepAlive(hook); }
+        finally { RemoveWindowSubclass(hwnd,hook,(UIntPtr)41); if (note == "observed") { w!.LayoutUpdated -= updated; CompositionTarget.Rendering -= rendering; } GC.KeepAlive(hook); }
     }
 }
