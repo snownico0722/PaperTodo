@@ -172,7 +172,7 @@ Open the `···` menu (or paper context menu) on a todo paper or built-in Markd
 | Current paper → HTML | An `.html` file with note images embedded, viewable in a browser |
 | All papers → Markdown / HTML | A ZIP archive containing all todos and built-in Markdown notes in the **current workspace** |
 
-Todo exports preserve item order, completion states, and multiline text while omitting empty placeholder rows. Plugin bodies are excluded. Export runs in the background without blocking editing; check the completion summary for missing-image placeholders or warnings.
+Todo exports preserve item order, completion states, and multiline text while omitting empty placeholder rows. Plugin bodies are excluded. You can keep editing during export or select **Cancel** in the progress window. Workspace switching becomes available again when all exports finish or cancel. The completion summary reports any missing images, which appear as text placeholders in the exported file.
 
 Export is for reading, sharing, or moving text to another editor—it is not a full data backup. To back up or migrate workspaces, settings, and plugin data, follow [Chapter 10](#10-data-backup-migration-and-recovery).
 

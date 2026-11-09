@@ -731,10 +731,12 @@ public sealed partial class AppController
                             menu.Focus();
                         }
                     }
-                    else if (existing.Contains(target) && target != WorkspaceNumber)
+                    else if (!IsPaperExportActive && existing.Contains(target) && target != WorkspaceNumber)
                         ShowConfirmation(target);
                 });
             var tiles = ((Grid)selector.Child).Children.OfType<Border>().ToArray();
+            if (IsPaperExportActive)
+                foreach (var tile in tiles.Take(existing.Count)) tile.IsEnabled = false;
             if (firstEmpty != 0)
             {
                 var tile = tiles[^1];

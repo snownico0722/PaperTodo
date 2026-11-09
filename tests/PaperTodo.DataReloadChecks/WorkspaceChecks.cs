@@ -1011,6 +1011,30 @@ internal static partial class Program
             Require(controller.PaperCommands.GetDataReloadStatus().LastResult != null,
                 "fixture did not establish a previous-workspace reload result");
             var oldWindow = windows["note-a"];
+            using (var cancellation = new CancellationTokenSource())
+            {
+                var dialog = new PaperExportProgressWindow(oldWindow, "Export", 3, cancellation);
+                dialog.Show();
+                dialog.Report(1);
+                var panel = (StackPanel)dialog.Content;
+                var bar = panel.Children.OfType<ProgressBar>().Single();
+                Require(bar.Value == 1 && bar.Maximum == 3, "batch export progress did not advance");
+                dialog.Close();
+                Require(cancellation.IsCancellationRequested && dialog.IsVisible &&
+                        !panel.Children.OfType<Button>().Single().IsEnabled,
+                    "closing the export dialog must request cancellation and wait for cleanup");
+                dialog.Finish();
+                Require(!dialog.IsVisible, "export dialog stayed visible after cleanup");
+            }
+            controller.SetPaperExportActive(true);
+            controller.SetPaperExportActive(true);
+            Require(!await controller.SwitchWorkspaceAsync(2) && controller.WorkspaceNumber == 1,
+                "export must keep its source workspace active");
+            controller.SetPaperExportActive(false);
+            Require(!await controller.SwitchWorkspaceAsync(2) && controller.WorkspaceNumber == 1,
+                "another export still holds the workspace");
+            controller.SetPaperExportActive(false);
+            Require(!controller.IsPaperExportActive, "last export did not release the workspace");
             var oldStore = Field<StateStore>(controller, "_store");
             var draft = $"saved draft\n![image](i:{imageId})";
             var editor = Field<MarkdownTextBox>(oldWindow, "_noteBox");

@@ -27,18 +27,23 @@ internal static class NoteHtmlExport
     }
 
     internal static void Write(TextWriter writer, string noteId, string title, string content,
-        NoteImageStore images, string missingImageLabel, ISet<string> missingImages)
+        NoteImageStore images, string missingImageLabel, ISet<string> missingImages,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var pipeline = new MarkdownPipelineBuilder()
             .DisableHtml()
             .UsePreciseSourceLocation()
             .UseEmphasisExtras(EmphasisExtraOptions.Strikethrough)
             .UseTaskLists()
             .Build();
-        var exportContent = PrepareMarkdownForExport(content, out var imageWidths);
+        var exportContent = PrepareMarkdownForExport(content, out var imageWidths, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
         var document = Markdown.Parse(exportContent, pipeline);
+        cancellationToken.ThrowIfCancellationRequested();
         foreach (var link in document.Descendants<LinkInline>())
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (!link.IsImage &&
                 !(link.Url?.StartsWith('#') == true ||
                   Uri.TryCreate(link.Url, UriKind.Absolute, out var uri) &&
@@ -55,18 +60,20 @@ internal static class NoteHtmlExport
         var renderer = new HtmlRenderer(writer);
         pipeline.Setup(renderer);
         renderer.ObjectRenderers.Replace<LinkInlineRenderer>(
-            new StreamingImageRenderer(noteId, images, missingImageLabel, missingImages, imageWidths));
+            new StreamingImageRenderer(noteId, images, missingImageLabel, missingImages, imageWidths, cancellationToken));
         renderer.Render(document);
         writer.Write("</body></html>");
     }
 
     private sealed class StreamingImageRenderer(
         string noteId, NoteImageStore images, string missingLabel,
-        ISet<string> missing, IReadOnlyDictionary<int, MarkdownImageDisplayOptions> widths)
+        ISet<string> missing, IReadOnlyDictionary<int, MarkdownImageDisplayOptions> widths,
+        CancellationToken cancellationToken)
         : LinkInlineRenderer
     {
         protected override void Write(HtmlRenderer renderer, LinkInline link)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (!link.IsImage)
             {
                 base.Write(renderer, link);
@@ -98,7 +105,7 @@ internal static class NoteHtmlExport
             renderer.Write("<img src=\"data:");
             renderer.Write(asset.Mime);
             renderer.Write(";base64,");
-            WriteBase64(renderer.Writer, bytes);
+            WriteBase64(renderer.Writer, bytes, cancellationToken);
             renderer.Write('"');
             renderer.WriteAttributes(link);
             renderer.Write(" alt=\"");
@@ -115,7 +122,7 @@ internal static class NoteHtmlExport
             renderer.Write(" />");
         }
 
-        private static void WriteBase64(TextWriter writer, ReadOnlySpan<byte> bytes)
+        private static void WriteBase64(TextWriter writer, ReadOnlySpan<byte> bytes, CancellationToken cancellationToken)
         {
             const int inputChunk = 24 * 1024; // Multiple of 3: no padding between chunks.
             var chars = ArrayPool<char>.Shared.Rent(inputChunk / 3 * 4);
@@ -123,6 +130,7 @@ internal static class NoteHtmlExport
             {
                 for (var offset = 0; offset < bytes.Length; offset += inputChunk)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     var length = Math.Min(inputChunk, bytes.Length - offset);
                     if (!Convert.TryToBase64Chars(bytes.Slice(offset, length), chars, out var written))
                         throw new InvalidDataException("Could not encode an exported image.");
@@ -139,16 +147,15 @@ internal static class NoteHtmlExport
     // PaperTodo's standalone image lines carry size syntax that standard Markdown
     // would otherwise render as trailing text.
     private static string PrepareMarkdownForExport(
-        string markdown, out Dictionary<int, MarkdownImageDisplayOptions> widths)
+        string markdown, out Dictionary<int, MarkdownImageDisplayOptions> widths, CancellationToken cancellationToken)
     {
         widths = new Dictionary<int, MarkdownImageDisplayOptions>();
-        var references = MarkdownImageReferences.Enumerate(markdown).ToArray();
-        if (references.Length == 0) return markdown;
 
-        var builder = new StringBuilder(markdown.Length);
+        var builder = new StringBuilder();
         var cursor = 0;
-        foreach (var reference in references)
+        foreach (var reference in MarkdownImageReferences.Enumerate(markdown))
         {
+            cancellationToken.ThrowIfCancellationRequested();
             builder.Append(markdown, cursor, reference.LineStart - cursor);
             var line = markdown.AsSpan(reference.LineStart, reference.LineLength);
             var indentation = 0;
@@ -160,6 +167,7 @@ internal static class NoteHtmlExport
                 .Append(reference.ImageId).Append(')');
             cursor = reference.LineStart + reference.LineLength;
         }
+        if (cursor == 0) return markdown;
         builder.Append(markdown, cursor, markdown.Length - cursor);
         return builder.ToString();
     }
