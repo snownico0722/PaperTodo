@@ -1,4 +1,5 @@
 using System.IO;
+using System.Text;
 using System.Text.Json;
 using PaperTodo;
 
@@ -119,6 +120,20 @@ static void CorruptPrimaryNeverRefreshesBackup()
     File.WriteAllBytes(store.FilePath, Enumerable.Repeat((byte)0, 4096).ToArray());
     Assert(!store.TryRefreshBackupFromPrimary(), "corrupt primary was accepted for backup refresh");
     Assert(ReadTheme(store.BackupPath) == "light", "healthy backup changed after corrupt primary");
+
+    // Keep all supported BOMs readable, but reject a bad text byte even inside a JSON string.
+    const string healthy = """{"theme":"dark","papers":[{"id":"note","content":"原文"}]}""";
+    foreach (var encoding in new[] { Encoding.UTF8, Encoding.Unicode, Encoding.BigEndianUnicode,
+                 Encoding.UTF32, new UTF32Encoding(bigEndian: true, byteOrderMark: true) })
+    {
+        File.WriteAllBytes(store.FilePath, [.. encoding.GetPreamble(), .. encoding.GetBytes(healthy)]);
+        Assert(store.Load().Papers.Single().Content == "原文", "cannot read " + encoding.WebName);
+    }
+    var damaged = Encoding.UTF8.GetBytes(healthy);
+    damaged[Array.IndexOf(damaged, (byte)0xe5)] = 0xff;
+    File.WriteAllBytes(store.FilePath, damaged);
+    Assert(!store.TryRefreshBackupFromPrimary() && store.Load().Theme == "light" &&
+        store.NeedsStartupRecoverySave, "malformed text displaced the healthy backup");
 }
 
 static void OlderSaveVersionCannotOverwriteNewer()
@@ -328,7 +343,12 @@ static void ReplaceRetriesTransientSharingFailures()
         ReplaceFailuresRemaining = 2
     };
     var writer = new DurableAtomicFileWriter(fileOperations: operations);
-    writer.Write(target, "new"u8.ToArray());
+    var guardedChecks = 0;
+    writer.Write(target, "new"u8.ToArray(), beforeReplace: () =>
+    {
+        if (Monitor.IsEntered(DurableAtomicFileWriter.SnapshotReadReplaceGate)) guardedChecks++;
+    });
+    Assert(guardedChecks == operations.ReplaceCalls, "a replacement was not revalidated inside the snapshot gate");
 
     Assert(File.ReadAllText(target) == "new", "transient replace failures did not eventually commit");
     Assert(operations.ReplaceCalls == 3, $"expected 3 replace attempts, got {operations.ReplaceCalls}");
