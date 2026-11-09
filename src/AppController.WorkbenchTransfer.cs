@@ -32,6 +32,10 @@ public sealed partial class AppController
         var sourceWindow = GetOrCreatePaperWindow(source);
         sourceWindow.PrepareWorkbenchContentTransfer();
         PrepareExternalPaperOperation(source);
+        // Pending user events can synchronously delete the source or change workspaces.
+        // Revalidate after those callbacks, before creating a target or changing either side.
+        if (!CanTransferWorkbenchContent(payload, targetPaperId) || sourceWindow.IsClosed ||
+            !ReferenceEquals(FindPaper(source.Id), source)) return false;
         var layoutBefore = WorkbenchLayout.Copy();
         using var suppress = SuppressPaperPluginEventScans();
         var created = targetPaperId == null;
@@ -194,6 +198,14 @@ public sealed partial class AppController
             : _workbenchContentTransfers.LastOrDefault(entry => IsCurrentWorkbenchTransfer(entry) && entry.Applied != redo);
         if (transaction == null) return false;
         if (transaction.Applied == redo) return true;
+        transaction.SourceWindow.PrepareWorkbenchContentTransfer();
+        transaction.TargetWindow.PrepareWorkbenchContentTransfer();
+        PrepareExternalPaperOperation(transaction.Source);
+        PrepareExternalPaperOperation(transaction.Target);
+        // Event handlers may replace/delete either peer and retire its shared history.
+        // Only the state after those callbacks can authorize replaying both snapshots.
+        if (IsExiting || IsDataReloading || !IsCurrentWorkbenchTransfer(transaction) ||
+            !_workbenchContentTransfers.Contains(transaction)) return false;
         if (!ReferenceEquals(FindPaper(transaction.Source.Id), transaction.Source) ||
             (!transaction.CreatedTarget || !redo) && !ReferenceEquals(FindPaper(transaction.Target.Id), transaction.Target)) return false;
         var sourceExpected = redo ? transaction.SourceBefore : transaction.SourceAfter;
@@ -209,10 +221,6 @@ public sealed partial class AppController
              WorkbenchLayout.Connections.Any(connection => connection.From == transaction.Target.Id || connection.To == transaction.Target.Id))) return false;
         if (transaction.CreatedTarget && redo && (State.Papers.Count >= 200 || FindPaper(transaction.Target.Id) != null)) return false;
 
-        transaction.SourceWindow.PrepareWorkbenchContentTransfer();
-        transaction.TargetWindow.PrepareWorkbenchContentTransfer();
-        PrepareExternalPaperOperation(transaction.Source);
-        PrepareExternalPaperOperation(transaction.Target);
         PreserveWorkbenchTriggeredReminders(transaction);
         var layoutBefore = WorkbenchLayout.Copy();
         var sourceItemModels = transaction.Source.Items;

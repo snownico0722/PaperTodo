@@ -180,6 +180,20 @@ internal static partial class WorkbenchChecks
                 "Workbench search shortcuts have the wrong modifiers");
             search.Clear();
 
+            // Whole-row deletion must follow the borrowed body's focus, including
+            // a Todo whose desktop window has never been shown.
+            var todoWindow = controller.WorkbenchPaperWindow("todo-a");
+            var todo = controller.FindPaper("todo-a")!;
+            workbench.Activate();
+            typeof(PaperWindow).GetMethod("FocusTodoSweepSelectionHost", Private)!.Invoke(todoWindow, null);
+            typeof(PaperWindow).GetMethod("SelectTodoRange", Private)!.Invoke(todoWindow, ["task-1", "task-2"]);
+            LifecycleInput.KeyChord([0x08]);
+            await Until(() => todo.Items.Count == 1 && TodoRules.IsPlaceholder(todo.Items[0]),
+                "Canvas Backspace did not delete the selected rows");
+            LifecycleInput.KeyChord([0x11, 0x5A]);
+            await Until(() => todo.Items.Select(item => item.Id).SequenceEqual(["task-1", "task-2"]),
+                "One undo did not restore the Canvas row selection deletion");
+
             // A large document and a Todo item after the twelfth preview entry are searchable.
             const string needle = "deep-search-target";
             var searchState = new AppState { Papers =

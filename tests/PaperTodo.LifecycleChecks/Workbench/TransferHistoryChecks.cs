@@ -198,6 +198,78 @@ internal static partial class WorkbenchChecks
                controller.State.Papers.All(p => p.Id != split.Id),
             "Retiring an undone split retained its unreachable redo window or recreated the paper");
 
+        // Flushing the user's undo can synchronously deliver a public plugin event.
+        // Its committed write must supersede the shared boundary checked by the outer undo.
+        var callbackSource = NewNote("callback source");
+        var callbackTarget = NewNote("callback target");
+        var callbackWindow = controller.WorkbenchPaperWindow(callbackSource.Paper.Id);
+        callbackSource.Box.Select(0, 8);
+        Assert(callbackWindow.TryCreateWorkbenchContentTransfer(out var callbackPayload) &&
+               controller.TransferWorkbenchContent(callbackPayload, callbackTarget.Paper.Id),
+            "Cannot prepare a transfer for the plugin callback check");
+        var callbackMove = controller.LastWorkbenchContentTransferId;
+        var callbackSourceAfter = callbackSource.Box.Text;
+        callbackSource.Box.Document.Insert(callbackSource.Box.Document.TextLength, " later");
+        controller.SaveNow(sync: true);
+        callbackSource.Box.Document.UndoStack.Undo();
+        Assert(callbackSource.Box.Text == callbackSourceAfter && callbackWindow.HasPendingMarkdownContentForSave,
+            "Native undo did not leave a pending edit at the shared transfer boundary");
+
+        using var api = new PaperPluginRuntimeWorkspaceApi(controller, "transfer-observer",
+            [PaperTodoPermissionNames.NotesRead, PaperTodoPermissionNames.NotesReplace,
+             PaperTodoPermissionNames.PapersDelete], () => true);
+        var callbackWrites = 0;
+        const string callbackContent = "Written by the synchronous plugin callback";
+        using (api.Subscribe(new()
+        {
+            Kinds = new HashSet<PaperTodoEventKind> { PaperTodoEventKind.NoteChanged },
+            PaperIds = new HashSet<string> { callbackSource.Paper.Id }
+        }, _ =>
+        {
+            api.WriteNote(new()
+            { PaperId = callbackTarget.Paper.Id, Content = callbackContent, Mode = NoteWriteMode.Replace });
+            callbackWrites++;
+        }))
+        {
+            Assert(!controller.TryUndoWorkbenchContentTransfer(callbackMove),
+                "Shared undo continued after its preparation callback replaced a peer");
+        }
+        var callbackDisk = StateStore.ReadWorkbenchOverview(store.FilePath)!;
+        Assert(callbackWrites == 1 && callbackSource.Box.Text == callbackSourceAfter &&
+               callbackTarget.Box.Text == callbackContent && callbackTarget.Paper.Content == callbackContent &&
+               callbackDisk.Papers.Single(p => p.Id == callbackSource.Paper.Id).Content == callbackSourceAfter &&
+               callbackDisk.Papers.Single(p => p.Id == callbackTarget.Paper.Id).Content == callbackContent &&
+               !controller.TryHandleWorkbenchContentHistory(callbackSource.Paper.Id, redo: false),
+            "Shared undo overwrote the callback's committed text or retained a retired boundary");
+
+        // The same preparation boundary precedes a first split. A callback deleting
+        // its source must not create a target from the now-detached paper object.
+        var deletedSource = NewNote("delete before split");
+        var deletedWindow = controller.WorkbenchPaperWindow(deletedSource.Paper.Id);
+        var papersBeforeCallback = controller.State.Papers.Select(p => p.Id).ToHashSet();
+        var callbackDeletes = 0;
+        using (api.Subscribe(new()
+        {
+            Kinds = new HashSet<PaperTodoEventKind> { PaperTodoEventKind.NoteChanged },
+            PaperIds = new HashSet<string> { deletedSource.Paper.Id }
+        }, _ =>
+        {
+            api.DeletePaper(deletedSource.Paper.Id);
+            callbackDeletes++;
+        }))
+        {
+            deletedSource.Box.Document.Insert(deletedSource.Box.Document.TextLength, " pending");
+            deletedSource.Box.Select(0, 6);
+            Assert(deletedWindow.TryCreateWorkbenchContentTransfer(out var deletedPayload) &&
+                   !controller.TransferWorkbenchContent(deletedPayload, null),
+                "A split continued after its preparation callback deleted the source");
+        }
+        papersBeforeCallback.Remove(deletedSource.Paper.Id);
+        Assert(callbackDeletes == 1 && deletedWindow.IsClosed &&
+               papersBeforeCallback.SetEquals(controller.State.Papers.Select(p => p.Id)) &&
+               papersBeforeCallback.SetEquals(StateStore.ReadWorkbenchOverview(store.FilePath)!.Papers.Select(p => p.Id)),
+            "A rejected split recreated callback-deleted content or left an extra target");
+
         (PaperData Paper, MarkdownTextBox Box) NewNote(string content)
         {
             var paper = controller.CreatePaper(PaperTypes.Note, show: false)!;
