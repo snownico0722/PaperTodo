@@ -9,7 +9,6 @@ internal static class StateReloadModels
 {
     private static readonly PropertyInfo[] AppProperties = Properties<AppState>(nameof(AppState.Papers));
     private static readonly PropertyInfo[] PaperProperties = Properties<PaperData>(nameof(PaperData.Items));
-    private static readonly PropertyInfo[] ItemProperties = Properties<PaperItem>();
 
     private static PropertyInfo[] Properties<T>(params string[] excluded) => typeof(T)
         .GetProperties(BindingFlags.Instance | BindingFlags.Public)
@@ -35,10 +34,7 @@ internal static class StateReloadModels
                 {
                     if (!items.TryGetValue(item.Id, out var live)) live = item;
                     else
-                    {
-                        Copy(ItemProperties, item, live);
-                        live.RestoreQuickLaunch(item.LinkedPaperId, item.LinkedPath, item.LinkedPathIsDirectory);
-                    }
+                        TodoRules.CopyValues(item, live);
                     ordered.Add(live);
                 }
                 target.Items.Clear();

@@ -1691,31 +1691,32 @@ public sealed partial class AppController
 
     private void RestoreVisualSettingsPageDefaults()
     {
+        var defaults = new AppState();
         TryResetPaperBackgroundPreferences();
         // Theme lives on the visual page with color scheme / fonts.
-        State.Theme = "system";
-        State.ColorScheme = ColorSchemes.Warm;
-        State.PaperSkin = PaperSkins.Paper;
-        State.MicaBackdropType = MicaBackdropTypes.Mica;
-        State.MicaAlwaysActive = false;
-        State.MaterialTransparency = MaterialTransparencyLevels.Medium;
-        State.HideSurfaceOutline = false;
-        State.EnableToolTips = true;
-        State.EnableAnimations = true;
-        State.FastAnimations = false;
-        State.UiFontPreset = UiFontPresets.Default;
-        State.TextRenderingProfile = TextRenderingProfiles.Standard;
-        State.CustomFontEnhancedBold = false;
-        State.Zoom = 1.0;
-        State.NoteTextSize = VisualTextSizes.Medium;
-        State.NoteTextBold = false;
-        State.TodoVisualSize = TodoVisualSizes.Medium;
-        State.TodoTextBold = false;
-        State.TitleTextSize = VisualTextSizes.Medium;
-        State.TitleTextBold = true;
-        State.CapsuleTextSize = VisualTextSizes.Medium;
-        State.CapsuleTextBold = false;
-        State.DeepCapsuleGapSize = DeepCapsuleGapSizes.Standard;
+        State.Theme = defaults.Theme;
+        State.ColorScheme = defaults.ColorScheme;
+        State.PaperSkin = PaperSkins.Resolve(defaults);
+        State.MicaBackdropType = defaults.MicaBackdropType;
+        State.MicaAlwaysActive = defaults.MicaAlwaysActive;
+        State.MaterialTransparency = defaults.MaterialTransparency;
+        State.HideSurfaceOutline = defaults.HideSurfaceOutline;
+        State.EnableToolTips = defaults.EnableToolTips;
+        State.EnableAnimations = defaults.EnableAnimations;
+        State.FastAnimations = defaults.FastAnimations;
+        State.UiFontPreset = defaults.UiFontPreset;
+        State.TextRenderingProfile = defaults.TextRenderingProfile;
+        State.CustomFontEnhancedBold = defaults.CustomFontEnhancedBold;
+        State.Zoom = defaults.Zoom;
+        State.NoteTextSize = defaults.NoteTextSize;
+        State.NoteTextBold = defaults.NoteTextBold;
+        State.TodoVisualSize = defaults.TodoVisualSize;
+        State.TodoTextBold = defaults.TodoTextBold;
+        State.TitleTextSize = defaults.TitleTextSize;
+        State.TitleTextBold = defaults.TitleTextBold;
+        State.CapsuleTextSize = defaults.CapsuleTextSize;
+        State.CapsuleTextBold = defaults.CapsuleTextBold;
+        State.DeepCapsuleGapSize = defaults.DeepCapsuleGapSize;
 
         AppTypography.Configure(
             State.UiFontPreset,
