@@ -17,8 +17,6 @@ namespace PaperTodo;
 
 public sealed partial class MarkdownTextBox : TextEditor
 {
-    private const int MaxSafePasteLength = 30000;
-    private const int MaxSafePasteLineLength = 6000;
     private const int MaxClipboardEncodedImageBytes = 32 * 1024 * 1024;
     private const double ImageBlockVerticalPadding = 7;
     private const double ImageBlockHorizontalPadding = 2;
@@ -82,8 +80,6 @@ public sealed partial class MarkdownTextBox : TextEditor
         SizeChanged += (_, _) => HandleImageViewportSizeChanged();
         RefreshVisualStyle();
     }
-
-    public int MaxLength { get; set; }
 
     public bool AcceptsReturn
     {
@@ -1183,17 +1179,6 @@ public sealed partial class MarkdownTextBox : TextEditor
         return target.Start + replacement.Length;
     }
 
-    private void EnsureImageInsertionFits(string candidateText, int imageCount)
-    {
-        if (MaxLength <= 0 || candidateText.Length <= TextLengthLimitFor(candidateText))
-        {
-            return;
-        }
-
-        throw new InvalidOperationException(
-            $"Cannot insert {imageCount} image reference(s): the note's {MaxLength:N0}-character limit would be exceeded.");
-    }
-
     private static string BuildImageReferenceBlock(
         int imageCount,
         Func<int, string> createReference)
@@ -1232,55 +1217,6 @@ public sealed partial class MarkdownTextBox : TextEditor
 
     private static string ReplaceRange(string text, int start, int length, string replacement)
         => string.Concat(text.AsSpan(0, start), replacement, text.AsSpan(start + length));
-
-    private int CurrentTextLengthLimit()
-    {
-        return TextLengthLimitFor(Text);
-    }
-
-    private int TextLengthLimitFor(string text)
-    {
-        if (MaxLength <= 0 || text.Length <= 0)
-        {
-            return MaxLength;
-        }
-
-        var structuralDelimiterLength = TrailingImageReferenceDelimiterLength(text);
-        return MaxLength > int.MaxValue - structuralDelimiterLength
-            ? int.MaxValue
-            : MaxLength + structuralDelimiterLength;
-    }
-
-    private static int TrailingImageReferenceDelimiterLength(string text)
-    {
-        var delimiterStart = text.Length;
-        if (delimiterStart > 0 && text[delimiterStart - 1] == '\n')
-        {
-            delimiterStart--;
-            if (delimiterStart > 0 && text[delimiterStart - 1] == '\r')
-            {
-                delimiterStart--;
-            }
-        }
-        else if (delimiterStart > 0 && text[delimiterStart - 1] == '\r')
-        {
-            delimiterStart--;
-        }
-        else
-        {
-            return 0;
-        }
-
-        var lineStart = delimiterStart;
-        while (lineStart > 0 && text[lineStart - 1] is not '\r' and not '\n')
-        {
-            lineStart--;
-        }
-
-        return MarkdownImageReferences.TryParseReferenceLine(text[lineStart..delimiterStart], out _)
-            ? text.Length - delimiterStart
-            : 0;
-    }
 
     private readonly record struct DocumentReplacementTarget(
         TextDocument Document,
@@ -1376,40 +1312,6 @@ public sealed partial class MarkdownTextBox : TextEditor
         }
 
         base.OnPreviewTextInput(e);
-    }
-
-    private bool CanApplyTextReplacement(string replacement)
-    {
-        if (MaxLength <= 0)
-        {
-            return true;
-        }
-
-        var start = Math.Clamp(SelectionStart, 0, Text.Length);
-        var selectedLength = Math.Clamp(SelectionLength, 0, Text.Length - start);
-        var projectedLength = checked(Text.Length - selectedLength + replacement.Length);
-        if (projectedLength <= MaxLength)
-        {
-            return true;
-        }
-
-        // Never make an already-oversized legacy note larger, but always permit an edit that
-        // reduces or preserves its length. Most importantly, never "repair" it by deleting a
-        // different part of the document after the edit has happened.
-        if (Text.Length > CurrentTextLengthLimit() && projectedLength <= Text.Length)
-        {
-            return true;
-        }
-
-        // Only a trailing delimiter after an internal image reference may live just beyond the
-        // nominal limit. Build the exact candidate for that narrow boundary case.
-        if (projectedLength > MaxLength + Environment.NewLine.Length)
-        {
-            return false;
-        }
-
-        var candidate = ReplaceRange(Text, start, selectedLength, replacement);
-        return candidate.Length <= TextLengthLimitFor(candidate);
     }
 
     private string NewLineTextAtCaret()
@@ -1678,24 +1580,6 @@ public sealed partial class MarkdownTextBox : TextEditor
         return builder.ToString();
     }
 
-    private bool IsSafeImageReferencePaste(
-        string pasteText,
-        DocumentReplacementTarget replacementTarget)
-    {
-        if (pasteText.Length > MaxSafePasteLength ||
-            ContainsLineLongerThan(pasteText, MaxSafePasteLineLength))
-        {
-            return false;
-        }
-
-        var candidateText = ReplaceRange(
-            replacementTarget.OriginalText,
-            replacementTarget.Start,
-            replacementTarget.SelectionLength,
-            pasteText);
-        return MaxLength <= 0 || candidateText.Length <= TextLengthLimitFor(candidateText);
-    }
-
     private static string ExpandImageReferenceIdsForLengthPreflight(string markdown)
     {
         const string maximumImageId = "99999999";
@@ -1771,45 +1655,6 @@ public sealed partial class MarkdownTextBox : TextEditor
     private void EnsureVisualLines()
     {
         TextArea.TextView.EnsureVisualLines();
-    }
-
-    private bool TryBuildSafePasteText(string text, int selectedLength, out string pasteText)
-    {
-        pasteText = text;
-        if (text.Length > MaxSafePasteLength ||
-            ContainsLineLongerThan(text, MaxSafePasteLineLength))
-        {
-            return false;
-        }
-
-        var candidateLength = Text.Length - Math.Max(0, selectedLength) + text.Length;
-        return MaxLength <= 0 || candidateLength <= CurrentTextLengthLimit();
-    }
-
-    private static bool ContainsLineLongerThan(string text, int maxLength)
-    {
-        if (string.IsNullOrEmpty(text) || maxLength <= 0)
-        {
-            return false;
-        }
-
-        var lineLength = 0;
-        foreach (var c in text)
-        {
-            if (c is '\r' or '\n')
-            {
-                lineLength = 0;
-                continue;
-            }
-
-            lineLength++;
-            if (lineLength > maxLength)
-            {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     private void QueuePostPasteRefresh()
