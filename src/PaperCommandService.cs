@@ -718,7 +718,8 @@ internal sealed partial class PaperCommandService
         }
         var target = Math.Clamp(requestedOrder, 0, ordered.Count);
         ordered.Insert(target, item);
-        paper.Items = ordered;
+        paper.Items.Clear();
+        paper.Items.AddRange(ordered);
     }
 
     private static bool IsBlankPlaceholderPaper(PaperData paper) =>
