@@ -165,13 +165,8 @@ public sealed partial class AppController
         State.HideScriptRunWindow = defaults.HideScriptRunWindow;
         PublishSettingEffects(SettingEffects.Compress);
         PublishSettingEffects(SettingEffects.Scripts);
-        foreach (var window in _windows.Values)
-        {
-            window.UpdateMarkdownRenderMode();
-            window.UpdateImageReferenceTextMode();
-            window.UpdateMarkdownEditAnimation();
-            window.UpdateExternalMarkdownExtension();
-        }
+        RefreshWindowSettingEffects(SettingEffects.Markdown, SettingEffects.ImageReferences,
+            SettingEffects.MarkdownAnimations, SettingEffects.ExternalExtension);
 
         SaveNow();
         RebuildTrayMenu();
@@ -285,14 +280,11 @@ public sealed partial class AppController
         State.ExperimentalTodoReminderSoundEnabled = defaults.ExperimentalTodoReminderSoundEnabled;
         State.ExperimentalTodoReminderSound = defaults.ExperimentalTodoReminderSound;
 
-        foreach (var window in _windows.Values)
-        {
-            window.UpdateTodoLinkFeature();
-        }
+        RefreshWindowSettingEffects(SettingEffects.TodoLinks);
         RefreshCapsuleEligibilityForLinkedPapers();
         ArrangeDeepCapsules(animate: false);
         SaveNow();
-        RefreshTodoReminderFeature();
+        PublishSettingEffects(SettingEffects.Reminders);
         RefreshSettingsWindowContent();
     }
 }

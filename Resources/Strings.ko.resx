@@ -875,12 +875,6 @@ PaperTodo를 수동으로 다시 여세요. 문제가 반복되면 PC를 다시 
   <data name="LabsWindowTetherDetach" xml:space="preserve">
     <value>창 바인딩 해제</value>
   </data>
-  <data name="LabsEnableTetherVisibility" xml:space="preserve">
-    <value>대상이 숨겨지면 함께 접기</value>
-  </data>
-  <data name="TipLabsTetherVisibility" xml:space="preserve">
-    <value>대상이 최소화되거나 숨겨지면 바인딩된 메모를 임시로 숨기거나 별도 캡슐로 바꿉니다. 대상을 복원하거나 활성화하면 메모 자체의 펼침, 캡슐 또는 표시 상태를 바꾸지 않고 다시 표시합니다.</value>
-  </data>
   <data name="ToolTipDragPaperToWindow" xml:space="preserve">
     <value>다른 앱 창으로 드래그해 바인딩</value>
   </data>
@@ -892,21 +886,6 @@ PaperTodo를 수동으로 다시 여세요. 문제가 반복되면 PC를 다시 
   </data>
   <data name="WindowBindingDropTargetFormat" xml:space="preserve">
     <value>놓으면 “{0}”에 바인딩</value>
-  </data>
-  <data name="LabsTetherMinimizedBehavior" xml:space="preserve">
-    <value>대상이 최소화될 때</value>
-  </data>
-  <data name="LabsTetherMinimizedHide" xml:space="preserve">
-    <value>메모 숨기기</value>
-  </data>
-  <data name="LabsTetherMinimizedCapsule" xml:space="preserve">
-    <value>캡슐 표시</value>
-  </data>
-  <data name="LabsTetherCapsuleLabelFormat" xml:space="preserve">
-    <value>바인딩 · {0}</value>
-  </data>
-  <data name="LabsTetherCapsuleTargetTipFormat" xml:space="preserve">
-    <value>클릭하여 “{0}” 복원 및 활성화</value>
   </data>
   <data name="LabsTodoReminders" xml:space="preserve">
     <value>할 일 알림</value>

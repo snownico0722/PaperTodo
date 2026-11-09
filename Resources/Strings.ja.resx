@@ -875,12 +875,6 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
   <data name="LabsWindowTetherDetach" xml:space="preserve">
     <value>ウィンドウ連携を解除</value>
   </data>
-  <data name="LabsEnableTetherVisibility" xml:space="preserve">
-    <value>対象が非表示のとき収納する</value>
-  </data>
-  <data name="TipLabsTetherVisibility" xml:space="preserve">
-    <value>対象が最小化または非表示になると、連携した付箋を一時的に隠すか、独立したカプセルに置き換えます。対象を復元またはアクティブにすると、付箋自体の展開、カプセル、表示状態を変えずに再表示します。</value>
-  </data>
   <data name="ToolTipDragPaperToWindow" xml:space="preserve">
     <value>別のアプリのウィンドウへドラッグして連携</value>
   </data>
@@ -892,21 +886,6 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
   </data>
   <data name="WindowBindingDropTargetFormat" xml:space="preserve">
     <value>離すと「{0}」に連携</value>
-  </data>
-  <data name="LabsTetherMinimizedBehavior" xml:space="preserve">
-    <value>対象が最小化されたとき</value>
-  </data>
-  <data name="LabsTetherMinimizedHide" xml:space="preserve">
-    <value>付箋を隠す</value>
-  </data>
-  <data name="LabsTetherMinimizedCapsule" xml:space="preserve">
-    <value>カプセルを表示</value>
-  </data>
-  <data name="LabsTetherCapsuleLabelFormat" xml:space="preserve">
-    <value>連携 · {0}</value>
-  </data>
-  <data name="LabsTetherCapsuleTargetTipFormat" xml:space="preserve">
-    <value>クリックして「{0}」を復元してアクティブにします</value>
   </data>
   <data name="LabsTodoReminders" xml:space="preserve">
     <value>ToDo リマインダー</value>

@@ -159,16 +159,11 @@ public sealed partial class AppController
 
     private Button PluginPageButton(string text)
     {
-        return new Button
-        {
-            Content = text,
-            MinWidth = 72,
-            Padding = new Thickness(10, 4, 10, 4),
-            Style = BuildDialogButtonStyle(),
-            FontFamily = AppTypography.UiFontFamily,
-            FontSize = AppTypography.Scale(11.5),
-            Focusable = false
-        };
+        var button = PaperNoticeDialog.CreateButton(text, primary: false, compact: true);
+        button.FontFamily = AppTypography.UiFontFamily;
+        button.FontSize = AppTypography.Scale(11.5);
+        button.Focusable = false;
+        return button;
     }
 
     private UIElement BuildPluginDescriptorCard(PaperBodyPluginDescriptor descriptor)

@@ -717,9 +717,6 @@ public sealed partial class StateStore
         state.ExperimentalWindowTetherGap =
             ExperimentalWindowTetherOptions.NormalizeGap(
                 state.ExperimentalWindowTetherGap);
-        state.ExperimentalTetherMinimizedBehavior =
-            ExperimentalTetherVisibilityModes.Normalize(
-                state.ExperimentalTetherMinimizedBehavior);
         state.Zoom = OverallFontScales.Normalize(state.Zoom);
 
         state.MaxTitleLength = PaperTitles.NormalizeMaxTitleLength(state.MaxTitleLength);

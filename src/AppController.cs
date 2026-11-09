@@ -6,7 +6,6 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Data;
 using System.Windows.Media;
-using System.Windows.Media.Effects;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -3543,43 +3542,6 @@ public sealed partial class AppController : IDisposable
         }
     }
 
-    private static Style BuildDialogButtonStyle()
-    {
-        var style = new Style(typeof(Button));
-        style.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(10, 4, 10, 4)));
-        style.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(0)));
-        style.Setters.Add(new Setter(Control.BackgroundProperty, Brushes.Transparent));
-        style.Setters.Add(new Setter(Control.ForegroundProperty, Theme.TextBrush));
-        style.Setters.Add(new Setter(Control.CursorProperty, Cursors.Hand));
-        style.Setters.Add(new Setter(Control.FontSizeProperty, AppTypography.Scale(13)));
-
-        var border = new FrameworkElementFactory(typeof(Border));
-        border.Name = "Bd";
-        border.SetValue(Border.CornerRadiusProperty, new CornerRadius(6));
-        border.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(Control.BackgroundProperty));
-        border.SetValue(Border.PaddingProperty, new TemplateBindingExtension(Control.PaddingProperty));
-
-        var content = new FrameworkElementFactory(typeof(ContentPresenter));
-        content.SetValue(ContentPresenter.ContentProperty, new TemplateBindingExtension(ContentControl.ContentProperty));
-        content.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
-        content.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
-        border.AppendChild(content);
-
-        var template = new ControlTemplate(typeof(Button)) { VisualTree = border };
-
-        var mouseOver = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
-        mouseOver.Setters.Add(new Setter(Control.BackgroundProperty, Theme.HoverBrush));
-
-        var pressed = new Trigger { Property = ButtonBase.IsPressedProperty, Value = true };
-        pressed.Setters.Add(new Setter(UIElement.OpacityProperty, 0.7));
-
-        template.Triggers.Add(mouseOver);
-        template.Triggers.Add(pressed);
-        style.Setters.Add(new Setter(Control.TemplateProperty, template));
-
-        return style;
-    }
-
     private void HandleSaveFailure(Exception ex, long? failedVersion = null)
     {
         if (IsExiting)
@@ -3599,53 +3561,11 @@ public sealed partial class AppController : IDisposable
                     return;
                 }
 
-                var dlg = new Window
+                PaperNoticeDialog.ShowSaveFailure(ex.Message, ignore =>
                 {
-                    Title = Strings.Get("SaveFailureTitle"),
-                    Width = 360,
-                    Height = 180,
-                    WindowStyle = WindowStyle.None,
-                    WindowStartupLocation = WindowStartupLocation.CenterScreen,
-                    AllowsTransparency = true,
-                    Background = Brushes.Transparent,
-                    Topmost = true
-                };
-                AppTypography.ApplyTextRendering(dlg);
-                var border = new Border
-                {
-                    Background = Theme.PaperBrush,
-                    BorderBrush = Theme.PaperBorderBrush,
-                    BorderThickness = new Thickness(1),
-                    CornerRadius = new CornerRadius(10),
-                    Padding = new Thickness(20)
-                };
-                var grid = new Grid();
-                grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-                grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-                var txt = new TextBlock
-                {
-                    Text = Strings.Format("SaveFailureMessage", ex.Message),
-                    Foreground = Theme.TextBrush,
-                    TextWrapping = TextWrapping.Wrap,
-                    FontSize = AppTypography.Scale(14)
-                };
-                grid.Children.Add(txt);
-                var btnPanel = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
-                Grid.SetRow(btnPanel, 1);
-                var btnOk = new Button { Content = Strings.Get("CommonOk"), Width = 80, Margin = new Thickness(0, 0, 10, 0), Style = BuildDialogButtonStyle() };
-                btnOk.Click += (s, e) =>
-                {
-                    _hasShownSaveFailure = false;
-                    dlg.Close();
-                };
-                var btnIgnore = new Button { Content = Strings.Get("SaveFailureIgnore"), Width = 110, Style = BuildDialogButtonStyle() };
-                btnIgnore.Click += (s, e) => { _ignoreSaveFailures = true; dlg.Close(); };
-                btnPanel.Children.Add(btnOk);
-                btnPanel.Children.Add(btnIgnore);
-                grid.Children.Add(btnPanel);
-                border.Child = grid;
-                dlg.Content = border;
-                dlg.ShowDialog();
+                    if (ignore) _ignoreSaveFailures = true;
+                    else _hasShownSaveFailure = false;
+                });
             });
         }
     }
@@ -3677,92 +3597,7 @@ public sealed partial class AppController : IDisposable
         }
     }
 
-    private static void ShowPaperLimitDialog()
-    {
-        var dialog = new Window
-        {
-            Title = Strings.Get("PaperLimitTitle"),
-            Width = 340,
-            Height = 176,
-            MinWidth = 340,
-            MinHeight = 176,
-            WindowStartupLocation = WindowStartupLocation.CenterScreen,
-            WindowStyle = WindowStyle.None,
-            ResizeMode = ResizeMode.NoResize,
-            AllowsTransparency = true,
-            Background = Brushes.Transparent,
-            ShowInTaskbar = false,
-            Topmost = true
-        };
-        AppTypography.ApplyTextRendering(dialog);
-
-        var root = new Border
-        {
-            Background = Theme.PaperBrush,
-            BorderBrush = Theme.PaperBorderBrush,
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(10),
-            Padding = new Thickness(18),
-            Effect = new DropShadowEffect
-            {
-                BlurRadius = 18,
-                ShadowDepth = 2,
-                Opacity = 0.22
-            }
-        };
-
-        var layout = new Grid();
-        layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        layout.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-        layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-
-        var title = new TextBlock
-        {
-            Text = Strings.Get("PaperLimitTitle"),
-            Foreground = Theme.TextBrush,
-            FontSize = AppTypography.Scale(16),
-            FontWeight = FontWeights.SemiBold,
-            Margin = new Thickness(0, 0, 0, 8)
-        };
-
-        var message = new TextBlock
-        {
-            Text = Strings.Get("PaperLimitMessage"),
-            Foreground = Theme.WeakTextBrush,
-            FontSize = AppTypography.Scale(13),
-            TextWrapping = TextWrapping.Wrap,
-            LineHeight = 20,
-            Margin = new Thickness(0, 2, 0, 0)
-        };
-
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0, 16, 0, 0)
-        };
-
-        var ok = new Button
-        {
-            Content = Strings.Get("CommonOk"),
-            MinWidth = 72,
-            Style = BuildDialogButtonStyle()
-        };
-        ok.Click += (_, _) => dialog.Close();
-        buttons.Children.Add(ok);
-
-        Grid.SetRow(title, 0);
-        Grid.SetRow(message, 1);
-        Grid.SetRow(buttons, 2);
-
-        layout.Children.Add(title);
-        layout.Children.Add(message);
-        layout.Children.Add(buttons);
-
-        root.Child = layout;
-        dialog.Content = root;
-        dialog.ShowDialog();
-    }
+    private static void ShowPaperLimitDialog() => PaperNoticeDialog.ShowPaperLimit();
 
     private bool IsPaperShown(PaperData paper)
     {

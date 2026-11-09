@@ -464,12 +464,7 @@ internal sealed partial class PaperCommandService
 
         using (_controller.SuppressPaperPluginEventScans())
         {
-            paper.Items.Remove(item);
-            if (paper.Items.Count == 0)
-            {
-                paper.Items.Add(new PaperItem());
-            }
-            NormalizeOrders(paper);
+            TodoRules.RemoveItems(paper.Items, candidate => candidate == item);
 
             if (!_controller.TryCommitExternalMutation())
             {

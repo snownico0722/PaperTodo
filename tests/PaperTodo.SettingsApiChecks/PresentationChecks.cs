@@ -105,6 +105,37 @@ internal static partial class Program
         var note = papers.Single(p => p.Id == "note");
         var todo = papers.Single(p => p.Id == "todo");
         var owner = papers.Single(p => p.Id == "owner");
+        if (!edge)
+        {
+            var window = ReadField<Dictionary<string, PaperWindow>>(c, "_windows")[owner.Id];
+            var saved = (c.State.TopBarShortcutOrder, c.State.TopBarPinnedCount,
+                c.State.HiddenTopBarShortcuts, c.State.ShowTopBarExternalOpenButton);
+            try
+            {
+                c.State.TopBarShortcutOrder = PaperTopBarShortcuts.NormalizeOrder([PaperTopBarShortcuts.ExternalEditor]);
+                foreach (var (pinned, hidden, legacy, visible) in new[]
+                {
+                    (0, false, true, false), (1, true, true, false), (1, false, false, true)
+                })
+                {
+                    c.State.TopBarPinnedCount = pinned;
+                    c.State.HiddenTopBarShortcuts = hidden ? [PaperTopBarShortcuts.ExternalEditor] : [];
+                    c.State.ShowTopBarExternalOpenButton = legacy;
+                    window.UpdateTopBarNewPaperButtons();
+                    // Body replacement refreshes chrome even when width and layout have not changed.
+                    Invoke(window, "RefreshPaperBodyChrome");
+                    Check((ReadField<System.Windows.Controls.Button>(window, "_openMarkdownButton").Visibility ==
+                           Visibility.Visible) == visible,
+                        "Body refresh respects the current pin/hidden choices instead of the migrated legacy toggle.");
+                }
+            }
+            finally
+            {
+                (c.State.TopBarShortcutOrder, c.State.TopBarPinnedCount,
+                    c.State.HiddenTopBarShortcuts, c.State.ShowTopBarExternalOpenButton) = saved;
+                window.UpdateTopBarNewPaperButtons();
+            }
+        }
         var current = true;
         PaperBodyPluginHostApi Api(params string[] permissions) =>
             new(c, commands, "owner", "tests.presentation", permissions, () => current, () => current);

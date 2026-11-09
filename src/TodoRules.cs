@@ -51,6 +51,19 @@ internal static class TodoRules
         }
     }
 
+    public static PaperItem? RemoveItems(List<PaperItem> items, Predicate<PaperItem> shouldRemove)
+    {
+        items.RemoveAll(shouldRemove);
+        PaperItem? replacement = null;
+        if (items.Count == 0)
+        {
+            replacement = new PaperItem();
+            items.Add(replacement);
+        }
+        NormalizeOrders(items);
+        return replacement;
+    }
+
     public static bool TryCreateMovedOrder(
         IReadOnlyList<PaperItem> items,
         IReadOnlyCollection<string> movedItemIds,
@@ -199,12 +212,7 @@ internal static class TodoRules
         if (done && autoClearCompleted)
         {
             var changed = changedItemIds.ToHashSet(StringComparer.Ordinal);
-            items.RemoveAll(item => changed.Contains(item.Id) && item.Done);
-            if (items.Count == 0)
-            {
-                items.Add(new PaperItem());
-            }
-            NormalizeOrders(items);
+            RemoveItems(items, item => changed.Contains(item.Id) && item.Done);
             return true;
         }
 

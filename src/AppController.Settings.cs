@@ -1479,45 +1479,42 @@ public sealed partial class AppController
 
     private void RestoreLabsSettingsPageDefaults()
     {
-        State.ExperimentalInactivePaperOpacity = false;
+        var defaults = new AppState();
+        State.ExperimentalInactivePaperOpacity = defaults.ExperimentalInactivePaperOpacity;
         State.ExperimentalInactivePaperOpacityLevel =
-            ExperimentalOpacityLevels.DefaultInactivePaper;
-        State.ExperimentalRestingCapsuleOpacity = false;
+            defaults.ExperimentalInactivePaperOpacityLevel;
+        State.ExperimentalRestingCapsuleOpacity = defaults.ExperimentalRestingCapsuleOpacity;
         State.ExperimentalRestingCapsuleOpacityLevel =
-            ExperimentalOpacityLevels.DefaultRestingCapsule;
-        State.ExperimentalRestingCapsuleOpacityIncludesMaster = false;
-        State.ExperimentalRestingCapsuleOpacityAlways = false;
-        State.ExperimentalCollapsePaperOnDeactivate = false;
-        State.ExperimentalHideInactiveTopBarButtons = false;
-        State.ExperimentalHideInactiveTitleBar = false;
-        State.ExperimentalAllowLockIconUnlock = true;
-        State.ExperimentalShortcutOpacityLevel = 0.35;
+            defaults.ExperimentalRestingCapsuleOpacityLevel;
+        State.ExperimentalRestingCapsuleOpacityIncludesMaster = defaults.ExperimentalRestingCapsuleOpacityIncludesMaster;
+        State.ExperimentalRestingCapsuleOpacityAlways = defaults.ExperimentalRestingCapsuleOpacityAlways;
+        State.ExperimentalCollapsePaperOnDeactivate = defaults.ExperimentalCollapsePaperOnDeactivate;
+        State.ExperimentalHideInactiveTopBarButtons = defaults.ExperimentalHideInactiveTopBarButtons;
+        State.ExperimentalHideInactiveTitleBar = defaults.ExperimentalHideInactiveTitleBar;
+        State.ExperimentalAllowLockIconUnlock = defaults.ExperimentalAllowLockIconUnlock;
+        State.ExperimentalShortcutOpacityLevel = defaults.ExperimentalShortcutOpacityLevel;
         ClearAdvancedShortcutRuntimeState();
-        State.ExperimentalCapsuleMagnetism = false;
-        State.ExperimentalCapsuleMagnetScreenEdges = true;
-        State.ExperimentalCapsuleMagnetWindowEdges = true;
+        State.ExperimentalCapsuleMagnetism = defaults.ExperimentalCapsuleMagnetism;
+        State.ExperimentalCapsuleMagnetScreenEdges = defaults.ExperimentalCapsuleMagnetScreenEdges;
+        State.ExperimentalCapsuleMagnetWindowEdges = defaults.ExperimentalCapsuleMagnetWindowEdges;
         State.ExperimentalCapsuleMagnetDistance =
-            ExperimentalWindowAttachmentOptions.DefaultSnapDistance;
-        State.ExperimentalWindowTethering = false;
+            defaults.ExperimentalCapsuleMagnetDistance;
+        State.ExperimentalWindowTethering = defaults.ExperimentalWindowTethering;
         State.ExperimentalWindowTetherPreferredEdge =
-            ExperimentalWindowTetherOptions.Auto;
+            defaults.ExperimentalWindowTetherPreferredEdge;
         State.ExperimentalWindowTetherGap =
-            ExperimentalWindowTetherOptions.DefaultGap;
-        State.ExperimentalTetherVisibilityLink = false;
-        State.ExperimentalTetherMinimizedBehavior =
-            ExperimentalTetherVisibilityModes.Hide;
+            defaults.ExperimentalWindowTetherGap;
         RestoreLabsShortcutDefaults();
 
         foreach (var window in _windows.Values.ToList())
         {
             window.DisableExperimentalCapsuleMagnet();
-            window.DisableExperimentalTetherVisibilityLink();
             window.DisableExperimentalWindowTether();
         }
         RefreshExperimentalWindowRuntime();
         SaveNow();
         RefreshExperimentalOpacitySurfaces(animate: false);
-        RefreshExperimentalFocusPresentationSurfaces();
+        PublishSettingEffects(SettingEffects.Focus);
         RefreshSettingsWindowContent();
     }
 
@@ -1718,12 +1715,7 @@ public sealed partial class AppController
         State.CapsuleTextBold = defaults.CapsuleTextBold;
         State.DeepCapsuleGapSize = defaults.DeepCapsuleGapSize;
 
-        AppTypography.Configure(
-            State.UiFontPreset,
-            State.Zoom,
-            State.CustomFontEnhancedBold,
-            State.TextRenderingProfile);
-        NoteTypography.Configure(State.NoteTextSize, State.NoteTextBold);
+        ConfigureSettingsTypography();
 
         SaveNow();
         // Typography was configured above; the theme refresh rebuilds settings once.
@@ -1745,10 +1737,9 @@ public sealed partial class AppController
 
         foreach (var window in windows)
         {
-            window.UpdateMarkdownRenderMode();
-            window.UpdateExternalMarkdownExtension();
-            window.UpdateTodoLinkFeature();
-            window.RefreshPaperTitle();
+            ApplyWindowSettingEffects(window,
+                [SettingEffects.Markdown, SettingEffects.ExternalExtension,
+                    SettingEffects.TodoLinks, SettingEffects.Titles]);
             window.UpdateCapsuleMode();
             window.UpdateDeepCapsuleMode();
             window.UpdateDeepCapsuleExpandedSlotMode();

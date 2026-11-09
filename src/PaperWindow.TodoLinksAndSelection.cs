@@ -729,7 +729,7 @@ public sealed partial class PaperWindow
             return;
         }
 
-        var previousItems = CloneItems(_paper.Items);
+        var previousLinkedPaperIds = CaptureLinkedPaperIds(_paper.Items);
         PushUndoSnapshot();
 
         foreach (var item in selected)
@@ -751,7 +751,7 @@ public sealed partial class PaperWindow
             done && _controller.State.AutoClearCompletedTodos
                 ? null
                 : selected.Select(item => item.Id));
-        RefreshCapsuleEligibilityForLinkedPaperChanges(previousItems);
+        RefreshCapsuleEligibilityForLinkedPaperChanges(previousLinkedPaperIds);
     }
 
     private void DeleteSelectedTodoItems()
@@ -762,22 +762,17 @@ public sealed partial class PaperWindow
             return;
         }
 
-        var previousItems = CloneItems(_paper.Items);
+        var previousLinkedPaperIds = CaptureLinkedPaperIds(_paper.Items);
         var selectedIds = selected.Select(item => item.Id).ToHashSet(StringComparer.Ordinal);
         PushUndoSnapshot();
-        _paper.Items.RemoveAll(item => selectedIds.Contains(item.Id));
-        if (_paper.Items.Count == 0)
-        {
-            _paper.Items.Add(new PaperItem());
-        }
+        TodoRules.RemoveItems(_paper.Items, item => selectedIds.Contains(item.Id));
 
         _selectedTodoItemIds.Clear();
         NormalizeTodoItems();
-        NormalizeOrders();
         _controller.MarkDirty();
         _controller.NotifyTodoReminderCollectionChanged();
         ReconcileTodoRows();
-        RefreshCapsuleEligibilityForLinkedPaperChanges(previousItems);
+        RefreshCapsuleEligibilityForLinkedPaperChanges(previousLinkedPaperIds);
     }
 
     private bool TryPopulateTodoSelectionContextMenu(
@@ -1046,12 +1041,12 @@ public sealed partial class PaperWindow
         }
 
         var focusedId = CurrentFocusedTodoItemId() ?? item.Id;
-        var previousItems = CloneItems(_paper.Items);
+        var previousLinkedPaperIds = CaptureLinkedPaperIds(_paper.Items);
         PushUndoSnapshot();
         item.LinkPath(path, isDirectory);
         _controller.MarkDirty();
         ReconcileTodoRows([item.Id], focusedId);
-        RefreshCapsuleEligibilityForLinkedPaperChanges(previousItems);
+        RefreshCapsuleEligibilityForLinkedPaperChanges(previousLinkedPaperIds);
     }
 
     private void UnlinkPathFromTodoItem(PaperItem item)
