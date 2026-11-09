@@ -127,6 +127,16 @@ internal static class TodoRules
         return true;
     }
 
+    // Return whether completing this item removed a reminder from the schedule.
+    public static bool SetDone(PaperItem item, bool done)
+    {
+        item.Done = done;
+        if (!done || (!item.ReminderAt.HasValue && !item.ReminderTriggered)) return false;
+        item.ReminderAt = null;
+        item.ReminderTriggered = false;
+        return true;
+    }
+
     public static bool ApplyDoneTransitionOrdering(
         List<PaperItem> items,
         IReadOnlyCollection<string> changedItemIds,

@@ -293,12 +293,7 @@ internal sealed partial class PaperCommandService
             }
             if (request.Done.HasValue)
             {
-                item.Done = request.Done.Value;
-                if (item.Done)
-                {
-                    item.ReminderAt = null;
-                    item.ReminderTriggered = false;
-                }
+                TodoRules.SetDone(item, request.Done.Value);
             }
             if (request.UpdateLinkedPaper)
             {
@@ -308,23 +303,10 @@ internal sealed partial class PaperCommandService
             {
                 MoveTodo(paper, item, requestedOrder.Value);
             }
-            if (doneChanged && item.Done && _controller.State.AutoClearCompletedTodos)
+            if (doneChanged)
             {
-                TodoRules.ApplyCompletionPolicy(
-                    paper.Items,
-                    [item.Id],
-                    done: true,
-                    autoClearCompleted: true,
-                    autoMoveCompletedToBottom:
-                        _controller.State.AutoMoveCompletedTodosToBottom);
-            }
-            else if (doneChanged)
-            {
-                TodoRules.ApplyDoneTransitionOrdering(
-                    paper.Items,
-                    [item.Id],
-                    item.Done,
-                    _controller.State.AutoMoveCompletedTodosToBottom);
+                TodoRules.ApplyCompletionPolicy(paper.Items, [item.Id], item.Done,
+                    _controller.State.AutoClearCompletedTodos, _controller.State.AutoMoveCompletedTodosToBottom);
             }
             else
             {
@@ -519,77 +501,12 @@ internal sealed partial class PaperCommandService
         EnsureRunning();
         var paper = RequirePaper(RequiredId(paperId, "paperId"));
         PrepareExternalMutation(paper);
-        var papers = _controller.State.Papers;
-        var originalIndex = papers.IndexOf(paper);
-        var affectedLinks = papers
-            .Where(candidate => candidate.Type == PaperTypes.Todo)
-            .SelectMany(candidate => candidate.Items
-                .Where(item => string.Equals(
-                    item.LinkedPaperId,
-                    paper.Id,
-                    StringComparison.Ordinal))
-                .Select(item => (
-                    PaperId: candidate.Id,
-                    Item: item,
-                    Link: item.LinkedPaperId)))
-            .ToList();
-        var affectedTodoPaperIds = affectedLinks
-            .Select(entry => entry.PaperId)
-            .Distinct(StringComparer.Ordinal)
-            .ToArray();
-        PaperData? replacement = null;
-
         using (_controller.SuppressPaperPluginEventScans())
         {
-            papers.RemoveAt(originalIndex);
-            foreach (var (_, item, _) in affectedLinks)
-            {
-                item.ClearQuickLaunch();
-            }
-
-            if (papers.Count == 0)
-            {
-                try
-                {
-                    replacement = _controller.CreatePaper(
-                        PaperTypes.Todo,
-                        show: false);
-                }
-                catch
-                {
-                    RestoreDeletedPaper(
-                        papers,
-                        originalIndex,
-                        paper,
-                        affectedLinks,
-                        replacement);
-                    _controller.ResetPaperPluginEventBaseline();
-                    throw;
-                }
-                if (replacement == null)
-                {
-                    RestoreDeletedPaper(
-                        papers,
-                        originalIndex,
-                        paper,
-                        affectedLinks,
-                        replacement);
-                    _controller.ResetPaperPluginEventBaseline();
-                    throw Error(
-                        "paper_limit",
-                        "PaperTodo could not create the required replacement paper.");
-                }
-                replacement.IsVisible = true;
-            }
-
+            var removed = _controller.RemovePaperFromWorkspace(paper);
             if (!_controller.TryCommitExternalMutation())
             {
-                RestoreDeletedPaper(
-                    papers,
-                    originalIndex,
-                    paper,
-                    affectedLinks,
-                    replacement);
+                _controller.RestoreRemovedPaper(removed);
                 _controller.RefreshAfterExternalRollback();
                 _controller.ResetPaperPluginEventBaseline();
                 throw SaveFailed();
@@ -600,37 +517,16 @@ internal sealed partial class PaperCommandService
             _controller.RunExternalPostCommitUi(() =>
             {
                 _controller.RefreshTodoPapersForExternalLinkMutation(
-                    affectedTodoPaperIds);
+                    removed.AffectedTodoPaperIds);
                 _controller.FinalizeExternalPaperDeletion(
                     paper,
-                    replacement,
+                    removed.Replacement,
                     refreshLinkedTodos: false);
             });
         }
 
         _controller.PublishExternalPaperOperation(context);
         return new DeleteMutationResult(paper.Id, Deleted: true);
-    }
-
-    private void RestoreDeletedPaper(
-        IList<PaperData> papers,
-        int originalIndex,
-        PaperData paper,
-        IEnumerable<(string PaperId, PaperItem Item, string? Link)> affectedLinks,
-        PaperData? replacement)
-    {
-        if (!papers.Contains(paper))
-        {
-            papers.Insert(Math.Clamp(originalIndex, 0, papers.Count), paper);
-        }
-        foreach (var (_, item, link) in affectedLinks)
-        {
-            item.LinkPaper(link);
-        }
-        if (replacement != null)
-        {
-            _controller.RollbackExternalCreatedPaper(replacement);
-        }
     }
 
     private IReadOnlyList<PaperItem> AddTodoInputs(
