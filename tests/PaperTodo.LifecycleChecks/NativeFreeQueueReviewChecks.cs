@@ -479,6 +479,17 @@ internal static class NativeFreeQueueReviewChecks
             var drop = Field<NativeEdgeQueueDrag>(c, "_nativeEdgeQueueDrag").Drop!;
             Require(drop.Decision.Kind == EdgeFreeQueueDropKind.Insert && drop.DestinationKey == B &&
                     drop.Decision.Index == 0, "a displaced queue must accept its visible head insertion");
+            if (pass == 0)
+            {
+                var peer = c.State.Papers.Single(p => p.Id == "review-7");
+                peer.IsVisible = false;
+                c.PreviewNativeEdgeQueueDrag(source, dropPoint, beforeB, floating: true);
+                var updated = Field<NativeEdgeQueueDrag>(c, "_nativeEdgeQueueDrag").Drop!;
+                Require(updated.DestinationKey == B && updated.TargetMembers.SequenceEqual(new[] { firstTarget }),
+                    "a peer hidden during the same-slot drag must leave the projected queue");
+                peer.IsVisible = true;
+                c.PreviewNativeEdgeQueueDrag(source, dropPoint, beforeB, floating: true);
+            }
             Near(beforeB, masters[B].AnchorTop, "first-slot preview retains the target master");
             Near(beforeC + pitch, masters[C].AnchorTop, "intersected lower neighbour gives way down");
             Near(targetMemberBefore + pitch, MemberTop(c, windows[firstTarget.Id], firstTarget),
