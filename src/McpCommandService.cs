@@ -403,8 +403,14 @@ internal sealed partial class McpCommandService
             if (note.Content.Length == 0)
             {
                 RequireAdditiveWrites();
+                // Keep an additive-only request conditional if a plugin fills the note during preparation.
+                if (!_controller.State.McpAllowFullWrites) mode = NoteWriteMode.FillBlank;
             }
-            else if (!string.Equals(note.Content, content, StringComparison.Ordinal))
+            else if (string.Equals(note.Content, content, StringComparison.Ordinal))
+            {
+                return PaperDetails(RequirePaperSnapshot(paperId));
+            }
+            else
             {
                 RequireFullWrites();
             }

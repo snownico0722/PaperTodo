@@ -67,7 +67,7 @@ public sealed partial class AppController
             PaperTitleText(paper),
             paper.BodyProviderId,
             contentAvailable,
-            contentAvailable ? paper.Content ?? "" : "");
+            contentAvailable ? CurrentMarkdownContentForExternalRead(paper) : "");
     }
 
     internal void PrepareExternalPaperOperation(PaperData? targetPaper = null)

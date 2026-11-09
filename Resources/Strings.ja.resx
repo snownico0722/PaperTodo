@@ -1649,6 +1649,7 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
   <data name="NoteExportFailedNotes" xml:space="preserve"><value>エクスポートに失敗した項目：&#xA;{0}</value></data>
   <data name="NoteExportFailure" xml:space="preserve"><value>エクスポートに失敗しました：{0}</value></data>
   <data name="NoteExportNoNotes" xml:space="preserve"><value>選択した範囲にエクスポートできる用紙がありません。</value></data>
+  <data name="NoteExportCancelling" xml:space="preserve"><value>エクスポートをキャンセルしています…</value></data>
   <data name="NoteExportProgress" xml:space="preserve"><value>エクスポート中 {0}/{1} 件</value></data>
   <data name="TodoExportCurrent" xml:space="preserve"><value>この ToDo をエクスポート</value></data>
   <data name="SettingsCapsuleFreeQueues" xml:space="preserve"><value>カプセルの自由キュー</value></data>

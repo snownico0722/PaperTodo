@@ -20,7 +20,7 @@ public sealed partial class StateStore
     {
         if (WorkspaceNumber > 1) state.Workspaces = null;
         PrepareForSave(state);
-        return JsonSerializer.Serialize(state, JsonOptions);
+        return JsonSerializer.Serialize(state, CoreFileWriteOptions);
     }
 
     private void NormalizeWorkspaceDocument(AppState state, bool deferLinkNormalization = false)
@@ -62,7 +62,7 @@ public sealed partial class StateStore
             ValidateExternalDocument(document);
             document["workspaces"] = JsonSerializer.SerializeToNode(options.Normalized(), JsonOptions);
             var sourceHash = System.Security.Cryptography.SHA256.HashData(bytes);
-            WriteJsonInternal(document.ToJsonString(JsonOptions), version,
+            WriteJsonInternal(document.ToJsonString(CoreFileWriteOptions), version,
                 beforeReplace: () => ValidatePrimaryHash(sourceHash));
         }
         finally { _writeLock.Release(); }

@@ -78,9 +78,7 @@ public sealed partial class PaperWindow
         {
             var export = new MenuItem
             {
-                Header = _paperExportRunning
-                    ? Strings.Format("NoteExportProgress", _paperExportCompleted, _paperExportTotal)
-                    : Strings.Get("MenuExport"),
+                Header = Strings.Get("MenuExport"),
                 IsEnabled = !_paperExportRunning
             };
             export.Items.Add(MenuItem(Strings.Get("MenuExportCurrent"), (_, _) => ExportPapers(ExportScope.Current)));
