@@ -4,8 +4,10 @@ using PaperTodo.Plugin;
 
 namespace PaperTodo;
 
-internal sealed partial class PaperBodyPluginHostApi : IPaperWorkspacePresentationApi
+internal sealed partial class PaperBodyPluginHostApi : IPaperWorkspacePresentationApi, IPaperPluginPopups
 {
+    private PluginPopupHost? _popupHost;
+
     public string PaperId => RequireHostPaperId();
 
     public void Show(bool activate = true) =>
@@ -104,5 +106,36 @@ internal sealed partial class PaperBodyPluginHostApi : IPaperWorkspacePresentati
                 _ = action(paperId);
             }),
             DispatcherPriority.Background);
+    }
+
+    public IPaperPluginPopup Open(PaperPopupPosition position, PaperPluginPopupOptions options,
+        Func<PaperPluginPopupContext, IPaperPluginPopupContent> createContent) => PopupOnUi(() =>
+    {
+        EnsureUsable();
+        if (_popupHost == null)
+        {
+            _popupHost = new PluginPopupHost(() => !_disposed && _isSessionCurrent());
+            _controller.PluginPopupThemeChanged += _popupHost.RefreshTheme;
+        }
+        return _popupHost.Open(position, options, createContent);
+    });
+
+    public void Close() => PopupOnUi(() => { EnsureUsable(); _popupHost?.Close(); return true; });
+
+    private static T PopupOnUi<T>(Func<T> action)
+    {
+        var dispatcher = Application.Current.Dispatcher;
+        return dispatcher.CheckAccess() ? action() : dispatcher.Invoke(action);
+    }
+
+    internal void ResetExtensionUi()
+    {
+        var host = _popupHost;
+        _popupHost = null;
+        if (host != null)
+        {
+            _controller.PluginPopupThemeChanged -= host.RefreshTheme;
+            host.Dispose();
+        }
     }
 }
