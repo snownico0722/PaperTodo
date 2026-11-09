@@ -27,6 +27,15 @@ internal static class ImageReferenceChecks
             True(protectedIds.Contains("123"), "code-looking reference still protects stored image bytes");
         });
 
+        Check("Replacing an image URL preserves its list and line formatting", () =>
+        {
+            const string source = "- step\r\n\r\n  ![image|65%]( i:123 ) {width=50%}  \r\n\r\n  details";
+            var reference = MarkdownImageReferences.Enumerate(source).Single();
+            Equal("  ![image|65%]( i:456 ) {width=50%}  ", reference.WithUrl("i:456"), "workspace remap");
+            Equal(source.Replace("i:123", "./123.png"),
+                MarkdownImageReferences.ReplaceForExternalMarkdown(source, _ => "./123.png"), "portable URL");
+        });
+
         Check("External replacement does not rewrite code image text", () =>
         {
             const string source = "    ![image|100%](i:123)";

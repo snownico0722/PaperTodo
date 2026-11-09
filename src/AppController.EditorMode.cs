@@ -135,4 +135,3 @@ public sealed partial class AppController
             editor.CurrentPaper?.CaptureExpandedEditorState(markDirty: false);
     }
 }
-

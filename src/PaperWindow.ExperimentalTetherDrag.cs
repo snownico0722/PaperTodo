@@ -26,7 +26,7 @@ public sealed partial class PaperWindow
             Owner: ExperimentalAttachmentOwner.WindowTether,
             TargetKind:
                 ExperimentalAttachmentTargetKind.ExternalWindow
-        } session
+        } session && !session.ExternalWindow.IsEmpty
             ? new ExperimentalTetherDragAnchor(
                 session.ExternalWindow,
                 session.Edge,

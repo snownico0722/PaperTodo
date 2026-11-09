@@ -9,11 +9,17 @@ using Path = System.Windows.Shapes.Path;
 
 namespace PaperTodo;
 
+// The same thin-line icon is used by the paper top bar and the shortcut
+// settings preview. Keep this path in sync with assets/workspace-cycle.svg.
+internal static class WorkspaceCycleIcon
+{
+    internal const string PathData =
+        "M7 2H16A2 2 0 0 1 18 4V13 M6 4H14A2 2 0 0 1 16 6V14A2 2 0 0 1 14 16H6A2 2 0 0 1 4 14V6A2 2 0 0 1 6 4Z";
+    internal const double StrokeThickness = 1.2;
+}
+
 public sealed partial class PaperWindow
 {
-    // WPF uses the shared path so the icon works in the single-file application
-    // without requiring an SVG renderer or an external asset.
-
     private Button? _workspaceButton;
     private TextBlock? _workspaceNumberBadge;
 
@@ -22,46 +28,18 @@ public sealed partial class PaperWindow
         var button = _workspaceButton = IconButton("", "");
         button.Width = 25;
         AutomationProperties.SetAutomationId(button, "WorkspaceCycle");
-        var icon = new Grid { Width = 20, Height = 20, IsHitTestVisible = false };
-        var loop = new Path
-        {
-            Data = Geometry.Parse(WorkspaceCycleIcon.PathData),
-            StrokeThickness = WorkspaceCycleIcon.StrokeThickness,
-            StrokeStartLineCap = PenLineCap.Round,
-            StrokeEndLineCap = PenLineCap.Round,
-            StrokeLineJoin = PenLineJoin.Round,
-            HorizontalAlignment = HorizontalAlignment.Left,
-            VerticalAlignment = VerticalAlignment.Top
-        };
-        loop.SetBinding(Shape.StrokeProperty, new Binding(nameof(Control.Foreground)) { Source = button });
-        icon.Children.Add(loop);
-        _workspaceNumberBadge = new TextBlock
-        {
-            FontSize = 9,
-            FontWeight = FontWeights.SemiBold,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center
-        };
-        _workspaceNumberBadge.SetBinding(TextBlock.ForegroundProperty,
-            new Binding(nameof(Control.Foreground)) { Source = button });
-        icon.Children.Add(_workspaceNumberBadge);
-        button.Content = new Viewbox
-        {
-            Width = Math.Round(18 * TopBarIconScale(), 1),
-            Height = Math.Round(18 * TopBarIconScale(), 1),
-            Child = icon
-        };
+        button.Content = CreateWorkspaceCycleIcon(button, _controller.WorkspaceNumber, out _workspaceNumberBadge);
         button.Click += async (_, _) =>
         {
             if (_controller.IsWorkspaceSwitching) return;
-            if (_controller.WorkspaceOptions.SlotNumbers.Count == 1)
-            {
-                await OfferCreateWorkspaceAsync();
-                return;
-            }
             if (_controller.WorkspaceOptions.TopBarNamePicker)
             {
                 ShowNamedWorkspaceSelector(button);
+                return;
+            }
+            if (_controller.WorkspaceOptions.SlotNumbers.Count == 1)
+            {
+                await OfferCreateWorkspaceAsync();
                 return;
             }
             // Leave the Button mouse-capture/input turn before ending its owning workspace.
@@ -72,6 +50,44 @@ public sealed partial class PaperWindow
         return button;
     }
 
+    // Draw the shared path directly so single-file builds need no external SVG renderer.
+    internal static Viewbox CreateWorkspaceCycleIcon(Control owner, int number, out TextBlock numberBadge)
+    {
+        // The stacked outline spans x=4..18, y=2..16 in this 20-unit drawing.
+        // Move both layers together so the number stays centered on the front page.
+        var icon = new Grid
+        {
+            Width = 20, Height = 20, IsHitTestVisible = false,
+            RenderTransform = new TranslateTransform(-1, 1)
+        };
+        var loop = new Path
+        {
+            Data = Geometry.Parse(WorkspaceCycleIcon.PathData),
+            StrokeThickness = WorkspaceCycleIcon.StrokeThickness,
+            StrokeStartLineCap = PenLineCap.Round,
+            StrokeEndLineCap = PenLineCap.Round,
+            StrokeLineJoin = PenLineJoin.Round,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Top
+        };
+        loop.SetBinding(Shape.StrokeProperty, new Binding(nameof(Control.Foreground)) { Source = owner });
+        icon.Children.Add(loop);
+        numberBadge = new TextBlock
+        {
+            Text = number.ToString(UiLanguages.EffectiveCulture),
+            FontFamily = AppTypography.UiFontFamily,
+            FontSize = 9,
+            FontWeight = FontWeights.SemiBold,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        numberBadge.SetBinding(TextBlock.ForegroundProperty,
+            new Binding(nameof(Control.Foreground)) { Source = owner });
+        icon.Children.Add(numberBadge);
+        var size = Math.Round(18 * TopBarIconScale(), 1);
+        return new Viewbox { Width = size, Height = size, Child = icon };
+    }
+
     internal void RefreshWorkspaceButton()
     {
         if (_workspaceButton == null || IsClosed) return;
@@ -80,8 +96,10 @@ public sealed partial class PaperWindow
         _workspaceButton.Visibility = options.Enabled &&
             PaperTopBarShortcuts.Contains(_controller.State, _paper.Type, PaperTopBarShortcuts.Workspace)
                 ? Visibility.Visible : Visibility.Collapsed;
-        _workspaceButton.IsEnabled = !_controller.IsWorkspaceSwitching;
-        _workspaceButton.Foreground = TextBrush;
+        _workspaceButton.IsEnabled = !_controller.IsWorkspaceSwitching &&
+            (!_controller.IsPaperExportActive || options.TopBarNamePicker || options.SlotNumbers.Count == 1);
+        if (_workspaceButton.Content is Viewbox icon)
+            icon.Width = icon.Height = Math.Round(18 * TopBarIconScale(), 1);
         if (_workspaceNumberBadge != null)
         {
             _workspaceNumberBadge.Text = number.ToString(UiLanguages.EffectiveCulture);
@@ -107,35 +125,13 @@ public sealed partial class PaperWindow
 
     private MenuItem BuildWorkspaceShortcutMenuItem(ContextMenu menu)
     {
-        if (_controller.WorkspaceOptions.SlotNumbers.Count == 1)
-            return MenuItem(Strings.Get("WorkspaceSettingsTitle"), async (_, _) =>
-            {
-                menu.IsOpen = false;
-                await OfferCreateWorkspaceAsync();
-            });
-        if (!_controller.WorkspaceOptions.TopBarNamePicker)
-        {
-            var next = _controller.WorkspaceOptions.NextSlot(_controller.WorkspaceNumber);
-            return MenuItem(WorkspaceMenuText(
-                "切换到工作区" + next,
-                "Switch to workspace " + next,
-                "ワークスペース" + next + "に切り替える",
-                "작업 공간 " + next + "(으)로 전환"),
-                (_, _) =>
-                {
-                    menu.IsOpen = false;
-                    _ = Dispatcher.InvokeAsync(
-                        () => { if (!IsClosed) _ = _controller.CycleWorkspaceAsync(); },
-                        DispatcherPriority.Background);
-                });
-        }
-
-        var selector = new MenuItem
-        {
-            Header = WorkspaceMenuText("切换工作区", "Switch workspace",
-                "ワークスペースを切り替える", "작업 공간 전환")
-        };
-        PopulateNamedWorkspaceChoices(selector, menu);
+        var selector = new MenuItem { Header = Strings.Get("WorkspaceSettingsTitle") };
+        AutomationProperties.SetAutomationId(selector, "PaperWorkspace");
+        selector.Items.Add(MenuHeader(Strings.Get("WorkspaceSwitchGroup")));
+        PopulateWorkspaceChoices(selector, menu, movePaper: false);
+        selector.Items.Add(MenuSeparator());
+        selector.Items.Add(MenuHeader(Strings.Get("WorkspaceMoveGroup")));
+        PopulateWorkspaceChoices(selector, menu, movePaper: true);
         return selector;
     }
 
@@ -153,9 +149,26 @@ public sealed partial class PaperWindow
             await _controller.CreateWorkspaceAsync();
     }
 
-    // Both top-bar and overflow use the same named-choice handler. Only the placement
-    // differs: a popup below the button versus a submenu beside the overflow item.
     private void PopulateNamedWorkspaceChoices(ItemsControl choices, ContextMenu ownerMenu)
+    {
+        choices.Items.Clear();
+        PopulateWorkspaceChoices(choices, ownerMenu, movePaper: false);
+        choices.Items.Add(MenuSeparator());
+        var create = MenuItem(Strings.Get("WorkspaceCreateNew"), async (_, _) =>
+        {
+            await _controller.CreateWorkspaceAsync();
+            if (IsClosed || !ownerMenu.IsOpen) return;
+            PopulateNamedWorkspaceChoices(choices, ownerMenu);
+            ownerMenu.Focus();
+        });
+        create.IsEnabled = !_controller.IsWorkspaceSwitching &&
+            _controller.WorkspaceOptions.SlotNumbers.Count < 5;
+        create.StaysOpenOnClick = true;
+        AutomationProperties.SetAutomationId(create, "CreateWorkspace");
+        choices.Items.Add(create);
+    }
+
+    private void PopulateWorkspaceChoices(ItemsControl choices, ContextMenu ownerMenu, bool movePaper)
     {
         foreach (var slot in _controller.WorkspaceOptions.SlotNumbers)
         {
@@ -164,27 +177,43 @@ public sealed partial class PaperWindow
             var item = new MenuItem
             {
                 Header = _controller.WorkspaceOptions.DisplayName(slot),
-                IsCheckable = true,
-                IsChecked = current,
-                IsEnabled = !current && !_controller.IsWorkspaceSwitching
+                IsCheckable = !movePaper,
+                IsChecked = !movePaper && current,
+                IsEnabled = !current && !_controller.IsWorkspaceSwitching &&
+                    (movePaper || !_controller.IsPaperExportActive)
             };
+            AutomationProperties.SetAutomationId(item, (movePaper ? "MoveToWorkspace" : "SwitchWorkspace") + slot);
             item.Click += (_, _) =>
             {
                 ownerMenu.IsOpen = false;
                 _ = Dispatcher.InvokeAsync(
-                    () => { if (!IsClosed) _ = _controller.SwitchWorkspaceAsync(target); },
+                    () =>
+                    {
+                        if (IsClosed) return;
+                        if (movePaper) _ = _controller.MovePaperToWorkspaceAsync(_paper, target);
+                        else _ = _controller.SwitchWorkspaceAsync(target);
+                    },
                     DispatcherPriority.Background);
             };
             choices.Items.Add(item);
         }
     }
 
-    private static string WorkspaceMenuText(string zh, string en, string ja, string ko) =>
-        UiLanguages.EffectiveUiCulture.TwoLetterISOLanguageName switch
-        {
-            "en" => en,
-            "ja" => ja,
-            "ko" => ko,
-            _ => zh
-        };
+    internal bool HasLivePluginBodyForWorkspaceMove =>
+        _paper.Type == PaperTypes.Note && !IsCurrentBodyProviderMarkdown && _paperBodyHost.HasCurrent;
+
+    internal void DetachPluginBodyForWorkspaceMove()
+    {
+        // Commit/Dispose may save once more. The existing detach boundary drains
+        // those writes and invalidates the old context before its state is copied.
+        RemoveCurrentPaperBody();
+    }
+
+    internal void RestorePluginBodyAfterFailedWorkspaceMove()
+    {
+        if (_windowLifecycle == PaperWindowLifecycleState.Alive &&
+            _isShellBuilt && !_paperBodyHost.HasCurrent)
+            ReloadCurrentPaperBody();
+    }
+
 }

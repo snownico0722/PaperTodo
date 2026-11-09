@@ -1,6 +1,8 @@
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
+using System.Threading;
 
 namespace PaperTodo;
 
@@ -10,11 +12,29 @@ public sealed partial class StateStore
 
     internal void StopWritesForTermination() => WriteLifetime.Stop();
 
+    private static readonly Encoding StrictUtf8 = new UTF8Encoding(true, true);
+    // Test UTF-32 first because its little-endian BOM starts with the UTF-16 LE BOM.
+    private static readonly Encoding[] StateEncodings =
+    [
+        new UTF32Encoding(false, true, true), new UTF32Encoding(true, true, true),
+        new UnicodeEncoding(false, true, true), new UnicodeEncoding(true, true, true),
+        StrictUtf8
+    ];
+
     private static string DecodeStateBytes(byte[] bytes)
     {
-        using var stream = new MemoryStream(bytes, writable: false);
-        using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
-        return reader.ReadToEnd();
+        ReadOnlySpan<byte> data = bytes;
+        try
+        {
+            foreach (var encoding in StateEncodings)
+                if (data.StartsWith(encoding.Preamble))
+                    return encoding.GetString(data[encoding.Preamble.Length..]);
+            return StrictUtf8.GetString(data);
+        }
+        catch (DecoderFallbackException ex)
+        {
+            throw new JsonException("The state file contains an invalid text encoding.", ex);
+        }
     }
 
     private static AppState? ReadCoreState(string json)
@@ -61,7 +81,39 @@ public sealed partial class StateStore
     private void ValidateExplicitSource(string observed, byte[] source)
     {
         WriteLifetime.ThrowIfStopped();
-        if (!string.Equals(DecodeStateBytes(source), observed, StringComparison.Ordinal))
-            throw new ExternalDocumentChangedException();
+        try
+        {
+            if (string.Equals(DecodeStateBytes(source), observed, StringComparison.Ordinal)) return;
+        }
+        catch (JsonException) { /* The previously valid source changed. */ }
+        throw new ExternalDocumentChangedException();
     }
+}
+
+/// <summary>
+/// One process/session write admission signal, shared by all of its workspace stores.
+/// Stop never waits on I/O or dispatches UI work, so it is safe at the crash boundary.
+/// An already admitted OS replacement may finish; no queued writer may start afterwards.
+/// </summary>
+internal sealed class PersistenceWriteLifetime
+{
+    private int _stopped;
+    internal bool IsStopped => Volatile.Read(ref _stopped) != 0;
+    internal void Stop() => Interlocked.Exchange(ref _stopped, 1);
+    internal void ThrowIfStopped()
+    {
+        if (IsStopped) throw new OperationCanceledException("Persistence is stopping; no new write was accepted.");
+    }
+}
+
+internal static class StateJsonReadPolicy
+{
+    public const JsonCommentHandling CommentHandling = JsonCommentHandling.Skip;
+    public const bool AllowTrailingCommas = true;
+
+    public static JsonDocumentOptions DocumentOptions => new()
+    {
+        CommentHandling = CommentHandling,
+        AllowTrailingCommas = AllowTrailingCommas
+    };
 }

@@ -1,4 +1,5 @@
 using System.IO;
+using System.Text;
 using System.Text.Json;
 using PaperTodo;
 
@@ -119,6 +120,20 @@ static void CorruptPrimaryNeverRefreshesBackup()
     File.WriteAllBytes(store.FilePath, Enumerable.Repeat((byte)0, 4096).ToArray());
     Assert(!store.TryRefreshBackupFromPrimary(), "corrupt primary was accepted for backup refresh");
     Assert(ReadTheme(store.BackupPath) == "light", "healthy backup changed after corrupt primary");
+
+    // Keep all supported BOMs readable, but reject a bad text byte even inside a JSON string.
+    const string healthy = """{"theme":"dark","papers":[{"id":"note","content":"原文"}]}""";
+    foreach (var encoding in new[] { Encoding.UTF8, Encoding.Unicode, Encoding.BigEndianUnicode,
+                 Encoding.UTF32, new UTF32Encoding(bigEndian: true, byteOrderMark: true) })
+    {
+        File.WriteAllBytes(store.FilePath, [.. encoding.GetPreamble(), .. encoding.GetBytes(healthy)]);
+        Assert(store.Load().Papers.Single().Content == "原文", "cannot read " + encoding.WebName);
+    }
+    var damaged = Encoding.UTF8.GetBytes(healthy);
+    damaged[Array.IndexOf(damaged, (byte)0xe5)] = 0xff;
+    File.WriteAllBytes(store.FilePath, damaged);
+    Assert(!store.TryRefreshBackupFromPrimary() && store.Load().Theme == "light" &&
+        store.NeedsStartupRecoverySave, "malformed text displaced the healthy backup");
 }
 
 static void OlderSaveVersionCannotOverwriteNewer()
@@ -136,15 +151,24 @@ static void BackupRecoveryIsPreservedUntilNormalSave()
 {
     using var scope = new TempDirectory();
     var seed = NewStore(scope.Path, DurableAtomicFileWriter.Shared);
-    seed.SaveJsonSync(seed.SerializeState(NewState("light")), version: 1);
+    const string legacyJson = """{"theme":"light","papers":[{"id":"legacy-note","type":"note","content":"\u4e2d\u6587\n\"<&>\""}]}""";
+    const string content = "中文\n\"<&>\"";
+    seed.SaveJsonSync(legacyJson, version: 1);
     Assert(seed.TryRefreshBackupFromPrimary(), "initial backup refresh failed");
 
     File.WriteAllText(seed.FilePath, "not-json");
     var recoveredStore = NewStore(scope.Path, DurableAtomicFileWriter.Shared);
-    Assert(recoveredStore.Load().Theme == "light", "backup recovery did not load");
+    var recovered = recoveredStore.Load();
+    Assert(recovered.Theme == "light" && recovered.Papers.Single().Content == content,
+        "escaped note text did not survive backup recovery");
     Assert(!recoveredStore.TryRefreshBackupFromPrimary(),
         "backup used for recovery was allowed to refresh immediately");
     Assert(ReadTheme(recoveredStore.BackupPath) == "light", "recovery backup was changed");
+
+    recoveredStore.SaveJsonSync(recoveredStore.SerializeState(recovered), version: 2);
+    Assert(File.ReadAllText(seed.FilePath).Contains("中文", StringComparison.Ordinal) &&
+        NewStore(scope.Path, DurableAtomicFileWriter.Shared).Load().Papers.Single().Content == content,
+        "the next save did not round-trip readable Chinese and JSON delimiters");
 }
 
 static void DisabledCapsuleModeKeepsQueueLayoutMemory()
@@ -319,7 +343,12 @@ static void ReplaceRetriesTransientSharingFailures()
         ReplaceFailuresRemaining = 2
     };
     var writer = new DurableAtomicFileWriter(fileOperations: operations);
-    writer.Write(target, "new"u8.ToArray());
+    var guardedChecks = 0;
+    writer.Write(target, "new"u8.ToArray(), beforeReplace: () =>
+    {
+        if (Monitor.IsEntered(DurableAtomicFileWriter.SnapshotReadReplaceGate)) guardedChecks++;
+    });
+    Assert(guardedChecks == operations.ReplaceCalls, "a replacement was not revalidated inside the snapshot gate");
 
     Assert(File.ReadAllText(target) == "new", "transient replace failures did not eventually commit");
     Assert(operations.ReplaceCalls == 3, $"expected 3 replace attempts, got {operations.ReplaceCalls}");

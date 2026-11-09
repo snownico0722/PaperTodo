@@ -355,13 +355,6 @@ internal sealed partial class PaperBodyPluginDataStore : IDisposable
             "Plugin paper state",
             out _);
 
-    internal static string NormalizePluginRuntimeStateJson(string? json) =>
-        NormalizeStateJson(
-            json,
-            MaximumPluginRuntimeStateBytes,
-            "Plugin Runtime state",
-            out _);
-
     private static string NormalizeStateJson(
         string? json,
         int maximumBytes,

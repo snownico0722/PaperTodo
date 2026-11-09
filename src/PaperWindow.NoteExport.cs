@@ -1,5 +1,7 @@
-using System.IO;
+using System.ComponentModel;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
 using Microsoft.Win32;
 
 namespace PaperTodo;
@@ -12,22 +14,36 @@ public sealed partial class PaperWindow
          string.Equals(paper.BodyProviderId, PaperBodyProviderIds.Markdown, StringComparison.Ordinal));
 
     private bool _paperExportRunning;
-    private int _paperExportCompleted;
-    private int _paperExportTotal;
 
-    private async void ExportPapers(bool all)
+    private enum ExportScope { Current, Notes, Todos, All }
+
+    private async void ExportPapers(ExportScope scope)
     {
-        if (_paperExportRunning || !IsExportablePaper(_paper))
+        if (_paperExportRunning || _controller.IsDataReloading || !IsExportablePaper(_paper))
             return;
 
-        var caption = Strings.Get(all ? "NoteExportAll" :
-            _paper.Type == PaperTypes.Todo ? "TodoExportCurrent" : "NoteExportCurrent");
+        var all = scope != ExportScope.Current;
+        var caption = Strings.Get(scope switch
+        {
+            ExportScope.Current => _paper.Type == PaperTypes.Todo ? "TodoExportCurrent" : "NoteExportCurrent",
+            ExportScope.Notes => "MenuExportAllNotes",
+            ExportScope.Todos => "MenuExportAllTodos",
+            _ => "NoteExportAll"
+        });
 
         try
         {
             // Capture live text and detached Todo items on the UI thread.
             // Sort and render Todo Markdown only after the worker starts.
-            var snapshots = (all ? _controller.State.Papers.Where(IsExportablePaper) : new[] { _paper })
+            var images = _controller.ImageStore;
+            IEnumerable<PaperData> selected = scope switch
+            {
+                ExportScope.Current => [_paper],
+                ExportScope.Notes => _controller.State.Papers.Where(p => p.Type == PaperTypes.Note),
+                ExportScope.Todos => _controller.State.Papers.Where(p => p.Type == PaperTypes.Todo),
+                _ => _controller.State.Papers
+            };
+            var snapshots = selected.Where(IsExportablePaper)
                 .Select(paper => (
                     paper.Id,
                     Title: _controller.PaperTitleText(paper),
@@ -59,24 +75,26 @@ public sealed partial class PaperWindow
                 FileName = all ? DateTime.Now.ToString("yyyy-MM-dd") + "_PaperTodo"
                     : NotePortableExport.SafeName(snapshots[0].Title)
             };
-            if (dialog.ShowDialog(InteractionWindow) != true) return;
+            if (dialog.ShowDialog(InteractionWindow) != true || IsClosed || _controller.IsDataReloading ||
+                !ReferenceEquals(images, _controller.ImageStore)) return;
 
             var format = dialog.FilterIndex == 2 ? NoteExportFormat.Html : NoteExportFormat.Markdown;
             var destination = dialog.FileName;
             var missingLabel = Strings.Get("NoteExportMissingImageText");
-            _paperExportRunning = true;
-            _paperExportCompleted = 0;
-            _paperExportTotal = snapshots.Length;
-            var progress = new Progress<int>(value => _paperExportCompleted = value);
-            var result = await Task.Run(() =>
+            var result = await RunExportWithProgressAsync(caption, snapshots.Length, (progress, token) =>
             {
-                var documents = snapshots.Select(snapshot => snapshot.TodoItems is { } items
-                    ? NotePortableExport.FromTodoItems(snapshot.Id, snapshot.Title, items)
-                    : new NoteExportDocument(snapshot.Id, snapshot.Title, snapshot.Markdown!))
-                    .ToArray();
-                return NotePortableExport.Export(
-                    destination, documents, format, all, _controller.ImageStore, missingLabel, progress);
+                var documents = new List<NoteExportDocument>(snapshots.Length);
+                foreach (var snapshot in snapshots)
+                {
+                    token.ThrowIfCancellationRequested();
+                    documents.Add(snapshot.TodoItems is { } items
+                        ? NotePortableExport.FromTodoItems(snapshot.Id, snapshot.Title, items)
+                        : new NoteExportDocument(snapshot.Id, snapshot.Title, snapshot.Markdown!));
+                }
+                return NotePortableExport.Export(destination, documents, format, all, images,
+                    missingLabel, progress, token);
             });
+            if (result == null) return;
 
             var message = Strings.Format("NoteExportSummary", result.Exported, snapshots.Length,
                 result.MissingImages, result.NotesWithMissingImages, destination);
@@ -95,11 +113,144 @@ public sealed partial class PaperWindow
                 MessageBox.Show(InteractionWindow, Strings.Format("NoteExportFailure", ex.Message),
                     caption, MessageBoxButton.OK, MessageBoxImage.Warning);
         }
+    }
+
+    private async Task<NoteExportResult?> RunExportWithProgressAsync(string caption, int total,
+        Func<IProgress<int>, CancellationToken, NoteExportResult> export)
+    {
+        using var cancellation = new CancellationTokenSource();
+        var dialog = new PaperExportProgressWindow(InteractionWindow, caption, total, cancellation);
+        var progress = new Progress<int>(dialog.Report);
+        _paperExportRunning = true;
+        try
+        {
+            _controller.SetPaperExportActive(true);
+            dialog.Show();
+            return await Task.Run(() => export(progress, cancellation.Token), cancellation.Token);
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+        {
+            return null;
+        }
         finally
         {
             _paperExportRunning = false;
-            _paperExportCompleted = 0;
-            _paperExportTotal = 0;
+            try { dialog.Finish(); }
+            finally { _controller.SetPaperExportActive(false); }
         }
+    }
+
+    private async void ExportNoteAsImage()
+    {
+        if (_paperExportRunning || _controller.IsDataReloading || !_isExpandedEditorMode ||
+            !IsCurrentBodyProviderMarkdown || _noteBox == null) return;
+        // Capture the live editor, not the debounced PaperData. Export never changes its
+        // selection, scroll position, source, undo history or persisted note content.
+        var markdown = _noteBox.Text;
+        var title = _controller.PaperTitleText(_paper);
+        var noteId = _paper.Id;
+        var images = _controller.ImageStore;
+        var missing = Strings.Get("NoteExportMissingImageText");
+        var preview = new NoteImageExportWindow(InteractionWindow, title, cancellation =>
+        {
+            var cache = new NoteImageExport.ImageSourceCache(images, noteId);
+            return NoteImageExport.Compose(title, markdown, cache.Resolve, missing, cancellation);
+        });
+        _paperExportRunning = true;
+        try
+        {
+            _controller.SetPaperExportActive(true);
+            preview.ShowDialog();
+        }
+        finally
+        {
+            // Closing cancels layout, but the STA may still be finishing an image
+            // read. Keep the existing workspace gate until that task has ended.
+            try { await preview.Preparation; }
+            finally
+            {
+                _paperExportRunning = false;
+                _controller.SetPaperExportActive(false);
+            }
+        }
+    }
+}
+
+internal sealed class PaperExportProgressWindow : Window
+{
+    private readonly TextBlock _status = new();
+    private readonly ProgressBar _progress;
+    private readonly Button _cancel;
+    private readonly CancellationTokenSource _cancellation;
+    private readonly int _total;
+    private bool _finished;
+
+    internal PaperExportProgressWindow(Window owner, string caption, int total, CancellationTokenSource cancellation)
+    {
+        _total = total;
+        _cancellation = cancellation;
+        Title = caption;
+        if (owner.IsVisible) Owner = owner;
+        WindowStartupLocation = Owner == null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner;
+        ShowInTaskbar = Owner == null;
+        ResizeMode = ResizeMode.NoResize;
+        SizeToContent = SizeToContent.Height;
+        Width = 320;
+        var panel = new StackPanel { Margin = new Thickness(16) };
+        _progress = new ProgressBar { Height = 14, Maximum = total, IsIndeterminate = total == 1,
+            Margin = new Thickness(0, 8, 0, 12) };
+        _cancel = new Button { Content = Strings.Get("CommonCancel"), MinWidth = 72,
+            Padding = new Thickness(10, 3, 10, 3), HorizontalAlignment = HorizontalAlignment.Right };
+        _cancel.Click += (_, _) => RequestCancellation();
+        panel.Children.Add(_status);
+        panel.Children.Add(_progress);
+        panel.Children.Add(_cancel);
+        Content = panel;
+        Report(0);
+    }
+
+    internal void Report(int completed)
+    {
+        if (_finished || _cancellation.IsCancellationRequested) return;
+        _status.Text = Strings.Format("NoteExportProgress", completed, _total);
+        _progress.Value = completed;
+    }
+
+    private void RequestCancellation()
+    {
+        if (_finished || _cancellation.IsCancellationRequested) return;
+        _cancellation.Cancel();
+        _cancel.IsEnabled = false;
+        _status.Text = Strings.Get("NoteExportCancelling");
+    }
+
+    protected override void OnPreviewKeyDown(KeyEventArgs e)
+    {
+        base.OnPreviewKeyDown(e);
+        if (e.Key != Key.Escape) return;
+        e.Handled = true;
+        RequestCancellation();
+    }
+
+    protected override void OnClosing(CancelEventArgs e)
+    {
+        if (!_finished)
+        {
+            RequestCancellation();
+            e.Cancel = true;
+        }
+        base.OnClosing(e);
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        if (!_finished) _cancellation.Cancel();
+        base.OnClosed(e);
+    }
+
+    internal void Finish()
+    {
+        _finished = true;
+        if (IsLoaded) Close();
     }
 }

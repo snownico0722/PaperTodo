@@ -145,7 +145,8 @@ public sealed partial class PaperWindow
         _markdownBodySession?.ContentDirty == true;
 
     internal string CurrentMarkdownContentForExternalRead() =>
-        _markdownBodySession?.NoteBox?.PersistentText ?? _paper.Content ?? "";
+        _markdownBodySession is { ContentDirty: true, NoteBox: { } editor }
+            ? editor.PersistentText : _paper.Content ?? "";
 
     private void CommitPendingNoteContent()
     {
@@ -160,7 +161,11 @@ public sealed partial class PaperWindow
         _controller.CompleteEdgeCapsuleQueueCompositionProxyFor(this);
         CommitPendingEditsForSave();
         CancelExperimentalTetherPresentation(showMain: false);
-        DetachExperimentalWindowAttachment(savePosition: false);
+        if (!HasExperimentalWindowTether ||
+            ExternalWindowNative.IsIdentityValid(_experimentalWindowAttachment!.ExternalWindow))
+        {
+            DetachExperimentalWindowAttachment(savePosition: false);
+        }
         SettlePaperFormPresentation();
         AbortAllInteractions(InteractionAbortReason.Hiding);
     }
@@ -386,7 +391,7 @@ public sealed partial class PaperWindow
             _capsuleShell.Opacity = 0;
             MinWidth = PaperLayoutDefaults.MinWidth;
             MinHeight = PaperLayoutDefaults.MinHeight;
-            ResizeMode = ResizeMode.CanResizeWithGrip;
+            ResizeMode = ResizeMode.CanResize;
             if (_controller.UsesNativeMicaWindows)
             {
                 Width = Math.Max(_targetTransitionWidth, PaperLayoutDefaults.MinWidth);

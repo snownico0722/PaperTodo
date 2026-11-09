@@ -34,6 +34,16 @@ public sealed partial class AppController
         var collapsedTarget = target?.Box.Collapsed == true;
         var top = EdgeCapsuleFreeQueuePolicy.GhostSlotTop(drop.Decision,
             target?.Box.HasMaster == true, pitch, collapsedTarget);
+        Action? raiseDrag = _windows.TryGetValue(drag.OwnerId, out var dragWindow)
+            ? dragWindow.BringEdgeCapsuleDragAboveGhost : null;
+        var topmost = dragWindow?.EdgeCapsuleDragIsTopmost ?? true;
+        if (collapsedTarget && drop.Decision.Kind == EdgeFreeQueueDropKind.Insert)
+        {
+            _nativeQueueDropGhost?.ShowMergeHaloAt(geometry, side, drop.Decision.TopDip,
+                NativeDropGhostMasterWidth(drop.DestinationKey, geometry), raiseDrag, topmost);
+            return;
+        }
+
         // Preview every carried member at its own docked width. Independent
         // placements prepend their short master; merges only carry members.
         var hasMaster = drop.Decision.Kind == EdgeFreeQueueDropKind.Move && State.UseCapsuleCollapseAll;
@@ -42,16 +52,7 @@ public sealed partial class AppController
             widths.Add(NativeDropGhostMasterWidth(drag.SourceKey, geometry));
         foreach (var id in drag.CarriedIds)
             widths.Add(NativeDropGhostMemberWidth(id, geometry));
-        Action? raiseDrag = _windows.TryGetValue(drag.OwnerId, out var dragWindow)
-            ? dragWindow.BringEdgeCapsuleDragAboveGhost : null;
-        var topmost = dragWindow?.EdgeCapsuleDragIsTopmost ?? true;
-        if (collapsedTarget && drop.Decision.Kind == EdgeFreeQueueDropKind.Insert &&
-            target != null)
-            _nativeQueueDropGhost?.ShowMergeHaloAt(geometry, side, drop.Decision.TopDip,
-                NativeDropGhostMasterWidth(target.Key, geometry), raiseDrag, topmost);
-        else
-            _nativeQueueDropGhost?.ShowAt(geometry, side, top, widths,
-                DeepCapsuleGap, raiseDrag, topmost);
+        _nativeQueueDropGhost?.ShowAt(geometry, side, top, widths, DeepCapsuleGap, raiseDrag, topmost);
     }
 
     // Same projection as the ordinary cross-edge commit: the preview is never
@@ -346,7 +347,7 @@ public sealed partial class AppController
             _masterCapsules.TryGetValue(targetKey, out var foldedMaster))
         {
             _nativeQueueDropGhost.ShowMergeHaloAt(geometry, side,
-                foldedMaster.AnchorTop, foldedMaster.DesiredDockedWidthFor(geometry),
+                target.StartTopMargin, foldedMaster.DesiredDockedWidthFor(geometry),
                 raiseDrag, topmost);
             return;
         }

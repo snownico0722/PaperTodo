@@ -53,4 +53,38 @@ internal sealed partial class PaperBodyPluginDataStore
             UpdateSaveTimersAfterFlush();
         }
     }
+
+    internal void CopyPaperStateTo(PaperBodyPluginDataStore destination, string paperId, string destinationPaperId)
+    {
+        var states = new Dictionary<string, PaperDataState>(StringComparer.Ordinal);
+        lock (_gate)
+        {
+            ThrowIfDisposed();
+            foreach (var providerId in EnumerateStoredProviderIds())
+                if (Load(providerId).Papers.TryGetValue(paperId, out var state))
+                    states[providerId] = state;
+        }
+
+        // The target workspace is inactive. Persist only this paper's entries;
+        // settings, Runtime state and every other paper stay owned by the target.
+        lock (destination._writeGate)
+        lock (destination._gate)
+        {
+            destination.ThrowIfDisposed();
+            foreach (var (providerId, state) in states)
+            {
+                var current = destination.Load(providerId);
+                var document = new PluginDataDocument
+                {
+                    StorageVersion = current.StorageVersion,
+                    Settings = new(current.Settings, StringComparer.Ordinal),
+                    Runtime = current.Runtime,
+                    Papers = new(current.Papers, StringComparer.Ordinal)
+                    { [destinationPaperId] = state }
+                };
+                destination.SaveNow(providerId, document);
+                destination._cache[providerId] = document;
+            }
+        }
+    }
 }

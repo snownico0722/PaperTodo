@@ -25,6 +25,7 @@ internal sealed class NoteImageExportWindow : Window
     private NoteImageSizePrediction? _sizeEstimate;
     private NoteImageFormat _preferredFormat = NoteImageFormat.Jpeg;
     private bool _closed;
+    internal Task Preparation { get; private set; } = Task.CompletedTask;
 
     internal NoteImageExportWindow(Window owner, string title, Func<CancellationToken, NoteImageArtifact> compose)
     {
@@ -191,7 +192,7 @@ internal sealed class NoteImageExportWindow : Window
             catch (EntryPointNotFoundException) { }
         };
         PreviewKeyDown += (_, e) => { if (e.Key == Key.Escape) { e.Handled = true; Close(); } };
-        Loaded += async (_, _) => await PrepareAsync();
+        Loaded += (_, _) => Preparation = PrepareAsync();
         Closed += (_, _) => { _closed = true; _lifetime.Cancel(); };
     }
 

@@ -330,7 +330,7 @@ public sealed partial class MarkdownTextBox
         try
         {
             var line = Document.GetLineByOffset(Math.Clamp(anchor.Offset, 0, Document.TextLength));
-            if (!TryGetImageReferenceForStableEditingLine(line, out var parsed, out _) ||
+            if (!TryGetImageReferenceForLine(line, out var parsed, out _) ||
                 !string.Equals(parsed.ImageId, _selectedImageId, StringComparison.Ordinal))
             {
                 return ImageAwareCopyResult.NotApplicable;

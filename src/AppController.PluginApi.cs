@@ -67,7 +67,7 @@ public sealed partial class AppController
             PaperTitleText(paper),
             paper.BodyProviderId,
             contentAvailable,
-            contentAvailable ? paper.Content ?? "" : "");
+            contentAvailable ? CurrentMarkdownContentForExternalRead(paper) : "");
     }
 
     internal void PrepareExternalPaperOperation(PaperData? targetPaper = null)
@@ -151,11 +151,11 @@ public sealed partial class AppController
 
     internal void RecordExternalTodoMutationUndoStep(
         PaperData paper,
-        IReadOnlyList<PaperItem> before)
+        List<PaperItem> snapshot)
     {
         if (_windows.TryGetValue(paper.Id, out var window))
         {
-            window.RecordExternalTodoMutationAsUndoStep(before);
+            window.RecordExternalTodoMutationAsUndoStep(snapshot);
         }
     }
 

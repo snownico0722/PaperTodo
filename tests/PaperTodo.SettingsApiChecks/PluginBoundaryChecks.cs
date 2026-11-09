@@ -109,6 +109,8 @@ internal static partial class Program
             var commands = c.PaperCommands;
             var mcp = new McpCommandService(c, commands);
             var oldEnabled = c.State.McpEnabled;
+            var oldAdditive = c.State.McpAllowBlankWrites;
+            var oldFull = c.State.McpAllowFullWrites;
             c.State.McpEnabled = true;
             try
             {
@@ -118,7 +120,7 @@ internal static partial class Program
                     _ = commands.GetPaper(owner.Id);
                     _ = commands.ListTodos(includeBlank: true);
                     Check(commands.GetNote(owner.Id)!.Content == owner.Content,
-                        "Note reads use the existing model, without synchronizing the editor.");
+                        "A clean note should read back its current content.");
                     _ = mcp.Execute(Json(new { method = "list_papers", @params = new { } }));
                 }
                 Throws<PaperCommandException>(() => commands.ReadNoteImage(note.Id, "missing"), "asset_not_found");
@@ -172,6 +174,35 @@ internal static partial class Program
                         "The unrelated Markdown edit must be published as a user change.");
                 }
 
+                void ReplaceViaMcp(string text) => mcp.Execute(Json(new
+                {
+                    method = "write_note",
+                    @params = new { paper_id = note.Id, mode = "replace", content = text }
+                }));
+
+                c.State.McpAllowFullWrites = c.State.McpAllowBlankWrites = false;
+                var previousText = note.Content;
+                box.Text = "unsaved edit";
+                using var pluginReader = new PaperBodyPluginHostApi(c, commands, owner.Id, "tests.reader",
+                    [PaperTodoPermissionNames.NotesRead], () => true, () => true);
+                Check(pluginReader.GetNote(note.Id)!.Content == box.PersistentText && note.Content == previousText,
+                    "Plugin reads must see pending Markdown without committing it.");
+                Throws<McpApiException>(() => ReplaceViaMcp(previousText), "full_writes_disabled");
+                ReplaceViaMcp(box.PersistentText);
+                Check(box.PersistentText == "unsaved edit" && note.Content == previousText,
+                    "Read-only replace must leave both the draft and its pending status intact.");
+
+                box.Text = "";
+                noteWindow.CommitPendingMarkdownContentForSave();
+                box.Text = "draft in a previously empty note";
+                c.State.McpAllowBlankWrites = true;
+                Throws<McpApiException>(() => ReplaceViaMcp("replacement"), "full_writes_disabled");
+                Check(note.Content == "" && box.PersistentText == "draft in a previously empty note",
+                    "An additive grant cannot replace a live draft in a previously empty note.");
+                box.Text = "";
+                ReplaceViaMcp("filled blank note");
+                Check(note.Content == "filled blank note", "Additive access can still fill a genuinely empty note.");
+
                 box.Text = "user invalid write edit";
                 var beforeInvalidWrite = note.Content;
                 Throws<PaperCommandException>(() => commands.WriteNote(
@@ -200,7 +231,12 @@ internal static partial class Program
                 Check(probe.Commits == 0,
                     "Target Markdown ordering must not invoke Commit on an unrelated body.");
             }
-            finally { c.State.McpEnabled = oldEnabled; }
+            finally
+            {
+                c.State.McpEnabled = oldEnabled;
+                c.State.McpAllowBlankWrites = oldAdditive;
+                c.State.McpAllowFullWrites = oldFull;
+            }
 
             window.NotifyCurrentPaperBodyActivated();
             window.NotifyCurrentPaperBodyDeactivated();

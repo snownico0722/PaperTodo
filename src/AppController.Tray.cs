@@ -731,10 +731,12 @@ public sealed partial class AppController
                             menu.Focus();
                         }
                     }
-                    else if (existing.Contains(target) && target != WorkspaceNumber)
+                    else if (!IsPaperExportActive && existing.Contains(target) && target != WorkspaceNumber)
                         ShowConfirmation(target);
                 });
             var tiles = ((Grid)selector.Child).Children.OfType<Border>().ToArray();
+            if (IsPaperExportActive)
+                foreach (var tile in tiles.Take(existing.Count)) tile.IsEnabled = false;
             if (firstEmpty != 0)
             {
                 var tile = tiles[^1];
@@ -900,12 +902,12 @@ public sealed partial class AppController
             Strings.Get("StudioTitle"), OpenStudio);
         var newTodoButton = TrayToolbarAction(
             menu,
-            CreateTrayAddIcon("✓"),
+            CreateTrayAddIcon(PaperTypes.Todo),
             Strings.Get("TrayNewTodo"),
             () => CreatePaper(PaperTypes.Todo, show: true));
         var newNoteButton = TrayToolbarAction(
             menu,
-            CreateTrayAddIcon("✎"),
+            CreateTrayAddIcon(PaperTypes.Note),
             Strings.Get("TrayNewNote"),
             () => CreatePaper(PaperTypes.Note, show: true));
 
@@ -1106,9 +1108,43 @@ public sealed partial class AppController
         return icon;
     }
 
-    private FrameworkElement CreateTrayAddIcon(string glyph)
+    private FrameworkElement CreateTrayAddIcon(string paperType)
     {
-        return CreateTrayAddVectorIcon(glyph);
+        var presenter = new FrameworkElementFactory(typeof(ContentPresenter));
+        presenter.SetValue(ContentPresenter.ContentProperty, new TemplateBindingExtension(ContentControl.ContentProperty));
+        presenter.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+        presenter.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+        var icon = new ContentControl
+        {
+            Template = new ControlTemplate(typeof(ContentControl)) { VisualTree = presenter },
+            Foreground = TrayTextBrush,
+            Focusable = false,
+            IsHitTestVisible = false,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+            VerticalContentAlignment = VerticalAlignment.Center,
+            SnapsToDevicePixels = true,
+            UseLayoutRounding = true
+        };
+        icon.Content = paperType == PaperTypes.Note
+            ? PaperWindow.CreateTopBarNewNoteIcon(icon)
+            : PaperWindow.CreateTopBarNewTodoIcon(icon);
+        return icon;
+    }
+
+    private FrameworkElement CreateTrayPaperTypeVectorIcon(PaperData paper)
+    {
+        return new VectorGlyphElement(
+            PaperTypeIcon(paper),
+            new FontFamily("Segoe UI Symbol"),
+            PaperTypeIconFontSize(paper),
+            FontWeights.SemiBold)
+        {
+            Foreground = TrayTextBrush,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        };
     }
 
     private MenuItem TrayPaperItem(ContextMenu menu, PaperData paper)

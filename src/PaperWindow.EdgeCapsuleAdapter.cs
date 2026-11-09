@@ -154,15 +154,26 @@ public sealed partial class PaperWindow
             EdgeCapsuleIntent.DockingRevealStarted(),
             EdgeCapsuleDirty.None);
 
-    private bool FinishEdgeCapsulePointerInteraction() =>
-        DispatchEdgeCapsuleIntent(
+    private bool FinishEdgeCapsulePointerInteraction()
+    {
+        if (IsDeepCapsuleReordering || IsDeepCapsuleDockingHandoff)
+        {
+            _controller.DeferEdgeCapsulePreviewAfterDrag();
+        }
+        return DispatchEdgeCapsuleIntent(
             EdgeCapsuleIntent.PointerInteractionFinished(),
             EdgeCapsuleDirty.Presentation | EdgeCapsuleDirty.Pointer);
+    }
 
-    private bool FinishEdgeCapsuleDockingHandoff() =>
-        DispatchEdgeCapsuleIntent(
+    private bool FinishEdgeCapsuleDockingHandoff()
+    {
+        // A floating return can outlast the mouse-up grace. Start the same input debounce when
+        // its verified docked frame becomes interactive, without delaying the visual handoff.
+        _controller.DeferEdgeCapsulePreviewAfterDrag();
+        return DispatchEdgeCapsuleIntent(
             EdgeCapsuleIntent.PointerInteractionFinished(),
             EdgeCapsuleDirty.None);
+    }
 
     private bool MarkEdgeCapsuleOpenedFromEdge() =>
         DispatchEdgeCapsuleIntent(
@@ -230,5 +241,25 @@ public sealed partial class PaperWindow
                 EdgeCapsuleSlotState.RetractedExpanded or
                 EdgeCapsuleSlotState.RetractingExpanded) || !_paper.IsCollapsed,
             "An expanded edge-capsule state requires an expanded paper model.");
+    }
+}
+
+internal static class EdgeCapsuleOpenOriginPolicy
+{
+    internal static bool ShouldMarkOpenedFromEdge(
+        EdgeCapsuleSlotState currentSlot,
+        EdgeCapsulePaperForm targetForm)
+    {
+        if (targetForm != EdgeCapsulePaperForm.Expanded)
+        {
+            return false;
+        }
+
+        // Open origin describes where expansion started, not whether the docked slot remains
+        // visible afterwards. Capture the collapsed-slot state before PaperFormChanged can detach it.
+        return currentSlot is
+            EdgeCapsuleSlotState.CollapsedDocked or
+            EdgeCapsuleSlotState.RetractedCollapsed or
+            EdgeCapsuleSlotState.RetractingCollapsed;
     }
 }

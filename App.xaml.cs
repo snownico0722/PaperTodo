@@ -5,6 +5,7 @@ using System.IO;
 using System.Reflection;
 using System.Threading;
 using System.Windows;
+using System.Windows.Threading;
 using Application = System.Windows.Application;
 
 namespace PaperTodo;
@@ -36,6 +37,45 @@ public partial class App : Application
     private bool _singleInstanceCommandsReady;
     private SingleInstanceHelper? _singleInstance;
     private int _handlingGlobalException;
+
+    static App()
+    {
+        // OnStartup is async void. Setting CurrentUICulture only inside that async execution
+        // context can be restored to the OS culture when control returns to the WPF Dispatcher.
+        // Establish the persisted UI culture on the root UI thread before App is constructed,
+        // InitializeComponent runs, or any Dispatcher work is queued. The existing OnStartup
+        // application remains a harmless idempotent re-apply during normal UI startup.
+        if (!McpBridge.IsRequested(Environment.GetCommandLineArgs()))
+        {
+            ApplyStartupCulturePreference(UiLanguages.LoadPersistedPreference());
+        }
+    }
+
+    public App()
+    {
+        // MCP is a stdio bridge process and never owns GUI edge surfaces or usage telemetry.
+        if (McpBridge.IsRequested(Environment.GetCommandLineArgs()))
+        {
+            return;
+        }
+
+        InitializeTelemetry();
+
+        // Pay known DComp publication and WPF HWND first-use costs during startup only when edge
+        // browsing is enabled. Users who keep the feature off should not create any prewarm HWNDs
+        // or compositor resources just for this path.
+        _ = Dispatcher.BeginInvoke(
+            DispatcherPriority.SystemIdle,
+            (Action)(() =>
+            {
+                if (AppController.Current?.State.ExperimentalEdgeCapsuleHoverPreview != true)
+                {
+                    return;
+                }
+
+                EdgeCapsuleQueueCompositionProxy.PrewarmLightweight(Dispatcher);
+            }));
+    }
 
     protected override async void OnStartup(StartupEventArgs e)
     {

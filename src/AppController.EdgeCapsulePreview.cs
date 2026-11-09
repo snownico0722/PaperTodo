@@ -8,6 +8,8 @@ public sealed partial class AppController
     // Two 60-Hz frames reject incidental pass-through without adding the visibly sluggish 50-ms
     // floor to every A-to-B switch. The negative-only predictor can still extend or veto motion.
     private const double EdgeCapsulePreviewTransferResidenceMilliseconds = 32;
+    private const double EdgeCapsulePreviewPostDragResidenceMilliseconds = 140;
+    private const double EdgeCapsulePreviewPostDragStableMilliseconds = 48;
     private const double EdgeCapsulePreviewPointerToleranceDip = 2;
     private const double EdgeCapsulePreviewCorridorTrackingIntervalMilliseconds = 24;
     private const double EdgeCapsulePreviewActivationIntentTrackingMilliseconds = 16;
@@ -28,6 +30,7 @@ public sealed partial class AppController
         _edgeCapsulePreviewCorridorExitIntent;
     private DispatcherTimer? _edgeCapsulePreviewCorridorIntentTimer;
     private DispatcherTimer? _edgeCapsulePreviewActivationIntentTimer;
+    private long _edgeCapsulePreviewLastDragFinishedTimestamp;
     private EdgeCapsulePreviewPointerAnchor?
         _edgeCapsulePreviewLayoutSuppressionAnchor;
     private int _edgeCapsulePreviewTransferGeneration;
@@ -273,8 +276,8 @@ public sealed partial class AppController
                 return;
             }
 
-            // This also recovers an initial enter whose first dispatcher turn became stale. A real
-            // first hit has no dwell; the queued callback still revalidates the physical target.
+            // This also recovers an initial enter whose first dispatcher turn became stale. Normal
+            // first hits have no dwell; a just-finished drag uses the shared activation intent.
             if (window.IsEdgeCapsulePointerOver &&
                 window.CanEnterEdgeCapsulePreview &&
                 window.IsEdgeCapsuleInteractiveAt(pointer.Value))
@@ -446,6 +449,16 @@ public sealed partial class AppController
             StringComparison.Ordinal);
         CloseEdgeCapsulePreview(animate: true, arrange: true);
         return draggedWindowWasOwner;
+    }
+
+    internal void DeferEdgeCapsulePreviewAfterDrag()
+    {
+        // Releasing capture and arranging the dropped queue can synthesize another first hit.
+        // Reuse the activation intent's physical hit/stability checks for this brief input grace;
+        // the gesture and visual-authority handoff still finish without waiting for this deadline.
+        CancelEdgeCapsulePreviewActivationIntent();
+        _edgeCapsulePreviewLastDragFinishedTimestamp = Stopwatch.GetTimestamp();
+        _edgeCapsulePreviewIntentPredictor.Reset();
     }
 
     internal void CloseEdgeCapsulePreviewForClose(PaperWindow window)
@@ -1234,22 +1247,32 @@ public sealed partial class AppController
         var now = Stopwatch.GetTimestamp();
         var predictiveIntentEnabled =
             State.ExperimentalEdgeCapsuleHoverIntent;
-        if (session == null)
+        var intent = _edgeCapsulePreviewActivationIntent;
+        var postDrag = session == null &&
+            ((_edgeCapsulePreviewLastDragFinishedTimestamp != 0 &&
+              Stopwatch.GetElapsedTime(
+                  _edgeCapsulePreviewLastDragFinishedTimestamp,
+                  now).TotalMilliseconds < EdgeCapsulePreviewPostDragResidenceMilliseconds) ||
+             (intent is { ExpectedOwnerPaperId: null } initialIntent &&
+              string.Equals(initialIntent.TargetPaperId, targetPaperId, StringComparison.Ordinal)));
+        if (session == null && predictiveIntentEnabled)
         {
-            if (predictiveIntentEnabled)
-            {
-                _edgeCapsulePreviewIntentPredictor.Observe(
-                    pointer,
-                    now,
-                    targetGeometry.DpiScaleX,
-                    targetGeometry.DpiScaleY);
-            }
+            _edgeCapsulePreviewIntentPredictor.Observe(
+                pointer,
+                now,
+                targetGeometry.DpiScaleX,
+                targetGeometry.DpiScaleY);
+        }
+        if (session == null && !postDrag)
+        {
             ResetEdgeCapsulePreviewActivationIntent();
             QueueEdgeCapsulePreviewTransfer(target);
             return;
         }
 
-        var intent = _edgeCapsulePreviewActivationIntent;
+        var residenceMilliseconds = postDrag
+            ? EdgeCapsulePreviewPostDragResidenceMilliseconds
+            : EdgeCapsulePreviewTransferResidenceMilliseconds;
         if (!intent.HasValue ||
             !string.Equals(
                 intent.Value.TargetPaperId,
@@ -1274,7 +1297,7 @@ public sealed partial class AppController
                 $"pointer={pointer.X},{pointer.Y}");
             ScheduleEdgeCapsulePreviewActivationIntentCheck(
                 target,
-                EdgeCapsulePreviewTransferResidenceMilliseconds);
+                residenceMilliseconds);
             return;
         }
 
@@ -1299,13 +1322,15 @@ public sealed partial class AppController
         var stableElapsed = Stopwatch.GetElapsedTime(
             currentIntent.StableSinceTimestamp,
             now).TotalMilliseconds;
-        if (candidateElapsed <
-            EdgeCapsulePreviewTransferResidenceMilliseconds)
+        var remainingResidence = residenceMilliseconds - candidateElapsed;
+        var remainingStability = postDrag
+            ? EdgeCapsulePreviewPostDragStableMilliseconds - stableElapsed
+            : 0;
+        if (remainingResidence > 0 || remainingStability > 0)
         {
             ScheduleEdgeCapsulePreviewActivationIntentCheck(
                 target,
-                EdgeCapsulePreviewTransferResidenceMilliseconds -
-                candidateElapsed);
+                Math.Max(remainingResidence, remainingStability));
             return;
         }
 
@@ -1313,7 +1338,7 @@ public sealed partial class AppController
         {
             var decision =
                 _edgeCapsulePreviewIntentPredictor.Evaluate(
-                    EdgeCapsuleHoverIntentMode.Transfer,
+                    postDrag ? EdgeCapsuleHoverIntentMode.Initial : EdgeCapsuleHoverIntentMode.Transfer,
                     State.ExperimentalEdgeCapsuleHoverIntentSensitivity,
                     targetGeometry.Bounds,
                     pointer,
@@ -1800,8 +1825,30 @@ public sealed partial class AppController
     {
         _edgeCapsulePreviewActivationIntentTimer?.Stop();
         if (IsExiting ||
-            _edgeCapsulePreviewActivationIntent is not { } intent ||
-            _edgeCapsulePreviewSession is not { } session ||
+            _edgeCapsulePreviewActivationIntent is not { } intent)
+        {
+            ResetEdgeCapsulePreviewActivationIntent();
+            return;
+        }
+
+        var session = _edgeCapsulePreviewSession;
+        if (intent.ExpectedOwnerPaperId == null)
+        {
+            if (session != null ||
+                !_windows.TryGetValue(intent.TargetPaperId, out var target) ||
+                !WindowNative.TryGetCursorScreenPosition(out var initialPointer))
+            {
+                CancelEdgeCapsulePreviewActivationIntent();
+                return;
+            }
+
+            // No session exists yet. The same physical-input entry point cancels the candidate
+            // when the pointer has left its current InteractiveBounds or another drag owns input.
+            NotifyEdgeCapsulePreviewPhysicalPointer(target, initialPointer);
+            return;
+        }
+
+        if (session == null ||
             !string.Equals(
                 intent.ExpectedOwnerPaperId,
                 session.OwnerPaperId,

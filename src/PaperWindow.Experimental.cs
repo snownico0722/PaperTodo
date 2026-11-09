@@ -88,7 +88,6 @@ public sealed partial class PaperWindow
     {
         var passive = IsExperimentalPassive;
         _edgeCapsuleHost?.SetExperimentalPassive(passive);
-        _experimentalTetherCapsule?.SetExperimentalPassive(passive);
     }
 
     private void ApplyExperimentalPassiveNativeState()
@@ -125,14 +124,6 @@ public sealed partial class PaperWindow
 
     internal void UpdateExperimentalOpacitySettings(bool animate = true)
     {
-        _experimentalTetherCapsule?.UpdateRestingOpacity(
-            _controller.State.ExperimentalRestingCapsuleOpacity
-                ? ExperimentalOpacityLevels.Normalize(
-                    _controller.State.ExperimentalRestingCapsuleOpacityLevel,
-                    ExperimentalOpacityLevels.DefaultRestingCapsule)
-                : 1.0,
-            _controller.State.ExperimentalRestingCapsuleOpacity &&
-            _controller.State.ExperimentalRestingCapsuleOpacityAlways);
         if (_isShellBuilt)
         {
             if (_controller.State.ExperimentalRestingCapsuleOpacity ||

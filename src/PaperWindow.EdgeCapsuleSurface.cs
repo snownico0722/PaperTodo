@@ -457,7 +457,7 @@ public sealed partial class PaperWindow
         _capsuleShell.Opacity = 0.0;
         MinWidth = PaperLayoutDefaults.MinWidth;
         MinHeight = PaperLayoutDefaults.MinHeight;
-        ResizeMode = ResizeMode.CanResizeWithGrip;
+        ResizeMode = ResizeMode.CanResize;
 
         var rawTargetWidth = Math.Max(_paper.Width, PaperLayoutDefaults.MinWidth);
         var rawTargetHeight = Math.Max(_paper.Height, PaperLayoutDefaults.MinHeight);

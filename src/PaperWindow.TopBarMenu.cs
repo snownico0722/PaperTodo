@@ -76,12 +76,12 @@ public sealed partial class PaperWindow
     {
         var todo = CanBeginPaperLinkDrag();
         var window = CanBeginWindowBindingDrag();
-        var label = todo && window ? "MenuTopBarAssociationDrag" :
+        var hint = todo && window ? "MenuTopBarAssociationDrag" :
             todo ? "MenuTopBarAssociationDragTodo" : "MenuTopBarAssociationDragWindow";
         var item = new MenuItem
         {
-            Header = Strings.Get(label),
-            ToolTip = AssociationDragHint(),
+            Header = Strings.Get("MenuAssociationTarget"),
+            ToolTip = Strings.Get(hint),
             Padding = new Thickness(8, 4, 10, 4),
             StaysOpenOnClick = true
         };

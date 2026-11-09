@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Text;
 
 namespace PaperTodo;
@@ -99,7 +100,7 @@ internal sealed class NoteImageSizeEstimate
         _imagePng += area * Math.Clamp(pngRate, .001, 3);
     }
 
-    // Offline fits; coefficient order follows HeaderRate. Calibration history: Decisions D-066.
+    // Offline fits; coefficient order follows HeaderRate. Calibration history: Decisions D-076.
     private static ReadOnlySpan<double> JpegCoefficients =>
         [-1.60994119, 0.88556676, 0.09386431, -0.38267748, -0.07381068, 0.44077617, 0.35345300, 0.00161109, -0.01643236, 0.24064990, 0.15136109, -0.06327877, 0.07220036, 0.00811685, 0.09241747, -0.04516633, -0.01710289, 0.06072375, 0.01422516];
     private static ReadOnlySpan<double> PngCoefficients =>
@@ -151,5 +152,116 @@ internal sealed class NoteImageSizeEstimate
                 _kanaText * 520 + _hangulText * 600 + _codeText * 350 + _quotes * 2000 + _checkboxes * 950 + _imageJpeg),
             (long)Math.Round(3500 + area * .0015 + _wideText * 550 + _narrowText * 235 +
                 _kanaText * 425 + _hangulText * 345 + _codeText * 275 + _quotes * 1700 + _checkboxes * 1400 + _imagePng));
+    }
+}
+
+// Header-only hints. Unknown/non-DCT encodings retain the original coarse estimate.
+internal readonly record struct NoteImageJpegInfo(int PayloadBytes, double Quantization, double Sampling)
+{
+    internal static NoteImageJpegInfo Read(ReadOnlySpan<byte> bytes)
+    {
+        if (bytes.Length < 4 || bytes[0] != 0xff || bytes[1] != 0xd8) return default;
+        Span<double> tables = stackalloc double[4];
+        tables.Clear();
+        var table = -1;
+        var sampling = 0d;
+        var position = 2;
+        // Bound header work; large APP/ICC payloads are skipped by their lengths.
+        for (var markers = 0; markers < 128 && position + 2 <= bytes.Length; markers++)
+        {
+            if (bytes[position++] != 0xff) return default;
+            var marker = bytes[position++];
+            if (marker == 0xff) { position--; continue; }
+            if (marker is 0 or 0xd8 or 0xd9) return default;
+            if (marker is 0x01 or >= 0xd0 and <= 0xd7) continue;
+            if (position + 2 > bytes.Length) return default;
+            var length = (bytes[position] << 8) | bytes[position + 1];
+            if (length < 2 || length > bytes.Length - position) return default;
+            if (marker == 0xda)
+                return table >= 0 && tables[table] > 0 && sampling > 0
+                    ? new(bytes.Length - position, tables[table], sampling) : default;
+            var segment = bytes.Slice(position + 2, length - 2);
+            position += length;
+            if (marker == 0xdb)
+            {
+                var offset = 0;
+                while (offset < segment.Length)
+                {
+                    var descriptor = segment[offset++];
+                    var precision = descriptor >> 4;
+                    var id = descriptor & 15;
+                    if (precision > 1 || id > 3 || segment.Length - offset < 64 * (precision + 1)) return default;
+                    var sum = 0d;
+                    for (var i = 0; i < 64; i++)
+                    {
+                        var value = (int)segment[offset++];
+                        if (precision == 1) value = (value << 8) | segment[offset++];
+                        if (value == 0) return default;
+                        sum += value;
+                    }
+                    tables[id] = sum / 64;
+                }
+            }
+            else if (marker is 0xc0 or 0xc1 or 0xc2)
+            {
+                // The fitted model covers 8-bit, three-component JPEGs only.
+                if (segment.Length < 15 || segment[0] != 8 || segment[5] != 3) return default;
+                table = segment[8];
+                if (table > 3) return default;
+                var luma = (segment[7] >> 4) * (segment[7] & 15);
+                var chroma = Math.Max((segment[10] >> 4) * (segment[10] & 15),
+                    (segment[13] >> 4) * (segment[13] & 15));
+                if (luma == 0 || chroma == 0) return default;
+                sampling = luma / (double)chroma;
+            }
+        }
+        return default;
+    }
+}
+
+// Read chunk lengths and small format headers; never inspect/inflate image data.
+internal readonly record struct NoteImagePngInfo(int PayloadBytes, byte BitDepth, byte ColorType,
+    int PaletteColors, bool HasAlpha, bool Interlaced)
+{
+    internal static NoteImagePngInfo Read(ReadOnlySpan<byte> bytes)
+    {
+        ReadOnlySpan<byte> signature = [137, 80, 78, 71, 13, 10, 26, 10];
+        if (bytes.Length < 33 || !bytes[..8].SequenceEqual(signature)) return default;
+        if (BinaryPrimitives.ReadUInt32BigEndian(bytes.Slice(8, 4)) != 13 ||
+            !bytes.Slice(12, 4).SequenceEqual("IHDR"u8)) return default;
+        var depth = bytes[24];
+        var type = bytes[25];
+        var validDepth = type switch
+        {
+            0 => depth is 1 or 2 or 4 or 8 or 16,
+            2 or 4 or 6 => depth is 8 or 16,
+            3 => depth is 1 or 2 or 4 or 8,
+            _ => false
+        };
+        if (!validDepth || bytes[26] != 0 || bytes[27] != 0 || bytes[28] > 1) return default;
+        var alpha = type is 4 or 6;
+        var colors = 0;
+        var payload = 0;
+        var offset = 33;
+        // A generous chunk-count bound keeps pathological fragmentation out of the UI hint.
+        for (var chunks = 0; chunks < 1024 && bytes.Length - offset >= 12; chunks++)
+        {
+            var length = BinaryPrimitives.ReadUInt32BigEndian(bytes.Slice(offset, 4));
+            if (length > bytes.Length - offset - 12) return default;
+            var kind = bytes.Slice(offset + 4, 4);
+            if (kind.SequenceEqual("IDAT"u8)) payload += (int)length;
+            else if (kind.SequenceEqual("PLTE"u8))
+            {
+                if (length == 0 || length > 768 || length % 3 != 0) return default;
+                colors = (int)length / 3;
+            }
+            else if (kind.SequenceEqual("tRNS"u8)) alpha = true;
+            else if (kind.SequenceEqual("acTL"u8)) return default; // Animation was not calibrated.
+            else if (kind.SequenceEqual("IEND"u8))
+                return length == 0 && payload > 0 && (type != 3 || colors > 0)
+                    ? new(payload, depth, type, colors, alpha, bytes[28] != 0) : default;
+            offset += (int)length + 12;
+        }
+        return default;
     }
 }
