@@ -3363,6 +3363,13 @@ public sealed partial class PaperWindow : Window
             pixelsPerDip);
     }
 
+    private readonly record struct CapsuleTextMetrics(string Text, double Size, FontWeight Weight,
+        FontFamily Family, CultureInfo Culture, TextFormattingMode Formatting, double PixelsPerDip);
+
+    // The two icon glyphs and the short/full title are the ordinary working set.
+    private readonly (CapsuleTextMetrics Metrics, double Width)[] _capsuleTextWidths = new (CapsuleTextMetrics, double)[4];
+    private int _nextCapsuleTextWidth;
+
     // Single source of truth for "how wide does this text actually render". Uses the same
     // font family and weight the capsule icon/label are bound to, so
     // measurement and rendering never disagree — digits and halfwidth chars get their true
@@ -3381,17 +3388,26 @@ public sealed partial class PaperWindow : Window
 
         try
         {
+            var metrics = new CapsuleTextMetrics(text, fontSize, weight, fontFamily,
+                UiLanguages.EffectiveUiCulture, AppTypography.TextFormattingMode,
+                pixelsPerDip ?? VisualTreeHelper.GetDpi(this).PixelsPerDip);
+            foreach (var cached in _capsuleTextWidths)
+                if (cached.Metrics == metrics) return cached.Width;
+
             var formatted = new FormattedText(
                 text,
-                UiLanguages.EffectiveUiCulture,
+                metrics.Culture,
                 FlowDirection.LeftToRight,
                 new Typeface(fontFamily, FontStyles.Normal, weight, FontStretches.Normal),
                 fontSize,
                 WeakTextBrush,
                 null,
-                AppTypography.TextFormattingMode,
-                pixelsPerDip ?? VisualTreeHelper.GetDpi(this).PixelsPerDip);
-            return formatted.WidthIncludingTrailingWhitespace;
+                metrics.Formatting,
+                metrics.PixelsPerDip);
+            var width = formatted.WidthIncludingTrailingWhitespace;
+            _capsuleTextWidths[_nextCapsuleTextWidth] = (metrics, width);
+            _nextCapsuleTextWidth = (_nextCapsuleTextWidth + 1) % _capsuleTextWidths.Length;
+            return width;
         }
         catch
         {

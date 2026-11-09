@@ -21,6 +21,7 @@ internal static class SkinChecks
             controller.State.HideSurfaceOutline = false;
             CheckAuxiliaryContent(controller);
             CheckLiveSwitch(controller);
+            if (!SystemParameters.HighContrast) CheckHiddenTitleWithoutOutline(controller);
         }
         finally
         {
@@ -28,6 +29,39 @@ internal static class SkinChecks
                 controller.State.EnableAnimations, controller.State.HideSurfaceOutline) = before;
             Theme.Invalidate();
         }
+    }
+
+    private static void CheckHiddenTitleWithoutOutline(AppController controller)
+    {
+        controller.State.PaperSkin = PaperSkins.Paper;
+        controller.State.HideSurfaceOutline = true;
+        var chrome = new SkinBorder
+        {
+            Width = 80, Height = 60, CornerRadius = new CornerRadius(6),
+            Background = Brushes.White, BorderBrush = Brushes.Black, BorderThickness = new Thickness(3)
+        };
+        chrome.SetHeaderExtent(20);
+        chrome.SetHeaderOpacity(0, 0);
+        var hidden = Pixels(Render(chrome, 1));
+        var title = (10 * 80 + 40) * 4;
+        var topEdge = (21 * 80 + 40) * 4;
+        Program.Assert(hidden[title + 3] == 0 && hidden[topEdge] == 255,
+            "hidden title is transparent and the shortened paper has no outline");
+        Program.Assert(VisualTreeHelper.HitTest(chrome, new Point(40, 10)) == null,
+            "hidden title leaves the area behind it available for input");
+
+        controller.State.HideSurfaceOutline = false;
+        chrome.RefreshSkin();
+        var outlined = Pixels(Render(chrome, 1));
+        Program.Assert(outlined[title + 3] == 0 && outlined[topEdge + 3] == 255 && outlined[topEdge] == 0,
+            "showing the outline while inactive paints the shortened paper's edge");
+
+        controller.State.HideSurfaceOutline = true;
+        chrome.RefreshSkin();
+        chrome.SetHeaderOpacity(1, 0);
+        var restored = Pixels(Render(chrome, 1));
+        Program.Assert(restored[title] == 255 && VisualTreeHelper.HitTest(chrome, new Point(40, 10)) != null,
+            "restored title is painted and receives input again");
     }
 
     private static void CheckAuxiliaryContent(AppController controller)

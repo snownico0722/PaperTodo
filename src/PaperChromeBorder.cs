@@ -28,6 +28,8 @@ internal class PaperChromeBorder : Border
 
     internal double HeaderOpacity => (double)GetValue(HeaderOpacityProperty);
     internal double HeaderExtent { get; private set; }
+    protected bool HasInsetSurface => _surface.Visibility == Visibility.Visible;
+    protected virtual bool DrawBaseOuterBorder => true;
 
     protected override int VisualChildrenCount => base.VisualChildrenCount + 1;
     protected override Visual GetVisualChild(int index) =>
@@ -44,13 +46,13 @@ internal class PaperChromeBorder : Border
     {
         DrawNineSliceShadow(drawingContext);
         DrawMaterialShadow(drawingContext);
-        if (_surface.Visibility != Visibility.Visible)
+        if (!HasInsetSurface)
             base.OnRender(drawingContext);
     }
 
     protected override HitTestResult? HitTestCore(PointHitTestParameters parameters)
     {
-        if (_surface.Visibility != Visibility.Visible) return base.HitTestCore(parameters);
+        if (!HasInsetSurface) return base.HitTestCore(parameters);
         // The helper is not an input element: keep border drag/menu gestures on this owner.
         var point = parameters.HitPoint - VisualTreeHelper.GetOffset(_surface);
         return VisualTreeHelper.HitTest(_surface, point) != null
@@ -62,7 +64,7 @@ internal class PaperChromeBorder : Border
         base.OnPropertyChanged(e);
         if (_surface == null) return;
         if (e.Property == BackgroundProperty || e.Property == BorderBrushProperty ||
-            e.Property == BorderThicknessProperty || e.Property == CornerRadiusProperty ||
+            e.Property == CornerRadiusProperty ||
             e.Property == SnapsToDevicePixelsProperty || e.Property == UseLayoutRoundingProperty)
         {
             _surface.SetValue(e.Property, e.NewValue);
@@ -97,6 +99,9 @@ internal class PaperChromeBorder : Border
         }
 
         _surface.Visibility = Visibility.Visible;
+        // Only the paint helper loses its stroke. The owner's thickness still lays out the editor.
+        var stroke = DrawBaseOuterBorder ? BorderThickness : default;
+        if (_surface.BorderThickness != stroke) _surface.BorderThickness = stroke;
         var surfaceSize = new Size(size.Width, size.Height - inset);
         _surface.Measure(surfaceSize);
         _surface.Arrange(new Rect(new Point(0, inset), surfaceSize));
