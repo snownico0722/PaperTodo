@@ -285,7 +285,18 @@ internal static class TodoHistoryChecks
             item.ReminderAt = reminder;
             item.ReminderTriggered = true;
         });
-        CheckFailedExternalUpdate(controller, paper, window);
+        CheckFailedExternalMutation(controller, paper, window, () =>
+            controller.PaperCommands.UpdateTodo(new UpdateTodoRequest
+            {
+                PaperId = paper.Id, TodoId = paper.Items[0].Id, Text = "failed change",
+                Done = true, Order = 2, UpdateLinkedPaper = true, LinkedPaperId = "link-target"
+            }, PaperOperationContext.Mcp()));
+        await Reset(1, item => item.LinkPaper("link-target"));
+        CheckFailedExternalMutation(controller, paper, window, () =>
+            controller.PaperCommands.DeleteTodo(new DeleteTodoRequest
+            {
+                PaperId = paper.Id, TodoId = paper.Items[0].Id
+            }, PaperOperationContext.Mcp()));
 
         // A successful external mutation orders a pending human edit before the external step.
         await Reset(4);
@@ -444,7 +455,8 @@ internal static class TodoHistoryChecks
         }
     }
 
-    private static void CheckFailedExternalUpdate(AppController controller, PaperData paper, PaperWindow window)
+    private static void CheckFailedExternalMutation(
+        AppController controller, PaperData paper, PaperWindow window, Action mutate)
     {
         var list = paper.Items;
         var rows = list.ToArray();
@@ -463,11 +475,7 @@ internal static class TodoHistoryChecks
                     string.Equals(path, store.FilePath, StringComparison.OrdinalIgnoreCase))
                     throw new System.IO.IOException("Injected todo save failure");
             }));
-            controller.PaperCommands.UpdateTodo(new UpdateTodoRequest
-            {
-                PaperId = paper.Id, TodoId = rows[0].Id, Text = "failed change",
-                Done = true, Order = 2, UpdateLinkedPaper = true, LinkedPaperId = "link-target"
-            }, PaperOperationContext.Mcp());
+            mutate();
             throw new InvalidOperationException("The injected save failure was ignored");
         }
         catch (PaperCommandException ex) when (ex.Code == "save_failed") { }
