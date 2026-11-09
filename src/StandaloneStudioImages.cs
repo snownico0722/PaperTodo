@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Windows.Media.Imaging;
 using Markdig.Syntax;
 using Markdig.Syntax.Inlines;
@@ -193,18 +194,24 @@ internal sealed class StandaloneStudioImages(string assetsDirectory) : IMarkdown
         var cursor = 0;
         try
         {
-            // Use Markdig's image spans, including images embedded in a paragraph. File
-            // persistence must not depend on whether the editor renders an image as a block.
             var syntax = MarkdownSemanticSnapshot.ParseDocument(text);
-            foreach (var link in Markdig.Syntax.MarkdownObjectExtensions.Descendants<Markdig.Syntax.Inlines.LinkInline>(syntax)
+            var references = syntax.Descendants<LinkInline>()
                          .Where(link => link.IsImage && !string.IsNullOrEmpty(link.Url) && !link.UrlSpan.IsEmpty)
-                         .GroupBy(link => (link.UrlSpan.Start, link.UrlSpan.End)).Select(group => group.First())
-                         .OrderBy(link => link.UrlSpan.Start))
+                         .Select(link => (Start: link.UrlSpan.Start, Length: link.UrlSpan.Length, Url: link.Url!)).ToList();
+            // Imported URLs must survive even inside code or an unfinished fence. Scan only
+            // this recovery folder's generated file names; other file references stay literal.
+            var temporaryPrefix = new Uri(Path.GetFullPath(assetsDirectory)
+                .TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar).AbsoluteUri;
+            foreach (Match match in Regex.Matches(text, Regex.Escape(temporaryPrefix) + @"[0-9a-f]{32}\.[a-z0-9]+",
+                         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+                references.Add((match.Index, match.Length, match.Value));
+            foreach (var reference in references.GroupBy(reference => (reference.Start, reference.Length))
+                         .Select(group => group.First()).OrderBy(reference => reference.Start))
             {
-                var start = link.UrlSpan.Start;
-                var length = link.UrlSpan.Length;
+                var start = reference.Start;
+                var length = reference.Length;
                 if (start < cursor || length <= 0 || start + length > text.Length ||
-                    !TryResolvePath(link.Url!, out var source) || !IsTemporaryAsset(source)) continue;
+                    !TryResolvePath(reference.Url, out var source) || !IsTemporaryAsset(source)) continue;
                 if (!replacements.TryGetValue(source, out var relative))
                 {
                     var directory = Path.Combine(destinationDirectory, folder);

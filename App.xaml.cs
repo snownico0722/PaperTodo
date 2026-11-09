@@ -254,9 +254,11 @@ public partial class App : Application
             _standaloneStudio.Loaded += (_, _) =>
             {
                 _standaloneStudio.Initialize(file);
+                // Until recovery is accepted or discarded, the editor still holds its
+                // initial blank document. Session ending must leave that old scene intact.
+                SessionEnding += (_, _) => _standaloneStudio.PreserveForSessionEnding();
                 CompleteSingleInstanceStartup();
             };
-            SessionEnding += (_, _) => _standaloneStudio.PreserveForSessionEnding();
             _standaloneStudio.Show();
         }
         catch (Exception ex)
