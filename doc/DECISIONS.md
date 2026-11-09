@@ -1061,7 +1061,7 @@ D-026 把内置 Note 的 Markdown 语义统一到 Markdig 后，第一版为了�
 
 - `src/MarkdownSemanticDocument.cs`。
 - `src/MarkdownSemanticSnapshot.Incremental.cs`。
-- `src/MarkdownTextBox.Semantics.cs`、`src/MarkdownTextBox.SemanticEditing.cs`、`src/MarkdownTextBox.SemanticImages.cs`。
+- `src/MarkdownTextBox.Semantics.cs`、`src/MarkdownTextBox.SemanticEditing.cs`。
 - `tests/PaperTodo.MarkdownSemanticChecks/SynchronousDocumentChecks.cs`。
 - `d624873`：移除 permanent worker 与 segmented production path。
 - `2b4b5a9`：移除 stale/current semantic compatibility path。
@@ -1186,7 +1186,7 @@ PaperTodo 的产品需求更接近：打开 Note 时建立全文正确基线；�
 - **决定**：删除 `ShouldHideImageReferenceText` 上的 `RenderModeIsFull ||` 短路。Full 档下图片引用文本是否隐藏由 `ImageReferenceTextMode` 决定：`Always` 始终显示、`Editing` 仅编辑态显示、`Hidden` 始终隐藏，与 Off/Basic/Enhanced 三档行为对齐。
 - **影响**：Full 档默认 `ImageReferenceTextMode = Always`（`ImageReferenceTextModes.Normalize` 兜底值），因此用户从其他档切到 Full 后默认会看到图片引用文字。仍希望紧凑观感的用户可在设置面板改为 `Hidden` 或 `Editing`，不需要改代码。
 - **不冲突**：与控制符显灵（`MarkdownSemanticReveal`）解耦——后者只决定 `#`/`**`/链接等语法控制符在活动块内是否显灵，与图片引用文本显隐无关。
-- **证据**：`src/MarkdownTextBox.cs` 的 `ShouldHideImageReferenceText` 现仅读 `_imageReferenceTextMode`；`src/MarkdownTextBox.SemanticImages.cs` 与 `src/MarkdownSemanticPresentation.Colorizer.cs` 自动跟随。
+- **证据**：`src/MarkdownTextBox.cs` 的 `ShouldHideImageReferenceText` 现仅读 `_imageReferenceTextMode`；`src/MarkdownTextBox.Semantics.cs` 与 `src/MarkdownSemanticPresentation.Colorizer.cs` 自动跟随。
 
 ### Follow-up：塌缩占位 run 由 U+200B 改用 WPF `TextHidden`（2026-09）
 
