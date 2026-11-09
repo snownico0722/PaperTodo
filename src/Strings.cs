@@ -105,3 +105,23 @@ public static class Strings
         return string.Format(UiLanguages.EffectiveCulture, Get(key), args);
     }
 }
+
+internal static class CopyTranslationStrings
+{
+    private static readonly ResourceManager Manager = new(
+        "PaperTodo.Resources.CopyTranslationStrings",
+        typeof(CopyTranslationStrings).Assembly);
+
+    internal static string Get(string key) =>
+        Manager.GetString(key, UiLanguages.EffectiveUiCulture) ?? key;
+}
+
+internal static class TelemetryStrings
+{
+    private static readonly ResourceManager Manager = new("PaperTodo.Resources.TelemetryStrings", typeof(TelemetryStrings).Assembly);
+
+    public static string Get(string key)
+    {
+        return Manager.GetString(key, UiLanguages.EffectiveUiCulture) ?? key;
+    }
+}
