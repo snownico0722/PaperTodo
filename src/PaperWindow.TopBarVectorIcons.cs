@@ -114,8 +114,7 @@ public sealed partial class PaperWindow
         if (collapse)
         {
             var scale = TopBarIconScale();
-            var minus = new VectorPrimitiveIconElement(
-                VectorPrimitiveIconKind.Minus)
+            var minus = new CollapseMinusIconElement
             {
                 Width = Math.Round(16 * scale, 1),
                 Height = Math.Round(10 * scale, 1),
@@ -123,7 +122,7 @@ public sealed partial class PaperWindow
                 VerticalAlignment = VerticalAlignment.Center
             };
             minus.SetBinding(
-                VectorPrimitiveIconElement.ForegroundProperty,
+                CollapseMinusIconElement.ForegroundProperty,
                 CreateForegroundBinding(owner));
             return minus;
         }
