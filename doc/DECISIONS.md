@@ -32,8 +32,8 @@
 | D-017 | Hardcodet WPF `IconSource` + 本地 popup lifecycle | Accepted | 托盘 |
 | D-018 | Edge plugin mini 由宿主持有关键 authority | Accepted | 插件 / Edge |
 | D-019 | Note 编辑与浏览共享 `MarkdownTextBox` | Accepted | Note |
-| D-020 | 插件状态与核心 `data.json` 分域持久化 | Accepted | 插件 / 持久化 |
-| D-021 | 插件与 MCP 共用 `PaperCommandService` | Accepted | 外部命令 / 一致性 |
+| D-020 | 插件状态与核心 `data.json` 分域持久化 | Partially superseded by D-040 | 插件 / 持久化 |
+| D-021 | 插件与 MCP 共用 `PaperCommandService` | Partially superseded by D-040 | 外部命令 / 一致性 |
 | D-022 | Plugin Top Bar 使用宿主绘制 descriptor + Paper/Runtime 分域 | Accepted | 插件 / UI ownership |
 | D-023 | Lightweight Prewarm 保留一次性首用预热 | Accepted | Edge performance |
 | D-024 | Web `backgroundUpdates` 使用 per-Paper Runtime | Superseded by D-029 | 插件 / 生命周期 |
@@ -52,6 +52,7 @@
 | D-037 | 可浏览队列保留已验证的 live authority | Deferred; experiments archived | Edge performance / lifecycle |
 | D-038 | 活动就绪动画使用可撤销 render demand | Accepted | Edge animation / lifecycle |
 | D-039 | 插件 API 采用向后兼容的 major.minor 演进 | Accepted | 插件 / 兼容性 |
+| D-040 | 插件基础读写不承担业务恢复，查询与普通通知不扩大副作用 | Accepted | 插件 / 外部命令 |
 | D-041 | 普通窗口原生 Mica 与 layered 胶囊边界 | Superseded by D-042 | 主题 / Window integration |
 | D-042 | 原生云母使用单一窗口外框，验证最终桌面像素 | Partially superseded by D-057（CI 截图） | 主题 / Window integration |
 | D-043 | 透色亚克力试用可调色 accent，保留单窗口边界 | Experimental | 主题 / Window integration |
@@ -74,9 +75,9 @@
 | D-063 | 仅显式热重载和有基线三方合并，普通保存不检测外部修改 | Accepted | 持久化 / 产品边界 |
 | D-064 | 固定编号工作区共用代码，不共用运行数据 | Accepted | 工作区 / 持久化 |
 | D-065 | DComp 视觉与 Win32 输入提交的非原子边界 | Accepted (historical findings; native-owner candidate deferred) | Edge input / composition |
-| D-066 | Free queues extend existing direct manipulation | Accepted | Edge queues / gestures |
+| D-066 | Free queues extend existing direct manipulation | Partially superseded by D-067, D-068 and D-072 | Edge queues / gestures |
 | D-067 | Free-queue masters follow queue identity | Accepted | Edge master ownership |
-| D-068 | Free-queue drops preview independent placement and prefer downward insertion | Accepted | Edge queues / gestures |
+| D-068 | Free-queue drops preview independent placement and prefer downward insertion | Partially superseded by D-069 | Edge queues / gestures |
 | D-069 | Independent landing ghosts consume adjacent gaps | Accepted | Edge queues / gestures |
 | D-070 | 完整快照按来源顺序恢复，损坏时须用户确认重建 | Accepted | 核心持久化 / 恢复 |
 | D-071 | 有界冲突归档与健康主文件后清理孤立临时文件 | Accepted | 核心持久化 / 归档 |
@@ -2038,7 +2039,7 @@ PR #319 的初版把主胶囊完整材质收展后的卡死解释为终点迟到
 
 ## D-066 - Free queues extend existing direct manipulation
 
-**Status:** Accepted
+**Status:** Partially superseded. [D-067](#d-067---free-queue-masters-follow-queue-identity-2026-11-04) changes master ownership, [D-068](#d-068---free-queue-drops-preview-independent-placement-and-prefer-downward-insertion-2026-11-05) revises insertion and drop feedback, and [D-072](#d-072--ctrl-整队拖拽归属胶囊自由队列) changes Ctrl-dragging when free queues are disabled. For independent landing placement, see [D-069](#d-069---independent-landing-ghosts-consume-the-adjacent-gap-before-moving-neighbours-2026-11-05). The original choices are recorded below.
 
 The optional queue instance id extends `(monitor, edge)` and reuses the existing start-margin dictionary. This selectively incorporates Just1ceCATT's PR #354 (`b77ffdba`): identity encoding, persistent key normalization, passive spacing, numeric shortcut ordering, UI registration, native Ctrl state and physical cursor sampling. It does not adopt that PR's magnet engine, global insertion solver, marker window or master/free exclusivity.
 
