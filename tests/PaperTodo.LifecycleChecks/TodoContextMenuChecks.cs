@@ -242,6 +242,165 @@ internal static class TodoContextMenuChecks
         }
     }
 
+    internal static async Task RunBindings(
+        AppController controller,
+        IReadOnlyDictionary<string, PaperWindow> windows)
+    {
+        var todo = controller.State.Papers.Single(paper => paper.Id == PaperId);
+        var note = controller.State.Papers.Single(paper => paper.Id == LinkedPaperId);
+        var todoWindow = windows[PaperId];
+        Require(todoWindow.LinkPaperToTodo("apps", LinkedPaperId), "second link could not be prepared");
+        controller.OpenLinkedPaper(LinkedPaperId, todoWindow);
+        await Until(() => windows.TryGetValue(LinkedPaperId, out var opened) && opened.IsVisible,
+            "linked note opens for association actions");
+        var noteWindow = windows[LinkedPaperId];
+        var button = (Button)Part(noteWindow, "_windowBindingButton");
+        await Flush();
+
+        controller.HidePaper(todo);
+        var menu = await OpenBindingMenu(noteWindow, button);
+        Require(Header((MenuItem)menu.Items[0]) == Strings.Get("MenuCancelBinding") &&
+                Header((MenuItem)menu.Items[1]) == Strings.Get("MenuOpenBindingTodo"),
+            "paper binding actions were missing, mislabeled, or out of order");
+        InvokeMenuAction(menu, 1);
+        await Until(() => todoWindow.IsVisible && todo.IsVisible && !todo.IsCollapsed,
+            "binding menu opens its hidden Todo target");
+
+        await PointAtBindingButton(noteWindow, button);
+        LifecycleInput.DoubleClick();
+        await Until(() => todo.Items.All(item => item.LinkedPaperId != LinkedPaperId),
+            "double click removes every link to the current note");
+        var editors = (Dictionary<string, TodoTextBox>)Part(todoWindow, "_todoEditors");
+        LifecycleInput.Focus(todoWindow, editors["paper"]);
+        LifecycleInput.KeyChord(0x11, 0x5A);
+        await Until(() => todo.Items.Count(item => item.LinkedPaperId == LinkedPaperId) == 2,
+            "one undo restores both links removed by the association button");
+        menu = await OpenBindingMenu(noteWindow, button);
+        InvokeMenuAction(menu, 0);
+        Require(todo.Items.All(item => item.LinkedPaperId != LinkedPaperId),
+            "the first context action did not remove the paper associations");
+
+        var executable = Path.Combine(AppContext.BaseDirectory, "PaperTodo.BindingTarget.exe");
+        File.Copy(Path.Combine(AppContext.BaseDirectory, "PaperTodo.LifecycleChecks.exe"), executable);
+        using var targetProcess = Process.Start(new ProcessStartInfo(executable) { UseShellExecute = false })!;
+        Process? reopenedProcess = null;
+        try
+        {
+            ExternalWindowSnapshot target = default;
+            await Until(() => ExternalWindowNative.TryFindProgramWindow(
+                executable, "PaperTodo binding fixture", out target) && target.IsUsableTarget,
+                "isolated app target becomes visible");
+            LifecycleInput.Focus(noteWindow, null);
+            var attach = typeof(PaperWindow).GetMethods(Private).Single(method =>
+                method.Name == "AttachExperimentalWindowTether" && method.GetParameters().Length == 1);
+            Require((bool)attach.Invoke(noteWindow, [target.Identity])!,
+                "binding to the real external process failed");
+            menu = await OpenBindingMenu(noteWindow, button);
+            Require(Header((MenuItem)menu.Items[1]) == Strings.Get("MenuOpenBindingProgram"),
+                "window binding did not offer the app action in second position");
+            InvokeMenuAction(menu, 1);
+            await Until(() => ExternalWindowNative.ForegroundWindow == target.Identity.Handle,
+                "opening a running app brings its existing window to the foreground");
+
+            _ = PostMessage(target.Identity.Handle, 0x0010, IntPtr.Zero, IntPtr.Zero); // WM_CLOSE
+            await Until(() => targetProcess.HasExited, "bound app closes normally");
+            await Until(() => noteWindow.IsVisible && noteWindow.HasExperimentalExternalWindowAttachment,
+                "closed app leaves a visible paper with its binding intact");
+            controller.HidePaper(note);
+            controller.ShowPaper(note);
+            await Until(() => noteWindow.IsVisible && noteWindow.Opacity > .99,
+                "manual show of a paper whose target app is closed");
+            Require(noteWindow.HasExperimentalExternalWindowAttachment,
+                "manual show removed the retained closed-app binding");
+
+            controller.State.UseCapsuleMode = true;
+            noteWindow.SetCollapsedState(true, animate: false, saveGeometry: false);
+            Require(note.IsCollapsed && noteWindow.HasExperimentalExternalWindowAttachment,
+                "collapsing a closed-app binding removed the association");
+            noteWindow.SetCollapsedState(false, animate: false, saveGeometry: false);
+            Require(!note.IsCollapsed && noteWindow.HasExperimentalExternalWindowAttachment,
+                "expanding a closed-app binding removed the association");
+
+            menu = await OpenBindingMenu(noteWindow, button);
+            InvokeMenuAction(menu, 1);
+            await Until(() => ExternalWindowNative.TryFindProgramWindow(
+                executable, "PaperTodo binding fixture", out target) && target.IsUsableTarget,
+                "opening a closed app starts its executable");
+            reopenedProcess = Process.GetProcessById((int)target.Identity.ProcessId);
+            await Until(() => noteWindow.TracksExperimentalExternalWindow(target.Identity.Handle),
+                "the retained binding automatically reconnects to the restarted app");
+            var before = noteWindow.Left;
+            Require(SetWindowPos(target.Identity.Handle, IntPtr.Zero,
+                target.Bounds.Left + 40, target.Bounds.Top, 0, 0, 0x0015), "target move failed");
+            await Until(() => Math.Abs(noteWindow.Left - before) > 10,
+                "reopened target continues moving its bound paper");
+
+            _ = ShowWindow(target.Identity.Handle, 6); // SW_MINIMIZE
+            await Until(() => ExternalWindowNative.TryGetSnapshot(target.Identity, out var minimized) &&
+                minimized.IsMinimized, "bound target minimizes");
+            typeof(PaperWindow).GetMethod("OpenWindowBindingTarget", Private)!.Invoke(noteWindow, null);
+            await Until(() => ExternalWindowNative.TryGetSnapshot(target.Identity, out var restored) &&
+                restored.IsUsableTarget && noteWindow.IsVisible,
+                "open-app action restores a minimized target without clearing the binding");
+            Require(noteWindow.HasExperimentalExternalWindowAttachment,
+                "restoring the minimized app cleared its binding");
+            await PointAtBindingButton(noteWindow, button);
+            LifecycleInput.DoubleClick();
+            await Until(() => !noteWindow.HasExperimentalExternalWindowAttachment,
+                "double click also cancels a window binding");
+            Require(!reopenedProcess.HasExited, "unbinding closed the target application");
+            Console.WriteLine("PASS paper bindings: menu order, target open, native double click, batch unlink undo, app close/reopen, form changes and restored window tracking");
+        }
+        finally
+        {
+            if (button.ContextMenu != null) button.ContextMenu.IsOpen = false;
+            foreach (var process in Process.GetProcessesByName("PaperTodo.BindingTarget"))
+            {
+                using (process)
+                {
+                    if (!process.HasExited && string.Equals(
+                        ExternalWindowNative.GetExecutablePath((uint)process.Id), executable,
+                        StringComparison.OrdinalIgnoreCase))
+                    {
+                        process.Kill(entireProcessTree: true);
+                        process.WaitForExit();
+                    }
+                }
+            }
+            reopenedProcess?.Dispose();
+        }
+    }
+
+    private static async Task PointAtBindingButton(PaperWindow window, Button button)
+    {
+        LifecycleInput.Focus(window, null);
+        await Flush();
+        Require(button.IsVisible, "association button is not reachable");
+        var point = button.PointToScreen(new Point(button.ActualWidth / 2, button.ActualHeight / 2));
+        await Until(() => LifecycleInput.IsMouseTarget(window, point), "binding button HWND is ready");
+        LifecycleInput.MoveCursor(point);
+        await Until(() => button.IsMouseOver, "native cursor reaches the association button");
+    }
+
+    private static async Task<ContextMenu> OpenBindingMenu(PaperWindow window, Button button)
+    {
+        await PointAtBindingButton(window, button);
+        LifecycleInput.RightClick();
+        await Until(() => button.ContextMenu?.IsOpen == true, "native binding context menu opens");
+        return button.ContextMenu!;
+    }
+
+    private static void InvokeMenuAction(ContextMenu menu, int index)
+    {
+        var action = (MenuItem)menu.Items[index];
+        menu.IsOpen = false;
+        action.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+    }
+
+    [DllImport("user32.dll")] private static extern bool PostMessage(IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam);
+    [DllImport("user32.dll")] private static extern bool ShowWindow(IntPtr hwnd, int command);
+    [DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr hwnd, IntPtr insertAfter, int x, int y, int width, int height, uint flags);
+
     private static void AssertSingleItemMenu(ContextMenu menu)
     {
         Item(menu, Strings.Get("MenuTodoItem"));
@@ -345,6 +504,16 @@ internal static class LifecycleInput
     {
         Send([new Input { Type = 0, Data = new InputData { Mouse = new MouseInput { Flags = 0x0008 } } },
             new Input { Type = 0, Data = new InputData { Mouse = new MouseInput { Flags = 0x0010 } } }]);
+    }
+
+    internal static void DoubleClick()
+    {
+        var click = new[]
+        {
+            new Input { Type = 0, Data = new InputData { Mouse = new MouseInput { Flags = 0x0002 } } },
+            new Input { Type = 0, Data = new InputData { Mouse = new MouseInput { Flags = 0x0004 } } }
+        };
+        Send(click.Concat(click).ToArray());
     }
 
     internal static void Text(string value) => Send(value.SelectMany(character => new[]

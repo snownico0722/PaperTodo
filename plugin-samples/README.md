@@ -235,7 +235,7 @@ plugins/
    └─ .runtime/
 ```
 
-`data` and `builtin.markdown` are reserved host IDs. A plugin ID must contain 3–120 ASCII letters, digits, `.`, `_`, or `-`. Directories beginning with `.` or `_` are not discovered.
+The host reserves `builtin.markdown` and the directory names `data`, `data1` through `data5` (case-insensitive). A plugin ID must contain 3–120 ASCII letters, digits, `.`, `_`, or `-`. Directories beginning with `.` or `_` are not discovered.
 
 A final Native plugin directory should contain only what is required at runtime. Do not ship unnecessary PDB/XML files, and do not duplicate host-provided shared assemblies such as `PaperTodo.Plugin.Abstractions`, Windows SDK / WinRT, or WebView2 shared assemblies.
 
@@ -538,6 +538,8 @@ MCP provides `list_settings(category?)`, `get_setting(id)`, and `set_setting(id,
 List returns an array. Each entry has a stable `id`, `category`, localized `title`, `type`, current `value`, caller-specific `writable`, `requires_restart`, and optional `unavailable_reason`, `min`, `max`, `step`, `max_length`, and `options`. Set returns `setting`, `previous_value`, and `changed`; assigning the current value is a no-op. Query the catalog instead of guessing CLR property names.
 
 The catalog includes general/language/startup, privacy, appearance/fonts/background preferences, Note/Todo/title/capsule options, edge browsing, reminders, window/focus/interaction options, scripts, MCP, and global shortcuts. Values are saved preferences: dependent settings may remain selected but have no effect until their parent feature is enabled. Shortcuts expose `.gesture` and `.enabled`; each edge sequence uses a modifier chord plus 1 and applies that prefix to keys 1–9. Active shortcut-editor drafts/recording and registration conflicts are reported instead of silently overriding them. Language reports `requires_restart: true` and does not force a restart.
+
+The retired `window.tether_visibility_link` and `window.tether_minimized` IDs are no longer listed; Get/Set returns `setting_not_found`. Window binding always hides and restores the actual paper with its target. Older saved values for these choices are ignored; `window.tether_enabled`, `window.tether_edge` and `window.tether_gap` remain supported.
 
 Settings are an explicit typed catalog. Per-paper geometry/content, live queue state, migration fields, plugin-private settings, file contents and one-shot UI commands such as import/export/reset are **not** setting values. These retain their existing APIs/owners; no raw `AppState` reflection endpoint is exposed. Future public settings must be explicitly registered with validation and effects.
 
@@ -1259,7 +1261,7 @@ When starting a new plugin, copy the smallest structure from the sample closest 
 
 - targeting `apiVersion: "2.0"` or earlier for a new plugin; the current host supports `2.1`–`2.3`, and new plugins should target `2.3`;
 - plugin directory name does not match `id`;
-- `id` uses invalid characters or the reserved host IDs `data` / `builtin.markdown`;
+- `id` uses invalid characters or the reserved host IDs `data` / `data1`–`data5` / `builtin.markdown`;
 - Web declares `runtime`, but the default `runtime.html` is missing, or an explicit `runtime` path is missing/outside the Web `entry` static directory;
 - Native declares `runtime` but does not implement `IPaperPluginRuntimeProvider`;
 - assuming a Runtime starts just because a plugin is installed while it has zero real plugin Papers;

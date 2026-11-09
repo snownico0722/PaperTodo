@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -27,12 +28,6 @@ public sealed partial class AppController
         rightColumn.Children.Add(BuildSettingsLiveRegion("general.capsules", BuildSettingsCapsuleOptions));
         rightColumn.Children.Add(BuildSettingsLiveRegion(
             "general.edgeBrowsing", BuildLabsEdgeCapsuleHoverIntentSettings));
-        rightColumn.Children.Add(BuildSettingsLiveRegion("general.edgeTopmost", () =>
-            State.UseCapsuleMode && State.UseDeepCapsuleMode
-                ? WrapWithHint(SettingsToggle(Strings.Get("LabsDockedCapsulesNonTopmost"),
-                    State.ExperimentalDockedCapsulesNonTopmost, ToggleExperimentalDockedCapsulesNonTopmost),
-                    "TipLabsDockedCapsulesNonTopmost")
-                : new StackPanel()));
         if (State.AdvancedSettingsMode)
             rightColumn.Children.Add(BuildSettingsLiveRegion(
                 "general.capsuleAppearance", BuildSettingsCapsuleAppearanceOptions));
@@ -69,6 +64,8 @@ public sealed partial class AppController
         Add("TrayDeepCapsuleMode", State.UseDeepCapsuleMode, ToggleDeepCapsuleMode, "TipDeepCapsuleMode");
         if (State.UseDeepCapsuleMode)
         {
+            Add("LabsDockedCapsulesNonTopmost", State.ExperimentalDockedCapsulesNonTopmost,
+                ToggleExperimentalDockedCapsulesNonTopmost, "TipLabsDockedCapsulesNonTopmost");
             Add("SettingsShowDeepCapsuleWhileExpanded", State.ShowDeepCapsuleWhileExpanded,
                 ToggleDeepCapsuleExpandedSlot, "TipShowDeepCapsuleWhileExpanded");
             Add("SettingsRememberDeepCapsuleExpandedPosition", State.RememberDeepCapsuleExpandedPosition,
@@ -110,6 +107,34 @@ public sealed partial class AppController
         return AdvancedSettingsBlock(options.ToArray());
     }
 
+    private UIElement CreateMaxTitleLengthStepper() =>
+        CreateSettingsStepper(
+            () => State.MaxTitleLength.ToString(CultureInfo.InvariantCulture),
+            () => SetMaxTitleLength(State.MaxTitleLength - 1),
+            () => SetMaxTitleLength(State.MaxTitleLength + 1));
+
+    private void SetMaxTitleLength(int value) =>
+        SetSettingFromUi("title.max_length", PaperTitles.NormalizeMaxTitleLength(value));
+
+    private UIElement CreateDeepCapsuleTitleMeasureLimitStepper() =>
+        CreateSettingsStepper(
+            DeepCapsuleTitleMeasureLimitText,
+            () => SetDeepCapsuleTitleMeasureCharacterLimit(EdgeCapsuleTitleLimit.Step(
+                State.DeepCapsuleTitleMeasureCharacterLimit, increase: false)),
+            () => SetDeepCapsuleTitleMeasureCharacterLimit(EdgeCapsuleTitleLimit.Step(
+                State.DeepCapsuleTitleMeasureCharacterLimit, increase: true)));
+
+    private string DeepCapsuleTitleMeasureLimitText()
+    {
+        var limit = State.DeepCapsuleTitleMeasureCharacterLimit;
+        return limit == EdgeCapsuleTitleLimit.Unlimited
+            ? Strings.Get("SettingsAllCharacters")
+            : (limit == EdgeCapsuleTitleLimit.Hidden ? 0 : limit).ToString(CultureInfo.InvariantCulture);
+    }
+
+    private void SetDeepCapsuleTitleMeasureCharacterLimit(int value) =>
+        SetSettingFromUi("capsule.title_measure_limit", EdgeCapsuleTitleLimit.Normalize(value));
+
     private UIElement BuildSettingsGeneralOptions()
     {
         var leftColumn = new StackPanel
@@ -123,31 +148,9 @@ public sealed partial class AppController
                 SystemSettingsHelper.IsStartupEnabled(),
                 ToggleStartup),
             "TipStartup"));
-        leftColumn.Children.Add(WrapWithHint(
-            SettingsToggle(
-                Strings.Get("SettingsEnableToolTips"),
-                State.EnableToolTips,
-                ToggleToolTips),
-            "TipEnableToolTips"));
-        leftColumn.Children.Add(WrapWithHint(
-            SettingsToggle(
-                Strings.Get("SettingsEnableAnimations"),
-                State.EnableAnimations,
-                ToggleAnimations),
-            "TipEnableAnimations"));
-        leftColumn.Children.Add(WrapWithHint(
-            SettingsToggle(
-                Strings.Get("SettingsFastAnimations"),
-                State.FastAnimations,
-                ToggleFastAnimations),
-            "TipFastAnimations"));
-
         leftColumn.Children.Add(BuildSettingsLiveRegion(
             "general.telemetry",
             CreateAnonymousUsageStatisticsSettingsRow));
-
-        leftColumn.Children.Add(BuildSettingsLiveRegion(
-            "general.topbar", BuildTopBarShortcutSettings));
 
         if (State.AdvancedSettingsMode)
         {
@@ -176,8 +179,74 @@ public sealed partial class AppController
                     topMargin: 8)));
         }
 
+        leftColumn.Children.Add(SettingsSoftDivider());
+        leftColumn.Children.Add(BuildSettingsLiveRegion(
+            "general.topbar", BuildTopBarShortcutSettings));
+
         RefreshSettingsSystemVisibilityToggleStates();
         return leftColumn;
+    }
+
+    private void SetUiLanguage(string language)
+    {
+        var normalized = UiLanguages.Normalize(language);
+        if (string.Equals(State.UiLanguage, normalized, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        if (!SetSettingFromUi("general.language", normalized)) return;
+
+        if (_settingsWindow == null ||
+            !PaperNoticeDialog.ShowChoice(
+                _settingsWindow,
+                SettingsSidebarLocalized(
+                    "重启 PaperTodo",
+                    "Restart PaperTodo",
+                    "PaperTodo を再起動",
+                    "PaperTodo 다시 시작"),
+                SettingsSidebarLocalized(
+                    "界面语言将在重启 PaperTodo 后生效。要现在立即重启吗？",
+                    "The interface language will take effect after restarting PaperTodo. Restart now?",
+                    "表示言語は PaperTodo の再起動後に反映されます。今すぐ再起動しますか？",
+                    "인터페이스 언어는 PaperTodo를 다시 시작한 후 적용됩니다. 지금 다시 시작할까요?"),
+                SettingsSidebarLocalized("稍后", "Later", "後で", "나중에"),
+                SettingsSidebarLocalized(
+                    "立即重启",
+                    "Restart now",
+                    "今すぐ再起動",
+                    "지금 다시 시작")))
+        {
+            return;
+        }
+
+        if (Application.Current is App app)
+        {
+            app.RequestRestartAfterExit();
+        }
+        Exit();
+    }
+
+    private UIElement CreateUiLanguageSettingsRow() =>
+        CompactSettingsField(
+            Strings.Get("SettingsUiLanguage"),
+            CreateUiLanguageSelector(),
+            editorWidth: 156,
+            tipKey: "TipSettingsUiLanguage",
+            topMargin: 4);
+
+    private UIElement CreateUiLanguageSelector()
+    {
+        return CreateSettingsSelect(
+            [
+                (UiLanguages.System, Strings.Get("UiLanguageSystem")),
+                (UiLanguages.ChineseSimplified, Strings.Get("UiLanguageZhHans")),
+                (UiLanguages.English, Strings.Get("UiLanguageEnglish")),
+                (UiLanguages.Japanese, Strings.Get("UiLanguageJapanese")),
+                (UiLanguages.Korean, Strings.Get("UiLanguageKorean"))
+            ],
+            UiLanguages.Normalize(State.UiLanguage),
+            SetUiLanguage);
     }
 
     private void ToggleEdgeCapsulePreviewPreferDownward() =>
@@ -185,59 +254,50 @@ public sealed partial class AppController
 
     private string HideEdgeCapsuleCloseButtonOnHoverTip() =>
         SettingsSidebarLocalized(
-            "开启后，普通边缘胶囊在悬停或激活时不显示关闭按钮，也不保留关闭区域；需要关闭时可在右键菜单中选择「隐藏」。",
-            "When enabled, ordinary edge capsules remove both the close button and its reserved strip while hovered or active. Use Hide in the context menu to close one.",
-            "有効にすると、通常のエッジカプセルはホバー／アクティブ時に閉じるボタンとその予約領域を表示しません。閉じる場合は右クリックメニューの「隠す」を使います。",
-            "켜면 일반 가장자리 캡슐은 호버/활성 상태에서 닫기 버튼과 그 예약 영역을 함께 제거합니다. 닫으려면 오른쪽 클릭 메뉴에서 '숨기기'를 사용하세요.");
+            "开启后，普通边缘胶囊在悬停或激活时不显示关闭按钮，也不保留关闭区域；需要隐藏时可在右键菜单中选择「隐藏」。",
+            "When enabled, ordinary edge capsules show neither the close button nor its reserved area while hovered or active. To hide one, choose Hide in its context menu.",
+            "有効にすると、通常の端のカプセルはホバー中やアクティブ時に閉じるボタンもその領域も表示しません。隠すには右クリックメニューから「非表示」を選びます。",
+            "켜면 일반 가장자리 캡슐은 마우스 오버나 활성 상태에서 닫기 버튼과 그 영역을 표시하지 않습니다. 숨기려면 오른쪽 클릭 메뉴에서 '숨김'을 선택하세요.");
 
     private void RestoreSettingsSidebarGeneralDefaults()
     {
-        State.EnableToolTips = true;
-        State.EnableAnimations = true;
-        State.FastAnimations = false;
-        State.UiLanguage = UiLanguages.Default;
-        State.HidePapersFromTaskbar = true;
-        State.HidePapersFromWindowSwitcher = true;
-        State.FullscreenTopmostMode = FullscreenTopmostModes.Avoid;
-        State.ShowTopBarNewTodoButton = true;
-        State.ShowTopBarNewNoteButton = true;
-        State.ShowTopBarExternalOpenButton = false;
-        State.TopBarShortcutOrder = PaperTopBarShortcuts.NormalizeOrder(null);
-        State.TopBarPinnedCount = 3;
+        var defaults = new AppState();
+        State.UiLanguage = defaults.UiLanguage;
+        State.HidePapersFromTaskbar = defaults.HidePapersFromTaskbar;
+        State.HidePapersFromWindowSwitcher = defaults.HidePapersFromWindowSwitcher;
+        State.FullscreenTopmostMode = defaults.FullscreenTopmostMode;
+        State.ShowTopBarNewTodoButton = defaults.ShowTopBarNewTodoButton;
+        State.ShowTopBarNewNoteButton = defaults.ShowTopBarNewNoteButton;
+        State.ShowTopBarExternalOpenButton = defaults.ShowTopBarExternalOpenButton;
+        State.TopBarShortcutOrder = defaults.TopBarShortcutOrder;
+        State.TopBarPinnedCount = defaults.TopBarPinnedCount;
         State.TopBarDefaultsVersion = PaperTopBarShortcuts.CurrentDefaultsVersion;
-        State.HiddenTopBarShortcuts = [];
-        State.TodoTopBarShortcuts = null;
-        State.NoteTopBarShortcuts = null;
-        State.UseCapsuleMode = true;
-        State.UseDeepCapsuleMode = true;
-        State.ShowDeepCapsuleWhileExpanded = true;
-        State.HideEdgeCapsuleCloseButtonOnHover = false;
-        State.RememberDeepCapsuleExpandedPosition = true;
-        State.UseCapsuleCollapseAll = true;
-        State.UseCapsuleFreeQueues = false;
-        State.CompactMasterCapsule = false;
-        State.CollapseExpandedDeepCapsuleOnClick = false;
-        State.EdgeCapsulePreviewPreferDownward = false;
-        State.ExperimentalEdgeCapsuleHoverPreview = true;
-        State.ExperimentalEdgeCapsuleHoverIntent = true;
+        State.HiddenTopBarShortcuts = defaults.HiddenTopBarShortcuts;
+        State.TodoTopBarShortcuts = defaults.TodoTopBarShortcuts;
+        State.NoteTopBarShortcuts = defaults.NoteTopBarShortcuts;
+        State.UseCapsuleMode = defaults.UseCapsuleMode;
+        State.UseDeepCapsuleMode = defaults.UseDeepCapsuleMode;
+        State.ShowDeepCapsuleWhileExpanded = defaults.ShowDeepCapsuleWhileExpanded;
+        State.HideEdgeCapsuleCloseButtonOnHover = defaults.HideEdgeCapsuleCloseButtonOnHover;
+        State.RememberDeepCapsuleExpandedPosition = defaults.RememberDeepCapsuleExpandedPosition;
+        State.UseCapsuleCollapseAll = defaults.UseCapsuleCollapseAll;
+        State.UseCapsuleFreeQueues = defaults.UseCapsuleFreeQueues;
+        State.CompactMasterCapsule = defaults.CompactMasterCapsule;
+        State.CollapseExpandedDeepCapsuleOnClick = defaults.CollapseExpandedDeepCapsuleOnClick;
+        State.EdgeCapsulePreviewPreferDownward = defaults.EdgeCapsulePreviewPreferDownward;
+        State.ExperimentalEdgeCapsuleHoverPreview = defaults.ExperimentalEdgeCapsuleHoverPreview;
+        State.ExperimentalEdgeCapsuleHoverIntent = defaults.ExperimentalEdgeCapsuleHoverIntent;
         State.ExperimentalEdgeCapsuleHoverIntentSensitivity =
-            EdgeCapsuleHoverIntentSensitivities.Medium;
-        State.ExperimentalDockedCapsulesNonTopmost = false;
-        State.MaxTitleLength = PaperTitles.DefaultMaxTitleLength;
-        State.DeepCapsuleTitleMeasureCharacterLimit = 0;
+            defaults.ExperimentalEdgeCapsuleHoverIntentSensitivity;
+        State.ExperimentalDockedCapsulesNonTopmost = defaults.ExperimentalDockedCapsulesNonTopmost;
+        State.MaxTitleLength = defaults.MaxTitleLength;
+        State.DeepCapsuleTitleMeasureCharacterLimit = defaults.DeepCapsuleTitleMeasureCharacterLimit;
 
         NormalizePaperSystemVisibilitySettings();
         SaveNow();
         ApplyGeneralSettingsAfterRestore();
-        RefreshEdgeCapsuleHoverIntentRuntime();
-        foreach (var window in _windows.Values)
-        {
-            window.RefreshDeepCapsuleSlotTopmost();
-        }
-        foreach (var master in _masterCapsules.Values)
-        {
-            master.RefreshEffectiveTopmost();
-        }
+        PublishSettingEffects(SettingEffects.HoverIntent);
+        PublishSettingEffects(SettingEffects.EdgeTopmost);
         RefreshSettingsWindowContent();
     }
 

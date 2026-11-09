@@ -6,7 +6,6 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Data;
 using System.Windows.Media;
-using System.Windows.Media.Effects;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -455,6 +454,34 @@ public sealed partial class AppController : IDisposable
             return null;
         }
 
+        var paper = CreatePaperModel(type, show, sourcePaper);
+        State.Papers.Add(paper);
+
+        if (show)
+        {
+            _trayRefreshSuppressionDepth++;
+            try
+            {
+                ShowPaper(paper);
+                if (sourcePaper != null && _windows.TryGetValue(paper.Id, out var window))
+                {
+                    ForceWindowToFront(window);
+                }
+            }
+            finally
+            {
+                _trayRefreshSuppressionDepth--;
+            }
+        }
+
+        RefreshTrayMenu();
+        RefreshExpandedEditorPaperLists();
+        MarkDirty();
+        return paper;
+    }
+
+    private PaperData CreatePaperModel(string type, bool show, PaperData? sourcePaper = null)
+    {
         (string DeviceName, Rect WorkArea)? cursorMonitor = null;
         if (sourcePaper == null && WindowNative.TryGetCursorScreenPosition(out var cursorPosition))
         {
@@ -546,28 +573,6 @@ public sealed partial class AppController : IDisposable
             });
         }
 
-        State.Papers.Add(paper);
-
-        if (show)
-        {
-            _trayRefreshSuppressionDepth++;
-            try
-            {
-                ShowPaper(paper);
-                if (sourcePaper != null && _windows.TryGetValue(paper.Id, out var window))
-                {
-                    ForceWindowToFront(window);
-                }
-            }
-            finally
-            {
-                _trayRefreshSuppressionDepth--;
-            }
-        }
-
-        RefreshTrayMenu();
-        RefreshExpandedEditorPaperLists();
-        MarkDirty();
         return paper;
     }
 
@@ -918,6 +923,23 @@ public sealed partial class AppController : IDisposable
         }
 
         return false;
+    }
+
+    internal IReadOnlyList<PaperData> GetPaperLinkTargets(PaperData paper) =>
+        State.Papers.Where(source => source.Type == PaperTypes.Todo &&
+            source.Items.Any(item => string.Equals(
+                item.LinkedPaperId, paper.Id, StringComparison.Ordinal)))
+            .ToArray();
+
+    internal void UnlinkPaperFromTodos(PaperData paper)
+    {
+        foreach (var target in GetPaperLinkTargets(paper))
+        {
+            // Keep one undo step per affected Todo, including a currently hidden
+            // paper whose editor has not been constructed yet.
+            GetOrCreatePaperWindow(target, deferShellConstruction: true)
+                .UnlinkPaperFromTodoItems(paper.Id);
+        }
     }
 
     public bool CanPaperDisplayAsCapsule(PaperData paper)
@@ -2066,24 +2088,24 @@ public sealed partial class AppController : IDisposable
             _windows.Remove(paper.Id);
         }
 
-        State.Papers.RemoveAll(p => p.Id == paper.Id);
+        // Closing a provider can call back into the host and remove this paper.
+        if (!State.Papers.Contains(paper)) return;
+        var removed = RemovePaperFromWorkspace(paper);
         NotifyPaperRemoved(paper.Id);
         _visibilityAnimationVersions.Remove(paper.Id);
         NotifyTodoReminderCollectionChanged();
+        foreach (var id in removed.AffectedTodoPaperIds)
+        {
+            if (_windows.TryGetValue(id, out var todoWindow))
+                todoWindow.RefreshTodoRowsForExternalChange();
+        }
+        RefreshCapsuleEligibilityForLinkedPapers();
 
-        ClearTodoLinksToPaper(paper.Id);
-
-        if (State.Papers.Count == 0)
+        if (removed.Replacement is { } replacement)
         {
             _trayRefreshSuppressionDepth++;
-            try
-            {
-                CreatePaper(PaperTypes.Todo, show: true);
-            }
-            finally
-            {
-                _trayRefreshSuppressionDepth--;
-            }
+            try { ShowPaper(replacement); }
+            finally { _trayRefreshSuppressionDepth--; }
         }
 
         ArrangeDeepCapsules();
@@ -2101,33 +2123,46 @@ public sealed partial class AppController : IDisposable
         QueuePluginPaperStateDeletion(paperId);
     }
 
-    private void ClearTodoLinksToPaper(string linkedPaperId)
+    internal sealed record RemovedPaper(
+        PaperData Paper, int Index, (string PaperId, PaperItem Item)[] Links, PaperData? Replacement)
     {
-        var affectedPaperIds = new HashSet<string>();
+        internal string[] AffectedTodoPaperIds =>
+            Links.Select(link => link.PaperId).Distinct(StringComparer.Ordinal).ToArray();
+    }
 
-        foreach (var paper in State.Papers.Where(p => p.Type == PaperTypes.Todo))
+    // Only mutate the source model. Each caller owns its save and the point at which
+    // windows, undo history and plugin resources can observe a successful removal.
+    internal RemovedPaper RemovePaperFromWorkspace(PaperData paper)
+    {
+        var papers = State.Papers;
+        var index = papers.IndexOf(paper);
+        var links = papers.Where(other => other != paper && other.Type == PaperTypes.Todo)
+            .SelectMany(other => other.Items.Where(item => item.LinkedPaperId == paper.Id)
+                .Select(item => (PaperId: other.Id, Item: item))).ToArray();
+        papers.RemoveAt(index);
+        PaperData? replacement = null;
+        if (papers.Count == 0)
         {
-            foreach (var item in paper.Items)
+            try
             {
-                if (!string.Equals(item.LinkedPaperId, linkedPaperId, StringComparison.Ordinal))
-                {
-                    continue;
-                }
-
-                item.ClearQuickLaunch();
-                affectedPaperIds.Add(paper.Id);
+                replacement = CreatePaperModel(PaperTypes.Todo, show: true);
+                papers.Add(replacement);
+            }
+            catch
+            {
+                papers.Insert(index, paper);
+                throw;
             }
         }
+        foreach (var link in links) link.Item.ClearQuickLaunch();
+        return new RemovedPaper(paper, index, links, replacement);
+    }
 
-        foreach (var paperId in affectedPaperIds)
-        {
-            if (_windows.TryGetValue(paperId, out var todoWindow))
-            {
-                todoWindow.RefreshTodoRowsForExternalChange();
-            }
-        }
-
-        RefreshCapsuleEligibilityForLinkedPapers();
+    internal void RestoreRemovedPaper(RemovedPaper removed)
+    {
+        if (removed.Replacement != null) State.Papers.Remove(removed.Replacement);
+        State.Papers.Insert(Math.Min(removed.Index, State.Papers.Count), removed.Paper);
+        foreach (var link in removed.Links) link.Item.LinkPaper(removed.Paper.Id);
     }
 
     public void RefreshCapsuleEligibilityForLinkedPapers()
@@ -2766,6 +2801,7 @@ public sealed partial class AppController : IDisposable
 
     private bool EndMasterCapsuleQueueTransferGate()
     {
+        DeferEdgeCapsulePreviewAfterDrag();
         _masterCapsuleQueueTransfer = null;
         if (_displayMetricsRefreshState !=
             DisplayMetricsRefreshState.DeferredForCapsuleDrag)
@@ -3552,43 +3588,6 @@ public sealed partial class AppController : IDisposable
         }
     }
 
-    private static Style BuildDialogButtonStyle()
-    {
-        var style = new Style(typeof(Button));
-        style.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(10, 4, 10, 4)));
-        style.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(0)));
-        style.Setters.Add(new Setter(Control.BackgroundProperty, Brushes.Transparent));
-        style.Setters.Add(new Setter(Control.ForegroundProperty, Theme.TextBrush));
-        style.Setters.Add(new Setter(Control.CursorProperty, Cursors.Hand));
-        style.Setters.Add(new Setter(Control.FontSizeProperty, AppTypography.Scale(13)));
-
-        var border = new FrameworkElementFactory(typeof(Border));
-        border.Name = "Bd";
-        border.SetValue(Border.CornerRadiusProperty, new CornerRadius(6));
-        border.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(Control.BackgroundProperty));
-        border.SetValue(Border.PaddingProperty, new TemplateBindingExtension(Control.PaddingProperty));
-
-        var content = new FrameworkElementFactory(typeof(ContentPresenter));
-        content.SetValue(ContentPresenter.ContentProperty, new TemplateBindingExtension(ContentControl.ContentProperty));
-        content.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
-        content.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
-        border.AppendChild(content);
-
-        var template = new ControlTemplate(typeof(Button)) { VisualTree = border };
-
-        var mouseOver = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
-        mouseOver.Setters.Add(new Setter(Control.BackgroundProperty, Theme.HoverBrush));
-
-        var pressed = new Trigger { Property = ButtonBase.IsPressedProperty, Value = true };
-        pressed.Setters.Add(new Setter(UIElement.OpacityProperty, 0.7));
-
-        template.Triggers.Add(mouseOver);
-        template.Triggers.Add(pressed);
-        style.Setters.Add(new Setter(Control.TemplateProperty, template));
-
-        return style;
-    }
-
     private void HandleSaveFailure(Exception ex, long? failedVersion = null)
     {
         if (IsExiting)
@@ -3608,53 +3607,11 @@ public sealed partial class AppController : IDisposable
                     return;
                 }
 
-                var dlg = new Window
+                PaperNoticeDialog.ShowSaveFailure(ex.Message, ignore =>
                 {
-                    Title = Strings.Get("SaveFailureTitle"),
-                    Width = 360,
-                    Height = 180,
-                    WindowStyle = WindowStyle.None,
-                    WindowStartupLocation = WindowStartupLocation.CenterScreen,
-                    AllowsTransparency = true,
-                    Background = Brushes.Transparent,
-                    Topmost = true
-                };
-                AppTypography.ApplyTextRendering(dlg);
-                var border = new Border
-                {
-                    Background = Theme.PaperBrush,
-                    BorderBrush = Theme.PaperBorderBrush,
-                    BorderThickness = new Thickness(1),
-                    CornerRadius = new CornerRadius(10),
-                    Padding = new Thickness(20)
-                };
-                var grid = new Grid();
-                grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-                grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-                var txt = new TextBlock
-                {
-                    Text = Strings.Format("SaveFailureMessage", ex.Message),
-                    Foreground = Theme.TextBrush,
-                    TextWrapping = TextWrapping.Wrap,
-                    FontSize = AppTypography.Scale(14)
-                };
-                grid.Children.Add(txt);
-                var btnPanel = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
-                Grid.SetRow(btnPanel, 1);
-                var btnOk = new Button { Content = Strings.Get("CommonOk"), Width = 80, Margin = new Thickness(0, 0, 10, 0), Style = BuildDialogButtonStyle() };
-                btnOk.Click += (s, e) =>
-                {
-                    _hasShownSaveFailure = false;
-                    dlg.Close();
-                };
-                var btnIgnore = new Button { Content = Strings.Get("SaveFailureIgnore"), Width = 110, Style = BuildDialogButtonStyle() };
-                btnIgnore.Click += (s, e) => { _ignoreSaveFailures = true; dlg.Close(); };
-                btnPanel.Children.Add(btnOk);
-                btnPanel.Children.Add(btnIgnore);
-                grid.Children.Add(btnPanel);
-                border.Child = grid;
-                dlg.Content = border;
-                dlg.ShowDialog();
+                    if (ignore) _ignoreSaveFailures = true;
+                    else _hasShownSaveFailure = false;
+                });
             });
         }
     }
@@ -3686,92 +3643,7 @@ public sealed partial class AppController : IDisposable
         }
     }
 
-    private static void ShowPaperLimitDialog()
-    {
-        var dialog = new Window
-        {
-            Title = Strings.Get("PaperLimitTitle"),
-            Width = 340,
-            Height = 176,
-            MinWidth = 340,
-            MinHeight = 176,
-            WindowStartupLocation = WindowStartupLocation.CenterScreen,
-            WindowStyle = WindowStyle.None,
-            ResizeMode = ResizeMode.NoResize,
-            AllowsTransparency = true,
-            Background = Brushes.Transparent,
-            ShowInTaskbar = false,
-            Topmost = true
-        };
-        AppTypography.ApplyTextRendering(dialog);
-
-        var root = new Border
-        {
-            Background = Theme.PaperBrush,
-            BorderBrush = Theme.PaperBorderBrush,
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(10),
-            Padding = new Thickness(18),
-            Effect = new DropShadowEffect
-            {
-                BlurRadius = 18,
-                ShadowDepth = 2,
-                Opacity = 0.22
-            }
-        };
-
-        var layout = new Grid();
-        layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        layout.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-        layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-
-        var title = new TextBlock
-        {
-            Text = Strings.Get("PaperLimitTitle"),
-            Foreground = Theme.TextBrush,
-            FontSize = AppTypography.Scale(16),
-            FontWeight = FontWeights.SemiBold,
-            Margin = new Thickness(0, 0, 0, 8)
-        };
-
-        var message = new TextBlock
-        {
-            Text = Strings.Get("PaperLimitMessage"),
-            Foreground = Theme.WeakTextBrush,
-            FontSize = AppTypography.Scale(13),
-            TextWrapping = TextWrapping.Wrap,
-            LineHeight = 20,
-            Margin = new Thickness(0, 2, 0, 0)
-        };
-
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0, 16, 0, 0)
-        };
-
-        var ok = new Button
-        {
-            Content = Strings.Get("CommonOk"),
-            MinWidth = 72,
-            Style = BuildDialogButtonStyle()
-        };
-        ok.Click += (_, _) => dialog.Close();
-        buttons.Children.Add(ok);
-
-        Grid.SetRow(title, 0);
-        Grid.SetRow(message, 1);
-        Grid.SetRow(buttons, 2);
-
-        layout.Children.Add(title);
-        layout.Children.Add(message);
-        layout.Children.Add(buttons);
-
-        root.Child = layout;
-        dialog.Content = root;
-        dialog.ShowDialog();
-    }
+    private static void ShowPaperLimitDialog() => PaperNoticeDialog.ShowPaperLimit();
 
     private bool IsPaperShown(PaperData paper)
     {

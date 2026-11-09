@@ -468,7 +468,72 @@ internal static partial class Program
                 if (failure != null) throw failure;
                 Require(result == choice, "recovery dialog did not honor the selected action");
             }
-            Console.WriteLine("PASS ownerless recovery dialogs: action mapping, safe defaults and dismissal");
+
+            T Choose<T>(Func<T> show, Action<System.Windows.Window> respond)
+            {
+                Exception? failure = null;
+                app.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ContextIdle, new Action(() =>
+                {
+                    var dialog = app.Windows.OfType<System.Windows.Window>().Single(window => window.IsVisible);
+                    try { respond(dialog); }
+                    catch (Exception ex) { failure = ex; dialog.Close(); }
+                }));
+                var result = show();
+                if (failure != null) throw failure;
+                return result;
+            }
+
+            void Escape(System.Windows.Window dialog) => dialog.RaiseEvent(new System.Windows.Input.KeyEventArgs(
+                System.Windows.Input.Keyboard.PrimaryDevice, System.Windows.PresentationSource.FromVisual(dialog),
+                Environment.TickCount, System.Windows.Input.Key.Escape)
+                { RoutedEvent = System.Windows.Input.Keyboard.PreviewKeyDownEvent });
+
+            // An unshown owner is common for a restored edge capsule. Only an explicit
+            // destructive action may confirm deletion; Escape and Cancel must remain safe.
+            var hiddenOwner = new System.Windows.Window { Topmost = true };
+            foreach (var action in new[] { "escape", "CommonCancel", "MenuDelete" })
+            {
+                var confirmed = Choose(() => PaperNoticeDialog.ShowDeleteConfirmation(hiddenOwner), dialog =>
+                {
+                    Require(dialog.Owner == null && !dialog.ShowInTaskbar && dialog.Topmost,
+                        "delete confirmation cannot attach to an unshown paper owner");
+                    var buttons = FailureDialogNodes(dialog).OfType<System.Windows.Controls.Button>().ToArray();
+                    Require(Equals(buttons.Single(button => button.IsDefault).Content, Strings.Get("CommonCancel")),
+                        "delete confirmation must default to Cancel");
+                    if (action == "escape") Escape(dialog);
+                    else buttons.Single(button => Equals(button.Content, Strings.Get(action))).RaiseEvent(
+                        new System.Windows.RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+                });
+                Require(confirmed == (action == "MenuDelete"), "delete confirmation changed dismissal semantics");
+            }
+            hiddenOwner.Close();
+
+            foreach (var action in new string?[] { null, "CommonOk", "SaveFailureIgnore" })
+            {
+                bool? selected = null;
+                Choose(() =>
+                {
+                    PaperNoticeDialog.ShowSaveFailure("fixture", ignore => selected = ignore);
+                    return selected;
+                }, dialog =>
+                {
+                    Require(dialog.Owner == null && dialog.ShowInTaskbar && dialog.Topmost,
+                        "save failure notice must remain independently reachable");
+                    if (action == null)
+                    {
+                        Escape(dialog);
+                        Require(dialog.IsVisible, "Escape must not acknowledge a save failure");
+                        dialog.Close();
+                    }
+                    else FailureDialogNodes(dialog).OfType<System.Windows.Controls.Button>()
+                        .Single(button => Equals(button.Content, Strings.Get(action))).RaiseEvent(
+                            new System.Windows.RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+                });
+                bool? expected = action == null ? null : action == "SaveFailureIgnore";
+                Require(selected == expected,
+                    "save failure dismissal must not invoke either selection callback");
+            }
+            Console.WriteLine("PASS shared notices: recovery choices, delete cancellation and save acknowledgement");
             return 0;
         }
         catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }

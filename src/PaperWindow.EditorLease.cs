@@ -270,4 +270,3 @@ public sealed partial class PaperWindow
         public void Dispose() => Return(restoreDesktop: true);
     }
 }
-

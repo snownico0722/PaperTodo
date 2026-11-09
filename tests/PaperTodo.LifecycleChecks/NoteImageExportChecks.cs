@@ -214,6 +214,20 @@ internal static class NoteImageExportChecks
         Check(File.ReadAllText(jpegDestination) == "previous image" &&
               !Directory.EnumerateFiles(AppContext.BaseDirectory, ".export-cancel.jpg.*.tmp").Any(),
             "Cancelled JPEG replaced the destination or left a temporary file");
+        using var lateCancellation = new CancellationTokenSource();
+        try
+        {
+            NotePortableExport.SaveAtomicFile(jpegDestination, tempPath =>
+            {
+                File.WriteAllText(tempPath, "completed replacement");
+                lateCancellation.Cancel();
+            }, lateCancellation.Token);
+            throw new Exception("Cancellation before publication ignored");
+        }
+        catch (OperationCanceledException) { }
+        Check(File.ReadAllText(jpegDestination) == "previous image" &&
+              !Directory.EnumerateFiles(AppContext.BaseDirectory, ".export-cancel.jpg.*.tmp").Any(),
+            "Cancelled completed export replaced destination or leaked its temporary file");
         File.Delete(jpegDestination);
 
         Console.WriteLine($"PASS note image: {sample.PixelWidth}x{sample.PixelHeight}; long note {longNote.PixelHeight}px; native decode, stripe seams, complete scanlines and atomic cancellation");
@@ -276,6 +290,7 @@ internal static class NoteImageExportChecks
         {
             TelemetryEnabled = false, EnableAnimations = false, UseCapsuleMode = false,
             UseDeepCapsuleMode = false, McpEnabled = false, UsePersistentPowerShellProcess = false,
+            Workspaces = new() { Enabled = true, Slots = [1, 2] },
             Papers = [new() { Id = "export-note", Type = PaperTypes.Note, Content = "old saved text",
                 IsVisible = true, X = 100, Y = 100, Width = 350, Height = 300 }]
         };
@@ -301,6 +316,9 @@ internal static class NoteImageExportChecks
             try
             {
                 preview = Application.Current.Windows.OfType<NoteImageExportWindow>().Single();
+                Check(controller.IsPaperExportActive && !await controller.SwitchWorkspaceAsync(2) &&
+                      controller.WorkspaceNumber == 1,
+                    "Image export allowed its workspace/image store to be replaced");
                 var started = System.Diagnostics.Stopwatch.StartNew();
                 while (MemberOrNull(preview, "_artifact") == null)
                 {
@@ -320,6 +338,8 @@ internal static class NoteImageExportChecks
         box = (MarkdownTextBox)Member(paper, "_noteBox");
         Check(completed && box.Text.Contains("latest unsaved text") && box.SelectedText == selected,
             "Export modified the document or its selection");
+        Check(!controller.IsPaperExportActive && await controller.SwitchWorkspaceAsync(2),
+            "Closed image preview did not release the workspace after layout finished");
     }
 
     private static void CheckScanlines(byte[] png, int width, int height)

@@ -720,19 +720,50 @@ internal static partial class Program
         const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
         var build = typeof(AppController).GetMethod("BuildWorkspaceSettingsPage", flags)!;
         var cancelRename = typeof(AppController).GetMethod("CancelWorkspaceRenameOnPointer", flags)!;
-        StackPanel Page() => (StackPanel)build.Invoke(controller, null)!;
-        StackPanel Options(StackPanel page) => page.Children.OfType<StackPanel>().Single();
-        Border Slot(StackPanel page) => Options(page).Children.OfType<Border>().Single(card =>
+        Grid Page() => (Grid)build.Invoke(controller, null)!;
+        StackPanel Options(Grid page) => page.Children.OfType<StackPanel>()
+            .Single(column => Grid.GetColumn(column) == 0).Children.OfType<StackPanel>().Single();
+        Border Slot(Grid page) => Options(page).Children.OfType<Border>().Single(card =>
             AutomationProperties.GetAutomationId(card) == "WorkspaceSlot2");
 
         var original = controller.WorkspaceOptions.Normalized();
         var originalName = original.DisplayName(2);
-        var nameRow = ((Grid)Slot(Page()).Child).Children.OfType<StackPanel>().First();
-        var rename = nameRow.Children.OfType<Button>().Single(button =>
+        var page = Page();
+        var window = new Window { Content = page, Width = 630, Height = 400, ShowInTaskbar = false };
+        window.Show();
+        var editingCard = Slot(page);
+        var cardControls = LogicalDescendants(editingCard).ToArray();
+        var rename = cardControls.OfType<Button>().Single(button =>
             AutomationProperties.GetAutomationId(button) == "WorkspaceRename2");
-        var editor = nameRow.Children.OfType<TextBox>().Single();
+        var editor = cardControls.OfType<TextBox>().Single();
+        async Task<Rect> RenameButtonBoundsAsync()
+        {
+            await window.Dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.ApplicationIdle);
+            return rename.TransformToAncestor(editingCard).TransformBounds(new Rect(rename.RenderSize));
+        }
+
         rename.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-        editor.Text = "Unconfirmed workspace name";
+        var shortNameButton = await RenameButtonBoundsAsync();
+        editor.Text = "Weekly plans";
+        var mediumNameButton = await RenameButtonBoundsAsync();
+        Require(mediumNameButton.Left > shortNameButton.Left,
+            $"the save button did not follow the name: {shortNameButton} -> {mediumNameButton}");
+        editor.Text = new string('中', 16);
+        Require(editor.Text == new string('中', 15), "fullwidth workspace names stop at 15 characters");
+        editor.Text = new string('A', 31);
+        Require(editor.Text == new string('A', 30), "ASCII workspace names stop at 30 halfwidth characters");
+        editor.Text = new string('中', 10) + new string('a', 11);
+        Require(editor.Text == new string('中', 10) + new string('a', 10),
+            "workspace names enforce the combined halfwidth/fullwidth limit");
+        editor.Text = new string('W', 48);
+        Require(editor.Text == new string('W', 30), "long paste was not limited to 15 fullwidth units");
+        editor.CaretIndex = 0;
+        editor.SelectedText = "X";
+        Require(editor.Text == new string('W', 30),
+            "adding text to a full name must not delete the original suffix");
+        var longNameButton = await RenameButtonBoundsAsync();
+        Require(longNameButton.Top >= shortNameButton.Bottom,
+            $"the save button did not wrap: {shortNameButton} -> {longNameButton}");
         cancelRename.Invoke(controller, [new Border()]);
         Require(editor.Visibility == Visibility.Collapsed &&
                 controller.WorkspaceOptions.DisplayName(2) == originalName,
@@ -744,6 +775,7 @@ internal static partial class Program
         await Until(() => controller.WorkspaceOptions.DisplayName(2) == "Confirmed workspace name",
             "workspace rename confirmation did not save");
         Require(controller.WorkspaceNumber == 1, "renaming a workspace unexpectedly switched it");
+        window.Close();
 
         var card = Slot(Page());
         card.RaiseEvent(new System.Windows.Input.MouseButtonEventArgs(
@@ -764,6 +796,192 @@ internal static partial class Program
         Console.WriteLine("PASS workspace settings: rename cancel/confirm and explicit card switch confirmation");
     }
 
+    private static ContextMenu PaperWorkspaceMenu(PaperWindow paper, bool edge = false) =>
+        (ContextMenu)typeof(PaperWindow).GetMethod("BuildPaperContextMenu",
+            BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(paper, [edge])!;
+
+    private static MenuItem WorkspaceMenuAction(ContextMenu menu, string id) =>
+        menu.Items.OfType<MenuItem>().Single(item =>
+                AutomationProperties.GetAutomationId(item) == "PaperWorkspace")
+            .Items.OfType<MenuItem>().Single(item => AutomationProperties.GetAutomationId(item) == id);
+
+    private static async Task WorkspacePaperMenuChecks(AppController controller)
+    {
+        var original = controller.WorkspaceOptions.Normalized();
+        var named = original.Normalized();
+        named.Slots = [1];
+        named.TopBarNamePicker = true;
+        Require(await controller.ChangeWorkspaceConfigurationAsync(named), "could not enable the named selector");
+        var state = controller.State;
+        var windows = Field<Dictionary<string, PaperWindow>>(controller, "_windows");
+        var paper = windows["note-a"];
+        paper.EnsureShellBuilt();
+        Field<Button>(paper, "_workspaceButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        var selector = Field<List<WeakReference<ContextMenu>>>(paper, "_themedContextMenus")
+            .Select(reference => reference.TryGetTarget(out var menu) ? menu : null)
+            .OfType<ContextMenu>().Last(menu => menu.IsOpen);
+        await Until(() => selector.ActualWidth > 0, "named selector did not open");
+        var create = selector.Items.OfType<MenuItem>().Last();
+        Require(create.IsEnabled && Equals(create.Header, Strings.Get("WorkspaceCreateNew")) &&
+                selector.Items.OfType<MenuItem>().First().IsEnabled == false,
+            "one-workspace named selector must retain the current entry and offer creation last");
+        create.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+        await Until(() => controller.WorkspaceOptions.ContainsSlot(2) && !controller.IsWorkspaceSwitching,
+            "named create action did not add a workspace");
+        Require(controller.WorkspaceNumber == 1 && ReferenceEquals(controller.State, state) &&
+                selector.IsOpen && selector.IsKeyboardFocusWithin,
+            "named creation switched workspace, closed the selector or lost its focus");
+        selector.IsOpen = false;
+        await Dispatcher.Yield(DispatcherPriority.Background);
+
+        var full = controller.WorkspaceOptions.Normalized();
+        full.Slots = [1, 2, 3, 4, 5];
+        Require(await controller.ChangeWorkspaceConfigurationAsync(full), "could not fill the named selector");
+        Field<Button>(paper, "_workspaceButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        selector = Field<List<WeakReference<ContextMenu>>>(paper, "_themedContextMenus")
+            .Select(reference => reference.TryGetTarget(out var menu) ? menu : null)
+            .OfType<ContextMenu>().Last(menu => menu.IsOpen);
+        Require(!selector.Items.OfType<MenuItem>().Last().IsEnabled,
+            "named selector allowed creating a sixth workspace");
+        selector.IsOpen = false;
+        await Dispatcher.Yield(DispatcherPriority.Background);
+
+        foreach (var edge in new[] { false, true })
+        {
+            var menu = PaperWorkspaceMenu(paper, edge);
+            var workspace = menu.Items.OfType<MenuItem>().Single(item =>
+                AutomationProperties.GetAutomationId(item) == "PaperWorkspace");
+            var labels = workspace.Items.OfType<MenuItem>().Where(item =>
+                string.IsNullOrEmpty(AutomationProperties.GetAutomationId(item))).ToArray();
+            Require(Equals(workspace.Header, Strings.Get("WorkspaceSettingsTitle")) &&
+                    labels.Select(item => item.Header).SequenceEqual(new object[]
+                        { Strings.Get("WorkspaceSwitchGroup"), Strings.Get("WorkspaceMoveGroup") }),
+                "paper/capsule workspace menu must show Switch above Move to");
+            Require(workspace.Items.OfType<Separator>().Count() == 1 &&
+                    !WorkspaceMenuAction(menu, "SwitchWorkspace1").IsEnabled &&
+                    !WorkspaceMenuAction(menu, "MoveToWorkspace1").IsEnabled &&
+                    WorkspaceMenuAction(menu, "MoveToWorkspace2").IsEnabled,
+                "workspace menu omitted/allowed the current workspace or disabled a valid move target");
+        }
+        WorkspaceMenuAction(PaperWorkspaceMenu(paper), "SwitchWorkspace2")
+            .RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+        await Until(() => controller.WorkspaceNumber == 2 && !controller.IsWorkspaceSwitching,
+            "workspace submenu switch action did not switch the full workspace");
+        Require(await controller.SwitchWorkspaceAsync(1) &&
+                await controller.ChangeWorkspaceConfigurationAsync(original),
+            "workspace menu test could not restore its original workspace");
+        Console.WriteLine("PASS workspace menus: named create, capacity, grouped actions and full switch");
+    }
+
+    private static async Task WorkspacePaperMoveChecks(AppController controller)
+    {
+        var catalog = Field<WorkspaceCatalog>(controller, "_workspaceCatalog");
+        var source = Field<StateStore>(controller, "_store");
+        var target = catalog.StoreFor(2);
+        var writerField = typeof(StateStore).GetField("_atomicWriter", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        var sourceWriter = writerField.GetValue(source);
+        var targetWriter = writerField.GetValue(target);
+        var windows = Field<Dictionary<string, PaperWindow>>(controller, "_windows");
+        var note = controller.State.Papers.Single(paper => paper.Id == "note-a");
+        var noteWindow = windows[note.Id];
+        noteWindow.EnsureShellBuilt();
+        note.Title = "Move note";
+        var image = controller.ImageStore.ImportBitmapSource(note.Id, WorkspaceBitmap(129, 63));
+        Require(controller.ImageStore.TryGetEncodedImageBytes(image.Id, out _, out var expectedImage),
+            "move fixture image was not saved");
+        var editor = Field<MarkdownTextBox>(noteWindow, "_noteBox");
+        const string findQuery = "pending move draft";
+        Require(!controller.GetBuiltInFindMatches(findQuery).Any(hit => hit.PaperId == note.Id),
+            "Move fixture already contains the draft search text.");
+        editor.Text = $"pending move draft\n![first|65%](i:{image.Id})\n![second](i:{image.Id})";
+        Require(controller.GetBuiltInFindMatches(findQuery).Any(hit => hit.PaperId == note.Id && hit.Match.Offset == 0),
+            "Workspace search missed a live Markdown edit before the move committed it.");
+        var expectedContent = editor.PersistentText;
+        var linked = controller.State.Papers.Single(paper => paper.Id == "todo").Items[0];
+        linked.LinkPaper(note.Id);
+        controller.PaperBodyPlugins.DataStore.SavePaperState("fixture", note.Id, 7, "{\"move\":true}");
+        var originalTarget = target.ReadCommittedWorkspaceState();
+        var originalTargetIds = originalTarget.Papers.Select(paper => paper.Id).ToArray();
+        Require(originalTargetIds.Contains(note.Id), "move fixture must collide with an existing target ID");
+
+        void RequireSourceRetained(string stage)
+        {
+            Require(controller.State.Papers.Contains(note) && !noteWindow.IsClosed &&
+                    note.Content == expectedContent && editor.PersistentText == expectedContent &&
+                    linked.LinkedPaperId == note.Id && controller.WorkspaceNumber == 1,
+                stage + " changed the original paper, draft, links or current workspace");
+            Require(target.ReadCommittedWorkspaceState().Papers.Select(paper => paper.Id)
+                    .SequenceEqual(originalTargetIds), stage + " left a visible destination copy");
+        }
+        try
+        {
+            writerField.SetValue(target, new DurableAtomicFileWriter((stage, path) =>
+            {
+                if (stage == DurableAtomicWriteStage.BeforeTempOpen && path == target.FilePath)
+                    throw new IOException("injected destination move failure");
+            }));
+            Require(!await controller.MovePaperToWorkspaceAsync(note, 2), "target-write failure was reported as success");
+            RequireSourceRetained("target-write failure");
+            writerField.SetValue(target, targetWriter);
+
+            var sourceWrites = 0;
+            writerField.SetValue(source, new DurableAtomicFileWriter((stage, path) =>
+            {
+                if (stage == DurableAtomicWriteStage.BeforeReplace && path == source.FilePath && ++sourceWrites == 2)
+                    throw new IOException("injected source move failure");
+            }));
+            Require(!await controller.MovePaperToWorkspaceAsync(note, 2), "source-write failure was reported as success");
+            Require(sourceWrites == 2, "source fault did not reach the post-destination commit");
+            RequireSourceRetained("source-write failure");
+        }
+        finally
+        {
+            writerField.SetValue(source, sourceWriter);
+            writerField.SetValue(target, targetWriter);
+        }
+
+        var staleVersion = Field<long>(controller, "_saveVersion");
+        var staleSource = source.SerializeState(controller.State);
+        var staleTarget = target.SerializeState(target.ReadCommittedWorkspaceState());
+        WorkspaceMenuAction(PaperWorkspaceMenu(noteWindow), "MoveToWorkspace2")
+            .RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+        await Until(() => !controller.State.Papers.Contains(note) && !controller.IsWorkspaceSwitching,
+            "move submenu did not transfer the paper");
+        await source.SaveJsonAsync(staleSource, staleVersion);
+        await target.SaveJsonAsync(staleTarget, staleVersion);
+        Require(controller.WorkspaceNumber == 1 && noteWindow.IsClosed && linked.LinkedPaperId == null &&
+                !source.ReadCommittedWorkspaceState().Papers.Any(paper => paper.Id == note.Id),
+            "successful move failed to save/close its source or switched workspaces");
+        Require(await controller.SwitchWorkspaceAsync(2), "could not enter the move destination");
+        var moved = controller.State.Papers.Single(paper => paper.Title == note.Title);
+        var movedImages = MarkdownImageReferences.Enumerate(moved.Content).ToArray();
+        Require(moved.Id != note.Id && movedImages.Length == 2 &&
+                movedImages[0].ImageId == movedImages[1].ImageId && movedImages[0].Label == "first|65%" &&
+                controller.ImageStore.TryGetEncodedImageBytes(movedImages[0].ImageId, out var movedAsset, out var bytes) &&
+                movedAsset.NoteId == moved.Id && bytes.SequenceEqual(expectedImage),
+            "move lost/recompressed images, duplicate references, metadata or the new paper ownership");
+        Require(controller.State.Papers.Single(paper => paper.Id == note.Id).Content ==
+                originalTarget.Papers.Single(paper => paper.Id == note.Id).Content,
+            "move overwrote the existing destination paper on an ID collision");
+        var pluginState = controller.PaperBodyPlugins.DataStore.ReadPaperState("fixture", moved.Id);
+        Require(pluginState.Version == 7 && J(pluginState.Json)["move"]!.GetValue<bool>() &&
+                J(controller.PaperBodyPlugins.DataStore.ReadPaperState("fixture", note.Id).Json)["slot"]!.GetValue<int>() == 2,
+            "move lost the remapped plugin state or overwrote existing destination state");
+
+        var todo = controller.State.Papers.Single(paper => paper.Id == "todo");
+        todo.Title = "Move todo";
+        todo.Items[0].LinkPaper(moved.Id);
+        todo.Items[1].LinkPath(Path.Combine(AppContext.BaseDirectory, "example.exe"));
+        var pathLink = todo.Items[1].LinkedPath;
+        Require(await controller.MovePaperToWorkspaceAsync(todo, 1) && controller.WorkspaceNumber == 2,
+            "moving a todo switched the current workspace or failed");
+        Require(await controller.SwitchWorkspaceAsync(1), "could not return after todo transfer");
+        var movedTodo = controller.State.Papers.Single(paper => paper.Title == todo.Title);
+        Require(movedTodo.Items[0].LinkedPaperId == null && movedTodo.Items[1].LinkedPath == pathLink,
+            "moving a todo retained a cross-workspace paper link or lost its file/program link");
+        Console.WriteLine("PASS workspace moves: draft, ID collision, image/plugin data, links and both write failures");
+    }
+
     private static async Task WorkspaceLiveChecks()
     {
         var directory = AppContext.BaseDirectory;
@@ -771,7 +989,7 @@ internal static partial class Program
         var main = NewState();
         main.Theme = "dark"; main.UiLanguage = "en-US";
         main.McpEnabled = main.McpAllowFullWrites = true;
-        main.Workspaces = new() { Enabled = true, Slots = [1, 2, 3, 4, 5] };
+        main.Workspaces = new() { Enabled = true, Slots = [1, 2, 3, 4, 5], Names = new() { [2] = "11" } };
         var second = NewState();
         second.Theme = "light"; second.UiLanguage = "ja-JP";
         second.McpEnabled = second.McpAllowFullWrites = false;
@@ -815,6 +1033,30 @@ internal static partial class Program
             Require(controller.PaperCommands.GetDataReloadStatus().LastResult != null,
                 "fixture did not establish a previous-workspace reload result");
             var oldWindow = windows["note-a"];
+            using (var cancellation = new CancellationTokenSource())
+            {
+                var dialog = new PaperExportProgressWindow(oldWindow, "Export", 3, cancellation);
+                dialog.Show();
+                dialog.Report(1);
+                var panel = (StackPanel)dialog.Content;
+                var bar = panel.Children.OfType<ProgressBar>().Single();
+                Require(bar.Value == 1 && bar.Maximum == 3, "batch export progress did not advance");
+                dialog.Close();
+                Require(cancellation.IsCancellationRequested && dialog.IsVisible &&
+                        !panel.Children.OfType<Button>().Single().IsEnabled,
+                    "closing the export dialog must request cancellation and wait for cleanup");
+                dialog.Finish();
+                Require(!dialog.IsVisible, "export dialog stayed visible after cleanup");
+            }
+            controller.SetPaperExportActive(true);
+            controller.SetPaperExportActive(true);
+            Require(!await controller.SwitchWorkspaceAsync(2) && controller.WorkspaceNumber == 1,
+                "export must keep its source workspace active");
+            controller.SetPaperExportActive(false);
+            Require(!await controller.SwitchWorkspaceAsync(2) && controller.WorkspaceNumber == 1,
+                "another export still holds the workspace");
+            controller.SetPaperExportActive(false);
+            Require(!controller.IsPaperExportActive, "last export did not release the workspace");
             var oldStore = Field<StateStore>(controller, "_store");
             var draft = $"saved draft\n![image](i:{imageId})";
             var editor = Field<MarkdownTextBox>(oldWindow, "_noteBox");
@@ -1197,8 +1439,154 @@ internal static partial class Program
                 "cancelling the tray workspace choice switched or retained the confirmation");
             cancelMenu.IsOpen = false;
 
+            await Dispatcher.Yield(DispatcherPriority.Background);
+            await WorkspacePaperMenuChecks(controller);
+            await WorkspacePaperMoveChecks(controller);
+            await WorkspacePluginBodyMoveChecks(controller);
+
             Console.WriteLine("PASS workspace WPF: cycle, editor flush, ID collision, inheritance, language, plugin data, failures and slot retention");
         }
         finally { controller.Dispose(); }
+    }
+
+    private static async Task WorkspacePluginBodyMoveChecks(AppController controller)
+    {
+        const string id = "tests.workspace-body-move";
+        var registry = controller.PaperBodyPlugins;
+        var descriptors = Field<Dictionary<string, PaperBodyPluginDescriptor>>(registry, "_descriptors");
+        var loaded = Field<System.Collections.IDictionary>(registry, "_loadedNativeByDirectory");
+        var path = Path.Combine(registry.PluginRoot, id);
+        var manifest = new PaperBodyPluginManifest
+        {
+            Id = id, Kind = "native", ApiVersion = "2.3", StateVersion = 3,
+            DirectoryPath = path, MaxPaperInstances = 0, Permissions = [PaperTodoPermissionNames.PapersRead]
+        };
+        var descriptor = new PaperBodyPluginDescriptor(id, "Workspace body move", "", new Version(1, 0),
+            "2.3", 3, PaperBodyPluginKind.Native, PaperBodyCapabilities.None,
+            new HashSet<string> { PaperTodoPermissionNames.PapersRead },
+            path, path, "fixture", typeof(WorkspaceMoveBodyProbe), manifest);
+        var loadedType = typeof(PaperBodyPluginRegistry).GetNestedType("LoadedNativePlugin", BindingFlags.NonPublic)!;
+        loaded[path] = Activator.CreateInstance(loadedType, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+            null, [path, descriptor, null], null)!;
+        descriptors[id] = descriptor;
+        var source = Field<StateStore>(controller, "_store");
+        var target = Field<WorkspaceCatalog>(controller, "_workspaceCatalog").StoreFor(2);
+        var writerField = typeof(StateStore).GetField("_atomicWriter", Private)!;
+        var sourceWriter = writerField.GetValue(source);
+        var targetWriter = writerField.GetValue(target);
+        try
+        {
+            var paper = controller.CreatePaper(PaperTypes.Note)!;
+            var window = Field<Dictionary<string, PaperWindow>>(controller, "_windows")[paper.Id];
+            window.SwitchPaperBodyProvider(id);
+            var host = Field<PaperBodyHost>(window, "_paperBodyHost");
+            var originalTargetIds = target.ReadCommittedWorkspaceState().Papers.Select(item => item.Id).ToArray();
+
+            void QueueBeforeDispatcherDrain(WorkspaceMoveBodyProbe.Session body, string json)
+            {
+                // The UI waits for callback acceptance without pumping its queued
+                // Background flush. A no-op Commit must not hide this boundary.
+                Task.Run(() => body.Context.SaveStateJson(json)).GetAwaiter().GetResult();
+                Require(Field<System.Collections.IDictionary>(window, "_pendingPluginStates").Count == 1 &&
+                        !JsonNode.DeepEquals(J(registry.DataStore.ReadPaperState(id, paper.Id).Json), J(json)),
+                    "plugin move fixture did not retain an accepted, not-yet-drained background save");
+            }
+
+            void RequireRestored(WorkspaceMoveBodyProbe.Session previous, string expected)
+            {
+                Require(previous.Disposed && host.Current is WorkspaceMoveBodyProbe.Session restored &&
+                        !ReferenceEquals(previous, restored) &&
+                        JsonNode.DeepEquals(J(restored.Context.StateJson), J(expected)) &&
+                        controller.State.Papers.Contains(paper) && !window.IsClosed && window.IsVisible &&
+                        controller.WorkspaceNumber == 1 &&
+                        target.ReadCommittedWorkspaceState().Papers.Select(item => item.Id).SequenceEqual(originalTargetIds),
+                    "failed plugin move lost the accepted state, source body/window, or target rollback");
+                previous.Context.SaveStateJson("{\"late\":true}");
+                Require(JsonNode.DeepEquals(J(registry.DataStore.ReadPaperState(id, paper.Id).Json), J(expected)),
+                    "the detached body context could overwrite the restored source state");
+            }
+
+            await Field<Task>(controller, "_coreHistoryBackupTask");
+            var body = (WorkspaceMoveBodyProbe.Session)host.Current!;
+            QueueBeforeDispatcherDrain(body, "{\"pending\":1}");
+            writerField.SetValue(target, new DurableAtomicFileWriter((stage, file) =>
+            {
+                if (stage == DurableAtomicWriteStage.BeforeTempOpen && file == target.FilePath)
+                    throw new IOException("injected plugin destination move failure");
+            }));
+            var move = controller.MovePaperToWorkspaceAsync(paper, 2);
+            Require(move.IsCompleted && !await move, "plugin destination fault did not run before the Dispatcher drain");
+            RequireRestored(body, "{\"pending\":1}");
+            writerField.SetValue(target, targetWriter);
+
+            await Field<Task>(controller, "_coreHistoryBackupTask");
+            body = (WorkspaceMoveBodyProbe.Session)host.Current!;
+            QueueBeforeDispatcherDrain(body, "{\"pending\":2}");
+            body.DisposeStateJson = "{\"final\":2}";
+            var sourceWrites = 0;
+            writerField.SetValue(source, new DurableAtomicFileWriter((stage, file) =>
+            {
+                if (stage == DurableAtomicWriteStage.BeforeReplace && file == source.FilePath && ++sourceWrites == 2)
+                    throw new IOException("injected plugin source move failure");
+            }));
+            move = controller.MovePaperToWorkspaceAsync(paper, 2);
+            Require(move.IsCompleted && !await move && sourceWrites == 2,
+                "plugin source fault did not reach the post-target save");
+            RequireRestored(body, "{\"final\":2}");
+            writerField.SetValue(source, sourceWriter);
+
+            await Field<Task>(controller, "_coreHistoryBackupTask");
+            body = (WorkspaceMoveBodyProbe.Session)host.Current!;
+            QueueBeforeDispatcherDrain(body, "{\"pending\":3}");
+            body.DisposeStateJson = "{\"final\":3}";
+            var lateWrites = 0;
+            writerField.SetValue(target, new DurableAtomicFileWriter((stage, file) =>
+            {
+                if (stage == DurableAtomicWriteStage.BeforeReplace && file == target.FilePath)
+                {
+                    body.Context.SaveStateJson("{\"late\":true}");
+                    lateWrites++;
+                }
+            }));
+            move = controller.MovePaperToWorkspaceAsync(paper, 2);
+            Require(move.IsCompleted && await move && body.Disposed && lateWrites == 1 && window.IsClosed &&
+                    controller.WorkspaceNumber == 1 && !controller.State.Papers.Contains(paper),
+                "successful plugin move did not end the old body lease or preserve the active workspace");
+            using var targetData = new PaperBodyPluginDataStore(registry.PluginRoot, 2);
+            var copied = targetData.ReadPaperState(id, paper.Id);
+            Require(copied.Version == 3 && JsonNode.DeepEquals(J(copied.Json), J("{\"final\":3}")),
+                "successful plugin move lost Dispose's final state or accepted a late old-context save");
+            Console.WriteLine("PASS workspace plugin move: accepted pending state, final Dispose save, failure restore and stale lease fence");
+        }
+        finally
+        {
+            writerField.SetValue(source, sourceWriter);
+            writerField.SetValue(target, targetWriter);
+            loaded.Remove(path);
+            descriptors.Remove(id);
+        }
+    }
+}
+
+public sealed class WorkspaceMoveBodyProbe : IPaperBodyPlugin
+{
+    public IPaperBodySession Create(PaperBodyContext context)
+    {
+        if (context.Workspace.GetPaper(context.PaperId) == null)
+            throw new InvalidOperationException("A restored body could not read its source paper.");
+        return new Session(context);
+    }
+
+    public sealed class Session(PaperBodyContext context) : IPaperBodySession
+    {
+        public PaperBodyContext Context { get; } = context;
+        public FrameworkElement View { get; } = new TextBlock();
+        public string? DisposeStateJson { get; set; }
+        public bool Disposed { get; private set; }
+        public void Dispose()
+        {
+            Disposed = true;
+            if (DisposeStateJson != null) Context.SaveStateJson(DisposeStateJson);
+        }
     }
 }

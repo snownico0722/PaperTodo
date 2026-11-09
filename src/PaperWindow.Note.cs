@@ -1037,7 +1037,7 @@ public sealed partial class PaperWindow
         if (_openMarkdownButton != null)
         {
             _openMarkdownButton.Content = _isExpandedEditorMode
-                ? StudioIcons.Create(_openMarkdownButton, StudioIcon.ExternalOpen) : ExternalOpenButtonLabel();
+                ? StudioIcons.Create(_openMarkdownButton, StudioIcon.ExternalOpen) : ExternalOpenButtonLabel(_controller.State.ExternalMarkdownExtension);
             _openMarkdownButton.ToolTip = OpenMarkdownEditorToolTip();
             UpdateTopBarNewPaperButtons();
         }
@@ -1049,9 +1049,9 @@ public sealed partial class PaperWindow
         return Strings.Format("ToolTipOpenMarkdownEditor", CurrentExternalMarkdownExtension());
     }
 
-    private string ExternalOpenButtonLabel()
+    internal static string ExternalOpenButtonLabel(string configuredExtension)
     {
-        var extension = CurrentExternalMarkdownExtension().TrimStart('.');
+        var extension = ExternalMarkdownFileExtensions.Normalize(configuredExtension).TrimStart('.');
         if (string.IsNullOrWhiteSpace(extension))
         {
             extension = ExternalMarkdownFileExtensions.Default.TrimStart('.');

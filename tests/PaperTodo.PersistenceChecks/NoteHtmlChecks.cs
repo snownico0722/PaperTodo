@@ -90,7 +90,7 @@ internal static class NoteHtmlChecks
                     .SequenceEqual(firstImageBytes), "repeated Markdown export overwrote images");
 
         var foreign = images.ImportBitmapSource("other-note", bitmap);
-        var badMarkdown = "Before\n\n![missing](i:99999999)\n\n![foreign](i:" +
+        var badMarkdown = "- Before\n\n  ![missing](i:99999999)\n\n![foreign](i:" +
             foreign.Id + ")\n\nAfter";
         var badNote = new NoteExportDocument("test-note", "Note", badMarkdown);
         var htmlWithMissing = NoteHtmlExport.Render("test-note", "Note", badMarkdown,
@@ -110,9 +110,27 @@ internal static class NoteHtmlChecks
         {
             Require(zip.GetEntry("Note.md") != null && zip.GetEntry("Note (2).md") != null &&
                     zip.GetEntry("Note-images/" + asset.Id + ".png") != null &&
-                    Read(zip.GetEntry("Note (2).md")!).Contains("[Missing image: 99999999]") &&
+                    Read(zip.GetEntry("Note (2).md")!).Contains("\n  [Missing image: 99999999]") &&
                     !Read(zip.GetEntry("Note (2).md")!).Contains("(i:99999999)"),
                 "Markdown archive contains safe note paths and placeholders");
+        }
+
+        foreach (var cancelAfter in new[] { 1, 2 })
+        {
+            using var cancellation = new CancellationTokenSource();
+            var cancelledZip = Path.Combine(temp.Path, "cancelled.zip");
+            File.WriteAllText(cancelledZip, "previous export");
+            var progress = new CallbackProgress(n => { if (n == cancelAfter) cancellation.Cancel(); });
+            try
+            {
+                NotePortableExport.Export(cancelledZip, [source, badNote], NoteExportFormat.Markdown,
+                    all: true, images, "Missing image", progress, cancellation.Token);
+                throw new Exception("cancelled ZIP export reported success");
+            }
+            catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+            Require(File.ReadAllText(cancelledZip) == "previous export" &&
+                    !Directory.EnumerateFiles(temp.Path, ".cancelled.zip.*.tmp").Any(),
+                "cancelled ZIP replaced the destination or left a temporary file");
         }
 
         var spacedZip = Path.Combine(temp.Path, "spaced.zip");
@@ -175,6 +193,11 @@ internal static class NoteHtmlChecks
                 exportedTodoHtml.Contains("# continuation") &&
                 !exportedTodoHtml.Contains("<strong>verbatim</strong>"),
             "single Todo HTML export must show checkboxes without interpreting literal Todo text as Markdown");
+    }
+
+    private sealed class CallbackProgress(Action<int> callback) : IProgress<int>
+    {
+        public void Report(int completed) => callback(completed);
     }
 
     private static string Read(ZipArchiveEntry entry)

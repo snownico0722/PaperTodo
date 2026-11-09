@@ -1,9 +1,12 @@
 using System.Collections.Frozen;
+using System.Text.Json;
 using PaperTodo.Plugin;
 
 namespace PaperTodo;
 
-internal sealed partial class PaperBodyPluginHostApi : IPaperTodoHostApi, IPaperReminderNotificationControl, IPaperTopBarApi, IPaperPresentationApi, IDisposable
+internal sealed partial class PaperBodyPluginHostApi :
+    IPaperTodoHostApi, IPaperReminderNotificationControl, IPaperTopBarApi, IPaperPresentationApi,
+    IPaperSettingsApi, IPaperNoteAssetsApi, IDisposable
 {
     private readonly AppController _controller;
     private readonly PaperCommandService _commands;
@@ -37,6 +40,59 @@ internal sealed partial class PaperBodyPluginHostApi : IPaperTodoHostApi, IPaper
 
     public IReadOnlySet<string> GrantedPermissions => _permissions;
 
+    // A data import can replace an entire workspace. Both plugin routes need the
+    // dedicated high-risk grant; MCP retains its existing full-write permission gate.
+    public DataReloadResult ReloadData()
+    {
+        Require(PaperTodoPermissionNames.DataImport);
+        return Invoke(() => _commands.ReloadData(PaperOperationContext.Plugin(_providerId)));
+    }
+
+    public DataReloadResult MergeData(string baselineJson)
+    {
+        Require(PaperTodoPermissionNames.DataImport);
+        return Invoke(() => _commands.MergeData(PaperOperationContext.Plugin(_providerId), baselineJson));
+    }
+
+    public DataReloadStatus GetDataReloadStatus() =>
+        Invoke(_commands.GetDataReloadStatus);
+
+    IReadOnlyList<PaperSettingSnapshot> IPaperSettingsApi.List(string? category) => PopupOnUi(() =>
+    {
+        Require(PaperTodoPermissionNames.SettingsRead);
+        return SettingsCall(() => _controller.PublicSettings.List(category).Select(SettingsAccess).ToArray());
+    });
+
+    PaperSettingSnapshot IPaperSettingsApi.Get(string id) => PopupOnUi(() =>
+    {
+        Require(PaperTodoPermissionNames.SettingsRead);
+        return SettingsAccess(SettingsCall(() => _controller.PublicSettings.Get(id)));
+    });
+
+    PaperSettingChangeResult IPaperSettingsApi.Set(string id, JsonElement value)
+    {
+        var copy = value.ValueKind == JsonValueKind.Undefined ? value : value.Clone();
+        return PopupOnUi(() =>
+        {
+            Require(PaperTodoPermissionNames.SettingsUpdate);
+            return SettingsCall(() =>
+            {
+                var result = _controller.PublicSettings.Set(id, copy);
+                return result with { Setting = SettingsAccess(result.Setting) };
+            });
+        });
+    }
+
+    private PaperSettingSnapshot SettingsAccess(PaperSettingSnapshot setting) =>
+        PaperSettingsService.WithAccess(setting,
+            _permissions.Contains(PaperTodoPermissionNames.SettingsUpdate));
+
+    private static T SettingsCall<T>(Func<T> action)
+    {
+        try { return action(); }
+        catch (PaperSettingsException ex) { throw new PaperTodoPluginException(ex.Code, ex.Message); }
+    }
+
     public IReadOnlyList<PaperSnapshot> ListPapers(string? type = null)
     {
         Require(PaperTodoPermissionNames.PapersRead);
@@ -57,11 +113,17 @@ internal sealed partial class PaperBodyPluginHostApi : IPaperTodoHostApi, IPaper
         return Invoke(() => _commands.ListTodos(paperId, includeBlank));
     }
 
-    public NoteSnapshot? GetNote(string paperId)
+    public NoteSnapshot? GetNote(string paperId) => PopupOnUi(() =>
     {
         Require(PaperTodoPermissionNames.NotesRead);
         return Invoke(() => _commands.GetNote(RequiredId(paperId, "paperId")));
-    }
+    });
+
+    public PaperNoteImage ReadImage(string paperId, string imageId) => PopupOnUi(() =>
+    {
+        Require(PaperTodoPermissionNames.NotesRead);
+        return Invoke(() => _commands.ReadNoteImage(paperId, imageId));
+    });
 
     public PaperMutationResult CreatePaper(CreatePaperRequest request)
     {

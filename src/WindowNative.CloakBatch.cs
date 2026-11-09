@@ -48,16 +48,6 @@ internal static partial class WindowNative
     /// caller's coordinated visual change, flush once, then verify every handle. If any step fails,
     /// every attempted handle and coordinated visual change are restored before one rollback flush.
     /// </summary>
-    internal static bool TrySetWindowCloakedBatch(
-        IReadOnlyCollection<WindowCloakChange> requestedChanges,
-        Func<bool>? publishBeforeFlush = null,
-        Action? rollbackBeforeFlush = null) =>
-        TrySetWindowCloakedBatchDetailed(
-            requestedChanges,
-            publishBeforeFlush,
-            rollbackBeforeFlush) ==
-        WindowCloakBatchResult.Success;
-
     internal static WindowCloakBatchResult
         TrySetWindowCloakedBatchDetailed(
             IReadOnlyCollection<WindowCloakChange> requestedChanges,

@@ -226,12 +226,6 @@ public sealed partial class AppController
     private void SetExperimentalWindowTetherGap(int gap) =>
         SetSettingFromUi("window.tether_gap", ExperimentalWindowTetherOptions.NormalizeGap(gap));
 
-    private void ToggleExperimentalTetherVisibilityLink() =>
-        SetSettingFromUi("window.tether_visibility_link", !State.ExperimentalTetherVisibilityLink);
-
-    private void SetExperimentalTetherMinimizedBehavior(string behavior) =>
-        SetSettingFromUi("window.tether_minimized", ExperimentalTetherVisibilityModes.Normalize(behavior));
-
     private void RefreshExperimentalAttachmentMenus()
     {
         foreach (var window in _windows.Values.ToList())

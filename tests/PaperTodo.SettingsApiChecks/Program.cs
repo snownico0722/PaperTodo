@@ -287,6 +287,23 @@ internal static partial class Program
         var saves = 0;
         var success = true;
         var service = new PaperSettingsService(definitions, () => true, () => { saves++; return success; }, _ => { });
+        foreach (var retired in new[] { "window.tether_visibility_link", "window.tether_minimized" })
+        {
+            Check(service.List().All(setting => setting.Id != retired), "Retired tether choices are not advertised.");
+            Throws<PaperSettingsException>(() => service.Get(retired), "setting_not_found");
+            Throws<PaperSettingsException>(() => service.Set(retired, Json(true)), "setting_not_found");
+        }
+        var legacyState = JsonSerializer.Deserialize<AppState>("""
+            { "experimentalTetherVisibilityLink": true, "experimentalTetherMinimizedBehavior": "capsule",
+              "experimentalWindowTethering": true, "experimentalWindowTetherGap": 12,
+              "papers": [{ "id": "kept", "type": "note", "content": "keep old content" }] }
+            """, StateStore.JsonOptions)!;
+        var persisted = JsonSerializer.SerializeToElement(legacyState, StateStore.JsonOptions);
+        Check(legacyState.ExperimentalWindowTethering && legacyState.ExperimentalWindowTetherGap == 12 &&
+              legacyState.Papers.Single().Content == "keep old content" &&
+              !persisted.TryGetProperty("experimentalTetherVisibilityLink", out _) &&
+              !persisted.TryGetProperty("experimentalTetherMinimizedBehavior", out _),
+            "Old tether choices are ignored on load and omitted on save without losing live settings or content.");
         Check(service.Get("general.language").RequiresRestart, "Language is restart-based; API must not force exit.");
         Throws<PaperSettingsException>(() => service.Set("appearance.font_scale", Json(1.3)), "invalid_setting_value");
         Throws<PaperSettingsException>(() => service.Set("appearance.theme", Json("unknown")), "invalid_setting_value");

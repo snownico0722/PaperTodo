@@ -17,8 +17,6 @@ namespace PaperTodo;
 
 public sealed partial class MarkdownTextBox : TextEditor
 {
-    private const int MaxSafePasteLength = 30000;
-    private const int MaxSafePasteLineLength = 6000;
     private const int MaxClipboardEncodedImageBytes = 32 * 1024 * 1024;
     private const double ImageBlockVerticalPadding = 7;
     private const double ImageBlockHorizontalPadding = 2;
@@ -30,11 +28,9 @@ public sealed partial class MarkdownTextBox : TextEditor
     private bool _isPreviewMode;
     private bool _isPostPasteRefreshQueued;
     private bool _isImageRenderRedrawQueued;
-    private bool _isMarkdownSuffixRedrawQueued;
     private bool _isEnsuringImageAnchorLine;
     private string _imageReferenceTextMode = ImageReferenceTextModes.Always;
     private bool _hadInternalImageReferences;
-    private int _queuedMarkdownRedrawStartLine = int.MaxValue;
     private readonly HashSet<int> _queuedImageRedrawLines = new();
     private TextAnchor? _selectedImageReferenceAnchor;
     private string? _selectedImageId;
@@ -84,8 +80,21 @@ public sealed partial class MarkdownTextBox : TextEditor
         RefreshVisualStyle();
     }
 
-    public int MaxLength { get; set; }
     internal string PreferredNewLine { get; set; } = Environment.NewLine;
+
+    protected override void OnInitialized(EventArgs e)
+    {
+        base.OnInitialized(e);
+        AddHandler(
+            Window.DpiChangedEvent,
+            new DpiChangedEventHandler(OnDescendantDpiChanged));
+        Loaded += (_, _) => InitializeImageBlockReuse();
+    }
+
+    private void OnDescendantDpiChanged(object sender, DpiChangedEventArgs e)
+    {
+        e.Handled = true;
+    }
 
     public bool AcceptsReturn
     {
@@ -495,30 +504,6 @@ public sealed partial class MarkdownTextBox : TextEditor
         Select(selectionStart, selectionEnd - selectionStart);
     }
 
-    public int GetFirstVisibleLineIndex()
-    {
-        EnsureVisualLines();
-        var lines = TextArea.TextView.VisualLines;
-        if (lines.Count > 0)
-        {
-            return Math.Max(0, lines[0].FirstDocumentLine.LineNumber - 1);
-        }
-
-        return GetLineIndexFromCharacterIndex(CaretIndex);
-    }
-
-    public int GetLastVisibleLineIndex()
-    {
-        EnsureVisualLines();
-        var lines = TextArea.TextView.VisualLines;
-        if (lines.Count > 0)
-        {
-            return Math.Max(0, lines[^1].LastDocumentLine.LineNumber - 1);
-        }
-
-        return GetLineIndexFromCharacterIndex(CaretIndex);
-    }
-
     public int GetLineIndexFromCharacterIndex(int charIndex)
     {
         if (Document == null || Document.TextLength == 0)
@@ -834,28 +819,6 @@ public sealed partial class MarkdownTextBox : TextEditor
             : null;
     }
 
-    public bool TryPlaceCaretOnImageFromSource(DependencyObject? source)
-    {
-        if (!TryGetImageCaretFromSource(source, out var caretIndex))
-        {
-            return false;
-        }
-
-        PlaceCaretAfterImage(caretIndex);
-        return true;
-    }
-
-    public bool TryPlaceCaretOnImageFromPoint(Point point)
-    {
-        if (!TryGetImageCaretFromPoint(point, out var caretIndex))
-        {
-            return false;
-        }
-
-        PlaceCaretAfterImage(caretIndex);
-        return true;
-    }
-
     public void PlaceCaretAfterImage(int caretIndex)
     {
         if (Document == null)
@@ -951,19 +914,6 @@ public sealed partial class MarkdownTextBox : TextEditor
         {
             EnsureTrailingImageAnchorLine();
         }
-    }
-
-    private static void GetAffectedLineRange(
-        TextDocument document,
-        int offset,
-        int length,
-        out int startLine,
-        out int endLine)
-    {
-        var startOffset = Math.Clamp(offset, 0, document.TextLength);
-        var endOffset = Math.Clamp(offset + Math.Max(0, length), 0, document.TextLength);
-        startLine = document.GetLineByOffset(startOffset).LineNumber;
-        endLine = document.GetLineByOffset(endOffset).LineNumber;
     }
 
     public bool CanInsertImagesFromDataObject(IDataObject dataObject)
@@ -1235,17 +1185,6 @@ public sealed partial class MarkdownTextBox : TextEditor
         return target.Start + replacement.Length;
     }
 
-    private void EnsureImageInsertionFits(string candidateText, int imageCount)
-    {
-        if (MaxLength <= 0 || candidateText.Length <= TextLengthLimitFor(candidateText))
-        {
-            return;
-        }
-
-        throw new InvalidOperationException(
-            $"Cannot insert {imageCount} image reference(s): the note's {MaxLength:N0}-character limit would be exceeded.");
-    }
-
     private string BuildImageReferenceBlock(
         int imageCount,
         Func<int, string> createReference)
@@ -1284,55 +1223,6 @@ public sealed partial class MarkdownTextBox : TextEditor
 
     private static string ReplaceRange(string text, int start, int length, string replacement)
         => string.Concat(text.AsSpan(0, start), replacement, text.AsSpan(start + length));
-
-    private int CurrentTextLengthLimit()
-    {
-        return TextLengthLimitFor(Text);
-    }
-
-    private int TextLengthLimitFor(string text)
-    {
-        if (MaxLength <= 0 || text.Length <= 0)
-        {
-            return MaxLength;
-        }
-
-        var structuralDelimiterLength = TrailingImageReferenceDelimiterLength(text);
-        return MaxLength > int.MaxValue - structuralDelimiterLength
-            ? int.MaxValue
-            : MaxLength + structuralDelimiterLength;
-    }
-
-    private static int TrailingImageReferenceDelimiterLength(string text)
-    {
-        var delimiterStart = text.Length;
-        if (delimiterStart > 0 && text[delimiterStart - 1] == '\n')
-        {
-            delimiterStart--;
-            if (delimiterStart > 0 && text[delimiterStart - 1] == '\r')
-            {
-                delimiterStart--;
-            }
-        }
-        else if (delimiterStart > 0 && text[delimiterStart - 1] == '\r')
-        {
-            delimiterStart--;
-        }
-        else
-        {
-            return 0;
-        }
-
-        var lineStart = delimiterStart;
-        while (lineStart > 0 && text[lineStart - 1] is not '\r' and not '\n')
-        {
-            lineStart--;
-        }
-
-        return MarkdownImageReferences.TryParseReferenceLine(text[lineStart..delimiterStart], out _)
-            ? text.Length - delimiterStart
-            : 0;
-    }
 
     private readonly record struct DocumentReplacementTarget(
         TextDocument Document,
@@ -1428,40 +1318,6 @@ public sealed partial class MarkdownTextBox : TextEditor
         }
 
         base.OnPreviewTextInput(e);
-    }
-
-    private bool CanApplyTextReplacement(string replacement)
-    {
-        if (MaxLength <= 0)
-        {
-            return true;
-        }
-
-        var start = Math.Clamp(SelectionStart, 0, Text.Length);
-        var selectedLength = Math.Clamp(SelectionLength, 0, Text.Length - start);
-        var projectedLength = checked(Text.Length - selectedLength + replacement.Length);
-        if (projectedLength <= MaxLength)
-        {
-            return true;
-        }
-
-        // Never make an already-oversized legacy note larger, but always permit an edit that
-        // reduces or preserves its length. Most importantly, never "repair" it by deleting a
-        // different part of the document after the edit has happened.
-        if (Text.Length > CurrentTextLengthLimit() && projectedLength <= Text.Length)
-        {
-            return true;
-        }
-
-        // Only a trailing delimiter after an internal image reference may live just beyond the
-        // nominal limit. Build the exact candidate for that narrow boundary case.
-        if (projectedLength > MaxLength + Environment.NewLine.Length)
-        {
-            return false;
-        }
-
-        var candidate = ReplaceRange(Text, start, selectedLength, replacement);
-        return candidate.Length <= TextLengthLimitFor(candidate);
     }
 
     private string NewLineTextAtCaret()
@@ -1736,24 +1592,6 @@ public sealed partial class MarkdownTextBox : TextEditor
         return builder.ToString();
     }
 
-    private bool IsSafeImageReferencePaste(
-        string pasteText,
-        DocumentReplacementTarget replacementTarget)
-    {
-        if (pasteText.Length > MaxSafePasteLength ||
-            ContainsLineLongerThan(pasteText, MaxSafePasteLineLength))
-        {
-            return false;
-        }
-
-        var candidateText = ReplaceRange(
-            replacementTarget.OriginalText,
-            replacementTarget.Start,
-            replacementTarget.SelectionLength,
-            pasteText);
-        return MaxLength <= 0 || candidateText.Length <= TextLengthLimitFor(candidateText);
-    }
-
     private static string ExpandImageReferenceIdsForLengthPreflight(string markdown)
     {
         const string maximumImageId = "99999999";
@@ -1844,45 +1682,6 @@ public sealed partial class MarkdownTextBox : TextEditor
         TextArea.TextView.EnsureVisualLines();
     }
 
-    private bool TryBuildSafePasteText(string text, int selectedLength, out string pasteText)
-    {
-        pasteText = text;
-        if (text.Length > MaxSafePasteLength ||
-            ContainsLineLongerThan(text, MaxSafePasteLineLength))
-        {
-            return false;
-        }
-
-        var candidateLength = Text.Length - Math.Max(0, selectedLength) + text.Length;
-        return MaxLength <= 0 || candidateLength <= CurrentTextLengthLimit();
-    }
-
-    private static bool ContainsLineLongerThan(string text, int maxLength)
-    {
-        if (string.IsNullOrEmpty(text) || maxLength <= 0)
-        {
-            return false;
-        }
-
-        var lineLength = 0;
-        foreach (var c in text)
-        {
-            if (c is '\r' or '\n')
-            {
-                lineLength = 0;
-                continue;
-            }
-
-            lineLength++;
-            if (lineLength > maxLength)
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
     private void QueuePostPasteRefresh()
     {
         if (_isPostPasteRefreshQueued)
@@ -1926,38 +1725,6 @@ public sealed partial class MarkdownTextBox : TextEditor
                     }
                 }
                 _queuedImageRedrawLines.Clear();
-            }),
-            System.Windows.Threading.DispatcherPriority.ContextIdle);
-    }
-
-    private void QueueMarkdownSuffixRedraw(int startLine)
-    {
-        _queuedMarkdownRedrawStartLine = Math.Min(_queuedMarkdownRedrawStartLine, Math.Max(1, startLine));
-        if (_isMarkdownSuffixRedrawQueued)
-        {
-            return;
-        }
-
-        _isMarkdownSuffixRedrawQueued = true;
-        Dispatcher.BeginInvoke(
-            (Action)(() =>
-            {
-                _isMarkdownSuffixRedrawQueued = false;
-                var document = Document;
-                var lineNumber = Math.Clamp(
-                    _queuedMarkdownRedrawStartLine,
-                    1,
-                    Math.Max(1, document.LineCount));
-                _queuedMarkdownRedrawStartLine = int.MaxValue;
-                var line = document.GetLineByNumber(lineNumber);
-                var length = document.TextLength - line.Offset;
-                if (length > 0)
-                {
-                    TextArea.TextView.Redraw(
-                        line.Offset,
-                        length,
-                        System.Windows.Threading.DispatcherPriority.Render);
-                }
             }),
             System.Windows.Threading.DispatcherPriority.ContextIdle);
     }
@@ -2555,4 +2322,3 @@ public sealed partial class MarkdownTextBox : TextEditor
         return value is >= 'A' and <= 'Z' or >= 'a' and <= 'z';
     }
 }
-

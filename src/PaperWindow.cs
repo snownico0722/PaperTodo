@@ -30,7 +30,6 @@ using SolidColorBrush = System.Windows.Media.SolidColorBrush;
 using TextBox = System.Windows.Controls.TextBox;
 using VerticalAlignment = System.Windows.VerticalAlignment;
 using WpfMenuItem = System.Windows.Controls.MenuItem;
-using WpfPath = System.Windows.Shapes.Path;
 using PaperTodo.Plugin;
 
 namespace PaperTodo;
@@ -212,8 +211,7 @@ public sealed partial class PaperWindow : Window
     public bool IsDeepCapsuleSlotVisible => _edgeCapsuleHost?.IsVisible == true;
     public bool HasVisibleSurface =>
         (IsVisible && WindowState != WindowState.Minimized) ||
-        IsDeepCapsuleSlotVisible ||
-        HasExperimentalTetherCapsuleSurface;
+        IsDeepCapsuleSlotVisible;
     public bool HasExpandedPaperSurface =>
         IsVisible &&
         WindowState != WindowState.Minimized &&
@@ -321,8 +319,6 @@ public sealed partial class PaperWindow : Window
     // still explicitly owned by DwmMicaApi; a second opaque header is not needed.
     private Brush TitleBarBrush => HasMaterialHeader ? Brushes.Transparent : Theme.TitleBarBrush(_controller.UsesNativeMicaWindows);
     private static Brush TitleBarDividerBrush => Theme.Tint((byte)(Theme.IsDark ? 34 : 28));
-    private const string PinOutlineHeadPathData = "M 7.5,4.25 H 16.5 V 5.75 H 15.5 V 12.05 L 17.6,14.15 V 15.35 H 6.4 V 14.15 L 8.5,12.05 V 5.75 H 7.5 Z";
-    private const string PinNeedlePathData = "M 10.85,15.35 H 13.15 V 22.1 L 12,23.25 L 10.85,22.1 Z";
     private const int TodoMoveAnimationMilliseconds = 150;
 
     // Static helpers can initialize PaperWindow on a worker thread during startup.
@@ -913,7 +909,7 @@ public sealed partial class PaperWindow : Window
             _advancedInteractionLocked ||
             IsPaperFormTransitioning ||
             WindowState != WindowState.Normal ||
-            (ResizeMode != ResizeMode.CanResize && ResizeMode != ResizeMode.CanResizeWithGrip) ||
+            ResizeMode != ResizeMode.CanResize ||
             !GetWindowRect(hwnd, out var bounds))
         {
             return false;
@@ -942,7 +938,6 @@ public sealed partial class PaperWindow : Window
         {
             return false;
         }
-        // All grip modes share the same resize hit test; the setting only changes the dots.
         // Layered windows can pass mouse input through their transparent shadow gutter,
         // so reach a few DIPs into the painted paper edge instead of relying on the gutter.
         // Snapped and native papers have no gutter and keep a 5-DIP interior band.
@@ -953,33 +948,19 @@ public sealed partial class PaperWindow : Window
         var nearTop = pointerY < bounds.Top + resizeBorder;
         var nearBottom = pointerY >= bounds.Bottom - resizeBorder;
 
-        // The stock Window-template ResizeGrip is anchored to the HWND corner, not to
-        // the paper's inset chrome. Adding chromeMargin again steals clicks beside the
-        // grip in layered skins; the separate narrow edge band already covers paper edges.
-        var gripRightBand = SystemParameters.VerticalScrollBarWidth * dpiScale;
-        var gripBottomBand = SystemParameters.HorizontalScrollBarHeight * dpiScale;
-        var overGrip = pointerX >= bounds.Right - gripRightBand &&
-            pointerY >= bounds.Bottom - gripBottomBand;
-
-        if (overGrip)
+        // Measure corner squares from the painted edge, preserving the narrower straight edges.
+        var topCorner = (chromeMargin + 7) * dpiScale;
+        var bottomCorner = (chromeMargin + 9) * dpiScale;
+        var inTopCorner = pointerY < bounds.Top + topCorner;
+        var inBottomCorner = pointerY >= bounds.Bottom - bottomCorner;
+        var cornerWidth = inTopCorner ? topCorner : bottomCorner;
+        if ((inTopCorner || inBottomCorner) && pointerX < bounds.Left + cornerWidth)
         {
-            hitTest = HtBottomRight;
+            hitTest = inTopCorner ? HtTopLeft : HtBottomLeft;
         }
-        else if (nearTop && nearLeft)
+        else if ((inTopCorner || inBottomCorner) && pointerX >= bounds.Right - cornerWidth)
         {
-            hitTest = HtTopLeft;
-        }
-        else if (nearTop && nearRight)
-        {
-            hitTest = HtTopRight;
-        }
-        else if (nearBottom && nearLeft)
-        {
-            hitTest = HtBottomLeft;
-        }
-        else if (nearBottom && nearRight)
-        {
-            hitTest = HtBottomRight;
+            hitTest = inTopCorner ? HtTopRight : HtBottomRight;
         }
         else if (nearLeft)
         {
@@ -1596,7 +1577,7 @@ public sealed partial class PaperWindow : Window
             Height = _paper.Height;
             MinWidth = PaperLayoutDefaults.MinWidth;
             MinHeight = PaperLayoutDefaults.MinHeight;
-            ResizeMode = ResizeMode.CanResizeWithGrip;
+            ResizeMode = ResizeMode.CanResize;
         }
 
         RefreshEffectiveTopmost();
@@ -1639,6 +1620,24 @@ public sealed partial class PaperWindow : Window
         Resources["CheckBoxActiveHoverBrushKey"] = Theme.CheckBoxActiveHoverBrush;
     }
 
+    private bool HasMaterialHeader => Theme.Skin != PaperSkins.Paper && !SystemParameters.HighContrast;
+
+    internal void RefreshSkin()
+    {
+        SkinBorder.Refresh(_paperChrome);
+        ApplyPaperChromeShadowPresentation(
+            _paper.IsCollapsed && _controller.State.UseCapsuleMode,
+            _isSnappedPresentation && !_paper.IsCollapsed);
+        _edgeCapsuleHost?.RefreshSkin();
+        _todoCheckBoxStyle = null;
+        if (_topBarTitleHost != null) _topBarTitleHost.CornerRadius = new CornerRadius(Theme.IsPixelSkin ? 0 : RadiusControl);
+        if (_newTodoButton != null) _newTodoButton.Content = CreateTopBarNewTodoIcon(_newTodoButton, studio: _isExpandedEditorMode);
+        if (_newNoteButton != null) _newNoteButton.Content = CreateTopBarNewNoteIcon(_newNoteButton, studio: _isExpandedEditorMode);
+        if (_runScriptButton != null) _runScriptButton.Content = CreateTopBarRunScriptIcon(_runScriptButton, studio: _isExpandedEditorMode);
+        if (_moreActionsButton != null) _moreActionsButton.Content = CreateTopBarMoreIcon(_moreActionsButton);
+        if (_closeButton != null) RefreshCloseButton();
+    }
+
     public void UpdateTheme()
     {
         RefreshSkin();
@@ -1653,7 +1652,6 @@ public sealed partial class PaperWindow : Window
         var themeAnimationGeneration = _themeAnimationGeneration;
 
         InitializeThemeResources();
-        _experimentalTetherCapsule?.UpdateTheme();
         RefreshThemedContextMenus();
 
         var canAnimateTheme = !PaperSkins.IsDecorated(Theme.Skin) && _nativeMica == null && _controller.State.EnableAnimations &&
@@ -1765,26 +1763,24 @@ public sealed partial class PaperWindow : Window
         }
 
         if (_runScriptButton != null)
-            _runScriptButton.Content = CreateTopBarRunScriptIcon(_runScriptButton);
+            _runScriptButton.Content = CreateTopBarRunScriptIcon(_runScriptButton, studio: _isExpandedEditorMode);
 
         if (_newTodoButton != null)
         {
             _newTodoButton.FontSize = AppTypography.Scale(13);
-            _newTodoButton.Content = CreateTopBarNewTodoIcon(_newTodoButton);
+            _newTodoButton.Content = CreateTopBarNewTodoIcon(_newTodoButton, studio: _isExpandedEditorMode);
         }
 
         if (_newNoteButton != null)
         {
             _newNoteButton.FontSize = AppTypography.Scale(13);
-            _newNoteButton.Content = CreateTopBarNewNoteIcon(_newNoteButton);
+            _newNoteButton.Content = CreateTopBarNewNoteIcon(_newNoteButton, studio: _isExpandedEditorMode);
         }
 
-        if (_closeButton != null)
-        {
-            _closeButton.FontSize = AppTypography.Scale(16);
-            _closeButton.Margin = new Thickness(AppTypography.Scale(1), -AppTypography.Scale(0.6), AppTypography.Scale(1), AppTypography.Scale(0.6));
-            RefreshCloseButton();
-        }
+        RefreshPaperIconButton();
+        if (_moreActionsButton != null)
+            _moreActionsButton.Content = CreateTopBarMoreIcon(_moreActionsButton);
+        RefreshCloseButton();
 
         if (_textZoomIndicator != null)
         {
@@ -2388,15 +2384,15 @@ public sealed partial class PaperWindow : Window
         buttons.Children.Add(actionButtons);
 
         _newTodoButton = IconButton("", Strings.Get("ToolTipNewTodoPaper"));
-        _newTodoButton.Content = CreateTopBarNewTodoIcon(_newTodoButton);
+        _newTodoButton.Content = CreateTopBarNewTodoIcon(_newTodoButton, studio: _isExpandedEditorMode);
         _newTodoButton.Click += (_, _) => _controller.CreatePaper(PaperTypes.Todo, show: true, _paper);
 
         _newNoteButton = IconButton("", Strings.Get("ToolTipNewNotePaper"));
-        _newNoteButton.Content = CreateTopBarNewNoteIcon(_newNoteButton);
+        _newNoteButton.Content = CreateTopBarNewNoteIcon(_newNoteButton, studio: _isExpandedEditorMode);
         _newNoteButton.Click += (_, _) => _controller.CreatePaper(PaperTypes.Note, show: true, _paper);
 
         _runScriptButton = IconButton("", Strings.Get("TopBarRunScript"));
-        _runScriptButton.Content = CreateTopBarRunScriptIcon(_runScriptButton);
+        _runScriptButton.Content = CreateTopBarRunScriptIcon(_runScriptButton, studio: _isExpandedEditorMode);
         _runScriptButton.Click += (_, _) => _controller.RunTopBarScript(InteractionWindow);
         actionButtons.Children.Add(_runScriptButton);
 
@@ -2408,7 +2404,7 @@ public sealed partial class PaperWindow : Window
 
         if (_paper.Type == PaperTypes.Note)
         {
-            _openMarkdownButton = IconButton(ExternalOpenButtonLabel(), OpenMarkdownEditorToolTip());
+            _openMarkdownButton = IconButton(ExternalOpenButtonLabel(_controller.State.ExternalMarkdownExtension), OpenMarkdownEditorToolTip());
             _openMarkdownButton.FontFamily = AppTypography.UiFontFamily;
             _openMarkdownButton.FontSize = AppTypography.Scale(10.5);
             _openMarkdownButton.Padding = new Thickness(0, AppTypography.Scale(1.4), 0, 0);
@@ -2416,15 +2412,13 @@ public sealed partial class PaperWindow : Window
             actionButtons.Children.Add(_openMarkdownButton);
         }
 
-        _moreActionsButton = IconButton("⋯", Strings.Get("MenuPaperActions"));
+        _moreActionsButton = IconButton("", Strings.Get("MenuPaperActions"));
+        System.Windows.Automation.AutomationProperties.SetName(_moreActionsButton, Strings.Get("MenuPaperActions"));
         _moreActionsButton.Width = 23;
-        _moreActionsButton.FontSize = AppTypography.Scale(16);
-        _moreActionsButton.FontWeight = FontWeights.SemiBold;
+        _moreActionsButton.Content = CreateTopBarMoreIcon(_moreActionsButton);
         _moreActionsButton.Click += (_, _) => OpenPaperActionsMenu();
 
         _closeButton = IconButton("", Strings.Get("ToolTipHideThisPaper"));
-        _closeButton.FontSize = AppTypography.Scale(16);
-        _closeButton.Margin = new Thickness(AppTypography.Scale(1), -AppTypography.Scale(0.6), AppTypography.Scale(1), AppTypography.Scale(0.6));
         _closeButton.Click += (_, _) =>
         {
             if (_expandedEditorHostWindow is { } host)
@@ -2553,25 +2547,6 @@ public sealed partial class PaperWindow : Window
         }
     }
 
-    private double VisibleTopBarActionButtonsWidth()
-    {
-        if (_topBarActionButtonsHost == null)
-        {
-            return 0;
-        }
-
-        var width = 0.0;
-        foreach (var child in _topBarActionButtonsHost.Children)
-        {
-            if (child is FrameworkElement element &&
-                element.Visibility == Visibility.Visible)
-            {
-                width += TopBarOuterWidth(element);
-            }
-        }
-        return width;
-    }
-
     private static double TopBarOuterWidth(FrameworkElement element)
     {
         var width = element.Width;
@@ -2586,87 +2561,6 @@ public sealed partial class PaperWindow : Window
         return Math.Max(0, width) +
             element.Margin.Left +
             element.Margin.Right;
-    }
-
-    private void ConfigureNoteLinkDragButton(Button button)
-    {
-        ConfigureTopBarDragGesture(
-            button,
-            new TopBarDragBehavior
-            {
-                Kind = TopBarDragKind.NoteLink,
-                CanBegin = () =>
-                    _controller.State.EnableTodoPaperLinks &&
-                    _paper.Type == PaperTypes.Note &&
-                    BodySupports(PaperBodyCapabilities.NoteLinks),
-                Started = () =>
-                {
-                    ExitNoteEditor();
-                    _controller.BeginPaperLinkDrag(_paper);
-                },
-                CreateFeedback = CreateNoteLinkDragFeedback,
-                Moved = (_, point) =>
-                    _controller.UpdatePaperLinkDrag(
-                        _paper,
-                        point.ToPoint()),
-                Completed = commit =>
-                    _controller.EndPaperLinkDrag(_paper, commit),
-                GhostPlacement = TopBarDragGhostPlacement.Centered,
-                DraggingOpacity = 0.82
-            });
-    }
-
-    private TopBarDragFeedback CreateNoteLinkDragFeedback()
-    {
-        var stack = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            VerticalAlignment = VerticalAlignment.Center,
-            IsHitTestVisible = false
-        };
-
-        stack.Children.Add(new TextBlock
-        {
-            Text = "✎",
-            Foreground = TextBrush,
-            FontFamily = AppTypography.SymbolFontFamily,
-            FontSize = AppTypography.Scale(13),
-            FontWeight = FontWeights.SemiBold,
-            VerticalAlignment = VerticalAlignment.Center
-        });
-
-        stack.Children.Add(new TextBlock
-        {
-            Text = _controller.PaperCapsuleTitle(_paper),
-            Foreground = TextBrush,
-            FontFamily = AppTypography.UiFontFamily,
-            FontSize = AppTypography.Scale(12),
-            Margin = new Thickness(6, 0, 0, 0),
-            MaxWidth = 150,
-            TextTrimming = TextTrimming.CharacterEllipsis,
-            VerticalAlignment = VerticalAlignment.Center
-        });
-
-        var root = new Border
-        {
-            Padding = new Thickness(9, 5, 10, 5),
-            CornerRadius = new CornerRadius(RadiusControl),
-            Background = PaperBrush,
-            BorderBrush = PaperLinkTargetBorderBrush,
-            BorderThickness = new Thickness(1),
-            Opacity = 0.86,
-            Child = stack,
-            IsHitTestVisible = false,
-            Effect = new DropShadowEffect
-            {
-                BlurRadius = 16,
-                ShadowDepth = 2,
-                Opacity = 0.22
-            }
-        };
-
-        return new TopBarDragFeedback(
-            CreateTopBarDragFeedbackWindow(root));
     }
 
     private void BuildBody()
@@ -2740,130 +2634,6 @@ public sealed partial class PaperWindow : Window
         _shell.Children.Add(zoomHost);
     }
 
-    private ContextMenu BuildPaperContextMenu(bool forDeepCapsuleSlot = false)
-    {
-        var menu = CreateContextMenu();
-        PopulatePaperContextMenu(menu, forDeepCapsuleSlot);
-        // Context menus survive resizes and paper preference changes. Rebuild when
-        // opened so right-click and ellipsis reflect the actual visible bar.
-        menu.Opened += (_, _) => PopulatePaperContextMenu(menu, forDeepCapsuleSlot);
-        return menu;
-    }
-
-    private void PopulatePaperContextMenu(ContextMenu menu, bool forDeepCapsuleSlot)
-    {
-        menu.Items.Clear();
-        menu.Items.Add(MenuHeader(Strings.Get("MenuQuick")));
-        // Keep the same command order in both menus. Only the expanded paper's own
-        // menu skips commands already visible in its top bar; the edge capsule is a
-        // separate surface and must retain both creation actions.
-        foreach (var action in PaperTopBarShortcuts.NormalizeOrder(_controller.State.TopBarShortcutOrder))
-        {
-            if (PaperTopBarShortcuts.IsHidden(_controller.State, action)) continue;
-            switch (action)
-            {
-                case PaperTopBarShortcuts.RunScript when
-                    forDeepCapsuleSlot || !IsTopBarCommandVisible(_runScriptButton):
-                    menu.Items.Add(MenuItem(Strings.Get("TopBarRunScript"),
-                        (_, _) => _controller.RunTopBarScript(InteractionWindow)));
-                    break;
-                case PaperTopBarShortcuts.Workspace when
-                    _controller.WorkspaceOptions.Enabled &&
-                    !IsTopBarCommandVisible(_workspaceButton):
-                    menu.Items.Add(BuildWorkspaceShortcutMenuItem(menu));
-                    break;
-                case PaperTopBarShortcuts.NewTodo when
-                    forDeepCapsuleSlot || !IsTopBarCommandVisible(_newTodoButton):
-                    menu.Items.Add(MenuItem(Strings.Get("MenuNewTodoPaper"),
-                        (_, _) => _controller.CreatePaper(PaperTypes.Todo, show: true, _paper)));
-                    break;
-                case PaperTopBarShortcuts.NewNote when
-                    forDeepCapsuleSlot || !IsTopBarCommandVisible(_newNoteButton):
-                    menu.Items.Add(MenuItem(Strings.Get("MenuNewNotePaper"),
-                        (_, _) => _controller.CreatePaper(PaperTypes.Note, show: true, _paper)));
-                    break;
-                case PaperTopBarShortcuts.Association when
-                    CanBeginAssociationDrag() && !IsTopBarCommandVisible(_windowBindingButton):
-                    menu.Items.Add(BuildAssociationDragMenuItem(menu));
-                    break;
-                case PaperTopBarShortcuts.ExternalEditor when
-                    _paper.Type == PaperTypes.Note && IsCurrentBodyProviderMarkdown &&
-                    !IsTopBarCommandVisible(_openMarkdownButton):
-                    menu.Items.Add(MenuItem(OpenMarkdownEditorToolTip(),
-                        (_, _) => OpenMarkdownInDefaultEditor()));
-                    break;
-                case PaperTopBarShortcuts.ExpandedEditor when
-                    !IsTopBarCommandVisible(_editorModeButton):
-                    menu.Items.Add(MenuItem(
-                        _isExpandedEditorMode ? Strings.Get("EditorReturn") : Strings.Get("EditorOpen"),
-                        (_, _) =>
-                        {
-                            if (_expandedEditorHostWindow != null)
-                                _expandedEditorHostWindow.ReturnToPaper();
-                            else _controller.OpenExpandedEditorFor(this);
-                        }));
-                    break;
-            }
-        }
-
-        AttachPluginTopBarActionsToMenu(menu);
-        menu.Items.Add(MenuItem(Strings.Get("TraySettings"),
-            (_, _) => _controller.OpenSettingsWindow()));
-
-        menu.Items.Add(MenuSeparator());
-        menu.Items.Add(MenuHeader(_controller.PaperCapsuleTitle(_paper)));
-
-        if (_paper.Type == PaperTypes.Note)
-            menu.Items.Add(BuildPaperBodyProviderMenuItem());
-
-        if (IsExportablePaper(_paper))
-        {
-            var export = new MenuItem
-            {
-                Header = _paperExportRunning
-                    ? Strings.Format("NoteExportProgress", _paperExportCompleted, _paperExportTotal)
-                    : Strings.Get("MenuExport"),
-                IsEnabled = !_paperExportRunning
-            };
-            var currentLabel = _paper.Type == PaperTypes.Todo
-                ? "MenuExportCurrentTodo" : "MenuExportCurrentNote";
-            export.Items.Add(MenuItem(Strings.Get(currentLabel),
-                (_, _) => ExportPapers(all: false)));
-            export.Items.Add(MenuItem(Strings.Get("MenuExportAllPapers"),
-                (_, _) => ExportPapers(all: true)));
-            menu.Items.Add(export);
-        }
-
-        AttachPluginPaperMenuActions(menu);
-
-        if (CanDisplayAsCapsule())
-        {
-            menu.Items.Add(_paper.IsCollapsed
-                ? MenuItem(Strings.Get("MenuRestoreWindow"), (_, _) => OpenCapsuleForEditing())
-                : MenuItem(Strings.Get("MenuCollapseToCapsule"), (_, _) => SetCollapsedState(true)));
-        }
-
-        if (HasExperimentalCapsuleMagnet)
-        {
-            menu.Items.Add(MenuItem(
-                Strings.Get("LabsCapsuleMagnetDetach"),
-                (_, _) => DetachExperimentalWindowAttachment(savePosition: true)));
-        }
-
-        if (HasExperimentalWindowTether)
-        {
-            menu.Items.Add(MenuItem(
-                Strings.Get("LabsWindowTetherDetach"),
-                (_, _) => DetachExperimentalWindowAttachment(savePosition: true)));
-        }
-
-        menu.Items.Add(MenuItem(Strings.Get("MenuHide"), (_, _) => _controller.HidePaper(_paper)));
-        menu.Items.Add(MenuItem(
-            Strings.Get("MenuDelete"),
-            (_, _) => DeletePaperFromPaperMenu(),
-            isDanger: true));
-    }
-
     private void ToggleTopmost()
     {
         _paper.AlwaysOnTop = !_paper.AlwaysOnTop;
@@ -2902,11 +2672,6 @@ public sealed partial class PaperWindow : Window
         {
             WindowNative.ApplyTopmostZOrder(this, effectiveTopmost, avoidanceWindow);
             _experimentalPassiveNeedsZOrderRestore = false;
-        }
-        if (_experimentalTetherCapsule is { } tetherCapsule)
-        {
-            tetherCapsule.SetFullscreenAvoidance(
-                _controller.FullscreenAvoidanceWindowFor(tetherCapsule));
         }
 
         RefreshDeepCapsuleSlotTopmost();
@@ -3154,168 +2919,7 @@ public sealed partial class PaperWindow : Window
         ConfirmAndDeletePaper();
     }
 
-    private bool ShowDeletePaperDialog()
-    {
-        // A startup-restored deep capsule may have a built shell but no shown PaperWindow.
-        var canOwnDialog = IsVisible && PresentationSource.FromVisual(this) is HwndSource;
-
-        var dialog = new Window
-        {
-            Title = Strings.Get("DeletePaperTitle"),
-            Width = 300,
-            Height = 178,
-            MinWidth = 300,
-            MinHeight = 178,
-            WindowStartupLocation = canOwnDialog
-                ? WindowStartupLocation.CenterOwner
-                : WindowStartupLocation.CenterScreen,
-            WindowStyle = WindowStyle.None,
-            ResizeMode = ResizeMode.NoResize,
-            AllowsTransparency = true,
-            Background = Brushes.Transparent,
-            ShowInTaskbar = false,
-            Topmost = Topmost
-        };
-        if (canOwnDialog)
-        {
-            dialog.Owner = this;
-        }
-
-        AppTypography.ApplyTextRendering(dialog);
-
-        var root = new Border
-        {
-            CornerRadius = new CornerRadius(RadiusShell),
-            BorderBrush = PaperBorderBrush,
-            BorderThickness = new Thickness(1),
-            Background = PaperBrush,
-            Padding = new Thickness(18),
-            Effect = new DropShadowEffect
-            {
-                BlurRadius = 18,
-                ShadowDepth = 2,
-                Opacity = 0.22
-            }
-        };
-
-        var layout = new Grid();
-        layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        layout.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-        layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-
-        var title = new TextBlock
-        {
-            Text = Strings.Get("DeletePaperQuestion"),
-            Foreground = TextBrush,
-            FontSize = AppTypography.Scale(16),
-            FontWeight = FontWeights.SemiBold,
-            Margin = new Thickness(0, 0, 0, 8)
-        };
-
-        var message = new TextBlock
-        {
-            Text = Strings.Get("DeletePaperBody"),
-            Foreground = WeakTextBrush,
-            FontSize = AppTypography.Scale(13),
-            TextWrapping = TextWrapping.Wrap,
-            LineHeight = 20,
-            Margin = new Thickness(0, 2, 0, 0)
-        };
-
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0, 16, 0, 0)
-        };
-
-        var delete = DialogButton(Strings.Get("MenuDelete"), isDanger: true);
-        delete.Click += (_, _) => dialog.DialogResult = true;
-
-        buttons.Children.Add(delete);
-
-        var cancel = DialogButton(Strings.Get("CommonCancel"), isDanger: false);
-        cancel.IsCancel = true;
-        cancel.Margin = new Thickness(8, 0, 0, 0);
-        cancel.Click += (_, _) => dialog.DialogResult = false;
-
-        buttons.Children.Add(cancel);
-
-        Grid.SetRow(title, 0);
-        Grid.SetRow(message, 1);
-        Grid.SetRow(buttons, 2);
-
-        layout.Children.Add(title);
-        layout.Children.Add(message);
-        layout.Children.Add(buttons);
-
-        root.Child = layout;
-        dialog.Content = root;
-
-        return dialog.ShowDialog() == true;
-    }
-
-    private static Button DialogButton(string text, bool isDanger)
-    {
-        var background = isDanger
-            ? Theme.DangerBrush
-            : Theme.Tint(28);
-
-        var foreground = isDanger ? PaperBrush : TextBrush;
-        var hover = isDanger
-            ? Theme.DangerHoverBrush
-            : Theme.Tint(46);
-
-        var style = new Style(typeof(Button));
-        style.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(16, 7, 16, 7)));
-        style.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(0)));
-        style.Setters.Add(new Setter(Control.BackgroundProperty, background));
-        style.Setters.Add(new Setter(Control.ForegroundProperty, foreground));
-        style.Setters.Add(new Setter(Control.FontSizeProperty, AppTypography.Scale(13)));
-        style.Setters.Add(new Setter(Control.CursorProperty, Cursors.Hand));
-        style.Setters.Add(new Setter(FrameworkElement.MinWidthProperty, 72.0));
-
-        var border = new FrameworkElementFactory(typeof(Border));
-        border.Name = "Bd";
-        border.SetValue(Border.CornerRadiusProperty, new CornerRadius(RadiusControl));
-        border.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(Control.BackgroundProperty));
-        border.SetValue(Border.PaddingProperty, new TemplateBindingExtension(Control.PaddingProperty));
-
-        var content = new FrameworkElementFactory(typeof(ContentPresenter));
-        content.SetValue(ContentPresenter.ContentProperty, new TemplateBindingExtension(ContentControl.ContentProperty));
-        content.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
-        content.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
-        border.AppendChild(content);
-
-        var template = new ControlTemplate(typeof(Button))
-        {
-            VisualTree = border
-        };
-
-        var mouseOver = new Trigger
-        {
-            Property = UIElement.IsMouseOverProperty,
-            Value = true
-        };
-        mouseOver.Setters.Add(new Setter(Control.BackgroundProperty, hover));
-
-        var pressed = new Trigger
-        {
-            Property = ButtonBase.IsPressedProperty,
-            Value = true
-        };
-        pressed.Setters.Add(new Setter(UIElement.OpacityProperty, 0.82));
-
-        template.Triggers.Add(mouseOver);
-        template.Triggers.Add(pressed);
-        style.Setters.Add(new Setter(Control.TemplateProperty, template));
-
-        return new Button
-        {
-            Content = text,
-            Style = style
-        };
-    }
+    private bool ShowDeletePaperDialog() => PaperNoticeDialog.ShowDeleteConfirmation(this);
 
     private void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
@@ -3340,26 +2944,6 @@ public sealed partial class PaperWindow : Window
         }
     }
 
-    private static DependencyObject? GetSafeParent(DependencyObject current)
-    {
-        if (current is Visual || current is System.Windows.Media.Media3D.Visual3D)
-        {
-            return VisualTreeHelper.GetParent(current);
-        }
-
-        if (current is FrameworkContentElement fce)
-        {
-            return fce.Parent;
-        }
-
-        if (current is ContentElement ce)
-        {
-            return ContentOperations.GetParent(ce);
-        }
-
-        return null;
-    }
-
     private static Button IconButton(string text, string tooltip)
     {
         return new Button
@@ -3373,240 +2957,12 @@ public sealed partial class PaperWindow : Window
         };
     }
 
-    private FrameworkElement CreateTopmostPinIcon(Button owner, bool pinned)
-    {
-        if (_isExpandedEditorMode) return StudioIcons.Create(owner, StudioIcon.Pin, 16 * TopBarIconScale());
-        if (Theme.IsPixelSkin) return pinned
-            ? CreatePixelIcon(owner, "..####..", "...##...", "..####..", ".######.", "...##...", "...##...", "...#....")
-            : CreatePixelIcon(owner, "..####..", "..#..#..", "..#..#..", ".######.", "...##...", "...##...", "...#....");
-        var canvas = new Canvas
-        {
-            Width = 24,
-            Height = 24,
-            SnapsToDevicePixels = true
-        };
-
-        if (pinned)
-        {
-            var head = new WpfPath
-            {
-                Data = Geometry.Parse(PinOutlineHeadPathData),
-                StrokeThickness = 2.15,
-                StrokeLineJoin = PenLineJoin.Round,
-                StrokeStartLineCap = PenLineCap.Round,
-                StrokeEndLineCap = PenLineCap.Round,
-                SnapsToDevicePixels = true
-            };
-            head.SetBinding(System.Windows.Shapes.Shape.FillProperty, CreateForegroundBinding(owner));
-            head.SetBinding(System.Windows.Shapes.Shape.StrokeProperty, CreateForegroundBinding(owner));
-            canvas.Children.Add(head);
-
-            var needle = new WpfPath
-            {
-                Data = Geometry.Parse(PinNeedlePathData),
-                SnapsToDevicePixels = true
-            };
-            needle.SetBinding(System.Windows.Shapes.Shape.FillProperty, CreateForegroundBinding(owner));
-            canvas.Children.Add(needle);
-        }
-        else
-        {
-            var head = new WpfPath
-            {
-                Data = Geometry.Parse(PinOutlineHeadPathData),
-                StrokeThickness = 2.15,
-                StrokeLineJoin = PenLineJoin.Round,
-                StrokeStartLineCap = PenLineCap.Round,
-                StrokeEndLineCap = PenLineCap.Round,
-                SnapsToDevicePixels = true
-            };
-            head.SetBinding(System.Windows.Shapes.Shape.StrokeProperty, CreateForegroundBinding(owner));
-            canvas.Children.Add(head);
-
-            var needle = new WpfPath
-            {
-                Data = Geometry.Parse(PinNeedlePathData),
-                SnapsToDevicePixels = true
-            };
-            needle.SetBinding(System.Windows.Shapes.Shape.FillProperty, CreateForegroundBinding(owner));
-            canvas.Children.Add(needle);
-        }
-
-        return new Viewbox
-        {
-            Width = 14,
-            Height = 14,
-            Stretch = Stretch.Uniform,
-            Child = canvas
-        };
-    }
-
-    private static System.Windows.Data.Binding CreateForegroundBinding(Button owner)
+    private static System.Windows.Data.Binding CreateForegroundBinding(Control owner)
     {
         return new System.Windows.Data.Binding(nameof(Control.Foreground))
         {
             Source = owner
         };
-    }
-
-    private ContextMenu CreateContextMenu()
-    {
-        var menu = new MaterialContextMenu();
-        InitializeContextMenu(menu);
-        return menu;
-    }
-
-    // Called once for each owned menu, either at creation or when a Todo placeholder
-    // is first requested. Preserve that instance so WPF's TextBox Closed hook survives.
-    private void InitializeContextMenu(ContextMenu menu)
-    {
-        menu.Padding = new Thickness(4, 4, 4, 4);
-        menu.FontFamily = AppTypography.UiFontFamily;
-        menu.Language = AppTypography.Language;
-        menu.FontSize = AppTypography.Scale(13);
-        menu.HasDropShadow = true;
-        menu.Template = SharedContextMenuTemplate;
-        AppTypography.ApplyTextRendering(menu);
-        UpdateContextMenuTheme(menu);
-        menu.Opened += (_, _) =>
-        {
-            if (_controller.State.Theme == "system")
-            {
-                Theme.Invalidate();
-            }
-
-            UpdateContextMenuTheme(menu);
-            RefreshExperimentalOpacity();
-        };
-        menu.Closed += (_, _) => Dispatcher.BeginInvoke(
-            (Action)(() =>
-            {
-                RefreshExperimentalOpacity();
-                FlushPendingPaperContextMenuRefresh();
-            }),
-            System.Windows.Threading.DispatcherPriority.Background);
-
-        menu.Resources.Add(typeof(MenuItem), SharedCompactMenuItemStyle);
-        RegisterThemedContextMenu(menu);
-    }
-
-    private bool IsPaperContextMenuInteractionActive =>
-        _paperContextMenuOpening || HasOpenOwnedContextMenu();
-
-    private void BeginPaperContextMenuOpening()
-    {
-        _paperContextMenuOpening = true;
-        var version = ++_paperContextMenuOpeningVersion;
-        Dispatcher.BeginInvoke(
-            (Action)(() =>
-            {
-                if (version != _paperContextMenuOpeningVersion)
-                {
-                    return;
-                }
-
-                _paperContextMenuOpening = false;
-                FlushPendingPaperContextMenuRefresh();
-            }),
-            System.Windows.Threading.DispatcherPriority.ContextIdle);
-    }
-
-    private void RegisterThemedContextMenu(ContextMenu menu)
-    {
-        for (var i = _themedContextMenus.Count - 1; i >= 0; i--)
-        {
-            if (!_themedContextMenus[i].TryGetTarget(out _))
-            {
-                _themedContextMenus.RemoveAt(i);
-            }
-        }
-
-        _themedContextMenus.Add(new WeakReference<ContextMenu>(menu));
-    }
-
-    private void RefreshThemedContextMenus()
-    {
-        for (var i = _themedContextMenus.Count - 1; i >= 0; i--)
-        {
-            if (_themedContextMenus[i].TryGetTarget(out var menu))
-            {
-                UpdateContextMenuTheme(menu);
-                RefreshContextMenuTypography(menu);
-            }
-            else
-            {
-                _themedContextMenus.RemoveAt(i);
-            }
-        }
-    }
-
-    private static void RefreshContextMenuTypography(ContextMenu menu)
-    {
-        menu.Resources[typeof(MenuItem)] = SharedCompactMenuItemStyle;
-        menu.FontFamily = AppTypography.UiFontFamily;
-        menu.FontSize = AppTypography.Scale(13);
-        menu.Language = AppTypography.Language;
-        AppTypography.ApplyTextRendering(menu);
-        foreach (var header in menu.Items.OfType<MenuItem>().Where(item => !item.IsEnabled))
-        {
-            header.FontSize = AppTypography.Scale(12);
-        }
-    }
-
-    private static void UpdateContextMenuTheme(ContextMenu menu)
-    {
-        menu.Resources["PaperBrushKey"] = PaperBrush;
-        menu.Resources["PaperBorderBrushKey"] = PaperBorderBrush;
-        menu.Resources["TextBrushKey"] = TextBrush;
-        menu.Resources["WeakTextBrushKey"] = WeakTextBrush;
-        menu.Resources["HoverBrushKey"] = HoverBrush;
-        menu.Resources["MenuHoverBrushKey"] = MenuHoverBrush;
-        menu.Resources["DangerTextBrushKey"] = TrashTextBrush;
-        menu.Background = PaperBrush;
-        menu.BorderBrush = PaperBorderBrush;
-        menu.Foreground = TextBrush;
-    }
-
-    private static Separator MenuSeparator()
-    {
-        return new Separator
-        {
-            Margin = new Thickness(8, 3, 8, 3),
-            Opacity = 0.38
-        };
-    }
-
-    private static MenuItem MenuHeader(string header)
-    {
-        var item = new MenuItem
-        {
-            Header = header,
-            IsEnabled = false,
-            Padding = new Thickness(8, 2, 10, 2),
-            Background = Brushes.Transparent,
-            FontSize = AppTypography.Scale(12),
-            FontWeight = FontWeights.SemiBold
-        };
-        item.SetResourceReference(Control.ForegroundProperty, "WeakTextBrushKey");
-        return item;
-    }
-
-    private static MenuItem MenuItem(
-        string header,
-        RoutedEventHandler click,
-        bool isDanger = false)
-    {
-        var item = new MenuItem
-        {
-            Header = header,
-            Padding = new Thickness(8, 4, 10, 4),
-            Background = Brushes.Transparent
-        };
-        item.SetResourceReference(
-            Control.ForegroundProperty,
-            isDanger ? "DangerTextBrushKey" : "TextBrushKey");
-        item.Click += click;
-        return item;
     }
 
     public static readonly DependencyProperty TransitionProgressProperty =
@@ -3793,6 +3149,13 @@ public sealed partial class PaperWindow : Window
             pixelsPerDip);
     }
 
+    private readonly record struct CapsuleTextMetrics(string Text, double Size, FontWeight Weight,
+        FontFamily Family, CultureInfo Culture, TextFormattingMode Formatting, double PixelsPerDip);
+
+    // The two icon glyphs and the short/full title are the ordinary working set.
+    private readonly (CapsuleTextMetrics Metrics, double Width)[] _capsuleTextWidths = new (CapsuleTextMetrics, double)[4];
+    private int _nextCapsuleTextWidth;
+
     // Single source of truth for "how wide does this text actually render". Uses the same
     // font family and weight the capsule icon/label are bound to, so
     // measurement and rendering never disagree — digits and halfwidth chars get their true
@@ -3811,17 +3174,26 @@ public sealed partial class PaperWindow : Window
 
         try
         {
+            var metrics = new CapsuleTextMetrics(text, fontSize, weight, fontFamily,
+                UiLanguages.EffectiveUiCulture, AppTypography.TextFormattingMode,
+                pixelsPerDip ?? VisualTreeHelper.GetDpi(this).PixelsPerDip);
+            foreach (var cached in _capsuleTextWidths)
+                if (cached.Metrics == metrics) return cached.Width;
+
             var formatted = new FormattedText(
                 text,
-                UiLanguages.EffectiveUiCulture,
+                metrics.Culture,
                 FlowDirection.LeftToRight,
                 new Typeface(fontFamily, FontStyles.Normal, weight, FontStretches.Normal),
                 fontSize,
                 WeakTextBrush,
                 null,
-                AppTypography.TextFormattingMode,
-                pixelsPerDip ?? VisualTreeHelper.GetDpi(this).PixelsPerDip);
-            return formatted.WidthIncludingTrailingWhitespace;
+                metrics.Formatting,
+                metrics.PixelsPerDip);
+            var width = formatted.WidthIncludingTrailingWhitespace;
+            _capsuleTextWidths[_nextCapsuleTextWidth] = (metrics, width);
+            _nextCapsuleTextWidth = (_nextCapsuleTextWidth + 1) % _capsuleTextWidths.Length;
+            return width;
         }
         catch
         {

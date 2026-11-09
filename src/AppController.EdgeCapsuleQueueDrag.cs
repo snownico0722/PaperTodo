@@ -24,7 +24,13 @@ internal sealed class NativeEdgeQueueDrag
     internal FreeQueueSlotPreviewState SlotPreview { get; } = new();
     internal bool FloatingCoverReady { get; set; }
     internal NativeEdgeQueueDrop? Drop { get; set; }
+    internal NativeQueueDragLayout? Layout { get; set; }
 }
+
+// Capture values, not just PaperData references: side, queue and anchor can change mid-drag.
+internal readonly record struct NativeQueueLayoutMember(EdgeCapsuleQueueMember Member, double Margin, bool Folded);
+internal sealed record NativeQueueDragLayout(NativeQueueLayoutMember[] Members,
+    IReadOnlyList<MonitorGeometry> Monitors, double Gap, bool HasMaster, EdgeCapsuleQueuePlan Resting);
 
 internal sealed record NativeEdgeQueueDrop(
     EdgeFreeQueueDrop Decision, string DestinationKey,
@@ -99,9 +105,14 @@ public sealed partial class AppController
                 return false; // Ordinary sorting uses the unchanged legacy gesture.
             }
         }
-        var resting = BuildRestingEdgeQueuePlan();
-        var groups = NativeQueueGroups(resting);
-        drag.Drop = EvaluateNativeEdgeQueueDrop(drag, owner, pointer, ownerTopDip, floating, resting, groups);
+        var previousLayout = drag.Layout;
+        var resting = NativeDragRestingPlan(drag);
+        var groups = NativeQueueGroups(resting, measureWidths: !floating);
+        var sameLayout = drag.Layout != null && ReferenceEquals(drag.Layout, previousLayout);
+        if (previousLayout != null && !sameLayout)
+            drag.SlotPreview.Decision = null; // Reapply to current members, restoring any prior displacement.
+        var previousDrop = sameLayout ? drag.Drop : null;
+        drag.Drop = EvaluateNativeEdgeQueueDrop(drag, owner, pointer, ownerTopDip, floating, resting, groups, previousDrop);
         ApplyNativeEdgeQueuePreview(drag, ownerTopDip, floating, resting, groups);
         if (!drag.WholeQueue && drag.SourceIds.Length == 1 &&
             _masterCapsules.TryGetValue(drag.SourceKey, out var sourceMaster) && sourceMaster.IsVisible)
@@ -114,12 +125,40 @@ public sealed partial class AppController
         return true;
     }
 
+    private EdgeCapsuleQueuePlan NativeDragRestingPlan(NativeEdgeQueueDrag drag)
+    {
+        if (!EdgeCapsuleFreeQueuesEnabled || _freeMasterDragPreview != null)
+        {
+            drag.Layout = null;
+            return BuildRestingEdgeQueuePlan();
+        }
+
+        var members = DeepCapsulePapersInOrder().Select(paper =>
+        {
+            var key = QueueKey(paper);
+            return new NativeQueueLayoutMember(new(paper, key),
+                DeepCapsuleStartTopMarginForQueueKey(key), IsCapsuleCollapseAllActiveForQueue(key));
+        }).ToArray();
+        var monitors = WindowWorkAreaHelper.ConnectedMonitorGeometries();
+        var gap = DeepCapsuleGap;
+        var hasMaster = State.UseCapsuleCollapseAll;
+        if (drag.Layout is { } layout && layout.Gap == gap && layout.HasMaster == hasMaster &&
+            members.AsSpan().SequenceEqual(layout.Members) && monitors.SequenceEqual(layout.Monitors))
+            return layout.Resting;
+
+        var resting = ApplyFreeQueueRestingLayout(
+            BuildEdgeQueuePlan(members.Select(m => m.Member), hasMaster), includePreview: false);
+        drag.Layout = new(members, monitors, gap, hasMaster, resting);
+        return resting;
+    }
+
     private NativeEdgeQueueDrop EvaluateNativeEdgeQueueDrop(NativeEdgeQueueDrag drag, PaperData owner,
         DeviceScreenPoint pointer, double ownerTopDip, bool floating,
-        EdgeCapsuleQueuePlan? resting = null, IReadOnlyList<NativeQueueGroup>? groups = null)
+        EdgeCapsuleQueuePlan? resting = null, IReadOnlyList<NativeQueueGroup>? groups = null,
+        NativeEdgeQueueDrop? previousDrop = null)
     {
         resting ??= BuildRestingEdgeQueuePlan();
-        groups ??= NativeQueueGroups(resting);
+        groups ??= NativeQueueGroups(resting, measureWidths: !floating);
         var live = groups.SelectMany(g => g.Papers).ToDictionary(p => p.Id, StringComparer.Ordinal);
         if (!live.TryGetValue(owner.Id, out var current) || QueueKey(current) != drag.SourceKey ||
             drag.CarriedIds.Any(id => !live.ContainsKey(id)) ||
@@ -167,6 +206,13 @@ public sealed partial class AppController
             var box = boxes[0];
             target = (box.Key, Math.Clamp((int)Math.Floor((top - box.FirstMemberTop(pitch)) / pitch + .5), 0, box.MemberCount));
         }
+        // The pointer still selects its slot on every move. With the same geometry and
+        // insertion index, the prospective membership and neighbour positions are identical.
+        // Release always evaluates fresh, even if the last preview hit this slot.
+        if (target is { } slot && previousDrop?.Decision is { Kind: EdgeFreeQueueDropKind.Insert } last &&
+            last.TargetKey == slot.Key && last.Index == slot.Index)
+            return previousDrop;
+
         var decision = target is { } insert
             ? EdgeCapsuleFreeQueuePolicy.Insert(boxes, insert.Key, insert.Index, carried.Length,
                 geometry.LocalWorkAreaDip.Height, pitch, gap)

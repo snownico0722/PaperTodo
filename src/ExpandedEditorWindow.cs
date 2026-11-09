@@ -288,4 +288,3 @@ internal sealed partial class ExpandedEditorWindow : Window
         }
     }
 }
-

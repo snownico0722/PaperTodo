@@ -240,7 +240,7 @@ public sealed partial class PaperWindow
               _edgeCapsuleHost.MatchesPresentation(endpoint);
     }
 
-    internal void InvalidateEdgeCapsuleQueueProxyPointer()
+    internal void InvalidateEdgeCapsuleQueueProxyPointer(DeviceScreenPoint? pointer)
     {
         if (_windowLifecycle != PaperWindowLifecycleState.Alive ||
             IsClosed)
@@ -248,7 +248,6 @@ public sealed partial class PaperWindow
             return;
         }
 
-        var pointer = CaptureEdgeCapsulePointerPosition();
         _controller.NotifyEdgeCapsulePreviewPhysicalPointer(
             this,
             pointer);

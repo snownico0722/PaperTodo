@@ -67,7 +67,7 @@ internal static class NoteImageExport
         string missingLabel, CancellationToken cancellation)
     {
         cancellation.ThrowIfCancellationRequested();
-        var source = NoteHtmlExport.PrepareMarkdownForExport(markdown, out var imageWidths);
+        var source = NoteHtmlExport.PrepareMarkdownForExport(markdown, out var imageWidths, cancellation);
         var document = Markdown.Parse(source, Pipeline);
         var html = source.Contains('<') ? MarkdownSemanticSnapshot.Parse(source) : null;
         return new Composer(resolveImage, missingLabel, imageWidths, html, cancellation).Compose(title, document);
@@ -141,9 +141,9 @@ internal static class NoteImageExport
         NoteImageFormat format = NoteImageFormat.Jpeg)
     {
         if (format == NoteImageFormat.Png)
-            NotePortableExport.SaveAtomic(path, stream => Write(stream, artifact, cancellation));
+            NotePortableExport.SaveAtomic(path, stream => Write(stream, artifact, cancellation), cancellation);
         else
-            NotePortableExport.SaveAtomicFile(path, tempPath => WriteJpeg(tempPath, artifact, cancellation));
+            NotePortableExport.SaveAtomicFile(path, tempPath => WriteJpeg(tempPath, artifact, cancellation), cancellation);
     }
 
     internal static void Write(Stream stream, NoteImageArtifact artifact, CancellationToken cancellation)

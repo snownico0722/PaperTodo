@@ -985,7 +985,7 @@ var expandedHeight = collapsed
                 {
                     MinWidth = PaperLayoutDefaults.MinWidth;
                     MinHeight = PaperLayoutDefaults.MinHeight;
-                    ResizeMode = ResizeMode.CanResizeWithGrip;
+                    ResizeMode = ResizeMode.CanResize;
                 }
 
                 Width = finalTargetWidth;
@@ -1068,7 +1068,7 @@ var expandedHeight = collapsed
 
                 MinWidth = PaperLayoutDefaults.MinWidth;
                 MinHeight = PaperLayoutDefaults.MinHeight;
-                ResizeMode = ResizeMode.CanResizeWithGrip;
+                ResizeMode = ResizeMode.CanResize;
             }
 
             _shell.Width = double.NaN;

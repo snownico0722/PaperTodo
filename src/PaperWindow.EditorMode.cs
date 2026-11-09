@@ -72,18 +72,19 @@ public sealed partial class PaperWindow
     {
         if (_editorModeButton == null) return;
         RefreshPaperIconButton();
-        if (_runScriptButton != null) _runScriptButton.Content = CreateTopBarRunScriptIcon(_runScriptButton);
-        if (_newTodoButton != null) _newTodoButton.Content = CreateTopBarNewTodoIcon(_newTodoButton);
-        if (_newNoteButton != null) _newNoteButton.Content = CreateTopBarNewNoteIcon(_newNoteButton);
+        if (_runScriptButton != null) _runScriptButton.Content = CreateTopBarRunScriptIcon(_runScriptButton, studio: _isExpandedEditorMode);
+        if (_newTodoButton != null) _newTodoButton.Content = CreateTopBarNewTodoIcon(_newTodoButton, studio: _isExpandedEditorMode);
+        if (_newNoteButton != null) _newNoteButton.Content = CreateTopBarNewNoteIcon(_newNoteButton, studio: _isExpandedEditorMode);
         if (_windowBindingButton != null)
             _windowBindingButton.Content = CreateTopBarAssociationIcon(_windowBindingButton,
-                HasExperimentalWindowTether || (_controller.State.EnableTodoPaperLinks && _controller.IsPaperLinkedToAnyTodo(_paper)));
+                HasExperimentalWindowTether || (_controller.State.EnableTodoPaperLinks && _controller.IsPaperLinkedToAnyTodo(_paper)),
+                studio: _isExpandedEditorMode);
         if (_moreActionsButton != null)
             _moreActionsButton.Content = _isExpandedEditorMode
                 ? StudioIcons.Create(_moreActionsButton, StudioIcon.More) : "⋯";
         if (_openMarkdownButton != null)
             _openMarkdownButton.Content = _isExpandedEditorMode
-                ? StudioIcons.Create(_openMarkdownButton, StudioIcon.ExternalOpen) : ExternalOpenButtonLabel();
+                ? StudioIcons.Create(_openMarkdownButton, StudioIcon.ExternalOpen) : ExternalOpenButtonLabel(_controller.State.ExternalMarkdownExtension);
         _editorModeButton.Content =
             CreateExpandedEditorModeIcon(_editorModeButton, _isExpandedEditorMode);
         _editorModeButton.ToolTip = _isExpandedEditorMode
@@ -190,5 +191,26 @@ public sealed partial class PaperWindow
         UpdateTopBarResponsiveLayout();
     }
 
-}
 
+    internal ExpandedEditorState? SavedExpandedEditorState => _paper.ExpandedEditor;
+
+    internal void MarkExpandedEditorViewDirty()
+    {
+        if (IsExpandedEditorHosted && !_controller.SuppressDataReloadEditorCommit)
+            _controller.MarkDirty();
+    }
+
+    internal void CaptureExpandedEditorState(bool markDirty)
+    {
+        if (_expandedEditorHostWindow is not { IsLoaded: true } host ||
+            !_controller.IsRunning || _controller.SuppressDataReloadEditorCommit)
+            return;
+
+        // Only window geometry and sidebar visibility are persisted. The live editor
+        // already owns its caret/selection; never replay stale document offsets.
+        var state = host.CaptureWindowState();
+        if (_paper.ExpandedEditor == state) return;
+        _paper.ExpandedEditor = state;
+        if (markDirty) _controller.MarkDirty();
+    }
+}

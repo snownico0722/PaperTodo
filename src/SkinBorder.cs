@@ -41,7 +41,7 @@ internal sealed partial class SkinBorder : PaperChromeBorder
     internal double PaperBackingOpacity => IsAuxiliary ? 1 - MaterialStrength * MaterialStrength : 0;
     // High contrast keeps an explicit edge for accessibility. Otherwise the preference
     // suppresses paint only; BorderThickness remains authoritative for layout and shape.
-    private bool DrawBaseOuterBorder => _highContrast || AppController.Current?.State.HideSurfaceOutline != true;
+    protected override bool DrawBaseOuterBorder => _highContrast || AppController.Current?.State.HideSurfaceOutline != true;
     public static readonly DependencyProperty UseLightweightMaterialProperty = DependencyProperty.Register(
         nameof(UseLightweightMaterial), typeof(bool), typeof(SkinBorder),
         new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender,
@@ -188,6 +188,12 @@ internal sealed partial class SkinBorder : PaperChromeBorder
 
     private void RenderSurface(DrawingContext dc)
     {
+        if (HasInsetSurface)
+        {
+            // The shortened border paints the whole visible paper while the title fades.
+            base.OnRender(dc);
+            return;
+        }
         if (IsOutline)
         {
             if (ActualWidth <= 0 || ActualHeight <= 0) return;
