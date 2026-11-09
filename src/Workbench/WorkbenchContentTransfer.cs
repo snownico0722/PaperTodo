@@ -87,11 +87,10 @@ internal static class WorkbenchContentTransfer
             var moved = source.Items.OrderBy(i => i.Order).Where(i => ids.Contains(i.Id)).ToArray();
             if (ids.Count == 0 || moved.Length != ids.Count || moved.Any(item =>
                     item.LinkedPaperId == target.Id || target.Items.Any(existing => existing.Id == item.Id))) return false;
-            var sourceItems = source.Items.OrderBy(i => i.Order).Where(i => !ids.Contains(i.Id)).Select(TodoRules.Clone).ToList();
+            var sourceItems = TodoRules.CloneAll(source.Items.OrderBy(item => item.Order));
+            TodoRules.RemoveItems(sourceItems, item => ids.Contains(item.Id));
             var targetItems = target.Items.OrderBy(i => i.Order).Where(i => !TodoRules.IsPlaceholder(i)).Select(TodoRules.Clone).ToList();
             targetItems.AddRange(moved.Select(TodoRules.Clone));
-            if (sourceItems.Count == 0) sourceItems.Add(new PaperItem());
-            TodoRules.NormalizeOrders(sourceItems);
             TodoRules.NormalizeOrders(targetItems);
             sourceAfter = new(sourceContent, sourceItems);
             targetAfter = new(targetContent, targetItems);

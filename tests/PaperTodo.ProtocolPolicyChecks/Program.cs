@@ -16,6 +16,7 @@ internal static partial class Program
             var abstractions = Assembly.Load("PaperTodo.Plugin.Abstractions");
             CheckShortcutReservations(host);
             CheckShortcutValidation(host);
+            CheckReservedPluginIds(host);
             CheckCapabilityNormalization(host);
             CheckSettingsLayoutManifest(host);
             CheckSettingActionBehavior(host);
@@ -37,6 +38,20 @@ internal static partial class Program
             Console.Error.WriteLine(ex);
             return 1;
         }
+    }
+
+    private static void CheckReservedPluginIds(Assembly host)
+    {
+        var validate = RequireType(host, "PaperTodo.PaperBodyPluginRegistry")
+            .GetMethod("ValidatePluginId", BindingFlags.NonPublic | BindingFlags.Static)!;
+        foreach (var id in new[] { "data", "data1", "DATA2", "data3", "Data4", "data5", "data2." })
+        {
+            try { validate.Invoke(null, [id]); }
+            catch (TargetInvocationException ex) when (ex.InnerException is InvalidDataException) { continue; }
+            throw new InvalidOperationException($"Accepted reserved plugin ID '{id}'.");
+        }
+        foreach (var id in new[] { "data0", "data6", "data10", "data2.notes" })
+            validate.Invoke(null, [id]);
     }
 
     private static void CheckShortcutReservations(Assembly host)

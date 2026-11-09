@@ -3,6 +3,33 @@ using PaperTodo;
 
 internal static partial class Program
 {
+    private static void MergeQuickLaunchTarget()
+    {
+        foreach (var hadPath in new[] { false, true })
+        foreach (var keepExternal in new[] { false, true })
+        {
+            using var scope = new Scope();
+            var local = scope.Memory.Papers.Single(p => p.Id == "todo").Items[0];
+            if (hadPath) local.LinkPath(@"C:\old.txt", false);
+            var baseline = scope.Store.SerializeState(scope.Memory);
+            var external = StateStore.CopyForReload(scope.Memory);
+            external.Papers.Single(p => p.Id == "todo").Items[0].LinkPath(@"C:\Notes", true);
+            File.WriteAllText(scope.Store.FilePath, scope.Store.SerializeState(external));
+            local.LinkPaper("note-a");
+            local.Text = "independent local edit";
+
+            var preview = scope.Store.PreviewExternalMerge(scope.Memory, 2, baseline);
+            Require(preview.Conflicts is { Count: > 0 }, "different quick-launch targets merged silently");
+            var choice = keepExternal ? ConflictChoice.KeepExternal : ConflictChoice.KeepMemory;
+            scope.Store.CommitExternalMerge(ResolvePreview(preview, choice), preview.ObservedDiskJson!, 2);
+            var item = scope.Store.Load().Papers.Single(p => p.Id == "todo").Items[0];
+            Require(item.LinkedPaperId == (keepExternal ? null : "note-a") &&
+                    item.LinkedPath == (keepExternal ? @"C:\Notes" : null) &&
+                    item.LinkedPathIsDirectory == (keepExternal ? true : (bool?)null) &&
+                    item.Text == "independent local edit", "link choice mixed targets or lost a text edit");
+        }
+    }
+
     private static void MergeDeletedPaperRetainsChosenLinks()
     {
         // A Todo link is unchanged on both sides. Deleting its target on ONE side

@@ -173,29 +173,45 @@ public sealed partial class AppController
                 Background = Brushes.Transparent,
                 Padding = new Thickness(7, 6, 7, 6)
             };
-            var row = new StackPanel
+            var row = new Grid
             {
-                Orientation = Orientation.Horizontal,
-                IsHitTestVisible = false,
+                MinHeight = AppTypography.FitChrome(20),
+                VerticalAlignment = VerticalAlignment.Center,
                 // The feature is inactive, but its placement remains editable.
-                Opacity = action == PaperTopBarShortcuts.Workspace && !WorkspaceOptions.Enabled ? 0.5 : 1
+                Opacity = (action == PaperTopBarShortcuts.Workspace && !WorkspaceOptions.Enabled) ||
+                          (action == PaperTopBarShortcuts.Association &&
+                           !State.EnableTodoPaperLinks && !State.ExperimentalWindowTethering)
+                    ? 0.5 : 1
             };
-            row.Children.Add(new TextBlock
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var grip = new Grid { Width = AppTypography.Scale(22), IsHitTestVisible = false };
+            grip.Children.Add(new System.Windows.Shapes.Path
             {
-                Text = "⋮⋮",
-                Foreground = TrayWeakTextBrush,
-                FontSize = AppTypography.Scale(12),
-                Width = AppTypography.Scale(22),
-                VerticalAlignment = VerticalAlignment.Center
+                Data = Geometry.Parse("M1 1h0.1 M5 1h0.1 M1 5h0.1 M5 5h0.1 M1 9h0.1 M5 9h0.1"),
+                Stroke = TrayWeakTextBrush,
+                StrokeThickness = AppTypography.Scale(1.8),
+                StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round,
+                Stretch = Stretch.Uniform,
+                Width = AppTypography.Scale(6), Height = AppTypography.Scale(10),
+                HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center
             });
-            row.Children.Add(CreateTopBarShortcutIcon(action));
-            row.Children.Add(new TextBlock
+            row.Children.Add(grip);
+            var icon = CreateTopBarShortcutIcon(action);
+            Grid.SetColumn(icon, 1);
+            row.Children.Add(icon);
+            var name = new TextBlock
             {
                 Text = TopBarShortcutName(action),
                 Foreground = TrayTextBrush,
                 FontSize = AppTypography.Scale(11.5),
+                TextWrapping = TextWrapping.Wrap,
                 VerticalAlignment = VerticalAlignment.Center
-            });
+            };
+            Grid.SetColumn(name, 2);
+            row.Children.Add(name);
             var content = new DockPanel { LastChildFill = true };
             var controls = new StackPanel
             {
@@ -205,18 +221,22 @@ public sealed partial class AppController
             };
             if (action == PaperTopBarShortcuts.RunScript)
             {
+                var hint = CreateSettingsHintGlyph("TipTopBarRunScript", new Thickness(3, 0, 0, 0));
+                Grid.SetColumn(hint, 3);
+                row.Children.Add(hint);
                 var edit = SettingsTextButton(SettingsSidebarLocalized(
                     "编辑", "Edit", "編集", "편집"));
                 edit.ToolTip = Strings.Get("TopBarEditScript");
                 System.Windows.Automation.AutomationProperties.SetName(edit,
                     Strings.Get("TopBarEditScript"));
                 edit.MinWidth = 0;
-                edit.Height = AppTypography.FitChrome(26);
-                edit.Padding = new Thickness(8, 0, 8, 0);
+                // Smaller than the row icon: the script action must not increase row height.
+                edit.Height = AppTypography.FitChrome(18);
+                edit.Padding = new Thickness(5, 0, 5, 0);
                 edit.BorderBrush = TrayBorderBrush;
                 edit.BorderThickness = new Thickness(1);
-                edit.FontSize = AppTypography.Scale(11.5);
-                edit.Margin = new Thickness(6, 0, 4, 0);
+                edit.FontSize = AppTypography.Scale(10.5);
+                edit.Margin = new Thickness(3, 0, 2, 0);
                 edit.Click += (_, _) => EditTopBarScript();
                 controls.Children.Add(edit);
             }
@@ -320,7 +340,7 @@ public sealed partial class AppController
     {
         for (var current = source; current != null; current = current is Visual
                  ? VisualTreeHelper.GetParent(current) : LogicalTreeHelper.GetParent(current))
-            if (current is ButtonBase) return true;
+            if (current is ButtonBase || current is Border hint && hint.Cursor == Cursors.Help) return true;
         return false;
     }
 
@@ -342,91 +362,38 @@ public sealed partial class AppController
         _ => action
     };
 
-    // Keep the settings icon column aligned. The two action icons are WPF vector
-    // strokes (24-unit Lucide-style outlines) rather than font-dependent symbols.
-    private static FrameworkElement CreateTopBarShortcutIcon(string action)
+    private FrameworkElement CreateTopBarShortcutIcon(string action)
     {
-        string? pathData = action switch
+        var presenter = new FrameworkElementFactory(typeof(ContentPresenter));
+        presenter.SetValue(ContentPresenter.ContentProperty,
+            new TemplateBindingExtension(ContentControl.ContentProperty));
+        presenter.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+        presenter.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+        var slot = new ContentControl
         {
-            PaperTopBarShortcuts.Association =>
-                "M 10 13 A 5 5 0 0 0 17.54 13.54 L 20.54 10.54 " +
-                "A 5 5 0 0 0 13.47 3.47 L 11.75 5.18 " +
-                "M 14 11 A 5 5 0 0 0 6.46 10.46 L 3.46 13.46 " +
-                "A 5 5 0 0 0 10.53 20.53 L 12.24 18.82",
-            PaperTopBarShortcuts.ExternalEditor =>
-                "M 15 3 H 21 V 9 M 10 14 L 21 3 " +
-                "M 21 13 V 19 A 2 2 0 0 1 19 21 H 5 " +
-                "A 2 2 0 0 1 3 19 V 5 A 2 2 0 0 1 5 3 H 11",
-            PaperTopBarShortcuts.Workspace => WorkspaceCycleIcon.PathData,
-            PaperTopBarShortcuts.RunScript => "M 5 5 H 19 V 19 H 5 Z M 8 9 L 11 12 L 8 15 M 13 15 H 16",
+            Width = AppTypography.Scale(26), Height = AppTypography.FitChrome(20),
+            Foreground = TrayWeakTextBrush, FontFamily = AppTypography.UiFontFamily,
+            FontSize = AppTypography.Scale(10.5), Focusable = false, IsHitTestVisible = false,
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+            VerticalContentAlignment = VerticalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            Template = new ControlTemplate(typeof(ContentControl)) { VisualTree = presenter }
+        };
+        slot.Content = action switch
+        {
+            PaperTopBarShortcuts.NewTodo => PaperWindow.CreateTopBarNewTodoIcon(slot),
+            PaperTopBarShortcuts.NewNote => PaperWindow.CreateTopBarNewNoteIcon(slot),
+            PaperTopBarShortcuts.RunScript => PaperWindow.CreateTopBarRunScriptIcon(slot),
+            PaperTopBarShortcuts.Association => PaperWindow.CreateTopBarAssociationIcon(slot, active: false),
+            PaperTopBarShortcuts.Workspace => PaperWindow.CreateWorkspaceCycleIcon(slot, WorkspaceNumber, out _),
+            PaperTopBarShortcuts.ExternalEditor => new TextBlock
+            {
+                Text = PaperWindow.ExternalOpenButtonLabel(State.ExternalMarkdownExtension),
+                TextAlignment = TextAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            },
             _ => null
         };
-        // Both font glyphs and vector paths live in the same centered slot.
-        // Their advance widths must not shift the icon column between rows.
-        var slot = new Grid
-        {
-            Width = AppTypography.Scale(24),
-            Height = AppTypography.Scale(20),
-            VerticalAlignment = VerticalAlignment.Center,
-            IsHitTestVisible = false
-        };
-        if (pathData == null)
-        {
-            slot.Children.Add(new TextBlock
-            {
-                Text = action switch
-                {
-                    PaperTopBarShortcuts.NewTodo => "✓",
-                    _ => "✎"
-                },
-                FontFamily = AppTypography.SymbolFontFamily,
-                FontWeight = FontWeights.SemiBold,
-                Foreground = TrayWeakTextBrush,
-                FontSize = AppTypography.Scale(12),
-                TextAlignment = TextAlignment.Center,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center
-            });
-            return slot;
-        }
-
-        var isWorkspace = action == PaperTopBarShortcuts.Workspace;
-        var canvas = new Canvas { Width = isWorkspace ? 20 : 24, Height = isWorkspace ? 20 : 24 };
-        canvas.Children.Add(new System.Windows.Shapes.Path
-        {
-            Data = Geometry.Parse(pathData),
-            Stroke = TrayWeakTextBrush,
-            StrokeThickness = isWorkspace ? WorkspaceCycleIcon.StrokeThickness : 2,
-            StrokeStartLineCap = PenLineCap.Round,
-            StrokeEndLineCap = PenLineCap.Round,
-            StrokeLineJoin = PenLineJoin.Round
-        });
-        if (isWorkspace)
-        {
-            var number = new Border
-            {
-                Width = 12, Height = 12,
-                Child = new TextBlock
-                {
-                    Text = "1", FontSize = 9, FontWeight = FontWeights.SemiBold,
-                    FontFamily = AppTypography.UiFontFamily, Foreground = TrayWeakTextBrush,
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    VerticalAlignment = VerticalAlignment.Center
-                }
-            };
-            Canvas.SetLeft(number, 4);
-            Canvas.SetTop(number, 4);
-            canvas.Children.Add(number);
-        }
-        slot.Children.Add(new Viewbox
-        {
-            Width = AppTypography.Scale(16),
-            Height = AppTypography.Scale(16),
-            Stretch = Stretch.Uniform,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-            Child = canvas
-        });
         return slot;
     }
 }

@@ -15,6 +15,7 @@ internal static partial class Program
         if (args.Contains("--history-dialog")) return RunHistoryDialogFixture();
         if (args.Contains("--history-actions")) return RunHistoryActionsFixture();
         if (args.Contains("--workspace-failure")) return RunWorkspaceFailureFixture();
+        if (args.Contains("--workspace-move-recovery-exit")) return RunWorkspaceMoveRecoveryExitFixture();
         if (args.Contains("--exit-fixture")) return RunDeferredExitFixture();
         if (args.Contains("--passive-dispose")) return RunPassiveDisposeFixture();
         if (args.Contains("--workspace-fixture")) return RunWorkspaceFixture();
@@ -36,6 +37,7 @@ internal static partial class Program
                 ("conflicts group by paper and archive input", MergePaperConflict),
                 ("delete/edit conflicts honor both choices for notes and todos", MergePaperDeletionConflicts),
                 ("merge preserves links to a paper chosen to survive", MergeDeletedPaperRetainsChosenLinks),
+                ("merge resolves the complete Todo link target", MergeQuickLaunchTarget),
                 ("conflict archives retain the latest five complete groups",
                     ConflictArchiveRetentionChecks),
                 ("source changed after flush is rejected before replacement", MergeRejectDuringReplace),
@@ -65,6 +67,7 @@ internal static partial class Program
             RunIsolatedLiveChecks("--history-dialog");
             RunIsolatedLiveChecks("--history-actions");
             RunIsolatedLiveChecks("--workspace-failure");
+            RunIsolatedLiveChecks("--workspace-move-recovery-exit");
             RunIsolatedLiveChecks("--shutdown-merge");
             RunIsolatedLiveChecks("--shutdown-workspace");
             RunIsolatedLiveChecks("--exit-fixture");

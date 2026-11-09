@@ -6,18 +6,6 @@ namespace PaperTodo;
 
 public sealed partial class PaperWindow
 {
-    private enum TopBarDragKind
-    {
-        NoteLink,
-        WindowBinding
-    }
-
-    private enum TopBarDragGhostPlacement
-    {
-        Centered,
-        PointerOffset
-    }
-
     private sealed class TopBarDragFeedback
     {
         public TopBarDragFeedback(Window window, object? context = null)
@@ -32,13 +20,11 @@ public sealed partial class PaperWindow
 
     private sealed class TopBarDragBehavior
     {
-        public required TopBarDragKind Kind { get; init; }
         public required Func<bool> CanBegin { get; init; }
         public required Action Started { get; init; }
         public required Func<TopBarDragFeedback> CreateFeedback { get; init; }
         public required Action<TopBarDragFeedback, DeviceScreenPoint> Moved { get; init; }
         public required Action<bool> Completed { get; init; }
-        public required TopBarDragGhostPlacement GhostPlacement { get; init; }
         public double DraggingOpacity { get; init; } = 0.82;
     }
 
@@ -226,14 +212,11 @@ public sealed partial class PaperWindow
         e.Handled = true;
     }
 
-    private void EndTopBarDragGesture(
-        bool commit,
-        TopBarDragKind? onlyKind = null)
+    private void EndTopBarDragGesture(bool commit)
     {
         var state = _topBarDrag;
         if (state == null ||
-            state.SuppressCaptureLossEnd ||
-            (onlyKind.HasValue && state.Behavior.Kind != onlyKind.Value))
+            state.SuppressCaptureLossEnd)
         {
             return;
         }
@@ -258,26 +241,15 @@ public sealed partial class PaperWindow
         if (feedbackWindow == null ||
             !WindowNative.TryGetWindowDeviceBounds(
                 feedbackWindow,
-                out var feedbackBounds))
+                out _))
         {
             return;
         }
 
-        DeviceScreenPoint position;
-        if (state.Behavior.GhostPlacement ==
-            TopBarDragGhostPlacement.Centered)
-        {
-            position = new DeviceScreenPoint(
-                pointer.X - feedbackBounds.Width / 2.0,
-                pointer.Y - feedbackBounds.Height / 2.0);
-        }
-        else
-        {
-            var dpi = VisualTreeHelper.GetDpi(state.Handle);
-            position = new DeviceScreenPoint(
-                pointer.X + 14 * Math.Max(1, dpi.DpiScaleX),
-                pointer.Y + 18 * Math.Max(1, dpi.DpiScaleY));
-        }
+        var dpi = VisualTreeHelper.GetDpi(state.Handle);
+        var position = new DeviceScreenPoint(
+            pointer.X + 14 * Math.Max(1, dpi.DpiScaleX),
+            pointer.Y + 18 * Math.Max(1, dpi.DpiScaleY));
 
         try
         {

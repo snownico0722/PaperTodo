@@ -25,30 +25,33 @@ internal static class NotePortableExport
 
     internal static NoteExportResult Export(string destination, IReadOnlyList<NoteExportDocument> notes,
         NoteExportFormat format, bool all, NoteImageStore images, string missingImageLabel,
-        IProgress<int>? progress = null)
+        IProgress<int>? progress = null, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (notes.Count == 0) throw new ArgumentException("No notes to export.", nameof(notes));
         return all
-            ? ExportZip(destination, notes, format, images, missingImageLabel, progress)
-            : ExportSingle(destination, notes[0], format, images, missingImageLabel, progress);
+            ? ExportZip(destination, notes, format, images, missingImageLabel, progress, cancellationToken)
+            : ExportSingle(destination, notes[0], format, images, missingImageLabel, progress, cancellationToken);
     }
 
     private static NoteExportResult ExportSingle(string path, NoteExportDocument note,
-        NoteExportFormat format, NoteImageStore images, string missingLabel, IProgress<int>? progress)
+        NoteExportFormat format, NoteImageStore images, string missingLabel,
+        IProgress<int>? progress, CancellationToken cancellationToken)
     {
         var missing = new HashSet<string>(StringComparer.Ordinal);
         if (format == NoteExportFormat.Html)
         {
-            SaveAtomic(path, stream => WriteHtml(stream, note, images, missingLabel, missing));
+            SaveAtomic(path, stream => WriteHtml(stream, note, images, missingLabel, missing, cancellationToken), cancellationToken);
         }
         else
         {
             var folderName = AvailableImageFolder(path);
             var folderPath = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(path))!, folderName);
+            var createdFiles = new List<string>();
             var madeFolder = false;
             try
             {
-                var markdown = RenderMarkdown(note, folderName, images, missingLabel, missing,
+                var markdown = RenderMarkdown(note, folderName, images, missingLabel, missing, cancellationToken,
                     (entryPath, bytes) =>
                     {
                         if (!madeFolder)
@@ -56,18 +59,20 @@ internal static class NotePortableExport
                             Directory.CreateDirectory(folderPath);
                             madeFolder = true;
                         }
-                        using var file = new FileStream(
-                            Path.Combine(folderPath, Path.GetFileName(entryPath)),
-                            FileMode.CreateNew, FileAccess.Write, FileShare.None);
-                        file.Write(bytes);
+                        var imagePath = Path.Combine(folderPath, Path.GetFileName(entryPath));
+                        using var file = new FileStream(imagePath, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+                        createdFiles.Add(imagePath);
+                        WriteBytes(file, bytes, cancellationToken);
                     });
-                SaveAtomic(path, Encoding.UTF8.GetBytes(markdown));
+                SaveAtomic(path, stream => WriteBytes(stream, Encoding.UTF8.GetBytes(markdown), cancellationToken),
+                    cancellationToken);
             }
             catch
             {
                 if (madeFolder)
                 {
-                    try { Directory.Delete(folderPath, recursive: true); }
+                    foreach (var imagePath in createdFiles) TryDelete(imagePath);
+                    try { Directory.Delete(folderPath); }
                     catch (IOException) { }
                     catch (UnauthorizedAccessException) { }
                 }
@@ -80,7 +85,8 @@ internal static class NotePortableExport
     }
 
     private static NoteExportResult ExportZip(string path, IReadOnlyList<NoteExportDocument> notes,
-        NoteExportFormat format, NoteImageStore images, string missingLabel, IProgress<int>? progress)
+        NoteExportFormat format, NoteImageStore images, string missingLabel,
+        IProgress<int>? progress, CancellationToken cancellationToken)
     {
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var missingCount = 0;
@@ -97,6 +103,7 @@ internal static class NotePortableExport
                 {
                     for (var index = 0; index < notes.Count; index++)
                     {
+                        cancellationToken.ThrowIfCancellationRequested();
                         var note = notes[index];
                         var stem = UniqueName(SafeName(note.Title), names);
                         var missing = new HashSet<string>(StringComparer.Ordinal);
@@ -105,16 +112,17 @@ internal static class NotePortableExport
                             if (format == NoteExportFormat.Markdown)
                             {
                                 var markdown = RenderMarkdown(note, stem + "-images", images,
-                                    missingLabel, missing, (entryPath, bytes) =>
-                                        WriteEntry(zip, entryPath, bytes));
-                                WriteEntry(zip, stem + ".md", Encoding.UTF8.GetBytes(markdown));
+                                    missingLabel, missing, cancellationToken, (entryPath, bytes) =>
+                                        WriteEntry(zip, entryPath, bytes, cancellationToken));
+                                WriteEntry(zip, stem + ".md", Encoding.UTF8.GetBytes(markdown), cancellationToken);
                             }
                             else
                             {
                                 WriteEntry(zip, stem + ".html", stream =>
-                                    WriteHtml(stream, note, images, missingLabel, missing));
+                                    WriteHtml(stream, note, images, missingLabel, missing, cancellationToken));
                             }
                         }
+                        catch (OperationCanceledException) { throw; }
                         catch (IOException) { throw; } // A broken ZIP or destination is a whole-export failure.
                         catch (UnauthorizedAccessException) { throw; }
                         catch (Exception ex)
@@ -132,6 +140,7 @@ internal static class NotePortableExport
                 }
                 stream.Flush(flushToDisk: true);
             }
+            cancellationToken.ThrowIfCancellationRequested();
             File.Move(tempPath, path, overwrite: true);
         }
         finally { TryDelete(tempPath); }
@@ -140,7 +149,7 @@ internal static class NotePortableExport
     }
 
     private static string RenderMarkdown(NoteExportDocument note, string imageFolder,
-        NoteImageStore store, string missingLabel, ISet<string> missing,
+        NoteImageStore store, string missingLabel, ISet<string> missing, CancellationToken cancellationToken,
         Action<string, byte[]> writeImage)
     {
         // Only paths are retained. Image bytes leave memory as soon as each image
@@ -150,6 +159,7 @@ internal static class NotePortableExport
         var position = 0;
         foreach (var reference in MarkdownImageReferences.Enumerate(note.Content))
         {
+            cancellationToken.ThrowIfCancellationRequested();
             builder.Append(note.Content, position, reference.LineStart - position);
             if (!urls.TryGetValue(reference.ImageId, out var url))
             {
@@ -172,8 +182,12 @@ internal static class NotePortableExport
             if (url != null)
                 builder.Append(reference.WithUrl(url));
             else
-                builder.Append('[').Append(missingLabel).Append(": ")
-                    .Append(reference.ImageId).Append(']');
+            {
+                var line = note.Content.AsSpan(reference.LineStart, reference.LineLength);
+                builder.Append(line[..(line.Length - line.TrimStart().Length)]);
+                builder.Append('[').Append(missingLabel).Append(": ").Append(reference.ImageId).Append(']');
+                builder.Append(line[line.TrimEnd().Length..]);
+            }
             position = reference.LineStart + reference.LineLength;
         }
         builder.Append(note.Content, position, note.Content.Length - position);
@@ -181,14 +195,24 @@ internal static class NotePortableExport
     }
 
     private static void WriteHtml(Stream stream, NoteExportDocument note, NoteImageStore images,
-        string missingLabel, ISet<string> missing)
+        string missingLabel, ISet<string> missing, CancellationToken cancellationToken)
     {
         using var writer = new StreamWriter(stream, new UTF8Encoding(false), 16 * 1024, leaveOpen: true);
-        NoteHtmlExport.Write(writer, note.Id, note.Title, note.Content, images, missingLabel, missing);
+        NoteHtmlExport.Write(writer, note.Id, note.Title, note.Content, images, missingLabel, missing, cancellationToken);
     }
 
-    private static void WriteEntry(ZipArchive zip, string name, byte[] bytes) =>
-        WriteEntry(zip, name, stream => stream.Write(bytes));
+    private static void WriteEntry(ZipArchive zip, string name, byte[] bytes, CancellationToken cancellationToken) =>
+        WriteEntry(zip, name, stream => WriteBytes(stream, bytes, cancellationToken));
+
+    private static void WriteBytes(Stream stream, byte[] bytes, CancellationToken cancellationToken)
+    {
+        const int chunkSize = 64 * 1024;
+        for (var offset = 0; offset < bytes.Length; offset += chunkSize)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            stream.Write(bytes, offset, Math.Min(chunkSize, bytes.Length - offset));
+        }
+    }
 
     private static void WriteEntry(ZipArchive zip, string name, Action<Stream> write)
     {
@@ -252,7 +276,7 @@ internal static class NotePortableExport
     internal static void SaveAtomic(string path, byte[] bytes) =>
         SaveAtomic(path, stream => stream.Write(bytes));
 
-    internal static void SaveAtomic(string path, Action<Stream> write)
+    internal static void SaveAtomic(string path, Action<Stream> write, CancellationToken cancellationToken = default)
     {
         var tempPath = TempPath(path);
         try
@@ -263,6 +287,7 @@ internal static class NotePortableExport
                 write(stream);
                 stream.Flush(flushToDisk: true);
             }
+            cancellationToken.ThrowIfCancellationRequested();
             File.Move(tempPath, path, overwrite: true);
         }
         finally { TryDelete(tempPath); }

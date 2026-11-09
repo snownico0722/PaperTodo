@@ -731,10 +731,12 @@ public sealed partial class AppController
                             menu.Focus();
                         }
                     }
-                    else if (existing.Contains(target) && target != WorkspaceNumber)
+                    else if (!IsPaperExportActive && existing.Contains(target) && target != WorkspaceNumber)
                         ShowConfirmation(target);
                 });
             var tiles = ((Grid)selector.Child).Children.OfType<Border>().ToArray();
+            if (IsPaperExportActive)
+                foreach (var tile in tiles.Take(existing.Count)) tile.IsEnabled = false;
             if (firstEmpty != 0)
             {
                 var tile = tiles[^1];
@@ -903,12 +905,12 @@ public sealed partial class AppController
 
         var newTodoButton = TrayToolbarAction(
             menu,
-            CreateTrayAddIcon("✓"),
+            CreateTrayAddIcon(PaperTypes.Todo),
             Strings.Get("TrayNewTodo"),
             () => CreatePaper(PaperTypes.Todo, show: true));
         var newNoteButton = TrayToolbarAction(
             menu,
-            CreateTrayAddIcon("✎"),
+            CreateTrayAddIcon(PaperTypes.Note),
             Strings.Get("TrayNewNote"),
             () => CreatePaper(PaperTypes.Note, show: true));
 
@@ -1109,9 +1111,43 @@ public sealed partial class AppController
         return icon;
     }
 
-    private FrameworkElement CreateTrayAddIcon(string glyph)
+    private FrameworkElement CreateTrayAddIcon(string paperType)
     {
-        return CreateTrayAddVectorIcon(glyph);
+        var presenter = new FrameworkElementFactory(typeof(ContentPresenter));
+        presenter.SetValue(ContentPresenter.ContentProperty, new TemplateBindingExtension(ContentControl.ContentProperty));
+        presenter.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+        presenter.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+        var icon = new ContentControl
+        {
+            Template = new ControlTemplate(typeof(ContentControl)) { VisualTree = presenter },
+            Foreground = TrayTextBrush,
+            Focusable = false,
+            IsHitTestVisible = false,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+            VerticalContentAlignment = VerticalAlignment.Center,
+            SnapsToDevicePixels = true,
+            UseLayoutRounding = true
+        };
+        icon.Content = paperType == PaperTypes.Note
+            ? PaperWindow.CreateTopBarNewNoteIcon(icon)
+            : PaperWindow.CreateTopBarNewTodoIcon(icon);
+        return icon;
+    }
+
+    private FrameworkElement CreateTrayPaperTypeVectorIcon(PaperData paper)
+    {
+        return new VectorGlyphElement(
+            PaperTypeIcon(paper),
+            new FontFamily("Segoe UI Symbol"),
+            PaperTypeIconFontSize(paper),
+            FontWeights.SemiBold)
+        {
+            Foreground = TrayTextBrush,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        };
     }
 
     private MenuItem TrayPaperItem(ContextMenu menu, PaperData paper)
@@ -1484,5 +1520,28 @@ public sealed partial class AppController
         brush.Freeze();
         return brush;
     }
+
+    // Keep this WPF geometry aligned with assets/workbench-tray.svg.
+    // WPF renders the vector directly without adding a runtime SVG decoder.
+    private FrameworkElement CreateTrayWorkbenchIcon()
+    {
+        return new System.Windows.Shapes.Path
+        {
+            Data = Geometry.Parse("M3.1 6.4V4.8A1.7 1.7 0 0 1 4.8 3.1H6.4 M13.6 3.1H15.2A1.7 1.7 0 0 1 16.9 4.8V6.4 M16.9 13.6V15.2A1.7 1.7 0 0 1 15.2 16.9H13.6 M6.4 16.9H4.8A1.7 1.7 0 0 1 3.1 15.2V13.6 M5.7 6.5H10.2V11H5.7Z M10.8 9.4H15.3V13.9H10.8Z"),
+            Width = 17,
+            Height = 17,
+            Stretch = Stretch.Uniform,
+            Stroke = TrayTextBrush,
+            StrokeThickness = 1.5,
+            StrokeStartLineCap = PenLineCap.Round,
+            StrokeEndLineCap = PenLineCap.Round,
+            StrokeLineJoin = PenLineJoin.Round,
+            Fill = Brushes.Transparent,
+            IsHitTestVisible = false,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+    }
+
 
 }

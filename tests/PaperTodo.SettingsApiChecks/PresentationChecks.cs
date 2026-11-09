@@ -105,6 +105,37 @@ internal static partial class Program
         var note = papers.Single(p => p.Id == "note");
         var todo = papers.Single(p => p.Id == "todo");
         var owner = papers.Single(p => p.Id == "owner");
+        if (!edge)
+        {
+            var window = ReadField<Dictionary<string, PaperWindow>>(c, "_windows")[owner.Id];
+            var saved = (c.State.TopBarShortcutOrder, c.State.TopBarPinnedCount,
+                c.State.HiddenTopBarShortcuts, c.State.ShowTopBarExternalOpenButton);
+            try
+            {
+                c.State.TopBarShortcutOrder = PaperTopBarShortcuts.NormalizeOrder([PaperTopBarShortcuts.ExternalEditor]);
+                foreach (var (pinned, hidden, legacy, visible) in new[]
+                {
+                    (0, false, true, false), (1, true, true, false), (1, false, false, true)
+                })
+                {
+                    c.State.TopBarPinnedCount = pinned;
+                    c.State.HiddenTopBarShortcuts = hidden ? [PaperTopBarShortcuts.ExternalEditor] : [];
+                    c.State.ShowTopBarExternalOpenButton = legacy;
+                    window.UpdateTopBarNewPaperButtons();
+                    // Body replacement refreshes chrome even when width and layout have not changed.
+                    Invoke(window, "RefreshPaperBodyChrome");
+                    Check((ReadField<System.Windows.Controls.Button>(window, "_openMarkdownButton").Visibility ==
+                           Visibility.Visible) == visible,
+                        "Body refresh respects the current pin/hidden choices instead of the migrated legacy toggle.");
+                }
+            }
+            finally
+            {
+                (c.State.TopBarShortcutOrder, c.State.TopBarPinnedCount,
+                    c.State.HiddenTopBarShortcuts, c.State.ShowTopBarExternalOpenButton) = saved;
+                window.UpdateTopBarNewPaperButtons();
+            }
+        }
         var current = true;
         PaperBodyPluginHostApi Api(params string[] permissions) =>
             new(c, commands, "owner", "tests.presentation", permissions, () => current, () => current);
@@ -183,18 +214,23 @@ internal static partial class Program
         Throws<PaperTodoPluginException>(() => Web("papers.show", new { paperId = "note", activate = "false" }), "invalid_params");
         Throws<PaperTodoPluginException>(() => Web("papers.hide", new { }), "invalid_params");
 
-        // Test the actual Body dispatcher separately: it has its own switch in addition to the
-        // common Workspace router used by Mini and Runtime. No live WebView is claimed here.
+        // Exercise the Body entry point as well as the shared Workspace dispatcher.
         var bodyContext = (PaperBodyContext)RuntimeHelpers.GetUninitializedObject(typeof(PaperBodyContext));
         Field(bodyContext, "<Workspace>k__BackingField", host);
         var body = (WebPaperBodySession)RuntimeHelpers.GetUninitializedObject(typeof(WebPaperBodySession));
         Field(body, "_context", bodyContext);
         var bodyMethod = typeof(WebPaperBodySession).GetMethod("ExecuteHostRequest", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        var bodyRequest = bodyMethod.CreateDelegate<Func<string, JsonElement, object?>>(body);
         foreach (var method in new[] { "papers.show", "papers.hide", "papers.toggle", "papers.expand", "papers.collapse", "papers.toggleCollapsed", "papers.activate" })
         {
-            var value = bodyMethod.Invoke(body, [method, Json(new { paperId = "note", activate = false })]);
+            var value = bodyRequest(method, Json(new { paperId = "note", activate = false }));
             Check(value is PaperPresentationResult, "Body dispatcher: " + method);
         }
+
+        Check(bodyRequest("data.status", Json(new { })) is DataReloadStatus,
+            "Web Body can query workspace data status without import permission.");
+        Throws<PaperTodoPluginException>(() => bodyRequest("data.reload", Json(new { })), "permission_denied");
+        Throws<PaperTodoPluginException>(() => bodyRequest("data.merge", Json(new { baselineJson = "{}" })), "permission_denied");
 
         c.State.McpEnabled = true;
         var mcp = new McpCommandService(c, commands);

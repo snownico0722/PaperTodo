@@ -78,7 +78,6 @@ internal sealed class MarkdownPaperBodySession : IPaperBodySession
         }
     }
 
-    internal UIElement? CurrentPresenter { get; set; }
     internal ContextMenu? PreviewContextMenu { get; set; }
     internal Action? ShowPreview { get; set; }
     internal int PresenterGeneration { get; set; }
@@ -87,9 +86,6 @@ internal sealed class MarkdownPaperBodySession : IPaperBodySession
     internal bool ContentDirty { get; set; }
     internal bool ApplyingExternalChange { get; set; }
     internal bool LiveIsScriptCapsule { get; set; }
-
-    internal IReadOnlyList<UIElement> PresenterElements =>
-        _root.Children.Cast<UIElement>().ToArray();
 
     internal void SetTransientFindReveal(int? absoluteOffset, int length) =>
         _semanticPresentation?.SetTransientFindReveal(absoluteOffset, length);
@@ -100,16 +96,6 @@ internal sealed class MarkdownPaperBodySession : IPaperBodySession
         {
             _root.Children.Add(presenter);
         }
-        CurrentPresenter = presenter;
-    }
-
-    internal void RemovePresenter(UIElement presenter)
-    {
-        _root.Children.Remove(presenter);
-        if (ReferenceEquals(CurrentPresenter, presenter))
-        {
-            CurrentPresenter = _root.Children.OfType<UIElement>().LastOrDefault();
-        }
     }
 
     internal void ResetPresenterState()
@@ -117,7 +103,6 @@ internal sealed class MarkdownPaperBodySession : IPaperBodySession
         PresenterGeneration++;
         DeferredWorkGeneration++;
         NoteBox = null;
-        CurrentPresenter = null;
         PreviewContextMenu = null;
         ShowPreview = null;
         CancelPresenterInteractions = null;

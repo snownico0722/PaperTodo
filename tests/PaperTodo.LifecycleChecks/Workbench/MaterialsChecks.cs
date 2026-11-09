@@ -158,6 +158,30 @@ internal static partial class WorkbenchChecks
         var ownerWindow = controller.WorkbenchPaperWindow(ownerId);
         await Until(() => !controller.HasWorkbench && ownerWindow.IsVisible,
             "Opening the materials note did not leave the canvas and show its collection");
+        // The collection owns workspace-wide layout and cannot follow the ordinary
+        // single-paper move path into another workspace's existing collection.
+        var destinationStore = new StateStore(AppContext.BaseDirectory, DurableAtomicFileWriter.Shared, 2);
+        var destinationState = FixtureState();
+        destinationState.Workspaces = null;
+        WorkspaceMaterials.CreateOwner(destinationState);
+        destinationStore.SaveJsonSync(destinationStore.SerializeState(destinationState), 1);
+        controller.SaveNow(sync: true);
+        var sourceBeforeMove = File.ReadAllText(store.FilePath);
+        var destinationBeforeMove = File.ReadAllText(destinationStore.FilePath);
+        Assert(!await controller.MovePaperToWorkspaceAsync(owner, 2) &&
+            ReferenceEquals(WorkspaceMaterials.FindOwner(controller.State), owner) && !ownerWindow.IsClosed &&
+            File.ReadAllText(store.FilePath) == sourceBeforeMove &&
+            File.ReadAllText(destinationStore.FilePath) == destinationBeforeMove,
+            "Moving a materials note changed its source or wrote a second destination owner");
+        var workspaceMenu = ownerWindow.CreateWorkbenchBodyMenu().Items.OfType<MenuItem>().Single(item =>
+            System.Windows.Automation.AutomationProperties.GetAutomationId(item) == "PaperWorkspace");
+        Assert(!workspaceMenu.Items.OfType<MenuItem>().Any(item =>
+                System.Windows.Automation.AutomationProperties.GetAutomationId(item).StartsWith("MoveToWorkspace")) &&
+            workspaceMenu.Items.OfType<MenuItem>().Any(item => item.IsEnabled &&
+                System.Windows.Automation.AutomationProperties.GetAutomationId(item) == "SwitchWorkspace2") &&
+            workspaceMenu.Items.OfType<MenuItem>().Any(item => !item.IsEnabled &&
+                Equals(item.Header, Strings.Get("WorkspaceMaterialsMoveUnavailable"))),
+            "Materials note menu offered an unsupported move or lost workspace switching and its explanation");
         var ownerEditors = (Dictionary<string, TextBox>)Member(ownerWindow, "_workspaceMaterialEditors");
         Assert(ownerEditors[textId + "/content"].Text == updated,
             "The collection note did not show the content edited on the canvas");

@@ -77,26 +77,27 @@ public sealed partial class AppController
 
     internal WorkbenchState WorkbenchLayout => EnsureWorkspaceMaterialsOwner().WorkspaceMaterials!.Layout;
 
-    internal WorkbenchWorkspaceSnapshot SnapshotWorkbench(AppState state, int number, bool live)
+    internal static WorkbenchWorkspaceSnapshot SnapshotWorkbench(
+        AppState state, int number, IReadOnlyDictionary<string, PaperWindow>? windows = null)
     {
         var document = WorkspaceMaterials.FindOwner(state)?.WorkspaceMaterials;
         var layout = document?.Layout;
         var papers = state.Papers.Where(p => p.WorkspaceMaterials == null).Select(p =>
         {
             var placement = layout?.Cards.GetValueOrDefault(p.Id)?.Copy();
-            _windows.TryGetValue(p.Id, out var window);
+            var window = windows?.GetValueOrDefault(p.Id);
             var plugin = p.Type == PaperTypes.Note && p.BodyProviderId != PaperBodyProviderIds.Markdown;
             var title = !string.IsNullOrWhiteSpace(p.Title) ? p.Title : p.BodyHeaderText;
             var content = p.Type == PaperTypes.Todo
                 ? string.Join("\n", p.Items.Take(12).Select(i => (i.Done ? "[x] " : "[ ] ") + i.Text))
-                : plugin ? p.BodyHeaderText : live && window != null ? window.CurrentMarkdownContentForExternalRead() : p.Content;
+                : plugin ? p.BodyHeaderText : window != null ? window.CurrentMarkdownContentForExternalRead() : p.Content;
             var searchText = p.Type == PaperTypes.Todo
                 ? string.Join("\n", p.Items.Select(i => i.Text)) : content ?? "";
             var summary = (content ?? "");
             if (summary.Length > 800) summary = summary[..800];
             return new WorkbenchPaperSnapshot(p.Id, title ?? "", summary, searchText, plugin ? "plugin" : p.Type,
-                live && window != null ? window.WorkbenchAffinity : plugin ? "plugin:" + p.BodyProviderId : "",
-                live && window != null ? window.WorkbenchBindingTitle : "",
+                window != null ? window.WorkbenchAffinity : plugin ? "plugin:" + p.BodyProviderId : "",
+                window != null ? window.WorkbenchBindingTitle : "",
                 placement?.Width ?? WorkbenchCardState.ValidSize(p.Width, 320, 240, 640),
                 placement?.Height ?? WorkbenchCardState.ValidSize(p.Height, 360, 240, 720), placement, p.IsVisible);
         }).Concat(SnapshotWorkbenchMaterials(document)).ToArray();
@@ -110,7 +111,7 @@ public sealed partial class AppController
         return new(number, papers, links, Layout: layout?.Copy());
     }
 
-    internal WorkbenchWorkspaceSnapshot SnapshotCurrentWorkbench() => SnapshotWorkbench(State, WorkspaceNumber, true);
+    internal WorkbenchWorkspaceSnapshot SnapshotCurrentWorkbench() => SnapshotWorkbench(State, WorkspaceNumber, _windows);
 
     internal async Task<IReadOnlyList<WorkbenchWorkspaceSnapshot>> ReadOtherWorkbenchWorkspacesAsync(CancellationToken token)
     {
@@ -128,7 +129,7 @@ public sealed partial class AppController
                 {
                     var state = StateStore.ReadWorkbenchOverview(new WorkspacePaths(root, number).Data);
                     // This projection deliberately does not access live windows on the worker.
-                    result.Add(state == null ? new(number, [], []) : SnapshotInactiveWorkbench(state, number));
+                    result.Add(state == null ? new(number, [], []) : SnapshotWorkbench(state, number));
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException or ArgumentException)
                 {
@@ -137,33 +138,6 @@ public sealed partial class AppController
             }
             return (IReadOnlyList<WorkbenchWorkspaceSnapshot>)result;
         }, token);
-    }
-
-    private static WorkbenchWorkspaceSnapshot SnapshotInactiveWorkbench(AppState state, int number)
-    {
-        var document = WorkspaceMaterials.FindOwner(state)?.WorkspaceMaterials;
-        var layout = document?.Layout;
-        var papers = state.Papers.Where(p => p.WorkspaceMaterials == null).Select(p =>
-        {
-            var placement = layout?.Cards.GetValueOrDefault(p.Id)?.Copy();
-            var plugin = p.Type == PaperTypes.Note && p.BodyProviderId != PaperBodyProviderIds.Markdown;
-            var text = p.Type == PaperTypes.Todo ? string.Join("\n", p.Items.Take(12).Select(i => (i.Done ? "[x] " : "[ ] ") + i.Text))
-                : plugin ? p.BodyHeaderText : p.Content;
-            text ??= "";
-            var searchText = p.Type == PaperTypes.Todo
-                ? string.Join("\n", p.Items.Select(i => i.Text)) : text;
-            return new WorkbenchPaperSnapshot(p.Id, p.Title ?? "", text.Length > 800 ? text[..800] : text,
-                searchText, plugin ? "plugin" : p.Type, plugin ? "plugin:" + p.BodyProviderId : "", "",
-                placement?.Width ?? WorkbenchCardState.ValidSize(p.Width, 320, 240, 640),
-                placement?.Height ?? WorkbenchCardState.ValidSize(p.Height, 360, 240, 720), placement, p.IsVisible);
-        }).Concat(SnapshotWorkbenchMaterials(document)).ToArray();
-        var ids = papers.Select(p => p.Id).ToHashSet(StringComparer.Ordinal);
-        var links = state.Papers.SelectMany(p => p.Items.Where(i => i.LinkedPaperId != null)
-                .Select(i => new WorkbenchLayoutEdge(p.Id, i.LinkedPaperId!)))
-            .Where(e => e.From != e.To && ids.Contains(e.From) && ids.Contains(e.To)).Distinct().ToArray();
-        links = links.Concat(layout?.Connections.Select(c => new WorkbenchLayoutEdge(c.From, c.To)) ?? [])
-            .Where(e => e.From != e.To && ids.Contains(e.From) && ids.Contains(e.To)).Distinct().ToArray();
-        return new(number, papers, links, Layout: layout?.Copy());
     }
 
     private static IEnumerable<WorkbenchPaperSnapshot> SnapshotWorkbenchMaterials(WorkspaceMaterialsDocument? document)

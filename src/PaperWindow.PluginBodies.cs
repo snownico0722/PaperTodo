@@ -49,11 +49,6 @@ public sealed partial class PaperWindow
         get => _markdownBodySession?.NoteBox;
         set => RequireMarkdownBodySession().NoteBox = value;
     }
-    private UIElement? _noteBodyElement
-    {
-        get => _markdownBodySession?.CurrentPresenter;
-        set => RequireMarkdownBodySession().CurrentPresenter = value;
-    }
     private ContextMenu? _notePreviewContextMenu
     {
         get => _markdownBodySession?.PreviewContextMenu;
@@ -1005,14 +1000,7 @@ public sealed partial class PaperWindow
 
     private void RefreshPaperBodyChrome()
     {
-        if (_openMarkdownButton != null)
-        {
-            _openMarkdownButton.Visibility =
-                _controller.State.ShowTopBarExternalOpenButton &&
-                IsCurrentBodyProviderMarkdown
-                    ? Visibility.Visible
-                    : Visibility.Collapsed;
-        }
+        UpdateTopBarNewPaperButtons();
 
         RemoveTextZoomOverlay();
         if (BodySupports(PaperBodyCapabilities.TextZoom))
@@ -1229,7 +1217,7 @@ public sealed partial class PaperWindow
         return $"#{color.R:X2}{color.G:X2}{color.B:X2}";
     }
 
-    private static string NormalizeBodyProviderId(string? providerId)
+    internal static string NormalizeBodyProviderId(string? providerId)
     {
         return string.IsNullOrWhiteSpace(providerId)
             ? PaperBodyProviderIds.Markdown

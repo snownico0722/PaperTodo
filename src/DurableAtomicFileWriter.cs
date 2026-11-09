@@ -136,20 +136,21 @@ internal sealed class DurableAtomicFileWriter : IDurableAtomicFileWriter
     {
         for (var attempt = 1; ; attempt++)
         {
-            // Check immediately before EACH replacement attempt, including retries.
-            beforeReplace?.Invoke();
-            try
+            lock (SnapshotReadReplaceGate)
             {
-                lock (SnapshotReadReplaceGate)
+                // A backup read may have delayed us. Revalidate after that wait on every attempt.
+                beforeReplace?.Invoke();
+                try
+                {
                     _fileOperations.Replace(tempPath, targetPath);
-                return;
+                    return;
+                }
+                catch (Exception ex) when (attempt < ReplaceAttemptCount && IsRetryableReplaceFailure(ex))
+                {
+                    // Release the snapshot gate during the retry delay.
+                }
             }
-            catch (Exception ex) when (
-                attempt < ReplaceAttemptCount &&
-                IsRetryableReplaceFailure(ex))
-            {
-                _fileOperations.Delay(ReplaceRetryDelay);
-            }
+            _fileOperations.Delay(ReplaceRetryDelay);
         }
     }
 

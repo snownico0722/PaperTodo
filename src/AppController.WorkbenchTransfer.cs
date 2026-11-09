@@ -181,8 +181,7 @@ public sealed partial class AppController
         if (!ReplayWorkbenchContentTransfer(transaction.Id, redo))
         {
             if (WorkbenchContentTransferBlocked != null) WorkbenchContentTransferBlocked.Invoke();
-            else System.Windows.MessageBox.Show(Strings.Get("WorkbenchTransferHistoryBlocked"), "PaperTodo",
-                System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+            else PaperNoticeDialog.Show(null, "PaperTodo", Strings.Get("WorkbenchTransferHistoryBlocked"));
         }
         return true;
     }
@@ -301,6 +300,29 @@ public sealed partial class AppController
             .Where(i => i.ReminderTriggered).ToDictionary(i => i.Id, i => i.ReminderAt, StringComparer.Ordinal);
         foreach (var item in new[] { transaction.SourceBefore, transaction.TargetBefore, transaction.SourceAfter, transaction.TargetAfter }.SelectMany(s => s.Items))
             if (triggered.TryGetValue(item.Id, out var at) && item.ReminderAt == at) item.ReminderTriggered = true;
+    }
+
+    internal WorkbenchState CaptureWorkbenchHistoryLayout()
+    {
+        var layout = WorkbenchLayout.Copy();
+        // A natively undone split keeps its paper only in the shared redo transaction.
+        // Include its dormant placement in layout history, never in persisted live state.
+        foreach (var transaction in _workbenchContentTransfers.Where(entry =>
+                     IsCurrentWorkbenchTransfer(entry) && entry.CreatedTarget && !entry.Applied))
+            if (transaction.CreatedCard is { } card)
+                layout.Cards.TryAdd(transaction.Target.Id, card.Copy());
+        return layout;
+    }
+
+    internal void RestoreWorkbenchHistoryLayout(WorkbenchState layout)
+    {
+        // Replaying an older move while a split is undone must also move its redo
+        // placement; otherwise redoing the split resurrects the already undone move.
+        foreach (var transaction in _workbenchContentTransfers.Where(entry =>
+                     IsCurrentWorkbenchTransfer(entry) && entry.CreatedTarget && !entry.Applied))
+            if (layout.Cards.TryGetValue(transaction.Target.Id, out var card))
+                transaction.CreatedCard = card.Copy();
+        StoreWorkbenchLayout(layout.Copy());
     }
 
     private sealed class WorkbenchTransferTransaction

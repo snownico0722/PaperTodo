@@ -627,7 +627,8 @@ public sealed partial class MasterCapsuleWindow : Window
                 currentScreenPos,
                 animate: false,
                 scaleFrom: 1,
-                durationMilliseconds: 0);
+                durationMilliseconds: 0,
+                alignToDragMessage: true);
             RefreshFloatingDragTopmost();
             if (_queueTransferCanceled || _isClosingForReal)
             {
@@ -738,6 +739,7 @@ public sealed partial class MasterCapsuleWindow : Window
     {
         var session = _dragSession;
         var wasDragging = _gestureState == MasterGestureState.Dragging && session != null;
+        if (wasDragging) _controller.DeferEdgeCapsulePreviewAfterDrag();
         _gestureState = MasterGestureState.Idle;
         _dragSession = null;
         var hadCapture = _pill.IsMouseCaptured;
@@ -1203,6 +1205,7 @@ public sealed partial class MasterCapsuleWindow : Window
         if (_isClosingForReal) return;
 
         // A drop/rollback swaps visible authority, so publish fully opaque under the floating cover.
+        _controller.DeferEdgeCapsulePreviewAfterDrag();
         BeginAnimation(OpacityProperty, null);
         Opacity = 1;
         MoveToTarget(animate: false);

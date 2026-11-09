@@ -32,8 +32,8 @@
 | D-017 | Hardcodet WPF `IconSource` + 本地 popup lifecycle | Accepted | 托盘 |
 | D-018 | Edge plugin mini 由宿主持有关键 authority | Accepted | 插件 / Edge |
 | D-019 | Note 编辑与浏览共享 `MarkdownTextBox` | Accepted | Note |
-| D-020 | 插件状态与核心 `data.json` 分域持久化 | Accepted | 插件 / 持久化 |
-| D-021 | 插件与 MCP 共用 `PaperCommandService` | Accepted | 外部命令 / 一致性 |
+| D-020 | 插件状态与核心 `data.json` 分域持久化 | Partially superseded by D-040 | 插件 / 持久化 |
+| D-021 | 插件与 MCP 共用 `PaperCommandService` | Partially superseded by D-040 | 外部命令 / 一致性 |
 | D-022 | Plugin Top Bar 使用宿主绘制 descriptor + Paper/Runtime 分域 | Accepted | 插件 / UI ownership |
 | D-023 | Lightweight Prewarm 保留一次性首用预热 | Accepted | Edge performance |
 | D-024 | Web `backgroundUpdates` 使用 per-Paper Runtime | Superseded by D-029 | 插件 / 生命周期 |
@@ -52,6 +52,7 @@
 | D-037 | 可浏览队列保留已验证的 live authority | Deferred; experiments archived | Edge performance / lifecycle |
 | D-038 | 活动就绪动画使用可撤销 render demand | Accepted | Edge animation / lifecycle |
 | D-039 | 插件 API 采用向后兼容的 major.minor 演进 | Accepted | 插件 / 兼容性 |
+| D-040 | 插件基础读写不承担业务恢复，查询与普通通知不扩大副作用 | Accepted | 插件 / 外部命令 |
 | D-041 | 普通窗口原生 Mica 与 layered 胶囊边界 | Superseded by D-042 | 主题 / Window integration |
 | D-042 | 原生云母使用单一窗口外框，验证最终桌面像素 | Partially superseded by D-057（CI 截图） | 主题 / Window integration |
 | D-043 | 透色亚克力试用可调色 accent，保留单窗口边界 | Experimental | 主题 / Window integration |
@@ -74,9 +75,9 @@
 | D-063 | 仅显式热重载和有基线三方合并，普通保存不检测外部修改 | Accepted | 持久化 / 产品边界 |
 | D-064 | 固定编号工作区共用代码，不共用运行数据 | Accepted | 工作区 / 持久化 |
 | D-065 | DComp 视觉与 Win32 输入提交的非原子边界 | Accepted (historical findings; native-owner candidate deferred) | Edge input / composition |
-| D-066 | Free queues extend existing direct manipulation | Accepted | Edge queues / gestures |
+| D-066 | Free queues extend existing direct manipulation | Partially superseded by D-067, D-068 and D-072 | Edge queues / gestures |
 | D-067 | Free-queue masters follow queue identity | Accepted | Edge master ownership |
-| D-068 | Free-queue drops preview independent placement and prefer downward insertion | Accepted | Edge queues / gestures |
+| D-068 | Free-queue drops preview independent placement and prefer downward insertion | Partially superseded by D-069 | Edge queues / gestures |
 | D-069 | Independent landing ghosts consume adjacent gaps | Accepted | Edge queues / gestures |
 | D-070 | 完整快照按来源顺序恢复，损坏时须用户确认重建 | Accepted | 核心持久化 / 恢复 |
 | D-071 | 有界冲突归档与健康主文件后清理孤立临时文件 | Accepted | 核心持久化 / 归档 |
@@ -829,7 +830,7 @@ Global 的关键不是“某张纸片 session 是否正活着”，也不是“�
 - `PaperTodo.Plugin.Abstractions/PaperPluginRuntimeContracts.cs`：`IPaperGlobalTopBarApi`、`PaperPluginRuntimeContext`、`IPaperPluginRuntimeProvider`。
 - `src/AppController.PluginStartup.cs`：`startupPaper` 先于 Runtime ownership reconcile。
 - `src/AppController.PluginRuntime.cs`：实体 Paper 0↔1 reconcile、provider Runtime lifetime 与失败隔离。
-- `src/PaperPluginRuntimeHostApi.cs`：Runtime Workspace / GlobalTopBar facade 与 UI Dispatcher 边界。
+- `src/PaperPluginRuntimeWorkspaceApi.cs`、`src/PaperPluginRuntimeHostApi.cs`：Runtime Workspace / GlobalTopBar facade 与 UI Dispatcher 边界。
 - `src/AppController.PluginTopBar.cs`：Paper session 与 Global Runtime 注册分域、输入校验与统一渲染状态。
 - `src/PaperWindow.PluginTopBar.cs`：宿主绘制、主题/字体/响应式与 suppression reconcile。
 - `src/WebPaperBodySession.TopBar.cs`：Web body 的 Paper document-generation ownership。
@@ -861,7 +862,7 @@ V3 Lite 收敛后，`EdgeCapsuleQueueCompositionProxy.PrewarmLightweight` 仍会
 
 ### Evidence
 
-- `src/App.EdgeCapsuleComposition.cs`：启动 idle 条件与预热调度。
+- `App.xaml.cs`：启动 idle 条件与预热调度。
 - `src/EdgeCapsuleQueueCompositionProxy.LightPrewarm.cs`：Lightweight Prewarm 本体。
 - D-007～D-010：bounded live host、WPF owns shape、DComp translation-only 与 handoff authority 的长期架构边界。
 - PR #137：4.0 slim-down review 再次暴露了该实测结论此前没有进入长期知识 owner。
@@ -1015,7 +1016,7 @@ Markdig 已经提供成熟的 CommonMark parser、AST 和 source span。PaperTod
 
 - `src/MarkdownSemanticDocument.cs`。
 - `src/MarkdownSemanticSnapshot*.cs`。
-- `src/MarkdownSemanticSnapshot.Compatibility.cs`、`src/MarkdownSemanticSnapshot.Escapes.cs` 与 `src/MarkdownSemanticSnapshot.Links.cs`。
+- `src/MarkdownSemanticSnapshot.Html.cs`、`src/MarkdownSemanticSnapshot.Inlines.cs` 与 `src/MarkdownSemanticSnapshot.Links.cs`。
 - `src/MarkdownSemanticPresentation*.cs`。
 - `src/MarkdownListEditing.cs`。
 - `src/MarkdownPaperBodySession.cs`。
@@ -1064,7 +1065,7 @@ D-026 把内置 Note 的 Markdown 语义统一到 Markdig 后，第一版为了�
 
 - `src/MarkdownSemanticDocument.cs`。
 - `src/MarkdownSemanticSnapshot.Incremental.cs`。
-- `src/MarkdownTextBox.Semantics.cs`、`src/MarkdownTextBox.SemanticEditing.cs`、`src/MarkdownTextBox.SemanticImages.cs`。
+- `src/MarkdownTextBox.Semantics.cs`、`src/MarkdownTextBox.SemanticEditing.cs`。
 - `tests/PaperTodo.MarkdownSemanticChecks/SynchronousDocumentChecks.cs`。
 - `d624873`：移除 permanent worker 与 segmented production path。
 - `2b4b5a9`：移除 stale/current semantic compatibility path。
@@ -1189,7 +1190,7 @@ PaperTodo 的产品需求更接近：打开 Note 时建立全文正确基线；�
 - **决定**：删除 `ShouldHideImageReferenceText` 上的 `RenderModeIsFull ||` 短路。Full 档下图片引用文本是否隐藏由 `ImageReferenceTextMode` 决定：`Always` 始终显示、`Editing` 仅编辑态显示、`Hidden` 始终隐藏，与 Off/Basic/Enhanced 三档行为对齐。
 - **影响**：Full 档默认 `ImageReferenceTextMode = Always`（`ImageReferenceTextModes.Normalize` 兜底值），因此用户从其他档切到 Full 后默认会看到图片引用文字。仍希望紧凑观感的用户可在设置面板改为 `Hidden` 或 `Editing`，不需要改代码。
 - **不冲突**：与控制符显灵（`MarkdownSemanticReveal`）解耦——后者只决定 `#`/`**`/链接等语法控制符在活动块内是否显灵，与图片引用文本显隐无关。
-- **证据**：`src/MarkdownTextBox.cs` 的 `ShouldHideImageReferenceText` 现仅读 `_imageReferenceTextMode`；`src/MarkdownTextBox.SemanticImages.cs` 与 `src/MarkdownSemanticPresentation.Colorizer.cs` 自动跟随。
+- **证据**：`src/MarkdownTextBox.cs` 的 `ShouldHideImageReferenceText` 现仅读 `_imageReferenceTextMode`；`src/MarkdownTextBox.Semantics.cs` 与 `src/MarkdownSemanticPresentation.Colorizer.cs` 自动跟随。
 
 ### Follow-up：塌缩占位 run 由 U+200B 改用 WPF `TextHidden`（2026-09）
 
@@ -1218,7 +1219,7 @@ PaperTodo 的产品需求更接近：打开 Note 时建立全文正确基线；�
 ### Evidence
 
 - `src/PluginPopupHost.cs`。
-- `src/PluginPaperActionRegistry.cs`。
+- `src/AppController.PluginPaperActions.cs`。
 - `src/PaperCommandService.NoteAssets.cs`。
 - `src/WebPluginPopupContent.cs`。
 - 历史范围更大的方案见 PR #198；当前最小能力实现见 PR #202。
@@ -1327,7 +1328,7 @@ D-033 移走了单个重段落的排版，但先前完整预热仍在 UI 构建�
 
 - `src/EdgeCapsulePreview.Markdown.Artifact.cs`：有界计划、冻结绘制结果与原生链接挂载。
 - `src/EdgeCapsulePreview.Preload.cs`：来源缓存、延迟队列、UI 发布及取消边界。
-- `src/EdgeCapsulePreview.Markdown.cs` / `src/MarkdownPreviewLinkHit.cs`：单一 viewport 发布与共享原生交互。
+- `src/EdgeCapsulePreview.Markdown.cs` / `src/EdgeCapsulePreview.Markdown.Artifact.cs`：单一 viewport 发布与共享原生交互。
 - `tests/PaperTodo.EdgePreviewChecks`：显式链接行为检查、冷/热像素矩阵、真实 host 首次命中、资源/DPI/版本失效、取消与 worker/动画检查；运行方法和历史数据见 `PRELOAD.md`。
 
 
@@ -1578,7 +1579,7 @@ PR #191 最初在现有透明 WPF 窗口上采样静态壁纸，生成类似云�
 ### Evidence
 
 - `src/NativeMicaBackdrop.cs`、`src/DwmMicaApi.cs`。
-- `src/AppController.Mica.cs`、`src/AppController.Settings.cs`。
+- `src/AppController.Settings.Skins.cs`、`src/AppController.Settings.cs`。
 - `src/PaperWindow.cs`、`src/PaperWindow.Lifecycle.cs`。
 - `tests/PaperTodo.MicaChecks/Program.cs`。
 - PR #191 的原生替换提交；原始壁纸模拟仅保留在 git 历史中。
@@ -1889,7 +1890,7 @@ PR #319 的初版把主胶囊完整材质收展后的卡死解释为终点迟到
 
 ### Evidence
 
-`src/StateStore.Reload.cs`、`src/AppController.DataReload.cs`、`src/StateReloadModels.cs`、`src/PaperCommandService.DataReload.cs` 和 `tests/PaperTodo.DataReloadChecks`。
+`src/StateStore.Reload.cs`、`src/AppController.DataReload.cs`、`src/StateReloadModels.cs`、`src/PaperCommandService.cs` 和 `tests/PaperTodo.DataReloadChecks`。
 
 
 ---
@@ -1917,7 +1918,7 @@ PR #319 的初版把主胶囊完整材质收展后的卡死解释为终点迟到
 
 ### Evidence
 
-`src/StateStore.Merge.cs`、`src/McpTools.cs`、`src/PaperBodyPluginHostApi.DataReload.cs`、`src/WebPaperBodySession.HostRequests.cs`；`tests/PaperTodo.DataReloadChecks` 覆盖读取旧版本后同步/异步保存、同字段冲突、缺失/非法基线，以及 MCP/Native/Web 和窗口生命周期。
+`src/StateStore.Merge.cs`、`src/McpTools.cs`、`src/PaperBodyPluginHostApi.cs`、`src/WebPluginWorkspaceRequests.cs`；`tests/PaperTodo.DataReloadChecks` 覆盖读取旧版本后同步/异步保存、同字段冲突、缺失/非法基线，以及 MCP/Native/Web 和窗口生命周期。
 
 
 ---
@@ -1946,7 +1947,7 @@ PR #319 的初版把主胶囊完整材质收展后的卡死解释为终点迟到
 
 ### Evidence
 
-`StateStore.WriteSafety`、`PersistenceWriteLifetime`、`AppController.PersistencePolicy`、`AppController.DataReload`、`StateStore.ConflictImages`；`WriteSafetyChecks`、`KillSafetyChecks`、`ShutdownSafetyChecks` 通过实际 IO/进程/控件边界约束行为。
+`StateStore.WriteSafety`、`PersistenceWriteLifetime`、`AppController.PersistencePolicy`、`AppController.DataReload`、`StateStore.ConflictRetention`；`WriteSafetyChecks`、`KillSafetyChecks`、`ShutdownSafetyChecks` 通过实际 IO/进程/控件边界约束行为。
 
 
 ---
@@ -2041,7 +2042,7 @@ PR #319 的初版把主胶囊完整材质收展后的卡死解释为终点迟到
 
 ## D-066 - Free queues extend existing direct manipulation
 
-**Status:** Accepted
+**Status:** Partially superseded. [D-067](#d-067---free-queue-masters-follow-queue-identity-2026-11-04) changes master ownership, [D-068](#d-068---free-queue-drops-preview-independent-placement-and-prefer-downward-insertion-2026-11-05) revises insertion and drop feedback, and [D-072](#d-072--ctrl-整队拖拽归属胶囊自由队列) changes Ctrl-dragging when free queues are disabled. For independent landing placement, see [D-069](#d-069---independent-landing-ghosts-consume-the-adjacent-gap-before-moving-neighbours-2026-11-05). The original choices are recorded below.
 
 The optional queue instance id extends `(monitor, edge)` and reuses the existing start-margin dictionary. This selectively incorporates Just1ceCATT's PR #354 (`b77ffdba`): identity encoding, persistent key normalization, passive spacing, numeric shortcut ordering, UI registration, native Ctrl state and physical cursor sampling. It does not adopt that PR's magnet engine, global insertion solver, marker window or master/free exclusivity.
 
@@ -2135,6 +2136,10 @@ The preview should show an available landing rather than make a target continuou
 ### Why
 
 让日常启动尽可能自动恢复完整数据，同时把不可逆的数据损失决定留给用户；不引入第二套文件数据库、碎片拼接或无限重试。
+
+### 主工作区缺少全部核心文件
+
+主工作区的 `data.json`、`data.backup.json` 和写入临时文件（含孤立临时文件）均不存在时，按新工作区启动。即使历史 ZIP 或 `note-assets.lmdb` 仍在，也沿用空工作区初始化和常规图片清理。若图片没有其他受保护的引用，启动清理可能删除库中全部图片，之后即使从 ZIP 手动还原正文也找不回这些图片。项目接受这一后果，不为此场景增加恢复提示或暂停清理。
 
 ## D-071 — 有界冲突归档与孤立临时文件生命周期 (2026-11-05)
 

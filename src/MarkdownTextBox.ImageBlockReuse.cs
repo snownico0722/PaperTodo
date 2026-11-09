@@ -5,14 +5,13 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Threading;
 using ICSharpCode.AvalonEdit.Document;
-using ICSharpCode.AvalonEdit.Rendering;
 
 namespace PaperTodo;
 
 public sealed partial class MarkdownTextBox
 {
     private readonly List<CachedImageBlock> _cachedImageBlocks = new();
-    private ReusingMarkdownImageElementGenerator? _reusingImageElementGenerator;
+    private MarkdownImageElementGenerator? _reusingImageElementGenerator;
     private DispatcherTimer? _imageBlockCachePruneTimer;
     private bool _imageBlockReuseInitialized;
 
@@ -32,7 +31,7 @@ public sealed partial class MarkdownTextBox
             return;
         }
 
-        _reusingImageElementGenerator = new ReusingMarkdownImageElementGenerator(this);
+        _reusingImageElementGenerator = new MarkdownImageElementGenerator(this, reuseBlocks: true);
         generators.RemoveAt(generatorIndex);
         generators.Insert(generatorIndex, _reusingImageElementGenerator);
         Document.Changed += OnImageBlockReuseDocumentChanged;
@@ -287,60 +286,6 @@ public sealed partial class MarkdownTextBox
             _isImageResizePreview
                 ? BitmapScalingMode.LowQuality
                 : BitmapScalingMode.HighQuality);
-    }
-
-    private sealed class ReusingMarkdownImageElementGenerator : VisualLineElementGenerator
-    {
-        private readonly MarkdownTextBox _owner;
-
-        public ReusingMarkdownImageElementGenerator(MarkdownTextBox owner)
-        {
-            _owner = owner;
-        }
-
-        public override int GetFirstInterestedOffset(int startOffset)
-        {
-            if (!_owner.ShouldRenderImages)
-            {
-                return -1;
-            }
-
-            var document = CurrentContext.Document;
-            if (document == null || document.TextLength <= 0)
-            {
-                return -1;
-            }
-
-            var referenceLine = CurrentContext.VisualLine.FirstDocumentLine;
-            return referenceLine.EndOffset >= startOffset &&
-                _owner.TryGetImageReferenceForLine(referenceLine, out _, out _)
-                ? referenceLine.EndOffset
-                : -1;
-        }
-
-        public override VisualLineElement ConstructElement(int offset)
-        {
-            if (!_owner.ShouldRenderImages)
-            {
-                return null!;
-            }
-
-            var document = CurrentContext.Document;
-            if (document == null || offset < 0 || offset > document.TextLength)
-            {
-                return null!;
-            }
-
-            var referenceLine = CurrentContext.VisualLine.FirstDocumentLine;
-            if (referenceLine.EndOffset != offset ||
-                !_owner.TryGetImageReferenceForLine(referenceLine, out var reference, out var asset))
-            {
-                return null!;
-            }
-
-            var element = _owner.GetOrCreateReusableImageBlock(reference, asset, referenceLine);
-            return new BlockImageElement(element);
-        }
     }
 
     private sealed class CachedImageBlock

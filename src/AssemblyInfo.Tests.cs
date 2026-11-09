@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 
+[assembly: InternalsVisibleTo("PaperTodo.DataReloadChecks")]
 [assembly: InternalsVisibleTo("PaperTodo.EdgeTitleChecks")]
 [assembly: InternalsVisibleTo("PaperTodo.LifecycleChecks")]
 [assembly: InternalsVisibleTo("PaperTodo.PluginApiChecks")]

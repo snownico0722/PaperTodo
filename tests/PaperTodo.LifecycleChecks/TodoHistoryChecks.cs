@@ -176,6 +176,43 @@ internal static class TodoHistoryChecks
         RequirePresentation(window, paper, "mixed redo", appendArea: true);
         RequireHistoryIsolation(window, paper);
 
+        // Backspace deletes the whole row selection in one undoable edit, including
+        // linked rows. Keep focus on the selection host so Ctrl+Z works immediately.
+        await Reset(4, item => item.LinkPaper("link-target"));
+        Invoke(window, "FocusTodoSweepSelectionHost");
+        Invoke(window, "SelectTodoRange", "row-0", "row-1");
+        await SendKey(window, Key.Back, control: false);
+        Require(paper.Items.Select(item => item.Id).SequenceEqual(new[] { "row-2", "row-3" }) &&
+                History(window, "_undoStack").Count == 1,
+            "Backspace did not delete the selected rows as one history step");
+        RequirePresentation(window, paper, "selected rows Backspace");
+        await SendKey(window, Key.Z);
+        Require(paper.Items.Select(item => item.Id).SequenceEqual(Items(4).Select(item => item.Id)) &&
+                paper.Items[0].LinkedPaperId == "link-target",
+            "one undo did not restore the deleted rows and their paper link");
+        await SendKey(window, Key.Y);
+        Require(paper.Items.Select(item => item.Id).SequenceEqual(new[] { "row-2", "row-3" }),
+            "redo did not delete the same selected rows");
+
+        await Reset(2);
+        Invoke(window, "FocusTodoSweepSelectionHost");
+        Invoke(window, "SelectTodoRange", "row-0", "row-1");
+        await SendKey(window, Key.Back, control: false);
+        Require(paper.Items.Count == 1 && TodoRules.IsPlaceholder(paper.Items[0]),
+            "deleting all selected rows did not retain an editable placeholder");
+        await SendKey(window, Key.Z);
+        Require(paper.Items.Select(item => item.Id).SequenceEqual(Items(2).Select(item => item.Id)),
+            "one undo did not restore all selected rows");
+
+        await Reset(4);
+        Invoke(window, "SelectTodoRange", "row-0", "row-1");
+        editor = Editors(window)["row-0"];
+        var textBeforeBackspace = editor.Text;
+        editor.Select(0, 4);
+        await SendKey(window, Key.Back, expectPaperHistory: false, control: false);
+        Require(paper.Items.Count == 4 && editor.Text == textBeforeBackspace[4..],
+            "a text selection was mistaken for whole-row Backspace deletion");
+
         // Native text undo has priority before list history. A list history boundary then
         // clears native history so old editor changes cannot be replayed against a new model.
         await Reset(4);
@@ -241,6 +278,26 @@ internal static class TodoHistoryChecks
             RequireHistoryIsolation(window, paper);
         }
 
+        // A rejected write must restore the same bound rows, including removed rows.
+        await Reset(4, item =>
+        {
+            item.LinkPath(AppContext.BaseDirectory, true);
+            item.ReminderAt = reminder;
+            item.ReminderTriggered = true;
+        });
+        CheckFailedExternalMutation(controller, paper, window, () =>
+            controller.PaperCommands.UpdateTodo(new UpdateTodoRequest
+            {
+                PaperId = paper.Id, TodoId = paper.Items[0].Id, Text = "failed change",
+                Done = true, Order = 2, UpdateLinkedPaper = true, LinkedPaperId = "link-target"
+            }, PaperOperationContext.Mcp()));
+        await Reset(1, item => item.LinkPaper("link-target"));
+        CheckFailedExternalMutation(controller, paper, window, () =>
+            controller.PaperCommands.DeleteTodo(new DeleteTodoRequest
+            {
+                PaperId = paper.Id, TodoId = paper.Items[0].Id
+            }, PaperOperationContext.Mcp()));
+
         // A successful external mutation orders a pending human edit before the external step.
         await Reset(4);
         editor = Editors(window)["row-0"];
@@ -254,6 +311,7 @@ internal static class TodoHistoryChecks
             PaperId = paper.Id, TodoId = "row-1", Text = "external change"
         }, PaperOperationContext.Mcp());
         await Idle();
+        RequireHistoryIsolation(window, paper);
         Require(History(window, "_undoStack").Count == 2, "external write did not separate the pending human edit");
         await SendKey(window, Key.Z);
         Require(paper.Items[1].Text == externalOriginal && paper.Items[0].Text == originalText + " pending human",
@@ -397,6 +455,45 @@ internal static class TodoHistoryChecks
         }
     }
 
+    private static void CheckFailedExternalMutation(
+        AppController controller, PaperData paper, PaperWindow window, Action mutate)
+    {
+        var list = paper.Items;
+        var rows = list.ToArray();
+        var before = System.Text.Json.JsonSerializer.Serialize(list);
+        var store = (StateStore)Field(controller, "_store");
+        var writer = Field(store, "_atomicWriter");
+        var ignoreFailures = Field(controller, "_ignoreSaveFailures");
+        var autoClear = controller.State.AutoClearCompletedTodos;
+        try
+        {
+            controller.State.AutoClearCompletedTodos = true;
+            SetField(controller, "_ignoreSaveFailures", true);
+            SetField(store, "_atomicWriter", new DurableAtomicFileWriter((stage, path) =>
+            {
+                if (stage == DurableAtomicWriteStage.BeforeTempOpen &&
+                    string.Equals(path, store.FilePath, StringComparison.OrdinalIgnoreCase))
+                    throw new System.IO.IOException("Injected todo save failure");
+            }));
+            mutate();
+            throw new InvalidOperationException("The injected save failure was ignored");
+        }
+        catch (PaperCommandException ex) when (ex.Code == "save_failed") { }
+        finally
+        {
+            SetField(store, "_atomicWriter", writer);
+            SetField(controller, "_ignoreSaveFailures", ignoreFailures);
+            controller.State.AutoClearCompletedTodos = autoClear;
+        }
+
+        Require(ReferenceEquals(paper.Items, list) && list.SequenceEqual(rows),
+            "rollback replaced or reordered a bound row");
+        Require(System.Text.Json.JsonSerializer.Serialize(list) == before,
+            "rollback lost persisted row fields");
+        Require(History(window, "_undoStack").Count == 0 && History(window, "_redoStack").Count == 0,
+            "a failed command changed the window history");
+    }
+
     private static List<PaperItem> Items(int count) => Enumerable.Range(0, count)
         .Select(index => new PaperItem { Id = "row-" + index, Order = index, Text = "Todo history row " + index })
         .ToList();
@@ -430,7 +527,7 @@ internal static class TodoHistoryChecks
             await Idle();
             Require(observed, "native keyboard input was not received by the PaperWindow");
             if (expectPaperHistory)
-                Require(handledAtWindow, "native Ctrl+Z/Y did not enter the paper-level history handler");
+                Require(handledAtWindow, "native keyboard command did not enter the paper-level handler");
         }
         finally
         {
