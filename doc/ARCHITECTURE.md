@@ -161,6 +161,8 @@ PaperTodo 不提供插件热重载入口。插件 manifest、DLL、Web body/mini
 
 `AppState` 是核心持久化根；`PaperData` 是单纸片模型；Todo 行使用 `PaperItem`。
 
+常规与实验室的恢复默认和其他设置页面一样，从 `new AppState()` 取得字段默认值，并由各页显式列出重置范围。页面恢复、公共设置 API 与数据重载复用现有生效动作；重复的单窗口更新由 `ApplyWindowSettingEffects` 按调用方给定的顺序执行。保存时点、编辑器同步、托盘刷新和运行时交接仍由各入口持有，不把恢复默认转换成逐项 API 写入或新的批量事务。
+
 删除、隐藏、折叠是不同语义：
 
 - 删除从 `State.Papers` 移除对象。
@@ -176,6 +178,8 @@ Edge 展开记忆保留原有窗口 DIP 字段，并用可选 `DeepCapsuleExpand
 全局 crash boundary 不执行普通“最后强行保存”。正常 durability 由常规保存、同步退出保存和 backup 提供。
 
 界面删除、插件/MCP 删除和跨工作区移出共用源工作区的纸片移除操作。它负责清理待办关联、在最后一张纸片移除后补默认待办，并记录回滚所需的原位置和关联。界面负责关窗，外部命令在同步保存成功后通知删除，跨工作区移动先提交目标再提交源。
+
+待办行的删除、末行空占位和连续 `Order` 由 `TodoRules.RemoveItems` 统一处理，界面与外部命令复用同一模型规则。界面保留编辑提交、撤销、焦点和动画职责，外部命令保留同步保存及失败回滚；仅用于判断关联变化的比较保存旧关联 ID 集合，撤销历史和事务回滚仍使用完整快照。
 
 主数据写入成功后，由保存完成路径分别触发图片缓存回收、已删除纸片的插件文件清理和 Runtime 成员同步；后两者不再借用对方的入口。这些后续操作失败不得将已成功的主数据写入改判为保存失败。删除纸片后清除 Todo 撤销/重做历史中的关联，属于实体删除边界，不属于插件文件删除队列；用户删除、外部命令删除及成功应用的显式重载/合并共用此边界。
 
@@ -241,7 +245,7 @@ Edge Capsule 启用后，一张纸的可见 surface 不再等价于一个 `Paper
 
 三种装饰皮肤由 `SkinBorder` 绘制：描图纸固定纤维、Aero 和像素风。材质不管理布局、命中或窗口；Edge shape/layout 与 DComp translation-only 边界不变。`MaterialRelief` 仅为 Aero 缓存预算内的边缘高光，`SkinBorder.Aero` 只按宿主位置更新 Aero 的视差，不运行空闲动画。侧边胶囊与菜单固定使用原「轻量材质」：较实的可读性底层，不启用完整材质或软件背景采样，正文、外轮廓与整窗 opacity 不受影响。五档材质透明度主要调节展开纸片与设置窗口的原生材质；它不为胶囊或菜单重新启用桌面背景透传。原 `MatchAuxiliaryMaterialStrength` 状态与设置入口彻底删除；旧配置中的未知字段自动忽略。专用背景采样、拖动截图、会话缓存和菜单预处理均已删除。展开纸片的 DWM 原生材质不变。Aero 小窗口直接使用既有 alpha。失效、高对比度、系统禁用透明或部分透明时保留实色回退。已删除的皮肤 ID 由通用 Normalize 回退 paper，没有保留旧材质绘制。
 
-配色由 `Theme` 提供实色语义；原生皮肤只让成功启用原生背景的窗口外壳透明，不把透明画刷传入正文、菜单或插件颜色协议。启动时 `AppController.UsesNativeMicaWindows` 根据已保存的皮肤选择和系统支持决定普通纸片与设置窗口是否使用 non-layered HWND；同一会话不重建编辑器或修改 `AllowsTransparency`。`WindowChrome` 单独负责 non-client/glass 集成；`NativeMicaBackdrop` 在窗口所属 Dispatcher 上管理 DWM 材质与系统事件，`DwmMicaApi` 封装 DWM API，并将透色亚克力的旧版 accent 接法隔离在单一方法内。普通纸片的动画宽高、外边距和缩放能力统一由 `PaperWindow` 的形态动画管理，材质适配器不监听布局或反向改写窗口尺寸。原生窗口在形态动画入口暂时关闭系统缩放外框并固定动画所需的最小尺寸，完成或中断时恢复目标形态的尺寸与缩放能力；每帧先更新内层纸面，再一次提交 HWND 的宽高，不通过两次 WPF 尺寸属性写入制造中间矩形。`PaperFormContentHost` 在形态过渡中按展开尺寸测量和排列现有正文，避免缩小的布局槽在 RenderTransform 之前产生隐式裁切；终点恢复普通伸展，不重建或迁移正文。原生材质退出时先在现有 `SkinBorder` 记录不透明替代绘制，再于该 WPF 渲染操作之后执行一次原生回退并同时启动各动画时钟；准备、取消与关闭由原形态生命周期收束，不新增补帧定时器，也不把此提交边界称为物理显示确认。材质形态动画和普通材质胶囊使用受当前留白限制的缓存软边绘制，避免整块内容阴影；Aero 过渡只复用现有光照绘制的八块素材，终点恢复完整光照，不截图或建立长期素材池。内层纸面和外层 HWND 使用同一进度，展开态零外边距与胶囊阴影外边距连续过渡。主纸片形态动画无需暂停或恢复背景截图，反转、隐藏与关闭沿现有形态生命周期收束。原生会话中的展开纸片填满 HWND，不保留 8 DIP 阴影外边距或 WPF 外壳阴影，不使用 `SetWindowRgn` 裁成内层纸片；系统圆角与外框交给 DWM，并使用纸片边框色；原生材质生效时隐藏 WPF 外壳描边，保留其布局厚度，避免两套圆角描边重叠。顶栏与设置外壳采用对应的内外圆角。原生 HWND 的 caption 恢复 COLOR_DEFAULT，不再给透明自绘顶栏下方盖一条实色 native caption；材质皮肤的 WPF 顶栏本身不再画独立底色、分隔描边或外边距，由唯一外壳材质连续绘制其下方；默认纸片仍沿用主线轻 tint，不改真实激活状态。纸片缩放命中仍由原有窗口消息逻辑处理。描图纸复用标准 Acrylic 原生背景。Aero 的内部 `aeroGlass` recipe 改为既有清透 alpha composition，不调用 state=3 或 state=4 模糊；蓝色透光与柔化斜反光由 WPF 绘制。它不读取桌面、不启动采样，也不改变截图可见性；原生 alpha 不可用时保留静态不透明表面。透色亚克力的 state=4 与其清理路径保持独立。见 D-051。标准云母与标准亚克力先关闭 legacy alpha，安装系统 backdrop。Windows 11 26100+ 成功启用 `DWMWA_REDIRECTIONBITMAP_ALPHA` 后采用零实际 glass margin，不再留下单独的 native caption 底板；能力调用失败时保留 full glass（-1），禁止仅清零而不提供 alpha 通道。透色亚克力试用零物理 glass margin 加 `SetWindowCompositionAttribute` 的可调色 accent policy，关闭原生 border 避免最顶端亮线，关闭系统 backdrop 且不再叠加 WPF 底色；两条接法只有全部设置成功后才让外壳透明。离开透色模式、动画回退和释放时清除 accent，再进入目标材质；`WindowChrome` 保留非零 glass 标志，避免其零值分支安装窗口 HRGN；透色 accent 与 aeroGlass 使用零实际 glass，系统 Mica/Acrylic 仅在显式 redirection alpha 成功后使用零实际 glass，否则保留 full glass；不增加第二套 NCCALCSIZE 或形状修改。原生材质、清透 alpha 与 accent 仍互斥。“材质始终显示激活效果”由适配器在原生材质生效时通过 `WM_NCACTIVATE` 保持活动外观，不改真实焦点、`WM_ACTIVATE` 或交互状态；关闭勾选或材质回退时恢复实际激活外观。失败/关闭效果恢复实色，但不恢复展开纸片的外层留白。普通纸片折叠、形态动画或部分透明时关闭原生背景并使用 WPF alpha 绘制，恢复 Mica 前先清除 legacy blur-behind alpha；显示动画提交不透明终点后移除整窗 opacity 时钟。Edge、drag、master、tether 胶囊仍是原有 layered HWND，不进入这个原生适配器；原软件辅助采样实现和截图会话已删除；DComp translation-only ownership 不变。原生云母不读取壁纸、截屏或维护背景纹理缓存；自动化测试的桌面截图仅用于验证正文未被遮盖或压暗（见 D-042）。
+配色由 `Theme` 提供实色语义；原生皮肤只让成功启用原生背景的窗口外壳透明，不把透明画刷传入正文、菜单或插件颜色协议。启动时 `AppController.UsesNativeMicaWindows` 根据已保存的皮肤选择和系统支持决定普通纸片与设置窗口是否使用 non-layered HWND；同一会话不重建编辑器或修改 `AllowsTransparency`。`WindowChrome` 单独负责 non-client/glass 集成；`NativeMicaBackdrop` 在窗口所属 Dispatcher 上管理 DWM 材质与系统事件，`DwmMicaApi` 封装 DWM API，并将透色亚克力的旧版 accent 接法隔离在单一方法内。普通纸片的动画宽高、外边距和缩放能力统一由 `PaperWindow` 的形态动画管理，材质适配器不监听布局或反向改写窗口尺寸。原生窗口在形态动画入口暂时关闭系统缩放外框并固定动画所需的最小尺寸，完成或中断时恢复目标形态的尺寸与缩放能力；每帧先更新内层纸面，再一次提交 HWND 的宽高，不通过两次 WPF 尺寸属性写入制造中间矩形。`PaperFormContentHost` 在形态过渡中按展开尺寸测量和排列现有正文，避免缩小的布局槽在 RenderTransform 之前产生隐式裁切；终点恢复普通伸展，不重建或迁移正文。原生材质退出时先在现有 `SkinBorder` 记录不透明替代绘制，再于该 WPF 渲染操作之后执行一次原生回退并同时启动各动画时钟；准备、取消与关闭由原形态生命周期收束，不新增补帧定时器，也不把此提交边界称为物理显示确认。材质形态动画和普通材质胶囊使用受当前留白限制的缓存软边绘制，避免整块内容阴影；Aero 过渡只复用现有光照绘制的八块素材，终点恢复完整光照，不截图或建立长期素材池。内层纸面和外层 HWND 使用同一进度，展开态零外边距与胶囊阴影外边距连续过渡。主纸片形态动画无需暂停或恢复背景截图，反转、隐藏与关闭沿现有形态生命周期收束。原生会话中的展开纸片填满 HWND，不保留 8 DIP 阴影外边距或 WPF 外壳阴影，不使用 `SetWindowRgn` 裁成内层纸片；系统圆角与外框交给 DWM，并使用纸片边框色；原生材质生效时隐藏 WPF 外壳描边，保留其布局厚度，避免两套圆角描边重叠。顶栏与设置外壳采用对应的内外圆角。原生 HWND 的 caption 恢复 COLOR_DEFAULT，不再给透明自绘顶栏下方盖一条实色 native caption；材质皮肤的 WPF 顶栏本身不再画独立底色、分隔描边或外边距，由唯一外壳材质连续绘制其下方；默认纸片仍沿用主线轻 tint，不改真实激活状态。纸片缩放命中仍由原有窗口消息逻辑处理。描图纸复用标准 Acrylic 原生背景。Aero 的内部 `aeroGlass` recipe 改为既有清透 alpha composition，不调用 state=3 或 state=4 模糊；蓝色透光与柔化斜反光由 WPF 绘制。它不读取桌面、不启动采样，也不改变截图可见性；原生 alpha 不可用时保留静态不透明表面。透色亚克力的 state=4 与其清理路径保持独立。见 D-051。标准云母与标准亚克力先关闭 legacy alpha，安装系统 backdrop。Windows 11 26100+ 成功启用 `DWMWA_REDIRECTIONBITMAP_ALPHA` 后采用零实际 glass margin，不再留下单独的 native caption 底板；能力调用失败时保留 full glass（-1），禁止仅清零而不提供 alpha 通道。透色亚克力试用零物理 glass margin 加 `SetWindowCompositionAttribute` 的可调色 accent policy，关闭原生 border 避免最顶端亮线，关闭系统 backdrop 且不再叠加 WPF 底色；两条接法只有全部设置成功后才让外壳透明。离开透色模式、动画回退和释放时清除 accent，再进入目标材质；`WindowChrome` 保留非零 glass 标志，避免其零值分支安装窗口 HRGN；透色 accent 与 aeroGlass 使用零实际 glass，系统 Mica/Acrylic 仅在显式 redirection alpha 成功后使用零实际 glass，否则保留 full glass；不增加第二套 NCCALCSIZE 或形状修改。原生材质、清透 alpha 与 accent 仍互斥。“材质始终显示激活效果”由适配器在原生材质生效时通过 `WM_NCACTIVATE` 保持活动外观，不改真实焦点、`WM_ACTIVATE` 或交互状态；关闭勾选或材质回退时恢复实际激活外观。失败/关闭效果恢复实色，但不恢复展开纸片的外层留白。普通纸片折叠、形态动画或部分透明时关闭原生背景并使用 WPF alpha 绘制，恢复 Mica 前先清除 legacy blur-behind alpha；显示动画提交不透明终点后移除整窗 opacity 时钟。Edge、drag、master 胶囊仍是原有 layered HWND，不进入这个原生适配器；原软件辅助采样实现和截图会话已删除；DComp translation-only ownership 不变。原生云母不读取壁纸、截屏或维护背景纹理缓存；自动化测试的桌面截图仅用于验证正文未被遮盖或压暗（见 D-042）。
 
 
 `SkinBorder` 只负责表面绘制，画刷与几何缓存分开：配色只使画刷失效，尺寸只使几何失效，形态动画不重建编辑器与顶栏图标。`Theme.MaterialColors` 缓存当前材质配色。软件背景截图和 `SkinBorder.BackgroundSession` 已删除；普通纸片、菜单和胶囊均不再创建采样会话。`MaterialSurfaceHost` 仅为启用动态反光的 Aero 表面观察自己的 `HwndSource`、窗口位置、DPI、显示与系统环境变化，不再订阅祖先透明度；仅平移时更新反光画刷变换，不额外要求整个表面重绘。观察器不接管输入或窗口几何，窗口销毁／源释放／卸载时解除 Hook。`DwmMicaApi` 的透明效果和 composition 状态由系统事件使缓存失效，不在移动热路径反复读注册表；仅切换“保持激活外观”不重新安装原生背景。
@@ -498,7 +502,7 @@ Debug 包可显式启用内存诊断：`EdgeDiagnosticObservation` 观察既有�
 
 托盘当前基于仓库固定的 `vendor/wpf-notifyicon` 和 WPF `IconSource`；选择该路线的历史原因见 D-017。
 
-外部窗口绑定仍由同一 `ExperimentalWindowAttachmentSession` 持有会话状态。目标关闭时清除失效 HWND/PID 身份，保留程序路径、目标标题及贴靠关系，并恢复可操作的纸片；已有 `ExternalWindowTracker` 的窗口显示/前台事件负责发现重新运行的目标，不新增轮询或核心数据字段。关联图标的双击与右键取消共用解绑入口；打开程序优先恢复既有窗口，未找到时按记录的程序路径启动。已关联待办的纸片从同一图标打开所属纸片，批量取消关联沿各待办纸片已有撤销边界完成。
+外部窗口绑定仍由同一 `ExperimentalWindowAttachmentSession` 持有会话状态。目标最小化、隐藏或被系统 cloak 时固定隐藏真实纸片，目标恢复后沿同一会话恢复；不再保留替身胶囊或可选的跟随显隐／最小化行为设置。目标关闭时清除失效 HWND/PID 身份，保留程序路径、目标标题及贴靠关系，并恢复可操作的纸片；已有 `ExternalWindowTracker` 的窗口显示/前台事件负责发现重新运行的目标，不新增轮询或核心数据字段。关联图标的双击与右键取消共用解绑入口；打开程序优先恢复既有窗口，未找到时按记录的程序路径启动。已关联待办的纸片从同一图标打开所属纸片，批量取消关联沿各待办纸片已有撤销边界完成。
 
 纸片名称的输入限制与显示投影分开：`PaperTitleText` 保留完整有效名称供编辑、导出和外部读取，`PaperDisplayTitle` / `PaperCapsuleTitle` 按当前长度限制显示内置标题。调整限制、恢复默认和读取持久化数据不按用户显示上限改写已有名称；未修改的改名提交也不截断原名。
 
@@ -506,7 +510,7 @@ Debug 包可显式启用内存诊断：`EdgeDiagnosticObservation` 观察既有�
 
 展开纸片的 `···` 入口与外框右键共享 `PaperWindow.BuildPaperContextMenu` 的实时菜单。菜单恢复「快捷」与当前纸片名称分组、「设置」入口；纸片正文、图片及插件仍可提供自己的上下文菜单，纸片菜单内不再提供自定义顶栏设置。
 
-顶栏的固定控件始终是置顶、标题、`···` 和关闭／折叠。可选内置操作是「新建待办」「新建笔记」「关联拖拽」「外部编辑」「切换工作区」「运行脚本」。`AppState.TopBarShortcutOrder` 保存全局唯一的操作顺序，`TopBarPinnedCount` 表示位于「显示在顶栏」与「显示在菜单」两区域之间的分界。设置 → 常规中的可拖拽列表可在两区内排序或跨区移动；每项的「隐藏」独立保存到 `HiddenTopBarShortcuts`，只过滤顶栏及共享纸片／胶囊菜单，不删除顺序或关闭功能。列表保留隐藏项，复选框和编辑按钮不触发拖拽；插件不进入内置列表，待办／笔记共用配置。对当前纸片不适用的操作只在渲染时跳过，不修改全局配置。既有 per-type 列表与布尔快捷配置的原有迁移机制不变；本次新增工作区快捷不为测试版固定按钮增加特殊迁移。现有公共设置 API ID 仍可将对应项跨越分界线。
+顶栏的固定控件始终是置顶、标题、`···` 和关闭／折叠。可选内置操作是「新建待办」「新建笔记」「关联拖拽」「外部编辑」「切换工作区」「运行脚本」。`AppState.TopBarShortcutOrder` 保存全局唯一的操作顺序，`TopBarPinnedCount` 表示位于「显示在顶栏」与「显示在菜单」两区域之间的分界。设置 → 常规中的可拖拽列表可在两区内排序或跨区移动；每项的「隐藏」独立保存到 `HiddenTopBarShortcuts`，只过滤顶栏及共享纸片／胶囊菜单，不删除顺序或关闭功能。列表保留隐藏项，复选框和编辑按钮不触发拖拽；插件不进入内置列表，待办／笔记共用配置。对当前纸片不适用的操作只在渲染时跳过，不修改全局配置。既有 per-type 列表与布尔快捷配置的原有迁移机制不变；本次新增工作区快捷不为测试版固定按钮增加特殊迁移。现有公共设置 API ID 仍可将对应项跨越分界线。正文建立、切换或失败后的顶栏刷新同样使用这套配置与宽度规则；旧布尔开关只参与旧数据迁移。
 
 用户选入顶栏的适用内置按钮**整组显示或整组临时收纳**；窗口缩小时不会只留下其中一部分，收纳不会改变分界位置。插件操作不参与用户设置，自动使用内置快捷组之后的剩余空间，Paper-scope 动作原子显示、Global-scope 按优先级缩减，插件状态文字最后使用剩余宽度。共享菜单按全局配置顺序列出未在顶栏显示的内置操作、未展示的插件动作；工作区菜单为保留单纸片移动入口，即使切换按钮在顶栏也显示。关联拖拽在菜单里仍使用原来的 drag handler。菜单在打开时刷新，即使右键菜单实例已经缓存，也会与 `···` 一致；插件只提供 descriptor，不持有顶栏或菜单生命周期。
 
