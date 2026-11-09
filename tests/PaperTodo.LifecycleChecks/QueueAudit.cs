@@ -68,4 +68,37 @@ internal static partial class NativeFreeQueueReviewChecks
         await Idle();
         Console.WriteLine($"CAPS FOLDED initial={original:F1} preview={haloTop:F1} requested=320 persisted={c.State.DeepCapsuleQueueStartTopMargins[targetKey]:F1} actual={Masters(c)[targetKey].AnchorTop:F1} folded={c.State.CapsuleCollapseAllActiveQueues.GetValueOrDefault(targetKey)}");
     }
+
+    private static async Task RunQueueAnimationAudit(AppController c, IReadOnlyDictionary<string, PaperWindow> windows)
+    {
+        var all=c.State.Papers.ToArray();
+        var first=all.Single(x=>x.Id=="review-0");
+        var key=c.QueueKeyForPaper(first);
+        var proxies=Field<Dictionary<string,EdgeCapsuleQueueCompositionProxy>>(c,"_edgeCapsuleQueueCompositionProxies");
+        foreach(var count in new[]{4,8})
+        {
+            foreach(var p in all)
+            {
+                p.IsVisible=Array.IndexOf(all,p)<count;
+                p.CapsuleQueueId=first.CapsuleQueueId;
+            }
+            c.State.EnableAnimations=false;
+            c.State.CapsuleCollapseAllActiveQueues.Clear();
+            c.ArrangeDeepCapsules(false);
+            await Idle();
+            c.State.EnableAnimations=true;
+            c.PreviewDeepCapsuleReorder(first,count-1);
+            await System.Windows.Threading.Dispatcher.CurrentDispatcher.InvokeAsync(static ()=>{}, System.Windows.Threading.DispatcherPriority.Send);
+            Require(proxies.TryGetValue(key,out var anim),"reorder animation should be live");
+            var members=anim!.Members.Count(m=>m.Window is PaperWindow);
+            CapsuleAuditCounts.Ticks=CapsuleAuditCounts.PaperPolls=CapsuleAuditCounts.Visited=CapsuleAuditCounts.Reconciles=0;
+            CapsuleAuditCounts.ElapsedTicks=0;
+            CapsuleAuditCounts.Observe=true;
+            await Task.Delay(650);
+            CapsuleAuditCounts.Observe=false;
+            var directMs=1000.0*CapsuleAuditCounts.ElapsedTicks/Stopwatch.Frequency;
+            Console.WriteLine($"CAPS ANIM queue={count} proxyPapers={members} pointerTicks={CapsuleAuditCounts.Ticks} osPointerReadsInTicks={CapsuleAuditCounts.PaperPolls} windowChecksInTicks={CapsuleAuditCounts.Visited} pointerReconcilesInInterval={CapsuleAuditCounts.Reconciles} totalDirectMs={directMs:F3} finished={!proxies.ContainsKey(key)}");
+            foreach(var proxy in proxies.Values.ToArray()) proxy.CompleteNow(true);
+        }
+    }
 }

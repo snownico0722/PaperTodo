@@ -24,6 +24,11 @@ jobs:
           python tools/InstrumentCapsuleQueue.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           dotnet run -c Release --project tests/PaperTodo.LifecycleChecks -- --case native-free-queue-review
+      - name: Measure real timed reorder animation
+        shell: pwsh
+        env:
+          CAPSULE_AUDIT: "2"
+        run: dotnet run --no-build -c Release --project tests/PaperTodo.LifecycleChecks -- --case native-free-queue-review
       - name: Run existing queue and handoff tests
         shell: pwsh
         run: |
