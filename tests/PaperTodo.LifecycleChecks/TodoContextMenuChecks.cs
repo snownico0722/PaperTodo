@@ -376,10 +376,32 @@ internal static class TodoContextMenuChecks
         LifecycleInput.Focus(window, null);
         await Flush();
         Require(button.IsVisible, "association button is not reachable");
-        var point = button.PointToScreen(new Point(button.ActualWidth / 2, button.ActualHeight / 2));
-        await Until(() => LifecycleInput.IsMouseTarget(window, point), "binding button HWND is ready");
-        LifecycleInput.MoveCursor(point);
-        await Until(() => button.IsMouseOver, "native cursor reaches the association button");
+        Point Center() => button.PointToScreen(new Point(button.ActualWidth / 2, button.ActualHeight / 2));
+        var firstPoint = Center();
+        Point? aimedPoint = null;
+        try
+        {
+            await Until(() =>
+            {
+                // Restoring the target starts WinEvent/frame-based tether positioning.
+                // A previously sampled point can remain inside the paper but miss this
+                // small button. Aim at its current position before injecting the click.
+                var point = Center();
+                if (!LifecycleInput.IsMouseTarget(window, point)) return false;
+                if (aimedPoint == point && button.IsMouseOver) return true;
+                LifecycleInput.MoveCursor(point);
+                aimedPoint = point;
+                return false;
+            }, "native cursor reaches the association button");
+        }
+        catch (TimeoutException ex)
+        {
+            WindowNative.TryGetWindowDeviceBounds(window, out var bounds);
+            WindowNative.TryGetCursorScreenPosition(out var cursor);
+            throw new TimeoutException($"{ex.Message}; first={firstPoint}, current={Center()}, " +
+                $"aimed={aimedPoint}, cursor={cursor}, window={bounds}, " +
+                $"over={Mouse.DirectlyOver?.GetType().Name}, captured={Mouse.Captured?.GetType().Name}", ex);
+        }
     }
 
     private static async Task<ContextMenu> OpenBindingMenu(PaperWindow window, Button button)
