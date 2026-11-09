@@ -15,6 +15,7 @@ public sealed partial class AppController
     private WorkspaceCatalog _workspaceCatalog = null!;
     private WorkspaceSession _workspace = null!;
     private bool _workspaceSwitching;
+    private int _activePaperExports;
     private bool _workspaceClosingSurfaces;
     private long _workspaceGeneration;
     private Guid _workspaceBindingId = Guid.NewGuid();
@@ -324,6 +325,7 @@ public sealed partial class AppController
         if ((number != 1 && (!nextOptions.Enabled || !nextOptions.ContainsSlot(number))) || number is < 1 or > 5) return false;
         if (!CanBeginWorkspaceChange()) return false;
         if (number == WorkspaceNumber) return true;
+        if (IsPaperExportActive) return false;
         nextOptions.Active = number;
 
         var previous = _workspace;
@@ -580,9 +582,21 @@ public sealed partial class AppController
     private AppState PrepareAcceptedWorkspaceReload(AppState candidate) =>
         _workspaceCatalog.AcceptReload(_workspace, candidate);
 
+    internal bool IsPaperExportActive => _activePaperExports > 0;
+
+    internal void SetPaperExportActive(bool active)
+    {
+        // Multiple papers can export concurrently. Refresh only on the first start or last stop.
+        _activePaperExports += active ? 1 : -1;
+        if (IsExiting || _activePaperExports != (active ? 1 : 0)) return;
+        RefreshWorkspaceButtons();
+        RebuildTrayMenu();
+    }
+
     private void RefreshWorkspaceButtons()
     {
         if (_workspaceSettingsPanel != null) _workspaceSettingsPanel.IsEnabled = !_workspaceSwitching;
+        RefreshWorkspaceSwitchConfirmation();
         foreach (var window in _windows.Values.ToArray()) window.RefreshWorkspaceButton();
     }
 

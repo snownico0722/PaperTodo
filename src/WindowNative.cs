@@ -770,23 +770,47 @@ internal static partial class WindowNative
             out _,
             "show-center");
 
-    // Keep the cursor anchor private to this class: GetCursorPos is intentionally sampled while
+    // The input epoch must remain identical across WPF's render barrier, which may
+    // dequeue newer mouse moves. This value belongs exclusively to the System Aware
+    // floating HWND; never interpret it as a PMv2 physical screen position.
+    internal readonly record struct SystemAwareCaptionAnchor(int X, int Y);
+
+    public static bool TryCenterSystemAwareWindowAtMessagePosition(
+        Window window,
+        double widthDip,
+        double heightDip,
+        out SystemAwareCaptionAnchor anchor)
+    {
+        var centered = TryCenterSystemAwareWindowAtCursor(
+            window, widthDip, heightDip, out var position, "show-message-center",
+            useMessagePosition: true);
+        anchor = centered ? new SystemAwareCaptionAnchor(position.X, position.Y) : default;
+        return centered;
+    }
+
+    // Keep the cursor anchor private to this class: cursor/message coordinates are sampled while
     // the thread is System Aware, so these coordinates must never escape as a DeviceScreenPoint
     // or be reused for monitor selection / the final drop position in the PMv2 application.
     public static bool TryBeginSystemAwareWindowCaptionDragFromCursor(
         Window window,
         double widthDip,
-        double heightDip)
+        double heightDip,
+        SystemAwareCaptionAnchor? initialAnchor = null)
     {
 #if DEBUG
         var callStartedAt = EdgeCapsulePerformanceDiagnostics.Timestamp();
 #endif
+        // Use the anchor captured before the floating HWND was first made visible.
+        // A nested WPF render turn can dequeue a later mouse position between show and
+        // caption handoff; resampling here would cause a visible B -> A -> B jump.
         var centered = TryCenterSystemAwareWindowAtCursor(
                 window,
                 widthDip,
                 heightDip,
                 out var cursorAnchor,
-                "pre-loop-center");
+                "pre-loop-center",
+                useMessagePosition: initialAnchor is null,
+                initialAnchor: initialAnchor);
 #if DEBUG
         var centerMs = EdgeCapsulePerformanceDiagnostics.ElapsedMilliseconds(callStartedAt);
 #endif
@@ -822,7 +846,9 @@ internal static partial class WindowNative
         double widthDip,
         double heightDip,
         out CursorPoint cursorPosition,
-        string diagnosticPhase)
+        string diagnosticPhase,
+        bool useMessagePosition = false,
+        SystemAwareCaptionAnchor? initialAnchor = null)
     {
 #if DEBUG
         var callStartedAt = EdgeCapsulePerformanceDiagnostics.Timestamp();
@@ -846,7 +872,20 @@ internal static partial class WindowNative
         {
             var dpi = GetDpiForWindow(handle);
             var scale = dpi > 0 ? dpi / 96.0 : 1.0;
-            if (!GetCursorPos(out cursorPosition))
+            if (initialAnchor is { } captured)
+            {
+                cursorPosition = new CursorPoint { X = captured.X, Y = captured.Y };
+            }
+            else if (useMessagePosition)
+            {
+                var packed = GetMessagePos();
+                cursorPosition = new CursorPoint
+                {
+                    X = unchecked((short)packed),
+                    Y = unchecked((short)(packed >> 16))
+                };
+            }
+            else if (!GetCursorPos(out cursorPosition))
             {
                 return false;
             }
@@ -1607,6 +1646,9 @@ internal static partial class WindowNative
     private static extern IntPtr SetFocus(IntPtr hWnd);
 
     [DllImport("user32.dll")]
+    private static extern uint GetMessagePos();
+
+    [DllImport("user32.dll")]
     private static extern bool GetCursorPos(out CursorPoint lpPoint);
 
     // 不受线程 DPI 虚拟化影响，始终返回物理屏幕像素。
@@ -1718,5 +1760,33 @@ internal static partial class WindowNative
         public int Top;
         public int Right;
         public int Bottom;
+    }
+}
+
+/// <summary>
+/// Adds only the native no-change flags that are proven by the current HWND rectangle. Keeping
+/// this policy pure keeps the strict axis contract independently testable without invoking User32
+/// from the regression checks.
+/// </summary>
+internal static class WindowNativeBoundsPolicy
+{
+    internal const uint SwpNoSize = 0x0001;
+    internal const uint SwpNoMove = 0x0002;
+
+    internal static uint FlagsForChanges(
+        uint baseFlags,
+        bool positionChanged,
+        bool sizeChanged)
+    {
+        if (!positionChanged)
+        {
+            baseFlags |= SwpNoMove;
+        }
+        if (!sizeChanged)
+        {
+            baseFlags |= SwpNoSize;
+        }
+
+        return baseFlags;
     }
 }

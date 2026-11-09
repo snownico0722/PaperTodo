@@ -26,11 +26,11 @@ public static class Strings
             ["LabsFocusInactiveGroup"] = ["失焦", "Inactive", "非アクティブ", "비활성"],
             ["LabsFocusRestingGroup"] = ["静置", "Resting", "静置", "유휴"],
             ["LabsDockedCapsuleBehavior"] = ["贴边胶囊", "Docked capsules", "端のカプセル", "가장자리 캡슐"],
-            ["LabsFocusRestingOpacity"] = ["静置时自动半透明", "Fade while resting", "静置時に自動で半透明", "유휴 시 자동 반투명"],
+            ["LabsFocusRestingOpacity"] = ["胶囊自动半透明", "Fade capsules automatically", "カプセルを自動で半透明に", "캡슐 자동 반투명"],
             ["TipLabsFocusRestingOpacity"] = ["仅影响普通胶囊和贴边胶囊的静置状态；悬停、激活或拖动时恢复为不透明。默认不影响主胶囊，可在下方选择同时应用。", "Affects ordinary and docked capsules while resting; hover, activation, or dragging restores full opacity. The master capsule is excluded by default and can be included below.", "通常カプセルと端のカプセルの静置時だけ半透明にし、ホバー・アクティブ化・ドラッグで不透明に戻します。マスターカプセルは既定では対象外で、下の項目から含められます。", "일반 캡슐과 가장자리 캡슐의 유휴 상태에만 적용되며, 호버·활성화·드래그 시 불투명하게 돌아옵니다. 마스터 캡슐은 기본적으로 제외되며 아래에서 포함할 수 있습니다."],
             ["LabsFocusRestingIncludeMaster"] = ["主胶囊也透明", "Include master capsule", "マスターカプセルにも適用", "마스터 캡슐도 투명"],
             ["LabsFocusRestingAlways"] = ["激活时也保持透明", "Keep transparent while active", "操作中も透明を維持", "활성 상태에서도 투명 유지"],
-            ["TipLabsWindowTetheringFixed"] = ["展开纸片后，把顶栏的窗口绑定按钮拖到其他软件窗口并松手，纸片会贴边并跟随移动；折叠与重新展开会保持同一绑定。目标窗口最小化或隐藏时纸片会暂时隐藏并等待恢复；等待期间手动显示纸片会解除绑定。", "After expanding a paper, drag its top-bar window-binding button onto another app window and release to attach and follow it. Folding and expanding keep the same binding. If the target is minimized or hidden, the paper waits hidden and returns with the target; explicitly showing it while waiting detaches the binding.", "紙を展開した後、上部バーのウィンドウ連携ボタンを別アプリのウィンドウへドラッグして離すと、そのウィンドウに沿って追従します。折りたたみと再展開でも同じ連携を維持します。対象が最小化または非表示になると紙も一時的に隠れて復帰を待ち、待機中に手動で表示すると連携を解除します。", "메모를 펼친 뒤 상단 바의 창 연결 버튼을 다른 앱 창으로 드래그해 놓으면 해당 창 가장자리에 붙어 따라갑니다. 접고 다시 펼쳐도 같은 연결을 유지합니다. 대상 창이 최소화되거나 숨겨지면 메모도 임시로 숨은 채 복원을 기다리며, 대기 중 수동으로 표시하면 연결을 해제합니다."],
+            ["TipLabsWindowTetheringFixed"] = ["把顶栏关联图标拖到其他软件窗口即可绑定；折叠与展开保留绑定。程序退出后绑定仍保留，可右键关联图标重新打开。目标窗口最小化或隐藏时纸片暂时隐藏；此时手动显示纸片会解除绑定。", "Drag the title-bar link icon onto another app window to bind it; collapsing and expanding preserve the binding. The binding remains after the app exits, and its menu can reopen the app. Minimizing or hiding a running target temporarily hides the paper; manually showing the paper at that point detaches it.", "上部の連携アイコンを別アプリのウィンドウへドラッグすると連携します。折りたたみ・展開やアプリ終了後も連携を保持し、アイコンの右クリックからアプリを再起動できます。起動中の対象が最小化・非表示になると紙も一時的に隠れ、この状態で紙を手動表示すると連携を解除します。", "상단 연결 아이콘을 다른 앱 창으로 드래그하면 연결됩니다. 접기와 펼치기 또는 앱 종료 후에도 연결을 유지하며, 아이콘을 오른쪽 클릭해 앱을 다시 열 수 있습니다. 실행 중인 대상 창을 최소화하거나 숨기면 메모도 임시로 숨겨지고, 이때 메모를 수동으로 표시하면 연결이 해제됩니다."],
             ["LabsInteractionLock"] = ["交互锁定", "Interaction lock", "操作ロック", "상호 작용 잠금"],
             ["LabsLockAllPapers"] = ["锁定全部便签", "Lock all papers", "すべての紙をロック", "모든 메모 잠금"],
             ["TipLabsLockAllPapers"] = ["切换全部普通与插件便签的交互锁定。", "Toggle interaction lock for all regular and plugin papers.", "通常およびプラグインの紙をすべてロックします。", "일반 및 플러그인 메모를 모두 잠급니다."],
@@ -103,5 +103,25 @@ public static class Strings
     public static string Format(string key, params object[] args)
     {
         return string.Format(UiLanguages.EffectiveCulture, Get(key), args);
+    }
+}
+
+internal static class CopyTranslationStrings
+{
+    private static readonly ResourceManager Manager = new(
+        "PaperTodo.Resources.CopyTranslationStrings",
+        typeof(CopyTranslationStrings).Assembly);
+
+    internal static string Get(string key) =>
+        Manager.GetString(key, UiLanguages.EffectiveUiCulture) ?? key;
+}
+
+internal static class TelemetryStrings
+{
+    private static readonly ResourceManager Manager = new("PaperTodo.Resources.TelemetryStrings", typeof(TelemetryStrings).Assembly);
+
+    public static string Get(string key)
+    {
+        return Manager.GetString(key, UiLanguages.EffectiveUiCulture) ?? key;
     }
 }

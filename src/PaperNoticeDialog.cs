@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
 
@@ -41,6 +42,28 @@ internal static class PaperNoticeDialog
             1 => true,
             _ => null
         };
+
+    public static bool ShowDeleteConfirmation(Window owner)
+    {
+        // Startup-restored edge capsules can own an unshown PaperWindow shell.
+        var dialogOwner = owner.IsVisible && PresentationSource.FromVisual(owner) is HwndSource
+            ? owner : null;
+        return ShowCore(dialogOwner, Strings.Get("DeletePaperQuestion"), Strings.Get("DeletePaperBody"),
+            [Strings.Get("MenuDelete"), Strings.Get("CommonCancel")], primaryIndex: -1,
+            width: 300, minHeight: 178, defaultIndex: 1, dangerIndex: 0,
+            topmost: owner.Topmost, showInTaskbar: false, windowTitle: Strings.Get("DeletePaperTitle")) == 0;
+    }
+
+    public static void ShowPaperLimit() =>
+        ShowCore(null, Strings.Get("PaperLimitTitle"), Strings.Get("PaperLimitMessage"),
+            [Strings.Get("CommonOk")], primaryIndex: -1, width: 340, minHeight: 176,
+            topmost: true, showInTaskbar: false, closeOnEscape: false);
+
+    public static void ShowSaveFailure(string reason, Action<bool> onChoice) =>
+        ShowCore(null, Strings.Get("SaveFailureTitle"), Strings.Format("SaveFailureMessage", reason),
+            [Strings.Get("CommonOk"), Strings.Get("SaveFailureIgnore")], primaryIndex: -1,
+            minHeight: 180, topmost: true, closeOnEscape: false,
+            onSelected: index => onChoice(index == 1));
 
     public static WorkspaceRecoveryChoice ShowHistoryRecovery(Window? owner, int number, string backupTime) =>
         ShowCore(owner, Strings.Get("HistoryRecoveryTitle"),
@@ -87,23 +110,31 @@ internal static class PaperNoticeDialog
         string messageText,
         string[] actions,
         int primaryIndex,
-        double width = 360)
+        double width = 360,
+        double minHeight = 164,
+        int? defaultIndex = null,
+        int dangerIndex = -1,
+        bool? topmost = null,
+        bool? showInTaskbar = null,
+        bool closeOnEscape = true,
+        string? windowTitle = null,
+        Action<int>? onSelected = null)
     {
         int? selected = null;
         var dialog = new Window
         {
             Owner = owner,
-            Title = titleText,
+            Title = windowTitle ?? titleText,
             Width = width,
-            MinHeight = 164,
+            MinHeight = minHeight,
             SizeToContent = SizeToContent.Height,
             WindowStartupLocation = owner == null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner,
             WindowStyle = WindowStyle.None,
             ResizeMode = ResizeMode.NoResize,
             AllowsTransparency = true,
             Background = Brushes.Transparent,
-            ShowInTaskbar = owner == null,
-            Topmost = owner?.Topmost ?? false,
+            ShowInTaskbar = showInTaskbar ?? (owner == null),
+            Topmost = topmost ?? owner?.Topmost ?? false,
             FontFamily = AppTypography.UiFontFamily,
             FontSize = AppTypography.Scale(12),
             Language = AppTypography.Language,
@@ -162,16 +193,22 @@ internal static class PaperNoticeDialog
         for (var index = 0; index < actions.Length; index++)
         {
             var action = index;
-            var button = CreateButton(actions[index], primary: index == primaryIndex && actions.Length > 1);
-            button.IsDefault = index == primaryIndex;
+            var button = CreateButton(actions[index], primary: index == primaryIndex && actions.Length > 1,
+                danger: index == dangerIndex);
+            button.IsDefault = index == (defaultIndex ?? primaryIndex);
             if (index > 0) button.Margin = new Thickness(8, 0, 0, 0);
-            button.Click += (_, _) => { selected = action; dialog.Close(); };
+            button.Click += (_, _) =>
+            {
+                selected = action;
+                onSelected?.Invoke(action);
+                dialog.Close();
+            };
             buttonRow.Children.Add(button);
         }
 
         dialog.PreviewKeyDown += (_, e) =>
         {
-            if (e.Key != Key.Escape)
+            if (!closeOnEscape || e.Key != Key.Escape)
             {
                 return;
             }
@@ -193,22 +230,23 @@ internal static class PaperNoticeDialog
         return selected;
     }
 
-    internal static Button CreateButton(string text, bool primary)
+    internal static Button CreateButton(string text, bool primary, bool danger = false, bool compact = false)
     {
         var style = new Style(typeof(Button));
-        style.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(16, 7, 16, 7)));
+        style.Setters.Add(new Setter(Control.PaddingProperty,
+            compact ? new Thickness(10, 4, 10, 4) : new Thickness(16, 7, 16, 7)));
         style.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(0)));
         style.Setters.Add(new Setter(
             Control.BackgroundProperty,
-            primary ? Theme.Tint(44) : Theme.Tint(28)));
-        style.Setters.Add(new Setter(Control.ForegroundProperty, Theme.TextBrush));
+            danger ? Theme.DangerBrush : compact ? Brushes.Transparent : primary ? Theme.Tint(44) : Theme.Tint(28)));
+        style.Setters.Add(new Setter(Control.ForegroundProperty, danger ? Theme.PaperBrush : Theme.TextBrush));
         style.Setters.Add(new Setter(Control.FontSizeProperty, AppTypography.Scale(13)));
         style.Setters.Add(new Setter(Control.CursorProperty, Cursors.Hand));
         style.Setters.Add(new Setter(FrameworkElement.MinWidthProperty, 72.0));
 
         var border = new FrameworkElementFactory(typeof(Border));
         border.Name = "Bd";
-        border.SetValue(Border.CornerRadiusProperty, new CornerRadius(8));
+        border.SetValue(Border.CornerRadiusProperty, new CornerRadius(compact ? 6 : 8));
         border.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(Control.BackgroundProperty));
         border.SetValue(Border.PaddingProperty, new TemplateBindingExtension(Control.PaddingProperty));
 
@@ -228,14 +266,15 @@ internal static class PaperNoticeDialog
             Property = UIElement.IsMouseOverProperty,
             Value = true
         };
-        hover.Setters.Add(new Setter(Control.BackgroundProperty, Theme.Tint(46)));
+        hover.Setters.Add(new Setter(Control.BackgroundProperty,
+            danger ? Theme.DangerHoverBrush : compact ? Theme.HoverBrush : Theme.Tint(46)));
 
         var pressed = new Trigger
         {
             Property = ButtonBase.IsPressedProperty,
             Value = true
         };
-        pressed.Setters.Add(new Setter(UIElement.OpacityProperty, 0.82));
+        pressed.Setters.Add(new Setter(UIElement.OpacityProperty, compact ? 0.7 : 0.82));
 
         template.Triggers.Add(hover);
         template.Triggers.Add(pressed);

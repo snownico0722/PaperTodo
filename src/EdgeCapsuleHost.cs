@@ -622,7 +622,28 @@ internal sealed partial class EdgeCapsuleHost : IDisposable
             Math.Abs(dpi.DpiScaleY - expected.DpiScaleY) < 0.001;
     }
 
-    internal bool PrepareCompositionSourceForHandoff()
+    [System.Diagnostics.Conditional("DEBUG")]
+    internal void TraceCompositionVisibility(string context)
+    {
+#if DEBUG
+        EdgeCapsulePerformanceDiagnostics.Trace(
+            $"proxy.visibility {context} " +
+            WindowNative.DescribeCompositionVisibility(Handle) +
+            $" wpfVisible={Window.IsVisible} opacity={Window.Opacity:F3} " +
+            $"contentOpacity={Root.Opacity:F3} " +
+            $"layoutValid={VisualSurface.IsMeasureValid && VisualSurface.IsArrangeValid} " +
+            $"surface={_appliedFrame.Surface} " +
+            $"bounds={_appliedFrame.Bounds.Left},{_appliedFrame.Bounds.Top}," +
+            $"{_appliedFrame.Bounds.Width}x{_appliedFrame.Bounds.Height}");
+#endif
+    }
+
+    /// <summary>
+    /// Drains this host's WPF layout without crossing the desktop-composition boundary. The queue
+    /// compositor prepares every endpoint first, then performs one Render dispatch and one DWM
+    /// flush for the complete queue instead of paying both barriers once per paper.
+    /// </summary>
+    internal bool PrepareCompositionSourceLayoutForBatchHandoff()
     {
         if (_disposed || !Window.IsVisible)
         {
@@ -631,21 +652,14 @@ internal sealed partial class EdgeCapsuleHost : IDisposable
 
         try
         {
-            // Host.Apply establishes the endpoint synchronously, but WPF may still have queued its
-            // Measure/Arrange/Render work. Drain through Render before the live HWND wrapper fades
-            // in or is uncloaked, then wait for that submitted surface at the desktop boundary.
             Window.UpdateLayout();
             VisualSurface.UpdateLayout();
-            Window.Dispatcher.Invoke(
-                DispatcherPriority.Render,
-                static () => { });
-            WindowNative.FlushDesktopComposition();
             return true;
         }
         catch (Exception ex)
         {
             Trace.TraceWarning(
-                "Edge capsule proxy endpoint render barrier failed. Paper={0}; Exception={1}",
+                "Edge capsule batched endpoint layout failed. Paper={0}; Exception={1}",
                 _options.DiagnosticId,
                 ex);
             return false;

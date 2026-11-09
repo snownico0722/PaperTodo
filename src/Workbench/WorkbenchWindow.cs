@@ -691,7 +691,7 @@ internal sealed class WorkbenchWindow : Window
             var delete = new MenuItem { Header = Strings.Get("WorkbenchDelete") };
             delete.Click += (_, _) =>
             {
-                if (MessageBox.Show(this, Strings.Get("WorkbenchDeleteConfirm"), Title, MessageBoxButton.OKCancel, MessageBoxImage.Question) == MessageBoxResult.OK)
+                if (PaperNoticeDialog.ShowDeleteConfirmation(this))
                     _controller.DeletePaper(_controller.FindPaper(paper.Id)!);
             };
             menu.Items.Add(delete); menu.PlacementTarget = card.Menu; menu.IsOpen = true;

@@ -15,14 +15,6 @@ internal sealed partial class MarkdownSemanticSnapshot
 {
     private const int IncrementalWindowChars = 1024;
 
-    /// <summary>同 <see cref="TryParseIncrementalLocal"/>，丢弃语义窗口（历史调用方用）。</summary>
-    internal static bool TryParseIncremental(
-        string oldSource,
-        MarkdownSemanticSnapshot oldSnapshot,
-        string newSource,
-        out MarkdownSemanticSnapshot snapshot) =>
-        TryParseIncrementalLocal(oldSource, oldSnapshot, newSource, out snapshot, out _);
-
     /// <summary>
     /// Re-parses one local window around an edit. The 1K target may expand to complete semantics
     /// already known by the previous full snapshot. Fence-marker edits cheaply propagate the

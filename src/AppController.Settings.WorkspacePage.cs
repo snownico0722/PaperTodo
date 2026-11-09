@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Windows;
@@ -13,6 +14,7 @@ namespace PaperTodo;
 public sealed partial class AppController
 {
     private FrameworkElement? _workspaceSettingsPanel;
+    private Button? _workspaceSwitchConfirmation;
     private int _workspaceSelectionDraft;
     // One active inline rename per settings window. The same window-wide pointer
     // handler cancels it whether the user clicks another card, the sidebar, or
@@ -25,17 +27,43 @@ public sealed partial class AppController
     private string WorkspaceUi(string zh, string en, string ja, string ko) =>
         SettingsSidebarLocalized(zh, en, ja, ko);
 
+    private void RefreshWorkspaceSwitchConfirmation()
+    {
+        if (_workspaceSwitchConfirmation is { } button)
+            button.IsEnabled = !IsPaperExportActive && WorkspaceOptions.Enabled &&
+                WorkspaceOptions.ContainsSlot(_workspaceSelectionDraft) && _workspaceSelectionDraft != WorkspaceNumber;
+    }
+
     private UIElement BuildWorkspaceSettingsPage()
     {
         CancelWorkspaceRenameOnPointer(null);
-        var root = new StackPanel { Margin = new Thickness(2, 4, 4, 0) };
+        var root = new Grid { Margin = new Thickness(2, 4, 6, 0) };
         _workspaceSettingsPanel = root;
         root.IsEnabled = !_workspaceSwitching;
+        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        root.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        var workspaceColumn = new StackPanel { Margin = new Thickness(0, 0, 14, 0) };
+        var dataColumn = new StackPanel { Margin = new Thickness(14, 0, 0, 0) };
+        var separator = new Border
+        {
+            Width = 1,
+            Margin = new Thickness(0, 10, 0, 4),
+            Background = TrayBorderBrush,
+            Opacity = 0.65
+        };
+        Grid.SetColumn(workspaceColumn, 0);
+        Grid.SetColumn(separator, 1);
+        Grid.SetColumn(dataColumn, 2);
+        root.Children.Add(workspaceColumn);
+        root.Children.Add(separator);
+        root.Children.Add(dataColumn);
+
         var enabled = WorkspaceOptions.Enabled;
-        var title = SettingsSectionLabel(Strings.Get("WorkspaceSettingsTitle"));
-        root.Children.Add(title);
-        // Keep only this toggle active when workspaces are disabled.
-        root.Children.Add(SettingsToggle(Strings.Get("WorkspaceEnabled"), enabled, async () =>
+        workspaceColumn.Children.Add(SettingsSectionLabelWithHint(Strings.Get("WorkspaceSettingsTitle"), "WorkspaceSettingsDescription"));
+        // Only workspace controls depend on this switch, not the adjacent data column.
+        workspaceColumn.Children.Add(SettingsToggle(Strings.Get("WorkspaceEnabled"), enabled, async () =>
         {
             var next = WorkspaceOptions.Normalized();
             next.Enabled = !next.Enabled;
@@ -46,18 +74,16 @@ public sealed partial class AppController
             IsEnabled = enabled,
             Opacity = enabled ? 1 : 0.5
         };
-        root.Children.Add(optionsPanel);
+        workspaceColumn.Children.Add(optionsPanel);
 
-        optionsPanel.Children.Add(SettingsToggle(WorkspaceUi(
-                "顶栏快捷切换显示具体名称", "Choose workspaces by name in the top bar",
-                "上部バーで名前を表示して選択", "상단 표시줄에서 이름으로 선택"),
-            WorkspaceOptions.TopBarNamePicker, async () =>
+        optionsPanel.Children.Add(WrapWithHint(WrappingSettingsToggle(
+            Strings.Get("WorkspaceTopBarNamePicker"), WorkspaceOptions.TopBarNamePicker, async () =>
             {
                 var next = WorkspaceOptions.Normalized();
                 next.TopBarNamePicker = !next.TopBarNamePicker;
                 await ChangeWorkspaceConfigurationAsync(next);
                 RefreshSettingsWindowContent();
-            }));
+            }), "TipWorkspaceTopBarNamePicker"));
 
         var heading = new DockPanel { Margin = new Thickness(0, 12, 0, 5) };
         var create = SettingsTextButton(WorkspaceUi("新建", "New", "新規", "새로 만들기"));
@@ -86,7 +112,8 @@ public sealed partial class AppController
         confirm.Padding = new Thickness(14, 0, 14, 0);
         confirm.HorizontalAlignment = HorizontalAlignment.Right;
         confirm.Margin = new Thickness(0, 8, 0, 2);
-        confirm.IsEnabled = WorkspaceOptions.Enabled && selected != WorkspaceNumber;
+        _workspaceSwitchConfirmation = confirm;
+        RefreshWorkspaceSwitchConfirmation();
         confirm.Click += async (_, _) =>
         {
             if (selected == WorkspaceNumber) return;
@@ -95,18 +122,16 @@ public sealed partial class AppController
         };
         optionsPanel.Children.Add(confirm);
 
-        // Workspaces may be disabled while data handling and external access remain available.
-        root.Children.Add(SettingsSoftDivider());
         if (FollowsMainWorkspaceSettings)
-            root.Children.Add(new TextBlock
+            dataColumn.Children.Add(new TextBlock
             {
                 Text = Strings.Get("WorkspaceSettingsReadOnly"),
                 Foreground = TrayWeakTextBrush,
                 TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(0, 0, 0, 8)
             });
-        root.Children.Add(BuildSettingsLiveRegion("workspace.data", BuildWorkspaceDataSettings));
-        root.Children.Add(BuildSettingsLiveRegion("workspace.mcp", BuildMcpSettings));
+        dataColumn.Children.Add(BuildSettingsLiveRegion("workspace.data", BuildWorkspaceDataSettings));
+        dataColumn.Children.Add(BuildSettingsLiveRegion("workspace.mcp", BuildMcpSettings));
         return root;
     }
 
@@ -118,19 +143,23 @@ public sealed partial class AppController
             Opacity = FollowsMainWorkspaceSettings ? 0.55 : 1
         };
         content.Children.Add(SettingsSectionLabel(Strings.Get("SettingsDataProcessing")));
-        content.Children.Add(CompactSettingsField(
-            Strings.Get("SettingsDataMergeConflicts"),
-            CreateSettingsSelect(
-                [
-                    (DataMergeConflictPolicies.Ask, Strings.Get("DataMergeConflictAsk")),
-                    (DataMergeConflictPolicies.External, Strings.Get("DataMergeConflictExternal")),
-                    (DataMergeConflictPolicies.Internal, Strings.Get("DataMergeConflictInternal"))
-                ],
-                DataMergeConflictPolicies.Normalize(State.DataMergeConflictPolicy),
-                value => SetSettingFromUi("general.data_merge_conflicts", value)),
-            editorWidth: 156,
-            tipKey: "TipDataMergeConflicts",
-            topMargin: 8));
+        content.Children.Add(SettingsSectionLabelWithHint(
+            Strings.Get("SettingsDataMergeConflicts"), "TipDataMergeConflicts"));
+        var selector = CreateSettingsSelect(
+            [
+                (DataMergeConflictPolicies.Ask, Strings.Get("DataMergeConflictAsk")),
+                (DataMergeConflictPolicies.External, Strings.Get("DataMergeConflictExternal")),
+                (DataMergeConflictPolicies.Internal, Strings.Get("DataMergeConflictInternal"))
+            ],
+            DataMergeConflictPolicies.Normalize(State.DataMergeConflictPolicy),
+            value => SetSettingFromUi("general.data_merge_conflicts", value));
+        if (selector is FrameworkElement control)
+        {
+            control.Width = AppTypography.Scale(166);
+            control.HorizontalAlignment = HorizontalAlignment.Left;
+            control.Margin = new Thickness(2, 4, 0, 2);
+        }
+        content.Children.Add(selector);
         return content;
     }
 
@@ -152,39 +181,42 @@ public sealed partial class AppController
         };
         content.Children.Add(permissions);
         permissions.Children.Add(WrapWithHint(
-            SettingsToggle(
+            WrappingSettingsToggle(
                 Strings.Get("LabsMcpEnable"),
                 State.McpEnabled,
                 ToggleMcpEnabled),
             "TipLabsMcpEnable"));
-        if (State.McpEnabled)
+        var permissionChoices = new StackPanel
         {
-            var blankWrites = SettingsToggle(
-                Strings.Get("LabsMcpBlankWrites"),
-                State.McpAllowBlankWrites || State.McpAllowFullWrites,
-                ToggleMcpBlankWrites);
-            blankWrites.IsEnabled = !State.McpAllowFullWrites;
-            permissions.Children.Add(WrapWithHint(
-                blankWrites,
-                "TipLabsMcpBlankWrites"));
-            permissions.Children.Add(WrapWithHint(
-                SettingsToggle(
-                    Strings.Get("LabsMcpFullWrites"),
-                    State.McpAllowFullWrites,
-                    ToggleMcpFullWrites),
-                "TipLabsMcpFullWrites"));
-            var directDeletes = SettingsToggle(
-                Strings.Get("LabsMcpDeletes"),
-                State.McpAllowDeletes,
-                ToggleMcpDeletes);
-            if (State.McpAllowDeletes)
-            {
-                directDeletes.Foreground = Theme.DangerBrush;
-            }
-            permissions.Children.Add(WrapWithHint(
-                directDeletes,
-                "TipLabsMcpDeletes"));
+            IsEnabled = State.McpEnabled,
+            Opacity = State.McpEnabled ? 1.0 : 0.55
+        };
+        permissions.Children.Add(permissionChoices);
+        var blankWrites = WrappingSettingsToggle(
+            Strings.Get("LabsMcpBlankWrites"),
+            State.McpAllowBlankWrites || State.McpAllowFullWrites,
+            ToggleMcpBlankWrites);
+        blankWrites.IsEnabled = !State.McpAllowFullWrites;
+        permissionChoices.Children.Add(WrapWithHint(
+            blankWrites,
+            "TipLabsMcpBlankWrites"));
+        permissionChoices.Children.Add(WrapWithHint(
+            WrappingSettingsToggle(
+                Strings.Get("LabsMcpFullWrites"),
+                State.McpAllowFullWrites,
+                ToggleMcpFullWrites),
+            "TipLabsMcpFullWrites"));
+        var directDeletes = WrappingSettingsToggle(
+            Strings.Get("LabsMcpDeletes"),
+            State.McpAllowDeletes,
+            ToggleMcpDeletes);
+        if (State.McpAllowDeletes)
+        {
+            directDeletes.Foreground = Theme.DangerBrush;
         }
+        permissionChoices.Children.Add(WrapWithHint(
+            directDeletes,
+            "TipLabsMcpDeletes"));
 
         var status = new TextBlock
         {
@@ -199,7 +231,7 @@ public sealed partial class AppController
         };
         content.Children.Add(status);
 
-        var actions = new StackPanel
+        var actions = new WrapPanel
         {
             Orientation = Orientation.Horizontal,
             Margin = new Thickness(0, 9, 0, 0)
@@ -216,26 +248,44 @@ public sealed partial class AppController
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(9, 0, 0, 0)
         };
-        copyJson.Click += (_, _) =>
+        async Task CopyAsync(string text)
         {
-            feedback.Text = ClipboardHelper.TrySetText(
-                BuildJsonMcpConfiguration())
-                ? Strings.Get("LabsMcpCopied")
-                : Strings.Get("LabsMcpCopyFailed");
-        };
-        copySkill.Click += (_, _) =>
-        {
-            feedback.Text = ClipboardHelper.TrySetText(
-                BuildAiMcpSkill())
-                ? Strings.Get("LabsMcpCopied")
-                : Strings.Get("LabsMcpCopyFailed");
-        };
+            copySkill.IsEnabled = copyJson.IsEnabled = false;
+            feedback.Text = string.Empty;
+            try
+            {
+                var copied = await ClipboardHelper.TrySetTextAsync(text);
+                feedback.Text = Strings.Get(copied ? "LabsMcpCopied" : "LabsMcpCopyFailed");
+            }
+            finally
+            {
+                copySkill.IsEnabled = copyJson.IsEnabled = true;
+            }
+        }
+        copyJson.Click += async (_, _) => await CopyAsync(BuildJsonMcpConfiguration());
+        copySkill.Click += async (_, _) => await CopyAsync(BuildAiMcpSkill());
         actions.Children.Add(copyJson);
         actions.Children.Add(copySkill);
         actions.Children.Add(feedback);
         content.Children.Add(actions);
         card.Child = content;
         return card;
+    }
+
+    // 15 fullwidth characters or 30 ASCII/halfwidth characters for new names.
+    // Existing persisted names are never shortened merely by opening Settings.
+    private static int WorkspaceNameUnits(string value) => EdgeCapsuleLayout.DisplayWidth(value);
+
+    private static string LimitWorkspaceName(string value, int maxHalfWidthUnits = 30)
+    {
+        var width = 0;
+        var elements = StringInfo.GetTextElementEnumerator(value);
+        while (elements.MoveNext())
+        {
+            width += EdgeCapsuleLayout.DisplayWidth((string)elements.Current);
+            if (width > maxHalfWidthUnits) return value[..elements.ElementIndex];
+        }
+        return value;
     }
 
     private Border BuildWorkspaceSlotCard(int slot, bool isSelected)
@@ -256,15 +306,15 @@ public sealed partial class AppController
         AutomationProperties.SetAutomationId(card, "WorkspaceSlot" + slot);
         AutomationProperties.SetName(card, label + " #" + slot);
 
-        var line = new Grid();
-        line.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        line.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-        var nameRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            VerticalAlignment = VerticalAlignment.Center
-        };
+        Grid? trailingActions = null;
+        var content = new Grid();
+        content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        content.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        var line = new WrapPanel { VerticalAlignment = VerticalAlignment.Center };
+        Grid.SetColumnSpan(line, 2);
+        content.Children.Add(line);
         var name = new TextBlock
         {
             Text = label,
@@ -272,22 +322,24 @@ public sealed partial class AppController
             FontWeight = isSelected ? FontWeights.SemiBold : FontWeights.Normal,
             Foreground = TrayTextBrush,
             VerticalAlignment = VerticalAlignment.Center,
-            MaxWidth = AppTypography.Scale(154),
-            TextTrimming = TextTrimming.CharacterEllipsis
+            HorizontalAlignment = HorizontalAlignment.Left,
+            TextWrapping = TextWrapping.Wrap,
+            TextTrimming = TextTrimming.None
         };
         var editor = new TextBox
         {
             Text = label,
-            Width = AppTypography.Scale(154),
+            HorizontalAlignment = HorizontalAlignment.Left,
             MaxLength = 64,
-            Height = AppTypography.FitChrome(28),
+            TextWrapping = TextWrapping.Wrap,
+            MinHeight = AppTypography.FitChrome(28),
             FontSize = AppTypography.Scale(12),
             Foreground = TrayTextBrush,
             CaretBrush = TrayTextBrush,
             Background = Brushes.Transparent,
             BorderBrush = TrayBorderBrush,
             BorderThickness = new Thickness(1),
-            Padding = new Thickness(8, 4, 8, 4),
+            Padding = new Thickness(2, 1, 2, 1),
             VerticalContentAlignment = VerticalAlignment.Center,
             Style = BuildSettingsTextBoxStyle(),
             Visibility = Visibility.Collapsed
@@ -298,36 +350,82 @@ public sealed partial class AppController
             Foreground = TrayWeakTextBrush,
             FontSize = AppTypography.Scale(11.5),
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(7, 0, 3, 0)
+            Margin = new Thickness(4, 0, 1, 0)
         };
-        var rename = PluginPageButton("✎");
-        rename.MinWidth = 27;
-        rename.Width = 27;
+        var pencil = Geometry.Parse("M1 11 L2 7.5 L8.8 0.7 Q9.3 0.2 9.8 0.7 L11.3 2.2 Q11.8 2.7 11.3 3.2 L4.5 10 Z M7.4 2.1 L9.9 4.6");
+        var check = Geometry.Parse("M0.8 6 L4.5 9.7 L11.2 2.3");
+        var rename = PluginPageButton(string.Empty);
+        var renameIcon = new System.Windows.Shapes.Path
+        {
+            Width = 12, Height = 12, Data = pencil, Stretch = Stretch.None,
+            LayoutTransform = new ScaleTransform(AppTypography.ScaleFactor, AppTypography.ScaleFactor),
+            StrokeThickness = 1.4, StrokeLineJoin = PenLineJoin.Round,
+            StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round,
+            IsHitTestVisible = false
+        };
+        renameIcon.SetBinding(System.Windows.Shapes.Shape.StrokeProperty,
+            new System.Windows.Data.Binding(nameof(Control.Foreground)) { Source = rename });
+        rename.Content = renameIcon;
+        rename.VerticalContentAlignment = VerticalAlignment.Center;
+        rename.HorizontalContentAlignment = HorizontalAlignment.Center;
+        rename.MinWidth = 22;
+        rename.Width = 22;
         rename.Height = 25;
         rename.Padding = new Thickness(3, 1, 3, 1);
-        rename.FontFamily = AppTypography.SymbolFontFamily;
         rename.VerticalAlignment = VerticalAlignment.Center;
         rename.ToolTip = WorkspaceUi("编辑名称", "Edit name", "名前を編集", "이름 편집");
         AutomationProperties.SetAutomationId(rename, "WorkspaceRename" + slot);
         AutomationProperties.SetName(rename, WorkspaceUi("编辑工作区名称", "Edit workspace name",
             "ワークスペース名を編集", "작업 공간 이름 편집"));
-        nameRow.Children.Add(name);
-        nameRow.Children.Add(editor);
-        nameRow.Children.Add(numberLabel);
-        nameRow.Children.Add(rename);
-        Grid.SetColumn(nameRow, 0);
-        line.Children.Add(nameRow);
-
+        var renameActions = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        renameActions.Children.Add(numberLabel);
+        renameActions.Children.Add(rename);
+        line.Children.Add(name);
+        line.Children.Add(editor);
+        line.Children.Add(renameActions);
         var editing = false;
+        var previousDraft = label;
+        var correctingDraft = false;
+        editor.TextChanged += (_, _) =>
+        {
+            if (!editing || correctingDraft) return;
+            var current = editor.Text;
+            if (WorkspaceNameUnits(current) <= 30) { previousDraft = current; return; }
+            // Limit the inserted text, not the old suffix: typing at the beginning of
+            // a full name must never silently delete characters at the end.
+            var prefix = 0;
+            while (prefix < current.Length && prefix < previousDraft.Length &&
+                   current[prefix] == previousDraft[prefix]) prefix++;
+            var suffix = 0;
+            while (suffix < current.Length - prefix && suffix < previousDraft.Length - prefix &&
+                   current[^(suffix + 1)] == previousDraft[^(suffix + 1)]) suffix++;
+            var start = current[..prefix];
+            var tail = current[(current.Length - suffix)..];
+            var inserted = current[prefix..(current.Length - suffix)];
+            var remaining = Math.Max(0, 30 - WorkspaceNameUnits(start + tail));
+            var allowed = LimitWorkspaceName(inserted, remaining);
+            var limited = start + allowed + tail;
+            if (limited == current) { previousDraft = current; return; }
+            correctingDraft = true;
+            editor.Text = limited;
+            editor.CaretIndex = prefix + allowed.Length;
+            correctingDraft = false;
+            previousDraft = limited;
+        };
         Action<DependencyObject?>? outsideClick = null;
         void ExitEditing()
         {
             editing = false;
             name.Visibility = Visibility.Visible;
             editor.Visibility = Visibility.Collapsed;
-            rename.Content = "✎";
+            renameIcon.Data = pencil;
             rename.ToolTip = WorkspaceUi("编辑名称", "Edit name", "名前を編集", "이름 편집");
             rename.IsEnabled = true;
+            UpdateCardLayout();
             if (ReferenceEquals(_workspaceRenameOutsideClick, outsideClick))
                 _workspaceRenameOutsideClick = null;
         }
@@ -336,6 +434,7 @@ public sealed partial class AppController
             var value = editor.Text.Trim();
             if (value.Length == 0) { editor.Focus(); return; }
             if (value == WorkspaceOptions.DisplayName(slot)) { ExitEditing(); return; }
+            value = LimitWorkspaceName(value);
             rename.IsEnabled = false;
             var next = WorkspaceOptions.Normalized();
             next.Names[slot] = value;
@@ -358,15 +457,17 @@ public sealed partial class AppController
             if (editing) { SaveName(); return; }
             // A second editor replaces the first draft rather than saving it.
             CancelWorkspaceRenameOnPointer(null);
-            editing = true;
             editor.Text = WorkspaceOptions.DisplayName(slot);
+            previousDraft = editor.Text;
+            editing = true;
             name.Visibility = Visibility.Collapsed;
             editor.Visibility = Visibility.Visible;
-            rename.Content = "✓";
+            renameIcon.Data = check;
             rename.ToolTip = WorkspaceUi("保存名称", "Save name", "名前を保存", "이름 저장");
             _workspaceRenameOutsideClick = outsideClick;
             editor.SelectAll();
             editor.Focus();
+            UpdateCardLayout();
         };
         editor.KeyDown += (_, e) =>
         {
@@ -374,36 +475,72 @@ public sealed partial class AppController
             else if (e.Key == Key.Escape) { ExitEditing(); e.Handled = true; }
         };
 
-        var controls = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            VerticalAlignment = VerticalAlignment.Center
-        };
         if (slot > 1)
         {
-            var follow = SettingsToggle(Strings.Get("WorkspaceFollowMain"),
+            // Keep actions right-aligned: share the name row when there is room,
+            // and only wrap to the next row when the content does not fit.
+            var controls = new Grid
+            {
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 3, 0, 0)
+            };
+            controls.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            controls.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var follow = WrappingSettingsToggle(Strings.Get("WorkspaceFollowMain"),
                 WorkspaceOptions.FollowsMain(slot), async () =>
                 {
                     var next = WorkspaceOptions.Normalized();
                     next.FollowMainSettings[slot] = !next.FollowsMain(slot);
                     await ChangeWorkspaceConfigurationAsync(next);
                 });
-            follow.Margin = new Thickness(9, 0, 7, 0);
             follow.FontSize = AppTypography.Scale(11.5);
             follow.VerticalAlignment = VerticalAlignment.Center;
-            controls.Children.Add(follow);
+            var followWithHint = WrapWithHint(follow, "WorkspaceFollowHint");
+            if (followWithHint is FrameworkElement followRow)
+                followRow.Margin = new Thickness(0, 0, 3, 0);
+            Grid.SetColumn(followWithHint, 0);
+            controls.Children.Add(followWithHint);
 
             var delete = PluginPageButton(WorkspaceUi("删除", "Delete", "削除", "삭제"));
-            delete.MinWidth = 48;
+            delete.VerticalContentAlignment = VerticalAlignment.Center;
+            delete.MinWidth = 28;
             delete.Height = 25;
-            delete.Padding = new Thickness(5, 1, 5, 1);
+            delete.Padding = new Thickness(3, 1, 3, 1);
             delete.VerticalAlignment = VerticalAlignment.Center;
             delete.Click += async (_, _) => await DeleteWorkspaceFromSettingsAsync(slot);
+            Grid.SetColumn(delete, 1);
             controls.Children.Add(delete);
+            Grid.SetRow(controls, 1);
+            Grid.SetColumnSpan(controls, 2);
+            trailingActions = controls;
+            content.Children.Add(controls);
         }
-        Grid.SetColumn(controls, 1);
-        line.Children.Add(controls);
-        card.Child = line;
+        card.Child = content;
+
+        void UpdateCardLayout()
+        {
+            var available = Math.Max(1, card.ActualWidth - card.Padding.Left - card.Padding.Right
+                - card.BorderThickness.Left - card.BorderThickness.Right);
+            name.MaxWidth = available;
+            editor.MaxWidth = available;
+            if (trailingActions == null || card.ActualWidth <= 0) return;
+
+            // Evaluate natural content width, not the current wrapped line.
+            line.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            trailingActions.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            var inline = line.DesiredSize.Width + trailingActions.DesiredSize.Width <= available;
+            var targetRow = inline ? 0 : 1;
+            if (Grid.GetRow(trailingActions) == targetRow) return;
+            Grid.SetRow(trailingActions, targetRow);
+            Grid.SetColumn(trailingActions, inline ? 1 : 0);
+            Grid.SetColumnSpan(trailingActions, inline ? 1 : 2);
+            Grid.SetColumnSpan(line, inline ? 1 : 2);
+            trailingActions.Margin = inline ? new Thickness(0) : new Thickness(0, 3, 0, 0);
+        }
+
+        card.SizeChanged += (_, _) => UpdateCardLayout();
+        editor.TextChanged += (_, _) => UpdateCardLayout();
 
         // The whole card selects its workspace, except its independent controls.
         // Inspect the routed hit to avoid selection on rename, delete or follow clicks.
@@ -414,6 +551,7 @@ public sealed partial class AppController
             while (hit != null && !ReferenceEquals(hit, card))
             {
                 if (hit is System.Windows.Controls.Primitives.ButtonBase or TextBox) return;
+                if (hit is Border help && help.Cursor == Cursors.Help) return;
                 hit = GetElementParent(hit);
             }
             if (!ReferenceEquals(hit, card)) return;

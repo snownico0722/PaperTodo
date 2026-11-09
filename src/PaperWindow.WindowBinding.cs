@@ -4,7 +4,6 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
-using System.Windows.Threading;
 
 namespace PaperTodo;
 
@@ -19,8 +18,12 @@ public sealed partial class PaperWindow
 
     private Button? _windowBindingButton;
     private ExternalWindowSnapshot? _windowBindingDragTarget;
-    private DeviceScreenPoint? _windowBindingPressStart;
     private long _windowBindingTargetSampleTimestamp;
+
+    private bool HasPaperAssociation =>
+        HasExperimentalWindowTether ||
+        (_controller.State.EnableTodoPaperLinks &&
+         _controller.IsPaperLinkedToAnyTodo(_paper));
 
     private void ConfigureWindowBindingButton(Button button)
     {
@@ -30,36 +33,14 @@ public sealed partial class PaperWindow
         button.Cursor = Cursors.Cross;
         button.PreviewMouseLeftButtonDown += (_, e) =>
         {
-            _windowBindingPressStart = HasExperimentalWindowTether
-                ? DeviceScreenPoint.FromPoint(
-                    PointToScreen(e.GetPosition(this)))
-                : null;
-        };
-        button.PreviewMouseLeftButtonUp += (_, _) =>
-        {
-            var start = _windowBindingPressStart;
-            _windowBindingPressStart = null;
-            if (!start.HasValue ||
-                !HasExperimentalWindowTether)
+            if (e.ClickCount != 2 || !HasPaperAssociation)
             {
                 return;
             }
 
-            var current = WindowNative.TryGetCursorScreenPosition(
-                    out var cursor)
-                ? cursor
-                : start.Value;
-            if (WindowWorkAreaHelper.ExceedsDragThreshold(
-                    start.Value,
-                    current,
-                    this))
-            {
-                return;
-            }
-
-            _ = Dispatcher.BeginInvoke(
-                (Action)(() => ShowWindowBindingButtonMenu(button)),
-                DispatcherPriority.Input);
+            EndTopBarDragGesture(commit: false);
+            CancelPaperAssociation();
+            e.Handled = true;
         };
         button.PreviewMouseRightButtonUp +=
             (_, e) => OpenWindowBindingButtonMenu(button, e);
@@ -69,7 +50,6 @@ public sealed partial class PaperWindow
 
     private TopBarDragBehavior CreateAssociationDragBehavior(Action? afterDrag = null) => new()
     {
-        Kind = TopBarDragKind.WindowBinding,
         CanBegin = CanBeginAssociationDrag,
         Started = () =>
         {
@@ -86,7 +66,6 @@ public sealed partial class PaperWindow
             CompleteAssociationDrag(commit);
             afterDrag?.Invoke();
         },
-        GhostPlacement = TopBarDragGhostPlacement.PointerOffset,
         DraggingOpacity = 0.72
     };
 
@@ -129,7 +108,7 @@ public sealed partial class PaperWindow
                 ? Visibility.Visible : Visibility.Collapsed;
         _windowBindingButton.Content = CreateTopBarAssociationIcon(_windowBindingButton, isAssociated);
         _windowBindingButton.Cursor =
-            isWindowBound ? Cursors.Hand : Cursors.Cross;
+            isAssociated ? Cursors.Hand : Cursors.Cross;
         _windowBindingButton.FontWeight =
             isAssociated ? FontWeights.Bold : FontWeights.SemiBold;
         if (isAssociated)
@@ -140,12 +119,15 @@ public sealed partial class PaperWindow
         {
             _windowBindingButton.ClearValue(Control.ForegroundProperty);
         }
-        _windowBindingButton.ToolTip = isWindowBound &&
-            _experimentalWindowAttachment is { } session
-                ? Strings.Format(
-                    "ToolTipWindowBindingActiveFormat",
-                    session.TargetTitle)
-                : AssociationDragHint();
+        var targetTitle = isWindowBound
+            ? _experimentalWindowAttachment!.TargetTitle
+            : isTodoLinked
+                ? string.Join(", ", _controller.GetPaperLinkTargets(_paper)
+                    .Select(_controller.PaperDisplayTitle))
+                : null;
+        _windowBindingButton.ToolTip = targetTitle != null
+            ? Strings.Format("ToolTipWindowBindingActiveFormat", targetTitle)
+            : AssociationDragHint();
 
         UpdateTopBarResponsiveLayout();
     }
@@ -222,7 +204,7 @@ public sealed partial class PaperWindow
         FrameworkElement placementTarget,
         MouseButtonEventArgs e)
     {
-        if (!HasExperimentalWindowTether)
+        if (!HasPaperAssociation)
         {
             return;
         }
@@ -234,16 +216,50 @@ public sealed partial class PaperWindow
     private void ShowWindowBindingButtonMenu(
         FrameworkElement placementTarget)
     {
-        if (!HasExperimentalWindowTether)
+        if (!HasPaperAssociation)
         {
             return;
         }
 
         var menu = CreateContextMenu();
         menu.Items.Add(MenuItem(
-            Strings.Get("LabsWindowTetherDetach"),
-            (_, _) => DetachExperimentalWindowAttachment(
-                savePosition: true)));
+            Strings.Get("MenuCancelBinding"),
+            (_, _) => CancelPaperAssociation()));
+
+        var targets = _controller.State.EnableTodoPaperLinks
+            ? _controller.GetPaperLinkTargets(_paper)
+            : Array.Empty<PaperData>();
+        if (targets.Count == 0)
+        {
+            menu.Items.Add(MenuItem(
+                Strings.Get("MenuOpenBindingProgram"),
+                (_, _) => OpenWindowBindingTarget()));
+        }
+        else if (targets.Count == 1 && !HasExperimentalWindowTether)
+        {
+            var target = targets[0];
+            menu.Items.Add(MenuItem(
+                Strings.Get(target.Type == PaperTypes.Todo
+                    ? "MenuOpenBindingTodo" : "MenuOpenBindingNote"),
+                (_, _) => OpenPaperBindingTarget(target)));
+        }
+        else
+        {
+            var open = MenuItem(Strings.Get("MenuOpenBindingTarget"), (_, _) => { });
+            if (HasExperimentalWindowTether)
+            {
+                open.Items.Add(MenuItem(
+                    Strings.Get("MenuOpenBindingProgram"),
+                    (_, _) => OpenWindowBindingTarget()));
+            }
+            foreach (var target in targets)
+            {
+                open.Items.Add(MenuItem(
+                    _controller.PaperDisplayTitle(target),
+                    (_, _) => OpenPaperBindingTarget(target)));
+            }
+            menu.Items.Add(open);
+        }
         var previousContextMenu = placementTarget.ContextMenu;
         menu.Closed += (_, _) =>
         {
@@ -257,6 +273,82 @@ public sealed partial class PaperWindow
         menu.Placement =
             System.Windows.Controls.Primitives.PlacementMode.Bottom;
         menu.IsOpen = true;
+    }
+
+    private void CancelPaperAssociation()
+    {
+        if (HasExperimentalWindowTether)
+        {
+            DetachExperimentalWindowAttachment(savePosition: true);
+        }
+        if (_controller.State.EnableTodoPaperLinks)
+        {
+            _controller.UnlinkPaperFromTodos(_paper);
+        }
+        RefreshWindowBindingButton();
+    }
+
+    private void OpenPaperBindingTarget(PaperData target)
+    {
+        if (_controller.IsLinkedPaperShown(target.Id))
+        {
+            _controller.BringPaperToFront(target);
+        }
+        else
+        {
+            _controller.OpenLinkedPaper(target.Id, this);
+        }
+    }
+
+    private void OpenWindowBindingTarget()
+    {
+        var session = _experimentalWindowAttachment;
+        if (session?.Owner != ExperimentalAttachmentOwner.WindowTether)
+        {
+            return;
+        }
+
+        if (ExternalWindowNative.TryGetSnapshot(session.ExternalWindow, out var target) ||
+            ExternalWindowNative.TryFindProgramWindow(
+                session.TargetExecutablePath, session.TargetTitle, out target))
+        {
+            SetExperimentalWindowAttachment(session with { ExternalWindow = target.Identity });
+            _ = ExternalWindowNative.RestoreAndActivate(target.Identity);
+            if (ExternalWindowNative.TryGetSnapshot(target.Identity, out target) &&
+                target.IsUsableTarget)
+            {
+                ReconcileExperimentalWindowAttachment(target);
+                RestoreExperimentalTetherPresentation();
+            }
+            RefreshWindowBindingButton();
+            return;
+        }
+
+        RetainUnavailableWindowTether();
+        if (string.IsNullOrWhiteSpace(session.TargetExecutablePath))
+        {
+            MessageBox.Show(this, Strings.Get("WindowBindingProgramUnavailable"),
+                Strings.Get("WindowBindingOpenFailureTitle"),
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        try
+        {
+            // The existing WinEvent tracker reconnects the retained session when
+            // the app creates its next top-level window.
+            using var process = Process.Start(new ProcessStartInfo
+            {
+                FileName = session.TargetExecutablePath,
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message,
+                Strings.Get("WindowBindingOpenFailureTitle"),
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
     }
 
     private void UpdateWindowBindingDragTarget(

@@ -144,7 +144,7 @@ internal static partial class WorkbenchChecks
                     Items = Enumerable.Range(0, 14).Select(i => new PaperItem
                     { Id = "item-" + i, Text = i == 13 ? needle : "ordinary item" }).ToList() }
             ] };
-            var searchSnapshot = controller.SnapshotWorkbench(searchState, controller.WorkspaceNumber, live: false);
+            var searchSnapshot = AppController.SnapshotWorkbench(searchState, controller.WorkspaceNumber);
             var match = typeof(WorkbenchWindow).GetMethod("SearchMatches", BindingFlags.NonPublic | BindingFlags.Static)!;
             foreach (var entry in searchSnapshot.Papers)
                 Assert(!entry.Summary.Contains(needle) &&
@@ -221,6 +221,39 @@ internal static partial class WorkbenchChecks
             foreach (var paper in controller.State.Papers) Assert(before[paper.Id] == Geometry(paper), "Desktop state changed on return: " + paper.Id);
             controller.ToggleWorkbench(); workbench = (WorkbenchWindow)Member(controller, "_workbenchWindow");
             await Until(() => workbench.HostedPaperCount == 3, "Second enter failed");
+            // A rejected external deletion must return both the paper and its canvas placement.
+            var placementBefore = controller.WorkbenchLayout.Cards["note-b"].Copy();
+            var store = (StateStore)Member(controller, "_store");
+            var writer = typeof(StateStore).GetField("_atomicWriter", Private)!;
+            var originalWriter = writer.GetValue(store);
+            var ignoreFailures = typeof(AppController).GetField("_ignoreSaveFailures", Private)!;
+            var originalIgnore = ignoreFailures.GetValue(controller);
+            var diskBefore = File.ReadAllText(store.FilePath);
+            try
+            {
+                ignoreFailures.SetValue(controller, true);
+                writer.SetValue(store, new DurableAtomicFileWriter((stage, target) =>
+                {
+                    if (stage == DurableAtomicWriteStage.BeforeTempOpen && target == store.FilePath)
+                        throw new IOException("Injected canvas deletion save failure.");
+                }));
+                try
+                {
+                    controller.PaperCommands.DeletePaper("note-b", PaperOperationContext.Mcp());
+                    throw new Exception("External deletion ignored the save failure.");
+                }
+                catch (PaperCommandException ex) when (ex.Code == "save_failed") { }
+            }
+            finally
+            {
+                writer.SetValue(store, originalWriter);
+                ignoreFailures.SetValue(controller, originalIgnore);
+            }
+            Assert(controller.FindPaper("note-b") != null &&
+                controller.WorkbenchLayout.Cards.TryGetValue("note-b", out var restoredPlacement) &&
+                restoredPlacement.Bounds == placementBefore.Bounds && restoredPlacement.Pinned == placementBefore.Pinned &&
+                File.ReadAllText(store.FilePath) == diskBefore,
+                "Failed external deletion lost the paper, its placement or the original file.");
             controller.DeletePaper(controller.FindPaper("note-b")!);
             await Until(() => workbench.HostedPaperCount == 2, "Deleted paper retained a leased editor");
             Assert(!controller.WorkbenchLayout.Cards.ContainsKey("note-b"), "Deleted paper retained spatial metadata");
