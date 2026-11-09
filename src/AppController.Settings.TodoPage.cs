@@ -91,6 +91,9 @@ public sealed partial class AppController
         return content;
     }
 
+    private void ToggleLinkedPathExtensionOnly() =>
+        SetSettingFromUi("todo.linked_path_extension_only", !State.ShowLinkedPathExtensionOnly);
+
     private void RestoreSettingsSidebarTodoDefaults()
     {
         State.ShowTodoBottomBar = true;

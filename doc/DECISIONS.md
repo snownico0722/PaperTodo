@@ -858,7 +858,7 @@ V3 Lite 收敛后，`EdgeCapsuleQueueCompositionProxy.PrewarmLightweight` 仍会
 
 ### Evidence
 
-- `src/App.EdgeCapsuleComposition.cs`：启动 idle 条件与预热调度。
+- `App.xaml.cs`：启动 idle 条件与预热调度。
 - `src/EdgeCapsuleQueueCompositionProxy.LightPrewarm.cs`：Lightweight Prewarm 本体。
 - D-007～D-010：bounded live host、WPF owns shape、DComp translation-only 与 handoff authority 的长期架构边界。
 - PR #137：4.0 slim-down review 再次暴露了该实测结论此前没有进入长期知识 owner。
@@ -1943,7 +1943,7 @@ PR #319 的初版把主胶囊完整材质收展后的卡死解释为终点迟到
 
 ### Evidence
 
-`StateStore.WriteSafety`、`PersistenceWriteLifetime`、`AppController.PersistencePolicy`、`AppController.DataReload`、`StateStore.ConflictImages`；`WriteSafetyChecks`、`KillSafetyChecks`、`ShutdownSafetyChecks` 通过实际 IO/进程/控件边界约束行为。
+`StateStore.WriteSafety`、`PersistenceWriteLifetime`、`AppController.PersistencePolicy`、`AppController.DataReload`、`StateStore.ConflictRetention`；`WriteSafetyChecks`、`KillSafetyChecks`、`ShutdownSafetyChecks` 通过实际 IO/进程/控件边界约束行为。
 
 
 ---
