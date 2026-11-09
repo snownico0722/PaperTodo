@@ -32,7 +32,6 @@ internal sealed class WorkspaceCatalog
     internal WorkspaceConfiguration Options { get; private set; }
     internal bool HasConfiguration { get; private set; }
     internal string? StartupError { get; private set; }
-    internal void SetStartupError(string message) => StartupError = message;
     internal StateStore MainStore => StoreFor(1);
     internal WorkspacePaths PathsFor(int number) => new(_directory, number);
 

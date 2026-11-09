@@ -901,12 +901,6 @@
   <data name="LabsWindowTetherDetach" xml:space="preserve">
     <value>解除窗口绑定</value>
   </data>
-  <data name="LabsEnableTetherVisibility" xml:space="preserve">
-    <value>目标隐藏时同步收起</value>
-  </data>
-  <data name="TipLabsTetherVisibility" xml:space="preserve">
-    <value>目标最小化或隐藏时，绑定纸片会临时隐藏或替换为独立胶囊；目标恢复或激活时纸片重新显示。此过程不会修改纸片自身的展开、胶囊或可见性数据。</value>
-  </data>
   <data name="ToolTipDragPaperToWindow" xml:space="preserve">
     <value>拖动到其他软件窗口以绑定</value>
   </data>
@@ -918,21 +912,6 @@
   </data>
   <data name="WindowBindingDropTargetFormat" xml:space="preserve">
     <value>松开以绑定到「{0}」</value>
-  </data>
-  <data name="LabsTetherMinimizedBehavior" xml:space="preserve">
-    <value>目标最小化时</value>
-  </data>
-  <data name="LabsTetherMinimizedHide" xml:space="preserve">
-    <value>隐藏纸片</value>
-  </data>
-  <data name="LabsTetherMinimizedCapsule" xml:space="preserve">
-    <value>显示胶囊</value>
-  </data>
-  <data name="LabsTetherCapsuleLabelFormat" xml:space="preserve">
-    <value>绑定 · {0}</value>
-  </data>
-  <data name="LabsTetherCapsuleTargetTipFormat" xml:space="preserve">
-    <value>点击恢复并激活“{0}”</value>
   </data>
   <data name="LabsTodoReminders" xml:space="preserve">
     <value>待办提醒</value>

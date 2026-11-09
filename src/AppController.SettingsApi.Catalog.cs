@@ -489,17 +489,6 @@ public sealed partial class AppController
             minimum: 0,
             maximum: 24,
             step: 2);
-        yield return DefineSetting<bool>("window.tether_visibility_link",
-            () => State.ExperimentalTetherVisibilityLink,
-            value => State.ExperimentalTetherVisibilityLink = value,
-            SettingEffects.TetherVisibility,
-            title: Strings.Get("LabsEnableTetherVisibility"));
-        yield return DefineSetting<string>("window.tether_minimized",
-            () => State.ExperimentalTetherMinimizedBehavior,
-            value => State.ExperimentalTetherMinimizedBehavior = value,
-            SettingEffects.TetherVisibility,
-            title: Strings.Get("LabsTetherMinimizedBehavior"),
-            options: ["hide", "capsule"]);
         yield return DefineSetting<bool>("scripts.persistent_process",
             () => State.UsePersistentPowerShellProcess,
             value => State.UsePersistentPowerShellProcess = value,

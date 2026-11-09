@@ -17,7 +17,7 @@ public sealed partial class AppController
         ImageReferences, MarkdownAnimations, ExternalExtension, Compress, TodoOrder,
         TodoLinks, TodoRows, LinkedCapsules, TopBar, SystemVisibility, Fullscreen,
         CapsuleMode, Arrange, CapsuleClose, Titles, Preview, HoverIntent, EdgeTopmost,
-        Opacity, Focus, Passive, Reminders, Magnet, Tether, TetherOptions, TetherVisibility,
+        Opacity, Focus, Passive, Reminders, Magnet, Tether, TetherOptions,
         Scripts, VisibilitySnapshot, Shortcuts, Mcp
     }
 
@@ -306,13 +306,6 @@ public sealed partial class AppController
                 RefreshExperimentalWindowRuntime(); RefreshExperimentalAttachmentMenus(); break;
             case SettingEffects.TetherOptions:
                 foreach (var w in _windows.Values.ToArray()) w.RefreshExperimentalWindowTetherOptions(); break;
-            case SettingEffects.TetherVisibility:
-                foreach (var w in _windows.Values.ToArray())
-                {
-                    if (State.ExperimentalTetherVisibilityLink) w.RefreshExperimentalTetherVisibilityOptions();
-                    else w.DisableExperimentalTetherVisibilityLink();
-                }
-                break;
             case SettingEffects.Scripts:
                 if (State.UsePersistentPowerShellProcess)
                     ScriptExecutionService.EnsurePersistentScriptProcessForSettings(State);

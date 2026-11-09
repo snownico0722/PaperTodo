@@ -211,8 +211,7 @@ public sealed partial class PaperWindow : Window
     public bool IsDeepCapsuleSlotVisible => _edgeCapsuleHost?.IsVisible == true;
     public bool HasVisibleSurface =>
         (IsVisible && WindowState != WindowState.Minimized) ||
-        IsDeepCapsuleSlotVisible ||
-        HasExperimentalTetherCapsuleSurface;
+        IsDeepCapsuleSlotVisible;
     public bool HasExpandedPaperSurface =>
         IsVisible &&
         WindowState != WindowState.Minimized &&
@@ -1617,7 +1616,6 @@ public sealed partial class PaperWindow : Window
             _paper.IsCollapsed && _controller.State.UseCapsuleMode,
             _isSnappedPresentation && !_paper.IsCollapsed);
         _edgeCapsuleHost?.RefreshSkin();
-        _experimentalTetherCapsule?.UpdateTheme();
         _todoCheckBoxStyle = null;
         if (_topBarTitleHost != null) _topBarTitleHost.CornerRadius = new CornerRadius(Theme.IsPixelSkin ? 0 : RadiusControl);
         if (_newTodoButton != null) _newTodoButton.Content = CreateTopBarNewTodoIcon(_newTodoButton);
@@ -1641,7 +1639,6 @@ public sealed partial class PaperWindow : Window
         var themeAnimationGeneration = _themeAnimationGeneration;
 
         InitializeThemeResources();
-        _experimentalTetherCapsule?.UpdateTheme();
         RefreshThemedContextMenus();
 
         var canAnimateTheme = !PaperSkins.IsDecorated(Theme.Skin) && _nativeMica == null && _controller.State.EnableAnimations &&
@@ -2506,25 +2503,6 @@ public sealed partial class PaperWindow : Window
         }
     }
 
-    private double VisibleTopBarActionButtonsWidth()
-    {
-        if (_topBarActionButtonsHost == null)
-        {
-            return 0;
-        }
-
-        var width = 0.0;
-        foreach (var child in _topBarActionButtonsHost.Children)
-        {
-            if (child is FrameworkElement element &&
-                element.Visibility == Visibility.Visible)
-            {
-                width += TopBarOuterWidth(element);
-            }
-        }
-        return width;
-    }
-
     private static double TopBarOuterWidth(FrameworkElement element)
     {
         var width = element.Width;
@@ -2539,87 +2517,6 @@ public sealed partial class PaperWindow : Window
         return Math.Max(0, width) +
             element.Margin.Left +
             element.Margin.Right;
-    }
-
-    private void ConfigureNoteLinkDragButton(Button button)
-    {
-        ConfigureTopBarDragGesture(
-            button,
-            new TopBarDragBehavior
-            {
-                Kind = TopBarDragKind.NoteLink,
-                CanBegin = () =>
-                    _controller.State.EnableTodoPaperLinks &&
-                    _paper.Type == PaperTypes.Note &&
-                    BodySupports(PaperBodyCapabilities.NoteLinks),
-                Started = () =>
-                {
-                    ExitNoteEditor();
-                    _controller.BeginPaperLinkDrag(_paper);
-                },
-                CreateFeedback = CreateNoteLinkDragFeedback,
-                Moved = (_, point) =>
-                    _controller.UpdatePaperLinkDrag(
-                        _paper,
-                        point.ToPoint()),
-                Completed = commit =>
-                    _controller.EndPaperLinkDrag(_paper, commit),
-                GhostPlacement = TopBarDragGhostPlacement.Centered,
-                DraggingOpacity = 0.82
-            });
-    }
-
-    private TopBarDragFeedback CreateNoteLinkDragFeedback()
-    {
-        var stack = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            VerticalAlignment = VerticalAlignment.Center,
-            IsHitTestVisible = false
-        };
-
-        stack.Children.Add(new TextBlock
-        {
-            Text = "✎",
-            Foreground = TextBrush,
-            FontFamily = AppTypography.SymbolFontFamily,
-            FontSize = AppTypography.Scale(13),
-            FontWeight = FontWeights.SemiBold,
-            VerticalAlignment = VerticalAlignment.Center
-        });
-
-        stack.Children.Add(new TextBlock
-        {
-            Text = _controller.PaperCapsuleTitle(_paper),
-            Foreground = TextBrush,
-            FontFamily = AppTypography.UiFontFamily,
-            FontSize = AppTypography.Scale(12),
-            Margin = new Thickness(6, 0, 0, 0),
-            MaxWidth = 150,
-            TextTrimming = TextTrimming.CharacterEllipsis,
-            VerticalAlignment = VerticalAlignment.Center
-        });
-
-        var root = new Border
-        {
-            Padding = new Thickness(9, 5, 10, 5),
-            CornerRadius = new CornerRadius(RadiusControl),
-            Background = PaperBrush,
-            BorderBrush = PaperLinkTargetBorderBrush,
-            BorderThickness = new Thickness(1),
-            Opacity = 0.86,
-            Child = stack,
-            IsHitTestVisible = false,
-            Effect = new DropShadowEffect
-            {
-                BlurRadius = 16,
-                ShadowDepth = 2,
-                Opacity = 0.22
-            }
-        };
-
-        return new TopBarDragFeedback(
-            CreateTopBarDragFeedbackWindow(root));
     }
 
     private void BuildBody()
@@ -2724,11 +2621,6 @@ public sealed partial class PaperWindow : Window
         {
             WindowNative.ApplyTopmostZOrder(this, effectiveTopmost, avoidanceWindow);
             _experimentalPassiveNeedsZOrderRestore = false;
-        }
-        if (_experimentalTetherCapsule is { } tetherCapsule)
-        {
-            tetherCapsule.SetFullscreenAvoidance(
-                _controller.FullscreenAvoidanceWindowFor(tetherCapsule));
         }
 
         RefreshDeepCapsuleSlotTopmost();

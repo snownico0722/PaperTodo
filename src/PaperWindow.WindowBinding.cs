@@ -38,7 +38,7 @@ public sealed partial class PaperWindow
                 return;
             }
 
-            EndTopBarDragGesture(commit: false, TopBarDragKind.WindowBinding);
+            EndTopBarDragGesture(commit: false);
             CancelPaperAssociation();
             e.Handled = true;
         };
@@ -50,7 +50,6 @@ public sealed partial class PaperWindow
 
     private TopBarDragBehavior CreateAssociationDragBehavior(Action? afterDrag = null) => new()
     {
-        Kind = TopBarDragKind.WindowBinding,
         CanBegin = CanBeginAssociationDrag,
         Started = () =>
         {
@@ -67,7 +66,6 @@ public sealed partial class PaperWindow
             CompleteAssociationDrag(commit);
             afterDrag?.Invoke();
         },
-        GhostPlacement = TopBarDragGhostPlacement.PointerOffset,
         DraggingOpacity = 0.72
     };
 

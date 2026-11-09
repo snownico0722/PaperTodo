@@ -1503,15 +1503,11 @@ public sealed partial class AppController
             ExperimentalWindowTetherOptions.Auto;
         State.ExperimentalWindowTetherGap =
             ExperimentalWindowTetherOptions.DefaultGap;
-        State.ExperimentalTetherVisibilityLink = false;
-        State.ExperimentalTetherMinimizedBehavior =
-            ExperimentalTetherVisibilityModes.Hide;
         RestoreLabsShortcutDefaults();
 
         foreach (var window in _windows.Values.ToList())
         {
             window.DisableExperimentalCapsuleMagnet();
-            window.DisableExperimentalTetherVisibilityLink();
             window.DisableExperimentalWindowTether();
         }
         RefreshExperimentalWindowRuntime();

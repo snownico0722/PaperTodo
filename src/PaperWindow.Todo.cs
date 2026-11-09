@@ -1646,9 +1646,7 @@ public sealed partial class PaperWindow
         if (!_controller.State.EnableTodoPaperLinks &&
             !_controller.State.ExperimentalWindowTethering)
         {
-            EndTopBarDragGesture(
-                commit: false,
-                TopBarDragKind.WindowBinding);
+            EndTopBarDragGesture(commit: false);
         }
 
         RefreshTodoRowsForExternalChange();

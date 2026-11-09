@@ -875,12 +875,6 @@ When off, only hides those items; selected values stay unchanged.</value>
   <data name="LabsWindowTetherDetach" xml:space="preserve">
     <value>Unbind from window</value>
   </data>
-  <data name="LabsEnableTetherVisibility" xml:space="preserve">
-    <value>Retract when the target is hidden</value>
-  </data>
-  <data name="TipLabsTetherVisibility" xml:space="preserve">
-    <value>When the target is minimized or hidden, its bound paper is temporarily hidden or replaced by a separate capsule. Restoring or activating the target shows the paper again without changing the paper's own expanded, capsule, or visibility data.</value>
-  </data>
   <data name="ToolTipDragPaperToWindow" xml:space="preserve">
     <value>Drag onto another application window to bind</value>
   </data>
@@ -892,21 +886,6 @@ When off, only hides those items; selected values stay unchanged.</value>
   </data>
   <data name="WindowBindingDropTargetFormat" xml:space="preserve">
     <value>Release to bind to “{0}”</value>
-  </data>
-  <data name="LabsTetherMinimizedBehavior" xml:space="preserve">
-    <value>When the target is minimized</value>
-  </data>
-  <data name="LabsTetherMinimizedHide" xml:space="preserve">
-    <value>Hide paper</value>
-  </data>
-  <data name="LabsTetherMinimizedCapsule" xml:space="preserve">
-    <value>Show capsule</value>
-  </data>
-  <data name="LabsTetherCapsuleLabelFormat" xml:space="preserve">
-    <value>Bound · {0}</value>
-  </data>
-  <data name="LabsTetherCapsuleTargetTipFormat" xml:space="preserve">
-    <value>Click to restore and activate “{0}”</value>
   </data>
   <data name="LabsTodoReminders" xml:space="preserve">
     <value>Todo reminders</value>
