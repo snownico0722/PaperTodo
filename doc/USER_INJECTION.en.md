@@ -49,7 +49,7 @@ For example, `capsule.labelBaseDip` changes an input to the label-size calculati
 
 An ordinary setting whose result is completely superseded becomes read-only while retaining its original choice. Removing and applying the override restores that choice. Overriding a coefficient or only some note/todo metrics leaves ordinary settings able to affect the remaining calculation. Global `user.json` is shared across workspaces, including secondary workspaces that follow main settings.
 
-New-paper dimensions apply to the new model and first display through the common GUI/plugin/MCP creation path; existing papers are unaffected. Later restoration has a separate `window.restore.constrainSize` switch. Window minimum dimensions and existing layout rules retain their own meanings.
+New-paper dimensions apply to the new model and first display for GUI/plugin/MCP creation, the initial blank paper in a new secondary workspace, and the replacement created after the last paper is deleted or moved away. Existing papers keep their own dimensions, with later restoration controlled separately by `window.restore.constrainSize`. Window minimum dimensions and existing layout rules retain their own meanings.
 
 ## Application timing and cost
 

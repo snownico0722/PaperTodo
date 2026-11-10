@@ -348,9 +348,15 @@ internal static partial class Program
             "unfollow did not restore independent settings");
         Require(next.State.MaxTitleLength == 2 && next.State.Papers[0].Title == "long title",
             "reopening with a smaller independent display limit truncated the persisted title");
+        var previousInjectionPath = UserInjection.FilePath;
+        var injectionPath = Path.Combine(scope.DirectoryPath, "user.json");
+        File.WriteAllText(injectionPath, "{\"newPaper.todo.widthDip\":400,\"newPaper.todo.heightDip\":500}");
+        UserInjection.LoadStartup(injectionPath);
         var newSlot = catalog.Open(3, catalog.Options);
         Require(newSlot.State.Papers.Count == 1 && newSlot.State.Papers[0].Content.Length == 0 &&
             newSlot.State.Papers[0].Id != main.Papers[0].Id, "new workspace copied main content");
+        Require(newSlot.State.Papers[0].Width == 400 && newSlot.State.Papers[0].Height == 500,
+            "a new workspace's blank paper must adopt the global initial dimensions");
         // New slots always start with main settings, even when they are
         // immediately independent and are entered from another secondary slot.
         var independentNew = catalog.Options.Normalized();
@@ -362,6 +368,14 @@ internal static partial class Program
                 fromMain.State.MaxTitleLength == 20 && fromSecondary.State.MaxTitleLength == 20 &&
                 fromMain.State.McpEnabled && fromSecondary.State.McpEnabled,
             "independent new slot did not use consistent main-workspace initial settings");
+        newSlot.State.Papers[0].Width = 360;
+        newSlot.State.Papers[0].Height = 420;
+        newSlot.BindPersistence();
+        newSlot.Store.SaveJsonSync(newSlot.Store.SerializeState(newSlot.State), 5);
+        var reopened = catalog.Open(3, catalog.Options);
+        Require(reopened.State.Papers[0].Width == 360 && reopened.State.Papers[0].Height == 420,
+            "new-paper overrides must not replace a saved workspace's paper dimensions");
+        UserInjection.LoadStartup(previousInjectionPath);
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
@@ -1350,13 +1364,46 @@ internal static partial class Program
             var busyFifthPath = Path.Combine(directory, "data5.json");
 
             // With no usable source, blank initialization requires an explicit choice.
+            var initialPaper = new PaperData();
+            var initialArea = WindowWorkAreaHelper.WorkAreaFor(new Rect(
+                initialPaper.X, initialPaper.Y, initialPaper.Width, initialPaper.Height));
+            var initialHeight = Math.Floor(initialArea.Height - 40);
+            controller.ApplyUserInjection(new PaperInjectionPatch
+            {
+                ExpectedRevision = UserInjection.Read().Revision,
+                Set = new Dictionary<string, JsonElement>
+                {
+                    ["newPaper.todo.widthDip"] = JsonSerializer.SerializeToElement(400),
+                    ["newPaper.todo.heightDip"] = JsonSerializer.SerializeToElement(initialHeight)
+                }
+            });
             File.WriteAllText(busyFifthPath, "{invalid target");
             Require(await WithWorkspaceFailureDialog(() => controller.SwitchWorkspaceAsync(5),
                     dialog => ClickFailureAction(dialog, "HistoryRecoveryCreate"), "HistoryRecoveryTitle") &&
                     controller.WorkspaceNumber == 5 &&
                     controller.State.Papers.Count == 1 && controller.State.Papers[0].Content.Length == 0,
                 "unrecoverable fifth workspace did not initialize blank");
+            var freshPaper = controller.State.Papers.Single();
+            var freshWindow = windows[freshPaper.Id];
+            freshWindow.UpdateLayout();
+            Require(freshPaper.Width == 400 && Math.Abs(freshPaper.Height - initialHeight) <= 1 &&
+                    Math.Abs(freshWindow.ActualWidth - 400) <= 1 &&
+                    Math.Abs(freshWindow.ActualHeight - initialHeight) <= 1,
+                "first workspace presentation must keep injected initial dimensions beyond the ordinary restore margin");
+            freshWindow.Width = 360;
+            freshWindow.Height = 420;
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
             Require(await controller.SwitchWorkspaceAsync(1), "return after explicit rebuild failed");
+            Require(await controller.SwitchWorkspaceAsync(5) &&
+                    controller.State.Papers.Single().Id == freshPaper.Id &&
+                    controller.State.Papers[0].Width == 360 && controller.State.Papers[0].Height == 420,
+                "returning to the initialized workspace must preserve the user's resized paper");
+            Require(await controller.SwitchWorkspaceAsync(1), "return after initialized workspace size check failed");
+            controller.ApplyUserInjection(new PaperInjectionPatch
+            {
+                ExpectedRevision = UserInjection.Read().Revision,
+                Remove = ["newPaper.todo.widthDip", "newPaper.todo.heightDip"]
+            });
             File.WriteAllText(busyFifthPath, "{invalid target");
             File.Delete(Path.Combine(directory, "data5.backup.json"));
             var fifthRecovered = NewState();

@@ -135,6 +135,7 @@ internal sealed class WorkspaceCatalog
         // Normalize papers against effective settings, not dormant local preferences.
         store.InheritedSettings = inherited;
         var state = LoadWorkspace(store, out var initializedEmpty);
+        string? initialPaperId = null;
         if (initializedEmpty && number > 1)
         {
             // New slots and explicitly restarted slots begin with one blank paper.
@@ -145,7 +146,11 @@ internal sealed class WorkspaceCatalog
             main ??= ReadMainForSettings();
             inherited ??= WorkspaceSettingsSnapshot.Capture(main);
             inherited.ApplyTo(state);
-            state.Papers.Add(new PaperData());
+            var paper = new PaperData();
+            paper.Width = InjectionParameters.NewTodoWidth.Resolve(paper.Width);
+            paper.Height = InjectionParameters.NewTodoHeight.Resolve(paper.Height);
+            state.Papers.Add(paper);
+            initialPaperId = paper.Id;
         }
         if (number == 1)
         {
@@ -157,7 +162,10 @@ internal sealed class WorkspaceCatalog
         state.Workspaces = null;
         var independent = WorkspaceSettingsSnapshot.Capture(state);
         if (follows) inherited!.ApplyTo(state);
-        var session = new WorkspaceSession(paths, store, state, follows, independent);
+        var session = new WorkspaceSession(paths, store, state, follows, independent)
+        {
+            InitialPaperId = initialPaperId
+        };
         return session;
     }
 

@@ -3734,7 +3734,16 @@ public sealed partial class AppController : IDisposable
                 continue;
             }
 
-            changed |= RescuePaperIfOffScreen(State.Papers[i], i);
+            var paper = State.Papers[i];
+            changed |= RescuePaperIfOffScreen(paper, i);
+            if (_workspace.InitialPaperId is { } initialPaperId && paper.Id == initialPaperId)
+            {
+                var previousWidth = paper.Width;
+                var previousHeight = paper.Height;
+                ApplyInjectedNewPaperSize(paper);
+                changed |= DimensionChanged(previousWidth, paper.Width) || DimensionChanged(previousHeight, paper.Height);
+                _workspace.InitialPaperId = null;
+            }
         }
 
         return changed;
