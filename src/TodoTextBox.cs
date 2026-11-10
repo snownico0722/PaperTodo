@@ -19,9 +19,9 @@ public sealed class TodoTextBox : TextBox
         ClipToBounds = true;
     }
 
-    private const double StrikeInset = 3;
-    private const double StrikeThickness = 1.35;
-    private const double StrikeVerticalRatio = 0.56;
+    private static double StrikeInset => InjectionParameters.TodoStrikeInset.Value;
+    private static double StrikeThickness => InjectionParameters.TodoStrikeThickness.Value;
+    private static double StrikeVerticalRatio => InjectionParameters.TodoStrikeVerticalRatio.Value;
     private bool _transientFindHighlightEnabled;
 
     // A folded preview must yield to the editor's own selection renderer during

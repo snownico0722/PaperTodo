@@ -7,7 +7,7 @@ namespace PaperTodo;
 internal sealed partial class MarkdownSemanticPresentation
 {
     /// <summary>进入编辑态（控制符显灵）的淡入时长（毫秒）。</summary>
-    private const double RevealFadeMs = 140;
+    private static double RevealFadeMs => InjectionParameters.MarkdownRevealFadeMs.Value;
 
     private DispatcherTimer? _fadeTimer;
     private DateTime _fadeStartedAt;
@@ -86,7 +86,7 @@ internal sealed partial class MarkdownSemanticPresentation
 
         _fadeTimer = new DispatcherTimer(DispatcherPriority.Render)
         {
-            Interval = TimeSpan.FromMilliseconds(16)
+            Interval = TimeSpan.FromMilliseconds(InjectionParameters.MarkdownRevealTickMs.Value)
         };
         _fadeTimer.Tick += OnRevealFadeTick;
     }

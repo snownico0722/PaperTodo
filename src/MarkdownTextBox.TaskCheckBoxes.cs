@@ -12,7 +12,7 @@ namespace PaperTodo;
 /// </summary>
 public sealed partial class MarkdownTextBox
 {
-    private const double TaskCheckBoxHitPadding = 2.0;
+    private static double TaskCheckBoxHitPadding => InjectionParameters.MarkdownTaskHitPadding.Value;
     private bool _renderedTaskCheckBoxMouseDownHandled;
 
     /// <summary>

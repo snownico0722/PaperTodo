@@ -44,7 +44,8 @@ public sealed partial class AppController
             Read = () => JsonSerializer.SerializeToElement(get()),
             Validate = value => ValidatePublicSetting(value, kind, allowed, minimum, maximum, step, id),
             Begin = value => BeginSettingChange(id, get, set, value.Deserialize<T>()!, effects),
-            IsNoOp = isNoOp is null ? null : value => isNoOp(value.Deserialize<T>()!)
+            IsNoOp = isNoOp is null ? null : value => isNoOp(value.Deserialize<T>()!),
+            Unavailable = () => InjectionSettingUnavailable(id)
         };
     }
 

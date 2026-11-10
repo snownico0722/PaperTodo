@@ -10,17 +10,17 @@ namespace PaperTodo;
 
 public sealed class NoteImageStore : IDisposable
 {
-    // 4096 is the hard import/storage limit. Automatic compression targets 2048, but disabling
-    // compression may still store an untouched image between 2049 and 4096 pixels.
-    private const int MaxStoredDimension = 4096;
-    private const int AutoCompressedDimension = 2048;
-    private const int MaxImageBytes = 8 * 1024 * 1024;
-    private const int MaxInputImageBytes = 32 * 1024 * 1024;
-    private const int MaxTotalImageBytes = 120 * 1024 * 1024;
-    // Decoded pixels (not the 120 MB encoded store). One version per image; LRU drops cold
+    // Import/storage and automatic-compression budgets are independently configurable.
+    // Disabling compression preserves the source within the current storage budgets.
+    private static int MaxStoredDimension => InjectionParameters.NoteImageStoredDimension.Value;
+    private static int AutoCompressedDimension => InjectionParameters.NoteImageCompressedDimension.Value;
+    private static int MaxImageBytes => InjectionParameters.NoteImageStoredBytes.Value;
+    private static int MaxInputImageBytes => InjectionParameters.NoteImageInputBytes.Value;
+    private static int MaxTotalImageBytes => InjectionParameters.NoteImageTotalBytes.Value;
+    // Decoded pixels (separate from the encoded store). One version per image; LRU drops cold
     // off-viewport entries. Currently visible (viewport-protected) ids ignore the caps.
-    private const long MaxDecodedBitmapBytes = 50L * 1024 * 1024;
-    private const int MaxBitmapCacheEntries = 20;
+    private static long MaxDecodedBitmapBytes => InjectionParameters.NoteImageDecodedBytes.Value;
+    private static int MaxBitmapCacheEntries => InjectionParameters.NoteImageCacheEntries.Value;
 
     private readonly object _gate = new();
     private readonly Dictionary<string, NoteImageAsset> _images = new(StringComparer.Ordinal);
@@ -1554,7 +1554,7 @@ public sealed class NoteImageStore : IDisposable
             asset.Width <= 0 ||
             asset.Height <= 0 ||
             Math.Max(asset.Width, asset.Height) > MaxStoredDimension ||
-            asset.ByteLength is <= 0 or > MaxImageBytes ||
+            (asset.ByteLength <= 0 || asset.ByteLength > MaxImageBytes) ||
             string.IsNullOrWhiteSpace(asset.Sha256) ||
             asset.Sha256.Length != 64)
         {

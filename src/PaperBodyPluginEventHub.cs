@@ -43,7 +43,7 @@ internal sealed class PaperBodyPluginEventHub : IDisposable
 
     private readonly record struct ChangeStamp(long StateRevision, long SaveVersion);
 
-    private static readonly TimeSpan UserChangeDebounce = TimeSpan.FromMilliseconds(180);
+    private static TimeSpan UserChangeDebounce => TimeSpan.FromMilliseconds(InjectionParameters.PluginUserChangeDebounceMs.Value);
 
     private readonly AppController _controller;
     private readonly Dispatcher _dispatcher;

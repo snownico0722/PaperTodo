@@ -9,14 +9,19 @@ internal sealed class TodoEdgeCapsulePreviewProvider : IEdgeCapsulePreviewProvid
 {
     // Keep row creation bounded; totals still describe the complete model and the paper remains
     // the place for browsing the full list.
-    internal const int MaximumRenderedItems = 12;
-    internal const int MaximumItemCharacters = 512;
-    internal const double LinkedTargetButtonSizeDip = 20;
+    internal static int MaximumRenderedItems => InjectionParameters.TodoPreviewItemBudget.Value;
+    internal static int MaximumItemCharacters => InjectionParameters.TodoPreviewItemCharacterBudget.Value;
+    internal static double LinkedTargetButtonSizeDip => InjectionParameters.TodoPreviewLinkedTargetButtonSizeDip.Value;
 
     // Total card width lost before todo text reaches its Grid column:
     // host close/chrome 22 + view margins 19 + items right margin 2 + row padding 7 +
     // checkbox column 24 + text margins 6 = 80 DIPs. Marker width is added separately per row.
-    private const double TodoTextLaneFixedReserveDip = 80;
+    private static double TodoTextLaneFixedReserveDip => InjectionParameters.TodoPreviewTextReserveDip.Value;
+
+    // Placement and the bounded host consume this same envelope as Describe.
+    internal static EdgeCapsulePreviewSize MaximumCapacity => new(
+        InjectionParameters.TodoPreviewWidth.Resolve(Math.Max(InjectionParameters.TodoPreviewMaximumWidth.Value, InjectionParameters.TodoPreviewEmptyMinimumWidth.Value)),
+        InjectionParameters.TodoPreviewHeight.Resolve(Math.Max(InjectionParameters.TodoPreviewMaximumHeight.Value, InjectionParameters.TodoPreviewEmptyHeight.Value)));
 
     public static TodoEdgeCapsulePreviewProvider Instance { get; } = new();
 
@@ -36,9 +41,14 @@ internal sealed class TodoEdgeCapsulePreviewProvider : IEdgeCapsulePreviewProvid
         var width = EdgeCapsulePreviewMeasure.MeasureWidth(
             context.Title,
             body,
-            minimum: EdgeCapsulePreviewSize.MinimumWidthDip,
-            maximum: 450,
+            minimum: InjectionParameters.TodoPreviewMinimumWidth.Value,
+            maximum: InjectionParameters.TodoPreviewMaximumWidth.Value,
             fixedReserveWidthDip: textLaneReserve);
+        if (items.Count == 0)
+        {
+            width = Math.Max(InjectionParameters.TodoPreviewEmptyMinimumWidth.Value, width);
+        }
+        width = InjectionParameters.TodoPreviewWidth.Resolve(width);
         // Height estimation must subtract the same fixed lane that width estimation added. Keeping
         // these two calculations on one reserve prevents the renderer from wrapping text that the
         // size estimator believed still had room beside the optional marker controls.
@@ -50,18 +60,15 @@ internal sealed class TodoEdgeCapsulePreviewProvider : IEdgeCapsulePreviewProvid
                     PreviewItemText(item.Text),
                     availableTextWidth),
                 1,
-                3));
+                InjectionParameters.TodoPreviewItemEstimatedLineCap.Value));
         var height = items.Count == 0
-            ? 120
+            ? InjectionParameters.TodoPreviewEmptyHeight.Value
             : Math.Clamp(
-                62 + Math.Min(MaximumRenderedItems, estimatedLines) *
-                    AppTypography.Scale(28),
-                150,
-                EdgeCapsulePreviewSize.BuiltInMaximumHeightDip);
-        if (items.Count == 0)
-        {
-            width = Math.Max(130, width);
-        }
+                InjectionParameters.TodoPreviewHeightBase.Value + Math.Min(MaximumRenderedItems, estimatedLines) *
+                    AppTypography.Scale(InjectionParameters.TodoPreviewEstimatedLineHeight.Value),
+                InjectionParameters.TodoPreviewMinimumHeight.Value,
+                InjectionParameters.TodoPreviewMaximumHeight.Value);
+        height = InjectionParameters.TodoPreviewHeight.Resolve(height);
 
         return new EdgeCapsulePreviewDescriptor(
             new EdgeCapsulePreviewSize(width, height),
@@ -86,8 +93,8 @@ internal sealed class TodoEdgeCapsulePreviewProvider : IEdgeCapsulePreviewProvid
                 done++;
             }
 
-            // Keep only the stable first 12 items by Order. With a fixed-size insertion list this
-            // is one model pass, O(n * 12), and never sorts/materializes the complete todo model.
+            // Keep only the stable first configured number of items by Order. This is one
+            // model pass with a bounded insertion list, not a complete model sort.
             var insertionIndex = selected.Count;
             for (var index = 0; index < selected.Count; index++)
             {
@@ -151,7 +158,7 @@ internal sealed class TodoEdgeCapsulePreviewProvider : IEdgeCapsulePreviewProvid
             var reserve = 0.0;
             if (item.ReminderAt.HasValue || item.ReminderTriggered)
             {
-                reserve += AppTypography.Scale(10.5) + 2;
+                reserve += AppTypography.Scale(InjectionParameters.TodoPreviewMarkerFont.Value) + 2;
             }
             if (HasLinkedTarget(item))
             {
@@ -209,7 +216,7 @@ internal sealed class TodoEdgeCapsulePreviewView : EdgeCapsuleLivePreviewView
         _title = new TextBlock
         {
             FontFamily = AppTypography.UiFontFamily,
-            FontSize = AppTypography.Scale(13),
+            FontSize = AppTypography.Scale(InjectionParameters.TodoPreviewTitleFont.Value),
             FontWeight = FontWeights.SemiBold,
             TextTrimming = TextTrimming.CharacterEllipsis,
             VerticalAlignment = VerticalAlignment.Center,
@@ -222,7 +229,7 @@ internal sealed class TodoEdgeCapsulePreviewView : EdgeCapsuleLivePreviewView
         {
             Margin = new Thickness(6, 0, 0, 0),
             FontFamily = AppTypography.UiFontFamily,
-            FontSize = AppTypography.Scale(11),
+            FontSize = AppTypography.Scale(InjectionParameters.TodoPreviewSummaryFont.Value),
             VerticalAlignment = VerticalAlignment.Center
         };
         _summary.SetResourceReference(TextBlock.ForegroundProperty, "WeakTextBrushKey");
@@ -263,7 +270,7 @@ internal sealed class TodoEdgeCapsulePreviewView : EdgeCapsuleLivePreviewView
                     Text = "—",
                     Margin = new Thickness(8, 18, 8, 8),
                     FontFamily = AppTypography.UiFontFamily,
-                    FontSize = AppTypography.Scale(16),
+                    FontSize = AppTypography.Scale(InjectionParameters.TodoPreviewEmptyFont.Value),
                     HorizontalAlignment = HorizontalAlignment.Center
                 };
                 empty.SetResourceReference(TextBlock.ForegroundProperty, "WeakTextBrushKey");
@@ -340,7 +347,7 @@ internal sealed class TodoEdgeCapsulePreviewView : EdgeCapsuleLivePreviewView
             Text = TodoEdgeCapsulePreviewProvider.PreviewItemText(item.Text),
             Margin = new Thickness(1, 0, 5, 0),
             FontFamily = AppTypography.FontFamilyFor(content: true, bold: false),
-            FontSize = AppTypography.Scale(12),
+            FontSize = AppTypography.Scale(InjectionParameters.TodoPreviewItemFont.Value),
             FontWeight = FontWeights.Normal,
             TextWrapping = TextWrapping.Wrap,
             VerticalAlignment = VerticalAlignment.Center
@@ -442,7 +449,7 @@ internal sealed class TodoEdgeCapsulePreviewView : EdgeCapsuleLivePreviewView
             Text = text,
             Margin = new Thickness(1, 0, 1, 0),
             FontFamily = AppTypography.SymbolFontFamily,
-            FontSize = AppTypography.Scale(10.5),
+            FontSize = AppTypography.Scale(InjectionParameters.TodoPreviewMarkerFont.Value),
             VerticalAlignment = VerticalAlignment.Center
         };
         marker.SetResourceReference(
@@ -470,7 +477,7 @@ internal sealed class TodoEdgeCapsulePreviewViewport : Panel
         {
             Text = "…",
             FontFamily = AppTypography.UiFontFamily,
-            FontSize = AppTypography.Scale(14),
+            FontSize = AppTypography.Scale(InjectionParameters.TodoPreviewTruncationFont.Value),
             TextAlignment = TextAlignment.Center,
             IsHitTestVisible = false
         };

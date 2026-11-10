@@ -20,7 +20,7 @@ public sealed partial class PaperWindow
         {
             _todoDragEdgeScrollTimer = new DispatcherTimer(DispatcherPriority.Render)
             {
-                Interval = TimeSpan.FromMilliseconds(16)
+                Interval = TimeSpan.FromMilliseconds(InjectionParameters.TodoAutoScrollTickMs.Value)
             };
             _todoDragEdgeScrollTimer.Tick += OnTodoDragEdgeScrollTick;
         }
@@ -46,6 +46,13 @@ public sealed partial class PaperWindow
             return;
         }
 
+        if (!InjectionParameters.TodoAutoScrollEnabled.Value)
+        {
+            _todoDragEdgeScrollDirection = 0;
+            _todoDragEdgeScrollLastTick = Stopwatch.GetTimestamp();
+            return;
+        }
+
         var scroll = FindVisualAncestor<ScrollViewer>(_todoPanel);
         if (scroll == null || scroll.ScrollableHeight <= 0 || scroll.ActualHeight <= 0)
         {
@@ -54,7 +61,9 @@ public sealed partial class PaperWindow
         }
 
         var pos = Mouse.GetPosition(scroll);
-        var edge = Math.Min(AppTypography.Scale(48), scroll.ActualHeight / 4);
+        var edge = InjectionParameters.TodoAutoScrollEdgeFinal.Resolve(Math.Min(
+            AppTypography.Scale(InjectionParameters.TodoAutoScrollEdgeDip.Value),
+            scroll.ActualHeight * InjectionParameters.TodoAutoScrollViewportRatio.Value));
         var direction = 0;
         var proximity = 0d;
         if (pos.X >= 0 && pos.X <= scroll.ActualWidth &&
@@ -75,7 +84,7 @@ public sealed partial class PaperWindow
         var now = Stopwatch.GetTimestamp();
         var elapsedSeconds = Math.Clamp(
             (now - _todoDragEdgeScrollLastTick) / (double)Stopwatch.Frequency,
-            0, 0.05);
+            0, InjectionParameters.TodoAutoScrollMaxElapsed.Value);
         _todoDragEdgeScrollLastTick = now;
         if (direction == 0)
         {
@@ -91,8 +100,13 @@ public sealed partial class PaperWindow
 
         var easeIn = Math.Clamp(
             (now - _todoDragEdgeScrollEnteredAt) /
-            (Stopwatch.Frequency * 0.20), 0, 1);
-        var speed = 28 + 520 * proximity * proximity;
+            (Stopwatch.Frequency * InjectionParameters.TodoAutoScrollEaseSeconds.Value), 0, 1);
+        var power = InjectionParameters.TodoAutoScrollPower.Value;
+        var proximityFactor = power == 2 ? proximity * proximity : Math.Pow(proximity, power);
+        var speed = InjectionParameters.TodoAutoScrollSpeedFinal.Resolve(
+            InjectionParameters.TodoAutoScrollBaseSpeed.Value +
+            InjectionParameters.TodoAutoScrollAcceleration.Value *
+            proximityFactor);
         // The ScrollChanged handler updates the drop target after layout has
         // applied the new offset, rather than sampling stale row positions here.
         scroll.ScrollToVerticalOffset(scroll.VerticalOffset +

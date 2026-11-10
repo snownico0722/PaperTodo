@@ -11,7 +11,7 @@ namespace PaperTodo;
 
 public sealed partial class AppController
 {
-    private const double SettingsSidebarBaseWidth = 158;
+    private static double SettingsSidebarBaseWidth => InjectionParameters.SettingsSidebarBaseWidth.Value;
     private readonly Dictionary<SettingsPage, double> _settingsPageScrollOffsets = new();
     private string? _settingsNativePalette;
 
@@ -393,7 +393,7 @@ public sealed partial class AppController
         var width = MeasureLabel(Strings.Get("SettingsAdvancedMode"), 11.5, 50);
         foreach (var page in SettingsPages())
             width = Math.Max(width, MeasureLabel(SettingsPageLabel(page), 12.5, 42));
-        return Math.Clamp(Math.Ceiling(width), SettingsSidebarBaseWidth, SettingsSidebarBaseWidth * 1.2);
+        return InjectionParameters.SettingsSidebarWidth.Resolve(Math.Clamp(Math.Ceiling(width), SettingsSidebarBaseWidth, SettingsSidebarBaseWidth * InjectionParameters.SettingsSidebarMaximumScale.Value));
     }
 
     private UIElement BuildSettingsSidebarNavigationItem(SettingsPage page)
@@ -401,7 +401,7 @@ public sealed partial class AppController
         var active = page == _settingsPage;
         var border = new Border
         {
-            Height = 34,
+            Height = InjectionParameters.SettingsNavigationRowHeight.Value,
             CornerRadius = new CornerRadius(6),
             Background = active
                 ? Theme.Tint((byte)(Theme.IsDark ? 34 : 18))
@@ -580,14 +580,14 @@ public sealed partial class AppController
     private static (double Width, double Height) SettingsSidebarSizeForWorkArea(
         Rect workArea, double navigationWidth)
     {
-        var targetWidth = Math.Min(840 + navigationWidth - SettingsSidebarBaseWidth,
-            Math.Max(360, workArea.Width - 48));
-        var targetHeight = Math.Min(620, Math.Max(320, workArea.Height - 48));
+        var targetWidth = Math.Min(InjectionParameters.SettingsWindowBaseWidth.Value + navigationWidth - SettingsSidebarBaseWidth,
+            Math.Max(InjectionParameters.SettingsWindowMinimumWidth.Value, workArea.Width - InjectionParameters.SettingsWindowPreferredMargin.Value));
+        var targetHeight = Math.Min(InjectionParameters.SettingsWindowBaseHeight.Value, Math.Max(InjectionParameters.SettingsWindowMinimumHeight.Value, workArea.Height - InjectionParameters.SettingsWindowPreferredMargin.Value));
 
         // Preserve the normal minimum size when possible, but never let that minimum push the
         // window outside a tiny/high-DPI work area. Keep 16 DIPs of margin on each side.
-        targetWidth = Math.Min(targetWidth, Math.Max(1, workArea.Width - 32));
-        targetHeight = Math.Min(targetHeight, Math.Max(1, workArea.Height - 32));
+        targetWidth = Math.Min(targetWidth, Math.Max(1, workArea.Width - InjectionParameters.SettingsWindowBoundaryMargin.Value));
+        targetHeight = Math.Min(targetHeight, Math.Max(1, workArea.Height - InjectionParameters.SettingsWindowBoundaryMargin.Value));
         return (targetWidth, targetHeight);
     }
 

@@ -157,6 +157,9 @@ public partial class App : Application
 
         try
         {
+            // Injection is process-wide and must precede controller field initializers.
+            UserInjection.TextResolver = UserInjectionText.Get;
+            UserInjection.LoadStartup(Path.Combine(AppContext.BaseDirectory, "user.json"));
             _controller = new AppController();
         }
         catch (OperationCanceledException)
@@ -208,6 +211,7 @@ public partial class App : Application
         }
         _controller.StartStateBackupPolicy();
         _controller.StartCoreHistoryBackupPolicy();
+        _controller.RestoreUserInjectionPaper(e.Args);
         CompleteSingleInstanceStartup();
     }
 

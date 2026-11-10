@@ -3,7 +3,7 @@ namespace PaperTodo;
 public sealed partial class PaperWindow
 {
     // Keep normal along-edge adjustment from accidentally tearing off the binding.
-    private const double ExperimentalTetherDetachThresholdDip = 72;
+    private static double ExperimentalTetherDetachThresholdDip => InjectionParameters.ExperimentalTetherDetachDip.Value;
 
     private enum ExperimentalTetherDragUpdate
     {

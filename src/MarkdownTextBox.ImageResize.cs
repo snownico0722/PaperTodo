@@ -55,7 +55,7 @@ public sealed partial class MarkdownTextBox
             return;
         }
 
-        if (Math.Abs(_lastImageViewportWidth - currentWidth) < 1.0)
+        if (Math.Abs(_lastImageViewportWidth - currentWidth) < InjectionParameters.NoteImageResizeToleranceDip.Value)
         {
             return;
         }
@@ -76,7 +76,7 @@ public sealed partial class MarkdownTextBox
         }
 
         _imageResizeSettleTimer ??= new DispatcherTimer(
-            TimeSpan.FromMilliseconds(200),
+            TimeSpan.FromMilliseconds(InjectionParameters.NoteImageResizeSettleMs.Value),
             DispatcherPriority.Background,
             (_, _) => CompleteImageResizePreview(),
             Dispatcher);

@@ -1,4 +1,5 @@
 using System;
+using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
@@ -7,8 +8,8 @@ using System.Windows.Threading;
 namespace PaperTodo;
 
 // WPF TextBox has MaxLines but no TextTrimming. This display-only overlay uses
-// its actual first two visual-line boundaries and adds a display-only ellipsis.
-// TextBlock's native character trimming keeps that ellipsis inside the second
+// its actual visible-line boundaries and adds a display-only ellipsis.
+// TextBlock's native character trimming keeps that ellipsis inside the last
 // line when it is full. It never modifies PaperItem.Text or editor history.
 internal sealed class TodoFoldPreview
 {
@@ -94,36 +95,66 @@ internal sealed class TodoFoldPreview
             return;
         }
 
+        var visibleLines = _editor.MaxLines;
+        if (_editor.LineCount <= visibleLines)
+        {
+            _preview.Visibility = Visibility.Collapsed;
+            _editor.Opacity = 1;
+            return;
+        }
+
         if (!_editor.IsLoaded || _editor.IsKeyboardFocusWithin ||
-            _editor.MaxLines != 2 || _editor.LineCount <= 2 ||
             _editor.ActualWidth <= 0 || _editor.ActualHeight <= 0)
             return;
 
-        // The TextBlock must be constrained to exactly the two visible text
+        // The TextBlock must be constrained to exactly the visible text
         // lines, even if other controls make the parent row taller. The caret
         // rectangle uses the TextBox's *actual* wrapping and current DPI.
-        var secondStart = _editor.GetCharacterIndexFromLineIndex(1);
-        var secondLength = _editor.GetLineLength(1);
-        if (secondStart < 0 || secondLength < 0) return;
-        var secondEnd = Math.Clamp(secondStart + secondLength, secondStart, _editor.Text.Length);
-        var secondLine = _editor.GetRectFromCharacterIndex(secondStart);
-        if (secondLine.IsEmpty || secondLine.Height <= 0) return;
+        var lastStart = _editor.GetCharacterIndexFromLineIndex(visibleLines - 1);
+        if (lastStart < 0) return;
+        var lastLine = _editor.GetRectFromCharacterIndex(lastStart);
+        if (lastLine.IsEmpty || lastLine.Height <= 0) return;
 
         var lineHeight = _editor.FontSize * _editor.FontFamily.LineSpacing;
-        var twoLineHeight = Math.Min(_editor.ActualHeight,
-            Math.Max(secondLine.Bottom + _editor.Padding.Bottom + 1,
-                     _editor.Padding.Top + 2 * lineHeight + _editor.Padding.Bottom));
+        var previewHeight = Math.Min(_editor.ActualHeight,
+            Math.Max(lastLine.Bottom + _editor.Padding.Bottom + 1,
+                     _editor.Padding.Top + visibleLines * lineHeight + _editor.Padding.Bottom));
 
-        if (twoLineHeight <= 0) return;
+        if (previewHeight <= 0) return;
 
-        // A two-line TextBlock with the *entire* source can silently clip
+        // A height-limited TextBlock with the *entire* source can silently clip
         // vertical overflow without drawing a trimming glyph. Explicitly
-        // extract the visible lines and append an ellipsis to line two.
-        var first = _editor.Text[..secondStart].TrimEnd('\r', '\n');
-        var second = _editor.Text[secondStart..secondEnd].TrimEnd('\r', '\n', ' ', '\t');
-        _preview.Text = first + "\n" + second + "…";
+        // preserve every visual line break and append an ellipsis to the last.
+        if (visibleLines == 2)
+        {
+            // Keep the ordinary two-line path's original measurements and allocations.
+            var lastLength = _editor.GetLineLength(1);
+            if (lastLength < 0) return;
+            var lastEnd = Math.Clamp(lastStart + lastLength, lastStart, _editor.Text.Length);
+            var first = _editor.Text[..lastStart].TrimEnd('\r', '\n');
+            var second = _editor.Text[lastStart..lastEnd].TrimEnd('\r', '\n', ' ', '\t');
+            _preview.Text = first + "\n" + second + "…";
+        }
+        else
+        {
+            var text = new StringBuilder();
+            for (var line = 0; line < visibleLines; line++)
+            {
+                var start = _editor.GetCharacterIndexFromLineIndex(line);
+                var length = _editor.GetLineLength(line);
+                if (start < 0 || length < 0) return;
+                var end = Math.Clamp(start + length, start, _editor.Text.Length);
+                var content = _editor.Text[start..end];
+                if (line != 0) text.Append('\n');
+                text.Append(line == visibleLines - 1
+                    ? content.TrimEnd('\r', '\n', ' ', '\t')
+                    : content.TrimEnd('\r', '\n'));
+            }
+            text.Append('…');
+            _preview.Text = text.ToString();
+        }
         _preview.Width = _editor.ActualWidth;
-        _preview.Height = twoLineHeight;
+        _preview.Height = previewHeight;
         _preview.Visibility = Visibility.Visible;
         _editor.Opacity = 0;
     }

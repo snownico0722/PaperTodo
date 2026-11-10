@@ -81,8 +81,8 @@ public sealed partial class PaperWindow
             }
             var monitor = DeepCapsuleMonitorGeometry().LocalWorkAreaDip;
             var size = descriptor.Size.Normalize(
-                Math.Max(1, monitor.Width - 16),
-                Math.Max(1, monitor.Height - 16));
+                Math.Max(1, monitor.Width - InjectionParameters.PreviewMonitorInsetDip.Value),
+                Math.Max(1, monitor.Height - InjectionParameters.PreviewMonitorInsetDip.Value));
             if (!PrepareEdgeCapsuleHostCapacity(size))
             {
                 if (!TryConstrainEdgeCapsulePreviewToCurrentHostCapacity(
@@ -239,13 +239,19 @@ public sealed partial class PaperWindow
         // own deliberate maxima so edits can change Preferred Size without growing a live WPF HWND.
         if (_paper.Type == PaperTypes.Todo)
         {
-            size = new EdgeCapsulePreviewSize(450, 400);
+            var maximum = TodoEdgeCapsulePreviewProvider.MaximumCapacity;
+            size = new EdgeCapsulePreviewSize(
+                maximum.WidthDip,
+                InjectionParameters.TodoPreviewHostHeight.Resolve(Math.Max(400, maximum.HeightDip)));
             source = "TodoRendererEnvelope";
             return true;
         }
         if (_paper.Type == PaperTypes.Note && IsCurrentBodyProviderMarkdown)
         {
-            size = new EdgeCapsulePreviewSize(460, 410);
+            var maximum = MarkdownEdgeCapsulePreviewProvider.MaximumCapacity;
+            size = new EdgeCapsulePreviewSize(
+                maximum.WidthDip,
+                InjectionParameters.MarkdownPreviewHostHeight.Resolve(Math.Max(410, maximum.HeightDip)));
             source = "MarkdownRendererEnvelope";
             return true;
         }
@@ -288,7 +294,7 @@ public sealed partial class PaperWindow
             // Web fallback width can change with capsule presentation; reserve its actual bounded
             // compatibility envelope whether the body is loaded or still deferred.
             size = new EdgeCapsulePreviewSize(
-                PluginFallbackMiniMaximumWidth,
+                InjectionParameters.PluginPreviewFallbackWidth.Resolve(PluginFallbackMiniMaximumWidth),
                 Math.Max(PluginFallbackMiniHeight, 220));
             source = "WebPluginFallbackEnvelope";
             return true;
@@ -297,9 +303,11 @@ public sealed partial class PaperWindow
         if (descriptor.Kind == PaperBodyPluginKind.Native && !_isShellBuilt)
         {
             // The body session has not run yet, so PreferredMiniViewSize is intentionally unknown.
-            // This initial envelope covers both protocol defaults (320x220 dedicated mini and
-            // 360x260 migration) without pretending to cap future Native Preferred sizes.
-            size = new EdgeCapsulePreviewSize(360, 260);
+            // Keep the existing initial envelope and expand it for the configured capsule
+            // fallback without pretending to cap future Native Preferred sizes.
+            size = new EdgeCapsulePreviewSize(
+                Math.Max(360, InjectionParameters.PluginPreviewFallbackWidth.Resolve(PluginFallbackMiniMaximumWidth)),
+                Math.Max(260, PluginFallbackMiniHeight));
             source = "DeferredNativePluginDefaultEnvelope";
             return true;
         }
@@ -336,8 +344,8 @@ public sealed partial class PaperWindow
         try
         {
             var workArea = DeepCapsuleMonitorGeometry().LocalWorkAreaDip;
-            var maximumWidth = Math.Max(1, workArea.Width - 16);
-            var maximumHeight = Math.Max(1, workArea.Height - 16);
+            var maximumWidth = Math.Max(1, workArea.Width - InjectionParameters.PreviewMonitorInsetDip.Value);
+            var maximumHeight = Math.Max(1, workArea.Height - InjectionParameters.PreviewMonitorInsetDip.Value);
 
             if (_edgeCapsulePendingPreviewCapacity is { } pendingCapacity)
             {

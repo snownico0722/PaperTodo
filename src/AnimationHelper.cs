@@ -9,7 +9,7 @@ public static class AnimationHelper
 {
     public static readonly IEasingFunction SmoothEase = FreezeShared(new CubicEase { EasingMode = EasingMode.EaseOut });
     public static readonly IEasingFunction QuickEase = FreezeShared(new QuadraticEase { EasingMode = EasingMode.EaseOut });
-    public static readonly IEasingFunction SnapEase = FreezeShared(new BackEase { Amplitude = 0.3, EasingMode = EasingMode.EaseOut });
+    public static readonly IEasingFunction SnapEase = FreezeShared(new BackEase { Amplitude = InjectionParameters.AnimationSnapAmplitude.Value, EasingMode = EasingMode.EaseOut });
 
     // These fixed curves are immutable Freezables, not per-window animation state.
     // Freeze before publication so the first caller need not be the UI thread.
@@ -211,7 +211,7 @@ public static class AnimationHelper
 
 internal static class AnimationTiming
 {
-    internal const double FastDurationScale = 0.60;
+    internal static double FastDurationScale => InjectionParameters.FastDurationScale.Value;
 
     private static bool UseFastDurations =>
         AppController.Current?.State is

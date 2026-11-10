@@ -18,10 +18,10 @@ public sealed partial class PaperWindow
     private static readonly Geometry TodoFoldUp = Geometry.Parse("M 2,8 L 6,4 L 10,8");
     private static readonly Geometry TodoFoldDown = Geometry.Parse("M 2,4 L 6,8 L 10,4");
 
-    private const int TodoFoldThreshold = 4;
-    private const int TodoFoldVisibleLines = 2;
-    internal const int TodoTextMaxLength = 5000;
-    internal const int MaxPastedTodoLines = 200;
+    private static int TodoFoldThreshold => InjectionParameters.TodoFoldThreshold.Value;
+    private static int TodoFoldVisibleLines => InjectionParameters.TodoFoldVisibleLines.Value;
+    internal static int TodoTextMaxLength => InjectionParameters.TodoTextLimit.Value;
+    internal static int MaxPastedTodoLines => InjectionParameters.TodoPasteLineLimit.Value;
 
     private UIElement BuildTodoBody()
     {
@@ -1535,15 +1535,15 @@ public sealed partial class PaperWindow
         if (_controller.State.EnableAnimations && newItems.Count > 1)
         {
             var animationGeneration = _todoRowsGeneration;
-            for (int i = 0; i < Math.Min(newItems.Count, 15); i++)
+            for (int i = 0; i < Math.Min(newItems.Count, InjectionParameters.TodoPasteAnimationCount.Value); i++)
             {
                 var animItem = newItems[i];
                 var animRow = _todoRows.FirstOrDefault(r => (string)r.Tag == animItem.Id);
                 if (animRow == null) continue;
 
-                var delay = i * 40;
+                var delay = i * InjectionParameters.TodoPasteStaggerMs.Value;
                 animRow.Opacity = 0;
-                AnimationHelper.GetTranslateTransform(animRow).Y = -15;
+                AnimationHelper.GetTranslateTransform(animRow).Y = InjectionParameters.TodoPasteStartOffset.Value;
 
                 var timer = new System.Windows.Threading.DispatcherTimer
                 {
@@ -1564,8 +1564,8 @@ public sealed partial class PaperWindow
                         return;
                     }
 
-                    AnimationHelper.FadeIn(row, 200);
-                    AnimationHelper.TranslateTo(row, 0, 0, 220, AnimationHelper.QuickEase);
+                    AnimationHelper.FadeIn(row, InjectionParameters.TodoPasteFadeMs.Value);
+                    AnimationHelper.TranslateTo(row, 0, 0, InjectionParameters.TodoPasteMoveMs.Value, AnimationHelper.QuickEase);
                 };
                 timer.Start();
             }
@@ -1702,11 +1702,11 @@ public sealed partial class PaperWindow
             var fadeOut = new System.Windows.Media.Animation.DoubleAnimation(
                 1,
                 0,
-                TimeSpan.FromMilliseconds(AnimationTiming.ScaleMilliseconds(200)));
+                TimeSpan.FromMilliseconds(AnimationTiming.ScaleMilliseconds(InjectionParameters.TodoDeleteMs.Value)));
             var slideOut = new System.Windows.Media.Animation.DoubleAnimation(
                 0,
-                30,
-                TimeSpan.FromMilliseconds(AnimationTiming.ScaleMilliseconds(200)))
+                InjectionParameters.TodoDeleteOffset.Value,
+                TimeSpan.FromMilliseconds(AnimationTiming.ScaleMilliseconds(InjectionParameters.TodoDeleteMs.Value)))
             {
                 EasingFunction = AnimationHelper.QuickEase
             };
@@ -2144,8 +2144,8 @@ public sealed partial class PaperWindow
 
         var ghost = new Border
         {
-            Width = Math.Max(state.SourceRow.ActualWidth, 160),
-            MinHeight = Math.Max(state.SourceRow.ActualHeight, 30),
+            Width = Math.Max(state.SourceRow.ActualWidth, InjectionParameters.TodoGhostMinimumWidth.Value),
+            MinHeight = Math.Max(state.SourceRow.ActualHeight, InjectionParameters.TodoGhostMinimumHeight.Value),
             Padding = new Thickness(2),
             CornerRadius = new CornerRadius(Theme.IsPixelSkin ? 0 : RadiusControl),
             Background = PaperBrush,
@@ -2407,8 +2407,8 @@ public sealed partial class PaperWindow
         {
             _dropIndicatorLine = new Border
             {
-                Height = 3,
-                CornerRadius = new CornerRadius(1.5),
+                Height = InjectionParameters.TodoDropIndicatorHeight.Value,
+                CornerRadius = new CornerRadius(InjectionParameters.TodoDropIndicatorRadius.Value),
                 Background = DropIndicatorBrush,
                 IsHitTestVisible = false
             };
@@ -2421,7 +2421,7 @@ public sealed partial class PaperWindow
         var y = placement == DropPlacement.Before
             ? rowOrigin.Y
             : rowOrigin.Y + row.ActualHeight;
-        var width = Math.Max(24, row.ActualWidth - 8);
+        var width = Math.Max(InjectionParameters.TodoDropIndicatorMinimumWidth.Value, row.ActualWidth - InjectionParameters.TodoDropIndicatorWidthInset.Value);
 
         _dropIndicatorLine.Width = width;
         Canvas.SetLeft(_dropIndicatorLine, rowOrigin.X + 4);

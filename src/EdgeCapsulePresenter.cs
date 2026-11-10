@@ -290,9 +290,11 @@ internal sealed class EdgeCapsulePresenter
             resolvePresentedFrame,
         Func<EdgeCapsulePresentationFrame, bool> apply,
         long? nowTimestamp = null,
-        int pointerDurationMilliseconds = EdgeCapsuleLayout.HorizontalResizeMilliseconds,
-        int preserveDurationMilliseconds = EdgeCapsuleLayout.SlotMoveMilliseconds)
+        int? pointerDurationMilliseconds = null,
+        int? preserveDurationMilliseconds = null)
     {
+        var pointerDuration = pointerDurationMilliseconds ?? EdgeCapsuleLayout.HorizontalResizeMilliseconds;
+        var preserveDuration = preserveDurationMilliseconds ?? EdgeCapsuleLayout.SlotMoveMilliseconds;
         var remaining = EdgeCapsuleDirty.None;
         var now = nowTimestamp ??
             _reconcileTimestampOverride ??
@@ -314,7 +316,7 @@ internal sealed class EdgeCapsulePresenter
         {
             RequestPresentation(EdgeCapsuleMotion.Animate(
                 EdgeCapsuleTransitionReason.Pointer,
-                pointerDurationMilliseconds));
+                pointerDuration));
             dirty |= EdgeCapsuleDirty.Presentation;
         }
 
@@ -348,7 +350,7 @@ internal sealed class EdgeCapsulePresenter
                     displayMetrics
                         ? EdgeCapsuleTransitionReason.DisplayMetrics
                         : EdgeCapsuleTransitionReason.Measure,
-                    preserveDurationMilliseconds));
+                    preserveDuration));
                 dirty |= EdgeCapsuleDirty.Presentation;
             }
         }
@@ -364,7 +366,7 @@ internal sealed class EdgeCapsulePresenter
             layout,
             apply,
             now,
-            preserveDurationMilliseconds);
+            preserveDuration);
         if (!result.Applied)
         {
             remaining |= EdgeCapsuleDirty.Presentation | EdgeCapsuleDirty.ApplyRetry;
@@ -381,12 +383,12 @@ internal sealed class EdgeCapsulePresenter
         {
             RequestPresentation(EdgeCapsuleMotion.Animate(
                 EdgeCapsuleTransitionReason.Pointer,
-                pointerDurationMilliseconds));
+                pointerDuration));
             var retarget = ReconcilePresentation(
                 layout,
                 apply,
                 now,
-                preserveDurationMilliseconds);
+                preserveDuration);
             if (!retarget.Applied)
             {
                 remaining |= EdgeCapsuleDirty.Presentation | EdgeCapsuleDirty.ApplyRetry;

@@ -44,18 +44,20 @@ public sealed partial class MasterCapsuleWindow : Window
     private static readonly IntPtr HtTransparent = new(-1);
     // Compact internal metrics controlling how tightly the glyph + stable count sit inside the pill.
     // The master owns exactly the width it renders; no full pill is hidden outside its HWND.
-    private const double WindowChromeMargin = EdgeCapsuleLayout.WindowChromeMargin;
-    private const double MasterLeftPadding = 4;
-    private const double MasterGlyphGap = 3;
-    private const double MasterRightPadding = 3;
-    private const double MasterInteriorBorderThickness = 1;
+    private static double WindowChromeMargin => EdgeCapsuleLayout.WindowChromeMargin;
+    private static double MasterLeftPadding => InjectionParameters.MasterLeftPadding.Value;
+    private static double MasterGlyphGap => InjectionParameters.MasterGlyphGap.Value;
+    private static double MasterRightPadding => InjectionParameters.MasterRightPadding.Value;
+    private static double MasterInteriorBorderThickness => InjectionParameters.MasterInteriorBorderThickness.Value;
     private const string MasterTwoDigitCountSample = "88";
-    private const double MasterQueueTransferUnlockDistance = EdgeCapsuleLayout.CrossQueueDragUnlockDistance;
+    private static double MasterQueueTransferUnlockDistance => EdgeCapsuleLayout.CrossQueueDragUnlockDistance;
 
     private readonly AppController _controller;
     private readonly DeepCapsuleContextMenuSession _contextMenuSession;
-    private double MasterGlyphFontSize => AppTypography.Scale(12);
-    private double MasterLabelFontSize => VisualTextSizes.FontSize(12, _controller.State.CapsuleTextSize);
+    private double MasterGlyphFontSize => AppTypography.Scale(InjectionParameters.MasterGlyphBase.Value);
+    private double MasterLabelFontSize => InjectionParameters.MasterLabelFont.Resolve(
+        InjectionParameters.CapsuleLabelFont.Resolve(VisualTextSizes.FontSize(
+            InjectionParameters.CapsuleLabelBase.Value, _controller.State.CapsuleTextSize)));
     private FontFamily MasterLabelFontFamily =>
         AppTypography.FontFamilyFor(content: false, bold: _controller.State.CapsuleTextBold);
 
@@ -826,7 +828,7 @@ public sealed partial class MasterCapsuleWindow : Window
             countWidth +
             MasterRightPadding +
             MasterInteriorBorderThickness);
-        return Math.Max(1, bodyWidth + WindowChromeMargin);
+        return InjectionParameters.MasterWidth.Resolve(Math.Max(1, bodyWidth + WindowChromeMargin));
     }
 
     internal double DesiredDockedWidthFor(MonitorGeometry geometry) =>

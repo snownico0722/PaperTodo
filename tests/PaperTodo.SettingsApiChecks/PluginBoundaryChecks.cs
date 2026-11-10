@@ -11,6 +11,8 @@ internal static partial class Program
 {
     private static async Task PluginBoundaryBehavior(AppController c, PaperData owner, PaperData note, PaperData todo)
     {
+        InjectionCapabilityPermissionsAndLifetime(c, owner);
+        InjectionRetainsOrdinarySettingPreference(c);
         DeferredPluginEnablementDoesNotAttachEarly(c);
         StartingPluginRuntimeIsDisposedOnRemoval(c);
         ReadsAndNotificationsDoNotCommitOrReplaceBodies(c, owner, note, todo);
@@ -21,6 +23,68 @@ internal static partial class Program
         CreationOwnsInitialTodoFields(c, note);
         PartialReminderDeliveryKeepsUnsurfacedItemsPending(c);
         await InitialRuntimeFailureDoesNotRetry(c);
+    }
+
+    private static void InjectionCapabilityPermissionsAndLifetime(AppController controller, PaperData owner)
+    {
+        var active = true;
+        using var noPermissions = new PaperBodyPluginHostApi(controller, controller.PaperCommands,
+            owner.Id, "tests.injection-none", [], () => active, () => active);
+        using var readOnly = new PaperBodyPluginHostApi(controller, controller.PaperCommands,
+            owner.Id, "tests.injection-reader", [PaperTodoPermissionNames.SettingsRead], () => active, () => active);
+        using var runtime = new PaperPluginRuntimeWorkspaceApi(controller, "tests.injection-runtime",
+            [PaperTodoPermissionNames.SettingsRead], () => active);
+        var denied = (IPaperInjectionApi)noPermissions;
+        var reader = (IPaperInjectionApi)readOnly;
+        var runtimeReader = (IPaperInjectionApi)runtime;
+
+        Throws<PaperTodoPluginException>(() => denied.Read(), "permission_denied");
+        Throws<PaperTodoPluginException>(() => denied.Suggest("todo.paste.maxItems", Json(200)), "permission_denied");
+        Throws<PaperTodoPluginException>(() => reader.Apply(), "permission_denied");
+        Throws<PaperTodoPluginException>(() => reader.Restart(), "permission_denied");
+        Throws<PaperTodoPluginException>(() => runtimeReader.Apply(), "permission_denied");
+        Throws<PaperTodoPluginException>(() => runtimeReader.Restart(), "permission_denied");
+
+        active = false;
+        Throws<PaperTodoPluginException>(() => denied.Read(), "session_closed");
+        Throws<PaperTodoPluginException>(() => reader.Apply(), "session_closed");
+        Throws<PaperTodoPluginException>(() => reader.Suggest("todo.paste.maxItems", Json(200)), "session_closed");
+        Throws<PaperTodoPluginException>(() => reader.Restart(), "session_closed");
+        Throws<PaperTodoPluginException>(() => runtimeReader.Read(), "runtime_closed");
+        Throws<PaperTodoPluginException>(() => runtimeReader.Apply(), "runtime_closed");
+        Throws<PaperTodoPluginException>(() => runtimeReader.Suggest("todo.paste.maxItems", Json(200)), "runtime_closed");
+        Throws<PaperTodoPluginException>(() => runtimeReader.Restart(), "runtime_closed");
+    }
+
+    private static void InjectionRetainsOrdinarySettingPreference(AppController controller)
+    {
+        const string injectionId = "appearance.fontScale";
+        const string settingId = "appearance.font_scale";
+        var preference = controller.State.Zoom;
+        var injected = preference == 1.5 ? 1.75 : 1.5;
+        var snapshot = UserInjection.Read();
+        var result = controller.ApplyUserInjection(new PaperInjectionPatch
+        {
+            ExpectedRevision = snapshot.Revision,
+            Set = new Dictionary<string, JsonElement> { [injectionId] = Json(injected) }
+        });
+        var locked = controller.PublicSettings.Get(settingId);
+        Check(!locked.Writable && locked.Value.GetDouble() == preference && controller.State.Zoom == preference,
+            "Injection locks the ordinary setting while retaining its stored preference and API value.");
+        Check(AppTypography.ScaleFactor == injected,
+            "The injected scale reaches the typography consumer without changing AppState.");
+        Throws<PaperSettingsException>(() => controller.PublicSettings.Set(settingId, Json(1.0)), "setting_read_only");
+
+        controller.ApplyUserInjection(new PaperInjectionPatch
+        {
+            ExpectedRevision = result.Snapshot.Revision,
+            Remove = [injectionId]
+        });
+        var unlocked = controller.PublicSettings.Get(settingId);
+        Check(unlocked.Writable && unlocked.Value.GetDouble() == preference && controller.State.Zoom == preference,
+            "Removing and applying an injection unlocks the original preference without writing the override into it.");
+        Check(AppTypography.ScaleFactor == OverallFontScales.Normalize(preference),
+            "Removing the override restores the ordinary typography calculation.");
     }
 
     private static void DeferredPluginEnablementDoesNotAttachEarly(AppController c)

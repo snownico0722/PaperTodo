@@ -5,17 +5,18 @@ namespace PaperTodo;
 
 public sealed partial class AppController
 {
-    // Two 60-Hz frames reject incidental pass-through without adding the visibly sluggish 50-ms
+    // The default two 60-Hz frames reject incidental pass-through without adding a sluggish 50-ms
     // floor to every A-to-B switch. The negative-only predictor can still extend or veto motion.
-    private const double EdgeCapsulePreviewTransferResidenceMilliseconds = 32;
-    private const double EdgeCapsulePreviewPostDragResidenceMilliseconds = 140;
-    private const double EdgeCapsulePreviewPostDragStableMilliseconds = 48;
-    private const double EdgeCapsulePreviewPointerToleranceDip = 2;
-    private const double EdgeCapsulePreviewCorridorTrackingIntervalMilliseconds = 24;
-    private const double EdgeCapsulePreviewActivationIntentTrackingMilliseconds = 16;
-    private const double EdgeCapsulePreviewLayoutSuppressionMilliseconds =
-        EdgeCapsuleLayout.SlotMoveMilliseconds + 50;
-    private const int EdgeCapsulePreviewCursorReadRetryCount = 1;
+    private static double EdgeCapsulePreviewTransferResidenceMilliseconds => InjectionParameters.PreviewTransferResidenceMilliseconds.Value;
+    private static double EdgeCapsulePreviewPostDragResidenceMilliseconds => InjectionParameters.PreviewPostDragResidenceMilliseconds.Value;
+    private static double EdgeCapsulePreviewPostDragStableMilliseconds => InjectionParameters.PreviewPostDragStableMilliseconds.Value;
+    private static double EdgeCapsulePreviewPointerToleranceDip => InjectionParameters.PreviewPointerToleranceDip.Value;
+    private static double EdgeCapsulePreviewCorridorTrackingIntervalMilliseconds => InjectionParameters.PreviewCorridorTrackingIntervalMilliseconds.Value;
+    private static double EdgeCapsulePreviewActivationIntentTrackingMilliseconds => InjectionParameters.PreviewActivationIntentTrackingMilliseconds.Value;
+    private static double EdgeCapsulePreviewLayoutSuppressionMilliseconds =>
+        InjectionParameters.PreviewLayoutSuppressionMs.Resolve(
+            EdgeCapsuleLayout.SlotMoveMilliseconds + InjectionParameters.PreviewLayoutSuppressionMarginMs.Value);
+    private static int EdgeCapsulePreviewCursorReadRetryCount => InjectionParameters.PreviewCursorReadRetryCount.Value;
 
     private readonly EdgeCapsuleHoverIntentPredictor
         _edgeCapsulePreviewIntentPredictor = new();
@@ -70,6 +71,22 @@ public sealed partial class AppController
         PaperWindow? Target,
         bool OwnerContains,
         bool TransferRectangleContains);
+
+    private void RefreshUserInjectionPreview(IReadOnlySet<string> changedKeys)
+    {
+        if (changedKeys.Any(key => key.StartsWith("edge.hover.profile.", StringComparison.Ordinal)))
+        {
+            EdgeCapsuleHoverIntentPredictor.RefreshProfiles();
+        }
+        if (changedKeys.Any(key =>
+                key.StartsWith("edge.hover.", StringComparison.Ordinal) ||
+                key.StartsWith("edge.preview.activation.", StringComparison.Ordinal)))
+        {
+            // Existing deadlines were scheduled with the previous residence/profile values.
+            // Reuse the settings path to cancel them and resample the physical pointer.
+            RefreshEdgeCapsuleHoverIntentRuntime();
+        }
+    }
 
     private EdgeCapsuleQueuePlan BuildCurrentEdgeCapsuleQueuePlan()
     {

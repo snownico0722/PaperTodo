@@ -103,9 +103,11 @@ internal static class MarkdownPreviewLinkHit
 
 internal static partial class MarkdownEdgeCapsulePreviewRenderer
 {
-    // The whole card is capped at 410 DIPs. Preparing this much body is therefore sufficient for
-    // every current card height and lets one artifact survive a smaller host-height constraint.
-    internal const double ArtifactMaximumBodyHeight = 410;
+    // Keep the original preparation floor and cover any explicitly enlarged card. The
+    // final budget can be independently overridden; viewport clipping remains unchanged.
+    internal static double ArtifactMaximumBodyHeight =>
+        InjectionParameters.MarkdownPreviewArtifactBodyHeight.Resolve(
+            Math.Max(410, MarkdownEdgeCapsulePreviewProvider.MaximumCapacity.HeightDip));
     internal static readonly Thickness ArtifactViewMargin = new(10, 9, 9, 10);
     internal static readonly Thickness ArtifactViewportMargin = new(1, 0, 2, 0);
 

@@ -17,9 +17,9 @@ namespace PaperTodo;
 
 public sealed partial class MarkdownTextBox : TextEditor
 {
-    private const int MaxClipboardEncodedImageBytes = 32 * 1024 * 1024;
-    private const double ImageBlockVerticalPadding = 7;
-    private const double ImageBlockHorizontalPadding = 2;
+    private static int MaxClipboardEncodedImageBytes => InjectionParameters.NoteClipboardImageBytes.Value;
+    private static double ImageBlockVerticalPadding => InjectionParameters.NoteImageVerticalPadding.Value;
+    private static double ImageBlockHorizontalPadding => InjectionParameters.NoteImageHorizontalPadding.Value;
     private static readonly string[] EncodedClipboardImageFormats =
         ["PNG", "image/png", "JFIF", "image/jpeg", "image/jpg", "GIF", "image/gif"];
 
@@ -68,7 +68,7 @@ public sealed partial class MarkdownTextBox : TextEditor
         ApplyTypographyRendering();
 
         Options.ConvertTabsToSpaces = false;
-        Options.IndentationSize = 4;
+        Options.IndentationSize = InjectionParameters.NoteIndentationSize.Value;
         Options.EnableHyperlinks = false;
         Options.EnableEmailHyperlinks = false;
 
@@ -1922,13 +1922,13 @@ public sealed partial class MarkdownTextBox : TextEditor
             viewport = ActualWidth;
         }
 
-        var width = viewport - ImageBlockHorizontalPadding * 2 - 10;
+        var width = viewport - ImageBlockHorizontalPadding * 2 - InjectionParameters.NoteImageViewportReserve.Value;
         if (double.IsNaN(width) || double.IsInfinity(width) || width <= 0)
         {
-            return 240;
+            return InjectionParameters.NoteImageTargetWidth.Resolve(InjectionParameters.NoteImageFallbackWidth.Value);
         }
 
-        return Math.Max(80, width);
+        return InjectionParameters.NoteImageTargetWidth.Resolve(Math.Max(InjectionParameters.NoteImageMinimumWidth.Value, width));
     }
 
     private static bool ClipboardHasText()
@@ -2026,7 +2026,7 @@ public sealed partial class MarkdownTextBox : TextEditor
         {
             switch (data)
             {
-                case byte[] bytes when bytes.Length is > 0 and <= MaxClipboardEncodedImageBytes:
+                case byte[] bytes when bytes.Length > 0 && bytes.Length <= MaxClipboardEncodedImageBytes:
                     using (var stream = new MemoryStream(bytes, writable: false))
                     {
                         bitmap = DecodeBitmapStream(stream);

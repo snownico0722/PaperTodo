@@ -11,6 +11,7 @@
 | Edge Capsule / 胶囊流畅性 | 本文件「Edge Capsule 硬约束」→ 按下述影响范围读取 Architecture / Decisions → 相关当前代码 |
 | 持久化 / 恢复 / 图片 | Architecture「状态与持久化架构」→ D-002、D-003；审查空工作区初始化和启动图片清理时，遵循 [D-070 已接受的主工作区缺失边界](doc/DECISIONS.md#主工作区缺少全部核心文件)；插件状态再读 D-020、D-040 |
 | paper-body 插件 | `plugin-samples/README.md`（当前插件 API / 示例）→ Architecture「Paper 与 paper-body 插件」→ D-004；Edge mini 看 D-018，插件数据看 D-020、D-040 |
+| 全局 user.json / Good Lock | Architecture「全局参数注入」→ D-073 → [注入目录与生效语义](doc/USER_INJECTION.md) → 对应模块的 typed 参数及消费点；保留全局一份和未使用时成本边界 |
 | MCP / 插件外部写入 | Architecture「进程与运行时边界」「外部读写」→ D-021、D-040 → `PaperCommandService` / transport adapter 当前代码 |
 | 托盘 / Hardcodet | Architecture「OS 与全局集成」→ D-017 → 当前 tray / vendored fork 代码 |
 | Note / Markdown | Architecture 的 Paper/Note 边界；涉及单正文 surface 看 D-019，再读当前 Markdown 代码 |

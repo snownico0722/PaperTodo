@@ -29,79 +29,161 @@ internal enum EdgeCapsuleCorridorExitDecision
 /// </summary>
 internal sealed class EdgeCapsuleHoverIntentPredictor
 {
-    private const int SampleCapacity = 20;
-    private const double HistoryWindowMilliseconds = 64;
-    private const double StaleHistoryMilliseconds = 180;
-    private const double DuplicateSampleMilliseconds = 1.5;
-    private const double BrakingRatio = 0.72;
-    private const double BrakingDeltaDipPerMillisecond = 0.05;
-    private const double AccelerationRatio = 1.15;
-    private const double AccelerationDeltaDipPerMillisecond = 0.04;
+    private static int SampleCapacity => InjectionParameters.HoverSampleCapacity.Value;
+    private static double HistoryWindowMilliseconds => InjectionParameters.HoverHistoryWindowMilliseconds.Value;
+    private static double StaleHistoryMilliseconds => InjectionParameters.HoverStaleHistoryMilliseconds.Value;
+    private static double DuplicateSampleMilliseconds => InjectionParameters.HoverDuplicateSampleMilliseconds.Value;
+    private static double BrakingRatio => InjectionParameters.HoverBrakingRatio.Value;
+    private static double BrakingDeltaDipPerMillisecond => InjectionParameters.HoverBrakingDeltaDipPerMillisecond.Value;
+    private static double AccelerationRatio => InjectionParameters.HoverAccelerationRatio.Value;
+    private static double AccelerationDeltaDipPerMillisecond => InjectionParameters.HoverAccelerationDeltaDipPerMillisecond.Value;
 
     // Empty-region browse intent deliberately fuses two independent signals. Geometry carries more
     // weight because it remains reliable during slow diagonal travel; motion can independently save
     // a fast transfer but cannot keep resetting the close clock on weak residual direction alone.
-    private const double CorridorGeometryWeight = 0.60;
-    private const double CorridorMotionWeight = 0.40;
-    private const double CorridorStrongEvidenceConfidence = 0.84;
-    private const double CorridorKeepEnterConfidence = 0.58;
-    private const double CorridorKeepExitConfidence = 0.42;
-    private const double CorridorMeaningfulMovementDip = 0.5;
-    private const double CorridorGeometryStationaryGraceMilliseconds = 160;
-    private const double CorridorMotionFullConfidenceHorizonMilliseconds = 250;
-    private const double CorridorMotionFadeHorizonMilliseconds = 900;
+    private static double CorridorGeometryWeight => InjectionParameters.HoverCorridorGeometryWeight.Value;
+    private static double CorridorMotionWeight => InjectionParameters.HoverCorridorMotionWeight.Value;
+    private static double CorridorStrongEvidenceConfidence => InjectionParameters.HoverCorridorStrongEvidenceConfidence.Value;
+    private static double CorridorKeepEnterConfidence => InjectionParameters.HoverCorridorKeepEnterConfidence.Value;
+    private static double CorridorKeepExitConfidence => InjectionParameters.HoverCorridorKeepExitConfidence.Value;
+    private static double CorridorMeaningfulMovementDip => InjectionParameters.HoverCorridorMeaningfulMovementDip.Value;
+    private static double CorridorGeometryStationaryGraceMilliseconds => InjectionParameters.HoverCorridorGeometryStationaryGraceMilliseconds.Value;
+    private static double CorridorMotionFullConfidenceHorizonMilliseconds => InjectionParameters.HoverCorridorMotionFullConfidenceHorizonMilliseconds.Value;
+    private static double CorridorMotionFadeHorizonMilliseconds => InjectionParameters.HoverCorridorMotionFadeHorizonMilliseconds.Value;
 
-    private static readonly IntentSensitivityProfile VeryHighProfile = new(
-        Initial: new IntentProfile(6, 4, 22, 55, 135),
-        Transfer: new IntentProfile(10, 8, 38, 90, 190),
-        StableFallbackMilliseconds: 38,
-        MinimumDirectionalSpeedDipPerMillisecond: 0.13,
-        MinimumDirectionConsistency: 0.76,
-        MinimumVerticalDominance: 0.60,
-        CorridorExit: new CorridorExitProfile(
-            0.060, 0.62, 12, 200));
+    private static IntentSensitivityProfile VeryHighProfile;
+    private static IntentSensitivityProfile HighProfile;
+    private static IntentSensitivityProfile MediumProfile;
+    private static IntentSensitivityProfile LowProfile;
+    private static IntentSensitivityProfile VeryLowProfile;
 
-    private static readonly IntentSensitivityProfile HighProfile = new(
-        Initial: new IntentProfile(8, 8, 32, 80, 180),
-        Transfer: new IntentProfile(12, 12, 50, 120, 240),
-        StableFallbackMilliseconds: 50,
-        MinimumDirectionalSpeedDipPerMillisecond: 0.10,
-        MinimumDirectionConsistency: 0.72,
-        MinimumVerticalDominance: 0.55,
-        CorridorExit: new CorridorExitProfile(
-            0.075, 0.68, 16, 350));
+    // Explicit initialization keeps the first cache build after startup has bound user.json.
+    static EdgeCapsuleHoverIntentPredictor() => RefreshProfiles();
 
-    private static readonly IntentSensitivityProfile MediumProfile = new(
-        Initial: new IntentProfile(8, 10, 36, 90, 200),
-        Transfer: new IntentProfile(14, 20, 66, 155, 310),
-        StableFallbackMilliseconds: 60,
-        MinimumDirectionalSpeedDipPerMillisecond: 0.075,
-        MinimumDirectionConsistency: 0.68,
-        MinimumVerticalDominance: 0.50,
-        CorridorExit: new CorridorExitProfile(
-            0.090, 0.74, 20, 500));
+    // Profiles are rebuilt on the owning Dispatcher after Apply, never while sampling a pointer.
+    internal static void RefreshProfiles()
+    {
+        VeryHighProfile = CreateVeryHighProfile();
+        HighProfile = CreateHighProfile();
+        MediumProfile = CreateMediumProfile();
+        LowProfile = CreateLowProfile();
+        VeryLowProfile = CreateVeryLowProfile();
+    }
 
-    // "Low" describes activation sensitivity: it applies longer waits and recognizes less
-    // pronounced residual motion as pass-through risk, so stopping must be more deliberate.
-    private static readonly IntentSensitivityProfile LowProfile = new(
-        Initial: new IntentProfile(10, 14, 44, 110, 240),
-        Transfer: new IntentProfile(18, 34, 90, 205, 410),
-        StableFallbackMilliseconds: 85,
-        MinimumDirectionalSpeedDipPerMillisecond: 0.055,
-        MinimumDirectionConsistency: 0.64,
-        MinimumVerticalDominance: 0.45,
+    private static IntentSensitivityProfile CreateVeryHighProfile() => new(
+        Initial: new IntentProfile(
+            InjectionParameters.HoverVeryHighInitialMinimumObservationMilliseconds.Value,
+            InjectionParameters.HoverVeryHighInitialMinimumDelayMilliseconds.Value,
+            InjectionParameters.HoverVeryHighInitialMaximumDelayMilliseconds.Value,
+            InjectionParameters.HoverVeryHighInitialPassThroughVetoHorizonMilliseconds.Value,
+            InjectionParameters.HoverVeryHighInitialDynamicDelayHorizonMilliseconds.Value),
+        Transfer: new IntentProfile(
+            InjectionParameters.HoverVeryHighTransferMinimumObservationMilliseconds.Value,
+            InjectionParameters.HoverVeryHighTransferMinimumDelayMilliseconds.Value,
+            InjectionParameters.HoverVeryHighTransferMaximumDelayMilliseconds.Value,
+            InjectionParameters.HoverVeryHighTransferPassThroughVetoHorizonMilliseconds.Value,
+            InjectionParameters.HoverVeryHighTransferDynamicDelayHorizonMilliseconds.Value),
+        StableFallbackMilliseconds: InjectionParameters.HoverVeryHighStableFallbackMilliseconds.Value,
+        MinimumDirectionalSpeedDipPerMillisecond: InjectionParameters.HoverVeryHighMinimumDirectionalSpeedDipPerMillisecond.Value,
+        MinimumDirectionConsistency: InjectionParameters.HoverVeryHighMinimumDirectionConsistency.Value,
+        MinimumVerticalDominance: InjectionParameters.HoverVeryHighMinimumVerticalDominance.Value,
         CorridorExit: new CorridorExitProfile(
-            0.110, 0.79, 24, 650));
+            InjectionParameters.HoverVeryHighCorridorMinimumSpeedDipPerMillisecond.Value,
+            InjectionParameters.HoverVeryHighCorridorMinimumPathConsistency.Value,
+            InjectionParameters.HoverVeryHighCorridorTargetPaddingDip.Value,
+            InjectionParameters.HoverVeryHighCorridorNoTargetIntentCloseMilliseconds.Value));
 
-    private static readonly IntentSensitivityProfile VeryLowProfile = new(
-        Initial: new IntentProfile(12, 18, 54, 135, 300),
-        Transfer: new IntentProfile(22, 48, 115, 255, 500),
-        StableFallbackMilliseconds: 110,
-        MinimumDirectionalSpeedDipPerMillisecond: 0.040,
-        MinimumDirectionConsistency: 0.60,
-        MinimumVerticalDominance: 0.40,
+    private static IntentSensitivityProfile CreateHighProfile() => new(
+        Initial: new IntentProfile(
+            InjectionParameters.HoverHighInitialMinimumObservationMilliseconds.Value,
+            InjectionParameters.HoverHighInitialMinimumDelayMilliseconds.Value,
+            InjectionParameters.HoverHighInitialMaximumDelayMilliseconds.Value,
+            InjectionParameters.HoverHighInitialPassThroughVetoHorizonMilliseconds.Value,
+            InjectionParameters.HoverHighInitialDynamicDelayHorizonMilliseconds.Value),
+        Transfer: new IntentProfile(
+            InjectionParameters.HoverHighTransferMinimumObservationMilliseconds.Value,
+            InjectionParameters.HoverHighTransferMinimumDelayMilliseconds.Value,
+            InjectionParameters.HoverHighTransferMaximumDelayMilliseconds.Value,
+            InjectionParameters.HoverHighTransferPassThroughVetoHorizonMilliseconds.Value,
+            InjectionParameters.HoverHighTransferDynamicDelayHorizonMilliseconds.Value),
+        StableFallbackMilliseconds: InjectionParameters.HoverHighStableFallbackMilliseconds.Value,
+        MinimumDirectionalSpeedDipPerMillisecond: InjectionParameters.HoverHighMinimumDirectionalSpeedDipPerMillisecond.Value,
+        MinimumDirectionConsistency: InjectionParameters.HoverHighMinimumDirectionConsistency.Value,
+        MinimumVerticalDominance: InjectionParameters.HoverHighMinimumVerticalDominance.Value,
         CorridorExit: new CorridorExitProfile(
-            0.140, 0.84, 30, 800));
+            InjectionParameters.HoverHighCorridorMinimumSpeedDipPerMillisecond.Value,
+            InjectionParameters.HoverHighCorridorMinimumPathConsistency.Value,
+            InjectionParameters.HoverHighCorridorTargetPaddingDip.Value,
+            InjectionParameters.HoverHighCorridorNoTargetIntentCloseMilliseconds.Value));
+
+    private static IntentSensitivityProfile CreateMediumProfile() => new(
+        Initial: new IntentProfile(
+            InjectionParameters.HoverMediumInitialMinimumObservationMilliseconds.Value,
+            InjectionParameters.HoverMediumInitialMinimumDelayMilliseconds.Value,
+            InjectionParameters.HoverMediumInitialMaximumDelayMilliseconds.Value,
+            InjectionParameters.HoverMediumInitialPassThroughVetoHorizonMilliseconds.Value,
+            InjectionParameters.HoverMediumInitialDynamicDelayHorizonMilliseconds.Value),
+        Transfer: new IntentProfile(
+            InjectionParameters.HoverMediumTransferMinimumObservationMilliseconds.Value,
+            InjectionParameters.HoverMediumTransferMinimumDelayMilliseconds.Value,
+            InjectionParameters.HoverMediumTransferMaximumDelayMilliseconds.Value,
+            InjectionParameters.HoverMediumTransferPassThroughVetoHorizonMilliseconds.Value,
+            InjectionParameters.HoverMediumTransferDynamicDelayHorizonMilliseconds.Value),
+        StableFallbackMilliseconds: InjectionParameters.HoverMediumStableFallbackMilliseconds.Value,
+        MinimumDirectionalSpeedDipPerMillisecond: InjectionParameters.HoverMediumMinimumDirectionalSpeedDipPerMillisecond.Value,
+        MinimumDirectionConsistency: InjectionParameters.HoverMediumMinimumDirectionConsistency.Value,
+        MinimumVerticalDominance: InjectionParameters.HoverMediumMinimumVerticalDominance.Value,
+        CorridorExit: new CorridorExitProfile(
+            InjectionParameters.HoverMediumCorridorMinimumSpeedDipPerMillisecond.Value,
+            InjectionParameters.HoverMediumCorridorMinimumPathConsistency.Value,
+            InjectionParameters.HoverMediumCorridorTargetPaddingDip.Value,
+            InjectionParameters.HoverMediumCorridorNoTargetIntentCloseMilliseconds.Value));
+
+    private static IntentSensitivityProfile CreateLowProfile() => new(
+        Initial: new IntentProfile(
+            InjectionParameters.HoverLowInitialMinimumObservationMilliseconds.Value,
+            InjectionParameters.HoverLowInitialMinimumDelayMilliseconds.Value,
+            InjectionParameters.HoverLowInitialMaximumDelayMilliseconds.Value,
+            InjectionParameters.HoverLowInitialPassThroughVetoHorizonMilliseconds.Value,
+            InjectionParameters.HoverLowInitialDynamicDelayHorizonMilliseconds.Value),
+        Transfer: new IntentProfile(
+            InjectionParameters.HoverLowTransferMinimumObservationMilliseconds.Value,
+            InjectionParameters.HoverLowTransferMinimumDelayMilliseconds.Value,
+            InjectionParameters.HoverLowTransferMaximumDelayMilliseconds.Value,
+            InjectionParameters.HoverLowTransferPassThroughVetoHorizonMilliseconds.Value,
+            InjectionParameters.HoverLowTransferDynamicDelayHorizonMilliseconds.Value),
+        StableFallbackMilliseconds: InjectionParameters.HoverLowStableFallbackMilliseconds.Value,
+        MinimumDirectionalSpeedDipPerMillisecond: InjectionParameters.HoverLowMinimumDirectionalSpeedDipPerMillisecond.Value,
+        MinimumDirectionConsistency: InjectionParameters.HoverLowMinimumDirectionConsistency.Value,
+        MinimumVerticalDominance: InjectionParameters.HoverLowMinimumVerticalDominance.Value,
+        CorridorExit: new CorridorExitProfile(
+            InjectionParameters.HoverLowCorridorMinimumSpeedDipPerMillisecond.Value,
+            InjectionParameters.HoverLowCorridorMinimumPathConsistency.Value,
+            InjectionParameters.HoverLowCorridorTargetPaddingDip.Value,
+            InjectionParameters.HoverLowCorridorNoTargetIntentCloseMilliseconds.Value));
+
+    private static IntentSensitivityProfile CreateVeryLowProfile() => new(
+        Initial: new IntentProfile(
+            InjectionParameters.HoverVeryLowInitialMinimumObservationMilliseconds.Value,
+            InjectionParameters.HoverVeryLowInitialMinimumDelayMilliseconds.Value,
+            InjectionParameters.HoverVeryLowInitialMaximumDelayMilliseconds.Value,
+            InjectionParameters.HoverVeryLowInitialPassThroughVetoHorizonMilliseconds.Value,
+            InjectionParameters.HoverVeryLowInitialDynamicDelayHorizonMilliseconds.Value),
+        Transfer: new IntentProfile(
+            InjectionParameters.HoverVeryLowTransferMinimumObservationMilliseconds.Value,
+            InjectionParameters.HoverVeryLowTransferMinimumDelayMilliseconds.Value,
+            InjectionParameters.HoverVeryLowTransferMaximumDelayMilliseconds.Value,
+            InjectionParameters.HoverVeryLowTransferPassThroughVetoHorizonMilliseconds.Value,
+            InjectionParameters.HoverVeryLowTransferDynamicDelayHorizonMilliseconds.Value),
+        StableFallbackMilliseconds: InjectionParameters.HoverVeryLowStableFallbackMilliseconds.Value,
+        MinimumDirectionalSpeedDipPerMillisecond: InjectionParameters.HoverVeryLowMinimumDirectionalSpeedDipPerMillisecond.Value,
+        MinimumDirectionConsistency: InjectionParameters.HoverVeryLowMinimumDirectionConsistency.Value,
+        MinimumVerticalDominance: InjectionParameters.HoverVeryLowMinimumVerticalDominance.Value,
+        CorridorExit: new CorridorExitProfile(
+            InjectionParameters.HoverVeryLowCorridorMinimumSpeedDipPerMillisecond.Value,
+            InjectionParameters.HoverVeryLowCorridorMinimumPathConsistency.Value,
+            InjectionParameters.HoverVeryLowCorridorTargetPaddingDip.Value,
+            InjectionParameters.HoverVeryLowCorridorNoTargetIntentCloseMilliseconds.Value));
 
     private readonly PointerSample[] _samples =
         new PointerSample[SampleCapacity];
@@ -302,7 +384,7 @@ internal sealed class EdgeCapsuleHoverIntentPredictor
         // this physical target soon is a pass-through, so it cannot activate this target. Strong
         // acceleration broadens the protection slightly; braking removes it immediately.
         var vetoHorizon = profile.PassThroughVetoHorizonMilliseconds *
-            (accelerating ? 1.20 : 1.0);
+            (accelerating ? InjectionParameters.HoverAcceleratingVetoHorizonScale.Value : 1.0);
         if (!braking && timeToExit <= vetoHorizon)
         {
             return EdgeCapsuleHoverIntentDecision.Veto;
@@ -318,15 +400,15 @@ internal sealed class EdgeCapsuleHoverIntentPredictor
             1);
         if (accelerating)
         {
-            risk = Math.Min(1, risk + 0.20);
+            risk = Math.Min(1, risk + InjectionParameters.HoverAccelerationRiskIncrement.Value);
         }
         else if (braking)
         {
-            risk *= 0.25;
+            risk *= InjectionParameters.HoverBrakingRiskScale.Value;
         }
         else if (!motion.HasSpeedTrend)
         {
-            risk *= 0.85;
+            risk *= InjectionParameters.HoverUncertainTrendRiskScale.Value;
         }
 
         var requiredDelay = profile.MinimumDelayMilliseconds +
@@ -375,7 +457,7 @@ internal sealed class EdgeCapsuleHoverIntentPredictor
             // A safe triangle is a path, not a parking zone. Once the pointer has actually stopped,
             // geometry remains useful as supporting evidence but may no longer clear the close clock
             // on its own. This removes the classic safe-polygon "stuck in the triangle" failure.
-            geometryConfidence = Math.Min(geometryConfidence, 0.55);
+            geometryConfidence = Math.Min(geometryConfidence, InjectionParameters.HoverStationaryGeometryConfidenceCap.Value);
         }
 
         var motionEvidence = EvaluateCorridorMotionEvidence(
@@ -891,21 +973,21 @@ internal sealed class EdgeCapsuleHoverIntentPredictor
 
     private void AddSample(PointerSample sample)
     {
-        if (_sampleCount < SampleCapacity)
+        if (_sampleCount < _samples.Length)
         {
             var destination = (_sampleStart + _sampleCount) %
-                SampleCapacity;
+                _samples.Length;
             _samples[destination] = sample;
             _sampleCount++;
             return;
         }
 
         _samples[_sampleStart] = sample;
-        _sampleStart = (_sampleStart + 1) % SampleCapacity;
+        _sampleStart = (_sampleStart + 1) % _samples.Length;
     }
 
     private PointerSample SampleAt(int index) =>
-        _samples[(_sampleStart + index) % SampleCapacity];
+        _samples[(_sampleStart + index) % _samples.Length];
 
     private static double ElapsedMilliseconds(long start, long end) =>
         Stopwatch.GetElapsedTime(start, end).TotalMilliseconds;

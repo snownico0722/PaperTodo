@@ -126,7 +126,7 @@ public sealed partial class AppController
     {
         paper.IsVisible = show;
         RefreshTrayMenu();
-        if (show) ShowPaper(paper);
+        if (show) ShowNewPaper(paper);
         else ArrangeDeepCapsules(animate: false);
 
         if (paper.Type == PaperTypes.Todo)

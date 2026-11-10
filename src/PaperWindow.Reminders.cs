@@ -139,19 +139,19 @@ public sealed partial class PaperWindow
         {
             Text = "\uE823",
             Foreground = WeakTextBrush,
-            Opacity = 0.44,
+            Opacity = InjectionParameters.ReminderIconOpacity.Value,
             FontFamily = new FontFamily("Segoe MDL2 Assets"),
             FontSize = Math.Max(
-                AppTypography.Scale(10.5),
-                metrics.TextFontSize - AppTypography.Scale(1.5)),
+                AppTypography.Scale(InjectionParameters.ReminderIconMinimumFont.Value),
+                metrics.TextFontSize - AppTypography.Scale(InjectionParameters.ReminderIconFontOffset.Value)),
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center
         };
         var button = new Border
         {
             Width = Math.Max(
-                AppTypography.Scale(17),
-                metrics.CheckColumnWidth - AppTypography.Scale(6)),
+                AppTypography.Scale(InjectionParameters.ReminderIconMinimumWidth.Value),
+                metrics.CheckColumnWidth - AppTypography.Scale(InjectionParameters.ReminderIconWidthOffset.Value)),
             MinHeight = metrics.RowMinHeight,
             Margin = new Thickness(1, 0, 1, 0),
             HorizontalAlignment = HorizontalAlignment.Center,
@@ -172,11 +172,11 @@ public sealed partial class PaperWindow
         button.MouseLeave += (_, _) =>
         {
             button.Background = Brushes.Transparent;
-            glyph.Opacity = 0.44;
+            glyph.Opacity = InjectionParameters.ReminderIconOpacity.Value;
         };
         button.PreviewMouseLeftButtonDown += (_, e) =>
         {
-            glyph.Opacity = 0.66;
+            glyph.Opacity = InjectionParameters.ReminderIconPressedOpacity.Value;
             e.Handled = true;
         };
         button.PreviewMouseLeftButtonUp += (_, e) =>
@@ -200,8 +200,8 @@ public sealed partial class PaperWindow
             Foreground = Theme.ActiveBrush,
             FontFamily = AppTypography.UiFontFamily,
             FontSize = Math.Max(
-                AppTypography.Scale(10),
-                metrics.TextFontSize - AppTypography.Scale(2)),
+                AppTypography.Scale(InjectionParameters.ReminderCountdownMinimumFont.Value),
+                metrics.TextFontSize - AppTypography.Scale(InjectionParameters.ReminderCountdownFontOffset.Value)),
             FontWeight = FontWeights.SemiBold,
             TextWrapping = TextWrapping.NoWrap,
             TextAlignment = TextAlignment.Center,
@@ -213,7 +213,7 @@ public sealed partial class PaperWindow
         var host = new Border
         {
             MinWidth = Math.Max(
-                AppTypography.Scale(24),
+                AppTypography.Scale(InjectionParameters.ReminderCountdownMinimumWidth.Value),
                 metrics.CheckColumnWidth),
             MinHeight = metrics.RowMinHeight,
             Margin = new Thickness(1, 0, 1, 0),

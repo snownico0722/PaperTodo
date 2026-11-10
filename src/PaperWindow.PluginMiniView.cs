@@ -37,8 +37,8 @@ internal sealed class PluginCapsuleFallbackLivePreviewView :
 
 public sealed partial class PaperWindow
 {
-    private const double DefaultPluginMiniMaximumWidthDip = 800;
-    private const double DefaultPluginMiniMaximumHeightDip = 600;
+    private static double DefaultPluginMiniMaximumWidthDip => InjectionParameters.PluginPreviewDefaultMaximumWidth.Value;
+    private static double DefaultPluginMiniMaximumHeightDip => InjectionParameters.PluginPreviewDefaultMaximumHeight.Value;
 
     private int _pluginMiniMaximumGeneration = -1;
     private string _pluginMiniMaximumProviderId = "";
@@ -48,9 +48,9 @@ public sealed partial class PaperWindow
     private bool _pluginMiniEffectiveMaximumLocked;
     private EdgeCapsulePreviewSize _pluginMiniEffectiveMaximum;
 
-    private const double PluginFallbackMiniHeight = 140;
-    private const double PluginFallbackMiniMinimumWidth = 220;
-    private const double PluginFallbackMiniMaximumWidth = 360;
+    private static double PluginFallbackMiniHeight => InjectionParameters.PluginPreviewFallbackHeight.Value;
+    private static double PluginFallbackMiniMinimumWidth => InjectionParameters.PluginPreviewFallbackMinimumWidth.Value;
+    private static double PluginFallbackMiniMaximumWidth => InjectionParameters.PluginPreviewFallbackMaximumWidth.Value;
 
     private int _pluginMiniViewGeneration = -1;
     private IPaperMiniViewProvider? _pluginMiniViewProvider;
@@ -131,31 +131,31 @@ public sealed partial class PaperWindow
     {
         var workArea = DeepCapsuleMonitorGeometry().LocalWorkAreaDip;
         return size.Normalize(
-            Math.Max(EdgeCapsulePreviewSize.MinimumWidthDip, workArea.Width - 16),
-            Math.Max(EdgeCapsulePreviewSize.MinimumHeightDip, workArea.Height - 16));
+            Math.Max(EdgeCapsulePreviewSize.MinimumWidthDip, workArea.Width - InjectionParameters.PreviewMonitorInsetDip.Value),
+            Math.Max(EdgeCapsulePreviewSize.MinimumHeightDip, workArea.Height - InjectionParameters.PreviewMonitorInsetDip.Value));
     }
 
     private EdgeCapsulePreviewSize ResolveEdgeCapsulePreviewMaximumCapacity()
     {
         if (_paper.Type == PaperTypes.Todo)
         {
-            return new EdgeCapsulePreviewSize(450, EdgeCapsulePreviewSize.BuiltInMaximumHeightDip);
+            return TodoEdgeCapsulePreviewProvider.MaximumCapacity;
         }
         if (_paper.Type == PaperTypes.Note && IsCurrentBodyProviderMarkdown)
         {
-            return new EdgeCapsulePreviewSize(460, EdgeCapsulePreviewSize.BuiltInMaximumHeightDip);
+            return MarkdownEdgeCapsulePreviewProvider.MaximumCapacity;
         }
 
         var descriptor = CurrentPluginMiniMaximumDescriptor();
         if (descriptor == null)
         {
-            return new EdgeCapsulePreviewSize(440, 280);
+            return DefaultEdgeCapsulePreviewProvider.MaximumCapacity;
         }
         if (descriptor.Kind == PaperBodyPluginKind.Web &&
             string.IsNullOrWhiteSpace(descriptor.Manifest?.MiniEntry))
         {
             return new EdgeCapsulePreviewSize(
-                PluginFallbackMiniMaximumWidth,
+                InjectionParameters.PluginPreviewFallbackWidth.Resolve(PluginFallbackMiniMaximumWidth),
                 PluginFallbackMiniHeight);
         }
 
@@ -214,9 +214,10 @@ public sealed partial class PaperWindow
         PaperBodyPluginDescriptor descriptor)
     {
         EnsurePluginMiniMaximumSession(descriptor);
+        var compatibilityMaximum = DefaultPluginMiniMaximum();
         var maximum = _pluginMiniDeclaredMaximum ?? new EdgeCapsulePreviewSize(
-            Math.Max(DefaultPluginMiniMaximumWidthDip, initialPreferred.WidthDip),
-            Math.Max(DefaultPluginMiniMaximumHeightDip, initialPreferred.HeightDip));
+            Math.Max(compatibilityMaximum.WidthDip, initialPreferred.WidthDip),
+            Math.Max(compatibilityMaximum.HeightDip, initialPreferred.HeightDip));
         if (initialPreferred.WidthDip > maximum.WidthDip + 0.001 ||
             initialPreferred.HeightDip > maximum.HeightDip + 0.001)
         {
@@ -288,7 +289,10 @@ public sealed partial class PaperWindow
     }
 
     private static EdgeCapsulePreviewSize DefaultPluginMiniMaximum() =>
-        new(DefaultPluginMiniMaximumWidthDip, DefaultPluginMiniMaximumHeightDip);
+        new(
+            Math.Max(DefaultPluginMiniMaximumWidthDip,
+                InjectionParameters.PluginPreviewFallbackWidth.Resolve(PluginFallbackMiniMaximumWidth)),
+            Math.Max(DefaultPluginMiniMaximumHeightDip, PluginFallbackMiniHeight));
 
     private FrameworkElement CreateNativePluginMiniView(
         IPaperMiniViewProvider provider,
@@ -415,12 +419,13 @@ public sealed partial class PaperWindow
             return DefaultEdgeCapsulePreviewProvider.Instance.Describe(context);
         }
 
-        var compactWidth = (PluginCapsuleRequestedContentWidth() ?? 110) +
+        var compactWidth = (PluginCapsuleRequestedContentWidth() ?? InjectionParameters.PluginPreviewFallbackContentWidth.Value) +
             CapsuleCloseWidth + WindowChromeMargin;
         var width = Math.Clamp(
-            Math.Ceiling(compactWidth * 1.65),
+            Math.Ceiling(compactWidth * InjectionParameters.PluginPreviewFallbackWidthScale.Value),
             PluginFallbackMiniMinimumWidth,
             PluginFallbackMiniMaximumWidth);
+        width = InjectionParameters.PluginPreviewFallbackWidth.Resolve(width);
         return new EdgeCapsulePreviewDescriptor(
             new EdgeCapsulePreviewSize(width, PluginFallbackMiniHeight),
             size => BuildPluginCapsuleEdgePreviewContent(context, size));
