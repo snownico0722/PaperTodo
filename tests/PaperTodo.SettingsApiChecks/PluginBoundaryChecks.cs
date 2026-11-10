@@ -23,6 +23,55 @@ internal static partial class Program
         CreationOwnsInitialTodoFields(c, note);
         PartialReminderDeliveryKeepsUnsurfacedItemsPending(c);
         await InitialRuntimeFailureDoesNotRetry(c);
+        await ReplacementPapersRetainInjectedInitialSize(c);
+    }
+
+    private static async Task ReplacementPapersRetainInjectedInitialSize(AppController controller)
+    {
+        const string widthId = "newPaper.todo.widthDip";
+        const string heightId = "newPaper.todo.heightDip";
+        var area = WindowNative.TryGetCursorScreenPosition(out var cursor)
+            ? WindowWorkAreaHelper.MonitorAtDeviceScreenPoint(cursor)?.WorkArea ?? SystemParameters.WorkArea
+            : SystemParameters.WorkArea;
+        var width = Math.Floor(area.Width - 40);
+        var height = Math.Floor(area.Height - 40);
+        Check(width > PaperLayoutDefaults.MinWidth && height > PaperLayoutDefaults.MinHeight,
+            "The desktop must fit a paper inside its work area but beyond the ordinary restore margin.");
+        controller.ApplyUserInjection(new PaperInjectionPatch
+        {
+            ExpectedRevision = UserInjection.Read().Revision,
+            Set = new Dictionary<string, JsonElement> { [widthId] = Json(width), [heightId] = Json(height) }
+        });
+        // The earlier cases have finished using these isolated fixture papers.
+        foreach (var paper in controller.State.Papers.Skip(1).ToArray())
+            controller.DeletePaper(paper);
+        var originalId = controller.State.Papers.Single().Id;
+        controller.DeletePaper(controller.State.Papers.Single());
+        await CheckReplacement(originalId, "UI deletion");
+
+        var uiReplacementId = controller.State.Papers.Single().Id;
+        var result = controller.PaperCommands.DeletePaper(uiReplacementId,
+            PaperOperationContext.Plugin("tests.injection-replacement"));
+        Check(result.Deleted, "External deletion must commit before showing its replacement.");
+        await CheckReplacement(uiReplacementId, "External deletion");
+        controller.ApplyUserInjection(new PaperInjectionPatch
+        {
+            ExpectedRevision = UserInjection.Read().Revision,
+            Remove = [widthId, heightId]
+        });
+
+        async Task CheckReplacement(string removedId, string operation)
+        {
+            await PresentationSettle();
+            var paper = controller.State.Papers.Single();
+            var window = ReadField<Dictionary<string, PaperWindow>>(controller, "_windows")[paper.Id];
+            Check(paper.Id != removedId && paper.Type == PaperTypes.Todo && paper.Items.Single().Text == "" &&
+                  paper.IsVisible && !paper.IsCollapsed && window.IsVisible && !window.IsClosed &&
+                  Math.Abs(paper.Width - width) <= 1 && Math.Abs(paper.Height - height) <= 1 &&
+                  Math.Abs(window.ActualWidth - width) <= 1 && Math.Abs(window.ActualHeight - height) <= 1,
+                $"{operation} must retain injected initial dimensions in both its model and actual window; " +
+                $"expected {width}×{height}, model {paper.Width}×{paper.Height}, window {window.ActualWidth}×{window.ActualHeight}.");
+        }
     }
 
     private static void InjectionCapabilityPermissionsAndLifetime(AppController controller, PaperData owner)

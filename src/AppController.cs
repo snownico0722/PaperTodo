@@ -2069,7 +2069,7 @@ public sealed partial class AppController : IDisposable
         if (removed.Replacement is { } replacement)
         {
             _trayRefreshSuppressionDepth++;
-            try { ShowPaper(replacement); }
+            try { ShowNewPaper(replacement); }
             finally { _trayRefreshSuppressionDepth--; }
         }
 

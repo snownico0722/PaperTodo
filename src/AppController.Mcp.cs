@@ -207,7 +207,7 @@ public sealed partial class AppController
         if (replacement != null)
         {
             replacement.IsVisible = true;
-            ShowPaper(replacement);
+            ShowNewPaper(replacement);
         }
         ArrangeDeepCapsules(animate: false);
         RefreshTrayMenu();
