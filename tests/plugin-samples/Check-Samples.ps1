@@ -94,7 +94,7 @@ try {
         throw "Plugin sample command failed: $LASTEXITCODE"
       }
     }
-    git diff --exit-code -- plugins
+    git diff --binary --exit-code -- plugins
     if ($LASTEXITCODE -ne 0) {
       throw "Committed native plugin outputs do not match their source projects."
     }
