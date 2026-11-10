@@ -18,7 +18,7 @@ internal static partial class InjectionSystemRunner
     {
         switch (scenario)
         {
-            case "timers": Timers(c); break;
+            case "timers": Timers(c); HoverProfiles(c); break;
             case "typography": await Typography(c); break;
             case "settings": Settings(c); break;
             case "menus": Menus(c); break;
@@ -115,11 +115,11 @@ internal static partial class InjectionSystemRunner
             .Select(n => "note.typography." + n).ToArray();
         Set(c, notes.Select(id => (id, (object)18d)).ToArray());
         Check(c.PublicSettings.Get("note.text_size").Writable, "Pending restart overrides locked the currently effective setting.");
-        UserInjection.LoadStartup();
+        UserInjection.LoadStartup(UserInjection.FilePath);
         Check(!c.PublicSettings.Get("note.text_size").Writable, "Adopted complete note typography did not lock its preset.");
         Remove(c, notes[0]);
         Check(!c.PublicSettings.Get("note.text_size").Writable, "Pending restart removal prematurely unlocked the effective override.");
-        UserInjection.LoadStartup();
+        UserInjection.LoadStartup(UserInjection.FilePath);
         Check(c.PublicSettings.Get("note.text_size").Writable, "Restarted partial note override did not restore preset control.");
     }
 
@@ -337,7 +337,11 @@ internal static partial class InjectionSystemRunner
             _timer.Tick += (_, _) => EnumThreadWindows(GetCurrentThreadId(), (hwnd, _) =>
             {
                 var name = new StringBuilder(64); GetClassName(hwnd, name, name.Capacity);
-                if (name.ToString() == "#32770" && _seen.Add(hwnd)) PostMessage(hwnd, 0x0111, new IntPtr(1), IntPtr.Zero);
+                if (name.ToString() == "#32770" && _seen.Add(hwnd))
+                {
+                    Console.WriteLine("FIXTURE_DIALOG " + hwnd);
+                    PostMessage(hwnd, 0x0111, new IntPtr(1), IntPtr.Zero);
+                }
                 return true;
             }, IntPtr.Zero);
             _timer.Start();

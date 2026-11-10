@@ -93,6 +93,7 @@ internal static partial class InjectionSystemRunner
                 if (!child.WaitForExit(60_000))
                 {
                     child.Kill(entireProcessTree: true); child.WaitForExit();
+                    Console.Write(stdout.GetAwaiter().GetResult()); Console.Error.Write(stderr.GetAwaiter().GetResult());
                     throw new TimeoutException("Fixture timed out.");
                 }
                 Console.Write(stdout.GetAwaiter().GetResult()); Console.Error.Write(stderr.GetAwaiter().GetResult());
@@ -148,7 +149,7 @@ internal static partial class InjectionSystemRunner
             var store = new StateStore(); store.SaveJsonSync(store.SerializeState(state), 1);
         }
         else File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "successor.pid"), Environment.ProcessId.ToString());
-        UserInjection.LoadStartup();
+        UserInjection.LoadStartup(Path.Combine(AppContext.BaseDirectory, "user.json"));
         Application app = scenario.StartsWith("restart", StringComparison.Ordinal) || resumed ? new FixtureApp() : new Application();
         app.ShutdownMode = ShutdownMode.OnExplicitShutdown;
         var result = 1;
@@ -176,7 +177,9 @@ internal static partial class InjectionSystemRunner
                 }
                 else
                 {
+                    using var dialogs = scenario is "good-lock" or "restart" ? new FixtureDialogs() : null;
                     await RunScenario(controller, scenario);
+                    Check(dialogs == null || dialogs.Count == 0, "Unexpected dialog during " + scenario);
                     restarting = scenario == "restart";
                 }
                 result = 0;
