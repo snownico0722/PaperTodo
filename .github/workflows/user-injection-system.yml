@@ -32,3 +32,18 @@ jobs:
       - name: Systematic parameter lifecycle and state-machine checks
         shell: pwsh
         run: dotnet run --project tests/PaperTodo.UserInjectionChecks -c Release -p:InjectionSystemChecks=true
+  presentation:
+    name: Real windows, Good Lock and restart
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Isolated normal and edge presentation scenarios
+        shell: pwsh
+        run: dotnet run --project tests/PaperTodo.SettingsApiChecks -c Release -p:InjectionSystemChecks=true
