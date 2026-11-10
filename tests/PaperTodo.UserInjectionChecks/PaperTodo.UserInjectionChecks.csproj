@@ -5,6 +5,13 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
+  <!-- Keep the focused checks and the pre-merge systematic campaign independently runnable. -->
+  <ItemGroup Condition="'$(InjectionSystemChecks)' == 'true'">
+    <Compile Remove="Program.cs" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(InjectionSystemChecks)' != 'true'">
+    <Compile Remove="SystematicChecks.cs" />
+  </ItemGroup>
   <ItemGroup>
     <Compile Include="..\..\src\InjectionParameter.cs" Link="InjectionParameter.cs" />
     <Compile Include="..\..\src\InjectionParameters.*.cs" Link="%(Filename)%(Extension)" />
@@ -12,5 +19,6 @@
     <Compile Include="..\..\src\DurableAtomicFileWriter.cs" Link="DurableAtomicFileWriter.cs" />
     <Compile Include="..\..\PaperTodo.Plugin.Abstractions\PaperInjectionContracts.cs" Link="PaperInjectionContracts.cs" />
     <Compile Include="..\..\tools\testing\UserInjectionMicrobenchmark.cs" Link="UserInjectionMicrobenchmark.cs" />
+    <None Include="..\..\doc\user-injection-catalog.json" Link="user-injection-catalog.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

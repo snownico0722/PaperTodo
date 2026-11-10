@@ -1,0 +1,34 @@
+name: User injection system checks
+
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'App*.cs'
+      - 'PaperTodo.Plugin.Abstractions/**'
+      - 'plugin-samples/PaperTodo.Plugin.GoodLock/**'
+      - 'tests/**'
+      - 'doc/user-injection-catalog.json'
+      - '.github/workflows/user-injection-system.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: injection-system-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contracts:
+    name: All parameter contracts
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Systematic parameter lifecycle and state-machine checks
+        shell: pwsh
+        run: dotnet run --project tests/PaperTodo.UserInjectionChecks -c Release -p:InjectionSystemChecks=true
