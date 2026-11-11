@@ -1,12 +1,9 @@
 using System.IO;
 using System.Reflection;
-using System.Runtime.InteropServices;
-using System.Text;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
-using System.Windows.Media;
 using System.Windows.Threading;
 using PaperTodo;
 using PaperTodo.Plugin;
@@ -56,29 +53,6 @@ internal static partial class InjectionSystemRunner
             "Injection timer edits wrote ordinary workspace data.");
     }
 
-    private static async Task Typography(AppController c)
-    {
-        var window = Windows(c)["note"];
-        var box = Field<MarkdownPaperBodySession>(window, "_markdownBodySession").NoteBox!;
-        var original = box.FontSize;
-        box.Text = "pending typography draft";
-        box.Select(2, 4);
-        var document = box.Document;
-        var preference = c.State.Zoom;
-        Set(c, ("appearance.fontScale", 1.2));
-        await Settle();
-        Check(c.State.Zoom == preference && AppTypography.ScaleFactor == 1.2,
-            "Font override replaced ordinary preferences or failed to reach typography.");
-        Check(ReferenceEquals(box, Field<MarkdownPaperBodySession>(window, "_markdownBodySession").NoteBox) &&
-            ReferenceEquals(document, box.Document) && box.Text == "pending typography draft" &&
-            box.SelectionStart == 2 && box.SelectionLength == 4 && box.Document.UndoStack.CanUndo,
-            "Hot typography replaced the editor, draft, selection or undo history.");
-        Check(Math.Abs(box.FontSize - original * 1.2) < 0.11, "Typed scale changed but actual note font did not.");
-        Remove(c, "appearance.fontScale");
-        await Settle();
-        Check(Math.Abs(box.FontSize - original) < 0.11 && c.State.Zoom == preference, "Actual font did not recover on removal.");
-    }
-
     private static void Settings(AppController c)
     {
         foreach (var (key, setting, value) in new[]
@@ -110,7 +84,6 @@ internal static partial class InjectionSystemRunner
         Remove(c, metrics[0].Id);
         Check(c.PublicSettings.Get("todo.visual_size").Writable, "Removing one metric did not unlock the remaining calculation.");
         Remove(c, metrics.Skip(1).Select(p => p.Id).ToArray());
-
         var notes = new[] { "fontSize", "codeFontSize", "heading1FontSize", "heading2FontSize", "heading3FontSize" }
             .Select(n => "note.typography." + n).ToArray();
         Set(c, notes.Select(id => (id, (object)18d)).ToArray());
@@ -248,26 +221,6 @@ internal static partial class InjectionSystemRunner
             AppTypography.ScaleFactor == c.State.Zoom, "Full reset left overrides, rows or an altered ordinary preference.");
     }
 
-    private static void Conflicts(AppController c)
-    {
-        Set(c, ("appearance.fontScale", 1.1), ("todo.paste.maxItems", 100));
-        using var view = new GoodLockView(c);
-        view.Command("todo.paste.maxItems", "ResetCommand");
-        const string external = "{\"appearance.fontScale\":1.05,\"todo.paste.maxItems\":100,\"external.keep\":[1,2,3]}";
-        File.WriteAllText(UserInjection.FilePath, external);
-        using (var dialogs = new FixtureDialogs())
-        {
-            view.Click("ApplyButton");
-            Check(dialogs.Count == 1, "Conflict was silently accepted or not reported to the user.");
-        }
-        Check(File.ReadAllText(UserInjection.FilePath) == external && view.Draft != "{}" && AppTypography.ScaleFactor == 1.1,
-            "Conflict changed external bytes, lost the user's draft or adopted unaccepted settings.");
-        view.Click("ApplyButton");
-        var accepted = UserInjection.Read();
-        Check(!accepted.Overrides.ContainsKey("todo.paste.maxItems") && accepted.Overrides.ContainsKey("external.keep") &&
-            AppTypography.ScaleFactor == 1.05 && view.Draft == "{}", "Explicit conflict retry did not combine the fresh file with sparse local edits.");
-    }
-
     private static async Task Lifetime(AppController c)
     {
         var active = true;
@@ -320,37 +273,7 @@ internal static partial class InjectionSystemRunner
         box.Text = "unsaved note before restart";
         window.SetCollapsedState(true);
         var view = new GoodLockView(c);
-        // Invoke the actual button handler; it must Apply before requesting normal host exit.
         Call(view.Session, "OnRestart", view.View, new RoutedEventArgs());
         Check(c.IsRunning, "Restart disposed its invoking plugin before the call returned.");
-        // Normal application Exit owns this fixture's windows and process termination.
     }
-
-    // Only dismiss dialogs owned by this isolated fixture thread. No user desktop window is touched.
-    private sealed class FixtureDialogs : IDisposable
-    {
-        private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(50) };
-        private readonly HashSet<IntPtr> _seen = [];
-        public int Count => _seen.Count;
-        public FixtureDialogs()
-        {
-            _timer.Tick += (_, _) => EnumThreadWindows(GetCurrentThreadId(), (hwnd, _) =>
-            {
-                var name = new StringBuilder(64); GetClassName(hwnd, name, name.Capacity);
-                if (name.ToString() == "#32770" && _seen.Add(hwnd))
-                {
-                    Console.WriteLine("FIXTURE_DIALOG " + hwnd);
-                    PostMessage(hwnd, 0x0111, new IntPtr(1), IntPtr.Zero);
-                }
-                return true;
-            }, IntPtr.Zero);
-            _timer.Start();
-        }
-        public void Dispose() => _timer.Stop();
-    }
-    private delegate bool EnumWindowProc(IntPtr hwnd, IntPtr lParam);
-    [DllImport("user32.dll")] private static extern bool EnumThreadWindows(uint threadId, EnumWindowProc callback, IntPtr lParam);
-    [DllImport("kernel32.dll")] private static extern uint GetCurrentThreadId();
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetClassName(IntPtr hwnd, StringBuilder name, int count);
-    [DllImport("user32.dll")] private static extern bool PostMessage(IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam);
 }

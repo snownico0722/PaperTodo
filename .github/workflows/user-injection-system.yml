@@ -32,6 +32,9 @@ jobs:
       - name: Systematic parameter lifecycle and state-machine checks
         shell: pwsh
         run: dotnet run --project tests/PaperTodo.UserInjectionChecks -c Release -p:InjectionSystemChecks=true
+      - name: Observe unused hot-path costs without timing gates
+        shell: pwsh
+        run: dotnet run --project tests/PaperTodo.UserInjectionChecks -c Release -p:InjectionSystemChecks=false -- --benchmark
   presentation:
     name: Real windows, Good Lock and restart
     runs-on: windows-latest
