@@ -8,8 +8,8 @@ using System.Windows.Threading;
 using PaperTodo;
 using PaperTodo.Plugin;
 
-// Pre-merge system campaign. Every scenario owns a clean executable directory and a real
-// Dispatcher/controller. Never load a developer's papers, plugins or user.json.
+// Each scenario owns a clean executable directory and a real Dispatcher/controller.
+// Never load a developer's papers, plugins or user.json.
 internal static partial class InjectionSystemRunner
 {
     private const string Marker = ".papertodo-injection-system-fixture";
@@ -61,9 +61,12 @@ internal static partial class InjectionSystemRunner
     [STAThread]
     private static int Main(string[] args)
     {
-        if (args.Length > 0) return Child(args);
+        var journeys = args.SequenceEqual(new[] { "--user-journeys" });
+        if (args.Length > 0 && !journeys) return Child(args);
         var failures = new List<string>();
-        var scenarios = new[] { "timers", "typography", "settings", "menus", "next-use", "good-lock", "conflict", "lifetime", "restart-cancel", "restart" };
+        var scenarios = journeys
+            ? new[] { "user-editor", "user-paste", "user-drag", "user-preview" }
+            : new[] { "timers", "typography", "settings", "menus", "next-use", "good-lock", "conflict", "lifetime", "restart-cancel", "restart" };
         foreach (var mode in new[] { "normal", "edge" })
         foreach (var scenario in scenarios)
         {
@@ -90,7 +93,7 @@ internal static partial class InjectionSystemRunner
                 start.ArgumentList.Add("--injection-fixture"); start.ArgumentList.Add(scenario);
                 using var child = Process.Start(start)!;
                 var stdout = child.StandardOutput.ReadToEndAsync(); var stderr = child.StandardError.ReadToEndAsync();
-                if (!child.WaitForExit(60_000))
+                if (!child.WaitForExit(90_000))
                 {
                     child.Kill(entireProcessTree: true); child.WaitForExit();
                     Console.Write(stdout.GetAwaiter().GetResult()); Console.Error.Write(stderr.GetAwaiter().GetResult());
@@ -98,21 +101,23 @@ internal static partial class InjectionSystemRunner
                 }
                 Console.Write(stdout.GetAwaiter().GetResult()); Console.Error.Write(stderr.GetAwaiter().GetResult());
                 Check(child.ExitCode == 0, "Fixture exited " + child.ExitCode);
-                if (scenario == "restart")
+                if (scenario is "restart" or "user-preview")
                 {
                     var watch = Stopwatch.StartNew();
                     var result = Path.Combine(root, Result);
-                    while (!File.Exists(result) && watch.Elapsed < TimeSpan.FromSeconds(45)) Thread.Sleep(100);
-                    Check(File.Exists(result), "The production restart did not launch a successor.");
+                    while (!File.Exists(result) && watch.Elapsed < TimeSpan.FromSeconds(90)) Thread.Sleep(100);
+                    Check(File.Exists(result), "The production restart did not finish its successor journey.");
                     var text = File.ReadAllText(result);
                     Check(text.StartsWith("PASS ", StringComparison.Ordinal), text);
                     Console.WriteLine(text);
                 }
-                Console.WriteLine($"PASS SYSTEM_UI {mode}/{scenario}");
+                Console.WriteLine($"PASS {(journeys ? "USER_JOURNEY" : "SYSTEM_UI")} {mode}/{scenario}");
             }
             catch (Exception ex) { failures.Add($"{mode}/{scenario}: {ex.GetBaseException().Message}"); }
             finally
             {
+                var journal = Path.Combine(root, "journey.log");
+                if (File.Exists(journal)) Console.Write(File.ReadAllText(journal));
                 var pidFile = Path.Combine(root, "successor.pid");
                 if (File.Exists(pidFile) && int.TryParse(File.ReadAllText(pidFile), out var pid))
                 {
@@ -122,8 +127,8 @@ internal static partial class InjectionSystemRunner
                 try { Directory.Delete(root, recursive: true); } catch (IOException) { }
             }
         }
-        Console.WriteLine($"SYSTEM_UI_RESULT fixtures={scenarios.Length * 2} failures={failures.Count}");
-        foreach (var failure in failures) Console.Error.WriteLine("FAIL SYSTEM_UI " + failure);
+        Console.WriteLine($"{(journeys ? "USER_JOURNEY_RESULT" : "SYSTEM_UI_RESULT")} fixtures={scenarios.Length * 2} failures={failures.Count}");
+        foreach (var failure in failures) Console.Error.WriteLine("FAIL " + failure);
         return failures.Count == 0 ? 0 : 1;
     }
 
@@ -133,6 +138,8 @@ internal static partial class InjectionSystemRunner
         if (!File.Exists(markerPath)) throw new InvalidOperationException("Refusing to use non-fixture data.");
         var resumed = args.Length == 2 && args[0] == "--return-paper";
         var scenario = resumed ? "resumed" : args.Length == 2 && args[0] == "--injection-fixture" ? args[1] : throw new ArgumentException("Invalid fixture arguments.");
+        if (resumed && File.Exists(Path.Combine(AppContext.BaseDirectory, "preview-stage.txt"))) scenario = "user-preview";
+        var journey = scenario.StartsWith("user-", StringComparison.Ordinal);
         var edge = File.ReadAllText(markerPath) == "edge";
         if (!resumed)
         {
@@ -146,11 +153,12 @@ internal static partial class InjectionSystemRunner
                 IsVisible = true, X = 80, Y = 80, Width = 360, Height = 260 });
             state.Papers.Add(new PaperData { Id = "todo", Type = PaperTypes.Todo, IsVisible = true,
                 X = 500, Y = 80, Width = 360, Height = 260, Items = [new PaperItem { Text = "original task", Order = 0 }] });
+            if (journey) PrepareUserJourney(state, scenario, edge);
             var store = new StateStore(); store.SaveJsonSync(store.SerializeState(state), 1);
         }
         else File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "successor.pid"), Environment.ProcessId.ToString());
         UserInjection.LoadStartup(Path.Combine(AppContext.BaseDirectory, "user.json"));
-        Application app = scenario.StartsWith("restart", StringComparison.Ordinal) || resumed ? new FixtureApp() : new Application();
+        Application app = scenario.StartsWith("restart", StringComparison.Ordinal) || resumed || scenario == "user-preview" ? new FixtureApp() : new Application();
         app.ShutdownMode = ShutdownMode.OnExplicitShutdown;
         var result = 1;
         app.Dispatcher.InvokeAsync(async () =>
@@ -162,7 +170,13 @@ internal static partial class InjectionSystemRunner
                 controller = new AppController();
                 await controller.StartAsync(createDefaultPaper: false);
                 await Settle();
-                if (resumed)
+                if (journey)
+                {
+                    using var dialogs = new FixtureDialogs();
+                    restarting = await RunUserJourney(controller, scenario);
+                    Check(dialogs.Count == 0, "Unexpected dialog during " + scenario);
+                }
+                else if (resumed)
                 {
                     controller.RestoreUserInjectionPaper(args);
                     await Settle();
@@ -187,20 +201,25 @@ internal static partial class InjectionSystemRunner
             }
             catch (Exception ex)
             {
+                restarting = false;
                 Console.Error.WriteLine(ex);
+                if (journey) JourneyLog("FAIL " + ex);
                 if (resumed) File.WriteAllText(Path.Combine(AppContext.BaseDirectory, Result), "FAIL " + ex);
             }
             finally
             {
-                if (!restarting) { controller?.Dispose(); app.Shutdown(); }
+                if (!restarting)
+                {
+                    if (journey) JourneyInput.Release();
+                    controller?.Dispose(); app.Shutdown();
+                }
             }
         });
         app.Run();
         return result;
     }
 
-    // Retain the production App restart/Exit implementation, while the fixture owns startup
-    // instead of acquiring a desktop-wide singleton or enabling unrelated app services.
+    // Production exit/restart, with isolated startup instead of the desktop-wide singleton.
     private sealed class FixtureApp : App
     {
         protected override void OnStartup(StartupEventArgs e) { }
