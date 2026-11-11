@@ -92,7 +92,7 @@ internal static partial class InjectionSystemRunner
         var window = Windows(c)["todo"];
         var paper = c.State.Papers.Single(p => p.Id == "todo");
         using var view = new GoodLockView(c);
-        foreach (var budget in new[] { 2, 3, 0 })
+        foreach (var budget in new[] { 2, 3, 1, 0 })
         {
             if (budget == 0) await ExternalJourneyApply(view);
             else await ExternalJourneyApply(view, ("todo.paste.maxItems", budget));
@@ -101,9 +101,25 @@ internal static partial class InjectionSystemRunner
             Clipboard.SetText("one\ntwo\nthree\nfour");
             JourneyInput.Chord(0x11, 0x41); JourneyInput.Chord(0x11, 0x56);
             var expected = budget == 0 ? 4 : budget;
-            await UntilJourney(() => paper.Items.Count == expected, "Native multi-line paste uses budget " + expected);
+            await UntilJourney(() => paper.Items.Count == expected && paper.Items[0].Text != "original task 0",
+                "Native multi-line paste uses budget " + expected);
+            if (budget != 0)
+            {
+                Window? notice = null;
+                await UntilJourney(() => (notice = Application.Current.Windows.Cast<Window>().SingleOrDefault(w =>
+                    w.IsVisible && ReferenceEquals(w.Owner, window) && w.Title == Strings.Get("TodoPasteTruncatedTitle"))) != null,
+                    "Over-budget paste presents its real truncation notice");
+                Check(JourneyDescendants(notice!).OfType<TextBlock>().Any(t =>
+                        t.Text == Strings.Format("TodoPasteItemLimitMessage", budget)),
+                    "Truncation notice did not describe the configured item budget.");
+                CaptureJourney(notice!, "paste-notice-" + budget);
+                var ok = JourneyDescendants(notice!).OfType<Button>().Single(b => Equals(b.Content, Strings.Get("CommonOk")));
+                await JourneyInput.Click(ok);
+                await UntilJourney(() => !notice!.IsVisible && window.IsActive, "Native OK returns to the paste owner");
+                JourneyLog("PASTE_NOTICE confirmed budget=" + budget);
+            }
             Check(paper.Items.OrderBy(p => p.Order).Select(p => p.Text).SequenceEqual(new[] { "one", "two", "three", "four" }.Take(expected)),
-                "Paste count changed but actual item text/order is wrong.");
+                "Paste count changed but actual item text/order is wrong: " + JsonSerializer.Serialize(paper.Items.Select(p => p.Text)));
             Check(Field<List<Border>>(window, "_todoRows").Count == expected, "Visible todo rows disagree with pasted items.");
             CaptureJourney(window, "paste-" + expected);
             JourneyInput.Chord(0x11, 0x5A);
