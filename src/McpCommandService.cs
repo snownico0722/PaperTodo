@@ -550,7 +550,7 @@ internal sealed partial class McpCommandService
         {
             throw new McpApiException("invalid_params", "todos must be an array.");
         }
-        if (todos.GetArrayLength() is 0 or > PaperWindow.MaxPastedTodoLines)
+        if (todos.GetArrayLength() == 0 || todos.GetArrayLength() > PaperWindow.MaxPastedTodoLines)
         {
             throw new McpApiException(
                 "invalid_params",

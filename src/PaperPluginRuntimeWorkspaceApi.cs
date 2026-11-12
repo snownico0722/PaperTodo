@@ -19,6 +19,7 @@ internal sealed class PaperPluginRuntimeWorkspaceApi :
     IPaperPluginRuntimeTopBarLabels,
     IPaperWorkspacePresentationApi,
     IPaperSettingsApi,
+    IPaperInjectionApi,
     IPaperPluginPaperActions,
     IPaperNoteAssetsApi,
     IPaperPluginPopups,
@@ -116,6 +117,31 @@ internal sealed class PaperPluginRuntimeWorkspaceApi :
         var copy = value.ValueKind == JsonValueKind.Undefined ? value : value.Clone();
         return OnUi(() => { EnsureUsable(); return ((IPaperSettingsApi)_inner).Set(id, copy); });
     }
+
+    PaperInjectionSnapshot IPaperInjectionApi.Read() =>
+        OnUi(() => { EnsureUsable(); return ((IPaperInjectionApi)_inner).Read(); });
+    PaperInjectionApplyResult IPaperInjectionApi.Apply(PaperInjectionPatch? patch)
+    {
+        var copy = patch == null ? null : patch with
+        {
+            Set = patch.Set.ToDictionary(pair => pair.Key,
+                pair => pair.Value.ValueKind == JsonValueKind.Undefined ? pair.Value : pair.Value.Clone(),
+                StringComparer.Ordinal),
+            Remove = patch.Remove.ToArray()
+        };
+        return OnUi(() => { EnsureUsable(); return ((IPaperInjectionApi)_inner).Apply(copy); });
+    }
+    PaperInjectionSuggestion? IPaperInjectionApi.Suggest(string id, JsonElement value,
+        IReadOnlyDictionary<string, JsonElement>? draftOverrides)
+    {
+        var copy = value.ValueKind == JsonValueKind.Undefined ? value : value.Clone();
+        var drafts = draftOverrides?.ToDictionary(pair => pair.Key,
+            pair => pair.Value.ValueKind == JsonValueKind.Undefined ? pair.Value : pair.Value.Clone(),
+            StringComparer.Ordinal);
+        return OnUi(() => { EnsureUsable(); return ((IPaperInjectionApi)_inner).Suggest(id, copy, drafts); });
+    }
+    void IPaperInjectionApi.Restart() =>
+        OnUi(() => { EnsureUsable(); ((IPaperInjectionApi)_inner).Restart(); });
 
     public PaperNoteImage ReadImage(string paperId, string imageId) => OnUi(() =>
     {

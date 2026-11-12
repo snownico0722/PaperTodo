@@ -14,9 +14,6 @@ internal readonly record struct EdgeCapsulePreviewSize(
     public const double MinimumHeightDip = 90;
     public const double MaximumHeightDip = double.MaxValue;
 
-    // Built-in Todo and Markdown preview cap; plugin Mini sizes have independent contracts.
-    internal const double BuiltInMaximumHeightDip = 320;
-
     // Descriptor sizes include close/chrome. Preload, first display and replacement must
     // use the same content box; height is part of the prepared-body cache key.
     internal Size ContentSize => new(
@@ -131,6 +128,10 @@ internal static class EdgeCapsulePreviewInteraction
 
 internal sealed class DefaultEdgeCapsulePreviewProvider : IEdgeCapsulePreviewProvider
 {
+    internal static EdgeCapsulePreviewSize MaximumCapacity => new(
+        InjectionParameters.FallbackPreviewWidth.Resolve(InjectionParameters.FallbackPreviewMaximumWidth.Value),
+        InjectionParameters.FallbackPreviewHeight.Resolve(InjectionParameters.FallbackPreviewMaximumHeight.Value));
+
     public static DefaultEdgeCapsulePreviewProvider Instance { get; } = new();
 
     private DefaultEdgeCapsulePreviewProvider()
@@ -144,14 +145,17 @@ internal sealed class DefaultEdgeCapsulePreviewProvider : IEdgeCapsulePreviewPro
         var width = EdgeCapsulePreviewMeasure.MeasureWidth(
             title,
             status,
-            minimum: EdgeCapsulePreviewSize.MinimumWidthDip,
-            maximum: 440);
+            minimum: InjectionParameters.FallbackPreviewMinimumWidth.Value,
+            maximum: InjectionParameters.FallbackPreviewMaximumWidth.Value);
+        width = InjectionParameters.FallbackPreviewWidth.Resolve(width);
         var height = Math.Clamp(
-            150 + EdgeCapsulePreviewMeasure.EstimateWrappedLines(
+            InjectionParameters.FallbackPreviewHeightBase.Value + EdgeCapsulePreviewMeasure.EstimateWrappedLines(
                 status,
-                Math.Max(72, width - 40)) * AppTypography.Scale(20),
-            160,
-            280);
+                Math.Max(InjectionParameters.FallbackPreviewMinimumTextWidth.Value, width - InjectionParameters.FallbackPreviewTextReserve.Value)) *
+                AppTypography.Scale(InjectionParameters.FallbackPreviewEstimatedLineHeight.Value),
+            InjectionParameters.FallbackPreviewMinimumHeight.Value,
+            InjectionParameters.FallbackPreviewMaximumHeight.Value);
+        height = InjectionParameters.FallbackPreviewHeight.Resolve(height);
 
         return new EdgeCapsulePreviewDescriptor(
             new EdgeCapsulePreviewSize(width, height),

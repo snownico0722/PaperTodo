@@ -35,8 +35,8 @@ internal static class PaperBackground
         public string Layout { get; set; } = PaperBackgroundLayouts.Center;
     }
 
-    private const int MaxDecodePixelDimension = 4096;
-    private const double BlendedImageOpacity = 0.30;
+    private static int MaxDecodePixelDimension => InjectionParameters.PaperBackgroundDecodeDimension.Value;
+    private static double BlendedImageOpacity => InjectionParameters.PaperBackgroundBlendOpacity.Value;
     private static readonly string[] CandidateNames =
         ["papertodo.png", "papertodo.jpg", "papertodo.jpeg"];
     private static readonly string PreferencesPath = Path.Combine(

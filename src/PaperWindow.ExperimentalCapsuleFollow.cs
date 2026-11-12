@@ -5,8 +5,8 @@ namespace PaperTodo;
 
 public sealed partial class PaperWindow
 {
-    private const double ExperimentalCapsuleFollowSlideMilliseconds = 130;
-    private const int ExperimentalCapsuleFollowRetractDelayMilliseconds = 180;
+    private static double ExperimentalCapsuleFollowSlideMilliseconds => InjectionParameters.ExperimentalFollowSlideMs.Value;
+    private static int ExperimentalCapsuleFollowRetractDelayMilliseconds => InjectionParameters.ExperimentalFollowRetractMs.Value;
 
     private readonly record struct ExperimentalCapsuleFollowTransition(
         DeviceScreenRect StartBounds,

@@ -95,7 +95,7 @@ public sealed partial class MarkdownTextBox
         }
 
         _imageBlockCachePruneTimer ??= new DispatcherTimer(
-            TimeSpan.FromMilliseconds(200),
+            TimeSpan.FromMilliseconds(InjectionParameters.NoteImageCachePruneMs.Value),
             DispatcherPriority.Background,
             (_, _) =>
             {

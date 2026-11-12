@@ -11,6 +11,8 @@ internal static partial class Program
 {
     private static async Task PluginBoundaryBehavior(AppController c, PaperData owner, PaperData note, PaperData todo)
     {
+        InjectionCapabilityPermissionsAndLifetime(c, owner);
+        InjectionRetainsOrdinarySettingPreference(c);
         DeferredPluginEnablementDoesNotAttachEarly(c);
         StartingPluginRuntimeIsDisposedOnRemoval(c);
         ReadsAndNotificationsDoNotCommitOrReplaceBodies(c, owner, note, todo);
@@ -21,6 +23,117 @@ internal static partial class Program
         CreationOwnsInitialTodoFields(c, note);
         PartialReminderDeliveryKeepsUnsurfacedItemsPending(c);
         await InitialRuntimeFailureDoesNotRetry(c);
+        await ReplacementPapersRetainInjectedInitialSize(c);
+    }
+
+    private static async Task ReplacementPapersRetainInjectedInitialSize(AppController controller)
+    {
+        const string widthId = "newPaper.todo.widthDip";
+        const string heightId = "newPaper.todo.heightDip";
+        var area = WindowNative.TryGetCursorScreenPosition(out var cursor)
+            ? WindowWorkAreaHelper.MonitorAtDeviceScreenPoint(cursor)?.WorkArea ?? SystemParameters.WorkArea
+            : SystemParameters.WorkArea;
+        var width = Math.Floor(area.Width - 40);
+        var height = Math.Floor(area.Height - 40);
+        Check(width > PaperLayoutDefaults.MinWidth && height > PaperLayoutDefaults.MinHeight,
+            "The desktop must fit a paper inside its work area but beyond the ordinary restore margin.");
+        controller.ApplyUserInjection(new PaperInjectionPatch
+        {
+            ExpectedRevision = UserInjection.Read().Revision,
+            Set = new Dictionary<string, JsonElement> { [widthId] = Json(width), [heightId] = Json(height) }
+        });
+        // The earlier cases have finished using these isolated fixture papers.
+        foreach (var paper in controller.State.Papers.Skip(1).ToArray())
+            controller.DeletePaper(paper);
+        var originalId = controller.State.Papers.Single().Id;
+        controller.DeletePaper(controller.State.Papers.Single());
+        await CheckReplacement(originalId, "UI deletion");
+
+        var uiReplacementId = controller.State.Papers.Single().Id;
+        var result = controller.PaperCommands.DeletePaper(uiReplacementId,
+            PaperOperationContext.Plugin("tests.injection-replacement"));
+        Check(result.Deleted, "External deletion must commit before showing its replacement.");
+        await CheckReplacement(uiReplacementId, "External deletion");
+        controller.ApplyUserInjection(new PaperInjectionPatch
+        {
+            ExpectedRevision = UserInjection.Read().Revision,
+            Remove = [widthId, heightId]
+        });
+
+        async Task CheckReplacement(string removedId, string operation)
+        {
+            await PresentationSettle();
+            var paper = controller.State.Papers.Single();
+            var window = ReadField<Dictionary<string, PaperWindow>>(controller, "_windows")[paper.Id];
+            Check(paper.Id != removedId && paper.Type == PaperTypes.Todo && paper.Items.Single().Text == "" &&
+                  paper.IsVisible && !paper.IsCollapsed && window.IsVisible && !window.IsClosed &&
+                  Math.Abs(paper.Width - width) <= 1 && Math.Abs(paper.Height - height) <= 1 &&
+                  Math.Abs(window.ActualWidth - width) <= 1 && Math.Abs(window.ActualHeight - height) <= 1,
+                $"{operation} must retain injected initial dimensions in both its model and actual window; " +
+                $"expected {width}×{height}, model {paper.Width}×{paper.Height}, window {window.ActualWidth}×{window.ActualHeight}.");
+        }
+    }
+
+    private static void InjectionCapabilityPermissionsAndLifetime(AppController controller, PaperData owner)
+    {
+        var active = true;
+        using var noPermissions = new PaperBodyPluginHostApi(controller, controller.PaperCommands,
+            owner.Id, "tests.injection-none", [], () => active, () => active);
+        using var readOnly = new PaperBodyPluginHostApi(controller, controller.PaperCommands,
+            owner.Id, "tests.injection-reader", [PaperTodoPermissionNames.SettingsRead], () => active, () => active);
+        using var runtime = new PaperPluginRuntimeWorkspaceApi(controller, "tests.injection-runtime",
+            [PaperTodoPermissionNames.SettingsRead], () => active);
+        var denied = (IPaperInjectionApi)noPermissions;
+        var reader = (IPaperInjectionApi)readOnly;
+        var runtimeReader = (IPaperInjectionApi)runtime;
+
+        Throws<PaperTodoPluginException>(() => denied.Read(), "permission_denied");
+        Throws<PaperTodoPluginException>(() => denied.Suggest("todo.paste.maxItems", Json(200)), "permission_denied");
+        Throws<PaperTodoPluginException>(() => reader.Apply(), "permission_denied");
+        Throws<PaperTodoPluginException>(() => reader.Restart(), "permission_denied");
+        Throws<PaperTodoPluginException>(() => runtimeReader.Apply(), "permission_denied");
+        Throws<PaperTodoPluginException>(() => runtimeReader.Restart(), "permission_denied");
+
+        active = false;
+        Throws<PaperTodoPluginException>(() => denied.Read(), "session_closed");
+        Throws<PaperTodoPluginException>(() => reader.Apply(), "session_closed");
+        Throws<PaperTodoPluginException>(() => reader.Suggest("todo.paste.maxItems", Json(200)), "session_closed");
+        Throws<PaperTodoPluginException>(() => reader.Restart(), "session_closed");
+        Throws<PaperTodoPluginException>(() => runtimeReader.Read(), "runtime_closed");
+        Throws<PaperTodoPluginException>(() => runtimeReader.Apply(), "runtime_closed");
+        Throws<PaperTodoPluginException>(() => runtimeReader.Suggest("todo.paste.maxItems", Json(200)), "runtime_closed");
+        Throws<PaperTodoPluginException>(() => runtimeReader.Restart(), "runtime_closed");
+    }
+
+    private static void InjectionRetainsOrdinarySettingPreference(AppController controller)
+    {
+        const string injectionId = "appearance.fontScale";
+        const string settingId = "appearance.font_scale";
+        var preference = controller.State.Zoom;
+        var injected = preference == 1.5 ? 1.75 : 1.5;
+        var snapshot = UserInjection.Read();
+        var result = controller.ApplyUserInjection(new PaperInjectionPatch
+        {
+            ExpectedRevision = snapshot.Revision,
+            Set = new Dictionary<string, JsonElement> { [injectionId] = Json(injected) }
+        });
+        var locked = controller.PublicSettings.Get(settingId);
+        Check(!locked.Writable && locked.Value.GetDouble() == preference && controller.State.Zoom == preference,
+            "Injection locks the ordinary setting while retaining its stored preference and API value.");
+        Check(AppTypography.ScaleFactor == injected,
+            "The injected scale reaches the typography consumer without changing AppState.");
+        Throws<PaperSettingsException>(() => controller.PublicSettings.Set(settingId, Json(1.0)), "setting_read_only");
+
+        controller.ApplyUserInjection(new PaperInjectionPatch
+        {
+            ExpectedRevision = result.Snapshot.Revision,
+            Remove = [injectionId]
+        });
+        var unlocked = controller.PublicSettings.Get(settingId);
+        Check(unlocked.Writable && unlocked.Value.GetDouble() == preference && controller.State.Zoom == preference,
+            "Removing and applying an injection unlocks the original preference without writing the override into it.");
+        Check(AppTypography.ScaleFactor == OverallFontScales.Normalize(preference),
+            "Removing the override restores the ordinary typography calculation.");
     }
 
     private static void DeferredPluginEnablementDoesNotAttachEarly(AppController c)

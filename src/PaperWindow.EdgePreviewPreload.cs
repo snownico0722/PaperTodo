@@ -95,7 +95,7 @@ public sealed partial class PaperWindow
             return MarkdownEdgePreviewPreload.ReadResult.Discard;
         var workArea = DeepCapsuleMonitorGeometry().LocalWorkAreaDip;
         var size = MarkdownEdgeCapsulePreviewProvider.MeasureSize(context, content)
-            .Normalize(Math.Max(1, workArea.Width - 16), Math.Max(1, workArea.Height - 16));
+            .Normalize(Math.Max(1, workArea.Width - InjectionParameters.PreviewMonitorInsetDip.Value), Math.Max(1, workArea.Height - InjectionParameters.PreviewMonitorInsetDip.Value));
         // Preloading never grows HWND capacity or takes presentation authority.
         if (!TryConstrainEdgeCapsulePreviewToCurrentHostCapacity(size, out size))
             return MarkdownEdgePreviewPreload.ReadResult.Deferred;

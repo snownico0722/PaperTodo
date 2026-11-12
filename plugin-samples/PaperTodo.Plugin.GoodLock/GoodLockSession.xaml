@@ -1,0 +1,171 @@
+<UserControl x:Class="PaperTodo.Plugin.GoodLock.GoodLockSession"
+             x:ClassModifier="internal"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Background="Transparent"
+             Foreground="{DynamicResource GoodLock.Text}"
+             FontFamily="{DynamicResource GoodLock.Font}"
+             FontSize="{DynamicResource GoodLock.FontSize}">
+    <UserControl.Resources>
+        <Style x:Key="GoodLock.Button" TargetType="Button">
+            <Setter Property="Foreground" Value="{DynamicResource GoodLock.Text}" />
+            <Setter Property="Background" Value="{DynamicResource GoodLock.Surface}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource GoodLock.Border}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="10,5" />
+            <Setter Property="MinHeight" Value="29" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Chrome" CornerRadius="6"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                Background="{TemplateBinding Background}">
+                            <ContentPresenter Margin="{TemplateBinding Padding}"
+                                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource GoodLock.Hover}" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Chrome" Property="Opacity" Value="0.72" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Chrome" Property="Opacity" Value="0.4" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource GoodLock.Accent}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="GoodLock.IconButton" TargetType="Button" BasedOn="{StaticResource GoodLock.Button}">
+            <Setter Property="Width" Value="28" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="MinHeight" Value="28" />
+            <Setter Property="Padding" Value="6" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+        <Style x:Key="GoodLock.RowText" TargetType="TextBlock">
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        </Style>
+        <DataTemplate x:Key="GoodLock.Row">
+            <Border BorderBrush="{DynamicResource GoodLock.Border}" BorderThickness="0,0,0,1" Padding="0,11">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="18" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="64" />
+                    </Grid.ColumnDefinitions>
+                    <Ellipse Width="7" Height="7" Fill="{Binding StateBrush}" ToolTip="{Binding StateText}"
+                             HorizontalAlignment="Left" VerticalAlignment="Center" />
+                    <Grid Grid.Column="1" Margin="0,0,8,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" Margin="0,0,10,6"
+                                   ToolTip="{Binding Key}" Style="{StaticResource GoodLock.RowText}" />
+                        <TextBlock Grid.Column="1" Text="{Binding Description}" Margin="0,0,0,6"
+                                   Foreground="{DynamicResource GoodLock.WeakText}" ToolTip="{Binding Description}"
+                                   Style="{StaticResource GoodLock.RowText}" />
+                        <TextBlock Grid.Row="1" Text="{Binding DefaultText}" Margin="0,0,10,0"
+                                   Foreground="{DynamicResource GoodLock.WeakText}" ToolTip="{Binding DefaultText}"
+                                   Style="{StaticResource GoodLock.RowText}" />
+                        <TextBlock Grid.Row="1" Grid.Column="1" ToolTip="{Binding ModifiedText}"
+                                   Style="{StaticResource GoodLock.RowText}">
+                            <Run Text="{Binding ModifiedLabel}" Foreground="{DynamicResource GoodLock.WeakText}" />
+                            <Run Text="  " />
+                            <Run Text="{Binding ValueText}" Foreground="{Binding ValueBrush}" />
+                        </TextBlock>
+                    </Grid>
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button Style="{StaticResource GoodLock.IconButton}" ToolTip="{Binding ResetText}"
+                                Command="{Binding ResetCommand}" Margin="0,0,5,0">
+                            <Path Data="M 4,6 A 6,6 0 1 1 3,12 M 4,2 L 4,7 L 9,7"
+                                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                  StrokeThickness="1.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                  Stretch="Uniform" Width="14" Height="14" />
+                        </Button>
+                        <Button Style="{StaticResource GoodLock.IconButton}" ToolTip="{Binding OptimizeText}"
+                                Command="{Binding OptimizeCommand}">
+                            <Path Data="M 2,14 L 12,4 L 14,6 L 4,16 Z M 8,8 L 10,10 M 3,1 L 3,5 M 1,3 L 5,3 M 13,0 L 13,2 M 12,1 L 14,1"
+                                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                  StrokeThickness="1.3" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                  Stretch="Uniform" Width="14" Height="14" />
+                        </Button>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </DataTemplate>
+    </UserControl.Resources>
+    <Grid Margin="14,12,14,10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <Grid Margin="0,0,0,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="Good Lock" FontSize="{DynamicResource GoodLock.TitleSize}" FontWeight="SemiBold" VerticalAlignment="Center" />
+            <Button x:Name="ApplyButton" Grid.Column="1" Content="{Binding Labels.Apply}" Click="OnApply"
+                    Style="{StaticResource GoodLock.Button}" Background="{DynamicResource GoodLock.AccentSurface}"
+                    BorderBrush="{DynamicResource GoodLock.Accent}" Padding="16,5" />
+        </Grid>
+        <Grid Grid.Row="1" Margin="0,0,0,5">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <WrapPanel>
+                <Button Content="{Binding Labels.OpenFile}" Click="OnOpenFile" Style="{StaticResource GoodLock.Button}" Margin="0,0,6,5" />
+                <Button x:Name="ResetAllButton" Content="{Binding Labels.ResetAll}" Click="OnResetAll" Style="{StaticResource GoodLock.Button}" Margin="0,0,6,5" />
+                <Button Content="{Binding Labels.Restart}" Click="OnRestart" Style="{StaticResource GoodLock.Button}" Margin="0,0,6,5" />
+            </WrapPanel>
+            <Button Grid.Column="1" ToolTip="{Binding Labels.SaveAs}" Click="OnSaveAs"
+                    VerticalAlignment="Top" Margin="0,0,0,5" Style="{StaticResource GoodLock.IconButton}">
+                <Path Data="M 2,1 L 12,1 L 15,4 L 15,15 L 1,15 L 1,1 Z M 4,1 L 4,6 L 11,6 L 11,1 M 4,15 L 4,10 L 12,10 L 12,15"
+                      Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                      StrokeThickness="1.3" Stretch="Uniform" Width="15" Height="15" />
+            </Button>
+        </Grid>
+        <ListBox x:Name="Rows" Grid.Row="2" Background="Transparent" BorderThickness="0" Padding="0"
+                 ItemTemplate="{StaticResource GoodLock.Row}" HorizontalContentAlignment="Stretch"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto"
+                 VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling">
+            <ListBox.ItemContainerStyle>
+                <Style TargetType="ListBoxItem">
+                    <Setter Property="Focusable" Value="False" />
+                    <Setter Property="IsTabStop" Value="False" />
+                    <Setter Property="Padding" Value="0" />
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="ListBoxItem">
+                                <ContentPresenter />
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+            </ListBox.ItemContainerStyle>
+        </ListBox>
+        <TextBlock x:Name="EmptyText" Grid.Row="2" Text="{Binding Labels.Empty}" Visibility="Collapsed"
+                   Foreground="{DynamicResource GoodLock.WeakText}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+    </Grid>
+</UserControl>

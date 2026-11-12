@@ -126,7 +126,7 @@ public sealed partial class AppController
     {
         paper.IsVisible = show;
         RefreshTrayMenu();
-        if (show) ShowPaper(paper);
+        if (show) ShowNewPaper(paper);
         else ArrangeDeepCapsules(animate: false);
 
         if (paper.Type == PaperTypes.Todo)
@@ -207,7 +207,7 @@ public sealed partial class AppController
         if (replacement != null)
         {
             replacement.IsVisible = true;
-            ShowPaper(replacement);
+            ShowNewPaper(replacement);
         }
         ArrangeDeepCapsules(animate: false);
         RefreshTrayMenu();

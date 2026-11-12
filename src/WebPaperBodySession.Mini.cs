@@ -111,7 +111,7 @@ internal sealed partial class WebPaperBodySession
         // mini surface is initialized. Keep that cold bootstrap out of the same 200 ms window in
         // which the fallback card is morphing/moving; the already-rendered fallback remains the
         // visible authority until the WebView is ready.
-        private const int ColdInitializationDeferralMilliseconds =
+        private static int ColdInitializationDeferralMilliseconds =>
             EdgeCapsuleLayout.SlotMoveMilliseconds + 20;
         private const int MaximumInteractiveRegions = 128;
         private static readonly TimeSpan IdleReleaseDelay = TimeSpan.FromSeconds(45);

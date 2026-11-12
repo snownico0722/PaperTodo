@@ -376,10 +376,20 @@ internal static class TodoContextMenuChecks
         LifecycleInput.Focus(window, null);
         await Flush();
         Require(button.IsVisible, "association button is not reachable");
-        var point = button.PointToScreen(new Point(button.ActualWidth / 2, button.ActualHeight / 2));
-        await Until(() => LifecycleInput.IsMouseTarget(window, point), "binding button HWND is ready");
-        LifecycleInput.MoveCursor(point);
-        await Until(() => button.IsMouseOver, "native cursor reaches the association button");
+        // The bound paper can still follow its target as Windows restores it from minimized.
+        Point? lastPoint = null;
+        await Until(() =>
+        {
+            var point = button.PointToScreen(new Point(button.ActualWidth / 2, button.ActualHeight / 2));
+            if (!LifecycleInput.IsMouseTarget(window, point)) return false;
+            if (point != lastPoint)
+            {
+                LifecycleInput.MoveCursor(point);
+                lastPoint = point;
+                return false;
+            }
+            return button.IsMouseOver;
+        }, "native cursor reaches the association button");
     }
 
     private static async Task<ContextMenu> OpenBindingMenu(PaperWindow window, Button button)

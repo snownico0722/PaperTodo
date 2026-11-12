@@ -11,7 +11,7 @@ namespace PaperTodo;
 // only stretches the straight sides; the corners and blur are never recomputed for the size.
 internal sealed class NineSlicePaperShadow
 {
-    private const double Gutter = EdgeCapsuleLayout.WindowChromeMargin;
+    private static double Gutter => EdgeCapsuleLayout.WindowChromeMargin;
     private const int MiddlePixels = 4;
     private const int MaxCachedRecipes = 32;
 

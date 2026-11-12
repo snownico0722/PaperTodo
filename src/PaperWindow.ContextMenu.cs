@@ -29,7 +29,8 @@ public sealed partial class PaperWindow
         // separate surface and must retain both creation actions.
         foreach (var action in PaperTopBarShortcuts.NormalizeOrder(_controller.State.TopBarShortcutOrder))
         {
-            if (PaperTopBarShortcuts.IsHidden(_controller.State, action)) continue;
+            if (PaperTopBarShortcuts.IsHidden(_controller.State, action) ||
+                !IsInjectedMenuActionVisible(action, forDeepCapsuleSlot)) continue;
             switch (action)
             {
                 case PaperTopBarShortcuts.RunScript when

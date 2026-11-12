@@ -27,6 +27,7 @@ $checks = @(
     @{ Group = 'plugins'; Project = 'ProtocolPolicyChecks'; Configuration = 'Release'; Runtime = '' }
     @{ Group = 'plugins'; Project = 'PluginApiChecks'; Configuration = 'Release'; Runtime = '' }
     @{ Group = 'plugins'; Project = 'SettingsApiChecks'; Configuration = 'Release'; Runtime = '' }
+    @{ Group = 'plugins'; Project = 'UserInjectionChecks'; Configuration = 'Release'; Runtime = '' }
     @{ Group = 'plugins'; Project = 'CodexCliBridgeChecks'; Configuration = 'Release'; Runtime = '' }
     @{ Group = 'persistence'; Project = 'PersistenceChecks'; Configuration = 'Release'; Runtime = 'win-x64' }
     @{ Group = 'persistence'; Project = 'DataReloadChecks'; Configuration = 'Release'; Runtime = 'win-x64' }

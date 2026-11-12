@@ -24,7 +24,8 @@ public sealed partial class PaperWindow
         var pluginContentWidth = PluginCapsuleRequestedContentWidth(pixelsPerDip);
         if (pluginContentWidth.HasValue)
         {
-            return Math.Max(34, Math.Ceiling(pluginContentWidth.Value + WindowChromeMargin));
+            return InjectionParameters.CapsuleEdgeWidth.Resolve(
+                Math.Max(34, Math.Ceiling(pluginContentWidth.Value + WindowChromeMargin)));
         }
 
         // A resting edge tag owns exactly the pixels it renders: one interior shadow margin plus
@@ -38,7 +39,7 @@ public sealed partial class PaperWindow
                 limitForDeepCapsule: limitTitle,
                 pixelsPerDip: pixelsPerDip) +
             CapsuleRightPadding);
-        return Math.Max(34, bodyWidth + WindowChromeMargin);
+        return InjectionParameters.CapsuleEdgeWidth.Resolve(Math.Max(34, bodyWidth + WindowChromeMargin));
     }
 
     private double ExpandedDeepCapsuleVisibleWidth()

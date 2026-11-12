@@ -11,6 +11,11 @@ namespace PaperTodo;
 
 internal sealed class MarkdownEdgeCapsulePreviewProvider : IEdgeCapsulePreviewProvider
 {
+    // Placement, host reservation, and artifact preparation share this configured envelope.
+    internal static EdgeCapsulePreviewSize MaximumCapacity => new(
+        InjectionParameters.MarkdownPreviewWidth.Resolve(Math.Max(InjectionParameters.MarkdownPreviewMaximumWidth.Value, InjectionParameters.MarkdownPreviewEmptyMinimumWidth.Value)),
+        InjectionParameters.MarkdownPreviewHeight.Resolve(Math.Max(InjectionParameters.MarkdownPreviewMaximumHeight.Value, InjectionParameters.MarkdownPreviewEmptyHeight.Value)));
+
     public static MarkdownEdgeCapsulePreviewProvider Instance { get; } = new();
 
     private MarkdownEdgeCapsulePreviewProvider()
@@ -38,27 +43,29 @@ internal sealed class MarkdownEdgeCapsulePreviewProvider : IEdgeCapsulePreviewPr
         var width = EdgeCapsulePreviewMeasure.MeasureWidth(
             context.Title,
             MarkdownEdgeCapsulePreviewRenderer.MeasureText(content),
-            minimum: EdgeCapsulePreviewSize.MinimumWidthDip,
-            maximum: 460,
-            fixedReserveWidthDip: 72,
+            minimum: InjectionParameters.MarkdownPreviewMinimumWidth.Value,
+            maximum: InjectionParameters.MarkdownPreviewMaximumWidth.Value,
+            fixedReserveWidthDip: InjectionParameters.MarkdownPreviewWidthReserve.Value,
             bodyScale: textScale);
+        var empty = content.IsEmpty;
+        if (empty)
+        {
+            width = Math.Max(InjectionParameters.MarkdownPreviewEmptyMinimumWidth.Value, width);
+        }
+        width = InjectionParameters.MarkdownPreviewWidth.Resolve(width);
         // The body loses host close/chrome 22 + view margins 19 + viewport margins 3.
         // Keep the estimate lightweight, but account for the same font size and per-note zoom
         // as rendering. Only the final card height is capped, not each admitted paragraph.
         var lines = MarkdownEdgeCapsulePreviewRenderer.EstimateVisualLines(
             content,
-            Math.Max(1, width - 44) / textScale);
-        var empty = content.IsEmpty;
+            Math.Max(1, width - InjectionParameters.MarkdownPreviewBodyWidthReserve.Value) / textScale);
         var height = empty
-            ? 120
+            ? InjectionParameters.MarkdownPreviewEmptyHeight.Value
             : Math.Clamp(
-                74 + lines * AppTypography.Scale(22) * textScale,
-                150,
-                EdgeCapsulePreviewSize.BuiltInMaximumHeightDip);
-        if (empty)
-        {
-            width = Math.Max(130, width);
-        }
+                InjectionParameters.MarkdownPreviewHeightBase.Value + lines * AppTypography.Scale(InjectionParameters.MarkdownPreviewEstimatedLineHeight.Value) * textScale,
+                InjectionParameters.MarkdownPreviewMinimumHeight.Value,
+                InjectionParameters.MarkdownPreviewMaximumHeight.Value);
+        height = InjectionParameters.MarkdownPreviewHeight.Resolve(height);
         return new EdgeCapsulePreviewSize(width, height);
     }
 }
@@ -91,7 +98,7 @@ internal sealed class MarkdownEdgeCapsulePreviewView : EdgeCapsuleLivePreviewVie
         _title = new TextBlock
         {
             FontFamily = AppTypography.UiFontFamily,
-            FontSize = AppTypography.Scale(13),
+            FontSize = AppTypography.Scale(InjectionParameters.MarkdownPreviewTitleFont.Value),
             FontWeight = FontWeights.SemiBold,
             TextTrimming = TextTrimming.CharacterEllipsis,
             VerticalAlignment = VerticalAlignment.Center
@@ -322,9 +329,9 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
 {
     // The preview is a navigation surface, not a second document renderer. Bound both visual
     // nodes and source text so one pathological note cannot stall the hover transition.
-    private const int MaximumRenderedBlocks = 16;
-    private const int MaximumRenderedCharacters = 6000;
-    private const int MaximumBlockCharacters = MaximumRenderedCharacters;
+    private static int MaximumRenderedBlocks => InjectionParameters.MarkdownPreviewBlockBudget.Value;
+    private static int MaximumRenderedCharacters => InjectionParameters.MarkdownPreviewCharacterBudget.Value;
+    private static int MaximumBlockCharacters => InjectionParameters.MarkdownPreviewBlockCharacterBudget.Resolve(MaximumRenderedCharacters);
 
     private readonly record struct PreviewLine(string Text, bool Truncated);
 
@@ -403,7 +410,8 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
         double.IsFinite(textZoom) ? Math.Clamp(textZoom, 0.5, 1.5) : 1.0;
 
     internal static double EstimateTextScale(double textZoom) =>
-        Math.Round(NoteTypography.FontSize * NormalizeTextZoom(textZoom), 1) / AppTypography.Scale(14);
+        InjectionParameters.MarkdownPreviewTextScale.Resolve(
+            Math.Round(NoteTypography.FontSize * NormalizeTextZoom(textZoom), 1) / AppTypography.Scale(14));
 
     public static string MeasureText(PreviewContent content)
     {
@@ -428,7 +436,7 @@ internal static partial class MarkdownEdgeCapsulePreviewRenderer
             measured.Add(CompactText(text));
         }
 
-        // The shared width helper samples only 32 lines. Supply the widest admitted line so
+        // The shared width helper samples a bounded number of lines. Supply the widest admitted line so
         // a long Full-mode code block has no second, unrelated measurement cutoff.
         return measured.MaxBy(EdgeCapsulePreviewMeasure.DisplayWidth) ?? string.Empty;
     }

@@ -8,8 +8,8 @@ namespace PaperTodo;
 // Dispatcher work is finite and event-driven; no polling timer or per-paper thread is used.
 internal sealed class MarkdownLayoutWorker : IDisposable
 {
-    private const int MaxLinesPerTurn = 4;
-    private const double MaxTurnMilliseconds = 1.5;
+    private static int MaxLinesPerTurn => InjectionParameters.MarkdownLayoutLinesPerTurn.Value;
+    private static double MaxTurnMilliseconds => InjectionParameters.MarkdownLayoutTurnMs.Value;
     private static readonly Lazy<MarkdownLayoutWorker> Instance = new(() => new());
     internal static MarkdownLayoutWorker Shared => Instance.Value;
     internal static int OutstandingRequests => Instance.IsValueCreated ? Instance.Value.OutstandingCount : 0;
