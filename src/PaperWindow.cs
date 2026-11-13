@@ -742,6 +742,7 @@ public sealed partial class PaperWindow : Window
         SourceInitialized += (_, _) =>
         {
             ApplySystemVisibility(reapplyTaskbarShellState: true);
+            UpdateCaptureExclusion();
             if (PresentationSource.FromVisual(this) is HwndSource source)
             {
                 source.AddHook(OnWindowMessage);
@@ -833,6 +834,16 @@ public sealed partial class PaperWindow : Window
         {
             _isClosingForReal = false;
         }
+    }
+
+    internal void UpdateCaptureExclusion()
+    {
+        // The ordinary collapsed capsule uses this same HWND; docked capsules have
+        // a separate host whose affinity must be updated independently.
+        WindowCaptureExclusion.Apply(this, _paper.IsCollapsed
+            ? _controller.State.HideCapsulesInCapture
+            : _controller.State.HidePapersInCapture);
+        _edgeCapsuleHost?.UpdateCaptureExclusion(_controller.State.HideCapsulesInCapture);
     }
 
     public void UpdateWindowSwitcherVisibility()
