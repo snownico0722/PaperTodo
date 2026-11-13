@@ -699,7 +699,6 @@ public sealed partial class PaperWindow
         double finalTargetHeight = rememberedDeepCapsuleExpandedGeometry?.HeightDip ?? RoundToDevicePixelY(targetHeight);
 
         _paper.IsCollapsed = collapsed;
-        UpdateCaptureExclusion();
         if (_controller.UsesNativeMicaWindows)
         {
             // Alpha fallback has a WPF-shaped surface. A resizable native frame can expose

@@ -12,7 +12,7 @@ internal sealed class ExperimentalAttachmentPreviewWindow : Window
     private const int OutlineMarginDevice = 3;
     private bool _closed;
 
-    public ExperimentalAttachmentPreviewWindow()
+    public ExperimentalAttachmentPreviewWindow(bool hideInCapture)
     {
         ShowInTaskbar = false;
         ShowActivated = false;
@@ -54,6 +54,7 @@ internal sealed class ExperimentalAttachmentPreviewWindow : Window
         Content = outline;
         SourceInitialized += (_, _) =>
         {
+            WindowCaptureExclusion.Apply(this, hideInCapture);
             WindowNative.ApplyNoActivateStyle(this);
             WindowNative.SetInputPassthrough(this, enabled: true);
         };

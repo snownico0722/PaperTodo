@@ -219,10 +219,10 @@ public sealed partial class AppController
                 editorWidth: 144,
                 topMargin: 5),
             BuildSettingsHintTooltip(SettingsSidebarLocalized(
-                "仅尝试从受支持的 Windows 截图、录屏和屏幕共享中排除勾选的窗口。透明窗口或第三方工具可能不支持，不能作为隐私安全保证。",
-                "Attempts to exclude selected windows from supported Windows screenshots, recordings and sharing. Transparent windows and some third-party tools may not support it; this is not a privacy guarantee.",
-                "対応する Windows のスクリーンショット・録画・共有から選択したウィンドウを除外します。透明ウィンドウや一部のツールでは動作せず、プライバシー保護を保証するものではありません。",
-                "지원되는 Windows 캡처·녹화·공유에서 선택한 창을 제외합니다. 투명 창이나 일부 도구에서는 작동하지 않을 수 있으며 개인정보 보호를 보장하지 않습니다.")));
+                "仅尝试从受支持的 Windows 截图、录屏和屏幕共享中排除勾选的窗口。Windows 10 2004 之前可能留下空白区域。透明窗口或第三方工具可能不支持，不能作为隐私安全保证。",
+                "Attempts to exclude selected windows from supported Windows screenshots, recordings and sharing. Before Windows 10 version 2004, a blank area may remain. Transparent windows and some third-party tools may not support it; this is not a privacy guarantee.",
+                "対応する Windows のスクリーンショット・録画・共有から選択したウィンドウを除外します。Windows 10 バージョン 2004 より前は空白が残ることがあります。透明ウィンドウや一部のツールでは動作せず、プライバシー保護を保証するものではありません。",
+                "지원되는 Windows 캡처·녹화·공유에서 선택한 창을 제외합니다. Windows 10 버전 2004 이전에는 빈 영역이 남을 수 있습니다. 투명 창이나 일부 도구에서는 작동하지 않을 수 있으며 개인정보 보호를 보장하지 않습니다.")));
     }
 
     private void ToggleHidePapersInCapture() =>

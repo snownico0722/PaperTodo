@@ -448,7 +448,7 @@ Right-click the tray icon and choose **Settings**. The sidebar lists **General**
 
 ### 8.1 General, Todo, and Note Settings
 
-- **General** includes the interface language (applied after restart), startup, top-bar shortcuts, capsule behavior, and edge browsing. **Advanced** adds options for hiding papers from the taskbar and `Alt+Tab`, fullscreen behavior, and capsule title length. Beneath the window-switcher option, **Hide from capture** offers independent **Papers** and **Capsules** checkboxes, both off by default. This uses Windows capture exclusion where supported; transparent windows and third-party capture tools may not honor it, so it is not a privacy guarantee.
+- **General** includes the interface language (applied after restart), startup, top-bar shortcuts, capsule behavior, and edge browsing. **Advanced** adds options for hiding papers from the taskbar and `Alt+Tab`, fullscreen behavior, and capsule title length. Beneath the window-switcher option, **Hide from capture** offers independent **Papers** and **Capsules** checkboxes, both off by default. Windows versions before Windows 10 version 2004 may leave a blank area where the window was. This uses Windows capture exclusion where supported; transparent windows and third-party capture tools may not honor it, so it is not a privacy guarantee.
 - The right column of **Notes & Todos** covers the bottom quick-add bar, auto-clear / auto-sink completed items, paper and file link display options, and todo reminders and sounds.
 - The left column of **Notes & Todos** covers the three Markdown rendering levels, Full Render editing animation, and the file extension for external editing. **Advanced** adds large-image compression and script-capsule settings.
 

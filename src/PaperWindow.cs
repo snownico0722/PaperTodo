@@ -838,12 +838,22 @@ public sealed partial class PaperWindow : Window
 
     internal void UpdateCaptureExclusion()
     {
-        // The ordinary collapsed capsule uses this same HWND; docked capsules have
-        // a separate host whose affinity must be updated independently.
-        WindowCaptureExclusion.Apply(this, _paper.IsCollapsed
-            ? _controller.State.HideCapsulesInCapture
-            : _controller.State.HidePapersInCapture);
-        _edgeCapsuleHost?.UpdateCaptureExclusion(_controller.State.HideCapsulesInCapture);
+        UpdateMainWindowCaptureExclusion();
+        UpdateFindPopupCaptureExclusion();
+        var hideCapsules = _controller.State.HideCapsulesInCapture;
+        _edgeCapsuleHost?.UpdateCaptureExclusion(hideCapsules);
+        if (_experimentalCapsuleMagnetPreview is { } preview)
+            WindowCaptureExclusion.Apply(preview, hideCapsules);
+    }
+
+    private void UpdateMainWindowCaptureExclusion()
+    {
+        var state = _controller.State;
+        // Both visuals share this HWND during a cross-fade, including reversals.
+        var excluded = IsPaperFormTransitioning
+            ? state.HidePapersInCapture || state.HideCapsulesInCapture
+            : _paper.IsCollapsed ? state.HideCapsulesInCapture : state.HidePapersInCapture;
+        WindowCaptureExclusion.Apply(this, excluded);
     }
 
     public void UpdateWindowSwitcherVisibility()

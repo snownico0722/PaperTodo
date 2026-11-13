@@ -79,6 +79,8 @@ public sealed partial class PaperWindow
         _presentationState = collapsed
             ? PaperPresentationState.Collapsing
             : PaperPresentationState.Expanding;
+        if (_controller.State.HidePapersInCapture != _controller.State.HideCapsulesInCapture)
+            UpdateMainWindowCaptureExclusion();
         // Native refresh belongs after target/frame preparation in SetCollapsedStateCore.
     }
 
@@ -94,6 +96,17 @@ public sealed partial class PaperWindow
         _presentationState = collapsed
             ? PaperPresentationState.Collapsed
             : PaperPresentationState.Expanded;
+
+        if (_controller.State.HidePapersInCapture != _controller.State.HideCapsulesInCapture)
+        {
+            // The old visual can still be in WPF's pending render batch. Read current
+            // state after that batch so a reversal or a settings change wins.
+            Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ContextIdle, new Action(() =>
+            {
+                if (_windowLifecycle == PaperWindowLifecycleState.Alive)
+                    UpdateMainWindowCaptureExclusion();
+            }));
+        }
 
         // ResetTransitionVisuals may have chosen a temporary shadow while the
         // state still said "transitioning". Re-select the actual endpoint here.
