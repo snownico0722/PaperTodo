@@ -2,6 +2,8 @@ using System.Collections;
 using System.Diagnostics;
 using System.IO;
 using System.Reflection;
+using System.Runtime.InteropServices;
+using System.Windows.Interop;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Threading;
@@ -11,7 +13,7 @@ internal static class Program
 {
     private const BindingFlags Private = BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic;
     private const string FixtureMarker = ".papertodo-lifecycle-fixture";
-    private static readonly string[] Cases = ["native-free-queue-review", "native-free-queues", "startup", "missing-monitor", "master-queue-transfer", "master-queue-cancel", "master-queue-drag-preparation", "master-queue-drop-handoff", "master-queue-membership", "master-queue-mutations", "master-queue-hide", "master-queue-hidden-retains-collapse", "master-queue-disconnect", "master-queue-merge", "master-queue-merge-collapsed", "master-queue-lightweight-handoff", "controller-hide-create-reentry", "controller-hide-show-reentry", "controller-zorder-create-reentry", "controller-close-delete-reentry", "todo-visibility", "real-exit", "early-expand", "edge-expand-foreground", "expanded-paper-display-recovery", "cancel-prewarm", "real-exit-scripts", "early-exit", "todo-context-menu", "todo-history", "paper-bindings"];
+    private static readonly string[] Cases = ["capsule-capture", "native-free-queue-review", "native-free-queues", "startup", "missing-monitor", "master-queue-transfer", "master-queue-cancel", "master-queue-drag-preparation", "master-queue-drop-handoff", "master-queue-membership", "master-queue-mutations", "master-queue-hide", "master-queue-hidden-retains-collapse", "master-queue-disconnect", "master-queue-merge", "master-queue-merge-collapsed", "master-queue-lightweight-handoff", "controller-hide-create-reentry", "controller-hide-show-reentry", "controller-zorder-create-reentry", "controller-close-delete-reentry", "todo-visibility", "real-exit", "early-expand", "edge-expand-foreground", "expanded-paper-display-recovery", "cancel-prewarm", "real-exit-scripts", "early-exit", "todo-context-menu", "todo-history", "paper-bindings"];
 
     [STAThread]
     private static int Main(string[] args)
@@ -173,6 +175,7 @@ internal static class Program
                 IsVisible = true, IsCollapsed = true, X = area.Left + 60, Y = area.Top + 60,
                 Width = 300, Height = 240, CapsuleSide = DeepCapsuleSides.Right
             });
+        if (name == "capsule-capture") state.HideCapsulesInCapture = true;
         if (name.StartsWith("master-queue-merge"))
         {
             state.Papers[2].CapsuleSide = DeepCapsuleSides.Left;
@@ -220,6 +223,25 @@ internal static class Program
             await controller.StartAsync(createDefaultPaper: false);
             await Dispatcher.CurrentDispatcher.InvokeAsync(static () => { }, DispatcherPriority.Render);
             var visible = windows.Values.Count(window => window.HasVisibleSurface);
+            if (name == "capsule-capture")
+            {
+                var hosts = windows.Values.Select(w => ((EdgeCapsuleHost)Field(w, "_edgeCapsuleHost")).Handle).ToArray();
+                var masters = Application.Current.Windows.OfType<MasterCapsuleWindow>()
+                    .Where(w => w.IsVisible).Select(w => new WindowInteropHelper(w).Handle).ToArray();
+                Require(hosts.Length == count && masters.Length > 0, "expected live edge and master capsules");
+                var handles = hosts.Concat(masters).ToArray();
+                void CheckAffinity(uint expected)
+                {
+                    foreach (var hwnd in handles)
+                        Require(GetWindowDisplayAffinity(hwnd, out var actual) && actual == expected,
+                            $"capsule {hwnd:X}: expected {expected:X}, got {actual:X}");
+                }
+                CheckAffinity(0x11);
+                controller.PublicSettings.Set("window.hide_capsules_in_capture", JsonSerializer.SerializeToElement(false));
+                await Dispatcher.CurrentDispatcher.InvokeAsync(static () => { }, DispatcherPriority.ApplicationIdle);
+                CheckAffinity(0);
+                return;
+            }
             if (name == "native-free-queues")
             {
                 await NativeFreeQueueChecks.Run(controller, windows, store);
@@ -627,6 +649,9 @@ internal static class Program
         try { using var process = Process.GetProcessById(id); return process.HasExited; }
         catch (ArgumentException) { return true; }
     }
+
+    [DllImport("user32.dll")]
+    private static extern bool GetWindowDisplayAffinity(IntPtr hwnd, out uint affinity);
 
     private static object Field(object target, string name) =>
         target.GetType().GetField(name, Private)?.GetValue(target) ??
