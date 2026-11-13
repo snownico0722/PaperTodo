@@ -171,6 +171,7 @@ public sealed partial class AppController
                 WrapWithHint(
                     _settingsHidePapersFromWindowSwitcherCheckBox,
                     "TipHidePapersFromWindowSwitcher"),
+                CreateCaptureExclusionSettingsRow(),
                 CompactSettingsField(
                     Strings.Get("SettingsFullscreenTopmostMode"),
                     CreateFullscreenTopmostModeSegmentSelector(),
@@ -185,6 +186,43 @@ public sealed partial class AppController
 
         RefreshSettingsSystemVisibilityToggleStates();
         return leftColumn;
+    }
+
+    private UIElement CreateCaptureExclusionSettingsRow()
+    {
+        var toggles = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        var paper = SettingsToggle(
+            SettingsSidebarLocalized("纸片", "Papers", "付箋", "메모"),
+            State.HidePapersInCapture,
+            () => SetSettingFromUi("window.hide_papers_in_capture", !State.HidePapersInCapture));
+        paper.Margin = new Thickness(0);
+        paper.FontSize = AppTypography.Scale(11.5);
+        var capsule = SettingsToggle(
+            SettingsSidebarLocalized("胶囊", "Capsules", "カプセル", "캡슐"),
+            State.HideCapsulesInCapture,
+            () => SetSettingFromUi("window.hide_capsules_in_capture", !State.HideCapsulesInCapture));
+        capsule.Margin = new Thickness(9, 0, 0, 0);
+        capsule.FontSize = AppTypography.Scale(11.5);
+        toggles.Children.Add(paper);
+        toggles.Children.Add(capsule);
+
+        return WrapWithHint(
+            (FrameworkElement)CompactSettingsField(
+                SettingsSidebarLocalized("在截图和录屏中隐藏", "Hide from capture",
+                    "スクリーンショット・録画から隠す", "스크린샷·녹화에서 숨기기"),
+                toggles,
+                editorWidth: 144,
+                topMargin: 5),
+            BuildSettingsHintTooltip(SettingsSidebarLocalized(
+                "仅尝试从受支持的 Windows 截图、录屏和屏幕共享中排除勾选的窗口。透明窗口或第三方工具可能不支持，不能作为隐私安全保证。",
+                "Attempts to exclude selected windows from supported Windows screenshots, recordings and sharing. Transparent windows and some third-party tools may not support it; this is not a privacy guarantee.",
+                "対応する Windows のスクリーンショット・録画・共有から選択したウィンドウを除外します。透明ウィンドウや一部のツールでは動作せず、プライバシー保護を保証するものではありません。",
+                "지원되는 Windows 캡처·녹화·공유에서 선택한 창을 제외합니다. 투명 창이나 일부 도구에서는 작동하지 않을 수 있으며 개인정보 보호를 보장하지 않습니다.")));
     }
 
     private void SetUiLanguage(string language)
@@ -265,6 +303,8 @@ public sealed partial class AppController
         State.UiLanguage = defaults.UiLanguage;
         State.HidePapersFromTaskbar = defaults.HidePapersFromTaskbar;
         State.HidePapersFromWindowSwitcher = defaults.HidePapersFromWindowSwitcher;
+        State.HidePapersInCapture = defaults.HidePapersInCapture;
+        State.HideCapsulesInCapture = defaults.HideCapsulesInCapture;
         State.FullscreenTopmostMode = defaults.FullscreenTopmostMode;
         State.ShowTopBarNewTodoButton = defaults.ShowTopBarNewTodoButton;
         State.ShowTopBarNewNoteButton = defaults.ShowTopBarNewNoteButton;
