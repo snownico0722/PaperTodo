@@ -12,42 +12,37 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $repository = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 
-# One-off A/B/C comparison. Each case gets fresh isolated data and its own WPF process.
-if ($env:GITHUB_REF_NAME -eq 'diagnostics/issue-456-proposed-fix' -and $Group -eq 'regression' -and !$List) {
+# One-off acceptance on isolated Windows WPF processes.
+if ($env:GITHUB_REF_NAME -eq 'diagnostics/issue-456-fix-verification' -and $Group -eq 'regression' -and !$List) {
     $projectPath = Join-Path $repository 'tests/PaperTodo.LifecycleChecks/PaperTodo.LifecycleChecks.csproj'
-    $master = 'src/MasterCapsuleWindow.cs'
-    $drag = 'src/EdgeCapsuleDragWindow.cs'
-    $baseline = 'e75ce0b13acb6155f9a7efc09148878b451f67c9'
-    foreach ($variant in @('baseline','two-lines','master-only')) {
-        switch ($variant) {
-            'baseline' { git restore --source=$baseline --worktree -- $master $drag }
-            'two-lines' { git restore --source=HEAD --worktree -- $master $drag }
-            'master-only' { git restore --source=$baseline --worktree -- $drag }
-        }
-        if ($LASTEXITCODE) { throw "Cannot select $variant" }
-        Write-Host "VARIANT $variant master=$(git hash-object $master) drag=$(git hash-object $drag)"
-        dotnet build $projectPath -c Release
-        if ($LASTEXITCODE) { throw "Cannot build $variant" }
-        $cases = @('master-queue-drag-preparation','held-drag-preparation','issue456-direct','issue456-layout-resize')
-        if ($variant -eq 'two-lines') {
-            $cases += @('master-queue-drop-handoff','issue456-classic','issue456-free','issue456-forced','issue456-direct-forced','issue456-resize')
-        }
-        foreach ($trial in $cases) {
-            $case = $trial
-            $env:ISSUE456_HOLD = '0'
-            if ($trial -eq 'held-drag-preparation') { $case = 'master-queue-drag-preparation'; $env:ISSUE456_HOLD = '1' }
-            Write-Host "TRIAL $variant $trial"
-            $lines = @(& dotnet run --no-build --project $projectPath -c Release -- --case $case 2>&1)
-            $code = $LASTEXITCODE
-            $log = ($lines | Out-String -Width 1200)
-            Write-Host $log
-            $stack = $log.Contains('PrepareQueueTransferHandoff') -and $log.Contains('dispatcher processing', [StringComparison]::OrdinalIgnoreCase) -and $log.Contains('OnDockingHandoffFrame')
-            Write-Host "RESULT variant=$variant case=$trial exit=$code matchingStack=$stack"
-        }
+    $productCommit = 'c41c2593b27e6f3838f182d67c1c25bcc3422628'
+    foreach ($path in @('src/MasterCapsuleWindow.cs','src/EdgeCapsuleDragWindow.cs','tests/PaperTodo.LifecycleChecks/MasterQueueDropHandoffChecks.cs')) {
+        if ((git hash-object $path) -ne (git rev-parse ("${productCommit}:$path"))) { throw "Different candidate file: $path" }
     }
-    git restore --source=HEAD --worktree -- $master $drag
-    if ($LASTEXITCODE) { throw 'Cannot restore checkout' }
-    # Failures are outcomes in this diagnostic matrix. Read the exit code and stack for each case.
+    dotnet build $projectPath -c Release
+    if ($LASTEXITCODE) { throw 'Cannot build candidate' }
+    $failures = @()
+    $cases = @('master-queue-drop-handoff','master-queue-drag-preparation','held-drag-preparation',
+        'issue456-direct','issue456-classic','issue456-free','issue456-forced','issue456-direct-forced',
+        'issue456-resize','issue456-layout-resize','issue456-layout-resize','issue456-layout-resize')
+    foreach ($trial in $cases) {
+        $case = $trial
+        $env:ISSUE456_HOLD = '0'
+        if ($trial -eq 'held-drag-preparation') { $case = 'master-queue-drag-preparation'; $env:ISSUE456_HOLD = '1' }
+        $lines = @(& dotnet run --no-build --project $projectPath -c Release -- --case $case 2>&1)
+        $code = $LASTEXITCODE
+        $log = ($lines | Out-String -Width 1600)
+        Write-Host $log
+        $ok = $code -eq 0 -and !$log.Contains('DISPATCHER_UNHANDLED') -and !$log.Contains('MATCHING_FIRST_CHANCE')
+        if ($trial -eq 'issue456-layout-resize') { $ok = $ok -and $log -match 'RESIZE_ENDPOINT reached=\w+ depth=[1-9]\d* insideMeasure=True insideHwndResize=True' }
+        if ($trial -eq 'issue456-resize') { $ok = $ok -and $log -match 'RESIZE_ENDPOINT reached=\w+ depth=0 insideMeasure=False insideHwndResize=True' }
+        if ($trial.EndsWith('-forced')) { $ok = $ok -and $log.Contains('INJECT_DISABLE_PROCESSING') }
+        if ($trial -eq 'issue456-direct') { $ok = $ok -and $log.Contains('PREPARE_RETURN earlierRenderRan=True') }
+        if ($trial -eq 'held-drag-preparation') { $ok = $ok -and $log.Contains('PREP_BEFORE received=True leftPressed=True') -and $log.Contains('PREP_AFTER held=True prepared=True nativeDragStarted=False sameMembers=True') }
+        Write-Host "ACCEPT case=$trial exit=$code pass=$ok"
+        if (!$ok) { $failures += $trial }
+    }
+    if ($failures.Count) { throw "Failed cases: $($failures -join ', ')" }
     exit 0
 }
 
