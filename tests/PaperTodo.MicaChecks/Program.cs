@@ -340,6 +340,7 @@ internal static class Program
                         Assert(Contrast(paper, text) >= 4.5, "readable text contrast");
                     }
                 });
+                CaptureDesktopProbe.Run(controller);
                 Check("capture affinity through form changes and auxiliary windows", () => CaptureExclusionChecks.Run(controller));
                 Check("real Todo and Note keep one editor and use edge-to-edge expanded chrome", () =>
                 {
