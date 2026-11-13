@@ -15,7 +15,7 @@ public sealed partial class AppController
     {
         None, Advanced, Telemetry, Animations, Theme, Skin, MaterialTransparency, SurfaceOutline, NativeMaterial, Typography, Markdown,
         ImageReferences, MarkdownAnimations, ExternalExtension, Compress, TodoOrder,
-        TodoLinks, TodoRows, LinkedCapsules, TopBar, SystemVisibility, Fullscreen,
+        TodoLinks, TodoRows, LinkedCapsules, TopBar, SystemVisibility, CaptureExclusion, Fullscreen,
         CapsuleMode, Arrange, CapsuleClose, Titles, Preview, HoverIntent, EdgeTopmost,
         Opacity, Focus, Passive, Reminders, Magnet, Tether, TetherOptions,
         Scripts, VisibilitySnapshot, Shortcuts, Mcp
@@ -279,6 +279,7 @@ public sealed partial class AppController
             case SettingEffects.TopBar:
                 foreach (var w in _windows.Values.ToArray()) w.UpdateTopBarNewPaperButtons(); break;
             case SettingEffects.SystemVisibility: RefreshPaperSystemVisibility(reapplyTaskbarShellState: true); break;
+            case SettingEffects.CaptureExclusion: RefreshCaptureExclusion(); break;
             case SettingEffects.Fullscreen: RefreshFullscreenAvoidanceRuntime(); break;
             case SettingEffects.Arrange: ArrangeDeepCapsules(animate: State.EnableAnimations); break;
             case SettingEffects.CapsuleClose:
