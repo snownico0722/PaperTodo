@@ -742,6 +742,7 @@ public sealed partial class PaperWindow : Window
         SourceInitialized += (_, _) =>
         {
             ApplySystemVisibility(reapplyTaskbarShellState: true);
+            UpdateCaptureExclusion();
             if (PresentationSource.FromVisual(this) is HwndSource source)
             {
                 source.AddHook(OnWindowMessage);
@@ -833,6 +834,26 @@ public sealed partial class PaperWindow : Window
         {
             _isClosingForReal = false;
         }
+    }
+
+    internal void UpdateCaptureExclusion()
+    {
+        UpdateMainWindowCaptureExclusion();
+        UpdateFindPopupCaptureExclusion();
+        var hideCapsules = _controller.State.HideCapsulesInCapture;
+        _edgeCapsuleHost?.UpdateCaptureExclusion(hideCapsules);
+        if (_experimentalCapsuleMagnetPreview is { } preview)
+            WindowCaptureExclusion.Apply(preview, hideCapsules);
+    }
+
+    private void UpdateMainWindowCaptureExclusion()
+    {
+        var state = _controller.State;
+        // Both visuals share this HWND during a cross-fade, including reversals.
+        var excluded = IsPaperFormTransitioning
+            ? state.HidePapersInCapture || state.HideCapsulesInCapture
+            : _paper.IsCollapsed ? state.HideCapsulesInCapture : state.HidePapersInCapture;
+        WindowCaptureExclusion.Apply(this, excluded);
     }
 
     public void UpdateWindowSwitcherVisibility()

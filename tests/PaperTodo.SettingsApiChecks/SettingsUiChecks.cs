@@ -35,6 +35,8 @@ internal static partial class Program
             ("SetMaxTitleLength", "title.max_length", true),
             ("ToggleAutoMoveCompletedTodosToBottom", "todo.move_completed_to_bottom", false),
             ("ToggleHidePapersFromWindowSwitcher", "window.hide_from_switcher", false),
+            ("ToggleHidePapersInCapture", "window.hide_papers_in_capture", false),
+            ("ToggleHideCapsulesInCapture", "window.hide_capsules_in_capture", false),
             ("ToggleCapsuleCollapseAll", "capsule.master_enabled", false)
         })
         {

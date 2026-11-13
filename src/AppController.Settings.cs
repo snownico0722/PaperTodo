@@ -1732,6 +1732,7 @@ public sealed partial class AppController
         }
 
         RefreshPaperSystemVisibility(reapplyTaskbarShellState: true);
+        RefreshCaptureExclusion();
         RefreshTopBarNewPaperButtonsSetting();
         RefreshTopmostForForegroundWindow();
 

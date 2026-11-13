@@ -113,8 +113,21 @@ internal sealed partial class EdgeCapsuleDragWindow : Window
         BuildContent();
         ConfigureForReuse(options);
 
-        SourceInitialized += (_, _) => WindowNative.ApplyNoActivateStyle(this);
+        SourceInitialized += (_, _) =>
+        {
+            WindowNative.ApplyNoActivateStyle(this);
+            UpdateCaptureExclusion();
+        };
         Dispatcher.ShutdownStarted += OnDispatcherShutdownStarted;
+    }
+
+    internal void UpdateCaptureExclusion() =>
+        WindowCaptureExclusion.Apply(this, AppController.Current?.State.HideCapsulesInCapture == true);
+
+    internal static void RefreshPooledCaptureExclusion()
+    {
+        if (s_pooledHost is { _isClosed: false } host)
+            host.UpdateCaptureExclusion();
     }
 
     public event EventHandler? UnexpectedlyClosed;
@@ -179,6 +192,7 @@ internal sealed partial class EdgeCapsuleDragWindow : Window
     public static EdgeCapsuleDragWindow Rent(EdgeCapsuleDragWindowOptions options)
     {
         VerifyPoolThreadAccess();
+        RefreshPooledCaptureExclusion();
         if (s_pooledHostLeased)
         {
             throw new InvalidOperationException(
