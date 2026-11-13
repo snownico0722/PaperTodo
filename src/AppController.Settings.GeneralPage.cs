@@ -201,13 +201,11 @@ public sealed partial class AppController
             State.HidePapersInCapture,
             ToggleHidePapersInCapture);
         paper.Margin = new Thickness(0);
-        paper.FontSize = AppTypography.Scale(11.5);
         var capsule = SettingsToggle(
             SettingsSidebarLocalized("胶囊", "Capsules", "カプセル", "캡슐"),
             State.HideCapsulesInCapture,
             ToggleHideCapsulesInCapture);
         capsule.Margin = new Thickness(9, 0, 0, 0);
-        capsule.FontSize = AppTypography.Scale(11.5);
         toggles.Children.Add(paper);
         toggles.Children.Add(capsule);
 
@@ -216,13 +214,13 @@ public sealed partial class AppController
                 SettingsSidebarLocalized("在截图和录屏中隐藏", "Hide from capture",
                     "スクリーンショット・録画から隠す", "스크린샷·녹화에서 숨기기"),
                 toggles,
-                editorWidth: 144,
+                editorWidth: double.NaN,
                 topMargin: 5),
             BuildSettingsHintTooltip(SettingsSidebarLocalized(
-                "仅尝试从受支持的 Windows 截图、录屏和屏幕共享中排除勾选的窗口。Windows 10 2004 之前可能留下空白区域。透明窗口或第三方工具可能不支持，不能作为隐私安全保证。",
-                "Attempts to exclude selected windows from supported Windows screenshots, recordings and sharing. Before Windows 10 version 2004, a blank area may remain. Transparent windows and some third-party tools may not support it; this is not a privacy guarantee.",
-                "対応する Windows のスクリーンショット・録画・共有から選択したウィンドウを除外します。Windows 10 バージョン 2004 より前は空白が残ることがあります。透明ウィンドウや一部のツールでは動作せず、プライバシー保護を保証するものではありません。",
-                "지원되는 Windows 캡처·녹화·공유에서 선택한 창을 제외합니다. Windows 10 버전 2004 이전에는 빈 영역이 남을 수 있습니다. 투명 창이나 일부 도구에서는 작동하지 않을 수 있으며 개인정보 보호를 보장하지 않습니다.")));
+                "勾选后，对应内容在你的屏幕上照常显示和使用，但会从截图、录屏和屏幕共享中隐藏。Windows 10 20H1 之前的版本可能会在窗口位置留下空白。部分窗口或捕获工具可能不支持此功能，请勿将它用作隐私保障。",
+                "Selected items stay visible on your screen and you can use them as usual. They are hidden from screenshots, recordings, and screen sharing. On Windows versions before Windows 10 20H1, a blank area may appear where the window was. Some windows or capture tools may not support this feature. Don’t rely on it for privacy.",
+                "選んだ項目は自分の画面ではいつもどおり表示・操作でき、スクリーンショットや録画、画面共有では非表示になります。Windows 10 20H1 より前のバージョンでは、ウィンドウの位置に空白が残ることがあります。一部のウィンドウやキャプチャツールでは機能しない場合があります。プライバシー保護の目的では使用しないでください。",
+                "선택한 항목은 내 화면에서 평소처럼 보고 사용할 수 있으며, 스크린샷과 녹화, 화면 공유에서는 숨겨집니다. Windows 10 20H1 이전 버전에서는 창이 있던 자리가 빈칸으로 남을 수 있습니다. 일부 창이나 캡처 도구에서는 작동하지 않을 수 있으므로 개인정보 보호 수단으로 사용하지 마세요.")));
     }
 
     private void ToggleHidePapersInCapture() =>
