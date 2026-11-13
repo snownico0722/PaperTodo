@@ -227,6 +227,7 @@ public sealed partial class AppController
         foreach (var master in _masterCapsules.Values.ToArray())
             master.UpdateCaptureExclusion();
         EdgeCapsuleDragWindow.RefreshPooledCaptureExclusion();
+        EdgeCapsuleQueueProxyWindow.RefreshCaptureExclusion(State.HideCapsulesInCapture);
         _nativeQueueDropGhost?.UpdateCaptureExclusion();
     }
 
