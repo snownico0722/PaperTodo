@@ -21,7 +21,8 @@ if ($env:GITHUB_REF_NAME -eq 'diagnostics/issue-456-wpf-handoff' -and $Group -eq
     $unexpected = 0
     foreach ($case in @('master-queue-drop-handoff','issue456-classic','issue456-free',
                          'issue456-classic','issue456-free','issue456-classic','issue456-free',
-                         'issue456-direct','issue456-forced','issue456-direct-forced')) {
+                         'issue456-direct','issue456-forced','issue456-direct-forced',
+                         'issue456-resize','issue456-layout-resize')) {
         Write-Host "=== ISSUE456 CASE $case ==="
         $lines = @(& dotnet run --no-build --project $projectPath -c Release -- --case $case 2>&1)
         $code = $LASTEXITCODE
@@ -33,12 +34,15 @@ if ($env:GITHUB_REF_NAME -eq 'diagnostics/issue-456-wpf-handoff' -and $Group -eq
         $forced = $case.EndsWith('-forced')
         $repro = $code -ne 0 -and $hasStack
         $ok = if ($forced) { $repro -and $log.Contains('INJECT_DISABLE_PROCESSING') } else { $repro -or $code -eq 0 }
+        if ($case.EndsWith('-resize')) {
+            $ok = $ok -and $log.Contains('RESIZING layout=') -and $log.Contains('RESIZE_ENDPOINT')
+        }
         Write-Host "ISSUE456_RESULT case=$case exit=$code matchingStack=$hasStack crash=$repro imposed=$forced valid=$ok"
         if ($ok) { $expected++ } else { $unexpected++ }
     }
     Write-Host "ISSUE456_SUMMARY valid=$expected inconclusive=$unexpected"
     if ($unexpected) { throw "$unexpected inconclusive trial(s), inspect individual logs" }
-    return
+    exit 0
 }
 
 # This is the shared local/CI inventory. Keep configuration differences explicit;

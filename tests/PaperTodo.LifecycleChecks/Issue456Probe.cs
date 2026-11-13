@@ -11,6 +11,19 @@ internal static class Issue456Probe
     private const BindingFlags Instance = BindingFlags.Instance | BindingFlags.NonPublic;
     private const BindingFlags Static = BindingFlags.Static | BindingFlags.NonPublic;
 
+    private sealed class LayoutProbe : FrameworkElement
+    {
+        public Action? DuringMeasure { get; set; }
+
+        protected override Size MeasureOverride(Size availableSize)
+        {
+            var action = DuringMeasure;
+            DuringMeasure = null;
+            action?.Invoke();
+            return new Size(24, 24);
+        }
+    }
+
     internal static void Prepare(AppState state, string name)
     {
         var free = name == "issue456-free";
@@ -50,6 +63,19 @@ internal static class Issue456Probe
         if (!source.IsVisible || !target.IsVisible || from.X <= to.X)
             throw new Exception("Two distinct visible queue masters required");
 
+        bool resize = name.EndsWith("-resize");
+        bool inMeasure = name == "issue456-layout-resize";
+        var layoutProbe = new LayoutProbe();
+        Window? resizeWindow = null;
+        if (resize)
+        {
+            resizeWindow = new Window {
+                Width = 80, Height = 60, Left = 350, Top = 400, ShowActivated = false,
+                ShowInTaskbar = false, WindowStyle = WindowStyle.None, Content = layoutProbe
+            };
+            resizeWindow.Show();
+            resizeWindow.UpdateLayout();
+        }
         bool pressed = false, flight = false, reveal = false, injected = false;
         var pool = typeof(EdgeCapsuleDragWindow).GetField("s_pooledHost", Static)!;
         var animation = typeof(EdgeCapsuleDragWindow).GetField("_dockingHandoffAnimation", Instance)!;
@@ -68,6 +94,40 @@ internal static class Issue456Probe
             if (phase != "Flight" || flight) return;
             flight = true;
             Console.WriteLine($"FLIGHT_OBSERVED allLeft={controller.State.Papers.All(p => p.CapsuleSide == DeepCapsuleSides.Left)}");
+            if (resize)
+            {
+                var type = record.GetType();
+                var propertyForResize = type.GetProperty("Completed")!;
+                var completion = (Action<bool>)propertyForResize.GetValue(record)!;
+                propertyForResize.SetValue(record, (Action<bool>)(reached => {
+                    var stack = Environment.StackTrace;
+                    var count = typeof(Dispatcher).GetField("_disableProcessingCount", Instance)?.GetValue(dispatcher);
+                    Console.WriteLine($"RESIZE_ENDPOINT reached={reached} depth={count} insideMeasure={stack.Contains("LayoutProbe.MeasureOverride")} insideHwndResize={stack.Contains("HwndTarget.OnResize")}");
+                    completion(reached);
+                }));
+                var start = (long)type.GetProperty("StartedAtTimestamp")!.GetValue(record)!;
+                var duration = (long)type.GetProperty("DurationTimestampTicks")!.GetValue(record)!;
+                // Align the normal and layout-resize cases to the same animation deadline.
+                // An HWND resize then makes WPF deliver a real Rendering frame synchronously.
+                dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(() =>
+                {
+                    var remaining = Math.Max(0, start + duration - Stopwatch.GetTimestamp());
+                    Thread.Sleep(TimeSpan.FromSeconds(remaining / (double)Stopwatch.Frequency) + TimeSpan.FromMilliseconds(8));
+                    void Resize()
+                    {
+                        Console.WriteLine($"RESIZING layout={inMeasure}");
+                        resizeWindow!.Width += 16;
+                    }
+                    if (inMeasure)
+                    {
+                        layoutProbe.DuringMeasure = Resize;
+                        layoutProbe.InvalidateMeasure();
+                        resizeWindow!.UpdateLayout();
+                    }
+                    else Resize();
+                }));
+                return;
+            }
             if (!forced) return;
             // Test-only positive control. Leave the real Rendering event, endpoint verification
             // and original completion delegate intact. Scope the one imposed condition precisely.
@@ -148,6 +208,6 @@ internal static class Issue456Probe
             if (!((direct || pressed) && flight && reveal && Merged() && visible && retired && released))
                 throw new Exception("Native drag did not satisfy all merge/flight completion checks");
         }
-        finally { CompositionTarget.Rendering -= OnRendering; }
+        finally { CompositionTarget.Rendering -= OnRendering; resizeWindow?.Close(); }
     }
 }
