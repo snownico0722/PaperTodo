@@ -199,13 +199,13 @@ public sealed partial class AppController
         var paper = SettingsToggle(
             SettingsSidebarLocalized("纸片", "Papers", "付箋", "메모"),
             State.HidePapersInCapture,
-            () => SetSettingFromUi("window.hide_papers_in_capture", !State.HidePapersInCapture));
+            ToggleHidePapersInCapture);
         paper.Margin = new Thickness(0);
         paper.FontSize = AppTypography.Scale(11.5);
         var capsule = SettingsToggle(
             SettingsSidebarLocalized("胶囊", "Capsules", "カプセル", "캡슐"),
             State.HideCapsulesInCapture,
-            () => SetSettingFromUi("window.hide_capsules_in_capture", !State.HideCapsulesInCapture));
+            ToggleHideCapsulesInCapture);
         capsule.Margin = new Thickness(9, 0, 0, 0);
         capsule.FontSize = AppTypography.Scale(11.5);
         toggles.Children.Add(paper);
@@ -224,6 +224,12 @@ public sealed partial class AppController
                 "対応する Windows のスクリーンショット・録画・共有から選択したウィンドウを除外します。透明ウィンドウや一部のツールでは動作せず、プライバシー保護を保証するものではありません。",
                 "지원되는 Windows 캡처·녹화·공유에서 선택한 창을 제외합니다. 투명 창이나 일부 도구에서는 작동하지 않을 수 있으며 개인정보 보호를 보장하지 않습니다.")));
     }
+
+    private void ToggleHidePapersInCapture() =>
+        SetSettingFromUi("window.hide_papers_in_capture", !State.HidePapersInCapture);
+
+    private void ToggleHideCapsulesInCapture() =>
+        SetSettingFromUi("window.hide_capsules_in_capture", !State.HideCapsulesInCapture);
 
     private void SetUiLanguage(string language)
     {
