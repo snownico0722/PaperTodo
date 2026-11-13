@@ -22,9 +22,10 @@ if ($env:GITHUB_REF_NAME -eq 'diagnostics/issue-456-fix-verification' -and $Grou
     dotnet build $projectPath -c Release
     if ($LASTEXITCODE) { throw 'Cannot build candidate' }
     $failures = @()
-    $cases = @('master-queue-drop-handoff','master-queue-drag-preparation','held-drag-preparation',
-        'issue456-direct','issue456-classic','issue456-free','issue456-forced','issue456-direct-forced',
-        'issue456-resize','issue456-layout-resize','issue456-layout-resize','issue456-layout-resize')
+    $cases = @('issue456-classic','issue456-free','issue456-forced','issue456-resize',
+        'issue456-layout-resize','issue456-layout-resize','issue456-layout-resize',
+        'issue456-direct','issue456-direct-forced','master-queue-drop-handoff',
+        'master-queue-drag-preparation','held-drag-preparation')
     foreach ($trial in $cases) {
         $case = $trial
         $env:ISSUE456_HOLD = '0'

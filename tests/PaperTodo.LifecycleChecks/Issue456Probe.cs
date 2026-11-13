@@ -11,6 +11,13 @@ internal static class Issue456Probe
     private const BindingFlags Instance = BindingFlags.Instance | BindingFlags.NonPublic;
     private const BindingFlags Static = BindingFlags.Static | BindingFlags.NonPublic;
 
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct HitPoint { public int X, Y; }
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern IntPtr WindowFromPoint(HitPoint p);
+    [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    private static extern int GetClassName(IntPtr window, System.Text.StringBuilder name, int maxCount);
+
     private sealed class LayoutProbe : FrameworkElement
     {
         public Action? DuringMeasure { get; set; }
@@ -57,6 +64,11 @@ internal static class Issue456Probe
             var pill = (FrameworkElement)typeof(MasterCapsuleWindow).GetField("_pill", Instance)!.GetValue(w)!;
             return pill.PointToScreen(new Point(pill.ActualWidth / 2, pill.ActualHeight / 2));
         }
+        if (!direct)
+        {
+            WindowNative.BringToFrontNoActivate(source);
+            await dispatcher.InvokeAsync(() => {}, DispatcherPriority.ApplicationIdle);
+        }
         var from = Center(source);
         var to = Center(target);
         Console.WriteLine($"BEGIN {name} OS={Environment.OSVersion.Version} CLR={Environment.Version} WPF={typeof(Window).Assembly.GetName().Version} tier={RenderCapability.Tier >> 16} screen={SystemParameters.PrimaryScreenWidth}x{SystemParameters.PrimaryScreenHeight} from={from} to={to} right=3 left=2");
@@ -76,12 +88,22 @@ internal static class Issue456Probe
             resizeWindow.Show();
             resizeWindow.UpdateLayout();
         }
+        if (!direct)
+        {
+            var hit = WindowFromPoint(new HitPoint { X = (int)Math.Round(from.X), Y = (int)Math.Round(from.Y) });
+            var hwnd = new System.Windows.Interop.WindowInteropHelper(source).Handle;
+            var cls = new System.Text.StringBuilder(256);
+            GetClassName(hit, cls, cls.Capacity);
+            Console.WriteLine($"MOUSE_HIT source={hwnd} hit={hit} class={cls} match={hit == hwnd}");
+            if (hit != hwnd) throw new Exception("Fixture desktop did not expose the source master to native mouse input.");
+        }
+        using var down = new ManualResetEventSlim();
         bool pressed = false, flight = false, reveal = false, injected = false;
         var pool = typeof(EdgeCapsuleDragWindow).GetField("s_pooledHost", Static)!;
         var animation = typeof(EdgeCapsuleDragWindow).GetField("_dockingHandoffAnimation", Instance)!;
         void OnDown(object sender, MouseButtonEventArgs e)
         {
-            if (e.ChangedButton == MouseButton.Left) { pressed = true; Console.WriteLine("MASTER_RECEIVED_LEFT_DOWN"); }
+            if (e.ChangedButton == MouseButton.Left) { pressed = true; down.Set(); Console.WriteLine("MASTER_RECEIVED_LEFT_DOWN"); }
         }
         source.AddHandler(Mouse.PreviewMouseDownEvent, new MouseButtonEventHandler(OnDown), true);
 
@@ -183,7 +205,7 @@ internal static class Issue456Probe
                 LifecycleInput.LeftButton(true);
                 try
                 {
-                    Thread.Sleep(140);
+                    if (!down.Wait(2000)) throw new Exception("Source did not receive system mouse down");
                     for (int i = 1; i <= 36; i++)
                     {
                         LifecycleInput.MoveCursor(new Point(from.X + (to.X - from.X) * i / 36,
