@@ -83,6 +83,7 @@ internal sealed partial class EdgeCapsuleHost : IDisposable
     private IntPtr _appliedTopmostInsertAfter;
     private bool _experimentalPassive;
     private bool _interactionLocked;
+    private bool _captureExcluded;
     private bool _disposed;
     private Window Window { get; }
     private Grid Root { get; }
@@ -129,6 +130,11 @@ internal sealed partial class EdgeCapsuleHost : IDisposable
         _textBrush = options.StrongTextBrush;
         _weakTextBrush = options.TextBrush;
         Window = window;
+        window.SourceInitialized += (_, _) =>
+        {
+            if (_captureExcluded)
+                WindowCaptureExclusion.Apply(window, true);
+        };
         Root = root;
         VisualSurface = visualSurface;
         VisualSurfaceOffset = visualSurfaceOffset;
@@ -142,6 +148,15 @@ internal sealed partial class EdgeCapsuleHost : IDisposable
         CloseArea = closeArea;
         CloseGlyph = closeGlyph;
         Label = label;
+    }
+
+    internal void UpdateCaptureExclusion(bool excluded)
+    {
+        if (_disposed) return;
+        _captureExcluded = excluded;
+        // A not-yet-created HWND is handled by SourceInitialized.
+        if (new WindowInteropHelper(Window).Handle != IntPtr.Zero)
+            WindowCaptureExclusion.Apply(Window, excluded);
     }
 
     public bool IsVisible => !_disposed && Window.IsVisible;
