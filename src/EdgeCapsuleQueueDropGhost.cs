@@ -58,8 +58,12 @@ internal sealed class EdgeCapsuleQueueDropGhost : IDisposable
         {
             WindowNative.ApplyNoActivateStyle(_window);
             WindowNative.SetInputPassthrough(_window, true);
+            UpdateCaptureExclusion();
         };
     }
+
+    internal void UpdateCaptureExclusion() =>
+        WindowCaptureExclusion.Apply(_window, AppController.Current?.State.HideCapsulesInCapture == true);
 
     // A merge into an already folded queue changes only the target master.
     // Expand on its interior and vertical sides; the wall edge stays flush.
