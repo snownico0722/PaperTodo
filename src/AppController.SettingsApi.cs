@@ -220,6 +220,16 @@ public sealed partial class AppController
             });
     }
 
+    private void RefreshCaptureExclusion()
+    {
+        foreach (var paper in _windows.Values.ToArray())
+            paper.UpdateCaptureExclusion();
+        foreach (var master in _masterCapsules.Values.ToArray())
+            master.UpdateCaptureExclusion();
+        EdgeCapsuleDragWindow.RefreshPooledCaptureExclusion();
+        _nativeQueueDropGhost?.UpdateCaptureExclusion();
+    }
+
     private void PublishSettingEffects(SettingEffects effects)
     {
         switch (effects)
