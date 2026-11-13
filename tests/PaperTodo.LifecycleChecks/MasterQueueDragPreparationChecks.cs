@@ -66,12 +66,40 @@ internal static class MasterQueueDragPreparationChecks
             var pointer = new DeviceScreenPoint(monitor.WorkArea.Right - 100, monitor.WorkArea.Top + 100);
             if (hold)
             {
-                LifecycleInput.MoveCursor(new Point((monitor.WorkArea.Left + monitor.WorkArea.Right) / 2,
-                    (monitor.WorkArea.Top + monitor.WorkArea.Bottom) / 2));
-                LifecycleInput.LeftButton(true);
-                master.Dispatcher.Invoke(static () => { }, DispatcherPriority.ApplicationIdle);
-                Console.WriteLine($"PREP_BEFORE leftPressed={System.Windows.Input.Mouse.LeftButton == System.Windows.Input.MouseButtonState.Pressed}");
-                Require(System.Windows.Input.Mouse.LeftButton == System.Windows.Input.MouseButtonState.Pressed, "fixture did not hold left button");
+                var pill = (FrameworkElement)typeof(MasterCapsuleWindow).GetField("_pill", Private)!.GetValue(master)!;
+                var center = pill.PointToScreen(new Point(pill.ActualWidth / 2, pill.ActualHeight / 2));
+                bool receivedDown = false;
+                var frame = new DispatcherFrame();
+                void OnDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+                {
+                    if (e.ChangedButton != System.Windows.Input.MouseButton.Left) return;
+                    receivedDown = true;
+                    frame.Continue = false;
+                }
+                var handler = new System.Windows.Input.MouseButtonEventHandler(OnDown);
+                pill.AddHandler(System.Windows.Input.Mouse.PreviewMouseDownEvent, handler, true);
+                var timeout = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
+                timeout.Tick += (_, _) => frame.Continue = false;
+                timeout.Start();
+                try
+                {
+                    var sender = Task.Run(() => {
+                        LifecycleInput.MoveCursor(center);
+                        Thread.Sleep(120);
+                        LifecycleInput.LeftButton(true);
+                    });
+                    Dispatcher.PushFrame(frame);
+                    sender.GetAwaiter().GetResult();
+                }
+                finally
+                {
+                    timeout.Stop();
+                    pill.RemoveHandler(System.Windows.Input.Mouse.PreviewMouseDownEvent, handler);
+                }
+                var leftPressed = System.Windows.Input.Mouse.LeftButton == System.Windows.Input.MouseButtonState.Pressed;
+                Console.WriteLine($"PREP_BEFORE received={receivedDown} leftPressed={leftPressed}");
+                Require(receivedDown && leftPressed, "fixture did not hold left button on the WPF master");
+                pointer = new DeviceScreenPoint(center.X, center.Y);
             }
             var sessionType = typeof(MasterCapsuleWindow).GetNestedType("MasterDragSession", Private)!;
             var session = Activator.CreateInstance(sessionType,
