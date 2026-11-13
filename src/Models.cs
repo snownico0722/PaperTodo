@@ -491,6 +491,8 @@ public sealed class AppState
     public List<string>? NoteTopBarShortcuts { get; set; }
     public bool HidePapersFromTaskbar { get; set; } = true;
     public bool HidePapersFromWindowSwitcher { get; set; } = true;
+    public bool HidePapersInCapture { get; set; }
+    public bool HideCapsulesInCapture { get; set; }
     [JsonPropertyName("enableTodoNoteLinks")]
     public bool EnableTodoPaperLinks { get; set; } = true;
     [JsonPropertyName("showLinkedNoteName")]
