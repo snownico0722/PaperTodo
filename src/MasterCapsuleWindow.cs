@@ -1197,7 +1197,7 @@ public sealed partial class MasterCapsuleWindow : Window
 
         PublishQueueTransferHandoff();
         // Call only after controller queue synchronization has finished: Render can reenter it.
-        Dispatcher.Invoke(static () => { }, System.Windows.Threading.DispatcherPriority.Render);
+        Dispatcher.BeginInvoke(static () => { }, System.Windows.Threading.DispatcherPriority.Render);
     }
 
     private void PublishQueueTransferHandoff()

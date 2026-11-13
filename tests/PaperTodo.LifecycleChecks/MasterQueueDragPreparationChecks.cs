@@ -56,6 +56,7 @@ internal static class MasterQueueDragPreparationChecks
             }));
         }
 
+        bool hold = Environment.GetEnvironmentVariable("ISSUE456_HOLD") == "1";
         source.AddHook(NativeHook);
         host.IsVisibleChanged += OnVisibleChanged;
         try
@@ -63,6 +64,15 @@ internal static class MasterQueueDragPreparationChecks
             Require(WindowWorkAreaHelper.TryGetMonitorGeometryForDevice(null, out var monitor),
                 "master drag fixture has no monitor");
             var pointer = new DeviceScreenPoint(monitor.WorkArea.Right - 100, monitor.WorkArea.Top + 100);
+            if (hold)
+            {
+                LifecycleInput.MoveCursor(new Point((monitor.WorkArea.Left + monitor.WorkArea.Right) / 2,
+                    (monitor.WorkArea.Top + monitor.WorkArea.Bottom) / 2));
+                LifecycleInput.LeftButton(true);
+                master.Dispatcher.Invoke(static () => { }, DispatcherPriority.ApplicationIdle);
+                Console.WriteLine($"PREP_BEFORE leftPressed={System.Windows.Input.Mouse.LeftButton == System.Windows.Input.MouseButtonState.Pressed}");
+                Require(System.Windows.Input.Mouse.LeftButton == System.Windows.Input.MouseButtonState.Pressed, "fixture did not hold left button");
+            }
             var sessionType = typeof(MasterCapsuleWindow).GetNestedType("MasterDragSession", Private)!;
             var session = Activator.CreateInstance(sessionType,
                 pointer, controller.MasterCapsuleQueueKey("", EdgeCapsuleEdge.Right), hadMargin, originalMargin, null)!;
@@ -70,6 +80,7 @@ internal static class MasterQueueDragPreparationChecks
                     .Invoke(master, [pointer, session])!,
                 "master drag fixture did not consume the transfer gesture");
             master.Dispatcher.Invoke(static () => { }, DispatcherPriority.Render);
+            Console.WriteLine($"PREP_AFTER held={hold} prepared={prepared} nativeDragStarted={nativeDragStarted} sameMembers={controller.State.Papers.Select(paper => paper.CapsuleSide).SequenceEqual(originalSides)}");
             Require(prepared, "master transferred ownership before its floating WPF render work completed");
             Require(!nativeDragStarted, "master entered native dragging after render-turn cancellation");
             Require(controller.State.Papers.Select(paper => paper.CapsuleSide).SequenceEqual(originalSides),
@@ -85,6 +96,7 @@ internal static class MasterQueueDragPreparationChecks
         }
         finally
         {
+            if (hold) LifecycleInput.LeftButton(false);
             layout?.Abort();
             host.IsVisibleChanged -= OnVisibleChanged;
             source.RemoveHook(NativeHook);

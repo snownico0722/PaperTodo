@@ -484,7 +484,7 @@ internal sealed partial class EdgeCapsuleDragWindow : Window
 #if DEBUG
         var renderStartedAt = EdgeCapsulePerformanceDiagnostics.Timestamp();
 #endif
-        Dispatcher.Invoke(static () => { }, System.Windows.Threading.DispatcherPriority.Render);
+        Dispatcher.BeginInvoke(static () => { }, System.Windows.Threading.DispatcherPriority.Render);
 #if DEBUG
         EdgeCapsulePerformanceDiagnostics.Trace(
             $"drag.host phase=native-ready paper={_diagnosticId} dragHost={_diagnosticHostId} " +

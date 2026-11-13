@@ -205,6 +205,14 @@ internal static class Issue456Probe
             var visible = destination is { IsVisible: true } && destination.Opacity >= .999;
             var retired = controller.MasterCapsuleForQueue(right) == null;
             Console.WriteLine($"END {name} pressed={pressed} flight={flight} reveal={reveal} imposed={injected} merged={Merged()} visible={visible} retired={retired} released={released}");
+            if (name == "issue456-direct" && destination != null)
+            {
+                bool renderRan = false;
+                var marker = dispatcher.InvokeAsync(() => { renderRan = true; }, DispatcherPriority.Render);
+                destination.PrepareQueueTransferHandoff();
+                Console.WriteLine($"PREPARE_RETURN earlierRenderRan={renderRan}");
+                await marker;
+            }
             if (!((direct || pressed) && flight && reveal && Merged() && visible && retired && released))
                 throw new Exception("Native drag did not satisfy all merge/flight completion checks");
         }
