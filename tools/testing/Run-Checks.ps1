@@ -12,6 +12,35 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $repository = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 
+# Temporary branch-only Windows reproduction. Every trial runs in a fresh fixture process.
+if ($env:GITHUB_REF_NAME -eq 'diagnostics/issue-456-wpf-handoff' -and $Group -eq 'regression' -and !$List) {
+    $projectPath = Join-Path $repository 'tests/PaperTodo.LifecycleChecks/PaperTodo.LifecycleChecks.csproj'
+    dotnet build $projectPath -c Release
+    if ($LASTEXITCODE -ne 0) { throw 'Issue 456 probe build failed' }
+    $expected = 0
+    $unexpected = 0
+    foreach ($case in @('master-queue-drop-handoff','issue456-classic','issue456-free',
+                         'issue456-classic','issue456-free','issue456-classic','issue456-free',
+                         'issue456-direct','issue456-forced','issue456-direct-forced')) {
+        Write-Host "=== ISSUE456 CASE $case ==="
+        $lines = @(& dotnet run --no-build --project $projectPath -c Release -- --case $case 2>&1)
+        $code = $LASTEXITCODE
+        $log = ($lines | Out-String -Width 1200)
+        Write-Host $log
+        $hasStack = $log.Contains('PrepareQueueTransferHandoff') -and
+            $log.Contains('CompleteFlight') -and $log.Contains('OnDockingHandoffFrame') -and
+            $log.Contains('dispatcher processing', [StringComparison]::OrdinalIgnoreCase)
+        $forced = $case.EndsWith('-forced')
+        $repro = $code -ne 0 -and $hasStack
+        $ok = if ($forced) { $repro -and $log.Contains('INJECT_DISABLE_PROCESSING') } else { $repro -or $code -eq 0 }
+        Write-Host "ISSUE456_RESULT case=$case exit=$code matchingStack=$hasStack crash=$repro imposed=$forced valid=$ok"
+        if ($ok) { $expected++ } else { $unexpected++ }
+    }
+    Write-Host "ISSUE456_SUMMARY valid=$expected inconclusive=$unexpected"
+    if ($unexpected) { throw "$unexpected inconclusive trial(s), inspect individual logs" }
+    return
+}
+
 # This is the shared local/CI inventory. Keep configuration differences explicit;
 # Debug collector checks and Release no-op checks protect different behavior.
 $checks = @(

@@ -491,6 +491,9 @@ internal static class LifecycleInput
         WindowFromPoint(new NativePoint { X = (int)Math.Round(point.X), Y = (int)Math.Round(point.Y) }) ==
         new WindowInteropHelper(window).Handle;
 
+    internal static void LeftButton(bool down) =>
+        Send([new Input { Type = 0, Data = new InputData { Mouse = new MouseInput { Flags = down ? 0x0002u : 0x0004u } } }]);
+
     internal static void RightClick()
     {
         Send([new Input { Type = 0, Data = new InputData { Mouse = new MouseInput { Flags = 0x0008 } } },
