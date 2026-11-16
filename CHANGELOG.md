@@ -30,7 +30,7 @@ This log is written for general and power users alike. It focuses on user-facing
 
 #### Papers, Title Bar & Capsules
 
-- Active edge capsules have a brighter outline in dark mode. A thin contrasting outer edge keeps the outline visible against desktop backgrounds of the same color.
+- Active edge capsules have a brighter outline in dark mode. A thin translucent rim blends with the desktop and keeps the outline visible when the background matches its color.
 
 - **Paper resize performance**: Default floating paper and ordinary capsule shadows use cached Gaussian nine-slice tiles instead of a full-surface WPF blur. Resizing reuses corners and stretches only straight sides, without changing other material skins.
 

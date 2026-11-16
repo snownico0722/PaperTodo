@@ -199,7 +199,10 @@ internal sealed partial class SkinBorder : PaperChromeBorder
         {
             if (ActualWidth <= 0 || ActualHeight <= 0) return;
             EnsureGeometry();
-            dc.DrawGeometry(_highContrast ? SystemColors.WindowBrush : Theme.PaperBrush, null, _borderRing);
+            var rimBrush = _highContrast
+                ? SystemColors.WindowBrush
+                : Theme.BrushWithAlpha(Theme.PaperBrush, _dark ? 0.60 : 0.70);
+            dc.DrawGeometry(rimBrush, null, _borderRing);
             dc.DrawGeometry(BorderBrush, null, _focusStroke);
             return;
         }

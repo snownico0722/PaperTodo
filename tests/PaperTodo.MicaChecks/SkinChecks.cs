@@ -20,6 +20,7 @@ internal static class SkinChecks
             controller.State.EnableAnimations = false;
             controller.State.HideSurfaceOutline = false;
             CheckAuxiliaryContent(controller);
+            CheckEdgeFocusOpacity(controller);
             CheckLiveSwitch(controller);
             if (!SystemParameters.HighContrast) CheckHiddenTitleWithoutOutline(controller);
         }
@@ -86,6 +87,29 @@ internal static class SkinChecks
                 $"{skin}: auxiliary material preserves opaque foreground content");
             Program.Assert(VisualTreeHelper.HitTest(surface, new Point(120, 40)) != null,
                 $"{skin}: auxiliary content remains interactive");
+        }
+    }
+
+    private static void CheckEdgeFocusOpacity(AppController controller)
+    {
+        var thickness = EdgeCapsuleLayout.OutlineThickness;
+        var outline = new SkinBorder
+        {
+            Width = 64, Height = 32, IsCapsule = true, IsOutline = true,
+            CornerRadius = new CornerRadius(0, 12, 12, 0),
+            BorderThickness = new Thickness(0, thickness, thickness, thickness)
+        };
+        foreach (var (theme, rimOpacity) in new[] { ("dark", 0.60), ("light", 0.70) })
+        {
+            controller.State.Theme = theme;
+            Theme.Invalidate();
+            outline.RefreshSkin();
+            outline.BorderBrush = Theme.EdgeCapsuleFocusBrush;
+            var pixels = Pixels(Render(outline, 1));
+            int TopAlpha(int y) => pixels[(y * 64 + 32) * 4 + 3];
+            var rimAlpha = SystemParameters.HighContrast ? 255 : Math.Round(rimOpacity * 255);
+            Program.Assert(Math.Abs(TopAlpha(0) - rimAlpha) <= 1 && TopAlpha(1) == 255 && TopAlpha(2) == 255,
+                $"{theme}: outer rim follows theme opacity and the focus stroke stays opaque");
         }
     }
 
