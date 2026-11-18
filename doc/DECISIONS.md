@@ -13,7 +13,7 @@
 
 | ID | 主题 | Status | 领域 |
 | --- | --- | --- | --- |
-| D-001 | “桌面纸片”作为主要交互和对象边界 | Accepted | 产品边界 |
+| D-001 | “桌面纸片”作为主要交互和对象边界 | Extended by D-074 / D-075 | 产品边界 |
 | D-002 | `data.json` 与 LMDB 分域 | Accepted | 持久化 |
 | D-003 | Crash boundary 不做强制最终保存 | Accepted | 持久化 / 恢复 |
 | D-004 | Paper body 通过 session 边界接入 | Accepted | 插件 |
@@ -82,7 +82,9 @@
 | D-070 | 完整快照按来源顺序恢复，损坏时须用户确认重建 | Accepted | 核心持久化 / 恢复 |
 | D-071 | 有界冲突归档与健康主文件后清理孤立临时文件 | Accepted | 核心持久化 / 归档 |
 | D-072 | Ctrl 整队拖拽归属胶囊自由队列 | Accepted | Edge / 队列 |
-| D-073 | 可编辑无限工作台与单正文租借 | Accepted | 工作台 / 布局 / 生命周期 |
+| D-073 | 可编辑无限工作台与单正文租借 | Superseded by D-075 | 工作台 / 布局 / 生命周期 |
+| D-074 | 可编辑灵感空间与单正文租借 | Superseded by D-075（内容归属与关系范围） | 灵感空间 / 布局 / 生命周期 |
+| D-075 | 工作空间素材 Note、手动分组与跨纸内容搬运 | Accepted | 灵感空间 / 内容 / 持久化 |
 
 ## 维护规则
 
@@ -2168,7 +2170,7 @@ The preview should show an available landing rather than make a target continuou
 
 ## D-073 — 可编辑无限工作台与单正文租借
 
-**Status:** Accepted；扩展 D-001 的呈现方式，不改变 paper 和 session 的 ownership。
+**Status:** Superseded by D-075（保留 paper 和 session 的单正文归属，内容与关系范围转由 D-075 约束）。
 
 ### Context
 
@@ -2188,3 +2190,54 @@ The preview should show an available landing rather than make a target continuou
 - `src/PaperWindow.Workbench.cs`、`src/AppController.Workbench.cs`、`src/StateStore.Workbench.cs`。
 - `tests/PaperTodo.WorkbenchLayoutChecks` 与 `tests/PaperTodo.LifecycleChecks/Workbench`：几何约束、单正文身份、桌面还原和工作区切换隔离。
 - 算法来源：https://github.com/microsoft/automatic-graph-layout；备选评估：https://eclipse.dev/elk/reference/algorithms/org-eclipse-elk-layered.html。
+
+## D-074 — 可编辑灵感空间与单正文租借
+
+**Status:** Superseded by D-075（内容归属与关系范围）；单正文租借和 paper/session ownership 继续有效。
+
+### Context
+
+新的交互目标是在同一空间内俯瞰多个工作区，并在当前工作区长期直接工作；强自动整理代替用户手工维护大量位置，不增加项目中心或另一套内容管理制度。
+
+### Decision / Why
+
+使用普通全屏 WPF 灵感空间，继续保留原桌面纸片模式。当前工作区租借原有正文 visual，而不是复制可写 ViewModel 或插件会话；其他工作区只读预览。这样正文、撤销和插件生命周期保持唯一 owner，代价是必须明确迁移输入根、焦点和关闭时的交接。
+
+选择 .NET MSAGL 的关系布局与路由算法，不引入 Java/JavaScript 布局运行时。产品所需的增量稳定性、用户位置偏好和硬锁定由独立几何层处理，不把第三方算法的交互参数当作这些承诺。通常新增纸片保留无冲突旧位置；整体整理才主动重排，硬锁定冲突明确反馈。
+
+虚线区域表达自动布局的关系邻域，而非内容归属；跨工作区查看不迁移纸片。关联仅采用既有待办条目到纸片的绑定，直接从纸片菜单选择具体待办条目并调用原生绑定逻辑，不引入任意纸片之间的新关联模型。采用标题栏直接拖动（无位移不生成撤销或重排）、双击改名；纸片左下角眼睛仅作为桌面可见状态指示，不具有命中区域或点击行为。搜索框与双击改名输入使用设置页「外部打开后缀」的圆角透明输入框样式。浮动顶栏左侧布局、中央搜索、右侧新建与缩放，不提供冗余的当前/全部工作区取景按钮。单击正文临时聚焦放大，点击空白灵感空间返回进入聚焦前的视角；全部使用原相机变换，不写入纸片位置。灵感空间 UI 采用 `Theme` 语义画刷并支持热更新；全局搜索遍历核心笔记和待办的完整文本，预览仅用于卡片摘要。灵感空间坐标属于本地空间元数据，与原窗口坐标分离。切换到其他应用不会关闭灵感空间；主动退出时归还正文并恢复主胶囊。模式无需绑定系统壁纸层；没有建立第二套全局写入或插件运行时。
+
+### Evidence
+
+- `src/Workbench/WorkbenchLayoutEngine.cs`、`WorkbenchState.cs`、`WorkbenchWindow.cs`。
+- `src/PaperWindow.Workbench.cs`、`src/AppController.Workbench.cs`、`src/StateStore.Workbench.cs`。
+- `tests/PaperTodo.WorkbenchLayoutChecks` 与 `tests/PaperTodo.LifecycleChecks/Workbench`：几何约束、单正文身份、桌面还原和工作区切换隔离。
+- 算法来源：https://github.com/microsoft/automatic-graph-layout；备选评估：https://eclipse.dev/elk/reference/algorithms/org-eclipse-elk-layered.html。
+
+## D-075 — 灵感空间素材 Note、手动分组与跨纸内容搬运
+
+**Status:** Accepted；扩展 D-074 的灵感空间内容与关系范围，保留普通纸片的单正文 ownership。
+
+### Context
+
+最初灵感空间只整理已有纸片，布局另存 `AppState.Workbench`，关系限于待办条目绑定。随后确定的新需求包括把外部素材直接放进灵感空间、快速编辑导图节点、手动成组以及在纸片间拆分和合并内容。只有位置和自动关系布局已不足以承载这些操作；新内容仍需明确的保存归属，并能在离开灵感空间后找到和编辑。
+
+### Decision
+
+- 每个工作区用一张初始名为「灵感空间素材」的内置 Note 持有 `WorkspaceMaterialsDocument`。素材项保存唯一正文，布局保存纸片/素材的位置、组和连线；普通纸片正文不复制进素材 Note。归属独立于标题，素材 Note 不再作为自身灵感空间中的卡片。
+- 旧布局在加载规范化时迁入该 Note，继续通过 `StateStore` 保存。素材图片使用现有图片库与引用保护；文件/文件夹保留原路径，不隐式复制文件或随卡片删除原文件。
+- 素材笔记采用直接编辑素材项的列表；搜索、外部读取和导出按需生成只读 Markdown 投影。通用 `notes.write` 拒绝该结构化 Note，专用界面直接编辑素材项与说明，避免外部读后回写造成重复正文。普通 Note 继续租借原编辑器，不能把生成的汇总正文与素材项都变成可写来源。
+- 手动组属于灵感空间布局，可整体移动、折叠和临时只看这一组，不改变桌面窗口或胶囊队列。自由连线和导图分支属于视觉关系，不复用待办完成或窗口绑定语义。
+- 同类型普通纸片之间的搬运先校验、后一次提交两侧变化。原生编辑撤销栈保留共享事务边界；两侧同时回到边界后才共同撤销/重做，避免单侧撤销把已移动内容复制回来。保留搬运前的历史和留空的原纸片。
+
+### Why / Consequences
+
+素材 Note 给灵感空间新内容提供普通笔记入口和统一保存位置，同时让每张图片、每段文字和每个节点继续独立摆放。用结构化素材项保存正文与布局能保留稳定 ID、自由连接和独立编辑；代价是素材 Note 需要专用列表及只读导出投影，不能直接把普通 Markdown 文本当成可任意回写的等价表示。跨纸搬运牵涉两份既有编辑历史，共享边界比清空历史或仅撤销一侧更符合移动语义；后续编辑须先按各自历史撤回，才能跨过该边界。永久删除、外部正文替换或重载已经破坏原生历史时，单纯移除共享标记会使另一侧单独撤销并重复内容；因此结束涉及纸片的相连历史，同时移除灵感空间搬运记录，保留无关编辑与布局历史。
+
+### Evidence
+
+- `src/Workbench/WorkspaceMaterials.cs`、`WorkspaceMaterialsDocument.cs`、`WorkbenchState.cs`：归属、迁移、素材与空间元数据。
+- `src/AppController.WorkspaceMaterials.cs`、`src/PaperWindow.WorkspaceMaterials.cs`：导入、素材编辑与笔记入口。
+- `src/Workbench/WorkbenchWindow.Selection.cs`、`WorkbenchWindow.Materials.cs`：手动组、节点与自由连线。
+- `src/Workbench/WorkbenchContentTransfer.cs`、`src/AppController.WorkbenchTransfer.cs`、`src/PaperWindow.WorkbenchTransfer.cs`：两侧校验、提交与撤销边界。
+- `tests/PaperTodo.WorkbenchLayoutChecks`、`tests/PaperTodo.LifecycleChecks/Workbench`、`tests/PaperTodo.DataReloadChecks/WorkspaceMaterialsChecks.cs`：模型、交互与持久化回归。

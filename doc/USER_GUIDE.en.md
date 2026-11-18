@@ -178,6 +178,8 @@ Export is for reading, sharing, or moving text to another editor—it is not a f
 
 ---
 
+Canvas follows its normal opening flow. The first opening arranges and saves the cards; later openings reuse that layout, and new papers fill available space. Paper context menus follow shared shortcut visibility and plugin menu-only placement. The current workspace’s “Canvas materials” note holds its materials and layout for editing, searching and export. This note cannot be moved as a whole to another workspace; ordinary notes and todos remain movable through the workspace menu.
+
 ## 3. Todo Papers
 
 Todo papers are for everyday checklists, plans, and small tasks.
@@ -573,6 +575,7 @@ Use these arguments in shortcuts, scripts, or launchers (visibility and creation
 | `PaperTodo.exe --toggle` | None | Toggle overall visibility |
 | `PaperTodo.exe --new-todo` | `PaperTodo.exe todo` | Create a todo paper |
 | `PaperTodo.exe --new-note` | `PaperTodo.exe note` | Create a note paper |
+| `PaperTodo.exe --canvas` | None | Open Canvas for the current workspace; restore and activate an existing window without closing or duplicating it |
 | `PaperTodo.exe --exit` | `PaperTodo.exe quit` | Save and exit |
 | `PaperTodo.exe --mcp` | None | Start the connection process for an MCP client (see [Local MCP interface](#local-mcp-interface)) |
 

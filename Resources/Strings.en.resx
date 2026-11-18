@@ -1780,10 +1780,56 @@ Resolve the file access problem and retry, or choose “Rebuild workspace” to 
   <data name="WorkbenchBindToTodo" xml:space="preserve"><value>Link to a to-do item</value></data>
   <data name="WorkbenchUnnamedTodo" xml:space="preserve"><value>Untitled to-do</value></data>
   <data name="WorkbenchBindTodoFailed" xml:space="preserve"><value>Could not link to that to-do item.</value></data>
+  <data name="WorkbenchHelp" xml:space="preserve"><value>Canvas help</value></data>
+  <data name="WorkbenchImportMaterials" xml:space="preserve"><value>Import materials</value></data>
+  <data name="WorkbenchImportDialogFilter" xml:space="preserve"><value>All files (*.*)|*.*|Images (*.png;*.jpg;*.jpeg;*.gif;*.webp;*.bmp)|*.png;*.jpg;*.jpeg;*.gif;*.webp;*.bmp</value></data>
+  <data name="WorkbenchCollapseCard" xml:space="preserve"><value>Collapse card</value></data>
+  <data name="WorkbenchExpandCard" xml:space="preserve"><value>Expand card</value></data>
+  <data name="WorkbenchLockCard" xml:space="preserve"><value>Lock position</value></data>
+  <data name="WorkbenchUnlockCard" xml:space="preserve"><value>Unlock position</value></data>
+  <data name="WorkbenchNewNode" xml:space="preserve"><value>New node</value></data>
+  <data name="WorkbenchGroupSelection" xml:space="preserve"><value>Group selection</value></data>
+  <data name="WorkbenchUngroup" xml:space="preserve"><value>Ungroup</value></data>
+  <data name="WorkbenchGroupDefault" xml:space="preserve"><value>New group</value></data>
+  <data name="WorkbenchCollapseGroup" xml:space="preserve"><value>Collapse group</value></data>
+  <data name="WorkbenchExpandGroup" xml:space="preserve"><value>Expand group</value></data>
+  <data name="WorkbenchFocusGroup" xml:space="preserve"><value>Focus this group</value></data>
+  <data name="WorkbenchLeaveGroup" xml:space="preserve"><value>Show all content</value></data>
+  <data name="WorkbenchRenameGroup" xml:space="preserve"><value>Rename group</value></data>
+  <data name="WorkbenchConnect" xml:space="preserve"><value>Drag to connect</value></data>
+  <data name="WorkbenchConnectHint" xml:space="preserve"><value>Click a card to connect; Esc to cancel</value></data>
+  <data name="WorkbenchConnectionLabel" xml:space="preserve"><value>Connection label</value></data>
+  <data name="WorkbenchRemoveConnection" xml:space="preserve"><value>Remove connection</value></data>
+  <data name="WorkbenchAddChild" xml:space="preserve"><value>Add child node</value></data>
+  <data name="WorkbenchAddSibling" xml:space="preserve"><value>Add sibling node</value></data>
+  <data name="WorkbenchCollapseBranch" xml:space="preserve"><value>Collapse branch</value></data>
+  <data name="WorkbenchExpandBranch" xml:space="preserve"><value>Expand branch</value></data>
+  <data name="WorkbenchOpenMaterial" xml:space="preserve"><value>Open material</value></data>
+  <data name="WorkbenchMaterialMissing" xml:space="preserve"><value>This material is no longer available.</value></data>
+  <data name="WorkbenchSplitSelection" xml:space="preserve"><value>Split selection into a new paper</value></data>
+  <data name="WorkbenchMoveSelectionTo" xml:space="preserve"><value>Move selection to…</value></data>
+  <data name="WorkbenchMergePaperTo" xml:space="preserve"><value>Merge this paper into…</value></data>
+  <data name="WorkbenchNoSelection" xml:space="preserve"><value>Select the content you want to move first.</value></data>
+  <data name="WorkbenchTransferRejected" xml:space="preserve"><value>This content cannot be moved.</value></data>
+  <data name="WorkbenchMaterialNote" xml:space="preserve"><value>Canvas materials</value></data>
+  <data name="WorkbenchViewMaterials" xml:space="preserve"><value>Open materials note</value></data>
+  <data name="WorkbenchImageMaterial" xml:space="preserve"><value>Image</value></data>
+  <data name="WorkbenchAddText" xml:space="preserve"><value>Add text material</value></data>
+  <data name="WorkbenchMaterialDescription" xml:space="preserve"><value>Description (optional)</value></data>
+  <data name="WorkbenchMaterialTitle" xml:space="preserve"><value>Title</value></data>
+  <data name="WorkbenchMaterialContent" xml:space="preserve"><value>Content</value></data>
+  <data name="WorkbenchMaterialSource" xml:space="preserve"><value>URL or file location</value></data>
+  <data name="WorkbenchMaterialsEmpty" xml:space="preserve"><value>Materials dropped onto Canvas and new nodes are saved here.</value></data>
+  <data name="WorkbenchDeleteMaterial" xml:space="preserve"><value>Delete material</value></data>
+  <data name="WorkbenchDeleteMaterialConfirm" xml:space="preserve"><value>Delete this material? Original files and folders will be kept.</value></data>
+  <data name="WorkbenchTransferHistoryBlocked" xml:space="preserve"><value>Undo later edits, grouping or connections involving these papers before undoing this transfer.</value></data>
   <data name="TipHideSurfaceOutline" xml:space="preserve"><value>Hide the thin outer border on papers, capsules and menus without changing their size. Borders stay visible in high-contrast mode.</value></data>
   <data name="TipScriptCapsule" xml:space="preserve"><value>Start a note with !p or another script prefix, then write PowerShell below. Click the collapsed capsule to run it. These settings also apply to the title-bar Run Script action.</value></data>
   <data name="WorkspaceSwitchGroup" xml:space="preserve">
     <value>Switch</value>
+  </data>
+  <data name="WorkspaceMaterialsMoveUnavailable" xml:space="preserve">
+    <value>Materials notes stay in their workspace</value>
   </data>
   <data name="WorkspaceMoveGroup" xml:space="preserve">
     <value>Move to</value>

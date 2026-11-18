@@ -67,7 +67,8 @@ internal static class StateJsonMerge
             return new(true, result);
         }
 
-        if ((path == "papers" || path.EndsWith("].items", StringComparison.Ordinal)) &&
+        if ((path == "papers" || path.EndsWith("].items", StringComparison.Ordinal) ||
+             path.EndsWith(".workspaceMaterials.layout.connections", StringComparison.Ordinal)) &&
             baseline.Node is JsonArray ba && memory.Node is JsonArray ma && external.Node is JsonArray ea)
         {
             return new(true, MergeEntities(ba, ma, ea, path, applied, conflicts));

@@ -18,7 +18,8 @@ public sealed partial class StateStore
         ValidateExternalDocument(document);
         var state = JsonSerializer.Deserialize<AppState>(json, JsonOptions)
             ?? throw new JsonException("Workspace cannot be null.");
-        state.Workbench?.Normalize(state.Papers.Select(p => p.Id));
+        // Migration is in-memory only: overview never writes another workspace's document.
+        WorkspaceMaterials.Normalize(state);
         return state;
     }
 }

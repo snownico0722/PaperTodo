@@ -208,7 +208,7 @@ internal static class GlobalShortcutCatalog
     {
         var definitions = new List<GlobalShortcutDefinition>
         {
-            new(Workbench, "WorkbenchTitle", "Ctrl+Alt+W", GlobalShortcutGroup.General, StartupCommandKind.Workbench),
+            new(Workbench, "WorkbenchTitle", "Ctrl+Alt+W", GlobalShortcutGroup.General, StartupCommandKind.Canvas),
             new(Show, "ShortcutShowAll", "", GlobalShortcutGroup.General, StartupCommandKind.Show),
             new(Hide, "ShortcutHideAll", "", GlobalShortcutGroup.General, StartupCommandKind.Hide),
             new(Toggle, "ShortcutToggleVisibility", "", GlobalShortcutGroup.General, StartupCommandKind.Toggle),

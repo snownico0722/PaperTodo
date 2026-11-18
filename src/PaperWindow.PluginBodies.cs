@@ -719,6 +719,7 @@ public sealed partial class PaperWindow
 
     private void CommitDisposeAndInvalidateCurrentBody(bool cancelInteractions)
     {
+        _controller.RetireWorkbenchContentHistory(_paper.Id);
         var generation = _bodySessionGeneration;
         var providerId = NormalizeBodyProviderId(_paper.BodyProviderId);
         // The edge host may currently own a protocol 1.8 mini tree created by this exact session.
@@ -874,7 +875,7 @@ public sealed partial class PaperWindow
 
     internal void SwitchPaperBodyProvider(string providerId)
     {
-        if (_paper.Type != PaperTypes.Note || IsClosed)
+        if (_paper.Type != PaperTypes.Note || IsClosed || _paper.WorkspaceMaterials != null)
         {
             return;
         }
@@ -1227,7 +1228,8 @@ public sealed partial class PaperWindow
     {
         var root = new MenuItem
         {
-            Header = Strings.Get("PaperBodyMenu")
+            Header = Strings.Get("PaperBodyMenu"),
+            IsEnabled = _paper.WorkspaceMaterials == null
         };
         var currentId = NormalizeBodyProviderId(_paper.BodyProviderId);
         foreach (var descriptor in _controller.PaperBodyPlugins.Descriptors)
@@ -1272,11 +1274,20 @@ public sealed partial class PaperWindow
 
     internal void RefreshLegacyMarkdownFromModel()
     {
+        if (_paper.WorkspaceMaterials != null)
+        {
+            RefreshWorkspaceMaterialsBodyFromModel();
+            InvalidateEdgeCapsulePreviewContent();
+            return;
+        }
         if (_paper.Type != PaperTypes.Note || _noteBox == null)
         {
             return;
         }
 
+        // Text assignment resets AvalonEdit's native undo stack. Retire both sides of
+        // any shared moves only here, after an external write has committed successfully.
+        _controller.RetireWorkbenchContentHistory(_paper.Id);
         var content = _paper.Content ?? "";
         var caret = Math.Clamp(_noteBox.CaretIndex, 0, content.Length);
         _applyingExternalNoteChange = true;
@@ -1302,7 +1313,9 @@ public sealed partial class PaperWindow
     }
 
     internal FrameworkElement CreateMarkdownBodyView() =>
-        (FrameworkElement)BuildNoteBody();
+        _paper.WorkspaceMaterials != null
+            ? BuildWorkspaceMaterialsBody()
+            : (FrameworkElement)BuildNoteBody();
 
     private void ClearPluginRuntimeStateOnFailure()
     {

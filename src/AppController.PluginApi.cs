@@ -87,6 +87,8 @@ public sealed partial class AppController
 
     internal string CurrentMarkdownContentForExternalRead(PaperData paper)
     {
+        if (paper.WorkspaceMaterials != null)
+            return WorkspaceMaterials.GetReadableContent(paper);
         if (paper.Type == PaperTypes.Note &&
             string.Equals(
                 paper.BodyProviderId,

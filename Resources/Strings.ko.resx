@@ -1780,10 +1780,56 @@ PaperTodo를 수동으로 다시 여세요. 문제가 반복되면 PC를 다시 
   <data name="WorkbenchBindToTodo" xml:space="preserve"><value>할 일 항목에 연결</value></data>
   <data name="WorkbenchUnnamedTodo" xml:space="preserve"><value>제목 없는 할 일</value></data>
   <data name="WorkbenchBindTodoFailed" xml:space="preserve"><value>해당 할 일에 연결할 수 없습니다.</value></data>
+  <data name="WorkbenchHelp" xml:space="preserve"><value>캔버스 도움말</value></data>
+  <data name="WorkbenchImportMaterials" xml:space="preserve"><value>자료 가져오기</value></data>
+  <data name="WorkbenchImportDialogFilter" xml:space="preserve"><value>모든 파일 (*.*)|*.*|이미지 (*.png;*.jpg;*.jpeg;*.gif;*.webp;*.bmp)|*.png;*.jpg;*.jpeg;*.gif;*.webp;*.bmp</value></data>
+  <data name="WorkbenchCollapseCard" xml:space="preserve"><value>카드 접기</value></data>
+  <data name="WorkbenchExpandCard" xml:space="preserve"><value>카드 펼치기</value></data>
+  <data name="WorkbenchLockCard" xml:space="preserve"><value>위치 잠금</value></data>
+  <data name="WorkbenchUnlockCard" xml:space="preserve"><value>위치 잠금 해제</value></data>
+  <data name="WorkbenchNewNode" xml:space="preserve"><value>새 노드</value></data>
+  <data name="WorkbenchGroupSelection" xml:space="preserve"><value>그룹으로 묶기</value></data>
+  <data name="WorkbenchUngroup" xml:space="preserve"><value>그룹 해제</value></data>
+  <data name="WorkbenchGroupDefault" xml:space="preserve"><value>새 그룹</value></data>
+  <data name="WorkbenchCollapseGroup" xml:space="preserve"><value>그룹 접기</value></data>
+  <data name="WorkbenchExpandGroup" xml:space="preserve"><value>그룹 펼치기</value></data>
+  <data name="WorkbenchFocusGroup" xml:space="preserve"><value>이 그룹만 보기</value></data>
+  <data name="WorkbenchLeaveGroup" xml:space="preserve"><value>모든 내용 보기</value></data>
+  <data name="WorkbenchRenameGroup" xml:space="preserve"><value>그룹 이름 변경</value></data>
+  <data name="WorkbenchConnect" xml:space="preserve"><value>드래그하여 연결</value></data>
+  <data name="WorkbenchConnectHint" xml:space="preserve"><value>연결할 카드를 클릭하세요. Esc로 취소합니다</value></data>
+  <data name="WorkbenchConnectionLabel" xml:space="preserve"><value>연결 설명</value></data>
+  <data name="WorkbenchRemoveConnection" xml:space="preserve"><value>연결선 삭제</value></data>
+  <data name="WorkbenchAddChild" xml:space="preserve"><value>하위 노드 추가</value></data>
+  <data name="WorkbenchAddSibling" xml:space="preserve"><value>같은 수준의 노드 추가</value></data>
+  <data name="WorkbenchCollapseBranch" xml:space="preserve"><value>가지 접기</value></data>
+  <data name="WorkbenchExpandBranch" xml:space="preserve"><value>가지 펼치기</value></data>
+  <data name="WorkbenchOpenMaterial" xml:space="preserve"><value>자료 열기</value></data>
+  <data name="WorkbenchMaterialMissing" xml:space="preserve"><value>이 자료를 더 이상 사용할 수 없습니다.</value></data>
+  <data name="WorkbenchSplitSelection" xml:space="preserve"><value>선택한 내용을 새 페이퍼로 분리</value></data>
+  <data name="WorkbenchMoveSelectionTo" xml:space="preserve"><value>선택한 내용 이동…</value></data>
+  <data name="WorkbenchMergePaperTo" xml:space="preserve"><value>페이퍼 전체 병합…</value></data>
+  <data name="WorkbenchNoSelection" xml:space="preserve"><value>먼저 이동할 본문을 선택하세요.</value></data>
+  <data name="WorkbenchTransferRejected" xml:space="preserve"><value>이 내용을 이동할 수 없습니다.</value></data>
+  <data name="WorkbenchMaterialNote" xml:space="preserve"><value>캔버스 자료</value></data>
+  <data name="WorkbenchViewMaterials" xml:space="preserve"><value>자료 노트 열기</value></data>
+  <data name="WorkbenchImageMaterial" xml:space="preserve"><value>이미지</value></data>
+  <data name="WorkbenchAddText" xml:space="preserve"><value>텍스트 자료 추가</value></data>
+  <data name="WorkbenchMaterialDescription" xml:space="preserve"><value>설명 (선택 사항)</value></data>
+  <data name="WorkbenchMaterialTitle" xml:space="preserve"><value>제목</value></data>
+  <data name="WorkbenchMaterialContent" xml:space="preserve"><value>내용</value></data>
+  <data name="WorkbenchMaterialSource" xml:space="preserve"><value>URL 또는 파일 위치</value></data>
+  <data name="WorkbenchMaterialsEmpty" xml:space="preserve"><value>캔버스에 놓은 자료와 새 노드가 여기에 저장됩니다.</value></data>
+  <data name="WorkbenchDeleteMaterial" xml:space="preserve"><value>자료 삭제</value></data>
+  <data name="WorkbenchDeleteMaterialConfirm" xml:space="preserve"><value>이 자료를 삭제할까요? 원본 파일과 폴더는 유지됩니다.</value></data>
+  <data name="WorkbenchTransferHistoryBlocked" xml:space="preserve"><value>이 이동을 취소하려면 먼저 관련 페이퍼의 이후 편집, 그룹 또는 연결을 실행 취소하세요.</value></data>
   <data name="TipHideSurfaceOutline" xml:space="preserve"><value>메모, 캡슐, 메뉴의 바깥 테두리만 숨깁니다. 크기는 변하지 않으며 고대비 모드에서는 테두리를 유지합니다.</value></data>
   <data name="TipScriptCapsule" xml:space="preserve"><value>메모 첫 줄에 !p 등의 명령을 쓰고 다음 줄부터 PowerShell을 작성하세요. 접힌 캡슐을 클릭해 실행할 수 있습니다. 아래 설정은 상단 바의 스크립트 실행에도 적용됩니다.</value></data>
   <data name="WorkspaceSwitchGroup" xml:space="preserve">
     <value>전환</value>
+  </data>
+  <data name="WorkspaceMaterialsMoveUnavailable" xml:space="preserve">
+    <value>자료 노트는 현재 작업 공간에 유지됩니다</value>
   </data>
   <data name="WorkspaceMoveGroup" xml:space="preserve">
     <value>이동 대상</value>

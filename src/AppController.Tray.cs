@@ -528,7 +528,6 @@ public sealed partial class AppController
         menu.Items.Add(TrayTitleBar(menu));
         menu.Items.Add(TraySeparator());
 
-        menu.Items.Add(TrayItem(menu, Strings.Get("WorkbenchTitle"), ToggleWorkbench));
         menu.Items.Add(TrayPaperToolbar(menu));
         if (WorkspaceOptions.Enabled)
             menu.Items.Add(TrayWorkspaceSelector(menu));
@@ -875,6 +874,7 @@ public sealed partial class AppController
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         KeyboardNavigation.SetTabNavigation(grid, KeyboardNavigationMode.Cycle);
 
         var visibilityTip = Strings.Get(anyShown ? "TrayHideAll" : "TrayShowAll");
@@ -896,6 +896,13 @@ public sealed partial class AppController
             VerticalAlignment = VerticalAlignment.Center
         };
 
+        var workbenchButton = TrayToolbarAction(
+            menu,
+            CreateTrayWorkbenchIcon(),
+            Strings.Get("WorkbenchTitle"),
+            ToggleWorkbench);
+        AutomationProperties.SetAutomationId(workbenchButton, "TrayWorkbench");
+
         var newTodoButton = TrayToolbarAction(
             menu,
             CreateTrayAddIcon(PaperTypes.Todo),
@@ -909,10 +916,12 @@ public sealed partial class AppController
 
         Grid.SetColumn(visibilityButton, 0);
         Grid.SetColumn(label, 1);
-        Grid.SetColumn(newTodoButton, 2);
-        Grid.SetColumn(newNoteButton, 3);
+        Grid.SetColumn(workbenchButton, 2);
+        Grid.SetColumn(newTodoButton, 3);
+        Grid.SetColumn(newNoteButton, 4);
         grid.Children.Add(visibilityButton);
         grid.Children.Add(label);
+        grid.Children.Add(workbenchButton);
         grid.Children.Add(newTodoButton);
         grid.Children.Add(newNoteButton);
 
@@ -1511,5 +1520,28 @@ public sealed partial class AppController
         brush.Freeze();
         return brush;
     }
+
+    // Keep this WPF geometry aligned with assets/workbench-tray.svg.
+    // WPF renders the vector directly without adding a runtime SVG decoder.
+    private FrameworkElement CreateTrayWorkbenchIcon()
+    {
+        return new System.Windows.Shapes.Path
+        {
+            Data = Geometry.Parse("M3.1 6.4V4.8A1.7 1.7 0 0 1 4.8 3.1H6.4 M13.6 3.1H15.2A1.7 1.7 0 0 1 16.9 4.8V6.4 M16.9 13.6V15.2A1.7 1.7 0 0 1 15.2 16.9H13.6 M6.4 16.9H4.8A1.7 1.7 0 0 1 3.1 15.2V13.6 M5.7 6.5H10.2V11H5.7Z M10.8 9.4H15.3V13.9H10.8Z"),
+            Width = 17,
+            Height = 17,
+            Stretch = Stretch.Uniform,
+            Stroke = TrayTextBrush,
+            StrokeThickness = 1.5,
+            StrokeStartLineCap = PenLineCap.Round,
+            StrokeEndLineCap = PenLineCap.Round,
+            StrokeLineJoin = PenLineJoin.Round,
+            Fill = Brushes.Transparent,
+            IsHitTestVisible = false,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+    }
+
 
 }

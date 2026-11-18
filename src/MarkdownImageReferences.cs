@@ -38,6 +38,17 @@ public static class MarkdownImageReferences
     public static string CreateReference(string imageId)
         => $"![image|100%]({UriPrefix}{imageId})";
 
+    // The editor needs an empty caret line after a final image block. Transfer plans
+    // must include this same structural delimiter before saving their undo snapshots.
+    internal static string TrailingImageAnchorDelimiter(string finalLine) =>
+        TryParseReferenceLine(finalLine, out _) ? Environment.NewLine : "";
+
+    internal static string EnsureTrailingImageAnchorLine(string markdown)
+    {
+        var finalLineStart = markdown.LastIndexOfAny(['\r', '\n']) + 1;
+        return markdown + TrailingImageAnchorDelimiter(markdown[finalLineStart..]);
+    }
+
     public static bool TryParseLine(string line, out string imageId)
     {
         imageId = "";

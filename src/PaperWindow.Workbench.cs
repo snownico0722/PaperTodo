@@ -120,16 +120,9 @@ public sealed partial class PaperWindow
         AbortAllInteractions(InteractionAbortReason.Deactivated);
     }
 
-    internal ContextMenu CreateWorkbenchBodyMenu()
-    {
-        var menu = CreateContextMenu();
-        if (_paper.Type == PaperTypes.Note)
-        {
-            menu.Items.Add(BuildPaperBodyProviderMenuItem());
-            AttachPluginTopBarActionsToMenu(menu);
-        }
-        return menu;
-    }
+    // Reuse the same native paper menu, styling, plugin actions and OnOpened refresh
+    // that desktop papers use. Workbench-specific filtering is in PopulatePaperContextMenu.
+    internal ContextMenu CreateWorkbenchBodyMenu() => BuildPaperContextMenu();
 
     internal sealed class WorkbenchBodyLease : IDisposable
     {

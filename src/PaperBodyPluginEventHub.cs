@@ -397,7 +397,7 @@ internal sealed class PaperBodyPluginEventHub : IDisposable
                                   paper.BodyProviderId,
                                   PaperBodyProviderIds.Markdown,
                                   StringComparison.Ordinal)
-                ? paper.Content ?? ""
+                ? WorkspaceMaterials.GetReadableContent(paper)
                 : null;
             result[paper.Id] = new PaperStateSnapshot(
                 _controller.CapturePaperSnapshot(paper),

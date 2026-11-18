@@ -12,6 +12,12 @@ public sealed partial class PaperWindow
 
     internal bool TryGetBuiltInFindText(string? todoItemId, out string text)
     {
+        if (_paper.WorkspaceMaterials != null && todoItemId != null &&
+            _workspaceMaterialEditors.TryGetValue(todoItemId, out var materialEditor))
+        {
+            text = materialEditor.Text;
+            return true;
+        }
         if (_paper.Type == PaperTypes.Todo &&
             todoItemId != null &&
             _todoEditors.TryGetValue(todoItemId, out var editor))

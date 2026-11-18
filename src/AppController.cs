@@ -1183,7 +1183,8 @@ public sealed partial class AppController : IDisposable
         if (command.Kind is StartupCommandKind.Show or
             StartupCommandKind.Toggle or
             StartupCommandKind.NewTodo or
-            StartupCommandKind.NewNote)
+            StartupCommandKind.NewNote or
+            StartupCommandKind.Canvas)
         {
             // Startup and secondary-instance commands arrive before PaperTodo intentionally takes focus.
             // Refresh here so a recent desktop/taskbar switch cannot leave stale fullscreen avoidance.
@@ -1192,8 +1193,8 @@ public sealed partial class AppController : IDisposable
 
         switch (command.Kind)
         {
-            case StartupCommandKind.Workbench:
-                ToggleWorkbench();
+            case StartupCommandKind.Canvas:
+                OpenCanvas();
                 break;
             case StartupCommandKind.Show:
                 ShowAllPapers();
@@ -2083,6 +2084,7 @@ public sealed partial class AppController : IDisposable
     // Cross-paper history belongs to entity removal, not plugin-state persistence.
     internal void NotifyPaperRemoved(string paperId)
     {
+        RetireWorkbenchContentHistory(paperId);
         WorkbenchModelChanged?.Invoke();
         foreach (var window in _windows.Values)
             window.PruneDeletedLinkedPaperFromTodoHistory(paperId);
@@ -2091,7 +2093,7 @@ public sealed partial class AppController : IDisposable
 
     internal sealed record RemovedPaper(
         PaperData Paper, int Index, (string PaperId, PaperItem Item)[] Links, PaperData? Replacement,
-        WorkbenchState? WorkbenchLayout)
+        WorkspaceMaterialsDocument? Materials, WorkbenchState? WorkbenchLayout)
     {
         internal string[] AffectedTodoPaperIds =>
             Links.Select(link => link.PaperId).Distinct(StringComparer.Ordinal).ToArray();
@@ -2103,6 +2105,8 @@ public sealed partial class AppController : IDisposable
     {
         var papers = State.Papers;
         var index = papers.IndexOf(paper);
+        var materials = WorkspaceMaterials.FindOwner(State)?.WorkspaceMaterials;
+        var layoutBefore = materials?.Layout.Copy();
         var links = papers.Where(other => other != paper && other.Type == PaperTypes.Todo)
             .SelectMany(other => other.Items.Where(item => item.LinkedPaperId == paper.Id)
                 .Select(item => (PaperId: other.Id, Item: item))).ToArray();
@@ -2121,10 +2125,13 @@ public sealed partial class AppController : IDisposable
                 throw;
             }
         }
-        var layoutBefore = State.Workbench?.Copy();
-        State.Workbench?.Normalize(papers.Select(item => item.Id));
+        // Only prune spatial references; a removal must not create a materials owner
+        // or normalize unrelated material content before the save can commit.
+        if (materials != null && paper.WorkspaceMaterials != materials)
+            materials.Layout.Normalize(papers.Where(item => item.WorkspaceMaterials == null)
+                .Select(item => item.Id).Concat(materials.Items.Keys));
         foreach (var link in links) link.Item.ClearQuickLaunch();
-        return new RemovedPaper(paper, index, links, replacement, layoutBefore);
+        return new RemovedPaper(paper, index, links, replacement, materials, layoutBefore);
     }
 
     internal void RestoreRemovedPaper(RemovedPaper removed)
@@ -2132,7 +2139,8 @@ public sealed partial class AppController : IDisposable
         if (removed.Replacement != null) State.Papers.Remove(removed.Replacement);
         State.Papers.Insert(Math.Min(removed.Index, State.Papers.Count), removed.Paper);
         foreach (var link in removed.Links) link.Item.LinkPaper(removed.Paper.Id);
-        State.Workbench = removed.WorkbenchLayout;
+        if (removed.Materials != null && removed.WorkbenchLayout != null)
+            removed.Materials.Layout = removed.WorkbenchLayout;
     }
 
     public void RefreshCapsuleEligibilityForLinkedPapers()
@@ -2200,6 +2208,10 @@ public sealed partial class AppController : IDisposable
 
     public bool IsPaperEmpty(PaperData paper)
     {
+        if (paper.WorkspaceMaterials is { } materials)
+            return materials.Items.Count == 0 && materials.Layout.Cards.Count == 0 &&
+                materials.Layout.Groups.Count == 0 && materials.Layout.Connections.Count == 0 &&
+                string.IsNullOrWhiteSpace(paper.Content);
         if (paper.Type == PaperTypes.Note)
         {
             if (!string.Equals(

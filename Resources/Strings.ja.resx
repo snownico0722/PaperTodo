@@ -1780,10 +1780,56 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
   <data name="WorkbenchBindToTodo" xml:space="preserve"><value>タスク項目に関連付ける</value></data>
   <data name="WorkbenchUnnamedTodo" xml:space="preserve"><value>無題のタスク</value></data>
   <data name="WorkbenchBindTodoFailed" xml:space="preserve"><value>そのタスクに関連付けできません。</value></data>
+  <data name="WorkbenchHelp" xml:space="preserve"><value>キャンバスのヘルプ</value></data>
+  <data name="WorkbenchImportMaterials" xml:space="preserve"><value>素材を読み込む</value></data>
+  <data name="WorkbenchImportDialogFilter" xml:space="preserve"><value>すべてのファイル (*.*)|*.*|画像 (*.png;*.jpg;*.jpeg;*.gif;*.webp;*.bmp)|*.png;*.jpg;*.jpeg;*.gif;*.webp;*.bmp</value></data>
+  <data name="WorkbenchCollapseCard" xml:space="preserve"><value>カードを折りたたむ</value></data>
+  <data name="WorkbenchExpandCard" xml:space="preserve"><value>カードを展開</value></data>
+  <data name="WorkbenchLockCard" xml:space="preserve"><value>位置を固定</value></data>
+  <data name="WorkbenchUnlockCard" xml:space="preserve"><value>位置の固定を解除</value></data>
+  <data name="WorkbenchNewNode" xml:space="preserve"><value>ノードを追加</value></data>
+  <data name="WorkbenchGroupSelection" xml:space="preserve"><value>グループ化</value></data>
+  <data name="WorkbenchUngroup" xml:space="preserve"><value>グループ解除</value></data>
+  <data name="WorkbenchGroupDefault" xml:space="preserve"><value>新しいグループ</value></data>
+  <data name="WorkbenchCollapseGroup" xml:space="preserve"><value>グループを折りたたむ</value></data>
+  <data name="WorkbenchExpandGroup" xml:space="preserve"><value>グループを展開</value></data>
+  <data name="WorkbenchFocusGroup" xml:space="preserve"><value>このグループだけ表示</value></data>
+  <data name="WorkbenchLeaveGroup" xml:space="preserve"><value>すべて表示</value></data>
+  <data name="WorkbenchRenameGroup" xml:space="preserve"><value>グループ名を変更</value></data>
+  <data name="WorkbenchConnect" xml:space="preserve"><value>ドラッグして接続</value></data>
+  <data name="WorkbenchConnectHint" xml:space="preserve"><value>接続先のカードをクリック。Esc でキャンセル</value></data>
+  <data name="WorkbenchConnectionLabel" xml:space="preserve"><value>接続の説明</value></data>
+  <data name="WorkbenchRemoveConnection" xml:space="preserve"><value>接続線を削除</value></data>
+  <data name="WorkbenchAddChild" xml:space="preserve"><value>子ノードを追加</value></data>
+  <data name="WorkbenchAddSibling" xml:space="preserve"><value>同階層のノードを追加</value></data>
+  <data name="WorkbenchCollapseBranch" xml:space="preserve"><value>枝を折りたたむ</value></data>
+  <data name="WorkbenchExpandBranch" xml:space="preserve"><value>枝を展開</value></data>
+  <data name="WorkbenchOpenMaterial" xml:space="preserve"><value>素材を開く</value></data>
+  <data name="WorkbenchMaterialMissing" xml:space="preserve"><value>この素材は利用できなくなりました。</value></data>
+  <data name="WorkbenchSplitSelection" xml:space="preserve"><value>選択内容を新しいペーパーに分割</value></data>
+  <data name="WorkbenchMoveSelectionTo" xml:space="preserve"><value>選択内容の移動先…</value></data>
+  <data name="WorkbenchMergePaperTo" xml:space="preserve"><value>ペーパー全体の結合先…</value></data>
+  <data name="WorkbenchNoSelection" xml:space="preserve"><value>移動する本文を先に選択してください。</value></data>
+  <data name="WorkbenchTransferRejected" xml:space="preserve"><value>この内容は移動できません。</value></data>
+  <data name="WorkbenchMaterialNote" xml:space="preserve"><value>キャンバスの素材</value></data>
+  <data name="WorkbenchViewMaterials" xml:space="preserve"><value>素材ノートを開く</value></data>
+  <data name="WorkbenchImageMaterial" xml:space="preserve"><value>画像</value></data>
+  <data name="WorkbenchAddText" xml:space="preserve"><value>テキスト素材を追加</value></data>
+  <data name="WorkbenchMaterialDescription" xml:space="preserve"><value>説明（任意）</value></data>
+  <data name="WorkbenchMaterialTitle" xml:space="preserve"><value>タイトル</value></data>
+  <data name="WorkbenchMaterialContent" xml:space="preserve"><value>内容</value></data>
+  <data name="WorkbenchMaterialSource" xml:space="preserve"><value>URL またはファイルの場所</value></data>
+  <data name="WorkbenchMaterialsEmpty" xml:space="preserve"><value>キャンバスにドロップした素材や新しいノードは、ここに保存されます。</value></data>
+  <data name="WorkbenchDeleteMaterial" xml:space="preserve"><value>素材を削除</value></data>
+  <data name="WorkbenchDeleteMaterialConfirm" xml:space="preserve"><value>この素材を削除しますか？元のファイルやフォルダーは保持されます。</value></data>
+  <data name="WorkbenchTransferHistoryBlocked" xml:space="preserve"><value>この移動を元に戻すには、先に関連するペーパーの後続の編集、グループ化、接続を元に戻してください。</value></data>
   <data name="TipHideSurfaceOutline" xml:space="preserve"><value>紙片、カプセル、メニューの外枠線のみを隠します。大きさは変わらず、高コントラスト表示では枠線を維持します。</value></data>
   <data name="TipScriptCapsule" xml:space="preserve"><value>ノートの先頭行に !p などを記入し、2行目から PowerShell を記述します。折りたたんだカプセルをクリックすると実行できます。下の設定は上部バーのスクリプト実行にも適用されます。</value></data>
   <data name="WorkspaceSwitchGroup" xml:space="preserve">
     <value>切り替え</value>
+  </data>
+  <data name="WorkspaceMaterialsMoveUnavailable" xml:space="preserve">
+    <value>素材ノートは現在のワークスペースに保持されます</value>
   </data>
   <data name="WorkspaceMoveGroup" xml:space="preserve">
     <value>移動先</value>

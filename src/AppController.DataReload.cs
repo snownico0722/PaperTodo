@@ -146,6 +146,7 @@ public sealed partial class AppController
                 _lastDataReloadResult = result;
                 storageAccepted = true;
             }
+            RetireWorkbenchContentHistory();
             pending = pending with { Next = PrepareAcceptedWorkspaceReload(pending.Next) };
             _paperSurfaceRestoreGeneration++;
             _startupShellPrewarmGeneration++;

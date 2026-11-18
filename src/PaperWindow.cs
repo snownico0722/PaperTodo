@@ -825,6 +825,7 @@ public sealed partial class PaperWindow : Window
         _isClosingForReal = true;
         try
         {
+            _controller.RetireWorkbenchContentHistory(_paper.Id);
             BeginPaperWindowClose();
             if (IsClosed) return;
             CloseExpandedDeepCapsuleSlotHostForReal();
@@ -2363,7 +2364,7 @@ public sealed partial class PaperWindow : Window
 
         _runScriptButton = IconButton("", Strings.Get("TopBarRunScript"));
         _runScriptButton.Content = CreateTopBarRunScriptIcon(_runScriptButton);
-        _runScriptButton.Click += (_, _) => _controller.RunTopBarScript(this);
+        _runScriptButton.Click += (_, _) => _controller.RunTopBarScript(InteractionWindow);
         actionButtons.Children.Add(_runScriptButton);
 
         var windowBindingButton = IconButton(
@@ -2866,7 +2867,7 @@ public sealed partial class PaperWindow : Window
         ConfirmAndDeletePaper();
     }
 
-    private bool ShowDeletePaperDialog() => PaperNoticeDialog.ShowDeleteConfirmation(this);
+    private bool ShowDeletePaperDialog() => PaperNoticeDialog.ShowDeleteConfirmation(InteractionWindow);
 
     private void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
     {

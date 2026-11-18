@@ -1,14 +1,14 @@
 name: Workbench checks
 on:
   push:
-    branches: [feature/infinite-workbench]
+    branches: [feature/infinite-workbench, feature/workbench-materials-groups-20261105]
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
   checks:
     runs-on: windows-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
         with:
@@ -18,12 +18,12 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
-      - name: Layout and real editor lifecycle checks
+      - name: Layout, material persistence, and real editor lifecycle checks
         shell: pwsh
         env:
           WORKBENCH_ARTIFACT_DIR: ${{ github.workspace }}/.artifacts/workbench
         run: |
-          ./tools/testing/Run-Checks.ps1 -Group regression -Project WorkbenchLayoutChecks
+          ./tools/testing/Run-Checks.ps1 -Group all -Project WorkbenchLayoutChecks,DataReloadChecks
           dotnet run --project tests/PaperTodo.LifecycleChecks -c Release -- --case 'workbench-*'
           if ($LASTEXITCODE -ne 0) { throw "Workbench lifecycle checks failed with exit code $LASTEXITCODE" }
       - uses: actions/upload-artifact@v4
