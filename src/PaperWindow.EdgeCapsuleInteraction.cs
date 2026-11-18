@@ -177,7 +177,7 @@ public sealed partial class PaperWindow
             PaperBorderBrush = PaperBorderBrush,
             IconBrush = BrightWeakTextBrush,
             LabelBrush = WeakTextBrush,
-            OutlineBrush = Theme.CapsuleFocusBorderBrush,
+            OutlineBrush = Theme.EdgeCapsuleFocusBrush,
             Topmost = _edgeCapsuleHost?.IsTopmost == true
         };
     }
