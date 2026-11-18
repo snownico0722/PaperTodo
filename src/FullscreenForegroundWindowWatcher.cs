@@ -14,6 +14,7 @@ internal sealed class FullscreenForegroundWindowWatcher : IDisposable
     private const uint EventObjectShow = 0x8002;
     private const uint EventObjectLocationChange = 0x800B;
     private const uint WineventOutOfContext = 0x0000;
+    private const uint WineventSkipOwnProcess = 0x0002;
     private const uint GaRoot = 2;
     private const int ObjidWindow = 0;
     private const int ChildidSelf = 0;
@@ -45,6 +46,7 @@ internal sealed class FullscreenForegroundWindowWatcher : IDisposable
             0,
             0,
             WineventOutOfContext);
+        // Moving our own papers cannot change an external fullscreen window's bounds.
         _locationHook = SetWinEventHook(
             EventObjectLocationChange,
             EventObjectLocationChange,
@@ -52,7 +54,7 @@ internal sealed class FullscreenForegroundWindowWatcher : IDisposable
             _callback,
             0,
             0,
-            WineventOutOfContext);
+            WineventOutOfContext | WineventSkipOwnProcess);
     }
 
     private void HandleWinEvent(
