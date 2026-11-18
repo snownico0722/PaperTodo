@@ -19,7 +19,8 @@ internal static partial class WorkbenchChecks
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
         controller.ToggleWorkbench();
         var desk = (WorkbenchWindow)Member(controller, "_workbenchWindow");
-        await Until(() => desk.HostedPaperCount == 3, "Group fixture did not mount its source papers");
+        await Until(() => desk.HostedPaperCount == 3 && controller.WorkbenchLayout.Cards.ContainsKey("note-a"),
+            "Group fixture did not mount its papers and apply the initial card layout");
 
         // Native paper actions are available in full from the card. Hiding and
         // desktop capsule transitions are forbidden while its editor is borrowed.
