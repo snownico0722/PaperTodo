@@ -301,6 +301,16 @@ internal static partial class Program
               !persisted.TryGetProperty("experimentalTetherMinimizedBehavior", out _),
             "Old tether choices are ignored on load and omitted on save without losing live settings or content.");
         Check(service.Get("general.language").RequiresRestart, "Language is restart-based; API must not force exit.");
+        Check(!service.Get("appearance.capsule_outline_enhancement").Value.GetBoolean() &&
+              !legacyState.EnhanceCapsuleActiveOutline,
+            "Capsule outline enhancement defaults off for new and pre-option configurations.");
+        service.Set("appearance.capsule_outline_enhancement", Json(true));
+        var outlinedState = JsonSerializer.Deserialize<AppState>(
+            JsonSerializer.Serialize(c.State, StateStore.JsonOptions), StateStore.JsonOptions)!;
+        Check(c.State.EnhanceCapsuleActiveOutline && outlinedState.EnhanceCapsuleActiveOutline &&
+              service.Get("appearance.capsule_outline_enhancement").Value.GetBoolean(),
+            "Enabled capsule outline enhancement survives a settings JSON round trip.");
+        service.Set("appearance.capsule_outline_enhancement", Json(false));
         Throws<PaperSettingsException>(() => service.Set("appearance.font_scale", Json(1.3)), "invalid_setting_value");
         Throws<PaperSettingsException>(() => service.Set("appearance.theme", Json("unknown")), "invalid_setting_value");
         Throws<PaperSettingsException>(() => service.Set("note.external_extension", Json("../../tmp")), "invalid_setting_value");
