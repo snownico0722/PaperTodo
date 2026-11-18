@@ -47,19 +47,7 @@ public sealed partial class PaperWindow
         return true;
     }
 
-    protected override void OnSourceInitialized(System.EventArgs e)
-    {
-        base.OnSourceInitialized(e);
-
-        // PreviewKeyDown requires a WPF keyboard-focus target. Register at the HWND boundary too
-        // so Ctrl+W still works in preview states where the paper is foreground but WPF has no
-        // focused element to route a key event through.
-        if (PresentationSource.FromVisual(this) is HwndSource source)
-        {
-            source.AddHook(OnWindowShortcutMessage);
-        }
-    }
-
+    // Ctrl+W also needs a native hook when preview mode leaves no WPF element focused.
     private System.IntPtr OnWindowShortcutMessage(
         System.IntPtr hwnd,
         int msg,

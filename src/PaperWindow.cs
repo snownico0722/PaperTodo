@@ -739,18 +739,6 @@ public sealed partial class PaperWindow : Window
         LostMouseCapture += OnLostMouseCapture;
         PreviewKeyDown += OnWindowPreviewKeyDown;
         PreviewKeyUp += OnWindowPreviewKeyUp;
-        SourceInitialized += (_, _) =>
-        {
-            ApplySystemVisibility(reapplyTaskbarShellState: true);
-            if (PresentationSource.FromVisual(this) is HwndSource source)
-            {
-                source.AddHook(OnWindowMessage);
-            }
-
-            ApplyExperimentalPassiveNativeState();
-            UpdateAdvancedInteractionLockVisuals();
-            RefreshEffectiveTopmost();
-        };
         Activated += (_, _) =>
         {
             CancelExperimentalAutoCollapse();
@@ -784,6 +772,21 @@ public sealed partial class PaperWindow : Window
                 }
             };
         }
+    }
+
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        ApplySystemVisibility(reapplyTaskbarShellState: true);
+        // Edge expansion can position this HWND before Show attaches the WPF visual.
+        if (HwndSource.FromHwnd(new WindowInteropHelper(this).Handle) is { } source)
+        {
+            source.AddHook(OnWindowMessage);
+            source.AddHook(OnWindowShortcutMessage);
+        }
+        ApplyExperimentalPassiveNativeState();
+        UpdateAdvancedInteractionLockVisuals();
+        RefreshEffectiveTopmost();
     }
 
     internal void EnsureShellBuilt()

@@ -1841,6 +1841,9 @@
   <data name="WorkspaceMoveGroup" xml:space="preserve">
     <value>移动到</value>
   </data>
+  <data name="WorkspaceCreateSlotsOccupied" xml:space="preserve">
+    <value>没有空闲编号可新建工作区。编号 {0} 仍有无法确认的数据，已保留原文件。</value>
+  </data>
   <data name="WorkspaceCreateNew" xml:space="preserve">
     <value>创建新工作区</value>
   </data>

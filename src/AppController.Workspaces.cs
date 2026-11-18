@@ -93,9 +93,22 @@ public sealed partial class AppController
     internal async Task<int> CreateWorkspaceAsync()
     {
         var options = WorkspaceOptions.Normalized();
-        if (!options.Enabled) return 0;
-        var slot = Enumerable.Range(2, 4).FirstOrDefault(number => !options.ContainsSlot(number));
-        if (slot == 0) return 0;
+        if (!options.Enabled || options.SlotNumbers.Count == 5) return 0;
+        // Files may also have been restored since startup. Register them before
+        // selecting a genuinely empty number for the requested new workspace.
+        var discovered = _workspaceCatalog.IncludeStoredWorkspaces(options);
+        var slot = _workspaceCatalog.FindNewWorkspaceSlot(options);
+        if (slot == 0)
+        {
+            if (discovered && !await ChangeWorkspaceConfigurationAsync(options)) return 0;
+            if (options.SlotNumbers.Count == 5) return 0;
+            var unlisted = Enumerable.Range(2, 4).Where(number => !options.ContainsSlot(number));
+            var owner = _settingsWindow is { IsVisible: true } ? _settingsWindow :
+                Application.Current.Windows.OfType<Window>().FirstOrDefault(window => window.IsActive);
+            PaperNoticeDialog.Show(owner, Strings.Get("WorkspaceCreateNew"),
+                Strings.Format("WorkspaceCreateSlotsOccupied", string.Join(", ", unlisted)));
+            return 0;
+        }
         options.Slots = options.SlotNumbers.Append(slot).OrderBy(number => number).ToList();
         return await ChangeWorkspaceConfigurationAsync(options) ? slot : 0;
     }
@@ -182,6 +195,7 @@ public sealed partial class AppController
             var (session, effectiveSettings) = _workspaceCatalog.PreviewSettingsChange(_workspace, options);
             var previousPersistentPowerShell = State.UsePersistentPowerShellProcess;
             var previousPreferPowerShell7 = State.PreferPowerShell7;
+            var remindersWereEnabled = State.ExperimentalTodoReminders;
 
             // Only the main catalog is persisted here. A failed write must not
             // change the current settings or the ordinary-save projection.
@@ -196,6 +210,8 @@ public sealed partial class AppController
 
             try
             {
+                if (remindersWereEnabled != State.ExperimentalTodoReminders)
+                    RefreshTodoReminderSchedule();
                 UiLanguages.ApplyWorkspacePreference(State.UiLanguage);
                 State.PaperSkin = PaperSkins.Resolve(State);
                 NormalizePaperSystemVisibilitySettings();
