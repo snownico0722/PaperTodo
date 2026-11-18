@@ -12,7 +12,7 @@ namespace PaperTodo;
 
 public sealed partial class PaperWindow
 {
-    private const double FindPopupBaseWidth = 296;
+    private static double FindPopupBaseWidth => InjectionParameters.FindBaseWidth.Value;
 
     private Popup? _findPopup;
     private Border? _findHost;
@@ -47,7 +47,7 @@ public sealed partial class PaperWindow
         row.ColumnDefinitions.Add(new ColumnDefinition
         {
             Width = new GridLength(1, GridUnitType.Star),
-            MinWidth = 72
+            MinWidth = InjectionParameters.FindInputMinimumWidth.Value
         });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -122,7 +122,7 @@ public sealed partial class PaperWindow
         var count = new TextBlock
         {
             Text = "0 / 0",
-            MinWidth = 42,
+            MinWidth = InjectionParameters.FindCounterWidth.Value,
             Margin = new Thickness(5, 0, 3, 0),
             TextAlignment = TextAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center
@@ -251,8 +251,8 @@ public sealed partial class PaperWindow
         var icon = new WpfPath
         {
             Data = geometry,
-            Width = 16,
-            Height = 16,
+            Width = InjectionParameters.FindIconSize.Value,
+            Height = InjectionParameters.FindIconSize.Value,
             StrokeThickness = 1.4,
             StrokeStartLineCap = PenLineCap.Round,
             StrokeEndLineCap = PenLineCap.Round,
@@ -281,9 +281,9 @@ public sealed partial class PaperWindow
             return [new CustomPopupPlacement(new Point(), PopupPrimaryAxis.None)];
         }
 
-        var y = TitleBarHeight + 33;
+        var y = TitleBarHeight + InjectionParameters.FindTopOffset.Value;
         var inside = new CustomPopupPlacement(
-            new Point(Math.Max(6, targetSize.Width - popupSize.Width + 20), y),
+            new Point(Math.Max(InjectionParameters.FindLeftMinimum.Value, targetSize.Width - popupSize.Width + InjectionParameters.FindRightOverhang.Value), y),
             PopupPrimaryAxis.Horizontal);
 
         // Default slightly below the title row and let the right edge overhang the paper.
@@ -308,11 +308,11 @@ public sealed partial class PaperWindow
 
         _findHost.Background = PaperBrush;
         _findHost.BorderBrush = PaperBorderBrush;
-        _findHost.Width = Math.Round(
+        _findHost.Width = InjectionParameters.FindComputedWidth.Resolve(Math.Round(
             Math.Clamp(
                 FindPopupBaseWidth * AppTypography.ScaleFactor,
-                236,
-                420));
+                InjectionParameters.FindMinimumWidth.Value,
+                InjectionParameters.FindMaximumWidth.Value)));
         _findHost.Padding = new Thickness(
             AppTypography.Scale(4), AppTypography.Scale(4),
             AppTypography.Scale(2), AppTypography.Scale(4));
@@ -322,8 +322,8 @@ public sealed partial class PaperWindow
         _findInput.Background = PaperBrush;
         _findInput.BorderBrush = PaperBorderBrush;
         _findInput.FontFamily = AppTypography.FontFamilyFor(content: true, bold: false);
-        _findInput.FontSize = AppTypography.Scale(11.5);
-        _findInput.MinHeight = AppTypography.FitChrome(23);
+        _findInput.FontSize = AppTypography.Scale(InjectionParameters.FindInputFontSize.Value);
+        _findInput.MinHeight = AppTypography.FitChrome(InjectionParameters.FindControlHeight.Value);
         _findInput.Padding = new Thickness(
             AppTypography.Scale(5),
             AppTypography.Scale(2),
@@ -332,8 +332,8 @@ public sealed partial class PaperWindow
 
         _findCountText.Foreground = WeakTextBrush;
         _findCountText.FontFamily = AppTypography.FontFamilyFor(content: false, bold: false);
-        _findCountText.FontSize = AppTypography.Scale(10.5);
-        _findCountText.MinWidth = AppTypography.FitChrome(42);
+        _findCountText.FontSize = AppTypography.Scale(InjectionParameters.FindCounterFontSize.Value);
+        _findCountText.MinWidth = AppTypography.FitChrome(InjectionParameters.FindCounterWidth.Value);
         _findCountText.Margin = new Thickness(
             AppTypography.Scale(5),
             0,
@@ -366,16 +366,16 @@ public sealed partial class PaperWindow
             return;
         }
 
-        var size = AppTypography.FitChrome(23);
+        var size = AppTypography.FitChrome(InjectionParameters.FindControlHeight.Value);
         button.Width = size;
         button.Height = size;
         button.MinWidth = size;
         button.MinHeight = size;
-        button.FontSize = AppTypography.Scale(11.5);
+        button.FontSize = AppTypography.Scale(InjectionParameters.FindInputFontSize.Value);
         if (button.Content is Viewbox icon)
         {
-            icon.Width = AppTypography.Scale(16);
-            icon.Height = AppTypography.Scale(16);
+            icon.Width = AppTypography.Scale(InjectionParameters.FindIconSize.Value);
+            icon.Height = AppTypography.Scale(InjectionParameters.FindIconSize.Value);
         }
     }
 

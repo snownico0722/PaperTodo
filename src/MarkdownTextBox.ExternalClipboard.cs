@@ -11,11 +11,11 @@ public sealed partial class MarkdownTextBox
     // HTML remains the primary mixed text+image representation and intentionally has a higher
     // ceiling than RTF. Count source bytes per rendered occurrence because repeated references
     // duplicate their base64 payload in the final CF_HTML string.
-    private const long MaxExternalClipboardHtmlSourceBytes = 24L * 1024 * 1024;
+    private static long MaxExternalClipboardHtmlSourceBytes => InjectionParameters.NoteClipboardHtmlBytes.Value;
     // RTF stores image bytes as hexadecimal text. Keep a lower safety ceiling so an unusually
     // large selection cannot expand into an enormous UI-thread string. HTML and plain text still
     // remain available when this guard is exceeded.
-    private const long MaxExternalClipboardRtfSourceBytes = 16L * 1024 * 1024;
+    private static long MaxExternalClipboardRtfSourceBytes => InjectionParameters.NoteClipboardRtfBytes.Value;
 
     private readonly record struct ClipboardLine(int Start, string Text, bool HasLineBreak);
 
@@ -353,24 +353,24 @@ public sealed partial class MarkdownTextBox
         int intrinsicWidth,
         MarkdownImageDisplayOptions options)
     {
-        const double defaultMaxWidth = 640;
+        var defaultMaxWidth = InjectionParameters.NoteClipboardImageMaxWidth.Value;
         if (options.WidthAttribute is { IsPercent: false } width)
         {
-            return Math.Clamp(width.Value, 24, defaultMaxWidth);
+            return Math.Clamp(width.Value, InjectionParameters.NoteClipboardImageMinWidth.Value, defaultMaxWidth);
         }
         if (options.LabelWidth is { } labelWidth)
         {
-            return Math.Clamp(labelWidth, 24, defaultMaxWidth);
+            return Math.Clamp(labelWidth, InjectionParameters.NoteClipboardImageMinWidth.Value, defaultMaxWidth);
         }
         if (options.WidthAttribute is { IsPercent: true } percentWidth)
         {
-            return Math.Clamp(defaultMaxWidth * percentWidth.Value / 100.0, 24, defaultMaxWidth);
+            return Math.Clamp(defaultMaxWidth * percentWidth.Value / 100.0, InjectionParameters.NoteClipboardImageMinWidth.Value, defaultMaxWidth);
         }
         if (options.LabelScalePercent is { } percent)
         {
-            return Math.Clamp(defaultMaxWidth * percent / 100.0, 24, defaultMaxWidth);
+            return Math.Clamp(defaultMaxWidth * percent / 100.0, InjectionParameters.NoteClipboardImageMinWidth.Value, defaultMaxWidth);
         }
-        return Math.Clamp(intrinsicWidth, 24, defaultMaxWidth);
+        return Math.Clamp(intrinsicWidth, InjectionParameters.NoteClipboardImageMinWidth.Value, defaultMaxWidth);
     }
 
     private static void AppendRtfText(StringBuilder builder, string text)

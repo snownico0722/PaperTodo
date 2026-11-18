@@ -37,9 +37,9 @@ internal sealed class EdgeQueueExitSnapState
 
 internal static class EdgeCapsuleFreeQueuePolicy
 {
-    internal const double SnapDistance = 18;
-    internal const double ReleaseDistance = 30; // A held target must be pulled further away to release.
-    internal const double ExitSnapDistance = 18; // Pointer distance needed to break an outer-slot snap.
+    internal static double SnapDistance => InjectionParameters.QueueSnapDistance.Value;
+    internal static double ReleaseDistance => InjectionParameters.QueueReleaseDistance.Value; // A held target must be pulled further away to release.
+    internal static double ExitSnapDistance => InjectionParameters.QueueExitSnapDistance.Value; // Pointer distance needed to break an outer-slot snap.
 
     // An actively dragged block must not be positioned outside the visible work area
     // when it fits. Oversized queues keep their first slot visible; adding members is
@@ -51,7 +51,7 @@ internal static class EdgeCapsuleFreeQueuePolicy
         var maxTop = Math.Max(0, areaHeight - Math.Max(PaperLayoutDefaults.CapsuleHeight, visibleHeight));
         return Math.Clamp(requestedTop, 0, maxTop);
     }
-    private const double TakeoverAdvantage = 6;
+    private static double TakeoverAdvantage => InjectionParameters.QueueTakeoverAdvantage.Value;
     private const double Epsilon = 0.1;
 
     internal static bool ShouldDetachSingle(

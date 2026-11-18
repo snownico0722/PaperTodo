@@ -9,7 +9,7 @@ namespace PaperTodo;
 
 public sealed partial class PaperWindow
 {
-    private const double WindowBindingTargetSampleMilliseconds = 32;
+    private static double WindowBindingTargetSampleMilliseconds => InjectionParameters.WindowBindingSampleMs.Value;
 
     private sealed record WindowBindingDragFeedback(
         Border Chrome,
@@ -66,7 +66,7 @@ public sealed partial class PaperWindow
             CompleteAssociationDrag(commit);
             afterDrag?.Invoke();
         },
-        DraggingOpacity = 0.72
+        DraggingOpacity = InjectionParameters.WindowBindingDragOpacity.Value
     };
 
     internal void RefreshAssociationButton()

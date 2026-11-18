@@ -12,8 +12,8 @@ namespace PaperTodo;
 
 public sealed partial class AppController
 {
-    private static readonly TimeSpan PluginTextSettingPropagationDebounce =
-        TimeSpan.FromMilliseconds(180);
+    private static TimeSpan PluginTextSettingPropagationDebounce =>
+        TimeSpan.FromMilliseconds(InjectionParameters.PluginTextSettingDebounceMs.Value);
 
     private readonly PaperBodyPluginRegistry _paperBodyPlugins;
     private readonly Dictionary<string, System.Windows.Threading.DispatcherTimer>

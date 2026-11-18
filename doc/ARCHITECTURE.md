@@ -112,7 +112,7 @@ MCP 的 transport、权限策略和 bridge 生命周期不拥有 Paper/Todo/Note
 
 Web 插件使用 WebView2；Native 插件可以自行创建线程、Worker、子进程或第三方运行环境。这些实现细节属于插件内部，不成为 PaperTodo 的第二套 `AppState` authority。
 
-插件协议当前最新为 **2.3**，最低兼容 **2.1**；2.0 及更早版本不再加载，高于当前实现的未来版本也拒绝加载。`apiVersion` 表示插件最低依赖的宿主 API：2.1／2.2 插件可继续运行，使用新能力的插件必须声明提供该能力的最低版本。需要在可见 Body/Mini 不存在时仍持续工作的插件声明 `runtime`：PaperTodo 对每个 provider **最多只创建一个 Runtime 后端**。`startupPaper` 先处理真实 Paper；之后只要最终至少有一张 `Note` Paper 的 `BodyProviderId` 指向该 provider，Runtime 就存在。0→1 启动，1→0 释放；隐藏、折叠、Body 重建、Mini 回收和当前没有 `PaperWindow` 都不改变 Runtime lifetime。
+插件协议当前最新为 **2.4**，最低兼容 **2.1**；2.0 及更早版本不再加载，高于当前实现的未来版本也拒绝加载。`apiVersion` 表示插件最低依赖的宿主 API：2.1／2.2／2.3 插件可继续运行，使用新能力的插件必须声明提供该能力的最低版本。需要在可见 Body/Mini 不存在时仍持续工作的插件声明 `runtime`：PaperTodo 对每个 provider **最多只创建一个 Runtime 后端**。`startupPaper` 先处理真实 Paper；之后只要最终至少有一张 `Note` Paper 的 `BodyProviderId` 指向该 provider，Runtime 就存在。0→1 启动，1→0 释放；隐藏、折叠、Body 重建、Mini 回收和当前没有 `PaperWindow` 都不改变 Runtime lifetime。
 
 一张 Paper 不再对应一个后台 Runtime。多开插件仍然只有一个 provider Runtime，Runtime 通过 `PaperId` 管理 N 个逻辑实例；需要额外线程、Web Worker、子进程或隔离域时，由插件在自己的 Runtime 内部创建和回收，宿主不提供第二种“每 Paper 后台”协议。
 
@@ -145,17 +145,18 @@ PaperTodo 不提供插件热重载入口。插件 manifest、DLL、Web body/mini
 
 ## 4. 状态与持久化架构
 
-### 4.1 三个数据域
+### 4.1 四个数据域
 
-当前长期数据按语义拆成三个主要域：
+当前长期数据按语义拆成四个主要域：
 
 | 数据域 | 当前存储 | authority | 方向 |
 | --- | --- | --- | --- |
 | 核心应用与纸片状态 | `data.json` + `data.backup.json` | `StateStore` | 保持可迁移、可恢复的结构化业务状态 |
 | Note 图片二进制 | `note-assets.lmdb` | `NoteImageStore` / `LmdbImageDatabase` | 大体积二进制与 JSON 分离，独立做引用/容量管理 |
 | 插件 settings / Runtime state / per-paper frontend state | `plugins/data/*.json` | `PaperBodyPluginDataStore` | 插件后端、前端与核心状态解耦，提供单文件读写 |
+| 全局参数注入 | 程序目录单一 `user.json` | `UserInjection` / typed `InjectionParameter<T>` | 跨工作区共享的稀疏覆盖；与普通设置原值分离 |
 
-这三类数据不能因为“都属于一张纸”就合并成一个写入协议。核心状态保存、图片回收和插件状态读写具有不同失败语义，因此保持各自 authority。
+这些数据不能因为“都属于一张纸”就合并成一个写入协议。核心状态保存、图片回收、插件状态读写和全局参数注入具有不同生命周期与失败语义，因此保持各自 authority。
 
 ### 4.2 核心状态
 
@@ -233,6 +234,22 @@ Markdown 中的 Note 图片只通过 PaperTodo 内部 `i:` asset URI 引用宿�
 
 宿主管理之外、由第三方插件自行决定路径的文件不由工作区系统重定向；这种插件需自行定义跨工作区数据策略。Windows 启动项、独立背景文件等不属于 AppState 的既有外部 owner，不因本功能建立第二套存储。
 
+### 4.6 全局参数注入
+
+`UserInjection` 拥有程序目录唯一的 `user.json`。它不跟随工作区路径，不写回 `AppState`、核心 JSON、图片库或其他插件业务状态。`App.OnStartup` 在创建 `AppController` 前加载覆盖，使构造时缓存和静态几何采用同一启动值。缺失或空文件的首次启动无需建立反射目录；消费点仍直接持有 typed slot。
+
+模块将固定参数、公式系数和可替换的动态结果声明在 `InjectionParameters` 的 partial catalog 中。固定参数读取缓存字段，动态结果通过 `Resolve(original)` 保留调用位置的原计算。反射和字符串键查找只用于启动采用非空文件、查询目录和显式应用；高频消费者不读取文件。默认值 JSON 和四语言说明延迟到目录查询，不添加常驻文件监听、轮询或另一套状态发布器。
+
+显式 `Apply` 重读文件，类型转换后绑定允许热更新的槽位，再由 controller 调用已有功能 owner 刷新其缓存。`live` 和 `next_use` 分别表示刷新当前运行状态及下一次现有消费；`restart` 保持当前绑定，直到下次启动。只有运行时刷新成功后才标记已采用；危险值造成的部分应用不回滚。文件请求值、已接受的重启目标和运行时已采用值分别用于显示待应用、待重启及已应用。建议范围属于元数据，不是写入约束；关系优化仅在显式 `Suggest` 时返回本项建议。
+
+覆盖的存在由键决定，即使值等于当前默认也保持覆盖，删除键才恢复默认值或当前公式。普通设置存储原选择；只有其结果完全被覆盖时，既有设置服务和相应 UI 返回只读原因。部分系数或部分度量覆盖不冻结仍有作用的普通设置。新建尺寸在原有新建和首次显示尺寸处理后注入，删除或移走最后一张后补出的纸片复用新建入口。副工作区初始化的空白纸片由 `WorkspaceSession` 暂存其身份，首次几何恢复完成后消费该身份；它不写入数据协议，也不用于识别已有或恢复的纸片。已有纸片的恢复仍走独立恢复规则。
+
+按键修改携带调用方读取的文件 revision，写前再次核对并使用 `DurableAtomicFileWriter` 完成单次文件替换。文件变化时报告冲突，由调用方重读后决定是否重试，不将陈旧整份文档覆盖回去。未知键保留但不绑定。普通外部编辑后直接 Apply 不重写文件格式；没有配置备份、自动修复或自定义数值的故障恢复层。
+
+Good Lock 是 API 2.4 的 Native paper-body 客户端，无 provider Runtime。它只展示修改项，调用可选 `IPaperInjectionApi`，草稿复用既有 per-paper plugin state；前端草稿不成为第二份全局配置。读取和建议要求 `settings.read`，应用和正常重启要求 `settings.update`，同时遵守插件上下文的生命周期。正常重启沿用显式退出的保存成功边界；新进程可返回原 Good Lock 纸片。这个全局能力不继承副工作区“跟随主设置”的写入锁。
+
+用户操作和完整参数目录见 [全局参数注入](USER_INJECTION.md)，决策来源见 D-073。
+
 ## 5. Paper 与 paper-body 插件
 
 ### 5.1 Paper shell
@@ -295,11 +312,12 @@ transport 权限、Web/Native surface 生命周期、Top Bar presentation 和 MC
 
 ### 5.4 Plugin Protocol 2.x
 
-当前最新插件协议是 **2.3**，宿主继续加载 **2.1** 和 **2.2** 插件。已有能力保持原语义；使用新增 manifest/API 契约时，插件需声明首次提供该能力的 API 版本或更高版本。宿主不接受 2.0 及更早版本，也不接受高于当前实现的未来版本。
+当前最新插件协议是 **2.4**，宿主继续加载 **2.1**、**2.2** 和 **2.3** 插件。已有能力保持原语义；使用新增 manifest/API 契约时，插件需声明首次提供该能力的 API 版本或更高版本。宿主不接受 2.0 及更早版本，也不接受高于当前实现的未来版本。
 
 - 2.1 保留 Top Bar、provider Runtime、快捷键、自定义 shortcut action、Mini / Workspace 等既有合同。
 - 2.2 新增 `startupPaper.presentation: hidden`、settings `type: action`、公共 Application Settings API 及 `settings.read/update` 权限、提醒已触发状态/事件和 Web Runtime 宿主事件订阅。
 - 2.3 为 Paper／Global Top Bar action 增加 `MenuOnly`（Web `menuOnly`）：只进入既有插件操作菜单，不创建顶栏按钮或占据其空间，默认 false 保持原行为；沿用原 scope 的 callback、replace 和生命周期清理。
+- 2.4 新增 Native Body / Runtime 可选 `IPaperInjectionApi`，提供全局覆盖目录、Apply、有限 Suggest 和正常 Restart；沿用 `settings.read/update` 权限，不扩展 Web bridge 或强制所有宿主实现新增成员。
 - 新增宿主内部行为、bugfix 或复用既有通用协议原语时不升版本；新增插件可观察的字段、类型、权限、事件、API surface 或新语义时升 minor。破坏既有插件合同才升 major。
 
 #### Protocol 2.1 Top Bar

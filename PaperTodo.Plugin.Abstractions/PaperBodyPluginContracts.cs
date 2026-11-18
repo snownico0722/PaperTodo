@@ -349,6 +349,8 @@ public sealed class PaperBodyContext
         ?? throw new InvalidOperationException("This host does not expose cross-paper presentation controls.");
     public IPaperSettingsApi SettingsApi => Workspace as IPaperSettingsApi
         ?? throw new InvalidOperationException("This host does not expose application settings.");
+    public IPaperInjectionApi InjectionApi => Workspace as IPaperInjectionApi
+        ?? throw new InvalidOperationException("This host does not expose global user injections.");
 
     public IPaperNoteAssetsApi NoteAssets => Workspace as IPaperNoteAssetsApi
         ?? throw new InvalidOperationException("This host does not expose note image reads.");

@@ -6,7 +6,7 @@ namespace PaperTodo;
 
 internal sealed partial class PaperBodyPluginHostApi :
     IPaperTodoHostApi, IPaperReminderNotificationControl, IPaperTopBarApi, IPaperPresentationApi,
-    IPaperSettingsApi, IPaperNoteAssetsApi, IDisposable
+    IPaperSettingsApi, IPaperInjectionApi, IPaperNoteAssetsApi, IDisposable
 {
     private readonly AppController _controller;
     private readonly PaperCommandService _commands;

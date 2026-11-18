@@ -242,14 +242,14 @@ public sealed partial class PaperWindow
     private void RequestEdgeCapsulePresentation(
         bool animate,
         EdgeCapsuleTransitionReason reason,
-        int durationMilliseconds = EdgeCapsuleLayout.SlotMoveMilliseconds,
+        int? durationMilliseconds = null,
         bool refreshLayout = false)
     {
         animate = animate && _controller.State.EnableAnimations;
         _edgeCapsule.RequestPresentation(animate
             ? EdgeCapsuleMotion.Animate(
                 reason,
-                AnimationTiming.ScaleMilliseconds(durationMilliseconds))
+                AnimationTiming.ScaleMilliseconds(durationMilliseconds ?? EdgeCapsuleLayout.SlotMoveMilliseconds))
             : EdgeCapsuleMotion.Snap(reason));
 
         // State-driven requests are allowed to depend on controller settings captured in the

@@ -8,12 +8,12 @@ namespace PaperTodo;
 
 public sealed partial class AppController
 {
-    private const long TodoReminderMaximumCustomSoundBytes = 10 * 1024 * 1024;
-    private static readonly TimeSpan TodoReminderMaximumTimerInterval =
-        TimeSpan.FromMinutes(1);
-    private static readonly TimeSpan TodoReminderMinimumTimerInterval =
-        TimeSpan.FromMilliseconds(250);
-    private static readonly TimeSpan ReminderAdvanceNotice = TimeSpan.FromSeconds(5);
+    private static long TodoReminderMaximumCustomSoundBytes => InjectionParameters.ReminderSoundBytes.Value;
+    private static TimeSpan TodoReminderMaximumTimerInterval =>
+        TimeSpan.FromMilliseconds(InjectionParameters.ReminderMaximumIntervalMs.Value);
+    private static TimeSpan TodoReminderMinimumTimerInterval =>
+        TimeSpan.FromMilliseconds(InjectionParameters.ReminderMinimumIntervalMs.Value);
+    private static TimeSpan ReminderAdvanceNotice => TimeSpan.FromMilliseconds(InjectionParameters.ReminderAdvanceMs.Value);
 
     // One short-lived token per pending Todo occurrence, invalidated by edits/rescheduling.
     // Tokens do not persist: overdue reminders after startup use the usual host notification.
@@ -524,7 +524,7 @@ public sealed partial class AppController
 
         // Retry failed/partial delivery within thirty seconds, but honor a different
         // reminder's earlier advance-notice or due-time wake.
-        var interval = TimeSpan.FromSeconds(30);
+        var interval = TimeSpan.FromMilliseconds(InjectionParameters.ReminderRetryMs.Value);
         var now = DateTimeOffset.Now;
         var nextFutureWake = NextReminderWake(now, includeOverdue: false);
         if (nextFutureWake != DateTimeOffset.MaxValue)
@@ -559,7 +559,7 @@ public sealed partial class AppController
             return Strings.Get("TodoReminderUnnamed");
         }
 
-        const int maximumLength = 90;
+        var maximumLength = InjectionParameters.ReminderSummaryCharacters.Value;
         return compact.Length <= maximumLength
             ? compact
             : compact[..(maximumLength - 1)] + "…";

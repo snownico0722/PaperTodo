@@ -16,6 +16,39 @@ internal static partial class Program
         new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
         var failures = 0;
         ClipboardImageChecks.Run(Check);
+        Check("Pasting into an existing over-limit note permits corrections and deletions", () =>
+        {
+            using var editor = new Editor("abcdef");
+            var box = editor.Box;
+            // AvalonEdit raises Pasting on its TextArea. The control template attaches it
+            // to MarkdownTextBox, where both production paste handlers are registered.
+            var window = new Window { Content = box, Width = 320, Height = 160,
+                ShowInTaskbar = false, ShowActivated = false };
+            try
+            {
+                window.Show();
+                window.UpdateLayout();
+                Require(box.IsAncestorOf(box.TextArea), "native paste routes through the Markdown editor");
+                var rejections = 0;
+                box.PasteRejected += () => rejections++;
+                box.MaxLength = 3;
+                Clipboard.SetText("x");
+                box.Select(0, 1);
+                box.Paste();
+                Equal("xbcdef", box.PersistentText, "equal-length correction survives");
+                box.Select(1, 2);
+                box.Paste();
+                Equal("xxdef", box.PersistentText, "shortening can leave the note above the cap");
+                box.Select(1, 0);
+                box.Paste();
+                Equal("xxdef", box.PersistentText, "growth stays blocked after shortening");
+                Equal(1, rejections, "only the growing paste raises the rejection notice");
+                box.Select(0, 2);
+                box.WrapSelection("**", "**");
+                Equal("xxdef", box.PersistentText, "formatting cannot grow the same note");
+            }
+            finally { window.Close(); }
+        });
         Check("Full mode preserves quote source and undo history", () =>
         {
             foreach (var source in new[] { "- > a\n  > b", "1. > a\n   > b", "> a\nb", "> a\n> > b\nlazy" })

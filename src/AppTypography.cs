@@ -81,7 +81,7 @@ public static class AppTypography
         string? textRenderingProfile = null)
     {
         _preset = UiFontPresets.Normalize(preset);
-        _scale = OverallFontScales.Normalize(scale);
+        _scale = InjectionParameters.OverallFontScale.Resolve(OverallFontScales.Normalize(scale));
         _customFontEnhancedBold = customFontEnhancedBold;
         _textRenderingProfile = TextRenderingProfiles.Normalize(textRenderingProfile);
         _customFontFace = TryLoadCustomFontFaceFromCandidates(CustomRegularFontCandidates());
@@ -307,15 +307,15 @@ public static class NoteTypography
     // Keep the global factor unrounded here so MarkdownTextBox can apply the per-note zoom last
     // and round only the final composed size.
     public static double FontSize =>
-        (14 + VisualTextSizes.Correction(_size)) * AppTypography.ScaleFactor;
+        InjectionParameters.NoteComputedFontSize.Resolve((InjectionParameters.NoteBaseFontSize.Value + VisualTextSizes.Correction(_size)) * AppTypography.ScaleFactor);
     public static double CodeFontSize =>
-        (13 + VisualTextSizes.Correction(_size)) * AppTypography.ScaleFactor;
+        InjectionParameters.NoteComputedCodeFontSize.Resolve((InjectionParameters.NoteBaseCodeFontSize.Value + VisualTextSizes.Correction(_size)) * AppTypography.ScaleFactor);
     public static double Heading1FontSize =>
-        (17 + VisualTextSizes.Correction(_size)) * AppTypography.ScaleFactor;
+        InjectionParameters.NoteComputedHeading1FontSize.Resolve((InjectionParameters.NoteBaseHeading1FontSize.Value + VisualTextSizes.Correction(_size)) * AppTypography.ScaleFactor);
     public static double Heading2FontSize =>
-        (15 + VisualTextSizes.Correction(_size)) * AppTypography.ScaleFactor;
+        InjectionParameters.NoteComputedHeading2FontSize.Resolve((InjectionParameters.NoteBaseHeading2FontSize.Value + VisualTextSizes.Correction(_size)) * AppTypography.ScaleFactor);
     public static double Heading3FontSize =>
-        (14 + VisualTextSizes.Correction(_size)) * AppTypography.ScaleFactor;
+        InjectionParameters.NoteComputedHeading3FontSize.Resolve((InjectionParameters.NoteBaseHeading3FontSize.Value + VisualTextSizes.Correction(_size)) * AppTypography.ScaleFactor);
 
     public static FontFamily FontFamily => AppTypography.FontFamilyFor(content: true, bold: _bold);
     public static FontFamily CodeFontFamily => AppTypography.CodeFontFamily;
@@ -324,7 +324,11 @@ public static class NoteTypography
     public static FontWeight HeadingFontWeight => AppTypography.HeadingFontWeightFor(_bold);
     public static FontStretch FontStretch => FontStretches.Normal;
     public static XmlLanguage Language => AppTypography.Language;
-    public static Thickness ContentPadding => new(13, 8, 6, 8);
+    public static Thickness ContentPadding => new(
+        InjectionParameters.NoteContentPaddingLeft.Value,
+        InjectionParameters.NoteContentPaddingTop.Value,
+        InjectionParameters.NoteContentPaddingRight.Value,
+        InjectionParameters.NoteContentPaddingBottom.Value);
 
     public static void Configure(string? size, bool bold)
     {

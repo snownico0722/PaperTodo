@@ -1562,7 +1562,7 @@ public sealed partial class AppController
         leftColumn.Children.Add(CreateColorSchemeSegmentSelector());
         leftColumn.Children.Add(CreateSkinSettings());
         leftColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsDeepCapsuleGap")), "TipDeepCapsuleGap"));
-        leftColumn.Children.Add(CreateDeepCapsuleGapSegmentSelector());
+        leftColumn.Children.Add(WithInjectionAvailability("capsule.gap", CreateDeepCapsuleGapSegmentSelector()));
         leftColumn.Children.Add(SettingsSoftDivider());
         leftColumn.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("SettingsEnableToolTips"),
             State.EnableToolTips, ToggleToolTips), "TipEnableToolTips"));
@@ -1588,7 +1588,7 @@ public sealed partial class AppController
         rightColumn.Children.Add(WrapWithHint(customBoldToggle, "TipCustomFontEnhancedBold"));
         rightColumn.Children.Add(CompactSettingsField(
             Strings.Get("SettingsOverallFontScale"),
-            CreateOverallFontScaleStepper(),
+            WithInjectionAvailability("appearance.font_scale", CreateOverallFontScaleStepper()),
             editorWidth: 132,
             tipKey: "TipOverallFontScale",
             topMargin: 7));
@@ -1612,27 +1612,27 @@ public sealed partial class AppController
         AddTextStyleEditor(
             "SettingsNoteBodyText",
             "TipNoteBodyTextStyle",
-            CreateVisualTextSizeSelector(State.NoteTextSize, SetNoteTextSize),
+            WithInjectionAvailability("note.text_size", CreateVisualTextSizeSelector(State.NoteTextSize, SetNoteTextSize)),
             State.NoteTextBold,
             ToggleNoteTextBold);
 
         AddTextStyleEditor(
             "SettingsTodoBodyText",
             "TipTodoBodyTextStyle",
-            CreateTodoVisualSizeSelector(),
+            WithInjectionAvailability("todo.visual_size", CreateTodoVisualSizeSelector()),
             State.TodoTextBold,
             ToggleTodoTextBold);
 
         AddTextStyleEditor(
             "SettingsTitleText",
             "TipTitleTextStyle",
-            CreateVisualTextSizeSelector(State.TitleTextSize, SetTitleTextSize),
+            WithInjectionAvailability("title.text_size", CreateVisualTextSizeSelector(State.TitleTextSize, SetTitleTextSize)),
             State.TitleTextBold,
             ToggleTitleTextBold);
         AddTextStyleEditor(
             "SettingsCapsuleText",
             "TipCapsuleTextStyle",
-            CreateVisualTextSizeSelector(State.CapsuleTextSize, SetCapsuleTextSize),
+            WithInjectionAvailability("capsule.text_size", CreateVisualTextSizeSelector(State.CapsuleTextSize, SetCapsuleTextSize)),
             State.CapsuleTextBold,
             ToggleCapsuleTextBold);
 

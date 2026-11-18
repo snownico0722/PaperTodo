@@ -1,0 +1,64 @@
+name: User injection system checks
+
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'App*.cs'
+      - 'PaperTodo.Plugin.Abstractions/**'
+      - 'plugin-samples/PaperTodo.Plugin.GoodLock/**'
+      - 'tests/**'
+      - 'doc/user-injection-catalog.json'
+      - '.github/workflows/user-injection-system.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: injection-system-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contracts:
+    name: All parameter contracts
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Systematic parameter lifecycle and state-machine checks
+        shell: pwsh
+        run: dotnet run --project tests/PaperTodo.UserInjectionChecks -c Release -p:InjectionSystemChecks=true
+      - name: Observe unused hot-path costs without timing gates
+        shell: pwsh
+        run: dotnet run --project tests/PaperTodo.UserInjectionChecks -c Release -p:InjectionSystemChecks=false -- --benchmark
+  presentation:
+    name: Real windows, Good Lock and restart
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Isolated normal and edge presentation scenarios
+        shell: pwsh
+        run: dotnet run --project tests/PaperTodo.SettingsApiChecks -c Release -p:InjectionSystemChecks=true
+      - name: Native mouse and keyboard user journeys
+        shell: pwsh
+        run: |
+          $env:PAPERTODO_INJECTION_EVIDENCE = Join-Path $env:RUNNER_TEMP 'injection-journey-evidence'
+          dotnet run --project tests/PaperTodo.SettingsApiChecks -c Release -p:InjectionSystemChecks=true --no-build -- --user-journeys
+      - name: Preserve rendered fixture evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: injection-journey-evidence
+          path: ${{ runner.temp }}/injection-journey-evidence
+          if-no-files-found: ignore

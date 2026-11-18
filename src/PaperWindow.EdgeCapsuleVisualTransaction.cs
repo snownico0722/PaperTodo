@@ -8,7 +8,7 @@ public sealed partial class PaperWindow
     private bool TryStageEdgeCapsuleVisualTransaction(
         bool animate,
         EdgeCapsuleTransitionReason reason,
-        int durationMilliseconds = EdgeCapsuleLayout.SlotMoveMilliseconds,
+        int? durationMilliseconds = null,
         bool refreshLayout = false)
     {
         animate = animate && _controller.State.EnableAnimations;
@@ -17,7 +17,7 @@ public sealed partial class PaperWindow
         var motion = animate
             ? EdgeCapsuleMotion.Animate(
                 reason,
-                AnimationTiming.ScaleMilliseconds(durationMilliseconds))
+                AnimationTiming.ScaleMilliseconds(durationMilliseconds ?? EdgeCapsuleLayout.SlotMoveMilliseconds))
             : EdgeCapsuleMotion.Snap(reason);
         return _controller.TryStageEdgeCapsuleVisualTransaction(
             this,

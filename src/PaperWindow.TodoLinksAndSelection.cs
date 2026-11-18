@@ -308,7 +308,7 @@ public sealed partial class PaperWindow
         {
             _todoSweepTrackingTimer = new DispatcherTimer(DispatcherPriority.Input)
             {
-                Interval = TimeSpan.FromMilliseconds(32)
+                Interval = TimeSpan.FromMilliseconds(InjectionParameters.TodoSelectionTickMs.Value)
             };
             _todoSweepTrackingTimer.Tick += OnTodoSweepTrackingTick;
         }
@@ -439,7 +439,7 @@ public sealed partial class PaperWindow
         }
 
         var point = TranslatePoint(pointOnWindow, scrollViewer);
-        var edge = Math.Min(AppTypography.Scale(28), scrollViewer.ActualHeight / 4);
+        var edge = InjectionParameters.TodoSelectionEdge.Resolve(Math.Min(AppTypography.Scale(InjectionParameters.TodoSelectionEdgeDip.Value), scrollViewer.ActualHeight * InjectionParameters.TodoSelectionEdgeRatio.Value));
         var direction = 0;
         var overflow = 0d;
         if (point.Y < edge)
@@ -458,11 +458,11 @@ public sealed partial class PaperWindow
             return;
         }
 
-        var stepDistance = Math.Max(AppTypography.Scale(14), edge * 0.7);
+        var stepDistance = InjectionParameters.TodoSelectionStepDistance.Resolve(Math.Max(AppTypography.Scale(InjectionParameters.TodoSelectionStepDip.Value), edge * InjectionParameters.TodoSelectionStepRatio.Value));
         var steps = Math.Clamp(
             1 + (int)Math.Floor(Math.Max(0, overflow - 1) / stepDistance),
             1,
-            6);
+            InjectionParameters.TodoSelectionMaximumSteps.Value);
         for (var index = 0; index < steps; index++)
         {
             if (direction < 0)
@@ -1079,8 +1079,8 @@ public sealed partial class PaperWindow
 
         double LegacyLinkedPathButtonWidth(bool isTodoMultiline) =>
             isTodoMultiline
-                ? Math.Max(44, metrics.CheckColumnWidth * 2)
-                : Math.Max(50, metrics.CheckColumnWidth * 2.2);
+                ? Math.Max(InjectionParameters.TodoPathMultilineMinimumWidth.Value, metrics.CheckColumnWidth * InjectionParameters.TodoPathMultilineWidthRatio.Value)
+                : Math.Max(InjectionParameters.TodoPathSingleLineMinimumWidth.Value, metrics.CheckColumnWidth * InjectionParameters.TodoPathSingleLineWidthRatio.Value);
 
         double LinkedPathButtonWidth(bool isTodoMultiline, string value)
         {
@@ -1094,17 +1094,17 @@ public sealed partial class PaperWindow
                 value,
                 metrics.LinkedPaperNameFontSize,
                 FontWeights.SemiBold,
-                AppTypography.UiFontFamily) + 10;
+                AppTypography.UiFontFamily) + InjectionParameters.TodoPathNamePadding.Value;
             return Math.Max(legacyWidth, Math.Ceiling(measuredWidth));
         }
 
         var linkedPathButtonText = LinkedPathButtonLabel(isTodoMultiline: false);
         var multilineLinkedPathButtonText = LinkedPathButtonLabel(isTodoMultiline: true);
-        var width = showName
+        var width = InjectionParameters.TodoPathButtonWidth.Resolve(showName
             ? Math.Max(
                 LinkedPathButtonWidth(false, linkedPathButtonText),
                 LinkedPathButtonWidth(true, multilineLinkedPathButtonText))
-            : Math.Max(23, metrics.CheckColumnWidth);
+            : Math.Max(23, metrics.CheckColumnWidth));
         var glyph = new TextBlock
         {
             FontWeight = FontWeights.SemiBold,
@@ -1116,7 +1116,7 @@ public sealed partial class PaperWindow
         var button = new Border
         {
             Width = width,
-            MinWidth = Math.Max(23, metrics.CheckColumnWidth),
+            MinWidth = Math.Min(width, Math.Max(23, metrics.CheckColumnWidth)),
             MinHeight = Math.Max(22, metrics.RowMinHeight - 2),
             Margin = new Thickness(1, 0, 0, 0),
             Padding = showName ? new Thickness(3, 1, 3, 1) : new Thickness(0),

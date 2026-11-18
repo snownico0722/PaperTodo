@@ -1,0 +1,24 @@
+{
+  "kind": "native",
+  "id": "official.good-lock.native",
+  "name": "Good Lock",
+  "description": "查看和管理 user.json 的全局修改，支持应用、重置、官方微调、另存为与快速重启。",
+  "version": "1.0.0",
+  "apiVersion": "2.4",
+  "stateVersion": 1,
+  "maxPaperInstances": 1,
+  "entry": "PaperTodo.Plugin.GoodLock.dll",
+  "capabilities": ["textZoom"],
+  "permissions": ["settings.read", "settings.update"],
+  "locales": {
+    "en": {
+      "description": "View and manage global user.json overrides: apply, reset, suggest adjustments, save a copy, and restart."
+    },
+    "ja": {
+      "description": "user.json のグローバル変更を確認・管理。適用、リセット、調整の提案、別名保存、再起動に対応。"
+    },
+    "ko": {
+      "description": "user.json의 전역 변경을 확인하고 적용, 초기화, 조정 제안, 다른 이름으로 저장 및 재시작합니다."
+    }
+  }
+}

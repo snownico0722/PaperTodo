@@ -85,7 +85,7 @@ public sealed partial class MarkdownTextBox
             }
         }
 
-        if (!CanApplyTextReplacementWithNotice(NewLineTextAtCaret()))
+        if (!CanInsertNewLineWithNotice())
         {
             return true;
         }

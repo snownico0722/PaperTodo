@@ -89,7 +89,7 @@ internal sealed class PaperBodyPluginMiniSizeManifest
 internal sealed partial class PaperBodyPluginRegistry : IDisposable
 {
     internal const string MinimumPluginApiVersion = "2.1";
-    internal const string SupportedPluginApiVersion = "2.3";
+    internal const string SupportedPluginApiVersion = "2.4";
     private PaperBodyPluginDataStore _dataStore =
         new(Path.Combine(AppContext.BaseDirectory, "plugins"));
 

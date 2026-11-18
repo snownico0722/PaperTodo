@@ -16,7 +16,7 @@ internal enum ExperimentalPassiveReason
 
 public sealed partial class PaperWindow
 {
-    private const int ExperimentalOpacityTransitionMilliseconds = 120;
+    private static int ExperimentalOpacityTransitionMilliseconds => InjectionParameters.ExperimentalOpacityMs.Value;
     private ExperimentalPassiveReason _experimentalPassiveReasons;
     private bool _experimentalPassiveNativeApplied;
     private bool _experimentalPassiveHadNoActivateStyle;
@@ -238,7 +238,7 @@ public sealed partial class PaperWindow
             DispatcherPriority.ContextIdle,
             Dispatcher)
         {
-            Interval = TimeSpan.FromMilliseconds(140)
+            Interval = TimeSpan.FromMilliseconds(InjectionParameters.ExperimentalAutoCollapseDelayMs.Value)
         };
         EventHandler? tick = null;
         tick = (_, _) =>

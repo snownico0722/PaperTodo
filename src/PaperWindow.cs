@@ -99,7 +99,7 @@ public sealed partial class PaperWindow : Window
         new(StringComparer.Ordinal);
     private bool _updatingTopBarResponsiveLayout;
     private readonly List<List<PaperItem>> _redoStack = new();
-    private const int MaxUndoDepth = 100;
+    private static int MaxUndoDepth => InjectionParameters.PaperMaxUndoDepth.Value;
     private string? _activeOriginalItemId;
     private string? _activeOriginalText;
     private bool _suppressTodoBackspaceUntilKeyUp;
@@ -135,76 +135,75 @@ public sealed partial class PaperWindow : Window
     private bool _collapsedFromMaximized;
     private int _themeAnimationGeneration;
     private int _todoRowsGeneration;
-    private const double DeepCapsuleExpandedEdgeInset = EdgeCapsuleLayout.ExpandedEdgeInset;
-    private const double DeepCapsuleTopMargin = EdgeCapsuleLayout.TopMargin;
+    private static double DeepCapsuleExpandedEdgeInset => EdgeCapsuleLayout.ExpandedEdgeInset;
+    private static double DeepCapsuleTopMargin => EdgeCapsuleLayout.TopMargin;
     private double DeepCapsuleGap => _controller.DeepCapsuleGap;
-    private const double WindowChromeMargin = EdgeCapsuleLayout.WindowChromeMargin;
-    private const double WindowChromeInset = WindowChromeMargin * 2;
-    private const double CapsuleBodyHeight =
-        PaperLayoutDefaults.CapsuleHeight - WindowChromeInset;
+    private static double WindowChromeMargin => EdgeCapsuleLayout.WindowChromeMargin;
+    private static double WindowChromeInset => WindowChromeMargin * 2;
+    private static double CapsuleBodyHeight => PaperLayoutDefaults.CapsuleHeight - WindowChromeInset;
     // Grow top bar with overall font scale, but only half as much as full FitChrome (shell zoom).
     private static double TitleBarHeight
     {
         get
         {
-            const double normal = PaperLayoutDefaults.TopBarHeight;
+            var normal = PaperLayoutDefaults.TopBarHeight;
             var scale = AppTypography.ScaleFactor;
             if (scale <= 1.0)
             {
-                return normal;
+                return InjectionParameters.TitleBarFinalHeight.Resolve(normal);
             }
 
             var fullScaled = Math.Ceiling(normal * scale);
-            return normal + (fullScaled - normal) * 0.5;
+            return InjectionParameters.TitleBarFinalHeight.Resolve(normal + (fullScaled - normal) * 0.5);
         }
     }
-    private const int CollapseShellFadeMilliseconds = 70;
-    private const int CollapseResizeMilliseconds = 150;
-    private const int ExpandAnimationMilliseconds = 220;
+    private static int CollapseShellFadeMilliseconds => InjectionParameters.PaperCollapseShellFadeMilliseconds.Value;
+    private static int CollapseResizeMilliseconds => InjectionParameters.PaperCollapseResizeMilliseconds.Value;
+    private static int ExpandAnimationMilliseconds => InjectionParameters.PaperExpandAnimationMilliseconds.Value;
     // Expand cross-fade: the capsule pill fades out first, then the paper shell fades in after it.
-    private const int ExpandCapsuleFadeOutMilliseconds = 80;
-    private const int ExpandShellFadeInMilliseconds = 140;
-    private const double ExpandedChromeCornerRadius = RadiusShell;
-    private const double CapsuleChromeCornerRadius = EdgeCapsuleLayout.CornerRadius; // 胶囊圆角，自成一套，不纳入圆角阶梯
-    private const double CapsuleInnerCornerRadius = EdgeCapsuleLayout.CornerRadius;   // 左区 / 关闭按钮的内圆角，与药丸外圆角同档
+    private static int ExpandCapsuleFadeOutMilliseconds => InjectionParameters.PaperExpandCapsuleFadeOutMilliseconds.Value;
+    private static int ExpandShellFadeInMilliseconds => InjectionParameters.PaperExpandShellFadeInMilliseconds.Value;
+    private static double ExpandedChromeCornerRadius => RadiusShell;
+    private static double CapsuleChromeCornerRadius => EdgeCapsuleLayout.CornerRadius; // 胶囊圆角，自成一套，不纳入圆角阶梯
+    private static double CapsuleInnerCornerRadius => EdgeCapsuleLayout.CornerRadius;   // 左区 / 关闭按钮的内圆角，与药丸外圆角同档
 
     // 胶囊态内部度量。布局（leftStack/标签）与宽度计算（CapsuleShellWidth）共用同一组值，
     // 否则二者不一致会让壳体与内容错位。整体偏紧凑，减少图标/文字四周的死白。
-    private const double CapsuleNormalMinWidth = 76;
-    private const double CapsuleLeftPadding = 6;
-    private const double CapsuleIconGap = 4;
-    private const double CapsuleCloseWidth = EdgeCapsuleLayout.CapsuleCloseWidth;
-    private const double CapsuleNormalCloseWidth = 21;
-    private const double CapsuleRightPadding = 6;
-    private double CapsuleIconFontSize => AppTypography.Scale(13);
-    private double CapsuleLabelFontSize => VisualTextSizes.FontSize(12, _controller.State.CapsuleTextSize);
+    private static double CapsuleNormalMinWidth => InjectionParameters.PaperCapsuleNormalMinWidth.Value;
+    private static double CapsuleLeftPadding => InjectionParameters.PaperCapsuleLeftPadding.Value;
+    private static double CapsuleIconGap => InjectionParameters.PaperCapsuleIconGap.Value;
+    private static double CapsuleCloseWidth => EdgeCapsuleLayout.CapsuleCloseWidth;
+    private static double CapsuleNormalCloseWidth => InjectionParameters.PaperCapsuleNormalCloseWidth.Value;
+    private static double CapsuleRightPadding => InjectionParameters.PaperCapsuleRightPadding.Value;
+    private double CapsuleIconFontSize => AppTypography.Scale(InjectionParameters.CapsuleIconBase.Value);
+    private double CapsuleLabelFontSize => InjectionParameters.CapsuleLabelFont.Resolve(
+        VisualTextSizes.FontSize(InjectionParameters.CapsuleLabelBase.Value, _controller.State.CapsuleTextSize));
     private FontFamily CapsuleLabelFontFamily =>
         AppTypography.FontFamilyFor(content: false, bold: _controller.State.CapsuleTextBold);
     private FontWeight CapsuleLabelFontWeight =>
         AppTypography.FontWeightFor(_controller.State.CapsuleTextBold);
-    private double TitleFontSize => VisualTextSizes.FontSize(12, _controller.State.TitleTextSize);
+    private double TitleFontSize => InjectionParameters.TitleFont.Resolve(
+        VisualTextSizes.FontSize(InjectionParameters.TitleFontBase.Value, _controller.State.TitleTextSize));
     private FontFamily TitleFontFamily =>
         AppTypography.FontFamilyForTitle(_controller.State.TitleTextBold);
     private FontWeight TitleFontWeight =>
         AppTypography.FontWeightFor(_controller.State.TitleTextBold);
     private double TitleLineHeight => Math.Ceiling(TitleFontSize + 2);
-    private const double TopBarCollisionGap = 2.0;
-    private const double TitleBarDragThreshold = 1.0;
-    private const double CapsuleCloseGlyphNormalOffset = -1;
-    private const double DeepCapsuleSlotOutlineThickness =
-        EdgeCapsuleLayout.OutlineThickness;
-    private const double DeepCapsuleSlotOutlineOverlap =
-        EdgeCapsuleLayout.OutlineOverlap;
-    private const double DeepCapsuleReorderDragExtraThreshold = 4;
-    private const double DeepCapsuleCrossQueueDragUnlockDistance = EdgeCapsuleLayout.CrossQueueDragUnlockDistance;
-    private const double DeepCapsuleCrossQueueDragScaleFrom = 0.97;
-    private const int DeepCapsuleCrossQueueDragMorphMilliseconds = 90;
+    private static double TopBarCollisionGap => InjectionParameters.PaperTopBarCollisionGap.Value;
+    private static double TitleBarDragThreshold => InjectionParameters.PaperTitleBarDragThreshold.Value;
+    private static double CapsuleCloseGlyphNormalOffset => InjectionParameters.PaperCapsuleCloseGlyphNormalOffset.Value;
+    private static double DeepCapsuleSlotOutlineThickness => EdgeCapsuleLayout.OutlineThickness;
+    private static double DeepCapsuleSlotOutlineOverlap => EdgeCapsuleLayout.OutlineOverlap;
+    private static double DeepCapsuleReorderDragExtraThreshold => InjectionParameters.PaperDeepCapsuleReorderDragExtraThreshold.Value;
+    private static double DeepCapsuleCrossQueueDragUnlockDistance => EdgeCapsuleLayout.CrossQueueDragUnlockDistance;
+    private static double DeepCapsuleCrossQueueDragScaleFrom => InjectionParameters.PaperDeepCapsuleCrossQueueDragScaleFrom.Value;
+    private static int DeepCapsuleCrossQueueDragMorphMilliseconds => InjectionParameters.PaperDeepCapsuleCrossQueueDragMorphMilliseconds.Value;
     // 圆角阶梯：所有元素只从这四档取值，避免散落的随手圆角。
     // 小元素（勾选框）/ 控件（按钮、徽标、行）/ 块（菜单、面板）/ 外壳（纸片、顶栏）。
-    private const double RadiusSmall = 4;
-    private const double RadiusControl = 8;
-    private const double RadiusBlock = 12;
-    private const double RadiusShell = 16;
+    private static double RadiusSmall => InjectionParameters.PaperRadiusSmall.Value;
+    private static double RadiusControl => InjectionParameters.PaperRadiusControl.Value;
+    private static double RadiusBlock => InjectionParameters.PaperRadiusBlock.Value;
+    private static double RadiusShell => InjectionParameters.PaperRadiusShell.Value;
 
     public bool IsDeepCapsulePlaced => _paper.IsCollapsed && HasDeepCapsuleSlotPlacement;
     internal bool IsShellBuilt => _isShellBuilt;
@@ -1421,7 +1420,7 @@ public sealed partial class PaperWindow : Window
             return false;
         }
 
-        const double tolerance = WindowChromeInset + 4.0;
+        var tolerance = WindowChromeInset + 4.0;
         // A window must occupy at least this fraction of a work-area dimension before a mere
         // edge graze counts as a snapped tile — keeps small free-floating windows out.
         const double minSpanRatio = 0.20;
@@ -3037,7 +3036,8 @@ public sealed partial class PaperWindow : Window
 
     private double CapsuleWindowWidth()
     {
-        return Math.Max(CapsuleNormalMinWidth, CapsuleShellWidth() + WindowChromeInset);
+        return InjectionParameters.CapsuleNormalWidth.Resolve(
+            Math.Max(CapsuleNormalMinWidth, CapsuleShellWidth() + WindowChromeInset));
     }
 
     private double CapsuleShellWidth()

@@ -8,11 +8,11 @@ public sealed partial class AppController
 {
     // Stability requires both real observations and elapsed time. This avoids treating the first
     // frame after a render stall as stable, without making lifetime depend on refresh rate.
-    private const int ExperimentalFollowMinimumStableSamples = 3;
-    private static readonly TimeSpan ExperimentalFollowStableDuration =
-        TimeSpan.FromMilliseconds(100);
-    private static readonly TimeSpan ExperimentalFollowMovingIdleDuration =
-        TimeSpan.FromSeconds(2);
+    private static int ExperimentalFollowMinimumStableSamples => InjectionParameters.ExperimentalFollowStableSamples.Value;
+    private static TimeSpan ExperimentalFollowStableDuration =>
+        TimeSpan.FromMilliseconds(InjectionParameters.ExperimentalFollowStableMs.Value);
+    private static TimeSpan ExperimentalFollowMovingIdleDuration =>
+        TimeSpan.FromMilliseconds(InjectionParameters.ExperimentalFollowMovingIdleMs.Value);
     private ExternalWindowTracker? _externalWindowTracker;
     private readonly HashSet<IntPtr> _externalMoveSizeWindows = new();
     private bool _experimentalFollowRendering;

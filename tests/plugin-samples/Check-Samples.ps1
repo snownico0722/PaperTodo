@@ -16,8 +16,8 @@ try {
       Write-Host "Validating $($manifest.FullName)"
       $document = Get-Content $manifest.FullName -Raw -Encoding UTF8 |
         ConvertFrom-Json -Depth 100
-      if ($document.apiVersion -notin @("2.1", "2.2", "2.3")) {
-        throw "$($manifest.FullName) must target a supported apiVersion (2.1 through 2.3)."
+      if ($document.apiVersion -notin @("2.1", "2.2", "2.3", "2.4")) {
+        throw "$($manifest.FullName) must target a supported apiVersion (2.1 through 2.4)."
       }
     }
 

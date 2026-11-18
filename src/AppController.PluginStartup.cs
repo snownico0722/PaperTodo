@@ -140,6 +140,7 @@ public sealed partial class AppController
                 continue;
             }
 
+            var created = paper == null;
             if (paper == null)
             {
                 if (!CanCreatePluginPaper(descriptor))
@@ -180,7 +181,8 @@ public sealed partial class AppController
                 changed = true;
             }
             EnablePluginRuntimeReconciliation();
-            ShowPaper(paper, activate: false);
+            if (created) ShowNewPaper(paper, activate: false);
+            else ShowPaper(paper, activate: false);
         }
 
         if (!changed)

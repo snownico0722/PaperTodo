@@ -15,35 +15,35 @@ public enum EdgeCapsuleEdge
 public static class EdgeCapsuleLayout
 {
     // Expanded windows opened from edge-aligned capsules should not hug the docked screen edge.
-    public const double ExpandedEdgeInset = 36;
+    public static double ExpandedEdgeInset => InjectionParameters.EdgeExpandedEdgeInset.Value;
     // Vertical breathing room at the top/bottom of the work area.
-    public const double TopMargin = 8;
+    public static double TopMargin => InjectionParameters.EdgeTopMargin.Value;
     // Where slot 0 starts from the top of the work area (leaves room above for reach).
-    public const double StartTopMargin = 48;
+    public static double StartTopMargin => InjectionParameters.EdgeStartTopMargin.Value;
     // Shared pill corner radius for the real capsules and the master capsule.
-    public const double CornerRadius = 12;
+    public static double CornerRadius => InjectionParameters.EdgeCornerRadius.Value;
     // Transparent outer chrome around the capsule body. Edge capsules omit this margin on the
     // wall side and keep it on the interior side for the shadow.
-    public const double WindowChromeMargin = 8;
-    internal const double CapsuleCloseWidth = 14;
+    public static double WindowChromeMargin => InjectionParameters.EdgeWindowChromeMargin.Value;
+    internal static double CapsuleCloseWidth => InjectionParameters.EdgeCapsuleCloseWidth.Value;
     // The focus outline extends one DIP beyond the body and is the outermost stable alpha edge.
     // Proxy clips share these values with the WPF host so animation and endpoint silhouettes use
     // the same coordinate system instead of intersecting two offset rounded rectangles.
-    internal const double OutlineThickness = 2;
-    internal const double OutlineOverlap = 1;
-    internal const double CrossQueueDragUnlockDistance = 56;
-    internal const double OutlineSilhouetteInset =
+    internal static double OutlineThickness => InjectionParameters.EdgeOutlineThickness.Value;
+    internal static double OutlineOverlap => InjectionParameters.EdgeOutlineOverlap.Value;
+    internal static double CrossQueueDragUnlockDistance => InjectionParameters.EdgeCrossQueueDragUnlockDistance.Value;
+    internal static double OutlineSilhouetteInset =>
         WindowChromeMargin - OutlineThickness + OutlineOverlap;
-    internal const double OutlineSilhouetteRadius =
+    internal static double OutlineSilhouetteRadius =>
         CornerRadius + OutlineThickness - OutlineOverlap;
-    public const int HorizontalResizeMilliseconds = 160;
-    public const int SlotMoveMilliseconds = 200;
+    public static int HorizontalResizeMilliseconds => InjectionParameters.EdgeHorizontalResizeMilliseconds.Value;
+    public static int SlotMoveMilliseconds => InjectionParameters.EdgeSlotMoveMilliseconds.Value;
     // Quick retract toward the master when a slot leaves the queue.
-    public const int SlotRetractMoveMilliseconds = 120;
+    public static int SlotRetractMoveMilliseconds => InjectionParameters.EdgeSlotRetractMoveMilliseconds.Value;
     // Shared detached-capsule return flight and reveal timings. Master and ordinary capsules use
     // the same floating HWND, so their wall-return motion must not drift apart.
-    internal const int DockingHandoffMilliseconds = 160;
-    internal const int DockingRevealMilliseconds = 80;
+    internal static int DockingHandoffMilliseconds => InjectionParameters.EdgeDockingHandoffMilliseconds.Value;
+    internal static int DockingRevealMilliseconds => InjectionParameters.EdgeDockingRevealMilliseconds.Value;
     // Shared display-width units for title limits and compact linked-paper labels:
     // CJK/fullwidth and supplementary Unicode glyphs count as 2; halfwidth as 1.
     // Count text elements, not UTF-16 code units, to keep emoji sequences intact.

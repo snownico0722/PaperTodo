@@ -214,6 +214,9 @@ internal sealed class WorkspaceSession
     internal bool FollowsMain { get; }
     internal WorkspaceSettingsSnapshot? IndependentSettings { get; set; }
     internal WorkspaceSettingsSnapshot? InheritedSettings { get; set; }
+    // Only a newly initialized blank paper bypasses the restore-size cap once.
+    // This is consumed by its first geometry preparation, never persisted.
+    internal string? InitialPaperId { get; set; }
 
     internal void BindPersistence()
     {

@@ -108,10 +108,10 @@ public sealed partial class PaperWindow
             .Normalize(
                 Math.Max(
                     EdgeCapsulePreviewSize.MinimumWidthDip,
-                    workAreaDip.Width - 16),
+                    workAreaDip.Width - InjectionParameters.PreviewMonitorInsetDip.Value),
                 Math.Max(
                     EdgeCapsulePreviewSize.MinimumHeightDip,
-                    workAreaDip.Height - 16));
+                    workAreaDip.Height - InjectionParameters.PreviewMonitorInsetDip.Value));
         var previewBodyWidth = Math.Max(
             1,
             maximumPreview.WidthDip -

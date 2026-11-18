@@ -662,41 +662,28 @@ internal sealed partial class PaperCommandService
         string content,
         NoteWriteMode mode)
     {
-        if (content.Length > PaperWindow.NoteTextMaxLength)
+        var append = mode == NoteWriteMode.Append;
+        var separator = append && original.Length > 0 && content.Length > 0 && !original.EndsWith('\n')
+            ? Environment.NewLine : "";
+        var resultLength = append ? (long)original.Length + separator.Length + content.Length : content.Length;
+        var maximumLength = Math.Max(PaperWindow.NoteTextMaxLength, original.Length);
+        if (resultLength > maximumLength)
         {
             throw Error(
                 "content_too_long",
-                $"A note cannot exceed {PaperWindow.NoteTextMaxLength} characters.");
+                $"This note cannot exceed {maximumLength} characters.");
         }
 
-        var result = mode switch
+        return mode switch
         {
             NoteWriteMode.FillBlank when original.Length == 0 => content,
             NoteWriteMode.FillBlank => throw Error(
                 "note_not_blank",
                 "fillBlank can only write to an empty note."),
-            NoteWriteMode.Append => AppendNoteText(original, content),
+            NoteWriteMode.Append => original + separator + content,
             NoteWriteMode.Replace => content,
             _ => throw Error("invalid_params", "Unknown note write mode.")
         };
-        if (result.Length > PaperWindow.NoteTextMaxLength)
-        {
-            throw Error(
-                "content_too_long",
-                $"A note cannot exceed {PaperWindow.NoteTextMaxLength} characters.");
-        }
-        return result;
-    }
-
-    private static string AppendNoteText(string original, string content)
-    {
-        var separator =
-            original.Length > 0 &&
-            content.Length > 0 &&
-            !original.EndsWith('\n')
-                ? Environment.NewLine
-                : "";
-        return original + separator + content;
     }
 
     private static void MoveTodo(
