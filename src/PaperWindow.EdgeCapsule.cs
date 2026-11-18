@@ -43,7 +43,7 @@ public sealed partial class PaperWindow
             Strings.Get("ToolTipHideThisPaper"),
             PaperBrush,
             PaperBorderBrush,
-            Theme.CapsuleFocusBorderBrush,
+            Theme.EdgeCapsuleFocusBrush,
             HoverBrush,
             BrightWeakTextBrush,
             TextBrush,
@@ -210,7 +210,7 @@ public sealed partial class PaperWindow
         _edgeCapsuleHost?.UpdateTheme(
             PaperBrush,
             PaperBorderBrush,
-            Theme.CapsuleFocusBorderBrush,
+            Theme.EdgeCapsuleFocusBrush,
             HoverBrush,
             BrightWeakTextBrush,
             TextBrush,

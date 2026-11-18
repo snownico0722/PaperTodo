@@ -1762,6 +1762,9 @@ Resolve the file access problem and retry, or choose “Rebuild workspace” to 
   <data name="WorkspaceMoveGroup" xml:space="preserve">
     <value>Move to</value>
   </data>
+  <data name="WorkspaceCreateSlotsOccupied" xml:space="preserve">
+    <value>No number is available for a new workspace. Workspace numbers {0} still have data that could not be verified. Their files have been kept.</value>
+  </data>
   <data name="WorkspaceCreateNew" xml:space="preserve">
     <value>Create new workspace</value>
   </data>

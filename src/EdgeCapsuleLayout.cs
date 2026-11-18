@@ -29,8 +29,8 @@ public static class EdgeCapsuleLayout
     // The focus outline extends one DIP beyond the body and is the outermost stable alpha edge.
     // Proxy clips share these values with the WPF host so animation and endpoint silhouettes use
     // the same coordinate system instead of intersecting two offset rounded rectangles.
-    internal const double OutlineThickness = 2;
-    internal const double OutlineOverlap = 1;
+    internal const double OutlineThickness = 3; // 1 DIP outer rim + 2 DIP focus stroke
+    internal const double OutlineOverlap = 2;
     internal const double CrossQueueDragUnlockDistance = 56;
     internal const double OutlineSilhouetteInset =
         WindowChromeMargin - OutlineThickness + OutlineOverlap;
