@@ -112,9 +112,9 @@ internal static partial class UserInjectionText
              "HTML 또는 RTF로 내보내는 이미지의 최소 표시 너비입니다."]);
         Add("note.maxTextChars",
             ["Note text length limit", "ノートの最大文字数", "노트 최대 글자 수"],
-            ["Character limit shared by the note editor and the host write APIs.",
-             "ノートエディターとホストの書き込み API が共通して使う文字数上限です。",
-             "노트 편집기와 호스트 쓰기 API가 공통으로 사용하는 글자 수 제한입니다."]);
+            ["The limit is at least 100,000 characters per note. Existing longer notes can be edited and saved at the same or a shorter length.",
+             "ノート1枚の文字数上限は100,000文字以上に設定できます。現在の上限を超えた既存のノートは、文字数を増やさずに編集・保存できます。",
+             "노트 하나의 글자 수 제한은 100,000자 이상으로 설정할 수 있습니다. 현재 제한을 초과하는 기존 노트는 글자 수를 늘리지 않는 범위에서 편집하고 저장할 수 있습니다."]);
         Add("note.images.maxStoredDimensionPx",
             ["Stored image maximum dimension", "保存画像の最大辺長", "저장 이미지 최대 변 길이"],
             ["Maximum pixel dimension accepted when importing or loading image assets.",
@@ -135,11 +135,6 @@ internal static partial class UserInjectionText
             ["Byte limit for original image data supplied during import.",
              "画像を取り込むときの元データのバイト数上限です。",
              "이미지를 가져올 때 원본 입력 데이터의 바이트 수 제한입니다."]);
-        Add("note.images.maxTotalBytes",
-            ["Total image asset budget", "画像アセットの合計容量上限", "이미지 자산 총용량 한도"],
-            ["Total encoded byte limit for all images in the current image store.",
-             "現在の画像ストレージにある、すべてのエンコード済み画像の合計バイト数上限です。",
-             "현재 이미지 저장소에 있는 모든 인코딩된 이미지의 총 바이트 수 제한입니다."]);
         Add("note.images.maxDecodedBytes",
             ["Decoded image cache budget", "デコード済み画像キャッシュの容量上限", "디코딩된 이미지 캐시 용량 한도"],
             ["Byte budget for the LRU decoded-image cache, excluding images currently visible.",

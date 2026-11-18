@@ -10,13 +10,12 @@ namespace PaperTodo;
 
 public sealed class NoteImageStore : IDisposable
 {
-    // Import/storage and automatic-compression budgets are independently configurable.
-    // Disabling compression preserves the source within the current storage budgets.
+    // Disabling compression preserves the source within the per-image and store limits.
     private static int MaxStoredDimension => InjectionParameters.NoteImageStoredDimension.Value;
     private static int AutoCompressedDimension => InjectionParameters.NoteImageCompressedDimension.Value;
     private static int MaxImageBytes => InjectionParameters.NoteImageStoredBytes.Value;
     private static int MaxInputImageBytes => InjectionParameters.NoteImageInputBytes.Value;
-    private static int MaxTotalImageBytes => InjectionParameters.NoteImageTotalBytes.Value;
+    private const int MaxTotalImageBytes = 120 * 1024 * 1024;
     // Decoded pixels (separate from the encoded store). One version per image; LRU drops cold
     // off-viewport entries. Currently visible (viewport-protected) ids ignore the caps.
     private static long MaxDecodedBitmapBytes => InjectionParameters.NoteImageDecodedBytes.Value;
@@ -1479,7 +1478,7 @@ public sealed class NoteImageStore : IDisposable
             _ => ".png"
         };
 
-    private static bool TryValidateIndex(
+    internal static bool TryValidateIndex(
         LmdbImageIndex index,
         out List<NoteImageAsset> images,
         out HashSet<string> corruptedImageIds,
@@ -1506,12 +1505,8 @@ public sealed class NoteImageStore : IDisposable
                 continue;
             }
 
-            if (asset.ByteLength > MaxTotalImageBytes - totalBytes)
-            {
-                corruptedImageIds.Add(asset.Id);
-                continue;
-            }
-
+            // An older store can exceed the current import budget. Keep every valid asset
+            // readable and count it toward subsequent imports.
             totalBytes += asset.ByteLength;
             images.Add(asset);
         }

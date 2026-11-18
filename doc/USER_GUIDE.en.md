@@ -535,7 +535,7 @@ The **`user.json` beside the program is shared by every workspace** and contains
 
 An ordinary setting **fully controlled** by global overrides is disabled with an explanation, while its original selection is retained. Overriding only part of a compound preset leaves that preset available to control the remaining parts. Remove the corresponding overrides and apply to unlock it; parameters that require a restart remain locked until restart.
 
-Internal parameters and their algorithms may change between versions, with no promise of permanent compatibility. A red number only means it is outside a recommended range and does not block Apply. The wand offers limited adjustments, may consider related parameters, and does not guarantee layout or algorithm results. Invalid combinations or extreme values can cause display problems, resource exhaustion, crashes or data loss; users accept the consequences of these adjustments, and no additional automatic correction or recovery flow is provided for them.
+Internal parameters and their algorithms may change between versions, with no promise of permanent compatibility. A red number is outside its recommended range. For the per-note length limit, reset or raise values below the 100,000-character minimum before applying. The wand offers limited adjustments, may consider related parameters, and does not guarantee layout or algorithm results. Invalid combinations or extreme values can cause display problems, resource exhaustion, crashes or data loss; users accept the consequences of these adjustments, and no additional automatic correction or recovery flow is provided for them.
 
 #### Sample Plugins and Codex CLI Bridge
 

@@ -49,6 +49,10 @@ internal static class UserInjection
         _filePath = Path.GetFullPath(filePath);
         var file = ReadFile();
         if (file.Values.Count == 0 && !Catalog.IsValueCreated) return;
+        // Earlier versions accepted smaller limits. Ignore just that override on startup;
+        // Read still reports the original file value so the user can correct or remove it.
+        if (HasBelowMinimumNoteLimit(file.Values))
+            file.Values.Remove(InjectionParameters.NoteTextLimit.Id);
         Adopt(file, startup: true, applyRuntime: null);
     }
 
@@ -68,8 +72,7 @@ internal static class UserInjection
                 : new Dictionary<string, JsonElement>(file.Values, StringComparer.Ordinal);
             foreach (var key in patch.Remove) values.Remove(key);
             foreach (var pair in patch.Set) values[pair.Key] = pair.Value.Clone();
-            // Type conversion finishes before writing. Suggested ranges deliberately do not
-            // participate: technically representable injections are the user's choice.
+            // Validate the proposed document before replacing the file.
             _ = Prepare(values);
             var bytes = JsonSerializer.SerializeToUtf8Bytes(values, WriteOptions.Value);
             var expected = file.Revision;
@@ -178,8 +181,19 @@ internal static class UserInjection
         return changed;
     }
 
+    private static bool HasBelowMinimumNoteLimit(IReadOnlyDictionary<string, JsonElement> values) =>
+        values.TryGetValue(InjectionParameters.NoteTextLimit.Id, out var value) &&
+        value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var limit) &&
+        limit < InjectionParameters.DefaultNoteTextLimit;
+
     private static Dictionary<string, object> Prepare(IReadOnlyDictionary<string, JsonElement> values)
     {
+        if (HasBelowMinimumNoteLimit(values))
+        {
+            var limit = InjectionParameters.NoteTextLimit;
+            var message = Text(limit.Id + ".description", limit.Description);
+            throw new UserInjectionException("injection_value_invalid", $"{limit.Id}: {message}");
+        }
         var prepared = new Dictionary<string, object>(StringComparer.Ordinal);
         foreach (var pair in values)
         {

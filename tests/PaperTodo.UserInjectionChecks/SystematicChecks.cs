@@ -33,6 +33,7 @@ internal static class SystematicChecks
             }
             Case("JSON / BOM, comments, trailing commas, duplicate and unknown keys", JsonFiles);
             Case("JSON / malformed documents preserve runtime and original bytes", MalformedFiles);
+            Case("note limits / existing low overrides and retired image budget", NoteLimits);
             Case("patch / conflict, unknown preservation, reset and set precedence", PatchBehavior);
             Case("failure / retry, removal and unchanged restart targets", RefreshFailure);
             Case("mixed state machine / 300 deterministic operations", StateMachine);
@@ -99,6 +100,7 @@ internal static class SystematicChecks
     {
         "boolean" => J(variant % 2 == 0),
         "string" => J("probe-" + variant),
+        "integer" when p.Id == "note.maxTextChars" => J(100_001 + variant),
         "integer" => J(27 + variant),
         "number" => J(27.25 + variant),
         _ => throw new InvalidOperationException("Unknown type: " + p.Type)
@@ -217,7 +219,9 @@ internal static class SystematicChecks
         foreach (var number in new[] { p.RecommendedMinimum - 1, p.RecommendedMaximum + 1 }.Where(v => v.HasValue).Select(v => v!.Value))
         {
             var candidate = p.Type == "integer" ? J((long)Math.Round(number)) : J(number);
-            // The declaration's representable CLR type, not the recommendation, is the only boundary.
+            if (p.Id == "note.maxTextChars" && number < 100_000)
+                continue; // NoteLimits covers the mandatory floor.
+            // Only test advisory values that also satisfy the parameter's binding constraints.
             object parsed;
             try { parsed = p.Parse(candidate); }
             catch (Exception ex) when (ex is JsonException or OverflowException) { continue; }
@@ -271,6 +275,31 @@ internal static class SystematicChecks
         Error("injection_value_invalid", () => Apply());
         Require(InjectionParameters.TodoPasteLineLimit.Value == 200, "Parsing partially bound an earlier valid key.");
         Require(File.ReadAllText(FilePath) == invalidMixed, "Parsing silently repaired the file.");
+    }
+
+    private static void NoteLimits()
+    {
+        const string text = "note.maxTextChars", images = "note.images.maxTotalBytes";
+        Set(text, J(110_000));
+        UserInjection.LoadStartup(FilePath);
+        Error("injection_value_invalid", () => Set(text, J(99_999)));
+        Require(InjectionParameters.NoteTextLimit.Value == 110_000 &&
+                Row(UserInjection.Read(), text).FileValue!.Value.GetInt32() == 110_000,
+            "A rejected reduction changed the saved or running limit.");
+
+        Write(new Dictionary<string, JsonElement> { [text] = J(99_999), [images] = J(1), ["todo.paste.maxItems"] = J(201) });
+        var original = File.ReadAllBytes(FilePath);
+        UserInjection.LoadStartup(FilePath);
+        var snapshot = UserInjection.Read();
+        Require(InjectionParameters.NoteTextLimit.Value == 100_000 && !UserInjection.HasOverride(text) &&
+                InjectionParameters.TodoPasteLineLimit.Value == 201,
+            "An older sub-default value must leave the app usable with its default note limit.");
+        Require(!Row(snapshot, images).Known && !UserInjection.HasOverride(images),
+            "A retired total image budget must not bind from an older file.");
+        Error("injection_value_invalid", () => Apply());
+        Require(original.AsSpan().SequenceEqual(File.ReadAllBytes(FilePath)), "Startup or failed Apply rewrote legacy settings.");
+        Remove(text);
+        Require(Row(UserInjection.Read(), images).FileValue!.Value.GetInt32() == 1, "An unrelated patch lost the unknown key.");
     }
 
     private static void PatchBehavior()

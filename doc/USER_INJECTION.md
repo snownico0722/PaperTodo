@@ -26,6 +26,8 @@ PaperTodo 的官方注入接口使用程序目录中的一份 `user.json`。所�
 
 **键存在就代表覆盖。** 即使填入的值恰好等于默认值，仍会保持覆盖。删除键并应用，才恢复原取值来源；重启项的删除也需要重启。普通设置页的“恢复默认”只恢复该页普通设置，保留 `user.json`。
 
+将 `note.maxTextChars` 设为至少 100,000，重启后生效。删除该键即可恢复默认的 100,000 字符。旧文件中的较小整数在启动时会跳过，应用配置前需改正或删除。已有超长笔记仍可打开，保持或减少字数即可保存。每个工作区的笔记图片总预算固定为 120 MiB，按编码后的图片大小计。
+
 ## 读懂修改项
 
 | 页面元素 | 含义 |
@@ -35,7 +37,7 @@ PaperTodo 的官方注入接口使用程序目录中的一份 `user.json`。所�
 | 灰点 | 文件或草稿尚待应用；当前版本未知的键也保持未采用状态。 |
 | 绿点 | 当前运行已经采用；`next_use` 参数会在下一次相应操作或构建时读取。 |
 | 红点 | 应用请求已接受，需要重启才能改变当前值。 |
-| 修改数值标红 | 超出该项声明的建议范围。它仍然可以应用，建议范围不是硬限制。 |
+| 修改数值标红 | 超出该项的建议范围。单篇笔记字数上限还须满足 100,000 字符的最低值。 |
 | 单项重置 | 形成删除这个键的草稿，点击应用后写入。 |
 | 魔棒 | 仅在点击时为本项给出有限建议，并形成草稿；没有适用规则时保持原值。 |
 | 全部重置 | 形成清空全局覆盖的草稿；应用时包括未知键一并清除。 |
@@ -75,7 +77,7 @@ Native Body 和 provider Runtime 使用 `context.InjectionApi`。先调用 `Read
 
 下表直接根据 typed catalog 导出。机器目录提供同一组键、类型、默认来源、生效时机、建议范围和中英文说明，便于 Agent 检索；编辑 `user.json` 时仅选择需要的 `id` 并填写其值。
 
-当前共 **434 项**，其中 **45 项**默认来源是动态计算；`live` 168, `next_use` 89, `restart` 177.
+当前共 **433 项**，其中 **45 项**默认来源是动态计算；`live` 168, `next_use` 88, `restart` 177.
 
 ### 整体外观 (1)
 
@@ -398,7 +400,7 @@ Native Body 和 provider Runtime 使用 `context.InjectionApi`。先调用 `Read
 | `newPaper.todo.heightDip` · 新建待办高度 | `number` | 340 DIP | `next_use` | 新建纸片时的最终初始尺寸；不改已有纸片和旧数据缺省值。 |
 | `newPaper.todo.widthDip` · 新建待办宽度 | `number` | 280 DIP | `next_use` | 新建纸片时的最终初始尺寸；不改已有纸片和旧数据缺省值。 |
 
-### 笔记、图片与排版 (37)
+### 笔记、图片与排版 (36)
 
 | 键 / 名称 | 类型 | 默认 / 计算来源 | 生效 | 说明 |
 | --- | --- | --- | --- | --- |
@@ -417,14 +419,13 @@ Native Body 和 provider Runtime 使用 `context.InjectionApi`。先调用 `Read
 | `note.images.maxInputBytes` · 图片导入输入预算 | `integer` | 33554432 bytes | `next_use` | 导入图片原始输入数据的字节上限。 |
 | `note.images.maxStoredBytes` · 单张图片存储预算 | `integer` | 8388608 bytes | `next_use` | 单个图片资产编码后的字节上限。 |
 | `note.images.maxStoredDimensionPx` · 图片存储最大边长 | `integer` | 4096 px | `next_use` | 导入及加载图片资产时接受的最大像素边长。 |
-| `note.images.maxTotalBytes` · 图片资产总预算 | `integer` | 125829120 bytes | `next_use` | 当前图片存储所有编码图片的总字节上限。 |
 | `note.images.minTargetWidthDip` · 笔记图片目标最小宽度 | `number` | 80 DIP | `restart` | 视口计算完成后图片目标宽度的原生下限。 |
 | `note.images.resizeSettleMs` · 图片重排静置时间 | `number` | 200 ms | `restart` | 停止改变图片视口宽度后恢复高质量解码的等待时间。 |
 | `note.images.resizeToleranceDip` · 图片重排宽度容差 | `number` | 1 DIP | `live` | 图片视口宽度变化达到此距离时开始重排。 |
 | `note.images.targetWidthDip` · 笔记图片最终可用宽度 | `number` | 按当前设置与布局计算 | `restart` | 覆盖根据正文视口计算的图片目标宽度。 |
 | `note.images.verticalPaddingDip` · 笔记图片上下留白 | `number` | 7 DIP | `restart` | 图片块布局使用的竖向基础留白。 |
 | `note.images.viewportReserveDip` · 笔记图片视口预留 | `number` | 10 DIP | `restart` | 计算图片宽度时除左右留白外额外减去的空间。 |
-| `note.maxTextChars` · 笔记文字长度上限 | `integer` | 100000 chars | `restart` | 笔记编辑器与宿主写入入口共同使用的字符上限。 |
+| `note.maxTextChars` · 笔记文字长度上限 | `integer` | 100000 chars | `restart` | 单篇笔记的字符上限至少为 100,000。超过当前上限的旧笔记仍可修改和保存，字数只能保持或减少。 建议：≥ 100000. |
 | `note.padding.bottomDip` · 笔记正文下留白 | `number` | 8 DIP | `restart` | 笔记正文区域的内边距。 |
 | `note.padding.leftDip` · 笔记正文左留白 | `number` | 13 DIP | `restart` | 笔记正文区域的内边距。 |
 | `note.padding.rightDip` · 笔记正文右留白 | `number` | 6 DIP | `restart` | 笔记正文区域的内边距。 |

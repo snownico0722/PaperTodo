@@ -29,7 +29,7 @@ PaperTodo 的官方全局调参插件。主程序独立读取 `user.json`；Good
 
 页面只显示已有覆盖、运行中尚未清除的覆盖和本页草稿。“默认值”可以是当前原值、简短计算说明或 `—`；“修改后”显示拟采用的值，清除覆盖时显示 `—`。
 
-灰点表示待应用，绿点表示运行中已经采用，红点表示已保存但需要重启。修改后的数值标红只表示超出建议范围，不阻止应用。未知键会列出但不会显示为已采用。
+灰点表示待应用，绿点表示运行中已经采用，红点表示已保存但需要重启。修改值标红表示超出建议范围。单篇笔记的字数上限最低为 100,000；较小的值须重置或调高后再应用。未知键会列出但不会显示为已采用。
 
 本页的重置和微调草稿只保存按键操作。若文件在外部修改，应用会刷新文件并保留本页草稿，提示检查后再次应用，不会用旧整份副本覆盖文件。页面在打开、激活和展开时读取文件，没有后台监听或周期轮询。
 
@@ -47,4 +47,4 @@ Good Lock is the official Native companion for PaperTodo's global `user.json`. I
 
 Use **Open file** for ordinary value edits. The Paper lists overrides with their default/reference value, proposed value, and application status. Reset and adjustment actions create a pending patch; **Apply** saves that patch and adopts the latest configuration. **Restart** applies first, then uses the host's normal saved shutdown/restart. **Save as** exports the current proposed overrides without changing the active file.
 
-Gray means pending, green means adopted, and red means saved but awaiting restart. A red value is only a recommendation warning. Suggestions are limited rules, may consider related parameters, and may return no change. Unknown keys remain visible and are not marked applied. Returning to the Paper refreshes the file; the plugin has no background watcher or provider Runtime.
+Gray means pending, green means adopted, and red means saved but awaiting restart. A red value falls outside the recommended range. For the per-note length limit, reset or raise values below the 100,000-character minimum before applying. Suggestions are limited rules, may consider related parameters, and may return no change. Unknown keys remain visible and are not marked applied. Returning to the Paper refreshes the file; the plugin has no background watcher or provider Runtime.

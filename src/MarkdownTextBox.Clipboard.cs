@@ -84,13 +84,12 @@ public sealed partial class MarkdownTextBox
         if (!string.IsNullOrEmpty(clipboardText))
         {
             // This class handler runs before the legacy instance paste handler. Reject obviously
-            // unsafe text here so neither path can pay for a full Markdig parse first. Rectangle
-            // selections use a surrounding segment, so assume no replacement there for a safe
-            // conservative length preflight.
-            var selectedLength = editor.TextArea.Selection is RectangleSelection
-                ? 0
-                : editor.SelectionLength;
-            if (!editor.TryBuildSafePasteText(clipboardText, selectedLength, out _))
+            // unsafe text here before a full Markdig parse. For ordinary paste, the instance
+            // handler checks the actual newline-normalized text or the final image reference block.
+            // Rectangle selections use a surrounding segment; don't credit that whole range.
+            if (!IsSafePasteSize(clipboardText) ||
+                (editor.TextArea.Selection is RectangleSelection &&
+                 !editor.CanApplyTextReplacement(clipboardText, editor.SelectionStart, 0)))
             {
                 e.Handled = true;
                 e.CancelCommand();

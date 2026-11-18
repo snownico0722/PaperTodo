@@ -5906,27 +5906,6 @@
       }
     },
     {
-      "id": "note.images.maxTotalBytes",
-      "type": "integer",
-      "unit": "bytes",
-      "application": "next_use",
-      "default_value": 125829120,
-      "recommended_minimum": null,
-      "recommended_maximum": null,
-      "text": {
-        "zh-CN": {
-          "title": "图片资产总预算",
-          "description": "当前图片存储所有编码图片的总字节上限。",
-          "default_description": null
-        },
-        "en-US": {
-          "title": "Total image asset budget",
-          "description": "Total encoded byte limit for all images in the current image store.",
-          "default_description": null
-        }
-      }
-    },
-    {
       "id": "note.images.minTargetWidthDip",
       "type": "number",
       "unit": "DIP",
@@ -6058,17 +6037,17 @@
       "unit": "chars",
       "application": "restart",
       "default_value": 100000,
-      "recommended_minimum": null,
+      "recommended_minimum": 100000,
       "recommended_maximum": null,
       "text": {
         "zh-CN": {
           "title": "笔记文字长度上限",
-          "description": "笔记编辑器与宿主写入入口共同使用的字符上限。",
+          "description": "单篇笔记的字符上限至少为 100,000。超过当前上限的旧笔记仍可修改和保存，字数只能保持或减少。",
           "default_description": null
         },
         "en-US": {
           "title": "Note text length limit",
-          "description": "Character limit shared by the note editor and the host write APIs.",
+          "description": "The limit is at least 100,000 characters per note. Existing longer notes can be edited and saved at the same or a shorter length.",
           "default_description": null
         }
       }

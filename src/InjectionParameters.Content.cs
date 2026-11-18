@@ -39,8 +39,10 @@ internal static partial class InjectionParameters
         new("note.clipboard.imageMinWidthDip", 24d, "剪贴板图片最小宽度", "HTML 和 RTF 导出图片显示宽度的下限。", unit: "DIP", application: "next_use");
     internal static readonly InjectionParameter<double> MarkdownTaskHitPadding =
         new("markdown.tasks.hitPaddingDip", 2.0, "Markdown 勾选热区", "渲染勾选框四周额外可点击的距离。", unit: "DIP", application: "live");
+    internal const int DefaultNoteTextLimit = 100_000;
     internal static readonly InjectionParameter<int> NoteTextLimit =
-        new("note.maxTextChars", 100000, "笔记文字长度上限", "笔记编辑器与宿主写入入口共同使用的字符上限。", unit: "chars", application: "restart");
+        new("note.maxTextChars", DefaultNoteTextLimit, "笔记文字长度上限", "单篇笔记的字符上限至少为 100,000。超过当前上限的旧笔记仍可修改和保存，字数只能保持或减少。",
+            unit: "chars", application: "restart", recommendedMinimum: DefaultNoteTextLimit);
     internal static readonly InjectionParameter<int> NoteImageStoredDimension =
         new("note.images.maxStoredDimensionPx", 4096, "图片存储最大边长", "导入及加载图片资产时接受的最大像素边长。", unit: "px", application: "next_use");
     internal static readonly InjectionParameter<int> NoteImageCompressedDimension =
@@ -49,8 +51,6 @@ internal static partial class InjectionParameters
         new("note.images.maxStoredBytes", 8 * 1024 * 1024, "单张图片存储预算", "单个图片资产编码后的字节上限。", unit: "bytes", application: "next_use");
     internal static readonly InjectionParameter<int> NoteImageInputBytes =
         new("note.images.maxInputBytes", 32 * 1024 * 1024, "图片导入输入预算", "导入图片原始输入数据的字节上限。", unit: "bytes", application: "next_use");
-    internal static readonly InjectionParameter<int> NoteImageTotalBytes =
-        new("note.images.maxTotalBytes", 120 * 1024 * 1024, "图片资产总预算", "当前图片存储所有编码图片的总字节上限。", unit: "bytes", application: "next_use");
     internal static readonly InjectionParameter<long> NoteImageDecodedBytes =
         new("note.images.maxDecodedBytes", 50L * 1024 * 1024, "解码图片缓存预算", "非当前可视图片的 LRU 解码缓存字节预算。", unit: "bytes", application: "next_use");
     internal static readonly InjectionParameter<int> NoteImageCacheEntries =

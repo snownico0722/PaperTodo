@@ -379,11 +379,6 @@ internal sealed partial class McpCommandService
     private object WriteNote(JsonElement parameters)
     {
         var paperId = RequiredString(parameters, "paper_id", 64);
-        var content = RequiredString(
-            parameters,
-            "content",
-            PaperWindow.NoteTextMaxLength,
-            allowEmpty: true);
         var modeText = OptionalString(parameters, "mode", 20) ?? "fill_blank";
         var mode = modeText switch
         {
@@ -394,12 +389,16 @@ internal sealed partial class McpCommandService
                 "invalid_params",
                 "mode must be 'fill_blank', 'append', or 'replace'.")
         };
-        if (mode == NoteWriteMode.Replace)
-        {
-            var note = _commands.GetNote(paperId)
+        var note = mode == NoteWriteMode.Replace
+            ? _commands.GetNote(paperId)
                 ?? throw new McpApiException(
                     "paper_not_found",
-                    "The requested paper does not exist.");
+                    "The requested paper does not exist.")
+            : null;
+        var content = RequiredString(parameters, "content",
+            Math.Max(PaperWindow.NoteTextMaxLength, note?.Content.Length ?? 0), allowEmpty: true);
+        if (note != null)
+        {
             if (note.Content.Length == 0)
             {
                 RequireAdditiveWrites();

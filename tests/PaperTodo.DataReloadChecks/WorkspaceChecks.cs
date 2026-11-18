@@ -198,6 +198,9 @@ internal static partial class Program
     {
         using var scope = new Scope();
         var source = scope.Read();
+        // This note was legal under a higher limit before the user reset it.
+        var existingNote = new string('x', PaperWindow.NoteTextMaxLength + 1);
+        source["papers"]![0]!["content"] = existingNote;
         source["futureExtension"] = J("{\"keep\":123}");
         scope.Write(source);
         var options = new WorkspaceConfiguration { Enabled = true, Slots = [1, 2, 3, 4, 5], Active = 3 };
@@ -219,6 +222,17 @@ internal static partial class Program
         Throws<IOException>(() => failed.UpdateWorkspaceConfiguration(
             new WorkspaceConfiguration { Enabled = true, Slots = [1, 2], Active = 2 }, 7));
         Require(File.ReadAllBytes(scope.Store.FilePath).SequenceEqual(bytes), "failed catalog write replaced main");
+
+        Require(File.Exists(scope.Store.FilePath + ".tmp"), "the interrupted catalog write did not leave a temp");
+        File.Delete(scope.Store.FilePath);
+        var restoredStore = new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared);
+        var restored = restoredStore.Load();
+        Require(restoredStore.NeedsStartupRecoverySave && restored.Workspaces?.Active == 2 &&
+                restored.Papers[0].Content == existingNote,
+            "the only complete temporary snapshot was rejected after the note limit decreased");
+        restoredStore.SaveJsonSync(restoredStore.SerializeState(restored), 8);
+        Require(restoredStore.Load().Papers[0].Content == existingNote,
+            "committing the recovered snapshot lost its long note");
     }
 
     private static void WorkspaceMainRecoveryBeforeSecondaryStart()

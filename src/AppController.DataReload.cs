@@ -69,7 +69,7 @@ public sealed partial class AppController
             var version = Interlocked.Read(ref _saveVersion) + 1;
             var commit = merge
                 ? _store.PreviewExternalMerge(State, version, baselineJson)
-                : _store.ReloadExternalState(version);
+                : _store.ReloadExternalState(version, State);
             if (commit.State != null || commit.Result.Outcome == "unchanged")
                 Interlocked.Increment(ref _saveVersion);
             // Native HWND transparency is fixed at startup. The first switch into a native
@@ -129,7 +129,7 @@ public sealed partial class AppController
                 var effectiveNext = resolution.State;
                 var files = _store.CommitExternalMerge(resolution,
                     pending.ObservedDiskJson ?? throw new InvalidOperationException("Missing data merge source."),
-                    pending.SaveVersion);
+                    pending.SaveVersion, pending.Before);
                 var result = pending.Result with
                 {
                     Outcome = pending.Conflicts is { Count: > 0 } ? "conflict" : "applied",

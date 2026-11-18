@@ -330,6 +330,23 @@ internal static partial class Program
                       box.PersistentText == "user invalid write edit",
                     "An invalid note write must not commit the user's pending target text.");
 
+                // Seed what an editor reopens after removing a previously larger note limit.
+                var line = new string('x', 99) + "\n";
+                var longBody = string.Concat(Enumerable.Repeat(line, PaperWindow.NoteTextMaxLength / line.Length + 1));
+                box.Text = longBody;
+                noteWindow.CommitPendingMarkdownContentForSave();
+                c.State.McpAllowFullWrites = true;
+                var correction = "y" + longBody[1..];
+                ReplaceViaMcp(correction);
+                Check(note.Content == correction, "MCP must allow an equal-length correction to an existing long note.");
+                var shorter = correction[..^2];
+                ReplaceViaMcp(shorter);
+                Throws<PaperCommandException>(() => commands.WriteNote(
+                    new WriteNoteRequest { PaperId = note.Id, Mode = NoteWriteMode.Append, Content = "x" },
+                    PaperOperationContext.Plugin("tests.boundary")), "content_too_long");
+                Check(note.Content == shorter && box.PersistentText == shorter,
+                    "A long note can shrink, and a subsequent append cannot regrow it.");
+
                 box.Text = "user target edit";
                 Check(note.Content != box.PersistentText,
                     "Fixture must keep the target Markdown edit pending before the external write.");

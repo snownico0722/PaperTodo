@@ -26,6 +26,8 @@ Keys are case-sensitive; dots belong to the literal key name. The root must be a
 
 **Presence defines an override.** A value equal to the current default is still explicit. Remove the key and apply to restore the original source; removing a restart-bound key also requires a restart. Ordinary Settings page resets restore that page's preferences while retaining `user.json`.
 
+Set `note.maxTextChars` to 100,000 or more and restart. Removing the key restores the default of 100,000. A smaller integer from an older file is ignored at startup and must be corrected or removed before applying changes. Existing longer notes remain readable and can be saved at the same or a shorter length. Each workspace has a fixed 120 MiB budget for encoded note images.
+
 ## Read the page
 
 | Element | Meaning |
@@ -35,7 +37,7 @@ Keys are case-sensitive; dots belong to the literal key name. The root must be a
 | Gray dot | A file or draft change is pending. Unknown keys remain unadopted. |
 | Green dot | The running process has adopted the value. A `next_use` consumer reads it at its next applicable operation or construction. |
 | Red dot | Apply accepted the request, but changing the current value requires a restart. |
-| Red modified number | The value is outside its declared advisory range. It is still accepted; this is not a write limit. |
+| Red modified number | The value is outside its recommended range. For the note length limit, 100,000 is also the lowest accepted value. |
 | Per-item reset | Draft removal of that key, written by Apply. |
 | Wand | An explicit request for a limited suggestion affecting this item. A suggestion becomes a draft; no applicable rule leaves the value unchanged. |
 | Reset all | Draft removal of all global overrides, including unknown keys when applied. |
@@ -75,7 +77,7 @@ The optional draft map supplied to `Suggest` is the entire proposed override doc
 
 The following tables are exported from the typed catalog. The machine-readable catalog supplies the same keys, types, defaults, lifecycle, advisory ranges and Chinese/English descriptions. Select the required `id` and value when editing `user.json`.
 
-There are **434 entries**, including **45 dynamic default sources**; `live` 168, `next_use` 89, `restart` 177.
+There are **433 entries**, including **45 dynamic default sources**; `live` 168, `next_use` 88, `restart` 177.
 
 ### Overall appearance (1)
 
@@ -398,7 +400,7 @@ There are **434 entries**, including **45 dynamic default sources**; `live` 168,
 | `newPaper.todo.heightDip` · New todo paper height | `number` | 340 DIP | `next_use` | Final initial dimension for a new paper; existing papers and legacy-data defaults stay unchanged. |
 | `newPaper.todo.widthDip` · New todo paper width | `number` | 280 DIP | `next_use` | Final initial dimension for a new paper; existing papers and legacy-data defaults stay unchanged. |
 
-### Notes, images and typography (37)
+### Notes, images and typography (36)
 
 | Key / title | Type | Default / calculation | When | Description |
 | --- | --- | --- | --- | --- |
@@ -417,14 +419,13 @@ There are **434 entries**, including **45 dynamic default sources**; `live` 168,
 | `note.images.maxInputBytes` · Image import input budget | `integer` | 33554432 bytes | `next_use` | Byte limit for original image data supplied during import. |
 | `note.images.maxStoredBytes` · Single image storage budget | `integer` | 8388608 bytes | `next_use` | Maximum encoded byte size of one image asset. |
 | `note.images.maxStoredDimensionPx` · Stored image maximum dimension | `integer` | 4096 px | `next_use` | Maximum pixel dimension accepted when importing or loading image assets. |
-| `note.images.maxTotalBytes` · Total image asset budget | `integer` | 125829120 bytes | `next_use` | Total encoded byte limit for all images in the current image store. |
 | `note.images.minTargetWidthDip` · Note image minimum target width | `number` | 80 DIP | `restart` | Built-in lower bound for the image target width after viewport calculations. |
 | `note.images.resizeSettleMs` · Image resize settling delay | `number` | 200 ms | `restart` | Wait after image viewport resizing stops before resuming high-quality decoding. |
 | `note.images.resizeToleranceDip` · Image reflow width tolerance | `number` | 1 DIP | `live` | Reflow images once their viewport width changes by this amount. |
 | `note.images.targetWidthDip` · Final note image available width | `number` | Computed from current settings and layout | `restart` | Override the target image width calculated from the content viewport. |
 | `note.images.verticalPaddingDip` · Note image vertical padding | `number` | 7 DIP | `restart` | Base vertical padding used by image block layout. |
 | `note.images.viewportReserveDip` · Note image viewport reserve | `number` | 10 DIP | `restart` | Extra space subtracted from image width in addition to left and right padding. |
-| `note.maxTextChars` · Note text length limit | `integer` | 100000 chars | `restart` | Character limit shared by the note editor and the host write APIs. |
+| `note.maxTextChars` · Note text length limit | `integer` | 100000 chars | `restart` | The limit is at least 100,000 characters per note. Existing longer notes can be edited and saved at the same or a shorter length. Advisory: ≥ 100000. |
 | `note.padding.bottomDip` · Note content bottom padding | `number` | 8 DIP | `restart` | Inner padding of the note content area. |
 | `note.padding.leftDip` · Note content left padding | `number` | 13 DIP | `restart` | Inner padding of the note content area. |
 | `note.padding.rightDip` · Note content right padding | `number` | 6 DIP | `restart` | Inner padding of the note content area. |
