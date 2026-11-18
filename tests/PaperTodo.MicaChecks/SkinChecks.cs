@@ -127,6 +127,7 @@ internal static class SkinChecks
                            TopAlpha(enhanced, 1) == 255 && TopAlpha(enhanced, 2) == 255,
                 $"{theme}: enabling enhancement adds a translucent outer rim to the same 2 DIP focus stroke");
         }
+        controller.State.EnhanceCapsuleActiveOutline = false;
     }
 
     private static void CheckLiveSwitch(AppController controller)
