@@ -21,6 +21,7 @@ internal static class SkinChecks
             controller.State.HideSurfaceOutline = false;
             CheckAuxiliaryContent(controller);
             CheckLiveSwitch(controller);
+            CheckRestoredEdgeResize(controller);
             if (!SystemParameters.HighContrast) CheckHiddenTitleWithoutOutline(controller);
         }
         finally
@@ -115,6 +116,49 @@ internal static class SkinChecks
             }
         }
         finally { window.CloseForReal(); controller.State.Papers.Remove(paper); }
+    }
+
+    private static void CheckRestoredEdgeResize(AppController controller)
+    {
+        var state = controller.State;
+        var original = (state.PaperSkin, state.UseDeepCapsuleMode,
+            state.RememberDeepCapsuleExpandedPosition, state.ShowDeepCapsuleWhileExpanded);
+        var paper = new PaperData
+        {
+            Type = PaperTypes.Todo, IsVisible = true, IsCollapsed = true,
+            X = 50, Y = 50, Width = 280, Height = 240, CapsuleSide = DeepCapsuleSides.Right,
+            DeepCapsuleExpandedSide = DeepCapsuleSides.Right, DeepCapsuleExpandedDpiScale = 1.25,
+            DeepCapsuleExpandedX = 80, DeepCapsuleExpandedY = 80,
+            DeepCapsuleExpandedWidth = 360, DeepCapsuleExpandedHeight = 320
+        };
+        try
+        {
+            state.PaperSkin = PaperSkins.Mica;
+            state.UseDeepCapsuleMode = true;
+            state.RememberDeepCapsuleExpandedPosition = true;
+            state.ShowDeepCapsuleWhileExpanded = true;
+            Theme.Invalidate();
+            state.Papers.Add(paper);
+            controller.ShowPaper(paper, activate: false);
+            Program.Pump();
+            var window = Application.Current.Windows.OfType<PaperWindow>().Single(w => w.PaperId == paper.Id);
+            Program.Assert(window.IsDeepCapsuleSlotVisible && new WindowInteropHelper(window).Handle == IntPtr.Zero,
+                "restored capsule must start with its paper HWND still uncreated");
+            window.ExpandForProgrammaticOpen();
+            Program.Pump();
+            Program.Assert(Math.Abs(window.ActualWidth - 360) <= 1 && Math.Abs(window.ActualHeight - 320) <= 1,
+                "first expansion must restore the saved paper size");
+            DragFromPaperCorner(window, "first Mica expansion with remembered geometry");
+            Program.Assert(paper.DeepCapsuleExpandedWidth > 360 && paper.DeepCapsuleExpandedHeight > 320 &&
+                paper.Width == 280 && paper.Height == 240, "resize updates the remembered expanded size independently");
+        }
+        finally
+        {
+            controller.DeletePaper(paper);
+            (state.PaperSkin, state.UseDeepCapsuleMode,
+                state.RememberDeepCapsuleExpandedPosition, state.ShowDeepCapsuleWhileExpanded) = original;
+            Theme.Invalidate();
+        }
     }
 
     internal static void CheckLayeredResize(AppController controller)
