@@ -35,6 +35,9 @@ internal sealed class WorkspaceCatalog
     internal StateStore MainStore => StoreFor(1);
     internal WorkspacePaths PathsFor(int number) => new(_directory, number);
 
+    internal int FindNewWorkspaceSlot() => Enumerable.Range(2, 4)
+        .FirstOrDefault(number => !Options.ContainsSlot(number) && !StoreFor(number).HasWorkspaceCoreFiles());
+
     private AppState LoadWorkspace(StateStore store, out bool initializedEmpty) =>
         store.Load(out initializedEmpty, _confirmRecovery == null ? null :
             timestamp => _confirmRecovery(store, timestamp), _confirmBackupReadFailure == null ? null :

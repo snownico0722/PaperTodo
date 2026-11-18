@@ -530,7 +530,7 @@ Enable **Advanced** in the bottom-left of Settings to access the **Labs** page:
 
 ### 8.6 Workspaces
 
-Enable workspaces in "Settings → Spaces & Data". By default only the **Main workspace (1)** exists; you can create up to **5 workspaces** (secondary workspaces are numbered `2`–`5`), each storing its own papers, layout, images, and plugin data.
+Enable workspaces in "Settings → Spaces & Data". By default only the **Main workspace (1)** exists; you can create up to **5 workspaces** (secondary workspaces are numbered `2`–`5`), each storing its own papers, layout, images, and plugin data. Creating a workspace skips numbers with an existing data file, fixed backup or interrupted write. If all remaining numbers have such files, a notice lists those numbers.
 
 - **Manage and switch**: Click a workspace card to select it, then click **Confirm switch**. Use the pencil (`✎`) beside a name to rename it and the checkmark (`✓`) to save. Renaming never changes numbered data filenames.
 - **Quick switching**: The title-bar workspace button cycles to the next workspace by default. Enable **Choose by name** to open the full-name menu. The same **Switch, Move to, and Create new workspace** actions appear in the overflow and ordinary/edge-capsule workspace menus. A dot marks the current workspace; switching or moving to it is disabled. Moving a paper and creating a workspace do not switch the active workspace. An expanded paper's menu does not duplicate a visible title-bar button; overflowed buttons and capsules without a title bar retain the menu entry. The explicit Hide option still hides the corresponding shortcut.

@@ -149,7 +149,26 @@ internal static partial class Program
                 managed.DisplayName(1) == Strings.Format("WorkspaceSlotLabel", 1) &&
                 managed.TopBarNamePicker,
             "noncontiguous named workspace catalog lost its membership or display mode");
+        // Secondary 2 is unlisted. Exercise each core recovery source separately
+        // so a lone backup or orphan cannot be mistaken for a brand-new slot.
         var secondFiles = catalog.PathsFor(2);
+        foreach (var path in new[] { secondFiles.Data, secondFiles.Backup, secondFiles.Data + ".tmp",
+                     secondFiles.Backup + ".tmp", secondFiles.Data + ".orphaned.test.tmp",
+                     secondFiles.Backup + ".orphaned.test.tmp" })
+        {
+            File.WriteAllText(path, "retained");
+            Require(catalog.FindNewWorkspaceSlot() == 3 && File.ReadAllText(path) == "retained",
+                "workspace creation must skip the unlisted core file " + Path.GetFileName(path));
+            File.Delete(path);
+        }
+        Directory.CreateDirectory(secondFiles.PluginData);
+        File.WriteAllText(secondFiles.Images, "existing auxiliary data");
+        Require(catalog.FindNewWorkspaceSlot() == 2, "auxiliary files alone must not reserve a slot");
+        catalog.AdoptOptions(new WorkspaceConfiguration { Enabled = true, Slots = [1, 3, 4, 5] });
+        File.WriteAllText(secondFiles.Backup, "retained");
+        Require(catalog.FindNewWorkspaceSlot() == 0 && !catalog.Options.ContainsSlot(2),
+            "creation with retained files in the last unlisted slot must preserve the catalog");
+
         var deletedArtifacts = new[]
         {
             secondFiles.Data, secondFiles.Data + ".tmp",
@@ -843,8 +862,8 @@ internal static partial class Program
         await Until(() => selector.ActualWidth > 0, "named selector did not open");
         RequireComplete(selector);
         WorkspaceMenuAction(selector, "CreateWorkspace").RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
-        await Until(() => controller.WorkspaceOptions.ContainsSlot(2) && !controller.IsWorkspaceSwitching,
-            "named create action did not add a workspace");
+        await Until(() => controller.WorkspaceOptions.ContainsSlot(4) && !controller.IsWorkspaceSwitching,
+            "named creation did not skip the unlisted workspaces with retained files");
         Require(controller.WorkspaceNumber == 1 && ReferenceEquals(controller.State, state) &&
                 selector.IsOpen && selector.IsKeyboardFocusWithin,
             "named creation switched workspace, closed the selector or lost its focus");
@@ -863,7 +882,7 @@ internal static partial class Program
         workspace = WorkspaceEntry(overflow);
         workspace.IsSubmenuOpen = true;
         WorkspaceMenuAction(workspace, "CreateWorkspace").RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
-        await Until(() => controller.WorkspaceOptions.ContainsSlot(3) && !controller.IsWorkspaceSwitching,
+        await Until(() => controller.WorkspaceOptions.ContainsSlot(5) && !controller.IsWorkspaceSwitching,
             "submenu create action did not add a workspace");
         Require(controller.WorkspaceNumber == 1 && overflow.IsOpen && workspace.IsSubmenuOpen,
             "submenu creation switched workspaces or dismissed the menu");
@@ -1386,6 +1405,19 @@ internal static partial class Program
             Require(await controller.CycleWorkspaceAsync() && controller.WorkspaceNumber == 3, "cycle to3 failed");
             Require(await controller.CycleWorkspaceAsync() && controller.WorkspaceNumber == 1, "cycle did not wrap at the last active slot");
 
+            // Both unlisted slots still have core data. Closing the creation notice
+            // preserves their files and the existing three-slot catalog.
+            var catalog = Field<WorkspaceCatalog>(controller, "_workspaceCatalog");
+            Require(!await WithWorkspaceFailureDialog(async () => await controller.CreateWorkspaceAsync() != 0,
+                    dialog => Require(FailureDialogNodes(dialog).OfType<TextBlock>().Any(block =>
+                        block.Text == Strings.Format("WorkspaceCreateSlotsOccupied", "4, 5")),
+                        "the creation notice did not identify the occupied slots"), "WorkspaceCreateNew") &&
+                    controller.WorkspaceOptions.SlotNumbers.SequenceEqual([1, 2, 3]) &&
+                    File.Exists(fourthDataPath) && File.Exists(fifthPath),
+                "creation silently adopted an old workspace or changed its files");
+            catalog.DeleteInactiveSlotFiles(4);
+            catalog.DeleteInactiveSlotFiles(5);
+
             // Only existing workspaces and one create action occupy the row.
             // Creating a slot never switches away and reuses the first missing number.
             ContentPresenter TraySegmentHost(MenuItem item) =>
@@ -1455,15 +1487,15 @@ internal static partial class Program
                 "five full workspace slots still showed a create action or switched workspaces");
 
             var withGap = controller.WorkspaceOptions.Normalized();
-            withGap.Slots.Remove(2);
+            withGap.Slots.Remove(4);
             Require(await controller.ChangeWorkspaceConfigurationAsync(withGap),
                 "could not remove an intermediate slot for tray gap test");
             var gapTiles = TraySlots(TrayForCreate());
             Require(gapTiles[^1].Child is System.Windows.Shapes.Path &&
-                    ((TextBlock)gapTiles[1].Child).Text == "3",
+                    ((TextBlock)gapTiles[3].Child).Text == "5",
                 "tray did not offer to reuse the first missing workspace number");
             ClickTraySlot(gapTiles[^1]);
-            await Until(() => controller.WorkspaceOptions.ContainsSlot(2) && !controller.IsWorkspaceSwitching,
+            await Until(() => controller.WorkspaceOptions.ContainsSlot(4) && !controller.IsWorkspaceSwitching,
                 "tray plus did not reuse the missing workspace number");
             Require(controller.WorkspaceNumber == 1 && ReferenceEquals(controller.State, originalWorkspaceState),
                 "recreating an intermediate workspace unexpectedly switched workspace");

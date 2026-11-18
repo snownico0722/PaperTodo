@@ -51,6 +51,12 @@ public sealed partial class StateStore
 
     private PendingStartupRecovery? _pendingStartupRecovery;
 
+    // Creating a new numbered workspace must not adopt an unlisted document that
+    // Load would open or recover. History ZIPs and auxiliary files alone do not count.
+    internal bool HasWorkspaceCoreFiles() =>
+        FileExistsForCollection(FilePath) || FileExistsForCollection(BackupPath) ||
+        InterruptedWritePaths().Length != 0;
+
     private string[] InterruptedWritePaths()
     {
         var directory = Path.GetDirectoryName(FilePath)!;

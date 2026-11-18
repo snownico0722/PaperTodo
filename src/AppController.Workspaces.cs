@@ -93,9 +93,26 @@ public sealed partial class AppController
     internal async Task<int> CreateWorkspaceAsync()
     {
         var options = WorkspaceOptions.Normalized();
-        if (!options.Enabled) return 0;
-        var slot = Enumerable.Range(2, 4).FirstOrDefault(number => !options.ContainsSlot(number));
-        if (slot == 0) return 0;
+        if (!options.Enabled || options.SlotNumbers.Count == 5) return 0;
+        int slot;
+        try
+        {
+            slot = _workspaceCatalog.FindNewWorkspaceSlot();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
+        {
+            ReportWorkspaceError(WorkspaceFailureMessage.For(ex));
+            return 0;
+        }
+        if (slot == 0)
+        {
+            var unlisted = Enumerable.Range(2, 4).Where(number => !options.ContainsSlot(number));
+            var owner = _settingsWindow is { IsVisible: true } ? _settingsWindow :
+                Application.Current.Windows.OfType<Window>().FirstOrDefault(window => window.IsActive);
+            PaperNoticeDialog.Show(owner, Strings.Get("WorkspaceCreateNew"),
+                Strings.Format("WorkspaceCreateSlotsOccupied", string.Join(", ", unlisted)));
+            return 0;
+        }
         options.Slots = options.SlotNumbers.Append(slot).OrderBy(number => number).ToList();
         return await ChangeWorkspaceConfigurationAsync(options) ? slot : 0;
     }

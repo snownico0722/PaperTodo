@@ -1762,6 +1762,9 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
   <data name="WorkspaceMoveGroup" xml:space="preserve">
     <value>移動先</value>
   </data>
+  <data name="WorkspaceCreateSlotsOccupied" xml:space="preserve">
+    <value>未使用のワークスペース番号（{0}）には、すべて以前のデータが残っています。いずれかの番号のデータファイル、固定バックアップ、一時ファイルをバックアップして別の場所に移してから、新しいワークスペースを作成してください。</value>
+  </data>
   <data name="WorkspaceCreateNew" xml:space="preserve">
     <value>新しいワークスペースを作成</value>
   </data>

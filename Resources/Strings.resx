@@ -1841,6 +1841,9 @@
   <data name="WorkspaceMoveGroup" xml:space="preserve">
     <value>移动到</value>
   </data>
+  <data name="WorkspaceCreateSlotsOccupied" xml:space="preserve">
+    <value>所有未使用的工作区编号（{0}）都留有旧数据。请先备份并移走这些编号中任意一个的工作区数据文件、固定备份和临时文件，再新建工作区。</value>
+  </data>
   <data name="WorkspaceCreateNew" xml:space="preserve">
     <value>创建新工作区</value>
   </data>

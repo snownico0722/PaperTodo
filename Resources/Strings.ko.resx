@@ -1762,6 +1762,9 @@ PaperTodo를 수동으로 다시 여세요. 문제가 반복되면 PC를 다시 
   <data name="WorkspaceMoveGroup" xml:space="preserve">
     <value>이동 대상</value>
   </data>
+  <data name="WorkspaceCreateSlotsOccupied" xml:space="preserve">
+    <value>사용하지 않는 작업 공간 번호({0})에 모두 이전 데이터가 남아 있습니다. 새 작업 공간을 만들려면 이 번호 중 하나의 데이터 파일, 고정 백업 및 임시 파일을 백업한 후 다른 위치로 옮기세요.</value>
+  </data>
   <data name="WorkspaceCreateNew" xml:space="preserve">
     <value>새 작업 공간 만들기</value>
   </data>
