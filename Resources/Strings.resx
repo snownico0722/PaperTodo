@@ -1842,7 +1842,7 @@
     <value>移动到</value>
   </data>
   <data name="WorkspaceCreateSlotsOccupied" xml:space="preserve">
-    <value>未使用的工作区编号（{0}）都留有旧数据。请从中选一个编号（下文用 N 表示），备份并移走以下现有文件和文件夹，再新建工作区。&#xA;• 工作区数据 dataN.json、固定备份 dataN.backup.json，以及该编号的临时文件、恢复副本和冲突记录&#xA;• 图片库 note-assetsN.lmdb&#xA;• 整个插件数据文件夹 plugins/dataN/</value>
+    <value>没有空闲编号可新建工作区。编号 {0} 仍有无法确认的数据，已保留原文件。</value>
   </data>
   <data name="WorkspaceCreateNew" xml:space="preserve">
     <value>创建新工作区</value>

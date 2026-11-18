@@ -1763,7 +1763,7 @@ Resolve the file access problem and retry, or choose “Rebuild workspace” to 
     <value>Move to</value>
   </data>
   <data name="WorkspaceCreateSlotsOccupied" xml:space="preserve">
-    <value>All unused workspace numbers ({0}) still have old data. Choose one number (N below). Before creating a workspace, back up and move any of these files and folders that exist:&#xA;• Workspace data (dataN.json), its backup (dataN.backup.json), and any temporary files, recovery copies, or conflict records for that number&#xA;• Image library (note-assetsN.lmdb)&#xA;• The entire plugin data folder (plugins/dataN/)</value>
+    <value>No number is available for a new workspace. Workspace numbers {0} still have data that could not be verified. Their files have been kept.</value>
   </data>
   <data name="WorkspaceCreateNew" xml:space="preserve">
     <value>Create new workspace</value>

@@ -94,18 +94,14 @@ public sealed partial class AppController
     {
         var options = WorkspaceOptions.Normalized();
         if (!options.Enabled || options.SlotNumbers.Count == 5) return 0;
-        int slot;
-        try
-        {
-            slot = _workspaceCatalog.FindNewWorkspaceSlot();
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
-        {
-            ReportWorkspaceError(WorkspaceFailureMessage.For(ex));
-            return 0;
-        }
+        // Files may also have been restored since startup. Register them before
+        // selecting a genuinely empty number for the requested new workspace.
+        var discovered = _workspaceCatalog.IncludeStoredWorkspaces(options);
+        var slot = _workspaceCatalog.FindNewWorkspaceSlot(options);
         if (slot == 0)
         {
+            if (discovered && !await ChangeWorkspaceConfigurationAsync(options)) return 0;
+            if (options.SlotNumbers.Count == 5) return 0;
             var unlisted = Enumerable.Range(2, 4).Where(number => !options.ContainsSlot(number));
             var owner = _settingsWindow is { IsVisible: true } ? _settingsWindow :
                 Application.Current.Windows.OfType<Window>().FirstOrDefault(window => window.IsActive);

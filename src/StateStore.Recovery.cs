@@ -51,11 +51,36 @@ public sealed partial class StateStore
 
     private PendingStartupRecovery? _pendingStartupRecovery;
 
-    // Creating a new numbered workspace must not adopt an unlisted document that
-    // Load would open or recover. History ZIPs and auxiliary files alone do not count.
-    internal bool HasWorkspaceCoreFiles() =>
-        FileExistsForCollection(FilePath) || FileExistsForCollection(BackupPath) ||
-        InterruptedWritePaths().Length != 0;
+    // Probe with the same core reader as Load, without opening a session, staging
+    // recovery, or cleaning up files belonging to an inactive workspace.
+    internal bool HasReadableWorkspace()
+    {
+        try { return Readable(FilePath) || Readable(BackupPath); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
+        {
+            return false; // An inaccessible primary also blocks normal backup recovery.
+        }
+
+        static bool Readable(string path)
+        {
+            if (!FileExistsForCollection(path)) return false;
+            try { return ReadCoreState(DecodeStateBytes(File.ReadAllBytes(path))) != null; }
+            catch (JsonException) { return false; }
+        }
+    }
+
+    internal bool CanCreateWorkspace()
+    {
+        try
+        {
+            return !FileExistsForCollection(FilePath) && !FileExistsForCollection(BackupPath) &&
+                InterruptedWritePaths().Length == 0;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
+        {
+            return false; // A single inaccessible number must not block the other numbers.
+        }
+    }
 
     private string[] InterruptedWritePaths()
     {

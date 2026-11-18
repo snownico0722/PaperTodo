@@ -22,6 +22,7 @@ internal static partial class Program
         {
             ("explicit state field ownership and fail-closed inheritance", WorkspaceFieldScopeChecks),
             ("legacy main and numbered paths", WorkspacePathsAndLegacy),
+            ("recover missing workspace numbers from readable core files", WorkspaceCatalogDiscovery),
             ("main catalog updates preserve content and fence old writers", WorkspaceMetadataWrites),
             ("main backup recovery persists before secondary activation", WorkspaceMainRecoveryBeforeSecondaryStart),
             ("follow-main overlay preserves dormant preferences and layout", WorkspaceInheritance),
@@ -157,16 +158,16 @@ internal static partial class Program
                      secondFiles.Backup + ".orphaned.test.tmp" })
         {
             File.WriteAllText(path, "retained");
-            Require(catalog.FindNewWorkspaceSlot() == 3 && File.ReadAllText(path) == "retained",
+            Require(catalog.FindNewWorkspaceSlot(catalog.Options) == 3 && File.ReadAllText(path) == "retained",
                 "workspace creation must skip the unlisted core file " + Path.GetFileName(path));
             File.Delete(path);
         }
         Directory.CreateDirectory(secondFiles.PluginData);
         File.WriteAllText(secondFiles.Images, "existing auxiliary data");
-        Require(catalog.FindNewWorkspaceSlot() == 2, "auxiliary files alone must not reserve a slot");
+        Require(catalog.FindNewWorkspaceSlot(catalog.Options) == 2, "auxiliary files alone must not reserve a slot");
         catalog.AdoptOptions(new WorkspaceConfiguration { Enabled = true, Slots = [1, 3, 4, 5] });
         File.WriteAllText(secondFiles.Backup, "retained");
-        Require(catalog.FindNewWorkspaceSlot() == 0 && !catalog.Options.ContainsSlot(2),
+        Require(catalog.FindNewWorkspaceSlot(catalog.Options) == 0 && !catalog.Options.ContainsSlot(2),
             "creation with retained files in the last unlisted slot must preserve the catalog");
 
         var deletedArtifacts = new[]
@@ -211,6 +212,73 @@ internal static partial class Program
                 File.ReadAllText(otherWorkspaceArtifact) == "keep workspace 3" &&
                 File.ReadAllText(similarlyNamedArtifact) == "keep unrelated file",
             "deleting a workspace left storage artifacts or affected other workspaces");
+    }
+
+    private static void WorkspaceCatalogDiscovery()
+    {
+        using var scope = new Scope();
+        var mainDocument = scope.Read();
+        mainDocument["workspaces"] = J("""{"enabled":true,"slots":[1],"names":{"2":"Study"}}""");
+        scope.Write(mainDocument);
+        var oldMain = File.ReadAllText(scope.Store.FilePath);
+        var second = new WorkspacePaths(scope.DirectoryPath, 2);
+        var third = new WorkspacePaths(scope.DirectoryPath, 3);
+        var fourth = new WorkspacePaths(scope.DirectoryPath, 4);
+        var fifth = new WorkspacePaths(scope.DirectoryPath, 5);
+        const string empty = """{"papers":[]}""";
+        const string backup = """{"papers":[{"id":"restored","content":"third workspace"}]}""";
+        File.WriteAllText(second.Data, empty);
+        File.WriteAllText(second.Data + ".orphaned.still-here.tmp", empty);
+        File.WriteAllText(third.Data, "{}");
+        File.WriteAllText(third.Backup, backup);
+        Directory.CreateDirectory(fourth.PluginData);
+        File.WriteAllText(fourth.Images, "images alone");
+        File.WriteAllText(fifth.Data + ".tmp", empty);
+
+        WorkspaceCatalog Start() => new(scope.DirectoryPath, DurableAtomicFileWriter.Shared);
+        var catalog = Start();
+        var main = catalog.OpenInitial();
+        Require(main.Paths.Number == 1 && main.State.Workspaces == catalog.Options &&
+                catalog.Options.SlotNumbers.SequenceEqual([1, 2, 3]) &&
+                catalog.Options.DisplayName(2) == "Study" &&
+                catalog.Options.DisplayName(3) == Strings.Format("WorkspaceSlotLabel", 3) &&
+                catalog.FindNewWorkspaceSlot(catalog.Options) == 4,
+            "an older main catalog did not recover both secondary slots before creation");
+        Require(File.ReadAllText(scope.Store.FilePath) == oldMain &&
+                File.Exists(second.Data + ".orphaned.still-here.tmp") &&
+                File.ReadAllText(third.Data) == "{}" && File.ReadAllText(third.Backup) == backup &&
+                !catalog.StoreFor(3).NeedsStartupRecoverySave && File.Exists(fifth.Data + ".tmp"),
+            "catalog discovery wrote a file, cleaned a temporary source or staged recovery");
+        var reopened = catalog.Open(3, catalog.Options, main.State);
+        Require(reopened.State.Papers.Single().Content == "third workspace" &&
+                reopened.Store.NeedsStartupRecoverySave,
+            "opening the rediscovered slot failed to recover its own paper from the fixed backup");
+
+        File.Delete(third.Data);
+        File.WriteAllText(fourth.Data, "{}");
+        var external = scope.Store.ReloadExternalState(2).State!;
+        external.Workspaces!.Enabled = false;
+        catalog.AcceptReload(main, external);
+        Require(catalog.Options.SlotNumbers.SequenceEqual([1, 2, 3]) && !catalog.Options.Enabled &&
+                catalog.Options.Active == 1 && catalog.FindNewWorkspaceSlot(catalog.Options) == 0 &&
+                File.ReadAllText(fourth.Data) == "{}",
+            "reload must accept a backup-only slot, respect explicit disable and reserve incomplete slots");
+        mainDocument.Remove("workspaces");
+        scope.Write(mainDocument);
+        using (var locked = new FileStream(second.Data, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+        {
+            File.WriteAllText(second.Backup, empty);
+            var legacy = Start();
+            Require(legacy.OpenInitial().Paths.Number == 1 && legacy.Options.Enabled &&
+                    legacy.Options.SlotNumbers.SequenceEqual([1, 3]),
+                "a locked primary must keep its slot unavailable without blocking a later backup-only slot");
+        }
+        var retried = Start();
+        Require(retried.Options.SlotNumbers.SequenceEqual([1, 2, 3]),
+            "an unlocked workspace must reappear when the catalog is next loaded");
+        retried.DeleteInactiveSlotFiles(2);
+        Require(Start().Options.SlotNumbers.SequenceEqual([1, 3]),
+            "discovering old files must not resurrect a workspace after its files were deleted");
     }
 
     private static void WorkspaceMetadataWrites()
@@ -863,7 +931,7 @@ internal static partial class Program
         RequireComplete(selector);
         WorkspaceMenuAction(selector, "CreateWorkspace").RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
         await Until(() => controller.WorkspaceOptions.ContainsSlot(4) && !controller.IsWorkspaceSwitching,
-            "named creation did not skip the unlisted workspaces with retained files");
+            "named creation did not register the restored workspaces and create the next slot");
         Require(controller.WorkspaceNumber == 1 && ReferenceEquals(controller.State, state) &&
                 selector.IsOpen && selector.IsKeyboardFocusWithin,
             "named creation switched workspace, closed the selector or lost its focus");
@@ -1405,16 +1473,17 @@ internal static partial class Program
             Require(await controller.CycleWorkspaceAsync() && controller.WorkspaceNumber == 3, "cycle to3 failed");
             Require(await controller.CycleWorkspaceAsync() && controller.WorkspaceNumber == 1, "cycle did not wrap at the last active slot");
 
-            // Both unlisted slots still have core data. Closing the creation notice
-            // preserves their files and the existing three-slot catalog.
+            // New also picks up complete files restored during this session.
             var catalog = Field<WorkspaceCatalog>(controller, "_workspaceCatalog");
-            Require(!await WithWorkspaceFailureDialog(async () => await controller.CreateWorkspaceAsync() != 0,
-                    dialog => Require(FailureDialogNodes(dialog).OfType<TextBlock>().Any(block =>
-                        block.Text == Strings.Format("WorkspaceCreateSlotsOccupied", "4, 5")),
-                        "the creation notice did not identify the occupied slots"), "WorkspaceCreateNew") &&
-                    controller.WorkspaceOptions.SlotNumbers.SequenceEqual([1, 2, 3]) &&
-                    File.Exists(fourthDataPath) && File.Exists(fifthPath),
-                "creation silently adopted an old workspace or changed its files");
+            var fourthBytes = File.ReadAllBytes(fourthDataPath);
+            var fifthBytes = File.ReadAllBytes(fifthPath);
+            Require(await controller.CreateWorkspaceAsync() == 0 && controller.WorkspaceNumber == 1 &&
+                    controller.WorkspaceOptions.SlotNumbers.SequenceEqual([1, 2, 3, 4, 5]) &&
+                    fourthBytes.SequenceEqual(File.ReadAllBytes(fourthDataPath)) &&
+                    fifthBytes.SequenceEqual(File.ReadAllBytes(fifthPath)),
+                "fully occupied slots should reappear without creating or rewriting a workspace");
+            Require(await controller.ChangeWorkspaceConfigurationAsync(reduced),
+                "could not remove the rediscovered slots for the deletion fixture");
             catalog.DeleteInactiveSlotFiles(4);
             catalog.DeleteInactiveSlotFiles(5);
 
