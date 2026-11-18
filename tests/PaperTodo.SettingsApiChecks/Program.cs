@@ -304,6 +304,8 @@ internal static partial class Program
         Check(!service.Get("appearance.capsule_outline_enhancement").Value.GetBoolean() &&
               !legacyState.EnhanceCapsuleActiveOutline,
             "Capsule outline enhancement defaults off for new and pre-option configurations.");
+        Check(WorkspaceFieldScopes.Inherits(nameof(AppState.EnhanceCapsuleActiveOutline)),
+            "Capsule outline preference follows the main workspace when configured to inherit settings.");
         service.Set("appearance.capsule_outline_enhancement", Json(true));
         var outlinedState = JsonSerializer.Deserialize<AppState>(
             JsonSerializer.Serialize(c.State, StateStore.JsonOptions), StateStore.JsonOptions)!;
