@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Reflection;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -322,10 +323,28 @@ internal static partial class WorkbenchChecks
         var desk = (WorkbenchWindow)Member(controller, "_workbenchWindow");
         await Until(() => desk.HostedPaperCount == 3, "Ordinary desktop papers were not leased");
 
-        // Simulate the suspend/reborrow boundary used by a hot data reload.
-        desk.SuspendWorkspace();
-        desk.ResumeWorkspace();
-        await Until(() => desk.HostedPaperCount == 3, "Reborrow after reload failed");
+        // Merge an independent disk change while a card title is still being edited.
+        controller.SaveNow(sync: true);
+        var baseline = File.ReadAllText(store.FilePath);
+        var external = JsonNode.Parse(baseline)!;
+        external["papers"]!.AsArray().Single(p => (string?)p!["id"] == "note-b")!["title"] = "From disk";
+        File.WriteAllText(store.FilePath, external.ToJsonString());
+
+        var cards = (System.Collections.IDictionary)Member(Member(desk, "ActiveScene"), "Cards");
+        var title = (TextBox)Member(cards["note-a"]!, "Title");
+        title.Visibility = Visibility.Visible;
+        Assert(title.Focus() && title.IsKeyboardFocusWithin, "Card title editor did not take focus");
+        title.Text = "Local draft";
+        Assert(controller.FindPaper("note-a")!.Title == "Research", "Test requires an uncommitted title");
+        var merge = controller.PaperCommands.MergeData(PaperOperationContext.Mcp(), baseline);
+        Assert(merge.ConflictCount == 0, "Independent titles produced a merge conflict");
+        await Until(() => !controller.IsDataReloading && desk.HostedPaperCount == 3, "Reborrow after merge failed");
+        Assert(controller.PaperCommands.GetDataReloadStatus().LastResult?.Applied == true, "Merge failed");
+        var saved = StateStore.ReadWorkbenchOverview(store.FilePath)!;
+        foreach (var state in new[] { controller.State, saved })
+            Assert(state.Papers.Single(p => p.Id == "note-a").Title == "Local draft" &&
+                state.Papers.Single(p => p.Id == "note-b").Title == "From disk",
+                "Merge must preserve both the focused title draft and the other paper's disk edit");
 
         // An associated, collapsed desktop paper must be navigated inside the
         // desk without unfolding it, closing the desk or modifying desktop XY.
