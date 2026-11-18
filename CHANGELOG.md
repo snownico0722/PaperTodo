@@ -97,6 +97,7 @@ This log is written for general and power users alike. It focuses on user-facing
 
 #### Fixes, Performance & Other Improvements
 
+- When anonymous usage statistics are enabled, their periodic disk writes now run in the background so slow storage does not hold up the interface.
 - Moving or resizing PaperTodo windows no longer triggers repeated fullscreen avoidance checks.
 - Fixed transparent note images turning black or opaque after copying and pasting them; fully transparent PNG images also retain their transparency.
 - **Todo performance and editing continuity**: Startup, paper opening and bulk paste involve less waiting when a Todo paper contains many items. Per-row context menus are created on demand, with mouse right-click, the Menu key and `Shift+F10` working on the first attempt. Reordering and undo/redo update only changed rows to reduce stutter while preserving editors, keyboard focus and text selections. Show/Hide All avoids rebuilding unchanged linked-todo rows and preserves text selections and undo history.
