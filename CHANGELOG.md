@@ -75,6 +75,8 @@ This log is written for general and power users alike. It focuses on user-facing
 
 #### Plugins, MCP & Codex
 
+- **Plugin management.** Enable or disable individual plugins in **Plugins** settings and see whether each is disabled, enabled but not running, or running. Disabling a plugin preserves its papers and data. A new action restarts PaperTodo and rescans plugins.
+- **Webhook event forwarding plugin.** A new, separately installable sample plugin forwards paper, todo and note changes, plus upcoming todo reminder events, to HTTP(S) endpoints configured for each event type. Route changes take effect immediately.
 - **Plugin API 2.3.** Plugins targeting 2.1 or 2.2 remain compatible.
   - **Host controls.** Plugins can hide their papers at startup (`hidden`), add action buttons to Settings (`action`), put actions in the menu only (`menuOnly`), show, hide, expand or collapse other papers, and use a shared API for app settings.
   - **Todo reminders.** Plugins can receive an event about five seconds before a reminder is due and present it themselves, for example through a desktop pet. Otherwise, PaperTodo shows the usual reminder.
@@ -97,6 +99,8 @@ This log is written for general and power users alike. It focuses on user-facing
 
 #### Other Fixes & Improvements
 
+- Web plugins now receive the current interface language, allowing multilingual plugin bodies, hover previews and popups to display in that language.
+- Fixed ordinary edge capsules occasionally jumping back or drifting away from the pointer at the start of a fast drag out of a queue.
 - Disabling PaperTodo in Windows Startup Apps or Task Manager is now reflected in the app’s settings.
 - Dragging or resizing a paper no longer triggers repeated full-screen avoidance checks, reducing overhead during those actions.
 - On the default skin, enabling both **Hide outer border** and **Hide inactive title bar** now leaves the entire title-bar area transparent when the paper loses focus.
