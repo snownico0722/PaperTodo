@@ -82,6 +82,7 @@
 | D-070 | 完整快照按来源顺序恢复，损坏时须用户确认重建 | Accepted | 核心持久化 / 恢复 |
 | D-071 | 有界冲突归档与健康主文件后清理孤立临时文件 | Accepted | 核心持久化 / 归档 |
 | D-072 | Ctrl 整队拖拽归属胶囊自由队列 | Accepted | Edge / 队列 |
+| D-073 | 默认纸片缩放使用预计算高斯九宫格阴影 | Accepted | Paper / Rendering / performance |
 
 ## 维护规则
 
@@ -2165,3 +2166,51 @@ The preview should show an available landing rather than make a target continuou
 **Why:** 功能关闭时不留下另一条隐含整队操作；保留主胶囊和真实纸片各自的状态归属，不为统一手势重建呈现或落位系统。
 
 **Evidence:** `PaperWindow.NativeQueueInteraction.LatchNativeQueueControl`、`AppController.BeginNativeEdgeQueueDrag`、`MasterCapsuleWindow.OnFloatingDragHostLocationChanged`。
+
+---
+
+## D-073 — 默认纸片缩放不再对整块 WPF 内容实时做阴影模糊（2026-11-05；2026-11-18 归档）
+
+**Status:** Accepted（主线采用 PR #386 的预计算高斯九宫格；PR #307 五层软边环仅保留为对照历史）
+
+### Context / Root cause
+
+默认 Paper 皮肤拖动改变窗口大小时，即使是空纸片，也曾出现明显的 CPU 占用和缩放节拍恶化。最初怀疑布局、`SkinBorder` 几何重建与整容器 `DropShadowEffect`，不在未采样时把其中任何一项直接定为根因。
+
+2026-09-24 在同一个默认 paper HWND 上做了原有阴影 / 完全无阴影的同窗 A/B：GitHub Windows Server runner 的 `DragFullWindows=false` 使真实鼠标拖边框只产生一次最终尺寸变化，所以基准使用**相同的 160 步 `SetWindowPos` 原生尺寸轨迹**，仍经过 WPF 布局、重绘、Effect 与 DWM，但不把它描述成真人鼠标拖拽。三轮交替采样中，进程 CPU 中位数 **10968.75 → 1468.75 ms（-86.61%）**，缩放消息间隔 P95 中位数 **35.07 → 14.11 ms（-59.76%）**；两侧均有 160 次 Layout，默认 Paper 的 `SkinBorder` 几何重建均为 0。至此可将整块 `DropShadowEffect` 判断为**该受控连续缩放路径的主要瓶颈**，而不是继续归因于几何反复重建。[原始诊断 run](https://github.com/snownico0722/PaperTodo/actions/runs/35968460608)。
+
+### Decision
+
+主线于 2026-11-05 合并 [PR #386](https://github.com/snownico0722/PaperTodo/pull/386)：默认 `paper` 皮肤的普通浮动纸片及其普通胶囊，使用**预计算高斯 Alpha 九宫格阴影**，不再给整个 paper chrome 挂 `DropShadowEffect`。
+
+- `NineSlicePaperShadow` 为指定模糊、偏移、透明度、圆角、DPI 与胶囊形态预先生成高斯遮罩，冻结并缓存八块角/边切片；窗口缩放只拉伸直边，四角不重复模糊，也不绘制会覆盖正文的中心切片。现有 8-DIP 透明留白内绘制，不增加 HWND、后台调度或整窗截图缓存。
+- 折叠/展开仍连续插值真实 WPF 圆角；阴影贴图圆角复用 12/14/16 DIP 三档模板，以避免动画每帧制造冷缓存。胶囊使用适配短形态的独立配方；按 DPI 与配方复用，不把阴影位图当成随窗口尺寸变化的整窗缓存。
+- Snap／最大化继续抑制外围阴影；原生材质与其他皮肤遵循各自现有绘制路径，不把默认 Paper 的优化无限扩张到所有窗口。切皮肤只更新阴影配方，不重写形态动画拥有的 `Margin` / `CornerRadius`；“隐藏外轮廓”只影响描边，不应把阴影一起隐藏。
+
+### Why / A/B trade-off
+
+[PR #307](https://github.com/snownico0722/PaperTodo/pull/307) 先用最多五层轻量圆角软边环证实：无需整窗模糊便能大幅降低缩放开销，并修复了皮肤切换覆盖动画几何、隐藏外轮廓时丢失阴影等边界；但 **#307 最终关闭且未合并**。后续 #386 独立建立在 `main` 上，用保留高斯柔和边缘的九宫格方案替代五层环，最终合并。以下是 #386 记录的**另一轮同窗四模式、160 步轨迹**对照（不是与 9 月结果跨运行拼接）：
+
+| 方案 | 进程 CPU 中位数 | 缩放消息间隔 P95 中位数 | DWM CPU 中位数 |
+| --- | ---: | ---: | ---: |
+| 原版整块 WPF `DropShadowEffect` | 8656 ms | 30.02 ms | 484 ms |
+| #307 五层软边环 | 1547 ms | 14.04 ms | 281 ms |
+| **#386 预计算高斯九宫格（采用）** | **1438 ms** | **14.03 ms** | **328 ms** |
+| 完全无阴影 | 1172 ms | 13.58 ms | 422 ms |
+
+相对旧 Effect，九宫格在此基准下进程 CPU **-83.4%**、消息间隔 P95 **-53.3%**。与五层环相比，CPU 中位数虽低约 7.1%，但轮次波动明显、P95 近似，**不能断言九宫格稳定更快**；采用它还考虑高斯阴影的视觉外观以及可复用的边/角模板。[四模式原始 CI](https://github.com/snownico0722/PaperTodo/actions/runs/41667076571)、[PR #386 原始记录](https://github.com/snownico0722/PaperTodo/pull/386#issuecomment-6608512896)。
+
+### Pitfalls / Verification boundary
+
+- 整窗 `BitmapCache` 不是等价替代：尺寸持续变化时缓存可能频繁失效或重新栅格化；要缓存的是**与窗口宽高解耦的阴影配方和角/边素材**，不是整张可变尺寸的纸。
+- 冷缓存成本也要测。#386 曾观察到 0.5 DIP 一档的模板随圆角动画反复冷生成；改为 12/14/16 DIP 后，重复动画不再持续产生新模板。贴图离散并不意味着纸片真正的圆角动画离散。
+- 合并后的 [PR #407](https://github.com/snownico0722/PaperTodo/pull/407) 对 100%、125%、150%、200% DPI 的八切片接缝、窄纸片、普通胶囊、收展过渡及 8-DIP gutter 的 Alpha 做了离屏 WPF 像素回归；它**不能代替** Windows 桌面、HDR、真实混合 DPI 和用户手动持续缩放的视觉验收。
+- 基准的 CPU 毫秒和消息间隔 P95 不等于真实拖拽 FPS；DWM CPU 不等于 GPU 占用或 GPU Present 时间。不要把 -83.4% 当作整体软件 CPU 降幅，也不要以跑分推断所有皮肤均已优化。
+- 一次性四模式性能基准、临时 CI 和诊断绘制已从最终产品 diff 删除；历史可从 PR / Actions 追溯。后续若要修改该路径，优先保持轻量阴影、切肤/收展 ownership 和多 DPI 接缝的正式行为保护。
+
+### Evidence
+
+- 现行实现：`src/NineSlicePaperShadow.cs`、`src/PaperChromeBorder.NineSliceShadow.cs`、`src/PaperChromeBorder.cs`、`src/PaperWindow.cs`、`src/SkinBorder.cs`。
+- 正式回归：`tests/PaperTodo.MicaChecks/MaterialPresentationChecks.cs`、`tests/PaperTodo.MicaChecks/NineSliceShadowSeamChecks.cs`。
+- 历史排查：Issue [#36](https://github.com/snownico0722/PaperTodo/issues/36)；未合并的实验 [#307](https://github.com/snownico0722/PaperTodo/pull/307)；主线实现 [#386](https://github.com/snownico0722/PaperTodo/pull/386)；多 DPI 补测 [#407](https://github.com/snownico0722/PaperTodo/pull/407)。
+
