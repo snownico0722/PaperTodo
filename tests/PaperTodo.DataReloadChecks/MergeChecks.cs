@@ -4,6 +4,47 @@ using PaperTodo;
 
 internal static partial class Program
 {
+    private static void MergeReminderOccurrence()
+    {
+        var today = new DateTimeOffset(2026, 11, 18, 9, 0, 0, TimeSpan.Zero);
+        var tomorrow = today.AddDays(1);
+        var later = today.AddDays(2);
+        Check((today, false), (today, true), (tomorrow, false), (tomorrow, false));
+        Check((today, false), (tomorrow, false), (today, true), (tomorrow, false));
+        Check((today, false), (today, true), (null, false), (null, false));
+        Check((today, false), (today, false), (today, true), (today, true));
+        Check((today, true), (today, true), (today, false), (today, false));
+        Check((today, true), (tomorrow, true), (tomorrow, false), (tomorrow, true));
+        Check((today, false), (today, true), (today.ToOffset(TimeSpan.FromHours(8)), false), (today, true));
+        Check((today, false), (tomorrow, true), (later, false), (tomorrow, true), ConflictChoice.KeepMemory);
+        Check((today, false), (tomorrow, true), (later, false), (later, false), ConflictChoice.KeepExternal);
+
+        static void Check((DateTimeOffset? At, bool Triggered) baseline, (DateTimeOffset? At, bool Triggered) memory,
+            (DateTimeOffset? At, bool Triggered) external, (DateTimeOffset? At, bool Triggered) expected,
+            ConflictChoice? choice = null)
+        {
+            using var scope = new Scope();
+            var local = scope.Memory.Papers.Single(p => p.Id == "todo").Items[0];
+            (local.ReminderAt, local.ReminderTriggered) = baseline;
+            var baselineJson = scope.Store.SerializeState(scope.Memory);
+            var disk = StateStore.CopyForReload(scope.Memory);
+            var incoming = disk.Papers.Single(p => p.Id == "todo").Items[0];
+            (incoming.ReminderAt, incoming.ReminderTriggered) = external;
+            File.WriteAllText(scope.Store.FilePath, scope.Store.SerializeState(disk));
+            (local.ReminderAt, local.ReminderTriggered) = memory;
+            local.Text = "independent local edit";
+
+            var preview = scope.Store.PreviewExternalMerge(scope.Memory, 2, baselineJson);
+            Require(preview.State != null && preview.Conflicts != null &&
+                (preview.Conflicts.Count > 0) == choice.HasValue, "unexpected reminder conflict");
+            scope.Store.CommitExternalMerge(ResolvePreview(preview, choice ?? ConflictChoice.KeepMemory),
+                preview.ObservedDiskJson!, 2);
+            var saved = scope.Store.Load().Papers.Single(p => p.Id == "todo").Items[0];
+            Require((saved.ReminderAt, saved.ReminderTriggered) == expected && saved.Text == local.Text,
+                $"merging local {memory} and external {external} against {baseline} did not preserve {expected}");
+        }
+    }
+
     private static void MergeDerivedTodoOrderDoesNotConflict()
     {
         using var s = new Scope();

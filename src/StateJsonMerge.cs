@@ -59,9 +59,13 @@ internal static class StateJsonMerge
                 var local = Member(m, key);
                 var incoming = Member(e, key);
                 var field = JsonPath.FieldPath(path, key);
-                var value = targetConflict && QuickLaunchFields.Contains(key) && !Same(local, incoming)
-                    ? RecordConflict(original, local, incoming, field, conflicts)
-                    : MergeValue(original, local, incoming, field, applied, conflicts);
+                Value value;
+                if (todoItem && key is ("reminderAt" or "reminderTriggered"))
+                    value = MergeReminderField(key, b, m, e, field, applied, conflicts);
+                else if (targetConflict && QuickLaunchFields.Contains(key) && !Same(local, incoming))
+                    value = RecordConflict(original, local, incoming, field, conflicts);
+                else
+                    value = MergeValue(original, local, incoming, field, applied, conflicts);
                 if (value.Exists) result[key] = value.Node;
             }
             return new(true, result);
@@ -80,6 +84,43 @@ internal static class StateJsonMerge
         }
 
         return RecordConflict(baseline, memory, external, path, conflicts);
+    }
+
+    private static bool SameReminderTime(Value left, Value right) =>
+        Same(left, right) || left.Node is JsonValue leftDate && right.Node is JsonValue rightDate &&
+        leftDate.TryGetValue<DateTimeOffset>(out var first) && rightDate.TryGetValue<DateTimeOffset>(out var second) &&
+        first == second;
+
+    private static Value MergeReminderField(string key, JsonObject baseline, JsonObject memory,
+        JsonObject external, string path, List<string> applied, List<StateMergeConflict> conflicts)
+    {
+        var originalTime = Member(baseline, "reminderAt");
+        var localTime = Member(memory, "reminderAt");
+        var incomingTime = Member(external, "reminderAt");
+        var original = Member(baseline, key);
+        var local = Member(memory, key);
+        var incoming = Member(external, key);
+
+        if (SameReminderTime(localTime, incomingTime))
+        {
+            if (key == "reminderAt") return local.Copy();
+            // Delivery of either copy counts for this occurrence. An older occurrence's
+            // delivered flag cannot serve as the baseline for a newly agreed time.
+            return MergeValue(SameReminderTime(originalTime, localTime) ? original : default,
+                local, incoming, path, applied, conflicts);
+        }
+
+        // Only the side that scheduled the selected occurrence knows its delivery state.
+        if (SameReminderTime(originalTime, incomingTime)) return local.Copy();
+        if (SameReminderTime(originalTime, localTime))
+        {
+            if (!Same(local, incoming)) applied.Add(path);
+            return incoming.Copy();
+        }
+
+        // Both sides rescheduled independently. Keep each side's time and delivery flag
+        // together under the existing paper conflict choice.
+        return Same(local, incoming) ? local.Copy() : RecordConflict(original, local, incoming, path, conflicts);
     }
 
     private static Value RecordConflict(Value baseline, Value memory, Value external, string path,
