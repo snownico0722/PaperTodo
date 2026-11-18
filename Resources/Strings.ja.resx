@@ -1763,7 +1763,7 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
     <value>移動先</value>
   </data>
   <data name="WorkspaceCreateSlotsOccupied" xml:space="preserve">
-    <value>未使用のワークスペース番号（{0}）には、すべて以前のデータが残っています。いずれかの番号のデータファイル、固定バックアップ、一時ファイルをバックアップして別の場所に移してから、新しいワークスペースを作成してください。</value>
+    <value>未使用のワークスペース番号（{0}）にはいずれも以前のデータが残っています。この中から番号を1つ選んでください（以下の N はその番号です）。新しいワークスペースを作成する前に、次のうち存在するものをバックアップして別の場所に移してください。&#xA;• ワークスペースデータ dataN.json、固定バックアップ dataN.backup.json、およびその番号の一時ファイル、復旧用コピー、競合記録&#xA;• 画像ライブラリ note-assetsN.lmdb&#xA;• プラグインデータフォルダー plugins/dataN/ 全体</value>
   </data>
   <data name="WorkspaceCreateNew" xml:space="preserve">
     <value>新しいワークスペースを作成</value>
