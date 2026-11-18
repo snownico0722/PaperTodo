@@ -1029,10 +1029,12 @@ internal static partial class Program
         var main = NewState();
         main.Theme = "dark"; main.UiLanguage = "en-US";
         main.McpEnabled = main.McpAllowFullWrites = true;
+        main.ExperimentalTodoReminders = true;
         main.Workspaces = new() { Enabled = true, Slots = [1, 2, 3, 4, 5], Names = new() { [2] = "11" } };
         var second = NewState();
         second.Theme = "light"; second.UiLanguage = "ja-JP";
         second.McpEnabled = second.McpAllowFullWrites = false;
+        second.Papers.Single(p => p.Id == "todo").Items[0].ReminderAt = DateTimeOffset.Now.AddDays(1);
         // Reuse IDs deliberately: a slot boundary must not reuse old windows, undo or bitmaps.
         string imageId;
         byte[] mainImage;
@@ -1237,8 +1239,12 @@ internal static partial class Program
             var followingImages = controller.ImageStore;
             var followingPluginData = controller.PaperBodyPlugins.DataStore;
             var followingBinding = controller.WorkspaceBindingToken;
+            Require(Field<DispatcherTimer?>(controller, "_todoReminderTimer")?.IsEnabled == true,
+                "pending secondary reminder was not scheduled under main settings");
             var independent = controller.WorkspaceOptions.Normalized(); independent.FollowMainSettings[2] = false;
             Require(await controller.ChangeWorkspaceConfigurationAsync(independent), "unfollow failed");
+            Require(Field<DispatcherTimer?>(controller, "_todoReminderTimer") == null,
+                "unfollowing left the secondary reminder scheduled despite its disabled local setting");
             Require(ReferenceEquals(controller.State, followingState) &&
                     ReferenceEquals(windows["note-a"], followingWindow) && !followingWindow.IsClosed &&
                     ReferenceEquals(controller.ImageStore, followingImages) &&
@@ -1250,6 +1256,8 @@ internal static partial class Program
                 "independent software settings/language did not activate");
             var following = controller.WorkspaceOptions.Normalized(); following.FollowMainSettings[2] = true;
             Require(await controller.ChangeWorkspaceConfigurationAsync(following), "refollow failed");
+            Require(Field<DispatcherTimer?>(controller, "_todoReminderTimer")?.IsEnabled == true,
+                "refollowing did not reschedule the existing secondary reminder");
             Require(controller.State.Theme == "dark" && controller.State.McpEnabled, "refollow did not reapply main settings");
             Require(ReferenceEquals(controller.State, followingState) &&
                     ReferenceEquals(windows["note-a"], followingWindow) && !followingWindow.IsClosed &&

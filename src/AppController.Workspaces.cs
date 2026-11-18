@@ -182,6 +182,7 @@ public sealed partial class AppController
             var (session, effectiveSettings) = _workspaceCatalog.PreviewSettingsChange(_workspace, options);
             var previousPersistentPowerShell = State.UsePersistentPowerShellProcess;
             var previousPreferPowerShell7 = State.PreferPowerShell7;
+            var remindersWereEnabled = State.ExperimentalTodoReminders;
 
             // Only the main catalog is persisted here. A failed write must not
             // change the current settings or the ordinary-save projection.
@@ -196,6 +197,8 @@ public sealed partial class AppController
 
             try
             {
+                if (remindersWereEnabled != State.ExperimentalTodoReminders)
+                    RefreshTodoReminderSchedule();
                 UiLanguages.ApplyWorkspacePreference(State.UiLanguage);
                 State.PaperSkin = PaperSkins.Resolve(State);
                 NormalizePaperSystemVisibilitySettings();
