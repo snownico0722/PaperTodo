@@ -20,6 +20,8 @@ This log is written for general and power users alike. It focuses on user-facing
 
 ### Unreleased
 
+- **Optional capsule outline enhancement.** A new **Enable capsule outline enhancement** toggle under **Style & Text** is off by default. Turn it on to add a thin translucent outer rim to active edge capsules, making them easier to distinguish against similarly colored desktop backgrounds. The brighter dark-mode focus outline remains unchanged.
+
 ### v4.0.0-beta2
 
 #### Workspaces
