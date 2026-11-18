@@ -20,6 +20,7 @@ internal static partial class Program
         ("runtime-capsule-publish-order", CheckCapsulePublication),
         ("runtime-invalid-owner-no-publication", CheckInvalidOwner),
         ("single-instance-timeout-keeps-listening", CheckSingleInstanceTimeout),
+        ("single-instance-command-limit", CheckSingleInstanceLineLimit),
         ("single-instance-cancel-pending-read", CheckSingleInstanceCancellation),
         ("single-instance-real-results", CheckSingleInstanceResults),
         ("single-instance-lost-result", CheckSingleInstanceLostResult),

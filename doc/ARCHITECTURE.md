@@ -86,7 +86,7 @@ PaperTodo.exe
 
 ### 3.1 GUI 单实例
 
-正常 GUI 启动使用 `SingleInstanceHelper` 的 Mutex + named pipe。只有主 GUI 实例建立 `AppController`；后续 GUI 启动只把参数转发给主实例后退出。
+正常 GUI 启动使用 `SingleInstanceHelper` 的 Mutex + named pipe。只有主 GUI 实例建立 `AppController`；后续 GUI 启动只把参数转发给主实例后退出。每个连接传一行命令，编码后的上限为 512 KiB（含可选的 `RESULT ` 前缀）。主实例丢弃超限命令后继续接受连接。
 
 `AppController` 尚未完成启动时收到的单实例命令先排队，待 controller 可用后再执行。普通纸片窗口全部关闭不等于退出应用，进程使用显式 shutdown 生命周期。
 
