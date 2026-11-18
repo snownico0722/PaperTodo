@@ -127,6 +127,9 @@ internal static class SkinChecks
         try
         {
             Program.Assert(window.AllowsTransparency, "layered resize check requires a layered paper");
+            // Edge capsule expansion positions this HWND before its first Show.
+            Program.Assert(WindowNative.TrySetWindowDeviceBounds(window, new DeviceScreenRect(60, 60, 420, 380)),
+                "position the hidden paper before showing it");
             window.Show(); Program.Pump();
             foreach (var skin in new[] { PaperSkins.Paper, PaperSkins.Aero })
             {
