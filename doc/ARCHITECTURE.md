@@ -86,7 +86,7 @@ PaperTodo.exe
 
 ### 3.1 GUI 单实例
 
-正常 GUI 启动使用 `SingleInstanceHelper` 的 Mutex + named pipe。只有主 GUI 实例建立 `AppController`；后续 GUI 启动只把参数转发给主实例后退出。
+正常 GUI 启动使用 `SingleInstanceHelper` 的 Mutex + named pipe。只有主 GUI 实例建立 `AppController`；后续 GUI 启动只把参数转发给主实例后退出。每个连接传一行命令，编码后的上限为 512 KiB（含可选的 `RESULT ` 前缀）。主实例丢弃超限命令后继续接受连接。
 
 `AppController` 尚未完成启动时收到的单实例命令先排队，待 controller 可用后再执行。普通纸片窗口全部关闭不等于退出应用，进程使用显式 shutdown 生命周期。
 
@@ -536,6 +536,8 @@ Debug 包可显式启用内存诊断：`EdgeDiagnosticObservation` 观察既有�
 ### 7.3 匿名使用统计
 
 `TelemetryService` 是可关闭的独立统计子系统：只聚合每日使用计数和粗粒度运行环境，不上传纸片/待办/Markdown 正文、图片、路径、剪贴板或机器/硬件标识；crash 只保留计数与粗粒度签名。关闭后停止采集并清除未发送统计。
+
+每次保存先在统计状态锁内生成完整 JSON 快照，再由单个后台写入器顺序替换 `telemetry.json`；尚未开始写的快照只保留最新一份。定时采样不等待磁盘，关闭统计及正常退出会等最后一次写入尝试完成。
 
 上传是异步 best-effort 的 `daily_usage` 批次，不影响产品正常行为。客户端使用随机安装 ID 和确定性 `report_id`；接收端只接受白名单字段，原始日志允许 at-least-once，分析时按 `report_id` 保留最新记录去重。
 

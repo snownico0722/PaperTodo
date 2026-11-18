@@ -62,6 +62,7 @@ internal static class TelemetryService
         "PaperTodo",
         "telemetry-crash.json");
 
+    private static readonly TelemetrySnapshotWriter StateWriter = new(json => WriteAtomic(StatePath, json));
     private static TelemetryPersistedState _persisted = LoadPersistedState();
     private static AppController? _controller;
     private static DispatcherTimer? _timer;
@@ -109,6 +110,7 @@ internal static class TelemetryService
         _controller = controller;
 
         var shouldStartRuntime = false;
+        Task save;
         lock (Gate)
         {
             _persisted.Enabled = controller.State.TelemetryEnabled;
@@ -125,8 +127,9 @@ internal static class TelemetryService
                 QueueInitialReportIfNeededLocked();
                 shouldStartRuntime = true;
             }
-            SaveLocked();
+            save = QueueSaveLocked();
         }
+        save.GetAwaiter().GetResult();
 
         if (!shouldStartRuntime)
         {
@@ -146,10 +149,12 @@ internal static class TelemetryService
 
         StopRuntime(captureFinalSnapshot: true);
 
+        Task save;
         lock (Gate)
         {
-            SaveLocked();
+            save = QueueSaveLocked();
         }
+        save.GetAwaiter().GetResult();
 
         _attached = false;
         _controller = null;
@@ -158,6 +163,7 @@ internal static class TelemetryService
     public static void SetEnabled(bool enabled)
     {
         AppController? controller;
+        Task save;
         lock (Gate)
         {
             if (_persisted.Enabled == enabled && _controller?.State.TelemetryEnabled == enabled)
@@ -182,8 +188,9 @@ internal static class TelemetryService
                 QueueInitialReportIfNeededLocked();
             }
 
-            SaveLocked();
+            save = QueueSaveLocked();
         }
+        save.GetAwaiter().GetResult();
 
         if (!enabled)
         {
@@ -627,7 +634,7 @@ internal static class TelemetryService
     {
         lock (Gate)
         {
-            SaveLocked();
+            _ = QueueSaveLocked();
         }
 
         _previousSnapshot = CaptureSnapshot(controller.State, previous: null);
@@ -700,7 +707,7 @@ internal static class TelemetryService
             {
                 lock (Gate)
                 {
-                    SaveLocked();
+                    _ = QueueSaveLocked();
                 }
                 _lastSaveUtc = now;
             }
@@ -1146,6 +1153,7 @@ internal static class TelemetryService
             if (response.IsSuccessStatusCode)
             {
                 succeeded = true;
+                var save = Task.CompletedTask;
                 lock (Gate)
                 {
                     if (_persisted.Enabled)
@@ -1157,9 +1165,10 @@ internal static class TelemetryService
                                 string.Equals(sent.ReportId, report.ReportId, StringComparison.Ordinal) &&
                                 string.Equals(sent.Payload, currentPayload, StringComparison.Ordinal));
                         });
-                        SaveLocked();
+                        save = QueueSaveLocked();
                     }
                 }
+                await save.ConfigureAwait(false);
             }
         }
         catch
@@ -1354,16 +1363,17 @@ internal static class TelemetryService
             _persisted.PendingReports.Count - MaxPendingReports);
     }
 
-    private static void SaveLocked()
+    private static Task QueueSaveLocked()
     {
         try
         {
             NormalizePersistedState(_persisted);
-            WriteAtomic(StatePath, JsonSerializer.Serialize(_persisted, DiskJsonOptions));
+            return StateWriter.Enqueue(JsonSerializer.Serialize(_persisted, DiskJsonOptions));
         }
         catch
         {
             // Local statistics persistence must never surface to the user.
+            return Task.CompletedTask;
         }
     }
 
