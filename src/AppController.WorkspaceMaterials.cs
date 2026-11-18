@@ -62,6 +62,14 @@ public sealed partial class AppController
         MarkDirty();
     }
 
+    internal void CommitWorkbenchMaterialTitle(WorkspaceMaterialItem item, string title)
+    {
+        // Collect focused titles into the outgoing workspace snapshot before a merge or switch.
+        if (IsExiting || SuppressDataReloadEditorCommit || item.Title == title) return;
+        item.Title = title;
+        MarkDirty();
+    }
+
     internal void AttachWorkspaceMaterialImagePaste(TextBox editor, Action<Exception> reportFailure)
     {
         DataObject.AddPastingHandler(editor, (_, e) =>

@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Reflection;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -405,10 +406,35 @@ internal static partial class WorkbenchChecks
         var desk = (WorkbenchWindow)Member(controller, "_workbenchWindow");
         await Until(() => desk.HostedPaperCount == 3, "Ordinary desktop papers were not leased");
 
-        // Simulate the suspend/reborrow boundary used by a hot data reload.
-        desk.SuspendWorkspace();
-        desk.ResumeWorkspace();
-        await Until(() => desk.HostedPaperCount == 3, "Reborrow after reload failed");
+        await MergeWithFocusedTitle("note-a", "From disk", state => state.Papers.Single(p => p.Id == "note-a").Title);
+        var materialId = controller.CreateWorkbenchMaterial(WorkspaceMaterialKinds.Text, "Material", "", "");
+        await Until(() => CardReady(desk, materialId), "Material title editor was not mounted");
+        await MergeWithFocusedTitle(materialId, "Disk edit 2", state =>
+            WorkspaceMaterials.FindOwner(state)!.WorkspaceMaterials!.Items[materialId].Title);
+
+        async Task MergeWithFocusedTitle(string cardId, string externalTitle, Func<AppState, string> readTitle)
+        {
+            controller.SaveNow(sync: true);
+            var baseline = File.ReadAllText(store.FilePath);
+            var external = JsonNode.Parse(baseline)!;
+            external["papers"]!.AsArray().Single(p => (string?)p!["id"] == "note-b")!["title"] = externalTitle;
+            File.WriteAllText(store.FilePath, external.ToJsonString());
+
+            const string draft = "Local draft";
+            var title = (TextBox)Member(ActiveCards(desk)[cardId]!, "Title");
+            title.Visibility = Visibility.Visible;
+            Assert(title.Focus() && title.IsKeyboardFocusWithin, "Card title editor did not take focus");
+            title.Text = draft;
+            Assert(readTitle(controller.State) != draft, "Test requires an uncommitted title");
+            var merge = controller.PaperCommands.MergeData(PaperOperationContext.Mcp(), baseline);
+            Assert(merge.Outcome == "pending" && merge.ConflictCount == 0, "Independent titles did not enter merge");
+            await Until(() => !controller.IsDataReloading && desk.HostedPaperCount == 3, "Reborrow after merge failed");
+            Assert(controller.PaperCommands.GetDataReloadStatus().LastResult?.Applied == true, "Merge failed");
+            var saved = StateStore.ReadWorkbenchOverview(store.FilePath)!;
+            foreach (var state in new[] { controller.State, saved })
+                Assert(readTitle(state) == draft && state.Papers.Single(p => p.Id == "note-b").Title == externalTitle,
+                    "Merge lost the focused title draft or the other paper's disk edit: " + cardId);
+        }
 
         // An associated, collapsed desktop paper must be navigated inside the
         // desk without unfolding it, closing the desk or modifying desktop XY.

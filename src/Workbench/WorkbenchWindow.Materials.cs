@@ -503,7 +503,7 @@ internal sealed partial class WorkbenchWindow
     {
         if (_closed || IsSuspended) return;
         if (_controller.FindWorkbenchMaterial(card.Snapshot.Id) is { } item)
-            _controller.UpdateWorkbenchMaterial(card.Snapshot.Id, card.Title.Text, item.Content);
+            _controller.CommitWorkbenchMaterialTitle(item, card.Title.Text);
         else if (_controller.FindPaper(card.Snapshot.Id) is { } paper)
             _controller.UpdatePaperTitle(paper, card.Title.Text);
         card.Move.Tag = card.Title.Text;

@@ -59,6 +59,7 @@ public sealed partial class AppController
         {
             // Flush edits into MEMORY, never overwrite the candidate file before reading it.
             // Reentrant saves are suppressed while collecting the current UI snapshot.
+            _workbenchWindow?.CommitPendingTitles();
             CommitSettingsExternalMarkdownEditor(saveImmediately: false);
             foreach (var window in _windows.Values.ToArray()) window.CommitPendingEditsForDataReload();
             PrepareExternalPaperOperation();
