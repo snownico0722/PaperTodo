@@ -1,4 +1,3 @@
-using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -73,10 +72,7 @@ public sealed partial class PaperWindow
         menu.Items.Add(MenuSeparator());
         menu.Items.Add(MenuHeader(_controller.PaperCapsuleTitle(_paper)));
 
-        if (_paper.Type == PaperTypes.Note &&
-            (!IsCurrentBodyProviderMarkdown ||
-             _controller.PaperBodyPlugins.Descriptors.Any(descriptor =>
-                 descriptor.Kind != PaperBodyPluginKind.BuiltIn)))
+        if (_paper.Type == PaperTypes.Note)
             menu.Items.Add(BuildPaperBodyProviderMenuItem());
 
         if (IsExportablePaper(_paper))
