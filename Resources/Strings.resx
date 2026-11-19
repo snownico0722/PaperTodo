@@ -560,7 +560,9 @@
     <value>切换纸片配色：背景、强调色与弱化文字。</value>
   </data>
   <data name="TipUiFont" xml:space="preserve">
-    <value>「默认」会按界面语言自动匹配系统字体，界面与笔记正文可能使用不同字体。选择「微软雅黑」或「等线」后，界面、托盘、胶囊、待办与笔记会统一使用所选字体。</value>
+    <value>默认会根据界面语言自动选择系统字体，界面与笔记正文可能使用不同的字体。
+选择微软雅黑或等线后，界面、托盘、胶囊、待办和笔记会统一使用所选字体。
+如果程序文件夹中有 papertodo.ttf 或 papertodo.otf，优先使用此自定义字体。</value>
   </data>
   <data name="TipTextRenderingProfile" xml:space="preserve">
     <value>标准：使用 Windows 默认的文字显示方式，兼容性最好。
@@ -572,7 +574,8 @@
     <value>自定义字体增强加粗</value>
   </data>
   <data name="TipCustomFontEnhancedBold" xml:space="preserve">
-    <value>搭配自定义字体使用。将独立的粗体文件命名为 `papertodo_bold.ttf`（或 `.otf`）一并放入程序文件夹并开启此项，加粗文字会直接使用该粗体字形。</value>
+    <value>开启后，设置为「加粗」的文字会使用单独的粗体字体文件，而不是直接将普通字体加粗。
+需要在程序文件夹中同时放置普通字体 papertodo 和粗体字体 PaperTodo_Bold，支持 .ttf 或 .otf 格式。</value>
   </data>
   <data name="TipMarkdownRender" xml:space="preserve">
     <value>基础渲染：保留 Markdown 语法标记，但会把这些符号淡化，同时显示列表圆点、分割线等简单排版效果。
@@ -1870,23 +1873,5 @@
   </data>
   <data name="WindowBindingProgramUnavailable" xml:space="preserve">
     <value>未能读取目标程序的位置，请重新绑定正在运行的程序。</value>
-  </data>
-  <data name="SettingsCustomFont" xml:space="preserve">
-    <value>自定义字体</value>
-  </data>
-  <data name="TipCustomFont" xml:space="preserve">
-    <value>将 `.ttf` 或 `.otf` 字体文件改名为 `papertodo.ttf`（或 `.otf`），放入 `PaperTodo.exe` 所在文件夹并重启软件，即可替换界面与正文的默认字体。</value>
-  </data>
-  <data name="SettingsDataBackup" xml:space="preserve">
-    <value>数据备份</value>
-  </data>
-  <data name="SettingsAutoGradientBackup" xml:space="preserve">
-    <value>自动梯度备份</value>
-  </data>
-  <data name="TipAutoGradientBackup" xml:space="preserve">
-    <value>开启后，程序会自动将各工作区的文字与设置打包存入 `PaperTodo-backups` 文件夹，按约 10 分钟、6 小时、3 天和 1 个月四个时间跨度最多保留 4 份历史包。历史包不含笔记图片与插件数据；换电脑或做完整备份时，仍建议直接复制整个程序文件夹。</value>
-  </data>
-  <data name="TipPluginBodyTypes" xml:space="preserve">
-    <value>笔记纸默认使用内置 Markdown 编辑器。安装支持自定义界面的插件后，右键笔记纸选择「正文类型」，即可把这张纸切换成时钟等插件面板。原有笔记内容会安全保留，随时可切回 Markdown。</value>
   </data>
 </root>
