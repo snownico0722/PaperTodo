@@ -209,6 +209,7 @@ internal static partial class Program
         var options = new WorkspaceConfiguration { Enabled = false, Slots = [1, 2] };
         Field(catalog, "<Options>k__BackingField", options);
         Field(c, "_workspaceCatalog", catalog);
+        c.State.AdvancedSettingsMode = true;
         c.State.McpEnabled = true;
         c.State.McpAllowFullWrites = true;
         var saves = 0;
