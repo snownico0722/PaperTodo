@@ -241,7 +241,7 @@ internal static partial class Program
         }
     }
 
-    private static void LineSpacingAdvancedModeVisibility()
+    private static void SpacingAdvancedModeVisibility()
     {
         var controller = Controller();
         Field(controller, "_settingsRegionRefreshers", new Dictionary<string, Action>());
@@ -259,9 +259,8 @@ internal static partial class Program
             window.UpdateLayout();
             DrainSettingsUi();
 
-            var normalSelectors = SettingsControls<ListBox>(window).ToArray();
-            Check(normalSelectors.Length == 1 && Equals(normalSelectors[0].SelectedValue, "small"),
-                "Normal mode hides note line spacing but keeps to-do item spacing visible.");
+            Check(SettingsControls<ListBox>(window).Count() == 0,
+                "Normal mode hides both note line spacing and to-do item spacing.");
 
             controller.State.AdvancedSettingsMode = true;
             window.Content = Invoke(controller, "BuildVisualSettingsPage");
@@ -272,15 +271,16 @@ internal static partial class Program
             Check(advancedSelectors.Length == 2 &&
                   Equals(advancedSelectors[0].SelectedValue, "large") &&
                   Equals(advancedSelectors[1].SelectedValue, "small"),
-                "Advanced mode reveals the saved note line spacing without changing either spacing value.");
+                "Advanced mode reveals both saved spacing values without changing either.");
 
             controller.State.AdvancedSettingsMode = false;
             window.Content = Invoke(controller, "BuildVisualSettingsPage");
             window.UpdateLayout();
             DrainSettingsUi();
-            Check(SettingsControls<ListBox>(window).Count() == 1 &&
-                  controller.State.NoteLineSpacing == "large",
-                "Hiding note line spacing in normal mode preserves its saved value.");
+            Check(SettingsControls<ListBox>(window).Count() == 0 &&
+                  controller.State.NoteLineSpacing == "large" &&
+                  controller.State.TodoItemSpacing == "small",
+                "Hiding both spacing controls in normal mode preserves both saved values.");
         }
         finally
         {
