@@ -1631,7 +1631,8 @@ public sealed partial class AppController
             CreateTodoVisualSizeSelector(),
             State.TodoTextBold,
             ToggleTodoTextBold);
-        rightColumn.Children.Add(CreateSpacingRow("SettingsItemSpacing", () => State.TodoItemSpacing, "todo.item_spacing"));
+        if (State.AdvancedSettingsMode)
+            rightColumn.Children.Add(CreateSpacingRow("SettingsItemSpacing", () => State.TodoItemSpacing, "todo.item_spacing"));
 
         AddTextStyleEditor(
             "SettingsTitleText",
