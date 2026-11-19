@@ -459,6 +459,7 @@ public sealed class AppState
     /// <summary>
     /// When a custom papertodo font is present, bold styles load papertodo_bold / PaperTodo_Bold instead of synthetic SemiBold.
     /// </summary>
+    public bool CustomFontEnabled { get; set; } = true;
     public bool CustomFontEnhancedBold { get; set; }
     public string ExternalMarkdownExtension { get; set; } = ExternalMarkdownFileExtensions.Default;
     public double Zoom { get; set; } = 1.0;
