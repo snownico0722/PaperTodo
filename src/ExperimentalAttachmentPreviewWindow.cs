@@ -11,9 +11,11 @@ internal sealed class ExperimentalAttachmentPreviewWindow : Window
 {
     private const int OutlineMarginDevice = 3;
     private bool _closed;
+    private bool _hideInCapture;
 
     public ExperimentalAttachmentPreviewWindow(bool hideInCapture)
     {
+        _hideInCapture = hideInCapture;
         ShowInTaskbar = false;
         ShowActivated = false;
         WindowStartupLocation = WindowStartupLocation.Manual;
@@ -54,11 +56,18 @@ internal sealed class ExperimentalAttachmentPreviewWindow : Window
         Content = outline;
         SourceInitialized += (_, _) =>
         {
-            WindowCaptureExclusion.Apply(this, hideInCapture);
+            WindowCaptureExclusion.Apply(this, _hideInCapture);
             WindowNative.ApplyNoActivateStyle(this);
             WindowNative.SetInputPassthrough(this, enabled: true);
         };
         Closed += (_, _) => _closed = true;
+    }
+
+    internal void UpdateCaptureExclusion(bool hideInCapture)
+    {
+        _hideInCapture = hideInCapture;
+        if (new System.Windows.Interop.WindowInteropHelper(this).Handle != IntPtr.Zero)
+            WindowCaptureExclusion.Apply(this, hideInCapture);
     }
 
     public void ShowAt(
