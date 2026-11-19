@@ -170,8 +170,7 @@ public sealed partial class AppController : IDisposable
             State.UiFontPreset,
             State.Zoom,
             State.CustomFontEnhancedBold,
-            State.TextRenderingProfile,
-            State.CustomFontEnabled);
+            State.TextRenderingProfile);
         NoteTypography.Configure(State.NoteTextSize, State.NoteTextBold);
         ToolTipPreferences.Register(() => State.EnableToolTips);
         _paperBodyPlugins = new PaperBodyPluginRegistry();
