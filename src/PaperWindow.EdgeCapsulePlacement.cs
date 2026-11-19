@@ -30,15 +30,21 @@ public sealed partial class PaperWindow
         // A resting edge tag owns exactly the pixels it renders: one interior shadow margin plus
         // icon/title content and its padding. Todo/Note use one shared icon slot so the different
         // `✓` / `✎` glyph advances cannot change the pill width for otherwise equal titles.
+        var hideTitle = limitTitle &&
+            _controller.State.DeepCapsuleTitleMeasureCharacterLimit == EdgeCapsuleTitleLimit.Hidden;
         var bodyWidth = Math.Ceiling(
             CapsuleLeftPadding +
             MeasureDeepCapsuleIconSlotWidth(pixelsPerDip) +
-            CapsuleIconGap +
-            MeasureCapsuleTitleWidth(
-                limitForDeepCapsule: limitTitle,
-                pixelsPerDip: pixelsPerDip) +
+            (hideTitle ? 0 : CapsuleIconGap) +
+            (hideTitle ? 0 : MeasureCapsuleTitleWidth(
+                limitForDeepCapsule: true,
+                pixelsPerDip: pixelsPerDip)) +
             CapsuleRightPadding);
-        return Math.Max(34, bodyWidth + WindowChromeMargin);
+        // In the zero-character mode the built-in tag contains only its icon and the
+        // normal side padding. Do not let the generic 34-DIP floor reintroduce dead space.
+        return hideTitle
+            ? bodyWidth + WindowChromeMargin
+            : Math.Max(34, bodyWidth + WindowChromeMargin);
     }
 
     private double ExpandedDeepCapsuleVisibleWidth()
