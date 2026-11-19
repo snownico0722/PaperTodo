@@ -843,7 +843,7 @@ public sealed partial class PaperWindow : Window
         var hideCapsules = _controller.State.HideCapsulesInCapture;
         _edgeCapsuleHost?.UpdateCaptureExclusion(hideCapsules);
         if (_experimentalCapsuleMagnetPreview is { } preview)
-            WindowCaptureExclusion.Apply(preview, hideCapsules);
+            preview.UpdateCaptureExclusion(hideCapsules);
     }
 
     private void UpdateMainWindowCaptureExclusion()
