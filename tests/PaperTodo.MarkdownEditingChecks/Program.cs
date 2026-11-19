@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Documents;
 using System.Windows.Media;
@@ -17,6 +18,7 @@ internal static partial class Program
         var failures = 0;
         ClipboardImageChecks.Run(Check);
         Check("Line spacing changes wrapped note lines in both modes", CheckNoteLineSpacing);
+        Check("All note spacing levels render the installed regular and bold files", CheckCustomFontSpacing);
         Check("Full mode preserves quote source and undo history", () =>
         {
             foreach (var source in new[] { "- > a\n  > b", "1. > a\n   > b", "> a\nb", "> a\n> > b\nlazy" })
@@ -348,6 +350,59 @@ internal static partial class Program
             Require(lines.Count >= 3, "fixture must wrap onto multiple lines");
             Console.WriteLine($"  {spacing}: font metrics {family.LineSpacing:F3} em, visual line {lines[1].Height:F3} DIP");
             return (lines[1].Height, lines[1].Length);
+        }
+    }
+
+    private static void CheckCustomFontSpacing()
+    {
+        var folder = Directory.CreateTempSubdirectory("PaperTodo fonts, #").FullName;
+        var fonts = Environment.GetFolderPath(Environment.SpecialFolder.Fonts);
+        var regular = Path.Combine(folder, "papertodo.ttf");
+        var bold = Path.Combine(folder, "papertodo_bold.ttf");
+        try
+        {
+            File.Copy(Path.Combine(fonts, "arial.ttf"), regular);
+            File.Copy(Path.Combine(fonts, "timesbd.ttf"), bold);
+            // Exercise the production file discovery without touching the user's program folder.
+            const string baseKey = "APP_CONTEXT_BASE_DIRECTORY";
+            var previousBase = AppContext.GetData(baseKey);
+            try
+            {
+                AppContext.SetData(baseKey, folder + Path.DirectorySeparatorChar);
+                AppTypography.Configure(null, customFontEnhancedBold: true);
+            }
+            finally { AppContext.SetData(baseKey, previousBase); }
+            Require(AppTypography.HasCustomFont && AppTypography.HasCustomBoldFont, "both fixture faces loaded");
+
+            using var editor = new Editor("PaperTodo");
+            var box = editor.Box;
+            var window = new Window { Content = box, Width = 240, Height = 180, ShowActivated = false, ShowInTaskbar = false };
+            try
+            {
+                window.Show();
+                foreach (var isBold in new[] { false, true })
+                foreach (var spacing in new[] { "medium", "small", "large" })
+                {
+                    NoteTypography.Configure(VisualTextSizes.Medium, isBold, spacing);
+                    box.RefreshTypography();
+                    Pump();
+                    window.UpdateLayout();
+                    var view = box.TextArea.TextView;
+                    view.EnsureVisualLines();
+                    var line = view.GetOrConstructVisualLine(box.Document.GetLineByNumber(1)).TextLines[0];
+                    var paths = line.GetIndexedGlyphRuns().Select(run => run.GlyphRun.GlyphTypeface.FontUri.LocalPath).ToArray();
+                    var expected = isBold ? bold : regular;
+                    Require(paths.Length > 0 && paths.All(path => string.Equals(path, expected, StringComparison.OrdinalIgnoreCase)),
+                        $"{spacing}: expected glyphs from {expected}, got {string.Join(", ", paths)}");
+                }
+            }
+            finally { window.Close(); }
+        }
+        finally
+        {
+            AppTypography.Configure(null);
+            NoteTypography.Configure(VisualTextSizes.Medium, false);
+            Directory.Delete(folder, recursive: true);
         }
     }
 

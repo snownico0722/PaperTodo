@@ -368,9 +368,15 @@ public static class NoteTypography
             LineSpacing = height,
             Baseline = Math.Clamp(source.Baseline + (height - source.LineSpacing) / 2, 0, height)
         };
-        // Relative custom font references are resolved against the installation directory.
-        // The anonymous family has no base URI of its own.
-        var target = source.BaseUri == null ? source.Source : new Uri(source.BaseUri, source.Source).AbsoluteUri;
+        var target = source.Source;
+        if (source.BaseUri is { } baseUri)
+        {
+            // An implicit Windows file URI treats '#' as a filename character. Resolve against
+            // an explicit file: URI so WPF gets the family fragment, even on a UNC share.
+            // A literal comma in the resulting URI would start another WPF fallback family.
+            var directory = new Uri(baseUri.AbsoluteUri, UriKind.Absolute);
+            target = new Uri(directory, target).AbsoluteUri.Replace(",", "%2C");
+        }
         family.FamilyMaps.Add(new FontFamilyMap { Target = target });
         return family;
     }
