@@ -1797,14 +1797,20 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
   </data>
   <data name="SettingsCustomFont" xml:space="preserve">
     <value>カスタムフォント</value>
-  </data>\n  <data name="TipCustomFont" xml:space="preserve">
+  </data>
+  <data name="TipCustomFont" xml:space="preserve">
     <value>`.ttf` または `.otf` のフォントファイルを `papertodo.ttf`（または `.otf`）に改名し、`PaperTodo.exe` と同じフォルダーに配置して PaperTodo を再起動すると、画面と本文の既定フォントを置き換えます。</value>
-  </data>\n  <data name="SettingsDataBackup" xml:space="preserve">
+  </data>
+  <data name="SettingsDataBackup" xml:space="preserve">
     <value>データバックアップ</value>
-  </data>\n  <data name="SettingsAutoGradientBackup" xml:space="preserve">
+  </data>
+  <data name="SettingsAutoGradientBackup" xml:space="preserve">
     <value>自動段階バックアップ</value>
-  </data>\n  <data name="TipAutoGradientBackup" xml:space="preserve">
+  </data>
+  <data name="TipAutoGradientBackup" xml:space="preserve">
     <value>有効にすると、すべてのワークスペースのテキストと設定を `PaperTodo-backups` フォルダーに自動保存します。約10分、6時間、3日、1か月の4つの期間を目安に、最大4個の履歴アーカイブを保持します。画像とプラグインデータは含まれません。PCの移行や完全バックアップには、アプリのフォルダー全体をコピーしてください。</value>
-  </data>\n  <data name="TipPluginBodyTypes" xml:space="preserve">
+  </data>
+  <data name="TipPluginBodyTypes" xml:space="preserve">
     <value>ノートは既定で内蔵 Markdown エディターを使用します。独自の画面を提供するプラグインをインストールした後、ノートを右クリックして「本文の種類」を選ぶと、そのノートを時計などのプラグインパネルに切り替えられます。元のノート内容は保持され、いつでも Markdown に戻せます。</value>
-  </data>\n</root>
+  </data>
+</root>
