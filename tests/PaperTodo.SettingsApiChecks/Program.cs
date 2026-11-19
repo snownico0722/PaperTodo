@@ -77,7 +77,7 @@ internal static partial class Program
             SharedUiSettingBehavior();
             SettingsEditorBehavior();
             PaperBackgroundSettingsVisibility();
-            LineSpacingAdvancedModeVisibility();
+            SpacingAdvancedModeVisibility();
             SpacingKeyboardBehavior();
             WorkspaceDataSettingsBehavior();
             PostCommitFailureDoesNotReplay();
