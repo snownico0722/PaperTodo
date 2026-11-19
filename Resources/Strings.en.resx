@@ -1797,14 +1797,20 @@ Resolve the file access problem and retry, or choose “Rebuild workspace” to 
   </data>
   <data name="SettingsCustomFont" xml:space="preserve">
     <value>Custom font</value>
-  </data>\n  <data name="TipCustomFont" xml:space="preserve">
+  </data>
+  <data name="TipCustomFont" xml:space="preserve">
     <value>Rename a `.ttf` or `.otf` font file to `papertodo.ttf` (or `.otf`), place it beside `PaperTodo.exe`, and restart PaperTodo to replace the default font used by the interface and note content.</value>
-  </data>\n  <data name="SettingsDataBackup" xml:space="preserve">
+  </data>
+  <data name="SettingsDataBackup" xml:space="preserve">
     <value>Data backup</value>
-  </data>\n  <data name="SettingsAutoGradientBackup" xml:space="preserve">
+  </data>
+  <data name="SettingsAutoGradientBackup" xml:space="preserve">
     <value>Automatic tiered backups</value>
-  </data>\n  <data name="TipAutoGradientBackup" xml:space="preserve">
+  </data>
+  <data name="TipAutoGradientBackup" xml:space="preserve">
     <value>When enabled, PaperTodo packages text and settings from all workspaces into the `PaperTodo-backups` folder. It keeps up to four history archives spanning roughly 10 minutes, 6 hours, 3 days, and 1 month. Archives do not include note images or plugin data. For a PC migration or a complete backup, copy the entire application folder.</value>
-  </data>\n  <data name="TipPluginBodyTypes" xml:space="preserve">
+  </data>
+  <data name="TipPluginBodyTypes" xml:space="preserve">
     <value>Notes use the built-in Markdown editor by default. After installing a plugin that provides a custom interface, right-click a note and choose “Body type” to switch that note to a plugin panel, such as a clock. The original note content is preserved and you can switch back to Markdown at any time.</value>
-  </data>\n</root>
+  </data>
+</root>
