@@ -20,6 +20,8 @@ This log is written for general and power users alike. It focuses on user-facing
 
 ### Unreleased
 
+- **Optional capsule outline enhancement.** A new **Enable capsule outline enhancement** toggle under **Style & Text** is off by default. Turn it on to add a thin translucent outer rim to active edge capsules. The previous 2 DIP focus stroke is retained; the default now uses that stroke alone, while the opt-in mode restores the additional translucent rim.
+
 ### v4.0.0-beta2
 
 #### Workspaces

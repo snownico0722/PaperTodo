@@ -664,6 +664,12 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
   <data name="TipFastAnimations" xml:space="preserve">
     <value>画面アニメーションの時間を通常の約 60% に短縮し、遷移効果を残したまま操作を素早くします。「アニメーションを有効化」がオフの場合は適用されません。</value>
   </data>
+  <data name="SettingsCapsuleOutlineEnhancement" xml:space="preserve">
+    <value>カプセルの枠線強調を有効化</value>
+  </data>
+  <data name="TipCapsuleOutlineEnhancement" xml:space="preserve">
+    <value>オンにすると、アクティブな画面端のカプセルに細い半透明の外枠線を追加し、似た色のデスクトップ背景でも見分けやすくします。</value>
+  </data>
   <data name="TipPersistentPowerShellProcess" xml:space="preserve">
     <value>!pf / !powerf は常駐プロセスを使い起動を速くしますが、変数や状態がスクリプト間に残ることがあります。
 オフにするとそのプロセスを終了します。</value>

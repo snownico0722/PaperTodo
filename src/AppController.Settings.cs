@@ -1570,6 +1570,8 @@ public sealed partial class AppController
             State.EnableAnimations, ToggleAnimations), "TipEnableAnimations"));
         leftColumn.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("SettingsFastAnimations"),
             State.FastAnimations, ToggleFastAnimations), "TipFastAnimations"));
+        leftColumn.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("SettingsCapsuleOutlineEnhancement"),
+            State.EnhanceCapsuleActiveOutline, ToggleCapsuleOutlineEnhancement), "TipCapsuleOutlineEnhancement"));
         rightColumn.Children.Add(SettingsSectionLabel(Strings.Get("SettingsFontGroup")));
         rightColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsUiFont")), "TipUiFont"));
         rightColumn.Children.Add(CreateUiFontPresetSegmentSelector());
@@ -1701,6 +1703,7 @@ public sealed partial class AppController
         State.EnableToolTips = defaults.EnableToolTips;
         State.EnableAnimations = defaults.EnableAnimations;
         State.FastAnimations = defaults.FastAnimations;
+        State.EnhanceCapsuleActiveOutline = defaults.EnhanceCapsuleActiveOutline;
         State.UiFontPreset = defaults.UiFontPreset;
         State.TextRenderingProfile = defaults.TextRenderingProfile;
         State.CustomFontEnhancedBold = defaults.CustomFontEnhancedBold;
@@ -2455,6 +2458,9 @@ public sealed partial class AppController
 
     private void ToggleFastAnimations() =>
         SetSettingFromUi("appearance.fast_animations", !State.FastAnimations);
+
+    private void ToggleCapsuleOutlineEnhancement() =>
+        SetSettingFromUi("appearance.capsule_outline_enhancement", !State.EnhanceCapsuleActiveOutline);
 
     private void ToggleTodoBottomBar() =>
         SetSettingFromUi("todo.bottom_bar", !State.ShowTodoBottomBar);
