@@ -165,6 +165,8 @@ public sealed partial class AppController
                 _workspaceCatalog.MainStore.UpdateWorkspaceConfiguration(next, NextWorkspaceSaveVersion());
             }
             _workspaceCatalog.AdoptOptions(next);
+            if (previous.AutoGradientBackup != next.AutoGradientBackup)
+                RefreshCoreHistoryBackupPolicy();
             if (WorkspaceNumber == 1) State.Workspaces = WorkspaceOptions;
             Interlocked.Increment(ref _stateRevision);
             return true;
