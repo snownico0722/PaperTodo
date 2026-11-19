@@ -119,7 +119,7 @@ internal static class WorkspaceFieldScopes
             nameof(AppState.TodoVisualSize), nameof(AppState.ShowTodoBottomBar), nameof(AppState.AutoClearCompletedTodos),
             nameof(AppState.AutoMoveCompletedTodosToBottom), nameof(AppState.AutoCompressLargeImages), nameof(AppState.UiFontPreset),
             nameof(AppState.TextRenderingProfile), nameof(AppState.AdvancedSettingsMode), nameof(AppState.TelemetryEnabled),
-            nameof(AppState.CustomFontEnhancedBold), nameof(AppState.ExternalMarkdownExtension), nameof(AppState.Zoom),
+            nameof(AppState.CustomFontEnabled), nameof(AppState.CustomFontEnhancedBold), nameof(AppState.ExternalMarkdownExtension), nameof(AppState.Zoom),
             nameof(AppState.NoteTextSize), nameof(AppState.NoteTextBold), nameof(AppState.TodoTextBold),
             nameof(AppState.TitleTextSize), nameof(AppState.TitleTextBold), nameof(AppState.CapsuleTextSize),
             nameof(AppState.CapsuleTextBold), nameof(AppState.UseCapsuleMode), nameof(AppState.UseDeepCapsuleMode),
