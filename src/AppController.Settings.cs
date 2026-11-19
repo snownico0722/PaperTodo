@@ -2111,6 +2111,8 @@ public sealed partial class AppController
         };
         ToolTipPreferences.SetAlwaysEnabled(hint, true);
         ToolTipService.SetShowOnDisabled(hint, true);
+        ToolTipService.SetPlacement(hint, PlacementMode.Bottom);
+        ToolTipService.SetVerticalOffset(hint, 8);
         ToolTipService.SetInitialShowDelay(hint, 200);
         ToolTipService.SetShowDuration(hint, 20000);
         ToolTipService.SetBetweenShowDelay(hint, 0);
