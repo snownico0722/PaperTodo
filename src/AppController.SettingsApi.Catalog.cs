@@ -99,6 +99,11 @@ public sealed partial class AppController
             minimum: 0.8,
             maximum: 1.2,
             step: 0.05);
+        yield return DefineSetting<bool>("appearance.custom_font_enabled",
+            () => State.CustomFontEnabled,
+            value => State.CustomFontEnabled = value,
+            SettingEffects.Typography,
+            title: Strings.Get("SettingsCustomFont"));
         yield return DefineSetting<bool>("appearance.enhanced_bold",
             () => State.CustomFontEnhancedBold,
             value => State.CustomFontEnhancedBold = value,
