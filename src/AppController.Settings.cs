@@ -1708,6 +1708,7 @@ public sealed partial class AppController
         State.FastAnimations = defaults.FastAnimations;
         State.UiFontPreset = defaults.UiFontPreset;
         State.TextRenderingProfile = defaults.TextRenderingProfile;
+        State.CustomFontEnabled = defaults.CustomFontEnabled;
         State.CustomFontEnhancedBold = defaults.CustomFontEnhancedBold;
         State.Zoom = defaults.Zoom;
         State.NoteTextSize = defaults.NoteTextSize;
