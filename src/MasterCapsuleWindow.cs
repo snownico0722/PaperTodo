@@ -112,6 +112,7 @@ public sealed partial class MasterCapsuleWindow : Window
         SourceInitialized += (_, _) =>
         {
             WindowNative.ApplyNoActivateStyle(this);
+            UpdateCaptureExclusion();
             if (_experimentalPassive)
             {
                 WindowNative.SetInputPassthrough(this, enabled: true);
@@ -428,6 +429,9 @@ public sealed partial class MasterCapsuleWindow : Window
                 ? restingOpacity
                 : 1.0;
     }
+
+    internal void UpdateCaptureExclusion() =>
+        WindowCaptureExclusion.Apply(this, _controller.State.HideCapsulesInCapture);
 
     public void RefreshEffectiveTopmost()
     {

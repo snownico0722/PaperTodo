@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
 using WpfPath = System.Windows.Shapes.Path;
@@ -25,6 +26,12 @@ public sealed partial class PaperWindow
     private Point _findDragPopupStart;
 
     internal bool IsBuiltInFindOpen => _findPopup?.IsOpen == true;
+
+    private void UpdateFindPopupCaptureExclusion()
+    {
+        if (_findHost != null && PresentationSource.FromVisual(_findHost) is HwndSource source)
+            WindowCaptureExclusion.Apply(source.Handle, _controller.State.HidePapersInCapture);
+    }
 
     private void EnsureBuiltInFindPopup()
     {
@@ -186,6 +193,7 @@ public sealed partial class PaperWindow
         };
         popup.Opened += (_, _) =>
         {
+            UpdateFindPopupCaptureExclusion();
             HookBuiltInFindContentChanges();
             RefreshTodoFindCues();
             CancelExperimentalAutoCollapse();

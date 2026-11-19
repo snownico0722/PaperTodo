@@ -56,6 +56,7 @@ public sealed partial class PaperWindow
                 _paper.CapsuleMonitorDeviceName) == IntPtr.Zero,
             EdgeCapsulePerformanceDiagnostics.ShortId(_paper.Id)));
         var host = _edgeCapsuleHost;
+        host.UpdateCaptureExclusion(_controller.State.HideCapsulesInCapture);
         ObserveMarkdownPreloadHost(host.MarkdownPreloadLifecycleAnchor);
         _ = MeasureDeepCapsuleIconSlotWidth(DeepCapsuleSlotDpi().PixelsPerDip);
         _edgeCapsule.SetNativeBatchApplyRejectedCallback(

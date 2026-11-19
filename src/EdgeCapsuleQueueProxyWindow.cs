@@ -121,6 +121,7 @@ internal sealed class EdgeCapsuleQueueProxyWindow : IDisposable
         {
             Instances[handle] = window;
         }
+        WindowCaptureExclusion.Apply(handle, AppController.Current?.State.HideCapsulesInCapture == true);
         window._previousWindowProcedure = SetWindowLongPtr(
             handle,
             GwlWndProc,
@@ -131,6 +132,15 @@ internal sealed class EdgeCapsuleQueueProxyWindow : IDisposable
             return null;
         }
         return window;
+    }
+
+    internal static void RefreshCaptureExclusion(bool excluded)
+    {
+        lock (Instances)
+        {
+            foreach (var hwnd in Instances.Keys)
+                WindowCaptureExclusion.Apply(hwnd, excluded);
+        }
     }
 
     public bool Show(DeviceScreenRect bounds, bool topmost, IntPtr insertAfter = default)

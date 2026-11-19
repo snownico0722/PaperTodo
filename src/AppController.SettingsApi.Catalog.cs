@@ -247,6 +247,16 @@ public sealed partial class AppController
             value => State.HidePapersFromWindowSwitcher = value,
             SettingEffects.SystemVisibility,
             title: Strings.Get("SettingsHidePapersFromWindowSwitcher"));
+        yield return DefineSetting<bool>("window.hide_papers_in_capture",
+            () => State.HidePapersInCapture,
+            value => State.HidePapersInCapture = value,
+            SettingEffects.CaptureExclusion,
+            title: SettingsSidebarLocalized("截图排除：纸片", "Exclude papers from capture", "撮影から付箋を除外", "캡처에서 메모 제외"));
+        yield return DefineSetting<bool>("window.hide_capsules_in_capture",
+            () => State.HideCapsulesInCapture,
+            value => State.HideCapsulesInCapture = value,
+            SettingEffects.CaptureExclusion,
+            title: SettingsSidebarLocalized("截图排除：胶囊", "Exclude capsules from capture", "撮影からカプセルを除外", "캡처에서 캡슐 제외"));
         yield return DefineSetting<string>("window.fullscreen_mode",
             () => State.FullscreenTopmostMode,
             value => State.FullscreenTopmostMode = value,

@@ -171,6 +171,7 @@ public sealed partial class AppController
                 WrapWithHint(
                     _settingsHidePapersFromWindowSwitcherCheckBox,
                     "TipHidePapersFromWindowSwitcher"),
+                CreateCaptureExclusionSettingsRow(),
                 CompactSettingsField(
                     Strings.Get("SettingsFullscreenTopmostMode"),
                     CreateFullscreenTopmostModeSegmentSelector(),
@@ -186,6 +187,47 @@ public sealed partial class AppController
         RefreshSettingsSystemVisibilityToggleStates();
         return leftColumn;
     }
+
+    private UIElement CreateCaptureExclusionSettingsRow()
+    {
+        var toggles = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        var paper = SettingsToggle(
+            SettingsSidebarLocalized("纸片", "Papers", "付箋", "메모"),
+            State.HidePapersInCapture,
+            ToggleHidePapersInCapture);
+        paper.Margin = new Thickness(0);
+        var capsule = SettingsToggle(
+            SettingsSidebarLocalized("胶囊", "Capsules", "カプセル", "캡슐"),
+            State.HideCapsulesInCapture,
+            ToggleHideCapsulesInCapture);
+        capsule.Margin = new Thickness(9, 0, 0, 0);
+        toggles.Children.Add(paper);
+        toggles.Children.Add(capsule);
+
+        return WrapWithHint(
+            (FrameworkElement)CompactSettingsField(
+                SettingsSidebarLocalized("在截图和录屏中隐藏", "Hide from capture",
+                    "スクリーンショット・録画から隠す", "스크린샷·녹화에서 숨기기"),
+                toggles,
+                editorWidth: double.NaN,
+                topMargin: 5),
+            BuildSettingsHintTooltip(SettingsSidebarLocalized(
+                "勾选后，对应内容在你的屏幕上照常显示和使用，但会从截图、录屏和屏幕共享中隐藏。Windows 10 20H1 之前的版本可能会在窗口位置留下空白。部分窗口或捕获工具可能不支持此功能，请勿将它用作隐私保障。",
+                "Selected items stay visible on your screen and you can use them as usual. They are hidden from screenshots, recordings, and screen sharing. On Windows versions before Windows 10 20H1, a blank area may appear where the window was. Some windows or capture tools may not support this feature. Don’t rely on it for privacy.",
+                "選んだ項目は自分の画面ではいつもどおり表示・操作でき、スクリーンショットや録画、画面共有では非表示になります。Windows 10 20H1 より前のバージョンでは、ウィンドウの位置に空白が残ることがあります。一部のウィンドウやキャプチャツールでは機能しない場合があります。プライバシー保護の目的では使用しないでください。",
+                "선택한 항목은 내 화면에서 평소처럼 보고 사용할 수 있으며, 스크린샷과 녹화, 화면 공유에서는 숨겨집니다. Windows 10 20H1 이전 버전에서는 창이 있던 자리가 빈칸으로 남을 수 있습니다. 일부 창이나 캡처 도구에서는 작동하지 않을 수 있으므로 개인정보 보호 수단으로 사용하지 마세요.")));
+    }
+
+    private void ToggleHidePapersInCapture() =>
+        SetSettingFromUi("window.hide_papers_in_capture", !State.HidePapersInCapture);
+
+    private void ToggleHideCapsulesInCapture() =>
+        SetSettingFromUi("window.hide_capsules_in_capture", !State.HideCapsulesInCapture);
 
     private void SetUiLanguage(string language)
     {
@@ -265,6 +307,8 @@ public sealed partial class AppController
         State.UiLanguage = defaults.UiLanguage;
         State.HidePapersFromTaskbar = defaults.HidePapersFromTaskbar;
         State.HidePapersFromWindowSwitcher = defaults.HidePapersFromWindowSwitcher;
+        State.HidePapersInCapture = defaults.HidePapersInCapture;
+        State.HideCapsulesInCapture = defaults.HideCapsulesInCapture;
         State.FullscreenTopmostMode = defaults.FullscreenTopmostMode;
         State.ShowTopBarNewTodoButton = defaults.ShowTopBarNewTodoButton;
         State.ShowTopBarNewNoteButton = defaults.ShowTopBarNewNoteButton;

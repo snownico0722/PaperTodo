@@ -58,6 +58,8 @@ This log is written for general and power users alike. It focuses on user-facing
 
 #### Appearance, Settings & Interaction
 
+- **Hide from capture**: Under General → Advanced, independently exclude papers and capsules from supported Windows screenshots, recordings and screen sharing. Both options are off by default.
+
 - **Seven experimental skins.** Choose from the default Paper skin, Mica, two Acrylic styles, Tracing Paper, Aero and Pixel. Each skin has its own color settings.
   - **Native Windows materials.** On Windows 11 22H2 or later, you can enable native backdrops for expanded papers and Settings. Restart PaperTodo the first time you enable them. On 24H2 or later, the backdrop can extend through the title bar.
   - **Five transparency levels.** Choose Very Low, Low, Medium, High or Very High to adjust the background while keeping text crisp. Capsules and context menus use a lighter material for readability.
