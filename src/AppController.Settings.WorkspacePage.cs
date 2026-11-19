@@ -123,7 +123,7 @@ public sealed partial class AppController
         optionsPanel.Children.Add(confirm);
 
         dataColumn.Children.Add(BuildSettingsLiveRegion("workspace.backup", BuildWorkspaceBackupSettings));
-        if (FollowsMainWorkspaceSettings)
+        if (FollowsMainWorkspaceSettings && State.AdvancedSettingsMode)
             dataColumn.Children.Add(new TextBlock
             {
                 Text = Strings.Get("WorkspaceSettingsReadOnly"),
