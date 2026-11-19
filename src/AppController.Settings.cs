@@ -287,6 +287,9 @@ public sealed partial class AppController
         SetSettingFromUi("capsule.text_bold", !State.CapsuleTextBold);
 
 
+    private void ToggleCustomFontEnabled() =>
+        SetSettingFromUi("appearance.custom_font_enabled", !State.CustomFontEnabled);
+
     private void ToggleCustomFontEnhancedBold() =>
         SetSettingFromUi("appearance.enhanced_bold", !State.CustomFontEnhancedBold);
 
@@ -1575,17 +1578,22 @@ public sealed partial class AppController
         rightColumn.Children.Add(CreateUiFontPresetSegmentSelector());
         rightColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsTextRenderingProfile")), "TipTextRenderingProfile"));
         rightColumn.Children.Add(CreateTextRenderingProfileSegmentSelector());
+        rightColumn.Children.Add(WrapWithHint(
+            SettingsToggle(Strings.Get("SettingsCustomFont"), State.CustomFontEnabled, ToggleCustomFontEnabled),
+            "TipCustomFont"));
+        var customFontChildren = new StackPanel { Margin = new Thickness(14, 0, 0, 0) };
         var customBoldToggle = SettingsToggle(
             Strings.Get("SettingsCustomFontEnhancedBold"),
             State.CustomFontEnhancedBold,
             ToggleCustomFontEnhancedBold);
-        // Only meaningful with papertodo + papertodo_bold (or PaperTodo_Bold) beside the exe.
-        // Keep an already-enabled setting clickable when a file disappears so the user can turn
-        // it off; AppTypography itself refuses to mix a system regular face with a custom bold one.
-        customBoldToggle.IsEnabled =
-            (AppTypography.HasCustomFont && AppTypography.HasCustomBoldFont) ||
-            State.CustomFontEnhancedBold;
-        rightColumn.Children.Add(WrapWithHint(customBoldToggle, "TipCustomFontEnhancedBold"));
+        // Keep an enabled value switchable off if its font file disappears. The typography
+        // resolver independently falls back to the system face whenever either face is missing.
+        customBoldToggle.IsEnabled = State.CustomFontEnabled &&
+            ((AppTypography.HasCustomFont && AppTypography.HasCustomBoldFont) ||
+             State.CustomFontEnhancedBold);
+        customBoldToggle.Opacity = customBoldToggle.IsEnabled ? 1.0 : 0.55;
+        customFontChildren.Children.Add(WrapWithHint(customBoldToggle, "TipCustomFontEnhancedBold"));
+        rightColumn.Children.Add(customFontChildren);
         rightColumn.Children.Add(CompactSettingsField(
             Strings.Get("SettingsOverallFontScale"),
             CreateOverallFontScaleStepper(),
@@ -2103,6 +2111,8 @@ public sealed partial class AppController
         };
         ToolTipPreferences.SetAlwaysEnabled(hint, true);
         ToolTipService.SetShowOnDisabled(hint, true);
+        ToolTipService.SetPlacement(hint, PlacementMode.Bottom);
+        ToolTipService.SetVerticalOffset(hint, 8);
         ToolTipService.SetInitialShowDelay(hint, 200);
         ToolTipService.SetShowDuration(hint, 20000);
         ToolTipService.SetBetweenShowDelay(hint, 0);
