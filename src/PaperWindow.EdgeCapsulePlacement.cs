@@ -40,8 +40,8 @@ public sealed partial class PaperWindow
                 limitForDeepCapsule: limitTitle,
                 pixelsPerDip: pixelsPerDip)) +
             CapsuleRightPadding);
-        // In the zero-character mode the built-in tag contains only its icon and the
-        // normal side padding. Do not let the generic 34-DIP floor reintroduce dead space.
+        // Plugin-requested widths return above; this branch sizes only the built-in icon/title tag.
+        // In zero-character mode keep its icon and side padding without the generic 34-DIP floor.
         return hideTitle
             ? bodyWidth + WindowChromeMargin
             : Math.Max(34, bodyWidth + WindowChromeMargin);
