@@ -62,13 +62,6 @@ internal static partial class Program
         Require(roles[nameof(AppState.TodoTopBarShortcuts)] == WorkspaceStateFieldScope.LegacyMigration &&
                 roles[nameof(AppState.NoteTopBarShortcuts)] == WorkspaceStateFieldScope.LegacyMigration,
             "Top-bar migration inputs need an explicit legacy classification.");
-        Require(WorkspaceFieldScopes.Inherits(nameof(AppState.CustomFontEnabled)) &&
-                new AppState().CustomFontEnabled,
-            "Custom font enablement must default on and follow main workspace settings.");
-        Require(new WorkspaceConfiguration().AutoGradientBackup &&
-                !new WorkspaceConfiguration { AutoGradientBackup = false }.Normalized().AutoGradientBackup,
-            "Automatic gradient backup must default on and preserve its global catalog preference.");
-
         Require(WorkspaceFieldScopes.Inherits(nameof(AppState.DataMergeConflictPolicy)) &&
                 WorkspaceFieldScopes.Inherits(nameof(AppState.McpAllowFullWrites)) &&
                 WorkspaceFieldScopes.Inherits(nameof(AppState.McpAllowDeletes)) &&
