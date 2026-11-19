@@ -37,7 +37,7 @@ public sealed partial class PaperWindow
             MeasureDeepCapsuleIconSlotWidth(pixelsPerDip) +
             (hideTitle ? 0 : CapsuleIconGap) +
             (hideTitle ? 0 : MeasureCapsuleTitleWidth(
-                limitForDeepCapsule: true,
+                limitForDeepCapsule: limitTitle,
                 pixelsPerDip: pixelsPerDip)) +
             CapsuleRightPadding);
         // In the zero-character mode the built-in tag contains only its icon and the
