@@ -78,14 +78,19 @@ public static class AppTypography
         string? preset,
         double scale = 1.0,
         bool customFontEnhancedBold = false,
-        string? textRenderingProfile = null)
+        string? textRenderingProfile = null,
+        bool customFontEnabled = true)
     {
         _preset = UiFontPresets.Normalize(preset);
         _scale = OverallFontScales.Normalize(scale);
         _customFontEnhancedBold = customFontEnhancedBold;
         _textRenderingProfile = TextRenderingProfiles.Normalize(textRenderingProfile);
-        _customFontFace = TryLoadCustomFontFaceFromCandidates(CustomRegularFontCandidates());
-        _customBoldFontFace = TryLoadCustomFontFaceFromCandidates(CustomBoldFontCandidates());
+        _customFontFace = customFontEnabled
+            ? TryLoadCustomFontFaceFromCandidates(CustomRegularFontCandidates())
+            : null;
+        _customBoldFontFace = customFontEnabled
+            ? TryLoadCustomFontFaceFromCandidates(CustomBoldFontCandidates())
+            : null;
     }
 
     /// <summary>
