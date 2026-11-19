@@ -84,7 +84,7 @@ public sealed partial class AppController
             else if (y < dividerMiddle)
             {
                 MoveTopBarShortcut(action, pinned: true,
-                    destinationIndex: PaperTopBarShortcuts.Pinned(State)
+                    destinationIndex: shownActions
                         .Count(item => item != action));
             }
             else
