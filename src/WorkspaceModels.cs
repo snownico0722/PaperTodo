@@ -14,6 +14,7 @@ public sealed class WorkspaceConfiguration
     public List<int> Slots { get; set; } = [1];
     public Dictionary<int, string> Names { get; set; } = new();
     public bool TopBarNamePicker { get; set; }
+    public bool AutoGradientBackup { get; set; } = true;
 
     public bool FollowsMain(int number) => number > 1 &&
         (FollowMainSettings == null || !FollowMainSettings.TryGetValue(number, out var follow) || follow);
@@ -45,6 +46,7 @@ public sealed class WorkspaceConfiguration
             Names = (Names ?? new()).Where(pair => slots.Contains(pair.Key) && !string.IsNullOrWhiteSpace(pair.Value))
                 .ToDictionary(pair => pair.Key, pair => pair.Value.Trim()[..Math.Min(64, pair.Value.Trim().Length)]),
             TopBarNamePicker = TopBarNamePicker,
+            AutoGradientBackup = AutoGradientBackup,
             FollowMainSettings = Enumerable.Range(2, 4).ToDictionary(n => n, FollowsMain)
         };
     }
