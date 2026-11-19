@@ -12,8 +12,65 @@ public sealed partial class AppController
         {
             Margin = new Thickness(2, 0, 4, 4)
         };
-        section.Children.Add(SettingsSectionLabel(SettingsSidebarLocalized(
-            "纸片背景", "Paper background", "紙面背景", "종이 배경")));
+        var imageFound = PaperBackground.IsAvailable;
+        var loadError = imageFound ? PaperBackground.LoadError : null;
+        var imageLoaded = imageFound && string.IsNullOrWhiteSpace(loadError);
+
+        var heading = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Margin = new Thickness(0, 2, 0, 4),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        heading.Children.Add(new TextBlock
+        {
+            Text = SettingsSidebarLocalized("纸片背景", "Paper background", "紙面背景", "종이 배경"),
+            Foreground = TrayWeakTextBrush,
+            FontSize = AppTypography.Scale(12),
+            FontWeight = FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center
+        });
+        heading.Children.Add(CreateSettingsHintGlyph(
+            BuildSettingsHintTooltip(SettingsSidebarLocalized(
+                "将图片命名为 papertodo.png、papertodo.jpg 或 papertodo.jpeg，放到 PaperTodo.exe 所在文件夹，重启后即可作为待办纸和笔记纸的背景。",
+                "Name the image papertodo.png, papertodo.jpg, or papertodo.jpeg, place it beside PaperTodo.exe, and restart PaperTodo to use it as the background for todos and notes.",
+                "画像を papertodo.png、papertodo.jpg、または papertodo.jpeg という名前で PaperTodo.exe と同じフォルダーに置き、再起動すると ToDo とノートの背景として使用できます。",
+                "이미지 이름을 papertodo.png, papertodo.jpg 또는 papertodo.jpeg로 지정해 PaperTodo.exe와 같은 폴더에 넣고 다시 시작하면 할 일과 노트의 배경으로 사용할 수 있습니다.")),
+            new Thickness(5, 0, 0, 0)));
+        if (!imageFound)
+        {
+            heading.Children.Add(new TextBlock
+            {
+                Text = SettingsSidebarLocalized("未启用", "Not enabled", "未有効", "사용 안 함"),
+                Foreground = TrayWeakTextBrush,
+                FontSize = AppTypography.Scale(10.5),
+                Margin = new Thickness(7, 0, 0, 0),
+                VerticalAlignment = VerticalAlignment.Center
+            });
+        }
+        section.Children.Add(heading);
+
+        if (!imageFound)
+            return section;
+
+        if (!imageLoaded)
+        {
+            section.Children.Add(new TextBlock
+            {
+                Text = SettingsSidebarLocalized(
+                    "背景图片加载失败，请检查图片文件。",
+                    "The background image could not be loaded. Check the image file.",
+                    "背景画像を読み込めません。画像ファイルを確認してください。",
+                    "배경 이미지를 불러오지 못했습니다. 이미지 파일을 확인하세요."),
+                Foreground = Theme.DangerBrush,
+                FontSize = AppTypography.Scale(11.5),
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 2, 0, 0),
+                ToolTip = BuildSettingsHintTooltip(loadError ?? string.Empty)
+            });
+            return section;
+        }
+
         section.Children.Add(WrapWithHint(
             SettingsToggle(
                 SettingsSidebarLocalized(
@@ -24,36 +81,15 @@ public sealed partial class AppController
                 PaperBackground.BlendWithTheme,
                 TogglePaperBackgroundBlend),
             BuildSettingsHintTooltip(SettingsSidebarLocalized(
-                "已检测到 PaperTodo.exe 同目录下的 papertodo.png（也支持 .jpg/.jpeg）。图片会同时用于笔记和待办；关闭此项显示原图，开启后与当前纸片配色混合。",
-                "Detected papertodo.png beside PaperTodo.exe (.jpg/.jpeg are also supported). The image is shared by notes and todos; turn this off to show the original image, or on to blend it with the current paper colors.",
-                "PaperTodo.exe と同じフォルダーの papertodo.png を検出しました（.jpg/.jpeg も対応）。画像はノートと ToDo で共通です。オフでは元画像を表示し、オンでは現在の紙面カラーと混合します。",
-                "PaperTodo.exe와 같은 폴더에서 papertodo.png을 감지했습니다(.jpg/.jpeg도 지원). 이미지는 메모와 할 일에 공통으로 사용됩니다. 끄면 원본을 표시하고 켜면 현재 메모 색상과 혼합합니다."))));
+                "开启后，背景图与当前纸片配色混合；关闭后显示原图。",
+                "When enabled, the image is blended with the current paper colors; when disabled, the original image is shown.",
+                "オンにすると背景画像を現在の紙面配色と混合し、オフにすると元画像を表示します。",
+                "켜면 배경 이미지가 현재 종이 색상과 혼합되고, 끄면 원본 이미지가 표시됩니다."))));
         section.Children.Add(SettingsToggle(
-            SettingsSidebarLocalized(
-                "拉伸", "Stretch", "ストレッチ", "늘이기"),
+            SettingsSidebarLocalized("拉伸", "Stretch", "ストレッチ", "늘이기"),
             PaperBackground.StretchImage,
             TogglePaperBackgroundStretch));
         section.Children.Add(BuildPaperBackgroundLayoutRow());
-
-        var loadError = PaperBackground.LoadError;
-        if (!string.IsNullOrWhiteSpace(loadError))
-        {
-            var error = new TextBlock
-            {
-                Text = SettingsSidebarLocalized(
-                    "背景图片加载失败，请检查图片文件。",
-                    "The background image could not be loaded. Check the image file.",
-                    "背景画像を読み込めません。画像ファイルを確認してください。",
-                    "배경 이미지를 불러오지 못했습니다. 이미지 파일을 확인하세요."),
-                Foreground = Theme.DangerBrush,
-                FontSize = AppTypography.Scale(11.5),
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 5, 0, 0),
-                ToolTip = BuildSettingsHintTooltip(loadError)
-            };
-            section.Children.Add(error);
-        }
-
         return section;
     }
 
