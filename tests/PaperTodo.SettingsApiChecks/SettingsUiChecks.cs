@@ -204,7 +204,7 @@ internal static partial class Program
     {
         var candidateImages = new[] { "papertodo.png", "papertodo.jpg", "papertodo.jpeg" };
         var hasBackgroundImage = candidateImages.Any(name =>
-            System.IO.File.Exists(Path.Combine(AppContext.BaseDirectory, name)));
+            System.IO.File.Exists(System.IO.Path.Combine(AppContext.BaseDirectory, name)));
 
         var controller = Controller();
         Field(controller, "_settingsRegionRefreshers", new Dictionary<string, Action>());
