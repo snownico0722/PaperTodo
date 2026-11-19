@@ -304,8 +304,15 @@ internal static partial class Program
         var source = string.Concat(Enumerable.Repeat("纸片中的中文与 English 会自动换行。", 10));
         using var editor = new Editor(source);
         var box = editor.Box;
+        var window = new Window
+        {
+            Content = box, Width = 240, Height = 600,
+            ShowActivated = false, ShowInTaskbar = false
+        };
         try
         {
+            window.Show();
+            Pump();
             foreach (var preview in new[] { false, true })
             {
                 box.SetPreviewMode(preview);
@@ -323,6 +330,7 @@ internal static partial class Program
         }
         finally
         {
+            window.Close();
             NoteTypography.Configure(VisualTextSizes.Medium, false);
         }
 
@@ -330,17 +338,15 @@ internal static partial class Program
         {
             NoteTypography.Configure(VisualTextSizes.Medium, false, spacing);
             box.RefreshTypography();
-            box.ApplyTemplate();
-            var viewport = new Size(220, 600);
-            box.Measure(viewport);
-            box.Arrange(new Rect(viewport));
-            box.UpdateLayout();
+            Pump();
+            window.UpdateLayout();
             var view = box.TextArea.TextView;
-            view.Measure(viewport);
-            view.Arrange(new Rect(viewport));
             view.EnsureVisualLines();
+            var family = (FontFamily)view.GetValue(System.Windows.Controls.TextBlock.FontFamilyProperty);
+            Require(family.Equals(box.FontFamily), "the loaded text view inherits the note font");
             var lines = view.GetOrConstructVisualLine(box.Document.GetLineByNumber(1)).TextLines;
             Require(lines.Count >= 3, "fixture must wrap onto multiple lines");
+            Console.WriteLine($"  {spacing}: font metrics {family.LineSpacing:F3} em, visual line {lines[1].Height:F3} DIP");
             return (lines[1].Height, lines[1].Length);
         }
     }
