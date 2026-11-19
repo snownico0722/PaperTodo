@@ -200,6 +200,47 @@ internal static partial class Program
         }
     }
 
+    private static void PaperBackgroundSettingsVisibility()
+    {
+        var candidateImages = new[] { "papertodo.png", "papertodo.jpg", "papertodo.jpeg" };
+        var hasBackgroundImage = candidateImages.Any(name =>
+            System.IO.File.Exists(Path.Combine(AppContext.BaseDirectory, name)));
+
+        var controller = Controller();
+        Field(controller, "_settingsRegionRefreshers", new Dictionary<string, Action>());
+        var page = (UIElement)Invoke(controller, "BuildVisualSettingsPage")!;
+        var window = new Window { Content = page, Width = 900, Height = 760 };
+        Field(controller, "_settingsWindow", window);
+        try
+        {
+            window.Show();
+            window.Activate();
+            window.UpdateLayout();
+            DrainSettingsUi();
+
+            var labels = SettingsControls<TextBlock>(window).Select(label => label.Text).ToArray();
+            Check(labels.Any(label => label is "纸片背景" or "Paper background" or "紙面背景" or "종이 배경"),
+                "Paper background settings stay visible at the bottom of Style & Text without an image.");
+
+            if (!hasBackgroundImage)
+            {
+                Check(labels.Any(label => label is "未启用" or "Not enabled" or "未有効" or "사용 안 함"),
+                    "The always-visible paper background section reports the no-image state.");
+                Check(!SettingsControls<CheckBox>(window).Any(toggle =>
+                        toggle.Content is string label &&
+                        label is "启用背景色混合" or "Enable background color blending" or
+                            "背景色のブレンドを有効化" or "배경색 혼합 사용"),
+                    "Detailed paper background options stay hidden until an image loads successfully.");
+            }
+        }
+        finally
+        {
+            Field(controller, "_settingsWindow", null!);
+            window.Close();
+            DrainSettingsUi();
+        }
+    }
+
     private static void SpacingKeyboardBehavior()
     {
         var controller = Controller();
