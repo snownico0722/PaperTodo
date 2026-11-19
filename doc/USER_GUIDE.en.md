@@ -501,7 +501,7 @@ Open **Style & Text** to adjust these options.
 #### Custom Paper Backgrounds
 
 1. Name an image `papertodo.png`, `papertodo.jpg`, or `papertodo.jpeg` and place it **beside `PaperTodo.exe`** (not in `assets/` or `plugins/`; priority is `PNG > JPG > JPEG`).
-2. Restart and open "Settings → Style & Text → Paper background" (shown once an image is detected).
+2. Restart and open "Settings → Style & Text → Paper background" at the bottom of the right column. The section is always visible: it shows "Not enabled" when no image is present, displays detailed options after a successful load, and shows an error when loading fails.
 3. **Blend with paper colors**: Off shows the original image; on blends it with the current paper colors. **This is not an image visibility switch.**
 4. **Stretch**: Independent toggle. On fills the paper proportionally and may crop edges; off keeps small images at original size and scales large images down only enough to fit.
 5. **Position**: Choose Center, Bottom left, Bottom center, or Bottom right alignment.
