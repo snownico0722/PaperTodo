@@ -1,6 +1,8 @@
 using System;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 
@@ -140,6 +142,77 @@ public sealed partial class AppController
             SetExperimentalWindowTetherPreferredEdge);
     }
 
+    private UIElement CreateSpacingRow(string labelKey, Func<string> current, string settingId)
+    {
+        var panel = new FrameworkElementFactory(typeof(UniformGrid));
+        panel.SetValue(UniformGrid.RowsProperty, 1);
+        var selector = new ListBox
+        {
+            ItemsPanel = new ItemsPanelTemplate(panel),
+            Template = new ControlTemplate(typeof(ListBox)) { VisualTree = new FrameworkElementFactory(typeof(ItemsPresenter)) },
+            SelectedValuePath = nameof(ListBoxItem.Tag),
+            ItemContainerStyle = SpacingOptionStyle(),
+            FontSize = AppTypography.Scale(12)
+        };
+        AutomationProperties.SetName(selector, Strings.Get(labelKey));
+        KeyboardNavigation.SetTabNavigation(selector, KeyboardNavigationMode.Once);
+        foreach (var (key, label) in new[]
+        {
+            (VisualTextSizes.Small, "TodoVisualSizeSmall"),
+            (VisualTextSizes.Medium, "TodoVisualSizeMedium"),
+            (VisualTextSizes.Large, "TodoVisualSizeLarge")
+        })
+        {
+            selector.Items.Add(new ListBoxItem { Tag = key, Content = Strings.Get(label) });
+        }
+        void SyncSelection() => selector.SelectedValue = current();
+        _settingsRegionRefreshers[settingId] = SyncSelection;
+        SyncSelection();
+        selector.SelectionChanged += (_, _) =>
+        {
+            if (selector.SelectedValue is string value && value != current())
+                SetSettingFromUi(settingId, value);
+        };
+
+        var frame = new Border
+        {
+            Child = selector, BorderThickness = new Thickness(1), BorderBrush = TrayBorderBrush,
+            CornerRadius = new CornerRadius(6), Height = AppTypography.FitChrome(26)
+        };
+        return new Border
+        {
+            Margin = new Thickness(14, 0, 0, 3),
+            Child = CompactSettingsField(Strings.Get(labelKey), frame, editorWidth: AppTypography.Scale(152), topMargin: 0)
+        };
+    }
+
+    private Style SpacingOptionStyle()
+    {
+        var chrome = new FrameworkElementFactory(typeof(Border));
+        chrome.SetValue(Border.CornerRadiusProperty, new CornerRadius(5));
+        chrome.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(Control.BackgroundProperty));
+        var content = new FrameworkElementFactory(typeof(ContentPresenter));
+        content.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+        content.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+        chrome.AppendChild(content);
+
+        var style = new Style(typeof(ListBoxItem));
+        style.Setters.Add(new Setter(Control.TemplateProperty, new ControlTemplate(typeof(ListBoxItem)) { VisualTree = chrome }));
+        style.Setters.Add(new Setter(FrameworkElement.MarginProperty, new Thickness(1)));
+        style.Setters.Add(new Setter(Control.BackgroundProperty, Brushes.Transparent));
+        style.Setters.Add(new Setter(Control.ForegroundProperty, TrayTextBrush));
+        style.Setters.Add(new Setter(FrameworkElement.CursorProperty, Cursors.Hand));
+        var hover = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
+        hover.Setters.Add(new Setter(Control.BackgroundProperty, TrayHoverBrush));
+        style.Triggers.Add(hover);
+        var selected = new Trigger { Property = ListBoxItem.IsSelectedProperty, Value = true };
+        selected.Setters.Add(new Setter(Control.BackgroundProperty, Theme.ActiveBrush));
+        selected.Setters.Add(new Setter(Control.ForegroundProperty, TrayPaperBrush));
+        selected.Setters.Add(new Setter(Control.FontWeightProperty, FontWeights.SemiBold));
+        style.Triggers.Add(selected);
+        return style;
+    }
+
     private UIElement CreateTextStyleRow(
         string labelText,
         string tipKey,
@@ -203,15 +276,29 @@ public sealed partial class AppController
         Grid.SetColumn(boldHost, 1);
         row.Children.Add(boldHost);
 
+        var sizeHost = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(8, 0, 0, 0)
+        };
+        sizeHost.Children.Add(new TextBlock
+        {
+            Text = Strings.Get("SettingsFontSizeLabel"),
+            Foreground = TrayWeakTextBrush,
+            FontSize = AppTypography.Scale(11),
+            VerticalAlignment = VerticalAlignment.Center
+        });
         if (sizeSelector is FrameworkElement selector)
         {
-            selector.Width = 92;
-            selector.Margin = new Thickness(8, 0, 0, 0);
+            selector.MinWidth = 56;
+            selector.Margin = new Thickness(4, 0, 0, 0);
             selector.HorizontalAlignment = HorizontalAlignment.Right;
             selector.VerticalAlignment = VerticalAlignment.Center;
         }
-        Grid.SetColumn(sizeSelector, 2);
-        row.Children.Add(sizeSelector);
+        sizeHost.Children.Add(sizeSelector);
+        Grid.SetColumn(sizeHost, 2);
+        row.Children.Add(sizeHost);
         return row;
     }
 

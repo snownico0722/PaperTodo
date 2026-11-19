@@ -15,18 +15,18 @@ internal sealed partial class MarkdownSemanticPresentation
     private double _nativeSpaceAdvance;
 
     private readonly record struct MarkerSlotMetricKey(
-        string FontFamily,
+        FontFamily FontFamily,
         double FontSize,
         FontStyle FontStyle,
         FontWeight FontWeight,
         FontStretch FontStretch,
-        string StrongFontFamily,
+        FontFamily StrongFontFamily,
         FontWeight StrongFontWeight,
         TextFormattingMode TextFormattingMode,
         double PixelsPerDip);
 
     private readonly record struct NativeSpaceMetricKey(
-        string FontFamily,
+        FontFamily FontFamily,
         FontStyle FontStyle,
         FontWeight FontWeight,
         FontStretch FontStretch,
@@ -78,17 +78,17 @@ internal sealed partial class MarkdownSemanticPresentation
     private MarkerSlotMetrics GetMarkerSlotMetrics(TextView textView)
     {
         var dpi = VisualTreeHelper.GetDpi(textView).PixelsPerDip;
-        var strongFamily = AppTypography.FontFamilyFor(content: true, bold: true);
+        var strongFamily = NoteTypography.EditorBoldFontFamily;
         var strongWeight = AppTypography.UsesCustomBoldFace(true)
             ? AppTypography.FontWeightFor(true)
             : NoteTypography.HeadingFontWeight;
         var key = new MarkerSlotMetricKey(
-            _editor.FontFamily.Source,
+            _editor.FontFamily,
             _editor.FontSize,
             _editor.FontStyle,
             _editor.FontWeight,
             _editor.FontStretch,
-            strongFamily.Source,
+            strongFamily,
             strongWeight,
             AppTypography.TextFormattingMode,
             dpi);
@@ -156,7 +156,7 @@ internal sealed partial class MarkdownSemanticPresentation
         var formattingMode = TextOptions.GetTextFormattingMode(textView);
         var dpi = VisualTreeHelper.GetDpi(textView).PixelsPerDip;
         var key = new NativeSpaceMetricKey(
-            typeface.FontFamily.Source,
+            typeface.FontFamily,
             typeface.Style,
             typeface.Weight,
             typeface.Stretch,

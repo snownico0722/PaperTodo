@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Documents;
 using System.Windows.Media;
@@ -16,6 +17,8 @@ internal static partial class Program
         new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
         var failures = 0;
         ClipboardImageChecks.Run(Check);
+        Check("Line spacing changes wrapped note lines in both modes", CheckNoteLineSpacing);
+        Check("All note spacing levels render the installed regular and bold files", CheckCustomFontSpacing);
         Check("Full mode preserves quote source and undo history", () =>
         {
             foreach (var source in new[] { "- > a\n  > b", "1. > a\n   > b", "> a\nb", "> a\n> > b\nlazy" })
@@ -295,6 +298,111 @@ internal static partial class Program
             Require(expected.SequenceEqual(table.Runs), $"incremental runs match full calculation at {caret.CaretOffset}");
             for (var index = 1; index < expected.Count; index++)
                 Require(expected[index - 1].End <= expected[index].Start, $"collapse cells do not overlap at {caret.CaretOffset}");
+        }
+    }
+
+    private static void CheckNoteLineSpacing()
+    {
+        var source = string.Concat(Enumerable.Repeat("纸片中的中文与 English 会自动换行。", 10));
+        using var editor = new Editor(source);
+        var box = editor.Box;
+        var window = new Window
+        {
+            Content = box, Width = 240, Height = 600,
+            ShowActivated = false, ShowInTaskbar = false
+        };
+        try
+        {
+            window.Show();
+            Pump();
+            foreach (var preview in new[] { false, true })
+            {
+                box.SetPreviewMode(preview);
+                var medium = Measure("medium");
+                var small = Measure("small");
+                var large = Measure("large");
+                Require(small.height < medium.height && medium.height < large.height,
+                    $"wrapped line heights (preview={preview}): {small.height}, {medium.height}, {large.height}");
+                Equal(medium.characters, small.characters, "compact spacing preserves wrapping");
+                Equal(medium.characters, large.characters, "large spacing preserves wrapping");
+                Near(medium.height, Measure("medium").height, "return to original line metrics");
+            }
+            Equal(source, box.Text, "spacing preserves source");
+            Require(!box.CanUndo, "spacing preserves undo history");
+        }
+        finally
+        {
+            window.Close();
+            NoteTypography.Configure(VisualTextSizes.Medium, false);
+        }
+
+        (double height, int characters) Measure(string spacing)
+        {
+            NoteTypography.Configure(VisualTextSizes.Medium, false, spacing);
+            box.RefreshTypography();
+            Pump();
+            window.UpdateLayout();
+            var view = box.TextArea.TextView;
+            view.EnsureVisualLines();
+            var family = (FontFamily)view.GetValue(System.Windows.Controls.TextBlock.FontFamilyProperty);
+            Require(family.Equals(box.FontFamily), "the loaded text view inherits the note font");
+            var lines = view.GetOrConstructVisualLine(box.Document.GetLineByNumber(1)).TextLines;
+            Require(lines.Count >= 3, "fixture must wrap onto multiple lines");
+            Console.WriteLine($"  {spacing}: font metrics {family.LineSpacing:F3} em, visual line {lines[1].Height:F3} DIP");
+            return (lines[1].Height, lines[1].Length);
+        }
+    }
+
+    private static void CheckCustomFontSpacing()
+    {
+        var folder = Directory.CreateTempSubdirectory("PaperTodo fonts, #").FullName;
+        var fonts = Environment.GetFolderPath(Environment.SpecialFolder.Fonts);
+        var regular = Path.Combine(folder, "papertodo.ttf");
+        var bold = Path.Combine(folder, "papertodo_bold.ttf");
+        try
+        {
+            File.Copy(Path.Combine(fonts, "arial.ttf"), regular);
+            File.Copy(Path.Combine(fonts, "timesbd.ttf"), bold);
+            // Exercise the production file discovery without touching the user's program folder.
+            const string baseKey = "APP_CONTEXT_BASE_DIRECTORY";
+            var previousBase = AppContext.GetData(baseKey);
+            try
+            {
+                AppContext.SetData(baseKey, folder + Path.DirectorySeparatorChar);
+                AppTypography.Configure(null, customFontEnhancedBold: true);
+            }
+            finally { AppContext.SetData(baseKey, previousBase); }
+            Require(AppTypography.HasCustomFont && AppTypography.HasCustomBoldFont, "both fixture faces loaded");
+
+            using var editor = new Editor("PaperTodo");
+            var box = editor.Box;
+            var window = new Window { Content = box, Width = 240, Height = 180, ShowActivated = false, ShowInTaskbar = false };
+            try
+            {
+                window.Show();
+                foreach (var isBold in new[] { false, true })
+                foreach (var spacing in new[] { "medium", "small", "large" })
+                {
+                    NoteTypography.Configure(VisualTextSizes.Medium, isBold, spacing);
+                    box.RefreshTypography();
+                    Pump();
+                    window.UpdateLayout();
+                    var view = box.TextArea.TextView;
+                    view.EnsureVisualLines();
+                    var line = view.GetOrConstructVisualLine(box.Document.GetLineByNumber(1)).TextLines[0];
+                    var paths = line.GetIndexedGlyphRuns().Select(run => run.GlyphRun.GlyphTypeface.FontUri.LocalPath).ToArray();
+                    var expected = isBold ? bold : regular;
+                    Require(paths.Length > 0 && paths.All(path => string.Equals(path, expected, StringComparison.OrdinalIgnoreCase)),
+                        $"{spacing}: expected glyphs from {expected}, got {string.Join(", ", paths)}");
+                }
+            }
+            finally { window.Close(); }
+        }
+        finally
+        {
+            AppTypography.Configure(null);
+            NoteTypography.Configure(VisualTextSizes.Medium, false);
+            Directory.Delete(folder, recursive: true);
         }
     }
 

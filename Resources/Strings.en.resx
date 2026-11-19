@@ -1041,6 +1041,9 @@ Per-note percentage zoom stacks on top.</value>
   <data name="ImageReferenceTextHidden" xml:space="preserve">
     <value>Always hide</value>
   </data>
+  <data name="SettingsFontSizeLabel" xml:space="preserve"><value>Size</value></data>
+  <data name="SettingsLineSpacing" xml:space="preserve"><value>Line spacing</value></data>
+  <data name="SettingsItemSpacing" xml:space="preserve"><value>Item spacing</value></data>
   <data name="SettingsTextBold" xml:space="preserve">
     <value>Bold</value>
   </data>
@@ -1049,13 +1052,14 @@ Per-note percentage zoom stacks on top.</value>
   </data>
   <data name="TipNoteBodyTextStyle" xml:space="preserve">
     <value>Small / medium / large on top of overall size, optional bold.
-Per-note percentage zoom stacks on top.</value>
+Per-note percentage zoom stacks on top.
+Line spacing applies while editing and browsing.</value>
   </data>
   <data name="SettingsTodoBodyText" xml:space="preserve">
     <value>Todo body</value>
   </data>
   <data name="TipTodoBodyTextStyle" xml:space="preserve">
-    <value>Todo body and row height: small / medium / large, optional bold.</value>
+    <value>Size and bold control to-do text. Item spacing adjusts the gap between to-dos, including those that wrap onto several lines.</value>
   </data>
   <data name="SettingsTitleText" xml:space="preserve">
     <value>Title text</value>

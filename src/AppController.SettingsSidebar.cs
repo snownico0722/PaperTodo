@@ -108,6 +108,7 @@ public sealed partial class AppController
             "title.max_length" or "capsule.title_measure_limit" or "capsule.hide_close_button" or
                 "capsule.master_compact" => "general.capsuleAppearance",
             "capsule.gap" => "visual.options",
+            "note.line_spacing" or "todo.item_spacing" => id,
             "edge.non_topmost" => "general.capsules",
             "scripts.run_linked_on_click" => "general.todos",
             "note.markdown_mode" or "note.edit_animations" or "note.image_reference_text" => "note.markdown",

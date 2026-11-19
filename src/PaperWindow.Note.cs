@@ -59,6 +59,8 @@ public sealed partial class PaperWindow
         _markdownBodySession?.CancelPresenterDeferredWork();
     }
 
+    internal void UpdateNoteLineSpacing() => _noteBox?.RefreshTypography();
+
     public void UpdateMarkdownRenderMode()
     {
         if (_paper.Type == PaperTypes.Note && _noteBox != null)
@@ -122,7 +124,7 @@ public sealed partial class PaperWindow
             Background = Brushes.Transparent,
             Foreground = TextBrush,
             CaretBrush = TextBrush,
-            FontFamily = NoteTypography.FontFamily,
+            FontFamily = NoteTypography.EditorFontFamily,
             FontSize = NoteTypography.FontSize,
             FontStyle = NoteTypography.FontStyle,
             FontWeight = NoteTypography.FontWeight,

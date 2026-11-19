@@ -496,6 +496,7 @@ Open **Style & Text** to adjust these options.
 - **Native materials**: Require **Windows 11 22H2 or later**; exit and reopen when prompted on first use. Unsupported systems or disabled system transparency fall back to solid colors.
 - **Material transparency**: Five levels adjust the material backdrop on expanded papers and Settings without fading text (distinct from window opacity). Capsules and menus always use lightweight opaque backgrounds.
 - **Typography**: Font presets include Language default, YaHei, and DengXian, with overall scaling, per-area size/bold controls, and Standard / Soft / Sharp text rendering.
+- **Content spacing**: In the font settings, **Line spacing** applies to notes while editing and browsing. **Item spacing** adjusts the gap between to-dos, including ones that wrap onto several lines. Each setting takes effect immediately and defaults to Medium. Use Tab to focus a selector and the left or right arrow to change it.
 
 #### Custom Paper Backgrounds
 

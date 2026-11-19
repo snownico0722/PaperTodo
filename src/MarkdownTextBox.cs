@@ -50,7 +50,7 @@ public sealed partial class MarkdownTextBox : TextEditor
 
     public MarkdownTextBox()
     {
-        FontFamily = NoteTypography.FontFamily;
+        FontFamily = NoteTypography.EditorFontFamily;
         FontSize = NoteTypography.FontSize;
         FontStyle = NoteTypography.FontStyle;
         FontWeight = NoteTypography.FontWeight;
@@ -274,7 +274,7 @@ public sealed partial class MarkdownTextBox : TextEditor
 
     public void RefreshTypography()
     {
-        FontFamily = NoteTypography.FontFamily;
+        FontFamily = NoteTypography.EditorFontFamily;
         FontStyle = NoteTypography.FontStyle;
         FontWeight = NoteTypography.FontWeight;
         FontStretch = NoteTypography.FontStretch;
