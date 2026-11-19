@@ -12,13 +12,15 @@ internal static class SkinChecks
     internal static void Run(AppController controller)
     {
         var before = (controller.State.PaperSkin, controller.State.ColorScheme, controller.State.Theme,
-            controller.State.EnableAnimations, controller.State.HideSurfaceOutline);
+            controller.State.EnableAnimations, controller.State.HideSurfaceOutline,
+            controller.State.EnhanceCapsuleActiveOutline);
         try
         {
             controller.State.Theme = "light";
             controller.State.ColorScheme = ColorSchemes.Warm;
             controller.State.EnableAnimations = false;
             controller.State.HideSurfaceOutline = false;
+            controller.State.EnhanceCapsuleActiveOutline = false;
             CheckAuxiliaryContent(controller);
             CheckEdgeFocusOpacity(controller);
             CheckLiveSwitch(controller);
@@ -28,7 +30,8 @@ internal static class SkinChecks
         finally
         {
             (controller.State.PaperSkin, controller.State.ColorScheme, controller.State.Theme,
-                controller.State.EnableAnimations, controller.State.HideSurfaceOutline) = before;
+                controller.State.EnableAnimations, controller.State.HideSurfaceOutline,
+                controller.State.EnhanceCapsuleActiveOutline) = before;
             Theme.Invalidate();
         }
     }
@@ -100,18 +103,31 @@ internal static class SkinChecks
             CornerRadius = new CornerRadius(0, 12, 12, 0),
             BorderThickness = new Thickness(0, thickness, thickness, thickness)
         };
+        Program.Assert(!new AppState().EnhanceCapsuleActiveOutline, "capsule outline enhancement defaults off");
         foreach (var (theme, rimOpacity) in new[] { ("dark", 0.60), ("light", 0.70) })
         {
             controller.State.Theme = theme;
             Theme.Invalidate();
             outline.RefreshSkin();
             outline.BorderBrush = Theme.EdgeCapsuleFocusBrush;
-            var pixels = Pixels(Render(outline, 1));
-            int TopAlpha(int y) => pixels[(y * 64 + 32) * 4 + 3];
+            int TopAlpha(byte[] pixels, int y) => pixels[(y * 64 + 32) * 4 + 3];
+
+            controller.State.EnhanceCapsuleActiveOutline = false;
+            outline.InvalidateVisual();
+            var standard = Pixels(Render(outline, 1));
+            Program.Assert(TopAlpha(standard, 0) == 255 && TopAlpha(standard, 1) == 255 &&
+                           TopAlpha(standard, 2) == 0,
+                $"{theme}: disabling enhancement keeps the original 2 DIP active outline");
+
+            controller.State.EnhanceCapsuleActiveOutline = true;
+            outline.InvalidateVisual();
+            var enhanced = Pixels(Render(outline, 1));
             var rimAlpha = SystemParameters.HighContrast ? 255 : Math.Round(rimOpacity * 255);
-            Program.Assert(Math.Abs(TopAlpha(0) - rimAlpha) <= 1 && TopAlpha(1) == 255 && TopAlpha(2) == 255,
-                $"{theme}: outer rim follows theme opacity and the focus stroke stays opaque");
+            Program.Assert(Math.Abs(TopAlpha(enhanced, 0) - rimAlpha) <= 1 &&
+                           TopAlpha(enhanced, 1) == 255 && TopAlpha(enhanced, 2) == 255,
+                $"{theme}: enabling enhancement adds a translucent outer rim to the same 2 DIP focus stroke");
         }
+        controller.State.EnhanceCapsuleActiveOutline = false;
     }
 
     private static void CheckLiveSwitch(AppController controller)
