@@ -200,6 +200,53 @@ internal static partial class Program
         }
     }
 
+    private static void SpacingKeyboardBehavior()
+    {
+        var controller = Controller();
+        Field(controller, "_settingsRegionRefreshers", new Dictionary<string, Action>());
+        SettingsFor(controller, () => true, action => action());
+        var panel = new StackPanel();
+        var start = new Button { Content = "Start" };
+        panel.Children.Add(start);
+        panel.Children.Add((UIElement)Invoke(controller, "CreateSpacingRow", "SettingsLineSpacing",
+            (Func<string>)(() => controller.State.NoteLineSpacing), "note.line_spacing")!);
+        panel.Children.Add((UIElement)Invoke(controller, "CreateSpacingRow", "SettingsItemSpacing",
+            (Func<string>)(() => controller.State.TodoItemSpacing), "todo.item_spacing")!);
+        var window = new Window { Content = panel, Width = 350, Height = 200 };
+        Field(controller, "_settingsWindow", window);
+        try
+        {
+            window.Show();
+            window.Activate();
+            DrainSettingsUi();
+            var lists = SettingsControls<ListBox>(panel).ToArray();
+            start.Focus();
+            start.MoveFocus(new TraversalRequest(FocusNavigationDirection.Next));
+            Check(lists[0].IsKeyboardFocusWithin, "Tab reaches note spacing");
+            Press(Key.Right);
+            DrainSettingsUi();
+            Check(controller.State.NoteLineSpacing == "large" && lists[0].IsKeyboardFocusWithin,
+                "Right changes spacing and keeps keyboard focus after persistence");
+            Press(Key.Left);
+            DrainSettingsUi();
+            Check(controller.State.NoteLineSpacing == "medium", "consecutive arrow keys work");
+            ((UIElement)Keyboard.FocusedElement).MoveFocus(new TraversalRequest(FocusNavigationDirection.Next));
+            Check(lists[1].IsKeyboardFocusWithin, "the next Tab reaches to-do spacing");
+            Press(Key.Left);
+            DrainSettingsUi();
+            Check(controller.State.TodoItemSpacing == "small" && controller.State.NoteLineSpacing == "medium",
+                "keyboard adjusts the two settings independently");
+        }
+        finally { window.Close(); }
+
+        void Press(Key key)
+        {
+            var target = (UIElement)Keyboard.FocusedElement;
+            target.RaiseEvent(new KeyEventArgs(Keyboard.PrimaryDevice, PresentationSource.FromVisual(target),
+                Environment.TickCount, key) { RoutedEvent = Keyboard.KeyDownEvent });
+        }
+    }
+
     private static void WorkspaceDataSettingsBehavior()
     {
         var c = Controller();
