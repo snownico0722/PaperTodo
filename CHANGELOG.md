@@ -20,15 +20,22 @@ This log is written for general and power users alike. It focuses on user-facing
 
 ### Unreleased
 
+#### Settings & Appearance
+
 - **Settings visibility and shortcuts.** Normal mode now hides Data Handling and the local MCP interface; these settings remain available in Advanced mode. Outside Advanced mode, the Run Script option is also hidden from shortcut settings without disabling an already-configured shortcut. New installations hide Run Script by default, and users can show it manually.
 - **Global automatic tiered-backup control.** Workspaces & Data adds a default-on switch shared by all workspaces. Turning it off stops new scheduled tiered archives without deleting existing ZIPs or disabling recovery.
 - **Custom font control.** A default-on **Custom font** switch controls loading `papertodo.ttf` or `papertodo.otf`. **Custom font enhanced bold** is nested beneath it and can use a separate bold font file; setup guidance is available from the option's info icon.
 - **Paper background settings.** The **Paper background** section now remains visible at the bottom of Style & Text and adapts to missing, successfully loaded or failed images. Its info icon explains how to install a background image, while the blending switch has its own explanation.
-- **Body plugin guidance and menu visibility.** Notes show the **Body type** menu only when an enabled third-party body plugin is available. The Plugins page explains plugin-provided body types and that note content is preserved when switching back to Markdown.
-- **Zero-title edge capsules.** Built-in edge capsules with a zero-character title now size to the icon slot and side padding, removing the unused title gap. The full title and spacing return on hover; plugin-drawn capsules keep their declared width.
+- **Hide from capture.** Under General → Advanced, independently exclude papers and capsules from supported Windows screenshots, recordings and screen sharing. Both options are off by default.
 
+#### Plugins & Body Types
+
+- **Body plugin guidance and menu visibility.** Notes show the **Body type** menu when an enabled third-party body plugin is available, or when the menu is needed to recover a note using a no-longer-available plugin. The Plugins page explains plugin-provided body types and that note content is preserved when switching back to Markdown.
+
+#### Edge Previews & Capsules
 
 - **Optional capsule outline enhancement.** A new **Enable capsule outline enhancement** toggle under **Style & Text** is off by default. Turn it on to add a thin translucent outer rim to active edge capsules. The previous 2 DIP focus stroke is retained; the default now uses that stroke alone, while the opt-in mode restores the additional translucent rim.
+- **Zero-title edge capsules.** Built-in edge capsules with a zero-character title now size to the icon slot and side padding, removing the unused title gap. The full title and spacing return on hover; plugin-drawn capsules keep their declared width.
 
 ### v4.0.0-beta2
 
@@ -68,7 +75,6 @@ This log is written for general and power users alike. It focuses on user-facing
 
 #### Appearance, Settings & Interaction
 
-- **Hide from capture**: Under General → Advanced, independently exclude papers and capsules from supported Windows screenshots, recordings and screen sharing. Both options are off by default.
 
 - **Seven experimental skins.** Choose from the default Paper skin, Mica, two Acrylic styles, Tracing Paper, Aero and Pixel. Each skin has its own color settings.
   - **Native Windows materials.** On Windows 11 22H2 or later, you can enable native backdrops for expanded papers and Settings. Restart PaperTodo the first time you enable them. On 24H2 or later, the backdrop can extend through the title bar.
