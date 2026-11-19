@@ -1622,7 +1622,8 @@ public sealed partial class AppController
             CreateVisualTextSizeSelector(State.NoteTextSize, SetNoteTextSize),
             State.NoteTextBold,
             ToggleNoteTextBold);
-        rightColumn.Children.Add(CreateSpacingRow("SettingsLineSpacing", () => State.NoteLineSpacing, "note.line_spacing"));
+        if (State.AdvancedSettingsMode)
+            rightColumn.Children.Add(CreateSpacingRow("SettingsLineSpacing", () => State.NoteLineSpacing, "note.line_spacing"));
 
         AddTextStyleEditor(
             "SettingsTodoBodyText",
