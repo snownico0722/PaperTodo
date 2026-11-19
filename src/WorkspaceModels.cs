@@ -14,7 +14,6 @@ public sealed class WorkspaceConfiguration
     public List<int> Slots { get; set; } = [1];
     public Dictionary<int, string> Names { get; set; } = new();
     public bool TopBarNamePicker { get; set; }
-    public bool AutoGradientBackup { get; set; } = true;
 
     public bool FollowsMain(int number) => number > 1 &&
         (FollowMainSettings == null || !FollowMainSettings.TryGetValue(number, out var follow) || follow);
@@ -46,7 +45,6 @@ public sealed class WorkspaceConfiguration
             Names = (Names ?? new()).Where(pair => slots.Contains(pair.Key) && !string.IsNullOrWhiteSpace(pair.Value))
                 .ToDictionary(pair => pair.Key, pair => pair.Value.Trim()[..Math.Min(64, pair.Value.Trim().Length)]),
             TopBarNamePicker = TopBarNamePicker,
-            AutoGradientBackup = AutoGradientBackup,
             FollowMainSettings = Enumerable.Range(2, 4).ToDictionary(n => n, FollowsMain)
         };
     }
@@ -119,7 +117,7 @@ internal static class WorkspaceFieldScopes
             nameof(AppState.TodoVisualSize), nameof(AppState.ShowTodoBottomBar), nameof(AppState.AutoClearCompletedTodos),
             nameof(AppState.AutoMoveCompletedTodosToBottom), nameof(AppState.AutoCompressLargeImages), nameof(AppState.UiFontPreset),
             nameof(AppState.TextRenderingProfile), nameof(AppState.AdvancedSettingsMode), nameof(AppState.TelemetryEnabled),
-            nameof(AppState.CustomFontEnabled), nameof(AppState.CustomFontEnhancedBold), nameof(AppState.ExternalMarkdownExtension), nameof(AppState.Zoom),
+            nameof(AppState.CustomFontEnhancedBold), nameof(AppState.ExternalMarkdownExtension), nameof(AppState.Zoom),
             nameof(AppState.NoteTextSize), nameof(AppState.NoteTextBold), nameof(AppState.TodoTextBold),
             nameof(AppState.TitleTextSize), nameof(AppState.TitleTextBold), nameof(AppState.CapsuleTextSize),
             nameof(AppState.CapsuleTextBold), nameof(AppState.UseCapsuleMode), nameof(AppState.UseDeepCapsuleMode),
