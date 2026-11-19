@@ -151,8 +151,8 @@ public sealed partial class AppController
                 {
                     var next = WorkspaceOptions.Normalized();
                     next.AutoGradientBackup = !next.AutoGradientBackup;
-                    if (await ChangeWorkspaceConfigurationAsync(next))
-                        RefreshSettingsWindowContent();
+                    await ChangeWorkspaceConfigurationAsync(next);
+                    RefreshSettingsWindowContent();
                 }),
             "TipAutoGradientBackup"));
         return content;
