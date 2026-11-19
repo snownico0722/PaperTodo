@@ -1622,7 +1622,8 @@ public sealed partial class AppController
             CreateVisualTextSizeSelector(State.NoteTextSize, SetNoteTextSize),
             State.NoteTextBold,
             ToggleNoteTextBold);
-        rightColumn.Children.Add(CreateSpacingRow("SettingsLineSpacing", () => State.NoteLineSpacing, "note.line_spacing"));
+        if (State.AdvancedSettingsMode)
+            rightColumn.Children.Add(CreateSpacingRow("SettingsLineSpacing", () => State.NoteLineSpacing, "note.line_spacing"));
 
         AddTextStyleEditor(
             "SettingsTodoBodyText",
@@ -1630,7 +1631,8 @@ public sealed partial class AppController
             CreateTodoVisualSizeSelector(),
             State.TodoTextBold,
             ToggleTodoTextBold);
-        rightColumn.Children.Add(CreateSpacingRow("SettingsItemSpacing", () => State.TodoItemSpacing, "todo.item_spacing"));
+        if (State.AdvancedSettingsMode)
+            rightColumn.Children.Add(CreateSpacingRow("SettingsItemSpacing", () => State.TodoItemSpacing, "todo.item_spacing"));
 
         AddTextStyleEditor(
             "SettingsTitleText",
@@ -1645,11 +1647,8 @@ public sealed partial class AppController
             State.CapsuleTextBold,
             ToggleCapsuleTextBold);
 
-        if (PaperBackground.IsAvailable)
-        {
-            rightColumn.Children.Add(SettingsSoftDivider());
-            rightColumn.Children.Add(BuildPaperBackgroundSettingsSection());
-        }
+        rightColumn.Children.Add(SettingsSoftDivider());
+        rightColumn.Children.Add(BuildPaperBackgroundSettingsSection());
 
         var separator = new Border
         {

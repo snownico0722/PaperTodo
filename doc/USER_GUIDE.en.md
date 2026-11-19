@@ -496,12 +496,12 @@ Open **Style & Text** to adjust these options.
 - **Native materials**: Require **Windows 11 22H2 or later**; exit and reopen when prompted on first use. Unsupported systems or disabled system transparency fall back to solid colors.
 - **Material transparency**: Five levels adjust the material backdrop on expanded papers and Settings without fading text (distinct from window opacity). Capsules and menus always use lightweight opaque backgrounds.
 - **Typography**: Font presets include Language default, YaHei, and DengXian, with overall scaling, per-area size/bold controls, and Standard / Soft / Sharp text rendering.
-- **Content spacing**: In the font settings, **Line spacing** applies to notes while editing and browsing. **Item spacing** adjusts the gap between to-dos, including ones that wrap onto several lines. Each setting takes effect immediately and defaults to Medium. Use Tab to focus a selector and the left or right arrow to change it.
+- **Content spacing**: In the font settings, **Line spacing** applies to notes while editing and browsing. **Item spacing** adjusts the gap between to-dos, including ones that wrap onto several lines. Both settings are shown only in Advanced mode, each with Small, Medium and Large levels and a Medium default. Use Tab to focus a selector and the left or right arrow to change it.
 
 #### Custom Paper Backgrounds
 
 1. Name an image `papertodo.png`, `papertodo.jpg`, or `papertodo.jpeg` and place it **beside `PaperTodo.exe`** (not in `assets/` or `plugins/`; priority is `PNG > JPG > JPEG`).
-2. Restart and open "Settings → Style & Text → Paper background" (shown once an image is detected).
+2. Restart and open "Settings → Style & Text → Paper background" at the bottom of the right column. The section is always visible: it shows "Not enabled" when no image is present, displays detailed options after a successful load, and shows an error when loading fails.
 3. **Blend with paper colors**: Off shows the original image; on blends it with the current paper colors. **This is not an image visibility switch.**
 4. **Stretch**: Independent toggle. On fills the paper proportionally and may crop edges; off keeps small images at original size and scales large images down only enough to fit.
 5. **Position**: Choose Center, Bottom left, Bottom center, or Bottom right alignment.

@@ -76,6 +76,8 @@ internal static partial class Program
             AdapterBehavior();
             SharedUiSettingBehavior();
             SettingsEditorBehavior();
+            PaperBackgroundSettingsVisibility();
+            SpacingAdvancedModeVisibility();
             SpacingKeyboardBehavior();
             WorkspaceDataSettingsBehavior();
             PostCommitFailureDoesNotReplay();
