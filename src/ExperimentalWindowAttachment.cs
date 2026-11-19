@@ -914,7 +914,7 @@ public sealed partial class PaperWindow
                 plan);
         _experimentalCapsuleMagnetPreviewPlan = plan;
         var preview = _experimentalCapsuleMagnetPreview ??=
-            new ExperimentalAttachmentPreviewWindow();
+            new ExperimentalAttachmentPreviewWindow(_controller.State.HideCapsulesInCapture);
         preview.ShowAt(
             plan.WindowBounds,
             _controller.FullscreenAvoidanceWindowFor(this),

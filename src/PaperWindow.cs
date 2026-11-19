@@ -778,6 +778,7 @@ public sealed partial class PaperWindow : Window
     {
         base.OnSourceInitialized(e);
         ApplySystemVisibility(reapplyTaskbarShellState: true);
+        UpdateCaptureExclusion();
         // Edge expansion can position this HWND before Show attaches the WPF visual.
         if (HwndSource.FromHwnd(new WindowInteropHelper(this).Handle) is { } source)
         {
@@ -836,6 +837,25 @@ public sealed partial class PaperWindow : Window
         {
             _isClosingForReal = false;
         }
+    }
+
+    internal void UpdateCaptureExclusion()
+    {
+        UpdateMainWindowCaptureExclusion();
+        UpdateFindPopupCaptureExclusion();
+        var hideCapsules = _controller.State.HideCapsulesInCapture;
+        _edgeCapsuleHost?.UpdateCaptureExclusion(hideCapsules);
+        if (_experimentalCapsuleMagnetPreview is { } preview)
+            preview.UpdateCaptureExclusion(hideCapsules);
+    }
+
+    private void UpdateMainWindowCaptureExclusion()
+    {
+        var state = _controller.State;
+        var excluded = IsPaperFormTransitioning
+            ? state.HidePapersInCapture || state.HideCapsulesInCapture
+            : _paper.IsCollapsed ? state.HideCapsulesInCapture : state.HidePapersInCapture;
+        WindowCaptureExclusion.Apply(this, excluded);
     }
 
     public void UpdateWindowSwitcherVisibility()
