@@ -254,6 +254,7 @@ public sealed partial class AppController
         }
         RefreshTypography();
         RefreshThemeSurfaces();
+        SkinBorder.RefreshLoadedCapsuleOutlines();
         InitializeGlobalHotkeys();
         RefreshPluginShortcuts();
         RefreshFullscreenAvoidanceRuntime();

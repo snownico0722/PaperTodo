@@ -691,6 +691,12 @@
   <data name="TipFastAnimations" xml:space="preserve">
     <value>将界面动画时长缩短至约 60%，保留过渡效果但让操作响应更快。关闭“开启过渡动画”时此设置不生效。</value>
   </data>
+  <data name="SettingsCapsuleOutlineEnhancement" xml:space="preserve">
+    <value>开启胶囊描边增强</value>
+  </data>
+  <data name="TipCapsuleOutlineEnhancement" xml:space="preserve">
+    <value>开启后，边缘胶囊激活时额外增加一圈半透明细描边，使其在相近颜色的桌面背景上更容易辨认。</value>
+  </data>
   <data name="TipPersistentPowerShellProcess" xml:space="preserve">
     <value>!pf / !powerf 使用常驻进程，启动更快，但变量与状态可能跨脚本保留。
 关闭后结束该进程。</value>
