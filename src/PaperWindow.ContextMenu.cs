@@ -76,7 +76,8 @@ public sealed partial class PaperWindow
         if (_paper.Type == PaperTypes.Note &&
             (!IsCurrentBodyProviderMarkdown ||
              _controller.PaperBodyPlugins.Descriptors.Any(descriptor =>
-                 descriptor.Kind != PaperBodyPluginKind.BuiltIn)))
+                 descriptor.Kind != PaperBodyPluginKind.BuiltIn &&
+                 _controller.IsPluginEnabled(descriptor.Id))))
             menu.Items.Add(BuildPaperBodyProviderMenuItem());
 
         if (IsExportablePaper(_paper))
