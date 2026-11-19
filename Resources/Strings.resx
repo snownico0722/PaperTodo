@@ -1873,14 +1873,20 @@
   </data>
   <data name="SettingsCustomFont" xml:space="preserve">
     <value>自定义字体</value>
-  </data>\n  <data name="TipCustomFont" xml:space="preserve">
+  </data>
+  <data name="TipCustomFont" xml:space="preserve">
     <value>将 `.ttf` 或 `.otf` 字体文件改名为 `papertodo.ttf`（或 `.otf`），放入 `PaperTodo.exe` 所在文件夹并重启软件，即可替换界面与正文的默认字体。</value>
-  </data>\n  <data name="SettingsDataBackup" xml:space="preserve">
+  </data>
+  <data name="SettingsDataBackup" xml:space="preserve">
     <value>数据备份</value>
-  </data>\n  <data name="SettingsAutoGradientBackup" xml:space="preserve">
+  </data>
+  <data name="SettingsAutoGradientBackup" xml:space="preserve">
     <value>自动梯度备份</value>
-  </data>\n  <data name="TipAutoGradientBackup" xml:space="preserve">
+  </data>
+  <data name="TipAutoGradientBackup" xml:space="preserve">
     <value>开启后，程序会自动将各工作区的文字与设置打包存入 `PaperTodo-backups` 文件夹，按约 10 分钟、6 小时、3 天和 1 个月四个时间跨度最多保留 4 份历史包。历史包不含笔记图片与插件数据；换电脑或做完整备份时，仍建议直接复制整个程序文件夹。</value>
-  </data>\n  <data name="TipPluginBodyTypes" xml:space="preserve">
+  </data>
+  <data name="TipPluginBodyTypes" xml:space="preserve">
     <value>笔记纸默认使用内置 Markdown 编辑器。安装支持自定义界面的插件后，右键笔记纸选择「正文类型」，即可把这张纸切换成时钟等插件面板。原有笔记内容会安全保留，随时可切回 Markdown。</value>
-  </data>\n</root>
+  </data>
+</root>
