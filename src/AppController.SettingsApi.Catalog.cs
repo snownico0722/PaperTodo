@@ -43,6 +43,12 @@ public sealed partial class AppController
             () => State.FastAnimations,
             value => State.FastAnimations = value,
             title: Strings.Get("SettingsFastAnimations"));
+        yield return DefineSetting<bool>("appearance.capsule_outline_enhancement",
+            () => State.EnhanceCapsuleActiveOutline,
+            value => State.EnhanceCapsuleActiveOutline = value,
+            SettingEffects.CapsuleOutline,
+            title: Strings.Get("SettingsCapsuleOutlineEnhancement"),
+            description: "Adds a thin translucent outer rim to active edge capsules without changing their focus color or geometry.");
         yield return DefineSetting<string>("appearance.theme",
             () => State.Theme,
             value => State.Theme = value,

@@ -13,7 +13,7 @@ public sealed partial class AppController
 
     private enum SettingEffects
     {
-        None, Advanced, Telemetry, Animations, Theme, Skin, MaterialTransparency, SurfaceOutline, NativeMaterial, Typography, Markdown,
+        None, Advanced, Telemetry, Animations, Theme, Skin, MaterialTransparency, SurfaceOutline, CapsuleOutline, NativeMaterial, Typography, Markdown,
         ImageReferences, MarkdownAnimations, ExternalExtension, Compress, TodoOrder,
         TodoLinks, TodoRows, LinkedCapsules, TopBar, SystemVisibility, Fullscreen,
         CapsuleMode, Arrange, CapsuleClose, Titles, Preview, HoverIntent, EdgeTopmost,
@@ -240,6 +240,7 @@ public sealed partial class AppController
                 RefreshSkinSurfaces();
                 RefreshMicaSettings();
                 break;
+            case SettingEffects.CapsuleOutline: SkinBorder.RefreshLoadedCapsuleOutlines(); break;
             case SettingEffects.NativeMaterial: RefreshMicaSettings(); break;
             case SettingEffects.Typography:
                 ConfigureSettingsTypography();

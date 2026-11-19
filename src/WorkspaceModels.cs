@@ -129,7 +129,7 @@ internal static class WorkspaceFieldScopes
             nameof(AppState.HideLinkedPapersFromCapsules), nameof(AppState.RunLinkedScriptCapsulesOnClick), nameof(AppState.MaxTitleLength),
             nameof(AppState.UseCapsuleCollapseAll), nameof(AppState.UseCapsuleFreeQueues), nameof(AppState.CompactMasterCapsule), nameof(AppState.ShowDeepCapsuleWhileExpanded),
             nameof(AppState.HideEdgeCapsuleCloseButtonOnHover), nameof(AppState.CollapseExpandedDeepCapsuleOnClick), nameof(AppState.EnableAnimations),
-            nameof(AppState.FastAnimations), nameof(AppState.EnableToolTips), nameof(AppState.ExperimentalInactivePaperOpacity),
+            nameof(AppState.FastAnimations), nameof(AppState.EnhanceCapsuleActiveOutline), nameof(AppState.EnableToolTips), nameof(AppState.ExperimentalInactivePaperOpacity),
             nameof(AppState.ExperimentalInactivePaperOpacityLevel), nameof(AppState.ExperimentalRestingCapsuleOpacity), nameof(AppState.ExperimentalRestingCapsuleOpacityLevel),
             nameof(AppState.ExperimentalRestingCapsuleOpacityIncludesMaster), nameof(AppState.ExperimentalRestingCapsuleOpacityAlways), nameof(AppState.ExperimentalCollapsePaperOnDeactivate),
             nameof(AppState.ExperimentalHideInactiveTopBarButtons), nameof(AppState.ExperimentalHideInactiveTitleBar), nameof(AppState.ExperimentalDockedCapsulesNonTopmost),

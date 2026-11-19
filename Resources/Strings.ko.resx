@@ -664,6 +664,12 @@ PaperTodo를 수동으로 다시 여세요. 문제가 반복되면 PC를 다시 
   <data name="TipFastAnimations" xml:space="preserve">
     <value>화면 애니메이션 시간을 기본의 약 60%로 줄여 전환 효과는 유지하면서 더 빠르게 반응합니다. “애니메이션 효과 사용”이 꺼져 있으면 적용되지 않습니다.</value>
   </data>
+  <data name="SettingsCapsuleOutlineEnhancement" xml:space="preserve">
+    <value>캡슐 테두리 강화 사용</value>
+  </data>
+  <data name="TipCapsuleOutlineEnhancement" xml:space="preserve">
+    <value>켜면 화면 가장자리의 활성 캡슐에 얇고 반투명한 바깥 테두리를 추가하여 비슷한 색상의 바탕 화면에서도 쉽게 구별할 수 있습니다.</value>
+  </data>
   <data name="TipPersistentPowerShellProcess" xml:space="preserve">
     <value>!pf / !powerf는 상주 프로세스를 사용해 더 빠르게 시작하지만, 변수와 상태가 스크립트 사이에 남을 수 있습니다.
 끄면 해당 프로세스를 종료합니다.</value>
