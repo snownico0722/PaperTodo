@@ -26,8 +26,14 @@ public sealed partial class AppController
 
         var actions = new StackPanel { Background = Brushes.Transparent };
         actions.Children.Add(BuildTopBarShortcutHeading("TopBarShownHeading"));
+        var shownActions = PaperTopBarShortcuts.Pinned(State)
+            .Where(action => State.AdvancedSettingsMode || action != PaperTopBarShortcuts.RunScript)
+            .ToArray();
+        var menuActions = PaperTopBarShortcuts.Menu(State)
+            .Where(action => State.AdvancedSettingsMode || action != PaperTopBarShortcuts.RunScript)
+            .ToArray();
         var shownGroup = BuildTopBarShortcutDropGroup(
-            PaperTopBarShortcuts.Pinned(State), pinned: true);
+            shownActions, pinned: true);
         actions.Children.Add(shownGroup);
 
         // This is an in-editor divider, not the roomy separator between settings.
@@ -42,7 +48,7 @@ public sealed partial class AppController
         actions.Children.Add(divider);
         actions.Children.Add(BuildTopBarShortcutHeading("TopBarMenuHeading"));
         actions.Children.Add(BuildTopBarShortcutDropGroup(
-            PaperTopBarShortcuts.Menu(State), pinned: false));
+            menuActions, pinned: false));
         root.Children.Add(new Border
         {
             BorderBrush = TrayBorderBrush,
