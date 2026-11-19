@@ -241,6 +241,55 @@ internal static partial class Program
         }
     }
 
+    private static void LineSpacingAdvancedModeVisibility()
+    {
+        var controller = Controller();
+        Field(controller, "_settingsRegionRefreshers", new Dictionary<string, Action>());
+        controller.State.NoteLineSpacing = "large";
+        controller.State.TodoItemSpacing = "small";
+        controller.State.AdvancedSettingsMode = false;
+
+        var window = new Window { Width = 900, Height = 760 };
+        Field(controller, "_settingsWindow", window);
+        try
+        {
+            window.Content = Invoke(controller, "BuildVisualSettingsPage");
+            window.Show();
+            window.Activate();
+            window.UpdateLayout();
+            DrainSettingsUi();
+
+            var normalSelectors = SettingsControls<ListBox>(window).ToArray();
+            Check(normalSelectors.Length == 1 && Equals(normalSelectors[0].SelectedValue, "small"),
+                "Normal mode hides note line spacing but keeps to-do item spacing visible.");
+
+            controller.State.AdvancedSettingsMode = true;
+            window.Content = Invoke(controller, "BuildVisualSettingsPage");
+            window.UpdateLayout();
+            DrainSettingsUi();
+
+            var advancedSelectors = SettingsControls<ListBox>(window).ToArray();
+            Check(advancedSelectors.Length == 2 &&
+                  Equals(advancedSelectors[0].SelectedValue, "large") &&
+                  Equals(advancedSelectors[1].SelectedValue, "small"),
+                "Advanced mode reveals the saved note line spacing without changing either spacing value.");
+
+            controller.State.AdvancedSettingsMode = false;
+            window.Content = Invoke(controller, "BuildVisualSettingsPage");
+            window.UpdateLayout();
+            DrainSettingsUi();
+            Check(SettingsControls<ListBox>(window).Count() == 1 &&
+                  controller.State.NoteLineSpacing == "large",
+                "Hiding note line spacing in normal mode preserves its saved value.");
+        }
+        finally
+        {
+            Field(controller, "_settingsWindow", null!);
+            window.Close();
+            DrainSettingsUi();
+        }
+    }
+
     private static void SpacingKeyboardBehavior()
     {
         var controller = Controller();
