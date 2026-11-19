@@ -122,8 +122,7 @@ public sealed partial class AppController
         };
         optionsPanel.Children.Add(confirm);
 
-        dataColumn.Children.Add(BuildSettingsLiveRegion("workspace.backup", BuildWorkspaceBackupSettings));
-        if (FollowsMainWorkspaceSettings && State.AdvancedSettingsMode)
+        if (FollowsMainWorkspaceSettings)
             dataColumn.Children.Add(new TextBlock
             {
                 Text = Strings.Get("WorkspaceSettingsReadOnly"),
@@ -131,31 +130,9 @@ public sealed partial class AppController
                 TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(0, 0, 0, 8)
             });
-        if (State.AdvancedSettingsMode)
-        {
-            dataColumn.Children.Add(BuildSettingsLiveRegion("workspace.data", BuildWorkspaceDataSettings));
-            dataColumn.Children.Add(BuildSettingsLiveRegion("workspace.mcp", BuildMcpSettings));
-        }
+        dataColumn.Children.Add(BuildSettingsLiveRegion("workspace.data", BuildWorkspaceDataSettings));
+        dataColumn.Children.Add(BuildSettingsLiveRegion("workspace.mcp", BuildMcpSettings));
         return root;
-    }
-
-    private UIElement BuildWorkspaceBackupSettings()
-    {
-        var content = new StackPanel();
-        content.Children.Add(SettingsSectionLabel(Strings.Get("SettingsDataBackup")));
-        content.Children.Add(WrapWithHint(
-            SettingsToggle(
-                Strings.Get("SettingsAutoGradientBackup"),
-                WorkspaceOptions.AutoGradientBackup,
-                async () =>
-                {
-                    var next = WorkspaceOptions.Normalized();
-                    next.AutoGradientBackup = !next.AutoGradientBackup;
-                    await ChangeWorkspaceConfigurationAsync(next);
-                    RefreshSettingsWindowContent();
-                }),
-            "TipAutoGradientBackup"));
-        return content;
     }
 
     private UIElement BuildWorkspaceDataSettings()
