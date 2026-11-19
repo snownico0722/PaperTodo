@@ -68,6 +68,8 @@ internal static partial class Program
         Require(new WorkspaceConfiguration().AutoGradientBackup &&
                 !new WorkspaceConfiguration { AutoGradientBackup = false }.Normalized().AutoGradientBackup,
             "Automatic gradient backup must default on and preserve its global catalog preference.");
+        Require(new AppState().HiddenTopBarShortcuts.Contains(PaperTopBarShortcuts.RunScript),
+            "Run Script must be hidden by default while remaining user-configurable.");
 
         Require(WorkspaceFieldScopes.Inherits(nameof(AppState.DataMergeConflictPolicy)) &&
                 WorkspaceFieldScopes.Inherits(nameof(AppState.McpAllowFullWrites)) &&
