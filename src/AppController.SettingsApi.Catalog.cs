@@ -126,6 +126,18 @@ public sealed partial class AppController
             SettingEffects.Typography,
             title: Strings.Get("SettingsNoteBodyText"),
             options: ["small", "medium", "large"]);
+        yield return DefineSetting<string>("note.line_spacing",
+            () => State.NoteLineSpacing,
+            value => State.NoteLineSpacing = value,
+            SettingEffects.NoteLineSpacing,
+            title: Strings.Get("SettingsNoteBodyText") + " · " + Strings.Get("SettingsLineSpacing"),
+            options: ["small", "medium", "large"]);
+        yield return DefineSetting<string>("todo.item_spacing",
+            () => State.TodoItemSpacing,
+            value => State.TodoItemSpacing = value,
+            SettingEffects.TodoItemSpacing,
+            title: Strings.Get("SettingsTodoBodyText") + " · " + Strings.Get("SettingsItemSpacing"),
+            options: ["small", "medium", "large"]);
         yield return DefineSetting<bool>("todo.text_bold",
             () => State.TodoTextBold,
             value => State.TodoTextBold = value,

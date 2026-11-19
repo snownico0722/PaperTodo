@@ -61,6 +61,23 @@ public sealed partial class PaperWindow
         RebuildTodoRows(CurrentFocusedTodoItemId());
     }
 
+    private Thickness TodoItemMargin()
+    {
+        var gap = _controller.State.TodoItemSpacing switch
+        {
+            VisualTextSizes.Small => 0d,
+            VisualTextSizes.Large => 4d,
+            _ => 2d
+        };
+        return new Thickness(0, gap, 0, gap);
+    }
+
+    internal void UpdateTodoItemSpacing()
+    {
+        var margin = TodoItemMargin();
+        foreach (var row in _todoRows) row.Margin = margin;
+    }
+
     public void UpdateTodoVisualSize()
     {
         if (_paper.Type != PaperTypes.Todo)
@@ -570,7 +587,7 @@ public sealed partial class PaperWindow
 
         var row = new Border
         {
-            Margin = new Thickness(0, 2, 0, 2),
+            Margin = TodoItemMargin(),
             Padding = new Thickness(2),
             CornerRadius = new CornerRadius(Theme.IsPixelSkin ? 0 : RadiusControl),
             Background = Brushes.Transparent,

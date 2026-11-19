@@ -172,7 +172,7 @@ public sealed partial class AppController : IDisposable
             State.CustomFontEnhancedBold,
             State.TextRenderingProfile,
             State.CustomFontEnabled);
-        NoteTypography.Configure(State.NoteTextSize, State.NoteTextBold);
+        NoteTypography.Configure(State.NoteTextSize, State.NoteTextBold, State.NoteLineSpacing);
         ToolTipPreferences.Register(() => State.EnableToolTips);
         _paperBodyPlugins = new PaperBodyPluginRegistry();
         _paperBodyPlugins.DataStore.WriteLifetime = _store.WriteLifetime;

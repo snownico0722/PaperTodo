@@ -14,7 +14,7 @@ public sealed partial class AppController
     private enum SettingEffects
     {
         None, Advanced, Telemetry, Animations, Theme, Skin, MaterialTransparency, SurfaceOutline, CapsuleOutline, NativeMaterial, Typography, Markdown,
-        ImageReferences, MarkdownAnimations, ExternalExtension, Compress, TodoOrder,
+        ImageReferences, MarkdownAnimations, NoteLineSpacing, TodoItemSpacing, ExternalExtension, Compress, TodoOrder,
         TodoLinks, TodoRows, LinkedCapsules, TopBar, SystemVisibility, CaptureExclusion, Fullscreen,
         CapsuleMode, Arrange, CapsuleClose, Titles, Preview, HoverIntent, EdgeTopmost,
         Opacity, Focus, Passive, Reminders, Magnet, Tether, TetherOptions,
@@ -267,6 +267,10 @@ public sealed partial class AppController
             case SettingEffects.Markdown:
                 RefreshWindowSettingEffects(effects);
                 RebuildTrayMenu(); break;
+            case SettingEffects.NoteLineSpacing:
+                NoteTypography.Configure(State.NoteTextSize, State.NoteTextBold, State.NoteLineSpacing);
+                RefreshWindowSettingEffects(effects); break;
+            case SettingEffects.TodoItemSpacing:
             case SettingEffects.MarkdownAnimations:
             case SettingEffects.ImageReferences:
                 RefreshWindowSettingEffects(effects); break;
@@ -334,7 +338,7 @@ public sealed partial class AppController
     private void ConfigureSettingsTypography()
     {
         AppTypography.Configure(State.UiFontPreset, State.Zoom, State.CustomFontEnhancedBold, State.TextRenderingProfile, State.CustomFontEnabled);
-        NoteTypography.Configure(State.NoteTextSize, State.NoteTextBold);
+        NoteTypography.Configure(State.NoteTextSize, State.NoteTextBold, State.NoteLineSpacing);
     }
 
     // Keep page restores in their existing per-window order; callers own saving,
@@ -356,6 +360,8 @@ public sealed partial class AppController
                 case SettingEffects.ImageReferences: window.UpdateImageReferenceTextMode(); break;
                 case SettingEffects.ExternalExtension: window.UpdateExternalMarkdownExtension(); break;
                 case SettingEffects.TodoLinks: window.UpdateTodoLinkFeature(); break;
+                case SettingEffects.NoteLineSpacing: window.UpdateNoteLineSpacing(); break;
+                case SettingEffects.TodoItemSpacing: window.UpdateTodoItemSpacing(); break;
                 case SettingEffects.Titles: window.RefreshPaperTitle(); break;
                 case SettingEffects.EdgeTopmost: window.RefreshDeepCapsuleSlotTopmost(); break;
             }

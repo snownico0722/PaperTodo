@@ -1622,6 +1622,7 @@ public sealed partial class AppController
             CreateVisualTextSizeSelector(State.NoteTextSize, SetNoteTextSize),
             State.NoteTextBold,
             ToggleNoteTextBold);
+        rightColumn.Children.Add(CreateSpacingRow("SettingsLineSpacing", State.NoteLineSpacing, "note.line_spacing"));
 
         AddTextStyleEditor(
             "SettingsTodoBodyText",
@@ -1629,6 +1630,7 @@ public sealed partial class AppController
             CreateTodoVisualSizeSelector(),
             State.TodoTextBold,
             ToggleTodoTextBold);
+        rightColumn.Children.Add(CreateSpacingRow("SettingsItemSpacing", State.TodoItemSpacing, "todo.item_spacing"));
 
         AddTextStyleEditor(
             "SettingsTitleText",
@@ -1714,6 +1716,8 @@ public sealed partial class AppController
         State.CustomFontEnabled = defaults.CustomFontEnabled;
         State.CustomFontEnhancedBold = defaults.CustomFontEnhancedBold;
         State.Zoom = defaults.Zoom;
+        State.NoteLineSpacing = defaults.NoteLineSpacing;
+        State.TodoItemSpacing = defaults.TodoItemSpacing;
         State.NoteTextSize = defaults.NoteTextSize;
         State.NoteTextBold = defaults.NoteTextBold;
         State.TodoVisualSize = defaults.TodoVisualSize;

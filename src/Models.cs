@@ -463,6 +463,8 @@ public sealed class AppState
     public bool CustomFontEnhancedBold { get; set; }
     public string ExternalMarkdownExtension { get; set; } = ExternalMarkdownFileExtensions.Default;
     public double Zoom { get; set; } = 1.0;
+    public string NoteLineSpacing { get; set; } = VisualTextSizes.Medium;
+    public string TodoItemSpacing { get; set; } = VisualTextSizes.Medium;
     public string NoteTextSize { get; set; } = VisualTextSizes.Medium;
     public bool NoteTextBold { get; set; }
     public bool TodoTextBold { get; set; }

@@ -22,6 +22,7 @@ This log is written for general and power users alike. It focuses on user-facing
 
 #### Settings & Appearance
 
+- **Note line spacing and to-do item spacing.** Choose Small, Medium or Large independently in Style & Text. Changes apply immediately. Medium preserves the previous layout.
 - **Settings visibility and shortcuts.** Normal mode now hides Data Handling and the local MCP interface; these settings remain available in Advanced mode. Outside Advanced mode, the Run Script option is also hidden from shortcut settings without disabling an already-configured shortcut. New installations hide Run Script by default, and users can show it manually.
 - **Global automatic tiered-backup control.** Workspaces & Data adds a default-on switch shared by all workspaces. Turning it off stops new scheduled tiered archives without deleting existing ZIPs or disabling recovery.
 - **Custom font control.** A default-on **Custom font** switch controls loading `papertodo.ttf` or `papertodo.otf`. **Custom font enhanced bold** is nested beneath it and can use a separate bold font file; setup guidance is available from the option's info icon.

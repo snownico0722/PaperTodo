@@ -16,6 +16,7 @@ internal static partial class Program
         new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
         var failures = 0;
         ClipboardImageChecks.Run(Check);
+        Check("Line spacing changes wrapped note lines in both modes", CheckNoteLineSpacing);
         Check("Full mode preserves quote source and undo history", () =>
         {
             foreach (var source in new[] { "- > a\n  > b", "1. > a\n   > b", "> a\nb", "> a\n> > b\nlazy" })
@@ -295,6 +296,52 @@ internal static partial class Program
             Require(expected.SequenceEqual(table.Runs), $"incremental runs match full calculation at {caret.CaretOffset}");
             for (var index = 1; index < expected.Count; index++)
                 Require(expected[index - 1].End <= expected[index].Start, $"collapse cells do not overlap at {caret.CaretOffset}");
+        }
+    }
+
+    private static void CheckNoteLineSpacing()
+    {
+        var source = string.Concat(Enumerable.Repeat("纸片中的中文与 English 会自动换行。", 10));
+        using var editor = new Editor(source);
+        var box = editor.Box;
+        try
+        {
+            foreach (var preview in new[] { false, true })
+            {
+                box.SetPreviewMode(preview);
+                var medium = Measure("medium");
+                var small = Measure("small");
+                var large = Measure("large");
+                Require(small.height < medium.height && medium.height < large.height,
+                    $"wrapped line heights (preview={preview}): {small.height}, {medium.height}, {large.height}");
+                Equal(medium.characters, small.characters, "compact spacing preserves wrapping");
+                Equal(medium.characters, large.characters, "large spacing preserves wrapping");
+                Near(medium.height, Measure("medium").height, "return to original line metrics");
+            }
+            Equal(source, box.Text, "spacing preserves source");
+            Require(!box.CanUndo, "spacing preserves undo history");
+        }
+        finally
+        {
+            NoteTypography.Configure(VisualTextSizes.Medium, false);
+        }
+
+        (double height, int characters) Measure(string spacing)
+        {
+            NoteTypography.Configure(VisualTextSizes.Medium, false, spacing);
+            box.RefreshTypography();
+            box.ApplyTemplate();
+            var viewport = new Size(220, 600);
+            box.Measure(viewport);
+            box.Arrange(new Rect(viewport));
+            box.UpdateLayout();
+            var view = box.TextArea.TextView;
+            view.Measure(viewport);
+            view.Arrange(new Rect(viewport));
+            view.EnsureVisualLines();
+            var lines = view.GetOrConstructVisualLine(box.Document.GetLineByNumber(1)).TextLines;
+            Require(lines.Count >= 3, "fixture must wrap onto multiple lines");
+            return (lines[1].Height, lines[1].Length);
         }
     }
 

@@ -140,6 +140,23 @@ public sealed partial class AppController
             SetExperimentalWindowTetherPreferredEdge);
     }
 
+    private UIElement CreateSpacingRow(string labelKey, string current, string settingId)
+    {
+        var selector = CreateSegmentSelector(
+            [
+                (VisualTextSizes.Small, Strings.Get("TodoVisualSizeSmall")),
+                (VisualTextSizes.Medium, Strings.Get("TodoVisualSizeMedium")),
+                (VisualTextSizes.Large, Strings.Get("TodoVisualSizeLarge"))
+            ],
+            current,
+            value => SetSettingFromUi(settingId, value));
+        return new Border
+        {
+            Margin = new Thickness(14, 0, 0, 3),
+            Child = CompactSettingsField(Strings.Get(labelKey), selector, editorWidth: AppTypography.Scale(152), topMargin: 0)
+        };
+    }
+
     private UIElement CreateTextStyleRow(
         string labelText,
         string tipKey,
@@ -203,15 +220,29 @@ public sealed partial class AppController
         Grid.SetColumn(boldHost, 1);
         row.Children.Add(boldHost);
 
+        var sizeHost = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(8, 0, 0, 0)
+        };
+        sizeHost.Children.Add(new TextBlock
+        {
+            Text = Strings.Get("SettingsFontSizeLabel"),
+            Foreground = TrayWeakTextBrush,
+            FontSize = AppTypography.Scale(11),
+            VerticalAlignment = VerticalAlignment.Center
+        });
         if (sizeSelector is FrameworkElement selector)
         {
-            selector.Width = 92;
-            selector.Margin = new Thickness(8, 0, 0, 0);
+            selector.MinWidth = 56;
+            selector.Margin = new Thickness(4, 0, 0, 0);
             selector.HorizontalAlignment = HorizontalAlignment.Right;
             selector.VerticalAlignment = VerticalAlignment.Center;
         }
-        Grid.SetColumn(sizeSelector, 2);
-        row.Children.Add(sizeSelector);
+        sizeHost.Children.Add(sizeSelector);
+        Grid.SetColumn(sizeHost, 2);
+        row.Children.Add(sizeHost);
         return row;
     }
 

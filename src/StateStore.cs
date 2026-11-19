@@ -684,6 +684,8 @@ public sealed partial class StateStore
         state.DeepCapsuleGapSize = DeepCapsuleGapSizes.Normalize(state.DeepCapsuleGapSize);
         state.DeepCapsuleMonitorDeviceName = WindowWorkAreaHelper.NormalizeQueueMonitorDeviceName(state.DeepCapsuleMonitorDeviceName);
         state.TodoVisualSize = TodoVisualSizes.Normalize(state.TodoVisualSize);
+        state.NoteLineSpacing = VisualTextSizes.Normalize(state.NoteLineSpacing);
+        state.TodoItemSpacing = VisualTextSizes.Normalize(state.TodoItemSpacing);
         state.NoteTextSize = VisualTextSizes.Normalize(state.NoteTextSize);
         state.TitleTextSize = VisualTextSizes.Normalize(state.TitleTextSize);
         state.CapsuleTextSize = VisualTextSizes.Normalize(state.CapsuleTextSize);

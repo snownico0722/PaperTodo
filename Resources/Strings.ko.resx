@@ -1041,6 +1041,9 @@ PaperTodo를 수동으로 다시 여세요. 문제가 반복되면 PC를 다시 
   <data name="ImageReferenceTextHidden" xml:space="preserve">
     <value>항상 숨김</value>
   </data>
+  <data name="SettingsFontSizeLabel" xml:space="preserve"><value>글자 크기</value></data>
+  <data name="SettingsLineSpacing" xml:space="preserve"><value>줄 간격</value></data>
+  <data name="SettingsItemSpacing" xml:space="preserve"><value>항목 간격</value></data>
   <data name="SettingsTextBold" xml:space="preserve">
     <value>굵게</value>
   </data>
@@ -1049,13 +1052,14 @@ PaperTodo를 수동으로 다시 여세요. 문제가 반복되면 PC를 다시 
   </data>
   <data name="TipNoteBodyTextStyle" xml:space="preserve">
     <value>전체 크기에 소/중/대를 얹고 굵게를 켤 수 있습니다.
-노트별 백분율 확대/축소는 계속 추가됩니다.</value>
+노트별 백분율 확대/축소는 계속 추가됩니다.
+줄 간격은 편집할 때와 읽을 때 모두 적용됩니다.</value>
   </data>
   <data name="SettingsTodoBodyText" xml:space="preserve">
     <value>할 일 본문</value>
   </data>
   <data name="TipTodoBodyTextStyle" xml:space="preserve">
-    <value>할 일 본문과 행 높이: 소/중/대, 굵게 가능.</value>
+    <value>할 일의 글자 크기와 굵기를 설정합니다. 항목 간격은 서로 다른 할 일 사이의 여백을 조절합니다.</value>
   </data>
   <data name="SettingsTitleText" xml:space="preserve">
     <value>제목 글자</value>

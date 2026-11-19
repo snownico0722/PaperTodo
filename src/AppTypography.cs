@@ -331,10 +331,48 @@ public static class NoteTypography
     public static XmlLanguage Language => AppTypography.Language;
     public static Thickness ContentPadding => new(13, 8, 6, 8);
 
-    public static void Configure(string? size, bool bold)
+    private static FontFamily? _spacedBody, _spacedBold, _spacedCode;
+    internal static FontFamily EditorFontFamily => _spacedBody ?? FontFamily;
+    internal static FontFamily EditorBoldFontFamily => _spacedBold ?? AppTypography.FontFamilyFor(content: true, bold: true);
+    internal static FontFamily EditorCodeFontFamily => _spacedCode ?? CodeFontFamily;
+
+    public static void Configure(string? size, bool bold, string? lineSpacing = VisualTextSizes.Medium)
     {
         _size = VisualTextSizes.Normalize(size);
         _bold = bold;
+        var factor = VisualTextSizes.Normalize(lineSpacing) switch
+        {
+            VisualTextSizes.Small => 0.88,
+            VisualTextSizes.Large => 1.16,
+            _ => 1.0
+        };
+        _spacedBody = null;
+        _spacedBold = null;
+        _spacedCode = null;
+        if (factor == 1.0) return;
+
+        var body = FontFamily;
+        var boldFamily = AppTypography.FontFamilyFor(content: true, bold: true);
+        _spacedBody = SpacedFamily(body, factor);
+        _spacedBold = body.Equals(boldFamily) ? _spacedBody : SpacedFamily(boldFamily, factor);
+        _spacedCode = SpacedFamily(CodeFontFamily, factor);
+    }
+
+    // AvalonEdit lets TextFormatter measure every wrapped line. Supply vertical metrics through
+    // a WPF composite family so hit testing, inline images and carets use the same real layout.
+    private static FontFamily SpacedFamily(FontFamily source, double factor)
+    {
+        var height = source.LineSpacing * factor;
+        var family = new FontFamily
+        {
+            LineSpacing = height,
+            Baseline = Math.Clamp(source.Baseline + (height - source.LineSpacing) / 2, 0, height)
+        };
+        // Relative custom font references are resolved against the installation directory.
+        // The anonymous family has no base URI of its own.
+        var target = source.BaseUri == null ? source.Source : new Uri(source.BaseUri, source.Source).AbsoluteUri;
+        family.FamilyMaps.Add(new FontFamilyMap { Target = target });
+        return family;
     }
 
     public static void ApplyTextRendering(DependencyObject target)

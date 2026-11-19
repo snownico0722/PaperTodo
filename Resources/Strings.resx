@@ -1068,6 +1068,9 @@
   <data name="ImageReferenceTextHidden" xml:space="preserve">
     <value>始终隐藏</value>
   </data>
+  <data name="SettingsFontSizeLabel" xml:space="preserve"><value>字号</value></data>
+  <data name="SettingsLineSpacing" xml:space="preserve"><value>行距</value></data>
+  <data name="SettingsItemSpacing" xml:space="preserve"><value>条目间距</value></data>
   <data name="SettingsTextBold" xml:space="preserve">
     <value>加粗</value>
   </data>
@@ -1076,13 +1079,14 @@
   </data>
   <data name="TipNoteBodyTextStyle" xml:space="preserve">
     <value>在整体字号上再设小 / 中 / 大，并可加粗。
-单个笔记的百分比缩放会继续叠加。</value>
+单个笔记的百分比缩放会继续叠加。
+行距同时用于编辑和浏览。</value>
   </data>
   <data name="SettingsTodoBodyText" xml:space="preserve">
     <value>待办正文</value>
   </data>
   <data name="TipTodoBodyTextStyle" xml:space="preserve">
-    <value>待办正文与行高：小 / 中 / 大，并可加粗。</value>
+    <value>字号与加粗控制待办文字。条目间距调整相邻待办之间的留白，长待办内部的行距保持原样。</value>
   </data>
   <data name="SettingsTitleText" xml:space="preserve">
     <value>标题文字</value>
