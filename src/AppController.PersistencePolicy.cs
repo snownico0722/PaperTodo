@@ -18,20 +18,11 @@ public sealed partial class AppController
     // ten minutes, including after a workspace's transient read failure.
     internal void StartCoreHistoryBackupPolicy()
     {
-        if (IsExiting || !WorkspaceOptions.AutoGradientBackup || _coreHistoryTimer != null) return;
+        if (IsExiting || _coreHistoryTimer != null) return;
         _coreHistoryTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(1) };
         _coreHistoryTimer.Tick += OnCoreHistoryTimerTick;
         _coreHistoryBackupDueAt = Environment.TickCount64 + (long)_coreHistoryTimer.Interval.TotalMilliseconds;
         _coreHistoryTimer.Start();
-    }
-
-    internal void RefreshCoreHistoryBackupPolicy()
-    {
-        if (IsExiting) return;
-        if (WorkspaceOptions.AutoGradientBackup)
-            StartCoreHistoryBackupPolicy();
-        else
-            StopCoreHistoryBackupPolicy();
     }
 
     private void ResumeCoreHistoryBackupTimer()
