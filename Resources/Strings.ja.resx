@@ -550,7 +550,7 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
     <value>紙片の配色：背景、アクセント、弱い文字色。</value>
   </data>
   <data name="TipUiFont" xml:space="preserve">
-    <value>既定では表示言語に応じてシステムフォントを選び、画面とノート本文で異なる場合があります。Microsoft YaHei または DengXian を選ぶと、画面・トレイ・カプセル・ToDo・ノートで同じフォントを使用します。アプリのフォルダーに papertodo.ttf または papertodo.otf があれば、そちらを優先します。</value>
+    <value>「既定」は画面言語に合わせてシステムフォントを選び、画面とノート本文で異なる場合があります。「Microsoft YaHei」または「DengXian」を選ぶと、画面、トレイ、カプセル、ToDo、ノートで同じフォントを使用します。</value>
   </data>
   <data name="TipTextRenderingProfile" xml:space="preserve">
     <value>標準：Windows 既定の文字表示方式で、互換性を重視します。柔和：輪郭を滑らかにしますが、表示倍率によって少しぼやけることがあります。鮮明：輪郭がくっきりしますが、一部のフォントで字幅や間隔が少し変わることがあります。いずれも文字内容は変更しません。</value>
@@ -559,7 +559,7 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
     <value>カスタムフォントの太字強化</value>
   </data>
   <data name="TipCustomFontEnhancedBold" xml:space="preserve">
-    <value>有効にすると、太字に設定した文字は通常フォントを擬似的に太くする代わりに、専用の太字ファイルを使います。アプリのフォルダーに通常用 papertodo と太字用 PaperTodo_Bold を両方置いてください（.ttf／.otf 対応）。</value>
+    <value>カスタムフォントと組み合わせて使用します。独立した太字フォントを `papertodo_bold.ttf`（または `.otf`）という名前でアプリのフォルダーに置き、この項目を有効にすると、太字の文字にその書体を直接使用します。</value>
   </data>
   <data name="TipMarkdownRender" xml:space="preserve">
     <value>基本レンダリング：Markdown の記号を薄く残し、箇条書きの点や区切り線など簡単な書式を表示します。完全レンダリング：見出し・リスト・引用・コードブロックを完成形に近い見た目にし、多くの記号を隠します。編集時はカーソルのあるブロックの記号を再表示します。</value>
@@ -1800,5 +1800,23 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
   </data>
   <data name="WindowBindingProgramUnavailable" xml:space="preserve">
     <value>アプリの場所を取得できませんでした。起動中のウィンドウにもう一度連携してください。</value>
+  </data>
+<data name="SettingsCustomFont" xml:space="preserve">
+    <value>カスタムフォント</value>
+  </data>
+<data name="TipCustomFont" xml:space="preserve">
+    <value>`.ttf` または `.otf` のフォントファイルを `papertodo.ttf`（または `.otf`）に改名し、`PaperTodo.exe` と同じフォルダーに配置して PaperTodo を再起動すると、画面と本文の既定フォントを置き換えます。</value>
+  </data>
+<data name="SettingsDataBackup" xml:space="preserve">
+    <value>データバックアップ</value>
+  </data>
+<data name="SettingsAutoGradientBackup" xml:space="preserve">
+    <value>自動段階バックアップ</value>
+  </data>
+<data name="TipAutoGradientBackup" xml:space="preserve">
+    <value>有効にすると、すべてのワークスペースのテキストと設定を `PaperTodo-backups` フォルダーに自動保存します。約10分、6時間、3日、1か月の4つの期間を目安に、最大4個の履歴アーカイブを保持します。画像とプラグインデータは含まれません。PCの移行や完全バックアップには、アプリのフォルダー全体をコピーしてください。</value>
+  </data>
+<data name="TipPluginBodyTypes" xml:space="preserve">
+    <value>ノートは既定で内蔵 Markdown エディターを使用します。独自の画面を提供するプラグインをインストールした後、ノートを右クリックして「本文の種類」を選ぶと、そのノートを時計などのプラグインパネルに切り替えられます。元のノート内容は保持され、いつでも Markdown に戻せます。</value>
   </data>
 </root>

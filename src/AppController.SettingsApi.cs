@@ -333,7 +333,7 @@ public sealed partial class AppController
 
     private void ConfigureSettingsTypography()
     {
-        AppTypography.Configure(State.UiFontPreset, State.Zoom, State.CustomFontEnhancedBold, State.TextRenderingProfile);
+        AppTypography.Configure(State.UiFontPreset, State.Zoom, State.CustomFontEnhancedBold, State.TextRenderingProfile, State.CustomFontEnabled);
         NoteTypography.Configure(State.NoteTextSize, State.NoteTextBold);
     }
 

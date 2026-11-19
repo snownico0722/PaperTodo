@@ -74,6 +74,11 @@ public sealed partial class AppController
 
     private void RefreshSettingsForChange(string id)
     {
+        if (id is "general.advanced_settings" or "appearance.custom_font_enabled")
+        {
+            RefreshSettingsWindowContent();
+            return;
+        }
         if (id is "window.hide_from_taskbar" or "window.hide_from_switcher")
         {
             RefreshSettingsSystemVisibilityToggleStates();
