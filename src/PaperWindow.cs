@@ -229,7 +229,6 @@ public sealed partial class PaperWindow : Window
         IsDeepCapsuleReordering || IsDeepCapsuleDockingReveal;
     public bool SuppressGeometrySave => _suppressGeometrySave;
     internal string PaperId => _paper.Id;
-    internal bool IsManuallyPinned => _paper.AlwaysOnTop;
     // Ordinary collapsed capsules are the main PaperWindow and should still save X/Y.
     // Deep capsules use the slot-host window for docked geometry, so the hidden/parked
     // main window must not overwrite ordinary paper geometry.
@@ -2627,7 +2626,7 @@ public sealed partial class PaperWindow : Window
         var fullscreenAvoidanceWindow =
             _controller.FullscreenAvoidanceWindowFor(this);
         var avoidanceWindow = ResolveExperimentalCapsuleFollowZOrderTarget(
-            fullscreenAvoidanceWindow);
+            _paper.AlwaysOnTop ? IntPtr.Zero : fullscreenAvoidanceWindow);
         _mainWindowFullscreenAvoidanceWindow =
             fullscreenAvoidanceWindow;
         var effectiveTopmost = shouldBeTopmost &&

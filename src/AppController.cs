@@ -102,8 +102,7 @@ public sealed partial class AppController : IDisposable
 
     internal IntPtr FullscreenAvoidanceWindowFor(Window? window)
     {
-        if (_fullscreenAvoidanceWindow == IntPtr.Zero ||
-            window is PaperWindow { IsManuallyPinned: true })
+        if (_fullscreenAvoidanceWindow == IntPtr.Zero)
         {
             return IntPtr.Zero;
         }
@@ -1354,7 +1353,7 @@ public sealed partial class AppController : IDisposable
             // To prevent a 1-frame DWM cache flash when a window's size changes while hidden,
             // we show it fully transparent first, then restore opacity after layout is complete.
             double originalOpacity = window.Opacity;
-            window.ShowActivated = activate;
+            window.ShowActivated = activate && FullscreenAvoidanceWindowFor(window) == IntPtr.Zero;
             window.Opacity = 0;
             window.Show();
 
