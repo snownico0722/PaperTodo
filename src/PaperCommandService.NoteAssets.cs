@@ -5,7 +5,7 @@ namespace PaperTodo;
 
 internal sealed partial class PaperCommandService
 {
-    internal NoteImageInsertionResult InsertNoteImage(
+    internal PaperNoteImageInsertionResult InsertNoteImage(
         string paperId, byte[] imageBytes, string? imageName,
         PaperOperationContext context)
     {
@@ -29,7 +29,7 @@ internal sealed partial class PaperCommandService
         try
         {
             imported = _controller.ImageStore.ImportImageBytes(
-                paper.Id, imageBytes, imageName ?? "mcp-image");
+                paper.Id, imageBytes, imageName ?? "image");
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or
                                    InvalidDataException or InvalidOperationException)
@@ -57,7 +57,7 @@ internal sealed partial class PaperCommandService
         }
 
         _controller.PublishExternalPaperOperation(context);
-        return new NoteImageInsertionResult(paper.Id, imported.Id, reference);
+        return new PaperNoteImageInsertionResult(paper.Id, imported.Id, reference);
     }
 
     private static void EnsureImageReferenceRenders(string current, string reference)
@@ -89,5 +89,3 @@ internal sealed partial class PaperCommandService
         return new PaperNoteImage(id, mime, bytes);
     }
 }
-
-internal sealed record NoteImageInsertionResult(string PaperId, string ImageId, string Reference);

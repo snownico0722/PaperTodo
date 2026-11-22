@@ -2626,12 +2626,14 @@ public sealed partial class PaperWindow : Window
         var fullscreenAvoidanceWindow =
             _controller.FullscreenAvoidanceWindowFor(this);
         var avoidanceWindow = ResolveExperimentalCapsuleFollowZOrderTarget(
-            fullscreenAvoidanceWindow);
+            _paper.AlwaysOnTop ? IntPtr.Zero : fullscreenAvoidanceWindow);
         _mainWindowFullscreenAvoidanceWindow =
             fullscreenAvoidanceWindow;
         var effectiveTopmost = shouldBeTopmost &&
             (avoidanceWindow == IntPtr.Zero ||
              ShouldKeepExperimentalCapsuleFollowAboveTarget);
+        // Unpinning still needs a relative Z-order update after WPF clears the topmost band.
+        var wasTopmost = Topmost;
         Topmost = effectiveTopmost;
         if (IsExperimentalPassive && IsVisible)
         {
@@ -2640,6 +2642,7 @@ public sealed partial class PaperWindow : Window
         else if (IsVisible &&
             (_experimentalPassiveNeedsZOrderRestore ||
              shouldBeTopmost ||
+             (wasTopmost && fullscreenAvoidanceWindow != IntPtr.Zero) ||
              WindowNative.IsTopmost(this)))
         {
             WindowNative.ApplyTopmostZOrder(this, effectiveTopmost, avoidanceWindow);

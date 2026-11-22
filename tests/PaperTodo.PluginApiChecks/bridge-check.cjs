@@ -40,6 +40,7 @@ process.once('beforeExit', () => {
   api.popup.close(); assert.equal(posted.pop().method, 'popup.close');
   assert.equal(styles.get('--paper-background'), '#fff');
   assert.equal(api.workspace, undefined); assert.equal(api.popups, undefined); assert.equal(api.paperActions, undefined);
+  assert.equal(api.noteAssets.appendImage, undefined);
   const foreign = {...scope, location: {origin: 'https://external.test'}};
   delete foreign.papertodo; foreign.window = foreign; foreign.top = foreign;
   vm.runInNewContext(fs.readFileSync(process.argv[2], 'utf8'), foreign);

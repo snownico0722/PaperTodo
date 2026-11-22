@@ -152,10 +152,17 @@ public sealed partial class AppController
             "general.telemetry",
             CreateAnonymousUsageStatisticsSettingsRow));
 
+        leftColumn.Children.Add(SettingsSectionLabel(
+            SettingsSidebarLocalized("窗口", "Windows", "ウィンドウ", "창")));
+        leftColumn.Children.Add(CompactSettingsField(
+            Strings.Get("SettingsFullscreenTopmostMode"),
+            CreateFullscreenTopmostModeSegmentSelector(),
+            editorWidth: 156,
+            tipKey: "TipFullscreenTopmostMode",
+            topMargin: 8));
+
         if (State.AdvancedSettingsMode)
         {
-            leftColumn.Children.Add(SettingsSectionLabel(
-                SettingsSidebarLocalized("窗口", "Windows", "ウィンドウ", "창")));
             _settingsHidePapersFromTaskbarCheckBox = SettingsToggle(
                 Strings.Get("SettingsHidePapersFromTaskbar"),
                 State.HidePapersFromTaskbar,
@@ -171,13 +178,7 @@ public sealed partial class AppController
                 WrapWithHint(
                     _settingsHidePapersFromWindowSwitcherCheckBox,
                     "TipHidePapersFromWindowSwitcher"),
-                CreateCaptureExclusionSettingsRow(),
-                CompactSettingsField(
-                    Strings.Get("SettingsFullscreenTopmostMode"),
-                    CreateFullscreenTopmostModeSegmentSelector(),
-                    editorWidth: 156,
-                    tipKey: "TipFullscreenTopmostMode",
-                    topMargin: 8)));
+                CreateCaptureExclusionSettingsRow()));
         }
 
         leftColumn.Children.Add(SettingsSoftDivider());

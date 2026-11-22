@@ -10,10 +10,10 @@
 新插件使用：
 
 ```json
-"apiVersion": "2.3"
+"apiVersion": "2.4"
 ```
 
-当前宿主最新协议为 `2.3`，并继续兼容 `2.1` 和 `2.2`。实验性 `2.0` 及更早 manifest 不再兼容加载。新插件应以 `2.3` 为目标；已有插件只要不使用其声明版本之后新增的能力仍可继续运行。
+当前宿主最新协议为 `2.4`，并继续兼容 `2.1`～`2.3`。实验性 `2.0` 及更早 manifest 不再兼容加载。新插件应以 `2.4` 为目标；已有插件只要不使用其声明版本之后新增的能力仍可继续运行。
 
 ### 插件 API 版本历史
 
@@ -23,7 +23,7 @@
 MinimumSupportedApiVersion <= plugin.apiVersion <= CurrentApiVersion
 ```
 
-因此新宿主可以继续加载仍在兼容范围内的旧插件；旧宿主遇到依赖更高 API 的新插件则必须拒绝加载。当前 PaperTodo 支持 **2.1～2.3**。
+因此新宿主可以继续加载仍在兼容范围内的旧插件；旧宿主遇到依赖更高 API 的新插件则必须拒绝加载。当前 PaperTodo 支持 **2.1～2.4**。
 
 | API | 状态 | 主要合同里程碑 |
 | --- | --- | --- |
@@ -31,7 +31,8 @@ MinimumSupportedApiVersion <= plugin.apiVersion <= CurrentApiVersion
 | 2.0 | 实验过渡 / 不再兼容 | 引入宿主绘制 Top Bar 等方向，但仍同时存在 provider app Runtime 与 per-Paper Web Runtime；后续被 2.1 收敛路线替代，没有保留加载兼容。 |
 | 2.1 | 当前最低兼容 | 后台统一为单 provider Runtime，Body/Mini 只做前端；包括 Workspace 的 Paper/Todo/Note、Runtime state/Papers、宿主绘制 Top Bar/Todo contribution、全局快捷键与自定义 shortcut action、纸片菜单、笔记图片读取和临时弹窗。 |
 | 2.2 | 继续支持 | 新增跨纸片显示控制、公共软件 Settings API（`settings.read/update`）、settings `type: "action"` 命令按钮、`startupPaper.presentation: "hidden"`、提醒触发状态/事件及 Web Runtime 宿主事件订阅。 |
-| 2.3 | 当前最新 | 顶栏操作新增 `MenuOnly` / `menuOnly`，可仅显示在插件操作菜单、不创建顶栏按钮。新插件默认面向 2.3。 |
+| 2.3 | 继续支持 | 顶栏操作新增 `MenuOnly` / `menuOnly`，可仅显示在插件操作菜单。 |
+| 2.4 | 当前最新 | 支持通过 `notes.append` 向内置 Markdown 笔记追加图片。 |
 
 **升版规则：**当前 minor 正式发布后，只要新增向后兼容、插件可观察的新合同（manifest 字段/类型、permission、事件、公开 API surface 或新语义），下一批就升 minor；纯宿主内部实现、性能优化和 bugfix 不升。破坏已有插件合同才升 major。同一个尚未发布的 minor 可以一起收纳多项兼容新增，不需要每加一个字段就连续制造多个版本号。
 
@@ -251,7 +252,7 @@ Native 最终目录只保留运行所需内容。不要分发无必要的 PDB/XM
 | `description` | 插件说明 |
 | `locales` | 可选；覆盖宿主绘制的 manifest/settings 多语言文案，见 §3.4 |
 | `version` | 插件版本，必须能解析为 `Version` |
-| `apiVersion` | 新插件使用 `"2.3"`；`"2.1"`、`"2.2"` 继续兼容加载 |
+| `apiVersion` | 新插件使用 `"2.4"`，兼容 `"2.1"`～`"2.3"` |
 | `stateVersion` | 宿主代管 JSON 的目标版本；同时用于 per-paper frontend state 和 provider Runtime state，至少为 1 |
 | `maxPaperInstances` | 可选；同一 Provider 最多允许存在的真实 Paper 数。省略默认 `1`，`0` 表示不限制；隐藏/折叠 Paper 仍计数 |
 | `entry` | Web 主页面或 Native 入口 DLL，必须位于插件目录内 |
@@ -951,7 +952,7 @@ papertodo.topBarLabels.set(paperId, labels);
 | Native 入口 | Web 入口 | 边界 |
 | --- | --- | --- |
 | `runtimeContext.PaperActions` | Runtime `papertodo.paperActions` | `papers.read`；给指定纸片注册文字菜单项 |
-| `context.NoteAssets` | `papertodo.noteAssets` | `notes.read`；读取指定笔记拥有的图片 |
+| `context.NoteAssets` | `papertodo.noteAssets` | `notes.read` 读取指定笔记的图片，`notes.append` 支持 Body / Runtime 追加图片（API 2.4） |
 | `context.Popups` | Body / Runtime `papertodo.popups` | 内容由插件绘制，宿主负责一次定位和失焦关闭 |
 
 这里的 `context` 可以是 `PaperBodyContext` 或 `PaperPluginRuntimeContext`。右键菜单入口仅由现有 provider Runtime 注册，使用 `SetActionHandler` / `SetActions(paperId, actions)`；Web 对应 `paperActions.set(paperId, actions)` 和 `paperActionInvoked` 事件。菜单项只包含 `Id` 和 `Text`，按声明顺序显示；不要求图标、不提供菜单提示、排序优先级或新的顶栏能力。替换、清除注册后旧菜单回调失效，Runtime 结束时清理所有注册。
@@ -1003,7 +1004,13 @@ papertodo.popup.close();
 
 弹窗可读取初始数据、接收主题事件、读取有权限的笔记图片、给创建者发消息和关闭自己；**不直接获得通用 Workspace 写入、菜单注册或再次开窗能力**。业务写入交给创建者处理。初始数据与单条消息上限 64 KiB；入口只接收本地 HTML，普通网页/邮件链接和外部新窗口请求交给系统默认程序打开，弹窗自身不导航；下载仍取消。页面导航会撤销旧消息凭证；可自动恢复的网页辅助进程故障不会关闭弹窗，主渲染或浏览器故障则关闭并向创建者报告 `popupError`。
 
-`NoteAssets.ReadImage(paperId, imageId)` 返回 `PaperNoteImage` 的 MIME 和独立编码字节；Web 的 `bytes` 为 Base64。沿用 `notes.read`，只读内置 Markdown 笔记拥有的图片，单次上限 16 MiB。缺失、损坏或归属错误报告 `asset_not_found`，超限报告 `asset_too_large`；不提供图片写入、磁盘路径或内部存储对象，也不承诺整篇笔记的原子导出快照。
+`NoteAssets.ReadImage(paperId, imageId)` 返回 `PaperNoteImage` 的 MIME 和独立编码字节；Web 的 `bytes` 为 Base64。沿用 `notes.read`，只读内置 Markdown 笔记拥有的图片，单次上限 16 MiB。缺失、损坏或归属错误报告 `asset_not_found`，超限报告 `asset_too_large`。
+
+#### 追加图片（API 2.4）
+
+在 `plugin.json` 中声明 `apiVersion: "2.4"` 和 `notes.append` 权限。Native Body / Runtime 调用 `context.NoteAssets.AppendImage(paperId, imageBytes, imageName)`，Web Body / Runtime 调用 `await papertodo.noteAssets.appendImage(paperId, imageBase64, imageName)`。单次最多传入 8 MiB 编码图片，Web 使用无 data URL 前缀的 Base64。图片名可省略，仅用于元数据，最多 200 字符。Web Mini 使用 `papertodo.workspace.request('noteAssets.appendImage', {paperId, imageBase64, imageName})`。
+
+宿主沿用正常的图片校验和压缩规则，保留目标内置 Markdown 笔记的待保存编辑，并在末尾追加图片。成功返回 `PaperId`、`ImageId` 和 `MarkdownReference`（Web 为小驼峰命名），返回时引用已写入正文。无效图片报告 `image_import_failed`，笔记末尾存在未闭合的代码块时报告 `image_reference_not_renderable`。Web 弹窗可向创建它的页面发送消息，请其写入。
 
 ## 8. 胶囊 presentation
 
@@ -1280,7 +1287,7 @@ Native 插件是 fully trusted / unsandboxed .NET/WPF 代码，与 PaperTodo 当
 
 ### Manifest / Runtime
 
-- 新插件仍以 `apiVersion: "2.0"` 或更早版本为目标；新开发应使用 `2.3`，已有 `2.1`、`2.2` 插件继续兼容；
+- 新插件仍以 `apiVersion: "2.0"` 或更早版本为目标；新开发应使用 `2.4`，已有 `2.1`～`2.3` 插件继续兼容；
 - 插件目录名和 `id` 不一致；
 - `id` 使用非法字符或宿主保留 ID `data` / `data1`–`data5` / `builtin.markdown`；
 - Web 声明 `runtime`，但默认 `runtime.html` 不存在，或显式 `runtime` 路径不存在/跑出 Web `entry` 静态目录；
@@ -1347,7 +1354,7 @@ Native 插件是 fully trusted / unsandboxed .NET/WPF 代码，与 PaperTodo 当
 
 ## 14. 提交插件前
 
-- 新 `plugin.json` 使用当前目标 `apiVersion: "2.3"`；只有刻意停留在旧合同时才继续写 `2.1` 或 `2.2`；
+- 新 `plugin.json` 使用当前目标 `apiVersion: "2.4"`，需要兼容旧宿主时声明对应版本；
 - 所有 metadata 只在 `plugin.json` 中声明，Native 入口 DLL 只提供行为实现；
 - 声明 `runtime` 时：Native 实现 `IPaperPluginRuntimeProvider`；Web 默认提供 `entry` 同目录 `runtime.html`，或用 `runtime` 指定同一 Web 静态目录内的其他入口；
 - Runtime 需要插件设置时使用自己的 `context.Settings.Json` + `Settings.Subscribe(...)` / `papertodo.settings.get()` + `settingsChanged`，不借用隐藏 paper session；

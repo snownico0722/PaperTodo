@@ -125,7 +125,7 @@ The top bar contains fixed window controls and configurable built-in shortcuts:
 
 | Control / Action | Type | How to Use It |
 | :--- | :--- | :--- |
-| **Pin** | Fixed control | Toggle always-on-top; fullscreen avoidance follows your settings |
+| **Pin** | Fixed control | Toggle always-on-top. Manually pinned papers stay on top during fullscreen avoidance |
 | **Title** | Fixed control | Click to edit, then press <kbd>Enter</kbd> or click elsewhere to save; pressing <kbd>Esc</kbd> saves and collapses the paper when capsule mode is available, or cancels the edit otherwise. Defaults to 6 full-width character equivalents (Latin letters, digits, and other half-width characters count as half) |
 | **`···` Menu** | Fixed control | Open the paper actions menu (same as right-clicking the paper frame) for unpinned shortcuts, export actions, and **Settings** |
 | **Collapse / Hide** | Fixed control | Collapse the paper; hide it when capsule mode is disabled |
@@ -480,7 +480,7 @@ Right-click the tray icon and choose **Settings**. The sidebar lists **General**
 
 ### 8.1 General, Todo, and Note Settings
 
-- **General** includes the interface language (applied after restart), startup, top-bar shortcuts, capsule behavior, and edge browsing. **Advanced** adds options for hiding papers from the taskbar and `Alt+Tab`, fullscreen behavior, and capsule title length. Beneath the window-switcher option, **Hide from capture** offers independent **Papers** and **Capsules** checkboxes, both off by default. Windows versions before Windows 10 version 2004 may leave a blank area where the window was. This uses Windows capture exclusion where supported; transparent windows and third-party capture tools may not honor it, so it is not a privacy guarantee.
+- **General** includes the interface language (applied after restart), startup, top-bar shortcuts, capsule behavior, and edge browsing. Set **Yield to fullscreen** in the **Windows** section. **Advanced** adds options for hiding papers from the taskbar and `Alt+Tab` and setting capsule title length. Beneath the window-switcher option, **Hide from capture** offers independent **Papers** and **Capsules** checkboxes, both off by default. Windows versions before Windows 10 version 2004 may leave a blank area where the window was. This uses Windows capture exclusion where supported; transparent windows and third-party capture tools may not honor it, so it is not a privacy guarantee.
 - The right column of **Notes & Todos** covers the bottom quick-add bar, auto-clear / auto-sink completed items, paper and file link display options, and todo reminders and sounds.
 - The left column of **Notes & Todos** covers the three Markdown rendering levels, Full Render editing animation, and the file extension for external editing. **Advanced** adds large-image compression and script-capsule settings.
 
@@ -520,7 +520,7 @@ Click a command's shortcut field and press a key combination; the page checks fo
 
 ### 8.4 Installing and Configuring Plugins
 
-Plugins can turn notes into clocks, Pomodoro timers, or review panels, and add todo actions, top-bar buttons, menu items, global shortcuts, and custom capsule / Mini views. The current host supports **Plugin API 2.1–2.3** (existing 2.1 and 2.2 plugins remain compatible). `apiVersion` in `plugin.json` specifies the **minimum required host API**; a plugin requiring `2.3` cannot load on an older host. Plugin actions may appear only in the menu without occupying title-bar space.
+Plugins can turn notes into clocks, Pomodoro timers, or review panels, and add todo actions, top-bar buttons, menu items, global shortcuts, and custom capsule / Mini views. The current host supports **Plugin API 2.1–2.4**. `apiVersion` in `plugin.json` specifies the **minimum required host API**; a plugin requiring `2.4` cannot load on an older host. Plugin actions may appear only in the menu without occupying title-bar space.
 
 - **Web & Native plugins**: Web plugins run HTML/CSS/JS via WebView2; Native plugins are compiled with .NET 10 + WPF.
 - **Plugin data**: Configured in "Settings → Plugins". Host-managed data is separated by workspace under `plugins/data/` (main workspace 1) and `plugins/data2/`–`plugins/data5/` (workspaces 2–5). Separate folders do not isolate system permissions; back up any files a plugin stores elsewhere according to its instructions.
@@ -710,7 +710,7 @@ To choose an older backup manually or restore images and plugins as well:
 **A**: Turning it off shows the original unblended image. To remove the background completely, move or rename `papertodo.png` / `.jpg` / `.jpeg` beside `PaperTodo.exe` and restart.
 
 #### Q9: Why does a copied plugin not appear?
-**A**: Check that you copied a built plugin folder (not a Native source folder from `plugin-samples/`), its folder name matches `id` in `plugin.json`, `plugin.json` is directly inside that folder (not nested an extra level), its `apiVersion` is within `2.1`–`2.3`, and the plugin is enabled in "Settings → Plugins". After adding or updating files, use the restart-and-rescan button on the Plugins page, or exit from the tray and relaunch PaperTodo.
+**A**: Check that you copied a built plugin folder (not a Native source folder from `plugin-samples/`), its folder name matches `id` in `plugin.json`, `plugin.json` is directly inside that folder (not nested an extra level), its `apiVersion` is within `2.1`–`2.4`, and the plugin is enabled in "Settings → Plugins". After adding or updating files, use the restart-and-rescan button on the Plugins page, or exit from the tray and relaunch PaperTodo.
 
 #### Q10: Why are other Settings pages dimmed in a secondary workspace?
 **A**: The workspace is following the main workspace's settings. Change settings in the main workspace (1), or open "Settings → Spaces & Data" and turn off **Follow main settings** for that workspace.

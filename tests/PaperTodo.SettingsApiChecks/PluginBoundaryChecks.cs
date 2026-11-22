@@ -230,6 +230,41 @@ internal static partial class Program
                     "A write to the same Markdown paper commits the user's pending text before the plugin write.");
                 Check(probe.Commits == 0,
                     "Target Markdown ordering must not invoke Commit on an unrelated body.");
+
+                var png = Convert.FromBase64String(
+                    "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR4nGMUVDJmYGBgYmBgYGBgAAAE0ABqaVHlcAAAAABJRU5ErkJggg==");
+                Throws<PaperTodoPluginException>(() => pluginReader.AppendImage(note.Id, png), "permission_denied");
+                using var pluginWriter = new PaperBodyPluginHostApi(c, commands, owner.Id, "tests.writer",
+                    [PaperTodoPermissionNames.NotesAppend], () => true, () => true);
+                Throws<PaperTodoPluginException>(() => pluginWriter.AppendImage(todo.Id, png), "wrong_paper_type");
+                Throws<PaperTodoPluginException>(() => pluginWriter.AppendImage(note.Id,
+                    new byte[IPaperNoteAssetsApi.MaximumImageAppendBytes + 1]), "asset_too_large");
+
+                box.Text = "```\nunfinished";
+                Throws<PaperTodoPluginException>(() => pluginWriter.AppendImage(note.Id, png), "image_reference_not_renderable");
+                box.Text = "user draft before the image";
+                var nativeImage = pluginWriter.AppendImage(note.Id, png, "sample.png");
+                var expectedNote = "user draft before the image" + Environment.NewLine + nativeImage.MarkdownReference;
+                Check(nativeImage.PaperId == note.Id && note.Content == expectedNote,
+                    "A native image append preserves the pending draft.");
+                Check(box.PersistentText == expectedNote + Environment.NewLine,
+                    "The editor displays the imported image and keeps its trailing line for the caret.");
+                Check(pluginReader.ReadImage(note.Id, nativeImage.ImageId).Mime == "image/png",
+                    "The returned image ID belongs to the target note.");
+
+                using var runtime = new PaperPluginRuntimeWorkspaceApi(c, "tests.writer",
+                    [PaperTodoPermissionNames.NotesAppend], () => true);
+                Throws<PaperTodoPluginException>(() => WebPluginWorkspaceRequests.Execute(runtime,
+                    "noteAssets.appendImage", Json(new { paperId = note.Id, imageBase64 = "%%%" })), "invalid_params");
+                var webImage = (PaperNoteImageInsertionResult)WebPluginWorkspaceRequests.Execute(runtime,
+                    "noteAssets.appendImage", Json(new { paperId = note.Id, imageBase64 = Convert.ToBase64String(png) }))!;
+                Check(webImage.ImageId != nativeImage.ImageId && note.Content.EndsWith(webImage.MarkdownReference),
+                    "Web Runtime appends through the shared command and returns the new reference.");
+                var savedState = JsonSerializer.Deserialize<AppState>(
+                    File.ReadAllText(ReadField<StateStore>(c, "_store").FilePath), StateStore.JsonOptions)!;
+                Check(savedState.Papers.Single(p => p.Id == note.Id).Content == note.Content,
+                    "A successful image append has already persisted the reference.");
+                Check(probe.Commits == 0, "Image appends must preserve unrelated plugin sessions.");
             }
             finally
             {

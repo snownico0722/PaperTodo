@@ -76,6 +76,7 @@ internal static partial class Program
             AdapterBehavior();
             SharedUiSettingBehavior();
             SettingsEditorBehavior();
+            FullscreenSettingVisibility();
             PaperBackgroundSettingsVisibility();
             SpacingAdvancedModeVisibility();
             SpacingKeyboardBehavior();
