@@ -244,10 +244,11 @@ internal static partial class Program
                 Throws<PaperTodoPluginException>(() => pluginWriter.AppendImage(note.Id, png), "image_reference_not_renderable");
                 box.Text = "user draft before the image";
                 var nativeImage = pluginWriter.AppendImage(note.Id, png, "sample.png");
-                Check(nativeImage.PaperId == note.Id &&
-                      note.Content == box.PersistentText &&
-                      note.Content == "user draft before the image" + Environment.NewLine + nativeImage.MarkdownReference,
-                    "A native image append preserves the pending draft and refreshes the editor.");
+                var expectedNote = "user draft before the image" + Environment.NewLine + nativeImage.MarkdownReference;
+                Check(nativeImage.PaperId == note.Id && note.Content == expectedNote,
+                    "A native image append preserves the pending draft.");
+                Check(box.PersistentText == expectedNote + Environment.NewLine,
+                    "The editor displays the imported image and keeps its trailing line for the caret.");
                 Check(pluginReader.ReadImage(note.Id, nativeImage.ImageId).Mime == "image/png",
                     "The returned image ID belongs to the target note.");
 
