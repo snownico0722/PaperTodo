@@ -204,6 +204,10 @@ internal static partial class Program
     {
         var controller = Controller();
         Field(controller, "_settingsRegionRefreshers", new Dictionary<string, Action>());
+        var catalog = (WorkspaceCatalog)System.Runtime.CompilerServices.RuntimeHelpers
+            .GetUninitializedObject(typeof(WorkspaceCatalog));
+        Field(catalog, "<Options>k__BackingField", new WorkspaceConfiguration());
+        Field(controller, "_workspaceCatalog", catalog);
         foreach (var advanced in new[] { false, true })
         {
             controller.State.AdvancedSettingsMode = advanced;
