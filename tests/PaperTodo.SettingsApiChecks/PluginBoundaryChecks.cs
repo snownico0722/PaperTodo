@@ -236,7 +236,6 @@ internal static partial class Program
                 Throws<PaperTodoPluginException>(() => pluginReader.AppendImage(note.Id, png), "permission_denied");
                 using var pluginWriter = new PaperBodyPluginHostApi(c, commands, owner.Id, "tests.writer",
                     [PaperTodoPermissionNames.NotesAppend], () => true, () => true);
-                Throws<PaperTodoPluginException>(() => pluginWriter.AppendImage(owner.Id, png), "note_content_unavailable");
                 Throws<PaperTodoPluginException>(() => pluginWriter.AppendImage(todo.Id, png), "wrong_paper_type");
                 Throws<PaperTodoPluginException>(() => pluginWriter.AppendImage(note.Id,
                     new byte[IPaperNoteAssetsApi.MaximumImageAppendBytes + 1]), "asset_too_large");

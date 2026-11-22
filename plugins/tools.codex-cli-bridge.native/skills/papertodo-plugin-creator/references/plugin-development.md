@@ -10,10 +10,10 @@ This is the **current PaperTodo plugin development manual**. It documents the cu
 New plugins use:
 
 ```json
-"apiVersion": "2.3"
+"apiVersion": "2.4"
 ```
 
-The current host exposes Protocol `2.3` and remains backward-compatible with `2.1` and `2.2`. Protocol `2.0` and earlier are no longer load-compatible. New plugins should target `2.3`; existing plugins can keep running within their declared contract.
+The current host exposes Protocol `2.4` and remains backward-compatible with `2.1` through `2.3`. Protocol `2.0` and earlier are no longer load-compatible. New plugins should target `2.4`; existing plugins can keep running within their declared contract.
 
 ### Plugin API version history
 
@@ -23,7 +23,7 @@ The current host exposes Protocol `2.3` and remains backward-compatible with `2.
 MinimumSupportedApiVersion <= plugin.apiVersion <= CurrentApiVersion
 ```
 
-A newer host may load an older compatible plugin. An older host must reject a plugin that requires a newer API. PaperTodo currently supports **2.1 through 2.3**.
+A newer host may load an older compatible plugin. An older host must reject a plugin that requires a newer API. PaperTodo currently supports **2.1 through 2.4**.
 
 | API | Status | Main contract milestones |
 | --- | --- | --- |
@@ -31,7 +31,8 @@ A newer host may load an older compatible plugin. An older host must reject a pl
 | 2.0 | Experimental / unsupported | Transitional generation that introduced host-rendered Top Bar concepts while still carrying separate provider app Runtime and per-Paper Web Runtime paths. It was superseded rather than kept load-compatible. |
 | 2.1 | Supported minimum | Consolidated background work into one provider Runtime; Body/Mini are frontend surfaces. Includes Workspace Paper/Todo/Note access, Runtime state/Papers, host-rendered Top Bar and Todo contributions, global shortcuts/custom shortcut actions, paper menus, note-image reads and temporary popups. |
 | 2.2 | Supported | Adds cross-paper presentation, public application Settings API (`settings.read/update`), settings `type: "action"` command buttons, `startupPaper.presentation: "hidden"`, reminder trigger state/events, and Web Runtime host-event subscriptions. |
-| 2.3 | Current | Adds `MenuOnly` / `menuOnly` to top-bar action descriptors, showing an action only in the plugin action menu without creating a title-bar button. New plugins should target 2.3. |
+| 2.3 | Supported | Adds `MenuOnly` / `menuOnly` to top-bar action descriptors, showing an action only in the plugin action menu without creating a title-bar button. |
+| 2.4 | Current | Adds image append to built-in Markdown notes with `notes.append`. |
 
 **Versioning rule:** a backward-compatible new plugin-visible contract (manifest field/type, permission, event, public API surface, or new observable semantics) advances the minor version after the current minor is published. Host-only implementation changes and bug fixes do not. Breaking an existing plugin contract advances the major version. Multiple compatible additions developed before one minor is released may ship together in that minor.
 
@@ -251,7 +252,7 @@ The current manifest supports:
 | `description` | Plugin description |
 | `locales` | Optional language overrides for host-rendered manifest/settings text; see §3.4 |
 | `version` | Plugin version; must parse as `Version` |
-| `apiVersion` | Use `"2.3"` for new plugins; `"2.1"` and `"2.2"` remain load-compatible |
+| `apiVersion` | Use `"2.4"` for new plugins. `"2.1"` through `"2.3"` remain compatible |
 | `stateVersion` | Target version for host-managed JSON; used by both per-paper frontend state and provider Runtime state; at least 1 |
 | `maxPaperInstances` | Optional; maximum number of real Papers for the same provider. Defaults to `1`; `0` means unlimited. Hidden/collapsed Papers still count |
 | `entry` | Web main page or Native entry DLL; must stay inside the plugin directory |
@@ -949,7 +950,7 @@ These capabilities extend existing entry points only: **text actions in the Pape
 | Native entry | Web entry | Boundary |
 | --- | --- | --- |
 | `runtimeContext.PaperActions` | Runtime `papertodo.paperActions` | `papers.read`; register text menu items for a specific Paper |
-| `context.NoteAssets` | `papertodo.noteAssets` | `notes.read`; read images owned by a specific Note |
+| `context.NoteAssets` | `papertodo.noteAssets` | `notes.read` reads images owned by a specific Note. `notes.append` adds an image from Body or Runtime (API 2.4) |
 | `context.Popups` | Body / Runtime `papertodo.popups` | Plugin renders content; host performs one-time positioning and closes on focus loss |
 
 Here `context` may be either `PaperBodyContext` or `PaperPluginRuntimeContext`. Context-menu entries are registered only by an existing provider Runtime using `SetActionHandler` / `SetActions(paperId, actions)`. Web uses `paperActions.set(paperId, actions)` plus the `paperActionInvoked` event. Menu items contain only `Id` and `Text`, displayed in declaration order. They do not require icons and provide no tooltip, sort-priority, or new Top Bar capability. Replacing or clearing a registration invalidates its old callbacks, and Runtime shutdown clears all registrations.
@@ -1001,7 +1002,13 @@ papertodo.popup.close();
 
 A popup can read initial data, receive theme events, read permitted Note images, send messages to its creator, and close itself. **It does not directly receive general Workspace write access, menu registration, or the ability to open another popup.** Business writes are handled by the creator. Initial data and each message are limited to 64 KiB. The entry accepts local HTML only. HTTP/HTTPS/mailto links and external new-window requests open through the system default application without navigating the popup. Downloads remain cancelled. Navigation invalidates old message credentials. Recoverable Web helper-process failures do not close the popup; main renderer or browser failures close it and report `popupError` to the creator.
 
-`NoteAssets.ReadImage(paperId, imageId)` returns the MIME type and separately encoded bytes from `PaperNoteImage`; Web exposes `bytes` as Base64. It reuses `notes.read`, can read only images owned by built-in Markdown Notes, and has a 16 MiB limit per read. Missing, corrupt, or ownership-mismatched assets report `asset_not_found`; oversized assets report `asset_too_large`. The API does not expose image writes, disk paths, or internal storage objects, and it does not promise an atomic export snapshot of an entire Note.
+`NoteAssets.ReadImage(paperId, imageId)` returns the MIME type and separately encoded bytes from `PaperNoteImage`; Web exposes `bytes` as Base64. It reuses `notes.read`, can read only images owned by built-in Markdown Notes, and has a 16 MiB limit per read. Missing, corrupt, or ownership-mismatched assets report `asset_not_found`; oversized assets report `asset_too_large`.
+
+#### Append an image (API 2.4)
+
+Declare `apiVersion: "2.4"` and the `notes.append` permission in `plugin.json`. Native Body and Runtime use `context.NoteAssets.AppendImage(paperId, imageBytes, imageName)`; Web Body and Runtime use `await papertodo.noteAssets.appendImage(paperId, imageBase64, imageName)`. Pass up to 8 MiB of encoded image data per call, using raw Base64 without a data URL prefix on Web. The optional name is metadata with a 200-character limit. Web Mini uses `papertodo.workspace.request('noteAssets.appendImage', {paperId, imageBase64, imageName})`.
+
+The host applies its normal image validation and compression, keeps any pending text in the target built-in Markdown note, and appends the image at the end. Success returns `PaperId`, `ImageId`, and `MarkdownReference` (camelCase on Web). The reference is already in the note. Invalid images report `image_import_failed`; notes ending in an open code block report `image_reference_not_renderable`. A Web popup can ask its creator to append the image.
 
 ## 8. Capsule Presentation
 
@@ -1278,7 +1285,7 @@ When starting a new plugin, copy the smallest structure from the sample closest 
 
 ### Manifest / Runtime
 
-- targeting `apiVersion: "2.0"` or earlier for a new plugin; the current host supports `2.1`–`2.3`, and new plugins should target `2.3`;
+- targeting `apiVersion: "2.0"` or earlier for a new plugin; the current host supports `2.1`–`2.4`, and new plugins should target `2.4`;
 - plugin directory name does not match `id`;
 - `id` uses invalid characters or the reserved host IDs `data` / `data1`–`data5` / `builtin.markdown`;
 - Web declares `runtime`, but the default `runtime.html` is missing, or an explicit `runtime` path is missing/outside the Web `entry` static directory;
@@ -1345,7 +1352,7 @@ When starting a new plugin, copy the smallest structure from the sample closest 
 
 ## 14. Before Submitting a Plugin
 
-- new `plugin.json` targets the current `apiVersion: "2.3"`; use `2.1` or `2.2` only when intentionally staying within an older contract;
+- new `plugin.json` targets the current `apiVersion: "2.4"`. Declare an older version when intentionally staying within that contract;
 - all metadata lives only in `plugin.json`; the Native entry DLL provides behavior only;
 - when declaring `runtime`: Native implements `IPaperPluginRuntimeProvider`; Web provides `runtime.html` next to `entry` by default, or uses `runtime` to select another entry inside the same Web static directory;
 - when Runtime needs plugin settings, use its own `context.Settings.Json` + `Settings.Subscribe(...)` / `papertodo.settings.get()` + `settingsChanged`; do not borrow a hidden paper session;

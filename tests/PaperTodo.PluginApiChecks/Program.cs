@@ -85,6 +85,8 @@ internal static partial class Program
         Error("permission_denied", () => denied.ReadImage("note-a", asset.Id));
         using var api = BodyApi(controller, [PaperTodoPermissionNames.NotesRead]);
         var image = api.ReadImage("note-a", asset.Id);
+        using var writer = BodyApi(controller, [PaperTodoPermissionNames.NotesAppend]);
+        Error("note_content_unavailable", () => writer.AppendImage("foreign", image.Bytes));
         Assert(image.Mime.StartsWith("image/") && image.Bytes.Length > 0, "Encoded bytes and MIME missing.");
         var first = image.Bytes[0];
         image.Bytes[0] ^= 255;
