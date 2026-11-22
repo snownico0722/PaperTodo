@@ -200,6 +200,23 @@ internal static partial class Program
         }
     }
 
+    private static void FullscreenSettingVisibility()
+    {
+        var controller = Controller();
+        Field(controller, "_settingsRegionRefreshers", new Dictionary<string, Action>());
+        foreach (var advanced in new[] { false, true })
+        {
+            controller.State.AdvancedSettingsMode = advanced;
+            var options = (UIElement)Invoke(controller, "BuildSettingsGeneralOptions")!;
+            Check(SettingsControls<TextBlock>(options).Count(label =>
+                    label.Text == Strings.Get("SettingsFullscreenTopmostMode")) == 1,
+                "General settings show the fullscreen selector once in both modes.");
+            Check(SettingsControls<CheckBox>(options).Any(toggle =>
+                    Equals(toggle.Content, Strings.Get("SettingsHidePapersFromTaskbar"))) == advanced,
+                "Taskbar visibility remains in advanced settings.");
+        }
+    }
+
     private static void PaperBackgroundSettingsVisibility()
     {
         var candidateImages = new[] { "papertodo.png", "papertodo.jpg", "papertodo.jpeg" };
