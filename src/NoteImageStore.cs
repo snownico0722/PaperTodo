@@ -438,7 +438,7 @@ public sealed class NoteImageStore : IDisposable
             image.Height);
     }
 
-    // MCP supplies encoded image bytes. Reuse the same WIC decoding, compression and
+    // External callers supply encoded image bytes. Reuse the same WIC decoding, compression and
     // LMDB limits as file/clipboard imports; never persist Base64 as Markdown content.
     internal NoteImageAsset ImportImageBytes(string noteId, byte[] bytes, string originalName)
     {

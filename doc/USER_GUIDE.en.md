@@ -520,7 +520,7 @@ Click a command's shortcut field and press a key combination; the page checks fo
 
 ### 8.4 Installing and Configuring Plugins
 
-Plugins can turn notes into clocks, Pomodoro timers, or review panels, and add todo actions, top-bar buttons, menu items, global shortcuts, and custom capsule / Mini views. The current host supports **Plugin API 2.1–2.3** (existing 2.1 and 2.2 plugins remain compatible). `apiVersion` in `plugin.json` specifies the **minimum required host API**; a plugin requiring `2.3` cannot load on an older host. Plugin actions may appear only in the menu without occupying title-bar space.
+Plugins can turn notes into clocks, Pomodoro timers, or review panels, and add todo actions, top-bar buttons, menu items, global shortcuts, and custom capsule / Mini views. The current host supports **Plugin API 2.1–2.4**. `apiVersion` in `plugin.json` specifies the **minimum required host API**; a plugin requiring `2.4` cannot load on an older host. Plugin actions may appear only in the menu without occupying title-bar space.
 
 - **Web & Native plugins**: Web plugins run HTML/CSS/JS via WebView2; Native plugins are compiled with .NET 10 + WPF.
 - **Plugin data**: Configured in "Settings → Plugins". Host-managed data is separated by workspace under `plugins/data/` (main workspace 1) and `plugins/data2/`–`plugins/data5/` (workspaces 2–5). Separate folders do not isolate system permissions; back up any files a plugin stores elsewhere according to its instructions.
@@ -710,7 +710,7 @@ To choose an older backup manually or restore images and plugins as well:
 **A**: Turning it off shows the original unblended image. To remove the background completely, move or rename `papertodo.png` / `.jpg` / `.jpeg` beside `PaperTodo.exe` and restart.
 
 #### Q9: Why does a copied plugin not appear?
-**A**: Check that you copied a built plugin folder (not a Native source folder from `plugin-samples/`), its folder name matches `id` in `plugin.json`, `plugin.json` is directly inside that folder (not nested an extra level), its `apiVersion` is within `2.1`–`2.3`, and the plugin is enabled in "Settings → Plugins". After adding or updating files, use the restart-and-rescan button on the Plugins page, or exit from the tray and relaunch PaperTodo.
+**A**: Check that you copied a built plugin folder (not a Native source folder from `plugin-samples/`), its folder name matches `id` in `plugin.json`, `plugin.json` is directly inside that folder (not nested an extra level), its `apiVersion` is within `2.1`–`2.4`, and the plugin is enabled in "Settings → Plugins". After adding or updating files, use the restart-and-rescan button on the Plugins page, or exit from the tray and relaunch PaperTodo.
 
 #### Q10: Why are other Settings pages dimmed in a secondary workspace?
 **A**: The workspace is following the main workspace's settings. Change settings in the main workspace (1), or open "Settings → Spaces & Data" and turn off **Follow main settings** for that workspace.

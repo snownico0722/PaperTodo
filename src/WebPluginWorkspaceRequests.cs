@@ -29,9 +29,10 @@ internal static class WebPluginWorkspaceRequests
             OptionalString(parameters, "paperId"),
             OptionalBoolean(parameters, "includeBlank") ?? false),
         "notes.get" => host.GetNote(RequiredString(parameters, "paperId")),
-        "noteAssets.readImage" => (host as IPaperNoteAssetsApi
-            ?? throw new PaperTodoPluginException("note_assets_unavailable", "NoteAssets is unavailable."))
-            .ReadImage(RequiredString(parameters, "paperId"), RequiredString(parameters, "imageId")),
+        "noteAssets.readImage" => NoteAssets(host).ReadImage(
+            RequiredString(parameters, "paperId"), RequiredString(parameters, "imageId")),
+        "noteAssets.appendImage" => NoteAssets(host).AppendImage(
+            RequiredString(parameters, "paperId"), DecodeImageBytes(parameters), OptionalString(parameters, "imageName")),
         "papers.create" => host.CreatePaper(Deserialize<CreatePaperRequest>(parameters, jsonOptions)),
         "todos.append" => host.AppendTodos(Deserialize<AppendTodosRequest>(parameters, jsonOptions)),
         "todos.update" => host.UpdateTodo(Deserialize<UpdateTodoRequest>(parameters, jsonOptions)),
@@ -61,6 +62,27 @@ internal static class WebPluginWorkspaceRequests
     private static IPaperWorkspacePresentationApi WorkspacePresentation(IPaperTodoHostApi host) =>
         host as IPaperWorkspacePresentationApi
         ?? throw new PaperTodoPluginException("presentation_unavailable", "Cross-paper presentation is unavailable.");
+
+    private static IPaperNoteAssetsApi NoteAssets(IPaperTodoHostApi host) =>
+        host as IPaperNoteAssetsApi
+        ?? throw new PaperTodoPluginException("note_assets_unavailable", "NoteAssets is unavailable.");
+
+    private static byte[] DecodeImageBytes(JsonElement parameters)
+    {
+        const int maxBase64Length = ((IPaperNoteAssetsApi.MaximumImageAppendBytes + 2) / 3) * 4;
+        var encoded = RequiredString(parameters, "imageBase64");
+        if (encoded.Length > maxBase64Length)
+            throw new PaperTodoPluginException("asset_too_large", "An image append accepts up to 8 MiB of encoded image data.");
+
+        try
+        {
+            return Convert.FromBase64String(encoded);
+        }
+        catch (FormatException)
+        {
+            throw new PaperTodoPluginException("invalid_params", "imageBase64 must contain valid Base64 image data.");
+        }
+    }
 
     private static T Deserialize<T>(JsonElement payload, JsonSerializerOptions? options)
     {

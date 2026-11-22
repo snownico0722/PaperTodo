@@ -123,6 +123,13 @@ internal sealed class PaperPluginRuntimeWorkspaceApi :
         return _inner.ReadImage(paperId, imageId);
     });
 
+    public PaperNoteImageInsertionResult AppendImage(string paperId, byte[] imageBytes, string? imageName = null) =>
+        OnUi(() =>
+        {
+            EnsureUsable();
+            return _inner.AppendImage(paperId, imageBytes, imageName);
+        });
+
     void IPaperPluginPaperActions.SetActionHandler(Action<PaperActionInvocation>? handler) => OnUi(() =>
     {
         EnsureUsable();

@@ -27,11 +27,24 @@ public interface IPaperPluginPaperActions
 /// <summary>An independent copy of the encoded image, never a store buffer or file path.</summary>
 public sealed record PaperNoteImage(string ImageId, string Mime, byte[] Bytes);
 
-/// <summary>Requires notes.read. Only the specified built-in Markdown note's images are readable.</summary>
+/// <summary>The saved image and the Markdown reference already appended to the note.</summary>
+public sealed record PaperNoteImageInsertionResult(string PaperId, string ImageId, string MarkdownReference);
+
+/// <summary>Accesses assets of built-in Markdown notes.</summary>
 public interface IPaperNoteAssetsApi
 {
     const int MaximumImageBytes = 16 * 1024 * 1024;
+    const int MaximumImageAppendBytes = 8 * 1024 * 1024;
+
+    /// <summary>Requires notes.read. Reads an image owned by the specified note.</summary>
     PaperNoteImage ReadImage(string paperId, string imageId);
+
+    /// <summary>
+    /// API 2.4. Requires notes.append. Saves encoded image bytes and appends a Markdown image
+    /// at the end of the note. The optional image name is metadata.
+    /// </summary>
+    PaperNoteImageInsertionResult AppendImage(string paperId, byte[] imageBytes, string? imageName = null) =>
+        throw new PaperTodoPluginException("note_assets_unavailable", "Appending note images is unavailable.");
 }
 
 public sealed record PaperPluginPopupOptions
