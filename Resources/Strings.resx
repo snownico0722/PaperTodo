@@ -585,8 +585,8 @@
     <value>编辑 Markdown 时，需要重新显示的语法标记会以淡入动画出现，让编辑状态的切换更加自然。</value>
   </data>
   <data name="TipFullscreenTopmostMode" xml:space="preserve">
-    <value>检测到视频、游戏等全屏时，纸片与边缘胶囊可暂时避让；
-「保持置顶」则始终可见。</value>
+    <value>检测到视频、游戏等全屏时，未固定的纸片与边缘胶囊可暂时避让。
+通过图钉手动置顶的纸片会保持置顶。</value>
   </data>
   <data name="TipTodoVisualSize" xml:space="preserve">
     <value>调整待办文字、行高与间距。</value>

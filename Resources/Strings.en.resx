@@ -558,8 +558,8 @@ Error: {0}</value>
     <value>When editing Markdown, syntax marks that reappear fade in smoothly as the editor changes state.</value>
   </data>
   <data name="TipFullscreenTopmostMode" xml:space="preserve">
-    <value>When video, games, or other fullscreen apps are detected, papers and edge capsules can step aside.
-“Stay on top” keeps them always visible.</value>
+    <value>When video, games, or other fullscreen apps are detected, unpinned papers and edge capsules can step aside.
+Manually pinned papers stay on top.</value>
   </data>
   <data name="TipTodoVisualSize" xml:space="preserve">
     <value>Todo text, row height, and spacing.</value>

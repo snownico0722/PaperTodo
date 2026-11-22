@@ -102,7 +102,8 @@ public sealed partial class AppController : IDisposable
 
     internal IntPtr FullscreenAvoidanceWindowFor(Window? window)
     {
-        if (_fullscreenAvoidanceWindow == IntPtr.Zero)
+        if (_fullscreenAvoidanceWindow == IntPtr.Zero ||
+            window is PaperWindow { IsManuallyPinned: true })
         {
             return IntPtr.Zero;
         }

@@ -571,8 +571,8 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
     <value>Markdown の編集中、再表示される構文記号がフェードインし、編集状態の切り替えが自然になります。</value>
   </data>
   <data name="TipFullscreenTopmostMode" xml:space="preserve">
-    <value>動画やゲームなどの全画面を検出したとき、紙片と端のカプセルを一時的に避けられます。
-「最前面のまま」なら常に表示します。</value>
+    <value>動画やゲームなどが全画面表示になると、固定していない紙片と端のカプセルを一時的に背面にできます。
+ピンで固定した紙片は最前面に表示されます。</value>
   </data>
   <data name="TipTodoVisualSize" xml:space="preserve">
     <value>ToDo の文字、行高、間隔を調整します。</value>

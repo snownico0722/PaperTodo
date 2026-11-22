@@ -229,6 +229,7 @@ public sealed partial class PaperWindow : Window
         IsDeepCapsuleReordering || IsDeepCapsuleDockingReveal;
     public bool SuppressGeometrySave => _suppressGeometrySave;
     internal string PaperId => _paper.Id;
+    internal bool IsManuallyPinned => _paper.AlwaysOnTop;
     // Ordinary collapsed capsules are the main PaperWindow and should still save X/Y.
     // Deep capsules use the slot-host window for docked geometry, so the hidden/parked
     // main window must not overwrite ordinary paper geometry.
@@ -2632,6 +2633,8 @@ public sealed partial class PaperWindow : Window
         var effectiveTopmost = shouldBeTopmost &&
             (avoidanceWindow == IntPtr.Zero ||
              ShouldKeepExperimentalCapsuleFollowAboveTarget);
+        // Unpinning still needs a relative Z-order update after WPF clears the topmost band.
+        var wasTopmost = Topmost;
         Topmost = effectiveTopmost;
         if (IsExperimentalPassive && IsVisible)
         {
@@ -2640,6 +2643,7 @@ public sealed partial class PaperWindow : Window
         else if (IsVisible &&
             (_experimentalPassiveNeedsZOrderRestore ||
              shouldBeTopmost ||
+             (wasTopmost && fullscreenAvoidanceWindow != IntPtr.Zero) ||
              WindowNative.IsTopmost(this)))
         {
             WindowNative.ApplyTopmostZOrder(this, effectiveTopmost, avoidanceWindow);

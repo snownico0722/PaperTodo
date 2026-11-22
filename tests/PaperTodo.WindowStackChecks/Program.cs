@@ -36,7 +36,7 @@ internal static class Program
         var total = 0;
         foreach (var visibility in new[] { "normal", "taskbar-hidden", "switcher-hidden" })
         foreach (var operation in new[] { "delete", "close-hide", "button-hide", "background-delete", "background-hide",
-            "animated-hide", "focus-change-during-fade", "hide-all", "peer-next", "animated-reopen" })
+            "animated-hide", "focus-change-during-fade", "hide-all", "peer-next", "animated-reopen", "fullscreen-pin" })
         {
             // Run every close route with the hidden native owner, where owner activation
             // can disturb the external window stack. Unowned and taskbar-only windows
@@ -185,6 +185,31 @@ internal static class Program
             await Settle();
             Require(Stack(known).SequenceEqual(initialStack), "Could not establish Z0/Z1/Z2/Z3: " + Describe(known));
             Console.WriteLine($"BEFORE {visibility}/{operation} {Describe(known)} managedOwner={new WindowInteropHelper(closing).Owner} nativeOwner={GetWindow(z0, 4)}");
+
+            if (operation == "fullscreen-pin")
+            {
+                var toggle = typeof(PaperWindow).GetMethod("ToggleTopmost",
+                    BindingFlags.Instance | BindingFlags.NonPublic)!;
+                toggle.Invoke(closing, null);
+                Require(SetForegroundWindow(z1), "Could not foreground the fullscreen avoidance target.");
+                await Until(() => GetForegroundWindow() == z1, "activate fullscreen avoidance target");
+
+                // Inject the detected target so the test exercises real Z-order without depending
+                // on the display resolution or moving the external test window into fullscreen.
+                typeof(AppController).GetField("_fullscreenAvoidanceWindow",
+                    BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(controller, z1);
+                typeof(PaperWindow).GetMethod("RefreshEffectiveTopmost",
+                    BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(closing, null);
+                Require(closing.Topmost && Stack([z0, z1]).SequenceEqual(new[] { z0, z1 }),
+                    "Fullscreen avoidance lowered a pinned paper.");
+                toggle.Invoke(closing, null);
+                Require(!closing.Topmost && Stack([z0, z1]).SequenceEqual(new[] { z1, z0 }),
+                    "Unpinning must move the paper below the fullscreen target immediately.");
+                toggle.Invoke(closing, null);
+                Require(closing.Topmost && GetForegroundWindow() == z1,
+                    "Pinning while avoidance is active must raise the paper without stealing focus.");
+                return;
+            }
 
             if (operation is "background-delete" or "background-hide")
             {

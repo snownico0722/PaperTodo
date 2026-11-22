@@ -571,8 +571,8 @@ PaperTodo를 수동으로 다시 여세요. 문제가 반복되면 PC를 다시 
     <value>Markdown을 편집할 때 다시 나타나는 문법 기호가 서서히 표시되어 편집 상태가 자연스럽게 전환됩니다.</value>
   </data>
   <data name="TipFullscreenTopmostMode" xml:space="preserve">
-    <value>동영상, 게임 등 전체 화면이 감지되면 종이와 가장자리 캡슐을 잠시 피할 수 있습니다.
-「위에 유지」는 항상 보이게 합니다.</value>
+    <value>동영상이나 게임 등의 전체 화면이 감지되면 고정하지 않은 종이와 가장자리 캡슐을 잠시 뒤로 보낼 수 있습니다.
+핀으로 고정한 종이는 맨 위에 유지됩니다.</value>
   </data>
   <data name="TipTodoVisualSize" xml:space="preserve">
     <value>할 일 글자, 행 높이, 간격.</value>

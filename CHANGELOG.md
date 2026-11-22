@@ -28,6 +28,7 @@ This log is written for general and power users alike. It focuses on user-facing
 - **Custom font control.** A default-on **Custom font** switch controls loading `papertodo.ttf` or `papertodo.otf`. **Custom font enhanced bold** is nested beneath it and can use a separate bold font file; setup guidance is available from the option's info icon.
 - **Paper background settings.** The **Paper background** section now remains visible at the bottom of Style & Text and adapts to missing, successfully loaded or failed images. Its info icon explains how to install a background image, while the blending switch has its own explanation.
 - **Hide from capture.** Under General → Advanced, independently exclude papers and capsules from supported Windows screenshots, recordings and screen sharing. Both options are off by default.
+- **Fullscreen avoidance.** Manually pinned papers stay on top. Unpinning a paper restores the configured fullscreen behavior.
 
 #### Plugins & Body Types
 

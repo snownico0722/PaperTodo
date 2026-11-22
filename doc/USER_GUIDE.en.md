@@ -125,7 +125,7 @@ The top bar contains fixed window controls and configurable built-in shortcuts:
 
 | Control / Action | Type | How to Use It |
 | :--- | :--- | :--- |
-| **Pin** | Fixed control | Toggle always-on-top; fullscreen avoidance follows your settings |
+| **Pin** | Fixed control | Toggle always-on-top. Manually pinned papers stay on top during fullscreen avoidance |
 | **Title** | Fixed control | Click to edit, then press <kbd>Enter</kbd> or click elsewhere to save; pressing <kbd>Esc</kbd> saves and collapses the paper when capsule mode is available, or cancels the edit otherwise. Defaults to 6 full-width character equivalents (Latin letters, digits, and other half-width characters count as half) |
 | **`···` Menu** | Fixed control | Open the paper actions menu (same as right-clicking the paper frame) for unpinned shortcuts, export actions, and **Settings** |
 | **Collapse / Hide** | Fixed control | Collapse the paper; hide it when capsule mode is disabled |
