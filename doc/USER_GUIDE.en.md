@@ -136,7 +136,7 @@ The top bar contains fixed window controls and configurable built-in shortcuts:
 
 In "Settings → General → Top-bar shortcuts", drag built-in shortcuts to reorder them or move them between **Show in title bar** and **Show in menu**. Todo and note papers share one layout, and actions that do not apply to the current paper are omitted. Each row has a Hide checkbox that removes its shortcut from title bars, overflow and paper/capsule context menus while preserving its position and keeping the feature enabled.
 
-New installations pin **Drag to Associate** and **Switch Workspace** to the top bar and keep **New Note**, **New Todo**, **Open externally**, and **Run script** in the menu; upgrades preserve existing choices. When the top bar is too narrow, pinned built-in shortcuts move into the `···` menu together. You can hold and drag the association item directly out of the menu as well. Plugins may also add top-bar buttons (such as Codex's `>_`).
+New installations pin **Drag to Associate**, **Switch Workspace**, **New Note**, and **New Todo** to the top bar. Upgrades keep existing shortcut choices. When the top bar is too narrow, pinned built-in shortcuts move into the `···` menu together. You can hold and drag the association item directly out of the menu as well. Plugins may also add top-bar buttons (such as Codex's `>_`).
 
 ### 2.3 Moving, Resizing, and Windows Snap
 
@@ -249,7 +249,7 @@ Note papers are for lightweight writing, ideas, and illustrated notes.
 
 ### 4.1 Rendering Levels and Editing
 
-Choose a rendering level in "Settings → Notes & Todos → Markdown":
+New installations use Full rendering by default. Upgrading from 3.x switches the old Enhanced mode to Full and preserves explicit Off and Basic choices. Change the rendering level under "Settings → Notes & Todos → Markdown".
 
 | Level | Behavior |
 | :--- | :--- |

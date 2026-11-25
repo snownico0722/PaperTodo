@@ -6,6 +6,7 @@ using PaperTodo;
 var checks = new (string Name, Action Run)[]
 {
     ("note-html-embeds-images-and-rejects-missing-assets", NoteHtmlChecks.Run),
+    ("new-workspace-and-legacy-markdown-defaults", NewWorkspaceAndLegacyMarkdownDefaults),
     ("primary-save-faults-keep-a-loadable-generation", PrimarySaveFaultsKeepALoadableGeneration),
     ("backup-refresh-fault-keeps-old-backup", BackupRefreshFaultKeepsOldBackup),
     ("corrupt-primary-never-refreshes-backup", CorruptPrimaryNeverRefreshesBackup),
@@ -51,6 +52,47 @@ if (failed != 0)
 
 Console.WriteLine($"Persistence checks passed: {checks.Length}/{checks.Length}");
 return 0;
+
+static void NewWorkspaceAndLegacyMarkdownDefaults()
+{
+    using var scope = new TempDirectory();
+    var store = NewStore(scope.Path, DurableAtomicFileWriter.Shared);
+    var fresh = store.Load(out var initializedEmpty);
+    Assert(initializedEmpty && fresh.MarkdownRenderMode == MarkdownRenderModes.Full,
+        "a new workspace must default to full Markdown rendering");
+    foreach (var type in new[] { PaperTypes.Note, PaperTypes.Todo })
+    {
+        Assert(PaperTopBarShortcuts.Contains(fresh, type, PaperTopBarShortcuts.NewNote) &&
+               PaperTopBarShortcuts.Contains(fresh, type, PaperTopBarShortcuts.NewTodo),
+            "both creation shortcuts must appear on the top bar by default");
+    }
+
+    File.WriteAllText(store.FilePath, """
+        {"papers":[],"markdownRenderMode":"enhanced","showTopBarNewNoteButton":false}
+        """);
+    var upgraded = store.Load();
+    Assert(upgraded.MarkdownRenderMode == MarkdownRenderModes.Full &&
+           !PaperTopBarShortcuts.IsPinned(upgraded, PaperTopBarShortcuts.NewNote),
+        "a 3.x default must upgrade to full rendering and preserve shortcut choices");
+    store.SaveJsonSync(store.SerializeState(upgraded), version: 1);
+    using (var saved = JsonDocument.Parse(File.ReadAllText(store.FilePath)))
+    {
+        Assert(saved.RootElement.GetProperty("markdownRenderMode").GetString() == MarkdownRenderModes.Full,
+            "an upgraded workspace must save the current rendering value");
+    }
+
+    File.WriteAllText(store.FilePath, """
+        {"papers":[],"markdownRenderMode":"off","topBarShortcutOrder":["workspace"],"topBarPinnedCount":1}
+        """);
+    var customized = store.Load();
+    Assert(customized.MarkdownRenderMode == MarkdownRenderModes.Off &&
+           PaperTopBarShortcuts.Pinned(customized).SequenceEqual([PaperTopBarShortcuts.Workspace]),
+        "explicit rendering and top-bar choices must survive loading");
+    customized.MarkdownRenderMode = MarkdownRenderModes.Basic;
+    store.SaveJsonSync(store.SerializeState(customized), version: 2);
+    Assert(store.Load().MarkdownRenderMode == MarkdownRenderModes.Basic,
+        "a saved basic rendering choice must survive a restart");
+}
 
 static void PrimarySaveFaultsKeepALoadableGeneration()
 {
