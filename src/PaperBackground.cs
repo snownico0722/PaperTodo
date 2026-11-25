@@ -1,5 +1,4 @@
 using System.IO;
-using System.Text.Json;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -24,27 +23,17 @@ internal static class PaperBackgroundLayouts
 
 internal static class PaperBackground
 {
-    private sealed class BackgroundPreferences
-    {
-        public BackgroundPreferences()
-        {
-        }
-
-        public bool BlendWithTheme { get; set; } = true;
-        public bool Stretch { get; set; }
-        public string Layout { get; set; } = PaperBackgroundLayouts.Center;
-    }
-
     private const int MaxDecodePixelDimension = 4096;
     private const double BlendedImageOpacity = 0.30;
     private static readonly string[] CandidateNames =
         ["papertodo.png", "papertodo.jpg", "papertodo.jpeg"];
-    private static readonly string PreferencesPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "PaperTodo",
-        "paper-background.json");
+    private const string PreferencesFileName = "paper-background.json";
+    private static readonly string PreferencesPath = Path.Combine(AppContext.BaseDirectory, PreferencesFileName);
 
-    private static BackgroundPreferences _preferences = LoadPreferences();
+    private static PaperBackgroundPreferences _preferences = PaperBackgroundPreferences.Load(
+        PreferencesPath,
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "PaperTodo", PreferencesFileName));
     private static BitmapSource? _cachedBitmap;
     private static string? _cachedPath;
     private static long _cachedLength = -1;
@@ -54,7 +43,7 @@ internal static class PaperBackground
     internal static bool IsAvailable => FindPath() != null;
     internal static bool BlendWithTheme => _preferences.BlendWithTheme;
     internal static bool StretchImage => _preferences.Stretch;
-    internal static string Layout => PaperBackgroundLayouts.Normalize(_preferences.Layout);
+    internal static string Layout => _preferences.Layout;
 
     internal static string? LoadError
     {
@@ -78,15 +67,7 @@ internal static class PaperBackground
             return;
         }
 
-        var next = new BackgroundPreferences
-        {
-            BlendWithTheme = enabled,
-            Stretch = StretchImage,
-            Layout = Layout
-        };
-        SavePreferences(next);
-        _preferences = next;
-        InvalidateCache();
+        ApplyPreferences(_preferences with { BlendWithTheme = enabled });
     }
 
     internal static void SetStretch(bool enabled)
@@ -96,15 +77,7 @@ internal static class PaperBackground
             return;
         }
 
-        var next = new BackgroundPreferences
-        {
-            BlendWithTheme = BlendWithTheme,
-            Stretch = enabled,
-            Layout = Layout
-        };
-        SavePreferences(next);
-        _preferences = next;
-        InvalidateCache();
+        ApplyPreferences(_preferences with { Stretch = enabled });
     }
 
     internal static void SetLayout(string layout)
@@ -115,21 +88,14 @@ internal static class PaperBackground
             return;
         }
 
-        var next = new BackgroundPreferences
-        {
-            BlendWithTheme = BlendWithTheme,
-            Stretch = StretchImage,
-            Layout = normalized
-        };
-        SavePreferences(next);
-        _preferences = next;
-        InvalidateCache();
+        ApplyPreferences(_preferences with { Layout = normalized });
     }
 
-    internal static void ResetPreferences()
+    internal static void ResetPreferences() => ApplyPreferences(new PaperBackgroundPreferences());
+
+    private static void ApplyPreferences(PaperBackgroundPreferences next)
     {
-        var next = new BackgroundPreferences();
-        SavePreferences(next);
+        next.Save(PreferencesPath);
         _preferences = next;
         InvalidateCache();
     }
@@ -342,57 +308,6 @@ internal static class PaperBackground
         return imageWidth > availableWidth || imageHeight > availableHeight
             ? Stretch.Uniform
             : Stretch.None;
-    }
-
-    private static BackgroundPreferences LoadPreferences()
-    {
-        try
-        {
-            if (!File.Exists(PreferencesPath))
-            {
-                return new BackgroundPreferences();
-            }
-
-            var loaded = JsonSerializer.Deserialize<BackgroundPreferences>(
-                File.ReadAllText(PreferencesPath));
-            if (loaded == null)
-            {
-                return new BackgroundPreferences();
-            }
-
-            loaded.Layout = PaperBackgroundLayouts.Normalize(loaded.Layout);
-            return loaded;
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
-        {
-            return new BackgroundPreferences();
-        }
-    }
-
-    private static void SavePreferences(BackgroundPreferences preferences)
-    {
-        var directory = Path.GetDirectoryName(PreferencesPath)!;
-        Directory.CreateDirectory(directory);
-        var temporaryPath = PreferencesPath + ".tmp";
-        try
-        {
-            File.WriteAllText(
-                temporaryPath,
-                JsonSerializer.Serialize(preferences));
-            File.Move(temporaryPath, PreferencesPath, overwrite: true);
-        }
-        catch
-        {
-            try
-            {
-                File.Delete(temporaryPath);
-            }
-            catch
-            {
-                // Preserve the original settings write failure.
-            }
-            throw;
-        }
     }
 
     private static void InvalidateCache()

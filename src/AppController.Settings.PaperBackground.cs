@@ -194,10 +194,10 @@ public sealed partial class AppController
                 SettingsSidebarLocalized(
                     "纸片背景", "Paper background", "紙面背景", "종이 배경"),
                 SettingsSidebarLocalized(
-                    "无法保存纸片背景设置。请检查 PaperTodo 本地设置目录的写入权限。",
-                    "Could not save the paper background setting. Check write access to PaperTodo's local settings folder.",
-                    "紙面背景の設定を保存できませんでした。PaperTodo のローカル設定フォルダーへの書き込み権限を確認してください。",
-                    "종이 배경 설정을 저장하지 못했습니다. PaperTodo 로컬 설정 폴더의 쓰기 권한을 확인하세요.") +
+                    "无法保存纸片背景设置。请检查 PaperTodo.exe 所在目录的写入权限。",
+                    "Could not save the paper background setting. Check write access to the folder containing PaperTodo.exe.",
+                    "紙面背景の設定を保存できませんでした。PaperTodo.exe があるフォルダーへの書き込み権限を確認してください。",
+                    "종이 배경 설정을 저장하지 못했습니다. PaperTodo.exe가 있는 폴더의 쓰기 권한을 확인하세요.") +
                 Environment.NewLine + ex.Message);
         }
     }
