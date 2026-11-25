@@ -22,13 +22,16 @@ This log is written for general and power users alike. It focuses on user-facing
 
 #### Settings & Appearance
 
+- **Defaults for new users.** The top bar shows New Note and New Todo by default, and notes use Full Markdown rendering. Upgrades from 3.x switch the old Enhanced mode to Full.
+
 - **Note line spacing and to-do item spacing.** Both controls are shown only in Advanced mode, with independent Small, Medium and Large levels. Use Tab to reach each selector and the arrow keys to switch levels. Changes apply immediately. Medium preserves the previous layout.
 - **Settings visibility and shortcuts.** Normal mode now hides Data Handling and the local MCP interface; these settings remain available in Advanced mode. Outside Advanced mode, the Run Script option is also hidden from shortcut settings without disabling an already-configured shortcut. New installations hide Run Script by default, and users can show it manually.
 - **Global automatic tiered-backup control.** Workspaces & Data adds a default-on switch shared by all workspaces. Turning it off stops new scheduled tiered archives without deleting existing ZIPs or disabling recovery.
 - **Custom font control.** A default-on **Custom font** switch controls loading `papertodo.ttf` or `papertodo.otf`. **Custom font enhanced bold** is nested beneath it and can use a separate bold font file; setup guidance is available from the option's info icon.
-- **Paper background settings.** The **Paper background** section now remains visible at the bottom of Style & Text and adapts to missing, successfully loaded or failed images. Its info icon explains how to install a background image, while the blending switch has its own explanation.
+- **Paper background settings.** The **Paper background** section now remains visible at the bottom of Style & Text and adapts to missing, successfully loaded or failed images. Its info icon explains how to install a background image, while the blending switch has its own explanation. Background blending, stretch, and position are saved with the workspace settings so they travel with your workspace data.
 - **Hide from capture.** Under General → Advanced, independently exclude papers and capsules from supported Windows screenshots, recordings and screen sharing. Both options are off by default.
 - **Fullscreen avoidance.** Available in normal mode under **General → Windows**. Manually pinned papers stay on top. Unpinning a paper restores the configured fullscreen behavior.
+- Deleting an empty note or todo from its paper menu now asks for confirmation.
 
 #### Workspaces & Recovery
 

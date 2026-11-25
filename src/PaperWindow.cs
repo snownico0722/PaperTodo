@@ -2871,27 +2871,13 @@ public sealed partial class PaperWindow : Window
         UpdateTopBarResponsiveLayout();
     }
 
-    private void ConfirmAndDeletePaper()
-    {
-        if (ShowDeletePaperDialog())
-        {
-            _controller.DeletePaper(_paper);
-        }
-    }
-
     private void DeletePaperFromPaperMenu()
     {
-        if ((_paper.Type != PaperTypes.Note || IsCurrentBodyProviderMarkdown) &&
-            _controller.IsPaperEmpty(_paper))
+        if (PaperNoticeDialog.ShowDeleteConfirmation(this))
         {
             _controller.DeletePaper(_paper);
-            return;
         }
-
-        ConfirmAndDeletePaper();
     }
-
-    private bool ShowDeletePaperDialog() => PaperNoticeDialog.ShowDeleteConfirmation(this);
 
     private void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
     {

@@ -40,8 +40,8 @@ public static class MarkdownRenderModes
     {
         Off => Off,
         Basic => Basic,
-        Full => Full,
-        _ => Basic
+        // This also upgrades the 3.x default, stored as "enhanced".
+        _ => Full
     };
 }
 
@@ -442,8 +442,11 @@ public sealed class AppState
     public bool HideSurfaceOutline { get; set; } = false;
     public string MicaBackdropType { get; set; } = MicaBackdropTypes.Mica;
     public bool MicaAlwaysActive { get; set; }
+    public bool PaperBackgroundBlendWithTheme { get; set; } = true;
+    public bool PaperBackgroundStretch { get; set; }
+    public string PaperBackgroundLayout { get; set; } = PaperBackgroundLayouts.Center;
     [System.Diagnostics.CodeAnalysis.AllowNull]
-    public string MarkdownRenderMode { get; set; } = MarkdownRenderModes.Basic;
+    public string MarkdownRenderMode { get; set; } = MarkdownRenderModes.Full;
     public string ImageReferenceTextMode { get; set; } = ImageReferenceTextModes.Always;
     /// <summary>Full 编辑态控制符显灵时是否播放短淡入动画。</summary>
     public bool MarkdownEditAnimationEnabled { get; set; } = true;
@@ -482,7 +485,7 @@ public sealed class AppState
     // the remaining commands live in the menu. The per-paper types have no separate layout.
     public List<string> TopBarShortcutOrder { get; set; } =
         PaperTopBarShortcuts.NormalizeOrder(null);
-    public int TopBarPinnedCount { get; set; } = 2;
+    public int TopBarPinnedCount { get; set; } = 4;
     // Hiding an entry does not remove its saved position or disable its feature.
     public List<string> HiddenTopBarShortcuts { get; set; } = [PaperTopBarShortcuts.RunScript];
     public string TopBarScript { get; set; } = string.Empty;

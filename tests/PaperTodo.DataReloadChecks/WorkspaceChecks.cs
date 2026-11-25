@@ -84,6 +84,9 @@ internal static partial class Program
             Theme = "dark",
             McpAllowFullWrites = true,
             DataMergeConflictPolicy = DataMergeConflictPolicies.External,
+            PaperBackgroundBlendWithTheme = false,
+            PaperBackgroundStretch = true,
+            PaperBackgroundLayout = PaperBackgroundLayouts.BottomRight,
             Papers = [new PaperData { Title = "Main only" }]
         };
         main.GlobalHotkeys["test"] = "Ctrl+Shift+K";
@@ -102,6 +105,8 @@ internal static partial class Program
         snapshot.ApplyTo(secondary);
         Require(secondary.Theme == "dark" && secondary.McpAllowFullWrites &&
                 secondary.DataMergeConflictPolicy == DataMergeConflictPolicies.External &&
+                !secondary.PaperBackgroundBlendWithTheme && secondary.PaperBackgroundStretch &&
+                secondary.PaperBackgroundLayout == PaperBackgroundLayouts.BottomRight &&
                 secondary.GlobalHotkeys["test"] == "Ctrl+Shift+K" &&
                 secondary.DisabledPluginIds.SequenceEqual(["disabled-on-main"]),
             "Declared software settings did not inherit as before.");

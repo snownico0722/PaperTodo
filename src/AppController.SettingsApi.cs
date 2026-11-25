@@ -13,7 +13,7 @@ public sealed partial class AppController
 
     private enum SettingEffects
     {
-        None, Advanced, Telemetry, Animations, Theme, Skin, MaterialTransparency, SurfaceOutline, CapsuleOutline, NativeMaterial, Typography, Markdown,
+        None, Advanced, Telemetry, Animations, Theme, Skin, MaterialTransparency, SurfaceOutline, CapsuleOutline, NativeMaterial, PaperBackground, Typography, Markdown,
         ImageReferences, MarkdownAnimations, NoteLineSpacing, TodoItemSpacing, ExternalExtension, Compress, TodoOrder,
         TodoLinks, TodoRows, LinkedCapsules, TopBar, SystemVisibility, CaptureExclusion, Fullscreen,
         CapsuleMode, Arrange, CapsuleClose, Titles, Preview, HoverIntent, EdgeTopmost,
@@ -253,6 +253,7 @@ public sealed partial class AppController
                 break;
             case SettingEffects.CapsuleOutline: SkinBorder.RefreshLoadedCapsuleOutlines(); break;
             case SettingEffects.NativeMaterial: RefreshMicaSettings(); break;
+            case SettingEffects.PaperBackground: RefreshPaperBackgroundSurfaces(); break;
             case SettingEffects.Typography:
                 ConfigureSettingsTypography();
                 RefreshTypography(); break;
@@ -368,10 +369,8 @@ public sealed partial class AppController
         }
     }
 
-    private IEnumerable<PaperSettingDefinition> CreateExternalSettingsCatalog()
+    private PaperSettingDefinition CreateStartupSetting()
     {
-        // These existing owners persist atomically before publishing their in-memory preference.
-        // They are not copied into AppState or saved again through a different store.
         var startup = DefineSetting("general.startup", SystemSettingsHelper.IsStartupEnabled,
             _ => { }, title: Strings.Get("TrayStartup"));
         startup.Begin = value => new PaperSettingChange(
@@ -380,32 +379,6 @@ public sealed partial class AppController
                 if (!SystemSettingsHelper.ToggleStartup(value.GetBoolean()))
                     throw PaperSettingsService.Error("setting_apply_failed", "Could not update the Windows startup registration.");
             }, () => { }, () => { RebuildTrayMenu(); RefreshSettingsForChange("general.startup"); }, () => true);
-        yield return startup;
-        foreach (var definition in new[]
-        {
-            BackgroundSetting("appearance.background_blend", () => PaperBackground.BlendWithTheme, PaperBackground.SetBlendWithTheme),
-            BackgroundSetting("appearance.background_stretch", () => PaperBackground.StretchImage, PaperBackground.SetStretch),
-            BackgroundSetting("appearance.background_layout", () => PaperBackground.Layout, PaperBackground.SetLayout,
-                ["center", "bottomLeft", "bottomCenter", "bottomRight"])
-        }) yield return definition;
-    }
-
-    private PaperSettingDefinition BackgroundSetting<T>(string id, Func<T> read, Action<T> write, string[]? options = null)
-    {
-        var title = id switch
-        {
-            "appearance.background_blend" => SettingsSidebarLocalized("启用和配色混合", "Blend with paper colors", "紙面カラーと混合する", "종이 색상과 혼합"),
-            "appearance.background_stretch" => SettingsSidebarLocalized("拉伸", "Stretch", "ストレッチ", "늘이기"),
-            _ => SettingsSidebarLocalized("位置", "Position", "位置", "위치")
-        };
-        var setting = DefineSetting(id, read, write, title: title, options: options);
-        setting.Begin = value => new PaperSettingChange(
-            () =>
-            {
-                try { write(value.Deserialize<T>()!); }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-                { throw PaperSettingsService.Error("save_failed", "Could not save paper-background preferences."); }
-            }, () => { }, () => { RefreshPaperBackgroundSurfaces(); RefreshSettingsForChange(id); }, () => true);
-        return setting;
+        return startup;
     }
 }

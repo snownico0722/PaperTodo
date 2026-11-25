@@ -1,6 +1,4 @@
 using System.IO;
-using System.Text.Json;
-using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
@@ -24,27 +22,10 @@ internal static class PaperBackgroundLayouts
 
 internal static class PaperBackground
 {
-    private sealed class BackgroundPreferences
-    {
-        public BackgroundPreferences()
-        {
-        }
-
-        public bool BlendWithTheme { get; set; } = true;
-        public bool Stretch { get; set; }
-        public string Layout { get; set; } = PaperBackgroundLayouts.Center;
-    }
-
     private const int MaxDecodePixelDimension = 4096;
     private const double BlendedImageOpacity = 0.30;
     private static readonly string[] CandidateNames =
         ["papertodo.png", "papertodo.jpg", "papertodo.jpeg"];
-    private static readonly string PreferencesPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "PaperTodo",
-        "paper-background.json");
-
-    private static BackgroundPreferences _preferences = LoadPreferences();
     private static BitmapSource? _cachedBitmap;
     private static string? _cachedPath;
     private static long _cachedLength = -1;
@@ -52,9 +33,6 @@ internal static class PaperBackground
     private static string? _lastLoadError;
 
     internal static bool IsAvailable => FindPath() != null;
-    internal static bool BlendWithTheme => _preferences.BlendWithTheme;
-    internal static bool StretchImage => _preferences.Stretch;
-    internal static string Layout => PaperBackgroundLayouts.Normalize(_preferences.Layout);
 
     internal static string? LoadError
     {
@@ -66,104 +44,15 @@ internal static class PaperBackground
                 return null;
             }
 
-            _ = CreateBrush(BlendWithTheme, Layout, StretchImage);
+            _ = CreateBrush(blendWithTheme: false, PaperBackgroundLayouts.Center, stretch: false);
             return _lastLoadError;
-        }
-    }
-
-    internal static void SetBlendWithTheme(bool enabled)
-    {
-        if (_preferences.BlendWithTheme == enabled)
-        {
-            return;
-        }
-
-        var next = new BackgroundPreferences
-        {
-            BlendWithTheme = enabled,
-            Stretch = StretchImage,
-            Layout = Layout
-        };
-        SavePreferences(next);
-        _preferences = next;
-        InvalidateCache();
-    }
-
-    internal static void SetStretch(bool enabled)
-    {
-        if (StretchImage == enabled)
-        {
-            return;
-        }
-
-        var next = new BackgroundPreferences
-        {
-            BlendWithTheme = BlendWithTheme,
-            Stretch = enabled,
-            Layout = Layout
-        };
-        SavePreferences(next);
-        _preferences = next;
-        InvalidateCache();
-    }
-
-    internal static void SetLayout(string layout)
-    {
-        var normalized = PaperBackgroundLayouts.Normalize(layout);
-        if (string.Equals(Layout, normalized, StringComparison.Ordinal))
-        {
-            return;
-        }
-
-        var next = new BackgroundPreferences
-        {
-            BlendWithTheme = BlendWithTheme,
-            Stretch = StretchImage,
-            Layout = normalized
-        };
-        SavePreferences(next);
-        _preferences = next;
-        InvalidateCache();
-    }
-
-    internal static void ResetPreferences()
-    {
-        var next = new BackgroundPreferences();
-        SavePreferences(next);
-        _preferences = next;
-        InvalidateCache();
-    }
-
-    internal static void Apply(Panel? host)
-    {
-        if (host != null)
-        {
-            host.Background = (Brush?)CreateBrush(
-                BlendWithTheme,
-                Layout,
-                StretchImage,
-                host.ActualWidth,
-                host.ActualHeight) ?? Brushes.Transparent;
-        }
-    }
-
-    internal static void Apply(Control? host)
-    {
-        if (host != null)
-        {
-            host.Background = (Brush?)CreateBrush(
-                BlendWithTheme,
-                Layout,
-                StretchImage,
-                host.ActualWidth,
-                host.ActualHeight) ?? Brushes.Transparent;
         }
     }
 
     internal static bool NeedsSizeRefresh(Brush? currentBrush, double availableWidth, double availableHeight)
     {
-        if (StretchImage ||
-            currentBrush is not ImageBrush imageBrush ||
+        if (currentBrush is not ImageBrush imageBrush ||
+            imageBrush.Stretch == Stretch.UniformToFill ||
             imageBrush.ImageSource is not BitmapSource bitmap)
         {
             return false;
@@ -344,58 +233,7 @@ internal static class PaperBackground
             : Stretch.None;
     }
 
-    private static BackgroundPreferences LoadPreferences()
-    {
-        try
-        {
-            if (!File.Exists(PreferencesPath))
-            {
-                return new BackgroundPreferences();
-            }
-
-            var loaded = JsonSerializer.Deserialize<BackgroundPreferences>(
-                File.ReadAllText(PreferencesPath));
-            if (loaded == null)
-            {
-                return new BackgroundPreferences();
-            }
-
-            loaded.Layout = PaperBackgroundLayouts.Normalize(loaded.Layout);
-            return loaded;
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
-        {
-            return new BackgroundPreferences();
-        }
-    }
-
-    private static void SavePreferences(BackgroundPreferences preferences)
-    {
-        var directory = Path.GetDirectoryName(PreferencesPath)!;
-        Directory.CreateDirectory(directory);
-        var temporaryPath = PreferencesPath + ".tmp";
-        try
-        {
-            File.WriteAllText(
-                temporaryPath,
-                JsonSerializer.Serialize(preferences));
-            File.Move(temporaryPath, PreferencesPath, overwrite: true);
-        }
-        catch
-        {
-            try
-            {
-                File.Delete(temporaryPath);
-            }
-            catch
-            {
-                // Preserve the original settings write failure.
-            }
-            throw;
-        }
-    }
-
-    private static void InvalidateCache()
+    internal static void InvalidateCache()
     {
         _cachedBitmap = null;
         _cachedPath = null;

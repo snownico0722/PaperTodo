@@ -261,6 +261,7 @@ public sealed partial class AppController
             window.UpdateTodoVisualSize();
         }
         RefreshTypography();
+        RefreshPaperBackgroundSurfaces();
         RefreshThemeSurfaces();
         SkinBorder.RefreshLoadedCapsuleOutlines();
         InitializeGlobalHotkeys();

@@ -1,8 +1,49 @@
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Threading;
 using PaperTodo;
 using PaperTodo.Plugin;
 
 internal static partial class Program
 {
+    private static void CheckEmptyPaperDeletionConfirmation(AppController controller)
+    {
+        var windows = Field<Dictionary<string, PaperWindow>>(controller, "_windows");
+        foreach (var type in new[] { PaperTypes.Note, PaperTypes.Todo })
+        {
+            var paper = controller.CreatePaper(type)!;
+            var window = windows[paper.Id];
+            window.EnsureShellBuilt();
+            var menu = Field<FrameworkElement>(window, "_paperChrome").ContextMenu;
+            var delete = menu.Items.OfType<MenuItem>()
+                .Single(item => Equals(item.Header, Strings.Get("MenuDelete")));
+
+            void Choose(string action)
+            {
+                var response = window.Dispatcher.InvokeAsync(() =>
+                {
+                    var dialog = Application.Current.Windows.OfType<Window>()
+                        .Single(w => w.IsVisible && w.Title == Strings.Get("DeletePaperTitle"));
+                    try { ClickFailureAction(dialog, action); }
+                    catch { dialog.Close(); throw; }
+                }, DispatcherPriority.ContextIdle);
+
+                delete.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+                if (response.Abort())
+                    throw new InvalidOperationException($"Deleting an empty {type} paper must open confirmation.");
+                response.Task.GetAwaiter().GetResult();
+            }
+
+            Choose("CommonCancel");
+            Require(controller.State.Papers.Contains(paper) && !window.IsClosed,
+                $"Cancel did not preserve the empty {type} paper.");
+            Choose("MenuDelete");
+            Require(!controller.State.Papers.Contains(paper) && window.IsClosed,
+                $"Confirm did not remove the empty {type} paper.");
+        }
+        Console.WriteLine("PASS deleting an empty paper requires confirmation");
+    }
+
     private static async Task DeletedPaperHistoryChecks(AppController controller)
     {
         var commands = controller.PaperCommands;

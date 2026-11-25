@@ -83,6 +83,7 @@
 | D-071 | 有界冲突归档与健康主文件后清理孤立临时文件 | Accepted | 核心持久化 / 归档 |
 | D-072 | Ctrl 整队拖拽归属胶囊自由队列 | Accepted | Edge / 队列 |
 | D-073 | 默认纸片缩放使用预计算高斯九宫格阴影 | Accepted | Paper / Rendering / performance |
+| D-074 | 背景偏好并入工作区设置 | Accepted | 外观 / 持久化 |
 
 ## 维护规则
 
@@ -2214,3 +2215,14 @@ The preview should show an available landing rather than make a target continuou
 - 正式回归：`tests/PaperTodo.MicaChecks/MaterialPresentationChecks.cs`、`tests/PaperTodo.MicaChecks/NineSliceShadowSeamChecks.cs`。
 - 历史排查：Issue [#36](https://github.com/snownico0722/PaperTodo/issues/36)；未合并的实验 [#307](https://github.com/snownico0722/PaperTodo/pull/307)；主线实现 [#386](https://github.com/snownico0722/PaperTodo/pull/386)；多 DPI 补测 [#407](https://github.com/snownico0722/PaperTodo/pull/407)。
 
+---
+
+## D-074 — 背景偏好并入工作区设置
+
+**Status:** Accepted
+
+**Context:** [PR #270](https://github.com/snownico0722/PaperTodo/pull/270) 把混色与位置存到用户级目录，以避免在 EXE 旁写标记文件。便携版整目录复制时会漏掉这些偏好，同一 Windows 用户下的不同程序目录也会共用设置。
+
+**Decision:** 背景混色、拉伸与位置交给 `AppState` 和 `StateStore`，随工作区配置一起保存、备份和迁移。旧的单独偏好无需导入。
+
+**Evidence:** `src/Models.cs`、`src/AppController.SettingsApi.Catalog.cs`、[PR #481](https://github.com/snownico0722/PaperTodo/pull/481)。

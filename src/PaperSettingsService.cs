@@ -8,8 +8,7 @@ internal sealed class PaperSettingsException(string code, string message) : Exce
     public string Code { get; } = code;
 }
 
-// A setting may use the core StateStore or an existing independent owner (startup registry /
-// paper-background preferences). It never introduces a second writer for either data domain.
+// Core settings use StateStore. Windows startup registration supplies its own commit action.
 internal sealed record PaperSettingChange(Action Apply, Action Rollback, Action Publish,
     Func<bool>? Commit = null);
 

@@ -136,7 +136,7 @@ The top bar contains fixed window controls and configurable built-in shortcuts:
 
 In "Settings → General → Top-bar shortcuts", drag built-in shortcuts to reorder them or move them between **Show in title bar** and **Show in menu**. Todo and note papers share one layout, and actions that do not apply to the current paper are omitted. Each row has a Hide checkbox that removes its shortcut from title bars, overflow and paper/capsule context menus while preserving its position and keeping the feature enabled.
 
-New installations pin **Drag to Associate** and **Switch Workspace** to the top bar and keep **New Note**, **New Todo**, **Open externally**, and **Run script** in the menu; upgrades preserve existing choices. When the top bar is too narrow, pinned built-in shortcuts move into the `···` menu together. You can hold and drag the association item directly out of the menu as well. Plugins may also add top-bar buttons (such as Codex's `>_`).
+New installations pin **Drag to Associate**, **Switch Workspace**, **New Note**, and **New Todo** to the top bar. Upgrades keep existing shortcut choices. When the top bar is too narrow, pinned built-in shortcuts move into the `···` menu together. You can hold and drag the association item directly out of the menu as well. Plugins may also add top-bar buttons (such as Codex's `>_`).
 
 ### 2.3 Moving, Resizing, and Windows Snap
 
@@ -150,7 +150,7 @@ New installations pin **Drag to Associate** and **Switch Workspace** to the top 
 | :--- | :--- | :--- | :--- |
 | **Collapse** | Edge capsule or floating desktop capsule | Preserved | Click the capsule |
 | **Hide** | Leaves the desktop and edge queue; the app stays running | Preserved | Click it in the tray list or double-click the tray icon |
-| **Delete** | Removed from the current workspace | Content deleted | Non-empty papers require confirmation; do not use in place of Hide |
+| **Delete** | Removed from the current workspace | Content deleted | Deleting from the paper menu opens a confirmation dialog, even for empty papers |
 | **Exit** | Saves data and closes PaperTodo | Preserved on disk | Run `PaperTodo.exe` again |
 
 ### 2.5 Full-Text Search
@@ -249,7 +249,7 @@ Note papers are for lightweight writing, ideas, and illustrated notes.
 
 ### 4.1 Rendering Levels and Editing
 
-Choose a rendering level in "Settings → Notes & Todos → Markdown":
+New installations use Full rendering by default. Upgrading from 3.x switches the old Enhanced mode to Full and preserves explicit Off and Basic choices. Change the rendering level under "Settings → Notes & Todos → Markdown".
 
 | Level | Behavior |
 | :--- | :--- |
@@ -506,7 +506,7 @@ Open **Style & Text** to adjust these options.
 4. **Stretch**: Independent toggle. On fills the paper proportionally and may crop edges; off keeps small images at original size and scales large images down only enough to fit.
 5. **Position**: Choose Center, Bottom left, Bottom center, or Bottom right alignment.
 
-The same image applies to notes and todos. After replacing the file, toggle blending, stretching, or position—or restart—to refresh. To remove the background, move or rename the candidate files and restart. Decoding caps the longest edge at **4,096 pixels** without modifying the file, and preferences are stored in `%LOCALAPPDATA%\PaperTodo\paper-background.json` (see [10.2 Backing Up Data](#102-backing-up-data)).
+The same image applies to notes and todos. After replacing the file, toggle blending, stretching, or position—or restart—to refresh. To remove the background, move or rename the candidate files and restart. Decoding caps the longest edge at **4,096 pixels** without modifying the file. Blending, stretch, and position are saved with workspace settings. Secondary workspaces follow the main workspace by default and can use independent settings under Workspaces & Data.
 
 #### Custom Fonts
 
@@ -642,15 +642,15 @@ The portable edition keeps core data beside `PaperTodo.exe`. Each workspace uses
 - `N` stands for the workspace number (for example, Workspace 2 uses `data2.json`, not a file literally named `dataN.json`).
 - **The main `data.json` also stores the workspace list, custom names, and follow-main settings**, so always retain it when migrating or restoring secondary workspaces.
 - Installed plugins in `plugins/<plugin-id>/` are shared by all workspaces; historical core-JSON archives are stored in `PaperTodo-backups/`.
-- Custom backgrounds, fonts, tray icons (`PaperTodo.ico`), and reminder sounds (`papertodo.wav`) sit beside `PaperTodo.exe`; background blending, stretching, and position preferences are stored separately at `%LOCALAPPDATA%\PaperTodo\paper-background.json`.
+- Custom backgrounds, fonts, tray icons (`PaperTodo.ico`), and reminder sounds (`papertodo.wav`) sit beside `PaperTodo.exe`. Background blending, stretch, and position are saved in the workspace JSON.
 - `data.backup.json` and `data2.backup.json`–`data5.backup.json` do not update on every save and are not guaranteed to match the state immediately before your last edit.
 
 ### 10.2 Backing Up Data
 
 1. **Choose "Exit" from the tray and wait for `PaperTodo.exe` to finish before copying.** If saving fails, resolve that first; a running app has not completed a safe exit.
 2. **Full directory copy (recommended)**: Copy the **entire application directory** to your backup location to preserve all workspaces, image databases, plugins, historical backups, and custom files at once.
-3. **Selective backup**: If copying individual items, include every used workspace's JSON, short-term backup, and image database, the complete `plugins/` folder, and the main `data.json` (plus `PaperTodo-backups/` if you want historical restore points). **The three unnumbered files cover only the main workspace (1).**
-4. **External files**: Save `%LOCALAPPDATA%\PaperTodo\paper-background.json` separately (or reconfigure the background after migration). Follow plugin instructions for data stored outside the app folder; files linked from todos are not bundled automatically either.
+3. **Selective backup**: If copying individual items, include every used workspace's JSON, short-term backup, and image database, the complete `plugins/` folder, and the main `data.json` (plus `PaperTodo-backups/` if you want historical restore points). For a custom background, include the image from the application folder. **The three unnumbered files cover only the main workspace (1).**
+4. **External files**: Follow plugin instructions for data stored outside the app folder; files linked from todos are not bundled automatically either.
 
 #### Automatic Core-Data History Archives (`PaperTodo-backups/`)
 
@@ -667,7 +667,7 @@ These archives store the original contents of existing `data.json` and `data2.js
 
 1. Exit PaperTodo on the old computer and create a complete backup as described above.
 2. Copy the entire backup folder to a writable directory on the new computer, using a compatible application version; **do not launch PaperTodo until copying is complete**.
-3. Restore separate background preferences and any external plugin or todo-linked files as needed.
+3. Restore any external plugin or todo-linked files as needed.
 4. Launch PaperTodo and switch through every workspace you use to verify text, images, plugins, and settings. Keep the old backup until everything is verified.
 
 #### Recovering from Damaged or Unwanted Changes

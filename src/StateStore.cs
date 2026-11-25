@@ -654,6 +654,7 @@ public sealed partial class StateStore
         state.ColorScheme = ColorSchemes.Normalize(state.ColorScheme);
         state.MicaBackdropType = MicaBackdropTypes.Normalize(state.MicaBackdropType);
         state.MaterialTransparency = MaterialTransparencyLevels.Normalize(state.MaterialTransparency);
+        state.PaperBackgroundLayout = PaperBackgroundLayouts.Normalize(state.PaperBackgroundLayout);
 
         state.MarkdownRenderMode = MarkdownRenderModes.Normalize(state.MarkdownRenderMode);
 
