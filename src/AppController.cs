@@ -3538,7 +3538,8 @@ public sealed partial class AppController : IDisposable
                 images.PrepareReusableImageNumbers(null);
             }
         }
-        images.ProtectPersistedImageReferences(workspace.State, protectedIds);
+        images.ProtectPersistedImageReferences(workspace.State, protectedIds,
+            recoveryPending: workspace.Store.HasPendingStartupRecovery);
     }
 
     private void HandleSaveFailure(Exception ex, long? failedVersion = null)

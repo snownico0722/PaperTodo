@@ -73,6 +73,10 @@ public sealed partial class AppController
             if (IsExiting || !State.Papers.Contains(paper)) return false;
             target.BindPersistence();
             targetBefore = target.Store.SerializeState(target.State);
+            // A recovery write can replace the document and then fail its readback.
+            // Commit only the recovered baseline before staging any part of the move.
+            if (target.Store.HasPendingStartupRecovery)
+                target.Store.SaveJsonSync(targetBefore, NextWorkspaceSaveVersion());
             var moved = JsonSerializer.Deserialize<PaperData>(
                 JsonSerializer.Serialize(paper, StateStore.JsonOptions), StateStore.JsonOptions)!;
             if (target.State.Papers.Any(candidate => candidate.Id == moved.Id))

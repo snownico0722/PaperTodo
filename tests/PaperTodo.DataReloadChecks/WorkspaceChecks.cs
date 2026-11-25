@@ -603,9 +603,21 @@ internal static partial class Program
         var pendingImagePath = Path.Combine(scope.DirectoryPath, "note-assets4.lmdb");
         using var pendingImages = new NoteImageStore(pendingImagePath);
         pendingImages.Load();
-        pendingImages.ProtectPersistedImageReferences(recovered, oldIds);
-        Require(pendingImages.IsWriteDisabled && !File.Exists(pendingImagePath),
+        pendingImages.ProtectPersistedImageReferences(recovered, oldIds, recoveryPending: true);
+        Require(pendingImages.IsWriteDisabled && pendingImages.NeedsRecoveryProtectionRefresh &&
+                !File.Exists(pendingImagePath),
             "a missing image library with a recovery-only reference must stay untouched");
+        pendingImages.ProtectPersistedImageReferences(recovered, oldIds);
+        Require(pendingImages.IsWriteDisabled && !pendingImages.NeedsRecoveryProtectionRefresh,
+            "a surviving image reference must keep the missing library protected after recovery");
+
+        var damagedImagePath = Path.Combine(scope.DirectoryPath, "damaged-images.lmdb");
+        File.WriteAllText(damagedImagePath, "{broken image database}");
+        using var damagedImages = new NoteImageStore(damagedImagePath);
+        damagedImages.Load();
+        damagedImages.ProtectPersistedImageReferences(recovered, freshIds, recoveryPending: true);
+        Require(damagedImages.IsWriteDisabled && !damagedImages.NeedsRecoveryProtectionRefresh,
+            "rechecking image references must not clear a database load failure");
 
         using var lockedOrphan = new FileStream(orphanPath, FileMode.Open, FileAccess.Read, FileShare.None);
         Require(!recoveringStore.TryCollectImageReferencesForMissingStore(recovered, out _),
@@ -772,6 +784,10 @@ internal static partial class Program
                 Require(secondary.TryRefreshBackupFromPrimary(),
                     "secondary recovery fixture could not create a valid backup");
                 File.WriteAllText(secondary.FilePath, "{corrupt secondary");
+                var orphanPath = secondary.FilePath + ".orphaned.test.tmp";
+                var orphan = NewState();
+                orphan.Papers[0].Content = MarkdownImageReferences.CreateReference("041");
+                File.WriteAllText(orphanPath, secondary.SerializeState(orphan));
                 var imagePath = Path.Combine(AppContext.BaseDirectory, "note-assets2.lmdb");
                 if (File.Exists(imagePath)) File.Delete(imagePath);
 
@@ -782,19 +798,19 @@ internal static partial class Program
                 var images = Field<NoteImageStore>(controller, "_imageStore");
                 Require(activeStore.NeedsStartupRecoverySave &&
                         File.ReadAllText(secondary.FilePath) == "{corrupt secondary" &&
-                        !images.IsWriteDisabled && !File.Exists(imagePath),
-                    "missing image-store protection wrote the recovery document or blocked its first image");
+                        File.Exists(orphanPath) && images.IsWriteDisabled && !File.Exists(imagePath),
+                    "startup did not protect the orphan's image reference before committing recovery");
                 await controller.StartAsync(createDefaultPaper: false);
                 Require(!activeStore.NeedsStartupRecoverySave &&
                         activeStore.ReadCommittedWorkspaceState().Papers[0].Content == "recovered text-only note",
                     "secondary startup recovery was not committed by the startup save");
-                Require(!images.IsWriteDisabled && !File.Exists(imagePath),
-                    "a recovered text-only workspace disabled or prematurely created its missing image library");
+                Require(!File.Exists(orphanPath) && !images.IsWriteDisabled && !File.Exists(imagePath),
+                    "the missing image store did not become writable after recovery retired its orphan");
                 var asset = images.ImportBitmapSource("note-a", WorkspaceBitmap(181, 73));
                 Require(asset.Id == "001" && File.Exists(imagePath) &&
                         images.TryGetEncodedImageBytes(asset.Id, out _, out var bytes) && bytes.Length > 0,
                     "image writes did not work after secondary startup recovery");
-                Console.WriteLine("PASS secondary startup protects missing images without an early recovery write");
+                Console.WriteLine("PASS secondary startup rechecks missing image protection after recovery cleanup");
                 result = 0;
             }
             catch (Exception ex) { result = 1; Console.Error.WriteLine(ex); }
@@ -1221,8 +1237,34 @@ internal static partial class Program
         transferWindow.EnsureShellBuilt();
         Field<MarkdownTextBox>(transferWindow, "_noteBox").Text =
             MarkdownImageReferences.CreateReference(transferImage.Id);
+
+        var recoveryWriter = writerField.GetValue(target3);
+        FileStream? readbackLock = null;
+        try
+        {
+            writerField.SetValue(target3, new DurableAtomicFileWriter((stage, path) =>
+            {
+                if (stage == DurableAtomicWriteStage.AfterReplace && path == target3.FilePath &&
+                    readbackLock == null)
+                    readbackLock = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+            }));
+            Require(!await controller.MovePaperToWorkspaceAsync(transferPaper, 3) && readbackLock != null,
+                "transfer did not reach a destination recovery readback failure");
+        }
+        finally
+        {
+            readbackLock?.Dispose();
+            writerField.SetValue(target3, recoveryWriter);
+        }
+        var targetAfterFailedReadback = target3.ReadCommittedWorkspaceState();
+        Require(controller.State.Papers.Contains(transferPaper) &&
+                !targetAfterFailedReadback.Papers.Any(paper => paper.Id == transferPaper.Id) &&
+                targetAfterFailedReadback.Papers.Any(paper => paper.Content == "destination recovery content") &&
+                !File.Exists(targetImagesPath),
+            "a failed recovery readback left a transferred paper or image store in the destination");
+
         Require(await controller.MovePaperToWorkspaceAsync(transferPaper, 3),
-            "moving an image note into a recovered destination failed");
+            "retrying the image move after recovery failed");
         var recoveredAfterMove = target3.ReadCommittedWorkspaceState();
         Require(recoveredAfterMove.Zoom == recoveredTarget.Zoom,
             $"transfer recovery changed destination zoom from {recoveredTarget.Zoom} to {recoveredAfterMove.Zoom}");

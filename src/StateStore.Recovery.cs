@@ -50,6 +50,7 @@ public sealed partial class StateStore
     }
 
     private PendingStartupRecovery? _pendingStartupRecovery;
+    internal bool HasPendingStartupRecovery => _pendingStartupRecovery != null;
 
     // Probe with the same core reader as Load, without opening a session, staging
     // recovery, or cleaning up files belonging to an inactive workspace.
