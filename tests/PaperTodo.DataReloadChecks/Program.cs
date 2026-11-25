@@ -19,6 +19,7 @@ internal static partial class Program
         if (args.Contains("--exit-fixture")) return RunDeferredExitFixture();
         if (args.Contains("--passive-dispose")) return RunPassiveDisposeFixture();
         if (args.Contains("--workspace-fixture")) return RunWorkspaceFixture();
+        if (args.Contains("--workspace-recovery-image-fixture")) return RunWorkspaceRecoveryImageFixture();
         if (args.Contains("--workspace-missing-images-fixture")) return RunWorkspaceMissingImagesFixture();
         try
         {
@@ -73,6 +74,7 @@ internal static partial class Program
             RunIsolatedLiveChecks("--exit-fixture");
             RunIsolatedLiveChecks("--passive-dispose");
             RunIsolatedLiveChecks("--workspace-fixture");
+            RunIsolatedLiveChecks("--workspace-recovery-image-fixture");
             RunIsolatedLiveChecks("--workspace-missing-images-fixture");
             Console.WriteLine($"PASS explicit reload: {checks.Length} storage groups and isolated WPF/API/MCP fixture");
             return 0;

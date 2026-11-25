@@ -14,28 +14,29 @@
           "Microsoft.Web.WebView2.Core": "1.0.4314.35",
           "Microsoft.Web.WebView2.WinForms": "1.0.4314.35",
           "Microsoft.Web.WebView2.Wpf": "1.0.4314.35",
-          "runtimepack.Microsoft.Windows.SDK.NET.Ref": "10.0.17763.57"
+          "runtimepack.Microsoft.Windows.SDK.NET.Ref": "10.0.17763.87"
         },
         "runtime": {
           "PaperTodo.Plugin.CloudGenshin.dll": {}
         }
       },
-      "runtimepack.Microsoft.Windows.SDK.NET.Ref/10.0.17763.57": {
+      "runtimepack.Microsoft.Windows.SDK.NET.Ref/10.0.17763.87": {
         "runtime": {
           "Microsoft.Windows.SDK.NET.dll": {
             "assemblyVersion": "10.0.17763.38",
-            "fileVersion": "10.0.17763.55"
+            "fileVersion": "10.0.17763.86"
           },
           "WinRT.Runtime.dll": {
-            "assemblyVersion": "2.2.0.0",
-            "fileVersion": "2.2.0.48161"
+            "assemblyVersion": "2.3.1.0",
+            "fileVersion": "2.3.1.54291"
           }
         }
       },
       "Microsoft.Web.WebView2/1.0.4314.35": {
         "native": {
           "runtimes/win-x64/native/WebView2Loader.dll": {
-            "fileVersion": "1.0.4314.35"
+            "fileVersion": "1.0.4314.35",
+            "localPath": "WebView2Loader.dll"
           }
         }
       },
@@ -79,7 +80,7 @@
       "serviceable": false,
       "sha512": ""
     },
-    "runtimepack.Microsoft.Windows.SDK.NET.Ref/10.0.17763.57": {
+    "runtimepack.Microsoft.Windows.SDK.NET.Ref/10.0.17763.87": {
       "type": "runtimepack",
       "serviceable": false,
       "sha512": ""

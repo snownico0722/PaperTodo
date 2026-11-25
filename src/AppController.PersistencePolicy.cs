@@ -140,6 +140,8 @@ public sealed partial class AppController
     private void CompleteStateSaveMaintenance(bool releaseImageCache)
     {
         if (IsExiting) return;
+        if (_imageStore.NeedsRecoveryProtectionRefresh && !_store.HasPendingStartupRecovery)
+            RunExternalPostCommitUi(() => ProtectWorkspaceImageReferences(_workspace, _imageStore));
         if (releaseImageCache) TryReleaseUnreferencedImageCache();
         RunExternalPostCommitUi(TryFlushPendingPluginPaperStateDeletes);
         RunExternalPostCommitUi(ReconcilePluginRuntimes);

@@ -379,13 +379,7 @@ public sealed partial class AppController
             var originalHideFromTaskbar = candidate.State.HidePapersFromTaskbar;
             candidateImages = new NoteImageStore(candidate.Paths.Images);
             candidateImages.Load();
-            // Missing images must not prevent entry or recreate an unsafe image library.
-            IReadOnlySet<string>? protectedImageIds = null;
-            if (!File.Exists(candidateImages.FilePath) &&
-                candidate.Store.TryCollectProtectedImageIds(candidate.State, out var ids))
-                protectedImageIds = ids;
-            candidateImages.ProtectPersistedImageReferences(candidate.State, protectedImageIds,
-                File.Exists(candidate.Paths.Data) || File.Exists(candidate.Paths.Backup));
+            ProtectWorkspaceImageReferences(candidate, candidateImages);
             candidatePluginData = new PaperBodyPluginDataStore(_paperBodyPlugins.PluginRoot, number)
                 { WriteLifetime = _store.WriteLifetime };
 

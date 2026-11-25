@@ -37,7 +37,15 @@ public sealed class NoteImageStore : IDisposable
     private long _totalImageBytes;
     private long _totalDecodedBitmapBytes;
     private int _nextImageNumber = 1;
-    private bool _writeDisabled;
+    private enum WriteBlockReason
+    {
+        None,
+        MissingStore,
+        MissingStoreDuringRecovery,
+        DatabaseUnavailable
+    }
+
+    private WriteBlockReason _writeBlockReason;
     private bool _disposed;
 
     public string FilePath { get; } = Path.Combine(AppContext.BaseDirectory, "note-assets.lmdb");
@@ -45,7 +53,13 @@ public sealed class NoteImageStore : IDisposable
     public NoteImageStore() { }
     internal NoteImageStore(string filePath) => FilePath = Path.GetFullPath(filePath);
 
-    public bool IsWriteDisabled => _writeDisabled;
+    public bool IsWriteDisabled => _writeBlockReason != WriteBlockReason.None;
+
+    internal bool NeedsMissingStoreProtection =>
+        _database == null && _writeBlockReason != WriteBlockReason.DatabaseUnavailable;
+
+    internal bool NeedsRecoveryProtectionRefresh =>
+        _writeBlockReason == WriteBlockReason.MissingStoreDuringRecovery;
 
     public bool AutoCompressLargeImages { get; set; } = true;
 
@@ -65,7 +79,7 @@ public sealed class NoteImageStore : IDisposable
             _reusableImageNumberRanges.Clear();
             _totalImageBytes = 0;
             _nextImageNumber = 1;
-            _writeDisabled = false;
+            _writeBlockReason = WriteBlockReason.None;
 
             if (!File.Exists(FilePath))
             {
@@ -80,7 +94,7 @@ public sealed class NoteImageStore : IDisposable
                 {
                     _database.Dispose();
                     _database = null;
-                    _writeDisabled = true;
+                    _writeBlockReason = WriteBlockReason.DatabaseUnavailable;
                     return;
                 }
 
@@ -93,7 +107,7 @@ public sealed class NoteImageStore : IDisposable
             {
                 _database?.Dispose();
                 _database = null;
-                _writeDisabled = true;
+                _writeBlockReason = WriteBlockReason.DatabaseUnavailable;
             }
         }
     }
@@ -102,7 +116,7 @@ public sealed class NoteImageStore : IDisposable
     // failure. A missing entire LMDB must not be replaced by a new empty store when
     // its live or recovery documents still reference the former image IDs.
     internal void ProtectPersistedImageReferences(
-        AppState state, IReadOnlySet<string>? protectedImageIds, bool hasPersistedDocument)
+        AppState state, IReadOnlySet<string>? protectedImageIds, bool recoveryPending = false)
     {
         var referenced = state.Papers
             .Where(paper => paper.Type == PaperTypes.Note)
@@ -120,12 +134,18 @@ public sealed class NoteImageStore : IDisposable
 
             // No loaded image database + references to historical pictures means that
             // creating a fresh LMDB could reuse IDs or obscure recovery of the old one.
-            // An unreadable protection scan is likewise not permission to replace a
-            // missing store for an existing document. Only image WRITES are disabled.
-            if (_database == null && !File.Exists(FilePath) &&
-                (referenced.Count > 0 ||
-                 (hasPersistedDocument && protectedImageIds == null)))
-                _writeDisabled = true;
+            // A missing store can be created only after a complete scan finds no references.
+            if (!NeedsMissingStoreProtection) return;
+
+            if (File.Exists(FilePath))
+            {
+                _writeBlockReason = WriteBlockReason.DatabaseUnavailable;
+                return;
+            }
+
+            _writeBlockReason = referenced.Count == 0 && protectedImageIds != null
+                ? WriteBlockReason.None
+                : recoveryPending ? WriteBlockReason.MissingStoreDuringRecovery : WriteBlockReason.MissingStore;
         }
     }
 
@@ -389,7 +409,7 @@ public sealed class NoteImageStore : IDisposable
 
     internal NoteImageAsset ImportBitmapSource(string noteId, BitmapSource source, bool repairMissingAlpha)
     {
-        if (_writeDisabled)
+        if (IsWriteDisabled)
         {
             throw new InvalidOperationException(Strings.Get("ImageStoreUnavailable"));
         }
@@ -411,7 +431,7 @@ public sealed class NoteImageStore : IDisposable
 
     public NoteImageAsset ImportImageFile(string noteId, string path)
     {
-        if (_writeDisabled)
+        if (IsWriteDisabled)
         {
             throw new InvalidOperationException(Strings.Get("ImageStoreUnavailable"));
         }
@@ -443,7 +463,7 @@ public sealed class NoteImageStore : IDisposable
     internal NoteImageAsset ImportImageBytes(string noteId, byte[] bytes, string originalName)
     {
         ArgumentNullException.ThrowIfNull(bytes);
-        if (_writeDisabled)
+        if (IsWriteDisabled)
             throw new InvalidOperationException(Strings.Get("ImageStoreUnavailable"));
         if (string.IsNullOrWhiteSpace(noteId))
             throw new InvalidOperationException(Strings.Get("ImageImportInvalidNote"));
@@ -454,7 +474,7 @@ public sealed class NoteImageStore : IDisposable
 
     public IReadOnlyList<NoteImageAsset> ImportImageFiles(string noteId, IEnumerable<string> paths)
     {
-        if (_writeDisabled)
+        if (IsWriteDisabled)
         {
             throw new InvalidOperationException(Strings.Get("ImageStoreUnavailable"));
         }
@@ -722,7 +742,7 @@ public sealed class NoteImageStore : IDisposable
                 return markdown;
             }
 
-            if (_writeDisabled)
+            if (IsWriteDisabled)
             {
                 throw new InvalidOperationException(Strings.Get("ImageStoreUnavailable"));
             }
@@ -836,7 +856,7 @@ public sealed class NoteImageStore : IDisposable
     {
         lock (_gate)
         {
-            if (_writeDisabled || _bitmapCache.Count == 0)
+            if (IsWriteDisabled || _bitmapCache.Count == 0)
                 return;
         }
 
@@ -857,7 +877,7 @@ public sealed class NoteImageStore : IDisposable
 
     internal void CollectUnprotectedImages(IReadOnlySet<string> protectedImageIds)
     {
-        if (_writeDisabled)
+        if (IsWriteDisabled)
         {
             return;
         }
@@ -891,7 +911,7 @@ public sealed class NoteImageStore : IDisposable
         lock (_gate)
         {
             _reusableImageNumberRanges.Clear();
-            if (_writeDisabled ||
+            if (IsWriteDisabled ||
                 _nextImageNumber <= 1 ||
                 protectedImageIds == null)
             {
@@ -1059,7 +1079,7 @@ public sealed class NoteImageStore : IDisposable
 
         lock (_gate)
         {
-            if (_writeDisabled)
+            if (IsWriteDisabled)
             {
                 throw new InvalidOperationException(Strings.Get("ImageStoreUnavailable"));
             }
@@ -1617,7 +1637,7 @@ public sealed class NoteImageStore : IDisposable
     private LmdbImageDatabase RequireDatabaseLocked()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        if (_writeDisabled)
+        if (IsWriteDisabled)
         {
             throw new InvalidOperationException(Strings.Get("ImageStoreUnavailable"));
         }
@@ -1625,6 +1645,14 @@ public sealed class NoteImageStore : IDisposable
         if (_database != null)
         {
             return _database;
+        }
+
+        // An image library copied into place after Load has no in-memory index.
+        // Only the normal load path can open an existing store for writes.
+        if (File.Exists(FilePath))
+        {
+            _writeBlockReason = WriteBlockReason.DatabaseUnavailable;
+            throw new InvalidOperationException(Strings.Get("ImageStoreUnavailable"));
         }
 
         try
@@ -1636,7 +1664,7 @@ public sealed class NoteImageStore : IDisposable
         {
             _database?.Dispose();
             _database = null;
-            _writeDisabled = true;
+            _writeBlockReason = WriteBlockReason.DatabaseUnavailable;
             throw new InvalidOperationException(Strings.Get("ImageStoreUnavailable"), ex);
         }
     }
