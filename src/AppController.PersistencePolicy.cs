@@ -141,13 +141,7 @@ public sealed partial class AppController
     {
         if (IsExiting) return;
         if (_imageStore.NeedsRecoveryProtectionRefresh && !_store.HasPendingStartupRecovery)
-            RunExternalPostCommitUi(() =>
-            {
-                // Recovery may have retired the last snapshot referencing a missing store.
-                // If a file has since appeared, leave it protected until normal loading.
-                if (!System.IO.File.Exists(_imageStore.FilePath))
-                    ProtectWorkspaceImageReferences(_workspace, _imageStore);
-            });
+            RunExternalPostCommitUi(() => ProtectWorkspaceImageReferences(_workspace, _imageStore));
         if (releaseImageCache) TryReleaseUnreferencedImageCache();
         RunExternalPostCommitUi(TryFlushPendingPluginPaperStateDeletes);
         RunExternalPostCommitUi(ReconcilePluginRuntimes);

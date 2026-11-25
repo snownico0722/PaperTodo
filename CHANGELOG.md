@@ -33,6 +33,7 @@ This log is written for general and power users alike. It focuses on user-facing
 #### Workspaces & Recovery
 
 - A recovered workspace can store its first image without a restart when it has no existing image references. Notes with images can also be moved into that workspace.
+- Reloading or merging workspace data now refreshes image protection so new images do not reuse IDs that existing notes or recovery records still reference.
 
 #### Plugins & Body Types
 

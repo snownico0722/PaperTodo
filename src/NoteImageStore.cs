@@ -135,12 +135,17 @@ public sealed class NoteImageStore : IDisposable
             // No loaded image database + references to historical pictures means that
             // creating a fresh LMDB could reuse IDs or obscure recovery of the old one.
             // A missing store can be created only after a complete scan finds no references.
-            if (NeedsMissingStoreProtection)
+            if (!NeedsMissingStoreProtection) return;
+
+            if (File.Exists(FilePath))
             {
-                _writeBlockReason = referenced.Count == 0 && protectedImageIds != null
-                    ? WriteBlockReason.None
-                    : recoveryPending ? WriteBlockReason.MissingStoreDuringRecovery : WriteBlockReason.MissingStore;
+                _writeBlockReason = WriteBlockReason.DatabaseUnavailable;
+                return;
             }
+
+            _writeBlockReason = referenced.Count == 0 && protectedImageIds != null
+                ? WriteBlockReason.None
+                : recoveryPending ? WriteBlockReason.MissingStoreDuringRecovery : WriteBlockReason.MissingStore;
         }
     }
 
@@ -1640,6 +1645,14 @@ public sealed class NoteImageStore : IDisposable
         if (_database != null)
         {
             return _database;
+        }
+
+        // An image library copied into place after Load has no in-memory index.
+        // Only the normal load path can open an existing store for writes.
+        if (File.Exists(FilePath))
+        {
+            _writeBlockReason = WriteBlockReason.DatabaseUnavailable;
+            throw new InvalidOperationException(Strings.Get("ImageStoreUnavailable"));
         }
 
         try

@@ -206,24 +206,24 @@ public sealed partial class StateStore
     internal bool TryCollectProtectedImageIds(
         AppState currentState,
         out HashSet<string> protectedImageIds) =>
-        TryCollectImageReferences(currentState, out protectedImageIds, forMissingStore: false);
+        TryCollectImageReferences(currentState, out protectedImageIds, requireCommittedState: true);
 
-    internal bool TryCollectImageReferencesForMissingStore(
+    internal bool TryReadProtectedImageIds(
         AppState currentState,
         out HashSet<string> protectedImageIds) =>
-        TryCollectImageReferences(currentState, out protectedImageIds, forMissingStore: true);
+        TryCollectImageReferences(currentState, out protectedImageIds, requireCommittedState: false);
 
     private bool TryCollectImageReferences(
         AppState currentState,
         out HashSet<string> protectedImageIds,
-        bool forMissingStore)
+        bool requireCommittedState)
     {
         protectedImageIds = new HashSet<string>(StringComparer.Ordinal);
         try
         {
-            // Recovery can be inspected to decide whether to create a missing store.
-            // GC and ID reuse still require the selected recovery to commit first.
-            if (WriteLifetime.IsStopped || (!forMissingStore && _pendingStartupRecovery != null) ||
+            // Reference protection can inspect pending recovery. GC and ID reuse
+            // still require the selected recovery to commit first.
+            if (WriteLifetime.IsStopped || (requireCommittedState && _pendingStartupRecovery != null) ||
                 !TryAddImageReferences(currentState, protectedImageIds))
             {
                 protectedImageIds.Clear();
@@ -242,7 +242,7 @@ public sealed partial class StateStore
                     path.EndsWith(".json.tmp", StringComparison.OrdinalIgnoreCase)) paths.Add(path);
             }
 
-            if (!forMissingStore && paths.Count == 0)
+            if (requireCommittedState && paths.Count == 0)
             {
                 protectedImageIds.Clear();
                 return false;

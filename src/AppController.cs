@@ -3515,13 +3515,16 @@ public sealed partial class AppController : IDisposable
     }
 
     private static void ProtectWorkspaceImageReferences(
-        WorkspaceSession workspace, NoteImageStore images, bool runStartupMaintenance = false)
+        WorkspaceSession workspace, NoteImageStore images, bool runStartupMaintenance = false,
+        bool refreshAfterDataReload = false)
     {
         IReadOnlySet<string>? protectedIds = null;
-        if (images.NeedsMissingStoreProtection)
+        if (images.NeedsMissingStoreProtection || refreshAfterDataReload)
         {
-            if (workspace.Store.TryCollectImageReferencesForMissingStore(workspace.State, out var ids))
+            if (workspace.Store.TryReadProtectedImageIds(workspace.State, out var ids))
                 protectedIds = ids;
+            else if (refreshAfterDataReload)
+                images.PrepareReusableImageNumbers(null);
         }
         else if (runStartupMaintenance && !images.IsWriteDisabled &&
                  workspace.Store.TryCollectProtectedImageIds(workspace.State, out var idsForMaintenance))

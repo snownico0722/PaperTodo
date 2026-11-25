@@ -569,13 +569,32 @@ internal static partial class Program
         freshImages.Load();
         var freshStore = new StateStore(scope.DirectoryPath, DurableAtomicFileWriter.Shared, 3);
         var fresh = freshStore.Load();
-        Require(freshStore.TryCollectImageReferencesForMissingStore(fresh, out var freshIds),
+        Require(freshStore.TryReadProtectedImageIds(fresh, out var freshIds),
             "a new workspace without a saved document did not yield a complete scan");
         freshImages.ProtectPersistedImageReferences(fresh, freshIds);
         Require(!freshImages.IsWriteDisabled &&
                 freshImages.ImportBitmapSource("note-a", WorkspaceBitmap(255, 0)).Id == "001" &&
                 File.Exists(freshImagePath),
             "a fresh workspace was mistaken for missing historical image data");
+        var retained = freshImages.ImportBitmapSource("note-a", WorkspaceBitmap(0, 255));
+        freshImages.CollectUnprotectedImages(new HashSet<string> { retained.Id });
+        freshImages.Dispose();
+        var existingImageBytes = File.ReadAllBytes(freshImagePath);
+        using var copiedBeforeRefresh = new NoteImageStore(Path.Combine(scope.DirectoryPath, "copied-before-refresh.lmdb"));
+        using var copiedBeforeWrite = new NoteImageStore(Path.Combine(scope.DirectoryPath, "copied-before-write.lmdb"));
+        copiedBeforeRefresh.Load();
+        copiedBeforeWrite.Load();
+        File.Copy(freshImagePath, copiedBeforeRefresh.FilePath);
+        File.Copy(freshImagePath, copiedBeforeWrite.FilePath);
+        copiedBeforeRefresh.ProtectPersistedImageReferences(fresh, freshIds);
+        Require(copiedBeforeRefresh.IsWriteDisabled,
+            "a reference refresh enabled writes to an unindexed image library");
+        Throws<InvalidOperationException>(() =>
+            copiedBeforeWrite.ImportBitmapSource("note-a", WorkspaceBitmap(255, 0)));
+        Require(copiedBeforeWrite.IsWriteDisabled &&
+                File.ReadAllBytes(copiedBeforeRefresh.FilePath).SequenceEqual(existingImageBytes) &&
+                File.ReadAllBytes(copiedBeforeWrite.FilePath).SequenceEqual(existingImageBytes),
+            "a missing-store write changed an existing image library before loading it");
 
         // Damaged records are explicitly abandoned rather than permanently stopping
         // cleanup for all healthy images in the same workspace.
@@ -590,7 +609,7 @@ internal static partial class Program
         var recovered = recoveringStore.Load();
         Require(recoveringStore.NeedsStartupRecoverySave &&
                 !recoveringStore.TryCollectProtectedImageIds(recovered, out _) &&
-                recoveringStore.TryCollectImageReferencesForMissingStore(recovered, out var recoveredIds) &&
+                recoveringStore.TryReadProtectedImageIds(recovered, out var recoveredIds) &&
                 recoveredIds.Count == 0,
             "pending recovery must allow read-only inspection while still blocking GC and ID reuse");
 
@@ -598,7 +617,7 @@ internal static partial class Program
         var orphan = NewState();
         orphan.Papers[0].Content = "![older](i:001)";
         File.WriteAllText(orphanPath, recoveringStore.SerializeState(orphan), Encoding.UTF32);
-        Require(recoveringStore.TryCollectImageReferencesForMissingStore(recovered, out var oldIds) &&
+        Require(recoveringStore.TryReadProtectedImageIds(recovered, out var oldIds) &&
                 oldIds.Contains("001"), "read-only recovery scan missed an old image reference");
         var pendingImagePath = Path.Combine(scope.DirectoryPath, "note-assets4.lmdb");
         using var pendingImages = new NoteImageStore(pendingImagePath);
@@ -620,7 +639,7 @@ internal static partial class Program
             "rechecking image references must not clear a database load failure");
 
         using var lockedOrphan = new FileStream(orphanPath, FileMode.Open, FileAccess.Read, FileShare.None);
-        Require(!recoveringStore.TryCollectImageReferencesForMissingStore(recovered, out _),
+        Require(!recoveringStore.TryReadProtectedImageIds(recovered, out _),
             "an unreadable recovery source was mistaken for an empty reference set");
         using var uncertain = new NoteImageStore(pendingImagePath);
         uncertain.Load();
@@ -773,6 +792,7 @@ internal static partial class Program
                 var main = NewState();
                 main.UiLanguage = UiLanguages.English;
                 main.PaperSkin = PaperSkins.Paper;
+                main.DataMergeConflictPolicy = DataMergeConflictPolicies.Internal;
                 main.Workspaces = new() { Enabled = true, Slots = [1, 2], Active = 2 };
                 var mainWriter = new StateStore();
                 mainWriter.SaveJsonSync(mainWriter.SerializeState(main), 1);
@@ -806,10 +826,12 @@ internal static partial class Program
                     "secondary startup recovery was not committed by the startup save");
                 Require(!File.Exists(orphanPath) && !images.IsWriteDisabled && !File.Exists(imagePath),
                     "the missing image store did not become writable after recovery retired its orphan");
+                await ReloadImageProtectionChecks(controller, activeStore, images);
                 var asset = images.ImportBitmapSource("note-a", WorkspaceBitmap(181, 73));
                 Require(asset.Id == "001" && File.Exists(imagePath) &&
                         images.TryGetEncodedImageBytes(asset.Id, out _, out var bytes) && bytes.Length > 0,
                     "image writes did not work after secondary startup recovery");
+                await MergeImageProtectionChecks(controller, activeStore, images, asset.Id);
                 Console.WriteLine("PASS secondary startup rechecks missing image protection after recovery cleanup");
                 result = 0;
             }
@@ -818,6 +840,66 @@ internal static partial class Program
         });
         app.Run();
         return result;
+    }
+
+    private static async Task ReloadImageProtectionChecks(AppController controller, StateStore store, NoteImageStore images)
+    {
+        var original = File.ReadAllText(store.FilePath);
+        var external = J(original);
+        var missing = MarkdownImageReferences.CreateReference("005");
+        LivePaper(external, "note-a")["content"] = missing;
+        File.WriteAllText(store.FilePath, external.ToJsonString());
+        Require(controller.PaperCommands.ReloadData(PaperOperationContext.Mcp()).Applied, "image reference reload rejected");
+        await Until(() => !controller.IsDataReloading, "image reference reload");
+        Require(controller.State.Papers.Single(paper => paper.Id == "note-a").Content.Contains(missing, StringComparison.Ordinal) &&
+                images.IsWriteDisabled && !File.Exists(images.FilePath),
+            "reload accepted an old image reference without protecting the missing image library");
+
+        File.WriteAllText(store.FilePath, original);
+        Require(controller.PaperCommands.ReloadData(PaperOperationContext.Mcp()).Applied, "text-only reload rejected");
+        await Until(() => !controller.IsDataReloading, "text-only reload");
+        Require(!images.IsWriteDisabled && !File.Exists(images.FilePath),
+            "reload did not release missing-store protection after its last reference disappeared");
+        Console.WriteLine("PASS explicit reload refreshes missing image library protection in both directions");
+    }
+
+    private static async Task MergeImageProtectionChecks(
+        AppController controller, StateStore store, NoteImageStore images, string archivedId)
+    {
+        var acceptedId = images.ImportBitmapSource("note-a", WorkspaceBitmap(83, 171)).Id;
+        var keepId = images.ImportBitmapSource("note-a", WorkspaceBitmap(19, 177)).Id;
+        var keepIds = new HashSet<string> { keepId };
+        images.CollectUnprotectedImages(keepIds);
+        images.PrepareReusableImageNumbers(keepIds);
+        Require(!images.TryGetAsset(archivedId, out _) && !images.TryGetAsset(acceptedId, out _),
+            "merge fixture did not create reusable image numbers");
+
+        var baseline = File.ReadAllText(store.FilePath);
+        var external = J(baseline);
+        var discardedReference = MarkdownImageReferences.CreateReference(archivedId);
+        var acceptedReference = MarkdownImageReferences.CreateReference(acceptedId);
+        LivePaper(external, "note-a")["content"] = discardedReference;
+        external["papers"]!.AsArray().Add(new JsonObject { ["id"] = "note-merged", ["type"] = "note",
+            ["content"] = acceptedReference, ["isVisible"] = false });
+        var window = Field<Dictionary<string, PaperWindow>>(controller, "_windows")["note-a"];
+        window.EnsureShellBuilt();
+        Field<MarkdownTextBox>(window, "_noteBox").Text = "local body wins conflict";
+        File.WriteAllText(store.FilePath, external.ToJsonString());
+        Require(controller.PaperCommands.MergeData(PaperOperationContext.Mcp(), baseline).Outcome == "pending",
+            "image reference merge rejected");
+        await Until(() => !controller.IsDataReloading, "image reference merge");
+        var result = controller.PaperCommands.GetDataReloadStatus().LastResult;
+        Require(result is { Applied: true, Outcome: "conflict", ConflictDiffFile: not null },
+            "image reference merge did not resolve and archive the conflict");
+        var archive = J(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, result.ConflictDiffFile!)));
+        Require(archive["conflicts"]!.AsArray().Any(entry => entry?["external"] is JsonValue value &&
+                    value.TryGetValue<string>(out var text) && text == discardedReference) &&
+                controller.State.Papers.Single(paper => paper.Id == "note-a").Content == "local body wins conflict" &&
+                controller.State.Papers.Single(paper => paper.Id == "note-merged").Content == acceptedReference,
+            "merge fixture did not keep one active reference and archive the discarded reference");
+        Require(images.ImportBitmapSource("note-a", WorkspaceBitmap(29, 193)).Id == "004",
+            "merge let a new image reuse a number referenced by the accepted document or conflict archive");
+        Console.WriteLine("PASS merge reserves reusable image numbers referenced by accepted data and conflict archives");
     }
 
     private static int RunWorkspaceMissingImagesFixture()
