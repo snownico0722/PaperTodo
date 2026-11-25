@@ -30,6 +30,10 @@ This log is written for general and power users alike. It focuses on user-facing
 - **Hide from capture.** Under General → Advanced, independently exclude papers and capsules from supported Windows screenshots, recordings and screen sharing. Both options are off by default.
 - **Fullscreen avoidance.** Available in normal mode under **General → Windows**. Manually pinned papers stay on top. Unpinning a paper restores the configured fullscreen behavior.
 
+#### Workspaces & Recovery
+
+- A recovered workspace can store its first image without a restart when it has no existing image references. Notes with images can also be moved into that workspace.
+
 #### Plugins & Body Types
 
 - **Plugin API 2.4.** Native and Web plugins with `notes.append` can add images to existing Markdown notes. Plugins written for 2.1 through 2.3 remain compatible.

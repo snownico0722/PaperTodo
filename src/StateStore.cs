@@ -205,14 +205,25 @@ public sealed partial class StateStore
 
     internal bool TryCollectProtectedImageIds(
         AppState currentState,
-        out HashSet<string> protectedImageIds)
+        out HashSet<string> protectedImageIds) =>
+        TryCollectImageReferences(currentState, out protectedImageIds, forMissingStore: false);
+
+    internal bool TryCollectImageReferencesForMissingStore(
+        AppState currentState,
+        out HashSet<string> protectedImageIds) =>
+        TryCollectImageReferences(currentState, out protectedImageIds, forMissingStore: true);
+
+    private bool TryCollectImageReferences(
+        AppState currentState,
+        out HashSet<string> protectedImageIds,
+        bool forMissingStore)
     {
         protectedImageIds = new HashSet<string>(StringComparer.Ordinal);
         try
         {
-            // Never collect while an interrupted source is still the authority
-            // for the first recovery save.
-            if (WriteLifetime.IsStopped || _pendingStartupRecovery != null ||
+            // Recovery can be inspected to decide whether to create a missing store.
+            // GC and ID reuse still require the selected recovery to commit first.
+            if (WriteLifetime.IsStopped || (!forMissingStore && _pendingStartupRecovery != null) ||
                 !TryAddImageReferences(currentState, protectedImageIds))
             {
                 protectedImageIds.Clear();
@@ -220,44 +231,18 @@ public sealed partial class StateStore
             }
 
             var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var hasPersistedState = FileExistsForCollection(FilePath);
             AddIfExists(paths, FilePath);
             AddIfExists(paths, BackupPath);
-            AddIfExists(paths, FilePath + ".tmp");
-            AddIfExists(paths, BackupPath + ".tmp");
-
-            var directory = Path.GetDirectoryName(FilePath);
-            if (string.IsNullOrWhiteSpace(directory))
-            {
-                directory = AppContext.BaseDirectory;
-            }
-
-            // An interrupted first save may have been moved aside before the next
-            // primary/backup write. Its references are as important as the live JSON.
-            foreach (var tempPath in new[] { FilePath + ".tmp", BackupPath + ".tmp" })
-            {
-                foreach (var orphan in Directory.EnumerateFiles(
-                             directory, Path.GetFileNameWithoutExtension(tempPath) + ".orphaned.*.tmp"))
-                    paths.Add(orphan);
-            }
-            // An interrupted first save may have been moved aside before the next
-            // primary/backup write. Its references are as important as the live JSON.
-            foreach (var tempPath in new[] { FilePath + ".tmp", BackupPath + ".tmp" })
-            {
-                foreach (var orphan in Directory.EnumerateFiles(
-                             directory, Path.GetFileNameWithoutExtension(tempPath) + ".orphaned.*.tmp"))
-                    paths.Add(orphan);
-            }
+            paths.UnionWith(InterruptedWritePaths());
             // Recovery includes rejected local/baseline values, not just the external file.
-            // Half-written archives also disable GC until they can be inspected safely.
+            var directory = Path.GetDirectoryName(FilePath)!;
             foreach (var path in Directory.EnumerateFiles(directory, ConflictFilePrefix + "*.json*"))
             {
                 if (path.EndsWith(".json", StringComparison.OrdinalIgnoreCase) ||
                     path.EndsWith(".json.tmp", StringComparison.OrdinalIgnoreCase)) paths.Add(path);
             }
 
-            hasPersistedState |= paths.Count > 0;
-            if (!hasPersistedState)
+            if (!forMissingStore && paths.Count == 0)
             {
                 protectedImageIds.Clear();
                 return false;
@@ -267,7 +252,7 @@ public sealed partial class StateStore
             {
                 try
                 {
-                    var json = File.ReadAllText(path);
+                    var json = DecodeStateBytes(File.ReadAllBytes(path));
                     var isDiff = path.EndsWith(".diff.json", StringComparison.OrdinalIgnoreCase) ||
                         path.EndsWith(".diff.json.tmp", StringComparison.OrdinalIgnoreCase);
                     if (isDiff)
@@ -277,12 +262,7 @@ public sealed partial class StateStore
                         _ = TryAddConflictImageReferences(json, protectedImageIds);
                         continue;
                     }
-                    var root = System.Text.Json.Nodes.JsonNode.Parse(json,
-                        documentOptions: StateJsonReadPolicy.DocumentOptions);
-                    if (root is not System.Text.Json.Nodes.JsonObject obj ||
-                        obj["papers"] is not System.Text.Json.Nodes.JsonArray)
-                        continue;
-                    var snapshot = JsonSerializer.Deserialize<AppState>(json, JsonOptions);
+                    var snapshot = ReadCoreState(json);
                     if (snapshot != null)
                         _ = TryAddImageReferences(snapshot, protectedImageIds);
                 }
@@ -298,8 +278,7 @@ public sealed partial class StateStore
         }
         catch
         {
-            // Image collection is destructive. An unreadable or malformed recovery snapshot
-            // therefore disables the whole collection pass instead of guessing reachability.
+            // An unreadable source leaves the reference set incomplete.
             protectedImageIds.Clear();
             return false;
         }

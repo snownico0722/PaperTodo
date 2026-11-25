@@ -47,6 +47,8 @@ public sealed class NoteImageStore : IDisposable
 
     public bool IsWriteDisabled => _writeDisabled;
 
+    internal bool NeedsMissingStoreProtection => _database == null && !_writeDisabled;
+
     public bool AutoCompressLargeImages { get; set; } = true;
 
     public void Load()
@@ -102,7 +104,7 @@ public sealed class NoteImageStore : IDisposable
     // failure. A missing entire LMDB must not be replaced by a new empty store when
     // its live or recovery documents still reference the former image IDs.
     internal void ProtectPersistedImageReferences(
-        AppState state, IReadOnlySet<string>? protectedImageIds, bool hasPersistedDocument)
+        AppState state, IReadOnlySet<string>? protectedImageIds)
     {
         var referenced = state.Papers
             .Where(paper => paper.Type == PaperTypes.Note)
@@ -120,11 +122,8 @@ public sealed class NoteImageStore : IDisposable
 
             // No loaded image database + references to historical pictures means that
             // creating a fresh LMDB could reuse IDs or obscure recovery of the old one.
-            // An unreadable protection scan is likewise not permission to replace a
-            // missing store for an existing document. Only image WRITES are disabled.
-            if (_database == null && !File.Exists(FilePath) &&
-                (referenced.Count > 0 ||
-                 (hasPersistedDocument && protectedImageIds == null)))
+            // A missing store can be created only after a complete scan finds no references.
+            if (_database == null && (referenced.Count > 0 || protectedImageIds == null))
                 _writeDisabled = true;
         }
     }

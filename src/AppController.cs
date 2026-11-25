@@ -151,22 +151,6 @@ public sealed partial class AppController : IDisposable
     {
         Current = this;
         InitializeWorkspaceState();
-        // Complete a selected secondary workspace's recovery before image-reference protection.
-        // Otherwise the pending recovery makes the scan unavailable and can permanently disable
-        // writes to a missing image library for the lifetime of this process.
-        if (_store.NeedsStartupRecoverySave)
-        {
-            try
-            {
-                _store.SaveJsonSync(_store.SerializeState(State), 1);
-            }
-            catch (Exception ex)
-            {
-                // Keep startup available; the subsequent protection scan will fail closed.
-                System.Diagnostics.Trace.TraceWarning(
-                    "Workspace startup recovery could not be committed before image-store initialization: {0}", ex);
-            }
-        }
         _imageStore.AutoCompressLargeImages = State.AutoCompressLargeImages;
         _imageStore.Load();
         // A missing or damaged picture must not redirect startup to another workspace.
@@ -175,12 +159,7 @@ public sealed partial class AppController : IDisposable
         UsesNativeMicaWindows = PaperSkins.UsesNativeBackdrop(State.PaperSkin) && NativeMicaBackdrop.IsSupported;
         Theme.Invalidate();
         RefreshApplicationThemeResources();
-        var protectedImageIdsForReuse = TryCollectUnprotectedImages();
-        // Only rebuild free numbers when the same protection scan that gates GC succeeded.
-        // A failed scan leaves reuse disabled so missing-but-referenced ids are never reissued.
-        _imageStore.PrepareReusableImageNumbers(protectedImageIdsForReuse);
-        _imageStore.ProtectPersistedImageReferences(State, protectedImageIdsForReuse,
-            System.IO.File.Exists(_store.FilePath) || System.IO.File.Exists(_store.BackupPath));
+        ProtectWorkspaceImageReferences(_workspace, _imageStore, runStartupMaintenance: true);
         NormalizePaperSystemVisibilitySettings();
         AppTypography.Configure(
             State.UiFontPreset,
@@ -3535,28 +3514,31 @@ public sealed partial class AppController : IDisposable
         }
     }
 
-    /// <summary>
-    /// Runs startup GC when protection ids can be collected. Returns that set for free-id reuse,
-    /// or null when collection is skipped/failed so reuse must stay off.
-    /// </summary>
-    private IReadOnlySet<string>? TryCollectUnprotectedImages()
+    private static void ProtectWorkspaceImageReferences(
+        WorkspaceSession workspace, NoteImageStore images, bool runStartupMaintenance = false)
     {
-        try
+        IReadOnlySet<string>? protectedIds = null;
+        if (images.NeedsMissingStoreProtection)
         {
-            if (!_store.TryCollectProtectedImageIds(State, out var protectedImageIds))
+            if (workspace.Store.TryCollectImageReferencesForMissingStore(workspace.State, out var ids))
+                protectedIds = ids;
+        }
+        else if (runStartupMaintenance && !images.IsWriteDisabled &&
+                 workspace.Store.TryCollectProtectedImageIds(workspace.State, out var idsForMaintenance))
+        {
+            protectedIds = idsForMaintenance;
+            try
             {
-                return null;
+                images.CollectUnprotectedImages(protectedIds);
+                images.PrepareReusableImageNumbers(protectedIds);
             }
-
-            _imageStore.CollectUnprotectedImages(protectedImageIds);
-            return protectedImageIds;
+            catch
+            {
+                // Failed startup maintenance leaves old numbers unavailable for reuse.
+                images.PrepareReusableImageNumbers(null);
+            }
         }
-        catch
-        {
-            // Collection is optional and destructive; any uncertainty keeps the image bytes
-            // and disables free-id reuse for this startup.
-            return null;
-        }
+        images.ProtectPersistedImageReferences(workspace.State, protectedIds);
     }
 
     private void HandleSaveFailure(Exception ex, long? failedVersion = null)

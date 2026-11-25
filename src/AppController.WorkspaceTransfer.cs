@@ -50,9 +50,6 @@ public sealed partial class AppController
 
             target = _workspaceCatalog.Open(number, WorkspaceOptions,
                 main: WorkspaceNumber == 1 ? State : null);
-            // Image copying must see a committed target state before its protection scan.
-            if (target.Store.NeedsStartupRecoverySave)
-                target.Store.SaveJsonSync(target.Store.SerializeState(target.State), NextWorkspaceSaveVersion());
             // Recovery may have opened a modal dialog, and a plugin Commit may
             // remove its own paper. Recheck the live identity after those callbacks.
             if (IsExiting || !State.Papers.Contains(paper)) return false;
@@ -93,11 +90,7 @@ public sealed partial class AppController
             {
                 using var images = new NoteImageStore(target.Paths.Images);
                 images.Load();
-                IReadOnlySet<string>? protectedIds = null;
-                if (!File.Exists(images.FilePath) &&
-                    target.Store.TryCollectProtectedImageIds(target.State, out var ids)) protectedIds = ids;
-                images.ProtectPersistedImageReferences(target.State, protectedIds,
-                    File.Exists(target.Paths.Data) || File.Exists(target.Paths.Backup));
+                ProtectWorkspaceImageReferences(target, images);
                 moved.Content = _imageStore.CopyImageReferencesTo(images, moved.Id, moved.Content);
             }
             using (var pluginData = new PaperBodyPluginDataStore(_paperBodyPlugins.PluginRoot, number)
