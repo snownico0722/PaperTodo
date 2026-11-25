@@ -1207,8 +1207,8 @@ internal static partial class Program
         var target3 = Field<WorkspaceCatalog>(controller, "_workspaceCatalog").StoreFor(3);
         var recoveredTarget = NewState();
         recoveredTarget.Papers[0].Content = "destination recovery content";
-        recoveredTarget.Zoom = 1.25;
-        File.WriteAllText(target3.FilePath, target3.SerializeState(recoveredTarget));
+        recoveredTarget.Zoom = OverallFontScales.Maximum;
+        File.WriteAllText(target3.FilePath, target3.SerializeRawState(recoveredTarget));
         Require(target3.TryRefreshBackupFromPrimary(), "transfer recovery fixture could not create a backup");
         File.WriteAllText(target3.FilePath, "{corrupt transfer destination");
         var targetImagesPath = Path.Combine(AppContext.BaseDirectory, "note-assets3.lmdb");
@@ -1224,9 +1224,10 @@ internal static partial class Program
         Require(await controller.MovePaperToWorkspaceAsync(transferPaper, 3),
             "moving an image note into a recovered destination failed");
         var recoveredAfterMove = target3.ReadCommittedWorkspaceState();
-        Require(recoveredAfterMove.Zoom == recoveredTarget.Zoom &&
-                recoveredAfterMove.Papers.Any(paper => paper.Content == "destination recovery content"),
-            "transfer recovery lost destination content or independent settings");
+        Require(recoveredAfterMove.Zoom == recoveredTarget.Zoom,
+            $"transfer recovery changed destination zoom from {recoveredTarget.Zoom} to {recoveredAfterMove.Zoom}");
+        Require(recoveredAfterMove.Papers.Any(paper => paper.Content == "destination recovery content"),
+            "transfer recovery lost destination content");
         var movedImagePaper = recoveredAfterMove.Papers.Single(paper => paper.Id == transferPaper.Id);
         var movedImageReference = MarkdownImageReferences.Enumerate(movedImagePaper.Content).Single();
         using (var verifiedImages = new NoteImageStore(targetImagesPath))
