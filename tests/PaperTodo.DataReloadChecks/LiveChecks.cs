@@ -345,6 +345,7 @@ internal static partial class Program
             Require(!windows.ContainsKey("merge-renamed-window"),
                 "deleted paper surface survived merge");
             Console.WriteLine("PASS external paper ID rename and delete close old windows");
+            CheckEmptyPaperDeletionConfirmation(controller);
             await DeletedPaperHistoryChecks(controller);
 
             using (var runtime = new PaperPluginRuntimeWorkspaceApi(controller, "fixture.runtime", [PaperTodoPermissionNames.DataImport], () => true))

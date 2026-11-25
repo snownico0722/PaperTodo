@@ -1105,17 +1105,6 @@ public sealed partial class PaperWindow
             : IsScriptCapsuleContent(_paper.Content);
     }
 
-    internal bool IsCurrentNoteEmpty()
-    {
-        if (_paper.Type != PaperTypes.Note ||
-            !IsCurrentBodyProviderMarkdown)
-        {
-            return false;
-        }
-
-        return string.IsNullOrWhiteSpace(_noteBox?.PersistentText ?? _paper.Content);
-    }
-
     internal static bool IsScriptCapsuleContent(string? text)
     {
         return IsScriptCapsuleText(text ?? "");

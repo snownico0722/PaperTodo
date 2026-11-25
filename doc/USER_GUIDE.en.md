@@ -150,7 +150,7 @@ New installations pin **Drag to Associate**, **Switch Workspace**, **New Note**,
 | :--- | :--- | :--- | :--- |
 | **Collapse** | Edge capsule or floating desktop capsule | Preserved | Click the capsule |
 | **Hide** | Leaves the desktop and edge queue; the app stays running | Preserved | Click it in the tray list or double-click the tray icon |
-| **Delete** | Removed from the current workspace | Content deleted | Non-empty papers require confirmation; do not use in place of Hide |
+| **Delete** | Removed from the current workspace | Content deleted | Deleting from the paper menu opens a confirmation dialog, even for empty papers |
 | **Exit** | Saves data and closes PaperTodo | Preserved on disk | Run `PaperTodo.exe` again |
 
 ### 2.5 Full-Text Search

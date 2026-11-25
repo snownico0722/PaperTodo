@@ -31,6 +31,7 @@ This log is written for general and power users alike. It focuses on user-facing
 - **Paper background settings.** The **Paper background** section now remains visible at the bottom of Style & Text and adapts to missing, successfully loaded or failed images. Its info icon explains how to install a background image, while the blending switch has its own explanation.
 - **Hide from capture.** Under General → Advanced, independently exclude papers and capsules from supported Windows screenshots, recordings and screen sharing. Both options are off by default.
 - **Fullscreen avoidance.** Available in normal mode under **General → Windows**. Manually pinned papers stay on top. Unpinning a paper restores the configured fullscreen behavior.
+- Deleting an empty note or todo from its paper menu now asks for confirmation.
 
 #### Workspaces & Recovery
 

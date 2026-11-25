@@ -2030,6 +2030,10 @@ public sealed partial class AppController : IDisposable
 
     public void DeletePaper(PaperData paper)
     {
+        // Confirmation can return after the workspace or its papers have changed.
+        if (IsExiting || IsWorkspaceSwitching || IsDataReloading || !State.Papers.Contains(paper))
+            return;
+
         paper.IsVisible = false;
         NextVisibilityAnimationVersion(paper.Id);
 
@@ -2177,25 +2181,6 @@ public sealed partial class AppController : IDisposable
 
         ArrangeDeepCapsules(animate: State.EnableAnimations);
         RefreshTrayMenu();
-    }
-
-    public bool IsPaperEmpty(PaperData paper)
-    {
-        if (paper.Type == PaperTypes.Note)
-        {
-            if (!string.Equals(
-                    paper.BodyProviderId,
-                    PaperBodyProviderIds.Markdown,
-                    StringComparison.Ordinal))
-            {
-                return false;
-            }
-            return _windows.TryGetValue(paper.Id, out var window)
-                ? window.IsCurrentNoteEmpty()
-                : string.IsNullOrWhiteSpace(paper.Content);
-        }
-
-        return !paper.Items.Any(TodoRules.HasMeaningfulContent);
     }
 
     public int VisibleDeepCapsuleCount()
