@@ -1195,8 +1195,8 @@ internal static partial class Program
         {
             verifiedImages.Load();
             Require(!verifiedImages.IsWriteDisabled &&
-                    verifiedImages.TryGetEncodedImageBytes(movedImageReference.ImageId, out var movedAsset, out var movedBytes) &&
-                    movedAsset.NoteId == movedImagePaper.Id && movedBytes.SequenceEqual(sourceBytes),
+                    verifiedImages.TryGetEncodedImageBytes(movedImageReference.ImageId, out var copiedAsset, out var movedBytes) &&
+                    copiedAsset.NoteId == movedImagePaper.Id && movedBytes.SequenceEqual(sourceBytes),
                 "image transfer did not initialize the recovered destination library safely");
         }
         Console.WriteLine("PASS workspace moves: draft, ID collision, image/plugin data, links, recovery and write failures");
