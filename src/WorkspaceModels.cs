@@ -115,6 +115,8 @@ internal static class WorkspaceFieldScopes
             nameof(AppState.UiLanguage), nameof(AppState.DataMergeConflictPolicy), nameof(AppState.Theme), nameof(AppState.ColorScheme),
             nameof(AppState.PaperSkin), nameof(AppState.MaterialTransparency), nameof(AppState.HideSurfaceOutline),
             nameof(AppState.MicaBackdropType), nameof(AppState.MicaAlwaysActive),
+            nameof(AppState.PaperBackgroundBlendWithTheme), nameof(AppState.PaperBackgroundStretch),
+            nameof(AppState.PaperBackgroundLayout),
             nameof(AppState.MarkdownRenderMode), nameof(AppState.ImageReferenceTextMode), nameof(AppState.MarkdownEditAnimationEnabled),
             nameof(AppState.TodoVisualSize), nameof(AppState.ShowTodoBottomBar), nameof(AppState.AutoClearCompletedTodos),
             nameof(AppState.AutoMoveCompletedTodosToBottom), nameof(AppState.AutoCompressLargeImages), nameof(AppState.UiFontPreset),

@@ -85,6 +85,23 @@ public sealed partial class AppController
             value => State.MicaAlwaysActive = value,
             SettingEffects.NativeMaterial,
             title: Strings.Get("SettingsMicaAlwaysActive"));
+        yield return DefineSetting<bool>("appearance.background_blend",
+            () => State.PaperBackgroundBlendWithTheme,
+            value => State.PaperBackgroundBlendWithTheme = value,
+            SettingEffects.PaperBackground,
+            title: SettingsSidebarLocalized("启用和配色混合", "Blend with paper colors", "紙面カラーと混合する", "종이 색상과 혼합"));
+        yield return DefineSetting<bool>("appearance.background_stretch",
+            () => State.PaperBackgroundStretch,
+            value => State.PaperBackgroundStretch = value,
+            SettingEffects.PaperBackground,
+            title: SettingsSidebarLocalized("拉伸", "Stretch", "ストレッチ", "늘이기"));
+        yield return DefineSetting<string>("appearance.background_layout",
+            () => State.PaperBackgroundLayout,
+            value => State.PaperBackgroundLayout = value,
+            SettingEffects.PaperBackground,
+            title: SettingsSidebarLocalized("位置", "Position", "位置", "위치"),
+            options: [PaperBackgroundLayouts.Center, PaperBackgroundLayouts.BottomLeft,
+                PaperBackgroundLayouts.BottomCenter, PaperBackgroundLayouts.BottomRight]);
         yield return DefineSetting<string>("appearance.font_preset",
             () => State.UiFontPreset,
             value => State.UiFontPreset = value,
@@ -572,7 +589,7 @@ public sealed partial class AppController
             value => State.McpAllowDeletes = value,
             SettingEffects.Mcp,
             title: Strings.Get("LabsMcpDeletes"));
-        foreach (var definition in CreateExternalSettingsCatalog()) yield return definition;
+        yield return CreateStartupSetting();
         foreach (var definition in CreateShortcutSettingsCatalog()) yield return definition;
     }
 }

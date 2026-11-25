@@ -506,7 +506,7 @@ Open **Style & Text** to adjust these options.
 4. **Stretch**: Independent toggle. On fills the paper proportionally and may crop edges; off keeps small images at original size and scales large images down only enough to fit.
 5. **Position**: Choose Center, Bottom left, Bottom center, or Bottom right alignment.
 
-The same image applies to notes and todos. After replacing the file, toggle blending, stretching, or position—or restart—to refresh. To remove the background, move or rename the candidate files and restart. Decoding caps the longest edge at **4,096 pixels** without modifying the file. Background preferences are stored in `paper-background.json` beside the executable. If that file is missing, PaperTodo imports preferences from the old `%LOCALAPPDATA%\PaperTodo\paper-background.json`.
+The same image applies to notes and todos. After replacing the file, toggle blending, stretching, or position—or restart—to refresh. To remove the background, move or rename the candidate files and restart. Decoding caps the longest edge at **4,096 pixels** without modifying the file. Blending, stretch, and position are saved with workspace settings. Secondary workspaces follow the main workspace by default and can use independent settings under Workspaces & Data.
 
 #### Custom Fonts
 
@@ -642,14 +642,14 @@ The portable edition keeps core data beside `PaperTodo.exe`. Each workspace uses
 - `N` stands for the workspace number (for example, Workspace 2 uses `data2.json`, not a file literally named `dataN.json`).
 - **The main `data.json` also stores the workspace list, custom names, and follow-main settings**, so always retain it when migrating or restoring secondary workspaces.
 - Installed plugins in `plugins/<plugin-id>/` are shared by all workspaces; historical core-JSON archives are stored in `PaperTodo-backups/`.
-- Custom backgrounds, fonts, tray icons (`PaperTodo.ico`), and reminder sounds (`papertodo.wav`) sit beside `PaperTodo.exe`. The `paper-background.json` file in the same folder holds background blending, stretching, and position preferences.
+- Custom backgrounds, fonts, tray icons (`PaperTodo.ico`), and reminder sounds (`papertodo.wav`) sit beside `PaperTodo.exe`. Background blending, stretch, and position are saved in the workspace JSON.
 - `data.backup.json` and `data2.backup.json`–`data5.backup.json` do not update on every save and are not guaranteed to match the state immediately before your last edit.
 
 ### 10.2 Backing Up Data
 
 1. **Choose "Exit" from the tray and wait for `PaperTodo.exe` to finish before copying.** If saving fails, resolve that first; a running app has not completed a safe exit.
 2. **Full directory copy (recommended)**: Copy the **entire application directory** to your backup location to preserve all workspaces, image databases, plugins, historical backups, and custom files at once.
-3. **Selective backup**: If copying individual items, include every used workspace's JSON, short-term backup, and image database, the complete `plugins/` folder, and the main `data.json` (plus `PaperTodo-backups/` if you want historical restore points). For a custom background, include the image and `paper-background.json`. **The three unnumbered files cover only the main workspace (1).**
+3. **Selective backup**: If copying individual items, include every used workspace's JSON, short-term backup, and image database, the complete `plugins/` folder, and the main `data.json` (plus `PaperTodo-backups/` if you want historical restore points). For a custom background, include the image from the application folder. **The three unnumbered files cover only the main workspace (1).**
 4. **External files**: Follow plugin instructions for data stored outside the app folder; files linked from todos are not bundled automatically either.
 
 #### Automatic Core-Data History Archives (`PaperTodo-backups/`)
@@ -665,7 +665,7 @@ These archives store the original contents of existing `data.json` and `data2.js
 
 #### Migrating to a New PC
 
-1. To keep background preferences from an older version, first run the updated app on the old computer to import them. Then exit PaperTodo and create a complete backup as described above.
+1. Exit PaperTodo on the old computer and create a complete backup as described above.
 2. Copy the entire backup folder to a writable directory on the new computer, using a compatible application version; **do not launch PaperTodo until copying is complete**.
 3. Restore any external plugin or todo-linked files as needed.
 4. Launch PaperTodo and switch through every workspace you use to verify text, images, plugins, and settings. Keep the old backup until everything is verified.

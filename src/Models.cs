@@ -442,6 +442,9 @@ public sealed class AppState
     public bool HideSurfaceOutline { get; set; } = false;
     public string MicaBackdropType { get; set; } = MicaBackdropTypes.Mica;
     public bool MicaAlwaysActive { get; set; }
+    public bool PaperBackgroundBlendWithTheme { get; set; } = true;
+    public bool PaperBackgroundStretch { get; set; }
+    public string PaperBackgroundLayout { get; set; } = PaperBackgroundLayouts.Center;
     [System.Diagnostics.CodeAnalysis.AllowNull]
     public string MarkdownRenderMode { get; set; } = MarkdownRenderModes.Full;
     public string ImageReferenceTextMode { get; set; } = ImageReferenceTextModes.Always;

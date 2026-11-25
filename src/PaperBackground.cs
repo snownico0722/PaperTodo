@@ -1,5 +1,4 @@
 using System.IO;
-using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
@@ -27,13 +26,6 @@ internal static class PaperBackground
     private const double BlendedImageOpacity = 0.30;
     private static readonly string[] CandidateNames =
         ["papertodo.png", "papertodo.jpg", "papertodo.jpeg"];
-    private const string PreferencesFileName = "paper-background.json";
-    private static readonly string PreferencesPath = Path.Combine(AppContext.BaseDirectory, PreferencesFileName);
-
-    private static PaperBackgroundPreferences _preferences = PaperBackgroundPreferences.Load(
-        PreferencesPath,
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "PaperTodo", PreferencesFileName));
     private static BitmapSource? _cachedBitmap;
     private static string? _cachedPath;
     private static long _cachedLength = -1;
@@ -41,9 +33,6 @@ internal static class PaperBackground
     private static string? _lastLoadError;
 
     internal static bool IsAvailable => FindPath() != null;
-    internal static bool BlendWithTheme => _preferences.BlendWithTheme;
-    internal static bool StretchImage => _preferences.Stretch;
-    internal static string Layout => _preferences.Layout;
 
     internal static string? LoadError
     {
@@ -55,81 +44,15 @@ internal static class PaperBackground
                 return null;
             }
 
-            _ = CreateBrush(BlendWithTheme, Layout, StretchImage);
+            _ = CreateBrush(blendWithTheme: false, PaperBackgroundLayouts.Center, stretch: false);
             return _lastLoadError;
-        }
-    }
-
-    internal static void SetBlendWithTheme(bool enabled)
-    {
-        if (_preferences.BlendWithTheme == enabled)
-        {
-            return;
-        }
-
-        ApplyPreferences(_preferences with { BlendWithTheme = enabled });
-    }
-
-    internal static void SetStretch(bool enabled)
-    {
-        if (StretchImage == enabled)
-        {
-            return;
-        }
-
-        ApplyPreferences(_preferences with { Stretch = enabled });
-    }
-
-    internal static void SetLayout(string layout)
-    {
-        var normalized = PaperBackgroundLayouts.Normalize(layout);
-        if (string.Equals(Layout, normalized, StringComparison.Ordinal))
-        {
-            return;
-        }
-
-        ApplyPreferences(_preferences with { Layout = normalized });
-    }
-
-    internal static void ResetPreferences() => ApplyPreferences(new PaperBackgroundPreferences());
-
-    private static void ApplyPreferences(PaperBackgroundPreferences next)
-    {
-        next.Save(PreferencesPath);
-        _preferences = next;
-        InvalidateCache();
-    }
-
-    internal static void Apply(Panel? host)
-    {
-        if (host != null)
-        {
-            host.Background = (Brush?)CreateBrush(
-                BlendWithTheme,
-                Layout,
-                StretchImage,
-                host.ActualWidth,
-                host.ActualHeight) ?? Brushes.Transparent;
-        }
-    }
-
-    internal static void Apply(Control? host)
-    {
-        if (host != null)
-        {
-            host.Background = (Brush?)CreateBrush(
-                BlendWithTheme,
-                Layout,
-                StretchImage,
-                host.ActualWidth,
-                host.ActualHeight) ?? Brushes.Transparent;
         }
     }
 
     internal static bool NeedsSizeRefresh(Brush? currentBrush, double availableWidth, double availableHeight)
     {
-        if (StretchImage ||
-            currentBrush is not ImageBrush imageBrush ||
+        if (currentBrush is not ImageBrush imageBrush ||
+            imageBrush.Stretch == Stretch.UniformToFill ||
             imageBrush.ImageSource is not BitmapSource bitmap)
         {
             return false;
@@ -310,7 +233,7 @@ internal static class PaperBackground
             : Stretch.None;
     }
 
-    private static void InvalidateCache()
+    internal static void InvalidateCache()
     {
         _cachedBitmap = null;
         _cachedPath = null;

@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 
 namespace PaperTodo;
 
@@ -43,34 +44,47 @@ public sealed partial class PaperWindow
 
     internal void RefreshPaperBackground()
     {
-        PaperBackground.Apply(_notePaperBackgroundHost);
+        if (_notePaperBackgroundHost is { } noteHost)
+            noteHost.Background = CreatePaperBackgroundBrush(noteHost);
         RefreshTodoBackground();
     }
 
     private void RefreshTodoBackground()
     {
-        PaperBackground.Apply(_todoPaperBackgroundHost);
+        if (_todoPaperBackgroundHost is { } todoHost)
+            todoHost.Background = CreatePaperBackgroundBrush(todoHost);
+    }
+
+    private Brush CreatePaperBackgroundBrush(FrameworkElement host)
+    {
+        var state = _controller.State;
+        return (Brush?)PaperBackground.CreateBrush(
+            state.PaperBackgroundBlendWithTheme,
+            state.PaperBackgroundLayout,
+            state.PaperBackgroundStretch,
+            host.ActualWidth,
+            host.ActualHeight) ?? Brushes.Transparent;
     }
 
     private void OnPaperBackgroundHostSizeChanged(object sender, SizeChangedEventArgs e)
     {
-        if (ReferenceEquals(sender, _notePaperBackgroundHost) &&
+        if (_notePaperBackgroundHost is { } noteHost && ReferenceEquals(sender, noteHost) &&
             PaperBackground.NeedsSizeRefresh(
-                _notePaperBackgroundHost.Background,
+                noteHost.Background,
                 e.NewSize.Width,
                 e.NewSize.Height))
         {
-            PaperBackground.Apply(_notePaperBackgroundHost);
+            noteHost.Background = CreatePaperBackgroundBrush(noteHost);
             return;
         }
 
-        if (ReferenceEquals(sender, _todoPaperBackgroundHost) &&
+        if (_todoPaperBackgroundHost is { } todoHost && ReferenceEquals(sender, todoHost) &&
             PaperBackground.NeedsSizeRefresh(
-                _todoPaperBackgroundHost.Background,
+                todoHost.Background,
                 e.NewSize.Width,
                 e.NewSize.Height))
         {
-            PaperBackground.Apply(_todoPaperBackgroundHost);
+            todoHost.Background = CreatePaperBackgroundBrush(todoHost);
         }
     }
 }

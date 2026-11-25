@@ -103,6 +103,8 @@ public sealed partial class AppController
         {
             "general.data_merge_conflicts" => "workspace.data",
             "general.tooltips" => "visual.options",
+            "appearance.background_blend" or "appearance.background_stretch" or
+                "appearance.background_layout" => "visual.background",
             "window.fullscreen_mode" or "window.hide_papers_in_capture" or
                 "window.hide_capsules_in_capture" => "general.options",
             "title.max_length" or "capsule.title_measure_limit" or "capsule.hide_close_button" or

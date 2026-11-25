@@ -7,7 +7,7 @@ var checks = new (string Name, Action Run)[]
 {
     ("note-html-embeds-images-and-rejects-missing-assets", NoteHtmlChecks.Run),
     ("new-workspace-and-legacy-markdown-defaults", NewWorkspaceAndLegacyMarkdownDefaults),
-    ("background-preferences-travel-with-portable-folder", BackgroundPreferencesTravelWithPortableFolder),
+    ("paper-background-preferences-are-core-settings", PaperBackgroundPreferencesAreCoreSettings),
     ("primary-save-faults-keep-a-loadable-generation", PrimarySaveFaultsKeepALoadableGeneration),
     ("backup-refresh-fault-keeps-old-backup", BackupRefreshFaultKeepsOldBackup),
     ("corrupt-primary-never-refreshes-backup", CorruptPrimaryNeverRefreshesBackup),
@@ -95,37 +95,32 @@ static void NewWorkspaceAndLegacyMarkdownDefaults()
         "a saved basic rendering choice must survive a restart");
 }
 
-static void BackgroundPreferencesTravelWithPortableFolder()
+static void PaperBackgroundPreferencesAreCoreSettings()
 {
     using var scope = new TempDirectory();
+    var store = NewStore(scope.Path, DurableAtomicFileWriter.Shared);
+    store.SaveJsonSync("""{"papers":[]}""", version: 1);
+    var state = store.Load();
+    Assert(state.PaperBackgroundBlendWithTheme && !state.PaperBackgroundStretch &&
+           state.PaperBackgroundLayout == PaperBackgroundLayouts.Center,
+        "a workspace without background preferences should use the defaults");
+
+    state.PaperBackgroundBlendWithTheme = false;
+    state.PaperBackgroundStretch = true;
+    state.PaperBackgroundLayout = PaperBackgroundLayouts.BottomRight;
+    store.SaveJsonSync(store.SerializeState(state), version: 2);
+
     using var destination = new TempDirectory();
-    var path = Path.Combine(scope.Path, "paper-background.json");
-    var legacyPath = Path.Combine(scope.Path, "legacy.json");
-    var copiedPath = Path.Combine(destination.Path, "paper-background.json");
+    var copiedStore = NewStore(destination.Path, DurableAtomicFileWriter.Shared);
+    File.Copy(store.FilePath, copiedStore.FilePath);
+    var loaded = copiedStore.Load();
+    Assert(!loaded.PaperBackgroundBlendWithTheme && loaded.PaperBackgroundStretch &&
+           loaded.PaperBackgroundLayout == PaperBackgroundLayouts.BottomRight,
+        "the background preferences should travel inside data.json");
 
-    Assert(PaperBackgroundPreferences.Load(path, legacyPath) == new PaperBackgroundPreferences() &&
-           !File.Exists(path), "a fresh folder should use defaults without creating a preferences file");
-    const string legacyJson = """{"BlendWithTheme":false,"Stretch":true,"Layout":"bottomRight"}""";
-    File.WriteAllText(legacyPath, legacyJson);
-    var migrated = PaperBackgroundPreferences.Load(path, legacyPath);
-    Assert(!migrated.BlendWithTheme && migrated.Stretch &&
-           migrated.Layout == PaperBackgroundLayouts.BottomRight &&
-           File.Exists(path) && File.ReadAllText(legacyPath) == legacyJson,
-        "the old preferences should be imported into the portable folder");
-
-    var changed = migrated with { Stretch = false, Layout = PaperBackgroundLayouts.BottomLeft };
-    changed.Save(path);
-    File.Copy(path, copiedPath);
-    Assert(PaperBackgroundPreferences.Load(path, legacyPath) == changed &&
-           PaperBackgroundPreferences.Load(copiedPath, Path.Combine(destination.Path, "missing.json")) == changed &&
-           File.ReadAllText(legacyPath) == legacyJson,
-        "edits should travel with the portable file and take precedence over the old settings");
-
-    const string broken = "{unreadable";
-    File.WriteAllText(path, broken);
-    Assert(PaperBackgroundPreferences.Load(path, legacyPath) == new PaperBackgroundPreferences() &&
-           File.ReadAllText(path) == broken,
-        "a damaged portable file should remain available for recovery without importing another copy");
+    copiedStore.SaveJsonSync("""{"papers":[],"paperBackgroundLayout":"unknown"}""", version: 3);
+    Assert(copiedStore.Load().PaperBackgroundLayout == PaperBackgroundLayouts.Center,
+        "an unknown saved background position should fall back to center");
 }
 
 static void PrimarySaveFaultsKeepALoadableGeneration()

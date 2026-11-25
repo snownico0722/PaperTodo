@@ -104,7 +104,7 @@ Codex CLI Bridge 通过单次 CLI 配置连接同一可执行文件的 stdio bri
 
 MCP 的 transport、权限策略和 bridge 生命周期不拥有 Paper/Todo/Note 的第二套业务写入逻辑；真正的业务 mutation 仍回到 GUI 主宿主和共享命令边界。
 
-公共软件设置由 `PaperSettingsService` 与显式的 `AppController.SettingsApi` 类型化目录统一处理；MCP、Native、Web 只适配参数、调用方权限和生命周期。`context.SettingsApi` 与插件私有 `context.Settings` 分离，不向 Workspace 必需接口加入 AppState 字段读写。普通 UI 设置值（主题、字体、显示、脚本、MCP、启动项和背景偏好等）与 API 共用此服务及生效函数；快捷键录制草稿、批量恢复默认和退出时收集输入仍属于各自的交互/命令流程。普通设置变化通过既有 live region 更新对应区域；主题、字体与设置模式才重建整页，外部后缀编辑器保持原实例并同步成功提交的值。核心设置提交到 StateStore 后再发布 UI/Runtime 生效，失败恢复原值及联动状态；Windows 启动项由系统管理，背景偏好由 `PaperBackgroundPreferences` 持久化。插件 List/Get 使用 `settings.read`，Set 使用 `settings.update`；MCP Set 继续使用完整写入授权。MCP 关闭自己时停止接收新连接，但保留当前响应及既有超时/退出取消边界。
+公共软件设置由 `PaperSettingsService` 与显式的 `AppController.SettingsApi` 类型化目录统一处理；MCP、Native、Web 只适配参数、调用方权限和生命周期。`context.SettingsApi` 与插件私有 `context.Settings` 分离，不向 Workspace 必需接口加入 AppState 字段读写。普通 UI 设置值（主题、字体、显示、脚本、MCP、启动项和背景偏好等）与 API 共用此服务及生效函数；快捷键录制草稿、批量恢复默认和退出时收集输入仍属于各自的交互/命令流程。普通设置变化通过既有 live region 更新对应区域；主题、字体与设置模式才重建整页，外部后缀编辑器保持原实例并同步成功提交的值。核心设置提交到 StateStore 后再发布 UI/Runtime 生效，失败恢复原值及联动状态；Windows 启动项由系统管理。插件 List/Get 使用 `settings.read`，Set 使用 `settings.update`；MCP Set 继续使用完整写入授权。MCP 关闭自己时停止接收新连接，但保留当前响应及既有超时/退出取消边界。
 
 跨纸片显示控制由插件可选 `IPaperWorkspacePresentationApi` 与 MCP 适配器进入共享 `AppController.PresentWorkspacePaper` / `ApplyPaperPresentation`，不将窗口请求塞入正文业务事务。2.1 自身纸片控制也复用同一 controller dispatch，但保留 session/provider 范围。窗口、焦点、胶囊资格、动画及常规保存仍由既有 `ShowPaper` / `HidePaper` / `SetPaperCollapsedRuntime` 等流程拥有，不另存显隐状态；返回值只承诺处理后的逻辑状态，不承诺动画完成或同步落盘。内容写入的同步提交/回滚语义不因此改变。展示请求只建立事件来源边界，不预先提交其他纸片的内容；Paper/Todo/Note 内容 mutation 仍统一走 `PaperCommandService` 的同步提交/回滚路径。外部写入只有在目标本身是正在编辑的内置 Markdown 时，才先把该目标的待提交文字写回模型，再执行插件/MCP 修改；修改其他目标不会调用无关第三方正文的 `Commit()`。后续核心保存仍按正常规则同步 PaperTodo 自己的内置 Markdown。该能力属于 API 2.2，但不新增插件 permission 或 MCP 完整写入门槛；MCP 仍受总开关控制。
 
@@ -161,7 +161,7 @@ PaperTodo 不提供插件热重载入口。插件 manifest、DLL、Web body/mini
 
 `AppState` 是核心持久化根；`PaperData` 是单纸片模型；Todo 行使用 `PaperItem`。
 
-背景偏好由各便携程序目录中的 `paper-background.json` 持有，在该目录的工作区间共用。文件缺失时尝试从旧的 Windows 用户级目录导入。导入只创建新文件，普通更新用同目录临时文件替换。旧文件保留作为读取来源。
+背景混色、拉伸和位置属于 `AppState` 的工作区设置，应用现有的主工作区跟随规则。纸片显示时从当前工作区的生效设置取值，背景图片从程序目录加载。
 
 常规与实验室的恢复默认和其他设置页面一样，从 `new AppState()` 取得字段默认值，并由各页显式列出重置范围。页面恢复、公共设置 API 与数据重载复用现有生效动作；重复的单窗口更新由 `ApplyWindowSettingEffects` 按调用方给定的顺序执行。保存时点、编辑器同步、托盘刷新和运行时交接仍由各入口持有，不把恢复默认转换成逐项 API 写入或新的批量事务。
 

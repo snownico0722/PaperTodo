@@ -1,4 +1,3 @@
-using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 
@@ -78,7 +77,7 @@ public sealed partial class AppController
                     "Enable background color blending",
                     "背景色のブレンドを有効化",
                     "배경색 혼합 사용"),
-                PaperBackground.BlendWithTheme,
+                State.PaperBackgroundBlendWithTheme,
                 TogglePaperBackgroundBlend),
             BuildSettingsHintTooltip(SettingsSidebarLocalized(
                 "开启后，背景图与当前纸片配色混合；关闭后显示原图。",
@@ -87,7 +86,7 @@ public sealed partial class AppController
                 "켜면 배경 이미지가 현재 종이 색상과 혼합되고, 끄면 원본 이미지가 표시됩니다."))));
         section.Children.Add(SettingsToggle(
             SettingsSidebarLocalized("拉伸", "Stretch", "ストレッチ", "늘이기"),
-            PaperBackground.StretchImage,
+            State.PaperBackgroundStretch,
             TogglePaperBackgroundStretch));
         section.Children.Add(BuildPaperBackgroundLayoutRow());
         return section;
@@ -128,7 +127,7 @@ public sealed partial class AppController
                 (PaperBackgroundLayouts.BottomRight,
                     SettingsSidebarLocalized("右下", "Bottom right", "右下", "오른쪽 아래"))
             ],
-            PaperBackground.Layout,
+            State.PaperBackgroundLayout,
             SetPaperBackgroundLayout);
         if (selector is FrameworkElement selectorElement)
         {
@@ -142,63 +141,20 @@ public sealed partial class AppController
     }
 
     private void TogglePaperBackgroundBlend() =>
-        SetSettingFromUi("appearance.background_blend", !PaperBackground.BlendWithTheme);
+        SetSettingFromUi("appearance.background_blend", !State.PaperBackgroundBlendWithTheme);
 
     private void TogglePaperBackgroundStretch() =>
-        SetSettingFromUi("appearance.background_stretch", !PaperBackground.StretchImage);
+        SetSettingFromUi("appearance.background_stretch", !State.PaperBackgroundStretch);
 
     private void SetPaperBackgroundLayout(string layout) =>
         SetSettingFromUi("appearance.background_layout", layout);
 
-
-
-    private bool TryResetPaperBackgroundPreferences()
-    {
-        if (!TryUpdatePaperBackgroundSetting(PaperBackground.ResetPreferences))
-        {
-            return false;
-        }
-
-        RefreshPaperBackgroundSurfaces();
-        return true;
-    }
-
     private void RefreshPaperBackgroundSurfaces()
     {
-        foreach (var window in _windows.Values)
+        PaperBackground.InvalidateCache();
+        foreach (var window in _windows.Values.ToArray())
         {
-            window.RefreshPaperBackground();
-        }
-    }
-
-    private bool TryUpdatePaperBackgroundSetting(Action update)
-    {
-        try
-        {
-            update();
-            return true;
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            ShowPaperBackgroundSaveFailure(ex);
-            return false;
-        }
-    }
-
-    private void ShowPaperBackgroundSaveFailure(Exception ex)
-    {
-        if (_settingsWindow != null)
-        {
-            PaperNoticeDialog.Show(
-                _settingsWindow,
-                SettingsSidebarLocalized(
-                    "纸片背景", "Paper background", "紙面背景", "종이 배경"),
-                SettingsSidebarLocalized(
-                    "无法保存纸片背景设置。请检查 PaperTodo.exe 所在目录的写入权限。",
-                    "Could not save the paper background setting. Check write access to the folder containing PaperTodo.exe.",
-                    "紙面背景の設定を保存できませんでした。PaperTodo.exe があるフォルダーへの書き込み権限を確認してください。",
-                    "종이 배경 설정을 저장하지 못했습니다. PaperTodo.exe가 있는 폴더의 쓰기 권한을 확인하세요.") +
-                Environment.NewLine + ex.Message);
+            if (!window.IsClosed) window.RefreshPaperBackground();
         }
     }
 }

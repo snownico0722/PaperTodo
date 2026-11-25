@@ -78,6 +78,7 @@ internal static partial class Program
             SettingsEditorBehavior();
             FullscreenSettingVisibility();
             PaperBackgroundSettingsVisibility();
+            PaperBackgroundSettingWrites();
             SpacingAdvancedModeVisibility();
             SpacingKeyboardBehavior();
             WorkspaceDataSettingsBehavior();
@@ -265,6 +266,32 @@ internal static partial class Program
         reentrant.Set("todo.paper_links", Json(false));
         Check(!PaperSettingsService.WithAccess(definition.Snapshot(), update: false).Writable, "Read-only access is not writable.");
         Check(PaperSettingsService.WithAccess(definition.Snapshot(), update: true).Writable, "Update permission makes a writable setting writable.");
+    }
+
+    private static void PaperBackgroundSettingWrites()
+    {
+        var controller = Controller();
+        var saved = new List<AppState>();
+        var success = true;
+        var service = SettingsFor(controller, () =>
+        {
+            if (success)
+                saved.Add(StateStore.CopyForReload(controller.State));
+            return success;
+        }, publish => publish());
+
+        service.Set("appearance.background_blend", Json(false));
+        service.Set("appearance.background_stretch", Json(true));
+        service.Set("appearance.background_layout", Json(PaperBackgroundLayouts.BottomLeft));
+        Check(saved.Count == 3 && !saved[2].PaperBackgroundBlendWithTheme &&
+              saved[2].PaperBackgroundStretch && saved[2].PaperBackgroundLayout == PaperBackgroundLayouts.BottomLeft,
+            "Background settings use the ordinary core settings commit.");
+        success = false;
+        Throws<PaperSettingsException>(
+            () => service.Set("appearance.background_layout", Json(PaperBackgroundLayouts.BottomRight)), "save_failed");
+        Check(controller.State.PaperBackgroundLayout == PaperBackgroundLayouts.BottomLeft &&
+              service.Get("appearance.background_layout").Value.GetString() == PaperBackgroundLayouts.BottomLeft,
+            "A failed save restores the background preference.");
     }
 
     private static void CatalogBehavior()

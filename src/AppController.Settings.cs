@@ -54,8 +54,6 @@ public sealed partial class AppController
             // StateStore already reports persistence failures; restore the clicked controls.
             if (id == "general.startup")
                 _trayIcon?.ShowBalloonTip(Strings.Get("StartupFailureTitle"), Strings.Get("StartupFailureMessage"), BalloonIcon.Warning);
-            else if (ex.Code == "save_failed" && id.StartsWith("appearance.background_", StringComparison.Ordinal))
-                ShowPaperBackgroundSaveFailure(ex);
             else if (id == "shortcuts.distinguish_numpad" && ex.Code == "shortcut_conflict")
                 ShowNumpadShortcutModeConflict();
             else if (ex.Code is not ("save_failed" or "setting_read_only"))
@@ -1648,7 +1646,7 @@ public sealed partial class AppController
             ToggleCapsuleTextBold);
 
         rightColumn.Children.Add(SettingsSoftDivider());
-        rightColumn.Children.Add(BuildPaperBackgroundSettingsSection());
+        rightColumn.Children.Add(BuildSettingsLiveRegion("visual.background", BuildPaperBackgroundSettingsSection));
 
         var separator = new Border
         {
@@ -1697,7 +1695,9 @@ public sealed partial class AppController
     private void RestoreVisualSettingsPageDefaults()
     {
         var defaults = new AppState();
-        TryResetPaperBackgroundPreferences();
+        State.PaperBackgroundBlendWithTheme = defaults.PaperBackgroundBlendWithTheme;
+        State.PaperBackgroundStretch = defaults.PaperBackgroundStretch;
+        State.PaperBackgroundLayout = defaults.PaperBackgroundLayout;
         // Theme lives on the visual page with color scheme / fonts.
         State.Theme = defaults.Theme;
         State.ColorScheme = defaults.ColorScheme;
@@ -1730,6 +1730,7 @@ public sealed partial class AppController
         ConfigureSettingsTypography();
 
         SaveNow();
+        RefreshPaperBackgroundSurfaces();
         // Typography was configured above; the theme refresh rebuilds settings once.
         RefreshTypography();
         RefreshThemeSurfaces();
