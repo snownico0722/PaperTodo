@@ -50,6 +50,9 @@ public sealed partial class AppController
 
             target = _workspaceCatalog.Open(number, WorkspaceOptions,
                 main: WorkspaceNumber == 1 ? State : null);
+            // Image copying must see a committed target state before its protection scan.
+            if (target.Store.NeedsStartupRecoverySave)
+                target.Store.SaveJsonSync(target.Store.SerializeState(target.State), NextWorkspaceSaveVersion());
             // Recovery may have opened a modal dialog, and a plugin Commit may
             // remove its own paper. Recheck the live identity after those callbacks.
             if (IsExiting || !State.Papers.Contains(paper)) return false;

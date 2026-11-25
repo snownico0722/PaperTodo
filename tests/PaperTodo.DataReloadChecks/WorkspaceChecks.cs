@@ -718,6 +718,59 @@ internal static partial class Program
             "retry after releasing the busy data file did not reopen the selected workspace");
     }
 
+    private static int RunWorkspaceRecoveryImageFixture()
+    {
+        if (!File.Exists(Path.Combine(AppContext.BaseDirectory, LiveMarker)))
+            throw new InvalidOperationException("Refusing workspace recovery image checks outside isolated fixture.");
+        var result = 1;
+        var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+        app.Dispatcher.InvokeAsync(async () =>
+        {
+            AppController? controller = null;
+            try
+            {
+                var main = NewState();
+                main.UiLanguage = UiLanguages.English;
+                main.PaperSkin = PaperSkins.Paper;
+                main.Workspaces = new() { Enabled = true, Slots = [1, 2], Active = 2 };
+                var mainWriter = new StateStore();
+                mainWriter.SaveJsonSync(mainWriter.SerializeState(main), 1);
+
+                var secondary = new StateStore(AppContext.BaseDirectory, DurableAtomicFileWriter.Shared, 2);
+                var restored = NewState();
+                restored.Papers[0].Content = "recovered text-only note";
+                secondary.SaveJsonSync(secondary.SerializeState(restored), 1);
+                Require(secondary.TryRefreshBackupFromPrimary(),
+                    "secondary recovery fixture could not create a valid backup");
+                File.WriteAllText(secondary.FilePath, "{corrupt secondary");
+                var imagePath = Path.Combine(AppContext.BaseDirectory, "note-assets2.lmdb");
+                if (File.Exists(imagePath)) File.Delete(imagePath);
+
+                controller = new AppController();
+                Require(controller.WorkspaceNumber == 2,
+                    "startup did not keep the selected secondary workspace");
+                await controller.StartAsync(createDefaultPaper: false);
+                var activeStore = Field<StateStore>(controller, "_store");
+                var images = Field<NoteImageStore>(controller, "_imageStore");
+                Require(!activeStore.NeedsStartupRecoverySave &&
+                        activeStore.ReadCommittedWorkspaceState().Papers[0].Content == "recovered text-only note",
+                    "secondary startup recovery was not committed before image protection");
+                Require(!images.IsWriteDisabled && !File.Exists(imagePath),
+                    "a recovered text-only workspace disabled or prematurely created its missing image library");
+                var asset = images.ImportBitmapSource("note-a", WorkspaceBitmap(181, 73));
+                Require(asset.Id == "001" && File.Exists(imagePath) &&
+                        images.TryGetEncodedImageBytes(asset.Id, out _, out var bytes) && bytes.Length > 0,
+                    "image writes did not work after secondary startup recovery");
+                Console.WriteLine("PASS secondary startup recovery completes before missing image-library protection");
+                result = 0;
+            }
+            catch (Exception ex) { result = 1; Console.Error.WriteLine(ex); }
+            finally { controller?.Dispose(); app.Shutdown(); }
+        });
+        app.Run();
+        return result;
+    }
+
     private static int RunWorkspaceMissingImagesFixture()
     {
         if (!File.Exists(Path.Combine(AppContext.BaseDirectory, LiveMarker)))
@@ -1115,7 +1168,38 @@ internal static partial class Program
         var movedTodo = controller.State.Papers.Single(paper => paper.Title == todo.Title);
         Require(movedTodo.Items[0].LinkedPaperId == null && movedTodo.Items[1].LinkedPath == pathLink,
             "moving a todo retained a cross-workspace paper link or lost its file/program link");
-        Console.WriteLine("PASS workspace moves: draft, ID collision, image/plugin data, links and both write failures");
+
+        // A recovered destination with no image references must initialize its missing
+        // image library before a note with images is transferred into it.
+        var target3 = Field<WorkspaceCatalog>(controller, "_workspaceCatalog").StoreFor(3);
+        var recoveredTarget = NewState();
+        recoveredTarget.Papers[0].Content = "destination recovery content";
+        File.WriteAllText(target3.FilePath, target3.SerializeState(recoveredTarget));
+        Require(target3.TryRefreshBackupFromPrimary(), "transfer recovery fixture could not create a backup");
+        File.WriteAllText(target3.FilePath, "{corrupt transfer destination");
+        var targetImagesPath = Path.Combine(AppContext.BaseDirectory, "note-assets3.lmdb");
+        if (File.Exists(targetImagesPath)) File.Delete(targetImagesPath);
+        var transferPaper = controller.CreatePaper(PaperTypes.Note)!;
+        var transferImage = controller.ImageStore.ImportBitmapSource(transferPaper.Id, WorkspaceBitmap(83, 171));
+        Require(controller.ImageStore.TryGetEncodedImageBytes(transferImage.Id, out _, out var sourceBytes),
+            "transfer recovery source image was not stored");
+        var transferWindow = Field<Dictionary<string, PaperWindow>>(controller, "_windows")[transferPaper.Id];
+        transferWindow.EnsureShellBuilt();
+        Field<MarkdownTextBox>(transferWindow, "_noteBox").Text =
+            MarkdownImageReferences.CreateReference(transferImage.Id);
+        Require(await controller.MovePaperToWorkspaceAsync(transferPaper, 3),
+            "moving an image note into a recovered destination failed");
+        var movedImagePaper = target3.ReadCommittedWorkspaceState().Papers.Single(paper => paper.Id == transferPaper.Id);
+        var movedImageReference = MarkdownImageReferences.Enumerate(movedImagePaper.Content).Single();
+        using (var verifiedImages = new NoteImageStore(targetImagesPath))
+        {
+            verifiedImages.Load();
+            Require(!verifiedImages.IsWriteDisabled &&
+                    verifiedImages.TryGetEncodedImageBytes(movedImageReference.ImageId, out var movedAsset, out var movedBytes) &&
+                    movedAsset.NoteId == movedImagePaper.Id && movedBytes.SequenceEqual(sourceBytes),
+                "image transfer did not initialize the recovered destination library safely");
+        }
+        Console.WriteLine("PASS workspace moves: draft, ID collision, image/plugin data, links, recovery and write failures");
     }
 
     private static async Task WorkspaceLiveChecks()
@@ -1471,6 +1555,10 @@ internal static partial class Program
                     !File.Exists(busyFifthPath + ".tmp") &&
                     !Directory.GetFiles(directory, "data5.failed_load.*.json").Any(),
                 "complete fifth-workspace temp was not automatically recovered");
+            Require(!controller.ImageStore.IsWriteDisabled &&
+                    controller.ImageStore.ImportBitmapSource("note-a", WorkspaceBitmap(19, 177)).Id == "001" &&
+                    File.Exists(Path.Combine(directory, "note-assets5.lmdb")),
+                "a recovered secondary with no image references left its missing image library write-disabled");
             var fifthPath = Path.Combine(directory, "data5.json");
             var fifthId = controller.State.Papers[0].Id;
             var reduced = controller.WorkspaceOptions.Normalized(); reduced.Slots = [1, 2, 3];

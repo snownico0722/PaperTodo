@@ -151,6 +151,22 @@ public sealed partial class AppController : IDisposable
     {
         Current = this;
         InitializeWorkspaceState();
+        // Complete a selected secondary workspace's recovery before image-reference protection.
+        // Otherwise the pending recovery makes the scan unavailable and can permanently disable
+        // writes to a missing image library for the lifetime of this process.
+        if (_store.NeedsStartupRecoverySave)
+        {
+            try
+            {
+                _store.SaveJsonSync(_store.SerializeState(State), 1);
+            }
+            catch (Exception ex)
+            {
+                // Keep startup available; the subsequent protection scan will fail closed.
+                System.Diagnostics.Trace.TraceWarning(
+                    "Workspace startup recovery could not be committed before image-store initialization: {0}", ex);
+            }
+        }
         _imageStore.AutoCompressLargeImages = State.AutoCompressLargeImages;
         _imageStore.Load();
         // A missing or damaged picture must not redirect startup to another workspace.

@@ -375,7 +375,9 @@ public sealed partial class AppController
             if (!TrySaveNow(sync: true, workspaceBoundary: true, throwOnFailure: true)) return false;
             candidate = _workspaceCatalog.Open(number, nextOptions,
                 main: previous.Paths.Number == 1 ? previous.State : null);
-            var needsInitialSave = candidate.Store.NeedsStartupRecoverySave;
+            // Commit recovery before loading/protecting the candidate image library.
+            if (candidate.Store.NeedsStartupRecoverySave)
+                candidate.Store.SaveJsonSync(candidate.Store.SerializeState(candidate.State), NextWorkspaceSaveVersion());
             var originalHideFromTaskbar = candidate.State.HidePapersFromTaskbar;
             candidateImages = new NoteImageStore(candidate.Paths.Images);
             candidateImages.Load();
@@ -409,7 +411,7 @@ public sealed partial class AppController
 
             // A healthy existing target needs no content write. Save only when
             // initializing/recovering the document or rescuing off-screen geometry.
-            var targetChanged = needsInitialSave || candidate.Store.NormalizedCollapsedStateOnLoad || relocated ||
+            var targetChanged = candidate.Store.NormalizedCollapsedStateOnLoad || relocated ||
                 candidate.State.HidePapersFromTaskbar != originalHideFromTaskbar;
             if (targetChanged && !TrySaveNow(sync: true, workspaceBoundary: true, throwOnFailure: true))
                 throw new IOException(Strings.Get("WorkspaceSaveFailed"));
