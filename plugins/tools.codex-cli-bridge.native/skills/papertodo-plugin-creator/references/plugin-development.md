@@ -32,7 +32,7 @@ A newer host may load an older compatible plugin. An older host must reject a pl
 | 2.1 | Supported minimum | Consolidated background work into one provider Runtime; Body/Mini are frontend surfaces. Includes Workspace Paper/Todo/Note access, Runtime state/Papers, host-rendered Top Bar and Todo contributions, global shortcuts/custom shortcut actions, paper menus, note-image reads and temporary popups. |
 | 2.2 | Supported | Adds cross-paper presentation, public application Settings API (`settings.read/update`), settings `type: "action"` command buttons, `startupPaper.presentation: "hidden"`, reminder trigger state/events, and Web Runtime host-event subscriptions. |
 | 2.3 | Supported | Adds `MenuOnly` / `menuOnly` to top-bar action descriptors, showing an action only in the plugin action menu without creating a title-bar button. |
-| 2.4 | Current | Adds image append to built-in Markdown notes with `notes.append`. |
+| 2.4 | Current | Adds image append to built-in Markdown notes with `notes.append` and Runtime capsule customization across the workspace. |
 
 **Versioning rule:** a backward-compatible new plugin-visible contract (manifest field/type, permission, event, public API surface, or new observable semantics) advances the minor version after the current minor is published. Host-only implementation changes and bug fixes do not. Breaking an existing plugin contract advances the major version. Multiple compatible additions developed before one minor is released may ship together in that minor.
 
@@ -424,12 +424,12 @@ public sealed class MyPlugin : IPaperBodyPlugin, IPaperPluginRuntimeProvider
 
 - `Settings`: the plugin's shared settings in the active workspace plus change subscriptions;
 - `State`: one persistent JSON document owned by the provider Runtime;
-- `Papers`: list logical Papers for the current provider, set long-lived presentation by `paperId`, send messages to Body, and receive Paper add/remove/frontend messages. At Runtime startup, call `List()` for the initial snapshot before `Subscribe(...)` for increments; subscriptions do not replay already-existing Papers;
+- `Papers`: list logical Papers for the current provider, set long-lived presentation by `paperId`, send messages to Body, and receive Paper add/remove/frontend messages. API 2.4 also lets `SetCapsulePresentation` target any Paper in the workspace. At Runtime startup, call `List()` for the initial snapshot before `Subscribe(...)` for increments; subscriptions do not replay already-existing Papers;
 - `Workspace`: permission-controlled access to the active workspace;
 - `GlobalTopBar` / `GlobalShortcuts`;
 - `TodoActions` / `TopBarLabels`: Protocol 2.1 host-rendered contributions.
 
-A Web Runtime receives the corresponding `papertodo.settings`, `papertodo.state`, `papertodo.papers`, `papertodo.workspace`, and root `papertodo.request(method, params)`. `state` reads/writes provider Runtime state; `papers` manages only logical Papers belonging to the current provider; `workspace` accesses data in the active workspace as allowed by permissions. One provider creates only one hidden Runtime WebView.
+A Web Runtime receives the corresponding `papertodo.settings`, `papertodo.state`, `papertodo.papers`, `papertodo.workspace`, and root `papertodo.request(method, params)`. `state` reads/writes provider Runtime state; `papers` manages the provider's logical Papers and exposes capsule customization; `workspace` accesses active-workspace data as allowed by permissions. One provider creates only one hidden Runtime WebView.
 
 This means the two `papers.list` calls have different meanings: `papertodo.papers.list()` returns the current provider's Runtime Paper snapshot only, while `papertodo.workspace.request('papers.list')` returns Workspace Papers visible under current permissions. Root `papertodo.request(...)` is the low-level Runtime transport; normal code should prefer the grouped APIs above to avoid confusing methods with similar names.
 
@@ -1051,6 +1051,14 @@ Rules:
 - the host caches the View for the same session/geometry. Update live state in place instead of continuously rebuilding the View.
 
 Web plugins do not get custom WPF capsules; they use the host-rendered standard presentation.
+
+### 8.3 Customize any Paper's capsule (API 2.4)
+
+A plugin Runtime can target an existing Todo, Markdown Note, or another plugin's Paper by ID. Native uses `context.Papers.SetCapsulePresentation(paperId, presentation)`, and Web uses `await papertodo.papers.setCapsulePresentation(paperId, presentation)`. List workspace Papers through `Workspace.ListPapers()` or `papertodo.workspace.request('papers.list')` with `papers.read`.
+
+For a Native WPF view, use `context.CapsuleViews.SetCapsuleView(paperId, presentation, createView)`. The factory runs on the UI dispatcher under the same WPF rules as above. It receives the target's surface, slot size and theme. Pass the same factory on consecutive updates to keep the cached view while its geometry stays the same. Keep the standard presentation as a measurement and rendering fallback.
+
+Each target has one active override, owned by the last Runtime that published it. Pass `null` through the same API to clear your override. Ending the Runtime or replacing its Web document clears its overrides and restores the target's own content. Overrides are temporary and do not write to the target's title, body, or stored plugin state.
 
 ## 9. Edge Mini
 
