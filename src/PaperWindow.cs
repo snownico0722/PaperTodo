@@ -1713,6 +1713,7 @@ public sealed partial class PaperWindow : Window
 
         RefreshNativeMica(force: true);
         if (!IsPaperFormTransitioning) ApplyPaperChromePresentation();
+        ResetWorkspaceCapsuleViewsForTheme();
         RefreshPaperTitle();
         RefreshPaperIconButton();
         RefreshWindowBindingButton();
@@ -1835,6 +1836,7 @@ public sealed partial class PaperWindow : Window
         RefreshThemedContextMenus();
         RefreshWorkspaceButton();
 
+        ResetWorkspaceCapsuleViewsForTheme();
         RefreshPaperTitle();
         UpdateTopBarResponsiveLayout();
         ApplyCurrentCollapsedCapsuleWidth();

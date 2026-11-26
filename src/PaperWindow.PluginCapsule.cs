@@ -383,6 +383,15 @@ public sealed partial class PaperWindow
         _pluginCapsuleCustomViewGeneration = _bodySessionGeneration;
     }
 
+    private void ResetWorkspaceCapsuleViewsForTheme()
+    {
+        // A Runtime factory has no body-session theme or typography callback.
+        if (_controller.GetWorkspaceCapsuleOverride(_paper.Id)?.CreateView != null)
+        {
+            ResetPluginCapsuleCustomViews();
+        }
+    }
+
     private void ResetPluginCapsuleCustomViews()
     {
         _pluginCapsuleCustomViewGeneration = -1;
