@@ -58,6 +58,7 @@ internal sealed partial class PaperBodyPluginRegistry
                 "textzoom" => "textZoom",
                 "notelinks" => "noteLinks",
                 "runtime" => "runtime",
+                "bottombar" => AppController.PluginBottomBarCapability,
                 _ => throw new InvalidDataException(
                     $"Unknown plugin capability '{value}'.")
             };
@@ -80,6 +81,13 @@ internal sealed partial class PaperBodyPluginRegistry
         {
             throw new InvalidDataException(
                 "Application settings permissions require apiVersion 2.2 or later.");
+        }
+        if (manifest.Capabilities.Contains(AppController.PluginBottomBarCapability, StringComparer.Ordinal) &&
+            (!ApiAtLeast(manifest.ApiVersion, "2.5") ||
+             !manifest.Capabilities.Contains("runtime", StringComparer.Ordinal) ||
+             !manifest.Permissions.Any(permission => permission?.Trim() == "papers.read")))
+        {
+            throw new InvalidDataException("bottomBar requires API 2.5, runtime and papers.read.");
         }
         if (manifest.MaxPaperInstances < 0)
         {

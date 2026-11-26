@@ -10,10 +10,10 @@
 新插件使用：
 
 ```json
-"apiVersion": "2.4"
+"apiVersion": "2.5"
 ```
 
-当前宿主最新协议为 `2.4`，并继续兼容 `2.1`～`2.3`。实验性 `2.0` 及更早 manifest 不再兼容加载。新插件应以 `2.4` 为目标；已有插件只要不使用其声明版本之后新增的能力仍可继续运行。
+当前宿主最新协议为 `2.5`，并继续兼容 `2.1`～`2.4`。实验性 `2.0` 及更早 manifest 不再兼容加载。新插件应以 `2.5` 为目标；已有插件只要不使用其声明版本之后新增的能力仍可继续运行。
 
 ### 插件 API 版本历史
 
@@ -23,7 +23,7 @@
 MinimumSupportedApiVersion <= plugin.apiVersion <= CurrentApiVersion
 ```
 
-因此新宿主可以继续加载仍在兼容范围内的旧插件；旧宿主遇到依赖更高 API 的新插件则必须拒绝加载。当前 PaperTodo 支持 **2.1～2.4**。
+因此新宿主可以继续加载仍在兼容范围内的旧插件；旧宿主遇到依赖更高 API 的新插件则必须拒绝加载。当前 PaperTodo 支持 **2.1～2.5**。
 
 | API | 状态 | 主要合同里程碑 |
 | --- | --- | --- |
@@ -32,7 +32,8 @@ MinimumSupportedApiVersion <= plugin.apiVersion <= CurrentApiVersion
 | 2.1 | 当前最低兼容 | 后台统一为单 provider Runtime，Body/Mini 只做前端；包括 Workspace 的 Paper/Todo/Note、Runtime state/Papers、宿主绘制 Top Bar/Todo contribution、全局快捷键与自定义 shortcut action、纸片菜单、笔记图片读取和临时弹窗。 |
 | 2.2 | 继续支持 | 新增跨纸片显示控制、公共软件 Settings API（`settings.read/update`）、settings `type: "action"` 命令按钮、`startupPaper.presentation: "hidden"`、提醒触发状态/事件及 Web Runtime 宿主事件订阅。 |
 | 2.3 | 继续支持 | 顶栏操作新增 `MenuOnly` / `menuOnly`，可仅显示在插件操作菜单。 |
-| 2.4 | 当前最新 | 支持通过 `notes.append` 向内置 Markdown 笔记追加图片。 |
+| 2.4 | 继续支持 | 支持通过 `notes.append` 向内置 Markdown 笔记追加图片。 |
+| 2.5 | 当前最新 | 开放可绑定到笔记或待办的插件底栏。 |
 
 **升版规则：**当前 minor 正式发布后，只要新增向后兼容、插件可观察的新合同（manifest 字段/类型、permission、事件、公开 API surface 或新语义），下一批就升 minor；纯宿主内部实现、性能优化和 bugfix 不升。破坏已有插件合同才升 major。同一个尚未发布的 minor 可以一起收纳多项兼容新增，不需要每加一个字段就连续制造多个版本号。
 
@@ -252,7 +253,7 @@ Native 最终目录只保留运行所需内容。不要分发无必要的 PDB/XM
 | `description` | 插件说明 |
 | `locales` | 可选；覆盖宿主绘制的 manifest/settings 多语言文案，见 §3.4 |
 | `version` | 插件版本，必须能解析为 `Version` |
-| `apiVersion` | 新插件使用 `"2.4"`，兼容 `"2.1"`～`"2.3"` |
+| `apiVersion` | 新插件使用 `"2.5"`，兼容 `"2.1"`～`"2.4"` |
 | `stateVersion` | 宿主代管 JSON 的目标版本；同时用于 per-paper frontend state 和 provider Runtime state，至少为 1 |
 | `maxPaperInstances` | 可选；同一 Provider 最多允许存在的真实 Paper 数。省略默认 `1`，`0` 表示不限制；隐藏/折叠 Paper 仍计数 |
 | `entry` | Web 主页面或 Native 入口 DLL，必须位于插件目录内 |
@@ -929,6 +930,11 @@ await papertodo.globalTopBar.setActions([
 
 仅菜单操作不需要图标、不创建顶栏按钮、不占顶栏空间；`ToolTip` 用作菜单文字，为空时显示 `Id`。`Visible`、`Enabled`、排序、数量限制、点击事件及 owner 失效清理沿用原来的规则。它们仍在现有插件操作菜单中，未加入内置快捷的排序／隐藏设置。指定纸片的纯文字 `PaperActions.SetActions(paperId, ...)` 接口保持不变。
 
+
+**插件底栏（API 2.5）**。声明 `runtime`、`bottomBar` 和 `papers.read`。用户可在已有待办或笔记绑定插件底栏，此绑定可启动插件 Runtime。Native 使用 `context.BottomBar`，Web Runtime 使用 `papertodo.bottomBar`。启动和收到 `TargetsChanged` / `bottomBarTargetsChanged` 时调用 `ListTargets()` / `listTargets()`。用 `SetItems(paperId, items)` / `setItems(paperId, items)` 为已绑定的纸片发布最多八项，传空数组可撤下该纸片的贡献。
+
+每项声明 `id`、文字和／或现有顶栏图标、`side`（`left` 或 `right`）、`order`、`priority`、`visible` 与 `clickable`。排序值越大越靠外，优先级越大越晚省略，两项均最高为 998。Native 用 `SetActionHandler` 接收点击，Web 接收 `bottomBarItemInvoked` 的 `message.item`。回调提供项目 ID、当前纸片与点击位置，可以打开插件弹窗。[底栏示例](PaperTodo.Plugin.BottomBarWeb/) 展示笔记字数和可点击的待办进度。
+
 ### 7.6 Protocol 2.1 Todo 与顶栏展示扩展
 
 Protocol 2.1 的 provider Runtime 还可以向宿主发布两类轻量 contribution：
@@ -1287,7 +1293,7 @@ Native 插件是 fully trusted / unsandboxed .NET/WPF 代码，与 PaperTodo 当
 
 ### Manifest / Runtime
 
-- 新插件仍以 `apiVersion: "2.0"` 或更早版本为目标；新开发应使用 `2.4`，已有 `2.1`～`2.3` 插件继续兼容；
+- 新插件仍以 `apiVersion: "2.0"` 或更早版本为目标；新开发应使用 `2.5`，已有 `2.1`～`2.4` 插件继续兼容；
 - 插件目录名和 `id` 不一致；
 - `id` 使用非法字符或宿主保留 ID `data` / `data1`–`data5` / `builtin.markdown`；
 - Web 声明 `runtime`，但默认 `runtime.html` 不存在，或显式 `runtime` 路径不存在/跑出 Web `entry` 静态目录；
@@ -1354,7 +1360,7 @@ Native 插件是 fully trusted / unsandboxed .NET/WPF 代码，与 PaperTodo 当
 
 ## 14. 提交插件前
 
-- 新 `plugin.json` 使用当前目标 `apiVersion: "2.4"`，需要兼容旧宿主时声明对应版本；
+- 新 `plugin.json` 使用当前目标 `apiVersion: "2.5"`，需要兼容旧宿主时声明对应版本；
 - 所有 metadata 只在 `plugin.json` 中声明，Native 入口 DLL 只提供行为实现；
 - 声明 `runtime` 时：Native 实现 `IPaperPluginRuntimeProvider`；Web 默认提供 `entry` 同目录 `runtime.html`，或用 `runtime` 指定同一 Web 静态目录内的其他入口；
 - Runtime 需要插件设置时使用自己的 `context.Settings.Json` + `Settings.Subscribe(...)` / `papertodo.settings.get()` + `settingsChanged`，不借用隐藏 paper session；

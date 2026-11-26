@@ -316,6 +316,7 @@ public sealed partial class AppController
 
     private bool HasActivePluginShortcutRuntime(string providerId)
     {
+        if (!AllowsPluginGlobalChrome(providerId)) return false;
         if (!_pluginShortcutRuntimes.TryGetValue(providerId, out var runtime))
         {
             return false;
@@ -672,6 +673,7 @@ public sealed partial class AppController
 
     private bool DispatchPluginShortcutAction(PluginShortcutRegistration registration)
     {
+        if (!AllowsPluginGlobalChrome(registration.ProviderId)) return false;
         if (!_pluginShortcutRuntimes.TryGetValue(registration.ProviderId, out var runtime))
         {
             return false;

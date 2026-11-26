@@ -346,6 +346,9 @@ Choose **Open externally** from the paper's `···` menu (or top bar if pinned)
 
 ---
 
+**Bottom bar plugins.** Open **Bottom bar plugins** in a note or to-do paper menu and check the installed plugins you want to display. On narrow papers, items join a single group on the right. An ellipsis indicates that some items did not fit.
+
+
 ## 5. Edge Capsules and Hover Previews
 
 <div align="center">

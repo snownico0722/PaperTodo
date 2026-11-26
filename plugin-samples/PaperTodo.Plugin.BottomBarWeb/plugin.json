@@ -1,0 +1,12 @@
+{
+  "kind": "web",
+  "id": "sample.bottom-bar.web",
+  "name": "Bottom Bar Counts",
+  "description": "Shows a note character count or the number of unfinished to-dos on an existing paper.",
+  "version": "1.0.0",
+  "apiVersion": "2.5",
+  "stateVersion": 1,
+  "entry": "web/index.html",
+  "capabilities": ["runtime", "bottomBar"],
+  "permissions": ["papers.read", "notes.read", "todos.read"]
+}
