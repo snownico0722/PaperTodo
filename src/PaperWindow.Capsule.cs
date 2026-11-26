@@ -188,6 +188,8 @@ public sealed partial class PaperWindow
         if (invalidatePreview) InvalidateEdgeCapsulePreviewContent();
         if (_capsuleLabelText == null)
         {
+            // A docked-only paper can have a live host before its regular shell is built.
+            RefreshDeepCapsuleSlotLabel();
             return;
         }
 

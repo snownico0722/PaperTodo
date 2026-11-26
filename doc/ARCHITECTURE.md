@@ -142,7 +142,7 @@ PaperTodo 不提供插件热重载入口。插件 manifest、DLL、Web body/mini
 - Body/Mini -> Runtime 消息不跨 Runtime interruption 排队。Web renderer 暂不可接收时 `runtime.post(...)` 明确失败为 `runtime_unavailable`，绝不返回成功后静默丢消息。业务重试、去重和时效判断属于插件。
 - 首次 Runtime 启动失败直接进入 `Failed`，不自动重试；修改设置或下次正常启动可再尝试。已经成功运行后的 Web renderer 最多先就地 reload 一次；需要宿主重建整个 Runtime 时，每个进程生命周期也只给一次立即重建机会，不使用 Backoff、失败计数或定时重试。重建期间保留最后一次 Runtime presentation，再失败则进入 `Failed` 并清除动态展示。
 - `Papers.List()` 是 Runtime 启动时的全量快照；`Papers.Subscribe(...)` 只报告订阅后的增量，不为启动前已存在的 Paper 重放 `PaperAdded`。删除 provider 最后一张 Paper 时，若当前仍有存活且可投递的 Runtime lease，宿主在撤销 lifetime 前先 reconcile 并投递最终 `PaperRemoved`；启动/重建中、`Failed` 或 Web document 不可投递期间不承诺该事件必达。
-- Todo actions 与 Top Bar labels 是 2.1 的 Runtime contribution，随 Runtime/目标对象生命周期撤销，不进入长期业务持久化。
+- Todo actions、Top Bar labels 及跨纸片胶囊覆盖都是 Runtime contribution，随 Runtime/目标对象生命周期撤销，不进入长期业务持久化。胶囊覆盖按目标 Paper ID 保存一份，后发布者取得覆盖归属。标准内容和 Native 工厂均由发起 Runtime 发布，Web 文档替换时收回。普通与贴边胶囊复用现有内容渲染和尺寸路径，外壳、输入及队列仍由宿主持有。覆盖清除后恢复目标现有的正文插件胶囊或宿主默认胶囊。
 
 ## 4. 状态与持久化架构
 
@@ -307,7 +307,7 @@ transport 权限、Web/Native surface 生命周期、Top Bar presentation 和 MC
 - 2.1 保留 Top Bar、provider Runtime、快捷键、自定义 shortcut action、Mini / Workspace 等既有合同。
 - 2.2 新增 `startupPaper.presentation: hidden`、settings `type: action`、公共 Application Settings API 及 `settings.read/update` 权限、提醒已触发状态/事件和 Web Runtime 宿主事件订阅。
 - 2.3 为 Paper／Global Top Bar action 增加 `MenuOnly`（Web `menuOnly`）：只进入既有插件操作菜单，不创建顶栏按钮或占据其空间，默认 false 保持原行为；沿用原 scope 的 callback、replace 和生命周期清理。
-- 2.4 新增 `NoteAssets.AppendImage`（Web `noteAssets.appendImage`），沿用 `notes.append` 权限。
+- 2.4 新增 `NoteAssets.AppendImage`（Web `noteAssets.appendImage`），沿用 `notes.append` 权限。Runtime 的 `Papers.SetCapsulePresentation` 可按 ID 定制工作区任意纸片，Native Runtime 可通过 `CapsuleViews.SetCapsuleView` 为目标提供自绘。
 - 新增宿主内部行为、bugfix 或复用既有通用协议原语时不升版本；新增插件可观察的字段、类型、权限、事件、API surface 或新语义时升 minor。破坏既有插件合同才升 major。
 
 #### Protocol 2.1 Top Bar

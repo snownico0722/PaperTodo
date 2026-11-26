@@ -15,7 +15,7 @@ internal static partial class Program
         public readonly PaperPluginRuntimePapersApi Api;
         public int Active = 1;
 
-        public RuntimeFixture()
+        public RuntimeFixture(string apiVersion = "2.3")
         {
             // Only the in-memory controller state required by the real presentation methods.
             // Bypass startup because its constructor loads user files and opens the native store.
@@ -23,7 +23,8 @@ internal static partial class Program
             SetField(Controller, "<State>k__BackingField", new AppState { Papers = [Paper] });
             SetField(Controller, "_windows", new Dictionary<string, PaperWindow>());
             SetField(Controller, "_pluginRuntimePresentationCache", new Dictionary<string, Dictionary<string, PaperCapsulePresentation>>());
-            Api = new PaperPluginRuntimePapersApi(Controller, Provider, () => Volatile.Read(ref Active) != 0);
+            Api = new PaperPluginRuntimePapersApi(
+                Controller, Provider, () => Volatile.Read(ref Active) != 0, apiVersion);
         }
         public void Dispose() => Api.Dispose();
     }
@@ -43,12 +44,13 @@ internal static partial class Program
             api => api.SetTitle("paper-1", "stale"),
             api => api.SetHeaderText("paper-1", "stale"),
             api => api.SetCapsulePresentation("paper-1", Capsule("stale")),
+            api => api.SetCapsuleView("paper-1", Capsule("stale")),
             api => { _ = api.PostToBody("paper-1", JsonSerializer.SerializeToElement("stale")); },
             api => api.ResetWebDocumentPresentation()
         ];
         foreach (var operation in operations)
         {
-            using var fixture = new RuntimeFixture();
+            using var fixture = new RuntimeFixture("2.4");
             var pending = QueueWorker(() => operation(fixture.Api));
             Volatile.Write(ref fixture.Active, 0);
             try
@@ -158,6 +160,7 @@ internal static partial class Program
     private static void CheckInvalidOwner()
     {
         using var fixture = new RuntimeFixture();
+        fixture.Controller.State.Papers.Add(new PaperData { Id = "other-paper", Type = PaperTypes.Todo });
         foreach (var publish in new Action[]
         {
             () => fixture.Api.SetHeaderText("other-paper", "invalid"),
@@ -168,5 +171,57 @@ internal static partial class Program
             catch (PaperTodoPluginException ex) when (ex.Code == "paper_not_owned") { }
         }
         Assert(!fixture.Api.TryGetCapsulePresentation("other-paper", out _), "unowned paper entered the cache");
+        Assert(fixture.Controller.GetWorkspaceCapsuleOverride("other-paper") == null,
+            "old protocol published a workspace override");
+    }
+
+    private static void CheckWorkspaceCapsuleOwnership()
+    {
+        using var fixture = new RuntimeFixture("2.4");
+        var todo = new PaperData { Id = "todo", Type = PaperTypes.Todo };
+        var markdown = new PaperData { Id = "note", Type = PaperTypes.Note, BodyProviderId = PaperBodyProviderIds.Markdown };
+        var other = new PaperData
+        {
+            Id = "other",
+            Type = PaperTypes.Note,
+            BodyProviderId = "test.other",
+            BodyCapsuleText = "original"
+        };
+        fixture.Controller.State.Papers.AddRange([todo, markdown, other]);
+        using var otherRuntime = new PaperPluginRuntimePapersApi(
+            fixture.Controller, other.BodyProviderId, () => true, "2.4");
+
+        fixture.Api.SetCapsulePresentation(todo.Id, Capsule("7 remaining"));
+        fixture.Api.SetCapsulePresentation(other.Id, Capsule("override"));
+        fixture.Api.SetCapsuleView(markdown.Id, Capsule("120 words"), _ => new System.Windows.Controls.TextBlock());
+        Assert(fixture.Controller.GetWorkspaceCapsuleOverride(todo.Id)?.PlainText == "7 remaining",
+            "a built-in Todo did not accept the presentation");
+        Assert(fixture.Controller.GetWorkspaceCapsuleOverride(markdown.Id)?.CreateView != null,
+            "a built-in Markdown Note did not accept the publishing Runtime's view factory");
+        Assert(fixture.Controller.GetWorkspaceCapsuleOverride(other.Id)?.PlainText == "override" &&
+            other.BodyCapsuleText == "original" && fixture.Api.Get(other.Id) == null,
+            "a workspace override changed the target's own presentation or Runtime membership");
+
+        otherRuntime.SetCapsulePresentation(todo.Id, Capsule("other Runtime"));
+        fixture.Api.SetCapsulePresentation(todo.Id, null);
+        Assert(fixture.Controller.GetWorkspaceCapsuleOverride(todo.Id)?.PlainText == "other Runtime",
+            "an older publisher cleared another Runtime's override");
+
+        markdown.BodyProviderId = RuntimeFixture.Provider;
+        fixture.Api.SetCapsulePresentation(markdown.Id, null);
+        Assert(fixture.Controller.GetWorkspaceCapsuleOverride(markdown.Id) == null,
+            "after changing the target to its own paper, the Runtime could not clear its workspace override");
+        fixture.Api.ClearWebDocumentCapsuleOverrides();
+        Assert(fixture.Controller.GetWorkspaceCapsuleOverride(other.Id) == null &&
+            other.BodyCapsuleText == "original", "ending a Web document did not restore the target presentation");
+
+        fixture.Api.SetCapsulePresentation(other.Id, Capsule("temporary"));
+        fixture.Api.Dispose();
+        Assert(fixture.Controller.GetWorkspaceCapsuleOverride(other.Id) == null &&
+            fixture.Controller.GetWorkspaceCapsuleOverride(todo.Id)?.PlainText == "other Runtime",
+            "Runtime teardown did not revoke only the contributions it owns");
+        otherRuntime.Dispose();
+        Assert(fixture.Controller.GetWorkspaceCapsuleOverride(todo.Id) == null,
+            "last publisher's teardown left a workspace override");
     }
 }

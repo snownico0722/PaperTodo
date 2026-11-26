@@ -276,18 +276,22 @@ internal static class EdgeCapsulePreviewMeasure
 
 internal sealed class PluginFallbackEdgeCapsulePreviewView : EdgeCapsuleLivePreviewView
 {
+    private readonly Func<FrameworkElement?>? _buildCapsule;
+    private readonly Grid _statusCard = new() { Margin = new Thickness(12, 10, 10, 11) };
     private readonly TextBlock _title;
     private readonly TextBlock _status;
 
     public PluginFallbackEdgeCapsulePreviewView(
         EdgeCapsulePreviewContext context,
-        EdgeCapsulePreviewSize size)
+        EdgeCapsulePreviewSize size,
+        Func<FrameworkElement?>? buildCapsule = null)
         : base(context, size)
     {
-        Margin = new Thickness(12, 10, 10, 11);
-        RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        RowDefinitions.Add(new RowDefinition());
-        RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        _buildCapsule = buildCapsule;
+        Children.Add(_statusCard);
+        _statusCard.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        _statusCard.RowDefinitions.Add(new RowDefinition());
+        _statusCard.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
         _title = new TextBlock
         {
@@ -298,7 +302,7 @@ internal sealed class PluginFallbackEdgeCapsulePreviewView : EdgeCapsuleLivePrev
             VerticalAlignment = VerticalAlignment.Center
         };
         _title.SetResourceReference(TextBlock.ForegroundProperty, "TextBrushKey");
-        Children.Add(_title);
+        _statusCard.Children.Add(_title);
 
         _status = new TextBlock
         {
@@ -310,7 +314,7 @@ internal sealed class PluginFallbackEdgeCapsulePreviewView : EdgeCapsuleLivePrev
         };
         _status.SetResourceReference(TextBlock.ForegroundProperty, "WeakTextBrushKey");
         Grid.SetRow(_status, 1);
-        Children.Add(_status);
+        _statusCard.Children.Add(_status);
 
         var form = new TextBlock
         {
@@ -322,13 +326,21 @@ internal sealed class PluginFallbackEdgeCapsulePreviewView : EdgeCapsuleLivePrev
         };
         form.SetResourceReference(TextBlock.ForegroundProperty, "WeakTextBrushKey");
         Grid.SetRow(form, 2);
-        Children.Add(form);
+        _statusCard.Children.Add(form);
 
         InitializeLiveContent();
     }
 
     protected override void RebuildContent()
     {
+        var content = _buildCapsule?.Invoke() ?? _statusCard;
+        if (!ReferenceEquals(Children[0], content))
+        {
+            Children.Clear();
+            Children.Add(content);
+        }
+        if (!ReferenceEquals(content, _statusCard)) return;
+
         var title = Context.Title;
         var status = Context.ReadPluginStatus();
         _title.Text = title;

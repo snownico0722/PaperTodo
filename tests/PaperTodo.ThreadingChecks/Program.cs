@@ -19,6 +19,7 @@ internal static partial class Program
         ("runtime-list-no-presentation-side-effects", CheckRuntimeListHasNoPresentationSideEffects),
         ("runtime-capsule-publish-order", CheckCapsulePublication),
         ("runtime-invalid-owner-no-publication", CheckInvalidOwner),
+        ("runtime-workspace-capsule-ownership", CheckWorkspaceCapsuleOwnership),
         ("telemetry-latest-snapshot", CheckTelemetrySnapshotWrites),
         ("single-instance-timeout-keeps-listening", CheckSingleInstanceTimeout),
         ("single-instance-command-limit", CheckSingleInstanceLineLimit),

@@ -69,8 +69,8 @@ public sealed partial class AppController
             }
 
             Lifetime.TryDeactivate();
-            try { Runtime?.Dispose(); } catch { }
             try { Papers.Dispose(); } catch { }
+            try { Runtime?.Dispose(); } catch { }
             try { State.Dispose(); } catch { }
             try { Settings.Dispose(); } catch { }
             try { GlobalShortcuts.Dispose(); } catch { }
@@ -342,7 +342,8 @@ public sealed partial class AppController
         var papers = new PaperPluginRuntimePapersApi(
             this,
             descriptor.Id,
-            IsActive);
+            IsActive,
+            descriptor.ApiVersion);
         var globalTopBar = new PaperPluginRuntimeGlobalTopBarApi(
             this,
             runtimeId,
@@ -432,8 +433,8 @@ public sealed partial class AppController
                 slot.StartingRuntime = null;
             }
             lifetime.TryDeactivate();
-            try { runtime?.Dispose(); } catch { }
             try { papers.Dispose(); } catch { }
+            try { runtime?.Dispose(); } catch { }
             try { state.Dispose(); } catch { }
             try { settings.Dispose(); } catch { }
             try { globalShortcuts.Dispose(); } catch { }

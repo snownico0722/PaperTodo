@@ -89,6 +89,7 @@ internal sealed partial class WebPluginRuntime
     {
         _extensionDocumentToken = null;
         ClearHostSubscriptions();
+        try { (_papers as PaperPluginRuntimePapersApi)?.ClearWebDocumentCapsuleOverrides(); } catch { }
         try { (_workspace as PaperPluginRuntimeWorkspaceApi)?.ResetExtensionUi(); } catch { }
     }
 }

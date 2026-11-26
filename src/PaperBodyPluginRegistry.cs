@@ -620,7 +620,7 @@ internal sealed partial class PaperBodyPluginRegistry : IDisposable
             $"Unsupported plugin API version {pluginApiVersion}; host supports {MinimumPluginApiVersion} through {SupportedPluginApiVersion}.");
     }
 
-    private static bool ApiAtLeast(string actual, string required) =>
+    internal static bool ApiAtLeast(string actual, string required) =>
         Version.Parse(actual).CompareTo(Version.Parse(required)) >= 0;
 
     private static Version ParseVersion(string? value)

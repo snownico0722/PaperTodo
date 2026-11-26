@@ -2073,6 +2073,7 @@ public sealed partial class AppController : IDisposable
     // Cross-paper history belongs to entity removal, not plugin-state persistence.
     internal void NotifyPaperRemoved(string paperId)
     {
+        _workspaceCapsuleOverrides?.Remove(paperId);
         foreach (var window in _windows.Values)
             window.PruneDeletedLinkedPaperFromTodoHistory(paperId);
         QueuePluginPaperStateDeletion(paperId);
