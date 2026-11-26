@@ -90,14 +90,15 @@ public sealed partial class PaperWindow
         };
         AutomationProperties.SetName(button, item.Text.Length > 0 ? item.Text :
             item.ToolTip.Length > 0 ? item.ToolTip : item.Id);
-        void UpdateHighlight(object sender, DependencyPropertyChangedEventArgs e)
+        void UpdateHighlight()
         {
             var active = button.IsMouseOver || button.IsKeyboardFocused;
             text.Foreground = active ? TextBrush : WeakTextBrush;
             content.Opacity = active ? 1 : 0.55;
         }
-        button.IsMouseOverChanged += UpdateHighlight;
-        button.IsKeyboardFocusedChanged += UpdateHighlight;
+        button.MouseEnter += (_, _) => UpdateHighlight();
+        button.MouseLeave += (_, _) => UpdateHighlight();
+        button.IsKeyboardFocusedChanged += (_, _) => UpdateHighlight();
         button.Click += (_, _) =>
         {
             PaperPopupPosition? position = null;
