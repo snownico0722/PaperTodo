@@ -540,8 +540,8 @@ public sealed class AppState
         EdgeCapsuleHoverIntentSensitivities.Medium;
     public bool ExperimentalAllowLockIconUnlock { get; set; } = true;
     public double ExperimentalShortcutOpacityLevel { get; set; } = 0.35;
-    public bool ExperimentalTodoReminders { get; set; }
-    public bool ExperimentalTodoReminderShowButton { get; set; } = true;
+    public bool ExperimentalTodoReminders { get; set; } = true;
+    public bool ExperimentalTodoReminderShowButton { get; set; }
     public int ExperimentalTodoReminderQuickMinutes { get; set; } =
         ExperimentalTodoReminderOptions.DefaultQuickMinutes;
     public bool ExperimentalTodoReminderSoundEnabled { get; set; }
