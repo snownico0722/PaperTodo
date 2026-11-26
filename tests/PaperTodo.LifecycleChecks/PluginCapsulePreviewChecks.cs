@@ -11,6 +11,7 @@ internal static class PluginCapsulePreviewChecks
 {
     public static async Task Run(AppController controller, PaperWindow window)
     {
+        CheckDockedOnlyRefresh(controller, window.EdgeCapsulePreviewPaper);
         window.EnsureShellBuilt();
         var paper = window.EdgeCapsulePreviewPaper;
         // Exercise the compatibility preview itself without installing any third-party plugin.
@@ -64,6 +65,39 @@ internal static class PluginCapsulePreviewChecks
         finally { host.Close(); }
 
         bool HasText(string text) => Descendants(view).OfType<TextBlock>().Any(label => label.Text == text);
+    }
+
+    private static void CheckDockedOnlyRefresh(AppController controller, PaperData paper)
+    {
+        var owner = Guid.NewGuid();
+        var dockOnly = new PaperWindow(paper, controller, deferShellConstruction: true);
+        try
+        {
+            controller.SetWorkspaceCapsuleOverride(owner, paper.Id, Capsule("docked", 100),
+                _ => new TextBlock { Text = "docked custom view" });
+            typeof(PaperWindow).GetMethod("EnsureDeepCapsuleSlotHost",
+                BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(dockOnly, null);
+            var initial = InstalledView();
+            dockOnly.UpdateTheme();
+            var themed = InstalledView();
+            dockOnly.UpdateTypography();
+            var retyped = InstalledView();
+            Require(!ReferenceEquals(initial, themed) && !ReferenceEquals(themed, retyped) &&
+                !dockOnly.IsShellBuilt, "theme and typography must replace the live dock-only view without building the shell");
+        }
+        finally
+        {
+            controller.ClearWorkspaceCapsuleOverrides(owner);
+            dockOnly.CloseForReal();
+        }
+
+        TextBlock InstalledView()
+        {
+            var view = typeof(PaperWindow).GetField("_pluginCapsuleDockedCustomView",
+                BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(dockOnly) as TextBlock;
+            return view is { Parent: not null } ? view :
+                throw new InvalidOperationException("custom view was not installed in the docked host");
+        }
     }
 
     private static PaperCapsulePresentation Capsule(string text, double width) => new()
