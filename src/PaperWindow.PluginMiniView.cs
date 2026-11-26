@@ -415,7 +415,7 @@ public sealed partial class PaperWindow
             return DefaultEdgeCapsulePreviewProvider.Instance.Describe(context);
         }
 
-        var compactWidth = (PluginCapsuleRequestedContentWidth() ?? 110) +
+        var compactWidth = (MeasurePluginCapsuleContentWidth(presentation) ?? 110) +
             CapsuleCloseWidth + WindowChromeMargin;
         var width = Math.Clamp(
             Math.Ceiling(compactWidth * 1.65),
