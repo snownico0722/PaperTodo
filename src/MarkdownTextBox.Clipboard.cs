@@ -10,10 +10,11 @@ namespace PaperTodo;
 public sealed partial class MarkdownTextBox
 {
     private const string NoteImageClipboardFormat = "PaperTodo.NoteImages.v1";
-    // The encoded images share the existing rich-copy budget. Allow for Base64 and JSON keys.
+    // The internal format embeds each distinct image once. The wire limit includes Base64 and JSON.
+    private const long MaxNoteImageSourceBytes = 24L * 1024 * 1024;
     private const int MaxNoteImageClipboardBytes = 33 * 1024 * 1024;
 
-    private sealed record NoteImageClipboard(Guid SourceStore, Dictionary<string, byte[]> Images);
+    private sealed record NoteImageClipboard(Guid SourceStore, string? SourceNote, Dictionary<string, byte[]> Images);
 
     private sealed record ClipboardImagePayload(
         NoteImageAsset Asset,
@@ -85,14 +86,29 @@ public sealed partial class MarkdownTextBox
                 : ImageReferencesInDocumentRange(editor.Text, line.Offset, line.Length);
             if (references.Count > 0)
             {
-                var images = editor.ReadClipboardImages(store, references, out _);
-                WriteNoteImageClipboard(e.DataObject, store, images);
+                var images = editor.ReadClipboardImages(store, references, out var tooLarge);
+                if (tooLarge)
+                {
+                    editor.CancelIncompleteClipboardOperation(e);
+                    return;
+                }
+
+                editor.WriteNoteImageClipboard(e.DataObject, store, images);
             }
         }
         catch
         {
-            // Plain-text cut/copy remains available if the optional image data cannot be written.
+            // AvalonEdit may delete the selected source as soon as this event returns.
+            editor.CancelIncompleteClipboardOperation(e);
         }
+    }
+
+    private void CancelIncompleteClipboardOperation(DataObjectCopyingEventArgs e)
+    {
+        e.CancelCommand();
+        if (Window.GetWindow(this) is PaperWindow owner)
+            Dispatcher.BeginInvoke(new Action(() => PaperNoticeDialog.Show(owner,
+                Strings.Get("NoteClipboardIncompleteTitle"), Strings.Get("NoteClipboardIncompleteMessage"))));
     }
 
     private static void OnImageAwarePasting(object sender, DataObjectPastingEventArgs e)
@@ -363,7 +379,7 @@ public sealed partial class MarkdownTextBox
         {
             var images = ReadClipboardImages(imageStore, references, out var tooLarge);
             var data = new DataObject();
-            if (images.Count > 0)
+            if (!tooLarge && images.Count > 0)
             {
                 AddImageAwareExternalClipboardFormats(data, markdown,
                     references.Where(reference => images.ContainsKey(reference.ImageId)).ToArray(), images);
@@ -385,38 +401,35 @@ public sealed partial class MarkdownTextBox
     private Dictionary<string, ClipboardImagePayload> ReadClipboardImages(NoteImageStore store,
         IReadOnlyList<MarkdownImageReference> references, out bool tooLarge)
     {
-        // CF_HTML embeds each occurrence, even when the same stored image is referenced twice.
-        var assets = new Dictionary<string, NoteImageAsset>(StringComparer.Ordinal);
-        long htmlSourceBytes = 0;
-        foreach (var reference in references)
+        var owned = new List<NoteImageAsset>();
+        foreach (var id in references.Select(reference => reference.ImageId).Distinct(StringComparer.Ordinal))
         {
-            if (!assets.TryGetValue(reference.ImageId, out var asset))
-            {
-                if (!store.TryGetAsset(reference.ImageId, out asset) || asset.NoteId != _noteId)
-                    continue;
-                assets.Add(reference.ImageId, asset);
-            }
-
-            htmlSourceBytes += asset.ByteLength;
+            if (store.TryGetAsset(id, out var asset) && asset.NoteId == _noteId && !store.IsImageCorrupted(id))
+                owned.Add(asset);
         }
 
+        tooLarge = owned.Sum(asset => (long)asset.ByteLength) > MaxNoteImageSourceBytes;
         var images = new Dictionary<string, ClipboardImagePayload>(StringComparer.Ordinal);
-        tooLarge = htmlSourceBytes > MaxExternalClipboardHtmlSourceBytes;
-        if (tooLarge) return images;
-
-        foreach (var id in assets.Keys)
+        foreach (var asset in owned)
         {
-            if (store.TryGetEncodedImageBytes(id, out var asset, out var bytes) && asset.NoteId == _noteId)
-                images.Add(id, new ClipboardImagePayload(asset, bytes));
+            if (tooLarge)
+            {
+                // A normal copy may still reuse these verified owners within this live store.
+                images.Add(asset.Id, new ClipboardImagePayload(asset, []));
+            }
+            else if (store.TryGetEncodedImageBytes(asset.Id, out var current, out var bytes) && current.NoteId == _noteId)
+            {
+                images.Add(asset.Id, new ClipboardImagePayload(current, bytes));
+            }
         }
 
         return images;
     }
 
-    private static void WriteNoteImageClipboard(IDataObject data, NoteImageStore store,
+    private void WriteNoteImageClipboard(IDataObject data, NoteImageStore store,
         IReadOnlyDictionary<string, ClipboardImagePayload> images)
     {
-        var source = new NoteImageClipboard(store.ClipboardIdentity,
+        var source = new NoteImageClipboard(store.ClipboardIdentity, _noteId,
             images.ToDictionary(pair => pair.Key, pair => pair.Value.Bytes, StringComparer.Ordinal));
         var stream = new MemoryStream();
         JsonSerializer.Serialize(stream, source);
@@ -445,19 +458,21 @@ public sealed partial class MarkdownTextBox
 
     private string? TryPasteClipboardImage(NoteImageClipboard? source, string imageId)
     {
-        if (source == null || _imageStore is not { } store)
+        if (_imageStore is not { } store || source?.Images == null ||
+            !source.Images.TryGetValue(imageId, out var bytes))
             return null;
 
         try
         {
-            if (source.SourceStore == store.ClipboardIdentity && store.TryGetAsset(imageId, out _))
+            if (source.SourceStore == store.ClipboardIdentity && store.TryGetAsset(imageId, out var asset) &&
+                asset.NoteId == source.SourceNote && !store.IsImageCorrupted(imageId))
             {
                 var reference = MarkdownImageReferences.CreateReference(imageId);
                 var cloned = store.CloneForeignImageReferencesForNote(_noteId, reference);
                 return MarkdownImageReferences.TryParseLine(cloned, out var id) ? id : null;
             }
 
-            return source.Images?.TryGetValue(imageId, out var bytes) == true
+            return bytes is { Length: > 0 }
                 ? store.ImportImageBytes(_noteId, bytes, "").Id
                 : null;
         }

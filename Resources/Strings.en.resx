@@ -1381,6 +1381,12 @@ When off, open at the docked edge or remembered position.</value>
   <data name="NotePasteImageTextOnlyMessage" xml:space="preserve">
     <value>Images that could not be imported were kept as text. The rest of the content was pasted.</value>
   </data>
+  <data name="NoteClipboardIncompleteTitle" xml:space="preserve">
+    <value>Clipboard operation canceled</value>
+  </data>
+  <data name="NoteClipboardIncompleteMessage" xml:space="preserve">
+    <value>The selected images could not all be copied. Your original content is still in place. Try a smaller selection.</value>
+  </data>
   <data name="NoteCopyTextOnlyTitle" xml:space="preserve">
     <value>Text copied only</value>
   </data>

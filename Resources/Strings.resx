@@ -1450,6 +1450,12 @@
   <data name="NotePasteImageTextOnlyMessage" xml:space="preserve">
     <value>无法导入的图片已保留为文字。其余内容已正常粘贴。</value>
   </data>
+  <data name="NoteClipboardIncompleteTitle" xml:space="preserve">
+    <value>操作已取消</value>
+  </data>
+  <data name="NoteClipboardIncompleteMessage" xml:space="preserve">
+    <value>所选图片未能完整写入剪贴板，原文已保留。请缩小选区后重试。</value>
+  </data>
   <data name="NoteCopyTextOnlyTitle" xml:space="preserve">
     <value>仅复制了文字</value>
   </data>

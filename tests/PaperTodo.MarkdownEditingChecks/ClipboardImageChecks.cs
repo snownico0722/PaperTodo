@@ -35,7 +35,8 @@ internal static partial class ClipboardImageChecks
             var collision = target.ImportBitmapSource("other", CreateBitmap(MakeOpaque(MixedPixels)));
             Require(collision.Id == asset.Id, "clipboard fixture did not create a target ID collision");
 
-            var missing = MarkdownImageReferences.CreateReference("999");
+            var foreign = source.ImportBitmapSource("third-note", CreateBitmap(MakeOpaque(MixedPixels)));
+            var missing = MarkdownImageReferences.CreateReference(foreign.Id);
             var markdown = $"before\r\n{MarkdownImageReferences.CreateReference(asset.Id)}\r\n{missing}\r\nafter";
             var sourceEditor = new MarkdownTextBox { Text = markdown };
             sourceEditor.ConfigureNoteImages("source", source);
@@ -53,10 +54,18 @@ internal static partial class ClipboardImageChecks
             Require(reference.ImageId != collision.Id, "the paste reused the unrelated target ID");
             Require(targetEditor.Text.StartsWith("before", StringComparison.Ordinal) &&
                 targetEditor.Text.EndsWith("after", StringComparison.Ordinal) &&
-                targetEditor.Text.Contains("\\" + missing, StringComparison.Ordinal) &&
-                !MarkdownImageReferences.CollectImageIds(targetEditor.Text).Contains("999"),
+                targetEditor.Text.Contains("\\" + missing, StringComparison.Ordinal),
                 "the unresolved image was not kept as inert text alongside the other content");
             AssertStoredPixels(target, reference.ImageId, MixedPixels);
+            var sameStore = new MarkdownTextBox();
+            sameStore.ConfigureNoteImages("another-note", source);
+            sameStore.RaiseEvent(new DataObjectPastingEventArgs(data, false, DataFormats.UnicodeText));
+            var owned = MarkdownImageReferences.Enumerate(sameStore.Text).Single();
+            Require(sameStore.Text.Contains("\\" + missing, StringComparison.Ordinal) &&
+                source.TryGetAsset(owned.ImageId, out var clone) && clone.NoteId == "another-note",
+                "same-store paste borrowed an image from a third note");
+            AssertStoredPixels(source, owned.ImageId, MixedPixels);
+
             targetEditor.Undo();
             Require(targetEditor.Text.Length == 0, "the mixed paste was not a single undo operation");
         });
@@ -138,6 +147,7 @@ internal static partial class ClipboardImageChecks
                 RunClipboardWriterProcess();
                 AssertSystemClipboard();
                 Console.WriteLine("PASS clipboard PNG pixels survive the writer process exiting");
+                CheckSystemCutBudgets();
             }
         }
         catch (Exception ex)

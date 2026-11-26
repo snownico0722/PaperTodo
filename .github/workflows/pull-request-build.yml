@@ -53,6 +53,9 @@ jobs:
           ./tools/testing/Run-Checks.ps1 -Group all -List
           ./tools/testing/Run-Checks.ps1 -Group regression
 
+      - name: Windows clipboard round trip
+        run: dotnet run --no-build --project tests/PaperTodo.MarkdownEditingChecks -c Release -- --clipboard
+
       - name: Material and skin behavior checks
         # DWM desktop screenshot acceptance was retired on main (see its D-057).
         # Preserve native behavior and WPF offscreen material checks only.
