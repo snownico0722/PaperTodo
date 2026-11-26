@@ -13,28 +13,6 @@ internal sealed class PluginEdgeCapsulePreviewProvider(
         owner.DescribePluginEdgeCapsulePreview(context);
 }
 
-internal sealed class PluginCapsuleFallbackLivePreviewView :
-    EdgeCapsuleLivePreviewView
-{
-    private readonly Func<FrameworkElement> _build;
-
-    public PluginCapsuleFallbackLivePreviewView(
-        EdgeCapsulePreviewContext context,
-        EdgeCapsulePreviewSize size,
-        Func<FrameworkElement> build)
-        : base(context, size)
-    {
-        _build = build;
-        InitializeLiveContent();
-    }
-
-    protected override void RebuildContent()
-    {
-        Children.Clear();
-        Children.Add(_build());
-    }
-}
-
 public sealed partial class PaperWindow
 {
     private const double DefaultPluginMiniMaximumWidthDip = 800;
@@ -409,47 +387,26 @@ public sealed partial class PaperWindow
     private EdgeCapsulePreviewDescriptor DescribePluginCapsuleFallback(
         EdgeCapsulePreviewContext context)
     {
-        var presentation = _pluginCapsulePresentation;
-        if (presentation == null)
-        {
-            return DefaultEdgeCapsulePreviewProvider.Instance.Describe(context);
-        }
-
-        var compactWidth = (MeasurePluginCapsuleContentWidth(presentation) ?? 110) +
-            CapsuleCloseWidth + WindowChromeMargin;
-        var width = Math.Clamp(
-            Math.Ceiling(compactWidth * 1.65),
-            PluginFallbackMiniMinimumWidth,
-            PluginFallbackMiniMaximumWidth);
-        return new EdgeCapsulePreviewDescriptor(
-            new EdgeCapsulePreviewSize(width, PluginFallbackMiniHeight),
+        var previewSize = PluginCapsuleRequestedContentWidth() is { } contentWidth
+            ? new EdgeCapsulePreviewSize(Math.Clamp(
+                Math.Ceiling((contentWidth + CapsuleCloseWidth + WindowChromeMargin) * 1.65),
+                PluginFallbackMiniMinimumWidth, PluginFallbackMiniMaximumWidth), PluginFallbackMiniHeight)
+            : DefaultEdgeCapsulePreviewProvider.Instance.Describe(context).Size;
+        return new EdgeCapsulePreviewDescriptor(previewSize,
             size => BuildPluginCapsuleEdgePreviewContent(context, size));
     }
 
     private FrameworkElement BuildPluginCapsuleEdgePreviewContent(
         EdgeCapsulePreviewContext context,
-        EdgeCapsulePreviewSize size)
-    {
-        if (_pluginCapsulePresentation == null)
-        {
-            return DefaultEdgeCapsulePreviewProvider.Instance
-                .Describe(context)
-                .CreateContent(size);
-        }
-        return new PluginCapsuleFallbackLivePreviewView(
-            context,
-            size,
-            () => BuildPluginCapsuleEdgePreviewCore(context, size));
-    }
+        EdgeCapsulePreviewSize size) =>
+        new PluginFallbackEdgeCapsulePreviewView(context, size, BuildPluginCapsuleEdgePreviewCore);
 
-    private FrameworkElement BuildPluginCapsuleEdgePreviewCore(
-        EdgeCapsulePreviewContext context,
-        EdgeCapsulePreviewSize size)
+    private FrameworkElement? BuildPluginCapsuleEdgePreviewCore()
     {
-        var presentation = _pluginCapsulePresentation;
+        var presentation = GetEffectiveCapsulePresentation(out _);
         if (presentation == null)
         {
-            return new Grid { Background = Brushes.Transparent };
+            return null; // Show the normal plugin title/status card.
         }
 
         var mirror = PluginCapsuleMirrorVisual();

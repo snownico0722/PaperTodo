@@ -59,10 +59,14 @@ public sealed partial class PaperWindow
             ? _pluginCapsulePresentation
             : null;
 
+    private PaperCapsulePresentation? GetEffectiveCapsulePresentation(out WorkspaceCapsuleOverride? workspaceOverride)
+    {
+        workspaceOverride = _controller.GetWorkspaceCapsuleOverride(_paper.Id);
+        return workspaceOverride?.Presentation ?? BodyCapsulePresentation;
+    }
+
     private double? PluginCapsuleRequestedContentWidth(double? pixelsPerDip = null) =>
-        MeasurePluginCapsuleContentWidth(
-            _controller.GetWorkspaceCapsuleOverride(_paper.Id)?.Presentation ?? BodyCapsulePresentation,
-            pixelsPerDip);
+        MeasurePluginCapsuleContentWidth(GetEffectiveCapsulePresentation(out _), pixelsPerDip);
 
     private double? MeasurePluginCapsuleContentWidth(
         PaperCapsulePresentation? presentation, double? pixelsPerDip = null)
@@ -102,6 +106,9 @@ public sealed partial class PaperWindow
         if (_capsuleLabelText == null)
         {
             RefreshDeepCapsuleSlotLabel();
+            // Docked-only plugin papers can own a live fallback before their regular shell exists.
+            if (_paper.Type == PaperTypes.Note && !IsCurrentBodyProviderMarkdown)
+                _edgeCapsulePreviewInvalidationSource.Invalidate();
             return;
         }
 
@@ -210,8 +217,7 @@ public sealed partial class PaperWindow
             return;
         }
 
-        var workspaceOverride = _controller.GetWorkspaceCapsuleOverride(_paper.Id);
-        var presentation = workspaceOverride?.Presentation ?? BodyCapsulePresentation;
+        var presentation = GetEffectiveCapsulePresentation(out var workspaceOverride);
         if (presentation == null)
         {
             _pluginCapsuleRegularLayer.Child = null;
@@ -239,8 +245,7 @@ public sealed partial class PaperWindow
             return;
         }
 
-        var workspaceOverride = _controller.GetWorkspaceCapsuleOverride(_paper.Id);
-        var presentation = workspaceOverride?.Presentation ?? BodyCapsulePresentation;
+        var presentation = GetEffectiveCapsulePresentation(out var workspaceOverride);
         if (presentation == null)
         {
             _edgeCapsuleHost.SetPluginContent(null, null);
