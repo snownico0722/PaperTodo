@@ -148,7 +148,7 @@ public sealed partial class AppController
                 registrationsByCommand[commandId] = RegistrationGesturesForPlugin(gesture).ToArray();
 
                 var canExecute = PluginShortcutActions.IsCustomAction(setting.ShortcutAction)
-                    ? HasActivePluginShortcutRuntime(descriptor.Id)
+                    ? AllowsPluginGlobalChrome(descriptor.Id) && HasActivePluginShortcutRuntime(descriptor.Id)
                     : HasEntityPluginPaper(descriptor.Id);
                 if (canExecute)
                 {
@@ -316,7 +316,6 @@ public sealed partial class AppController
 
     private bool HasActivePluginShortcutRuntime(string providerId)
     {
-        if (!AllowsPluginGlobalChrome(providerId)) return false;
         if (!_pluginShortcutRuntimes.TryGetValue(providerId, out var runtime))
         {
             return false;
@@ -593,9 +592,11 @@ public sealed partial class AppController
             return;
         }
 
-        _ = Application.Current.Dispatcher.InvokeAsync(
-            () => ExecutePluginShortcut(registration),
-            DispatcherPriority.Input);
+        _ = Application.Current.Dispatcher.InvokeAsync(() =>
+        {
+            if (AllowsPluginGlobalChrome(registration.ProviderId))
+                ExecutePluginShortcut(registration);
+        }, DispatcherPriority.Input);
     }
 
     private bool TryRecordRegisteredPluginHotkey(string commandId)
@@ -673,7 +674,6 @@ public sealed partial class AppController
 
     private bool DispatchPluginShortcutAction(PluginShortcutRegistration registration)
     {
-        if (!AllowsPluginGlobalChrome(registration.ProviderId)) return false;
         if (!_pluginShortcutRuntimes.TryGetValue(registration.ProviderId, out var runtime))
         {
             return false;
