@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>To-do progress</title>
+<style>
+  body { margin: 12px; color: var(--paper-text); background: var(--paper-background); font-family: var(--paper-font); }
+</style>
+<p id="summary"></p>
+<script>
+  void papertodo.ready.then(({ data }) => {
+    document.getElementById('summary').textContent = `${data.done} of ${data.total} completed`;
+  });
+</script>
+</html>

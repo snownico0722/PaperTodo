@@ -935,16 +935,7 @@ public sealed partial class PaperWindow
             NotifyCurrentPaperBodyTypographyChanged();
         }
 
-        if (_textZoomIndicator != null)
-        {
-            _textZoomIndicator.Text = $"{(int)Math.Round(zoom * 100)}%";
-            _textZoomIndicator.Foreground = WeakTextBrush;
-            _textZoomIndicator.Opacity = 0.55;
-            if (_textZoomIndicator.Parent is UIElement host)
-            {
-                host.Visibility = Math.Abs(zoom - 1.0) < 0.001 ? Visibility.Collapsed : Visibility.Visible;
-            }
-        }
+        RefreshPaperBottomBar();
     }
 
     private double CurrentTextZoom()

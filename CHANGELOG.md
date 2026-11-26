@@ -43,6 +43,8 @@ This log is written for general and power users alike. It focuses on user-facing
 
 #### Plugins & Body Types
 
+- **Paper bottom bar (Plugin API 2.5).** Enable a plugin in Settings → Plugins; it can add items to every matching note or to-do, alongside other plugins. Compact status and action items share the bottom edge with the note zoom indicator.
+
 - **Plugin API 2.4.** Native and Web plugins can customize the capsule content of any paper in the workspace. Native plugins can also draw their own capsule content. Plugins with `notes.append` can add images to existing Markdown notes. Plugins written for 2.1 through 2.3 remain compatible.
 - **Body plugin guidance and menu visibility.** Notes show the **Body type** menu when an enabled third-party body plugin is available, or when the menu is needed to recover a note using a no-longer-available plugin. The Plugins page explains plugin-provided body types and that note content is preserved when switching back to Markdown.
 

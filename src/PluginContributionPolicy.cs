@@ -16,6 +16,33 @@ internal static class PluginContributionPolicy
     private const double MinimumSvgStrokeWidth = 0.1;
     private const double MaximumSvgStrokeWidth = 4.0;
 
+    internal const int MaximumBottomBarItemsPerPaper = 8;
+
+    internal static PaperBottomBarItem[] NormalizeBottomBarItems(IReadOnlyList<PaperBottomBarItem> items)
+    {
+        const string error = "invalid_bottom_bar_items";
+        if (items.Count > MaximumBottomBarItemsPerPaper)
+            throw new PaperTodoPluginException(error, "A plugin can contribute at most eight bottom-bar items per paper.");
+
+        var ids = new HashSet<string>(StringComparer.Ordinal);
+        return items.Select(item =>
+        {
+            if (item == null || !Enum.IsDefined(item.Side) || item.Order > 998 || item.Priority > 998)
+                throw new PaperTodoPluginException(error, "Specify a valid side and order and priority values no higher than 998.");
+            var id = NormalizeIdentifier(item.Id, error, "Bottom bar item");
+            if (!ids.Add(id))
+                throw new PaperTodoPluginException(error, "Item ids must be unique per paper.");
+            var icon = item.Icon == null ? null : NormalizeIcon(item.Icon, required: true, error);
+            return item with
+            {
+                Id = id,
+                Icon = icon,
+                Text = NormalizeText(item.Text, MaximumLabelTextLength, icon == null, error, "Bottom bar text"),
+                ToolTip = item.Clickable ? NormalizeToolTip(item.ToolTip, error) : string.Empty
+            };
+        }).ToArray();
+    }
+
     internal static PaperAction[] NormalizePaperActions(IReadOnlyList<PaperAction> actions)
     {
         ArgumentNullException.ThrowIfNull(actions);

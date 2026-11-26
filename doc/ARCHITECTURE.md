@@ -334,6 +334,12 @@ Top Bar 是宿主 chrome/presentation capability，不是 Workspace 数据 API�
 
 为什么选择 host-rendered descriptor、Paper/session 与 Global/Runtime 分域，而不是插件直接拥有顶栏控件或把 Top Bar 塞进 Workspace，见 D-022。
 
+#### Protocol 2.5 Bottom Bar
+
+展开的待办与笔记共用宿主绘制的正文底边浮层。声明 `runtime`、`bottomBar`、`papers.read` 和 `bottomBarTargets` 的插件沿用插件管理页的启停状态，无需实体插件纸片。宿主从当前工作区匹配声明的纸片类型，不持久化逐纸片绑定。多个 provider 可分别发布项目；目标移除、插件禁用或 Runtime 结束会撤下相应贡献。全局顶栏与全局快捷键仍依赖实体插件纸片，读写正文仍检查原 Workspace 权限。Web 注册还随 Runtime 文档重置而清除。
+
+每项独立声明侧边、显隐、点击、排序与优先级。排序值越大越靠组外侧，优先级越大越晚省略。两组放不下先合并靠右，仍放不下再从最低优先级省略并在最右显示不可点击的省略号。排序与优先级相同的项目保持稳定顺序。浮层沿用笔记底部比例控件的交互，底距 4 DIP、侧距 12 DIP。比例控件占用宿主保留值 999。取舍见 D-075。
+
 ### 5.5 Edge mini
 
 插件可以提供专属 mini、允许迁移的纯 WPF 正文 View、custom/standard capsule presentation 或 plain-text fallback，但 **Edge 的窗口、queue placement、外层尺寸会话和输入 authority 始终属于宿主**。

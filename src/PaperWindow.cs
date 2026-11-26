@@ -77,7 +77,6 @@ public sealed partial class PaperWindow : Window
     private StackPanel? _topBarActionButtonsHost;
     private TextBlock? _titleText;
     private TextBox? _titleEditBox;
-    private TextBlock? _textZoomIndicator;
     private Border? _capsuleLeftArea;
     private Border? _activeDropRow;
     private Border? _dropIndicatorLine;
@@ -1719,6 +1718,7 @@ public sealed partial class PaperWindow : Window
         RefreshWindowBindingButton();
         RefreshWorkspaceButton();
         UpdateTextZoom();
+        if (_paper.Type != PaperTypes.Note || !BodySupports(PaperBodyCapabilities.TextZoom)) RefreshPaperBottomBar();
         UpdateDeepCapsuleSlotHostTheme();
 
         if (_paper.Type == PaperTypes.Note)
@@ -1792,10 +1792,7 @@ public sealed partial class PaperWindow : Window
             _moreActionsButton.Content = CreateTopBarMoreIcon(_moreActionsButton);
         RefreshCloseButton();
 
-        if (_textZoomIndicator != null)
-        {
-            _textZoomIndicator.FontSize = AppTypography.Scale(10.5);
-        }
+        RefreshPaperBottomBar();
 
         if (_paper.Type == PaperTypes.Note)
         {
@@ -1978,6 +1975,7 @@ public sealed partial class PaperWindow : Window
 
         BuildTopBar();
         BuildBody();
+        BuildPaperBottomBar();
         BuildDragLayer();
 
         BuildCapsuleShell();
@@ -2560,54 +2558,6 @@ public sealed partial class PaperWindow : Window
                 WindowState != WindowState.Minimized);
             RefreshPaperBodyChrome();
         }
-    }
-
-    private void BuildTextZoomOverlay()
-    {
-        var zoomHost = new Border
-        {
-            HorizontalAlignment = HorizontalAlignment.Right,
-            VerticalAlignment = VerticalAlignment.Bottom,
-            Margin = new Thickness(0, 0, 12, 7),
-            Padding = new Thickness(6, 1, 6, 1),
-            CornerRadius = new CornerRadius(RadiusControl),
-            Background = Brushes.Transparent,
-            Cursor = Cursors.Hand,
-            ToolTip = Strings.Get("ToolTipResetTextZoom"),
-            Visibility = Visibility.Collapsed
-        };
-
-        _textZoomIndicator = new TextBlock
-        {
-            Foreground = WeakTextBrush,
-            FontSize = AppTypography.Scale(10.5),
-            FontWeight = FontWeights.SemiBold,
-            Opacity = 0.55,
-            VerticalAlignment = VerticalAlignment.Center
-        };
-
-        zoomHost.Child = _textZoomIndicator;
-        zoomHost.MouseEnter += (_, _) =>
-        {
-            zoomHost.Background = HoverBrush;
-            _textZoomIndicator.Foreground = TextBrush;
-            _textZoomIndicator.Opacity = 1.0;
-        };
-        zoomHost.MouseLeave += (_, _) =>
-        {
-            zoomHost.Background = Brushes.Transparent;
-            _textZoomIndicator.Foreground = WeakTextBrush;
-            _textZoomIndicator.Opacity = 0.55;
-        };
-        zoomHost.MouseLeftButtonUp += (_, e) =>
-        {
-            _controller.SetPaperTextZoom(_paper, 1.0);
-            e.Handled = true;
-        };
-
-        Grid.SetRow(zoomHost, 1);
-        Panel.SetZIndex(zoomHost, 20);
-        _shell.Children.Add(zoomHost);
     }
 
     private void ToggleTopmost()

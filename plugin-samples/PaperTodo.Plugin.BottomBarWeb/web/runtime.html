@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Bottom Bar Counts Runtime</title>
+<script>
+  let targets = new Map();
+  let unsubscribe = () => {};
+  let targetGeneration = 0;
+
+  async function publish(target, generation) {
+    const { paperId, type } = target;
+    const workspace = papertodo.workspace;
+    let items;
+    if (type === 'note') {
+      const note = await workspace.request('notes.get', { paperId });
+      items = note?.contentAvailable
+        ? [{ id: 'characters', text: `${Array.from(note.content).length} chars`, side: 'left', order: 20, priority: 10 }]
+        : [];
+    } else {
+      const todos = await workspace.request('todos.list', { paperId });
+      const open = todos.filter(todo => !todo.done).length;
+      items = [
+        { id: 'remaining', text: `${open} remaining`, side: 'left', order: 20, priority: 10 },
+        { id: 'progress', text: 'Progress', side: 'right', order: 10, priority: 20, clickable: true }
+      ];
+    }
+    if (generation === targetGeneration) await papertodo.bottomBar.setItems(paperId, items);
+  }
+
+  function report(error) {
+    if (error.code !== 'bottom_bar_target_unavailable' && error.code !== 'data_reload_in_progress')
+      console.error(error);
+  }
+
+  async function updateTargets() {
+    const generation = ++targetGeneration;
+    unsubscribe();
+    const list = await papertodo.bottomBar.listTargets();
+    if (generation !== targetGeneration) return;
+    targets = new Map(list.map(target => [target.paperId, target]));
+    if (!list.length) return;
+
+    unsubscribe = papertodo.onHostEvent(['note.changed', 'todo.created', 'todo.changed', 'todo.deleted'], event => {
+      const target = targets.get(event.paperId ?? event.todo?.paperId ?? event.after?.paperId);
+      if (target) void publish(target, generation).catch(report);
+    });
+    for (const target of list) void publish(target, generation).catch(report);
+  }
+
+  async function openProgress({ paper, position }) {
+    const todos = await papertodo.workspace.request('todos.list', { paperId: paper.id });
+    await papertodo.popups.open(position, {
+      entry: 'progress.html',
+      data: { done: todos.filter(todo => todo.done).length, total: todos.length }
+    });
+  }
+
+  papertodo.onEvent(message => {
+    if (message.type === 'initialize' || message.type === 'bottomBarTargetsChanged')
+      void updateTargets().catch(report);
+    if (message.type === 'bottomBarItemInvoked' && message.item.actionId === 'progress')
+      void openProgress(message.item).catch(report);
+  });
+</script>
+</html>

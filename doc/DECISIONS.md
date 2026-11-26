@@ -2226,3 +2226,22 @@ The preview should show an available landing rather than make a target continuou
 **Decision:** 背景混色、拉伸与位置交给 `AppState` 和 `StateStore`，随工作区配置一起保存、备份和迁移。旧的单独偏好无需导入。
 
 **Evidence:** `src/Models.cs`、`src/AppController.SettingsApi.Catalog.cs`、[PR #481](https://github.com/snownico0722/PaperTodo/pull/481)。
+
+---
+
+## D-075 — 用纸片底边浮层承载插件底栏
+
+**Status:** Accepted
+
+### Decision
+
+待办和笔记共用原比例控件风格的浮层。布局由宿主负责。插件声明目标类型（待办、笔记或两者），自行决定向哪些匹配纸片发布轻量项。用户只在插件管理启停整个插件。排序控制摆放，优先级控制空间不足时的取舍。两侧撞上时合并到右侧，无法保留的项目由非交互省略号提示。
+
+### Why
+
+底栏能给已有笔记和待办补充上下文状态和操作，保留完整正文空间和已有编辑交互。同一个 provider Runtime 处理当前工作区内全部匹配纸片；无需为每张纸片做选择，也不把插件绑定写入纸片。多个 provider 独立发布和撤回自己的贡献。顶栏和快捷键继续由它们原有的纸片归属条件控制。
+
+### Evidence
+
+- `src/PaperBottomBarLayout.cs`、`src/PaperWindow.PluginBottomBar.cs`、`src/AppController.PluginBottomBar.cs`。
+- `tests/PaperTodo.LifecycleChecks/PaperBottomBarChecks.cs`、`plugin-samples/PaperTodo.Plugin.BottomBarWeb/`。

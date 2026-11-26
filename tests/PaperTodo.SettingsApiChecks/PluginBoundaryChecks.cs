@@ -21,6 +21,7 @@ internal static partial class Program
         CreationOwnsInitialTodoFields(c, note);
         PartialReminderDeliveryKeepsUnsurfacedItemsPending(c);
         await InitialRuntimeFailureDoesNotRetry(c);
+        await InitialRuntimeFailureDoesNotRetry(c, bottomBar: true);
     }
 
     private static void DeferredPluginEnablementDoesNotAttachEarly(AppController c)
@@ -730,24 +731,25 @@ internal static partial class Program
         }
     }
 
-    private static async Task InitialRuntimeFailureDoesNotRetry(AppController c)
+    private static async Task InitialRuntimeFailureDoesNotRetry(AppController c, bool bottomBar = false)
     {
-        const string id = "tests.initial-failure";
+        var id = bottomBar ? "tests.bottom-bar-lifecycle" : "tests.initial-failure";
         var registry = c.PaperBodyPlugins;
         var descriptors = ReadField<Dictionary<string, PaperBodyPluginDescriptor>>(registry, "_descriptors");
         var loaded = ReadField<IDictionary>(registry, "_loadedNativeByDirectory");
         var path = Path.Combine(AppContext.BaseDirectory, "plugins", id);
-        var manifest = new PaperBodyPluginManifest { Id = id, Kind = "native", ApiVersion = "2.2",
-            Capabilities = ["runtime"], DirectoryPath = path };
-        var descriptor = new PaperBodyPluginDescriptor(id, "Test", "", new Version(1, 0), "2.2", 1,
-            PaperBodyPluginKind.Native, PaperBodyCapabilities.None, PaperTodoPermissionNames.None,
+        var manifest = new PaperBodyPluginManifest { Id = id, Kind = "native", ApiVersion = bottomBar ? "2.5" : "2.2",
+            Capabilities = bottomBar ? ["runtime", "bottomBar"] : ["runtime"],
+            BottomBarTargets = bottomBar ? ["note"] : [], Permissions = bottomBar ? ["papers.read"] : [], DirectoryPath = path };
+        var descriptor = new PaperBodyPluginDescriptor(id, "Test", "", new Version(1, 0), manifest.ApiVersion, 1,
+            PaperBodyPluginKind.Native, PaperBodyCapabilities.None, manifest.Permissions.ToHashSet(StringComparer.Ordinal),
             path, path, "fixture", typeof(BoundaryRuntimePlugin), manifest);
         var loadedType = typeof(PaperBodyPluginRegistry).GetNestedType("LoadedNativePlugin", BindingFlags.NonPublic)!;
         loaded[path] = Activator.CreateInstance(loadedType, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
             null, [path, descriptor, null], null)!;
         descriptors[id] = descriptor;
         var paper = new PaperData { Id = "failure-owner", Type = PaperTypes.Note, BodyProviderId = id, IsVisible = false };
-        c.State.Papers.Add(paper);
+        if (!bottomBar) c.State.Papers.Add(paper);
         try
         {
             BoundaryRuntimePlugin.Configure = null;
@@ -763,6 +765,21 @@ internal static partial class Program
             Invoke(c, "RetryFailedPluginRuntimeAfterSettingsChanged", id);
             Check(slot.GetType().GetProperty("State")!.GetValue(slot)!.ToString() == "Running",
                 "An explicit settings change can start a previously failed runtime.");
+
+            if (bottomBar)
+            {
+                var bars = ReadField<Dictionary<string, PaperPluginRuntimeBottomBarApi>>(c, "_pluginBottomBars");
+                var oldApi = bars[id];
+                var note = oldApi.ListTargets().First();
+                oldApi.SetItems(note.PaperId, [new() { Id = "sample", Text = "Count" }]);
+                Invoke(c, "SetPluginEnabled", id, false);
+                Check(!bars.ContainsKey(id) && oldApi.GetItems(note.PaperId).Count == 0 && !slots.Contains(id),
+                    "Global disable must end the provider and remove its items without an entity paper.");
+                Invoke(c, "SetPluginEnabled", id, true);
+                slot = slots[id]!;
+                Check(bars.TryGetValue(id, out var fresh) && !ReferenceEquals(fresh, oldApi) &&
+                    fresh.GetItems(note.PaperId).Count == 0, "Re-enable starts a clean provider for eligible papers.");
+            }
 
             var runtimeId = (Guid)slot.GetType().GetProperty("RuntimeId")!.GetValue(slot)!;
             var before = BoundaryRuntimePlugin.Starts;
@@ -783,9 +800,10 @@ internal static partial class Program
         }
         finally
         {
-            c.State.Papers.Remove(paper);
+            if (!bottomBar) c.State.Papers.Remove(paper);
+            descriptors.Remove(id);
             c.ReconcilePluginRuntimes();
-            descriptors.Remove(id); loaded.Remove(path);
+            loaded.Remove(path);
         }
     }
 

@@ -13,11 +13,44 @@ internal sealed partial class WebPluginRuntime
         if (payload.ValueKind != JsonValueKind.Object || !payload.TryGetProperty("method", out var methodValue) ||
             methodValue.ValueKind != JsonValueKind.String) return true;
         var method = methodValue.GetString()!;
-        if (!method.StartsWith("paperActions.", StringComparison.Ordinal) &&
+        if (!method.StartsWith("bottomBar.", StringComparison.Ordinal) &&
+            !method.StartsWith("paperActions.", StringComparison.Ordinal) &&
             !method.StartsWith("events.", StringComparison.Ordinal) &&
             !method.StartsWith("popups.", StringComparison.Ordinal)) return true;
         return expectedToken != null && root.TryGetProperty("uiToken", out var token) &&
             token.ValueKind == JsonValueKind.String && token.GetString() == expectedToken;
+    }
+
+    private void OnBottomBarTargetsChanged()
+    {
+        if (CanAcceptPaperMessages)
+            Send(new { type = "bottomBarTargetsChanged" });
+    }
+
+    private object ExecuteBottomBarRequest(string method, JsonElement parameters)
+    {
+        var bottomBar = _bottomBar ?? throw new PaperTodoPluginException(
+            "bottom_bar_unavailable", "Declare the bottomBar Runtime capability to use this API.");
+        if (method == "bottomBar.listTargets") return bottomBar.ListTargets();
+
+        var paperId = WebPluginRuntimeInfrastructure.RequiredString(parameters, "paperId");
+        PaperBottomBarItem[] items;
+        try
+        {
+            var value = RequiredProperty(parameters, "items");
+            if (value.ValueKind != JsonValueKind.Array ||
+                value.GetArrayLength() > PluginContributionPolicy.MaximumBottomBarItemsPerPaper)
+                throw new JsonException("items must be an array of at most eight entries.");
+            items = value.Deserialize<PaperBottomBarItem[]>(WebPluginRuntimeInfrastructure.JsonOptions)!;
+        }
+        catch (Exception ex) when (ex is JsonException or NotSupportedException)
+        {
+            throw new PaperTodoPluginException("invalid_params", ex.GetBaseException().Message);
+        }
+
+        bottomBar.SetItems(paperId, items);
+        bottomBar.SetActionHandler(invocation => Send(new { type = "bottomBarItemInvoked", item = invocation }));
+        return new { updated = items.Length };
     }
 
     private object ExecutePaperActionRequest(string method, JsonElement parameters)
@@ -90,6 +123,7 @@ internal sealed partial class WebPluginRuntime
         _extensionDocumentToken = null;
         ClearHostSubscriptions();
         try { (_papers as PaperPluginRuntimePapersApi)?.ClearWebDocumentCapsuleOverrides(); } catch { }
+        try { _bottomBar?.Clear(); } catch { }
         try { (_workspace as PaperPluginRuntimeWorkspaceApi)?.ResetExtensionUi(); } catch { }
     }
 }

@@ -10,10 +10,10 @@
 新插件使用：
 
 ```json
-"apiVersion": "2.4"
+"apiVersion": "2.5"
 ```
 
-当前宿主最新协议为 `2.4`，并继续兼容 `2.1`～`2.3`。实验性 `2.0` 及更早 manifest 不再兼容加载。新插件应以 `2.4` 为目标；已有插件只要不使用其声明版本之后新增的能力仍可继续运行。
+当前宿主最新协议为 `2.5`，并继续兼容 `2.1`～`2.4`。实验性 `2.0` 及更早 manifest 不再兼容加载。新插件应以 `2.5` 为目标；已有插件只要不使用其声明版本之后新增的能力仍可继续运行。
 
 ### 插件 API 版本历史
 
@@ -23,7 +23,7 @@
 MinimumSupportedApiVersion <= plugin.apiVersion <= CurrentApiVersion
 ```
 
-因此新宿主可以继续加载仍在兼容范围内的旧插件；旧宿主遇到依赖更高 API 的新插件则必须拒绝加载。当前 PaperTodo 支持 **2.1～2.4**。
+因此新宿主可以继续加载仍在兼容范围内的旧插件；旧宿主遇到依赖更高 API 的新插件则必须拒绝加载。当前 PaperTodo 支持 **2.1～2.5**。
 
 | API | 状态 | 主要合同里程碑 |
 | --- | --- | --- |
@@ -32,7 +32,8 @@ MinimumSupportedApiVersion <= plugin.apiVersion <= CurrentApiVersion
 | 2.1 | 当前最低兼容 | 后台统一为单 provider Runtime，Body/Mini 只做前端；包括 Workspace 的 Paper/Todo/Note、Runtime state/Papers、宿主绘制 Top Bar/Todo contribution、全局快捷键与自定义 shortcut action、纸片菜单、笔记图片读取和临时弹窗。 |
 | 2.2 | 继续支持 | 新增跨纸片显示控制、公共软件 Settings API（`settings.read/update`）、settings `type: "action"` 命令按钮、`startupPaper.presentation: "hidden"`、提醒触发状态/事件及 Web Runtime 宿主事件订阅。 |
 | 2.3 | 继续支持 | 顶栏操作新增 `MenuOnly` / `menuOnly`，可仅显示在插件操作菜单。 |
-| 2.4 | 当前最新 | 支持通过 `notes.append` 向内置 Markdown 笔记追加图片，并开放 Runtime 跨纸片定制胶囊。 |
+| 2.4 | 继续支持 | 支持通过 `notes.append` 向内置 Markdown 笔记追加图片，并开放 Runtime 跨纸片定制胶囊。 |
+| 2.5 | 当前最新 | 开放按声明类型作用于笔记或待办的插件底栏。 |
 
 **升版规则：**当前 minor 正式发布后，只要新增向后兼容、插件可观察的新合同（manifest 字段/类型、permission、事件、公开 API surface 或新语义），下一批就升 minor；纯宿主内部实现、性能优化和 bugfix 不升。破坏已有插件合同才升 major。同一个尚未发布的 minor 可以一起收纳多项兼容新增，不需要每加一个字段就连续制造多个版本号。
 
@@ -252,7 +253,7 @@ Native 最终目录只保留运行所需内容。不要分发无必要的 PDB/XM
 | `description` | 插件说明 |
 | `locales` | 可选；覆盖宿主绘制的 manifest/settings 多语言文案，见 §3.4 |
 | `version` | 插件版本，必须能解析为 `Version` |
-| `apiVersion` | 新插件使用 `"2.4"`，兼容 `"2.1"`～`"2.3"` |
+| `apiVersion` | 新插件使用 `"2.5"`，兼容 `"2.1"`～`"2.4"` |
 | `stateVersion` | 宿主代管 JSON 的目标版本；同时用于 per-paper frontend state 和 provider Runtime state，至少为 1 |
 | `maxPaperInstances` | 可选；同一 Provider 最多允许存在的真实 Paper 数。省略默认 `1`，`0` 表示不限制；隐藏/折叠 Paper 仍计数 |
 | `entry` | Web 主页面或 Native 入口 DLL，必须位于插件目录内 |
@@ -260,7 +261,8 @@ Native 最终目录只保留运行所需内容。不要分发无必要的 PDB/XM
 | `miniSize` | 可选，仅与 `miniEntry` 一起使用；Mini 首选尺寸 |
 | `miniMaxSize` | 可选；插件承诺的 Mini 最大容量，用于宿主 bounded capacity 规划 |
 | `runtime` | 可选，仅 Web `runtime`；一个 provider 最多一个 Runtime，省略时默认 `entry` 同目录 `runtime.html` |
-| `capabilities` | 可选：`textZoom`、`noteLinks`，以及生命周期能力 `runtime` |
+| `capabilities` | 可选：`textZoom`、`noteLinks`、`runtime` 和 API 2.5 的 `bottomBar` |
+| `bottomBarTargets` | 声明 `bottomBar` 时必填；非空数组，取值为 `"note"`、`"todo"` 或两者，限定可显示底栏项的纸片类型，不授予创建纸片权限 |
 | `permissions` | 可选；Paper/Todo/Note Workspace 权限 |
 | `advancedSettings` | 可选，默认 `false`；声明 `true` 后启用独立完整设置页 |
 | `primarySettings` | 可选；仅 `advancedSettings: true` 时有效，插件卡片直接显示前 1～3 个设置，省略时默认 3 |
@@ -338,7 +340,7 @@ Native 最终目录只保留运行所需内容。不要分发无必要的 PDB/XM
 规则只有一套：
 
 - 正常可见启动时，`startupPaper` 先按设置创建/恢复真实插件 Paper，前提是宿主已启用该插件；
-- 已启用的 provider 在当前工作区有至少一张真实 Paper 时启动 **一个** Runtime；最后一张离开 provider，或宿主禁用插件时 Dispose；
+- 已启用的 provider 出现首张实体插件纸片时启动 **一个** Runtime；声明 API 2.5 底栏的插件无需等待纸片，即使没有匹配目标也会运行。禁用插件会结束 Runtime；
 - 隐藏、折叠、Body 重建、Mini 回收以及当前没有 `PaperWindow` 都不影响 Runtime；
 - 不存在“每 Paper 后台”协议；多开仍然共用这一个 Runtime，通过 `PaperId` 区分逻辑实例；
 - 插件如果确实需要多个 Worker、线程、子进程或隔离域，自己在 Runtime 内管理；
@@ -747,7 +749,7 @@ Top Bar 有两个明确 owner：
 
 Global action 使用 `Priority` 排序，数值越大越靠前；同优先级先按 provider runtime 注册顺序，再按插件声明顺序，保证稳定。**PaperTodo 自己的宿主 action 不进入这个数值空间，拥有不可被插件覆盖的最高优先级。** 窗口宽度不足时插件 contribution 先让位，不会因为插件声明很多 Global action 而先把宿主 action 挤掉。
 
-正常可见启动时先处理已启用插件的 `startupPaper`。它可能先创建/恢复实体插件 paper；随后宿主按最终实体 paper 集合启动对应 Global runtime。对于已启用的 provider，运行中第一张实体 paper 出现会启动，最后一张被删除或切走 provider 会 Dispose；宿主禁用插件和切换工作区也会释放 Runtime 及其 Global action。删除/隐藏/折叠非最后一张不会撤销 Global action。
+正常可见启动时先处理已启用插件的 `startupPaper`。它可能先创建/恢复实体插件 paper；随后宿主按最终实体 paper 集合启动对应 Global runtime。首张实体插件纸片使 Global action 可用，最后一张被删除或切换 provider 时撤下这些动作。即使 API 2.5 底栏维持 Runtime 也不例外；宿主禁用插件和切换工作区也会释放 Runtime 及其 Global action。删除/隐藏/折叠非最后一张不会撤销 Global action。
 
 Global 点击包含：`TargetPaperId`、`TargetPaperType`、`TargetBodyProviderId`。`TargetBodyProviderId` 只对 Note 有意义；Todo 等非 Note 目标返回空字符串。插件据此通过 Runtime Workspace 读取或修改目标 Markdown/Todo；Top Bar 自己不拥有业务数据接口。
 
@@ -928,6 +930,11 @@ await papertodo.globalTopBar.setActions([
 ```
 
 仅菜单操作不需要图标、不创建顶栏按钮、不占顶栏空间；`ToolTip` 用作菜单文字，为空时显示 `Id`。`Visible`、`Enabled`、排序、数量限制、点击事件及 owner 失效清理沿用原来的规则。它们仍在现有插件操作菜单中，未加入内置快捷的排序／隐藏设置。指定纸片的纯文字 `PaperActions.SetActions(paperId, ...)` 接口保持不变。
+
+
+**插件底栏（API 2.5）**。声明 `runtime`、`bottomBar` 和 `papers.read`。声明 `"bottomBarTargets": ["note", "todo"]` 或只写一种。用户只在「设置 → 插件」启停整个插件。启用后即使没有插件自己的纸片或尚无匹配目标，Runtime 也会启动；已有和新建的匹配纸片都可收到贡献，多个插件可同时作用于同一张纸片，没有逐纸片开关。Native 使用 `context.BottomBar`，Web Runtime 使用 `papertodo.bottomBar`。启动和收到 `TargetsChanged` / `bottomBarTargetsChanged` 时调用 `ListTargets()` / `listTargets()`。用 `SetItems(paperId, items)` / `setItems(paperId, items)` 为任意匹配纸片发布最多八项，传空数组可撤下该纸片的贡献。仅可点击项支持提示文字（`toolTip`）；只读标签忽略该字段，不拦截鼠标。
+
+每项声明 `id`、文字和／或现有顶栏图标、`side`（`left` 或 `right`）、`order`、`priority`、`visible` 与 `clickable`。排序值越大越靠外，优先级越大越晚省略，两项均最高为 998。Native 用 `SetActionHandler` 接收点击，Web 接收 `bottomBarItemInvoked` 的 `message.item`。回调提供项目 ID、当前纸片与点击位置，可以打开插件弹窗。[底栏示例](PaperTodo.Plugin.BottomBarWeb/) 展示笔记字数和可点击的待办进度。
 
 ### 7.6 Protocol 2.1 Todo 与顶栏展示扩展
 
@@ -1295,7 +1302,7 @@ Native 插件是 fully trusted / unsandboxed .NET/WPF 代码，与 PaperTodo 当
 
 ### Manifest / Runtime
 
-- 新插件仍以 `apiVersion: "2.0"` 或更早版本为目标；新开发应使用 `2.4`，已有 `2.1`～`2.3` 插件继续兼容；
+- 新插件仍以 `apiVersion: "2.0"` 或更早版本为目标；新开发应使用 `2.5`，已有 `2.1`～`2.4` 插件继续兼容；
 - 插件目录名和 `id` 不一致；
 - `id` 使用非法字符或宿主保留 ID `data` / `data1`–`data5` / `builtin.markdown`；
 - Web 声明 `runtime`，但默认 `runtime.html` 不存在，或显式 `runtime` 路径不存在/跑出 Web `entry` 静态目录；
@@ -1362,7 +1369,7 @@ Native 插件是 fully trusted / unsandboxed .NET/WPF 代码，与 PaperTodo 当
 
 ## 14. 提交插件前
 
-- 新 `plugin.json` 使用当前目标 `apiVersion: "2.4"`，需要兼容旧宿主时声明对应版本；
+- 新 `plugin.json` 使用当前目标 `apiVersion: "2.5"`，需要兼容旧宿主时声明对应版本；
 - 所有 metadata 只在 `plugin.json` 中声明，Native 入口 DLL 只提供行为实现；
 - 声明 `runtime` 时：Native 实现 `IPaperPluginRuntimeProvider`；Web 默认提供 `entry` 同目录 `runtime.html`，或用 `runtime` 指定同一 Web 静态目录内的其他入口；
 - Runtime 需要插件设置时使用自己的 `context.Settings.Json` + `Settings.Subscribe(...)` / `papertodo.settings.get()` + `settingsChanged`，不借用隐藏 paper session；
