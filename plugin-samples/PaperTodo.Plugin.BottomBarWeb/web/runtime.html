@@ -28,7 +28,7 @@
   }
 
   function report(error) {
-    if (error.code !== 'bottom_bar_not_bound' && error.code !== 'data_reload_in_progress')
+    if (error.code !== 'bottom_bar_target_unavailable' && error.code !== 'data_reload_in_progress')
       console.error(error);
   }
 
@@ -43,7 +43,7 @@
     unsubscribe = papertodo.onHostEvent(['note.changed', 'todo.created', 'todo.changed', 'todo.deleted'], event => {
       const target = targets.get(event.paperId ?? event.todo?.paperId ?? event.after?.paperId);
       if (target) void publish(target, generation).catch(report);
-    }, { paperIds: [...targets.keys()] });
+    });
     for (const target of list) void publish(target, generation).catch(report);
   }
 

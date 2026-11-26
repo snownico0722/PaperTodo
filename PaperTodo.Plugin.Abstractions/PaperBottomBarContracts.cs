@@ -23,7 +23,7 @@ public sealed record PaperBottomBarItem
 
 public sealed record PaperBottomBarTarget(string PaperId, string Type);
 
-/// <summary>API 2.5 Runtime capability. Only targets explicitly bound by the user accept items.
+/// <summary>API 2.5 Runtime capability. Any current paper matching the plugin’s declared bottomBarTargets may receive items.
 /// Use Workspace for content access and change subscriptions under their usual permissions.</summary>
 public interface IPaperPluginBottomBarApi
 {

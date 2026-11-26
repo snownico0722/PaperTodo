@@ -55,7 +55,6 @@ public static class Strings
             ["LabsRestingCapsuleOpacityIncludeMaster"] = ["覆盖主胶囊", "Include master capsule", "マスターカプセルにも適用", "마스터 캡슐에도 적용"],
             ["LabsRestingCapsuleOpacityAlways"] = ["无论是否激活都透明", "Keep transparent while active", "操作中も透明を維持", "활성 상태에서도 투명 유지"],
             ["LabsMcpCopyAiSkill"] = ["复制 AI Skill", "Copy AI skill", "AI Skill をコピー", "AI Skill 복사"],
-            ["MenuPaperBottomBar"] = ["底栏插件", "Bottom bar plugins", "下部バーのプラグイン", "하단 바 플러그인"],
             ["SettingsShowTodoBottomBar"] = ["显示待办底栏", "Show todo bottom bar", "ToDo の下部バーを表示", "할 일 하단 바 표시"],
             ["TipShowTodoBottomBar"] = ["显示底部快速新建区域；拖动待办时这里会变成删除区。关闭后同时隐藏底栏并禁用拖入删除。", "Show the quick-add bar at the bottom of todo papers. While dragging todos it becomes the delete target; turning this off hides the bar and disables drag-to-delete.", "ToDo の下部にクイック追加バーを表示します。ドラッグ中は削除領域に変わります。オフにするとバーを隠し、ドラッグによる削除も無効になります。", "할 일 하단에 빠른 추가 바를 표시합니다. 드래그 중에는 삭제 영역으로 바뀝니다. 끄면 하단 바가 숨겨지고 드래그 삭제도 비활성화됩니다."],
             ["SettingsAutoMoveCompletedTodosToBottom"] = ["已完成待办自动置底", "Move completed todos to bottom", "完了したToDoを下へ移動", "완료된 할 일을 아래로 이동"],

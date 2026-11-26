@@ -13,46 +13,18 @@ public sealed partial class AppController
         descriptor.Manifest?.Capabilities.Contains(PluginBottomBarCapability, StringComparer.Ordinal) == true;
 
     private bool HasPluginRuntimeOwner(PaperBodyPluginDescriptor descriptor) =>
-        HasEntityPluginPaper(descriptor.Id) ||
-        (DeclaresPluginBottomBar(descriptor) && State.Papers.Any(paper => HasBottomBarBinding(paper, descriptor.Id)));
+        DeclaresPluginBottomBar(descriptor) || HasEntityPluginPaper(descriptor.Id);
 
-    // Existing global chrome still needs an entity paper, even when a bottom-bar target
+    // Existing global chrome still needs an entity paper, even when global bottom-bar enablement
     // keeps the same Runtime alive. Other providers retain their existing lifetime check.
     private bool AllowsPluginGlobalChrome(string providerId) =>
         !_pluginBottomBars.ContainsKey(providerId) || HasEntityPluginPaper(providerId);
-
-    internal static bool HasBottomBarBinding(PaperData paper, string providerId) =>
-        paper.BottomBarPluginIds?.Contains(providerId, StringComparer.Ordinal) == true;
-
-    internal IReadOnlyList<PaperBottomBarTarget> GetBottomBarTargets(string providerId) =>
-        State.Papers.Where(paper => HasBottomBarBinding(paper, providerId))
-            .Select(paper => new PaperBottomBarTarget(paper.Id, paper.Type)).ToArray();
-
-    internal void TogglePaperBottomBar(PaperData paper, string providerId)
-    {
-        if (IsExiting || IsDataReloading || !State.Papers.Contains(paper)) return;
-        if (HasBottomBarBinding(paper, providerId))
-        {
-            var remaining = paper.BottomBarPluginIds!.Where(id => id != providerId).ToArray();
-            paper.BottomBarPluginIds = remaining.Length == 0 ? null : remaining;
-        }
-        else
-        {
-            if (!IsPluginEnabled(providerId) || !PaperBodyPlugins.TryGet(providerId, out var descriptor) ||
-                !DeclaresPluginBottomBar(descriptor)) return;
-            paper.BottomBarPluginIds = [.. paper.BottomBarPluginIds ?? [], providerId];
-        }
-
-        MarkDirty();
-        ReconcilePluginRuntimes();
-        RefreshPaperBottomBar(paper.Id);
-    }
 
     private PaperPluginRuntimeBottomBarApi? CreatePluginBottomBar(
         PaperBodyPluginDescriptor descriptor, Func<bool> isActive)
     {
         if (!DeclaresPluginBottomBar(descriptor)) return null;
-        var api = new PaperPluginRuntimeBottomBarApi(this, descriptor.Id, isActive);
+        var api = new PaperPluginRuntimeBottomBarApi(this, descriptor.Id, descriptor.Manifest!.BottomBarTargets, isActive);
         _pluginBottomBars[descriptor.Id] = api;
         return api;
     }
@@ -66,9 +38,9 @@ public sealed partial class AppController
     internal IEnumerable<(PaperPluginRuntimeBottomBarApi Runtime, PaperBottomBarItem Item)> GetPaperBottomBarItems(
         PaperData paper)
     {
-        foreach (var providerId in paper.BottomBarPluginIds ?? [])
+        foreach (var api in _pluginBottomBars.Values)
         {
-            if (!_pluginBottomBars.TryGetValue(providerId, out var api)) continue;
+            if (!api.Supports(paper.Type)) continue;
             foreach (var item in api.GetItems(paper.Id))
                 if (item.Visible) yield return (api, item);
         }
@@ -81,23 +53,27 @@ public sealed partial class AppController
 }
 
 internal sealed class PaperPluginRuntimeBottomBarApi(
-    AppController controller, string providerId, Func<bool> isActive) : IPaperPluginBottomBarApi, IDisposable
+    AppController controller, string providerId, string[] targetTypes, Func<bool> isActive) : IPaperPluginBottomBarApi, IDisposable
 {
     private readonly Dictionary<string, PaperBottomBarItem[]> _items = new(StringComparer.Ordinal);
-    private IReadOnlyList<PaperBottomBarTarget> _targets = controller.GetBottomBarTargets(providerId);
+    private IReadOnlyList<PaperBottomBarTarget> _targets = CollectTargets(controller, targetTypes);
+    internal bool Supports(string type) => targetTypes.Contains(type, StringComparer.Ordinal);
+    private static PaperBottomBarTarget[] CollectTargets(AppController host, string[] types) =>
+        host.State.Papers.Where(p => types.Contains(p.Type, StringComparer.Ordinal))
+            .Select(p => new PaperBottomBarTarget(p.Id, p.Type)).ToArray();
     private Action<PaperActionInvocation>? _action;
     public event Action? TargetsChanged;
     internal string ProviderId => providerId;
 
     public IReadOnlyList<PaperBottomBarTarget> ListTargets() =>
-        OnUi(() => controller.GetBottomBarTargets(providerId));
+        OnUi(() => CollectTargets(controller, targetTypes));
 
     public void SetItems(string paperId, IReadOnlyList<PaperBottomBarItem> items) =>
         OnUi(() =>
         {
             var id = paperId?.Trim();
-            if (id == null || !controller.GetBottomBarTargets(providerId).Any(target => target.PaperId == id))
-                throw new PaperTodoPluginException("bottom_bar_not_bound", "This plugin is not enabled on that paper's bottom bar.");
+            if (id == null || !controller.State.Papers.Any(p => p.Id == id && Supports(p.Type)))
+                throw new PaperTodoPluginException("bottom_bar_target_unavailable", "No current paper of a declared bottom-bar type has this ID.");
             var normalized = PluginContributionPolicy.NormalizeBottomBarItems(items);
             if (_items.TryGetValue(id, out var previous) && previous.SequenceEqual(normalized)) return true;
             if (normalized.Length == 0) _items.Remove(id);
@@ -127,15 +103,12 @@ internal sealed class PaperPluginRuntimeBottomBarApi(
     internal void ReconcileTargets()
     {
         if (!isActive()) return;
-        var current = controller.GetBottomBarTargets(providerId);
+        var current = CollectTargets(controller, targetTypes);
         if (current.SequenceEqual(_targets)) return;
+        var previous = _targets;
         _targets = current;
-        var bound = current.Select(target => target.PaperId).ToHashSet(StringComparer.Ordinal);
-        foreach (var paperId in _items.Keys.Where(id => !bound.Contains(id)).ToArray())
-        {
-            _items.Remove(paperId);
-            controller.RefreshPaperBottomBar(paperId);
-        }
+        foreach (var departed in previous.Except(current))
+            if (_items.Remove(departed.PaperId)) controller.RefreshPaperBottomBar(departed.PaperId);
 
         if (TargetsChanged is { } handlers)
             foreach (Action handler in handlers.GetInvocationList())
@@ -145,7 +118,7 @@ internal sealed class PaperPluginRuntimeBottomBarApi(
 
     internal void Invoke(PaperData paper, PaperBottomBarItem item, PaperPopupPosition? position = null)
     {
-        if (!item.Clickable || !AppController.HasBottomBarBinding(paper, providerId) ||
+        if (!item.Clickable || !Supports(paper.Type) || !controller.State.Papers.Contains(paper) ||
             !GetItems(paper.Id).Contains(item)) return;
         try
         {

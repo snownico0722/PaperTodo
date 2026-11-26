@@ -346,7 +346,7 @@ Choose **Open externally** from the paper's `···` menu (or top bar if pinned)
 
 ---
 
-**Bottom bar plugins.** Open **Bottom bar plugins** in a note or to-do paper menu and check the installed plugins you want to display. Press Tab to focus a bottom-bar button and Space to activate it. Read-only labels do not show tooltips or intercept pointer input. On narrow papers, items join a single group on the right. An ellipsis indicates that some items did not fit.
+**Bottom bar plugins.** Enable or disable a plugin in **Settings → Plugins**. Its bottom-bar items may appear on notes, to-dos, or both, as declared by the plugin. Several plugins can show items on the same paper; there is no per-paper switch. Press Tab to focus a bottom-bar button and Space to activate it. Read-only labels do not show tooltips or intercept pointer input. On narrow papers, items join a single group on the right. An ellipsis indicates that some items did not fit.
 
 
 ## 5. Edge Capsules and Hover Previews

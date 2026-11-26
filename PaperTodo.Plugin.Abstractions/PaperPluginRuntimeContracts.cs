@@ -107,8 +107,8 @@ public interface IPaperPluginRuntimeTopBarLabels
 }
 
 /// <summary>
-/// Context for the one provider-level backend Runtime. The Runtime exists while PaperTodo has at
-/// least one Note uses the provider or one Paper enables its bottom bar. It does not depend on any Paper
+/// Context for the one provider-level backend Runtime. The Runtime exists while the plugin is enabled and
+/// either a Note uses the provider or the plugin declares the API 2.5 bottom bar. It does not depend on any Paper
 /// being visible, expanded, or having a live Body/Mini frontend.
 ///
 /// State is one provider-scoped backend document; a multi-instance plugin keeps its own logical
@@ -161,7 +161,7 @@ public sealed class PaperPluginRuntimeContext
 /// <summary>
 /// Optional Protocol 2.1 Native capability. A plugin declaring manifest capability "runtime"
 /// implements this interface. PaperTodo starts exactly one provider Runtime when the first real
-/// Paper uses the provider or its bottom bar and disposes it when the last owner disappears. If a plugin needs
+/// Paper uses the provider, or immediately for an enabled API 2.5 bottom-bar plugin. If a plugin needs
 /// multiple workers, processes or isolation domains, it owns those internally behind this Runtime.
 /// </summary>
 public interface IPaperPluginRuntimeProvider

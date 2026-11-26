@@ -261,7 +261,8 @@ The current manifest supports:
 | `miniSize` | Optional; used only with `miniEntry`; preferred Mini size |
 | `miniMaxSize` | Optional; maximum Mini capacity promised by the plugin, used for bounded host-capacity planning |
 | `runtime` | Optional, Web Runtime only; at most one Runtime per provider. Defaults to `runtime.html` next to `entry` |
-| `capabilities` | Optional: `textZoom`, `noteLinks`, and the lifecycle capability `runtime` |
+| `capabilities` | Optional: `textZoom`, `noteLinks`, `runtime`, and (API 2.5) `bottomBar` |
+| `bottomBarTargets` | Required for `bottomBar`: a nonempty array containing `"note"`, `"todo"`, or both; selects which existing papers may receive items, not which papers the plugin may create |
 | `permissions` | Optional Paper/Todo/Note Workspace permissions |
 | `advancedSettings` | Optional, default `false`; enables a dedicated full settings page when `true` |
 | `primarySettings` | Optional; effective only with `advancedSettings: true`; shows the first 1–3 settings directly on the plugin card; defaults to 3 |
@@ -339,7 +340,7 @@ Declare a Runtime when the plugin must continue running independently of the Bod
 There is one lifecycle model:
 
 - on normal visible startup, `startupPaper` first creates/restores a real plugin Paper according to settings, provided the plugin is enabled in the host;
-- an enabled provider with at least one real Paper in the active workspace starts **one** Runtime; it is disposed when the final Paper leaves that provider or the host disables the plugin;
+- an enabled provider starts **one** Runtime when its first real Paper appears, or immediately if it declares an API 2.5 bottom bar. Only the latter can keep running without an owner Paper. Disabling the plugin stops it;
 - hiding, collapsing, Body rebuilds, Mini reclamation, or having no current `PaperWindow` does not affect the Runtime;
 - there is no "background per Paper" contract. Multiple Papers still share the single Runtime and use `PaperId` to distinguish logical instances;
 - if a plugin truly needs multiple workers, threads, subprocesses, or isolation domains, it manages them inside its Runtime;
@@ -746,7 +747,7 @@ Top Bar has two explicit owners:
 
 Global actions are ordered by `Priority`, with larger numbers first. Ties are stable: first by provider Runtime registration order, then by declaration order inside the plugin. **PaperTodo's own host actions do not participate in this numeric priority space and always have a higher, non-overridable priority than plugin actions.** When width is insufficient, plugin contributions yield first; declaring many Global actions cannot push host actions out before plugin actions.
 
-On normal visible startup, `startupPaper` is processed first for enabled plugins. It may create/restore a real plugin Paper, after which the host starts Global runtimes according to the final set of real Papers. For an enabled provider, the first real Paper starts the Runtime and the final Paper being deleted or switched to another provider disposes it. Host disablement and workspace switching also dispose the Runtime and its Global actions. Deleting, hiding, or collapsing a non-final Paper does not remove Global actions.
+On normal visible startup, `startupPaper` is processed first for enabled plugins. It may create/restore a real plugin Paper, after which the host starts Global runtimes according to the final set of real Papers. The first real provider Paper enables Global actions and the last departing Paper removes them, even if an API 2.5 bottom bar keeps the Runtime alive. Host disablement and workspace switching also dispose the Runtime and its Global actions. Deleting, hiding, or collapsing a non-final Paper does not remove Global actions.
 
 A Global click contains `TargetPaperId`, `TargetPaperType`, and `TargetBodyProviderId`. `TargetBodyProviderId` is meaningful only for Notes; non-Note targets such as Todos return an empty string. Use these values to read or modify target Markdown/Todo data through Runtime Workspace. Top Bar itself does not own a business-data API.
 
@@ -929,7 +930,7 @@ await papertodo.globalTopBar.setActions([
 Menu-only actions require no icon, create no title-bar button, and reserve no title-bar space. `ToolTip` supplies the menu label, falling back to `Id` when empty. Existing `Visible`, `Enabled`, ordering, count limits, callbacks and owner cleanup still apply. These actions use the existing plugin action menu and do not join the built-in shortcut ordering/hiding settings. The targeted plain-text `PaperActions.SetActions(paperId, ...)` API is unchanged.
 
 
-**Bottom bar (API 2.5).** Declare the `runtime` and `bottomBar` capabilities with `papers.read`. A user binding on an existing note or to-do can start the provider Runtime. Native uses `context.BottomBar` and Web Runtime uses `papertodo.bottomBar`. Use `ListTargets()` / `listTargets()` on startup and when `TargetsChanged` / `bottomBarTargetsChanged` fires. Publish up to eight items per bound paper using `SetItems(paperId, items)` / `setItems(paperId, items)`. Passing an empty array clears that paper's items. Only clickable items accept a tooltip; read-only labels ignore it and let pointer input pass through.
+**Bottom bar (API 2.5).** Declare the `runtime` and `bottomBar` capabilities with `papers.read`. Set `"bottomBarTargets": ["note", "todo"]` (or just one type). Enabling the plugin in Settings → Plugins starts its Runtime even with no plugin-owned paper and no current match. Existing and newly created matching papers are eligible automatically; several plugins can contribute independently. No per-paper switch exists. Native uses `context.BottomBar` and Web Runtime uses `papertodo.bottomBar`. Use `ListTargets()` / `listTargets()` on startup and when `TargetsChanged` / `bottomBarTargetsChanged` fires. Publish up to eight items per matching paper using `SetItems(paperId, items)` / `setItems(paperId, items)`. Passing an empty array clears that paper's items. Only clickable items accept a tooltip; read-only labels ignore it and let pointer input pass through.
 
 Each item has an `id`, text and/or a top-bar-compatible icon, `side` (`left` or `right`), `order`, `priority`, `visible` and `clickable`. Larger order values sit closer to the edge. Larger priorities stay visible longer. Plugin values may be at most 998. Native receives clicks through `SetActionHandler`; Web receives `bottomBarItemInvoked` with `message.item`. The callback contains the item ID, current paper and click position for an optional popup. See [Bottom Bar Counts](PaperTodo.Plugin.BottomBarWeb/) for a note character count and clickable to-do progress example.
 

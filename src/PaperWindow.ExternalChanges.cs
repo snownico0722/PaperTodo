@@ -16,8 +16,6 @@ public sealed partial class PaperWindow
         if (before.Title != _paper.Title || before.BodyHeaderText != _paper.BodyHeaderText ||
             before.BodyCapsuleText != _paper.BodyCapsuleText) RefreshPaperTitle();
         if (before.TextZoom != _paper.TextZoom) UpdateTextZoom();
-        if (!StateReloadModels.Equivalent(before.BottomBarPluginIds, _paper.BottomBarPluginIds))
-            RefreshPaperBottomBar();
         if (before.AlwaysOnTop != _paper.AlwaysOnTop) RefreshEffectiveTopmost();
         if (before.IsCollapsed != _paper.IsCollapsed)
         {

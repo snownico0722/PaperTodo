@@ -89,6 +89,14 @@ internal sealed partial class PaperBodyPluginRegistry
         {
             throw new InvalidDataException("bottomBar requires API 2.5, runtime and papers.read.");
         }
+        var bottomBar = manifest.Capabilities.Contains(AppController.PluginBottomBarCapability, StringComparer.Ordinal);
+        manifest.BottomBarTargets ??= [];
+        if (bottomBar != (manifest.BottomBarTargets.Length != 0) ||
+            manifest.BottomBarTargets.Any(type => type is not (PaperTypes.Note or PaperTypes.Todo)))
+        {
+            throw new InvalidDataException("Declare bottomBarTargets with 'note', 'todo', or both when using bottomBar.");
+        }
+        manifest.BottomBarTargets = manifest.BottomBarTargets.Distinct(StringComparer.Ordinal).ToArray();
         if (manifest.MaxPaperInstances < 0)
         {
             throw new InvalidDataException(

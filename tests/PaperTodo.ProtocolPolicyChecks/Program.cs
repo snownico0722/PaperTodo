@@ -219,6 +219,24 @@ internal static partial class Program
         manifestType.GetProperty("ApiVersion")!.SetValue(settingsPermissionManifest, "2.2");
         validateFeatures.Invoke(null, [settingsPermissionManifest]);
 
+        var bottom = Activator.CreateInstance(manifestType, nonPublic: true)!;
+        manifestType.GetProperty("ApiVersion")!.SetValue(bottom, "2.5");
+        manifestType.GetProperty("Capabilities")!.SetValue(bottom, new[] { "runtime", "bottomBar" });
+        permissionsProperty.SetValue(bottom, new[] { "papers.read" });
+        var targets = manifestType.GetProperty("BottomBarTargets")!;
+        foreach (string[] types in new string[][] { ["note"], ["todo"], ["todo", "note"] })
+        {
+            targets.SetValue(bottom, types);
+            validateFeatures.Invoke(null, [bottom]);
+        }
+        foreach (string[] types in new string[][] { [], ["note", "other"] })
+        {
+            targets.SetValue(bottom, types);
+            try { validateFeatures.Invoke(null, [bottom]); }
+            catch (TargetInvocationException ex) when (ex.InnerException is InvalidDataException) { continue; }
+            throw new InvalidOperationException("Missing or invalid bottomBarTargets was accepted.");
+        }
+
         var validateSettings = registryType.GetMethod(
             "ValidateSettings",
             BindingFlags.Static | BindingFlags.NonPublic)

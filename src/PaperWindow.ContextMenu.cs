@@ -80,8 +80,6 @@ public sealed partial class PaperWindow
                  _controller.IsPluginEnabled(descriptor.Id))))
             menu.Items.Add(BuildPaperBodyProviderMenuItem());
 
-        AttachPaperBottomBarMenu(menu);
-
         if (IsExportablePaper(_paper))
         {
             var export = new MenuItem
@@ -124,28 +122,6 @@ public sealed partial class PaperWindow
             Strings.Get("MenuDelete"),
             (_, _) => DeletePaperFromPaperMenu(),
             isDanger: true));
-    }
-
-    private void AttachPaperBottomBarMenu(ContextMenu menu)
-    {
-        var choices = _controller.PaperBodyPlugins.Descriptors
-            .Where(AppController.DeclaresPluginBottomBar)
-            .Where(provider => _controller.IsPluginEnabled(provider.Id) ||
-                AppController.HasBottomBarBinding(_paper, provider.Id))
-            .Select(provider => (provider.Id, provider.DisplayName)).ToList();
-        foreach (var id in _paper.BottomBarPluginIds ?? [])
-            if (!choices.Any(choice => choice.Id == id)) choices.Add((id, id));
-        if (choices.Count == 0) return;
-
-        var group = new MenuItem { Header = Strings.Get("MenuPaperBottomBar") };
-        foreach (var (id, title) in choices)
-        {
-            var option = MenuItem(title, (_, _) => _controller.TogglePaperBottomBar(_paper, id));
-            option.IsCheckable = true;
-            option.IsChecked = AppController.HasBottomBarBinding(_paper, id);
-            group.Items.Add(option);
-        }
-        menu.Items.Add(group);
     }
 
     private void AttachPluginPaperMenuActions(ContextMenu menu) =>

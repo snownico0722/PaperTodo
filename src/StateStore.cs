@@ -751,12 +751,6 @@ public sealed partial class StateStore
             paper.BodyProviderId = paper.Type == PaperTypes.Note
                 ? NormalizeBodyProviderId(paper.BodyProviderId)
                 : PaperBodyProviderIds.Markdown;
-            if (paper.BottomBarPluginIds is { } bottomBarPluginIds)
-            {
-                var ids = bottomBarPluginIds.Select(id => id?.Trim()).OfType<string>()
-                    .Where(id => id.Length > 0).Distinct(StringComparer.Ordinal).ToArray();
-                paper.BottomBarPluginIds = ids.Length == 0 ? null : ids;
-            }
             // Plugin state is opaque persisted data. Validate it only when that provider starts;
             // load normalization must never replace recoverable bytes with an empty state.
             paper.BodyCapsuleText ??= "";

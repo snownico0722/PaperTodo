@@ -58,28 +58,33 @@ internal static class PaperBottomBarChecks
         state.Papers.Add(new PaperData
         {
             Id = "note-bottom", Type = PaperTypes.Note, Title = "Note",
-            TextZoom = 0.9, Width = 340, Height = 230, X = 140, Y = 140,
-            BottomBarPluginIds = ["checks.bottom-bar"]
+            TextZoom = 0.9, Width = 340, Height = 230, X = 140, Y = 140
         });
         state.Papers.Add(new PaperData
         {
             Id = "todo-bottom", Type = PaperTypes.Todo, Title = "Todo",
-            Width = 340, Height = 230, X = 530, Y = 140,
-            BottomBarPluginIds = ["checks.bottom-bar", "checks.second-bar"]
+            Width = 340, Height = 230, X = 530, Y = 140
         });
     }
 
     internal static void Run(AppController controller, Dictionary<string, PaperWindow> windows)
     {
         // Drive the same Native API a provider receives, with an isolated Runtime lifetime.
-        using var api = new PaperPluginRuntimeBottomBarApi(controller, "checks.bottom-bar", () => true);
+        using var api = new PaperPluginRuntimeBottomBarApi(controller, "checks.bottom-bar", [PaperTypes.Todo, PaperTypes.Note], () => true);
         var runtimes = (Dictionary<string, PaperPluginRuntimeBottomBarApi>)typeof(AppController)
             .GetField("_pluginBottomBars", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(controller)!;
         runtimes.Add(api.ProviderId, api);
-        using var second = new PaperPluginRuntimeBottomBarApi(controller, "checks.second-bar", () => true);
+        using var second = new PaperPluginRuntimeBottomBarApi(controller, "checks.second-bar", [PaperTypes.Todo], () => true);
         runtimes.Add(second.ProviderId, second);
         Require(api.ListTargets().Select(p => p.PaperId).SequenceEqual(new[] { "note-bottom", "todo-bottom" }),
-            "bindings must survive persistence and expose both paper types");
+            "a both-types plugin must see existing notes and todos without bindings");
+        Require(second.ListTargets().Single().PaperId == "todo-bottom", "a todo-only plugin must not list notes");
+        try
+        {
+            second.SetItems("note-bottom", []);
+            throw new InvalidOperationException("a todo-only plugin was allowed to publish on a note");
+        }
+        catch (PaperTodoPluginException ex) when (ex.Code == "bottom_bar_target_unavailable") { }
 
         api.SetItems("note-bottom", [new() { Id = "words", Text = "4 chars", ToolTip = "ignored", Side = PaperBottomBarSide.Left }]);
         api.SetItems("todo-bottom", [new() { Id = "review", Text = "Review", ToolTip = "Open review", Clickable = true }]);
@@ -127,11 +132,25 @@ internal static class PaperBottomBarChecks
 
         var targetChanges = 0;
         api.TargetsChanged += () => targetChanges++;
-        controller.TogglePaperBottomBar(controller.State.Papers.Single(p => p.Id == "todo-bottom"), api.ProviderId);
-        Require(targetChanges == 1 && api.ListTargets().Single().PaperId == "note-bottom" &&
-            review.Parent == null && api.GetItems("todo-bottom").Count == 0 &&
-            ReferenceEquals(other, VisibleButton(todoBar, "Other")) && wordCount.Parent == noteBar,
-            "unbinding must remove that paper's items without touching another provider's same ID or another paper");
+        var added = new PaperData { Id = "added", Type = PaperTypes.Note };
+        controller.State.Papers.Add(added);
+        controller.ReconcilePluginRuntimes();
+        Require(targetChanges == 1 && api.ListTargets().Contains(new(added.Id, PaperTypes.Note)) &&
+            api.GetItems(added.Id).Count == 0, "new eligible papers are targets, not mandatory contributions");
+        api.SetItems(added.Id, [new() { Id = "sample", Text = "Note" }]);
+        added.Type = PaperTypes.Todo;
+        controller.ReconcilePluginRuntimes();
+        Require(targetChanges == 2 && api.GetItems(added.Id).Count == 0 &&
+            second.ListTargets().Any(p => p.PaperId == added.Id), "type changes must invalidate old contributions");
+        api.SetItems(added.Id, [new() { Id = "sample", Text = "Todo" }]);
+        controller.State.Papers.Remove(added);
+        controller.ReconcilePluginRuntimes();
+        Require(targetChanges == 3 && api.GetItems(added.Id).Count == 0, "deleted targets must release their items");
+
+        api.Dispose();
+        Require(review.Parent == null && wordCount.Parent == null &&
+            ReferenceEquals(other, VisibleButton(todoBar, "Other")),
+            "ending a provider must remove its items from all papers without touching another provider's same ID");
         clicked = null;
         review.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, review));
         PressSpace(other);
@@ -158,7 +177,7 @@ internal static class PaperBottomBarChecks
                 });
         }
 
-        Console.WriteLine("PASS note and todo bottom bars retain per-paper bindings and route input");
+        Console.WriteLine("PASS note and todo bottom bars apply global type declarations and route input");
     }
 
     private static void Require(bool condition, string message)

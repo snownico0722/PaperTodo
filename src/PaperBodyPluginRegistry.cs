@@ -60,6 +60,7 @@ internal sealed class PaperBodyPluginManifest
     public PaperBodyPluginMiniSizeManifest? MiniSize { get; set; }
     public PaperBodyPluginMiniSizeManifest? MiniMaxSize { get; set; }
     public string[] Capabilities { get; set; } = [];
+    public string[] BottomBarTargets { get; set; } = [];
     public bool AdvancedSettings { get; set; }
     public int? PrimarySettings { get; set; }
     public PaperBodyPluginSettingCategoryManifest[] SettingCategories { get; set; } = [];

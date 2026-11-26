@@ -16,7 +16,7 @@ async function run() {
     onEvent: callback => { onRuntime = callback; },
     onHostEvent: (names, callback, filter) => {
       assert.deepEqual([...names].sort(), [...events].sort());
-      assert.deepEqual([...filter.paperIds].sort(), ['n', 't']);
+      assert.equal(filter, undefined); // No unbounded ID filter; consult the current target map.
       onChange = callback;
       return () => {};
     },
@@ -48,6 +48,6 @@ async function run() {
   await change({ type: 'todo.deleted', todo: { paperId: 't' } }, 't', '0 remaining');
   note = 'A🐦';
   await change({ type: 'note.changed', paperId: 'n' }, 'n', '2 chars');
-  console.log('PASS bottom bar sample updates bound counts on workspace events');
+  console.log('PASS bottom bar sample updates matching paper counts on workspace events');
 }
 run().catch(error => { console.error(error); process.exitCode = 1; });

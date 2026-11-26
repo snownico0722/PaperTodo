@@ -8,5 +8,6 @@
   "stateVersion": 1,
   "entry": "web/index.html",
   "capabilities": ["runtime", "bottomBar"],
+  "bottomBarTargets": ["note", "todo"],
   "permissions": ["papers.read", "notes.read", "todos.read"]
 }
