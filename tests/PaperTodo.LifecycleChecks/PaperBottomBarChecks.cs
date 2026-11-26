@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using PaperTodo;
@@ -25,9 +26,21 @@ internal static class PaperBottomBarChecks
         var narrow = PaperBottomBarLayout.Plan(entries, 77, 12);
         Require(narrow.Left.Length == 0 && narrow.Right.SequenceEqual(new[] { 1, 2 }) && narrow.Omitted,
             "omission must use global priority independently of order or side");
-        var oneSide = PaperBottomBarLayout.Plan(entries.Take(2).Select(i => i with { Side = PaperBottomBarSide.Left }).ToArray(), 45, 12);
-        Require(oneSide.Left.Length == 0 && oneSide.Right.SequenceEqual(new[] { 1 }) && oneSide.Omitted,
-            "one overflowing side must also align its retained items to the right");
+        foreach (var side in new[] { PaperBottomBarSide.Left, PaperBottomBarSide.Right })
+        {
+            var items = entries.Take(2).Select(i => i with { Side = side }).ToArray();
+            var exact = PaperBottomBarLayout.Plan(items, 57, 12);
+            Require((side == PaperBottomBarSide.Left ? exact.Left : exact.Right).SequenceEqual(new[] { 1, 0 }) && !exact.Omitted,
+                "one side at its exact width must keep its alignment without an ellipsis");
+            var overflow = PaperBottomBarLayout.Plan(items, 44, 12);
+            Require(overflow.Left.Length == 0 && overflow.Right.SequenceEqual(new[] { 1 }) && overflow.Omitted,
+                "one overflowing side must reserve the ellipsis and right-align the highest-priority item");
+            var ellipsisOnly = PaperBottomBarLayout.Plan(items, 12, 12);
+            var noRoom = PaperBottomBarLayout.Plan(items, 11, 12);
+            Require(ellipsisOnly.Left.Length + ellipsisOnly.Right.Length == 0 && ellipsisOnly.Omitted &&
+                noRoom.Left.Length + noRoom.Right.Length == 0 && !noRoom.Omitted,
+                "an overflowing side must not draw outside the available width, even for the ellipsis");
+        }
 
         PaperBottomBarLayoutItem[] tied =
         [
@@ -52,7 +65,7 @@ internal static class PaperBottomBarChecks
         {
             Id = "todo-bottom", Type = PaperTypes.Todo, Title = "Todo",
             Width = 340, Height = 230, X = 530, Y = 140,
-            BottomBarPluginIds = ["checks.bottom-bar"]
+            BottomBarPluginIds = ["checks.bottom-bar", "checks.second-bar"]
         });
     }
 
@@ -63,11 +76,16 @@ internal static class PaperBottomBarChecks
         var runtimes = (Dictionary<string, PaperPluginRuntimeBottomBarApi>)typeof(AppController)
             .GetField("_pluginBottomBars", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(controller)!;
         runtimes.Add(api.ProviderId, api);
+        using var second = new PaperPluginRuntimeBottomBarApi(controller, "checks.second-bar", () => true);
+        runtimes.Add(second.ProviderId, second);
         Require(api.ListTargets().Select(p => p.PaperId).SequenceEqual(new[] { "note-bottom", "todo-bottom" }),
             "bindings must survive persistence and expose both paper types");
 
         api.SetItems("note-bottom", [new() { Id = "words", Text = "4 chars", ToolTip = "ignored", Side = PaperBottomBarSide.Left }]);
         api.SetItems("todo-bottom", [new() { Id = "review", Text = "Review", ToolTip = "Open review", Clickable = true }]);
+        second.SetItems("todo-bottom", [new() { Id = "review", Text = "Other", Clickable = true }]);
+        PaperActionInvocation? otherClick = null;
+        second.SetActionHandler(action => otherClick = action);
         PaperActionInvocation? clicked = null;
         api.SetActionHandler(action => clicked = action);
 
@@ -89,6 +107,16 @@ internal static class PaperBottomBarChecks
             "a passive label must pass through pointer input and never expose a tooltip");
         Require(review.IsHitTestVisible && review.Focusable && review.IsTabStop && (string?)review.ToolTip == "Open review",
             "a clickable item must be a keyboard-accessible button with its own tooltip");
+        var other = VisibleButton(todoBar, "Other");
+        var originalContent = review.Content;
+        todo.Activate();
+        Keyboard.Focus(review);
+        Require(review.IsKeyboardFocused, "the review button must acquire keyboard focus");
+        api.SetItems("todo-bottom", [new() { Id = "review", Text = "Review 2", ToolTip = "Updated", Clickable = true }]);
+        todo.UpdateLayout();
+        Require(ReferenceEquals(review, VisibleButton(todoBar, "Review 2")) && ReferenceEquals(originalContent, review.Content) &&
+            review.IsKeyboardFocused && (string?)review.ToolTip == "Updated" && AutomationProperties.GetName(review) == "Review 2",
+            "a content refresh must update the same focused button and its accessible name in place");
         PressSpace(review);
         Require(clicked?.ActionId == "review" && clicked.Paper.Id == "todo-bottom",
             "click should route to the originating Runtime and target paper");
@@ -101,8 +129,20 @@ internal static class PaperBottomBarChecks
         api.TargetsChanged += () => targetChanges++;
         controller.TogglePaperBottomBar(controller.State.Papers.Single(p => p.Id == "todo-bottom"), api.ProviderId);
         Require(targetChanges == 1 && api.ListTargets().Single().PaperId == "note-bottom" &&
-            !todoBar.Children.OfType<Button>().Any(b => (b.Content as TextBlock)?.Text == "Review"),
-            "detaching one paper must only withdraw its own items");
+            review.Parent == null && api.GetItems("todo-bottom").Count == 0 &&
+            ReferenceEquals(other, VisibleButton(todoBar, "Other")) && wordCount.Parent == noteBar,
+            "unbinding must remove that paper's items without touching another provider's same ID or another paper");
+        clicked = null;
+        review.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, review));
+        PressSpace(other);
+        Require(clicked == null && otherClick?.Paper.Id == "todo-bottom" && otherClick.ActionId == "review",
+            "detached actions must stop routing while the other provider remains usable");
+
+        second.SetItems("todo-bottom", [new() { Id = "review", Text = "Read only", ToolTip = "ignored" }]);
+        todo.UpdateLayout();
+        var passive = todoBar.Children.OfType<Border>().Single(b => (b.Child as TextBlock)?.Text == "Read only");
+        Require(other.Parent == null && !passive.IsHitTestVisible && passive.ToolTip == null,
+            "switching an existing ID to passive must remove button behavior and the tooltip");
 
         static Panel FindBar(PaperWindow window) =>
             (Panel)typeof(PaperWindow).GetField("_bottomBar", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!;
