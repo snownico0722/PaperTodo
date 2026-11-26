@@ -32,7 +32,7 @@ MinimumSupportedApiVersion <= plugin.apiVersion <= CurrentApiVersion
 | 2.1 | 当前最低兼容 | 后台统一为单 provider Runtime，Body/Mini 只做前端；包括 Workspace 的 Paper/Todo/Note、Runtime state/Papers、宿主绘制 Top Bar/Todo contribution、全局快捷键与自定义 shortcut action、纸片菜单、笔记图片读取和临时弹窗。 |
 | 2.2 | 继续支持 | 新增跨纸片显示控制、公共软件 Settings API（`settings.read/update`）、settings `type: "action"` 命令按钮、`startupPaper.presentation: "hidden"`、提醒触发状态/事件及 Web Runtime 宿主事件订阅。 |
 | 2.3 | 继续支持 | 顶栏操作新增 `MenuOnly` / `menuOnly`，可仅显示在插件操作菜单。 |
-| 2.4 | 继续支持 | 支持通过 `notes.append` 向内置 Markdown 笔记追加图片。 |
+| 2.4 | 继续支持 | 支持通过 `notes.append` 向内置 Markdown 笔记追加图片，并开放 Runtime 跨纸片定制胶囊。 |
 | 2.5 | 当前最新 | 开放按声明类型作用于笔记或待办的插件底栏。 |
 
 **升版规则：**当前 minor 正式发布后，只要新增向后兼容、插件可观察的新合同（manifest 字段/类型、permission、事件、公开 API surface 或新语义），下一批就升 minor；纯宿主内部实现、性能优化和 bugfix 不升。破坏已有插件合同才升 major。同一个尚未发布的 minor 可以一起收纳多项兼容新增，不需要每加一个字段就连续制造多个版本号。
@@ -424,12 +424,12 @@ public sealed class MyPlugin : IPaperBodyPlugin, IPaperPluginRuntimeProvider
 
 - `Settings`：插件在当前工作区内共享的设置 + 变更订阅；
 - `State`：provider Runtime 自己的一份持久 JSON；
-- `Papers`：列出当前 provider 的逻辑 Paper，按 `paperId` 设置长期 presentation、向 Body 发消息、接收 Paper 增删/前端消息；Runtime 启动时先 `List()` 取快照，再 `Subscribe(...)` 接收增量，订阅不会补发既有 Paper；
+- `Papers`：列出当前 provider 的逻辑 Paper，按 `paperId` 设置长期 presentation、向 Body 发消息、接收 Paper 增删/前端消息。API 2.4 的 `SetCapsulePresentation` 也可作用于当前工作区的任意纸片。Runtime 启动时先 `List()` 取快照，再 `Subscribe(...)` 接收增量，订阅不会补发既有 Paper；
 - `Workspace`：按权限访问当前活动工作区；
 - `GlobalTopBar` / `GlobalShortcuts`；
 - `TodoActions` / `TopBarLabels`：Protocol 2.1 的宿主绘制 contribution。
 
-Web Runtime 获得对应的 `papertodo.settings`、`papertodo.state`、`papertodo.papers`、`papertodo.workspace` 和 root `papertodo.request(method, params)`。`state` 读写 provider Runtime state；`papers` 只管理属于当前 provider 的逻辑 Paper；`workspace` 按权限访问当前活动工作区的数据。一个 provider 只创建一个隐藏 Runtime WebView。
+Web Runtime 获得对应的 `papertodo.settings`、`papertodo.state`、`papertodo.papers`、`papertodo.workspace` 和 root `papertodo.request(method, params)`。`state` 读写 provider Runtime state，`papers` 管理当前 provider 的逻辑 Paper 并提供胶囊定制，`workspace` 按权限访问当前活动工作区的数据。一个 provider 只创建一个隐藏 Runtime WebView。
 
 因此两个 `papers.list` 含义不同：`papertodo.papers.list()` 只返回当前 provider 的 Runtime Paper 快照，`papertodo.workspace.request('papers.list')` 返回当前权限可见的 Workspace Paper。root `papertodo.request(...)` 是底层 Runtime transport；日常代码优先使用上面的分组 API，避免同名 method 混淆。
 
@@ -1060,6 +1060,14 @@ Native session 可实现 `IPaperCapsuleViewProvider`，由 `CreateCapsuleView(Pa
 - 同一 session/geometry 下宿主缓存 View，实时状态应原地刷新，不要靠持续重建 View。
 
 Web 插件不提供 WPF 自定义胶囊，只使用宿主绘制的标准 presentation。
+
+### 8.3 定制任意纸片的胶囊（API 2.4）
+
+插件 Runtime 可以按 ID 定制现有待办、Markdown 笔记或其他插件纸片的胶囊。Native 调用 `context.Papers.SetCapsulePresentation(paperId, presentation)`，Web 调用 `await papertodo.papers.setCapsulePresentation(paperId, presentation)`。有 `papers.read` 权限时，可以用 `Workspace.ListPapers()` 或 `papertodo.workspace.request('papers.list')` 查工作区纸片 ID。
+
+Native 自绘调用 `context.CapsuleViews.SetCapsuleView(paperId, presentation, createView)`。工厂在 UI Dispatcher 上收到目标胶囊的 surface、尺寸和主题，沿用上面的 WPF 视图规则。连续更新时可以复用同一个工厂，尺寸相同的视图会保持缓存。标准 presentation 仍用于尺寸计算和渲染回退。
+
+每张纸片同时生效一份覆盖，由最后发布的 Runtime 持有。通过同一接口传入 `null` 可以清除自己的覆盖，Runtime 结束或 Web 文档被替换时也会清除，恢复目标原有胶囊。覆盖仅存在于当前运行期间，不写入目标的标题、正文或插件状态。
 
 ## 9. Edge Mini
 

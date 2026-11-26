@@ -229,7 +229,7 @@ A todo item can act as a shortcut to another paper or to a local file or folder.
 
 ### 3.5 Todo Reminders
 
-Turn on reminders under "Settings → Notes & Todos → Todo reminders", then click the row's bell button or right-click the item to set a reminder:
+Todo reminders are on by default. Right-click a todo to set a reminder. To show the bell beside each todo, turn on **Show inline reminder buttons** under **Settings → Notes & Todos → Todo reminders**.
 
 - **Presets**: Choose a minute/hour interval, this evening, or tomorrow morning.
 - **Custom time**: Enter a specific future date and time.

@@ -106,6 +106,20 @@ public interface IPaperPluginRuntimeTopBarLabels
     void Clear();
 }
 
+/// <summary>API 2.4 Native Runtime capsule views for existing Papers in the current workspace.</summary>
+public interface IPaperPluginRuntimeCapsuleViews
+{
+    /// <summary>
+    /// The factory runs on the UI dispatcher and returns a fresh, unparented pure-WPF view
+    /// for each surface. The host uses the standard presentation for measurement and fallback.
+    /// Pass a null presentation to remove the Runtime override.
+    /// </summary>
+    void SetCapsuleView(
+        string paperId,
+        PaperCapsulePresentation? presentation,
+        Func<PaperCapsuleViewContext, System.Windows.FrameworkElement?>? createView = null);
+}
+
 /// <summary>
 /// Context for the one provider-level backend Runtime. The Runtime exists while the plugin is enabled and
 /// either a Note uses the provider or the plugin declares the API 2.5 bottom bar. It does not depend on any Paper
@@ -134,6 +148,9 @@ public sealed class PaperPluginRuntimeContext
     public required IPaperGlobalShortcutApi GlobalShortcuts { get; init; }
 
     public IPaperPluginBottomBarApi? BottomBar { get; init; }
+
+    public IPaperPluginRuntimeCapsuleViews CapsuleViews => Papers as IPaperPluginRuntimeCapsuleViews
+        ?? throw new InvalidOperationException("This host does not expose Runtime capsule views.");
 
     public IPaperPluginPaperActions PaperActions => Workspace as IPaperPluginPaperActions
         ?? throw new InvalidOperationException("This host does not expose paper menu actions.");

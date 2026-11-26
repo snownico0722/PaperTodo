@@ -22,7 +22,7 @@ This log is written for general and power users alike. It focuses on user-facing
 
 #### Settings & Appearance
 
-- **Defaults for new users.** The top bar shows New Note and New Todo by default, and notes use Full Markdown rendering. Upgrades from 3.x switch the old Enhanced mode to Full.
+- **Defaults for new users.** The top bar shows New Note and New Todo by default, and notes use Full Markdown rendering. Todo reminders are on by default. Inline bell buttons are hidden by default, and you can set reminders from a todo's context menu. Upgrades from 3.x switch the old Enhanced mode to Full.
 
 - **Note line spacing and to-do item spacing.** Both controls are shown only in Advanced mode, with independent Small, Medium and Large levels. Use Tab to reach each selector and the arrow keys to switch levels. Changes apply immediately. Medium preserves the previous layout.
 - **Settings visibility and shortcuts.** Normal mode now hides Data Handling and the local MCP interface; these settings remain available in Advanced mode. Outside Advanced mode, the Run Script option is also hidden from shortcut settings without disabling an already-configured shortcut. New installations hide Run Script by default, and users can show it manually.
@@ -45,7 +45,7 @@ This log is written for general and power users alike. It focuses on user-facing
 
 - **Paper bottom bar (Plugin API 2.5).** Enable a plugin in Settings → Plugins; it can add items to every matching note or to-do, alongside other plugins. Compact status and action items share the bottom edge with the note zoom indicator.
 
-- **Plugin API 2.4.** Native and Web plugins with `notes.append` can add images to existing Markdown notes. Plugins written for 2.1 through 2.3 remain compatible.
+- **Plugin API 2.4.** Native and Web plugins can customize the capsule content of any paper in the workspace. Native plugins can also draw their own capsule content. Plugins with `notes.append` can add images to existing Markdown notes. Plugins written for 2.1 through 2.3 remain compatible.
 - **Body plugin guidance and menu visibility.** Notes show the **Body type** menu when an enabled third-party body plugin is available, or when the menu is needed to recover a note using a no-longer-available plugin. The Plugins page explains plugin-provided body types and that note content is preserved when switching back to Markdown.
 
 #### Edge Previews & Capsules
