@@ -1382,6 +1382,7 @@ internal static partial class Program
         var second = NewState();
         second.Theme = "light"; second.UiLanguage = "ja-JP";
         second.McpEnabled = second.McpAllowFullWrites = false;
+        second.ExperimentalTodoReminders = false; // Exercise stopping a reminder when leaving inherited settings.
         second.Papers.Single(p => p.Id == "todo").Items[0].ReminderAt = DateTimeOffset.Now.AddDays(1);
         // Reuse IDs deliberately: a slot boundary must not reuse old windows, undo or bitmaps.
         string imageId;
