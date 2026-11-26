@@ -50,6 +50,8 @@ try {
 
     Write-Host '
     === Check Web settings action behavior ==='
+    node ./tests/PaperTodo.ProtocolPolicyChecks/BottomBarSampleChecks.cjs
+    if ($LASTEXITCODE -ne 0) { throw "Bottom bar sample behavior check failed: $LASTEXITCODE" }
     node ./tests/PaperTodo.ProtocolPolicyChecks/SettingActionSampleChecks.cjs
     if ($LASTEXITCODE -ne 0) { throw "Plugin sample behavior check failed: $LASTEXITCODE" }
 

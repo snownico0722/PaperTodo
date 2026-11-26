@@ -40,7 +40,7 @@
     targets = new Map(list.map(target => [target.paperId, target]));
     if (!list.length) return;
 
-    unsubscribe = papertodo.onHostEvent(['noteChanged', 'todoCreated', 'todoChanged', 'todoDeleted'], event => {
+    unsubscribe = papertodo.onHostEvent(['note.changed', 'todo.created', 'todo.changed', 'todo.deleted'], event => {
       const target = targets.get(event.paperId ?? event.todo?.paperId ?? event.after?.paperId);
       if (target) void publish(target, generation).catch(report);
     }, { paperIds: [...targets.keys()] });
