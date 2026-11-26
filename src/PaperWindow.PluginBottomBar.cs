@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -9,6 +10,7 @@ namespace PaperTodo;
 public sealed partial class PaperWindow
 {
     private PaperBottomBarOverlay? _bottomBar;
+    private static readonly Style BottomBarButtonStyle = BuildIconButtonStyle();
 
     private void BuildPaperBottomBar()
     {
@@ -36,20 +38,20 @@ public sealed partial class PaperWindow
                 ToolTip = Strings.Get("ToolTipResetTextZoom"),
                 Order = 999, Priority = 999, Clickable = true
             };
-            _bottomBar.Add(zoom, CreateBottomBarItem(zoom, () => _controller.SetPaperTextZoom(_paper, 1.0)));
+            _bottomBar.Add(zoom, CreateBottomBarItem(zoom, _ => _controller.SetPaperTextZoom(_paper, 1.0)));
         }
 
         foreach (var (runtime, item) in _controller.GetPaperBottomBarItems(_paper)
             .OrderBy(entry => entry.Runtime.ProviderId, StringComparer.Ordinal)
             .ThenBy(entry => entry.Item.Id, StringComparer.Ordinal))
         {
-            _bottomBar.Add(item, CreateBottomBarItem(item, () => runtime.Invoke(_paper, item)));
+            _bottomBar.Add(item, CreateBottomBarItem(item, position => runtime.Invoke(_paper, item, position)));
         }
 
         _bottomBar.SetEllipsis(CreateBottomBarItem(new PaperBottomBarItem { Text = "…" }, null));
     }
 
-    private Border CreateBottomBarItem(PaperBottomBarItem item, Action? invoke)
+    private FrameworkElement CreateBottomBarItem(PaperBottomBarItem item, Action<PaperPopupPosition?>? invoke)
     {
         var text = new TextBlock
         {
@@ -71,32 +73,42 @@ public sealed partial class PaperWindow
             content = row;
         }
 
-        var border = new Border
+        content.Opacity = 0.55;
+        var padding = new Thickness(6, 1, 6, 1);
+        if (!item.Clickable)
+            return new Border
+            {
+                Padding = padding, Child = content, IsHitTestVisible = false, ClipToBounds = true,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+        var button = new Button
         {
-            Padding = new Thickness(6, 1, 6, 1), CornerRadius = new CornerRadius(RadiusControl),
-            Child = content, IsHitTestVisible = item.Clickable, ClipToBounds = true,
-            Background = Brushes.Transparent, VerticalAlignment = VerticalAlignment.Center,
+            Style = BottomBarButtonStyle, FontFamily = FontFamily, Padding = padding, Content = content,
+            Focusable = true, IsTabStop = true, ClipToBounds = true, VerticalAlignment = VerticalAlignment.Center,
             ToolTip = item.ToolTip.Length == 0 ? null : item.ToolTip
         };
-        content.Opacity = 0.55;
-        if (item.Clickable)
+        AutomationProperties.SetName(button, item.Text.Length > 0 ? item.Text :
+            item.ToolTip.Length > 0 ? item.ToolTip : item.Id);
+        void UpdateHighlight(object sender, DependencyPropertyChangedEventArgs e)
         {
-            border.Cursor = Cursors.Hand;
-            border.MouseEnter += (_, _) =>
-            {
-                border.Background = HoverBrush;
-                text.Foreground = TextBrush;
-                content.Opacity = 1;
-            };
-            border.MouseLeave += (_, _) =>
-            {
-                border.Background = Brushes.Transparent;
-                text.Foreground = WeakTextBrush;
-                content.Opacity = 0.55;
-            };
-            border.MouseLeftButtonUp += (_, e) => { invoke?.Invoke(); e.Handled = true; };
+            var active = button.IsMouseOver || button.IsKeyboardFocused;
+            text.Foreground = active ? TextBrush : WeakTextBrush;
+            content.Opacity = active ? 1 : 0.55;
         }
-        return border;
+        button.IsMouseOverChanged += UpdateHighlight;
+        button.IsKeyboardFocusedChanged += UpdateHighlight;
+        button.Click += (_, _) =>
+        {
+            PaperPopupPosition? position = null;
+            if (InputManager.Current.MostRecentInputDevice is KeyboardDevice && PresentationSource.FromVisual(button) != null)
+            {
+                var point = button.PointToScreen(new Point(button.ActualWidth / 2, button.ActualHeight));
+                position = new PaperPopupPosition(point.X, point.Y);
+            }
+            invoke?.Invoke(position);
+        };
+        return button;
     }
 
     private sealed class PaperBottomBarOverlay : Panel

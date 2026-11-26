@@ -66,8 +66,8 @@ internal static class PaperBottomBarChecks
         Require(api.ListTargets().Select(p => p.PaperId).SequenceEqual(new[] { "note-bottom", "todo-bottom" }),
             "bindings must survive persistence and expose both paper types");
 
-        api.SetItems("note-bottom", [new() { Id = "words", Text = "4 chars", Side = PaperBottomBarSide.Left }]);
-        api.SetItems("todo-bottom", [new() { Id = "review", Text = "Review", Clickable = true }]);
+        api.SetItems("note-bottom", [new() { Id = "words", Text = "4 chars", ToolTip = "ignored", Side = PaperBottomBarSide.Left }]);
+        api.SetItems("todo-bottom", [new() { Id = "review", Text = "Review", ToolTip = "Open review", Clickable = true }]);
         PaperActionInvocation? clicked = null;
         api.SetActionHandler(action => clicked = action);
 
@@ -78,38 +78,45 @@ internal static class PaperBottomBarChecks
 
         var noteBar = FindBar(note);
         var todoBar = FindBar(todo);
-        var zoom = VisibleItem(noteBar, "90%");
-        var wordCount = VisibleItem(noteBar, "4 chars");
-        var review = VisibleItem(todoBar, "Review");
+        var zoom = VisibleButton(noteBar, "90%");
+        var wordCount = noteBar.Children.OfType<Border>().Single(b => b.IsVisible && (b.Child as TextBlock)?.Text == "4 chars");
+        var review = VisibleButton(todoBar, "Review");
         Require(noteBar.Margin.Bottom == 4 && noteBar.Margin.Right == 12 &&
             zoom.TranslatePoint(new Point(), noteBar).X > wordCount.TranslatePoint(new Point(), noteBar).X,
             "note must keep passive text to the left and zoom to the right");
-        Require(!wordCount.IsHitTestVisible && review.IsHitTestVisible,
-            "passive text should pass through pointer input");
-        Click(review);
+        Require(!wordCount.IsHitTestVisible && !wordCount.Focusable && wordCount.ToolTip == null &&
+            api.GetItems("note-bottom").Single().ToolTip == string.Empty,
+            "a passive label must pass through pointer input and never expose a tooltip");
+        Require(review.IsHitTestVisible && review.Focusable && review.IsTabStop && (string?)review.ToolTip == "Open review",
+            "a clickable item must be a keyboard-accessible button with its own tooltip");
+        PressSpace(review);
         Require(clicked?.ActionId == "review" && clicked.Paper.Id == "todo-bottom",
             "click should route to the originating Runtime and target paper");
-        Click(zoom);
+        zoom.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, zoom));
         Require(controller.State.Papers.Single(p => p.Id == "note-bottom").TextZoom == 1 &&
-            !noteBar.Children.OfType<Border>().Any(b => (b.Child as TextBlock)?.Text == "90%"),
+            !noteBar.Children.OfType<Button>().Any(b => (b.Content as TextBlock)?.Text == "90%"),
             "text zoom should reset and hide when clicked");
 
         var targetChanges = 0;
         api.TargetsChanged += () => targetChanges++;
         controller.TogglePaperBottomBar(controller.State.Papers.Single(p => p.Id == "todo-bottom"), api.ProviderId);
         Require(targetChanges == 1 && api.ListTargets().Single().PaperId == "note-bottom" &&
-            !todoBar.Children.OfType<Border>().Any(b => (b.Child as TextBlock)?.Text == "Review"),
+            !todoBar.Children.OfType<Button>().Any(b => (b.Content as TextBlock)?.Text == "Review"),
             "detaching one paper must only withdraw its own items");
 
         static Panel FindBar(PaperWindow window) =>
             (Panel)typeof(PaperWindow).GetField("_bottomBar", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!;
-        static Border VisibleItem(Panel panel, string text) =>
-            panel.Children.OfType<Border>().Single(b => b.IsVisible && (b.Child as TextBlock)?.Text == text);
-        static void Click(Border border) =>
-            border.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, Environment.TickCount, MouseButton.Left)
-            {
-                RoutedEvent = UIElement.MouseLeftButtonUpEvent
-            });
+        static Button VisibleButton(Panel panel, string text) =>
+            panel.Children.OfType<Button>().Single(b => b.IsVisible && (b.Content as TextBlock)?.Text == text);
+        static void PressSpace(Button button)
+        {
+            var source = PresentationSource.FromVisual(button)!;
+            foreach (var routedEvent in new[] { Keyboard.KeyDownEvent, Keyboard.KeyUpEvent })
+                button.RaiseEvent(new KeyEventArgs(Keyboard.PrimaryDevice, source, Environment.TickCount, Key.Space)
+                {
+                    RoutedEvent = routedEvent
+                });
+        }
 
         Console.WriteLine("PASS note and todo bottom bars retain per-paper bindings and route input");
     }

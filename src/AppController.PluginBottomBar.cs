@@ -143,14 +143,14 @@ internal sealed class PaperPluginRuntimeBottomBarApi(
                 catch (Exception ex) { Trace.TraceWarning("Bottom bar targets callback failed ({0}): {1}", providerId, ex.GetBaseException()); }
     }
 
-    internal void Invoke(PaperData paper, PaperBottomBarItem item)
+    internal void Invoke(PaperData paper, PaperBottomBarItem item, PaperPopupPosition? position = null)
     {
         if (!item.Clickable || !AppController.HasBottomBarBinding(paper, providerId) ||
             !GetItems(paper.Id).Contains(item)) return;
         try
         {
             _action?.Invoke(new PaperActionInvocation(item.Id, controller.CapturePaperSnapshot(paper),
-                PluginPopupHost.CapturePosition()));
+                position ?? PluginPopupHost.CapturePosition()));
         }
         catch (Exception ex)
         {

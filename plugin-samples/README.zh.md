@@ -931,7 +931,7 @@ await papertodo.globalTopBar.setActions([
 仅菜单操作不需要图标、不创建顶栏按钮、不占顶栏空间；`ToolTip` 用作菜单文字，为空时显示 `Id`。`Visible`、`Enabled`、排序、数量限制、点击事件及 owner 失效清理沿用原来的规则。它们仍在现有插件操作菜单中，未加入内置快捷的排序／隐藏设置。指定纸片的纯文字 `PaperActions.SetActions(paperId, ...)` 接口保持不变。
 
 
-**插件底栏（API 2.5）**。声明 `runtime`、`bottomBar` 和 `papers.read`。用户可在已有待办或笔记绑定插件底栏，此绑定可启动插件 Runtime。Native 使用 `context.BottomBar`，Web Runtime 使用 `papertodo.bottomBar`。启动和收到 `TargetsChanged` / `bottomBarTargetsChanged` 时调用 `ListTargets()` / `listTargets()`。用 `SetItems(paperId, items)` / `setItems(paperId, items)` 为已绑定的纸片发布最多八项，传空数组可撤下该纸片的贡献。
+**插件底栏（API 2.5）**。声明 `runtime`、`bottomBar` 和 `papers.read`。用户可在已有待办或笔记绑定插件底栏，此绑定可启动插件 Runtime。Native 使用 `context.BottomBar`，Web Runtime 使用 `papertodo.bottomBar`。启动和收到 `TargetsChanged` / `bottomBarTargetsChanged` 时调用 `ListTargets()` / `listTargets()`。用 `SetItems(paperId, items)` / `setItems(paperId, items)` 为已绑定的纸片发布最多八项，传空数组可撤下该纸片的贡献。仅可点击项支持提示文字（`toolTip`）；只读标签忽略该字段，不拦截鼠标。
 
 每项声明 `id`、文字和／或现有顶栏图标、`side`（`left` 或 `right`）、`order`、`priority`、`visible` 与 `clickable`。排序值越大越靠外，优先级越大越晚省略，两项均最高为 998。Native 用 `SetActionHandler` 接收点击，Web 接收 `bottomBarItemInvoked` 的 `message.item`。回调提供项目 ID、当前纸片与点击位置，可以打开插件弹窗。[底栏示例](PaperTodo.Plugin.BottomBarWeb/) 展示笔记字数和可点击的待办进度。
 

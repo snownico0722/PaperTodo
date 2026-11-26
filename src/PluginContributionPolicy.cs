@@ -38,7 +38,7 @@ internal static class PluginContributionPolicy
                 Id = id,
                 Icon = icon,
                 Text = NormalizeText(item.Text, MaximumLabelTextLength, icon == null, error, "Bottom bar text"),
-                ToolTip = NormalizeToolTip(item.ToolTip, error)
+                ToolTip = item.Clickable ? NormalizeToolTip(item.ToolTip, error) : string.Empty
             };
         }).ToArray();
     }
