@@ -309,6 +309,8 @@ Bold, italic, strikethrough, and links can be combined, and plain `http://` / `h
 
 Images appear as Markdown references in the text while their binary data is stored in the current workspace's image database: `note-assets.lmdb` for the main workspace (1), and `note-assets2.lmdb`–`note-assets5.lmdb` for secondary workspaces 2–5. Right-click a rendered image to copy it or delete its reference. Always back up and migrate a workspace's text data and image database together.
 
+Select note content with images to copy or cut it and paste it into another workspace. If an image cannot be imported, PaperTodo keeps its reference as text and lets you know.
+
 **Local AI image import and MCP reads**: With MCP enabled and additive writes allowed, you can **append an image to an existing built-in Markdown note**. Images follow the existing format, compression, dimension, and image-database capacity limits. The result includes an image ID and Markdown reference.
 
 - **Image writes use only the local import command**: Clients that can execute local programs, such as Codex or Claude Code, run `PaperTodo.exe --import-note-image --paper-id <note-id> [--image-name <name>]`. The calling program obtains the original image bytes, writes them to the child process's binary standard input, and closes the input when finished. The limit is 4 MiB. The command does not accept an image file path, URL, Base64 text, or data URI. It uses the existing named-pipe connection internally and returns only a short result to the model; **no Base64 image-write tool is exposed to the model**.

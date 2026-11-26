@@ -37,6 +37,9 @@ This log is written for general and power users alike. It focuses on user-facing
 
 - A recovered workspace can store its first image without a restart when it has no existing image references. Notes with images can also be moved into that workspace.
 - Reloading or merging workspace data now refreshes image protection so new images do not reuse IDs that existing notes or recovery records still reference.
+- Pasting note content into another workspace brings along its images. Unavailable images are kept as text and the rest of the paste continues.
+- Notes at the length limit with an image at the end can be reloaded and recovered. They also no longer block workspace changes.
+- During a data merge, settings changes that write the same data file wait for the caller to retry after the merge finishes.
 
 #### Plugins & Body Types
 

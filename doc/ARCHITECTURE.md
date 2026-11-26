@@ -16,6 +16,7 @@ PaperTodo 是 Windows 桌面“纸片”应用。当前技术路线围绕几个�
 - **WPF 是主 UI / shape owner，native/DirectComposition 只承担确有必要的 Windows 边界能力。** 不把 compositor 扩成第二套 UI renderer。
 - **插件贡献内容/动作意图，宿主持有产品 chrome 与关键生命周期 authority。** Capsule、Edge Mini、Top Bar 都沿用这一方向；插件不能因为获得扩展点就接管 PaperWindow、Edge HWND 或顶栏 WPF tree。
 - **持久化按数据生命周期和失败语义分域。** 核心状态、图片资产、插件状态分别由各自 store 管理；破坏性恢复/回收采用保守策略。
+- **失败尽量留在受影响的范围内。** 功能不支持、资源缺失或操作失败时，优先保留已有数据和仍可用的功能。能独立完成的部分继续完成，无法安全提交的部分保留原状，并在结果发生变化时给出清楚的反馈。
 - **当前 Architecture 只记录已经确立的方向。** 未确认的未来方案、实验候选和一次性 workaround 不写成当前架构。
 
 技术基础：
@@ -204,6 +205,8 @@ Edge 展开记忆保留原有窗口 DIP 字段，并用可选 `DeepCapsuleExpand
 ### 4.3 图片资产
 
 图片二进制不进入 `data.json`。`NoteImageStore` 统一串行化 LMDB 访问，外部业务代码不直接拥有 LMDB transaction authority。
+
+笔记复制和剪切通过剪贴板携带图片来源和可用的编码数据。跨工作区粘贴由目标图片库分配编号。无法导入的引用降级为普通文字，其余内容照常粘贴。正文长度校验与编辑器共用末尾图片锚点换行的豁免，目录更新、重载和恢复可读取编辑器在上限处保存的完整笔记。
 
 Markdown 中的 Note 图片只通过 PaperTodo 内部 `i:` asset URI 引用宿主管理的图片；网络图片或任意外部图片不是当前 Note 图片资产协议的一部分。
 

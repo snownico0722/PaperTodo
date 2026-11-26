@@ -29,8 +29,19 @@ internal static partial class ClipboardImageChecks
         Require(rtf?.Contains(@"\pngblip", StringComparison.Ordinal) == true,
             "Selection copy must retain an RTF image.");
         AssertSystemClipboard();
+
+        using var destination = new NoteImageStore(Path.Combine(directory.Path, "other.lmdb"));
+        destination.Load();
+        var otherImage = destination.ImportBitmapSource("other-note", CreateBitmap(MakeOpaque(MixedPixels)));
+        var target = new MarkdownTextBox();
+        target.ConfigureNoteImages("paste-note", destination);
+        target.RaiseEvent(new DataObjectPastingEventArgs(data, isDragDrop: false, DataFormats.UnicodeText));
+        var pasted = MarkdownImageReferences.Enumerate(target.Text).Single();
+        Require(pasted.ImageId != otherImage.Id, "the system clipboard lost source image data");
+        AssertStoredPixels(destination, pasted.ImageId, MixedPixels);
+
         box.SetSemanticDocument(null);
         store.SetViewportProtectedBitmapIds("selection-copy-note", Array.Empty<string>());
-        Console.WriteLine("PASS selected image copy preserves PNG pixels, Markdown, HTML and RTF");
+        Console.WriteLine("PASS selected image copy preserves Markdown, HTML, RTF and cross-workspace PNG pixels");
     }
 }
