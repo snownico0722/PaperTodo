@@ -1375,6 +1375,18 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
   <data name="PluginInstanceLimitMessage" xml:space="preserve">
     <value>「{0}」で作成できる紙片は最大 {1} 個です。既存のインスタンスを削除してから作成してください。</value>
   </data>
+  <data name="NotePasteImageTextOnlyTitle" xml:space="preserve">
+    <value>一部の画像をテキストとして貼り付けました</value>
+  </data>
+  <data name="NotePasteImageTextOnlyMessage" xml:space="preserve">
+    <value>取り込めなかった画像はテキストとして残しました。ほかの内容は貼り付けられました。</value>
+  </data>
+  <data name="NoteClipboardIncompleteTitle" xml:space="preserve">
+    <value>操作をキャンセルしました</value>
+  </data>
+  <data name="NoteClipboardIncompleteMessage" xml:space="preserve">
+    <value>選択した画像をすべてクリップボードにコピーできなかったため、元の内容を残しました。選択範囲を小さくして再試行してください。</value>
+  </data>
   <data name="NoteCopyTextOnlyTitle" xml:space="preserve">
     <value>テキストのみコピーしました</value>
   </data>

@@ -86,6 +86,37 @@ public static class MarkdownImageReferences
         return true;
     }
 
+    internal static int TrailingAnchorDelimiterLength(string text)
+    {
+        var delimiterStart = text.Length;
+        if (delimiterStart > 0 && text[delimiterStart - 1] == '\n')
+        {
+            delimiterStart--;
+            if (delimiterStart > 0 && text[delimiterStart - 1] == '\r')
+            {
+                delimiterStart--;
+            }
+        }
+        else if (delimiterStart > 0 && text[delimiterStart - 1] == '\r')
+        {
+            delimiterStart--;
+        }
+        else
+        {
+            return 0;
+        }
+
+        var lineStart = delimiterStart;
+        while (lineStart > 0 && text[lineStart - 1] is not '\r' and not '\n')
+        {
+            lineStart--;
+        }
+
+        return TryParseReferenceLine(text[lineStart..delimiterStart], out _)
+            ? text.Length - delimiterStart
+            : 0;
+    }
+
     public static HashSet<string> CollectImageIds(string? markdown)
     {
         var ids = new HashSet<string>(StringComparer.Ordinal);

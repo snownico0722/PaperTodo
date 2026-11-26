@@ -5,6 +5,8 @@ using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using ICSharpCode.AvalonEdit;
+using ICSharpCode.AvalonEdit.Editing;
 using PaperTodo;
 
 internal static partial class ClipboardImageChecks
@@ -24,6 +26,83 @@ internal static partial class ClipboardImageChecks
 
     public static void Run(Action<string, Action> check)
     {
+        check("Image paste uses source bytes and keeps unresolved references as text", () =>
+        {
+            using var directory = new FixtureDirectory();
+            using var source = new NoteImageStore(Path.Combine(directory.Path, "source.lmdb"));
+            using var target = new NoteImageStore(Path.Combine(directory.Path, "target.lmdb"));
+            source.Load();
+            target.Load();
+            var asset = source.ImportBitmapSource("source", CreateBitmap(MixedPixels));
+            var collision = target.ImportBitmapSource("other", CreateBitmap(MakeOpaque(MixedPixels)));
+            Require(collision.Id == asset.Id, "clipboard fixture did not create a target ID collision");
+
+            var foreign = source.ImportBitmapSource("third-note", CreateBitmap(MakeOpaque(MixedPixels)));
+            var missing = MarkdownImageReferences.CreateReference(foreign.Id);
+            var markdown = $"before\r\n{MarkdownImageReferences.CreateReference(asset.Id)}\r\n{missing}\r\nafter";
+            var sourceEditor = new MarkdownTextBox { Text = markdown };
+            sourceEditor.ConfigureNoteImages("source", source);
+            sourceEditor.Select(0, markdown.Length);
+            var data = new DataObject();
+            data.SetData(DataFormats.UnicodeText, markdown);
+            sourceEditor.RaiseEvent(new DataObjectCopyingEventArgs(data, isDragDrop: false));
+
+            var targetEditor = new MarkdownTextBox();
+            targetEditor.ConfigureNoteImages("target", target);
+            var paste = new DataObjectPastingEventArgs(data, isDragDrop: false, DataFormats.UnicodeText);
+            targetEditor.RaiseEvent(paste);
+            Require(paste.CommandCancelled, "the image paste did not take ownership of the replacement");
+            var reference = MarkdownImageReferences.Enumerate(targetEditor.Text).Single();
+            Require(reference.ImageId != collision.Id, "the paste reused the unrelated target ID");
+            Require(targetEditor.Text.StartsWith("before", StringComparison.Ordinal) &&
+                targetEditor.Text.EndsWith("after", StringComparison.Ordinal) &&
+                targetEditor.Text.Contains("\\" + missing, StringComparison.Ordinal),
+                "the unresolved image was not kept as inert text alongside the other content");
+            AssertStoredPixels(target, reference.ImageId, MixedPixels);
+            var sameStore = new MarkdownTextBox();
+            sameStore.ConfigureNoteImages("another-note", source);
+            sameStore.RaiseEvent(new DataObjectPastingEventArgs(data, false, DataFormats.UnicodeText));
+            var owned = MarkdownImageReferences.Enumerate(sameStore.Text).Single();
+            Require(sameStore.Text.Contains("\\" + missing, StringComparison.Ordinal) &&
+                source.TryGetAsset(owned.ImageId, out var clone) && clone.NoteId == "another-note",
+                "same-store paste borrowed an image from a third note");
+            AssertStoredPixels(source, owned.ImageId, MixedPixels);
+
+            targetEditor.Undo();
+            Require(targetEditor.Text.Length == 0, "the mixed paste was not a single undo operation");
+        });
+
+        check("Rectangular image paste respects the resulting Markdown on each row", () =>
+        {
+            var reference = MarkdownImageReferences.CreateReference("001");
+            var box = new MarkdownTextBox { FontFamily = new FontFamily("Consolas") };
+            var window = new Window { Content = box, Width = 400, Height = 220, ShowActivated = false, ShowInTaskbar = false };
+            try
+            {
+                window.Show();
+                CheckRows("~~~\nx\nx\n~~~", 2, 3, reference, $"~~~\n{reference}\n{reference}\n~~~");
+                CheckRows("x\nx\nx\nx", 1, 4, $"~~~\n{reference}\n~~~\n{reference}",
+                    $"~~~\n{reference}\n~~~\n\\{reference}");
+            }
+            finally { window.Close(); }
+
+            void CheckRows(string original, int first, int last, string pasted, string expected)
+            {
+                box.Text = original;
+                box.UpdateLayout();
+                box.TextArea.Selection = new RectangleSelection(box.TextArea,
+                    new TextViewPosition(first, 1), new TextViewPosition(last, 2));
+                var data = new DataObject(DataFormats.UnicodeText, pasted);
+                var paste = new DataObjectPastingEventArgs(data, false, DataFormats.UnicodeText);
+                box.RaiseEvent(paste);
+                Require(!paste.CommandCancelled, "rectangular paste was rejected");
+                box.TextArea.Selection.ReplaceSelectionWithText((string)paste.DataObject.GetData(DataFormats.UnicodeText));
+                Require(box.Text.TrimEnd('\r', '\n') == expected, $"rectangular paste changed the wrong rows: {box.Text}");
+                box.Undo();
+                Require(box.Text == original, "rectangular paste was not one undo step");
+            }
+        });
+
         check("PNG paste preserves transparent, translucent and opaque black pixels", () =>
         {
             var data = new DataObject();
@@ -101,6 +180,7 @@ internal static partial class ClipboardImageChecks
                 RunClipboardWriterProcess();
                 AssertSystemClipboard();
                 Console.WriteLine("PASS clipboard PNG pixels survive the writer process exiting");
+                CheckSystemCutBudgets();
             }
         }
         catch (Exception ex)

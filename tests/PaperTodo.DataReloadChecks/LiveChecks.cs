@@ -226,6 +226,20 @@ internal static partial class Program
             AppController.ConflictDialogDriver = (_, bucket) =>
             {
                 dialogueCalls++;
+                var animations = controller.State.EnableAnimations;
+                try
+                {
+                    mcp.Execute(JsonSerializer.SerializeToElement(new
+                    {
+                        method = "set_setting",
+                        @params = new { id = "appearance.animations", value = !animations }
+                    }));
+                    throw new InvalidOperationException("Settings unexpectedly wrote during a merge.");
+                }
+                catch (McpApiException ex) when (ex.Code == "settings_busy") { }
+                Require(controller.State.EnableAnimations == animations &&
+                    Str(LivePaper(ReadLive(), "note-b")["content"]) == "external conflicting body",
+                    "a rejected settings change modified the running setting or disk contents");
                 return bucket is PaperBucket
                     ? PaperConflictChoice.KeepExternal
                     : ConflictChoice.KeepExternal;

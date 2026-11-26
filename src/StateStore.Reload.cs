@@ -81,7 +81,9 @@ public sealed partial class StateStore
         foreach (var node in papers)
         {
             if (node!["content"] is JsonValue content && content.TryGetValue<string>(out var text) &&
-                text.Length > PaperWindow.NoteTextMaxLength)
+                text.Length > PaperWindow.NoteTextMaxLength &&
+                text.Length - MarkdownImageReferences.TrailingAnchorDelimiterLength(text) >
+                    PaperWindow.NoteTextMaxLength)
                 throw new JsonException("Note content exceeds the editor length limit.");
             if (node["items"] is JsonArray items) ValidateIdentities(items, "items");
             else if (node!.AsObject().ContainsKey("items")) throw new JsonException("items must be an array.");

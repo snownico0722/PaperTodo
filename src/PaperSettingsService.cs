@@ -8,9 +8,7 @@ internal sealed class PaperSettingsException(string code, string message) : Exce
     public string Code { get; } = code;
 }
 
-// Core settings use StateStore. Windows startup registration supplies its own commit action.
-internal sealed record PaperSettingChange(Action Apply, Action Rollback, Action Publish,
-    Func<bool>? Commit = null);
+internal sealed record PaperSettingChange(Action Apply, Action Rollback, Action Publish);
 
 internal sealed class PaperSettingDefinition
 {
@@ -18,6 +16,8 @@ internal sealed class PaperSettingDefinition
     internal required Func<JsonElement> Read { get; init; }
     internal required Func<JsonElement, JsonElement> Validate { get; init; }
     internal required Func<JsonElement, PaperSettingChange> Begin { get; set; }
+    // Windows startup registration uses its own persistence instead of StateStore.
+    internal Func<bool>? Commit { get; set; }
     // Optional composite-setting equality. A legacy boolean may represent two values,
     // so its getter alone is insufficient for deciding that a write is a no-op.
     internal Func<JsonElement, bool>? IsNoOp { get; init; }
@@ -43,18 +43,21 @@ internal sealed class PaperSettingsService
     private readonly Func<bool> _commit;
     private readonly Action<Action> _publish;
     private readonly Func<string?>? _unavailable;
+    private readonly Func<bool>? _coreWriteBusy;
     internal bool IsChanging => _changing;
     // Saving calls live provider sessions; do not allow a provider to nest a second transaction.
     private bool _changing;
 
     internal PaperSettingsService(IEnumerable<PaperSettingDefinition> definitions, Func<bool> running,
-        Func<bool> commit, Action<Action> publish, Func<string?>? unavailable = null)
+        Func<bool> commit, Action<Action> publish, Func<string?>? unavailable = null,
+        Func<bool>? coreWriteBusy = null)
     {
         _definitions = definitions.ToDictionary(d => d.Metadata.Id, StringComparer.Ordinal);
         _running = running;
         _commit = commit;
         _publish = publish;
         _unavailable = unavailable;
+        _coreWriteBusy = coreWriteBusy;
     }
 
     internal IReadOnlyList<PaperSettingSnapshot> List(string? category = null)
@@ -84,6 +87,8 @@ internal sealed class PaperSettingsService
         if (definition.IsNoOp?.Invoke(normalized) ??
             JsonElement.DeepEquals(before.Value, normalized))
             return new PaperSettingChangeResult(before, before.Value, false);
+        if (definition.Commit == null && _coreWriteBusy?.Invoke() == true)
+            throw Error("settings_busy", "PaperTodo is reloading or merging data. Retry after it completes.");
         _changing = true;
         try
         {
@@ -91,7 +96,7 @@ internal sealed class PaperSettingsService
             try
             {
                 change.Apply();
-                if (!(change.Commit ?? _commit)())
+                if (!(definition.Commit ?? _commit)())
                     throw Error("save_failed", "PaperTodo could not save the setting; the previous value was restored.");
             }
             catch

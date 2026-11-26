@@ -49,6 +49,7 @@ public sealed class NoteImageStore : IDisposable
     private bool _disposed;
 
     public string FilePath { get; } = Path.Combine(AppContext.BaseDirectory, "note-assets.lmdb");
+    internal Guid ClipboardIdentity { get; } = Guid.NewGuid();
 
     public NoteImageStore() { }
     internal NoteImageStore(string filePath) => FilePath = Path.GetFullPath(filePath);
