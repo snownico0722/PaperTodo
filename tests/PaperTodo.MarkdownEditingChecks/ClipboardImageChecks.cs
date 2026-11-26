@@ -5,6 +5,8 @@ using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using ICSharpCode.AvalonEdit;
+using ICSharpCode.AvalonEdit.Editing;
 using PaperTodo;
 
 internal static partial class ClipboardImageChecks
@@ -68,6 +70,37 @@ internal static partial class ClipboardImageChecks
 
             targetEditor.Undo();
             Require(targetEditor.Text.Length == 0, "the mixed paste was not a single undo operation");
+        });
+
+        check("Rectangular image paste respects the resulting Markdown on each row", () =>
+        {
+            var reference = MarkdownImageReferences.CreateReference("001");
+            var box = new MarkdownTextBox { FontFamily = new FontFamily("Consolas") };
+            var window = new Window { Content = box, Width = 400, Height = 220, ShowActivated = false, ShowInTaskbar = false };
+            try
+            {
+                window.Show();
+                CheckRows("~~~\nx\nx\n~~~", 2, 3, reference, $"~~~\n{reference}\n{reference}\n~~~");
+                CheckRows("x\nx\nx\nx", 1, 4, $"~~~\n{reference}\n~~~\n{reference}",
+                    $"~~~\n{reference}\n~~~\n\\{reference}");
+            }
+            finally { window.Close(); }
+
+            void CheckRows(string original, int first, int last, string pasted, string expected)
+            {
+                box.Text = original;
+                box.UpdateLayout();
+                box.TextArea.Selection = new RectangleSelection(box.TextArea,
+                    new TextViewPosition(first, 1), new TextViewPosition(last, 2));
+                var data = new DataObject(DataFormats.UnicodeText, pasted);
+                var paste = new DataObjectPastingEventArgs(data, false, DataFormats.UnicodeText);
+                box.RaiseEvent(paste);
+                Require(!paste.CommandCancelled, "rectangular paste was rejected");
+                box.TextArea.Selection.ReplaceSelectionWithText((string)paste.DataObject.GetData(DataFormats.UnicodeText));
+                Require(box.Text.TrimEnd('\r', '\n') == expected, $"rectangular paste changed the wrong rows: {box.Text}");
+                box.Undo();
+                Require(box.Text == original, "rectangular paste was not one undo step");
+            }
         });
 
         check("PNG paste preserves transparent, translucent and opaque black pixels", () =>

@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Input;
+using ICSharpCode.AvalonEdit.Document;
 using ICSharpCode.AvalonEdit.Editing;
 
 namespace PaperTodo;
@@ -153,25 +154,24 @@ public sealed partial class MarkdownTextBox
 
         // Leave rectangular replacement to AvalonEdit. Its segmented paste cannot
         // transfer image blocks, so keep their source as plain text.
-        if (editor.TextArea.Selection is RectangleSelection)
+        if (editor.TextArea.Selection is RectangleSelection rectangle)
         {
             if (ContainsPotentialPaperTodoImageReference(clipboardText))
             {
-                var plainText = RewritePastedImageLines(clipboardText,
-                    MarkdownImageReferences.Enumerate(clipboardText).ToArray(), AsPlainImageReference);
-                if (!editor.TryBuildSafePasteText(plainText, selectedLength: 0, out _))
+                var plainText = editor.PrepareRectangularImagePaste(rectangle, clipboardText);
+                if (plainText == null)
                 {
                     e.CancelCommand();
                     editor.PasteRejected?.Invoke();
                     return;
                 }
+                if (plainText == clipboardText) return;
 
                 var data = new DataObject();
                 data.SetData(DataFormats.UnicodeText, plainText);
                 e.DataObject = data;
                 e.FormatToApply = DataFormats.UnicodeText;
-                if (plainText != clipboardText)
-                    editor.Dispatcher.BeginInvoke(new Action(editor.NotifyImagePasteDegradedToText));
+                editor.Dispatcher.BeginInvoke(new Action(editor.NotifyImagePasteDegradedToText));
             }
             return;
         }
@@ -182,6 +182,81 @@ public sealed partial class MarkdownTextBox
         }
 
         editor.HandleContextAwareImageReferencePaste(e, clipboardText);
+    }
+
+    private string? PrepareRectangularImagePaste(RectangleSelection selection, string text)
+    {
+        // AvalonEdit repeats a single line across the rectangle. For multiline text the final
+        // selected row receives the remaining lines. Parse that projection with its surrounding
+        // Markdown so fences, indentation and unselected text decide which markers are active.
+        var segments = selection.Segments.ToArray();
+        if (segments.Length == 0) return text;
+        var newline = TextUtilities.GetNewLineFromDocument(Document, TextArea.Caret.Line);
+        var normalized = TextUtilities.NormalizeNewLines(text, newline);
+        var repeat = !normalized.Contains(newline, StringComparison.Ordinal);
+        if (repeat && (long)normalized.Length * segments.Length > MaxSafePasteLength)
+            return null;
+
+        var rows = repeat ? Enumerable.Repeat(normalized, segments.Length).ToArray()
+            : normalized.Split([newline], segments.Length, StringSplitOptions.None);
+        var original = Text;
+        var candidate = new StringBuilder(original.Length);
+        var starts = new int[rows.Length];
+        var cursor = 0;
+        var inserted = 0;
+        for (var i = 0; i < rows.Length; i++)
+        {
+            var segment = segments[i];
+            candidate.Append(original, cursor, segment.StartOffset - cursor);
+            var line = Document.GetLineByOffset(segment.StartOffset);
+            if (segment.StartOffset == line.EndOffset && rows[i].Length > 0)
+            {
+                var visual = TextArea.TextView.GetOrConstructVisualLine(line);
+                var padding = Math.Max(0, segment.StartVisualColumn - visual.VisualLengthWithEndOfLineMarker);
+                if (padding > MaxSafePasteLength - inserted) return null;
+                // Spaces at these columns have the same Markdown indentation as Avalon's virtual tabs.
+                candidate.Append(' ', padding);
+                inserted += padding;
+            }
+            starts[i] = candidate.Length;
+            inserted += rows[i].Length;
+            if (inserted > MaxSafePasteLength) return null;
+            candidate.Append(rows[i]);
+            cursor = segment.EndOffset;
+        }
+        candidate.Append(original, cursor, original.Length - cursor);
+
+        var projected = candidate.ToString();
+        var markers = MarkdownImageReferences.Enumerate(projected)
+            .Select(reference => reference.LineStart + reference.OriginalLine!.IndexOf('!')).ToArray();
+        var index = markers.Length - 1;
+        var escapes = 0;
+        var lastEscapedMarker = -1;
+        for (var i = rows.Length - 1; i >= 0; i--)
+        {
+            var end = starts[i] + rows[i].Length;
+            while (index >= 0 && markers[index] >= end) index--;
+            while (index >= 0 && markers[index] >= starts[i])
+            {
+                if (lastEscapedMarker < 0) lastEscapedMarker = markers[index];
+                rows[i] = rows[i].Insert(markers[index--] - starts[i], "\\");
+                escapes++;
+            }
+        }
+        if (inserted + escapes > MaxSafePasteLength ||
+            rows.Any(row => ContainsLineLongerThan(row, MaxSafePasteLineLength))) return null;
+        if (MaxLength > 0 && projected.Length + escapes > MaxLength)
+        {
+            var anchor = MarkdownImageReferences.TrailingAnchorDelimiterLength(projected);
+            if (projected.Length + escapes - anchor > MaxLength) return null;
+            // Escaping the last image also removes its trailing-newline allowance.
+            if (lastEscapedMarker > projected.LastIndexOfAny(['\r', '\n'], projected.Length - anchor - 1))
+                return null;
+        }
+        if (escapes == 0) return text;
+        // Preserve native single-line column editing when every row needs the same replacement.
+        if (repeat && rows.All(row => row == rows[0])) return rows[0];
+        return string.Join(newline, rows);
     }
 
     private static bool ContainsPotentialPaperTodoImageReference(string text)
