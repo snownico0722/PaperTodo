@@ -9,7 +9,8 @@ public sealed partial class AppController
     private PaperSettingsService? _publicSettings;
     internal PaperSettingsService PublicSettings => _publicSettings ??= new(
         CreatePublicSettingsCatalog(), () => IsRunning,
-        TryCommitExternalMutation, RunExternalPostCommitUi, () => WorkspaceSettingsUnavailable);
+        TryCommitExternalMutation, RunExternalPostCommitUi, () => WorkspaceSettingsUnavailable,
+        coreWriteBusy: () => IsDataReloading);
 
     private enum SettingEffects
     {
@@ -378,7 +379,8 @@ public sealed partial class AppController
             {
                 if (!SystemSettingsHelper.ToggleStartup(value.GetBoolean()))
                     throw PaperSettingsService.Error("setting_apply_failed", "Could not update the Windows startup registration.");
-            }, () => { }, () => { RebuildTrayMenu(); RefreshSettingsForChange("general.startup"); }, () => true);
+            }, () => { }, () => { RebuildTrayMenu(); RefreshSettingsForChange("general.startup"); });
+        startup.Commit = () => true;
         return startup;
     }
 }
