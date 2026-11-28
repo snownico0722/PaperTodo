@@ -12,21 +12,26 @@ internal static class SkinChecks
     internal static void Run(AppController controller)
     {
         var before = (controller.State.PaperSkin, controller.State.ColorScheme, controller.State.Theme,
-            controller.State.EnableAnimations, controller.State.HideSurfaceOutline);
+            controller.State.EnableAnimations, controller.State.HideSurfaceOutline,
+            controller.State.EnhanceCapsuleActiveOutline);
         try
         {
             controller.State.Theme = "light";
             controller.State.ColorScheme = ColorSchemes.Warm;
             controller.State.EnableAnimations = false;
             controller.State.HideSurfaceOutline = false;
+            controller.State.EnhanceCapsuleActiveOutline = false;
             CheckAuxiliaryContent(controller);
+            CheckEdgeFocusOpacity(controller);
             CheckLiveSwitch(controller);
+            CheckRestoredEdgeResize(controller);
             if (!SystemParameters.HighContrast) CheckHiddenTitleWithoutOutline(controller);
         }
         finally
         {
             (controller.State.PaperSkin, controller.State.ColorScheme, controller.State.Theme,
-                controller.State.EnableAnimations, controller.State.HideSurfaceOutline) = before;
+                controller.State.EnableAnimations, controller.State.HideSurfaceOutline,
+                controller.State.EnhanceCapsuleActiveOutline) = before;
             Theme.Invalidate();
         }
     }
@@ -89,6 +94,42 @@ internal static class SkinChecks
         }
     }
 
+    private static void CheckEdgeFocusOpacity(AppController controller)
+    {
+        var thickness = EdgeCapsuleLayout.OutlineThickness;
+        var outline = new SkinBorder
+        {
+            Width = 64, Height = 32, IsCapsule = true, IsOutline = true,
+            CornerRadius = new CornerRadius(0, 12, 12, 0),
+            BorderThickness = new Thickness(0, thickness, thickness, thickness)
+        };
+        Program.Assert(!new AppState().EnhanceCapsuleActiveOutline, "capsule outline enhancement defaults off");
+        foreach (var (theme, rimOpacity) in new[] { ("dark", 0.60), ("light", 0.70) })
+        {
+            controller.State.Theme = theme;
+            Theme.Invalidate();
+            outline.RefreshSkin();
+            outline.BorderBrush = Theme.EdgeCapsuleFocusBrush;
+            int TopAlpha(byte[] pixels, int y) => pixels[(y * 64 + 32) * 4 + 3];
+
+            controller.State.EnhanceCapsuleActiveOutline = false;
+            outline.InvalidateVisual();
+            var standard = Pixels(Render(outline, 1));
+            Program.Assert(TopAlpha(standard, 0) == 255 && TopAlpha(standard, 1) == 255 &&
+                           TopAlpha(standard, 2) == 0,
+                $"{theme}: disabling enhancement keeps the original 2 DIP active outline");
+
+            controller.State.EnhanceCapsuleActiveOutline = true;
+            outline.InvalidateVisual();
+            var enhanced = Pixels(Render(outline, 1));
+            var rimAlpha = SystemParameters.HighContrast ? 255 : Math.Round(rimOpacity * 255);
+            Program.Assert(Math.Abs(TopAlpha(enhanced, 0) - rimAlpha) <= 1 &&
+                           TopAlpha(enhanced, 1) == 255 && TopAlpha(enhanced, 2) == 255,
+                $"{theme}: enabling enhancement adds a translucent outer rim to the same 2 DIP focus stroke");
+        }
+        controller.State.EnhanceCapsuleActiveOutline = false;
+    }
+
     private static void CheckLiveSwitch(AppController controller)
     {
         var paper = new PaperData { Type = PaperTypes.Note, Title = "材质切换 · 同一张纸", Content = "# 今日待办\n\n换肤与缩放保留 **正文**。", Width = 360, Height = 320, X = 40, Y = 40 };
@@ -117,6 +158,49 @@ internal static class SkinChecks
         finally { window.CloseForReal(); controller.State.Papers.Remove(paper); }
     }
 
+    private static void CheckRestoredEdgeResize(AppController controller)
+    {
+        var state = controller.State;
+        var original = (state.PaperSkin, state.UseDeepCapsuleMode,
+            state.RememberDeepCapsuleExpandedPosition, state.ShowDeepCapsuleWhileExpanded);
+        var paper = new PaperData
+        {
+            Type = PaperTypes.Todo, IsVisible = true, IsCollapsed = true,
+            X = 50, Y = 50, Width = 280, Height = 240, CapsuleSide = DeepCapsuleSides.Right,
+            DeepCapsuleExpandedSide = DeepCapsuleSides.Right, DeepCapsuleExpandedDpiScale = 1.25,
+            DeepCapsuleExpandedX = 80, DeepCapsuleExpandedY = 80,
+            DeepCapsuleExpandedWidth = 360, DeepCapsuleExpandedHeight = 320
+        };
+        try
+        {
+            state.PaperSkin = PaperSkins.Mica;
+            state.UseDeepCapsuleMode = true;
+            state.RememberDeepCapsuleExpandedPosition = true;
+            state.ShowDeepCapsuleWhileExpanded = true;
+            Theme.Invalidate();
+            state.Papers.Add(paper);
+            controller.ShowPaper(paper, activate: false);
+            Program.Pump();
+            var window = Application.Current.Windows.OfType<PaperWindow>().Single(w => w.PaperId == paper.Id);
+            Program.Assert(window.IsDeepCapsuleSlotVisible && new WindowInteropHelper(window).Handle == IntPtr.Zero,
+                "restored capsule must start with its paper HWND still uncreated");
+            window.ExpandForProgrammaticOpen();
+            Program.Pump();
+            Program.Assert(Math.Abs(window.ActualWidth - 360) <= 1 && Math.Abs(window.ActualHeight - 320) <= 1,
+                "first expansion must restore the saved paper size");
+            DragFromPaperCorner(window, "first Mica expansion with remembered geometry");
+            Program.Assert(paper.DeepCapsuleExpandedWidth > 360 && paper.DeepCapsuleExpandedHeight > 320 &&
+                paper.Width == 280 && paper.Height == 240, "resize updates the remembered expanded size independently");
+        }
+        finally
+        {
+            controller.DeletePaper(paper);
+            (state.PaperSkin, state.UseDeepCapsuleMode,
+                state.RememberDeepCapsuleExpandedPosition, state.ShowDeepCapsuleWhileExpanded) = original;
+            Theme.Invalidate();
+        }
+    }
+
     internal static void CheckLayeredResize(AppController controller)
     {
         var previousSkin = controller.State.PaperSkin;
@@ -127,6 +211,9 @@ internal static class SkinChecks
         try
         {
             Program.Assert(window.AllowsTransparency, "layered resize check requires a layered paper");
+            // Edge capsule expansion positions this HWND before its first Show.
+            Program.Assert(WindowNative.TrySetWindowDeviceBounds(window, new DeviceScreenRect(60, 60, 420, 380)),
+                "position the hidden paper before showing it");
             window.Show(); Program.Pump();
             foreach (var skin in new[] { PaperSkins.Paper, PaperSkins.Aero })
             {

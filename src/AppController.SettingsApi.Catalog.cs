@@ -43,6 +43,12 @@ public sealed partial class AppController
             () => State.FastAnimations,
             value => State.FastAnimations = value,
             title: Strings.Get("SettingsFastAnimations"));
+        yield return DefineSetting<bool>("appearance.capsule_outline_enhancement",
+            () => State.EnhanceCapsuleActiveOutline,
+            value => State.EnhanceCapsuleActiveOutline = value,
+            SettingEffects.CapsuleOutline,
+            title: Strings.Get("SettingsCapsuleOutlineEnhancement"),
+            description: "Adds a thin translucent outer rim to active edge capsules without changing their focus color or geometry.");
         yield return DefineSetting<string>("appearance.theme",
             () => State.Theme,
             value => State.Theme = value,
@@ -79,6 +85,23 @@ public sealed partial class AppController
             value => State.MicaAlwaysActive = value,
             SettingEffects.NativeMaterial,
             title: Strings.Get("SettingsMicaAlwaysActive"));
+        yield return DefineSetting<bool>("appearance.background_blend",
+            () => State.PaperBackgroundBlendWithTheme,
+            value => State.PaperBackgroundBlendWithTheme = value,
+            SettingEffects.PaperBackground,
+            title: SettingsSidebarLocalized("启用和配色混合", "Blend with paper colors", "紙面カラーと混合する", "종이 색상과 혼합"));
+        yield return DefineSetting<bool>("appearance.background_stretch",
+            () => State.PaperBackgroundStretch,
+            value => State.PaperBackgroundStretch = value,
+            SettingEffects.PaperBackground,
+            title: SettingsSidebarLocalized("拉伸", "Stretch", "ストレッチ", "늘이기"));
+        yield return DefineSetting<string>("appearance.background_layout",
+            () => State.PaperBackgroundLayout,
+            value => State.PaperBackgroundLayout = value,
+            SettingEffects.PaperBackground,
+            title: SettingsSidebarLocalized("位置", "Position", "位置", "위치"),
+            options: [PaperBackgroundLayouts.Center, PaperBackgroundLayouts.BottomLeft,
+                PaperBackgroundLayouts.BottomCenter, PaperBackgroundLayouts.BottomRight]);
         yield return DefineSetting<string>("appearance.font_preset",
             () => State.UiFontPreset,
             value => State.UiFontPreset = value,
@@ -99,6 +122,11 @@ public sealed partial class AppController
             minimum: 0.8,
             maximum: 1.2,
             step: 0.05);
+        yield return DefineSetting<bool>("appearance.custom_font_enabled",
+            () => State.CustomFontEnabled,
+            value => State.CustomFontEnabled = value,
+            SettingEffects.Typography,
+            title: Strings.Get("SettingsCustomFont"));
         yield return DefineSetting<bool>("appearance.enhanced_bold",
             () => State.CustomFontEnhancedBold,
             value => State.CustomFontEnhancedBold = value,
@@ -114,6 +142,18 @@ public sealed partial class AppController
             value => State.NoteTextSize = value,
             SettingEffects.Typography,
             title: Strings.Get("SettingsNoteBodyText"),
+            options: ["small", "medium", "large"]);
+        yield return DefineSetting<string>("note.line_spacing",
+            () => State.NoteLineSpacing,
+            value => State.NoteLineSpacing = value,
+            SettingEffects.NoteLineSpacing,
+            title: Strings.Get("SettingsNoteBodyText") + " · " + Strings.Get("SettingsLineSpacing"),
+            options: ["small", "medium", "large"]);
+        yield return DefineSetting<string>("todo.item_spacing",
+            () => State.TodoItemSpacing,
+            value => State.TodoItemSpacing = value,
+            SettingEffects.TodoItemSpacing,
+            title: Strings.Get("SettingsTodoBodyText") + " · " + Strings.Get("SettingsItemSpacing"),
             options: ["small", "medium", "large"]);
         yield return DefineSetting<bool>("todo.text_bold",
             () => State.TodoTextBold,
@@ -247,6 +287,16 @@ public sealed partial class AppController
             value => State.HidePapersFromWindowSwitcher = value,
             SettingEffects.SystemVisibility,
             title: Strings.Get("SettingsHidePapersFromWindowSwitcher"));
+        yield return DefineSetting<bool>("window.hide_papers_in_capture",
+            () => State.HidePapersInCapture,
+            value => State.HidePapersInCapture = value,
+            SettingEffects.CaptureExclusion,
+            title: SettingsSidebarLocalized("截图排除：纸片", "Exclude papers from capture", "撮影から付箋を除外", "캡처에서 메모 제외"));
+        yield return DefineSetting<bool>("window.hide_capsules_in_capture",
+            () => State.HideCapsulesInCapture,
+            value => State.HideCapsulesInCapture = value,
+            SettingEffects.CaptureExclusion,
+            title: SettingsSidebarLocalized("截图排除：胶囊", "Exclude capsules from capture", "撮影からカプセルを除外", "캡처에서 캡슐 제외"));
         yield return DefineSetting<string>("window.fullscreen_mode",
             () => State.FullscreenTopmostMode,
             value => State.FullscreenTopmostMode = value,
@@ -539,7 +589,7 @@ public sealed partial class AppController
             value => State.McpAllowDeletes = value,
             SettingEffects.Mcp,
             title: Strings.Get("LabsMcpDeletes"));
-        foreach (var definition in CreateExternalSettingsCatalog()) yield return definition;
+        yield return CreateStartupSetting();
         foreach (var definition in CreateShortcutSettingsCatalog()) yield return definition;
     }
 }

@@ -185,16 +185,21 @@ internal static partial class InjectionSystemRunner
 
     private static void GoodLock(AppController c)
     {
-        const string initial = "{ /* preserved formatting */ \"appearance.fontScale\":1.1,\"todo.paste.maxItems\":100,\"note.editor.indentationSize\":7,\"future.keep\":{\"text\":\"中文\"}, }\n";
+        const string initial = "{ /* preserved formatting */ \"appearance.fontScale\":1.1,\"todo.paste.maxItems\":100,\"note.editor.indentationSize\":7,\"todo.layout.itemVerticalMarginDip\":7,\"future.keep\":{\"text\":\"中文\"}, }\n";
         File.WriteAllText(UserInjection.FilePath, initial);
         using var first = new GoodLockView(c);
-        Check(first.Rows.Length == 4 && RowState(first, "appearance.fontScale", "Pending"), "Initial Good Lock rows or pending state incorrect.");
+        Check(first.Rows.Length == 5 && RowState(first, "appearance.fontScale", "Pending"), "Initial Good Lock rows or pending state incorrect.");
         first.Click("ApplyButton");
         Check(File.ReadAllText(UserInjection.FilePath) == initial && AppTypography.ScaleFactor == 1.1,
             "Good Lock external Apply rewrote formatting or missed the actual consumer.");
         Check(RowState(first, "appearance.fontScale", "Applied") && RowState(first, "note.editor.indentationSize", "RestartRequired"),
             "Good Lock applied/restart indicators disagree with runtime.");
-        Check(!Property<ICommand>(first.Row("future.keep"), "OptimizeCommand").CanExecute(null), "Unknown key offered an invalid optimizer.");
+        Check(RowState(first, "todo.layout.itemVerticalMarginDip", "Applied") &&
+            InjectionParameters.TodoItemMargin.Resolve(-1) == 7 && !c.PublicSettings.Get("todo.item_spacing").Writable,
+            "Good Lock must apply a new host catalog entry while an unsupported key is present.");
+        Check(RowState(first, "future.keep", "Pending") &&
+            !Property<ICommand>(first.Row("future.keep"), "OptimizeCommand").CanExecute(null),
+            "An unsupported key must remain visible without being applied or offering suggestions.");
         first.Command("todo.paste.maxItems", "ResetCommand");
         Check(RowState(first, "todo.paste.maxItems", "Pending") && InjectionParameters.TodoPasteLineLimit.Value == 100 &&
             File.ReadAllText(UserInjection.FilePath) == initial && first.Draft != "{}", "Reset did not remain an unapplied persistent draft.");
@@ -214,11 +219,14 @@ internal static partial class InjectionSystemRunner
         restored.Click("ApplyButton");
         Check(UserInjection.Read().Overrides["animation.fastDurationScale"].GetDouble() == 1,
             "Suggested value did not reach the real host.");
+        restored.Command("appearance.fontScale", "ResetCommand");
+        File.WriteAllText(UserInjection.FilePath, "{\"future.keep\":3}");
         restored.Click("ResetAllButton");
         Check(UserInjection.Read().Overrides.Count > 0 && restored.Draft != "{}", "Reset all applied before the Apply button.");
         restored.Click("ApplyButton");
         Check(UserInjection.Read().Overrides.Count == 0 && restored.Rows.Length == 0 && restored.Draft == "{}" &&
-            AppTypography.ScaleFactor == c.State.Zoom, "Full reset left overrides, rows or an altered ordinary preference.");
+            AppTypography.ScaleFactor == c.State.Zoom && c.PublicSettings.Get("todo.item_spacing").Writable,
+            "Full reset left overrides, rows or an altered ordinary preference.");
     }
 
     private static async Task Lifetime(AppController c)

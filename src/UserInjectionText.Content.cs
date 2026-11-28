@@ -117,9 +117,9 @@ internal static partial class UserInjectionText
              "노트 하나의 글자 수 제한은 100,000자 이상으로 설정할 수 있습니다. 현재 제한을 초과하는 기존 노트는 글자 수를 늘리지 않는 범위에서 편집하고 저장할 수 있습니다."]);
         Add("note.images.maxStoredDimensionPx",
             ["Stored image maximum dimension", "保存画像の最大辺長", "저장 이미지 최대 변 길이"],
-            ["Maximum pixel dimension accepted when importing or loading image assets.",
-             "画像アセットの取り込みや読み込みで受け入れる、各辺の最大ピクセル数です。",
-             "이미지 자산을 가져오거나 불러올 때 허용되는 각 변의 최대 픽셀 수입니다."]);
+            ["Maximum pixel dimension of newly imported images.",
+             "画像アセットの新規取り込みで受け入れる、各辺の最大ピクセル数です。",
+             "이미지 자산을 새로 가져올 때 허용되는 각 변의 최대 픽셀 수입니다."]);
         Add("note.images.autoCompressedDimensionPx",
             ["Automatic compression target dimension", "自動圧縮後の目標辺長", "자동 압축 목표 변 길이"],
             ["Maximum dimension after resizing large images when automatic compression is enabled.",
@@ -127,9 +127,9 @@ internal static partial class UserInjectionText
              "자동 압축이 켜져 있을 때 큰 이미지를 축소한 후의 최대 변 길이입니다."]);
         Add("note.images.maxStoredBytes",
             ["Single image storage budget", "画像1枚の保存容量上限", "개별 이미지 저장 용량 한도"],
-            ["Maximum encoded byte size of one image asset.",
-             "画像アセット1枚をエンコードした後のバイト数上限です。",
-             "이미지 자산 하나를 인코딩한 후의 최대 바이트 수입니다."]);
+            ["Maximum encoded bytes for one newly imported image.",
+             "新しく取り込む画像1枚のエンコード後のバイト数上限です。",
+             "새로 가져오는 이미지 하나의 인코딩 후 최대 바이트 수입니다."]);
         Add("note.images.maxInputBytes",
             ["Image import input budget", "画像取り込みの入力容量上限", "이미지 가져오기 입력 용량 한도"],
             ["Byte limit for original image data supplied during import.",

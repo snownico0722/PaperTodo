@@ -159,19 +159,15 @@ public sealed partial class AppController : IDisposable
         UsesNativeMicaWindows = PaperSkins.UsesNativeBackdrop(State.PaperSkin) && NativeMicaBackdrop.IsSupported;
         Theme.Invalidate();
         RefreshApplicationThemeResources();
-        var protectedImageIdsForReuse = TryCollectUnprotectedImages();
-        // Only rebuild free numbers when the same protection scan that gates GC succeeded.
-        // A failed scan leaves reuse disabled so missing-but-referenced ids are never reissued.
-        _imageStore.PrepareReusableImageNumbers(protectedImageIdsForReuse);
-        _imageStore.ProtectPersistedImageReferences(State, protectedImageIdsForReuse,
-            System.IO.File.Exists(_store.FilePath) || System.IO.File.Exists(_store.BackupPath));
+        ProtectWorkspaceImageReferences(_workspace, _imageStore, runStartupMaintenance: true);
         NormalizePaperSystemVisibilitySettings();
         AppTypography.Configure(
             State.UiFontPreset,
             State.Zoom,
             State.CustomFontEnhancedBold,
-            State.TextRenderingProfile);
-        NoteTypography.Configure(State.NoteTextSize, State.NoteTextBold);
+            State.TextRenderingProfile,
+            State.CustomFontEnabled);
+        NoteTypography.Configure(State.NoteTextSize, State.NoteTextBold, State.NoteLineSpacing);
         ToolTipPreferences.Register(() => State.EnableToolTips);
         _paperBodyPlugins = new PaperBodyPluginRegistry();
         _paperBodyPlugins.DataStore.WriteLifetime = _store.WriteLifetime;
@@ -1361,7 +1357,7 @@ public sealed partial class AppController : IDisposable
             // To prevent a 1-frame DWM cache flash when a window's size changes while hidden,
             // we show it fully transparent first, then restore opacity after layout is complete.
             double originalOpacity = window.Opacity;
-            window.ShowActivated = activate;
+            window.ShowActivated = activate && FullscreenAvoidanceWindowFor(window) == IntPtr.Zero;
             window.Opacity = 0;
             window.Show();
 
@@ -2043,6 +2039,10 @@ public sealed partial class AppController : IDisposable
 
     public void DeletePaper(PaperData paper)
     {
+        // Confirmation can return after the workspace or its papers have changed.
+        if (IsExiting || IsWorkspaceSwitching || IsDataReloading || !State.Papers.Contains(paper))
+            return;
+
         paper.IsVisible = false;
         NextVisibilityAnimationVersion(paper.Id);
 
@@ -2082,6 +2082,7 @@ public sealed partial class AppController : IDisposable
     // Cross-paper history belongs to entity removal, not plugin-state persistence.
     internal void NotifyPaperRemoved(string paperId)
     {
+        _workspaceCapsuleOverrides?.Remove(paperId);
         foreach (var window in _windows.Values)
             window.PruneDeletedLinkedPaperFromTodoHistory(paperId);
         QueuePluginPaperStateDeletion(paperId);
@@ -2190,25 +2191,6 @@ public sealed partial class AppController : IDisposable
 
         ArrangeDeepCapsules(animate: State.EnableAnimations);
         RefreshTrayMenu();
-    }
-
-    public bool IsPaperEmpty(PaperData paper)
-    {
-        if (paper.Type == PaperTypes.Note)
-        {
-            if (!string.Equals(
-                    paper.BodyProviderId,
-                    PaperBodyProviderIds.Markdown,
-                    StringComparison.Ordinal))
-            {
-                return false;
-            }
-            return _windows.TryGetValue(paper.Id, out var window)
-                ? window.IsCurrentNoteEmpty()
-                : string.IsNullOrWhiteSpace(paper.Content);
-        }
-
-        return !paper.Items.Any(TodoRules.HasMeaningfulContent);
     }
 
     public int VisibleDeepCapsuleCount()
@@ -3527,28 +3509,35 @@ public sealed partial class AppController : IDisposable
         }
     }
 
-    /// <summary>
-    /// Runs startup GC when protection ids can be collected. Returns that set for free-id reuse,
-    /// or null when collection is skipped/failed so reuse must stay off.
-    /// </summary>
-    private IReadOnlySet<string>? TryCollectUnprotectedImages()
+    private static void ProtectWorkspaceImageReferences(
+        WorkspaceSession workspace, NoteImageStore images, bool runStartupMaintenance = false,
+        bool refreshAfterDataReload = false)
     {
-        try
+        IReadOnlySet<string>? protectedIds = null;
+        if (images.NeedsMissingStoreProtection || refreshAfterDataReload)
         {
-            if (!_store.TryCollectProtectedImageIds(State, out var protectedImageIds))
+            if (workspace.Store.TryReadProtectedImageIds(workspace.State, out var ids))
+                protectedIds = ids;
+            else if (refreshAfterDataReload)
+                images.PrepareReusableImageNumbers(null);
+        }
+        else if (runStartupMaintenance && !images.IsWriteDisabled &&
+                 workspace.Store.TryCollectProtectedImageIds(workspace.State, out var idsForMaintenance))
+        {
+            protectedIds = idsForMaintenance;
+            try
             {
-                return null;
+                images.CollectUnprotectedImages(protectedIds);
+                images.PrepareReusableImageNumbers(protectedIds);
             }
-
-            _imageStore.CollectUnprotectedImages(protectedImageIds);
-            return protectedImageIds;
+            catch
+            {
+                // Failed startup maintenance leaves old numbers unavailable for reuse.
+                images.PrepareReusableImageNumbers(null);
+            }
         }
-        catch
-        {
-            // Collection is optional and destructive; any uncertainty keeps the image bytes
-            // and disables free-id reuse for this startup.
-            return null;
-        }
+        images.ProtectPersistedImageReferences(workspace.State, protectedIds,
+            recoveryPending: workspace.Store.HasPendingStartupRecovery);
     }
 
     private void HandleSaveFailure(Exception ex, long? failedVersion = null)

@@ -74,6 +74,11 @@ public sealed partial class AppController
 
     private void RefreshSettingsForChange(string id)
     {
+        if (id is "general.advanced_settings" or "appearance.custom_font_enabled")
+        {
+            RefreshSettingsWindowContent();
+            return;
+        }
         if (id is "window.hide_from_taskbar" or "window.hide_from_switcher")
         {
             RefreshSettingsSystemVisibilityToggleStates();
@@ -98,10 +103,14 @@ public sealed partial class AppController
         {
             "general.data_merge_conflicts" => "workspace.data",
             "general.tooltips" => "visual.options",
-            "window.fullscreen_mode" => "general.options",
+            "appearance.background_blend" or "appearance.background_stretch" or
+                "appearance.background_layout" => "visual.background",
+            "window.fullscreen_mode" or "window.hide_papers_in_capture" or
+                "window.hide_capsules_in_capture" => "general.options",
             "title.max_length" or "capsule.title_measure_limit" or "capsule.hide_close_button" or
                 "capsule.master_compact" => "general.capsuleAppearance",
             "capsule.gap" => "visual.options",
+            "note.line_spacing" or "todo.item_spacing" => id,
             "edge.non_topmost" => "general.capsules",
             "scripts.run_linked_on_click" => "general.todos",
             "note.markdown_mode" or "note.edit_animations" or "note.image_reference_text" => "note.markdown",

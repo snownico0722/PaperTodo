@@ -9,13 +9,14 @@ public sealed partial class AppController
     private PaperSettingsService? _publicSettings;
     internal PaperSettingsService PublicSettings => _publicSettings ??= new(
         CreatePublicSettingsCatalog(), () => IsRunning,
-        TryCommitExternalMutation, RunExternalPostCommitUi, () => WorkspaceSettingsUnavailable);
+        TryCommitExternalMutation, RunExternalPostCommitUi, () => WorkspaceSettingsUnavailable,
+        coreWriteBusy: () => IsDataReloading);
 
     private enum SettingEffects
     {
-        None, Advanced, Telemetry, Animations, Theme, Skin, MaterialTransparency, SurfaceOutline, NativeMaterial, Typography, Markdown,
-        ImageReferences, MarkdownAnimations, ExternalExtension, Compress, TodoOrder,
-        TodoLinks, TodoRows, LinkedCapsules, TopBar, SystemVisibility, Fullscreen,
+        None, Advanced, Telemetry, Animations, Theme, Skin, MaterialTransparency, SurfaceOutline, CapsuleOutline, NativeMaterial, PaperBackground, Typography, Markdown,
+        ImageReferences, MarkdownAnimations, NoteLineSpacing, TodoItemSpacing, ExternalExtension, Compress, TodoOrder,
+        TodoLinks, TodoRows, LinkedCapsules, TopBar, SystemVisibility, CaptureExclusion, Fullscreen,
         CapsuleMode, Arrange, CapsuleClose, Titles, Preview, HoverIntent, EdgeTopmost,
         Opacity, Focus, Passive, Reminders, Magnet, Tether, TetherOptions,
         Scripts, VisibilitySnapshot, Shortcuts, Mcp
@@ -221,6 +222,17 @@ public sealed partial class AppController
             });
     }
 
+    private void RefreshCaptureExclusion()
+    {
+        foreach (var paper in _windows.Values.ToArray())
+            paper.UpdateCaptureExclusion();
+        foreach (var master in _masterCapsules.Values.ToArray())
+            master.UpdateCaptureExclusion();
+        EdgeCapsuleDragWindow.RefreshPooledCaptureExclusion();
+        EdgeCapsuleQueueProxyWindow.RefreshCaptureExclusion(State.HideCapsulesInCapture);
+        _nativeQueueDropGhost?.UpdateCaptureExclusion();
+    }
+
     private void PublishSettingEffects(SettingEffects effects)
     {
         switch (effects)
@@ -241,7 +253,9 @@ public sealed partial class AppController
                 RefreshSkinSurfaces();
                 RefreshMicaSettings();
                 break;
+            case SettingEffects.CapsuleOutline: SkinBorder.RefreshLoadedCapsuleOutlines(); break;
             case SettingEffects.NativeMaterial: RefreshMicaSettings(); break;
+            case SettingEffects.PaperBackground: RefreshPaperBackgroundSurfaces(); break;
             case SettingEffects.Typography:
                 ConfigureSettingsTypography();
                 RefreshTypography(); break;
@@ -256,6 +270,10 @@ public sealed partial class AppController
             case SettingEffects.Markdown:
                 RefreshWindowSettingEffects(effects);
                 RebuildTrayMenu(); break;
+            case SettingEffects.NoteLineSpacing:
+                NoteTypography.Configure(State.NoteTextSize, State.NoteTextBold, State.NoteLineSpacing);
+                RefreshWindowSettingEffects(effects); break;
+            case SettingEffects.TodoItemSpacing:
             case SettingEffects.MarkdownAnimations:
             case SettingEffects.ImageReferences:
                 RefreshWindowSettingEffects(effects); break;
@@ -280,6 +298,7 @@ public sealed partial class AppController
             case SettingEffects.TopBar:
                 foreach (var w in _windows.Values.ToArray()) w.UpdateTopBarNewPaperButtons(); break;
             case SettingEffects.SystemVisibility: RefreshPaperSystemVisibility(reapplyTaskbarShellState: true); break;
+            case SettingEffects.CaptureExclusion: RefreshCaptureExclusion(); break;
             case SettingEffects.Fullscreen: RefreshFullscreenAvoidanceRuntime(); break;
             case SettingEffects.Arrange: ArrangeDeepCapsules(animate: State.EnableAnimations); break;
             case SettingEffects.CapsuleClose:
@@ -321,8 +340,8 @@ public sealed partial class AppController
 
     private void ConfigureSettingsTypography()
     {
-        AppTypography.Configure(State.UiFontPreset, State.Zoom, State.CustomFontEnhancedBold, State.TextRenderingProfile);
-        NoteTypography.Configure(State.NoteTextSize, State.NoteTextBold);
+        AppTypography.Configure(State.UiFontPreset, State.Zoom, State.CustomFontEnhancedBold, State.TextRenderingProfile, State.CustomFontEnabled);
+        NoteTypography.Configure(State.NoteTextSize, State.NoteTextBold, State.NoteLineSpacing);
     }
 
     // Keep page restores in their existing per-window order; callers own saving,
@@ -344,16 +363,16 @@ public sealed partial class AppController
                 case SettingEffects.ImageReferences: window.UpdateImageReferenceTextMode(); break;
                 case SettingEffects.ExternalExtension: window.UpdateExternalMarkdownExtension(); break;
                 case SettingEffects.TodoLinks: window.UpdateTodoLinkFeature(); break;
+                case SettingEffects.NoteLineSpacing: window.UpdateNoteLineSpacing(); break;
+                case SettingEffects.TodoItemSpacing: window.UpdateTodoItemSpacing(); break;
                 case SettingEffects.Titles: window.RefreshPaperTitle(); break;
                 case SettingEffects.EdgeTopmost: window.RefreshDeepCapsuleSlotTopmost(); break;
             }
         }
     }
 
-    private IEnumerable<PaperSettingDefinition> CreateExternalSettingsCatalog()
+    private PaperSettingDefinition CreateStartupSetting()
     {
-        // These existing owners persist atomically before publishing their in-memory preference.
-        // They are not copied into AppState or saved again through a different store.
         var startup = DefineSetting("general.startup", SystemSettingsHelper.IsStartupEnabled,
             _ => { }, title: Strings.Get("TrayStartup"));
         startup.Begin = value => new PaperSettingChange(
@@ -361,33 +380,8 @@ public sealed partial class AppController
             {
                 if (!SystemSettingsHelper.ToggleStartup(value.GetBoolean()))
                     throw PaperSettingsService.Error("setting_apply_failed", "Could not update the Windows startup registration.");
-            }, () => { }, () => { RebuildTrayMenu(); RefreshSettingsForChange("general.startup"); }, () => true);
-        yield return startup;
-        foreach (var definition in new[]
-        {
-            BackgroundSetting("appearance.background_blend", () => PaperBackground.BlendWithTheme, PaperBackground.SetBlendWithTheme),
-            BackgroundSetting("appearance.background_stretch", () => PaperBackground.StretchImage, PaperBackground.SetStretch),
-            BackgroundSetting("appearance.background_layout", () => PaperBackground.Layout, PaperBackground.SetLayout,
-                ["center", "bottomLeft", "bottomCenter", "bottomRight"])
-        }) yield return definition;
-    }
-
-    private PaperSettingDefinition BackgroundSetting<T>(string id, Func<T> read, Action<T> write, string[]? options = null)
-    {
-        var title = id switch
-        {
-            "appearance.background_blend" => SettingsSidebarLocalized("启用和配色混合", "Blend with paper colors", "紙面カラーと混合する", "종이 색상과 혼합"),
-            "appearance.background_stretch" => SettingsSidebarLocalized("拉伸", "Stretch", "ストレッチ", "늘이기"),
-            _ => SettingsSidebarLocalized("位置", "Position", "位置", "위치")
-        };
-        var setting = DefineSetting(id, read, write, title: title, options: options);
-        setting.Begin = value => new PaperSettingChange(
-            () =>
-            {
-                try { write(value.Deserialize<T>()!); }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-                { throw PaperSettingsService.Error("save_failed", "Could not save paper-background preferences."); }
-            }, () => { }, () => { RefreshPaperBackgroundSurfaces(); RefreshSettingsForChange(id); }, () => true);
-        return setting;
+            }, () => { }, () => { RebuildTrayMenu(); RefreshSettingsForChange("general.startup"); });
+        startup.Commit = () => true;
+        return startup;
     }
 }

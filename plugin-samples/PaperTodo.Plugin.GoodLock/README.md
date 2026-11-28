@@ -4,7 +4,7 @@ PaperTodo 的官方全局调参插件。主程序独立读取 `user.json`；Good
 
 ## 安装
 
-需要支持插件 API 2.4 的 PaperTodo。
+需要支持插件 API 2.6 的 PaperTodo。
 
 退出 PaperTodo，将已编译的 `plugins/official.good-lock.native/` 整个目录放到应用的 `plugins/` 下，再启动。在插件页启用 Good Lock，创建或打开它的纸片。
 
@@ -43,7 +43,7 @@ PaperTodo 的官方全局调参插件。主程序独立读取 `user.json`；Good
 
 ## English
 
-Good Lock is the official Native companion for PaperTodo's global `user.json`. It requires plugin API 2.4. Install the complete `plugins/official.good-lock.native/` directory separately, enable the plugin, and open its Paper.
+Good Lock is the official Native companion for PaperTodo's global `user.json`. It requires plugin API 2.6. Install the complete `plugins/official.good-lock.native/` directory separately, enable the plugin, and open its Paper.
 
 Use **Open file** for ordinary value edits. The Paper lists overrides with their default/reference value, proposed value, and application status. Reset and adjustment actions create a pending patch; **Apply** saves that patch and adopts the latest configuration. **Restart** applies first, then uses the host's normal saved shutdown/restart. **Save as** exports the current proposed overrides without changing the active file.
 

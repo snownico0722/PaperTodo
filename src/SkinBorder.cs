@@ -63,6 +63,13 @@ internal sealed partial class SkinBorder : PaperChromeBorder
         foreach (var reference in LoadedSurfaces.ToArray())
             if (reference.TryGetTarget(out var surface)) surface.RefreshSkin();
     }
+    internal static void RefreshLoadedCapsuleOutlines()
+    {
+        LoadedSurfaces.RemoveAll(reference => !reference.TryGetTarget(out var surface) || !surface.IsLoaded);
+        foreach (var reference in LoadedSurfaces.ToArray())
+            if (reference.TryGetTarget(out var surface) && surface.IsOutline)
+                surface.InvalidateVisual();
+    }
     private int _surfaceVersion;
     private const double QuietAuxiliaryMaterialStrength = .40;
     internal bool IsFormTransition { get; private set; }
@@ -108,6 +115,7 @@ internal sealed partial class SkinBorder : PaperChromeBorder
     private Brush _fill = Brushes.Transparent, _shine = Brushes.Transparent;
     private (Size Size, CornerRadius Corners, Thickness Border, bool Pixel, bool Capsule, double X, double Y)? _geometryKey;
     private Geometry _shape = Geometry.Empty, _borderRing = Geometry.Empty;
+    private Geometry _focusStroke = Geometry.Empty, _baseFocusStroke = Geometry.Empty;
     public static readonly DependencyProperty HeaderHeightProperty = DependencyProperty.Register(
         nameof(HeaderHeight), typeof(double), typeof(SkinBorder),
         new FrameworkPropertyMetadata(0.0, FrameworkPropertyMetadataOptions.AffectsRender,
@@ -198,7 +206,15 @@ internal sealed partial class SkinBorder : PaperChromeBorder
         {
             if (ActualWidth <= 0 || ActualHeight <= 0) return;
             EnsureGeometry();
-            dc.DrawGeometry(BorderBrush, null, _borderRing);
+            if (AppController.Current?.State.EnhanceCapsuleActiveOutline == true)
+            {
+                var rimBrush = _highContrast
+                    ? SystemColors.WindowBrush
+                    : Theme.BrushWithAlpha(Theme.PaperBrush, _dark ? 0.60 : 0.70);
+                dc.DrawGeometry(rimBrush, null, _borderRing);
+                dc.DrawGeometry(BorderBrush, null, _focusStroke);
+            }
+            else dc.DrawGeometry(BorderBrush, null, _baseFocusStroke);
             return;
         }
         var systemMaterial = PaperSkins.IsSystemMaterial(Skin);
@@ -292,15 +308,26 @@ internal sealed partial class SkinBorder : PaperChromeBorder
         GeometryBuildCount++;
         _surfaceVersion++;
         _shape = CreateShape(RenderSize, CornerRadius, 0, pixel, dpi);
-        _borderRing = Ring(new Thickness(), BorderThickness);
-        Geometry Ring(Thickness inset, Thickness width)
+        if (BorderThickness == new Thickness())
         {
-            if (width == new Thickness()) return Geometry.Empty;
-            var outside = Inset(inset);
-            var inside = Inset(new Thickness(inset.Left + width.Left, inset.Top + width.Top,
-                inset.Right + width.Right, inset.Bottom + width.Bottom));
-            return Frozen(new CombinedGeometry(GeometryCombineMode.Exclude, outside, inside));
+            _borderRing = _focusStroke = _baseFocusStroke = Geometry.Empty;
+            return;
         }
+        var inside = Inset(BorderThickness);
+        _borderRing = Frozen(new CombinedGeometry(GeometryCombineMode.Exclude, _shape, inside));
+        if (IsOutline)
+        {
+            // Keep the wall side open and place the separating rim inside the existing silhouette.
+            static double Rim(double width) => Math.Min(1, width / 2);
+            var rim = new Thickness(Rim(BorderThickness.Left), Rim(BorderThickness.Top),
+                Rim(BorderThickness.Right), Rim(BorderThickness.Bottom));
+            _focusStroke = Frozen(new CombinedGeometry(GeometryCombineMode.Exclude, Inset(rim), inside));
+            // Match the former 2 DIP stroke while keeping the same outer silhouette and proxy clips.
+            var baseWidth = new Thickness(Math.Min(2, BorderThickness.Left), Math.Min(2, BorderThickness.Top),
+                Math.Min(2, BorderThickness.Right), Math.Min(2, BorderThickness.Bottom));
+            _baseFocusStroke = Frozen(new CombinedGeometry(GeometryCombineMode.Exclude, _shape, Inset(baseWidth)));
+        }
+
         Geometry Inset(Thickness inset)
         {
             if (pixel)

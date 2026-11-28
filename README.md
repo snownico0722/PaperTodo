@@ -155,6 +155,7 @@ dotnet build -c Release
 ## Feedback & Community
 
 - Bugs & suggestions: [GitHub Issues](https://github.com/snownico0722/PaperTodo/issues)
+- Before contributing, please read the [Contributing Guide (Chinese)](CONTRIBUTING.md).
 
 Thanks to the [linux.do](https://linux.do/) community for the support.
 
@@ -323,6 +324,7 @@ dotnet build -c Release
 ## 反馈与交流
 
 - 提交 Bug 或建议：[GitHub Issues](https://github.com/snownico0722/PaperTodo/issues)
+- 参与开发前，请阅读[贡献指南](CONTRIBUTING.md)。
 - QQ 交流群：[551612664（奇奇怪怪的魔法研究基地）](https://qm.qq.com/q/Mp7spYLrig)
 
 感谢 [linux.do](https://linux.do/) 社区的支持。

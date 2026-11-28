@@ -16,6 +16,9 @@ public sealed class SingleInstanceHelper : IDisposable
     private const int SignalConnectTimeoutMs = 180;
     private const int SignalRetryDelayMs = 70;
 
+    // The wire command is ASCII (optional RESULT prefix followed by Base64 JSON).
+    private const int MaxCommandBytes = 512 * 1024;
+
     private readonly string _mutexName;
     private readonly string _pipeName;
     private readonly TimeSpan _commandReadTimeout;
@@ -66,6 +69,7 @@ public sealed class SingleInstanceHelper : IDisposable
     {
         if (_disposed) throw new ObjectDisposedException(nameof(SingleInstanceHelper));
         var message = (waitForResult ? "RESULT " : "") + EncodeArgs(args);
+        if (message.Length > MaxCommandBytes) return 2;
         for (var attempt = 0; attempt < SignalRetryCount; attempt++)
         {
             using var client = new NamedPipeClientStream(
@@ -126,11 +130,15 @@ public sealed class SingleInstanceHelper : IDisposable
                     // the listener, and shutdown must cancel a peer already connected to the pipe.
                     using var readTimeout = CancellationTokenSource.CreateLinkedTokenSource(token);
                     readTimeout.CancelAfter(_commandReadTimeout);
-                    using var reader = new StreamReader(server);
                     string? message;
                     try
                     {
-                        message = await reader.ReadLineAsync(readTimeout.Token);
+                        message = await ReadCommandLineAsync(server, MaxCommandBytes, readTimeout.Token);
+                    }
+                    catch (InvalidDataException)
+                    {
+                        // Discard this command without dispatching an empty activation.
+                        continue;
                     }
                     catch (OperationCanceledException) when (!token.IsCancellationRequested)
                     {
@@ -171,6 +179,32 @@ public sealed class SingleInstanceHelper : IDisposable
                 }
             }
         }, token);
+    }
+
+    internal static async Task<string?> ReadCommandLineAsync(Stream stream, int limit, CancellationToken token)
+    {
+        using var line = new MemoryStream();
+        var buffer = new byte[4096];
+        var preamble = Encoding.UTF8.GetPreamble();
+        while (true)
+        {
+            var count = await stream.ReadAsync(buffer.AsMemory(), token).ConfigureAwait(false);
+            var end = buffer.AsSpan(0, count).IndexOfAny((byte)'\r', (byte)'\n');
+            var length = end < 0 ? count : end;
+            if (line.Length + length > limit + preamble.Length)
+                throw new InvalidDataException("Activation command exceeds the wire limit.");
+
+            line.Write(buffer, 0, length);
+            var offset = line.GetBuffer().AsSpan(0, (int)line.Length).StartsWith(preamble) ? preamble.Length : 0;
+            if (line.Length - offset > limit)
+                throw new InvalidDataException("Activation command exceeds the wire limit.");
+
+            if (end >= 0 || count == 0)
+            {
+                if (count == 0 && line.Length == offset) return null;
+                return Encoding.UTF8.GetString(line.GetBuffer(), offset, (int)line.Length - offset);
+            }
+        }
     }
 
     private static string EncodeArgs(IReadOnlyList<string> args)

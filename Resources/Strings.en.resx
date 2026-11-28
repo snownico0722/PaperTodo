@@ -537,7 +537,7 @@ Error: {0}</value>
     <value>Paper colors: background, accents, and muted text.</value>
   </data>
   <data name="TipUiFont" xml:space="preserve">
-    <value>By default, system fonts are chosen for the interface language; the interface and note text may use different fonts. Choosing Microsoft YaHei or DengXian applies that font across the interface, tray, capsules, todos, and notes. If papertodo.ttf or papertodo.otf is in the app folder, that custom font takes priority.</value>
+    <value>Default matches system fonts to the interface language; the interface and note content may use different fonts. Choosing Microsoft YaHei or DengXian applies the selected font consistently to the interface, tray, capsules, todos, and notes.</value>
   </data>
   <data name="TipTextRenderingProfile" xml:space="preserve">
     <value>Standard uses Windows' default text rendering for the best compatibility. Soft smooths letter edges but may look slightly blurry at some display scales. Sharp makes outlines clearer but can slightly change the width or spacing of some fonts. These modes affect only appearance, not text content.</value>
@@ -546,7 +546,7 @@ Error: {0}</value>
     <value>Enhanced custom bold</value>
   </data>
   <data name="TipCustomFontEnhancedBold" xml:space="preserve">
-    <value>When enabled, bold text uses a separate bold font file instead of artificially thickening the regular font. Place both papertodo (regular) and PaperTodo_Bold (bold) in the app folder, using .ttf or .otf files.</value>
+    <value>Used together with a custom font. Place a separate bold font file named `papertodo_bold.ttf` (or `.otf`) in the app folder and enable this option. Bold text will use that font face directly.</value>
   </data>
   <data name="TipMarkdownRender" xml:space="preserve">
     <value>Basic rendering keeps Markdown syntax marks but dims them, while showing simple formatting such as list bullets and dividers. Full rendering makes headings, lists, quotes, and code blocks look closer to the final result and hides most syntax marks. While editing, the block containing the cursor shows its marks again for easy changes.</value>
@@ -558,8 +558,8 @@ Error: {0}</value>
     <value>When editing Markdown, syntax marks that reappear fade in smoothly as the editor changes state.</value>
   </data>
   <data name="TipFullscreenTopmostMode" xml:space="preserve">
-    <value>When video, games, or other fullscreen apps are detected, papers and edge capsules can step aside.
-“Stay on top” keeps them always visible.</value>
+    <value>When video, games, or other fullscreen apps are detected, unpinned papers and edge capsules can step aside.
+Manually pinned papers stay on top.</value>
   </data>
   <data name="TipTodoVisualSize" xml:space="preserve">
     <value>Todo text, row height, and spacing.</value>
@@ -650,6 +650,12 @@ Settings info icons always stay available.</value>
   </data>
   <data name="TipFastAnimations" xml:space="preserve">
     <value>Shorten interface animations to about 60% of their normal duration for faster responses while keeping transitions. This has no effect when animations are disabled.</value>
+  </data>
+  <data name="SettingsCapsuleOutlineEnhancement" xml:space="preserve">
+    <value>Enable capsule outline enhancement</value>
+  </data>
+  <data name="TipCapsuleOutlineEnhancement" xml:space="preserve">
+    <value>When enabled, active edge capsules gain a thin translucent outer outline, making them easier to distinguish against similarly colored desktop backgrounds.</value>
   </data>
   <data name="TipPersistentPowerShellProcess" xml:space="preserve">
     <value>!pf / !powerf use a persistent process for faster starts; variables and state may carry across scripts.
@@ -1035,6 +1041,9 @@ Per-note percentage zoom stacks on top.</value>
   <data name="ImageReferenceTextHidden" xml:space="preserve">
     <value>Always hide</value>
   </data>
+  <data name="SettingsFontSizeLabel" xml:space="preserve"><value>Size</value></data>
+  <data name="SettingsLineSpacing" xml:space="preserve"><value>Line spacing</value></data>
+  <data name="SettingsItemSpacing" xml:space="preserve"><value>Item spacing</value></data>
   <data name="SettingsTextBold" xml:space="preserve">
     <value>Bold</value>
   </data>
@@ -1043,13 +1052,14 @@ Per-note percentage zoom stacks on top.</value>
   </data>
   <data name="TipNoteBodyTextStyle" xml:space="preserve">
     <value>Small / medium / large on top of overall size, optional bold.
-Per-note percentage zoom stacks on top.</value>
+Per-note percentage zoom stacks on top.
+Line spacing applies while editing and browsing.</value>
   </data>
   <data name="SettingsTodoBodyText" xml:space="preserve">
     <value>Todo body</value>
   </data>
   <data name="TipTodoBodyTextStyle" xml:space="preserve">
-    <value>Todo body and row height: small / medium / large, optional bold.</value>
+    <value>Size and bold control to-do text. Item spacing adjusts the gap between to-dos, including those that wrap onto several lines.</value>
   </data>
   <data name="SettingsTitleText" xml:space="preserve">
     <value>Title text</value>
@@ -1364,6 +1374,18 @@ When off, open at the docked edge or remembered position.</value>
   </data>
   <data name="PluginInstanceLimitMessage" xml:space="preserve">
     <value>“{0}” allows at most {1} paper instance(s). Delete an existing instance before creating another.</value>
+  </data>
+  <data name="NotePasteImageTextOnlyTitle" xml:space="preserve">
+    <value>Some images were pasted as text</value>
+  </data>
+  <data name="NotePasteImageTextOnlyMessage" xml:space="preserve">
+    <value>Images that could not be imported were kept as text. The rest of the content was pasted.</value>
+  </data>
+  <data name="NoteClipboardIncompleteTitle" xml:space="preserve">
+    <value>Clipboard operation canceled</value>
+  </data>
+  <data name="NoteClipboardIncompleteMessage" xml:space="preserve">
+    <value>The selected images could not all be copied. Your original content is still in place. Try a smaller selection.</value>
   </data>
   <data name="NoteCopyTextOnlyTitle" xml:space="preserve">
     <value>Text copied only</value>
@@ -1762,6 +1784,9 @@ Resolve the file access problem and retry, or choose “Rebuild workspace” to 
   <data name="WorkspaceMoveGroup" xml:space="preserve">
     <value>Move to</value>
   </data>
+  <data name="WorkspaceCreateSlotsOccupied" xml:space="preserve">
+    <value>No number is available for a new workspace. Workspace numbers {0} still have data that could not be verified. Their files have been kept.</value>
+  </data>
   <data name="WorkspaceCreateNew" xml:space="preserve">
     <value>Create new workspace</value>
   </data>
@@ -1791,5 +1816,23 @@ Resolve the file access problem and retry, or choose “Rebuild workspace” to 
   </data>
   <data name="WindowBindingProgramUnavailable" xml:space="preserve">
     <value>The app location could not be read. Bind its running window again.</value>
+  </data>
+<data name="SettingsCustomFont" xml:space="preserve">
+    <value>Custom font</value>
+  </data>
+<data name="TipCustomFont" xml:space="preserve">
+    <value>Rename a `.ttf` or `.otf` font file to `papertodo.ttf` (or `.otf`), place it beside `PaperTodo.exe`, and restart PaperTodo to replace the default font used by the interface and note content.</value>
+  </data>
+<data name="SettingsDataBackup" xml:space="preserve">
+    <value>Data backup</value>
+  </data>
+<data name="SettingsAutoGradientBackup" xml:space="preserve">
+    <value>Automatic tiered backups</value>
+  </data>
+<data name="TipAutoGradientBackup" xml:space="preserve">
+    <value>When enabled, PaperTodo packages text and settings from all workspaces into the `PaperTodo-backups` folder. It keeps up to four history archives spanning roughly 10 minutes, 6 hours, 3 days, and 1 month. Archives do not include note images or plugin data. For a PC migration or a complete backup, copy the entire application folder.</value>
+  </data>
+<data name="TipPluginBodyTypes" xml:space="preserve">
+    <value>Notes use the built-in Markdown editor by default. After installing a plugin that provides a custom interface, right-click a note and choose “Body type” to switch that note to a plugin panel, such as a clock. The original note content is preserved and you can switch back to Markdown at any time.</value>
   </data>
 </root>

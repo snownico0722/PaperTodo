@@ -59,6 +59,8 @@ public sealed partial class PaperWindow
         _markdownBodySession?.CancelPresenterDeferredWork();
     }
 
+    internal void UpdateNoteLineSpacing() => _noteBox?.RefreshTypography();
+
     public void UpdateMarkdownRenderMode()
     {
         if (_paper.Type == PaperTypes.Note && _noteBox != null)
@@ -122,7 +124,7 @@ public sealed partial class PaperWindow
             Background = Brushes.Transparent,
             Foreground = TextBrush,
             CaretBrush = TextBrush,
-            FontFamily = NoteTypography.FontFamily,
+            FontFamily = NoteTypography.EditorFontFamily,
             FontSize = NoteTypography.FontSize,
             FontStyle = NoteTypography.FontStyle,
             FontWeight = NoteTypography.FontWeight,
@@ -933,16 +935,7 @@ public sealed partial class PaperWindow
             NotifyCurrentPaperBodyTypographyChanged();
         }
 
-        if (_textZoomIndicator != null)
-        {
-            _textZoomIndicator.Text = $"{(int)Math.Round(zoom * 100)}%";
-            _textZoomIndicator.Foreground = WeakTextBrush;
-            _textZoomIndicator.Opacity = 0.55;
-            if (_textZoomIndicator.Parent is UIElement host)
-            {
-                host.Visibility = Math.Abs(zoom - 1.0) < 0.001 ? Visibility.Collapsed : Visibility.Visible;
-            }
-        }
+        RefreshPaperBottomBar();
     }
 
     private double CurrentTextZoom()
@@ -1101,17 +1094,6 @@ public sealed partial class PaperWindow
         return _noteBox != null
             ? _liveIsScriptCapsule
             : IsScriptCapsuleContent(_paper.Content);
-    }
-
-    internal bool IsCurrentNoteEmpty()
-    {
-        if (_paper.Type != PaperTypes.Note ||
-            !IsCurrentBodyProviderMarkdown)
-        {
-            return false;
-        }
-
-        return string.IsNullOrWhiteSpace(_noteBox?.PersistentText ?? _paper.Content);
     }
 
     internal static bool IsScriptCapsuleContent(string? text)

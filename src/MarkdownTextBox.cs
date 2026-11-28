@@ -50,7 +50,7 @@ public sealed partial class MarkdownTextBox : TextEditor
 
     public MarkdownTextBox()
     {
-        FontFamily = NoteTypography.FontFamily;
+        FontFamily = NoteTypography.EditorFontFamily;
         FontSize = NoteTypography.FontSize;
         FontStyle = NoteTypography.FontStyle;
         FontWeight = NoteTypography.FontWeight;
@@ -74,7 +74,6 @@ public sealed partial class MarkdownTextBox : TextEditor
 
         // Rebuild viewport pin set after visual lines change so on-screen decodes skip LRU eviction.
         TextArea.TextView.VisualLinesChanged += (_, _) => QueueRefreshViewportProtectedBitmaps();
-        DataObject.AddPastingHandler(this, OnPaste);
         SizeChanged += (_, _) => HandleImageViewportSizeChanged();
         RefreshVisualStyle();
     }
@@ -274,7 +273,7 @@ public sealed partial class MarkdownTextBox : TextEditor
 
     public void RefreshTypography()
     {
-        FontFamily = NoteTypography.FontFamily;
+        FontFamily = NoteTypography.EditorFontFamily;
         FontStyle = NoteTypography.FontStyle;
         FontWeight = NoteTypography.FontWeight;
         FontStretch = NoteTypography.FontStretch;
@@ -1358,222 +1357,6 @@ public sealed partial class MarkdownTextBox : TextEditor
         }
 
         return true;
-    }
-
-    private void OnPaste(object sender, DataObjectPastingEventArgs e)
-    {
-        string? clipboardText;
-        try
-        {
-            clipboardText = e.DataObject.GetDataPresent(DataFormats.UnicodeText)
-                ? e.DataObject.GetData(DataFormats.UnicodeText) as string
-                : null;
-        }
-        catch
-        {
-            e.CancelCommand();
-            return;
-        }
-
-        if (!IsReadOnly &&
-            string.IsNullOrEmpty(clipboardText) &&
-            TryInsertImageFromClipboard(e.DataObject))
-        {
-            e.CancelCommand();
-            return;
-        }
-
-        if (string.IsNullOrEmpty(clipboardText))
-        {
-            return;
-        }
-
-        if (IsReadOnly)
-        {
-            return;
-        }
-
-        var text = clipboardText;
-        var replacementTarget = CaptureDocumentReplacementTarget();
-        var selectedLength = replacementTarget.SelectionLength;
-        var containsImageReference = MarkdownImageReferences.Enumerate(text).Any();
-        var blockPasteText = EnsureImageReferencePasteIsBlock(text, replacementTarget);
-        string pasteText;
-        if (containsImageReference)
-        {
-            try
-            {
-                if (!IsSafeImageReferencePaste(blockPasteText, replacementTarget))
-                {
-                    e.CancelCommand();
-                    PasteRejected?.Invoke();
-                    return;
-                }
-
-                var maximumIdPasteText = ExpandImageReferenceIdsForLengthPreflight(blockPasteText);
-                if (!IsSafeImageReferencePaste(maximumIdPasteText, replacementTarget))
-                {
-                    e.CancelCommand();
-                    PasteRejected?.Invoke();
-                    return;
-                }
-            }
-            catch (Exception ex)
-            {
-                ImageImportFailed?.Invoke(ex);
-                e.CancelCommand();
-                return;
-            }
-
-            // Image references are atomic: unlike ordinary text, never clip a partial batch.
-            pasteText = blockPasteText;
-        }
-        else
-        {
-            // Native paste normalizes line endings. A copied whole line is inserted at the
-            // line start even when text is selected, so it cannot borrow that selection's length.
-            var newLine = TextUtilities.GetNewLineFromDocument(Document, TextArea.Caret.Line);
-            var nativeText = TextUtilities.NormalizeNewLines(blockPasteText, newLine);
-            var replaces = Options.CutCopyWholeLine && e.DataObject.GetDataPresent("MSDEVLineSelect")
-                ? 0 : selectedLength;
-            if (!TryBuildSafePasteText(nativeText, replaces, out _))
-            {
-                e.CancelCommand();
-                PasteRejected?.Invoke();
-                return;
-            }
-            pasteText = blockPasteText;
-        }
-
-        if (containsImageReference && _imageStore != null)
-        {
-            try
-            {
-                pasteText = _imageStore.CloneForeignImageReferencesForNote(_noteId, pasteText);
-            }
-            catch (Exception ex)
-            {
-                ImageImportFailed?.Invoke(ex);
-                e.CancelCommand();
-                return;
-            }
-        }
-
-        if (containsImageReference)
-        {
-            try
-            {
-                if (!IsSafeImageReferencePaste(pasteText, replacementTarget))
-                {
-                    e.CancelCommand();
-                    PasteRejected?.Invoke();
-                    return;
-                }
-
-                e.CancelCommand();
-                var caret = CommitDocumentReplacement(replacementTarget, pasteText);
-                CaretIndex = caret;
-                Select(caret, 0);
-                Focus();
-                QueuePostPasteRefresh();
-            }
-            catch (Exception ex)
-            {
-                ImageImportFailed?.Invoke(ex);
-                e.CancelCommand();
-            }
-            return;
-        }
-
-        if (string.Equals(pasteText, clipboardText, StringComparison.Ordinal))
-        {
-            return;
-        }
-
-        var data = new DataObject();
-        data.SetData(DataFormats.UnicodeText, pasteText);
-        data.SetData(DataFormats.Text, pasteText);
-        e.DataObject = data;
-        e.FormatToApply = DataFormats.UnicodeText;
-        QueuePostPasteRefresh();
-    }
-
-    private static string EnsureImageReferencePasteIsBlock(
-        string pasteText,
-        DocumentReplacementTarget replacementTarget)
-    {
-        if (string.IsNullOrWhiteSpace(pasteText))
-        {
-            return pasteText;
-        }
-
-        var firstLineEnd = pasteText.IndexOfAny(['\r', '\n']);
-        var firstLine = firstLineEnd < 0 ? pasteText : pasteText[..firstLineEnd];
-        var lastLineStart = pasteText.LastIndexOfAny(['\r', '\n']) + 1;
-        var lastLine = pasteText[lastLineStart..];
-        var selectionStart = replacementTarget.Start;
-        var selectionEnd = selectionStart + replacementTarget.SelectionLength;
-        var needsLeadingNewLine =
-            MarkdownImageReferences.TryParseReferenceLine(firstLine, out _) &&
-            selectionStart > 0 &&
-            replacementTarget.OriginalText[selectionStart - 1] is not '\r' and not '\n';
-        var needsTrailingNewLine =
-            MarkdownImageReferences.TryParseReferenceLine(lastLine, out _) &&
-            (selectionEnd >= replacementTarget.OriginalText.Length ||
-                replacementTarget.OriginalText[selectionEnd] is not '\r' and not '\n');
-        if (!needsLeadingNewLine && !needsTrailingNewLine)
-        {
-            return pasteText;
-        }
-
-        var builder = new StringBuilder(pasteText.Length + Environment.NewLine.Length * 2);
-        if (needsLeadingNewLine)
-        {
-            builder.Append(Environment.NewLine);
-        }
-        builder.Append(pasteText);
-        if (needsTrailingNewLine)
-        {
-            builder.Append(Environment.NewLine);
-        }
-        return builder.ToString();
-    }
-
-    private static string ExpandImageReferenceIdsForLengthPreflight(string markdown)
-    {
-        const string maximumImageId = "99999999";
-        var references = MarkdownImageReferences.Enumerate(markdown).ToList();
-        if (references.Count == 0)
-        {
-            return markdown;
-        }
-
-        var additionalLength = references.Sum(reference => maximumImageId.Length - reference.ImageId.Length);
-        var builder = new StringBuilder(checked(markdown.Length + additionalLength));
-        var cursor = 0;
-        foreach (var reference in references)
-        {
-            builder.Append(markdown, cursor, reference.LineStart - cursor);
-            var line = markdown.Substring(reference.LineStart, reference.LineLength);
-            var urlMarker = line.IndexOf("](", StringComparison.Ordinal);
-            var imageToken = MarkdownImageReferences.UriPrefix + reference.ImageId;
-            var tokenStart = urlMarker >= 0
-                ? line.IndexOf(imageToken, urlMarker + 2, StringComparison.Ordinal)
-                : -1;
-            if (tokenStart < 0)
-            {
-                throw new InvalidDataException(Strings.Get("ImageImportUnsupported"));
-            }
-
-            var idStart = tokenStart + MarkdownImageReferences.UriPrefix.Length;
-            builder.Append(line, 0, idStart);
-            builder.Append(maximumImageId);
-            builder.Append(line, idStart + reference.ImageId.Length, line.Length - idStart - reference.ImageId.Length);
-            cursor = reference.LineStart + reference.LineLength;
-        }
-
-        builder.Append(markdown, cursor, markdown.Length - cursor);
-        return builder.ToString();
     }
 
     private bool EnsureTrailingImageAnchorLine()

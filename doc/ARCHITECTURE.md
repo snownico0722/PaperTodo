@@ -16,6 +16,7 @@ PaperTodo 是 Windows 桌面“纸片”应用。当前技术路线围绕几个�
 - **WPF 是主 UI / shape owner，native/DirectComposition 只承担确有必要的 Windows 边界能力。** 不把 compositor 扩成第二套 UI renderer。
 - **插件贡献内容/动作意图，宿主持有产品 chrome 与关键生命周期 authority。** Capsule、Edge Mini、Top Bar 都沿用这一方向；插件不能因为获得扩展点就接管 PaperWindow、Edge HWND 或顶栏 WPF tree。
 - **持久化按数据生命周期和失败语义分域。** 核心状态、图片资产、插件状态分别由各自 store 管理；破坏性恢复/回收采用保守策略。
+- **失败尽量留在受影响的范围内。** 功能不支持、资源缺失或操作失败时，优先保留已有数据和仍可用的功能。能独立完成的部分继续完成，无法安全提交的部分保留原状，并在结果发生变化时给出清楚的反馈。
 - **当前 Architecture 只记录已经确立的方向。** 未确认的未来方案、实验候选和一次性 workaround 不写成当前架构。
 
 技术基础：
@@ -86,7 +87,7 @@ PaperTodo.exe
 
 ### 3.1 GUI 单实例
 
-正常 GUI 启动使用 `SingleInstanceHelper` 的 Mutex + named pipe。只有主 GUI 实例建立 `AppController`；后续 GUI 启动只把参数转发给主实例后退出。
+正常 GUI 启动使用 `SingleInstanceHelper` 的 Mutex + named pipe。只有主 GUI 实例建立 `AppController`；后续 GUI 启动只把参数转发给主实例后退出。每个连接传一行命令，编码后的上限为 512 KiB（含可选的 `RESULT ` 前缀）。主实例丢弃超限命令后继续接受连接。
 
 `AppController` 尚未完成启动时收到的单实例命令先排队，待 controller 可用后再执行。普通纸片窗口全部关闭不等于退出应用，进程使用显式 shutdown 生命周期。
 
@@ -104,7 +105,7 @@ Codex CLI Bridge 通过单次 CLI 配置连接同一可执行文件的 stdio bri
 
 MCP 的 transport、权限策略和 bridge 生命周期不拥有 Paper/Todo/Note 的第二套业务写入逻辑；真正的业务 mutation 仍回到 GUI 主宿主和共享命令边界。
 
-公共软件设置由 `PaperSettingsService` 与显式的 `AppController.SettingsApi` 类型化目录统一处理；MCP、Native、Web 只适配参数、调用方权限和生命周期。`context.SettingsApi` 与插件私有 `context.Settings` 分离，不向 Workspace 必需接口加入 AppState 字段读写。普通 UI 设置值（主题、字体、显示、脚本、MCP、启动项和背景偏好等）与 API 共用此服务及生效函数；快捷键录制草稿、批量恢复默认和退出时收集输入仍属于各自的交互/命令流程。普通设置变化通过既有 live region 更新对应区域；主题、字体与设置模式才重建整页，外部后缀编辑器保持原实例并同步成功提交的值。核心设置提交到 StateStore 后再发布 UI/Runtime 生效，失败恢复原值及联动状态；Windows 启动项与背景偏好沿用原存储 owner。插件 List/Get 使用 `settings.read`，Set 使用 `settings.update`；MCP Set 继续使用完整写入授权。MCP 关闭自己时停止接收新连接，但保留当前响应及既有超时/退出取消边界。
+公共软件设置由 `PaperSettingsService` 与显式的 `AppController.SettingsApi` 类型化目录统一处理；MCP、Native、Web 只适配参数、调用方权限和生命周期。`context.SettingsApi` 与插件私有 `context.Settings` 分离，不向 Workspace 必需接口加入 AppState 字段读写。普通 UI 设置值（主题、字体、显示、脚本、MCP、启动项和背景偏好等）与 API 共用此服务及生效函数；快捷键录制草稿、批量恢复默认和退出时收集输入仍属于各自的交互/命令流程。普通设置变化通过既有 live region 更新对应区域；主题、字体与设置模式才重建整页，外部后缀编辑器保持原实例并同步成功提交的值。核心设置提交到 StateStore 后再发布 UI/Runtime 生效，失败恢复原值及联动状态；Windows 启动项由系统管理。插件 List/Get 使用 `settings.read`，Set 使用 `settings.update`；MCP Set 继续使用完整写入授权。MCP 关闭自己时停止接收新连接，但保留当前响应及既有超时/退出取消边界。
 
 跨纸片显示控制由插件可选 `IPaperWorkspacePresentationApi` 与 MCP 适配器进入共享 `AppController.PresentWorkspacePaper` / `ApplyPaperPresentation`，不将窗口请求塞入正文业务事务。2.1 自身纸片控制也复用同一 controller dispatch，但保留 session/provider 范围。窗口、焦点、胶囊资格、动画及常规保存仍由既有 `ShowPaper` / `HidePaper` / `SetPaperCollapsedRuntime` 等流程拥有，不另存显隐状态；返回值只承诺处理后的逻辑状态，不承诺动画完成或同步落盘。内容写入的同步提交/回滚语义不因此改变。展示请求只建立事件来源边界，不预先提交其他纸片的内容；Paper/Todo/Note 内容 mutation 仍统一走 `PaperCommandService` 的同步提交/回滚路径。外部写入只有在目标本身是正在编辑的内置 Markdown 时，才先把该目标的待提交文字写回模型，再执行插件/MCP 修改；修改其他目标不会调用无关第三方正文的 `Commit()`。后续核心保存仍按正常规则同步 PaperTodo 自己的内置 Markdown。该能力属于 API 2.2，但不新增插件 permission 或 MCP 完整写入门槛；MCP 仍受总开关控制。
 
@@ -112,7 +113,7 @@ MCP 的 transport、权限策略和 bridge 生命周期不拥有 Paper/Todo/Note
 
 Web 插件使用 WebView2；Native 插件可以自行创建线程、Worker、子进程或第三方运行环境。这些实现细节属于插件内部，不成为 PaperTodo 的第二套 `AppState` authority。
 
-插件协议当前最新为 **2.4**，最低兼容 **2.1**；2.0 及更早版本不再加载，高于当前实现的未来版本也拒绝加载。`apiVersion` 表示插件最低依赖的宿主 API：2.1／2.2／2.3 插件可继续运行，使用新能力的插件必须声明提供该能力的最低版本。需要在可见 Body/Mini 不存在时仍持续工作的插件声明 `runtime`：PaperTodo 对每个 provider **最多只创建一个 Runtime 后端**。`startupPaper` 先处理真实 Paper；之后只要最终至少有一张 `Note` Paper 的 `BodyProviderId` 指向该 provider，Runtime 就存在。0→1 启动，1→0 释放；隐藏、折叠、Body 重建、Mini 回收和当前没有 `PaperWindow` 都不改变 Runtime lifetime。
+插件协议当前最新为 **2.6**，最低兼容 **2.1**；2.0 及更早版本不再加载，高于当前实现的未来版本也拒绝加载。`apiVersion` 表示插件最低依赖的宿主 API：2.1～2.5 插件可继续运行，使用新能力的插件必须声明提供该能力的最低版本。需要在可见 Body/Mini 不存在时仍持续工作的插件声明 `runtime`：PaperTodo 对每个 provider **最多只创建一个 Runtime 后端**。`startupPaper` 先处理真实 Paper；之后只要最终至少有一张 `Note` Paper 的 `BodyProviderId` 指向该 provider，Runtime 就存在；声明底栏的已启用插件也可在没有纸片时运行。隐藏、折叠、Body 重建、Mini 回收和当前没有 `PaperWindow` 都不改变 Runtime lifetime。
 
 一张 Paper 不再对应一个后台 Runtime。多开插件仍然只有一个 provider Runtime，Runtime 通过 `PaperId` 管理 N 个逻辑实例；需要额外线程、Web Worker、子进程或隔离域时，由插件在自己的 Runtime 内部创建和回收，宿主不提供第二种“每 Paper 后台”协议。
 
@@ -141,7 +142,7 @@ PaperTodo 不提供插件热重载入口。插件 manifest、DLL、Web body/mini
 - Body/Mini -> Runtime 消息不跨 Runtime interruption 排队。Web renderer 暂不可接收时 `runtime.post(...)` 明确失败为 `runtime_unavailable`，绝不返回成功后静默丢消息。业务重试、去重和时效判断属于插件。
 - 首次 Runtime 启动失败直接进入 `Failed`，不自动重试；修改设置或下次正常启动可再尝试。已经成功运行后的 Web renderer 最多先就地 reload 一次；需要宿主重建整个 Runtime 时，每个进程生命周期也只给一次立即重建机会，不使用 Backoff、失败计数或定时重试。重建期间保留最后一次 Runtime presentation，再失败则进入 `Failed` 并清除动态展示。
 - `Papers.List()` 是 Runtime 启动时的全量快照；`Papers.Subscribe(...)` 只报告订阅后的增量，不为启动前已存在的 Paper 重放 `PaperAdded`。删除 provider 最后一张 Paper 时，若当前仍有存活且可投递的 Runtime lease，宿主在撤销 lifetime 前先 reconcile 并投递最终 `PaperRemoved`；启动/重建中、`Failed` 或 Web document 不可投递期间不承诺该事件必达。
-- Todo actions 与 Top Bar labels 是 2.1 的 Runtime contribution，随 Runtime/目标对象生命周期撤销，不进入长期业务持久化。
+- Todo actions、Top Bar labels 及跨纸片胶囊覆盖都是 Runtime contribution，随 Runtime/目标对象生命周期撤销，不进入长期业务持久化。胶囊覆盖按目标 Paper ID 保存一份，后发布者取得覆盖归属。标准内容和 Native 工厂均由发起 Runtime 发布，Web 文档替换时收回。普通与贴边胶囊复用现有内容渲染和尺寸路径，外壳、输入及队列仍由宿主持有。覆盖清除后恢复目标现有的正文插件胶囊或宿主默认胶囊。
 
 ## 4. 状态与持久化架构
 
@@ -161,6 +162,8 @@ PaperTodo 不提供插件热重载入口。插件 manifest、DLL、Web body/mini
 ### 4.2 核心状态
 
 `AppState` 是核心持久化根；`PaperData` 是单纸片模型；Todo 行使用 `PaperItem`。
+
+背景混色、拉伸和位置属于 `AppState` 的工作区设置，应用现有的主工作区跟随规则。纸片显示时从当前工作区的生效设置取值，背景图片从程序目录加载。
 
 常规与实验室的恢复默认和其他设置页面一样，从 `new AppState()` 取得字段默认值，并由各页显式列出重置范围。页面恢复、公共设置 API 与数据重载复用现有生效动作；重复的单窗口更新由 `ApplyWindowSettingEffects` 按调用方给定的顺序执行。保存时点、编辑器同步、托盘刷新和运行时交接仍由各入口持有，不把恢复默认转换成逐项 API 写入或新的批量事务。
 
@@ -204,9 +207,13 @@ Edge 展开记忆保留原有窗口 DIP 字段，并用可选 `DeepCapsuleExpand
 
 图片二进制不进入 `data.json`。`NoteImageStore` 统一串行化 LMDB 访问，外部业务代码不直接拥有 LMDB transaction authority。
 
+笔记复制和剪切通过剪贴板携带图片来源和可用的编码数据。跨工作区粘贴由目标图片库分配编号。无法导入的引用降级为普通文字，其余内容照常粘贴。正文长度校验与编辑器共用末尾图片锚点换行的豁免，目录更新、重载和恢复可读取编辑器在上限处保存的完整笔记。
+
 Markdown 中的 Note 图片只通过 PaperTodo 内部 `i:` asset URI 引用宿主管理的图片；网络图片或任意外部图片不是当前 Note 图片资产协议的一部分。
 
 图片 GC / id reuse 是破坏性操作，因此 reachability 采用 fail-closed：无法可靠证明当前状态和需要保护的 recovery snapshot 都可扫描时，本轮不回收。
+
+显式重载或合并接受新状态后，复查当前正文、备份、临时文件和冲突归档的图片引用。缺库时据此更新建库准入；已加载的库保留扫描到的悬空编号，扫描失败时停用本会话的空洞编号复用。该复查不触发 GC。首次写入时，`NoteImageStore` 只对仍缺失的文件执行建库，已有文件必须经正常加载建立索引后才可写入。
 
 ### 4.4 插件状态
 
@@ -216,19 +223,19 @@ Markdown 中的 Note 图片只通过 PaperTodo 内部 `i:` asset URI 引用宿�
 
 ### 4.5 固定编号工作区
 
-`WorkspaceCatalog` 从主 `data.json` 的可选 `workspaces` 对象解析总开关、实际工作区编号列表（最多五个，默认仅主工作区）、自定义名称、最后激活编号、副工作区设置跟随开关及顶栏选择模式。当前目录以 `Slots` 唯一决定现有工作区成员；没有列表时默认仅工作区1，不再迁移测试版基于 `Count` 的旧目录，也不扫描隐藏的旧文件。不创建额外目录扫描器或 `workspaces.json`。
+`WorkspaceCatalog` 从主 `data.json` 的可选 `workspaces` 对象解析总开关、实际工作区编号列表（最多五个，默认仅主工作区）、自定义名称、最后激活编号、副工作区设置跟随开关及顶栏选择模式。启动、显式接受主数据重载或新建工作区时，以 `Slots` 为基础，按正常读取规则只读校验缺少的 2～5 号主文件及固定备份，将可用编号补入列表。未记录工作区配置时，发现有效副区即启用工作区；已有的关闭选择继续有效。扫描不打开副区会话，编号随正常目录保存写回。旧版 `Count` 不参与判断。
 
-每个固定编号拥有不可变的 `WorkspacePaths` 与复用的 `StateStore` writer：1 使用 `data.json` / `data.backup.json` / `note-assets.lmdb` / `plugins/data`；2～5 使用 `data2.json` / `data2.backup.json` / `note-assets2.lmdb` / `plugins/data2` 等。备份、失败恢复源及冲突归档的图片引用扫描只保护对应工作区；未激活工作区不维持窗口、LMDB 连接或插件 Runtime。图片缺失或读取损坏不阻止工作区启动和切换，也不额外弹出预检查提示；图片读取按原有局部失败处理。图片库加载失败时禁止危险写入，缺失库如有历史引用则不创建新库覆盖其恢复位置，缺失的引用编号不得重新分配；只有图片写入受到必要限制，不影响纸片和工作区的正常使用。插件代码发现与 Native assembly 缓存仍属于进程，不随切换重新发现。
+每个固定编号拥有不可变的 `WorkspacePaths` 与复用的 `StateStore` writer：1 使用 `data.json` / `data.backup.json` / `note-assets.lmdb` / `plugins/data`；2～5 使用 `data2.json` / `data2.backup.json` / `note-assets2.lmdb` / `plugins/data2` 等。备份、失败恢复源及冲突归档的图片引用扫描只保护对应工作区；未激活工作区不维持窗口、LMDB 连接或插件 Runtime。图片缺失或读取损坏不阻止工作区启动和切换，也不额外弹出预检查提示；图片读取按原有局部失败处理。图片库加载失败时禁止危险写入。缺失库可在核心恢复提交前只读扫描引用，扫描完整且无旧引用时允许首次写入建库。若缺库因待恢复的引用扫描而被保护，核心恢复提交、复读和临时清理成功后重新扫描引用。核心恢复待提交时跳过图片 GC 和旧编号复用。插件代码发现与 Native assembly 缓存仍属于进程，不随切换重新发现。
 
 `AppController.Workspaces` 协调显式切换：先提交原编辑器并同步保存以淘汰旧异步快照，再加载目标核心数据与图片库，结束旧窗口、胶囊与插件 session/runtime。设置跟随只读取已提交的健康主区数据，不自行恢复或初始化主区。核心数据按健康主文件、健康固定备份、最新完整临时快照依次恢复；旧核心文件仍存在但所有来源不可用时，寻找当前工作区最近的有效历史 ZIP，由用户明确选择历史恢复、重建、回退到可用工作区或退出，绝不隐式创建空白内容。真正没有旧核心文件的新工作区正常初始化。占用、权限或 I/O 读取异常不等同于损坏，不自动覆盖；固定备份读取失败时明确提供重试或重建，重试仅重新读取该备份，显式重建沿用正常提交检查，不自动继续搜索其他来源。恢复与重建沿用原子写入器，写入前校验来源，提交成功后复读；复用固定 `.tmp` 前保护不同版本的完整快照，不拼接片段，不另建重复损坏副本。只有主文件健康且没有未完成恢复时才清理该工作区的孤立临时文件；冲突归档仅保留最近五组完整记录。临时文件、冲突归档及其图片引用按工作区保护，无法可靠扫描时不进行破坏性图片清理；图片、插件目录及历史归档不参与创建准入。启动时目标副工作区不可用时，可回退到已加载的健康主区；切换失败统一提供本地化原因与重试/退出，取消时保持原工作区，不重复弹普通保存失败。插件 datastore 的严格 detach 会等待当前写入、保存最新状态并报告失败；切换失败可恢复原缓存。切换不是删除，不发送永久纸片删除清理。目标使用新窗口及对应图片缓存，目标保存成功后才提交主文件中的活动编号。副工作区运行时更新主 catalog，必须通过主 `StateStore` 的锁与版本序号只替换 `workspaces` 节点，不能将当前副工作区 AppState 写入主文件。普通异步保存捕获具体 store 和界面代次，晚到的回调不能操作另一个工作区。成功切换清空旧工作区的重载结果；切换失败回滚则保留旧结果。目标已安装后失败时，先结束目标脚本进程，再按目标到原工作区的设置差异恢复运行时。MCP adapter 也绑定工作区代次：旧请求可完成已提交响应，但不得在新工作区执行；状态查询返回当前编号、数据文件名及设置跟随状态。缓存 writer 的保存投影只持有设置快照，不持有整份未激活 AppState。
 
-`AppController.WorkspaceTransfer` 协调单纸片移动，复用工作区交接门控、版本化保存与各资源 owner。先提交源纸片编辑；活动插件正文沿现有 detach 边界提交、释放并排空已接收状态，捕获最终保存并使旧 context 失效，再由 `NoteImageStore` 复制实际引用的编码图片并重映射编号，由 `PaperBodyPluginDataStore` 复制宿主管理的 per-paper state；目标设置、Runtime 及其他纸片不随源迁移。目标核心数据保存成功后才移除源纸片、清理本工作区内的纸片关联并保存源数据，两个保存均成功后才关闭源窗口。源保存失败保留源对象及窗口并回滚目标核心数据；已释放的插件正文沿既有重建入口恢复，Markdown 编辑实例保持不变。回滚失败明确报告目标可能留有副本。纸片 ID 冲突时生成新 ID，插件私有状态同步使用新 ID；自由队列和启动归属不跨工作区继承。移动不切换当前工作区，不建立跨 JSON/LMDB 的第二套事务或后台同步。
+`AppController.WorkspaceTransfer` 协调单纸片移动，复用工作区交接门控、版本化保存与各资源 owner。先提交源纸片编辑；活动插件正文沿现有 detach 边界提交、释放并排空已接收状态，捕获最终保存并使旧 context 失效。若目标已有待提交的恢复，先按目标的保存投影提交并验证恢复基准，再由 `NoteImageStore` 复制实际引用的编码图片并重映射编号，由 `PaperBodyPluginDataStore` 复制宿主管理的 per-paper state；目标设置、Runtime 及其他纸片不随源迁移。目标核心数据保存成功后才移除源纸片、清理本工作区内的纸片关联并保存源数据，两个保存均成功后才关闭源窗口。源保存失败保留源对象及窗口并回滚目标核心数据；已释放的插件正文沿既有重建入口恢复，Markdown 编辑实例保持不变。回滚失败明确报告目标可能留有副本。纸片 ID 冲突时生成新 ID，插件私有状态同步使用新 ID；自由队列和启动归属不跨工作区继承。移动不切换当前工作区，不建立跨 JSON/LMDB 的第二套事务或后台同步。
 
 副工作区默认继承主工作区 AppState 的软件设置。`WorkspaceFieldScopes` 对每个 `AppState` 可写字段显式声明归属（主设置、独立内容、独立布局、主区专属或旧版迁移）；只有列入主设置及保留兼容语义的旧版迁移字段才参与 `WorkspaceSettingsSnapshot`。新增字段未登记时默认不继承，工作区持久化 CI 必须检查全部字段均已分类，不能靠排除少数属性而隐式共享。MCP 权限、全局快捷键、插件启用状态等仍按原有主设置继承语义处理。`WorkspaceSettingsSnapshot` 不继承 Papers、胶囊位置、队列折叠记忆与布局；副工作区自己的设置保留在自身 JSON。加载时先按有效设置规范化纸片，再保留独立设置，避免用休眠偏好提前截短标题或改变折叠状态。保存时投影独立设置而不回写继承值；正常单工作区不启用投影。设置 UI / Native / Web / MCP 的公共设置目录在继承期间为只读；普通设置页面（包括插件页）禁用并降低亮度；「工作区与数据」页的工作区管理仍可用，数据处理与 MCP 设置单独只读，MCP 状态和复制连接信息仍可用，插件私有数据仍按工作区独立。关闭继承恢复自己的设置，再开启时读取当前主设置。不进行持续文件监听或后台同步。
 
 普通设置修改仍沿用既有重启约定；完整工作区交接已销毁旧 HWND，因此可以在新窗口构造前应用目标语言和原生窗口类型。已发现插件的文字从原始标签重新本地化，不热重载代码。
 
-工作区创建只更新主目录，内容在首次进入时初始化；重命名不改变固定数据文件名。删除副工作区先完成必要的工作区交接并提交主目录，再清理其核心文件、图片库和宿主管理的插件数据；主工作区不可删除，关闭功能不删除数据。文件清理失败报告错误，不额外建立恢复流程。
+新建工作区只选取目录外且没有该编号核心 JSON、固定备份或恢复用临时文件的编号，只更新主目录，内容在首次进入时初始化；重命名不改变固定数据文件名。删除副工作区先完成必要的工作区交接并提交主目录，再清理其核心文件、图片库和宿主管理的插件数据；主工作区不可删除，关闭功能不删除数据。文件清理失败报告错误，不额外建立恢复流程。
 
 菜单和设置页复用 `AppController` 的创建、切换和单纸片移动入口，不分别拥有数据交接逻辑。入口呈现与菜单构建归属见 7.1；具体标签、排列和操作步骤由中英文用户指南维护。
 
@@ -246,9 +253,9 @@ Markdown 中的 Note 图片只通过 PaperTodo 内部 `i:` asset URI 引用宿�
 
 按键修改携带调用方读取的文件 revision，写前再次核对并使用 `DurableAtomicFileWriter` 完成单次文件替换。文件变化时报告冲突，由调用方重读后决定是否重试，不将陈旧整份文档覆盖回去。未知键保留但不绑定。普通外部编辑后直接 Apply 不重写文件格式；没有配置备份、自动修复或自定义数值的故障恢复层。
 
-Good Lock 是 API 2.4 的 Native paper-body 客户端，无 provider Runtime。它只展示修改项，调用可选 `IPaperInjectionApi`，草稿复用既有 per-paper plugin state；前端草稿不成为第二份全局配置。读取和建议要求 `settings.read`，应用和正常重启要求 `settings.update`，同时遵守插件上下文的生命周期。正常重启沿用显式退出的保存成功边界；新进程可返回原 Good Lock 纸片。这个全局能力不继承副工作区“跟随主设置”的写入锁。
+Good Lock 是 API 2.6 的 Native paper-body 客户端，无 provider Runtime。它只展示修改项，调用可选 `IPaperInjectionApi`，草稿复用既有 per-paper plugin state；前端草稿不成为第二份全局配置。读取和建议要求 `settings.read`，应用和正常重启要求 `settings.update`，同时遵守插件上下文的生命周期。正常重启沿用显式退出的保存成功边界；新进程可返回原 Good Lock 纸片。这个全局能力不继承副工作区“跟随主设置”的写入锁。
 
-用户操作和完整参数目录见 [全局参数注入](USER_INJECTION.md)，决策来源见 D-073。
+用户操作和完整参数目录见 [全局参数注入](USER_INJECTION.md)，决策来源见 D-076。
 
 ## 5. Paper 与 paper-body 插件
 
@@ -312,12 +319,14 @@ transport 权限、Web/Native surface 生命周期、Top Bar presentation 和 MC
 
 ### 5.4 Plugin Protocol 2.x
 
-当前最新插件协议是 **2.4**，宿主继续加载 **2.1**、**2.2** 和 **2.3** 插件。已有能力保持原语义；使用新增 manifest/API 契约时，插件需声明首次提供该能力的 API 版本或更高版本。宿主不接受 2.0 及更早版本，也不接受高于当前实现的未来版本。
+当前最新插件协议是 **2.6**，宿主继续加载 **2.1～2.5** 插件。已有能力保持原语义；使用新增 manifest/API 契约时，插件需声明首次提供该能力的 API 版本或更高版本。宿主不接受 2.0 及更早版本，也不接受高于当前实现的未来版本。
 
 - 2.1 保留 Top Bar、provider Runtime、快捷键、自定义 shortcut action、Mini / Workspace 等既有合同。
 - 2.2 新增 `startupPaper.presentation: hidden`、settings `type: action`、公共 Application Settings API 及 `settings.read/update` 权限、提醒已触发状态/事件和 Web Runtime 宿主事件订阅。
 - 2.3 为 Paper／Global Top Bar action 增加 `MenuOnly`（Web `menuOnly`）：只进入既有插件操作菜单，不创建顶栏按钮或占据其空间，默认 false 保持原行为；沿用原 scope 的 callback、replace 和生命周期清理。
-- 2.4 新增 Native Body / Runtime 可选 `IPaperInjectionApi`，提供全局覆盖目录、Apply、有限 Suggest 和正常 Restart；沿用 `settings.read/update` 权限，不扩展 Web bridge 或强制所有宿主实现新增成员。
+- 2.4 新增 `NoteAssets.AppendImage`（Web `noteAssets.appendImage`），沿用 `notes.append` 权限。Runtime 的 `Papers.SetCapsulePresentation` 可按 ID 定制工作区任意纸片，Native Runtime 可通过 `CapsuleViews.SetCapsuleView` 为目标提供自绘。
+- 2.5 新增纸片底栏。
+- 2.6 新增 Native Body / Runtime 可选 `IPaperInjectionApi`，提供全局覆盖目录、Apply、有限 Suggest 和正常 Restart；沿用 `settings.read/update` 权限，不扩展 Web bridge 或强制所有宿主实现新增成员。
 - 新增宿主内部行为、bugfix 或复用既有通用协议原语时不升版本；新增插件可观察的字段、类型、权限、事件、API surface 或新语义时升 minor。破坏既有插件合同才升 major。
 
 #### Protocol 2.1 Top Bar
@@ -344,6 +353,12 @@ Top Bar 是宿主 chrome/presentation capability，不是 Workspace 数据 API�
 
 为什么选择 host-rendered descriptor、Paper/session 与 Global/Runtime 分域，而不是插件直接拥有顶栏控件或把 Top Bar 塞进 Workspace，见 D-022。
 
+#### Protocol 2.5 Bottom Bar
+
+展开的待办与笔记共用宿主绘制的正文底边浮层。声明 `runtime`、`bottomBar`、`papers.read` 和 `bottomBarTargets` 的插件沿用插件管理页的启停状态，无需实体插件纸片。宿主从当前工作区匹配声明的纸片类型，不持久化逐纸片绑定。多个 provider 可分别发布项目；目标移除、插件禁用或 Runtime 结束会撤下相应贡献。全局顶栏与全局快捷键仍依赖实体插件纸片，读写正文仍检查原 Workspace 权限。Web 注册还随 Runtime 文档重置而清除。
+
+每项独立声明侧边、显隐、点击、排序与优先级。排序值越大越靠组外侧，优先级越大越晚省略。两组放不下先合并靠右，仍放不下再从最低优先级省略并在最右显示不可点击的省略号。排序与优先级相同的项目保持稳定顺序。浮层沿用笔记底部比例控件的交互，底距 4 DIP、侧距 12 DIP。比例控件占用宿主保留值 999。取舍见 D-075。
+
 ### 5.5 Edge mini
 
 插件可以提供专属 mini、允许迁移的纯 WPF 正文 View、custom/standard capsule presentation 或 plain-text fallback，但 **Edge 的窗口、queue placement、外层尺寸会话和输入 authority 始终属于宿主**。
@@ -357,11 +372,13 @@ Top Bar 是宿主 chrome/presentation capability，不是 Workspace 数据 API�
 
 具体 fallback 次序、尺寸和 ready 时序属于当前 contract/代码实现；为什么形成这些边界见 D-018。
 
-### 5.6 插件右键入口、图片读取与临时弹窗
+### 5.6 插件右键入口、笔记图片与临时弹窗
 
 `PluginPaperActionRegistry` 只拥有 Runtime 对指定纸片的文字菜单贡献；`PaperWindow` 在既有右键菜单中呈现并分发，注册替换、目标删除与 Runtime 结束撤销旧回调。它不构建第二套顶栏，也不改变胶囊呈现或命中机制。
 
 图片读取由 session / Runtime facade 检查 `notes.read`，进入 `PaperCommandService.ReadNoteImage` → `NoteImageStore.TryReadOwnedImage`，在既有存储锁内检查笔记归属与编码大小并返回独立字节，不复制持久化 authority。
+
+图片追加由 Native / Web Body 和 Runtime 的 facade 检查 `notes.append`，与 AI 图片导入共用 `PaperCommandService.InsertNoteImage`。命令向内置 Markdown 笔记末尾添加引用，经 `NoteImageStore` 保存编码图像，同步提交正文后刷新界面并发布带来源的事件。Web 弹窗仍通过创建它的 Body 或 Runtime 写入。
 
 `PluginPopupHost` 为既有 session / Runtime 承载一个临时、可交互窗口。右键与原有顶栏点击传递一次性的屏幕位置；宿主只在显示时约束到工作区，以窗口失活作为关闭边界，不监视原控件或来源窗口的位置。窗口内容与主题由插件处理，壳和释放由宿主处理；它不是 Paper，不延长 provider Runtime 存活，也没有常驻独立窗口入口。
 
@@ -554,6 +571,8 @@ Debug 包可显式启用内存诊断：`EdgeDiagnosticObservation` 观察既有�
 ### 7.3 匿名使用统计
 
 `TelemetryService` 是可关闭的独立统计子系统：只聚合每日使用计数和粗粒度运行环境，不上传纸片/待办/Markdown 正文、图片、路径、剪贴板或机器/硬件标识；crash 只保留计数与粗粒度签名。关闭后停止采集并清除未发送统计。
+
+每次保存先在统计状态锁内生成完整 JSON 快照，再由单个后台写入器顺序替换 `telemetry.json`；尚未开始写的快照只保留最新一份。定时采样不等待磁盘，关闭统计及正常退出会等最后一次写入尝试完成。
 
 上传是异步 best-effort 的 `daily_usage` 批次，不影响产品正常行为。客户端使用随机安装 ID 和确定性 `report_id`；接收端只接受白名单字段，原始日志允许 at-least-once，分析时按 `report_id` 保留最新记录去重。
 

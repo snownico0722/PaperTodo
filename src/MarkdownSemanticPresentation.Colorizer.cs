@@ -20,28 +20,28 @@ internal sealed partial class MarkdownSemanticPresentation
         }
 
         private readonly record struct TypefaceCacheKey(
-            string Family,
+            FontFamily Family,
             FontStyle Style,
             FontWeight Weight,
             FontStretch Stretch);
 
         private readonly record struct TypefaceCacheRevision(
-            string NormalFamily,
-            string BoldFamily,
-            string CodeFamily,
+            FontFamily NormalFamily,
+            FontFamily BoldFamily,
+            FontFamily CodeFamily,
             FontStyle Style,
             FontWeight NormalWeight,
             FontWeight BoldWeight,
             FontStretch Stretch);
 
         private Typeface NormalTypeface => GetCachedTypeface(
-            NoteTypography.FontFamily,
+            NoteTypography.EditorFontFamily,
             NoteTypography.FontStyle,
             NoteTypography.FontWeight,
             NoteTypography.FontStretch);
 
         private static FontFamily SemanticBoldFontFamily =>
-            AppTypography.FontFamilyFor(content: true, bold: true);
+            NoteTypography.EditorBoldFontFamily;
 
         private static FontWeight SemanticBoldFontWeight =>
             AppTypography.UsesCustomBoldFace(true)
@@ -57,7 +57,7 @@ internal sealed partial class MarkdownSemanticPresentation
         private Typeface StrongTypeface => HeadingTypeface;
 
         private Typeface CodeTypeface => GetCachedTypeface(
-            NoteTypography.CodeFontFamily,
+            NoteTypography.EditorCodeFontFamily,
             NoteTypography.FontStyle,
             NoteTypography.FontWeight,
             NoteTypography.FontStretch);
@@ -456,7 +456,7 @@ internal sealed partial class MarkdownSemanticPresentation
             FontStretch stretch)
         {
             EnsureTypefaceCacheCurrent();
-            var key = new TypefaceCacheKey(family.Source, style, weight, stretch);
+            var key = new TypefaceCacheKey(family, style, weight, stretch);
             if (_typefaceCache.TryGetValue(key, out var cached))
             {
                 return cached;
@@ -470,9 +470,9 @@ internal sealed partial class MarkdownSemanticPresentation
         private void EnsureTypefaceCacheCurrent()
         {
             var revision = new TypefaceCacheRevision(
-                NoteTypography.FontFamily.Source,
-                SemanticBoldFontFamily.Source,
-                NoteTypography.CodeFontFamily.Source,
+                NoteTypography.EditorFontFamily,
+                SemanticBoldFontFamily,
+                NoteTypography.EditorCodeFontFamily,
                 NoteTypography.FontStyle,
                 NoteTypography.FontWeight,
                 SemanticBoldFontWeight,

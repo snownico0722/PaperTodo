@@ -1,13 +1,22 @@
 using System.IO;
 using System.Text;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Input;
+using ICSharpCode.AvalonEdit.Document;
 using ICSharpCode.AvalonEdit.Editing;
 
 namespace PaperTodo;
 
 public sealed partial class MarkdownTextBox
 {
+    private const string NoteImageClipboardFormat = "PaperTodo.NoteImages.v1";
+    // The internal format embeds each distinct image once. The wire limit includes Base64 and JSON.
+    private const long MaxNoteImageSourceBytes = 24L * 1024 * 1024;
+    private const int MaxNoteImageClipboardBytes = 33 * 1024 * 1024;
+
+    private sealed record NoteImageClipboard(Guid SourceStore, string? SourceNote, Dictionary<string, byte[]> Images);
+
     private sealed record ClipboardImagePayload(
         NoteImageAsset Asset,
         byte[] Bytes);
@@ -23,15 +32,17 @@ public sealed partial class MarkdownTextBox
 
     static MarkdownTextBox()
     {
-        // Keep clipboard shortcuts/paste policy outside the core editor implementation so the
-        // Markdig semantic editor remains the authority for Markdown state. Class handlers run
-        // before instance handlers and let this optional clipboard layer take ownership only when
-        // PaperTodo image-reference semantics are involved.
+        // AvalonEdit owns ordinary text cut/copy/paste. PaperTodo handles the clipboard
+        // image formats and uses the target's Markdown semantics for image blocks.
         EventManager.RegisterClassHandler(
             typeof(MarkdownTextBox),
             UIElement.PreviewKeyDownEvent,
             new KeyEventHandler(OnClipboardPreviewKeyDown),
             handledEventsToo: true);
+        EventManager.RegisterClassHandler(
+            typeof(MarkdownTextBox),
+            DataObject.CopyingEvent,
+            new DataObjectCopyingEventHandler(OnNativeClipboardCopying));
         EventManager.RegisterClassHandler(
             typeof(MarkdownTextBox),
             DataObject.PastingEvent,
@@ -52,6 +63,55 @@ public sealed partial class MarkdownTextBox
         e.Handled = true;
     }
 
+    private static void OnNativeClipboardCopying(object sender, DataObjectCopyingEventArgs e)
+    {
+        if (sender is not MarkdownTextBox editor || e.IsDragDrop ||
+            editor._imageStore is not { } store || editor.TextArea.Selection is RectangleSelection)
+        {
+            return;
+        }
+
+        // AvalonEdit owns the cut (including removal and undo). Attach the same source data
+        // before it publishes the clipboard, without performing another copy.
+        try
+        {
+            if (e.DataObject.GetData(DataFormats.UnicodeText) is not string text ||
+                !ContainsPotentialPaperTodoImageReference(text))
+            {
+                return;
+            }
+
+            var line = editor.Document.GetLineByOffset(editor.CaretOffset);
+            var references = editor.SelectionLength > 0
+                ? ImageReferencesInDocumentRange(editor.Text, editor.SelectionStart, editor.SelectionLength)
+                : ImageReferencesInDocumentRange(editor.Text, line.Offset, line.Length);
+            if (references.Count > 0)
+            {
+                var images = editor.ReadClipboardImages(store, references, out var tooLarge);
+                if (tooLarge)
+                {
+                    editor.CancelIncompleteClipboardOperation(e);
+                    return;
+                }
+
+                editor.WriteNoteImageClipboard(e.DataObject, store, images);
+            }
+        }
+        catch
+        {
+            // AvalonEdit may delete the selected source as soon as this event returns.
+            editor.CancelIncompleteClipboardOperation(e);
+        }
+    }
+
+    private void CancelIncompleteClipboardOperation(DataObjectCopyingEventArgs e)
+    {
+        e.CancelCommand();
+        if (Window.GetWindow(this) is PaperWindow owner)
+            Dispatcher.BeginInvoke(new Action(() => PaperNoticeDialog.Show(owner,
+                Strings.Get("NoteClipboardIncompleteTitle"), Strings.Get("NoteClipboardIncompleteMessage"))));
+    }
+
     private static void OnImageAwarePasting(object sender, DataObjectPastingEventArgs e)
     {
         if (sender is not MarkdownTextBox editor || editor.IsReadOnly)
@@ -59,65 +119,144 @@ public sealed partial class MarkdownTextBox
             return;
         }
 
-        // AvalonEdit has already moved the caret to the real drop target and owns copy/move plus
-        // undo grouping for text drag-drop. Mark this routed event handled only to keep the legacy
-        // MarkdownTextBox paste handler from reinterpreting the source selection; do not cancel the
-        // command, so AvalonEdit continues its native drop at the caret target.
-        if (e.IsDragDrop)
-        {
-            e.Handled = true;
-            return;
-        }
+        // AvalonEdit owns native drag/drop placement and undo grouping.
+        if (e.IsDragDrop) return;
 
         string? clipboardText;
         try
         {
             clipboardText = e.DataObject.GetDataPresent(DataFormats.UnicodeText)
                 ? e.DataObject.GetData(DataFormats.UnicodeText) as string
-                : null;
+                : e.DataObject.GetData(DataFormats.Text) as string;
         }
         catch
         {
+            e.CancelCommand();
             return;
         }
 
-        if (!string.IsNullOrEmpty(clipboardText))
+        if (string.IsNullOrEmpty(clipboardText))
         {
-            // This class handler runs before the legacy instance paste handler. Reject obviously
-            // unsafe text here before a full Markdig parse. For ordinary paste, the instance
-            // handler checks the actual newline-normalized text or the final image reference block.
-            // Rectangle selections use a surrounding segment; don't credit that whole range.
-            if (!IsSafePasteSize(clipboardText) ||
-                (editor.TextArea.Selection is RectangleSelection &&
-                 !editor.CanApplyTextReplacement(clipboardText, editor.SelectionStart, 0)))
-            {
-                e.Handled = true;
+            if (editor.TryInsertImageFromClipboard(e.DataObject))
                 e.CancelCommand();
-                editor.PasteRejected?.Invoke();
-                return;
+            return;
+        }
+
+        // Rectangular paste owns segmented replacement. Preflight without subtracting the
+        // surrounding selection range, since that range includes unselected text.
+        var selectedLength = editor.TextArea.Selection is RectangleSelection ? 0 : editor.SelectionLength;
+        if (!editor.TryBuildSafePasteText(clipboardText, selectedLength, out _))
+        {
+            e.CancelCommand();
+            editor.PasteRejected?.Invoke();
+            return;
+        }
+
+        // Leave rectangular replacement to AvalonEdit. Its segmented paste cannot
+        // transfer image blocks, so keep their source as plain text.
+        if (editor.TextArea.Selection is RectangleSelection rectangle)
+        {
+            if (ContainsPotentialPaperTodoImageReference(clipboardText))
+            {
+                var plainText = editor.PrepareRectangularImagePaste(rectangle, clipboardText);
+                if (plainText == null)
+                {
+                    e.CancelCommand();
+                    editor.PasteRejected?.Invoke();
+                    return;
+                }
+                if (plainText == clipboardText) return;
+
+                var data = new DataObject();
+                data.SetData(DataFormats.UnicodeText, plainText);
+                e.DataObject = data;
+                e.FormatToApply = DataFormats.UnicodeText;
+                editor.Dispatcher.BeginInvoke(new Action(editor.NotifyImagePasteDegradedToText));
+            }
+            return;
+        }
+
+        if (!ContainsPotentialPaperTodoImageReference(clipboardText))
+        {
+            return;
+        }
+
+        editor.HandleContextAwareImageReferencePaste(e, clipboardText);
+    }
+
+    private string? PrepareRectangularImagePaste(RectangleSelection selection, string text)
+    {
+        // AvalonEdit repeats a single line across the rectangle. For multiline text the final
+        // selected row receives the remaining lines. Parse that projection with its surrounding
+        // Markdown so fences, indentation and unselected text decide which markers are active.
+        var segments = selection.Segments.ToArray();
+        if (segments.Length == 0) return text;
+        var newline = TextUtilities.GetNewLineFromDocument(Document, TextArea.Caret.Line);
+        var normalized = TextUtilities.NormalizeNewLines(text, newline);
+        var repeat = !normalized.Contains(newline, StringComparison.Ordinal);
+        if (repeat && (long)normalized.Length * segments.Length > MaxSafePasteLength)
+            return null;
+
+        var rows = repeat ? Enumerable.Repeat(normalized, segments.Length).ToArray()
+            : normalized.Split([newline], segments.Length, StringSplitOptions.None);
+        var original = Text;
+        var candidate = new StringBuilder(original.Length);
+        var starts = new int[rows.Length];
+        var cursor = 0;
+        var inserted = 0;
+        for (var i = 0; i < rows.Length; i++)
+        {
+            var segment = segments[i];
+            candidate.Append(original, cursor, segment.StartOffset - cursor);
+            var line = Document.GetLineByOffset(segment.StartOffset);
+            if (segment.StartOffset == line.EndOffset && rows[i].Length > 0)
+            {
+                var visual = TextArea.TextView.GetOrConstructVisualLine(line);
+                var padding = Math.Max(0, segment.StartVisualColumn - visual.VisualLengthWithEndOfLineMarker);
+                if (padding > MaxSafePasteLength - inserted) return null;
+                // Spaces at these columns have the same Markdown indentation as Avalon's virtual tabs.
+                candidate.Append(' ', padding);
+                inserted += padding;
+            }
+            starts[i] = candidate.Length;
+            inserted += rows[i].Length;
+            if (inserted > MaxSafePasteLength) return null;
+            candidate.Append(rows[i]);
+            cursor = segment.EndOffset;
+        }
+        candidate.Append(original, cursor, original.Length - cursor);
+
+        var projected = candidate.ToString();
+        var markers = MarkdownImageReferences.Enumerate(projected)
+            .Select(reference => reference.LineStart + reference.OriginalLine!.IndexOf('!')).ToArray();
+        var index = markers.Length - 1;
+        var escapes = 0;
+        var lastEscapedMarker = -1;
+        for (var i = rows.Length - 1; i >= 0; i--)
+        {
+            var end = starts[i] + rows[i].Length;
+            while (index >= 0 && markers[index] >= end) index--;
+            while (index >= 0 && markers[index] >= starts[i])
+            {
+                if (lastEscapedMarker < 0) lastEscapedMarker = markers[index];
+                rows[i] = rows[i].Insert(markers[index--] - starts[i], "\\");
+                escapes++;
             }
         }
-
-        // Rich image paste only supports one continuous source range. AvalonEdit already owns
-        // segmented rectangular replacement correctly; suppress the legacy instance handler but
-        // leave the command alive so its native rectangle paste completes without touching the
-        // surrounding unselected text.
-        if (editor.TextArea.Selection is RectangleSelection)
+        if (inserted + escapes > MaxSafePasteLength ||
+            rows.Any(row => ContainsLineLongerThan(row, MaxSafePasteLineLength))) return null;
+        if (MaxLength > 0 && projected.Length + escapes > MaxLength)
         {
-            e.Handled = true;
-            return;
+            var anchor = MarkdownImageReferences.TrailingAnchorDelimiterLength(projected);
+            if (projected.Length + escapes - anchor > MaxLength) return null;
+            // Escaping the last image also removes its trailing-newline allowance.
+            if (lastEscapedMarker > projected.LastIndexOfAny(['\r', '\n'], projected.Length - anchor - 1))
+                return null;
         }
-
-        if (string.IsNullOrEmpty(clipboardText) ||
-            !ContainsPotentialPaperTodoImageReference(clipboardText))
-        {
-            return;
-        }
-
-        // Prevent the legacy instance paste handler from independently classifying the same image-
-        // looking text. This handler performs the full target-context semantic check below.
-        e.Handled = true;
-        editor.HandleContextAwareImageReferencePaste(e, clipboardText);
+        if (escapes == 0) return text;
+        // Preserve native single-line column editing when every row needs the same replacement.
+        if (repeat && rows.All(row => row == rows[0])) return rows[0];
+        return string.Join(newline, rows);
     }
 
     private static bool ContainsPotentialPaperTodoImageReference(string text)
@@ -138,16 +277,6 @@ public sealed partial class MarkdownTextBox
         string clipboardText)
     {
         var replacementTarget = CaptureDocumentReplacementTarget();
-        if (!TryBuildSafePasteText(
-                clipboardText,
-                replacementTarget.SelectionLength,
-                out _))
-        {
-            e.CancelCommand();
-            PasteRejected?.Invoke();
-            return;
-        }
-
         var pasteText = EnsureContextAwareImageReferencePasteIsBlock(
             clipboardText,
             replacementTarget);
@@ -161,83 +290,45 @@ public sealed partial class MarkdownTextBox
             replacementTarget.Start,
             pasteText.Length);
 
-        if (effectiveReferences.Count == 0)
-        {
-            // The source can look like a PaperTodo image reference while the target semantic context
-            // makes it literal text (most importantly inside a fenced code block). Commit it as plain
-            // text here so the older instance handler cannot reinterpret the standalone clipboard
-            // fragment without its target context.
-            if (!TryBuildSafePasteText(
-                    clipboardText,
-                    replacementTarget.SelectionLength,
-                    out var safeText))
-            {
-                e.CancelCommand();
-                PasteRejected?.Invoke();
-                return;
-            }
-
-            try
-            {
-                e.CancelCommand();
-                var caret = CommitDocumentReplacement(replacementTarget, safeText);
-                CaretIndex = caret;
-                Select(caret, 0);
-                Focus();
-                QueuePostPasteRefresh();
-            }
-            catch (Exception ex)
-            {
-                ImageImportFailed?.Invoke(ex);
-                e.CancelCommand();
-            }
-            return;
-        }
-
         try
         {
-            if (!IsSafeImageReferencePaste(pasteText, replacementTarget))
+            var imageMissing = false;
+            if (effectiveReferences.Count == 0)
             {
-                e.CancelCommand();
-                PasteRejected?.Invoke();
-                return;
+                // Keep literal Markdown unchanged when the target treats it as code.
+                pasteText = clipboardText;
             }
-
-            var maximumIdPasteText = ReplaceImageReferenceIdsAtReferences(
-                pasteText,
-                effectiveReferences,
-                Enumerable.Repeat("99999999", effectiveReferences.Count).ToArray());
-            if (!IsSafeImageReferencePaste(maximumIdPasteText, replacementTarget))
+            else
             {
-                e.CancelCommand();
-                PasteRejected?.Invoke();
-                return;
-            }
-
-            if (_imageStore != null)
-            {
-                // Clone only references that are real images in the target document. Building a
-                // standalone probe keeps the store transaction reusable without allowing code-block
-                // literals to participate in id rewriting.
-                var cloneProbe = BuildImageReferenceCloneProbe(pasteText, effectiveReferences);
-                var clonedProbe = _imageStore.CloneForeignImageReferencesForNote(_noteId, cloneProbe);
-                var clonedReferences = MarkdownImageReferences.Enumerate(clonedProbe).ToList();
-                if (clonedReferences.Count != effectiveReferences.Count)
+                var maximumIdPasteText = RewritePastedImageLines(pasteText, effectiveReferences,
+                    reference => reference.WithUrl(MarkdownImageReferences.UriPrefix + "99999999"));
+                if (!IsSafeImageReferencePaste(maximumIdPasteText, replacementTarget))
                 {
-                    throw new InvalidDataException(Strings.Get("ImageImportUnsupported"));
+                    e.CancelCommand();
+                    PasteRejected?.Invoke();
+                    return;
                 }
 
-                pasteText = ReplaceImageReferenceIdsAtReferences(
-                    pasteText,
-                    effectiveReferences,
-                    clonedReferences.Select(reference => reference.ImageId).ToArray());
-            }
+                var source = ReadNoteImageClipboard(e.DataObject);
+                var replacements = new Dictionary<string, string?>(StringComparer.Ordinal);
+                foreach (var reference in effectiveReferences)
+                {
+                    if (!replacements.ContainsKey(reference.ImageId))
+                        replacements.Add(reference.ImageId, TryPasteClipboardImage(source, reference.ImageId));
+                }
 
-            if (!IsSafeImageReferencePaste(pasteText, replacementTarget))
-            {
-                e.CancelCommand();
-                PasteRejected?.Invoke();
-                return;
+                pasteText = RewritePastedImageLines(pasteText, effectiveReferences, reference =>
+                    replacements[reference.ImageId] is { } id
+                        ? reference.WithUrl(MarkdownImageReferences.UriPrefix + id)
+                        : AsPlainImageReference(reference));
+                imageMissing = replacements.ContainsValue(null);
+
+                if (!IsSafeImageReferencePaste(pasteText, replacementTarget))
+                {
+                    e.CancelCommand();
+                    PasteRejected?.Invoke();
+                    return;
+                }
             }
 
             e.CancelCommand();
@@ -246,6 +337,8 @@ public sealed partial class MarkdownTextBox
             Select(committedCaret, 0);
             Focus();
             QueuePostPasteRefresh();
+            if (imageMissing)
+                Dispatcher.BeginInvoke(new Action(NotifyImagePasteDegradedToText));
         }
         catch (Exception ex)
         {
@@ -257,12 +350,8 @@ public sealed partial class MarkdownTextBox
     public new void Copy()
     {
         var result = CopySelectionWithImagesToClipboard();
-        if (result == ImageAwareCopyResult.Copied)
-        {
-            return;
-        }
-
-        base.Copy();
+        if (result == ImageAwareCopyResult.NotApplicable)
+            base.Copy();
         if (result == ImageAwareCopyResult.TextOnlyDueToSize)
         {
             NotifyImageCopyDegradedToText();
@@ -363,56 +452,118 @@ public sealed partial class MarkdownTextBox
 
         try
         {
-            // Preflight from metadata before reading any blobs. Count every occurrence because
-            // HTML embeds the encoded bytes once per rendered image occurrence.
-            var assets = new Dictionary<string, NoteImageAsset>(StringComparer.Ordinal);
-            long htmlSourceBytes = 0;
-            foreach (var reference in references)
-            {
-                if (!assets.TryGetValue(reference.ImageId, out var asset))
-                {
-                    if (!imageStore.TryGetAsset(reference.ImageId, out asset) ||
-                        !string.Equals(asset.NoteId, _noteId, StringComparison.Ordinal))
-                    {
-                        return ImageAwareCopyResult.NotApplicable;
-                    }
-                    assets.Add(reference.ImageId, asset);
-                }
-
-                if (asset.ByteLength <= 0)
-                {
-                    return ImageAwareCopyResult.NotApplicable;
-                }
-                if (htmlSourceBytes > MaxExternalClipboardHtmlSourceBytes - asset.ByteLength)
-                {
-                    return ImageAwareCopyResult.TextOnlyDueToSize;
-                }
-                htmlSourceBytes += asset.ByteLength;
-            }
-
-            var images = new Dictionary<string, ClipboardImagePayload>(StringComparer.Ordinal);
-            foreach (var pair in assets)
-            {
-                if (!imageStore.TryGetEncodedImageBytes(pair.Key, out var asset, out var bytes) ||
-                    !string.Equals(asset.NoteId, _noteId, StringComparison.Ordinal))
-                {
-                    return ImageAwareCopyResult.NotApplicable;
-                }
-
-                images.Add(pair.Key, new ClipboardImagePayload(asset, bytes));
-            }
-
+            var images = ReadClipboardImages(imageStore, references, out var tooLarge);
             var data = new DataObject();
-            AddImageAwareExternalClipboardFormats(data, markdown, references, images);
-            // Keep Markdown as the canonical PaperTodo-to-PaperTodo and plain-text representation.
+            if (!tooLarge && images.Count > 0)
+            {
+                AddImageAwareExternalClipboardFormats(data, markdown,
+                    references.Where(reference => images.ContainsKey(reference.ImageId)).ToArray(), images);
+            }
+
+            WriteNoteImageClipboard(data, imageStore, images);
+            // Keep Markdown as the canonical plain-text representation for other applications.
             data.SetData(DataFormats.UnicodeText, markdown);
             data.SetData(DataFormats.Text, markdown);
             Clipboard.SetDataObject(data, copy: true);
-            return ImageAwareCopyResult.Copied;
+            return tooLarge ? ImageAwareCopyResult.TextOnlyDueToSize : ImageAwareCopyResult.Copied;
         }
         catch
         {
             return ImageAwareCopyResult.NotApplicable;
+        }
+    }
+
+    private Dictionary<string, ClipboardImagePayload> ReadClipboardImages(NoteImageStore store,
+        IReadOnlyList<MarkdownImageReference> references, out bool tooLarge)
+    {
+        var owned = new List<NoteImageAsset>();
+        foreach (var id in references.Select(reference => reference.ImageId).Distinct(StringComparer.Ordinal))
+        {
+            if (store.TryGetAsset(id, out var asset) && asset.NoteId == _noteId && !store.IsImageCorrupted(id))
+                owned.Add(asset);
+        }
+
+        tooLarge = owned.Sum(asset => (long)asset.ByteLength) > MaxNoteImageSourceBytes;
+        var images = new Dictionary<string, ClipboardImagePayload>(StringComparer.Ordinal);
+        foreach (var asset in owned)
+        {
+            if (tooLarge)
+            {
+                // A normal copy may still reuse these verified owners within this live store.
+                images.Add(asset.Id, new ClipboardImagePayload(asset, []));
+            }
+            else if (store.TryGetEncodedImageBytes(asset.Id, out var current, out var bytes) && current.NoteId == _noteId)
+            {
+                images.Add(asset.Id, new ClipboardImagePayload(current, bytes));
+            }
+        }
+
+        return images;
+    }
+
+    private void WriteNoteImageClipboard(IDataObject data, NoteImageStore store,
+        IReadOnlyDictionary<string, ClipboardImagePayload> images)
+    {
+        var source = new NoteImageClipboard(store.ClipboardIdentity, _noteId,
+            images.ToDictionary(pair => pair.Key, pair => pair.Value.Bytes, StringComparer.Ordinal));
+        var stream = new MemoryStream();
+        JsonSerializer.Serialize(stream, source);
+        stream.Position = 0;
+        data.SetData(NoteImageClipboardFormat, stream, autoConvert: false);
+    }
+
+    private static NoteImageClipboard? ReadNoteImageClipboard(IDataObject data)
+    {
+        try
+        {
+            if (data.GetData(NoteImageClipboardFormat, autoConvert: false) is Stream stream &&
+                stream.CanSeek && stream.Length <= MaxNoteImageClipboardBytes)
+            {
+                stream.Position = 0;
+                return JsonSerializer.Deserialize<NoteImageClipboard>(stream);
+            }
+        }
+        catch
+        {
+            // The source can lose its custom clipboard format. Paste its text in that case.
+        }
+
+        return null;
+    }
+
+    private string? TryPasteClipboardImage(NoteImageClipboard? source, string imageId)
+    {
+        if (_imageStore is not { } store || source?.Images == null ||
+            !source.Images.TryGetValue(imageId, out var bytes))
+            return null;
+
+        try
+        {
+            if (source.SourceStore == store.ClipboardIdentity && store.TryGetAsset(imageId, out var asset) &&
+                asset.NoteId == source.SourceNote && !store.IsImageCorrupted(imageId))
+            {
+                var reference = MarkdownImageReferences.CreateReference(imageId);
+                var cloned = store.CloneForeignImageReferencesForNote(_noteId, reference);
+                return MarkdownImageReferences.TryParseLine(cloned, out var id) ? id : null;
+            }
+
+            return bytes is { Length: > 0 }
+                ? store.ImportImageBytes(_noteId, bytes, "").Id
+                : null;
+        }
+        catch (Exception ex) when (ex is IOException or InvalidOperationException or InvalidDataException
+                                   or NotSupportedException or ArgumentException or System.Runtime.InteropServices.COMException)
+        {
+            return null;
+        }
+    }
+
+    private void NotifyImagePasteDegradedToText()
+    {
+        if (Window.GetWindow(this) is PaperWindow owner)
+        {
+            PaperNoticeDialog.Show(owner, Strings.Get("NotePasteImageTextOnlyTitle"),
+                Strings.Get("NotePasteImageTextOnlyMessage"));
         }
     }
 
@@ -493,69 +644,26 @@ public sealed partial class MarkdownTextBox
         return builder.ToString();
     }
 
-    private static string BuildImageReferenceCloneProbe(
-        string markdown,
-        IReadOnlyList<MarkdownImageReference> references)
+    private static string RewritePastedImageLines(string markdown,
+        IReadOnlyList<MarkdownImageReference> references, Func<MarkdownImageReference, string> rewrite)
     {
-        var builder = new StringBuilder();
-        for (var index = 0; index < references.Count; index++)
+        var builder = new StringBuilder(markdown.Length);
+        var cursor = 0;
+        foreach (var reference in references)
         {
-            if (index > 0)
-            {
-                builder.Append(Environment.NewLine);
-            }
-
-            var reference = references[index];
-            builder.Append(markdown, reference.LineStart, reference.LineLength);
+            builder.Append(markdown, cursor, reference.LineStart - cursor);
+            builder.Append(rewrite(reference));
+            cursor = reference.LineStart + reference.LineLength;
         }
+        builder.Append(markdown, cursor, markdown.Length - cursor);
         return builder.ToString();
     }
 
-    private static string ReplaceImageReferenceIdsAtReferences(
-        string markdown,
-        IReadOnlyList<MarkdownImageReference> references,
-        IReadOnlyList<string> replacementIds)
+    private static string AsPlainImageReference(MarkdownImageReference reference)
     {
-        if (references.Count != replacementIds.Count)
-        {
-            throw new InvalidDataException(Strings.Get("ImageImportUnsupported"));
-        }
-
-        var additionalLength = 0L;
-        for (var index = 0; index < references.Count; index++)
-        {
-            additionalLength += replacementIds[index].Length - references[index].ImageId.Length;
-        }
-        var capacity = checked((int)(markdown.Length + additionalLength));
-        var builder = new StringBuilder(capacity);
-        var cursor = 0;
-        for (var index = 0; index < references.Count; index++)
-        {
-            var reference = references[index];
-            builder.Append(markdown, cursor, reference.LineStart - cursor);
-            var line = markdown.Substring(reference.LineStart, reference.LineLength);
-            var imageToken = MarkdownImageReferences.UriPrefix + reference.ImageId;
-            var urlMarker = line.IndexOf("](", StringComparison.Ordinal);
-            var tokenStart = urlMarker >= 0
-                ? line.IndexOf(imageToken, urlMarker + 2, StringComparison.Ordinal)
-                : -1;
-            if (tokenStart < 0)
-            {
-                throw new InvalidDataException(Strings.Get("ImageImportUnsupported"));
-            }
-
-            var idStart = tokenStart + MarkdownImageReferences.UriPrefix.Length;
-            builder.Append(line, 0, idStart);
-            builder.Append(replacementIds[index]);
-            builder.Append(
-                line,
-                idStart + reference.ImageId.Length,
-                line.Length - idStart - reference.ImageId.Length);
-            cursor = reference.LineStart + reference.LineLength;
-        }
-
-        builder.Append(markdown, cursor, markdown.Length - cursor);
-        return builder.ToString();
+        var line = reference.OriginalLine!;
+        var imageStart = line.Length - line.TrimStart().Length;
+        return line.Insert(imageStart, "\\");
     }
 
     private static IReadOnlyList<MarkdownImageReference> ImageReferencesInDocumentRange(

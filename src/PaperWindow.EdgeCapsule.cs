@@ -43,7 +43,7 @@ public sealed partial class PaperWindow
             Strings.Get("ToolTipHideThisPaper"),
             PaperBrush,
             PaperBorderBrush,
-            Theme.CapsuleFocusBorderBrush,
+            Theme.EdgeCapsuleFocusBrush,
             HoverBrush,
             BrightWeakTextBrush,
             TextBrush,
@@ -56,6 +56,7 @@ public sealed partial class PaperWindow
                 _paper.CapsuleMonitorDeviceName) == IntPtr.Zero,
             EdgeCapsulePerformanceDiagnostics.ShortId(_paper.Id)));
         var host = _edgeCapsuleHost;
+        host.UpdateCaptureExclusion(_controller.State.HideCapsulesInCapture);
         ObserveMarkdownPreloadHost(host.MarkdownPreloadLifecycleAnchor);
         _ = MeasureDeepCapsuleIconSlotWidth(DeepCapsuleSlotDpi().PixelsPerDip);
         _edgeCapsule.SetNativeBatchApplyRejectedCallback(
@@ -210,7 +211,7 @@ public sealed partial class PaperWindow
         _edgeCapsuleHost?.UpdateTheme(
             PaperBrush,
             PaperBorderBrush,
-            Theme.CapsuleFocusBorderBrush,
+            Theme.EdgeCapsuleFocusBrush,
             HoverBrush,
             BrightWeakTextBrush,
             TextBrush,

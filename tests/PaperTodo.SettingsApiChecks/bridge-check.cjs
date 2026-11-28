@@ -41,10 +41,25 @@ process.once('beforeExit', () => {
   await assert.rejects(result, error => error.code === 'permission_denied');
   const list = api.list('appearance');
   await new Promise(resolve => setImmediate(resolve));
-  request = posted.find(x => x.type === 'hostRequest');
+  request = posted.find(x => x.type === 'hostRequest'); posted.length = 0;
   assert.equal(request.payload.method, 'appSettings.list'); assert.equal(request.payload.params.category, 'appearance');
   deliver({type: 'hostResponse', requestId: request.payload.requestId, ok: true, result: []});
   assert.equal((await list).length, 0);
+  {
+    const params = {paperId: 'note', imageBase64: 'AA==', imageName: 'image.png'};
+    const image = process.argv[3] === 'mini'
+      ? context.papertodo.workspace.request('noteAssets.appendImage', params)
+      : context.papertodo.noteAssets.appendImage(params.paperId, params.imageBase64, params.imageName);
+    await new Promise(resolve => setImmediate(resolve));
+    request = posted.find(x => x.type === 'hostRequest'); posted.length = 0;
+    assert.equal(request.payload.method, 'noteAssets.appendImage');
+    assert.equal(request.payload.params.paperId, params.paperId);
+    assert.equal(request.payload.params.imageBase64, params.imageBase64);
+    assert.equal(request.payload.params.imageName, params.imageName);
+    deliver({type: 'hostResponse', requestId: request.payload.requestId, ok: true,
+      result: {paperId: 'note', imageId: '001', markdownReference: '![](001)'}});
+    assert.equal((await image).markdownReference, '![](001)');
+  }
   const foreign = {...context, location: {origin: 'https://untrusted.test'}};
   delete foreign.papertodo; foreign.window = foreign; foreign.top = foreign;
   vm.runInNewContext(script, foreign);

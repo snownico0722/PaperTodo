@@ -4,7 +4,7 @@
   "name": "Good Lock",
   "description": "查看和管理 user.json 的全局修改，支持应用、重置、官方微调、另存为与快速重启。",
   "version": "1.0.0",
-  "apiVersion": "2.4",
+  "apiVersion": "2.6",
   "stateVersion": 1,
   "maxPaperInstances": 1,
   "entry": "PaperTodo.Plugin.GoodLock.dll",

@@ -43,6 +43,7 @@ public sealed partial class AppController
         public PluginRuntimeLease? Lease { get; set; }
         public bool RecoveryAttempted { get; set; }
         public bool RestartRequested { get; set; }
+        public bool HasEntityPaper { get; set; }
     }
 
     private sealed class PluginRuntimeLease : IDisposable
@@ -58,6 +59,7 @@ public sealed partial class AppController
         public required PaperPluginRuntimePapersApi Papers { get; init; }
         public required PaperPluginRuntimeGlobalTopBarApi GlobalTopBar { get; init; }
         public required PaperPluginRuntimeGlobalShortcutApi GlobalShortcuts { get; init; }
+        public PaperPluginRuntimeBottomBarApi? BottomBar { get; init; }
         public IDisposable? Runtime { get; init; }
         public IPaperBodyPlugin? NativeFactory { get; init; }
 
@@ -69,8 +71,9 @@ public sealed partial class AppController
             }
 
             Lifetime.TryDeactivate();
-            try { Runtime?.Dispose(); } catch { }
+            try { BottomBar?.Dispose(); } catch { }
             try { Papers.Dispose(); } catch { }
+            try { Runtime?.Dispose(); } catch { }
             try { State.Dispose(); } catch { }
             try { Settings.Dispose(); } catch { }
             try { GlobalShortcuts.Dispose(); } catch { }
@@ -113,9 +116,10 @@ public sealed partial class AppController
         var desired = PaperBodyPlugins.Descriptors
             .Where(descriptor => IsPluginEnabled(descriptor.Id))
             .Where(DeclaresPluginRuntime)
-            .Where(descriptor => HasEntityPluginPaper(descriptor.Id))
+            .Where(HasPluginRuntimeOwner)
             .ToDictionary(descriptor => descriptor.Id, StringComparer.Ordinal);
         var statusChanged = false;
+        var globalOwnershipChanged = false;
 
         foreach (var providerId in _pluginRuntimeSlots.Keys
                      .Where(providerId => !desired.ContainsKey(providerId))
@@ -133,6 +137,7 @@ public sealed partial class AppController
                 {
                     ProviderId = descriptor.Id,
                     Descriptor = descriptor,
+                    HasEntityPaper = HasEntityPluginPaper(descriptor.Id),
                     State = PluginRuntimeState.Stopped
                 };
                 _pluginRuntimeSlots.Add(descriptor.Id, slot);
@@ -141,6 +146,9 @@ public sealed partial class AppController
             else
             {
                 slot.Descriptor = descriptor;
+                var hasEntityPaper = HasEntityPluginPaper(descriptor.Id);
+                globalOwnershipChanged |= hasEntityPaper != slot.HasEntityPaper;
+                slot.HasEntityPaper = hasEntityPaper;
             }
 
             if (slot.State == PluginRuntimeState.Stopped)
@@ -150,9 +158,15 @@ public sealed partial class AppController
             }
         }
 
-        foreach (var slot in _pluginRuntimeSlots.Values)
-        {
+        foreach (var slot in _pluginRuntimeSlots.Values.ToArray())
             slot.Lease?.Papers.Reconcile();
+        foreach (var bottomBar in _pluginBottomBars.Values.ToArray())
+            bottomBar.ReconcileTargets();
+
+        if (globalOwnershipChanged)
+        {
+            RefreshAllPluginTopBars();
+            RefreshPluginShortcutsAfterRuntimeChange();
         }
 
         if (statusChanged)
@@ -312,7 +326,7 @@ public sealed partial class AppController
             !lifetime.IsActive)
         {
             throw new OperationCanceledException(
-                "The plugin runtime no longer has an entity-paper owner.");
+                "The plugin runtime no longer has a paper owner.");
         }
 
         var storedRuntimeState = PaperBodyPlugins.DataStore.ReadRuntimeState(descriptor.Id);
@@ -342,7 +356,8 @@ public sealed partial class AppController
         var papers = new PaperPluginRuntimePapersApi(
             this,
             descriptor.Id,
-            IsActive);
+            IsActive,
+            descriptor.ApiVersion);
         var globalTopBar = new PaperPluginRuntimeGlobalTopBarApi(
             this,
             runtimeId,
@@ -354,6 +369,7 @@ public sealed partial class AppController
             descriptor.Id,
             IsActive);
 
+        var bottomBar = CreatePluginBottomBar(descriptor, IsActive);
         IDisposable? runtime = null;
         IPaperBodyPlugin? nativeFactory = null;
         try
@@ -378,7 +394,8 @@ public sealed partial class AppController
                     State = state,
                     Papers = papers,
                     GlobalTopBar = globalTopBar,
-                    GlobalShortcuts = globalShortcuts
+                    GlobalShortcuts = globalShortcuts,
+                    BottomBar = bottomBar
                 }) ?? throw new InvalidOperationException(
                     $"Native plugin '{descriptor.Id}' returned no plugin runtime.");
             }
@@ -392,6 +409,7 @@ public sealed partial class AppController
                     papers,
                     globalTopBar,
                     globalShortcuts,
+                    bottomBar,
                     IsActive,
                     () => RequestPluginRuntimeRestart(runtimeId, descriptor.Id));
                 runtime = webRuntime;
@@ -407,7 +425,7 @@ public sealed partial class AppController
             if (!lifetime.IsActive)
             {
                 throw new OperationCanceledException(
-                    "The plugin runtime lost its entity-paper owner while starting.");
+                    "The plugin runtime lost its paper owner while starting.");
             }
 
             return new PluginRuntimeLease
@@ -421,6 +439,7 @@ public sealed partial class AppController
                 Papers = papers,
                 GlobalTopBar = globalTopBar,
                 GlobalShortcuts = globalShortcuts,
+                BottomBar = bottomBar,
                 Runtime = runtime,
                 NativeFactory = nativeFactory
             };
@@ -432,8 +451,9 @@ public sealed partial class AppController
                 slot.StartingRuntime = null;
             }
             lifetime.TryDeactivate();
-            try { runtime?.Dispose(); } catch { }
+            try { bottomBar?.Dispose(); } catch { }
             try { papers.Dispose(); } catch { }
+            try { runtime?.Dispose(); } catch { }
             try { state.Dispose(); } catch { }
             try { settings.Dispose(); } catch { }
             try { globalShortcuts.Dispose(); } catch { }
@@ -501,9 +521,8 @@ public sealed partial class AppController
         !_pluginRuntimeDisposing &&
         !IsExiting &&
         IsPluginEnabled(providerId) &&
-        HasEntityPluginPaper(providerId) &&
         PaperBodyPlugins.TryGet(providerId, out var descriptor) &&
-        DeclaresPluginRuntime(descriptor);
+        DeclaresPluginRuntime(descriptor) && HasPluginRuntimeOwner(descriptor);
 
     private void RequestPluginRuntimeRestart(Guid runtimeId, string providerId)
     {

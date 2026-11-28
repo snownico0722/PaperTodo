@@ -54,8 +54,6 @@ public sealed partial class AppController
             // StateStore already reports persistence failures; restore the clicked controls.
             if (id == "general.startup")
                 _trayIcon?.ShowBalloonTip(Strings.Get("StartupFailureTitle"), Strings.Get("StartupFailureMessage"), BalloonIcon.Warning);
-            else if (ex.Code == "save_failed" && id.StartsWith("appearance.background_", StringComparison.Ordinal))
-                ShowPaperBackgroundSaveFailure(ex);
             else if (id == "shortcuts.distinguish_numpad" && ex.Code == "shortcut_conflict")
                 ShowNumpadShortcutModeConflict();
             else if (ex.Code is not ("save_failed" or "setting_read_only"))
@@ -1570,22 +1568,29 @@ public sealed partial class AppController
             State.EnableAnimations, ToggleAnimations), "TipEnableAnimations"));
         leftColumn.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("SettingsFastAnimations"),
             State.FastAnimations, ToggleFastAnimations), "TipFastAnimations"));
+        leftColumn.Children.Add(WrapWithHint(SettingsToggle(Strings.Get("SettingsCapsuleOutlineEnhancement"),
+            State.EnhanceCapsuleActiveOutline, ToggleCapsuleOutlineEnhancement), "TipCapsuleOutlineEnhancement"));
         rightColumn.Children.Add(SettingsSectionLabel(Strings.Get("SettingsFontGroup")));
         rightColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsUiFont")), "TipUiFont"));
         rightColumn.Children.Add(CreateUiFontPresetSegmentSelector());
         rightColumn.Children.Add(WrapWithHint(SettingsFieldLabel(Strings.Get("SettingsTextRenderingProfile")), "TipTextRenderingProfile"));
         rightColumn.Children.Add(CreateTextRenderingProfileSegmentSelector());
+        rightColumn.Children.Add(WrapWithHint(
+            SettingsToggle(Strings.Get("SettingsCustomFont"), State.CustomFontEnabled, ToggleCustomFontEnabled),
+            "TipCustomFont"));
+        var customFontChildren = new StackPanel { Margin = new Thickness(14, 0, 0, 0) };
         var customBoldToggle = SettingsToggle(
             Strings.Get("SettingsCustomFontEnhancedBold"),
             State.CustomFontEnhancedBold,
             ToggleCustomFontEnhancedBold);
-        // Only meaningful with papertodo + papertodo_bold (or PaperTodo_Bold) beside the exe.
-        // Keep an already-enabled setting clickable when a file disappears so the user can turn
-        // it off; AppTypography itself refuses to mix a system regular face with a custom bold one.
-        customBoldToggle.IsEnabled =
-            (AppTypography.HasCustomFont && AppTypography.HasCustomBoldFont) ||
-            State.CustomFontEnhancedBold;
-        rightColumn.Children.Add(WrapWithHint(customBoldToggle, "TipCustomFontEnhancedBold"));
+        // Keep an enabled value switchable off if its font file disappears. The typography
+        // resolver independently falls back to the system face whenever either face is missing.
+        customBoldToggle.IsEnabled = State.CustomFontEnabled &&
+            ((AppTypography.HasCustomFont && AppTypography.HasCustomBoldFont) ||
+             State.CustomFontEnhancedBold);
+        customBoldToggle.Opacity = customBoldToggle.IsEnabled ? 1.0 : 0.55;
+        customFontChildren.Children.Add(WrapWithHint(customBoldToggle, "TipCustomFontEnhancedBold"));
+        rightColumn.Children.Add(customFontChildren);
         rightColumn.Children.Add(CompactSettingsField(
             Strings.Get("SettingsOverallFontScale"),
             WithInjectionAvailability("appearance.font_scale", CreateOverallFontScaleStepper()),
@@ -1615,6 +1620,8 @@ public sealed partial class AppController
             WithInjectionAvailability("note.text_size", CreateVisualTextSizeSelector(State.NoteTextSize, SetNoteTextSize)),
             State.NoteTextBold,
             ToggleNoteTextBold);
+        if (State.AdvancedSettingsMode)
+            rightColumn.Children.Add(CreateSpacingRow("SettingsLineSpacing", () => State.NoteLineSpacing, "note.line_spacing"));
 
         AddTextStyleEditor(
             "SettingsTodoBodyText",
@@ -1622,6 +1629,8 @@ public sealed partial class AppController
             WithInjectionAvailability("todo.visual_size", CreateTodoVisualSizeSelector()),
             State.TodoTextBold,
             ToggleTodoTextBold);
+        if (State.AdvancedSettingsMode)
+            rightColumn.Children.Add(CreateSpacingRow("SettingsItemSpacing", () => State.TodoItemSpacing, "todo.item_spacing"));
 
         AddTextStyleEditor(
             "SettingsTitleText",
@@ -1636,11 +1645,8 @@ public sealed partial class AppController
             State.CapsuleTextBold,
             ToggleCapsuleTextBold);
 
-        if (PaperBackground.IsAvailable)
-        {
-            rightColumn.Children.Add(SettingsSoftDivider());
-            rightColumn.Children.Add(BuildPaperBackgroundSettingsSection());
-        }
+        rightColumn.Children.Add(SettingsSoftDivider());
+        rightColumn.Children.Add(BuildSettingsLiveRegion("visual.background", BuildPaperBackgroundSettingsSection));
 
         var separator = new Border
         {
@@ -1689,7 +1695,9 @@ public sealed partial class AppController
     private void RestoreVisualSettingsPageDefaults()
     {
         var defaults = new AppState();
-        TryResetPaperBackgroundPreferences();
+        State.PaperBackgroundBlendWithTheme = defaults.PaperBackgroundBlendWithTheme;
+        State.PaperBackgroundStretch = defaults.PaperBackgroundStretch;
+        State.PaperBackgroundLayout = defaults.PaperBackgroundLayout;
         // Theme lives on the visual page with color scheme / fonts.
         State.Theme = defaults.Theme;
         State.ColorScheme = defaults.ColorScheme;
@@ -1701,10 +1709,14 @@ public sealed partial class AppController
         State.EnableToolTips = defaults.EnableToolTips;
         State.EnableAnimations = defaults.EnableAnimations;
         State.FastAnimations = defaults.FastAnimations;
+        State.EnhanceCapsuleActiveOutline = defaults.EnhanceCapsuleActiveOutline;
         State.UiFontPreset = defaults.UiFontPreset;
         State.TextRenderingProfile = defaults.TextRenderingProfile;
+        State.CustomFontEnabled = defaults.CustomFontEnabled;
         State.CustomFontEnhancedBold = defaults.CustomFontEnhancedBold;
         State.Zoom = defaults.Zoom;
+        State.NoteLineSpacing = defaults.NoteLineSpacing;
+        State.TodoItemSpacing = defaults.TodoItemSpacing;
         State.NoteTextSize = defaults.NoteTextSize;
         State.NoteTextBold = defaults.NoteTextBold;
         State.TodoVisualSize = defaults.TodoVisualSize;
@@ -1718,6 +1730,7 @@ public sealed partial class AppController
         ConfigureSettingsTypography();
 
         SaveNow();
+        RefreshPaperBackgroundSurfaces();
         // Typography was configured above; the theme refresh rebuilds settings once.
         RefreshTypography();
         RefreshThemeSurfaces();
@@ -1732,6 +1745,7 @@ public sealed partial class AppController
         }
 
         RefreshPaperSystemVisibility(reapplyTaskbarShellState: true);
+        RefreshCaptureExclusion();
         RefreshTopBarNewPaperButtonsSetting();
         RefreshTopmostForForegroundWindow();
 
@@ -2103,6 +2117,8 @@ public sealed partial class AppController
         };
         ToolTipPreferences.SetAlwaysEnabled(hint, true);
         ToolTipService.SetShowOnDisabled(hint, true);
+        ToolTipService.SetPlacement(hint, PlacementMode.Bottom);
+        ToolTipService.SetVerticalOffset(hint, 8);
         ToolTipService.SetInitialShowDelay(hint, 200);
         ToolTipService.SetShowDuration(hint, 20000);
         ToolTipService.SetBetweenShowDelay(hint, 0);
@@ -2454,6 +2470,12 @@ public sealed partial class AppController
 
     private void ToggleFastAnimations() =>
         SetSettingFromUi("appearance.fast_animations", !State.FastAnimations);
+
+    private void ToggleCapsuleOutlineEnhancement() =>
+        SetSettingFromUi("appearance.capsule_outline_enhancement", !State.EnhanceCapsuleActiveOutline);
+
+    private void ToggleCustomFontEnabled() =>
+        SetSettingFromUi("appearance.custom_font_enabled", !State.CustomFontEnabled);
 
     private void ToggleTodoBottomBar() =>
         SetSettingFromUi("todo.bottom_bar", !State.ShowTodoBottomBar);

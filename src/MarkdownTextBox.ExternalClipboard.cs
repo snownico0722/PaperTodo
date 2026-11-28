@@ -65,6 +65,9 @@ public sealed partial class MarkdownTextBox
         out string html)
     {
         html = "";
+        if (references.Sum(reference => images[reference.ImageId].Bytes.LongLength) > MaxExternalClipboardHtmlSourceBytes)
+            return false;
+
         var referencesByLineStart = ClipboardReferencesByLineStart(references);
         var repeatedImageIds = references
             .GroupBy(reference => reference.ImageId, StringComparer.Ordinal)

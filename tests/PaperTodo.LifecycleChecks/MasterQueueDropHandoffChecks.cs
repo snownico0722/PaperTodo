@@ -312,6 +312,15 @@ internal static class MasterQueueDropHandoffChecks
                 host.ReturnToPool();
                 released = true;
             });
+            // A layout-driven resize can deliver the flight endpoint while WPF disallows a nested
+            // Dispatcher frame. Finish the real flight in that scope, then resume its normal reveal.
+            using (source.Dispatcher.DisableProcessing())
+            {
+                typeof(EdgeCapsuleDragWindow).GetMethod("CompleteDockingHandoffAnimation", Private)!
+                    .Invoke(host, [true]);
+                Require(host.IsVisible && !released && !handoffTarget!.IsVisible,
+                    "the return flight must keep its cover and defer target publication until layout returns");
+            }
             PumpUntil(() => released, "reentrant master return flight");
             Require(show.Status == DispatcherOperationStatus.Completed && showedUnderCover,
                 "MCP show did not reenter while the floating cover was retained");

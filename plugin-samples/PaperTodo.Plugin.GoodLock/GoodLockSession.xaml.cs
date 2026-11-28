@@ -135,7 +135,7 @@ internal partial class GoodLockSession : UserControl, IPaperBodySession
     private void OnResetAll(object sender, RoutedEventArgs e) => Run(() =>
     {
         RefreshSnapshot();
-        BeginEdit();
+        _draft.ExpectedRevision = _snapshot.Revision;
         _draft.ResetAll = true;
         _draft.Set.Clear();
         _draft.Remove.Clear();

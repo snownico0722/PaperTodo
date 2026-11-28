@@ -25,8 +25,7 @@ internal sealed class WorkspaceCatalog
         _confirmRecovery = confirmRecovery;
         _confirmBackupReadFailure = confirmBackupReadFailure;
         _initialMain = LoadWorkspace(StoreFor(1), out _);
-        HasConfiguration = _initialMain.Workspaces != null;
-        Options = (_initialMain.Workspaces ?? new()).Normalized();
+        Options = LoadOptions(_initialMain);
     }
 
     internal WorkspaceConfiguration Options { get; private set; }
@@ -34,6 +33,36 @@ internal sealed class WorkspaceCatalog
     internal string? StartupError { get; private set; }
     internal StateStore MainStore => StoreFor(1);
     internal WorkspacePaths PathsFor(int number) => new(_directory, number);
+
+    private WorkspaceConfiguration LoadOptions(AppState main)
+    {
+        var options = main.Workspaces ?? new();
+        if (!options.ContainsSlot(options.Active)) options.Active = 1;
+        var discovered = IncludeStoredWorkspaces(options);
+        if (discovered && main.Workspaces == null) options.Enabled = true;
+        HasConfiguration = discovered || main.Workspaces != null;
+        // A healthy main document keeps its normal save schedule. A pending main
+        // recovery already has a required first commit, which includes these slots.
+        options = options.Normalized();
+        main.Workspaces = HasConfiguration ? options : null;
+        return options;
+    }
+
+    internal bool IncludeStoredWorkspaces(WorkspaceConfiguration options)
+    {
+        var slots = options.SlotNumbers.ToList();
+        var previousCount = slots.Count;
+        for (var number = 2; number <= 5; number++)
+            if (!slots.Contains(number) && StoreFor(number).HasReadableWorkspace())
+                slots.Add(number);
+        if (slots.Count == previousCount) return false;
+        slots.Sort();
+        options.Slots = slots;
+        return true;
+    }
+
+    internal int FindNewWorkspaceSlot(WorkspaceConfiguration options) => Enumerable.Range(2, 4)
+        .FirstOrDefault(number => !options.ContainsSlot(number) && StoreFor(number).CanCreateWorkspace());
 
     private AppState LoadWorkspace(StateStore store, out bool initializedEmpty) =>
         store.Load(out initializedEmpty, _confirmRecovery == null ? null :
@@ -202,11 +231,9 @@ internal sealed class WorkspaceCatalog
     {
         if (session.Paths.Number == 1)
         {
-            var options = (candidate.Workspaces ?? new()).Normalized();
+            Options = LoadOptions(candidate);
             // reload_data reloads this workspace; a stored startup slot is not a switch command.
-            options.Active = 1;
-            AdoptOptions(options, candidate.Workspaces != null);
-            candidate.Workspaces = HasConfiguration ? Options : null;
+            Options.Active = 1;
         }
         else
         {

@@ -25,41 +25,10 @@ public sealed partial class MarkdownTextBox
             return MaxLength;
         }
 
-        var structuralDelimiterLength = TrailingImageReferenceDelimiterLength(text);
+        var structuralDelimiterLength = MarkdownImageReferences.TrailingAnchorDelimiterLength(text);
         return MaxLength > int.MaxValue - structuralDelimiterLength
             ? int.MaxValue
             : MaxLength + structuralDelimiterLength;
-    }
-
-    private static int TrailingImageReferenceDelimiterLength(string text)
-    {
-        var delimiterStart = text.Length;
-        if (delimiterStart > 0 && text[delimiterStart - 1] == '\n')
-        {
-            delimiterStart--;
-            if (delimiterStart > 0 && text[delimiterStart - 1] == '\r')
-            {
-                delimiterStart--;
-            }
-        }
-        else if (delimiterStart > 0 && text[delimiterStart - 1] == '\r')
-        {
-            delimiterStart--;
-        }
-        else
-        {
-            return 0;
-        }
-
-        var lineStart = delimiterStart;
-        while (lineStart > 0 && text[lineStart - 1] is not '\r' and not '\n')
-        {
-            lineStart--;
-        }
-
-        return MarkdownImageReferences.TryParseReferenceLine(text[lineStart..delimiterStart], out _)
-            ? text.Length - delimiterStart
-            : 0;
     }
 
     private bool TryBuildSafePasteText(string text, int selectedLength, out string pasteText)

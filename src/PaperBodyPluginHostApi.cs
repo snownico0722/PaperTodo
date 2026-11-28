@@ -125,6 +125,21 @@ internal sealed partial class PaperBodyPluginHostApi :
         return Invoke(() => _commands.ReadNoteImage(paperId, imageId));
     });
 
+    public PaperNoteImageInsertionResult AppendImage(string paperId, byte[] imageBytes, string? imageName = null) =>
+        PopupOnUi(() =>
+        {
+            Require(PaperTodoPermissionNames.NotesAppend);
+            if (imageBytes is null || imageBytes.Length == 0)
+                throw Error("invalid_params", "imageBytes must contain encoded image data.");
+            if (imageBytes.Length > IPaperNoteAssetsApi.MaximumImageAppendBytes)
+                throw Error("asset_too_large", "An image append accepts up to 8 MiB of encoded image data.");
+            if (imageName?.Length > 200)
+                throw Error("invalid_params", "imageName cannot exceed 200 characters.");
+
+            return Invoke(() => _commands.InsertNoteImage(
+                paperId, imageBytes, imageName, PaperOperationContext.Plugin(_providerId)));
+        });
+
     public PaperMutationResult CreatePaper(CreatePaperRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);

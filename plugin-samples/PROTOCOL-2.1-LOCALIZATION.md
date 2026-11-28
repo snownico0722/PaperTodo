@@ -59,7 +59,9 @@ Body 和 provider Runtime 都可以直接读取当前 PaperTodo UI culture：
 var uiLanguage = context.UiLanguage;
 ```
 
-`PaperPluginEnvironment.UiLanguage` 也提供相同的进程级值。PaperTodo 的界面语言在重启后生效，因此这些值在一次进程生命周期内保持稳定。
+`context.UiLanguage` 是该 Body/Runtime 创建时的语言快照；`PaperPluginEnvironment.UiLanguage` 则读取宿主当前实际生效的语言。普通界面语言修改仍在重启后生效，但完整切换工作区会先结束旧 session/Runtime，也可能在同一进程中应用目标工作区的语言。
+
+插件应在每次创建 Body/Runtime，或收到 Web `initialize` 时读取宿主提供的语言，不要把它缓存为整个进程永远不变的值；这不表示宿主会向现有会话实时推送普通语言设置修改。
 
 `locales` 只覆盖宿主绘制的 manifest/settings 文案；Native/Web 插件自己绘制的内容仍由插件自行组织翻译资源。
 

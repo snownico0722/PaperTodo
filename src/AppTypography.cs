@@ -78,14 +78,19 @@ public static class AppTypography
         string? preset,
         double scale = 1.0,
         bool customFontEnhancedBold = false,
-        string? textRenderingProfile = null)
+        string? textRenderingProfile = null,
+        bool customFontEnabled = true)
     {
         _preset = UiFontPresets.Normalize(preset);
         _scale = InjectionParameters.OverallFontScale.Resolve(OverallFontScales.Normalize(scale));
         _customFontEnhancedBold = customFontEnhancedBold;
         _textRenderingProfile = TextRenderingProfiles.Normalize(textRenderingProfile);
-        _customFontFace = TryLoadCustomFontFaceFromCandidates(CustomRegularFontCandidates());
-        _customBoldFontFace = TryLoadCustomFontFaceFromCandidates(CustomBoldFontCandidates());
+        _customFontFace = customFontEnabled
+            ? TryLoadCustomFontFaceFromCandidates(CustomRegularFontCandidates())
+            : null;
+        _customBoldFontFace = customFontEnabled
+            ? TryLoadCustomFontFaceFromCandidates(CustomBoldFontCandidates())
+            : null;
     }
 
     /// <summary>
@@ -330,10 +335,54 @@ public static class NoteTypography
         InjectionParameters.NoteContentPaddingRight.Value,
         InjectionParameters.NoteContentPaddingBottom.Value);
 
-    public static void Configure(string? size, bool bold)
+    private static FontFamily? _spacedBody, _spacedBold, _spacedCode;
+    internal static FontFamily EditorFontFamily => _spacedBody ?? FontFamily;
+    internal static FontFamily EditorBoldFontFamily => _spacedBold ?? AppTypography.FontFamilyFor(content: true, bold: true);
+    internal static FontFamily EditorCodeFontFamily => _spacedCode ?? CodeFontFamily;
+
+    public static void Configure(string? size, bool bold, string? lineSpacing = VisualTextSizes.Medium)
     {
         _size = VisualTextSizes.Normalize(size);
         _bold = bold;
+        var factor = InjectionParameters.NoteLineSpacingFactor.Resolve(VisualTextSizes.Normalize(lineSpacing) switch
+        {
+            VisualTextSizes.Small => 0.88,
+            VisualTextSizes.Large => 1.16,
+            _ => 1.0
+        });
+        _spacedBody = null;
+        _spacedBold = null;
+        _spacedCode = null;
+        if (factor == 1.0) return;
+
+        var body = FontFamily;
+        var boldFamily = AppTypography.FontFamilyFor(content: true, bold: true);
+        _spacedBody = SpacedFamily(body, factor);
+        _spacedBold = body.Equals(boldFamily) ? _spacedBody : SpacedFamily(boldFamily, factor);
+        _spacedCode = SpacedFamily(CodeFontFamily, factor);
+    }
+
+    // AvalonEdit lets TextFormatter measure every wrapped line. Supply vertical metrics through
+    // a WPF composite family so hit testing, inline images and carets use the same real layout.
+    private static FontFamily SpacedFamily(FontFamily source, double factor)
+    {
+        var height = source.LineSpacing * factor;
+        var family = new FontFamily
+        {
+            LineSpacing = height,
+            Baseline = Math.Clamp(source.Baseline + (height - source.LineSpacing) / 2, 0, height)
+        };
+        var target = source.Source;
+        if (source.BaseUri is { } baseUri)
+        {
+            // An implicit Windows file URI treats '#' as a filename character. Resolve against
+            // an explicit file: URI so WPF gets the family fragment, even on a UNC share.
+            // A literal comma in the resulting URI would start another WPF fallback family.
+            var directory = new Uri(baseUri.AbsoluteUri, UriKind.Absolute);
+            target = new Uri(directory, target).AbsoluteUri.Replace(",", "%2C");
+        }
+        family.FamilyMaps.Add(new FontFamilyMap { Target = target });
+        return family;
     }
 
     public static void ApplyTextRendering(DependencyObject target)

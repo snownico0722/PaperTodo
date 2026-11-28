@@ -166,7 +166,7 @@ public sealed partial class AppController
                     pair.Value.PrepareForCapsulePresentationModeChange();
             }
 
-            StateReloadModels.Apply(State, pending.Next);
+            ApplyAcceptedDataReload(pending.Next);
             foreach (var paper in State.Papers)
             {
                 if (_windows.TryGetValue(paper.Id, out var window) && oldPapers.TryGetValue(paper.Id, out var old))
@@ -198,7 +198,7 @@ public sealed partial class AppController
             // claiming a rollback or triggering a second import.
             if (storageAccepted && !IsExiting)
             {
-                StateReloadModels.Apply(State, pending.Next);
+                ApplyAcceptedDataReload(pending.Next);
                 _lastDataReloadResult = pending.Result with
                 {
                     Outcome = "failed", Applied = true,
@@ -238,6 +238,14 @@ public sealed partial class AppController
         if (!StateReloadModels.Equivalent(State, pending.Next)) MarkDirty();
     }
 
+    private void ApplyAcceptedDataReload(AppState next)
+    {
+        StateReloadModels.Apply(State, next);
+        // The accepted document and new conflict archives can reference IDs that
+        // were available for reuse when this image store was opened.
+        ProtectWorkspaceImageReferences(_workspace, _imageStore, refreshAfterDataReload: true);
+    }
+
     private void RefreshReloadedSettings(AppState before) =>
         RefreshReloadedSettings(before.UsePersistentPowerShellProcess, before.PreferPowerShell7);
 
@@ -253,7 +261,9 @@ public sealed partial class AppController
             window.UpdateTodoVisualSize();
         }
         RefreshTypography();
+        RefreshPaperBackgroundSurfaces();
         RefreshThemeSurfaces();
+        SkinBorder.RefreshLoadedCapsuleOutlines();
         InitializeGlobalHotkeys();
         RefreshPluginShortcuts();
         RefreshFullscreenAvoidanceRuntime();

@@ -48,6 +48,11 @@ public sealed partial class AppController
             RefreshTypography();
         }
 
+        var lineSpacingChanged = changedKeys.Contains(InjectionParameters.NoteLineSpacingFactor.Id);
+        if (lineSpacingChanged && !typographyChanged)
+            NoteTypography.Configure(State.NoteTextSize, State.NoteTextBold, State.NoteLineSpacing);
+        var todoMarginChanged = changedKeys.Contains(InjectionParameters.TodoItemMargin.Id);
+
         if (changedKeys.Contains(InjectionParameters.CapsuleGapBase.Id) ||
             changedKeys.Contains(InjectionParameters.CapsuleGapDelta.Id) ||
             changedKeys.Contains(InjectionParameters.CapsuleGapFinal.Id))
@@ -55,7 +60,12 @@ public sealed partial class AppController
 
         RefreshUserInjectionPreview(changedKeys);
         foreach (var window in _windows.Values.ToArray())
-            if (!window.IsClosed) window.RefreshUserInjectionRuntime(changedKeys);
+        {
+            if (window.IsClosed) continue;
+            if (lineSpacingChanged && !typographyChanged) window.UpdateNoteLineSpacing();
+            if (todoMarginChanged) window.UpdateTodoItemSpacing();
+            window.RefreshUserInjectionRuntime(changedKeys);
+        }
         RefreshSettingsWindowContent();
     }
 
@@ -69,6 +79,8 @@ public sealed partial class AppController
             "title.text_size" => InjectionParameters.TitleFont.HasOverride,
             "capsule.text_size" => InjectionParameters.CapsuleLabelFont.HasOverride,
             "capsule.gap" => InjectionParameters.CapsuleGapFinal.HasOverride,
+            "note.line_spacing" => InjectionParameters.NoteLineSpacingFactor.HasOverride,
+            "todo.item_spacing" => InjectionParameters.TodoItemMargin.HasOverride,
             "note.text_size" => InjectionParameters.NoteComputedFontSize.HasOverride &&
                 InjectionParameters.NoteComputedCodeFontSize.HasOverride &&
                 InjectionParameters.NoteComputedHeading1FontSize.HasOverride &&

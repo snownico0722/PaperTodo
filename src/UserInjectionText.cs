@@ -24,6 +24,7 @@ internal static partial class UserInjectionText
         AddDesktop(entries);
         AddContent(entries);
         AddPreview(entries);
+        AddCurrentLayout(entries);
         entries["suggestion.range"] = [
             "Move this value to the nearest declared recommendation; the override remains explicit.",
             "指定された推奨範囲内の最も近い値へ調整します。上書きは維持されます。",
@@ -77,5 +78,6 @@ internal static partial class UserInjectionText
 
     static partial void AddDesktop(Dictionary<string, string[]> entries);
     static partial void AddContent(Dictionary<string, string[]> entries);
+    static partial void AddCurrentLayout(Dictionary<string, string[]> entries);
     static partial void AddPreview(Dictionary<string, string[]> entries);
 }

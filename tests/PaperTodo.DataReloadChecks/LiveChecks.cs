@@ -226,6 +226,20 @@ internal static partial class Program
             AppController.ConflictDialogDriver = (_, bucket) =>
             {
                 dialogueCalls++;
+                var animations = controller.State.EnableAnimations;
+                try
+                {
+                    mcp.Execute(JsonSerializer.SerializeToElement(new
+                    {
+                        method = "set_setting",
+                        @params = new { id = "appearance.animations", value = !animations }
+                    }));
+                    throw new InvalidOperationException("Settings unexpectedly wrote during a merge.");
+                }
+                catch (McpApiException ex) when (ex.Code == "settings_busy") { }
+                Require(controller.State.EnableAnimations == animations &&
+                    Str(LivePaper(ReadLive(), "note-b")["content"]) == "external conflicting body",
+                    "a rejected settings change modified the running setting or disk contents");
                 return bucket is PaperBucket
                     ? PaperConflictChoice.KeepExternal
                     : ConflictChoice.KeepExternal;
@@ -345,6 +359,7 @@ internal static partial class Program
             Require(!windows.ContainsKey("merge-renamed-window"),
                 "deleted paper surface survived merge");
             Console.WriteLine("PASS external paper ID rename and delete close old windows");
+            CheckEmptyPaperDeletionConfirmation(controller);
             await DeletedPaperHistoryChecks(controller);
 
             using (var runtime = new PaperPluginRuntimeWorkspaceApi(controller, "fixture.runtime", [PaperTodoPermissionNames.DataImport], () => true))

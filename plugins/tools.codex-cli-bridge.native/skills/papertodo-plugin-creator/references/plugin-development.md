@@ -10,10 +10,10 @@ This is the **current PaperTodo plugin development manual**. It documents the cu
 New plugins use:
 
 ```json
-"apiVersion": "2.4"
+"apiVersion": "2.6"
 ```
 
-The current host exposes Protocol `2.4` and remains backward-compatible with `2.1`, `2.2`, and `2.3`. Protocol `2.0` and earlier are no longer load-compatible. New plugins should target `2.4`; existing plugins can keep running within their declared contract.
+The current host exposes Protocol `2.6` and remains backward-compatible with `2.1` through `2.5`. Protocol `2.0` and earlier are no longer load-compatible. New plugins should target `2.6`; existing plugins can keep running within their declared contract.
 
 ### Plugin API version history
 
@@ -23,7 +23,7 @@ The current host exposes Protocol `2.4` and remains backward-compatible with `2.
 MinimumSupportedApiVersion <= plugin.apiVersion <= CurrentApiVersion
 ```
 
-A newer host may load an older compatible plugin. An older host must reject a plugin that requires a newer API. PaperTodo currently supports **2.1 through 2.4**.
+A newer host may load an older compatible plugin. An older host must reject a plugin that requires a newer API. PaperTodo currently supports **2.1 through 2.6**.
 
 | API | Status | Main contract milestones |
 | --- | --- | --- |
@@ -32,7 +32,9 @@ A newer host may load an older compatible plugin. An older host must reject a pl
 | 2.1 | Supported minimum | Consolidated background work into one provider Runtime; Body/Mini are frontend surfaces. Includes Workspace Paper/Todo/Note access, Runtime state/Papers, host-rendered Top Bar and Todo contributions, global shortcuts/custom shortcut actions, paper menus, note-image reads and temporary popups. |
 | 2.2 | Supported | Adds cross-paper presentation, public application Settings API (`settings.read/update`), settings `type: "action"` command buttons, `startupPaper.presentation: "hidden"`, reminder trigger state/events, and Web Runtime host-event subscriptions. |
 | 2.3 | Supported | Adds `MenuOnly` / `menuOnly` to top-bar action descriptors, showing an action only in the plugin action menu without creating a title-bar button. |
-| 2.4 | Current | Adds the optional global `user.json` injection API: query overrides, apply a patch, request a limited adjustment, and restart through the normal host lifecycle. |
+| 2.4 | Supported | Adds image append to built-in Markdown notes with `notes.append` and Runtime capsule customization across the workspace. |
+| 2.5 | Supported | Adds per-paper bottom bar contributions to notes and to-dos. |
+| 2.6 | Current | Adds the Native global `user.json` API for inspection, application, suggestions and restart. |
 
 **Versioning rule:** a backward-compatible new plugin-visible contract (manifest field/type, permission, event, public API surface, or new observable semantics) advances the minor version after the current minor is published. Host-only implementation changes and bug fixes do not. Breaking an existing plugin contract advances the major version. Multiple compatible additions developed before one minor is released may ship together in that minor.
 
@@ -213,7 +215,7 @@ Repository directories have distinct responsibilities:
 
 - `plugin-samples/`: plugin source code, source-side `plugin.json`, samples, and build scripts;
 - `plugins/`: final built plugins that PaperTodo can load directly;
-- `plugins/data/`: host-managed plugin settings, provider Runtime state, and per-paper frontend state;
+- `plugins/data/` (main workspace) and `plugins/data2/`–`plugins/data5/` (workspaces 2–5): host-managed plugin settings, provider Runtime state, and per-paper frontend state, isolated by workspace;
 - `plugins/<id>/.runtime/`: plugin-managed caches or independent long-lived data.
 
 Neither local PaperTodo publish output nor GitHub Releases bundle plugins. Plugins are distributed independently.
@@ -250,8 +252,9 @@ The current manifest supports:
 | `id` | Unique plugin ID; the directory name must match |
 | `name` | Display name; falls back to the ID when empty |
 | `description` | Plugin description |
+| `locales` | Optional language overrides for host-rendered manifest/settings text; see §3.4 |
 | `version` | Plugin version; must parse as `Version` |
-| `apiVersion` | Use `"2.4"` for new plugins; `"2.1"`, `"2.2"`, and `"2.3"` remain load-compatible |
+| `apiVersion` | Use `"2.5"` for new plugins. `"2.1"` through `"2.4"` remain compatible |
 | `stateVersion` | Target version for host-managed JSON; used by both per-paper frontend state and provider Runtime state; at least 1 |
 | `maxPaperInstances` | Optional; maximum number of real Papers for the same provider. Defaults to `1`; `0` means unlimited. Hidden/collapsed Papers still count |
 | `entry` | Web main page or Native entry DLL; must stay inside the plugin directory |
@@ -259,12 +262,13 @@ The current manifest supports:
 | `miniSize` | Optional; used only with `miniEntry`; preferred Mini size |
 | `miniMaxSize` | Optional; maximum Mini capacity promised by the plugin, used for bounded host-capacity planning |
 | `runtime` | Optional, Web Runtime only; at most one Runtime per provider. Defaults to `runtime.html` next to `entry` |
-| `capabilities` | Optional: `textZoom`, `noteLinks`, and the lifecycle capability `runtime` |
+| `capabilities` | Optional: `textZoom`, `noteLinks`, `runtime`, and (API 2.5) `bottomBar` |
+| `bottomBarTargets` | Required for `bottomBar`: a nonempty array containing `"note"`, `"todo"`, or both; selects which existing papers may receive items, not which papers the plugin may create |
 | `permissions` | Optional Paper/Todo/Note Workspace permissions |
 | `advancedSettings` | Optional, default `false`; enables a dedicated full settings page when `true` |
 | `primarySettings` | Optional; effective only with `advancedSettings: true`; shows the first 1–3 settings directly on the plugin card; defaults to 3 |
 | `settingCategories` | Optional; effective only with `advancedSettings: true`; declares categories for the full settings page and optional `left` / `right` column placement |
-| `settings` | Optional global settings rendered and stored by the host; settings may specify `category` in advanced mode |
+| `settings` | Optional plugin settings shared within the active workspace, rendered and stored by the host; settings may specify `category` in advanced mode |
 | `startupPaper` | Optional; automatically creates/restores a plugin Paper according to user settings |
 
 `maxPaperInstances` is a Paper/provider-level product constraint and applies equally to Native and Web plugins. If an update lowers the limit below the number of existing instances, the host does not delete existing Papers; it only blocks creation of additional ones.
@@ -324,6 +328,8 @@ Constraints:
 - creation timing, deduplication, and restoration are managed by the host; the plugin only declares intent;
 - if the user has converted the originally auto-created Paper to another provider/type, the host does not forcibly reclaim it or silently create another copy.
 
+`enabledSetting` controls automatic Paper creation/restoration only. Turning it off does not delete an existing Paper or stop its Runtime. The host-level enable/disable switch in **Settings → Plugins** controls whether the plugin may run at all.
+
 ### 3.3 `runtime` (2.1)
 
 Declare a Runtime when the plugin must continue running independently of the Body/Mini UI lifecycle:
@@ -334,13 +340,21 @@ Declare a Runtime when the plugin must continue running independently of the Bod
 
 There is one lifecycle model:
 
-- on normal visible startup, `startupPaper` first creates/restores a real plugin Paper according to settings;
-- when the provider has at least one real Paper, **one** Runtime starts; it is disposed when the final Paper leaves that provider;
+- on normal visible startup, `startupPaper` first creates/restores a real plugin Paper according to settings, provided the plugin is enabled in the host;
+- an enabled provider starts **one** Runtime when its first real Paper appears, or immediately if it declares an API 2.5 bottom bar. Only the latter can keep running without an owner Paper. Disabling the plugin stops it;
 - hiding, collapsing, Body rebuilds, Mini reclamation, or having no current `PaperWindow` does not affect the Runtime;
 - there is no "background per Paper" contract. Multiple Papers still share the single Runtime and use `PaperId` to distinguish logical instances;
 - if a plugin truly needs multiple workers, threads, subprocesses, or isolation domains, it manages them inside its Runtime;
 - Native plugins declare `runtime` and implement `IPaperPluginRuntimeProvider`; Web plugins use manifest `runtime` to select the background entry, defaulting to `runtime.html` next to `entry`;
 - restart PaperTodo after modifying plugin files.
+
+Disabling a plugin disposes its Body/Mini sessions, Runtime, shortcuts, and host UI contributions. The host keeps the Papers' provider bindings and all host-managed plugin data; existing windows show a disabled placeholder. Re-enabling rebuilds the sessions and Runtime required by the current Papers. Disabling/re-enabling is not a Native DLL hot-reload mechanism: the plugin page's restart/rescan button restarts **PaperTodo itself** to discover added, removed, or changed plugin files.
+
+### 3.4 UI language and localization
+
+Use manifest `locales` for translated plugin names, descriptions, settings, categories, select labels, and startup Paper titles rendered by the host. Plugins supply their own translations for content they render themselves.
+
+Native Body and Runtime read the host language through `context.UiLanguage`; `PaperPluginEnvironment.UiLanguage` exposes the current effective host language. Web Body, Mini, Runtime, and Popup receive `uiLanguage` in `initialize` (Popup reads it through `await window.papertodo.ready`). Read the language for each new session/initialization: ordinary language edits take effect after restart, but a complete workspace switch may apply a different language in the same process. See the [localization protocol](https://github.com/snownico0722/PaperTodo/blob/main/plugin-samples/PROTOCOL-2.1-LOCALIZATION.md) for manifest matching, fallback rules, and Native/Web examples.
 
 ## 4. Plugin Runtime Model
 
@@ -411,37 +425,42 @@ public sealed class MyPlugin : IPaperBodyPlugin, IPaperPluginRuntimeProvider
 
 `PaperPluginRuntimeContext` provides:
 
-- `Settings`: current global settings plus change subscriptions;
+- `Settings`: the plugin's shared settings in the active workspace plus change subscriptions;
 - `State`: one persistent JSON document owned by the provider Runtime;
-- `Papers`: list logical Papers for the current provider, set long-lived presentation by `paperId`, send messages to Body, and receive Paper add/remove/frontend messages. At Runtime startup, call `List()` for the initial snapshot before `Subscribe(...)` for increments; subscriptions do not replay already-existing Papers;
-- `Workspace`;
+- `Papers`: list logical Papers for the current provider, set long-lived presentation by `paperId`, send messages to Body, and receive Paper add/remove/frontend messages. API 2.4 also lets `SetCapsulePresentation` target any Paper in the workspace. At Runtime startup, call `List()` for the initial snapshot before `Subscribe(...)` for increments; subscriptions do not replay already-existing Papers;
+- `Workspace`: permission-controlled access to the active workspace;
 - `GlobalTopBar` / `GlobalShortcuts`;
 - `TodoActions` / `TopBarLabels`: Protocol 2.1 host-rendered contributions.
 
-A Web Runtime receives the corresponding `papertodo.settings`, `papertodo.state`, `papertodo.papers`, `papertodo.workspace`, and root `papertodo.request(method, params)`. `state` reads/writes provider Runtime state; `papers` manages only logical Papers belonging to the current provider; `workspace` accesses all PaperTodo data allowed by permissions. One provider creates only one hidden Runtime WebView.
+A Web Runtime receives the corresponding `papertodo.settings`, `papertodo.state`, `papertodo.papers`, `papertodo.workspace`, and root `papertodo.request(method, params)`. `state` reads/writes provider Runtime state; `papers` manages the provider's logical Papers and exposes capsule customization; `workspace` accesses active-workspace data as allowed by permissions. One provider creates only one hidden Runtime WebView.
 
 This means the two `papers.list` calls have different meanings: `papertodo.papers.list()` returns the current provider's Runtime Paper snapshot only, while `papertodo.workspace.request('papers.list')` returns Workspace Papers visible under current permissions. Root `papertodo.request(...)` is the low-level Runtime transport; normal code should prefer the grouped APIs above to avoid confusing methods with similar names.
 
 Runtime state and Body/Mini per-paper frontend state are different data domains. A Runtime may keep `instances[paperId]` inside provider state; Body `saveState` stores only that Paper's frontend state and does not compete with Runtime for the same writer.
 
+A complete workspace switch disposes the old Body/Mini sessions and provider Runtimes, replaces the host-managed plugin data store, then creates the target workspace's sessions and Runtimes as needed. This is a lifecycle boundary, not a visibility change or permanent Paper deletion. End tasks/subscriptions with their owning session or Runtime and initialize the new instances from the target workspace's settings and state.
+
 ## 5. State, Settings, and `.runtime`
 
 ### 5.1 Host-managed state
 
-Host-managed state for each plugin is stored at:
+Host-managed state for each plugin is stored separately in each workspace:
 
-```text
-plugins/data/<plugin ID>.json
-```
+| Workspace | Path |
+| --- | --- |
+| Main (1) | `plugins/data/<plugin ID>.json` |
+| 2–5 | `plugins/data2/<plugin ID>.json` through `plugins/data5/<plugin ID>.json` |
 
-It contains:
+Each workspace's file contains:
 
-- `settings`: shared by all Papers belonging to the plugin;
+- `settings`: shared by that plugin's Papers within this workspace;
 - `runtime`: one backend state document for the provider Runtime;
 - `papers`: Body/Mini frontend state keyed by Paper ID;
 - each Paper state is limited to **10 MiB of UTF-8 JSON**, and the provider Runtime state is limited to **20 MiB of UTF-8 JSON**.
 
 The manifest's single `stateVersion` is the target version for both independent state domains, but they do not share JSON and do not overwrite each other.
+
+All three domains (`settings`, `runtime`, and `papers`) are isolated by workspace. Following the main workspace's application preferences does not share these plugin-private values. Installed plugin files are shared across workspaces; the separate rules for plugin-managed `.runtime/` data are in §5.4.
 
 A Native Body session uses:
 
@@ -513,7 +532,7 @@ Runtime does not borrow the paper-session settings lifecycle. Native code may re
 - large local indexes;
 - plugin-private data that must outlive any individual Paper.
 
-The plugin owns `.runtime/` format versioning, atomic writes, corruption recovery, and capacity control. Do not write ordinary single-Paper UI/business state to both `.runtime/` and `plugins/data/`, or you will create two authoritative copies of the same state.
+The plugin owns `.runtime/` format versioning, atomic writes, corruption recovery, and capacity control. This directory belongs to the shared plugin installation and is not automatically isolated by workspace. Do not write ordinary single-Paper UI/business state to both `.runtime/` and the workspace's host-managed plugin data file, or you will create two authoritative copies of the same state.
 
 ### 5.5 Public application Settings API (2.2)
 
@@ -549,7 +568,7 @@ All three adapters share one service. Core preferences synchronously save throug
 Todo linking remains available through the existing Workspace update request (`UpdateLinkedPaper=true`, `LinkedPaperId=null` unlinks). MCP adds `update_todo(clear_linked_paper=true)` for unambiguous unlinking; it conflicts with a non-null `linked_paper_id`. Omitting both leaves the link unchanged. Before creating a long-detail Note for a Todo, query `todo.paper_links`; when disabled or unknown, skip that approach unless the user explicitly requests a settings change.
 
 
-### 5.6 Global `user.json` injection API (2.4)
+### 5.6 Global `user.json` injection API (2.6)
 
 The optional `IPaperInjectionApi` capability edits the host's process-global override file, separately from ordinary workspace preferences and plugin state. Native Body and provider Runtime access it through `context.InjectionApi`. It is also usable without Good Lock: hand-edit the same `user.json` and restart PaperTodo. Internal injection IDs may change or retire with their modules; query the catalog instead of guessing field names.
 
@@ -579,6 +598,8 @@ The snapshot contains the file path/revision, its sparse overrides, and paramete
 [Good Lock](PaperTodo.Plugin.GoodLock/README.md) is the official Native consumer. It lists changed entries, uses the external editor for normal value editing, and keeps reset/adjustment actions as a pending patch. Returning to its Paper refreshes the file without a background watcher. Its source is in `plugin-samples/`; the separately installable compiled plugin is in `plugins/official.good-lock.native/`.
 
 ## 6. Workspace Permissions and Data API
+
+Workspace APIs operate on the **active workspace**, subject to the caller's permissions. They do not provide cross-workspace access through the same session or Runtime context.
 
 A manifest may declare:
 
@@ -697,7 +718,7 @@ const stop = papertodo.onHostEvent(['todo.reminderUpcoming'], async event => {
 });
 ```
 
-Paper, Todo, Note and Note-image reads use the current host model/assets without committing editors. Recent typing may appear after the normal editor/save synchronization; reads do not force a flush. When an external write targets the same built-in Markdown paper, PaperTodo commits that paper's pending user text first so the write follows it; writes to other papers do not invoke unrelated third-party Body `Commit()`. Core `data.json` saves still synchronize built-in Markdown normally and do not use third-party Body `Commit()` as a global save hook. MCP creation/append accepts the new Todo's initial fields under additive writes; changing existing content still needs full writes.
+Paper, Todo, Note and Note-image reads do not commit editors or force a save. Reading a built-in Markdown Note includes its current unsaved editor text; when no active editor is available, it reads the current model content. Custom plugin bodies retain the state/capability boundary described below. When an external write targets the same built-in Markdown paper, PaperTodo commits that paper's pending user text first so the write follows it; writes to other papers do not invoke unrelated third-party Body `Commit()`. Core `data.json` saves still synchronize built-in Markdown normally and do not use third-party Body `Commit()` as a global save hook. MCP creation/append accepts the new Todo's initial fields under additive writes; changing existing content still needs full writes.
 
 ### 6.1 Body read/write boundary
 
@@ -752,11 +773,11 @@ MCP exposes `show_paper`, `hide_paper`, `toggle_paper_visibility`, `expand_paper
 Top Bar has two explicit owners:
 
 - **Paper**: `PaperBodyContext.TopBar` / body session. Shown only on the plugin Paper hosting the current session; up to 4 actions per session;
-- **Global**: `PaperPluginRuntimeContext.GlobalTopBar` / provider Runtime. Shown on every PaperTodo Paper; up to 256 Global actions per provider Runtime. The Global runtime requires at least one real plugin Paper for its provider, but no Paper needs to be visible, expanded, or have a live body session.
+- **Global**: `PaperPluginRuntimeContext.GlobalTopBar` / provider Runtime. Shown on every PaperTodo Paper; up to 256 Global actions per provider Runtime. The Global runtime requires an enabled provider with at least one real plugin Paper in the active workspace, but no Paper needs to be visible, expanded, or have a live body session.
 
 Global actions are ordered by `Priority`, with larger numbers first. Ties are stable: first by provider Runtime registration order, then by declaration order inside the plugin. **PaperTodo's own host actions do not participate in this numeric priority space and always have a higher, non-overridable priority than plugin actions.** When width is insufficient, plugin contributions yield first; declaring many Global actions cannot push host actions out before plugin actions.
 
-On normal visible startup, `startupPaper` is processed first. It may create/restore a real plugin Paper, after which the host starts Global runtimes according to the final set of real Papers. During runtime, the first real Paper starts the Runtime and the final Paper being deleted or switched to another provider disposes it. Deleting, hiding, or collapsing a non-final Paper does not remove Global actions.
+On normal visible startup, `startupPaper` is processed first for enabled plugins. It may create/restore a real plugin Paper, after which the host starts Global runtimes according to the final set of real Papers. The first real provider Paper enables Global actions and the last departing Paper removes them, even if an API 2.5 bottom bar keeps the Runtime alive. Host disablement and workspace switching also dispose the Runtime and its Global actions. Deleting, hiding, or collapsing a non-final Paper does not remove Global actions.
 
 A Global click contains `TargetPaperId`, `TargetPaperType`, and `TargetBodyProviderId`. `TargetBodyProviderId` is meaningful only for Notes; non-Note targets such as Todos return an empty string. Use these values to read or modify target Markdown/Todo data through Runtime Workspace. Top Bar itself does not own a business-data API.
 
@@ -871,7 +892,7 @@ Manifest:
 
 `runtime` may be omitted. When omitted, it defaults to `runtime.html` next to `entry`. An explicit path is still relative to the plugin directory and must stay inside the Web `entry` static directory.
 
-When the provider has at least one real plugin Paper, the Runtime page receives:
+When the provider is enabled and has at least one real plugin Paper in the active workspace, the Runtime page receives:
 
 ```js
 papertodo.surface;                    // 'runtime'
@@ -938,6 +959,11 @@ await papertodo.globalTopBar.setActions([
 
 Menu-only actions require no icon, create no title-bar button, and reserve no title-bar space. `ToolTip` supplies the menu label, falling back to `Id` when empty. Existing `Visible`, `Enabled`, ordering, count limits, callbacks and owner cleanup still apply. These actions use the existing plugin action menu and do not join the built-in shortcut ordering/hiding settings. The targeted plain-text `PaperActions.SetActions(paperId, ...)` API is unchanged.
 
+
+**Bottom bar (API 2.5).** Declare the `runtime` and `bottomBar` capabilities with `papers.read`. Set `"bottomBarTargets": ["note", "todo"]` (or just one type). Enabling the plugin in Settings → Plugins starts its Runtime even with no plugin-owned paper and no current match. Existing and newly created matching papers are eligible automatically; several plugins can contribute independently. No per-paper switch exists. Native uses `context.BottomBar` and Web Runtime uses `papertodo.bottomBar`. Use `ListTargets()` / `listTargets()` on startup and when `TargetsChanged` / `bottomBarTargetsChanged` fires. Publish up to eight items per matching paper using `SetItems(paperId, items)` / `setItems(paperId, items)`. Passing an empty array clears that paper's items. Only clickable items accept a tooltip; read-only labels ignore it and let pointer input pass through.
+
+Each item has an `id`, text and/or a top-bar-compatible icon, `side` (`left` or `right`), `order`, `priority`, `visible` and `clickable`. Larger order values sit closer to the edge. Larger priorities stay visible longer. Plugin values may be at most 998. Native receives clicks through `SetActionHandler`; Web receives `bottomBarItemInvoked` with `message.item`. The callback contains the item ID, current paper and click position for an optional popup. See [Bottom Bar Counts](PaperTodo.Plugin.BottomBarWeb/) for a note character count and clickable to-do progress example.
+
 ### 7.6 Protocol 2.1 Todo and Top Bar presentation extensions
 
 A Protocol 2.1 provider Runtime can also publish two lightweight contribution types to the host:
@@ -961,7 +987,7 @@ These capabilities extend existing entry points only: **text actions in the Pape
 | Native entry | Web entry | Boundary |
 | --- | --- | --- |
 | `runtimeContext.PaperActions` | Runtime `papertodo.paperActions` | `papers.read`; register text menu items for a specific Paper |
-| `context.NoteAssets` | `papertodo.noteAssets` | `notes.read`; read images owned by a specific Note |
+| `context.NoteAssets` | `papertodo.noteAssets` | `notes.read` reads images owned by a specific Note. `notes.append` adds an image from Body or Runtime (API 2.4) |
 | `context.Popups` | Body / Runtime `papertodo.popups` | Plugin renders content; host performs one-time positioning and closes on focus loss |
 
 Here `context` may be either `PaperBodyContext` or `PaperPluginRuntimeContext`. Context-menu entries are registered only by an existing provider Runtime using `SetActionHandler` / `SetActions(paperId, actions)`. Web uses `paperActions.set(paperId, actions)` plus the `paperActionInvoked` event. Menu items contain only `Id` and `Text`, displayed in declaration order. They do not require icons and provide no tooltip, sort-priority, or new Top Bar capability. Replacing or clearing a registration invalidates its old callbacks, and Runtime shutdown clears all registrations.
@@ -1013,7 +1039,13 @@ papertodo.popup.close();
 
 A popup can read initial data, receive theme events, read permitted Note images, send messages to its creator, and close itself. **It does not directly receive general Workspace write access, menu registration, or the ability to open another popup.** Business writes are handled by the creator. Initial data and each message are limited to 64 KiB. The entry accepts local HTML only. HTTP/HTTPS/mailto links and external new-window requests open through the system default application without navigating the popup. Downloads remain cancelled. Navigation invalidates old message credentials. Recoverable Web helper-process failures do not close the popup; main renderer or browser failures close it and report `popupError` to the creator.
 
-`NoteAssets.ReadImage(paperId, imageId)` returns the MIME type and separately encoded bytes from `PaperNoteImage`; Web exposes `bytes` as Base64. It reuses `notes.read`, can read only images owned by built-in Markdown Notes, and has a 16 MiB limit per read. Missing, corrupt, or ownership-mismatched assets report `asset_not_found`; oversized assets report `asset_too_large`. The API does not expose image writes, disk paths, or internal storage objects, and it does not promise an atomic export snapshot of an entire Note.
+`NoteAssets.ReadImage(paperId, imageId)` returns the MIME type and separately encoded bytes from `PaperNoteImage`; Web exposes `bytes` as Base64. It reuses `notes.read`, can read only images owned by built-in Markdown Notes, and has a 16 MiB limit per read. Missing, corrupt, or ownership-mismatched assets report `asset_not_found`; oversized assets report `asset_too_large`.
+
+#### Append an image (API 2.4)
+
+Declare `apiVersion: "2.4"` and the `notes.append` permission in `plugin.json`. Native Body and Runtime use `context.NoteAssets.AppendImage(paperId, imageBytes, imageName)`; Web Body and Runtime use `await papertodo.noteAssets.appendImage(paperId, imageBase64, imageName)`. Pass up to 8 MiB of encoded image data per call, using raw Base64 without a data URL prefix on Web. The optional name is metadata with a 200-character limit. Web Mini uses `papertodo.workspace.request('noteAssets.appendImage', {paperId, imageBase64, imageName})`.
+
+The host applies its normal image validation and compression, keeps any pending text in the target built-in Markdown note, and appends the image at the end. Success returns `PaperId`, `ImageId`, and `MarkdownReference` (camelCase on Web). The reference is already in the note. Invalid images report `image_import_failed`; notes ending in an open code block report `image_reference_not_renderable`. A Web popup can ask its creator to append the image.
 
 ## 8. Capsule Presentation
 
@@ -1056,6 +1088,14 @@ Rules:
 - the host caches the View for the same session/geometry. Update live state in place instead of continuously rebuilding the View.
 
 Web plugins do not get custom WPF capsules; they use the host-rendered standard presentation.
+
+### 8.3 Customize any Paper's capsule (API 2.4)
+
+A plugin Runtime can target an existing Todo, Markdown Note, or another plugin's Paper by ID. Native uses `context.Papers.SetCapsulePresentation(paperId, presentation)`, and Web uses `await papertodo.papers.setCapsulePresentation(paperId, presentation)`. List workspace Papers through `Workspace.ListPapers()` or `papertodo.workspace.request('papers.list')` with `papers.read`.
+
+For a Native WPF view, use `context.CapsuleViews.SetCapsuleView(paperId, presentation, createView)`. The factory runs on the UI dispatcher under the same WPF rules as above. It receives the target's surface, slot size and theme. Pass the same factory on consecutive updates to keep the cached view while its geometry stays the same. Keep the standard presentation as a measurement and rendering fallback.
+
+Each target has one active override, owned by the last Runtime that published it. Pass `null` through the same API to clear your override. Ending the Runtime or replacing its Web document clears its overrides and restores the target's own content. Overrides are temporary and do not write to the target's title, body, or stored plugin state.
 
 ## 9. Edge Mini
 
@@ -1191,7 +1231,7 @@ topBarActionInvoked
 runtimeMessage
 ```
 
-`initialize` includes the current surface, paper/provider IDs, API/state versions, state, settings, permissions, theme, Runtime visibility, and presentation visibility.
+`initialize` includes the current surface, paper/provider IDs, API/state versions, state, settings, permissions, theme, `uiLanguage`, Runtime visibility, and presentation visibility. For plugin translations, see §3.4.
 
 ### 10.3 Mini bridge
 
@@ -1218,7 +1258,7 @@ Body/Mini `runtime.post(...)` reports only whether the current provider Runtime 
 
 ### 10.4 Plugin Runtime bridge
 
-A Web plugin declaring `runtime` creates an independent Runtime surface while the provider has at least one real plugin Paper. Manifest `runtime` may select a custom entry; otherwise it defaults to `runtime.html` next to `entry`:
+A Web plugin declaring `runtime` creates an independent Runtime surface while the provider is enabled and has at least one real plugin Paper in the active workspace. Manifest `runtime` may select a custom entry; otherwise it defaults to `runtime.html` next to `entry`:
 
 ```js
 papertodo.surface;                    // 'runtime'
@@ -1242,7 +1282,7 @@ papertodo.request(method, params);    // root transport
 papertodo.onEvent(listener);
 ```
 
-Runtime `initialize` contains `settings`, provider Runtime `state` plus its versions, and the current provider `papers` snapshot. Later setting changes produce `settingsChanged`; Paper add/remove events and Body messages produce `paperEvent`. API 2.2 also provides `papertodo.onHostEvent(types, listener, options)` for Workspace events, with the same observe/read permissions as Native. Runtime does not receive paper-session APIs such as `paper`, `body`, `mini`, or `saveState`.
+Runtime `initialize` contains `settings`, `uiLanguage`, provider Runtime `state` plus its versions, and the current provider `papers` snapshot. Later setting changes produce `settingsChanged`; Paper add/remove events and Body messages produce `paperEvent`. API 2.2 also provides `papertodo.onHostEvent(types, listener, options)` for Workspace events, with the same observe/read permissions as Native. Runtime does not receive paper-session APIs such as `paper`, `body`, `mini`, or `saveState`.
 
 `papertodo.papers.postBody(...)` / Native `Papers.PostToBody(...)` only attempts delivery to the current live Body. Its return value tells whether that Body currently accepts the message; a Web Body may temporarily buffer until its document is ready. It is not a persistent message queue, business ACK, or guarantee of final delivery.
 
@@ -1261,7 +1301,7 @@ Key rules:
 - `IPaperBodyPlugin` is a factory and must not hold session state for a specific Paper;
 - each Paper body session uses a new plugin object / `IPaperBodySession`;
 - without `runtime`, manifest-only discovery does not load the Native DLL merely because PaperTodo starts;
-- with `runtime`, a provider Runtime is created only while the provider has at least one real plugin Paper;
+- with `runtime`, a provider Runtime is created only while the provider is enabled and has at least one real plugin Paper in the active workspace;
 - Runtime and paper sessions are separate objects/lifetimes; a specific paper session cannot be treated as the authority for Global runtime behavior;
 - the entry assembly must contain exactly one valid `IPaperBodyPlugin` implementation;
 - restart PaperTodo after plugin files change or are deleted;
@@ -1281,7 +1321,7 @@ For select controls that need host-consistent visuals, use `PaperBodyContext.Bod
 | `PaperTodo.Plugin.OfficialClockWeb` | Main Web sample: body/mini pages, `miniEntry`, state/settings synchronization, startup Paper, background updates |
 | `PaperTodo.Plugin.FocusTimer` | Stateful Native interaction: body and dedicated mini share a timer model; start/pause/resume directly from Mini |
 | `PaperTodo.Plugin.ReviewArchive` | Workspace reads/observe plus combined use of plugin state and long-lived data |
-| `PaperTodo.Plugin.GoodLock` | Official Native `user.json` editor companion: override differences, pending patches, limited suggestions, and normal restart |
+| [PaperTodo.Plugin.Webhook](https://github.com/snownico0722/PaperTodo/blob/main/plugin-samples/PaperTodo.Plugin.Webhook/README.en.md) | Forward host events to HTTP(S) endpoints by event type; Runtime event subscriptions, immediate route-setting updates, and background JSON POST delivery |
 | `PaperTodo.Plugin.CloudGenshin` | Body containing WebView2/native child content: keep the full remote app in Body and use a separate pure-WPF status panel for Edge Mini |
 
 When starting a new plugin, copy the smallest structure from the sample closest to your target. Do not combine every sample capability at once.
@@ -1290,7 +1330,7 @@ When starting a new plugin, copy the smallest structure from the sample closest 
 
 ### Manifest / Runtime
 
-- targeting `apiVersion: "2.0"` or earlier for a new plugin; the current host supports `2.1`–`2.4`, and new plugins should target `2.4`;
+- targeting `apiVersion: "2.0"` or earlier for a new plugin; the current host supports `2.1`–`2.6`, and new plugins should target `2.6`;
 - plugin directory name does not match `id`;
 - `id` uses invalid characters or the reserved host IDs `data` / `data1`–`data5` / `builtin.markdown`;
 - Web declares `runtime`, but the default `runtime.html` is missing, or an explicit `runtime` path is missing/outside the Web `entry` static directory;
@@ -1357,11 +1397,11 @@ When starting a new plugin, copy the smallest structure from the sample closest 
 
 ## 14. Before Submitting a Plugin
 
-- new `plugin.json` targets the current `apiVersion: "2.4"`; use `2.1`, `2.2`, or `2.3` only when intentionally staying within an older contract;
+- new `plugin.json` targets the current `apiVersion: "2.6"`. Declare an older version when intentionally staying within that contract;
 - all metadata lives only in `plugin.json`; the Native entry DLL provides behavior only;
 - when declaring `runtime`: Native implements `IPaperPluginRuntimeProvider`; Web provides `runtime.html` next to `entry` by default, or uses `runtime` to select another entry inside the same Web static directory;
 - when Runtime needs plugin settings, use its own `context.Settings.Json` + `Settings.Subscribe(...)` / `papertodo.settings.get()` + `settingsChanged`; do not borrow a hidden paper session;
-- on normal visible startup, `startupPaper` decides first whether to create/restore a real plugin Paper; Runtime always starts according to the final real-Paper count;
+- on normal visible startup, `startupPaper` decides first whether to create/restore a real plugin Paper; Runtime starts according to host enablement and the active workspace's final real-Paper count;
 - Global Top Bar is registered only by Runtime: deleting a non-final Paper must not remove it, while deleting/converting the final Paper must remove it. Global action `Priority` expresses plugin-internal ordering; host actions always rank higher;
 - Native passes the shared build/install script;
 - final `plugins/<id>/` contains no PDB/XML files or duplicate shared assemblies;
@@ -1374,7 +1414,7 @@ When starting a new plugin, copy the smallest structure from the sample closest 
 - every custom WPF surface is fresh / unparented / pure WPF;
 - Edge Mini does not depend on keyboard input;
 - declare only permissions / `runtime` that are actually needed;
-- 0↔1 Runtime ownership is correct when switching providers or deleting Papers; exiting PaperTodo fully removes Runtime and Global Top Bar contributions.
+- 0↔1 Runtime ownership is correct when switching providers or deleting Papers; host disablement, workspace switching, and exiting PaperTodo fully remove the old Runtime and Global Top Bar contributions. Re-enabled or newly created sessions use the current workspace's data and UI language.
 
 ## Explicit data.json reload (host 2.2 capability)
 

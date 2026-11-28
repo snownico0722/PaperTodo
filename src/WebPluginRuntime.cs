@@ -28,6 +28,7 @@ internal sealed partial class WebPluginRuntime : IDisposable
         RuntimePapersSetCapsulePresentation,
         RuntimePapersPostBody,
         GlobalTopBarSet,
+        BottomBar,
         TodoActionsSet,
         TodoActionsClear,
         TodoActionsClearAll,
@@ -47,6 +48,7 @@ internal sealed partial class WebPluginRuntime : IDisposable
     private readonly IPaperPluginRuntimePapers _papers;
     private readonly PaperPluginRuntimeGlobalTopBarApi _globalTopBar;
     private readonly PaperPluginRuntimeGlobalShortcutApi _globalShortcuts;
+    private readonly PaperPluginRuntimeBottomBarApi? _bottomBar;
     private readonly Func<bool> _isActive;
     private readonly Action _requestRestart;
     private readonly WebView2CompositionControl _webView;
@@ -73,6 +75,7 @@ internal sealed partial class WebPluginRuntime : IDisposable
         IPaperPluginRuntimePapers papers,
         PaperPluginRuntimeGlobalTopBarApi globalTopBar,
         PaperPluginRuntimeGlobalShortcutApi globalShortcuts,
+        PaperPluginRuntimeBottomBarApi? bottomBar,
         Func<bool> isActive,
         Action requestRestart)
     {
@@ -83,6 +86,7 @@ internal sealed partial class WebPluginRuntime : IDisposable
         _papers = papers;
         _globalTopBar = globalTopBar;
         _globalShortcuts = globalShortcuts;
+        _bottomBar = bottomBar;
         _isActive = isActive;
         _requestRestart = requestRestart;
         _webView = new WebView2CompositionControl
@@ -102,6 +106,7 @@ internal sealed partial class WebPluginRuntime : IDisposable
 
         _settingsSubscription = _settings.Subscribe(OnSettingsChanged);
         _papersSubscription = _papers.Subscribe(OnPaperEvent);
+        if (_bottomBar != null) _bottomBar.TargetsChanged += OnBottomBarTargetsChanged;
     }
 
     internal bool CanAcceptPaperMessages =>
@@ -284,7 +289,10 @@ internal sealed partial class WebPluginRuntime : IDisposable
                 clearAll() { return request('topbar.labels.clearAll'); }
               });
               const noteAssets = Object.freeze({
-                readImage(paperId, imageId) { return request('noteAssets.readImage', {paperId, imageId}); }
+                readImage(paperId, imageId) { return request('noteAssets.readImage', {paperId, imageId}); },
+                appendImage(paperId, imageBase64, imageName) {
+                  return request('noteAssets.appendImage', {paperId, imageBase64, imageName});
+                }
               });
               const popups = Object.freeze({
                 open(position, options) { return request('popups.open', {...options, position}); },
@@ -295,7 +303,12 @@ internal sealed partial class WebPluginRuntime : IDisposable
                 clear(paperId) { return request('paperActions.clear', {paperId}); },
                 clearAll() { return request('paperActions.clearAll'); }
               });
+              const bottomBar = Object.freeze({
+                listTargets() { return request('bottomBar.listTargets'); },
+                setItems(paperId, items) { return request('bottomBar.setItems', { paperId, items }); }
+              });
               window.papertodo = Object.freeze({
+                bottomBar,
                 settingsApi: Object.freeze({
                     list(category) { return workspace.request('appSettings.list', {category}); },
                     get(id) { return workspace.request('appSettings.get', {id}); },
@@ -668,6 +681,7 @@ internal sealed partial class WebPluginRuntime : IDisposable
             HostRequestRoute.RuntimePapersSetCapsulePresentation => SetPaperCapsule(parameters),
             HostRequestRoute.RuntimePapersPostBody => PostPaperBody(parameters),
             HostRequestRoute.GlobalTopBarSet => SetGlobalActions(parameters),
+            HostRequestRoute.BottomBar => ExecuteBottomBarRequest(method, parameters),
             HostRequestRoute.TodoActionsSet => SetTodoActions(parameters),
             HostRequestRoute.TodoActionsClear => ClearTodoActions(parameters),
             HostRequestRoute.TodoActionsClearAll => ClearTodoActions(),
@@ -864,6 +878,7 @@ internal sealed partial class WebPluginRuntime : IDisposable
                 HostRequestRoute.RuntimePapersSetCapsulePresentation,
             "papers.postBody" => HostRequestRoute.RuntimePapersPostBody,
             "topbar.global.set" => HostRequestRoute.GlobalTopBarSet,
+            "bottomBar.listTargets" or "bottomBar.setItems" => HostRequestRoute.BottomBar,
             "todoActions.set" => HostRequestRoute.TodoActionsSet,
             "todoActions.clear" => HostRequestRoute.TodoActionsClear,
             "todoActions.clearAll" => HostRequestRoute.TodoActionsClearAll,
@@ -1040,6 +1055,7 @@ internal sealed partial class WebPluginRuntime : IDisposable
         TryClearTopBarLabels();
         ResetRuntimeDocument();
         _disposed = true;
+        if (_bottomBar != null) _bottomBar.TargetsChanged -= OnBottomBarTargetsChanged;
         try { _papersSubscription.Dispose(); } catch { }
         try { _settingsSubscription.Dispose(); } catch { }
         _startupReady.TrySetCanceled();

@@ -14,6 +14,7 @@ public sealed class WorkspaceConfiguration
     public List<int> Slots { get; set; } = [1];
     public Dictionary<int, string> Names { get; set; } = new();
     public bool TopBarNamePicker { get; set; }
+    public bool AutoGradientBackup { get; set; } = true;
 
     public bool FollowsMain(int number) => number > 1 &&
         (FollowMainSettings == null || !FollowMainSettings.TryGetValue(number, out var follow) || follow);
@@ -45,6 +46,7 @@ public sealed class WorkspaceConfiguration
             Names = (Names ?? new()).Where(pair => slots.Contains(pair.Key) && !string.IsNullOrWhiteSpace(pair.Value))
                 .ToDictionary(pair => pair.Key, pair => pair.Value.Trim()[..Math.Min(64, pair.Value.Trim().Length)]),
             TopBarNamePicker = TopBarNamePicker,
+            AutoGradientBackup = AutoGradientBackup,
             FollowMainSettings = Enumerable.Range(2, 4).ToDictionary(n => n, FollowsMain)
         };
     }
@@ -113,23 +115,27 @@ internal static class WorkspaceFieldScopes
             nameof(AppState.UiLanguage), nameof(AppState.DataMergeConflictPolicy), nameof(AppState.Theme), nameof(AppState.ColorScheme),
             nameof(AppState.PaperSkin), nameof(AppState.MaterialTransparency), nameof(AppState.HideSurfaceOutline),
             nameof(AppState.MicaBackdropType), nameof(AppState.MicaAlwaysActive),
+            nameof(AppState.PaperBackgroundBlendWithTheme), nameof(AppState.PaperBackgroundStretch),
+            nameof(AppState.PaperBackgroundLayout),
             nameof(AppState.MarkdownRenderMode), nameof(AppState.ImageReferenceTextMode), nameof(AppState.MarkdownEditAnimationEnabled),
             nameof(AppState.TodoVisualSize), nameof(AppState.ShowTodoBottomBar), nameof(AppState.AutoClearCompletedTodos),
             nameof(AppState.AutoMoveCompletedTodosToBottom), nameof(AppState.AutoCompressLargeImages), nameof(AppState.UiFontPreset),
             nameof(AppState.TextRenderingProfile), nameof(AppState.AdvancedSettingsMode), nameof(AppState.TelemetryEnabled),
-            nameof(AppState.CustomFontEnhancedBold), nameof(AppState.ExternalMarkdownExtension), nameof(AppState.Zoom),
+            nameof(AppState.CustomFontEnabled), nameof(AppState.CustomFontEnhancedBold), nameof(AppState.ExternalMarkdownExtension), nameof(AppState.Zoom),
+            nameof(AppState.NoteLineSpacing), nameof(AppState.TodoItemSpacing),
             nameof(AppState.NoteTextSize), nameof(AppState.NoteTextBold), nameof(AppState.TodoTextBold),
             nameof(AppState.TitleTextSize), nameof(AppState.TitleTextBold), nameof(AppState.CapsuleTextSize),
             nameof(AppState.CapsuleTextBold), nameof(AppState.UseCapsuleMode), nameof(AppState.UseDeepCapsuleMode),
             nameof(AppState.DeepCapsuleGapSize), nameof(AppState.ShowTopBarNewTodoButton), nameof(AppState.ShowTopBarNewNoteButton),
             nameof(AppState.ShowTopBarExternalOpenButton), nameof(AppState.TopBarShortcutOrder), nameof(AppState.TopBarPinnedCount),
             nameof(AppState.HiddenTopBarShortcuts), nameof(AppState.TopBarScript),
-            nameof(AppState.HidePapersFromTaskbar), nameof(AppState.HidePapersFromWindowSwitcher), nameof(AppState.EnableTodoPaperLinks),
+            nameof(AppState.HidePapersFromTaskbar), nameof(AppState.HidePapersFromWindowSwitcher),
+            nameof(AppState.HidePapersInCapture), nameof(AppState.HideCapsulesInCapture), nameof(AppState.EnableTodoPaperLinks),
             nameof(AppState.ShowLinkedPaperName), nameof(AppState.AllowLongLinkedPaperTitles), nameof(AppState.ShowLinkedPathExtensionOnly),
             nameof(AppState.HideLinkedPapersFromCapsules), nameof(AppState.RunLinkedScriptCapsulesOnClick), nameof(AppState.MaxTitleLength),
             nameof(AppState.UseCapsuleCollapseAll), nameof(AppState.UseCapsuleFreeQueues), nameof(AppState.CompactMasterCapsule), nameof(AppState.ShowDeepCapsuleWhileExpanded),
             nameof(AppState.HideEdgeCapsuleCloseButtonOnHover), nameof(AppState.CollapseExpandedDeepCapsuleOnClick), nameof(AppState.EnableAnimations),
-            nameof(AppState.FastAnimations), nameof(AppState.EnableToolTips), nameof(AppState.ExperimentalInactivePaperOpacity),
+            nameof(AppState.FastAnimations), nameof(AppState.EnhanceCapsuleActiveOutline), nameof(AppState.EnableToolTips), nameof(AppState.ExperimentalInactivePaperOpacity),
             nameof(AppState.ExperimentalInactivePaperOpacityLevel), nameof(AppState.ExperimentalRestingCapsuleOpacity), nameof(AppState.ExperimentalRestingCapsuleOpacityLevel),
             nameof(AppState.ExperimentalRestingCapsuleOpacityIncludesMaster), nameof(AppState.ExperimentalRestingCapsuleOpacityAlways), nameof(AppState.ExperimentalCollapsePaperOnDeactivate),
             nameof(AppState.ExperimentalHideInactiveTopBarButtons), nameof(AppState.ExperimentalHideInactiveTitleBar), nameof(AppState.ExperimentalDockedCapsulesNonTopmost),

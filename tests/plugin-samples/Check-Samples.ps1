@@ -16,8 +16,8 @@ try {
       Write-Host "Validating $($manifest.FullName)"
       $document = Get-Content $manifest.FullName -Raw -Encoding UTF8 |
         ConvertFrom-Json -Depth 100
-      if ($document.apiVersion -notin @("2.1", "2.2", "2.3", "2.4")) {
-        throw "$($manifest.FullName) must target a supported apiVersion (2.1 through 2.4)."
+      if ($document.apiVersion -notin @("2.1", "2.2", "2.3", "2.4", "2.5", "2.6")) {
+        throw "$($manifest.FullName) must target a supported apiVersion (2.1 through 2.6)."
       }
     }
 
@@ -50,6 +50,8 @@ try {
 
     Write-Host '
     === Check Web settings action behavior ==='
+    node ./tests/PaperTodo.ProtocolPolicyChecks/BottomBarSampleChecks.cjs
+    if ($LASTEXITCODE -ne 0) { throw "Bottom bar sample behavior check failed: $LASTEXITCODE" }
     node ./tests/PaperTodo.ProtocolPolicyChecks/SettingActionSampleChecks.cjs
     if ($LASTEXITCODE -ne 0) { throw "Plugin sample behavior check failed: $LASTEXITCODE" }
 

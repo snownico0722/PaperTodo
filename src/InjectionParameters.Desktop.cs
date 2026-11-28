@@ -16,9 +16,9 @@ internal static partial class InjectionParameters
     internal static readonly InjectionParameter<double> EdgeCapsuleCloseWidth =
         new("edge.layout.capsuleCloseWidth", 14, "边缘胶囊关闭区宽度", "原有边缘胶囊共享几何或过渡计算使用的数值。", unit: "DIP", application: "restart");
     internal static readonly InjectionParameter<double> EdgeOutlineThickness =
-        new("edge.layout.outlineThickness", 2, "边缘胶囊轮廓粗细", "原有边缘胶囊共享几何或过渡计算使用的数值。", unit: "DIP", application: "restart");
+        new("edge.layout.outlineThickness", 3, "边缘胶囊轮廓粗细", "原有边缘胶囊共享几何或过渡计算使用的数值。", unit: "DIP", application: "restart");
     internal static readonly InjectionParameter<double> EdgeOutlineOverlap =
-        new("edge.layout.outlineOverlap", 1, "边缘胶囊轮廓重叠", "原有边缘胶囊共享几何或过渡计算使用的数值。", unit: "DIP", application: "restart");
+        new("edge.layout.outlineOverlap", 2, "边缘胶囊轮廓重叠", "原有边缘胶囊共享几何或过渡计算使用的数值。", unit: "DIP", application: "restart");
     internal static readonly InjectionParameter<double> EdgeCrossQueueDragUnlockDistance =
         new("edge.layout.crossQueueDragUnlockDistance", 56, "胶囊脱离队列距离", "原有边缘胶囊共享几何或过渡计算使用的数值。", unit: "DIP", application: "next_use");
     internal static readonly InjectionParameter<int> EdgeHorizontalResizeMilliseconds =

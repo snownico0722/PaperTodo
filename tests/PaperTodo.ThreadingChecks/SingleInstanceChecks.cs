@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.IO;
 using System.IO.Pipes;
 using System.Text;
 
@@ -26,6 +27,31 @@ internal static partial class Program
             "timed-out input was dispatched, or the subsequent valid command was lost");
         helper.Dispose();
         Assert(ReadField<Task>(helper, "_listenerTask").Wait(TimeSpan.FromSeconds(5)), "listener did not stop");
+    }
+
+    private static void CheckSingleInstanceLineLimit()
+    {
+        static string? Read(string input, int limit)
+        {
+            using var stream = new MemoryStream(Encoding.UTF8.GetBytes(input));
+            return SingleInstanceHelper.ReadCommandLineAsync(stream, limit, CancellationToken.None)
+                .GetAwaiter().GetResult();
+        }
+
+        var command = new string('A', 4096);
+        Assert(Read("\uFEFF" + command + "\r\n", command.Length) == command, "exact-limit command was lost");
+        Assert(Read("SHOW\nnext", 4) == "SHOW", "read past the first line");
+        Assert(Read("SHOW", 4) == "SHOW", "EOF did not finish the command");
+        Assert(Read("", 4) == null && Read("\r", 4) == "", "empty line and EOF were conflated");
+        foreach (var ending in new[] { "", "\n" })
+        {
+            try
+            {
+                Read("ABCDE" + ending, 4);
+                throw new InvalidOperationException("accepted a command longer than the limit");
+            }
+            catch (InvalidDataException) { }
+        }
     }
 
     private static void CheckSingleInstanceCancellation()

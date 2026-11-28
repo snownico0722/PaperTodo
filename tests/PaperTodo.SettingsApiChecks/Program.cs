@@ -76,6 +76,11 @@ internal static partial class Program
             AdapterBehavior();
             SharedUiSettingBehavior();
             SettingsEditorBehavior();
+            FullscreenSettingVisibility();
+            PaperBackgroundSettingsVisibility();
+            PaperBackgroundSettingWrites();
+            SpacingAdvancedModeVisibility();
+            SpacingKeyboardBehavior();
             WorkspaceDataSettingsBehavior();
             PostCommitFailureDoesNotReplay();
             Pump(PipeAndUnlinkBehavior());
@@ -263,6 +268,32 @@ internal static partial class Program
         Check(PaperSettingsService.WithAccess(definition.Snapshot(), update: true).Writable, "Update permission makes a writable setting writable.");
     }
 
+    private static void PaperBackgroundSettingWrites()
+    {
+        var controller = Controller();
+        var saved = new List<AppState>();
+        var success = true;
+        var service = SettingsFor(controller, () =>
+        {
+            if (success)
+                saved.Add(StateStore.CopyForReload(controller.State));
+            return success;
+        }, publish => publish());
+
+        service.Set("appearance.background_blend", Json(false));
+        service.Set("appearance.background_stretch", Json(true));
+        service.Set("appearance.background_layout", Json(PaperBackgroundLayouts.BottomLeft));
+        Check(saved.Count == 3 && !saved[2].PaperBackgroundBlendWithTheme &&
+              saved[2].PaperBackgroundStretch && saved[2].PaperBackgroundLayout == PaperBackgroundLayouts.BottomLeft,
+            "Background settings use the ordinary core settings commit.");
+        success = false;
+        Throws<PaperSettingsException>(
+            () => service.Set("appearance.background_layout", Json(PaperBackgroundLayouts.BottomRight)), "save_failed");
+        Check(controller.State.PaperBackgroundLayout == PaperBackgroundLayouts.BottomLeft &&
+              service.Get("appearance.background_layout").Value.GetString() == PaperBackgroundLayouts.BottomLeft,
+            "A failed save restores the background preference.");
+    }
+
     private static void CatalogBehavior()
     {
         var c = Controller();
@@ -301,6 +332,18 @@ internal static partial class Program
               !persisted.TryGetProperty("experimentalTetherMinimizedBehavior", out _),
             "Old tether choices are ignored on load and omitted on save without losing live settings or content.");
         Check(service.Get("general.language").RequiresRestart, "Language is restart-based; API must not force exit.");
+        Check(!service.Get("appearance.capsule_outline_enhancement").Value.GetBoolean() &&
+              !legacyState.EnhanceCapsuleActiveOutline,
+            "Capsule outline enhancement defaults off for new and pre-option configurations.");
+        Check(WorkspaceFieldScopes.Inherits(nameof(AppState.EnhanceCapsuleActiveOutline)),
+            "Capsule outline preference follows the main workspace when configured to inherit settings.");
+        service.Set("appearance.capsule_outline_enhancement", Json(true));
+        var outlinedState = JsonSerializer.Deserialize<AppState>(
+            JsonSerializer.Serialize(c.State, StateStore.JsonOptions), StateStore.JsonOptions)!;
+        Check(c.State.EnhanceCapsuleActiveOutline && outlinedState.EnhanceCapsuleActiveOutline &&
+              service.Get("appearance.capsule_outline_enhancement").Value.GetBoolean(),
+            "Enabled capsule outline enhancement survives a settings JSON round trip.");
+        service.Set("appearance.capsule_outline_enhancement", Json(false));
         Throws<PaperSettingsException>(() => service.Set("appearance.font_scale", Json(1.3)), "invalid_setting_value");
         Throws<PaperSettingsException>(() => service.Set("appearance.theme", Json("unknown")), "invalid_setting_value");
         Throws<PaperSettingsException>(() => service.Set("note.external_extension", Json("../../tmp")), "invalid_setting_value");

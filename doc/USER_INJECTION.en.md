@@ -1,12 +1,12 @@
 # Global parameter injection and Good Lock
 
-[中文](USER_INJECTION.md) · [User guide](USER_GUIDE.en.md#84-installing-and-configuring-plugins) · [Plugin API](../plugin-samples/README.md#56-global-userjson-injection-api-24) · [Machine-readable catalog](user-injection-catalog.json)
+[中文](USER_INJECTION.md) · [User guide](USER_GUIDE.en.md#84-installing-and-configuring-plugins) · [Plugin API](../plugin-samples/README.md#56-global-userjson-injection-api-26) · [Machine-readable catalog](user-injection-catalog.json)
 
 PaperTodo's official injection interface uses one `user.json` beside the application. Every workspace shares this file while ordinary settings retain their original preferences. It exposes fixed values, coefficients in dynamic formulas, and selected intermediate results. Include only the keys you want to override.
 
 ## Edit and apply
 
-1. Follow the [plugin installation steps](USER_GUIDE.en.md#84-installing-and-configuring-plugins) to install `plugins/official.good-lock.native/`, then select **Good Lock** as a note paper's body type. The plugin requires API 2.4 and is distributed separately from the application release.
+1. Follow the [plugin installation steps](USER_GUIDE.en.md#84-installing-and-configuring-plugins) to install `plugins/official.good-lock.native/`, then select **Good Lock** as a note paper's body type. The plugin requires API 2.6 and is distributed separately from the application release.
 2. Choose **Open file** and edit `user.json` in an external editor. The first explicit editor request creates an empty object; opening an existing file does not rewrite it.
 3. Save and return to Good Lock. It rereads the file and lists modified entries, including running overrides still waiting to be removed. Choose **Apply** at the top right.
 4. A red dot means the accepted change needs a restart. **Quick restart** first applies the page's draft, then uses normal save-and-exit and returns to the calling paper after startup.
@@ -71,13 +71,13 @@ Existing default preview layout and viewport clipping are preserved. A `maximum`
 
 Native Body and provider Runtime contexts expose `context.InjectionApi`. Call `Read()` for the installed version's actual catalog and latest file revision. Use `Apply()` to adopt an external edit, or submit a revision with `Set` and `Remove` for per-key edits. `Read` / `Suggest` require `settings.read`; `Apply` / `Restart` require `settings.update`. Body restart returns to the calling paper; Runtime has no paper return target.
 
-The optional draft map supplied to `Suggest` is the entire proposed override document: an omitted key restores its original source. A suggestion returns only the named replacement and explanation without writing anything. See the [plugin API examples](../plugin-samples/README.md#56-global-userjson-injection-api-24). Internal injection keys may evolve with their modules. Agents should inspect the current catalog, retain unknown keys and write sparse overrides.
+The optional draft map supplied to `Suggest` is the entire proposed override document: an omitted key restores its original source. A suggestion returns only the named replacement and explanation without writing anything. See the [plugin API examples](../plugin-samples/README.md#56-global-userjson-injection-api-26). A key keeps the same meaning across versions that support it. The host applies supported keys and preserves unsupported entries in the same file. Good Lock reads the host catalog, so adding or retiring a key needs no plugin update. Agents should inspect the current catalog and write sparse overrides.
 
 ## Complete parameter catalog
 
 The following tables are exported from the typed catalog. The machine-readable catalog supplies the same keys, types, defaults, lifecycle, advisory ranges and Chinese/English descriptions. Select the required `id` and value when editing `user.json`.
 
-There are **433 entries**, including **45 dynamic default sources**; `live` 168, `next_use` 88, `restart` 177.
+There are **441 entries**, including **47 dynamic default sources**; `live` 170, `next_use` 88, `restart` 183.
 
 ### Overall appearance (1)
 
@@ -107,11 +107,12 @@ There are **433 entries**, including **45 dynamic default sources**; `live` 168,
 | `background.blendedImageOpacity` · Blended background image opacity | `number` | 0.3 | `restart` | Image brush opacity when blending with the background color is enabled. |
 | `background.maxDecodeDimensionPx` · Background image decode dimension | `integer` | 4096 px | `restart` | Maximum pixel dimension used when decoding a background image. |
 
-### Capsule text, dimensions and gaps (15)
+### Capsule text, dimensions and gaps (16)
 
 | Key / title | Type | Default / calculation | When | Description |
 | --- | --- | --- | --- | --- |
 | `capsule.edge.widthDip` · Final edge capsule width | `number` | Computed from the icon, title or plugin content | `restart` | Replace the measured edge capsule width, including the interior shadow margin. |
+| `capsule.edge.iconOnlyMinWidthDip` · Icon-only edge capsule minimum width | `number` | 0 DIP | `restart` | Minimum built-in edge capsule width with zero title characters, including the inner shadow margin. Recommended: ≥ 0. |
 | `capsule.gap.baseDip` · Capsule base gap | `number` | 4 DIP | `live` | Base gap for the standard preset; narrow and wide still use the preset delta. |
 | `capsule.gap.deltaDip` · Capsule gap preset delta | `number` | 4 DIP | `live` | Narrow subtracts this value from the base gap; wide adds it. |
 | `capsule.gap.finalDip` · Final capsule gap | `number` | Computed from the current gap preset | `live` | Replace the result computed from the current gap preset and base values. |
@@ -250,8 +251,8 @@ There are **433 entries**, including **45 dynamic default sources**; `live` 168,
 | `edge.layout.dockingRevealMilliseconds` · Capsule reveal duration at the edge | `integer` | 80 ms | `next_use` | Used by the existing shared edge capsule geometry or transition calculations. |
 | `edge.layout.expandedEdgeInset` · Expanded paper edge inset | `number` | 36 DIP | `restart` | Used by the existing shared edge capsule geometry or transition calculations. |
 | `edge.layout.horizontalResizeMilliseconds` · Capsule width change duration | `integer` | 160 ms | `next_use` | Used by the existing shared edge capsule geometry or transition calculations. |
-| `edge.layout.outlineOverlap` · Edge capsule outline overlap | `number` | 1 DIP | `restart` | Used by the existing shared edge capsule geometry or transition calculations. |
-| `edge.layout.outlineThickness` · Edge capsule outline thickness | `number` | 2 DIP | `restart` | Used by the existing shared edge capsule geometry or transition calculations. |
+| `edge.layout.outlineOverlap` · Edge capsule outline overlap | `number` | 2 DIP | `restart` | Used by the existing shared edge capsule geometry or transition calculations. |
+| `edge.layout.outlineThickness` · Edge capsule outline thickness | `number` | 3 DIP | `restart` | Used by the existing shared edge capsule geometry or transition calculations. |
 | `edge.layout.slotMoveMilliseconds` · Queue movement duration | `integer` | 200 ms | `next_use` | Used by the existing shared edge capsule geometry or transition calculations. |
 | `edge.layout.slotRetractMoveMilliseconds` · Queue retraction duration | `integer` | 120 ms | `next_use` | Used by the existing shared edge capsule geometry or transition calculations. |
 | `edge.layout.startTopMargin` · New queue starting position | `number` | 48 DIP | `restart` | Used by the existing shared edge capsule geometry or transition calculations. |
@@ -400,7 +401,7 @@ There are **433 entries**, including **45 dynamic default sources**; `live` 168,
 | `newPaper.todo.heightDip` · New todo paper height | `number` | 340 DIP | `next_use` | Final initial dimension for a new paper; existing papers and legacy-data defaults stay unchanged. |
 | `newPaper.todo.widthDip` · New todo paper width | `number` | 280 DIP | `next_use` | Final initial dimension for a new paper; existing papers and legacy-data defaults stay unchanged. |
 
-### Notes, images and typography (36)
+### Notes, images and typography (37)
 
 | Key / title | Type | Default / calculation | When | Description |
 | --- | --- | --- | --- | --- |
@@ -410,6 +411,7 @@ There are **433 entries**, including **45 dynamic default sources**; `live` 168,
 | `note.clipboard.maxImageBytes` · Clipboard image input limit | `integer` | 33554432 bytes | `next_use` | Byte limit when reading encoded image data from the clipboard. |
 | `note.clipboard.maxRtfImageBytes` · RTF clipboard image budget | `integer` | 16777216 bytes | `next_use` | Source image byte budget for mixed RTF export, counting each image occurrence separately. |
 | `note.editor.indentationSize` · Note indentation width | `integer` | 4 columns | `restart` | Tab and indentation display width in AvalonEdit. |
+| `note.editor.lineSpacingFactor` · Note line spacing factor | `number` | Computed from the current note line spacing preset | `live` | Override the line spacing factor selected for note editing and reading. Recommended: 0.75–2. |
 | `note.images.autoCompressedDimensionPx` · Automatic compression target dimension | `integer` | 2048 px | `next_use` | Maximum dimension after resizing large images when automatic compression is enabled. |
 | `note.images.cachePruneMs` · Image block cache cleanup delay | `number` | 200 ms | `restart` | Debounce delay before cleaning up cached image controls after the visible lines change. |
 | `note.images.fallbackWidthDip` · Note image width before layout | `number` | 240 DIP | `restart` | Target width used while the image viewport has no valid width yet. |
@@ -417,8 +419,8 @@ There are **433 entries**, including **45 dynamic default sources**; `live` 168,
 | `note.images.maxCacheEntries` · Decoded image cache count | `integer` | 20 items | `next_use` | Entry budget for the LRU decoded-image cache, excluding images currently visible. |
 | `note.images.maxDecodedBytes` · Decoded image cache budget | `integer` | 52428800 bytes | `next_use` | Byte budget for the LRU decoded-image cache, excluding images currently visible. |
 | `note.images.maxInputBytes` · Image import input budget | `integer` | 33554432 bytes | `next_use` | Byte limit for original image data supplied during import. |
-| `note.images.maxStoredBytes` · Single image storage budget | `integer` | 8388608 bytes | `next_use` | Maximum encoded byte size of one image asset. |
-| `note.images.maxStoredDimensionPx` · Stored image maximum dimension | `integer` | 4096 px | `next_use` | Maximum pixel dimension accepted when importing or loading image assets. |
+| `note.images.maxStoredBytes` · Single image storage budget | `integer` | 8388608 bytes | `next_use` | Maximum encoded bytes for one newly imported image. |
+| `note.images.maxStoredDimensionPx` · Stored image maximum dimension | `integer` | 4096 px | `next_use` | Maximum pixel dimension of newly imported images. |
 | `note.images.minTargetWidthDip` · Note image minimum target width | `number` | 80 DIP | `restart` | Built-in lower bound for the image target width after viewport calculations. |
 | `note.images.resizeSettleMs` · Image resize settling delay | `number` | 200 ms | `restart` | Wait after image viewport resizing stops before resuming high-quality decoding. |
 | `note.images.resizeToleranceDip` · Image reflow width tolerance | `number` | 1 DIP | `live` | Reflow images once their viewport width changes by this amount. |
@@ -470,6 +472,16 @@ There are **433 entries**, including **45 dynamic default sources**; `live` 168,
 | `paper.titleFontDip` · Final paper title font size | `number` | Calculated from the current settings or runtime state | `live` | Uses the existing text, content or scale calculation until an override replaces its result. |
 | `paper.topBarCollisionGap` · Top bar button collision gap | `number` | 2 DIP | `restart` | Used by the paper’s existing interface or interaction behavior. |
 
+### Paper plugin bottom bar (5)
+
+| Key / name | Type | Default / source | Application | Description |
+| --- | --- | --- | --- | --- |
+| `paper.bottomBar.horizontalInsetDip` · Bottom bar side inset | `number` | 12 DIP | `restart` | Inset from each side of the paper to the plugin bottom bar. Recommended: ≥ 0. |
+| `paper.bottomBar.bottomInsetDip` · Bottom bar bottom inset | `number` | 4 DIP | `restart` | Inset from the bottom of the paper to the plugin bottom bar. Recommended: ≥ 0. |
+| `paper.bottomBar.itemGapDip` · Bottom bar item gap | `number` | 2 DIP | `restart` | Space between adjacent bottom bar items in the same group. Recommended: ≥ 0. |
+| `paper.bottomBar.groupGapDip` · Bottom bar group gap | `number` | 8 DIP | `restart` | Minimum space between the left and right bottom bar groups. Recommended: ≥ 0. |
+| `paper.bottomBar.fontDip` · Bottom bar base font size | `number` | 10.5 DIP | `restart` | Base size of bottom bar text and icons before overall font scaling. Recommended: ≥ 6. |
+
 ### Plugin presentation and events (9)
 
 | Key / title | Type | Default / calculation | When | Description |
@@ -519,7 +531,7 @@ There are **433 entries**, including **45 dynamic default sources**; `live` 168,
 | `settings.window.minWidthDip` · Settings window reference minimum width | `number` | 360 DIP | `restart` | Reference lower bound when calculating a settings window width that fits the screen. |
 | `settings.window.preferredMarginDip` · Settings window preferred space reserve | `number` | 48 DIP | `restart` | Total space subtracted from the available screen area when calculating the target settings window size. |
 
-### Todo input, layout, folding and dragging (55)
+### Todo input, layout, folding and dragging (56)
 
 | Key / title | Type | Default / calculation | When | Description |
 | --- | --- | --- | --- | --- |
@@ -578,6 +590,7 @@ There are **433 entries**, including **45 dynamic default sources**; `live` 168,
 | `todo.strike.insetDip` · Todo strikethrough inset | `number` | 3 DIP | `next_use` | Inset at each end of a completed todo's strikethrough. |
 | `todo.strike.thicknessDip` · Todo strikethrough thickness | `number` | 1.35 DIP | `next_use` | Stroke thickness of the strikethrough on completed todos. |
 | `todo.strike.verticalRatio` · Todo strikethrough height ratio | `number` | 0.56 | `next_use` | Vertical position of the strikethrough as a fraction of each text line's rectangle. |
+| `todo.layout.itemVerticalMarginDip` · Todo item vertical margin | `number` | Computed from the current todo item spacing preset | `live` | Override each vertical outer margin while keeping line layout within an item. Recommended: 0–12. |
 
 ### Window dimensions, restoration, binding and following (18)
 

@@ -40,8 +40,8 @@ public static class MarkdownRenderModes
     {
         Off => Off,
         Basic => Basic,
-        Full => Full,
-        _ => Basic
+        // This also upgrades the 3.x default, stored as "enhanced".
+        _ => Full
     };
 }
 
@@ -442,8 +442,11 @@ public sealed class AppState
     public bool HideSurfaceOutline { get; set; } = false;
     public string MicaBackdropType { get; set; } = MicaBackdropTypes.Mica;
     public bool MicaAlwaysActive { get; set; }
+    public bool PaperBackgroundBlendWithTheme { get; set; } = true;
+    public bool PaperBackgroundStretch { get; set; }
+    public string PaperBackgroundLayout { get; set; } = PaperBackgroundLayouts.Center;
     [System.Diagnostics.CodeAnalysis.AllowNull]
-    public string MarkdownRenderMode { get; set; } = MarkdownRenderModes.Basic;
+    public string MarkdownRenderMode { get; set; } = MarkdownRenderModes.Full;
     public string ImageReferenceTextMode { get; set; } = ImageReferenceTextModes.Always;
     /// <summary>Full 编辑态控制符显灵时是否播放短淡入动画。</summary>
     public bool MarkdownEditAnimationEnabled { get; set; } = true;
@@ -459,9 +462,12 @@ public sealed class AppState
     /// <summary>
     /// When a custom papertodo font is present, bold styles load papertodo_bold / PaperTodo_Bold instead of synthetic SemiBold.
     /// </summary>
+    public bool CustomFontEnabled { get; set; } = true;
     public bool CustomFontEnhancedBold { get; set; }
     public string ExternalMarkdownExtension { get; set; } = ExternalMarkdownFileExtensions.Default;
     public double Zoom { get; set; } = 1.0;
+    public string NoteLineSpacing { get; set; } = VisualTextSizes.Medium;
+    public string TodoItemSpacing { get; set; } = VisualTextSizes.Medium;
     public string NoteTextSize { get; set; } = VisualTextSizes.Medium;
     public bool NoteTextBold { get; set; }
     public bool TodoTextBold { get; set; }
@@ -479,9 +485,9 @@ public sealed class AppState
     // the remaining commands live in the menu. The per-paper types have no separate layout.
     public List<string> TopBarShortcutOrder { get; set; } =
         PaperTopBarShortcuts.NormalizeOrder(null);
-    public int TopBarPinnedCount { get; set; } = 2;
+    public int TopBarPinnedCount { get; set; } = 4;
     // Hiding an entry does not remove its saved position or disable its feature.
-    public List<string> HiddenTopBarShortcuts { get; set; } = [];
+    public List<string> HiddenTopBarShortcuts { get; set; } = [PaperTopBarShortcuts.RunScript];
     public string TopBarScript { get; set; } = string.Empty;
     // Read-only legacy migration inputs from older data.json versions. Do not write
     // obsolete per-type lists back once converted to the single global layout.
@@ -491,6 +497,8 @@ public sealed class AppState
     public List<string>? NoteTopBarShortcuts { get; set; }
     public bool HidePapersFromTaskbar { get; set; } = true;
     public bool HidePapersFromWindowSwitcher { get; set; } = true;
+    public bool HidePapersInCapture { get; set; }
+    public bool HideCapsulesInCapture { get; set; }
     [JsonPropertyName("enableTodoNoteLinks")]
     public bool EnableTodoPaperLinks { get; set; } = true;
     [JsonPropertyName("showLinkedNoteName")]
@@ -511,6 +519,7 @@ public sealed class AppState
     public bool CollapseExpandedDeepCapsuleOnClick { get; set; }
     public bool EnableAnimations { get; set; } = true;
     public bool FastAnimations { get; set; }
+    public bool EnhanceCapsuleActiveOutline { get; set; }
     public bool EnableToolTips { get; set; } = true;
     public bool ExperimentalInactivePaperOpacity { get; set; }
     public double ExperimentalInactivePaperOpacityLevel { get; set; } =
@@ -531,8 +540,8 @@ public sealed class AppState
         EdgeCapsuleHoverIntentSensitivities.Medium;
     public bool ExperimentalAllowLockIconUnlock { get; set; } = true;
     public double ExperimentalShortcutOpacityLevel { get; set; } = 0.35;
-    public bool ExperimentalTodoReminders { get; set; }
-    public bool ExperimentalTodoReminderShowButton { get; set; } = true;
+    public bool ExperimentalTodoReminders { get; set; } = true;
+    public bool ExperimentalTodoReminderShowButton { get; set; }
     public int ExperimentalTodoReminderQuickMinutes { get; set; } =
         ExperimentalTodoReminderOptions.DefaultQuickMinutes;
     public bool ExperimentalTodoReminderSoundEnabled { get; set; }

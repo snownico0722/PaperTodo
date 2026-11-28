@@ -4,7 +4,7 @@
 
 > **Related Links**: [Back to Home](../README.md) · [Plugin Development Manual](../plugin-samples/README.md) · [Changelog](../CHANGELOG.md)
 >
-> This manual follows **the current main branch**, including features listed under **Unreleased** in the changelog. Released 4.0.0-beta1 builds and older downloads may not include every feature; check the changelog for your installed version. Screenshots illustrate basic operations; follow your version's actual settings layout.
+> This manual follows **the current main branch** and covers **4.0.0-beta2**. Later additions are listed under **Unreleased** in the changelog; older downloads may not include every feature, so check the changelog for your installed version. Screenshots illustrate basic operations; follow your version's actual settings layout.
 
 This manual is for everyday users of PaperTodo. Start with [1. Quick Start](#1-quick-start), then use the table of contents to look up individual features.
 
@@ -125,7 +125,7 @@ The top bar contains fixed window controls and configurable built-in shortcuts:
 
 | Control / Action | Type | How to Use It |
 | :--- | :--- | :--- |
-| **Pin** | Fixed control | Toggle always-on-top; fullscreen avoidance follows your settings |
+| **Pin** | Fixed control | Toggle always-on-top. Manually pinned papers stay on top during fullscreen avoidance |
 | **Title** | Fixed control | Click to edit, then press <kbd>Enter</kbd> or click elsewhere to save; pressing <kbd>Esc</kbd> saves and collapses the paper when capsule mode is available, or cancels the edit otherwise. Defaults to 6 full-width character equivalents (Latin letters, digits, and other half-width characters count as half) |
 | **`···` Menu** | Fixed control | Open the paper actions menu (same as right-clicking the paper frame) for unpinned shortcuts, export actions, and **Settings** |
 | **Collapse / Hide** | Fixed control | Collapse the paper; hide it when capsule mode is disabled |
@@ -136,7 +136,7 @@ The top bar contains fixed window controls and configurable built-in shortcuts:
 
 In "Settings → General → Top-bar shortcuts", drag built-in shortcuts to reorder them or move them between **Show in title bar** and **Show in menu**. Todo and note papers share one layout, and actions that do not apply to the current paper are omitted. Each row has a Hide checkbox that removes its shortcut from title bars, overflow and paper/capsule context menus while preserving its position and keeping the feature enabled.
 
-New installations pin **Drag to Associate** and **Switch Workspace** to the top bar and keep **New Note**, **New Todo**, **Open externally**, and **Run script** in the menu; upgrades preserve existing choices. When the top bar is too narrow, pinned built-in shortcuts move into the `···` menu together. You can hold and drag the association item directly out of the menu as well. Plugins may also add top-bar buttons (such as Codex's `>_`).
+New installations pin **Drag to Associate**, **Switch Workspace**, **New Note**, and **New Todo** to the top bar. Upgrades keep existing shortcut choices. When the top bar is too narrow, pinned built-in shortcuts move into the `···` menu together. You can hold and drag the association item directly out of the menu as well. Plugins may also add top-bar buttons (such as Codex's `>_`).
 
 ### 2.3 Moving, Resizing, and Windows Snap
 
@@ -150,7 +150,7 @@ New installations pin **Drag to Associate** and **Switch Workspace** to the top 
 | :--- | :--- | :--- | :--- |
 | **Collapse** | Edge capsule or floating desktop capsule | Preserved | Click the capsule |
 | **Hide** | Leaves the desktop and edge queue; the app stays running | Preserved | Click it in the tray list or double-click the tray icon |
-| **Delete** | Removed from the current workspace | Content deleted | Non-empty papers require confirmation; do not use in place of Hide |
+| **Delete** | Removed from the current workspace | Content deleted | Deleting from the paper menu opens a confirmation dialog, even for empty papers |
 | **Exit** | Saves data and closes PaperTodo | Preserved on disk | Run `PaperTodo.exe` again |
 
 ### 2.5 Full-Text Search
@@ -164,13 +164,15 @@ Press <kbd>Ctrl</kbd> + <kbd>F</kbd> in a todo or note paper and enter the text 
 
 ### 2.6 Exporting Todos and Notes
 
-Open the `···` menu (or paper context menu) on a todo paper or built-in Markdown note, choose the current-paper export option or **Export all papers**, and select a format in the save dialog:
+Open the `···` menu (or paper context menu) on a todo paper or built-in Markdown note, choose **Export**, then **Current**, **All notes**, **All todos**, or **All notes and todos**, and select Markdown or HTML in the save dialog:
 
 | Export Option | Saved Content |
 | :--- | :--- |
-| Current paper → Markdown | An `.md` file, plus a `*-images` folder when the note has images (keep the folder when sharing) |
-| Current paper → HTML | An `.html` file with note images embedded, viewable in a browser |
-| All papers → Markdown / HTML | A ZIP archive containing all todos and built-in Markdown notes in the **current workspace** |
+| Current → Markdown | An `.md` file, plus a `*-images` folder when the note has images (keep the folder when sharing) |
+| Current → HTML | An `.html` file with note images embedded, viewable in a browser |
+| All notes → Markdown / HTML | A ZIP archive containing all built-in Markdown notes in the **current workspace** |
+| All todos → Markdown / HTML | A ZIP archive containing all todo papers in the **current workspace** |
+| All notes and todos → Markdown / HTML | A ZIP archive containing all built-in Markdown notes and todo papers in the **current workspace** |
 
 Todo exports preserve item order, completion states, and multiline text while omitting empty placeholder rows. Plugin bodies are excluded. You can keep editing during export or select **Cancel** in the progress window. Workspace switching becomes available again when all exports finish or cancel. The completion summary reports any missing images, which appear as text placeholders in the exported file.
 
@@ -197,7 +199,8 @@ Todo papers are for everyday checklists, plans, and small tasks.
 - **Reorder**: Drag the right handle (`≡`) vertically. Selected items move together as a group while keeping their relative order.
 - **Auto-scroll & drag-to-trash**: Dragging near the top or bottom of the list scrolls smoothly, even with a stationary pointer. Auto-scrolling continues while deletion is previewed over the bottom trash bar; drag away from the trash to cancel the preview—**items are deleted only when released over the trash**.
 - **Batch actions & Markdown copy**: Check or uncheck selected items, delete them from the context menu, or drag the group into the trash. Press <kbd>Ctrl</kbd> + <kbd>C</kbd> for ordinary copy, or <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>C</kbd> to copy selected items as `- [ ] Unfinished` / `- [x] Finished` Markdown tasks.
-- **Bottom-bar toggle**: Hiding the bottom quick-add bar in "Settings → Notes & Todos" also disables drag-to-trash deletion; right-click deletion remains available.
+- **Delete selected rows with the keyboard**: With multiple todos selected, press <kbd>Backspace</kbd> to delete them as one operation that can be undone or redone. If text is selected inside a todo editor, Backspace still deletes that text.
+- **Bottom-bar toggle**: Hiding the bottom quick-add bar in "Settings → Notes & Todos" also disables drag-to-trash deletion; right-click deletion and <kbd>Backspace</kbd> for multiple selected todos remain available.
 
 ### 3.3 Completed Items
 
@@ -226,7 +229,7 @@ A todo item can act as a shortcut to another paper or to a local file or folder.
 
 ### 3.5 Todo Reminders
 
-Turn on reminders under "Settings → Notes & Todos → Todo reminders", then click the row's bell button or right-click the item to set a reminder:
+Todo reminders are on by default. Right-click a todo to set a reminder. To show the bell beside each todo, turn on **Show inline reminder buttons** under **Settings → Notes & Todos → Todo reminders**.
 
 - **Presets**: Choose a minute/hour interval, this evening, or tomorrow morning.
 - **Custom time**: Enter a specific future date and time.
@@ -246,7 +249,7 @@ Note papers are for lightweight writing, ideas, and illustrated notes.
 
 ### 4.1 Rendering Levels and Editing
 
-Choose a rendering level in "Settings → Notes & Todos → Markdown":
+New installations use Full rendering by default. Upgrading from 3.x switches the old Enhanced mode to Full and preserves explicit Off and Basic choices. Change the rendering level under "Settings → Notes & Todos → Markdown".
 
 | Level | Behavior |
 | :--- | :--- |
@@ -306,6 +309,34 @@ Bold, italic, strikethrough, and links can be combined, and plain `http://` / `h
 
 Images appear as Markdown references in the text while their binary data is stored in the current workspace's image database: `note-assets.lmdb` for the main workspace (1), and `note-assets2.lmdb`–`note-assets5.lmdb` for secondary workspaces 2–5. Right-click a rendered image to copy it or delete its reference. Always back up and migrate a workspace's text data and image database together.
 
+Select note content with images to copy or cut it and paste it into another workspace. Repeated references count as one image. If the distinct images total more than 24 MiB, cutting leaves the original selection in place so you can try a smaller one. Images that cannot be imported on paste are kept as text.
+
+**Local AI image import and MCP reads**: With MCP enabled and additive writes allowed, you can **append an image to an existing built-in Markdown note**. Images follow the existing format, compression, dimension, and image-database capacity limits. The result includes an image ID and Markdown reference.
+
+- **Image writes use only the local import command**: Clients that can execute local programs, such as Codex or Claude Code, run `PaperTodo.exe --import-note-image --paper-id <note-id> [--image-name <name>]`. The calling program obtains the original image bytes, writes them to the child process's binary standard input, and closes the input when finished. The limit is 4 MiB. The command does not accept an image file path, URL, Base64 text, or data URI. It uses the existing named-pipe connection internally and returns only a short result to the model; **no Base64 image-write tool is exposed to the model**.
+- **Image reads still use MCP**: Use `get_paper` to obtain image IDs referenced by the note, then call `read_note_image` so a vision-capable client can view the image directly.
+
+Example using Python's standard library (if the image is already in memory, use the existing `image_bytes`):
+
+```python
+from pathlib import Path
+import subprocess
+
+image_bytes = Path(r"C:\Pictures\screenshot.png").read_bytes()  # Read by the caller
+result = subprocess.run(
+    [r"C:\PaperTodo\PaperTodo.exe", "--import-note-image",
+     "--paper-id", "replace-with-existing-note-id", "--image-name", "screenshot.png"],
+    input=image_bytes, capture_output=True, check=False,
+)
+print(result.stdout.decode("utf-8"))  # Short JSON only; no image data
+if result.returncode:
+    raise RuntimeError(result.stderr.decode("utf-8", errors="replace"))
+```
+
+In PowerShell, write bytes through `Process.StandardInput.BaseStream`; do not send images through a text pipeline. Exit code `0` means success, `1` means import failed, and `2` means invalid arguments or input mode. Failures are written to standard error. The command does not open the main GUI or enable MCP permissions; PaperTodo must already be running. An import is rejected if the workspace changes while image bytes are being received. If the write result is uncertain, query the note before retrying to avoid appending the image twice.
+
+To read an image, first find its `i:image-id` reference with `get_paper`, then call `read_note_image(paper_id, image_id)` to return an image a vision-capable MCP client can display. Images cannot be read through a different note. Reads are allowed only while the current note still contains a valid reference; after the reference is deleted, MCP cannot read the image even if its bytes are retained for undo. Before appending an image, PaperTodo checks the current Markdown layout; for example, an unclosed code block at the end prevents the write so an apparently successful import does not leave only image syntax visible. Reading does not require write permission. Whether the image can be displayed depends on the MCP client's support for image content blocks.
+
 ### 4.4 Opening in an External Editor
 
 Choose **Open externally** from the paper's `···` menu (or top bar if pinned). PaperTodo exports the current built-in Markdown note and its referenced images to temporary files, then opens the file with the default application for the configured extension ("Settings → Notes & Todos → External open file type"). If no application is associated with that extension, PaperTodo uses Notepad.
@@ -314,6 +345,9 @@ Choose **Open externally** from the paper's `···` menu (or top bar if pinned)
 > External opening is a one-way temporary export. Changes saved in the external editor **do not automatically write back to PaperTodo**—copy them back manually. To keep or share exported files permanently, use [2.6 Exporting Todos and Notes](#26-exporting-todos-and-notes).
 
 ---
+
+**Bottom bar plugins.** Enable or disable a plugin in **Settings → Plugins**. Its bottom-bar items may appear on notes, to-dos, or both, as declared by the plugin. Several plugins can show items on the same paper; there is no per-paper switch. Press Tab to focus a bottom-bar button and Space to activate it. Read-only labels do not show tooltips or intercept pointer input. On narrow papers, items join a single group on the right. An ellipsis indicates that some items did not fit.
+
 
 ## 5. Edge Capsules and Hover Previews
 
@@ -348,7 +382,9 @@ With **Enable hover preview** turned on in "Settings → General", hover over a 
 
 ### 5.4 Master Capsule and Queue Control
 
-With **Capsule free queues** enabled in "Settings → General", hold <kbd>Ctrl</kbd> while dragging a regular capsule to move its queue. With free queues off, the same gesture moves only that capsule. If **Show main capsule** is enabled, each independent queue has its own master. With free queues off, there is one master per occupied screen edge.
+With **Capsule free queues** enabled in "Settings → General", drag a single capsule away from its queue and drop it separately in an empty position along a screen edge to create a new queue.
+
+Hold <kbd>Ctrl</kbd> while dragging a regular capsule to move its queue. With free queues off, the same gesture moves only that capsule. If **Show main capsule** is enabled, each independent queue has its own master. With free queues off, there is one master per occupied screen edge.
 
 - **Batch toggle**: Left-click to retract or expand the entries in its queue without deleting papers.
 - **Starting height**: Drag vertically to adjust the queue's starting position.
@@ -413,6 +449,7 @@ Without a prefix it uses `!p`, without inserting a prefix into your text. Suppor
 | <kbd>Ctrl</kbd> + <kbd>W</kbd> | Expanded paper | Collapse the active paper; hide it when capsule mode is off |
 | <kbd>Esc</kbd> | General | Close the search bar, or cancel dragging or todo multi-selection; otherwise collapse the paper when capsule mode is available (saving any active title edit), or cancel an active title edit / image selection when capsule mode is unavailable |
 | <kbd>Ctrl</kbd> + <kbd>Z</kbd> / <kbd>Ctrl</kbd> + <kbd>Y</kbd> | Todo / Note | Undo / redo |
+| <kbd>Backspace</kbd> | Multiple selected todos | Delete the selected rows; if text is selected in the editor, delete that text instead |
 | <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>C</kbd> | Selected todos | Copy Markdown tasks with completion states |
 | <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>C</kbd> | Selected note text | Copy plain text |
 | <kbd>↑</kbd> / <kbd>↓</kbd> | Todo editing | Move to the adjacent item at an editing boundary |
@@ -448,7 +485,7 @@ Right-click the tray icon and choose **Settings**. The sidebar lists **General**
 
 ### 8.1 General, Todo, and Note Settings
 
-- **General** includes the interface language (applied after restart), startup, top-bar shortcuts, capsule behavior, and edge browsing. **Advanced** adds options for hiding papers from the taskbar and `Alt+Tab`, fullscreen behavior, and capsule title length.
+- **General** includes the interface language (applied after restart), startup, top-bar shortcuts, capsule behavior, and edge browsing. Set **Yield to fullscreen** in the **Windows** section. **Advanced** adds options for hiding papers from the taskbar and `Alt+Tab` and setting capsule title length. Beneath the window-switcher option, **Hide from capture** offers independent **Papers** and **Capsules** checkboxes, both off by default. Windows versions before Windows 10 version 2004 may leave a blank area where the window was. This uses Windows capture exclusion where supported; transparent windows and third-party capture tools may not honor it, so it is not a privacy guarantee.
 - The right column of **Notes & Todos** covers the bottom quick-add bar, auto-clear / auto-sink completed items, paper and file link display options, and todo reminders and sounds.
 - The left column of **Notes & Todos** covers the three Markdown rendering levels, Full Render editing animation, and the file extension for external editing. **Advanced** adds large-image compression and script-capsule settings.
 
@@ -464,16 +501,17 @@ Open **Style & Text** to adjust these options.
 - **Native materials**: Require **Windows 11 22H2 or later**; exit and reopen when prompted on first use. Unsupported systems or disabled system transparency fall back to solid colors.
 - **Material transparency**: Five levels adjust the material backdrop on expanded papers and Settings without fading text (distinct from window opacity). Capsules and menus always use lightweight opaque backgrounds.
 - **Typography**: Font presets include Language default, YaHei, and DengXian, with overall scaling, per-area size/bold controls, and Standard / Soft / Sharp text rendering.
+- **Content spacing**: In the font settings, **Line spacing** applies to notes while editing and browsing. **Item spacing** adjusts the gap between to-dos, including ones that wrap onto several lines. Both settings are shown only in Advanced mode, each with Small, Medium and Large levels and a Medium default. Use Tab to focus a selector and the left or right arrow to change it.
 
 #### Custom Paper Backgrounds
 
 1. Name an image `papertodo.png`, `papertodo.jpg`, or `papertodo.jpeg` and place it **beside `PaperTodo.exe`** (not in `assets/` or `plugins/`; priority is `PNG > JPG > JPEG`).
-2. Restart and open "Settings → Style & Text → Paper background" (shown once an image is detected).
+2. Restart and open "Settings → Style & Text → Paper background" at the bottom of the right column. The section is always visible: it shows "Not enabled" when no image is present, displays detailed options after a successful load, and shows an error when loading fails.
 3. **Blend with paper colors**: Off shows the original image; on blends it with the current paper colors. **This is not an image visibility switch.**
 4. **Stretch**: Independent toggle. On fills the paper proportionally and may crop edges; off keeps small images at original size and scales large images down only enough to fit.
 5. **Position**: Choose Center, Bottom left, Bottom center, or Bottom right alignment.
 
-The same image applies to notes and todos. After replacing the file, toggle blending, stretching, or position—or restart—to refresh. To remove the background, move or rename the candidate files and restart. Decoding caps the longest edge at **4,096 pixels** without modifying the file, and preferences are stored in `%LOCALAPPDATA%\PaperTodo\paper-background.json` (see [10.2 Backing Up Data](#102-backing-up-data)).
+The same image applies to notes and todos. After replacing the file, toggle blending, stretching, or position—or restart—to refresh. To remove the background, move or rename the candidate files and restart. Decoding caps the longest edge at **4,096 pixels** without modifying the file. Blending, stretch, and position are saved with workspace settings. Secondary workspaces follow the main workspace by default and can use independent settings under Workspaces & Data.
 
 #### Custom Fonts
 
@@ -487,7 +525,7 @@ Click a command's shortcut field and press a key combination; the page checks fo
 
 ### 8.4 Installing and Configuring Plugins
 
-Plugins can turn notes into clocks, Pomodoro timers, or review panels, and add todo actions, top-bar buttons, menu items, global shortcuts, and custom capsule / Mini views. The current host supports **Plugin API 2.1–2.4** (existing 2.1, 2.2 and 2.3 plugins remain compatible). `apiVersion` in `plugin.json` specifies the **minimum required host API**; a plugin requiring `2.4` cannot load on an older host. Plugin actions may appear only in the menu without occupying title-bar space.
+Plugins can turn notes into clocks, Pomodoro timers, or review panels, and add todo actions, top-bar buttons, menu items, global shortcuts, and custom capsule / Mini views. The current host supports **Plugin API 2.1–2.4**. `apiVersion` in `plugin.json` specifies the **minimum required host API**; a plugin requiring `2.4` cannot load on an older host. Plugin actions may appear only in the menu without occupying title-bar space.
 
 - **Web & Native plugins**: Web plugins run HTML/CSS/JS via WebView2; Native plugins are compiled with .NET 10 + WPF.
 - **Plugin data**: Configured in "Settings → Plugins". Host-managed data is separated by workspace under `plugins/data/` (main workspace 1) and `plugins/data2/`–`plugins/data5/` (workspaces 2–5). Separate folders do not isolate system permissions; back up any files a plugin stores elsewhere according to its instructions.
@@ -497,17 +535,27 @@ Plugins can turn notes into clocks, Pomodoro timers, or review panels, and add t
 1. Obtain a complete, runnable plugin folder. The repository's [`plugins/`](../plugins/) folder contains built plugins, while [`plugin-samples/`](../plugin-samples/) contains source code and developer docs—**Native source folders cannot be copied as a substitute for compiled plugins**. Main release packages do not bundle these plugins.
 2. Exit PaperTodo from the tray.
 3. Place the folder at `plugins/<plugin-id>/` beside `PaperTodo.exe`. The folder name must match `id` in `plugin.json`, and `plugin.json` must sit directly inside it (not nested an extra level down).
-4. Restart and verify detection in "Settings → Plugins".
+4. Restart, verify detection in "Settings → Plugins", and check that the plugin is enabled.
 5. For plugins that provide a body, right-click a note paper and select the plugin under **Body type**; some plugins create an entry paper automatically based on their settings.
 
-Restart after updating or removing plugin files as well; replacing a Native `.dll` does not hot-reload it.
+Restart after updating or removing plugin files as well. You can also use **Restart PaperTodo and rescan plugins** on the Plugins page, then confirm to restart the whole application. This is not plugin hot reload; replacing a Native `.dll` requires a restart.
+
+#### Enabling, Disabling, and Status
+
+Click the switch beside a plugin's name to enable or disable it individually. Hover over the switch to see its status:
+
+- **Disabled**: The plugin has stopped. Existing papers and plugin data are retained, and its body shows a disabled notice.
+- **Enabled but not running**: The plugin is allowed to run but has no active body or background runtime instance. This does not mean it is disabled.
+- **Running**: A plugin body or background runtime instance is active. Loading or runtime problems are indicated separately.
+
+Re-enabling a plugin already recognized by PaperTodo resumes it according to its existing papers. Adding, updating, or removing plugin files still requires a restart and rescan.
 
 > [!WARNING]
 > PaperTodo **does not provide a security sandbox for plugins**. Treat both Native and Web plugins as trusted code and install only from trusted sources. Per-workspace data folders do not restrict a plugin's system access. Developers can refer to the [Plugin Development Manual](../plugin-samples/README.md).
 
 #### Good Lock and Global user.json
 
-**Good Lock** is the official parameter editor companion and requires plugin API 2.4. Following the installation steps above, copy the complete built [`plugins/official.good-lock.native/`](../plugins/official.good-lock.native/) folder to the matching path beside the program. Restart, then select **Good Lock** under a note paper's **Body type**. If a Good Lock paper already exists, open it directly.
+**Good Lock** is the official parameter editor companion and requires plugin API 2.6. Following the installation steps above, copy the complete built [`plugins/official.good-lock.native/`](../plugins/official.good-lock.native/) folder to the matching path beside the program. Restart, then select **Good Lock** under a note paper's **Body type**. If a Good Lock paper already exists, open it directly.
 
 The **`user.json` beside the program is shared by every workspace** and contains only parameters you choose to override. PaperTodo reads it independently at startup, so Good Lock need not be open for overrides to work. Switching workspaces does not rewrite the file or copy override values into ordinary settings. See the [global parameter guide and complete catalog](USER_INJECTION.en.md) for names, types, units and application timing.
 
@@ -539,7 +587,9 @@ Internal parameters and their algorithms may change between versions, with no pr
 
 #### Sample Plugins and Codex CLI Bridge
 
-Runnable examples in `plugins/` include **Good Lock**, a native clock, Pomodoro timer, review archive, Web clock, and **Codex CLI Bridge**. Copy only the plugins you need.
+Runnable examples in `plugins/` include **Good Lock**, a native clock, Pomodoro timer, review archive, Web clock, **Webhook event forwarding**, and **Codex CLI Bridge**. Copy only the plugins you need.
+
+The **Webhook event-forwarding plugin** routes paper, todo, note-change, and upcoming todo-reminder events to HTTP(S) URLs by event type. Route changes take effect immediately. See the [Webhook plugin guide](../plugin-samples/PaperTodo.Plugin.Webhook/README.en.md) for installation, configuration, and forwarding details.
 
 **Codex CLI Bridge** requires Codex CLI to be installed and signed in on your computer:
 
@@ -555,14 +605,14 @@ The plugin uses your local Codex login, approval, and sandbox settings; it is no
 
 Enable **Advanced** in the bottom-left of Settings to access the **Labs** page:
 
-- **Window binding**: Drag **Drag to Associate** from an expanded paper's top bar or `···` menu onto another application's window so the paper docks to it and follows its movement, minimization, and restoration.
+- **Window binding**: Drag **Drag to Associate** from an expanded paper's top bar or `···` menu onto another application's window so the paper docks to it and follows its movement, minimization, and restoration. Double-click the bound top-bar icon to unbind. Right-click the icon and choose **Open target app** to activate or relaunch the target. The binding is retained when the target exits, and docking resumes when its window reappears.
 - **Edge snap**: With **Edge capsule mode** turned off, ordinary floating capsules snap near screen or window edges, slide out on hover, and retract when the pointer leaves (independent of fixed left/right edge queues).
 - **Focus and idle behavior**: Collapse papers when focus is lost, hide inactive top-bar buttons or the title bar, fade inactive expanded papers, or fade resting capsules.
 - **Shortcut pass-through & lock**: Use Labs global shortcuts to send the current paper or all papers and capsules behind other windows with click-through enabled, or lock all papers against edits.
 
 ### 8.6 Workspaces
 
-Enable workspaces in "Settings → Spaces & Data". By default only the **Main workspace (1)** exists; you can create up to **5 workspaces** (secondary workspaces are numbered `2`–`5`), each storing its own papers, layout, images, and plugin data.
+Enable workspaces in "Settings → Spaces & Data". By default only the **Main workspace (1)** exists; you can create up to **5 workspaces** (secondary workspaces are numbered `2`–`5`), each storing its own papers, layout, images, and plugin data. After restoring an older main configuration, start the app or reload the main data. Each secondary workspace with a readable data file or fixed backup reappears under its original number. For example, if the list only contains workspace 1 and workspaces 2 and 3 are recovered, the next new workspace uses 4. Unverified core files keep their numbers reserved.
 
 - **Manage and switch**: Click a workspace card to select it, then click **Confirm switch**. Use the pencil (`✎`) beside a name to rename it and the checkmark (`✓`) to save. Renaming never changes numbered data filenames.
 - **Quick switching**: The title-bar workspace button cycles to the next workspace by default. Enable **Choose by name** to open the full-name menu. The same **Switch, Move to, and Create new workspace** actions appear in the overflow and ordinary/edge-capsule workspace menus. A dot marks the current workspace; switching or moving to it is disabled. Moving a paper and creating a workspace do not switch the active workspace. An expanded paper's menu does not duplicate a visible title-bar button; overflowed buttons and capsules without a title bar retain the menu entry. The explicit Hide option still hides the corresponding shortcut.
@@ -607,8 +657,9 @@ Use these arguments in shortcuts, scripts, or launchers (visibility and creation
 | `PaperTodo.exe --new-note` | `PaperTodo.exe note` | Create a note paper |
 | `PaperTodo.exe --exit` | `PaperTodo.exe quit` | Save and exit |
 | `PaperTodo.exe --mcp` | None | Start the connection process for an MCP client (see [Local MCP interface](#local-mcp-interface)) |
+| `PaperTodo.exe --import-note-image --paper-id <note-id>` | None | Import an image from binary standard input; PaperTodo must already be running with MCP additive writes allowed |
 
-Normal GUI launches use a single instance: if PaperTodo is already running, subsequent launches forward commands and exit without creating duplicate windows. `--mcp` is a separate connection mode rather than a normal GUI launch command.
+Normal GUI launches use a single instance: if PaperTodo is already running, subsequent launches forward commands and exit without creating duplicate windows. `--mcp` and `--import-note-image` are separate connection modes rather than normal GUI launch commands.
 
 ---
 
@@ -628,15 +679,15 @@ The portable edition keeps core data beside `PaperTodo.exe`. Each workspace uses
 - `N` stands for the workspace number (for example, Workspace 2 uses `data2.json`, not a file literally named `dataN.json`).
 - **The main `data.json` also stores the workspace list, custom names, and follow-main settings**, so always retain it when migrating or restoring secondary workspaces.
 - Installed plugins in `plugins/<plugin-id>/` are shared by all workspaces; historical core-JSON archives are stored in `PaperTodo-backups/`.
-- Custom backgrounds, fonts, tray icons (`PaperTodo.ico`), and reminder sounds (`papertodo.wav`) sit beside `PaperTodo.exe`; background blending, stretching, and position preferences are stored separately at `%LOCALAPPDATA%\PaperTodo\paper-background.json`.
+- Custom backgrounds, fonts, tray icons (`PaperTodo.ico`), and reminder sounds (`papertodo.wav`) sit beside `PaperTodo.exe`. Background blending, stretch, and position are saved in the workspace JSON.
 - `data.backup.json` and `data2.backup.json`–`data5.backup.json` do not update on every save and are not guaranteed to match the state immediately before your last edit.
 
 ### 10.2 Backing Up Data
 
 1. **Choose "Exit" from the tray and wait for `PaperTodo.exe` to finish before copying.** If saving fails, resolve that first; a running app has not completed a safe exit.
 2. **Full directory copy (recommended)**: Copy the **entire application directory** to your backup location to preserve all workspaces, image databases, plugins, historical backups, and custom files at once.
-3. **Selective backup**: If copying individual items, include every used workspace's JSON, short-term backup, and image database, the complete `plugins/` folder, and the main `data.json` (plus `PaperTodo-backups/` if you want historical restore points). **The three unnumbered files cover only the main workspace (1).**
-4. **External files**: Save `%LOCALAPPDATA%\PaperTodo\paper-background.json` separately (or reconfigure the background after migration). Follow plugin instructions for data stored outside the app folder; files linked from todos are not bundled automatically either.
+3. **Selective backup**: If copying individual items, include every used workspace's JSON, short-term backup, and image database, the complete `plugins/` folder, and the main `data.json` (plus `PaperTodo-backups/` if you want historical restore points). For a custom background, include the image from the application folder. **The three unnumbered files cover only the main workspace (1).**
+4. **External files**: Follow plugin instructions for data stored outside the app folder; files linked from todos are not bundled automatically either.
 
 #### Automatic Core-Data History Archives (`PaperTodo-backups/`)
 
@@ -653,7 +704,7 @@ These archives store the original contents of existing `data.json` and `data2.js
 
 1. Exit PaperTodo on the old computer and create a complete backup as described above.
 2. Copy the entire backup folder to a writable directory on the new computer, using a compatible application version; **do not launch PaperTodo until copying is complete**.
-3. Restore separate background preferences and any external plugin or todo-linked files as needed.
+3. Restore any external plugin or todo-linked files as needed.
 4. Launch PaperTodo and switch through every workspace you use to verify text, images, plugins, and settings. Keep the old backup until everything is verified.
 
 #### Recovering from Damaged or Unwanted Changes
@@ -696,7 +747,7 @@ To choose an older backup manually or restore images and plugins as well:
 **A**: Turning it off shows the original unblended image. To remove the background completely, move or rename `papertodo.png` / `.jpg` / `.jpeg` beside `PaperTodo.exe` and restart.
 
 #### Q9: Why does a copied plugin not appear?
-**A**: Check that you copied a built plugin folder (not a Native source folder from `plugin-samples/`), its folder name matches `id` in `plugin.json`, `plugin.json` is directly inside that folder (not nested an extra level), its `apiVersion` is within `2.1`–`2.2`, and you restarted PaperTodo from the tray.
+**A**: Check that you copied a built plugin folder (not a Native source folder from `plugin-samples/`), its folder name matches `id` in `plugin.json`, `plugin.json` is directly inside that folder (not nested an extra level), its `apiVersion` is within `2.1`–`2.4`, and the plugin is enabled in "Settings → Plugins". After adding or updating files, use the restart-and-rescan button on the Plugins page, or exit from the tray and relaunch PaperTodo.
 
 #### Q10: Why are other Settings pages dimmed in a secondary workspace?
 **A**: The workspace is following the main workspace's settings. Change settings in the main workspace (1), or open "Settings → Spaces & Data" and turn off **Follow main settings** for that workspace.

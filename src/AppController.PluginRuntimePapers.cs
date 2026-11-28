@@ -233,7 +233,7 @@ public sealed partial class AppController
         return false;
     }
 
-    private PaperData? FindPluginRuntimePaper(string providerId, string paperId) =>
+    internal PaperData? FindPluginRuntimePaper(string providerId, string paperId) =>
         State.Papers.FirstOrDefault(paper =>
             paper.Type == PaperTypes.Note &&
             string.Equals(paper.Id, paperId, StringComparison.Ordinal) &&

@@ -193,7 +193,7 @@ public sealed partial class AppController
         }
 
         var globalActions = _pluginGlobalTopBars.Values
-            .Where(item => IsActive(item.IsActive))
+            .Where(item => AllowsPluginGlobalChrome(item.ProviderId) && IsActive(item.IsActive))
             .SelectMany(registration =>
                 registration.Actions.Select((action, index) => new
                 {
@@ -229,6 +229,7 @@ public sealed partial class AppController
 
         if (binding.Scope == PaperTopBarActionScope.Global)
         {
+            if (!AllowsPluginGlobalChrome(binding.ProviderId)) return;
             if (!_pluginGlobalTopBars.TryGetValue(binding.ProviderId, out var registration) ||
                 registration.RuntimeId != binding.OwnerId ||
                 !IsActive(registration.IsActive))

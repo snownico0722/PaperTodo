@@ -200,6 +200,164 @@ internal static partial class Program
         }
     }
 
+    private static void FullscreenSettingVisibility()
+    {
+        var controller = Controller();
+        Field(controller, "_settingsRegionRefreshers", new Dictionary<string, Action>());
+        var catalog = (WorkspaceCatalog)System.Runtime.CompilerServices.RuntimeHelpers
+            .GetUninitializedObject(typeof(WorkspaceCatalog));
+        Field(catalog, "<Options>k__BackingField", new WorkspaceConfiguration());
+        Field(controller, "_workspaceCatalog", catalog);
+        foreach (var advanced in new[] { false, true })
+        {
+            controller.State.AdvancedSettingsMode = advanced;
+            var options = (UIElement)Invoke(controller, "BuildSettingsGeneralOptions")!;
+            Check(SettingsControls<TextBlock>(options).Count(label =>
+                    label.Text == Strings.Get("SettingsFullscreenTopmostMode")) == 1,
+                "General settings show the fullscreen selector once in both modes.");
+            Check(SettingsControls<CheckBox>(options).Any(toggle =>
+                    Equals(toggle.Content, Strings.Get("SettingsHidePapersFromTaskbar"))) == advanced,
+                "Taskbar visibility remains in advanced settings.");
+        }
+    }
+
+    private static void PaperBackgroundSettingsVisibility()
+    {
+        var candidateImages = new[] { "papertodo.png", "papertodo.jpg", "papertodo.jpeg" };
+        var hasBackgroundImage = candidateImages.Any(name =>
+            System.IO.File.Exists(System.IO.Path.Combine(AppContext.BaseDirectory, name)));
+
+        var controller = Controller();
+        Field(controller, "_settingsRegionRefreshers", new Dictionary<string, Action>());
+        var page = (UIElement)Invoke(controller, "BuildVisualSettingsPage")!;
+        var window = new Window { Content = page, Width = 900, Height = 760 };
+        Field(controller, "_settingsWindow", window);
+        try
+        {
+            window.Show();
+            window.Activate();
+            window.UpdateLayout();
+            DrainSettingsUi();
+
+            var labels = SettingsControls<TextBlock>(window).Select(label => label.Text).ToArray();
+            Check(labels.Any(label => label is "纸片背景" or "Paper background" or "紙面背景" or "종이 배경"),
+                "Paper background settings stay visible at the bottom of Style & Text without an image.");
+
+            if (!hasBackgroundImage)
+            {
+                Check(labels.Any(label => label is "未启用" or "Not enabled" or "未有効" or "사용 안 함"),
+                    "The always-visible paper background section reports the no-image state.");
+                Check(!SettingsControls<CheckBox>(window).Any(toggle =>
+                        toggle.Content is string label &&
+                        label is "启用背景色混合" or "Enable background color blending" or
+                            "背景色のブレンドを有効化" or "배경색 혼합 사용"),
+                    "Detailed paper background options stay hidden until an image loads successfully.");
+            }
+        }
+        finally
+        {
+            Field(controller, "_settingsWindow", null!);
+            window.Close();
+            DrainSettingsUi();
+        }
+    }
+
+    private static void SpacingAdvancedModeVisibility()
+    {
+        var controller = Controller();
+        Field(controller, "_settingsRegionRefreshers", new Dictionary<string, Action>());
+        controller.State.NoteLineSpacing = "large";
+        controller.State.TodoItemSpacing = "small";
+        controller.State.AdvancedSettingsMode = false;
+
+        var window = new Window { Width = 900, Height = 760 };
+        Field(controller, "_settingsWindow", window);
+        try
+        {
+            window.Content = Invoke(controller, "BuildVisualSettingsPage");
+            window.Show();
+            window.Activate();
+            window.UpdateLayout();
+            DrainSettingsUi();
+
+            Check(SettingsControls<ListBox>(window).Count() == 0,
+                "Normal mode hides both note line spacing and to-do item spacing.");
+
+            controller.State.AdvancedSettingsMode = true;
+            window.Content = Invoke(controller, "BuildVisualSettingsPage");
+            window.UpdateLayout();
+            DrainSettingsUi();
+
+            var advancedSelectors = SettingsControls<ListBox>(window).ToArray();
+            Check(advancedSelectors.Length == 2 &&
+                  Equals(advancedSelectors[0].SelectedValue, "large") &&
+                  Equals(advancedSelectors[1].SelectedValue, "small"),
+                "Advanced mode reveals both saved spacing values without changing either.");
+
+            controller.State.AdvancedSettingsMode = false;
+            window.Content = Invoke(controller, "BuildVisualSettingsPage");
+            window.UpdateLayout();
+            DrainSettingsUi();
+            Check(SettingsControls<ListBox>(window).Count() == 0 &&
+                  controller.State.NoteLineSpacing == "large" &&
+                  controller.State.TodoItemSpacing == "small",
+                "Hiding both spacing controls in normal mode preserves both saved values.");
+        }
+        finally
+        {
+            Field(controller, "_settingsWindow", null!);
+            window.Close();
+            DrainSettingsUi();
+        }
+    }
+
+    private static void SpacingKeyboardBehavior()
+    {
+        var controller = Controller();
+        Field(controller, "_settingsRegionRefreshers", new Dictionary<string, Action>());
+        SettingsFor(controller, () => true, action => action());
+        var panel = new StackPanel();
+        var start = new Button { Content = "Start" };
+        panel.Children.Add(start);
+        panel.Children.Add((UIElement)Invoke(controller, "CreateSpacingRow", "SettingsLineSpacing",
+            (Func<string>)(() => controller.State.NoteLineSpacing), "note.line_spacing")!);
+        panel.Children.Add((UIElement)Invoke(controller, "CreateSpacingRow", "SettingsItemSpacing",
+            (Func<string>)(() => controller.State.TodoItemSpacing), "todo.item_spacing")!);
+        var window = new Window { Content = panel, Width = 350, Height = 200 };
+        Field(controller, "_settingsWindow", window);
+        try
+        {
+            window.Show();
+            window.Activate();
+            DrainSettingsUi();
+            var lists = SettingsControls<ListBox>(panel).ToArray();
+            start.Focus();
+            start.MoveFocus(new TraversalRequest(FocusNavigationDirection.Next));
+            Check(lists[0].IsKeyboardFocusWithin, "Tab reaches note spacing");
+            Press(Key.Right);
+            DrainSettingsUi();
+            Check(controller.State.NoteLineSpacing == "large" && lists[0].IsKeyboardFocusWithin,
+                "Right changes spacing and keeps keyboard focus after persistence");
+            Press(Key.Left);
+            DrainSettingsUi();
+            Check(controller.State.NoteLineSpacing == "medium", "consecutive arrow keys work");
+            ((UIElement)Keyboard.FocusedElement).MoveFocus(new TraversalRequest(FocusNavigationDirection.Next));
+            Check(lists[1].IsKeyboardFocusWithin, "the next Tab reaches to-do spacing");
+            Press(Key.Left);
+            DrainSettingsUi();
+            Check(controller.State.TodoItemSpacing == "small" && controller.State.NoteLineSpacing == "medium",
+                "keyboard adjusts the two settings independently");
+        }
+        finally { window.Close(); }
+
+        void Press(Key key)
+        {
+            var target = (UIElement)Keyboard.FocusedElement;
+            target.RaiseEvent(new KeyEventArgs(Keyboard.PrimaryDevice, PresentationSource.FromVisual(target),
+                Environment.TickCount, key) { RoutedEvent = Keyboard.KeyDownEvent });
+        }
+    }
+
     private static void WorkspaceDataSettingsBehavior()
     {
         var c = Controller();
@@ -209,6 +367,7 @@ internal static partial class Program
         var options = new WorkspaceConfiguration { Enabled = false, Slots = [1, 2] };
         Field(catalog, "<Options>k__BackingField", options);
         Field(c, "_workspaceCatalog", catalog);
+        c.State.AdvancedSettingsMode = true;
         c.State.McpEnabled = true;
         c.State.McpAllowFullWrites = true;
         var saves = 0;

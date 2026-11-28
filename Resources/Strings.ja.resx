@@ -550,7 +550,7 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
     <value>紙片の配色：背景、アクセント、弱い文字色。</value>
   </data>
   <data name="TipUiFont" xml:space="preserve">
-    <value>既定では表示言語に応じてシステムフォントを選び、画面とノート本文で異なる場合があります。Microsoft YaHei または DengXian を選ぶと、画面・トレイ・カプセル・ToDo・ノートで同じフォントを使用します。アプリのフォルダーに papertodo.ttf または papertodo.otf があれば、そちらを優先します。</value>
+    <value>「既定」は画面言語に合わせてシステムフォントを選び、画面とノート本文で異なる場合があります。「Microsoft YaHei」または「DengXian」を選ぶと、画面、トレイ、カプセル、ToDo、ノートで同じフォントを使用します。</value>
   </data>
   <data name="TipTextRenderingProfile" xml:space="preserve">
     <value>標準：Windows 既定の文字表示方式で、互換性を重視します。柔和：輪郭を滑らかにしますが、表示倍率によって少しぼやけることがあります。鮮明：輪郭がくっきりしますが、一部のフォントで字幅や間隔が少し変わることがあります。いずれも文字内容は変更しません。</value>
@@ -559,7 +559,7 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
     <value>カスタムフォントの太字強化</value>
   </data>
   <data name="TipCustomFontEnhancedBold" xml:space="preserve">
-    <value>有効にすると、太字に設定した文字は通常フォントを擬似的に太くする代わりに、専用の太字ファイルを使います。アプリのフォルダーに通常用 papertodo と太字用 PaperTodo_Bold を両方置いてください（.ttf／.otf 対応）。</value>
+    <value>カスタムフォントと組み合わせて使用します。独立した太字フォントを `papertodo_bold.ttf`（または `.otf`）という名前でアプリのフォルダーに置き、この項目を有効にすると、太字の文字にその書体を直接使用します。</value>
   </data>
   <data name="TipMarkdownRender" xml:space="preserve">
     <value>基本レンダリング：Markdown の記号を薄く残し、箇条書きの点や区切り線など簡単な書式を表示します。完全レンダリング：見出し・リスト・引用・コードブロックを完成形に近い見た目にし、多くの記号を隠します。編集時はカーソルのあるブロックの記号を再表示します。</value>
@@ -571,8 +571,8 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
     <value>Markdown の編集中、再表示される構文記号がフェードインし、編集状態の切り替えが自然になります。</value>
   </data>
   <data name="TipFullscreenTopmostMode" xml:space="preserve">
-    <value>動画やゲームなどの全画面を検出したとき、紙片と端のカプセルを一時的に避けられます。
-「最前面のまま」なら常に表示します。</value>
+    <value>動画やゲームなどが全画面表示になると、固定していない紙片と端のカプセルを一時的に背面にできます。
+ピンで固定した紙片は最前面に表示されます。</value>
   </data>
   <data name="TipTodoVisualSize" xml:space="preserve">
     <value>ToDo の文字、行高、間隔を調整します。</value>
@@ -663,6 +663,12 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
   </data>
   <data name="TipFastAnimations" xml:space="preserve">
     <value>画面アニメーションの時間を通常の約 60% に短縮し、遷移効果を残したまま操作を素早くします。「アニメーションを有効化」がオフの場合は適用されません。</value>
+  </data>
+  <data name="SettingsCapsuleOutlineEnhancement" xml:space="preserve">
+    <value>カプセルの枠線強調を有効化</value>
+  </data>
+  <data name="TipCapsuleOutlineEnhancement" xml:space="preserve">
+    <value>オンにすると、アクティブな画面端のカプセルに細い半透明の外枠線を追加し、似た色のデスクトップ背景でも見分けやすくします。</value>
   </data>
   <data name="TipPersistentPowerShellProcess" xml:space="preserve">
     <value>!pf / !powerf は常駐プロセスを使い起動を速くしますが、変数や状態がスクリプト間に残ることがあります。
@@ -1035,6 +1041,9 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
   <data name="ImageReferenceTextHidden" xml:space="preserve">
     <value>常に非表示</value>
   </data>
+  <data name="SettingsFontSizeLabel" xml:space="preserve"><value>文字サイズ</value></data>
+  <data name="SettingsLineSpacing" xml:space="preserve"><value>行間</value></data>
+  <data name="SettingsItemSpacing" xml:space="preserve"><value>項目の間隔</value></data>
   <data name="SettingsTextBold" xml:space="preserve">
     <value>太字</value>
   </data>
@@ -1043,13 +1052,14 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
   </data>
   <data name="TipNoteBodyTextStyle" xml:space="preserve">
     <value>全体サイズの上に小／中／大を載せ、太字も切り替えます。
-ノートごとの倍率はさらに加算されます。</value>
+ノートごとの倍率はさらに加算されます。
+行間は編集時と閲覧時の両方に適用されます。</value>
   </data>
   <data name="SettingsTodoBodyText" xml:space="preserve">
     <value>ToDo 本文</value>
   </data>
   <data name="TipTodoBodyTextStyle" xml:space="preserve">
-    <value>ToDo 本文と行高：小／中／大、太字可。</value>
+    <value>文字サイズと太字を設定できます。項目の間隔は隣り合う ToDo の間の余白に適用されます。</value>
   </data>
   <data name="SettingsTitleText" xml:space="preserve">
     <value>タイトル文字</value>
@@ -1364,6 +1374,18 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
   </data>
   <data name="PluginInstanceLimitMessage" xml:space="preserve">
     <value>「{0}」で作成できる紙片は最大 {1} 個です。既存のインスタンスを削除してから作成してください。</value>
+  </data>
+  <data name="NotePasteImageTextOnlyTitle" xml:space="preserve">
+    <value>一部の画像をテキストとして貼り付けました</value>
+  </data>
+  <data name="NotePasteImageTextOnlyMessage" xml:space="preserve">
+    <value>取り込めなかった画像はテキストとして残しました。ほかの内容は貼り付けられました。</value>
+  </data>
+  <data name="NoteClipboardIncompleteTitle" xml:space="preserve">
+    <value>操作をキャンセルしました</value>
+  </data>
+  <data name="NoteClipboardIncompleteMessage" xml:space="preserve">
+    <value>選択した画像をすべてクリップボードにコピーできなかったため、元の内容を残しました。選択範囲を小さくして再試行してください。</value>
   </data>
   <data name="NoteCopyTextOnlyTitle" xml:space="preserve">
     <value>テキストのみコピーしました</value>
@@ -1762,6 +1784,9 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
   <data name="WorkspaceMoveGroup" xml:space="preserve">
     <value>移動先</value>
   </data>
+  <data name="WorkspaceCreateSlotsOccupied" xml:space="preserve">
+    <value>新しいワークスペースに使える空き番号がありません。番号 {0} には内容を確認できないデータがあり、元のファイルは保持されています。</value>
+  </data>
   <data name="WorkspaceCreateNew" xml:space="preserve">
     <value>新しいワークスペースを作成</value>
   </data>
@@ -1791,5 +1816,23 @@ PaperTodo を手動でもう一度開いてください。問題が繰り返さ�
   </data>
   <data name="WindowBindingProgramUnavailable" xml:space="preserve">
     <value>アプリの場所を取得できませんでした。起動中のウィンドウにもう一度連携してください。</value>
+  </data>
+<data name="SettingsCustomFont" xml:space="preserve">
+    <value>カスタムフォント</value>
+  </data>
+<data name="TipCustomFont" xml:space="preserve">
+    <value>`.ttf` または `.otf` のフォントファイルを `papertodo.ttf`（または `.otf`）に改名し、`PaperTodo.exe` と同じフォルダーに配置して PaperTodo を再起動すると、画面と本文の既定フォントを置き換えます。</value>
+  </data>
+<data name="SettingsDataBackup" xml:space="preserve">
+    <value>データバックアップ</value>
+  </data>
+<data name="SettingsAutoGradientBackup" xml:space="preserve">
+    <value>自動段階バックアップ</value>
+  </data>
+<data name="TipAutoGradientBackup" xml:space="preserve">
+    <value>有効にすると、すべてのワークスペースのテキストと設定を `PaperTodo-backups` フォルダーに自動保存します。約10分、6時間、3日、1か月の4つの期間を目安に、最大4個の履歴アーカイブを保持します。画像とプラグインデータは含まれません。PCの移行や完全バックアップには、アプリのフォルダー全体をコピーしてください。</value>
+  </data>
+<data name="TipPluginBodyTypes" xml:space="preserve">
+    <value>ノートは既定で内蔵 Markdown エディターを使用します。独自の画面を提供するプラグインをインストールした後、ノートを右クリックして「本文の種類」を選ぶと、そのノートを時計などのプラグインパネルに切り替えられます。元のノート内容は保持され、いつでも Markdown に戻せます。</value>
   </data>
 </root>

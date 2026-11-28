@@ -60,6 +60,7 @@ internal sealed class PaperBodyPluginManifest
     public PaperBodyPluginMiniSizeManifest? MiniSize { get; set; }
     public PaperBodyPluginMiniSizeManifest? MiniMaxSize { get; set; }
     public string[] Capabilities { get; set; } = [];
+    public string[] BottomBarTargets { get; set; } = [];
     public bool AdvancedSettings { get; set; }
     public int? PrimarySettings { get; set; }
     public PaperBodyPluginSettingCategoryManifest[] SettingCategories { get; set; } = [];
@@ -89,7 +90,7 @@ internal sealed class PaperBodyPluginMiniSizeManifest
 internal sealed partial class PaperBodyPluginRegistry : IDisposable
 {
     internal const string MinimumPluginApiVersion = "2.1";
-    internal const string SupportedPluginApiVersion = "2.4";
+    internal const string SupportedPluginApiVersion = "2.6";
     private PaperBodyPluginDataStore _dataStore =
         new(Path.Combine(AppContext.BaseDirectory, "plugins"));
 
@@ -620,7 +621,7 @@ internal sealed partial class PaperBodyPluginRegistry : IDisposable
             $"Unsupported plugin API version {pluginApiVersion}; host supports {MinimumPluginApiVersion} through {SupportedPluginApiVersion}.");
     }
 
-    private static bool ApiAtLeast(string actual, string required) =>
+    internal static bool ApiAtLeast(string actual, string required) =>
         Version.Parse(actual).CompareTo(Version.Parse(required)) >= 0;
 
     private static Version ParseVersion(string? value)

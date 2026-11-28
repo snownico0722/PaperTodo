@@ -1,12 +1,12 @@
 # 全局参数注入与 Good Lock
 
-[English](USER_INJECTION.en.md) · [用户指南](USER_GUIDE.md#84-插件安装与配置) · [插件 API](../plugin-samples/README.zh.md#56-全局-userjson-注入-api24) · [机器可读目录](user-injection-catalog.json)
+[English](USER_INJECTION.en.md) · [用户指南](USER_GUIDE.md#84-插件安装与配置) · [插件 API](../plugin-samples/README.zh.md#56-全局-userjson-注入-api26) · [机器可读目录](user-injection-catalog.json)
 
 PaperTodo 的官方注入接口使用程序目录中的一份 `user.json`。所有工作区共用它，普通设置仍保存各自原来的选择。它可以覆盖固定数值、动态公式的系数，以及指定位置的中间计算结果。只写需要修改的键即可。
 
 ## 编辑与应用
 
-1. 按[用户指南](USER_GUIDE.md#84-插件安装与配置)安装 `plugins/official.good-lock.native/`，在笔记纸的“正文类型”中选择 **Good Lock**。插件要求 API 2.4；主程序发布包与插件分别提供。
+1. 按[用户指南](USER_GUIDE.md#84-插件安装与配置)安装 `plugins/official.good-lock.native/`，在笔记纸的“正文类型”中选择 **Good Lock**。插件要求 API 2.6；主程序发布包与插件分别提供。
 2. 点击 **打开修改文件**，使用外部编辑器修改 `user.json`。第一次打开时建立空对象；已有文件不会因打开而被改写。
 3. 保存后回到 Good Lock。页面重新读取文件，只显示修改项和仍待恢复的运行覆盖。点击右上 **应用**。
 4. 重启项会显示红点。点击 **快速重启**会先应用本页草稿，再走正常保存退出流程，并在启动后回到这张纸片。
@@ -26,7 +26,7 @@ PaperTodo 的官方注入接口使用程序目录中的一份 `user.json`。所�
 
 **键存在就代表覆盖。** 即使填入的值恰好等于默认值，仍会保持覆盖。删除键并应用，才恢复原取值来源；重启项的删除也需要重启。普通设置页的“恢复默认”只恢复该页普通设置，保留 `user.json`。
 
-将 `note.maxTextChars` 设为至少 100,000，重启后生效。删除该键即可恢复默认的 100,000 字符。旧文件中的较小整数在启动时会跳过，应用配置前需改正或删除。已有超长笔记仍可打开，保持或减少字数即可保存。每个工作区的笔记图片总预算固定为 120 MiB，按编码后的图片大小计。
+将 `note.maxTextChars` 设为至少 100,000，重启后生效。删除该键即可恢复默认的 100,000 字符。旧文件中的较小整数在启动时会跳过，应用配置前需改正或删除。已有超长笔记仍可打开，保持或减少字数即可保存。每个工作区的笔记图片总预算固定为 120 MiB，按编码后的图片大小计。单图上限用于新导入，重置后已有的合法图片仍可读取。
 
 ## 读懂修改项
 
@@ -71,13 +71,13 @@ PaperTodo 的官方注入接口使用程序目录中的一份 `user.json`。所�
 
 Native Body 和 provider Runtime 使用 `context.InjectionApi`。先调用 `Read()` 获取此版本实际目录和最新文件 revision；外部修改后调用 `Apply()` 采用，按键编辑则携带 revision、`Set` 和 `Remove`。`Read` / `Suggest` 使用 `settings.read`，`Apply` / `Restart` 使用 `settings.update`。Body 请求重启后回到调用纸片，Runtime 没有纸片返回目标。
 
-`Suggest` 的可选草稿字典代表完整候选文档：缺失的键表示恢复默认来源。建议只返回本项的新值及解释，不写文件。更多接口示例见[插件文档](../plugin-samples/README.zh.md#56-全局-userjson-注入-api24)。内部注入键可能随模块演进变化；Agent 应查询当前目录，保留未知键，避免把整份默认目录写成覆盖文件。
+`Suggest` 的可选草稿字典代表完整候选文档：缺失的键表示恢复默认来源。建议只返回本项的新值及解释，不写文件。更多接口示例见[插件文档](../plugin-samples/README.zh.md#56-全局-userjson-注入-api26)。同一个键保留同一含义。新版本会继续采用仍支持的键，并忽略已退役或暂不支持的键，保留其原值。Good Lock 从宿主读取目录，因此新增或停用键无需更新插件。Agent 应查询当前目录，避免把整份默认目录写成覆盖文件。
 
 ## 完整参数目录
 
 下表直接根据 typed catalog 导出。机器目录提供同一组键、类型、默认来源、生效时机、建议范围和中英文说明，便于 Agent 检索；编辑 `user.json` 时仅选择需要的 `id` 并填写其值。
 
-当前共 **433 项**，其中 **45 项**默认来源是动态计算；`live` 168, `next_use` 88, `restart` 177.
+当前共 **441 项**，其中 **47 项**默认来源是动态计算；`live` 170, `next_use` 88, `restart` 183.
 
 ### 整体外观 (1)
 
@@ -107,11 +107,12 @@ Native Body 和 provider Runtime 使用 `context.InjectionApi`。先调用 `Read
 | `background.blendedImageOpacity` · 纸片背景混合透明度 | `number` | 0.3 | `restart` | 启用背景色混合时图片画刷的透明度。 |
 | `background.maxDecodeDimensionPx` · 纸片背景解码边长 | `integer` | 4096 px | `restart` | 背景图片解码的最大像素边长。 |
 
-### 胶囊文字、尺寸与间距 (15)
+### 胶囊文字、尺寸与间距 (16)
 
 | 键 / 名称 | 类型 | 默认 / 计算来源 | 生效 | 说明 |
 | --- | --- | --- | --- | --- |
 | `capsule.edge.widthDip` · 边缘胶囊最终宽度 | `number` | 按图标、标题或插件内容计算 | `restart` | 覆盖当前内容测量后的边缘胶囊宽度，包含内侧阴影留白。 |
+| `capsule.edge.iconOnlyMinWidthDip` · 纯图标贴边胶囊最小宽度 | `number` | 0 DIP | `restart` | 标题设为零字时，内置贴边胶囊的最小宽度，包含内侧阴影留白。 建议：≥ 0。 |
 | `capsule.gap.baseDip` · 胶囊间距基础值 | `number` | 4 DIP | `live` | 普通间距预设的基础值；紧凑和宽松预设仍按差值计算。 |
 | `capsule.gap.deltaDip` · 胶囊间距预设差值 | `number` | 4 DIP | `live` | 紧凑预设从基础值减去此值，宽松预设加上此值。 |
 | `capsule.gap.finalDip` · 胶囊最终间距 | `number` | 按当前间距预设计算 | `live` | 覆盖当前间距预设与基础值计算的结果。 |
@@ -250,8 +251,8 @@ Native Body 和 provider Runtime 使用 `context.InjectionApi`。先调用 `Read
 | `edge.layout.dockingRevealMilliseconds` · 胶囊回墙显现时长 | `integer` | 80 ms | `next_use` | 原有边缘胶囊共享几何或过渡计算使用的数值。 |
 | `edge.layout.expandedEdgeInset` · 展开纸片贴边留白 | `number` | 36 DIP | `restart` | 原有边缘胶囊共享几何或过渡计算使用的数值。 |
 | `edge.layout.horizontalResizeMilliseconds` · 胶囊横向变化时长 | `integer` | 160 ms | `next_use` | 原有边缘胶囊共享几何或过渡计算使用的数值。 |
-| `edge.layout.outlineOverlap` · 边缘胶囊轮廓重叠 | `number` | 1 DIP | `restart` | 原有边缘胶囊共享几何或过渡计算使用的数值。 |
-| `edge.layout.outlineThickness` · 边缘胶囊轮廓粗细 | `number` | 2 DIP | `restart` | 原有边缘胶囊共享几何或过渡计算使用的数值。 |
+| `edge.layout.outlineOverlap` · 边缘胶囊轮廓重叠 | `number` | 2 DIP | `restart` | 原有边缘胶囊共享几何或过渡计算使用的数值。 |
+| `edge.layout.outlineThickness` · 边缘胶囊轮廓粗细 | `number` | 3 DIP | `restart` | 原有边缘胶囊共享几何或过渡计算使用的数值。 |
 | `edge.layout.slotMoveMilliseconds` · 队列位移时长 | `integer` | 200 ms | `next_use` | 原有边缘胶囊共享几何或过渡计算使用的数值。 |
 | `edge.layout.slotRetractMoveMilliseconds` · 队列收回时长 | `integer` | 120 ms | `next_use` | 原有边缘胶囊共享几何或过渡计算使用的数值。 |
 | `edge.layout.startTopMargin` · 新队列起始位置 | `number` | 48 DIP | `restart` | 原有边缘胶囊共享几何或过渡计算使用的数值。 |
@@ -400,7 +401,7 @@ Native Body 和 provider Runtime 使用 `context.InjectionApi`。先调用 `Read
 | `newPaper.todo.heightDip` · 新建待办高度 | `number` | 340 DIP | `next_use` | 新建纸片时的最终初始尺寸；不改已有纸片和旧数据缺省值。 |
 | `newPaper.todo.widthDip` · 新建待办宽度 | `number` | 280 DIP | `next_use` | 新建纸片时的最终初始尺寸；不改已有纸片和旧数据缺省值。 |
 
-### 笔记、图片与排版 (36)
+### 笔记、图片与排版 (37)
 
 | 键 / 名称 | 类型 | 默认 / 计算来源 | 生效 | 说明 |
 | --- | --- | --- | --- | --- |
@@ -410,6 +411,7 @@ Native Body 和 provider Runtime 使用 `context.InjectionApi`。先调用 `Read
 | `note.clipboard.maxImageBytes` · 剪贴板图片输入上限 | `integer` | 33554432 bytes | `next_use` | 读取剪贴板编码图片数据时使用的字节上限。 |
 | `note.clipboard.maxRtfImageBytes` · RTF 剪贴板图片预算 | `integer` | 16777216 bytes | `next_use` | 导出混排 RTF 时按每次图片出现累加的源图片字节预算。 |
 | `note.editor.indentationSize` · 笔记缩进宽度 | `integer` | 4 columns | `restart` | AvalonEdit 的制表符与缩进显示宽度。 |
+| `note.editor.lineSpacingFactor` · 笔记行距倍率 | `number` | 由当前笔记行距档位计算 | `live` | 覆盖小、中、大档计算出的笔记行距倍率，编辑和阅读使用同一排版。 建议：0.75–2。 |
 | `note.images.autoCompressedDimensionPx` · 自动压缩目标边长 | `integer` | 2048 px | `next_use` | 开启自动压缩时大图片缩小后的最大边长。 |
 | `note.images.cachePruneMs` · 图片块缓存清理等待 | `number` | 200 ms | `restart` | 可视行变化后整理图片控件缓存的防抖时间。 |
 | `note.images.fallbackWidthDip` · 笔记图片未布局宽度 | `number` | 240 DIP | `restart` | 图片视口尚无有效宽度时使用的目标宽度。 |
@@ -417,8 +419,8 @@ Native Body 和 provider Runtime 使用 `context.InjectionApi`。先调用 `Read
 | `note.images.maxCacheEntries` · 解码图片缓存数量 | `integer` | 20 items | `next_use` | 非当前可视图片的 LRU 解码缓存条目预算。 |
 | `note.images.maxDecodedBytes` · 解码图片缓存预算 | `integer` | 52428800 bytes | `next_use` | 非当前可视图片的 LRU 解码缓存字节预算。 |
 | `note.images.maxInputBytes` · 图片导入输入预算 | `integer` | 33554432 bytes | `next_use` | 导入图片原始输入数据的字节上限。 |
-| `note.images.maxStoredBytes` · 单张图片存储预算 | `integer` | 8388608 bytes | `next_use` | 单个图片资产编码后的字节上限。 |
-| `note.images.maxStoredDimensionPx` · 图片存储最大边长 | `integer` | 4096 px | `next_use` | 导入及加载图片资产时接受的最大像素边长。 |
+| `note.images.maxStoredBytes` · 单张图片存储预算 | `integer` | 8388608 bytes | `next_use` | 新导入的单张图片编码后的字节上限。 |
+| `note.images.maxStoredDimensionPx` · 图片存储最大边长 | `integer` | 4096 px | `next_use` | 新导入图片接受的最大像素边长。 |
 | `note.images.minTargetWidthDip` · 笔记图片目标最小宽度 | `number` | 80 DIP | `restart` | 视口计算完成后图片目标宽度的原生下限。 |
 | `note.images.resizeSettleMs` · 图片重排静置时间 | `number` | 200 ms | `restart` | 停止改变图片视口宽度后恢复高质量解码的等待时间。 |
 | `note.images.resizeToleranceDip` · 图片重排宽度容差 | `number` | 1 DIP | `live` | 图片视口宽度变化达到此距离时开始重排。 |
@@ -470,6 +472,16 @@ Native Body 和 provider Runtime 使用 `context.InjectionApi`。先调用 `Read
 | `paper.titleFontDip` · 纸片标题最终字号 | `number` | 按当前设置或运行状态计算 | `live` | 未覆盖时沿用现有文字、内容或缩放计算；写入后替换这个计算结果。 |
 | `paper.topBarCollisionGap` · 顶栏按钮碰撞间隔 | `number` | 2 DIP | `restart` | 纸片现有界面或交互路径使用的数值。 |
 
+### 纸片插件底栏 (5)
+
+| 键 / 名称 | 类型 | 默认 / 计算来源 | 生效 | 说明 |
+| --- | --- | --- | --- | --- |
+| `paper.bottomBar.horizontalInsetDip` · 纸片底栏两侧留白 | `number` | 12 DIP | `restart` | 待办和笔记的插件底栏到左右边缘各自的距离。 建议：≥ 0。 |
+| `paper.bottomBar.bottomInsetDip` · 纸片底栏底部留白 | `number` | 4 DIP | `restart` | 待办和笔记的插件底栏到纸片底边的距离。 建议：≥ 0。 |
+| `paper.bottomBar.itemGapDip` · 纸片底栏项间距 | `number` | 2 DIP | `restart` | 底栏同一组内相邻两项之间的留白。 建议：≥ 0。 |
+| `paper.bottomBar.groupGapDip` · 纸片底栏组间距 | `number` | 8 DIP | `restart` | 底栏维持左右两组时，两组之间至少保留的距离。 建议：≥ 0。 |
+| `paper.bottomBar.fontDip` · 纸片底栏基础字号 | `number` | 10.5 DIP | `restart` | 底栏文字和图标的基础尺寸，仍受整体字号比例影响。 建议：≥ 6。 |
+
 ### 插件呈现与事件 (9)
 
 | 键 / 名称 | 类型 | 默认 / 计算来源 | 生效 | 说明 |
@@ -519,7 +531,7 @@ Native Body 和 provider Runtime 使用 `context.InjectionApi`。先调用 `Read
 | `settings.window.minWidthDip` · 设置窗口参考最小宽度 | `number` | 360 DIP | `restart` | 计算屏幕内设置窗口宽度时使用的参考下限。 |
 | `settings.window.preferredMarginDip` · 设置窗口首选空间预留 | `number` | 48 DIP | `restart` | 计算设置目标尺寸时从屏幕可用空间减去的总余量。 |
 
-### 待办输入、排版、折叠与拖动 (55)
+### 待办输入、排版、折叠与拖动 (56)
 
 | 键 / 名称 | 类型 | 默认 / 计算来源 | 生效 | 说明 |
 | --- | --- | --- | --- | --- |
@@ -578,6 +590,7 @@ Native Body 和 provider Runtime 使用 `context.InjectionApi`。先调用 `Read
 | `todo.strike.insetDip` · 待办删除线左右留白 | `number` | 3 DIP | `next_use` | 已完成待办删除线两端的内缩距离。 |
 | `todo.strike.thicknessDip` · 待办删除线粗细 | `number` | 1.35 DIP | `next_use` | 已完成待办删除线的绘制粗细。 |
 | `todo.strike.verticalRatio` · 待办删除线高度比例 | `number` | 0.56 | `next_use` | 删除线在每行文字矩形内的竖向位置比例。 |
+| `todo.layout.itemVerticalMarginDip` · 待办条目上下边距 | `number` | 由当前待办间距档位计算 | `live` | 覆盖待办条目上下各自的外边距，保留同一条待办内部的换行排版。 建议：0–12。 |
 
 ### 窗口尺寸、恢复、关联与跟随 (18)
 

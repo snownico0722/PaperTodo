@@ -1,7 +1,7 @@
 {
   "scope": "global",
   "file": "user.json",
-  "plugin_api": "2.4",
+  "plugin_api": "2.6",
   "usage": "Choose parameter IDs and write only overridden values to user.json.",
   "parameters": [
     {
@@ -190,6 +190,27 @@
           "title": "Final edge capsule width",
           "description": "Replace the measured edge capsule width, including the interior shadow margin.",
           "default_description": "Computed from the icon, title or plugin content"
+        }
+      }
+    },
+    {
+      "id": "capsule.edge.iconOnlyMinWidthDip",
+      "type": "number",
+      "unit": "DIP",
+      "application": "restart",
+      "default_value": 0,
+      "recommended_minimum": 0,
+      "recommended_maximum": null,
+      "text": {
+        "zh-CN": {
+          "title": "纯图标贴边胶囊最小宽度",
+          "description": "标题设为零字时，内置贴边胶囊的最小宽度，包含内侧阴影留白。",
+          "default_description": null
+        },
+        "en-US": {
+          "title": "Icon-only edge capsule minimum width",
+          "description": "Minimum built-in edge capsule width with zero title characters, including the inner shadow margin.",
+          "default_description": null
         }
       }
     },
@@ -2991,7 +3012,7 @@
       "type": "number",
       "unit": "DIP",
       "application": "restart",
-      "default_value": 1,
+      "default_value": 2,
       "recommended_minimum": null,
       "recommended_maximum": null,
       "text": {
@@ -3012,7 +3033,7 @@
       "type": "number",
       "unit": "DIP",
       "application": "restart",
-      "default_value": 2,
+      "default_value": 3,
       "recommended_minimum": null,
       "recommended_maximum": null,
       "text": {
@@ -5717,6 +5738,27 @@
       }
     },
     {
+      "id": "note.editor.lineSpacingFactor",
+      "type": "number",
+      "unit": "",
+      "application": "live",
+      "default_value": null,
+      "recommended_minimum": 0.75,
+      "recommended_maximum": 2,
+      "text": {
+        "zh-CN": {
+          "title": "笔记行距倍率",
+          "description": "覆盖小、中、大档计算出的笔记行距倍率，编辑和阅读使用同一排版。",
+          "default_description": "由当前笔记行距档位计算"
+        },
+        "en-US": {
+          "title": "Note line spacing factor",
+          "description": "Override the line spacing factor selected for note editing and reading.",
+          "default_description": "Computed from the current note line spacing preset"
+        }
+      }
+    },
+    {
       "id": "note.images.autoCompressedDimensionPx",
       "type": "integer",
       "unit": "px",
@@ -5874,12 +5916,12 @@
       "text": {
         "zh-CN": {
           "title": "单张图片存储预算",
-          "description": "单个图片资产编码后的字节上限。",
+          "description": "新导入的单张图片编码后的字节上限。",
           "default_description": null
         },
         "en-US": {
           "title": "Single image storage budget",
-          "description": "Maximum encoded byte size of one image asset.",
+          "description": "Maximum encoded bytes for one newly imported image.",
           "default_description": null
         }
       }
@@ -5895,12 +5937,12 @@
       "text": {
         "zh-CN": {
           "title": "图片存储最大边长",
-          "description": "导入及加载图片资产时接受的最大像素边长。",
+          "description": "新导入图片接受的最大像素边长。",
           "default_description": null
         },
         "en-US": {
           "title": "Stored image maximum dimension",
-          "description": "Maximum pixel dimension accepted when importing or loading image assets.",
+          "description": "Maximum pixel dimension of newly imported images.",
           "default_description": null
         }
       }
@@ -6846,6 +6888,111 @@
         "en-US": {
           "title": "Top bar button collision gap",
           "description": "Used by the paper’s existing interface or interaction behavior.",
+          "default_description": null
+        }
+      }
+    },
+    {
+      "id": "paper.bottomBar.horizontalInsetDip",
+      "type": "number",
+      "unit": "DIP",
+      "application": "restart",
+      "default_value": 12,
+      "recommended_minimum": 0,
+      "recommended_maximum": null,
+      "text": {
+        "zh-CN": {
+          "title": "纸片底栏两侧留白",
+          "description": "待办和笔记的插件底栏到左右边缘各自的距离。",
+          "default_description": null
+        },
+        "en-US": {
+          "title": "Bottom bar side inset",
+          "description": "Inset from each side of the paper to the plugin bottom bar.",
+          "default_description": null
+        }
+      }
+    },
+    {
+      "id": "paper.bottomBar.bottomInsetDip",
+      "type": "number",
+      "unit": "DIP",
+      "application": "restart",
+      "default_value": 4,
+      "recommended_minimum": 0,
+      "recommended_maximum": null,
+      "text": {
+        "zh-CN": {
+          "title": "纸片底栏底部留白",
+          "description": "待办和笔记的插件底栏到纸片底边的距离。",
+          "default_description": null
+        },
+        "en-US": {
+          "title": "Bottom bar bottom inset",
+          "description": "Inset from the bottom of the paper to the plugin bottom bar.",
+          "default_description": null
+        }
+      }
+    },
+    {
+      "id": "paper.bottomBar.itemGapDip",
+      "type": "number",
+      "unit": "DIP",
+      "application": "restart",
+      "default_value": 2,
+      "recommended_minimum": 0,
+      "recommended_maximum": null,
+      "text": {
+        "zh-CN": {
+          "title": "纸片底栏项间距",
+          "description": "底栏同一组内相邻两项之间的留白。",
+          "default_description": null
+        },
+        "en-US": {
+          "title": "Bottom bar item gap",
+          "description": "Space between adjacent bottom bar items in the same group.",
+          "default_description": null
+        }
+      }
+    },
+    {
+      "id": "paper.bottomBar.groupGapDip",
+      "type": "number",
+      "unit": "DIP",
+      "application": "restart",
+      "default_value": 8,
+      "recommended_minimum": 0,
+      "recommended_maximum": null,
+      "text": {
+        "zh-CN": {
+          "title": "纸片底栏组间距",
+          "description": "底栏维持左右两组时，两组之间至少保留的距离。",
+          "default_description": null
+        },
+        "en-US": {
+          "title": "Bottom bar group gap",
+          "description": "Minimum space between the left and right bottom bar groups.",
+          "default_description": null
+        }
+      }
+    },
+    {
+      "id": "paper.bottomBar.fontDip",
+      "type": "number",
+      "unit": "DIP",
+      "application": "restart",
+      "default_value": 10.5,
+      "recommended_minimum": 6,
+      "recommended_maximum": null,
+      "text": {
+        "zh-CN": {
+          "title": "纸片底栏基础字号",
+          "description": "底栏文字和图标的基础尺寸，仍受整体字号比例影响。",
+          "default_description": null
+        },
+        "en-US": {
+          "title": "Bottom bar base font size",
+          "description": "Base size of bottom bar text and icons before overall font scaling.",
           "default_description": null
         }
       }
@@ -9094,6 +9241,27 @@
           "title": "Window tether visible handle width",
           "description": "Minimum visible width kept available as a draggable handle.",
           "default_description": null
+        }
+      }
+    },
+    {
+      "id": "todo.layout.itemVerticalMarginDip",
+      "type": "number",
+      "unit": "DIP",
+      "application": "live",
+      "default_value": null,
+      "recommended_minimum": 0,
+      "recommended_maximum": 12,
+      "text": {
+        "zh-CN": {
+          "title": "待办条目上下边距",
+          "description": "覆盖待办条目上下各自的外边距，保留同一条待办内部的换行排版。",
+          "default_description": "由当前待办间距档位计算"
+        },
+        "en-US": {
+          "title": "Todo item vertical margin",
+          "description": "Override each vertical outer margin while keeping line layout within an item.",
+          "default_description": "Computed from the current todo item spacing preset"
         }
       }
     }

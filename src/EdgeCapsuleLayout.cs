@@ -29,6 +29,7 @@ public static class EdgeCapsuleLayout
     // The focus outline extends one DIP beyond the body and is the outermost stable alpha edge.
     // Proxy clips share these values with the WPF host so animation and endpoint silhouettes use
     // the same coordinate system instead of intersecting two offset rounded rectangles.
+    // The default 3 DIP contains the 1 DIP outer rim and 2 DIP focus stroke.
     internal static double OutlineThickness => InjectionParameters.EdgeOutlineThickness.Value;
     internal static double OutlineOverlap => InjectionParameters.EdgeOutlineOverlap.Value;
     internal static double CrossQueueDragUnlockDistance => InjectionParameters.EdgeCrossQueueDragUnlockDistance.Value;

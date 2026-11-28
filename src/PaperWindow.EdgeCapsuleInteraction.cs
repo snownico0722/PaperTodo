@@ -152,6 +152,7 @@ public sealed partial class PaperWindow
         EdgeCapsuleFloatingShape shape)
     {
         var outlineMargin = WindowChromeMargin - DeepCapsuleSlotOutlineThickness + DeepCapsuleSlotOutlineOverlap;
+        var overrideText = _controller.GetWorkspaceCapsuleOverride(_paper.Id)?.PlainText;
         return new EdgeCapsuleDragWindowOptions
         {
 #if DEBUG
@@ -166,7 +167,7 @@ public sealed partial class PaperWindow
             IconGap = CapsuleIconGap,
             RightPadding = CapsuleRightPadding,
             Icon = CapsuleIconText(),
-            Label = _controller.PaperCapsuleTitle(_paper),
+            Label = string.IsNullOrEmpty(overrideText) ? _controller.PaperCapsuleTitle(_paper) : overrideText,
             IconFontSize = CapsuleIconFontSizeForCurrentPaper(),
             LabelFontSize = CapsuleLabelFontSize,
             LabelFontWeight = CapsuleLabelFontWeight,
@@ -177,7 +178,7 @@ public sealed partial class PaperWindow
             PaperBorderBrush = PaperBorderBrush,
             IconBrush = BrightWeakTextBrush,
             LabelBrush = WeakTextBrush,
-            OutlineBrush = Theme.CapsuleFocusBorderBrush,
+            OutlineBrush = Theme.EdgeCapsuleFocusBrush,
             Topmost = _edgeCapsuleHost?.IsTopmost == true
         };
     }

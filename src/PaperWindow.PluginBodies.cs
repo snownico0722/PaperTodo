@@ -993,7 +993,6 @@ public sealed partial class PaperWindow
         _bodyFailed = false;
         _bodyDisabled = false;
         _bodyRuntimeVisible = false;
-        RemoveTextZoomOverlay();
         _controller.QueuePluginStatusUiRefresh();
     }
 
@@ -1001,22 +1000,9 @@ public sealed partial class PaperWindow
     {
         UpdateTopBarNewPaperButtons();
 
-        RemoveTextZoomOverlay();
-        if (BodySupports(PaperBodyCapabilities.TextZoom))
-        {
-            BuildTextZoomOverlay();
-            UpdateTextZoom();
-        }
+        if (BodySupports(PaperBodyCapabilities.TextZoom)) UpdateTextZoom();
+        else RefreshPaperBottomBar();
         RefreshPaperContextMenus();
-    }
-
-    private void RemoveTextZoomOverlay()
-    {
-        if (_textZoomIndicator?.Parent is UIElement host)
-        {
-            _shell.Children.Remove(host);
-        }
-        _textZoomIndicator = null;
     }
 
     private void InvokeBodySession(

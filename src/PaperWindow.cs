@@ -77,7 +77,6 @@ public sealed partial class PaperWindow : Window
     private StackPanel? _topBarActionButtonsHost;
     private TextBlock? _titleText;
     private TextBox? _titleEditBox;
-    private TextBlock? _textZoomIndicator;
     private Border? _capsuleLeftArea;
     private Border? _activeDropRow;
     private Border? _dropIndicatorLine;
@@ -738,18 +737,6 @@ public sealed partial class PaperWindow : Window
         LostMouseCapture += OnLostMouseCapture;
         PreviewKeyDown += OnWindowPreviewKeyDown;
         PreviewKeyUp += OnWindowPreviewKeyUp;
-        SourceInitialized += (_, _) =>
-        {
-            ApplySystemVisibility(reapplyTaskbarShellState: true);
-            if (PresentationSource.FromVisual(this) is HwndSource source)
-            {
-                source.AddHook(OnWindowMessage);
-            }
-
-            ApplyExperimentalPassiveNativeState();
-            UpdateAdvancedInteractionLockVisuals();
-            RefreshEffectiveTopmost();
-        };
         Activated += (_, _) =>
         {
             CancelExperimentalAutoCollapse();
@@ -783,6 +770,22 @@ public sealed partial class PaperWindow : Window
                 }
             };
         }
+    }
+
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        ApplySystemVisibility(reapplyTaskbarShellState: true);
+        UpdateCaptureExclusion();
+        // Edge expansion can position this HWND before Show attaches the WPF visual.
+        if (HwndSource.FromHwnd(new WindowInteropHelper(this).Handle) is { } source)
+        {
+            source.AddHook(OnWindowMessage);
+            source.AddHook(OnWindowShortcutMessage);
+        }
+        ApplyExperimentalPassiveNativeState();
+        UpdateAdvancedInteractionLockVisuals();
+        RefreshEffectiveTopmost();
     }
 
     internal void EnsureShellBuilt()
@@ -832,6 +835,25 @@ public sealed partial class PaperWindow : Window
         {
             _isClosingForReal = false;
         }
+    }
+
+    internal void UpdateCaptureExclusion()
+    {
+        UpdateMainWindowCaptureExclusion();
+        UpdateFindPopupCaptureExclusion();
+        var hideCapsules = _controller.State.HideCapsulesInCapture;
+        _edgeCapsuleHost?.UpdateCaptureExclusion(hideCapsules);
+        if (_experimentalCapsuleMagnetPreview is { } preview)
+            preview.UpdateCaptureExclusion(hideCapsules);
+    }
+
+    private void UpdateMainWindowCaptureExclusion()
+    {
+        var state = _controller.State;
+        var excluded = IsPaperFormTransitioning
+            ? state.HidePapersInCapture || state.HideCapsulesInCapture
+            : _paper.IsCollapsed ? state.HideCapsulesInCapture : state.HidePapersInCapture;
+        WindowCaptureExclusion.Apply(this, excluded);
     }
 
     public void UpdateWindowSwitcherVisibility()
@@ -1689,11 +1711,13 @@ public sealed partial class PaperWindow : Window
 
         RefreshNativeMica(force: true);
         if (!IsPaperFormTransitioning) ApplyPaperChromePresentation();
+        ResetWorkspaceCapsuleViewsForTheme();
         RefreshPaperTitle();
         RefreshPaperIconButton();
         RefreshWindowBindingButton();
         RefreshWorkspaceButton();
         UpdateTextZoom();
+        if (_paper.Type != PaperTypes.Note || !BodySupports(PaperBodyCapabilities.TextZoom)) RefreshPaperBottomBar();
         UpdateDeepCapsuleSlotHostTheme();
 
         if (_paper.Type == PaperTypes.Note)
@@ -1767,10 +1791,7 @@ public sealed partial class PaperWindow : Window
             _moreActionsButton.Content = CreateTopBarMoreIcon(_moreActionsButton);
         RefreshCloseButton();
 
-        if (_textZoomIndicator != null)
-        {
-            _textZoomIndicator.FontSize = AppTypography.Scale(10.5);
-        }
+        RefreshPaperBottomBar();
 
         if (_paper.Type == PaperTypes.Note)
         {
@@ -1811,6 +1832,7 @@ public sealed partial class PaperWindow : Window
         RefreshThemedContextMenus();
         RefreshWorkspaceButton();
 
+        ResetWorkspaceCapsuleViewsForTheme();
         RefreshPaperTitle();
         UpdateTopBarResponsiveLayout();
         ApplyCurrentCollapsedCapsuleWidth();
@@ -1952,6 +1974,7 @@ public sealed partial class PaperWindow : Window
 
         BuildTopBar();
         BuildBody();
+        BuildPaperBottomBar();
         BuildDragLayer();
 
         BuildCapsuleShell();
@@ -2536,54 +2559,6 @@ public sealed partial class PaperWindow : Window
         }
     }
 
-    private void BuildTextZoomOverlay()
-    {
-        var zoomHost = new Border
-        {
-            HorizontalAlignment = HorizontalAlignment.Right,
-            VerticalAlignment = VerticalAlignment.Bottom,
-            Margin = new Thickness(0, 0, 12, 7),
-            Padding = new Thickness(6, 1, 6, 1),
-            CornerRadius = new CornerRadius(RadiusControl),
-            Background = Brushes.Transparent,
-            Cursor = Cursors.Hand,
-            ToolTip = Strings.Get("ToolTipResetTextZoom"),
-            Visibility = Visibility.Collapsed
-        };
-
-        _textZoomIndicator = new TextBlock
-        {
-            Foreground = WeakTextBrush,
-            FontSize = AppTypography.Scale(10.5),
-            FontWeight = FontWeights.SemiBold,
-            Opacity = 0.55,
-            VerticalAlignment = VerticalAlignment.Center
-        };
-
-        zoomHost.Child = _textZoomIndicator;
-        zoomHost.MouseEnter += (_, _) =>
-        {
-            zoomHost.Background = HoverBrush;
-            _textZoomIndicator.Foreground = TextBrush;
-            _textZoomIndicator.Opacity = 1.0;
-        };
-        zoomHost.MouseLeave += (_, _) =>
-        {
-            zoomHost.Background = Brushes.Transparent;
-            _textZoomIndicator.Foreground = WeakTextBrush;
-            _textZoomIndicator.Opacity = 0.55;
-        };
-        zoomHost.MouseLeftButtonUp += (_, e) =>
-        {
-            _controller.SetPaperTextZoom(_paper, 1.0);
-            e.Handled = true;
-        };
-
-        Grid.SetRow(zoomHost, 1);
-        Panel.SetZIndex(zoomHost, 20);
-        _shell.Children.Add(zoomHost);
-    }
-
     private void ToggleTopmost()
     {
         _paper.AlwaysOnTop = !_paper.AlwaysOnTop;
@@ -2602,12 +2577,14 @@ public sealed partial class PaperWindow : Window
         var fullscreenAvoidanceWindow =
             _controller.FullscreenAvoidanceWindowFor(this);
         var avoidanceWindow = ResolveExperimentalCapsuleFollowZOrderTarget(
-            fullscreenAvoidanceWindow);
+            _paper.AlwaysOnTop ? IntPtr.Zero : fullscreenAvoidanceWindow);
         _mainWindowFullscreenAvoidanceWindow =
             fullscreenAvoidanceWindow;
         var effectiveTopmost = shouldBeTopmost &&
             (avoidanceWindow == IntPtr.Zero ||
              ShouldKeepExperimentalCapsuleFollowAboveTarget);
+        // Unpinning still needs a relative Z-order update after WPF clears the topmost band.
+        var wasTopmost = Topmost;
         Topmost = effectiveTopmost;
         if (IsExperimentalPassive && IsVisible)
         {
@@ -2616,6 +2593,7 @@ public sealed partial class PaperWindow : Window
         else if (IsVisible &&
             (_experimentalPassiveNeedsZOrderRestore ||
              shouldBeTopmost ||
+             (wasTopmost && fullscreenAvoidanceWindow != IntPtr.Zero) ||
              WindowNative.IsTopmost(this)))
         {
             WindowNative.ApplyTopmostZOrder(this, effectiveTopmost, avoidanceWindow);
@@ -2844,27 +2822,13 @@ public sealed partial class PaperWindow : Window
         UpdateTopBarResponsiveLayout();
     }
 
-    private void ConfirmAndDeletePaper()
-    {
-        if (ShowDeletePaperDialog())
-        {
-            _controller.DeletePaper(_paper);
-        }
-    }
-
     private void DeletePaperFromPaperMenu()
     {
-        if ((_paper.Type != PaperTypes.Note || IsCurrentBodyProviderMarkdown) &&
-            _controller.IsPaperEmpty(_paper))
+        if (PaperNoticeDialog.ShowDeleteConfirmation(this))
         {
             _controller.DeletePaper(_paper);
-            return;
         }
-
-        ConfirmAndDeletePaper();
     }
-
-    private bool ShowDeletePaperDialog() => PaperNoticeDialog.ShowDeleteConfirmation(this);
 
     private void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
     {

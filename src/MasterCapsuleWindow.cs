@@ -7,6 +7,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
+using System.Windows.Threading;
 using Brush = System.Windows.Media.Brush;
 using Brushes = System.Windows.Media.Brushes;
 using FontFamily = System.Windows.Media.FontFamily;
@@ -113,6 +114,7 @@ public sealed partial class MasterCapsuleWindow : Window
         SourceInitialized += (_, _) =>
         {
             WindowNative.ApplyNoActivateStyle(this);
+            UpdateCaptureExclusion();
             if (_experimentalPassive)
             {
                 WindowNative.SetInputPassthrough(this, enabled: true);
@@ -430,6 +432,9 @@ public sealed partial class MasterCapsuleWindow : Window
                 : 1.0;
     }
 
+    internal void UpdateCaptureExclusion() =>
+        WindowCaptureExclusion.Apply(this, _controller.State.HideCapsulesInCapture);
+
     public void RefreshEffectiveTopmost()
     {
         var avoidanceWindow = _controller.FullscreenAvoidanceWindowForQueue(
@@ -697,7 +702,8 @@ public sealed partial class MasterCapsuleWindow : Window
                 {
                     try
                     {
-                        ReleaseFloatingDragHostHandlers();
+                        if (ReferenceEquals(_floatingDragHost, floatingHost))
+                            ReleaseFloatingDragHostHandlers();
                     }
                     finally
                     {
@@ -1129,6 +1135,7 @@ public sealed partial class MasterCapsuleWindow : Window
         MasterCapsuleWindow target,
         Action releaseCover)
     {
+        var workspace = _controller.WorkspaceGeneration;
         var targetKey = target._queueKey;
         var targetEdge = target._queueEdge;
         var hasTarget = target.TryGetQueueTransferDockingTarget(
@@ -1144,15 +1151,27 @@ public sealed partial class MasterCapsuleWindow : Window
                 _ => floatingHost.CompleteHandoff(releaseCover));
         }
 
+        MasterCapsuleWindow? CurrentTarget() =>
+            _controller.IsRunning && _controller.WorkspaceGeneration == workspace
+                ? _controller.MasterCapsuleForQueue(targetKey)
+                : null;
+
         void CompleteFlight(bool reachedTarget)
         {
-            var current = _controller.MasterCapsuleForQueue(targetKey);
-            current?.PrepareQueueTransferHandoff();
+            // A resize can deliver the last Rendering callback inside WPF layout, with
+            // Dispatcher processing suspended. Keep the floating cover until the handoff finishes.
+            Dispatcher.BeginInvoke(DispatcherPriority.Render, new Action(() =>
+            {
+                CurrentTarget()?.PublishQueueTransferHandoff();
+                // Allow the target's pending render work to run before revealing it.
+                Dispatcher.BeginInvoke(DispatcherPriority.Render, new Action(() => RevealCurrentTarget(reachedTarget)));
+            }));
+        }
 
-            // Preparing the WPF surface pumps Render and can dispatch an arrange that replaces
-            // the master or changes its geometry. Resolve once more after that boundary, then
-            // publish synchronously so the cover uses the same current endpoint as the master.
-            current = _controller.MasterCapsuleForQueue(targetKey);
+        void RevealCurrentTarget(bool reachedTarget)
+        {
+            // An intervening arrange can replace the master or change its endpoint.
+            var current = CurrentTarget();
             current?.PublishQueueTransferHandoff();
             if (current == null)
             {

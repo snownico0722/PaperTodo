@@ -57,9 +57,8 @@ public sealed record PaperTopBarLabel
 }
 
 /// <summary>
-/// Provider-scoped view of the plugin's own Paper instances. It deliberately does not create one
-/// runtime per Paper: presentation is addressed by PaperId while one plugin Runtime owns the
-/// backend. Plugins needing extra workers/processes create and manage those internally.
+/// Provider-scoped view of the plugin's own Paper instances. From API 2.4,
+/// SetCapsulePresentation also accepts any existing Paper in the current workspace.
 /// </summary>
 public interface IPaperPluginRuntimePapers
 {
@@ -68,6 +67,11 @@ public interface IPaperPluginRuntimePapers
 
     void SetTitle(string paperId, string title);
     void SetHeaderText(string paperId, string text);
+
+    /// <summary>
+    /// Publishes capsule content for a Paper. API 2.4 permits workspace targets; pass null to
+    /// clear this Runtime's customization. Workspace overrides last for the current Runtime.
+    /// </summary>
     void SetCapsulePresentation(string paperId, PaperCapsulePresentation? presentation);
 
     bool PostToBody(string paperId, JsonElement message);

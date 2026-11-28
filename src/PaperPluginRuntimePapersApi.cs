@@ -11,12 +11,15 @@ namespace PaperTodo;
 /// capsule presentation is cached only as volatile presentation state so a rebuilt PaperWindow can
 /// replay the Runtime's last published value without creating a second backend authority.
 /// </summary>
-internal sealed class PaperPluginRuntimePapersApi : IPaperPluginRuntimePapers, IDisposable
+internal sealed class PaperPluginRuntimePapersApi :
+    IPaperPluginRuntimePapers, IPaperPluginRuntimeCapsuleViews, IDisposable
 {
     private readonly AppController _controller;
     private readonly Dispatcher _dispatcher;
     private readonly string _providerId;
     private readonly Func<bool> _isActive;
+    private readonly bool _canCustomizeWorkspaceCapsules;
+    private readonly Guid _capsuleOverrideOwner = Guid.NewGuid();
     private readonly object _gate = new();
     private readonly HashSet<string> _knownPaperIds = new(StringComparer.Ordinal);
     private readonly Dictionary<string, PaperCapsulePresentation> _capsulePresentations =
@@ -28,11 +31,13 @@ internal sealed class PaperPluginRuntimePapersApi : IPaperPluginRuntimePapers, I
     public PaperPluginRuntimePapersApi(
         AppController controller,
         string providerId,
-        Func<bool> isActive)
+        Func<bool> isActive,
+        string apiVersion)
     {
         _controller = controller;
         _providerId = providerId;
         _isActive = isActive;
+        _canCustomizeWorkspaceCapsules = PaperBodyPluginRegistry.ApiAtLeast(apiVersion, "2.4");
         _dispatcher = Application.Current.Dispatcher;
         foreach (var paper in OnUi(() => _controller.GetPluginRuntimePapers(_providerId)))
         {
@@ -103,6 +108,15 @@ internal sealed class PaperPluginRuntimePapersApi : IPaperPluginRuntimePapers, I
         var presentationNormalized = PaperWindow.NormalizePluginCapsulePresentation(presentation);
         OnUi(() =>
         {
+            if (_canCustomizeWorkspaceCapsules &&
+                (_controller.FindPluginRuntimePaper(_providerId, paperIdNormalized) == null ||
+                 _controller.GetWorkspaceCapsuleOverride(paperIdNormalized)?.OwnerId == _capsuleOverrideOwner))
+            {
+                _controller.SetWorkspaceCapsuleOverride(
+                    _capsuleOverrideOwner, paperIdNormalized, presentationNormalized);
+                return;
+            }
+
             _ = _controller.RequirePluginRuntimePaper(_providerId, paperIdNormalized);
             // Cache publication and UI application use the same dispatcher order. A worker must
             // not publish a future value that an earlier queued UI update can overwrite visually.
@@ -121,6 +135,27 @@ internal sealed class PaperPluginRuntimePapersApi : IPaperPluginRuntimePapers, I
             _controller.SetPluginRuntimePaperCapsule(_providerId, paperIdNormalized, presentationNormalized);
         });
     }
+
+    public void SetCapsuleView(
+        string paperId,
+        PaperCapsulePresentation? presentation,
+        Func<PaperCapsuleViewContext, FrameworkElement?>? createView = null)
+    {
+        EnsureUsable();
+        if (!_canCustomizeWorkspaceCapsules)
+        {
+            throw new PaperTodoPluginException(
+                "api_version_required", "Runtime capsule views require plugin API 2.4.");
+        }
+
+        var normalizedId = NormalizePaperId(paperId);
+        var normalizedPresentation = PaperWindow.NormalizePluginCapsulePresentation(presentation);
+        OnUi(() => _controller.SetWorkspaceCapsuleOverride(
+            _capsuleOverrideOwner, normalizedId, normalizedPresentation, createView));
+    }
+
+    internal void ClearWebDocumentCapsuleOverrides() =>
+        _controller.ClearWorkspaceCapsuleOverrides(_capsuleOverrideOwner);
 
     internal bool TryGetCapsulePresentation(
         string paperId,
@@ -332,6 +367,14 @@ internal sealed class PaperPluginRuntimePapersApi : IPaperPluginRuntimePapers, I
             _handlers.Clear();
             _knownPaperIds.Clear();
             _capsulePresentations.Clear();
+        }
+        if (_dispatcher.CheckAccess())
+        {
+            _controller.ClearWorkspaceCapsuleOverrides(_capsuleOverrideOwner);
+        }
+        else if (!_dispatcher.HasShutdownStarted && !_dispatcher.HasShutdownFinished)
+        {
+            _dispatcher.Invoke(() => _controller.ClearWorkspaceCapsuleOverrides(_capsuleOverrideOwner));
         }
     }
 

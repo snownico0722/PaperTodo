@@ -77,6 +77,7 @@ public sealed partial class AppController
             FontWeight = FontWeights.SemiBold,
             VerticalAlignment = VerticalAlignment.Center
         });
+        heading.Children.Add(CreateSettingsHintGlyph("TipPluginBodyTypes", new Thickness(5, 0, 0, 0)));
         heading.Children.Add(new TextBlock
         {
             Text = Strings.Format("PluginsLoadedCountFormat", descriptors.Length),

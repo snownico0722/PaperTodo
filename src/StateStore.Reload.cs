@@ -93,8 +93,11 @@ public sealed partial class StateStore
         var limit = PaperWindow.NoteTextMaxLength;
         foreach (var paper in incoming.Papers)
         {
-            var length = paper.Content?.Length ?? 0;
-            if (length <= limit) continue;
+            var content = paper.Content ?? "";
+            var length = content.Length;
+            if (length <= limit ||
+                length - MarkdownImageReferences.TrailingAnchorDelimiterLength(content) <= limit)
+                continue;
             currentLengths ??= current?.Papers.ToDictionary(p => p.Id, p => p.Content?.Length ?? 0,
                 StringComparer.Ordinal) ?? [];
             if (length > currentLengths.GetValueOrDefault(paper.Id))

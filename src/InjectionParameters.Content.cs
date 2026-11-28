@@ -44,11 +44,11 @@ internal static partial class InjectionParameters
         new("note.maxTextChars", DefaultNoteTextLimit, "笔记文字长度上限", "单篇笔记的字符上限至少为 100,000。超过当前上限的旧笔记仍可修改和保存，字数只能保持或减少。",
             unit: "chars", application: "restart", recommendedMinimum: DefaultNoteTextLimit);
     internal static readonly InjectionParameter<int> NoteImageStoredDimension =
-        new("note.images.maxStoredDimensionPx", 4096, "图片存储最大边长", "导入及加载图片资产时接受的最大像素边长。", unit: "px", application: "next_use");
+        new("note.images.maxStoredDimensionPx", 4096, "图片存储最大边长", "新导入图片接受的最大像素边长。", unit: "px", application: "next_use");
     internal static readonly InjectionParameter<int> NoteImageCompressedDimension =
         new("note.images.autoCompressedDimensionPx", 2048, "自动压缩目标边长", "开启自动压缩时大图片缩小后的最大边长。", unit: "px", application: "next_use");
     internal static readonly InjectionParameter<int> NoteImageStoredBytes =
-        new("note.images.maxStoredBytes", 8 * 1024 * 1024, "单张图片存储预算", "单个图片资产编码后的字节上限。", unit: "bytes", application: "next_use");
+        new("note.images.maxStoredBytes", 8 * 1024 * 1024, "单张图片存储预算", "新导入的单张图片编码后的字节上限。", unit: "bytes", application: "next_use");
     internal static readonly InjectionParameter<int> NoteImageInputBytes =
         new("note.images.maxInputBytes", 32 * 1024 * 1024, "图片导入输入预算", "导入图片原始输入数据的字节上限。", unit: "bytes", application: "next_use");
     internal static readonly InjectionParameter<long> NoteImageDecodedBytes =

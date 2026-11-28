@@ -19,6 +19,7 @@ internal static partial class Program
         if (args.Contains("--exit-fixture")) return RunDeferredExitFixture();
         if (args.Contains("--passive-dispose")) return RunPassiveDisposeFixture();
         if (args.Contains("--workspace-fixture")) return RunWorkspaceFixture();
+        if (args.Contains("--workspace-recovery-image-fixture")) return RunWorkspaceRecoveryImageFixture();
         if (args.Contains("--workspace-missing-images-fixture")) return RunWorkspaceMissingImagesFixture();
         try
         {
@@ -27,6 +28,7 @@ internal static partial class Program
                 ("explicit request accepts external snapshot; no revision metadata", ExplicitImport),
                 ("reload and merge preserve legacy long notes and reject new growth", LegacyNoteLengthEdits),
                 ("invalid or missing input never falls back to backup", InvalidInput),
+                ("persisted notes at the limit retain their image anchor through reload and catalog updates", TrailingImageAnchorLength),
                 ("old async writes cannot replace an accepted import", SaveFence),
                 ("model/list references survive accepted reload", ModelIdentities),
                 ("opt-in three-way merge combines independent changes", MergeIndependentEdits),
@@ -39,6 +41,7 @@ internal static partial class Program
                 ("delete/edit conflicts honor both choices for notes and todos", MergePaperDeletionConflicts),
                 ("merge preserves links to a paper chosen to survive", MergeDeletedPaperRetainsChosenLinks),
                 ("merge resolves the complete Todo link target", MergeQuickLaunchTarget),
+                ("merge keeps reminder delivery with its scheduled occurrence", MergeReminderOccurrence),
                 ("conflict archives retain the latest five complete groups",
                     ConflictArchiveRetentionChecks),
                 ("source changed after flush is rejected before replacement", MergeRejectDuringReplace),
@@ -73,6 +76,7 @@ internal static partial class Program
             RunIsolatedLiveChecks("--exit-fixture");
             RunIsolatedLiveChecks("--passive-dispose");
             RunIsolatedLiveChecks("--workspace-fixture");
+            RunIsolatedLiveChecks("--workspace-recovery-image-fixture");
             RunIsolatedLiveChecks("--workspace-missing-images-fixture");
             Console.WriteLine($"PASS explicit reload: {checks.Length} storage groups and isolated WPF/API/MCP fixture");
             return 0;
@@ -144,6 +148,27 @@ internal static partial class Program
         s.Store.SaveJsonSync(s.Store.SerializeState(commit.State), 3);
         Require(!File.ReadAllText(s.Store.FilePath).Contains("$paperTodoRevision", StringComparison.Ordinal),
             "ordinary save retained a revision history protocol");
+    }
+
+    private static void TrailingImageAnchorLength()
+    {
+        using var s = new Scope();
+        var image = MarkdownImageReferences.CreateReference("001");
+        var content = new string('x', PaperWindow.NoteTextMaxLength - image.Length - 2) +
+            "\r\n" + image + "\r\n";
+        s.Memory.Papers[0].Content = content;
+        s.Store.SaveJsonSync(s.Store.SerializeState(s.Memory), 2);
+
+        s.Store.UpdateWorkspaceConfiguration(new WorkspaceConfiguration(), 3);
+        var reload = s.Store.ReloadExternalState(4);
+        Require(reload.Result.Applied && reload.State?.Papers[0].Content == content,
+            "the editor's trailing image anchor was rejected or changed");
+
+        var oversized = s.Read();
+        oversized["papers"]![0]!["content"] = "x" + content;
+        s.Write(oversized);
+        Require(s.Store.ReloadExternalState(5).Result.Outcome == "invalid",
+            "the exception for the image anchor also allowed oversized note text");
     }
 
     private static void InvalidInput()

@@ -53,23 +53,34 @@ public sealed partial class PaperWindow
         return host;
     }
 
-    private double? PluginCapsuleRequestedContentWidth(double? pixelsPerDip = null)
+    private PaperCapsulePresentation? BodyCapsulePresentation =>
+        !_bodyDisabled && !IsCurrentBodyProviderMarkdown &&
+        (!_bodyFailed || HasPluginRuntimePresentationOwner)
+            ? _pluginCapsulePresentation
+            : null;
+
+    private PaperCapsulePresentation? GetEffectiveCapsulePresentation(out WorkspaceCapsuleOverride? workspaceOverride)
     {
-        if (_pluginCapsulePresentation == null ||
-            IsCurrentBodyProviderMarkdown ||
-            (_bodyFailed && !HasPluginRuntimePresentationOwner))
+        workspaceOverride = _controller.GetWorkspaceCapsuleOverride(_paper.Id);
+        return workspaceOverride?.Presentation ?? BodyCapsulePresentation;
+    }
+
+    private double? PluginCapsuleRequestedContentWidth(double? pixelsPerDip = null) =>
+        MeasurePluginCapsuleContentWidth(GetEffectiveCapsulePresentation(out _), pixelsPerDip);
+
+    private double? MeasurePluginCapsuleContentWidth(
+        PaperCapsulePresentation? presentation, double? pixelsPerDip = null)
+    {
+        if (presentation == null)
         {
             return null;
         }
-        if (_pluginCapsulePresentation.PreferredWidth <=
-            PaperCapsulePresentation.AutomaticWidth)
+        if (presentation.PreferredWidth <= PaperCapsulePresentation.AutomaticWidth)
         {
-            return MeasurePluginCapsuleTemplateWidth(
-                _pluginCapsulePresentation,
-                pixelsPerDip);
+            return MeasurePluginCapsuleTemplateWidth(presentation, pixelsPerDip);
         }
         return Math.Clamp(
-            _pluginCapsulePresentation.PreferredWidth,
+            presentation.PreferredWidth,
             PluginCapsuleMinContentWidth,
             PluginCapsuleMaxContentWidth);
     }
@@ -82,6 +93,32 @@ public sealed partial class PaperWindow
         _paper.BodyCapsuleText = normalized == null
             ? string.Empty
             : CapsulePresentationFallbackText(normalized);
+        RefreshPluginCapsulePresentation(previousRequestedWidth);
+    }
+
+    internal void RefreshWorkspaceCapsulePresentation(
+        WorkspaceCapsuleOverride? previous, WorkspaceCapsuleOverride? current)
+    {
+        if (previous?.OwnerId != current?.OwnerId || previous?.CreateView != current?.CreateView)
+        {
+            ResetPluginCapsuleCustomViews();
+        }
+        if (_capsuleLabelText == null)
+        {
+            RefreshDeepCapsuleSlotLabel();
+            // Docked-only plugin papers can own a live fallback before their regular shell exists.
+            if (_paper.Type == PaperTypes.Note && !IsCurrentBodyProviderMarkdown)
+                _edgeCapsulePreviewInvalidationSource.Invalidate();
+            return;
+        }
+
+        var previousWidth = MeasurePluginCapsuleContentWidth(
+            previous?.Presentation ?? BodyCapsulePresentation);
+        RefreshPluginCapsulePresentation(previousWidth);
+    }
+
+    private void RefreshPluginCapsulePresentation(double? previousRequestedWidth)
+    {
         var requestedWidth = PluginCapsuleRequestedContentWidth();
         var geometryChanged = previousRequestedWidth != requestedWidth;
         if (geometryChanged)
@@ -180,11 +217,8 @@ public sealed partial class PaperWindow
             return;
         }
 
-        var presentation = _pluginCapsulePresentation;
-        if (presentation == null ||
-            _bodyDisabled ||
-            IsCurrentBodyProviderMarkdown ||
-            (_bodyFailed && !HasPluginRuntimePresentationOwner))
+        var presentation = GetEffectiveCapsulePresentation(out var workspaceOverride);
+        if (presentation == null)
         {
             _pluginCapsuleRegularLayer.Child = null;
             _pluginCapsuleRegularLayer.Visibility = Visibility.Collapsed;
@@ -196,7 +230,8 @@ public sealed partial class PaperWindow
         _pluginCapsuleRegularDefaultContent.Visibility = Visibility.Collapsed;
         _pluginCapsuleRegularLayer.Child = BuildPluginCapsuleContent(
             presentation,
-            PaperCapsuleSurfaceKind.Regular);
+            PaperCapsuleSurfaceKind.Regular,
+            workspaceOverride);
         _pluginCapsuleRegularLayer.Visibility = Visibility.Visible;
         _pluginCapsuleRegularHost.ToolTip = string.IsNullOrWhiteSpace(presentation.ToolTip)
             ? _controller.PaperTitleText(_paper)
@@ -210,11 +245,8 @@ public sealed partial class PaperWindow
             return;
         }
 
-        var presentation = _pluginCapsulePresentation;
-        if (presentation == null ||
-            _bodyDisabled ||
-            IsCurrentBodyProviderMarkdown ||
-            (_bodyFailed && !HasPluginRuntimePresentationOwner))
+        var presentation = GetEffectiveCapsulePresentation(out var workspaceOverride);
+        if (presentation == null)
         {
             _edgeCapsuleHost.SetPluginContent(null, null);
             return;
@@ -223,7 +255,8 @@ public sealed partial class PaperWindow
         _edgeCapsuleHost.SetPluginContent(
             BuildPluginCapsuleContent(
                 presentation,
-                PaperCapsuleSurfaceKind.Docked),
+                PaperCapsuleSurfaceKind.Docked,
+                workspaceOverride),
             string.IsNullOrWhiteSpace(presentation.ToolTip)
                 ? _controller.PaperTitleText(_paper)
                 : presentation.ToolTip);
@@ -231,9 +264,10 @@ public sealed partial class PaperWindow
 
     private FrameworkElement BuildPluginCapsuleContent(
         PaperCapsulePresentation presentation,
-        PaperCapsuleSurfaceKind surface)
+        PaperCapsuleSurfaceKind surface,
+        WorkspaceCapsuleOverride? workspaceOverride)
     {
-        var customView = TryGetPluginCapsuleCustomView(presentation, surface);
+        var customView = TryGetPluginCapsuleCustomView(presentation, surface, workspaceOverride);
         if (customView != null)
         {
             // Protocol 1.7 owns the complete requested content segment. Do not consume part of
@@ -261,10 +295,17 @@ public sealed partial class PaperWindow
 
     private FrameworkElement? TryGetPluginCapsuleCustomView(
         PaperCapsulePresentation presentation,
-        PaperCapsuleSurfaceKind surface)
+        PaperCapsuleSurfaceKind surface,
+        WorkspaceCapsuleOverride? workspaceOverride)
     {
-        if (_bodyDescriptor?.Kind != PaperBodyPluginKind.Native ||
-            _paperBodyHost.Current is not IPaperCapsuleViewProvider provider)
+        var createView = workspaceOverride?.CreateView;
+        if (workspaceOverride == null &&
+            _bodyDescriptor?.Kind == PaperBodyPluginKind.Native &&
+            _paperBodyHost.Current is IPaperCapsuleViewProvider provider)
+        {
+            createView = provider.CreateCapsuleView;
+        }
+        if (createView == null)
         {
             return null;
         }
@@ -301,7 +342,7 @@ public sealed partial class PaperWindow
         cachedWidth = width;
         try
         {
-            var view = provider.CreateCapsuleView(new PaperCapsuleViewContext(
+            var view = createView(new PaperCapsuleViewContext(
                 surface,
                 width,
                 CapsuleBodyHeight,
@@ -345,6 +386,15 @@ public sealed partial class PaperWindow
         }
         ResetPluginCapsuleCustomViews();
         _pluginCapsuleCustomViewGeneration = _bodySessionGeneration;
+    }
+
+    private void ResetWorkspaceCapsuleViewsForTheme()
+    {
+        // A Runtime factory has no body-session theme or typography callback.
+        if (_controller.GetWorkspaceCapsuleOverride(_paper.Id)?.CreateView != null)
+        {
+            ResetPluginCapsuleCustomViews();
+        }
     }
 
     private void ResetPluginCapsuleCustomViews()

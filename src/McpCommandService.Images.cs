@@ -29,12 +29,12 @@ internal sealed partial class McpCommandService
             throw new McpApiException("invalid_params", "image_base64 cannot exceed 4 MiB decoded.");
 
         var result = _commands.InsertNoteImage(
-            paperId, imageBytes, imageName, PaperOperationContext.Mcp());
+            paperId, imageBytes, imageName ?? "mcp-image", PaperOperationContext.Mcp());
         return new
         {
             paper_id = result.PaperId,
             image_id = result.ImageId,
-            markdown_reference = result.Reference
+            markdown_reference = result.MarkdownReference
         };
     }
 
