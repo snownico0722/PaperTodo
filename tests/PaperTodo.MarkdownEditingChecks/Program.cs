@@ -49,6 +49,14 @@ internal static partial class Program
                 box.Select(0, 2);
                 box.WrapSelection("**", "**");
                 Equal("xxdef", box.PersistentText, "formatting cannot grow the same note");
+
+                box.MaxLength = 9;
+                box.Text = "ab\r\ncd";
+                box.Select(2, 0);
+                Clipboard.SetText("x\ny");
+                box.Paste();
+                Equal("ab\r\ncd", box.PersistentText, "paste length includes the document's actual newline");
+                Equal(2, rejections, "the normalized paste is rejected before it exceeds the limit");
             }
             finally { window.Close(); }
         });
