@@ -121,10 +121,24 @@ internal static partial class InjectionSystemRunner
                 var pidFile = Path.Combine(root, "successor.pid");
                 if (File.Exists(pidFile) && int.TryParse(File.ReadAllText(pidFile), out var pid))
                 {
-                    try { using var p = Process.GetProcessById(pid); if (!p.WaitForExit(5000)) p.Kill(entireProcessTree: true); }
+                    try
+                    {
+                        using var successor = Process.GetProcessById(pid);
+                        if (!successor.WaitForExit(5000))
+                        {
+                            successor.Kill(entireProcessTree: true);
+                            successor.WaitForExit();
+                        }
+                    }
                     catch (ArgumentException) { }
                 }
-                try { Directory.Delete(root, recursive: true); } catch (IOException) { }
+                try { Directory.Delete(root, recursive: true); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    // Windows can still hold a copied resource while the test directory is being
+                    // collected. Keep the fixture result and leave the isolated files for cleanup.
+                    Console.WriteLine($"Fixture cleanup left {root}: {ex.Message}");
+                }
             }
         }
         Console.WriteLine($"{(journeys ? "USER_JOURNEY_RESULT" : "SYSTEM_UI_RESULT")} fixtures={scenarios.Length * 2} failures={failures.Count}");
