@@ -91,16 +91,3 @@ jobs:
       - name: Plugin behavior and sample checks
         shell: pwsh
         run: ./tools/testing/Run-Checks.ps1 -Group plugins
-
-  rebuild-good-lock-for-review:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: "10.0.x"
-      - name: Rebuild Good Lock and report the native output delta
-        shell: pwsh
-        run: |
-          ./plugin-samples/Build-And-Install-NativePlugin.ps1 -ProjectPath plugin-samples/PaperTodo.Plugin.GoodLock/PaperTodo.Plugin.GoodLock.csproj
-          git diff --binary -- plugins/official.good-lock.native/PaperTodo.Plugin.GoodLock.dll
