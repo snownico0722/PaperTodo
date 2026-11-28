@@ -160,7 +160,7 @@ internal static partial class InjectionSystemRunner
                 [PaperTodoPermissionNames.SettingsRead, PaperTodoPermissionNames.SettingsUpdate], () => true, () => true);
             Session = new GoodLockPlugin().Create(new PaperBodyContext
             {
-                ProviderId = "official.good-lock.native", ApiVersion = "2.4", UiLanguage = "en-US",
+                ProviderId = "official.good-lock.native", ApiVersion = "2.6", UiLanguage = "en-US",
                 StateJson = draft, StateVersion = 1, TargetStateVersion = 1,
                 Paper = new PaperBodyPaperContext { PaperId = "note", SetTitle = _ => { }, SetHeaderText = _ => { }, SetCapsulePresentation = _ => { } },
                 Body = new PaperBodySurfaceContext
@@ -197,7 +197,7 @@ internal static partial class InjectionSystemRunner
         Check(RowState(first, "todo.layout.itemVerticalMarginDip", "Applied") &&
             InjectionParameters.TodoItemMargin.Resolve(-1) == 7 && !c.PublicSettings.Get("todo.item_spacing").Writable,
             "Good Lock must apply a new host catalog entry while an unsupported key is present.");
-        Check(RowState(first, "future.keep", "Pending") &&
+        Check(RowState(first, "future.keep", "Unknown") &&
             !Property<ICommand>(first.Row("future.keep"), "OptimizeCommand").CanExecute(null),
             "An unsupported key must remain visible without being applied or offering suggestions.");
         first.Command("todo.paste.maxItems", "ResetCommand");
